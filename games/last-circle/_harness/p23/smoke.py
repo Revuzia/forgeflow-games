@@ -21,11 +21,11 @@ STANDARD solo match (Savanna seed 7), landed under the guard, the human moved to
   hides          the cloud at full size HIDES a body 7 m behind its centre on screen (what losBlocked cuts for bots, the human must not
                  see either): visibility = mean |smoke+bot - smoke| / mean |bot - nothing| over the bot's projected box <= 0.15, at the
                  tier in use and at LOW (one page task, four renders at dt 1e-5)
-  cost           GPU frame time with 3 live smokes in view minus none, ABAB x 8 at 60 rendered frames per arm, <= +0.3 ms (the iGPU: --gpu d3d11).
-                 Two readings: median frame per arm, and the 10th-percentile frame per arm (contention only ever ADDS time to a GPU timer query).
-                 0 other automated Chromes: BOTH must meet the bar; 1-2 others: the p10 reading counts when the timer is stable (each arm's p10
-                 within x1.5 over the 8 repeats; unstable = could-not-judge); more: information. The reading is always printed ("smoke cost
-                 reading") and kept in the report (smokeCost)
+  cost           GPU frame time with 3 standing smokes in view minus none, <= +0.3 ms (the iGPU: --gpu d3d11). R4: the scene FROZEN (dt 1e-5:
+                 no sim tick, no fx time), the same 3 cloud entries in / out of W.smokes frame by frame, adjacent on / off frames paired in ABBA
+                 order, each frame its own TIME_ELAPSED query, 640 counted pairs after a warm batch; reading = the MEDIAN of the paired
+                 differences, judged when its 95 % CI is no wider than the bar (else could-not-judge); > 2 other automated Chromes: information.
+                 The reading is always printed ("smoke cost reading") and kept in the report (smokeCost)
   errors
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ HIDE_JS = r"""([bid, cx, cy, cz, bx, bz, wantShot]) => { const C = window.__LC__
   if (!drawn(b)) b = W.actors.filter((a) => a.isBot && drawn(a)).sort((p, q) => Math.hypot(p.pos.x - bx, p.pos.z - bz) - Math.hypot(q.pos.x - bx, q.pos.z - bz))[0];
   if (!b) return { error: 'no live drawn bot', was };
   if (b.obj) b.obj.visible = true; const V = cam.position.constructor; const by = W.map.heightAt(bx, bz);
-  const place = (on) => { const x = on ? bx : bx + 400; b.pos.set(x, W.map.heightAt(x, bz), bz); b.vel.set(0, 0, 0); b.alive = true; b.hp = 100; if (b.obj) b.obj.position.copy(b.pos); };
+  const place = (on) => { const x = on ? bx : bx + 400; b.pos.set(x, W.map.heightAt(x, bz), bz); b.vel.set(0, 0, 0); b.alive = true; b.hp = 100; if (b._pp) b._pp.copy(b.pos); if (b.obj) b.obj.position.copy(b.pos); };
   const smoke = (on) => { W.smokes = W.smokes || []; W.smokes.length = 0; if (on) W.smokes.push({ x: cx, y: cy, z: cz, r: K.SMOKE.r, rMax: K.SMOKE.r, t0: W.t - 5, t1: W.t + 30 }); };
   const read = () => { C.stepFrames(2, 1e-5, true); const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = new Uint8Array(4 * w * h); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, w, h }; };
   place(true); smoke(false); C.stepFrames(2, 1e-5, true); cam.updateMatrixWorld(true);
@@ -90,6 +90,50 @@ HIDE_JS = r"""([bid, cx, cy, cz, bx, bz, wantShot]) => { const C = window.__LC__
   const dAB = diff(A, B), dCD = diff(Cc, D);
   return { visibility: dCD > 0 ? +(dAB / dCD).toFixed(3) : null, smokedDiff: +dAB.toFixed(2), openDiff: +dCD.toFixed(2), boxPx: [x0, y0, x1, y1], tier: W.gfxTier, subject: b.id, pinnedWas: was,
          shot }; }"""
+# the cost scene: three cloud entries made ONCE and reused for every 'on' frame (fx binds its per-cloud cache to the entry object), 8 m apart,
+# 16 m ahead of the human, at full size past their vent jets (t0 = now - 5 s); the kernel's own GPU timer off (one TIME_ELAPSED query at a time)
+COST_SETUP_JS = r"""([x, y, z]) => { const W = window.__LC__.W, g = W.kernel.gpuTimer, t = W.t;
+  window.__P23GT__ = g ? !!g.on : null; if (g) g.on = false; W.smokes = W.smokes || []; W.smokes.length = 0;
+  const e = []; for (let i = 0; i < 3; i++) e.push({ x: x - 8 + 8 * i, y: y + 1.2, z: z - 16, r: W.SIM.SMOKE.r, rMax: W.SIM.SMOKE.r, t0: t - 5, t1: t + 600 });
+  window.__P23COST__ = e; return true; }"""
+# one batch: 2 x pairs frames, adjacent on / off pairs whose order alternates (ABBA), each frame = one stepFrames(1, 1e-5, render) (dt 1e-5: no
+# sim tick, no fx time - the same picture every frame but the clouds). The TIME_ELAPSED queries bracket the frame's RENDER only (the kernel's
+# composer.render / renderer.render, every top-level call of the frame summed - the kernel's own GPU timer brackets the same call), never the
+# updaters' CPU work: a query round the whole stepFrames read +0.05 ms with NO cloud drawn (GPU idle while the CPU built the clouds' instances).
+# Then the page yields until every result is available (WebGL hands query results out only after the task returns). A disjoint event voids
+# the batch.
+COST_BATCH_JS = r"""async ([pairs, bi]) => { const C = window.__LC__, W = C.W, k = W.kernel, gl = k.renderer.getContext();
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2'); if (!ext) return { error: 'no EXT_disjoint_timer_query_webgl2' };
+  const E = window.__P23COST__; if (!E) return { error: 'no cost scene' };
+  const set = (on) => { W.smokes.length = 0; if (on) for (const q of E) W.smokes.push(q); };
+  const tgt = k.composer || k.renderer, own = Object.prototype.hasOwnProperty.call(tgt, 'render'), orig = tgt.render;
+  const qs = []; let arm = null, depth = 0;
+  tgt.render = function () {
+    let q = null;
+    if (depth === 0 && arm) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); }
+    depth++;
+    try { return orig.apply(this, arguments); }
+    finally { depth--; if (q) { gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push({ q, on: arm.on, i: arm.i }); } }
+  };
+  gl.getParameter(ext.GPU_DISJOINT_EXT);
+  try {
+    for (let i = 0; i < pairs; i++) {
+      const first = ((i + bi) % 2 === 0);
+      for (const on of (first ? [true, false] : [false, true])) { set(on); arm = { on, i }; C.stepFrames(1, 1e-5, true); arm = null; }
+    }
+  } finally { if (own) tgt.render = orig; else delete tgt.render; set(false); }
+  if (!qs.length) return { error: 'no render call was timed' };
+  const last = qs[qs.length - 1].q, t0 = performance.now();
+  while (!gl.getQueryParameter(last, gl.QUERY_RESULT_AVAILABLE)) { if (performance.now() - t0 > 20000) break; await new Promise((r) => setTimeout(r, 5)); }
+  const disjoint = !!gl.getParameter(ext.GPU_DISJOINT_EXT);
+  const ms = {}; let missing = 0;
+  for (const r of qs) {
+    if (!disjoint && gl.getQueryParameter(r.q, gl.QUERY_RESULT_AVAILABLE)) { const m = (ms[r.i] = ms[r.i] || { on: 0, off: 0, non: 0, noff: 0 }); const v = gl.getQueryParameter(r.q, gl.QUERY_RESULT) / 1e6;
+      if (r.on) { m.on += v; m.non++; } else { m.off += v; m.noff++; } }
+    else missing++;
+    gl.deleteQuery(r.q); }
+  const out = []; for (let i = 0; i < pairs; i++) { const m = ms[i]; if (m && m.non && m.noff) out.push([m.on, m.off]); }
+  return { pairs: out, disjoint, missing, calls: qs.length }; }"""
 SNAP_JS = r"""() => { const W = window.__LC__.W; return (W.smokes || []).map((q) => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), r: +(q.r || 0).toFixed(2), t0: +(q.t0 || 0).toFixed(2), t1: +(q.t1 || 0).toFixed(2) })); }"""
 
 
@@ -226,59 +270,60 @@ def main():
             v.check("bot-sight (open control: the bot fires >= 5 rounds at the human in 6 s; through the smoke: 0 rounds from t0 + 3 s and 0 hits from t0 + 2 s to t1 - 1 s)",
                     ctrl["shots"] >= 5 and not hits and not shots_in,
                     {"openHits": ctrl["hits"], "openShots": ctrl["shots"], "hitsInSmoke": hits, "shotsInSmoke": shots_in[:20], "botLineBlocked": sight_blocked}, ">= 5 open, 0 in smoke")
-            # cost: 3 smokes in view vs none, ABAB (GPU timer on the default iGPU profile)
+            # cost: 3 smokes in view vs none on a FROZEN scene (R4: the old ABAB x 8 of 60 live-stepped frames per arm read +2.0 / -1.0 / +1.9 ms on
+            # the real build and +1.3 / +1.7 ms with NO cloud drawn: the world moved between arms and the frame-to-frame spread (~+-3 ms of a
+            # ~20 ms frame) swamped a 0.3 ms bar). Now: the world held still (dt 1e-5: no sim tick, no fx time), the SAME three cloud entries in
+            # and out of W.smokes frame by frame in ABBA order, each frame its own TIME_ELAPSED query; the reading = the MEDIAN OF THE PAIRED
+            # DIFFERENCES (on - off of adjacent frames) over >= 480 pairs, with its 95 % confidence interval (order statistics). The clouds sit at
+            # full size past their vent jets (t0 = now - 5 s), so the frame difference is what three standing clouds cost the GPU.
             L.pin_actor(s, None)
             s.js("() => { const W = window.__LC__.W, p = W.player; p.input.pitch = 0.05; }")
-            # ABAB x 8 (was x 4): each arm = 60 GPU-timed frames. Two readings per arm: the MEDIAN frame (the quiet-box measure, unchanged) and
-            # the 10th-percentile frame (CONTENTION-ROBUST: another context's work queued between our queries only ever ADDS time to a
-            # TIME_ELAPSED query, never removes it, so the low quantile reads the uncontended cost)
-            arms = {"on": [], "off": []}
-            lo = {"on": [], "off": []}
-            for k in range(8):
-                for arm in (("off", "on") if k % 2 == 0 else ("on", "off")):
-                    if arm == "on":
-                        s.js("([x, y, z]) => { const W = window.__LC__.W, t = W.t; W.smokes = W.smokes || []; W.smokes.length = 0;"
-                             " for (let i = 0; i < 3; i++) W.smokes.push({ x: x - 8 + 8 * i, y: y + 1.2, z: z - 16, r: W.SIM.SMOKE.r, rMax: W.SIM.SMOKE.r, t0: t - 5, t1: t + 60 }); }",
-                             [iso["x"], iso["y"], iso["z"]])
-                    else:
-                        s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
-                    s.step_frames(20, 1 / 60, render=True)
-                    g = L.gpu_ms(s, 60)
-                    if g:
-                        arms[arm].append(L.med(g))
-                        lo[arm].append(quantile(g, 0.10))
             s.js("() => { const W = window.__LC__.W; if (W.smokes) W.smokes.length = 0; }")
-            diffs = [a - b for a, b in zip(arms["on"], arms["off"]) if a is not None and b is not None]
-            diffs_lo = [a - b for a, b in zip(lo["on"], lo["off"]) if a is not None and b is not None]
+            s.step_frames(180, 1 / 60, render=True)            # 3 s of fx time: the thrown cloud's jets / fade are gone before the scene freezes
+            s.js(COST_SETUP_JS, [iso["x"], iso["y"], iso["z"]])
+            pairs, raw = [], []
+            v.data["smokeCostRaw"] = raw                        # [batch, [[on ms, off ms] per pair]] (pair i of batch b is on-first when (i + b) is even)
+            batches = {"ok": 0, "disjoint": 0, "missing": 0, "error": None}
+            for bi in range(COST_BATCHES):
+                r = s.js(COST_BATCH_JS, [COST_PAIRS_PER_BATCH, bi])
+                if not isinstance(r, dict) or r.get("error"):
+                    batches["error"] = r.get("error") if isinstance(r, dict) else str(r)
+                    break
+                batches["missing"] += r.get("missing") or 0
+                if r.get("disjoint"):
+                    batches["disjoint"] += 1
+                    continue
+                batches["ok"] += 1
+                if bi >= 1:                                     # the first batch warms the path (cache binds, first uploads): not counted
+                    pairs.extend(r["pairs"])
+                    raw.append([bi, [[round(a_, 4), round(b_, 4)] for a_, b_ in r["pairs"]]])
+            s.js("() => { const W = window.__LC__.W, g = W.kernel.gpuTimer; if (W.smokes) W.smokes.length = 0; window.__P23COST__ = null;"
+                 " if (g && window.__P23GT__ != null) g.on = window.__P23GT__; }")
             others = v.data.get("otherAutomatedChromes")
-            if not diffs:
-                v.cnj("cost (3 smokes in view: GPU <= +0.3 ms)", "no GPU timer on this Chrome (EXT_disjoint_timer_query) or no frames")
+            name = "cost (3 smokes in view minus none, frozen scene, ABBA paired frames: median GPU difference <= +0.3 ms)"
+            if len(pairs) < COST_MIN_PAIRS:
+                v.cnj(name, "too few timed frame pairs (%d < %d; batches %s): no GPU timer (EXT_disjoint_timer_query_webgl2) or disjoint results" % (len(pairs), COST_MIN_PAIRS, batches))
             else:
+                diffs = sorted(on - off for on, off in pairs)
+                n = len(diffs)
                 d = statistics.median(diffs)
-                d_lo = statistics.median(diffs_lo) if diffs_lo else None
-                det = {"medianDiffMs": round(d, 3), "p10DiffMs": None if d_lo is None else round(d_lo, 3), "on": [round(x, 3) for x in arms["on"]],
-                       "off": [round(x, 3) for x in arms["off"]], "onP10": [round(x, 3) for x in lo["on"]], "offP10": [round(x, 3) for x in lo["off"]],
-                       "otherAutomatedChromes": others}
+                lo_i, hi_i = median_ci(n)
+                ci = (diffs[lo_i], diffs[hi_i])
+                det = {"medianDiffMs": round(d, 3), "ci95Ms": [round(ci[0], 3), round(ci[1], 3)], "pairs": n, "batches": batches,
+                       "onMedianMs": round(statistics.median(p_[0] for p_ in pairs), 3), "offMedianMs": round(statistics.median(p_[1] for p_ in pairs), 3),
+                       "diffP25P75Ms": [round(quantile(diffs, 0.25), 3), round(quantile(diffs, 0.75), 3)], "otherAutomatedChromes": others}
+                # STABLE = the reading resolves the bar: the 95 % interval of the median is no wider than the bar itself (0.3 ms); wider = the
+                # timer cannot tell 0 from 0.3 ms on this box now (could-not-judge, never a pass)
+                det["stable"] = stable = (ci[1] - ci[0]) <= COST_BAR
                 v.data["smokeCost"] = det
-                print("  smoke cost reading: median-frame diff %+.3f ms, p10-frame diff %s ms, other automated Chromes %s" % (
-                    d, "n/a" if d_lo is None else "%+.3f" % d_lo, others), flush=True)
-                name = "cost (3 smokes in view minus none, ABAB x 8: GPU <= +0.3 ms)"
-                # the timer is STABLE when each arm's p10 frames agree within x1.5 across the 8 repeats (3 other Chromes, 10-26 22:45: one 'off'
-                # arm read 1501 ms against 31-112 ms for the others - the GPU queue of other contexts, not our frames)
-                spread = lambda xs: (max(xs) / max(1e-6, min(xs))) if xs else None
-                det["p10SpreadOn"], det["p10SpreadOff"] = (round(spread(lo["on"]), 2) if lo["on"] else None), (round(spread(lo["off"]), 2) if lo["off"] else None)
-                stable = bool(lo["on"]) and bool(lo["off"]) and spread(lo["on"]) <= 1.5 and spread(lo["off"]) <= 1.5
-                det["stable"] = stable
-                # COUNTED on a quiet box (0 other automated Chromes): BOTH readings must meet the bar. With 1-2 others the contention-robust
-                # p10 reading is judged when the timer is stable (unstable = could-not-judge: a busy box, D16); with more: information only
-                if others == 0:
-                    v.check(name + " [quiet box: median AND p10 readings]", d <= 0.3 and (d_lo is None or d_lo <= 0.3), det, "<= 0.3 ms")
-                elif isinstance(others, int) and others <= 2 and d_lo is not None and stable:
-                    v.check(name + " [%d other Chromes, stable timer: the p10 reading]" % others, d_lo <= 0.3, det, "<= 0.3 ms")
-                elif isinstance(others, int) and others <= 2:
-                    v.cnj(name, "the GPU timer is unstable with %d other automated Chromes (p10 spread on %s / off %s > x1.5): %s" % (others, det["p10SpreadOn"], det["p10SpreadOff"], det))
+                print("  smoke cost reading: median paired diff %+.3f ms (95%% CI %+.3f .. %+.3f, %d pairs), on %.3f / off %.3f ms, other automated Chromes %s" % (
+                    d, ci[0], ci[1], n, det["onMedianMs"], det["offMedianMs"], others), flush=True)
+                if isinstance(others, int) and others > 2:
+                    v.info(name + " would %s - %s other automated Chromes: not judged" % ("PASS" if d <= COST_BAR else "FAIL", others), det)
+                elif not stable:
+                    v.cnj(name, "the GPU timer does not resolve the bar now (95%% CI %.3f .. %.3f ms wider than %.1f ms): %s" % (ci[0], ci[1], COST_BAR, det))
                 else:
-                    v.info(name + " would %s - %s other automated Chromes: not judged" % ("PASS" if (d_lo if d_lo is not None else d) <= 0.3 else "FAIL", others), det)
+                    v.check(name, d <= COST_BAR, det, "<= %.1f ms" % COST_BAR)
             # hides: the cloud hides a body 7 m behind its centre on screen, at the tier in use and at LOW (fx: every tier hides)
             hide = {}
             tier0 = s.js("() => window.__LC__.W.gfxTier")
@@ -312,6 +357,19 @@ def main():
                 shutil.copyfile(first["shotPath"], os.path.join(shots, "smoke_hides.png"))
             L.errors_row(v, s)
     return C.run_gate("p23_smoke", body, args)
+
+
+COST_BAR = 0.3                 # ms of GPU for 3 standing clouds (the plan bar, unchanged)
+COST_BATCHES = 41              # the first warms, 40 counted (640 pairs: 95 % CI of the median ~ +-0.08 ms on this iGPU)
+COST_PAIRS_PER_BATCH = 16      # ABBA: 32 timed frames per page task
+COST_MIN_PAIRS = 480
+
+
+def median_ci(n):
+    """the 95 % confidence interval of the median of n sorted samples (order statistics, the binomial's normal approximation): (lo, hi) indices"""
+    import math
+    h = 1.96 * math.sqrt(n) / 2
+    return max(0, int(math.floor(n / 2 - h))), min(n - 1, int(math.ceil(n / 2 + h)))
 
 
 def quantile(xs, q):
