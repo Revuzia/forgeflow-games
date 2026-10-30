@@ -230,11 +230,18 @@ export function sacredAnimalOf(st: Settlement): string {
   return t ? t.slice(7) : '';
 }
 
-/** an animal the god (a command, an omen) can set a town to revere: a beast of its land or a bird of its sky — not a whale,
- * a fish shoal, shellfish or a seal that none of it ever sees (PUNCH P28), nor a swarm. (The people's own story — the
- * animal that fed them through a famine, people/culture.ts — may still be a fish.) */
-export function reverable(a: AnimalDef | null | undefined): boolean {
-  return !!a && (a.habitat === 'land' || a.habitat === 'air') && !a.swarm;
+/** an animal the god (a command, an omen) can set a town to revere: a beast of its land or a bird of its sky, never a
+ * swarm; a creature of the water (a whale, a fish shoal, shellfish, a seal) only where a shoal or pod of it lives within
+ * the town's reach — a fishing town may revere the fish it nets (fix r3 #18), an inland town never sees a whale (PUNCH
+ * P28). Without a town (an omen's draw) only land and sky. (The people's own story — the animal that fed them through a
+ * famine, people/culture.ts — may still be a fish.) */
+export function reverable(a: AnimalDef | null | undefined, x?: PCtx, st?: Settlement): boolean {
+  if (!a || a.swarm) return false;
+  if (a.habitat === 'land' || a.habitat === 'air') return true;
+  if (!x || !st) return false;
+  const reach = st.territory + 1500;
+  for (const h of x.ps.herds) if (h.owner < 0 && x.c.animals.list[h.species]?.id === a.id && distM(x.p, h.from, st.pos) <= reach) return true;
+  return false;
 }
 
 /** make `animal` (a content animal id, real) sacred to a settlement (replacing any other: at most one) */
@@ -281,11 +288,11 @@ export function registerSacredCommands(r: CommandRegistry): void {
     const id = String(a.animal);
     const def = x.c.animals.find(id);
     if (!def) return fail(`There is no animal called '${id}' in this world.`);
-    if (!reverable(def)) return fail(`The ${def.name.toLowerCase()} lives in the water, where ${st.name} never sees it: make a beast of its land or a bird of its sky sacred.`);
+    if (!reverable(def, x, st)) return fail(`No ${def.name.toLowerCase()} lives in the waters ${st.name} knows: make a beast of its land, a bird of its sky or a creature of its own waters sacred.`);
     revere(x, st, def.id, 'god');
     godAct(u, p, st.pos, st.territory + 200, { wonder: 0.2 }, 0);
     return ok(`The ${def.name.toLowerCase()} is sacred to ${st.name}: none there will hunt it.`);
-  }, { desc: 'Make a real animal sacred to a town (hunting it is taboo there)', category: 'Signs', params: { settlement: { type: 'int', required: true, min: 0 }, animal: { type: 'enum', values: (u: Universe) => u.content.animals.list.filter(reverable).map((a) => a.id), required: true } } });
+  }, { desc: 'Make a real animal sacred to a town (hunting it is taboo there)', category: 'Signs', params: { settlement: { type: 'int', required: true, min: 0 }, animal: { type: 'enum', values: (u: Universe) => u.content.animals.ids(), required: true } } });
 }
 
 /** query 'sacred': every sacred place, and each settlement's sacred animal */

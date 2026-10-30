@@ -210,18 +210,24 @@ test('P13 a late-era scenario city starts with its farmland laid out, and wants 
   assert.ok(seen.length >= 3, `late-era cities seen: ${seen.join('; ')}`);
 });
 
-// P28: the god cannot make a whale, a fish shoal, shellfish or a seal sacred to a town (it never sees them); a beast of
-// its land still can be, and the command's list offers only those.
-test('P28 a town can be given a land beast or a bird to revere, not a sea creature', async () => {
+// P28: the god cannot make a whale, a fish shoal, shellfish or a seal sacred to a town that never sees one (no shoal or
+// pod of it within the town's reach); a creature of its own waters still can be (fix r3 #18, living-sacred), and a beast
+// of its land always.
+test('P28 a town can be given a land beast, a bird or a creature of its own waters to revere, not one it never sees', async () => {
   const { Sim } = await import('../src/sim/sim.ts');
+  const { distM } = await import('../src/sim/people/world.ts');
   const sim = new Sim({ seed: 1, scenario: 'lookdev', overrides: { n: 12 } });
   const p = sim.u.planets.find((q) => q.people && q.people.settlements.some((s) => s.fallen < 0))!;
-  const st = p.people!.settlements.find((s) => s.fallen < 0)!;
+  const ps = p.people!;
+  const st = ps.settlements.find((s) => s.fallen < 0)!;
+  const lives = (id: string) => ps.herds.some((h) => h.owner < 0 && sim.u.content.animals.list[h.species].id === id && distM(p, h.from, st.pos) <= st.territory + 1500);
+  let refused = 0;
   for (const animal of ['whale', 'fish-shoal', 'shellfish', 'harbour-seal']) {
     const r = sim.applyNow({ k: 'settlement.sacred', planet: p.id, settlement: st.id, animal } as never) as { ok: boolean; msg?: string };
-    assert.equal(r.ok, false, `${animal}: ${JSON.stringify(r)}`);
+    assert.equal(r.ok, lives(animal), `${animal} (lives near: ${lives(animal)}): ${JSON.stringify(r)}`);
+    if (!r.ok) refused++;
   }
-  assert.ok(!st.culture.sacred.some((q) => q.startsWith('animal:')), st.culture.sacred.join(','));
+  assert.ok(refused >= 1, 'a sea creature the town never sees is refused');
   const r = sim.applyNow({ k: 'settlement.sacred', planet: p.id, settlement: st.id, animal: 'deer' } as never) as { ok: boolean };
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.ok(st.culture.sacred.includes('animal:deer'));

@@ -438,8 +438,10 @@ export const AIRBURST_W = 0.5;
  * within a third of 1.5 crater radii outright). PUNCH P15: at 1 the default meteor left 0.61 of a town standing (the
  * acceptance's young town), 0.40 of a year-50 town and 0.58 of the wrath test's town against >= 0.60 — a burst above
  * stoves in roofs and blows out walls (Chelyabinsk, 2013: ~7,000 buildings damaged, none flattened); the blast wave
- * after it (shock) still throws down the weak and the near ones */
-export const AIRBURST_HARM = { wreck: 0.6 };
+ * after it (shock) still throws down the weak and the near ones. Measured on the biggest town of the 8 round-4 year-50
+ * worlds (_harness/scratch/punch/p15probe.ts, standing 3 h after / day 10, killed): 1 -> 0.43 / 0.51; 0.6 -> 0.57 / 0.60;
+ * 0.3 -> 0.71 / 0.68; 0 -> 0.80 / 0.72; killed 0.19 at every value (the blast's harm to people is the shock's) */
+export const AIRBURST_HARM = { wreck: 0.3 };
 /** the stones from the sky that may burst in the air (a moon does not; a supervolcano's caldera is no stone) */
 const AIRBURSTS = new Set(['meteor', 'comet']);
 /**
