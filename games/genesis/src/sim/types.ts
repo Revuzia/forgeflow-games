@@ -591,6 +591,9 @@ export type ToWorker =
   | { type: 'mod'; id: number; pack: unknown };
 
 /** worker -> main */
+/** building the world: how far it is (the boot bar; client/simclient.ts reads it apart from FromWorker's replies) */
+export type WorkerProgress = { type: 'progress'; stage: string; frac: number };
+
 export type FromWorker =
   | { type: 'ready'; content: string[] }
   | { type: 'snapshot'; snap: Snapshot }

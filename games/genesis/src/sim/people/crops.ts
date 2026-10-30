@@ -18,6 +18,7 @@ import type { PCtx } from './ctx.ts';
 import type { Settlement } from './state.ts';
 import type { TaskSpec } from './tasks.ts';
 import type { PlantDef } from '../content.ts';
+import { ERAS } from '../content.ts';
 import { hashFloat } from '../core/rng.ts';
 import { NS, SKILL, TASK } from './defs.ts';
 import { suitability } from '../fields/vegetation.ts';
@@ -234,10 +235,18 @@ export function newFieldCell(x: PCtx, st: Settlement): number {
   return best;
 }
 
-/** how many fields st wants (a third of its people, at most 14) */
+/** the most fields a settlement works: 14 by hand and ox; from the age of steam (machines plough and reap) 24 (PUNCH P13:
+ * a rocket-age city of 90-139 people farmed 4 cells, about a hectare) */
+export const FIELDS_MAX = 14, FIELDS_MAX_MACHINES = 24;
+export const MACHINE_ERA = ERAS.indexOf('steam');
+export function fieldsMax(st: Settlement): number {
+  return st.era >= MACHINE_ERA ? FIELDS_MAX_MACHINES : FIELDS_MAX;
+}
+
+/** how many fields st wants (a third of its people, at most fieldsMax) */
 export function fieldsWanted(x: PCtx, st: Settlement): number {
   const pop = (x.ps.members.get(st.id)?.length ?? 0) + cohortTotal(st);
-  return Math.min(14, 1 + Math.ceil(pop / 3));
+  return Math.min(fieldsMax(st), 1 + Math.ceil(pop / 3));
 }
 
 /** fibre wanted and flax at hand to sow: a flax field beside the staple */

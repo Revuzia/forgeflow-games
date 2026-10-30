@@ -183,3 +183,68 @@ test('P02 the Two worlds band sends two hunting parties of two or three out at o
   assert.ok(most.every((n) => n >= PARTY_MIN && n <= 3), `parties of two or three (${most.join('+')})`);
   assert.notEqual(new Set(sts.flatMap((st) => parties(st).map((q) => q.herd))).size, 1, 'after two herds');
 });
+
+// P13: late-era cities farm. A scenario city is set down at tick 0, before the first vegetation step has computed the
+// soil's fertility (all 0 then), so the city laid out no field and its farmers waited for a sowing window: the electric-age
+// city of 'twoworlds-late' / 'system' had 0 fields for its first days (4 for 90-139 people later). Now it starts with its
+// fields laid out and sown, and a city of machines wants more of them than a village (crops.ts fieldsWanted).
+test('P13 a late-era scenario city starts with its farmland laid out, and wants more of it than a village', async () => {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { fieldsWanted } = await import('../src/sim/people/crops.ts');
+  const { cohortTotal } = await import('../src/sim/people/cohorts.ts');
+  const seen: string[] = [];
+  for (const [scen, seed] of [['twoworlds-late', 1], ['twoworlds-late', 2], ['system', 1]] as const) {
+    const sim = new Sim({ seed, scenario: scen });
+    for (const p of sim.u.planets) for (const st of p.people.settlements) {
+      // (the terran cities; the hive on the desert world Rust has no ground fertile enough to sow on at all)
+      if (st.fallen >= 0 || st.era < 8 || st.crop < 0 || p.st.kind !== 'terran') continue;
+      const x = makeCtx(sim.u, p);
+      const pop = (p.people.members.get(st.id)?.length ?? 0) + cohortTotal(st);
+      const sown = st.fields.filter((c) => p.f.crop[c] > 0.1 && p.f.cropSpecies[c] >= 0).length;
+      seen.push(`${scen}#${seed} ${p.name} ${st.name}: pop ${pop}, ${st.fields.length} fields (${sown} sown), wants ${fieldsWanted(x, st)}`);
+      assert.ok(st.fields.length >= 10 && sown >= 10, seen.at(-1));
+      assert.ok(fieldsWanted(x, st) >= 20, seen.at(-1));
+    }
+  }
+  assert.ok(seen.length >= 3, `late-era cities seen: ${seen.join('; ')}`);
+});
+
+// P28: the god cannot make a whale, a fish shoal, shellfish or a seal sacred to a town (it never sees them); a beast of
+// its land still can be, and the command's list offers only those.
+test('P28 a town can be given a land beast or a bird to revere, not a sea creature', async () => {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const sim = new Sim({ seed: 1, scenario: 'lookdev', overrides: { n: 12 } });
+  const p = sim.u.planets.find((q) => q.people && q.people.settlements.some((s) => s.fallen < 0))!;
+  const st = p.people!.settlements.find((s) => s.fallen < 0)!;
+  for (const animal of ['whale', 'fish-shoal', 'shellfish', 'harbour-seal']) {
+    const r = sim.applyNow({ k: 'settlement.sacred', planet: p.id, settlement: st.id, animal } as never) as { ok: boolean; msg?: string };
+    assert.equal(r.ok, false, `${animal}: ${JSON.stringify(r)}`);
+  }
+  assert.ok(!st.culture.sacred.some((q) => q.startsWith('animal:')), st.culture.sacred.join(','));
+  const r = sim.applyNow({ k: 'settlement.sacred', planet: p.id, settlement: st.id, animal: 'deer' } as never) as { ok: boolean };
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.ok(st.culture.sacred.includes('animal:deer'));
+});
+
+// P21: the worker posts how far the world's build is ({ type: 'progress', stage, frac }), so a first visit's boot bar
+// follows the real build instead of a guess (client/simclient.ts already reads it).
+test('P21 the worker posts the build\'s real progress before it is ready', async () => {
+  const { Worker } = await import('node:worker_threads');
+  const w = new Worker(new URL('./helpers/workerboot.ts', import.meta.url));
+  const got: { stage: string; frac: number }[] = [];
+  try {
+    await new Promise<void>((ok, fail) => {
+      const t = setTimeout(() => fail(new Error(`no ready (progress ${JSON.stringify(got)})`)), 60000);
+      w.on('message', (m: { type: string; stage?: string; frac?: number }) => {
+        if (m.type === '__booted') w.postMessage({ type: 'init', scenario: 'twoworlds', seed: 7, options: { overrides: { n: 12 }, speed: 0 } });
+        if (m.type === 'progress') got.push({ stage: String(m.stage), frac: Number(m.frac) });
+        if (m.type === 'ready') { clearTimeout(t); ok(); }
+      });
+    });
+  } finally { await w.terminate(); }
+  assert.ok(got.length >= 5, `progress messages: ${JSON.stringify(got)}`);
+  for (let i = 1; i < got.length; i++) assert.ok(got[i].frac > got[i - 1].frac, `rising: ${JSON.stringify(got)}`);
+  assert.equal(got.at(-1)!.frac, 1);
+  assert.ok(new Set(got.map((g) => g.stage)).size >= 3, JSON.stringify(got));
+});

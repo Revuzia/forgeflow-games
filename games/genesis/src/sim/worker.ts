@@ -27,7 +27,7 @@
 // This is the one sim file allowed to touch timers and performance.now (_harness/detban.ts): it only paces the sim; it
 // never feeds time into it.
 
-import type { Command, FieldName, FromWorker, Snapshot, ToWorker } from './types.ts';
+import type { Command, FieldName, FromWorker, Snapshot, ToWorker, WorkerProgress } from './types.ts';
 import { TICKS_PER_SECOND_1X } from './types.ts';
 import { Sim } from './sim.ts';
 import { FAST_FIELDS } from './world/planet.ts';
@@ -66,7 +66,7 @@ function now(): number {
   return performance.now();
 }
 
-function post(m: FromWorker, transfer: Transferable[] = []): void {
+function post(m: FromWorker | WorkerProgress, transfer: Transferable[] = []): void {
   scope.postMessage(m, transfer);
 }
 
@@ -284,7 +284,8 @@ function handle(m: ToWorker): void {
       // packs named with 'init' replace the list; without them the world is made from the packs sent by 'mod' before it
       const packs = Array.isArray(opts.mods) ? (opts.mods as ContentPack[]) : mods;
       mods = packs;
-      sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined });
+      // (the build posts how far it is: the boot bar follows the real build — PUNCH P21)
+      sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined, onProgress: (stage, frac) => post({ type: 'progress', stage, frac }) });
       if (typeof opts.speed === 'number') speed = Math.max(0, opts.speed);
       wantGrad = opts.grad === true;
       resetSent();

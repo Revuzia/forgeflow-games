@@ -55,6 +55,9 @@ const DEG = Math.PI / 180;
 export interface BuildOptions {
   /** applied to every planet's kind (n, radius, vegetation, climateOffset, atmosphere: {...}, ...) */
   overrides?: Record<string, unknown>;
+  /** how far the build is, 0..1 after each world made, each world's climate and life, the herds and each people (the
+   * worker posts it as `{ type: 'progress' }` for the boot bar — PUNCH P21: a first visit's bar was a guess) */
+  onProgress?: (stage: string, frac: number) => void;
 }
 
 export function buildScenario(content: Content, scenarioId: string, seed: number, opts: BuildOptions = {}): Universe {
@@ -67,6 +70,11 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
   const u = new Universe(content, seed, sc.id, makeStar(starDef, sc.starName ?? starDef.name));
   let nextId = 0;
   const made: { p: Planet; vegetation: number }[] = [];
+  // (the boot bar: a step per world made, per world's climate and life, the herds and each people)
+  const nWorlds = sc.planets.reduce((a, pl) => a + 1 + (pl.moons?.length ?? 0), 0);
+  const steps = 2 * nWorlds + 1 + (sc.peoples?.length ?? 0);
+  let stepsDone = 0;
+  const progress = (stage: string): void => { stepsDone++; opts.onProgress?.(stage, Math.min(1, stepsDone / steps)); };
   /** planet ids of the scenario's top-level planets, in its order (moons take ids in between) */
   const topIds: number[] = [];
 
@@ -92,6 +100,7 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     const { planet } = generatePlanet(content, { id, name: def.name, seed: pseed, kind: def.kind, orbit, overrides });
     u.addPlanet(planet);
     made.push({ p: planet, vegetation: kind.vegetation });
+    progress('worlds');
     for (const m of def.moons ?? []) add(m, planet);
   };
   for (const pl of sc.planets) add(pl, null);
@@ -112,9 +121,11 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     initBiomes(u, p);
     markInitialFirsts(p);
     p.hydro.sourced = 0; // conservation accounting starts from the generated state
+    progress('climate');
   }
   // life: herds on living worlds, then the scenario's peoples (CONTRACT §6.5)
   for (const { p } of made) initHerds(makeCtx(u, p));
+  progress('animals');
   for (const raw of sc.peoples as PeopleEntry[]) {
     // "planet" counts the scenario's own planets (moons are not counted)
     const p = u.planet(topIds[raw.planet] ?? -1);
@@ -134,6 +145,7 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
       }) ?? last;
     });
     if (last && (raw.knowledge?.length || raw.store || raw.buildings?.length)) advance(u, p, last, raw);
+    progress('peoples');
   }
   // the opening's beats a world already has (its air, seas, green, its peoples) are not news (chronicle.ts)
   for (const { p } of made) milestonesCheck(u, p, true);

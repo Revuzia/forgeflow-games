@@ -42,7 +42,7 @@ import { fail, ok, cellPos3, nearestSettlement, norm, herePos, moveBy, bearingDi
 import { meansNow, moveSettlement, relOf, relStat, srel } from './regard.ts';
 import { spawnDisaster } from './disasters.ts';
 import { foretell, heard, makeProphet, prophetOfSettlement } from './prophets.ts';
-import { addSacredPlace, revere, sacredAnimalOf } from './sacred.ts';
+import { addSacredPlace, revere, reverable, sacredAnimalOf } from './sacred.ts';
 import { godAct } from './belief.ts';
 import { curiosityGain } from '../people/outlets.ts';
 
@@ -361,7 +361,7 @@ function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null,
         for (const h of x.ps.herds) {
           if (h.owner >= 0) continue;
           const a = animalDef(x, h.species);
-          if (!a || a.kind === 'fish' || a.swarm) continue;
+          if (!reverable(a)) continue;
           const d = distM(p, h.from, st.pos);
           if (d < bd) { bd = d; sp = h.species; }
         }

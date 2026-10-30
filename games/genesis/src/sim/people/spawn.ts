@@ -17,6 +17,8 @@ import { learn, refreshLibrary } from './knowledge.ts';
 import { worldSalt } from './lifecycle.ts';
 import { storeAdd } from './store.ts';
 import { updateResources, itemIdx } from './resources.ts';
+import { fieldsMax, MACHINE_ERA } from './crops.ts';
+import { seedFertility } from '../fields/vegetation.ts';
 import { cellPos, isLand } from './world.ts';
 import { NS } from './defs.ts';
 
@@ -204,14 +206,28 @@ function establish(x: PCtx, st: Settlement, cell: number, era: number, size: str
   // fields of the domestic crop
   const ag = x.rt.byId.get('agriculture');
   if (ag !== undefined && st.library.includes(ag)) {
+    // (PUNCH P13: a scenario sets its towns down at tick 0, before the first vegetation pass has computed the soil's
+    // fertility — all 0 then, so no ground was fertile and a rocket-age city of 90-139 people began with no field. A city
+    // of machines has its fields from the start; an older town still lays out its own in its first sowing window, as the
+    // tests' towns and the acceptance's are calibrated on)
+    const machines = st.era >= MACHINE_ERA;
+    if (machines && !x.p.f.fertility.some((v) => v > 0)) seedFertility(x.u, x.p);
     st.crop = chooseCrop(x, st);
     updateResources(x, st);
     const f = x.p.f;
-    for (const c of (st.res?.fertile ?? []).slice(0, Math.min(10, 2 + Math.floor(pop / 5)))) {
-      f.cropSpecies[c] = st.crop;
-      f.crop[c] = 0.25 + 0.4 * hashFloat(c, st.id, worldSalt(x, 0xf1e1));
-      f.tree[c] = 0; f.shrub[c] = 0; f.grass[c] *= 0.3;
-      st.fields.push(c);
+    // the town's fields: a fifth of its people and two, up to what it works (the resource cache lists ten free fertile
+    // cells at a time: refreshed until the town has its fields or the ground runs out)
+    const want = Math.min(machines ? fieldsMax(st) : 10, 2 + Math.floor(pop / 5));
+    for (let round = 0; round < (machines ? 4 : 1) && st.fields.length < want; round++) {
+      const free = (st.res?.fertile ?? []).filter((c) => !st.fields.includes(c)).slice(0, want - st.fields.length);
+      if (!free.length) break;
+      for (const c of free) {
+        f.cropSpecies[c] = st.crop;
+        f.crop[c] = 0.25 + 0.4 * hashFloat(c, st.id, worldSalt(x, 0xf1e1));
+        f.tree[c] = 0; f.shrub[c] = 0; f.grass[c] *= 0.3;
+        st.fields.push(c);
+      }
+      if (st.fields.length < want) updateResources(x, st);
     }
     st.fields.sort((a, b) => a - b);
     x.p.bump('crop'); x.p.bump('cropSpecies');

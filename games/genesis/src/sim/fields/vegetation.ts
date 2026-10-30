@@ -164,6 +164,29 @@ function perHours(r: number, h: number): number {
   return 1 - q;
 }
 
+/** a cell's fertility from its soil, ash, moisture, salt and pollution (+0.2 under a growing crop that feeds the soil) */
+export function fertilityOf(soil: number, ash: number, mo: number, sal: number, pollution: number, nitroCrop: boolean): number {
+  const soilF = Math.min(1, (soil + 0.2 * ash) / 0.5);
+  let fert = soilF * (0.3 + 0.7 * mo) * (1 - 0.8 * sal);
+  if (ash > 0.01 && mo > 0.2) fert += 0.25 * Math.min(1, ash / 0.15);
+  // (LIVING CONTENT: a field of a crop that feeds the soil — lentils, plants.json `nitrogen` — is richer while it grows)
+  if (nitroCrop) fert += 0.2;
+  fert -= 0.5 * pollution;
+  return fert < 0 ? 0 : fert > 1 ? 1 : fert;
+}
+
+/** the soil's fertility before the first vegetation pass has computed it (all 0 at tick 0): a scenario that sets down a
+ * farming town lays out its fields then (PUNCH P13: a late-era city had no field for its first days) */
+export function seedFertility(u: Universe, p: Planet): void {
+  const f = p.f, ocean = p.s.ocean, N = p.count;
+  const t = u.content.plantTable;
+  const nitro = t.nitrogen && t.nitrogen.some((v) => v > 0) ? t.nitrogen : null;
+  for (let c = 0; c < N; c++) {
+    if (ocean[c] || f.water[c] > 0.5) { f.fertility[c] = 0; continue; }
+    f.fertility[c] = fertilityOf(f.soil[c], f.ash[c], f.moisture[c], f.salinity[c], f.pollution[c], !!nitro && f.crop[c] > 0.03 && f.cropSpecies[c] >= 0 && nitro[f.cropSpecies[c]] > 0);
+  }
+}
+
 /** One hourly vegetation pass (`hours` > 1: a time-lapse pass standing for that many hours, perf/lapse.ts — growth,
  * decline and decay scale with it, hourly chances are compounded; at 1 every expression is the hourly one). */
 export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
@@ -307,15 +330,7 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
     if (burnt[c] > 0 && fire[c] <= 0) burnt[c] = Math.max(0, H1 ? burnt[c] - 0.004 - 0.02 * grassA[c] : burnt[c] - (0.004 + 0.02 * grassA[c]) * H);
     // fertility
     if (ocean[c] || w > 0.5) fertility[c] = 0;
-    else {
-      const soilF = Math.min(1, (soil[c] + 0.2 * ash[c]) / 0.5);
-      let fert = soilF * (0.3 + 0.7 * mo) * (1 - 0.8 * sal);
-      if (ash[c] > 0.01 && mo > 0.2) fert += 0.25 * Math.min(1, ash[c] / 0.15);
-      // (LIVING CONTENT: a field of a crop that feeds the soil — lentils, plants.json `nitrogen` — is richer while it grows)
-      if (nitro && cropA[c] > 0.03 && cropSp[c] >= 0 && nitro[cropSp[c]]) fert += 0.2;
-      fert -= 0.5 * pollution[c];
-      fertility[c] = fert < 0 ? 0 : fert > 1 ? 1 : fert;
-    }
+    else fertility[c] = fertilityOf(soil[c], ash[c], mo, sal, pollution[c], !!nitro && cropA[c] > 0.03 && cropSp[c] >= 0 && !!nitro[cropSp[c]]);
     if (pollution[c] > 0) pollution[c] = Math.max(0, pollution[c] - 0.002 * H);
     if (blight[c] > 0) blight[c] = Math.max(0, blight[c] - 0.01 * H);
   }

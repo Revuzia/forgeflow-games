@@ -434,6 +434,12 @@ function triggers(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, re
  * and star iron); from it up — a "great" meteor, 0.6 — it strikes the ground as before. Nature's stones always strike.
  */
 export const AIRBURST_W = 0.5;
+/** how hard a burst in the air hits the buildings under it (1: as a crater's blow, which ruins an average building
+ * within a third of 1.5 crater radii outright). PUNCH P15: at 1 the default meteor left 0.61 of a town standing (the
+ * acceptance's young town), 0.40 of a year-50 town and 0.58 of the wrath test's town against >= 0.60 — a burst above
+ * stoves in roofs and blows out walls (Chelyabinsk, 2013: ~7,000 buildings damaged, none flattened); the blast wave
+ * after it (shock) still throws down the weak and the near ones */
+export const AIRBURST_HARM = { wreck: 0.6 };
 /** the stones from the sky that may burst in the air (a moon does not; a supervolcano's caldera is no stone) */
 const AIRBURSTS = new Set(['meteor', 'comet']);
 /**
@@ -471,7 +477,7 @@ function impact(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, e: E
     // them — people/people.ts onImpact's damageArea; the blow to people is the shock below: the ground's own blow,
     // onImpact's harmArea, is a striking stone's)
     stripPlants(p, pos, craterR, { tree: 0.7, shrub: 0.8, grass: 0.6, crop: 0.9 }, 0.9);
-    wreckBuildings(u, p, pos, R * num(e, 'craterK', 1) * 1.5, 1, d.kind);
+    wreckBuildings(u, p, pos, R * num(e, 'craterK', 1) * 1.5, AIRBURST_HARM.wreck, d.kind);
     u.emit({ t: 'impact', planet: p.id, pos: [...pos], a: craterR, b: 0, data: { kind: d.kind, airburst: 1 } });
   } else if (num(e, 'crater') > 0) crater(u, p, pos, sea ? craterR * 0.6 : craterR, num(e, 'crater') * Math.sqrt(I) * ws.L);
   else u.emit({ t: 'impact', planet: p.id, pos: [...pos], a: R, b: I, data: { kind: d.kind } });

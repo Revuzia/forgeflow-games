@@ -90,6 +90,8 @@ export interface SimOptions {
   content?: ContentPack[];
   /** applied to every planet's kind (tests: { n: 24 }) */
   overrides?: Record<string, unknown>;
+  /** how far building the world is (stage, 0..1; world/scenarios.ts BuildOptions.onProgress) */
+  onProgress?: (stage: string, frac: number) => void;
 }
 
 export interface SnapshotOptions {
@@ -156,7 +158,7 @@ export class Sim {
       this.u = restored.universe;
     } else {
       this.content = loadContent([BASE_PACK, ...(opts.content ?? [])]);
-      this.u = buildScenario(this.content, opts.scenario, opts.seed >>> 0, { overrides: opts.overrides });
+      this.u = buildScenario(this.content, opts.scenario, opts.seed >>> 0, { overrides: opts.overrides, onProgress: opts.onProgress });
     }
     this.registry = buildRegistry();
     registerTimeScale(this.registry); // SIM perf push 2: the logged speed level (perf/lapse.ts)
