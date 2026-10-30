@@ -565,8 +565,7 @@ export class Opening {
   private placeRing(): void {
     const sp = this.spot;
     const beat = this.cur?.beat;
-    // (the card steps aside while the people are held in the Touch — that is exactly when the ring must guide the drop)
-    const p = sp && (beat === 'people' || beat === 'gone') && (this.armedPeople || !this.card.classList.contains('gn-away')) ? this.host.screenOf(sp.planet, sp.pos, 2) : null;
+    const p = sp && ringWanted(beat, this.armedPeople, this.card.classList.contains('gn-away'), !!this.deps.cameraBusy?.()) ? this.host.screenOf(sp.planet, sp.pos, 2) : null;
     if (!p) { this.ring.hidden = true; return; }
     this.ring.hidden = false;
     this.ring.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
@@ -802,6 +801,17 @@ function bodySun(pv: PlanetView): [number, number, number] {
 function isNight(pv: PlanetView, u: ArrayLike<number>): boolean {
   const b = bodySun(pv);
   return b[0] * u[0] + b[1] * u[1] + b[2] * u[2] < -0.04;
+}
+
+/**
+ * Whether the opening's ring stands on its spot this frame: only while the people's whisper (or the empty world's) points
+ * at it; the card steps aside while the people are held in the Touch — that is exactly when the ring must guide the
+ * drop — but under an open window with nothing held it steps back. And never while the camera is falling to the spot
+ * ("set them down": a 1.4 s blend, minutes on a software renderer): mid-fall the ring swung off the bottom of the view
+ * with its words hidden (punch P24, 1920×1080); it appears once the camera has arrived, centred, its words fitted there.
+ */
+export function ringWanted(beat: string | undefined, armedPeople: boolean, cardAway: boolean, cameraBusy: boolean): boolean {
+  return (beat === 'people' || beat === 'gone') && (armedPeople || !cardAway) && !cameraBusy;
 }
 
 /**

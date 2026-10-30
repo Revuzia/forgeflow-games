@@ -1238,7 +1238,10 @@ export class HandVisual {
     const busy = Math.max(grasp, W.point, W.soothe, rk, ck);
     const lowGod = (1 - eyeCam) * (1 - smooth(90, 260, altCam)) * (1 - busy);
     this.lowGod = lowGod;
-    this.u.uColK.value = Math.max(0.03, 1 - 0.97 * nearEye - 0.8 * lowGod);
+    this.u.uColK.value = Math.max(0.03, 1 - 0.97 * nearEye - 0.88 * lowGod);
+    // (its low whirl too, by a little under half: at 0.2 of the shaft the whirl round its foot still stood in the town
+    // centre as a pale smoky curl — rp-vil-fix)
+    this.u.uTuftK.value *= 1 - 0.45 * lowGod;
     const wk = 1.6 * (1 + 0.45 * feared) * (1 + 0.2 * trusted * (1 - grasp)) * (1 - 0.55 * farK) * (1 - 0.5 * nearEye);
     this.u.uWTop.value = Math.max(L * 1.1, topH * 0.06) * (1 + 0.4 * W.soothe - 0.35 * W.point) * wk;
     this.u.uWGrip.value = L * (0.3 - 0.1 * grasp - 0.17 * W.point + 0.2 * W.soothe + 0.25 * rk) * wk;

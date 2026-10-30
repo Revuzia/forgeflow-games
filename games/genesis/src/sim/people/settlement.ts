@@ -671,8 +671,10 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   // food workers, 5-15 % of a farming town's — when game is within range: people/herding.ts, hunt.ts)
   const herders = Math.min(herderQuota(x, st), Math.max(0, food - 1));
   if (herders > 0) { quota[ROLE.herder] = herders; food -= herders; }
-  const hunters = Math.min(huntQuota(x, st, foodWorkers), Math.max(0, food - 1));
-  if (hunters > 0) { quota[ROLE.hunter] = hunters; food -= hunters; }
+  // (punch P02) hunters by the able adults: those the food workers cannot spare come from the rest (below), the gatherers
+  const hunters = huntQuota(x, st, foodWorkers, n);
+  const fromFood = Math.min(hunters, Math.max(0, food - 1));
+  if (fromFood > 0) { quota[ROLE.hunter] = fromFood; food -= fromFood; }
   if (lib('fishing') && res && res.fish.length) { quota[ROLE.fisher] = Math.max(1, Math.round(food * 0.35)); food -= quota[ROLE.fisher]; }
   quota[ROLE.gatherer] = Math.max(1, food);
   let rest = n - quota.reduce((a, b) => a + b, 0);
@@ -696,6 +698,16 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   if (lib('writing')) take(ROLE.scholar, Math.floor(n / 20));
   // at war (or under the threat of raids) some keep watch at home
   if (atWar(x, st) || (st.recent.raided !== undefined && x.tick - st.recent.raided < 2 * x.day)) take(ROLE.soldier, Math.max(1, Math.floor(n / 8)));
+  // (punch P02) the hunters the food workers could not spare: from the rest, else from the crafters (one kept), the
+  // gatherers (one kept) and the builders (two kept) — round 4: a town of 13 adults dealt 4 builders and 4 crafters and no
+  // hunter, with game a few hundred metres off
+  if (hunters > fromFood) {
+    take(ROLE.hunter, hunters - fromFood);
+    for (const [role, keep] of [[ROLE.crafter, 1], [ROLE.gatherer, 1], [ROLE.builder, 2]]) {
+      const g = Math.min(hunters - quota[ROLE.hunter], quota[role] - keep);
+      if (g > 0) { quota[ROLE.hunter] += g; quota[role] -= g; }
+    }
+  }
   // whoever is left gathers
   quota[ROLE.gatherer] += rest;
   st.quota = quota;

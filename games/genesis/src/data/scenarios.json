@@ -23,7 +23,7 @@
         { "name": "Rust", "kind": "desert", "overrides": { "n": 48, "climateOffset": 16 }, "orbit": { "a": 1.3, "e": 0.05, "inc": 1.7, "node": 63, "phase0": 150, "yearDays": 17 } }
       ],
       "peoples": [
-        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone" },
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone", "knowledge": ["hunting"] },
         { "phase": 2, "species": "hive", "planet": 1, "count": 60, "era": "stone" }
       ] },
     { "id": "twoworlds-late", "name": "Two worlds: the age of rockets", "description": "The plains folk of Gaia and the hive of Rust, both grown into their electric age: Gaia's launchpad stands ready, and Rust is a light in its telescopes.",

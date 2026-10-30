@@ -71,3 +71,45 @@ test('P20 chronicle templates read right with plural knowledge, and the wonder l
   const w = ev.templates.find((t) => t.id === 'reading.wonder')!;
   for (const s of w.text) assert.ok(!/nothing else\.?$/.test(s) && /god/i.test(s), s);
 });
+
+// P02: villagers hunt where game exists. The stone-age band of "Two worlds" knows hunting from the start (it did not, and no
+// party went out in the owner's first ten game days), and a town with game in range keeps hunters for two parties by its
+// able adults even with the store full (round 4: the hunters were a share of the food workers left after the farmers and
+// herders — none at all in 784 of 1341 daylight town-hours over 8 worlds), without taking its priest, healer or teachers.
+test('P02 the Two worlds band knows hunting and sends out a party on its first day', async () => {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const sim = new Sim({ seed: 1, scenario: 'twoworlds' });
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const k = x.rt.byId.get('hunting');
+  const sts = p.people.settlements.filter((st) => st.fallen < 0);
+  assert.ok(sts.length && sts.every((st) => k !== undefined && st.library.includes(k)), 'the band on Gaia knows hunting at the start');
+  let party = false;
+  for (let h = 0; h < 18 && !party; h++) { sim.step(60); party = sts.some((st) => !!st.land?.party); }
+  assert.ok(party, 'a hunting party sets out within the first 18 hours');
+});
+
+test('P02 a town with game in range keeps hunters for two parties though its store is full, and keeps its priest', async () => {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { assignRoles } = await import('../src/sim/people/settlement.ts');
+  const { ROLE } = await import('../src/sim/people/defs.ts');
+  const { AgentFlag } = await import('../src/sim/types.ts');
+  const { HUNT_TWO, PARTY_MIN, bestGame } = await import('../src/sim/people/hunt.ts');
+  const sim = new Sim({ seed: 1, scenario: 'twoworlds' });
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const st = p.people.settlements.find((s) => s.fallen < 0)!;
+  const adults = (x.ps.members.get(st.id) ?? []).filter((m) => !(x.A.flags[m] & AgentFlag.child) && !x.A.mission[m]);
+  assert.ok(adults.length >= HUNT_TWO, `a town of ${HUNT_TWO}+ adults (${adults.length})`);
+  assert.ok(bestGame(x, st, st.pos, PARTY_MIN, false), 'game within range');
+  // a full store: few food workers wanted
+  st.store[x.c.items.idx('berries')] = 20000;
+  for (const id of ['hunting', 'religion']) { const k = x.rt.byId.get(id); if (k !== undefined && !st.library.includes(k)) st.library.push(k); }
+  assignRoles(x, st);
+  let hunters = 0;
+  for (const m of adults) if (x.A.role[m] === ROLE.hunter) hunters++;
+  assert.ok(st.quota[ROLE.hunter] >= 2 * PARTY_MIN && hunters >= 2 * PARTY_MIN, `hunters for two parties (quota ${st.quota[ROLE.hunter]}, dealt ${hunters})`);
+  assert.ok(st.quota[ROLE.priest] >= 1, 'the priest is kept');
+});

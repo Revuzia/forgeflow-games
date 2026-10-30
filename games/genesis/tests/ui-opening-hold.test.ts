@@ -2,7 +2,7 @@
 // (src/ui/opening.ts findSpot), up to ~100° away — at 1920×1080 the ring sat below the view. spotHold bounds the hold.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spotHold } from '../src/ui/opening.ts';
+import { ringWanted, spotHold } from '../src/ui/opening.ts';
 
 type V = [number, number, number];
 const norm = (v: V): V => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -73,4 +73,20 @@ test('spotHold rests on the lit face when the spot is already near the middle, a
   // the lit face straight behind the spot: the spot itself (no NaN)
   const back = spotHold(lit, [-lit[0], -lit[1], -lit[2]], 2.7, KEEP);
   assert.ok(back.every(Number.isFinite) && dot(back, [-lit[0], -lit[1], -lit[2]]) > 0.999);
+});
+
+// the second half of P24: after "set them down" the camera falls to the spot (a 1.4 s blend; minutes on a software
+// renderer) and mid-fall the ring swung off the bottom of the view with its label hidden (r4 'after Esc', 1920x1080:
+// circle at y 1194-1264 of 1080, label gn-off). The ring waits for the camera to arrive.
+test('the ring steps back while the camera falls to the spot, and returns once it has arrived', () => {
+  // the people's whisper, the band held in the Touch, the camera mid-fall: no ring
+  assert.equal(ringWanted('people', true, true, true), false);
+  assert.equal(ringWanted('gone', false, false, true), false);
+  // arrived: the ring guides the drop (the card stepped aside while the band is held)
+  assert.equal(ringWanted('people', true, true, false), true);
+  assert.equal(ringWanted('gone', false, false, false), true);
+  // the card away under a window, nothing held: no ring; other beats never ring a spot
+  assert.equal(ringWanted('people', false, true, false), false);
+  assert.equal(ringWanted('wait', true, false, false), false);
+  assert.equal(ringWanted(undefined, true, false, false), false);
 });

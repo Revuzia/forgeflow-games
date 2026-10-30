@@ -235,8 +235,17 @@ export const HUNT_TUNE = { folkDays: 0, raidDays: 0, armedOnly: false, folkReach
  * The variant run sets { folkDays: <a year in days>, raidDays: 2, armedOnly: true, folkReach: 700 }.
  */
 
-/** hunters wanted (settlement.ts assignRoles): of `food` food workers, when hunting is known and game is within range */
-export function huntQuota(x: PCtx, st: Settlement, food: number): number {
+/**
+ * (punch P02) the able adults it takes for one hunting party / for two: a town of HUNT_ONE adults keeps a party's worth of
+ * hunters and one of HUNT_TWO two parties' (round 4: with the share counted on the food workers only — 30 % of the adults
+ * once the store is full — and taken after the farmers and herders, 784 of 1341 daylight town-hours over 8 worlds had no
+ * hunter at all and 436 had one or two hunters, all out in the one party: 2.1 kills per 100 people a year, target >= 20)
+ */
+export const HUNT_ONE = 6, HUNT_TWO = 16;
+
+/** hunters wanted (settlement.ts assignRoles): of `food` food workers (and `adults` able adults), when hunting is known and
+ * game is within range */
+export function huntQuota(x: PCtx, st: Settlement, food: number, adults = 0): number {
   const k = x.rt.byId.get('hunting');
   if (k === undefined || !libHas(st, k) || st.besieged >= 0 || food < 2) return 0;
   const easy = bestGame(x, st, st.pos, PARTY_MIN, false);
@@ -247,6 +256,9 @@ export function huntQuota(x: PCtx, st: Settlement, food: number): number {
   let n = Math.round(food * share);
   if (n < PARTY_MIN && food >= 4) n = PARTY_MIN;
   if (!easy && n < 4 && food >= 6) n = 4;
+  // (punch P02) a party's worth of hunters, or two parties', by the able adults (assignRoles finds the ones the food
+  // workers cannot spare among the gatherers)
+  if (adults > 0) return Math.min(Math.max(n, adults >= HUNT_TWO ? 2 * PARTY_MIN : adults >= HUNT_ONE ? PARTY_MIN : 0), adults - 2);
   return Math.min(n, food - 1);
 }
 
