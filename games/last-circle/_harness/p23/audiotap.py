@@ -158,8 +158,17 @@ def capture(s, js, arg, settle):
     x = np.frombuffer(base64.b64decode(d["b64"]), dtype=np.float32)
     x = x.reshape(-1, 2) if len(x) else np.zeros((0, 2), np.float32)
     row = analyse(d["sr"], x, d["t0"], et)
-    pl = s.js("() => window.__PL__.slice(0, 2)")
-    row["gain_dB"] = round(20 * np.log10(pl[0]["gain"]), 2) if pl and pl[0]["gain"] > 0 else None
+    pl = s.js("() => window.__PL__.slice(0, 4)")
+    row["pl"] = pl
+    # the gain the game ASSIGNED: a pooled strip is wired gain -> panner when audio.js creates it (makeStrip), so a capture that needed a
+    # NEW strip (a direction no free strip points within 10 deg of) first logs that connect at the GainNode's default 1.0 (0 dB), and only
+    # then the vol x occlusion write spatialOut makes before any audio flows. R4: after the R2 movers merge (ea6853de) the player lands 256 m
+    # from the spot instead of 894 m, the behind step needed a fresh strip, and pl[0] read 0.0 dB for one of three crouch-9 captures (mean
+    # -8.64 vs the real -12.96; audible peak -35.97 vs front -34.85). So: the first write when there is one; a connect only for a chain that
+    # was built with its gain already set (spatialOut's throwaway fallback, which is never written after the connect).
+    w = [e for e in pl if e.get("via") == "set"] if pl else []
+    g0 = (w[0] if w else pl[0]) if pl else None
+    row["gain_dB"] = round(20 * np.log10(g0["gain"]), 2) if g0 and g0["gain"] > 0 else None
     return row
 
 
@@ -214,6 +223,7 @@ def main():
                 for sg in (1, -1):
                     st["%s%+d" % (stance, sg * d)] = [capture(s, STEP_JS, [sg * d, stance, "f", None], 1.0) for _ in range(3)]
             R["steps"] = {k: {"gain_dB": mean(x, "gain_dB"), "peak": mean(x, "peak"), "heard": sum(1 for r in x if "peak" in r)} for k, x in st.items()}
+            R["stepCaptures"] = {k: [{"gain_dB": r.get("gain_dB"), "peak": r.get("peak"), "pl": r.get("pl")} for r in x] for k, x in st.items()}
             heard_any = any(R["steps"][k]["heard"] for k in R["steps"])
             if not heard_any:
                 v.cnj("tap (the tap captured the game's output)", "every capture was silent / empty: no AudioContext output reached the tap")
