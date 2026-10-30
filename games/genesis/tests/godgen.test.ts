@@ -46,7 +46,7 @@ import { SHAPES, Unistroke, type Pt } from '../src/ui/unistroke.ts';
 import { BASE_PACK } from '../src/data/index.ts';
 import { AgentFlag2, type EntityRef, type HandView, type ProjectileView } from '../src/sim/types.ts';
 import { PLACE_LOOK, SignsLayer, animalIndex, markedPeople, type SignsFrame } from '../src/render/signs/signs.ts';
-import { DRAWBACK_MAX, Drawback, SHELF_MAX, SHOW_K } from '../src/render/fx/drawback.ts';
+import { DRAWBACK_MAX, Drawback, SEL_MAX, SHELF_MAX, SHOW_K } from '../src/render/fx/drawback.ts';
 import { SigilMarks, landTop } from '../src/render/fx/sigilfx.ts';
 import { groundHeight } from '../src/sim/grid/surface.ts';
 import type { Decal, DecalPass } from '../src/render/fx/decals.ts';
@@ -815,9 +815,9 @@ test('the sea drawing back: the coast\'s shallow band is laid on the ground, nev
   const pos = db.mesh.geometry.getAttribute('position'), dep = db.mesh.geometry.getAttribute('aDepth');
   let wet = 0, sum = 0;
   for (let i = 0; i < pos.count; i++) {
-    // (a triangle is taken when a corner lies in the shallows: its other corners may reach a little deeper)
+    // (a triangle is taken when a corner lies on the shelf: its other corners may reach deeper, held to SHELF_MAX)
     const d = dep.getX(i);
-    assert.ok(d >= 0 && d < DRAWBACK_MAX * 2.5, `a shallow depth (${d})`);
+    assert.ok(d >= 0 && d <= SHELF_MAX + 1e-3, `a shelf depth (${d})`);
     sum += d;
     if (d > 0.02) wet++;
     // on the ground (the ground's own height, a hand's breadth over it)
@@ -827,7 +827,7 @@ test('the sea drawing back: the coast\'s shallow band is laid on the ground, nev
     assert.ok(new Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).distanceTo(coast) < 1500 + 400, 'near the wave');
   }
   assert.ok(wet > pos.count * 0.3, 'most of it is seabed');
-  assert.ok(sum / pos.count < DRAWBACK_MAX, `the shallows, not the open sea (mean ${(sum / pos.count).toFixed(2)} m)`);
+  assert.ok(sum / pos.count < SEL_MAX / 2, `the shelf, not the open sea (mean ${(sum / pos.count).toFixed(2)} m)`);
   db.update(2, 1, coast);
   assert.ok(db.mesh.visible);
   db.update(2, 0, coast);
@@ -861,6 +861,8 @@ test('the sea drawing back on a steep coast: dry land beside deep water still ba
     if (d > 0.02 && d < DRAWBACK_MAX * SHOW_K) lo++;
     if (d >= DRAWBACK_MAX * SHOW_K) mid++;
   }
+  // (no seam where the mesh ends: the points held at the shelf's floor lie past SEL_MAX, where the shader draws nothing)
+  assert.ok(SHELF_MAX >= SEL_MAX && DRAWBACK_MAX * SHOW_K + 4 < SEL_MAX, 'all it draws is gone before the mesh ends');
   assert.ok(lo > dep.count * 0.15, `a band the drawn-back sea lays bare (${lo} of ${dep.count} points)`);
   assert.ok(mid > 0, 'and water beyond it');
   db.dispose();

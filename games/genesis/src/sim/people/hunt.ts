@@ -54,15 +54,18 @@ const _route: number[] = [];
  * of 2-3 was out ~3 days for one boar (`r5/pprobe.ts`: 13 parties, 7 kills in five years on seed 7), and the other
  * hunters gathered. At most this many parties of a settlement are out at once, each after its own herd.
  */
-export const PARTIES_MAX = 2;
+export const PARTIES_MAX = 3;
 /**
  * (punch P02, lever 2) the hunting pace, measured from the year-50 saves (_harness/scratch/punch/gateprobe.ts) and gated on
  * the 8-seed 25-year alone runs: `parties` at most out at once; `split` the hunters at home it takes to send two parties
  * of 2-3 rather than one crowd; `killDiv` a party brings down 1 + floor(hunters there / killDiv) head at most (carry and
  * the herd's spare still bound it); `three` the able adults for three parties' worth of hunters (0 off).
+ * Probe, 8 worlds x 1 game year from the round-4 year-50 saves (pace-*.log; lever 1 alone 43 kills in 62 trips, 7.7 per
+ * 100 people a year; the old pace {2, 5, 3, 0} sent four hunters out as one crowd): three parties 7.7; + split at four
+ * 8.4; + two head for a pair 9.5; + three parties' worth at 28 adults 10.5 (59 kills, 67 trips).
  * Tests and probes may set it (and restore it); the sim never writes it.
  */
-export const HUNT_PACE = { parties: PARTIES_MAX, split: 2 * PARTY_MIN + 1, killDiv: 3, three: 0 };
+export const HUNT_PACE = { parties: PARTIES_MAX, split: 2 * PARTY_MIN, killDiv: 2, three: 28 };
 /**
  * A party musters at home: hunters within this of the settlement's centre (m), who set out together with the trip's food
  * from the store (PARTY_FOOD_DAYS). It took any hunter in the territory and the walk out of the one gathering 850 m off

@@ -250,6 +250,10 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
   const fn = def.function;
   if ((fn === 'dock' || fn === 'shipyard' || def.provides.includes('dock')) && st.res) {
     const c = st.res.fish[0] ?? st.res.water[0];
+    // (punch P04) on the shore itself, its pier out over the water: the spiral below kept every spot on dry cells around
+    // a point 0.3 of the way to the water's centre, ~30 m short of the shore drawn between them, and faced the pier home
+    const shore = c !== undefined ? shoreSite(x, st, t, c) : null;
+    if (shore) return shore;
     if (c !== undefined) {
       const P = p.grid.pos;
       centre = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
@@ -330,6 +334,53 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
   // cells around it, ring by ring, a few spots in each.)
   if (wall || outskirts || fn === 'mine' || centre !== st.pos) return null;
   return edgeSite(x, st, t);
+}
+
+/**
+ * (punch P04) the fraction of the way from a dry cell's centre to its water neighbour's at which a dock stands (its
+ * building cell the dry one: a cell is the nearer centre's, so under 0.5 it is still on the land side) — the shore is
+ * drawn between the two centres, and the pier reaches ~11 m out along its heading (render buildinggen dock()).
+ * Shipyards and lighthouses (dock providers on land) stand a little farther back.
+ */
+export const DOCK_T = [0.48, 0.45, 0.42, 0.38, 0.33], YARD_T = [0.4, 0.35, 0.3, 0.25];
+
+/** (punch P04) a spot on the shore of water cell c for a dock-like building t of st, facing the water; null if none */
+function shoreSite(x: PCtx, st: Settlement, t: number, c: number): { pos: [number, number, number]; cell: number; rot: number } | null {
+  const p = x.p, g = p.grid, P = g.pos, R = p.st.radius;
+  const def = x.c.buildings.list[t];
+  const wc = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
+  // the dry neighbours of that water, nearest home first
+  const dry: { o: number; d: number }[] = [];
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+    const o = g.nbr[e];
+    if (!isLand(p, o) || p.f.water[o] > 0.15 || p.f.lava[o] > 0 || p.f.fire[o] > 0.1) continue;
+    dry.push({ o, d: distM(p, st.pos, [P[o * 3], P[o * 3 + 1], P[o * 3 + 2]]) });
+  }
+  dry.sort((a, b) => a.d - b.d || a.o - b.o);
+  const fracs = def.function === 'dock' ? DOCK_T : YARD_T;
+  const pt: number[] = [0, 0, 0], out: number[] = [0, 0, 0];
+  for (const { o } of dry.slice(0, 4)) {
+    if (st.fields.includes(o) || p.f.crop[o] > 0.05) continue;
+    for (const f of fracs) {
+      const vx = P[o * 3] * (1 - f) + wc[0] * f, vy = P[o * 3 + 1] * (1 - f) + wc[1] * f, vz = P[o * 3 + 2] * (1 - f) + wc[2] * f;
+      const l = Math.hypot(vx, vy, vz) || 1;
+      pt[0] = vx / l; pt[1] = vy / l; pt[2] = vz / l;
+      const h = facing(pt, wc);
+      // along the shore either way from that point (offsetPoint angles run from east toward north, facing's from north
+      // toward east)
+      for (const side of [0, 1, -1, 2, -2]) {
+        if (side === 0) { out[0] = pt[0]; out[1] = pt[1]; out[2] = pt[2]; } else offsetPoint(pt, Math.abs(side) * (def.footprint + 3), Math.PI / 2 - h + (side > 0 ? Math.PI / 2 : -Math.PI / 2), R, out);
+        if (p.cellAt(out) !== o) continue;
+        let clear = true;
+        for (const b of x.ps.buildings) {
+          if (Math.abs(b.pos[0] - out[0]) + Math.abs(b.pos[1] - out[1]) + Math.abs(b.pos[2] - out[2]) > 0.05) continue;
+          if (distM(p, b.pos, out) < x.c.buildings.list[b.type].footprint + def.footprint + 1.5) { clear = false; break; }
+        }
+        if (clear) return { pos: [out[0], out[1], out[2]], cell: o, rot: facing(out, wc) };
+      }
+    }
+  }
+  return null;
 }
 
 /** a place for building type t at the edge of st: the dry, free, unfarmed cells around its centre, nearest ring first

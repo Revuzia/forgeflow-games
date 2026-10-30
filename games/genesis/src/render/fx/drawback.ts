@@ -7,8 +7,8 @@
 //
 // The mesh is built once per tsunami from the sim triangles of the coast round it (some corner under water, some corner
 // no deeper than a few metres — or dry land beside deep water, a steep coast), each split into nine and laid on the
-// curved ground (the terrain's own height function), carrying the water depth the sea had there (held to SHELF_MAX). Drawn in the FX layer over the composited image (so over the
-// water), soft-tested against the opaque scene's depth (the seabed itself).
+// curved ground (the terrain's own height function), carrying the water depth the sea had there (held to SHELF_MAX).
+// Drawn in the FX layer over the composited image (so over the water), soft-tested against the opaque scene's depth (the seabed itself).
 
 import { BufferAttribute, BufferGeometry, CustomBlending, Mesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
@@ -24,10 +24,13 @@ const MAX_TRIS = 7000;
 /**
  * the sim's coarse cells average a coast's shelf away: land often sits next to a 20-50 m deep cell, and laid as a
  * straight line between the two the 8 m drawn back bared a rim 2-3 m wide (fr4d-drawback, punch P08). Such a triangle
- * is taken too, its depths held to SHELF_MAX, and the shader lays bare to SHOW_K × the drawn-back depth.
+ * is taken too (any corner shallower than SEL_MAX), and the shader lays bare to SHOW_K × the drawn-back depth. All it
+ * draws (bare ground, foam, silt) is gone by SEL_MAX − 1 m and its depths are held to SHELF_MAX ≥ SEL_MAX, so where the
+ * mesh ends — an edge shared with a triangle not taken, every corner of it deeper than SEL_MAX — nothing shows a seam.
  */
-export const SHELF_MAX = DRAWBACK_MAX * 2.4;
 export const SHOW_K = 2.1;
+export const SEL_MAX = DRAWBACK_MAX * 3.25;
+export const SHELF_MAX = DRAWBACK_MAX * 3.5;
 
 const VERT = /* glsl */ `
 ${ATMO_PARS}
@@ -60,6 +63,9 @@ uniform vec3 uCamB;
 uniform float uDw;       // how deep the sea has drawn back (m)
 uniform float uK;        // fade (in during the warning, out when the wave comes)
 uniform float uShowK;    // how far down the shelf the drawn-back depth reads (SHOW_K)
+uniform float uSel;      // SEL_MAX: all of it gone by then (the mesh's own edge)
+uniform vec3 uCentre;    // where the wave comes ashore, and how far round it the mesh was taken
+uniform float uReach;
 varying float vDepth;
 varying float vZ;
 varying vec3 vP;
@@ -76,7 +82,10 @@ void main() {
   // (a broad ragged line of foam along the new waterline, and past it the shallows draining off, brown with silt)
   float fw = 0.3 + 0.05 * dw;
   float foam = exp(-pow((d - dw - fw * 0.5) / fw, 2.0)) * (0.6 + 0.4 * snoise(vP * 0.3 + vec3(0.0, uFxTime * 0.6, 0.0)));
-  float silt = (1.0 - smoothstep(dw, dw + 2.0 + 0.6 * dw, d)) * smoothstep(0.3, 1.5, uDw);
+  float silt = (1.0 - smoothstep(dw, dw + 1.5 + 0.15 * dw, d)) * smoothstep(0.3, 1.5, uDw);
+  // (no seam where the mesh ends: on its deep side, and at the edge of the wave's reach)
+  float edge = (1.0 - smoothstep(uSel - 4.0, uSel - 1.0, vDepth)) * (1.0 - smoothstep(uReach * 0.8, uReach * 0.92, length(vP - uCentre)));
+  bare *= edge; foam *= edge; silt *= edge;
   if (bare <= 0.003 && foam <= 0.01 && silt <= 0.01) discard;
   vec3 up = normalize(vP);
   vec3 V = normalize(uCamB - vP);
@@ -101,8 +110,8 @@ void main() {
   float a = bare * uK * vis;
   float fa = clamp(foam, 0.0, 1.0) * 0.9 * uK * vis;
   // the draining shallows: a veil of silty water over the seabed showing through, under the sky's sheen
-  float sa = silt * (1.0 - bare) * 0.55 * uK * vis;
-  vec3 sc = vec3(0.16, 0.14, 0.1) * vLight + sky * 0.3 * fres;
+  float sa = silt * (1.0 - bare) * 0.35 * uK * vis;
+  vec3 sc = vec3(0.24, 0.21, 0.15) * vLight + sky * 0.3 * fres;
   vec3 col = (c * a + sc * sa * (1.0 - a)) * (1.0 - fa) + fc * fa;
   gl_FragColor = vec4(col, max(max(a, fa), sa));
 }
@@ -125,13 +134,14 @@ export class Drawback {
       const cosR = Math.cos(reach / R);
       for (let t = 0; t < g.triCount && n < MAX_TRIS; t++) {
         const a = T[t * 3], b = T[t * 3 + 1], c = T[t * 3 + 2];
-        // (near enough: the triangle's first corner within the reach)
-        if (P[a * 3] * cu.x + P[a * 3 + 1] * cu.y + P[a * 3 + 2] * cu.z < cosR) continue;
+        // (near enough: a corner within the reach — so a triangle not taken lies wholly outside it, past the fade)
+        const near = (i: number) => P[i * 3] * cu.x + P[i * 3 + 1] * cu.y + P[i * 3 + 2] * cu.z >= cosR;
+        if (!near(a) && !near(b) && !near(c)) continue;
         const wa = water[a], wb = water[b], wc = water[c];
         const lo = Math.min(wa, wb, wc), hi = Math.max(wa, wb, wc);
         // the shallow band: some of it under water and some of it shallow — a corner in the shallows, or a steep coast
         // (dry land beside deep water: the shelf the coarse cells averaged away lies between them)
-        if (hi < 0.02 || lo > DRAWBACK_MAX + 1) continue;
+        if (hi < 0.02 || lo >= SEL_MAX) continue;
         const base = pos.length / 3;
         for (let i = 0; i <= SUB; i++) for (let j = 0; j <= SUB - i; j++) {
           const wB = i / SUB, wC = j / SUB, wA = 1 - wB - wC;
@@ -159,7 +169,8 @@ export class Drawback {
     geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
     geo.setAttribute('aDepth', new BufferAttribute(new Float32Array(dep), 1));
     geo.setIndex(idx);
-    const uniforms: Record<string, IUniform> = { ...fx, uDw: { value: 0 }, uK: { value: 0 }, uShowK: { value: SHOW_K }, uCamB: { value: new Vector3() } };
+    const uniforms: Record<string, IUniform> = { ...fx, uDw: { value: 0 }, uK: { value: 0 }, uShowK: { value: SHOW_K }, uSel: { value: SEL_MAX },
+      uCentre: { value: centre.clone() }, uReach: { value: reach }, uCamB: { value: new Vector3() } };
     for (const k of Object.keys(shared)) if (!(k in uniforms)) uniforms[k] = shared[k];
     this.mat = new ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG, uniforms, transparent: true, depthTest: false, depthWrite: false,

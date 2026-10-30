@@ -113,3 +113,73 @@ test('P02 a town with game in range keeps hunters for two parties though its sto
   assert.ok(st.quota[ROLE.hunter] >= 2 * PARTY_MIN && hunters >= 2 * PARTY_MIN, `hunters for two parties (quota ${st.quota[ROLE.hunter]}, dealt ${hunters})`);
   assert.ok(st.quota[ROLE.priest] >= 1, 'the priest is kept');
 });
+
+// P04: a dock stands on the shore with its pier out over the water — on its dry cell's water side, in the outer part
+// toward the water (the shore is drawn between the two cell centres), facing the water; before, it stood ~0.3 of the
+// way toward the water's centre on any dry spot of a spiral around that point, 25-40 m short of the drawn shore, and
+// faced the town.
+export async function dockSites(): Promise<{ frac: number; turn: number; dry: boolean }[]> {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { findSite } = await import('../src/sim/people/buildings.ts');
+  const { distM, isLand } = await import('../src/sim/people/world.ts');
+  const sim = new Sim({ seed: 1, scenario: 'twoworlds' });
+  const out: { frac: number; turn: number; dry: boolean }[] = [];
+  for (const p of sim.u.planets) {
+    const x = makeCtx(sim.u, p);
+    const t = x.c.buildings.list.findIndex((b) => b.id === 'dock');
+    const P = p.grid.pos, g = p.grid;
+    for (const st of p.people.settlements) {
+      if (st.fallen >= 0 || !st.res || !st.res.fish.length) continue;
+      const s = findSite(x, st, t);
+      assert.ok(s, `a dock site for ${st.name}`);
+      // the nearest water cell to the dock and the dock cell's centre: how far across toward that water it stands
+      let best = Infinity, wc: number[] = [];
+      for (let e = g.nbrStart[s!.cell]; e < g.nbrStart[s!.cell + 1]; e++) {
+        const o = g.nbr[e];
+        if (isLand(p, o) && p.f.water[o] <= 0.15) continue;
+        const q = [P[o * 3], P[o * 3 + 1], P[o * 3 + 2]];
+        const d = distM(p, s!.pos, q);
+        if (d < best) { best = d; wc = q; }
+      }
+      assert.ok(best < Infinity, `${st.name}: the dock's cell borders the water`);
+      const home = [P[s!.cell * 3], P[s!.cell * 3 + 1], P[s!.cell * 3 + 2]];
+      const span = distM(p, home, wc);
+      // its heading toward that water (rot: radians from north toward east, as buildings.ts facing())
+      const u = s!.pos; const l = Math.hypot(u[0], u[1], u[2]);
+      let ex = u[2], ez = -u[0]; const el = Math.hypot(ex, ez) || 1; ex /= el; ez /= el;
+      const nx = (u[1] * ez) / l, ny = (u[2] * ex - u[0] * ez) / l, nz = (-u[1] * ex) / l;
+      const dx = wc[0] - u[0], dy = wc[1] - u[1], dz = wc[2] - u[2];
+      const want = Math.atan2(dx * ex + dz * ez, dx * nx + dy * ny + dz * nz);
+      const turn = Math.abs(Math.atan2(Math.sin(want - s!.rot), Math.cos(want - s!.rot)));
+      out.push({ frac: 1 - best / span, turn, dry: isLand(p, s!.cell) && p.f.water[s!.cell] <= 0.15 });
+    }
+  }
+  return out;
+}
+
+test('P04 a dock stands on the shore, its pier facing out over the water', async () => {
+  const sites = await dockSites();
+  assert.ok(sites.length >= 2, `fishing towns to place docks for (${sites.length})`);
+  for (const s of sites) {
+    assert.ok(s.dry, 'the dock\'s own cell is dry land');
+    assert.ok(s.frac >= 0.38 && s.frac <= 0.55, `on the shore: ${s.frac.toFixed(2)} of the way from its cell's centre to the water's`);
+    assert.ok(s.turn < 0.35, `facing the water (off by ${s.turn.toFixed(2)} rad)`);
+  }
+});
+
+// P02 lever 2: hunters enough for two parties go out as two (after two herds), not as one crowd of four.
+test('P02 the Two worlds band sends two hunting parties of two or three out at once', async () => {
+  const { Sim } = await import('../src/sim/sim.ts');
+  const { parties, PARTY_MIN } = await import('../src/sim/people/hunt.ts');
+  const sim = new Sim({ seed: 1, scenario: 'twoworlds' });
+  const sts = sim.u.planets[0].people.settlements.filter((st) => st.fallen < 0);
+  let most: number[] = [];
+  for (let h = 0; h < 48 && most.length < 2; h++) {
+    sim.step(60);
+    for (const st of sts) { const ps = parties(st); if (ps.length > most.length) most = ps.map((q) => q.members.length); }
+  }
+  assert.ok(most.length >= 2, `two parties out at once in the first two days (most: ${most.join('+') || 'none'})`);
+  assert.ok(most.every((n) => n >= PARTY_MIN && n <= 3), `parties of two or three (${most.join('+')})`);
+  assert.notEqual(new Set(sts.flatMap((st) => parties(st).map((q) => q.herd))).size, 1, 'after two herds');
+});
