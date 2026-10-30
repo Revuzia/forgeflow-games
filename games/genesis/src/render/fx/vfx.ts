@@ -82,6 +82,8 @@ export interface EmitterDef {
 }
 
 const BLOCK = 64;
+/** instances per lava bomb (SYS.arcGlow): the glowing head and its tail along the arc — emitters pass count = arcs x ARC_TAIL */
+export const ARC_TAIL = 8;
 const ROWS = 1024;          // emitter rows
 const TEX_W = 5;            // texels per emitter row
 
@@ -400,6 +402,9 @@ void main() {
     // thin out toward the box's edge (no visible wall of rain)
     float edge = 1.0 - smoothstep(0.6, 1.0, length(q) / B);
     a = edge * power;
+    // (rain: none in the first metre or so before the lens, faint to ~3.5 m — a streak a hand's breadth away drew as a
+    // thick white bar across the frame; the first rain on the barren world read as falling white bars — punch P06)
+    if (S == 16 && p2 < 0.5) a *= smoothstep(1.2, 3.5, length(q));
     kind = S == 19 ? 7.0 : 5.0;
     if (S == 19) { sz *= 0.6 + 0.8 * r4; }
     // (S 19 with p2: big flakes right at the lens, out of focus — soft discs)
@@ -547,7 +552,9 @@ void main() {
     // temperature: hottest in the core and early; a blackbody ramp
     float T = exp(-tS * (0.9 + 0.6 * r2)) * (1.0 - 0.35 * r2);
     glow = mix(vec3(0.6, 0.06, 0.0), vec3(1.0, 0.42, 0.08), smoothstep(0.1, 0.5, T));
-    glow = mix(glow, vec3(1.0, 0.86, 0.6), smoothstep(0.55, 0.95, T)) * 22.0 * T * T;
+    // (a yellow-white heart only in the first instant, 10x not 22x: at 22x every puff was a cream-white glare ball and
+    // from 450-900 m the strike read as a milky sheet with white blobs on it — punch P07)
+    glow = mix(glow, vec3(1.0, 0.76, 0.42), smoothstep(0.75, 1.0, T)) * 10.0 * T * T;
     selfSh = 1.0;
   } else if (S == 42) {
     // an impact's shock ring: a wall of dust rolling out along the ground (p0 its farthest reach, p1 its spread rate),
@@ -577,8 +584,8 @@ void main() {
   } else if (S == 44 || S == 29) {
     // things thrown on ballistic arcs from O: arc j's launch from a hash of the emitters' shared seed (p2); smoke
     // puffs left along each arc (44, twelve per arc) and the glowing heads (29, one per arc)
-    float j = S == 44 ? floor(idx / 12.0) : idx;
-    float kk = S == 44 ? mod(idx, 12.0) : 0.0;
+    float j = S == 44 ? floor(idx / 12.0) : floor(idx / ${ARC_TAIL}.0);
+    float kk = S == 44 ? mod(idx, 12.0) : mod(idx, ${ARC_TAIL}.0);
     float aj = h1(p2 * 1.7 + j * 0.37, 11.0) * 6.2831853;
     float el = 0.45 + 0.6 * h1(p2 * 2.3 + j * 0.71, 12.0);
     float spd = p1 * (0.35 + 0.65 * h1(p2 * 3.1 + j * 0.53, 13.0));
@@ -596,17 +603,23 @@ void main() {
       soft = 0.6 * sz;
       age = pa;
     } else {
-      if (tAll > Tj) { hideMe(); return; }
-      float tt = tAll;
+      // (the head and its glowing tail: kk > 0 the same rock a moment earlier, so the trail follows the parabola — one
+      // straight streak per bomb along its flight read as a spray of upright bars, punch P23; the tail spans ~1.4 s,
+      // the long exposure a lava-bomb photograph shows as a curve)
+      float dtT = min(0.2, 0.05 * Tj + 0.04);
+      float tt = tAll - kk * dtT;
+      if (tAll > Tj || tt < 0.0) { hideMe(); return; }
       vec3 v0 = hz * spd * cos(el) + up * spd * sin(el);
       p += v0 * tt - up * 0.5 * g * tt * tt;
       vel = v0 - up * g * tt;
       float cool = clamp(tt / max(Tj, 0.1), 0.0, 1.0);
-      c = mix(vec3(1.0, 0.65, 0.25), vec3(0.5, 0.07, 0.01), smoothstep(0.0, 0.85, cool)) * mix(16.0, 2.0, cool);
-      sz = size * (0.6 + 0.6 * h1(p2 + j, 14.0));
-      a = 1.0 - smoothstep(0.85, 1.0, cool);
+      float tl = kk / ${ARC_TAIL}.0;
+      c = mix(vec3(1.0, 0.65, 0.25), vec3(0.5, 0.07, 0.01), smoothstep(0.0, 0.85, cool + 0.5 * tl)) * mix(16.0, 2.0, cool) * (1.0 - 0.55 * tl);
+      sz = size * (0.6 + 0.6 * h1(p2 + j, 14.0)) * (1.0 - 0.6 * tl);
+      a = (1.0 - smoothstep(0.85, 1.0, tAll / max(Tj, 0.1))) * (1.0 - tl) * (1.0 - tl);
       kind = 1.0;
-      stretchCap = 2.5;
+      // (each piece of the tail long enough to meet the next: a dotted line otherwise)
+      stretchCap = kk < 0.5 ? 2.5 : clamp(0.6 * length(vel) * dtT / max(sz, 1e-3), 1.0, 9.0);
       age = cool;
     }
   } else if (S == 46) {
@@ -796,14 +809,15 @@ void main() {
   } else if (vKind > 4.5 && vKind < 5.5) {
     // a rain streak: thin, brightest in the middle, lit by the sky
     float k = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * (1.0 - smoothstep(0.6, 1.0, abs(vCorner.y)));
-    float bright = 1.6;
+    // (rain is water: it catches the sky's light, it does not glow white — 1.6 and .55 read as chalk bars, punch P06)
+    float bright = 1.3;
     if (vKind > 5.1) {
       // a driven flake: a soft, rounded smear (no hard-edged card), a diffuse white body
       float rr = length(vec2(vCorner.x, max(abs(vCorner.y) - 0.3, 0.0) / 0.7));
       k = exp(-rr * rr * 3.2) * (1.0 - smoothstep(0.75, 1.0, rr));
       bright = 1.25;
     }
-    float a = vColor.a * k * fade * 0.55;
+    float a = vColor.a * k * fade * (vKind > 5.1 ? 0.55 : 0.42);
     gl_FragColor = vec4((vColor.rgb * ((vLight + vSkyL) * bright + 0.01) * vAirT + vAirIn) * a, a);
   } else if (vKind > 5.5 && vKind < 6.5) {
     // a leaf: a little lit ellipse turning in the air

@@ -23,7 +23,7 @@ import { FX_EXPOSURE } from './particles.ts';
 
 export const DECAL = {
   shadow: 0, brush: 1, reticle: 2, glow: 3, cracks: 4, scorch: 5, frost: 6, tint: 7, ring: 8, paint: 9, light: 10,
-  path: 11, pit: 12, domeRing: 13, crackGlow: 14, ripple: 15,
+  path: 11, pit: 12, domeRing: 13, crackGlow: 14, ripple: 15, crater: 16,
 } as const;
 
 /** which blend group a decal type draws in */
@@ -31,7 +31,7 @@ const GROUP_OF: Record<number, 0 | 1 | 2> = {
   [DECAL.shadow]: 0, [DECAL.brush]: 0, [DECAL.reticle]: 0, [DECAL.cracks]: 0, [DECAL.scorch]: 0, [DECAL.frost]: 0,
   [DECAL.paint]: 0, [DECAL.path]: 0, [DECAL.pit]: 0, [DECAL.ring]: 0,
   [DECAL.glow]: 1, [DECAL.light]: 1, [DECAL.domeRing]: 1, [DECAL.crackGlow]: 1, [DECAL.ripple]: 1,
-  [DECAL.tint]: 2,
+  [DECAL.tint]: 2, [DECAL.crater]: 2,
 };
 
 export interface Decal {
@@ -318,6 +318,26 @@ void main() {
     float mx2 = max(A.r, max(A.g, A.b)) * 0.35;
     if (uGroup > 1.5) o = vec4(vec3(1.0) + Am * min(1.0, 3.5 / max(mx, 1e-6)), 1.0);
     else o = vec4(A * 0.35 * min(1.0, (0.05 / max(expo(), 1e-4)) / max(mx2, 1e-12)), 0.0);
+  } else if (t == 16) {
+    // a ground strike's crater and ejecta blanket (punch P07: the strike left only a scorch that faded in a minute — no
+    // crater read from the regional view): a burnt bowl floor, a raised rim of crushed pale rock, and rays of thrown rock
+    // out to ~2.6 rim radii. A MULTIPLY on the lit ground (the tint group), so it is lit as the ground is, by day and by
+    // night, and never glows (p0 the rim radius, p1 strength 0-1, p2 the noise seed)
+    float R = vP.x;
+    float n = fbm3(vec3(q / (R * 0.35), vP.z));
+    float rr = r / R + n * 0.1;
+    vec2 dir = q / max(r, 1e-3);
+    float rays = sat(fbm3(vec3(dir * 2.6, vP.z + 7.0)) * 1.6 + 0.35);
+    rays *= rays;
+    float floorK = 1.0 - smoothstep(0.5, 0.92, rr);
+    float rim = exp(-pow((rr - 1.0) / 0.13, 2.0));
+    float blanket = smoothstep(0.9, 1.05, rr) * (1.0 - smoothstep(1.1, 2.6, rr / mix(0.7, 1.15, rays)));
+    float k = vP.y * hf * vCol.a;
+    vec3 m = vec3(1.0);
+    m = mix(m, vec3(0.34, 0.31, 0.29), floorK * 0.85);
+    m = mix(m, vec3(1.45, 1.36, 1.24), rim * 0.8);
+    m = mix(m, vec3(1.22, 1.15, 1.05) * (0.92 + 0.16 * n), blanket * (0.35 + 0.5 * rays) * (1.0 - rim));
+    o = vec4(mix(vec3(1.0), m, k), 1.0);
   } else if (t == 11) {
     // a path ahead (a front's heading): chevrons marching along the axis
     float L = vP.x, W = vP.y;

@@ -35,7 +35,8 @@ const DEFS = new Map<string, WDef>(
 
 /** what falls, by the sim's precipType: 0 none, 1 rain, 2 snow, 3 hail, 4 ash, 5 acid, 6 blood, 7 sand */
 const FALL: Record<number, { sys: number; speed: number; size: number; col: [number, number, number]; splash: boolean }> = {
-  1: { sys: SYS.precip, speed: 9.5, size: 0.02, col: [0.7, 0.74, 0.8], splash: true },
+  // (rain 12 mm wide, not 20: a drop is a few millimetres; at 20 mm a streak 2 m off was 9 px wide — punch P06)
+  1: { sys: SYS.precip, speed: 9.5, size: 0.012, col: [0.66, 0.7, 0.76], splash: true },
   2: { sys: SYS.snowfall, speed: 1.2, size: 0.06, col: [0.95, 0.96, 1.0], splash: false },
   3: { sys: SYS.snowfall, speed: 13, size: 0.03, col: [0.9, 0.92, 0.95], splash: true },
   4: { sys: SYS.snowfall, speed: 0.9, size: 0.06, col: [0.32, 0.31, 0.3], splash: false },
@@ -217,7 +218,11 @@ export class WeatherFx {
     // every ray) the same density laid a milky white veil over the view — a tsunami's drawback, a meteor's strike and
     // the land itself washed out — so it thins with the camera's height; a real fog or dust storm stays)
     const hazeK = 0.3 * ov.cam * (1 - 0.8 * smooth(40, 300, alt));
-    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0, hazeK) * low;
+    // (a downpour's murk too: down among things it closes in, but from the god's height its full 0.5 — x(1 + 1.2 gust)
+    // along ~140 m of ground air — veiled the first rain's hill from 400 m at 50-80 % in a pale blue-grey, the bare
+    // rock read as frost (punch P06))
+    const rainK = type === 2 && precip > 6 ? 0.5 * (1 - 0.75 * smooth(40, 300, alt)) : 0;
+    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, rainK, hazeK) * low;
     this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.ease * 0.8 + 0.02);
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);

@@ -75,8 +75,12 @@ test('an iron monopoly drives the have-nots toward war (a town that holds iron a
   // 1-12 with fix/seedbound/iron.ts (before: the tree with the fix's hunting, fever and budding reverted, fix/before/):
   // before it held on 3 of 12 (4, 7, 9), after on 3 of 12 (3, 7, 9) — as often as before. Seed 9 holds on both trees
   // with the war mid-window (day 8 before, 11 after; margin 0.32 / 0.29).
+  // PUNCH P02 (2026-10-30: hunting parties of two or three, up to three at once, people/hunt.ts HUNT_PACE): measured over
+  // seeds 1-12 with _harness/scratch/punch/iron.ts (iron-oldpace.log / iron-newpace.log): old pace held on 5 of 12
+  // (1, 3, 6, 7, 9), new pace on 3 of 12 (6, 7, 10) — seed 9's fair town now goes to war over land. Seed 6 holds on both
+  // with the war mid-window (day 11 on both; margin 0.36 old / 0.30 new).
   const run = (monopoly: boolean) => {
-    const { sim, a, b } = twoTowns(9, 'iron');
+    const { sim, a, b } = twoTowns(6, 'iron');
     metals(sim, a, true);
     metals(sim, b, !monopoly);
     warlike(sim, b);

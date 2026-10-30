@@ -114,12 +114,18 @@ const LIGHT_GLSL = /* glsl */ `
 ${ATMO_PARS}
 ${SKY_LOOKUP}
 uniform vec3 uSunDirBody;
+// the storm the camera stands under (sky/clouds.ts overcastAt; the planet's shared uniforms): under its deck the sun is
+// put out and the land lies in a flat grey light — the Touch's cloud lit by the full sun there stood on the first
+// rain's hill as a white crescent and spun a white spiral in the grey deck (punch P06)
+uniform vec4 uOvercastC;
+uniform float uOvercastK;
 vec3 touchLight(vec3 P) {
   float rP = length(P);
   vec3 upP = P / max(rP, 1.0);
   vec3 sun = uSunE * sunTransmittance(rP, dot(upP, uSunDirBody));
   vec3 sky = skyIrradiance(upP, upP, uSunDirBody);
-  return sun * 0.24 + sky * 0.3 + vec3(0.002, 0.003, 0.005);
+  float ov = uOvercastK > 0.0 ? uOvercastK * smoothstep(uOvercastC.w, mix(uOvercastC.w, 1.0, 0.5), dot(upP, uOvercastC.xyz)) : 0.0;
+  return sun * 0.24 * (1.0 - 0.85 * ov) + sky * 0.3 * (1.0 - 0.45 * ov) + vec3(0.002, 0.003, 0.005);
 }
 `;
 

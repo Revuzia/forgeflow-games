@@ -49,7 +49,7 @@ import type { PlanetView } from '../../client/worldview.ts';
 import { TICKS_PER_SECOND_1X, type DisasterView, type SimEvent } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { DECAL, decal, type Decal, type DecalPass } from './decals.ts';
-import { SYS, type EmitterDef, type Vfx } from './vfx.ts';
+import { ARC_TAIL, SYS, type EmitterDef, type Vfx } from './vfx.ts';
 import { Bolide, Comet, Debris, Dome, Funnel } from './meshfx.ts';
 import type { Lightning } from './lightning.ts';
 import type { ScreenState } from './screenfx.ts';
@@ -58,6 +58,14 @@ import { clamp01, fxHash, smooth } from './fxcommon.ts';
 import { makePropMaterial } from './propmat.ts';
 import { TsunamiCrest } from './tsunami.ts';
 import { DRAWBACK_MAX, Drawback } from './drawback.ts';
+
+/** 1 when p is in front of the camera (within ~45° of its axis), fading to 0 by ~60° (no camera axis: in view) */
+function inView(p: Vector3, c: FxCtx): number {
+  if (!c.camFwd) return 1;
+  const dx = p.x - c.camBody.x, dy = p.y - c.camBody.y, dz = p.z - c.camBody.z;
+  const l = Math.hypot(dx, dy, dz) || 1;
+  return smooth(0.5, 0.72, (dx * c.camFwd.x + dy * c.camFwd.y + dz * c.camFwd.z) / l);
+}
 
 export interface FxCtx {
   pv: PlanetView;
@@ -179,7 +187,11 @@ export class DisasterFx {
     const u = new Vector3(e.pos[0], e.pos[1], e.pos[2]).normalize();
     const p = groundAt(pv, u, new Vector3());
     switch (e.t) {
-      case 'impact': this.impact(p, Math.max(4, e.a ?? 40), Math.max(0.2, e.b ?? 1), ctx, String((e.data as { kind?: string } | undefined)?.kind ?? '')); break;
+      case 'impact': {
+        const dd = e.data as { kind?: string; airburst?: number } | undefined;
+        this.impact(p, Math.max(4, e.a ?? 40), Math.max(0.2, e.b ?? 1), ctx, String(dd?.kind ?? ''), !!dd?.airburst);
+        break;
+      }
       case 'eruption': this.eruptionBurst(p, e.a ?? 1, ctx); break;
       case 'collapsed': {
         ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: 4, life: 6, count: 64, p0: 6, p1: 8, burst: true, r: 0.42, g: 0.37, b: 0.3 }, ctx.now);
@@ -226,25 +238,29 @@ export class DisasterFx {
     return !!w && pv.grid.sample(w, u.x, u.y, u.z) > 0.3;
   }
 
-  /** an impact: R the crater radius (m), I its strength */
-  impact(p: Vector3, R: number, I: number, ctx: FxCtx, kind = ''): void {
+  /** an impact: R the crater radius (m), I its strength; `air` a stone that bursts in the air (the sim's airburst) */
+  impact(p: Vector3, R: number, I: number, ctx: FxCtx, kind = '', air = false): void {
     if (kind === 'volcano') { this.ventBlast(p, R, I, ctx); return; }
+    if (air) { this.airBurst(p, R, ctx); return; }
     const big = kind === 'meteor' || kind === 'comet' || kind === 'moon-fall' || R > 30;
     const s = Math.sqrt(I);
     const up = _v.copy(p).normalize();
     const pc = p.clone();
     // the flash (and the light it throws)
-    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * (big ? 2.6 : 5), life: big ? 0.45 : 0.6, count: 1, p0: R * 0.5, p1: big ? 300 : 60, burst: true, r: 1, g: 0.9, b: 0.75 }, ctx.now);
+    // (punch P07: the strike's flash was a R × 2.6 sphere at p1 300, its light held near full for 14 s and the view washed
+    // .55 white: from 450-900 m the impact frame was a milky sheet. Now a smaller, warmer flash; the light dies with the
+    // fireball in a few seconds; the wash is a quarter, and only when the strike is in front of the camera)
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * (big ? 1.8 : 5), life: big ? 0.4 : 0.6, count: 1, p0: R * 0.5, p1: big ? 140 : 60, burst: true, r: 1, g: 0.86, b: 0.64 }, ctx.now);
     this.transients.push({
       t0: ctx.now, dur: big ? 14 : 3, step: (age, k, c) => {
         const flash = Math.exp(-age * 3.5);
-        const glow = (1 - k) * 0.25;
+        const glow = Math.exp(-age / 2.5) * 0.25 * (1 - k);
         const d = decal(DECAL.light, [pc.x, pc.y, pc.z], R * 30);
         d.cr = 1; d.cg = 0.62 + 0.3 * flash; d.cb = 0.3 + 0.4 * flash;
-        d.p0 = R * 30; d.p1 = (flash * 2.5e5 + glow * 2e4) * R * R / 900 * s; d.p2 = R * 0.8; d.p3 = R * 0.8;
+        d.p0 = R * 30; d.p1 = (flash * 1.4e5 + glow * 2e4) * R * R / 900 * s; d.p2 = R * 0.8; d.p3 = R * 0.8;
         c.decals.add(d);
         // the view washes white for an instant (two frames), then the light is the fireball's
-        const f = (age < 0.07 ? 1 : Math.exp(-(age - 0.07) * 22)) * (big ? 0.55 : 0.05) * clamp01(1 - pc.distanceTo(c.camBody) / (R * 400));
+        const f = (age < 0.07 ? 1 : Math.exp(-(age - 0.07) * 22)) * (big ? 0.25 : 0.05) * clamp01(1 - pc.distanceTo(c.camBody) / (R * 400)) * inView(pc, c);
         c.screen.flash.addScalar(f);
       },
     });
@@ -266,7 +282,7 @@ export class DisasterFx {
     // debris on curved arcs, each glowing as it flies and trailing smoke (the two systems share the arcs' seed)
     const arcSeed = Math.random() * 97;
     ctx.vfx.emit({ sys: SYS.arcSmoke, x: p.x, y: p.y, z: p.z, size: Math.max(1, R * 0.1), life: 9, count: 26 * 12, p1: 26 + R * 0.55, p2: arcSeed, burst: true, r: 0.22, g: 0.2, b: 0.18 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.035), life: 9, count: 26, p1: 26 + R * 0.55, p2: arcSeed, burst: true }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.035), life: 9, count: 26 * ARC_TAIL, p1: 26 + R * 0.55, p2: arcSeed, burst: true }, ctx.now);
     // the mushroom column (sun-lit: warm on its lit side, blue-grey in its shade), low dust, embers, tumbling rocks
     const H = R * 9 * s;
     ctx.vfx.emit({ sys: SYS.plume, x: p.x, y: p.y, z: p.z, size: R * 1.1, life: 40, count: Math.round(900 * q), p0: H, p1: R * 4, duration: 22, r: 0.25, g: 0.21, b: 0.17 }, ctx.now);
@@ -274,6 +290,15 @@ export class DisasterFx {
     ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.025), life: 5, count: 110, p0: R, p1: 10 + R * 0.15, burst: true }, ctx.now);
     ctx.debris.burst(p, 70, 18 + R * 0.9, Math.max(1, R * 0.07), ctx.now);
     void shellUp;
+    // the crater's bowl, its pale rim and the rays of thrown rock round it: they stay (the scorch and glow fade within
+    // the minute; the sim's terrain keeps the bowl, this keeps it reading from the regional view — punch P07)
+    const seed = Math.random() * 50;
+    this.transients.push({
+      t0: ctx.now, dur: 900, step: (age, k, c) => {
+        const a = smooth(0.3, 3, age) * (1 - smooth(0.6, 1, k));
+        if (a > 0.01) c.decals.add(Object.assign(decal(DECAL.crater, [pc.x, pc.y, pc.z], R * 2.8), { p0: R, p1: a, p2: seed, q0: R * 1.2 }));
+      },
+    });
     // the crater glows and the ground around it is scorched
     this.transients.push({
       t0: ctx.now, dur: 60, step: (age, k, c) => {
@@ -287,6 +312,41 @@ export class DisasterFx {
         }
       },
     });
+  }
+
+  /**
+   * a stone that bursts in the air over its mark (the sim's airburst: below AIRBURST_W, the god's default meteor —
+   * Chelyabinsk, Tunguska): a flash high in the sky, a fireball there cooling to a dark cloud, the blast reaching the
+   * ground as a ring of dust rolling out, scorched ground under it. No crater, no ejecta, no column from the ground — it
+   * was drawn as a ground strike: white-hot puffs on the town, a mushroom column and a glowing crater that the sim had
+   * never dug (punch P07)
+   */
+  private airBurst(p: Vector3, R: number, ctx: FxCtx): void {
+    const up = _v.copy(p).normalize();
+    const H = Math.min(320, Math.max(90, R * 4));
+    const hp = p.clone().addScaledVector(up, H);
+    const pc = p.clone();
+    const q = ctx.q;
+    ctx.vfx.emit({ sys: SYS.flash, x: p.x, y: p.y, z: p.z, size: R * 1.4, life: 0.4, count: 1, p0: H, p1: 90, burst: true, r: 1, g: 0.88, b: 0.7 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.fireball, x: hp.x, y: hp.y, z: hp.z, size: R * 0.35, life: 7, count: Math.round(180 * q), p0: R * 0.9, p1: R * 0.08, burst: true, r: 0.11, g: 0.1, b: 0.09 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.shockRing, x: p.x, y: p.y, z: p.z, size: R * 0.45, life: 10, count: Math.round(420 * q), p0: R * 12, p1: 0.5, burst: true, r: 0.44, g: 0.38, b: 0.31 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.dust, x: p.x, y: p.y, z: p.z, size: R * 0.6, life: 10, count: Math.round(140 * q), p0: R * 1.2, p1: R * 1.8, burst: true, r: 0.44, g: 0.38, b: 0.3 }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.02), life: 4, count: 40, p0: R * 0.8, p1: 6 + R * 0.08, burst: true }, ctx.now);
+    // the light, from the burst's height: even over the ground under it, gone with the fireball
+    this.transients.push({
+      t0: ctx.now, dur: 8, step: (age, _k, c) => {
+        const flash = Math.exp(-age * 5);
+        const glow = Math.exp(-age / 1.8) * 0.15;
+        const d = decal(DECAL.light, [pc.x, pc.y, pc.z], R * 25);
+        d.cr = 1; d.cg = 0.68 + 0.22 * flash; d.cb = 0.38 + 0.35 * flash;
+        d.p0 = R * 25; d.p1 = (flash * 1.2e5 + glow * 1e4) * R * R / 900; d.p2 = H; d.p3 = R * 0.8;
+        c.decals.add(d);
+        const f = (age < 0.07 ? 1 : Math.exp(-(age - 0.07) * 22)) * 0.12 * clamp01(1 - pc.distanceTo(c.camBody) / (R * 400)) * inView(pc, c);
+        c.screen.flash.addScalar(f);
+      },
+    });
+    // the scorched ground under it (the sim strips the plants and stoves in the roofs there)
+    this.transients.push({ t0: ctx.now, dur: 90, step: (_age, k, c) => c.decals.add(Object.assign(decal(DECAL.scorch, [pc.x, pc.y, pc.z], R * 2), { p0: R * 1.7, p1: 0.45 * (1 - k * k * k), p2: 2.3, q0: R * 1.5 })) });
   }
 
   /**
@@ -304,7 +364,7 @@ export class DisasterFx {
     const arcSeed = Math.random() * 97;
     const v = 30 + R * 0.18 * s;
     ctx.vfx.emit({ sys: SYS.arcSmoke, x: p.x, y: p.y, z: p.z, size: Math.max(1, R * 0.025), life: 9, count: 22 * 12, p1: v, p2: arcSeed, burst: true, r: 0.2, g: 0.19, b: 0.18 }, ctx.now);
-    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.009), life: 9, count: 22, p1: v, p2: arcSeed, burst: true }, ctx.now);
+    ctx.vfx.emit({ sys: SYS.arcGlow, x: p.x, y: p.y, z: p.z, size: Math.max(0.6, R * 0.009), life: 9, count: 22 * ARC_TAIL, p1: v, p2: arcSeed, burst: true }, ctx.now);
     ctx.vfx.emit({ sys: SYS.shockRing, x: p.x, y: p.y, z: p.z, size: R * 0.16, life: 10, count: Math.round(300 * q), p0: R * 2.5, p1: 0.45, burst: true, r: 0.3, g: 0.28, b: 0.26 }, ctx.now);
     ctx.vfx.emit({ sys: SYS.embers, x: p.x, y: p.y, z: p.z, size: 0.9, life: 6, count: 120, p0: R * 0.2, p1: 12 + R * 0.08, burst: true }, ctx.now);
     ctx.debris.burst(p, 36, 18 + R * 0.3, Math.max(1, R * 0.015), ctx.now);
@@ -519,7 +579,7 @@ export class DisasterFx {
         if (ctx.now > ((st.extra.salvo as number | undefined) ?? 0) && !far) {
           st.extra.salvo = ctx.now + 2 + Math.random() * 2.5;
           const seed = Math.random() * 97;
-          ctx.vfx.emit({ sys: SYS.arcGlow, x: g.x, y: g.y, z: g.z, size: 2.2 * (1 + sup), life: 7, count: 12, p1: 36 * Math.sqrt(I) * (1 + sup * 0.5), p2: seed, burst: true, power: k }, ctx.now);
+          ctx.vfx.emit({ sys: SYS.arcGlow, x: g.x, y: g.y, z: g.z, size: 2.2 * (1 + sup), life: 7, count: 12 * ARC_TAIL, p1: 36 * Math.sqrt(I) * (1 + sup * 0.5), p2: seed, burst: true, power: k }, ctx.now);
           ctx.vfx.emit({ sys: SYS.arcSmoke, x: g.x, y: g.y, z: g.z, size: 3.5 * (1 + sup), life: 8, count: 12 * 12, p1: 36 * Math.sqrt(I) * (1 + sup * 0.5), p2: seed, burst: true, r: 0.2, g: 0.19, b: 0.18, power: k * 0.8 }, ctx.now);
         }
         // the vent's glow, and the fountain's light over the slopes around it

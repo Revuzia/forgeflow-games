@@ -66,13 +66,22 @@ void main() {
   if (uEcl > 0.0 && uSunUV.x > -1.0) {
     vec2 dv = (vUv - uSunUV) * vec2(uAspect, 1.0);
     float dist = length(dv);
-    float R = uSunR;
+    // (drawn at a readable size: at its true ~0.27° a star is 2 px across a 540-px view, and a partial eclipse's
+    // crescent of it was no figure at all — the sun just dimmed, punch P23)
+    float R = max(uSunR, 7.0 / max(uResolution.y, 1.0));
     // the occluder slides across: its centre offset by the uncovered share
     vec2 off = vec2(1.0, 0.35) * R * 2.0 * (1.0 - uEcl);
     float dm = length(dv - off);
     float disc = 1.0 - smoothstep(R * 0.995, R * 1.01, dm);
     if (sky) {
-      o.rgb *= 1.0 - disc; o.a = max(o.a, disc);
+      // partial phases: the star's crescent, its bite the moon's silhouette (seen only against the star, as through a
+      // filter; the moon's disc off the star is lost in the bright sky until totality darkens it)
+      float sunD = 1.0 - smoothstep(R * 0.97, R * 1.02, dist);
+      float part = smoothstep(0.02, 0.12, uEcl) * (1.0 - smoothstep(0.97, 0.995, uEcl));
+      float cres = sunD * (1.0 - disc) * part;
+      float moonK = disc * mix(sunD, 1.0, smoothstep(0.9, 0.99, uEcl));
+      o.rgb = o.rgb * (1.0 - max(moonK, cres)) + vec3(1.0, 0.95, 0.86) * cres * 14.0;
+      o.a = max(o.a, max(moonK, cres));
       // the corona: streamers fanning from the limb; the diamond ring where a sliver of sun shows at the edge
       float ang = atan(dv.y, dv.x);
       float streak = 0.55 + 0.45 * pow(abs(snoise(vec3(ang * 3.0, 0.0, uTime * 0.02))), 0.6);
