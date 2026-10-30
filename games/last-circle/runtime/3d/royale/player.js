@@ -260,6 +260,16 @@ const RIM_ALLY = 0x3dffa0;               // SQUAD UP teammate edge (friendly gre
 const RIM_NEAR = 0.16, RIM_FAR = 0.36;   // strength at <= 8 m / >= 60 m from the camera
 const RIM_ALLY_NEAR = 0.30, RIM_ALLY_FAR = 0.45;
 const RIM_GAIN = { value: 0.8 };
+// -- character exposure (R4, player_rim) --------------------------------------
+// OD-2's grade G2 cut the scene exposure per map (Isla Viva 1.15 -> 0.72, Savanna 0.80, Deepwood 1.14) to darken the drop
+// view; it took the characters down with it (wraith body 29.6 -> 14.1 on screen, soldier 120 -> 75), so a dark skin went
+// near-black against the ground and its silhouette read as a bright outline (edge 4.5x body). The grade is the world's: a
+// body's outgoing light (its rim included, as tuned on live) is scaled by the pre-grade exposure over the map's, so a
+// character reaches the tone mapper exactly as it did before G2, on every map, while the ground, water and sky keep the
+// owner's grade.
+const CHAR_EXPO_REF = 1.15;              // the global exposure every map used before G2 (maps.js at 9115494d)
+const CHAR_EXPO = { value: 1 };
+const SKIN_DIFFUSE = { wraith: 2.0 };      // per-skin diffuse gain over BODY_GAIN (loadActorModels)          // ONE shared uniform object, set per view pass from the renderer's exposure
 // Per-skin weapon-holder rotation (hand-bone local). Meshy rigs DON'T share a
 // hand-bone rest orientation, so one fixed rotation left wraith/juggernaut
 // aiming 35° high. These were auto-calibrated live (measure barrel → rotate to
@@ -856,7 +866,10 @@ export async function loadActorModels(W) {
     //   gain 3.4        sun 67.4   shade 26.1   = 61% darker,  3.3% clipped
     // 3.2 sits just under the shipped brightness while keeping blown highlights
     // low enough that texture detail survives.
-    const BODY_GAIN = 3.2;
+    // (R4, player_rim) the WRAITH's texture is baked far darker than the other four (its body read 2-5x darker than the next
+    // darkest skin at the same light): x2 on its diffuse keeps it the darkest skin, a charcoal (not a black hole) whose body
+    // reads against the ground and whose anti-aliased silhouette does not out-shine it (wraith far body 21 -> ~30, as on live)
+    const BODY_GAIN = 3.2 * (SKIN_DIFFUSE[a.skin] || 1);
     const hue = vr();                                   // full wheel
     const sat = 0.22 + vr() * 0.16;                     // 0.22-0.38 — reads now that diffuse is live
     const lig = 0.68 + vr() * 0.12;                     // 0.68-0.80 before gain
@@ -897,7 +910,8 @@ export async function loadActorModels(W) {
         // change whenever the injected GLSL does, or three would hand a stale program
         // from the cache to a material expecting the new uniforms
         // "Dith1" (P23, LC-32): the camera-focus body's screen-door dither (uniform zDither, 1 = opaque) is in the program too
-        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1";
+        // "Exp1" (R4): the character exposure (uniform zExpK = CHAR_EXPO) is in the program too
+        m.customProgramCacheKey = () => "lcZoneTintRim1Dith1Exp1";
         m.onBeforeCompile = (sh) => {
           sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
           // rim light: colour + (near, far) strength per material (SQUAD UP allies get
@@ -905,6 +919,7 @@ export async function loadActorModels(W) {
           sh.uniforms.zRimCol = { value: new THREE.Color(RIM_COOL) };
           sh.uniforms.zRimP = { value: new THREE.Vector2(RIM_NEAR, RIM_FAR) };
           sh.uniforms.zRimK = RIM_GAIN;
+          sh.uniforms.zExpK = CHAR_EXPO;
           m.userData.zRimCol = sh.uniforms.zRimCol;
           m.userData.zRimP = sh.uniforms.zRimP;
           // The zone tint below divides `diffuse` (= material.color) back out, so
@@ -919,7 +934,7 @@ export async function loadActorModels(W) {
           // injected AFTER <color_fragment>, which in three r172's meshphysical
           // fragment runs after <map_fragment> — so diffuseColor is already
           // (diffuse * texture) and dividing `diffuse` out leaves the texture.
-          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zDither;\n" + sh.fragmentShader.replace(
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\nuniform vec3 zRimCol;\nuniform vec2 zRimP;\nuniform float zRimK;\nuniform float zExpK;\nuniform float zDither;\n" + sh.fragmentShader.replace(
             "#include <color_fragment>",
             // (P23, LC-32) 4x4 ordered (Bayer) screen-door: a fragment whose threshold is at or above zDither is dropped
             "if ( zDither < 0.999 ) {\n    vec2 zdp = mod( floor( gl_FragCoord.xy ), 4.0 );\n    vec4 zr = zdp.y < 0.5 ? vec4( 0.0, 8.0, 2.0, 10.0 ) : zdp.y < 1.5 ? vec4( 12.0, 4.0, 14.0, 6.0 ) : zdp.y < 2.5 ? vec4( 3.0, 11.0, 1.0, 9.0 ) : vec4( 15.0, 7.0, 13.0, 5.0 );\n    float zb = ( zdp.x < 0.5 ? zr.x : zdp.x < 1.5 ? zr.y : zdp.x < 2.5 ? zr.z : zr.w ) / 16.0 + 0.03125;\n    if ( zb >= zDither ) discard;\n  }\n" +
@@ -938,6 +953,7 @@ export async function loadActorModels(W) {
             "  float rUp = dot( normal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) * 0.5 + 0.5;\n" +
             "  float rD = mix( zRimP.x, zRimP.y, smoothstep( 8.0, 60.0, length( vViewPosition ) ) );\n" +
             "  outgoingLight += zRimCol * ( rF * rUp * rD * zRimK );\n" +
+            "  outgoingLight *= zExpK;\n" +
             "}\n#include <opaque_fragment>"
           );
         };
@@ -2048,6 +2064,8 @@ function viewPass(W, dt) {
   const cam = W.camera;
   if (!cam) return;
   _viewN++;
+  const ex = W.kernel && W.kernel.renderer ? W.kernel.renderer.toneMappingExposure : 0;
+  CHAR_EXPO.value = ex > 0.05 ? CHAR_EXPO_REF / ex : 1;       // (R4) characters keep the pre-G2 exposure (CHAR_EXPO)
   cam.updateMatrixWorld();
   _pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_pm);
@@ -4916,7 +4934,7 @@ export function warmObjects(W) {
     m.frustumCulled = false;
     out.push(m);
   }
-  // The zone-tint body program carries the rim light (P1.8) and the focus dither (P23 LC-32): key "lcZoneTintRim1Dith1".
+  // The zone-tint body program carries the rim light (P1.8) and the focus dither (P23 LC-32): key "lcZoneTintRim1Dith1Exp1".
   // Every live rig is already in the scene and the warm frame forces all of it
   // visible, so that program compiles there; this throwaway body on a LIVE body
   // material guarantees it even for a roster whose skins have no far LOD (each
