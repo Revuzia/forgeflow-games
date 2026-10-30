@@ -165,7 +165,7 @@ export function createActor(W, opts) {
     _bodies: null, _lod0Geo: null, _lod1Geo: null, _lod: 0, _bodyShadow: true, _wpnRef: null, _wpnMeshes: null, _wpnShadow: null,
     _evalNow: false, _mixT: 0, _skipUsed: false, _mixRate: 1, _onScreen: false, _dEff: 0, _agl: 0, _synced: false,
     _bodyYaw: 0, _hasBodyYaw: false, _tiltX: 0, _tiltZ: 0, _eyeY: 0, _hasEyeY: false,
-    _armW: 0, _hasArmW: false, _armMode: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
+    _armW: 0, _hasArmW: false, _armMode: null, _weldFor: null, _animTS: 1, _adsT: 0, _stepAcc: 0,
     hitReactT: 0, _hitReactAt: -9, _portalT: 0, _portalBoost: false, _ovReload: false,
     // rim light (P1.8): 0 = not applied yet, 1 = the faint cool rim, 2 = SQUAD UP ally rim.
     // _sinkT: corpse timeline on SIM time (killActor / corpseStep), -1 = not a corpse;
@@ -3283,7 +3283,16 @@ function animate(W, a, dt) {
       // used the full twist: a Mixamo rifle bot landing off screen (seed 11, s15, AR, aimDelta 1.0 rad) had its barrel 0.95 rad one side of
       // the body and its bladed rifle chest ~0.95 rad the other: barrel . chest -0.335 / -0.223, the gun backwards in its shadow.
       const spineTwisted = pistolTwist || (useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive && !a.downed);
-      if ((layers || a._evalNow) && a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim)) barrelWeld(a, bodyFwdYaw, (spineTwisted && !layers) ? 0 : twist, mixamoAim);
+      // (R4, rigcheck_ashgrid (c)) ...and ONCE on a frame the mixer did not re-key the bones when the gun has not been welded to the
+      // pose they hold: a bot that lands (or swaps guns) off screen beyond shadow range has its mixer policy-skipped, so the weld above
+      // never ran on the ground and the holder kept its glide-time grip on the frozen pose (seed 7 s18 juggernaut LMG, 219 m off
+      // screen, barrel . chest -0.065). The bones do not move while skipped, so one weld holds until they are re-keyed.
+      const weldOn = !!(a.hand && a.handBone && !a.emoting && !a.downed && (poseAim || mixamoAim));
+      const wid = armed ? a.weapon.id : null;
+      if (weldOn && (layers || a._evalNow || a._weldFor !== wid)) {
+        barrelWeld(a, bodyFwdYaw, (spineTwisted && !layers) ? 0 : twist, mixamoAim);
+        a._weldFor = wid;
+      } else if (!weldOn) a._weldFor = null;
       // ── SUPPORT HAND — two-bone IK onto the foregrip ─────────────────────
       // History, so nobody hunts ghosts: this call spent weeks disabled under
       // the theory that "something later in the frame re-poses the arm". Wrong.
@@ -3298,8 +3307,20 @@ function animate(W, a, dt) {
       // carries relaxed, and swim/glide/emote clips own the whole body.
       if (layers && a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
           a._armMode === "gunReady" && a._armW > 0.5) supportHandIK(a);
-    }
+    } else if (farAnim && !a.emoting) farWeld(a);
   }
+}
+
+/** (R4) the far-skipped actor (no clip chain, no layers): weld its gun ONCE to the frozen pose when it is armed on the ground and
+ *  that gun has not been welded since (landing / swap out there), so no grounded actor carries a glide-time grip backwards. */
+function farWeld(a) {
+  const armed = !!(a.weapon && !a.weapon.id.startsWith("consumable"));
+  if (!armed || !a.hand || !a.handBone || !a.alive || a.downed || a.gliding || a.swimming || !a.onGround) { a._weldFor = null; return; }
+  if (a._weldFor === a.weapon.id) return;
+  const fam = gunFamily(a), FK = fam ? FAM_KEYS[fam] : null;
+  // twist 0: a frozen pose carries no aim twist on its spine
+  barrelWeld(a, a._hasBodyYaw ? a._bodyYaw - Math.PI : a.yaw, 0, !!(FK && a.clips && a.clips[FK.idle]));
+  a._weldFor = a.weapon.id;
 }
 
 /** Clip selection for one actor this frame (downed / freefall / canopy / swim / mantle / air / landing / hit / reload / slide /
