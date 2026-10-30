@@ -23,7 +23,8 @@ Rows (exit 0 pass / 1 fail / 2 could-not-judge):
                  doorway (interiorcheck's spot) facing in, seen from the third-person camera: >= 3 furniture pieces each change >= 60 pixels when hidden in turn
                  (a piece of the next room seen through an opening counts, like interiorcheck; how many of the room's OWN pieces show is printed beside it)
   view-pixels-compound   the same for the 6 compound buildings (farm / ruin / mill)
-  glass          every window has a pane that DRAWS and no pane has a collider
+  glass          every window of an intact building has a pane that DRAWS and no pane has a collider (a ruin - THEMES[].ruined - keeps one pane in
+                 four by design, Wave 8 K1: its panes are counted apart, never more than its windows)
   boot           0 page errors / console errors / failed requests
 Screenshots (LOOK at them): per use a contact sheet (street, the front from the third-person camera, stepping in through the front door, the biggest room
 from its doorway), the compound sheet, the storeys cut-away sheet, and every building's every room from its doorway (third person).
@@ -262,14 +263,21 @@ PROBE = r"""
     sc.body.visible = false;
     return out;
   }
+  // R4: a RUIN (housegen THEMES[theme].ruined, Wave 8 K1 788eb418: "a ruin's panes are mostly gone", one kept in four from its own stream)
+  // is judged apart - its windows may lack panes (never more panes than windows); every intact building still needs one pane per window
   function glass() {
-    let panes = 0, windows = 0, colliding = 0;
+    let panes = 0, windows = 0, colliding = 0, ruinPanes = 0, ruinWindows = 0;
+    const per = [];
     for (const q of houses) {
-      windows += q.H.windows.length;
-      for (const b of q.H.boxes) if (b.p === "glass") { panes++; if (b.c) colliding++; }
+      const ruin = !!(HG.THEMES && HG.THEMES[q.H.theme] && HG.THEMES[q.H.theme].ruined);
+      let np = 0;
+      for (const b of q.H.boxes) if (b.p === "glass") { np++; if (b.c) colliding++; }
+      if (ruin) { ruinPanes += np; ruinWindows += q.H.windows.length; } else { panes += np; windows += q.H.windows.length; }
+      per.push({ id: q.H.id, theme: q.H.theme, ruin, windows: q.H.windows.length, panes: np });
     }
     const meshes = []; for (const q of houses) q.B.group.traverse((o) => { if (o.isMesh && o.parent && o.parent.name === "glass") meshes.push(o.geometry.index.count / 3); });
-    return { windows, panes, colliding, glassMeshes: meshes.length, glassTris: meshes.reduce((a, b) => a + b, 0) };
+    return { windows, panes, ruinWindows, ruinPanes, colliding, glassMeshes: meshes.length, glassTris: meshes.reduce((a, b) => a + b, 0),
+             short: per.filter((x) => !x.ruin && x.panes !== x.windows), ruins: per.filter((x) => x.ruin) };
   }
   // contact sheet: views rendered one by one into a grid of 640 x 360 tiles. A view is { tp: [x, y, z, fx, fz] } (the game's camera) or { pos, at, fov }
   function sheet(list, cols) {
@@ -334,8 +342,11 @@ def main_fn(v, args):
             v.info(label + "-own", "%d of %d rooms show >= %d of their OWN pieces from that view; mean pieces in view %.1f; %s" % (
                 len(vp) - len(ownp), len(vp), VIEW_MIN, sum(r["inView"] for r in vp) / max(1, len(vp)), [(r["room"], r["kind"], r["own"], r["inView"]) for r in ownp[:12]]))
         gl = s.js("() => window.__HGL__.glass()")
-        v.check("glass", gl["panes"] == gl["windows"] and gl["colliding"] == 0 and gl["glassTris"] > 0, "%d panes for %d windows, %d with a collider; %d glass meshes, %d triangles drawn" % (
-            gl["panes"], gl["windows"], gl["colliding"], gl["glassMeshes"], gl["glassTris"]))
+        ruins = gl.get("ruins") or []
+        v.check("glass", gl["windows"] > 0 and gl["panes"] == gl["windows"] and gl["ruinPanes"] <= gl["ruinWindows"] and gl["colliding"] == 0 and gl["glassTris"] > 0,
+                "%d panes for %d windows of the intact buildings (short %s), ruins (K1: panes mostly gone) %d panes for %d windows %s, %d with a collider; %d glass meshes, %d triangles drawn" % (
+                    gl["panes"], gl["windows"], gl.get("short"), gl["ruinPanes"], gl["ruinWindows"], [(x["id"], x["panes"], x["windows"]) for x in ruins],
+                    gl["colliding"], gl["glassMeshes"], gl["glassTris"]))
         H = s.js("() => window.__HGL__.data()")
         s.stage("shots")
         shotlist = []
