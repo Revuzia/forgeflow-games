@@ -3,7 +3,7 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
-## 2026-10-27 — Wave 8 + parity waves P1 / P2 / P3: team modes, revives, fall damage, grenades, new guns, furnished houses (?v= set at deploy)
+## 2026-10-30 — Wave 8 + parity waves P1 / P2 / P3: team modes, revives, fall damage, grenades, new guns, furnished houses (LIVE ?v=1793384602)
 
 One release for four waves of work: Wave 8 (furnished interiors) and the parity waves P1, P2 and P3 (what the big battle royales do that we did
 not). Every map's world and loot changed, so `MAP_GEN_VERSION` is 7 (Wave 8's 6 never shipped): an older page and this one cannot share a squad
