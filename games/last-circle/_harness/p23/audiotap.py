@@ -158,7 +158,8 @@ def capture(s, js, arg, settle):
     x = np.frombuffer(base64.b64decode(d["b64"]), dtype=np.float32)
     x = x.reshape(-1, 2) if len(x) else np.zeros((0, 2), np.float32)
     row = analyse(d["sr"], x, d["t0"], et)
-    pl = s.js("() => window.__PL__.slice(0, 2)")
+    pl = s.js("() => window.__PL__.slice(0, 4)")
+    row["pl"] = pl
     row["gain_dB"] = round(20 * np.log10(pl[0]["gain"]), 2) if pl and pl[0]["gain"] > 0 else None
     return row
 
@@ -214,6 +215,7 @@ def main():
                 for sg in (1, -1):
                     st["%s%+d" % (stance, sg * d)] = [capture(s, STEP_JS, [sg * d, stance, "f", None], 1.0) for _ in range(3)]
             R["steps"] = {k: {"gain_dB": mean(x, "gain_dB"), "peak": mean(x, "peak"), "heard": sum(1 for r in x if "peak" in r)} for k, x in st.items()}
+            R["stepCaptures"] = {k: [{"gain_dB": r.get("gain_dB"), "peak": r.get("peak"), "pl": r.get("pl")} for r in x] for k, x in st.items()}
             heard_any = any(R["steps"][k]["heard"] for k in R["steps"])
             if not heard_any:
                 v.cnj("tap (the tap captured the game's output)", "every capture was silent / empty: no AudioContext output reached the tap")
