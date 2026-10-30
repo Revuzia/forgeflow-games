@@ -108,6 +108,116 @@ let _LCOutputPass = null;
 try { _LCOutputPass = (await import("./lc_output_pass.js" + _V)).LCOutputPass; }
 catch (e) { console.warn("[FFG3D] lc_output_pass.js did not load; the stock OutputPass is used (no storm grade):", e && e.message ? e.message : e); }
 
+// ANTI-ALIASING (Last Circle parity LC-03). The scene is drawn into the composer's single-sampled
+// render target (antialias:false on the renderer, see the constructor), so MSAA can never reach it.
+// Post AA runs AFTER the output pass, on the tone-mapped sRGB image (where FXAA / SMAA are designed
+// to run): FXAA (one full-screen pass) or SMAA (three draws: edges, weights, blend). The composer
+// hands renderToScreen to its LAST ENABLED pass every frame, so an AA pass that is switched off puts
+// the output pass back on the canvas exactly as before (bit-identical).
+// The three addon files (three r172, MIT, vendored byte-identical to npm three@0.172.0) are fetched
+// WITHOUT blocking the kernel: an enhancement, never a boot dependency. setAA() records the wish and
+// attaches the passes once the modules arrive (normally before the menu's first frame).
+let _aaMods = null;
+let _aaP = null;
+function _loadAA() {
+  if (_aaMods) return Promise.resolve(_aaMods);
+  if (!_aaP) {
+    _aaP = Promise.all([
+      import("three/addons/postprocessing/ShaderPass.js"),
+      import("three/addons/shaders/FXAAShader.js"),
+      import("three/addons/postprocessing/SMAAPass.js"),
+    ]).then(([sp, fx, sm]) => {
+      _aaMods = { ShaderPass: sp.ShaderPass, FXAAShader: fx.FXAAShader, SMAAPass: sm.SMAAPass };
+      return _aaMods;
+    });
+    _aaP.catch((e) => { console.warn("[FFG3D] anti-aliasing passes did not load (no AA):", e && e.message ? e.message : e); _aaP = null; });
+  }
+  return _aaP;
+}
+_loadAA().catch(() => {});
+/** FXAA as a pass: three's ShaderPass + a setSize that keeps the shader's texel size equal to the
+ *  composer's real buffer size (EffectComposer.setSize / addPass hand passes the DPR-scaled size). */
+function _makeFXAAPass(M) {
+  const p = new M.ShaderPass(M.FXAAShader);
+  p.name = "LCFXAAPass";
+  p.isLCFXAAPass = true;
+  p.material.name = "LCFXAA";
+  // drawn straight to the canvas on purpose (it reads an image that is already tone-mapped + sRGB):
+  // a game hook that appends output chunks to canvas-bound ShaderMaterials must leave it alone
+  p.material.userData.lcNoCanvasOut = true;
+  p.setSize = function (w, h) { this.material.uniforms.resolution.value.set(1 / Math.max(1, w), 1 / Math.max(1, h)); };
+  return p;
+}
+function _makeSMAAPass(M, w, h) {
+  const p = new M.SMAAPass(Math.max(1, w), Math.max(1, h));
+  p.name = "SMAAPass";
+  // The reference SMAA keeps edges + weights in RGBA8; the r172 pass allocates them half-float. Same
+  // result (both hold values in [0, 1] at 8-bit precision needs), half the memory and bandwidth.
+  // Safe here: a render target allocates on first use, and nothing has used these yet.
+  p.edgesRT.texture.type = THREE.UnsignedByteType;
+  p.weightsRT.texture.type = THREE.UnsignedByteType;
+  for (const m of [p.materialEdges, p.materialWeights, p.materialBlend]) m.userData.lcNoCanvasOut = true;
+  return p;
+}
+
+// GPU FRAME TIMER (LC-06 auto-tier + in-match quality ladder). EXT_disjoint_timer_query_webgl2 around
+// the frame's render call; results arrive a few frames later and are polled without blocking. Off
+// until a game turns it on (kernel.gpuTimer.on = true), and never while ?prof=1's profiler runs (only
+// one TIME_ELAPSED query may be active at a time). `count` is monotonic, so a reader can take "the
+// samples since I last changed something" from `ms` (the last CAP results, oldest first).
+class GpuFrameTimer {
+  constructor(renderer) {
+    this.CAP = 240;
+    this.ms = [];
+    this.count = 0;
+    this.on = false;
+    this.disjoints = 0;
+    this._pending = [];
+    this._cur = null;
+    this._init(renderer);
+  }
+  _init(renderer) {
+    this.gl = null; this.ext = null; this.supported = false;
+    try {
+      const gl = renderer.getContext();
+      const ext = gl && typeof gl.createQuery === "function" ? gl.getExtension("EXT_disjoint_timer_query_webgl2") : null;
+      if (ext) { this.gl = gl; this.ext = ext; this.supported = true; }
+    } catch (e) { /* no timer: readers fall back to frame intervals */ }
+  }
+  /** after a context restore every query object is gone; the extension object is re-fetched */
+  reset(renderer) { this._pending.length = 0; this._cur = null; if (renderer) this._init(renderer); }
+  begin() {
+    if (!this.on || !this.supported || this._cur || this._pending.length >= 6) return;
+    try { const q = this.gl.createQuery(); this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, q); this._cur = q; } catch (e) { this._cur = null; }
+  }
+  end() {
+    if (!this._cur) return;
+    try { this.gl.endQuery(this.ext.TIME_ELAPSED_EXT); this._pending.push(this._cur); } catch (e) { /* lost context */ }
+    this._cur = null;
+  }
+  poll() {
+    if (!this._pending.length || !this.gl) return;
+    const gl = this.gl;
+    try {
+      if (gl.getParameter(this.ext.GPU_DISJOINT_EXT)) {           // a disjoint event voids every result in flight
+        for (const q of this._pending) gl.deleteQuery(q);
+        this._pending.length = 0; this.disjoints++;
+        return;
+      }
+      while (this._pending.length) {
+        const q = this._pending[0];
+        if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+        const ns = gl.getQueryParameter(q, gl.QUERY_RESULT);
+        gl.deleteQuery(q);
+        this._pending.shift();
+        this.ms.push(ns / 1e6);
+        if (this.ms.length > this.CAP) this.ms.shift();
+        this.count++;
+      }
+    } catch (e) { this._pending.length = 0; }
+  }
+}
+
 /** Frame budgets (contract C3; BLOCKTOOTH config.ts BUDGET). dprMax is ENFORCED
  * by setDpr; drawCallsMax / p99Ms are reported by the profiler as information. */
 export const BUDGET = Object.freeze({ drawCallsMax: 450, p99Ms: 22, dprMax: 1.5 });
@@ -202,6 +312,8 @@ export class Kernel3D {
     this.dpr = 0;
     this._tierDpr = 1.5;
     this._devDpr = 0;
+    this._dprCap = Infinity;          // a game's own ceiling under the tier (LC-06 quality ladder); Infinity = none
+    this._dprMax = BUDGET.dprMax;     // the budget ceiling; a game lifts it for its best tier only (setDprMax, Last Circle ULTRA)
     this._rawSetPixelRatio = this.renderer.setPixelRatio;
     this.renderer.setPixelRatio = (v) => { this.setDpr(v); };
     // QUALITY preset (shell settings → ffg_settings.quality): low = 1.0 DPR +
@@ -251,7 +363,21 @@ export class Kernel3D {
     // cache is unaffected.
     const buildV = (new URL(import.meta.url).search || "").replace(/^\?/, "");
     const mgr = new THREE.LoadingManager();
-    if (buildV) mgr.setURLModifier((u) => /^(data:|blob:|https?:)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + buildV);
+    // PREFETCHED BYTES (LC-23): a URL whose bytes were fetched ahead of time (prefetchBytes, menu idle)
+    // resolves ONCE to a blob: URL of those bytes, so the loader that asks for it later skips the
+    // network whatever the server's cache headers say. GLTFLoader takes its resource path from the
+    // URL it was GIVEN (before this modifier), so a GLB's relative references still resolve normally.
+    this._prefetchBlobs = new Map();
+    this._urlFull = (u) => (buildV && !/^(data:|blob:|https?:)/.test(u) ? u + (u.includes("?") ? "&" : "?") + buildV : u);
+    mgr.setURLModifier((u) => {
+      const full = this._urlFull(u);
+      const b = this._prefetchBlobs.size ? this._prefetchBlobs.get(full) : null;
+      if (!b) return full;
+      this._prefetchBlobs.delete(full);
+      this._prefetchUsed = (this._prefetchUsed || 0) + 1;
+      setTimeout(() => { try { URL.revokeObjectURL(b); } catch (e) { /* gone */ } }, 30000);   // the loader fetches it in this tick
+      return b;
+    });
     this.loadingManager = mgr;
     this.loader = new GLTFLoader(mgr);
     this.loader.setDRACOLoader(_lcDraco);
@@ -289,6 +415,13 @@ export class Kernel3D {
     this._lostReported = false;       // this loss already reached the handlers (one card per loss)
     this._lostHandled = false;
     this.onContextRestored = null;    // default on restore: location.reload()
+    // post AA (LC-03): the wished mode survives a composer rebuild; passes are made once per composer
+    this._aaWant = "off";
+    this.aaMode = "off";              // what is actually in force on the canvas
+    // GPU frame timer (LC-06): created here, off until a game switches it on
+    this.gpuTimer = new GpuFrameTimer(this.renderer);
+    this.rawMs = [];                  // the last 240 live rAF frame intervals (ms), oldest first
+    this.rawCount = 0;
     // C3: frame profiler, `?prof=1` only
     this.prof = NOOP_PROF;
     this._profOn = false;
@@ -378,11 +511,13 @@ export class Kernel3D {
       try { e.preventDefault(); } catch (err) {}
       this.stop();
       this.contextLost = true;
+      try { this.gpuTimer.reset(); } catch (err) { /* timer only */ }
       this.onError(new Error("WebGL context lost"), { kind: "contextlost" });
     }, false);
     cv.addEventListener("webglcontextrestored", () => {
       this.contextLost = false;
       this._lostReported = false;        // a later loss gets its own card
+      try { this.gpuTimer.reset(this.renderer); } catch (e) { /* timer only */ }
       if (typeof this.onContextRestored === "function") this.onContextRestored();
       else location.reload();
     }, false);
@@ -421,13 +556,52 @@ export class Kernel3D {
     const dev = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
     this._tierDpr = req;
     this._devDpr = dev;
-    const eff = Math.max(0.5, Math.min(dev, req, BUDGET.dprMax));
+    const eff = Math.max(0.5, Math.min(dev, req, this._dprMax, this._dprCap));
     if (eff !== this.dpr) {
       this._rawSetPixelRatio.call(this.renderer, eff);
       if (this.composer && this.composer.setPixelRatio) this.composer.setPixelRatio(eff);
       this.dpr = eff;
     }
     return eff;
+  }
+
+  /** A ceiling under the tier DPR (LC-06 quality ladder): effective = max(0.5, min(device, tier,
+   *  BUDGET.dprMax, cap)). `cap` null / 0 / Infinity removes it. Re-applies the current tier at once
+   *  (the renderer and the composer's targets resize; no shader program changes). Returns the
+   *  effective ratio. */
+  setDprCap(cap) {
+    this._dprCap = cap > 0 && Number.isFinite(+cap) ? +cap : Infinity;
+    return this.setDpr(this._tierDpr);
+  }
+
+  /** The effective DPR the current tier would get WITHOUT the cap (to tell whether a cap step changes anything). */
+  dprUncapped() {
+    const dev = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+    return Math.max(0.5, Math.min(dev, this._tierDpr, this._dprMax));
+  }
+
+  /** The DPR budget ceiling (default BUDGET.dprMax 1.5). Last Circle's ULTRA tier lifts it to 2 ("full DPR, cap 2");
+   *  every other tier keeps 1.5. Clamped to [1, 2]. Re-applies the current tier at once. Returns the effective ratio. */
+  setDprMax(v) {
+    const m = Number.isFinite(+v) && +v > 0 ? Math.max(1, Math.min(2, +v)) : BUDGET.dprMax;
+    if (m === this._dprMax) return this.dpr;
+    this._dprMax = m;
+    return this.setDpr(this._tierDpr);
+  }
+
+  /** Bloom work resolution as a factor of what the composer hands the pass (UnrealBloomPass itself already blurs at half
+   *  of that): 1 = three's default, 0.5 = a quarter of the frame's pixels per axis. The bright pass and every mip shrink
+   *  with it (render targets only: no program changes), and the composite samples them bilinearly. Returns the factor. */
+  setBloomScale(f) {
+    const v = Number.isFinite(+f) && +f > 0 ? Math.max(0.25, Math.min(1, +f)) : 1;
+    const b = this.bloom;
+    this._bloomScale = v;
+    if (b && b._lcScale !== v) {
+      b._lcScale = v;
+      const c = this.composer;
+      if (c && b._lcSize) b.setSize(b._lcSize[0], b._lcSize[1]);
+    }
+    return v;
   }
 
   /** Re-derive the camera's VERTICAL fov for the CURRENT aspect from the
@@ -502,14 +676,122 @@ export class Kernel3D {
       opts.radius != null ? opts.radius : 0.5,
       opts.threshold != null ? opts.threshold : 0.85);
     composer.addPass(bloom);
+    // setBloomScale: the composer sizes every pass to its own (DPR-scaled) buffer; the bloom pass gets that times _lcScale
+    bloom._lcScale = this._bloomScale || 1;
+    {
+      const set0 = bloom.setSize.bind(bloom);
+      bloom.setSize = (w, h) => { bloom._lcSize = [w, h]; const k = bloom._lcScale || 1; set0(Math.max(2, Math.round(w * k)), Math.max(2, Math.round(h * k))); };
+      // addPass already sized it (unscaled): register the composer's size through the wrapper
+      bloom.setSize((composer._width || w) * (composer._pixelRatio || 1), (composer._height || h) * (composer._pixelRatio || 1));
+    }
     // The storm-grade copy of OutputPass when it loaded (see _LCOutputPass above); neutral
     // (stormAmt 0) it is bit-identical to the stock pass.
     const out = _LCOutputPass ? new _LCOutputPass() : new OutputPass();
     composer.addPass(out);
     this.outputPass = out;
+    // BLOOM COMPOSITE FOLDED into the output pass (C-GFX perf): UnrealBloomPass ends with a full-resolution additive
+    // draw of its half-res result over the composer's read buffer (a read-modify-write of the whole half-float frame)
+    // that the output pass reads straight back. With the LC output pass the bloom texture is handed to it instead and
+    // added in the shader it already runs (same sum, before tone mapping): one full-frame pass fewer, no new target, no
+    // extra program (a uniform branch).
+    // DEFAULT OFF (P23 fix round): three's blend stores the sum in the half-float read buffer through the GPU's blend unit,
+    // whose rounding the shader cannot reproduce (Intel UHD / D3D11: none of 18 binary16 rounding rules - round-to-nearest
+    // or toward zero for the source, the product and the sum - matched it), so the fold left 1/255 on ~6.6 % of the
+    // pixels and broke stormfx_fx's bit-identity bar (LCOutputPass at grade 0 == three's stock OutputPass), while its
+    // GPU saving on the default MEDIUM tier measured -0.06 ms (paired median, noise +-1-2 ms on the shared iGPU).
+    // ?bloomfold=1 (or kernel.bloomFold = true) turns it on for an A/B.
+    this.bloomFold = false;
+    if (out && typeof out.setBloomTexture === "function") {
+      let fold = false;
+      try { fold = new URLSearchParams(location.search).get("bloomfold") === "1"; } catch (e) { /* default off */ }
+      this.bloomFold = fold;
+      const k3 = this;
+      const render0 = bloom.render.bind(bloom);
+      // r172 UnrealBloomPass.render (MIT, three.js authors) minus the final blend, which LCOutputPass does
+      bloom.render = function (renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+        // the fold needs ITS consumer: the next enabled pass must be this LC output pass. Anything else in that slot (a
+        // probe's stock OutputPass, a pass added later) gets three's own blend, so the frame is never left without its bloom.
+        let consumer = null;
+        const P = composer.passes;
+        for (let i = P.indexOf(this) + 1; i < P.length; i++) if (P[i].enabled) { consumer = P[i]; break; }
+        if (!k3.bloomFold || this.renderToScreen || consumer !== out) { out.setBloomTexture(null); return render0(renderer, writeBuffer, readBuffer, deltaTime, maskActive); }
+        renderer.getClearColor(this._oldClearColor);
+        this.oldClearAlpha = renderer.getClearAlpha();
+        const oldAutoClear = renderer.autoClear;
+        renderer.autoClear = false;
+        renderer.setClearColor(this.clearColor, 0);
+        if (maskActive) renderer.state.buffers.stencil.setTest(false);
+        this.highPassUniforms.tDiffuse.value = readBuffer.texture;
+        this.highPassUniforms.luminosityThreshold.value = this.threshold;
+        this.fsQuad.material = this.materialHighPassFilter;
+        renderer.setRenderTarget(this.renderTargetBright);
+        renderer.clear();
+        this.fsQuad.render(renderer);
+        let input = this.renderTargetBright;
+        for (let i = 0; i < this.nMips; i++) {
+          const m = this.separableBlurMaterials[i];
+          this.fsQuad.material = m;
+          m.uniforms.colorTexture.value = input.texture;
+          m.uniforms.direction.value = UnrealBloomPass.BlurDirectionX;
+          renderer.setRenderTarget(this.renderTargetsHorizontal[i]);
+          renderer.clear();
+          this.fsQuad.render(renderer);
+          m.uniforms.colorTexture.value = this.renderTargetsHorizontal[i].texture;
+          m.uniforms.direction.value = UnrealBloomPass.BlurDirectionY;
+          renderer.setRenderTarget(this.renderTargetsVertical[i]);
+          renderer.clear();
+          this.fsQuad.render(renderer);
+          input = this.renderTargetsVertical[i];
+        }
+        this.fsQuad.material = this.compositeMaterial;
+        this.compositeMaterial.uniforms.bloomStrength.value = this.strength;
+        this.compositeMaterial.uniforms.bloomRadius.value = this.radius;
+        this.compositeMaterial.uniforms.bloomTintColors.value = this.bloomTintColors;
+        renderer.setRenderTarget(this.renderTargetsHorizontal[0]);
+        renderer.clear();
+        this.fsQuad.render(renderer);
+        if (maskActive) renderer.state.buffers.stencil.setTest(true);
+        out.setBloomTexture(this.renderTargetsHorizontal[0].texture);   // consumed (and cleared) by this frame's output pass
+        renderer.setClearColor(this._oldClearColor, this.oldClearAlpha);
+        renderer.autoClear = oldAutoClear;
+      };
+    }
     this.composer = composer;
     this.bloom = bloom;
+    this.setAA(this._aaWant);          // post AA after the output pass (LC-03): whatever was asked before the composer existed
     return composer;
+  }
+
+  /** Post anti-aliasing after the output pass (LC-03): "off" | "fxaa" | "smaa". Needs a real composer
+   *  (enableBloom); asked for before one exists, or before the pass modules have arrived, the wish is
+   *  kept and applied as soon as it can be. Each pass is created ONCE per composer and then only
+   *  switched on/off, so flipping modes never rebuilds anything (a first use compiles its programs;
+   *  a game warms them with its usual warm-up frame). Returns the mode now in force on the canvas. */
+  setAA(mode) {
+    const want = mode === "fxaa" || mode === "smaa" ? mode : "off";
+    this._aaWant = want;
+    const c = this.composer;
+    if (!c || c.isDirectPost || !Array.isArray(c.passes) || typeof c.addPass !== "function") { this.aaMode = "off"; return this.aaMode; }
+    if (want !== "off" && !_aaMods) {
+      // not loaded yet: apply when it lands (to whatever composer is current then)
+      const p = _loadAA();
+      if (p && !this._aaWaiting) { this._aaWaiting = true; p.then(() => { this._aaWaiting = false; this.setAA(this._aaWant); }, () => { this._aaWaiting = false; }); }
+    }
+    // FXAA folded into the output pass (lc_output_pass.js setFXAA: no extra pass, no extra target) when that pass
+    // is in use; the stock OutputPass falls back to three's FXAA as a separate pass after it.
+    const out = this.outputPass;
+    const folded = !!(out && typeof out.setFXAA === "function");
+    if (folded) out.setFXAA(want === "fxaa");
+    let fx = c._lcFXAA || null, sm = c._lcSMAA || null;
+    if (!folded && _aaMods && want === "fxaa" && !fx) { fx = c._lcFXAA = _makeFXAAPass(_aaMods); fx.enabled = false; c.addPass(fx); }
+    if (_aaMods && want === "smaa" && !sm) {
+      const w = (c._width || this.viewW || 1) * (c._pixelRatio || this.dpr || 1), h = (c._height || this.viewH || 1) * (c._pixelRatio || this.dpr || 1);
+      sm = c._lcSMAA = _makeSMAAPass(_aaMods, w, h); sm.enabled = false; c.addPass(sm);
+    }
+    if (fx) fx.enabled = want === "fxaa";
+    if (sm) sm.enabled = want === "smaa";
+    this.aaMode = (want === "fxaa" && (folded || fx)) || (want === "smaa" && sm) ? want : "off";
+    return this.aaMode;
   }
 
   /** Storm grade (desaturate + lavender tint) on the final output pass, 0 = neutral .. 1 = full.
@@ -517,6 +799,14 @@ export class Kernel3D {
   setGrade(amt) {
     const p = this.outputPass;
     return p && typeof p.setStormGrade === "function" ? p.setStormGrade(amt) : 0;
+  }
+
+  /** Colour-vision correction (daltonize) in the output pass (LC-43 hook): mode 0 off | 1 protan |
+   *  2 deutan | 3 tritan, amt 0..1. Uniform-driven like the storm grade (no new program). Returns the
+   *  { mode, amt } in force, or null when the output pass has no hook (stock pass / no composer). */
+  setDaltonize(mode, amt) {
+    const p = this.outputPass;
+    return p && typeof p.setDaltonize === "function" ? p.setDaltonize(mode, amt) : null;
   }
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
@@ -640,23 +930,26 @@ export class Kernel3D {
    * { scene, mixer, actions, play(name,opts), animations }. Uses SkeletonUtils to
    * clone skinned meshes correctly, wires an AnimationMixer, and registers it for
    * per-frame updates. `play(name)` crossfades to a clip (loops by default). */
-  async loadCharacter(url) {
-    if (!this._charCache[url]) {
-      // Same cold-cache stampede as loadGLTF (see the note there): the actor
-      // group carried 57 unique texture Sources for 5 distinct skins because
-      // every concurrent spawn on a cold url ran its own loadAsync before the
-      // first one could fill the cache. All callers await one shared promise.
-      if (!this._charInflight[url]) {
-        this._charInflight[url] = _withTimeout(this.loader.loadAsync(url), this.loadTimeoutMs, url).then((g) => {   // same timeout as loadGLTF
-          const _lts = [];
-          g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
-          _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
-          this._charCache[url] = g;
-          return g;
-        }).finally(() => { delete this._charInflight[url]; });
-      }
-      await this._charInflight[url];
+  /** The shared parse of a rigged GLB into _charCache (one promise per cold url). */
+  _charLoad(url) {
+    // Same cold-cache stampede as loadGLTF (see the note there): the actor
+    // group carried 57 unique texture Sources for 5 distinct skins because
+    // every concurrent spawn on a cold url ran its own loadAsync before the
+    // first one could fill the cache. All callers await one shared promise.
+    if (!this._charInflight[url]) {
+      this._charInflight[url] = _withTimeout(this.loader.loadAsync(url), this.loadTimeoutMs, url).then((g) => {   // same timeout as loadGLTF
+        const _lts = [];
+        g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
+        _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
+        this._charCache[url] = g;
+        return g;
+      }).finally(() => { delete this._charInflight[url]; });
     }
+    return this._charInflight[url];
+  }
+
+  async loadCharacter(url) {
+    if (!this._charCache[url]) await this._charLoad(url);
     const gltf = this._charCache[url];
     const scene = skeletonClone(gltf.scene);
     const mixer = new THREE.AnimationMixer(scene);
@@ -682,6 +975,46 @@ export class Kernel3D {
       next.play(); current = next; return next;
     }
     return { scene, mixer, actions, play, animations: gltf.animations || [] };
+  }
+
+  // ── idle prefetch (LC-23) ─────────────────────────────────────────────────
+  /** Parse a rigged GLB into the loadCharacter cache ahead of time: no clone, no mixer, nothing
+   *  added to the scene. A later loadCharacter(url) is then a clone. Resolves true / false (never
+   *  rejects: a prefetch is an optimisation, the real load still runs and reports its own error). */
+  prefetchCharacter(url) {
+    if (this._charCache[url]) return Promise.resolve(true);
+    return this._charLoad(url).then(() => true, () => false);
+  }
+
+  /** Parse a static GLB into the loadGLTF cache ahead of time (no clone). Resolves true / false. */
+  prefetchGLTF(url) {
+    if (this._gltfCache[url]) return Promise.resolve(true);
+    return this.loadGLTF(url).then(() => true, () => false);
+  }
+
+  /** Fetch a file's bytes ahead of time for a loader that keeps no cache of its own (a plain
+   *  loader.loadAsync): the next request for exactly this url through kernel.loadingManager is
+   *  answered from memory, once (see the URL modifier). opts.signal aborts it. Resolves the byte
+   *  count, or 0 when it did not arrive (the later load then simply goes to the network). */
+  async prefetchBytes(url, opts) {
+    const full = this._urlFull(url);                    // the exact string the loader will ask for
+    if (this._prefetchBlobs.has(full)) return 0;        // already prefetched and waiting
+    try {
+      const r = await fetch(full, { credentials: "same-origin", signal: opts && opts.signal });
+      if (!r.ok) return 0;
+      const blob = await r.blob();
+      if (opts && opts.signal && opts.signal.aborted) return 0;
+      this._prefetchBlobs.set(full, URL.createObjectURL(blob));
+      return blob.size;
+    } catch (e) { return 0; }
+  }
+
+  /** Drop every prefetched byte buffer that no loader has asked for (frees the memory). */
+  dropPrefetched() {
+    for (const b of this._prefetchBlobs.values()) { try { URL.revokeObjectURL(b); } catch (e) { /* gone */ } }
+    const n = this._prefetchBlobs.size;
+    this._prefetchBlobs.clear();
+    return n;
   }
 
   disposeMixer(mixer) { const i = this._mixers.indexOf(mixer); if (i >= 0) this._mixers.splice(i, 1); }
@@ -737,6 +1070,11 @@ export class Kernel3D {
       const t = typeof now === "number" ? now : performance.now();
       const raw = this._lastFrameT ? t - this._lastFrameT : 0;
       this._lastFrameT = t;
+      if (raw > 0) {                     // live frame intervals only (stepped frames never land here)
+        this.rawMs.push(raw);
+        if (this.rawMs.length > 240) this.rawMs.shift();
+        this.rawCount++;
+      }
       try {
         this._frame(Math.min(0.05, this.clock.getDelta()), true, raw);
       } catch (e) {
@@ -840,9 +1178,13 @@ export class Kernel3D {
     this.applyCameraFit();
 
     if (render) {
+      // the LC-06 GPU timer: polled every rendered frame, one query around the draw (never with ?prof=1's own timer)
+      const G = !P && this.gpuTimer.on ? this.gpuTimer : null;
+      if (G) { G.poll(); G.begin(); }
       if (P) { P.begin("render"); P.gpuBegin(); }
       if (this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
       if (P) { P.gpuEnd(); P.end("render"); }
+      if (G) G.end();
     }
     if (P) P.frameEnd(raw || 0, this.renderer.info);
   }
@@ -987,5 +1329,5 @@ if (typeof window !== "undefined") {
   window.FFG = window.FFG || {};
   window.FFG.genres3d = genres3d;
   window.FFG.boot3d = boot3d;
-  window.FFG.VERSION3D = "2.3.0";   // 2.3: wasm Draco (JS fallback) + lazy meshopt + storm-grade output pass. 2.2: rAF-first loop + onError, ResizeObserver view size, per-frame camera fit, honest counters, ?prof=1, mixer policy, DPR cap, load timeouts, warmup
+  window.FFG.VERSION3D = "2.4.0";   // 2.4 (Last Circle copy): post AA after the output pass (setAA), GPU frame timer, DPR cap, daltonize hook. 2.3: wasm Draco (JS fallback) + lazy meshopt + storm-grade output pass. 2.2: rAF-first loop + onError, ResizeObserver view size, per-frame camera fit, honest counters, ?prof=1, mixer policy, DPR cap, load timeouts, warmup
 }

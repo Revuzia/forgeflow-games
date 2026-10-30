@@ -47,12 +47,20 @@ const _V = (() => { try { return new URL(import.meta.url).search || ""; } catch 
 // coverage 0..1 (P1.7), per map for identity.
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#9ed0e3", zenith: "#5c8dc1", cloud: 0.66, fog: 0.0018, themeColor: "#22d3a0", water: true,
-    sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 } },
+    sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 },
+    grade: { exposure: 0.72, ground: 0.6, water: 0.6 } },
   ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e5cf9f", zenith: "#6585ab", cloud: 0.54, fog: 0.0019, themeColor: "#e0854a", water: false,
-    sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 } },
+    sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 },
+    grade: { exposure: 0.80, ground: 0.6, water: 0.6 } },
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#acc5dc", zenith: "#506e9b", cloud: 0.72, fog: 0.0020, themeColor: "#7fb069", water: true,
-    sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 } },
+    sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 },
+    grade: { exposure: 1.14, ground: 0.6, water: 0.6 } },
 };
+// LC-04 / owner decision OD-2 (2026-10-20, grade "G2 Balanced" from the P1-G A/B sheets): the drop view was 2-2.5x the reference's luminance (0.67-0.81 vs
+// 0.32). G2 darkens the GROUND and the WATER (terrain, city ground and tufts x `ground`, water x `water`) and cuts the exposure a little, leaving the sun, the
+// sky fill and the environment as they were, so a room keeps its light (the other grades took Isla Viva's interiors to 0.07-0.08). Target: the drop view's
+// mean luminance 0.45-0.50 per map (Deepwood measured on its forest half: its snow half stays near-white on purpose), interiors >= 0.15. `exposure` replaces
+// the old global 1.15 (NeutralToneMapping is unchanged). The minimap keeps the undarkened palette (it is a 2D map read at a glance, not a lit surface).
 
 const SIZE = 1600;               // meters, square
 const HALF = SIZE / 2;
@@ -198,10 +206,25 @@ function stuccoTex(aniso) {
 }
 const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block: blockTex, stucco: stuccoTex };
 
+// LC-39: a PERIODIC fbm - the lattice indices wrap at the tile's own period (per x 2^octave cells), so the field at u = 1 is the field at u = 0. The water's
+// ripple field was _tfbm (lattice hashes at unwrapped integers) plus sin(u * 22 + v * 15) (22 and 15 are not multiples of 2 pi): neither wrapped, so the
+// tile edge was a seam every ~28 m, a square grid across the whole sea in the drop view's sun sheen. The sine is now 2 pi x (3, 2) cycles a tile,
+// and a minor term (0.18) under a 4-octave fbm, so the sheen reads as ripples, not ridges.
+function _tpfbm(u, v, s, oct, per) {
+  let a = 1, f = per, sum = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    const x = u * f, y = v * f, ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), w = (k) => ((k % f) + f) % f;
+    const s00 = _thash(w(ix), w(iy), s + i), s10 = _thash(w(ix + 1), w(iy), s + i), s01 = _thash(w(ix), w(iy + 1), s + i), s11 = _thash(w(ix + 1), w(iy + 1), s + i);
+    sum += ((s00 + (s10 - s00) * sx) * (1 - sy) + (s01 + (s11 - s01) * sx) * sy) * a;
+    n += a; a *= 0.5; f *= 2;
+  }
+  return sum / n;
+}
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
-  const t = _fieldTex("water_f", 256,
-    (u, v) => _tfbm(u * 6, v * 6, 31, 3) * 0.6 + (Math.sin(u * 22 + v * 15) * 0.5 + 0.5) * 0.4,
+  const t = _fieldTex("water_p", 256,
+    (u, v) => _tpfbm(u, v, 31, 4, 6) * 0.82 + (Math.sin((u * 3 + v * 2) * Math.PI * 2) * 0.5 + 0.5) * 0.18,   // (the swell sine 0.4 -> 0.18: at 0.4 the sun sheen read as parallel zebra ridges from the drop)
     (h) => h, aniso, 1.4).normal;
   _texCache.waterN = t; return t;
 }
@@ -307,6 +330,247 @@ vec3 lcDetail(sampler2D t, vec2 p, vec3 avg, float chroma, float gain) {
 }`);
   };
 }
+// ── P2/P3 WORLD SHADER LAYER (parity lane maps: LC-17 wear + grime, LC-41 contact AO, LC-74 cloud shadows, LC-38 wind, LC-39 water depth) ────────────
+// One set of LIVE uniform objects at module scope, shared by every material this file patches (the terrain, the roads, the city ground, the structure
+// materials, the foliage and grass clones, the water): buildMap sets their values once per match and the sky updater advances uLcT. Every feature is a
+// #define on the material, chosen at map BUILD time from the graphics tier (so a mid-match ladder step never recompiles anything) and compiled in the warm
+// frame with the rest of the map. Per tier: LOW = none of them (the materials are not patched at all); MEDIUM / HIGH / ULTRA = all of them. ZERO extra draw
+// calls: every one is a few lines in programs the map already draws with.
+const LCU = {
+  uLcT: { value: 0 },                                                   // seconds (the map's own clock)
+  uLcCloud: { value: null },                                            // the sky's baked cloud noise (R shape, G detail)
+  uLcCloudK: { value: new THREE.Vector4(0, 0, 0.62, 0) },              // xy = sun.xz / sun.y (the deck projects along the sun), z = noise threshold, w = strength (fraction of the SUN removed)
+  uLcCloudOff: { value: new THREE.Vector2() },                          // drift (uv)
+  uLcHgt: { value: null },                                              // the baked ground lattice as a half-float texture (wear band, water depth)
+  uLcHgtK: { value: new THREE.Vector4(0, 0, 0, 0) },                   // uv = xz * x + y
+  uLcAO: { value: null },                                               // blurred footprint occupancy of everything standing on the ground (contact AO)
+  uLcAOK: { value: new THREE.Vector4(0, 0, 0, 0) },                    // uv = xz * x + y; z = indirect strength, w = direct strength
+  uLcWind: { value: new THREE.Vector4(0.8, 0.6, 1, 0) },               // xy = wind direction, z = strength (0 = still)
+  uLcGrime: { value: null },                                            // the CC0 wall photograph (detail, divided by its own mean)
+  uLcGrimeK: { value: new THREE.Vector4(0, 1 / 6, 0, 0) },             // x = gain (0 = off), y = 1 / the photo's tile (m, world-planar)
+  uLcWear: { value: new THREE.Vector3(0.30, 0.85, 1.15) },              // x = how much darker ON SCREEN the base of a wall is at the ground, y = the band's height (m), z = the tone-map exposure
+  uLcWater: { value: new THREE.Vector4(0, 0, 7, 0) },                  // x = water y, z = the depth that reads fully deep (m)
+  uLcShallow: { value: new THREE.Color() }, uLcDeep: { value: new THREE.Color() },
+};
+const GRIME_FILE = { url: "assets/tex/wall_grime.jpg", avg: [0.6339, 0.4989, 0.3582] };   // Poly Haven "Concrete Wall 003" (CC0), 1k diffuse JPG (265 KB); avg = its LINEAR mean (numpy over the decoded sRGB pixels)
+let _grimeLoad = null;
+async function loadGrimeTexture(W) {
+  if (_texCache.grime) return _texCache.grime;
+  const r = W.kernel && W.kernel.renderer;
+  if (!r || typeof THREE.TextureLoader !== "function") return null;
+  if (!_grimeLoad) _grimeLoad = (async () => {
+    let to = 0;
+    try {
+      const t = await Promise.race([new THREE.TextureLoader().loadAsync((W.assetBase || "") + GRIME_FILE.url), new Promise((_, rej) => { to = setTimeout(() => rej(new Error("timeout")), 25000); })]);
+      t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = Math.min(r.capabilities && r.capabilities.getMaxAnisotropy ? r.capabilities.getMaxAnisotropy() : 4, Math.max(2, W._texAniso || 4));
+      _texCache.grime = t;
+    } catch (err) { console.warn("[maps] wall grime photo unavailable, procedural walls only:", err && err.message || err); }
+    finally { if (to) clearTimeout(to); _grimeLoad = null; }
+    return _texCache.grime || null;
+  })();
+  return _grimeLoad;
+}
+const LC_VERT_HEAD = `
+varying vec3 vLcW;
+varying vec3 vLcN;
+#ifdef LC_WIND
+uniform float uLcT; uniform vec4 uLcWind;
+#endif`;
+// wind: a sway of the whole crown (the square of the height over the kind's height, so the base never moves) under a slow gust front that crosses the map,
+// plus a fine leaf flutter; computed in WORLD metres, carried back into the instance's own frame (rotation x uniform scale: transpose / scale^2)
+const LC_VERT_WIND = `
+#ifdef LC_WIND
+{
+  vec4 lwp = vec4( transformed, 1.0 ); mat3 lim = mat3( 1.0 ); vec3 lorg = vec3( 0.0 );
+  #ifdef USE_INSTANCING
+    lwp = instanceMatrix * lwp; lim = mat3( instanceMatrix ); lorg = instanceMatrix[ 3 ].xyz;
+  #endif
+  float lhn = max( 0.0, lwp.y - lorg.y ) / LC_WIND_H;
+  float lph = dot( lorg.xz, vec2( 0.071, 0.053 ) );
+  float lsw = sin( uLcT * 1.27 + lph ) * 0.62 + sin( uLcT * 2.13 + lph * 1.7 ) * 0.38;
+  float lgu = 0.62 + 0.38 * sin( uLcT * 0.33 - dot( lorg.xz, uLcWind.xy ) * 0.006 );
+  float lfl = sin( uLcT * 6.3 + dot( lwp.xyz, vec3( 1.7, 2.3, 1.1 ) ) ) * LC_WIND_FLUT;
+  vec3 lwd = vec3( uLcWind.x, 0.0, uLcWind.y ) * ( LC_WIND_A * lhn * lhn * ( lsw * lgu + 0.45 ) ) + vec3( lfl, lfl * 0.45, lfl * 0.7 ) * lhn;
+  transformed += ( transpose( lim ) * ( lwd * uLcWind.z ) ) / max( 1e-8, dot( lim[ 0 ], lim[ 0 ] ) );
+}
+#endif`;
+// the leaves catching the light: the same flutter tilts the crown's shading normals a little (x3 the flutter, by height), so a crown shimmers as a whole, not
+// only along its silhouette (a low-poly crown's facets slide over themselves and barely change a pixel: Deepwood's pines moved 1.4-1.5 % of a forest-edge frame).
+// Injected after beginnormal_vertex (the depth materials have no normal: no-op there); grass (flutter 0) is untouched.
+const LC_NRM_WIND = `
+#ifdef LC_WIND
+{
+  vec3 lnp = position; vec3 lno = vec3( 0.0 );
+  #ifdef USE_INSTANCING
+    lnp = ( instanceMatrix * vec4( position, 1.0 ) ).xyz; lno = instanceMatrix[ 3 ].xyz;
+  #endif
+  float lnh = clamp( ( lnp.y - lno.y ) / LC_WIND_H, 0.0, 1.0 );
+  float lsh = LC_WIND_FLUT * 3.0 * lnh * uLcWind.z;
+  objectNormal = normalize( objectNormal + lsh * vec3( sin( uLcT * 5.1 + dot( lnp, vec3( 2.1, 1.3, 1.7 ) ) ), 0.0, cos( uLcT * 4.3 + dot( lnp, vec3( 1.1, 2.7, 1.9 ) ) ) ) );
+}
+#endif`;
+const LC_VERT_WORLD = `
+{
+  vec4 lw = vec4( transformed, 1.0 ); vec3 ln = objectNormal;
+  #ifdef USE_BATCHING
+    lw = batchingMatrix * lw; ln = mat3( batchingMatrix ) * ln;
+  #endif
+  #ifdef USE_INSTANCING
+    lw = instanceMatrix * lw; ln = mat3( instanceMatrix ) * ln;
+  #endif
+  lw = modelMatrix * lw; vLcW = lw.xyz; vLcN = normalize( mat3( modelMatrix ) * ln );
+}`;
+const LC_FRAG_HEAD = `
+varying vec3 vLcW;
+varying vec3 vLcN;
+#ifdef LC_CLOUD
+uniform sampler2D uLcCloud; uniform vec4 uLcCloudK; uniform vec2 uLcCloudOff;
+#endif
+#ifdef LC_HGT
+uniform sampler2D uLcHgt; uniform vec4 uLcHgtK;
+float lcGround( vec2 xz ) { return texture2D( uLcHgt, xz * uLcHgtK.x + uLcHgtK.y ).r; }
+#endif
+#ifdef LC_AO
+uniform sampler2D uLcAO; uniform vec4 uLcAOK;
+#endif
+#ifdef LC_GRIME
+uniform sampler2D uLcGrime; uniform vec4 uLcGrimeK;
+#endif
+#ifdef LC_WEAR
+uniform vec3 uLcWear;
+float lcWB = 0.0;                    // the wear band's on-screen darkening at this fragment (set in the albedo terms, applied to the lit colour)
+#endif
+#ifdef LC_WATER
+uniform vec4 uLcWater; uniform vec3 uLcShallow; uniform vec3 uLcDeep;
+#endif`;
+// albedo terms (after map_fragment): the wall-base wear band (a vertical face within uLcWear.y m of the ground under it, darker by up to uLcWear.x) and the
+// grime photograph (its light / dark only, divided by its own mean so a wall still averages its colour)
+const LC_FRAG_ALBEDO = `
+#ifdef LC_WEAR
+{
+  float lvert = 1.0 - abs( vLcN.y );
+  float lhb = vLcW.y - lcGround( vLcW.xz );
+  float lband = ( 1.0 - smoothstep( 0.0, uLcWear.y, lhb ) ) * smoothstep( 0.25, 0.75, lvert ) * step( -0.6, lhb );
+  lcWB = uLcWear.x * lband;
+}
+#endif
+#ifdef LC_GRIME
+{
+  // world-space planar mapping (a wall's own plane, a floor's / roof's xz), so every structure mesh - the procedural batches, the district merges AND the
+  // furnished houses' BatchedMeshes, whose UVs are per-material - wears the photograph at one scale: uLcGrimeK.y = 1 / its tile (m)
+  vec3 lan = abs( vLcN );
+  vec2 lgp = ( lan.y > 0.7 ? vLcW.xz : ( lan.x > lan.z ? vLcW.zy : vLcW.xy ) ) * uLcGrimeK.y;
+  vec3 lg1 = texture2D( uLcGrime, lgp ).rgb, lg2 = texture2D( uLcGrime, mat2( 0.8, 0.6, -0.6, 0.8 ) * lgp * 0.53 + 0.29 ).rgb;
+  float lgl = dot( ( lg1 + lg2 ) * 0.5 / ${glslV3(GRIME_FILE.avg)}, ${PH_LUM} );
+  diffuseColor.rgb *= clamp( 1.0 + ( lgl - 1.0 ) * uLcGrimeK.x, 0.55, 1.35 );
+}
+#endif
+#ifdef LC_WATER
+{
+  float ldep = uLcWater.x - lcGround( vLcW.xz );
+  float lk = smoothstep( 0.0, uLcWater.z, ldep );                // (the depth that reads as deep: 7 m on the sea, 3.2 m in Deepwood's rivers and lakes)
+  diffuseColor.rgb = mix( uLcShallow, uLcDeep, lk );
+  // surf lines follow the depth contours (so they run along the shore and roll in), broken into ~12 m patches; once a band is under ~2 px (the drop
+  // view) its sine is replaced by its mean, so the plane sees a soft white rim, not stripes (was one world-space diagonal sine: zebra bands from the air)
+  float lph = ldep * 11.0 - uLcWater.y * 1.6;
+  float law = clamp( fwidth( lph ) - 0.6, 0.0, 1.0 );
+  float lbr = 0.62 + 0.38 * sin( dot( vLcW.xz, vec2( 0.45, 0.27 ) ) + 2.0 * sin( vLcW.z * 0.083 + vLcW.x * 0.031 ) );
+  float lfoam = ( 1.0 - smoothstep( 0.0, 0.55, ldep ) ) * mix( 0.55 + 0.45 * sin( lph ), 0.5, law ) * lbr;
+  diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.95, 0.94 ), clamp( lfoam, 0.0, 1.0 ) * 0.75 );
+  diffuseColor.a = mix( 0.62, diffuseColor.a, smoothstep( 0.0, 2.5, ldep ) );
+}
+#endif`;
+// light terms (after lights_fragment_end): a cloud's shadow takes a share of the SUN only (the sky fill stays: a shadowed field reads as overcast, not night),
+// contact AO darkens the sky fill most and the sun a little
+const LC_FRAG_LIGHT = `
+#ifdef LC_CLOUD
+{
+  vec2 lcp = ( vLcW.xz + uLcCloudK.xy * ( 380.0 - vLcW.y ) ) * 0.00105 + uLcCloudOff;
+  float lcn = texture2D( uLcCloud, lcp ).r * 0.72 + texture2D( uLcCloud, lcp * 2.9 + 0.31 ).g * 0.28;
+  float lcs = 1.0 - uLcCloudK.w * smoothstep( uLcCloudK.z, uLcCloudK.z + 0.2, lcn );
+  reflectedLight.directDiffuse *= lcs; reflectedLight.directSpecular *= lcs;
+}
+#endif
+#ifdef LC_AO
+{
+  float lao = texture2D( uLcAO, vLcW.xz * uLcAOK.x + uLcAOK.y ).r;
+  reflectedLight.indirectDiffuse *= 1.0 - uLcAOK.z * lao; reflectedLight.directDiffuse *= 1.0 - uLcAOK.w * lao;
+}
+#endif`;
+// P23-fix / LC-17 wall base: the wear band darkens the LIT colour by a share of its ON-SCREEN brightness (uLcWear.x x the band), not the albedo by a fixed
+// factor. An albedo factor k reads as 1 - k^(1/2.4) on a sunlit face but ~1 - k on a shaded one (sRGB's dark end is near-linear): one wear setting read 7-14 %
+// on Savanna's sunlit walls and 25-28 % on Isla's shaded ones (the plan's band is 15-25 %). Here the lit colour x the exposure goes through the screen's own
+// curve (PBR Neutral's toe - its shoulder starts at 0.76 - then sRGB, PER CHANNEL), is lowered by the band's share and comes back through the inverse: the
+// same darkening on every face, lit or not.
+const LC_FRAG_OUT = `
+#ifdef LC_WEAR
+if ( lcWB > 0.0 ) {
+  vec3 lx = max( outgoingLight * uLcWear.z, vec3( 0.0 ) );
+  float lm = min( lx.r, min( lx.g, lx.b ) );
+  lx -= lm < 0.08 ? lm - 6.25 * lm * lm : 0.04;                                   // PBR Neutral's toe (three's NeutralToneMapping below its 0.76 shoulder)
+  vec3 lt = mix( 1.055 * pow( lx, vec3( 0.41667 ) ) - 0.055, lx * 12.92, vec3( lessThanEqual( lx, vec3( 0.0031308 ) ) ) ) * ( 1.0 - lcWB );
+  lx = mix( pow( ( lt + 0.055 ) * 0.947867, vec3( 2.4 ) ), lt * 0.0773994, vec3( lessThanEqual( lt, vec3( 0.04045 ) ) ) );
+  lm = min( lx.r, min( lx.g, lx.b ) );
+  lx += lm < 0.04 ? sqrt( max( lm, 0.0 ) * 0.16 ) - lm : 0.04;                   // (its inverse)
+  outgoingLight = lx / uLcWear.z;
+}
+#endif`;
+const LC_UNIFORMS = { LC_WIND: ["uLcT", "uLcWind"], LC_CLOUD: ["uLcCloud", "uLcCloudK", "uLcCloudOff"], LC_HGT: ["uLcHgt", "uLcHgtK"], LC_AO: ["uLcAO", "uLcAOK"],
+  LC_GRIME: ["uLcGrime", "uLcGrimeK"], LC_WEAR: ["uLcWear"], LC_WATER: ["uLcWater", "uLcShallow", "uLcDeep"] };
+/** Patch a MeshStandardMaterial (or a MeshDepthMaterial for the wind) with the world-shader layer. `defs` = { LC_CLOUD: "", LC_WEAR: "", LC_WIND_H: "6.5", ... }
+ *  (LC_WEAR and LC_WATER need LC_HGT, which is added). Chains any onBeforeCompile the material already had (the terrain photo, the struct mix); the program
+ *  cache key carries the previous key and the define set, so every match reuses the same programs. Idempotent per material. */
+function lcPatch(mat, defs) {
+  if (!mat || mat.userData.lcPatched) return mat;
+  defs = Object.assign({}, defs);
+  if (defs.LC_WEAR !== undefined || defs.LC_WATER !== undefined) defs.LC_HGT = "";
+  const keys = Object.keys(defs).sort();
+  if (!keys.length) return mat;
+  mat.userData.lcPatched = keys.join(",");
+  mat.defines = Object.assign({}, mat.defines || {}, defs);
+  const prevKey = mat.customProgramCacheKey && mat.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : null;
+  const prevCompile = mat.onBeforeCompile && mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? mat.onBeforeCompile : null;
+  const sig = "lcw-v1:" + keys.map((k) => k + "=" + defs[k]).join(";");
+  mat.customProgramCacheKey = () => (prevKey ? prevKey() + "|" : "") + sig;
+  const depth = !!mat.isMeshDepthMaterial || !!mat.isMeshDistanceMaterial;
+  mat.onBeforeCompile = (sh, r) => {
+    // ours FIRST: a previous patch may expand an #include it replaces (the struct mix rewrites map_fragment's text), and ours anchors on the #include tokens
+    for (const d of keys) for (const u of LC_UNIFORMS[d] || []) sh.uniforms[u] = LCU[u];
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\n" + LC_VERT_HEAD)
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n" + LC_NRM_WIND)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + LC_VERT_WIND);
+    if (!depth) {
+      sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>\n" + LC_VERT_WORLD);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + LC_FRAG_HEAD)
+        .replace("#include <map_fragment>", "#include <map_fragment>\n" + LC_FRAG_ALBEDO)
+        .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + LC_FRAG_LIGHT)
+        .replace("#include <opaque_fragment>", LC_FRAG_OUT + "\n#include <opaque_fragment>");
+    }
+    if (prevCompile) prevCompile.call(mat, sh, r);
+  };
+  mat.needsUpdate = true;
+  return mat;
+}
+/** the graphics tier this map is built for (lane boot's C-GFX W.gfxTier, else the stored setting): low | medium | high | ultra */
+function gfxTierOf(W) { const t = W.gfxTier || (W.settings && W.settings.graphics) || (W._gfx && W._gfx.tier) || "medium"; return t === "low" || t === "medium" || t === "high" || t === "ultra" ? t : "medium"; }
+/** C-GFX / D10: the citykit facade-detail strength for a tier (0 = off on low: setDetail(0) needs no recompile) and the wall photograph's gain. */
+const KIT_DETAIL = 0.62, GRIME_GAIN = 0.7;
+function kitDetailFor(tier) { return tier === "low" ? 0 : KIT_DETAIL; }
+/** D10: boot emits W.events 'gfxTier'(tier) whenever the tier changes (and once at start). One listener per W (the emitter has no off()), acting on
+ *  whatever map is current: the city kit's facade detail and the wall photograph follow the tier without a recompile (a map BUILT on low never loaded the
+ *  photograph or patched the shaders, so raising the tier mid-match cannot add them: the draw distances (TIER_Q) stay those of the tier the map was built for). */
+function hookGfxTier(W) {
+  if (!W || W._mapsGfxHook || !W.events || typeof W.events.on !== "function") return;
+  W._mapsGfxHook = true;
+  W.events.on("gfxTier", (tier) => {
+    const t = tier || W.gfxTier;
+    const kit = W._cityKit;
+    if (kit && typeof kit.setDetail === "function") { try { kit.setDetail(kitDetailFor(t)); } catch (e) { /* a disposed kit */ } }
+    if (LCU.uLcGrime.value) LCU.uLcGrimeK.value.x = t === "low" ? 0 : GRIME_GAIN;
+  });
+}
+
 /** the photo splat of a terrain vertex: weights of (grass/rock, beach, sand) - the same biome zones colorAt tints, so the detail and the colour agree */
 function splatAt(mapId, h, x, z, seed, out) {
   let g = 1, b = 0, s = 0;
@@ -496,7 +760,16 @@ function mkHeightFn(mapId, seed) {
 //   bake()            freeze into the Float32 lattice; from then on at(x, z) is the ground
 // Everything is deterministic: pads come from the seeded layout only and the bake is plain IEEE arithmetic (+, -, *, /, sqrt), the same on
 // every client.
-export const MAP_GEN_VERSION = 5;                   // see map.genVersion (5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
+// 7 = the parity release (P1 + P2 + P3 on top of Wave 8; measured against the version-6 snapshot e10b9836: genversion says the colliders, props,
+//     loot points and settled items moved on all 9 builds of 3 maps x seeds 1 / 7 / 1234 and the ground heights on 8 of them, e.g. Isla Viva s1
+//     33,901 -> 34,493 colliders, Savanna s1 67,186 -> 69,425, Deepwood s1 28,762 -> 31,962). What changed, from the lanes' commits: rotation cover
+//     between the POIs on all three maps incl. Isla Viva (towngen.rotationCover: rock outcrops, ruined walls, wrecks, with colliders); POI identity
+//     (Savanna's Container Yard container lots, the Old Mall department store, Deepwood's Logging Camp woodyards with log piles); the link roads
+//     string-pulled and filleted (the road grade moves the ground); ground launch portals (LC-51), Deepwood's fire lookout (LC-90), the sky islands'
+//     rocks and braziers (LC-73); in the seeded loot: POI loot tiers and one hot zone per match, the three new guns (DMR, LMG, burst rifle) in the
+//     floor / chest lists, frag and smoke grenade weights on, the medium-ammo / sniper rebalance; and in the match's seeded loot stream supply drops
+//     (crates by storm phase) and death piles (a dead man's whole bag on one spot). A version-6 client builds a different world from the same seed.
+export const MAP_GEN_VERSION = 7;                   // see map.genVersion (7 = the parity release P1-P3, above; 6 = Wave 8: every enterable town / compound building on all three maps is a furnished housegen.js house - its walls, floors, roofs, furniture and colliders; 5 = Wave 7b: Isla Viva's resort towns, docks village and crater-rim village, Deepwood's lodge villages and mill-and-bridge compound; Savanna's world is identical to 4; 4 = Wave 7 completion: Savanna's polished city - taller downtown, parcel palettes, richer compounds, landmarks, merged street dressing; 3 = Wave 7: Savanna's towns; 2 = Wave 6 layout; an old client has no export and counts as 1)
 const FALLBACK_GEN_VERSION = { ashgrid: 2, isla_viva: 4, deepwood: 4 };   // the generator version of the layout a page plays when towngen.js / citykit.js do not load (see prepareCity): Savanna's Wave-6 layout is 2; Isla Viva's and Deepwood's pre-7b worlds are 4 (their maps were identical in 2, 3 and 4, only the loot settled differently from 3)
 export const LAT_CELLS = 608;                       // 8 chunks x 76 near-LOD cells (see CHUNKS / NEAR_SEG in buildMap)
 export const LAT_N = LAT_CELLS + 1;                 // 609 nodes per side
@@ -809,6 +1082,7 @@ export function disposeMapResources(W) {
   // C-SKY handles belong to the map being torn down: never leave a consumer (STORMFX's storm tint)
   // holding the uniforms of a disposed dome between matches. Done before the idempotence guard.
   W.skyUniforms = null; W.skyDome = null;
+  if (W._lcOwned) { for (const t of W._lcOwned) { try { t.dispose(); } catch (e) { /* gone */ } } W._lcOwned = null; LCU.uLcHgt.value = null; LCU.uLcAO.value = null; }
   const g = W._groups && W._groups.map;
   if (W._cityKit) { try { W._cityKit.dispose(); } catch (e) { /* already gone */ } W._cityKit = null; }   // WAVE 7: the instanced districts' matrix buffers, palette textures and proxies (a group traverse frees none of them)
   if (!g) return { geometries: 0, materials: 0, textures: 0 };
@@ -826,6 +1100,8 @@ export function disposeMapResources(W) {
   const seenG = new Set(), seenM = new Set(), seenT = new Set();
   let geometries = 0, materials = 0, textures = 0;
   g.traverse((o) => {
+    // (Wave 8 fix round, lane K1) a BatchedMesh (the furnished houses' insides) owns its geometry AND two data textures (instance matrices, indirection): dispose() frees all three
+    if (o.isBatchedMesh && o.geometry && !seenG.has(o.geometry)) { seenG.add(o.geometry); try { o.dispose(); } catch (e) { /* already gone */ } geometries++; textures += 2; }
     if (o.geometry && !seenG.has(o.geometry)) { seenG.add(o.geometry); o.geometry.dispose(); geometries++; }
     const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
     for (const m of mats) {
@@ -907,9 +1183,110 @@ const CITY_THEME_TABLES = {
   },
 };
 
+// LC-89: one kind's cull pass, at MODULE level (the hot loop optimised, like bakeContactAO below). PL = the 6 frustum planes as [nx, ny, nz, c] x 6;
+// Q = [camera x, y, z, draw distance^2, fade start, 1 / fade length] (a Float64Array: doubles passed as plain arguments are boxed per call);
+// out = [instances drawn, LOD instances drawn].
+function lcCullKind(list, cxA, cyA, czA, crA, hid, parts, PL, Q, out) {
+  const n = list.length, px = Q[0], py = Q[1], pz = Q[2], D2 = Q[3], F0 = Q[4], FK = Q[5];
+  let nOut = 0, nLod = 0;
+  for (let i = 0; i < n; i++) {
+    if (list[i].dead) continue;
+    const cx = cxA[i], cy = cyA[i], cz = czA[i], r = crA[i];
+    const dx = cx - px, dy = cy - py, dz = cz - pz, d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > D2) continue;
+    const d = Math.sqrt(d2), pad = -(r + 4 + d * 0.07);
+    if (PL[0] * cx + PL[1] * cy + PL[2] * cz + PL[3] < pad || PL[4] * cx + PL[5] * cy + PL[6] * cz + PL[7] < pad || PL[8] * cx + PL[9] * cy + PL[10] * cz + PL[11] < pad ||
+        PL[12] * cx + PL[13] * cy + PL[14] * cz + PL[15] < pad || PL[16] * cx + PL[17] * cy + PL[18] * cz + PL[19] < pad || PL[20] * cx + PL[21] * cy + PL[22] * cz + PL[23] < pad) continue;
+    const fade = d > F0 ? Math.max(0, 1 - (d - F0) * FK) : 1;
+    const skipLod = hid !== null && hid.has(i);
+    for (let k = 0; k < parts.length; k++) {
+      const pt = parts[k];
+      if (pt.lod && skipLod) continue;
+      const o = (pt.lod ? nLod : nOut) * 16, a = pt.arr, sv = pt.src, si = i * 16;
+      if (fade === 1) for (let j = 0; j < 16; j++) a[o + j] = sv[si + j];
+      else { for (let j = 0; j < 12; j++) a[o + j] = (j & 3) === 3 ? sv[si + j] : sv[si + j] * fade; a[o + 12] = sv[si + 12]; a[o + 13] = sv[si + 13]; a[o + 14] = sv[si + 14]; a[o + 15] = sv[si + 15]; }
+    }
+    nOut++;
+    if (!skipLod) nLod++;
+  }
+  out[0] = nOut; out[1] = nLod;
+}
+/** LC-41: the contact-AO mask (see buildMap). A module-level function, not a block inside buildMap: buildMap is far past V8's optimising-compiler size
+ *  limit, so a hot loop written inline there runs in the baseline tier (the 16 M-texel blur measured 1.6-3.3 s in the page vs 0.16 s optimised).
+ *  `gyc[i]` = the ground under collider i's centre (the caller's heightAt). Returns the R8 texels, the colliders rasterised and the raster's ms. */
+function bakeContactAO(colliders, gyc, N, size) {
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const half = size / 2, inv = N / size, occ = new Float32Array(N * N), rowHas = new Uint8Array(N);
+  let nAO = 0;
+  for (let ci = 0; ci < colliders.length; ci++) {
+    const c = colliders[ci];
+    if (c.dead || c.kind !== "box") continue;
+    const w = c.maxX - c.minX, d = c.maxZ - c.minZ;
+    if (w * d > 6000 || w < 0.05 || d < 0.05) continue;
+    const gy = gyc[ci];
+    if (c.minY > gy + 0.35 || c.maxY < gy + 0.5) continue;
+    const hk = Math.min(1, (c.maxY - Math.max(c.minY, gy)) / 2.5);
+    const fx0 = (c.minX + half) * inv, fx1 = (c.maxX + half) * inv, fz0 = (c.minZ + half) * inv, fz1 = (c.maxZ + half) * inv;
+    const i0 = Math.max(0, Math.floor(fx0)), i1 = Math.min(N - 1, Math.floor(fx1)), j0 = Math.max(0, Math.floor(fz0)), j1 = Math.min(N - 1, Math.floor(fz1));
+    for (let j = j0; j <= j1; j++) {
+      const cz = Math.min(j + 1, fz1) - Math.max(j, fz0);
+      if (cz <= 0) continue;
+      rowHas[j] = 1;
+      for (let i = i0; i <= i1; i++) {
+        const cx = Math.min(i + 1, fx1) - Math.max(i, fx0);
+        if (cx <= 0) continue;
+        const v = cx * cz * hk, k = j * N + i;
+        if (v > occ[k]) occ[k] = v;
+      }
+    }
+    nAO++;
+  }
+  const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  // the blur: two 3-texel boxes (~ a 1.6 m soft edge) = ONE separable 5-tap [1 2 3 2 1] / 9 per axis, edges clamped; only the rows the raster touched (+-2)
+  // are filtered (the rest of the map stays 0) and the vertical pass writes the bytes directly
+  const tmp = new Float32Array(N * N), px = new Uint8Array(N * N), k9 = 1 / 9;
+  for (let r = 0; r < N; r++) {
+    if (!rowHas[r]) continue;
+    const o = r * N;
+    for (let c = 0; c < N; c++) {
+      const cm2 = c < 2 ? 0 : c - 2, cm1 = c < 1 ? 0 : c - 1, cp1 = c > N - 2 ? N - 1 : c + 1, cp2 = c > N - 3 ? N - 1 : c + 2;
+      tmp[o + c] = (occ[o + cm2] + 2 * occ[o + cm1] + 3 * occ[o + c] + 2 * occ[o + cp1] + occ[o + cp2]) * k9;
+    }
+  }
+  for (let r = 0; r < N; r++) {
+    const rm2 = r < 2 ? 0 : r - 2, rm1 = r < 1 ? 0 : r - 1, rp1 = r > N - 2 ? N - 1 : r + 1, rp2 = r > N - 3 ? N - 1 : r + 2;
+    if (!rowHas[rm2] && !rowHas[rm1] && !rowHas[r] && !rowHas[rp1] && !rowHas[rp2]) continue;
+    const o = r * N, a = rm2 * N, b = rm1 * N, d = rp1 * N, e = rp2 * N;
+    for (let c = 0; c < N; c++) {
+      const v = (tmp[a + c] + 2 * tmp[b + c] + 3 * tmp[o + c] + 2 * tmp[d + c] + tmp[e + c]) * k9;
+      px[o + c] = v >= 1 ? 255 : v <= 0 ? 0 : (v * 255 + 0.5) | 0;
+    }
+  }
+  return { px, nAO, rasterMs: Math.round((t1 - t0) * 10) / 10 };
+}
+
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;
+  hookGfxTier(W);                                       // D10: the city kit detail / wall photograph follow boot's 'gfxTier' event
+  // C-GFX: the tier this map is BUILT for (fixed for the match: the in-match ladder only moves bloom / DPR). LCFX = the world-shader layer (LCU) and the photo
+  // wall detail: off on low. ULTRA (lane boot) = the longest draw / foliage / grass / furniture distances and the 5 x 5 near terrain ring (see TIER_Q).
+  const TIER = gfxTierOf(W), LCFX = TIER !== "low";
+  const TIER_Q = {
+    low:    { propD: 600, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 0 },
+    medium: { propD: 780, nearR: 110, nearN: 64, clR: 55, clN: 1400, distD: 1100, furnD: 60, ring: 1, lamps: 4 },
+    high:   { propD: 1000, nearR: 125, nearN: 72, clR: 60, clN: 1700, distD: 1300, furnD: 70, ring: 1, lamps: 4 },
+    ultra:  { propD: 1650, nearR: 165, nearN: 112, clR: 78, clN: 2900, distD: 1750, furnD: 95, ring: 2, lamps: 6 },
+  }[TIER];
+  const GRADE = K.grade || { exposure: 1.15, ground: 1, water: 1 };   // LC-04 / OD-2 (see MAPS)
+  const grimePromise = LCFX ? loadGrimeTexture(W).catch(() => null) : Promise.resolve(null);   // LC-17: the CC0 wall photograph (medium and up)
+  // the world-shader layer's per-match textures (the ground lattice, the contact-AO mask): no material slot holds them (they are uniforms), so the map
+  // disposes them itself - the previous match's first (a rebuild without a teardown), the rest in disposeMapResources
+  if (W._lcOwned) { for (const t of W._lcOwned) { try { t.dispose(); } catch (e) { /* gone */ } } }
+  W._lcOwned = [];
+  const lcOwn = (t) => { W._lcOwned.push(t); return t; };
+  LCU.uLcHgt.value = null; LCU.uLcAO.value = null; LCU.uLcAOK.value.set(0, 0, 0, 0);
+  W._lcU = LCU;                                       // (read-only handle for the gates: the world-shader layer's live uniforms)
   const rng = W.SIM.mulberry32(seed ^ 0xabcdef);
   const baseH = mkHeightFn(mapId, seed);
   const field = new TerrainField(baseH, SIZE);          // C-PAD: the analytic ground + the pads and corridors the generators register (see the section above mkHeightFn's palette)
@@ -1009,7 +1386,8 @@ export async function buildMap(W, mapId) {
     // exposure at all — so 1.15 is a real +15% mid-tone lift, not a re-statement.
     // The menu is untouched: hud.js restores ACES 1.12 for the menu diorama.
     kn.renderer.toneMapping = THREE.NeutralToneMapping;
-    kn.renderer.toneMappingExposure = 1.15;
+    kn.renderer.toneMappingExposure = K.grade ? K.grade.exposure : 1.15;
+    LCU.uLcWear.value.z = kn.renderer.toneMappingExposure;           // (the wear band's on-screen darkening: LC_FRAG_OUT)
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
     kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
@@ -1032,6 +1410,7 @@ export async function buildMap(W, mapId) {
   const FAR_SEG = 38, NEAR_SEG = 76;                 // ~5.3 / ~2.6 m per vertex; NEAR_SEG * CHUNKS === LAT_CELLS
   const TILE = 8;                                    // meters per texture tile
   const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
+  terrMat.color.setScalar(GRADE.ground);               // LC-04 (OD-2 G2): the ground's albedo (the vertex colours stay the biome palette the minimap and the tufts share)
   try {
     const gt = groundTex(aniso);
     terrMat.map = gt.map; terrMat.normalMap = gt.normal;
@@ -1088,6 +1467,7 @@ export async function buildMap(W, mapId) {
   }
   function buildTerrain() {
     if (photo && terrMat.map) patchTerrainPhoto(terrMat, photo); else photo = null;     // the splat attribute only exists with the patched program
+    if (LCFX) lcPatch(terrMat, { LC_CLOUD: "", LC_AO: "" });                              // LC-74 cloud shadows + LC-41 contact AO (medium and up)
     terrain = new THREE.Group();
     terrain.name = "terrain";
     const tChunks = [];
@@ -1110,7 +1490,7 @@ export async function buildMap(W, mapId) {
       if (ci !== _lodCi || cj !== _lodCj) {
         _lodCi = ci; _lodCj = cj;
         for (const c of tChunks) {
-          const ring = Math.abs(c.ci - ci) <= 1 && Math.abs(c.cj - cj) <= 1;
+          const ring = Math.abs(c.ci - ci) <= TIER_Q.ring && Math.abs(c.cj - cj) <= TIER_Q.ring;   // (ULTRA: a 5 x 5 near ring, 2.6 m terrain to ~500 m)
           if (ring && !c.near && _lodQueue.indexOf(c) < 0) _lodQueue.push(c);
           const useNear = ring && !!c.near;
           c.far.visible = !useNear;
@@ -1121,7 +1501,7 @@ export async function buildMap(W, mapId) {
         const c = _lodQueue.shift();
         c.near = buildChunk(c.ci, c.cj, NEAR_SEG, true);
         terrain.add(c.near);
-        const ring = Math.abs(c.ci - _lodCi) <= 1 && Math.abs(c.cj - _lodCj) <= 1;
+        const ring = Math.abs(c.ci - _lodCi) <= TIER_Q.ring && Math.abs(c.cj - _lodCj) <= TIER_Q.ring;
         c.near.visible = ring;
         if (ring) c.far.visible = false;
       }
@@ -1153,6 +1533,13 @@ export async function buildMap(W, mapId) {
       color: mapId === "isla_viva" ? 0x80c2ca : 0x4b7a84, transparent: true, opacity: 0.86,
       roughness: 0.30, metalness: 0.0, side: THREE.DoubleSide,
     });
+    wmat.color.multiplyScalar(GRADE.water);                                              // LC-04 (OD-2 G2)
+    // LC-39 (P3 half): depth colour + shoreline foam from the baked ground (LCU.uLcHgt): shallow water shows the sand under it, deep water the grade's colour
+    if (LCFX) {
+      LCU.uLcShallow.value.copy(wmat.color).lerp(new THREE.Color(mapId === "isla_viva" ? 0x9fe0d2 : 0x7fa89a), 0.55);
+      LCU.uLcDeep.value.copy(wmat.color).multiplyScalar(mapId === "isla_viva" ? 0.55 : 0.62);
+      lcPatch(wmat, { LC_WATER: "" });
+    }
     let wN = null;
     try {
       wN = waterNormalTex(aniso);
@@ -1294,6 +1681,16 @@ export async function buildMap(W, mapId) {
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
+    // LC-74 cloud shadows + LC-38 wind (the world-shader layer, LCU): the ground reads the SAME baked cloud noise the dome draws, projected along the sun onto a
+    // deck ~380 m up and drifting with the wind; the wind's direction is seeded per match (a separate stream: the world rng is untouched). Cloud cover per map
+    // sets how much of the ground is under a cloud (Deepwood's 0.72 -> ~40 %, Savanna's 0.54 -> ~25 %); a cloud takes 50 % of the sun.
+    {
+      const wr = W.SIM.mulberry32(seed ^ 0x77d1a5), wa = wr() * Math.PI * 2;
+      LCU.uLcWind.value.set(Math.cos(wa), Math.sin(wa), LCFX ? 1 : 0, 0);
+      LCU.uLcCloud.value = skyMat.uniforms.tNoise.value;
+      LCU.uLcCloudK.value.set(sunDir.x / Math.max(0.2, sunDir.y), sunDir.z / Math.max(0.2, sunDir.y), 1.02 - (K.cloud != null ? K.cloud : 0.5) * 0.62, LCFX ? 0.5 : 0);
+      LCU.uLcCloudOff.value.copy(cloudOff);
+    }
     const sky = new THREE.Mesh(skyGeo, skyMat);
     sky.renderOrder = -10; sky.frustumCulled = false; sky.name = "sky";
     g.add(sky);
@@ -1311,31 +1708,41 @@ export async function buildMap(W, mapId) {
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
     const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
-    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // ONE shared material for every bird (a SpriteMaterial per bird was 96 program lookups a frame)
+    // (R1 / endgame lane) ALL the birds are ONE Points draw (was one Sprite per bird: 15-27 birds = 0-24 draw calls in a view, by the time of the frame; perf_district's endgame
+    // view read +/- 24 calls run to run). The same rng() draws in the same order (every seeded placement after this is unchanged), the same flight; size 6 = the sprites' mean 4.25 m
+    // seen through the 70-degree lens (a point is sized in screen height / depth, a sprite in world metres: x 1 / tan 35 deg).
     const flocks = [];
     for (let f = 0; f < 3; f++) {
-      const flock = new THREE.Group();
+      const flock = { children: [], position: new THREE.Vector3() };
       const n = 5 + Math.floor(rng() * 5);
       for (let b = 0; b < n; b++) {
-        const s = new THREE.Sprite(birdMat);
-        s.scale.setScalar(3 + rng() * 2.5);
+        const s = { position: new THREE.Vector3(), userData: {} };
+        s.sc = 3 + rng() * 2.5;
         s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
-        flock.add(s);
+        flock.children.push(s);
       }
       flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 120 + rng() * 60, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 }; // 120-180m: clear of the sky-islands (~52m) and the volcano
-      g.add(flock); flocks.push(flock);
+      flocks.push(flock);
     }
+    const nB = flocks.reduce((a, f) => a + f.children.length, 0), bPos = new Float32Array(nB * 3), bGeo = new THREE.BufferGeometry();
+    bGeo.setAttribute("position", new THREE.BufferAttribute(bPos, 3));
+    const birdPts = new THREE.Points(bGeo, new THREE.PointsMaterial({ map: birdTex, size: 6, sizeAttenuation: true, transparent: true, depthWrite: false, fog: false }));
+    birdPts.frustumCulled = false; birdPts.name = "birds"; g.add(birdPts);
 
     trackUpdater((dt, t) => {
       // keep the sky dome centered on the camera — a skybox should follow the viewer,
       // else it parallaxes as you move and its far shell clips the 2000m far-plane at map corners
       if (W.camera) sky.position.copy(W.camera.position);
       skyMat.uniforms.cloudT.value = t;    // scrolls both baked cloud layers (replaces the sprite drift)
+      LCU.uLcT.value = t; LCU.uLcWater.value.y = t;
+      LCU.uLcCloudOff.value.set(cloudOff.x + t * 0.0072 * LCU.uLcWind.value.x, cloudOff.y + t * 0.0072 * LCU.uLcWind.value.y);   // ~7 m/s of drift
+      let bi = 0;
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
         fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
-        for (const s of fl.children) s.position.set((s.userData.ix - fl.children.length / 2) * 4.5, Math.sin(t * 6 + s.userData.ph) * 1.6, (s.userData.ix % 2) * 3);
+        for (const s of fl.children) { bPos[bi++] = fl.position.x + (s.userData.ix - fl.children.length / 2) * 4.5; bPos[bi++] = fl.position.y + Math.sin(t * 6 + s.userData.ph) * 1.6; bPos[bi++] = fl.position.z + (s.userData.ix % 2) * 3; }
       }
+      bGeo.attributes.position.needsUpdate = true;
     });
 
     // ── P1.10 (SKY lane, Wave 4): altitude-scaled fog ───────────────────────────
@@ -1399,6 +1806,24 @@ export async function buildMap(W, mapId) {
     const l = sink[key];
     if (l) l.push(geo); else sink[key] = [geo];
     if (cap) cap.push(geo);
+  }
+  // LC-52: what a structure collider is MADE of, for surfaceAt (a side table keyed by the collider object: the colliders keep their one hidden class, see
+  // mkCollider). From the texture kind the geometry is drawn with: planks / shingles -> wood, metal -> metal, block / plaster -> concrete; the brick / stone
+  // grain ("s") by its colour: a warm, saturated tint (the huts' and docks' timber) -> wood, otherwise stone.
+  const colSurf = new Map();
+  const _tsC = new THREE.Color();
+  function surfOfTex(tex, color) {
+    if (tex === "plank" || tex === "shingle") return "wood";
+    if (tex === "metal") return "metal";
+    if (tex === "block" || tex === "stucco") return "concrete";
+    try { _tsC.set(color); } catch (e) { return "stone"; }
+    const mx = Math.max(_tsC.r, _tsC.g, _tsC.b), mn = Math.min(_tsC.r, _tsC.g, _tsC.b);
+    return mx > 0.02 && (mx - mn) / mx > 0.35 && _tsC.r >= _tsC.b ? "wood" : "stone";
+  }
+  function tagSurf(n0, tex, color) {
+    if (n0 >= colliders.length) return;
+    const sf = surfOfTex(tex, color);
+    for (let i = n0; i < colliders.length; i++) colSurf.set(colliders[i], sf);
   }
   // Axis-aligned colliders for a (possibly yawed) box. A quarter turn is exact. Any other yaw used to become ONE AABB of the rotated box: 8.4 m
   // of invisible wall beside the 18 m shipwreck hull, 1,100-2,500 m2 of phantom collider per match, and the invisible walkable floor beside
@@ -1466,7 +1891,7 @@ export async function buildMap(W, mapId) {
     // default "s" = the struct brick) — the merge loop below splits it back out
     const bkey = color + "|" + (opts.tex || "s");
     pushGeo(bkey, geo);
-    if (opts.collide !== false) boxColliders(cx, cy, cz, w, h, d, opts.rotY || 0);
+    if (opts.collide !== false) { const n0 = colliders.length; boxColliders(cx, cy, cz, w, h, d, opts.rotY || 0); tagSurf(n0, opts.tex || "s", color); }
   }
   // addBox rotates a box about its OWN centre (rotateY then translate on an
   // origin-centred BoxGeometry), so a caller that also wants the box MOVED around
@@ -1499,6 +1924,7 @@ export async function buildMap(W, mapId) {
     const hx = (dir === 0 || dir === 1) ? d / 2 : w / 2;
     const hz = (dir === 0 || dir === 1) ? w / 2 : d / 2;
     colliders.push(mkCollider("ramp", cx - hx, cx + hx, cy, cy + h, cz - hz, cz + hz, dir, null, -1, 0));
+    tagSurf(colliders.length - 1, "s", color);
   }
   // C-RAMP authoring (Wave 5, lane 5A). A ramp is a 0.3 m sloped slab: walkable from its low edge, 45 degrees at most, and it must meet the
   // thing it climbs to. The old call sites passed the height at the BUILDING CENTRE as the ramp's foot, so on any slope the low edge hung
@@ -1895,6 +2321,11 @@ export async function buildMap(W, mapId) {
   const landmarks = [];             // {x,z,r} unnamed inter-POI structures — trees keep clear
   const lampPts = [];               // {x,y,z} emissive lamp heads — the near-lamp light pool follows these
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
+  // R2 / world: the rotation-cover pieces (towngen.rotationCover, below) in their OWN lists, never appended to props: props[kind] stays the seeded scatter
+  // stream as drawn from `rng` (worldcheck rng-stream judges its anchors against the live build). They are finalized, drawn and collided exactly as before:
+  // the draw loop hands each kind's InstancedMeshes and colliders props[kind] followed by coverProps[kind] (same matrices, same collider order and idx,
+  // same one draw call per kind part); only M.propInstances no longer lists them (M.coverInstances does).
+  const coverProps = { rocks: [], car: [] };
   let yardInfo = null;               // ashgrid's container yard: what the ramp-corridor pass dropped (see the yard block)
 
   // ── prop grounding (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────────────────
@@ -1981,14 +2412,14 @@ export async function buildMap(W, mapId) {
   }
   function finalizeProps() {
     const stats = {};
-    for (const kind in props) {
-      const list = props[kind];
+    for (const [lists, out] of [[props, stats], [coverProps, stats.cover = {}]]) for (const kind in lists) {
+      const list = lists[kind];
       if (!list.length) continue;
       const lim = PROP_SLOPE_MAX[kind], keep = [];
       for (const it of list) { if (it.drop || (it.rej && lim != null && groundSlopeDeg(it.x, it.z) > lim) || (it.reliefMax != null && groundRelief(kind, it) > it.reliefMax)) continue; keep.push(it); }
-      props[kind] = keep;
+      lists[kind] = keep;
       for (const it of keep) settleProp(kind, it);
-      stats[kind] = { generated: list.length, rejected: list.length - keep.length };
+      out[kind] = { generated: list.length, rejected: list.length - keep.length };
     }
     return stats;
   }
@@ -2063,6 +2494,33 @@ export async function buildMap(W, mapId) {
   // are BUILT after the bake (emitRoads), their vertices on the same triangle-exact ground the player stands on. Only the DRY sections are
   // kept: a street used to run into the sea (Jungle Market's was partly under water in 99.5 % of seeds); a section whose smoothed
   // centreline is below waterY + 0.35 is dropped, and a stub shorter than 8 m with it.
+  // LC-52: the paved / laid ground of the map as a 1 m raster (2.56 MB, freed with the map): 0 = bare terrain (surfaceAt reads the biome zones), else what was
+  // DRAWN there - the road ribbons and parking lots (asphalt), the towns' sidewalks / plazas / parcels (paving), the compounds' yards and crop fields (earth),
+  // a park lot (grass). Painted by the code that lays each of them, so the footstep under a player is the surface under them, never a neighbour's.
+  const SG_CONCRETE = 1, SG_DIRT = 2, SG_GRASS = 3, SG_NAMES = [null, "concrete", "dirt", "grass"];
+  const SGN = SIZE, surfG = new Uint8Array(SGN * SGN);
+  function surfRect(x0, z0, x1, z1, code) {
+    const i0 = Math.max(0, Math.floor(x0 + HALF)), i1 = Math.min(SGN - 1, Math.floor(x1 + HALF)), j0 = Math.max(0, Math.floor(z0 + HALF)), j1 = Math.min(SGN - 1, Math.floor(z1 + HALF));
+    for (let j = j0; j <= j1; j++) { const o = j * SGN; for (let i = i0; i <= i1; i++) surfG[o + i] = code; }
+  }
+  function surfSeg(x0, z0, x1, z1, width, code) {
+    const hw = width / 2, dx = x1 - x0, dz = z1 - z0, L2 = dx * dx + dz * dz || 1;
+    const i0 = Math.max(0, Math.floor(Math.min(x0, x1) - hw + HALF)), i1 = Math.min(SGN - 1, Math.floor(Math.max(x0, x1) + hw + HALF));
+    const j0 = Math.max(0, Math.floor(Math.min(z0, z1) - hw + HALF)), j1 = Math.min(SGN - 1, Math.floor(Math.max(z0, z1) + hw + HALF));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const px = i + 0.5 - HALF - x0, pz = j + 0.5 - HALF - z0, t = Math.max(0, Math.min(1, (px * dx + pz * dz) / L2));
+      const ex = px - dx * t, ez = pz - dz * t;
+      if (ex * ex + ez * ez <= hw * hw) surfG[j * SGN + i] = code;
+    }
+  }
+  const _sgC = new THREE.Color();
+  /** a town ground decal's surface by its tint: greys = paving, a green = lawn, any other saturated tint = packed earth / a field */
+  function surfOfHex(hex) {
+    try { _sgC.set(hex); } catch (e) { return SG_CONCRETE; }
+    const mx = Math.max(_sgC.r, _sgC.g, _sgC.b), mn = Math.min(_sgC.r, _sgC.g, _sgC.b);
+    if (mx <= 0 || (mx - mn) / mx < 0.3) return SG_CONCRETE;
+    return _sgC.g >= _sgC.r && _sgC.g >= _sgC.b ? SG_GRASS : SG_DIRT;
+  }
   const roadGeos = [];                                  // merged into one asphalt mesh after structures
   const roadQueue = [];                                 // { x0, z0, x1, z1, width } dry sections waiting for the bake
   const lotQueue = [];                                  // { cx, cz, w, d } parking lots waiting for the bake
@@ -2126,6 +2584,7 @@ export async function buildMap(W, mapId) {
     }
     for (let i = 0; i < n; i++) for (let j = 0; j < W2 - 1; j++) {
       const a = i * W2 + j, b = a + 1, c = a + W2, dI = c + 1;
+      if (houses.length && (underHouse(posA[a * 3], posA[a * 3 + 2]) || underHouse(posA[b * 3], posA[b * 3 + 2]) || underHouse(posA[c * 3], posA[c * 3 + 2]) || underHouse(posA[dI * 3], posA[dI * 3 + 2]))) continue;   // (WAVE 8: no piece of ribbon over a house's floor)
       idx.push(a, b, c, b, dI, c);           // winding gives +Y normals (p x u = +Y)
     }
     const geo = new THREE.BufferGeometry();
@@ -2152,8 +2611,8 @@ export async function buildMap(W, mapId) {
   }
   // runs once, after the bake: every queued ribbon and lot on the final ground
   function emitRoads() {
-    for (const r of roadQueue) { roadRibbon(r.x0, r.z0, r.x1, r.z1, r.width); roadLog.push(r); }
-    for (const l of lotQueue) lotPlane(l.cx, l.cz, l.w, l.d);
+    for (const r of roadQueue) { roadRibbon(r.x0, r.z0, r.x1, r.z1, r.width); roadLog.push(r); surfSeg(r.x0, r.z0, r.x1, r.z1, r.width, SG_CONCRETE); }
+    for (const l of lotQueue) { lotPlane(l.cx, l.cz, l.w, l.d); surfRect(l.cx - l.w / 2, l.cz - l.d / 2, l.cx + l.w / 2, l.cz + l.d / 2, SG_CONCRETE); }
     roadQueue.length = 0; lotQueue.length = 0;
   }
   // greedy nearest-neighbour tree over the POIs → a connected road network
@@ -2510,7 +2969,7 @@ export async function buildMap(W, mapId) {
   // (a linear scan: called for a few dozen points a match)? onProp(x, z): a wild loot spot never lands under a placed car / barrel / rock / container / tree
   // (their colliders are built later, from these anchors). Both only matter on Savanna (the callers test `city` first), so the other maps' streams are untouched.
   const PROP_CLEAR = { car: 3.2, barrel: 1.4, rocks: 3.6, container: 4.2, tree: 1.0, palm: 1.0, pine: 1.0, birch: 1.0 };
-  const onProp = (x, z) => { for (const kind in PROP_CLEAR) { const r = PROP_CLEAR[kind], l = props[kind]; if (l) for (let i = 0; i < l.length; i++) { const dx = l[i].x - x, dz = l[i].z - z; if (dx * dx + dz * dz < r * r) return true; } } return false; };
+  const onProp = (x, z) => { for (const kind in PROP_CLEAR) for (const l of [props[kind], coverProps[kind]]) { const r = PROP_CLEAR[kind]; if (l) for (let i = 0; i < l.length; i++) { const dx = l[i].x - x, dz = l[i].z - z; if (dx * dx + dz * dz < r * r) return true; } } return false; };   // (the rotation cover too)
   const cityKitBoxes = [];          // the colliders citykit WILL add (a pure function of the kit list, computed when the buildings are done): loot keeps clear of them too
   const openSpot = (x, y, z) => {
     for (let i = 0; i < colliders.length; i++) { const c = colliders[i]; if (c.kind !== "ramp" && x > c.minX - 0.05 && x < c.maxX + 0.05 && z > c.minZ - 0.05 && z < c.maxZ + 0.05 && y > c.minY - 0.05 && y < c.maxY + 0.05) return false; }
@@ -2552,17 +3011,18 @@ export async function buildMap(W, mapId) {
   // `map.fallback` = { reason, genVersion, wanted }, and a "mapFallback" event on W.events (see the end of buildMap).
   let cityFallback = null;
   async function prepareCity() {
-    let TG, CK, err = null;
+    let TG, CK, HG, err = null;
     for (let attempt = 0; attempt < 2 && !TG; attempt++) {
       try {
         if (attempt) await new Promise((res) => setTimeout(res, 400));
         const q = attempt ? _V + (_V ? "&" : "?") + "retry=1" : _V;
-        [TG, CK] = await Promise.all([import("./towngen.js" + q), import("./citykit.js" + q)]);
-      } catch (e) { err = e; TG = CK = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
+        // (WAVE 8: housegen.js - the furnished houses - is one of the city modules: a page without it builds the pre-city layout, like a page without towngen.js)
+        [TG, CK, HG] = await Promise.all([import("./towngen.js" + q), import("./citykit.js" + q), import("./housegen.js" + q)]);
+      } catch (e) { err = e; TG = CK = HG = undefined; console.warn("[maps] the town generator did not load (try " + (attempt + 1) + " of 2):", e && e.message || e); }
     }
     if (!TG) {
       cityFallback = { reason: String(err && err.message || err || "import failed").slice(0, 200), genVersion: FALLBACK_GEN_VERSION[mapId] || 2, wanted: MAP_GEN_VERSION };
-      console.error("[maps] towngen.js / citykit.js failed to load twice: " + K.name + " is built on its pre-city layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
+      console.error("[maps] towngen.js / citykit.js / housegen.js failed to load twice: " + K.name + " is built on its pre-city layout (genVersion " + cityFallback.genVersion + ", not " + MAP_GEN_VERSION + "); a squad host with the towns builds a different map.");
       return null;
     }
     // landmarks that stay: Savanna's overpass (pillars, decks, the access ramp, the station) and the crane with its jib ramp. The other maps keep their landmarks by drawing
@@ -2572,7 +3032,36 @@ export async function buildMap(W, mapId) {
       const op = pois.find((q) => q.id === "overpass"), cr = pois.find((q) => q.id === "crane");
       reserve = [[op.x - 106, op.z - 8, op.x + 108, op.z + 8], [cr.x - 6, cr.z - 20, cr.x + 10, cr.z + 24]];
     }
-    const lay = TG.layoutMap(seed, mapId, pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r })), baseH, waterY, { reserve });
+    const layPois = pois.map((q) => ({ id: q.id, x: q.x, z: q.z, r: q.r }));
+    const lay = TG.layoutMap(seed, mapId, layPois, baseH, waterY, { reserve });
+    // (R1 / colliders: the shared stream) a town with a POI identity (P23 / LC-29: towngen applyIdentity - container lots, the Old Mall, woodyards) has FEWER or other
+    // buildings than the layout the live build drew for, and legacyRolls (below) re-made the live generators' loot rolls per building: every draw after the towns -
+    // the wild scatter, landmarks, portals, wild loot - moved (worldcheck rng-stream vs 9115494d: ashgrid s7 trees / bushes / rocks / cars / barrels). The rolls of such a
+    // town are made for the buildings of ITS layout WITHOUT the identity (the same towngen call layoutMap made, identity off, the same avoid list): the shared stream
+    // leaves the towns exactly where the live build left it. The identity buildings themselves draw nothing from the shared `rng` (housegen + towngen sub-streams).
+    const legacyParcels = new Map();
+    {
+      const avoid = (reserve || []).map((r) => r.slice()), HPq = TG.PITCH / 2;
+      lay.towns.forEach((T, i) => {
+        const plan = TG.planFor(mapId, layPois[i]);
+        if (plan.identity && T.blocks.length) {
+          const L0 = TG.layout(seed, layPois[i], baseH, waterY, plan.theme, Object.assign({}, plan, { avoid: avoid.slice(), identity: null }));
+          legacyParcels.set(T.id, L0);
+        }
+        for (const b of T.blocks) avoid.push([b.cx - HPq, b.cz - HPq, b.cx + HPq, b.cz + HPq]);
+        if (T.compound && T.parcels.length) avoid.push(T.compound.bounds);
+      });
+      // the compounds' farthest-point fill keeps away from every town's ENTERABLE buildings (towngen enterableBoxes): an identity that removes buildings moved every
+      // compound of the map (ashgrid s7: 25 of 30 sites) and with them the wilderness rejects (inCity) that decide how many draws the car / barrel scatter makes.
+      // The compounds are placed against the towns as the live build laid them out (identity off); the towns themselves keep their identity.
+      if (legacyParcels.size) {
+        const comp = TG.placeCompounds(seed, mapId, lay.towns.map((T) => legacyParcels.get(T.id) || T), baseH, waterY, { reserve: reserve || [] });
+        lay.compounds = comp.sites;
+        const all = lay.towns.concat(comp.sites);
+        Object.assign(lay.stats, { compounds: comp.sites.length, enterable: all.reduce((n, T) => n + T.stats.enterable, 0), buildings: all.reduce((n, T) => n + T.stats.buildings, 0), compoundFill: comp.stats });
+      }
+      for (const [k, L0] of legacyParcels) legacyParcels.set(k, L0.parcels);
+    }
     // Isla Viva and Deepwood (Wave 7b): a town the generator had to move (a coastal POI on open water, a river bank, a steep slope) takes its POI with it, so the named place,
     // the drop-screen label, the bots' targets and the citycheck attribution all sit where the buildings are. Savanna's POIs never move.
     if (mapId !== "ashgrid") for (const T of lay.towns) {
@@ -2585,7 +3074,7 @@ export async function buildMap(W, mapId) {
     for (const T of lay.towns.concat(lay.compounds)) for (const p of T.parcels) if (p.building) { const a = p.building.aabb; cityBld.push([a[0], a[1], a[2], a[3]]); }
     for (const T of lay.towns) if (T.kind === "docks" && T.docks) for (const dk of T.docks.decks) cityDecks.push([dk.rect[0], dk.rect[1], dk.rect[2], dk.rect[3]]);
     for (const T of lay.compounds) for (const q of T.compound.props) cityBld.push(q.kind === "container" ? [q.x - 3.4, q.z - 3.4, q.x + 3.4, q.z + 3.4] : [q.x - 5, q.z - 5, q.x + 5, q.z + 5]);   // (silo / water tower / containers: wild loot keeps out)
-    return { TG, CK, lay, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
+    return { TG, CK, HG, lay, legacyParcels, kit: [], stats: lay.stats, lights: 0, kitStats: null, skyline: [], landmarks: [] };
   }
   // the streets and the links between towns go into the ground field NOW (before any pad), as ROAD_W-wide corridors
   function registerCityRoads() {
@@ -2962,7 +3451,7 @@ export async function buildMap(W, mapId) {
     for (const bz of C.braziers || []) {
       const top = stoneBox(bz[0], bz[1], 0.7, 0.7, 0, 1.0, "#7d786d");
       addBox(bz[0], top + 0.12, bz[1], 0.95, 0.24, 0.95, "#3a3430", { collide: false });
-      coneAt(bz[0], top + 0.2, bz[1], 0.34, 0.62, 6, "#ffb050", pr() * Math.PI);
+      flameAt(bz[0], top + 0.2, bz[1], 1, "#ffb050", pr() * Math.PI);                 // (LC-73: a flame with tongues, was one 6-sided cone; same batch, same draw)
       lampPts.push({ x: bz[0], y: top + 0.6, z: bz[1] });
     }
     // the stair flights: the four axis lines through the volcano's axis, from the outer ring to the plaza, in 8 m ramps that follow the ground (the foot of each on the lowest ground
@@ -3042,6 +3531,18 @@ export async function buildMap(W, mapId) {
     if (rotY) geo.rotateY(rotY);
     geo.translate(x, y + h / 2, z);
     pushGeo(color + "|" + (tex || "s"), geo);
+  }
+  // LC-73: a fire as a flame, not a cone - a lathed body (a round belly that narrows to a licking tip) and three smaller tongues leaning out round it, in
+  // the same emissive batch the cone was in (0 extra draw calls). No random draw: the tongues' turn is the caller's rotY.
+  const FLAME_P = [[0, 0], [0.22, 0.05], [0.33, 0.17], [0.31, 0.31], [0.2, 0.5], [0.09, 0.72], [0, 0.98]];
+  function flameAt(x, y, z, sc, color, rotY) {
+    const mk = (k) => new THREE.LatheGeometry(FLAME_P.map((q) => new THREE.Vector2(q[0] * k * sc, q[1] * k * sc)), 9);
+    const body = mk(1); body.rotateY(rotY || 0); body.translate(x, y, z); pushGeo(color + "|s", body);
+    for (let t = 0; t < 3; t++) {
+      const a = (rotY || 0) + t * 2.094, g = mk(0.52 + 0.1 * t);
+      g.rotateZ(0.32); g.translate(0.15 * sc, 0, 0); g.rotateY(a); g.translate(x, y + 0.02, z);
+      pushGeo(color + "|s", g);
+    }
   }
   /** a café / beach umbrella over a little table with two chairs, standing on the ground at (x, z) (cosmetic: a pole you walk round, like the street furniture) */
   function umbrella(x, z, color, rr, table) {
@@ -3215,10 +3716,24 @@ export async function buildMap(W, mapId) {
     const AT = (u, t) => (NS ? [u, t] : [t, u]);                     // (across, along) -> world x, z
     const boxUT = (u, y, t, wu, h, wt, color, o) => { const p = AT(u, t); addBox(p[0], y, p[1], NS ? wu : wt, h, NS ? wt : wu, color, o); };
     // the deck: the main slab over the span every strip covers, and each strip's own run-out to its bank at both ends (exact boxes, one top)
-    boxUT(ax, top - 0.15, (cA + cB) / 2, BW, 0.3, cB - cA, "#9a6c43", { tex: "plank" });
+    // (R1 / endgame lane) the main slab spans ALL the swim-deep water under the deck: where the channel's dredged falloff runs under a strip's run-out (deepwood s18: three 0.71 m
+    // run-outs 20-30 % over swim-deep water, the deck read as four slabs over the river and its axis 14.5 degrees off - every walk that followed it swam), the slab end moves out to
+    // 0.75 m past the outermost deep point under any strip, so what is left of a run-out lies over the shallows / the bank. Only where every shorter strip's bank stands within a step
+    // under the deck top along the stretch the slab now reaches into it (else the old end: a deck end face over a dip in the bank is a wall to a walker). On the 63 walk seeds the slab reaches 0.75-1.6 m further on 25 (38 unchanged).
+    const deepAt = (s, t) => Math.min(G(s.u0, t), G((s.u0 + s.u1) / 2, t), G(s.u1, t)) < waterY - 0.9;
+    const reachOut = (c, sg) => {                                                                       // sg -1: the tA end (c = cA), +1: the tB end (c = cB)
+      let e = c;
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; for (let t = tE; sg < 0 ? t < c : t > c; t -= sg * 0.25) if (deepAt(s, t)) { e = sg < 0 ? Math.min(e, t - 0.75) : Math.max(e, t + 0.75); break; } }
+      e = sg < 0 ? Math.max(e, t0) : Math.min(e, t1);
+      for (const s of strips) { const tE = sg < 0 ? s.tA : s.tB; if (sg < 0 ? tE <= e : tE >= e) continue; for (let t = e; sg < 0 ? t <= tE : t >= tE; t -= sg * 0.25) if (Math.min(G(s.u0 + 0.05, t), G((s.u0 + s.u1) / 2, t), G(s.u1 - 0.05, t)) < top - 0.45) return c; }
+      return e;
+    };
+    const sA = reachOut(cA, -1), sB = reachOut(cB, 1);
+    M.deckBuilt.slab = [sA, sB, cA, cB];                                                             // (the main slab's span, and the span every strip covers)
+    boxUT(ax, top - 0.15, (sA + sB) / 2, BW, 0.3, sB - sA, "#9a6c43", { tex: "plank" });
     for (const s of strips) {
-      if (cA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + cA) / 2, s.u1 - s.u0, 0.3, cA - s.tA, "#9a6c43", { tex: "plank" });
-      if (s.tB - cB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (cB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - cB, "#9a6c43", { tex: "plank" });
+      if (sA - s.tA > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (s.tA + sA) / 2, s.u1 - s.u0, 0.3, sA - s.tA, "#9a6c43", { tex: "plank" });
+      if (s.tB - sB > 0.01) boxUT(ax + (s.u0 + s.u1) / 2, top - 0.15, (sB + s.tB) / 2, s.u1 - s.u0, 0.3, s.tB - sB, "#9a6c43", { tex: "plank" });
     }
     // three stringer beams under the deck over the water (cosmetic: they read as a timber bridge from the banks), and a darker kerb plank along both edges (each over its own edge strip)
     for (const su of [-1, 0, 1]) boxUT(ax + su * (BH - 0.9), top - 0.55, (a + b) / 2, 0.4, 0.5, b - a + 2, "#5e4430", { tex: "plank", collide: false });
@@ -3345,7 +3860,9 @@ export async function buildMap(W, mapId) {
     const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * q.w / structTile * 2, uv.getY(i) * q.h / structTile * 2);
     pushGeo(c + "|block", geo);
     const yt = base + q.h * 0.92;
+    const n0 = colliders.length;
     boxColliders(q.x, (lo - 0.35 + yt) / 2, q.z, q.w * 0.8, yt - lo + 0.35, q.d * 0.8, q.rot || 0);
+    for (let i = n0; i < colliders.length; i++) colSurf.set(colliders[i], "stone");      // LC-52: a boulder is rock (the untagged default is timber)
   }
   /** The water mill beside the bridge (towngen's L.mill.wheel): a two-storey timber millhouse on a stone base that stands in the river's edge, a gable roof, an overshot wheel on its side wall
    *  (it TURNS: one mesh of its own, turned about its axle every frame within 320 m of the camera), the axle into the base, a flume on trestles from a stone sluice up the bank to the wheel's top.
@@ -3476,6 +3993,365 @@ export async function buildMap(W, mapId) {
     }
   }
 
+  // ── WAVE 8 (stage B, lane I1): the furnished houses ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Every enterable building of a town / compound parcel (house, shop, hall, shed, barn, mid-rise, tower; the crater village's ruins and the docks' stilt houses too) is ONE
+  // housegen.js house: walls, floors, stairs, roofs, glass, furniture and every collider come from its data (generate at y 0 -> the pad under everything it stands on ->
+  // translateY onto the pad). Drawing:
+  //  - the OUTSIDE of the structure (every face with open air in front of it: facades, roofs, trim, porches) goes into the district's sink as pre-coloured geometry
+  //    ("vc|<kind>": the struct textures, no new material and no new draw call - the district's mix mesh, which casts the shadows);
+  //  - the INSIDE (the faces that look into the house: room walls, floors, ceilings, stair steps, door leaves, lamp panels) and the furniture (authored pieces + the
+  //    Kenney kit GLBs baked in, see buildHouseFurniture) go into ONE mesh per 32 m chunk with the same mix material (textured, the same program), drawn within
+  //    HG_FURN_DIST of the camera, no shadow pass. The inside is darkened by HG_INDOOR (the hemisphere light and the IBL are not occluded indoors: without the term
+  //    a room under a roof is as bright as the street in the shade); lamp panels keep their colour;
+  //  - the glass panes of every house: ONE transparent mesh for the whole map (one draw call, no collider: the cover rule - bullets and eyes pass, bodies do not),
+  //    clear near the camera and turning to dark sky-lit glass with distance (beyond the inside's 60 m an empty house would otherwise show through its windows).
+  // Colliders: collidersOf(house) in its fixed order (structure boxes, ramps - the stairs AND the pitched roofs' planks, see house.roofRamps -, furniture), nothing else.
+  // Loot: housegen's points reach loot.js as map.houses (lane I3's per-room pass): no house point is added to map.lootPoints here.
+  // DETERMINISM: generate() is a pure function of the parcel (towngen's record + the map seed); nothing here draws from the shared `rng`.
+  const houses = [];                 // map.houses: the housegen records as built, in build order (+ town, parcel, district, chunk, index, cols, roofRamps)
+  const hgChunks = new Map();        // inside / furniture chunk key -> { key, x0, z0, x1, z1, y0, y1, pos, nor, uv, col, tki, idx, kit: [{ type, x, y, z, rot, min, max }] }
+  const hgGlass = { pos: [], nor: [], col: [], idx: [] };
+  // housegen palette material -> the struct texture kind its faces wear (district merge: s / plank / stucco share the mix mesh; no metal mesh)
+  const HG_COLSURF = { brick: "stone", stone: "stone", roof: "stone", roof_flat: "concrete", floor_tile: "concrete", floor_concrete: "concrete", lamp: "concrete", sheet: "metal", metal: "metal",
+    glass: "concrete", plaster: "concrete", stucco: "concrete", fabric: "concrete", ceramic: "concrete", plank: "wood", plank_in: "wood", floor_wood: "wood", wood: "wood" };   // LC-52 (surfaceAt)
+  // a pitched "roof" is clay tile (stone) unless its tint is a DARK warm brown: the timber lodges' and cabins' shingles (wood)
+  const _hgC = new THREE.Color();
+  function hgSurf(pe) {
+    if (!pe) return "concrete";
+    if (pe.mat === "roof") { try { _hgC.set(pe.color); } catch (e) { return "stone"; } if (Math.max(_hgC.r, _hgC.g, _hgC.b) < 0.2 && _hgC.r >= _hgC.g && _hgC.g >= _hgC.b) return "wood"; }
+    return HG_COLSURF[pe.mat] || "concrete";
+  }
+  const HG_MAT_KIND = { brick: "s", stone: "s", roof: "s", roof_flat: "s", floor_tile: "s", floor_concrete: "s", lamp: "s", sheet: "s", metal: "s", glass: "s",
+    plaster: "stucco", stucco: "stucco", fabric: "stucco", ceramic: "stucco", plank: "plank", plank_in: "plank", floor_wood: "plank", wood: "plank" };
+  // the indoor ambient term: interior faces and furniture take this share of their colour (lamp panels keep theirs). Deepwood's forest light is darker than the
+  // other maps' and its lodges are timber inside: at 0.8 a third of a lodge room's pixels read near-black from its doorway (interiorcheck light: dark share 0.31-0.36)
+  const HG_INDOOR = mapId === "deepwood" ? 0.95 : 0.8;
+  const HG_TKI = { s: 0, plank: 1, stucco: 2 };   // dualStructMaterial's texture index per struct kind (furniture wears the near-flat stucco grain unless it is wood)
+  const HG_FURN_CELL = 32, HG_FURN_DIST = TIER_Q.furnD;    // (60 m; high 70, ULTRA 95)
+  const _hgc = new THREE.Color(), hgColCache = new Map();
+  const hgCol = (hex) => { let v = hgColCache.get(hex); if (!v) { _hgc.set(hex); v = [_hgc.r, _hgc.g, _hgc.b]; hgColCache.set(hex, v); } return v; };
+  const hgStack = () => new Error().stack;
+  // is (x, z) inside a furnished house's walls (its outer faces, minus an L plan's cut)? The ground decals and the road ribbons drawn there would lie OVER the house's
+  // floor (5 cm over its pad; a ribbon is 6 cm over the ground, a decal 10 cm): they are not drawn inside a house. Hash built on the first call (the houses are done by then).
+  let hgUH = null;
+  const HG_QC = [1, 0, -1, 0], HG_QS = [0, 1, 0, -1];
+  function underHouse(x, z) {
+    if (!houses.length) return false;
+    if (!hgUH) {
+      hgUH = new Map();
+      for (const H of houses) { const a = H.aabb; for (let i = Math.floor(a.min[0] / 16); i <= Math.floor(a.max[0] / 16); i++) for (let j = Math.floor(a.min[2] / 16); j <= Math.floor(a.max[2] / 16); j++) { const k = i * 4096 + j; if (!hgUH.has(k)) hgUH.set(k, []); hgUH.get(k).push(H); } }
+    }
+    const l = hgUH.get(Math.floor(x / 16) * 4096 + Math.floor(z / 16));
+    if (l) for (const H of l) {
+      const dx = x - H.cx, dz = z - H.cz, c = HG_QC[H.turn], sn = HG_QS[H.turn], u = dx * c - dz * sn, v = dx * sn + dz * c, hw = H.W / 2 + 0.12, hd = H.D / 2 + 0.12;
+      if (u <= -hw || u >= hw || v <= -hd || v >= hd) continue;
+      if (H.cut) { const cu0 = -H.W / 2 + H.cut[0] * H.U, cv0 = -H.D / 2 + H.cut[1] * H.U, cu1 = -H.W / 2 + H.cut[2] * H.U, cv1 = -H.D / 2 + H.cut[3] * H.U; if (u > cu0 + 0.12 && u < cu1 - 0.12 && v > cv0 + 0.12 && v < cv1 - 0.12) continue; }
+      return true;
+    }
+    return false;
+  }   // (the placement census reads the generator's name from the frame under this one: "hgHouse")
+  /** The shared-`rng` draws the live generators (house() / towerTurn() / ruinHouse() and house()'s upper floor) made for this building - their loot rolls - made
+   *  again and thrown away: the furnished house's loot comes from its own stream (loot.js), and with these draws everything the shared stream places after the
+   *  towns (props, landmarks, portals, wild loot) is what the live build placed. Same branches and probabilities as the live code below. */
+  function legacyRolls(T, b, isCmp, core, sr, PAL, roofC) {
+    if (b.gen === "tower") {
+      const base = core ? SAV.tower.core : SAV.tower.town;
+      for (let f = 0; f < b.floors; f++) if (rng() < base.loot) { rng(); rng(); }          // a floor item per storey (+ its x / z jitter)
+      rng(); rng();                                                                         // the roof chest, the ground-floor item
+      return;
+    }
+    const lt = isCmp ? (b.use === "shed" ? SAV.loot.cmpShed : SAV.loot.cmpHouse) : (SAV.loot[b.use] || SAV.loot.house);
+    if (mapId !== "ashgrid" && T.kind !== "crater" && !b.deck && themedStyle(b, sr, PAL, roofC, b.floorH || 3.4).storeys === 2) rng();   // the upper floor's item
+    rng();                                                                                  // the floor item
+    if (rng() < lt[1]) { rng(); rng(); }                                                    // the chest (+ its jitter)
+  }
+  // (Wave 8 fix round, lane K1) the other buildings round a parcel (every town / compound building's layout footprint, + 0.3 m): housegen opens no street / back
+  // door onto one closer than its DOOR_OUT (verify_b: 11 Savanna downtown back doors faced a tower wall 1-3 m across an alley - a door nobody can approach)
+  let hgNearAll = null;
+  function hgNear(b) {
+    if (!hgNearAll) { hgNearAll = []; for (const T of city.lay.towns.concat(city.lay.compounds)) for (const q of T.parcels) if (q.building && q.building.aabb) hgNearAll.push(q.building.aabb); }
+    const a = b.aabb, M = 6, out = [];
+    if (!a) return out;
+    for (const r of hgNearAll) { if (r === a || r[2] < a[0] - M || r[0] > a[2] + M || r[3] < a[1] - M || r[1] > a[3] + M) continue; out.push([r[0] - 0.3, r[1] - 0.3, r[2] + 0.3, r[3] + 0.3]); }
+    return out;
+  }
+  /** One parcel building -> one furnished house. Returns { H, look, roofTop }. */
+  function hgHouse(T, p, b, did, wallC, roofC) {
+    const HG = city.HG;
+    const use = p.use && HG.USES.indexOf(p.use) >= 0 ? p.use : (b.use && HG.USES.indexOf(b.use) >= 0 ? b.use : "house");
+    const theme = T.theme || (mapId === "isla_viva" ? "resort" : mapId === "deepwood" ? "lodge" : "city");
+    const par = { id: T.id + "@" + p.id, cx: b.cx, cz: b.cz, y: 0, w: b.w, d: b.d, turn: b.turn, theme, storeys: Math.max(1, b.floors || 1), seed: seed >>> 0, use, fh: b.floorH, near: hgNear(b) };
+    // Savanna's towns keep their block palettes (cityPalette: a block's two wall colours and two roof colours, the colours the live towns wear): the city theme's own
+    // colours are brick reds and plasters only
+    if (mapId === "ashgrid" && theme === "city" && wallC && roofC) { par.facadeColor = parseInt(wallC.slice(1), 16); par.roofColor = parseInt(roofC.slice(1), 16); }
+    const H0 = HG.generate(par);
+    // the pad: the old roof-deck rectangle (the parcel + 0.4 m) and everything the house stands on the ground with (walls, porch decks, stoops, steps)
+    const rc = Math.abs(Math.cos(b.rot || 0)), rs = Math.abs(Math.sin(b.rot || 0));
+    const ohx = (rc * (b.w + 0.7) + rs * (b.d + 0.7)) / 2 + 0.05, ohz = (rs * (b.w + 0.7) + rc * (b.d + 0.7)) / 2 + 0.05;
+    let x0 = b.cx - ohx, x1 = b.cx + ohx, z0 = b.cz - ohz, z1 = b.cz + ohz;
+    for (const bx of H0.boxes) {
+      if (bx.min[1] > 0.6 || bx.p === "glass" || bx.p === "deco" || bx.p === "skin" || bx.p === "furn") continue;
+      if (bx.min[0] - 0.05 < x0) x0 = bx.min[0] - 0.05;
+      if (bx.max[0] + 0.05 > x1) x1 = bx.max[0] + 0.05;
+      if (bx.min[2] - 0.05 < z0) z0 = bx.min[2] - 0.05;
+      if (bx.max[2] + 0.05 > z1) z1 = bx.max[2] + 0.05;
+    }
+    const y = b.deck && b.y0 != null ? b.y0 : groundPad((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, { gen: "house" });
+    const H = HG.translateY(H0, y);
+    // the inside / furniture chunk of this house (by its centre: a house's inside shows and hides as one)
+    const ck = Math.floor(b.cx / HG_FURN_CELL) + "," + Math.floor(b.cz / HG_FURN_CELL);
+    let C = hgChunks.get(ck);
+    if (!C) hgChunks.set(ck, C = { key: ck, x0: 1e9, z0: 1e9, x1: -1e9, z1: -1e9, y0: 1e9, y1: -1e9, parts: [], inside: [], kit: [] });
+    C.x0 = Math.min(C.x0, H.aabb.min[0]); C.x1 = Math.max(C.x1, H.aabb.max[0]); C.z0 = Math.min(C.z0, H.aabb.min[2]); C.z1 = Math.max(C.z1, H.aabb.max[2]);
+    C.y0 = Math.min(C.y0, H.aabb.min[1]); C.y1 = Math.max(C.y1, H.aabb.max[1]);
+    const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
+    // structure: the outside -> the district sink, the inside -> the chunk
+    // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true });
+    for (const [key, a] of md.groups.walls) {
+      if (!a.idx.length) continue;
+      const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
+      const bar = key0.indexOf("|"), mat = bar < 0 ? key0 : key0.slice(0, bar), kind = HG_MAT_KIND[mat] || "s";
+      if (bar >= 0) { toChunk(a, mat === "lamp" ? 1 : HG_INDOOR, HG_TKI[kind] || 0, true); continue; }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(a.pos, 3));
+      geo.setAttribute("normal", new THREE.Float32BufferAttribute(a.nor, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(a.uv, 2));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(a.col, 3));
+      geo.setIndex(a.idx);
+      pushGeo((nsK ? "vcn|" : "vc|") + kind, geo);
+    }
+    for (const [, a] of md.groups.glass) {
+      const base = hgGlass.pos.length / 3;
+      for (let i = 0; i < a.pos.length; i++) { hgGlass.pos.push(a.pos[i]); hgGlass.nor.push(a.nor[i]); hgGlass.col.push(a.col[i]); }
+      for (let i = 0; i < a.idx.length; i++) hgGlass.idx.push(a.idx[i] + base);
+    }
+    for (const [key, a] of md.groups.furniture) { const mat = key.split("|")[0]; toChunk(a, HG_INDOOR, mat === "wood" ? 1 : 2); }
+    for (const f of H.furniture) if (f.src === "kit") C.kit.push({ type: f.kit.type, x: f.kit.x, y: f.kit.y, z: f.kit.z, rot: f.kit.rot, min: f.min, max: f.max });
+    // colliders: structure boxes, ramps (stairs + roof planks), furniture - housegen's order
+    const c0 = colliders.length, nBox = H.boxes.reduce((n, q) => n + (q.c ? 1 : 0), 0), roofRamps = [];
+    for (const c of HG.collidersOf(H, mkCollider)) colliders.push(c);
+    {                                                // LC-52: what each house collider is made of (its top face's palette material; stairs are timber; a roof plank its roof's material)
+      let k = c0;
+      for (const b of H.boxes) if (b.c) { const pe = H.palette[b.f && b.f[2]]; colSurf.set(colliders[k++], hgSurf(pe)); }
+      let roofS = "stone";
+      for (const pe of H.palette) if (pe.mat === "roof" || pe.mat === "roof_flat" || pe.mat === "sheet") { roofS = hgSurf(pe); break; }
+      for (const r of H.ramps) { if (k < colliders.length) colSurf.set(colliders[k++], r.roof ? roofS : "wood"); }
+      for (; k < colliders.length; k++) colSurf.set(colliders[k], "wood");             // (furniture: tables, beds, crates)
+    }
+    H.ramps.forEach((r, k) => { if (r.roof) roofRamps.push(c0 + nBox + k); });
+    H.town = T.id; H.parcel = p.id; H.district = did; H.chunk = ck; H.index = houses.length;
+    H.cols = [c0, nBox + H.ramps.length, colliders.length - c0];      // [first collider, structure colliders (boxes + ramps), all of the house's]
+    H.roofRamps = roofRamps;
+    houses.push(H);
+    // the house's loot points are listed on map.lootPoints too, tagged `house` (loot.js spawns a house's loot from map.houses and SKIPS these; bots.assignDrops reads
+    // lootPoints for its landing spots - a spot qualifies when a gun lies within 1.8 m of it - and its per-POI cap). `w` = this house's expected loot units (lane I3's
+    // per-room budget: min(3, 0.6 + 0.12 x rooms with points) + a chest slot's 0.4 x 2) spread over its points, so a cap can weigh a town by what it will hold
+    {
+      const rooms = new Set(H.loot.map((l) => l.room)), E = Math.min(3, 0.6 + 0.12 * rooms.size) + (H.chests.length ? 0.8 : 0), w = H.loot.length ? Math.round(E / H.loot.length * 1000) / 1000 : 0;
+      for (const l of H.loot) { lootPoints.push({ x: l.x, y: l.y, z: l.z, kind: "floor", poi: T.id, house: H.index, room: l.room, w }); lootG.push(heightAt0(l.x, l.z)); }
+    }
+    cityBld.push([H.aabb.min[0], H.aabb.min[2], H.aabb.max[0], H.aabb.max[2]]);
+    // the placement census (Node gate only: globalThis.__LC_BOXES is null in the game) sees every drawn structure box with this generator's name on its stack
+    if (globalThis.__LC_BOXES) {
+      const st = hgStack();
+      // (the attic's gable layers and the ramps - the roof planks a chimney or a ridge rests on, the stairs - are structure too: their boxes join the record)
+      // (a roof plank is drawn hv above and below its ramp's walk line - housegen rampHalfV - and the ridge cap rests on the DRAWN plank: its box is the ramp's grown by hv)
+      const planks = H.ramps.map((r) => { const hv = r.roof ? HG.rampHalfV(r) : 0; return { p: "ramp", min: [r.min[0], r.min[1] - hv, r.min[2]], max: [r.max[0], r.max[1] + hv, r.max[2]] }; });
+      for (const bx of H.boxes.concat(planks)) {
+        if (bx.p === "glass" || bx.p === "deco" || bx.p === "furn") continue;
+        const P = [];
+        for (const xi of [bx.min[0], bx.max[0]]) for (const yi of [bx.min[1], bx.max[1]]) for (const zi of [bx.min[2], bx.max[2]]) P.push(xi, yi, zi);
+        globalThis.__LC_BOXES.push({ geo: { attributes: { position: { count: 8, getX: (k) => P[k * 3], getY: (k) => P[k * 3 + 1], getZ: (k) => P[k * 3 + 2] } } }, w: bx.max[0] - bx.min[0], h: bx.max[1] - bx.min[1], d: bx.max[2] - bx.min[2], stack: st });
+      }
+    }
+    const fc = H.facade || {}, look = "hg:" + (fc.mat || "") + (fc.color != null ? fc.color.toString(16) : "") + "|" + H.roof + "|" + H.storeys + "|" + b.w + "x" + b.d + "|" + H.plan + "|" + (H.trim != null ? H.trim.toString(16) : "");
+    return { H, look, roofTop: H.floors[H.floors.length - 1].ceil + HG.SLAB };
+  }
+  /** WAVE 8: the furniture chunks and the map's glass, after the kit (its GLBs are the kit's: one parse, the same lazy loader). Kit pieces are baked into the
+   *  chunk mesh (their GLB triangles, the GLB materials' colours as vertex colours, x HG_INDOOR); a type whose GLB did not load (or a page on the ultra-low tier)
+   *  draws its collider box instead - the collider never depends on the GLB. One MeshStandardMaterial (vertex colours) for every chunk: one program,
+   *  compiled in the warm frame (it forces the hidden chunks visible). */
+  async function buildHouseFurniture() {
+    if (!houses.length) return;
+    const kit = W._cityKit, low = W.settings && W.settings.graphics === "ultra-low";
+    const types = new Set();
+    for (const C of hgChunks.values()) for (const e of C.kit) types.add(e.type);
+    const tpl = new Map();                                                     // type -> [{ pos (the GLB mesh's matrix applied), nor, idx, col [r, g, b] }] | null
+    const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _nm = new THREE.Matrix3();
+    if (kit && !low && typeof kit.parts === "function") {
+      for (const t of types) {
+        let rec = null;
+        try { rec = await kit.parts(t); } catch (e) { rec = null; }
+        if (!rec || rec.failed || !rec.parts) { tpl.set(t, null); continue; }
+        const out = [];
+        for (const pt of rec.parts) {
+          const gp = pt.geometry.attributes.position, gn = pt.geometry.attributes.normal, gi = pt.geometry.index;
+          if (!gp) continue;
+          _nm.getNormalMatrix(pt.local);
+          const pos = new Float32Array(gp.count * 3), nor = new Float32Array(gp.count * 3);
+          for (let i = 0; i < gp.count; i++) {
+            _v.set(gp.getX(i), gp.getY(i), gp.getZ(i)).applyMatrix4(pt.local); pos[i * 3] = _v.x; pos[i * 3 + 1] = _v.y; pos[i * 3 + 2] = _v.z;
+            if (gn) _n.set(gn.getX(i), gn.getY(i), gn.getZ(i)).applyMatrix3(_nm).normalize(); else _n.set(0, 1, 0);
+            nor[i * 3] = _n.x; nor[i * 3 + 1] = _n.y; nor[i * 3 + 2] = _n.z;
+          }
+          const idx = gi ? Array.from(gi.array) : Array.from({ length: gp.count }, (_, i) => i);
+          const m = Array.isArray(pt.material) ? pt.material[0] : pt.material, c = m && m.color ? [m.color.r, m.color.g, m.color.b] : [0.6, 0.6, 0.6];
+          out.push({ pos, nor, idx, col: c });
+        }
+        tpl.set(t, out.length ? out : null);
+      }
+    }
+    const COSQ = [1, 0, -1, 0], SINQ = [0, 1, 0, -1];
+    const mat = dualStructMaterial();                                         // (the district meshes' material: one program for the town, its insides and its furniture)
+    const meshes = [];
+    let kitBoxes = 0;
+    const BOXV = 20, BOXI = 30;                                               // (a collider-box stand-in: five faces, no underside)
+    // size of a part list (housegen's inside faces / authored furniture) + kit pieces (their GLB parts, or a box)
+    const sizeOf = (parts, kitL) => {
+      let nv = 0, ni = 0;
+      for (let q = 0; q < parts.length; q += 3) { nv += parts[q].pos.length / 3; ni += parts[q].idx.length; }
+      for (const e of kitL) { const kp = tpl.get(e.type); if (kp) for (const t of kp) { nv += t.pos.length / 3; ni += t.idx.length; } else { nv += BOXV; ni += BOXI; } }
+      return [nv, ni];
+    };
+    // (Wave 8 fix round, lane K1) TWO BatchedMeshes per map: the houses' INSIDES ("houses:inside@all": room walls, floors, ceilings, stair steps, door leaves, lamp
+    // panels - structure) and their FURNITURE ("houses:pieces@all": authored pieces and the baked kit GLBs, lcPart furniture); the 32 m chunks are their instances,
+    // each shown / hidden by the distance check below (the same chunks, the same triangles, the same 60 m rule; three culls each instance by the frustum too).
+    //  - the 32 m chunk meshes were one geometry each: 131-220 per map, and how many depended on the seed's layout (Isla Viva 158-193 over five seeds) - every lobby
+    //    held a different count (hud_cycle: lobby geometries 324-386 between rounds, the bar +-30, ~1.7x the live build). A batch is one geometry (+ its two small
+    //    data textures: instance matrices, draw ids), one material, one multi-draw call: every map holds exactly two, whatever the seed (a batch per region made the
+    //    texture count follow the layout instead).
+    //  - a chunk mixed both, so whoever reads the drawn triangles (interiorcheck's page judge) had to guess by box which triangle was furniture: a piece's own faces
+    //    lie ON its box, read as walls, and hid the piece and what stood behind it (verify_b furniture-view 148/150). Two meshes say which is which.
+    const regions = new Map();                                                // region key -> { key, chunks: [[C, insideSize, piecesSize]], sizes, bm: { inside, pieces } }
+    for (const C of hgChunks.values()) {
+      const si = sizeOf(C.inside, []), sp = sizeOf(C.parts, C.kit);
+      if (!si[1] && !sp[1]) continue;
+      const rk = "all";
+      let Rg = regions.get(rk);
+      if (!Rg) regions.set(rk, Rg = { key: rk, chunks: [], n: { inside: [0, 0, 0], pieces: [0, 0, 0] }, bm: {} });
+      Rg.chunks.push([C, si, sp]);
+      if (si[1]) { Rg.n.inside[0]++; Rg.n.inside[1] += si[0]; Rg.n.inside[2] += si[1]; }
+      if (sp[1]) { Rg.n.pieces[0]++; Rg.n.pieces[1] += sp[0]; Rg.n.pieces[2] += sp[1]; }
+    }
+    const lod = [];                                                           // per chunk: { box, on, inst: [[bm, iid], ...] }
+    const batches = [];
+    for (const Rg of regions.values()) for (const kind of ["inside", "pieces"]) {
+      const [nI, nV, nIdx] = Rg.n[kind];
+      if (!nI) continue;
+      const bm = new THREE.BatchedMesh(nI, nV, nIdx, mat);
+      bm.name = "houses:" + kind + "@" + Rg.key; bm.castShadow = false; bm.receiveShadow = true;
+      bm.sortObjects = false;                                                  // (opaque chunks: no per-frame depth sort and its garbage; per-chunk frustum culling stays on)
+      bm.userData.hgChunk = kind + ":" + Rg.key; bm.userData.lcPart = kind === "pieces" ? "furniture" : "inside";
+      Rg.bm[kind] = bm; batches.push(bm);
+    }
+    const n8 = (x) => (x >= 1 ? 127 : x <= -1 ? -127 : Math.round(x * 127)), c8 = (x) => (x >= 1 ? 255 : x <= 0 ? 0 : Math.round(x * 255));
+    // one chunk's part list + kit list -> a BufferGeometry in the batches' layout (never drawn itself: copied into the batch)
+    const chunkGeo = (parts, kitL, nv, ni) => {
+      const P = new Float32Array(nv * 3), N = new Int8Array(nv * 3), UV = new Float32Array(nv * 2), CO = new Uint8Array(nv * 3), TK = new Uint8Array(nv), ID = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+      let v = 0, ii = 0;
+      for (let q = 0; q < parts.length; q += 3) {
+        const a = parts[q], k = parts[q + 1], tki = parts[q + 2], n = a.pos.length / 3, base = v;
+        for (let i = 0; i < n * 3; i++) { P[v * 3 + i] = a.pos[i]; N[v * 3 + i] = n8(a.nor[i]); CO[v * 3 + i] = c8(a.col[i] * k); }
+        for (let i = 0; i < n * 2; i++) UV[v * 2 + i] = a.uv[i];
+        TK.fill(tki, v, v + n);
+        for (let i = 0; i < a.idx.length; i++) ID[ii++] = a.idx[i] + base;
+        v += n;
+      }
+      for (const e of kitL) {
+        const kp = tpl.get(e.type), c = COSQ[e.rot & 3], sn = SINQ[e.rot & 3];
+        if (kp) {
+          for (const t of kp) {
+            const base = v, cr = c8(t.col[0] * HG_INDOOR), cg = c8(t.col[1] * HG_INDOOR), cb = c8(t.col[2] * HG_INDOOR);
+            for (let i = 0; i < t.pos.length; i += 3) {
+              const lx = t.pos[i], ly = t.pos[i + 1], lz = t.pos[i + 2], px = e.x + lx * c + lz * sn, py = e.y + ly, pz = e.z - lx * sn + lz * c;
+              const nx = t.nor[i], ny = t.nor[i + 1], nz = t.nor[i + 2], wx = nx * c + nz * sn, wz = -nx * sn + nz * c;
+              P[v * 3] = px; P[v * 3 + 1] = py; P[v * 3 + 2] = pz;
+              N[v * 3] = n8(wx); N[v * 3 + 1] = n8(ny); N[v * 3 + 2] = n8(wz);
+              CO[v * 3] = cr; CO[v * 3 + 1] = cg; CO[v * 3 + 2] = cb;
+              // a planar uv on the face's dominant axis (the stucco grain at 2 m a tile: the pieces read as painted / upholstered, not as flat plastic)
+              const ax = Math.abs(wx), ay = Math.abs(ny), az = Math.abs(wz);
+              if (ay >= ax && ay >= az) { UV[v * 2] = px / 2; UV[v * 2 + 1] = pz / 2; } else if (ax >= az) { UV[v * 2] = pz / 2; UV[v * 2 + 1] = py / 2; } else { UV[v * 2] = px / 2; UV[v * 2 + 1] = py / 2; }
+              TK[v] = 2; v++;
+            }
+            for (let i = 0; i < t.idx.length; i++) ID[ii++] = t.idx[i] + base;
+          }
+        } else {                                                                 // the collider box, five faces (no underside), a neutral brown
+          kitBoxes++;
+          const x0 = e.min[0], y0 = e.min[1], z0 = e.min[2], x1 = e.max[0], y1 = e.max[1], z1 = e.max[2], cc = hgCol(0x8a7560);
+          const quad = (a, b2, c2, d, n) => {
+            const base = v;
+            for (const w of [a, b2, c2, d]) {
+              P[v * 3] = w[0]; P[v * 3 + 1] = w[1]; P[v * 3 + 2] = w[2]; N[v * 3] = n[0] * 127; N[v * 3 + 1] = n[1] * 127; N[v * 3 + 2] = n[2] * 127;
+              CO[v * 3] = c8(cc[0] * HG_INDOOR); CO[v * 3 + 1] = c8(cc[1] * HG_INDOOR); CO[v * 3 + 2] = c8(cc[2] * HG_INDOOR);
+              UV[v * 2] = n[1] ? w[0] / 2 : n[0] ? w[2] / 2 : w[0] / 2; UV[v * 2 + 1] = n[1] ? w[2] / 2 : w[1] / 2; TK[v] = 1; v++;
+            }
+            ID[ii++] = base; ID[ii++] = base + 1; ID[ii++] = base + 2; ID[ii++] = base; ID[ii++] = base + 2; ID[ii++] = base + 3;
+          };
+          quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0]);
+          quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]);
+          quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]);
+          quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0]);
+          quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0]);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(P, 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(N, 3, true));
+      geo.setAttribute("color", new THREE.BufferAttribute(CO, 3, true));
+      geo.setAttribute("uv", new THREE.BufferAttribute(UV, 2));
+      geo.setAttribute("tki", new THREE.BufferAttribute(TK, 1));
+      geo.setIndex(new THREE.BufferAttribute(ID, 1));
+      return geo;
+    };
+    for (const Rg of regions.values()) for (const [C, si, sp] of Rg.chunks) {
+      const L = { box: [C.x0, C.y0, C.z0, C.x1, C.y1, C.z1], on: false, inst: [] };
+      for (const [kind, sz, parts, kitL] of [["inside", si, C.inside, []], ["pieces", sp, C.parts, C.kit]]) {
+        if (!sz[1]) continue;
+        // (copied into the region's batch: the chunk geometry is never drawn, never uploaded)
+        const bm = Rg.bm[kind], gid = bm.addGeometry(chunkGeo(parts, kitL, sz[0], sz[1])), iid = bm.addInstance(gid);
+        bm.setVisibleAt(iid, false);                                           // (shown by the distance check below once a camera exists; the warm frame draws the batch - its program and buffers)
+        L.inst.push([bm, iid]);
+      }
+      C.kit.length = 0; C.parts.length = 0; C.inside.length = 0;
+      lod.push(L);
+    }
+    for (const bm of batches) { bm.computeBoundingBox(); bm.computeBoundingSphere(); g.add(bm); meshes.push(bm); }
+    if (hgGlass.idx.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(hgGlass.pos, 3));
+      geo.setAttribute("normal", new THREE.Float32BufferAttribute(hgGlass.nor, 3));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(hgGlass.col, 3));
+      geo.setIndex(hgGlass.idx);
+      geo.computeBoundingSphere();
+      const gm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false, roughness: 0.05, metalness: 0 });
+      gm.name = "houses:glass";
+      // clear (0.3) up to 35 m, a dark glazing (0.9, the sky's reflection) from 60 m: past HG_FURN_DIST the inside of a house is not drawn
+      gm.customProgramCacheKey = () => "lc-house-glass-v1";
+      gm.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", "diffuseColor.a = mix(diffuseColor.a, 0.9, smoothstep(35.0, 60.0, length(vViewPosition)));\n#include <opaque_fragment>");
+      };
+      const glass = new THREE.Mesh(geo, gm);
+      glass.name = "houses:glass"; glass.castShadow = false; glass.receiveShadow = false; glass.renderOrder = 2; glass.userData.lcPart = "glass";
+      g.add(glass);
+      hgGlass.pos = hgGlass.nor = hgGlass.col = hgGlass.idx = null;
+    }
+    // furniture beyond HG_FURN_DIST of the camera is not drawn (distance to the chunk's box), checked 4 times a second
+    let t = 9;
+    trackUpdater((dt) => {
+      t += dt; if (t < 0.25) return;
+      const cam = W.camera; if (!cam) return;
+      t = 0;
+      const px = cam.position.x, py = cam.position.y, pz = cam.position.z, D2 = HG_FURN_DIST * HG_FURN_DIST;
+      for (let i = 0; i < lod.length; i++) {
+        const L = lod[i], bx = L.box;
+        const dx = px < bx[0] ? bx[0] - px : px > bx[3] ? px - bx[3] : 0, dy = py < bx[1] ? bx[1] - py : py > bx[4] ? py - bx[4] : 0, dz = pz < bx[2] ? bx[2] - pz : pz > bx[5] ? pz - bx[5] : 0;
+        const on = dx * dx + dy * dy + dz * dz <= D2;
+        if (on !== L.on) { L.on = on; for (const q of L.inst) q[0].setVisibleAt(q[1], on); }
+      }
+    });
+    city.furniture = { chunks: lod.length, regions: batches.length, kitTypes: types.size, kitBaked: [...tpl.values()].filter(Boolean).length, kitBoxes };
+  }
   function buildCityBuildings() {
     const { TG, lay } = city;
     const cell = mapId === "ashgrid" ? 600 : 300;   // (Wave 7b: a themed map's compounds share a district per 300 m cell - fewer compounds per mesh: the frustum drops the ones behind a street camera and the shadow pass the far ones) (7A2: compounds share a district per 600 m cell, was 300 m: a compound is 3-5 small buildings, and every district costs 2-3 structure draw calls (twice with the shadow pass) in every view that sees it - 9 compound districts were 36 calls of a seed-1 drop view)
@@ -3491,12 +4367,22 @@ export async function buildMap(W, mapId) {
       const dim = T.theme === "ruin" ? 0.8 : 1;
       const core = T.kind === "core";
       const blockLoot = new Map(), blockHome = new Map();       // block id -> loot points it holds / its first enterable building (every block ends up holding loot)
+      // (R1 / colliders) a POI-identity town: the live generators' rolls for the buildings of its layout without the identity (see legacyParcels), in parcel order - nothing
+      // else in this parcel loop draws from the shared stream, so making them here is the same sequence the live build made in the loop
+      const legacyP = city.HG ? city.legacyParcels.get(T.id) : null;
+      if (legacyP) for (const p of legacyP) {
+        const b = mapId !== "ashgrid" && p.building && p.building.use == null ? Object.assign({}, p.building, { use: p.use }) : p.building;
+        if (!b || b.gen === "shell") continue;
+        const PAL0 = cityPalette(T, isCmp ? -1 : p.block, core);          // (cached per block, its own sub-stream; themedStyle reads it, the storeys roll does not)
+        legacyRolls(T, b, isCmp, core, TG.subRng(seed, T.id, "sty" + p.id), PAL0, PAL0.roof[0]);
+      }
       for (const p of T.parcels) {
         // (Wave 7b stage B: a layout's building record carries no `use` - the parcel does - so every `b.use` test below read undefined: on the themed maps every shop, hall, shed and barn
         //  was styled, textured and looted as a house (no shop fronts, no awnings). The themed maps read the parcel's use; Savanna keeps what it built (its world must hash as the live one).)
         const b = mapId !== "ashgrid" && p.building && p.building.use == null ? Object.assign({}, p.building, { use: p.use }) : p.building;
         if (!b) continue;
         const nLoot0 = lootPoints.length + chestPoints.length;
+        let nHouseLoot = 0;                                       // (WAVE 8: a housegen house's own points - loot.js lays them - count as the block's loot)
         const wallKey = b.arch === "shop" ? "shop" : (b.gen === "tower" ? "big" : b.use === "barn" ? "barn" : b.use === "hall" ? "hall" : b.use === "shed" ? "shed" : "house");
         const PAL = cityPalette(T, isCmp ? -1 : p.block, core), cr = TG.subRng(seed, T.id, "col" + p.id), sr = TG.subRng(seed, T.id, "sty" + p.id);
         const q1 = cr(), q2 = cr(), q3 = cr(), q4 = cr(), vr = TG.subRng(seed, T.id, "var" + p.id), v1 = vr(), v2 = vr();
@@ -3514,6 +4400,18 @@ export async function buildMap(W, mapId) {
           city.kit.push({ type: b.kit, x: b.cx - (ctr[0] * cs + ctr[1] * sn), y, z: b.cz - (-ctr[0] * sn + ctr[1] * cs), rot: q, district: did, palette: b.palette && b.palette.variant ? b.palette.variant : undefined, sy: b.sy });
           look = b.kit + "|" + (b.palette && b.palette.variant || "") + "|" + (b.sy || 1);
           if (b.height > 30) city.skyline.push({ x: b.cx, z: b.cz, h: b.height, kind: "shell", town: T.id });
+        } else if (city.HG) {
+          // WAVE 8: a furnished housegen house (see hgHouse); a tower / mid-rise keeps its rooftop crown (the units, a mast, Savanna's curtain-wall shaft, a resort terrace)
+          // standing on the housegen roof (the crown functions measure from y + floors x 4 + 0.3: they are handed the y that puts that on the roof slab's top)
+          if (!legacyP) legacyRolls(T, b, isCmp, core, sr, PAL, roofC);
+          const hr = hgHouse(T, p, b, did, wallC, roofC);
+          look = hr.look;
+          nHouseLoot += hr.H.loot.length + hr.H.chests.length;
+          if (b.gen === "tower") {
+            const yc = hr.roofTop - b.floors * 4 - 0.3;
+            const shaftH = mapId === "ashgrid" ? towerCrown(b, yc, sr, core, wallC, T.id) : themedCrown(b, yc, sr);
+            look += shaftH ? "s" + Math.round(shaftH / 6) : "";
+          }
         } else if (b.gen === "tower") {
           const base = core ? SAV.tower.core : SAV.tower.town, mull = SAV.mullions[Math.floor(sr() * SAV.mullions.length)];
           const tO = { loot: base.loot, chest: base.chest, mullion: mull };
@@ -3552,7 +4450,7 @@ export async function buildMap(W, mapId) {
           look += st.roof + "" + storeys + (st.chimney ? "c" : "") + (st.porch ? "p" : "") + (st.awning || "") + b.w + "x" + b.d + st.glass + structTile + st.trim;
         }
         city.looks.set(T.id + ":" + p.id, look);
-        blockLoot.set(p.block, (blockLoot.get(p.block) || 0) + (lootPoints.length + chestPoints.length - nLoot0));
+        blockLoot.set(p.block, (blockLoot.get(p.block) || 0) + (lootPoints.length + chestPoints.length - nLoot0) + nHouseLoot);
         if (b.enterable && b.gen !== "shell" && !blockHome.has(p.block)) blockHome.set(p.block, b);
       }
       structTile = STRUCT_TILE;
@@ -3685,7 +4583,11 @@ export async function buildMap(W, mapId) {
       }
       return v;
     };
+    // WAVE 8: a furnished house has its own floor (5 cm over its pad); the block's paving / a yard's earth (10 cm over the ground) drawn inside its walls lay OVER that
+    // floor (lane I3 found it hiding the floor loot's rings in a Palm Bay shop). A slab cell whose centre is inside a house's walls is not drawn.
     const quad = (T, x0, z0, x1, z1, lift, hex) => {
+      if (T === slab && houses.length && underHouse((x0 + x1) / 2, (z0 + z1) / 2)) return;
+      if (T === slab) surfRect(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1) - 1e-3, Math.max(z0, z1) - 1e-3, surfOfHex(hex));       // LC-52
       const y00 = vl(x0, z0), y10 = vl(x1, z0), y01 = vl(x0, z1), y11 = vl(x1, z1);
       const dx = x1 - x0, dz = z1 - z0, gx = ((y10 + y11) - (y00 + y01)) / (2 * dx), gz = ((y01 + y11) - (y00 + y10)) / (2 * dz), il = 1 / Math.sqrt(gx * gx + 1 + gz * gz);
       _c.set(hex);
@@ -3835,7 +4737,9 @@ export async function buildMap(W, mapId) {
       geo.setAttribute("uv", new THREE.Float32BufferAttribute(T.uv, 2));
       geo.setIndex(T.idx);
       const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.96, metalness: 0, polygonOffset: true, polygonOffsetFactor: offset, polygonOffsetUnits: offset });
+      mat.color.setScalar(GRADE.ground);                                                   // LC-04 (OD-2 G2): the town ground is ground too
       try { const gt = groundTex(aniso); mat.map = gt.map; mat.normalMap = gt.normal; mat.normalScale = new THREE.Vector2(0.3, 0.3); } catch (e) { /* flat vertex colour */ }
+      if (LCFX) lcPatch(mat, { LC_CLOUD: "", LC_AO: "" });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = name;
       g.add(mesh);
@@ -3884,6 +4788,24 @@ export async function buildMap(W, mapId) {
     for (const r of cityRoadLog) { const hw = r[4] / 2 + 1; mark(Math.min(r[0], r[2]) - hw, Math.min(r[1], r[3]) - hw, Math.max(r[0], r[2]) + hw, Math.max(r[1], r[3]) + hw); }
     for (const T of city.lay.compounds.concat(city.lay.towns.filter((q) => !q.blocks.length && q.compound))) { const q = T.compound.bounds; mark(q[0] - 2, q[1] - 2, q[2] + 2, q[3] + 2); }
     for (const a of cityBld) mark(a[0] - 2, a[1] - 2, a[2] + 2, a[3] + 2);
+    // (Wave 8 fix round, lane K1) and the trodden approach of every street / back door of a furnished house: 6 m out, 4 m wide. A room's floor seen from above
+    // shows the ground through its doorway well past the 2 m ring (interiorcheck grass-indoors: a crater-rim ruin room on the slope, 255 px of tufts)
+    // ... and round a house whose ground falls away below its floor (a terrace on a slope: the crater-rim village): a window or a doorway on the downhill side
+    // looks down past the 2 m ring at grass far below the floor (grass-indoors: volcano_rim@p40.f0r0 255 px) - the ring widens 2 m per metre of drop (<= 10 m)
+    for (const H of houses) {
+      const a = H.aabb, y = H.y0;
+      let lo = Infinity;
+      for (const [sx, sz] of [[a.min[0] - 3, a.min[2] - 3], [a.max[0] + 3, a.min[2] - 3], [a.min[0] - 3, a.max[2] + 3], [a.max[0] + 3, a.max[2] + 3], [(a.min[0] + a.max[0]) / 2, a.min[2] - 3], [(a.min[0] + a.max[0]) / 2, a.max[2] + 3], [a.min[0] - 3, (a.min[2] + a.max[2]) / 2], [a.max[0] + 3, (a.min[2] + a.max[2]) / 2]]) lo = Math.min(lo, heightAt0(sx, sz));
+      const drop = y - lo;
+      if (drop > 0.5) { const M = Math.min(10, 2 + 2 * drop); mark(a.min[0] - M, a.min[2] - M, a.max[0] + M, a.max[2] + M); }
+    }
+    for (const H of houses) for (const d of H.doors) {
+      if (!d.rooms || d.rooms[1] != null || d.floor !== 0) continue;
+      let nx = d.nx || 0, nz = d.nz || 0;
+      if (d.out) { const ox = d.out[0] - d.x, oz = d.out[1] - d.z, l = Math.hypot(ox, oz); if (l > 1e-6) { nx = ox / l; nz = oz / l; } }
+      const ex = d.x + nx * 6, ez = d.z + nz * 6, wx = Math.abs(nz) * 2 + 0.5, wz = Math.abs(nx) * 2 + 0.5;
+      mark(Math.min(d.x, ex) - wx, Math.min(d.z, ez) - wz, Math.max(d.x, ex) + wx, Math.max(d.z, ez) + wz);
+    }
     return m;
   }
   // The district meshes (every town and compound has one per texture kind, with its own bounding sphere): three already frustum-culls them, so what is left is
@@ -3915,13 +4837,13 @@ export async function buildMap(W, mapId) {
       for (const m of meshes) {
         const bs = m.geometry.boundingSphere, dx = bs.center.x - cam.position.x, dy = bs.center.y - cam.position.y, dz = bs.center.z - cam.position.z;
         const d = Math.sqrt(dx * dx + dy * dy + dz * dz) - bs.radius;
-        m.visible = d < 1100;
+        m.visible = d < TIER_Q.distD;                     // (1,100 m; high 1,300, ULTRA 1,750)
         // (Wave 7b: a compound cell's sphere spans its 600 m cell, so the 170 m test passed from anywhere near it and the shadow pass drew every compound of the cell (15 k
         //  triangles of a Coco Village street view's shadow map for compounds 300 m away): a themed cell casts when one of ITS compounds is within 170 m)
         const P = m.userData.parts;
         let ds = d;
         if (P) { ds = Infinity; for (const p of P) { const e = Math.hypot(p[0] - cam.position.x, p[1] - cam.position.z) - p[2]; if (e < ds) ds = e; } }
-        m.castShadow = ds < 170;
+        m.castShadow = !m.userData.noCast && ds < 170;          // (K1 re-run: a district's no-shadow twin never casts)
       }
     });
   }
@@ -3931,7 +4853,7 @@ export async function buildMap(W, mapId) {
     const { CK, lay } = city;
     if (!city.kit.length) return;
     const tier = W.settings && W.settings.graphics;
-    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "" });
+    const kit = CK.createCityKit({ THREE, kernel: W.kernel, assetBase: W.assetBase || "", detail: kitDetailFor(TIER) });   // (C-GFX / D10: the facade detail is 0 on low)
     W._cityKit = kit;
     const districts = {};
     for (const it of city.kit) if (!districts[it.district]) districts[it.district] = { theme: "city" };
@@ -3951,6 +4873,37 @@ export async function buildMap(W, mapId) {
   // ONLY from generators that already exist, are seeded off the same rng, and are
   // recorded in `landmarks` so scatterTrees does not grow a pine through the roof.
   // MUST be called after every poi() and BEFORE that branch's scatterTrees block.
+  // (Wave 8 fix round, lane K1) FREE WALL FRAGMENTS NEVER MEET. A fragment at a free yaw collides as a stepped chain of ~1 m AABBs (boxColliders), and two
+  // fragments that touch or cross (a T, a V, an X) leave junction pockets narrower than a capsule where the chains of BOTH walls overlap a body: a bot that came
+  // down into one (a glider has no side collision) stood inside the chain with every way out but one blocked by the other wall (verify_b: Savanna seed 51002,
+  // a ruin's two fragments in a T at (489, -153), a bot wedged ~200 s). Every fragment keeps its draws; where its footprint grown by FRAG_GAP / 2 meets an
+  // earlier fragment of the same cluster it is pushed away from the cluster's centre in 0.75 m steps (no draw) until it clears (cover stays, the junction goes).
+  const FRAG_GAP = 1.2;                                                     // > the capsule's 0.9 m: the gap between two fragments is a walkway, not a pocket
+  function fragClearOf(list, x, z, w, d, rot) {
+    const c = Math.cos(rot), s = Math.sin(rot), ax = [[c, -s], [s, c]];          // the fragment's local x / z axes in the world (three's rotateY)
+    for (const f of list) {
+      const axes = ax.concat(f.ax);
+      let sep = false;
+      for (const n of axes) {
+        const ra = (w / 2) * Math.abs(ax[0][0] * n[0] + ax[0][1] * n[1]) + (d / 2) * Math.abs(ax[1][0] * n[0] + ax[1][1] * n[1]);
+        const rb = (f.w / 2) * Math.abs(f.ax[0][0] * n[0] + f.ax[0][1] * n[1]) + (f.d / 2) * Math.abs(f.ax[1][0] * n[0] + f.ax[1][1] * n[1]);
+        if (Math.abs((f.x - x) * n[0] + (f.z - z) * n[1]) > ra + rb + FRAG_GAP) { sep = true; break; }
+      }
+      if (!sep) return false;
+    }
+    return true;
+  }
+  /** the spot a fragment of the cluster `list` (centre ox, oz) stands at: (x, z) when it clears the others, else pushed outward; recorded in list. null = no room */
+  function fragSpot(list, ox, oz, x, z, w, d, rot) {
+    let dx = x - ox, dz = z - oz;
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-6) { dx = Math.cos(rot); dz = -Math.sin(rot); } else { dx /= l; dz /= l; }
+    for (let k = 0; k <= 16; k++) {
+      const px = x + dx * 0.75 * k, pz = z + dz * 0.75 * k;
+      if (fragClearOf(list, px, pz, w, d, rot)) { list.push({ x: px, z: pz, w, d, ax: [[Math.cos(rot), -Math.sin(rot)], [Math.sin(rot), Math.cos(rot)]] }); return [px, pz]; }
+    }
+    return null;
+  }
   function minorLandmarks(n, wallCs, roofC, opts) {
     opts = opts || {};
     const minH = opts.minH != null ? opts.minH : waterY + 1.0;
@@ -3973,9 +4926,13 @@ export async function buildMap(W, mapId) {
       } else if (kind === 2) {
         rangerTower(x, z, wallCs[1 % wallCs.length], null);
       } else if (kind === 3) {                              // ruin — same fragment pattern as Rubble Row
+        const frags = [];
         for (let i = 0; i < 4; i++) {
-          const rx = x + (rng() - 0.5) * 14, rz = z + (rng() - 0.5) * 14, ry2 = heightAt0(rx, rz);
+          const rx0 = x + (rng() - 0.5) * 14, rz0 = z + (rng() - 0.5) * 14;
           const fw = 3.5 + rng() * 3, fh = 2.2 + rng() * 1.4, fc = shade(wallCs[0], 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
+          const sp = fragSpot(frags, x, z, rx0, rz0, fw, 0.5, fr);         // (K1: never a junction with the ruin's other fragments)
+          if (!sp) continue;
+          const rx = sp[0], rz = sp[1], ry2 = heightAt0(rx, rz);
           addBox(rx, Math.min(ry2 + 1.1, lowGround(rx, rz, fw, 0.5, fr) + fh / 2), rz, fw, fh, 0.5, fc, { rotY: fr });
         }
         if (!city || openSpot(x, y + 0.5, z)) loot(x, y + 0.5, z, null);
@@ -4037,6 +4994,70 @@ export async function buildMap(W, mapId) {
   // Was a SOLID 8x8x11 block plus a solid bell tower — the biggest silhouette on
   // Deepwood and you could not get inside it. Four walls around an 8 x 11 nave with
   // a door at each gable end, and a ramp inside the bell tower up to a deck.
+  // LC-90 (P3): Deepwood had no map-scale landmark (Isla Viva has the lighthouse and the volcano, Savanna the downtown skyline, the water tower and the crane;
+  // Deepwood's tallest thing was the 18 m chapel tower, lost among 15 m pines). A FIRE LOOKOUT on the highest free hill of the forest half: four 0.5 m timber
+  // legs to a 29 m cab, cross-braced on every face, a glazed cab (its windows the warm emissive the lamps use, so it reads from the plane at dusk too), a
+  // hipped roof and a mast. The cab is a SOLID block (no room nobody can reach: navcheck's room survey), the legs are exact colliders, the braces cosmetic.
+  // A chest stands between the legs. Placed by a deterministic search (no random draw: the world stream is untouched): a 40 m grid over the forest half,
+  // within 520 m of the centre, dry, below the rocky tops, clear of towns / POIs / roads / landmarks, nearly flat across 10 m; the highest wins. The trees, bushes and rocks the scatter
+  // put within 7 m of it are dropped (drop flag: finalizeProps' own path, no stream change). WORLD CHANGE (colliders, one chest, dropped props): the
+  // MAP_GEN_VERSION bump is the integrator's.
+  function lookoutTower() {
+    let best = null;
+    for (let gx = -HALF + 140; gx <= HALF - 140; gx += 40) for (let gz = -60; gz <= HALF - 140; gz += 40) {
+      const h = baseH(gx, gz);
+      if (gx * gx + gz * gz > 520 * 520) continue;                                   // (inside the playable heart: a beacon on the map's rim orients nobody)
+      if (h < waterY + 4 || h > 40 || (best && h <= best.h)) continue;
+      if (nearPoi(gx, gz, 45) || nearLandmark(gx, gz) || cityBlocks(gx, gz, 40)) continue;
+      let lm = false;
+      for (const l of landmarks) if (Math.hypot(gx - l.x, gz - l.z) < (l.r || 20) + 40) { lm = true; break; }
+      if (lm) continue;
+      let flat = true;
+      for (const [ox, oz] of [[5, 0], [-5, 0], [0, 5], [0, -5], [5, 5], [-5, -5], [5, -5], [-5, 5]]) if (Math.abs(baseH(gx + ox, gz + oz) - h) > 2.2) { flat = false; break; }
+      if (!flat) continue;
+      let road = false;
+      for (const r of roadQueue) {
+        const dx = r.x1 - r.x0, dz = r.z1 - r.z0, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((gx - r.x0) * dx + (gz - r.z0) * dz) / L2));
+        if (Math.hypot(gx - r.x0 - dx * t, gz - r.z0 - dz * t) < r.width / 2 + 14) { road = true; break; }
+      }
+      if (road) continue;
+      best = { x: gx, z: gz, h };
+    }
+    if (!best) return null;
+    const x = best.x, z = best.z, LEG = 2.7, LT = 0.5, TOP = 29, CAB = 3.2, W2 = 7.0;
+    const y = groundPad(x, z, 4.6, 4.6, { gen: "lookout" });
+    const C_TIM = "#6e4a2c", C_TIM2 = "#5a3b22", C_CAB = "#8a5a33", C_ROOF = "#3f3a36", NC = { collide: false };
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) addBox(x + sx * LEG, y + TOP / 2 - 0.3, z + sz * LEG, LT, TOP + 0.6, LT, C_TIM, { tex: "plank" });   // (0.3 m into the ground)
+    // cross bracing on the four faces, 5 storeys (cosmetic boards: thin, a capsule never needs to stand on one)
+    const BR = [0, 5.8, 11.6, 17.4, 23.2, TOP - 0.4];
+    for (let k = 0; k + 1 < BR.length; k++) {
+      const ya = y + BR[k], yb = y + BR[k + 1];
+      for (const f of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
+        const ax = x + f[0] * LEG, az = z + f[1] * LEG, bx = x + f[2] * LEG, bz = z + f[3] * LEG;
+        addFenceBoard(ax, ya, az, bx, yb, bz, 0.22, 0.14, C_TIM2);
+        addFenceBoard(bx, ya, bz, ax, yb, az, 0.22, 0.14, C_TIM2);
+        addFenceBoard(ax, yb, az, bx, yb, bz, 0.26, 0.16, C_TIM2);              // the girt at each storey
+      }
+    }
+    // the cab: a solid block (floor to roof plate) with a glazed band and a catwalk ledge under it
+    addBox(x, y + TOP + 0.15, z, W2 + 1.6, 0.3, W2 + 1.6, C_TIM2, { tex: "plank" });                          // catwalk deck
+    addBox(x, y + TOP + 0.3 + 0.45, z, W2, 0.9, W2, C_CAB, { tex: "plank" });                                // lower wall
+    addBox(x, y + TOP + 1.2 + 0.75, z, W2 - 0.1, 1.5, W2 - 0.1, "#ffe9a8", NC);                             // the windows (lit glass band)
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) addBox(x + sx * (W2 / 2 - 0.12), y + TOP + 1.95, z + sz * (W2 / 2 - 0.12), 0.26, 1.5, 0.26, C_CAB, NC);   // corner posts
+    addBox(x, y + TOP + 1.2 + 0.75, z, W2 - 0.4, 1.5, W2 - 0.4, C_CAB);                                     // (the collider body inside the glass)
+    addBox(x, y + TOP + CAB - 0.25, z, W2 + 0.2, 0.5, W2 + 0.2, C_CAB, { tex: "plank" });                    // eaves plate
+    for (const sx of [-1, 1]) addBox(x + sx * (W2 / 2 + 0.75), y + TOP + 0.75, z, 0.08, 0.9, W2 + 1.6, C_TIM2, NC);   // catwalk rails
+    for (const sz of [-1, 1]) addBox(x, y + TOP + 0.75, z + sz * (W2 / 2 + 0.75), W2 + 1.6, 0.9, 0.08, C_TIM2, NC);
+    coneAt(x, y + TOP + CAB, z, (W2 + 1.4) * 0.72, 2.6, 4, C_ROOF, Math.PI / 4, "shingle");                   // hipped roof
+    addBox(x, y + TOP + CAB + 4.7, z, 0.16, 9.8, 0.16, "#9a9a96", NC);                                      // mast: stepped on the eaves plate, up through the roof (it stood on the cone's apex: placementcheck structure-contact read a 2.6 m hover)
+    addBox(x, y + TOP + CAB + 2.6 + 7.1, z, 0.5, 0.5, 0.5, "#ffe9a8", NC);                                  // the beacon
+    chest(x, y + 0.4, z, null);
+    // the scatter's props under it go (finalizeProps drops a `drop` entry): nothing grows through the legs or the bracing
+    for (const kind in props) for (const it of props[kind]) if (Math.abs(it.x - x) < 7 && Math.abs(it.z - z) < 7) it.drop = 1;
+    lookout = { x, z, y, top: y + TOP + CAB + 2.6 + 7.4 };
+    return lookout;
+  }
+  let lookout = null;
   function steeple(x, z, poi) {
     const T = 0.4, NW = 8, ND = 11, WH = 8, dw = 2;
     const y = groundPad(x, z - 0.5, 4.6, 6.5, { gen: "steeple" });       // C-PAD: nave + bell tower (x +-4.3, z -6.8 .. +5.9)
@@ -4445,19 +5466,24 @@ export async function buildMap(W, mapId) {
       // cover on its own, which is scattered debris rather than a fight space. ~35
       // in 6 KNOTS of 5-7 instead: inside a knot the pieces interlock, and the gaps
       // between knots are the rotations.
+      // (Wave 8 fix round, lane K1: the pieces of a knot stand CLOSE, never touching - fragSpot - so a knot is a maze of walkways >= 1.2 m, not of junction pockets)
+      const frags = [];
       for (let k = 0; k < 6; k++) {
         const kx = p.x + (rng() - 0.5) * p.r * 1.6, kz = p.z + (rng() - 0.5) * p.r * 1.6;
         const n = 5 + Math.floor(rng() * 3);
         for (let i = 0; i < n; i++) {
-          const x = kx + (rng() - 0.5) * 22, z = kz + (rng() - 0.5) * 22;
-          const y = heightAt0(x, z);
+          const x0 = kx + (rng() - 0.5) * 22, z0 = kz + (rng() - 0.5) * 22;
           // The tint is QUANTISED to 4 steps on purpose: addBox keys its batches by
           // the colour string and shade() returns a hex, so a continuous multiplier
           // gave every wall a unique key — one merged mesh each, with its own
           // MeshStandardMaterial + map + normalMap, for one pile of rubble.
           // This is the only shade() call site in the file that passes a random k.
           const fw = 3.5 + rng() * 3, fh = 1.8 + rng() * 1.6, fc = shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), fr = rng() * Math.PI;   // same draws, same order
-          if (inCity(x, z, 3)) continue;                    // (Wave 7: no rubble inside the village's blocks)
+          if (inCity(x0, z0, 3)) continue;                  // (Wave 7: no rubble inside the village's blocks)
+          const sp = fragSpot(frags, kx, kz, x0, z0, fw, 0.5, fr);
+          if (!sp) continue;
+          if (inCity(sp[0], sp[1], 3)) { frags.pop(); continue; }
+          const x = sp[0], z = sp[1], y = heightAt0(x, z);
           addBox(x, Math.min(y + 0.9, lowGround(x, z, fw, 0.5, fr) + fh / 2), z, fw, fh, 0.5, fc, { rotY: fr });
         }
         if (k % 2 === 0 && !inRects(cityBld, kx, kz, 2) && !inRects(cityDecks, kx, kz, 2) && (!city || openSpot(kx, heightAt0(kx, kz) + 0.5, kz))) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
@@ -4606,6 +5632,51 @@ export async function buildMap(W, mapId) {
     scatterTrees("birch", 20, 1.2, 40, "wood");
     scatterTrees("bush", 16, 0.8, 40, null);
     scatterTrees("rocks", 12, 2, 60, "brick");
+    lookoutTower();                                  // LC-90: the map-scale landmark Deepwood lacked (after the scatter: it draws nothing from the world stream)
+    if (lookout) lookoutBeacon(lookout);
+  }
+  // LC-90: the lookout's BEACON reads through the haze. From the plane the timber tower is 83 % fog at 700 m (FogExp2), a grey ghost (lm_probe crops); a
+  // lamp is what carries through haze, so the beacon gets a warm additive glow that ignores the fog: a sprite whose size follows the camera distance so it
+  // stays ~10 px across from 75 m out (1.2 m up close: a lit lamp, not a halo), with a slow 0.5 Hz pulse. One sprite, one draw call, the birds' sprite
+  // program (no new shader); every tier (a landmark is not a quality feature). Cosmetic: no collider, no world-stream draw.
+  function lookoutBeacon(L) {
+    if (typeof document === "undefined") return;
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const cx = cv.getContext("2d"), gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,246,214,1)"); gr.addColorStop(0.18, "rgba(255,214,130,0.9)"); gr.addColorStop(0.5, "rgba(255,170,70,0.28)"); gr.addColorStop(1, "rgba(255,150,40,0)");
+    cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, toneMapped: false });
+    const sp = new THREE.Sprite(mat);
+    sp.name = "lookout:beacon"; sp.position.set(L.x, L.top - 0.15, L.z); sp.renderOrder = 2;
+    g.add(sp);
+    trackUpdater((dt, t) => {
+      const c = W.camera; if (!c) return;
+      const d = c.position.distanceTo(sp.position);
+      sp.scale.setScalar(Math.min(20, Math.max(1.2, d * 0.016)));
+      mat.opacity = (0.82 + 0.18 * Math.sin(t * 3.1)) * Math.min(1, 0.35 + d / 160);
+    });
+  }
+
+  // P23 / LC-47: rotation cover (towngen.js rotationCover): the holes the wild scatter left between the POIs get a rock outcrop, a ruined wall or (beside a road) an abandoned
+  // car - only where nothing that stops a bullet stands within 15.5 m. Built with what the map already draws (the instanced rocks / cars and their baked colliders, quarter-turn
+  // box walls in the structure batches): no new mesh, program or draw call. towngen draws from its own per-cell sub-streams: the shared `rng` is never touched.
+  if (city && typeof city.TG.rotationCover === "function") {
+    const RAD = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2 };
+    const have = [];
+    for (const k in RAD) for (const it of props[k] || []) have.push([it.x, it.z, RAD[k] * (it.s || 1)]);
+    for (const r of cityBld) have.push([(r[0] + r[2]) / 2, (r[1] + r[3]) / 2, Math.min(r[2] - r[0], r[3] - r[1]) / 2]);
+    const free = (x, z, pad) => !(nearPoi(x, z, pad) || nearLandmark(x, z) || inCity(x, z, pad) || inRects(cityBld, x, z, pad) || inRects(cityDecks, x, z, pad));
+    const cov = city.TG.rotationCover(seed, mapId, { half: HALF, waterY, h: (x, z) => heightAt0(x, z), free, cover: have, roads: cityRoadLog });
+    for (const c of cov.pieces) {
+      if (c.kind === "rocks") coverProps.rocks.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: c.s, ry: c.ry, rej: 1, reliefMax: 1.2 });
+      else if (c.kind === "car") coverProps.car.push({ x: c.x, y: heightAt0(c.x, c.z), z: c.z, s: 2.2, ry: c.ry, rej: 1 });
+      else if (c.kind === "wall") {
+        const ry = c.quarter ? Math.PI / 2 : 0;
+        addBox(c.x, lowGround(c.x, c.z, c.w, c.d, ry) + c.h / 2 - 0.15, c.z, c.w, c.h + 0.3, c.d, c.tone, { rotY: ry });
+      }
+    }
+    city.cover = cov.stats; city.coverPieces = cov.pieces;            // (the gates / shot tools read them)
   }
 
   // (the road network between the POIs is registered right after each branch declares its POIs, above: its corridors must be in the ground
@@ -4619,11 +5690,24 @@ export async function buildMap(W, mapId) {
   field.bake();
   const bakeMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _bk0;
   heightAt0 = (x, z) => field.at(x, z);
+  // the world-shader layer's ground (LCU.uLcHgt): the baked lattice as a 609 x 609 half-float texture, linear-filtered, so the drawn ground height at any
+  // fragment is one fetch (the walls' wear band, the water's depth colour and foam). Medium and up; freed with the map.
+  if (LCFX) {
+    const L = field.lat, hp = new Uint16Array(LAT_N * LAT_N);
+    for (let i = 0; i < hp.length; i++) hp[i] = THREE.DataUtils.toHalfFloat(L[i]);
+    const ht = new THREE.DataTexture(hp, LAT_N, LAT_N, THREE.RedFormat, THREE.HalfFloatType);
+    ht.minFilter = ht.magFilter = THREE.LinearFilter; ht.generateMipmaps = false; ht.wrapS = ht.wrapT = THREE.ClampToEdgeWrapping; ht.needsUpdate = true;
+    lcOwn(ht);
+    LCU.uLcHgt.value = ht;
+    LCU.uLcHgtK.value.set(LAT_CELLS / (SIZE * LAT_N), (HALF * LAT_CELLS / SIZE + 0.5) / LAT_N, 0, 0);
+    LCU.uLcWater.value.x = waterY;
+    LCU.uLcWater.value.z = mapId === "deepwood" ? 3.2 : 7.0;   // LC-39: Deepwood's water is 3.7 m at its deepest (p90 2.9 m): on the sea's 7 m scale it never read deep
+  }
   photo = await photoPromise;
   buildTerrain();
   emitRoads();
   if (city) buildCityGround();
-  for (let i = 0; i < lootPoints.length; i++) { const p = lootPoints[i], d = p.y - lootG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - lootG[i]; }
+  for (let i = 0; i < lootPoints.length; i++) { const p = lootPoints[i], d = p.y - lootG[i]; if (p.house == null && d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - lootG[i]; }   // (WAVE 8: a house point lies on its floor / furniture: as given)
   for (let i = 0; i < chestPoints.length; i++) { const p = chestPoints[i], d = p.y - chestG[i]; if (d >= 0 && d <= 1) p.y += heightAt0(p.x, p.z) - chestG[i]; }
   await yieldPhase();                                // phase 1/3 done — let the loader paint
 
@@ -4639,7 +5723,19 @@ export async function buildMap(W, mapId) {
   // two fresh TorusGeometry, a CircleGeometry and three materials on every call.
   // Built once per map instead; disposeMapResources dedupes by identity, so the
   // shared instances are still freed exactly once at teardown.
-  let _pGeo = null, _pMat = null;
+  // R1 (lane endgame, perf_district endgame view): a portal was FOUR draw calls (two rings + the double-sided transparent swirl, which three draws back then front) and an
+  // endgame camera on an OD-1 circle sees 4-6 of them across the map (16-24 calls). The two rings of every portal are now two InstancedMeshes for the whole map (static, opaque:
+  // the same pixels) and the flat swirl is drawn in one pass (forceSinglePass: a disc has no faces behind its own); each swirl stays its own mesh so the transparent sort is per portal.
+  // The instanced rings draw only the portals in the view (each mesh compacts its instance list against the camera's frustum before it draws: ~12 sphere tests a frame), so a view
+  // that saw two portals does not draw the triangles of all twelve.
+  let _pGeo = null, _pMat = null, _pRings = null;
+  const P_RINGS_MAX = 32, _pAll = [], _pFr = new THREE.Frustum(), _pPV = new THREE.Matrix4(), _pSph = new THREE.Sphere(new THREE.Vector3(), 1.75);
+  function portalCull(renderer, scene, camera) {
+    _pPV.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _pFr.setFromProjectionMatrix(_pPV);
+    let n = 0;
+    for (const m of _pAll) { _pSph.center.setFromMatrixPosition(m); if (_pFr.intersectsSphere(_pSph)) this.setMatrixAt(n++, m); }
+    if (n !== this.count || n) { this.count = n; this.instanceMatrix.needsUpdate = true; }
+  }
   function addPortal(px, py, pz, faceYaw) {
     if (!_pGeo) {
       _pGeo = {
@@ -4650,21 +5746,26 @@ export async function buildMap(W, mapId) {
       _pMat = {
         ring: new THREE.MeshStandardMaterial({ color: 0x37e0ff, emissive: 0x1ec8f0, emissiveIntensity: 1.6, roughness: 0.4 }),
         ring2: new THREE.MeshStandardMaterial({ color: 0xb26bff, emissive: 0x9b4dff, emissiveIntensity: 1.4, roughness: 0.4 }),
-        swirl: new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+        swirl: new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
       };
+      _pRings = [new THREE.InstancedMesh(_pGeo.ring, _pMat.ring, P_RINGS_MAX), new THREE.InstancedMesh(_pGeo.ring2, _pMat.ring2, P_RINGS_MAX)];
+      for (const im of _pRings) { im.count = 0; im.name = "portal-rings"; im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.onBeforeRender = portalCull; g.add(im); }
     }
     const grp = new THREE.Group();
-    grp.add(new THREE.Mesh(_pGeo.ring, _pMat.ring));
-    grp.add(new THREE.Mesh(_pGeo.ring2, _pMat.ring2));
-    grp.add(new THREE.Mesh(_pGeo.swirl, _pMat.swirl));
     grp.position.set(px, py + 1.8, pz);
     grp.rotation.y = faceYaw;
+    grp.updateMatrix();
+    if (_pAll.length < P_RINGS_MAX) _pAll.push(grp.matrix.clone());
+    else { grp.add(new THREE.Mesh(_pGeo.ring, _pMat.ring)); grp.add(new THREE.Mesh(_pGeo.ring2, _pMat.ring2)); }
+    grp.add(new THREE.Mesh(_pGeo.swirl, _pMat.swirl));
     g.add(grp);
-    portals.push({ x: px, y: py, z: pz, obj: grp });
+    portals.push({ x: px, y: py, z: pz, obj: grp, kind: _pKind });
   }
+  let _pKind = "island";          // LC-51: every portal record says where it stands ("island" | "ground"), for the big map (hud) and the gates
   {
     const nIsl = 5 + Math.floor(rng() * 3);
-    const grassC = mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
+    const grassC = new THREE.Color(mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62").multiplyScalar(Math.min(1, GRADE.ground * 1.25));   // (LC-04: the turf takes the ground grade, a little lighter: it is lit from above, the terrain mostly grazed)
+    const turfSideC = new THREE.Color("#7a5f45").multiplyScalar(Math.min(1, GRADE.ground * 1.25)), islWhite = new THREE.Color(1, 1, 1);   // (LC-73: the turf's earth-and-root side)
     // #7a6a58 is linear ~(0.19, 0.14, 0.10). The cone is rotated 180 degrees below,
     // so its lit faces all point DOWN and the only light reaching them is the
     // hemisphere's groundColor — at that albedo the signature feature of the map
@@ -4690,6 +5791,62 @@ export async function buildMap(W, mapId) {
       return m;
     };
     const isl = (mapId === "ashgrid" || city) ? { tops: [], rocks: [] } : null;     // (Wave 7b: the themed maps bake their islands too - a drop view over Deepwood saw 4-6 islands = 8-12 draw calls)
+    // LC-73 (P3): the islands were a 9-gon disc on a 14-gon cone. Now the grass top is a 27-gon whose rim wanders between 0.95 and 1.0 of the radius (inside
+    // the three collider boxes' cover, which is unchanged) with a slight dome, and the underside is a lathed mass: a lip of earth under the turf, a bulge,
+    // strata, then a long irregular taper, its every vertex pushed in / out by a seeded-by-index (no random draw) noise of angle and depth, plus three
+    // hanging spurs merged in. Same meshes (the baked tops / rocks on the themed maps, one each), so 0 extra draw calls; ~1.5 k triangles an island.
+    const _iN = (a, b, k) => Math.sin(a * 1.7 + k * 12.9898) * 0.5 + Math.sin(a * 3.1 + b * 2.3 + k * 4.1) * 0.3 + Math.sin(a * 6.7 - b * 4.9 + k * 7.7) * 0.2;
+    const islandTopGeo = (rad, k) => {
+      const g = new THREE.CylinderGeometry(rad, rad * 0.93, 1.6, 27, 1);
+      const P = g.attributes.position;
+      for (let v = 0; v < P.count; v++) {
+        const x = P.getX(v), y = P.getY(v), z = P.getZ(v), r = Math.hypot(x, z);
+        if (r < 1e-4) { if (y > 0) P.setY(v, y + 0.18); continue; }                    // (the cap centre: a gentle dome)
+        const a = Math.atan2(z, x), f = 0.975 + 0.025 * _iN(a, 0, k);
+        P.setX(v, x * f); P.setZ(v, z * f);
+      }
+      g.computeVertexNormals();
+      // LC-73: the turf's 1.6 m side read as a bright green slab edge (the top one flat colour): the side is a dark earth-and-root band, the cap rim a little
+      // darker than its crown, as vertex colours x the material (no extra draw)
+      // (the material is white: the vertex colour IS the colour - turf on the cap, earth on the side)
+      const N = g.attributes.normal, col = new Float32Array(P.count * 3);
+      for (let v = 0; v < P.count; v++) {
+        const up = N.getY(v), r = Math.hypot(P.getX(v), P.getZ(v)) / rad;
+        const c = up > 0.5 ? grassC : turfSideC, f = up > 0.5 ? (r < 1e-3 ? 1.06 : 0.86) : 1;
+        col[v * 3] = c.r * f; col[v * 3 + 1] = c.g * f; col[v * 3 + 2] = c.b * f;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      return g;
+    };
+    const islandRockGeo = (rad, k) => {
+      // the profile, top (y = 0, under the turf) to the tip (y = -1): radius x rad
+      const prof = [[0.93, 0.0], [0.97, -0.04], [0.9, -0.09], [0.94, -0.15], [0.82, -0.24], [0.86, -0.31], [0.7, -0.42], [0.56, -0.55], [0.44, -0.66], [0.3, -0.78], [0.17, -0.89], [0.0, -1.0]];
+      const H = rad * 1.5;
+      const g = new THREE.LatheGeometry(prof.slice().reverse().map((q) => new THREE.Vector2(q[0] * rad, q[1] * H)), 22);     // (tip first: y increasing, so the faces point outward)
+      const P = g.attributes.position;
+      for (let v = 0; v < P.count; v++) {
+        const x = P.getX(v), y = P.getY(v), z = P.getZ(v), r = Math.hypot(x, z);
+        if (r < 1e-4) continue;
+        const a = Math.atan2(z, x), d = -y / H, f = 1 + (0.06 + 0.22 * d) * _iN(a * 1.3, d * 5, k) + 0.05 * Math.sin(d * 31 + k);
+        P.setX(v, x * f); P.setZ(v, z * f);
+        P.setY(v, y - H * 0.18 * d * d * Math.max(0, _iN(a * 2.1, 0, k + 3)));       // (the lower half hangs further on some sides: an uneven tip)
+      }
+      // the lathe's top is y = 0, its tip y = -H; the caller flips it (rotateX PI) and places it as the old cone (centre at the cone's half height)
+      g.translate(0, H / 2, 0);
+      g.rotateX(Math.PI);                                                               // (pre-flip: the caller's rotateX(PI) puts the mass back under the top)
+      const parts = [g];
+      for (let t = 0; t < 3; t++) {
+        const a = k * 1.9 + t * 2.1, rr = rad * (0.42 + 0.12 * t), h2 = H * (0.35 + 0.08 * t);
+        const sp = new THREE.ConeGeometry(rad * (0.2 - 0.03 * t), h2, 7, 1);
+        sp.rotateX(Math.PI); sp.translate(Math.cos(a) * rr, -H * 0.18 - h2 / 2, Math.sin(a) * rr);
+        sp.translate(0, H / 2, 0); sp.rotateX(Math.PI);
+        parts.push(sp);
+      }
+      const m = BufferGeometryUtils.mergeGeometries(parts.map((q) => q.index ? q.toNonIndexed() : q), false);
+      for (const q of parts) q.dispose();
+      m.computeVertexNormals();
+      return m;
+    };
     const islScaleUV = (geo, span) => { if (!_islTex) return; const uv = geo.attributes.uv; if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; } };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
@@ -4701,10 +5858,10 @@ export async function buildMap(W, mapId) {
       const topY = Math.max(groundH, waterY) + 26 + rng() * 26; // 26-52m up
       const rad = 9 + rng() * 8;
       // grassy top disc — TILE = 8 m per texture tile, same density as the terrain
-      const topGeo = new THREE.CylinderGeometry(rad, rad * 0.92, 1.6, 9);
+      const topGeo = islandTopGeo(rad, i);
       // D2 (Savanna only): the islands' discs and rocks are baked into ONE mesh each after the loop (a drop view over the whole map saw five islands = ten draw calls); they cast no
       // shadow there (a floating island 26-52 m up never shadows anything a player can see: the shadow box is +-55 m around the player and the merged mesh would sit in it for ever)
-      const top = isl ? null : new THREE.Mesh(topGeo, islMat(grassC, 0.95, topGeo, (rad * 2) / TILE));
+      const top = isl ? null : new THREE.Mesh(topGeo, Object.assign(islMat(islWhite, 0.95, topGeo, (rad * 2) / TILE), { vertexColors: true }));
       if (isl) { islScaleUV(topGeo, (rad * 2) / TILE); topGeo.translate(ix, topY - 0.8, iz); isl.tops.push(topGeo); }
       else {
         top.position.set(ix, topY - 0.8, iz);
@@ -4712,7 +5869,7 @@ export async function buildMap(W, mapId) {
         g.add(top);
       }
       // hanging rock cone underneath
-      const rockGeo = new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 14);   // 8 radial segments read as a paper dart from below; +12 tris each
+      const rockGeo = islandRockGeo(rad, i);                              // LC-73: a jagged stratified mass with hanging spurs (was a 14-gon cone: a paper dart from below)
       if (isl) { islScaleUV(rockGeo, (rad * 2) / TILE); rockGeo.rotateX(Math.PI); rockGeo.translate(ix, topY - 1.4 - rad * 0.75, iz); isl.rocks.push(rockGeo); }
       else {
       const rock = new THREE.Mesh(rockGeo, islMat(rockC, 1, rockGeo, (rad * 2) / TILE));
@@ -4737,7 +5894,7 @@ export async function buildMap(W, mapId) {
       // 0.92 widening was made to cure. Two arms (0.95 x 0.55) plus a 0.78 hub are three plain boxes (contract C-COLL), measured on the real
       // 9-gon (offline fit over the polygon's area): invisible floor 19% -> 10% of the disc area, disc (r <= 0.94) without support 0.86% -> 0.00%.
       for (const [hx, hz] of [[0.95, 0.55], [0.55, 0.95], [0.78, 0.78]])
-        colliders.push(mkCollider("box", ix - rad * hx, ix + rad * hx, topY - 2.2, topY, iz - rad * hz, iz + rad * hz, -1, null, -1, 0));
+        { colliders.push(mkCollider("box", ix - rad * hx, ix + rad * hx, topY - 2.2, topY, iz - rad * hz, iz + rad * hz, -1, null, -1, 0)); colSurf.set(colliders[colliders.length - 1], "grass"); }
       // premium loot: every island gets a chest + a couple of floor items
       chest(ix + (rng() - 0.5) * rad * 0.6, topY + 0.4, iz + (rng() - 0.5) * rad * 0.6, "sky_island");
       loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");
@@ -4753,16 +5910,60 @@ export async function buildMap(W, mapId) {
       addPortal(ix + Math.cos(pAng) * rad * 0.55, topY, iz + Math.sin(pAng) * rad * 0.55, -pAng + Math.PI / 2);
     }
     // ground launch portals at POIs: quick rotation + the way UP to islands
+    _pKind = "ground";
+    // LC-51: a portal never stands in the city kit's street dressing (a parked van ran through Isla Viva's first ground portal: the kit is placed after the
+    // portals, from city.kit). A kit-blocked draw still burns its yaw draw, so the world stream is byte-identical; the top-up below replaces it.
+    const nearKit = (x, z, r) => {
+      if (!city || !city.kit.length) return false;
+      for (let k = 0; k < city.kit.length; k++) { const e = city.kit[k]; if (/building|shell/.test(e.type)) continue; const dx = e.x - x, dz = e.z - z; if (dx * dx + dz * dz < r * r) return true; }
+      return false;
+    };
     for (let i = 0; i < Math.min(4, pois.length); i++) {
       const p = pois[Math.floor(rng() * pois.length)];
       const px = p.x + 14 + (rng() - 0.5) * 24, pz = p.z + 14 + (rng() - 0.5) * 24;
       const py = heightAt0(px, pz);
       if (baseH(px, pz) < waterY + 0.5 || inRects(cityBld, px, pz, 3.5) || (cityKeepClear.length && inRects(cityKeepClear, px, pz, 3))) continue;
+      if (nearKit(px, pz, 7.5)) { rng(); continue; }
       addPortal(px, py, pz, rng() * Math.PI * 2);
     }
+    // LC-51: the four draws above are kept exactly (the world stream feeds everything after them), but each one is skipped when it lands in the sea or in a
+    // town, so a match had 0-4 ground portals (the audit: scarce, and none at most POIs). The shortfall is topped up to FOUR from a stream of its own (the
+    // world stream is untouched): a spot on a ring round a POI, dry, outside every building / kept-clear rectangle, clear of every standing collider by 3 m,
+    // on ground flat to 0.6 m across the ring, and 60 m or more from any other ground portal. WORLD CHANGE (new portals = new nav blockers): MAP_GEN_VERSION
+    // is the integrator's.
+    {
+      const prt = W.SIM.mulberry32((seed ^ 0x51a7e5) >>> 0);
+      let nG = 0;
+      for (const q of portals) if (q.kind === "ground") nG++;
+      for (let tries = 0; nG < 4 && tries < 120 && pois.length; tries++) {
+        const p = pois[Math.floor(prt() * pois.length)], a = prt() * Math.PI * 2, rr = (p.r || 40) * (0.5 + prt() * 0.45) + 8;
+        const px = p.x + Math.cos(a) * rr, pz = p.z + Math.sin(a) * rr, fy = prt() * Math.PI * 2;
+        if (Math.abs(px) > HALF - 60 || Math.abs(pz) > HALF - 60) continue;
+        if (baseH(px, pz) < waterY + 0.8 || heightAt0(px, pz) < waterY + 0.8 || inRects(cityBld, px, pz, 4) || (cityKeepClear.length && inRects(cityKeepClear, px, pz, 4))) continue;
+        if (houses.length && underHouse(px, pz)) continue;
+        if (nearKit(px, pz, 7.5)) continue;
+        const py = heightAt0(px, pz);
+        let flat = true;
+        for (let k = 0; k < 6 && flat; k++) { const b = k / 6 * Math.PI * 2; if (Math.abs(heightAt0(px + Math.cos(b) * 2.2, pz + Math.sin(b) * 2.2) - py) > 0.6) flat = false; }
+        if (!flat) continue;
+        let far = true;
+        for (const q of portals) if (q.kind === "ground" && (q.x - px) * (q.x - px) + (q.z - pz) * (q.z - pz) < 60 * 60) { far = false; break; }
+        if (!far) continue;
+        let clear = true;
+        for (let ci = 0; ci < colliders.length; ci++) {
+          const c = colliders[ci];
+          if (c.maxX < px - 3 || c.minX > px + 3 || c.maxZ < pz - 3 || c.minZ > pz + 3 || c.maxY < py + 0.2 || c.minY > py + 4) continue;
+          clear = false; break;
+        }
+        if (!clear) continue;
+        addPortal(px, py, pz, fy);
+        nG++;
+      }
+    }
+    _pKind = "island";
     if (isl && isl.tops.length) {
       const nullGeo = { attributes: {} };                                           // (islMat only scales a UV it finds: the baked geometries carry their own)
-      const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), islMat(grassC, 0.95, nullGeo, 1));
+      const topM = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(isl.tops, false), Object.assign(islMat(islWhite, 0.95, nullGeo, 1), { vertexColors: true }));
       topM.name = "island:tops"; topM.castShadow = false; topM.receiveShadow = true; g.add(topM);
       const rockMat = islMat(rockC, 1, nullGeo, 1);
       rockMat.emissive.set(K.sky); rockMat.emissiveIntensity = 0.12;
@@ -4811,13 +6012,25 @@ export async function buildMap(W, mapId) {
   // their own mesh each: emissive is a uniform.
   const _vc = new THREE.Color();
   const structMats = {};                          // tkind -> the ONE material every structure mesh of that kind shares (the map-wide batches and the Wave-7 district meshes)
+  // LC-17 (P2-C): per-kind surface response. Every procedural wall was roughness 0.88 / metalness 0.04: brick, planks, plaster, shingles and corrugated steel
+  // all caught the sun the same way. Now plaster is the most matte, shingles a little glossier, and metal a real metal (0.45 / 0.5: the IBL exists since the
+  // look plan, so a metal lobe reflects the map's sky instead of black). Plus, on medium and up (LCFX), the world-shader layer: the wall-base wear band
+  // (vertical faces within 0.85 m of the ground under them, up to 30 % darker at the ground: the 0.1-0.5 m band ~ 20 %), the CC0 grime photograph (stains / weathering, its light / dark only, a 6 m
+  // tile and a turned second sample) and the cloud shadows. Same draw calls (the same meshes), one program per kind as before.
+  const KIND_PBR = { s: [0.86, 0.03], plank: [0.9, 0.0], shingle: [0.8, 0.02], metal: [0.45, 0.5], block: [0.84, 0.02], stucco: [0.93, 0.0] };
+  const STRUCT_LC = { LC_CLOUD: "", LC_WEAR: "" };
+  const grimeTex = await grimePromise;
+  if (grimeTex) { LCU.uLcGrime.value = grimeTex; LCU.uLcGrimeK.value.set(GRIME_GAIN, 1 / 6.0, 0, 0); STRUCT_LC.LC_GRIME = ""; }
+  else LCU.uLcGrimeK.value.set(0, 1 / 6.0, 0, 0);
   function structMaterial(tkind) {
     let mat = structMats[tkind];
     if (mat) return mat;
-    mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.88, metalness: 0.04 });
+    const pbr = KIND_PBR[tkind] || KIND_PBR.s;
+    mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: pbr[0], metalness: pbr[1] });
     let tx = null;
     try { tx = KIND_TEX[tkind] ? KIND_TEX[tkind](aniso) : _st; } catch (e) { tx = _st; }
     if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    if (LCFX) lcPatch(mat, STRUCT_LC);
     return (structMats[tkind] = mat);
   }
   /** Wave 7b: the brick/stone ("s") and plank textures in one material - vertex attribute `tki` 0 = s, 1 = plank (both 256 px tiling canvases, identity transforms, the same UVs) */
@@ -4832,8 +6045,10 @@ export async function buildMap(W, mapId) {
       const SC = THREE.ShaderChunk;
       // tki 0 = s (brick / stone), 1 = plank, 2 = stucco: weights from the flat per-vertex index (no interpolation across a box: every vertex of a box has the same index)
       const pick3 = (a, b, c, uv) => "( texture2D( " + a + ", " + uv + " ) * ( 1.0 - step( 0.5, vTki ) ) + texture2D( " + b + ", " + uv + " ) * ( step( 0.5, vTki ) - step( 1.5, vTki ) ) + texture2D( " + c + ", " + uv + " ) * step( 1.5, vTki ) )";
-      mat.customProgramCacheKey = () => "lc-struct-mix-v2";
+      mat.customProgramCacheKey = () => "lc-struct-mix-v3";
       mat.onBeforeCompile = (sh) => {
+        // LC-17: the per-kind roughness of the three kinds this material mixes (brick / stone, plank, plaster: KIND_PBR)
+        sh.fragmentShader = sh.fragmentShader.replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = vTki < 0.5 ? " + KIND_PBR.s[0].toFixed(3) + " : ( vTki < 1.5 ? " + KIND_PBR.plank[0].toFixed(3) + " : " + KIND_PBR.stucco[0].toFixed(3) + " );");
         sh.uniforms.map2 = { value: pk.map }; sh.uniforms.normalMap2 = { value: pk.normal }; sh.uniforms.map3 = { value: sc.map }; sh.uniforms.normalMap3 = { value: sc.normal };
         sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float tki;\nvarying float vTki;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvTki = tki;");
         sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D map2;\nuniform sampler2D normalMap2;\nuniform sampler2D map3;\nuniform sampler2D normalMap3;\nvarying float vTki;")
@@ -4841,11 +6056,13 @@ export async function buildMap(W, mapId) {
           .replace("#include <normal_fragment_maps>", SC.normal_fragment_maps.split("texture2D( normalMap, vNormalMapUv )").join(pick3("normalMap", "normalMap2", "normalMap3", "vNormalMapUv")));     // (every occurrence: the chunk samples the normal map in its object-space AND its tangent-space branch)
       };
     }
+    if (LCFX) lcPatch(mat, STRUCT_LC);
     return (dualMat = mat);
   }
   /** Merge one batch set (colour|kind -> geometries) into one mesh per texture kind plus one per emissive colour. `tag` = "" for the map-wide set, else the district id. */
   function mergeBatchSet(bset, tag) {
     const kindGroups = {};                        // tkind -> [geometry with a color attribute]
+    const nsGroups = {};                          // (K1 re-run) tkind -> pre-coloured house geometry that casts no shadow (a ruin's wreckage, "vcn|<kind>")
     for (const bkey in bset) {
       const bar = bkey.lastIndexOf("|");
       const color = bkey.slice(0, bar);
@@ -4855,8 +6072,10 @@ export async function buildMap(W, mapId) {
       const bk = bkey.slice(bar + 1);
       const tkind = (tag || city) && (bk === "block" || bk === "shingle") ? "s" : bk;
       if (EMIT[color]) continue;                    // built below, one mesh per colour
-      _vc.set(color);
+      if (color === "vcn") { const l = nsGroups[bk] || (nsGroups[bk] = []); for (const geo of bset[bkey]) l.push(geo); continue; }
       const list = kindGroups[tkind] || (kindGroups[tkind] = []);
+      if (color === "vc") { for (const geo of bset[bkey]) list.push(geo); continue; }        // (WAVE 8: a housegen house's faces carry their own vertex colours)
+      _vc.set(color);
       for (const geo of bset[bkey]) {
         const n = geo.attributes.position.count, ca = new Float32Array(n * 3);
         for (let i = 0; i < n; i++) { ca[i * 3] = _vc.r; ca[i * 3 + 1] = _vc.g; ca[i * 3 + 2] = _vc.b; }
@@ -4868,7 +6087,7 @@ export async function buildMap(W, mapId) {
     // were two draw calls (four with the shadow pass) in every view that saw it: 10-13 districts in a Deepwood street view. A per-vertex texture index picks the texture
     // (dualStructMaterial: the same lighting, the same UVs and texture transforms, two samplers); Savanna keeps its kinds (its frames are untouched).
     const DUAL = [["s", 0], ["plank", 1], ["stucco", 2]];
-    if (tag && city && mapId !== "ashgrid" && DUAL.filter(([k]) => kindGroups[k]).length >= 2) {
+    if (tag && city && (mapId !== "ashgrid" || houses.length) && DUAL.filter(([k]) => kindGroups[k]).length >= 2) {      // (WAVE 8: Savanna's districts too, now that its houses wear brick, plaster and plank in one district)
       const both = [];
       for (const [k, v] of DUAL) for (const geo of (kindGroups[k] || [])) { geo.setAttribute("tki", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(v), 1)); both.push(geo); }
       const mergedB = BufferGeometryUtils.mergeGeometries(both, false);
@@ -4876,7 +6095,7 @@ export async function buildMap(W, mapId) {
         for (const [k] of DUAL) delete kindGroups[k];
         const mesh = new THREE.Mesh(mergedB, dualStructMaterial());
         mesh.castShadow = true; mesh.receiveShadow = true;
-        mesh.name = "structures:mix@" + tag; mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag);
+        mesh.name = "structures:mix@" + tag; mesh.userData.district = tag; mesh.userData.lcPart = "structure"; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag);
         g.add(mesh);
       }
     }
@@ -4885,8 +6104,23 @@ export async function buildMap(W, mapId) {
       const mesh = new THREE.Mesh(merged, structMaterial(tkind));
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.name = "structures:" + tkind + (tag ? "@" + tag : "");
+      mesh.userData.lcPart = "structure";                                         // (WAVE 8: what the mesh IS, for the gates: a town called "yard" is not a yard decal)
       if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
       g.add(mesh);
+    }
+    // (K1 re-run) the district's NO-SHADOW twin: a ruin's wreckage (housegen ns boxes: rubble, remnants, scorch, burnt roof plates), the mix material and program,
+    // receives shadow, never casts (installCityCull leaves it alone: userData.noCast) - the depth pass no longer re-draws ~375 triangles per ruin house
+    const nsGeos = [];
+    for (const [k, v] of DUAL) for (const geo of (nsGroups[k] || [])) { geo.setAttribute("tki", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(v), 1)); nsGeos.push(geo); }
+    if (nsGeos.length) {
+      const mergedN = BufferGeometryUtils.mergeGeometries(nsGeos, false);
+      if (mergedN) {
+        const mesh = new THREE.Mesh(mergedN, dualStructMaterial());
+        mesh.castShadow = false; mesh.receiveShadow = true;
+        mesh.name = "structures:mixns" + (tag ? "@" + tag : ""); mesh.userData.lcPart = "structure"; mesh.userData.noCast = true;
+        if (tag) { mesh.userData.district = tag; if (distParts.has(tag)) mesh.userData.parts = distParts.get(tag); }
+        g.add(mesh);
+      }
     }
     for (const bkey in bset) {
       const color = bkey.slice(0, bkey.lastIndexOf("|"));
@@ -4948,7 +6182,7 @@ export async function buildMap(W, mapId) {
   // rather than the 8 the audit suggested, and off entirely on 'low', because in a
   // forward renderer each one is evaluated per fragment on every lit material and
   // the performance dimension is also below parity.
-  const NLAMP = (W.settings && W.settings.graphics === "low") ? 0 : 4;
+  const NLAMP = TIER_Q.lamps;                         // (0 on low, 4; ULTRA 6: the count is fixed for the match, so no program ever changes)
   if (NLAMP && lampPts.length) {
     const pool = [];
     for (let i = 0; i < NLAMP; i++) {
@@ -4998,15 +6232,134 @@ export async function buildMap(W, mapId) {
 }`);
       };
     }
+    if (LCFX) lcPatch(rmat, { LC_CLOUD: "", LC_AO: "" });                                // LC-74 / LC-41: the roads are ground too
     const rmesh = new THREE.Mesh(rmerged, rmat);
     rmesh.receiveShadow = true; rmesh.name = "roads";
     g.add(rmesh);
   }
 
   // ── instanced props from GLBs ─────────────────────────────────────────────
+  // WAVE 8: a tree whose crown would reach into a furnished house's upper storey (a palm 4 m from a two-storey wall put its fronds through the upstairs window:
+  // interiorcheck kit-agree, Isla Viva s1) is not planted. Crown radius x the tree's scale: palm 4.2 m, broadleaf 3.8 m, pine / birch 2.2 m; one-storey houses keep their trees (the crown
+  // overhangs the roof). Draw-then-reject: every tree was drawn before this filter, nothing else moves.
+  let hgTreesDropped = 0;
+  if (houses.length) {
+    const tall = houses.filter((H) => H.storeys >= 2);
+    for (const kind of ["palm", "tree", "pine", "birch"]) {
+      const l = props[kind]; if (!l || !l.length || !tall.length) continue;
+      const cr = kind === "palm" ? 4.2 : kind === "tree" ? 3.8 : 2.2;
+      props[kind] = l.filter((it) => {
+        const r = cr * (it.s || 1);
+        for (const H of tall) { const a = H.aabb; const dx = Math.max(a.min[0] - it.x, 0, it.x - a.max[0]), dz = Math.max(a.min[2] - it.z, 0, it.z - a.max[2]); if (dx * dx + dz * dz < r * r) { hgTreesDropped++; return false; } }
+        return true;
+      });
+    }
+  }
   const propStats = finalizeProps();   // slope rejection + ground fit for every placed prop (see the grounding block above scatterTrees)
+  if (houses.length) propStats.treesNearHouses = hgTreesDropped;
   if (yardInfo) propStats.yard = yardInfo;
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
+  // ── LC-38 foliage wind (medium and up) ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // A map-local CLONE of a foliage GLB material (the GLB's own material is shared with the menu diorama and the probes' reference meshes) with the wind
+  // vertex term (see LC_VERT_WIND): kind height, sway at the top, leaf flutter. Plus the cloud shadows. The near shadow casters get a depth material with the
+  // same sway, so a tree's shadow moves with its crown.
+  const WIND_K = { tree: [6.5, 0.42, 0.065], pine: [8, 0.34, 0.04], birch: [7, 0.46, 0.075], palm: [7, 0.6, 0.07], bush: [1.4, 0.09, 0.035], grass: [0.6, 0.12, 0] };   // [kind height m, crown sway m, leaf flutter m]
+  const windDefs = (kind) => { const w = WIND_K[kind]; return { LC_WIND: "", LC_WIND_H: w[0].toFixed(2), LC_WIND_A: w[1].toFixed(3), LC_WIND_FLUT: w[2].toFixed(3) }; };
+  const windMats = new Map(), windDepth = new Map();
+  function windMat(kind, mat) {
+    if (!LCFX || !WIND_K[kind] || !mat || Array.isArray(mat) || !mat.isMeshStandardMaterial) return mat;
+    const key = kind + "|" + mat.uuid;
+    let m = windMats.get(key);
+    if (!m) { m = mat.clone(); m.name = (mat.name || kind) + ":wind"; lcPatch(m, Object.assign({ LC_CLOUD: "" }, windDefs(kind))); windMats.set(key, m); }
+    return m;
+  }
+  function windDepthMat(kind) {
+    if (!LCFX || !WIND_K[kind]) return undefined;
+    let m = windDepth.get(kind);
+    if (!m) { m = lcPatch(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }), windDefs(kind)); windDepth.set(kind, m); }
+    return m;
+  }
+  // ── LC-89 per-instance culled prop draws ───────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Every prop kind was ONE InstancedMesh spanning the whole map (bounding radii 850-1,011 m): three can never cull it, so every tree, bush, rock, car and
+  // container of the map was drawn in every frame - 76-83 % of a ground frame's triangles (perf audit: 992 k of 1.31 M on Savanna, 1.19 M of 1.42 M on
+  // Deepwood), most of them behind the camera or fogged out. Chunking into cells buys that back with far MORE draw calls; instead each map-wide mesh stays
+  // the REFERENCE (invisible: every instance at its true matrix, index i = props[kind][i], what destroyProp, the placement / collision probes and the census
+  // read) and a DRAWN twin holds only the instances inside the camera frustum and within the tier's draw distance, compacted to the front of its instance
+  // buffer: the SAME one draw call per kind part, a fraction of the triangles. The cull re-runs only when it can matter (the camera moved > 2 m or turned
+  // > 3 degrees, the draw distance moved, a prop died, the near-tree swap changed), against the frustum widened by 4 m + 4 degrees so a recull is never
+  // late, and uploads only the live range. Distance: the tier's (low 600, medium 780, high 1,000, ULTRA 1,650 m), x up to 2.1 with height above the ground
+  // (the drop sees the map's forests to the horizon); the last 12 % of it shrinks an instance to nothing (no pop). Allocation-free per frame.
+  const culls = [];                                   // per kind: { list, parts: [{ draw, src, lod }], cx, cy, cz, cr, hid }
+  let cullDirty = true, cullFn = null;              // (cullFn: the updater; map.cullNow() runs it at once - a camera CUT (spectate, a probe's pinned view) need not wait a frame)
+  function addCulled(kind, list, ref, mat, lodPart) {
+    let K2 = null;
+    for (const q of culls) if (q.kind === kind) { K2 = q; break; }
+    if (!K2) { K2 = { kind, list, parts: [], cx: null, cy: null, cz: null, cr: null, hid: null }; culls.push(K2); }
+    const dg = ref.geometry.clone(); dg.userData = {};            // (no kind tag: the probes read the reference meshes only)
+    const draw = new THREE.InstancedMesh(dg, mat, list.length);
+    draw.castShadow = false; draw.receiveShadow = true; draw.frustumCulled = false; draw.count = 0;
+    draw.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    draw.name = "props:" + kind; draw.userData.lcCulled = kind;
+    g.add(draw);
+    ref.visible = false; ref.userData.lcReference = true;
+    K2.parts.push({ draw, arr: draw.instanceMatrix.array, src: ref.instanceMatrix.array.slice(0, list.length * 16), lod: !!lodPart, geo: ref.geometry });
+    return draw;
+  }
+  function finishCulls() {
+    const _sp = new THREE.Sphere(), _m = new THREE.Matrix4();
+    for (const K2 of culls) {
+      const n = K2.list.length;
+      K2.cx = new Float32Array(n); K2.cy = new Float32Array(n); K2.cz = new Float32Array(n); K2.cr = new Float32Array(n);
+      for (const pt of K2.parts) if (!pt.geo.boundingSphere) pt.geo.computeBoundingSphere();
+      for (let i = 0; i < n; i++) {
+        let cx = 0, cy = 0, cz = 0, r = -1;
+        for (const pt of K2.parts) {
+          _m.fromArray(pt.src, i * 16);
+          _sp.copy(pt.geo.boundingSphere).applyMatrix4(_m);
+          if (r < 0) { cx = _sp.center.x; cy = _sp.center.y; cz = _sp.center.z; r = _sp.radius; }
+          else { const d = Math.sqrt((_sp.center.x - cx) ** 2 + (_sp.center.y - cy) ** 2 + (_sp.center.z - cz) ** 2) + _sp.radius; if (d > r) r = d; }
+        }
+        K2.cx[i] = cx; K2.cy[i] = cy; K2.cz[i] = cz; K2.cr[i] = Math.max(0.5, r);
+      }
+    }
+    if (!culls.length) return;
+    const _f = new THREE.Frustum(), _pv = new THREE.Matrix4();
+    // the last cull's camera (x, y, z, fwd x, y, z, distance, aspect, fov) in a typed array: no boxed doubles in the closure; PL / CO: the planes, the counts
+    const LS = new Float64Array([1e9, 1e9, 1e9, 0, 0, 0, 0, 0, 0]), PL = new Float64Array(24), CQ = new Float64Array(6), CO = new Int32Array(2);
+    W._lcCullStats = { culls: 0, drawn: 0, total: 0, D: 0 };
+    trackUpdater(cullFn = () => {
+      const cam = W.camera;
+      if (!cam || !cam.matrixWorld) return;
+      const e = cam.matrixWorld.elements;
+      if (!cullDirty) {                               // (the every-frame test, as few float ops as possible: under 2 m and 3 degrees nothing re-culls; the distance only
+        const mx = e[12] - LS[0], my = e[13] - LS[1], mz = e[14] - LS[2];          //  changes with height, so it is re-derived on a re-cull only)
+        if (mx * mx + my * my + mz * mz < 4 && e[8] * LS[3] + e[9] * LS[4] + e[10] * LS[5] < -0.99863 && cam.aspect === LS[7] && cam.fov === LS[8]) return;
+      }
+      const px = e[12], py = e[13], pz = e[14], fx = -e[8], fy = -e[9], fz = -e[10];
+      const agl = py - Math.max(heightAt0(px, pz), waterY);
+      const af = agl <= 40 ? 1 : agl >= 312 ? 2.1 : 1 + (agl - 40) / 247;
+      const D = TIER_Q.propD * af;
+      cullDirty = false; LS[0] = px; LS[1] = py; LS[2] = pz; LS[3] = fx; LS[4] = fy; LS[5] = fz; LS[6] = D; LS[7] = cam.aspect; LS[8] = cam.fov;
+      _pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      _f.setFromProjectionMatrix(_pv);
+      for (let k = 0; k < 6; k++) { const pl = _f.planes[k]; PL[k * 4] = pl.normal.x; PL[k * 4 + 1] = pl.normal.y; PL[k * 4 + 2] = pl.normal.z; PL[k * 4 + 3] = pl.constant; }
+      CQ[0] = px; CQ[1] = py; CQ[2] = pz; CQ[3] = D * D; CQ[4] = D * 0.88; CQ[5] = 1 / (D * 0.12);
+      let drawnN = 0, totalN = 0;
+      for (let q = 0; q < culls.length; q++) {
+        const K2 = culls[q], parts = K2.parts;
+        totalN += K2.list.length;
+        lcCullKind(K2.list, K2.cx, K2.cy, K2.cz, K2.cr, K2.hid, parts, PL, CQ, CO);
+        const nOut = CO[0], nLod = CO[1];
+        for (let k = 0; k < parts.length; k++) {
+          const pt = parts[k], im = pt.draw.instanceMatrix, c = pt.lod ? nLod : nOut;
+          pt.draw.count = c;
+          im.clearUpdateRanges(); if (c) im.addUpdateRange(0, c * 16); im.needsUpdate = true;
+        }
+        drawnN += nOut;
+      }
+      const st = W._lcCullStats; st.culls++; st.drawn = drawnN; st.total = totalN; st.D = Math.round(D);
+    });
+  }
   // Which kinds collide. The SHAPE of every collider comes from the baked table (pushPropColliders); these radii are only the legacy
   // fallback for a client whose table did not load.
   const propColliderKinds = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2, barrel: 0.55 };
@@ -5073,9 +6426,42 @@ export async function buildMap(W, mapId) {
         const ox = (x0 + x1) / 2, oz = (z0 + z1) / 2, ex = (x1 - x0) / 2, ez = (z1 - z0) / 2;
         // a tilted rock's top is its PEAK, not the high corner of its outline: lift the box top by the tilt at the peak
         const pk = p.peak, pdy = tg && pk ? tg.tx * ((pk[0] * c + pk[1] * sn) * sc) + tg.tz * ((-pk[0] * sn + pk[1] * c) * sc) : 0;
-        colliders.push(mkCollider("box", it.x + x0, it.x + x1, yLo(ox, oz, ex, ez), it.y + top + pdy, it.z + z0, it.z + z1, -1, kind, idx, hp));
+        const y0 = yLo(ox, oz, ex, ez), y1 = p.byScale ? it.y + top + pdy : hullBoxTop(it, x0, x1, z0, z1, y0, it.y + top + pdy, p.hull, sc, c, sn, pk);
+        colliders.push(mkCollider("box", it.x + x0, it.x + x1, y0, y1, it.z + z0, it.z + z1, -1, kind, idx, hp));
       }
     }
+  }
+  // (R1 / colliders: collisioncheck phantom-rocks) a rock part whose drawn top is under the step height over the ground it stands on (a 0.5 m stone beside the big
+  // rock of a cluster at the cover / quarry scales 2-2.7) is a STEP - the mover's own rule (player.js blockedF: a box whose top is within STEP_UP of the feet is stepped
+  // onto) - but on a slope the feet beside its downhill side stand lower than the ground under it, so its full-height box was a knee-high wall there with no wall drawn
+  // (deepwood s7, every isolated rock walked at: 17 of 361 walks stopped 0.30-2.1 m from the nearest rock that is not a step). The box top of such a part is held to
+  // HULL_STEP over the lowest ground a capsule can stand on beside it (its box + HULL_RING, 8 points), so it is a step from every side, as drawn. Footprint unchanged
+  // (the AABB of the yawed hull); a part at or over HULL_STEP_PART above its ground keeps its full height (a wall, as drawn). HULL_STEP_PART sits 3 cm over STEP_UP: the
+  // probe reads a part's ground under its drawn band, this under the table hull (0.55: walls kept by a 1-3 cm misread came back as phantoms; 0.61: kept bodies lost their tall box,
+  // collisioncheck clip isla_viva rocks p95 0.12). Not fixed here: the table hull is every vertex of the part, the buried skirt too - at s >= 1.4 it stands 0.16-0.7 m outside
+  // the drawn rock above the ground (an outline per scale in the bake, as the trees' byScale, would close it).
+  // (R3 / rocks: rocksweep deepwood s2026 rock 43, 7 sprints 0.68-1.18 m inside the drawn rock) the MEAN ground under the table hull is not the ground the drawn top
+  // stands on: on a steep slope (deepwood s2026 rock 43, gradient 0.58, ring ground spanning 2.06 m) the hull mean sits on the uphill skirt, so a part drawn 0.79 m over the
+  // ground right under its own peak read 0.46 m "over its ground", was taken for a step, and its box top dropped 1.01 m - to 0.50 m UNDER the ground at its own centre: a
+  // buried box, and a drawn rock with no wall. A part is a step only if its drawn top is under HULL_STEP_PART over the ground under its PEAK as well (the drawn top is AT
+  // the peak: that is where a walker meets it); otherwise it keeps its full height, as before a89bee66. (No peak in the table: the box centre.)
+  const HULL_STEP = 0.52, HULL_STEP_PART = 0.58, HULL_RING = 0.5;
+  function hullBoxTop(it, x0, x1, z0, z1, y0, topY, hull, sc, c, sn, pk) {
+    let gm = 0;
+    for (const q of hull) { const u = q[0] * sc, w = q[1] * sc; gm += heightAt0(it.x + u * c + w * sn, it.z - u * sn + w * c); }
+    gm /= hull.length;
+    if (topY - gm >= HULL_STEP_PART) return topY;
+    const pu = pk ? pk[0] * sc : 0, pw = pk ? pk[1] * sc : 0;
+    const gp = pk ? heightAt0(it.x + pu * c + pw * sn, it.z - pu * sn + pw * c) : heightAt0(it.x + (x0 + x1) / 2, it.z + (z0 + z1) / 2);
+    if (topY - gp >= HULL_STEP_PART) return topY;
+    let gl = Infinity;
+    const ax = it.x + x0 - HULL_RING, bx = it.x + x1 + HULL_RING, az = it.z + z0 - HULL_RING, bz = it.z + z1 + HULL_RING, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    for (let a = 0; a < 8; a++) {
+      const x = a === 0 || a === 6 || a === 7 ? ax : a === 1 || a === 5 ? mx : bx, z = a < 3 ? az : a === 3 || a === 7 ? mz : bz;
+      const g = heightAt0(x, z);
+      if (g < gl) gl = g;
+    }
+    return Math.max(y0 + 0.05, Math.min(topY, gl + HULL_STEP));
   }
   function mergePartsByMaterial(meshes) {
     const byMat = new Map(), out = [];
@@ -5093,7 +6479,9 @@ export async function buildMap(W, mapId) {
   }
   const _upV = new THREE.Vector3(0, 1, 0), _qTilt = new THREE.Quaternion(), _vTilt = new THREE.Vector3(), _tAnch = new THREE.Matrix4();
   for (const kind in props) {
-    const list = props[kind];
+    // (R2 / world) the kind's seeded scatter, then its rotation-cover pieces: ONE instance list for the reference / drawn meshes and the colliders, so a cover
+    // piece's index i (its collider idx, its reference instance) is props[kind].length + its index in coverProps[kind]; rocks and cars are never destructible
+    const cov = coverProps[kind], list = cov && cov.length ? props[kind].concat(cov) : props[kind];
     if (!list.length) continue;
     const tk = PT && PT.kinds[kind];
     const url = W.assetBase + "assets/props/" + kind + ".glb";
@@ -5128,13 +6516,17 @@ export async function buildMap(W, mapId) {
       // D2 (Savanna only): a prop GLB made of several meshes that share ONE material (the car is 13 meshes of 7 materials, the rock cluster 4 of 1) is one InstancedMesh per
       // MESH - 13 draw calls for the cars alone in every view that sees the map-wide mesh. Meshes of one material are baked into one geometry (their GLB-local matrices
       // folded into the vertices), so a kind costs one call per material. Same triangles, same instance matrices, same colliders (those come from the baked table).
-      if (mapId === "ashgrid") meshes = mergePartsByMaterial(meshes);
+      meshes = mergePartsByMaterial(meshes);
       // (the coarse trunk is added AFTER the canopy: the first InstancedMesh of a kind carries the GLB's own geometry, which the placement census reads the kind's local frame from)
       // Wave 7b stage B: the same far LOD for the themed maps' heavy tree - Isla Viva's palm (one 3,134-triangle mesh: 551 k triangles of an Isla Viva s31337 street view, 47 % of the frame)
       // and Deepwood's pine canopy (1,613). Savanna's acacia is unchanged.
+      // R2 / world: Isla Viva's acacia ("tree", the same GLB as Savanna's) gets Savanna's trunk LOD too: drawn at its full 2,360-triangle trunk beyond the near ring it was 98 k
+      // triangles of the phone drop view over Coco Village (34 trees; perf_district_phone isla_viva s1 drop x1.200 against the x1.20 bar). The near-field proxies still draw the
+      // trees within the tier's near radius in full (and cast), exactly as on Savanna; no draw call is added (the coarse trunk takes the full trunk's place in the culled twin).
       const LOD_KIND = mapId === "ashgrid" ? "tree" : mapId === "isla_viva" ? "palm" : mapId === "deepwood" ? "pine" : null;
-      const isLod = (q) => kind === LOD_KIND && q.geometry.index && q.geometry.index.count / 3 > 1200;
-      if (kind === LOD_KIND) meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
+      const lodKind = kind === LOD_KIND || (mapId === "isla_viva" && kind === "tree");
+      const isLod = (q) => lodKind && q.geometry.index && q.geometry.index.count / 3 > 1200;
+      if (lodKind) meshes.sort((a, b) => (isLod(a) ? 1 : 0) - (isLod(b) ? 1 : 0));
       instRefs[kind] = [];
       // a kind whose ONLY mesh is the LOD part (the palm): a full-geometry twin with every instance goes first and is never drawn (visible = false) - it is the kind's instance list at the
       // GLB's own geometry (what the probes read a kind's frame and positions from, as the acacia's canopy is on Savanna); the coarse copy draws, the near proxies draw the near ones in full
@@ -5156,7 +6548,7 @@ export async function buildMap(W, mapId) {
         // D2 (Savanna): the acacia's trunk is 2,360 triangles x ~456 trees, all drawn in every view (1.07 M of a 2.2 M triangle frame). The map-wide mesh draws a COARSE copy
         // (~560 triangles); the trees within 110 m of the camera focus are drawn from the full geometry by the near-caster proxies below, and are hidden here while they are
         const lodPart = isLod(m);
-        const lodGeo = lodPart ? (mapId === "ashgrid" ? clusterSimplify(m.geometry, 24) : clusterSimplifyUV(m.geometry, 24)) : null;
+        const lodGeo = lodPart ? (kind === "tree" ? clusterSimplify(m.geometry, 24) : clusterSimplifyUV(m.geometry, 24)) : null;   // (the acacia trunk: Savanna's own coarse copy on every map)
         if (lodGeo && m.geometry.userData) lodGeo.userData.kind = m.geometry.userData.kind;                   // (the same kind tag as the geometry it stands in for)
         const inst = new THREE.InstancedMesh(lodGeo || m.geometry, m.material, list.length);
         // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
@@ -5190,7 +6582,9 @@ export async function buildMap(W, mapId) {
         inst.instanceMatrix.needsUpdate = true;
         g.add(inst);
         instRefs[kind].push(inst);
-        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats, lo: lodPart ? inst : null, hid: new Set() });
+        const drawMat = windMat(kind, m.material);                                 // LC-38 (medium and up: a wind clone; low: the GLB's own)
+        addCulled(kind, list, inst, drawMat, lodPart);                               // LC-89: inst is now the invisible reference, a culled twin draws
+        if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: drawMat, mats, lo: lodPart ? inst : null, hid: new Set() });
       }
     }
     // colliders for solid props
@@ -5214,16 +6608,19 @@ export async function buildMap(W, mapId) {
   // buy the same triangles with far MORE colour-pass calls, on a frame the
   // scorecard proves is draw-call bound (64x36 costs the same as 1280x720).
   {
-    const NEAR_N = 64, NEAR_R2 = 110 * 110;
+    const NEAR_N = TIER_Q.nearN, NEAR_R2 = TIER_Q.nearR * TIER_Q.nearR;     // (64 within 110 m; high 72 / 125 m, ULTRA 112 / 165 m)
     const nearCasters = shadowSrc.map((ref) => {
       const im = new THREE.InstancedMesh(ref.geo, ref.mat, NEAR_N);
-      im.castShadow = true; im.receiveShadow = !!ref.lo; im.count = 0;       // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did)
+      // (a near tree that replaces its coarse twin keeps receiving shadow, as that twin did - EXCEPT Isla Viva's acacia trunk (R2 / world re-check): its LOD is new in R2
+      // and before it the near trunk was drawn last by a non-receiving proxy; receiving here darkened the near trunks ~26 % in red. The near view stays as it was.)
+      im.castShadow = true; im.receiveShadow = !!ref.lo && !(mapId === "isla_viva" && ref.kind === "tree"); im.count = 0;
+      const wd = windDepthMat(ref.kind); if (wd) im.customDepthMaterial = wd;     // LC-38: its shadow sways with its crown
       im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
       g.add(im);
       // Wave 7b stage B: a LOD kind on a themed map also draws its STREET trees near the focus in full (the street palms / pines cast no near-field shadow, so the casters skip them;
       // without this they would stay coarse up close). Its own InstancedMesh, never a caster; a clone of the geometry without the kind tag (the probes read only the map-wide meshes).
       let street = null;
-      if (ref.lo && mapId !== "ashgrid") {
+      if (ref.lo && mapId !== "ashgrid" && ref.kind === cityTree) {                 // (only the town tree has street instances: Isla Viva's acacia LOD needs none)
         const sg = ref.geo.clone(); sg.userData = {};
         street = new THREE.InstancedMesh(sg, ref.mat, NEAR_N);
         street.castShadow = false; street.receiveShadow = true; street.count = 0; street.frustumCulled = false; street.name = "near-street:" + ref.kind;
@@ -5232,7 +6629,6 @@ export async function buildMap(W, mapId) {
       return { im, ref, street };
     });
     let _fx = 1e9, _fz = 1e9;
-    const _tinyM = new THREE.Matrix4();
     W._foliageDirty = true;
     if (nearCasters.length) trackUpdater(() => {
       const f = W._camFocus || W.player; if (!f) return;
@@ -5259,17 +6655,17 @@ export async function buildMap(W, mapId) {
         nc.im.count = n;
         nc.im.instanceMatrix.needsUpdate = true;
         if (nc.street) { nc.street.count = ns; nc.street.instanceMatrix.needsUpdate = true; }
-        if (lo) {                                  // the coarse map-wide twin hides exactly the trees the near proxy draws in full
-          const prev = nc.ref.hid;
-          for (const i of prev) if (!cur.has(i) && !list[i].dead) lo.setMatrixAt(i, mats[i]);
-          for (const i of cur) if (!prev.has(i)) { _tinyM.copy(mats[i]); const e = _tinyM.elements; for (let k = 0; k < 11; k++) if (k !== 3 && k !== 7) e[k] *= 1e-4; lo.setMatrixAt(i, _tinyM); }       // (hidden IN PLACE: the same position, a ten-thousandth of the size - never at the origin)
+        if (lo) {                                  // the coarse twin skips exactly the trees the near proxy draws in full
+          // (LC-89: the map-wide mesh is the invisible REFERENCE now and keeps every true matrix; the culled draw mesh of the kind reads this set and leaves them out)
           nc.ref.hid = cur;
-          lo.instanceMatrix.needsUpdate = true;
+          for (const K2 of culls) if (K2.kind === nc.ref.kind) K2.hid = cur;
+          cullDirty = true;
         }
       }
     });
   }
-  if (city) { await placeCityKit(); installCityCull(); }
+  finishCulls();                                     // LC-89: the culled twins' instance spheres + their updater (after the near-caster swap set exists)
+  if (city) { await placeCityKit(); installCityCull(); await buildHouseFurniture(); }
   await yieldPhase();                                // phase 3/3 done
 
   // ── ground clutter ────────────────────────────────────────────────────────
@@ -5281,7 +6677,7 @@ export async function buildMap(W, mapId) {
   // Refreshed on a timer rather than per frame, and only when the camera moved.
   {
     const cityMask = city ? buildCityMask() : null;
-    const CL_N = 1400, CL_R = 55;
+    const CL_N = TIER_Q.clN, CL_R = TIER_Q.clR;         // (1,400 tufts in 55 m; high 1,700 / 60 m, ULTRA 2,900 / 78 m)
     const q1 = new THREE.PlaneGeometry(0.55, 0.45); q1.translate(0, 0.225, 0);
     const q2 = q1.clone(); q2.rotateY(Math.PI / 2);
     const clGeo = BufferGeometryUtils.mergeGeometries([q1, q2], false);
@@ -5294,6 +6690,7 @@ export async function buildMap(W, mapId) {
     // renders black.
     clGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(clGeo.attributes.position.count * 3).fill(1), 3));
     const clMat = new THREE.MeshStandardMaterial({ map: clutterTex(), alphaTest: 0.5, roughness: 1, metalness: 0, side: THREE.DoubleSide, vertexColors: true });
+    if (LCFX) lcPatch(clMat, Object.assign({ LC_CLOUD: "", LC_AO: "" }, windDefs("grass")));     // LC-38 the tufts sway, LC-74 / LC-41 like the ground under them
     const clutter = new THREE.InstancedMesh(clGeo, clMat, CL_N);
     clutter.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CL_N * 3), 3);
     clutter.castShadow = false; clutter.receiveShadow = false;
@@ -5302,6 +6699,7 @@ export async function buildMap(W, mapId) {
     const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cs = new THREE.Vector3(), _cp = new THREE.Vector3();
     const _cy = new THREE.Vector3(0, 1, 0), _hide = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
     const _clC = [0, 0, 0];                           // colorAt out (a rebuild colours up to 1,400 tufts)
+    const CLK = 0.82 * GRADE.ground;
     // The tufts used to be a golden-angle spiral bolted to the CAMERA: instance i
     // always sat at (clX + cos(i*GA)*r, ...), so the offset depended only on i and
     // every tuft was rigidly parented to the camera anchor. Re-snapping that
@@ -5315,7 +6713,7 @@ export async function buildMap(W, mapId) {
     // change as the camera moves. A rebuild only adds cells entering the ring and
     // drops cells leaving it, and the rim scale-fade makes even that sub-pixel.
     const CELL = 2.6;                                 // ~0.148 tufts/m^2, matches the old density
-    const FADE0 = 40;                                 // full size to here, shrink to 0 by CL_R
+    const FADE0 = CL_R - 15;                          // full size to here, shrink to 0 by CL_R (40 m at the default 55)
     let clT = 9, clAX = 1e9, clAZ = 1e9;
     trackUpdater((dt) => {
       clT += dt;
@@ -5352,7 +6750,7 @@ export async function buildMap(W, mapId) {
           _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, h2 * 6.283), _cs.set(s, s, s));
           clutter.setMatrixAt(n, _cm);
           const c = colorAt(mapId, y, x, z, seed, _clC);
-          clutter.instanceColor.setXYZ(n, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // contact darkening
+          clutter.instanceColor.setXYZ(n, c[0] * CLK, c[1] * CLK, c[2] * CLK);   // contact darkening x the ground grade (the tufts match the darkened ground)
           n++;
         }
       }
@@ -5382,7 +6780,7 @@ export async function buildMap(W, mapId) {
         for (const part of mergePartsByMaterial(meshes)) {
           const ig = part.geometry.clone();                                              // (a copy of its own, tagged as nothing: a sky-island tree is not a GROUND prop to the placement gates)
           ig.userData = {};
-          const inst = new THREE.InstancedMesh(ig, part.material, list.length);
+          const inst = new THREE.InstancedMesh(ig, windMat(kind, part.material), list.length);     // (LC-38: island trees sway too)
           inst.name = "island:" + kind;
           for (let i = 0; i < list.length; i++) {
             const t = list[i], s2 = (baseH2 / Math.max(0.001, sz2.y)) * t.s;
@@ -5413,6 +6811,26 @@ export async function buildMap(W, mapId) {
     } catch (e) { /* crystal GLB may not exist yet — islands still work */ }
   }
 
+  // ── LC-41 baked contact AO (medium and up) ────────────────────────────────────────────────────────────────────────
+  // Nothing darkened the ground where a wall, a rock, a car or a container stands on it: every base sat on fully lit ground (GTAO was cut: 268 -> 484
+  // calls). Baked once per match instead: every box collider that stands ON the ground (its foot within 0.35 m of the terrain, at least 0.5 m tall) is
+  // rasterised into a 2048 x 2048 occupancy mask over the map (0.78 m a texel, area-weighted at its edges, taller = denser up to 2.5 m), blurred by two
+  // running-sum box passes (~1.6 m), and the ground materials (terrain, roads, town ground, grass tufts) take it as AO: the sky fill under it x (1 - 0.55 ao),
+  // the sun x (1 - 0.2 ao). One R8 texture (4 MB + mips), one fetch per ground fragment, ZERO draw calls. A function of the colliders only: every client and
+  // every seed replay bakes the same mask.
+  if (LCFX) {
+    const _ao0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const N = 2048, gyc = new Float32Array(colliders.length);
+    for (let ci = 0; ci < colliders.length; ci++) { const c = colliders[ci]; gyc[ci] = c.dead || c.kind !== "box" ? 0 : heightAt0((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2); }
+    const { px, nAO, rasterMs } = bakeContactAO(colliders, gyc, N, SIZE);
+    const at = new THREE.DataTexture(px, N, N, THREE.RedFormat, THREE.UnsignedByteType);
+    at.minFilter = THREE.LinearMipmapLinearFilter; at.magFilter = THREE.LinearFilter; at.generateMipmaps = true; at.wrapS = at.wrapT = THREE.ClampToEdgeWrapping; at.needsUpdate = true;
+    lcOwn(at);
+    LCU.uLcAO.value = at;
+    LCU.uLcAOK.value.set(1 / SIZE, 0.5, 0.55, 0.2);
+    W._lcAOStats = { colliders: nAO, rasterMs, ms: Math.round(((typeof performance !== "undefined" ? performance.now() : Date.now()) - _ao0) * 10) / 10 };
+  }
+
   // ── static collider spatial hash ──────────────────────────────────────────
   // queryColliders is the hottest function in the game: 423 calls a frame were
   // measured (movement support + wall tests for 50 actors, bullets, bot sight and
@@ -5427,7 +6845,10 @@ export async function buildMap(W, mapId) {
   // WAVE 7: Savanna's towns put 60-100 colliders into a 16 m cell (a house is ~20 boxes): every query returned them all and every caller slab-tested them. With a
   // city the cell is 8 m (a quarter of the candidates, the same colliders, the same insertion order inside a cell); the other maps keep 16 m, so their
   // nearest-hit tie-breaks (cells x-major, then insertion order) are exactly what they were.
-  const CELL = city ? 8 : 16;
+  // WAVE 8: the furnished houses hold 60-680 colliders each (ashgrid ~61 k in all, was ~10 k): with 8 m cells a 0.6 m query at a room's centre returned 88
+  // colliders on average (max 412), with 4 m cells 40 (max 177) - the mover, bullets and bots slab-test every one they get. Wide queries visit more cells
+  // (r 16: 949 entries vs 782) - lane I2's bots use queryCollidersY / hasCollidersNear for those.
+  const CELL = city ? (houses.length ? 4 : 8) : 16;
   const chash = new Map();
   const cKey = (cx, cz) => (cx + 8192) * 16384 + (cz + 8192);
   colliders.forEach((c, idx) => {
@@ -5449,23 +6870,108 @@ export async function buildMap(W, mapId) {
   //   Same colliders, same order.
   const qOut = [];
   const Q_EMPTY = Object.freeze([]);
-  function queryColliders(x, z, r, out) {
+  // WAVE 8 (lane I2's proposal, lane I1): only the colliders whose box meets the query SQUARE are returned (a cell holds whole wall runs, a house's furniture;
+  // every caller's own test needs a collider within its reach, so the answer of every caller is unchanged - lane I2: whole-match fingerprints identical on 3 maps).
+  // (Wave 8 fix round, lane K1) an optional vertical band: queryColliders(x, z, r, out, y0, y1) returns only the colliders whose span meets [y0, y1] (the
+  // mover's capsule band, a bullet segment's height range). A furnished house stacks two or three storeys, an attic and its roof over the same square metres:
+  // a ground-floor mover query got every storey's walls, slabs, gables and furniture (Deepwood: 23 per r 1.6 query at a room, 11 of them on the actor's storey;
+  // houseload collider-load-frame x1.371). Without y0 / y1 the answer is exactly what it was.
+  function queryColliders(x, z, r, out, y0, y1) {
+    if (y0 !== undefined) return queryCollidersY(x, z, r, y0, y1, out || qOut);
     const o = out || qOut;
     let n = 0;
     const stamp = ++qStamp;
-    const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
-    const z0 = Math.floor((z - r) / CELL), z1 = Math.floor((z + r) / CELL);
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
       const l = chash.get(cKey(cx, cz));
       if (!l) continue;
       for (let i = 0; i < l.length; i++) {
         const c = l[i];
-        if (!c.dead && c._qs !== stamp) { c._qs = stamp; o[n++] = c; }
+        if (!c.dead && c._qs !== stamp && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) { c._qs = stamp; o[n++] = c; }
       }
     }
     if (n === 0 && !out) return Q_EMPTY;
     if (o.length !== n) o.length = n;
     return o;
+  }
+
+  // WAVE 8 (lane I1, for lane I2's bots and anyone else whose query covers whole houses): a furnished house holds 60-680 colliders (walls, slabs, stairs, roof
+  // planks, furniture) in a few cells, so a 16 m query returns houses whole. Two cheaper forms, same cells, same order, same scratch contract as queryColliders:
+  //   queryCollidersY(x, z, r, y0, y1, out?)  only the colliders whose vertical span meets [y0, y1] (one storey: [feet - 0.6, feet + 2.4]);
+  //   hasCollidersNear(x, z, r)               true at the FIRST live collider of the cells the disc touches (an emptiness test returns nothing).
+  const qOutY = [];
+  function queryCollidersY(x, z, r, y0, y1, out) {
+    const o = out || qOutY;
+    let n = 0;
+    const stamp = ++qStamp;
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const l = chash.get(cKey(cx, cz));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (!c.dead && c._qs !== stamp && c.maxY >= y0 && c.minY <= y1 && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) { c._qs = stamp; o[n++] = c; }
+      }
+    }
+    if (n === 0 && !out) return Q_EMPTY;
+    if (o.length !== n) o.length = n;
+    return o;
+  }
+  function hasCollidersNear(x, z, r) {                // == queryColliders(x, z, r).length > 0, without building the list
+    const qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    const x0 = Math.floor(qx0 / CELL), x1 = Math.floor(qx1 / CELL);
+    const z0 = Math.floor(qz0 / CELL), z1 = Math.floor(qz1 / CELL);
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
+      const l = chash.get(cKey(cx, cz));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) return true; }
+    }
+    return false;
+  }
+  // WAVE 8: which house / storey / room a point is in (bots' "which room and floor am I on", loot, the footstep surface, the gates). houseAt(x, z, y?) ->
+  // { house (index into map.houses), id, floor, room (a rooms[] index of that house, -1 = inside the walls but in no room: a stair strip's landing / a wall),
+  // y (that storey's floor), surf ("wood" | "concrete") } or null outside every house. y = the feet (default: the ground storey). Rooms by their cell rects.
+  const HOUSE_CELL = 16, houseHash = new Map(), houseFloors = [];
+  const HG_SURF = { floor_wood: "wood", plank: "wood", plank_in: "wood", wood: "wood" };      // a floor slab's top material -> the footstep surface (else "concrete")
+  houses.forEach((H, hi) => {
+    const a = H.aabb, i0 = Math.floor(a.min[0] / HOUSE_CELL), i1 = Math.floor(a.max[0] / HOUSE_CELL), j0 = Math.floor(a.min[2] / HOUSE_CELL), j1 = Math.floor(a.max[2] / HOUSE_CELL);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const k = cKey(i, j); if (!houseHash.has(k)) houseHash.set(k, []); houseHash.get(k).push(hi); }
+    // the floor slabs (their walkable tops): [x0, z0, x1, z1, top, surf]
+    const sl = [];
+    for (const b of H.boxes) if (b.p === "slab" && b.c) { const pe = H.palette[b.f[2]]; sl.push([b.min[0], b.min[2], b.max[0], b.max[2], b.max[1], HG_SURF[pe && pe.mat] || "concrete"]); }
+    houseFloors.push(sl);
+  });
+  const _ha = { house: -1, id: "", floor: 0, room: -1, y: 0, surf: "concrete" };
+  function houseAt(x, z, y) {
+    const l = houseHash.get(cKey(Math.floor(x / HOUSE_CELL), Math.floor(z / HOUSE_CELL)));
+    if (!l) return null;
+    for (let k = 0; k < l.length; k++) {
+      const H = houses[l[k]], fl = houseFloors[l[k]];
+      // inside the walls' outer faces: one of the house's floor slabs is under the point
+      let best = -Infinity, surf = null;
+      for (let i = 0; i < fl.length; i++) {
+        const q = fl[i];
+        if (x < q[0] || x > q[2] || z < q[1] || z > q[3]) continue;
+        if (y == null) { if (surf === null || q[4] < best) { best = q[4]; surf = q[5]; } }                 // (no feet given: the ground storey)
+        else if (q[4] <= y + 0.35 && (surf === null || q[4] > best)) { best = q[4]; surf = q[5]; }       // (the highest floor at or under the feet)
+      }
+      if (surf === null) continue;
+      let f = 0;
+      for (let i = 0; i < H.floors.length; i++) if (Math.abs(H.floors[i].y - best) < 0.2) f = i;
+      let room = -1;
+      for (let i = 0; i < H.rooms.length && room < 0; i++) {
+        const R = H.rooms[i];
+        if (R.floor !== f) continue;
+        for (const r of R.rects) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) { room = i; break; }
+      }
+      _ha.house = l[k]; _ha.id = H.id; _ha.floor = f; _ha.room = room; _ha.y = H.floors[f].y; _ha.surf = surf;
+      return _ha;
+    }
+    return null;
   }
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
@@ -5480,9 +6986,31 @@ export async function buildMap(W, mapId) {
     }
     return false;
   }
-  function losBlocked(ax, ay, az, bx, by, bz) {
+  // C-SMOKE (LC-14, P2-C side): W.smokes = [{x, y, z, r, t0, t1}] (weapons.js keeps it; fx.js draws the clouds). A sight line whose CHORD through a live
+  // smoke sphere (t0 <= W.t < t1) is longer than SMOKE_SEE m is blocked - through the middle of a cloud you see nothing, a line grazing its rim (a chord
+  // under 1.5 m: the thin fringe fx draws) still sees. Two actors standing inside the same cloud closer than that still see each other. Tested FIRST: a
+  // handful of spheres costs a few multiplies against the collider sweep below. `noSmoke` (7th argument) skips it: an explosion's splash is not stopped by
+  // smoke (weapons.js blastBlocked should pass true - integrator note), nor is a sound.
+  const SMOKE_SEE = 1.5;
+  function smokeBlocks(ax, ay, az, dx, dy, dz, len) {
+    const S2 = W.smokes;
+    if (!S2 || !S2.length || !(len > 0)) return false;
+    const t = W.t, il = 1 / len, ux = dx * il, uy = dy * il, uz = dz * il;
+    for (let i = 0; i < S2.length; i++) {
+      const s = S2[i];
+      if (!s || !(t >= s.t0 && t < s.t1) || !(s.r > 0)) continue;
+      const ox = s.x - ax, oy = s.y - ay, oz = s.z - az, p = ox * ux + oy * uy + oz * uz;
+      const q2 = ox * ox + oy * oy + oz * oz - p * p, r2 = s.r * s.r;
+      if (q2 >= r2) continue;
+      const hcl = Math.sqrt(r2 - q2), t0 = Math.max(0, p - hcl), t1 = Math.min(len, p + hcl);
+      if (t1 - t0 > SMOKE_SEE) return true;
+    }
+    return false;
+  }
+  function losBlocked(ax, ay, az, bx, by, bz, noSmoke) {
     const dx = bx - ax, dy = by - ay, dz = bz - az;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (!noSmoke && W.smokes && W.smokes.length && smokeBlocks(ax, ay, az, dx, dy, dz, len)) return true;
     // Terrain still needs sampling (it is a heightfield, not a solid), but
     // colliders are now SWEPT: the old point-sampled containment test shared the
     // bullet path's flaw, so a bot could see — and shoot — through any wall its
@@ -5562,6 +7090,7 @@ export async function buildMap(W, mapId) {
     const lst = props[col.prop];
     if (lst && lst[col.idx]) lst[col.idx].dead = true;
     W._foliageDirty = true;
+    cullDirty = true;                                // LC-89: the culled twin drops it on its next pass
   }
 
   const lootAll = lootPoints.concat(chestPoints);
@@ -5571,21 +7100,99 @@ export async function buildMap(W, mapId) {
   // uses (deepwood's northern zone, maps.js colorAt), so what you hear always
   // matches what you see, and falls back to the map's base ground otherwise.
   // Structures are checked first — standing on a deck or a roof reads as wood.
-  const BASE_SURF = { isla_viva: "grass", ashgrid: "concrete", deepwood: "grass" };
-  function surfaceAt(x, z) {
-    const gy = heightAt0(x, z);
-    const near = queryColliders(x, z, 0.6);
-    for (const c of near) {
-      // only count something we could actually be standing ON, not a wall beside us
-      if (c.maxY > gy + 0.35 && c.maxY < gy + 6) return "wood";
+  // LC-52 (P2-C): the footstep surface used to be the map's base ground unless ANY collider within 0.6 m rose 0.35-6 m over the ground - a wall, a tree
+  // trunk or a crate BESIDE the player read as "wood" (342 of 355 wood readings in the audit census), and all of Savanna read "concrete" (3,366 / 0 grass)
+  // though its west is a grass savanna. Now, in order:
+  //   1. a furnished house floor (Wave 8 houseAt, upstairs by the feet height);
+  //   2. a collider the feet stand ON: its footprint contains (x, z) and its top is within 0.3 m below / 0.25 m above the feet (no feet given: a top
+  //      0.35-6 m over the ground, the old rule but footprint-exact) - its material (colSurf: from the texture kind / tint it is drawn with), a prop's by
+  //      its kind (rocks stone; car, container, barrel metal), a sky island's top grass;
+  //   3. what is LAID on the ground there (the 1 m raster: asphalt / paving = concrete, yards and fields = dirt, a park = grass);
+  //   4. shallow water over the terrain = "water";
+  //   5. the terrain's own biome zone, the SAME tests colorAt / splatAt tint and texture the ground with: beach / dry-wash / desert sand = "sand",
+  //      volcano basalt, bluffs and rocky tops = "stone", Deepwood's snow = "snow", its river mud = "dirt", else "grass".
+  // Labels: wood, stone, concrete, metal, dirt, sand, snow, grass, water (audio.js keys wood / snow / stone + concrete today; the rest play its grass step
+  // until lane audio adds samples - integrator note). Allocation-free (queryColliders fills a reused array).
+  const PROP_SURF = { rocks: "stone", car: "metal", container: "metal", barrel: "metal", tree: "wood", palm: "wood", pine: "wood", birch: "wood" };
+  const _sfCols = [], _sfW = [0, 0, 0];
+  function surfaceAt(x, z, y) {
+    if (houses.length) { const h = houseAt(x, z, y); if (h) return h.surf; }          // (WAVE 8: a house floor: its boards or its tiles / concrete, upstairs when the caller gives the feet)
+    const gy = heightAt0(x, z), hasY = typeof y === "number" && y === y;
+    const near = queryColliders(x, z, 0.05, _sfCols);
+    let best = null, bestTop = -Infinity;
+    for (let i = 0; i < near.length; i++) {
+      const c = near[i];
+      if (c.dead || x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+      let top = c.maxY;
+      if (c.kind === "ramp") {                                     // the ramp's surface under (x, z): dir 0 +X, 1 -X, 2 +Z, 3 -Z rises
+        const f = c.dir === 0 ? (x - c.minX) / (c.maxX - c.minX) : c.dir === 1 ? (c.maxX - x) / (c.maxX - c.minX) : c.dir === 2 ? (z - c.minZ) / (c.maxZ - c.minZ) : (c.maxZ - z) / (c.maxZ - c.minZ);
+        top = c.minY + (c.maxY - c.minY) * Math.max(0, Math.min(1, f));
+      }
+      const on = hasY ? (top >= y - 0.3 && top <= y + 0.25) : (top > gy + 0.35 && top < gy + 6);
+      if (on && top > bestTop) { bestTop = top; best = c; }
     }
-    if (mapId === "deepwood") {
-      const edge = 0;
-      const snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));
-      if (snow > 0.35) return "snow";
+    if (best) return colSurf.get(best) || (best.prop != null ? (PROP_SURF[best.prop] || "stone") : (city && mapId === "ashgrid" ? "concrete" : "wood"));
+    if (K.water && gy < waterY - 0.05 && (!hasY || y <= waterY + 0.3)) return "water";             // (wading: the feet are at the waterline, above the sea bed; before the raster - a sunken lot edge is still water)
+    if (!hasY || y <= gy + 0.6) {
+      const i = Math.floor(x + HALF), j = Math.floor(z + HALF);
+      if (i >= 0 && j >= 0 && i < SGN && j < SGN) { const k = surfG[j * SGN + i]; if (k) return SG_NAMES[k]; }
     }
-    return BASE_SURF[mapId] || "grass";
+    // the bare terrain: the DOMINANT layer of the splat the ground is textured with (splatAt: grass/rock, beach, sand - the same weights colorAt blends
+    // its tint by), so the step sounds like the ground looks; then the zones colorAt paints outright (basalt, bluffs, rocky tops, river mud)
+    const w = splatAt(mapId, gy, x, z, seed, _sfW);
+    if (mapId === "isla_viva") return gy > 34 ? "stone" : w[1] >= 0.5 ? "sand" : "grass";
+    if (mapId === "ashgrid") return gy > 28 ? "stone" : w[2] >= 0.5 ? "sand" : "grass";
+    if (mapId === "deepwood") return w[1] >= 0.5 ? "snow" : gy < 0.6 ? "dirt" : gy > 44 ? "stone" : "grass";
+    return "grass";
   }
+  // LC-12 (P2-C export for lane bots): how hidden a point is INSIDE A BUSH, 0 (in the open) .. 1 (at a bush's heart). Bushes have no collider (adding one
+  // would change collision and the baked collider table), so bot sight asks this instead: each bush's drawn bounds (its instance matrix x its mesh's box,
+  // every part) as the ellipsoid inscribed in that box; conceal = 2 x (1 - q) clamped to 0..1, q = the point's normalised squared distance from the centre
+  // (so the inner ~70 % of the bush volume reads >= 0.5). y = the point's height (a chest / eye); omitted = 0.7 m over the ground (a crouched chest). A
+  // static 8 m hash, built once per match from the placed bushes; allocation-free.
+  const CONCEAL_CELL = 8;
+  let concealHash = null;
+  function buildConceal() {
+    const list = props.bush || [], refs = instRefs.bush || [];
+    const n = list.length;
+    const B = new Float32Array(n * 6), box = new THREE.Box3(), tb = new THREE.Box3(), m = new THREE.Matrix4();
+    let nOk = 0;
+    const cells = new Map();
+    for (let i = 0; i < n; i++) {
+      box.makeEmpty();
+      for (const inst of refs) {
+        if (!inst.geometry.boundingBox) inst.geometry.computeBoundingBox();
+        inst.getMatrixAt(i, m);
+        tb.copy(inst.geometry.boundingBox).applyMatrix4(m);
+        box.union(tb);
+      }
+      if (box.isEmpty()) continue;
+      B[i * 6] = box.min.x; B[i * 6 + 1] = box.min.y; B[i * 6 + 2] = box.min.z; B[i * 6 + 3] = box.max.x; B[i * 6 + 4] = box.max.y; B[i * 6 + 5] = box.max.z;
+      const ci0 = Math.floor((box.min.x + HALF) / CONCEAL_CELL), ci1 = Math.floor((box.max.x + HALF) / CONCEAL_CELL);
+      const cj0 = Math.floor((box.min.z + HALF) / CONCEAL_CELL), cj1 = Math.floor((box.max.z + HALF) / CONCEAL_CELL);
+      for (let cj = cj0; cj <= cj1; cj++) for (let ci = ci0; ci <= ci1; ci++) { const key = cj * 1024 + ci; let a = cells.get(key); if (!a) cells.set(key, a = []); a.push(i); }
+      nOk++;
+    }
+    concealHash = { B, cells, n: nOk };
+  }
+  function concealAt(x, z, y) {
+    if (!concealHash) return 0;
+    const a = concealHash.cells.get(Math.floor((z + HALF) / CONCEAL_CELL) * 1024 + Math.floor((x + HALF) / CONCEAL_CELL));
+    if (!a) return 0;
+    const py = typeof y === "number" && y === y ? y : heightAt0(x, z) + 0.7, B = concealHash.B;
+    let best = 0;
+    for (let k = 0; k < a.length; k++) {
+      const o = a[k] * 6;
+      if (x < B[o] || x > B[o + 3] || z < B[o + 2] || z > B[o + 5] || py < B[o + 1] || py > B[o + 4]) continue;
+      const hx = (B[o + 3] - B[o]) / 2, hy = (B[o + 4] - B[o + 1]) / 2, hz = (B[o + 5] - B[o + 2]) / 2;
+      const ux = (x - B[o] - hx) / hx, uy = (py - B[o + 1] - hy) / hy, uz = (z - B[o + 2] - hz) / hz, q = ux * ux + uy * uy + uz * uz;
+      const v = 2 * (1 - q);
+      if (v > best) best = v >= 1 ? 1 : v;
+      if (best === 1) break;
+    }
+    return best;
+  }
+  buildConceal();                                    // LC-12: the bushes' drawn bounds (the reference meshes' true matrices; here, after its consts)
 
   // D2 (squad fallback, with lane D1's net.js): after the map is built, a page that fell back says so on W.mapFallback { from, to, reason } (from = the version it advertised,
   // to = the version it really built: the Wave-6 layout is generator version 2) and on the "mapFallback" event; net.js leaves the squad room for such a client
@@ -5595,13 +7202,18 @@ export async function buildMap(W, mapId) {
   }
   return {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
-    heightAt: heightAt0, groundAt: heightAt0, surfaceAt,
+    heightAt: heightAt0, groundAt: heightAt0, surfaceAt, concealAt,
     colliders, queryColliders, destroyProp,
+    // WAVE 8: the furnished houses (housegen records as built: rooms, doors, stairs, nav links, loot / chest points, furniture, cols = [first collider, structure
+    // colliders, all], roofRamps = the collider indices of the pitched roofs' planks - a roof you land on, not a stair) and the queries over them
+    houses, houseAt, queryCollidersY, hasCollidersNear,
     // the placed prop lists ({x, y, z, s, ry, ...} per kind: the ANCHOR, the final base y, the seeded scale and yaw) and what the slope
     // limits dropped - read-only, for the placement / collision gates (_harness) and for debugging
-    propInstances: props, propStats,
+    propInstances: props, propStats, coverInstances: coverProps,           // (R2 / world: the rotation cover, drawn and collided after its kind's props)
     lootPoints: lootAll, pois, portals,
+    landmark: lookout,                                                          // LC-90: Deepwood's fire lookout { x, z, y, top } (null elsewhere)
     randomGroundPos, losBlocked,
+    cullNow: () => { if (cullFn) { cullDirty = true; cullFn(); } },          // LC-89: re-cull the prop twins against W.camera now (after a camera cut)
     minimap: mm, themeColor: K.themeColor,
     terrain, water: mapWater, sky: K.sky,
     // C-PAD (Wave 6): what the ground is made of - read-only, for the gates and for debugging. `genVersion` names the world GENERATOR: 1 = the
@@ -5611,7 +7223,7 @@ export async function buildMap(W, mapId) {
     fallback: cityFallback,                                                     // null, or { reason, genVersion, wanted }: the towns did not load, this is the Wave-6 Savanna
     // WAVE 7: the Savanna city as built (null on the other maps): towngen's layout (towns, compounds, links, stats), the citykit list and what it placed, the
     // decals - read-only, for the gates (citycheck, placementcheck, perf_district) and for debugging
-    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog } : null,
+    city: city ? { version: city.TG.VERSION, layout: city.lay, looks: city.looks, skyline: city.skyline, landmarks: city.landmarks, stats: city.stats, kit: city.kit, kitStats: city.kitStats, paintStats: city.paintStats, lights: city.lights, footprints: cityBld, roads: cityRoadLog, furniture: city.furniture || null, houseVersion: city.HG ? city.HG.VERSION : null, cover: city.cover || null, coverPieces: city.coverPieces || null } : null,
     ground: { lattice: field.lat, latN: LAT_N, pitch: LAT_PITCH, pads: field.pads.length, corridors: field.corridors, corridorSegments: field.segs.length, bakeMs, roads: roadStats, roadSections: roadLog, padLog },
     // the look to restore to when the camera surfaces (underwater overrides it)
     fogSurface: { color: K.sky, density: K.fog },

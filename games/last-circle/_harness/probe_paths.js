@@ -199,7 +199,19 @@ async ([seed, mapId, liveSeconds, stepS, skipStart]) => {
   }
   // ── (3b) LIVE loot census: what populate() actually spawned ──
   const liveCensus = { floorWeapons: {}, ammo: {}, cons: {}, chests: 0, floorItems: 0, lootPoints: W.map.lootPoints.length, players: W.actors.length };
-  if (typeof W.nearbyLoot === "function") {
+  if (typeof W.debugItems === "function" && typeof W.debugChests === "function" && Array.isArray(W.map.houses)) {
+    // WAVE 8: a furnished house's loot is laid by loot.js's per-room pass from W.map.houses, NOT at a map.lootPoints entry (maps.js lists none for them):
+    // the walk over lootPoints below would miss all of it. Count what populate() really spawned - every live floor item and every chest.
+    for (const it of W.debugItems()) {
+      liveCensus.floorItems++;
+      const dd = it.data || {};
+      const bag = dd.kind === "weapon" ? liveCensus.floorWeapons : dd.kind === "ammo" ? liveCensus.ammo : liveCensus.cons;
+      bag[dd.id] = (bag[dd.id] || 0) + 1;
+      if (it.house) liveCensus.houseItems = (liveCensus.houseItems || 0) + 1;
+    }
+    for (const c of W.debugChests()) { if (c.opened) continue; liveCensus.chests++; if (c.house) liveCensus.houseChests = (liveCensus.houseChests || 0) + 1; }
+    liveCensus.source = "debugItems+debugChests (Wave 8 houses)";
+  } else if (typeof W.nearbyLoot === "function") {
     const seenIds = new Set();
     for (const lp of W.map.lootPoints) {
       for (const n of W.nearbyLoot({ x: lp.x, y: lp.y, z: lp.z }, 3)) {

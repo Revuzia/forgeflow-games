@@ -23,7 +23,10 @@ It imports the UNMODIFIED runtime/3d/royale/maps.js in Node (world_env.mjs, the 
                        2026): the POIs are identical, the wild loot (the LAST consumer of the shared RNG in buildMap) is identical, and every
                        prop kind's anchors (x, z) except containers' (stack uppers are laid out by the stack, by design) are an ordered
                        subsequence of the baseline's (draw-then-reject: a slope-rejected prop disappears, nothing else moves). A Wave-5
-                       row: Wave 6 builds towns on purpose and passes `--baseline-rev` with the revision it started from
+                       row: Wave 6 builds towns on purpose and passes `--baseline-rev` with the revision it started from.
+                       Wave 8 (lane K3): `--wild-info-maps ashgrid` - housegen's house footprints change which wild-loot draws (the LAST rng consumer,
+                       draw-then-reject) are rejected, so Savanna's wild loot is information this wave; its POIs and prop anchors stay judged
+                       (control worldcheck-plant-rng-shift-wave8: the same arguments + one extra draw must still FAIL)
 
 --plant stale-table  runs the table check on a scratch copy whose table was edited (container height + 0.5 m)         -> table-current FAILs
 --plant rng-shift    runs the working-copy fingerprint on a scratch copy of maps.js with ONE extra rng() draw after the generator is
@@ -55,7 +58,11 @@ PLANT_ROWS = {"stale-table": {"table-current"}, "rng-shift": {"rng-stream"}}
 RNG_ANCHOR = "const rng = W.SIM.mulberry32(seed ^ 0xabcdef);"
 
 
-def run_node(args_list, timeout=900):
+NODE_TIMEOUT = [900]          # --node-timeout (an environment knob for a loaded box: a timeout is could-not-judge, never a verdict; no row changes)
+
+
+def run_node(args_list, timeout=None):
+    timeout = timeout or NODE_TIMEOUT[0]
     run_node.n = getattr(run_node, "n", 0) + 1
     out = os.path.join(tempfile.gettempdir(), "lc_world_node_%d_%d.json" % (os.getpid(), run_node.n))
     cmd = ["node", NODE_PROBE] + args_list + ["--out", out]
@@ -117,7 +124,7 @@ def mini_root(with_runtime):
 SAVANNA_BY_DESIGN = ("ashgrid",)
 
 
-def judge_rng(v, now, base, baseline_label, chk, skip_maps=()):
+def judge_rng(v, now, base, baseline_label, chk, skip_maps=(), wild_info=()):
     nb = {(b["map"], b["seed"]): b for b in now["builds"]}
     bb = {(b["map"], b["seed"]): b for b in base["builds"]}
     for m in skip_maps:
@@ -126,14 +133,17 @@ def judge_rng(v, now, base, baseline_label, chk, skip_maps=()):
     keys = sorted(k for k in (set(nb) & set(bb)) if k[0] not in skip_maps)
     if not keys:
         return chk("rng-stream", None, "no (map, seed) in common between the two fingerprints")
-    poi_bad, wild_bad, prop_bad, rejected, kinds_checked = [], [], [], 0, 0
+    poi_bad, wild_bad, wild_inf, prop_bad, rejected, kinds_checked = [], [], [], [], 0, 0
     unchecked = set()
     for k in keys:
         a, b = nb[k], bb[k]
         if a["pois"] != b["pois"]:
             poi_bad.append("%s s%d" % k)
         if a["wild"] != b["wild"]:
-            wild_bad.append("%s s%d (%d vs %d wild loot points)" % (k[0], k[1], len(a["wild"]), len(b["wild"])))
+            if k[0] in wild_info:
+                wild_inf.append("%s s%d (%d vs %d wild loot points)" % (k[0], k[1], len(a["wild"]), len(b["wild"])))
+            else:
+                wild_bad.append("%s s%d (%d vs %d wild loot points)" % (k[0], k[1], len(a["wild"]), len(b["wild"])))
         for kind, now_list in a["props"].items():
             if kind == "container" or not now_list:
                 continue
@@ -148,8 +158,13 @@ def judge_rng(v, now, base, baseline_label, chk, skip_maps=()):
             if not all(any(q == (x, z) for q in it) for x, z, _s, _ry in now_list):
                 prop_bad.append("%s s%d %s" % (k[0], k[1], kind))
             rejected += max(0, len(before) - len(now_list))
-    det = "%d builds vs %s: POIs identical in %d, wild loot identical in %d, prop anchors an ordered subsequence of the baseline's in %d of %d (build, kind) pairs (%d props rejected by slope since; no baseline anchors for: %s)" % (
-        len(keys), baseline_label, len(keys) - len(poi_bad), len(keys) - len(wild_bad), kinds_checked - len(prop_bad), kinds_checked, rejected, ", ".join(sorted(unchecked)) or "none")
+    det = "%d builds vs %s: POIs identical in %d, wild loot identical in %d%s, prop anchors an ordered subsequence of the baseline's in %d of %d (build, kind) pairs (%d props rejected by slope since; no baseline anchors for: %s)" % (
+        len(keys), baseline_label, len(keys) - len(poi_bad), len(keys) - len(wild_bad) - len(wild_inf), (" (+%d differing on an information-only map)" % len(wild_inf)) if wild_inf else "", kinds_checked - len(prop_bad), kinds_checked, rejected, ", ".join(sorted(unchecked)) or "none")
+    if wild_info:
+        # Wave 8 (lane K3): housegen footprints change which wild-loot draws the LAST rng consumer of buildMap rejects (draw-then-reject vs cityBld / openSpot): on a
+        # map whose buildings change on purpose, wild loot is information; its POIs and prop anchors (the stream itself, drawn before the houses) stay judged
+        v.info("rng-stream wild loot on %s (information: the map's buildings change on purpose; POIs + prop anchors still judged)" % ",".join(sorted(wild_info)),
+               ("%d of %d builds differ from %s: %s" % (len(wild_inf), sum(1 for k in keys if k[0] in wild_info), baseline_label, ", ".join(wild_inf[:6]))) if wild_inf else "identical in every build")
     bad = []
     if poi_bad:
         bad.append("POIs differ: " + ", ".join(poi_bad[:5]))
@@ -244,7 +259,7 @@ def main_fn(v, args):
         else:                       # Wave 7b: a comma list of the maps whose stream is JUDGED (`ashgrid`: Savanna must be identical to the live build, Isla Viva and Deepwood get towns on purpose)
             judged = set(x for x in args.rng_maps.split(",") if x)
             skip_maps = tuple(m for m in C.MAPS if m not in judged)
-        judge_rng(v, now, base, "git " + base_sha, chk, skip_maps)
+        judge_rng(v, now, base, "git " + base_sha, chk, skip_maps, tuple(x for x in (args.wild_info_maps or "").split(",") if x))
     finally:
         for d in tmp:
             shutil.rmtree(d, ignore_errors=True)
@@ -256,8 +271,11 @@ def main():
     ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANT_ROWS)))
     ap.add_argument("--baseline-rev", default=None, help="the revision the RNG stream is compared with (default %s, the Wave-4 commit)" % WAVE4_REV)
     ap.add_argument("--quick", action="store_true", help="seed 7 only for the RNG stream")
+    ap.add_argument("--node-timeout", type=int, default=900, help="seconds each world_node.mjs run may take before the gate says could-not-judge (environment: a loaded box)")
+    ap.add_argument("--wild-info-maps", default="", help="Wave 8: judged maps whose WILD LOOT is information (their buildings change on purpose: housegen footprints reject other wild-loot draws); POIs and prop anchors stay judged (gate.py: ashgrid)")
     ap.add_argument("--rng-maps", default="held", help="'held' (default): the stream row skips ashgrid (Wave 7 builds Savanna's towns on purpose) and judges isla_viva + deepwood; 'all': every map; or a comma list of the maps JUDGED (Wave 7b: 'ashgrid' - Savanna must read the live build's stream, the themed maps get their towns on purpose)")
     args = ap.parse_args()
+    NODE_TIMEOUT[0] = max(60, args.node_timeout)
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 
 

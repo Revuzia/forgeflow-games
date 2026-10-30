@@ -86,6 +86,10 @@ FLAGS = [
 ]
 GPU_PROFILES = {
     "d3d11": [],
+    # P2-F (parity P2+P3): the iGPU profile = a player's FIRST RUN. Chrome's own adapter choice with vsync on and no GPU forcing (the audits measured
+    # "ANGLE (Intel UHD Graphics 0x9A60 D3D11)" for every powerPreference without --force_high_performance_gpu), so the UHD iGPU on this box; the
+    # gate's fresh browser profile makes the first-run auto-tier decide. Same flags as d3d11 today, named for what it means (p23/tierprof, perfcheck_igpu)
+    "default": [],
     # live-measure: on this box the ONLY config in which rAF runs (vsync'd presentation goes through the
     # Intel iGPU that dwm + the DisplayLink host hold at ~95%)
     "dgpu": ["--force_high_performance_gpu", "--disable-gpu-vsync", "--disable-frame-rate-limit"],
@@ -356,6 +360,10 @@ class Verdict:
         self.started = time.strftime("%Y-%m-%d %H:%M:%S")
 
     def check(self, name, ok, detail="", expect=None):
+        # a truthy / falsy non-bool (an `a and b and []` chain returns the list) is a verdict, never a crash of the report (P2/P3 fix round:
+        # p23_smoke under --plant short-life died in finish() with 'unhashable type: list' and its control counted only by accident)
+        if ok is not None and not isinstance(ok, bool):
+            ok = bool(ok)
         self.rows.append({"name": name, "ok": ok, "kind": "gate", "detail": detail, "expect": expect})
         tag = {True: "PASS", False: "FAIL", None: "CNJ "}[ok if ok in (True, False) else None]
         print("  %-4s %s :: %s" % (tag, name, _short(detail)), flush=True)
@@ -425,6 +433,7 @@ def run_gate(gate, main_fn, args):
     else:
         v.data["servedFrom"] = "working copy via page routing" if getattr(args, "disk", False) else args.base
     print("%s: serving %s" % (gate, v.data["servedFrom"]), flush=True)
+    stamp_validation(v, args)
     n, err = automated_chromes()
     v.data["otherAutomatedChromes"] = n if err is None else ("unknown: " + err)
     print("%s: other automated Chromes on the box: %s" % (gate, v.data["otherAutomatedChromes"]), flush=True)
@@ -470,7 +479,71 @@ def add_common_args(ap: argparse.ArgumentParser):
     ap.add_argument("--boot-timeout", type=float, default=300.0, help="seconds to wait for __LC__ (the box is shared)")
     ap.add_argument("--load-timeout", type=float, default=1500.0,
                     help="seconds to wait for a match load (measured 106-600+ s with 9-12 other Chromes on this box)")
+    # P2-F (parity waves P2+P3): validate a gate against another lane's work or a stub BEFORE integration. Neither is ever used by gate.py's
+    # integration run (that judges the working copy as it is); a report records both, so a stubbed / overlaid run can never pass for a plain one.
+    ap.add_argument("--overlay", action="append", default=[], metavar="DIR[=rel,rel]",
+                    help="serve files of another games/last-circle directory (READ-ONLY, e.g. another lane's worktree) over the served build: "
+                         "DIR alone = every file DIR has; DIR=runtime/3d/royale/player.js,runtime/sim/royale.js = only those (repeatable; later wins)")
+    ap.add_argument("--inject", action="append", default=[], metavar="JS_FILE",
+                    help="add a JS file as an init script of every document (a contract STUB for a gate's own validation; repeatable)")
     return ap
+
+
+def overlay_specs(args):
+    """--overlay DIR[=rel,...] -> [(realdir, set(rels) | None)]. DIR may be a worktree root (it holds games/last-circle) or the game dir itself."""
+    out = []
+    for spec in (getattr(args, "overlay", None) or []):
+        d, _, rels = spec.partition("=")
+        d = os.path.realpath(d)
+        if os.path.isdir(os.path.join(d, "games", "last-circle")):
+            d = os.path.join(d, "games", "last-circle")
+        if not os.path.isfile(os.path.join(d, "index.html")):
+            raise HarnessError("--overlay %s: not a games/last-circle directory" % spec)
+        if rels.strip() == "@changed":
+            out.append((d, changed_files(d)))
+            continue
+        out.append((d, set(r.strip().replace("\\", "/") for r in rels.split(",") if r.strip()) or None))
+    return out
+
+
+OVERLAY_BASE = "9aa2b746"   # int-p1 = the base of every P2/P3 lane (--overlay DIR=@changed diffs against it)
+
+
+def changed_files(game_dir):
+    """--overlay DIR=@changed: the files of DIR (a games/last-circle dir inside a git worktree) that differ from its HEAD (modified or untracked),
+    relative to the game dir. Lets one run serve several lanes' work at once (each worktree holds the WHOLE game: a plain DIR would serve its
+    unchanged copies over the other lanes' changes)."""
+    # lanes COMMIT their checkpoints: "changed" = every file that differs from the wave base (OVERLAY_BASE, committed or not) + the untracked
+    # files (a HEAD-only status missed every committed checkpoint and served e.g. maps.js without its new texture -> 404).
+    top = subprocess.run(["git", "-C", game_dir, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    paths = []
+    d = subprocess.run(["git", "-C", game_dir, "-c", "core.quotepath=off", "diff", "--name-only", "--diff-filter=d", "--relative=", OVERLAY_BASE, "--", "."],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if d.returncode == 0:
+        paths += [x for x in d.stdout.splitlines() if x.strip()]
+    else:  # base unknown to this repo: fall back to the working-tree status
+        r0 = subprocess.run(["git", "-C", game_dir, "status", "--porcelain", "--", "."], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        paths += [ln[3:].strip().strip('"').split(" -> ")[-1] for ln in r0.stdout.splitlines() if len(ln) >= 4 and "D" not in ln[:2]]
+    u = subprocess.run(["git", "-C", game_dir, "-c", "core.quotepath=off", "ls-files", "--others", "--exclude-standard", "--full-name", "--", "."],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    paths += [x for x in u.stdout.splitlines() if x.strip()]
+    rels = set()
+    for p in paths:
+        full = os.path.realpath(os.path.join(top, p))
+        if not os.path.isfile(full):
+            continue
+        rel = os.path.relpath(full, os.path.realpath(game_dir)).replace("\\", "/")
+        if not rel.startswith("..") and "/_harness/" not in "/" + rel and not rel.startswith("_"):
+            rels.add(rel)
+    return rels
+
+
+def stamp_validation(v, args):
+    """record --overlay / --inject in the report and as an INFO row (a stubbed run is a validation of the gate, not of the game)."""
+    ov, inj = list(getattr(args, "overlay", None) or []), list(getattr(args, "inject", None) or [])
+    if ov or inj:
+        v.data["validation"] = {"overlay": ov, "inject": inj}
+        v.info("VALIDATION RUN (not a game verdict)", {"overlay": ov, "inject": inj})
 
 
 # ─────────────────────────────── disk server (page routing) ───────────────────────────────
@@ -545,13 +618,27 @@ def git_blobs(rev):
 class DiskServer:
     """context.route handler serving the game dir for a set of origins (read-only; working copy or a git revision)."""
 
-    def __init__(self, origins, rev=None, game_path=None):
+    def __init__(self, origins, rev=None, game_path=None, overlays=None):
         self.origins = [o.rstrip("/") for o in origins]
         self.game_path = game_path or GAME_PATH       # the URL path the game dir is served under (the live CDN: /last-circle/)
         self.served = 0
         self.missing = []
         self.overrides = []          # (predicate(url) -> bool, handler(route) -> None) checked first
         self.git = git_blobs(rev) if rev else None
+        self.overlays = list(overlays or [])          # [(dir, rels | None)] from --overlay: checked after overrides, before the build
+        self.overlaid = {}                            # rel -> dir actually served from an overlay (reported)
+
+    def _overlay_file(self, rel):
+        if not rel or ".." in rel.split("/"):
+            return None
+        for d, rels in reversed(self.overlays):
+            if rels is not None and rel not in rels:
+                continue
+            f = os.path.join(d, rel.replace("/", os.sep))
+            if os.path.isfile(f):
+                self.overlaid[rel] = d
+                return f
+        return None
 
     def matches(self, url):
         return any(url.startswith(o + "/") or url == o for o in self.origins)
@@ -565,6 +652,16 @@ class DiskServer:
             except Exception:
                 pass
         u = urllib.parse.urlparse(url)
+        if self.overlays and u.path.startswith(self.game_path):
+            rel0 = urllib.parse.unquote(u.path[len(self.game_path):]) or "index.html"
+            of = self._overlay_file(rel0)
+            if of is not None:
+                with open(of, "rb") as f:
+                    body = f.read()
+                ext = os.path.splitext(of)[1].lower()
+                self.served += 1
+                return route.fulfill(status=200, body=body, headers={"Content-Type": CTYPES.get(ext) or mimetypes.guess_type(of)[0] or "application/octet-stream",
+                                                                     "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
         if self.git is not None:
             rel = urllib.parse.unquote(u.path[len(self.game_path):]) if u.path.startswith(self.game_path) else None
             if rel is not None and (rel == "" or rel.endswith("/")):
@@ -657,8 +754,14 @@ class Session:
         self.context.add_init_script(INIT_JS)
         for s in self.init_scripts:
             self.context.add_init_script(s)
+        for f in (getattr(self.args, "inject", None) or []):
+            with open(f, encoding="utf-8") as fh:
+                self.context.add_init_script(fh.read())
+        ovl = overlay_specs(self.args)
+        if ovl and not disk:
+            raise HarnessError("--overlay needs --disk or --rev (it rides on the page-routing server)")
         if disk:
-            self.disk = DiskServer([self.origin()] + list(self.extra_origins), getattr(self.args, "rev", None))
+            self.disk = DiskServer([self.origin()] + list(self.extra_origins), getattr(self.args, "rev", None), overlays=ovl)
             self.context.route(lambda url: self.disk.matches(url), self.disk.handle)
         self.page = self.context.new_page()
         self.page.set_default_timeout(120_000)
@@ -875,7 +978,9 @@ class Session:
                     break
             res["phaseAfterEnter"] = self.phase()
             if res["phaseAfterEnter"] not in ("drop", "match"):
-                raise HarnessError("a real Enter did not leave the lobby (phase %s)" % res["phaseAfterEnter"])
+                # a load that failed lands on the MENU with the reason on screen (ffg_royale3d matchLoadFailed): carry it in the error
+                why = self.safe_js("() => { const e = document.querySelector('[data-lc=matchnotice], [data-lc=loadfail], .lc-notice'); return (e ? e.innerText : document.body.innerText).slice(0, 300); }")
+                raise HarnessError("a real Enter did not leave the lobby (phase %s; after load %s; screen: %r)" % (res["phaseAfterEnter"], res.get("phaseAfterLoad"), why))
         self.stage(self.phase() or "match")
         return res
 

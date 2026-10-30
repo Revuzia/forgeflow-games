@@ -40,9 +40,18 @@ COLLIDERS  baked from the geometry, as exact axis-aligned boxes, and judged agai
            "elevation" are unchanged. They are built from the manifest, not from the GLB, so they exist whether or not the GLB loads (the maps.js pattern
            that drops colliders on a failed load is the thing to avoid).
 
-USAGE   python games/last-circle/_tools/art_b_city.py [--only SUBSTR] [--scratch DIR] [--no-plots] [--skip-pack] [--out-root DIR] [--colliders-only]
+THEMES  (Wave 7b, lane B3) The town themes resort (Isla Viva) and lodge (Deepwood) have their own recoloured colormaps: THEME_VARIANTS below names six colourways each (resort: coral, mint,
+        lagoon, sun, shell, rose; lodge: pine, cedar, walnut, driftwood, forest, barn). A colourway recolours four swatches of the suburban AND the commercial colormap (SWATCH_USE: wall,
+        roof, trim, door / ground-floor base; each keeps its own light -> dark ramp), the lodge ones also paint horizontal boards into the wall swatch (SIDING_PX). Output:
+        palettes/<key>_<variant>.png (PNG-8, exact colours: ~11 KB suburban, ~3 KB commercial), manifest `palettes[key].variants.<variant>` (+ `theme`), `themes` (variants, colours, types per
+        role: THEME_TYPE_LISTS) and `swatch_use`. The four shipped variants (slate / brick / sand + base) are untouched, byte for byte. runtime/3d/royale/citykit.js keeps literal copies of the
+        theme tables (VARIANT_ORDER, PROXY_COLORS_X, THEMES, THEME_TYPES): --emit-theme-tables FILE writes exactly those blocks; citykit.selftest.cjs and _harness/themeshots.py compare them.
+
+USAGE   python games/last-circle/_tools/art_b_city.py [--only SUBSTR] [--scratch DIR] [--no-plots] [--skip-pack] [--out-root DIR] [--colliders-only] [--palettes-only] [--emit-theme-tables FILE]
           --colliders-only   recompute only the colliders / collider_mode / collider_info (+ the manifest readme) into the existing manifest: ~1 min, no GLB, palette or
                              plot is written, every other byte of the manifest is kept. The full run and this one write the SAME manifest bytes (checked 2026-10-14).
+          --palettes-only    regenerate ONLY the palette PNGs and the manifest's palettes / themes / swatch_use / readme blocks (~10 s, no GLB is written, every other manifest byte is kept)
+          --emit-theme-tables FILE   (with --palettes-only) the literal citykit.js blocks for the theme variants (VARIANT_ORDER, PROXY_COLORS_X, THEMES, THEME_TYPES entries)
           --out-root DIR     write assets/props/{city,cars} under DIR instead of the game directory (reproducibility checks: the full run into an empty DIR reproduces the
                              manifest and every GLB / PNG of the game directory byte for byte).
         After a run: node runtime/3d/royale/citykit.selftest.cjs --emit-table (the embedded COLLIDER_BOXES of citykit.js), then
@@ -108,6 +117,68 @@ VARIANTS = {
     },
 }
 
+# ── Wave 7b (lane B3): the town THEMES' own colourways ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+# What a swatch of the two colormaps is (measured 2026-10-15: a debug colormap with one flat colour per swatch rendered on every suburban + commercial type, then the UV area
+# of every swatch per type). Swatch = 64 x 128 px, (col, row) under the 128 px black band, a light (top) -> dark (bottom) ramp; u is constant per triangle and v runs 13..102 px
+# over ONE storey face (35.6 px per metre on the suburban kit, 21.3 on the commercial kit), so a stripe pattern along v is horizontal siding on every storey of every wall.
+#   wall (3,1)   the white facades                                   trim (0,1)   window frames, cornice / storey bands, gutters + drain pipes, chimneys, porch posts, sills
+#   roof (0,0)   the green pitched roof planes                       door (1,1)   suburban: the front door (and carport / garage door)
+#   base (1,1)   commercial: the dark ground-floor band and flat roof decks (the same swatch as the suburban door)
+# The other swatches in use (bushes (1,2), window glass (5,0), soil tops (4,1)) stay as authored in every colourway.
+SWATCH_USE = {
+    "suburban": {"wall": (3, 1), "roof": (0, 0), "trim": (0, 1), "door": (1, 1)},
+    "commercial": {"wall": (3, 1), "roof": (0, 0), "trim": (0, 1), "base": (1, 1)},
+}
+SIDING_PX = {"suburban": 9, "commercial": 6}      # plank pitch in swatch rows (~0.25 m of wall: 9 / 35.6 px per metre, 6 / 21.3)
+
+
+def swatch_box(cell):
+    c, r = cell
+    return (c * 64, 128 + r * 128, c * 64 + 64, 128 + r * 128 + 128)
+
+
+# Colours are the MID tone of each swatch (sRGB); the swatch keeps its own light -> dark ramp (recolor(): luminance ratio of the cell). `siding` paints horizontal boards into the
+# wall swatch: (gap depth, board-to-board jitter). resort = Isla Viva (pastel stucco, white trim, terracotta / teal / blue / silver roofs, bright doors); lodge = Deepwood (stained
+# timber walls, dark trim, dark green / brown / red-brown / slate roofs, painted red and green outbuildings).
+THEME_VARIANTS = {
+    "resort": {
+        "coral":  dict(wall=(247, 170, 148), trim=(255, 247, 238), door=(24, 140, 152), base=(24, 132, 144), roof=(192, 88, 62)),
+        "mint":   dict(wall=(170, 226, 204), trim=(255, 255, 252), door=(238, 118, 96), base=(238, 122, 100), roof=(34, 128, 140)),
+        "lagoon": dict(wall=(144, 212, 228), trim=(255, 255, 255), door=(250, 204, 88), base=(248, 200, 92), roof=(46, 96, 168)),
+        "sun":    dict(wall=(252, 228, 152), trim=(255, 251, 240), door=(30, 148, 160), base=(30, 140, 152), roof=(220, 110, 60)),
+        "shell":  dict(wall=(250, 244, 232), trim=(98, 178, 198), door=(232, 104, 88), base=(98, 178, 198), roof=(200, 206, 212)),
+        "rose":   dict(wall=(240, 170, 186), trim=(255, 250, 246), door=(40, 150, 150), base=(40, 140, 142), roof=(180, 74, 58)),
+    },
+    "lodge": {
+        "pine":      dict(wall=(188, 140, 86), trim=(74, 50, 34), door=(118, 38, 32), base=(88, 60, 40), roof=(58, 98, 76), siding=(0.30, 0.05)),
+        "cedar":     dict(wall=(150, 84, 58), trim=(58, 40, 30), door=(40, 78, 62), base=(70, 44, 32), roof=(92, 64, 50), siding=(0.30, 0.05)),
+        "walnut":    dict(wall=(116, 80, 56), trim=(74, 54, 40), door=(160, 108, 60), base=(66, 48, 36), roof=(142, 64, 50), siding=(0.32, 0.05)),
+        "driftwood": dict(wall=(156, 146, 128), trim=(80, 68, 56), door=(112, 42, 36), base=(96, 86, 74), roof=(80, 88, 100), siding=(0.28, 0.05)),
+        "forest":    dict(wall=(74, 108, 84), trim=(232, 224, 204), door=(152, 60, 44), base=(60, 86, 68), roof=(98, 70, 54), siding=(0.18, 0.03)),
+        "barn":      dict(wall=(156, 58, 46), trim=(238, 230, 212), door=(58, 44, 36), base=(110, 44, 36), roof=(76, 82, 88), siding=(0.18, 0.03)),
+    },
+}
+# the colormap files these add: palettes/<key>_<variant>.png for every key in SWATCH_USE x every variant above (manifest palettes[key].variants[<variant>])
+THEME_TINT = {"resort": 0xffffff, "lodge": 0xffffff}     # the colours are baked into the variants: no tint on top (a tint multiplies in linear light and only darkens)
+# Types per role (the manifest's `role` field decides the role of a type; citykit.selftest checks it). resort strips are low-rise: bungalows and flat-roofed villas, one low shop,
+# hotel blocks of 15 m; a lodge village is steep-gabled houses, one shop and a hall: no mid-rise, no tower, no skyline silhouette in either.
+THEME_TYPE_LISTS = {
+    "resort": {
+        "house": ["suburban/building-type-g", "suburban/building-type-h", "suburban/building-type-i", "suburban/building-type-m", "suburban/building-type-p", "suburban/building-type-q"],
+        "shop": ["commercial/building-c"],
+        "midrise": ["commercial/building-a", "commercial/building-h"],
+    },
+    "lodge": {
+        "house": ["suburban/building-type-a", "suburban/building-type-c", "suburban/building-type-e", "suburban/building-type-o"],
+        "shop": ["commercial/building-c"],
+        "warehouse": ["commercial/building-e"],
+    },
+}
+THEME_CHARACTER = {
+    "resort": "Isla Viva: pastel stucco walls (coral, mint, lagoon, sun, shell, rose), white or sea-blue trim, terracotta / teal / blue / silver roofs, bright doors, low-rise",
+    "lodge": "Deepwood: stained timber walls with horizontal boards (pine, cedar, walnut, driftwood), painted forest-green and barn-red outbuildings, dark trim, dark roofs, steep gables, no mid-rise",
+}
+
 # id suffix -> (group, source file under SRC, palette, suggested_scale, role, collider mode)
 B = []   # buildings
 for n in "acegh" + "imopq":
@@ -148,12 +219,132 @@ README = [
         "Origin = footprint centre at ground, authored front = +Z. Multiply native units by suggested_scale for metres. bbox_m / colliders are in metres at suggested_scale (for another scale multiply by newScale/suggested_scale).",
         "colliders: axis-aligned boxes {min,max}, local metres, fitted to the geometry that is DRAWN between feet+0.3 m and feet+1.8 m (art_b_city.py; judged by _harness/probe_kitcollide.js: nothing drawn at body height more than 0.10 m outside the boxes, no box edge more than 0.25 m off the drawn mesh). A porch roof or awning above 1.8 m is not a collider, a column or pilaster is. Build them from this manifest whether or not the GLB loads.",
         "Palette variants (palettes[key].variants): recoloured copies of the colormap (suburban: roof slate/brick/sand; commercial: roof + facade slate/brick/sand). Swap the shared texture, not the GLB.",
+        "Theme colourways (Wave 7b): variants whose `theme` is resort (coral, mint, lagoon, sun, shell, rose) or lodge (pine, cedar, walnut, driftwood, forest, barn) recolour the roof, wall, trim and door / ground-floor swatches (swatch_use) and, for the lodge, paint horizontal boards into the wall swatch; `themes` lists each theme's variants, colours and types per role.",
         "Cars have no roof palette variants (no roofs); front = +Z; collider boxes in two layers (body up to the beltline, cabin above it).",
         "The suburban and commercial kits both name their texture Textures/colormap.png but the two colormaps DIFFER: never share one THREE.Texture between them (one shared Texture per palette key).",
         "districts: suggested type lists for the Savanna pilot (downtown, suburb, warehouse_yard, far_skyline, street, parking, interior_kit).",
 ]
 
 KIT_SCALE = 2.2   # furniture + walls share one grid: a 1.0 wall module = 2.2 m
+
+# ── Wave 8 stage A (lane H2): the INTERIOR KIT ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# More furniture for furnished, lootable rooms (bedroom, bathroom, kitchen, living, dining, office, shop, storage) + stairs and a cover-rule window wall, through the SAME
+# intake (meshopt, 0.5 mm snap, per-type colliders, manifest rows). Sources, both on disk, both CC0 (CREDITS rows in the lane report):
+#   KIT_SRC   the full Kenney Furniture Kit 2.0 (140 GLBs; License.txt "Creative Commons Zero, CC0"); the 32 pieces shipped since Wave 4 are byte-identical copies of these files
+#   QUAT_SRC  Quaternius pieces from Poly Pizza (CC0 1.0 per F:/AssetLibrary/polypizza/_manifest.json): Shelf Tall TDgvIuorcX, Shelf Large 3FmjkLClVE, Pallet MwOFAOgOhg
+#             (the pallet's embedded atlas is byte-identical to palettes/quaternius_atlas.png, so it costs no new palette)
+# Rows go to manifest_interior.json (same row schema as manifest.json) while INTERIOR_IN_MAIN is False: the shipped gates (kitcollide.py, citykit.selftest.cjs, citykit_probe.py) assert
+# EXACTLY 81 types in manifest.json, and the 7b fix round runs them while stage A is built. Stage B sets INTERIOR_IN_MAIN = True (or passes --interior-into-main), regenerates
+# citykit.js COLLIDER_BOXES (citykit.selftest.cjs --emit-table) and raises those counts to 81 + len(INTERIOR); manifest_interior.json then keeps only the `catalogue`.
+# Wave 8 stage A2 (lane H5, kit merge): MERGED. INTERIOR_IN_MAIN = True, so a plain run of this file reproduces the merged tree (136 types in manifest.json, the catalogue alone in
+# manifest_interior.json); citykit.js COLLIDER_BOXES was re-emitted from it and citykit.selftest.cjs counts 136. citykit only fetches the GLBs of the types a place() list draws,
+# so the 55 new types cost a map nothing until it places them (the manifest JSON grows; no GLB is requested).
+KIT_SRC = Path("F:/3d-asset-packs/kenney_furniture-kit/Models/GLTF format")
+QUAT_SRC = Path("F:/AssetLibrary/polypizza/furniture")
+INTERIOR_IN_MAIN = True
+WINDOW_PORT_Y = [(0.0, 0.0), (0.755, 0.983), (0.864, 1.092), (0.972, 1.20), (2.217, 2.30), (2.325, 2.408), (2.434, 2.517), (2.837, 2.837)]
+# ^ wallWindowPort: Kenney wallWindow (sill 0.864 / opening 0.972-2.217 m at 2.2) re-authored to the game's window cover rule (maps.js house(): solid to the 1.20 m sill - standing
+#   eye 1.62 clears it, crouched eye 0.97 does not - and the header from 2.30 m): every vertex sits on one of these knots (metres at KIT_SCALE), mapped piecewise-linearly in y;
+#   the glass panes are dropped (an open firing port, like house()'s), so the elevation colliders leave exactly the 1.20-2.30 m aperture free.
+# name, group, source file, scale, collider mode, rooms, use, place (floor | wall | ceiling | surface), extra options
+#   place: floor = stands on the floor; wall = hung on a wall (mount height is the placer's: the model's y = 0 is its own bottom); ceiling = hangs from the ceiling (y = 0 at
+#   its bottom: put y = ceiling - bbox height); surface = on a table / counter / cabinet top (y = that top). Colliders are the real extents at the placed height in every case.
+_K, _Q = KIT_SRC, QUAT_SRC
+INTERIOR = [
+    # bedroom
+    ("bedSingle", "furniture", _K / "bedSingle.glb", KIT_SCALE, "bbox", ["bedroom"], "bed", "floor", {}),
+    ("bedDouble", "furniture", _K / "bedDouble.glb", KIT_SCALE, "bbox", ["bedroom"], "bed", "floor", {}),
+    ("cabinetBed", "furniture", _K / "cabinetBed.glb", KIT_SCALE, "bbox", ["bedroom"], "nightstand", "floor", {}),
+    ("cabinetBedDrawer", "furniture", _K / "cabinetBedDrawer.glb", KIT_SCALE, "bbox", ["bedroom"], "nightstand", "floor", {}),
+    ("bookcaseClosedDoors", "furniture", _K / "bookcaseClosedDoors.glb", KIT_SCALE, "bbox", ["bedroom", "office"], "wardrobe", "floor", {}),
+    ("sideTableDrawers", "furniture", _K / "sideTableDrawers.glb", KIT_SCALE, "bbox", ["bedroom", "living"], "dresser", "floor", {}),
+    ("coatRackStanding", "furniture", _K / "coatRackStanding.glb", KIT_SCALE, "footprint", ["bedroom", "hall"], "coat_rack", "floor", {}),
+    # lighting
+    ("lampRoundFloor", "furniture", _K / "lampRoundFloor.glb", KIT_SCALE, "footprint", ["living", "bedroom", "office"], "floor_lamp", "floor", {}),
+    ("lampSquareFloor", "furniture", _K / "lampSquareFloor.glb", KIT_SCALE, "footprint", ["living", "bedroom"], "floor_lamp", "floor", {}),
+    ("lampSquareTable", "furniture", _K / "lampSquareTable.glb", KIT_SCALE, "bbox", ["bedroom", "living", "office"], "table_lamp", "surface", {}),
+    ("lampSquareCeiling", "furniture", _K / "lampSquareCeiling.glb", KIT_SCALE, "bbox", ["any"], "ceiling_lamp", "ceiling", {}),
+    ("lampWall", "furniture", _K / "lampWall.glb", KIT_SCALE, "bbox", ["any"], "wall_lamp", "wall", {}),
+    # rugs (flat: nothing at body height, no collider)
+    ("rugRectangle", "furniture", _K / "rugRectangle.glb", KIT_SCALE, "none", ["living", "bedroom", "dining"], "rug", "floor", {}),
+    ("rugSquare", "furniture", _K / "rugSquare.glb", KIT_SCALE, "none", ["living", "bedroom", "office"], "rug", "floor", {}),
+    ("rugRound", "furniture", _K / "rugRound.glb", KIT_SCALE, "none", ["living", "bedroom", "dining"], "rug", "floor", {}),
+    # bathroom
+    ("toilet", "furniture", _K / "toilet.glb", KIT_SCALE, "bbox", ["bathroom"], "toilet", "floor", {}),
+    ("bathtub", "furniture", _K / "bathtub.glb", KIT_SCALE, "bbox", ["bathroom"], "bathtub", "floor", {}),
+    ("bathroomSinkSquare", "furniture", _K / "bathroomSinkSquare.glb", KIT_SCALE, "bbox", ["bathroom"], "basin", "floor", {}),
+    ("bathroomCabinet", "furniture", _K / "bathroomCabinet.glb", KIT_SCALE, "bbox", ["bathroom"], "wall_cabinet", "wall", {}),
+    # kitchen
+    ("kitchenCabinet", "furniture", _K / "kitchenCabinet.glb", KIT_SCALE, "bbox", ["kitchen"], "base_cabinet", "floor", {}),
+    ("kitchenCabinetDrawer", "furniture", _K / "kitchenCabinetDrawer.glb", KIT_SCALE, "bbox", ["kitchen"], "base_cabinet", "floor", {}),
+    ("kitchenCabinetCornerInner", "furniture", _K / "kitchenCabinetCornerInner.glb", KIT_SCALE, "bbox", ["kitchen"], "base_cabinet_corner", "floor", {}),
+    ("kitchenCabinetUpper", "furniture", _K / "kitchenCabinetUpper.glb", KIT_SCALE, "bbox", ["kitchen"], "wall_cabinet", "wall", {}),
+    ("kitchenStoveElectric", "furniture", _K / "kitchenStoveElectric.glb", KIT_SCALE, "bbox", ["kitchen"], "stove", "floor", {}),
+    ("kitchenMicrowave", "furniture", _K / "kitchenMicrowave.glb", KIT_SCALE, "bbox", ["kitchen"], "appliance", "surface", {}),
+    ("hoodModern", "furniture", _K / "hoodModern.glb", KIT_SCALE, "footprint", ["kitchen"], "cooker_hood", "wall", {}),
+    ("dryer", "furniture", _K / "dryer.glb", KIT_SCALE, "bbox", ["kitchen", "bathroom", "storage"], "laundry", "floor", {}),
+    # living
+    ("loungeChair", "furniture", _K / "loungeChair.glb", KIT_SCALE, "bbox", ["living"], "armchair", "floor", {}),
+    ("loungeSofaCorner", "furniture", _K / "loungeSofaCorner.glb", KIT_SCALE, "footprint", ["living"], "sofa_corner", "floor", {}),
+    ("loungeSofaLong", "furniture", _K / "loungeSofaLong.glb", KIT_SCALE, "footprint", ["living"], "sofa_chaise", "floor", {}),
+    ("loungeSofaOttoman", "furniture", _K / "loungeSofaOttoman.glb", KIT_SCALE, "bbox", ["living"], "ottoman", "floor", {}),
+    ("loungeDesignSofa", "furniture", _K / "loungeDesignSofa.glb", KIT_SCALE, "bbox", ["living"], "sofa", "floor", {}),
+    ("tableCoffeeSquare", "furniture", _K / "tableCoffeeSquare.glb", KIT_SCALE, "bbox", ["living"], "coffee_table", "floor", {}),
+    ("televisionModern", "furniture", _K / "televisionModern.glb", KIT_SCALE, "bbox", ["living", "bedroom"], "tv", "surface", {}),
+    ("bookcaseOpen", "furniture", _K / "bookcaseOpen.glb", KIT_SCALE, "bbox", ["living", "office", "shop", "storage"], "shelf", "floor", {}),
+    ("bookcaseOpenLow", "furniture", _K / "bookcaseOpenLow.glb", KIT_SCALE, "bbox", ["living", "office", "shop"], "shelf_low", "floor", {}),
+    ("books", "furniture", _K / "books.glb", KIT_SCALE, "bbox", ["living", "office", "bedroom"], "decor", "surface", {}),
+    ("plantSmall1", "furniture", _K / "plantSmall1.glb", KIT_SCALE, "bbox", ["any"], "decor", "surface", {}),
+    # dining
+    ("tableCross", "furniture", _K / "tableCross.glb", KIT_SCALE, "bbox", ["dining", "kitchen"], "dining_table", "floor", {}),
+    ("tableRound", "furniture", _K / "tableRound.glb", KIT_SCALE, "footprint", ["dining", "kitchen", "office"], "dining_table", "floor", {}),
+    ("tableCloth", "furniture", _K / "tableCloth.glb", KIT_SCALE, "bbox", ["dining"], "dining_table", "floor", {}),
+    ("chairCushion", "furniture", _K / "chairCushion.glb", KIT_SCALE, "bbox", ["dining", "kitchen"], "dining_chair", "floor", {}),
+    ("chairModernCushion", "furniture", _K / "chairModernCushion.glb", KIT_SCALE, "bbox", ["dining", "office"], "dining_chair", "floor", {}),
+    # office
+    ("deskCorner", "furniture", _K / "deskCorner.glb", KIT_SCALE, "footprint", ["office"], "desk_corner", "floor", {}),
+    ("computerScreen", "furniture", _K / "computerScreen.glb", KIT_SCALE, "bbox", ["office"], "computer", "surface", {}),
+    ("bookcaseClosedWide", "furniture", _K / "bookcaseClosedWide.glb", KIT_SCALE, "bbox", ["office", "living", "storage"], "shelf_wide", "floor", {}),
+    # shop
+    ("kitchenBar", "furniture", _K / "kitchenBar.glb", KIT_SCALE, "bbox", ["shop", "kitchen"], "counter", "floor", {}),
+    ("kitchenBarEnd", "furniture", _K / "kitchenBarEnd.glb", KIT_SCALE, "bbox", ["shop", "kitchen"], "counter_end", "floor", {}),
+    ("shelfTall", "furniture", _Q / "TDgvIuorcX.glb", 0.64, "bbox", ["shop", "storage"], "gondola_shelf", "floor", {"credit": "Shelf Tall by Quaternius, https://poly.pizza/m/TDgvIuorcX (CC0 1.0)"}),
+    ("shelfLarge", "furniture", _Q / "3FmjkLClVE.glb", 0.45, "footprint", ["shop", "storage", "office"], "storage_rack", "floor", {"credit": "Shelf Large by Quaternius, https://poly.pizza/m/3FmjkLClVE (CC0 1.0)"}),
+    # storage
+    ("cardboardBoxOpen", "furniture", _K / "cardboardBoxOpen.glb", KIT_SCALE, "bbox", ["storage", "shop", "any"], "box", "floor", {}),
+    ("pallet", "furniture", _Q / "MwOFAOgOhg.glb", 1.0, "none", ["storage", "shop"], "pallet", "floor", {"palette": "quaternius_atlas", "credit": "Pallet by Quaternius, https://poly.pizza/m/MwOFAOgOhg (CC0 1.0)"}),
+    # walls: stairs (one storey) + the cover-rule window wall
+    ("stairs", "walls", _K / "stairs.glb", KIT_SCALE, "steps", ["any"], "stairs", "floor", {}),
+    ("stairsCorner", "walls", _K / "stairsCorner.glb", KIT_SCALE, "steps", ["any"], "stairs_corner", "floor", {}),
+    ("wallWindowPort", "walls", _K / "wallWindow.glb", KIT_SCALE, "elevation", ["any"], "window_wall", "floor", {"remap_y": WINDOW_PORT_Y, "drop_mats": ["glass"]}),
+]
+# Looked at and left out: laptop and bathroomMirror (at body height only a thin screen / mirror plate stands over a flat base, so neither one box nor a band fit passes both
+# kitcollide's phantom bar and citykit.selftest's body-cover rule), bedBunk / shower / showerRound / washer / washerDryerStacked / stairsOpen (580-992 triangles), the Quaternius
+# counters (a dark-wood medieval look that clashes with the Kenney kit), the open-tread stairs (a hide space under the flight). Railing: walls/paneling (1.31 m half wall).
+# The 32 pieces shipped since Wave 4 (manifest.json rows unchanged): their room / use / place for the catalogue of manifest_interior.json
+INTERIOR_SHIPPED = {
+    "furniture/bookcaseClosed": (["living", "office"], "bookcase", "floor"), "furniture/cabinetTelevision": (["living", "bedroom"], "tv_cabinet", "floor"),
+    "furniture/cardboardBoxClosed": (["storage", "shop", "any"], "box", "floor"), "furniture/chair": (["dining", "kitchen", "office"], "dining_chair", "floor"),
+    "furniture/chairDesk": (["office"], "desk_chair", "floor"), "furniture/desk": (["office", "bedroom"], "desk", "floor"),
+    "furniture/kitchenFridge": (["kitchen"], "fridge", "floor"), "furniture/kitchenSink": (["kitchen"], "sink_cabinet", "floor"),
+    "furniture/kitchenStove": (["kitchen"], "stove", "floor"), "furniture/loungeSofa": (["living"], "sofa", "floor"),
+    "furniture/pottedPlant": (["any"], "plant", "floor"), "furniture/sideTable": (["living", "bedroom", "hall"], "side_table", "floor"),
+    "furniture/stoolBar": (["kitchen", "shop"], "bar_stool", "floor"), "furniture/table": (["dining", "kitchen"], "dining_table", "floor"),
+    "furniture/tableCoffee": (["living"], "coffee_table", "floor"), "furniture/trashcan": (["any"], "trashcan", "floor"),
+    "walls/doorway": (["any"], "door_frame", "floor"), "walls/doorwayFront": (["any"], "door_frame_front", "floor"), "walls/doorwayOpen": (["any"], "door_frame_open", "floor"),
+    "walls/floorCorner": (["any"], "floor_corner", "floor"), "walls/floorCornerRound": (["any"], "floor_corner_round", "floor"), "walls/floorFull": (["any"], "floor", "floor"),
+    "walls/floorHalf": (["any"], "floor_half", "floor"), "walls/paneling": (["any"], "half_wall_railing", "floor"), "walls/wall": (["any"], "wall", "floor"),
+    "walls/wallCorner": (["any"], "wall_corner", "floor"), "walls/wallCornerRond": (["any"], "wall_corner_round", "floor"), "walls/wallDoorway": (["any"], "wall_door", "floor"),
+    "walls/wallDoorwayWide": (["any"], "wall_door_wide", "floor"), "walls/wallHalf": (["any"], "wall_half", "floor"), "walls/wallWindow": (["any"], "window_wall_glazed", "floor"),
+    "walls/wallWindowSlide": (["any"], "window_wall_glazed", "floor"),
+}
+README_INTERIOR = [
+    "Wave 8 stage A (lane H2) interior kit: furniture + walls rows in the SAME schema as manifest.json (`types`), generated by art_b_city.py with the shipped kit. Stage B merges them into manifest.json (INTERIOR_IN_MAIN / --interior-into-main).",
+    "catalogue: every interior piece (the 32 shipped since Wave 4 + the new ones): rooms, use, place (floor | wall | ceiling | surface), collide (solid = boxes at its real extents; none = nothing drawn at body height, e.g. rugs and pallets), new (true = a row of this file).",
+    "Kenney pieces: suggested_scale 2.2, origin at a CORNER of the piece (x 0..w, z -d..0, front +Z), so place them by bbox_min_m / bbox_max_m. Storey = wall 2.837 m + floor slab 0.11 m = 2.947 m = one stairs flight (11 risers of 0.268 m: the mover's 0.55 m step climbs them).",
+    "Collider modes: bbox (one box, the real extents), footprint (the drawn body-band solid covered by a few boxes: L-shaped sofas / desks, lamps on a thin stand), elevation (front-elevation decomposition: the window aperture stays free), steps (stairs: one box per tread, ground to tread top), none.",
+    "walls/wallWindowPort = Kenney wallWindow re-authored to the game's window cover rule: solid to the 1.20 m sill, open 1.20-2.30 m (no glass), header above (art_b_city.py WINDOW_PORT_Y).",
+]
 
 
 def catalogue():
@@ -167,6 +358,10 @@ def catalogue():
     for n in WALLS:
         mode = "elevation" if "oorway" in n else ("footprint" if n in ("wallCorner", "wallCornerRond") else "bbox")
         cat.append(dict(group="walls", src=SRC / "walls" / f"{n}.glb", name=n, palette=None, scale=KIT_SCALE, role="wall", mode=mode, out=OUT / "walls" / f"{n}.glb", kind="wall"))
+    for n, g, src, sc, mode, rooms, use, place, opt in INTERIOR:              # Wave 8 stage A: the interior kit (rows -> manifest_interior.json unless INTERIOR_IN_MAIN)
+        cat.append(dict(group=g, src=src, name=n, palette=opt.get("palette"), scale=sc, role="furniture" if g == "furniture" else "wall", mode=mode,
+                        out=OUT / g / f"{n}.glb", kind="furniture" if g == "furniture" else "wall", interior=True, rooms=rooms, use=use, place=place,
+                        remap_y=opt.get("remap_y"), drop_mats=opt.get("drop_mats"), credit=opt.get("credit"), yaw_q=opt.get("yaw_q", 0), center=(g == "furniture")))
     for c in cat:
         c["id"] = f"{c['group']}/{c['name']}"
     return cat
@@ -218,6 +413,31 @@ def materials_for(c: dict, g) -> list[dict]:
 
 def clean_prims(g, c) -> list[Prim]:
     prims = g.prims
+    if c.get("drop_mats"):                     # Wave 8: e.g. the glass panes of wallWindowPort (an open firing port)
+        names = [m.get("name", "") for m in g.json.get("materials", [])]
+        prims = [p for p in prims if names[p.mat] not in c["drop_mats"]]
+    if c.get("remap_y"):                       # Wave 8: re-author heights (piecewise-linear knots in metres at the suggested scale; every source vertex sits on a knot)
+        ky = np.array([a for a, _ in c["remap_y"]], np.float64)
+        vy = np.array([b for _, b in c["remap_y"]], np.float64)
+        out = []
+        for p in prims:
+            y = p.pos[:, 1].astype(np.float64) * c["scale"]
+            if np.abs(y[:, None] - ky[None, :]).min(1).max() > 0.002:
+                raise RuntimeError("%s: a vertex at y %.3f m is not on a remap_y knot" % (c["name"], float(y[np.abs(y[:, None] - ky[None, :]).min(1).argmax()])))
+            pos = p.pos.copy()
+            pos[:, 1] = (np.interp(y, ky, vy) / c["scale"]).astype(np.float32)
+            out.append(Prim(pos, p.nrm, p.uv, p.idx, p.mat, p.node))
+        prims = out
+    if c.get("yaw_q"):                         # Wave 8: quarter-turn the source about +Y so the piece's front faces +Z (x' = c x + s z, z' = -s x + c z, the citykit turn)
+        q = c["yaw_q"] % 4
+        cs, sn = [(1, 0), (0, 1), (-1, 0), (0, -1)][q]
+        rot = lambda a: np.stack([cs * a[:, 0] + sn * a[:, 2], a[:, 1], -sn * a[:, 0] + cs * a[:, 2]], 1).astype(np.float32)
+        prims = [Prim(rot(p.pos), rot(p.nrm), p.uv, p.idx, p.mat, p.node) for p in prims]
+    if c.get("center"):                        # Wave 8 interior furniture: origin = footprint centre at the bottom (the contract of this file; the Kenney sources sit anywhere in the kit's scene)
+        P = np.concatenate([p.pos for p in prims]).astype(np.float64)
+        lo, hi = P.min(0), P.max(0)
+        sh = np.array([-(lo[0] + hi[0]) / 2, -lo[1], -(lo[2] + hi[2]) / 2])
+        prims = [Prim((p.pos.astype(np.float64) + sh).astype(np.float32), p.nrm, p.uv, p.idx, p.mat, p.node) for p in prims]
     if c["palette"]:
         for p in prims:
             p.mat = 0
@@ -593,7 +813,7 @@ def band_colliders(prims, scale):
     return boxes, dict(coverage=round(1 - left / max(total, 1), 3), split=split)
 
 
-def elevation_colliders(prims, scale, cell=0.05, max_boxes=4):
+def elevation_colliders(prims, scale, cell=0.05, max_boxes=4, snap=False):
     """Wall pieces with an opening (doorway, wide doorway, open frame): decompose the FRONT-ELEVATION silhouette (x,y), so the
     opening stays free and the jambs / lintel become boxes. Thickness (z) = the piece's own."""
     tris = tri_world(prims, scale)
@@ -614,12 +834,66 @@ def elevation_colliders(prims, scale, cell=0.05, max_boxes=4):
     for r0, c0, r1, c1 in rects:
         boxes.append([round(x0 + c0 * cell, 3), round(max(y0 + r0 * cell, 0.0), 3), round(zc - half, 3),
                       round(x0 + c1 * cell, 3), round(y0 + r1 * cell, 3), round(zc + half, 3)])
+    if snap:                                   # Wave 8 interior pieces only (the shipped elevation types keep their Wave 4 boxes byte for byte)
+        boxes = snap_boxes(boxes, tris)
     return boxes, dict(coverage=round(cov, 3), view="front elevation")
+
+
+def steps_colliders(prims, scale, max_boxes=MAX_BOXES):
+    """Stairs (Wave 8): one box per tread, from the ground to the tread top, so a flight is a staircase of axis-aligned boxes the mover climbs riser by riser (Kenney: 0.268 m, under
+    its 0.55 m step) and nothing is open underneath (no hide area under a flight). The tread map = the top view of the UPWARD faces only (normal.y > 0.7: risers, nosing undersides
+    and the bottom are left out), each cell holding the height of the highest one; cells of one tread height are covered by maximal rectangles (exact: a tread is a rectangle, the
+    corner flight's landing a square)."""
+    tris = tri_world(prims, scale)
+    n = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    ny = n[:, 1] / np.maximum(np.linalg.norm(n, axis=1), 1e-12)
+    up = tris[ny > 0.7]
+    grid = Grid(tris, CELL, margin=4)
+    top = np.zeros((grid.H, grid.W), np.float32)
+    for t in up[np.argsort(up[:, :, 1].max(1), kind="stable")]:
+        pts = grid.pts(t[:, [0, 2]])
+        cv2.fillConvexPoly(top, pts, float(t[:, 1].max()), lineType=cv2.LINE_8, shift=4)     # fill only (no outline): a tread does not bleed one cell past its edge
+    lv = np.round(top / 0.005).astype(np.int32)
+    boxes, cells, covered = [], 0, 0
+    for L in sorted(set(lv[lv > 0].tolist())):
+        region = lv == L
+        rects, cov = decompose(region, max_boxes, 0.0)
+        cells += int(region.sum())
+        covered += int(round(cov * region.sum()))
+        for r0, c0, r1, c1 in rects:
+            x0, z0, x1, z1 = grid.to_world(c0, r0, c1, r1)
+            boxes.append([round(x0, 3), 0.0, round(z0, 3), round(x1, 3), round(L * 0.005, 3), round(z1, 3)])
+    if len(boxes) > max_boxes:
+        raise RuntimeError("steps: %d boxes > %d" % (len(boxes), max_boxes))
+    boxes = snap_boxes(boxes, tris)
+    return boxes, dict(coverage=round(covered / max(cells, 1), 3), treads=len(boxes), view="tread map")
+
+
+def snap_boxes(boxes, tris, tol=0.08):
+    """Wave 8 (interior pieces): a raster box edge stands up to a cell (+ the rasteriser's boundary pixel) off the real geometry; move every box coordinate to the nearest vertex
+    coordinate of the piece on that axis when one is within tol, so a collider face sits ON the drawn face (the 1.20 m sill of wallWindowPort is 1.200, not 1.25)."""
+    V = tris.reshape(-1, 3)
+    vals = [np.unique(np.round(V[:, a], 4)) for a in range(3)]
+    out = []
+    for b in boxes:
+        nb = list(b)
+        for k in range(6):
+            a = k % 3
+            j = int(np.abs(vals[a] - b[k]).argmin())
+            if abs(float(vals[a][j]) - b[k]) <= tol:
+                nb[k] = round(float(vals[a][j]), 3)
+        out.append(nb if all(nb[a] < nb[a + 3] for a in range(3)) else list(b))
+    return out
 
 
 def make_colliders(c, prims):
     sc = c["scale"]
     info, dbg = {}, None
+    if c["mode"] == "none":                   # Wave 8: nothing drawn at body height (a rug, a pallet): no collider
+        return [], {"none": "nothing drawn above %.2f m" % BAND[0]}, None
+    if c["mode"] == "steps":
+        boxes, info = steps_colliders(prims, sc)
+        return boxes, info, None
     if c["mode"] == "footprint":
         boxes, info, dbg = footprint_colliders(prims, sc)
         if not boxes:
@@ -629,7 +903,7 @@ def make_colliders(c, prims):
     elif c["mode"] == "bands":
         boxes, info = band_colliders(prims, sc)
     elif c["mode"] == "elevation":
-        boxes, info = elevation_colliders(prims, sc)
+        boxes, info = elevation_colliders(prims, sc, snap=bool(c.get("interior")))
     else:
         boxes = bbox_collider(prims, sc, 0.0)
     return boxes, info, dbg
@@ -652,6 +926,47 @@ def recolor(im: Image.Image, cells) -> Image.Image:
         ratio = lum / max(float(lum.mean()), 1e-4)
         a[y0:y1, x0:x1] = np.clip(np.array(rgb, np.float32)[None, None, :] / 255.0 * ratio[..., None], 0, 1)
     return Image.fromarray((a * 255 + 0.5).astype(np.uint8), "RGB")
+
+
+def siding_profile(period: int, depth: float, jitter: float, rows: int = 128) -> np.ndarray:
+    """Per-row luminance factor of horizontal boards painted along a swatch's v axis: a dark gap line at the top of each board (depth) and a small board-to-board shade jitter.
+    Integer hash of the board index, so the profile is the same on every run."""
+    gap = max(1, int(round(period * 0.22)))
+    f = np.ones(rows, np.float32)
+    for k in range(rows):
+        j = k // period
+        h = (((j + 1) * 2654435761) >> 7) & 255
+        f[k] = (1.0 + jitter * (h / 127.5 - 1.0)) * (1.0 - depth if (k % period) < gap else 1.0)
+    return f
+
+
+def recolor_theme(im: Image.Image, key: str, spec: dict) -> tuple[Image.Image, list]:
+    """One theme colourway of a colormap: roof, wall, trim and door / base swatches take the spec's mid colour (each keeps its own light -> dark ramp); the wall swatch can carry boards."""
+    cells = []
+    for what, cell in SWATCH_USE[key].items():
+        cells.append((swatch_box(cell), spec[what], what))
+    out = np.asarray(recolor(im, cells)).astype(np.float32)
+    if spec.get("siding"):
+        x0, y0, x1, y1 = swatch_box(SWATCH_USE[key]["wall"])
+        prof = siding_profile(SIDING_PX[key], spec["siding"][0], spec["siding"][1], y1 - y0)
+        out[y0:y1, x0:x1] = np.clip(out[y0:y1, x0:x1] * prof[:, None, None], 0, 255)
+    return Image.fromarray((out + 0.5).astype(np.uint8), "RGB"), sorted({w for *_, w in cells} | ({"siding"} if spec.get("siding") else set()))
+
+
+def save_pal(im: Image.Image, dst: Path) -> int:
+    """PNG-8 when the picture has <= 256 colours (every colour exact: the shipped base colormaps are PNG-8 too), else a deterministic median-cut to 256 colours. The theme
+    colourways go through here: an RGB copy of the suburban colormap is 18 KB, the PNG-8 one 12 KB."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    a = np.asarray(im.convert("RGB"))
+    flat = a.reshape(-1, 3)
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    if len(uniq) <= 256:
+        pim = Image.fromarray(inv.reshape(a.shape[:2]).astype(np.uint8), "P")
+        pim.putpalette(uniq.astype(np.uint8).reshape(-1).tolist())
+    else:
+        pim = im.convert("RGB").quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pim.save(dst, optimize=True)
+    return dst.stat().st_size
 
 
 def build_palettes(cat) -> dict:
@@ -679,7 +994,95 @@ def build_palettes(cat) -> dict:
             vf = p["file"].replace(".png", f"_{vname}.png")
             vs = save_png(recolor(im.convert("RGB"), cells), (OUT / vf).resolve())
             out[key]["variants"][vname] = {"file": vf, "bytes": vs, "recolours": sorted({w for *_, w in cells})}
+        if key in SWATCH_USE:                                  # Wave 7b: the resort / lodge colourways (after the four shipped variants: the manifest keeps their order)
+            for theme, vs_ in THEME_VARIANTS.items():
+                for vname, spec in vs_.items():
+                    vf = p["file"].replace(".png", f"_{vname}.png")
+                    img, rec = recolor_theme(im.convert("RGB"), key, spec)
+                    out[key]["variants"][vname] = {"file": vf, "bytes": save_pal(img, (OUT / vf).resolve()), "recolours": rec, "theme": theme}
     return out
+
+
+# ── far-proxy colours of the theme variants + the JS tables the runtime keeps as literal copies ─────────────────────────────────────────────────────────────────────
+BASE_VARIANTS = ["base", "slate", "brick", "sand"]                    # citykit.js VARIANT_ORDER as shipped (PROXY_COLORS holds [wall, roof] per entry in this order)
+
+
+def theme_variant_names() -> list:
+    return [n for t in THEME_VARIANTS for n in THEME_VARIANTS[t]]
+
+
+def proxy_colours(cat, pal_dir: Path) -> dict:
+    """[wall, roof] sRGB per palette-textured building type per theme variant (the far proxy of a district and the box fallback of a type whose GLB failed draw these).
+    wall = the area-weighted mean colour over the type's non-roof faces (normal.y <= 0.5), roof = over its roof faces (normal.y > 0.5), each triangle sampled at its UV centroid
+    in the variant's colormap. (The shipped PROXY_COLORS roofs agree with this within ~0x10; its walls were weighted lighter - they are not used for the new variants.)"""
+    out = {}
+    pals = {}
+    for key in SWATCH_USE:
+        for v in theme_variant_names():
+            pals[(key, v)] = np.asarray(Image.open(pal_dir / f"{key}_{v}.png").convert("RGB")).astype(np.float64)
+    for c in cat:
+        if c["kind"] != "building" or not c["palette"] or c["palette"] not in SWATCH_USE:
+            continue
+        g = read_glb(c["src"])
+        tris = []
+        for pr in g.prims:
+            tr = pr.pos[pr.idx].astype(np.float64) * c["scale"]
+            uv = pr.uv[pr.idx].astype(np.float64).mean(1) * 512
+            n = np.cross(tr[:, 1] - tr[:, 0], tr[:, 2] - tr[:, 0])
+            a = 0.5 * np.linalg.norm(n, axis=1)
+            n = n / np.maximum(2 * a[:, None], 1e-12)
+            tris.append((a, n[:, 1], np.clip(uv[:, 0].astype(int), 0, 511), np.clip(uv[:, 1].astype(int), 0, 511)))
+        row = []
+        for v in theme_variant_names():
+            img = pals[(c["palette"], v)]
+            for roof in (False, True):
+                acc, tot = np.zeros(3), 0.0
+                for a, ny, ux, uy in tris:
+                    m = (ny > 0.5) if roof else (ny <= 0.5)
+                    acc += (img[uy[m], ux[m]] * a[m, None]).sum(0)
+                    tot += float(a[m].sum())
+                col = acc / tot if tot > 0 else np.zeros(3)
+                row.append(int(round(col[0])) << 16 | int(round(col[1])) << 8 | int(round(col[2])))
+        out[c["id"]] = row
+    return out
+
+
+def emit_theme_tables(dst: Path, pal_dir: Path) -> None:
+    """The literal blocks citykit.js keeps (VARIANT_ORDER, PROXY_COLORS_X, THEMES, THEME_TYPES), generated; `--check-tables` compares the runtime files against the same text."""
+    cat = [c for c in catalogue() if c["kind"] == "building" and c["palette"] in SWATCH_USE]
+    px = proxy_colours(cat, pal_dir)
+    order = sorted(px, key=lambda i: ["suburban", "commercial", "skyscraper", "lowdetail"].index(i.split("/")[0]) * 1000 + sorted(px).index(i))
+    lines = ["// generated by games/last-circle/_tools/art_b_city.py (--emit-theme-tables): copy these blocks into runtime/3d/royale/citykit.js (do not edit by hand)",
+             'const VARIANT_ORDER = [%s];' % ", ".join('"%s"' % v for v in BASE_VARIANTS + theme_variant_names()),
+             "/** [wall, roof] per type for the theme variants, in VARIANT_ORDER order after the four shipped ones (the far proxy / box fallback; see art_b_city.py proxy_colours) */",
+             "const PROXY_COLORS_X = Object.freeze({"]
+    for i, tid in enumerate(order):
+        lines.append('  "%s": [%s]%s' % (tid, ", ".join("0x%06x" % x for x in px[tid]), "," if i + 1 < len(order) else ""))
+    lines.append("});")
+    lines.append("// THEMES entries (default colourway when an entry carries no palette; the colours are baked into the variants, so the tint stays white)")
+    for t in THEME_VARIANTS:
+        d = list(THEME_VARIANTS[t])[0]
+        lines.append('  %s Object.freeze({ variant: Object.freeze({ suburban: "%s", commercial: "%s" }), tint: 0x%06x }),' % ((t + ":").ljust(7), d, d, THEME_TINT[t]))
+    lines.append("// THEME_TYPES entries")
+    for t in THEME_TYPE_LISTS:
+        lines.append("  %s: Object.freeze({" % t)
+        for role, ids in THEME_TYPE_LISTS[t].items():
+            lines.append("    %s: [%s]," % (role, ", ".join('"%s"' % x for x in ids)))
+        lines.append("  }),")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    print("theme tables ->", dst, "(%d types x %d variants)" % (len(px), len(theme_variant_names())))
+
+
+def theme_block() -> dict:
+    """manifest.themes / manifest.swatch_use: the generator's own record of the theme colourways, the types per role and the swatch cells (themeshots.py audits them; citykit.js
+    THEMES / THEME_TYPES and towngen.js THEMES are literal copies the selftests compare)."""
+    return {
+        "themes": {t: {"character": THEME_CHARACTER[t], "tint": "0x%06x" % THEME_TINT[t], "variants": {k: list(THEME_VARIANTS[t]) for k in SWATCH_USE},
+                       "colours": {n: {w: "#%02x%02x%02x" % tuple(v) for w, v in sp.items() if w != "siding"} for n, sp in THEME_VARIANTS[t].items()},
+                       "types": THEME_TYPE_LISTS[t]} for t in THEME_VARIANTS},
+        "swatch_use": {k: {w: list(c) for w, c in d.items()} for k, d in SWATCH_USE.items()},
+    }
 
 
 # ───────────────────────────── plotting ─────────────────────────────
@@ -722,26 +1125,115 @@ def plot_group(group: str, items: list, path: Path) -> None:
     plt.close(fig)
 
 
+def palettes_only() -> int:
+    """Regenerate the palette PNGs and the manifest's `palettes`, `themes`, `swatch_use` and `readme`; nothing else is read or written (the GLBs and every type row are kept byte for byte).
+    The output is a pure function of (the source colormaps, this file, the existing manifest)."""
+    mpath = OUT / "manifest.json"
+    if not mpath.exists():
+        game_m = GAME / "assets" / "props" / "city" / "manifest.json"
+        mpath.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(game_m, mpath)
+    manifest = json.loads(mpath.read_text(encoding="utf-8"))
+    palettes = build_palettes(catalogue())
+    tb = theme_block()
+    new = {}
+    for k, v in manifest.items():                       # keep the key order of the manifest; the new blocks go right after `palettes`
+        if k == "palettes":
+            new["palettes"] = palettes
+            new["themes"] = tb["themes"]
+            new["swatch_use"] = tb["swatch_use"]
+        elif k in ("themes", "swatch_use"):
+            continue
+        elif k == "readme":
+            new["readme"] = README
+        else:
+            new[k] = v
+    mpath.write_text(json.dumps(new, separators=(",", ":")), encoding="utf-8")
+    nvar = sum(len(p["variants"]) for p in palettes.values())
+    print("palettes ->", mpath, "(%d palettes, %d variants, themes %s)" % (len(palettes), nvar, ", ".join(tb["themes"])))
+    for key in SWATCH_USE:
+        for vn, vv in palettes[key]["variants"].items():
+            print("  %-10s %-10s %6d B  %s" % (key, vn, vv["bytes"], vv["file"]))
+    return 0
+
+
 def colliders_only(cat) -> int:
     """Recompute ONLY the colliders (boxes, mode, info) from the source models and rewrite them into the existing manifest. Nothing else is written
-    (no GLB, palette or plot) and every other byte of the manifest is kept, so the output is a pure function of (source models, this file, the manifest)."""
+    (no GLB, palette or plot) and every other byte of the manifest is kept, so the output is a pure function of (source models, this file, the manifest).
+    Wave 8: an interior row is rewritten where it lives (manifest_interior.json in stage A, manifest.json once merged)."""
     mpath = OUT / "manifest.json"
+    ipath = OUT / "manifest_interior.json"
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
-    types = manifest["types"]
+    imanifest = json.loads(ipath.read_text(encoding="utf-8")) if ipath.exists() else {"types": {}}
+    types, itypes = manifest["types"], imanifest["types"]
     for c in cat:
-        if c["id"] not in types:
+        if c["id"] in types:
+            t = types[c["id"]]
+        elif c["id"] in itypes:
+            t = itypes[c["id"]]
+        else:
             print("FAIL", c["id"], "is not in the existing manifest (run the full intake first)")
             return 1
         boxes, info, _ = make_colliders(c, clean_prims(read_glb(c["src"]), c))
-        t = types[c["id"]]
         t["colliders"] = [{"min": b[:3], "max": b[3:]} for b in boxes]
         t["collider_mode"] = c["mode"]
         t["collider_info"] = info
         print("%-34s %-9s %d box%s %s" % (c["id"], c["mode"], len(boxes), "" if len(boxes) == 1 else "es", info))
-    manifest["readme"] = README
+    manifest["readme"] = README + (README_INTERIOR if any(k in types for k in (f"{g}/{n}" for n, g, *_ in INTERIOR)) else [])
     mpath.write_text(json.dumps(manifest, separators=(",", ":")), encoding="utf-8")
+    if ipath.exists():
+        ipath.write_text(json.dumps(imanifest, separators=(",", ":")), encoding="utf-8")
     print("\ncolliders ->", mpath, "(%d types, %d boxes)" % (len(types), sum(len(v["colliders"]) for v in types.values())))
+    if itypes:
+        print("colliders ->", ipath, "(%d interior rows, %d boxes)" % (len(itypes), sum(len(v["colliders"]) for v in itypes.values())))
     return 0
+
+
+def interior_catalogue() -> dict:
+    """rooms / use / place / collide of every interior piece (the 32 shipped + INTERIOR), in a fixed order: shipped first (manifest order), then INTERIOR as listed."""
+    out = {}
+    for tid in sorted(INTERIOR_SHIPPED, key=lambda k: (k.split("/")[0] != "furniture", k)):
+        rooms, use, place = INTERIOR_SHIPPED[tid]
+        out[tid] = {"rooms": rooms, "use": use, "place": place, "collide": "solid", "new": False}
+    for n, g, src, sc, mode, rooms, use, place, opt in INTERIOR:
+        out[f"{g}/{n}"] = {"rooms": rooms, "use": use, "place": place, "collide": "none" if mode == "none" else "solid", "new": True}
+    return out
+
+
+def write_interior_manifest(rows: dict, into_main: bool, merge: bool) -> None:
+    """assets/props/city/manifest_interior.json: README_INTERIOR, the catalogue and (stage A) the interior `types` rows in manifest.json's schema. A pure function of the inputs:
+    a second run writes the same bytes. merge (an --only run): rows of the existing file that this run did not produce are kept. into_main: no rows (they are in manifest.json)."""
+    ipath = OUT / "manifest_interior.json"
+    old = {}
+    if merge and not into_main and ipath.exists():
+        old = json.loads(ipath.read_text(encoding="utf-8")).get("types", {})
+    if not into_main:
+        old.update(rows)
+    order = [f"{g}/{n}" for n, g, *_ in INTERIOR]
+    rows = {k: old[k] for k in sorted(old, key=lambda k: order.index(k) if k in order else len(order))}
+    totals = {}
+    for v in rows.values():
+        t = totals.setdefault(v["group"], {"files": 0, "tris": 0, "bytes": 0, "src_bytes": 0})
+        t["files"] += 1
+        t["tris"] += v["tris"]
+        t["bytes"] += v["bytes"]
+        t["src_bytes"] += v["src_bytes"]
+    doc = {
+        "version": 1,
+        "generated_by": "games/last-circle/_tools/art_b_city.py",
+        "stage": "Wave 8 stage A (lane H2): rows NOT yet in manifest.json" if rows else "merged into manifest.json (INTERIOR_IN_MAIN): catalogue only",
+        "licence": "CC0 throughout: Kenney Furniture Kit 2.0; Quaternius (Poly Pizza, CC0 1.0): Shelf Tall, Shelf Large, Pallet. See CREDITS.md.",
+        "readme": README_INTERIOR,
+        "palettes": "manifest.json `palettes` (the pallet uses quaternius_atlas; every other interior piece uses flat material colours and no texture)",
+        "catalogue": interior_catalogue(),
+        "totals": totals,
+        "types": rows,
+    }
+    ipath.parent.mkdir(parents=True, exist_ok=True)
+    ipath.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    print("\ninterior manifest ->", ipath, "(%d rows, catalogue %d)" % (len(rows), len(doc["catalogue"])))
+    for grp, t in totals.items():
+        print("  interior %-11s %2d files  %6d tris  %8d B  (source %8d B)" % (grp, t["files"], t["tris"], t["bytes"], t["src_bytes"]))
 
 
 # ───────────────────────────── main ─────────────────────────────
@@ -752,6 +1244,13 @@ def main() -> int:
     ap.add_argument("--no-plots", action="store_true")
     ap.add_argument("--skip-pack", action="store_true", help="reuse the GLBs already on disk (collider / manifest iteration)")
     ap.add_argument("--out-root", default=None, help="write assets/props/{city,cars} under this directory instead of the game directory (reproducibility checks)")
+    ap.add_argument("--palettes-only", action="store_true",
+                    help="regenerate ONLY the palette PNGs and the manifest's palettes / themes / swatch_use / readme blocks (no GLB is written, every other byte of the manifest is kept; "
+                         "needs an existing manifest under the output root, copied from the game directory when --out-root is new)")
+    ap.add_argument("--emit-theme-tables", default=None, metavar="FILE",
+                    help="with --palettes-only (or alone): write the literal citykit.js blocks (VARIANT_ORDER, PROXY_COLORS_X, THEMES, THEME_TYPES) for the theme variants to FILE")
+    ap.add_argument("--interior-into-main", action="store_true",
+                    help="Wave 8 stage B: write the interior kit rows (INTERIOR) into manifest.json instead of manifest_interior.json (the same as INTERIOR_IN_MAIN = True)")
     ap.add_argument("--colliders-only", action="store_true",
                     help="recompute ONLY colliders / collider_mode / collider_info from the source models and rewrite them into the existing manifest "
                          "(no GLB, palette or plot is written; every other byte of the manifest is kept)")
@@ -774,9 +1273,15 @@ def main() -> int:
         cat = [c for c in cat if args.only in c["id"]]
     if args.colliders_only:
         return colliders_only(cat)
+    if args.palettes_only:
+        rc = palettes_only()
+        if args.emit_theme_tables and rc == 0:
+            emit_theme_tables(Path(args.emit_theme_tables), OUT / "palettes")
+        return rc
     t0 = time.time()
     palettes = build_palettes(catalogue())
     types = {}
+    interior_ids: set = set()
     plots: dict[str, list] = {}
     bad = 0
     for c in cat:
@@ -808,16 +1313,23 @@ def main() -> int:
         lo = np.array(st["bbox_min"]) * sc
         hi = np.array(st["bbox_max"]) * sc
         boxes, info, dbg = make_colliders(c, prims)
+        if c["mode"] == "none" and float(hi[1]) > BAND[0]:
+            print("FAIL", c["id"], "collider mode none but drawn up to %.3f m (> %.2f m: a player meets it)" % (float(hi[1]), BAND[0]))
+            bad += 1
         rel = os.path.relpath(c["out"], OUT).replace("\\", "/")
         types[c["id"]] = {
             "file": rel, "group": c["group"], "kind": c["kind"], "role": c["role"], "palette": c["palette"], "tris": st["tris"],
             "verts": st["verts"], "bytes": c["out"].stat().st_size, "src_bytes": c["src"].stat().st_size,
             "suggested_scale": sc, "bbox_m": {"x": round(float(hi[0] - lo[0]), 3), "y": round(float(hi[1] - lo[1]), 3), "z": round(float(hi[2] - lo[2]), 3)},
             "bbox_min_m": [round(float(v), 3) for v in lo], "bbox_max_m": [round(float(v), 3) for v in hi],
-            "compression": compression, "front": "+Z", "double_sided": bool(mats[0].get("doubleSided", False)), "materials": len(mats), "uv": bool(uvs),
+            "compression": compression, "front": "+Z", "double_sided": bool(mats[0].get("doubleSided", False)),
+            "materials": len({p.mat for p in prims}) if c.get("interior") else len(mats), "uv": bool(uvs),
             "colliders": [{"min": b[:3], "max": b[3:]} for b in boxes], "collider_mode": c["mode"],
             "collider_info": info,
         }
+        if c.get("interior"):
+            interior_ids.add(c["id"])
+            types[c["id"]]["source"] = c["credit"] or "Kenney Furniture Kit 2.0 (CC0): %s" % c["src"].name
         plots.setdefault(c["group"], []).append(dict(name=c["name"], size=hi - lo, colliders=boxes, dbg=dbg,
                                                      tris_world=tri_world(prims, sc) if dbg is None else None))
         print("%-34s tris %5d  %7d B (src %7d B, %.2fx)  %5.1f x %5.1f x %5.1f m  colliders %d %s" % (
@@ -826,6 +1338,12 @@ def main() -> int:
     if not args.no_plots:
         for grp, items in plots.items():
             plot_group(grp, items, scratch / "plots" / f"colliders_{grp}.png")
+    # Wave 8 stage A: the interior rows go to manifest_interior.json unless they are merged into the main manifest (stage B)
+    into_main = INTERIOR_IN_MAIN or args.interior_into_main
+    itypes = {k: v for k, v in types.items() if k in interior_ids}
+    if not into_main:
+        types = {k: v for k, v in types.items() if k not in interior_ids}
+    write_interior_manifest(itypes, into_main, merge=bool(args.only))
     # manifest (merge with an existing one when --only was used)
     mpath = OUT / "manifest.json"
     manifest = {}
@@ -846,7 +1364,7 @@ def main() -> int:
         "version": 1,
         "generated_by": "games/last-circle/_tools/art_b_city.py",
         "licence": "CC0 throughout: Kenney City Kit Suburban / Commercial / Roads, Car Kit, Furniture Kit, Graveyard Kit; Quaternius props (Poly Pizza). See CREDITS.md.",
-        "readme": README,
+        "readme": README + (README_INTERIOR if into_main else []),
         "districts": {
             "downtown": [k for k in sorted_types if k.startswith("skyscraper/")] + ["commercial/building-i", "commercial/building-m", "commercial/building-f", "commercial/building-a", "commercial/building-h"],
             "suburb": [k for k in sorted_types if k.startswith("suburban/")],
@@ -857,6 +1375,8 @@ def main() -> int:
             "interior_kit": [k for k in sorted_types if k.startswith("walls/") or k.startswith("furniture/")],
         },
         "palettes": palettes,
+        "themes": theme_block()["themes"],
+        "swatch_use": theme_block()["swatch_use"],
         "totals": totals,
         "types": sorted_types,
     }

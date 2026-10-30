@@ -191,7 +191,7 @@ def one_run(args, v, mp, seed):
     with C.Session(args, "warm_programs") as s:
         if plant == "no-arm":
             txt = read_game_file(args, "runtime/3d/ffg_warmup.js")
-            new = re.sub(r"try \{ dv = armDepthVariants\(renderer, scene\);[^\n]*", "/* planted: depth variants not armed */", txt)
+            new = re.sub(r"try \{ dv = armDepthVariants\([^)]*\);[^\n]*", "/* planted: depth variants not armed */", txt)   # any argument list: (renderer, scene) before eab44ff0, (renderer, scene, camera) since
             if new == txt:
                 v.cnj("plant no-arm", "the armDepthVariants call was not found in ffg_warmup.js")
                 return

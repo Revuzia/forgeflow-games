@@ -14,7 +14,11 @@
  *   kit.dispose();                                                                            // from disposeMapResources: frees what a group traverse cannot
  *
  * list = [{ type, x, y, z, rot, scale?, district, palette? }, ...]
- *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 81). Unknown types are skipped and reported in `skipped`.
+ *   type     a manifest id such as "suburban/building-type-a" (typeIds() lists the 136). Unknown types are skipped and reported in `skipped`.
+ *            Wave 8 (stage A2, lane H5): the interior kit is merged - 55 furniture / wall types (Kenney Furniture Kit 2.0 + 3 Quaternius pieces, CC0) with exact
+ *            colliders in COLLIDER_BOXES below: collider_mode "steps" (stairs: one box per tread, nothing to hide under), "none" (rugs, the pallet: nothing at body
+ *            height, so colliderFor gives [] and the far / fallback box drawing skips them). Only the GLBs of the types a place() list DRAWS are fetched
+ *            (place -> preload(drawn types)); a type no map places costs nothing but its manifest row.
  *   x y z    world metres of the footprint CENTRE at GROUND (the manifest origin). y is the pad height from lane 6A; the module never samples terrain.
  *   rot      an INTEGER is a quarter-turn index (rot * 90 degrees about +Y, as maps.js `Q.setFromAxisAngle(Y, ry)`; the authored front +Z faces +Z, +X, -Z,
  *            -X for 0, 1, 2, 3; quarterFacing(dx, dz) gives the index that faces a street); a NON-integer is radians; `ry` (radians) overrides `rot`.
@@ -65,6 +69,8 @@
 
 export const KIT_API = 1;
 export const MANIFEST_PATH = "assets/props/city/manifest.json";
+/** C-GFX / D10: the facade detail strength per graphics tier (createCityKit env.detail / kit.setDetail take a tier name or a number). Off on low. */
+export const DETAIL_BY_TIER = Object.freeze({ low: 0, medium: 0.62, high: 0.62, ultra: 0.62 });
 export const DEFAULTS = Object.freeze({
   farDistance: 250,        // m beyond a district's bounding sphere before it collapses to its one proxy mesh
   hysteresis: 0.04,        // THREE.LOD hysteresis (fraction of the level distance)
@@ -131,21 +137,73 @@ const COLLIDER_BOXES = Object.freeze({
   "cars/taxi": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.72,1.325,1.377,0.92],
   "cars/truck": [-1.125,0,-2.5,1.175,1.326,2.5,-1.275,0,0.9,1.325,1.326,1.1],
   "cars/van": [-1.125,0,-2.33,1.175,1.377,2.32,-1.275,0,0.87,1.325,1.377,1.12],
+  "furniture/bathroomCabinet": [-0.253,0,-0.143,0.253,0.858,0.143],
+  "furniture/bathroomSinkSquare": [-0.473,0,-0.33,0.473,1.276,0.33],
+  "furniture/bathtub": [-1.309,0,-0.616,1.309,0.924,0.616],
+  "furniture/bedDouble": [-1.052,0,-1.238,1.052,0.825,1.238],
+  "furniture/bedSingle": [-0.628,0,-1.238,0.628,0.825,1.238],
   "furniture/bookcaseClosed": [0,0,-0.55,0.88,1.87,0],
+  "furniture/bookcaseClosedDoors": [-0.44,0,-0.275,0.44,1.87,0.275],
+  "furniture/bookcaseClosedWide": [-0.88,0,-0.275,0.88,1.738,0.275],
+  "furniture/bookcaseOpen": [-0.44,0,-0.275,0.44,1.936,0.275],
+  "furniture/bookcaseOpenLow": [-0.44,0,-0.275,0.44,0.88,0.275],
+  "furniture/books": [-0.165,0,-0.104,0.165,0.229,0.104],
+  "furniture/cabinetBed": [-0.293,0,-0.237,0.293,0.513,0.237],
+  "furniture/cabinetBedDrawer": [-0.293,0,-0.239,0.293,0.579,0.239],
   "furniture/cabinetTelevision": [0,0,-0.55,1.76,0.682,0],
   "furniture/cardboardBoxClosed": [0,0,-0.468,0.468,0.618,0],
+  "furniture/cardboardBoxOpen": [-0.409,0,-0.234,0.409,0.618,0.234],
   "furniture/chair": [0,0,-0.44,0.44,1.034,0],
+  "furniture/chairCushion": [-0.22,0,-0.22,0.22,1.012,0.22],
   "furniture/chairDesk": [0,0,-0.692,0.737,1.337,0],
+  "furniture/chairModernCushion": [-0.22,0,-0.22,0.22,1.012,0.22],
+  "furniture/coatRackStanding": [-0.25,0,-0.1,0.3,1.694,0.15,-0.1,0,-0.25,0.15,1.694,0.3],
+  "furniture/computerScreen": [-0.432,0,-0.114,0.432,0.647,0.114],
   "furniture/desk": [-0.022,0,-0.836,1.594,0.846,0.027],
+  "furniture/deskCorner": [0.128,0,-1.072,1.128,0.846,1.128,-1.072,0,-1.072,0.078,0.846,-0.172],
+  "furniture/dryer": [-0.429,0,-0.418,0.429,1.034,0.418],
+  "furniture/hoodModern": [-0.223,0,-0.313,0.277,0.879,-0.013],
+  "furniture/kitchenBar": [-0.473,0,-0.231,0.473,0.924,0.231],
+  "furniture/kitchenBarEnd": [-0.112,0,-0.231,0.112,0.924,0.231],
+  "furniture/kitchenCabinet": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/kitchenCabinetCornerInner": [-0.506,0,-0.506,0.506,0.99,0.506],
+  "furniture/kitchenCabinetDrawer": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/kitchenCabinetUpper": [-0.473,0,-0.242,0.473,0.858,0.242],
   "furniture/kitchenFridge": [0,0,-0.62,0.946,2.024,0.022],
+  "furniture/kitchenMicrowave": [-0.319,0,-0.253,0.319,0.396,0.253],
   "furniture/kitchenSink": [0,0,-0.99,0.946,1.078,0],
   "furniture/kitchenStove": [0,0,-0.99,0.946,0.99,0],
+  "furniture/kitchenStoveElectric": [-0.473,0,-0.495,0.473,0.99,0.495],
+  "furniture/lampRoundFloor": [-0.167,0,-0.193,0.233,1.892,0.257],
+  "furniture/lampSquareCeiling": [-0.132,0,-0.132,0.132,0.506,0.132],
+  "furniture/lampSquareFloor": [-0.132,0,-0.132,0.168,1.892,0.168],
+  "furniture/lampSquareTable": [-0.132,0,-0.132,0.132,0.638,0.132],
+  "furniture/lampWall": [-0.249,0,-0.165,0.249,0.204,0.165],
+  "furniture/loungeChair": [-0.539,0,-0.451,0.539,1.012,0.451],
+  "furniture/loungeDesignSofa": [-1.232,0,-0.451,1.232,0.88,0.451],
   "furniture/loungeSofa": [0,0,-0.902,2.156,1.012,0],
+  "furniture/loungeSofaCorner": [0.122,0,-1.078,1.122,1.012,1.122,-1.078,0,-1.078,0.072,1.012,-0.128],
+  "furniture/loungeSofaLong": [-1.078,0,-0.902,1.122,1.012,0.098,-0.028,0,0.148,0.972,1.012,0.948],
+  "furniture/loungeSofaOttoman": [-0.484,0,-0.495,0.484,0.506,0.495],
+  "furniture/pallet": [],
+  "furniture/plantSmall1": [-0.104,0,-0.104,0.104,0.308,0.104],
   "furniture/pottedPlant": [-0.233,0,-0.266,0.233,1.439,0.266],
+  "furniture/rugRectangle": [],
+  "furniture/rugRound": [],
+  "furniture/rugSquare": [],
+  "furniture/shelfLarge": [-0.061,0,-0.17,0.389,1.997,0.18,-0.761,0,-0.17,-0.661,1.997,0.18,0.739,0,-0.17,0.789,1.997,0.18],
+  "furniture/shelfTall": [-0.658,0,-0.259,0.658,1.988,0.259],
   "furniture/sideTable": [-0.022,0,-0.462,1.154,0.846,0.022],
+  "furniture/sideTableDrawers": [-0.588,0,-0.245,0.588,0.846,0.245],
   "furniture/stoolBar": [0,0,-0.506,0.584,0.957,0],
   "furniture/table": [0,0,-0.984,1.851,0.719,0],
+  "furniture/tableCloth": [-0.926,0,-0.492,0.926,0.719,0.492],
   "furniture/tableCoffee": [-1.014,0,-0.66,0.44,0.506,0.22],
+  "furniture/tableCoffeeSquare": [-0.44,0,-0.44,0.44,0.506,0.44],
+  "furniture/tableCross": [-0.937,0,-0.492,0.937,0.764,0.492],
+  "furniture/tableRound": [-0.762,0,-0.58,0.838,0.807,0.62,-0.312,0,-0.83,0.388,0.807,0.87],
+  "furniture/televisionModern": [-0.753,0,-0.141,0.753,1,0.141],
+  "furniture/toilet": [-0.344,0,-0.525,0.344,0.992,0.525],
   "furniture/trashcan": [-0.229,0,-0.246,0.229,0.941,0.269],
   "walls/doorway": [0,0,-0.223,1.1,2.25,0.027],
   "walls/doorwayFront": [0,0,-0.223,1.1,2.25,0.027],
@@ -155,6 +213,8 @@ const COLLIDER_BOXES = Object.freeze({
   "walls/floorFull": [0,0,-2.2,2.2,0.11,0],
   "walls/floorHalf": [0,0,-2.2,1.1,0.11,0],
   "walls/paneling": [0,0,0,1.1,1.308,0.066],
+  "walls/stairs": [0,0,-1.738,0.361,0.268,0,0.361,0,-1.738,0.721,0.536,0,0.721,0,-1.738,1.082,0.804,0,1.082,0,-1.738,1.443,1.071,0,1.443,0,-1.738,1.803,1.34,0,1.803,0,-1.738,2.164,1.608,0,2.164,0,-1.738,2.569,1.875,0,2.569,0,-1.738,2.886,2.143,0,2.886,0,-1.738,3.246,2.411,0,3.246,0,-1.738,3.607,2.679,0,3.607,0,-1.738,4.012,2.947,0],
+  "walls/stairsCorner": [0.361,0,-1.738,0.721,0.268,0,0.721,0,-1.738,1.082,0.536,0,1.082,0,-1.738,1.443,0.804,0,1.443,0,-1.738,1.803,1.071,0,1.803,0,-1.738,2.164,1.34,0,2.164,0,-1.738,2.525,1.608,0,2.525,0,-1.65,4.263,1.875,0,2.525,0,-2.011,4.263,2.143,-1.65,2.525,0,-2.371,4.263,2.411,-2.011,2.525,0,-2.732,4.263,2.679,-2.371,2.525,0,-3.137,4.263,2.947,-2.732],
   "walls/wall": [0,0,-0.11,2.2,2.837,0],
   "walls/wallCorner": [1,0,-1.21,1.25,2.837,-0.01,0,0,-0.11,1,2.837,0.04],
   "walls/wallCornerRond": [0,0,-0.21,1.25,2.837,0.04,1.1,0,-1.21,1.25,2.837,-0.26],
@@ -162,6 +222,7 @@ const COLLIDER_BOXES = Object.freeze({
   "walls/wallDoorwayWide": [0,2.15,-0.153,2.25,2.9,0.043,0,0,-0.153,0.2,2.15,0.043,2.05,0,-0.153,2.25,2.15,0.043],
   "walls/wallHalf": [0,0,-0.11,1.1,2.837,0],
   "walls/wallWindow": [0,0,-0.153,2.2,2.837,0.043],
+  "walls/wallWindowPort": [0,0,-0.153,2.2,1.2,0.043,0,1.2,-0.153,0.796,2.837,0.043,1.404,1.2,-0.153,2.2,2.837,0.043,0.796,2.3,-0.153,1.404,2.837,0.043],
   "walls/wallWindowSlide": [0,0,-0.153,2.2,2.837,0.043]
 });
 
@@ -489,6 +550,7 @@ export function createCityKit(env) {
   const texP = new Map();                              // palette file -> Promise<Texture|null>
   const palMats = new Map();                           // palette id -> material (kit-owned)
   const textures = new Set();                          // kit-owned textures
+  const surfTextures = new Set();                      // (P23 / LC-17) the derived surface maps + the facade detail: kit-owned, counted apart (stats.surfaceTextures)
   const placements = [];                               // { id, districts: Map, entries }
   let proxyMat = null;
   const shadowsOpt = { value: env.shadows === undefined ? "auto" : env.shadows };
@@ -570,12 +632,127 @@ export function createCityKit(env) {
     const pf = paletteFile(pal.key, pal.variant);
     const tex = pf ? await loadTexture(pf) : null;
     if (palMats.has(id)) return palMats.get(id);
+    const bldg = pal.key === "suburban" || pal.key === "commercial";
+    if (tex && bldg && detailWant > 0) await detailTexture();        // (D10: never fetched while the strength is 0 - the low tier; setDetail(> 0) fetches it later)
+    if (palMats.has(id)) return palMats.get(id);
     const m = new THREE.MeshStandardMaterial({ map: tex || null, roughness: 1, metalness: 0, side: double ? THREE.DoubleSide : THREE.FrontSide });
     m.color.setHex(tex ? pal.tint : 0xb4b8c4);
     m.name = "citykit:" + id;
+    if (tex && (bldg || pal.key === "car")) installSurfaceMap(m, tex, pal.key === "car" ? "car" : "building");
     if (pal.key === "car") installCarPaint(m);
+    else if (tex && bldg) installFacadeDetail(m);
     palMats.set(id, m);
     return m;
+  }
+  // -- surfaces (parity P2-I, LC-17) ---------------------------------------------------------------------------------------------------------
+  // The audit: every kit surface was roughness 1 / metalness 0 - the windows of a tower as matte as its concrete, a car body as dull as its tyres, so the IBL (maps.js
+  // scene.environment) had nothing to show. installSurfaceMap reads the palette's own colormap once (the swatches are flat 64 px cells) and writes a 128 x 128
+  // roughness (G) / metalness (B) map beside it, by what each swatch IS:
+  //   building  glass (pale blue, saturation 0.12-0.7, value >= 0.5): rough 0.14 | white / pale trim: 0.62 | the darkest greys (frames, rails): 0.5, metal 0.45 | the rest 0.9
+  //   car       the saturated body swatches: rough 0.32, metal 0.25 (citykit's car paint recolours them; the paint stays glossy) | glass: 0.08 | light greys (chrome,
+  //             rims, lamps): 0.3, metal 0.6 | near-black (tyres, trim): 0.86 | the rest 0.6
+  // A map, not a program per swatch: one extra texture fetch, the material's own program (compiled by the warm-up with the kit). Node / no canvas: untouched.
+  const surfCache = new Map();
+  function surfaceMapFor(tex, kind) {
+    const img = tex && tex.image, key = (tex && tex.uuid) + ":" + kind;
+    if (surfCache.has(key)) return surfCache.get(key);
+    let out = null;
+    try {
+      if (typeof document !== "undefined" && img && img.width > 0) {
+        const N = Math.min(128, img.width), cv = document.createElement("canvas"); cv.width = cv.height = N;
+        const g = cv.getContext("2d");
+        g.imageSmoothingEnabled = false;
+        g.drawImage(img, 0, 0, N, N);
+        const src = g.getImageData(0, 0, N, N), d = src.data, o = g.createImageData(N, N), od = o.data;
+        let any = 0;
+        for (let i = 0; i < N * N; i++) {
+          const r = d[i * 4] / 255, gg = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), s = mx > 1e-6 ? (mx - mn) / mx : 0;
+          let hue = 0;
+          if (mx - mn > 1e-6) hue = mx === r ? 60 * (((gg - b) / (mx - mn)) % 6) : mx === gg ? 60 * ((b - r) / (mx - mn) + 2) : 60 * ((r - gg) / (mx - mn) + 4);
+          if (hue < 0) hue += 360;
+          const glass = hue >= 195 && hue <= 235 && s >= 0.12 && s <= 0.7 && mx >= 0.5;
+          let ro = 0.9, me = 0;
+          if (kind === "car") {
+            if (glass) ro = 0.08; else if (s > 0.55 && mx > 0.25) { ro = 0.32; me = 0.25; } else if (s < 0.15 && mx > 0.55) { ro = 0.3; me = 0.6; } else if (mx < 0.2) ro = 0.86; else ro = 0.6;
+          } else if (glass) ro = 0.14;
+          else if (s < 0.1 && mx > 0.88) ro = 0.62;
+          else if (s < 0.15 && mx < 0.3 && mx > 0.08) { ro = 0.5; me = 0.45; }
+          if (ro !== 0.9 || me) any++;
+          od[i * 4] = 255; od[i * 4 + 1] = Math.round(ro * 255); od[i * 4 + 2] = Math.round(me * 255); od[i * 4 + 3] = 255;
+        }
+        if (any) {
+          g.putImageData(o, 0, 0);
+          const t = new THREE.CanvasTexture(cv);
+          t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+          t.name = "citykit:surface:" + kind + ":" + (tex.name || ""); t.needsUpdate = true;
+          surfTextures.add(t);
+          out = t;
+        }
+      }
+    } catch (e) { warn("surface map failed:", e && e.message || e); out = null; }
+    surfCache.set(key, out);
+    return out;
+  }
+  function installSurfaceMap(m, tex, kind) {
+    const sm = surfaceMapFor(tex, kind);
+    if (!sm) return;
+    m.roughnessMap = sm; m.metalnessMap = sm; m.roughness = 1; m.metalness = 1;
+  }
+  // Facade detail (LC-17): the kit's colormaps are flat swatches - a 40 m tower face is one colour. A CC0 photographic plaster (assets/tex/facade_detail.jpg, Poly Haven,
+  // greyscale, mean 0.5, low frequencies removed) multiplies the albedo of every building swatch that is not glass or trim (the surface map's roughness >= 0.75), projected
+  // in WORLD space on the face's dominant plane at two scales (2.6 m and 9 m), faded out from 40 to 120 m (no shimmer at range). One shared texture and uniform for every
+  // building palette: no draw call; the program is the material's own (customProgramCacheKey), compiled in the warm frame.
+  // C-GFX / D10 (the low tier): env.detail / setDetail(v) set the strength (DETAIL_BY_TIER: 0 on low). At 0 the texture is never fetched (the 131 KB jpg stays on the
+  // server) and the shader's detail block is skipped by a uniform branch (no texture fetch per fragment); the program is the same at every strength, so a tier change
+  // is a uniform write, never a recompile. Raising it from 0 fetches the texture once and the detail shows when it lands (the live strength stays 0 until then).
+  const DETAIL_PATH = "../../tex/facade_detail.jpg";
+  const detailOf = (v) => (typeof v === "string" ? (DETAIL_BY_TIER[v] != null ? DETAIL_BY_TIER[v] : DETAIL_BY_TIER.medium) : Math.max(0, Math.min(1.5, +v || 0)));
+  let detailWant = env.detail != null ? detailOf(env.detail) : DETAIL_BY_TIER.medium, detailUsers = 0;
+  const detailU = { value: 0 };                        // the live strength (shared by every building palette): 0 until the texture is in, then detailWant
+  const detailTexU = { value: null };                  // the shared sampler (null = three's empty texture: never sampled behind the uLcDetail > 0 branch)
+  let detailP = null;
+  function detailTexture() {
+    if (detailP) return detailP;
+    const pf = { file: DETAIL_PATH, sampler: "LINEAR/LINEAR_MIPMAP_LINEAR" };
+    detailP = loadTexture(pf).then((t) => {
+      if (t) { textures.delete(t); surfTextures.add(t); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; detailTexU.value = t; detailU.value = detailWant; }
+      return t;
+    });
+    return detailP;
+  }
+  function installFacadeDetail(m) {
+    detailUsers++;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.tLcDetail = detailTexU;
+      sh.uniforms.uLcDetail = detailU;
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+{
+  vec4 lcW = vec4(transformed, 1.0);
+  vec3 lcN = objectNormal;
+#ifdef USE_INSTANCING
+  lcW = instanceMatrix * lcW;
+  lcN = mat3(instanceMatrix) * lcN;
+#endif
+  vLcW = (modelMatrix * lcW).xyz;
+  vLcN = mat3(modelMatrix) * lcN;
+}`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform sampler2D tLcDetail;\nuniform float uLcDetail;\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <map_fragment>", `#include <map_fragment>
+if (uLcDetail > 0.0) {
+  vec3 lcN = normalize(vLcN), lcA = abs(lcN);
+  vec2 lcUv = lcA.y > 0.6 ? vLcW.xz : (lcA.x > lcA.z ? vLcW.zy : vLcW.xy);
+  float lcF = uLcDetail * (1.0 - smoothstep(40.0, 120.0, distance(cameraPosition, vLcW)));
+#ifdef USE_ROUGHNESSMAP
+  lcF *= smoothstep(0.7, 0.85, texture2D(roughnessMap, vRoughnessMapUv).g);
+#endif
+  float lcD = texture2D(tLcDetail, lcUv * 0.3846).r * 1.2 + texture2D(tLcDetail, lcUv * 0.1111 + 0.37).r * 0.8;
+  diffuseColor.rgb *= mix(1.0, clamp(lcD, 0.5, 1.55), lcF);
+}`);
+    };
+    m.customProgramCacheKey = () => "citykit-facade-detail";
   }
   // Car paint (Wave 7 polish). The Kenney car palette paints every model in ONE saturated swatch (green sedans, red hatchbacks, ...), which in a street of 20 parked cars
   // is a toy shop. Every car InstancedMesh carries an instance colour (white = untouched): where the texel is a saturated body swatch (HSV saturation > ~0.65) it is replaced
@@ -596,6 +773,23 @@ export function createCityKit(env) {
 #endif`);
     };
     m.customProgramCacheKey = () => "citykit-car-paint";
+  }
+  // Container liveries (P23 / LC-29). The shipping-container GLB is two plain-colour materials (a grey frame, a red body). An entry with a `tint` (sRGB) paints the BODY: the
+  // most saturated part draws with a white copy of its material and the instance colour carries the paint (an entry without one keeps the authored red). One InstancedMesh per
+  // part as before - no draw call per colour; the copy is kit-owned (disposed with the palettes) and compiled by the warm-up like every kit material.
+  function paintPartOf(parts) {
+    let best = -1, bs = -1;
+    parts.forEach((q, i) => { const c = q.material && q.material.color; if (!c) return; const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b), sat = mx > 1e-6 ? (mx - mn) / mx : 0; if (sat > bs + 1e-9) { bs = sat; best = i; } });
+    return bs > 0.3 ? best : -1;
+  }
+  function paintMaterial(src) {
+    const id = "paint:" + src.uuid;
+    if (palMats.has(id)) return palMats.get(id);
+    const m = src.clone();
+    m.color.setRGB(1, 1, 1);
+    m.name = (src.name || "kit") + ":paint";
+    palMats.set(id, m);
+    return m;
   }
   function boxMaterial() {
     if (!proxyMat) { proxyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }); proxyMat.name = "citykit:boxes"; }
@@ -795,10 +989,12 @@ export function createCityKit(env) {
     const M = new THREE.Matrix4(), _sc3 = new THREE.Vector3(), _carCol = new THREE.Color();
     for (const [key, list] of groups) {
       const type = list[0].type, r = glb.get(type), T = man.types[type], pal = list[0].pal;
+      const paintPi = T.role === "container" && list.some((it) => it.tint != null) ? paintPartOf(r.parts) : -1;     // (P23: a container's body wears its entry's livery)
       for (let pi = 0; pi < r.parts.length; pi++) {
         const part = r.parts[pi];
         let mat = part.material;
         if (T.palette) mat = await paletteMaterial(pal, T.double || (part.material && part.material.side === THREE.DoubleSide));
+        if (pi === paintPi) mat = paintMaterial(part.material);
         const im = new THREE.InstancedMesh(part.geometry, mat, list.length);
         im.name = "kit:" + id + ":" + type + (r.parts.length > 1 ? "#" + pi : "") + (T.palette && pal.variant !== "base" ? ":" + pal.variant : "");
         if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
@@ -812,6 +1008,7 @@ export function createCityKit(env) {
           if (!part.identity) M.multiply(part.local);
           im.setMatrixAt(j, M);
           if (T.kind === "car") { _carCol.setHex(it.tint == null ? 0xffffff : it.tint); im.setColorAt(j, _carCol); }
+          else if (pi === paintPi) { if (it.tint == null) _carCol.copy(part.material.color); else _carCol.setHex(it.tint); im.setColorAt(j, _carCol); }
           sc3.copy(gs.center).applyMatrix4(M);
           const rr = gs.radius * M.getMaxScaleOnAxis();
           cen.push(sc3.x, sc3.y, sc3.z, rr);
@@ -868,7 +1065,7 @@ export function createCityKit(env) {
   // -- stats ---------------------------------------------------------------------------------------------------------------------------------
   function stats() {
     const out = { districts: {}, totals: { districts: 0, instances: 0, detailDrawCalls: 0, detailTriangles: 0, proxyDrawCalls: 0, proxyTriangles: 0, currentDrawCalls: 0, currentTriangles: 0,
-      fallbackBoxes: 0, textures: textures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
+      fallbackBoxes: 0, textures: textures.size, surfaceTextures: surfTextures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], detail: { strength: detailWant, live: detailU.value, fetched: !!detailP, materials: detailUsers }, inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
     const failed = new Set();
     for (const P of placements) {
       out.inexactEntries += P.inexact || 0;
@@ -893,6 +1090,14 @@ export function createCityKit(env) {
     shadowsOpt.value = on;
     for (const P of placements) for (const D of P.districts.values()) for (const it of D.meshes) it.mesh.castShadow = on === "auto" ? (it.type ? casts(it.type) : true) : !!on;
   }
+  /** (P23 / LC-17, C-GFX / D10) the facade detail's strength: a number (0 = off) or a tier name ("low" | "medium" | "high" | "ultra": DETAIL_BY_TIER). Every
+   *  building palette shares the uniform: no recompile. Off -> on fetches the texture the first time (never fetched while it stays 0). Returns the strength set. */
+  function setDetail(v) {
+    detailWant = detailOf(v);
+    if (detailWant > 0 && !detailP && !disposed && detailUsers) detailTexture();
+    detailU.value = detailTexU.value ? detailWant : 0;
+    return detailWant;
+  }
   function setFarDistance(m) {
     opt.farDistance = m;
     for (const P of placements) for (const D of P.districts.values()) if (D.lod.levels.length > 1) D.lod.levels[1].distance = m + D.radius;
@@ -913,12 +1118,23 @@ export function createCityKit(env) {
     for (const mat of palMats.values()) { mat.dispose(); m++; }
     if (proxyMat) { proxyMat.dispose(); m++; }
     for (const tex of textures) { tex.dispose(); t++; }
-    palMats.clear(); textures.clear(); texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
+    for (const tex of surfTextures) { tex.dispose(); t++; }
+    palMats.clear(); textures.clear(); surfTextures.clear(); surfCache.clear(); detailP = null; detailTexU.value = null; detailU.value = 0; detailUsers = 0; texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
     return { geometries: g, materials: m, textures: t, instancedMeshes: im };
   }
 
+  /** Wave 8 stage B (lane I1): the parsed GLB of ONE type, for a caller that bakes the pieces into merged meshes of its own (maps.js merges the furnished
+   *  interiors' kit furniture per 32 m chunk: one draw call for every piece of a chunk, not one per type). Resolves { parts: [{ geometry, material, local
+   *  (the mesh's matrix in the GLB), identity, tris }], tris } or { failed }; never rejects. The geometry is the kit's shared parse: read it, never dispose it. */
+  async function parts(type) {
+    assertAlive();
+    await ready();
+    if (!hasType(type)) return { failed: "unknown type " + type };
+    return loadType(type);
+  }
+
   return {
-    api: KIT_API, place, preload, dispose, stats, ready, warmObjects, setShadows, setFarDistance,
+    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance, setDetail,
     colliderFor, footprintFor, typeIds, hasType, resolvePalette,
     get manifest() { return man; },
     get disposed() { return disposed; },

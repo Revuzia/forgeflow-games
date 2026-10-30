@@ -40,7 +40,7 @@ shared box), each as its own process with the same --base / --disk / --rev / --h
 --negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
 allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
 kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout, loot_beams_rings
-(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles), sky_lowtier (one-layer-broken); the Wave-5 gates:
+(flush-clear, storm-ignore), sky_probe (fog-flat, no-rng-burn, no-handles, bird-split), sky_lowtier (one-layer-broken); the Wave-5 gates:
 placementcheck (y-only-recentre, perimeter-drop, tree-float, stack-float: the built map is mutated in memory; and the Wave-4 commit itself), collisioncheck served from the
 Wave-4 commit (--rev 7f6a9fb2), navcheck (nav-l3, raw-strafe, heal-yaw: bots.js / ffg_royale3d.js served patched by a page route), worldcheck
 (the Wave-4 commit, stale-table, rng-shift: scratch copies), worldlive (the Wave-4 commit; ramp-sides-open: player.js served patched);
@@ -89,6 +89,30 @@ walk only, 5 seeds: 30/30 on the stage-B tree, whose E-W decks fail 6-8 of 20 at
 'settled' = canopy open >= 1 s (was |tiltX| <= 0.3; new control player_dive-plant-canopy-dive-pose); squadguard_live_cdn_fallback_full_isla_viva / _deepwood (INFORMATION until the
 deploy, COUNTED in POST_DEPLOY). See README "Wave-7b stage C".
 
+Wave 8 stage B (lane I4, 2026-10-19; furnished interiors wired into the maps): interiorcheck (NEW, BLOCKING on all three maps, --source match: every sampled house
+of a real match has housegen records, a real floor, a ceiling, >= 3 of its OWN furniture pieces in view, kit visuals = colliders at sills / headers, doors >= 2 m,
+reach + loot-reach by the real mover, grass masked indoors, light, and Wave 4's camera pull-in inside EVERY sampled house (--camwall-houses = --houses));
+interiorcheck_housegen / interiorcheck_fixture (housegen.js on its own / the gate's reference house); housegen_demo_nav (2100 rooms walked by the real mover on the
+nav grid); housegen_demo_looks (INFORMATION until it is green: LOOKS_INFO); houseload (NEW: colliders RETURNED per bot query and per frame vs the live build,
+x1.25 - they must not grow with the houses - and <= 16 draw calls per district); navcheck upper-rooms bar 85 % -> 98 % (plan section 4). interiorcheck's
+definition corrections (probe_interior.js VERSION 2): a room counts only its OWN furniture pieces (a neighbour's seen through the doorway never makes it pass), and
+the route planner never stands on a furniture top. Controls: interiorcheck on the frozen Wave-7b release WAVE7B_REV (empty boxes on terrain floors: MUST FAIL), the
+housegen / fixture plants furniture-in-door, window-solid, no-ceiling, empty-room (+ crate-steps on the fixture), housegen_demo_nav --plant doors-blocked,
+houseload --plant query-flood / district-split; navcheck-plant-nav-l3 keeps failing upper-rooms. See README "Wave 8 stage B".
+
+Wave 8 fix round (lane K3, 2026-10-20; definition corrections from the stage-B verify, none lowers a bar, each keeps a failing control): placementcheck ramp-start-step and
+collisioncheck ramps-climb / ramps-lip leave housegen's pitched-roof PLANKS (house.roofRamps) out (roofs, not stairs; control placementcheck-plant-house-stair-lip);
+collisioncheck doors walks housegen's own street-door records (control collisioncheck-plant-door-shift); genversion target 6, no held-identical map (Savanna changes on
+purpose; genversion-plant-savanna-shift re-pinned to WAVE7B_REV vs WAVE7C_REV + its unplanted twin, exit 0); worldcheck --wild-info-maps ashgrid (control
+worldcheck-plant-rng-shift-wave8); navcheck-plant-nav-l3 replaced by navcheck-plant-coarse-indoor (the bots' town grid at 3 m indoor cells); navtown / navcheck rooms surveys drop furniture tops and furniture-fenced pockets (lane I2's request); lootcheck judges a house chest as
+its own box (lane I3's request; lootcheck-wave6-loot-js still fails); worldlive aim judges a box between muzzle / camera and the wall correctly and ramp-sides walks
+30 / 50 / 70 % of the run; artb_check / artb_decode exempt collider_mode 'none' (controls *-plant-drop-colliders); loot_beams_rings skips an off-screen sample instead of
+throwing; houseload's battery look-around radius follows bots.js (WALL_QR 2.4 on the Wave-8 bots, 16 on the live build). Re-run (2026-10-25), on lane K1's request and the
+fix-round verify: interiorcheck grass-indoors counts a changed pixel only when its ray is still inside the room 0.65 m over the floor (the frame's view out of a window is
+information; control interiorcheck-plant-grass-on-floor); mobile's USE row stands the player where it SEES the chest by the game's own pickup rule (control
+mobile_ashgrid-plant-chest-through-wall); mobile's minimap row records the HUD's own tap readback and calls a tap the HUD refused for a > 1200 ms real-time hold
+could-not-judge (environment; every other miss still FAILS). See README "Wave 8 fix round" + "Wave 8 fix round, re-run".
+
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
 any fail -> FAIL (exit 1); else any could-not-judge -> COULD-NOT-JUDGE (exit 2, re-run those gates; never counted as a
@@ -119,7 +143,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 5                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps
+MAP_GEN_TARGET = 7                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
@@ -130,12 +154,26 @@ COLSEEDS_MAPS = ALL_MAPS                               # collisioncheck_seeds --
                                                        # prop containers), so it is no longer could-not-judge there; phantom-rocks passes on the 7b tree (the live build: 1 of 12)
 ENDGAME_BLOCK = "isla_viva,deepwood"                   # endgamecheck --block-maps (both endgame areas landed)
 THEMES_INFO = False                                    # themeshots (lane B3's gate: the resort / lodge colourways + looks): information until lane B1 applies B3's palette patch to the tree; counted afterwards
+ # ---- Wave 8 (lane I4). WAVE7B_REV: the Wave-7b release (live from 2026-10-19 until the Wave-8 deploy): its houses are today's empty house()/tower() boxes on terrain floors - the frozen
+# "must fail" build of interiorcheck --source match. NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
+WAVE7B_REV = "9115494d"
+INTERIOR_MAPS = ALL_MAPS                               # interiorcheck --source match --maps: BLOCKING on all three maps (owner O3 + plan Wave 8 verify "every map")
+LOOKS_INFO = True                                      # housegen_demo_looks: INFORMATION until it is green (stage A: view-pixels 115/116, lodge_tower.f1r1 storage shows 2 pieces); counted afterwards
 PREL5_REV = "874ab0ca"       # the last-circle build BEFORE lane L5 (3474f1c0, 2026-10-04): every chute deploy allocated geometries (200 -> 212 over the 10 SPACE toggles on isla_viva): the frozen "must fail" build of framecheck's
                              # 10-SPACE-toggle row (Wave-7 fix round: the row now excludes the terrain's lazily built chunks and must still see this)
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
 WAVE5B_REV = "bd523284"      # the Wave-5 leftovers release (live; the build Wave 6 starts from): the frozen "must fail" build of the Wave-6 rows and the perf_district baseline
 WAVE5_REV = "3fce7529"       # the Wave-5 release ("Wave 5", live): the frozen "must fail" build of the 2026-10-13 leftovers-round rows
                              # (heal-pockets, container-lean, sprints-rocks, ramps-walk-fine): each fails here AND on the Wave-4 commit (heal-pockets there on geometry-only placements: no C-RAMP)
+
+# ---- Parity waves P2 + P3 (lane P2-F "harness", 2026-10-20; README "Parity waves P2 + P3"). Gates live in _harness/p23/ (p23lib.py shared).
+BASE_P23 = "9aa2b746"        # int-p1 = the Wave-8 snapshot + the verified P1 lanes: the base of every P2/P3 lane. The frozen "must fail" build of every P2/P3 FEATURE gate
+                             # (the feature is absent there). NEVER moves
+PREP1_REV = "e10b9836"       # the Wave-8 working-tree snapshot BEFORE P1: the frozen "must fail" build of the PORTED P1 probes (spray, lobby, ping, loadbar, audiotap). NEVER moves
+# P23_PENDING: the P2/P3 feature gates run as INFORMATION until the integrator has merged the lanes (their contract rows FAIL on a tree without the
+# feature: a missing feature is a failing gate, never a pass). The INTEGRATOR sets this False after the merge: the rows count, and the planted
+# faults of those gates join the negative controls (P23_PENDING_NEG). The ports of the P1 probes count NOW (their features are in the base).
+P23_PENDING = False          # D15 (P2/P3 fix round, 2026-10-26): the lanes are merged (int-p23 f367520c) - the feature gates COUNT and their plants join NEGATIVE
 
 # (name, script, extra args, timeout s, informational)
 GATES = [
@@ -144,13 +182,16 @@ GATES = [
     ("placementcheck", "placementcheck.py", [], 1800, False),
     # Wave-5 fix round (lane F1): worldcheck is Node only too (same reason, runs second); worldlive loads one Chrome per map (PRACTICE: ~40 s)
     # Wave 7b: Savanna's RNG stream must equal the LIVE build's (genversion's gv-identical is the whole-world twin); Isla Viva / Deepwood change on purpose (printed as information)
-    ("worldcheck", "worldcheck.py", ["--baseline-rev", LIVE_REV, "--rng-maps", "ashgrid"], 1800, False),
+    # Wave 8 fix round (lane K3): Savanna's WILD LOOT is information (housegen footprints reject other draws of the last rng consumer); its POIs + prop anchors stay judged
+    ("worldcheck", "worldcheck.py", ["--baseline-rev", LIVE_REV, "--rng-maps", "ashgrid", "--wild-info-maps", "ashgrid"], 1800, False),
     # Wave 7 (lane 7D), Node only: no non-finite ground on 200 seeds x 3 maps (~4 min), and lane 7C's loot probe (15 builds, ~15 s)
     ("nancheck", "nancheck.py", [], 1800, False),
     # Wave-7 completion round (D5), Node only (~25 s): the squad world contract - if anything a peer must agree on (colliders, ground, POIs, prop anchors, loot points, the settled loot items) differs from
     # the LIVE build's on 3 maps x seeds 1, 7, 1234, MAP_GEN_VERSION must be higher than the live build's. Lane D2 owns the constant and bumps it ONCE; every other lane that changes the world tells D2
     # Wave 7b: + gv-target (MAP_GEN_VERSION == MAP_GEN_TARGET on all three maps) and gv-identical (Savanna hashes IDENTICALLY to the live build: col / heights / pois / props / points / items)
-    ("genversion", "genversion.py", ["--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 1800, False),
+    # Wave 8 fix round (lane K3): Savanna changes ON PURPOSE (housegen's furnished houses on every map), so no map is held identical; gv-bumped (the world moved -> the version moved)
+    # and gv-target (6 on all three maps) carry the squad contract. gv-identical keeps its own control (genversion-plant-savanna-shift, re-pinned to the 7b release vs 7c)
+    ("genversion", "genversion.py", ["--expect-version", str(MAP_GEN_TARGET)], 1800, False),
     ("lootcheck", "lootcheck.py", [], 900, False),
     # NavGrid.bakeTown over the Savanna towns + compounds: every room street -> room -> street, planned by the grid and walked by the real mover (Node, ~1 min)
     # Wave 7b: every map's towns + compounds (+ the Deepwood bridge). Rows of the maps in NAVTOWN_BLOCK count; the others print would PASS / would FAIL
@@ -213,6 +254,20 @@ GATES = [
     ("rocksweep", "rocksweep.py", [], 3600, False),
     ("rocksweep_nolip", "rocksweep.py", ["--strip-lip"], 3600, True),       # INFORMATION: a QUESTION about the bake config (is the lip redundant?), not a bar on the game - the lip ships either way
     ("navcheck", "navcheck.py", [], 5400, False),
+    # ---- Wave 8 stage B (lane I4): the furnished interiors. interiorcheck --source match judges 10 houses per map in a real PRACTICE match (one Chrome per map, ~4-8 min per map):
+    # BLOCKING on every map in INTERIOR_MAPS; the camera-wall sweep (Wave 4's pull-in, W.noCamWall as its own control) runs inside EVERY sampled house (--camwall-houses 10)
+    ("interiorcheck", "interiorcheck.py", ["--source", "match", "--maps", INTERIOR_MAPS, "--camwall-houses", "10"], 7200, False),
+    # housegen.js on its own (Node: seeds 1, 7, 1234 x 12 houses; then 4 houses stood on Savanna in a real page): the generator, independent of the maps.js wiring (~3 min)
+    ("interiorcheck_housegen", "interiorcheck.py", ["--source", "housegen"], 3600, False),
+    # the gate's own reference house: every row must PASS on it (its plants below must FAIL) - the judge is checked before it judges the game (~1 min)
+    ("interiorcheck_fixture", "interiorcheck.py", ["--source", "fixture"], 1800, False),
+    # lane H4's nav gate: 300 housegen houses, every room planned on NavGrid.bakeTown and walked IN and OUT by the real mover (Node, ~30 s)
+    ("housegen_demo_nav", "housegen_demo_nav.py", [], 1800, False),
+    # lane H4/H6's looks gate (first-person views of 12 buildings, glass, kit extents): INFORMATION until green (LOOKS_INFO)
+    ("housegen_demo_looks", "housegen_demo_looks.py", [], 1800, LOOKS_INFO),
+    # NEW: colliders returned per bot query (battery at every footprint centre, exact) and per frame (600 stepped frames), vs common.LIVE_REV x1.25; <= 16 draw calls per district.
+    # Two Chromes per map (candidate, baseline), ~1 min each
+    ("houseload", "houseload.py", [], 3600, False),
     # Wave 7b (lane B3's gate, registered here by lane B2): what the kit's town THEMES look like (resort / lodge colourways, palette looks, tables in sync with towngen / citykit, 0 new programs); one
     # Chrome at the menu, ~1 min. THEMES_INFO until the palette patch is on the tree
     ("themeshots", "themeshots.py", ["--themes", "resort,lodge,city", "--label", "gate"], 1800, THEMES_INFO),
@@ -304,6 +359,33 @@ GATES = [
     # information only (never exits 1): LOW tier with vs without the composer, interleaved ABAB. --no-lp drops its lc_liveprobe
     # arms (rAF windows - perfcheck above already reports those); the stepped GPU-synced bench stays
     ("orch_lowpost_ab", "new/orch_lowpost_ab.py", ["--no-lp"], 5400, True),
+    # ---- Parity waves P2 + P3 (lane P2-F). The P1 probes promoted (COUNTED: P1 is in the base; each also FAILS on PREP1_REV, see NEGATIVE):
+    ("p23_spray", "p23/spray.py", [], 3600, False),             # LC-01 recoil climb 3-4 deg + identical pattern, LC-33 bloom, disc pellets, LC-25 blast LOS, frag arc
+    ("p23_lobby", "p23/lobby.py", [], 600, False),              # LC-11 phantom slot + 8 forgeries + grace, LC-07 ping streams (Node)
+    ("p23_ping", "p23/ping.py", [], 3600, False),               # LC-07 ping: one tick, 120 m, rate, MMB, edge, expiry, big-map pin, pointer regrab
+    ("p23_loadbar", "p23/loadbar.py", [], 3600, False),         # LC-23 bar never backwards, LC-82 FIGHT copy, LC-19 Quick challenges
+    ("p23_audiotap", "p23/audiotap.py", [], 3600, False),       # LC-02 listener, LC-08 tail / 450 m delay, LC-26 occlusion 4-8 dB, LC-53 mix >= 6 dB (tap on the output)
+    # the P2 / P3 feature gates (INFORMATION while P23_PENDING; the integrator counts them after the merge):
+    ("p23_stormplace", "p23/stormplace.py", [], 3600, P23_PENDING),       # LC-13 / OD-1: 2000 seeds x 3 maps, p50 >= 150 m, 0 wet finals, 920 s, Quick unchanged (Node)
+    ("p23_roster", "p23/roster.py", ["--parts", "node,fire"], 3600, P23_PENDING),    # LC-16 DMR / LMG / burst lanes, rolls, burst cadence, LC-34 ADS earned
+    ("p23_roster_soak", "p23/roster.py", ["--parts", "soak", "--soak", "10"], 14400, P23_PENDING),   # plan: every gun >= 1 kill over 10 matches
+    ("p23_hitbox", "p23/hitbox.py", [], 5400, P23_PENDING),               # LC-22: no body hit > 0.06 m outside the drawn silhouette, head-top + 0.1 m misses
+    ("p23_heal", "p23/heal.py", [], 3600, P23_PENDING),                   # C-HEAL / LC-05: cancel keeps the item, gun ready <= 0.4 s, spent on completion
+    ("p23_fall", "p23/fall.py", [], 5400, P23_PENDING),                   # C-FALL / OD-8: curve, stagger, armour untouched, water / glide free, bots
+    ("p23_move", "p23/move.py", [], 3600, P23_PENDING),                   # LC-21 slide curve, LC-31 shoulder swap + crosshair truth, LC-10 strafe skate <= 1.25x
+    ("p23_smoke", "p23/smoke.py", [], 3600, P23_PENDING),                 # C-SMOKE: W.smokes, losBlocked, bot sight 0 through it, <= +0.3 ms for 3 on the iGPU
+    ("p23_dbno", "p23/dbno.py", [], 7200, P23_PENDING),                   # C-DBNO: solo unchanged; knock / crawl / bleed / revive (bot + human), trio elimination; two humans
+    ("p23_modes", "p23/modes.py", [], 7200, P23_PENDING),                 # C-MODE: team sizes, drop together, bot mates follow <= 60 m, the menu card
+    ("p23_settings", "p23/settings.py", [], 5400, P23_PENDING),           # P2-G tabs fit, LOW..ULTRA, rebind, colour-blind x3, HUD 130 %, minimap <= 3 m/px, hints once
+    ("p23_lootp2", "p23/lootp2.py", [], 7200, P23_PENDING),               # P2-H death pile, supply drops (>= 3 by 760 s, beacons, open), tiers 1.5x + hot zone
+    ("p23_footsteps", "p23/footsteps.py", [], 3600, P23_PENDING),         # LC-52 footstep census >= 90 % per zone
+    ("p23_tierprof", "p23/tierprof.py", ["--gpu", "default"], 5400, P23_PENDING),    # C-GFX per-tier profile on the iGPU: KB/frame, queryColliders, programs, GPU order
+    ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
+    ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=
+    # lane net's live probe, promoted in the fix round (cases mode / mode3 / match; the in-process server with backlog 256; a browser-level wrong-key rejoin)
+    ("p23_netlive", "p23/netlive.py", [], 5400, P23_PENDING),
+    # INFORMATION (never counted): the live-measure probe on the iGPU profile (a player's first run; perfcheck's own default is the dGPU)
+    ("perfcheck_igpu", "perfcheck.py", ["--profile", "default", "--label", "perfcheck_igpu"], 7200, True),
 ]
 # planted faults that MUST make a passing gate fail (the gate's own falsifier)
 # The post-deploy check (`python _harness/gate.py --disk --post-deploy`, README "Wave-7 completion round"): run it AFTER the CDN has the new build and AFTER common.LIVE_REV was moved to the deployed commit. Every row
@@ -340,6 +422,8 @@ NEGATIVE = [
     ("sky_probe-plant-fog-flat", "new/sky_probe.py", ["--plant", "fog-flat"], 1800),
     ("sky_probe-plant-no-rng-burn", "new/sky_probe.py", ["--plant", "no-rng-burn"], 1800),
     ("sky_probe-plant-no-handles", "new/sky_probe.py", ["--plant", "no-handles"], 1800),
+    ("sky_probe-plant-bird-split", "new/sky_probe.py", ["--plant", "bird-split"], 1800),
+    ("stormfx_storm-plant-no-streaks", "new/stormfx_storm.py", ["--plant", "no-streaks"], 5400),
     ("sky_lowtier-plant-one-layer-broken", "new/sky_lowtier.py", ["--plant", "one-layer-broken"], 1800),
     # Wave-5 lane 5D. placementcheck: the BUILT map is mutated in memory (rocks back on their Wave-4 offset, the 0.35 m perimeter drop
     # back, one tree lifted 0.30 m); collisioncheck: the Wave-4 commit itself is served (pinned: `--rev` in the extra args makes run_gate
@@ -348,7 +432,11 @@ NEGATIVE = [
     ("placementcheck-plant-perimeter-drop", "placementcheck.py", ["--plant", "perimeter-drop"], 900),
     ("placementcheck-plant-tree-float", "placementcheck.py", ["--plant", "tree-float"], 900),
     ("collisioncheck-wave4-commit", "collisioncheck.py", ["--rev", WAVE4_REV], 3600),
-    ("navcheck-plant-nav-l3", "navcheck.py", ["--plant", "nav-l3"], 3600),
+    # Wave 8 fix round (lane K3): navcheck-plant-nav-l3 RETIRED from the battery and replaced by navcheck-plant-coarse-indoor. The Wave-8 bots plan houses on the town grid
+    # (bakeTown), so the NAV_L layer count no longer bites: with the corrected rooms survey nav-l3 PASSES (upper 239 / 240, top 329 / 339), and with the old survey it "failed" only on
+    # furniture-top pseudo-rooms that fail without the plant too (215 / 240 vs 220 / 240 unplanted). coarse-indoor bakes the bots' town grid at 3 m indoor cells: upper 191 / 240, top 11 / 339 FAIL.
+    # (nav-l3 / nav-l2 stay available as --plant for information: nav-l2 reads top 321 / 339 = 94.7 %, a 0.3-point margin - too thin for a control)
+    ("navcheck-plant-coarse-indoor", "navcheck.py", ["--plant", "coarse-indoor"], 3600),
     ("navcheck-plant-raw-strafe", "navcheck.py", ["--plant", "raw-strafe"], 3600),
     ("navcheck-plant-heal-yaw", "navcheck.py", ["--plant", "heal-yaw"], 3600),
     # Wave-5 fix round (lane F1). placementcheck stack-float: ONE stacked upper container is lifted 0.30 m (the stack-support rule must not forgive
@@ -504,7 +592,11 @@ NEGATIVE = [
     ("kitcollide-wave7c-themed", "kitcollide.py", ["--rev", WAVE7C_REV, "--census", "7", "--census-maps", "isla_viva,deepwood", "--census-require", "isla_viva,deepwood"], 1800),
     # genversion: the live build is version 4, not the target (gv-target FAILS); Savanna one compound short (a scratch towngen.js) breaks gv-identical
     ("genversion-wave7c-target", "genversion.py", ["--rev", WAVE7C_REV, "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid"], 900),
-    ("genversion-plant-savanna-shift", "genversion.py", ["--disk", "--live-rev", WAVE7C_REV, "--expect-version", str(MAP_GEN_TARGET), "--identical-maps", "ashgrid", "--plant", "savanna-shift"], 900),
+    # Wave 8 fix round (lane K3): re-pinned. On the Wave-8 tree Savanna differs from every earlier build ON PURPOSE, so the --disk control failed with OR without its plant (gv-identical
+    # and the stale target): it proved nothing. Pinned to the Wave-7b release vs the 7c one (Savanna byte-identical there, version 5): the unplanted twin must PASS (exit 0) and the
+    # planted one (one Savanna compound fewer) must FAIL gv-identical
+    ("genversion-plant-savanna-shift", "genversion.py", ["--rev", WAVE7B_REV, "--live-rev", WAVE7C_REV, "--expect-version", "5", "--identical-maps", "ashgrid", "--plant", "savanna-shift"], 900),
+    ("genversion-savanna-shift-unplanted", "genversion.py", ["--rev", WAVE7B_REV, "--live-rev", WAVE7C_REV, "--expect-version", "5", "--identical-maps", "ashgrid"], 900, 0),
     # worldcheck: the extra rng() draw (existing) judged the new way - Savanna against the live build
     ("worldcheck-plant-rng-shift-wave7c", "worldcheck.py", ["--plant", "rng-shift", "--baseline-rev", WAVE7C_REV, "--rng-maps", "ashgrid"], 900),
     # perf_district: the same sized plants on the themed maps (Isla Viva is the tight one), and the phone tier's x1.20
@@ -528,7 +620,127 @@ NEGATIVE = [
     ("framecheck-plant-extra-tris-isla-viva", "framecheck.py", ["--plant", "extra-tris"], 1800),
     ("squadguard_live_fallback_full_deepwood-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "deepwood"], 1800),
     ("squadguard_live_fallback_full_isla_viva-wave7c-live", "squadguard_live.py", ["--rev", WAVE7C_REV, "--full", "--cases", "fallback-full", "--fallback-map", "isla_viva"], 1800),
+    # ---- Wave 8 stage B (lane I4). interiorcheck --source match on the frozen Wave-7b release: no house records, terrain floors, empty rooms, kit / collider disagreements (stage A measured
+    # 6 pass / 9 fail there) - MUST FAIL. The housegen and fixture plants each fail ONLY their designated rows (interiorcheck PLANT_ROWS); empty-room is the control of the own-pieces
+    # correction (a room whose only visible furniture is its neighbour's), crate-steps the control of the planner correction (a door reachable only over furniture tops: the
+    # stage-A planner walked the fixture's 3 rooms through it, VERSION 2 must not)
+    ("interiorcheck-wave7b-live", "interiorcheck.py", ["--rev", WAVE7B_REV, "--source", "match", "--maps", INTERIOR_MAPS], 5400),
+    ("interiorcheck_housegen-plant-furniture-in-door", "interiorcheck.py", ["--source", "housegen", "--plant", "furniture-in-door"], 3600),
+    ("interiorcheck_housegen-plant-window-solid", "interiorcheck.py", ["--source", "housegen", "--plant", "window-solid"], 3600),
+    ("interiorcheck_housegen-plant-no-ceiling", "interiorcheck.py", ["--source", "housegen", "--plant", "no-ceiling"], 3600),
+    ("interiorcheck_housegen-plant-empty-room", "interiorcheck.py", ["--source", "housegen", "--plant", "empty-room"], 3600),
+    ("interiorcheck_fixture-plant-furniture-in-door", "interiorcheck.py", ["--source", "fixture", "--plant", "furniture-in-door"], 1800),
+    ("interiorcheck_fixture-plant-window-solid", "interiorcheck.py", ["--source", "fixture", "--plant", "window-solid"], 1800),
+    ("interiorcheck_fixture-plant-no-ceiling", "interiorcheck.py", ["--source", "fixture", "--plant", "no-ceiling"], 1800),
+    ("interiorcheck_fixture-plant-empty-room", "interiorcheck.py", ["--source", "fixture", "--plant", "empty-room"], 1800),
+    ("interiorcheck_fixture-plant-crate-steps", "interiorcheck.py", ["--source", "fixture", "--plant", "crate-steps"], 1800),
+    # housegen_demo_nav: a 3 m crate in every street doorway -> nav-rooms 0 %
+    ("housegen_demo_nav-plant-doors-blocked", "housegen_demo_nav.py", ["--plant", "doors-blocked"], 1800),
+    # houseload: 64 dead far-away colliders appended to every queryColliders result (collider-load + collider-load-frame), 20 extra meshes in one district (district-calls)
+    ("houseload-plant-query-flood", "houseload.py", ["--maps", "deepwood", "--plant", "query-flood"], 1800),
+    ("houseload-plant-district-split", "houseload.py", ["--maps", "ashgrid", "--plant", "district-split"], 1800),
+    # (R3 gates) the look measure's own controls - the REAL W.map.hasCollidersNear read through a c.dead tap: it floods (builds and scans its whole r-list,
+    # look mean x13.9) or always answers true (400 wrong answers at empty probe points). Under a plant collider-load judges only that plant's queries
+    ("houseload-plant-look-flood", "houseload.py", ["--maps", "deepwood", "--plant", "look-flood"], 1800),
+    ("houseload-plant-look-true", "houseload.py", ["--maps", "deepwood", "--plant", "look-true"], 1800),
+    # ---- Wave 8 fix round (lane K3): each corrected row keeps a failing control
+    # placementcheck ramp-start-step no longer judges housegen ROOF planks (house.roofRamps): the first housegen STAIR lifted 0.8 m must still fail it
+    ("placementcheck-plant-house-stair-lip", "placementcheck.py", ["--plant", "house-stair-lip", "--quick"], 900),
+    # collisioncheck doors walks housegen's own street-door records: every record moved 2 m along its wall (the walk aims at solid wall) must fail it
+    ("collisioncheck-plant-door-shift", "collisioncheck.py", ["--plant", "door-shift"], 1800),
+    # worldcheck with Savanna's wild loot as information: one extra rng() draw still moves Savanna's prop anchors (rng-stream FAILS) under the gate's own arguments
+    ("worldcheck-plant-rng-shift-wave8", "worldcheck.py", ["--plant", "rng-shift", "--baseline-rev", WAVE7B_REV, "--rng-maps", "ashgrid", "--wild-info-maps", "ashgrid"], 900),
+    # artb_check / artb_decode exempt collider_mode 'none' (rugs, pallet) only: a boxed type whose colliders are emptied in memory must fail the collider row
+    ("artb_check-plant-drop-colliders", "new/artb_check.py", ["--plant", "drop-colliders"], 600),
+    ("artb_decode-plant-drop-colliders", "new/artb_decode.py", ["--groups", "suburban", "--plant", "drop-colliders"], 1800),
+    # ---- Parity waves P2 + P3 (lane P2-F): the ported P1 probes FAIL on the snapshot before P1 and on each planted fault
+    ("p23_spray-rev-pre-p1", "p23/spray.py", ["--rev", PREP1_REV], 3600),
+    ("p23_spray-plant-flat-pattern", "p23/spray.py", ["--plant", "flat-pattern"], 3600),
+    ("p23_spray-plant-los-off", "p23/spray.py", ["--plant", "los-off"], 3600),
+    ("p23_spray-plant-cone-leak", "p23/spray.py", ["--plant", "cone-leak"], 3600),
+    ("p23_lobby-rev-pre-p1", "p23/lobby.py", ["--rev", PREP1_REV], 600),
+    ("p23_lobby-plant-presence-blind", "p23/lobby.py", ["--plant", "presence-blind"], 600),
+    ("p23_lobby-plant-forgery-open", "p23/lobby.py", ["--plant", "forgery-open"], 600),
+    ("p23_lobby-plant-ping-merged", "p23/lobby.py", ["--plant", "ping-merged"], 600),
+    ("p23_ping-rev-pre-p1", "p23/ping.py", ["--rev", PREP1_REV], 3600),
+    ("p23_ping-plant-no-expiry", "p23/ping.py", ["--plant", "no-expiry"], 3600),
+    ("p23_ping-plant-flood", "p23/ping.py", ["--plant", "flood"], 3600),
+    ("p23_loadbar-rev-pre-p1", "p23/loadbar.py", ["--rev", PREP1_REV], 3600),
+    ("p23_loadbar-plant-bar-dip", "p23/loadbar.py", ["--plant", "bar-dip"], 3600),
+    ("p23_audiotap-rev-pre-p1", "p23/audiotap.py", ["--rev", PREP1_REV], 3600),
+    ("p23_audiotap-plant-no-occlusion", "p23/audiotap.py", ["--plant", "no-occlusion"], 3600),
+    ("p23_audiotap-plant-team-blind", "p23/audiotap.py", ["--plant", "team-blind"], 3600),
+    # the P2 / P3 feature gates FAIL on the P2 base (the feature absent): meaningful now and after the merge
+    ("p23_stormplace-rev-base", "p23/stormplace.py", ["--rev", BASE_P23], 3600),
+    ("p23_roster-rev-base", "p23/roster.py", ["--rev", BASE_P23, "--parts", "node,fire"], 3600),
+    ("p23_hitbox-rev-base", "p23/hitbox.py", ["--rev", BASE_P23], 5400),
+    ("p23_heal-rev-base", "p23/heal.py", ["--rev", BASE_P23], 3600),
+    ("p23_fall-rev-base", "p23/fall.py", ["--rev", BASE_P23, "--parts", "human"], 3600),
+    ("p23_move-rev-base", "p23/move.py", ["--rev", BASE_P23], 3600),
+    ("p23_smoke-rev-base", "p23/smoke.py", ["--rev", BASE_P23], 3600),
+    ("p23_dbno-rev-base", "p23/dbno.py", ["--rev", BASE_P23, "--parts", "bot"], 3600),
+    ("p23_modes-rev-base", "p23/modes.py", ["--rev", BASE_P23, "--modes", "duo"], 3600),
+    ("p23_settings-rev-base", "p23/settings.py", ["--rev", BASE_P23], 3600),
+    ("p23_lootp2-rev-base", "p23/lootp2.py", ["--rev", BASE_P23, "--parts", "pile"], 3600),
+    ("p23_footsteps-rev-base", "p23/footsteps.py", ["--rev", BASE_P23, "--maps", "ashgrid,isla_viva"], 3600),
+    ("p23_tierprof-rev-base", "p23/tierprof.py", ["--rev", BASE_P23, "--gpu", "default"], 5400),
+    ("p23_netseq-rev-base", "p23/netseq.py", ["--rev", BASE_P23], 3600),
+    ("p23_botbatch-rev-base", "p23/botbatch.py", ["--rev", BASE_P23, "--runs", "2:isla_viva,3:ashgrid,4:deepwood"], 14400),
+    # (K3 re-run, 2026-10-25) interiorcheck grass-indoors counts only the pixels whose ray is inside the room 0.65 m over the floor: three tufts stood on every room's own floor
+    # lattice (Isla Viva, 4 houses: the map whose crater-ruin frame saw tufts outside through a window) must still fail it
+    ("interiorcheck-plant-grass-on-floor", "interiorcheck.py", ["--source", "match", "--maps", "isla_viva", "--plant", "grass-on-floor", "--houses", "4", "--camwall-houses", "0",
+                                                                  "--shot-houses", "0", "--no-walk"], 2400),
+    # (K3 re-run) mobile's USE row stands where the player SEES the chest (loot.js pickLos): standing at a free spot with a wall between the player and a house chest must fail it
+    ("mobile_ashgrid-plant-chest-through-wall", "mobile.py", ["--map", "ashgrid", "--devices", "pixel7", "--plant", "chest-through-wall"], 3600),
+    # (P2/P3 fix round) player_deaths' facing row judges the VISIBLE facing (the torso; toes are information for the sprint-strafe / run clips):
+    # every model turned 90 deg inside its actor must still fail it
+    ("player_deaths-plant-rig-turned", "new/player_deaths.py", ["--plant", "rig-turned"], 3600),
 ]
+# the P2 / P3 feature gates' planted faults: they bite only on a tree that HAS the feature (on the base every one of them fails anyway, which proves
+# nothing), so they join the negative controls when the integrator sets P23_PENDING = False
+P23_PENDING_NEG = [
+    ("p23_stormplace-plant-land-ignored", "p23/stormplace.py", ["--plant", "land-ignored"], 3600),
+    ("p23_roster-plant-dmr-weak", "p23/roster.py", ["--plant", "dmr-weak", "--parts", "node"], 900),
+    ("p23_hitbox-plant-fat", "p23/hitbox.py", ["--plant", "fat"], 5400),
+    ("p23_hitbox-plant-thin", "p23/hitbox.py", ["--plant", "thin"], 5400),
+    ("p23_heal-plant-no-cancel", "p23/heal.py", ["--plant", "no-cancel"], 3600),
+    ("p23_heal-plant-refund-lost", "p23/heal.py", ["--plant", "refund-lost"], 3600),
+    ("p23_fall-plant-no-damage", "p23/fall.py", ["--plant", "no-damage", "--parts", "human"], 3600),
+    ("p23_fall-plant-harsh", "p23/fall.py", ["--plant", "harsh", "--parts", "human"], 3600),
+    ("p23_fall-plant-no-event", "p23/fall.py", ["--plant", "no-event", "--parts", "human"], 3600),
+    # (fix round) bots-avoid's falsifier: bots.js served with its C-FALL guard off (LETHAL_H / WALK_H null = the base bots) - bots-avoid lips must FAIL
+    ("p23_fall-plant-no-fall-guard", "p23/fall.py", ["--plant", "no-fall-guard", "--parts", "lip"], 3600),
+    # (R3) bots-rule's falsifier: the fall curve x0.6 in the bots' page (a 10 m drop costs a bot ~23 hp) - bots-rule must FAIL
+    ("p23_fall-plant-bot-curve-x0.6", "p23/fall.py", ["--plant", "bot-curve-x0.6", "--parts", "bots"], 3600),
+    ("p23_move-plant-slide-flat", "p23/move.py", ["--plant", "slide-flat", "--parts", "slide"], 3600),
+    ("p23_move-plant-no-swap", "p23/move.py", ["--plant", "no-swap", "--parts", "shoulder"], 3600),
+    ("p23_move-plant-aim-past", "p23/move.py", ["--plant", "aim-past", "--parts", "crosshair"], 3600),
+    ("p23_smoke-plant-los-ignores", "p23/smoke.py", ["--plant", "los-ignores"], 3600),
+    ("p23_smoke-plant-short-life", "p23/smoke.py", ["--plant", "short-life"], 3600),
+    ("p23_smoke-plant-no-cloud", "p23/smoke.py", ["--plant", "no-cloud"], 3600),
+    ("p23_dbno-plant-crawl-fast", "p23/dbno.py", ["--plant", "crawl-fast", "--parts", "bot"], 3600),
+    ("p23_dbno-plant-no-bleed", "p23/dbno.py", ["--plant", "no-bleed", "--parts", "bot"], 3600),
+    ("p23_dbno-plant-revive-quick", "p23/dbno.py", ["--plant", "revive-quick", "--parts", "bot"], 3600),
+    # (R3) the two-human revive: the host releases E after 3 s of game time - human2's channel row (5.0 +- 0.25 s, fixed) must FAIL
+    ("p23_dbno-control-h2-short-hold", "p23/dbno.py", ["--parts", "human2", "--control", "h2-short-hold"], 3600),
+    ("p23_modes-plant-teams-off", "p23/modes.py", ["--plant", "teams-off", "--modes", "duo"], 3600),
+    ("p23_settings-plant-ultra-noop", "p23/settings.py", ["--plant", "ultra-noop"], 3600),
+    ("p23_settings-plant-scale-center", "p23/settings.py", ["--plant", "scale-center"], 3600),
+    ("p23_settings-plant-cvd-sticky", "p23/settings.py", ["--plant", "cvd-sticky"], 3600),
+    ("p23_lootp2-plant-ammo-cap", "p23/lootp2.py", ["--plant", "ammo-cap", "--parts", "pile"], 3600),
+    ("p23_lootp2-plant-no-supply", "p23/lootp2.py", ["--plant", "no-supply", "--parts", "tiers"], 7200),
+    ("p23_footsteps-plant-beside-wood", "p23/footsteps.py", ["--plant", "beside-wood", "--maps", "ashgrid"], 3600),
+    ("p23_tierprof-plant-alloc-leak", "p23/tierprof.py", ["--plant", "alloc-leak", "--gpu", "default"], 5400),
+    ("p23_botbatch-plant-shield-cap", "p23/botbatch.py", ["--plant", "shield-cap", "--runs", "2:isla_viva"], 5400),
+    ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
+    ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
+    # p23_netlive (fix round): the host's order gate off (every packet 'new') must FAIL the late / duplicate row; the guest's revive gate off must
+    # FAIL the early-done row
+    ("p23_netlive-plant-no-order", "p23/netlive.py", ["--cases", "match", "--plant", "no-order"], 5400),
+    ("p23_netlive-plant-no-revive-gate", "p23/netlive.py", ["--cases", "match", "--plant", "no-revive-gate"], 5400),
+]
+if not P23_PENDING:
+    NEGATIVE = NEGATIVE + P23_PENDING_NEG
 
 
 def node_selftests():
@@ -592,6 +804,21 @@ def run_gate(name, script, extra, timeout, args, logdir):
     return {"name": name, "exit": code, "verdict": verdict, "wall": round(time.time() - t0, 1), "log": log, "report": report}
 
 
+def retry_cnj(r, name, script, extra, timeout, args, logdir):
+    """D16 (P2/P3 fix round): a p23 gate that came back COULD-NOT-JUDGE (a setup miss: no pointer lock, a page that never reached the state, a
+    busy-box timeout) runs ONCE more; the second verdict stands (still CNJ = CNJ, never a pass and never a fail). Older gates are unchanged.
+    A control that must exit 2 (feelcheck-plant-blind-sampler) is never retried."""
+    if r["exit"] != 2 or not name.startswith("p23_"):
+        return r
+    print("    -> could-not-judge: retrying %s once (D16)" % name, flush=True)
+    r2 = run_gate(name + "#retry", script, extra, timeout, args, logdir)
+    r2["name"] = name
+    r2["firstAttempt"] = {"exit": r["exit"], "verdict": r["verdict"], "wall": r["wall"], "log": r["log"]}
+    r2["verdict"] = "(retry after a could-not-judge) " + r2["verdict"]
+    r2["wall"] = round(r["wall"] + r2["wall"], 1)
+    return r2
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
@@ -628,6 +855,7 @@ def main():
         if (only is not None and name not in only) or name in skip:
             continue
         r = run_gate(name, script, extra, timeout, args, logdir)
+        r = retry_cnj(r, name, script, extra, timeout, args, logdir)
         r["info"] = info
         rows.append(r)
     if args.negative_controls and not args.post_deploy:
@@ -637,6 +865,8 @@ def main():
             if only is not None and name.split("-")[0] not in only:
                 continue
             r = run_gate(name, script, extra, timeout, args, logdir)
+            if want == 1:
+                r = retry_cnj(r, name, script, extra, timeout, args, logdir)
             r["negative"] = True
             r["info"] = False
             r["gateExit"] = r["exit"]

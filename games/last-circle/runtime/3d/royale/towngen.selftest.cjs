@@ -449,6 +449,49 @@ function checkSpecial(TG, L, S, wy) {
   }
   return out;
 }
+// (P23 / towns) per layoutMap: the Container Yard's containers (streetProps), the Old Mall's department store, the Logging Camp's woodyards, link turn angles
+function p23Collect(TG, M, map, seed, p23) {
+  if (map === "ashgrid") {
+    const Y = M.towns.find((t) => t.id === "yard");
+    if (Y) {
+      const lots = Y.parcels.filter((p) => p.ident === "containers");
+      const inLot = (e) => lots.some((p) => e.x > p.rect[0] && e.x < p.rect[2] && e.z > p.rect[1] && e.z < p.rect[3]);
+      const cs = TG.streetProps(Y, seed).filter((e) => e.type === "props/shipping-container");
+      let badTint = null;
+      for (const e of cs) if (inLot(e) && !TG.CONTAINER_TINTS.some((q) => q[0] === e.tint)) badTint = "container at " + e.x + "," + e.z + " tint " + e.tint;
+      p23.yard.push({ seed, n: cs.length, badTint });
+    } else p23.yard.push({ seed, n: 0 });
+    const ML = M.towns.find((t) => t.id === "mall");
+    let good = false, why = "no mall town";
+    if (ML) {
+      const st = ML.parcels.filter((p) => p.building && p.building.mall);
+      const park = ML.parcels.filter((p) => p.ident === "mall" && p.use === "lot" && p.lot === "parking");
+      if (st.length !== 1) why = st.length + " department stores";
+      else if (!(st[0].building.w === TG.MALL_W && st[0].building.d === TG.MALL_D && st[0].building.floors === TG.MALL_FLOORS && st[0].building.enterable)) why = "store " + st[0].building.w + "x" + st[0].building.d + " f" + st[0].building.floors;
+      else if (park.length !== 1) why = park.length + " car parks";
+      else good = true;
+    }
+    p23.mall.push({ seed, ok: good, why });
+  }
+  if (map === "deepwood") {
+    const LG = M.towns.find((t) => t.id === "logging");
+    p23.wood.push({ seed, n: LG ? LG.parcels.filter((p) => p.ident === "woodyard" && p.use === "lot" && p.lot === "yard").length : 0 });
+  }
+  if (map !== "ashgrid") {
+    let n30 = 0, mx = 0;
+    for (const l of M.links) {
+      const P = l.path || [];
+      for (let k = 1; k + 1 < P.length; k++) {
+        const ax = P[k][0] - P[k - 1][0], az = P[k][1] - P[k - 1][1], bx = P[k + 1][0] - P[k][0], bz = P[k + 1][1] - P[k][1];
+        const a = Math.acos(Math.max(-1, Math.min(1, (ax * bx + az * bz) / Math.max(1e-9, Math.hypot(ax, az) * Math.hypot(bx, bz))))) * 180 / Math.PI;
+        if (a > 30) n30++;
+        if (a > mx) mx = a;
+      }
+    }
+    (p23.turns[map] = p23.turns[map] || []).push(n30);
+    (p23.maxTurn[map] = p23.maxTurn[map] || []).push(mx);
+  }
+}
 const linkLow = { n: 0 };
 function checkLinks(TG, M, h, wy) {
   const out = [];
@@ -608,6 +651,7 @@ async function main() {
   const roadAgg = { n: 0, low0: 0, low8: 0, min: Infinity, edges: 0 };
   const agg = { special: {}, towns: 0, compounds: 0, buildings: 0, enterable: 0, shells: 0, rooms: 0, doors: 0, stairs: 0, blocks: 0, parcels: 0, quarterTurned: 0, doorsReach: 0, enterableTown: 0, lanes: 0, bridges: 0, hardStage: 0, fallbackLane: 0, jogged: 0, millBridges: 0, relief: [], reliefLevel: [0, 0, 0] };
   const keep = {};                                                     // one layoutMap per map kept for the coverage / plots
+  const p23 = { yard: [], mall: [], wood: [], turns: {}, maxTurn: {} };
   const denseEvery = 4;
   for (const map of MAPS) {
     const wy = waterOf(map);
@@ -665,6 +709,7 @@ async function main() {
       addFail("compounds >= 60 m from every town", checkCompounds(TG, M).map((s) => map + "#" + seed + " " + s));
       addFail("links leave by an edge node and never cross a block", checkLinks(TG, M, h, wy).map((s) => map + "#" + seed + " " + s));
       if (map === "deepwood") { const mill = M.towns.find((t) => t.id === "mill"); if (mill.bridges.length) agg.millBridges++; }
+      p23Collect(TG, M, map, seed, p23);                                // (P23 / towns: POI identity + road smoothing rows, section [9])
       // town parcels enterable counts for the share row
       for (const L of M.towns) agg.enterableTown += L.stats.enterable;
     }
@@ -774,6 +819,7 @@ async function main() {
         const vs = new Set(L.parcels.filter((p) => p.building && p.building.gen === "shell").map((p) => p.building.palette.variant || "base"));
         variantsPerTown.push(vs.size);
         for (const e of TG.streetProps(L, seed)) {
+          if (e.kind === "container" && e.tint !== undefined) { if (!(TG.CONTAINER_TINTS || []).some((q) => q[0] === e.tint)) tintBad.push("ashgrid#" + seed + " " + L.id + " container livery " + e.tint + " is not a CONTAINER_TINTS colour"); continue; }   // (P23: a container lot's liveries)
           if (e.kind !== "car") { if (e.tint !== undefined) tintBad.push("ashgrid#" + seed + " " + L.id + " a " + e.kind + " carries a tint"); continue; }
           nCars++;
           if ((TG.TINTABLE_CARS || []).indexOf(e.type) < 0) { nonTintable++; if (e.tint !== undefined) tintBad.push("ashgrid#" + seed + " " + L.id + " " + e.type + " carries a tint"); }
@@ -1043,6 +1089,57 @@ async function main() {
     console.log("      whole map (every POI + compounds + links), cold sampler: median " + fix(pct(tMapMs, 0.5), 1) + " ms, worst " + fix(Math.max(...tMapMs), 1) + " ms");
     console.log("      layout data: median " + fix(pct(sizes, 0.5), 0) + " KB of JSON per map (max " + fix(Math.max(...sizes), 0) + " KB), rooms / doors / stairs included");
     ok(pct(tMapMs, 0.5) < 600, "a whole map's layout takes < 600 ms at the median (guards a quadratic blow-up; the live match builds it once)", "median " + fix(pct(tMapMs, 0.5), 1) + " ms");
+  }
+
+  // ── 9. parity P2-I (P23 / towns): POI identity, road smoothing, rotation cover ─────────────────────────────────────────────────────────
+  console.log("\n[9] parity P2-I: POI identity (LC-29), road smoothing and rotation cover (LC-47)");
+  {
+    const yMin = Math.min(...p23.yard.map((q) => q.n)), yBad = p23.yard.filter((q) => q.n < 30);
+    ok(p23.yard.length === SEEDS && yBad.length === 0, "Container Yard: >= 30 shipping containers on every seed (" + SEEDS + " seeds; fewest " + yMin + ", median " + pct(p23.yard.map((q) => q.n), 0.5) + ")", yBad.slice(0, 5).map((q) => "seed " + q.seed + ": " + q.n).join("; "));
+    const tintBad = p23.yard.filter((q) => q.badTint);
+    ok(tintBad.length === 0, "every container on a yard container lot wears a CONTAINER_TINTS livery", tintBad.slice(0, 3).map((q) => "seed " + q.seed + " " + q.badTint).join("; "));
+    const mBad = p23.mall.filter((q) => !q.ok);
+    ok(p23.mall.length === SEEDS && mBad.length === 0, "Old Mall: one 30 x 22.5 m two-storey department store (building.mall) and its car park on every seed", mBad.slice(0, 5).map((q) => "seed " + q.seed + ": " + q.why).join("; "));
+    const wBad = p23.wood.filter((q) => q.n < 2);
+    ok(p23.wood.length === SEEDS && wBad.length === 0, "Logging Camp: >= 2 woodyard lots (maps.js builds their log piles) on every seed (median " + pct(p23.wood.map((q) => q.n), 0.5) + ")", wBad.slice(0, 5).map((q) => "seed " + q.seed + ": " + q.n).join("; "));
+    for (const m of ["isla_viva", "deepwood"]) {
+      const t = p23.turns[m] || [], mx = p23.maxTurn[m] || [];
+      console.log("      " + m.padEnd(10) + " link vertices turning > 30 deg per map: median " + pct(t, 0.5) + ", p90 " + pct(t, 0.9) + " (the 7b routes: 15-36 at seeds 7 / 1 / 1234); sharpest turn per map median " + fix(pct(mx, 0.5), 1) + " deg, p90 " + fix(pct(mx, 0.9), 1));
+      ok(pct(t, 0.5) <= 6 && pct(mx, 0.5) <= 75, m + ": link roads are smoothed (string-pulled + filleted): median <= 6 vertices a map turn > 30 deg and the median sharpest turn <= 75 deg", "median " + pct(t, 0.5) + ", sharpest median " + fix(pct(mx, 0.5), 1));
+    }
+    // rotation cover: a pure function of (seed, map, env); pieces off the water, the roads and every POI / town / compound; walls quarter-turned
+    for (const map of MAPS) {
+      const K = keep[map];
+      if (!K) continue;
+      const { M, h, wy } = K;
+      const rects = [];
+      for (const T of M.towns.concat(M.compounds)) { for (const b of T.blocks) rects.push([b.cx - 28, b.cz - 28, b.cx + 28, b.cz + 28]); if (T.compound) rects.push(T.compound.bounds); for (const p of T.parcels) rects.push(p.rect); }
+      const roads = [];
+      for (const T of M.towns) for (const st of T.roads.streets) roads.push([st.x0, st.z0, st.x1, st.z1, TG.ROAD_W]);
+      for (const l of M.links) { const P = l.path && l.path.length > 1 ? l.path : [[l.ax, l.az], [l.bx, l.bz]]; for (let k = 0; k + 1 < P.length; k++) roads.push([P[k][0], P[k][1], P[k + 1][0], P[k + 1][1], TG.ROAD_W]); }
+      const pois = TG.defaultPois(map);
+      const free = (x, z, pad) => !pois.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + pad) && !rects.some((r) => x > r[0] - pad && x < r[2] + pad && z > r[1] - pad && z < r[3] + pad);
+      const env = { half: 800, waterY: wy, h, free, cover: [], roads };
+      const A = TG.rotationCover(7, map, env), B2 = TG.rotationCover(7, map, env);
+      ok(JSON.stringify(A) === JSON.stringify(B2), map + ": rotationCover is a pure function of (seed, map, env)");
+      const bad = [];
+      const segD = (x, z, s) => { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz, t = L2 ? Math.max(0, Math.min(1, ((x - s[0]) * dx + (z - s[1]) * dz) / L2)) : 0; return Math.hypot(x - s[0] - dx * t, z - s[1] - dz * t); };
+      for (const c of A.pieces) {
+        if (!(h(c.x, c.z) >= wy + 1.0)) bad.push(c.kind + " on water at " + c.x + "," + c.z);
+        if (!free(c.x, c.z, 2)) bad.push(c.kind + " inside a POI / town / compound at " + c.x + "," + c.z);
+        if (roads.some((s) => segD(c.x, c.z, s) < TG.ROAD_W / 2 + 2.4)) bad.push(c.kind + " on a road at " + c.x + "," + c.z);
+        if (c.kind === "wall" && !(c.quarter === 0 || c.quarter === 1)) bad.push("wall not quarter-turned");
+        if (c.kind === "rocks" && !(c.s >= 1.4 && c.s <= 2.7)) bad.push("rocks scale " + c.s);
+        if (Math.abs(c.x) > 760 || Math.abs(c.z) > 760) bad.push(c.kind + " outside the scatter extent");
+      }
+      const by = {}; for (const c of A.pieces) by[c.kind] = (by[c.kind] || 0) + 1;
+      console.log("      " + map.padEnd(10) + " rotation cover on bare land (seed 7, no wild props): " + A.pieces.length + " pieces " + JSON.stringify(by) + " cells " + JSON.stringify(A.stats));
+      ok(bad.length === 0 && A.pieces.length > 50, map + ": rotation cover pieces stand on dry land, off every road, POI, town and compound; walls quarter-turned", bad.slice(0, 4).join("; "));
+      // negative control: cover already stands every 12 m -> nothing placed
+      const full = []; for (let x = -800; x <= 800; x += 12) for (let z = -800; z <= 800; z += 12) full.push([x, z, 1]);
+      const N = TG.rotationCover(7, map, Object.assign({}, env, { cover: full }));
+      ok(N.pieces.length === 0, map + ": control - where cover already stands every 12 m, rotationCover places nothing", N.pieces.length + " pieces");
+    }
   }
 
   const wall = Date.now() - T_START;

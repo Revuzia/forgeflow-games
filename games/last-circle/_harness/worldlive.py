@@ -18,7 +18,8 @@ One Chrome per map, one PRACTICE match (seed 7, the player + five range actors: 
   ranger-towers  every ranger tower, foot -> deck by the ramps that serve it (a switchback when two do)             (Wave 4: 0/6)
   ramp-sides     walking into a ramp's side from outside never puts the capsule inside the plank (C-RAMP); promoted from lane 5C's
                  live5c.js. Wave 4 passed this (its sides were not walkable-through here), so the registered control is a PLANT:
-                 `--plant ramp-sides-open` serves player.js with `K.rampBlocks` never blocking
+                 `--plant ramp-sides-open` serves player.js with `K.rampBlocks` never blocking. Wave 8 (lane K3): the side is walked at 50, 30
+                 and 70 % of the run (the mid-run walk alone found 6 clear approaches on the stage-B tree: could-not-judge, control disarmed)
   ramps-walk-fine  (L4-gates 2026-10-13, promoted from lane L2's stairs_all.py) the FINE ramp scan on EVERY ramp of 5 seeds x 3 maps (seeds 1, 7, 1234,
                  31337, 2026: the placement census seeds; one Chrome per map and a fresh PRACTICE match per seed): the real mover WALKS and SPRINTS up
                  (any of 4 run-ups climbs) and down from EVERY start phase (0.5, 0.9, 1.6 m from the top edge); a descent that was lifted (mantled onto
@@ -28,6 +29,10 @@ One Chrome per map, one PRACTICE match (seed 7, the player + five range actors: 
                  lane 5C's live5c.js (collisioncheck's falls row samples 9 heights x 8 sub-tick phases)           (Wave 4: ~100 through)
   aim            the REAL fire() path at a near thin wall: the impact lands within 0.15 m of where the crosshair ray meets the wall
                  (>= 10 shots measured over the maps); promoted from lane 5C's live5c.js                          (Wave 4: up to 0.53 m, ADS 0.9 m)
+                 Wave 8 (lane K3, furnished rooms): "the same wall" is a thin >= 2 m wall piece in the plane (a stair box / shelf flush with the wall
+                 is no wall: a stance with one within 0.8 m is skipped); a box the camera ray or the muzzle -> reticle line meets before the wall
+                 is the expected surface; a bullet stopped on another collider is judged by its distance from the muzzle -> reticle line (never
+                 within 0.3 m of the muzzle). The 0.15 m bar is unchanged (stage-B tree: isla 5/12 over -> 0/12, the shelf shots 0.04 m off the line)
   errors         0 page / console / request / shader errors
 (5C's all-direction hide area is collisioncheck's ramps-hide: the same definition, not duplicated.)
 
@@ -245,7 +250,7 @@ def judge(v, per_map, args, plant_rows):
             chk("aim", None, "only %d shots measured (need >= %d): %s" % (meas, AIM_MIN_SHOTS, {m: r["shots"] for m, r in rows.items()}))
         else:
             bad = sum(r["over015"] for r in rows.values())
-            detail = "%d shots measured: %s" % (meas, "; ".join("%s %d shots, err max %s p50 %s, %d over %.2f m" % (m, r["measured"], f(r["errMax"]), f(r["errP50"]), r["over015"], AIM_ERR_MAX) for m, r in rows.items() if r["measured"]))
+            detail = "%d shots measured: %s" % (meas, "; ".join("%s %d shots (%d judged on a box between muzzle / camera and the wall), err max %s p50 %s, %d over %.2f m" % (m, r["measured"], r.get("onBlocker", 0), f(r["errMax"]), f(r["errP50"]), r["over015"], AIM_ERR_MAX) for m, r in rows.items() if r["measured"]))
             chk("aim", bad == 0, detail, "every impact within 0.15 m of the crosshair ray")
 
     probs = {m: r.get("problems") for m, r in per_map.items() if r.get("problems")}

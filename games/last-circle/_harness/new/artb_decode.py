@@ -31,7 +31,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 H = os.path.dirname(HERE)                       # _harness
 GAME = os.path.dirname(H)
 sys.path.insert(0, H)
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(GAME, "_tools"))
+sys.dont_write_bytecode = True      # (Wave 8, lane K3) importing _tools/art_b_render.py left a stray _tools/__pycache__/art_b_render.cpython-313.pyc in the deploy tree
 
 from common import EnvFailure, run_gate  # noqa: E402
 
@@ -63,7 +65,7 @@ def main_fn(v, args):
             groups.append(t["group"])
     shots = args.shots
     os.makedirs(shots, exist_ok=True)
-    bad_decode, bad_tris, bad_bbox, bad_float, bad_err, bad_coll = [], [], [], [], [], []
+    bad_decode, bad_tris, bad_bbox, bad_float, bad_err, judged = [], [], [], [], [], []
     n = 0
     for grp in groups:
         items = []
@@ -93,11 +95,7 @@ def main_fn(v, args):
                 bad_float.append("%s attrs=%s" % (it["id"], r.get("attrs")))
             if r.get("page_errors"):
                 bad_err.append("%s: %s" % (it["id"], r["page_errors"][0]))
-            lo, hi = t["bbox_min_m"], t["bbox_max_m"]
-            cs = t["colliders"]
-            inside = bool(cs) and all(all(c["min"][i] >= lo[i] - 0.3 and c["max"][i] <= hi[i] + 0.3 and c["max"][i] > c["min"][i] for i in range(3)) for c in cs)
-            if not inside:
-                bad_coll.append(it["id"])
+            judged.append(it["id"])
         v.info("sheet %s" % grp, out)
     v.check("every GLB decodes in Chrome through the vendored meshopt decoder", not bad_decode, "%d decoded of %d%s" % (
         n - len(bad_decode), n, "; FAILED " + "; ".join(bad_decode[:4]) if bad_decode else ""))
@@ -105,7 +103,11 @@ def main_fn(v, args):
     v.check("browser bbox at suggested_scale == manifest bbox_m", not bad_bbox, "; ".join(bad_bbox[:4]) or "all %d match" % n)
     v.check("POSITION decodes as Float32Array (no quantisation transform)", not bad_float, "; ".join(bad_float[:3]) or "all float32")
     v.check("0 page errors / failed requests while decoding", not bad_err, "; ".join(bad_err[:3]) or "clean")
-    v.check("colliders non-empty and inside the bbox", not bad_coll, ", ".join(bad_coll[:8]) or "all %d" % n)
+    # (Wave 8, lane K3) the shared rule (artb_colliders.py): a collider_mode "none" type (the interior kit's rugs + pallet) carries no collider on purpose
+    import artb_colliders
+    bad_coll, exempt, _boxes, note = artb_colliders.judge({k: types[k] for k in judged}, args.plant)
+    v.check("colliders non-empty and inside the bbox", not bad_coll, ((note + "; ") if note else "") + (", ".join(bad_coll[:8]) if bad_coll else "all %d (%d collider_mode 'none' types carry none on purpose: %s)" % (
+        len(judged), len(exempt), ", ".join(exempt[:6]) or "-")))
 
     # palette variants sheet (information: the recoloured colormaps applied to the same geometry)
     vit = []
@@ -130,6 +132,7 @@ def main():
     add_common_args(ap)
     ap.add_argument("--groups", default=None)
     ap.add_argument("--tile", type=int, default=300)
+    ap.add_argument("--plant", default=None, choices=["drop-colliders"], help="negative control: one boxed type's colliders emptied in memory (the collider row must FAIL)")
     ap.add_argument("--shots", default=DEFAULT_SHOTS, help="where the contact sheets go (default: the lane scratch dir, never the repo)")
     args = ap.parse_args()
     return run_gate("artb_decode", lambda v: main_fn(v, args), args)

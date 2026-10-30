@@ -251,12 +251,16 @@
       const run = c.dir < 2 ? c.maxX - c.minX : c.maxZ - c.minZ, across = c.dir < 2 ? c.maxZ - c.minZ : c.maxX - c.minX;
       const mx = (c.minX + c.maxX) / 2, mz = (c.minZ + c.maxZ) / 2;
       const hv = S.rampHalfV ? S.rampHalfV(c) : 0.15;
-      const midU = run * 0.5, lineMid = c.minY + (c.maxY - c.minY) * 0.5;
+      // (Wave 8, lane K3) the side is walked at 50 % of the run (the original walk) AND at 30 % / 70 %: Wave 8's ramps are mostly housegen stairs inside walls
+      // (no clear approach), so the mid-run walk alone measured 6 side walks on the stage-B tree (< SIDES_MIN 20: could-not-judge, and the ramp-sides-open
+      // control was disarmed). Same eligibility, same judgement at every position; more of the same measurement, never a looser one.
+      for (const fr of (opt && opt.fracs) || [0.5, 0.3, 0.7]) {
+      const midU = run * fr, lineMid = c.minY + (c.maxY - c.minY) * fr;
       const gx = c.dir === 0 ? c.minX + midU : c.dir === 1 ? c.maxX - midU : mx, gz = c.dir === 2 ? c.minZ + midU : c.dir === 3 ? c.maxZ - midU : mz;
       const gUnder = support(gx, gz, lineMid - hv - 0.01, c, lineMid - hv - 0.01);
       const clearance = lineMid - hv - gUnder;
       // only where the plank is above a step and too low to stand under: there a capsule may not end up inside the footprint at ground level
-      if (!(lineMid - gUnder > SU + 0.2 && clearance < H - 0.1 && across > 1.0)) continue;
+      if (!(lineMid - gUnder > SU + 0.2 && clearance < H - 0.1 && across > 1.0)) continue;   // (next position along the run)
       const ax = c.dir < 2 ? 0 : 1, az = 1 - ax;
       for (const sg of [1, -1]) {
         const px = gx + ax * sg * (across / 2 + 2.6), pz = gz + az * sg * (across / 2 + 2.6);
@@ -290,7 +294,8 @@
           if (lineHere + hv > e[1] + SU && lineHere - hv < e[1] + H - 0.05) into++;       // the plank is inside the capsule's body band: the capsule is IN the solid
         }
         p.input.mz = 0;
-        out.push({ at: [r3(mx), r3(mz)], dir: c.dir, rise: r3(c.maxY - c.minY), side: sg, minCross: r3(minCross), insideTicks: inside, intoPlankTicks: into, start: [r3(px), r3(py), r3(pz)], gx: r3(gx), gz: r3(gz), across: r3(across), trace: trc });
+        out.push({ at: [r3(mx), r3(mz)], frac: fr, dir: c.dir, rise: r3(c.maxY - c.minY), side: sg, minCross: r3(minCross), insideTicks: inside, intoPlankTicks: into, start: [r3(px), r3(py), r3(pz)], gx: r3(gx), gz: r3(gz), across: r3(across), trace: trc });
+      }
       }
     }
     return { tested: out.length, blockedApproach, insideAny: out.filter((q) => q.insideTicks > 0).length, intoSolid: out.filter((q) => q.intoPlankTicks > 0).length, examples: out.filter((q) => q.intoPlankTicks > 0).slice(0, 5), sample: out.slice(0, 3), rows: opt && opt.trace ? out : undefined };
@@ -350,7 +355,10 @@
           const px = thinX ? face + nx * dist : (c.minX + c.maxX) / 2 + off, pz = thinX ? (c.minZ + c.maxZ) / 2 + off : face + nz * dist;
           // open floor in front of the wall: level ground, no other collider within 0.8 m of the player
           const gy = support(px, pz, m.heightAt(px, pz) + 0.3);
-          const sameWall = (o) => (thinX ? (o.minX < c.maxX + 0.05 && o.maxX > c.minX - 0.05) : (o.minZ < c.maxZ + 0.05 && o.maxZ > c.minZ - 0.05));
+          // (Wave 8, lane K3) "the same wall" = another WALL piece in the wall's plane (thin across it, >= 2 m tall). A furnished room puts deep boxes flush against
+          // the wall (a stair's side box 2.26 m deep, a 0.25 m shelf 0.27 m tall): the in-plane test alone called them "the same wall", so a stance with the muzzle
+          // inside a stair box passed the 0.8 m open-floor check (stage-B tree: the shot hit at the muzzle, 0.41 m from the reticle)
+          const sameWall = (o) => (thinX ? (o.minX < c.maxX + 0.05 && o.maxX > c.minX - 0.05 && o.maxX - o.minX <= 0.6) : (o.minZ < c.maxZ + 0.05 && o.maxZ > c.minZ - 0.05 && o.maxZ - o.minZ <= 0.6)) && o.maxY - o.minY >= 2.0;
           const near = m.queryColliders(px, pz, 0.8, []).filter((o) => o !== c && !sameWall(o) && !o.dead && o.maxY > gy + 0.6 && o.minY < gy + 1.8);
           if (near.length || Math.abs(gy - support(thinX ? face : px, thinX ? pz : face, m.heightAt(px, pz) + 0.3)) > 0.5) continue;
           setPlayer(px, gy + 0.02, pz); p.onGround = true; C.fastForward(3 / 60);
@@ -368,15 +376,50 @@
           const tr = window.__aimHook.tracers[0], im = window.__aimHook.impacts[0];
           // where the camera ray meets the wall's face plane (what the reticle sits on)
           const s = thinX ? (face - camX) / dX : (face - camZ) / dZ;
-          const ex = camX + dX * s, ey = camY + dY * s, ez = camZ + dZ * s;
-          const inWall = ey > c.minY && ey < c.maxY && (thinX ? (ez > c.minZ && ez < c.maxZ) : (ex > c.minX && ex < c.maxX));
+          let ex = camX + dX * s, ey = camY + dY * s, ez = camZ + dZ * s;
+          let inWall = ey > c.minY && ey < c.maxY && (thinX ? (ez > c.minZ && ez < c.maxZ) : (ex > c.minX && ex < c.maxX));
+          // (Wave 8, lane K3) a furnished room: a box between the camera and the wall face (a housegen wall shelf 0.25 m deep at 1.7-1.97 m, a stair's side box)
+          // is what the crosshair ray meets FIRST - the reticle sits on it, so the shot is judged against THAT surface (exact segment test over the colliders on the
+          // ray; a box that contains the camera is skipped - that is the camera-pull-in row's business). The bar is unchanged; only the expected point is the true one.
+          let blocker = null;
+          if (inWall) {
+            const mxp = (camX + ex) / 2, mzp = (camZ + ez) / 2, rad = Math.hypot(ex - camX, ez - camZ) / 2 + 1.0;
+            const cand = m.queryColliders(mxp, mzp, rad, []).filter((o) => o !== c && !o.dead && !(camX >= o.minX && camX <= o.maxX && camY >= o.minY && camY <= o.maxY && camZ >= o.minZ && camZ <= o.maxZ));
+            const h = S.segmentColliders(camX, camY, camZ, ex, ey, ez, cand);
+            if (h && h.t * s < s - 0.02) { ex = camX + dX * s * h.t; ey = camY + dY * s * h.t; ez = camZ + dZ * s * h.t; blocker = { via: 'camera', kind: h.c.kind, box: [r3(h.c.minX), r3(h.c.maxX), r3(h.c.minY), r3(h.c.maxY), r3(h.c.minZ), r3(h.c.maxZ)], before: r3(s * (1 - h.t)) }; }
+            // ... and the shot itself leaves the MUZZLE (the tracer's origin), not the camera: a box on the muzzle -> reticle line but off the camera ray (the stage-B
+            // verify's worst Isla shot: a wall shelf 1.7-1.97 m up, the reticle on the wall above / beside it) stops the bullet before the reticle point in every
+            // third-person shooter (muzzle parallax). The expected impact is then where that line meets the box; a shot that misses BOTH is judged as before.
+            if (tr) {
+              const L = Math.hypot(ex - tr.x, ey - tr.y, ez - tr.z);
+              if (L > 0.05) {
+                const cand2 = m.queryColliders((tr.x + ex) / 2, (tr.z + ez) / 2, L / 2 + 1.0, []).filter((o) => o !== c && !o.dead && !(tr.x >= o.minX && tr.x <= o.maxX && tr.y >= o.minY && tr.y <= o.maxY && tr.z >= o.minZ && tr.z <= o.maxZ));
+                const h2 = S.segmentColliders(tr.x, tr.y, tr.z, ex, ey, ez, cand2);
+                if (h2 && h2.t * L < L - 0.02) { const t2 = h2.t; ex = tr.x + (ex - tr.x) * t2; ey = tr.y + (ey - tr.y) * t2; ez = tr.z + (ez - tr.z) * t2; blocker = { via: 'muzzle', kind: h2.c.kind, box: [r3(h2.c.minX), r3(h2.c.maxX), r3(h2.c.minY), r3(h2.c.maxY), r3(h2.c.minZ), r3(h2.c.maxZ)], before: r3(L * (1 - t2)) }; }
+              }
+            }
+          }
+          // the collider(s) the impact lies on (within 2 cm of its surface): names what the bullet really hit when the error is large
+          const onBox = im ? m.queryColliders(im.x, im.z, 0.1, []).filter((o) => !o.dead && im.x >= o.minX - 0.02 && im.x <= o.maxX + 0.02 && im.y >= o.minY - 0.02 && im.y <= o.maxY + 0.02 && im.z >= o.minZ - 0.02 && im.z <= o.maxZ + 0.02)
+            .slice(0, 3).map((o) => ({ kind: o.kind, wall: o === c, box: [r3(o.minX), r3(o.maxX), r3(o.minY), r3(o.maxY), r3(o.minZ), r3(o.maxZ)] })) : null;
+          // the error: the impact's distance from the expected point. When the bullet stopped on ANOTHER collider (not this wall) - a shelf edge the muzzle line grazes,
+          // a box between muzzle and reticle - the shot went where it was aimed iff the impact lies ON the muzzle -> reticle line: then the error is the impact's distance
+          // from that line (a mis-aimed shot is off the line whatever it hits; the 0.15 m bar is unchanged)
+          let err = im && inWall ? Math.hypot(im.x - ex, im.y - ey, im.z - ez) : null, errKind = 'point';
+          if (err != null && tr && onBox && onBox.length && !onBox.some((q) => q.wall)) {
+            const vx = ex - tr.x, vy = ey - tr.y, vz = ez - tr.z, vv = vx * vx + vy * vy + vz * vz;
+            const u = vv > 1e-9 ? Math.max(0, Math.min(1, ((im.x - tr.x) * vx + (im.y - tr.y) * vy + (im.z - tr.z) * vz) / vv)) : 0;
+            const dl = Math.hypot(im.x - (tr.x + vx * u), im.y - (tr.y + vy * u), im.z - (tr.z + vz * u));
+            if (dl < err && u * Math.sqrt(vv) >= 0.3) { err = dl; errKind = 'line'; }     // never for a hit AT the muzzle (a muzzle inside a box is no aim)
+          }
           shots.push({ dist, expected: [r3(ex), r3(ey), r3(ez)], impact: im ? [r3(im.x), r3(im.y), r3(im.z)] : null, surf: im && im.surf,
-            err: im && inWall ? r3(Math.hypot(im.x - ex, im.y - ey, im.z - ez)) : null, inWall, fired: !!tr });
+            err: err != null ? r3(err) : null, errKind, inWall, blocker, fired: !!tr,
+            cam: [r3(camX), r3(camY), r3(camZ)], muzzle: tr ? [r3(tr.x), r3(tr.y), r3(tr.z)] : null, wallBox: [r3(c.minX), r3(c.maxX), r3(c.minY), r3(c.maxY), r3(c.minZ), r3(c.maxZ)], impactOn: onBox });
         }
       }
     }
     const errs = shots.filter((q) => q.err != null).map((q) => q.err);
-    return { shots: shots.length, measured: errs.length, errMax: pct(errs, 1), errP50: pct(errs, 0.5), over015: errs.filter((e) => e > 0.15).length, rows: shots.slice(0, 16) };
+    return { shots: shots.length, measured: errs.length, errMax: pct(errs, 1), errP50: pct(errs, 0.5), over015: errs.filter((e) => e > 0.15).length, onBlocker: shots.filter((q) => (q.blocker || q.errKind === 'line') && q.err != null).length, rows: shots.slice(0, 16) };
   }
 
   return { chests, ramps, rampsFine, towers, sides, fallsFine, aim };

@@ -18,7 +18,8 @@ import * as THREE from "three";
  *      per-sprite path used to get from three for free).
  *
  *  The caller owns the visibility RULES (player.js update); this module only
- *  draws what `handle.visible` says, at the actor's current transform. Packing
+ *  draws what `handle.visible` says, at the actor's current transform - narrowed
+ *  by the HUD's tag POLICY when one is set (setPolicy, below: OD-11). Packing
  *  runs from a scene.onBeforeRender hook installed by player.js, i.e. after
  *  three's matrix update and before its culling, so the instance buffer that is
  *  drawn is always this frame's.
@@ -34,8 +35,30 @@ const ATLAS_W = CELL_W * COLS, ATLAS_H = CELL_H * ROWS;
 const MARGIN = 8;                       // transparent rows above/below the 48 px tag band
 const MAX = COLS * ROWS;                // 64 >= 50 actors + 5 range dummies
 const TAG_W = 2.6, TAG_H = 0.49, TAG_Y = 2.25;
+// Fix round (verifier screenshot: a teammate's plate drawn very large at 1-2 m): a tag is world-sized (2.6 x 0.49 m), so its screen
+// size grew without bound as it neared the camera - from 12 m in it covered a fifth of the screen width and more. With the HUD's
+// policy on, a tag nearer the camera than TAG_FULL_M keeps the screen size it had at TAG_FULL_M (its world size shrinks with the
+// distance, down to TAG_MIN_SC of full); past it nothing changes. No policy (null) = the old drawing, untouched.
+const TAG_FULL_M = 12, TAG_MIN_SC = 0.12;
 
 let S = null;
+
+/** ── TAG POLICY (owner OD-11, parity LC-42) ───────────────────────────────
+ *  Enemy tags reached 70 m (player.js) - a readability crutch reference BRs do
+ *  not give: PUBG / Apex / Warzone name an enemy only up close or under the
+ *  reticle. hud.js sets the policy every frame (setPolicy) and this module
+ *  applies it at pack time, so player.js's own rule is untouched:
+ *    - an ENEMY's tag (any actor not on the focus actor's team) shows only
+ *      within `enemyM` (28 m) of the focus actor, or while it is the actor under
+ *      the reticle in clear line of sight (`aimedId` until `aimedUntil`, the
+ *      HUD's 10 Hz aim test with a short hold);
+ *    - a TEAMMATE's tag shows out to `mateM` (250 m: the gunfire-audible radius)
+ *      whether it is a human or a bot teammate (C-MODE), in the teammate's own
+ *      colour (`colorOf`), so a squad can find each other;
+ *    - practice dummies keep their own rule (their tags are distance labels).
+ *  No policy (null) = exactly the old behaviour. beginMatch clears it. */
+let POL = null;
+export function setPolicy(p) { POL = p || null; }
 
 function ensure() {
   if (S) return S;
@@ -93,6 +116,7 @@ export function beginMatch(parent) {
   s.dirty = true;
   s.mesh.count = 0;
   s.mesh.visible = false;
+  POL = null;
   if (parent && s.mesh.parent !== parent) parent.add(s.mesh);
   return s.mesh;
 }
@@ -105,7 +129,7 @@ export function addTag(actor, name, human) {
   if (!s.free.length) return null;
   const cell = s.free.pop();
   drawCell(s, cell, String(name == null ? "" : name), !!human);
-  const h = { visible: false, cell, actor };
+  const h = { visible: false, cell, actor, name: String(name == null ? "" : name), human: !!human, mate: null };
   s.handles.push(h);
   return h;
 }
@@ -122,10 +146,11 @@ export function releaseTag(h) {
   S.dirty = true;
 }
 
-function drawCell(s, cell, name, human) {
+function drawCell(s, cell, name, human, mate) {
   const ctx = s.ctx;
   const x0 = (cell % COLS) * CELL_W, y0 = Math.floor(cell / COLS) * CELL_H + MARGIN;
   ctx.save();
+  ctx.clearRect(x0, y0 - MARGIN, CELL_W, CELL_H);
   // the old per-tag canvas was 256 wide and clipped a long name at its edges;
   // the atlas must clip at the cell or a long handle would paint into the next
   ctx.beginPath(); ctx.rect(x0, y0 - MARGIN, CELL_W, CELL_H); ctx.clip();
@@ -135,11 +160,13 @@ function drawCell(s, cell, name, human) {
   // from the 46 bots in SQUAD UP.
   ctx.font = "bold 26px system-ui";
   ctx.textAlign = "center";
-  ctx.fillStyle = human ? "rgba(6,40,70,0.55)" : "rgba(0,0,0,0.45)";
+  ctx.fillStyle = human || mate ? "rgba(6,40,70,0.55)" : "rgba(0,0,0,0.45)";
   const w = Math.min(240, ctx.measureText(name).width + 22);
   ctx.beginPath(); ctx.roundRect(x0 + 128 - w / 2, y0 + 4, w, 38, 8); ctx.fill();
-  if (human) { ctx.strokeStyle = "rgba(110,196,255,0.9)"; ctx.lineWidth = 2; ctx.stroke(); }
-  ctx.fillStyle = human ? "#8fd8ff" : "#fff";
+  // a teammate (OD-11 policy) is outlined in its squad colour - the one on its pings, blip and vitals chip
+  if (mate) { ctx.strokeStyle = mate; ctx.lineWidth = 2.5; ctx.stroke(); }
+  else if (human) { ctx.strokeStyle = "rgba(110,196,255,0.9)"; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = mate ? mate : human ? "#8fd8ff" : "#fff";
   ctx.fillText(name, x0 + 128, y0 + 32);
   ctx.restore();
   s.dirty = true;
@@ -154,14 +181,39 @@ export function refresh(camera) {
   const cam = camera ? s.cam.setFromMatrixPosition(camera.matrixWorld) : s.cam.set(0, 0, 0);
   const order = s.order, key = s.key;
   let n = 0;
+  const pol = POL, foc = pol && pol.focus;
+  const now = pol ? pol.now : 0;
+  s.policyHidden = 0;
   for (let i = 0; i < s.handles.length; i++) {
     const h = s.handles[i];
-    if (!h.visible || h.cell < 0) continue;
-    const o = h.actor && h.actor.obj;
+    if (h.cell < 0) continue;
+    const a = h.actor;
+    // hidden by player.js and not a teammate (whom the policy may show further out): nothing to compute
+    // same team = a non-empty team id shared with the focus actor (D4: the rule player canRevive and bots sameTeam use)
+    const mate = !!(foc && a && foc.teamId && a.teamId === foc.teamId);
+    if (!h.visible && !mate) continue;
+    const o = a && a.obj;
     if (!o || !o.parent) continue;
     const e = o.matrixWorld.elements;
     const dx = e[12] - cam.x, dy = e[13] + TAG_Y - cam.y, dz = e[14] - cam.z;
     const d2 = dx * dx + dy * dy + dz * dz;
+    let vis = h.visible;
+    if (foc && !a.isDummy) {
+      if (mate) {
+        // teammate: out to mateM from the camera, never the watched actor itself, in the squad colour
+        // near cut 10 m from the camera: the tag is world-sized (2.6 m wide), so a squadmate a few metres away got a tag a third
+        // of the screen wide; up close a mate is known by their squad colour (vitals chip, blip, pings) - the tag is for finding them far
+        vis = a.alive && a !== foc && d2 > 100 && d2 < pol.mateM * pol.mateM;
+        const col = vis && pol.colorOf ? pol.colorOf(a) : null;
+        if (col && h.mate !== col) { h.mate = col; drawCell(s, h.cell, h.name, h.human, col); }
+      } else if (vis) {
+        const fx = a.pos.x - foc.pos.x, fy = a.pos.y - foc.pos.y, fz = a.pos.z - foc.pos.z;
+        const near = fx * fx + fy * fy + fz * fz <= pol.enemyM * pol.enemyM;
+        vis = near || (pol.aimedId === a.id && now < pol.aimedUntil);
+        if (!vis) s.policyHidden++;
+      }
+    }
+    if (!vis) continue;
     // insertion sort, farthest first (<= 64 entries, no allocation)
     let j = n++;
     while (j > 0 && key[j - 1] < d2) { order[j] = order[j - 1]; key[j] = key[j - 1]; j--; }
@@ -177,10 +229,15 @@ export function refresh(camera) {
   mesh.position.set(near[12], near[13] + TAG_Y, near[14]);
   mesh.updateMatrixWorld(true);
   const im = mesh.instanceMatrix.array, ca = s.cellAttr.array;
+  const capOn = !!pol, full2 = TAG_FULL_M * TAG_FULL_M;
+  let maxSc = 0;
   for (let i = 0; i < n; i++) {
     const h = order[i], e = h.actor.obj.matrixWorld.elements, b = i * 16, c = i * 4;
-    im[b] = TAG_W; im[b + 1] = 0; im[b + 2] = 0; im[b + 3] = 0;
-    im[b + 4] = 0; im[b + 5] = TAG_H; im[b + 6] = 0; im[b + 7] = 0;
+    const sc = capOn && key[i] < full2 && !h.actor.isDummy ? Math.max(TAG_MIN_SC, Math.sqrt(key[i]) / TAG_FULL_M) : 1;
+    const ang = TAG_W * sc / Math.max(0.25, Math.sqrt(key[i]));   // world width / camera distance (probe readback)
+    if (ang > maxSc) maxSc = ang;
+    im[b] = TAG_W * sc; im[b + 1] = 0; im[b + 2] = 0; im[b + 3] = 0;
+    im[b + 4] = 0; im[b + 5] = TAG_H * sc; im[b + 6] = 0; im[b + 7] = 0;
     im[b + 8] = 0; im[b + 9] = 0; im[b + 10] = 1; im[b + 11] = 0;
     im[b + 12] = e[12] - mesh.position.x; im[b + 13] = e[13] + TAG_Y - mesh.position.y; im[b + 14] = e[14] - mesh.position.z; im[b + 15] = 1;
     const x0 = (h.cell % COLS) * CELL_W, y0 = Math.floor(h.cell / COLS) * CELL_H + MARGIN;
@@ -189,6 +246,7 @@ export function refresh(camera) {
   }
   mesh.instanceMatrix.needsUpdate = true;
   s.cellAttr.needsUpdate = true;
+  s.maxAng = maxSc;
   return n;
 }
 
@@ -230,5 +288,14 @@ export function disposeMatch() {
 
 /** read-back for probes */
 export function stats() {
-  return S ? { handles: S.handles.length, free: S.free.length, drawn: S.mesh.count, visible: S.mesh.visible, parented: !!S.mesh.parent } : null;
+  return S ? { handles: S.handles.length, free: S.free.length, drawn: S.mesh.count, visible: S.mesh.visible, parented: !!S.mesh.parent,
+               policy: POL ? { enemyM: POL.enemyM, mateM: POL.mateM, aimedId: POL.aimedId || null } : null, policyHidden: S.policyHidden || 0,
+               maxAng: S.maxAng || 0, fullM: TAG_FULL_M } : null;
+}
+/** read-back for probes: which actors' tags were packed on the last refresh */
+export function drawnIds() {
+  if (!S) return [];
+  const out = [];
+  for (let i = 0; i < S.mesh.count; i++) { const h = S.order[i]; if (h && h.actor) out.push(h.actor.id); }
+  return out;
 }

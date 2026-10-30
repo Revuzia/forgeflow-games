@@ -24,8 +24,8 @@ decoder). Every count below is read from renderer.info after a REAL render() (a 
                   and fewer than all; every InstancedMesh carries its own computed bounding sphere no wider than its district's (a map-wide instance never culls)
   dispose         3 place -> render -> dispose cycles: renderer.info geometries and textures return to the baseline after every dispose, no kit object is left in
                   the scene, and the second and third cycle compile no new program
-  all-types       all 81 manifest types place and draw (one each): 0 failed, browser triangles == manifest tris within 2 %, calls == the GLB's mesh count
-  agreement       81 types x 4 quarter turns: every collider box lies inside the bounding box of the DRAWN instance (mesh and colliders use one rotation convention)
+  all-types       all 136 manifest types (81 before the Wave-8 interior merge) place and draw (one each): 0 failed, browser triangles == manifest tris within 2 %, calls == the GLB's mesh count
+  agreement       every kit type (136 since the Wave-8 interior merge; 81 before) x 4 quarter turns: every collider box lies inside the bounding box of the DRAWN instance (mesh and colliders use one rotation convention)
   api             preload(), entries with no district chunked on a grid, a free yaw, scale, setShadows, place() after dispose() throws
   themes          6 themes + an explicit variant give distinct shared materials / textures; one texture per (palette, variant), tints applied
   far-only        lod "far" districts request NO GLB, still return every collider, draw exactly 1 call per district
@@ -393,7 +393,7 @@ def main_fn(v, args):
 
     def r_types():
         bad = [r for r in ty["rows"] if r["failed"] or abs(r["tris"] - r["manifestTris"]) > max(2, 0.02 * r["manifestTris"]) or r["calls"] != r["parts"]]
-        return (len(ty["rows"]) == 81 and not bad and not ty["failed"],
+        return (len(ty["rows"]) == 136 and not bad and not ty["failed"],
                 "%d types placed, %d failed to load, %d off the manifest triangles by more than 2 %%%s; %d boxes, %d textures" % (
                     len(ty["rows"]), len(ty["failed"]), len(bad), (": " + ", ".join(r["id"] for r in bad[:4])) if bad else "", ty["boxes"], ty["textures"]))
     guarded("all-types", r_types)
@@ -411,8 +411,8 @@ def main_fn(v, args):
                 "%d shared materials for %d (palette, variant, tint) ids, %d textures (one per palette x variant: %d expected), tints %s; ids %s" % (th["distinctMaterials"], len(exp_ids), th["textures"], n_tex, sorted(set(th["tints"])), sorted(got_ids)))
     guarded("themes", r_themes)
 
-    guarded("agreement", lambda: (ag["entries"] == 324 and ag["bad"] == 0 and ag["worst"] <= 0.3 + 1e-6,
-            "%d instances (81 types x 4 quarter turns): every collider box lies inside the DRAWN instance's bounding box (+0.3 m, the intake rule); worst overshoot %.3f m, %d outside%s" % (
+    guarded("agreement", lambda: (ag["entries"] == 544 and ag["bad"] == 0 and ag["worst"] <= 0.3 + 1e-6,
+            "%d instances (136 types x 4 quarter turns): every collider box lies inside the DRAWN instance's bounding box (+0.3 m, the intake rule); worst overshoot %.3f m, %d outside%s" % (
                 ag["entries"], ag["worst"], ag["bad"], (": " + json.dumps(ag["rows"][:3])) if ag["rows"] else "")))
 
     def r_misc():
@@ -470,11 +470,11 @@ def main_fn(v, args):
     pal_bytes = 0
     for k, p in man["palettes"].items():
         pal_bytes += p["bytes"]
-    v.info("download for the 300-building scene", "%d GLBs = %d B, all palettes %d B; whole kit (81 types) %d B" % (len(used), glb_bytes_300, pal_bytes, sum(t["bytes"] for t in T.values())))
+    v.info("download for the 300-building scene", "%d GLBs = %d B, all palettes %d B; whole kit (%d types) %d B" % (len(used), glb_bytes_300, pal_bytes, len(T), sum(t["bytes"] for t in T.values())))
     v.info("programs", "%s after the first full render" % M["programs"])
     table = sorted(ty["rows"], key=lambda r: -r["tris"])
     v.data["perTypeTriangles"] = [{"id": r["id"], "tris": r["tris"], "manifest": r["manifestTris"], "parts": r["parts"], "kind": r["kind"], "bytes": r["bytes"], "scale": r["scale"]} for r in table]
-    v.info("per-type triangle table", "top 6: " + ", ".join("%s %d" % (r["id"].split("/")[1], r["tris"]) for r in table[:6]) + "; whole table in the JSON report (81 rows)")
+    v.info("per-type triangle table", "top 6: " + ", ".join("%s %d" % (r["id"].split("/")[1], r["tris"]) for r in table[:6]) + "; whole table in the JSON report (%d rows)" % len(table))
     v.info("screenshots", ", ".join(v.data["shots"].values()))
     v.data["info"] = {"lod": lod_info}
 
