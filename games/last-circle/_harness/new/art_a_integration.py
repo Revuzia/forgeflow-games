@@ -5,7 +5,7 @@ art_a_clips.py / art_a_canopy.py prove the files themselves. This gate proves th
 (run it with --disk on the full tree; about 6-20 min on the shared box, mostly the match load and the landing; under --isolate the HEAD player.js has no consumer and the gate reports could-not-judge):
 
   * a standard match loads; player.js reports clip mode "shared"; every shared assets/chars/clips/<clip>.glb named by player.js
-    (MESHY_CLIPS + DEATH_CLIPS) was requested exactly ONCE and 0 per-skin assets/chars/meshy/<skin>_<clip>.glb clip files were
+    (its SHARED_REQ: MESHY_CLIPS + DEATH_CLIPS + EXT_CLIPS minus SUPERSEDED) was requested exactly ONCE and 0 per-skin assets/chars/meshy/<skin>_<clip>.glb clip files were
     requested (the per-skin originals stay on disk as the fallback);
   * a REAL Space press deploys the human's canopy: player.js reports the canopy "loaded" with the triangle and line-segment counts
     that canopy.json declares (read from the file, not hard-coded) and the deployed chutes are instances of the one canopy mesh;
@@ -93,13 +93,23 @@ def _player_lists():
     def grab(name):
         m = re.search(r"const\s+%s\s*=\s*\[(.*?)\];" % name, src, re.S)
         return re.findall(r'"([A-Za-z0-9_]+)"', re.sub(r"//[^\n]*", "", m.group(1))) if m else None
-    return grab("MESHY_CLIPS"), grab("DEATH_CLIPS")
+    sup = re.search(r"const\s+SUPERSEDED\s*=\s*\{(.*?)\};", src, re.S)
+    superseded = dict(re.findall(r'([A-Za-z0-9_]+)\s*:\s*"([A-Za-z0-9_]+)"', sup.group(1))) if sup else {}
+    return grab("MESHY_CLIPS"), grab("DEATH_CLIPS"), grab("EXT_CLIPS") or [], superseded
+
+
+def shared_request_names(meshy, deaths, ext, superseded):
+    """the shared clip files player.js asks for: its SHARED_REQ = MESHY_CLIPS + DEATH_CLIPS + EXT_CLIPS minus the SUPERSEDED names (P2/P3 fix
+    round: the P23 player lane bound rifle_idle / walk / run / crouch from their *_g re-bakes, 45 files; this gate still read only the first
+    two lists - 22 names - and FAILED the integrated tree 'missing rifle_idle ...' although every file player.js names came exactly once)"""
+    allc = (meshy or []) + (deaths or []) + (ext or [])
+    return [n for n in allc if not (n in superseded and superseded[n] in allc)]
 
 
 def main(v):
     art_a_lib.served_note(v, v.args)
     a = v.args
-    meshy, deaths = _player_lists()
+    meshy, deaths, ext, superseded = _player_lists()
     meta = json.load(open(os.path.join(common.ROOT, "assets", "props", "canopy.json"), encoding="utf-8"))
     want_tris, want_lines = int(meta.get("tris") or 0), len(meta["lines"]) // 2
     shots = a.shots or os.path.join(common.ROOT, "_harness", "_shots")
@@ -145,8 +155,9 @@ def main(v):
             m = re.search(r"/assets/chars/clips/([A-Za-z0-9_]+)\.glb$", u)
             if m:
                 shared_req[m.group(1)] = shared_req.get(m.group(1), 0) + 1
-        names = (meshy or []) + (deaths or [])
-        clip_re = r"/assets/chars/meshy/[a-z]+_(%s)\.glb$" % "|".join(map(re.escape, names))
+        names = shared_request_names(meshy, deaths, ext, superseded)
+        v.info("shared clip names player.js requests (MESHY + DEATH + EXT minus SUPERSEDED)", {"n": len(names), "superseded": superseded})
+        clip_re = r"/assets/chars/meshy/[a-z]+_(%s)\.glb$" % "|".join(map(re.escape, (meshy or []) + (deaths or []) + (ext or [])))
         per_skin_all = [u for u in clip_urls if re.search(clip_re, u)]
         # a per-skin request counts against player.js unless its initiator stack is known and does not contain player.js
         def by_player(u):

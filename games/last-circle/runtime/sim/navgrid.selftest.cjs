@@ -21,6 +21,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
+if (process.argv.includes("--noprime")) globalThis.__ngNoPrime = 1;      // (final/nav) the control child of section 6i: a module that never primes
 const _m = require("./navgrid.js");
 const NG = _m && _m.bakeTile ? _m : (globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.NavGrid);
 if (!NG || typeof NG.bakeTile !== "function") { console.error("FAIL: could not load the NavGrid module"); process.exit(1); }
@@ -51,9 +52,17 @@ function minOf(n, fn) { let best = Infinity; for (let i = 0; i < n; i++) { const
   if (pj) {
     const m1 = /const STEP_UP = ([0-9.]+);/.exec(pj);
     ok(m1 && +m1[1] === NG.STEP_UP, "STEP_UP = player.js literal (" + (m1 && m1[1]) + ")");
-    const sup = /function supportF\([^)]*\) \{[\s\S]*?\n\}/.exec(pj);            // Wave 7b S1: supportIn's body lives in supportF (MV calling convention)
-    const m2 = sup && /c\.minX - ([0-9.]+)/.exec(sup[0]);
-    ok(m2 && +m2[1] === NG.SUP_MARGIN, "supportIn footprint margin = player.js literal (" + (m2 && m2[1]) + ")");
+    // Wave 7b S1 moved supportIn's body into supportF; R2 (cd2ea528) split it again into supportF + supportFG. So the pin reads EVERY player.js
+    // support* function that carries a footprint test (x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m), wherever it lives
+    // now, and requires all four margins of each such function to equal NG.SUP_MARGIN (and at least one such function to exist).
+    const supRe = /function (support\w*)\([^)]*\) \{[\s\S]*?\n\}/g, foot = [];
+    for (let fm; (fm = supRe.exec(pj)); ) {
+      const fp = /c\.minX - ([0-9.]+) \|\| x > c\.maxX \+ ([0-9.]+) \|\| z < c\.minZ - ([0-9.]+) \|\| z > c\.maxZ \+ ([0-9.]+)/.exec(fm[0]);
+      if (fp) foot.push({ fn: fm[1], m: [+fp[1], +fp[2], +fp[3], +fp[4]] });
+      else if (/c\.(?:min|max)[XZ] [-+] [0-9.]/.test(fm[0])) foot.push({ fn: fm[1], m: [NaN] });   // a footprint the pin cannot read fails, never skips
+    }
+    const footOk = foot.length > 0 && foot.every(f => f.m.every(v => v === NG.SUP_MARGIN));
+    ok(footOk, "supportIn footprint margin = player.js literal (" + (foot.length ? foot.map(f => f.fn + " " + f.m.join("/")).join(", ") : "null") + ")");
     // Wave 7b S1: blockedIn's body is blockedF, which hands the SAME numbers to the sim's rampBlocksA (rampBlocks' one body) in an array
     ok(/K\.PLAYERK\.radius/.test(pj) && /function blockedF\(/.test(pj) && /RBA\[0\] = x; RBA\[1\] = z; RBA\[2\] = yd; RBA\[3\] = h; RBA\[4\] = r; RBA\[5\] = STEP_UP;\s*\n\s*if \(!K\.rampBlocksA\(c, RBA\)\) continue;/.test(pj),
        "player.js blockedIn still calls the sim rampBlocks the way navgrid copies it");
@@ -159,7 +168,7 @@ function townSignature() {
   for (const q of qs) { const str = JSON.stringify(NG.findPath(Wt, ...q)); for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } }
   return NG.worldHash(Wt) + ":" + (h >>> 0).toString(16);
 }
-if (process.argv.includes("--child")) { console.log(townSignature()); process.exit(0); }
+if (process.argv.includes("--child")) { const sg = townSignature(), c = NG.counters(); console.log(sg + (process.argv.includes("--work") ? ":" + c.hops + ":" + c.steps + ":" + NG.primeMs() : "")); process.exit(0); }
 
 /** the kept node nearest (x, z) within maxD whose height is within maxDy of y, over a list of tiles: { x, y, z } or null */
 function nearestNode(tiles, x, z, y, maxD, maxDy) {
@@ -316,6 +325,32 @@ const street = { x: 36.5, y: 0, z: 33 };
   const down = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25), up = NG.findPath(W1, 36.5, 0, 25, 33.4, 3.6, 25);
   ok(down && down.length <= 4 && down.some((w) => w.k === NG.EDGE_DROP), "balcony -> street is a short route with a drop (" + (down && down.length) + " waypoints)");
   ok(up && up.length > 10 && !up.some((w) => w.k === NG.EDGE_DROP && w.y > 3), "street -> balcony goes through the house, never up a 'drop' (" + (up && up.length) + " waypoints)");
+  // (P2-E) opts.maxDrop: a route that may not take the 3.6 m drop walks down through the house; a budget over the drop changes nothing
+  const downMd = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: 1.0 }), downMd6 = NG.findPath(W1, 33.4, 3.6, 25, 36.5, 0, 25, { maxDrop: NG.DROP_MAX });
+  let tallest = 0;
+  if (downMd) for (let i = 1; i < downMd.length; i++) if (downMd[i].k === NG.EDGE_DROP) tallest = Math.max(tallest, downMd[i - 1].y - downMd[i].y);
+  ok(downMd && downMd.length > 10 && tallest <= 1.0 + 1e-6, "maxDrop 1 m: balcony -> street goes down through the house (" + (downMd && downMd.length) + " waypoints, tallest drop leg " + tallest.toFixed(2) + " m)");
+  ok(downMd6 && down && JSON.stringify(downMd6.map((w) => [w.x, w.y, w.z, w.k])) === JSON.stringify(down.map((w) => [w.x, w.y, w.z, w.k])), "maxDrop = DROP_MAX: the very route the default query returns");
+  // (P23 fix round) maxDrop is a HEIGHT: a fall-damage budget comes from C-FALL's safe impact SPEED as h = v^2 / (2 g) at this game's gravity (NG.dropHeight)
+  ok(Math.abs(NG.dropHeight(R.FALL_SAFE_V) - (R.FALL_SAFE_H != null ? R.FALL_SAFE_H : 4)) < 1e-9 && NG.dropHeight(0) === 0 && NG.dropHeight(-3) === 0,
+    "dropHeight(K.FALL_SAFE_V = " + (+R.FALL_SAFE_V).toFixed(3) + " m/s) = " + NG.dropHeight(R.FALL_SAFE_V).toFixed(3) + " m = K.FALL_SAFE_H at g = " + Math.abs(NG.GRAVITY) + " m/s^2");
+  {
+    // ... and a NULL path is an answer: a walled yard (3 m walls, no door) that only a 3 m drop off a ramped platform leads into. With a 1 m budget there is
+    // no route in ("no-path"), from inside there is no route out at all (the yard is kept: the directed flood reaches it by the drop); a budget of the
+    // safe fall height takes the drop exactly as the default query does.
+    const yc = [], yb = (x0, x1, y0, y1, z0, z1) => yc.push(mk("box", x0, x1, y0, y1, z0, z1));
+    yb(9.8, 10.2, 0, 2.7, 9.8, 16.2); yb(15.8, 16.2, 0, 3, 9.8, 16.2); yb(10.2, 15.8, 0, 3, 9.8, 10.2); yb(10.2, 15.8, 0, 3, 15.8, 16.2);   // the yard's walls
+    yb(5, 10.2, 2.7, 3.0, 9.8, 16.2);                                                                                                     // the platform, its east edge on the west wall
+    yc.push(mk("ramp", -1, 5, 0, 3, 11, 15, 0));                                                                                        // its ramp, rising toward +x
+    const WY = NG.createWorld({ colliders: yc, heightFn: flat, cover: (tx, tz) => tx >= -1 && tx <= 0 && tz === 0 });
+    const inD = NG.findPath(WY, -4, 0, 13, 13, 0, 13), fD = WY.lastFail, inSafe = NG.findPath(WY, -4, 0, 13, 13, 0, 13, { maxDrop: NG.dropHeight(R.FALL_SAFE_V) });
+    const in1 = NG.findPath(WY, -4, 0, 13, 13, 0, 13, { maxDrop: 1 }), f1 = WY.lastFail;
+    const out = NG.findPath(WY, 13, 0, 13, -4, 0, 13), fo = WY.lastFail;
+    const legs = (p) => JSON.stringify(p && p.map((w) => [w.x, w.y, w.z, w.k]));
+    ok(inD && inD.some((w) => w.k === NG.EDGE_DROP) && legs(inSafe) === legs(inD), "the walled yard: in over the platform with a drop leg (" + (inD ? inD.length + " waypoints" : "null: " + fD) + "); maxDrop = the safe fall height gives the same route");
+    ok(in1 === null && f1 === "no-path", "... maxDrop 1 m: null, lastFail " + f1 + " (a valid answer: the caller keeps its own plan)");
+    ok(out === null && fo === "no-path", "... from inside the yard: null, lastFail " + fo + " (no way out at any budget)");
+  }
   // islands
   const vault = NG.findPath(W1, 36.5, 0, 25, 43, 0, 23);
   ok(vault === null && W1.lastFail === "no-goal", "the sealed vault has no node (pruned): lastFail " + W1.lastFail);
@@ -755,6 +790,89 @@ const mkc = (k) => ({ kind: k[0] ? "ramp" : "box", minX: k[1], maxX: k[2], minY:
   info("the lazy / incremental section took " + (nowMs() - tLazy0).toFixed(0) + " ms");
 }
 
+// ── 6h. Wave P2 (lane P2-E, LC-88): the PREBAKE and the SEAMS - work done ahead (workers) is invisible to the sim ───────────────────
+// The schedule run slice by slice with queries in between gives the same per-slice trace (done, steps, hops, the mover's carried ramp / margin flags),
+// the same world hash and the same routes whether no tile, every tile, or every other tile was prebaked, with or without the stitch's seams answered
+// ahead. Then the worker protocol itself (the factory's own source in a fresh context, as the Blob worker runs it): its tiles hash like the main
+// thread's bake, and its stitch worker's seam records are the in-process ones byte for byte.
+if (typeof NG.prebakeInline === "function") {
+  const tPb0 = nowMs();
+  const area = { minX: 0, maxX: 64, minZ: 0, maxZ: 64 };
+  const pq = [[36.5, 0, 33, 29, 7.2, 25], [36.5, 0, 33, 22, 0, 22], [9, 0, 30, 36.5, 0, 25]];
+  const run = (mode) => {
+    const W = NG.createWorld({ colliders: scene, heightFn: flat, cover, lazy: true, rects: [area], margin: 0 });
+    if (mode !== "none") { let i = 0; NG.prebakeInline(W, (d) => mode.startsWith("all") || (i++ % 2) === 0, { seams: mode.endsWith("S") }); }
+    for (const j of NG.collectJobs(W, area)) if (j.kind === 0) NG.runJob(W, j);
+    const tr = [], routes = [];
+    let qn = 0;
+    for (let pass = 0; pass < 20; pass++) {
+      const js = NG.collectJobs(W, area);
+      if (!js.length) break;
+      for (const j of js) {
+        const job = NG.beginJob(W, j);
+        for (;;) {
+          const w0 = NG.work(), h0 = NG.counters().hops, d = NG.stepJob(W, job), sr = NG.supRampState();
+          tr.push((d ? 1 : 0) + ":" + (NG.work() - w0) + ":" + (NG.counters().hops - h0) + ":" + sr.ramp + sr.margin);
+          if (d) break;
+          if ((++qn % 7) === 0) { const p = NG.findPath(W, ...pq[qn % pq.length]); routes.push(p ? p.length : -1); }
+        }
+      }
+    }
+    for (const q of pq) routes.push(JSON.stringify(NG.findPath(W, ...q)));
+    return { mode, tr: tr.join(","), routes: routes.join("|"), hash: NG.worldHash(W), st: NG.prebakeStats(W), slices: tr.length };
+  };
+  const R0 = run("none"), RS = ["all", "allS", "halfS", "half"].map(run);
+  ok(RS.every((r) => r.tr === R0.tr && r.hash === R0.hash && r.routes === R0.routes),
+    "prebaked tiles and seams answered ahead change nothing: the same " + R0.slices + "-slice trace (steps, hops, carried ramp/margin flags), routes and world hash (" + R0.hash + ") in " +
+    RS.map((r) => r.mode + " [" + (r.tr === R0.tr ? "=" : "TRACE") + (r.hash === R0.hash ? "" : " HASH") + (r.routes === R0.routes ? "" : " ROUTES") + "]").join(", "));
+  const S = RS[1].st;
+  ok(S.hits > 0 && S.seamsIn > 0 && S.recMemo > 0, "... and the work ahead was really used (allS: " + S.hits + " tiles replayed from the prebake, " + S.seamsIn + " seams answered ahead, " + S.recMemo + " stitch records taken, " + S.recLive + " replayed live)");
+  // the worker protocol: the factory's source in a fresh context (as pbStart's Blob runs it), driven by messages
+  const vm = require("vm");
+  const src = fs.readFileSync(path.join(__dirname, "navgrid.js"), "utf8");
+  const mkWorker = () => {
+    const box = { out: [], __ngPrebake: 1, Map, Set, Float64Array, Float32Array, Int32Array, Uint32Array, Int16Array, Uint16Array, Int8Array, Uint8Array, Array, Math, Object, String, Number, Error, JSON, performance };
+    box.self = box; box.postMessage = (m) => box.out.push(m);
+    vm.runInNewContext("var self = this;\n" + src.replace(/^\(function navgridFactory/m, "(function navgridFactory").replace(/\}\)\(typeof window !== "undefined" \? window : globalThis\);\s*$/, "})(self);\n"), box);
+    return box;
+  };
+  const lat = new Float32Array(9 * 9);
+  const flatL = () => 0; flatL.ground = { lattice: lat, latN: 9 }; flatL.size = 256;
+  const Wm = NG.createWorld({ colliders: scene, heightFn: flatL, cover, lazy: true, rects: [area], margin: 0, prebake: false });
+  NG.prebakeInline(Wm, null, { seams: true });
+  const pbm = Wm.pb, jobs = pbm.coarse.concat(pbm.fine);
+  const bw = mkWorker(), sw = mkWorker(), csd = { n: Wm.cs.n, minX: Wm.cs.minX, maxX: Wm.cs.maxX, minY: Wm.cs.minY, maxY: Wm.cs.maxY, minZ: Wm.cs.minZ, maxZ: Wm.cs.maxZ, kind: Wm.cs.kind, dir: Wm.cs.dir };
+  const workerOk = typeof bw.onmessage === "function" && typeof sw.onmessage === "function";
+  let hashSame = workerOk, seamSame = workerOk, nT = 0, nS = 0;
+  if (workerOk) {
+    bw.onmessage({ data: { t: "init", cs: csd, L: lat, latN: 9, size: 256 } });
+    sw.onmessage({ data: { t: "sinit", cs: csd, L: lat, latN: 9, size: 256, world: { tileSize: Wm.tileSize, cellOutdoor: Wm.cellOutdoor, cellIndoor: Wm.cellIndoor, waterY: Wm.waterY,
+      fine: Wm.fine.map((r) => ({ minX: r.minX, minZ: r.minZ, maxX: r.maxX, maxZ: r.maxZ, idx: r.idx })) }, jobs: pbm.list } });
+    const portBox = { onmessage: null };
+    sw.onmessage({ data: { t: "port" }, ports: [portBox] });
+    for (const d of jobs) {
+      bw.out.length = 0;
+      bw.onmessage({ data: Object.assign({}, d, { t: "job" }) });
+      const m = bw.out.find((x) => x.t === "tile");
+      if (!m) { hashSame = false; continue; }
+      nT++;
+      if (m.P.hash !== pbm.cache.get(d.key).hash) hashSame = false;
+      portBox.onmessage({ data: { t: "tile", P: m.P } });
+    }
+    const got = new Map(sw.out.filter((x) => x.t === "seam").map((x) => [x.s.a + "," + x.s.b, x.s]));
+    nS = got.size;
+    const eq = (p, q) => p.length === q.length && p.every((v, i) => Object.is(v, q[i]));
+    for (const [k, s] of pbm.seams) {
+      const g = got.get(k);
+      if (!g || !["L0", "L1", "K", "C", "S", "H", "F", "X", "TL"].every((f) => eq(Array.from(s[f]), Array.from(g[f])))) seamSame = false;
+    }
+    if (got.size !== pbm.seams.size || !sw.out.some((x) => x.t === "sidle")) seamSame = false;
+  }
+  ok(workerOk && hashSame && nT === jobs.length, "the bake worker (the module's own source in a fresh context, message for message) bakes every tile with the main thread's hash (" + nT + " of " + jobs.length + ")");
+  ok(workerOk && seamSame && nS > 0, "the stitch worker answers the same seams with the same records as the in-process host (" + nS + " seams, then 'sidle')");
+  info("the prebake / seams section took " + (nowMs() - tPb0).toFixed(0) + " ms");
+}
+
 // ── 6e. a fresh process builds the same world ─────────────────────────────────────────────────────────────────────────────
 {
   const child = require("child_process");
@@ -762,6 +880,37 @@ const mkc = (k) => ({ kind: k[0] ? "ramp" : "box", minX: k[1], maxX: k[2], minY:
   let theirs = "(no output)";
   try { theirs = child.execFileSync(process.execPath, [__filename, "--child"], { encoding: "utf8", timeout: 60000 }).trim().split("\n").pop(); } catch (e) { theirs = "child failed: " + (e && e.message); }
   ok(mine === theirs, "a fresh process gives the identical world hash and routes (" + mine.slice(0, 60) + ")");
+}
+
+// ── 6i. final/nav: ONE tile class; the feedback priming leaves no trace ─────────────────────────────────────────────────────────
+// Every tile is born from one literal (tileShell) with every field, so all tiles share a hidden class (a megamorphic tile read boxed a double per replayed
+// step: hopQ 49 B a step). Proxy for the class: the own keys, in order, of every tile from every path (bakeTile, an eager world, a lazy world's jobs, a
+// prebaked payload). And the module's priming (a world of its own, run before the first createWorld) changes nothing: a child that primes and a child that
+// never does give the same world hash, routes, hop count and replayed steps.
+{
+  const keysOf = (T) => Object.keys(T).join(",");
+  const ref = keysOf(NG.bakeTile(scene, flat, { minX: 17.5, minZ: 17.5, maxX: 36.5, maxZ: 32.5 }, 0.75));
+  const area = { minX: 0, maxX: 64, minZ: 0, maxZ: 64 };
+  const We = world(); NG.prewarm(We, area, 1e9);
+  const Wl = NG.createWorld({ colliders: scene, heightFn: flat, cover, lazy: true, rects: [area], margin: 0 });
+  for (let pass = 0; pass < 3; pass++) for (const j of NG.collectJobs(Wl, area)) NG.runJob(Wl, j);
+  NG.findPath(Wl, 36.5, 0, 33, 29, 7.2, 25); NG.findPath(We, 36.5, 0, 33, 29, 7.2, 25);
+  let Wp = null;
+  if (typeof NG.prebakeInline === "function") {
+    Wp = NG.createWorld({ colliders: scene, heightFn: flat, cover, lazy: true, rects: [area], margin: 0 });
+    NG.prebakeInline(Wp, null, { seams: true });
+    for (let pass = 0; pass < 3; pass++) for (const j of NG.collectJobs(Wp, area)) NG.runJob(Wp, j);
+  }
+  const all = NG.tiles(We).concat(NG.tiles(Wl), Wp ? NG.tiles(Wp) : []);
+  const odd = all.filter((T) => keysOf(T) !== ref);
+  ok(all.length > 10 && odd.length === 0, "one tile class: " + all.length + " tiles (eager, lazy" + (Wp ? ", prebaked" : "") + ") all carry the same " + ref.split(",").length + " own fields in one order" + (odd.length ? "; " + odd.length + " differ, e.g. " + keysOf(odd[0]).slice(-80) : ""));
+  ok(NG.primeMs() >= 0, "the module primed its replay before its first world (" + NG.primeMs().toFixed(1) + " ms)");
+  const child = require("child_process");
+  const sig = (extra) => { try { return child.execFileSync(process.execPath, [__filename, "--child", "--work"].concat(extra), { encoding: "utf8", timeout: 60000 }).trim().split("\n").pop(); } catch (e) { return "child failed: " + (e && e.message); } };
+  const primed = sig([]), plain = sig(["--noprime"]);
+  const strip = (x) => x.split(":").slice(0, 4).join(":");
+  ok(strip(primed) === strip(plain) && !primed.startsWith("child failed"), "priming leaves no trace: world hash, routes, hops and replayed steps equal with and without it (" + strip(primed) + " / " + strip(plain) + ")");
+  ok(+primed.split(":")[4] > 0 && +plain.split(":")[4] === 0, "the control child did not prime (" + primed.split(":")[4] + " ms / " + plain.split(":")[4] + " ms)");
 }
 
 // ── 6g. Wave 7, round 2 (lane D4): the one-pass forms of the bake equal the two-call reference; a stair that ends short of its landing still leads to it ──────────

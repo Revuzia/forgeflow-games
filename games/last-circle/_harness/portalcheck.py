@@ -51,8 +51,19 @@ addEventListener('message', (e) => {
 </body>"""
 
 
+def portal_source():
+    """GamePlayer.tsx from the working tree; in a SPARSE worktree (only games/last-circle + pipeline checked out - the lane worktrees) the file
+    is not on disk, so the committed blob at HEAD is read instead (P2/P3 fix round: gate_20261027_092051 portalcheck was a FileNotFoundError
+    CNJ). The planted fault (minus allow-pointer-lock) is applied to whichever text was read."""
+    if os.path.exists(GAMEPLAYER):
+        return open(GAMEPLAYER, encoding="utf-8").read()
+    import subprocess
+    rel = os.path.relpath(GAMEPLAYER, C.REPO).replace(os.sep, "/")
+    return subprocess.run(["git", "-C", C.REPO, "show", "HEAD:" + rel], capture_output=True, check=True).stdout.decode("utf-8")
+
+
 def read_portal_attrs():
-    src = open(GAMEPLAYER, encoding="utf-8").read()
+    src = portal_source()
     m = re.search(r"<iframe[\s\S]*?/>", src)
     block = m.group(0) if m else src
     sb = re.search(r'\bsandbox="([^"]*)"', block)

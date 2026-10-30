@@ -6,17 +6,38 @@ batch per material per district (12-16 calls)" and "Wave 8 verify: framecheck qu
     python _harness/houseload.py --disk --maps ashgrid --baseline 9115494d
     python _harness/houseload.py --disk --maps deepwood --plant query-flood      # control: every queryColliders result carries 64 extra colliders -> the collider rows FAIL
     python _harness/houseload.py --disk --maps deepwood --plant district-split   # control: 20 extra meshes in the first town district -> district-calls FAILS
+    python _harness/houseload.py --disk --maps deepwood --plant look-flood       # control (R3): hasCollidersNear reads its whole r-list -> collider-load FAILS
+    python _harness/houseload.py --disk --maps deepwood --plant look-true        # control (R3): hasCollidersNear always true -> collider-load FAILS
     python _harness/houseload.py --rev 9115494d --baseline 9115494d --maps ashgrid   # the same build twice: the collider rows read x1.000 (the battery is exact)
 
-framecheck counts queryColliders CALLS per frame (<= 150). It never counted what a call RETURNS: maps.js queryColliders hands back every collider of every
-40 m grid cell the query circle touches, so a furnished house (150-680 colliders: housegen p50 ~160) inside a cell lands in every bot's r = 16 m look-around
-(bots.js) and every mover query near it. This gate measures that, and the per-district draw calls the plan's batching bar is about.
+framecheck counts queryColliders CALLS per frame (<= 150). It never counted what a call RETURNS: maps.js queryColliders hands back the colliders of the grid
+cells the query square touches, so a furnished house (150-680 colliders: housegen p50 ~160) lands in every bot's look-around and every mover query near it
+unless the query is narrowed (a band, an emptiness test). This gate measures that, and the per-district draw calls the plan's batching bar is about.
 
 Per map, ONE Chrome serves the candidate (the working copy, or --rev), ONE the baseline revision (git, page routing); each loads a standard match at --seed,
 lands (guarded), freezes the loop and measures:
-  BATTERY (exact, deterministic: the same points in both builds): the queries the game makes near a house, at every town / compound building footprint centre of
-          the CANDIDATE's layout (W.map.city.footprints; the baseline is queried at the same points): r 16 (the bot look-around, bots.js), r 1.6 (bot steering), r 0.6
-          (the mover's support). Counts of colliders returned: mean, p95, max per radius.
+  BATTERY (exact, deterministic: the same points in both builds): the queries the game makes near a house, each EXACTLY as the game issues it (read
+          from each build's own source, below), at every town / compound building footprint centre of the CANDIDATE's layout (W.map.city.footprints; the
+          baseline is queried at the same points). The asker is a mover standing on the footprint's ground floor (W.map.houseAt(x, z).y, else the
+          terrain), vel 0. Counts of colliders the query hands back (a list query) or reads before it answers (occAny): mean, p95, max per query.
+          R2 call-site proof (the head this battery was rewritten on, 2e76a02c + R2; the old r 16 / 1.6 / 0.6 rows were stale):
+            look     bots.js:5258  `if (!occAny(W, a.pos.x, a.pos.z, 16)) {` and bots.js:3595 `if (W.map.hasCollidersNear) return W.map.hasCollidersNear(x, z, r);`
+                     (maps.js:6903 `function hasCollidersNear(x, z, r)` = true at the FIRST live collider of the cells the square touches): the look-around
+                     builds no list any more - measured as the cell entries it reads before it answers (the maps.js scan, replicated over W.map.colliders
+                     and checked point by point against W.map.hasCollidersNear). 9115494d's bots.js:3265 `const near = W.map.queryColliders(a.pos.x, a.pos.z, 16);`
+                     = the baseline (an unbanded r 16 list).
+            steer    bots.js:2272 `const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);` (bots.js:2258 `const WALL_QR = 2.4;`) - the per-bot
+                     steering list (9115494d bots.js:1392, the same call). Unbanded on 2e76a02c; a band added there (lane movers, R2) is read from the call.
+            move     player.js:2352 `const cols = moveCols(W, a.pos.x, a.pos.z, Math.abs(mvx) + Math.abs(mvz), yLo, yHi);` with player.js:2351
+                     `yLo = (dyT < 0 ? a.pos.y + dyT : a.pos.y) - 1.0, yHi = (dyT > 0 ? a.pos.y + dyT : a.pos.y) + h + 1.0` and player.js:1940
+                     `return W.map.queryColliders(x, z, Math.max(K.PLAYERK.radius + 0.4, 0.6) + K.PLAYERK.radius + reach, _moveCols, y0, y1);` - every
+                     actor's one move query a tick, banded (maps.js:6859 `if (y0 !== undefined) return queryCollidersY(...)`); reach = a sprint tick on the
+                     diagonal (K.MOVE.sprint / 60 x sqrt 2): r 1.489. 9115494d player.js:1630: the same radius, no band. (The swim branch, player.js:2599,
+                     is unbanded but nobody swims on a house floor.)
+            support  the r 0.6 support / solid probes: player.js:1784 (supportA, the bots' per-frame hop probe) and player.js:1792 (supportAt)
+                     `W.map.queryColliders(x, z, 0.6)`, bots.js:1833 (insideSolid) and bots.js:2125 (obstacleAt) - unbanded on 2e76a02c (lane movers, R2,
+                     is adding the asker's band). Per point the WORST of these sites as each build issues it (a site's band read from its call).
+          A band or radius the page cannot evaluate falls back to the unbanded query (the stricter reading), and is printed in the row's notes.
   MATCH   (counts, but a match: bots differ between builds): 600 stepped sim frames after landing with every external queryColliders call wrapped - calls and
           colliders returned per frame, per radius bucket.
   DRAWS   every mesh under the map group attributed to its district (structure meshes: userData.district; kit instanced meshes: userData.kitDistrict or the
@@ -24,14 +45,21 @@ lands (guarded), freezes the loop and measures:
           district of their own); calls = meshes x
           material groups at DETAIL (the kit's far proxies are not counted), main pass.
 Rows (per map):
-  collider-load        BATTERY r 16: mean AND p95 colliders returned <= x1.25 the baseline's (plus r 1.6 / r 0.6 mean <= x1.25): the houses must not grow what a
-                       query returns (the fix is a per-house broad phase or a separate furniture grid; housegen colliders straight into maps.js's 40 m grid fail it)
+  collider-load        BATTERY: look and steer mean AND p95, move and support mean: colliders <= x1.25 the baseline's: the houses must not grow what the
+                       game's queries near a house hand back (the fix is a per-house broad phase, a band, a separate furniture grid)
   collider-load-frame  MATCH: colliders returned per frame <= x1.25 the baseline's, and queryColliders calls per frame <= 150 (framecheck's bar, here on every map)
   district-calls       DRAWS: every district <= 16 draw calls at detail (plan 8B: 12-16 per district), the worst five printed; the baseline's worst printed beside it
   errors               0 page errors / failed requests in the candidate
 Plants (--plant, applied to the CANDIDATE page after the match is loaded, never a file; only the designated rows count):
   query-flood          the wrapped queryColliders appends 64 dead, far-away dummy colliders to every result   -> collider-load, collider-load-frame FAIL
   district-split       20 extra 1-triangle meshes tagged with the first district id                         -> district-calls FAILS
+  look-flood           (R3) W.map.hasCollidersNear builds the r-list and reads all of it (same answers, no early exit) -> collider-load FAILS (look reads)
+  look-true            (R3) W.map.hasCollidersNear always answers true                                         -> collider-load FAILS (wrong answers)
+R3 (gates): each band is evaluated with the module constants its file declares (bots.js WALL_BAND_UP / WALL_REUSE_DY / NAV_STEP_UP, player.js STEP_UP), an
+infinite band edge is issued as such (wallCols' -Infinity), player.js supportA / supportAt are followed into supportBand (the r2-movers query), and the
+look measure counts the reads of the REAL hasCollidersNear (a c.dead read tap) instead of a replica's, a wrong answer failing the row.
+Under --plant the collider-load row judges only the queries that plant breaks (query-flood: steer/move/support; look-*: look), so a control is caught by
+ITS measure, never by a row that is red for another reason.
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -51,7 +79,12 @@ GATE = "houseload"
 RATIO_MAX = 1.25            # the same tolerance perf_district gives triangles: x1.25 of the build that is live
 QC_CALLS_MAX = 150          # framecheck's queryColliders calls per match frame
 DISTRICT_CALLS_MAX = 16     # plan section 3 WAVE 8, lane 8B: "batch per material per district (12-16 calls)"
-PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"}}
+PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"},
+              # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
+              "look-flood": {"collider-load"}, "look-true": {"collider-load"}}
+# (R3) under a plant the collider-load row is judged on the queries that plant breaks ONLY: the steer query is over the bar on the R3 head (game work,
+# bots.js wallCols), so judging the whole row would let a control "fail" on steer while its own measure saw nothing. Without --plant: all four queries.
+PLANT_QUERIES = {"query-flood": ("steer", "move", "support"), "look-flood": ("look",), "look-true": ("look",)}
 FRAMES = 600
 
 WRAP_JS = r"""(plant) => {
@@ -61,6 +94,11 @@ WRAP_JS = r"""(plant) => {
   const st = M.__hl = { on: false, calls: 0, ret: 0, b: {} };
   const dummies = [];
   if (plant === 'query-flood') for (let i = 0; i < 64; i++) dummies.push({ kind: 'box', minX: 9e5 + i, maxX: 9e5 + i + 0.1, minY: -9e5, maxY: -9e5 + 0.1, minZ: 9e5, maxZ: 9e5 + 0.1, dir: -1, prop: null, idx: -1, hp: 0, dead: true, _qs: 0 });
+  // (R3) look plants: W.map.hasCollidersNear broken the two ways the look measure must see - it floods (builds the r-list and reads all of it, no
+  // early exit: the same answer at the old list's cost) or always answers true (a wrong answer wherever the square is empty)
+  if (plant === 'look-flood' && M.hasCollidersNear) M.hasCollidersNear = function (x, z, r) { const l = q.call(M, x, z, r, []); let any = false;
+    for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= x - r && c.minX <= x + r && c.maxZ >= z - r && c.minZ <= z + r) any = true; } return any; };
+  if (plant === 'look-true' && M.hasCollidersNear) M.hasCollidersNear = function () { return true; };
   M.queryColliders = function (x, z, r, out) {
     let res = q.apply(this, arguments);
     if (dummies.length) { if (Object.isFrozen(res)) res = res.slice(); for (const d of dummies) res.push(d); }
@@ -76,16 +114,94 @@ WRAP_JS = r"""(plant) => {
   return 'ok';
 }"""
 
-BATTERY_JS = r"""([pts, R]) => {
-  const W = window.__LC__.W, M = W.map;
+BATTERY_JS = r"""([pts, Q]) => {
+  const W = window.__LC__.W, M = W.map, K = W.SIM;
   const fp = pts || ((M.city && M.city.footprints) || []).map((a) => [(a[0] + a[2]) / 2, (a[1] + a[3]) / 2]);
-  const out = { points: fp.length, r: {} };
-  for (const r of R) {
-    const ns = [];
-    for (const p of fp) { const l = M.queryColliders(p[0], p[1], r, []); ns.push(l.length); }
+  const out = { points: fp.length, q: {}, notes: [] };
+  const DT = 1 / 60, h = K.PLAYERK.height, reach = K.MOVE.sprint * DT * Math.SQRT2;
+  const fn = (pre, exprs, tag) => { try { return new Function('K', 'reach', 'a', 'x', 'z', 'y', 'h', 'dt', 'g', (pre || '') + '\n; return [' + exprs.join(', ') + '];'); }
+                                    catch (e) { out.notes.push(tag + ': not evaluable (' + e.message + ') - unbanded'); return null; } };
+  // the occAny / hasCollidersNear scan (maps.js: cells of CELL m, x-major, entries in collider order; stop at the first live collider meeting the square)
+  let occ = null, tapN = 0;
+  const occReads = (x, z, r) => {
+    if (!occ) { const C = M.city ? (M.houses && M.houses.length ? 4 : 8) : 16, cells = new Map();
+      (M.colliders || []).forEach((c) => { for (let i = Math.floor(c.minX / C); i <= Math.floor(c.maxX / C); i++) for (let j = Math.floor(c.minZ / C); j <= Math.floor(c.maxZ / C); j++) {
+        const k = (i + 8192) * 16384 + (j + 8192); let l = cells.get(k); if (!l) cells.set(k, l = []); l.push(c); } });
+      occ = { C, cells }; out.occCell = C; }
+    const C = occ.C, qx0 = x - r, qx1 = x + r, qz0 = z - r, qz1 = z + r;
+    let n = 0;
+    for (let i = Math.floor(qx0 / C); i <= Math.floor(qx1 / C); i++) for (let j = Math.floor(qz0 / C); j <= Math.floor(qz1 / C); j++) {
+      const l = occ.cells.get((i + 8192) * 16384 + (j + 8192)); if (!l) continue;
+      for (let k = 0; k < l.length; k++) { n++; const c = l[k]; if (!c.dead && c.maxX >= qx0 && c.minX <= qx1 && c.maxZ >= qz0 && c.minZ <= qz1) return [n, true]; }
+    }
+    return [n, false];
+  };
+  for (const q of Q) {
+    const rF = fn('', [q.r], q.key + ' radius');
+    const vars = q.sites.map((st) => ({ st, f: st.band ? fn(st.pre, st.band, q.key + ' band ' + st.at) : null }));
+    const ns = [], rs = new Set(); let banded = 0, occBad = 0, occReadDiff = 0, emptyN = 0, emptyBad = 0;
+    // (R3) the read tap for the look measure: c.dead on every collider becomes a counting accessor for the length of this query's points, then the
+    // plain data property is put back (the match measurement below runs on untouched colliders). A non-configurable collider = no tap (the replica's
+    // count, noted)
+    let tap = false; const tapped = [];
+    if (q.mode === 'occ') {
+      tap = true;
+      for (const c of (M.colliders || [])) { const d = Object.getOwnPropertyDescriptor(c, 'dead');
+        if (Object.isFrozen(c) || (d && !d.configurable)) { tap = false; break; }
+        const v0 = c.dead; tapped.push([c, d, v0]); let cur = v0;
+        Object.defineProperty(c, 'dead', { get() { tapN++; return cur; }, set(nv) { cur = nv; }, enumerable: true, configurable: true }); }
+      if (!tap) out.notes.push(q.key + ': a collider is frozen / non-configurable - its reads are the replica\'s count');
+    }
+    try {
+    for (const p of fp) {
+      const x = p[0], z = p[1], H = M.houseAt ? M.houseAt(x, z) : null, y = H ? H.y : M.heightAt(x, z);
+      const a = { pos: { x, y, z }, vel: { x: 0, y: 0, z: 0 }, onGround: true };
+      const g = M.heightAt(x, z);        // (R3) the terrain under the point: player.js supportBand's MV[7] (groundF)
+      let r = q.r0; try { if (rF) r = rF(K, reach, a, x, z, y, h, DT, g)[0]; } catch (e) {}
+      rs.add(+r.toFixed(3));
+      let worst = 0;
+      for (const v of vars) {
+        let n;
+        if (q.mode === 'occ') {
+          // (R3) the REAL W.map.hasCollidersNear is called and its reads are counted (every collider entry it inspects reads c.dead: the tap below);
+          // the replica's answer is the truth it must give (== a live collider meets the square). A flooding or always-true hasCollidersNear now
+          // shows: more reads, or a wrong answer (occMismatch: the row FAILS)
+          const [reads, any] = occReads(x, z, r);
+          tapN = 0;
+          const real = M.hasCollidersNear(x, z, r);
+          if (any !== real) occBad++;
+          n = tap ? tapN : reads;
+          if (tap && tapN !== reads) occReadDiff++;
+        } else {
+          let b = null; try { if (v.f) b = v.f(K, reach, a, x, z, y, h, DT, g); } catch (e) { b = null; if (!v.err) { v.err = 1; out.notes.push(q.key + ' band ' + v.st.at + ': ' + e.message + ' - unbanded'); } }
+          // (R3) a band edge may be infinite (bots.js wallCols asks [-Infinity, feet + 12.8]); only a NaN / missing edge is unevaluable
+          if (b && typeof b[0] === 'number' && typeof b[1] === 'number' && !isNaN(b[0]) && !isNaN(b[1])) { banded++; n = M.queryColliders(x, z, r, [], b[0], b[1]).length; }
+          else n = M.queryColliders(x, z, r, []).length;
+        }
+        if (n > worst) worst = n;
+      }
+      ns.push(worst);
+    }
+    // (R3) the look's answer where it must be FALSE: every footprint centre has a collider within 16 m, so an always-true hasCollidersNear answered
+    // right at all of them. Points 40 m out from each centre (8 directions) whose square the scan finds empty, up to 400: the real answer must be
+    // false there. Not part of the read counts (those stay on the footprint centres).
+    if (q.mode === 'occ') {
+      outer: for (const p of fp) for (let k = 0; k < 8; k++) {
+        const x = p[0] + Math.cos(k * Math.PI / 4) * 40, z = p[1] + Math.sin(k * Math.PI / 4) * 40;
+        if (occReads(x, z, q.r0)[1]) continue;
+        emptyN++; if (M.hasCollidersNear(x, z, q.r0) !== false) emptyBad++;
+        if (emptyN >= 400) break outer;
+      }
+      if (!emptyN) out.notes.push(q.key + ': no empty probe point found (the false answer is unchecked)');
+    }
+    } finally {
+      for (const [c, d, v0] of tapped) { const cur = c.dead; delete c.dead; if (d) Object.defineProperty(c, 'dead', Object.assign({}, d, { value: cur })); else if (cur !== undefined) c.dead = cur; }
+    }
     ns.sort((a, b) => a - b);
     const sum = ns.reduce((a, b) => a + b, 0);
-    out.r[String(r)] = { n: ns.length, mean: ns.length ? +(sum / ns.length).toFixed(2) : null, p95: ns.length ? ns[Math.min(ns.length - 1, Math.floor(ns.length * 0.95))] : null, max: ns.length ? ns[ns.length - 1] : null };
+    out.q[q.key] = { mode: q.mode, r: [...rs].slice(0, 4), sites: q.sites.map((st) => st.at + (st.band ? ' band' : '')), bandedQueries: banded, occMismatch: q.mode === 'occ' ? occBad + emptyBad : null, occEmptyChecked: q.mode === 'occ' ? emptyN : null,
+                     occTap: q.mode === 'occ' ? tap : null, occReadsVsReplica: q.mode === 'occ' ? occReadDiff : null,
+                     n: ns.length, mean: ns.length ? +(sum / ns.length).toFixed(2) : null, p95: ns.length ? ns[Math.min(ns.length - 1, Math.floor(ns.length * 0.95))] : null, max: ns.length ? ns[ns.length - 1] : null };
   }
   out.pts = pts ? null : fp;
   out.colliders = (M.colliders || []).length;
@@ -141,33 +257,190 @@ def rkey(r):
     return ("%d" % r) if float(r).is_integer() else repr(float(r))
 
 
-def look_radius(rev):
-    """(Wave 8, lane K3) the bot look-around radius the CANDIDATE's bots.js really queries. The Wave-7b bots made queryColliders(a.pos.x, a.pos.z, 16) per bot
-    (the battery's r 16 row); the Wave-8 bots.js answers that question from hasCollidersNear (no collider list) and its per-bot list query is WALL_QR
-    (const WALL_QR = 2.4: one queryColliders per bot per 0.1 s). The battery follows the query the game makes: 16 while the source still has a
-    queryColliders(..., 16) call, else WALL_QR; neither found -> 16 (the old row, printed so)."""
-    import re
-    rel = "runtime/3d/royale/bots.js"
+def _src(rev, rel):
     if rev:
         p = subprocess.run(["git", "-C", C.REPO, "show", "%s:games/last-circle/%s" % (rev, rel)], capture_output=True)
-        src = p.stdout.decode("utf-8", "replace") if p.returncode == 0 else ""
-    else:
-        try:
-            with open(os.path.join(C.ROOT, rel.replace("/", os.sep)), encoding="utf-8") as fh:
-                src = fh.read()
-        except OSError:
-            src = ""
+        return p.stdout.decode("utf-8", "replace") if p.returncode == 0 else ""
+    try:
+        with open(os.path.join(C.ROOT, rel.replace("/", os.sep)), encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _code(src):
+    import re
     code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    code = re.sub(r"//[^\n]*", "", code)                    # comments name the old call ("coverStepQ asked queryColliders(x, z, 16) ..."): code only
-    if re.search(r"queryColliders\([^;\n]*,\s*16\s*[,)]", code):
-        return 16, "bots.js queries queryColliders(x, z, 16) (the bot look-around)"
-    m = re.search(r"const WALL_QR = ([0-9.]+);", src)
-    if m:
-        return float(m.group(1)), "bots.js makes no r 16 query any more (occAny / coverStepQ -> map.hasCollidersNear); its per-bot list query is WALL_QR = %s" % m.group(1)
-    return 16, "bots.js: neither a r 16 query nor WALL_QR found - the old r 16 row"
+    return re.sub(r"//[^\n]*", "", code)                   # comments name old calls ("coverStepQ asked queryColliders(x, z, 16)"): code only
 
 
-def measure(args, label, map_id, rev, plant, pts=None):
+def _args_at(code, i):
+    """the top-level argument texts of the call whose '(' is at code[i]"""
+    depth, cur, out = 0, "", []
+    for ch in code[i:]:
+        if ch in "([{":
+            depth += 1
+            if depth == 1:
+                continue
+        elif ch in ")]}":
+            depth -= 1
+            if depth == 0:
+                out.append(cur.strip())
+                return out
+        if ch == "," and depth == 1:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    return out
+
+
+def _body(code, name):
+    import re
+    m = re.search(r"(?:^|\n)(?:export )?function %s\(" % re.escape(name), code)
+    if not m:
+        return None
+    nxt = re.search(r"\n(?:export )?(?:async )?function \w+\(", code[m.end():])
+    return code[m.start(): m.end() + (nxt.start() if nxt else len(code))]
+
+
+def _qc_sites(body, radius_re):
+    """every queryColliders(...) call in `body` whose radius text matches radius_re: (radius text, band [y0, y1] texts or None)"""
+    import re
+    out = []
+    for m in re.finditer(r"queryColliders\(", body or ""):
+        a = _args_at(body, m.end() - 1)
+        if len(a) >= 3 and re.fullmatch(radius_re, a[2]):
+            out.append((a[2], a[4:6] if len(a) >= 6 else None))
+    return out
+
+
+def call_sites(rev):
+    """(R2) the battery's queries, each as THIS build's source issues it: [{key, mode, r, r0, sites: [{at, band, pre}]}], plus a proof line each.
+    Read from the build's own bots.js / player.js (comments stripped), so the candidate and the baseline are each measured the way their game asks."""
+    import re
+    B, P = _code(_src(rev, "runtime/3d/royale/bots.js")), _code(_src(rev, "runtime/3d/royale/player.js"))
+    if not B or not P:
+        raise C.HarnessError("houseload: cannot read bots.js / player.js of %s" % (rev or "the working copy"))
+    KB, KP = _module_consts(B), _module_consts(P)      # (R3) each file's own module constants, for the bands its call sites issue
+    Q, proof = [], {}
+    # look-around: occAny(W, a.pos.x, a.pos.z, 16) delegating to map.hasCollidersNear, else the old r 16 list
+    occ_body = _body(B, "occAny") or ""
+    if re.search(r"occAny\(W,\s*a\.pos\.x,\s*a\.pos\.z,\s*16\)", B) and "hasCollidersNear(x, z, r)" in occ_body:
+        Q.append({"key": "look", "mode": "occ", "r": "16", "r0": 16, "sites": [{"at": "bots.js occAny(W, a.pos.x, a.pos.z, 16) -> map.hasCollidersNear", "band": None, "pre": ""}]})
+        proof["look"] = "occAny(W, a.pos.x, a.pos.z, 16) -> W.map.hasCollidersNear: cell entries read"
+    else:
+        m = re.search(r"queryColliders\(a\.pos\.x,\s*a\.pos\.z,\s*16\s*[,)]", B)
+        Q.append({"key": "look", "mode": "list", "r": "16", "r0": 16, "sites": [{"at": "bots.js queryColliders(a.pos.x, a.pos.z, 16)", "band": None, "pre": ""}]})
+        proof["look"] = "queryColliders(a.pos.x, a.pos.z, 16) list" if m else "NOT FOUND in bots.js - the old unbanded r 16 list"
+    # steering: wallCols' queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq[, y0, y1])
+    wq = re.search(r"const WALL_QR = ([0-9.]+);", B)
+    wqr = wq.group(1) if wq else "2.4"
+    st = _qc_sites(_body(B, "wallCols"), r"WALL_QR")
+    Q.append({"key": "steer", "mode": "list", "r": wqr, "r0": float(wqr),
+              "sites": [{"at": "bots.js wallCols r WALL_QR", "band": (x[1] if x[1] else None), "pre": _const_pre(KB, x[1] or [])} for x in st] or [{"at": "bots.js wallCols (not found: unbanded)", "band": None, "pre": ""}]})
+    proof["steer"] = "wallCols r WALL_QR=%s: %s" % (wqr, ", ".join(("band %s%s" % (b, _pre_note(_const_pre(KB, b)))) if b else "unbanded" for _, b in st) or "call not found - unbanded")
+    # move: player.js tick's moveCols(W, a.pos.x, a.pos.z, reach[, yLo, yHi]) -> moveCols' queryColliders(x, z, <radius with reach>, _moveCols[, y0, y1])
+    mc = _qc_sites(_body(P, "moveCols"), r".*reach.*")
+    rexpr = mc[0][0] if mc else "Math.max(K.PLAYERK.radius + 0.4, 0.6) + K.PLAYERK.radius + reach"
+    fwd = bool(mc and mc[0][1] and [x.strip() for x in mc[0][1]] == ["y0", "y1"])
+    call = re.search(r"moveCols\(W,\s*a\.pos\.x,\s*a\.pos\.z,\s*Math\.abs\(mvx\)\s*\+\s*Math\.abs\(mvz\)\s*,\s*(\w+)\s*,\s*(\w+)\s*\)", P)
+    band, pre = None, ""
+    if fwd and call:
+        y0n, y1n = call.group(1), call.group(2)
+        d = re.search(r"const dyT = [^;]*\b%s = [^;]*;" % re.escape(y0n), P)
+        if d:
+            band, pre = [y0n, y1n], _const_pre(KP, [d.group(0)]) + d.group(0)
+    Q.append({"key": "move", "mode": "list", "r": rexpr, "r0": 1.489, "sites": [{"at": "player.js tick moveCols", "band": band, "pre": pre}]})
+    proof["move"] = "moveCols r %s, %s" % (rexpr, "band %s from `%s`" % (band, pre) if band else "unbanded")
+    # support: the r 0.6 probes (player.js supportA / supportAt, bots.js insideSolid / obstacleAt) - the worst site per point
+    sup = []
+    for f, code, kc in (("supportA", P, KP), ("supportAt", P, KP), ("insideSolid", B, KB), ("obstacleAt", B, KB)):
+        # the band's locals are the battery's own (insideSolid `const h = K.PLAYERK.height` = h, the feet = y); module constants come from the file
+        body = _body(code, f) or ""
+        for _, b in _qc_sites(body, r"0\.6"):
+            sup.append({"at": "%s r 0.6" % f, "band": b if b else None, "pre": _const_pre(kc, b or [])})
+        if body and not _qc_sites(body, r"0\.6"):
+            sup.extend(_mv_helper_sites(code, kc, f, body))
+    Q.append({"key": "support", "mode": "list", "r": "0.6", "r0": 0.6, "sites": sup or [{"at": "support r 0.6 (no site found: unbanded)", "band": None, "pre": ""}]})
+    proof["support"] = ", ".join("%s %s" % (x["at"], ("band %s%s" % (x["band"], _pre_note(x["pre"]))) if x["band"] else "unbanded") for x in sup) or "no site found - unbanded"
+    return Q, proof
+
+
+def _module_consts(code):
+    """(R3) the module-level `const NAME = expr[, NAME2 = expr2];` declarations of a source file (comments already stripped): {NAME: expr text}.
+    Top level only (the line starts with `const` / `export const`, no indentation): the constants a call site's band reads."""
+    import re
+    out = {}
+    for m in re.finditer(r"(?m)^(?:export )?const ([^\n]*?);[ \t]*$", code):
+        depth, cur, parts = 0, "", []
+        for ch in m.group(1):
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+            if ch == "," and depth == 0:
+                parts.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        for part in parts:
+            mm = re.fullmatch(r"\s*([A-Za-z_$][\w$]*)\s*=\s*(.+?)\s*", part, flags=re.S)
+            if mm:
+                out.setdefault(mm.group(1), mm.group(2))
+    return out
+
+
+def _const_pre(consts, texts):
+    """(R3) the declarations a band's expressions need: every UPPER_CASE module constant they name (and the constants those name), in dependency
+    order, as `const NAME = expr;`, so the battery evaluates each band exactly as the call site computes it. r2-harness read the call but not the
+    module's constants ('WALL_BAND_UP is not defined', 'NAV_STEP_UP is not defined'): every banded movers query was measured unbanded."""
+    import re
+    order, seen = [], set()
+
+    def need(text, depth=0):
+        for name in re.findall(r"\b[A-Z][A-Z0-9_]*\b", text or ""):
+            if name in seen or name not in consts or depth > 8:
+                continue
+            seen.add(name)
+            need(consts[name], depth + 1)
+            order.append(name)
+    for t in texts:
+        need(t)
+    return "".join("const %s = %s;\n" % (n, consts[n]) for n in order)
+
+
+def _mv_helper_sites(code, consts, f, body):
+    """(R3) r2-movers moved player.js supportA / supportAt's query into a helper: `MV[2] = x; MV[3] = z; MV[4] = y; supportBand(W);` and supportBand
+    issues `queryColliders(MV[2], MV[3], 0.6, _supCols, MV[7], MV[4] + STEP_UP)` after groundF(W) wrote MV[7] = the terrain under (MV[2], MV[3]).
+    The r2 battery only looked inside supportA / supportAt, found no r 0.6 call and dropped both sites. Here every helper `name(W)` the function
+    calls that holds an r 0.6 query is a site; its MV slots are bound from the caller's own `MV[i] = <x|z|y>;` writes, MV[7] from groundF
+    (`MV[7] = W.map.heightAt(MV[2], MV[3])`, the battery's g). A slot neither source binds leaves the band unevaluable (noted, unbanded)."""
+    import re
+    out = []
+    binds = {int(i): v for i, v in re.findall(r"\bMV\[(\d)\]\s*=\s*([xyz])\s*;", body)}
+    gf = _body(code, "groundF") or ""
+    for name in dict.fromkeys(re.findall(r"\b([A-Za-z_]\w*)\(W\)", body)):
+        hb = _body(code, name) or ""
+        for _, b in _qc_sites(hb, r"0\.6"):
+            bind = dict(binds)
+            if re.search(r"\bgroundF\(W\)", hb) and re.search(r"MV\[7\]\s*=\s*W\.map\.heightAt\(MV\[2\],\s*MV\[3\]\)", gf):
+                bind[7] = "g"
+            used = sorted(set(int(i) for i in re.findall(r"\bMV\[(\d)\]", " ".join(b or []))))
+            if b and all(i in bind for i in used):
+                mv = "const MV = [%s];\n" % ", ".join(bind.get(i, "NaN") for i in range(8))
+                out.append({"at": "%s -> %s r 0.6" % (f, name), "band": b, "pre": _const_pre({k: e for k, e in consts.items() if k != "MV"}, b) + mv})
+            else:
+                out.append({"at": "%s -> %s r 0.6" % (f, name), "band": b or None, "pre": "" if not b else "throw new Error('MV slot %s not bound');" % [i for i in used if i not in bind]})
+    return out
+
+
+def _pre_note(pre):
+    return (" with `%s`" % " ".join(pre.split())) if pre else ""
+
+
+def measure(args, label, map_id, rev, plant, Q, pts=None):
     a = copy.copy(args)
     a.rev = rev
     a.disk = True
@@ -181,7 +454,7 @@ def measure(args, label, map_id, rev, plant, pts=None):
         s.guard_player(True)
         s.freeze_loop()
         res["wrap"] = s.js(WRAP_JS, plant)
-        res["battery"] = s.js(BATTERY_JS, [pts, [args.look_r, 1.6, 0.6]])
+        res["battery"] = s.js(BATTERY_JS, [pts, Q])
         res["draws"] = s.js(DRAWS_JS, plant)
         s.js("() => { const st = window.__LC__.W.map.__hl; st.on = true; st.calls = 0; st.ret = 0; st.b = {}; }")
         s.step_frames(FRAMES, 1 / 60, render=False)
@@ -190,10 +463,10 @@ def measure(args, label, map_id, rev, plant, pts=None):
         res["problems"] = C.diag_problems(d, rig=False)
         res["pageErrors"] = d["pageErrors"][:3]
         res["failed"] = d["failedRequests"][:3]
-        b = res["battery"]["r"]
-        lk = rkey(args.look_r)
-        print("  [%s %s] loaded+landed %.0f s; battery %d points r%s mean %s p95 %s max %s | r1.6 mean %s | r0.6 mean %s; match %s calls/frame %s returned/frame; districts %d, worst %s calls (%s), over %d: %d; untagged %d (housegen %d)" % (
-            label, map_id, time.time() - t0, res["battery"]["points"], lk, b[lk]["mean"], b[lk]["p95"], b[lk]["max"], b["1.6"]["mean"], b["0.6"]["mean"],
+        b = res["battery"]["q"]
+        print("  [%s %s] loaded+landed %.0f s; battery %d points %s; notes %s; match %s calls/frame %s returned/frame; districts %d, worst %s calls (%s), over %d: %d; untagged %d (housegen %d)" % (
+            label, map_id, time.time() - t0, res["battery"]["points"],
+            " | ".join("%s(%s r%s) mean %s p95 %s max %s" % (k, e["mode"], e["r"], e["mean"], e["p95"], e["max"]) for k, e in b.items()), res["battery"]["notes"],
             res["match"]["callsPerFrame"], res["match"]["retPerFrame"], res["draws"]["districts"], (res["draws"]["worst"] or [{}])[0].get("calls"), (res["draws"]["worst"] or [{}])[0].get("id"),
             DISTRICT_CALLS_MAX, res["draws"]["over"], res["draws"]["untaggedCalls"], res["draws"]["untaggedHousegenCalls"]), flush=True)
     return res
@@ -205,10 +478,10 @@ def main_fn(v, args):
     bsha = git_sha(args.baseline)
     clabel, crev = ("candidate %s" % git_sha(args.rev)[:8], args.rev) if args.rev else ("working copy", None)
     v.data.update({"baseline": bsha, "candidate": clabel, "maps": maps, "seed": args.seed, "plant": plant})
-    args.look_r, why = look_radius(crev)
-    LK = rkey(args.look_r)
-    v.data["lookRadius"] = args.look_r
-    v.info("battery look-around radius", "r %s: %s" % (LK, why))
+    QC, pc = call_sites(crev)
+    QB, pb = call_sites(bsha)
+    v.data["querySites"] = {"candidate": QC, "baseline": QB}
+    v.info("battery queries as each build issues them", {"candidate": pc, "baseline %s" % bsha[:8]: pb})
 
     def chk(name, ok, detail, expect=None):
         if plant and name.split(" [")[0] not in PLANT_ROWS.get(plant, set()):
@@ -218,9 +491,9 @@ def main_fn(v, args):
 
     probs = []
     for m in maps:
-        cand = measure(args, clabel, m, crev, plant)
+        cand = measure(args, clabel, m, crev, plant, QC)
         pts = cand["battery"].pop("pts")
-        base = measure(args, "baseline %s" % bsha[:8], m, bsha, None, pts)
+        base = measure(args, "baseline %s" % bsha[:8], m, bsha, None, QB, pts)
         v.data[m] = {"candidate": cand, "baseline": base}
         cb, bb = cand["battery"], base["battery"]
         if not cb["points"]:
@@ -228,17 +501,33 @@ def main_fn(v, args):
         else:
             rows = {}
             ok = True
-            for r in (LK, "1.6", "0.6"):
-                c, b = cb["r"][r], bb["r"][r]
+            over = []          # (R3) which query is over the bar (the row names it: a plant must be caught by ITS measure)
+            judged = PLANT_QUERIES.get(plant, ("look", "steer", "move", "support")) if plant else ("look", "steer", "move", "support")
+            bad_occ = [k for k, e in cb["q"].items() if e.get("occMismatch") and k in judged]
+            for r in ("look", "steer", "move", "support"):
+                c, b = cb["q"][r], bb["q"][r]
                 rm = c["mean"] / b["mean"] if b["mean"] else (1.0 if not c["mean"] else 99.0)
-                rows[r] = {"mean": c["mean"], "baseMean": b["mean"], "ratio": round(rm, 3), "p95": c["p95"], "baseP95": b["p95"], "max": c["max"], "baseMax": b["max"]}
-                ok = ok and rm <= RATIO_MAX
-                if r == LK:
+                rows[r] = {"query": "%s r %s" % (c["mode"], c["r"]), "baseQuery": "%s r %s" % (b["mode"], b["r"]), "sites": c["sites"], "bandedQueries": c["bandedQueries"],
+                           "mean": c["mean"], "baseMean": b["mean"], "ratio": round(rm, 3), "p95": c["p95"], "baseP95": b["p95"], "max": c["max"], "baseMax": b["max"]}
+                if c.get("mode") == "occ":
+                    rows[r]["realReadsTapped"], rows[r]["pointsWhereRealReadsDifferFromReplica"] = c.get("occTap"), c.get("occReadsVsReplica")
+                    rows[r]["wrongAnswers"], rows[r]["emptyPointsChecked"] = c.get("occMismatch"), c.get("occEmptyChecked")
+                if rm > RATIO_MAX:
+                    over.append("%s mean x%.3f" % (r, rm))
+                ok = ok and (rm <= RATIO_MAX or r not in judged)
+                if r in ("look", "steer"):
                     rp = c["p95"] / b["p95"] if b["p95"] else (1.0 if not c["p95"] else 99.0)
                     rows[r]["p95ratio"] = round(rp, 3)
-                    ok = ok and rp <= RATIO_MAX
-            chk("collider-load [%s]" % m, ok, {"points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "byRadius": rows},
-                expect="r %s (the bots' look-around query) mean and p95, r 1.6 / 0.6 mean: colliders returned <= x%.2f the baseline (%s) at the same %d footprint centres" % (LK, RATIO_MAX, bsha[:8], cb["points"]))
+                    if rp > RATIO_MAX:
+                        over.append("%s p95 x%.3f" % (r, rp))
+                    ok = ok and (rp <= RATIO_MAX or r not in judged)
+            if bad_occ:
+                # (R3) W.map.hasCollidersNear gave a WRONG answer (not "== a live collider meets the square") at these points: the look is broken - FAIL
+                chk("collider-load [%s]" % m, False, {"wrongAnswers": {k: cb["q"][k]["occMismatch"] for k in bad_occ}, "overBar": over, "judgedQueries": list(judged), "points": cb["points"], "byQuery": rows, "notes": cb["notes"]},
+                    expect="W.map.hasCollidersNear answers as the scan's truth at every footprint centre, and the collider counts <= x%.2f" % RATIO_MAX)
+            else:
+                chk("collider-load [%s]" % m, ok, {"overBar": over, "judgedQueries": list(judged), "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
+                    expect="look (bots' look-around) and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s, its own call sites) at the same %d footprint centres" % (RATIO_MAX, bsha[:8], cb["points"]))
         cm, bm = cand["match"], base["match"]
         rr = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
         chk("collider-load-frame [%s]" % m, rr <= RATIO_MAX and cm["callsPerFrame"] <= QC_CALLS_MAX,

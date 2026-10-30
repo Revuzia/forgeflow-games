@@ -18,7 +18,9 @@ ROWS (per map: isla_viva, ashgrid, deepwood; seed 1, standard match through the 
   C-SKY           W.skyUniforms {top, bot} are THREE.Uniform-like {value: Color}, live (same objects as the dome material's uniforms),
                   W.skyDome is the named "sky" mesh in the scene; writing red into top/bot visibly reddens the rendered sky band; a
                   second match replaces the handles and re-uses the ONE baked noise texture (falsifier --plant no-handles)
-  sprites         the 24 sprite-cloud groups are gone: >= 72 fewer Sprite objects than BEFORE, only the bird sprites remain
+  sprites         the 24 sprite-cloud groups are gone: >= 72 fewer Sprite objects than BEFORE (BEFORE column only)
+  birds           (R2, both modes) the birds are ONE THREE.Points draw (c0240f17): one bird draw (Points 'birds', visible), one material,
+                  15-27 points; any other Points / non-landmark Sprite under the map group counts as a bird draw (falsifier --plant bird-split)
   draw calls      no pose draws more calls than BEFORE; the sky-facing ground pose draws >= 20 fewer (plan: -43 on its pose)
   programs        0 new programs on drop frame 1 (the warm-up covers the new dome shader); the program count is IDENTICAL across
                   every pose including the 250 -> 330 m -> ground altitude change; never more programs than BEFORE
@@ -29,7 +31,7 @@ ROWS (per map: isla_viva, ashgrid, deepwood; seed 1, standard match through the 
   luma spread     drop250 / drop330 luma sd (imgstats): BEFORE -> AFTER and the plan's >= 0.08 target
   colour          step A: |red - blue| and saturation of the drop/ground shots move TOWARD the exterior reference frames (t08 t22 t52)
 
-Falsifier plants (each must exit 1): --plant fog-flat | no-rng-burn | no-handles   (single-line substitutions on the served copy)
+Falsifier plants (each must exit 1): --plant fog-flat | no-rng-burn | no-handles | bird-split   (single-line substitutions on the served copy)
 """
 from __future__ import annotations
 
@@ -59,9 +61,17 @@ PLANTS = {
     "fog-flat": [("const FOG_LO = 40, FOG_HI = 250, FOG_MIN = 0.5;", "const FOG_LO = 40, FOG_HI = 250, FOG_MIN = 1.0;")],
     "no-rng-burn": [("for (let i = 0; i < 24; i++) { const puffs = 3 + Math.floor(rng() * 3); for (let k = 0; k < puffs * 4 + 4; k++) rng(); }", "")],
     "no-handles": [("W.skyUniforms = { top: skyMat.uniforms.top, bot: skyMat.uniforms.bot };", "")],
+    # (R2) a second bird draw with its own material (the pre-c0240f17 shape in miniature: more than one bird draw / material) - the birds row MUST fail
+    "bird-split": [('birdPts.frustumCulled = false; birdPts.name = "birds"; g.add(birdPts);',
+                    'birdPts.frustumCulled = false; birdPts.name = "birds"; g.add(birdPts); { const b2 = new THREE.Points(bGeo, birdPts.material.clone()); b2.frustumCulled = false; b2.name = "birds"; g.add(b2); }')],
 }
 
 FOG_ALTS = [6, 40, 100, 170, 250, 330]
+BIRD_POINTS = (15, 27)                              # maps.js: 3 flocks of 5 + floor(rng() * 5) birds
+
+
+def birds_ok(bd):
+    return bool(bd) and bd["draws"] == 1 and bd["materials"] == 1 and bd["kinds"] == ["Points:birds"] and bd["visible"] is True         and bd["points"] is not None and BIRD_POINTS[0] <= bd["points"] <= BIRD_POINTS[1]
 
 
 def smooth_expected(base, agl):
@@ -202,9 +212,11 @@ def judge(v, args, A, B, maps):
         # ---- sprites
         if b:
             removed = b["sprites"]["sprites"] - a["sprites"]["sprites"]
-            v.check("sprite clouds gone: %s (>= %d fewer Sprite objects; birds keep ONE shared material)" % (mid, MIN_SPRITES_REMOVED),
-                    removed >= MIN_SPRITES_REMOVED and a["sprites"]["distinctSpriteMaterials"] == 1,
-                    {"before": b["sprites"], "after": a["sprites"], "removed": removed}, expect=">= %d removed, 1 sprite material left" % MIN_SPRITES_REMOVED)
+            v.check("sprite clouds gone: %s (>= %d fewer Sprite objects)" % (mid, MIN_SPRITES_REMOVED), removed >= MIN_SPRITES_REMOVED,
+                    {"before": b["sprites"], "after": a["sprites"], "removed": removed}, expect=">= %d removed" % MIN_SPRITES_REMOVED)
+        # (R2) the birds are ONE THREE.Points draw (c0240f17; was one Sprite per bird, one shared SpriteMaterial): judged in both modes
+        v.check("birds: ONE Points draw with ONE material: %s" % mid, birds_ok(a["sprites"].get("birds")), a["sprites"].get("birds"),
+                expect="1 bird draw (THREE.Points 'birds', visible), 1 material, %d-%d points" % BIRD_POINTS)
         # ---- programs
         df1 = a["dropFrame1"]
         v.check("programs: 0 new on drop frame 1: %s" % mid, df1["newPrograms"] == 0, df1, expect="0 (the warm-up covers the new dome shader)")
@@ -325,7 +337,7 @@ def main():
                     with open(args.baseline_json, "w", encoding="utf-8") as f:
                         json.dump(C._clean(B), f)
             v.data["before"] = B
-        elif args.plant:
+        elif args.plant and args.plant != "bird-split":
             # plant runs compare the planted AFTER against the committed-HEAD BEFORE for the world hash only
             B = measure(args, "head", maps, None, "before", True)
         if args.plant:
@@ -347,6 +359,8 @@ def judge_plant(v, args, A, B, maps):
     elif args.plant == "no-rng-burn":
         b = B["maps"][mid]
         v.check("world unchanged vs BEFORE (PLANTED no-rng-burn: must FAIL)", a["fingerprint"] == b["fingerprint"], {"after": a["fingerprint"], "before": b["fingerprint"]})
+    elif args.plant == "bird-split":
+        v.check("birds: ONE Points draw with ONE material (PLANTED bird-split: must FAIL)", birds_ok(a["sprites"].get("birds")), a["sprites"].get("birds"))
     elif args.plant == "no-handles":
         h = a["handles"]
         v.check("C-SKY handles present (PLANTED no-handles: must FAIL)", bool(h.get("present") and h.get("live")), h)

@@ -35,12 +35,129 @@ const paceAt = (arr, tier) => arr[Math.max(0, Math.min(arr.length - 1, (tier | 0
 /** Re-read the table (init() runs once per page; a match start re-reads it, so an edited table is live). A
  *  table with a missing key falls back to PACE_OFF for that key. QUICK mode keeps PACE_OFF: it is the short, hot
  *  format and its 5-circle storm was never the problem. */
-function loadPace(W) { PACE = K && K.BOT_PACE && !(W && W.mode === "quick") ? Object.assign({}, PACE_OFF, K.BOT_PACE) : PACE_OFF; }
+function loadPace(W) { PACE = K && K.BOT_PACE && !isQuick(W) ? Object.assign({}, PACE_OFF, K.BOT_PACE) : PACE_OFF; }
+/** (P23, C-MODE) Quick pacing: the old W.mode === "quick", or W.match.pace once the boot lane splits pace (quick / standard) from the team mode. */
+function isQuick(W) { return !!W && (W.mode === "quick" || !!(W.match && W.match.pace === "quick")); }
+
+// ── PARITY P2+P3, lane bots (C-MODE / C-DBNO / C-SMOKE / C-FALL / C-PING) ─────────────────────────────────────────────────────────────────
+// Everything below keys on DATA the other lanes write (a.teamId, a.downed, W.smokes, K.FALL_*, W.map.concealAt, "pingPlaced") and is a no-op
+// until it exists: a solo match with no teamId, no downed actor, no smoke and no fall constants takes exactly the code paths it took before.
+/** Same squad (integrator D4): both carry the same NON-EMPTY teamId - player.js canRevive's rule (`by.teamId && by.teamId === t.teamId`), so a
+ *  bot and a human agree on who is a mate (a falsy id - null, "", 0 - is nobody's team). hasTeam: the same test on one actor. */
+const hasTeam = (a) => !!(a && a.teamId);
+const sameTeam = (a, t) => !!a.teamId && a.teamId === t.teamId;
+const slotOf = (a) => parseInt(String(a.id).slice(1), 10) || 0;
+// (LC-15) finish a downed enemy, by tier: the share of bots that keep shooting a knocked man when nobody standing is in sight (the rest let him
+// bleed and go on). A stable per-slot draw (never the rng stream: a draw there would reshuffle every other decision of every bot).
+const FINISH_PCT = [25, 40, 60, 80, 92];
+// (LC-96) new-player grace (PLAN: the first 60-90 s after landing; the 90 s end of it, then a 90 s taper so it never ends on a cliff - a 60 s taper
+// measured AFK-human median survival 134-138 s over 9 matches, the deaths inside the taper): full for GRACE_FULL_S after a human touches down, tapering to nothing at GRACE_END_S; scaled by the account's
+// skill (full at <= 0.35, gone at >= 0.75), so a skilled player's match is the match it was. A human who shoots a bot ends the grace for that bot.
+const GRACE_FULL_S = 90, GRACE_END_S = 180, GRACE_ERR = 2.5, GRACE_REACT_S = 0.9;
+const humanLandT = new Map();     // human actor id -> W.t of its touchdown (this match)
+function graceOf(W, t) {
+  if (t.isBot) return 0;
+  const sk = typeof W.matchSkill === "number" ? W.matchSkill : 0.35;
+  const ks = sk <= 0.35 ? 1 : sk >= 0.75 ? 0 : (0.75 - sk) / 0.4;
+  if (ks <= 0) return 0;
+  const lt = humanLandT.get(t.id);
+  if (lt == null) return t.gliding ? ks : 0;        // in the air: full; never seen landing (a late join): none
+  const s = W.t - lt;
+  return s <= GRACE_FULL_S ? ks : s >= GRACE_END_S ? 0 : ks * (GRACE_END_S - s) / (GRACE_END_S - GRACE_FULL_S);
+}
+// (C-SMOKE) a sight line through a live smoke sphere is blocked. maps.js losBlocked is to read W.smokes too (lane maps); this is the bots' own
+// cheap test, run FIRST (a few spheres, no collider query), so a bot is blind through smoke whichever lane lands first.
+function smokeBlocks(W, ax, ay, az, bx, by, bz) {
+  const S = W.smokes;
+  if (!S || !S.length) return false;
+  const dx = bx - ax, dy = by - ay, dz = bz - az, L2 = dx * dx + dy * dy + dz * dz;
+  for (let i = 0; i < S.length; i++) {
+    const s = S[i];
+    if (!s || (s.t0 != null && W.t < s.t0) || (s.t1 != null && W.t > s.t1)) continue;
+    const r = s.r || 0;
+    if (r <= 0) continue;
+    let u = L2 > 1e-9 ? ((s.x - ax) * dx + (s.y - ay) * dy + (s.z - az) * dz) / L2 : 0;
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    const cx = ax + dx * u - s.x, cy = ay + dy * u - s.y, cz = az + dz * u - s.z;
+    if (cx * cx + cy * cy + cz * cz < r * r) return true;
+  }
+  return false;
+}
+// (C-FALL) the drop height a bot refuses to walk off: the fall that would leave it with less than 2 hp. Built per match from the sim's fall
+// constants (K.fallDamage(v) when the sim exports it, else K.FALL_SAFE_V / K.FALL_DMG_PER_V on the (v - safe)^1.5 curve); null = no fall damage
+// in this sim, and then nothing below changes a single step.
+let LETHAL_H = null;
+function fallDmgForDrop(h) {
+  if (!K || !(K.FALL_SAFE_V > 0) || !(h > 0)) return 0;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22);
+  const v = Math.sqrt(2 * g * h);
+  if (typeof K.fallDamage === "function") { const d = K.fallDamage(v); return d > 0 ? d : 0; }
+  if (v <= K.FALL_SAFE_V) return 0;
+  return (K.FALL_DMG_PER_V || 1) * Math.pow(v - K.FALL_SAFE_V, K.FALL_EXP || K.FALL_DMG_EXP || 1.5);
+}
+let WALK_H = null;
+// (fix pass 2, probe_match stuck rows) A DROP THAT COSTS NOTHING IS ALWAYS WALKABLE. With hp at or under the margin (WALK_H: 6 hp, LETHAL_H: 2) no drop
+// leaves `left` hp - fall damage is never below 0 - so the table said 0 m, and edgeGuard refused every heading whose ground sampled a millimetre under
+// the feet: on flat ground the bot froze until it died (probe_match ashgrid seed 11: s41 at 5 hp held in one 10 x 3 m patch of level ground at 9.2 m
+// from 211 s to its death at 325 s - 7 stuck episodes). (final) The rule itself, not a fraction of it: a drop whose fall damage is 0
+// (fallDmgForDrop(m) <= 0: the sim's FALL_SAFE_V and the rounding of K.fallDamage, about 4 m at this gravity) counts as walkable in every row,
+// so a wounded bot still walks steps, kerbs and slopes, and is still held at a real ledge. This replaces ab99e26b's floor (x0.75 / x0.9 of that
+// drop) with the form the maps re-check verified: sim_pacing at 50cc573a froze bots at 2-5 hp on open beach (isla s7 2.1 %, s1 1.5 %, s3 6.2 %
+// stuck, edgeGuard renewing its ban on slopes of 0.01-0.03) and passed 11/11 with exactly this rule.
+function dropTable(margin) {
+  const T = new Float64Array(201);
+  for (let hp = 0; hp <= 200; hp++) {
+    const left = hp - margin(hp);
+    let lo = 0, hi = 120;
+    if (fallDmgForDrop(hi) < left) { T[hp] = hi; continue; }
+    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; const d = fallDmgForDrop(m); if (d <= 0 || d < left) lo = m; else hi = m; }
+    T[hp] = lo;
+  }
+  return T;
+}
+function buildFallTable() {
+  LETHAL_H = null; WALK_H = null;
+  if (!K || !(K.FALL_SAFE_V > 0)) return;
+  LETHAL_H = dropTable(() => 2);
+  // walking off an edge keeps a real margin: the guard samples the ground ahead at 0.8 m steps 4 times a second, a jump or a strafe adds
+  // height and speed, and a wounded bot dies of what the table calls survivable (stub duo 10-26, Isla seed 2: a 2-attacker fight at 738 s,
+  // a bot took 6 then 11.4 hp of falls and died of the second)
+  WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));
+}
+/** The highest drop this actor survives with >= 2 hp (Infinity when the sim has no fall damage): the canopy rescue's rule. */
+// (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
+const fallHp = (a) => Math.max(0, Math.min(200, Math.round((a.downed ? a.downedHp : a.hp) || 0)));
+function lethalDrop(a) { return LETHAL_H ? LETHAL_H[fallHp(a)] : Infinity; }
+/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). */
+function walkDrop(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
+// (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
+const reviving = new Map();
+// (integrator D3) sim's K is the single source of the DBNO tunables (K.REVIVE_RANGE / REVIVE_S / REVIVE_HP): nothing below hardcodes one.
+// A bot walks in to 80 % of the reach before it holds E (it stops short of the line, not on it: player.js canRevive refuses past K.REVIVE_RANGE).
+const reviveR = () => K.REVIVE_RANGE * 0.8;
+const REVIVE_SEEK_M = 80;         // a downed squadmate within this range is worth going to
+/** player.js runs the revive channel itself (lane player: W.canRevive + reviveStep on every up actor's interactDown) - the bots then only hold E. */
+const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
+/** Revive `t` by `by`: player.js's own entry when it exports one (the integrator wires W.reviveActor), else the contract's state change. */
+function finishRevive(W, t, by) {
+  if (typeof W.reviveActor === "function") { W.reviveActor(t, by); return; }
+  t.downed = false; t.downedHp = 0;
+  t.hp = K.REVIVE_HP;
+  W.events.emit("actorRevived", t, by);
+}
 // Math.hypot allocates in V8 (it is a rest-args builtin): 60 KB/frame of garbage
 // was measured on the brain + bullet paths. Two-argument form, no allocation.
 const hyp = (x, z) => Math.sqrt(x * x + z * z);
 // scratch for per-frame K.moveBasis calls (out-param; older sims ignore it)
 const _mb0 = { fx: 0, fz: 0, rx: 0, rz: 0 }, _mb1 = { fx: 0, fz: 0, rx: 0, rz: 0 };
+/** (release blockers) basisOf(inp, out) with the yaw read HERE: the sim's moveBasis term for term (sin / cos of the same yaw, the same four
+ *  stores), so the numbers are bit-identical; a call that passes the yaw boxes it (a heap number per bot per call while the caller is not
+ *  optimized, or the callee is not inlined - tierprof's first window after the landing). */
+function basisOf(inp, out) {
+  const yaw = inp.yaw, s = Math.sin(yaw), c = Math.cos(yaw);
+  out.fx = -s; out.fz = -c; out.rx = c; out.rz = -s;
+  return out;
+}
 const _eye_actEngage = { x: 0, y: 0, z: 0 }, _eye_fireOnTheMove = { x: 0, y: 0, z: 0 }, _eye_perceive = { x: 0, y: 0, z: 0 }, _eye_underFire = { x: 0, y: 0, z: 0 };   // eyePos scratch per caller (no per-frame allocation)
 
 // First-run protection. BOT_TIER_MIX.standard is [8,12,14,10,5] over 49 bots and
@@ -59,8 +176,37 @@ const _eye_actEngage = { x: 0, y: 0, z: 0 }, _eye_fireOnTheMove = { x: 0, y: 0, 
 // lobby. The soft end is now band B0, which keeps 69% of the lobby in tiers 3-5.
 const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];   // eslint-disable-line no-unused-vars
 
+// (release blockers) THE WEAPON TABLE IN ONE SHAPE. Every weapon def has its own hidden class (a burst rifle carries burst, an LMG adsSpreadMult,
+// a launcher arc ...), so each def.* read in actEngage / coverStepQ / chooseGun went polymorphic, then megamorphic, as bots picked up new
+// classes - every new class at every site threw the optimized function away (a 'wrong map' deopt: actEngage at def.rpm, seconds after the
+// landing, tierprof's first window). wdefN(id) hands back a copy of K.WEAPONS[id] with the 14 fields this module reads, in one fixed shape (the
+// same values; the falloff array is the def's own); a missing id reads exactly as K.WEAPONS[id] does. Built on first use per id, reset per sim.
+let WN = Object.create(null);
+function normDef(d) {
+  return { falloff: d.falloff, cls: d.cls, rpm: d.rpm, mag: d.mag, speed: d.speed, damage: d.damage, ammo: d.ammo, fire: d.fire,
+    splashR: d.splashR, smoke: d.smoke, pellets: d.pellets, fuseS: d.fuseS, burst: d.burst, arc: d.arc };
+}
+function wdefN(id) {
+  let r = WN[id];
+  if (r === undefined) {
+    const d = K.WEAPONS[id];
+    if (d === undefined) return d;
+    r = WN[id] = d && typeof d === "object" ? normDef(d) : d;
+  }
+  return r;
+}
+// (release blockers) a consumable's use time through one Map (the consumable defs have a shape each: coverStepQ's K.CONSUMABLES[cid].useS
+// read went polymorphic and threw the optimized function away when a bot first used a new kind - a 'wrong map' deopt after the landing)
+let _useS = new Map();
+function useSOf(id) {
+  let v = _useS.get(id);
+  if (v === undefined && !_useS.has(id)) { v = K.CONSUMABLES[id].useS; _useS.set(id, v); }
+  return v;
+}
 export function init(W) {
   K = W.SIM;
+  _useS = new Map();
+  WN = Object.create(null);           // (release blockers) this sim's weapon table, normalized on first use
   loadPace(W);
   brains.length = 0;
   // kill taunts: a bot that just won a fight (and sees no new threat)
@@ -68,6 +214,8 @@ export function init(W) {
   W.events.on("actorDied", (victim, killerId) => {
     const k2 = killerId && W.actorById.get(killerId);
     if (!k2 || !k2.isBot || !k2.alive || !k2.brain) return;
+    // (P23, LC-20) where the body dropped its kit: the killer restocks there once it is safe (think: LOOT 54)
+    { const kb = k2.brain.bb; kb.pileX = victim.pos.x; kb.pileZ = victim.pos.z; kb.pileT = W.t; }
     if (k2.brain.bb.target && W.t - k2.brain.bb.targetSeenT < 2) return;   // still in danger
     const r = k2.brain.rng;
     if (r() < 0.3) k2.input.emote = r() < 0.5 ? "dance" : "cheer";
@@ -80,9 +228,14 @@ export function init(W) {
   // 2026-09-30: the first divergence of a seed-1 replay, at t = 25.5 s).
   W.events.on("shotFired", (shooter, weaponId, muzzle) => {
     const p = (shooter && shooter.pos) || muzzle;
-    for (const b of brains) {
+    for (let _i194 = 0, _l194 = brains; _i194 < _l194.length; _i194++) { const b = _l194[_i194];
       if (!b.actor.alive || b.actor === shooter) continue;
       const d = hyp(b.actor.pos.x - p.x, b.actor.pos.z - p.z);
+      // (P23) a squadmate's shot is not an enemy to hunt: it is a fight to help with (the assist mark below)
+      if (shooter && sameTeam(b.actor, shooter)) {
+        if (d < 150) { const s = b.bb.assist || (b.bb.assist = { x: 0, z: 0, t: -99, id: null }); if (W.t - s.t > 1) { s.x = p.x; s.z = p.z; s.t = W.t; s.id = null; } }
+        continue;
+      }
       if (d < 250) {
         // one record per brain, rewritten in place (every shot used to allocate one per
         // listening brain); nothing keeps a reference to it (PUSH copies x/z out)
@@ -95,8 +248,77 @@ export function init(W) {
   // best loot in the game was uncontested. A bot could only collect one by
   // coincidence — via the 90m scan inside LOOT, which scores 20-35 mid-game and
   // loses to ENGAGE/ROTATE every time. This mark is what routes them there.
+  // (P23, LC-96) a human's touchdown starts its new-player grace clock
+  W.events.on("landed", (a2) => { if (a2 && !a2.isBot && !humanLandT.has(a2.id)) humanLandT.set(a2.id, W.t); });
+  // (P23, C-MODE) a squadmate is hit: his squad's bots learn where from (the attacker's position: a teammate calls it out) and come to help
+  W.events.on("actorHurt", (v, info) => {
+    if (!v || !hasTeam(v) || !info || !info.attackerId) return;
+    const att = W.actorById.get(info.attackerId);
+    if (!att || sameTeam(v, att)) return;
+    for (let _i221 = 0, _l221 = brains; _i221 < _l221.length; _i221++) { const b = _l221[_i221];
+      const a2 = b.actor;
+      if (a2 === v || !a2.alive || a2.downed || !sameTeam(a2, v)) continue;
+      if (hyp(a2.pos.x - v.pos.x, a2.pos.z - v.pos.z) > 150) continue;
+      const s = b.bb.assist || (b.bb.assist = { x: 0, z: 0, t: -99, id: null });
+      s.x = att.pos.x; s.z = att.pos.z; s.t = W.t; s.id = att.id;
+    }
+  });
+  // (P23, LC-14) a live grenade: bots near where it will land get out of the blast (the round's flight, terrain only: no collider query)
+  W.events.on("grenadeThrown", (thrower, wid, o, v) => {
+    if (!o || !v || !brains.length) return;
+    const def = wdefN(wid);
+    if (!def || !(def.damage > 0)) return;                 // a smoke is no blast
+    const g = (K.FRAG && K.FRAG.gravity) || -15;
+    let lx = o.x, lz = o.z, ly = o.y;
+    for (let i = 1; i <= 90; i++) {                        // 1/30 s steps, 3 s
+      const t = i / 30, x = o.x + v.x * t, y = o.y + v.y * t + 0.5 * g * t * t, z = o.z + v.z * t;
+      lx = x; lz = z; ly = y;
+      if (y <= W.map.heightAt(x, z)) break;
+    }
+    const R = (def.splashR || 4.5) + 2.5;
+    for (let _i242 = 0, _l242 = brains; _i242 < _l242.length; _i242++) { const b = _l242[_i242];
+      const a2 = b.actor;
+      if (!a2.alive || a2.gliding || a2 === thrower) continue;
+      if (hyp(a2.pos.x - lx, a2.pos.z - lz) > R + 4 || Math.abs(a2.pos.y - ly) > 6) continue;
+      const bb2 = b.bb;
+      bb2.dangerX = lx; bb2.dangerZ = lz; bb2.dangerR = R; bb2.dangerUntil = W.t + (def.fuseS || 3) + 0.3;
+    }
+  });
+  // (P23, C-PING) a human's ping reaches his squad's bots: a spot / map pin = go there; an enemy = that is who to fight
+  W.events.on("pingPlaced", (pg) => {
+    if (!pg || !Number.isFinite(pg.x) || !Number.isFinite(pg.z)) return;
+    const owner = W.actorById.get(pg.owner);
+    if (!owner || owner.isBot || !hasTeam(owner)) return;
+    // (fix round) the ack is EARNED: one record per ping, shared by the squad's bots; think() acks it when a mate actually takes the ping
+    // (PING / ASSIST chosen: busy false), or - nobody free 1 s after it was placed - sends one busy ack (busy true) and still acks "going"
+    // later if a mate frees up inside the ping's 30 s. It used to ack at once while the mate stayed in its fight for the ping's whole life.
+    const rec = { t: W.t, owner: owner.id, kind: pg.kind, x: pg.x, z: pg.z, acked: false, busy: false };
+    for (let _i259 = 0, _l259 = brains; _i259 < _l259.length; _i259++) { const b = _l259[_i259];
+      const a2 = b.actor;
+      if (!a2.alive || a2.downed || !sameTeam(a2, owner)) continue;
+      const bb2 = b.bb;
+      const p = bb2.ping || (bb2.ping = { x: 0, y: 0, z: 0, t: -99, kind: 0, id: null });
+      p.x = pg.x; p.y = Number.isFinite(pg.y) ? pg.y : W.map.heightAt(pg.x, pg.z); p.z = pg.z; p.t = W.t;
+      p.kind = pg.kind === "enemy" ? 2 : 1; p.id = null;
+      if (p.kind === 2) {                                   // the enemy nearest the marked spot (within 4 m)
+        let bd = 16;
+        for (let _i268 = 0, _l268 = W.actors; _i268 < _l268.length; _i268++) { const t = _l268[_i268];
+          if (!t.alive || sameTeam(t, owner)) continue;
+          const dx = t.pos.x - pg.x, dz = t.pos.z - pg.z, d2 = dx * dx + dz * dz;
+          if (d2 < bd) { bd = d2; p.id = t.id; }
+        }
+      }
+      bb2.pingRec = rec;
+      b.nextThink = 0;
+    }
+  });
+  // (P23, C-DBNO) the revive bookkeeping, whoever channels it (a human through player.js, a bot through actRevive below)
+  W.events.on("reviveStart", (by, t) => { if (by && t) reviving.set(t.id, by.id); });
+  W.events.on("reviveCancel", (by, t) => { if (t && reviving.get(t.id) === (by && by.id)) reviving.delete(t.id); });
+  W.events.on("actorRevived", (t) => { if (t) reviving.delete(t.id); });
+  W.events.on("actorDied", (v) => { if (v) reviving.delete(v.id); });
   W.events.on("supplyDropLanded", (p) => {
-    for (const b of brains) {
+    for (let _i284 = 0, _l284 = brains; _i284 < _l284.length; _i284++) { const b = _l284[_i284];
       if (!b.actor.alive) continue;
       if (hyp(b.actor.pos.x - p.x, b.actor.pos.z - p.z) < 220) {
         b.bb.supply = { x: p.x, z: p.z, t: b.W.t };
@@ -121,6 +343,7 @@ export function disposeMatch(W) {
   navReset();                         // (Wave 7) the town grid: typed arrays + the old map's colliders
   IND.map = null; IND.H = null; IND.R.length = 0; IND.ix.clear(); IND.grid = null;      // (Wave 8) the room graph: the old map's house records
   OCC.map = null; OCC.cells = null;                                                    // (Wave 8) the cover test's cell table: the old map's colliders
+  humanLandT.clear(); reviving.clear();                                                // (P23) actor ids of the old match
   return { brains: n };
 }
 
@@ -144,6 +367,8 @@ export function debugBrains() { return brains; }
  */
 export function setLobbySkill(W) {
   loadPace(W);
+  humanLandT.clear(); reviving.clear();     // (P23) this match's grace clocks and revive channels
+  buildFallTable();                         // (P23, C-FALL) from this sim's fall constants (none: no guard)
   W.matchWasNet = !!W.net;          // captured BEFORE a takeover nulls W.net
   W.matchSkill = readSkill(W);
   // Quick mode is the short, hot format — nudge it up a little.
@@ -159,6 +384,66 @@ export function readSkill(W) {
   const p = W.progress;
   const v = p && typeof p.skill === "number" ? p.skill : NaN;
   return Number.isFinite(v) ? Math.min(0.98, Math.max(0.05, v)) : 0.35;
+}
+
+/** (release blockers) The blackboard. It was an object LITERAL of 168 properties, and V8 builds a literal of 128 or more properties in DICTIONARY
+ *  mode: every bot's blackboard was a hash table, every number stored into it a fresh heap box (tierprof, isla_viva: bots.js 21-25 KB of garbage
+ *  per simulated frame right after the landing, act / actEngage / moveToward's timer writes) and every read a hash lookup. A constructor that
+ *  assigns the same fields in the same order with the same start values is a fast in-object shape (Chrome 156: %HasFastProperties true, the
+ *  literal false); Object.keys order, values and readers are unchanged. */
+class Blackboard {
+  constructor() {
+      this.target = null; this.targetSeenT = -99; this.targetPos = null; this.acquireT = 0;
+      this.heard = null; this.lootId = null;
+      this.moveTo = null; this.strafeDir = 1; this.strafeT = 0;
+      this.campSpot = null; this.dropTarget = null; this.chestT = 0; this.chestId = null;
+      this.stuckT = 0; this.lastPos = new THREE.Vector3(); this.burstLeft = 0; this.burstPause = 0;
+      // EVERY field the brain ever writes, present from birth, so all 49
+      // blackboards share one hidden class. They used to grow these on first use,
+      // each bot in its own order: dozens of shapes at every bb.* read, i.e.
+      // megamorphic loads, and a megamorphic load of a number field hands back a
+      // fresh heap box - garbage on every read in actEngage/moveToward/think. Each
+      // start value behaves exactly like the old `undefined` at every reader:
+      // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
+      // the rest only meet truthiness or `== null`. fightTarget, threatFor and
+      // coverState keep `undefined` itself (compared with !== / ===).
+      this.lootType = null; this.supply = null; this.path = null; this.pathGoal = null; this.nextPathT = 0; this.badLoot = null; this.navGX = 0; this.navGZ = 0; this.navT = -99;
+      this.progGoal = null; this.progBest = null; this.progT = 0; this.wallSide = 0; this.detourDir = 0; this.nextJumpT = 0;
+      this.anchor = null; this.anchorT = 0; this.breaks = 0;
+      // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
+      // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
+      // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
+      this.progKind = 0; this.wallCols = []; this.wallT = -99; this.wallX = 0; this.wallZ = 0; this.wallY = 0; this.wallLo = 0; this.wallHi = 0; this.wallAny = false;
+      // (R2 movers) trap*: the loop breaker's anchor / clock / recent trips; esc*: the committed break-out goal (see trapBreak)
+      this.trapX = 0; this.trapZ = 0; this.trapT = -99; this.trapN = 0; this.trapLastT = -99; this.escX = 0; this.escZ = 0; this.escUntil = -99;
+      this.hdX = 0; this.hdZ = 0; this.hdT = -99; this.healSide = 1; this.hdBadX = 0; this.hdBadZ = 0; this.hdBadUntil = 0; this.unstickT = -99; this.hdHold = -1;
+      this.slideX = 0; this.slideZ = 0; this.slideUntil = -99; this.slideFlips = 0; this.routeId = null; this.pinX = 0; this.pinZ = 0; this.pinT = 0; this.pinIntent = 0; this.pinN = 0;
+      this.fightTarget = undefined; this.fightT = 0; this.aimHigh = false; this.errPhase = 0; this.closeInUntil = 0;
+      this.avoidId = null; this.avoidUntil = 0; this.swapT = -99; this.healBlockedUntil = 0;
+      this.threatFor = undefined; this.threatT = -99; this.threatAt = null;
+      this.coverState = undefined; this.coverPt = null; this.coverGiveUp = 0; this.coverUntil = 0; this.coverFailUntil = 0; this.coverReflexUntil = 0;
+      this.noRouteT = -99; this.deckT = -99; this.heldN = 0; this.heldT = -99; this.heldAcc = 0;   // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
+      // (Wave 8) indoors: the bot's own room (IND.R index, -1 outdoors) and when / where it was read; the target's room; the doorway an indoor cover
+      // spot is held beside (coverFace: 1 = face that doorway while holding)
+      this.roomI = -1; this.roomT = -99; this.roomX = 0; this.roomZ = 0; this.roomY = 0; this.tRoomI = -1; this.tRoomT = -99; this.coverFace = 0; this.coverFX = 0; this.coverFZ = 0; this.nearLootT = 0;
+      // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
+      // inside-a-solid detector's 0.5 s window (escapeSolid)
+      this.standGoal = null; this.solidT = -99; this.solidX = 0; this.solidZ = 0; this.solidN = 0;
+      // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
+      // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
+      this.offFurnUntil = -99; this.offFurnYaw = 0; this.offFurnX = 0; this.offFurnZ = 0; this.offFurnK = 0; this.offFurnGi = -1; this.furnT = -99; this.furnX = 0; this.furnZ = 0; this.furnN = 0; this.furnD = 0;
+      // (P23) graceMul: the new-player grace of the target at its acquisition (0 = none); assist / ping: a squadmate's fight / ping (C-MODE, C-PING);
+      // danger*: a live grenade's predicted blast (LC-14); nade*: the throw machine (nadeS 0 idle / 1 drawing / 2 aiming, nadeKind 1 frag / 2 smoke);
+      // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
+      this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
+      this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
+      this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
+      // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
+      // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
+      this.stormLatch = false; this.boltWaitT = 0;
+
+  }
 }
 
 export function attachBrain(W, actor, nBots) {
@@ -207,51 +492,15 @@ export function attachBrain(W, actor, nBots) {
     tierK: K.BOT_TIERS[tier - 1],
     state: "DROP",
     nextThink: 0,
-    bb: {          // blackboard
-      target: null, targetSeenT: -99, targetPos: null, acquireT: 0,
-      heard: null, lootId: null,
-      moveTo: null, strafeDir: 1, strafeT: 0,
-      campSpot: null, dropTarget: null, chestT: 0, chestId: null,
-      stuckT: 0, lastPos: new THREE.Vector3(), burstLeft: 0, burstPause: 0,
-      // EVERY field the brain ever writes, present from birth, so all 49
-      // blackboards share one hidden class. They used to grow these on first use,
-      // each bot in its own order: dozens of shapes at every bb.* read, i.e.
-      // megamorphic loads, and a megamorphic load of a number field hands back a
-      // fresh heap box - garbage on every read in actEngage/moveToward/think. Each
-      // start value behaves exactly like the old `undefined` at every reader:
-      // numbers only meet `|| 0` / `|| -99` defaults or `>` tests against W.t >= 0;
-      // the rest only meet truthiness or `== null`. fightTarget, threatFor and
-      // coverState keep `undefined` itself (compared with !== / ===).
-      lootType: null, supply: null, path: null, pathGoal: null, nextPathT: 0, badLoot: null, navGX: 0, navGZ: 0, navT: -99,
-      progGoal: null, progBest: null, progT: 0, wallSide: 0, detourDir: 0, nextJumpT: 0,
-      anchor: null, anchorT: 0, breaks: 0,
-      // Wave 5 (lane 5B): the wall-aware fight / heal steering. progKind: what progBest measures (0 = horizontal distance
-      // to the goal, 1 = the length of the route left, used on the wrong floor). wall*: the held collider list (see wallCols).
-      // hd*: the heal retreat heading + the heading banned after a pin. unstickT: last pinned-in-a-fight recovery.
-      progKind: 0, wallCols: [], wallT: -99, wallX: 0, wallZ: 0,
-      hdX: 0, hdZ: 0, hdT: -99, healSide: 1, hdBadX: 0, hdBadZ: 0, hdBadUntil: 0, unstickT: -99, hdHold: -1,
-      slideX: 0, slideZ: 0, slideUntil: -99, slideFlips: 0, routeId: null, pinX: 0, pinZ: 0, pinT: 0, pinIntent: 0, pinN: 0,
-      fightTarget: undefined, fightT: 0, aimHigh: false, errPhase: 0, closeInUntil: 0,
-      avoidId: null, avoidUntil: 0, swapT: -99, healBlockedUntil: 0,
-      threatFor: undefined, threatT: -99, threatAt: null,
-      coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
-      noRouteT: -99, deckT: -99, heldN: 0, heldT: -99, heldAcc: 0,        // (Wave 7, round 2) the last "no route" answer of a path request / the next time a roof exit may be looked for
-      // (Wave 8) indoors: the bot's own room (IND.R index, -1 outdoors) and when / where it was read; the target's room; the doorway an indoor cover
-      // spot is held beside (coverFace: 1 = face that doorway while holding)
-      roomI: -1, roomT: -99, roomX: 0, roomZ: 0, roomY: 0, tRoomI: -1, tRoomT: -99, coverFace: 0, coverFX: 0, coverFZ: 0, nearLootT: 0,
-      // (Wave 8 fix round, lane K2) standGoal: the moveTo object that is a house loot STAND point (arrive closer: LOOT_STAND_M); solid*: the
-      // inside-a-solid detector's 0.5 s window (escapeSolid)
-      standGoal: null, solidT: -99, solidX: 0, solidZ: 0, solidN: 0,
-      // (K2, re-run) offFurn*: offFurniture's committed heading (until when, which heading, where the window began, which candidate, for which room);
-      // furn*: the off-the-floor pin detector's 0.5 s window (escapeToWalk)
-      offFurnUntil: -99, offFurnYaw: 0, offFurnX: 0, offFurnZ: 0, offFurnK: 0, offFurnGi: -1, furnT: -99, furnX: 0, furnZ: 0, furnN: 0, furnD: 0,
-    },
+    bb: new Blackboard(),          // blackboard (see Blackboard)
     // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
     // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
     pushRoll: (slot * 37 + 11) % 100,
     // the same kind of stable per-slot draw for BOT_PACE.earlyChutePct; earlyChute is set by assignDrops
     chuteRoll: (slot * 53 + 29) % 100,
     earlyChute: false,
+    // (P23, LC-15) the same kind of stable per-slot draw: finishes a downed enemy when finishRoll < FINISH_PCT[tier]
+    finishRoll: (slot * 71 + 17) % 100,
   };
   actor.brain = brain;
   brains.push(brain);
@@ -268,7 +517,7 @@ export function attachBrain(W, actor, nBots) {
  *  happened once per field, at the moment the match first used it (framecheck, isla_viva: ~8,500 map deprecations and ~2,300 deopts, 195 of them in
  *  bots.js, in bursts through the measured window; the housed maps' new indoor fields added their own). Done here, it happens once, in the lobby. */
 const INT_FIELDS = new Set(["solidN", "offFurnK", "offFurnGi", "furnN", "furnD", "roomI", "tRoomI", "strafeDir", "healSide", "hdHold", "pinN", "heldN", "breaks", "slideFlips", "progKind", "wallSide", "detourDir",
-  "coverFace", "ramp", "pushRoll", "chuteRoll"]);      // small integers / indexes / signs: they stay Smi fields (they never hold a fraction)
+  "coverFace", "ramp", "pushRoll", "chuteRoll", "nadeS", "nadeKind", "nadeSlot", "nadePrev", "smokeWant", "pingDone", "finishRoll"]);      // small integers / indexes / signs: they stay Smi fields (they never hold a fraction)
 function doubleFields(o) {
   for (const k in o) {
     const v = o[k];
@@ -281,8 +530,13 @@ function doubleFields(o) {
 // inside 60 s, because 55-85% of bots dropped into ~8 POIs holding 1-16 loot
 // points each: a pistol brawl over a handful of guns (audit gap 4).
 const DROP_PTS_PER_BOT = 4;
-const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach
+const LAND_CLEAR_M = 3.5;          // landing spot: no low overhang within this reach - and (R2) no roof or structure top in the glide-drift disc of this radius
+const LAND_STEP_M = 0.55;         // (R2) player.js STEP_UP: a top higher than this over the ground under it is something a glide can touch down ON
+/** (R2 movers) landing-spot census for the probes (debugNav().dropStats): spots kept, loot points / house spots with no clear spot in reach, spot candidates the
+ *  glide-drift disc rule refused, fallback targets (POI random point / random ground) moved to a clear spot, and those left where they were. */
+const dropSt = { spots: 0, noSpot: 0, discRej: 0, fbMoved: 0, fbKept: 0 };
 export function assignDrops(W) {
+  dropSt.spots = 0; dropSt.noSpot = 0; dropSt.discRej = 0; dropSt.fbMoved = 0; dropSt.fbKept = 0;
   const rng = K.mulberry32(W.seed ^ 0xd407);
   const pois = W.map.pois;
   const pts = Object.create(null);
@@ -329,9 +583,22 @@ export function assignDrops(W) {
       if (near && c.maxY > g + 0.3) return false;
       const reach = x > c.minX - LAND_CLEAR_M && x < c.maxX + LAND_CLEAR_M && z > c.minZ - LAND_CLEAR_M && z < c.maxZ + LAND_CLEAR_M;
       if (reach && c.kind !== "ramp" && c.minY > g + 0.3 && c.minY < g + 2.6) return false;
+      // (R2 movers, probe_match stuck episodes) THE WHOLE GLIDE-DRIFT DISC IS CLEAR OF TOPS. The tests above only kept a 1 m margin round a structure, but a
+      // glide circles its spot ~2.5 m out before it touches down (measured: ashgrid seed 12, s14 spiralled round a spot 7 m from the cmp07 water tower's
+      // centre - 2.6 m from the 8.8 m tank's edge - landed on the tank top at y 33.4 and paced it for 40 s: an 18 m drop on every side, 17 stuck
+      // episodes; base build seed 10, s44 on a roof at y 80.5). So no top higher than a step over the ground under it may lie within LAND_CLEAR_M of
+      // the spot (a ramp is walked down: it never traps).
+      if (c.kind !== "ramp") {
+        const nx = x < c.minX ? c.minX : x > c.maxX ? c.maxX : x, nz = z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z;
+        const ex = x - nx, ez = z - nz;
+        if (ex * ex + ez * ez < LAND_CLEAR_M * LAND_CLEAR_M && c.maxY > W.map.heightAt(nx, nz) + LAND_STEP_M) { dropSt.discRej++; return false; }
+      }
     }
     return true;
   };
+  // (R2) the rings stay 0-7 m: 9 / 11 m rings (tried) kept ~15 % more gun spots beside buildings, but the longer walks in after the landing raised
+  // tierprof's first measured window on ashgrid (kb [low] 71.7 -> 85.7 KB/frame, navgrid.js 3.2 -> 7.2: routes into the towns); a gun with no clear
+  // spot within 7 m is not a landing spot (the bot lands at another one)
   const RING_R = [0, 3, 5, 7];
   const landingFor = (lp) => {
     for (let ri = 0; ri < RING_R.length; ri++) {
@@ -343,6 +610,14 @@ export function assignDrops(W) {
       }
     }
     return null;
+  };
+  // (R2) a fallback target (a random point of a full POI, a random ground point) is moved to the nearest clear spot round it by the same rings (no rng
+  // draw: the claims after it draw what they always drew); none in 7 m: it stays where it was
+  const clearFallback = (x, z) => {
+    const at = landingFor({ x, z });
+    if (at && (at.x !== x || at.z !== z)) dropSt.fbMoved++;
+    else if (!at) dropSt.fbKept++;
+    return at ? { x: at.x, z: at.z } : { x, z };
   };
   // (Wave 8 fix round, lane K2) a furnished house's loot lands bots by loot.js's own list of the spots it USED (W.houseLootSpots: a chest, or a floor / top
   // spot where a non-pistol gun lies), aimed at the spot's STAND point inside its room. The house lootPoints are skipped: the 1.8 m query round one found
@@ -361,7 +636,8 @@ export function assignDrops(W) {
       }
       if (!ok) continue;
       const at = landingFor(lp);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       // (Wave 7) a Savanna compound's loot points are tagged cmpNN, which names no POI: they used to be filed under a list nothing ever
       // claimed from, so ~30 compounds with their guns and chests were never a landing zone. They land with the wild spots (one bot per
@@ -373,7 +649,8 @@ export function assignDrops(W) {
       const hs = HSP[i];
       if (!hs.gun) continue;
       const at = landingFor(hs.stand || hs);
-      if (!at) continue;
+      if (!at) { dropSt.noSpot++; continue; }
+      dropSt.spots++;
       const s = { x: at.x, z: at.z, taken: false };
       if (hs.poi == null || (typeof hs.poi === "string" && hs.poi.startsWith("cmp"))) spots.wild.push(s);
       else (byPoi[hs.poi] || (byPoi[hs.poi] = [])).push(s);
@@ -444,7 +721,7 @@ export function assignDrops(W) {
       p = pois[idx];
       let s = claim(byPoi[p.id]);
       if (!s && sep) s = claim(spots.wild) || claimAnyPoi() || claimFarthest();    // this POI has no spot left that clears the others: land elsewhere
-      b.bb.dropTarget = s ? { x: s.x, z: s.z } : { x: p.x + (rng() - 0.5) * p.r, z: p.z + (rng() - 0.5) * p.r };
+      b.bb.dropTarget = s ? { x: s.x, z: s.z } : clearFallback(p.x + (rng() - 0.5) * p.r, p.z + (rng() - 0.5) * p.r);
     } else {
       let s = claim(spots.wild);
       if (!s && sep) s = claimAnyPoi() || claimFarthest();
@@ -455,7 +732,7 @@ export function assignDrops(W) {
           let bd = nearestPlaced(gp.x, gp.z);
           for (let tries = 0; tries < 23 && bd < sep2; tries++) { const g2 = W.map.randomGroundPos(rng), d2 = nearestPlaced(g2.x, g2.z); if (d2 > bd) { bd = d2; gp = g2; } }
         }
-        b.bb.dropTarget = { x: gp.x, z: gp.z };
+        b.bb.dropTarget = clearFallback(gp.x, gp.z);
       }
     }
     placed.push(b.bb.dropTarget);
@@ -472,6 +749,84 @@ export function assignDrops(W) {
     a.pos.x = W.SIM.clamp(b.bb.dropTarget.x + Math.cos(ang) * off, -W.map.half, W.map.half);
     a.pos.z = W.SIM.clamp(b.bb.dropTarget.z + Math.sin(ang) * off, -W.map.half, W.map.half);
   }
+  squadDrops(W);
+}
+
+/** (P23, C-MODE) DROP WITH THE SQUAD. A squad's bots jump beside their leader (a human squadmate, else the squad's lowest slot) and aim
+ *  for his landing spot in a fixed formation (member k: 7 m out at k x 2.1 rad), so a squad lands together, not 440-1019 m apart. A human
+ *  leader is followed LIVE through the glide (act: the glide branch): his landing is his to choose. No rng draw: solo lobbies (no teamId)
+ *  are untouched and the claims above drew exactly what they always drew. */
+const FORM_R = 7, FORM_A = 2.1;
+function formOff(k, out) { const an = k * FORM_A + 0.6; out.x = Math.cos(an) * FORM_R; out.z = Math.sin(an) * FORM_R; return out; }
+const _fo = { x: 0, z: 0 };
+let squadSnapped = false;
+function squadSnap(W) {
+  for (const b of brains) {
+    const m = b.actor;
+    if (!m.alive || !m.gliding || m.netRemote || !b.bb.leaderId) continue;
+    const L = W.actorById.get(b.bb.leaderId);
+    if (!L || L.isBot || !L.alive || !L.gliding) continue;
+    formOff(formIndex(W, m), _fo);
+    m.pos.x = W.SIM.clamp(L.pos.x + _fo.x, -W.map.half, W.map.half);
+    m.pos.z = W.SIM.clamp(L.pos.z + _fo.z, -W.map.half, W.map.half);
+    m.pos.y = L.pos.y;
+    if (m.obj) m.obj.position.copy(m.pos);
+  }
+}
+function squadDrops(W) {
+  squadSnapped = false;
+  const teams = new Map();
+  for (const a of W.actors) {
+    if (!hasTeam(a)) continue;
+    let l = teams.get(a.teamId);
+    if (!l) teams.set(a.teamId, (l = []));
+    l.push(a);
+  }
+  teams.forEach((members) => {
+    if (members.length < 2) return;
+    members.sort((x, y) => (x.isBot === y.isBot ? slotOf(x) - slotOf(y) : (x.isBot ? 1 : -1)));
+    const lead = members[0];
+    let k = 0;
+    for (let i = 1; i < members.length; i++) {
+      const m = members[i], b = m.brain;
+      if (!m.isBot || !b) continue;
+      formOff(++k, _fo);
+      // jump beside him (the glide line's height is kept)
+      m.pos.x = W.SIM.clamp(lead.pos.x + _fo.x, -W.map.half, W.map.half);
+      m.pos.z = W.SIM.clamp(lead.pos.z + _fo.z, -W.map.half, W.map.half);
+      const lt = lead.isBot && lead.brain && lead.brain.bb.dropTarget;
+      b.bb.dropTarget = lt ? { x: lt.x + _fo.x, z: lt.z + _fo.z } : { x: lead.pos.x + _fo.x, z: lead.pos.z + _fo.z };
+      b.earlyChute = lead.isBot && lead.brain ? lead.brain.earlyChute : false;
+      b.bb.leaderId = lead.id;
+    }
+  });
+}
+/** The squadmate this bot follows (C-MODE): a living, standing human of its squad first, else the squad's lowest living standing slot when that is
+ *  not this bot; null = solo, or this bot leads. Cached for 1 s (think cadence). */
+function leaderOf(W, b) {
+  const a = b.actor, bb = b.bb;
+  if (!hasTeam(a)) return null;
+  if (W.t - bb.leaderT < 1 && W.t >= bb.leaderT) {
+    const c = bb.leaderId ? W.actorById.get(bb.leaderId) : null;
+    if (!bb.leaderId || (c && c.alive && !c.downed)) return c || null;
+  }
+  bb.leaderT = W.t;
+  let best = null, bh = false, bs = 1e9;
+  for (let _i735 = 0, _l735 = W.actors; _i735 < _l735.length; _i735++) { const t = _l735[_i735];
+    if (t === a || !t.alive || t.downed || !sameTeam(a, t)) continue;
+    const hu = !t.isBot, s = slotOf(t);
+    if ((hu && !bh) || (hu === bh && s < bs)) { best = t; bh = hu; bs = s; }
+  }
+  if (best && !bh && slotOf(a) < bs) best = null;        // the bots' squad: the lowest slot leads
+  bb.leaderId = best ? best.id : null;
+  return best;
+}
+/** This bot's formation index in its squad (1..3; 0 = the leader / solo), from the slot order: stable for the match. */
+function formIndex(W, a) {
+  if (!hasTeam(a)) return 0;
+  let k = 0;
+  for (let _i748 = 0, _l748 = W.actors; _i748 < _l748.length; _i748++) { const t = _l748[_i748]; if (t !== a && sameTeam(a, t) && t.isBot && slotOf(t) < slotOf(a)) k++; }
+  return k + 1;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -489,12 +844,19 @@ export function update(W, dt) {
   nav.q = NAV_Q_PER_FRAME;
   const now = W.t;
   const pp = W.player ? W.player.pos : null;
-  for (const b of brains) {
+  // (P23, LC-96) a ground start has no glide touchdown event: the local human's first grounded frame starts its grace clock
+  const pl = W.player;
+  if (pl && pl.alive && !pl.gliding && (W.phase === "match" || W.phase === "drop") && !humanLandT.has(pl.id)) humanLandT.set(pl.id, now);
+  // (P23, C-MODE) the human's glide start is moved over his landing zone when the lobby ends (player.setDropTarget), AFTER assignDrops
+  // placed his squad beside his old spot: on the first drop frame his bot squadmates jump with him again (beside him, at his height)
+  if (!squadSnapped && W.phase === "drop") { squadSnapped = true; squadSnap(W); }
+  for (let _i773 = 0, _l773 = brains; _i773 < _l773.length; _i773++) { const b = _l773[_i773];
     const a = b.actor;
     if (!a.alive || a.netRemote) continue;
     // staggered thinking: near bots think fast, far bots slow
     if (now >= b.nextThink) {
-      const near = pp && a.pos.distanceToSquared(pp) < 120 * 120;
+      let near = pp;
+      if (pp) { const nx = a.pos.x - pp.x, ny = a.pos.y - pp.y, nz = a.pos.z - pp.z; near = nx * nx + ny * ny + nz * nz < 120 * 120; }   // Vector3.distanceToSquared, inline
       b.nextThink = now + (near ? 0.15 : 0.4) + b.rng() * 0.08;
       think(W, b);
     }
@@ -507,6 +869,14 @@ export function update(W, dt) {
 function think(W, b) {
   const a = b.actor, bb = b.bb;
   if (a.gliding) { b.state = "DROP"; return; }
+  // (P23, C-DBNO) knocked: no gun, no loot, no heal - crawl to the squad (or away from whoever did it) and wait for the revive
+  if (a.downed) {
+    if (bb.nadeS) endThrow(W, b);
+    if (b.state !== "DOWNED") { b.state = "DOWNED"; bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.coverState = "NONE"; }
+    bb.reviveId = null; bb.reviveT = 0;
+    return;
+  }
+  if (b.state === "DOWNED") { b.state = "WANDER"; bb.moveTo = null; }
 
   perceive(W, b);
   // Weapon choice belongs on the think cadence, not inside two act states. It
@@ -516,7 +886,17 @@ function think(W, b) {
   ensureGunOut(W, a);
 
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null;
-  const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius;
+  // (fix pass 2, probe_match stuck rows) HYSTERESIS ON THE STORM EDGE. The in-storm override flipped at exactly the live radius, and a loot goal in the
+  // storm pulled the bot back over it at every think: the override walked it in, LOOT (20) walked it out, 0.5-1 s each (probe_match deepwood seed 23:
+  // s36 paced a 5 m box beside chests c68 / c67 just outside the closing edge from 165 s to 245 s, 1 hp a second, 6-7 stuck episodes; a replay with the
+  // think scores read ROTATE 0, LOOT 20 at every think - the ROTATE samples were this override). Once in it, a bot is out of the storm only STORM_IN_M
+  // inside the edge, and the loot goal it was walking to in the storm is parked for 30 s (a player leaves the chest the storm has taken).
+  const inStorm = st && st.dps > 0 && hyp(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius - (bb.stormLatch ? STORM_IN_M : 0);
+  if (inStorm && !bb.stormLatch && bb.lootId && bb.moveTo && hyp(bb.moveTo.x - st.center.x, bb.moveTo.z - st.center.z) > st.radius - 2) {
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
+    bb.badLoot[bb.lootId] = W.t + 30; bb.lootId = null;
+  }
+  bb.stormLatch = !!inStorm;
   const outsideNext = st && st.nextRadius != null &&
     hyp(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
   const alive = W.match.aliveCount();
@@ -565,20 +945,27 @@ function think(W, b) {
   // useConsumable refuses every bandage because bandage cap is 75 and hp is 78,
   // and there is no shield item to fall back to. So test USABILITY, not mere
   // presence — mirroring useConsumable's own cap checks (player.js).
-  const usable = (id) => {
-    const c = K.CONSUMABLES[id];
-    if (!c) return false;
-    return c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap;
-  };
-  const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0 && usable(s2.id));
+  // (release blockers) both tests as plain loops: the usable() closure and the two .some() callbacks were three closures allocated per think
+  // (same answers: the first usable heal / the first loaded gun, holes read as empty slots exactly as .some skipped them)
+  let heals = false, hasFirepower = false;
+  const slots0 = a.inventory.slots;
+  for (let i = 0; i < slots0.length; i++) {
+    const s2 = slots0[i];
+    if (!(s2 && s2.kind === "consumable" && s2.count > 0)) continue;
+    const c = K.CONSUMABLES[s2.id];
+    if (c && (c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap)) { heals = true; break; }
+  }
   // A bot with NOTHING LEFT TO SHOOT must go find ammo/weapons, not dance
   // around a fight it cannot win (owner: "two bots ran and jumped around
   // because they had no bullets rather than looking for chests").
-  const hasFirepower = a.inventory.slots.some((s2) => s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0);
+  for (let i = 0; i < slots0.length; i++) { const s2 = slots0[i]; if (s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0) { hasFirepower = true; break; } }
 
   // hard overrides
-  if (inStorm) { b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
-  if (a.healing) { b.state = "HEAL"; return; }
+  if (inStorm) { if (b.state === "REVIVE") cancelRevive(W, b); b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
+  // (P23, LC-20) a cell popped behind a cover wall mid-fight stays an ENGAGE cover hold (coverStepQ holds the wall until the heal is in)
+  if (a.healing) { if (!(b.state === "ENGAGE" && bb.coverState === "IN")) b.state = "HEAL"; return; }
+  // (P23, C-DBNO) mid-channel: the revive owns the bot until it ends (actRevive decides when to break it off)
+  if (b.state === "REVIVE" && bb.reviveStarted) return;
 
   // utility scores — a VISIBLE enemy is the headline event: fighting beats
   // looting/rotating for every personality (the "runs right past you" tell)
@@ -592,7 +979,8 @@ function think(W, b) {
   const tEhp = tAct && tAct.alive ? tAct.hp + tAct.shield : 200;
   const outnumbered = myEhp < 50 && tEhp > myEhp + 10;
   const winning = !!tAct && tEhp < myEhp * 0.5 && tEhp < 90;   // press a cracked enemy
-  const liveTarget = bb.target && W.t - bb.targetSeenT < 1.2;
+  // (P23, LC-12) a bot holding cover against a man it saw 3 s ago is still in that fight (the wall broke the line, not the fight)
+  const liveTarget = bb.target && (W.t - bb.targetSeenT < 1.2 || ((bb.coverState === "IN" || bb.coverState === "MOVING") && W.t - bb.targetSeenT < 3));
   // live sighting = fight — but an un-geared bot ignores DISTANT enemies and
   // keeps looting (a starter-pistol duel at 60m is how the whole lobby
   // gridlocks); anyone close is always fought
@@ -612,7 +1000,56 @@ function think(W, b) {
   s.FLEE = bb.target && outnumbered && !lastFew ? (heals ? 86 : 72) : 0;   // disengage to heal, not to hide forever
   const healOk = heals && !(bb.healBlockedUntil > W.t);
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && healOk && !bb.target ? 75 : (a.hp < 60 && healOk && W.t - a.lastDamageT > 6 ? 45 : 0);
+  // (P23, LC-20) SHIELD UP WHEN CALM. The score above only ever fired at hp < 45 or (shield < 30 and hp < 80), so a full-hp bot with 0 shield and
+  // three big shields in the bag walked the whole match at half its bar (measured live: 42-58 % of calm low-shield samples carried an unused
+  // shield item). A player tops up every lull: no target, 5 s since the last hit, a usable shield item -> HEAL (66: over LOOT, CAMP, HUNT, PUSH;
+  // a pressing ROTATE 70+ and every live fight still win). Calm hp top-ups (a medkit under 100, bandages under 75) the same way at 62.
+  // (a target last seen 2.5 s+ ago, out of the fight's sight line, and no hit for 4 s is a lull too: the man behind the rock gets a fresh bar)
+  const calm = (!bb.target && W.t - (a.lastDamageT || -99) > 5) || (!!bb.target && !liveTarget && W.t - bb.targetSeenT > 2.5 && W.t - (a.lastDamageT || -99) > 4);
+  let shieldItem = false, hpItem = false;
+  if (calm && healOk) {
+    const sl = a.inventory.slots;
+    for (let i = 0; i < sl.length; i++) {
+      const s2 = sl[i];
+      if (!s2 || s2.kind !== "consumable" || !(s2.count > 0)) continue;
+      const c = K.CONSUMABLES[s2.id];
+      if (!c || !c.heals) continue;
+      if (c.heals === "shield" && keepBig(a, s2)) continue;       // (fix round) a lone big shield is kept for the bar under 75
+      if (c.heals === "shield" ? a.shield < c.cap : a.hp < c.cap) { if (c.heals === "shield") shieldItem = true; else hpItem = true; }
+    }
+    // (fix round, P2-B) a lull with a target in memory (calm: unseen 2.5 s, no hit for 4 s) is a lull in the endgame too: the stale-target
+    // ENGAGE there scores 62-87 (endgame + last-few bonuses) and outbid the 60, so at <= 10 alive - the whole t >= 600 window - a bot
+    // carried its minis through every gap in the fight (census: 0-shield ENGAGE bots holding 1-6 minis)
+    if (shieldItem) s.HEAL = Math.max(s.HEAL, bb.target ? Math.max(60, s.ENGAGE + 2) : 66);
+    else if (hpItem && a.hp < 90) s.HEAL = Math.max(s.HEAL, 62);
+  }
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
+  // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
+  // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
+  bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP());
+  if (!bb.wantShield) bb.shieldGo = null;
+  else if (W.t >= bb.shieldScanT) {
+    bb.shieldScanT = W.t + 2;
+    const n = nearShield(W, a, SHIELD_SEEK_M);
+    // (fix round, P2-B) AT THE MINI CAP, GO FURTHER. A bar at 50 with no big shield in the bag only climbs on a big one (a mini caps at 50), and
+    // the verifier's census found the in-circle big shields of the late game 60-200 m from the bots that needed them, unclaimed: nearbyLoot's
+    // 4 m vertical window (NEAR_DY) drops anything up or down a slope, and the LOOT scan stops at 90 m. So once the bar sits at the cap a calm
+    // bot looks out to SHIELD_FAR_M, slope or not, for a big shield (a death pile's too) or an unopened supply crate (two of them), inside the
+    // next circle, and walks to it (bb.shieldGo: onEnter LOOT takes it over a pick that is not a shield).
+    bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
+    // (final, OD-13) ...AND THE DEAD MEN'S SHIELDS. A body's bag is on the floor in its death pile (loot.js deathDrop); a calm bot under the cap
+    // walks to the nearest pile still holding a shield it can use, out to PILE_SHIELD_M and up or down a slope, over an unopened chest (a pile's
+    // shield is certain, a chest's is 6 in 10) unless the chest is much nearer
+    if (!bb.shieldGo || bb.shieldGo.type !== "item") {
+      const ps = pileShield(W, a, bb);
+      if (ps && !(n && n.type === "chest" && n.d + PILE_OVER_CHEST_M < ps.d)) bb.shieldGo = ps;
+    }
+    bb.shieldNear = !!(n || bb.shieldGo);
+  }
+  // (fix round, P2-B) ...and the shield it goes for outbids a stale target in the endgame the same way (not in the last few: that is the fight)
+  if (bb.wantShield && bb.shieldNear) s.LOOT = Math.max(s.LOOT, 58, bb.target && !lastFew ? s.ENGAGE + 1 : 0);
+  // ...and loots the body of the man it just killed, once nobody is in sight (his shields, ammo and heals are the restock a player takes)
+  if (!liveTarget && W.t - bb.pileT < 35 && W.t - (a.lastDamageT || -99) > 3 && hyp(bb.pileX - a.pos.x, bb.pileZ - a.pos.z) < 60) s.LOOT = Math.max(s.LOOT, 56);
   // GRAB FIRST. Measured 2026-09-30 (isla_viva 7, deepwood 3): of the pistol kills
   // inside the first 60 s, 10 of 16 were by a pistol-only bot 2-15 s after it
   // landed — beside the gun it had glided onto — that answered an enemy 20-25 m
@@ -667,6 +1104,7 @@ function think(W, b) {
   // for a crate that whoever was standing next to it has already emptied.
   s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
     ? (a.personality === "loot_goblin" ? 78 : 58) - hyp(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
+      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is two big shields: worth more to a thin bar
     : 0;
   // ENDGAME HUNT (owner playtest: "at some point they just wander around
   // aimlessly doing nothing"): ≤10 alive, nothing visible, safely inside the
@@ -675,9 +1113,54 @@ function think(W, b) {
   s.WANDER = 12;
   s.CLOSEIN = bb.closeInUntil > W.t && tAct && tAct.alive ? 99 : 0;
 
+  // ── (P23) SQUAD PLAY: revive, follow, pings, help (all zero without a squad) ──
+  if (hasTeam(a)) {
+    // REVIVE (C-DBNO): a downed squadmate nobody is reviving, within REVIVE_SEEK_M. Over every calm state; under a close live fight (88+):
+    // the man shooting at you is dealt with first, then the knock is picked up. A fight at range does not stop a revive.
+    const mate = downedMate(W, b);
+    if (mate) {
+      const md = hyp(mate.pos.x - a.pos.x, mate.pos.z - a.pos.z);
+      s.REVIVE = !liveTarget ? 87 : (tDist > 45 && W.t - (a.lastDamageT || -99) > 1.5 ? 84 : 0);
+      if (md > REVIVE_SEEK_M) s.REVIVE = 0;
+      if (s.REVIVE && bb.reviveId !== mate.id) { bb.reviveId = mate.id; bb.reviveT = 0; bb.reviveStarted = false; }
+    } else s.REVIVE = 0;
+    // FOLLOW (C-MODE): a bot keeps within 60 m of its leader (a human squadmate first): past 60 m it goes back to him over everything but a fight
+    // or a pressing storm; 28-60 m it drifts back when it has nothing better to do (LOOT 64 for an ungeared bot still wins: gear first)
+    const L = leaderOf(W, b);
+    if (L) {
+      const ld = hyp(L.pos.x - a.pos.x, L.pos.z - a.pos.z);
+      // (hysteresis: p23_modes read the mates' median 59.4 / 59.6 m - the 60 m line was where they turned round, so they lived on it. A bot
+      // 45 m+ out now comes all the way back in, to 18 m, before anything calm takes it away again)
+      if (ld > 45) bb.followBack = true; else if (ld < 18) bb.followBack = false;
+      s.FOLLOW = bb.followBack ? (liveTarget && tDist < 60 ? 0 : (ld > 60 ? 84 : 76)) : (ld > 28 ? 52 : 0);
+      if (L.gliding) s.FOLLOW = 0;
+    }
+    // PING (C-PING): a squadmate's spot ping / map pin is where to go (72: over loot and follow, under a live fight); an enemy ping is a fight
+    // to join (the assist mark). Done = arrived within 6 m, or 30 s old.
+    const pg = bb.ping;
+    if (pg && W.t - pg.t < 30) {
+      if (pg.kind === 2) {
+        const as = bb.assist || (bb.assist = { x: 0, z: 0, t: -99, id: null });
+        if (as.t < pg.t) { as.x = pg.x; as.z = pg.z; as.t = pg.t; as.id = pg.id; }
+        bb.ping = null;
+      } else if (hyp(pg.x - a.pos.x, pg.z - a.pos.z) > 6) s.PING = 72;
+      else bb.ping = null;
+    }
+    // ASSIST (C-MODE): a squadmate within 150 m is being shot (or is shooting): go and help - a PUSH that answers to the squad, not to noise
+    const as = bb.assist;
+    if (as && W.t - as.t < 8 && !liveTarget && hasFirepower && myEhp >= 40) {
+      s.ASSIST = 74;
+      if (as.id) {                                          // he is a known enemy: take him as the target to look for (no sight: just where)
+        const at = W.actorById.get(as.id);
+        if (at && at.alive && !bb.target) { bb.target = at.id; bb.targetSeenT = W.t - 1.3; bb.acquireT = W.t; setTargetPos(bb, at.pos); }
+      }
+    }
+  }
+
   // pick best
   let best = "WANDER", bs = -1;
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
+  if (bb.pingRec) pingAckStep(W, b, best);
   if (b.state !== best) { b.state = best; onEnter(W, b, best); }
   if (best === "LOOT" && grab && bb.lootId !== grab.id) {
     bb.lootId = grab.id; bb.lootType = "item"; bb.nearLootT = 0;
@@ -685,7 +1168,23 @@ function think(W, b) {
   }
 }
 
+/** (C-PING, fix round) this bot's part in its squad's ping record (see the pingPlaced listener): "going" when the state it chooses is the
+ *  ping's (PING for a spot / pin, ASSIST for an enemy mark) for PING_GO_S running, "busy" once 1 s has passed with no mate going. Both at most once per ping. */
+const PING_BUSY_S = 1.0, PING_LIFE_S = 30, PING_GO_S = 1.0;
+function pingAckStep(W, b, best) {
+  const r = b.bb.pingRec;
+  if (r.acked || W.t - r.t > PING_LIFE_S) { b.bb.pingRec = null; return; }
+  // "going" = the ping's state held PING_GO_S running (pingchk, mid-fight: one think chose PING between two sightings, then the fight took the
+  // bot back - an instant "going" ack for a mate that never went)
+  const take = best === (r.kind === "enemy" ? "ASSIST" : "PING");
+  if (!take) b.bb.pingGoT = -1; else if (!(b.bb.pingGoT >= 0)) b.bb.pingGoT = W.t;
+  const going = take && W.t - b.bb.pingGoT >= PING_GO_S;
+  if (!going && (take || r.busy || W.t - r.t < PING_BUSY_S)) return;     // (on its way, not 1 s yet: neither ack)
+  if (going) { r.acked = true; b.bb.pingRec = null; b.bb.pingGoT = -1; } else r.busy = true;
+  W.events.emit("pingAck", { by: b.actor.id, owner: r.owner, kind: r.kind, x: r.x, z: r.z, busy: !going });
+}
 const GRAB_R = 8, GRAB_CLOSE_M = 8;
+const STORM_IN_M = 8;             // (fix pass 2) a bot the storm sent rotating is out of it again only this far inside the live edge
 /** Nearest ground gun that is a real upgrade over the starter pistol (a primary:
  *  isUpgraded's definition, so a pistol of any rarity is not one) and that the
  *  inventory would take (same predicate give() enforces). */
@@ -705,6 +1204,8 @@ function nearestGun(W, a, bb, r) {
   return best;
 }
 
+let _pcS = new Float64Array(64), _pcN = 0;      // perceive's candidates in reach: sd, actor (release blockers: nearest-first sight lines)
+const _pcT = [];
 function perceive(W, b) {
   const a = b.actor, bb = b.bb;
   // current target still valid?
@@ -716,21 +1217,45 @@ function perceive(W, b) {
   const eye = eyePos(a, _eye_perceive);
   let best = null, bestD = 1e9;
   const noticeM = paceAt(PACE.noticeM, a.tier || 3);
-  for (const t of W.actors) {
+  // (P23, C-DBNO) a downed target: a "finisher" keeps him while nobody standing is in sight; the rest let him bleed and look for the next man
+  const finisher = b.finishRoll < FINISH_PCT[Math.max(0, Math.min(4, (a.tier || 3) - 1))];
+  if (bb.target) {
+    const ct = W.actorById.get(bb.target);
+    if (ct && ct.downed && !finisher) { bb.avoidId = ct.id; bb.avoidUntil = W.t + 10; bb.target = null; }
+  }
+  for (let _i1139 = 0, _l1139 = W.actors; _i1139 < _l1139.length; _i1139++) { const t = _l1139[_i1139];
     if (t === a || !t.alive) continue;
+    if (sameTeam(a, t)) continue;                                      // (P23, C-MODE) never a squadmate
     if (bb.avoidId === t.id && W.t < (bb.avoidUntil || 0)) continue;   // fatigue cooldown
     const dx = t.pos.x - a.pos.x, dz = t.pos.z - a.pos.z;
     const d = hyp(dx, dz);
     if (d > 200) continue;
+    const provoked = a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4;
+    const heardHim = bb.heard && bb.heard.shooterId === t.id && W.t - bb.heard.t < 4;
     // A bot notices a stranger only inside its tier's reach (BOT_PACE.noticeM) unless it is already fighting
     // him or he just shot it. Distance was the one thing every tier saw identically: 200 m for all.
-    if (d > noticeM && bb.target !== t.id && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4)) continue;
+    // (P23, LC-12) CONCEALMENT, for a NEW sighting only (a man already being fought is tracked as before): crouched x0.7, standing still x0.75,
+    // in a bush (W.map.concealAt, lane maps) at most ~12 m; a man who has just fired (heard) has given himself away. (P23, LC-96) a new player
+    // in his grace window is noticed at up to 35 % of that reach, unless he shot at this bot.
+    let reach = noticeM;
+    if (bb.target !== t.id && !provoked) {
+      if (!heardHim) {
+        if (t.crouching) reach *= 0.7;
+        if (!t.vel || t.vel.x * t.vel.x + t.vel.z * t.vel.z < 0.36) reach *= 0.75;
+        if (W.map.concealAt) {
+          const c = W.map.concealAt(t.pos.x, t.pos.z, t.pos.y);
+          if (c === true || c > 0.5) reach = Math.min(reach, 12);
+        }
+      }
+      const g = t.isBot ? 0 : graceOf(W, t);
+      if (g > 0) reach *= 1 - 0.65 * g;
+    }
+    if (d > reach && bb.target !== t.id && !provoked) continue;
     // vision: wide ~160° cone; anyone within 15m registers regardless of
     // facing (you notice someone sprinting past you); heard shooters = 360°
     const angTo = Math.atan2(dx, dz);
     let dd = Math.abs(((angTo - Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw))) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
-    const heardHim = bb.heard && bb.heard.shooterId === t.id && W.t - bb.heard.t < 4;
-    if (dd > 1.4 && d > 15 && !heardHim && bb.target !== t.id) continue;
+    if (dd > 1.4 && d > Math.min(15, reach) && !heardHim && bb.target !== t.id) continue;
     // TARGET VALUE, not just distance (audit S1: bots never read hp/shield). A
     // player judges an enemy by the shield bar and by who is shooting at them:
     //  - a cracked target (low shield+hp) is worth walking a little further for;
@@ -740,17 +1265,40 @@ function perceive(W, b) {
     const ehp = (t.hp || 0) + (t.shield || 0);
     const weak = ehp < 50 ? 0.6 : ehp < 100 ? 0.85 : 1;
     const attacker = a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 3 ? 0.6 : 1;
-    const sd = d * bias * weak * attacker;
+    // (P23, C-DBNO) a downed man is no threat: anyone standing comes first (x4 for most, x1.8 for a finisher)
+    const sd = d * bias * weak * attacker * (t.downed ? (finisher ? 1.8 : 4) : 1) * (t.isBot || provoked ? 1 : 1 + 2 * graceOf(W, t));   // (LC-96) anyone else first
     // (Wave 7b, S1) the sight line LAST, and only for a candidate that would win: a seen candidate replaces the best only when
     // sd < bestD, so one that cannot win needs no march (the same choice as before; losBlocked has no lasting side effect - its
     // collider queries only stamp their own results). It was the costliest call of the think tick (maps.js losBlocked 3.7 KB
     // of garbage a frame on Isla Viva, every candidate in reach every think).
-    if (!(sd < bestD)) continue;
-    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, t.pos.y + 1.2, t.pos.z)) continue;
-    bestD = sd; best = t;
+    // (release blockers) ... and the candidates are marched NEAREST-FIRST (by sd): the first one in sight is the one the actor-order walk ended
+    // with (the lowest sd in sight; on a tie the earlier actor - the walk kept the first of equal sd), so the choice is the same, and the sight
+    // lines of the farther candidates behind it are never marched (the walk marched every candidate that beat the best so far: losBlocked's
+    // own garbage was the largest share of the think tick right after the landing, tierprof's first window)
+    if (!(sd < 1e9)) continue;
+    if (_pcN >= _pcS.length) { const g = new Float64Array(_pcS.length * 2); g.set(_pcS); _pcS = g; }
+    _pcS[_pcN] = sd; _pcT[_pcN] = t; _pcN++;
   }
+  for (let left = _pcN; left > 0; left--) {
+    let k = -1, ks = 1e9;
+    for (let i = 0; i < _pcN; i++) { const si = _pcS[i]; if (si < ks) { ks = si; k = i; } }      // strict <: the earliest of equal sd
+    if (k < 0) break;
+    const t = _pcT[k];
+    _pcS[k] = 1e9;                                                                                 // taken
+    const ty = t.pos.y + (t.downed ? 0.4 : 1.2);
+    if (W.smokes && W.smokes.length && smokeBlocks(W, eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;        // (P23, C-SMOKE) first: no collider query
+    if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, ty, t.pos.z)) continue;
+    bestD = ks; best = t;
+    break;
+  }
+  for (let i = 0; i < _pcN; i++) _pcT[i] = null;                                                  // no actor kept past the scan
+  _pcN = 0;
   if (best) {
-    if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; }
+    if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; bb.graceMul = graceOf(W, best); }
+    // (P23, LC-12) RE-PEEK REACTION. acquireT used to reset only when the target CHANGED, so a man who ducked out of sight and peeked again
+    // inside the 8 s memory was shot on the first think tick after he reappeared (measured live: re-sight-to-shot p10 0.05-0.10 s, every
+    // tier). A player re-acquires too: seen again after more than 0.9 s out of sight = a fresh reaction delay and a fresh aim overshoot.
+    else if (W.t - bb.targetSeenT > 0.9) { bb.acquireT = W.t; bb.reSightT = W.t; bb.graceMul = graceOf(W, best); }
     bb.targetSeenT = W.t;
     setTargetPos(bb, best.pos);
   } else if (bb.target && W.t - bb.targetSeenT > 8) {
@@ -776,10 +1324,16 @@ function onEnter(W, b, state) {
       for (const k in bad) if (bad[k] <= W.t) delete bad[k];
       near = near.filter((n) => !(bad[n.id] > W.t));
     }
-    const pick = pickLoot(W, a, near);
+    let pick = pickLoot(W, a, near);
+    if (bb.wantShield && bb.shieldGo && !(pick && shieldGoal(a, pick))) {      // (fix round, P2-B) the shield the scan found, over loot that is not one
+      const g = liveLoot(W, bb.shieldGo);
+      if (g) pick = g; else bb.shieldGo = null;
+    }
     if (!pick || pick.id !== bb.lootId) bb.nearLootT = 0;
+    if (!pick) { bb.pileT = -99; bb.shieldNear = false; }        // (P23) nothing left to take: the restock marks are spent
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
+    bb.roomFor = pick && pick.type === "item" && bb.wantShield && shieldNeedsRoom(W, a, pick.data) ? pick.id : null;   // (P23, LC-20) make room on arrival
     if (pick) {
       setLootGoal(bb, pick);                                         // y: loot on an upper floor
     } else {
@@ -826,26 +1380,31 @@ function onEnter(W, b, state) {
     const t = bb.target && W.actorById.get(bb.target);
     bb.moveTo = t ? { x: t.pos.x, z: t.pos.z, y: t.pos.y } : randNear(W, a, 30, rng);   // (Wave 5) y: arrive on HIS floor
   } else if (state === "HUNT") {
-    // head for the NEAREST living enemy's rough area — ±22m of fuzz makes it a
-    // sixth sense for direction, not a wallhack; re-planned every arrival so it
-    // tracks a moving lobby. Endgame-only (see the score), where converging is
-    // exactly what the shrinking circle forces anyway.
-    let nearT = null, nd = 1e9;
-    for (const t2 of W.actors) {
-      if (t2 === a || !t2.alive) continue;
-      const d2 = hyp(t2.pos.x - a.pos.x, t2.pos.z - a.pos.z);
-      if (d2 < nd) { nd = d2; nearT = t2; }
-    }
-    if (nearT) {
-      const hx = nearT.pos.x + (rng() - 0.5) * 44, hz = nearT.pos.z + (rng() - 0.5) * 44;   // (same two draws, same order)
-      // (Wave 5) the floor of the fuzzed point at HIS height: the goal is a place on his storey, not a column through the
-      // map. NaN (water, a wall, a floor more than a step below him) -> a floor-blind goal, as before.
-      const hy = standAt(W, hx, hz, nearT.pos.y);
-      bb.moveTo = hy === hy ? { x: hx, z: hz, y: hy } : { x: hx, z: hz };
+    // (P23, LC-12) HUNT ON WHAT IT KNOWS. This used to walk to the NEAREST living enemy's true position +-22 m - a wallhack with fuzz (measured
+    // live: HUNT goals 14-29 m from an enemy 61-225 m away with no line of sight, 9 of 10). A player hunts the last shot he HEARD (under 20 s
+    // old, 250 m hearing, the shooter's spot +-8 m), and with nothing heard he goes where the next circle will force everyone: its centre
+    // (+- a third of its radius). Same two draws, same order, either way.
+    const h = bb.heard;
+    const fx = (rng() - 0.5), fz = (rng() - 0.5);
+    if (h && W.t - h.t < 20 && hyp(h.x - a.pos.x, h.z - a.pos.z) > 10) {
+      bb.moveTo = { x: h.x + fx * 16, z: h.z + fz * 16 };
+    } else if (W.stormCtl) {
+      const st = W.stormCtl.storm.stateAt(W.t);
+      const c = st.nextCenter || st.center, r = (st.nextRadius != null ? st.nextRadius : st.radius) * 0.66;
+      bb.moveTo = { x: c.x + fx * r, z: c.z + fz * r };
+      if (hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) < 12) bb.moveTo = randNear(W, a, 40, rng);
     } else bb.moveTo = randNear(W, a, 50, rng);
   } else if (state === "WANDER") {
     bb.moveTo = randNear(W, a, 50, rng);
+  } else if (state === "REVIVE" || state === "FOLLOW" || state === "PING" || state === "ASSIST") {
+    // (P23) the squad states steer every frame from live positions (actRevive / actSquadMove): nothing to plan here, no draw
+    bb.moveTo = null;
   } else if (state === "HEAL") {
+    // (P23, C-SMOKE) a heal under a known threat (seen in the last 6 s, 12-90 m off, the bar under 60): smoke between first, then heal in it
+    if (!bb.nadeS && W.t >= bb.nadeNextT && bb.targetPos && W.t - bb.targetSeenT < 6 && a.hp + a.shield < 60 && throwSlot(a, 2) >= 0) {
+      const tx = bb.targetPos.x - a.pos.x, tz = bb.targetPos.z - a.pos.z, td = hyp(tx, tz);
+      if (td > 12 && td < 90 && beginThrow(W, b, 2, a.pos.x + tx / td * 3.5, a.pos.y, a.pos.z + tz / td * 3.5)) return;
+    }
     startHeal(W, a);
   } else if (state === "FLEE") {
     // run from target — but NEVER flee into the storm: blend the escape vector
@@ -860,6 +1419,15 @@ function onEnter(W, b, state) {
         const c = st.nextCenter || st.center;
         fx = fx * 0.55 + c.x * 0.45;
         fz = fz * 0.55 + c.z * 0.45;
+        // (fix pass 2, probe_match stuck rows) THE BLEND CAN CANCEL OUT. With the circle's centre ~73 m behind the enemy (0.55 x 60 m away = 0.45 x the
+        // centre's pull) the escape point lands on the bot: it "arrived" at once, re-planned the same point, and circled a 2-3 m patch in FLEE (probe_match
+        // deepwood seed 13: s11, goal 0.2-0.5 m away in 6 stuck episodes over 90 s). A blend that leaves under 20 m to run goes ACROSS the enemy's line
+        // instead, 45 m to the side the centre is on (and 15 m back), so the bot both opens the distance and keeps to the safe side.
+        if (hyp(fx - a.pos.x, fz - a.pos.z) < 20) {
+          const ux = dx / d, uz = dz / d, sx = -uz, sz = ux;
+          const side = (c.x - a.pos.x) * sx + (c.z - a.pos.z) * sz >= 0 ? 1 : -1;
+          fx = a.pos.x + sx * side * 45 + ux * 15; fz = a.pos.z + sz * side * 45 + uz * 15;
+        }
       }
       bb.moveTo = { x: fx, z: fz };
     } else bb.moveTo = randNear(W, a, 50, rng);
@@ -887,7 +1455,7 @@ function isUpgraded(a) {
 }
 /** Fewer rounds on hand (mag + matching reserve) than `frac` of a magazine. */
 function lowOnAmmo(a, s, frac) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   return !def || slotAmmo(a, s) < Math.max(1, def.mag * frac);
 }
 /** Does this ammo type feed a carried primary that is short of a full magazine?
@@ -898,7 +1466,7 @@ function feedsStarvingPrimary(a, ammoId) {
   for (let i = 0; i < sl.length; i++) {
     const s2 = sl[i];
     if (!s2 || s2.kind !== "weapon" || s2.id === "pistol") continue;
-    const def = K.WEAPONS[s2.id];
+    const def = wdefN(s2.id);
     if (def && def.ammo === ammoId && lowOnAmmo(a, s2, 1)) return true;
   }
   return false;
@@ -918,20 +1486,28 @@ function pickLoot(W, a, near) {
   // (Wave 8) CLEAR THE HOUSE: inside a furnished house the loot of that house is worth IND_LOOT_HOUSE points more (its own room IND_LOOT_ROOM): a bot
   // takes what the house holds before it crosses the street for the next one (a candidate's room from roomAt; -1 = no houses / outdoors: no change)
   const myR = IND.H !== null && a.brain ? myRoom(W, a.brain) : -1;
-  for (const n of near) {
+  for (let _i1386 = 0, _l1386 = near; _i1386 < _l1386.length; _i1386++) { const n = _l1386[_i1386];
     let score = 0;
     // Skip anything give() would refuse. Without this a bot at the gun cap kept
     // re-selecting the same weapon, walking to it, being refused, and re-planning
     // to it again — a twitch loop in the open, next to loot it could not take.
-    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data)) continue;
-    if (n.type === "chest") score = dry ? 82 : (upgraded ? 55 : 72);
+    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !(a.brain && a.brain.bb.wantShield && shieldNeedsRoom(W, a, n.data))) continue;
+    if (n.type === "chest") score = dry ? 82 : (upgraded ? (a.brain && a.brain.bb.wantShield ? 60 : 55) : 72);   // (P23, LC-20) a shield restock
     else if (n.data.kind === "weapon") {
       score = dry ? 76 + n.data.rarity * 4 : (upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6);
       // a copy of a gun already carried at the same or better rarity adds nothing
       // (a second common pistol was scored 66 — a walk across the POI for nothing)
       if (!dry && carriesAtLeast(a, n.data.id, n.data.rarity || 0)) score = 12;
     }
-    else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
+    else if (n.data.kind === "consumable") {
+      score = n.data.id.includes("shield") ? 45 : 34;
+      // (P23, LC-20) a calm bot with a thin bar and no shield in the bag goes for the shield first
+      // (fix round) a mini only while it still adds (under its cap): at the cap the boost walked a bot to minis that do nothing
+      if (score === 45 && a.brain && a.brain.bb.wantShield && (n.data.id === "big_shield" || a.shield < MINI_CAP())) score = n.data.id === "big_shield" ? 70 : 62;
+      // ...and a big shield is the only item that takes the bar past 50 (a mini caps there): the first two in the bag are worth a detour (fix
+      // round: two, not one - the late game's bar is what the bag carried into it)
+      else if (n.data.id === "big_shield" && bigCount(a) < 2) score = 54;
+    }
     else if (n.data.kind === "ammo") score = dry ? 80 : (feedsStarvingPrimary(a, n.data.id) ? 70 : 38);
     score -= n.d * 0.4;
     if (myR >= 0) { RAQ[0] = n.pos.x; RAQ[1] = n.pos.y; RAQ[2] = n.pos.z; const lr = roomAtQ(W); if (lr >= 0 && IND.R[lr].h === IND.R[myR].h) score += lr === myR ? IND_LOOT_ROOM : IND_LOOT_HOUSE; }
@@ -972,9 +1548,14 @@ function pickLoot(W, a, near) {
  *  first-floor slab; a bot pinned there died, its death drop landed there, and the
  *  next bot that came for the drop was pinned too (two to three bots per match at
  *  the same spot, 200+ s each). */
+// (R2 movers, item 2) the banded one-shot queries below (lowCeiling, obstacleAt, the town exit, tallWallAt) read their list at once and call nothing that
+// queries while they do: one out array of their own - a banded query that finds nothing writes length 0 into the array it is given (maps.js), and on the
+// map's shared scratch that dropped its backing store under every other caller.
+const _bandCols = [];
 function lowCeiling(W, x, y, z) {
   const s = supportAt(W, x, z, y + 0.3);
-  const cols = W.map.queryColliders(x, z, 0.5);
+  // (R2 movers, item 2) the test's band: only a box whose underside lies between s + 0.3 and s + height + 0.05 is a low ceiling (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.5, _bandCols, s + 0.3, s + K.PLAYERK.height + 0.05);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1007,7 +1588,7 @@ function carriesLongGun(a) {
     // makes a 100 m fight worth starting (measured: bots with "ar:1:4"-style
     // loadouts opened 70-140 m fights, drew the pistol when the rifle ran dry and
     // stayed in them instead of looting rifle ammo)
-    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar") && !lowOnAmmo(a, s2, 0.5)) return true;
+    if (s2 && s2.kind === "weapon" && (s2.id === "sniper" || s2.id === "ar" || (wdefN(s2.id) && LONG_CLS[wdefN(s2.id).cls])) && !lowOnAmmo(a, s2, 0.5)) return true;
   }
   return false;
 }
@@ -1022,9 +1603,27 @@ function randNear(W, a, r, rng) {
   return { x: a.pos.x, z: a.pos.z };
 }
 
+const HEAL_CALM_ORDER = ["mini_shield", "big_shield", "medkit", "bandage"];
+/** (P23, LC-20) the shield item a cover hold pops: a mini while the bar is under 50 (2 s), else a big one (5 s); null = none that adds. */
+function coverShieldId(a) {
+  let mini = false, big = false;
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2 || s2.kind !== "consumable" || !(s2.count > 0)) continue;
+    if (s2.id === "mini_shield") mini = true; else if (s2.id === "big_shield") big = true;
+  }
+  return mini && a.shield < 50 ? "mini_shield" : big ? "big_shield" : null;
+}
 function startHeal(W, a) {
-  const order = a.shield < 40 ? ["big_shield", "mini_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
-  for (const id of order) if (W.useConsumable(a, id)) return true;
+  // (P23, LC-20) calm (5 s since the last hit, no target): the minis first while they still add (cap 50), then the big ones - the whole bar
+  // ends up full. Under fire: the old order (the big shield first: the most bar per second).
+  const calm = a.brain && !a.brain.bb.target && W.t - (a.lastDamageT || -99) > 5;
+  // (fix round, P2-B) under 40 the minis go first under fire too: a mini is the faster bar (25 in 2 s = 12.5/s; a big 50 in 5 s =
+  // 10/s), and a big spent at 0 is the only refill past 50 gone (census: 7-14 bigs a match used from a 0 bar, then the bar sat at 50)
+  const order = calm && a.shield < MINI_CAP() ? HEAL_CALM_ORDER : a.shield < 40 ? ["mini_shield", "big_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
+  const keep = calm && a.shield >= SHIELD_KEEP && bigCount(a) < 2;      // (fix round) a lone big is kept for the bar under 75 (keepBig)
+  for (let _i1518 = 0, _l1518 = order; _i1518 < _l1518.length; _i1518++) { const id = _l1518[_i1518]; if (!(keep && id === "big_shield") && W.useConsumable(a, id)) return true; }
   return false;
 }
 
@@ -1060,11 +1659,24 @@ function act(W, b, dt) {
   // so without a clear here a bot that crouched once at a camp spot would stay
   // crouched — and at CROUCH.speedMult 0.45 — for the rest of the match.
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false; inp.crouch = false;
+  inp.interactDown = false;       // (P23, C-DBNO) held only by actRevive, frame by frame (player.js reviveStep channels while it is held)
 
   if (a.gliding) {
     // steer toward drop target, dive (sprint) when above it
-    const t = bb.dropTarget || { x: 0, z: 0 };
-    steerYaw(a, Math.atan2(-(t.x - a.pos.x), -(t.z - a.pos.z)), dt, 3);
+    let t = bb.dropTarget || { x: 0, z: 0 };
+    // (P23, C-MODE) a squad's bots follow a HUMAN leader's glide live: his chosen spot (the local player's drop target while he is in the air,
+    // else where he is), in the squad's formation
+    if (bb.leaderId) {
+      const L = W.actorById.get(bb.leaderId);
+      if (L && !L.isBot && L.alive) {
+        const dt2 = L === W.player && W.dropTarget && Number.isFinite(W.dropTarget.x) && L.gliding ? W.dropTarget : L.pos;
+        formOff(formIndex(W, a), _fo);
+        const ft = bb.dropTarget || (bb.dropTarget = { x: 0, z: 0 });
+        ft.x = dt2.x + _fo.x; ft.z = dt2.z + _fo.z;
+        t = ft;
+      }
+    }
+    (SYQ[0] = Math.atan2(-(t.x - a.pos.x), -(t.z - a.pos.z)), steerYawQ(a, dt, 3));
     inp.mz = 1;
     const d = hyp(t.x - a.pos.x, t.z - a.pos.z);
     inp.sprint = d < 60; // dive
@@ -1085,25 +1697,92 @@ function act(W, b, dt) {
   const _wasStuckPos = _v.copy(bb.lastPos);
   bb.lastPos.copy(a.pos);
 
+  // (P23, C-DBNO) knocked: crawl (player.js sets the crawl speed and the low capsule), never fire, never loot
+  if (a.downed || b.state === "DOWNED") {
+    if (a.downed) {
+      actDowned(W, b, dt);
+      // (the crawl keeps the edge rule: stub duo 10-26, Isla seed 2, a knocked bot crawled off a 5 m bank and died of it)
+      if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
+      return;
+    }
+  }
+  // (P23, C-SMOKE) a smoke that rolls between this bot and its target cuts the sight line THIS frame (perceive runs on the think cadence):
+  // the target is out of sight from now, so ENGAGE / fireOnTheMove stop shooting at him at once
+  if (bb.target && W.smokes && W.smokes.length && W.t - bb.targetSeenT < 0.4) smokeCut(W, b);
+  // (P23, C-FALL) walked off a ledge that would kill: a player re-opens the canopy (player.js: Space in the air more than 12 m up)
+  if (!a.onGround && LETHAL_H && a.vel.y < -7 && W.t >= bb.edgeT) chuteRescue(W, b);
+
   // Being shot outranks whatever the brain had planned. This may flip b.state to
   // ENGAGE, so it runs BEFORE the dispatch below and the fight starts this frame.
-  const answering = underFire(W, b, dt);
+  // (P23) not mid-revive: a bot channelling a revive answers fire only when it breaks the channel off (actRevive)
+  // (P23, LC-14) ...nor mid-throw: underFire turns the yaw to the shooter every frame of his burst, and against throwRun's pull to the throw heading
+  // the yaw settled outside the 0.05 rad release window - K24, Deepwood seed 63: 10 planned frags timed out in the hand, 0 thrown. The throw is
+  // 0.4-1 s; it counts as the answer (no suppression reflex either).
+  const answering = b.state === "REVIVE" && bb.reviveStarted ? false : bb.nadeS ? true : underFire(W, b, dt);
 
-  switch (b.state) {
+  // (P23, LC-14 / C-SMOKE) a throw in progress owns the aim, the legs and the trigger: the state's act is skipped for its 0.4-1 s. It used to
+  // run first and steer the yaw to the target while throwRun steered it to the throw heading, two pulls whose rest point could sit outside
+  // throwRun's 0.05 rad release window (g6, Ashgrid seed 62: 8 planned frags timed out in the hand, 0 thrown)
+  if (bb.nadeS) throwRun(W, b, dt);
+  else switch (b.state) {
     case "ENGAGE": actEngage(W, b, dt); break;
-    case "FLEE": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "HEAL": actHeal(W, b, dt); break;
     case "LOOT": actLoot(W, b, dt); break;
-    case "SUPPLY": actSupply(W, b, dt); fireOnTheMove(W, b, dt); break;
-    case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); fireOnTheMove(W, b, dt); break;
-    case "HUNT": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
-    case "CLOSEIN": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "CAMP": actCamp(W, b, dt); break;
+    case "REVIVE": actRevive(W, b, dt); break;
+    // (release blockers) the travelling states share ONE call of each mover and of fireOnTheMove (the same calls, the same order): a state's
+    // first frame of the match used to reach a call site that had never run - an optimized act() thrown away (no feedback) mid-match
+    case "FLEE": case "ROTATE": case "PUSH": case "WANDER": case "HUNT": case "CLOSEIN": case "SUPPLY": case "FOLLOW": case "PING": case "ASSIST":
+      if (b.state === "SUPPLY") actSupply(W, b, dt);
+      else if (b.state === "FOLLOW" || b.state === "PING" || b.state === "ASSIST") actSquadMove(W, b, dt);
+      else { const nP = b.state !== "PUSH", nW = b.state !== "WANDER"; actMove(W, b, dt, nP && nW); }     // sprint: ROTATE, FLEE, HUNT, CLOSEIN (R1: both compares every call)
+      fireOnTheMove(W, b, dt);
+      break;
   }
+  // (P23, LC-14) a live grenade landing here: get out of its blast (over every state but a revive channel and a throw)
+  if (bb.dangerUntil > W.t && !bb.nadeS && !(b.state === "REVIVE" && bb.reviveStarted)) dodgeGrenade(W, b, dt);
+  // (P23, C-FALL) never walk off a drop that would kill (only when the sim has fall damage)
+  // (R3 steer) a real flight (falling past 4 m/s) re-arms the probe for the frame it lands: p23_fall lips, isla_viva seed 77, s11 at 10 hp landed
+  // on a 0.5 m bump between two faces at a sprint, the probe was not due on the two frames it stood there, and it ran off the second face
+  if (!a.onGround && a.vel.y < -4) bb.edgeAir = true;
+  if (LETHAL_H && (a.onGround || W.t < bb.edgeBanUntil) && (inp.mz || inp.mx)) edgeGuard(W, b);
+  // ...and in a real fall (2 m+ of drop already under it, no canopy) it drops straight: air control steered by the state's goal carried bots
+  // downhill onto lower ground (p23_fall: a 10 m lift cost 53.9 hp, the human's curve says 41.4)
+  if (LETHAL_H && !a.onGround && !a.gliding && !a.swimming && a.vel.y < -9) { inp.mx = 0; inp.mz = 0; inp.sprint = false; }
 
+  // (release blockers) the per-frame bookkeeping (stuck / pin / solid / furniture / progress / hard breaker) lives in actTail: act() itself
+  // deoptimizes on code paths first reached seconds after the landing (a state's first frame, the first suppression reflex) and ran
+  // unoptimized - every number of all this bookkeeping a heap box, for every bot - until it was optimized again (tierprof's first window).
+  // Same statements, same order: actTail runs exactly where they stood.
+  actTail(W, b, dt);
+
+  // suppression reflex: shot recently by someone unseen → sprint to lateral
+  // cover instead of standing there soaking damage
+  // (R1, tierprof kb) the test's reads run on every frame (pure reads, same answer): read only behind `!answering && ...` they had no type feedback until
+  // the first unseen hit of the match, which threw the optimized act() away inside tierprof's measured window
+  const lastAtt = a.lastAttacker, hitNow = W.t - a.lastDamageT < 0.9, reflexFree = W.t >= (bb.coverReflexUntil || 0), notEngage = b.state !== "ENGAGE";
+  const attNow = W.actorById.get(lastAtt);         // (the Map read of a null key is undefined: `lastAtt && attNow` is the old value)
+  if (!answering && hitNow && reflexFree && notEngage) {
+    const att = lastAtt && attNow;
+    if (att) {
+      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
+      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
+      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
+      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
+      bb.coverReflexUntil = W.t + 1.5;
+    }
+  }
+}
+
+/** (release blockers) act()'s per-frame bookkeeping, moved out unchanged (see the call in act). _v is act's _wasStuckPos (this frame's
+ *  start position, copied before the state ran). */
+function actTail(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const _wasStuckPos = _v;
   // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
   // move => stuck
-  if (_wasStuckPos.distanceToSquared(a.pos) < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
+  const sqx = _wasStuckPos.x - a.pos.x, sqy = _wasStuckPos.y - a.pos.y, sqz = _wasStuckPos.z - a.pos.z;     // Vector3.distanceToSquared, inline (a call returns a boxed double)
+  if (sqx * sqx + sqy * sqy + sqz * sqz < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
   else bb.stuckT = 0;
 
   // PIN DETECTOR (Wave 5): trying to move for most of a half-second and ending it within 15 cm of where it began. stuckT
@@ -1144,10 +1823,19 @@ function act(W, b, dt) {
     const still = fx * fx + fz * fz < 0.15 * 0.15 && (inp.mz || inp.mx || MOVING_STATES[b.state]) && a.onGround && free;
     bb.furnT = W.t; bb.furnX = a.pos.x; bb.furnZ = a.pos.z;
     const gi = still ? offWalkRoom(W, b, true) : travel ? offWalkRoom(W, b, false) : -1;     // (the travel-only test reads the room without refreshing the brain's cached one)
-    if (gi >= 0 && still && ++bb.furnN >= FURN_ESC_N) { bb.furnN = 0; bb.furnD = 0; escapeToWalk(W, b, gi); }
-    else if (gi >= 0 && travel && ++bb.furnD >= FURN_DWELL_N) { bb.furnN = 0; bb.furnD = 0; if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
-    if (!(gi >= 0 && still)) bb.furnN = 0;
-    if (!(gi >= 0 && travel)) bb.furnD = 0;
+    // (R1, tierprof kb) the two counters are read and written on EVERY window (same values, same order of the escape): `++bb.furnN` / `++bb.furnD` on
+    // the rare side of `&&` had no type feedback until a bot first stood off the walk area, and that first time threw the optimized actTail away
+    // (V8 log: "Insufficient type feedback" at both, inside tierprof's measured window)
+    const gS = gi >= 0 && still, gT = gi >= 0 && travel;
+    let fN = bb.furnN, fD = bb.furnD, esc = 0;
+    if (gS) fN++;
+    if (gS && fN >= FURN_ESC_N) { fN = 0; fD = 0; esc = 1; }
+    else if (gT && ++fD >= FURN_DWELL_N) { fN = 0; fD = 0; esc = 2; }
+    bb.furnN = fN; bb.furnD = fD;
+    if (esc === 1) escapeToWalk(W, b, gi);
+    else if (esc === 2) { if (escapeToWalk(W, b, gi)) nav.st.furnDwell++; }
+    if (!gS) bb.furnN = 0;
+    if (!gT) bb.furnD = 0;
   }
 
   // PROGRESS BREAKER for the fight and the heal (Wave 5; Unreal's path follower does block detection the same way). The
@@ -1176,26 +1864,26 @@ function act(W, b, dt) {
     }
   } else if (bb.anchor) { bb.anchorT = W.t; bb.anchor.x = a.pos.x; bb.anchor.z = a.pos.z; }
 
-  // suppression reflex: shot recently by someone unseen → sprint to lateral
-  // cover instead of standing there soaking damage
-  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
-    const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
-    if (att) {
-      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (b.rng() < 0.5 ? 1 : -1) * 1.2;
-      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
-      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
-      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
-      bb.coverReflexUntil = W.t + 1.5;
-    }
+  // (R2 movers) LOOP BREAKER. The hard breaker above re-anchors every time the bot strays 2 m, so a bot that paces back and forth through a doorway in a
+  // 2.5-3 m figure (ashgrid seed 11: s35, 27 s at (-69.2, 434), no route, its loot 53 m off - 8 stuck episodes) or round a roof it cannot leave never
+  // reaches its 12 s. This one keeps ONE anchor while the bot stays within TRAP_R of it, and a bot that is travelling (a goal more than TRAP_GOAL_M away)
+  // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
+  const mt = bb.moveTo;
+  let tq = 0;
+  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {
+    const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
+    if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
   }
+  if (tq === 2) trapBreak(W, b);
+  if (tq !== 1) { bb.trapX = a.pos.x; bb.trapZ = a.pos.z; bb.trapT = W.t; }
 }
-
-const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1 };
+const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
 /** (K2) the point (x, y = feet, z) lies inside the footprint of a solid box that spans the body above the step-up (a ramp never counts: its own rules hold) */
 const _solidCols = [];
 function insideSolid(W, x, y, z) {
-  const cols = W.map.queryColliders(x, z, 0.6, _solidCols);
   const h = K.PLAYERK.height;
+  // (R2 movers, item 2) the test's band [y + step, y + h - 0.1]: a box outside it never counts (maps.js queryColliders' y0 / y1)
+  const cols = W.map.queryColliders(x, z, 0.6, _solidCols, y + NAV_STEP_UP, y + h - 0.1);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1225,7 +1913,8 @@ function escapeSolid(W, b) {
   }
   // the faces of every box the bot is inside (insideSolid's test), as exits sorted by distance (Array sort is stable: ties keep the collider order).
   // Copied out first: escTry's own queries reuse the shared query array. (Rare path: the bot is inside a solid with no free spot within 4 m.)
-  const cols = M.queryColliders(px, pz, 0.6, _solidCols), h = K.PLAYERK.height, ex = [];
+  const h = K.PLAYERK.height, ex = [];
+  const cols = M.queryColliders(px, pz, 0.6, _solidCols, py + NAV_STEP_UP, py + h - 0.1);      // (R2 movers, item 2) insideSolid's band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -1396,7 +2085,7 @@ function breakOut(W, b) {
   const a = b.actor, bb = b.bb;
   bb.breaks = (bb.breaks || 0) + 1;
   if (bb.lootId) {
-    if (!bb.badLoot) bb.badLoot = {};
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
     bb.badLoot[bb.lootId] = W.t + 60;
     bb.lootId = null;
   }
@@ -1417,6 +2106,113 @@ function breakOut(W, b) {
   bb.progGoal = null; bb.stuckT = 0;
 }
 
+const TRAP_R = 3.0;               // (R2 movers) loop breaker: a travelling bot that has not left this disc ...
+const TRAP_S = 3.0;               // ... in this long (probe_match's stuck window is 3 s) is trapped
+const TRAP_GOAL_M = 6.0;          // ... when its goal lies further off than this (a bot at its goal is not travelling)
+const TRAP_ESC_S = 6.0;           // the break-out goal is held this long (or until reached)
+const TRAP_AGAIN_S = 30.0;        // a second trip within this long: the exits the first one tried did not work - walk away along a free heading instead
+const TRAP_WALK_M = 12.0;         // ... this far
+/** (R2 movers) Break a trapped bot out, deterministically (no rng draw), and COMMIT to it for TRAP_ESC_S (moveTowardQ walks the break-out goal instead of
+ *  the state's goal: the state's next think re-picking the same goal used to throw the exit path away on the next frame). The goal, first that exists:
+ *    1. on a roof / wall top / ledge (feet DECK_AGL over the ground, no ceiling): off the lowest open edge it may walk off (deckExitPoint: edgeGuard's
+ *       own walking margin - an edge past it is refused by edgeGuard frame by frame, and a bot committed to pushing at it slipped over a 10 m lip at
+ *       10 hp in p23_fall's lip setup);
+ *    2. a first trip: the house's street door (houseExitPath), else the nearest open cell (findExit, as breakOut);
+ *    3. a repeat trip (within TRAP_AGAIN_S) or nothing above: TRAP_WALK_M along the first heading whose next 4 m is free of walls and whose terrain
+ *       never falls more than the walking margin under the feet, tried from the side of the goal (+-90 deg, alternating with the trip count) round to
+ *       straight away from it.
+ *  The loot item it was after is parked as breakOut parks it. */
+function trapBreak(W, b) {
+  const a = b.actor, bb = b.bb, mt = bb.moveTo;
+  const again = W.t - bb.trapLastT < TRAP_AGAIN_S;
+  bb.trapN = again ? bb.trapN + 1 : 1;
+  bb.trapLastT = W.t;
+  nav.st.trapBreaks++;
+  if (bb.lootId) {
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
+    bb.badLoot[bb.lootId] = W.t + 60;
+    bb.lootId = null;
+  }
+  const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
+  bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
+  let ex = null;
+  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
+    ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
+    ex.exit = true;
+    nav.st.trapDeck++;
+  } else if (!again) {
+    const hx = IND.H !== null ? houseExitPath(W, b) : null;
+    ex = hx || findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
+    if (ex && ex.length && !hx) extendExit(W, a, ex);
+    if (ex && !ex.length) ex = null;
+    // (R2 movers, pass 2) the open cell findExit / the door path hands back knows nothing of drops: p23_fall's lip setup, Isla seed 77, s46 at 10 hp was
+    // HELD by edgeGuard at a 6 m face (-23.3, -150.6), tripped the breaker 3 s later, got findExit's cell (-23.3, -158.6) on the lip of the same face,
+    // sprinted in, turned for its loot as it arrived and ran over (14 hp fall, dead) - edgeGuard's 0.15 s probe missed the turn. An exit whose walk, or
+    // whose last point's surroundings, falls further than the bot may walk off is refused (the heading walk below is tried instead)
+    if (ex && !exitFallSafe(W, a, ex, walkDrop(a))) { ex = null; nav.st.trapUnsafe++; }
+  }
+  if (!ex) {
+    const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
+    for (let k = 0; k < TRAP_HEADINGS.length; k++) {
+      const yaw = gyaw + side * TRAP_HEADINGS[k];
+      if (wallAhead(W, a, yaw, 4)) continue;
+      const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
+      if (Math.abs(x) >= W.map.half || Math.abs(z) >= W.map.half || W.map.heightAt(x, z) < W.map.waterY + 0.4) continue;
+      let drop = false;
+      for (let d = 1; d <= TRAP_WALK_M && !drop; d += 1) if (W.map.heightAt(a.pos.x - Math.sin(yaw) * d, a.pos.z - Math.cos(yaw) * d) < a.pos.y - lim) drop = true;
+      if (drop) continue;
+      const wk = [{ x, y: null, z, k: 0 }];
+      if (!exitFallSafe(W, a, wk, lim)) { nav.st.trapUnsafe++; continue; }      // (pass 2) its overrun and its end's surroundings too
+      ex = wk;
+      nav.st.trapWalk++;
+      break;
+    }
+  }
+  if (!ex) return;
+  const last = ex[ex.length - 1];
+  bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
+  bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
+  bb.nextPathT = W.t + 2.5;
+}
+const TRAP_OVERRUN_M = 3.0;       // (pass 2) a sprint arriving at a break-out goal runs on (and turns) this far past it ...
+const TRAP_LIP_R = 2.5;           // ... and no ground within this of the goal may lie more than the walking margin under it
+const _lipDirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, -0.7071]];
+/** (R2 movers, pass 2) Is a break-out route safe to walk for this bot (lim = walkDrop)? The terrain (water floors a fall) sampled every 0.8 m from the feet
+ *  along each leg and TRAP_OVERRUN_M past the last point: no face (a run of samples falling more than STEEP_STEP per sample, edgeGuard's own test) falls
+ *  more than lim from its top; and round the last point (8 headings at TRAP_LIP_R) no ground lies more than lim under it. Terrain only: a bot up on a
+ *  deck takes deckExitPoint, which is edgeGuard's margin by construction. No rng draw. */
+function exitFallSafe(W, a, ex, lim) {
+  if (!(lim < 1e6)) return true;
+  const M = W.map, wy = M.waterY;
+  const hAt = (x, z) => { const h = M.heightAt(x, z); return wy != null && h < wy ? wy : h; };
+  let px = a.pos.x, pz = a.pos.z, prev = hAt(px, pz), runTop = NaN;
+  const n = ex.length;
+  for (let i = 0; i <= n; i++) {
+    let qx, qz;
+    if (i < n) { qx = ex[i].x; qz = ex[i].z; }
+    else {
+      const bx = n > 1 ? ex[n - 2].x : a.pos.x, bz = n > 1 ? ex[n - 2].z : a.pos.z, dx = px - bx, dz = pz - bz, L = Math.sqrt(dx * dx + dz * dz);
+      if (L < 1e-3) break;
+      qx = px + dx / L * TRAP_OVERRUN_M; qz = pz + dz / L * TRAP_OVERRUN_M;
+    }
+    const dx = qx - px, dz = qz - pz, L = Math.sqrt(dx * dx + dz * dz), steps = Math.max(1, Math.ceil(L / 0.8));
+    for (let k = 1; k <= steps; k++) {
+      const h = hAt(px + dx * k / steps, pz + dz * k / steps);
+      if (prev - h > STEEP_STEP) { if (runTop !== runTop) runTop = prev; if (runTop - h > lim) return false; }
+      else runTop = NaN;
+      prev = h;
+    }
+    px = qx; pz = qz;
+  }
+  const last = ex[n - 1], g = hAt(last.x, last.z);
+  for (let r = 1; r <= 2; r++) for (let j = 0; j < 8; j++) {
+    const d = TRAP_LIP_R * r / 2;
+    if (g - hAt(last.x + _lipDirs[j][0] * d, last.z + _lipDirs[j][1] * d) > lim) return false;
+  }
+  return true;
+}
+const TRAP_HEADINGS = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75, Math.PI, Math.PI / 4, -Math.PI / 4];
+
 /** UNDER FIRE (owner 2026-09-15: "make sure enemies can spot where attacks are
  *  coming from and fight in that direction"). A hit is itself a sighting: the
  *  bot freezes the bearing the shot came from, whips round to face it, and — if
@@ -1431,7 +2227,7 @@ function underFire(W, b, dt) {
   const a = b.actor, bb = b.bb;
   if (W.t - a.lastDamageT > 1.6) return false;
   const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
-  if (!att || !att.alive || att === a) return false;
+  if (!att || !att.alive || att === a || sameTeam(a, att)) return false;
   // freeze the bearing on the first frame of this burst
   if (bb.threatFor !== a.lastAttacker || (W.t - (bb.threatT || -99)) > 2.5) {
     bb.threatFor = a.lastAttacker;
@@ -1440,19 +2236,23 @@ function underFire(W, b, dt) {
     bb.threatAt.x = att.pos.x; bb.threatAt.z = att.pos.z;
   }
   const tp = bb.threatAt;
-  steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 4 + (a.tier || 3) * 1.6);
+  (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), SYQ[1] = 4 + (a.tier || 3) * 1.6, steerYawS(a, dt));
   // can this actually be answered — gun, ammo, reach, and a clear line?
   const slot = a.inventory.slots[a.inventory.active];
-  const def = K.WEAPONS[a.weapon && a.weapon.id];
+  const def = wdefN(a.weapon && a.weapon.id);
   if (!def || !slot || slotAmmo(a, slot) <= 0) return false;
   const dist = hyp(att.pos.x - a.pos.x, att.pos.z - a.pos.z);
   if (dist > (def.falloff ? def.falloff[1] * 1.2 : 40)) return false;
   const eye = eyePos(a, _eye_underFire);
-  if (W.map.losBlocked(eye.x, eye.y, eye.z, att.pos.x, att.pos.y + 1.2, att.pos.z)) return false;
+  const ay = att.pos.y + (att.downed ? 0.4 : 1.2);
+  if (W.smokes && W.smokes.length && smokeBlocks(W, eye.x, eye.y, eye.z, att.pos.x, ay, att.pos.z)) return false;          // (P23, C-SMOKE)
+  if (W.map.losBlocked(eye.x, eye.y, eye.z, att.pos.x, ay, att.pos.z)) return false;
   // answer it. Clearing avoidId matters: fight-fatigue may have just blacklisted
   // this very actor, which would otherwise make the bot ignore the man shooting it.
   if (bb.avoidId === att.id) { bb.avoidId = null; bb.avoidUntil = 0; }
+  bb.graceMul = 0;                                   // (P23, LC-96) he shot first: no grace for him from this bot
   if (bb.target !== att.id) { bb.target = att.id; bb.acquireT = W.t; bb.fightT = 0; }
+  else if (W.t - bb.targetSeenT > 0.9) bb.acquireT = W.t;       // (P23, LC-12) re-sighted by his hit after he was out of sight: a fresh reaction
   bb.targetSeenT = W.t;
   setTargetPos(bb, att.pos);
   if (b.state !== "ENGAGE") { b.state = "ENGAGE"; b.nextThink = 0; }
@@ -1460,11 +2260,13 @@ function underFire(W, b, dt) {
 }
 
 // (Wave 7b, S1) steerYawQ: the same turn with the wanted yaw in SYQ[0] (a call boxes a double argument)
-const SYQ = new Float64Array(1);
+const SYQ = new Float64Array(2);          // [0] the wanted yaw, [1] the turn speed for steerYawS
 function steerYaw(a, want, dt, speed) {
   SYQ[0] = want;
   steerYawQ(a, dt, speed);
 }
+/** (release blockers) steerYawQ with the speed in SYQ[1] too (underFire's tier-scaled turn: a double argument is a heap box per call) */
+function steerYawS(a, dt) { steerYawQ(a, dt, SYQ[1]); }
 function steerYawQ(a, dt, speed) {
   const want = SYQ[0];
   let d = want - a.input.yaw;
@@ -1480,7 +2282,8 @@ function steerYawQ(a, dt, speed) {
  *  A wall blocks when its box spans the hop-to-headroom band. A ramp blocks by
  *  the C-RAMP contract (rampBlocks): its sides and underside, not its slope. */
 function obstacleAt(W, x, z, y) {
-  const cols = W.map.queryColliders(x, z, 0.6);
+  // (R2 movers, item 2) the test's band: a wall spans y + 0.55 .. y + 2.0, a ramp blocks only with its walk line over y + NAV_STEP_UP (0.55) and its low edge under y + 2.0
+  const cols = W.map.queryColliders(x, z, 0.6, _bandCols, y + NAV_STEP_UP, y + 2.0);
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead) continue;
@@ -1614,29 +2417,98 @@ const WALL_LOOK = 0.9;            // metres ahead the steering probes
 const WALL_REUSE_S = 0.1;         // a held collider list stays valid this long (sim time) ...
 const WALL_REUSE_M = 0.45;        // ... and while the bot has moved less than this
 const WALL_QR = 2.4;              // list radius: capsule 0.45 + look 0.9 + margin 0.3 + the reuse drift, with slack
+// (R3 steer) the list's vertical band is the bot's OWN storey: [feet - WALL_BAND_DN, feet + WALL_BAND_UP]. R2's band ran from
+// -Infinity to feet + 12.8 m, so in a furnished two- or three-storey house a ground-floor bot was handed the walls, slabs and furniture of every storey
+// above it (houseload collider-load, steer query: x1.9-2.1 of the live build). Its readers take far less: headingBlocked the floor tops in (feet, feet + 1]
+// and the walls meeting (floor + 0.55, floor + 2.0) - on a flat floor [feet, feet + 2]; rampLegBlocked the floor and the ramps one step either side of
+// its march. roofedForJump (to 12 m) and underCeiling (to 6 m) ask their own point query (no steering reads that far up). The band the list was asked
+// for is held (bb.wallLo / wallHi): each reader checks that what it is about to read lies inside it and re-asks a wider list (wallColsSpan) when it does
+// not - a climb, a fall, a floor under a lip, terrain rising under a probe. A banded answer is the unbanded one in the same order minus colliders
+// outside the band, and every reader's test refuses a collider outside the span it checked, so every answer is what the -Infinity band gave.
+const WALL_REUSE_DY = 0.8;           // the list is re-asked once the feet have RISEN more than this since (a jump, a stair) - R2's rule, kept: the
+                                     // list's order follows where it was asked, so it is asked exactly when it always was
+const WALL_BAND_DN = 1.0;            // feet - 1 m
+const WALL_BAND_UP = 2.35;           // the flat-floor reach (feet + 2) and 0.35 m of climb; past that the reader widens the list (wallColsSpan). Under the
+                                     // 2.4 m lintels / ceiling beams of a housegen storey (seed 7, the houseload points: [feet - 1, feet + 2.35] is 15.2 / 13.1
+                                     // / 14.1 colliders a list on isla_viva / ashgrid / deepwood, [.., feet + 2.8] 16.7 / 14.7 / 15.7, R2's band 26-29)
+const _wspan = new Float64Array(2);   // wallColsSpan's [lo, hi] (a call with double arguments boxes them)
 const FIGHT_UNSTICK_S = 0.8;      // pinned this long with a move intent in ENGAGE / HEAL -> recover (the hard breaker skips them)
 const FIGHT_UNSTICK_GAP_S = 1.6;
 const _wq = [];                   // queryColliders out-param scratch
+const _rfq = [];                  // (R3 steer) roofedForJump / underCeiling's point query scratch
 const _wn = { x: 0, z: 0 };       // wall face normal scratch
 const _gh = { x: 0, z: 0 };       // heading scratch
 
-/** This bot's colliders within WALL_QR of it. ONE queryColliders per bot per 0.1 s of sim time (the budget is <= 150 a frame):
- *  every probe of the frame, any number of headings, reads the held list. queryColliders hands back every collider of the
- *  16 m cells its box touches, so the list is cut down to those within reach. A pure function of sim state (the clock is W.t). */
+/** This bot's colliders within WALL_QR of it, in the band [feet - WALL_BAND_DN, feet + WALL_BAND_UP]. ONE queryColliders per bot per 0.1 s of sim
+ *  time (the budget is <= 150 a frame): every probe of the frame, any number of headings, reads the held list - re-asked when the bot has moved
+ *  WALL_REUSE_M or risen WALL_REUSE_DY (R2's rule); a reader whose reach leaves the band held widens it (wallColsSpan). queryColliders hands back every
+ *  collider of the cells its box touches, so the list is cut down to those within reach. A pure function of sim state (the clock is W.t). */
 function wallCols(W, b) {
   const a = b.actor, bb = b.bb, list = bb.wallCols;
   const dx = a.pos.x - bb.wallX, dz = a.pos.z - bb.wallZ;
-  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M) return list;
-  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq);
-  const x0 = a.pos.x - WALL_QR, x1 = a.pos.x + WALL_QR, z0 = a.pos.z - WALL_QR, z1 = a.pos.z + WALL_QR;
+  if (W.t - bb.wallT <= WALL_REUSE_S && W.t >= bb.wallT && dx * dx + dz * dz <= WALL_REUSE_M * WALL_REUSE_M && a.pos.y <= bb.wallY + WALL_REUSE_DY) return list;
+  const got = W.map.queryColliders(a.pos.x, a.pos.z, WALL_QR, _wq, a.pos.y - WALL_BAND_DN, a.pos.y + WALL_BAND_UP);
+  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z; bb.wallY = a.pos.y; bb.wallLo = a.pos.y - WALL_BAND_DN; bb.wallHi = a.pos.y + WALL_BAND_UP;
+  return wallFill(W, b, got);
+}
+/** (R3 steer) A reader needs [_wspan[0], _wspan[1]] and the band held does not cover it: the list re-asked at the SAME point it was asked at (so it is
+ *  the held list with the colliders of the wider band put back in their places - the order a first-hit reader breaks ties by is unchanged) for that span
+ *  joined with the band held. The same list object, refilled in place: a caller's reference stays good. The ask clock is not reset. */
+function wallColsSpan(W, b) {
+  const bb = b.bb;
+  if (_wspan[0] < bb.wallLo) bb.wallLo = _wspan[0];
+  if (_wspan[1] > bb.wallHi) bb.wallHi = _wspan[1];
+  const got = W.map.queryColliders(bb.wallX, bb.wallZ, WALL_QR, _wq, bb.wallLo, bb.wallHi);
+  nav.st.wallSpan++;
+  return wallFill(W, b, got);
+}
+function wallFill(W, b, got) {
+  const bb = b.bb, list = bb.wallCols;
+  const x0 = bb.wallX - WALL_QR, x1 = bb.wallX + WALL_QR, z0 = bb.wallZ - WALL_QR, z1 = bb.wallZ + WALL_QR;
   let n = 0;                       // (Wave 8) by index, the length set once (see wallAheadQ)
   for (let i = 0; i < got.length; i++) {
     const c = got[i];
     if (c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) list[n++] = c;
   }
   if (list.length !== n) list.length = n;
-  bb.wallT = W.t; bb.wallX = a.pos.x; bb.wallZ = a.pos.z;
+  // (R3 steer) is ANY collider (any height) in the list's square? false = the -Infinity band's list would be empty too, so guardMove's "nothing
+  // near: the heading is free" exit stays exact (without it every fighting bot in the open ran the probe every frame: tierprof kb)
+  bb.wallAny = n > 0 || W.map.hasCollidersNear(bb.wallX, bb.wallZ, WALL_QR);
   return list;
+}
+/** (R3 steer) Every ramp of the map in a 4 m grid, at any height (rampLegBlocked's "is a ramp near this leg" must not depend on the list's band), and
+ *  the deepest a ramp's underside reaches below its low edge (RAMP_THICK / 2 along the slab's normal: rampBlocks' wedge), for its band check. */
+const RG = { map: null, cells: new Map(), under: 0 };
+const RG_CELL = 4;
+function rampGrid(W) {
+  if (RG.map === W.map) return RG;
+  RG.map = W.map; RG.cells = new Map(); RG.under = 0;
+  const cols = W.map.colliders || [];
+  for (let i = 0; i < cols.length; i++) {
+    const c = cols[i];
+    if (c.kind !== "ramp") continue;
+    const along = (c.dir === 0 || c.dir === 1) ? c.maxX - c.minX : c.maxZ - c.minZ;
+    const k = (c.maxY - c.minY) / Math.max(0.01, along), u = K.RAMP_THICK * 0.5 * Math.sqrt(1 + k * k);
+    if (u > RG.under) RG.under = u;
+    for (let cx = Math.floor(c.minX / RG_CELL); cx <= Math.floor(c.maxX / RG_CELL); cx++) for (let cz = Math.floor(c.minZ / RG_CELL); cz <= Math.floor(c.maxZ / RG_CELL); cz++) {
+      const key = (cx + 8192) * 16384 + (cz + 8192);
+      let l = RG.cells.get(key); if (!l) RG.cells.set(key, l = []); l.push(c);
+    }
+  }
+  return RG;
+}
+/** Is a live ramp of the map (any height) within the box [x0, x1] x [z0, z1]? The box comes in RGB (a call with double arguments boxes them). */
+const RGB = new Float64Array(4);
+function rampNear(W) {
+  const G = rampGrid(W);
+  if (!G.cells.size) return false;
+  const x0 = RGB[0], x1 = RGB[1], z0 = RGB[2], z1 = RGB[3];
+  for (let cx = Math.floor(x0 / RG_CELL); cx <= Math.floor(x1 / RG_CELL); cx++) for (let cz = Math.floor(z0 / RG_CELL); cz <= Math.floor(z1 / RG_CELL); cz++) {
+    const l = G.cells.get((cx + 8192) * 16384 + (cz + 8192));
+    if (!l) continue;
+    for (let i = 0; i < l.length; i++) { const c = l[i]; if (!c.dead && c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) return true; }
+  }
+  return false;
 }
 
 const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with double arguments boxes them: framecheck allocation)
@@ -1648,23 +2520,36 @@ const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with doubl
  *  underside are refused by the second half, rampLegBlocked, which asks the mover's own rule (the heal pocket fix: a heading
  *  into a stair's side read free here while player.js blocked it). Returns the blocking collider or null. Everything inline:
  *  this runs for every fighting bot every frame. */
-function headingBlocked(W, list, a) {
+function headingBlocked(W, list, b) {
+  const a = b.actor, bb = b.bb;
   const px = a.pos.x + _hd.x * WALL_LOOK, pz = a.pos.z + _hd.z * WALL_LOOK, y0 = a.pos.y;
+  // (R3 steer) the band: the floor test takes tops in (feet, feet + 1], the wall test spans meeting (floor + 0.55, floor + 2) - a list without the
+  // colliders it would read (the feet fell under the band, or the floor ahead is higher than the band reaches) is widened first
+  if (y0 < bb.wallLo || y0 + 2.0 > bb.wallHi) { _wspan[0] = y0; _wspan[1] = y0 + 2.0; wallColsSpan(W, b); }
   GA[0] = px; GA[1] = pz; groundA(W, GA, 0);
   let s = GA[2];
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
-    const top = c.kind === "ramp" ? rampTopAt(c, px, pz) : c.maxY;
+    let top = c.maxY;
+    if (c.kind === "ramp") {          // rampTopAt(c, px, pz), inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
+      let f;
+      if (c.dir === 0) f = (px - c.minX) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 1) f = (c.maxX - px) / Math.max(0.01, c.maxX - c.minX);
+      else if (c.dir === 2) f = (pz - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+      else f = (c.maxZ - pz) / Math.max(0.01, c.maxZ - c.minZ);
+      top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+    }
     if (top > s && top <= y0 + NAV_STEP_UP + (c.kind === "ramp" ? NAV_RAMP_EXTRA : 0)) s = top;
   }
   const fy = s > y0 ? s : y0;
+  if (fy + 2.0 > bb.wallHi) { _wspan[0] = y0; _wspan[1] = fy + 2.0; wallColsSpan(W, b); }
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp" || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
     if (c.minY < fy + 2.0 && c.maxY > fy + 0.55) return c;
   }
-  return rampLegBlocked(W, list, a);
+  return rampLegBlocked(W, list, b);
 }
 
 /** (heal pocket fix) The RAMP half of headingBlocked: does walking WALL_LOOK m along _hd run into a ramp's SIDE or UNDERSIDE?
@@ -1679,30 +2564,47 @@ function headingBlocked(W, list, a) {
  *  use, applied along the heading. Returns the blocking ramp or null. Cheap exit when no ramp is near the leg. */
 const RBQ = new Float64Array(6);          // K.rampBlocksA's numbers [x, z, yd, h, r, stepUp] (unboxed: Wave 7b, S1)
 const RAMP_STEP = 0.15;                  // march step (the mover moves < 0.1 m a tick; 0.15 m reads a stair's side the same)
-function rampLegBlocked(W, list, a) {
+function rampLegBlocked(W, list, b) {
+  const a = b.actor, bb = b.bb;
   const ax = a.pos.x, az = a.pos.z, ex = ax + _hd.x * WALL_LOOK, ez = az + _hd.z * WALL_LOOK;
   const rr = K.PLAYERK.radius, hh = K.PLAYERK.height;
   const x0 = (ax < ex ? ax : ex) - rr - 0.3, x1 = (ax < ex ? ex : ax) + rr + 0.3, z0 = (az < ez ? az : ez) - rr - 0.3, z1 = (az < ez ? ez : az) + rr + 0.3;
-  let near = false;
-  for (let i = 0; i < list.length; i++) {
-    const c = list[i];
-    if (c.kind === "ramp" && !c.dead && c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { near = true; break; }
-  }
-  if (!near) return null;
+  // (R3 steer) "a ramp near the leg" at ANY height (the map's ramp grid): the list holds only the band's ramps, and a march that climbs or drops reads
+  // ramps outside it (each step widens the list first when it does)
+  RGB[0] = x0; RGB[1] = x1; RGB[2] = z0; RGB[3] = z1;
+  if (!rampNear(W)) return null;
+  const under = RG.under;
   const n = Math.ceil(WALL_LOOK / RAMP_STEP);
   let y = a.pos.y, ox = ax, oz = az;
   for (let k = 1; k <= n; k++) {
     const x = ax + (ex - ax) * k / n, z = az + (ez - az) * k / n;
     // the floor under this step: player.js supportIn over the held list
     GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    // (R3 steer) a top over the band cannot be <= y + step if the band reaches y + step; a top under the band cannot beat a floor found inside it
+    if (y + NAV_STEP_UP > bb.wallHi) { _wspan[0] = bb.wallLo; _wspan[1] = y + NAV_STEP_UP; wallColsSpan(W, b); }
     let s = GA[2];
-    for (let i = 0; i < list.length; i++) {
-      const c = list[i];
-      if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
-      const top = c.kind === "ramp" ? rampTopAt(c, x, z) : c.maxY;
-      if (top <= y + NAV_STEP_UP && top > s) s = top;
+    for (let pass = 0; pass < 2; pass++) {
+      s = GA[2];
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+        let top = c.maxY;
+        if (c.kind === "ramp") {          // rampTopAt(c, x, z), inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
+          let f;
+          if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+          else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+          else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+          else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+          top = c.minY + (c.maxY - c.minY) * (f < 0 ? 0 : f > 1 ? 1 : f);
+        }
+        if (top <= y + NAV_STEP_UP && top > s) s = top;
+      }
+      if (s >= bb.wallLo || pass) break;
+      _wspan[0] = GA[2]; _wspan[1] = bb.wallHi; wallColsSpan(W, b);     // the step went off a lip under the band: down to the terrain, once
     }
     const yd = s > y ? s : y;
+    // (R3 steer) a ramp blocks where its underside (>= minY - under) is under the head (yd + h) and its walk line over yd + step (so its top is > yd >= the band's floor)
+    if (yd + hh + under > bb.wallHi) { _wspan[0] = bb.wallLo; _wspan[1] = yd + hh + under; wallColsSpan(W, b); }
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (c.kind !== "ramp" || c.dead) continue;
@@ -1744,19 +2646,19 @@ function guardMove(W, b, mirror) {
   const mz0 = inp.mz, mx0 = inp.mx;
   const m = Math.sqrt(mz0 * mz0 + mx0 * mx0);
   if (m < 0.1 || !a.onGround) return 0;
-  const B = K.moveBasis(inp.yaw, _mb0);
+  const B = basisOf(inp, _mb0);
   const wx = (B.fx * mz0 + B.rx * mx0) / m, wz = (B.fz * mz0 + B.rz * mx0) / m;
   const list = wallCols(W, b);
-  if (!list.length) return 0;
+  if (!list.length && !b.bb.wallAny) return 0;            // (R3 steer) nothing at any height in the list's square (see wallFill)
   _hd.x = wx; _hd.z = wz;
-  const hit = headingBlocked(W, list, a);
+  const hit = headingBlocked(W, list, b);
   if (!hit) return 0;
   let mode = 3, hx = 0, hz = 0;
   // 2. mirrored strafe
   if (mirror && mx0 !== 0 && Math.abs(mx0) > 0.1) {
     const mxx = (B.fx * mz0 - B.rx * mx0) / m, mzz = (B.fz * mz0 - B.rz * mx0) / m;
     _hd.x = mxx; _hd.z = mzz;
-    if (!headingBlocked(W, list, a)) { mode = 1; hx = mxx; hz = mzz; bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.5); }
+    if (!headingBlocked(W, list, b)) { mode = 1; hx = mxx; hz = mzz; bb.strafeDir = -bb.strafeDir; bb.strafeT = Math.max(bb.strafeT, 0.5); }
   }
   // 3. the wall tangent
   if (mode === 3) {
@@ -1773,8 +2675,8 @@ function guardMove(W, b, mirror) {
     if (Math.abs(kept) > 0.5) side = kept;
     if (side < 0) { tx = -tx; tz = -tz; }
     _hd.x = tx; _hd.z = tz;
-    if (!headingBlocked(W, list, a)) { mode = 2; hx = tx; hz = tz; }
-    else { _hd.x = -tx; _hd.z = -tz; if (!headingBlocked(W, list, a)) { mode = 2; hx = -tx; hz = -tz; } }
+    if (!headingBlocked(W, list, b)) { mode = 2; hx = tx; hz = tz; }
+    else { _hd.x = -tx; _hd.z = -tz; if (!headingBlocked(W, list, b)) { mode = 2; hx = -tx; hz = -tz; } }
     if (mode === 2) {
       // PING-PONG: a slide that has to reverse (the wall ended in a corner) twice inside a few seconds is a bot walking back
       // and forth along a wall with its goal on the far side of it - net displacement ~0 over 3 s although it never stops
@@ -1797,7 +2699,11 @@ function guardMove(W, b, mirror) {
  *  dodge hop is an outdoor move: under a low ceiling the head meets the slab and a capsule jammed under it is blocked in every
  *  direction, and under a high one it is a bot pogo-ing in a house (the plan: "no random fight hop under a roof"). */
 function roofedForJump(W, b) {
-  const a = b.actor, list = wallCols(W, b);
+  // (R3 steer) its own query, the test's own box and band (the 0.45 margin, 1-12 m over the feet): the steering list holds one storey. wallCols is
+  // still asked here first - the held list is re-asked where and when it always was (its order is the order of that ask)
+  wallCols(W, b);
+  const a = b.actor, list = W.map.queryColliders(a.pos.x, a.pos.z, 0.45, _rfq, a.pos.y + 1.0, a.pos.y + 12.0);
+  nav.st.roofQ++;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -2321,7 +3227,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -2636,7 +3542,7 @@ function townExitPath(W, sx, sy, sz, tx, tz) {
     if (cx < r.minX || cx > r.maxX || cz < r.minZ || cz > r.maxZ) continue;
     const g = W.map.heightAt(cx, cz);
     if (g < W.map.waterY + 0.5) continue;
-    const cols = W.map.queryColliders(cx, cz, 1.6);
+    const cols = W.map.queryColliders(cx, cz, 1.6, _bandCols, g - 0.5, g + 4.0);      // (R2 movers, item 2) the test's own band
     let free = true;
     for (let i = 0; i < cols.length && free; i++) {
       const c = cols[i];
@@ -2687,13 +3593,14 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
 export function debugNav() {
   return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
     // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
-    headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b.actor); },
-    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b.actor); },
+    headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b); },
+    rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b); },
     // (Wave 8) the room graph, for the probes: where a point is (house, room, storey) and the brain's own room
     roomAt: (W, x, y, z) => { const i = roomAt(W, x, y, z); return i < 0 ? null : { house: IND.R[i].h.id, room: IND.R[i].r.id, kind: IND.R[i].r.kind, floor: IND.R[i].f, index: i }; },
     indoors: () => ({ houses: IND.H ? IND.H.length : 0, rooms: IND.R.length, built: IND.built }),
     roomRoute: (from, to) => { const L = roomRoute(from, to); if (!L) return null; linkTarget(from, L); return { to: L.to, door: L.d ? L.d.id : null, stair: L.s ? L.s.id : null, at: [LT[0], LT[1], LT[2]], exitDoor: to === -1 && _bfsEnd && _bfsEnd.d ? _bfsEnd.d.id : null }; },
     occAny: (W, x, z, r) => occAny(W, x, z, r),
+    dropStats: () => Object.assign({}, dropSt),       // (R2 movers) the last assignDrops' landing-spot census
     houseExitPath: (W, b) => houseExitPath(W, b), roomHopPath: (W, sx, sy, sz, tx, tz, ty) => roomHopPath(W, sx, sy, sz, tx, tz, ty) };
 }
 
@@ -3010,7 +3917,7 @@ const HELD_RETRY_S = 1.0;         // ... and at most this often
 const _dkx = { x: 0, z: 0, d: 0 };
 /** A wall in the walk band at (x,z) for feet at y that is too tall to hop: its box (0.45 m = the capsule) spans from above y + hop to below the head. */
 function tallWallAt(W, x, z, y, hop) {
-  const cols = W.map.queryColliders(x, z, 0.8);
+  const cols = W.map.queryColliders(x, z, 0.8, _bandCols, y + hop, y + 2.0);      // (R2 movers, item 2) the test's own band
   for (let i = 0; i < cols.length; i++) {
     const c = cols[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -3022,7 +3929,9 @@ function tallWallAt(W, x, z, y, hop) {
 /** Is the bot's own spot under a ceiling: a slab or a wide box whose footprint holds the bot's centre, from 1.8 m (its head) to 6 m over its feet. roofedForJump's test also counts
  *  a thin wall a storey up that the bot's 0.45 m margin touches - which is what a bot on the outer ledge of a wall top has over its head, and it is NOT under a roof. */
 function underCeiling(W, b) {
-  const a = b.actor, list = wallCols(W, b);
+  wallCols(W, b);                                        // (R3 steer) as roofedForJump: its own point query, the held list asked as it always was
+  const a = b.actor, list = W.map.queryColliders(a.pos.x, a.pos.z, 0, _rfq, a.pos.y + 1.8, a.pos.y + 6.0);
+  nav.st.roofQ++;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.dead || c.kind === "ramp") continue;
@@ -3046,7 +3955,11 @@ function deckExitPoint(W, a, preferYaw) {
       const sup = supportAt(W, x, z, h);
       if (sup < h - DECK_DROP) {
         if (W.map.heightAt(x + dx * 1.5, z + dz * 1.5) < wy + 0.4) break;      // the ground under the edge is water
-        const cost = s + Math.abs(off) * 6;
+        // (P23, C-FALL) with fall damage a drop is not free: never an edge that kills (walkDrop: a quarter of the hp left), and a lower edge is preferred
+        // (+0.5 a hit point). Without fall damage in the sim: Infinity / 0, the old choice.
+        const drop = h - sup;
+        if (drop > walkDrop(a)) break;
+        const cost = s + Math.abs(off) * 6 + fallDmgForDrop(drop) * 0.5;
         if (cost < best) { best = cost; _dkx.x = x + dx * 2.0; _dkx.z = z + dz * 2.0; _dkx.d = s; }
         break;
       }
@@ -3078,8 +3991,15 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
  *  (actLoot, actMove, actEngage, coverStep) use this form: a call boxes every double argument and the returned double. */
 const MTQ = new Float64Array(3);
 function moveTowardQ(W, b, dt, sprint, ty) {
-  const tx = MTQ[0], tz = MTQ[1];
   const a = b.actor, inp = a.input, bb = b.bb;
+  // (R2 movers) a committed break-out (trapBreak) walks its own goal while it lasts, in the travelling states; the caller still gets the distance to ITS goal
+  const ox = MTQ[0], oz = MTQ[1];
+  let tx = ox, tz = oz;
+  if (W.t < bb.escUntil) {
+    const ex = bb.escX - a.pos.x, ez = bb.escZ - a.pos.z;
+    if (!MOVING_STATES[b.state] || ex * ex + ez * ez < 1.5 * 1.5) bb.escUntil = -99;
+    else { tx = bb.escX; tz = bb.escZ; ty = undefined; }
+  }
   /* PROGRESS stuck, as opposed to FROZEN stuck.
      The speed test at the top of act() only accumulates bb.stuckT when the bot
      moves less than 0.02 m in a frame — i.e. pinned solid. A bot grinding along
@@ -3133,7 +4053,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
        the SAME item every time, so the bot escaped the wall and walked straight
        back into it. Park this id for 30 s and let it pick something else. */
     if (bb.lootId && !routed) {
-      if (!bb.badLoot) bb.badLoot = {};
+      if (!bb.badLoot) bb.badLoot = Object.create(null);
       bb.badLoot[bb.lootId] = W.t + 30;
       bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
     }
@@ -3144,7 +4064,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   if (bb.path && bb.pathGoal) { qx = tx - bb.pathGoal.x; qz = tz - bb.pathGoal.z; if (Math.sqrt(qx * qx + qz * qz) > 8) { bb.path = null; bb.pathGoal = null; } }
   // (Wave 5) a goal on another floor needs a ROUTE (the stairs), not a straight walk at it: plan one as soon as it is in
   // reach of the planner's window instead of waiting for a wall to stop the bot (requestPath is rate-limited to 2.5 s)
-  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; requestPath(W, b, tx, tz, ty); }
+  if (wrongFloor && !bb.path && goalD < WRONG_FLOOR_PLAN_M) { reqWhy = 2; if (!((bb.nextPathT || 0) > W.t)) requestPath(W, b, tx, tz, ty); }      // (requestPath's own first test, here: the call boxes its numbers)
   // (Wave 7, round 2) a bot on a roof / wall top whose path request came back with "no route" and whose goal is well below it walks off the nearest open edge
   if (!bb.path && a.onGround && bb.noRouteT > W.t - DECK_NOROUTE_S && W.t >= bb.deckT && (ty != null ? ty : W.map.heightAt(tx, tz)) < a.pos.y - 2.5) {
     bb.deckT = W.t + DECK_RETRY_S;
@@ -3234,7 +4154,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   if ((!(bb.path && (bb.path.nav || bb.path.exit)) && ((WAQ[0] = want), (WAQ[1] = bb.path ? Math.min(3.2, Math.max(0.8, legD)) : 3.2), wallAheadQ(W, a))) ||
       (bb.stuckT > 0.3 && ((WAQ[0] = want), (WAQ[1] = 0.9), wallAheadQ(W, a)))) {
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
-    reqWhy = 4; requestPath(W, b, tx, tz, ty);
+    reqWhy = 4; if (!((bb.nextPathT || 0) > W.t)) requestPath(W, b, tx, tz, ty);      // (requestPath's own first test, here: a walled bot asked every frame)
     if (!bb.wallSide) bb.wallSide = !((WAQ[0] = want + 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? 1 : (!((WAQ[0] = want - 0.9), (WAQ[1] = 3.2), wallAheadQ(W, a)) ? -1 : 1);
     if (!bb.path) {
       // The slide itself must not walk the bot somewhere it cannot leave. Sliding
@@ -3264,7 +4184,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
      Savanna: 8 of 80 upper-floor walks failed). The grid certified each leg for a walker that heads straight at the next waypoint, so the
      move direction is that line NOW, expressed in the current yaw's frame (fireOnTheMove's reprojection); the yaw still turns smoothly. */
   if (bb.path && bb.path.nav && !holdStill) {
-    const bq = K.moveBasis(inp.yaw, _mb0), wdx = -Math.sin(want), wdz = -Math.cos(want);
+    const bq = basisOf(inp, _mb0), wdx = -Math.sin(want), wdz = -Math.cos(want);
     inp.mz = wdx * bq.fx + wdz * bq.fz;
     inp.mx = wdx * bq.rx + wdz * bq.rz;
   }
@@ -3343,7 +4263,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
   // (pinned: stuckT - frozen legs - or the pin window - a bot jittering 2-3 cm a frame in a nook never runs stuckT up, the 0.5 s net-displacement window sees it)
   // (K2, re-run) ... and every frame of its committed window (offFurnUntil): the flags above come and go frame by frame
   if (inHouse && a.onGround && (bb.heldN > 0 || holdStill || bb.stuckT > 0.3 || bb.pinN >= 1 || W.t < bb.offFurnUntil) && offFurniture(W, b, dt)) { bb.heldN = 0; bb.heldAcc = 0; }
-  qx = tx - a.pos.x; qz = tz - a.pos.z;
+  qx = ox - a.pos.x; qz = oz - a.pos.z;
   MTQ[2] = Math.sqrt(qx * qx + qz * qz);
 }
 
@@ -3390,7 +4310,7 @@ function offFurniture(W, b, dt) {
   }
   // a loot goal a few metres off is what led the bot in (an item in the pocket / on the piece): park it, or the bot walks back in the moment it is out
   if (bb.lootId && bb.moveTo && hyp(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) < 4) {
-    if (!bb.badLoot) bb.badLoot = {};
+    if (!bb.badLoot) bb.badLoot = Object.create(null);
     bb.badLoot[bb.lootId] = W.t + 30;
     bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
   }
@@ -3398,7 +4318,7 @@ function offFurniture(W, b, dt) {
   SYQ[0] = bb.offFurnYaw; steerYawQ(a, dt, 20);
   // a pocket on the FLOOR is often closed by low pieces (a side table, a chair): pinned there, hop (a 0.85 m table is in reach: then this walks off it)
   if (dy < 0.3 && (bb.stuckT > 0.7 || bb.pinN >= 1) && bb.nextJumpT <= W.t) { a.input.jump = true; bb.nextJumpT = W.t + 0.9; }
-  const B = K.moveBasis(a.input.yaw, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
+  const B = basisOf(a.input, _mb0), wdx = -Math.sin(bb.offFurnYaw), wdz = -Math.cos(bb.offFurnYaw);
   a.input.mz = wdx * B.fx + wdz * B.fz; a.input.mx = wdx * B.rx + wdz * B.rz; a.input.sprint = false;
   return true;
 }
@@ -3413,8 +4333,8 @@ function fireOnTheMove(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
   if (!t || !t.alive || W.t - bb.targetSeenT > 0.4) return;
-  if (W.t - bb.acquireT < b.tierK.reactionMs / 1000) return;
-  const def = K.WEAPONS[a.weapon ? a.weapon.id : "pistol"] || K.WEAPONS.pistol;
+  if (W.t - bb.acquireT < b.tierK.reactionMs / 1000 + (bb.graceMul > 0 && !t.isBot ? bb.graceMul * GRACE_REACT_S : 0)) return;   // (P23, LC-96) the grace delay too
+  const def = wdefN(a.weapon ? a.weapon.id : "pistol") || wdefN("pistol");
   if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) {
     /* An empty mag is only a reload if there is something to reload FROM.
        weapons.js:381 refuses the reload when the matching reserve is 0, so a
@@ -3431,15 +4351,16 @@ function fireOnTheMove(W, b, dt) {
   const dist = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
   if (dist > (def.falloff ? def.falloff[1] * 1.15 : 30)) return;
   // capture the state's move intent as a WORLD direction before touching yaw
-  const b0 = K.moveBasis(inp.yaw, _mb0);
+  const b0 = basisOf(inp, _mb0);
   const wx = b0.fx * inp.mz + b0.rx * inp.mx, wz = b0.fz * inp.mz + b0.rz * inp.mx;
   const eye = eyePos(a, _eye_fireOnTheMove);
   const aimY = t.pos.y + K.actorHeight(t) * 0.64;
-  const err = (b.tierK.aimErrDeg * 1.5 * Math.PI) / 180;
+  const gmv = bb.graceMul > 0 && !t.isBot && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4) ? bb.graceMul : 0;   // (P23, LC-96)
+  const err = (b.tierK.aimErrDeg * 1.5 * (1 + GRACE_ERR * gmv) * Math.PI) / 180;
   bb.errPhase = (bb.errPhase || b.rng() * 9) + dt * 3.1;
-  steerYaw(a, Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, dt, 10);
+  (SYQ[0] = Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, steerYawQ(a, dt, 10));
   inp.pitch = K.clamp(Math.atan2(aimY - eye.y, dist) + Math.cos(bb.errPhase * 0.83) * err * 0.6, -1.3, 1.3);
-  const b1 = K.moveBasis(inp.yaw, _mb1);
+  const b1 = basisOf(inp, _mb1);
   inp.mz = wx * b1.fx + wz * b1.fz;
   inp.mx = wx * b1.rx + wz * b1.rz;
   inp.fire = true;
@@ -3480,7 +4401,8 @@ function actLoot(W, b, dt) {
   // (Wave 8 fix round, lane K2) los = true: a HOUSE item / chest is taken only along a clear line from the bot's chest (loot.js pickLos, the player's rule) -
   // a bot on the street used to take the gun on a shelf behind the wall. The bot walks to the thing's STAND point (setLootGoal) so the line is clear there.
   const near = nearGoal ? W.nearbyLoot(a.pos, 2.4, 2.2, true) : _noLoot;
-  for (const n of near) {
+  if (bb.roomFor && bb.roomFor === bb.lootId && mt && hyp(mt.x - a.pos.x, mt.z - a.pos.z) < 3.5) makeRoom(W, b);
+  for (let _i4029 = 0, _l4029 = near; _i4029 < _l4029.length; _i4029++) { const n = _l4029[_i4029];
     if (n.type === "chest") {
       // chests take a 2s channel — bots obey the same rule as the player
       if (bb.chestId !== n.id) { bb.chestId = n.id; bb.chestT = 0; }
@@ -3508,7 +4430,7 @@ function actLoot(W, b, dt) {
     if (IND.H !== null && bb.lootId && bb.moveTo && d < LOOT_NEAR_M) {
       bb.nearLootT += dt;
       if (bb.nearLootT > 2.5) {
-        if (!bb.badLoot) bb.badLoot = {};
+        if (!bb.badLoot) bb.badLoot = Object.create(null);
         bb.badLoot[bb.lootId] = W.t + 30;
         bb.lootId = null; bb.moveTo = null; bb.nearLootT = 0; b.nextThink = 0; nav.st.lootParked++;
       }
@@ -3536,14 +4458,14 @@ function actSupply(W, b, dt) {
 
 /** Ammo a slot can actually put downrange right now (mag + matching reserve). */
 function slotAmmo(a, s) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return 0;
   const mag = s.mag != null ? s.mag : 0;
   return mag + (a.inventory.ammo[def.ammo] || 0);
 }
 /** Sustained DPS of a slot, rarity-weighted. Fallback only (sim without gunValueAt). */
 function slotScore(a, s) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return -1;
   if (slotAmmo(a, s) <= 0) return 0;                       // a dry gun is worth nothing
   const pellets = def.pellets || 1;                        // without this a legendary
@@ -3591,7 +4513,7 @@ const _gvOpts = { ehp: 150, speed: 0, mag: 0, reserve: 0, aimDeg: undefined, tra
  *  only). No fight: the next one is assumed to be against someone strafing at walk
  *  speed while this bot strafes too (actEngage strafes at mx = +-1 inside 50 m). */
 function slotValue(a, s, dist, ehp, speed, tgtSpeed, tgtAir) {
-  const def = K.WEAPONS[s.id];
+  const def = wdefN(s.id);
   if (!def) return -1;
   if (!K.gunValueAt) return slotScore(a, s);
   const reserve = a.inventory.ammo[def.ammo] || 0;
@@ -3676,7 +4598,7 @@ function chooseGun(W, a) {
   for (let i = 0; i < sl.length; i++) {
     const s = sl[i];
     if (!s || s.kind !== "weapon" || slotAmmo(a, s) <= 0) continue;
-    const def = K.WEAPONS[s.id];
+    const def = wdefN(s.id);
     if (!def) continue;
     const reach = dist == null || dist <= fireRangeM(def);
     if (reach) anyReach = true;
@@ -3741,6 +4663,8 @@ function ensureGunOut(W, a) {
   // onto the first gun it ever touched, never upgraded, and — once mag AND
   // reserve hit zero — stood in the open aiming correctly and pulling a dead
   // trigger while a loaded pistol sat in slot 0.
+  const bb0 = a.brain && a.brain.bb;
+  if (bb0 && bb0.nadeS) return;                 // (P23) a throw holds the throwable until it is gone (throwRun / endThrow)
   const g = chooseGun(W, a);
   if (!g.swap) return;
   W.equipSlot(a, g.bestIdx);
@@ -3763,6 +4687,7 @@ const SWAP_GATE_S = 1.2;
 function actHeal(W, b, dt) {
   const a = b.actor, bb = b.bb;
   if (!a.healing) {
+    if (bb.nadeS) return;                        // (P23) the smoke goes first (throwRun owns this frame)
     if (!startHeal(W, a)) {
       // Second line of defence behind the usability predicate above: if a heal
       // ever fails anyway, refuse to re-enter HEAL for a few seconds instead of
@@ -3771,6 +4696,12 @@ function actHeal(W, b, dt) {
       b.bb.healBlockedUntil = W.t + 4;
       b.state = "WANDER"; b.nextThink = 0.35 + b.rng() * 0.4;
     }
+    return;
+  }
+  // (P23, LC-20) a heal popped behind a cover wall stays behind the wall (the wall is why it was safe to start)
+  if (bb.coverState === "IN" && bb.coverPt && hyp(bb.coverPt.x - a.pos.x, bb.coverPt.z - a.pos.z) < COVER_ARRIVE + 0.6) {
+    a.input.mx = 0; a.input.mz = 0; a.input.sprint = false;
+    if (bb.targetPos) (SYQ[0] = Math.atan2(-(bb.targetPos.x - a.pos.x), -(bb.targetPos.z - a.pos.z)), steerYawQ(a, dt, 6));
     return;
   }
   // Healing used to zero movement outright, which pinned a bot in the open for
@@ -3801,9 +4732,9 @@ function actHeal(W, b, dt) {
     // free of walls and not toward the threat, and express that WORLD heading in the yaw frame the mover will use.
     const fan = pickRetreat(W, b, wallCols(W, b), ux, uz);
     const face = bb.targetPos ? Math.atan2(dx, dz) : (fan ? Math.atan2(-_gh.x, -_gh.z) : Math.atan2(-ux, -uz));
-    steerYaw(a, face, dt, 8);
+    (SYQ[0] = face, steerYawQ(a, dt, 8));
     if (fan) {
-      const B = K.moveBasis(a.input.yaw, _mb0);
+      const B = basisOf(a.input, _mb0);
       a.input.mz = _gh.x * B.fx + _gh.z * B.fz;              // backing off at the slowed heal speed
       a.input.mx = _gh.x * B.rx + _gh.z * B.rz;
     } else { a.input.mz = 0; a.input.mx = 0; }               // walled in: hold the corner and finish the heal there
@@ -3841,7 +4772,7 @@ function pickRetreat(W, b, list, ux, uz) {
   const gi = IND.H !== null ? myRoom(W, b) : -1;
   if (W.t - bb.hdT < 0.6 && bb.hdX * ux + bb.hdZ * uz > -0.17) {
     _hd.x = bb.hdX; _hd.z = bb.hdZ;
-    if (!headingBlocked(W, list, a) && !(gi >= 0 && retreatPocket(IND.R[gi], a, bb.hdX, bb.hdZ))) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
+    if (!headingBlocked(W, list, b) && !(gi >= 0 && retreatPocket(IND.R[gi], a, bb.hdX, bb.hdZ))) { _gh.x = bb.hdX; _gh.z = bb.hdZ; return true; }
   }
   const side = bb.healSide;
   for (let k = 0; k < RETREAT_FAN.length; k++) {
@@ -3850,7 +4781,7 @@ function pickRetreat(W, b, list, ux, uz) {
     const hx = ux * c - uz * s, hz = ux * s + uz * c;
     if (W.t < bb.hdBadUntil && hx * bb.hdBadX + hz * bb.hdBadZ > 0.9) continue;    // the heading a pin just proved wrong
     _hd.x = hx; _hd.z = hz;
-    if (headingBlocked(W, list, a)) continue;
+    if (headingBlocked(W, list, b)) continue;
     if (gi >= 0 && retreatPocket(IND.R[gi], a, hx, hz)) continue;
     // a REVERSAL of the retreat inside a second (the way it was going just closed): hold the corner instead of pacing - for at most
     // HEAL_HOLD_S. (Wave 7b, S1) The hold renewed itself (it set hdT, which re-armed the 1 s window on every frame of the hold), so a healer
@@ -3882,6 +4813,661 @@ function actCamp(W, b, dt) {
   a.input.ads = true;
   a.input.crouch = true;
   a.input.yaw += dt * 0.25;
+}
+
+// ── (P23) SQUAD, DBNO, THROWABLES, FALLS ─────────────────────────────────────────────────────────────────────────────────────────────────
+/** (C-SMOKE) the target is behind a live smoke from this bot's eye: back-date the sighting past ENGAGE's 0.4 s window. */
+function smokeCut(W, b) {
+  const a = b.actor, bb = b.bb;
+  const t = W.actorById.get(bb.target);
+  if (!t || !t.alive) return;
+  const eye = eyePos(a, _eye_perceive);
+  if (smokeBlocks(W, eye.x, eye.y, eye.z, t.pos.x, t.pos.y + (t.downed ? 0.4 : 1.2), t.pos.z)) { bb.targetSeenT = W.t - 0.41; nav.st.smokeCuts++; }
+}
+/** (C-DBNO) the nearest downed squadmate within REVIVE_SEEK_M that nobody else is reviving (this bot's own claim counts as free). */
+function downedMate(W, b) {
+  const a = b.actor;
+  let best = null, bd = REVIVE_SEEK_M;
+  for (let _i4455 = 0, _l4455 = W.actors; _i4455 < _l4455.length; _i4455++) { const t = _l4455[_i4455];
+    if (t === a || !t.alive || !t.downed || !sameTeam(a, t)) continue;
+    const by = reviving.get(t.id);
+    if (by && by !== a.id) continue;
+    const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+/** (C-DBNO) a knocked bot: crawl to the nearest standing squadmate within 80 m (he is the one who can pick it up), else away from whoever
+ *  knocked it, toward the circle; hold still while someone revives it. Never fires, loots or heals (player.js / loot.js gate those too). */
+function actDowned(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  inp.fire = false; inp.sprint = false; inp.ads = false; inp.crouch = false; inp.jump = false; inp.reload = false;
+  if (reviving.has(a.id) || a._revivedBy) { inp.mx = 0; inp.mz = 0; return; }     // (a._revivedBy: player.js's channel, a human or a bot on it)
+  let best = null, bd = 80;
+  for (let _i4471 = 0, _l4471 = W.actors; _i4471 < _l4471.length; _i4471++) { const t = _l4471[_i4471];
+    if (t === a || !t.alive || t.downed || !sameTeam(a, t)) continue;
+    const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (best) {
+    if (bd > K.REVIVE_RANGE * 0.75) { MTQ[0] = best.pos.x; MTQ[1] = best.pos.z; moveTowardQ(W, b, dt, false, best.pos.y); }   // (D3) inside his reach
+    inp.sprint = false;
+    return;
+  }
+  const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
+  if (att && att.alive) {
+    let dx = a.pos.x - att.pos.x, dz = a.pos.z - att.pos.z;
+    const d = hyp(dx, dz) || 1;
+    let fx = a.pos.x + dx / d * 20, fz = a.pos.z + dz / d * 20;
+    if (W.stormCtl) { const st = W.stormCtl.storm.stateAt(W.t), c = st.nextCenter || st.center; fx = fx * 0.6 + c.x * 0.4; fz = fz * 0.6 + c.z * 0.4; }
+    MTQ[0] = fx; MTQ[1] = fz; moveTowardQ(W, b, dt, false);
+  }
+  inp.sprint = false;
+}
+/** (C-DBNO) the revive channel, the chest channel's rules: walk to the squadmate, stand within reviveR() (0.8 x K.REVIVE_RANGE), hold K.REVIVE_S. A bot breaks it
+ *  off when it is being shot hard (its own bar under 60 after a hit during the channel) - it answers the shooter and comes back. */
+function actRevive(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const t = bb.reviveId ? W.actorById.get(bb.reviveId) : null;
+  if (!t || !t.alive || !t.downed) {
+    if (bb.reviveStarted && t && t.alive && PLAYER_REVIVE(W)) { if (reviving.get(t.id) === a.id) reviving.delete(t.id); bb.reviveStarted = false; nav.st.revives++; }   // player.js revived him
+    else if (bb.reviveStarted) cancelRevive(W, b, true);
+    bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return;
+  }
+  const by = reviving.get(t.id);
+  if (by && by !== a.id) { bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }       // someone else got there first
+  const d = hyp(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
+  if (!bb.reviveStarted) {
+    if (d > reviveR() || Math.abs(t.pos.y - a.pos.y) > 1.5) {
+      // (C-SMOKE) cover the pick-up: a threat seen in the last 8 s within 90 m, a smoke in the bag -> smoke the downed mate first
+      if (d < 14 && !bb.nadeS && !bb.smokeWant && bb.targetPos && W.t - bb.targetSeenT < 8 && W.t >= bb.nadeNextT) {
+        const tx = bb.targetPos.x - t.pos.x, tz = bb.targetPos.z - t.pos.z, td = hyp(tx, tz);
+        if (td > 10 && td < 90 && throwSlot(a, 2) >= 0) beginThrow(W, b, 2, t.pos.x + tx / td * 2.5, t.pos.y, t.pos.z + tz / td * 2.5);
+      }
+      MTQ[0] = t.pos.x; MTQ[1] = t.pos.z; moveTowardQ(W, b, dt, d > 8, t.pos.y);
+      return;
+    }
+    if (bb.nadeS) { inp.mx = 0; inp.mz = 0; return; }                 // let the smoke go first
+    if (t._revivedBy && t._revivedBy !== a.id) { bb.reviveId = null; b.state = "WANDER"; b.nextThink = 0; return; }   // a human (player.js) is on him
+    bb.reviveStarted = true; bb.reviveT = 0; bb.reviveHurtT = a.lastDamageT || -99;
+    reviving.set(t.id, a.id);
+    if (!PLAYER_REVIVE(W)) W.events.emit("reviveStart", a, t);       // player.js emits its own when it runs the channel
+  }
+  inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.crouch = true;
+  (SYQ[0] = Math.atan2(-(t.pos.x - a.pos.x), -(t.pos.z - a.pos.z)), steerYawQ(a, dt, 6));
+  if (d > K.REVIVE_RANGE) { cancelRevive(W, b); return; }               // he crawled off / was pushed past the reach: walk up again
+  if ((a.lastDamageT || -99) > bb.reviveHurtT && a.hp + a.shield < 60) {   // shot hard mid-channel: fight first
+    cancelRevive(W, b);
+    b.state = "ENGAGE"; b.nextThink = 0;
+    return;
+  }
+  if (PLAYER_REVIVE(W)) {
+    // player.js owns the channel (reviveStep: HOLD E within K.REVIVE_RANGE for K.REVIVE_S, its events, completeRevive): hold the key, watch it end.
+    // A refusal (canRevive false: out of reach on the stairs, someone else on him) walks up again rather than holding E at nothing.
+    if (!W.canRevive(a, t) && a._reviveOf !== t.id) { cancelRevive(W, b, true); return; }
+    inp.interactDown = true;
+    return;
+  }
+  bb.reviveT += dt;
+  if (bb.reviveT >= K.REVIVE_S) {
+    bb.reviveStarted = false; bb.reviveT = 0; bb.reviveId = null;
+    reviving.delete(t.id);
+    finishRevive(W, t, a);
+    nav.st.revives++;
+    b.state = "WANDER"; b.nextThink = 0;
+  }
+}
+function cancelRevive(W, b, quiet) {
+  const a = b.actor, bb = b.bb;
+  const t = bb.reviveId ? W.actorById.get(bb.reviveId) : null;
+  if (bb.reviveStarted) {
+    if (t && reviving.get(t.id) === a.id) reviving.delete(t.id);
+    if (!PLAYER_REVIVE(W) && (!quiet || (t && t.alive))) W.events.emit("reviveCancel", a, t || null);   // player.js: releasing E is its cancel
+  }
+  bb.reviveStarted = false; bb.reviveT = 0;
+}
+/** (C-MODE / C-PING) FOLLOW: to a formation spot beside the leader; PING: to the pinged spot; ASSIST: to where the squadmate's fight is. */
+function actSquadMove(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  let tx, tz, ty, arrive = 4;
+  if (b.state === "FOLLOW") {
+    const L = leaderOf(W, b);
+    if (!L) { b.state = "WANDER"; b.nextThink = 0; return; }
+    formOff(formIndex(W, a), _fo);
+    // the spot is BEHIND-BESIDE him on his own floor: his position plus the formation offset turned into his facing
+    const cy = Math.cos(L.yaw || 0), sy = Math.sin(L.yaw || 0);
+    tx = L.pos.x + _fo.x * cy + _fo.z * sy * 0.6; tz = L.pos.z - _fo.x * sy + _fo.z * cy * 0.6; ty = L.pos.y;
+    arrive = 5;
+  } else if (b.state === "PING") {
+    const p = bb.ping;
+    if (!p || W.t - p.t > 30) { bb.ping = null; b.state = "WANDER"; b.nextThink = 0; return; }
+    tx = p.x; tz = p.z; ty = p.y; arrive = 6;
+  } else {
+    const s = bb.assist;
+    if (!s || W.t - s.t > 8) { b.state = "WANDER"; b.nextThink = 0; return; }
+    tx = s.x; tz = s.z; arrive = 10;
+  }
+  const d = hyp(tx - a.pos.x, tz - a.pos.z);
+  if (d < arrive) {
+    if (b.state === "PING") { bb.ping = null; b.nextThink = 0; }
+    if (b.state === "ASSIST") { bb.assist.t = -99; b.nextThink = 0; }
+    inp.mx = 0; inp.mz = 0;
+    return;
+  }
+  MTQ[0] = tx; MTQ[1] = tz; moveTowardQ(W, b, dt, d > 12, ty);
+}
+
+// THROWABLES (LC-14 frag, C-SMOKE smoke). A consumable whose def has `throws` is thrown by weapons.js stepThrow: equip it, aim, pull the
+// trigger once. A smoke is told from a frag by its id or its weapon def (`smoke`, or no damage); nothing here knows the smoke lane's names.
+function isSmokeDef(id, c) {
+  const w = wdefN(c.throws);
+  return id.indexOf("smoke") >= 0 || String(c.throws).indexOf("smoke") >= 0 || !!(w && (w.smoke || !(w.damage > 0)));
+}
+/** Inventory slot of a throwable of kind 1 (frag) / 2 (smoke) with something left, or -1. */
+function throwSlot(a, kind) {
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2 || s2.kind !== "consumable" || !(s2.count > 0)) continue;
+    const c = K.CONSUMABLES[s2.id];
+    if (!c || !c.throws) continue;
+    if ((kind === 2) === isSmokeDef(s2.id, c)) return i;
+  }
+  return -1;
+}
+const _arc = { el: 0, x: 0, y: 0, z: 0, ok: false };
+/** Elevation for a throw from (ox,oy,oz) to land at (tx,ty,tz): the closed-form ballistic angle for K.FRAG's speed and gravity (fragLaunch
+ *  throws at the aim's elevation + loft, so the aim pitch is this minus loft). high = the lob. NaN = out of reach. */
+function throwElev(d, dy, high) {
+  const F = K.FRAG || { speed: 20, gravity: -15 };
+  const v = F.speed, g = Math.abs(F.gravity), v2 = v * v;
+  const disc = v2 * v2 - g * (g * d * d + 2 * dy * v2);
+  if (disc < 0 || d < 0.5) return NaN;
+  return Math.atan((v2 + (high ? 1 : -1) * Math.sqrt(disc)) / (g * d));
+}
+const _arcCols = [];
+/** Where a throw at elevation `el` along heading (hx,hz) from the eye first meets the world: the exact parabola in 1/40 s steps against the terrain
+ *  and against the colliders of ONE query round the flight (never one query per step: framecheck's queryColliders budget). Into _arc. */
+function arcLanding(W, ox, oy, oz, hx, hz, el, d) {
+  const F = K.FRAG || { speed: 20, gravity: -15 };
+  const vh = Math.cos(el) * F.speed, vy = Math.sin(el) * F.speed, g = F.gravity;
+  const mx = ox + hx * d * 0.5, mz = oz + hz * d * 0.5;
+  const cols = W.map.queryColliders(mx, mz, d * 0.5 + 2, _arcCols);
+  let px = ox, py = oy, pz = oz;
+  for (let i = 1; i <= 160; i++) {
+    const t = i / 40, cx = ox + hx * vh * t, cy = oy + vy * t + 0.5 * g * t * t, cz = oz + hz * vh * t;
+    if (cols.length && K.segmentColliders) {
+      const sh = K.segmentColliders(px, py, pz, cx, cy, cz, cols);
+      if (sh && sh.t > 0) { _arc.x = px + (cx - px) * sh.t; _arc.y = py + (cy - py) * sh.t; _arc.z = pz + (cz - pz) * sh.t; _arc.ok = true; return _arc; }
+    }
+    const h = W.map.heightAt(cx, cz);
+    if (cy <= h) { _arc.x = cx; _arc.y = h; _arc.z = cz; _arc.ok = true; return _arc; }
+    px = cx; py = cy; pz = cz;
+  }
+  _arc.ok = false;
+  return _arc;
+}
+/** Plan a throw of kind (1 frag / 2 smoke) at (tx,ty,tz): pick the low arc, or the lob when the low arc meets a wall short of the spot; aim error by
+ *  tier (seeded draws: a throw only happens with a throwable in the bag, so a lobby without them draws exactly what it drew). false = no clean arc. */
+function beginThrow(W, b, kind, tx, ty, tz) {
+  const a = b.actor, bb = b.bb;
+  const slot = throwSlot(a, kind);
+  if (slot < 0 || a.healing || a.swimming || !a.onGround) return false;
+  const eye = eyePos(a, _eye_actEngage);
+  let dx = tx - eye.x, dz = tz - eye.z;
+  const d0 = hyp(dx, dz);
+  if (d0 < 2) return false;
+  // a tier's throw is as good as its aim: up to +-2.2 m long/short and a few degrees off for a tier 1, +-0.6 m for a tier 5
+  const tier = b.tierNow || a.tier || 3;
+  const longErr = (b.rng() - 0.5) * 2 * (2.6 - tier * 0.4), yawErr = (b.rng() - 0.5) * 2 * b.tierK.aimErrDeg * 0.6 * Math.PI / 180;
+  const hx0 = dx / d0, hz0 = dz / d0, cs = Math.cos(yawErr), sn = Math.sin(yawErr);
+  const hx = hx0 * cs - hz0 * sn, hz = hx0 * sn + hz0 * cs;
+  const d = Math.max(2, d0 + longErr - (kind === 1 ? 1.2 : 0.4));     // a frag bounces on: aim it a little short
+  const dy = ty + 0.2 - eye.y;
+  for (let pass = 0; pass < 2; pass++) {
+    const el = throwElev(d, dy, pass === 1);
+    if (!(el === el)) continue;
+    const F = K.FRAG || { loft: 0.17, minElev: -0.7, maxElev: 1.25 };
+    if (el > F.maxElev || el < F.minElev) continue;
+    const L = arcLanding(W, eye.x, eye.y, eye.z, hx, hz, el, d);
+    if (!L.ok) continue;
+    const miss = hyp(L.x - (eye.x + hx * d), L.z - (eye.z + hz * d));
+    if (miss > (kind === 1 ? 3.5 : 4.5)) continue;
+    // never into its own lap (a frag only): the first bounce must be 6 m+ from the thrower
+    if (kind === 1 && hyp(L.x - a.pos.x, L.z - a.pos.z) < 6) return false;
+    if (kind === 1) for (let _i4662 = 0, _l4662 = W.actors; _i4662 < _l4662.length; _i4662++) { const m = _l4662[_i4662];             // ... nor at a squadmate's feet
+      if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - L.x, m.pos.z - L.z) < 6) return false;
+    }
+    return armThrow(W, b, kind, slot, L, hx, hz, el);
+  }
+  // NEITHER EXACT ARC IS CLEAN (F24 + g1: 16-33 planned throws a match fell here, and the two matches with no frag were all of them): the man is
+  // behind a wall or in a room, the flat arc meets the wall and the lob is past maxElev or meets a roof. A player arcs it OVER: sweep the
+  // elevations and take the first whose landing is within reach of him with nothing between the burst and him (one sight test per candidate).
+  if (W.t >= (bb.arcSweepT || 0)) {
+    bb.arcSweepT = W.t + 1.5;
+    const F = K.FRAG || { loft: 0.17, minElev: -0.7, maxElev: 1.25 };
+    const near = kind === 1 ? 3.5 : 4.5;
+    for (let el = Math.max(F.minElev, -0.2); el <= F.maxElev + 1e-6; el += 0.09) {
+      const L = arcLanding(W, eye.x, eye.y, eye.z, hx, hz, el, d * 1.4);
+      if (!L.ok) continue;
+      const lx = L.x, ly = L.y, lz = L.z;
+      if (hyp(lx - tx, lz - tz) > near || Math.abs(ly - ty) > 2.5) continue;
+      if (kind === 1 && hyp(lx - a.pos.x, lz - a.pos.z) < 6) continue;
+      if (kind === 1) {
+        let mateNear = false;
+        for (let _i4682 = 0, _l4682 = W.actors; _i4682 < _l4682.length; _i4682++) { const m = _l4682[_i4682]; if (m !== a && m.alive && sameTeam(a, m) && hyp(m.pos.x - lx, m.pos.z - lz) < 6) { mateNear = true; break; } }
+        if (mateNear) continue;
+        if (W.map.losBlocked(lx, ly + 0.35, lz, tx, ty + 0.9, tz)) continue;     // the burst must reach him (no wall between)
+      }
+      _arc.x = lx; _arc.y = ly; _arc.z = lz;
+      bb.fdS = (bb.fdS || 0) + 1;
+      return armThrow(W, b, kind, slot, _arc, hx, hz, el);
+    }
+  }
+  return false;
+}
+function armThrow(W, b, kind, slot, L, hx, hz, el) {
+  const a = b.actor, bb = b.bb;
+  const F = K.FRAG || { loft: 0.17 };
+  bb.nadeS = 1; bb.nadeKind = kind; bb.nadeSlot = slot; bb.nadePrev = a.inventory.active; bb.nadeT = W.t;
+  bb.nadeX = L.x; bb.nadeY = L.y; bb.nadeZ = L.z;
+  bb.nadeYaw = Math.atan2(-hx, -hz); bb.nadePitch = el - (F.loft || 0.17);
+  bb.smokeWant = 0;
+  if (W.equipSlot) W.equipSlot(a, slot);
+  return true;
+}
+/** The throw machine, every frame while bb.nadeS: hold still, turn to the throw heading, set the pitch, and pull once the draw (0.4 s) is done. */
+function throwRun(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const w = a.weapon, slot = a.inventory.slots[bb.nadeSlot];
+  inp.fire = false; inp.ads = false; inp.reload = false;
+  if (!slot || !(slot.count > 0) || W.t - bb.nadeT > 2.5 || a.healing || a.swimming) { if (bb.nadeS === 1) bb.fdA++; endThrow(W, b); return; }   // (fdA: probe counter, a planned throw that never left the hand)
+  if (!w || w.slotRef !== slot) { if (W.t - bb.nadeT > 0.1 && W.equipSlot) W.equipSlot(a, bb.nadeSlot); return; }
+  inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false;
+  (SYQ[0] = bb.nadeYaw, steerYawQ(a, dt, 14));
+  inp.pitch = Math.max(-1.3, Math.min(1.3, bb.nadePitch));
+  // (the yaw is unbounded - steerYaw wraps the DIFFERENCE, not the angle - so it settles on the heading + 2 pi k; the old one-shot `% 2 pi` gave
+  // 2 pi for a yaw a turn or more below the heading (JS % keeps the sign) and the frag never left the hand: g10, Deepwood seed 4, 11 of 11
+  // timed-out throws read 6.28 rad here)
+  let dyaw = inp.yaw - bb.nadeYaw;
+  while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+  while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+  dyaw = Math.abs(dyaw);
+  if (bb.nadeS === 1 && w.cd <= 0 && dyaw < 0.05) { inp.fire = true; bb.nadeS = 2; bb.nadeT = W.t; if (bb.nadeKind === 1) nav.st.frags++; else nav.st.smokes++; return; }   // released: weapons.js throws this tick
+  if (bb.nadeS === 2) endThrow(W, b);
+}
+function endThrow(W, b) {
+  const a = b.actor, bb = b.bb;
+  const k = bb.nadeKind;
+  bb.nadeS = 0; bb.nadeKind = 0;
+  bb.nadeNextT = W.t + (k === 2 ? 6 : 9 + b.rng() * 6);   // a bot is not a grenade fountain
+  const prev = a.inventory.slots[bb.nadePrev];
+  if (a.weapon && a.weapon.id.startsWith("consumable") && prev && prev.kind === "weapon" && W.equipSlot) W.equipSlot(a, bb.nadePrev);
+  else ensureGunOut(W, a);
+  bb.nadeSlot = -1; bb.nadePrev = -1;
+}
+/** (LC-14) FRAG DECISION, inside a fight, at most every 0.5 s: a target 9-28 m off that is behind cover (out of sight 0.5-5 s, last seen there),
+ *  holding still in a room or by cover, or indoors while this bot is outside - flush him. Tier 2+ only. */
+function maybeFrag(W, b, t, seen, dist) {
+  const a = b.actor, bb = b.bb;
+  if (W.t < bb.nadeCheckT) return;
+  bb.nadeCheckT = W.t + 0.5;
+  if (bb.nadeS || W.t < bb.nadeNextT || (a.tier || 1) < 2 || t.downed || !bb.targetPos) return;
+  if (throwSlot(a, 1) < 0) return;
+  if (bb.graceMul > 0.3 && !t.isBot) return;                                       // (LC-96) no frag at a new player in his grace
+  bb.fdN++;                                                                       // (probe counters: checks / out of reach / no reason / no arc / pushes)
+  if (dist < 9 || dist > 30) {
+    bb.fdR++;
+    // OUT OF THROWING REACH (a frag carries ~27 m on the flat). Measured (Isla Viva seed 5, 12 frag carriers, 0 throws): 98 % of their checks
+    // were out of reach, 87 % of them past 60 m - the duels of an open map are long. A player with a nade in a stalled duel closes the gap to
+    // throw it: a tier 3+ bot with 100+ of bar, 5 s into a fight with a man holding his spot 30-60 m off, pushes (CLOSEIN, firing on the move)
+    // for the time it takes to come to ~24 m (2-4 s), and the reasons below get their chance; once per 30 s.
+    // (F24, 21 matches at weight 8: 0-1 pushes a match, 2 matches with no frag at all from 8-10 carriers - "holding his spot" was a stationary
+    // target only, and a duellist strafes: up to 3 m/s now, tier 2+, 80+ of bar, 4 s into the fight, 30-70 m, once per 20 s)
+    // (J24, Deepwood seed 46: 3 carriers, 508 of 516 checks out of reach, 0 pushes - in the trees the man is in and out of sight, and the push
+    // asked for him in sight: a man who ducked behind a trunk 0-3 s ago at his last spot counts too - the frag is for exactly him)
+    const lastSeen = seen || W.t - bb.targetSeenT < 3;
+    if (dist > 30 && dist < 70 && lastSeen && (a.tier || 1) >= 2 && W.t >= bb.nadePushT && bb.fightT > 4 && a.hp + a.shield >= 80 &&
+        (!seen || (t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 9))) {
+      bb.nadePushT = W.t + 20; bb.closeInUntil = W.t + Math.min(7, Math.max(2, (dist - 22) / 5)); b.nextThink = 0; bb.fdP++;   // (g2: 5 s left a 60 m push at 35-45 m)
+    }
+    return;
+  }
+  // (the fight's age is bb.fightT, the engage clock: acquireT restarts at every re-sight past 0.9 s since LC-12, so a peek duel never got
+  // 4 s old by it)
+  const gone = W.t - bb.targetSeenT;
+  let why = 0;
+  if (!seen && gone > 0.5 && gone < 5) why = 1;                                   // he ducked behind something: put one there
+  else if (seen && t.vel && t.vel.x * t.vel.x + t.vel.z * t.vel.z < 1.5) {
+    const tr = IND.H !== null ? targetRoom(W, b, bb.targetPos) : -1;
+    if (tr >= 0 && myRoom(W, b) !== tr) why = 2;                                 // camping a room
+    else if (occAny(W, bb.targetPos.x, bb.targetPos.z, 3) && b.rng() < 0.6) why = 3;   // planted by cover
+    // a duel that has gone on 4 s+ against a man standing his ground: break the stalemate (measured: 1 match in 6 had no bot frag at loot
+    // weight 8 in two 6-match batches, a Deepwood match both times: its duels rarely met the room / cover / ducked tests)
+    else if (bb.fightT > 2 && b.rng() < 0.35) why = 4;
+  }
+  // (fragdist, Ashgrid seed 62: frag carriers spent 136 s of 2308 within 9-30 m of their man and those fights were 0-4.6 s old - the close
+  // fight is short, so the stalemate / duel reasons come at 2-2.5 s, not 4-6 s; H24: 25 of 31 in-reach checks still had no reason in a
+  // match without a frag, so a fight in reach that lasts past 2 s gets one with high odds)
+  // ...and a man strafing in the open 12-28 m off, 3 s into the duel: a frag at his feet moves him off his line (a player's "nade the duel")
+  else if (seen && dist > 12 && bb.fightT > 2.5 && b.rng() < 0.2) why = 5;
+  if (!why) { bb.fdW++; return; }
+  const tp = bb.targetPos;
+  beginThrow(W, b, 1, tp.x, tp.y, tp.z);
+  if (!bb.nadeS) { bb.nadeCheckT = W.t + 2; bb.fdB++; }                                          // no clean arc from here: look again in a bit
+}
+/** (LC-14) a bot that knows a grenade is landing beside it sprints out of the blast (away from the predicted burst, over every state's legs). */
+function dodgeGrenade(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const dx = a.pos.x - bb.dangerX, dz = a.pos.z - bb.dangerZ, d = hyp(dx, dz);
+  if (d > bb.dangerR) return;
+  const ax = d > 0.05 ? dx / d : 1, az = d > 0.05 ? dz / d : 0;
+  const B = basisOf(inp, _mb0);
+  inp.mz = ax * B.fx + az * B.fz; inp.mx = ax * B.rx + az * B.rz;
+  inp.sprint = true; inp.crouch = false;
+  guardMove(W, b, false);
+}
+/** (C-FALL) Before the legs move this frame: would this heading walk off a drop that kills (walkDrop for the bot's hp)? Probed 4x a second
+ *  (7x past 4 m/s) along the heading at 0.8 m steps (3-6 of them, then down any face found) - the terrain alone where the bot stands on it, the support (colliders: a roof, a tower, a wall top) where it
+ *  stands over the terrain. A refused heading is held for 0.6 s and the bot re-plans (a route takes the stairs). */
+function edgeGuard(W, b) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const wyE = W.map.waterY;          // (R1, tierprof kb) read on every call: read only inside the probe loop it had no type feedback when the loop first ran
+  // (release blockers) no held heading and no probe due (3 frames in 4): nothing below can act - the same early return the tests below reach,
+  // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
+  if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
+  if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
+  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
+  const B = basisOf(inp, _mb0);
+  let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
+  const m = Math.sqrt(wx * wx + wz * wz);         // hyp, inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
+  if (m < 0.05) return;
+  wx /= m; wz /= m;
+  // (a held heading holds the jump too, and holds in the air: stub duo 10-26, Isla seed 2, a camper held at a 10 m lip hopped - the state's step
+  // hop - and the next airborne frames' air control carried it over the lip it was being held at)
+  if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }
+  if (!a.onGround || W.t < bb.edgeT) return;
+  // (the probe interval and the look-ahead scale with the speed: at a sprint's ~8 m/s a 0.25 s probe let the bot travel 2 m between looks, and the
+  // lip of a face first seen in the 4th sample was already under its feet at the next look - stub duo 10-26, Isla seed 2: s11 fleeing at 20 hp
+  // found the face at 0.8 m, too late to stop, and fell 10 m; s43 following at 30 hp crossed a slope break at speed, flew, and met the face airborne)
+  const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z);
+  bb.edgeT = W.t + (spd > 4 ? 0.15 : 0.25);
+  const lim = walkDrop(a);
+  if (!(lim < 1e6)) return;
+  GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
+  const elevated = a.pos.y - GA[2] > 1.0;
+  // (a CLIFF FACE, not just a ledge: the stub-duo batch lost 2 bots of 2 matches at the same Isla Viva cliff (-22, -34), terrain 55.5 -> 44.5 m
+  // over 4 m. No 0.8-2.4 m sample was ever more than the bot's limit below it, but past the first steep step the capsule leaves the ground and
+  // falls the whole face. So a run of steep samples (more than STEEP_STEP down per 0.8 m) that starts within the look-ahead window is followed
+  // down to its foot (up to 10 more samples, 8 m; 6 on a deck / rock top, where each sample is a supportAt collider query) and the fall is
+  // measured from the top of the run to the foot. The window is a sprint's travel to the next probe plus 3 m to stop in, whatever the speed
+  // NOW: a bot held at a lip stands still when its hold ends and is back at 7.8 m/s 0.4 s later (sq_duo6, Isla seed 5: a follower at 12 hp
+  // on a rock top - window 3 - ran the 2.8 m to the lip it had been held at). 6 samples on the ground, 4 up on a collider
+  const win = elevated ? 4 : 6, kMax = win + (elevated ? 6 : 10);
+  let runTop = NaN, prev = a.pos.y;
+  for (let k = 1; k <= kMax; k++) {
+    const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
+    let sup;
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }      // supportAt(W, px, pz, a.pos.y), unboxed
+    else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
+    if (wyE != null && sup < wyE) sup = wyE;      // water breaks a fall
+    const steep = prev - sup > STEEP_STEP;
+    if (steep && runTop !== runTop && k <= win) runTop = prev;
+    if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
+      bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
+      inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
+      bb.nextPathT = 0;
+      nav.st.edgeHolds++;
+      return;
+    }
+    if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
+    // a face is followed while it goes on down; the window ends the look. (R3 steer) A face that ends INSIDE the window does not end the look: s11
+    // (isla_viva seed 77, 10 hp) saw a 1.5 m face at 0.8 m, stopped looking at its foot, and the 5.8 m face 2 m further on was never measured
+    if (runTop === runTop && !steep) { if (k >= win) break; runTop = NaN; }
+    else if (runTop !== runTop && k >= win) break;
+    prev = sup;
+  }
+  // (R3 steer) THE FLIGHTS THIS HEADING MAKES, on the terrain (a deck keeps the sampled rule above: each of its samples is a collider query).
+  // Downhill faster than gravity pulls the capsule down, the mover leaves the ground (player.js: feet more than 0.1 m over the support after a
+  // tick), and a flight lands at the speed of a fall from where it left: its drop is judged by the same curve as any drop (walkDrop). A sprint
+  // down a 45-degree face flies ~5.8 m (2 u^2 tan^2 / g), a walk 3.3 m - so the sampled rule above (a face is steeper than 48 degrees) passed
+  // slopes a sprinting wounded bot fell down. Checked only where the ground within 16 m falls more than lim below the feet (no flight can drop
+  // further than the ground does); a heading that flies too far at the sprint but not at the walk is walked, else it is held like a lip.
+  if (elevated) return;
+  // (the water level as a plain double: a phi of the map's tagged waterY and a typed-array read boxed every sample - tierprof kb, edgeGuard 0.3 -> 1.5 KB/frame)
+  const wyF = wyE != null ? +wyE : -1e9;
+  let minG = a.pos.y;
+  for (let k = 1; k <= 20; k++) {
+    GA[0] = a.pos.x + wx * 0.8 * k; GA[1] = a.pos.z + wz * 0.8 * k; groundA(W, GA, 0);
+    const gk = GA[2] < wyF ? wyF : GA[2];
+    if (gk < minG) minG = gk;
+  }
+  if (a.pos.y - minG <= lim) return;
+  const sprintNow = inp.sprint && inp.mz > 0.5, walkV = K.MOVE.walk, uT = sprintNow ? K.MOVE.sprint : walkV;
+  FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
+  if (flightSafe(W, a)) return;
+  if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
+  bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
+  inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
+  bb.nextPathT = 0;
+  nav.st.edgeHolds++; nav.st.edgeFlights++;
+}
+/** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
+ *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
+ *  landing's drop (from where the flight left the ground: a fall from rest) against lim. Walks dmax of ground, plus every flight that starts on it.
+ *  false = a flight lands from higher than lim. Numbers in, a boolean out (no boxed double crosses the call). */
+const FLQ = new Float64Array(5);
+function flightSafe(W, a) {
+  const wx = FLQ[0], wz = FLQ[1], u = FLQ[2], lim = FLQ[3], dmax = FLQ[4], wy0 = W.map.waterY, wy = wy0 != null ? +wy0 : -1e9;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), dt = 1 / 30, step = u * dt;
+  let x = a.pos.x, z = a.pos.z, y = a.pos.y, vy = 0, top = y, d = 0, air = false;
+  for (let n = 0; n < 150; n++) {
+    x += wx * step; z += wz * step; d += step;
+    GA[0] = x; GA[1] = z; groundA(W, GA, 0);
+    const sup = GA[2] < wy ? wy : GA[2];
+    if (!air) {
+      if (sup - y > 1.0) return true;                     // rising ground the legs do not climb in a step: the walk stops here
+      if (y - sup <= 0.1) { y = sup; if (d >= dmax) return true; continue; }
+      air = true; vy = 0; top = y;
+    }
+    vy += g * dt; y -= vy * dt;
+    if (y <= sup) {
+      if (top - sup > lim) return false;
+      y = sup; vy = 0; air = false;
+      if (d >= dmax) return true;
+    }
+  }
+  return true;
+}
+/** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
+ *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
+function jumpLandsSafe(W, a) {
+  if (!LETHAL_H) return true;
+  const inp = a.input, B = basisOf(inp, _mb1);
+  for (let d = 0; d < 2; d++) {
+    let wx = d === 0 ? a.vel.x : B.fx * inp.mz + B.rx * inp.mx, wz = d === 0 ? a.vel.z : B.fz * inp.mz + B.rz * inp.mx;
+    const m = hyp(wx, wz);
+    if (m < 0.05) continue;
+    wx /= m; wz /= m;
+    for (let k = 1; k <= 3; k++) {
+      GA[0] = a.pos.x + wx * 1.5 * k; GA[1] = a.pos.z + wz * 1.5 * k; groundA(W, GA, 0);
+      if (a.pos.y - GA[2] > 2.5) return false;
+    }
+  }
+  return true;
+}
+const STEEP_STEP = 0.9;           // m down per 0.8 m sample (~48 deg): steeper than this the capsule is in the air, not walking
+/** (C-FALL) Falling toward a landing that kills: open the canopy (the player's own escape: Space in the air more than 12 m up). */
+function chuteRescue(W, b) {
+  const a = b.actor, bb = b.bb;
+  bb.edgeT = W.t + 0.2;
+  const sup = Math.max(supportAt(W, a.pos.x, a.pos.z, a.pos.y), W.map.waterY != null ? W.map.waterY : -1e9);
+  const agl = a.pos.y - sup;
+  if (agl <= 12) return;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), vy = -a.vel.y;
+  const vLand = Math.sqrt(vy * vy + 2 * g * agl);
+  const hEq = vLand * vLand / (2 * g);                     // the drop that lands at this speed
+  // (only a drop that KILLS: the rule is the human's - p23_fall measured bots lifted 15 m at hp 100 opening the canopy and taking 0 where the
+  // human takes 86; the 0.8 factor rescued every drop past ~13 m. Half a metre of margin for the 5 Hz probe and the ground under the landing)
+  if (hEq > lethalDrop(a) - 0.5) {
+    a.input.jump = true;
+    // the canopy brings it down HERE (the glide branch steers to dropTarget: the match's first landing spot would be a long glide away)
+    const dtg = bb.dropTarget || (bb.dropTarget = { x: 0, z: 0 });
+    dtg.x = a.pos.x + a.vel.x * 0.5; dtg.z = a.pos.z + a.vel.z * 0.5;
+  }
+}
+/** (LC-20) carries any shield item (usable or not). */
+function carriesShield(a, bigOnly) {
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (s2 && s2.kind === "consumable" && s2.count > 0) { const c = K.CONSUMABLES[s2.id]; if (c && c.heals === "shield" && (!bigOnly || c.cap > 50)) return true; }
+  }
+  return false;
+}
+/** (LC-20) a ground shield item the inventory would take within r, or an unopened chest (6 in 10 of a chest's consumable rolls are shields;
+ *  late in a match the floor shields are gone and the chests in the houses are where the restock is). nearbyLoot; one query per 2 s per calm
+ *  bot that wants one. */
+const SHIELD_SEEK_M = 80;
+function nearShield(W, a, r) {
+  if (!W.nearbyLoot) return null;
+  const near = W.nearbyLoot(a.pos, r);
+  let chest = null;
+  for (let i = 0; i < near.length; i++) {
+    const n = near[i];
+    if (n.type === "chest") { if (!chest && !(a.brain && a.brain.bb.badLoot && a.brain.bb.badLoot[n.id] > W.t)) chest = n; continue; }
+    if (n.type !== "item" || n.data.kind !== "consumable") continue;
+    const c = K.CONSUMABLES[n.data.id];
+    if (c && c.heals === "shield" && shieldGoal(a, n) && (!W.wouldAcceptItem || W.wouldAcceptItem(a, n.data) || shieldNeedsRoom(W, a, n.data))) return n;
+  }
+  return chest;
+}
+/** (fix round, P2-B) the mini shield's cap (the bar a mini fills to: 50) and the big shields in the bag. */
+const MINI_CAP = () => (K.CONSUMABLES.mini_shield && K.CONSUMABLES.mini_shield.cap) || 50;
+function bigCount(a) {
+  const sl = a.inventory.slots;
+  let n = 0;
+  for (let i = 0; i < sl.length; i++) { const s2 = sl[i]; if (s2 && s2.kind === "consumable" && s2.id === "big_shield") n += s2.count || 0; }
+  return n;
+}
+/** (fix round, P2-B) KEEP A LONE BIG. A calm bot at 75+ with one big shield used it for the last 20-25 points of the bar; the big is the only
+ *  thing that refills past 50, and it is worth twice as much after the next fight. Kept while the bar is at or over SHIELD_KEEP and it is the
+ *  bag's last big one (with two, one tops up). Under fire the old order stands (startHeal: the biggest bar per second first). */
+const SHIELD_KEEP = 75;
+function keepBig(a, s2) { return s2.id === "big_shield" && a.shield >= SHIELD_KEEP && bigCount(a) < 2; }
+/** (fix round, P2-B) a loot node that answers wantShield: a shield item that still adds to this bar (a big one at the mini cap), an unopened
+ *  supply crate (two big shields), or - under the mini cap - any unopened chest (6 in 10 of its consumable rolls are shields). */
+function shieldGoal(a, n) {
+  if (n.type === "chest") return !!n.supply || a.shield < MINI_CAP();
+  if (n.type !== "item" || !n.data || n.data.kind !== "consumable") return false;
+  const c = K.CONSUMABLES[n.data.id];
+  return !!(c && c.heals === "shield" && a.shield < c.cap - 5 && (n.data.id === "big_shield" || a.shield < MINI_CAP()));
+}
+/** (fix round, P2-B) the far big-shield scan: the nearest big shield item (or unopened supply crate) within SHIELD_FAR_M, any slope
+ *  (SHIELD_FAR_DY), inside the next circle (6 m in from its edge: the walk there is a walk the storm wants anyway), that this bot has not
+ *  failed to reach (badLoot), with headroom over it and on this bot's shore. One query per 2 s per calm bot at the cap with no big shield. */
+const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
+function farShield(W, a) {
+  if (!W.nearbyLoot) return null;
+  let cx = 0, cz = 0, cr = Infinity;
+  if (W.stormCtl) {
+    const st = W.stormCtl.storm.stateAt(W.t), c = st.nextCenter || st.center;
+    cx = c.x; cz = c.z; cr = (st.nextRadius != null ? st.nextRadius : st.radius) - 6;
+  }
+  const near = W.nearbyLoot(a.pos, SHIELD_FAR_M, SHIELD_FAR_DY);
+  const bad = a.brain && a.brain.bb.badLoot;
+  for (let i = 0; i < near.length; i++) {           // nearest first (nearbyLoot sorts by distance)
+    const n = near[i];
+    if (n.type === "chest" ? !n.supply : !(n.type === "item" && n.data && n.data.id === "big_shield")) continue;
+    if (bad && bad[n.id] > W.t) continue;
+    if (cr < Infinity && hyp(n.pos.x - cx, n.pos.z - cz) > cr) continue;
+    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    return n;
+  }
+  return null;
+}
+/** (final, OD-13) THE DEATH-PILE SHIELD SCAN: the best shield item still in a death pile (W.pileShields) within PILE_SHIELD_M, any slope up to
+ *  PILE_SHIELD_DY, that adds to this bar (shieldGoal), that the bag would take (or make room for), not under a low ceiling or off-shore, not one
+ *  this bot failed to reach (badLoot). Weighed the way pickLoot weighs loot - distance (0.4 a metre), plus the storm: a pile in the storm now is
+ *  skipped, one outside the next circle costs PILE_OUT_CIRCLE points - and danger: a pile within PILE_DANGER_M of where this bot last saw an
+ *  enemy (8 s memory) is the fight it just left, skipped. A big shield is worth PILE_BIG_BONUS metres more than a mini. One call per 2 s per calm
+ *  bot that wants a shield (the wantShield scan). */
+const PILE_SHIELD_M = 160, PILE_SHIELD_DY = 40, PILE_OVER_CHEST_M = 40, PILE_OUT_CIRCLE = 25, PILE_DANGER_M = 35, PILE_BIG_BONUS = 12;
+function pileShield(W, a, bb) {
+  if (!W.pileShields) return null;
+  const near = W.pileShields(a.pos, PILE_SHIELD_M, PILE_SHIELD_DY);
+  if (!near.length) return null;
+  let st = null;
+  if (W.stormCtl) st = W.stormCtl.storm.stateAt(W.t);
+  const nc = st ? (st.nextCenter || st.center) : null, nr = st ? (st.nextRadius != null ? st.nextRadius : st.radius) : Infinity;
+  const bad = bb.badLoot;
+  const foe = bb.target && W.t - bb.targetSeenT < 8 && bb.targetPos ? bb.targetPos : null;
+  let best = null, bs = Infinity;
+  for (let i = 0; i < near.length; i++) {           // nearest first: a candidate past the best score cannot win (every bonus is <= PILE_BIG_BONUS)
+    const n = near[i];
+    if (n.d * 0.4 - PILE_BIG_BONUS * 0.4 > bs) break;
+    if (bad && bad[n.id] > W.t) continue;
+    if (!shieldGoal(a, n)) continue;
+    if (st && st.dps > 0 && hyp(n.pos.x - st.center.x, n.pos.z - st.center.z) > st.radius - 4) continue;
+    if (foe && hyp(n.pos.x - foe.x, n.pos.z - foe.z) < PILE_DANGER_M) continue;
+    let sc = n.d * 0.4;
+    if (n.data.id === "big_shield") sc -= PILE_BIG_BONUS * 0.4;
+    if (nc && hyp(n.pos.x - nc.x, n.pos.z - nc.z) > nr) sc += PILE_OUT_CIRCLE;
+    if (!(sc < bs)) continue;
+    if (W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    best = n; bs = sc;
+  }
+  return best;
+}
+/** (fix round) `n` re-read from loot.js: null once it is taken / opened (a nearbyLoot node is a snapshot). */
+function liveLoot(W, n) {
+  const q = W.nearbyLoot(n.pos, 0.6, 1);
+  for (let i = 0; i < q.length; i++) if (q[i].id === n.id) return q[i];
+  return null;
+}
+/** (LC-20) MAKE ROOM FOR A SHIELD. Measured (3 AFK matches, t >= 600 s): every calm bot under 75 shield with no shield item carried three guns,
+ *  and 2 in 3 had no free slot at all (a bandage stack and a frag in the other two) - the walkover had filled the bag before a shield came by, so
+ *  the shield on the floor beside it was refused (loot.js wouldAccept) and the bar stayed empty for the rest of the match. A player drops the
+ *  sidearm for the shield. The gun to drop: the weakest of THREE (gunScore: the pistol first), only while another carried gun has a full
+ *  magazine on hand (never the bot's last real firepower). -1 = keep everything. */
+function roomGunSlot(a) {
+  const sl = a.inventory.slots;
+  let guns = 0, worst = -1, ws = 1e9;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2) return -1;                                   // a free slot already: nothing to drop
+    if (s2.kind !== "weapon") continue;
+    guns++;
+    const sc = K.gunScore(s2.id, s2.rarity || 0);
+    if (sc < ws) { ws = sc; worst = i; }
+  }
+  if (guns < 3 || worst < 0) return -1;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (i !== worst && s2 && s2.kind === "weapon" && !lowOnAmmo(a, s2, 1)) return worst;
+  }
+  return -1;
+}
+/** A shield item the bag refuses only for want of a slot, and that dropping a gun (roomGunSlot) would let in. */
+function shieldNeedsRoom(W, a, data) {
+  if (!data || data.kind !== "consumable" || !W.dropActive) return false;
+  const c = K.CONSUMABLES[data.id];
+  if (!c || c.heals !== "shield" || !(c.cap > a.shield)) return false;
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) if (sl[i] && sl[i].kind === "consumable" && sl[i].id === data.id) return false;   // a stack of it: full, or it would fit
+  return roomGunSlot(a) >= 0;
+}
+/** Drop the roomGunSlot gun (loot.js W.dropActive: tossed 2 m ahead, the dropper's walkover ignores it for 1.5 s - the shield is taken first),
+ *  then draw the best gun again. */
+function makeRoom(W, b) {
+  const a = b.actor, bb = b.bb;
+  bb.roomFor = null;
+  const i = roomGunSlot(a);
+  if (i < 0 || a.healing) return;
+  if (a.inventory.active !== i && W.equipSlot) W.equipSlot(a, i);
+  if (a.inventory.active === i && W.dropActive(a)) { nav.st.roomDrops++; ensureGunOut(W, a); }
 }
 
 // ── combat ───────────────────────────────────────────────────────────────────
@@ -3929,7 +5515,8 @@ function coverStepQ(W, b, dt, tp, seen) {
     if (d < COVER_ARRIVE) {
       bb.coverState = "IN";
       // Tier-scaled: a sharper bot spends less time hiding and more time shooting.
-      bb.coverUntil = W.t + COVER_HOLD * (1.35 - (b.tierNow || a.tier || 3) * 0.09);
+      // (P23, LC-12) a ranged duel from cover holds the wall longer between peeks (x1.7): a rifleman trades from behind a rock, not in the open
+      bb.coverUntil = W.t + COVER_HOLD * (1.35 - (b.tierNow || a.tier || 3) * 0.09) * (bb.coverFace === 2 ? 1.7 : 1);
       return true;
     }
     MTQ[0] = cp.x; MTQ[1] = cp.z; moveTowardQ(W, b, dt, d > 6);
@@ -3942,14 +5529,22 @@ function coverStepQ(W, b, dt, tp, seen) {
       // one that stands in the open.
       bb.coverState = "NONE";
       bb.coverFailUntil = W.t + 1.2;      // don't instantly re-hide
+      bb.coverPeekT = W.t;                // (P23, LC-12) a ranged hold re-hides at the same wall after the peek (no new search)
       return false;
     }
     // reload and heal while the wall is doing the work
     inp.mx = 0; inp.mz = 0; inp.sprint = false;
     // (Wave 8) HOLD THE ROOM: indoors the spot is beside a doorway of the bot's own room and the threat comes through that doorway - face IT (the
     // threat's last position is behind a wall), so the peek / the man stepping through meets a gun already pointing at the opening
-    if (bb.coverFace) steerYaw(a, Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), dt, 6);
-    else steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 6);
+    if (bb.coverFace === 1) (SYQ[0] = Math.atan2(-(bb.coverFX - a.pos.x), -(bb.coverFZ - a.pos.z)), steerYawQ(a, dt, 6));
+    else (SYQ[0] = Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), steerYawQ(a, dt, 6));
+    // (P23, LC-12) reload behind the wall: a ranged cover hold is the moment to top the magazine up
+    if (a.weapon && a.weapon.state === "ready") { const wd = wdefN(a.weapon.id); if (wd && wd.mag > 0 && a.weapon.magAmmo < wd.mag * 0.6) inp.reload = true; }
+    // (P23, LC-20) ...and to put a cell in: a shield item that still adds, no hit for 0.8 s -> pop it behind the wall and hold the wall until it is in
+    else if (!a.healing && !bb.nadeS && a.shield < 100 && W.t - (a.lastDamageT || -99) > 0.8 && !(bb.healBlockedUntil > W.t)) {
+      const cid = coverShieldId(a);
+      if (cid && W.useConsumable(a, cid)) bb.coverUntil = Math.max(bb.coverUntil, W.t + useSOf(cid) + 0.25);
+    }
     return true;
   }
 
@@ -3958,8 +5553,33 @@ function coverStepQ(W, b, dt, tp, seen) {
   const reloading = !!(a.weapon && a.weapon.state === "reloading");
   const hurt = (a.hp + a.shield) < 70;
   const shotAt = W.t - a.lastDamageT < 1.5;
-  if (!reloading && !hurt && !shotAt) return false;     // no reason to break off
+  // (P23, LC-12) COVER AT RANGE. Cover was only ever taken to reload, when hurt or when just hit, so a ranged duel was two men standing in a
+  // field (measured live: ENGAGE in cover 2.6-3.4 %). Seen, more than 30 m off, a rifle / DMR / LMG / sniper in hand: fight it from cover -
+  // hide, peek, shoot, hide.
+  const wcls = a.weapon && wdefN(a.weapon.id) ? wdefN(a.weapon.id).cls : null;
+  // (mid-range too: past 20 m with anything but a shotgun / pistol, unless he is nearly finished - then press)
+  const tA = bb.target ? W.actorById.get(bb.target) : null;
+  // (...or he is cracked by this bot's own fire in the last 3 s: a player who just landed a rifle / sniper hit stays on him for the follow-up, he does not
+  // duck back behind the rock and let him heal - probe_match: sniper kills fell from 43 in 24 matches (21 with one) to 27 (13) with the ranged hold)
+  // (slowGun: a bolt / single-round gun, rpm < 100 - the sniper. A rifle's next round is 0.2 s away and its cover cycle already shoots; J24 with the
+  // two rules below on every gun: ENGAGE in cover 16.0 -> 13.7 %)
+  const wdef = a.weapon && wdefN(a.weapon.id), slowGun = !!wdef && wdef.rpm > 0 && wdef.rpm < 100;
+  const pressIt = !!tA && (tA.downed || (tA.hp || 0) + (tA.shield || 0) < 40 ||
+    (slowGun && (tA.hp || 0) + (tA.shield || 0) < 100 && tA.lastAttacker === a.id && W.t - (tA.lastHurtByActorT || -99) < 3));
+  const ranged = seen && !pressIt && ((dist > 30 && !!LONG_CLS[wcls]) || (dist > 20 && wcls !== "shotgun" && wcls !== "pistol"));
+  if (!reloading && !hurt && !shotAt && !ranged) return false;     // no reason to break off
   if (dist < 6) return false;                           // point-blank: fight, don't hide
+  // (P23, LC-12) HIDE - PEEK - HIDE: a ranged hold that has just peeked from its wall goes back behind the SAME wall (no search, no budget) while
+  // the man it is trading with is still about where he was when the wall was picked (8 m), and the wall is a step away (5 m)
+  // ...but only once the peek has done its job: a shot fired since it came out (a bolt sniper needs its re-sight + ADS + one round, which the bare
+  // 1.2 s peek often cut off) or 2.6 s out in the open
+  const peekLive = slowGun && W.t - bb.coverPeekT < 2.6 && !(a.lastShotT > bb.coverPeekT);
+  if (peekLive && !reloading && !hurt && !shotAt) return false;       // (no new wall either: the peek stays out until it has shot)
+  if (ranged && bb.coverFace === 2 && bb.coverPt && W.t - bb.coverPeekT < 8 && hyp(bb.coverPt.x - a.pos.x, bb.coverPt.z - a.pos.z) < 5 &&
+      hyp(tp.x - bb.coverTX, tp.z - bb.coverTZ) < 8) {
+    bb.coverState = "MOVING"; bb.coverGiveUp = W.t + 2.5;
+    return true;
+  }
   if (_coverBudget <= 0) return false;
 
   // Open terrain is the common case and must cost almost nothing: one cheap
@@ -3971,11 +5591,13 @@ function coverStepQ(W, b, dt, tp, seen) {
   // (Wave 8) indoors (a room of a furnished house): the cover is the wall beside one of this room's doorways, or a tall piece of furniture in it - never
   // the outdoor ring's 7 / 14 m points, which lie in other rooms and outside, through walls
   const gi = myRoom(W, b);
-  const found = gi >= 0 ? findCoverIndoor(W, b, gi, tp) : findCover(W, a, tp);
+  const found = gi >= 0 ? findCoverIndoor(W, b, gi, tp) : findCover(W, a, tp, ranged && !reloading && !hurt && !shotAt);
   bb.coverFace = 0;
   if (!found) { if (gi >= 0) nav.st.coverInFail++; bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
   if (gi >= 0) { nav.st.coverIn++; if (_icDoor) { nav.st.coverInDoor++; bb.coverFace = 1; bb.coverFX = _icDoor.x; bb.coverFZ = _icDoor.z; } }
+  else if (ranged && !reloading && !hurt && !shotAt) { bb.coverFace = 2; nav.st.coverRange++; }    // (P23) a ranged hold: the longer cycle
   bb.coverPt = found;
+  bb.coverTX = tp.x; bb.coverTZ = tp.z;   // (P23) where he was when this wall was picked (the re-hide test above)
   bb.coverState = "MOVING";
   bb.coverGiveUp = W.t + 3.5;             // never chase a cover point forever
   return true;
@@ -3983,12 +5605,13 @@ function coverStepQ(W, b, dt, tp, seen) {
 
 /** 12 candidates = 6 bearings x 2 radii. Each is prefiltered on walkability and
  *  height before it is allowed to cost a ray. */
-function findCover(W, a, tp) {
+function findCover(W, a, tp, near) {
   const gy = a.pos.y;                                   // this floor, not the terrain under it
   const toT = Math.atan2(tp.x - a.pos.x, tp.z - a.pos.z);
   let best = null, bestScore = -1e9;
   for (let ri = 0; ri < 2; ri++) {
-    const r = ri === 0 ? 7 : 14;
+    // (P23, LC-12) a ranged hold looks closer first (3.5 / 7 m): the rock beside him, not one 14 m back that walks him out of his own fight
+    const r = near ? (ri === 0 ? 3.5 : 7) : (ri === 0 ? 7 : 14);
     for (let i = 0; i < 6; i++) {
       // bias the ring AWAY from the target: cover is behind you, not past them
       const ang = toT + Math.PI + (i - 2.5) * 0.62;
@@ -4068,7 +5691,15 @@ function losTruncated(W, x, h, z, tp) {
   return W.map.losBlocked(ex, ey, ez, ex + dx * f, (tp.y || h) + 1.2, ez + dz * f);
 }
 
-const PREFER_RANGE = { shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, glauncher: 26 };
+const PREFER_RANGE = { shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, glauncher: 26,
+  // (P23, LC-16) the P2-D roster: a DMR fights from range (between the AR and the sniper), an LMG holds a mid-range lane, a burst AR plays the AR's range
+  dmr: 60, lmg: 32, burst: 28, burst_ar: 28, burstar: 28 };
+// ...and by class, for any gun the table does not name (a new id with a known cls)
+const PREFER_CLS = { shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, launcher: 26, dmr: 60, lmg: 32, burst: 28 };
+// rounds per bot burst by class (pistols are semi sidearms; an LMG is fired in long bursts; a burst gun is held for ONE burst per trigger pull)
+const BURST_CLS = { ar: 4, smg: 8, pistol: 3, lmg: 12, burst: 3 };
+/** (P23, LC-16) a gun that fights at range: the old sniper / AR test, plus a DMR / LMG / burst rifle (by class or the P2-D ids) */
+const LONG_CLS = { sniper: 1, ar: 1, dmr: 1, lmg: 1, burst: 1 };
 function actEngage(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
@@ -4103,10 +5734,10 @@ function actEngage(W, b, dt) {
   const dist = Math.sqrt(dx * dx + dz * dz);   // (inline: actEngage is past the inliner's budget, and every call boxes its numbers)
 
   const wid = a.weapon ? a.weapon.id : "pistol";
-  const def = K.WEAPONS[wid] || K.WEAPONS.pistol;
+  const def = wdefN(wid) || wdefN("pistol");
 
   // preferred range by class
-  const prefer = PREFER_RANGE[wid] || 25;          // (module table: the literal was an allocation per bot per frame)
+  const prefer = PREFER_RANGE[wid] || PREFER_CLS[def.cls] || 25;          // (module table: the literal was an allocation per bot per frame)
   // final-circle duels: tighter aim (adrenaline > wobble) so fights resolve
   const duel = W.match.aliveCount() <= 4;
 
@@ -4148,7 +5779,7 @@ function actEngage(W, b, dt) {
     const mi = myRoom(W, b), ti = targetRoom(W, b, tp);
     if ((mi >= 0 || ti >= 0) && mi !== ti) {
       MTQ[0] = tp.x; MTQ[1] = tp.z; moveTowardQ(W, b, dt, dist > prefer * 3, tp.y);
-      const B0 = K.moveBasis(inp.yaw, _mb0);
+      const B0 = basisOf(inp, _mb0);
       routeX = B0.fx * inp.mz + B0.rx * inp.mx; routeZ = B0.fz * inp.mz + B0.rz * inp.mx;
       routed = true; nav.st.routedFrames++;
     }
@@ -4160,7 +5791,7 @@ function actEngage(W, b, dt) {
   // (Wave 5) the dodge hop is for open air: indoors it is a bot pogo-ing in a house, and under a low ceiling the head meets
   // the slab and a capsule jammed under it is blocked in every direction (the draw is kept either way, so the rng stream does
   // not depend on the roof)
-  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35 && !roofedForJump(W, b)) inp.jump = true;
+  if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35 && !roofedForJump(W, b) && jumpLandsSafe(W, a)) inp.jump = true;
 
   // aiming with human error model
   const eye = eyePos(a, _eye_actEngage);
@@ -4172,7 +5803,8 @@ function actEngage(W, b, dt) {
   // swimmer's 1.02m one, so scale it: 0.94 stays inside the head band at every
   // stance, 0.64 reproduces the old ~1.15m chest point when standing.
   // K.actorHeight(t), inlined (a call returns a boxed double)
-  const th = t.swimming ? 0.9 : K.PLAYERK.height * (t && t.crouching && t.hasCrouchClip ? K.CROUCH.heightMult : 1);
+  // (P23, C-DBNO) a downed man's capsule is 0.6 m (K.actorHeight, lane sim): aim at it, not at the air over him
+  const th = t.downed ? (K.actorHeight ? K.actorHeight(t) : 0.6) : t.swimming ? 0.9 : K.PLAYERK.height * (t && t.crouching && t.hasCrouchClip ? K.CROUCH.heightMult : 1);
   const aimY = tp.y + th * (bb.aimHigh ? 0.94 : 0.64);
   // lead for projectile weapons
   let lead = 0;
@@ -4187,19 +5819,23 @@ function actEngage(W, b, dt) {
   // a flat aim drops every bot-fired shell well short — bots holding one were
   // harmless. Solve the low-arc launch angle for the horizontal range.
   {
-    const wdef = K.WEAPONS[a.weapon && a.weapon.id];
+    const wdef = wdefN(a.weapon && a.weapon.id);
     if (wdef && wdef.arc) {
       const dHoriz = dHorizE;
       if (dHoriz > 0.5) wantPitch = arcPitch(wdef, dHoriz, aimY - eye.y);
     }
   }
 
+  const aimYaw0 = wantYaw, aimPitch0 = wantPitch;   // (fix pass 2) the true aim line, before the wobble: the bolt squeeze reads against it
   // error: base tier error × acquire overshoot (3× decaying 0.6s) × target-motion penalty
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
   const tgtSpeed = seen && t.vel ? Math.sqrt(t.vel.x * t.vel.x + t.vel.z * t.vel.z) : 0;
   const motionMul = 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (t.onGround === false ? 0.35 : 0);   // = aimMotionMul (inlined)
-  const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1);
+  // (P23, LC-96) a new player in his grace window: the bot that found him aims up to 3.5x wider and reacts up to 0.9 s later (2x / 0.6 s
+  // measured AFK-human median survival 130 s over 6 matches: a tier-5 pistol at 16 m still hit a standing man with twice its error)
+  const gm = bb.graceMul > 0 && !t.isBot && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4) ? bb.graceMul : 0;
+  const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1) * (1 + GRACE_ERR * gm);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble
   bb.errPhase = (bb.errPhase || b.rng() * 9) + dt * 3.1;
@@ -4208,14 +5844,16 @@ function actEngage(W, b, dt) {
 
   SYQ[0] = wantYaw; steerYawQ(a, dt, 10);
   if (routed) {                                   // (Wave 8) the route's world heading in the new aim yaw's frame
-    const B1 = K.moveBasis(inp.yaw, _mb1);
+    const B1 = basisOf(inp, _mb1);
     inp.mz = routeX * B1.fx + routeZ * B1.fz;
     inp.mx = routeX * B1.rx + routeZ * B1.rz;
   }
   inp.pitch = Math.max(-1.3, Math.min(1.3, inp.pitch + (wantPitch - inp.pitch) * Math.min(1, dt * 9)));
 
   // fire discipline: reaction delay, LOS, range, bursts
-  const reacted = sinceAcq > b.tierK.reactionMs / 1000;
+  const reacted = sinceAcq > b.tierK.reactionMs / 1000 + gm * GRACE_REACT_S;
+  // (P23, LC-14) flush him with a frag (behind cover / camping a room / planted by cover; 9-28 m; tier 2+; one per 9-15 s)
+  if (!bb.nadeS && bb.coverState !== "IN" && !(W.t < bb.nadeCheckT)) maybeFrag(W, b, t, seen, dist);      // (its own first test, here: the call boxes dist)
   const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);      // fireRangeM(def), inlined          // the same reach ensureGunOut values a gun at
   const canSee = seen;
   inp.ads = dist > 25;
@@ -4225,19 +5863,20 @@ function actEngage(W, b, dt) {
   // paid on a frame the bot had chosen to stand still anyway.
   inp.crouch = seen && dist > 30 && Math.abs(inp.mz) < 0.1 && a.tier >= 3;
   if (reacted && canSee && inRange) {
-    if (def.cls === "ar" || def.cls === "smg" || def.cls === "pistol") {
+    const burstN = def.fire === "burst" ? (def.burst || BURST_CLS.burst) : BURST_CLS[def.cls];
+    if (burstN) {
       // burst sizes per class: AR 4, SMG 8 — and pistols 3, they are SEMI-AUTO
       // sidearms, not machine pistols (they used to fall into the SMG bucket
       // and mag-dump 8 rounds at 400rpm — the "killed by AFKAndy (Pistol)"
-      // spectate reports)
-      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = def.cls === "ar" ? 4 : (def.cls === "pistol" ? 3 : 8); bb.aimHigh = b.rng() < (HEAD_CHANCE[a.tier - 1] || 0); }
+      // spectate reports). (P23) LMG 12; a burst gun (def.fire "burst") one burst per pull.
+      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = burstN; bb.aimHigh = b.rng() < (HEAD_CHANCE[a.tier - 1] || 0); }
       if (bb.burstLeft > 0) {
         inp.fire = true;
         bb.burstLeft -= dt * (def.rpm / 60);
         if (bb.burstLeft <= 0) bb.burstPause = 0.35 + b.rng() * 0.4;
       }
       bb.burstPause -= dt;
-    } else if (def.cls === "sniper") {
+    } else if (def.cls === "sniper" || (def.cls === "dmr" && dist > 45)) {
       // PLANT, then fire once still. This used to stop the bot only when it was
       // ALREADY below 1.5 m/s - but the strafe a few lines up has just set
       // inp.mx = +-1 (walk speed), so a sniper bot in a fight was never still and
@@ -4248,7 +5887,30 @@ function actEngage(W, b, dt) {
       // NOTE: coverStep owns inp.mx/mz when it is active — only fire+crouch here.
       if (bb.coverState === "NONE" || !bb.coverState) { inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.jump = false; }
       inp.crouch = true;
-      if (a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
+      // (P23, LC-20 x sniper) A BOLT ROUND IS TIMED: a player with one round in the chamber squeezes as the crosshair crosses the man, he does not
+      // fire wherever the wobble happens to sit. With calm bots topping their shields up a body round rarely finishes anyone (pm6 10-26, the
+      // probe_match seeds: 12 sniper hits from 327 rounds - 3.7 % - and 7 of the 12 left the man standing; base 11 of 12 killed), so the hits
+      // the bolt does land have to come from the rounds it aims. The wobble below (yaw sin, pitch cos x 0.6) is read against the man's own
+      // angular size (0.4 m half-width, 0.8 m half-height at this range): squeeze when both are inside it, or after 2.5 s of waiting (a
+      // player takes the shot he has). A DMR past 45 m is a rifle: the old rule.
+      // (fix pass 2, probe_match sniper row) ...read against the CROSSHAIR and the BODY THAT IS HIT. The window above was the legacy 0.57 m
+      // cylinder's; sim's bone hit volumes (K.HITVOL, LC-22) are a ~0.4 m-wide chest and a ~0.12 m head, so on the integrated tree the
+      // "on" squeeze landed beside the man half the time (sniper hit rate 5.2 % -> 2.1-2.5 % of rounds, lane batches). The test now reads
+      // where the gun really points (the steered input yaw / pitch, after the turn lag) against the aim point, inside the hit volume's
+      // half-size there: chest 0.2 m wide x 0.35 m up / down; head 0.12 m wide x 0.12 m up (a low head round still finds the neck / chest).
+      let timed = true;
+      if (def.rpm > 0 && def.rpm < 100) {
+        let ey = inp.yaw - aimYaw0;
+        while (ey > Math.PI) ey -= Math.PI * 2;
+        while (ey < -Math.PI) ey += Math.PI * 2;
+        const ep = inp.pitch - aimPitch0, hv = !!(K.HITVOL && K.HITVOL.ok), high = !!bb.aimHigh;
+        const hw = !hv ? 0.4 : high ? 0.12 : 0.2, hUp = !hv ? 0.8 : high ? 0.12 : 0.35, hDn = !hv ? 0.8 : 0.35;
+        const on = Math.abs(ey) < Math.atan2(hw, dist) && (ep >= 0 ? ep < Math.atan2(hUp, dist) : -ep < Math.atan2(hDn, dist));
+        if (!(bb.boltWaitT > 0) || W.t - bb.boltWaitT > 6) bb.boltWaitT = W.t;          // (a wait older than 6 s is another fight)
+        timed = on || W.t - bb.boltWaitT > 2.5;
+      }
+      if (timed && a.vel.x * a.vel.x + a.vel.z * a.vel.z < 2.25) inp.fire = true;   // < 1.5 m/s
+      if (inp.fire) bb.boltWaitT = 0;
     } else {
       inp.fire = true;
     }

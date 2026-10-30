@@ -234,3 +234,105 @@ Legend — **Verified?** ✅ = I read the licence on the source page **this sess
 6. kkenny101 852826 + BigSoundBank s0904 OGG (ambience)
 7. Kenney Sci-fi Sounds — extract 7 explosion files only
 8. Optional: SpringySpringo reloads
+
+## 6. SHIPPED IN THE PARITY RELEASE (P1 + P2 + P3, 2026-10-27) — every new audio file, its source and licence
+
+86 new files in `assets/audio/sfx/`, all CC0 1.0, $0. Raw downloads stayed in dev-only folders (F:/lc_p23/audio/dl/), never shipped; each file was cut,
+faded, normalised and encoded (mono 44.1 kHz Ogg Vorbis) by the lanes' deterministic builders. Licences re-checked on the source pages 2026-10-20
+(P2) and 2026-10-27 (footsteps). The same records ship beside the files: `assets/audio/sfx/P1B-SOURCES.txt`, `assets/audio/sfx/P23-SOURCES.txt`.
+Authors credited as a courtesy (CC0 asks for no attribution): The Free Firearm Sound Library by Ben Jaszczak, Brian Nelson, Kevin Heras and
+Matthew Nanney; Potapooo; qubodup; thebardofblasphemy; Nocturnal_Vanguard; mvVoiceActing; Fantozzi; TinyWorlds; rubberduck; Peludo (its page asks
+games to reference its itch.io page - a request, not a licence term); Kenney.
+
+### P1 (lane P1-B): 7 files built from local Kenney packs (no download)
+
+| file | source take | source URL | licence |
+|---|---|---|---|
+| hit_flesh_0.ogg, hit_flesh_1.ogg | Kenney Impact Sounds 1.0: impactPunch_medium_000 / _002 | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
+| hit_shield_0.ogg, hit_shield_1.ogg | Kenney Interface Sounds 1.0: glass_002 / glass_003 | https://kenney.nl/assets/interface-sounds | CC0 1.0 |
+| shield_break_0.ogg | Kenney Impact Sounds 1.0 impactGlass_heavy_000 + _002 and Kenney Interface Sounds 1.0 glass_004, layered | https://kenney.nl/assets/impact-sounds , https://kenney.nl/assets/interface-sounds | CC0 1.0 |
+| explosion_0.ogg, explosion_1.ogg | Kenney Impact Sounds 1.0 impactPunch_heavy_000 / _002, impactSoft_heavy_000, impactWood_light_001 / _003, impactPlank_medium_001, pitched and layered, + a seeded procedural rumble (own work) | https://kenney.nl/assets/impact-sounds | CC0 1.0 (+ own work) |
+
+### P2 / P3 (lane audio): 63 files (guns, vocals) + 16 footsteps (fix round)
+
+| file | source take | source URL | licence |
+|---|---|---|---|
+| gd_pistol_mid_0.ogg | FFSL A_34P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_pistol_mid_1.ogg | FFSL A_34P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_pistol_far_0.ogg | FFSL A_39.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_pistol_far_1.ogg | FFSL A_39.wav event 1 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_smg_mid_0.ogg | FFSL G_20P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_smg_mid_1.ogg | FFSL G_20P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_smg_far_0.ogg | FFSL G_19.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_smg_far_1.ogg | FFSL G_19.wav event 1 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_ar_mid_0.ogg | FFSL C_31P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_ar_mid_1.ogg | FFSL C_31P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_ar_far_0.ogg | FFSL C_17.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_ar_far_1.ogg | FFSL C_17.wav event 1 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_shotgun_mid_0.ogg | FFSL N_26P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_shotgun_mid_1.ogg | FFSL N_26P.wav event 2 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_sniper_mid_0.ogg | FFSL M_26P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_sniper_mid_1.ogg | FFSL M_26P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_sniper_far_0.ogg | FFSL M_23.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_sniper_far_1.ogg | FFSL M_23.wav event 1 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| shot_dmr_0.ogg | FFSL U_14P.wav event 0 (near distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| shot_dmr_1.ogg | FFSL U_14P.wav event 2 (near distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| shot_dmr_2.ogg | FFSL U_14P.wav event 3 (near distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_dmr_mid_0.ogg | FFSL U_19P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_dmr_mid_1.ogg | FFSL U_19P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_dmr_far_0.ogg | FFSL U_18.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_dmr_far_1.ogg | FFSL U_18.wav event 1 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| shot_burst_0.ogg | FFSL D_32P.wav event 0 (near distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| shot_burst_1.ogg | FFSL D_32P.wav event 1 (near distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_burst_mid_0.ogg | FFSL D_24P.wav event 0 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_burst_mid_1.ogg | FFSL D_24P.wav event 1 (mid distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_burst_far_0.ogg | FFSL D_25.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| gd_burst_far_1.ogg | FFSL D_26.wav event 0 (far distance) | https://github.com/buddingmonkey/FreeFirearmsSFXLibrary (licence authority https://opengameart.org/content/the-free-firearm-sound-library) | CC0 1.0 |
+| vo_m1_hurt_0.ogg | 714596.ogg 0.00-0.60 s | https://freesound.org/people/Potapooo/sounds/714596/ | CC0 1.0 |
+| vo_m1_hurt_1.ogg | 714597.ogg 0.00-0.49 s | https://freesound.org/people/Potapooo/sounds/714597/ | CC0 1.0 |
+| vo_m1_hurt_2.ogg | 714598.ogg 0.00-0.43 s | https://freesound.org/people/Potapooo/sounds/714598/ | CC0 1.0 |
+| vo_m1_hurt_3.ogg | 714599.ogg 0.00-0.57 s | https://freesound.org/people/Potapooo/sounds/714599/ | CC0 1.0 |
+| vo_m1_downed_0.ogg | 714592.ogg 0.00-0.93 s | https://freesound.org/people/Potapooo/sounds/714592/ | CC0 1.0 |
+| vo_m1_downed_1.ogg | 714593.ogg 0.00-1.24 s | https://freesound.org/people/Potapooo/sounds/714593/ | CC0 1.0 |
+| vo_m1_death_0.ogg | 714594.ogg 0.00-1.37 s | https://freesound.org/people/Potapooo/sounds/714594/ | CC0 1.0 |
+| vo_m1_death_1.ogg | 714595.ogg 0.00-0.89 s | https://freesound.org/people/Potapooo/sounds/714595/ | CC0 1.0 |
+| vo_m1_revive_0.ogg | 714583.ogg 0.00-0.57 s | https://freesound.org/people/Potapooo/sounds/714583/ | CC0 1.0 |
+| vo_m1_revive_1.ogg | 714585.ogg 0.00-0.76 s | https://freesound.org/people/Potapooo/sounds/714585/ | CC0 1.0 |
+| vo_m2_hurt_0.ogg | slightscream-01.flac 0.00-0.45 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_hurt_1.ogg | slightscream-03.flac 0.00-0.56 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_hurt_2.ogg | slightscream-08.flac 0.00-0.41 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_hurt_3.ogg | slightscream-11.flac 0.00-0.33 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_hurt_4.ogg | slightscream-12.flac 0.00-0.38 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_downed_0.ogg | slightscream-10.flac 0.00-0.73 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_downed_1.ogg | slightscream-15.flac 0.00-0.79 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_revive_0.ogg | slightscream-14.flac 0.00-0.60 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_revive_1.ogg | slightscream-05.flac 0.00-0.69 s | https://opengameart.org/content/15-vocal-male-strainhurtpainjump-sounds | CC0 1.0 |
+| vo_m2_death_0.ogg | death_pain_grunts.wav 0.50-1.84 s | https://opengameart.org/content/grunts-male-death-and-pain | CC0 1.0 |
+| vo_m2_death_1.ogg | death_pain_grunts.wav 14.46-16.06 s | https://opengameart.org/content/grunts-male-death-and-pain | CC0 1.0 |
+| vo_m2_death_2.ogg | death_pain_grunts.wav 35.98-37.26 s | https://opengameart.org/content/grunts-male-death-and-pain | CC0 1.0 |
+| vo_f_hurt_0.ogg | female_hurt_grunts_groans_1.ogg 3.72-4.10 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_hurt_1.ogg | female_hurt_grunts_groans_1.ogg 2.10-2.68 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_hurt_2.ogg | female_hurt_grunts_groans_1.ogg 0.44-1.12 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_hurt_3.ogg | 855460.mp3 0.58-1.18 s | https://freesound.org/people/mvVoiceActing/sounds/855460/ | CC0 1.0 |
+| vo_f_hurt_4.ogg | 855460.mp3 2.06-2.60 s | https://freesound.org/people/mvVoiceActing/sounds/855460/ | CC0 1.0 |
+| vo_f_downed_0.ogg | female_hurt_grunts_groans_1.ogg 4.96-6.08 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_downed_1.ogg | female_hurt_grunts_groans_1.ogg 9.38-10.26 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_death_0.ogg | female_hurt_grunts_groans_1.ogg 11.70-12.52 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_death_1.ogg | female_hurt_grunts_groans_1.ogg 7.34-8.08 s | https://opengameart.org/content/female-hurt-grunts-groans | CC0 1.0 |
+| vo_f_revive_0.ogg | 855460.mp3 3.48-4.04 s | https://freesound.org/people/mvVoiceActing/sounds/855460/ | CC0 1.0 |
+| step_sand_000.ogg | Fantozzi-SandL1.flac (Fantozzi, OGA, submitted by qubodup) | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | CC0 1.0 |
+| step_sand_001.ogg | Fantozzi-SandR1.flac (Fantozzi, OGA, submitted by qubodup) | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | CC0 1.0 |
+| step_sand_002.ogg | Fantozzi-SandL2.flac (Fantozzi, OGA, submitted by qubodup) | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | CC0 1.0 |
+| step_sand_003.ogg | Fantozzi-SandR3.flac (Fantozzi, OGA, submitted by qubodup) | https://opengameart.org/content/fantozzis-footsteps-grasssand-stone | CC0 1.0 |
+| step_dirt_000.ogg | [kdd]DifferentSteps gravel.ogg (TinyWorlds) | https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud | CC0 1.0 |
+| step_dirt_001.ogg | [kdd]DifferentSteps mud02.ogg (TinyWorlds) | https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud | CC0 1.0 |
+| step_dirt_002.ogg | sfx100v2_footstep_01.ogg (rubberduck) | https://opengameart.org/content/100-cc0-sfx-2 | CC0 1.0 |
+| step_dirt_003.ogg | sfx100v2_footstep_02.ogg (rubberduck) | https://opengameart.org/content/100-cc0-sfx-2 | CC0 1.0 |
+| step_water_000.ogg | sfx100v2_footstep_wet_01.ogg (rubberduck) | https://opengameart.org/content/100-cc0-sfx-2 | CC0 1.0 |
+| step_water_001.ogg | sfx100v2_footstep_wet_02.ogg (rubberduck) | https://opengameart.org/content/100-cc0-sfx-2 | CC0 1.0 |
+| step_water_002.ogg | sfx100v2_footstep_wet_03.ogg (rubberduck) | https://opengameart.org/content/100-cc0-sfx-2 | CC0 1.0 |
+| step_water_003.ogg | splash2.wav 0.66-1.12 s at rate 1.25 (Peludo) | https://opengameart.org/content/water-splash-and-sand-footsteps | CC0 1.0 |
+| step_metal_000.ogg | Kenney footstep_concrete_000 + impactTin_medium_000 (-1 dB) + impactMetal_light_001 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
+| step_metal_001.ogg | Kenney footstep_concrete_001 + impactTin_medium_001 (-1 dB) + impactMetal_light_002 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
+| step_metal_002.ogg | Kenney footstep_concrete_002 + impactTin_medium_002 (-1 dB) + impactMetal_light_003 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |
+| step_metal_003.ogg | Kenney footstep_concrete_003 + impactTin_medium_003 (-1 dB) + impactMetal_light_004 (rate 0.8, -11 dB), layered | https://kenney.nl/assets/impact-sounds | CC0 1.0 |

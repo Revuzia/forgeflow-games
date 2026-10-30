@@ -45,9 +45,33 @@ SF_JS = r"""() => {
   };
 
   // projected sample points ON the wall: heights hMin..hMax above the ground reference, every azimuth step
-  SF.wallPoints = (hMin, hMax, nH, azStepDeg) => {
+  // (R2) the scene's own depth, wall / bolts / sky / see-through draws hidden: what really stands between the camera and a wall point. map.losBlocked
+  // knows only colliders and the terrain is stepped along the ray, so a tree canopy (no collider) or a floating island hid the wall from the frame
+  // while the gate still counted it visible (R1 bootfx: 5 of the phase6/near view's 11 rows sampled the wall behind a canopy, A/B delta ~ -3).
+  // A float target (MeshDepthMaterial BasicDepthPacking: 1 - gl_FragCoord.z), linearised with the camera's near / far; alpha-tested leaves count solid.
+  SF.sceneDepth = () => {
+    const r = k.renderer, sc = W.scene, cam = W.camera, ctl = W.stormCtl; const cw = cv().width, ch = cv().height;
+    if (!SF._drt || SF._drt.width !== cw || SF._drt.height !== ch) {
+      if (SF._drt) SF._drt.dispose();
+      SF._drt = new THREE.WebGLRenderTarget(cw, ch, { type: THREE.FloatType, depthBuffer: true });
+      SF._dmat = SF._dmat || new THREE.MeshDepthMaterial({ depthPacking: THREE.BasicDepthPacking });
+    }
+    const hide = [];
+    sc.traverse((o) => { if (!o.visible) return; const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (o === ctl.wall || o === ctl.bolts || o.name === 'sky' || o.isPoints || o.isSprite || o.isLine || (m && m.transparent && !m.depthWrite)) hide.push(o); });
+    hide.forEach((o) => { o.visible = false; });
+    const ov = sc.overrideMaterial, bg = sc.background, rt = r.getRenderTarget(), cc = new THREE.Color(); r.getClearColor(cc); const ca = r.getClearAlpha();
+    sc.overrideMaterial = SF._dmat; sc.background = null; r.setRenderTarget(SF._drt); r.setClearColor(0x000000, 0); r.clear(); r.render(sc, cam);
+    const buf = new Float32Array(cw * ch * 4); r.readRenderTargetPixels(SF._drt, 0, 0, cw, ch, buf);
+    r.setRenderTarget(rt); r.setClearColor(cc, ca); sc.overrideMaterial = ov; sc.background = bg; hide.forEach((o) => { o.visible = true; });
+    const n = cam.near, f = cam.far, lin = (d) => { const z = d * 2 - 1; return 2 * n * f / (f + n - z * (f - n)); };
+    return { at: (px, py) => { const d = 1 - buf[((ch - 1 - py) * cw + px) * 4]; return d >= 1 ? Infinity : lin(d); }, lin };
+  };
+
+  SF.wallPoints = (hMin, hMax, nH, azStepDeg, depthOcc) => {
     const ctl = W.stormCtl, wall = ctl.wall, cam = W.camera; cam.updateMatrixWorld(); const R = wall.scale.x, cx = wall.position.x, cz = wall.position.z;
     const cw = cv().width, ch = cv().height; const v = new THREE.Vector3(); const out = [];
+    const D = depthOcc ? SF.sceneDepth() : null; let nDepth = 0, nLos = 0;
     for (let d = 0; d < 360; d += azStepDeg) {
       const a = d * Math.PI / 180; const x = cx + Math.sin(a) * R, z = cz + Math.cos(a) * R; const g = SF.ground(x, z);
       for (let j = 0; j < nH; j++) {
@@ -60,10 +84,12 @@ SF_JS = r"""() => {
         try { if (W.map.losBlocked && W.map.losBlocked(ax, ay, az, x, y, z)) blocked = true; } catch (e) {}
         if (!blocked) { const dist = Math.hypot(x - ax, y - ay, z - az); const n = Math.min(80, Math.ceil(dist / 5));
           for (let s = 1; s < n; s++) { const t = s / n; const gx = ax + (x - ax) * t, gz = az + (z - az) * t, gy = ay + (y - ay) * t; if (W.map.heightAt(gx, gz) > gy) { blocked = true; break; } } }
+        if (blocked) nLos++;
+        else if (D && D.at(px, py) < D.lin(v.z * 0.5 + 0.5) - 0.5) { blocked = true; nDepth++; }     // something drawn > 0.5 m in front of the wall point
         out.push([px, py, +h.toFixed(2), blocked ? 0 : 1, +Math.hypot(x - ax, z - az).toFixed(1)]);
       }
     }
-    return { w: cw, h: ch, pts: out };
+    return { w: cw, h: ch, pts: out, losBlocked: nLos, depthBlocked: nDepth };
   };
 
   // wall (and optionally the lightning pool / sky dome) drawn ALONE into a float render target over a flat colour.
@@ -96,6 +122,27 @@ SF_JS = r"""() => {
              inStorm: !!W._playerInStorm, skySrc: su ? 'W.skyUniforms' : 'mesh:sky' }; };
   return 'ok';
 }"""
+
+
+AA_OFF_JS = r"""() => { const W = window.__LC__.W; if (typeof W.setGfx !== 'function' || typeof W.getGfx !== 'function') return { had: false };
+  const g = W.getGfx(); const prev = g && g.prefs ? g.prefs.aa : null; const live = g && g.live ? g.live.aa : null;
+  if (live && live !== 'off') W.setGfx('aa', 'off'); return { had: true, prev, live }; }"""
+
+
+def aa_off(s):
+    """P2-F (parity P2+P3, P1-C's open item): switch the anti-aliasing pass OFF for an A/B whose rule is additive / bit-exact (FXAA and SMAA
+    are edge-dependent and non-linear: a 2x2 factorial or a bit-identity comparison through them is not additive by construction). The rows
+    that judge AA itself live in P1-C's aa probe; every other row of these gates still runs with the build's own AA. Returns the restore token."""
+    tok = s.js(AA_OFF_JS)
+    if tok.get("had") and tok.get("live") not in (None, "off"):
+        s.step_frames(2, 1 / 60, True)
+    return tok
+
+
+def aa_restore(s, tok):
+    if tok and tok.get("had") and tok.get("live") not in (None, "off"):
+        s.js("(v) => window.__LC__.W.setGfx('aa', v || 'auto')", tok.get("prev"))
+        s.step_frames(2, 1 / 60, True)
 
 
 def install(s):

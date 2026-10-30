@@ -125,7 +125,7 @@ function depthSignature(o, m, vsm) {
 
 /** Pick one representative caster per depth signature and give it its own depth material for the warm frame.
  *  Call AFTER force() (everything visible, un-culled) and before the one real composer frame. Returns { reps, undo }. */
-function armDepthVariants(renderer, scene) {
+function armDepthVariants(renderer, scene, camera) {
   const sm = renderer.shadowMap;
   const out = { reps: 0, skipped: 0, undo() {} };
   if (!sm || !sm.enabled) return out;                 // low tier: no shadow pass, no depth programs
@@ -144,6 +144,16 @@ function armDepthVariants(renderer, scene) {
     const have = reps.get(sig);
     if (!have || (o.castShadow === true && have.castShadow !== true)) reps.set(sig, o);
   });
+  // SYNTHETIC COVERAGE (P23 boot, C-GFX "0 programs after the first drop frame on every tier"): a signature no mesh wears
+  // at warm time can still appear later - measured once on ULTRA (late_probe 03:07, ashgrid s11): a plain front-side caster
+  // with no map ("-,-,-,0,-1,-1,0,-1,1") linked its depth program at t 53.6 s mid-fight; the warm frame had no such caster
+  // (a later loot / pile / FX mesh switching its shadow on). The common signature space (instanced or not x map or not x
+  // the three depth sides) is small, so every member nobody represents gets a one-triangle stand-in inside the shadow
+  // box but OUTSIDE the view frustum: three's shadow pass frustum-tests it against the shadow camera and draws it with the
+  // shared depth path; the colour pass culls it, so no colour program is linked for it. (Added after force(), so it keeps
+  // frustumCulled = true. three tests an object's layers against the VIEW camera in the shadow pass too, so a private
+  // layer cannot hide it from the colour pass alone.)
+  const synth = synthDepthReps(scene, camera, vsm, reps);
   const armed = [];
   for (const [sig, o] of reps) {
     let d = _depthPool.get(sig);
@@ -153,7 +163,9 @@ function armDepthVariants(renderer, scene) {
     o.customDepthMaterial = d;
   }
   out.reps = armed.length;
-  out.list = armed.map((a) => (a.o.name || a.o.type) + (a.cast === true ? "*" : ""));     // diagnostics: the representative of each signature (* = a current caster)
+  out.synth = synth.n;
+  out.list = armed.map((a) => (a.o.name || a.o.type) + (a.cast === true ? "*" : ""));   // diagnostics: the representative of each signature (* = a current caster)
+  out.sigs = [...reps.keys()];                       // diagnostics: the depth signatures this warm frame linked (W._warm.depthSigs)
   out.undo = () => {
     for (const a of armed) {
       a.o.castShadow = a.cast;
@@ -161,13 +173,111 @@ function armDepthVariants(renderer, scene) {
       // getDepthMaterial() copied the caster's textures onto the pooled material: drop them so a finished match is never held alive
       a.d.map = null; a.d.alphaMap = null; a.d.displacementMap = null;
     }
+    synth.undo();
   };
   return out;
 }
 
+// the synthetic stand-ins: one shared triangle (with uv, so a map variant is a real draw), one 1x1 texture, session-lived
+let _synthGeo = null, _synthTex = null;
+const _synthMats = new Map();       // "map|side" -> MeshBasicMaterial (never drawn by a colour pass: view-frustum culled)
+function synthDepthReps(scene, camera, vsm, reps) {
+  const res = { n: 0, undo() {} };
+  const light = (() => { let l = null; scene.traverse((o) => { if (!l && o.isDirectionalLight && o.castShadow) l = o; }); return l; })();
+  if (!light || !light.shadow || !light.shadow.camera || !camera || !camera.isCamera) return res;
+  if (!_synthGeo) {
+    _synthGeo = new THREE.BufferGeometry();
+    _synthGeo.setAttribute("position", new THREE.Float32BufferAttribute([-0.05, 0, 0, 0.05, 0, 0, 0, 0.05, 0], 3));
+    _synthGeo.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    _synthGeo.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
+    _synthTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    _synthTex.needsUpdate = true;
+  }
+  // a spot inside the shadow box (centred on the light's target, half-size = the shadow camera's right) that the view
+  // frustum does not contain: the target itself, else half the box out in one of 8 directions (one is always behind the view)
+  const sc = light.shadow.camera, half = Math.max(1, Math.abs(sc.right || 10)) * 0.5;
+  const tgt = new THREE.Vector3();
+  if (light.target) light.target.getWorldPosition(tgt);
+  camera.updateMatrixWorld();
+  const vf = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const at = new THREE.Vector3();
+  let found = false;
+  for (let k = -1; k < 8 && !found; k++) {
+    at.copy(tgt); at.y += 1;
+    if (k >= 0) { at.x += Math.cos(k * Math.PI / 4) * half; at.z += Math.sin(k * Math.PI / 4) * half; }
+    found = !vf.containsPoint(at);
+  }
+  if (!found) return res;
+  const sideOf = (s) => (vsm ? s : SHADOW_SIDE[s]);
+  const made = [];
+  for (const inst of [false, true]) for (const map of [false, true]) for (const side of [THREE.FrontSide, THREE.BackSide, THREE.DoubleSide]) {
+    const sig = [inst ? "I" : "-", "-", "-", "0", map ? 0 : -1, -1, 0, -1, sideOf(side)].join(",");
+    if (reps.has(sig)) continue;
+    const mk = (map ? 1 : 0) + "|" + side;
+    let m = _synthMats.get(mk);
+    if (!m) { m = new THREE.MeshBasicMaterial({ side, map: map ? _synthTex : null }); _synthMats.set(mk, m); }
+    const o = inst ? new THREE.InstancedMesh(_synthGeo, m, 1) : new THREE.Mesh(_synthGeo, m);
+    if (inst) { o.setMatrixAt(0, new THREE.Matrix4()); o.instanceMatrix.needsUpdate = true; }
+    o.position.copy(at); o.frustumCulled = true; o.castShadow = true; o.receiveShadow = false;
+    o.name = "warm-depth-synth";
+    scene.add(o); o.updateMatrixWorld(true);
+    reps.set(sig, o); made.push(o);
+  }
+  if (!made.length) return res;
+  res.n = made.length;
+  res.undo = () => {
+    for (const o of made) { if (o.parent) o.parent.remove(o); if (o.isInstancedMesh && o.dispose) o.dispose(); }
+  };
+  return res;
+}
+
+// ── the link-readiness wait (R1 boot): three's compileAsync, made safe against a teardown ────────────────────────────
+// WHY (sky_lowtier boot row, both verifier runs): renderer.compileAsync polls every material it compiled until its program
+// reports ready, from a setTimeout three owns and nobody can cancel. A tier change in a match re-runs this warm-up
+// (ffg_royale3d rewarmRoute); when the next match starts while that poll is still pending, teardownMatch disposes the old
+// match's materials: properties.get(disposed material) comes back empty, so three's poll reads undefined.isReady() and
+// throws (an uncaught page error at three.module.js checkMaterialsReady), and a program released by that dispose is
+// queried after gl.deleteProgram (GL_INVALID_VALUE: glGetProgramiv: Program object expected). The same compile() runs
+// here, but the wait is ours: a material disposed during the wait, one whose program is gone, or one whose program was
+// destroyed leaves the set instead of being queried; the wait is bounded (an optimisation only, never a hang).
+const READY_POLL_MS = 10, READY_MAX_MS = 20000;
+
+function compileAndWait(renderer, scene, camera, stats) {
+  if (typeof renderer.compile !== "function") return Promise.resolve();
+  const materials = renderer.compile(scene, camera);
+  const props = renderer.properties;
+  if (!(materials instanceof Set) || !props || typeof props.has !== "function") return Promise.resolve();
+  const pending = new Set(materials);
+  const onDispose = (ev) => { const m = ev && ev.target; if (m) { pending.delete(m); stats.readyDropped++; m.removeEventListener("dispose", onDispose); } };
+  for (const m of pending) m.addEventListener("dispose", onDispose);
+  const parallel = !!(renderer.extensions && renderer.extensions.get && renderer.extensions.get("KHR_parallel_shader_compile"));
+  const t0 = performance.now();
+  return new Promise((resolve) => {
+    const finish = () => { for (const m of pending) m.removeEventListener("dispose", onDispose); pending.clear(); resolve(); };
+    const check = () => {
+      try {
+        for (const m of pending) {
+          // has() first: get() would re-create an empty entry for a material three already forgot
+          const prog = props.has(m) ? props.get(m).currentProgram : undefined;
+          if (!prog || prog.program === undefined || typeof prog.isReady !== "function") { pending.delete(m); m.removeEventListener("dispose", onDispose); stats.readyDropped++; continue; }
+          if (prog.isReady()) { pending.delete(m); m.removeEventListener("dispose", onDispose); }
+        }
+      } catch (e) { stats.readyError = String(e && e.message || e); finish(); return; }
+      if (pending.size === 0) { finish(); return; }
+      if (performance.now() - t0 > READY_MAX_MS) { stats.readyTimedOut = pending.size; finish(); return; }
+      setTimeout(check, READY_POLL_MS);
+    };
+    // three's order: query right away when the status can be read without blocking, else give the driver a moment first
+    if (parallel) check(); else setTimeout(check, READY_POLL_MS);
+  });
+}
+
 /**
  * @param kernel   Kernel3D (renderer, scene, camera, optional composer)
- * @param opts     { extras?: Object3D[] }
+ * @param opts     { extras?: Object3D[], alive?: () => boolean }
+ *                 alive: checked after the (async) link wait; false = the scene this warm-up was for is gone (a teardown
+ *                 ran meanwhile), so the real frame of step 3 is skipped (stats.aborted) instead of drawing whatever the
+ *                 scene holds now.
  * @returns stats  { ms, target, forced, extras, skinBounds, depthVariants, programs: {before, afterCompile, afterRender} }
  *                 (depthVariants = depth signatures given their own depth material for the warm frame; absent without a shadow pass)
  */
@@ -177,7 +287,8 @@ export async function warmup(kernel, opts) {
   const composer = kernel.composer || null;
   const extras = (opts.extras || []).filter((o) => o && o.isObject3D);
   const t0 = performance.now();
-  const stats = { ms: 0, target: composer ? "composer" : "canvas", forced: 0, extras: extras.length, programs: { before: progCount(renderer), afterCompile: 0, afterRender: 0 } };
+  const alive = typeof opts.alive === "function" ? opts.alive : null;
+  const stats = { ms: 0, target: composer ? "composer" : "canvas", forced: 0, extras: extras.length, readyDropped: 0, programs: { before: progCount(renderer), afterCompile: 0, afterRender: 0 } };
 
   const prevTarget = renderer.getRenderTarget();
   const prevAutoClear = renderer.autoClear;
@@ -201,13 +312,21 @@ export async function warmup(kernel, opts) {
   scene.traverse((o) => { if (o.isSkinnedMesh === true && o.boundingSphere === null) { o.computeBoundingSphere(); stats.skinBounds++; } });
   try {
     renderer.setRenderTarget(composer ? composer.readBuffer : null);
-    ready = renderer.compileAsync ? renderer.compileAsync(scene, camera) : (renderer.compile(scene, camera), Promise.resolve());
+    ready = compileAndWait(renderer, scene, camera, stats);
   } finally {
     renderer.setRenderTarget(prevTarget);
     restore(st);
   }
   try { await ready; } catch (e) { /* an optimisation only — never block a match start on it */ }
   stats.programs.afterCompile = progCount(renderer);
+  if (alive && !alive()) {
+    // the scene was torn down (or a new match started building) during the wait: no frame of a scene this warm-up was not for
+    stats.aborted = true;
+    stats.programs.afterRender = progCount(renderer);
+    stats.ms = Math.round((performance.now() - t0) * 10) / 10;
+    kernel.lastWarmup = stats;
+    return stats;
+  }
 
   // 3: one real frame (synchronous), 4: exact restore.
   st = force(scene, extras);
@@ -215,7 +334,7 @@ export async function warmup(kernel, opts) {
   try {
     renderer.autoClear = true;
     if (sm && sm.enabled) sm.needsUpdate = true;    // a real shadow pass even when autoUpdate is off (glide cadence)
-    try { dv = armDepthVariants(renderer, scene); stats.depthVariants = dv.reps; stats.depthVariantList = dv.list; } catch (e) { dv = null; /* an optimisation only */ }
+    try { dv = armDepthVariants(renderer, scene, camera); stats.depthVariants = dv.reps; stats.depthVariantList = dv.list; stats.depthSigs = dv.sigs; stats.depthSynth = dv.synth; } catch (e) { dv = null; /* an optimisation only */ }
     if (composer) composer.render(0);
     else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
   } finally {

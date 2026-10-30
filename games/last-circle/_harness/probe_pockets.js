@@ -161,6 +161,10 @@ async (opt) => {
     a.pos.set(x, y, z); a.vel.set(0, 0, 0); a.onGround = true; a.gliding = false; a.swimming = false; a.emoting = null; a.mantleT = null;
     a.healing = null; a.crouching = false; a.yaw = yaw; a.input.yaw = yaw; a.input.mx = 0; a.input.mz = 0; a.input.jump = false; a.input.sprint = false;
     a.hp = 30; a.shield = 0; a.lastDamageT = -999; a.lastAttacker = null;
+    // the C-FALL landing clocks run on W.t too: a trial whose placement landed hard (a 0.4 s stagger to W.t + 0.4) left _landT
+    // ahead of the rewound clock, so the next trial's bot crawled at the stagger speed for as long as the old trial had run
+    // (release prep: heal-pockets 84 % -> 99.62 % with this reset). Creation values (player.js createActor).
+    a._landT = 0; a._landUntil = 0; a._landKind = 0; a._airT = 0; a._fallV = 0; a._glideLandT = -1e9;
     slotMed();
     bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.progBest = null; bb.progT = 0; bb.stuckT = 0; bb.anchor = null; bb.anchorT = W.t;
     bb.wallSide = 0; bb.detourDir = 0; bb.nextPathT = 0; bb.nextJumpT = 0; bb.lootId = null; bb.chestId = null; bb.chestT = 0;

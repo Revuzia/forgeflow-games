@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import statistics
 import subprocess
@@ -137,9 +138,15 @@ INSTRUMENT_JS = r"""() => {
   const r = k.renderer, info = r.info;
   const S = k.__lm = { on: false, f: [], snaps: [], cur: null };
   info.autoReset = false;
+  // P2-F (2026-10-20): the kernel resets renderer.info ONCE at the top of every frame (ffg_kernel_3d.js _frame, autoReset off) BEFORE
+  // _stepTweens runs, so finish() below used to read the counters of an already-reset frame: calls_med / tris 0 in every perfcheck since
+  // the counter fix. Snapshot the totals at each reset (tagged with the kernel frame number) and read the snapshot when it belongs to this frame.
+  const ir = info.reset.bind(info);
+  info.reset = function () { S.lc = info.render.calls; S.lt = info.render.triangles; S.lf = k.frameNo; return ir(); };
   info.reset();
   const finish = () => {
     const c = S.cur; if (!c) return;
+    const kreset = S.lf === k.frameNo && info.render.calls === 0;     // the kernel reset this frame already: the previous frame's totals are the snapshot
     S.cur = null;
     if (!S.on) return;
     const W = window.__LC__.W;
@@ -149,7 +156,7 @@ INSTRUMENT_JS = r"""() => {
     tgt.push([
       c.t1 != null ? +(c.t1 - c.t0).toFixed(3) : null,        // 0 update ms (tweens + mixers + updaters)
       c.t2 != null ? +(c.t2 - c.t1).toFixed(3) : null,        // 1 render submission ms (composer.render)
-      info.render.calls, c.scene, c.shadow, info.render.triangles,   // 2..5
+      kreset ? S.lc : info.render.calls, c.scene, c.shadow, kreset ? S.lt : info.render.triangles,   // 2..5
       c.shadowTris,                                            // 6 shadow-pass triangles
       info.programs ? info.programs.length : -1,               // 7 programs alive at frame end
       info.memory.textures, info.memory.geometries,            // 8, 9
@@ -649,11 +656,11 @@ class Run:
             self.out["endgame"] = {"wall_s": round(time.time() - t0, 2), "over": over, "slices": len(trace),
                                    "trace_head": trace[:3], "trace_tail": trace[-4:],
                                    "state": self.js(STATE_JS)}
-            # post-match panel (2.6 s beat), then PLAY AGAIN by a real click
+            # post-match panel (2.6 s beat), then PLAY AGAIN (since P1-D: "Run it back", the same map) by a real click
             self.stage = "postmatch"
             vis = None
             if over:
-                vis = self.wait_js("() => [...document.querySelectorAll('button')].some((b) => /PLAY AGAIN/.test(b.textContent) && b.offsetParent)", 20, 0.1)
+                vis = self.wait_js("() => [...document.querySelectorAll('button')].some((b) => /PLAY AGAIN|Run it back/i.test(b.textContent) && b.offsetParent)", 20, 0.1)
             else:
                 self.out["notes"].append("endgame: match not over after %d slices (sim t=%s, alive=%s) - post-match / PLAY AGAIN skipped" % (
                     len(trace), trace[-1]["t"] if trace else None, trace[-1]["alive"] if trace else None))
@@ -663,7 +670,7 @@ class Run:
                 t0 = time.time()
                 # what is actually under the button's centre (a real player's click lands there)
                 self.out["again_hit"] = self.js("""() => {
-                    const b = [...document.querySelectorAll('button')].find((x) => /PLAY AGAIN/.test(x.textContent) && x.offsetParent);
+                    const b = [...document.querySelectorAll('button')].find((x) => /PLAY AGAIN|Run it back/i.test(x.textContent) && x.offsetParent);
                     if (!b) return 'no button';
                     const r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
                     const e = document.elementFromPoint(cx, cy);
@@ -673,7 +680,7 @@ class Run:
                              anims: document.getAnimations ? document.getAnimations().filter((a) => a.effect && a.effect.target && (a.effect.target === b || a.effect.target.contains && a.effect.target.contains(b))).map((a) => a.animationName || a.constructor.name) : null };
                 }""")
                 try:
-                    self.page.get_by_role("button", name="PLAY AGAIN").first.click(timeout=15000)
+                    self.page.locator("button").filter(has_text=re.compile(r"PLAY AGAIN|Run it back", re.I)).first.click(timeout=15000)   # P1-D renamed the button "Run it back" (data-lc=runitback)
                     self.out["again_click"] = "real click ok"
                 except Exception as ce:
                     self.out["again_click"] = "REAL CLICK FAILED: " + str(ce)[:1500]
@@ -684,7 +691,7 @@ class Run:
                     except Exception:
                         pass
                     # fall back to a DOM click so the match-over-match measurement still happens (flagged)
-                    self.js("() => { const b = [...document.querySelectorAll('button')].find((x) => /PLAY AGAIN/.test(x.textContent) && x.offsetParent); if (b) b.click(); }")
+                    self.js("() => { const b = [...document.querySelectorAll('button')].find((x) => /PLAY AGAIN|Run it back/i.test(x.textContent) && x.offsetParent); if (b) b.click(); }")
                 ok = self.wait_js("() => !!document.querySelector('body') && window.__LC__.W.phase === 'lobby' && !window.__LC__.W._starting", 90, 0.05)
                 self.out["again_load_s"] = None if ok is None else round(time.time() - t0, 2)
                 self.out["again_map"] = self.js("() => window.__LC__.W.mapId")

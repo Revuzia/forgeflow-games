@@ -69,6 +69,8 @@
 
 export const KIT_API = 1;
 export const MANIFEST_PATH = "assets/props/city/manifest.json";
+/** C-GFX / D10: the facade detail strength per graphics tier (createCityKit env.detail / kit.setDetail take a tier name or a number). Off on low. */
+export const DETAIL_BY_TIER = Object.freeze({ low: 0, medium: 0.62, high: 0.62, ultra: 0.62 });
 export const DEFAULTS = Object.freeze({
   farDistance: 250,        // m beyond a district's bounding sphere before it collapses to its one proxy mesh
   hysteresis: 0.04,        // THREE.LOD hysteresis (fraction of the level distance)
@@ -548,6 +550,7 @@ export function createCityKit(env) {
   const texP = new Map();                              // palette file -> Promise<Texture|null>
   const palMats = new Map();                           // palette id -> material (kit-owned)
   const textures = new Set();                          // kit-owned textures
+  const surfTextures = new Set();                      // (P23 / LC-17) the derived surface maps + the facade detail: kit-owned, counted apart (stats.surfaceTextures)
   const placements = [];                               // { id, districts: Map, entries }
   let proxyMat = null;
   const shadowsOpt = { value: env.shadows === undefined ? "auto" : env.shadows };
@@ -629,12 +632,127 @@ export function createCityKit(env) {
     const pf = paletteFile(pal.key, pal.variant);
     const tex = pf ? await loadTexture(pf) : null;
     if (palMats.has(id)) return palMats.get(id);
+    const bldg = pal.key === "suburban" || pal.key === "commercial";
+    if (tex && bldg && detailWant > 0) await detailTexture();        // (D10: never fetched while the strength is 0 - the low tier; setDetail(> 0) fetches it later)
+    if (palMats.has(id)) return palMats.get(id);
     const m = new THREE.MeshStandardMaterial({ map: tex || null, roughness: 1, metalness: 0, side: double ? THREE.DoubleSide : THREE.FrontSide });
     m.color.setHex(tex ? pal.tint : 0xb4b8c4);
     m.name = "citykit:" + id;
+    if (tex && (bldg || pal.key === "car")) installSurfaceMap(m, tex, pal.key === "car" ? "car" : "building");
     if (pal.key === "car") installCarPaint(m);
+    else if (tex && bldg) installFacadeDetail(m);
     palMats.set(id, m);
     return m;
+  }
+  // -- surfaces (parity P2-I, LC-17) ---------------------------------------------------------------------------------------------------------
+  // The audit: every kit surface was roughness 1 / metalness 0 - the windows of a tower as matte as its concrete, a car body as dull as its tyres, so the IBL (maps.js
+  // scene.environment) had nothing to show. installSurfaceMap reads the palette's own colormap once (the swatches are flat 64 px cells) and writes a 128 x 128
+  // roughness (G) / metalness (B) map beside it, by what each swatch IS:
+  //   building  glass (pale blue, saturation 0.12-0.7, value >= 0.5): rough 0.14 | white / pale trim: 0.62 | the darkest greys (frames, rails): 0.5, metal 0.45 | the rest 0.9
+  //   car       the saturated body swatches: rough 0.32, metal 0.25 (citykit's car paint recolours them; the paint stays glossy) | glass: 0.08 | light greys (chrome,
+  //             rims, lamps): 0.3, metal 0.6 | near-black (tyres, trim): 0.86 | the rest 0.6
+  // A map, not a program per swatch: one extra texture fetch, the material's own program (compiled by the warm-up with the kit). Node / no canvas: untouched.
+  const surfCache = new Map();
+  function surfaceMapFor(tex, kind) {
+    const img = tex && tex.image, key = (tex && tex.uuid) + ":" + kind;
+    if (surfCache.has(key)) return surfCache.get(key);
+    let out = null;
+    try {
+      if (typeof document !== "undefined" && img && img.width > 0) {
+        const N = Math.min(128, img.width), cv = document.createElement("canvas"); cv.width = cv.height = N;
+        const g = cv.getContext("2d");
+        g.imageSmoothingEnabled = false;
+        g.drawImage(img, 0, 0, N, N);
+        const src = g.getImageData(0, 0, N, N), d = src.data, o = g.createImageData(N, N), od = o.data;
+        let any = 0;
+        for (let i = 0; i < N * N; i++) {
+          const r = d[i * 4] / 255, gg = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), s = mx > 1e-6 ? (mx - mn) / mx : 0;
+          let hue = 0;
+          if (mx - mn > 1e-6) hue = mx === r ? 60 * (((gg - b) / (mx - mn)) % 6) : mx === gg ? 60 * ((b - r) / (mx - mn) + 2) : 60 * ((r - gg) / (mx - mn) + 4);
+          if (hue < 0) hue += 360;
+          const glass = hue >= 195 && hue <= 235 && s >= 0.12 && s <= 0.7 && mx >= 0.5;
+          let ro = 0.9, me = 0;
+          if (kind === "car") {
+            if (glass) ro = 0.08; else if (s > 0.55 && mx > 0.25) { ro = 0.32; me = 0.25; } else if (s < 0.15 && mx > 0.55) { ro = 0.3; me = 0.6; } else if (mx < 0.2) ro = 0.86; else ro = 0.6;
+          } else if (glass) ro = 0.14;
+          else if (s < 0.1 && mx > 0.88) ro = 0.62;
+          else if (s < 0.15 && mx < 0.3 && mx > 0.08) { ro = 0.5; me = 0.45; }
+          if (ro !== 0.9 || me) any++;
+          od[i * 4] = 255; od[i * 4 + 1] = Math.round(ro * 255); od[i * 4 + 2] = Math.round(me * 255); od[i * 4 + 3] = 255;
+        }
+        if (any) {
+          g.putImageData(o, 0, 0);
+          const t = new THREE.CanvasTexture(cv);
+          t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+          t.name = "citykit:surface:" + kind + ":" + (tex.name || ""); t.needsUpdate = true;
+          surfTextures.add(t);
+          out = t;
+        }
+      }
+    } catch (e) { warn("surface map failed:", e && e.message || e); out = null; }
+    surfCache.set(key, out);
+    return out;
+  }
+  function installSurfaceMap(m, tex, kind) {
+    const sm = surfaceMapFor(tex, kind);
+    if (!sm) return;
+    m.roughnessMap = sm; m.metalnessMap = sm; m.roughness = 1; m.metalness = 1;
+  }
+  // Facade detail (LC-17): the kit's colormaps are flat swatches - a 40 m tower face is one colour. A CC0 photographic plaster (assets/tex/facade_detail.jpg, Poly Haven,
+  // greyscale, mean 0.5, low frequencies removed) multiplies the albedo of every building swatch that is not glass or trim (the surface map's roughness >= 0.75), projected
+  // in WORLD space on the face's dominant plane at two scales (2.6 m and 9 m), faded out from 40 to 120 m (no shimmer at range). One shared texture and uniform for every
+  // building palette: no draw call; the program is the material's own (customProgramCacheKey), compiled in the warm frame.
+  // C-GFX / D10 (the low tier): env.detail / setDetail(v) set the strength (DETAIL_BY_TIER: 0 on low). At 0 the texture is never fetched (the 131 KB jpg stays on the
+  // server) and the shader's detail block is skipped by a uniform branch (no texture fetch per fragment); the program is the same at every strength, so a tier change
+  // is a uniform write, never a recompile. Raising it from 0 fetches the texture once and the detail shows when it lands (the live strength stays 0 until then).
+  const DETAIL_PATH = "../../tex/facade_detail.jpg";
+  const detailOf = (v) => (typeof v === "string" ? (DETAIL_BY_TIER[v] != null ? DETAIL_BY_TIER[v] : DETAIL_BY_TIER.medium) : Math.max(0, Math.min(1.5, +v || 0)));
+  let detailWant = env.detail != null ? detailOf(env.detail) : DETAIL_BY_TIER.medium, detailUsers = 0;
+  const detailU = { value: 0 };                        // the live strength (shared by every building palette): 0 until the texture is in, then detailWant
+  const detailTexU = { value: null };                  // the shared sampler (null = three's empty texture: never sampled behind the uLcDetail > 0 branch)
+  let detailP = null;
+  function detailTexture() {
+    if (detailP) return detailP;
+    const pf = { file: DETAIL_PATH, sampler: "LINEAR/LINEAR_MIPMAP_LINEAR" };
+    detailP = loadTexture(pf).then((t) => {
+      if (t) { textures.delete(t); surfTextures.add(t); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true; detailTexU.value = t; detailU.value = detailWant; }
+      return t;
+    });
+    return detailP;
+  }
+  function installFacadeDetail(m) {
+    detailUsers++;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.tLcDetail = detailTexU;
+      sh.uniforms.uLcDetail = detailU;
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+{
+  vec4 lcW = vec4(transformed, 1.0);
+  vec3 lcN = objectNormal;
+#ifdef USE_INSTANCING
+  lcW = instanceMatrix * lcW;
+  lcN = mat3(instanceMatrix) * lcN;
+#endif
+  vLcW = (modelMatrix * lcW).xyz;
+  vLcN = mat3(modelMatrix) * lcN;
+}`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform sampler2D tLcDetail;\nuniform float uLcDetail;\nvarying vec3 vLcW;\nvarying vec3 vLcN;")
+        .replace("#include <map_fragment>", `#include <map_fragment>
+if (uLcDetail > 0.0) {
+  vec3 lcN = normalize(vLcN), lcA = abs(lcN);
+  vec2 lcUv = lcA.y > 0.6 ? vLcW.xz : (lcA.x > lcA.z ? vLcW.zy : vLcW.xy);
+  float lcF = uLcDetail * (1.0 - smoothstep(40.0, 120.0, distance(cameraPosition, vLcW)));
+#ifdef USE_ROUGHNESSMAP
+  lcF *= smoothstep(0.7, 0.85, texture2D(roughnessMap, vRoughnessMapUv).g);
+#endif
+  float lcD = texture2D(tLcDetail, lcUv * 0.3846).r * 1.2 + texture2D(tLcDetail, lcUv * 0.1111 + 0.37).r * 0.8;
+  diffuseColor.rgb *= mix(1.0, clamp(lcD, 0.5, 1.55), lcF);
+}`);
+    };
+    m.customProgramCacheKey = () => "citykit-facade-detail";
   }
   // Car paint (Wave 7 polish). The Kenney car palette paints every model in ONE saturated swatch (green sedans, red hatchbacks, ...), which in a street of 20 parked cars
   // is a toy shop. Every car InstancedMesh carries an instance colour (white = untouched): where the texel is a saturated body swatch (HSV saturation > ~0.65) it is replaced
@@ -655,6 +773,23 @@ export function createCityKit(env) {
 #endif`);
     };
     m.customProgramCacheKey = () => "citykit-car-paint";
+  }
+  // Container liveries (P23 / LC-29). The shipping-container GLB is two plain-colour materials (a grey frame, a red body). An entry with a `tint` (sRGB) paints the BODY: the
+  // most saturated part draws with a white copy of its material and the instance colour carries the paint (an entry without one keeps the authored red). One InstancedMesh per
+  // part as before - no draw call per colour; the copy is kit-owned (disposed with the palettes) and compiled by the warm-up like every kit material.
+  function paintPartOf(parts) {
+    let best = -1, bs = -1;
+    parts.forEach((q, i) => { const c = q.material && q.material.color; if (!c) return; const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b), sat = mx > 1e-6 ? (mx - mn) / mx : 0; if (sat > bs + 1e-9) { bs = sat; best = i; } });
+    return bs > 0.3 ? best : -1;
+  }
+  function paintMaterial(src) {
+    const id = "paint:" + src.uuid;
+    if (palMats.has(id)) return palMats.get(id);
+    const m = src.clone();
+    m.color.setRGB(1, 1, 1);
+    m.name = (src.name || "kit") + ":paint";
+    palMats.set(id, m);
+    return m;
   }
   function boxMaterial() {
     if (!proxyMat) { proxyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }); proxyMat.name = "citykit:boxes"; }
@@ -854,10 +989,12 @@ export function createCityKit(env) {
     const M = new THREE.Matrix4(), _sc3 = new THREE.Vector3(), _carCol = new THREE.Color();
     for (const [key, list] of groups) {
       const type = list[0].type, r = glb.get(type), T = man.types[type], pal = list[0].pal;
+      const paintPi = T.role === "container" && list.some((it) => it.tint != null) ? paintPartOf(r.parts) : -1;     // (P23: a container's body wears its entry's livery)
       for (let pi = 0; pi < r.parts.length; pi++) {
         const part = r.parts[pi];
         let mat = part.material;
         if (T.palette) mat = await paletteMaterial(pal, T.double || (part.material && part.material.side === THREE.DoubleSide));
+        if (pi === paintPi) mat = paintMaterial(part.material);
         const im = new THREE.InstancedMesh(part.geometry, mat, list.length);
         im.name = "kit:" + id + ":" + type + (r.parts.length > 1 ? "#" + pi : "") + (T.palette && pal.variant !== "base" ? ":" + pal.variant : "");
         if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
@@ -871,6 +1008,7 @@ export function createCityKit(env) {
           if (!part.identity) M.multiply(part.local);
           im.setMatrixAt(j, M);
           if (T.kind === "car") { _carCol.setHex(it.tint == null ? 0xffffff : it.tint); im.setColorAt(j, _carCol); }
+          else if (pi === paintPi) { if (it.tint == null) _carCol.copy(part.material.color); else _carCol.setHex(it.tint); im.setColorAt(j, _carCol); }
           sc3.copy(gs.center).applyMatrix4(M);
           const rr = gs.radius * M.getMaxScaleOnAxis();
           cen.push(sc3.x, sc3.y, sc3.z, rr);
@@ -927,7 +1065,7 @@ export function createCityKit(env) {
   // -- stats ---------------------------------------------------------------------------------------------------------------------------------
   function stats() {
     const out = { districts: {}, totals: { districts: 0, instances: 0, detailDrawCalls: 0, detailTriangles: 0, proxyDrawCalls: 0, proxyTriangles: 0, currentDrawCalls: 0, currentTriangles: 0,
-      fallbackBoxes: 0, textures: textures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
+      fallbackBoxes: 0, textures: textures.size, surfaceTextures: surfTextures.size, materials: palMats.size + (proxyMat ? 1 : 0) }, failedTypes: [], detail: { strength: detailWant, live: detailU.value, fetched: !!detailP, materials: detailUsers }, inexactEntries: 0, oversize: [], tableDrift: man ? man.drift.slice() : null };
     const failed = new Set();
     for (const P of placements) {
       out.inexactEntries += P.inexact || 0;
@@ -952,6 +1090,14 @@ export function createCityKit(env) {
     shadowsOpt.value = on;
     for (const P of placements) for (const D of P.districts.values()) for (const it of D.meshes) it.mesh.castShadow = on === "auto" ? (it.type ? casts(it.type) : true) : !!on;
   }
+  /** (P23 / LC-17, C-GFX / D10) the facade detail's strength: a number (0 = off) or a tier name ("low" | "medium" | "high" | "ultra": DETAIL_BY_TIER). Every
+   *  building palette shares the uniform: no recompile. Off -> on fetches the texture the first time (never fetched while it stays 0). Returns the strength set. */
+  function setDetail(v) {
+    detailWant = detailOf(v);
+    if (detailWant > 0 && !detailP && !disposed && detailUsers) detailTexture();
+    detailU.value = detailTexU.value ? detailWant : 0;
+    return detailWant;
+  }
   function setFarDistance(m) {
     opt.farDistance = m;
     for (const P of placements) for (const D of P.districts.values()) if (D.lod.levels.length > 1) D.lod.levels[1].distance = m + D.radius;
@@ -972,7 +1118,8 @@ export function createCityKit(env) {
     for (const mat of palMats.values()) { mat.dispose(); m++; }
     if (proxyMat) { proxyMat.dispose(); m++; }
     for (const tex of textures) { tex.dispose(); t++; }
-    palMats.clear(); textures.clear(); texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
+    for (const tex of surfTextures) { tex.dispose(); t++; }
+    palMats.clear(); textures.clear(); surfTextures.clear(); surfCache.clear(); detailP = null; detailTexU.value = null; detailU.value = 0; detailUsers = 0; texP.clear(); glb.clear(); glbP.clear(); placements.length = 0; proxyMat = null;
     return { geometries: g, materials: m, textures: t, instancedMeshes: im };
   }
 
@@ -987,7 +1134,7 @@ export function createCityKit(env) {
   }
 
   return {
-    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance,
+    api: KIT_API, place, preload, parts, dispose, stats, ready, warmObjects, setShadows, setFarDistance, setDetail,
     colliderFor, footprintFor, typeIds, hasType, resolvePalette,
     get manifest() { return man; },
     get disposed() { return disposed; },

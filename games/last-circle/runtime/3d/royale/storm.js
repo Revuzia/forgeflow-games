@@ -28,6 +28,16 @@
  *   - an ALPHA CAP (0.40) so a silhouette 20 m behind the wall keeps >= 60 % contrast.
  *   - looking from OUTSIDE the circle the ray crosses the wall twice; the far surface is
  *     drawn at 0.45 strength so two layers still stay near the cap.
+ *   - DISTANCE FADE (parity P1-E, LC-72). In circle 1 the wall stands 400-800 m from where
+ *     players are, and a 300 m curtain of streaks covered the whole sky (live: streaks over
+ *     every sky pixel at t=48 with r=784). Measured from the camera's horizontal distance to
+ *     each fragment, the curtain keeps its full 300 m within PAL.farD0 (170 m: every
+ *     stormfx_storm view is unchanged) and beyond PAL.farD1 (300 m) its top is capped at
+ *     ~3.7 deg of elevation (d x farK, never under farMin = 18 m: 19.5 m at 300 m, 52 m
+ *     at 800 m); the streaks follow the top and fade out between streakD0 and streakD1
+ *     (200-380 m), the way the fogged terrain behind it sinks into the haze. The dense base
+ *     and the ground band (0-18 m) are untouched, so the storm still reads as a violet line
+ *     on the horizon.
  *
  * INSIDE THE STORM (playerStormState). scene.fog colour + density, scene.background and the
  * sky dome's top/bot uniforms (the dome is fog:false, so the fog alone never tinted it)
@@ -67,9 +77,20 @@ const ALPHA_CAP = 0.40;                     // a silhouette 20 m behind the wall
 // into the curtain by baseH1 m); band = the 0-bandH m line where the wall meets the ground; streak = the hue
 // of the falling streaks, whose BRIGHTNESS is streakGain x the curtain luminance under them (glare bar <= 2x).
 const PAL = {
-  base: 0x5e4a9e, curtain: 0xbe96e6, band: 0xc878fa, streak: 0xe8e0ff,
-  baseA: 0.40, curtainA: 0.36, bandA: 0.40, streakGain: 1.8, streakAlpha: 0.45,
+  // R1 (stormfx_storm phase2/far ground band 19.4-21.4 over runs, bar 20): the base is a deeper violet (0x5e4a9e -> 0x4c3a8e) and its
+  // streaks glow a little less (1.8 -> 1.5; up in the curtain 1.4 -> 1.3), so the foot of the wall reads ~+3/255 stronger on the
+  // horizon (probe, bolts hidden: 19.1-20.4 -> 22.0-23.2) and the glare ratio keeps its headroom (phase6 1.45-1.66 -> 1.48-1.55)
+  base: 0x4c3a8e, curtain: 0xbe96e6, band: 0xc878fa, streak: 0xe8e0ff,
+  baseA: 0.40, curtainA: 0.36, bandA: 0.40, streakGain: 1.5, streakGainHi: 1.3, streakAlpha: 0.45,
+  // R1 near rain: a third, FINE streak layer (fineM m apart) that only exists while its lines are >= 5-8 px apart on screen
+  // (a wall within ~50 m): up close the curtain reads as falling rain, not three lines over a hill crest. fineK = its strength,
+  // fineGlow = its share of the streak glow (it is carried by the thinner haze), fineP = the hash cut (cells without a line)
+  fineM: 0.35, fineK: 0.9, fineGlow: 0.5, fineP: 0.05, fineH0: 6, fineH1: 10,
   baseH0: 8, baseH1: 18, bodyMin: 0.6, bodyH: 160, bandH: 3.0,
+  // P1-E (LC-72) distance fade: within farD0 m of the camera the wall is exactly as before (every stormfx_storm view); beyond
+  // farD1 m its top is capped by ELEVATION, d x farK (~3.7 deg), never under farMin m; between the two it blends. Streaks follow
+  // the top and also fade out between streakD0 and streakD1 m.
+  farD0: 170, farD1: 300, farK: 0.065, farMin: 18, streakD0: 200, streakD1: 380,
 };
 
 // ── session state (the storm module has one wall at a time) ──────────────────
@@ -111,7 +132,8 @@ uniform vec3 uStreakCol;    // hue of the falling streaks (their brightness come
 uniform float uBaseA;
 uniform float uCurtainA;
 uniform float uBandA;
-uniform float uStreakGain;  // streak luminance as a multiple of the curtain's own luminance under it (glare bar: <= 2)
+uniform float uStreakGain;  // streak luminance as a multiple of the curtain's own luminance under it, in the dense base (glare bar: <= 2)
+uniform float uStreakGainHi; // the same multiple up in the lighter curtain (R1: there the haze thinning carries the streak)
 uniform float uStreakAlpha; // the haze is this much thinner along a streak (alpha multiplier, < 1)
 uniform float uAlphaCap;
 uniform float uBaseH0;      // metres: the base holds up to here...
@@ -119,6 +141,10 @@ uniform float uBaseH1;      // ...and has become the curtain by here
 uniform float uBodyMin;     // curtain strength at height, as a fraction of the ground strength
 uniform float uBodyH;       // metres over which it falls
 uniform float uBandH;       // metres of the brighter band at the ground
+uniform vec4 uFar;          // P1-E distance fade: x, y = camera distance (m) of the near -> far blend; z = far top slope (m per m); w = far top floor (m)
+uniform vec2 uStreakFar;    // P1-E: camera distance (m) where the streaks start / finish fading out
+uniform vec4 uFine;         // R1 near rain: x = spacing (m), y = strength, z = glow share, w = hash cut (cells without a line)
+uniform vec2 uFineUp;       // R1 near rain: metres where its haze thinning starts / is full (lower than the big streaks' base -> curtain blend)
 varying vec2 vUv;
 varying vec3 vW;
 
@@ -127,7 +153,7 @@ float hash11( float p ) { p = fract( p * 0.1031 ); p *= p + 33.33; p *= p + p; r
 // One layer of thin vertical streaks. s = arc length along the wall in METRES, so the
 // spacing is a world distance; fwidth( sx ) is the cell-units-per-pixel footprint, which
 // keeps the line ~1.7 px wide at every distance and angle (anti-aliased, never a fat band).
-float streakLayer( float s, float h, float spacing, float seed ) {
+float streakLayer( float s, float h, float spacing, float seed, float hS, float hE ) {
   float sx = s / spacing;
   float fw = max( fwidth( sx ), 1e-5 );
   float cell = floor( sx );
@@ -141,8 +167,28 @@ float streakLayer( float s, float h, float spacing, float seed ) {
   float dense = 1.0 - smoothstep( 0.22, 0.50, fw );                   // sub-3 px spacing dissolves, never shimmers
   float ph = h * 0.025 + uTime * ( 0.45 + 0.5 * r2 ) + r * 9.0;       // brightness runs DOWN the line
   float pat = 0.72 + 0.28 * sin( ph * 6.2831853 );
-  float vfade = 1.0 - smoothstep( 120.0, 300.0, h );
+  float vfade = 1.0 - smoothstep( hS, hE, h );                       // height fade (lower when the wall is far: P1-E)
   return cov * present * dense * pat * vfade * ( 0.75 + 0.25 * r2 );
+}
+
+// R1 near rain: the fine layer. Same anti-aliased ~1.7 px line as streakLayer, a steadier spacing (centres 0.35-0.65 of the
+// cell, ~19 in 20 cells carry one) and a SCREEN-SPACE level of detail: full while a cell is >= 8 px wide, gone by 5 px, so it
+// only shows on a wall within ~50 m and never turns into a shimmer or a flat brightening further out.
+float fineLayer( float s, float h, float hS, float hE ) {
+  float sx = s / uFine.x;
+  float fw = max( fwidth( sx ), 1e-5 );
+  float cell = floor( sx );
+  float r  = hash11( cell * 2.3 + 29.0 );
+  float r2 = hash11( cell * 4.7 + 41.0 );
+  float d = abs( fract( sx ) - ( 0.35 + 0.3 * r ) );
+  float halfW = 0.85 * fw;
+  float cov = clamp( ( halfW - d ) / fw + 0.5, 0.0, 1.0 );
+  float present = step( uFine.w, r2 );
+  float lod = 1.0 - smoothstep( 0.125, 0.2, fw );
+  float ph = h * 0.04 + uTime * ( 0.9 + 0.6 * r2 ) + r * 7.0;        // brightness runs down the line, faster than the big streaks
+  float pat = 0.75 + 0.25 * sin( ph * 6.2831853 );
+  float vfade = 1.0 - smoothstep( hS, hE, h );
+  return cov * present * lod * pat * vfade;
 }
 
 void main() {
@@ -151,7 +197,16 @@ void main() {
   float hA = max( h, 0.0 );
   float above = smoothstep( -1.5, 0.0, h );                           // nothing below the ground / the waterline
   float bodyLo = mix( 1.0, uBodyMin, smoothstep( 0.0, uBodyH, hA ) );   // strength falls with height, streaks follow it
-  float body = bodyLo * ( 1.0 - smoothstep( 160.0, 300.0, hA ) );
+  // P1-E (LC-72): DISTANCE FADE. Up close the curtain stands 300 m tall; far away (circle 1, the wall 400-800 m off) a 300 m
+  // curtain covered most of the sky in streaks. Like the terrain behind it, the far wall sinks into the haze: its top comes
+  // down to a few degrees above the horizon and its streaks fade out, while the dense base and the ground band (0-18 m) stay,
+  // so the storm's position still reads on the horizon. Measured from the camera's horizontal distance to this fragment.
+  // Near (within uFar.x) the curtain is the full 300 m wall exactly as before; far (beyond uFar.y) its top is an ELEVATION
+  // cap, max( uFar.w, d x uFar.z ) (~3.7 deg: a violet band on the horizon); between the two it blends.
+  float dC = length( vW.xz - cameraPosition.xz );
+  float far = smoothstep( uFar.x, uFar.y, dC );
+  float topE = mix( 300.0, max( uFar.w, dC * uFar.z ), far );
+  float body = bodyLo * ( 1.0 - smoothstep( mix( 160.0, topE * 0.45, far ), topE, hA ) );
   float up = smoothstep( uBaseH0, uBaseH1, hA );                       // 0 in the dense base, 1 in the curtain above
   float band = ( 1.0 - smoothstep( 0.0, uBandH, hA ) ) * above;       // the brighter band at the ground
 
@@ -174,11 +229,22 @@ void main() {
   // pixel, never more: the glare bar (streaks <= 2x the curtain) holds by construction, on the base,
   // the band and all the way up the wall.
   float s = vUv.x * uCirc;
-  float sk = max( streakLayer( s, hA, 2.7, 1.0 ), streakLayer( s, hA, 6.4, 7.0 ) );
+  float sHs = mix( 120.0, topE * 0.5, far ), sHe = topE;
+  float sk = max( streakLayer( s, hA, 2.7, 1.0, sHs, sHe ), streakLayer( s, hA, 6.4, 7.0, sHs, sHe ) );
+  sk *= 1.0 - smoothstep( uStreakFar.x, uStreakFar.y, dC );           // and streaks fade out with distance
   const vec3 LUM = vec3( 0.2126, 0.7152, 0.0722 );
-  vec3 sRgb = uStreakCol * ( uStreakGain * dot( rgb, LUM ) / max( dot( uStreakCol, LUM ), 1e-4 ) );
-  rgb = mix( rgb, sRgb, sk );
-  a = mix( a, a * mix( 1.0, uStreakAlpha, up ), sk );                 // the dense base stays dense: streaks there only glow
+  // R1 (stormfx_storm phase6 glare 2.10x / 1.84x over two runs): a streak up in the bright curtain glowed 1.8x of a pixel that is
+  // already ~1.2x the 10-60 m median (the base -> curtain blend sits below it), so the brightest streaks read 2.1-2.2x the curtain.
+  // Up in the curtain the line now glows less and is carried by the thinner haze (below); the dense base keeps its glow, where
+  // thinning is off and the glow is all that shows (the ground-band delta)
+  vec3 sRgb = uStreakCol * ( mix( uStreakGain, uStreakGainHi, up ) * dot( rgb, LUM ) / max( dot( uStreakCol, LUM ), 1e-4 ) );
+  // R1 near rain (stormfx_storm phase6/near: 1-4 peaks per row, bar 8): the fine layer thins the haze like a streak but glows
+  // only uFine.z of one, so the glare bar (streaks <= 2x the curtain) keeps its headroom
+  float skF = fineLayer( s, hA, sHs, sHe ) * uFine.y;
+  rgb = mix( rgb, sRgb, max( sk, skF * uFine.z ) );
+  float aS = mix( a, a * mix( 1.0, uStreakAlpha, up ), sk );          // the dense base stays dense: the big streaks there only glow
+  float aF = mix( a, a * mix( 1.0, uStreakAlpha, smoothstep( uFineUp.x, uFineUp.y, hA ) ), skF );
+  a = min( aS, aF );
   gl_FragColor = vec4( rgb, a );                                      // premultiplied
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -278,8 +344,29 @@ export function init(W) {
   if (!W.stormU) W.stormU = { cx: 0, cz: 0, r: 1e9 };
 }
 
+/** LC-13 land predicate for the storm plan (owner OD-1): true where the TERRAIN (groundAt: no roofs, no props)
+ *  stands more than 0.5 m over the water plane - the P1-G storm study's rule (storm_study.cjs: land = height >
+ *  waterY + 0.5). A dry map (Ashgrid, waterY -999) is land everywhere. A pure function of the seeded map, so every
+ *  client builds the same circles. Exposed as W.stormLandAt for harness callers (new SIM.Storm({..., landAt})). */
+export function landPredicate(map) {
+  if (!map) return null;
+  const ground = typeof map.groundAt === "function" ? map.groundAt : typeof map.heightAt === "function" ? map.heightAt : null;
+  if (!ground) return null;
+  const wy = typeof map.waterY === "number" ? map.waterY : 0;
+  return (x, z) => ground(x, z) > wy + 0.5;
+}
+
+/** The storm's pacing key: W.match.pace (contract C-MODE) when the boot lane sets it, else the legacy W.mode, which
+ *  IS the pacing (standard / quick / practice). A team mode (solo / duo / trio / squad) is never a pacing. */
+function stormPace(W) {
+  const p = W.match && W.match.pace;
+  if (p && K.STORM_PHASES[p]) return p;
+  return K.STORM_PHASES[W.mode] ? W.mode : "standard";
+}
+
 export function createStorm(W) {
-  const storm = new K.Storm({ seed: W.seed, mode: W.mode, half: W.map.half });
+  W.stormLandAt = landPredicate(W.map);
+  const storm = new K.Storm({ seed: W.seed, mode: stormPace(W), half: W.map.half, landAt: W.stormLandAt });
   const g = W.group("storm");
   g.clear();
 
@@ -312,6 +399,7 @@ export function createStorm(W) {
       uCurtainA: { value: PAL.curtainA },
       uBandA: { value: PAL.bandA },
       uStreakGain: { value: PAL.streakGain },
+      uStreakGainHi: { value: PAL.streakGainHi },
       uStreakAlpha: { value: PAL.streakAlpha },
       uAlphaCap: { value: ALPHA_CAP },
       uBaseH0: { value: PAL.baseH0 },
@@ -319,6 +407,10 @@ export function createStorm(W) {
       uBodyMin: { value: PAL.bodyMin },
       uBodyH: { value: PAL.bodyH },
       uBandH: { value: PAL.bandH },
+      uFar: { value: new THREE.Vector4(PAL.farD0, PAL.farD1, PAL.farK, PAL.farMin) },
+      uStreakFar: { value: new THREE.Vector2(PAL.streakD0, PAL.streakD1) },
+      uFine: { value: new THREE.Vector4(PAL.fineM, PAL.fineK, PAL.fineGlow, PAL.fineP) },
+      uFineUp: { value: new THREE.Vector2(PAL.fineH0, PAL.fineH1) },
     },
     vertexShader: WALL_VS, fragmentShader: WALL_FS,
     transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending,

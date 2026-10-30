@@ -11,8 +11,10 @@ One standard match on isla_viva seed 7 (the research's measured seed: 124 weapon
 
   gpusync    what the GPU draws == the module's CPU slot state: the frame as the game left it vs the same frame after a forced
              FULL re-upload of every marker attribute, after the landing skip (player view), after a 20 s sim-only skip (250 m up)
-             and after 90 rendered frames of 3 sim ticks each - 0 differing pixels (a lost update range = a ghost marker of a
-             taken item). Falsifier: --plant flush-clear serves loot.js with the pre-fix flush and must FAIL this row
+             and after 90 rendered frames of 3 sim ticks each, and (R1) after two net takes on two sim ticks of ONE rendered frame
+             (a spawned legendary rifle 7 m in front of the player, then a second item, no render between) - 0 differing pixels
+             (a lost update range = a ghost marker of a taken item). Falsifier: --plant flush-clear serves loot.js with the pre-fix
+             flush and must FAIL this row (the two-take view is what catches it: the other three passed with the plant applied)
 
   pools      the markers are THREE instanced meshes (loot-rings / loot-beams / loot-glows) at renderOrder >= 6; the loot group holds no
              per-item ring torus and no sprite; the three add exactly 3 draw calls (renderer.info delta, markers shown vs hidden);
@@ -168,10 +170,12 @@ CENSUS_JS = r"""() => {
     rows.push({ id: it.id, kind: it.data.kind, did: it.data.id, r: it.data.rarity || 0, ring: o.ring ? o.ring.slot : -1, beam: o.beam ? o.beam.slot : -1,
                 glow: o.glow ? o.glow.slot : -1, ringAlive: !!(o.ring && o.ring.alive), top: o.beam ? o.beam.top : null, by: o.beam ? o.beam.y : null,
                 nominal: o.beam ? o.beam.nominal : null, size: o.beam ? o.beam.size : null, x: it.pos.x, y: it.pos.y, z: it.pos.z, ceil: o.ceil === Infinity ? null : o.ceil,
-                th: W.map.heightAt(it.pos.x, it.pos.z) }); }
+                th: W.map.heightAt(it.pos.x, it.pos.z), pile: it.pile || null }); }
+  // LC-27 (P2-H): a death pile carries ONE marker (ring + beam + glow); its members carry none of their own
+  const piles = W.debugPiles ? W.debugPiles().map((q) => ({ id: q.id, members: q.members.length, ring: q.ring, beam: q.beam, glow: q.glow, best: q.best, color: q.color })) : [];
   const chests = W.debugChests().map((c) => { const o = W.debugLootFx(c.id).obj; return { id: c.id, opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow,
       top: o && o.beam ? o.beam.top : null, by: o && o.beam ? o.beam.y : null, nominal: o && o.beam ? o.beam.nominal : null, x: c.pos.x, y: c.pos.y, z: c.pos.z, ceil: c.ceil === Infinity ? null : c.ceil }; });
-  return { torus, sprites, inst, rows, chests, fx: { beams: d.beams, rings: d.rings, glows: d.glows } };
+  return { torus, sprites, inst, rows, chests, piles, fx: { beams: d.beams, rings: d.rings, glows: d.glows } };
 }"""
 
 CALLS_JS = r"""() => {
@@ -438,12 +442,49 @@ def main():
                 s.js("(x) => { const W = window.__LC__.W, p = W.player; p.pos.x = x[0]; p.pos.y = x[1]; p.pos.z = x[2]; p.onGround = true; if (p.vel) { p.vel.x = p.vel.y = p.vel.z = 0; } }", pos0)
                 s.step_frames(90, 1 / 20, True)
                 res.append(sync_diff("after 90 rendered frames of 3 ticks: player view"))
+                # 3. (R1, harness lane) the documented failure built on purpose instead of hoped for: views 1-2 change slots on many ticks but
+                # mostly by the 150 m cull, whose markers the shader has already faded to nothing at the cull edge, and view 3 only sees a ghost
+                # when a bot happens to take an item in view on a tick that is not the frame's last (inferred) - so --plant flush-clear passed all three
+                # (0 px in every view: verifier A run4_flushclear on the release head and on a8467320, 2026-10-28). Here: a legendary rifle 'g_a' and an smg 'g_b' spawned on open flat ground
+                # (findSpot, the pickup row's own rule), the player 7 m from g_a facing it, rendered until settled; then g_a is taken on one sim
+                # tick and g_b on the NEXT, with no render between (two net takes inside one 30 fps frame). The fixed flush merges both ranges and
+                # the GPU drops both; the pre-fix flush uploads only g_b's slots and g_a's ring / beam / glow / blob stay drawn: a ghost the forced
+                # re-upload removes. Armed only when g_a's ring and beam slots were live and its foot was on screen before the takes.
+                pos0b = s.js("() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.y, p.pos.z, p.yaw, p.input.yaw, p.input.pitch]; }")
+                g_spot = s.js("() => window.__LG__.findSpot(2.5, 25, 6, 0.8, null, 0)")
+                armed = None
+                if g_spot:
+                    gx, gz = g_spot["x"], g_spot["z"]
+                    s.js("([x, z]) => { const L = window.__LG__; L.spawn('g_a', { kind: 'weapon', id: 'ar', rarity: 4, mag: 30 }, x, z);"
+                         " L.spawn('g_b', { kind: 'weapon', id: 'smg', rarity: 2, mag: 30 }, x + 4, z - 3); }", [gx, gz])
+                    rig.place(gx, gz, dist=7.0, pitch=0.10, yaw_off=0.20)
+                    pre = s.js("""([x, z]) => { const L = window.__LG__, W = window.__LC__.W, a = L.info('g_a'), b = L.info('g_b');
+                        const foot = L.project(x, W.map.heightAt(x, z) + 0.3, z), cv = L.canvas();
+                        return { a: a && a.ring && a.beam ? [a.ring.slot, a.beam.slot, a.ring.alive, a.beam.alive] : null, b: b && b.ring ? [b.ring.slot, b.beam ? b.beam.slot : -1] : null,
+                                 foot: [Math.round(foot[0]), Math.round(foot[1]), +foot[2].toFixed(4)], onScreen: foot[2] < 1 && foot[0] > 8 && foot[0] < cv[0] - 8 && foot[1] > 8 && foot[1] < cv[1] - 8 }; }""", [gx, gz])
+                    armed = bool(pre["a"] and pre["a"][2] and pre["a"][3] and pre["b"] and pre["onScreen"])
+                    v.info("gpusync two-take probe", {"spot": [gx, gz], "slots g_a [ring, beam, alive, alive]": pre["a"], "slots g_b [ring, beam]": pre["b"],
+                                                      "g_a foot on screen": pre["foot"], "armed": armed})
+                    if armed:
+                        s.js("() => window.__LC__.W.netTakeItem('g_a')")
+                        s.step_frames(1, 1 / 60, False)       # tick 1: g_a's slots parked (no render)
+                        s.js("() => window.__LC__.W.netTakeItem('g_b')")
+                        s.step_frames(1, 1 / 60, False)       # tick 2: g_b's slots parked (no render): the frame's last flush
+                        res.append(sync_diff("two net takes on two sim ticks of one rendered frame: 7 m from the first"))
+                    else:
+                        for gid in ("g_a", "g_b"):
+                            s.js("(id) => window.__LC__.W.netTakeItem(id)", gid)
+                    s.js("(x) => { const W = window.__LC__.W, p = W.player; p.pos.x = x[0]; p.pos.y = x[1]; p.pos.z = x[2]; p.yaw = x[3]; p.input.yaw = x[4]; p.input.pitch = x[5];"
+                         " p.onGround = true; if (p.vel) { p.vel.x = p.vel.y = p.vel.z = 0; } }", pos0b)
+                    s.step_frames(8, 1 / 60, True)        # back where the census below always measured (the cull follows the camera)
                 v.info("gpusync per view", res)
                 if any(r["controlPixels"] for r in res):
                     v.cnj("gpusync: the rendered markers equal a forced full re-upload", "two renders with NO re-upload already differ: %s" % res)
+                elif not armed:
+                    v.cnj("gpusync: the rendered markers equal a forced full re-upload", "the two-take probe could not be armed (no open flat spot, or g_a not live / on screen): %s" % (g_spot,))
                 else:
                     v.check("gpusync: the rendered markers equal a forced full re-upload of every marker attribute (no ghost or missing ring / beam / glow / blob)",
-                            all(r["pixels"] == 0 for r in res), res, expect="0 differing pixels in every view (control: 0 without a re-upload)")
+                            all(r["pixels"] == 0 for r in res), res, expect="0 differing pixels in every view, the two-take view included (control: 0 without a re-upload)")
             cen = s.js(CENSUS_JS)
             rows, chests = cen["rows"], cen["chests"]
             v.info("loot census (live after landing)", {"items": len(rows), "weapons": sum(1 for r in rows if r["kind"] == "weapon"),
@@ -460,8 +501,11 @@ def main():
                         {"torus": cen["torus"], "sprites": cen["sprites"]}, expect="0 / 0 (was 1 torus per floor item + 55 chest sprites)")
                 calls = s.js(CALLS_JS)
                 v.check("pools: the markers add exactly 3 draw calls", calls["delta"] == 3, calls, expect="3 (was ~8 beams + ~8 glows + ~12 rings in the ground frustum)")
-                wp = [r for r in rows if r["kind"] == "weapon"]
-                other = [r for r in rows if r["kind"] != "weapon"]
+                # (P2/P3 fix round, LC-27) a death-pile member has no marker of its own by design: the pile has one. Members are judged by the
+                # piles row below, everything else as before
+                members = [r for r in rows if r.get("pile")]
+                wp = [r for r in rows if r["kind"] == "weapon" and not r.get("pile")]
+                other = [r for r in rows if r["kind"] != "weapon" and not r.get("pile")]
                 # an item the module could not put a ring under (nothing within 0.9 m below it) has no markers by design
                 noring_w = [r for r in wp if r["ring"] < 0]
                 v.check("pools: every floor weapon has a ring and a beam (a beam only where >= 0.35 m of headroom)",
@@ -470,6 +514,15 @@ def main():
                 v.check("pools: ammo and consumables get a ring and NO beam",
                         all(r["beam"] < 0 for r in other) and sum(1 for r in other if r["ring"] < 0) <= max(1, int(0.02 * len(other))),
                         {"n": len(other), "withBeam": sum(1 for r in other if r["beam"] >= 0), "noRing": sum(1 for r in other if r["ring"] < 0)})
+                piles = cen.get("piles") or []
+                pile_ids = {q["id"] for q in piles}
+                mm = [r for r in members if r["ring"] >= 0 or r["beam"] >= 0 or r["glow"] >= 0]
+                orphan = [r["id"] for r in members if r["pile"] not in pile_ids]
+                nomark = [q["id"] for q in piles if q["ring"] < 0 or q["glow"] < 0]
+                v.check("pools: death piles (LC-27): every pile has its one ring + glow (+ beam), no member has a marker of its own, every member's pile exists",
+                        not mm and not orphan and not nomark,
+                        {"piles": len(piles), "members": len(members), "membersWithOwnMarker": [r["id"] for r in mm][:5], "orphans": orphan[:5],
+                         "pilesWithoutMarker": nomark[:5], "pilesWithoutBeam": sum(1 for q in piles if q["beam"] < 0)})
                 live_ch = [c for c in chests if not c["opened"]]
                 v.check("pools: every unopened chest has a ring, a beam and a glow", all(c["ring"] >= 0 and c["glow"] >= 0 and c["beam"] >= 0 for c in live_ch),
                         {"chests": len(live_ch), "missing": [c["id"] for c in live_ch if min(c["ring"], c["glow"], c["beam"]) < 0][:5]})
@@ -626,7 +679,7 @@ def main():
                             // a freed slot may be taken again at once by loot a BOT spawns during the 3 stepped frames (a bot opening a chest bursts items that reuse it): then it is
                             // neither zero nor free, but it is owned by someone else - the item that was picked no longer owns it. That is reuse, not a leak (the accounting row below
                             // proves every live slot has exactly one live owner).
-                            const ownerOf = (k, slot) => { for (const o of W.debugItems().concat(W.debugChests())) { if (o[k] === slot) return o.id; } return null; };
+                            const ownerOf = (k, slot) => { for (const o of W.debugItems().concat(W.debugChests()).concat(W.debugPiles ? W.debugPiles() : [])) { if (o[k] === slot) return o.id; } return null; };
                             return { ringOwner: ownerOf('ring', sp[0]), beamOwner: ownerOf('beam', sp[1]), netRingOwner: sn ? ownerOf('ring', sn[0]) : null, netBeamOwner: sn ? ownerOf('beam', sn[1]) : null,
                                      ringZero: zero(m[0], sp[0]), beamZero: zero(m[1], sp[1]), netRingZero: sn ? zero(m[0], sn[0]) : null, netBeamZero: sn ? zero(m[1], sn[1]) : null,
                                      ringFree: free('rings', sp[0]), beamFree: free('beams', sp[1]), netRingFree: sn ? free('rings', sn[0]) : null, netBeamFree: sn ? free('beams', sn[1]) : null,
@@ -640,7 +693,8 @@ def main():
                         # slot ACCOUNTING instead of a global live-count delta (49 bots keep looting during the stepped frames): every live slot
                         # of every pool is owned by exactly one live item / chest, and nothing owns a freed slot
                         acct = s.js("""() => { const W = window.__LC__.W, d = W.debugLootFx(); const own = { beams: [], rings: [], glows: [] };
-                            for (const o of W.debugItems().concat(W.debugChests())) { if (o.beam >= 0) own.beams.push(o.beam); if (o.ring >= 0) own.rings.push(o.ring); if (o.glow >= 0) own.glows.push(o.glow); }
+                            // (LC-27) a death pile owns its one ring / beam / glow: an owner like an item or a chest
+                            for (const o of W.debugItems().concat(W.debugChests()).concat(W.debugPiles ? W.debugPiles() : [])) { if (o.beam >= 0) own.beams.push(o.beam); if (o.ring >= 0) own.rings.push(o.ring); if (o.glow >= 0) own.glows.push(o.glow); }
                             const out = {};
                             for (const k of ['beams', 'rings', 'glows']) { const set = new Set(own[k]); const fr = d.free ? new Set(d.free[k]) : new Set();
                               out[k] = { owned: own[k].length, distinct: set.size, live: d[k].live, ownedButFree: own[k].filter((x) => fr.has(x)).length }; }
@@ -658,7 +712,7 @@ def main():
                                 return True
                             return bool(post.get(zero_k)) and post.get(free_k) is not False
                         v.check("pickup: picking an item and a net-take mirror each park their ring + beam (zero matrix, back on the free list) and the pools stay "
-                                "consistent (every live slot owned by exactly one live item / chest)",
+                                "consistent (every live slot owned by exactly one live item / chest / death pile)",
                                 bool(ok_pick) and alive_pre and post is not None and parked("ringZero", "ringFree", "ringOwner") and parked("beamZero", "beamFree", "beamOwner")
                                 and parked("netRingZero", "netRingFree", "netRingOwner") and parked("netBeamZero", "netBeamFree", "netBeamOwner")
                                 and post["itemGone"] and post["nearby"] == 0 and acct_ok,
@@ -680,7 +734,7 @@ def main():
                             s.js("(id) => window.__LC__.W.openChest(window.__LC__.W.player, id)", ch["id"])
                             s.step_frames(2, 1 / 60, True)
                             after = s.js("""(id) => { const W = window.__LC__.W, d = W.debugLootFx(), c = W.debugChests().find((q) => q.id === id);
-                                const own = []; for (const o of W.debugItems().concat(W.debugChests())) { if (o.glow >= 0) own.push(o.glow); }
+                                const own = []; for (const o of W.debugItems().concat(W.debugChests()).concat(W.debugPiles ? W.debugPiles() : [])) { if (o.glow >= 0) own.push(o.glow); }
                                 return { live: [d.beams.live, d.rings.live, d.glows.live], glowOwned: own.length, glowDistinct: new Set(own).size, rec: { opened: c.opened, ring: c.ring, beam: c.beam, glow: c.glow },
                                          targetable: W.nearbyLoot({ x: c.pos.x, y: c.pos.y, z: c.pos.z }, 3).some((q) => q.type === 'chest' && q.id === id) }; }""", ch["id"])
                             v.check("pickup: opening a chest parks its ring + beam + glow slots (the record lets go of all three, the glow count drops by at least 1 - a bot may open another chest in the same frames - and every live glow has exactly one owner)",
@@ -692,21 +746,38 @@ def main():
 
             # ---- deaths ------------------------------------------------------------------------------------------------
             if want("deaths"):
-                b = s.js("""() => { const W = window.__LC__.W; const a = W.actors.find((x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon'));
-                    if (!a) return null; W.giveItem(a, { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 }); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
-                    return { id: a.id }; }""")
+                # (R1, harness lane) the subject is an armed bot whose bag TAKES the given legendary sniper when one exists (the first armed bot of
+                # the Savanna run had a full bag, so its pile was rightly grey and the colour half of the row tested only "common")
+                b = s.js("""() => { const W = window.__LC__.W, SN = { kind: 'weapon', id: 'sniper', rarity: 4, mag: 5 };
+                    const armed = (x) => x.isBot && x.alive && x.inventory && x.inventory.slots.some((q) => q && q.kind === 'weapon');
+                    const a = W.actors.find((x) => armed(x) && W.wouldAcceptItem(x, SN)) || W.actors.find(armed);
+                    if (!a) return null; const g = W.giveItem(a, SN); W.giveItem(a, { kind: 'consumable', id: 'medkit', count: 2 });
+                    return { id: a.id, sniperGiven: !!g }; }""")
                 if not b:
                     v.cnj("deaths: a killed bot's drops carry ring + glow (+ beam for a weapon)", "no armed bot alive")
                 else:
                     before = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
                     s.js("(id) => { const W = window.__LC__.W; W.killActor(W.actorById.get(id), W.player, 'ar'); }", b["id"])
                     s.step_frames(2, 1 / 60, True)
-                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
+                    # (R1) a drop id is 'dd:<victim>:<k>': match the victim EXACTLY - the bare prefix 'dd:s1' also took bot s18's six drops from an
+                    # earlier death (ashgrid 2026-10-27: 14 "drops", 8 of pile:s1 and 6 of pile:s18, read as markerless members of the wrong pile)
+                    others = s.js("(id) => window.__LC__.W.debugItems().filter((it) => it.id.indexOf('dd:' + id) === 0 && it.id.indexOf('dd:' + id + ':') !== 0).length", b["id"])
+                    drops = s.js("""(id) => { const W = window.__LC__.W; return W.debugItems().filter((it) => it.id.indexOf('dd:' + id + ':') === 0).map((it) => { const o = W.debugLootFx(it.id).obj;
                         return { id: it.id, kind: it.data.kind, did: it.data.id, r: it.data.rarity, ring: o.ring ? o.ring.slot : -1, beam: o.beam ? o.beam.slot : -1, glow: o.glow ? o.glow.slot : -1 }; }); }""", b["id"])
                     after = s.js("() => { const d = window.__LC__.W.debugLootFx(); return [d.beams.live, d.rings.live, d.glows.live]; }")
-                    okd = bool(drops) and all(d["ring"] >= 0 and d["glow"] >= 0 and ((d["beam"] >= 0) == (d["kind"] == "weapon")) for d in drops)
-                    v.check("deaths: a killed bot's drops carry ring + glow, and a beam if (and only if) they are weapons", okd and len(drops) >= 2,
-                            {"drops": drops[:8], "nDrops": len(drops), "liveBefore": before, "liveAfter": after})
+                    # (P2/P3 fix round) LC-27: the drops are ONE death pile - its members carry NO marker of their own; the pile carries one ring +
+                    # beam + glow in RARITY_COLOR of its best gun (the legendary sniper given here). Was: every drop its own ring + glow (+ beam)
+                    pile = s.js("""(id) => { const W = window.__LC__.W, K = W.SIM; const q = (W.debugPiles ? W.debugPiles() : []).find((x) => x.id === 'pile:' + id);
+                        return q ? { id: q.id, members: q.members.length, ring: q.ring, beam: q.beam, glow: q.glow, best: q.best, color: q.color,
+                                     want: K.RARITY_COLOR[K.RARITY[Math.max(0, q.best)]] } : null; }""", b["id"])
+                    own = [d["id"] for d in drops if d["ring"] >= 0 or d["beam"] >= 0 or d["glow"] >= 0]
+                    # the best gun DROPPED (the given legendary sniper needs a free slot: a full bag keeps what it had)
+                    best_r = max([d["r"] or 0 for d in drops if d["kind"] == "weapon"] or [-1])
+                    okd = bool(drops) and len(drops) >= 2 and not own and bool(pile) and pile["members"] == len(drops) and pile["ring"] >= 0 and pile["glow"] >= 0 \
+                        and pile["beam"] >= 0 and pile["best"] == best_r and pile["color"] == pile["want"]
+                    v.check("deaths (LC-27): a killed bot's drops form ONE death pile - 0 member markers, one ring + beam + glow in the best dropped gun's rarity colour", okd,
+                            {"victim": b, "drops": drops[:8], "nDrops": len(drops), "otherDeathsDropsWithSamePrefix": others, "membersWithOwnMarker": own[:5], "pile": pile, "liveBefore": before, "liveAfter": after,
+                             "markerDelta": [a - b_ for a, b_ in zip(after, before)], "bestDroppedRarity": best_r})
 
             # ---- chestview ---------------------------------------------------------------------------------------------
             if want("chestview"):
