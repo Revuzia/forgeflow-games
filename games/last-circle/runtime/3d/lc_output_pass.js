@@ -395,7 +395,11 @@ LCOutputPass.CB_SIM = [
 LCOutputPass.CB_SHIFT = [
   null,
   [0, 0, 0, 0.7, 1, 0, 0.7, 0, 1],          // protan: red loss shown as green + blue
-  [0, 0, 0, 0.7, 1, 0, 0.7, 0, 1],          // deutan: same redistribution
+  // deutan: the GREEN loss shown as red + blue (it was the protan row: a deuteranope's error sits mostly in G with the opposite
+  // sign in R, and the red-axis shift zeroed R and folded the two back together - deutan moved the judged frame 1.2 / 255 against
+  // protan's 5.2). Chromium's colour enhancer (ui/accessibility/extensions/colorenhancer/src/cvd.js, CvdAxis.GREEN addendum), whose
+  // RED / BLUE addenda are exactly the protan / tritan rows here; applied the same way: c + shift * (c - sim * c)
+  [1, 0.7, 0, 0, 0, 0, 0, 0.7, 1],
   [1, 0, 0.7, 0, 1, 0.7, 0, 0, 0],          // tritan: blue loss shown as red + green
 ];
 
