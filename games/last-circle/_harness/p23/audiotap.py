@@ -160,7 +160,15 @@ def capture(s, js, arg, settle):
     row = analyse(d["sr"], x, d["t0"], et)
     pl = s.js("() => window.__PL__.slice(0, 4)")
     row["pl"] = pl
-    row["gain_dB"] = round(20 * np.log10(pl[0]["gain"]), 2) if pl and pl[0]["gain"] > 0 else None
+    # the gain the game ASSIGNED: a pooled strip is wired gain -> panner when audio.js creates it (makeStrip), so a capture that needed a
+    # NEW strip (a direction no free strip points within 10 deg of) first logs that connect at the GainNode's default 1.0 (0 dB), and only
+    # then the vol x occlusion write spatialOut makes before any audio flows. R4: after the R2 movers merge (ea6853de) the player lands 256 m
+    # from the spot instead of 894 m, the behind step needed a fresh strip, and pl[0] read 0.0 dB for one of three crouch-9 captures (mean
+    # -8.64 vs the real -12.96; audible peak -35.97 vs front -34.85). So: the first write when there is one; a connect only for a chain that
+    # was built with its gain already set (spatialOut's throwaway fallback, which is never written after the connect).
+    w = [e for e in pl if e.get("via") == "set"] if pl else []
+    g0 = (w[0] if w else pl[0]) if pl else None
+    row["gain_dB"] = round(20 * np.log10(g0["gain"]), 2) if g0 and g0["gain"] > 0 else None
     return row
 
 
