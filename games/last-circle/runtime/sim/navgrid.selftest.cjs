@@ -52,9 +52,17 @@ function minOf(n, fn) { let best = Infinity; for (let i = 0; i < n; i++) { const
   if (pj) {
     const m1 = /const STEP_UP = ([0-9.]+);/.exec(pj);
     ok(m1 && +m1[1] === NG.STEP_UP, "STEP_UP = player.js literal (" + (m1 && m1[1]) + ")");
-    const sup = /function supportF\([^)]*\) \{[\s\S]*?\n\}/.exec(pj);            // Wave 7b S1: supportIn's body lives in supportF (MV calling convention)
-    const m2 = sup && /c\.minX - ([0-9.]+)/.exec(sup[0]);
-    ok(m2 && +m2[1] === NG.SUP_MARGIN, "supportIn footprint margin = player.js literal (" + (m2 && m2[1]) + ")");
+    // Wave 7b S1 moved supportIn's body into supportF; R2 (cd2ea528) split it again into supportF + supportFG. So the pin reads EVERY player.js
+    // support* function that carries a footprint test (x < c.minX - m || x > c.maxX + m || z < c.minZ - m || z > c.maxZ + m), wherever it lives
+    // now, and requires all four margins of each such function to equal NG.SUP_MARGIN (and at least one such function to exist).
+    const supRe = /function (support\w*)\([^)]*\) \{[\s\S]*?\n\}/g, foot = [];
+    for (let fm; (fm = supRe.exec(pj)); ) {
+      const fp = /c\.minX - ([0-9.]+) \|\| x > c\.maxX \+ ([0-9.]+) \|\| z < c\.minZ - ([0-9.]+) \|\| z > c\.maxZ \+ ([0-9.]+)/.exec(fm[0]);
+      if (fp) foot.push({ fn: fm[1], m: [+fp[1], +fp[2], +fp[3], +fp[4]] });
+      else if (/c\.(?:min|max)[XZ] [-+] [0-9.]/.test(fm[0])) foot.push({ fn: fm[1], m: [NaN] });   // a footprint the pin cannot read fails, never skips
+    }
+    const footOk = foot.length > 0 && foot.every(f => f.m.every(v => v === NG.SUP_MARGIN));
+    ok(footOk, "supportIn footprint margin = player.js literal (" + (foot.length ? foot.map(f => f.fn + " " + f.m.join("/")).join(", ") : "null") + ")");
     // Wave 7b S1: blockedIn's body is blockedF, which hands the SAME numbers to the sim's rampBlocksA (rampBlocks' one body) in an array
     ok(/K\.PLAYERK\.radius/.test(pj) && /function blockedF\(/.test(pj) && /RBA\[0\] = x; RBA\[1\] = z; RBA\[2\] = yd; RBA\[3\] = h; RBA\[4\] = r; RBA\[5\] = STEP_UP;\s*\n\s*if \(!K\.rampBlocksA\(c, RBA\)\) continue;/.test(pj),
        "player.js blockedIn still calls the sim rampBlocks the way navgrid copies it");
