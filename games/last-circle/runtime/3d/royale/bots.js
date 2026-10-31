@@ -128,14 +128,56 @@ function buildFallTable() {
 // (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
 const fallHp = (a) => Math.max(0, Math.min(200, Math.round((a.downed ? a.downedHp : a.hp) || 0)));
 function lethalDrop(a) { return LETHAL_H ? LETHAL_H[fallHp(a)] : Infinity; }
-/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). */
-function walkDrop(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
+/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). (W9 R1B, Volcano Rim) ...and in a CALM state no more than
+ *  the path planner itself drops (CALM_DROP_H = NAV_DROP_MAX + 0.3 m): a full-hp bot's hp limit is ~14 m, so calm bots stepped off the 6-9 m terrace
+ *  edges of Isla Viva's Volcano Rim village that the planner routes round by the stairs. bb.calmDrop is set by act() every frame (calmDropOn). */
+function walkDrop(a) {
+  if (!WALK_H) return Infinity;
+  const h = WALK_H[fallHp(a)], br = a.brain;
+  return br && br.bb.calmDrop && h > CALM_DROP_H ? CALM_DROP_H : h;
+}
+/** the hp limit alone (what walkDrop was before W9): the calm cap's fall-back and its "would the hp limit have held this?" test */
+function walkDropHp(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
+// (W9 R1B) the calm states (the planner's drop limit applies); FLEE, CLOSEIN, ENGAGE, HEAL, REVIVE and a storm-pressed ROTATE keep the hp limit
+const CALM_DROP_ST = { WANDER: 1, LOOT: 1, ROTATE: 1, FOLLOW: 1, PING: 1, ASSIST: 1, HUNT: 1, SUPPLY: 1, PUSH: 1, CAMP: 1 };
+const CALM_HOLD_N = 3, CALM_HOLD_WIN_S = 10, CALM_OFF_S = 5;
+function calmDropOn(W, b) {
+  const bb = b.bb;
+  return CALM_DROP_ST[b.state] === 1 && !(b.state === "ROTATE" && bb.rotPress) && !(W.t < bb.calmOffUntil);
+}
+/** (W9 R1B) edgeGuard held a calm bot at a drop only the calm cap refuses (the hp limit would let it walk off): its next moveToward asks the planner
+ *  for a route at once (bb.edgeReplan - a drop is no wall, so nothing else asked: the bot pushed at the lip until something gave; the planner's
+ *  own drop limit, NAV_DROP_MAX, routes it round by the stairs). */
+function calmHeld(W, b, drop) {
+  const a = b.actor, bb = b.bb;
+  if (!bb.calmDrop || !(drop <= walkDropHp(a))) return;
+  bb.edgeReplan = true;
+}
+/** (W9 R1B) ...and that re-plan found no route. CALM_HOLD_N of them inside CALM_HOLD_WIN_S: the trap breaker (trapBreak: the goal parked, an exit
+ *  under the same calm limit, committed) - a goal behind a drop is given up, not jumped to; CALM_HOLD_N more inside CALM_HOLD_WIN_S of that = penned
+ *  (no exit at the calm limit): the hp limit for CALM_OFF_S - no permanent pen. (The design's "3 failed re-plans -> the hp limit" alone walked a PUSH
+ *  bot off the 9.3 m lip at Volcano Rim (88, -138) in p23_fall rim: the break-out comes first.) */
+function calmReplanFailed(W, b) {
+  const bb = b.bb;
+  if (W.t - bb.calmHold0 > CALM_HOLD_WIN_S) { bb.calmHold0 = W.t; bb.calmHoldN = 0; }
+  if (++bb.calmHoldN < CALM_HOLD_N) return;
+  bb.calmHoldN = 0; bb.calmHold0 = W.t;
+  if (W.t - bb.calmBreakT > CALM_HOLD_WIN_S) { bb.calmBreakT = W.t; nav.st.calmBreak++; if (b.state === "PUSH" && bb.heard) bb.heard.t = -99; trapBreak(W, b); b.nextThink = 0; }
+  else { bb.calmOffUntil = W.t + CALM_OFF_S; bb.calmDrop = false; nav.st.calmOff++; }
+}
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
 // (integrator D3) sim's K is the single source of the DBNO tunables (K.REVIVE_RANGE / REVIVE_S / REVIVE_HP): nothing below hardcodes one.
 // A bot walks in to 80 % of the reach before it holds E (it stops short of the line, not on it: player.js canRevive refuses past K.REVIVE_RANGE).
 const reviveR = () => K.REVIVE_RANGE * 0.8;
 const REVIVE_SEEK_M = 80;         // a downed squadmate within this range is worth going to
+// (W9 R1B, bot mate dither) the revive's commitment (think: the REVIVE score) - REVIVE_COMMIT false = the pre-W9 flip-flop (dbno --plant no-commit)
+const REVIVE_COMMIT = true;
+const REVIVE_COMMIT_M = 6;        // within this of the downed mate the revive holds (92) ...
+const REVIVE_HURT_S = 1.5;        // ... unless hit this recently with hp + shield under 60 ...
+const REVIVE_CLOSE_M = 15;        // ... or an enemy is seen inside this
+const REVIVE_ENGAGE_HOLD_S = 3;   // a REVIVE -> ENGAGE switch outside the commit zone holds the fight this long (or until its target is dead / unseen this long)
+const REVIVE_URGENT_NEAR_M = 20;  // bleed-out urgency (+6) applies unless the enemy is inside this
 /** player.js runs the revive channel itself (lane player: W.canRevive + reviveStep on every up actor's interactDown) - the bots then only hold E. */
 const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
 /** Revive `t` by `by`: player.js's own entry when it exports one (the integrator wires W.reviveActor), else the contract's state change. */
@@ -367,7 +409,7 @@ export function debugBrains() { return brains; }
  */
 export function setLobbySkill(W) {
   loadPace(W);
-  humanLandT.clear(); reviving.clear();     // (P23) this match's grace clocks and revive channels
+  humanLandT.clear(); reviving.clear(); shieldClaims.clear();     // (P23) this match's grace clocks and revive channels; (W9 R1B) far-shield claims
   buildFallTable();                         // (P23, C-FALL) from this sim's fall constants (none: no guard)
   W.matchWasNet = !!W.net;          // captured BEFORE a takeover nulls W.net
   W.matchSkill = readSkill(W);
@@ -438,6 +480,8 @@ class Blackboard {
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
       this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
+      this.revEngUntil = -99;     // (W9 R1B) the REVIVE -> ENGAGE hold
+      this.calmDrop = false; this.rotPress = false; this.calmHoldN = 0; this.calmHold0 = -99; this.calmOffUntil = -99; this.calmBreakT = -99; this.edgeReplan = false;   // (W9 R1B) walkDrop's calm cap
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -1026,7 +1070,12 @@ function think(W, b) {
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
   // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
-  bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP());
+  // (W9 R1B, OD-16) ...AND A RESERVE BIG FOR THE LATE GAME. p23_botbatch read the median alive-bot shield at t >= 600 s at 13 (bar 75) while the census
+  // counted 11 big shields lying unclaimed inside the next circle: after the mid-game fights a bot had no big shield to refill past 50, and nothing
+  // sent it for one unless its bar sat exactly at the mini cap. From WANT_BIG_T a calm, upgraded bot with no big shield in the bag and a bar under
+  // 100 (not on a pressing rotation: it would walk away from the circle) wants one too (wantBig): the same scans, a big shield only (shieldGoal).
+  const wantBig = WANT_BIG && calm && upgraded && W.t >= WANT_BIG_T && a.shield < 100 && !shieldItem && !bb.rotPress && bigCount(a) === 0;
+  bb.wantShield = (calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP())) || wantBig;
   if (!bb.wantShield) bb.shieldGo = null;
   else if (W.t >= bb.shieldScanT) {
     bb.shieldScanT = W.t + 2;
@@ -1036,7 +1085,9 @@ function think(W, b) {
     // 4 m vertical window (NEAR_DY) drops anything up or down a slope, and the LOOT scan stops at 90 m. So once the bar sits at the cap a calm
     // bot looks out to SHIELD_FAR_M, slope or not, for a big shield (a death pile's too) or an unopened supply crate (two of them), inside the
     // next circle, and walks to it (bb.shieldGo: onEnter LOOT takes it over a pick that is not a shield).
-    bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
+    // (W9 R1B, OD-16) the far scan at ANY bar under 75 (and for wantBig), not only at the mini cap: a bot that wants a shield holds no big one
+    // (carriesShield), and the near scan's 80 m / 4 m-high window found nothing it can use
+    bb.shieldGo = n && n.type === "item" ? n : (WANT_BIG || a.shield >= MINI_CAP() ? farShield(W, a) : null);
     // (final, OD-13) ...AND THE DEAD MEN'S SHIELDS. A body's bag is on the floor in its death pile (loot.js deathDrop); a calm bot under the cap
     // walks to the nearest pile still holding a shield it can use, out to PILE_SHIELD_M and up or down a slope, over an unopened chest (a pile's
     // shield is certain, a chest's is 6 in 10) unless the chest is much nearer
@@ -1094,6 +1145,7 @@ function think(W, b) {
     if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
   }
   s.ROTATE = rotScore;
+  bb.rotPress = rotScore >= 70;     // (W9 R1B) a pressing rotation keeps the hp drop limit (walkDrop)
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   // PUSH toward gunfire — but not into it at 30 EHP: a hurt bot that pushes a
   // fight it only heard is feeding it. Healthy aggressors still go.
@@ -1104,7 +1156,7 @@ function think(W, b) {
   // for a crate that whoever was standing next to it has already emptied.
   s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
     ? (a.personality === "loot_goblin" ? 78 : 58) - hyp(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
-      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is two big shields: worth more to a thin bar
+      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is big shields (W9 OD-16: three + three minis): worth more to a thin bar
     : 0;
   // ENDGAME HUNT (owner playtest: "at some point they just wander around
   // aimlessly doing nothing"): ≤10 alive, nothing visible, safely inside the
@@ -1120,7 +1172,27 @@ function think(W, b) {
     const mate = downedMate(W, b);
     if (mate) {
       const md = hyp(mate.pos.x - a.pos.x, mate.pos.z - a.pos.z);
-      s.REVIVE = !liveTarget ? 87 : (tDist > 45 && W.t - (a.lastDamageT || -99) > 1.5 ? 84 : 0);
+      const hitRecent = W.t - (a.lastDamageT || -99) <= REVIVE_HURT_S;
+      let rv = !liveTarget ? 87 : (tDist > 45 && !hitRecent ? 84 : 0);
+      // (W9 R1B, the mate that dithered) BLEED-OUT URGENCY: the mate bleeds out before this bot could walk there and finish the channel (+2 s) ->
+      // +6 over the calm score (93: over a mid-range ENGAGE 88), unless the enemy is inside REVIVE_URGENT_NEAR_M
+      const rate = K.dbnoBleedRate ? K.dbnoBleedRate(mate.knocks || 1) : 0;
+      if (rate > 0 && (mate.downedHp || 0) / rate < md / 6 + K.REVIVE_S + 2 && !(liveTarget && tDist < REVIVE_URGENT_NEAR_M)) rv = Math.max(rv, 87) + 6;
+      // (W9 R1B) COMMITMENT + HYSTERESIS. An enemy peeking in and out of sight inside 45 m flipped the state every ~1.2 s (seen: ENGAGE 88 > REVIVE 0;
+      // unseen 1.2 s: REVIVE 87 > ENGAGE 42), so the mate walked a step toward the knock, turned back to the fight, and the man bled out. Now:
+      //  - inside REVIVE_COMMIT_M of the mate the revive scores 92 (over any fight score) and holds, unless the break rule fires: hit in the last
+      //    REVIVE_HURT_S with hp + shield under 60, or an enemy SEEN inside REVIVE_CLOSE_M - then ENGAGE, and the revive resumes when it clears;
+      //  - a bot already walking to the knock (REVIVE chosen) keeps going until it is there or the break rule fires;
+      //  - a REVIVE -> ENGAGE switch outside the commit zone holds the fight REVIVE_ENGAGE_HOLD_S (or until its target is dead / unseen that long).
+      if (REVIVE_COMMIT) {
+        const brk = (hitRecent && a.hp + a.shield < 60) || (liveTarget && tDist < REVIVE_CLOSE_M && W.t - bb.targetSeenT < 0.5);
+        const commit = md < REVIVE_COMMIT_M;
+        if (commit || (b.state === "REVIVE" && bb.reviveId === mate.id)) {
+          if (brk) rv = 0;
+          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; }
+        } else if (W.t < bb.revEngUntil && tAct && tAct.alive && W.t - bb.targetSeenT < REVIVE_ENGAGE_HOLD_S) rv = 0;
+      }
+      s.REVIVE = rv;
       if (md > REVIVE_SEEK_M) s.REVIVE = 0;
       if (s.REVIVE && bb.reviveId !== mate.id) { bb.reviveId = mate.id; bb.reviveT = 0; bb.reviveStarted = false; }
     } else s.REVIVE = 0;
@@ -1161,7 +1233,10 @@ function think(W, b) {
   let best = "WANDER", bs = -1;
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
   if (bb.pingRec) pingAckStep(W, b, best);
-  if (b.state !== best) { b.state = best; onEnter(W, b, best); }
+  if (b.state !== best) {
+    if (b.state === "REVIVE" && best === "ENGAGE") bb.revEngUntil = W.t + REVIVE_ENGAGE_HOLD_S;      // (W9 R1B) the fight it turned to is held
+    b.state = best; onEnter(W, b, best);
+  }
   if (best === "LOOT" && grab && bb.lootId !== grab.id) {
     bb.lootId = grab.id; bb.lootType = "item"; bb.nearLootT = 0;
     setLootGoal(bb, grab);
@@ -1660,6 +1735,7 @@ function act(W, b, dt) {
   // crouched — and at CROUCH.speedMult 0.45 — for the rest of the match.
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false; inp.crouch = false;
   inp.interactDown = false;       // (P23, C-DBNO) held only by actRevive, frame by frame (player.js reviveStep channels while it is held)
+  bb.calmDrop = calmDropOn(W, b);   // (W9 R1B) walkDrop's calm cap, for this frame's state
 
   if (a.gliding) {
     // steer toward drop target, dive (sprint) when above it
@@ -1870,7 +1946,9 @@ function actTail(W, b, dt) {
   // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
   const mt = bb.moveTo;
   let tq = 0;
-  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {
+  // (W9 R1B, swimmer trapBreak) swimmers are no longer exempt: deepwood seed 1 s4 spent 3 of its 4 stuck episodes swimming at (52.5, 74.5) in LOOT,
+  // its goal 10.8 m off - the breaker never looked at it. trapBreak's water branch (swimExit) hauls it out or swims it away instead.
+  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {
     const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
     if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
   }
@@ -2136,7 +2214,11 @@ function trapBreak(W, b) {
   const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
   bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
   let ex = null;
-  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
+  if (a.swimming) {
+    // (W9 R1B) THE WATER BRANCH: the nearest haul-out (swimStep's own rule) or dry shore, else 12 m of open water away from the goal (swimExit)
+    ex = swimExit(W, a, gyaw, bb.trapN);
+    if (ex) nav.st.trapSwim++;
+  } else if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
     ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
     ex.exit = true;
     nav.st.trapDeck++;
@@ -2151,7 +2233,7 @@ function trapBreak(W, b) {
     // whose last point's surroundings, falls further than the bot may walk off is refused (the heading walk below is tried instead)
     if (ex && !exitFallSafe(W, a, ex, walkDrop(a))) { ex = null; nav.st.trapUnsafe++; }
   }
-  if (!ex) {
+  if (!ex && !a.swimming) {
     const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
     for (let k = 0; k < TRAP_HEADINGS.length; k++) {
       const yaw = gyaw + side * TRAP_HEADINGS[k];
@@ -2173,6 +2255,45 @@ function trapBreak(W, b) {
   bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
   bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
   bb.nextPathT = W.t + 2.5;
+}
+const SWIM_RING_M = [3, 6, 12];   // (W9 R1B) the haul-out ring search: 8 headings at each of these radii, nearest ring first
+const SWIM_FEET = 0.45;           // player.js swimStep: swimFeet = pos.y + 0.45 (its probe height for collision and the haul-out)
+const SWIM_HAUL_UP = SWIM_FEET + 0.55;    // ... and a ledge is climbed onto up to swimFeet + STEP_UP over pos.y
+const SWIM_AWAY = [Math.PI, Math.PI * 0.75, -Math.PI * 0.75, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
+/** (W9 R1B, swimmer trapBreak) a trapped swimmer's way out, deterministic (no rng draw):
+ *    1. the nearest point on rings of 3 / 6 / 12 m (8 headings each, from the goal's heading round) whose support passes swimStep's own haul-out rule
+ *       (a top above waterY - 0.25 and at most swimFeet + STEP_UP: the ledge it climbs onto) or whose terrain is dry (above waterY + 0.1: the shore);
+ *    2. else TRAP_WALK_M of water along the first heading away from the goal (straight away first, then +-135, +-90, +-45 deg; the side alternates with
+ *       the trip count as the land branch does).
+ *  Either goal needs a clear straight swim: no collider the swimmer's move test would stop at (fitsAt at the swim tick's feet) every 1 m of it. */
+function swimExit(W, a, gyaw, trapN) {
+  const M = W.map, wy = M.waterY, py = a.pos.y, feet = py + SWIM_FEET;
+  for (let ri = 0; ri < SWIM_RING_M.length; ri++) {
+    const r = SWIM_RING_M[ri];
+    for (let k = 0; k < 8; k++) {
+      const yaw = gyaw + (k & 1 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 4;
+      const x = a.pos.x - Math.sin(yaw) * r, z = a.pos.z - Math.cos(yaw) * r;
+      if (Math.abs(x) >= M.half || Math.abs(z) >= M.half) continue;
+      const dry = M.heightAt(x, z) > wy + 0.1;
+      if (!dry) { const ledge = supportAt(W, x, z, py + 0.9); if (!(ledge > wy - 0.25 && ledge <= py + SWIM_HAUL_UP)) continue; }
+      if (!swimClear(W, a, x, z, feet)) continue;
+      return [{ x, y: null, z, k: 0 }];
+    }
+  }
+  const side = (trapN & 1) ? 1 : -1;
+  for (let k = 0; k < SWIM_AWAY.length; k++) {
+    const yaw = gyaw + side * SWIM_AWAY[k];
+    const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
+    if (Math.abs(x) >= M.half || Math.abs(z) >= M.half) continue;
+    if (!swimClear(W, a, x, z, feet)) continue;
+    return [{ x, y: null, z, k: 0 }];
+  }
+  return null;
+}
+function swimClear(W, a, x, z, feet) {
+  const dx = x - a.pos.x, dz = z - a.pos.z, n = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dz * dz)));
+  for (let i = 1; i <= n; i++) if (!fitsAt(W, a.pos.x + dx * i / n, a.pos.z + dz * i / n, feet)) return false;
+  return true;
 }
 const TRAP_OVERRUN_M = 3.0;       // (pass 2) a sprint arriving at a break-out goal runs on (and turns) this far past it ...
 const TRAP_LIP_R = 2.5;           // ... and no ground within this of the goal may lie more than the walking margin under it
@@ -2747,6 +2868,7 @@ const NAV_NODES = NAV_CELLS * NAV_L;
 const NAV_STEP_UP = 0.55;                 // player.js STEP_UP
 const NAV_RAMP_EXTRA = 0.45;              // a ramp may rise faster than a step per 0.5 m sub-step
 const NAV_DROP_MAX = 6.0;
+const CALM_DROP_H = NAV_DROP_MAX + 0.3;     // (W9 R1B) a calm bot's walk-off limit: the planner's own drop limit + 0.3 m of sampling slack (walkDrop)
 const NAV_DROP_COST = 2.0;
 const NAV_LAYER_EPS = 1.0;
 const NAV_MAX_EXPAND = 2600;
@@ -3227,7 +3349,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3880,7 +4002,7 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
-let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck)
+let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck, 6 calm drop cap: W9)
 function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
   if ((bb.nextPathT || 0) > W.t) return;
@@ -4057,6 +4179,14 @@ function moveTowardQ(W, b, dt, sprint, ty) {
       bb.badLoot[bb.lootId] = W.t + 30;
       bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
     }
+  }
+  // (W9 R1B) the calm drop cap held this bot at a lip last frame (edgeGuard -> calmHeld): ask for a route NOW (the leg it walked, if any, is refused);
+  // no route -> calmReplanFailed (after 3: the trap breaker, after 3 more: the hp limit)
+  if (bb.edgeReplan) {
+    bb.edgeReplan = false;
+    if (bb.path) { bb.path = null; bb.pathGoal = null; }
+    reqWhy = 6; bb.nextPathT = 0; requestPath(W, b, tx, tz, ty, true);
+    if (bb.path) nav.st.calmRoutes++; else calmReplanFailed(W, b);
   }
   // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
   // Drop the plan when the caller's goal has moved well away from the one the
@@ -5218,6 +5348,7 @@ function edgeGuard(W, b) {
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
       nav.st.edgeHolds++;
+      if (bb.calmDrop) calmHeld(W, b, k <= 3 && a.pos.y - sup > lim ? a.pos.y - sup : runTop - sup);
       return;
     }
     if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
@@ -5251,6 +5382,7 @@ function edgeGuard(W, b) {
   inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
   bb.nextPathT = 0;
   nav.st.edgeHolds++; nav.st.edgeFlights++;
+  if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); }
 }
 /** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
  *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
@@ -5367,6 +5499,9 @@ function shieldGoal(a, n) {
  *  (SHIELD_FAR_DY), inside the next circle (6 m in from its edge: the walk there is a walk the storm wants anyway), that this bot has not
  *  failed to reach (badLoot), with headroom over it and on this bot's shore. One query per 2 s per calm bot at the cap with no big shield. */
 const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
+// (W9 R1B, OD-16) the reserve-big trigger (think: wantBig) and the far scan at any bar; WANT_BIG false = the pre-W9 rules (botbatch --plant no-far-big)
+const WANT_BIG = true;
+const WANT_BIG_T = 420;           // from this match time (the batch measures from 600 s: a reserve picked up at 420-600 s refills the bar after the 600 s fights)
 function farShield(W, a) {
   if (!W.nearbyLoot) return null;
   let cx = 0, cz = 0, cr = Infinity;
@@ -5382,10 +5517,24 @@ function farShield(W, a) {
     if (bad && bad[n.id] > W.t) continue;
     if (cr < Infinity && hyp(n.pos.x - cx, n.pos.z - cz) > cr) continue;
     if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (n.type === "item" && WANT_BIG && !claimFree(W, n.id, a)) continue;          // (W9 R1B, OD-16) another bot is on its way to it
     if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    if (n.type === "item" && WANT_BIG) shieldClaims.set(n.id, a.id);
     return n;
   }
   return null;
+}
+/** (W9 R1B, OD-16) CLAIM, NOT STAMPEDE: a far big shield is claimed by the bot the far scan sent for it, so two bots do not walk 200 m to the same
+ *  item (the second takes the next candidate). A claim holds while its bot is alive and that item is still its shield goal (bb.shieldGo): picked
+ *  up, given up (badLoot, no longer wanted) or dead, it is free again. Cleared every match (spawnBrains). */
+const shieldClaims = new Map();
+function claimFree(W, id, a) {
+  const by = shieldClaims.get(id);
+  if (by === undefined || by === a.id) return true;
+  const o = W.actorById.get(by), g = o && o.alive && o.brain ? o.brain.bb.shieldGo : null;
+  if (g && g.id === id && o.brain.bb.wantShield) return false;
+  shieldClaims.delete(id);
+  return true;
 }
 /** (final, OD-13) THE DEATH-PILE SHIELD SCAN: the best shield item still in a death pile (W.pileShields) within PILE_SHIELD_M, any slope up to
  *  PILE_SHIELD_DY, that adds to this bar (shieldGoal), that the bag would take (or make room for), not under a low ceiling or off-shore, not one

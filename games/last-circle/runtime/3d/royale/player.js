@@ -189,7 +189,7 @@ export function createActor(W, opts) {
     // air / landing (LC-30, C-FALL): time off the ground, highest feet height, whether it left by a jump, the landing
     // kind (0 none, 1 soft, 2 hard) and until when it plays / staggers, the impact speed of the last fall, the W.t of the
     // last glide / canopy touchdown (C-FALL settle, see LAND_SETTLE_S)
-    _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0, _glideLandT: -1e9,
+    _airT: 0, _airPeakY: 0, _jumped: false, _landKind: 0, _landT: 0, _landUntil: 0, _fallV: 0, _glideLandT: -1e9, _heavyT: -1e9,
     // slide (LC-21): seconds into the slide (-1 = none), speed, direction, cooldown clock
     _slideT: -1, _slideV: 0, _slideDx: 0, _slideDz: 0, _slideCd: 0, _crouchPrev: false,
     // slide clip (LC-21): its play rate for this slide, the slide count and the slide the clip was started for
@@ -2247,6 +2247,9 @@ function stepActor(W, a, dt) {
     a.healing.tLeft -= dt;
     if (a.healing.tLeft <= 0) finishHeal(W, a);
   }
+  // (W9 R1B, LC-61) HEAVY LANDING: no shot and no ADS for K.FALL.HEAVY_S after a landing from over K.FALL.HEAVY_H (landed sets a._heavyT; the
+  // landing tick itself is blocked there). Bots run the same rule (their input passes through here). The human's click edge is dropped too.
+  if (W.t < a._heavyT) { inp.fire = false; inp.ads = false; if (a === W.player) W._fireEdge = 0; }
   // C-DBNO: a downed actor cannot shoot, aim, reload, swap, loot or heal (its brain / keys may still ask). The human's
   // semi-auto click edge is a W field (weapons.js reads it, not input.fire), so it is dropped too.
   if (a.downed) {
@@ -2377,8 +2380,8 @@ function stepActor(W, a, dt) {
     }
     inp.jump = false;
 
-    // gravity
-    a.vel.y += K.MOVE.gravity * dt;
+    // gravity, capped at terminal velocity (W9 R1B, LC-61: K.MOVE.terminalV; an 80 m fall reached vy -59)
+    a.vel.y = Math.max(a.vel.y + K.MOVE.gravity * dt, -K.MOVE.terminalV);
 
     // integrate — X then Z with wall blocking, then Y with support. EVERY actor,
     // at any distance from the camera (the old far-bot branch moved on terrain
@@ -2564,7 +2567,7 @@ function emoteStep(W, a, inp, dt) {
     playAnim(a, "idle", { force: true });
   } else {
     a.vel.x *= 0.75; a.vel.z *= 0.75;
-    a.vel.y += K.MOVE.gravity * dt;
+    a.vel.y = Math.max(a.vel.y + K.MOVE.gravity * dt, -K.MOVE.terminalV);     // (W9 R1B, LC-61) terminal velocity here too
     a.pos.y += a.vel.y * dt;
     const supE = supportAt(W, a.pos.x, a.pos.z, a.pos.y);
     if (a.pos.y <= supE + 0.02) { a.pos.y = supE; a.vel.y = 0; }
@@ -4364,6 +4367,12 @@ function landed(W, a, v, wet) {
   if (!wet && !a.isDummy && !settle) dmg = fallHurt(W, a, v);
   if (!a.alive) return;
   const hard = !wet && (v > HARD_LAND_V || dmg >= 5);
+  // (W9 R1B, LC-61) a heavy landing (an impact from over K.FALL.HEAVY_H, 12 m) also blocks firing / ADS for K.FALL.HEAVY_S - from this tick on
+  if (!wet && K && K.FALL && K.FALL.HEAVY_V > 0 && v >= K.FALL.HEAVY_V) {
+    a._heavyT = W.t + K.FALL.HEAVY_S;
+    const inp = a.input; if (inp) { inp.fire = false; inp.ads = false; }
+    if (a === W.player) W._fireEdge = 0;
+  }
   if (hard) {
     a._landKind = 2; a._landUntil = W.t + 0.7;
     a._landT = W.t + kNum("LAND_STAGGER_S", LAND_STAGGER_DEF);
