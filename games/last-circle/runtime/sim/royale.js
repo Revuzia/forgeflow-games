@@ -301,10 +301,16 @@
 
   // arcade-BR speeds (owner: "not industry standard" at 8.4 — browser BRs
   // like Final Drop run ~9-10 sprint with a strong FOV kick)
+  // (W9 R1B, LC-61) terminalV: the fastest a falling body goes (player.js clamps vel.y at -terminalV in both of its gravity integrations). 34 m/s =
+  // the game's own sprint-dive skydive speed (player.js glide fallTarget -34), so a fall never looks faster than a deliberate dive; reached after
+  // 26.3 m (v^2 / 2g). It makes no fall survivable that was lethal: fallDamage(34) ~ 142 > 100, and the lethal height (19.4 m) is below 26.3 m.
+  // (A human belly-to-earth terminal velocity is ~55 m/s; arcade BRs cap lower for readability.) The bots' drop tables (bots.js dropTable:
+  // v = sqrt(2 g h)) need no change: every drop past 26.3 m is lethal on both curves.
   var MOVE = {
     walk: 6.0, sprint: 8.0, ads: 3.8,
     swim: 4.0, swimSprint: 5.6,
     jumpV: 7.8, gravity: -22, accelT: 0.13, airControl: 0.4,
+    terminalV: 34,
   };
 
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
@@ -325,6 +331,9 @@
   // lands at 13.3 m/s.) dmg = FALL_DMG_PER_V x (v - FALL_SAFE_V)^FALL_EXP, rounded.
   // A hard landing (v > LAND_STAGGER_V, the same 4 m) also staggers for LAND_STAGGER_S (LC-61).
   var FALL_SAFE_H = 4, FALL_EXP = 1.33, LAND_STAGGER_S = 0.4;
+  // (W9 R1B, LC-61) HEAVY LANDING: an impact at or over the speed of a HEAVY_LAND_H fall (the brief's "> 12 m", 22.98 m/s) also blocks firing and
+  // ADS for HEAVY_LAND_S after the touchdown (player.js landed / stepActor). The 0.4 s stagger above is unchanged for every hard landing.
+  var HEAVY_LAND_H = 12, HEAVY_LAND_S = 0.3;
   function fallSpeedForHeight(h) { return Math.sqrt(2 * Math.abs(MOVE.gravity) * Math.max(0, h)); }
   var FALL_SAFE_V = fallSpeedForHeight(FALL_SAFE_H);
   // calibrated so a 10 m drop costs FALL_REF_DMG (D2: 35-40 at 10 m; the in-game impact lands ~1 % under v(10 m))
@@ -343,7 +352,9 @@
     var v = FALL_SAFE_V + Math.pow(hp / FALL_DMG_PER_V, 1 / FALL_EXP);
     return v * v / (2 * Math.abs(MOVE.gravity));
   }
-  var FALL = { SAFE_H: FALL_SAFE_H, SAFE_V: FALL_SAFE_V, DMG_PER_V: FALL_DMG_PER_V, EXP: FALL_EXP, STAGGER_S: LAND_STAGGER_S, STAGGER_V: LAND_STAGGER_V };
+  var HEAVY_LAND_V = fallSpeedForHeight(HEAVY_LAND_H);
+  var FALL = { SAFE_H: FALL_SAFE_H, SAFE_V: FALL_SAFE_V, DMG_PER_V: FALL_DMG_PER_V, EXP: FALL_EXP, STAGGER_S: LAND_STAGGER_S, STAGGER_V: LAND_STAGGER_V,
+               HEAVY_H: HEAVY_LAND_H, HEAVY_V: HEAVY_LAND_V, HEAVY_S: HEAVY_LAND_S };
 
   // Crouch: the one basic shooter verb the game did not have. Today it trades
   // 55% of your movement speed for a markedly tighter hipfire cone and a lower
@@ -1761,11 +1772,15 @@
     return items;
   }
 
+  // (W9 R1B, OD-16) a supply crate carries a full stack of big shields (3) and three minis (was big x2): 100 -> 225 shield points a crate, the late
+  // game's restock (Apex care packages / PUBG crates carry top-tier defensive gear). The fixed items draw nothing: the per-drop rng draw count (the
+  // gun, its rarity) is unchanged, so only the contents change (MAP_GEN bumped once for the wave by the geometry lane).
   function rollSupplyDrop(rng) {
     var wid = WEAPON_IDS[weightedIndex(rng, SUPPLY_GUN_WEIGHTS)];
     return [
       { kind: "weapon", id: wid, rarity: rollRarity(rng, "supply") },
-      { kind: "consumable", id: "big_shield", count: 2 },
+      { kind: "consumable", id: "big_shield", count: 3 },
+      { kind: "consumable", id: "mini_shield", count: 3 },
       { kind: "consumable", id: "medkit", count: 1 },
       { kind: "ammo", id: WEAPONS[wid].ammo || "medium", count: (AMMO[WEAPONS[wid].ammo || "medium"] || AMMO.medium).box * 3 * ammoBoxMult(wid) },
     ];

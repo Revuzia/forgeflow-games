@@ -28,6 +28,10 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   census per map: (floor guns + chests) / players >= 3 and >= 8 light-ammo boxes; the game's path search finds a usable
   path for >= 15 of 30 blocked pairs at 120 m and at 180 m
   --farwall (gate.py passes it): far-bot wall clipping farToNearInside == 0 (PLAN L5 d) on seeds 1 and 7 isla_viva
+  swim-trap (W9 R1B, every run list): stuck episodes while SWIMMING (stuckEp inWater) <= 1 per bot in every run - the loop breaker's water branch
+  --sweep (W9 R1B): the episode sweep, 3 maps x seeds 1-6 (18 runs, no paths): the worst bot's stuck episodes <= 4 in every run (the R2 movers bar)
+  --swimcheck (W9 R1B): the scripted swimmer trap (natural swim traps: 0 in the 18-run sweep, base and lane alike) - see SWIMCHECK_JS
+  --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
@@ -46,7 +50,87 @@ import common as C  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_RUNS = "1:isla_viva,1:isla_viva,7:isla_viva,11:ashgrid,12:ashgrid,13:deepwood,23:deepwood"
+SWEEP_RUNS = ",".join("%d:%s" % (sd, mp) for mp in ("isla_viva", "ashgrid", "deepwood") for sd in range(1, 7))
+SWEEP_WORST_MAX, SWIM_TRAP_MAX = 4, 1
+# planted faults served into bots.js (p23lib.serve_patched: each anchor must occur exactly once, else could-not-judge)
+PLANTS = {
+    # (W9 R1B) the loop breaker's trap test exempts swimmers again (the pre-W9 term): swim-trap MUST FAIL (deepwood seed 1, bot s4)
+    "swim-exempt": [("if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {",
+                     "if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {")],
+}
 GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
+
+
+# (W9 R1B) --swimcheck: the loop breaker's water branch on a SCRIPTED trap (natural swimmer traps: 0 in the 18-run sweep of the base and of this
+# lane, so the sweep's swim-trap row cannot tell the two apart). A quick match on deepwood seed 1, after the landings: a free bot is put in deep water
+# (terrain >= 3 m under the surface) with dry shore 20-40 m off, 100 hp, shield 50, an AR and no shield item, and a big shield on that shore - its
+# own shield scan sends it there (LOOT). SETUP: every other actor kept > 260 m away (no sight, no shot heard); for SWIM_PIN_S the bot is held inside a 1 m disc every sim tick
+# (an invisible pen: the trap). Then it is released for SWIM_FREE_S. Judged per spot (SWIM_SPOTS spots): the bot was swimming and travelling (LOOT,
+# its goal > 6 m off) while penned, the breaker tripped (a break-out goal committed: bb.escUntil set while penned), and after the release it was
+# not stuck again (no 3 s window inside 0.4 m while swimming in a moving state). --plant swim-exempt (swimmers exempt again): never trips - FAILS.
+SWIM_MAP, SWIM_SEED, SWIM_SPOTS, SWIM_PIN_S, SWIM_FREE_S = "deepwood", 1, 3, 4.0, 8.0
+SWIMCHECK_JS = r"""async ([wantN, pinS, freeS]) => {
+  const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM, wy = M.waterY, H = (M.half || 760) - 30;
+  const cl = (v) => Math.max(-H, Math.min(H, v));
+  // deep-water spots with dry shore 20-40 m off along one of 16 headings (the first dry point on it), >= 80 m apart
+  const spots = [];
+  for (let x = -H; x <= H && spots.length < wantN; x += 24) for (let z = -H; z <= H && spots.length < wantN; z += 24) {
+    if (!(M.heightAt(x, z) < wy - 3)) continue; if (spots.some((p) => Math.hypot(p.x - x, p.z - z) < 80)) continue;
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a); let shore = null;
+      for (let d = 2; d <= 40; d += 1) { const h = M.heightAt(x + dx * d, z + dz * d); if (h > wy + 0.3) { shore = d; break; } }
+      if (shore == null || shore < 20) continue;
+      const gx = x + dx * (shore + 4), gz = z + dz * (shore + 4); if (!(M.heightAt(gx, gz) > wy + 0.3) || Math.abs(gx) > H || Math.abs(gz) > H) continue;
+      spots.push({ x, z, gx, gz, shore }); break; } }
+  const used = new Set(), out = [];
+  for (let si = 0; si < spots.length; si++) { const sp = spots[si];
+    const b = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding && !used.has(a.id)).sort((p, q) => Math.hypot(p.pos.x - sp.x, p.pos.z - sp.z) - Math.hypot(q.pos.x - sp.x, q.pos.z - sp.z))[0];
+    if (!b) { out.push({ error: 'no free bot' }); continue; } used.add(b.id);
+    const put = (a, x, z, y) => { a.pos.set(x, y, z); a.vel.set(0, 0, 0); a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
+    put(b, sp.x, sp.z, wy - 0.55); b.onGround = false;
+    const sl = b.inventory.slots; for (let i = 0; i < sl.length; i++) sl[i] = null; for (const q in b.inventory.ammo) b.inventory.ammo[q] = 0;
+    sl[0] = { kind: 'weapon', id: 'ar', rarity: 1, mag: K.WEAPONS.ar.mag }; b.inventory.ammo.medium = 120; b.inventory.active = 0;
+    b.hp = 100; b.shield = 50; b.lastDamageT = -99;
+    if (b.brain) { const bb = b.brain.bb; bb.target = null; bb.targetPos = null; bb.path = null; bb.pathGoal = null; bb.moveTo = null; bb.lootId = null; bb.shieldScanT = 0; bb.escUntil = -99; bb.trapLastT = -99; b.brain.nextThink = 0; }
+    const gid = 'p23swim' + si;
+    W.netSpawnItem({ id: gid, data: { kind: 'consumable', id: 'big_shield', count: 1 }, x: sp.gx, y: M.heightAt(sp.gx, sp.gz) + 0.15, z: sp.gz });
+    const fence = () => { for (const o of W.actors) { if (o === b || !o.alive || o.gliding) continue; const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz);
+      if (d < 260) { const s = 265 / Math.max(0.1, d), nx = cl(b.pos.x + dx * s), nz = cl(b.pos.z + dz * s); put(o, nx, nz, Math.max(M.heightAt(nx, nz), wy) + 0.05); o.onGround = true; } } };
+    let pinned = true, tripped = null, swimPin = 0, travelPin = 0, pinTicks = 0; const t0 = W.t;
+    const prev = W._tickHook;
+    W._tickHook = (w) => { if (prev) prev(w); fence(); if (!b.alive) return;
+      if (pinned) { pinTicks++; const dx = b.pos.x - sp.x, dz = b.pos.z - sp.z, d = Math.hypot(dx, dz); if (d > 0.5) { b.pos.x = sp.x + dx / d * 0.5; b.pos.z = sp.z + dz / d * 0.5; }
+        if (b.swimming) swimPin++; const bb = b.brain && b.brain.bb, mt = bb && bb.moveTo;
+        if (b.brain && b.brain.state === 'LOOT' && mt && Math.hypot(mt.x - b.pos.x, mt.z - b.pos.z) > 6) travelPin++;
+        if (tripped == null && bb && bb.escUntil > W.t) tripped = { t: +(W.t - t0).toFixed(2), esc: [+bb.escX.toFixed(1), +bb.escZ.toFixed(1)], swimming: !!b.swimming }; } };
+    C.fastForward(pinS, 1 / 30);
+    pinned = false;
+    const track = [];
+    for (let i = 0; i < freeS * 10; i++) { C.fastForward(0.1, 1 / 30); track.push([b.pos.x, b.pos.z, !!b.swimming, b.brain ? b.brain.state : null]); }
+    W._tickHook = prev;
+    const MOV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1 };
+    let stuck = 0; for (let i = 0; i + 30 < track.length; ) { let mx = 0, ok = true; for (let j = i; j <= i + 30; j++) { mx = Math.max(mx, Math.hypot(track[j][0] - track[i][0], track[j][1] - track[i][1])); if (!track[j][2] || !MOV[track[j][3]]) ok = false; }
+      if (mx < 0.4 && ok) { stuck++; i += 30; } else i++; }
+    const moved = track.length ? Math.hypot(track[track.length - 1][0] - sp.x, track[track.length - 1][1] - sp.z) : 0;
+    out.push({ bot: b.id, spot: [Math.round(sp.x), Math.round(sp.z)], shoreM: sp.shore, pinTicks, swimPin, travelPin, tripped, stuckAfter: stuck, movedAfter: +moved.toFixed(1),
+               endSwimming: !!b.swimming, state: b.brain ? b.brain.state : null }); }
+  return { found: spots.length, out }; }"""
+
+
+def swimcheck(s, v):
+    st = s.start_match("quick", SWIM_SEED, SWIM_MAP, enter=True)
+    s.freeze_loop()
+    s.page.evaluate("() => window.__LC__.fastForward(20, 1 / 30)")
+    r = s.page.evaluate(SWIMCHECK_JS, [SWIM_SPOTS, SWIM_PIN_S, SWIM_FREE_S])
+    v.data["swimcheck"] = {"start": st, "result": r}
+    rows = [x for x in r["out"] if not x.get("error")]
+    setup_ok = [x for x in rows if x["swimPin"] >= 0.8 * x["pinTicks"] and x["travelPin"] >= 0.5 * x["pinTicks"]]
+    name = ("swim-trap scripted (a swimmer travelling to a goal on the shore, held %.0f s in a 1 m disc: the loop breaker trips and the bot is not "
+            "stuck swimming again in the next %.0f s; %s seed %d)" % (SWIM_PIN_S, SWIM_FREE_S, SWIM_MAP, SWIM_SEED))
+    if len(setup_ok) < 2:
+        v.cnj(name, "SETUP missed: %d of %d spots had a swimming, travelling bot while penned (want >= 2): %s" % (len(setup_ok), len(rows), r))
+        return
+    ok = all(x["tripped"] and x["stuckAfter"] == 0 for x in setup_ok)
+    v.check(name, ok, {"spots": setup_ok, "found": r["found"]}, "tripped while penned; 0 swimming stuck episodes after")
 
 
 def pct(a, b):
@@ -89,7 +173,12 @@ def main():
     ap.add_argument("--small-run", action="store_true",
                     help="the run list is too small for the 'sniper kills in MOST matches' row (a share of matches: Wave 7's Savanna run has 2 distinct matches): that one row is information; every other row is judged as usual")
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
+    ap.add_argument("--swimcheck", action="store_true", help="W9 R1B: the scripted swimmer trap (see SWIMCHECK_JS); --plant swim-exempt must FAIL it")
+    ap.add_argument("--sweep", action="store_true", help="W9 R1B: the episode sweep (3 maps x seeds 1-6, --no-paths, --small-run); adds the worst <= %d row" % SWEEP_WORST_MAX)
+    ap.add_argument("--plant", default=None, choices=sorted(PLANTS), help="a planted fault served into bots.js (this gate must then FAIL); needs --disk / --rev")
     args = ap.parse_args()
+    if args.sweep:
+        args.runs, args.no_paths = SWEEP_RUNS, True
     runs = []
     for r in args.runs.split(","):
         if r.strip():
@@ -102,6 +191,10 @@ def main():
     def body(v):
         results, paths, far = [], [], []
         with C.Session(args, "probe_match", viewport={"width": 960, "height": 600}) as s:
+            if args.plant:
+                sys.path.insert(0, os.path.join(HERE, "p23"))
+                import p23lib  # noqa: E402
+                v.data["plant"] = {"name": args.plant, "edits": p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant])}
             s.boot()
             s.freeze_loop()
             for k, (seed, mp) in enumerate(runs):
@@ -130,6 +223,8 @@ def main():
                     print("  paths %s: %s; census %s" % (mp, r["navSrc"], json.dumps(r["census"])), flush=True)
                     for D, row in r["exp"].items():
                         print("     D=%4s n=%2d game-useful %2d | verbatim-mid %2d | start-centred %2d" % (D, row["n"], row["gameUseful"], row["midUseful"], row["startUseful"]))
+            if args.swimcheck:
+                swimcheck(s, v)
             if args.farwall:
                 for seed, mp in ((1, "isla_viva"), (7, "isla_viva")):
                     s.start_match("standard", seed, mp, enter=True)
@@ -200,6 +295,18 @@ def main():
         v.check("stuck < 2 % of moving samples in every run", all(x["stuckPct"] is not None and x["stuckPct"] < 2 for x in stuck_rows), stuck_rows,
                 expect="< 2 % (was 12-27 % on isla_viva)")
         v.check("no bot with > 5 stuck episodes in a run", all(x["episodes"] <= 5 for x in ep_rows), ep_rows)
+        if args.sweep:
+            v.check("episode sweep: the worst bot's stuck episodes <= %d in every run (3 maps x seeds 1-6)" % SWEEP_WORST_MAX,
+                    len(ep_rows) == 18 and all(x["episodes"] <= SWEEP_WORST_MAX for x in ep_rows), ep_rows, "<= %d" % SWEEP_WORST_MAX)
+        # (W9 R1B) swim-trap: stuck episodes while swimming, per bot per run (the loop breaker's water branch; probe_match.js stuckEp inWater)
+        sw_rows = []
+        for r in distinct:
+            per = collections.Counter(e["id"] for e in r["stuckEp"] if e.get("inWater"))
+            worst = per.most_common(1)[0] if per else (None, 0)
+            sw_rows.append({"seed": r["seed"], "map": r["map"], "worstBot": worst[0], "swimEpisodes": worst[1], "botsWithSwimEp": len(per),
+                            "eps": [{k: e.get(k) for k in ("id", "t", "x", "z", "st", "goalD")} for e in r["stuckEp"] if e.get("inWater") and e["id"] == worst[0]][:6]})
+        v.check("swim-trap: stuck episodes while swimming <= %d per bot in every run" % SWIM_TRAP_MAX,
+                bool(sw_rows) and all(x["swimEpisodes"] <= SWIM_TRAP_MAX for x in sw_rows), sw_rows, "<= %d per bot" % SWIM_TRAP_MAX)
         s1 = [r for r in results if r["seed"] == 1 and r["map"] == "isla_viva" and r.get("track", {}).get("s21")]
         if not any(r["seed"] == 1 and r["map"] == "isla_viva" for r in results):
             v.info("seed 1 isla_viva: s21 leaves Coco Village", "not part of this --runs list (a Savanna-only run, Wave 7); the default run judges it")
@@ -223,7 +330,9 @@ def main():
         for r in results:
             by[(r["seed"], r["map"])].append(r)
         reps = [(k, rs) for k, rs in by.items() if len(rs) >= 2]
-        if not reps:
+        if not reps and args.sweep:
+            v.info("the same seed twice: identical fingerprints and placements", "--sweep has no repeated (seed, map): the default run judges replay")
+        elif not reps:
             v.cnj("the same seed twice: identical fingerprints and placements", "no repeated (seed, map) in --runs")
         else:
             rows = []

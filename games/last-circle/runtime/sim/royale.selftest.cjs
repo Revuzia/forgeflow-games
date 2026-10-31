@@ -1215,6 +1215,32 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const lh = R.fallLethalHeight(100);
   ok(mono && lh >= 19 && lh < 20 && R.FALL_EXP === 1.33 && R.fallDamage(v(lh + 0.05)) >= 100 && R.fallDamage(v(lh - 0.3)) < 100, "C-FALL: monotone; a full-health actor dies from " + lh.toFixed(1) + " m (fallLethalHeight for bots)");
   ok(R.LAND_STAGGER_S === 0.4 && R.weaponName("fall") === "a fall", "C-FALL: 0.4 s landing stagger; the kill feed names the fall");
+  // (W9 R1B, LC-61) terminal velocity + the heavy-landing tier
+  const tv = R.MOVE.terminalV, hTerm = tv * tv / (2 * Math.abs(R.MOVE.gravity));
+  ok(tv === 34 && R.fallDamage(tv) > 100 && hTerm > lh && Math.abs(hTerm - 26.27) < 0.05,
+     "LC-61: terminal velocity " + tv + " m/s (the sprint-dive speed), reached after " + hTerm.toFixed(1) + " m - past the lethal height (" + lh.toFixed(1) + " m), fallDamage(terminal) = " + R.fallDamage(tv) + " > 100: no lethal fall made survivable");
+  // the bots' drop tables (bots.js dropTable, v = sqrt(2 g h), no cap) need no change: every drop the cap shortens (> hTerm) is lethal both ways
+  let capSame = true;
+  for (let h = 0; h <= 120; h += 0.5) { const vc = Math.min(v(h), tv); if ((R.fallDamage(vc) >= 100) !== (R.fallDamage(v(h)) >= 100) || (h <= hTerm && R.fallDamage(vc) !== R.fallDamage(v(h)))) capSame = false; }
+  ok(capSame, "LC-61: the cap changes no drop below " + hTerm.toFixed(1) + " m and no lethal / survivable verdict above it (bots' WALK_H / LETHAL_H tables unchanged)");
+  ok(R.FALL.HEAVY_H === 12 && R.FALL.HEAVY_S === 0.3 && Math.abs(R.FALL.HEAVY_V - v(12)) < 1e-9 && Math.abs(R.FALL.HEAVY_V - 22.98) < 0.01 && R.FALL.HEAVY_V > v(10) && R.FALL.HEAVY_V < tv,
+     "LC-61: a heavy landing is an impact >= v(12 m) = " + R.FALL.HEAVY_V.toFixed(2) + " m/s (the 10 m class below it, terminal above it): fire / ADS blocked " + R.FALL.HEAVY_S + " s");
+}
+// (W9 R1B, OD-16) the supply crate: a full stack of big shields + three minis; the per-drop rng draw count unchanged (the gun, then its rarity)
+{
+  const sd = R.rollSupplyDrop(R.mulberry32(779));
+  const ids = sd.map((x) => x.kind + ":" + x.id + (x.count != null ? "x" + x.count : ""));
+  ok(sd.length === 5 && sd[0].kind === "weapon" && ids[1] === "consumable:big_shieldx3" && ids[2] === "consumable:mini_shieldx3" && ids[3] === "consumable:medkitx1" && sd[4].kind === "ammo",
+     "OD-16: a supply crate = gun + big_shield x3 + mini_shield x3 + medkit + ammo (" + ids.join(", ") + ")");
+  let same = true;
+  for (let sdn = 1; sdn <= 200 && same; sdn++) {
+    let n1 = 0, n2 = 0; const r1 = R.mulberry32(sdn), r2 = R.mulberry32(sdn);
+    const c1 = () => { n1++; return r1(); }, c2 = () => { n2++; return r2(); };
+    const d = R.rollSupplyDrop(c1);
+    const wid = R.WEAPON_IDS[R.weightedIndex(c2, R.SUPPLY_GUN_WEIGHTS)], rar = R.rollRarity(c2, "supply");
+    if (n1 !== n2 || d[0].id !== wid || d[0].rarity !== rar) same = false;
+  }
+  ok(same, "OD-16: rollSupplyDrop draws exactly the gun's and its rarity's numbers (200 seeds): the crate's fixed items draw nothing");
 }
 
 // LC-22 bone-derived hit volumes

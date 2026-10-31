@@ -11,6 +11,9 @@ sim -, application in player.js - lane player.)
     python _harness/p23/fall.py --disk --plant no-event        # 'fallDamage' never reaches W.events - MUST FAIL
     python _harness/p23/fall.py --disk --plant no-fall-guard --parts lip   # bots.js served with its fall guard off - MUST FAIL (bots-avoid lips)
     python _harness/p23/fall.py --disk --plant bot-curve-x0.6 --parts bots # the bots' fall curve x0.6 - MUST FAIL (bots-rule)
+    python _harness/p23/fall.py --disk --plant calm-guard-off --parts rim  # bots.js served with the calm drop cap off - MUST FAIL (rim)
+    python _harness/p23/fall.py --disk --plant no-terminal --parts human   # K.MOVE.terminalV = 1e9 - MUST FAIL (terminal)
+    python _harness/p23/fall.py --disk --plant no-heavy --parts human      # K.FALL.HEAVY_V = 1e9 - MUST FAIL (heavy)
     python _harness/p23/fall.py --disk --inject F:/lc_p23/harness/stubs/fall_stub.js   # validation against a contract stub
 
 Part HUMAN (PRACTICE, Isla Viva seed 4242, kernel loop frozen, frames stepped, the hp guard OFF during each drop): the player is set
@@ -29,7 +32,8 @@ Rows: contract (K.FALL_SAFE_V, K.FALL_DMG_PER_V, K.LAND_STAGGER_S numbers) - saf
 (35-40 hp) - fifteen-metre (60-75 hp) - monotonic (damage non-decreasing with height) - lethal (17 m survived, 22 m kills at full shield) - shield-untouched (shield 100 before
 = 100 after a 10 m drop, hp loss equal to the shield-0 drop) - event (one 'fallDamage' per damaging landing, none otherwise) - stagger
 (after the 10 m landing with W held: horizontal speed <= 50 % of walk over the first 0.3 s, back to >= 85 % of walk by 0.8 s; after a 1 m
-drop >= 85 % within 0.3 s) - water (0 hp) - bots-rule - bots-avoid - bots-avoid lips - glide - errors.
+drop >= 85 % within 0.3 s) - water (0 hp) - (W9 R1B, LC-61) heavy (LMB held through a 14 m landing: first round >= 0.30 s after touchdown; a 10 m
+landing's <= 0.10 s) - terminal (an 80 m drop: max |vy| <= 34.05 m/s, the landing kills) - bots-rule - bots-avoid - bots-avoid lips - rim - glide - errors.
 """
 from __future__ import annotations
 
@@ -44,11 +48,16 @@ C = L.C
 
 PLANTS = {
     # both the constants and the sim's pure helper (an implementation may read either): a plant must bite on any implementation
+    # (W9 R1B, LC-61) no terminal velocity (terminal MUST FAIL); no heavy-landing tier (heavy MUST FAIL)
+    "no-terminal": "K.MOVE.terminalV = 1e9",
+    "no-heavy": "if (K.FALL) K.FALL.HEAVY_V = 1e9",
     "no-damage": "K.FALL_SAFE_V = 1e9; if (typeof K.fallDamage === 'function') K.fallDamage = () => 0; if (K.FALL) K.FALL.SAFE_V = 1e9",
     "harsh": "K.FALL_DMG_PER_V = (K.FALL_DMG_PER_V || 1) * 4; if (typeof K.fallDamage === 'function') { const f0 = K.fallDamage; K.fallDamage = function () { return 4 * f0.apply(this, arguments); }; } if (K.FALL) K.FALL.DMG_PER_V *= 4",
     "no-event": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'fallDamage') return; return em.apply(null, arguments); }",
     # bots.js served with its C-FALL guard off (part lip; see NO_FALL_GUARD): no page snippet
     "no-fall-guard": "",
+    # (W9 R1B) bots.js served with the calm drop cap off (part rim; see CALM_GUARD_OFF): no page snippet
+    "calm-guard-off": "",
     # R3: the fall curve scaled x0.6 in the bots' page (part bots; registered --parts bots): a 10 m drop costs a bot ~23 hp - bots-rule MUST FAIL
     "bot-curve-x0.6": "{ const f0 = K.fallDamage; if (typeof f0 === 'function') K.fallDamage = function () { return Math.round(0.6 * f0.apply(this, arguments)); }; K.FALL_DMG_PER_V = (K.FALL_DMG_PER_V || 1) * 0.6; if (K.FALL) K.FALL.DMG_PER_V *= 0.6; }",
 }
@@ -115,6 +124,65 @@ def speed_between(rows, a, b):
     return (pb[-1][1] - pa[-1][1]) / max(1e-6, pb[-1][0] - pa[-1][0])
 
 
+# (W9 R1B, LC-61) the heavy-landing / terminal-velocity drops of part HUMAN. An SMG (720 rpm: a round every 0.083 s) with a full magazine; LMB held
+# for real (pointer locked) through the fall and the landing; every 'shotFired' of the player is timed against the touchdown tick.
+HEAVY_JS = r"""([x, z, h, after]) => {
+  const W = window.__LC__.W, p = W.player, P = window.__H_PUMP__, M = W.map, K = W.SIM;
+  if (!p.weapon || p.weapon.id !== 'smg') { const sl = p.inventory.slots, fi = () => sl.findIndex((s2) => s2 && s2.kind === 'weapon' && s2.id === 'smg');
+    let i = fi(); if (i < 0) { W.giveItem(p, { kind: 'weapon', id: 'smg', rarity: 0 }); i = fi(); }
+    if (i < 0) { i = sl.findIndex((s2) => s2 && s2.kind === 'weapon'); if (i < 0) i = 0; sl[i] = { kind: 'weapon', id: 'smg', rarity: 0, mag: K.WEAPONS.smg.mag }; }
+    W.equipSlot(p, i); P.step(30, 1 / 60, false); }
+  p.inventory.ammo.light = 600;
+  if (p.weapon) { p.weapon.magAmmo = K.WEAPONS.smg.mag; p.weapon.state = 'ready'; if (p.weapon.slotRef) p.weapon.slotRef.mag = K.WEAPONS.smg.mag; }
+  const shots = []; const on = (a) => { if (a === p) shots.push(+W.t.toFixed(4)); }; W.events.on('shotFired', on);
+  p.pos.set(x, M.heightAt(x, z) + h, z); p.vel.set(0, 0, 0); p.onGround = false; p.gliding = false; p.hp = 100; p.shield = 100; p.input.pitch = 0;
+  let f = 0, maxV = 0;
+  while (f < 1800 && !p.onGround && p.alive) { P.step(1, 1 / 60, false); f++; if (!p.onGround) maxV = Math.max(maxV, -p.vel.y); }
+  const td = W.t, aliveAtTd = !!p.alive;
+  for (let i = 0; i < after && p.alive; i++) P.step(1, 1 / 60, false);
+  if (W.events.off) W.events.off('shotFired', on);
+  const post = shots.filter((t) => t > td - 1e-6);
+  return { h, landedF: f, maxV: +maxV.toFixed(3), firstAfterS: post.length ? +(post[0] - td).toFixed(3) : null, airShots: shots.length - post.length, postShots: post.length,
+           aliveAtTd, alive: !!p.alive, hp: p.hp, shield: p.shield, weapon: p.weapon ? p.weapon.id : null }; }"""
+HEAVY_MIN_S, LIGHT_MAX_S, TERM_MAX_V, TERM_H, HEAVY_TEST_H, LIGHT_TEST_H = 0.30, 0.10, 34.05, 80, 14, 10
+
+
+def heavy_drop(s, spot, h, after=60):
+    s.guard_player(False)
+    return s.js(HEAVY_JS, [spot["x"], spot["z"], h, after])
+
+
+def part_heavy(s, v, R, spot):
+    """LC-61 heavy: a 14 m drop with LMB held through the landing - the first round leaves >= 0.30 s after the touchdown; a 10 m drop's first round
+    <= 0.10 s after it (the 5-12 m class keeps shooting). The stagger row's numbers are judged by the stagger row itself."""
+    v.data["lock_s"] = L.lock_pointer(s)
+    s.step_frames(5, 1 / 60)
+    s.page.mouse.down(button="left")
+    try:
+        hv = heavy_drop(s, spot, HEAVY_TEST_H)
+        lt = heavy_drop(s, spot, LIGHT_TEST_H)
+    finally:
+        s.page.mouse.up(button="left")
+    R["heavy"] = {"14m": hv, "10m": lt}
+    if hv.get("weapon") != "smg" or lt.get("weapon") != "smg":
+        v.cnj("heavy (LC-61)", "SETUP: the SMG was not in hand: %s" % {"14m": hv, "10m": lt})
+        return
+    ok = (hv["aliveAtTd"] and lt["aliveAtTd"] and hv["firstAfterS"] is not None and hv["firstAfterS"] >= HEAVY_MIN_S
+          and lt["firstAfterS"] is not None and lt["firstAfterS"] <= LIGHT_MAX_S and hv["airShots"] > 0 and lt["airShots"] > 0)
+    v.check("heavy (LC-61: LMB held through a %d m landing - the first round leaves >= %.2f s after touchdown; a %d m landing's <= %.2f s)"
+            % (HEAVY_TEST_H, HEAVY_MIN_S, LIGHT_TEST_H, LIGHT_MAX_S), ok,
+            {"14m": hv, "10m": lt}, ">= %.2f s / <= %.2f s (and the gun was firing in the air: the trigger was held)" % (HEAVY_MIN_S, LIGHT_MAX_S))
+
+
+def part_terminal(s, v, R, spot):
+    """LC-61 terminal: an 80 m drop - max |vy| over the fall <= 34.05 m/s; the landing kills (hp 100 + shield 100)."""
+    s.page.mouse.up(button="left")
+    tm = heavy_drop(s, spot, TERM_H, 30)
+    R["terminal"] = tm
+    v.check("terminal (LC-61: an %d m drop - max |vy| <= %.2f m/s over the fall; the landing kills at full shield)" % (TERM_H, TERM_MAX_V),
+            tm["maxV"] <= TERM_MAX_V and tm["maxV"] > 30 and not tm["alive"], tm, "<= %.2f m/s, dead" % TERM_MAX_V)
+
+
 def part_human(s, v, args):
     R = v.data.setdefault("human", {})
     spot = s.js(SPOT_JS, [False])
@@ -141,6 +209,7 @@ def part_human(s, v, args):
     st_hard = s.js(STAGGER_JS, [spot["x"], spot["z"], 10])
     st_soft = s.js(STAGGER_JS, [spot["x"], spot["z"], 1])
     s.page.keyboard.up("KeyW")
+    part_heavy(s, v, R, spot)            # (W9 R1B, LC-61)
     wspot = s.js(SPOT_JS, [True])
     rows["water20"] = drop(s, wspot, 20) if wspot else None
     # the two lethal-threshold drops LAST (fix round: a 17 m drop that kills - the pre-D2 curve - left the jumps / stagger / water rows a dead
@@ -152,6 +221,12 @@ def part_human(s, v, args):
             L.plant_js(s, PLANTS[args.plant])
         spot = s.js(SPOT_JS, [False]) or spot
     rows[DEAD_H] = drop(s, spot, DEAD_H)
+    # (W9 R1B, LC-61) the 80 m terminal drop on a fresh practice page (the 22 m drop above killed the player)
+    R["repractice2"] = L.practice(s, 4242, "isla_viva")
+    if args.plant:
+        L.plant_js(s, PLANTS[args.plant])
+    tspot = s.js(SPOT_JS, [False]) or spot
+    part_terminal(s, v, R, tspot)
     R["rows"] = {str(k): {kk: vv for kk, vv in r.items() if kk != "trace"} if r else None for k, r in rows.items()}
     lost = {k: (r["lost"] if r else None) for k, r in rows.items()}
     # the curve the bots row compares against (fall_all3 10-26: bots-rule read "human15": null - nothing stored it, so the row fell back to
@@ -420,6 +495,121 @@ def part_lip(s, v, args):
         v.check(name, not walked, det, "0 fall deaths")
 
 
+# (W9 R1B) part RIM - "bots walk off 6-9 m ledges on Isla Viva Volcano Rim": calm states take only the drops the path planner takes (bots.js
+# CALM_DROP_H = NAV_DROP_MAX + 0.3 = 6.3 m; FLEE / CLOSEIN / ENGAGE / a pressing ROTATE keep the hp limit). On Isla Viva (QUICK, seeds 7 and 77)
+# every terrain lip inside the Volcano Rim POI whose drop is 6.3-10 m (the LIP_FIND_JS rule restricted to the POI: the ground falls >= 6.3 m
+# within 4 m, a level plateau behind, a level lower terrace 6-14 m out), up to RIM_N per seed >= 15 m apart: the nearest free bot is put 1.2 m
+# from the lip, 100 hp, armed (an AR + ammo), shield 50 and no shield item (so its own shield scan wants a big one), and a big shield is laid on
+# the lower terrace 14 m out (8 m past the foot): its loot goal. SETUP fence: every other actor is kept > RIM_FENCE_M from the bot (perceive
+# never notices a stranger past 200 m, no shot is heard past 250 m: no PUSH), so the bot stays calm. 25 s per lip. Judged per lip (the bot moved >= 1.5 m or fell): 0 drops > 6.3 m
+# taken in a calm state (the state at take-off; drops taken in a fight state are listed, not judged), and the goal reached (the shield taken /
+# the bot within 2 m of it) or no stuck episode (>= 3 s with < 0.4 m of movement).
+RIM_MAP, RIM_SEEDS, RIM_N, RIM_LO, RIM_HI, RIM_FENCE_M, RIM_SECS = "isla_viva", (7, 77), 6, 6.3, 10.0, 260, 25
+RIM_FIND_JS = r"""([lo, hi, wantN]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY;
+  const poi = (M.pois || []).find((p) => p.id === 'volcano_rim' || p.name === 'Volcano Rim'); if (!poi) return { error: 'no Volcano Rim POI', pois: (M.pois || []).map((p) => p.name) };
+  const free = (x, z, r, h) => { for (const c of M.queryColliders(x, z, r + 1, [])) { if (c.dead) continue; if (c.maxY > h + 0.3 && c.minX < x + r && c.maxX > x - r && c.minZ < z + r && c.maxZ > z - r) return false; } return true; };
+  const lips = [];
+  for (let x = poi.x - poi.r; x <= poi.x + poi.r; x += 2) for (let z = poi.z - poi.r; z <= poi.z + poi.r; z += 2) {
+    if (Math.hypot(x - poi.x, z - poi.z) > poi.r) continue; const h0 = M.heightAt(x, z); if (!(h0 > wy + 2)) continue;
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a); let fall = 0;
+      for (let d = 1; d <= 4; d += 0.5) fall = Math.max(fall, h0 - M.heightAt(x + dx * d, z + dz * d)); if (fall < lo) continue;
+      const hf = M.heightAt(x + dx * 6, z + dz * 6), drop = h0 - hf; if (!(drop >= lo && drop <= hi) || !(hf > wy + 0.5)) continue;
+      let ok = true; for (let d = 6; d <= 14 && ok; d += 1) if (Math.abs(M.heightAt(x + dx * d, z + dz * d) - hf) > 1.0) ok = false; if (!ok) continue;
+      for (let d = 1; d <= 6 && ok; d += 1) if (Math.abs(M.heightAt(x - dx * d, z - dz * d) - h0) > 1.0) ok = false; if (!ok) continue;
+      if (!free(x - dx * 2.5, z - dz * 2.5, 2.5, h0)) continue;
+      lips.push({ x, z, dx, dz, h0: +h0.toFixed(2), foot: +hf.toFixed(2), drop: +drop.toFixed(2) }); break; } }
+  // spread over the drop band: round-robin over three bands (6.3-7.5, 7.5-8.7, 8.7-10 m), each band's lips in a fixed order, >= 15 m apart
+  lips.sort((p, q) => (p.x - q.x) || (p.z - q.z)); const pick = [], band = (d) => d < 7.5 ? 0 : d < 8.7 ? 1 : 2, B = [[], [], []];
+  for (const l of lips) B[band(l.drop)].push(l);
+  for (let r = 0; pick.length < wantN && r < 400; r++) { const q = B[r % 3]; while (q.length) { const l = q.shift(); if (pick.every((p) => Math.hypot(p.x - l.x, p.z - l.z) >= 15)) { pick.push(l); break; } } if (!B[0].length && !B[1].length && !B[2].length) break; }
+  return { n: lips.length, bands: [0, 1, 2].map((i) => lips.filter((l) => band(l.drop) === i).length), lips: pick, poi: { x: poi.x, z: poi.z, r: poi.r } }; }"""
+RIM_RUN_JS = r"""([lip, k, secs, fenceM, calmMax]) => { const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM;
+  const CALM = { WANDER: 1, LOOT: 1, ROTATE: 1, FOLLOW: 1, PING: 1, ASSIST: 1, HUNT: 1, SUPPLY: 1, PUSH: 1, CAMP: 1 };
+  const used = window.__P23RIMUSED__ = window.__P23RIMUSED__ || new Set();
+  const pool = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding && !used.has(a.id));
+  const b = pool.sort((q, r) => Math.hypot(q.pos.x - lip.x, q.pos.z - lip.z) - Math.hypot(r.pos.x - lip.x, r.pos.z - lip.z))[0];
+  if (!b) return { error: 'no free bot' };
+  used.add(b.id);
+  const H = (M.half || 760) - 20, cl = (v) => Math.max(-H, Math.min(H, v));
+  const put = (a, x, z) => { a.pos.set(x, M.heightAt(x, z) + 0.05, z); a.vel.set(0, 0, 0); a.onGround = true; a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
+  put(b, lip.x - lip.dx * 1.2, lip.z - lip.dz * 1.2); b.yaw = Math.atan2(-lip.dx, -lip.dz);
+  // SETUP FENCE: every other actor kept more than fenceM from the bot under test, every sim tick (moved out radially; W._tickHook runs inside
+  // fastForward - the kernel's _updaters do not)
+  const fence = () => { for (const o of W.actors) { if (o === b || !o.alive || o.gliding) continue; const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz);
+    if (d < fenceM) { const s = (fenceM + 5) / Math.max(0.1, d); put(o, cl(b.pos.x + dx * s), cl(b.pos.z + dz * s)); } } };
+  fence();
+  // SETUP: no competing shield goal - the other big shields on the floor within 120 m are taken off (W.netTakeItem), so the bot's scans find the goal
+  const cleared = []; for (const n of W.nearbyLoot(b.pos, 120, 80)) if (n.type === 'item' && n.data && n.data.id === 'big_shield') { W.netTakeItem(n.id); cleared.push(n.id); }
+  const sl = b.inventory.slots; for (let i = 0; i < sl.length; i++) sl[i] = null; for (const q in b.inventory.ammo) b.inventory.ammo[q] = 0;
+  sl[0] = { kind: 'weapon', id: 'ar', rarity: 1, mag: K.WEAPONS.ar.mag }; b.inventory.ammo.medium = 120; b.inventory.active = 0;
+  b.hp = 100; b.shield = 50; b.lastDamageT = -99; b.lastAttacker = null;
+  if (b.brain) { const bb = b.brain.bb; bb.target = null; bb.targetPos = null; bb.path = null; bb.pathGoal = null; bb.moveTo = null; bb.lootId = null; bb.shieldScanT = 0; b.brain.nextThink = 0; }
+  const gx = lip.x + lip.dx * 14, gz = lip.z + lip.dz * 14, gid = 'p23rim' + k;
+  W.netSpawnItem({ id: gid, data: { kind: 'consumable', id: 'big_shield', count: 1 }, x: gx, y: M.heightAt(gx, gz) + 0.15, z: gz });
+  const drops = []; let air = null; const states = {}; let targetN = 0, calmOffN = 0;
+  const upd = () => { fence(); const B = W.actorById.get(b.id); if (!B || !B.alive) return; if (B.brain && B.brain.bb.calmOffUntil > W.t) calmOffN++;
+    const st = B.brain ? B.brain.state : null, calm = !!(st && CALM[st] && !(B.brain.bb.target));
+    if (!B.onGround && !B.swimming && !B.gliding) { if (!air) air = { top: B.pos.y, st, calm, t: +W.t.toFixed(2), x: +B.pos.x.toFixed(1), z: +B.pos.z.toFixed(1) }; else air.top = Math.max(air.top, B.pos.y); }
+    else if (air) { const d = air.top - B.pos.y; if (d > 1.0) drops.push({ drop: +d.toFixed(2), st: air.st, calm: air.calm, t: air.t, x: air.x, z: air.z }); air = null; } };
+  const prevHook = W._tickHook; W._tickHook = (w) => { if (prevHook) prevHook(w); upd(); };
+  const x0 = b.pos.x, z0 = b.pos.z, track = []; let moved = 0, reached = false, goalId = null;
+  for (let i = 0; i < secs * 10; i++) { C.fastForward(0.1, 1 / 30); const B = W.actorById.get(b.id); if (!B || !B.alive) break;
+    const st = B.brain && B.brain.state; if (st) states[st] = (states[st] || 0) + 1; if (B.brain && B.brain.bb.target) targetN++;
+    if (B.brain && B.brain.bb.shieldGo && !goalId) goalId = B.brain.bb.shieldGo.id || null;
+    track.push([+W.t.toFixed(1), +B.pos.x.toFixed(2), +B.pos.z.toFixed(2), st || null, !!B.healing]); moved = Math.max(moved, Math.hypot(B.pos.x - x0, B.pos.z - z0));
+    const taken = !(W.nearbyLoot(B.pos, 300, 80).some((n) => n.id === gid));
+    if (taken || Math.hypot(B.pos.x - gx, B.pos.z - gz) < 2) { reached = true; break; } }
+  W._tickHook = prevHook;
+  // stuck episodes (probe_match's definition): a 3 s window (30 samples) in a MOVING state, not healing, whose positions all stay within 0.4 m of its first
+  const MOV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1 };
+  let stuck = 0; const stuckAt = [];
+  for (let i = 0; i + 30 < track.length; ) { let mx = 0, mv = true; for (let j = i; j <= i + 30; j++) { if (j > i) mx = Math.max(mx, Math.hypot(track[j][1] - track[i][1], track[j][2] - track[i][2])); if (!MOV[track[j][3]] || track[j][4]) mv = false; }
+    if (mx < 0.4 && mv) { stuck++; if (stuckAt.length < 3) stuckAt.push(track[i]); i += 30; } else i++; }
+  const B = W.actorById.get(b.id);
+  return { bot: b.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, goal: [+gx.toFixed(1), +gz.toFixed(1)], goalId, reached, stuck, stuckAt, moved: +moved.toFixed(2), drops,
+           calmBad: drops.filter((d) => d.calm && d.drop > calmMax), states, targetN, cleared: cleared.length, calmOffTicks: calmOffN, alive: !!(B && B.alive), hp: B ? Math.round(B.hp) : null,
+           endPos: B ? [+B.pos.x.toFixed(1), +B.pos.y.toFixed(1), +B.pos.z.toFixed(1)] : null }; }"""
+
+
+def part_rim(s, v, args):
+    R = v.data.setdefault("rim", {})
+    if args.plant == "calm-guard-off":
+        R["plant"] = L.serve_patched(s, "runtime/3d/royale/bots.js", CALM_GUARD_OFF)
+    s.boot()
+    L.dismiss_cards(s)
+    runs, finds = [], []
+    for seed in RIM_SEEDS:
+        if finds:
+            s.thaw_loop()
+        R.setdefault("start", []).append(s.start_match("quick", seed, RIM_MAP, enter=True, guard=True))
+        s.freeze_loop()
+        s.install_pump()
+        s.step_frames(30, 1 / 60)
+        s.js("() => { window.__P23RIMUSED__ = null; }")
+        found = s.js(RIM_FIND_JS, [RIM_LO, RIM_HI, RIM_N])
+        finds.append({"seed": seed, "n": found.get("n"), "bands": found.get("bands"), "poi": found.get("poi"), "error": found.get("error"), "lips": found.get("lips")})
+        for k, lip in enumerate(found.get("lips") or []):
+            r = s.js(RIM_RUN_JS, [lip, "%d_%d" % (seed, k), RIM_SECS, RIM_FENCE_M, RIM_LO])
+            r["seed"] = seed
+            runs.append(r)
+    R["found"], R["runs"] = finds, runs
+    judged = [r for r in runs if not r.get("error") and (r.get("moved", 0) >= 1.5 or r.get("drops"))]
+    bad = [r for r in judged if r["calmBad"]]
+    pen = [r for r in judged if not r["reached"] and r["stuck"] > 0]
+    name = ("rim (Volcano Rim, Isla Viva seeds 7 / 77: a calm, armed, 100 hp bot by a 6.3-10 m terrain lip, its big-shield goal 8 m past the foot: "
+            "0 drops > 6.3 m walked off in a calm state; goal reached or never stuck >= 3 s)")
+    det = {"lipsFound": [(f["seed"], f["n"]) for f in finds], "judged": len(judged), "calmDropsOver6.3": len(bad), "stuckNotReached": len(pen),
+           "runs": [{q: r.get(q) for q in ("seed", "bot", "lip", "reached", "stuck", "stuckAt", "moved", "drops", "states", "targetN", "goalId", "calmOffTicks", "endPos", "error")} for r in runs]}
+    if len(judged) < 2:
+        v.cnj(name, "SETUP missed: %d lips judged (want >= 2: the bot moved >= 1.5 m or fell): %s" % (len(judged), det))
+    else:
+        v.check(name, not bad and not pen, det, "0 calm drops > 6.3 m; reached or not stuck")
+
+
+# plant calm-guard-off: bots.js served with the calm cap off (CALM_DROP_H = Infinity: the pre-W9 hp limit in every state) - rim MUST FAIL
+CALM_GUARD_OFF = [("const CALM_DROP_H = NAV_DROP_MAX + 0.3;", "const CALM_DROP_H = Infinity;")]
+
+
 # plant no-fall-guard: bots.js as if the sim had no fall damage (LETHAL_H / WALK_H stay null: "nothing below changes a single step" - the base
 # bots' behaviour). The sim's fall damage is untouched, so a bot that walks off a lethal lip dies of it: bots-avoid lips must FAIL
 NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;")]
@@ -454,7 +644,7 @@ def part_glide(s, v, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
-    ap.add_argument("--parts", default="human,bots,lip,glide")
+    ap.add_argument("--parts", default="human,bots,lip,rim,glide")
     args = L.parse(ap)
     parts = set(args.parts.split(","))
 
@@ -477,6 +667,10 @@ def main():
             with C.Session(args, "p23_fall_lip") as s:
                 part_lip(s, v, args)
                 L.errors_row(v, s, "errors [lip]")
+        if "rim" in parts:
+            with C.Session(args, "p23_fall_rim") as s:
+                part_rim(s, v, args)
+                L.errors_row(v, s, "errors [rim]")
         if "glide" in parts:
             with C.Session(args, "p23_fall_glide") as s:
                 part_glide(s, v, args)
