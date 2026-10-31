@@ -65,8 +65,8 @@ GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
 # lane, so the sweep's swim-trap row cannot tell the two apart). A quick match on deepwood seed 1, after the landings: a free bot is put in deep water
 # (terrain >= 3 m under the surface) with dry shore 20-40 m off, 100 hp, shield 50, an AR and no shield item, and a big shield on that shore - its
 # own shield scan sends it there (LOOT). SETUP: every other actor kept > 260 m away (no sight, no shot heard); for SWIM_PIN_S the bot is held inside a 1 m disc every sim tick
-# (an invisible pen: the trap). Then it is released for SWIM_FREE_S. Judged per spot (SWIM_SPOTS spots): the bot was swimming and travelling (LOOT,
-# its goal > 6 m off) while penned, the breaker tripped (a break-out goal committed: bb.escUntil set while penned), and after the release it was
+# (an invisible pen: the trap). Then it is released for SWIM_FREE_S. Judged per spot (SWIM_SPOTS spots): the bot was swimming and travelling (a
+# MOVING_STATES state - LOOT for the shield, ROTATE when the storm closes - its goal > 6 m off) while penned, the breaker tripped (a break-out goal committed: bb.escUntil set while penned), and after the release it was
 # not stuck again (no 3 s window inside 0.4 m while swimming in a moving state). --plant swim-exempt (swimmers exempt again): never trips - FAILS.
 SWIM_MAP, SWIM_SEED, SWIM_SPOTS, SWIM_PIN_S, SWIM_FREE_S = "deepwood", 1, 3, 4.0, 8.0
 SWIMCHECK_JS = r"""async ([wantN, pinS, freeS]) => {
@@ -95,12 +95,15 @@ SWIMCHECK_JS = r"""async ([wantN, pinS, freeS]) => {
     W.netSpawnItem({ id: gid, data: { kind: 'consumable', id: 'big_shield', count: 1 }, x: sp.gx, y: M.heightAt(sp.gx, sp.gz) + 0.15, z: sp.gz });
     const fence = () => { for (const o of W.actors) { if (o === b || !o.alive || o.gliding) continue; const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz);
       if (d < 260) { const s = 265 / Math.max(0.1, d), nx = cl(b.pos.x + dx * s), nz = cl(b.pos.z + dz * s); put(o, nx, nz, Math.max(M.heightAt(nx, nz), wy) + 0.05); o.onGround = true; } } };
+    // travelling = any state the loop breaker watches (bots.js MOVING_STATES) with its goal > 6 m off: the shield goal sends it in LOOT, but a
+    // storm that closes over the spot sends it in ROTATE (2 of 3 spots on deepwood seed 1) - the same trap, the same breaker
+    const TRAV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1, FOLLOW: 1, PING: 1, ASSIST: 1 };
     let pinned = true, tripped = null, swimPin = 0, travelPin = 0, pinTicks = 0; const t0 = W.t;
     const prev = W._tickHook;
     W._tickHook = (w) => { if (prev) prev(w); fence(); if (!b.alive) return;
       if (pinned) { pinTicks++; const dx = b.pos.x - sp.x, dz = b.pos.z - sp.z, d = Math.hypot(dx, dz); if (d > 0.5) { b.pos.x = sp.x + dx / d * 0.5; b.pos.z = sp.z + dz / d * 0.5; }
         if (b.swimming) swimPin++; const bb = b.brain && b.brain.bb, mt = bb && bb.moveTo;
-        if (b.brain && b.brain.state === 'LOOT' && mt && Math.hypot(mt.x - b.pos.x, mt.z - b.pos.z) > 6) travelPin++;
+        if (b.brain && TRAV[b.brain.state] && mt && Math.hypot(mt.x - b.pos.x, mt.z - b.pos.z) > 6) travelPin++;
         if (tripped == null && bb && bb.escUntil > W.t) tripped = { t: +(W.t - t0).toFixed(2), esc: [+bb.escX.toFixed(1), +bb.escZ.toFixed(1)], swimming: !!b.swimming }; } };
     C.fastForward(pinS, 1 / 30);
     pinned = false;
