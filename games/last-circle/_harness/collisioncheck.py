@@ -75,7 +75,9 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
                  (a close never brings the closed slabs alive) must FAIL it
   door-cycle     200 close / open cycles (20 street doors x 10) with the player standing in the doorway (the close must be REFUSED: "blocked"), in the
                  swing clear of the doorway (the close goes through), in an open slab's place when the door opens (that slab waits: it must not come
-                 alive inside the body) and then clear of it (it comes alive): every frame the capsule is <= 0.02 m inside a live slab of the door
+                 alive inside the body) and then clear of it (it comes alive): every frame the capsule is <= 0.02 m inside a live slab of the door.
+                 Control --plant door-crush (a close never sees the bodies in the doorway: the actors lifted out of setDoor's occupancy test, in the
+                 page) must FAIL it
   errors         0 page errors / console errors / failed requests / shader errors
 
 Exit 0 pass / 1 fail / 2 could-not-judge (a map would not load in time, Chrome did not start, a probe measured nothing).
@@ -125,16 +127,17 @@ MIN_KIND_N = 5
 # door-shift (Wave 8, lane K3): in the page, every housegen street-door record is moved 2.0 m along its wall before the walk (nothing served, no file touched): the walk aims at
 # solid wall and the doors row must FAIL - the control that the corrected door set (housegen's own records) is walked, not trusted
 # door-stuck-closed / door-ghost (Wave 9, lane R1A): W.map.setDoor wrapped IN THE PAGE (no file touched) - an open leaves the closed slabs alive / a close
-# never brings them alive: doors-open / doors-closed must FAIL
-PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}, "door-shift": {"doors"}, "door-stuck-closed": {"doors-open"}, "door-ghost": {"doors-closed"}}
-DOOR_PLANTS = {"door-stuck-closed", "door-ghost"}
+# never brings them alive: doors-open / doors-closed must FAIL. door-crush: setDoor's close made with the actors lifted out of its occupancy test (then put
+# back): the slabs close on a body standing in the doorway - door-cycle must FAIL
+PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}, "door-shift": {"doors"}, "door-stuck-closed": {"doors-open"}, "door-ghost": {"doors-closed"}, "door-crush": {"door-cycle"}}
+DOOR_PLANTS = {"door-stuck-closed", "door-ghost", "door-crush"}
 DOOR_STOP = -0.449                # doors-closed: the capsule centre ends >= 0.45 m outside the wall line (R 0.45 + the slab's 2 cm half-thickness - 2 cm allowed into it)
 DOOR_PEN = 0.02                   # door-cycle: max capsule depth inside a live slab of the door
 CYCLES_MIN = 200
 PLANT_KIND = {"container-narrow": "container", "rocks-small": "rocks"}
 PLANT_SKIP = "doors,walls,ramps,falls"       # a plant run needs props + live only
-PLANT_SKIPS = {"door-shift": "props,live,walls,ramps,falls", "door-stuck-closed": "props,live,walls,ramps,falls,door-cycle", "door-ghost": "props,live,walls,ramps,falls,door-cycle"}   # ... except the door plants: doors only
-PLANT_MAPS_BY = {"door-shift": "deepwood", "door-stuck-closed": "deepwood", "door-ghost": "deepwood"}   # door-shift: a map with housegen houses and few kit shells (stage-B verify: 451 street doors on seed 7)
+PLANT_SKIPS = {"door-shift": "props,live,walls,ramps,falls", "door-stuck-closed": "props,live,walls,ramps,falls,door-cycle", "door-ghost": "props,live,walls,ramps,falls,door-cycle", "door-crush": "props,live,walls,ramps,falls"}   # ... except the door plants: doors only
+PLANT_MAPS_BY = {"door-shift": "deepwood", "door-stuck-closed": "deepwood", "door-ghost": "deepwood", "door-crush": "deepwood"}   # door-shift: a map with housegen houses and few kit shells (stage-B verify: 451 street doors on seed 7)
 PLANT_MAPS = "ashgrid"                       # containers and rocks are both plentiful there
 LEAN_OPTIONAL = "isla_viva,deepwood"         # container-lean: maps that place NO prop containers (the container yard is Savanna's; Wave 7b stage B, lane S3). A map listed here with no container is
                                              # information; any other map of the run must measure >= MIN_KIND_N containers or the row is could-not-judge. "none" = every map required
@@ -155,7 +158,12 @@ DOOR_JS = r"""
     const m = M(), orig = m.setDoor;
     if (typeof orig !== "function") return null;
     m.setDoor = function (i, open, by, t) {
-      const r = orig.call(this, i, open, by, t), D = m.doors[i];
+      // door-crush: the close is made with every actor lifted 500 m (setDoor's occupancy test sees nobody), then put back - the slabs close on the body
+      const lift = kind === "door-crush" && !open ? (W.actors || []).filter((a) => a && a.pos) : [];
+      for (const a of lift) a.pos.y += 500;
+      let r;
+      try { r = orig.call(this, i, open, by, t); } finally { for (const a of lift) a.pos.y -= 500; }
+      const D = m.doors[i];
       if (r === true && D) {
         if (kind === "door-stuck-closed" && open) for (const lf of D.leaves) lf.cClosed.dead = false;
         if (kind === "door-ghost" && !open) for (const lf of D.leaves) lf.cClosed.dead = true;
