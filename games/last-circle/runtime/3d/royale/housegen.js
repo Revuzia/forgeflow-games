@@ -2712,10 +2712,15 @@ export function generate(parcel, opts) {
       const V5 = roomView(R);
       if (!V5.ents.length) return X;
       later(() => {
-        // (the count the earlier phases left - the accurate model, camera AND eye, is never above the eye's own count - decides first: most rooms stop here, untouched)
+        // (Wave 9, design W9) phase 5 judges with the ACCURATE model - the game's third-person camera AND the first-person eye, every entrance, the room's tall
+        // pieces hiding what stands behind them - and searches with it (tryPiece then only keeps a spot both see). Before, it switched to the eye-only model:
+        // a room the eye read but the camera did not (housegen_demo_looks lodge_tower.f1r1: two box stacks behind a 2.1 m rack in line with the right-shoulder
+        // camera) stopped here. FALLBACK: when the accurate search cannot reach 3, the eye-only search runs as before (no regression against interiorcheck's
+        // first-person judge; the looks gate keeps reporting such a room).
+        const model5 = (acc) => { R._acc = acc; if (acc) R._accMask = (1 << Math.min(30, V5.ents.length)) - 1; R._ext = null; R._tall = null; for (const q of placed) q.vis = null; };
+        model5(true);
         if (bestView(R).n >= 3) return;
-        R._acc = false; R._ext = null; R._tall = null; for (const q of placed) q.vis = null;
-        if (bestView(R).n >= 3) return;
+        const run5 = () => {
         const FL = s[f], budget5 = (cat) => tris[f] + cat.tris <= TRI_BUDGET;
         const cnt = () => viewCounts(R);
         const entOrder = cnt().map((n, i) => [n, i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map((q) => q[1]);
@@ -2774,6 +2779,12 @@ export function generate(parcel, opts) {
             unput(b);
           }
         }
+        };
+        run5();
+        if (bestView(R).n >= 3) return;
+        model5(false);                                    // (the fallback: the eye-only model, as before Wave 9)
+        if (bestView(R).n >= 3) return;
+        run5();
       });
       return X;
     }
