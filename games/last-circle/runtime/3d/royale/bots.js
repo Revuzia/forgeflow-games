@@ -151,19 +151,28 @@ function calmDropOn(W, b) {
 function calmHeld(W, b, drop) {
   const a = b.actor, bb = b.bb;
   if (!bb.calmDrop || !(drop <= walkDropHp(a))) return;
+  // ...unless the last re-plan's route has just led it back to a refused drop here: the planner walks a steep face in 0.5 m steps that each fall
+  // less than NAV_DROP_MAX while the mover flies the whole face (p23_fall rim, Isla seed 7 lip (-70, -34): 23 holds, each re-plan the same route,
+  // held 2.5-8 s at a time). That route counts as a failed re-plan (calmReplanFailed: 3 -> the trap breaker), and no new search is asked for.
+  const dx = a.pos.x - bb.calmRpX, dz = a.pos.z - bb.calmRpZ;
+  if (W.t - bb.calmRpT < CALM_RP_S && dx * dx + dz * dz < CALM_RP_M * CALM_RP_M) { nav.st.calmLoops++; calmReplanFailed(W, b); return; }
   bb.edgeReplan = true;
 }
-/** (W9 R1B) ...and that re-plan found no route. CALM_HOLD_N of them inside CALM_HOLD_WIN_S: the trap breaker (trapBreak: the goal parked, an exit
- *  under the same calm limit, committed) - a goal behind a drop is given up, not jumped to; CALM_HOLD_N more inside CALM_HOLD_WIN_S of that = penned
- *  (no exit at the calm limit): the hp limit for CALM_OFF_S - no permanent pen. (The design's "3 failed re-plans -> the hp limit" alone walked a PUSH
- *  bot off the 9.3 m lip at Volcano Rim (88, -138) in p23_fall rim: the break-out comes first.) */
+const CALM_RP_S = 3, CALM_RP_M = 2;   // (W9 R1B) a calm hold this soon after, and this near to, the last calm re-plan's route = that route failed
+/** (W9 R1B) ...and that re-plan found no route (or its route led straight back: calmHeld). CALM_HOLD_N of them inside CALM_HOLD_WIN_S: the trap
+ *  breaker (trapBreak: the goal parked, an exit under the same calm limit, committed) - a goal behind a drop is given up, not jumped to. Only when
+ *  the breaker finds NO exit under the calm limit is the bot penned: the hp limit for CALM_OFF_S - no permanent pen. (The design's "3 failed
+ *  re-plans -> the hp limit" alone walked a PUSH bot off the 9.3 m lip at Volcano Rim (88, -138) in p23_fall rim; a second stage that released the
+ *  cap on any 3 more failures inside 10 s walked 7 of 12 rim bots off 6.8-9 m lips once their re-plans were seen to loop: the break-out comes
+ *  first, and the cap is lifted for a real pen only.) */
 function calmReplanFailed(W, b) {
   const bb = b.bb;
   if (W.t - bb.calmHold0 > CALM_HOLD_WIN_S) { bb.calmHold0 = W.t; bb.calmHoldN = 0; }
   if (++bb.calmHoldN < CALM_HOLD_N) return;
-  bb.calmHoldN = 0; bb.calmHold0 = W.t;
-  if (W.t - bb.calmBreakT > CALM_HOLD_WIN_S) { bb.calmBreakT = W.t; nav.st.calmBreak++; if (b.state === "PUSH" && bb.heard) bb.heard.t = -99; trapBreak(W, b); b.nextThink = 0; }
-  else { bb.calmOffUntil = W.t + CALM_OFF_S; bb.calmDrop = false; nav.st.calmOff++; }
+  bb.calmHoldN = 0; bb.calmHold0 = W.t; bb.calmBreakT = W.t; bb.calmRpT = -99;
+  nav.st.calmBreak++; if (b.state === "PUSH" && bb.heard) bb.heard.t = -99;
+  trapBreak(W, b); b.nextThink = 0;
+  if (!(W.t < bb.escUntil)) { bb.calmOffUntil = W.t + CALM_OFF_S; bb.calmDrop = false; nav.st.calmOff++; }
 }
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
@@ -481,7 +490,7 @@ class Blackboard {
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
       this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
       this.revEngUntil = -99;     // (W9 R1B) the REVIVE -> ENGAGE hold
-      this.calmDrop = false; this.rotPress = false; this.calmHoldN = 0; this.calmHold0 = -99; this.calmOffUntil = -99; this.calmBreakT = -99; this.edgeReplan = false;   // (W9 R1B) walkDrop's calm cap
+      this.calmDrop = false; this.rotPress = false; this.calmHoldN = 0; this.calmHold0 = -99; this.calmOffUntil = -99; this.calmBreakT = -99; this.edgeReplan = false; this.calmRpT = -99; this.calmRpX = 0; this.calmRpZ = 0;   // (W9 R1B) walkDrop's calm cap
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -3349,7 +3358,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -4186,7 +4195,7 @@ function moveTowardQ(W, b, dt, sprint, ty) {
     bb.edgeReplan = false;
     if (bb.path) { bb.path = null; bb.pathGoal = null; }
     reqWhy = 6; bb.nextPathT = 0; requestPath(W, b, tx, tz, ty, true);
-    if (bb.path) nav.st.calmRoutes++; else calmReplanFailed(W, b);
+    if (bb.path) { nav.st.calmRoutes++; bb.calmRpT = W.t; bb.calmRpX = a.pos.x; bb.calmRpZ = a.pos.z; } else calmReplanFailed(W, b);
   }
   // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
   // Drop the plan when the caller's goal has moved well away from the one the
