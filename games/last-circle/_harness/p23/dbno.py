@@ -10,6 +10,7 @@ hud (BLEEDING OUT, [HOLD E] Revive), loot (downed gate). The gate reads only the
     python _harness/p23/dbno.py --disk --plant no-bleed             # K.DBNO_BLEED_HPS = 0 - MUST FAIL (bleed / bleed-out rows)
     python _harness/p23/dbno.py --disk --plant revive-quick         # K.REVIVE_S = 1 - MUST FAIL (5 s channel row)
     python _harness/p23/dbno.py --disk --parts bot --plant no-commit   # bots.js served with the revive commitment off - MUST FAIL (dither)
+    python _harness/p23/dbno.py --disk --parts bot --plant no-revive-threat   # bots.js: no revive while an enemy was seen in 10 s - MUST FAIL (revive-start)
     python _harness/p23/dbno.py --lanes all                         # validation: every lane's work served over the base
     python _harness/p23/dbno.py --disk --parts human2 --control h2-short-hold  # E released after 3 s of GAME time - MUST FAIL (human2 revive row)
 
@@ -34,11 +35,13 @@ Part BOT (STANDARD, duo, Savanna seed 7): the human and its bot teammate are mov
   The human is knocked 15 m from its (armed, guarded) bot mate; an enemy bot (unarmed, guarded, pinned) PEEKS at the mate: 2 s on a spot in the
   open, 2 s out of sight (moved 350 m off), over and over. DITHER_N episodes per threat range (a first knock each: knocks reset - setup), each
   until the revive completes or DITHER_CAP_S (then a setup rescue: the mate is put 1 m from the human, the enemy hidden, so the next episode
-  starts from an up human).
+  starts from an up human; a mate that has not revived it 1 s before its bleed-out leaves the rescue to the game's own revive entry).
   dither       threat at 30 m: REVIVE <-> ENGAGE flips of the mate per downed-human episode: median <= 2 and max <= 4 (design pick: the brief
                has no number; label: W9 G design)
   revive-start threat at 50 m (> 45 m): the mate starts the revive channel before the human bleeds out in >= 80 % of the episodes
   --plant no-commit: bots.js served with the revive commitment / hysteresis off (REVIVE_COMMIT = false) - MUST FAIL dither
+  --plant no-revive-threat: bots.js served with REVIVE scored 0 while an enemy was seen in the last 10 s (the mate that will not revive with a
+               threat about, however far) - MUST FAIL revive-start (no-commit cannot: past 45 m the pre-W9 rule already revived)
 Part HUMAN2 (two pages, the squad relay stand-in of squadguard_live, a REAL duo match on both): the guest is knocked on its own page; the host
   sees the guest's body downed within 1 s; the guest crawls (real W) and the host sees it move; the host (teleported 1.2 m away) holds real E
   until its sim completes the revive (cap 5 s / host sim rate + 1.5 s real) and the channel took 5.0 +- 0.25 s of the host's GAME time;
@@ -64,8 +67,11 @@ PLANTS = {
     "revive-quick": "K.REVIVE_S = 1; if (K.DBNO) K.DBNO.REVIVE_S = 1",
     # (W9 R1B) bots.js served with REVIVE_COMMIT = false (NO_COMMIT below): no page snippet
     "no-commit": "",
+    # (W9 R1B) bots.js served with NO_REVIVE_THREAT below: no page snippet
+    "no-revive-threat": "",
 }
 NO_COMMIT = [("const REVIVE_COMMIT = true;", "const REVIVE_COMMIT = false;")]
+NO_REVIVE_THREAT = [("      if (md > REVIVE_SEEK_M) s.REVIVE = 0;", "      if (md > REVIVE_SEEK_M || W.t - bb.targetSeenT < 10) s.REVIVE = 0;")]
 DITHER_N, DITHER_CAP_S, DITHER_MATE_M, DITHER_PEEK_S = 4, 52, 15, 2.0
 DITHER_MED_MAX, DITHER_MAX_MAX, REVSTART_MIN = 2, 4, 80.0
 # one episode: knock the human, the enemy peeks at the mate (2 s seen / 2 s hidden), every frame the mate's state; the episode ends at the revive,
@@ -85,7 +91,10 @@ DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
   // the human at (cx, cz), the mate mateM m west of it; the enemy's open spot threatM from the mate, north or south (whichever the mate's eye sees)
   const hm = at(cx, cz), bm = at(cx - mateM, cz);
   let vis = null;
-  for (const sg of [1, -1]) { const q = at(bm[0], bm[2] + sg * threatM); if (!M.losBlocked(bm[0], bm[1] + 1.5, bm[2], q[0], q[1] + 1.2, q[2])) { vis = q; break; } }
+  // north or south first; then (W9 R1B) west (away from the human), the four diagonals, east: a plant that changes the earlier parts' outcomes
+  // moves the isolated spot, and north / south alone found no open line at 50 m there (could-not-judge instead of the control's FAIL)
+  for (const [ux, uz] of [[0, 1], [0, -1], [-1, 0], [-0.7071, 0.7071], [-0.7071, -0.7071], [0.7071, 0.7071], [0.7071, -0.7071], [1, 0]]) {
+    const q = at(bm[0] + ux * threatM, bm[2] + uz * threatM); if (!M.losBlocked(bm[0], bm[1] + 1.5, bm[2], q[0], q[1] + 1.2, q[2])) { vis = q; break; } }
   if (!vis) return { error: 'no open peek spot', threatM };
   const hid = at(bm[0], bm[2] + (vis[2] > bm[2] ? -350 : 350));
   put(A, hm); put(B, bm); put(E, vis);
@@ -95,11 +104,16 @@ DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
   A.knocks = 0; A.hp = 100; A.shield = 0; W.hurtActor(A, 250, foe, 'ar', false);
   P.step(1, 1 / 60, false);
   if (!A.downed) return { error: 'not downed', alive: !!A.alive };
+  // (W9 R1B) SETUP FENCE: every other actor is kept FENCE_M from the spot, every frame (a 52 s episode let third parties walk in: 'otherTarget'
+  // in the hundreds, and under the no-revive-threat plant a passer-by killed the downed human, which ended the run's setup - could-not-judge)
+  const FENCE_M = 200, fence = () => { for (const o of W.actors) { if (o === A || o === B || o === E || !o.alive || o.gliding) continue;
+    const dx = o.pos.x - cx, dz = o.pos.z - cz, d = Math.hypot(dx, dz); if (d < FENCE_M) { const k = (FENCE_M + 5) / Math.max(0.1, d); put(o, at(cx + dx * k, cz + dz * k)); } } };
+  fence();
   const from = Q.ev.length, t0 = W.t;
   let flips = 0, last = null, revStart = null, revived = null, died = null, seenN = 0, otherTarget = 0, minFoeD = 1e9; const states = [];
   for (let f = 0; f < capS * 60; f++) {
     const shown = Math.floor((W.t - t0) / peekS) % 2 === 0;
-    put(E, shown ? vis : hid); E.hp = 100; E.shield = 100;
+    put(E, shown ? vis : hid); E.hp = 100; E.shield = 100; fence();
     P.step(1, 1 / 60, false);
     const st = B.brain ? B.brain.state : null;
     if (st === 'REVIVE' || st === 'ENGAGE') { if (last && st !== last) flips++; last = st; }
@@ -120,9 +134,14 @@ DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
   if (revived == null && died == null && A.alive && A.downed) {
     put(B, at(A.pos.x - 1, A.pos.z)); put(E, hid);
     const r0 = Q.ev.length;
-    for (let f = 0; f < 15 * 60; f++) { put(E, hid); E.hp = 100; P.step(1, 1 / 60, false);
+    // (W9 R1B) up to 15 s, but never into the bleed-out (a mate that will not revive - the no-revive-threat plant - bled the human out here
+    // and every later episode lost its setup: could-not-judge, not the FAIL the control is for); still down -> the game's own revive entry
+    const rate0 = K.dbnoBleedRate ? K.dbnoBleedRate(A.knocks || 1) : 0, capF = rate0 > 0 ? Math.min(15 * 60, Math.max(0, Math.floor((A.downedHp / rate0 - 1) * 60))) : 15 * 60;
+    for (let f = 0; f < capF; f++) { put(E, hid); E.hp = 100; fence(); P.step(1, 1 / 60, false);
       if (Q.ev.slice(r0).some((e) => e.n === 'actorRevived' && e.a === me) || !A.alive) break; }
-    rescued = { up: !!(A.alive && !A.downed) };
+    let byHarness = false;
+    if (A.alive && A.downed) { byHarness = true; if (typeof W.reviveActor === 'function') W.reviveActor(A, B); else { A.downed = false; A.downedHp = 0; A.hp = K.REVIVE_HP; W.events.emit('actorRevived', A, B); } P.step(1, 1 / 60, false); }
+    rescued = { up: !!(A.alive && !A.downed), byHarness };
   }
   put(E, hid);
   return { threatM, flips, revStart, revived, died, bleedLeftS, rescued, seenN, otherTarget, minFoeD: +minFoeD.toFixed(1), vis: vis.map((v) => +v.toFixed(1)),
@@ -210,6 +229,8 @@ def part_bot(args, v):
     with C.Session(args, "p23_dbno_bot") as s:
         if args.plant == "no-commit":
             v.data["plant_served"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_COMMIT)
+        elif args.plant == "no-revive-threat":
+            v.data["plant_served"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_REVIVE_THREAT)
         s.boot()
         L.dismiss_cards(s)
         st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
@@ -421,7 +442,9 @@ def part_dither(s, v):
     s.guard_player(False)
     L.guard_ids(s, [info["mate"]])
     eps = {30: [], 50: []}
-    for threat in (30, 50):
+    # (W9 R1B) the 50 m episodes first: under a plant whose mate never revives (no-revive-threat) every episode runs its full cap, and the 50 m
+    # set, run after four capped 30 m episodes, met the closing storm at the isolated spot (the human died in it: setup lost, could-not-judge)
+    for threat in (50, 30):
         for _ in range(DITHER_N):
             r = s.js(DITHER_JS, [info["me"], info["mate"], info["foe"], iso["x"], iso["z"], threat, DITHER_CAP_S, DITHER_PEEK_S, DITHER_MATE_M])
             eps[threat].append(r)

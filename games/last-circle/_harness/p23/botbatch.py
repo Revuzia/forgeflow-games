@@ -50,8 +50,9 @@ PLANTS = {"shield-cap": "W.kernel._updaters.push(() => { for (const a of W.actor
           # (W9 R1B) served-file plant (NO_FAR_BIG below): no page snippet
           "no-far-big": ""}
 NO_FAR_BIG = {"runtime/3d/royale/bots.js": [("const WANT_BIG = true;", "const WANT_BIG = false;")],
-              "runtime/sim/royale.js": [('      { kind: "consumable", id: "big_shield", count: 3 },\n      { kind: "consumable", id: "mini_shield", count: 3 },\n',
-                                         '      { kind: "consumable", id: "big_shield", count: 2 },\n')]}
+              # (single-line anchors: sim/royale.js is served with its CRLF line ends - a two-line anchor joined by LF never matched)
+              "runtime/sim/royale.js": [('{ kind: "consumable", id: "big_shield", count: 3 },', '{ kind: "consumable", id: "big_shield", count: 2 },'),
+                                         ('{ kind: "consumable", id: "mini_shield", count: 3 },', '')]}
 CENSUS_T, CENSUS_MAX = 600.0, 3
 # (W9 R1B) the t = 600 s census: big shields on the floor (death piles included) inside the next circle, and those no bot is walking to
 CENSUS_JS = r"""() => { const W = window.__LC__.W, C = window.__LC__; const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; if (!st) return null;
