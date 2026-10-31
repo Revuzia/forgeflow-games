@@ -950,7 +950,7 @@ else if (require.main === module) (async () => {
   const cps = sampleJobs.slice(0, 40).map((j) => Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys }));
   const childSrc = "import(" + JSON.stringify(pathToFileURL(HG).href) + ").then(M=>{const P=JSON.parse(process.argv[1]);const o=[];for(const p of P){let s=JSON.stringify(M.generate(p)),h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)}o.push((h>>>0).toString(16))}console.log(JSON.stringify(o))})";
   // (Wave 9) the map rows run in a CHILD process while the workers work (3 maps x 5 seeds built by maps.js through _harness/world_env.mjs)
-  const mapsP = runMapsChild(null);
+  const mapsP = runMapsChild(null), plantP = runMapsChild("no-hash");      // (+ the C3 negative control: the same child on a planted scratch copy)
   const childP = new Promise((resolve) => { const c = cp.spawn(process.execPath, ["-e", childSrc, JSON.stringify(cps)]); let out = "", errs = ""; c.stdout.on("data", (d) => { out += d; }); c.stderr.on("data", (d) => { errs += d; }); c.on("close", () => resolve({ out, errs })); });
   const mainHash = new Map();
   for (const j of sampleJobs) mainHash.set(j.key, fnv(JSON.stringify(HGmod.generate(Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys })))));   // (j.storeys: the job's own)
@@ -1248,6 +1248,9 @@ else if (require.main === module) (async () => {
     info("door leaves (selftest parcels): " + lv + " leaves; exterior doors leafed " + extL + " / " + ext + " (" + (100 * extL / Math.max(1, ext)).toFixed(1) + " %), interior " + intL + " / " + int + " (" + (100 * intL / Math.max(1, int)).toFixed(1) + " %, hash share " + HGmod.LEAF_SHARE + "); the rest failed the swing clearance (a window or another doorway at the leaf's corner, a stair, a space too narrow to pass the open leaves)");
   }
   mapRows(await mapsP);
+  { const pr = await plantP, pj = pr && pr.j;
+    ok(!!(pj && pj.builds && pj.dynN > 0 && pj.dynErr.length > 0), "negative control [C3]: addDynamicCollider pushing WITHOUT the cell insert (a scratch copy of maps.js, deepwood seed 1) is caught by the C3 row",
+      pj ? pj.dynErr.length + " of " + pj.dynN + " boxes caught, e.g. " + pj.dynErr.slice(0, 1).join("") : (pr && pr.errs) || "no output"); }
 
 
   // ---- negative controls: a planted fault must be caught by its checker
