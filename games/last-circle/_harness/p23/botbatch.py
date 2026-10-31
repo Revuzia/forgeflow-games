@@ -62,7 +62,11 @@ CENSUS_JS = r"""() => { const W = window.__LC__.W, C = window.__LC__; const st =
     if (q.type === 'chest') { if (q.supply) crates++; continue; }
     if (q.type !== 'item' || !q.data || q.data.id !== 'big_shield') continue;
     const k = q.data.count || 1; n += k; if (!goals.has(q.id)) { un += k; if (where.length < 8) where.push([Math.round(q.pos.x), Math.round(q.pos.z), q.id]); } }
-  return { t: +W.t.toFixed(1), r: Math.round(r), bigs: n, unclaimed: un, supplyCratesUnopened: crates, where, alive: W.match.aliveCount() }; }"""
+  // (information) the whole map's floor big shields / unopened crates, and what the alive bots carry
+  let mapBigs = 0, mapCrates = 0, bagBigs = 0, bagMinis = 0, bots = 0;
+  for (const q of W.nearbyLoot({ x: 0, y: 0, z: 0 }, (W.map.half || 800) * 1.5, 1e4)) { if (q.type === 'chest') { if (q.supply) mapCrates++; } else if (q.type === 'item' && q.data && q.data.id === 'big_shield') mapBigs += q.data.count || 1; }
+  for (const b of C.brains()) { const a = b.actor; if (!a.alive) continue; bots++; for (const s2 of a.inventory.slots) if (s2 && s2.kind === 'consumable') { if (s2.id === 'big_shield') bagBigs += s2.count || 0; else if (s2.id === 'mini_shield') bagMinis += s2.count || 0; } }
+  return { t: +W.t.toFixed(1), r: Math.round(r), bigs: n, unclaimed: un, supplyCratesUnopened: crates, where, alive: W.match.aliveCount(), mapBigs, mapCrates, bots, bagBigs, bagMinis }; }"""
 
 COVER_MIN, NEGLECT_MAX, SH600_MIN, SURV_MIN, END_LO, END_HI = 15.0, 10.0, 75.0, 150.0, 600.0, 900.0
 SHARE75_TARGET = 60.0
@@ -107,6 +111,7 @@ def analyze(results):
     out["sh600why"] = why
     cs = [r.get("census") for r in results]
     out["census600"] = {"medianUnclaimed": med([c["unclaimed"] for c in cs if c]), "perMatch": [(c["unclaimed"], c["bigs"], c["supplyCratesUnopened"]) if c else None for c in cs],
+                        "mapAndBags": [{k: c.get(k) for k in ("mapBigs", "mapCrates", "bots", "bagBigs", "bagMinis")} if c else None for c in cs],
                         "missing": sum(1 for c in cs if not c)}
     surv = []
     for r in results:
