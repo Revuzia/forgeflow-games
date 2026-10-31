@@ -26,6 +26,9 @@ Rows (exit 0 pass / 1 fail / 2 could-not-judge):
   glass          every window of an intact building has a pane that DRAWS and no pane has a collider (a ruin - THEMES[].ruined - keeps one pane in
                  four by design, Wave 8 K1: its panes are counted apart, never more than its windows)
   boot           0 page errors / console errors / failed requests
+Plant (Wave 9, lane R1A; only the designated row counts, exit 1 = the fault was caught):
+  --plant eye-only-phase5   housegen.js served (a page route, no file touched) with phase 5 judging on the EYE-ONLY model again (W9's fix undone: model5(false)
+                            where it starts) -> view-pixels must FAIL (lodge_tower.f1r1, the Wave-8 storage room whose boxes hide behind the rack from the camera)
 Screenshots (LOOK at them): per use a contact sheet (street, the front from the third-person camera, stepping in through the front door, the biggest room
 from its doorway), the compound sheet, the storeys cut-away sheet, and every building's every room from its doorway (third person).
 """
@@ -36,12 +39,55 @@ import base64
 import json
 import os
 import sys
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import common as C  # noqa: E402
 
 GATE = "housegen_demo_looks"
+# --plant (Wave 9, lane R1A): the row that must FAIL, and the in-memory edit of the served housegen.js
+PLANTS = {"eye-only-phase5": {"view-pixels"}}
+HG_REL = "runtime/3d/royale/housegen.js"
+PLANT_EDIT = {"eye-only-phase5": ("        model5(true);\n        if (bestView(R).n >= 3) return;\n        const run5", "        model5(false);\n        if (bestView(R).n >= 3) return;\n        const run5")}
+
+
+class PlantView:
+    """Verdict wrapper for --plant: only the designated rows count (exit 1 = the planted fault was seen); every other row is printed as information."""
+
+    def __init__(self, v, rows):
+        self._v, self._rows = v, rows
+
+    def check(self, name, ok, detail="", expect=None):
+        if name in self._rows:
+            return self._v.check(name, ok, detail, expect)
+        self._v.info(name + " (not counted in plant mode)", detail)
+        return ok
+
+    def cnj(self, name, why):
+        return self.check(name, None, why)
+
+    def __getattr__(self, k):
+        return getattr(self._v, k)
+
+
+def install_plant(s, args, plant):
+    """Serve housegen.js with the planted edit (in memory, by a page route); needs --disk or --rev."""
+    if args.rev:
+        b = s.disk.git.read(HG_REL)
+    else:
+        with open(os.path.join(C.ROOT, HG_REL.replace("/", os.sep)), "rb") as fh:
+            b = fh.read()
+    if b is None:
+        raise C.EnvFailure("plant: %s is not in the served tree" % HG_REL)
+    src = b.decode("utf-8").replace("\r\n", "\n")
+    old, new = PLANT_EDIT[plant]
+    if src.count(old) != 1:
+        raise C.EnvFailure("plant %s: the phase-5 model switch was not found once in housegen.js (found %d)" % (plant, src.count(old)))
+    body = src.replace(old, new).encode("utf-8")
+    s.disk.overrides.append((lambda url: urllib.parse.urlparse(url).path.endswith("/" + HG_REL),
+                             lambda route: route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})))
+    return "housegen.js served with phase 5 on the eye-only model (%s)" % plant
 PX_MIN = 60
 VIEW_MIN = 3
 
@@ -303,9 +349,19 @@ PROBE = r"""
 def main_fn(v, args):
     shots = args.shots or C.SHOTS
     os.makedirs(shots, exist_ok=True)
+    if args.plant:
+        if args.plant not in PLANTS:
+            raise C.HarnessError("unknown --plant %r (known: %s)" % (args.plant, ", ".join(sorted(PLANTS))))
+        print("%s: PLANT MODE %s - only %s count; exit 1 = the planted fault was detected" % (GATE, args.plant, sorted(PLANTS[args.plant])), flush=True)
+        v = PlantView(v, PLANTS[args.plant])
+        v.data["plant"] = args.plant
     s = C.Session(args, name="housegen_demo_looks")
     s.start()
     try:
+        if args.plant:
+            if not (args.disk or args.rev):
+                raise C.EnvFailure("--plant needs --disk or --rev (it patches the served housegen.js)")
+            v.info("plant", install_plant(s, args, args.plant))
         s.boot()
         s.freeze_loop()
         keys = s.js("() => { window.__HGL__ = (" + PROBE + ")(); return Object.keys(window.__HGL__); }")
@@ -425,6 +481,7 @@ def main():
     C.add_common_args(ap)
     ap.set_defaults(disk=True)
     ap.add_argument("--shots", default=None, help="directory for the screenshots (default _harness/_shots)")
+    ap.add_argument("--plant", default=None, help="negative control: %s" % ", ".join(sorted(PLANTS)))
     args = ap.parse_args()
     return C.run_gate(GATE, lambda v: main_fn(v, args), args)
 
