@@ -601,8 +601,11 @@ function splatAt(mapId, h, x, z, seed, out) {
  *  (only ramps read it), a non-prop has prop null / idx -1 / hp 0 (every reader
  *  tests `c.prop == null`, `!c.prop`, `c.hp > 0`), dead false, _qs 0 (stamps
  *  start at 1). */
+// (Wave 9, LC-91, contract C1) two more fields on EVERY collider, still one shape: door = the index into map.doors of the door a leaf slab belongs to (-1: not
+// a door), dslab = 1 a leaf's CLOSED slab / 2 its OPEN slab / 0 not a leaf. Test door-ness as c.door >= 0 or c.dslab, never !c.door (-1 is truthy).
+// (citykit.js keeps its own copy of the old 13-field literal: its colliders are re-made here when they join the map, see placeCityKit)
 function mkCollider(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp) {
-  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 };
+  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0, door: -1, dslab: 0 };
 }
 
 // ── baked prop collider table (Wave 5, lane 5A) ──────────────────────────────────────────────────────────────────
@@ -4008,7 +4011,107 @@ export async function buildMap(W, mapId) {
   // Colliders: collidersOf(house) in its fixed order (structure boxes, ramps - the stairs AND the pitched roofs' planks, see house.roofRamps -, furniture), nothing else.
   // Loot: housegen's points reach loot.js as map.houses (lane I3's per-room pass): no house point is added to map.lootPoints here.
   // DETERMINISM: generate() is a pure function of the parcel (towngen's record + the map seed); nothing here draws from the shared `rng`.
-  const houses = [];                 // map.houses: the housegen records as built, in build order (+ town, parcel, district, chunk, index, cols, roofRamps)
+  const houses = [];                 // map.houses: the housegen records as built, in build order (+ town, parcel, district, chunk, index, cols, roofRamps, leafCols)
+  // (Wave 9, LC-91, contract C1) map.doors: every LEAFED door of every furnished house, in build order -
+  //   { id (housegen door id), house (index into map.houses), kind front | back | interior, x, y, z, axis, nx, nz (the door record's), open (now), start (the
+  //     start state: open?), leaves: [{ cClosed, cOpen (its two slab colliders), inst (its BatchedMesh instance, -1 until drawn), L (housegen's leaf record) }],
+  //     t0 (when the last swing began, the door clock), cool (when it last toggled), k (drawn swing: 0 shut .. 1 open), pend (open slabs waiting for a clear swing) }
+  // The START state is (W.SIM.DOOR_START || all open)[kind] (C1: the geometry lane ships no DOOR_START - every door starts open, today's walkability; the bot-side
+  // lane adds { front: "closed", back: "closed", interior: "open" } to sim/royale.js). Seeded world output: every client derives the same doors and start.
+  const mapDoors = [];
+  const DOOR_START_ALL_OPEN = Object.freeze({ front: "open", back: "open", interior: "open" });
+  const doorStartOf = (kind) => { const SR = W.SIM || (globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.Royale) || null; return ((SR && SR.DOOR_START) || DOOR_START_ALL_OPEN)[kind] !== "closed"; };
+  // -- the doors at run time (C1). setDoor(i, open, byId, t) -> true | "blocked" | "cool" (false: no such door):
+  //   OPEN: the closed slabs die at once (no body is ever pushed by a moving leaf); each open slab comes alive on the first tick no live actor's capsule overlaps
+  //         it (no time limit; the leaf DRAWS open regardless - industry ref: PUBG doors never trap a player);
+  //   CLOSE: refused while a live actor's capsule overlaps a closed slab grown by DOOR_CLOSE_PAD (returns "blocked", emits "doorBlocked" (i, byId)); else the
+  //         open slabs die and the closed ones live at once;
+  //   a door toggles at most once per DOOR_COOL_S ("cool"); every toggle emits W.events "doorChanged" (i, open, byId) - audio, HUD and bots listen.
+  //   t: the caller's time in seconds; the doors run on their own clock (the kernel's update dt) and a t ahead of it moves it on (a gate stepping no frames).
+  // doorNear(x, y, z, r) -> the nearest door (its opening's middle) within r on the same storey (|y - door.y| < 1.2), else -1; doorAt(collider) -> c.door;
+  // doorStates() -> Uint8Array, 1 bit per door (set = differs from its start state); applyDoorStates(bits) puts every door in that state at once (join / rejoin).
+  const DOOR_SWING_S = 0.28, DOOR_COOL_S = 0.3, DOOR_CLOSE_PAD = 0.05, DOOR_FAR_EXT = 150;
+  let doorClock = 0, doorDraw = null, doorTicking = false, doorHash = null, doorLodT = 9;
+  const doorSwinging = new Set(), doorPending = new Set();
+  const doorEmit = (name, a, b, c) => { try { if (W.events && typeof W.events.emit === "function") W.events.emit(name, a, b, c); } catch (e) { /* a listener's problem */ } };
+  function doorCapsuleIn(c, pad) {                       // a live actor's capsule (PLAYERK radius / height) overlaps collider c grown by pad
+    const L = W.actors;
+    if (!L || !L.length) return false;
+    const PK = W.SIM && W.SIM.PLAYERK, R = (PK && PK.radius) || 0.45, Hh = (PK && PK.height) || 1.8;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (!a || a.alive === false || !a.pos) continue;
+      const px = a.pos.x, py = a.pos.y, pz = a.pos.z;
+      if (py + Hh <= c.minY - pad || py >= c.maxY + pad) continue;
+      const ex = px < c.minX - pad ? c.minX - pad - px : px > c.maxX + pad ? px - c.maxX - pad : 0, ez = pz < c.minZ - pad ? c.minZ - pad - pz : pz > c.maxZ + pad ? pz - c.maxZ - pad : 0;
+      if (ex * ex + ez * ez < R * R) return true;
+    }
+    return false;
+  }
+  function doorOpenSlabs(D, i) {                         // bring the open slabs alive where no capsule stands in them; the rest wait (doorPending)
+    let wait = false;
+    for (const lf of D.leaves) { if (!lf.cOpen.dead) continue; if (doorCapsuleIn(lf.cOpen, 0)) wait = true; else lf.cOpen.dead = false; }
+    D.pend = wait;
+    if (wait) doorPending.add(i); else doorPending.delete(i);
+  }
+  function setDoor(i, open, byId, t) {
+    const D = mapDoors[i];
+    if (!D) return false;
+    open = !!open;
+    if (typeof t === "number" && t > doorClock) doorClock = t;
+    if (D.open === open) return true;
+    if (doorClock - D.cool < DOOR_COOL_S) return "cool";
+    if (!open) {
+      for (const lf of D.leaves) if (doorCapsuleIn(lf.cClosed, DOOR_CLOSE_PAD)) { doorEmit("doorBlocked", i, byId); return "blocked"; }
+      for (const lf of D.leaves) { lf.cOpen.dead = true; lf.cClosed.dead = false; }
+      D.pend = false; doorPending.delete(i);
+    } else {
+      for (const lf of D.leaves) lf.cClosed.dead = true;
+      doorOpenSlabs(D, i);
+    }
+    D.open = open; D.t0 = doorClock; D.cool = doorClock;
+    doorSwinging.add(i);
+    if (doorDraw) doorDraw.pose(D);
+    doorEmit("doorChanged", i, open, byId);
+    return true;
+  }
+  function doorNear(x, y, z, r) {
+    if (!mapDoors.length) return -1;
+    if (!doorHash) { doorHash = new Map(); mapDoors.forEach((D, i) => { const k = Math.floor(D.x / 8) * 65536 + Math.floor(D.z / 8); let l = doorHash.get(k); if (!l) { l = []; doorHash.set(k, l); } l.push(i); }); }
+    let best = -1, bd = r * r;
+    for (let gx = Math.floor((x - r) / 8); gx <= Math.floor((x + r) / 8); gx++) for (let gz = Math.floor((z - r) / 8); gz <= Math.floor((z + r) / 8); gz++) {
+      const l = doorHash.get(gx * 65536 + gz);
+      if (l) for (const i of l) { const D = mapDoors[i]; if (Math.abs(y - D.y) >= 1.2) continue; const d2 = (D.x - x) * (D.x - x) + (D.z - z) * (D.z - z); if (d2 <= bd) { bd = d2; best = i; } }
+    }
+    return best;
+  }
+  const doorAt = (c) => (c && c.door >= 0 ? c.door : -1);
+  function doorStates() {
+    const b = new Uint8Array((mapDoors.length + 7) >> 3);
+    for (let i = 0; i < mapDoors.length; i++) if (mapDoors[i].open !== mapDoors[i].start) b[i >> 3] |= 1 << (i & 7);
+    return b;
+  }
+  function applyDoorStates(bits) {
+    for (let i = 0; i < mapDoors.length; i++) {
+      const D = mapDoors[i], flip = bits && ((bits[i >> 3] >> (i & 7)) & 1), want = flip ? !D.start : D.start;
+      if (want === D.open) continue;
+      if (want) { for (const lf of D.leaves) lf.cClosed.dead = true; doorOpenSlabs(D, i); }
+      else { for (const lf of D.leaves) { lf.cOpen.dead = true; lf.cClosed.dead = false; } D.pend = false; doorPending.delete(i); }
+      D.open = want; D.k = want ? 1 : 0; D.t0 = -1e9; doorSwinging.delete(i);
+      if (doorDraw) doorDraw.pose(D);
+    }
+  }
+  function doorUpdate(dt) {
+    doorClock += dt > 0 ? dt : 0;
+    if (doorPending.size) for (const i of [...doorPending]) doorOpenSlabs(mapDoors[i], i);
+    if (doorSwinging.size) for (const i of [...doorSwinging]) {
+      const D = mapDoors[i], u = Math.min(1, (doorClock - D.t0) / DOOR_SWING_S), e = 1 - (1 - u) * (1 - u);     // (ease-out)
+      D.k = D.open ? e : 1 - e;
+      if (doorDraw) doorDraw.pose(D);
+      if (u >= 1) doorSwinging.delete(i);
+    }
+    if (doorDraw && (doorLodT += dt) >= 0.25) { doorLodT = 0; doorDraw.lod(); }
+  }
   const hgChunks = new Map();        // inside / furniture chunk key -> { key, x0, z0, x1, z1, y0, y1, pos, nor, uv, col, tki, idx, kit: [{ type, x, y, z, rot, min, max }] }
   const hgGlass = { pos: [], nor: [], col: [], idx: [] };
   // housegen palette material -> the struct texture kind its faces wear (district merge: s / plank / stucco share the mix mesh; no metal mesh)
@@ -4075,6 +4178,109 @@ export async function buildMap(W, mapId) {
     for (const r of hgNearAll) { if (r === a || r[2] < a[0] - M || r[0] > a[2] + M || r[3] < a[1] - M || r[1] > a[3] + M) continue; out.push([r[0] - 0.3, r[1] - 0.3, r[2] + 0.3, r[3] + 0.3]); }
     return out;
   }
+  /** (Wave 9, LC-91) a house's leafed doors -> map.doors; its leaf slabs (from collider lc0 on: closed, open per leaf) get door = the map index and the start
+   *  state; its nav links through a leafed door gain doorIdx (the bots lane's door links). */
+  function registerDoors(H, lc0) {
+    let k = lc0, D = null;
+    const idx = new Map();
+    for (const L of H.doorLeaves) {
+      const cC = colliders[k++], cO = colliders[k++];
+      if (!D || D.id !== L.door) {
+        const d = H.doors.find((q) => q.id === L.door) || {};
+        const st = doorStartOf(L.kind);
+        D = { id: L.door, house: H.index, kind: L.kind, x: d.x, y: L.y, z: d.z, axis: d.axis, nx: d.nx, nz: d.nz, open: st, start: st, leaves: [], t0: -1e9, cool: -1e9, k: st ? 1 : 0, pend: false };
+        idx.set(L.door, mapDoors.length);
+        mapDoors.push(D);
+      }
+      const di = mapDoors.length - 1;
+      cC.door = di; cO.door = di;                         // (collidersOf set the house-local ordinal and dslab 1 / 2)
+      cC.dead = D.open; cO.dead = !D.open;
+      D.leaves.push({ cClosed: cC, cOpen: cO, inst: -1, L });
+    }
+    for (const l of H.nav.links) if (l.door != null && idx.has(l.door)) l.doorIdx = idx.get(l.door);
+    if (!doorTicking && mapDoors.length) { doorTicking = true; trackUpdater(doorUpdate); }
+  }
+  /** (Wave 9, LC-91) the door leaves, drawn: ONE BatchedMesh "houses:doors@all" (one multi-draw call, + one in the depth pass on medium and up: a shut door shades
+   *  the room it closes), the insides' material (dualStructMaterial: the batched program already exists - no new program). One model per (wood colour, hand,
+   *  indoor shade) - a hand is the leaf's side of the pivot, see housegen LEAF_PIVOT -, baked vertex colours (setColorAt would add a USE_BATCHING_COLOR variant),
+   *  48 triangles: the 4 cm slab, a raised panel each side, a lever handle each side. Instance = leaf: rotated about its pivot by (q0 + swing * k) quarter turns
+   *  (k: 0 shut .. 1 open, eased over DOOR_SWING_S); shown within DOOR_FAR_EXT (150 m: a shut front door is part of the street) for exterior doors, within the
+   *  furniture distance (TIER_Q.furnD) for interior ones, checked 4 times a second. */
+  function buildDoorLeaves(mat, parent, meshes) {
+    if (!mapDoors.length) return;
+    const PV = (city && city.HG && city.HG.LEAF_PIVOT) || { x0: 0.05, z0: 0.05 };
+    const geoKey = new Map(), geos = [];
+    const n8 = (x) => (x >= 1 ? 127 : x <= -1 ? -127 : Math.round(x * 127)), c8 = (x) => (x >= 1 ? 255 : x <= 0 ? 0 : Math.round(x * 255));
+    const model = (rgb, hand, ks, w, h, t) => {
+      const P = [], N = [], CO = [], UV = [], TK = [], ID = [];
+      // a box's faces (skip: bit k = face k not drawn, faces +x -x +y -y +z -z)
+      const box = (x0, x1, y0, y1, z0, z1, col, tk, skip) => {
+        const F = [[[1, 0, 0], [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]]], [[-1, 0, 0], [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]]],
+          [[0, 1, 0], [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]]], [[0, -1, 0], [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]]],
+          [[0, 0, 1], [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]], [[0, 0, -1], [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]]]];
+        F.forEach(([n, q], fi) => {
+          if (skip & (1 << fi)) return;
+          const base = P.length / 3;
+          for (const v of q) {
+            P.push(v[0], v[1], v[2]); N.push(n8(n[0]), n8(n[1]), n8(n[2])); CO.push(c8(col[0] * ks), c8(col[1] * ks), c8(col[2] * ks)); TK.push(tk);
+            if (n[1]) UV.push(v[0] / 1.6, v[2] / 1.6); else if (n[0]) UV.push(v[2] / 1.6, v[1] / 1.6); else UV.push(v[0] / 1.6, v[1] / 1.6);
+          }
+          ID.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        });
+      };
+      const x0 = PV.x0, x1 = PV.x0 + w, zc = hand * (PV.z0 + t / 2), za = zc - t / 2, zb = zc + t / 2;
+      const pan = [rgb[0] * 0.82, rgb[1] * 0.82, rgb[2] * 0.82], hd = [0.11, 0.11, 0.11];
+      box(x0, x1, 0, h, za, zb, rgb, 1, 0);                                                     // the slab: 12
+      box(x0 + 0.14, x1 - 0.24, 0.18, h - 0.3, zb, zb + 0.01, pan, 1, 1 << 5);                   // raised panels, 1 cm proud: 10 + 10
+      box(x0 + 0.14, x1 - 0.24, 0.18, h - 0.3, za - 0.01, za, pan, 1, 1 << 4);
+      box(x1 - 0.2, x1 - 0.07, 0.98, 1.03, zb, zb + 0.05, hd, 0, (1 << 5) | (1 << 3));          // lever handles: 8 + 8
+      box(x1 - 0.2, x1 - 0.07, 0.98, 1.03, za - 0.05, za, hd, 0, (1 << 4) | (1 << 3));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(P), 3));
+      g.setAttribute("normal", new THREE.BufferAttribute(new Int8Array(N), 3, true));
+      g.setAttribute("color", new THREE.BufferAttribute(new Uint8Array(CO), 3, true));
+      g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(UV), 2));
+      g.setAttribute("tki", new THREE.BufferAttribute(new Uint8Array(TK), 1));
+      g.setIndex(new THREE.BufferAttribute(new Uint16Array(ID), 1));
+      return g;
+    };
+    const jobs = [];
+    for (const D of mapDoors) for (const lf of D.leaves) {
+      const L = lf.L, H = houses[D.house], pe = H && H.palette[L.pal], hex = pe ? pe.color : 0x8a5a3a, indoor = D.kind === "interior", hand = L.swing;
+      const key = hex + "|" + hand + "|" + (indoor ? 1 : 0) + "|" + L.w + "|" + L.h;
+      if (!geoKey.has(key)) { geoKey.set(key, geos.length); geos.push(model(hgCol(hex), hand, indoor ? HG_INDOOR : 1, L.w, L.h, L.t)); }
+      jobs.push([D, lf, geoKey.get(key)]);
+    }
+    let nv = 0, ni = 0;
+    for (const g of geos) { nv += g.attributes.position.count; ni += g.index.count; }
+    const bm = new THREE.BatchedMesh(jobs.length, nv, ni, mat);
+    bm.name = "houses:doors@all"; bm.castShadow = TIER !== "low"; bm.receiveShadow = true; bm.sortObjects = false;
+    bm.userData.lcPart = "door";
+    const gid = geos.map((g) => bm.addGeometry(g));
+    const _m = new THREE.Matrix4();
+    const pose = (D) => {
+      for (const lf of D.leaves) {
+        if (lf.inst < 0) continue;
+        const L = lf.L, yaw = (L.q0 + L.swing * D.k) * Math.PI / 2;
+        _m.makeRotationY(yaw); _m.setPosition(L.pivot[0], L.y, L.pivot[1]);
+        bm.setMatrixAt(lf.inst, _m);
+      }
+    };
+    for (const [, lf, gi] of jobs) { lf.inst = bm.addInstance(gid[gi]); bm.setVisibleAt(lf.inst, false); }
+    for (const D of mapDoors) { D._vis = false; pose(D); }
+    const lod = () => {
+      const cam = W.camera; if (!cam) return;
+      const px = cam.position.x, py = cam.position.y, pz = cam.position.z, dIn = HG_FURN_DIST * HG_FURN_DIST, dEx = DOOR_FAR_EXT * DOOR_FAR_EXT;
+      for (const D of mapDoors) {
+        const on = (D.x - px) * (D.x - px) + (D.y - py) * (D.y - py) + (D.z - pz) * (D.z - pz) <= (D.kind === "interior" ? dIn : dEx);
+        if (on !== D._vis) { D._vis = on; for (const lf of D.leaves) if (lf.inst >= 0) bm.setVisibleAt(lf.inst, on); }
+      }
+    };
+    bm.computeBoundingBox(); bm.computeBoundingSphere();
+    parent.add(bm); meshes.push(bm);
+    doorDraw = { bm, pose, lod, geometries: geos.length, instances: jobs.length };
+    for (const g of geos) g.dispose();                   // (copied into the batch)
+  }
   /** One parcel building -> one furnished house. Returns { H, look, roofTop }. */
   function hgHouse(T, p, b, did, wallC, roofC) {
     const HG = city.HG;
@@ -4107,7 +4313,7 @@ export async function buildMap(W, mapId) {
     const toChunk = (a, k, tki, inside) => { if (a.idx.length) (inside ? C.inside : C.parts).push(a, k, tki); };   // (copied once into the chunk's typed arrays, see buildHouseFurniture; K1: the insides and the furniture apart)
     // structure: the outside -> the district sink, the inside -> the chunk
     // (K1 re-run: ns - a ruin's wreckage comes keyed "<mat>#ns" and goes to the district's no-shadow twin, "vcn|<kind>", see mergeBatchSet)
-    const md = HG.meshData(H, hgCol, { interior: true, ns: true });
+    const md = HG.meshData(H, hgCol, { interior: true, ns: true, leaves: false });     // (Wave 9: the door leaves are drawn swinging, in houses:doors@all - see buildDoorLeaves)
     for (const [key, a] of md.groups.walls) {
       if (!a.idx.length) continue;
       const nsK = key.endsWith("#ns"), key0 = nsK ? key.slice(0, -3) : key;
@@ -4141,8 +4347,10 @@ export async function buildMap(W, mapId) {
     }
     H.ramps.forEach((r, k) => { if (r.roof) roofRamps.push(c0 + nBox + k); });
     H.town = T.id; H.parcel = p.id; H.district = did; H.chunk = ck; H.index = houses.length;
-    H.cols = [c0, nBox + H.ramps.length, colliders.length - c0];      // [first collider, structure colliders (boxes + ramps), all of the house's]
+    H.cols = [c0, nBox + H.ramps.length, colliders.length - c0];      // [first collider, structure colliders (boxes + ramps), all of the house's (+ the door-leaf slabs: last, see leafCols)]
     H.roofRamps = roofRamps;
+    // (Wave 9, LC-91) the door-leaf slabs are the house's LAST colliders (collidersOf: per leaf closed, open): [first, count]; the doors join map.doors
+    { const nL = HG.leafColliderCount ? HG.leafColliderCount(H) : 0; H.leafCols = [colliders.length - nL, nL]; if (nL) registerDoors(H, colliders.length - nL); }
     houses.push(H);
     // the house's loot points are listed on map.lootPoints too, tagged `house` (loot.js spawns a house's loot from map.houses and SKIPS these; bots.assignDrops reads
     // lootPoints for its landing spots - a spot qualifies when a gun lies within 1.8 m of it - and its per-POI cap). `w` = this house's expected loot units (lane I3's
@@ -4350,7 +4558,8 @@ export async function buildMap(W, mapId) {
         if (on !== L.on) { L.on = on; for (const q of L.inst) q[0].setVisibleAt(q[1], on); }
       }
     });
-    city.furniture = { chunks: lod.length, regions: batches.length, kitTypes: types.size, kitBaked: [...tpl.values()].filter(Boolean).length, kitBoxes };
+    buildDoorLeaves(mat, g, meshes);                     // (Wave 9, LC-91: the swinging door leaves, the same material)
+    city.furniture = { chunks: lod.length, regions: batches.length, kitTypes: types.size, kitBaked: [...tpl.values()].filter(Boolean).length, kitBoxes, doors: mapDoors.length, doorLeaves: doorDraw ? doorDraw.instances : 0, doorModels: doorDraw ? doorDraw.geometries : 0 };
   }
   function buildCityBuildings() {
     const { TG, lay } = city;
@@ -4860,7 +5069,8 @@ export async function buildMap(W, mapId) {
     let res;
     try { res = await kit.place(city.kit, { parent: g, districts, draw: tier === "ultra-low" ? false : undefined }); }
     catch (e) { console.warn("[maps] citykit place failed, the city draws without its kit:", e && e.message || e); res = await kit.place(city.kit, { draw: false }); }
-    for (const c of res.colliders) colliders.push(c);
+    // (Wave 9: re-made with THIS file's mkCollider - the door / dslab fields - so the kit's boxes share the one hidden class of every other collider)
+    for (const c of res.colliders) colliders.push(mkCollider(c.kind, c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ, c.dir, c.prop, c.idx, c.hp));
     city.kitStats = { entries: city.kit.length, colliders: res.colliders.length, failed: res.failed, skipped: res.skipped, districts: res.districts.length };
     void lay;
   }
@@ -6851,7 +7061,8 @@ export async function buildMap(W, mapId) {
   const CELL = city ? (houses.length ? 4 : 8) : 16;
   const chash = new Map();
   const cKey = (cx, cz) => (cx + 8192) * 16384 + (cz + 8192);
-  colliders.forEach((c, idx) => {
+  /** a collider into every hash cell its footprint covers (the build loop below and addDynamicCollider) */
+  function cellInsert(c) {
     const x0 = Math.floor(c.minX / CELL), x1 = Math.floor(c.maxX / CELL);
     const z0 = Math.floor(c.minZ / CELL), z1 = Math.floor(c.maxZ / CELL);
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
@@ -6859,7 +7070,20 @@ export async function buildMap(W, mapId) {
       if (!chash.has(k)) chash.set(k, []);
       chash.get(k).push(c);
     }
-  });
+  }
+  colliders.forEach(cellInsert);
+  // (Wave 9, contract C3) a RUNTIME collider - the landed supply crate (loot.js): a plain box (kind "box", mkCollider's one shape: no extra field), APPENDED to
+  // map.colliders (every house's cols range, every prop index stays valid) and put into every hash cell its footprint covers exactly as the build loop does, so
+  // queryColliders / queryCollidersY / hasCollidersNear, the mover, bullets and the bots' live grid see it. The bots' town grid was baked before it existed (C3:
+  // a 1.6 m box in open ground is enough for the live grid and the mover). removeDynamicCollider(c) kills it (dead: every query skips it; the cells keep the
+  // entry - the map is rebuilt per match). The landing spot is seeded: every client registers its own (no net).
+  function addDynamicCollider(minX, maxX, minY, maxY, minZ, maxZ) {
+    const c = mkCollider("box", minX, maxX, minY, maxY, minZ, maxZ, -1, null, -1, 0);
+    colliders.push(c);
+    cellInsert(c);
+    return c;
+  }
+  function removeDynamicCollider(c) { if (c) c.dead = true; }
   let qStamp = 0;
   //   ALLOCATION (lane S, 2026-10): `o.length = 0` then push() made V8 drop the
   //   array's backing store on EVERY query and allocate a new one on the first
@@ -7207,6 +7431,8 @@ export async function buildMap(W, mapId) {
     // WAVE 8: the furnished houses (housegen records as built: rooms, doors, stairs, nav links, loot / chest points, furniture, cols = [first collider, structure
     // colliders, all], roofRamps = the collider indices of the pitched roofs' planks - a roof you land on, not a stair) and the queries over them
     houses, houseAt, queryCollidersY, hasCollidersNear,
+    // (Wave 9, LC-91 / contract C1) the doors: map.doors (see mapDoors) and their API; (C3) runtime colliders (the landed supply crate)
+    doors: mapDoors, setDoor, doorNear, doorAt, doorStates, applyDoorStates, addDynamicCollider, removeDynamicCollider,
     // the placed prop lists ({x, y, z, s, ry, ...} per kind: the ANCHOR, the final base y, the seeded scale and yaw) and what the slope
     // limits dropped - read-only, for the placement / collision gates (_harness) and for debugging
     propInstances: props, propStats, coverInstances: coverProps,           // (R2 / world: the rotation cover, drawn and collided after its kind's props)

@@ -24,6 +24,15 @@
  *   roof (round 3) every pitched roof plank is its ramp (<= 45 deg), drawn underneath only outside the walls; the attic SEALED by 'gable' layers that never
  *                   rise above the plank; every end-wall polygon flat on the layers' faces
  *   loot (round 3)  floor loot never inside / under a piece's collider
+ *   leaves (Wave 9, LC-91, design W2 row (a) + contract C1)  every leafed door has two leaves (exterior doors, interior doors whose id hashes under LEAF_SHARE);
+ *                   the CLOSED slabs cover the opening (every gap <= 1 cm: sides, middle, under the lintel), each OPEN slab stands inside the room it swings into,
+ *                   the swing quarter discs are free of furniture, loot points, chests, stairs (ramp, approach, hole, exit) and every other leaf's discs; the slab
+ *                   colliders come last in collidersOf, closed (dslab 1) then open (dslab 2) per leaf, the start state all-open (closed dead, open alive)
+ *   maps (Wave 9, a CHILD process: its CPU is not this process's)  the same leaf rows on every house of 3 maps x 5 seeds built by maps.js (world_env), the map's
+ *                   door API (map.doors, setDoor: closed / open slabs, "cool", "blocked" + doorBlocked, the pending open slab, doorChanged, doorNear, doorAt,
+ *                   doorStates / applyDoorStates) and contract C3: addDynamicCollider is returned by queryColliders / queryCollidersY / hasCollidersNear at its
+ *                   centre, and by none after removeDynamicCollider.  --plant no-hash: the same build from a scratch copy whose addDynamicCollider pushes
+ *                   without the cell insert - the C3 row must FAIL (exit 1 = the fault was caught)
  *   themes / roofs / relief / kit download (round 3): city resort lodge farm ruin mill each in its own look; flat, gable, gambrel, lean-to and hip roofs
  *                   built; exterior relief on every house; the kit GLBs the interior profile can place <= 300,000 B
  * The 500 parcels are built in three themes each, rotating over all six (city resort lodge farm ruin mill). Workers: one per physical core, claiming
@@ -58,6 +67,9 @@ const ALL_THEMES = ["city", "resort", "lodge", "farm", "ruin", "mill"];   // + t
 /** the three themes parcel k is built in: rotating over all six (every theme gets 250 of the 500 parcels) */
 const themesOf = (k) => [ALL_THEMES[k % 6], ALL_THEMES[(k + 2) % 6], ALL_THEMES[(k + 4) % 6]];
 const T0 = Date.now();
+const MAPS_CHILD = process.argv.includes("--maps-child");
+const PLANT = (() => { const i = process.argv.indexOf("--plant"); return i >= 0 ? process.argv[i + 1] || "" : null; })();
+const LEAF_MAPS = (process.env.HG_LEAF_MAPS || "isla_viva,ashgrid,deepwood").split(",").filter(Boolean), LEAF_SEEDS = (process.env.HG_LEAF_SEEDS || "1,7,1234,31337,2026").split(",").filter(Boolean).map(Number);
 /** (P23-fix) this thread's CPU time in ms (user + system): the timing row judges CPU, which a box shared with other lanes does not stretch the way it stretches
  *  the wall clock (Node >= 22.? process.threadCpuUsage; older: the process total, which on the main thread before the workers start is the same thing) */
 const threadCpuMs = () => { const u = typeof process.threadCpuUsage === "function" ? process.threadCpuUsage() : process.cpuUsage(); return (u.user + u.system) / 1000; };
@@ -132,8 +144,9 @@ function segHits(a, b, c) {
 function checkHouse(H, HGmod, MAN) {
   const err = [];
   const E = (code, msg) => { err.push(code + ": " + msg); };
-  const cols = HGmod.collidersOf(H);
+  const allCols = HGmod.collidersOf(H), cols = allCols.filter((c) => !c.dead);     // (Wave 9: the door leaves' slabs of the other state are dead - every row judges the live set)
   const boxes = cols.filter((c) => c.kind === "box"), ramps = cols.filter((c) => c.kind === "ramp");
+  checkLeaves(H, HGmod, allCols, E);
   // a 2 m grid over the colliders (box colliders only): near(x0, z0, x1, z1) -> every box whose footprint may meet that rectangle (each once)
   const GI = new Map(), GS = 2;
   boxes.forEach((c, i) => { for (let gx = Math.floor(c.minX / GS); gx <= Math.floor(c.maxX / GS); gx++) for (let gz = Math.floor(c.minZ / GS); gz <= Math.floor(c.maxZ / GS); gz++) { const k = gx * 65536 + gz; let l = GI.get(k); if (!l) { l = []; GI.set(k, l); } l.push(i); } });
@@ -216,7 +229,6 @@ function checkHouse(H, HGmod, MAN) {
   };
   for (const b of H.boxes) {
     if (b.p === "skin" && (b.c || !flatOn(b, 0.015))) { E("vis-col", "a skin (trim / shutter / blind window) not <= 1.5 cm flat on one collider face"); break; }
-    if (b.p === "leaf" && (!b.c || !flatOn(b, 0.04) || b.max[1] - b.min[1] > 2.4)) { E("vis-col", "a door leaf not a <= 4 cm collider flat on a wall"); break; }
   }
   const panes = H.boxes.filter((b) => b.p === "glass");
   // (Wave 8 fix round, lane K1: a RUIN's panes are mostly broken out - housegen keeps one in ~25 % of its windows. Every other theme: one pane per window,
@@ -472,6 +484,7 @@ function checkHouse(H, HGmod, MAN) {
   const triF = new Array(S).fill(0);
   const pop = (h) => { let n = 0; for (let k = 0; k < 6; k++) if (h & (1 << k)) n++; return n; };
   for (const b of H.boxes) if (b.p !== "furn" && b.p !== "deco") triF[b.fl] += 12 - 2 * pop(b.h || 0);
+  for (const L of H.doorLeaves || []) triF[L.floor] += HGmod.LEAF_TRIS;            // (Wave 9: the builder draws each door leaf open, 5 faces)
   for (const p of H.furniture) triF[p.floor] += p.src === "kit" ? MAN.types[p.kit.type].tris : p.parts.reduce((a, bi) => a + 12 - 2 * pop(H.boxes[bi].h || 0), 0);
   for (const rf of H.roofs || []) triF[S - 1] += 2 + 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length;
   for (const g of H.gables || []) triF[S - 1] += g.pts.length - 2;
@@ -646,6 +659,73 @@ function deepSame(a, b) {
   for (let i = 0; i < ka.length; i++) { if (ka[i] !== kb[i] || !deepSame(a[ka[i]], b[kb[i]])) return false; }
   return true;
 }
+/** (Wave 9, LC-91: design W2 row (a), contract C1) the door leaves of ONE house, from the house data and its colliders only (world frame).
+ *  allCols: the house's colliders in collidersOf order (the leaf slabs last); startOpen(kind) the start state (default all open, C1's fallback). */
+function checkLeaves(H, HGmod, allCols, E, startOpen) {
+  startOpen = startOpen || (() => true);
+  const Ls = H.doorLeaves || [], U2 = (H.U || 2.5) / 2, JMB = HGmod.JAMB;
+  const byDoor = new Map();
+  for (const L of Ls) { if (!byDoor.has(L.door)) byDoor.set(L.door, []); byDoor.get(L.door).push(L); }
+  const doorById = new Map(H.doors.map((d) => [d.id, d]));
+  for (const L of Ls) if (!doorById.has(L.door)) { E("leaves", "a leaf of no door " + L.door); return; }
+  for (const d of H.doors) {
+    const l = byDoor.get(d.id) || [];
+    if (l.length !== (d.leaves || 0) || (l.length && (l.length !== 2 || l[0].leaf !== 0 || l[1].leaf !== 1))) { E("leaves", d.id + ": " + l.length + " leaves, the record says " + d.leaves); return; }
+    if (l.length && d.kind === "interior" && HGmod.leafHash(d.id) >= HGmod.LEAF_SHARE) { E("leaves", d.id + ": an interior door leafed against its hash"); return; }
+    for (const L of l) if (L.kind !== d.kind || L.floor !== d.floor || Math.abs(L.y - d.y) > 1e-3) { E("leaves", d.id + ": a leaf's kind / floor / y differs from its door"); return; }
+  }
+  // the quarter disc of a leaf: points p with (p - hinge).tdir >= 0, (p - hinge).n >= 0, |p - hinge| < r (tdir, n: axis unit vectors)
+  const quadBox = (L) => { const ex = L.hinge[0] + L.r * (L.tdir[0] + L.n[0]), ez = L.hinge[1] + L.r * (L.tdir[1] + L.n[1]); return [Math.min(L.hinge[0], ex), Math.min(L.hinge[1], ez), Math.max(L.hinge[0], ex), Math.max(L.hinge[1], ez)]; };
+  const discHits = (L, r) => {
+    const q = quadBox(L), x0 = Math.max(q[0], r[0]), x1 = Math.min(q[2], r[2]), z0 = Math.max(q[1], r[1]), z1 = Math.min(q[3], r[3]);
+    if (x1 - x0 <= 1e-3 || z1 - z0 <= 1e-3) return false;
+    const dx = L.hinge[0] < x0 ? x0 - L.hinge[0] : L.hinge[0] > x1 ? L.hinge[0] - x1 : 0, dz = L.hinge[1] < z0 ? z0 - L.hinge[1] : L.hinge[1] > z1 ? L.hinge[1] - z1 : 0;
+    return dx * dx + dz * dz < L.r * L.r - 1e-6;
+  };
+  const inDisc = (L, x, z) => { const dx = x - L.hinge[0], dz = z - L.hinge[1]; return dx * L.tdir[0] + dz * L.tdir[1] >= 0 && dx * L.n[0] + dz * L.n[1] >= 0 && dx * dx + dz * dz < L.r * L.r; };
+  for (const [id, l] of byDoor) {
+    const d = doorById.get(id), ax = d.axis === "x" ? 0 : 2, oa = 2 - ax, c = ax === 0 ? d.x : d.z, line = ax === 0 ? d.z : d.x, hw = d.width / 2;
+    // CLOSED: the two slabs cover the opening along the wall (every gap <= 1 cm), in the wall line, from the floor to 1 cm under the lintel
+    const iv = l.map((L) => [L.closed.min[ax], L.closed.max[ax]]).sort((a, b) => a[0] - b[0]);
+    const gaps = [iv[0][0] - (c - hw), iv[1][0] - iv[0][1], (c + hw) - iv[1][1]];
+    if (gaps.some((g) => g > 0.01 + 5e-4)) { E("leaves", id + ": the closed leaves leave a gap of " + Math.max(...gaps).toFixed(3) + " m in the opening"); return; }
+    for (const L of l) {
+      const C = L.closed, O = L.open;
+      if (C.min[oa] > line - 0.019 || C.max[oa] < line + 0.019 || C.min[1] > d.y + 1e-3 || C.max[1] < d.y + d.height - 0.01 - 1e-3) { E("leaves", id + ": a closed slab off the wall line or short of floor / lintel"); return; }
+      // OPEN: perpendicular to the wall at its jamb, inside the room it swings into (its rects shrunk by the half-wall)
+      if (O.max[ax] - O.min[ax] > HGmod.LEAF_T + 1e-3 || O.max[oa] - O.min[oa] < 1.1 || O.min[ax] < c - hw - 1e-3 || O.max[ax] > c + hw + 1e-3) { E("leaves", id + ": an open slab not standing at its jamb"); return; }
+      const px = d.x + L.n[0] * (JMB + 0.6), pz = d.z + L.n[1] * (JMB + 0.6);
+      const R = H.rooms.find((r) => r.floor === L.floor && (r.rects || []).some((q) => px > q[0] && px < q[2] && pz > q[1] && pz < q[3]));
+      if (!R) { E("leaves", id + ": no room on the swing side"); return; }
+      const inR = (x, z) => R.rects.some((q) => x >= q[0] + JMB - 1e-3 && x <= q[2] - JMB + 1e-3 && z >= q[1] + JMB - 1e-3 && z <= q[3] - JMB + 1e-3);
+      if (![[O.min[0], O.min[2]], [O.max[0], O.min[2]], [O.min[0], O.max[2]], [O.max[0], O.max[2]]].every(([x, z]) => inR(x, z))) { E("leaves", id + ": an open slab outside the room it swings into (" + R.id + ")"); return; }
+      // the swing disc: no furniture (its collider footprint, at the leaf's height), loot point, chest, stair zone or other leaf's disc in it
+      for (const p of H.furniture) if (!p.deco && p.floor === L.floor && p.max[1] > L.y + 0.01 && p.min[1] < L.y + L.h && discHits(L, [p.min[0], p.min[2], p.max[0], p.max[2]])) { E("leaves", id + ": " + p.cat + " in a leaf's swing"); return; }
+      for (const q of H.loot) if (q.floor === L.floor && inDisc(L, q.x, q.z)) { E("leaves", id + ": loot point " + q.id + " in a leaf's swing"); return; }
+      for (const q of H.chests) if (q.floor === L.floor && inDisc(L, q.x, q.z)) { E("leaves", id + ": chest " + q.id + " in a leaf's swing"); return; }
+      for (const st of H.stairs) {
+        const zs = [];
+        if (st.from === L.floor) zs.push([st.x0, st.z0, st.x1, st.z1], [st.approach[0] - U2, st.approach[1] - U2, st.approach[0] + U2, st.approach[1] + U2]);
+        if (st.to === L.floor) zs.push(st.hole, [st.exit[0] - U2, st.exit[1] - U2, st.exit[0] + U2, st.exit[1] + U2]);
+        if (zs.some((r) => discHits(L, r))) { E("leaves", id + ": stair " + st.id + " in a leaf's swing"); return; }
+      }
+      for (const M of Ls) if (M.door !== L.door && M.floor === L.floor && discHits(L, quadBox(M)) && discHits(M, quadBox(L))) { E("leaves", id + ": its swing meets the leaves of " + M.door); return; }
+    }
+  }
+  // the slab colliders: the LAST 2 x leaves of collidersOf, per leaf closed (dslab 1) then open (dslab 2), the door index stepping by one per door, the start state
+  const tail = allCols.slice(allCols.length - 2 * Ls.length);
+  let last = null, di = null;
+  for (let k = 0; k < Ls.length; k++) {
+    const L = Ls[k], cc = tail[2 * k], co = tail[2 * k + 1];
+    const same = (cl, b) => cl && cl.kind === "box" && Math.abs(cl.minX - b.min[0]) < 5e-4 && Math.abs(cl.minY - b.min[1]) < 5e-4 && Math.abs(cl.minZ - b.min[2]) < 5e-4 && Math.abs(cl.maxX - b.max[0]) < 5e-4 && Math.abs(cl.maxY - b.max[1]) < 5e-4 && Math.abs(cl.maxZ - b.max[2]) < 5e-4;
+    if (!same(cc, L.closed) || !same(co, L.open) || cc.dslab !== 1 || co.dslab !== 2) { E("leaves", L.door + ": its slab colliders are not the last ones, closed then open, as drawn"); return; }
+    if (L.door !== last) { if (di != null && cc.door !== di + 1) { E("leaves", L.door + ": door index " + cc.door + " after " + di); return; } di = cc.door; last = L.door; }
+    if (cc.door !== di || co.door !== di || cc.door < 0) { E("leaves", L.door + ": its slabs name door " + cc.door + " / " + co.door); return; }
+    const so = startOpen(L.kind);
+    if (cc.dead !== so || co.dead !== !so) { E("leaves", L.door + ": start state " + (so ? "open" : "closed") + " but closed dead " + cc.dead + " / open dead " + co.dead); return; }
+  }
+}
+
 // ── a worker: generate + check a slice of the jobs ──────────────────────────────────────────────────────────────────────────────────────
 async function runJobs(jobs) {
   const HGmod = await import(pathToFileURL(HG).href);
@@ -668,7 +748,7 @@ async function runJobs(jobs) {
     const viewShort = H.rooms.filter((r) => Math.max(0, ...(r.views || []).map((v) => v.seen)) < 3).length;
     let lootIn = 0;
     for (const l of H.loot) if (l.on !== "floor") { const p = H.furniture.find((q) => q.room === l.room && q.cat === l.on && l.x > q.min[0] && l.x < q.max[0] && l.z > q.min[2] && l.z < q.max[2]); if (p && l.y < p.max[1] - 0.005) lootIn++; }
-    out.push({ key: j.key, hash: j.hashed ? fnv(js) : null, errors, ms, kit: H.kit, viewShort, lootIn, hasTop: H.furniture.some((q) => q.mount === "top"), shell: H.shell || 0, fh: H.fh, hasRug: H.furniture.some((q) => q.cat === "rug") && H.furniture.some((q) => q.deco && q.max[1] - q.min[1] > 0.1), bedrooms: key("bedroom").length, bedless: key("bedroom").filter((l) => !l.includes("bed") && !l.includes("bedSingle")).length,
+    out.push({ key: j.key, hash: j.hashed ? fnv(js) : null, errors, ms, kit: H.kit, viewShort, lootIn, leaves: (H.doorLeaves || []).length, leafDoors: H.doors.filter((d) => d.leaves).map((d) => d.kind), doorKinds: H.doors.map((d) => d.kind), intRefused: H.doors.filter((d) => d.kind === "interior" && HGmod.leafHash(d.id) >= HGmod.LEAF_SHARE).length, hasTop: H.furniture.some((q) => q.mount === "top"), shell: H.shell || 0, fh: H.fh, hasRug: H.furniture.some((q) => q.cat === "rug") && H.furniture.some((q) => q.deco && q.max[1] - q.min[1] > 0.1), bedrooms: key("bedroom").length, bedless: key("bedroom").filter((l) => !l.includes("bed") && !l.includes("bedSingle")).length,
       baths: key("bath").length, toiletless: key("bath").filter((l) => !l.includes("toilet")).length, livings: key("living").length, sofaless: key("living").filter((l) => !l.includes("sofa") && !l.includes("sofaDesign")).length, storeys: H.storeys, asked: H.storeysAsked, plan: H.plan, use: H.use, roof: H.roof, theme: H.theme, facade: H.facade.mat + ":" + H.facade.color, relief: H.boxes.reduce((a, b) => a + (b.p === "trim" ? 1 : 0), 0),
       dens: H.rooms.map((r) => [r.kind, r.area, H.furniture.reduce((a, q) => a + (q.room === r.id && !q.deco ? 1 : 0), 0), H.furniture.reduce((a, q) => a + (q.room === r.id && q.deco ? 1 : 0), 0)]),
       kitTypes: [...new Set(H.furniture.filter((q) => q.src === "kit").map((q) => q.kit.type))], rooms: H.rooms.length, kinds: H.rooms.map((r) => r.kind),
@@ -676,7 +756,7 @@ async function runJobs(jobs) {
   }
   return out;
 }
-module.exports = { checkHouse, parcels, runJobs, loadManifest };
+module.exports = { checkHouse, checkLeaves, parcels, runJobs, loadManifest };
 if (!isMainThread) {
   // the workers share one job counter: each claims the next CHUNK jobs until none are left (big towers do not leave one thread running alone)
   (async () => {
@@ -696,7 +776,140 @@ let passed = 0, failed = 0;
 function ok(cond, msg, detail) { if (cond) { passed++; console.log("  PASS  " + msg); } else { failed++; console.error("  FAIL  " + msg + (detail ? "   -> " + detail : "")); } }
 function info(msg) { console.log("  info  " + msg); }
 
-if (require.main === module) (async () => {
+/** (Wave 9) the map rows: this file again, as a child process with --maps-child (its CPU is not this process's); the plant adds --plant no-hash */
+function runMapsChild(plant) {
+  return new Promise((resolve) => {
+    const args = [__filename, "--maps-child"].concat(plant ? ["--plant", plant] : []);
+    const c = cp.spawn(process.execPath, args, { cwd: ROOT });
+    let out = "", errs = "";
+    c.stdout.on("data", (d) => { out += d; }); c.stderr.on("data", (d) => { errs += d; });
+    c.on("close", (code) => { const m = out.match(/@@LEAFJSON@@(.*)$/m); let j = null; try { j = m ? JSON.parse(m[1]) : null; } catch (e) { j = null; } resolve({ code, j, errs: errs.slice(-600) }); });
+  });
+}
+function mapRows(r) {
+  const j = r && r.j;
+  if (!j) { ok(false, "maps: the map child process ran (3 maps x 5 seeds)", (r && r.errs) || "no output"); return; }
+  const want = LEAF_MAPS.length * LEAF_SEEDS.length;
+  ok(j.builds === want && j.houses > 0 && j.leaves > 0 && !j.leafErr.length, "door leaves on the MAPS (" + j.builds + " builds: " + LEAF_MAPS.join(" ") + " x seeds " + LEAF_SEEDS.join(" ") + ", " + j.houses + " houses, " + j.doors + " leafed doors, " + j.leaves + " leaves): every house passes the leaf rows; map.doors = the leafed doors, their slabs carry door / dslab, start all open",
+    j.leafErr.length + " failing, e.g. " + j.leafErr.slice(0, 3).join(" | ") + (j.buildErr ? " | " + j.buildErr : ""));
+  ok(j.builds === want && j.apiN > 0 && !j.apiErr.length, "map door API on every build (" + j.apiN + " doors toggled): setDoor closes / opens the slab pairs, 'cool' inside 0.3 s, 'blocked' + doorBlocked while a capsule stands in the closed slab, the open slab waits for a clear swing, doorChanged, doorNear, doorAt, doorStates / applyDoorStates round trip",
+    j.apiErr.length + " failing, e.g. " + j.apiErr.slice(0, 3).join(" | "));
+  ok(j.builds === want && j.dynN > 0 && !j.dynErr.length, "C3 addDynamicCollider (" + j.dynN + " boxes): queryColliders, queryCollidersY and hasCollidersNear return it at its centre; after removeDynamicCollider none do",
+    j.dynErr.length + " failing, e.g. " + j.dynErr.slice(0, 3).join(" | "));
+  info("door leaves on the maps: " + JSON.stringify(j.perMap) + " (exterior / all street + back doors leafed, interior leafed / interior; the rest failed the swing clearance); " + (j.ms / 1000).toFixed(1) + " s in the child");
+}
+/** the child: build every (map, seed) with the working copy's maps.js (or the planted scratch copy) and run the map rows */
+async function mapsChild(plant) {
+  const HGmod = await import(pathToFileURL(HG).href);
+  const t0 = Date.now();
+  let root = ROOT, tmp = null;
+  if (plant === "no-hash") {                                // a scratch copy of runtime/ + assets/props whose addDynamicCollider pushes WITHOUT the cell insert
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hg-plant-nohash-"));
+    for (const sub of ["runtime", path.join("assets", "props")]) fs.cpSync(path.join(ROOT, sub), path.join(tmp, sub), { recursive: true });
+    const mp = path.join(tmp, "runtime", "3d", "royale", "maps.js"), src = fs.readFileSync(mp, "utf8"), needle = /( {4}colliders\.push\(c\);\r?\n) {4}cellInsert\(c\);\r?\n( {4}return c;)/g;
+    if ((src.match(needle) || []).length !== 1) throw new Error("plant no-hash: the cell insert of addDynamicCollider was not found once in maps.js");
+    fs.writeFileSync(mp, src.replace(needle, "$1$2"));
+    root = tmp;
+  }
+  const { makeEnv } = await import(pathToFileURL(path.join(ROOT, "_harness", "world_env.mjs")).href);
+  const E = await makeEnv({ root, vendor: path.join(ROOT, "assets", "vendor", "three") });
+  const { buildMap } = await E.importMaps();
+  const out = { builds: 0, houses: 0, doors: 0, leaves: 0, leafErr: [], apiErr: [], apiN: 0, dynErr: [], dynN: 0, perMap: {}, buildErr: null, ms: 0 };
+  const maps = plant ? ["deepwood"] : LEAF_MAPS, seeds = plant ? [1] : LEAF_SEEDS;
+  const quiet = { log: console.log, warn: console.warn, error: console.error };
+  for (const mapId of maps) for (const seed of seeds) {
+    let M = null, W = null;
+    console.log = console.warn = console.error = () => {};
+    try { W = E.makeW(seed); W.actors = []; M = await buildMap(W, mapId); } catch (e) { out.buildErr = mapId + " " + seed + ": " + String(e && e.message || e).slice(0, 200); }
+    Object.assign(console, quiet);
+    if (!M) continue;
+    out.builds++;
+    const tag = mapId + "/" + seed, pm = out.perMap[mapId] || (out.perMap[mapId] = { ext: 0, extL: 0, int: 0, intL: 0 });
+    // the leaf rows on every house (its colliders as the map holds them: the house's slice of map.colliders, the leaf slabs last)
+    let nd = 0;
+    for (const H of M.houses) {
+      out.houses++; out.leaves += (H.doorLeaves || []).length;
+      for (const d of H.doors) { if (d.kind === "interior") { pm.int++; if (d.leaves) pm.intL++; } else { pm.ext++; if (d.leaves) pm.extL++; } if (d.leaves) nd++; }
+      const errs = [];
+      checkLeaves(H, HGmod, M.colliders.slice(H.cols[0], H.cols[0] + H.cols[2]), (c, m) => errs.push(m));
+      if (H.leafCols && (H.leafCols[0] + H.leafCols[1] !== H.cols[0] + H.cols[2] || H.leafCols[1] !== 2 * (H.doorLeaves || []).length)) errs.push(H.id + ": leafCols " + H.leafCols + " vs cols " + H.cols);
+      for (const e of errs) out.leafErr.push(tag + " " + e);
+    }
+    out.doors += M.doors ? M.doors.length : 0;
+    if (!M.doors || M.doors.length !== nd) out.leafErr.push(tag + ": map.doors " + (M.doors && M.doors.length) + " != leafed doors " + nd);
+    else M.doors.forEach((D, i) => { for (const lf of D.leaves) if (lf.cClosed.door !== i || lf.cOpen.door !== i || lf.cClosed.dslab !== 1 || lf.cOpen.dslab !== 2 || lf.cClosed.dead !== true || lf.cOpen.dead !== false || !D.open || !D.start) { out.leafErr.push(tag + ": door " + i + " slabs / start wrong"); break; } });
+    // the API, on every 9th door: close, cool, open, blocked, pending, states
+    const ev = [];
+    if (W.events && W.events.on) { W.events.on("doorChanged", (i, o, by) => ev.push(["c", i, o, by])); W.events.on("doorBlocked", (i, by) => ev.push(["b", i, by])); }
+    const tick = (dt) => { for (const f of (W.kernel && W.kernel._updaters) || []) f(dt); };
+    let t = 1;
+    const A = (cond, msg) => { if (!cond) out.apiErr.push(tag + " " + msg); };
+    for (let i = 0; i < (M.doors || []).length; i += 9) {
+      const D = M.doors[i], L0 = D.leaves[0];
+      out.apiN++;
+      t += 1; ev.length = 0;
+      A(M.setDoor(i, false, "gate", t) === true && D.leaves.every((lf) => !lf.cClosed.dead && lf.cOpen.dead) && !D.open, "door " + i + ": close did not swap the slabs");
+      A(ev.length === 1 && ev[0][0] === "c" && ev[0][1] === i && ev[0][2] === false && ev[0][3] === "gate", "door " + i + ": no doorChanged on close");
+      A(M.setDoor(i, true, "gate", t + 0.1) === "cool", "door " + i + ": a toggle 0.1 s later was not 'cool'");
+      const bits = M.doorStates();
+      A(((bits[i >> 3] >> (i & 7)) & 1) === 1, "door " + i + ": doorStates does not flag the shut door");
+      A(M.doorAt(L0.cClosed) === i && M.doorNear(D.x, D.y + 0.3, D.z, 2.0) === i && M.doorNear(D.x, D.y + 3.0, D.z, 2.0) !== i, "door " + i + ": doorAt / doorNear");
+      // open with a capsule standing in an open slab: the closed slabs die at once, that open slab waits for a clear swing
+      const O = L0.cOpen, ax = (O.minX + O.maxX) / 2, az = (O.minZ + O.maxZ) / 2;
+      W.actors = [{ alive: true, pos: { x: ax, y: O.minY, z: az } }];
+      t += 1;
+      A(M.setDoor(i, true, "gate", t) === true && D.leaves.every((lf) => lf.cClosed.dead) && O.dead === true && D.pend === true, "door " + i + ": open with a body in the swing did not hold that open slab back");
+      tick(0.1); A(O.dead === true, "door " + i + ": the open slab came alive inside a body");
+      W.actors[0].pos.x += 3; W.actors[0].pos.z += 3; W.actors[0].pos.y += 10;
+      tick(0.1); A(O.dead === false && !D.pend, "door " + i + ": the open slab did not come alive once the swing was clear");
+      // close refused while a body stands in the doorway (the closed slab + 5 cm)
+      const C = L0.cClosed; W.actors[0].pos = { x: (C.minX + C.maxX) / 2, y: C.minY, z: (C.minZ + C.maxZ) / 2 };
+      t += 1; ev.length = 0;
+      A(M.setDoor(i, false, "gate", t) === "blocked" && D.open && D.leaves.every((lf) => lf.cClosed.dead && !lf.cOpen.dead) && ev.some((e) => e[0] === "b" && e[1] === i), "door " + i + ": close with a body in the doorway was not refused ('blocked' + doorBlocked)");
+      W.actors = [];
+      // join / rejoin: shut it, take the bits, open everything again, apply the bits
+      t += 1; M.setDoor(i, false, "gate", t);
+      const snap = M.doorStates(); M.applyDoorStates(new Uint8Array(snap.length));
+      A(D.open && D.leaves.every((lf) => lf.cClosed.dead && !lf.cOpen.dead), "door " + i + ": applyDoorStates(start) did not reopen it");
+      M.applyDoorStates(snap);
+      A(!D.open && D.leaves.every((lf) => !lf.cClosed.dead && lf.cOpen.dead), "door " + i + ": applyDoorStates(snapshot) did not shut it");
+      M.applyDoorStates(new Uint8Array(snap.length));
+    }
+    // C3: a runtime box at a house room's centre, at an empty open-ground spot and straddling hash cells; found by all three queries, gone after remove
+    const spots = [];
+    for (const H of M.houses.slice(0, 3)) { const r = H.rooms[0]; spots.push([r.cx, r.cz, r.y, false]); }
+    for (let k = 0; k < 400 && spots.length < 6; k++) { const x = -300 + (k * 37) % 600, z = -300 + (k * 53) % 600; if (!M.hasCollidersNear(x, z, 3)) spots.push([x, z, M.heightAt(x, z), true]); }
+    spots.push([4.0, 8.0, M.heightAt(4, 8), false]);       // (straddling the 4 / 8 / 16 m cell lines)
+    for (const [x, z, y, empty] of spots) {
+      out.dynN++;
+      const c = M.addDynamicCollider(x - 0.8, x + 0.8, y, y + 1.4, z - 0.7, z + 0.7);
+      const q1 = M.queryColliders(x, z, 0.3, []).includes(c), q2 = M.queryCollidersY(x, z, 0.3, y + 0.2, y + 1.0, []).includes(c), q3 = M.hasCollidersNear(x, z, 0.3);
+      const q4 = M.queryColliders(x + 0.75, z - 0.65, 0.05, []).includes(c);            // (a corner: a cell its footprint covers that its centre may not be in)
+      if (!(q1 && q2 && q3 && q4) || c.dslab !== 0 || c.door !== -1 || M.colliders[M.colliders.length - 1] !== c) out.dynErr.push(tag + " (" + x.toFixed(1) + ", " + z.toFixed(1) + "): queryColliders " + q1 + ", queryCollidersY " + q2 + ", hasCollidersNear " + q3 + ", corner " + q4);
+      M.removeDynamicCollider(c);
+      const r1 = M.queryColliders(x, z, 0.3, []).includes(c), r2 = M.queryCollidersY(x, z, 0.3, y + 0.2, y + 1.0, []).includes(c), r3 = empty ? M.hasCollidersNear(x, z, 0.3) : false;
+      if (r1 || r2 || r3) out.dynErr.push(tag + " (" + x.toFixed(1) + ", " + z.toFixed(1) + "): still found after removeDynamicCollider");
+    }
+    try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }
+  }
+  if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* a scratch dir */ }
+  out.ms = Date.now() - t0;
+  process.stdout.write("\n@@LEAFJSON@@" + JSON.stringify(out) + "\n");
+}
+
+if (require.main === module && MAPS_CHILD) mapsChild(PLANT).catch((e) => { process.stdout.write("\n@@LEAFJSON@@null\n"); console.error(e && e.stack || e); process.exit(1); });
+else if (require.main === module && PLANT) (async () => {
+  // plant mode: only the planted fault's row counts. Exit 1 = the fault was CAUGHT (the row failed), 0 = it slipped through
+  if (PLANT !== "no-hash") { console.error("unknown --plant " + PLANT + " (known: no-hash)"); process.exit(2); }
+  console.log("housegen selftest PLANT no-hash: addDynamicCollider pushes without the cell insert (a scratch copy of maps.js) - the C3 row must FAIL");
+  const r = await runMapsChild("no-hash"), j = r && r.j;
+  if (!j || !j.builds || !j.dynN) { console.error("  CNJ   the planted map did not build: " + ((r && r.errs) || "")); process.exit(2); }
+  const caught = j.dynErr.length > 0;
+  console.log("  " + (caught ? "FAIL" : "PASS") + "  C3 addDynamicCollider rows on the planted copy (" + j.dynN + " boxes): " + j.dynErr.length + " failing, e.g. " + j.dynErr.slice(0, 2).join(" | "));
+  console.log("\n" + (caught ? "PLANT CAUGHT (exit 1)" : "PLANT NOT CAUGHT (exit 0)"));
+  process.exit(caught ? 1 : 0);
+})();
+else if (require.main === module) (async () => {
   const HGmod = await import(pathToFileURL(HG).href);
   const TGmod = await import(pathToFileURL(TG).href);
   const MAN = loadManifest();
@@ -736,6 +949,8 @@ if (require.main === module) (async () => {
   const sampleJobs = jobs.filter((j, i) => i < N_MAIN && i % 30 === 0);
   const cps = sampleJobs.slice(0, 40).map((j) => Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys }));
   const childSrc = "import(" + JSON.stringify(pathToFileURL(HG).href) + ").then(M=>{const P=JSON.parse(process.argv[1]);const o=[];for(const p of P){let s=JSON.stringify(M.generate(p)),h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)}o.push((h>>>0).toString(16))}console.log(JSON.stringify(o))})";
+  // (Wave 9) the map rows run in a CHILD process while the workers work (3 maps x 5 seeds built by maps.js through _harness/world_env.mjs)
+  const mapsP = runMapsChild(null);
   const childP = new Promise((resolve) => { const c = cp.spawn(process.execPath, ["-e", childSrc, JSON.stringify(cps)]); let out = "", errs = ""; c.stdout.on("data", (d) => { out += d; }); c.stderr.on("data", (d) => { errs += d; }); c.on("close", () => resolve({ out, errs })); });
   const mainHash = new Map();
   for (const j of sampleJobs) mainHash.set(j.key, fnv(JSON.stringify(HGmod.generate(Object.assign({}, j.parcel, { theme: j.theme, storeys: j.storeys })))));   // (j.storeys: the job's own)
@@ -918,6 +1133,20 @@ if (require.main === module) (async () => {
         }
         if (faceBad) bad++;
       }
+      // (Wave 9) then each door leaf, open: 5 faces (+x -x +y +z -z) of its open slab in its wood's walls mesh
+      for (const L of H.doorLeaves || []) {
+        const m = gp[H.palette[L.pal].mat + ":walls"], b = L.open;
+        tot++;
+        let faceBad = !m;
+        if (m) for (const fi of [0, 1, 2, 4, 5]) {
+          const c = cursor.get(m) || 0, a = m.geometry.attributes.position.array, ax = fi >> 1, plane = fi & 1 ? b.min[ax] : b.max[ax];
+          let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+          for (let v = 0; v < 4; v++) for (let q = 0; q < 3; q++) { const val = a[(c + v) * 3 + q]; mn[q] = Math.min(mn[q], val); mx[q] = Math.max(mx[q], val); }
+          for (let q = 0; q < 3; q++) { const lo = q === ax ? plane : b.min[q], hi = q === ax ? plane : b.max[q]; if (Math.abs(mn[q] - lo) > 1e-4 || Math.abs(mx[q] - hi) > 1e-4) faceBad = true; }
+          cursor.set(m, c + 4);
+        }
+        if (faceBad) bad++;
+      }
       // after the boxes, the walls meshes hold the pitched roofs: 3 vertices per triangle (a plank: top 2, sides 4, free ends 2 each, soffits 2 each; an end wall: its fan)
       const extra = new Map(), addX = (mat, nTri) => { const m = gp[mat + ":walls"]; extra.set(m, (extra.get(m) || 0) + 3 * nTri); };
       for (const rf of H.roofs || []) { addX(H.palette[rf.top].mat, 2); addX(H.palette[rf.edge].mat, 4 + (rf.freeLow ? 2 : 0) + (rf.freeHigh ? 2 : 0) + 2 * rf.soffit.length); }
@@ -932,7 +1161,7 @@ if (require.main === module) (async () => {
       if (built.kitList.length !== kitOnly.length || built.colliders.length !== HGmod.collidersOf(H).length) bad++;
       built.dispose();
     }
-    okP(bad === 0 && boundsBad === 0, "buildHouse (three r172): every drawn face of every box = 4 vertices spanning exactly that face; vertex counts match; mesh bounds == box bounds (" + tot + " boxes, 30 houses)", bad + " / " + boundsBad);
+    okP(bad === 0 && boundsBad === 0, "buildHouse (three r172): every drawn face of every box (and every door leaf, open) = 4 vertices spanning exactly that face; vertex counts match; mesh bounds == box bounds (" + tot + " boxes and leaves, 30 houses)", bad + " / " + boundsBad);
   } catch (e) { okP(false, "buildHouse runs in Node with the vendored three", String(e && e.stack || e).slice(0, 300)); }
   const resByKey = new Map((await resP).flat().map((r) => [r.key, r]));
   const res = jobs.map((j) => resByKey.get(j.key)).filter(Boolean);       // (in job order: the workers claim chunks in whatever order the box runs them)
@@ -955,7 +1184,8 @@ if (require.main === module) (async () => {
   row("roof", "pitched roofs: every plank IS its ramp (<= 45 deg, underside drawn only outside the walls); the attic sealed by layers under the plank; end walls on the layers");
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
-  const other = [...byCode.keys()].filter((k) => !["determinism", "floors", "reach", "nav", "furniture", "doors", "windows", "vis-col", "stairs", "budget", "roof", "loot", "staircase"].includes(k));
+  row("leaves", "door leaves (W2 row a): two per leafed door, closed slabs cover the opening (gaps <= 1 cm), open slabs inside the swing room, swing discs free of furniture / loot / chests / stairs / other leaves, slab colliders last (closed dead, open alive)");
+  const other = [...byCode.keys()].filter((k) => !["determinism", "floors", "reach", "nav", "furniture", "doors", "windows", "vis-col", "stairs", "budget", "roof", "loot", "staircase", "leaves"].includes(k));
   ok(other.length === 0, "no other checker errors", other.join(", "));
   // cross-thread + fresh process determinism
   let xt = 0;
@@ -1012,10 +1242,16 @@ if (require.main === module) (async () => {
   const vs = res.reduce((a, r) => a + r.viewShort, 0), li = res.reduce((a, r) => a + r.lootIn, 0);
   info("rooms the generator's own view model sees < 3 pieces in from their best entrance (a room's OWN pieces, as interiorcheck counts them since stage B): " + vs + " of " + rooms + " (" + (100 * vs / rooms).toFixed(2) + " %)");
   info("loot points on furniture whose collider reaches above them (a sink's backsplash, a gondola's top shelf): " + li + " (stage B: use loot.y as given, never snap it to supportAt)");
+  {                                                        // (Wave 9) which doors got leaves, over the selftest parcels
+    let ext = 0, extL = 0, int = 0, intL = 0, lv = 0;
+    for (const r of res) { lv += r.leaves; for (const k of r.doorKinds) { if (k === "interior") int++; else ext++; } for (const k of r.leafDoors) { if (k === "interior") intL++; else extL++; } }
+    info("door leaves (selftest parcels): " + lv + " leaves; exterior doors leafed " + extL + " / " + ext + " (" + (100 * extL / Math.max(1, ext)).toFixed(1) + " %), interior " + intL + " / " + int + " (" + (100 * intL / Math.max(1, int)).toFixed(1) + " %, hash share " + HGmod.LEAF_SHARE + "); the rest failed the swing clearance (a window or another doorway at the leaf's corner, a stair, a space too narrow to pass the open leaves)");
+  }
+  mapRows(await mapsP);
 
 
   // ---- negative controls: a planted fault must be caught by its checker
-  const base = (() => { for (const r of res) if (r.storeys === 2 && r.windows > 2 && r.furn > 8 && r.errors.length === 0 && r.hasRug && r.hasTop && r.kit === "interior") { const [k, theme, st] = r.key.split(":"); return HGmod.generate(Object.assign({}, PS[+k], { theme, storeys: storeysOf(PS[+k], +k, +st) })); } return null; })();
+  const base = (() => { for (const r of res) if (r.storeys === 2 && r.windows > 2 && r.furn > 8 && r.errors.length === 0 && r.hasRug && r.hasTop && r.kit === "interior" && r.leaves >= 2 && r.intRefused > 0) { const [k, theme, st] = r.key.split(":"); return HGmod.generate(Object.assign({}, PS[+k], { theme, storeys: storeysOf(PS[+k], +k, +st) })); } return null; })();
   const clone = () => JSON.parse(JSON.stringify(base));
   const plants = [
     ["reach", "a box planted across the front doorway", (H) => { const d = H.doors.find((x) => x.kind === "front"); const pi = H.boxes[0].f[0]; H.boxes.push({ p: "wall", min: [d.x - 1.5, d.y, d.z - 1.5], max: [d.x + 1.5, d.y + 3, d.z + 1.5], f: [pi, pi, pi, pi, pi, pi], c: 1, fl: 0 }); }],
@@ -1038,7 +1274,10 @@ if (require.main === module) (async () => {
     ["loot", "a floor loot point moved under a piece", (H) => { const l = H.loot.find((q) => q.on === "floor"), p = H.furniture.find((q) => !q.deco && q.floor === l.floor && q.room === l.room) || H.furniture.find((q) => !q.deco && q.floor === l.floor); l.x = (p.min[0] + p.max[0]) / 2; l.z = (p.min[2] + p.max[2]) / 2; }],
     ["nav", "a room's walkable rectangle moved 3 m out of the house", (H) => { const q = H.rooms[0].walk[0]; q[0] += 30; q[2] += 30; }],
     ["vis-col", "a window frame skin moved 5 cm off its wall", (H) => { const b = H.boxes.find((q) => q.p === "skin"); const ax = b.max[0] - b.min[0] <= 0.016 ? 0 : 2; b.min[ax] += 0.05; b.max[ax] += 0.05; }],
-    ["vis-col", "an open door leaf drawn without its collider", (H) => { const b = H.boxes.find((q) => q.p === "leaf"); b.c = 0; }],
+    ["leaves", "a closed door leaf 5 cm short (a gap in the shut door)", (H) => { const L = H.doorLeaves[0], ax = H.doors.find((d) => d.id === L.door).axis === "x" ? 0 : 2; if (L.tdir[ax ? 1 : 0] > 0) L.closed.max[ax] -= 0.05; else L.closed.min[ax] += 0.05; }],
+    ["leaves", "an open door leaf pushed 1.3 m out of the room it swings into", (H) => { const L = H.doorLeaves[0]; for (const k of [0, 2]) { const s = L.n[k ? 1 : 0] * -1.3; L.open.min[k] += s; L.open.max[k] += s; } }],
+    ["leaves", "a floor loot point moved into a door leaf's swing", (H) => { const L = H.doorLeaves[0], l = H.loot.find((q) => q.floor === L.floor) || H.loot[0]; l.floor = L.floor; l.x = L.hinge[0] + 0.5 * (L.tdir[0] + L.n[0]); l.z = L.hinge[1] + 0.5 * (L.tdir[1] + L.n[1]); }],
+    ["leaves", "an interior door given leaves its hash refuses", (H) => { const d = H.doors.find((q) => q.kind === "interior" && !q.leaves && HGmod.leafHash(q.id) >= HGmod.LEAF_SHARE); const L0 = H.doorLeaves[0]; d.leaves = 2; for (const lf of [0, 1]) H.doorLeaves.push(Object.assign(JSON.parse(JSON.stringify(L0)), { door: d.id, leaf: lf, kind: d.kind, floor: d.floor, y: d.y })); }],
     ["windows", "a glass pane lifted 0.3 m out of its aperture", (H) => { const b = H.boxes.find((q) => q.p === "glass"); b.min[1] += 0.3; b.max[1] += 0.3; }],
     ["vis-col", "a lamp lifted 0.2 m off the piece it stands on", (H) => { const p = H.furniture.find((q) => q.mount === "top"); p.min[1] += 0.2; p.max[1] += 0.2; if (p.kit) p.kit.y += 0.2; }],
   ];
@@ -1051,6 +1290,9 @@ if (require.main === module) (async () => {
       try { plant(H); errs = checkHouse(H, HGmod, MAN); } catch (e) { errs = ["threw: " + e.message]; }
       ok(errs.some((e) => e.startsWith(code + ":")), "negative control [" + code + "]: " + label + " is caught", errs.slice(0, 2).join(" | ") || "no error raised");
     }
+    // (Wave 9) the start state: the same house judged as if its doors started SHUT (closed slabs alive) must be caught - the slab check reads the dead flags
+    { const errs = []; checkLeaves(base, HGmod, HGmod.collidersOf(base), (c, m) => errs.push(c + ": " + m), () => false);
+      ok(errs.some((e) => e.startsWith("leaves:")), "negative control [leaves]: the slab colliders judged against a shut start state are caught", errs.slice(0, 1).join(" | ") || "no error raised"); }
     // the pitched-roof plants on a gable house
     const g0 = HGmod.generate({ id: "gable-base", w: 12.5, d: 10, theme: "lodge", use: "house", storeys: 2, seed: 4, plan: "rect" });
     ok(g0.roof === "gable" && checkHouse(g0, HGmod, MAN).length === 0, "negative-control gable house passes every check (roof " + g0.roof + ")");

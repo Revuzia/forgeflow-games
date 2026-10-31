@@ -149,6 +149,19 @@ export const GRID = 0.25;                  // the capsule walk's sample pitch
 export const RING = 1.5;                   // ground-floor walk: the street ring around the house
 export const REACH_XZ = 1.5, REACH_DY = 2.2;   // a loot point counts as reachable from a free capsule spot this close (loot.js REACH_DY 2.2)
 export const DOOR_ZONE = 1.0;              // furniture keeps this depth clear in front of a doorway, both sides (and 0.1 m past each jamb)
+// Wave 9 (LC-91, design W2 + contract C1): door leaves - see "DOOR LEAVES" in generate() and H.doorLeaves
+export const LEAF_T = 0.04;                // a leaf's thickness
+export const SWING_R = 1.18;               // a leaf's swing quarter disc round its hinge (the 1.125 m leaf + its 4 cm thickness + margin): a keep-out
+export const DOOR_ZONE_LEAF = 1.2;         // the door zone on a leafed door's SWING side (DOOR_ZONE elsewhere): covers both discs
+export const LEAF_SHARE = 0.5;             // interior doors with leafHash(id) under this get leaves (exterior doors always, the clearance test allowing)
+export const LEAF_TRIS = 10;               // what housegen's own builder (meshData) draws of a leaf: its OPEN slab, 5 faces (maps.js draws the swinging model instead)
+export const LEAF_PIVOT = Object.freeze({ t: -0.05, c: 0.07, x0: 0.05, z0: 0.05 });   // the drawn leaf's hinge pivot (from the jamb face corner: t toward the middle, c into the room) and its model's X / |Z| offsets: rotating ONE model about it lands exactly on the closed and the open slab
+/** a door id -> [0, 1): which interior doors get leaves (an FNV hash, finalised: no rng is drawn, the house's stream is untouched) */
+export function leafHash(id) {
+  let h = hash32(String(id) + "#leaf");
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
 // The generator's own walk uses a FATTER capsule (r + WALK_MARGIN) and a shorter loot reach (REACH_XZ - 0.25) than the rules it promises: a path or
 // a pickup it accepts then holds for the real capsule wherever its samples fall (a 0.25 m grid can miss a gap only ~0.9 m wide), and bots get a
 // free band of >= 0.3 m beside furniture (bots.js:1295-1297: narrow bands are where they grind).
@@ -1448,13 +1461,14 @@ export function generate(parcel, opts) {
   // Authored to the 2.5 m grid (H2's kit walls are a 2.2 m module and a 2.947 m storey: they do not fit these openings). Three kinds of box:
   //   glass  a 2 cm pane in a window's aperture, drawn only (the cover rule: bullets pass, nobody walks through: the sill and header do the blocking)
   //   skin   trim <= 1.5 cm proud, drawn only, lying flat on ONE collider face (inside the visual tolerance: nothing to shoot or bump that is not there)
-  //   leaf   an open door leaf folded flat against the wall beside its opening (4 cm: a collider, drawn == collider)
-  const SKIN = 0.015, LEAF_T = 0.04, LEAF_W = r3(DOOR_CLEAR / 2), dark = P.theme === "lodge";
+  //   (the door LEAVES are not boxes since Wave 9 / LC-91: see "DOOR LEAVES" below - H.doorLeaves, each with a closed and an open slab collider)
+  const SKIN = 0.015, dark = P.theme === "lodge";
   const P_GLASS = pal("glass", TH.ruined ? 0x4a5458 : 0x6f93a6), P_FRAME = pal(dark ? "wood" : "plaster", dark ? 0x3a2e24 : trimC), P_LEAF = pal("wood", dark ? 0x6e4a2e : P.theme === "resort" ? 0xf2efe6 : 0x8a5a3a);
   const P_SHUT = pal("wood", dark ? 0x4f6b3a : P.theme === "resort" ? pick(rng, [0x2f6f8a, 0x3a8a6a, 0x8a5a3a]) : 0x55606a), P_BLIND = pal("ceramic", 0x33475a);
   const shutters = rng() < (TH.shutters || 0);
-  const leafRects = [];                                   // per floor: [u0, v0, u1, v1] the furnisher keeps clear
+  const leafRects = [];                                   // per floor: [u0, v0, u1, v1] the furnisher keeps clear (Wave 9: the OPEN slab of every door leaf)
   for (let f = 0; f < S; f++) leafRects.push([]);
+  const doorSide = new Map();                             // door -> the side its leaves swing to (+1 / -1 along its wall's normal: the room it opens INTO)
   const skinOn = (along, line, nOut, t0, t1, ya, yb, pi, fl) => {     // a skin on the face at line + nOut * JAMB (nOut = the side it faces)
     const face = line + nOut * JAMB, c0 = nOut > 0 ? face : face - SKIN, c1 = nOut > 0 ? face + SKIN : face;
     const fc = [pi, pi, pi, pi, pi, pi];
@@ -1488,29 +1502,89 @@ export function generate(parcel, opts) {
     if (d.kind !== "interior") side = cPlus >= 0 && F.type[cPlus] !== 0 ? 1 : -1;
     else side = d.b != null && cPlus >= 0 && F.region[cPlus] === d.b ? 1 : -1;
     const sideCell = side > 0 ? cPlus : cMinus;
+    if (sideCell >= 0 && F.type[sideCell] === 1) doorSide.set(d, side);      // (a door opening onto a stair / hole cell gets no leaves)
     if (d.kind === "front") {                             // a frame round the front door, outside
       skinOn(g.along, g.line, -side, g.o0, g.o1, sf + DOOR_H, sf + DOOR_H + 0.15, P_FRAME, d.floor);
       skinOn(g.along, g.line, -side, g.o0 - 0.1, g.o0, sf, sf + DOOR_H + 0.15, P_FRAME, d.floor);
       skinOn(g.along, g.line, -side, g.o1, g.o1 + 0.1, sf, sf + DOOR_H + 0.15, P_FRAME, d.floor);
     }
-    // a leaf folds back flat against the next stretch of the same wall when that stretch is a solid wall of the same room (no corner within reach)
-    for (const dir of [-1, 1]) {
-      const k = (d.ori === "H" ? d.i : d.j) + dir;              // the neighbouring edge along the wall
-      if (k < 0 || k >= (d.ori === "H" ? nx : nz)) continue;
-      const eIdx = d.ori === "H" ? d.j * nx + k : d.i * nz + k, arr = d.ori === "H" ? F.eH : F.eV;
-      if (arr[eIdx] !== 1) continue;
-      const nCell = d.ori === "H" ? cellAt(k, side > 0 ? d.j : d.j - 1) : cellAt(side > 0 ? d.i : d.i - 1, k);
-      if (nCell < 0 || sideCell < 0 || F.type[nCell] !== 1 || F.type[sideCell] !== 1 || F.region[nCell] !== F.region[sideCell]) continue;
-      const vx = dir < 0 ? (d.ori === "H" ? d.i : d.j) : (d.ori === "H" ? d.i + 1 : d.j + 1);   // the grid vertex between the door edge and its neighbour
-      const perp = d.ori === "H" ? F.eV[vx * nz + (side > 0 ? d.j : d.j - 1)] : F.eH[vx * nx + (side > 0 ? d.i : d.i - 1)];
-      if (perp > 0) continue;
-      const t0 = dir < 0 ? g.o0 - LEAF_W : g.o1, t1 = dir < 0 ? g.o0 : g.o1 + LEAF_W;
-      const face = g.line + side * JAMB, c0 = side > 0 ? face : face - LEAF_T, c1 = side > 0 ? face + LEAF_T : face;
-      const fc = [P_LEAF, P_LEAF, P_LEAF, P_LEAF, P_LEAF, P_LEAF];
-      if (g.along === "u") { addBox("leaf", t0, t1, sf, sf + DOOR_H - 0.05, c0, c1, fc, 1, d.floor); leafRects[d.floor].push([t0, c0, t1, c1]); }
-      else { addBox("leaf", c0, c1, sf, sf + DOOR_H - 0.05, t0, t1, fc, 1, d.floor); leafRects[d.floor].push([c0, t0, c1, t1]); }
-    }
   }
+  // ---- DOOR LEAVES (Wave 9, LC-91: design W2, bound by contract C1). A leafed door is a DOUBLE door: two leaves of LEAF_LEN (each from its jamb's face to 5 mm
+  // short of the opening's middle), LEAF_H tall (1 cm under the 2.4 m lintel: the closed door leaves no gap over 1 cm), 4 cm thick, single-acting INTO the room
+  // (the side rule above), 90 degrees open: an OPEN leaf stands perpendicular to the wall at its jamb (t from the jamb face to + 4 cm, from the wall face LEAF_LEN
+  // into the room - the clear width becomes 2.18 m), a CLOSED leaf lies in the wall line (+- 2 cm). Each leaf is TWO collider slabs (both built; the one of the
+  // other state dead at run time: maps.js setDoor) and is drawn by maps.js (one BatchedMesh, the swing animated); housegen's own builder (buildHouse /
+  // meshData) draws the START state, open. WHICH doors: every exterior (front / back) door and the interior doors whose id hashes under LEAF_SHARE (no rng drawn:
+  // the house's stream is untouched), unless the swing fails the clearance test: the swing quarter discs (radius SWING_R round each hinge - the jamb face's
+  // inner corner -, opening toward the room) must be free of structure colliders, stair zones (the stair, its approach and exit cells, the hole), a window's
+  // lane (its opening +- 0.1 m, 0.3 m from its face) and another door's zone (opening +- 0.1 m, DOOR_ZONE deep each side), and must not meet another leafed
+  // door's discs - exterior doors are decided first, then the interior ones by id: the later door loses. A door that fails keeps an open doorway (no leaf).
+  // The discs are keep-outs for furniture (the swing side's door zone grows to DOOR_ZONE_LEAF), floor loot points and chests (selftest row "leaves").
+  const LEAF_LEN = r3(DOOR_CLEAR / 2 - 0.005), LEAF_H = r3(DOOR_H - 0.01);
+  const leafL = [];                                       // local leaves: { d, k, l, side, along, line, face, sf, f, th (hinge t), td (+1 / -1: toward the middle), closed / open [u0, u1, y0, y1, v0, v1] }
+  const leafDiscs = [];                                   // accepted discs: { f, hu, hv, qu, qv } (local hinge; the quadrant's u / v signs)
+  {
+    const R2 = SWING_R * SWING_R;
+    const quad = (hu, hv, qu, qv) => [qu > 0 ? hu : hu - SWING_R, qv > 0 ? hv : hv - SWING_R, qu > 0 ? hu + SWING_R : hu, qv > 0 ? hv + SWING_R : hv];
+    const discHits = (D, r) => {                          // does quarter disc D meet rect r [u0, v0, u1, v1] with more than 1 mm of overlap (a face it only touches: no)
+      const q = quad(D.hu, D.hv, D.qu, D.qv), x0 = Math.max(q[0], r[0]), x1 = Math.min(q[2], r[2]), y0 = Math.max(q[1], r[1]), y1 = Math.min(q[3], r[3]);
+      if (x1 - x0 <= 1e-3 || y1 - y0 <= 1e-3) return false;
+      const du = D.hu < x0 ? x0 - D.hu : D.hu > x1 ? D.hu - x1 : 0, dv = D.hv < y0 ? y0 - D.hv : D.hv > y1 ? D.hv - y1 : 0;
+      return du * du + dv * dv < R2 - 1e-6;
+    };
+    const discsMeet = (A, B) => A.f === B.f && discHits(A, quad(B.hu, B.hv, B.qu, B.qv)) && discHits(B, quad(A.hu, A.hv, A.qu, A.qv));
+    const cellR = (i, j) => [uL(i), vL(j), uL(i + 1), vL(j + 1)];
+    const stairZ = []; for (let f = 0; f < S; f++) stairZ.push([]);
+    for (const sr of stairRecs) {
+      for (const k of [sr.st.k, sr.st.k + 1, sr.st.k + 2]) stairZ[sr.f].push(cellR(...stripCell(sr.sp, k)));
+      for (const k of [sr.st.k - 1, sr.st.k, sr.st.k + 1]) if (sr.f + 1 < S) stairZ[sr.f + 1].push(cellR(...stripCell(sr.sp, k)));
+    }
+    const zoneOf = (g, Z) => (g.along === "u" ? [g.o0 - 0.1, g.line - Z, g.o1 + 0.1, g.line + Z] : [g.line - Z, g.o0 - 0.1, g.line + Z, g.o1 + 0.1]);
+    const order = doors.map((d, k) => [d, k]).filter(([d]) => doorSide.has(d));
+    order.sort((a, b) => (a[0].kind === "interior" ? 1 : 0) - (b[0].kind === "interior" ? 1 : 0) || a[1] - b[1]);
+    for (const [d, k] of order) {
+      if (d.kind === "interior" && leafHash(P.id + ".d" + k) >= LEAF_SHARE) continue;
+      const g = doorGeo(d), side = doorSide.get(d), f = d.floor, sf = s[f], face = g.line + side * JAMB;
+      // the room runs on SIDEWAYS from the cell in front of the opening (a hall, a corridor-like room, a room round a stair) but not around the leaf's tip: the
+      // open leaves (tips 1.25 m out) would leave 1.1 m of the 2.26 m to pass them - narrower than the walk's fat capsule (the bots' free band, WALK_MARGIN):
+      // no leaves. Passing is fine when the row beyond the tips is the same room both in front of the opening and beside it (3.5 m beyond the tips);
+      // a one-cell room is a dead end (nothing to pass)
+      {
+        const Fd = floors[f], ci = d.ori === "H" ? d.i : (side > 0 ? d.i : d.i - 1), cj = d.ori === "H" ? (side > 0 ? d.j : d.j - 1) : d.j, rg = Fd.region[cellAt(ci, cj)];
+        const same = (c) => c >= 0 && Fd.type[c] === 1 && Fd.region[c] === rg;
+        const at = (lat, dep) => (d.ori === "H" ? cellAt(ci + lat, cj + dep * side) : cellAt(ci + dep * side, cj + lat));
+        let narrow = false;
+        for (const lat of [-1, 1]) if (same(at(lat, 0)) && !(same(at(0, 1)) && same(at(lat, 1)))) narrow = true;
+        if (narrow) continue;
+      }
+      // the two discs (local): hinge at the jamb face's inner corner, the quadrant toward the middle of the opening and into the room
+      const mk = (th, td) => (g.along === "u" ? { f, hu: th, hv: face, qu: td, qv: side } : { f, hu: face, hv: th, qu: side, qv: td });
+      const D2 = [mk(g.o0, 1), mk(g.o1, -1)];
+      let clear = true;
+      for (const D of D2) {
+        if (!clear) break;
+        for (const b of boxes) if (b.c && b.y1 > sf + 0.01 && b.y0 < sf + LEAF_H && discHits(D, [b.u0, b.v0, b.u1, b.v1])) { clear = false; break; }
+        if (clear) for (const r of stairZ[f]) if (discHits(D, r)) { clear = false; break; }
+        if (clear) for (const w of winGeo) if (w.f === f && discHits(D, zoneOf(w, JAMB + 0.3))) { clear = false; break; }
+        if (clear) for (const e of doors) if (e !== d && e.floor === f && discHits(D, zoneOf(doorGeo(e), JAMB + DOOR_ZONE))) { clear = false; break; }
+        if (clear) for (const A of leafDiscs) if (discsMeet(A, D)) { clear = false; break; }
+      }
+      if (!clear) continue;
+      for (const D of D2) leafDiscs.push(D);
+      for (let l = 0; l < 2; l++) {
+        const th = l === 0 ? g.o0 : g.o1, td = l === 0 ? 1 : -1;
+        const ct0 = l === 0 ? g.o0 : g.o1 - LEAF_LEN, ct1 = l === 0 ? g.o0 + LEAF_LEN : g.o1;          // closed: along the wall line
+        const ot0 = l === 0 ? g.o0 : g.o1 - LEAF_T, ot1 = l === 0 ? g.o0 + LEAF_T : g.o1;              // open: at the jamb, into the room
+        const oc0 = side > 0 ? face : face - LEAF_LEN, oc1 = side > 0 ? face + LEAF_LEN : face;
+        const closed = g.along === "u" ? [ct0, ct1, sf, sf + LEAF_H, g.line - LEAF_T / 2, g.line + LEAF_T / 2] : [g.line - LEAF_T / 2, g.line + LEAF_T / 2, sf, sf + LEAF_H, ct0, ct1];
+        const open = g.along === "u" ? [ot0, ot1, sf, sf + LEAF_H, oc0, oc1] : [oc0, oc1, sf, sf + LEAF_H, ot0, ot1];
+        leafL.push({ d, k, l, side, along: g.along, line: g.line, face, sf, f, th, td, closed, open });
+        leafRects[f].push([open[0], open[4], open[1], open[5]]);
+      }
+    }
+    leafL.sort((a, b) => a.k - b.k || a.l - b.l);          // (output order: by door id, then leaf)
+  }
+  const leafBoxes = leafL.map((L) => ({ p: "leaf", u0: L.open[0], u1: L.open[1], y0: L.open[2], y1: L.open[3], v0: L.open[4], v1: L.open[5], c: 1, fl: L.f }));   // the START state (open) as the walk and the view model see it
   if (shell) {                                            // blind windows on every closed storey (dark panels on the mass)
     const a0 = uL(0) - JAMB, a1 = uL(nx) + JAMB, b0 = vL(0) - JAMB, b1 = vL(nz) + JAMB, top = Math.min(FHu - 0.5, 2.9);
     const fc = [P_BLIND, P_BLIND, P_BLIND, P_BLIND, P_BLIND, P_BLIND];
@@ -2015,6 +2089,7 @@ export function generate(parcel, opts) {
     for (let k = 0; k < NS; k++) { const c = sCell[k]; if (c < 0) { fr[k] = out; rg[k] = -1; } else { fr[k] = typ[c] === 1 ? 1 : 0; rg[k] = rc[c]; } }
     regS.push(rg);                                        // (the room - region - of every walk sample of this floor: the furnisher's)
     for (const bx of boxes) if (bx.c) blockInto(fr, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1);
+    for (const bx of leafBoxes) blockInto(fr, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1);     // (Wave 9: the open door leaves, the start state)
     structFree.push(fr);
   }
   })();
@@ -2022,6 +2097,7 @@ export function generate(parcel, opts) {
   const roomVis = new Int32Array(NS), roomBlk = new Int32Array(NS), roomStamp = { n: 0, m: 0, b: 0 };
   const structSolids = [];
   for (const bx of boxes) if (bx.c) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
+  for (const bx of leafBoxes) structSolids.push([bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1]);
   // ---- furniture
   const furn = [];                                        // { cat, room, f, u, v (centre), fq (local facing turn), rect [u0, v0, u1, v1], parts [box idx], tint, order }
   const tris = new Array(S + 1).fill(0);                  // [storey 0 .. S - 1, the closed shell storeys of a tall building]
@@ -2072,12 +2148,16 @@ export function generate(parcel, opts) {
   }
   const faceTris = (h) => { let n = 12; for (let k = 0; k < 6; k++) if (h & (1 << k)) n -= 2; return n; };
   for (const b of boxes) tris[b.fl] += faceTris(b.h);
+  for (const L of leafL) tris[L.f] += LEAF_TRIS;           // (Wave 9: the builder draws each door leaf: inside the storey's budget like the structure)
   tris[S - 1] += roofTrisN;
   const keepOuts = [];                                    // per floor: rects furniture may not overlap
   for (let f = 0; f < S; f++) keepOuts.push(leafRects[f].map((r) => ({ r: [r[0] - 0.05, r[1] - 0.05, r[2] + 0.05, r[3] + 0.05], why: "leaf" })));
+  const leafSide = new Map();                             // (Wave 9) a leafed door -> its swing side: that side's door zone is DOOR_ZONE_LEAF deep (it covers both swing discs)
+  for (const L of leafL) leafSide.set(L.d, L.side);
   for (const d of doors) {
-    const g = doorGeo(d), Z = JAMB + DOOR_ZONE;
-    const r = g.along === "u" ? [g.o0 - 0.1, g.line - Z, g.o1 + 0.1, g.line + Z] : [g.line - Z, g.o0 - 0.1, g.line + Z, g.o1 + 0.1];
+    const g = doorGeo(d), Z = JAMB + DOOR_ZONE, sw = leafSide.get(d) || 0, Zs = JAMB + DOOR_ZONE_LEAF;
+    const lo = g.line - (sw < 0 ? Zs : Z), hi = g.line + (sw > 0 ? Zs : Z);
+    const r = g.along === "u" ? [g.o0 - 0.1, lo, g.o1 + 0.1, hi] : [lo, g.o0 - 0.1, hi, g.o1 + 0.1];
     keepOuts[d.floor].push({ r, why: "door" });
   }
   const cellRect = (i, j) => [uL(i), vL(j), uL(i + 1), vL(j + 1)];
@@ -2127,7 +2207,7 @@ export function generate(parcel, opts) {
   };
   // what a doorway's eye cannot see through: the walls, rails, stairs and door leaves (glass is seen through; a skin lies on a wall face; a ray
   // from 1.62 m to a piece of furniture never reaches the floor slab or the ceiling, so slabs and roofs are left out)
-  const occluders = boxes.filter((b) => b.p !== "glass" && b.p !== "skin" && b.p !== "slab" && b.p !== "roof" && b.p !== "shell" && b.p !== "gable" && b.p !== "trim");
+  const occluders = boxes.filter((b) => b.p !== "glass" && b.p !== "skin" && b.p !== "slab" && b.p !== "roof" && b.p !== "shell" && b.p !== "gable" && b.p !== "trim").concat(leafBoxes);
   // (stage B, lane I1: the same boolean, faster - a box wholly outside the segment's bounding box is skipped before the slab divisions, and the view model's
   //  extra lists (the room's tall pieces but the one tested, a body) are walked in place instead of being concatenated per call: no garbage)
   const segBlocked = (ax, ay, az, bx, by, bz, list, tMax, list2, skip, one) => {
@@ -2526,7 +2606,7 @@ export function generate(parcel, opts) {
       if (!cat || !budgetOK(cat)) return null;
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
-      if (cat.deco) { if (rect[0] < inner[0] || rect[1] < inner[1] || rect[2] > inner[2] || rect[3] > inner[3]) return null; for (const hr of holes) if (ovl(rect, hr, 0)) return null; for (const k of keepOuts[f]) if (k.why === "stair" && ovl(rect, k.r, 1e-6)) return null; }
+      if (cat.deco) { if (rect[0] < inner[0] || rect[1] < inner[1] || rect[2] > inner[2] || rect[3] > inner[3]) return null; for (const hr of holes) if (ovl(rect, hr, 0)) return null; for (const k of keepOuts[f]) if ((k.why === "stair" || k.why === "leaf") && ovl(rect, k.r, 1e-6)) return null; }     // (Wave 9: never behind an open door leaf either)
       else if (!valid(rect, 0, cat.h, touch)) return null;
       const p = put(cat, u, v, fq, tint);
       if (!cat.deco && !roomOK()) { unput(p); return null; }
@@ -3226,6 +3306,12 @@ export function generate(parcel, opts) {
 
   // ---- loot points: furniture tops first (front edge, reachable), then free floor spots; chests on their slots
   const loot = [], underM = [];
+  // (Wave 9) a door leaf's swing quarter disc (+ 0.15 m: the item's own size) is no place for floor loot: the leaf would sweep it / stand on it
+  const inSwing = (f, u, v) => {
+    const rr = (SWING_R + 0.15) * (SWING_R + 0.15);
+    for (const D of leafDiscs) if (D.f === f && (u - D.hu) * D.qu > -0.15 && (v - D.hv) * D.qv > -0.15 && (u - D.hu) * (u - D.hu) + (v - D.hv) * (v - D.hv) < rr) return true;
+    return false;
+  };
   const underMask = (f) => {                               // the walk samples within 0.25 m of a piece's footprint, per floor (once)
     if (underM[f]) return underM[f];
     const m = new Uint8Array(NS);
@@ -3273,7 +3359,7 @@ export function generate(parcel, opts) {
         const a = ac + da, b = bc + db;
         if (a < 0 || b < 0 || a >= NU || b >= NV) continue;
         const k = b * NU + a;
-        if (se[k] && rg[k] === R.ri && !um[k]) { spots.push(k); break; }
+        if (se[k] && rg[k] === R.ri && !um[k] && !inSwing(f, su(a), sv(b))) { spots.push(k); break; }
       }
     }
     shuffle(rng, spots);
@@ -3419,6 +3505,24 @@ export function generate(parcel, opts) {
     if (rb) roomById.get(rb).doors.push(rec.id);
     return rec;
   });
+  // (Wave 9, LC-91) the door leaves, world frame. Per leaf: its door's id and kind, leaf 0 | 1, the floor, y (the floor surface), w (LEAF_LEN) x h (LEAF_H) x t
+  // (LEAF_T), the hinge (the jamb face's inner corner) [x, z], tdir (from the hinge toward the opening's middle) and n (into the room it swings into: the
+  // swing side), r (SWING_R: the quarter disc kept clear), closed / open { min, max } (the two slab colliders, axis-aligned), pal (palette index of its wood),
+  // and the DRAWN leaf's swing: one model (X from LEAF_PIVOT.x0 to + w along the leaf, Z from hand * LEAF_PIVOT.z0 to hand * (z0 + t)) rotated about `pivot`
+  // [x, z] by yaw q0 * 90 degrees when closed and (q0 + swing) * 90 degrees when open (three's Y rotation: local +X -> (cos, -sin)); hand = swing.
+  const doorLeaves2 = leafL.map((L) => {
+    const tu = L.along === "u" ? L.td : 0, tv = L.along === "u" ? 0 : L.td, nu = L.along === "u" ? 0 : L.side, nv = L.along === "u" ? L.side : 0;
+    const tw = wdir(tu, tv).map((q) => Math.round(q)), nw = wdir(nu, nv).map((q) => Math.round(q));
+    const q0 = tw[0] > 0 ? 0 : tw[1] < 0 ? 1 : tw[0] < 0 ? 2 : 3;
+    const swing = nw[0] === -tw[1] && nw[1] === tw[0] ? -1 : 1;
+    const hu = L.along === "u" ? L.th : L.face, hv = L.along === "u" ? L.face : L.th;
+    const pt = L.th + L.td * LEAF_PIVOT.t, pc = L.line + L.side * LEAF_PIVOT.c;
+    const pu = L.along === "u" ? pt : pc, pv = L.along === "u" ? pc : pt;
+    const C = L.closed, O = L.open;
+    return { door: P.id + ".d" + L.k, leaf: L.l, kind: L.d.kind, floor: L.f, y: r3(L.sf), w: LEAF_LEN, h: LEAF_H, t: LEAF_T, hinge: wp(hu, hv), tdir: tw, n: nw, r: SWING_R,
+      pivot: wp(pu, pv), q0, swing, closed: wbox(C[0], C[1], C[2], C[3], C[4], C[5]), open: wbox(O[0], O[1], O[2], O[3], O[4], O[5]), pal: P_LEAF };
+  });
+  { const nl = new Map(); for (const L of doorLeaves2) nl.set(L.door, (nl.get(L.door) || 0) + 1); for (const d of doors2) d.leaves = nl.get(d.id) || 0; }
   const windows2 = winGeo.map((w, k) => {
     const mid = (w.o0 + w.o1) / 2;
     const [wx, wz] = w.along === "u" ? wp(mid, w.line) : wp(w.line, mid);
@@ -3535,6 +3639,7 @@ export function generate(parcel, opts) {
   const trisF = new Array(S + 1).fill(0);
   for (const b of outBoxes) if (b.p !== "furn" && b.p !== "deco") trisF[b.fl] += faceTris(b.h);
   for (const fr of furniture) trisF[fr.floor] += fr.tris;
+  for (const L of doorLeaves2) trisF[L.floor] += LEAF_TRIS;           // (Wave 9: the builder draws each leaf open, 5 faces)
   trisF[S - 1] += roofTrisN;
   let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
   (() => {
@@ -3552,7 +3657,7 @@ export function generate(parcel, opts) {
     v: VERSION, kit: kitProfile, id: P.id, theme: P.theme, use, seed: P.seed, turn: P.turn, cx: r3(P.cx), cz: r3(P.cz), y0: r3(y0), nx, nz, U, W, D,
     storeys: S, storeysAsked: P.storeysAsked, notes, plan: cut ? "L" : "rect", cut, roof: roofKind, facade: { mat: fMat, color: facadeC }, trim: trimC,
     floors: s.slice(0, S).map((y, f) => ({ f, y: r3(y), ceil: r3(s[f + 1] - SLAB) })),
-    rooms: rooms2, doors: doors2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2,
+    rooms: rooms2, doors: doors2, doorLeaves: doorLeaves2, windows: windows2, stairs: stairs2, rails: rails2, palette, boxes: outBoxes, ramps: outRamps, roofs: roofs2, gables: gables2, furniture, loot: loot2, chests: chests2,
     nav: { nodes, links }, tris: { floors: trisF.slice(0, S), shell: trisF[S], total: trisF.reduce((a, b) => a + b, 0) }, fh: FHu, shell,
     aabb: { min: mn.map(r3), max: mx.map(r3) }, lod: { cx: ctr[0], cy: ctr[1], cz: ctr[2], r: rad, furnitureR: 60 },
   };
@@ -3598,6 +3703,7 @@ export function translateY(H, dy) {
   out.floors = H.floors.map((f) => Object.assign({}, f, { y: q(f.y), ceil: q(f.ceil) }));
   out.rooms = H.rooms.map((r) => Object.assign({}, r, { y: q(r.y), ceil: q(r.ceil), anchor: v3(r.anchor) }));
   out.doors = H.doors.map((d) => Object.assign({}, d, { y: q(d.y) }));
+  out.doorLeaves = (H.doorLeaves || []).map((L) => Object.assign({}, L, { y: q(L.y), closed: mm(L.closed), open: mm(L.open) }));
   out.windows = H.windows.map((w) => Object.assign({}, w, { sill: q(w.sill), head: q(w.head) }));
   out.stairs = H.stairs.map((s) => Object.assign({}, s, { foot: v3(s.foot), top: v3(s.top) }));
   out.rails = H.rails.map((r) => Object.assign({}, r, { y0: q(r.y0), y1: q(r.y1) }));
@@ -3621,10 +3727,13 @@ export function translateY(H, dy) {
 
 // ── colliders and kit entries (pure) ───────────────────────────────────────────────────────────────────────────────────────────────────
 function mkColliderDefault(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp) {
-  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 };    // maps.js mkCollider: one hidden class
+  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0, door: -1, dslab: 0 };    // maps.js mkCollider: one hidden class (C1: door / dslab on every collider)
 }
-/** every collider of the house in a fixed order: structure boxes (c = 1), ramps, furniture collider groups */
-export function collidersOf(H, mk) {
+/** every collider of the house in a fixed order: structure boxes (c = 1), ramps, furniture collider groups, then (Wave 9, LC-91) the door leaves' slabs - per
+ *  H.doorLeaves entry its CLOSED slab (dslab 1) then its OPEN slab (dslab 2), door = the ordinal of its door among the house's leafed doors (maps.js adds the
+ *  map's base: the index into map.doors). The start state here is OPEN (contract C1's all-open fallback): every closed slab is dead; maps.js applies the
+ *  map's start state (K.DOOR_START). opts.doors false: no leaf slabs (the house as it was before Wave 9 - nothing in the game asks for that). */
+export function collidersOf(H, mk, opts) {
   mk = mk || mkColliderDefault;
   const out = [];
   for (const b of H.boxes) if (b.c) out.push(mk("box", b.min[0], b.max[0], b.min[1], b.max[1], b.min[2], b.max[2], -1, null, -1, 0));
@@ -3634,8 +3743,21 @@ export function collidersOf(H, mk) {
     if (p.src === "kit") out.push(mk("box", p.min[0], p.max[0], p.min[1], p.max[1], p.min[2], p.max[2], -1, null, -1, 0));
     else for (const g of p.cols) out.push(mk("box", g.min[0], g.max[0], g.min[1], g.max[1], g.min[2], g.max[2], -1, null, -1, 0));
   }
+  if (!(opts && opts.doors === false)) {
+    let di = -1, last = null;
+    for (const L of H.doorLeaves || []) {
+      if (L.door !== last) { di++; last = L.door; }
+      for (const [st, bx] of [[1, L.closed], [2, L.open]]) {
+        const c = mk("box", bx.min[0], bx.max[0], bx.min[1], bx.max[1], bx.min[2], bx.max[2], -1, null, -1, 0);
+        c.door = di; c.dslab = st; c.dead = st === 1;
+        out.push(c);
+      }
+    }
+  }
   return out;
 }
+/** (Wave 9) the number of door-leaf slab colliders collidersOf appends (2 per leaf) */
+export function leafColliderCount(H) { return 2 * ((H && H.doorLeaves) || []).length; }
 /** the kit furniture as citykit.place() entries (x y z = the manifest origin at the floor, rot = quarter-turn index) */
 export function kitEntries(H, district) {
   const out = [];
@@ -3868,6 +3990,19 @@ export function meshData(H, colOf, opts) {
     }
     boxRanges[bi] = first;
   });
+  // (Wave 9, LC-91) the door leaves in their START state, open: the open slab's 5 faces (no underside: it stands on the floor), inside faces. maps.js passes
+  // opts.leaves false (it draws the swinging leaves in one BatchedMesh); house.tris counts LEAF_TRIS per leaf
+  if (opts.leaves !== false) for (const L of H.doorLeaves || []) {
+    const pe = H.palette[L.pal], mm = [L.open.min, L.open.max], tile = TILE[pe.mat] || 2, rgb = colOf(pe.color), a = acc("walls", pe.mat, split, false);
+    for (const fi of [0, 1, 2, 4, 5]) {
+      const base = a.pos.length / 3, [n, cs, ax] = FACES[fi];
+      for (const cr of cs) {
+        const x = mm[cr[0]][0], y = mm[cr[1]][1], z = mm[cr[2]][2], p = [x, y, z];
+        a.pos.push(x, y, z); a.nor.push(n[0], n[1], n[2]); a.uv.push(p[ax[0]] / tile, p[ax[1]] / tile); a.col.push(rgb[0], rgb[1], rgb[2]);
+      }
+      a.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+  }
   // pitched roofs: each plank exactly as its ramp collides (walk line +- hv), the end walls as flat polygons; walls group
   const poly = (mat, color, pts, nrm, uvf) => {          // a convex polygon (fan), each triangle wound to face nrm (three's front face: counter-clockwise)
     const nl = Math.sqrt(nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]), nn = nrm.map((v) => v / nl);
