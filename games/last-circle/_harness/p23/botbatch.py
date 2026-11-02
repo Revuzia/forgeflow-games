@@ -25,6 +25,9 @@ to the end (max 1150 s of sim). Rows (the plan's bars; never lowered):
   errors           0 page errors over the batch
   census-600       (W9 R1B, OD-16) median over the matches of the big shields lying UNCLAIMED inside the next circle at t = 600 s (floor items, death
                    piles' included, that no bot has as its shield / loot goal) <= 3 (the OD-16 text counted 11)
+                   NOTE: the OD-16 text's "11" is the 24-MATCH TOTAL of in-circle floor bigs at the OD-13 build (b6ffaf4e, F:/lc_p23/final/
+                   shields/cen_24.json: per match 0 x20, 2 x3, 5 x1 -> median 0), not a per-match count; see INFO census-600-total
+  INFO census-600-total (W9 R1B) the batch totals of the census: unclaimed and all in-circle big shields at t = 600 s, summed over the matches
   INFO share>=75   (W9 C6) share of the alive-bot shield samples at t >= 600 s that are >= 75 (design target >= 60 %: the bimodal median's margin)
 """
 from __future__ import annotations
@@ -124,6 +127,8 @@ def analyze(results):
     out["census600"] = {"medianUnclaimed": med([c["unclaimed"] for c in cs if c]), "perMatch": [(c["unclaimed"], c["bigs"], c["supplyCratesUnopened"]) if c else None for c in cs],
                         "mapAndBags": [{k: c.get(k) for k in ("mapBigs", "mapCrates", "bots", "bagBigs", "bagMinis")} if c else None for c in cs],
                         "missing": sum(1 for c in cs if not c)}
+    out["census600total"] = {"matches": sum(1 for c in cs if c), "unclaimed": sum(c["unclaimed"] for c in cs if c), "bigsInCircle": sum(c["bigs"] for c in cs if c),
+                             "matchesWithUnclaimed": sum(1 for c in cs if c and c["unclaimed"] > 0)}
     surv = []
     for r in results:
         pd, lt = r.get("playerDeath"), r.get("landT")
@@ -208,6 +213,7 @@ def main():
         ce = a["census600"]
         v.check("census-600 (median unclaimed big shields inside the next circle at t = 600 s <= %d)" % CENSUS_MAX,
                 ce["medianUnclaimed"] is not None and ce["medianUnclaimed"] <= CENSUS_MAX, ce, "<= %d" % CENSUS_MAX)
+        v.info("census-600-total (batch sums at t = 600 s: unclaimed / all in-circle big shields; the OD-16 '11' was such a 24-match total, INFO)", a["census600total"])
         v.info("share>=75 (alive-bot shield samples at t >= 600 s that are >= 75; design target >= %.0f %%, INFO)" % SHARE75_TARGET, a["share75"])
         v.info("sh600why (bots under 75 at t >= 600 s: why; diagnosis)", a["sh600why"])
     return C.run_gate("p23_botbatch", body, args)

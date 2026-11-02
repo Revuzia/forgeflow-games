@@ -4368,7 +4368,7 @@ function landed(W, a, v, wet) {
   if (!a.alive) return;
   const hard = !wet && (v > HARD_LAND_V || dmg >= 5);
   // (W9 R1B, LC-61) a heavy landing (an impact from over K.FALL.HEAVY_H, 12 m) also blocks firing / ADS for K.FALL.HEAVY_S - from this tick on
-  if (!wet && K && K.FALL && K.FALL.HEAVY_V > 0 && v >= K.FALL.HEAVY_V) {
+  if (!wet && !settle && K && K.FALL && K.FALL.HEAVY_V > 0 && v >= K.FALL.HEAVY_V) {   // a glide / canopy settle is no new fall (C-FALL)
     a._heavyT = W.t + K.FALL.HEAVY_S;
     const inp = a.input; if (inp) { inp.fire = false; inp.ads = false; }
     if (a === W.player) W._fireEdge = 0;
