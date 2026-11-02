@@ -10,6 +10,8 @@ harness (p23/js/botbatch_probe.js, from lane P23/bots' scratch probe, itself fro
     python _harness/p23/botbatch.py --lanes bots                    # validation: lane bots' work served over the base
     python _harness/p23/botbatch.py --disk --runs 2:isla_viva,3:ashgrid --plant no-far-big    # (W9 R1B) bots.js served with the reserve-big trigger off
                                                                     # and sim/royale.js with the pre-W9 crate (big x2) - MUST FAIL (census-600)
+    python _harness/p23/botbatch.py --disk --runs 2:isla_viva --plant census-surge    # (W9 R1B) census-600's measure control: 6 bigs in the next circle
+                                                                    # at t = 590 s that no bot may claim - MUST FAIL (census-600)
 
 Each match: STANDARD solo on the seed / map of the run list, the human AFK (no input; the probe never protects it), fastForwarded in 30 s slices
 to the end (max 1150 s of sim). Rows (the plan's bars; never lowered):
@@ -48,7 +50,15 @@ DEFAULT_RUNS = ",".join("%d:%s" % (s, m) for s, m in [
 PLANTS = {"shield-cap": "W.kernel._updaters.push(() => { for (const a of W.actors) if (a.isBot && a.alive && a.shield > 50) a.shield = 50; });"
                         " { const prev = W._tickHook; W._tickHook = (w) => { if (prev) prev(w); for (const a of W.actors) if (a.isBot && a.alive && a.shield > 50) a.shield = 50; }; }",
           # (W9 R1B) served-file plant (NO_FAR_BIG below): no page snippet
-          "no-far-big": ""}
+          "no-far-big": "",
+          # (W9 R1B) census-600's MEASURE control: at t = 590 s six big shields land inside the next circle and no bot may take them as a goal
+          # (bots blind to big shields lying in the circle) - MUST FAIL (census-600). no-far-big is the logic control; base and lane both read 0
+          "census-surge": "{ const prev = W._tickHook; let done = false; const ids = new Set(); W._tickHook = (w) => { if (prev) prev(w);"
+                          " if (!done && W.t >= 590 && W.stormCtl) { done = true; const st = W.stormCtl.storm.stateAt(W.t); const c = st.nextCenter || st.center;"
+                          " const r = (st.nextRadius != null ? st.nextRadius : st.radius) * 0.5; for (let i = 0; i < 6; i++) { const ang = i * 1.047, x = c.x + Math.cos(ang) * r * 0.8, z = c.z + Math.sin(ang) * r * 0.8;"
+                          " ids.add(W.netSpawnItem({ data: { kind: 'consumable', id: 'big_shield', count: 1 }, x, y: W.map.heightAt(x, z), z, id: 'plant_bs' + i })); } }"
+                          " if (ids.size) for (const b of window.__LC__.brains()) { const bb = b.bb; if (bb.shieldGo && ids.has(bb.shieldGo.id)) bb.shieldGo = null;"
+                          " if (bb.lootId != null && ids.has(bb.lootId)) bb.lootId = null; if (!bb.badLoot) bb.badLoot = Object.create(null); for (const id of ids) bb.badLoot[id] = W.t + 60; } }; }"}
 NO_FAR_BIG = {"runtime/3d/royale/bots.js": [("const WANT_BIG = true;", "const WANT_BIG = false;")],
               # (single-line anchors: sim/royale.js is served with its CRLF line ends - a two-line anchor joined by LF never matched)
               "runtime/sim/royale.js": [('{ kind: "consumable", id: "big_shield", count: 3 },', '{ kind: "consumable", id: "big_shield", count: 2 },'),
