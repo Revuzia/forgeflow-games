@@ -884,6 +884,15 @@ function formIndex(W, a) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
+  // (W9 R1B) the bots-section timer for p23_tierprof's "bots" row (PLAN sec 5: bots section p95 <= 3 ms): only while a harness has set W.botsProf =
+  // { ms: Float64Array(n), i: 0 } - the game itself pays one property read a frame
+  const PF = W.botsProf;
+  if (!PF) { updateBots(W, dt); return; }
+  const t0 = navNow();
+  updateBots(W, dt);
+  if (PF.i < PF.ms.length) PF.ms[PF.i++] = navNow() - t0;
+}
+function updateBots(W, dt) {
   if (!brains.length) return;
   if (IND.map !== W.map) indEnsure(W);       // (Wave 8) the room graph and the cover test's cell table: built once per map, before the first brain tick
   if (OCC.map !== W.map && !W.map.hasCollidersNear) occBuild(W.map);

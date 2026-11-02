@@ -8,6 +8,7 @@ on this box, vsync on: what a player's first run gets; common.GPU_PROFILES).
     python _harness/p23/tierprof.py --rev 9aa2b746 --gpu default   # control: the P2 base has no ULTRA - MUST FAIL (ultra rows)
     python _harness/p23/tierprof.py --disk --plant alloc-leak       # 200 KB of garbage per frame - MUST FAIL (KB/frame rows)
     python _harness/p23/tierprof.py --disk --plant query-flood      # 400 extra queryColliders per frame - MUST FAIL (queryColliders rows)
+    python _harness/p23/tierprof.py --disk --plant bots-slow        # +40 us per terrain height read - MUST FAIL (bots row)
 
 One Chrome at 1280x720 (fresh profile), STANDARD solo on each map in --maps (default Savanna), landed under the guard, then for EACH tier (set
 through W.setGfx('tier', t), as the Video tab does):
@@ -18,6 +19,7 @@ through W.setGfx('tier', t), as the Video tab does):
   programs [t]    no shader program linked in the 240 measured frames (the tier's own programs link in its warm frames)
   gpu [t] (info)  GPU ms per rendered frame (the kernel's timer query), median
   raw [t] (info)  real rAF frame time p50 / p90 over 4 s with the loop running
+  bots            (W9 R1B) bots.update ms per simulated frame, p95 over 600 frames <= 3 ms (PLAN sec 5 "bots section 3 ms p95")
   order           GPU cost never falls going LOW -> MEDIUM -> HIGH -> ULTRA (10 % noise allowance)
   auto-ground     the tier the first run auto-picked: ground raw p50 <= 20 ms - COUNTED only on a quiet box (no other automated Chrome), else
                   INFORMATION (the iGPU is shared: every ms is an upper bound then)
@@ -36,10 +38,14 @@ C = L.C
 
 PLANTS = {
     "alloc-leak": "window.__P23LEAK__ = []; W.kernel._updaters.push(() => { window.__P23LEAK__.push(new Array(25600).fill(1.5)); if (window.__P23LEAK__.length > 40) window.__P23LEAK__.shift(); })",
+    # (W9 R1B) the bots row's control: every terrain height read costs 40 us more (bots.js reads heightAt hundreds of times a frame) - MUST FAIL bots
+    "bots-slow": "{ const M = W.map, h0 = M.heightAt; M.heightAt = function () { const t = performance.now(); while (performance.now() - t < 0.04) {} return h0.apply(this, arguments); }; }",
     "query-flood": "W.kernel._updaters.push(() => { const p = W.player; for (let i = 0; i < 400; i++) W.map.queryColliders(p.pos.x, p.pos.z, 4, []); })",
 }
 TIERS = ("low", "medium", "high", "ultra")
 KB_MAX, QC_MAX, RAW_P50_MAX = 85.0, 150, 20.0
+BOTS_FRAMES, BOTS_P95_MS = 600, 3.0
+FN_FILES = ("bots.js", "weapons.js", "player.js", "loot.js")
 
 MEASURE_JS = r"""([n, render]) => { const W = window.__LC__.W, P = window.__H_PUMP__, k = W.kernel; const M = W.map; const q0 = M.queryColliders; let qc = 0, qsum = 0;
   M.queryColliders = function () { qc++; return q0.apply(this, arguments); };
@@ -102,20 +108,26 @@ def main():
                                                                "includeObjectsCollectedByMinorGC": True})
                         mm = s.js(MEASURE_JS, [n, render])
                         hp = cdp.send("HeapProfiler.stopSampling")["profile"]
-                        tot, files = [0], {}
+                        tot, files, fns = [0], {}, {}
 
                         def walk(nd):
                             sz = nd.get("selfSize", 0)
                             if sz:
                                 tot[0] += sz
-                                f = nd["callFrame"].get("url", "").split("/")[-1].split("?")[0] or "(native)"
+                                cf = nd["callFrame"]
+                                f = cf.get("url", "").split("/")[-1].split("?")[0] or "(native)"
                                 files[f] = files.get(f, 0) + sz
+                                if f in FN_FILES:     # (W9 R1B) where in the game's own files the bytes are allocated: function:line, INFO only
+                                    fk = "%s %s:%d" % (f, cf.get("functionName") or "(anon)", cf.get("lineNumber", -1) + 1)
+                                    fns[fk] = fns.get(fk, 0) + sz
                             for ch in nd.get("children", []):
                                 walk(ch)
                         walk(hp["head"])
                         mm["heapStepKb"] = mm.get("kbPerFrame")
                         mm["kbPerFrame"] = round(tot[0] / 1024 / n, 2)
                         mm["topFiles"] = [[kk, round(x / 1024 / n, 1)] for kk, x in sorted(files.items(), key=lambda kv: -kv[1])[:6]]
+                        mm["topFns"] = [[kk, round(x / 1024 / n, 2)] for kk, x in sorted(fns.items(), key=lambda kv: -kv[1])[:12]]
+                        mm["allFns"] = {kk: round(x / 1024 / n, 3) for kk, x in fns.items()}
                         return mm
                     m = sampled(240, True)              # rendered: programs, qc, render KB (INFO)
                     ms = sampled(300, False)            # simulated: the KB bar, as framecheck
@@ -123,16 +135,27 @@ def main():
                     s.thaw_loop()
                     raw = s.js(RAW_JS, [4000])
                     s.freeze_loop()
-                    prof[t] = dict(m, kbSim=ms['kbPerFrame'], tier=got, gpu=L.med(g) if g else None, raw=raw)
+                    prof[t] = dict(m, kbSim=ms['kbPerFrame'], simFns=ms.get('allFns'), tier=got, gpu=L.med(g) if g else None, raw=raw)
                     v.check("tier [%s %s] (W.gfxTier = %s)" % (mp, t, t), got == t, {"gfxTier": got}, t)
                     v.check("kb [%s %s] (JS heap allocated per simulated ground frame <= %.0f KB, HeapProfiler sampling as framecheck)" % (mp, t, KB_MAX), ms["kbPerFrame"] is not None and ms["kbPerFrame"] <= KB_MAX,
-                            {"kbPerFrame": ms["kbPerFrame"], "topFilesKbPerFrame": ms["topFiles"]}, "<= %.0f" % KB_MAX)
+                            {"kbPerFrame": ms["kbPerFrame"], "topFilesKbPerFrame": ms["topFiles"], "topFnsKbPerFrame": ms["topFns"]}, "<= %.0f" % KB_MAX)
                     v.info("kb-rendered [%s %s] (the same sampling over RENDERED frames: no bar set)" % (mp, t), {"kbPerFrame": m["kbPerFrame"], "topFilesKbPerFrame": m["topFiles"]})
                     v.check("qc [%s %s] (queryColliders calls per frame, mean <= %d, as framecheck)" % (mp, t, QC_MAX), m["qcMean"] <= QC_MAX,
                             {"qcMean": m["qcMean"], "qcMaxInfo": m["qcMax"]}, "mean <= %d" % QC_MAX)
                     v.check("programs [%s %s] (no shader linked in 240 measured frames)" % (mp, t), m["programsAfter"] == m["programsBefore"],
                             {"before": m["programsBefore"], "after": m["programsAfter"], "new": m.get("newPrograms")}, "unchanged")
                     v.info("gpu / raw [%s %s]" % (mp, t), {"gpuMsMedian": prof[t]["gpu"], "raw": raw})
+                # (W9 R1B) BOTS SECTION: bots.update wall time per SIMULATED frame (bots.js W.botsProf timer; no heap profiler attached, no render),
+                # p95 over BOTS_FRAMES frames at the last tier's scene state <= BOTS_P95_MS (PLAN sec 5 "bots section 3 ms p95"; W9 OD-16's widened
+                # far-shield scan is measured here)
+                s.js("(n) => { window.__LC__.W.botsProf = { ms: new Float64Array(n), i: 0 }; }", BOTS_FRAMES)
+                s.step_frames(BOTS_FRAMES, 1 / 60, render=False)
+                bp = s.js("""() => { const W = window.__LC__.W, P = W.botsProf; W.botsProf = null; const a = Array.from(P.ms.subarray(0, P.i)).sort((x, y) => x - y);
+                  const q = (f) => a.length ? +a[Math.min(a.length - 1, Math.floor(a.length * f))].toFixed(3) : null;
+                  return { frames: a.length, p50: q(0.5), p95: q(0.95), max: a.length ? +a[a.length - 1].toFixed(3) : null, alive: W.match ? W.match.aliveCount() : null, t: +W.t.toFixed(1) }; }""")
+                v.data.setdefault("bots", {})[mp] = bp
+                v.check("bots [%s] (bots.update ms per simulated frame, p95 over %d frames <= %.0f ms: PLAN sec 5 bots section)" % (mp, BOTS_FRAMES, BOTS_P95_MS),
+                        bp["frames"] >= BOTS_FRAMES * 0.95 and bp["p95"] is not None and bp["p95"] <= BOTS_P95_MS, bp, "p95 <= %.0f ms" % BOTS_P95_MS)
                 v.check("gfxTier event [%s] (D10: every tier change emits W.events 'gfxTier'(tier) with the new tier)" % mp,
                         bool(gt_rows) and all(r["ok"] for r in gt_rows) and any(r["from"] != r["to"] for r in gt_rows), gt_rows, "one per change, the new tier")
                 v.data.setdefault("profile", {})[mp] = prof
