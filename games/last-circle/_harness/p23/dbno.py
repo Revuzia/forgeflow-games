@@ -13,6 +13,7 @@ hud (BLEEDING OUT, [HOLD E] Revive), loot (downed gate). The gate reads only the
     python _harness/p23/dbno.py --disk --parts bot --plant no-revive-threat   # bots.js: no revive while an enemy was seen in 10 s - MUST FAIL (revive-start)
     python _harness/p23/dbno.py --lanes all                         # validation: every lane's work served over the base
     python _harness/p23/dbno.py --disk --parts human2 --control h2-short-hold  # E released after 3 s of GAME time - MUST FAIL (human2 revive row)
+    python _harness/p23/dbno.py --disk --parts human2 --control h2-fat-downed  # (W9 R1B 1b) +16 B per downed state message - MUST FAIL (size row)
 
 Part SOLO (STANDARD, solo, Savanna seed 7): W.match.mode 'solo', every actor its own team; a lethal hit on the human kills it (never downed);
   120 s of the match through fastForward: 0 'actorDowned' events (solo play unchanged).
@@ -500,10 +501,21 @@ def part_human2(args, v):
         gpg.evaluate("""() => { const S = window.__LC__.W.net; if (!S || !S.rtc || S.rtc.__p23sz) return; const f = S.rtc.sendState;
             S.rtc.sendState = function (env) { try { if (env && env.t === 'state') { const A = window.__SQ_STATE_RTC__ = window.__SQ_STATE_RTC__ || []; A.push(JSON.stringify(env.d).length); if (A.length > 600) A.shift(); window.__SQ_STATE_LAST__ = env.d; } } catch (e) {}
               return f.apply(this, arguments); }; S.rtc.__p23sz = true; }""")
-        hpg.wait_for_timeout(2500)
+        if getattr(args, "control", None) == "h2-fat-downed":       # (W9 R1B pass 1b) the size row's control: +16 B per downed state message (outside the size hook: it runs first)
+            gpg.evaluate("""() => { const W = window.__LC__.W, S = W.net; if (!S || !S.rtc) return; const f = S.rtc.sendState;
+                S.rtc.sendState = function (env) { if (env && env.t === 'state' && env.d && W.player.downed) env.d.pad = 'xxxxxxxx'; return f.apply(this, arguments); }; }""")
         size_js = ("() => { const pick = (S) => (S || []).slice(-40); const R = pick(window.__SQ_STATE_RTC__), B = pick(window.__SQ_STATE__); const S = R.length >= 10 ? R : B;"
                    " return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }")
-        up_b = gpg.evaluate(size_js)
+        # (W9 R1B pass 1b, the upBytes-null flake) the UP size was sampled while the GUEST was the hidden tab (hpg fronted above for the rates): a
+        # background page gets no rAF, its game does not tick and sends a handful of state packets in 2.5 s - under the 10 the size needs (check2
+        # dbno_full: upBytes null, upKeys present with t 4.07; the downed size, read after gpg is fronted, was 117.2). The sender is fronted for
+        # its own sample now, and the sample waits for >= 10 packets (8 s cap) after the same 2.5 s
+        gpg.bring_to_front()
+        gpg.wait_for_timeout(2500)
+        up_b, t_up = gpg.evaluate(size_js), time.time()
+        while up_b is None and time.time() - t_up < 8.0:
+            gpg.wait_for_timeout(250)
+            up_b = gpg.evaluate(size_js)
         keys_js = "() => { const d = window.__SQ_STATE_LAST__; const me = d && (Array.isArray(d.p) ? d.p[0] : d); return d ? { top: Object.keys(d).sort(), sample: JSON.stringify(d).slice(0, 240) } : null; }"
         up_k = gpg.evaluate(keys_js)
         gpg.bring_to_front()          # the page that acts must be the visible one: a background tab gets no rAF, so its game does not tick
@@ -590,8 +602,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
     ap.add_argument("--parts", default="solo,bot,human2")
-    ap.add_argument("--control", default=None, choices=["h2-short-hold"],
-                    help="harness-side planted control (this gate must then FAIL): h2-short-hold = the host releases E after 3 s of game time")
+    ap.add_argument("--control", default=None, choices=["h2-short-hold", "h2-fat-downed"],
+                    help="harness-side planted control (this gate must then FAIL): h2-short-hold = the host releases E after 3 s of game time; "
+                         "h2-fat-downed = the guest's state message carries 16 B more while it is downed (human2 size row)")
     args = L.parse(ap)
     parts = set(args.parts.split(","))
     os.makedirs(os.path.join(C.REPORTS, "p23_shots"), exist_ok=True)
