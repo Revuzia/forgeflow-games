@@ -884,6 +884,15 @@ function formIndex(W, a) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
+  // (W9 R1B) the bots-section timer for p23_tierprof's "bots" row (PLAN sec 5: bots section p95 <= 3 ms): only while a harness has set W.botsProf =
+  // { ms: Float64Array(n), i: 0 } - the game itself pays one property read a frame
+  const PF = W.botsProf;
+  if (!PF) { updateBots(W, dt); return; }
+  const t0 = navNow();
+  updateBots(W, dt);
+  if (PF.i < PF.ms.length) PF.ms[PF.i++] = navNow() - t0;
+}
+function updateBots(W, dt) {
   if (!brains.length) return;
   if (IND.map !== W.map) indEnsure(W);       // (Wave 8) the room graph and the cover test's cell table: built once per map, before the first brain tick
   if (OCC.map !== W.map && !W.map.hasCollidersNear) occBuild(W.map);
@@ -2879,6 +2888,9 @@ const NAV_NODES = NAV_CELLS * NAV_L;
 const NAV_STEP_UP = 0.55;                 // player.js STEP_UP
 const NAV_RAMP_EXTRA = 0.45;              // a ramp may rise faster than a step per 0.5 m sub-step
 const NAV_DROP_MAX = 6.0;
+let navDropLim = NAV_DROP_MAX;               // (W9 R1B) this search's drop limit: requestPath sets min(NAV_DROP_MAX, walkDrop(bot)) round its findPath ...
+let navDropRun = false;                      // ... and turns on the steep-face run test (navWalk); probes and the exit searches keep the per-step rule
+const NAV_STEEP = 0.9 / 0.8;                 // edgeGuard's STEEP_STEP per metre: a step falling more than this per metre is a flight, not a walk
 const CALM_DROP_H = NAV_DROP_MAX + 0.3;     // (W9 R1B) a calm bot's walk-off limit: the planner's own drop limit + 0.3 m of sampling slack (walkDrop)
 const NAV_DROP_COST = 2.0;
 const NAV_LAYER_EPS = 1.0;
@@ -3069,7 +3081,7 @@ function navWalk(W) {
   const n = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dz * dz) / 0.5));
   let h = h0;
   let swim = h0 < W.map.waterY - 0.4;               // starting afloat
-  let drop = 0, wet = 0;
+  let drop = 0, wet = 0, run = 0;
   const stepM = Math.sqrt(dx * dx + dz * dz) / n;
   for (let k = 1; k <= n; k++) {
     const f = k / n, x = x0 + dx * f, z = z0 + dz * f;
@@ -3079,7 +3091,12 @@ function navWalk(W) {
     NF[4] = x; NF[5] = z; NF[6] = h + (swim ? NAV_SWIM_UP : NAV_STEP_UP);
     navSupport(W, ci);
     const s = NF[0];
-    if (h - s > NAV_DROP_MAX) return false;
+    if (h - s > navDropLim) return false;
+    // (W9 R1B) A BOT'S ROUTE (requestPath: navDropRun) is also refused a STEEP FACE that falls more than its drop limit in all: the 0.5 m steps each
+    // fall less than the limit, but the mover leaves the ground on any step steeper than edgeGuard's STEEP_STEP (~48 deg) and flies the whole face,
+    // and edgeGuard measures that run and holds the bot at its top (probe_match isla_viva seed 5: s19 at 17 hp routed down the 26.8 -> 18.4 m face
+    // west of (-71, -78) again and again, held at the lip each time - 5 stuck episodes)
+    if (navDropRun) { run = !navSwim && h - s > stepM * NAV_STEEP ? run + (h - s) : 0; if (run > navDropLim) return false; }
     if (navWall(ci)) return false;
     // (T-tick-actors B1) a DROP is walked off at the OLD feet height: a slab edge in
     // that band (the floor above a stair ramp) blocks the capsule before it falls
@@ -3360,7 +3377,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -4013,6 +4030,7 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
+const PER_BOT_DROP = true;        // (W9 R1B) requestPath's per-bot drop limit; false = the planner's NAV_DROP_MAX for every bot (probe_match --plant no-bot-drop)
 let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck, 6 calm drop cap: W9)
 function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
@@ -4025,7 +4043,10 @@ function requestPath(W, b, tx, tz, ty, urgent) {
     nav.q--;
     nav.st.req[reqWhy]++;
   }
-  bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
+  // (W9 R1B) THE BOT'S OWN DROP LIMIT in the window planner (navWalk): min(NAV_DROP_MAX, walkDrop) per step, and the same limit on a steep face's
+  // whole run - no route over a drop or a face its walk-off limit (edgeGuard) would then refuse at the lip (a pen: the planner routed it there again).
+  if (PER_BOT_DROP) { const lim = walkDrop(a); navDropLim = lim < NAV_DROP_MAX ? lim : NAV_DROP_MAX; navDropRun = true; }
+  try { bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty); } finally { navDropLim = NAV_DROP_MAX; navDropRun = false; }
   bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
   bb.noRouteT = (!bb.path && !navMiss) ? W.t : -99;       // (Wave 7, round 2) a real "no way": a bot on a roof may walk off it (deckExitPath)
@@ -5345,7 +5366,7 @@ function edgeGuard(W, b) {
   // NOW: a bot held at a lip stands still when its hold ends and is back at 7.8 m/s 0.4 s later (sq_duo6, Isla seed 5: a follower at 12 hp
   // on a rock top - window 3 - ran the 2.8 m to the lip it had been held at). 6 samples on the ground, 4 up on a collider
   const win = elevated ? 4 : 6, kMax = win + (elevated ? 6 : 10);
-  let runTop = NaN, prev = a.pos.y;
+  let runTop = NaN, prev = a.pos.y, kTop = 0;
   for (let k = 1; k <= kMax; k++) {
     const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
     let sup;
@@ -5353,8 +5374,13 @@ function edgeGuard(W, b) {
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (wyE != null && sup < wyE) sup = wyE;      // water breaks a fall
     const steep = prev - sup > STEEP_STEP;
-    if (steep && runTop !== runTop && k <= win) runTop = prev;
+    if (steep && runTop !== runTop && k <= win) { runTop = prev; kTop = k; }
     if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
+      // (W9 R1B) ...unless the bot's ROUTE turns before it gets there: a path that runs along the top of a face (its corner waypoint 2 m short of
+      // the lip, the next leg along it) was held at the look-ahead's 4.8 m, every look, and never reached the corner (probe_match isla_viva seed 5:
+      // s19 held at (-69.6, -78) heading for the corner (-71.6, -77.6) of a route north along a 8.4 m face - 3-4 stuck episodes). It WALKS to the
+      // corner (no sprint, the next look 0.25 s on); past the corner the next leg's heading is looked at as any other.
+      if (EDGE_TURN && routeTurnsBefore(b, wx, wz, 0.8 * ((runTop === runTop ? kTop : k) - 1))) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
@@ -5394,6 +5420,20 @@ function edgeGuard(W, b) {
   bb.nextPathT = 0;
   nav.st.edgeHolds++; nav.st.edgeFlights++;
   if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); }
+}
+/** (W9 R1B) edgeGuard's corner rule: the bot is heading (wx, wz) for its path's next waypoint, on its own level, more than EDGE_TURN_M short of the
+ *  face (faceD m ahead), and the route turns there (the next leg leaves this heading by more than 45 deg) - the face is not on the route. */
+const EDGE_TURN = true;           // false = every face in the look-ahead holds the bot, as before W9 (probe_match --plant no-edge-turn)
+const EDGE_TURN_M = 1.6;          // the corner at least this short of the face: a walk's run-on past a waypoint it consumes 0.55 m early
+function routeTurnsBefore(b, wx, wz, faceD) {
+  const P = b.bb.path, a = b.actor;
+  if (!P || P.length < 2) return false;
+  const p = P[0], q = P[1];
+  if (p.y == null || Math.abs(p.y - a.pos.y) > 0.6) return false;
+  const dx = p.x - a.pos.x, dz = p.z - a.pos.z, d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 0.3 || d + EDGE_TURN_M > faceD || (dx * wx + dz * wz) < 0.95 * d) return false;
+  const ex = q.x - p.x, ez = q.z - p.z, e = Math.sqrt(ex * ex + ez * ez);
+  return e > 0.3 && (ex * wx + ez * wz) < 0.7071 * e;
 }
 /** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
  *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
