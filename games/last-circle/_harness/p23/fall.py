@@ -14,6 +14,7 @@ sim -, application in player.js - lane player.)
     python _harness/p23/fall.py --disk --plant calm-guard-off --parts rim  # bots.js served with the calm drop cap off - MUST FAIL (rim)
     python _harness/p23/fall.py --disk --plant no-terminal --parts human   # K.MOVE.terminalV = 1e9 - MUST FAIL (terminal)
     python _harness/p23/fall.py --disk --plant no-heavy --parts human      # K.FALL.HEAVY_V = 1e9 - MUST FAIL (heavy)
+    python _harness/p23/fall.py --disk --plant heavy-12.5 --parts human    # K.FALL.HEAVY_V = v(12.5 m) - MUST FAIL (heavy-12.2)
     python _harness/p23/fall.py --disk --inject F:/lc_p23/harness/stubs/fall_stub.js   # validation against a contract stub
 
 Part HUMAN (PRACTICE, Isla Viva seed 4242, kernel loop frozen, frames stepped, the hp guard OFF during each drop): the player is set
@@ -51,6 +52,8 @@ PLANTS = {
     # (W9 R1B, LC-61) no terminal velocity (terminal MUST FAIL); no heavy-landing tier (heavy MUST FAIL)
     "no-terminal": "K.MOVE.terminalV = 1e9",
     "no-heavy": "if (K.FALL) K.FALL.HEAVY_V = 1e9",
+    # (W9 R1B pass 1b) the heavy line moved up to v(12.5 m): a fall just over 12 m is no longer heavy - heavy-12.2 MUST FAIL
+    "heavy-12.5": "if (K.FALL) K.FALL.HEAVY_V = Math.sqrt(2 * Math.abs(K.MOVE.gravity) * 12.5)",
     "no-damage": "K.FALL_SAFE_V = 1e9; if (typeof K.fallDamage === 'function') K.fallDamage = () => 0; if (K.FALL) K.FALL.SAFE_V = 1e9",
     "harsh": "K.FALL_DMG_PER_V = (K.FALL_DMG_PER_V || 1) * 4; if (typeof K.fallDamage === 'function') { const f0 = K.fallDamage; K.fallDamage = function () { return 4 * f0.apply(this, arguments); }; } if (K.FALL) K.FALL.DMG_PER_V *= 4",
     "no-event": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'fallDamage') return; return em.apply(null, arguments); }",
@@ -142,9 +145,10 @@ HEAVY_JS = r"""([x, z, h, after]) => {
   for (let i = 0; i < after && p.alive; i++) P.step(1, 1 / 60, false);
   if (W.events.off) W.events.off('shotFired', on);
   const post = shots.filter((t) => t > td - 1e-6);
-  return { h, landedF: f, maxV: +maxV.toFixed(3), firstAfterS: post.length ? +(post[0] - td).toFixed(3) : null, airShots: shots.length - post.length, postShots: post.length,
+  return { h, landedF: f, maxV: +maxV.toFixed(3), impactV: +(p._fallV || 0).toFixed(3), firstAfterS: post.length ? +(post[0] - td).toFixed(3) : null, airShots: shots.length - post.length, postShots: post.length,
            aliveAtTd, alive: !!p.alive, hp: p.hp, shield: p.shield, weapon: p.weapon ? p.weapon.id : null }; }"""
 HEAVY_MIN_S, LIGHT_MAX_S, TERM_MAX_V, TERM_H, HEAVY_TEST_H, LIGHT_TEST_H = 0.30, 0.10, 34.05, 80, 14, 10
+JUST_OVER_H = 12.2
 
 
 def heavy_drop(s, spot, h, after=60):
@@ -161,9 +165,16 @@ def part_heavy(s, v, R, spot):
     try:
         hv = heavy_drop(s, spot, HEAVY_TEST_H)
         lt = heavy_drop(s, spot, LIGHT_TEST_H)
+        jo = heavy_drop(s, spot, JUST_OVER_H)          # (W9 R1B pass 1b) a fall just over the 12 m line
     finally:
         s.page.mouse.up(button="left")
-    R["heavy"] = {"14m": hv, "10m": lt}
+    R["heavy"] = {"14m": hv, "10m": lt, "12.2m": jo}
+    if jo.get("weapon") == "smg":
+        v.check("heavy-12.2 (LC-61: a %.1f m fall - just over the 12 m line - is heavy too: LMB held, first round >= %.2f s after touchdown)"
+                % (JUST_OVER_H, HEAVY_MIN_S), jo["aliveAtTd"] and jo["firstAfterS"] is not None and jo["firstAfterS"] >= HEAVY_MIN_S and jo["airShots"] > 0,
+                {"12.2m": jo, "heavyV": s.js("() => window.__LC__.W.SIM.FALL.HEAVY_V")}, ">= %.2f s" % HEAVY_MIN_S)
+    else:
+        v.cnj("heavy-12.2 (LC-61)", "SETUP: the SMG was not in hand: %s" % jo)
     if hv.get("weapon") != "smg" or lt.get("weapon") != "smg":
         v.cnj("heavy (LC-61)", "SETUP: the SMG was not in hand: %s" % {"14m": hv, "10m": lt})
         return
