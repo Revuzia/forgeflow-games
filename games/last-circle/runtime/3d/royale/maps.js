@@ -603,7 +603,7 @@ function splatAt(mapId, h, x, z, seed, out) {
  *  start at 1). */
 // (Wave 9, LC-91, contract C1) two more fields on EVERY collider, still one shape: door = the index into map.doors of the door a leaf slab belongs to (-1: not
 // a door), dslab = 1 a leaf's CLOSED slab / 2 its OPEN slab / 0 not a leaf. Test door-ness as c.door >= 0 or c.dslab, never !c.door (-1 is truthy).
-// (citykit.js keeps its own copy of the old 13-field literal: its colliders are re-made here when they join the map, see placeCityKit)
+// (citykit.js keeps its own copy of this literal, door / dslab included - citykit.selftest pins the two together; its colliders are re-made here when they join the map, see placeCityKit)
 function mkCollider(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp) {
   return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0, door: -1, dslab: 0 };
 }
