@@ -1013,6 +1013,22 @@ function think(W, b) {
   // because they had no bullets rather than looking for chests").
   for (let i = 0; i < slots0.length; i++) { const s2 = slots0[i]; if (s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0) { hasFirepower = true; break; } }
 
+  // BATTLE-ROYALE PRIORITY MODEL (rotation urgency, see s.ROTATE below)
+  let rotScore = 0;
+  if (outsideNext) {
+    const scx = st.nextCenter ? st.nextCenter.x : st.center.x;
+    const scz = st.nextCenter ? st.nextCenter.z : st.center.z;
+    const overM = hyp(a.pos.x - scx, a.pos.z - scz) - (st.nextRadius || 0);
+    const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
+    const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
+    rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
+    // BOT_PACE.rotateLeadS: the leisurely "40" rotation starts only this many seconds before the
+    // "70" one, instead of at second 0 - every bot outside the next ring used to start walking to
+    // the centre the moment it had a gun, so the whole lobby converged inside the first two minutes.
+    if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
+  }
+  bb.rotPress = rotScore >= 70 || inStorm;     // (W9 R1B) a pressing rotation keeps the hp drop limit (walkDrop) and skips the reserve-big hunt; computed
+  // here, before wantBig and the inStorm return read it (it was set after both: wantBig / calmDropOn read the previous tick's value)
   // hard overrides
   if (inStorm) { if (b.state === "REVIVE") cancelRevive(W, b); b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
   // (P23, LC-20) a cell popped behind a cover wall mid-fight stays an ENGAGE cover hold (coverStepQ holds the wall until the heal is in)
@@ -1140,21 +1156,7 @@ function think(W, b) {
   // safe"): rotation urgency = how far past safety you are vs time left.
   // Only a genuinely pressing storm outranks a live fight — otherwise bots
   // were sprinting straight past enemies all mid-game.
-  let rotScore = 0;
-  if (outsideNext) {
-    const scx = st.nextCenter ? st.nextCenter.x : st.center.x;
-    const scz = st.nextCenter ? st.nextCenter.z : st.center.z;
-    const overM = hyp(a.pos.x - scx, a.pos.z - scz) - (st.nextRadius || 0);
-    const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
-    const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
-    rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
-    // BOT_PACE.rotateLeadS: the leisurely "40" rotation starts only this many seconds before the
-    // "70" one, instead of at second 0 - every bot outside the next ring used to start walking to
-    // the centre the moment it had a gun, so the whole lobby converged inside the first two minutes.
-    if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
-  }
   s.ROTATE = rotScore;
-  bb.rotPress = rotScore >= 70;     // (W9 R1B) a pressing rotation keeps the hp drop limit (walkDrop)
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   // PUSH toward gunfire — but not into it at 30 EHP: a hurt bot that pushes a
   // fight it only heard is feeding it. Healthy aggressors still go.
@@ -1198,7 +1200,7 @@ function think(W, b) {
         const commit = md < REVIVE_COMMIT_M;
         if (commit || (b.state === "REVIVE" && bb.reviveId === mate.id)) {
           if (brk) rv = 0;
-          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; }
+          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; if (s.ROTATE >= 95) rv = Math.min(rv, s.ROTATE - 1); }   // a pressing storm (95) still outranks the committed revive (pre-W9 REVIVE topped out at 87)
         } else if (W.t < bb.revEngUntil && tAct && tAct.alive && W.t - bb.targetSeenT < REVIVE_ENGAGE_HOLD_S) rv = 0;
       }
       s.REVIVE = rv;
