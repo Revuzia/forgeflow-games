@@ -1176,7 +1176,7 @@ function think(W, b) {
   // for a crate that whoever was standing next to it has already emptied.
   s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
     ? (a.personality === "loot_goblin" ? 78 : 58) - hyp(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
-      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is big shields (W9 OD-16: three + three minis): worth more to a thin bar
+      + (a.shield < SHIELD_KEEP && bigCount(a) < 2 ? 8 : 0)       // (fix round, P2-B) a crate is two big shields: worth more to a thin bar
     : 0;
   // ENDGAME HUNT (owner playtest: "at some point they just wander around
   // aimlessly doing nothing"): ≤10 alive, nothing visible, safely inside the
@@ -1209,7 +1209,7 @@ function think(W, b) {
         const commit = md < REVIVE_COMMIT_M;
         if (commit || (b.state === "REVIVE" && bb.reviveId === mate.id)) {
           if (brk) rv = 0;
-          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; if (s.ROTATE >= 95) rv = Math.min(rv, s.ROTATE - 1); }   // a pressing storm (95) still outranks the committed revive (pre-W9 REVIVE topped out at 87)
+          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; if (bb.rotPress && s.ROTATE > 0) rv = Math.min(rv, s.ROTATE - 1); }   // a pressing storm rotation (bb.rotPress: rotScore >= 70) still outranks the committed revive (pre-W9 REVIVE topped out at 87)
         } else if (W.t < bb.revEngUntil && tAct && tAct.alive && W.t - bb.targetSeenT < REVIVE_ENGAGE_HOLD_S) rv = 0;
       }
       s.REVIVE = rv;
@@ -5550,8 +5550,10 @@ function shieldGoal(a, n) {
  *  (SHIELD_FAR_DY), inside the next circle (6 m in from its edge: the walk there is a walk the storm wants anyway), that this bot has not
  *  failed to reach (badLoot), with headroom over it and on this bot's shore. One query per 2 s per calm bot at the cap with no big shield. */
 const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
-// (W9 R1B, OD-16) the reserve-big trigger (think: wantBig) and the far scan at any bar; WANT_BIG false = the pre-W9 rules (botbatch --plant no-far-big)
-const WANT_BIG = true;
+// (W9 R1B, OD-16) the reserve-big trigger (think: wantBig) and the far scan at any bar; WANT_BIG false = the pre-W9 rules.
+// (W9 R1B pass 2) OFF: with it on, p23_tierprof kb [ashgrid ultra] read 97-101 KB/frame (bar 85; off: 77) - the far walks put more bots in fights
+// inside the profiled window - and it bought no shield (botbatch 24 shield-600: on 12, off 25 vs bar 75). OD-16 parks the shield economy.
+const WANT_BIG = false;
 const WANT_BIG_T = 420;           // from this match time (the batch measures from 600 s: a reserve picked up at 420-600 s refills the bar after the 600 s fights)
 function farShield(W, a) {
   if (!W.nearbyLoot) return null;

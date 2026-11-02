@@ -1226,22 +1226,6 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.FALL.HEAVY_H === 12 && R.FALL.HEAVY_S === 0.3 && Math.abs(R.FALL.HEAVY_V - v(12)) < 1e-9 && Math.abs(R.FALL.HEAVY_V - 22.98) < 0.01 && R.FALL.HEAVY_V > v(10) && R.FALL.HEAVY_V < tv,
      "LC-61: a heavy landing is an impact >= v(12 m) = " + R.FALL.HEAVY_V.toFixed(2) + " m/s (the 10 m class below it, terminal above it): fire / ADS blocked " + R.FALL.HEAVY_S + " s");
 }
-// (W9 R1B, OD-16) the supply crate: a full stack of big shields + three minis; the per-drop rng draw count unchanged (the gun, then its rarity)
-{
-  const sd = R.rollSupplyDrop(R.mulberry32(779));
-  const ids = sd.map((x) => x.kind + ":" + x.id + (x.count != null ? "x" + x.count : ""));
-  ok(sd.length === 5 && sd[0].kind === "weapon" && ids[1] === "consumable:big_shieldx3" && ids[2] === "consumable:mini_shieldx3" && ids[3] === "consumable:medkitx1" && sd[4].kind === "ammo",
-     "OD-16: a supply crate = gun + big_shield x3 + mini_shield x3 + medkit + ammo (" + ids.join(", ") + ")");
-  let same = true;
-  for (let sdn = 1; sdn <= 200 && same; sdn++) {
-    let n1 = 0, n2 = 0; const r1 = R.mulberry32(sdn), r2 = R.mulberry32(sdn);
-    const c1 = () => { n1++; return r1(); }, c2 = () => { n2++; return r2(); };
-    const d = R.rollSupplyDrop(c1);
-    const wid = R.WEAPON_IDS[R.weightedIndex(c2, R.SUPPLY_GUN_WEIGHTS)], rar = R.rollRarity(c2, "supply");
-    if (n1 !== n2 || d[0].id !== wid || d[0].rarity !== rar) same = false;
-  }
-  ok(same, "OD-16: rollSupplyDrop draws exactly the gun's and its rarity's numbers (200 seeds): the crate's fixed items draw nothing");
-}
 
 // LC-22 bone-derived hit volumes
 {
