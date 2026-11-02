@@ -63,7 +63,7 @@ const Pmod = await loadPlayer(ROOT);
 const M = await buildMap(E.makeW(7), "ashgrid");
 const Y0 = (M.waterY || 0) + 30;
 let houseCols = [];
-M.ground = null; M.heightAt = () => Y0; M.queryColliders = (x, z, r, out) => { const o = out || []; o.length = 0; for (const c of houseCols) if (c.maxX >= x - r && c.minX <= x + r && c.maxZ >= z - r && c.minZ <= z + r) o.push(c); return o; };
+M.ground = null; M.heightAt = () => Y0; M.queryColliders = (x, z, r, out) => { const o = out || []; o.length = 0; for (const c of houseCols) if (!c.dead && c.maxX >= x - r && c.minX <= x + r && c.maxZ >= z - r && c.minZ <= z + r) o.push(c); return o; };   // (Wave 9: maps.js queryColliders skips dead colliders - the door leaves' closed slabs start dead)
 if (M.supportAt) M.supportAt = undefined;
 M.portals = [];
 const GW = await makeGameW(E, Pmod, M, 7);
