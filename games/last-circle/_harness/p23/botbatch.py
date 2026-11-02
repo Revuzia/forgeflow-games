@@ -9,7 +9,7 @@ harness (p23/js/botbatch_probe.js, from lane P23/bots' scratch probe, itself fro
                                                                     # - MUST FAIL (shield-600; the measure's control, the base is the logic one)
     python _harness/p23/botbatch.py --lanes bots                    # validation: lane bots' work served over the base
     python _harness/p23/botbatch.py --disk --plant no-far-big       # (W9 R1B pass 1b) bots.js served with the far-big seeking off (WANT_BIG false),
-                                                                    # the crate unchanged; 24 matches - MUST FAIL (census-600-reserve)
+                                                                    # the crate unchanged; 24 matches - does NOT fail census-600(-reserve): no row discriminates (W9 R1B 1b)
     python _harness/p23/botbatch.py --disk --runs 2:isla_viva --plant census-surge    # (W9 R1B) census-600's measure control: 6 bigs in the next circle
                                                                     # at t = 590 s that no bot may claim - MUST FAIL (census-600)
 
@@ -27,8 +27,8 @@ to the end (max 1150 s of sim). Rows (the plan's bars; never lowered):
                    piles' included, that no bot has as its shield / loot goal) <= 3 (the OD-16 text counted 11)
                    NOTE: the OD-16 text's "11" is the 24-MATCH TOTAL of in-circle floor bigs at the OD-13 build (b6ffaf4e, F:/lc_p23/final/
                    shields/cen_24.json: per match 0 x20, 2 x3, 5 x1 -> median 0), not a per-match count; see INFO census-600-total
-  census-600-reserve (W9 R1B pass 1b, OD-16) big shields carried in the alive bots' bags at t = 600 s, mean per match >= 0.6 (twice the
-                   base's 0.29): the reserve big the far-big seeking exists to pick up; logic control --plant no-far-big (24 matches)
+  INFO census-600-reserve (W9 R1B pass 1b, OD-16) big shields carried in the alive bots' bags at t = 600 s, mean per match (base 0.29; lane
+                   1.29; --plant no-far-big 1.13: NOT a row - the plant does not fail it, see the NO_FAR_BIG note)
   INFO census-600-total (W9 R1B) the batch totals of the census: unclaimed and all in-circle big shields at t = 600 s, summed over the matches
   INFO share>=75   (W9 C6) share of the alive-bot shield samples at t >= 600 s that are >= 75 (design target >= 60 %: the bimodal median's margin)
 """
@@ -223,8 +223,9 @@ def main():
         v.check("census-600 (median unclaimed big shields inside the next circle at t = 600 s <= %d)" % CENSUS_MAX,
                 ce["medianUnclaimed"] is not None and ce["medianUnclaimed"] <= CENSUS_MAX, ce, "<= %d" % CENSUS_MAX)
         rv = a["reserve600"]
-        v.check("census-600-reserve (big shields carried by the alive bots at t = 600 s, mean per match >= %.1f: the OD-16 reserve big)" % RESERVE_MIN,
-                rv["meanPerMatch"] is not None and rv["meanPerMatch"] >= RESERVE_MIN, rv, ">= %.1f" % RESERVE_MIN)
+        # (W9 R1B pass 1b) INFO, not a gate: its logic control did not discriminate (24 matches each: lane e29c95c9+ 1.292 a match, --plant
+        # no-far-big 1.125 - the crate's 3 bigs, not the far seeking, fill the bags), so it may not be registered as a row (no failing control)
+        v.info("census-600-reserve (big shields carried by the alive bots at t = 600 s, mean per match; design pick %.1f; INFO: no discriminating control)" % RESERVE_MIN, rv)
         v.info("census-600-total (batch sums at t = 600 s: unclaimed / all in-circle big shields; the OD-16 '11' was such a 24-match total, INFO)", a["census600total"])
         v.info("share>=75 (alive-bot shield samples at t >= 600 s that are >= 75; design target >= %.0f %%, INFO)" % SHARE75_TARGET, a["share75"])
         v.info("sh600why (bots under 75 at t >= 600 s: why; diagnosis)", a["sh600why"])
