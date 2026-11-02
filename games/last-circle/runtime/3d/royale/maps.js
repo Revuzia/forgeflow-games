@@ -4019,8 +4019,13 @@ export async function buildMap(W, mapId) {
   // The START state is (W.SIM.DOOR_START || all open)[kind] (C1: the geometry lane ships no DOOR_START - every door starts open, today's walkability; the bot-side
   // lane adds { front: "closed", back: "closed", interior: "open" } to sim/royale.js). Seeded world output: every client derives the same doors and start.
   const mapDoors = [];
+  // (W9 R1A 1b) K is the sim constants object every module reads (bots.js `K = W.SIM`; FFG.sim.Royale before W.SIM is set): C1's `K.DOOR_START`, read ONCE
+  // per map build. Only the two words count: a kind K.DOOR_START leaves out, or names with anything but "closed" / "open", starts open (the fallback), so a
+  // half-written table can never shut a door by accident. The bot-side lane (R2A) exports DOOR_START on the sim api object (sim/royale.js `api`).
   const DOOR_START_ALL_OPEN = Object.freeze({ front: "open", back: "open", interior: "open" });
-  const doorStartOf = (kind) => { const SR = W.SIM || (globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.Royale) || null; return ((SR && SR.DOOR_START) || DOOR_START_ALL_OPEN)[kind] !== "closed"; };
+  const DOOR_K = W.SIM || (globalThis.FFG && globalThis.FFG.sim && globalThis.FFG.sim.Royale) || null;
+  const DOOR_START = (DOOR_K && DOOR_K.DOOR_START && typeof DOOR_K.DOOR_START === "object") ? DOOR_K.DOOR_START : DOOR_START_ALL_OPEN;
+  const doorStartOf = (kind) => DOOR_START[kind] !== "closed";        // true = starts open
   // -- the doors at run time (C1). setDoor(i, open, byId, t) -> true | "blocked" | "cool" (false: no such door):
   //   OPEN: the closed slabs die at once (no body is ever pushed by a moving leaf); each open slab comes alive on the first tick no live actor's capsule overlaps
   //         it (no time limit; the leaf DRAWS open regardless - industry ref: PUBG doors never trap a player);

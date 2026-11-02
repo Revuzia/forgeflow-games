@@ -796,6 +796,8 @@ function mapRows(r) {
     j.apiErr.length + " failing, e.g. " + j.apiErr.slice(0, 3).join(" | "));
   ok(j.builds === want && j.dynN > 0 && !j.dynErr.length, "C3 addDynamicCollider (" + j.dynN + " boxes): queryColliders, queryCollidersY and hasCollidersNear return it at its centre; after removeDynamicCollider none do",
     j.dynErr.length + " failing, e.g. " + j.dynErr.slice(0, 3).join(" | "));
+  ok(j.startN > 0 && !(j.startErr || ["missing"]).length, "C1 start state from K.DOOR_START (" + LEAF_MAPS[0] + " seed " + LEAF_SEEDS[0] + " rebuilt with W.SIM.DOOR_START { front: closed, back: closed, interior: open }, " + j.startN + " doors " + JSON.stringify(j.startKinds || {}) + "): front / back start shut (closed slabs live), interior open, doorStates all zero; without it (the builds above) all open",
+    (j.startErr || []).filter(Boolean).slice(0, 3).join(" | ") + " (" + (j.startErr || []).length + " failing)");
   info("door leaves on the maps: " + JSON.stringify(j.perMap) + " (exterior / all street + back doors leafed, interior leafed / interior; the rest failed the swing clearance); " + (j.ms / 1000).toFixed(1) + " s in the child");
 }
 /** the child: build every (map, seed) with the working copy's maps.js (or the planted scratch copy) and run the map rows */
@@ -892,6 +894,32 @@ async function mapsChild(plant) {
     }
     try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }
   }
+  // (W9 R1A 1b, C1 start state) the same map once more with the sim's K.DOOR_START set as the bot-side lane will set it: every front / back door must start
+  // SHUT (closed slabs live, open slabs dead, open false, k 0) and every interior door open; with no K.DOOR_START (the builds above) every door starts open
+  out.startN = 0; out.startErr = [];
+  if (!plant || plant === "start-ignored") {
+    const SS = { front: "closed", back: "closed", interior: "open" };
+    let M = null, W = null;
+    console.log = console.warn = console.error = () => {};
+    try { W = E.makeW(LEAF_SEEDS[0]); W.actors = []; W.SIM = Object.create(W.SIM); if (plant !== "start-ignored") W.SIM.DOOR_START = SS; M = await buildMap(W, LEAF_MAPS[0]); }
+    catch (e) { out.startErr.push("build: " + String(e && e.message || e).slice(0, 200)); }
+    Object.assign(console, quiet);
+    if (M) {
+      const kinds = {};
+      (M.doors || []).forEach((D, i) => {
+        out.startN++; kinds[D.kind] = (kinds[D.kind] || 0) + 1;
+        const wantOpen = SS[D.kind] !== "closed";
+        if (D.start !== wantOpen || D.open !== wantOpen || D.k !== (wantOpen ? 1 : 0) || !D.leaves.every((lf) => lf.cClosed.dead === wantOpen && lf.cOpen.dead === !wantOpen))
+          if (out.startErr.length < 8) out.startErr.push(LEAF_MAPS[0] + " door " + i + " (" + D.kind + "): start " + D.start + " open " + D.open + " want " + wantOpen);
+          else out.startErr.push("");
+      });
+      const bits = M.doorStates();
+      if (!bits.every((b) => b === 0)) out.startErr.push("doorStates() is not all zero at the start state (the bits are 'differs from the start')");
+      if (!kinds.front || !kinds.interior) out.startErr.push("no front or no interior door on the map: " + JSON.stringify(kinds));
+      out.startKinds = kinds;
+      try { if (typeof M.dispose === "function") M.dispose(); } catch (e) { /* ignore */ }
+    }
+  }
   if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* a scratch dir */ }
   out.ms = Date.now() - t0;
   process.stdout.write("\n@@LEAFJSON@@" + JSON.stringify(out) + "\n");
@@ -900,7 +928,16 @@ async function mapsChild(plant) {
 if (require.main === module && MAPS_CHILD) mapsChild(PLANT).catch((e) => { process.stdout.write("\n@@LEAFJSON@@null\n"); console.error(e && e.stack || e); process.exit(1); });
 else if (require.main === module && PLANT) (async () => {
   // plant mode: only the planted fault's row counts. Exit 1 = the fault was CAUGHT (the row failed), 0 = it slipped through
-  if (PLANT !== "no-hash") { console.error("unknown --plant " + PLANT + " (known: no-hash)"); process.exit(2); }
+  if (PLANT === "start-ignored") {                         // (W9 1b) the start-state row's control: the rebuild runs WITHOUT K.DOOR_START -> every door open -> the row must FAIL
+    console.log("housegen selftest PLANT start-ignored: the start-state rebuild gets no K.DOOR_START (doors all open) - the C1 start-state row must FAIL");
+    const r = await runMapsChild("start-ignored"), j = r && r.j;
+    if (!j || !j.startN) { console.error("  CNJ   the planted map did not build: " + ((r && r.errs) || "")); process.exit(2); }
+    const caught = j.startErr.length > 0;
+    console.log("  " + (caught ? "FAIL" : "PASS") + "  C1 start state on the planted run (" + j.startN + " doors): " + j.startErr.length + " failing, e.g. " + j.startErr.filter(Boolean).slice(0, 2).join(" | "));
+    console.log("\n" + (caught ? "PLANT CAUGHT (exit 1)" : "PLANT NOT CAUGHT (exit 0)"));
+    process.exit(caught ? 1 : 0);
+  }
+  if (PLANT !== "no-hash") { console.error("unknown --plant " + PLANT + " (known: no-hash, start-ignored)"); process.exit(2); }
   console.log("housegen selftest PLANT no-hash: addDynamicCollider pushes without the cell insert (a scratch copy of maps.js) - the C3 row must FAIL");
   const r = await runMapsChild("no-hash"), j = r && r.j;
   if (!j || !j.builds || !j.dynN) { console.error("  CNJ   the planted map did not build: " + ((r && r.errs) || "")); process.exit(2); }
