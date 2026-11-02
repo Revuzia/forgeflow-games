@@ -84,7 +84,7 @@
  * side walls mostly blank for shelving). FURNITURE: pieces stand with their back to a wall (front to the room), as a centred group (dining table +
  * chairs, shop gondolas) or hang on a solid wall stretch (pictures, mirrors); never inside a door zone (opening + 0.1 m, 1.0 m deep both sides), a stair
  * zone (the stair, its approach / exit cells, the hole) or another piece; tall pieces never in front of a window. After every piece the room's PORTS
- * (doorway sides, stair ends) must stay joined through free floor for a fatter capsule (r 0.45 + WALK_MARGIN) or the piece is refused. Each storey's
+ * (doorway sides, stair ends) must stay joined through free floor for a fatter capsule (r 0.45 + WALK_MARGIN + PASS_MARGIN = 0.7) or the piece is refused. Each storey's
  * budget is split into room shares (by area, weighted by kind: SHAREW; a reserve held back); a kit piece over its room's share falls back to its authored
  * stand-in; pieces go in round-robin (every room's key pieces - bed, toilet, counter row + dining set, sofa + TV, desk, shop counter - before anybody's
  * extras). READ FROM THE DOOR (round 2): every room keeps a view model of its entrances (see rooms[].views; 80 x 52 degrees, >= 2 of 10 sample points
@@ -166,6 +166,14 @@ export function leafHash(id) {
 // a pickup it accepts then holds for the real capsule wherever its samples fall (a 0.25 m grid can miss a gap only ~0.9 m wide), and bots get a
 // free band of >= 0.3 m beside furniture (bots.js:1295-1297: narrow bands are where they grind).
 export const WALK_MARGIN = 0.15;              // furniture keeps this depth clear in front of a doorway, both sides
+// (Wave 9, lane R1A) the furnisher's PORTS check (a room's doorway sides and stair ends stay joined through its free floor) runs with a capsule PASS_MARGIN
+// fatter still (r 0.45 + 0.15 + 0.1 = 0.7: every route between a room's ports >= 1.4 m wide between walls, rails, open door leaves and pieces). The bots'
+// NavGrid (0.75 m indoor lattice, every hop replayed by the mover) does not join a narrower squeeze both ways: a 1.36 m gap between a stair-side wall end
+// and a lobby sofa let bots climb the stair and never come back down (navtown, Savanna seed 2026 downtown@p59: 4 of 46 top-storey rooms one-way). The
+// whole-house walk keeps r 0.6 (it judges reach, not the bots' grid). ONE exception: phase 5 (the view guarantee), when its accurate (camera + eye) search
+// cannot reach 3 pieces with the margin, searches once more with the room's ports check at the plain capsule (R._pm = 0, as before Wave 9) before the
+// eye-only fallback - the third-person view is the binding judge (housegen_demo_looks lodge_tower.f1r1: the margin left only the rack's wall free).
+export const PASS_MARGIN = 0.1;
 const MOVE = { sprint: 8, gravity: -22 };  // runtime/sim/royale.js MOVE (stairHeadroomRun)
 const EPS = 1e-6;
 // the 0.25 m walk-sample offsets within 1.2 m, nearest first (ties in a fixed order): where a floor loot spot is looked for round a cell's middle
@@ -2064,10 +2072,10 @@ export function generate(parcel, opts) {
   const SXA = new Float64Array(NU), SZA = new Float64Array(NV);
   for (let a = 0; a < NU; a++) SXA[a] = su(a);
   for (let b = 0; b < NV; b++) SZA[b] = sv(b);
-  const blockInto = (fr, sfl, u0, u1, yA, yB, v0, v1, stampV) => {
+  const blockInto = (fr, sfl, u0, u1, yA, yB, v0, v1, stampV, extra) => {      // (extra: PASS_MARGIN for the ports check)
     const val = stampV || 0;
     if (!(yB > sfl + CAPSULE.step && yA < sfl + CAPSULE.h)) return;
-    const r = CAPSULE.r + WALK_MARGIN, r2 = r * r;
+    const r = CAPSULE.r + WALK_MARGIN + (extra || 0), r2 = r * r;
     const a0 = Math.max(0, Math.floor((u0 - r + W / 2 + RING) / GRID - 0.5)), a1 = Math.min(NU - 1, Math.ceil((u1 + r + W / 2 + RING) / GRID - 0.5));
     const b0 = Math.max(0, Math.floor((v0 - r + D / 2 + RING) / GRID - 0.5)), b1 = Math.min(NV - 1, Math.ceil((v1 + r + D / 2 + RING) / GRID - 0.5));
     for (let b = b0; b <= b1; b++) {
@@ -2081,7 +2089,7 @@ export function generate(parcel, opts) {
     }
   };
   // the structure never changes during the walk loop: its free mask per floor is computed once
-  const structFree = [], regS = [];
+  const structFree = [], regS = [], structFreeP = [];      // (structFreeP: the same with the ports check's PASS_MARGIN)
   (() => {                                                   // (a separate function: generate itself is too big for the optimizing compiler, its own loops run unoptimized)
   for (let f = 0; f < S; f++) {
     const F = floors[f], fr = new Uint8Array(NS), out = f === 0 ? 1 : 0, typ = F.type, rg = new Int16Array(NS), rc = new Int16Array(nx * nz);
@@ -2091,6 +2099,10 @@ export function generate(parcel, opts) {
     for (const bx of boxes) if (bx.c) blockInto(fr, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1);
     for (const bx of leafBoxes) blockInto(fr, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1);     // (Wave 9: the open door leaves, the start state)
     structFree.push(fr);
+    const fp = fr.slice();
+    for (const bx of boxes) if (bx.c) blockInto(fp, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1, 0, PASS_MARGIN);
+    for (const bx of leafBoxes) blockInto(fp, s[f], bx.u0, bx.u1, bx.y0, bx.y1, bx.v0, bx.v1, 0, PASS_MARGIN);
+    structFreeP.push(fp);
   }
   })();
 
@@ -2481,17 +2493,18 @@ export function generate(parcel, opts) {
     };
     const roomOK = () => {
       if (!stairsOK()) return false;
+      const pm = R._pm != null ? R._pm : PASS_MARGIN;
       if (!RW.free || RW.stale) {                          // (stale: a piece of the cache was taken out - set where pieces leave a room; was a scan of the cache per call)
         RW.stale = false;
         RW.free = RW.free || new Uint8Array(NS); RW.inc = new Set();
-        const sf0 = structFree[f];
+        const sf0 = pm ? structFreeP[f] : structFree[f];
         for (let b = wb0; b <= wb1; b++) { const o = b * NU; for (let a = wa0; a <= wa1; a++) RW.free[o + a] = sf0[o + a]; }
       }
       // the pieces not yet in the cache are stamped (not copied in): a sample is free when the cache says so and no new piece stamps it
       const pend = placed.filter((p) => !RW.inc.has(p)), st = ++roomStamp.b;
-      for (const p of pend) for (const pb of pieceBoxes(p)) blockInto(roomBlk, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], st);
+      for (const p of pend) for (const pb of pieceBoxes(p)) blockInto(roomBlk, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], st, pm);
       const ok = roomOK0(RW.free, st);
-      if (ok) for (const p of pend) { for (const pb of pieceBoxes(p)) blockInto(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5]); RW.inc.add(p); }
+      if (ok) for (const p of pend) { for (const pb of pieceBoxes(p)) blockInto(RW.free, s[f], pb[0], pb[1], pb[2], pb[3], pb[4], pb[5], 0, pm); RW.inc.add(p); }
       return ok;
     };
     const roomOK0 = (fr, bst) => {
@@ -2780,6 +2793,9 @@ export function generate(parcel, opts) {
           }
         }
         };
+        run5();
+        if (bestView(R).n >= 3) return;
+        R._pm = 0; RW.stale = true;
         run5();
         if (bestView(R).n >= 3) return;
         model5(false);                                    // (the fallback: the eye-only model, as before Wave 9)
