@@ -8,7 +8,7 @@ on this box, vsync on: what a player's first run gets; common.GPU_PROFILES).
     python _harness/p23/tierprof.py --rev 9aa2b746 --gpu default   # control: the P2 base has no ULTRA - MUST FAIL (ultra rows)
     python _harness/p23/tierprof.py --disk --plant alloc-leak       # 200 KB of garbage per frame - MUST FAIL (KB/frame rows)
     python _harness/p23/tierprof.py --disk --plant query-flood      # 400 extra queryColliders per frame - MUST FAIL (queryColliders rows)
-    python _harness/p23/tierprof.py --disk --plant bots-slow        # +40 us per terrain height read - MUST FAIL (bots row)
+    python _harness/p23/tierprof.py --disk --plant bots-slow        # +0.5 ms per terrain height read - MUST FAIL (bots row)
 
 One Chrome at 1280x720 (fresh profile), STANDARD solo on each map in --maps (default Savanna), landed under the guard, then for EACH tier (set
 through W.setGfx('tier', t), as the Video tab does):
@@ -38,8 +38,8 @@ C = L.C
 
 PLANTS = {
     "alloc-leak": "window.__P23LEAK__ = []; W.kernel._updaters.push(() => { window.__P23LEAK__.push(new Array(25600).fill(1.5)); if (window.__P23LEAK__.length > 40) window.__P23LEAK__.shift(); })",
-    # (W9 R1B) the bots row's control: every terrain height read costs 40 us more (bots.js reads heightAt hundreds of times a frame) - MUST FAIL bots
-    "bots-slow": "{ const M = W.map, h0 = M.heightAt; M.heightAt = function () { const t = performance.now(); while (performance.now() - t < 0.04) {} return h0.apply(this, arguments); }; }",
+    # (W9 R1B) the bots row's control: every terrain height read costs 0.5 ms more (bots.js reads heightAt hundreds of times a frame) - MUST FAIL bots
+    "bots-slow": "{ const M = W.map, h0 = M.heightAt; M.heightAt = function () { const t = performance.now(); while (performance.now() - t < 0.5) {} return h0.apply(this, arguments); }; }",
     "query-flood": "W.kernel._updaters.push(() => { const p = W.player; for (let i = 0; i < 400; i++) W.map.queryColliders(p.pos.x, p.pos.z, 4, []); })",
 }
 TIERS = ("low", "medium", "high", "ultra")
@@ -152,7 +152,9 @@ def main():
                 s.step_frames(BOTS_FRAMES, 1 / 60, render=False)
                 bp = s.js("""() => { const W = window.__LC__.W, P = W.botsProf; W.botsProf = null; const a = Array.from(P.ms.subarray(0, P.i)).sort((x, y) => x - y);
                   const q = (f) => a.length ? +a[Math.min(a.length - 1, Math.floor(a.length * f))].toFixed(3) : null;
-                  return { frames: a.length, p50: q(0.5), p95: q(0.95), max: a.length ? +a[a.length - 1].toFixed(3) : null, alive: W.match ? W.match.aliveCount() : null, t: +W.t.toFixed(1) }; }""")
+                  return { frames: a.length, p50: q(0.5), p95: q(0.95), max: a.length ? +a[a.length - 1].toFixed(3) : null, alive: W.match ? W.match.aliveCount() : null, t: +W.t.toFixed(1),
+                  engaging: window.__LC__.brains().filter((b) => b.actor.alive && b.state === 'ENGAGE').length,
+                  onPlayer: window.__LC__.brains().filter((b) => { const g = b.bb.target; return b.actor.alive && g && (g === W.player || g === W.player.id || g.id === W.player.id); }).length }; }""")
                 v.data.setdefault("bots", {})[mp] = bp
                 v.check("bots [%s] (bots.update ms per simulated frame, p95 over %d frames <= %.0f ms: PLAN sec 5 bots section)" % (mp, BOTS_FRAMES, BOTS_P95_MS),
                         bp["frames"] >= BOTS_FRAMES * 0.95 and bp["p95"] is not None and bp["p95"] <= BOTS_P95_MS, bp, "p95 <= %.0f ms" % BOTS_P95_MS)

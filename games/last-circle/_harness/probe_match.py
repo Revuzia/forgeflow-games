@@ -57,6 +57,9 @@ PLANTS = {
     # (W9 R1B) the loop breaker's trap test exempts swimmers again (the pre-W9 term): swim-trap MUST FAIL (deepwood seed 1, bot s4)
     "swim-exempt": [("if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {",
                      "if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {")],
+    # (W9 R1B pass 1b) the two pen fixes off: requestPath's per-bot drop limit + steep-face run (PER_BOT_DROP) and edgeGuard's route-corner walk
+    # (EDGE_TURN) - the sweep MUST FAIL (isla_viva seed 5: s19 penned at the Volcano Rim face (-71, -78), 5 stuck episodes)
+    "no-pen-fix": [("const PER_BOT_DROP = true;", "const PER_BOT_DROP = false;"), ("const EDGE_TURN = true;", "const EDGE_TURN = false;")],
 }
 GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
 
