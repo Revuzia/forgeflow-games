@@ -699,8 +699,8 @@ function checkLeaves(H, HGmod, allCols, E, startOpen) {
       if (!R) { E("leaves", id + ": no room on the swing side"); return; }
       const inR = (x, z) => R.rects.some((q) => x >= q[0] + JMB - 1e-3 && x <= q[2] - JMB + 1e-3 && z >= q[1] + JMB - 1e-3 && z <= q[3] - JMB + 1e-3);
       if (![[O.min[0], O.min[2]], [O.max[0], O.min[2]], [O.min[0], O.max[2]], [O.max[0], O.max[2]]].every(([x, z]) => inR(x, z))) { E("leaves", id + ": an open slab outside the room it swings into (" + R.id + ")"); return; }
-      // the swing disc: no furniture (its collider footprint, at the leaf's height), loot point, chest, stair zone or other leaf's disc in it
-      for (const p of H.furniture) if (!p.deco && p.floor === L.floor && p.max[1] > L.y + 0.01 && p.min[1] < L.y + L.h && discHits(L, [p.min[0], p.min[2], p.max[0], p.max[2]])) { E("leaves", id + ": " + p.cat + " in a leaf's swing"); return; }
+      // the swing disc: no furniture (its collider footprint; a deco piece taller than a rug - wall art, mirrors, boards - its drawn box; at the leaf's height), loot point, chest, stair zone or other leaf's disc in it
+      for (const p of H.furniture) if ((!p.deco || p.max[1] - p.min[1] > 0.05) && p.floor === L.floor && p.max[1] > L.y + 0.01 && p.min[1] < L.y + L.h && discHits(L, [p.min[0], p.min[2], p.max[0], p.max[2]])) { E("leaves", id + ": " + p.cat + " in a leaf's swing"); return; }
       for (const q of H.loot) if (q.floor === L.floor && inDisc(L, q.x, q.z)) { E("leaves", id + ": loot point " + q.id + " in a leaf's swing"); return; }
       for (const q of H.chests) if (q.floor === L.floor && inDisc(L, q.x, q.z)) { E("leaves", id + ": chest " + q.id + " in a leaf's swing"); return; }
       for (const st of H.stairs) {
