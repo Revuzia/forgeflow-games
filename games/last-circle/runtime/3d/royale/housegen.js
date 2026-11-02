@@ -1592,6 +1592,20 @@ export function generate(parcel, opts) {
     }
     leafL.sort((a, b) => a.k - b.k || a.l - b.l);          // (output order: by door id, then leaf)
   }
+  // (Wave 9 R1A 1b) the swing quarter discs keep out drawn-only dressing as well: a deco piece taller than a rug (wall art, mirrors, boards - cat.wall or
+  // cat.h > 0.05) never stands or hangs inside a leaf's swing (the leaf would sweep through it). A rug stays (the leaf passes over its 2 cm). Same quarter-disc
+  // test as the leaf decision above (more than 1 mm of overlap); the selftest's "leaves" row checks the result.
+  const inLeafDisc = (f, r) => {
+    for (const D of leafDiscs) {
+      if (D.f !== f) continue;
+      const q0 = D.qu > 0 ? D.hu : D.hu - SWING_R, q1 = D.qv > 0 ? D.hv : D.hv - SWING_R, q2 = D.qu > 0 ? D.hu + SWING_R : D.hu, q3 = D.qv > 0 ? D.hv + SWING_R : D.hv;
+      const x0 = Math.max(q0, r[0]), x1 = Math.min(q2, r[2]), y0 = Math.max(q1, r[1]), y1 = Math.min(q3, r[3]);
+      if (x1 - x0 <= 1e-3 || y1 - y0 <= 1e-3) continue;
+      const du = D.hu < x0 ? x0 - D.hu : D.hu > x1 ? D.hu - x1 : 0, dv = D.hv < y0 ? y0 - D.hv : D.hv > y1 ? D.hv - y1 : 0;
+      if (du * du + dv * dv < SWING_R * SWING_R - 1e-6) return true;
+    }
+    return false;
+  };
   const leafBoxes = leafL.map((L) => ({ p: "leaf", u0: L.open[0], u1: L.open[1], y0: L.open[2], y1: L.open[3], v0: L.open[4], v1: L.open[5], c: 1, fl: L.f }));   // the START state (open) as the walk and the view model see it
   if (shell) {                                            // blind windows on every closed storey (dark panels on the mass)
     const a0 = uL(0) - JAMB, a1 = uL(nx) + JAMB, b0 = vL(0) - JAMB, b1 = vL(nz) + JAMB, top = Math.min(FHu - 0.5, 2.9);
@@ -2619,7 +2633,8 @@ export function generate(parcel, opts) {
       if (!cat || !budgetOK(cat)) return null;
       const w = fq % 2 ? cat.d : cat.w, d = fq % 2 ? cat.w : cat.d;
       const rect = [u - w / 2, v - d / 2, u + w / 2, v + d / 2];
-      if (cat.deco) { if (rect[0] < inner[0] || rect[1] < inner[1] || rect[2] > inner[2] || rect[3] > inner[3]) return null; for (const hr of holes) if (ovl(rect, hr, 0)) return null; for (const k of keepOuts[f]) if ((k.why === "stair" || k.why === "leaf") && ovl(rect, k.r, 1e-6)) return null; }     // (Wave 9: never behind an open door leaf either)
+      if (cat.deco) { if (rect[0] < inner[0] || rect[1] < inner[1] || rect[2] > inner[2] || rect[3] > inner[3]) return null; for (const hr of holes) if (ovl(rect, hr, 0)) return null; for (const k of keepOuts[f]) if ((k.why === "stair" || k.why === "leaf") && ovl(rect, k.r, 1e-6)) return null;
+        if ((cat.wall || cat.h > 0.05) && inLeafDisc(f, rect)) return null; }     // (Wave 9: never behind an open door leaf either, nor in its swing unless a rug)
       else if (!valid(rect, 0, cat.h, touch)) return null;
       const p = put(cat, u, v, fq, tint);
       if (!cat.deco && !roomOK()) { unput(p); return null; }
@@ -2653,6 +2668,7 @@ export function generate(parcel, opts) {
           if (g.rect[0] < inner[0] - 1e-6 || g.rect[1] < inner[1] - 1e-6 || g.rect[2] > inner[2] + 1e-6 || g.rect[3] > inner[3] + 1e-6) continue;
           let clash = false;
           for (const k of keep) if ((k.why === "stair" || k.why === "leaf") && ovl(g.rect, k.r, 1e-6)) { clash = true; break; }      // never on a stairwell wall, never behind an open door leaf
+          if (!clash && inLeafDisc(f, g.rect)) clash = true;                                                                     // (Wave 9 1b) nor in a leaf's swing
           for (const p of placed) if (!clash && ((p.y0 || 0) + p.cat.h > 1.25 || p.cat.wall) && ovl(g.rect, p.rect, -0.1)) { clash = true; break; }     // (the room's own pieces: nothing else stands inside its walls)
           if (clash) continue;
           return put(cat, g.u, g.v, g.fq, tint || pick(rng, ART));
