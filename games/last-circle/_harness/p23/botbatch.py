@@ -8,8 +8,8 @@ harness (p23/js/botbatch_probe.js, from lane P23/bots' scratch probe, itself fro
     python _harness/p23/botbatch.py --disk --runs 2:isla_viva --plant shield-cap      # every bot's shield held <= 50 (a bot that never tops up)
                                                                     # - MUST FAIL (shield-600; the measure's control, the base is the logic one)
     python _harness/p23/botbatch.py --lanes bots                    # validation: lane bots' work served over the base
-    python _harness/p23/botbatch.py --disk --runs 2:isla_viva,3:ashgrid --plant no-far-big    # (W9 R1B) bots.js served with the reserve-big trigger off
-                                                                    # and sim/royale.js with the pre-W9 crate (big x2) - MUST FAIL (census-600)
+    python _harness/p23/botbatch.py --disk --plant no-far-big       # (W9 R1B pass 1b) bots.js served with the far-big seeking off (WANT_BIG false),
+                                                                    # the crate unchanged; 24 matches - does NOT fail census-600(-reserve): no row discriminates (W9 R1B 1b)
     python _harness/p23/botbatch.py --disk --runs 2:isla_viva --plant census-surge    # (W9 R1B) census-600's measure control: 6 bigs in the next circle
                                                                     # at t = 590 s that no bot may claim - MUST FAIL (census-600)
 
@@ -27,6 +27,8 @@ to the end (max 1150 s of sim). Rows (the plan's bars; never lowered):
                    piles' included, that no bot has as its shield / loot goal) <= 3 (the OD-16 text counted 11)
                    NOTE: the OD-16 text's "11" is the 24-MATCH TOTAL of in-circle floor bigs at the OD-13 build (b6ffaf4e, F:/lc_p23/final/
                    shields/cen_24.json: per match 0 x20, 2 x3, 5 x1 -> median 0), not a per-match count; see INFO census-600-total
+  INFO census-600-reserve (W9 R1B pass 1b, OD-16) big shields carried in the alive bots' bags at t = 600 s, mean per match (base 0.29; lane
+                   1.29; --plant no-far-big 1.13: NOT a row - the plant does not fail it, see the NO_FAR_BIG note)
   INFO census-600-total (W9 R1B) the batch totals of the census: unclaimed and all in-circle big shields at t = 600 s, summed over the matches
   INFO share>=75   (W9 C6) share of the alive-bot shield samples at t >= 600 s that are >= 75 (design target >= 60 %: the bimodal median's margin)
 """
@@ -62,11 +64,15 @@ PLANTS = {"shield-cap": "W.kernel._updaters.push(() => { for (const a of W.actor
                           " ids.add(W.netSpawnItem({ data: { kind: 'consumable', id: 'big_shield', count: 1 }, x, y: W.map.heightAt(x, z), z, id: 'plant_bs' + i })); } }"
                           " if (ids.size) for (const b of window.__LC__.brains()) { const bb = b.bb; if (bb.shieldGo && ids.has(bb.shieldGo.id)) bb.shieldGo = null;"
                           " if (bb.lootId != null && ids.has(bb.lootId)) bb.lootId = null; if (!bb.badLoot) bb.badLoot = Object.create(null); for (const id of ids) bb.badLoot[id] = W.t + 60; } }; }"}
-NO_FAR_BIG = {"runtime/3d/royale/bots.js": [("const WANT_BIG = true;", "const WANT_BIG = false;")],
-              # (single-line anchors: sim/royale.js is served with its CRLF line ends - a two-line anchor joined by LF never matched)
-              "runtime/sim/royale.js": [('{ kind: "consumable", id: "big_shield", count: 3 },', '{ kind: "consumable", id: "big_shield", count: 2 },'),
-                                         ('{ kind: "consumable", id: "mini_shield", count: 3 },', '')]}
+# (W9 R1B pass 1b) no-far-big RE-DESIGNED: the far-big seeking alone off (WANT_BIG false: no wantBig trigger, the far scan only at the mini cap, no
+# claims); the crate keeps the lane's contents. The round-1 plant also put the crate back to big x2, which took bigs out of the world and read LOWER
+# than the lane on every census form (24 matches: unclaimed 0 / in-circle 4 vs the lane's 3 / 19) - it could not tell the seeking apart.
+NO_FAR_BIG = {"runtime/3d/royale/bots.js": [("const WANT_BIG = true;", "const WANT_BIG = false;")]}
 CENSUS_T, CENSUS_MAX = 600.0, 3
+# (W9 R1B pass 1b) census-600-reserve: the OD-16 mechanism itself - a reserve big shield picked up in the 420-600 s window and CARRIED at t = 600 s.
+# Big shields in the alive bots' bags at the census, MEAN per match >= RESERVE_MIN. Design pick: twice the base build's mean (09720db0, 24 matches:
+# 7 bigs = 0.29 a match; the lane at e29c95c9: 28 = 1.17). The census-600 bar (unclaimed <= 3) is unchanged.
+RESERVE_MIN = 0.6
 # (W9 R1B) the t = 600 s census: big shields on the floor (death piles included) inside the next circle, and those no bot is walking to
 CENSUS_JS = r"""() => { const W = window.__LC__.W, C = window.__LC__; const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; if (!st) return null;
   const c = st.nextCenter || st.center, r = st.nextRadius != null ? st.nextRadius : st.radius;
@@ -127,6 +133,9 @@ def analyze(results):
     out["census600"] = {"medianUnclaimed": med([c["unclaimed"] for c in cs if c]), "perMatch": [(c["unclaimed"], c["bigs"], c["supplyCratesUnopened"]) if c else None for c in cs],
                         "mapAndBags": [{k: c.get(k) for k in ("mapBigs", "mapCrates", "bots", "bagBigs", "bagMinis")} if c else None for c in cs],
                         "missing": sum(1 for c in cs if not c)}
+    out["reserve600"] = {"matches": sum(1 for c in cs if c), "bagBigs": sum(c.get("bagBigs", 0) for c in cs if c),
+                         "perMatch": [c.get("bagBigs") if c else None for c in cs], "aliveBots": sum(c.get("bots", 0) for c in cs if c)}
+    out["reserve600"]["meanPerMatch"] = round(out["reserve600"]["bagBigs"] / out["reserve600"]["matches"], 3) if out["reserve600"]["matches"] else None
     out["census600total"] = {"matches": sum(1 for c in cs if c), "unclaimed": sum(c["unclaimed"] for c in cs if c), "bigsInCircle": sum(c["bigs"] for c in cs if c),
                              "matchesWithUnclaimed": sum(1 for c in cs if c and c["unclaimed"] > 0)}
     surv = []
@@ -213,6 +222,10 @@ def main():
         ce = a["census600"]
         v.check("census-600 (median unclaimed big shields inside the next circle at t = 600 s <= %d)" % CENSUS_MAX,
                 ce["medianUnclaimed"] is not None and ce["medianUnclaimed"] <= CENSUS_MAX, ce, "<= %d" % CENSUS_MAX)
+        rv = a["reserve600"]
+        # (W9 R1B pass 1b) INFO, not a gate: its logic control did not discriminate (24 matches each: lane e29c95c9+ 1.292 a match, --plant
+        # no-far-big 1.125 - the crate's 3 bigs, not the far seeking, fill the bags), so it may not be registered as a row (no failing control)
+        v.info("census-600-reserve (big shields carried by the alive bots at t = 600 s, mean per match; design pick %.1f; INFO: no discriminating control)" % RESERVE_MIN, rv)
         v.info("census-600-total (batch sums at t = 600 s: unclaimed / all in-circle big shields; the OD-16 '11' was such a 24-match total, INFO)", a["census600total"])
         v.info("share>=75 (alive-bot shield samples at t >= 600 s that are >= 75; design target >= %.0f %%, INFO)" % SHARE75_TARGET, a["share75"])
         v.info("sh600why (bots under 75 at t >= 600 s: why; diagnosis)", a["sh600why"])
