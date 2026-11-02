@@ -24,7 +24,7 @@ A 20 m drop into deep water.
 Part BOTS (a QUICK match on Savanna seed 77, ground start): three bots lifted 10 m, three 15 m and three 22 m over open, flat ground (each moved to
 the nearest spot that passes the human's flat-ground rule AND lies out of every other actor's fire range and sight for the window first, R3) - the same rule
 (10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
-Part LIP (a QUICK match on Isla Viva seed 77): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
+Part LIP (QUICK matches on Isla Viva seeds 77 and 7 (pass 2)): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
 toward a >= 7 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
 Part GLIDE (a STANDARD match, Isla Viva seed 7): the whole drop through fastForward until every actor stands on the ground: 0 fallDamage
 events, 0 hp lost without an attacker at touchdown, for the human and all 49 bots.
@@ -434,6 +434,10 @@ def part_bots(s, v, args):
 # >= 7 m costs more than LIP_HP = 10 at the C-FALL curve (7 m: 17 hp on the pre-D2 curve; a 10 m drop costs 35-40 after D2), so a bot that
 # walks off dies of the fall; the guard's own walk limit for a 10 hp bot is ~5 m. 25 s per lip.
 LIP_MAP, LIP_SEED, LIP_HP, LIP_N, LIP_DROP = "isla_viva", 77, 10, 6, 7
+# (W9 R1B pass 2) a second Isla Viva seed: seed 77 alone found 4 lips, and with the W9 bots its falsifier (--plant no-fall-guard) walked 0 of the 4
+# off (base 09720db0 + plant: 2 of 4; W9 with far-big seeking on + plant: 1 of 4) - a 4-lip sample is too small for the control to discriminate.
+# The bar is unchanged (0 fall deaths over every judged lip); the sample is up to 2 x LIP_N lips.
+LIP_SEEDS = (LIP_SEED, 7)
 LIP_FIND_JS = r"""([drop, wantN]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY;
   const free = (x, z, r, h) => { for (const c of M.queryColliders(x, z, r + 1, [])) { if (c.dead) continue; if (c.maxY > h + 0.3 && c.minX < x + r && c.maxX > x - r && c.minZ < z + r && c.maxZ > z - r) return false; } return true; };
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; const cc = st ? (st.nextCenter || st.center) : { x: 0, z: 0 };
@@ -479,27 +483,34 @@ LIP_RUN_JS = r"""([lip, hp, secs]) => { const W = window.__LC__.W, C = window.__
   return { bot: b.id, threat: e.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, fall, died, alive: !!(B && B.alive), states, dropped: +(y0 - minY).toFixed(2), pastLipM: +past.toFixed(2), movedM: +moved.toFixed(2), path: path.slice(0, 24) }; }"""
 
 
-def part_lip(s, v, args):
-    R = v.data.setdefault("lip", {})
+def part_lip(s, v, args, seed=LIP_SEED):
+    """one seed's lips (runs appended to v.data['lip']['runs']); lip_verdict judges every seed's runs together"""
+    R0 = v.data.setdefault("lip", {})
+    R = R0.setdefault("seeds", {}).setdefault(str(seed), {})
     if args.plant == "no-fall-guard":
         R["plant"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_FALL_GUARD)
     s.boot()
     L.dismiss_cards(s)
-    R["start"] = s.start_match("quick", LIP_SEED, LIP_MAP, enter=True, guard=True)
+    R["start"] = s.start_match("quick", seed, LIP_MAP, enter=True, guard=True)
     s.freeze_loop()
     s.install_pump()
     s.step_frames(30, 1 / 60)
     found = s.js(LIP_FIND_JS, [LIP_DROP, LIP_N])
     R["found"] = {"n": found["n"], "centre": found["centre"], "lips": found["lips"]}
-    runs = [s.js(LIP_RUN_JS, [lip, LIP_HP, 25]) for lip in found["lips"]]
-    R["runs"] = runs
+    runs = [dict(s.js(LIP_RUN_JS, [lip, LIP_HP, 25]), seed=seed) for lip in found["lips"]]
+    R0.setdefault("runs", []).extend(runs)
+
+
+def lip_verdict(v):
+    runs = v.data.get("lip", {}).get("runs", [])
     # a lip is JUDGED when its bot really moved there (>= 1.5 m from where it was put) or fell; a bot that stood still tested nothing
     judged = [r for r in runs if not r.get("error") and (r.get("movedM", 0) >= 1.5 or r["fall"])]
     walked = [r for r in judged if r["died"] and r["died"]["byFall"]]
     fled = [r for r in judged if r["states"].get("FLEE", 0) >= 5]
-    name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= %d m terrain lip: 0 die of the fall, up to %d lips)" % (LIP_HP, LIP_DROP, LIP_N)
+    name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= %d m terrain lip: 0 die of the fall, up to %d lips per seed, Isla Viva seeds %s)" % (
+        LIP_HP, LIP_DROP, LIP_N, " + ".join(str(x) for x in LIP_SEEDS))
     det = {"fallDeaths": len(walked), "lips": len(judged), "fled": len(fled),
-           "runs": [{k: r.get(k) for k in ("bot", "lip", "fall", "died", "states", "dropped", "pastLipM", "movedM", "path")} for r in runs]}
+           "runs": [{k: r.get(k) for k in ("seed", "bot", "lip", "fall", "died", "states", "dropped", "pastLipM", "movedM", "path")} for r in runs]}
     if len(judged) < 2:
         v.cnj(name, "SETUP missed (D16): %d lips judged (want >= 2: the bot moved >= 1.5 m or fell): %s" % (len(judged), det))
     else:
@@ -623,7 +634,11 @@ CALM_GUARD_OFF = [("const CALM_DROP_H = NAV_DROP_MAX + 0.3;", "const CALM_DROP_H
 
 # plant no-fall-guard: bots.js as if the sim had no fall damage (LETHAL_H / WALK_H stay null: "nothing below changes a single step" - the base
 # bots' behaviour). The sim's fall damage is untouched, so a bot that walks off a lethal lip dies of it: bots-avoid lips must FAIL
-NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;")]
+# (W9 R1B pass 2) + PER_BOT_DROP off: the lane's route guard (requestPath's per-bot drop limit + steep-face run, navDropRun) is a fall guard too and
+# stayed ON under the two-anchor plant (walkDrop = Infinity still turned navDropRun on at NAV_DROP_MAX), so the plant no longer modelled "no fall
+# guard": fix1 1 fall death of 4 lips (FAIL), pass 2 (far-big seeking off) 0 of 4 (PASS - control lost). With all three off it is the base bots again.
+NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;"),
+                 ("const PER_BOT_DROP = true;", "const PER_BOT_DROP = false;")]
 
 
 def part_glide(s, v, args):
@@ -675,9 +690,11 @@ def main():
                 part_bots(s, v, args)
                 L.errors_row(v, s, "errors [bots]")
         if "lip" in parts:
-            with C.Session(args, "p23_fall_lip") as s:
-                part_lip(s, v, args)
-                L.errors_row(v, s, "errors [lip]")
+            for sd in LIP_SEEDS:
+                with C.Session(args, "p23_fall_lip" if sd == LIP_SEED else "p23_fall_lip%d" % sd) as s:
+                    part_lip(s, v, args, sd)
+                    L.errors_row(v, s, "errors [lip]" if sd == LIP_SEED else "errors [lip seed %d]" % sd)
+            lip_verdict(v)
         if "rim" in parts:
             with C.Session(args, "p23_fall_rim") as s:
                 part_rim(s, v, args)
