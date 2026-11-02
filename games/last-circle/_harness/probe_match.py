@@ -59,6 +59,9 @@ PLANTS = {
                      "if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {")],
     # (W9 R1B pass 1b) the two pen fixes off: requestPath's per-bot drop limit + steep-face run (PER_BOT_DROP) and edgeGuard's route-corner walk
     # (EDGE_TURN) - the sweep MUST FAIL (isla_viva seed 5: s19 penned at the Volcano Rim face (-71, -78), 5 stuck episodes)
+    # (W9 R1B pass 2) NO LONGER DISCRIMINATES at this HEAD (crate back to 2 bigs, far-big seeking off): sweep PASS 13/0, isla s5 worst s39 1.
+    # Tried as replacement controls, both PASS too (not registered): + WANT_BIG on (isla s5 s19 4 episodes, bar 4); PER_BOT_DROP off + the
+    # window planner's step limit raised to 14 m (identical episode list to no-pen-fix). The sweep row has no failing control - reported open.
     "no-pen-fix": [("const PER_BOT_DROP = true;", "const PER_BOT_DROP = false;"), ("const EDGE_TURN = true;", "const EDGE_TURN = false;")],
 }
 GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
