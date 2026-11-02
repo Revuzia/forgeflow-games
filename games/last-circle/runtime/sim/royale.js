@@ -1772,15 +1772,11 @@
     return items;
   }
 
-  // (W9 R1B, OD-16) a supply crate carries a full stack of big shields (3) and three minis (was big x2): 100 -> 225 shield points a crate, the late
-  // game's restock (Apex care packages / PUBG crates carry top-tier defensive gear). The fixed items draw nothing: the per-drop rng draw count (the
-  // gun, its rarity) is unchanged, so only the contents change (MAP_GEN bumped once for the wave by the geometry lane).
   function rollSupplyDrop(rng) {
     var wid = WEAPON_IDS[weightedIndex(rng, SUPPLY_GUN_WEIGHTS)];
     return [
       { kind: "weapon", id: wid, rarity: rollRarity(rng, "supply") },
-      { kind: "consumable", id: "big_shield", count: 3 },
-      { kind: "consumable", id: "mini_shield", count: 3 },
+      { kind: "consumable", id: "big_shield", count: 2 },
       { kind: "consumable", id: "medkit", count: 1 },
       { kind: "ammo", id: WEAPONS[wid].ammo || "medium", count: (AMMO[WEAPONS[wid].ammo || "medium"] || AMMO.medium).box * 3 * ammoBoxMult(wid) },
     ];
