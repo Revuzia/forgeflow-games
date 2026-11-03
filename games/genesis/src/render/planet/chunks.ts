@@ -161,8 +161,8 @@ export interface ChunkMaterials {
  * One LOD level's patches in ONE draw (three's BatchedMesh: WEBGL_multi_draw where the browser has it, else a loop
  * of draws with no per-object cost). Every patch has the same vertex and index counts (the shared lattice), so the
  * batch is a pool of fixed-size slots: a new patch overwrites a freed slot in place (a sub-range upload) and the pool
- * doubles when it runs out. The patches' positions are already in the body frame, so every instance matrix stays the
- * identity; visibility per slot is set by the LOD selection (and per shadow cascade), never by three's culling (the
+ * grows 1.5x when it runs out (ChunkLOD.shrinkPools gives the memory back after an eviction). The patches' positions
+ * are already in the body frame, so every instance matrix stays the identity; visibility per slot is set by the LOD selection (and per shadow cascade), never by three's culling (the
  * unit-direction `position` attribute would give it wrong bounds).
  */
 class PatchBatch {
@@ -245,7 +245,8 @@ class PatchBatch {
   }
 
   private grow(): void {
-    const cap = this.cap * 2;
+    // (1.5x, not 2x: the pool's slack is CPU + GPU memory, ~140 kB a slot; a grow copies the pool, so not by less)
+    const cap = Math.ceil(this.cap * 1.5);
     this.mesh.setInstanceCount(cap);
     this.mesh.setGeometrySize(cap * NVERT, cap * NINDEX);
     const v = new Uint8Array(cap);
@@ -320,7 +321,13 @@ export class ChunkLOD {
   /** per LOD level: the terrain batch and the water batch (created on first use) */
   private tBatch: (PatchBatch | null)[] = [];
   private wBatch: (PatchBatch | null)[] = [];
-  maxCached = 1400;
+  /**
+   * built patches kept for reuse (the view in use always stays, see evict). Each costs ~140 kB of CPU attribute copies
+   * in its terrain slot (and as much again in a water slot when wet) plus their GPU mirrors: at 1,400 a 100x camera
+   * tour filled 3,300 slots, ~0.5 GB of page memory, for views drawing ~450 patches. 800 still holds the ~450 of one
+   * low-quality surface view plus the way back to it; a view needing more raises the budget to 1.5x what it draws.
+   */
+  maxCached = 800;
   terrainLayerMask = 0;
   castShadows = false;
   waterEnabled = true;
@@ -636,9 +643,9 @@ export class ChunkLOD {
    * Give back the memory of pools the eviction emptied. A pool only ever doubled (BatchedMesh can't shrink in place),
    * so each level held its slots — CPU copies of every attribute plus three's GPU mirrors — at its high-water mark
    * for the whole session, and a camera tour through the LOD depths grew the page by ~1 GB in 30 minutes. Now a pool
-   * whose live slots fit in half its capacity (with a 1.5× margin) is rebuilt at that smaller size, its patches copied
-   * over with their visibility; an empty pool is dropped. The 2× gap between the shrink and grow points keeps a level
-   * from flapping, and the total capacity stays within ~3× the live patch count (≤ maxCached + the eviction slack).
+   * whose live slots fill less than ~56% of it is rebuilt at 1.25× its live count (copying the patches over with their
+   * visibility); an empty pool is dropped. A rebuilt pool is 80% full and grows only when full (to 67%), so a level
+   * does not flap, and the total capacity stays within ~1.8× the live slots (plus the small first pools).
    */
   private shrinkPools(): void {
     for (const water of [false, true]) {
@@ -653,8 +660,8 @@ export class ChunkLOD {
           list[level] = null;
           continue;
         }
-        const cap = Math.max(b.minCap, Math.ceil(n * 1.5));
-        if (cap > b.cap / 2) continue;
+        const cap = Math.max(b.minCap, Math.ceil(n * 1.25));
+        if (cap > b.cap * 0.7) continue;
         const nb = this.newBatch(level, water, cap);
         for (const p of this.live) {
           if (p.level !== level) continue;
@@ -892,12 +899,13 @@ export class ChunkLOD {
 
   /** drop geometry of long-unused patches when over the cache budget */
   private evict(frame: number): void {
-    if (this.live.size <= this.maxCached) return;
+    const budget = Math.max(this.maxCached, Math.ceil(this.selected.length * 1.5));
+    if (this.live.size <= budget) return;
     // least recently used first, anything not in use this frame. (It once also had to be 120 frames old: at the few
     // frames a minute of a starved software renderer nothing ever qualified, and the cache grew past its budget for
     // the whole session — 2,000+ patches, ~250 MB of CPU attribute copies plus their GPU mirrors, in 9 minutes.)
     const cands = [...this.live].filter((p) => p.lastUsed < frame && p.level > 1).sort((a, b) => a.lastUsed - b.lastUsed);
-    const drop = this.live.size - this.maxCached + 64;
+    const drop = this.live.size - budget + 64;
     for (let i = 0; i < Math.min(drop, cands.length); i++) {
       const p = cands[i];
       this.tBatch[p.level]?.release(p.tSlot);

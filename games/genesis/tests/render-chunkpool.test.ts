@@ -52,7 +52,7 @@ test('a camera tour through the LOD depths leaves bounded patch pools (shrink af
     const live = (lod as unknown as { live: Set<Patch> }).live.size;
     assert.ok(live <= lod.maxCached, `live ${live} within the cache budget at level ${level}`);
     // total capacity within ~3x the live count plus the small per-level minimum pools (32 terrain / 8 water)
-    assert.ok(c.slots <= 3 * c.live + 40 * c.pools, `level ${level}: ${c.slots} slots for ${c.live} live patches in ${c.pools} pools`);
+    assert.ok(c.slots <= 2 * c.live + 40 * c.pools, `level ${level}: ${c.slots} slots for ${c.live} live patches in ${c.pools} pools`);
   }
   // (unbounded: 8 levels x (512 terrain + water) slots would remain)
   assert.ok(peak.slots < 1200, `peak pool capacity ${peak.slots}`);
@@ -109,4 +109,26 @@ test('the cache budget holds at a few frames a minute (eviction does not wait 12
     assert.ok(live <= lod.maxCached, `frame ${frame}: ${live} live patches over the ${lod.maxCached} budget`);
     for (const p of used) assert.ok(p.built, 'a patch in use this frame is never evicted');
   }
+});
+
+test('default budget: a long camera tour holds the terrain pools near the view, not at 1,400 patches a planet', () => {
+  const lod = makeLod();
+  const L = lod as unknown as Internal & { selected: Patch[] };
+  const n = lod.grid.n;
+  let peak = 0;
+  // ten views of ~300 patches each (a low-quality surface view draws ~300-450), each a different place and depth
+  for (let frame = 1; frame <= 10; frame++) {
+    L.curFrame = frame;
+    const view: Patch[] = [];
+    for (let k = 0; k < 300; k++) {
+      const p = new Patch((k + frame) % 20, 3 + (frame % 6), [k % 16, frame], [(k % 16) + 1, frame], [k % 16, frame + 1]);
+      L.ensureGeometry(p, false);
+      view.push(p);
+    }
+    L.selected = view;
+    L.evict(frame);
+    peak = Math.max(peak, lod.poolCapacity().slots);
+  }
+  // (each slot ~140 kB CPU + its GPU mirror: 1,400 cached patches in doubling pools reached ~2,900 slots here)
+  assert.ok(peak <= 1800, `peak pool capacity ${peak} slots`);
 });
