@@ -1,0 +1,141 @@
+{
+ "wave": "CW3s",
+ "round": 1,
+ "verifier": "adversarial verifier, 2026-11-03, re-measured at 67f00021 (engineer reports not trusted)",
+ "pass": false,
+ "summary": "CW3s does not pass round 1. Pass: done:4 / originality C1 (Quick re-key, probe_sim_rekey 40/0), m2, m6, CL-g1 (0 early core falls), regression probes and pacing. Fail on my fresh untuned soak (seeds 901-920, shuffle): CL-1 major still open (takedowns by 10:00 4.25 / 3.80 vs >= 6, no-death stretch 4.1 min, shadehold 0.90 / 0.85, ulkro/ilsheta first ult > 10 min); G1 veteran last-hit 49.2 % and in-lane 73.3 %; veteran beats novice 82.5 % (< 85 %, so CL-g3 'done' does not hold); Sunsplinter first take 8.5-8.8 min after spawn and Splinters don't stack; duo level 6 at 8.2-8.5 min. Critic gauge-source and bot-micro are partly (LeagueMath source verified; no 10:00 kill/first-blood source; passive human seat is punished less than a bot seat). m3 not done (handoffs), m1 has a stale Lullaby Dart desc.",
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "My fresh soak _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt (node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 901 --cut 0 --lineup shuffle --mirror-weak novice --jobs 3 --label fw_CW3s_v1; fresh untuned window 901-920, HEAD 67f00021, sim files clean): credited takedowns by 10:00 4.25 adept / 3.80 veteran (target >= 6, FAIL); games with none 0/20 and 0/20 (PASS); longest no-death stretch from 3:00 median 4.1 / 4.1 min (target <= 3, FAIL); shadehold takedowns before 14:00 0.90 / 0.85 (target >= 1, FAIL at both tiers; the engineer's veteran 1.15 PASS does not reproduce); median first ult after 10:00: ulkro 10.5 (adept), ulkro 10.3 + ilsheta 10.2 (veteran) (FAIL). The r09 4.4 gates are in probe_sim_bot_soak.ts (group 'early', enforced at >= 16 games) and that part is met.",
+   "fixHint": "Per the engineer's own diagnosis, add a last-hit-in-fight behaviour (a laner in a trade/all-in within 14 m of a dying Wick takes the last hit when the kill is not on) so trade windows and duo all-ins (+1 to +1.5 takedowns each) can ship without breaking G1; give shadehold trade windows on level 2/3/6 spikes and let the ult count toward killMargin for ulkro/ilsheta (their median first ult sits 10.2-10.5)."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Same soak: last-hit share adept 50.8 % / veteran 49.2 % (target >= 50 %, veteran FAIL on the fresh window; the npm-probe quick soak on tuned seeds 1-8 passes 50.9 / 51.0, _harness/_reports/fw_W4_soak_fw_CW3s_v1_quick.txt); laners in lane 76.7 / 73.3 % (done-criterion asks >= 75 %: veteran FAIL; engineer's own final run also had veteran 74.7 %); no RIFT core before 16:00: 0 / 0 (PASS); Sunsplinter first take after its 6:00 spawn (map_rift.json firstSpawn 360), median 8.5 adept / 8.8 veteran min (target <= 3, FAIL; computed from objs[] in _harness/_reports/fw_W4_soak_fw_CW3s_v1.json); Splinters do not stack (src/sim/core.ts:142 addTeamBuff only refreshes; content/team_buffs.json $comment says so) FAIL; pacing.ts PASS (RIFT adept p90 30.0, _harness/_reports/fw_CW3s_v1_pacing.log).",
+   "fixHint": "Splinters: once the lead adds TeamBuffDef.maxStacks in catalog.ts, stack in addTeamBuff (stats x stacks, renew timer), set splinters maxStacks 3. Sunsplinter: let the objective intent gather the adjacent roads + grovehunter a few seconds before spawn once their waves are shoved (CL-2 fix). G1: re-check last-hit/in-lane on a second untuned window after any CL-1 change; veteran in-lane must reach 75 %."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Same soak, fresh untuned seeds 901-920 (40 mirrored games): veteran beats novice 33/40 = 82.5 % (target >= 85 %, FAIL). Engineer reported 36/40 on s501 and 37/40 on s621; the bar does not hold across windows. Duo road (shaftlight) level 6 median 8.2 adept / 8.5 veteran min (target <= 8:00, FAIL).",
+   "fixHint": "Novice: widen further without stats (e.g. intent follow 0.3, longer macroDelay, lower skillshot lead / dodge chance, slower recall decisions) and judge on >= 80 games across two untuned windows. Duo XP: needs an original rules key (handoff to catalog.ts owner) or a shaftlight/lampglass lane-share tweak (lampglass yields last hits / stays in XP range)."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/probe_sim_rekey.ts: 40 passed, 0 failed (_harness/_reports/fw_CW3s_v1_rekey.log): rows 'quick RIFT ~ Swiftplay start level: VALE 1 vs 3 (67 %)', 'start Gleam: VALE 480 vs 1400 (66 %)', 'PASS quick RIFT has no level-3 start (level 1)'. content/queues.json rift_quick startLevel 1, startGold 480, desc updated; DESIGN_NOTE.md:53 and modes_economy.md §3 (lines 92-101) updated."
+  },
+  {
+   "id": "gameplay:CL-1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "See done:1. Fresh window: 4.25 / 3.80 takedowns by 10:00 (from 1.9 / 1.75 at review, so real improvement), but >= 6 not met, no-death stretch 4.1 min, shadehold 0.90 / 0.85, late ults; veteran last-hit falls to 49.2 % on this window. Claim 'partly' is accurate as progress but the major remains open; the shadehold veteran PASS claimed does not reproduce.",
+   "fixHint": "See done:1; fight-time last-hitting is the stated missing lever."
+  },
+  {
+   "id": "critic:gauge-source",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Verified the cited page myself (WebFetch https://www.leaguemath.com/kills-deaths-gold-per-min/): 96,851 NA Diamond+ games, patches 5.1-5.3, top-10 champions per role at 0.157-0.214 deaths/min; my unweighted role means 0.180/0.184/0.183/0.174/0.175, matching modes_economy.md:54. The critic's measurement (kills at 10:00 and first-blood time from a dataset, then re-grade CL-1) is not done: no 10:00 kill mean or FB time is sourced, and CL-1 was not re-graded; the >= 6 bar is derived as 'a third' of a whole-game rate, an assumption.",
+   "fixHint": "Find a readable published per-team kills-at-10:00 or first-blood-time figure (e.g. a stats-site 'first blood time' page or a paper using the Diamond 10-min set) without downloading data, then re-grade CL-1 severity explicitly in the review against it."
+  },
+  {
+   "id": "critic:bot-micro",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Instrumentation exists and reproduces (fresh soak): skillshot hit 53.4 / 76.8 / 73.8 % (novice/adept/veteran; veteran below adept), telegraph dodge 10.6 / 26.6 / 49.4 %, deaths lingering under retreat threshold 0.0 / 2.4 / 2.7 %, lowest-EHP focus 86.1 / 86.8 / 88.5 %, recall HP median 41 / 32 / 33 % (40-46 % of recalls start under 30 %). Passive human seat 3:00-8:00: 264 / 173 dmg/min and 0.00 deaths a game vs the bot-played seat 314 / 259 and 0.15 / 0.10: bots punish a passive player LESS than an active bot, the opposite of the critic's concern. BRIDGE re-run: 15.3 min median, 5/40 sudden death, PASS; FRAY pacing median 9.1 min (pacing.ts).",
+   "fixHint": "Make lane bots trade into a passive opponent harder (the 0.15 passive bonus at bot.ts:439 is too weak: target passive-seat damage >= the bot seat's and >= 0.2 deaths 3-8 min); fix veteran skillshot hit rate below adept; add gates for these numbers."
+  },
+  {
+   "id": "originality:C1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:4. rift_quick level 1 / 480 Gleam, own xpTable at 75 %, Dawn Seal 300 s; probe_sim_rekey 40/0. Residual: goldMult 1.15 kept (not a reference headline number); pre-pick kept under the HotS precedent the review allowed."
+  },
+  {
+   "id": "originality:m1",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "content/fighters/nurrow.json Snuff (line 259 desc) drops the sleeper damage bonus, probe_kits_B 733/0, ROSTER.md:510 says 'no wake bonus'. But Lullaby Dart's desc at content/fighters/nurrow.json:184 still says 'Snuff on a sleeper hits harder, silences longer and comes back sooner' - stale player-facing text contradicting the change.",
+   "fixHint": "Edit nurrow.json:184 a2 desc: 'Snuff on a sleeper silences longer and comes back sooner.'"
+  },
+  {
+   "id": "originality:m2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "content/items.json hourcleaver passive 'Split Hour' (abilityHit, 3 m cleave 20 + 0.3 bonus AD, shield 40 + 0.15 bonus HP, cd 10); probe_sim_rekey 'PASS no finished item carries a low-health shield'; probe_items 160/0 (_harness/_reports/fw_CW3s_v1_items.log)."
+  },
+  {
+   "id": "originality:m3",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/queues.json:80 still 'Co-op vs bots' (a CW3s file); strings.en.json:264/321/1216 unchanged (CW3c); the lint patch /private/tmp/.../scratchpad/m3_names_lint.patch is not applied (git apply --check: applies). Handoffs are coordinated, not done.",
+   "fixHint": "Integration: land CW3c string renames + queue rename 'Co-op vs bots' -> e.g. 'Lantern Drill' together with the .qcard selector updates, then git apply the names_check patch; content:check must show 0 errors."
+  },
+  {
+   "id": "originality:m6",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Review fix: 'No change is required under the brief' (owner-accepted RIFT/BRIDGE)."
+  },
+  {
+   "id": "gameplay:CL-g1",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Fresh soak, full games: RIFT cores fallen before 16:00 0 adept / 0 veteran; first structure median 10.6 / 10.2 min."
+  },
+  {
+   "id": "gameplay:CL-g3",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Fresh untuned window 901-920: veteran beats novice 33/40 = 82.5 % (< 85 %). Claimed 'done' does not hold on a third window.",
+   "fixHint": "See done:3."
+  },
+  {
+   "id": "gameplay:CL-g4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Balance report exists in probe_sim_bot_soak.ts (fresh soak: 40 decided games, CIs about ±18 points, e.g. ervet 61.5 % [42.5-77.6]); the 200+ game read the fix asks for was not run.",
+   "fixHint": "Run the balance suite on >= 200 shuffled same-tier RIFT games (can be cut at 25:00) and record CIs."
+  },
+  {
+   "id": "gameplay:CL-g5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "src/sim/bots/draft.ts:95 scores secondaryRole 1.2; 14 fighter files carry secondaryRole. Roster growth is out of scope.",
+   "fixHint": "Long term roster work; short-term part is met."
+  },
+  {
+   "id": "gameplay:CL-g2",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Duo road level 6 median 8.2 / 8.5 min on the fresh window (target <= 8:00). Not attempted.",
+   "fixHint": "See done:3."
+  },
+  {
+   "id": "gameplay:CL-2",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Splinters still refresh only (src/sim/core.ts:142); Sunsplinter first take 8.5 / 8.8 min after spawn on the fresh soak (target median <= 3).",
+   "fixHint": "See done:2."
+  },
+  {
+   "id": "regression:checks",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "npm run typecheck clean. content:check: 1 error in content/maps/map_bridge.json (hour_lamp.glb missing; CW4's file, not CW3s). probe_sim_determinism 6/0, probe_items 160/0, probe_kits_B 733/0, probe_sim_modes 29/0, probe_sim_economy 28/0, probe_sim_rekey 40/0, quick soak (npm probe) PASS, pacing.ts PASS. Bot code uses mode kind only (no content ids), no Math.random/Date in src/sim."
+  }
+ ],
+ "regressions": [
+  "Fresh-window G1: veteran last-hit 49.2 % (< 50 %) and veteran in-lane 73.3 % (< the done-list's 75 %) on seeds 901-920 after the CL-1 aggression changes; the tuned quick gate (seeds 1-8) still passes.",
+  "Veteran-vs-novice tier gate 82.5 % on seeds 901-920 (claimed done at 90-92 %).",
+  "Stale nurrow.json:184 Lullaby Dart text still promises Snuff 'hits harder' on a sleeper."
+ ]
+}
