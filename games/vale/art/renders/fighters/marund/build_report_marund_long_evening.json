@@ -21,7 +21,7 @@
         "toe.R"
       ]
     },
-    "tris_shirt": 2598,
+    "tris_shirt": 2198,
     "bind_forearms": {
       "heat_ok": true,
       "unweighted": 0,
@@ -44,7 +44,7 @@
         "toe.R"
       ]
     },
-    "tris_forearms": 800,
+    "tris_forearms": 650,
     "bind_apron": {
       "heat_ok": true,
       "unweighted": 0,
@@ -59,7 +59,7 @@
         "foot.R"
       ]
     },
-    "tris_apron": 1800,
+    "tris_apron": 1500,
     "bind_tunic": {
       "heat_ok": true,
       "unweighted": 0,
@@ -73,7 +73,6 @@
         "shoulder.R",
         "upper_arm.R",
         "forearm.R",
-        "hand.R",
         "shin.L",
         "foot.L",
         "toe.L",
@@ -82,13 +81,12 @@
         "toe.R"
       ]
     },
-    "tris_tunic": 1700,
+    "tris_tunic": 1450,
     "bind_belt": {
       "heat_ok": true,
       "unweighted": 0,
       "fixed_vertices": 0,
       "empty_groups": [
-        "neck",
         "shin.L",
         "foot.L",
         "toe.L",
@@ -97,7 +95,7 @@
         "toe.R"
       ]
     },
-    "tris_belt": 900,
+    "tris_belt": 748,
     "bind_legs": {
       "heat_ok": true,
       "unweighted": 0,
@@ -120,7 +118,7 @@
         "toe.R"
       ]
     },
-    "tris_legs": 896,
+    "tris_legs": 748,
     "bind_boots": {
       "heat_ok": true,
       "unweighted": 0,
@@ -141,82 +139,74 @@
         "hand.R"
       ]
     },
-    "tris_boots": 1198,
-    "tris_cap": 3600,
-    "tris_cap_band": 1098,
-    "tris_windows_frame": 600,
+    "tris_boots": 996,
+    "tris_cap": 2900,
+    "tris_cap_band": 800,
+    "tris_windows_frame": 500,
     "tris_windows_glass": 240,
-    "tris_head": 1000,
-    "tris_mask": 1498,
+    "tris_head": 848,
+    "tris_mask": 1500,
     "tris_hand_R": 600,
     "tris_hand_L": 600,
     "tris_knee_R": 250,
     "tris_knee_L": 250,
-    "tris_maul_haft": 200,
-    "tris_maul_head": 400,
-    "tris_rod_l": 150,
-    "tris_pail": 900,
-    "tris_finial_post": 258,
+    "tris_maul_haft": 320,
+    "tris_maul_bands": 100,
+    "tris_maul_head": 420,
+    "tris_maul_faces": 220,
+    "tris_trowel": 150,
+    "tris_pail": 750,
+    "tris_finial_post": 254,
     "tris_finial_vessel": 120,
-    "validate_marund": "21416->21407",
+    "validate_marund": "18872->18860",
     "validate_marund_accent": "240->236"
   },
-  "uv_coverage": 0.639,
+  "uv_coverage": 0.632,
   "bake": {
-    "base": 2.45,
-    "rough_metal": 1.91,
-    "normal": 1.44,
-    "ao": 2.19,
-    "normal_fixed_px": 35022,
-    "projection": 31.94,
-    "pack_save": 32.19,
-    "total": 40.39
+    "base": 10.44,
+    "rough_metal": 9.12,
+    "normal": 4.23,
+    "ao": 4.48,
+    "normal_fixed_px": 30348,
+    "projection": 158.37,
+    "pack_save": 159.33,
+    "total": 188.52
   },
-  "tris": 21643,
+  "tris": 19096,
   "mesh_top_m": 2.408,
-  "glb_bytes_raw": 2506744,
+  "glb_bytes_raw": 2416300,
   "optimize": {
     "ok": true,
-    "before": 2506744,
-    "after": 1059180
+    "before": 2416300,
+    "after": 1004356
   },
-  "glb_bytes": 1059180,
+  "glb_bytes": 1004356,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_long_evening.glb (1034 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_long_evening_base 2048x2048 307K, marund_long_evening_normal 512x512 38K, marund_long_evening_orm 512x512 59K",
-      "  skinned meshes: marund_accent(126v), marund_long_evening(17892v)",
-      "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_long_evening.glb (981 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_long_evening_base 2048x2048 303K, marund_long_evening_normal 512x512 42K, marund_long_evening_orm 512x512 60K",
+      "  skinned meshes: marund_accent(126v), marund_long_evening(16454v)",
+      "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 21643; bind-pose bounds (three units, Y up): 1.62 x 2.41 x 1.28; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
+      "  tris: 19096; bind-pose bounds (three units, Y up): 1.43 x 2.41 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/marund/marund_long_evening_splash.png",
-      "portrait": "art/out/fighters/marund/marund_long_evening_portrait.png"
-    },
-    "seconds": {
-      "splash": 9.8,
-      "portrait": 5.76
-    }
   },
   "three_qa": {
     "ok": true,
     "mode": "sheet",
     "bindBox": [
       [
-        -0.77,
+        -0.718,
         0,
         -0.638
       ],
       [
-        0.852,
+        0.717,
         2.408,
-        0.638
+        0.932
       ]
     ],
     "facing": [
@@ -224,7 +214,7 @@
       1
     ],
     "headY": 1.579,
-    "accentPct": 2.11,
+    "accentPct": 2.06,
     "accentTopHalfPct": 100,
     "heightPx1080": 130,
     "size": [
@@ -233,24 +223,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/marund/three_marund_long_evening.png",
-    "seconds": 12.8,
+    "seconds": 208.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.11,
-      "model": 3.67,
-      "lows_bind": 6.08,
-      "uv": 6.68,
-      "bake": 40.39,
-      "export": 0.17,
-      "optimize": 0.95,
-      "load_test": 0.18,
-      "render": 15.6,
-      "three_qa": 13.06
+      "rig": 0.15,
+      "materials": 7.26,
+      "model": 193.64,
+      "lows_bind": 62.3,
+      "uv": 17.64,
+      "bake": 188.52,
+      "export": 0.74,
+      "optimize": 2.22,
+      "load_test": 0.33,
+      "three_qa": 209.78
     },
-    "total_s": 86.93
+    "total_s": 687.26
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88
