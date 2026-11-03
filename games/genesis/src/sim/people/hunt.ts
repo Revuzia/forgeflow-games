@@ -433,7 +433,9 @@ function keepParty(x: PCtx, st: Settlement, p: HuntParty): boolean {
   const A = x.A;
   p.members = p.members.filter((id) => { const s = A.slotOf(id); return s >= 0 && A.alive[s] && A.settlement[s] === st.id && A.role[s] === ROLE.hunter; });
   const out = p.members.some((id) => { const s = A.slotOf(id); return s >= 0 && (A.camp[s] >= 0 || (A.task[s] === TASK.hunt)); });
-  const old = x.tick - p.since > (p.day ? 1 : PARTY_DAYS) * x.day;
+  // (a day trip that has not killed by nightfall camps and stalks on like any party: breaking it up at a day threw the
+  // stalk away and the next morning's party walked the same ground again — living-land 'tracks game beyond the old reach')
+  const old = x.tick - p.since > (p.day && p.kills > 0 ? 1 : PARTY_DAYS) * x.day;
   // (the rest of the kill left by it: kept for them while it is fresh, then the scavengers' and the flies')
   if (p.cache && x.tick - p.cache.t > CACHE_DAYS * x.day) delete p.cache;
   if (p.members.length === 0 || old || (p.kills > 0 && !out && !p.cache)) return false;

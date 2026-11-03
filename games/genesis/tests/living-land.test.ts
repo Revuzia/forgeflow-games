@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
-import { AgentFlag, AgentFlag2 } from '../src/sim/types.ts';
+import { AgentFlag, AgentFlag2, BuildingFlag } from '../src/sim/types.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 import type { PCtx } from '../src/sim/people/ctx.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
@@ -547,6 +547,23 @@ test('land: houses follow the people — a third site is opened for a dwelling w
   planConstruction(x2, st);
   const shelters = st.sites.filter((id) => x2.c.buildings.list[x2.ps.building(id)!.type].capacity > 0);
   assert.equal(shelters.length, 1, 'a dwelling is begun beside them');
+});
+
+test('land: a town that lost most of its houses raises three dwellings at once (sim-fix-r1 P11)', () => {
+  const { sim, st } = village('stone', 20261008, 30);
+  must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 20, settlement: st.id });
+  const x = cx(sim);
+  // nothing open; every dwelling but one has fallen (a quake): a town of ~50 in a handful of beds
+  st.sites = [];
+  let kept = 0;
+  for (const b of x.ps.of(st.id)) {
+    if (!(x.c.buildings.list[b.type].capacity > 0 && x.c.buildings.list[b.type].provides.includes('shelter'))) continue;
+    if (kept++ >= 1) b.flags |= BuildingFlag.ruined;
+  }
+  for (let i = 0; i < 4; i++) planConstruction(cx(sim), st);
+  const x2 = cx(sim);
+  const shelters = st.sites.filter((id) => x2.c.buildings.list[x2.ps.building(id)!.type].provides.includes('shelter'));
+  assert.ok(shelters.length >= 3, `three dwellings rise together (${shelters.length})`);
 });
 
 test('land: materials drive gathering — ore in store is wanted smelted: its fuel is wanted from the land, the crafts on the way go on the job list', () => {

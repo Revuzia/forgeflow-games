@@ -36,6 +36,8 @@ export class FollowCamera implements CameraController {
   private idle = 99;
   private off: D3 | null = null;
   private lift = 0;
+  /** stand-off (m) added away from the subject while the canopy lifts the eye: a crane shot over the crowns, not a plumb one */
+  private back = 0;
   private state: TargetState | null = null;
   private lastPlanet = -2;
   /** the subject is gone (died, burned out, a ship that ended): the camera holds where it was */
@@ -47,7 +49,7 @@ export class FollowCamera implements CameraController {
   set(ref: EntityRef | null): void {
     const same = ref && this.ref && ref.kind === this.ref.kind && ref.id === this.ref.id;
     this.ref = ref;
-    if (!same) { this.off = null; this.yaw = 0; this.pitch = ref?.kind === 'ship' ? 0.1 : 0.32; this.zoom = 1; this.wantDist = null; this.idle = 99; this.lift = 0; }
+    if (!same) { this.off = null; this.yaw = 0; this.pitch = ref?.kind === 'ship' ? 0.1 : 0.32; this.zoom = 1; this.wantDist = null; this.idle = 99; this.lift = 0; this.back = 0; }
     this.lost = false;
   }
 
@@ -124,7 +126,7 @@ export class FollowCamera implements CameraController {
       : [s.pos[0] + radial[0] * s.size * 0.15, s.pos[1] + radial[1] * s.size * 0.15, s.pos[2] + radial[2] * s.size * 0.15];
     // ── collision: above the ground under the eye, and nothing rising between the eye and the subject ──
     if (pv) {
-      let need = 0;
+      let need = 0, needC = 0;
       for (let j = 0; j <= 6; j++) {
         const t = j / 6;
         const p: D3 = [lookAt[0] + (eye[0] - lookAt[0]) * t, lookAt[1] + (eye[1] - lookAt[1]) * t, lookAt[2] + (eye[2] - lookAt[2]) * t];
@@ -132,12 +134,23 @@ export class FollowCamera implements CameraController {
         const u: D3 = [p[0] / r, p[1] / r, p[2] / r];
         const tree = pv.fields.get('tree');
         const canopy = tree && t > 0.2 ? Math.min(1, pv.grid.sample(tree, u[0], u[1], u[2]) * 2.2) * 16 : 0;
-        const clear = (j === 6 ? 1.5 : 0.8) + canopy;
-        const g = surfaceRadius(pv, u) + clear;
-        if (r < g) need = Math.max(need, (g - r) / Math.max(0.15, t));
+        const ground = surfaceRadius(pv, u) + (j === 6 ? 1.5 : 0.8);
+        if (r < ground) need = Math.max(need, (ground - r) / Math.max(0.15, t));
+        // the crowns: a person in a grove (people live in woods) is framed from just over the canopy, not from a
+        // tower — clearing the crowns right beside them along a straight line (÷t) put the eye 50 m up; near the
+        // subject the eye looks down through the gap their path makes, so the canopy's demand is not amplified there
+        if (canopy > 0 && r < ground + canopy) needC = Math.max(needC, (ground + canopy - r) / Math.max(0.6, t));
       }
+      need = Math.max(need, needC);
+      this.back += (needC * 0.5 - this.back) * (1 - Math.exp(-dt * 2));
       this.lift += (need - this.lift) * (1 - Math.exp(-dt * (need > this.lift ? 6 : 1.2)));
       if (this.lift > 0.01) eye = [eye[0] + radial[0] * this.lift, eye[1] + radial[1] * this.lift, eye[2] + radial[2] * this.lift];
+      if (this.back > 0.01) {
+        const o = this.off!, orad = o[0] * radial[0] + o[1] * radial[1] + o[2] * radial[2];
+        const h: D3 = [o[0] - radial[0] * orad, o[1] - radial[1] * orad, o[2] - radial[2] * orad];
+        const hl = Math.hypot(h[0], h[1], h[2]);
+        if (hl > 1e-3) eye = [eye[0] + h[0] / hl * this.back, eye[1] + h[1] / hl * this.back, eye[2] + h[2] / hl * this.back];
+      }
       const re = Math.hypot(eye[0], eye[1], eye[2]);
       const ue: D3 = [eye[0] / re, eye[1] / re, eye[2] / re];
       const ge = surfaceRadius(pv, ue) + 1.5;

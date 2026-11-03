@@ -965,8 +965,12 @@ export function planConstruction(x: PCtx, st: Settlement): void {
   // may be begun beside the first, in a slot of its own)
   const short = bedsUp < pop * 0.9;
   const wantBeds = bedsUp + (beds - bedsUp) * 0.5 < pop * 1.1 + 1 || (homeless && shelterSites === 0 && bedsUp < pop + 6);
-  const extra = wantBeds && (shelterSites === 0 || (short && shelterSites < 2));
-  if (st.sites.length >= (extra ? 3 : 2)) return;
+  // (sim-fix-r1 stint 4, P11: a quake, a slide or a fire that brings down half the houses left a town of 40 in 15 beds
+  // for most of a year while one or two sites rose — 'housed at every year end' failed on 6/8 seeds only in such years.
+  // A town that lost many beds raises up to three dwellings at once)
+  const maxShelter = short ? (pop * 0.9 - bedsUp >= 16 ? 3 : 2) : 1;
+  const extra = wantBeds && shelterSites < maxShelter;
+  if (st.sites.length >= (extra ? Math.max(3, 1 + maxShelter) : 2)) return;
   const have = (id: string) => mine.some((b) => x.c.buildings.list[b.type].id === id);
   const tIdx = (id: string) => x.c.buildings.idx(id);
   const ok = (id: string) => { const t = tIdx(id); return t >= 0 && canBuild(x, st, t); };
