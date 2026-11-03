@@ -13,14 +13,20 @@
 //   A4  expiry: a band-4 line still waiting after its time-to-live is dropped, never spoken late
 //   A5  preemption: a wipe (band 1) cuts a playing structure line short; a takedown (band 2) waits for it
 //   A6  one at a time: over the whole script no two voice-bus lines overlap beyond the ring-out allowance
-//   A7  ducking: under a line, music and ambience sit −6 dB and sfx −3 dB, a threat to your fighter is not ducked, and
-//       the mix is back within 0.5 dB 0.8 s after the line
+//   A7  ducking: under a news line (bands 1-3; closing AUD-C7) music and ambience sit −6 dB and sfx −6 dB, and the line
+//       plays +5 dB over its cue gain; under a band 4-5 line sfx only −3 dB at the cue's own gain; a threat to your
+//       fighter is not ducked, and the mix is back within 0.5 dB 0.8 s after the line
 //   A8  the bell language: every line class resolves to its own cue (first, 2-5 tolls, shutdown, structure yours /
 //       theirs, Sunsplinter and Longshade yours / theirs, other objectives, wipe yours / theirs)
 //   A9  match flow / personal: match_start, sudden_death (announce), surrender_passed speak no announcer line; a
 //       denied purchase is a ui-bus error, not a voice line
 //   B1  the global budget: 80 combat events in one tick never hold more than 32 pooled voices
-//   B2  heals: a lifesteal heal (self, the tick of its own damage) is silent; one target's heals within 250 ms are one
+//   B2  heals (closing AUD-C5): a lifesteal heal (self, the tick of its own damage) is silent; a fighter's heal of >= 5 %
+//       of its max HP chimes once, the ticks of its chain (another heal on it within 1.2 s) do not, the next chain
+//       does; a small heal (< 5 %) and a heal on a Wick are silent
+//   B5  an enemy fighter's death plays enemyDown (not when YOU scored it: the takedown cue carries that); a ward's end
+//       wardOut, a summon's summonOut; the lamp item's cast wardSet (not the shared summon cue); the music's dead state
+//       follows your fighter (closing AUD-C6, AUD-C9, AUD-C4)
 //   B3  the soft clip: a WaveShaper after the limiter, linear to −3.1 dBFS, never past −1 dBFS
 //   B4  accessibility: mono sums the output to 1 channel, softenLoud (session/settings.ts) wires its compressor in (and out)
 //   C1  a bed's main stem starts while its layer is still decoding; the layer joins on a bar, phase-locked
@@ -49,6 +55,7 @@ class Param {
   set value(v) { this._v = v; if (!this.ev.length) this.v0 = v; }
   setTargetAtTime(v, t, tc) { this.ev.push({ t, v, tc }); this.ev.sort((a, b) => a.t - b.t); this.value = v; }
   setValueAtTime(v, t) { this.ev.push({ t, v, tc: 0 }); this.ev.sort((a, b) => a.t - b.t); this.value = v; }
+  linearRampToValueAtTime(v, t) { this.ev.push({ t, v, tc: 0 }); this.ev.sort((a, b) => a.t - b.t); this.value = v; }
   cancelScheduledValues(t) { this.ev = this.ev.filter((e) => e.t < t); }
   at(t) {
     let v = this.v0;
@@ -140,7 +147,8 @@ const SETTINGS = { audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0
 const E = {};
 const ent = (id, kind, team, x, y, def) => (E[id] = { id, kind, team, x, y, alive: true, visibleMask: 3, statuses: [], def });
 const F0 = catalog.fighters[0].id;
-ent(1, 'fighter', 0, 100, 100, F0); ent(4, 'fighter', 0, 98, 100, F0);
+ent(1, 'fighter', 0, 100, 100, F0); ent(4, 'fighter', 0, 98, 100, F0); E[1].maxHp = 600; E[4].maxHp = 600;
+ent(5, 'minion', 0, 99, 100, 'wick');  E[5].maxHp = 400;
 ent(2, 'fighter', 1, 103, 100, F0); ent(3, 'fighter', 1, 104, 101, F0);
 ent(9, 'structure', 1, 110, 100, 'lantern');
 const players = [{ player: 0, team: 0, entity: 1, respawnIn: 0, abilities: [] }, { player: 1, team: 0, entity: 4, respawnIn: 0, abilities: [] },
@@ -242,11 +250,26 @@ let node = hitOnYou; while (node && node.kind !== 'gain') node = node.outs[0];
 const threatRoute = node?.outs[0] === eng.threat;
 const until = eng.announcer.until;
 const mid = tLine + 0.3;
+const lineNode = voiceStarts()[voiceStarts().length - 1];
+let ln = lineNode; while (ln && ln.kind !== 'gain') ln = ln.outs[0];
+const lineLiftDb = ln ? 20 * Math.log10(ln.gain.value / audio.cues[cueOf(lineNode)].gain) : null;
 report.A7 = { musicDb: +duck('music', mid).toFixed(2), ambienceDb: +duck('ambience', mid).toFixed(2), sfxDb: +duck('sfx', mid).toFixed(2),
-  afterMusicDb: +duck('music', until + 0.8).toFixed(2), afterSfxDb: +duck('sfx', until + 0.8).toFixed(2), threatNotDucked: threatRoute };
-if (Math.abs(report.A7.musicDb + 6) > 0.3 || Math.abs(report.A7.ambienceDb + 6) > 0.3 || Math.abs(report.A7.sfxDb + 3) > 0.3) failures.push(`A7: under a line music ${report.A7.musicDb} / ambience ${report.A7.ambienceDb} / sfx ${report.A7.sfxDb} dB (want -6 / -6 / -3)`);
+  afterMusicDb: +duck('music', until + 0.8).toFixed(2), afterSfxDb: +duck('sfx', until + 0.8).toFixed(2), threatNotDucked: threatRoute,
+  newsLineLiftDb: lineLiftDb === null ? null : +lineLiftDb.toFixed(2) };
+if (Math.abs(report.A7.musicDb + 6) > 0.3 || Math.abs(report.A7.ambienceDb + 6) > 0.3 || Math.abs(report.A7.sfxDb + 6) > 0.3) failures.push(`A7: under a news line music ${report.A7.musicDb} / ambience ${report.A7.ambienceDb} / sfx ${report.A7.sfxDb} dB (want -6 / -6 / -6)`);
+if (lineLiftDb === null || Math.abs(lineLiftDb - 5) > 0.2) failures.push(`A7: the news line plays ${lineLiftDb} dB over its cue gain (want +5)`);
 if (report.A7.afterMusicDb < -0.5 || report.A7.afterSfxDb < -0.5) failures.push(`A7: 0.8 s after the line the duck is still ${report.A7.afterMusicDb} / ${report.A7.afterSfxDb} dB`);
 if (!threatRoute) failures.push('A7: an enemy hit on you went through the ducked sfx bus');
+// a band-4 line (a team notice): the sfx bus only −3 dB, the line at its cue's own gain
+await wait(4);
+const tMinor = ctx.currentTime;
+await batch([{ e: 'announce', key: 'surrender_vote', team: 0 }]);
+const minorNode = voiceStarts()[voiceStarts().length - 1];
+let mn = minorNode; while (mn && mn.kind !== 'gain') mn = mn.outs[0];
+report.A7.minorSfxDb = +duck('sfx', tMinor + 0.3).toFixed(2);
+report.A7.minorLiftDb = mn ? +(20 * Math.log10(mn.gain.value / audio.cues[cueOf(minorNode)].gain)).toFixed(2) : null;
+if (Math.abs(report.A7.minorSfxDb + 3) > 0.3) failures.push(`A7: under a band-4 line sfx ${report.A7.minorSfxDb} dB (want -3)`);
+if (report.A7.minorLiftDb === null || Math.abs(report.A7.minorLiftDb) > 0.2) failures.push(`A7: a band-4 line plays ${report.A7.minorLiftDb} dB over its cue gain (want 0)`);
 await wait(4);
 
 // A6 — one at a time over everything spoken so far
@@ -309,23 +332,34 @@ if (maxPooled < 32) failures.push(`B1: the stress never filled the budget (${max
 if (!threatIn) failures.push('B1: an enemy hit on you was dropped by the full pool');
 await wait(3);
 
-// B2 — heals
+// B2 — heals (closing AUD-C5)
+const heals = () => ctx.started.slice(s0).map(cueOf).filter((c) => c === cueFor('heal')).length;
 s0 = ctx.started.length;
-await batch([{ e: 'damage', src: 1, dst: 2, amount: 40, dtype: 'physical', crit: false }, { e: 'heal', src: 1, dst: 1, amount: 4 }]);
-const vamp = ctx.started.slice(s0).map(cueOf).filter((c) => c === cueFor('heal')).length;
-await wait(1);
+await batch([{ e: 'damage', src: 1, dst: 2, amount: 40, dtype: 'physical', crit: false }, { e: 'heal', src: 1, dst: 1, amount: 40 }]);
+const vamp = heals();
+await wait(2);
 s0 = ctx.started.length;
-await batch([{ e: 'heal', src: 1, dst: 4, amount: 30 }]);
-ctx.advance(0.1);
-await batch([{ e: 'heal', src: 1, dst: 4, amount: 30 }]);
-const merged = ctx.started.slice(s0).map(cueOf).filter((c) => c === cueFor('heal')).length;
-ctx.advance(0.3);
-await batch([{ e: 'heal', src: 1, dst: 4, amount: 30 }]);
-const later = ctx.started.slice(s0).map(cueOf).filter((c) => c === cueFor('heal')).length - merged;
-report.B2 = { vampHealCues: vamp, twoHealsIn100ms: merged, healAfter400ms: later };
+await batch([{ e: 'heal', src: 1, dst: 4, amount: 60 }]);          // 10 % of 600: chimes
+const first = heals();
+ctx.advance(0.4);
+await batch([{ e: 'heal', src: 1, dst: 4, amount: 60 }]);          // its chain's next tick: silent
+ctx.advance(0.9);
+await batch([{ e: 'heal', src: 1, dst: 4, amount: 60 }]);          // still the chain (0.9 s after the last tick)
+const chain = heals() - first;
+ctx.advance(2);
+await batch([{ e: 'heal', src: 1, dst: 4, amount: 60 }]);          // a new heal after 2 s: chimes
+const next = heals() - first - chain;
+ctx.advance(2);
+await batch([{ e: 'heal', src: 1, dst: 4, amount: 20 }]);          // 3.3 %: silent
+ctx.advance(2);
+await batch([{ e: 'heal', src: 1, dst: 5, amount: 200 }]);         // a Wick: silent
+const small = heals() - first - chain - next;
+report.B2 = { vampHealCues: vamp, firstHeal: first, chainTicks: chain, nextChain: next, smallOrWick: small };
 if (vamp) failures.push('B2: a lifesteal heal was voiced');
-if (merged !== 1) failures.push(`B2: two heals on one target 100 ms apart played ${merged} chimes (want 1)`);
-if (later !== 1) failures.push(`B2: a heal 400 ms later played ${later} chimes (want 1)`);
+if (first !== 1) failures.push(`B2: a 10 % heal played ${first} chimes (want 1)`);
+if (chain !== 0) failures.push(`B2: a heal chain's later ticks played ${chain} chimes (want 0)`);
+if (next !== 1) failures.push(`B2: a heal 2 s after the chain played ${next} chimes (want 1)`);
+if (small !== 0) failures.push(`B2: a small heal / a Wick's heal played ${small} chimes (want 0)`);
 
 // B3 — the soft clip
 let shaper = null;
@@ -346,6 +380,43 @@ eng.settings({ ...SETTINGS.audio });
 const stereoCh = eng.graph.out.channelCount, softOut = eng.mix.outs[0] === eng.master && eng.master.outs[0] === eng.graph.limiter;
 report.B4 = { monoChannels: monoCh, softenWired: softIn, offChannels: stereoCh, softenUnwired: softOut };
 if (monoCh !== 1 || stereoCh !== 2 || !softIn || !softOut) failures.push(`B4: ${JSON.stringify(report.B4)}`);
+
+// B5 — deaths heard team-relative, vision, the dead state (closing AUD-C6, AUD-C9, AUD-C4)
+{
+  await wait(3);
+  const cuesFrom = (k) => ctx.started.slice(k).map(cueOf);
+  let k = ctx.started.length;
+  await batch([{ e: 'death', dst: 3, kind: 'fighter', by: 1 }]);           // an enemy fighter falls to your ally
+  const enemyByAlly = cuesFrom(k);
+  E[3].alive = true; await wait(1);
+  k = ctx.started.length;
+  await batch([{ e: 'death', dst: 3, kind: 'fighter', by: 0 }]);           // … to you: the takedown cue carries it
+  const enemyByYou = cuesFrom(k);
+  E[3].alive = true; await wait(1);
+  ent(20, 'ward', 1, 102, 100, 'hooded_lamp'); ent(21, 'summon', 1, 102, 101, 'x');
+  k = ctx.started.length;
+  await batch([{ e: 'death', dst: 20, kind: 'ward', by: 0 }]);
+  const wardOut = cuesFrom(k);
+  k = ctx.started.length;
+  await batch([{ e: 'death', dst: 21, kind: 'summon', by: 0 }]);
+  const summonOut = cuesFrom(k);
+  // a lamp set: the item active that summons a ward unit plays 'wardSet', never the shared summon cue
+  const wardUnits = new Set(catalog.units.filter((u) => u.kind === 'ward').map((u) => u.id));
+  const lampItem = catalog.items.find((it) => (it.active?.effects ?? []).some((x) => x.op === 'summon' && wardUnits.has(x.unit)));
+  k = ctx.started.length;
+  if (lampItem) await batch([{ e: 'cast', src: 1, slot: 'item1', ability: lampItem.active.id, x: 101, y: 100, castTime: 0 }]);
+  const lampSet = cuesFrom(k);
+  // the dead state: your fighter down → the music closes; back → it opens
+  E[1].alive = false; eng.update(0.25); const deadOn = eng.musicDead;
+  E[1].alive = true; eng.update(0.25); const deadOff = eng.musicDead;
+  report.B5 = { enemyByAlly, enemyByYou, wardOut, summonOut, lampItem: lampItem?.id ?? null, lampSet, deadOn, deadOff };
+  if (!enemyByAlly.includes(cueFor('enemyDown'))) failures.push(`B5: an enemy fighter's death played ${JSON.stringify(enemyByAlly)} (want enemyDown)`);
+  if (enemyByYou.includes(cueFor('enemyDown'))) failures.push('B5: your own takedown also played enemyDown (the takedown cue carries it)');
+  if (!wardOut.includes(cueFor('wardOut'))) failures.push(`B5: a ward's death played ${JSON.stringify(wardOut)} (want wardOut)`);
+  if (!summonOut.includes(cueFor('summonOut'))) failures.push(`B5: a summon's death played ${JSON.stringify(summonOut)} (want summonOut)`);
+  if (!lampItem || !lampSet.includes(cueFor('wardSet')) || lampSet.includes('c_summon')) failures.push(`B5: a lamp set played ${JSON.stringify(lampSet)} (want wardSet only)`);
+  if (!deadOn || deadOff) failures.push(`B5: the music's dead state ${deadOn} while down, ${deadOff} once back (want true, false)`);
+}
 
 // C1 — a bed whose layer decodes slowly
 const synced = (id) => !id.startsWith('stem') && !id.startsWith('phase_') && !id.startsWith('urgency_') && !id.startsWith('seg_');      // the combat layer
@@ -448,10 +519,11 @@ console.log(`A8 lines: ${JSON.stringify(report.A8)}`);
 console.log(`A9 flow: ${JSON.stringify(report.A9)}`);
 console.log(`B1 ${JSON.stringify(report.B1)} · B2 ${JSON.stringify(report.B2)}`);
 console.log(`B3 ${JSON.stringify(report.B3)} · B4 ${JSON.stringify(report.B4)}`);
+console.log(`B5 ${JSON.stringify(report.B5)}`);
 console.log(`C1 ${JSON.stringify(report.C1)}`);
 console.log(`C4 ${JSON.stringify(report.C4)} · C5 ${JSON.stringify(report.C5)}`);
 console.log(`C2 ${JSON.stringify(report.C2)}`);
 console.log(`C3 ${JSON.stringify(report.C3)}`);
-console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : 'PASS: one announcer line per event, merged, expired, preempted only by bands 0-1, the mix ducked under it; the voice budget, heal merging, soft clip, mono / soften and the bed layers hold');
+console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : 'PASS: one announcer line per event, merged, expired, preempted only by bands 0-1, the mix ducked under it, news lines on top; the voice budget, heal gating, soft clip, mono / soften and the bed layers hold');
 console.log(`report → ${OUT}`);
 process.exit(failures.length ? 1 : 0);

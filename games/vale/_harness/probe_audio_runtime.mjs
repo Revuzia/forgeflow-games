@@ -1,0 +1,322 @@
+// VALE harness — audio runtime truth in a REAL Chrome (closing critic gap 'audio-runtime', CW2 minors): what the
+// player hears, measured at the engine's final output, on Chrome's fake output device (--disable-audio-output: the
+// clamshell Mac's default device does not render, so pw.mjs probes meter silence; the closing review's
+// closing_audio_tool_open.mjs method). Two modes, one per run (each holds a heavy slot):
+//
+//   node _harness/probe_audio_runtime.mjs sync  [--hits 50] [--out <json>]
+//     A/V sync: a live match (render on), your fighter's own auto hit injected 50 times at jittered intervals INTO THE
+//     FRAME LOOP (the match's pump is wrapped: the event batch reaches the renderer and the audio engine exactly as a
+//     sim batch does, in the frame whose rAF timestamp is recorded). The final output (after limiter + soft clip) is
+//     recorded sample-exactly by an AudioWorklet (context frame indexes); music and ambience buses are muted for the
+//     run so the hit is the only sound. Per hit: the onset (first sample within 30 dB of the hit's peak) → context
+//     time → performance time at the OUTPUT via AudioContext.getOutputTimestamp() (which places a context time on the
+//     device clock), cross-checked by the inject-time clock + baseLatency + outputLatency. Offset = heard − the impact
+//     frame's rAF timestamp. Gate: p95 <= one frame (the median rAF interval) + outputLatency.
+//   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--out <json>]
+//     A real match at speed 1, default settings, the autopilot playing your seat. Per 4096-sample block: K-weighted
+//     mean square of the output and of each bus (the sfx bus plus the threat path = what sfx the player hears) →
+//     integrated loudness (gated as BS.1770), short-term (3 s) percentiles, momentary (~0.4 s) maxima; the cue log
+//     with match time. Gates (closing CW2 done, minors): heal chimes <= 6 per minute; enemyDown fires; announcer
+//     line peak (voice momentary max) >= 3 dB over the sfx short-term p99 over the whole capture and over the
+//     teamfight windows (sfx short-term above its p90); reported: master integrated (about -19 LUFS), ambience
+//     (about -28), music.
+// Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
+
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+import { holdHeavy } from './heavy_slot.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const BASE = process.env.VALE_URL ?? 'http://localhost:5190';
+const args = process.argv.slice(2);
+const mode = args[0] === 'match' ? 'match' : 'sync';
+const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
+const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
+const HITS = Number(opt('--hits', 50));
+const QUEUE = opt('--queue', 'rift_coop');
+const SECONDS = Number(opt('--seconds', 420));
+const t0 = Date.now();
+const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
+
+async function openFake(path) {
+  const release = await holdHeavy('probe_audio_runtime ' + mode);
+  const browser = await chromium.launch({ channel: 'chrome', headless: true,
+    args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-audio-output'] });
+  browser.on('disconnected', release);
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  await context.routeWebSocket(/.*/, () => {});
+  const page = await context.newPage();
+  const logs = [];
+  page.on('console', (m) => { if (m.type() === 'error') logs.push(`[${m.type()}] ${m.text()}`); });
+  page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!window.__vale && !!window.__valeAudio, null, { timeout: 60000 });
+  return { browser, page, logs };
+}
+
+async function startMatch(page, queue) {
+  await page.waitForTimeout(1500);
+  await page.keyboard.press('Shift');                       // a gesture: the context resumes
+  await page.waitForFunction(() => window.__valeAudio?.graph?.ctx?.state === 'running', null, { timeout: 20000 });
+  await page.evaluate((q) => { const v = window.__vale; (v.state.queueFor ? v.state.queueFor({ queue: q }) : v.session.queue({ queue: q })); }, queue);
+  await page.waitForFunction(() => !!window.__vale.state.match.value, null, { timeout: 600000, polling: 500 });
+}
+
+const pct = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))]; };
+const r2 = (x) => (x === null || x === undefined || !Number.isFinite(x) ? x : Math.round(x * 100) / 100);
+
+// ── sync ──────────────────────────────────────────────────────────────────────────────────────────
+async function runSync() {
+  const { browser, page, logs } = await openFake('/?dev=1&render=1&autoflow=1');
+  const rep = { probe: 'probe_audio_runtime', mode: 'sync', hits: HITS, err: null };
+  try {
+    await startMatch(page, QUEUE);
+    log('match');
+    await page.waitForFunction(() => { const m = window.__vale.state.match.value; return m && m.started !== false && m.view.players.length > 0; }, null, { timeout: 120000 });
+    await page.waitForTimeout(4000);                         // loading done, first frames drawn
+    rep.setup = await page.evaluate(async (n) => {
+      const a = window.__valeAudio, g = a.graph, ctx = g.ctx, v = window.__vale, m = v.state.match.value;
+      // only the hit: music and ambience off for the run
+      for (const b of ['music', 'ambience']) { const p = g.bus[b].gain; p.cancelScheduledValues(0); p.value = 0; }
+      // the output recorder: every render quantum of graph.out (mono sum) with its context frame
+      const src = `class Rec extends AudioWorkletProcessor { constructor() { super(); this.buf = new Float32Array(4096); this.n = 0; this.f0 = 0; }
+        process(ins) { const i = ins[0]; if (!i || !i.length) return true; const L = i[0], R = i[1] || i[0];
+          if (this.n === 0) this.f0 = currentFrame;
+          for (let k = 0; k < L.length; k++) this.buf[this.n + k] = 0.5 * (L[k] + R[k]);
+          this.n += L.length; if (this.n >= 4096) { this.port.postMessage({ f0: this.f0, d: this.buf.slice(0, this.n) }); this.n = 0; } return true; } }
+        registerProcessor('vale-rec', Rec);`;
+      await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+      const rec = new AudioWorkletNode(ctx, 'vale-rec', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 2, channelCountMode: 'explicit' });
+      const chunks = [];
+      rec.port.onmessage = (e) => chunks.push(e.data);
+      g.out.connect(rec);
+      const z = ctx.createGain(); z.gain.value = 0; rec.connect(z).connect(ctx.destination);
+      // the frame clock
+      const frames = [];
+      const raf = (ts) => { frames.push(ts); if (frames.length < 100000) requestAnimationFrame(raf); };
+      requestAnimationFrame(raf);
+      // inject into the frame loop: the match's pump, wrapped
+      const you = m.view.players.find((p) => p.player === m.you).entity;
+      const hits = [];
+      let due = Infinity, left = n;
+      const orig = m.pump.bind(m);
+      m.pump = (dt) => {
+        const r = orig(dt);
+        const now = performance.now();
+        if (due === Infinity && m.view.time >= 2) due = now + 1500;   // after the countdown and the match-start toll
+        if (left > 0 && now >= due) {
+          left--;
+          due = now + 900 + Math.random() * 400;               // jittered against the audio blocks
+          const ts = ctx.getOutputTimestamp();
+          const h = { raf: document.timeline.currentTime, perf: now, ct: ctx.currentTime, oc: ts.contextTime, op: ts.performanceTime };
+          const ev = [{ e: 'damage', t: m.view.time, src: you, dst: you, amount: 1, dtype: 'physical', crit: false, shielded: 0 }];
+          for (const l of m.listeners) l(ev);
+          const k = a.log.length;
+          hits.push(h);
+          setTimeout(() => { h.cue = a.log.slice(k).find((c) => /_attack_hit$|^c_hit_phys/.test(c)) ?? a.log[k] ?? null; }, 0);
+        }
+        return r;
+      };
+      window.__sync = { chunks, frames, hits, sr: ctx.sampleRate, done: () => left === 0 };
+      return { sampleRate: ctx.sampleRate, baseLatency: ctx.baseLatency, outputLatency: ctx.outputLatency, you };
+    }, HITS);
+    log('injecting', HITS, 'hits', JSON.stringify(rep.setup));
+    await page.waitForFunction(() => window.__sync.done(), null, { timeout: HITS * 2500 + 30000, polling: 500 });
+    await page.waitForTimeout(1500);
+    const raw = await page.evaluate(() => {
+      const s = window.__sync, ctx = window.__valeAudio.graph.ctx;
+      const ts = ctx.getOutputTimestamp();
+      // per hit: the onset in the recording after its inject time
+      const f0 = s.chunks.length ? s.chunks[0].f0 : 0;
+      const last = s.chunks[s.chunks.length - 1];
+      const total = last ? last.f0 + last.d.length - f0 : 0;
+      const x = new Float32Array(total);
+      for (const c of s.chunks) x.set(c.d, c.f0 - f0);
+      const out = [];
+      for (const h of s.hits) {
+        const a0 = Math.max(0, Math.round((h.ct - 0.05) * s.sr) - f0), a1 = Math.min(total, a0 + Math.round(0.6 * s.sr));
+        let pk = 0, pkAt = -1;
+        for (let i = a0; i < a1; i++) { const v = Math.abs(x[i]); if (v > pk) { pk = v; pkAt = i; } }
+        const on = (db) => { const th = pk * Math.pow(10, -db / 20); for (let i = a0; i <= pkAt; i++) if (Math.abs(x[i]) >= th) return i; return -1; };
+        const i30 = on(30), i20 = on(20);
+        out.push({ ...h, peak: pk, on30: i30 < 0 ? null : (i30 + f0) / s.sr, on20: i20 < 0 ? null : (i20 + f0) / s.sr });
+      }
+      const fr = s.frames; const dts = []; for (let i = 1; i < fr.length; i++) dts.push(fr[i] - fr[i - 1]);
+      return { hits: out, frameDts: dts, outputLatency: ctx.outputLatency, baseLatency: ctx.baseLatency, endTs: { oc: ts.contextTime, op: ts.performanceTime }, samples: total };
+    });
+    const frame = pct(raw.frameDts, 50);
+    const outLatMs = (raw.outputLatency || 0) * 1000, baseLatMs = (raw.baseLatency || 0) * 1000;
+    const rows = raw.hits.map((h) => {
+      const heardTs = h.on30 === null ? null : h.op + (h.on30 - h.oc) * 1000;                         // the device clock
+      const heardClk = h.on30 === null ? null : h.perf + (h.on30 - h.ct) * 1000 + baseLatMs + outLatMs;   // inject clock + latencies
+      return { cue: h.cue, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
+        offTsMs: heardTs === null ? null : r2(heardTs - h.raf), offClkMs: heardClk === null ? null : r2(heardClk - h.raf), injectAfterRafMs: r2(h.perf - h.raf) };
+    });
+    // a hit is measured when its window holds the hit alone: its peak within 3 dB of the hits' median (a match toll or
+    // a wave horn landing in the window is another sound) and its own cue logged
+    const medPk = pct(rows.filter((r) => r.peakDb !== null).map((r) => r.peakDb), 50);
+    const ok = rows.filter((r) => r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
+    rep.excluded = rows.length - ok.length;
+    const tsValid = ok.every((r) => Number.isFinite(r.offTsMs)) && raw.hits.some((h) => h.op > 0);
+    const offs = ok.map((r) => (tsValid ? r.offTsMs : r.offClkMs));
+    rep.frameMs = r2(frame);
+    rep.outputLatencyMs = r2(outLatMs); rep.baseLatencyMs = r2(baseLatMs);
+    rep.detected = ok.length;
+    rep.clock = tsValid ? 'getOutputTimestamp' : 'inject clock + baseLatency + outputLatency';
+    rep.offsetMs = { p50: r2(pct(offs, 50)), p95: r2(pct(offs, 95)), max: r2(Math.max(...offs)), min: r2(Math.min(...offs)) };
+    // the same from the frame loop's own pump (the sim batch's arrival), and with the picture shown one frame after its rAF
+    const fromPump = ok.map((r) => (tsValid ? r.offTsMs : r.offClkMs) - r.injectAfterRafMs);
+    rep.offsetFromPumpMs = { p50: r2(pct(fromPump, 50)), p95: r2(pct(fromPump, 95)) };
+    rep.audioAfterPictureMs = { p50: r2(pct(offs, 50) - frame), p95: r2(pct(offs, 95) - frame), note: 'picture presented at the next vsync after its rAF (headless: not measurable, assumed one frame)' };
+    const alt = ok.map((r) => r.offClkMs);
+    rep.offsetAltMs = { p50: r2(pct(alt, 50)), p95: r2(pct(alt, 95)) };
+    rep.schedMs = { p50: r2(pct(ok.map((r) => r.schedMs), 50)), p95: r2(pct(ok.map((r) => r.schedMs), 95)) };
+    rep.budgetMs = r2(frame + outLatMs);
+    rep.rows = rows;
+    rep.gates = { measured: ok.length >= HITS * 0.9, p95WithinFramePlusOutput: rep.offsetMs.p95 <= rep.budgetMs };
+    rep.pass = Object.values(rep.gates).every(Boolean);
+  } catch (e) { rep.err = String(e?.message ?? e); }
+  rep.logs = logs.slice(0, 30);
+  await browser.close().catch(() => {});
+  return rep;
+}
+
+// ── match capture ─────────────────────────────────────────────────────────────────────────────────
+const TAP = () => {
+  const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
+  // final out, music, sfx bus, the threat path (sfx aimed at you, past the sfx duck), ui, voice, ambience
+  const stems = [g.out, g.bus.music, g.bus.sfx, a.threat, g.bus.ui, g.bus.voice, g.bus.ambience];
+  const N = stems.length * 2;
+  const merger = ctx.createChannelMerger(N);
+  stems.forEach((node, i) => {
+    const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 1681.974; hs.gain.value = 3.9998;
+    hs.channelCount = 2; hs.channelCountMode = 'explicit'; hs.channelInterpretation = 'speakers';
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 38.135; hp.Q.value = -6.015;   // WebAudio's high-pass Q is in dB: -6.015 dB = Q 0.5 (BS.1770 RLB)
+    const sp = ctx.createChannelSplitter(2);
+    node.connect(hs); hs.connect(hp); hp.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1);
+  });
+  const proc = ctx.createScriptProcessor(4096, N, 1);
+  const st = { blocks: [] };
+  window.__cap = st;
+  proc.onaudioprocess = (ev) => {
+    const ib = ev.inputBuffer, n = ib.length, row = [ctx.currentTime];
+    for (let s = 0; s < stems.length; s++) {
+      let ss = 0;
+      for (let c = 0; c < 2; c++) { const d = ib.getChannelData(2 * s + c); for (let i = 0; i < n; i++) ss += d[i] * d[i]; }
+      row.push(ss / n);
+    }
+    st.blocks.push(row);
+  };
+  const z = ctx.createGain(); z.gain.value = 0;
+  merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
+  return true;
+};
+
+const LU = (ms) => -0.691 + 10 * Math.log10(Math.max(ms, 1e-20));
+const movAvg = (xs, n) => { const o = []; let s = 0; for (let i = 0; i < xs.length; i++) { s += xs[i]; if (i >= n) s -= xs[i - n]; if (i >= n - 1) o.push(s / n); } return o; };
+function integrated(ms) {
+  const m = movAvg(ms, 5).filter((x) => LU(x) > -70);
+  if (!m.length) return null;
+  const rel = LU(m.reduce((a, b) => a + b, 0) / m.length) - 10;
+  const g = m.filter((x) => LU(x) > rel);
+  return LU(g.reduce((a, b) => a + b, 0) / g.length);
+}
+
+async function runMatch() {
+  const { browser, page, logs } = await openFake('/?dev=1&render=0&autopilot=1&autoflow=1');
+  const rep = { probe: 'probe_audio_runtime', mode: 'match', queue: QUEUE, seconds: SECONDS, err: null, cues: [] };
+  try {
+    await page.waitForTimeout(1500);
+    await page.keyboard.press('Shift');
+    await page.waitForFunction(() => window.__valeAudio?.graph?.ctx?.state === 'running', null, { timeout: 20000 });
+    rep.settings = await page.evaluate(() => window.__vale.session.profile().settings.audio);
+    rep.rate = await page.evaluate(() => window.__valeAudio.graph.ctx.sampleRate);
+    await page.evaluate(TAP);
+    await page.evaluate((q) => { const v = window.__vale; (v.state.queueFor ? v.state.queueFor({ queue: q }) : v.session.queue({ queue: q })); }, QUEUE);
+    await page.waitForFunction(() => !!window.__vale.state.match.value, null, { timeout: 600000, polling: 500 });
+    const ct0 = await page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
+    rep.you = await page.evaluate(() => { const m = window.__vale.state.match.value; const p = m?.view.players.find((x) => x.player === m.you); return p ? { fighter: p.fighter ?? null, team: p.team } : null; });
+    log('match', JSON.stringify(rep.you));
+    let deadSeen = 0;
+    for (;;) {
+      const s = await page.evaluate(() => {
+        const a = window.__valeAudio, v = window.__vale;
+        return { ct: a.graph.ctx.currentTime, t: v?.state?.match?.value?.view?.time ?? null, cues: a.log.splice(0), dead: a.musicDead === true };
+      });
+      if (s.dead) deadSeen++;
+      for (const c of s.cues) rep.cues.push([r2(s.ct), s.t === null ? null : r2(s.t), c]);
+      if (s.t === null && rep.cues.length > 5) { log('match left'); break; }
+      if ((s.t ?? 0) >= SECONDS) break;
+      if ((Date.now() - t0) / 1000 > SECONDS * 1.6 + 300) { rep.err = 'wall-clock budget'; break; }
+      await page.waitForTimeout(2000);
+    }
+    rep.deadPolls = deadSeen;
+    const blocks = await page.evaluate((c0) => window.__cap.blocks.filter((r) => r[0] >= c0 - 2), ct0);
+    await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
+    // ── analysis ──
+    const col = (i) => blocks.map((r) => r[i]);
+    const names = ['out', 'music', 'sfxBus', 'threat', 'ui', 'voice', 'ambience'];
+    const ms = Object.fromEntries(names.map((n, i) => [n, col(i + 1)]));
+    ms.sfx = ms.sfxBus.map((x, i) => x + ms.threat[i]);       // the sfx the player hears: bus + threat path
+    const blk = 4096 / rep.rate;
+    const loud = {};
+    for (const n of ['out', 'music', 'sfx', 'voice', 'ambience']) {
+      const st = movAvg(ms[n], 35).map(LU), mo = movAvg(ms[n], 5).map(LU);
+      loud[n] = { I: r2(integrated(ms[n])), p10: r2(pct(st, 10)), p50: r2(pct(st, 50)), p90: r2(pct(st, 90)), p99: r2(pct(st, 99)), Mmax: r2(Math.max(...mo)) };
+    }
+    rep.seconds = r2(blocks.length * blk);
+    rep.loudness = loud;
+    // the announcer over the fight: each line's momentary peak vs the sfx short-term p99, whole capture and teamfights
+    const voiceMo = movAvg(ms.voice, 5).map(LU), sfxSt = movAvg(ms.sfx, 35).map(LU);
+    const sfxP90 = pct(sfxSt, 90);
+    const fightIdx = sfxSt.map((v, i) => (v >= sfxP90 ? i : -1)).filter((i) => i >= 0);
+    const fightP99 = pct(fightIdx.map((i) => sfxSt[i]), 99);
+    const lines = [];
+    for (let i = 1; i < voiceMo.length - 1; i++) if (voiceMo[i] > -45 && voiceMo[i] >= voiceMo[i - 1] && voiceMo[i] > voiceMo[i + 1]) {
+      if (lines.length && i - lines[lines.length - 1].i < 12) { if (voiceMo[i] > lines[lines.length - 1].db) lines[lines.length - 1] = { i, db: voiceMo[i] }; continue; }
+      lines.push({ i, db: voiceMo[i] });
+    }
+    const lineRows = lines.map((l) => {
+      const j = Math.min(sfxSt.length - 1, Math.max(0, l.i - 17));
+      return { at: r2(l.i * blk), peak: r2(l.db), sfxShortHere: r2(sfxSt[j]), overHere: r2(l.db - sfxSt[j]) };
+    });
+    const p99 = loud.sfx.p99;
+    const linePeak = lines.length ? Math.max(...lines.map((l) => l.db)) : null;
+    const lineMedian = pct(lines.map((l) => l.db), 50);
+    rep.announcer = { lines: lines.length, linePeak: r2(linePeak), lineMedianPeak: r2(lineMedian), sfxP99: p99, teamfightSfxP99: r2(fightP99),
+      peakOverSfxP99: r2(linePeak - p99), medianOverSfxP99: r2(lineMedian - p99), medianOverTeamfightP99: r2(lineMedian - fightP99),
+      linesInTeamfight: lineRows.filter((r) => r.sfxShortHere >= sfxP90).map((r) => r), rows: lineRows.slice(0, 40) };
+    // the cue log: heal chimes per minute, enemyDown, the lamp cues
+    const tMax = Math.max(1, ...rep.cues.map((c) => c[1] ?? 0));
+    const count = (id) => rep.cues.filter((c) => c[2] === id).length;
+    const cat = await page.evaluate(() => ({ heal: window.__vale.catalog?.audio?.events?.heal ?? null })).catch(() => ({}));
+    const healId = cat.heal ?? 'c_heal';
+    rep.cueLog = { total: rep.cues.length, matchSeconds: r2(tMax), heal: count(healId), healPerMin: r2(count(healId) / tMax * 60),
+      enemyDown: count('m_enemy_down'), allyDown: count('m_ally_down'), selfDown: count('m_self_down'), takedown: count('m_takedown'),
+      lampSet: count('c_lamp_set'), lampOut: count('c_lamp_out'), summonOut: count('c_summon_out'), summon: count('c_summon') };
+    const top = {}; for (const c of rep.cues) top[c[2]] = (top[c[2]] ?? 0) + 1;
+    rep.cueTop = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 30);
+    rep.gates = {
+      healPerMinLe6: rep.cueLog.healPerMin <= 6,
+      enemyDownFires: rep.cueLog.enemyDown > 0,
+      announcerPeakOverSfxP99Ge3: rep.announcer.peakOverSfxP99 !== null && rep.announcer.peakOverSfxP99 >= 3,
+      announcerMedianOverTeamfightP99Ge3: rep.announcer.medianOverTeamfightP99 !== null && rep.announcer.medianOverTeamfightP99 >= 3,
+    };
+    rep.pass = Object.values(rep.gates).every(Boolean) && !rep.err;
+    rep.cues = rep.cues.slice(0, 3000);
+  } catch (e) { rep.err = String(e?.message ?? e); }
+  rep.logs = logs.slice(0, 30);
+  await browser.close().catch(() => {});
+  return rep;
+}
+
+const rep = mode === 'sync' ? await runSync() : await runMatch();
+mkdirSync(dirname(OUT), { recursive: true });
+writeFileSync(OUT, JSON.stringify(rep, null, 1));
+const brief = { ...rep }; delete brief.rows; delete brief.cues; delete brief.logs;
+if (brief.announcer) brief.announcer = { ...brief.announcer, rows: undefined };
+console.log(JSON.stringify(brief, null, 1).slice(0, 5000));
+console.log(rep.err ? `ERROR ${rep.err}` : rep.pass ? 'PASS' : 'FAIL', '→', OUT);
+process.exit(rep.err ? 2 : rep.pass ? 0 : 1);

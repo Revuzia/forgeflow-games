@@ -367,14 +367,24 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             rec.wick14[kk] = (rec.wick14[kk] ?? 0) + 1;
             // (diagnostic: a Wick finished by a Wick — was a fighter of the other team there to take it, and in which mode?)
             if (kk === 'minion' && victim) {
-              let near = 'none', bd = 14 * 14;
+              let near = 'none', bd = Infinity;
               for (const pl of world().players) {
                 const f = pl.ent;
                 if (!f || !f.alive || pl.team === victim.team) continue;
                 const d2 = (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2;
-                if (d2 < bd) { bd = d2; near = `${setup.seats[pl.player]?.role ?? '?'}/${modeOf(pl.player)}`; }
+                if (d2 < bd) { bd = d2; near = `${d2 > 14 * 14 ? 'far:' : ''}${setup.seats[pl.player]?.role ?? '?'}/${modeOf(pl.player)}`; }
               }
               rec.wickMissed[near] = (rec.wickMissed[near] ?? 0) + 1;
+              let nf: ReturnType<typeof world>['players'][number]['ent'] = null, nd = 14 * 14;
+              for (const pl of world().players) { const f = pl.ent; if (!f || !f.alive || pl.team === victim.team) continue; const d2 = (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2; if (d2 < nd) { nd = d2; nf = f; } }
+              if (nf && modeOf(world().players.findIndex((pp) => pp.ent === nf)) === 'lane') {
+                const d = Math.sqrt(nd), reach = nf.stats.range + nf.radius + victim.radius;
+                let tower = false;
+                for (const st of structuresOf(world())) if (st.ent.alive && st.ent.team === victim.team && st.ent.attackDef && (st.ent.x - victim.x) ** 2 + (st.ent.y - victim.y) ** 2 <= (st.ent.stats.range + st.ent.radius + 1) ** 2) tower = true;
+                const tg = nf.atkTarget >= 0 ? world().entity(nf.atkTarget) : null;
+                const why = tower ? 'tower' : d <= reach + 0.5 ? (nf.atkWindup >= 0 && nf.atkTarget !== victim.id ? `reach:swing-${tg?.kind ?? '?'}` : nf.atkCd > 0.05 ? 'reach:cd' : 'reach:idle') : d <= reach + 4 ? 'near' : 'far';
+                rec.wickMissed['L:' + why] = (rec.wickMissed['L:' + why] ?? 0) + 1;
+              }
             }
           } else if (e.kind === 'fighter') {
             const w = world();
@@ -636,7 +646,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const miss: Record<string, number> = {};
     for (const g of gs) for (const [k, v] of Object.entries(g.wickMissed ?? {})) miss[k] = (miss[k] ?? 0) + v;
     const mTot = Object.values(miss).reduce((a, b) => a + b, 0) || 1;
-    text.push(`  Wicks finished by Wicks, nearest other-team fighter in 14 m: ${Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${pct(v / mTot)}`).join(', ')}`);
+    text.push(`  Wicks finished by Wicks, nearest other-team fighter (far: beyond 14 m): ${Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${pct(v / mTot)}`).join(', ')}`);
     if (Object.keys(alone).length) text.push(`  alone deaths by role/mode/phase: ${Object.entries(alone).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   }
   detail.laning = lan;

@@ -24,6 +24,9 @@
 //               is still heard (a missed ready check costs a re-queue lockout), the UI slider cannot take it
 //               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
 //               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
+//   sync        a cue starts the moment its event reaches the engine (the frame loop pumps the sim, then renders, in one rAF);
+//               a one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in.
+//               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame
 //   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices, cooldown (s), loop; files
 //               decode lazily on first use, UI cues preload; an unknown or missing cue is silently ignored (art
 //               may still be rendering)
@@ -273,6 +276,9 @@ const AWARE_GAIN = 0.8;      // … play at least this loud (−2 dB), unfiltere
 const NEAR_COMBAT_M = 14;    // fighter damage within this of the listener (or of your living fighter) feeds the combat layer
 const MAX_VOICES = 32;       // the global budget (r07 §4.3: 32-48 in a browser): past it the lowest-ranked voice yields
 const HEAL_MERGE_S = 0.25;   // one target's heals within this are one chime
+const LEAD_SKIP_S = 0.004;   // a one-shot starts this far into its file: audio/build.py pads 5 ms of silence before every
+                             // one-shot (LEAD_S, the codec's pre-echo room); skipping 4 ms of it under a LEAD_RAMP_S
+const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame (closing critic 'audio-runtime')
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
@@ -836,7 +842,14 @@ class Engine implements ValeAudioPort {
       node.connect(g).connect(into);
       v.src = src; v.gain = g; v.started = this.ctx.currentTime;
       src.onended = drop;
-      src.start();
+      // a one-shot of the cue build skips most of its silent codec lead (see LEAD_SKIP_S); loops and the music bus's
+      // stings (their own build) start at 0
+      if (!c.loop && c.bus !== 'music' && buf.duration > LEAD_SKIP_S * 4) {
+        const t = this.ctx.currentTime;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(c.gain * att * gainMul, t + LEAD_RAMP_S);
+        src.start(0, LEAD_SKIP_S);
+      } else src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
       o.onVoice?.(v, buf);
@@ -1647,7 +1660,7 @@ class Engine implements ValeAudioPort {
           const youEnt = this.client?.view.players.find((x) => x.player === this.client?.you)?.entity;
           if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
           else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);
-          else if (dst) this.cue(this.ev('enemyDown'), null);
+          else if (dst && e.by !== this.client?.you) this.cue(this.ev('enemyDown'), null);   // yours: 'takedown' carries it
         } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.6);
         else if (k === 'ward') this.cue(this.ev('wardOut'), at(dst));
         else if (k === 'summon') this.cue(this.ev('summonOut'), at(dst), 0.8);

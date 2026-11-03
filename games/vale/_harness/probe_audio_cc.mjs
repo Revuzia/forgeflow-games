@@ -44,7 +44,7 @@ const MINUTES = Number(arg('--minutes', 9));
 const SEED = Number(arg('--seed', 5));
 
 // ── a fake WebAudio whose sources END (after their buffer's length, or a stop()) ─────────────────────────
-class Param { constructor(v) { this.value = v; } setTargetAtTime(v) { this.value = v; } cancelScheduledValues() {} }
+class Param { constructor(v) { this.value = v; } setTargetAtTime(v) { this.value = v; } cancelScheduledValues() {} setValueAtTime(v) { this.value = v; } linearRampToValueAtTime(v) { this.value = v; } }
 class Node {
   constructor(ctx, kind) { this.ctx = ctx; this.kind = kind; this.outs = []; this.gain = new Param(1); }
   connect(d) { this.outs.push(d); return d; }

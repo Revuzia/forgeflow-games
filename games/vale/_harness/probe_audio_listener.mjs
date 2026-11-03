@@ -38,7 +38,7 @@ const SEED = Number(arg('--seed', 3));
 const FIGHT_R = 8, AWARE_R = 10, SCOUT_DX = 40;
 
 // ── a minimal fake WebAudio + DOM (the engine only builds a graph and starts sources) ─────────────────────
-class Param { constructor(v) { this.value = v; } setTargetAtTime(v) { this.value = v; } cancelScheduledValues() {} }
+class Param { constructor(v) { this.value = v; } setTargetAtTime(v) { this.value = v; } cancelScheduledValues() {} setValueAtTime(v) { this.value = v; } linearRampToValueAtTime(v) { this.value = v; } }
 class Node {
   constructor(ctx, kind) { this.ctx = ctx; this.kind = kind; this.outs = []; this.gain = new Param(1); }
   connect(d) { this.outs.push(d); return d; }

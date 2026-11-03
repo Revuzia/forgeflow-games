@@ -49,6 +49,20 @@
 //              band: LoL's bases stay tinted), and the base structures' L* p95 (<= 80: structure chalk sits under the
 //              fighters, r12 B5) and display luma p95 against the fighters' (verdict base_<n>_plaza / base_<n>_structure)
 //
+//   landmarks (env E1, --landmarks 1 adds it, --landmarks only runs nothing else) the landmark face-detail gate: the camera
+//             (28.5 m, fog off, VFX/UI hidden) on each gated landmark of the map (art.terrain.landmarks entries whose model
+//             is a numeral_*, vi_slab, lampwright_cart, lampwright_stall or fair_stand_* GLB), the class pass tagging that
+//             landmark's own meshes, and over its pixels (eroded 2 px; occluders excluded by the depth test) in DISPLAY L*:
+//               hp       the in-game high-pass: std of L* minus its 5 x 5 masked box mean (the lane's in the same
+//                        frames is reported as laneHp for reference)
+//               breakup  p95 - p5 of the 0.5 m band: L* smoothed over a 0.5 m box minus L* smoothed over a 2.5 m box,
+//                        both inside the pixel's own face (the class pass writes the geometric view-space normal of the
+//                        landmark under test in 5 x 5 bins: a face = one bin), over the pixels a 0.5 m box fits inside
+//                        their face: the face's own value pattern at >= 0.5 m; the light / shade split between faces
+//                        and the silhouette never count. hp is taken inside the faces the same way
+//               range05  p95 - p5 of L* smoothed over 0.5 m (info: includes the light / shade split of its faces)
+//             Gate (closing CW4 done 2): hp >= 2.9 (the lane flagstone) and breakup >= 6 L* on every gated landmark
+//   --report  the report's file name under _harness/_reports (default value_probe.json)
 //   --vfxcaps the flash test again per VFX lift cap (e.g. off,1.3,1.6: renderer.vfx.liftCap, combat F4; off = effects
 //             lifted like the ground), reported as flash.byCap
 //   --you     pins seat 0's fighter (the bench's `you=`): measure a fighter the map's default seat roster leaves out
@@ -79,6 +93,11 @@ const YOU = opt('you', '');
 const FSHOTS = opt('fshots', '0') === '1';
 const FOG = opt('fog', '0');
 const FOG_ONLY = FOG === 'only';
+const LMK = opt('landmarks', '0');
+const LMK_ONLY = LMK === 'only';
+/** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
+const LMK_RE = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
+const LMK_HP = 2.9, LMK_BREAKUP = 6;
 /** combat F4: the flash test once per VFX lift cap (renderer.vfx.liftCap; 'off' = effects lifted like the ground) */
 const VFX_CAPS = opt('vfxcaps', '').split(',').filter(Boolean).map((c) => (c === 'off' ? null : Number(c)));
 /** env F3: the unseen / lit display ratio band (tokens grade.fogOfWar.valueMul 0.55) */
@@ -157,13 +176,21 @@ function install() {
 }`;
   const cache = new Map();
   const figs = [];
+  /** env E1: the GLB node name of the landmark under test, and the one instance (root object) being measured */
+  let lmkTag = null, lmkRoot = null;
+  const lmkTagged = (o) => { for (let p = o; p; p = p.parent) if (p === lmkRoot) return true; return false; };
   const classMat = (m, cls, kind, g = 0) => {
     const key = `${m.uuid}|${kind}|${cls}|${g}`;
     let c = cache.get(key);
     if (c) return c;
     c = m.clone();
     const ob = m.onBeforeCompile, ck = m.customProgramCacheKey;
-    const snip = kind === 'ground' ? GROUND_SNIP : kind === 'wall' ? WALL_SNIP : `gl_FragColor = vec4( ${cls}.0 / 255.0, ${g}.0 / 255.0, 0.0, 1.0 );`;
+    // env E1: the landmark under test (G 1) writes its face orientation into B: the geometric view-space normal in 5 x 5
+    // bins (1-25), so the face-detail stats stay inside one flat face (never across a lit top and a shaded side)
+    const faceB = g === 1 && (cls === C.landmark || cls === C.lamp)
+      ? `vec3 qn = normalize( cross( dFdx( vViewPosition ), dFdy( vViewPosition ) ) ); float qb = 1.0 + min( 4.0, floor( ( qn.x * 0.5 + 0.5 ) * 5.0 ) ) + 5.0 * min( 4.0, floor( ( qn.y * 0.5 + 0.5 ) * 5.0 ) );`
+      : 'float qb = 0.0;';
+    const snip = kind === 'ground' ? GROUND_SNIP : kind === 'wall' ? WALL_SNIP : `{ ${faceB} gl_FragColor = vec4( ${cls}.0 / 255.0, ${g}.0 / 255.0, qb / 255.0, 1.0 ); }`;
     c.onBeforeCompile = (sh, r) => {
       ob.call(m, sh, r);
       sh.fragmentShader = sh.fragmentShader.replace(/\}\s*$/, `\n${snip}\n}\n`);
@@ -205,7 +232,9 @@ function install() {
     if (names.some((n) => /^vale_(boulders|stones)/.test(n))) return { cls: C.rock };
     if (names.some((n) => n.startsWith('vale_clutter'))) return { cls: C.clutter };
     const ms = Array.isArray(o.material) ? o.material : [o.material];
-    return { cls: ms.some(emissive) ? C.lamp : C.landmark, perMat: true };
+    // env E1: the landmark under test carries G = 1 (its root is the GLB's node named after its file)
+    const tg = lmkRoot && lmkTagged(o) ? 1 : 0;
+    return { cls: ms.some(emissive) ? C.lamp : C.landmark, perMat: true, g: tg };
   };
   /** the class pass into an 8-bit target at the drawing-buffer size; returns RGBA bytes (bottom-up) */
   const classPass = () => {
@@ -384,6 +413,79 @@ function install() {
         m.maskPng = cv.toDataURL('image/png');
       }
       return m;
+    },
+    /** env E1: the gated landmarks of this map (content entries with a gated model) */
+    landmarkList: (reSrc) => {
+      const m = b.catalog.maps.find((x) => x.id === b.host.setup.map);
+      const re = new RegExp(reSrc);
+      return (m.art?.terrain?.landmarks ?? []).filter((l) => typeof l.model === 'string' && re.test(l.model))
+        .map((l) => ({ id: l.id, glb: l.model.match(re)[1], at: l.at, value: l.value ?? 1 }));
+    },
+    /** env E1: the face-detail stats of one landmark instance: camera on it, the class pass tagging its meshes */
+    landmarkAt: (l, off) => {
+      // the instance: the terrain object standing at its `at` whose subtree holds a node named after the GLB
+      let root = null, bd = 1e9;
+      R.scene.traverse((o) => {
+        if ((o.name !== l.glb && !o.name.startsWith(`${l.glb}_`)) || !o.parent) return;
+        let top = o; while (top.parent && top.parent.name !== 'vale_terrain' && top.parent !== R.scene) top = top.parent;
+        const p = new Vec3(); top.getWorldPosition(p);
+        const d = Math.hypot(p.x - l.at[0], p.z - l.at[1]);
+        if (d < bd) { bd = d; root = top; }
+      });
+      if (!root || bd > 1.0) return { error: `instance not found (${bd})` };
+      b.focus(l.at[0] + off[0], l.at[1] + off[1]); b.zoom(28.5);
+      R.vfx.clear(); fx.reset();
+      settle(12);
+      const frame = readFrame();
+      lmkTag = l.glb; lmkRoot = root;
+      const cls = classPass();
+      lmkTag = null; lmkRoot = null;
+      const { w, h } = frame, F = frame.buf, K = cls.buf;
+      const sx = gl.domElement.width / R.cssW;
+      const p0 = R.worldToScreen(l.at[0], l.at[1], 0), p1 = R.worldToScreen(l.at[0] + 1, l.at[1], 0);
+      const pxm = Math.hypot(p1.x - p0.x, p1.y - p0.y) * sx;
+      // M: the face id (normal bin 1-25) of the landmark's pixels, 0 elsewhere; LN: the lane (id 1)
+      const N = w * h, Ls = new Float32Array(N), M = new Uint8Array(N), LN = new Uint8Array(N);
+      for (let i = 0; i < N; i++) {
+        const j = i * 4;
+        Ls[i] = lstarOf(F[j], F[j + 1], F[j + 2]);
+        if ((K[j] === C.landmark || K[j] === C.lamp) && K[j + 1] === 1) M[i] = Math.max(1, K[j + 2]);
+        if (K[j] === C.lane) LN[i] = 1;
+      }
+      /** eroded: the 4-neighbours share the face id, r times */
+      const erode = (A, r) => { let cur = A; for (let k = 0; k < r; k++) { const o = new Uint8Array(N); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x, c = cur[i]; o[i] = c && cur[i - 1] === c && cur[i + 1] === c && cur[i - w] === c && cur[i + w] === c ? c : 0; } cur = o; } return cur; };
+      const Me = erode(M, 2), LNe = erode(LN, 2);
+      // masked box mean via integral images, per face id (the mean of the pixels of the same face inside the box)
+      const boxMean = (A, r) => {
+        const out = new Float32Array(N);
+        const ids = new Set(); for (let i = 0; i < N; i++) if (A[i]) ids.add(A[i]);
+        for (const id of ids) boxMean1(A, r, id, out);
+        return out;
+      };
+      const boxMean1 = (A, r, id, out) => {
+        const W1 = w + 1, S = new Float64Array(W1 * (h + 1)), Cn = new Float64Array(W1 * (h + 1));
+        for (let y = 0; y < h; y++) { let rs = 0, rc = 0; for (let x = 0; x < w; x++) { const i = y * w + x; if (A[i] === id) { rs += Ls[i]; rc++; } S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + rs; Cn[(y + 1) * W1 + x + 1] = Cn[y * W1 + x + 1] + rc; } }
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const i = y * w + x; if (A[i] !== id) continue;
+          const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1), y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+          const s = S[y1 * W1 + x1] - S[y0 * W1 + x1] - S[y1 * W1 + x0] + S[y0 * W1 + x0];
+          const c = Cn[y1 * W1 + x1] - Cn[y0 * W1 + x1] - Cn[y1 * W1 + x0] + Cn[y0 * W1 + x0];
+          out[i] = c ? s / c : Ls[i];
+        }
+      };
+      const hpOf = (A, Ae) => { const m = boxMean(A, 2); let s = 0, s2 = 0, n = 0; for (let i = 0; i < N; i++) if (Ae[i]) { const d = Ls[i] - m[i]; s += d; s2 += d * d; n++; } return n ? { hp: +Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2)).toFixed(2), n } : { hp: null, n: 0 }; };
+      const q = (arr, p) => { if (!arr.length) return null; const a = Float32Array.from(arr).sort(); return a[Math.min(a.length - 1, Math.floor(p * a.length))]; };
+      const own = hpOf(M, Me), lane = hpOf(LN, LNe);
+      const r05 = Math.max(1, Math.round(pxm * 0.25)), r25 = Math.max(2, Math.round(pxm * 1.25));
+      const s05 = boxMean(M, r05), s25 = boxMean(M, r25);
+      const band = [], sm = [], raw = [];
+      const er05 = erode(Me, Math.max(0, r05 - 2));          // the band only where a 0.5 m box fits inside the face
+      for (let i = 0; i < N; i++) if (Me[i]) { sm.push(s05[i]); raw.push(Ls[i]); if (er05[i]) band.push(s05[i] - s25[i]); }
+      const r1 = (v) => (v == null ? null : +v.toFixed(1));
+      return {
+        id: l.id, glb: l.glb, value: l.value, px: own.n, bandPx: band.length, pxPerM: +pxm.toFixed(1), hp: own.hp, laneHp: lane.hp, lanePx: lane.n,
+        breakup: r1(q(band, 0.95) - q(band, 0.05)), range05: r1(q(sm, 0.95) - q(sm, 0.05)), lstarP5: r1(q(raw, 0.05)), lstarP50: r1(q(raw, 0.5)), lstarP95: r1(q(raw, 0.95)),
+      };
     },
     /** env F3: the same frame lit and fully unseen; per class (eroded) the display luma ratio of every pixel lit at
      *  luma >= 20 (400 bins over 0-2), the unseen L* and the summed lumas. Leaves the frame unseen (fogOff()) */
@@ -625,7 +727,7 @@ function verdict(s, flash, map) {
 }
 
 // ── run ──────────────────────────────────────────────────────────────────────────────────────────────
-const REPORT = join(HERE, '_reports', 'value_probe.json');
+const REPORT = opt('report', '') ? join(HERE, '_reports', opt('report', '')) : join(HERE, '_reports', 'value_probe.json');
 mkdirSync(dirname(REPORT), { recursive: true });
 const report = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')) : { note: 'r12 B5 environment value probe (_harness/value_probe.mjs)', runs: {} };
 report.runs[TAG] ??= {};
@@ -643,6 +745,26 @@ for (const map of MAPS) for (const tier of TIERS) {
     const C = await V((v) => v.C);
     const spots = await V((v) => v.spots());
     await V((v) => v.prep());
+    let landmarks = null;
+    if (LMK === '1' || LMK_ONLY) {
+      landmarks = {};
+      const list = await V((v, re) => v.landmarkList(re), LMK_RE.source);
+      // the camera stands a little south of the landmark (the gameplay camera looks north): it fills the frame's middle
+      for (const l of list) {
+        const r = await V((v, a) => v.landmarkAt(a.l, a.off), { l, off: [0, 0] });
+        if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_lmk_${l.id}`);
+        const pass = r.hp != null && r.hp >= LMK_HP && r.breakup != null && r.breakup >= LMK_BREAKUP;
+        landmarks[l.id] = { ...r, verdict: r.error ? `FAIL (${r.error})` : `hp ${r.hp} (>= ${LMK_HP}) breakup ${r.breakup} (>= ${LMK_BREAKUP}) ${pass ? 'PASS' : 'FAIL'}` };
+        console.log(`  landmark ${String(l.id).padEnd(20)} ${r.error ?? `${String(r.px).padStart(7)} px  ${r.pxPerM} px/m  hp ${r.hp}  breakup ${r.breakup}  range05 ${r.range05}  L* ${r.lstarP5}/${r.lstarP50}/${r.lstarP95}  lane hp ${r.laneHp}`}  ${landmarks[l.id].verdict}`);
+      }
+      if (LMK_ONLY) {
+        report.runs[TAG][`${map}_${tier}`] = { ...(report.runs[TAG][`${map}_${tier}`] ?? {}), tier, viewport: [w, h], t: T, seed: SEED, landmarks,
+          verdict: Object.fromEntries(Object.entries(landmarks).map(([k, e]) => [`landmark_${k}`, e.verdict])) };
+        report.generated = new Date().toISOString();
+        writeFileSync(REPORT, JSON.stringify(report, null, 1));
+        continue;
+      }
+    }
     let fog = null;
     if (FOG === '1' || FOG_ONLY) {
       const per = {};
@@ -703,7 +825,8 @@ for (const map of MAPS) for (const tier of TIERS) {
     }
     const s = summarise(res, C, fres);
     const bases = summariseBases(bres, C, s.fighters);
-    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+    const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, landmarks, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}),
+      ...(landmarks ? Object.fromEntries(Object.entries(landmarks).map(([k, e]) => [`landmark_${k}`, e.verdict])) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();
     writeFileSync(REPORT, JSON.stringify(report, null, 1));

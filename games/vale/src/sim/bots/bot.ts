@@ -457,6 +457,17 @@ export class Bot extends BotBase implements BotController {
       const leF = (le.hp + le.shield) / Math.max(1, le.maxHp);
       if (leF < 0.5 && hpF - leF >= 0.2 && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
     }
+    // (CW3 CL-1: a gank on my road is two on one only if I turn on its target too — the grovehunter at it, or already on
+    // it, and me close enough to join: that is the laner's half of the gank)
+    const gk = b && kind === 'rift' && !this.jungle && b.gank && b.gankLane === this.lane ? b.gank : null;
+    if (gk && gk.alive && this.isNoticed(gk) && hpF > 0.4 && this.dist2(gk, e.x, e.y) < 11 * 11 && (this.towerSafe(gk.x, gk.y, 0) || gk.hp < gk.maxHp * 0.25)) {
+      let mate = false;
+      for (const a of this.perc.allyFighters) {
+        if (a === e || !a.alive || !a.player) continue;
+        if (this.dist2(a, gk.x, gk.y) < 9 * 9 || (b && b.focus.get(a.player.player) === gk.id)) { mate = true; break; }
+      }
+      if (mate) { if (!this.killTarget || this.killTarget === gk) { this.killTarget = gk; consider('allin', 0.76); } }
+    }
     // (CW3 CL-1: a committed all-in is seen through — the combo it was started on is spent the moment it lands, and
     // dropping the chase then let every wounded target walk home; it holds while the target stays in reach, is hurt
     // worse than I am, and I am not the one about to fall)
