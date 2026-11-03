@@ -20,14 +20,20 @@ tests the camera against every static box collider with its own slab test.
   (6) the body is hidden while the lens is within 0.75 m of the eye and shown again beyond 0.95 m.
   (7) queryColliders: the pull-in's own calls (counted by caller name on the stack) are exactly 1 per frame when on and 0 when off, and
       no frame exceeds 150 calls in total (ON/OFF interleaved; the difference of the totals is information).
+  (7b) SETTLE (deterministic, W9 R1 camwall): a floorless drop (an item spawned 5 / 8 m over open ground with no collider within 3 m - the
+      swap / death drop that put ~322 calls into ONE frame on isla_viva, 8eaae688) settles in <= 4 queryColliders calls (counted by caller
+      `settle` on the stack) and keeps its authored x/z. Plant `settle-requery` (the served loot.js's settle() probes 160 extra points)
+      MUST FAIL it. `--settle-only` runs just this row (+ the error rows): the plant / a quick check.
   (8) 0 console/page/window errors, 0 failed requests, 0 shader errors, 0 [rig] lines.
 Exit 0 pass / 1 fail / 2 could-not-judge.
     python _harness/new/player_camwall.py --isolate           # or --disk for the whole working copy
+    python _harness/new/player_camwall.py --disk --maps isla_viva --settle-only --plant settle-requery   # the settle row's control: MUST FAIL
 """
 from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -276,6 +282,78 @@ QUERY_JS = r"""() => {
 }"""
 
 
+SETTLE_BAR = 4
+SETTLE_JS = r"""async (tag) => {
+  const W = window.__LC__.W, p = W.player, M = W.map;
+  const lootUrl = performance.getEntriesByType('resource').map((e) => e.name).find((u) => /royale\/loot\.js/.test(u));
+  if (!lootUrl) return { error: 'loot.js not among the loaded resources' };
+  const LM = await import(lootUrl);            // the same URL = the same module instance the game runs
+  const mc = M.queryColliders; let n = 0, inSettle = 0;
+  M.queryColliders = function () { n++; if (/\bsettle\b/.test(new Error().stack || '')) inSettle++; return mc.apply(this, arguments); };
+  try {
+    // deterministic spiral from the subject: open ground above the waterline with NO collider within 3 m (settle's whole reach is 2.2 m), so a
+    // body 5 / 8 m up has no floor within 0.9 m at any candidate = the worst case (every candidate tested, both passes)
+    const spots = [];
+    for (let k = 0; k < 2000 && spots.length < 3; k++) {
+      const ang = k * 2.39996, rr = 8 + k * 0.6, x = p.pos.x + Math.sin(ang) * rr, z = p.pos.z + Math.cos(ang) * rr, g = M.heightAt(x, z);
+      if (!(g > (M.waterY == null ? -1e9 : M.waterY) + 1) || mc.call(M, x, z, 3).length) continue;
+      if (spots.some((q) => Math.hypot(q[0] - x, q[1] - z) < 8)) continue;
+      spots.push([x, z, g]);
+    }
+    if (!spots.length) return { error: 'no open spot (no collider within 3 m) found near the subject' };
+    const drops = [];
+    let i = 0;
+    for (const [x, z, g] of spots) for (const up of [5, 8]) {
+      n = 0; inSettle = 0;
+      const id = 'cwsettle_' + tag + '_' + (i++);
+      LM.spawnItem(W, { kind: 'ammo', id: 'light', count: 1 }, x, g + up, z, id);
+      const it = LM.debugItems().find((q) => q.id === id);
+      drops.push({ at: [+x.toFixed(1), +(g + up).toFixed(1), +z.toFixed(1)], inSettle, inSpawn: n,
+                   stayed: !!it && Math.abs(it.pos.x - x) < 1e-9 && Math.abs(it.pos.z - z) < 1e-9 });
+    }
+    return { drops, maxInSettle: Math.max(...drops.map((d) => d.inSettle)), maxInSpawn: Math.max(...drops.map((d) => d.inSpawn)),
+             allStayed: drops.every((d) => d.stayed), lootUrl: lootUrl.replace(/^.*\/runtime\//, 'runtime/') };
+  } finally { M.queryColliders = mc; }
+}"""
+
+LOOT_REL = "runtime/3d/royale/loot.js"
+SETTLE_ANCHOR = "function settle(W, x, y, z, rad, hi) {"
+PLANT_SETTLE = "\n  for (let _plq = 0; _plq < 160; _plq++) W.map.queryColliders(x, z, 0.05, []);   // PLANT settle-requery (player_camwall)\n"
+
+
+def _served_loot(args):
+    """the loot.js this run serves: the last --overlay that has it, else --rev's blob, else the working copy"""
+    for d, rels in reversed(C.overlay_specs(args)):
+        f = os.path.join(d, LOOT_REL.replace("/", os.sep))
+        if (rels is None or LOOT_REL in rels) and os.path.isfile(f):
+            return open(f, encoding="utf-8").read()
+    if getattr(args, "rev", None):
+        r = subprocess.run(["git", "-C", C.ROOT, "show", "%s:./%s" % (args.rev, LOOT_REL)], capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            raise C.HarnessError("plant settle-requery: git show %s:%s failed: %s" % (args.rev, LOOT_REL, r.stderr.strip()[:200]))
+        return r.stdout
+    return open(os.path.join(C.ROOT, LOOT_REL.replace("/", os.sep)), encoding="utf-8").read()
+
+
+def apply_plant(args):
+    """--plant settle-requery: serve the judged loot.js with 160 extra queryColliders probes at the top of settle() (= a per-candidate settle)."""
+    if args.plant != "settle-requery":
+        return None
+    if not (getattr(args, "disk", False) or getattr(args, "rev", None)):
+        raise C.HarnessError("--plant settle-requery needs --disk or --rev (it is served by the page-routing server)")
+    src = _served_loot(args)
+    if src.count(SETTLE_ANCHOR) != 1:
+        raise C.HarnessError("plant settle-requery: anchor %r found %d times in the served loot.js" % (SETTLE_ANCHOR, src.count(SETTLE_ANCHOR)))
+    d = os.path.join(C.REPORTS, "_plant_camwall_settle", "games", "last-circle")
+    os.makedirs(os.path.join(d, os.path.dirname(LOOT_REL)), exist_ok=True)
+    with open(os.path.join(C.ROOT, "index.html"), "rb") as f, open(os.path.join(d, "index.html"), "wb") as g:
+        g.write(f.read())
+    with open(os.path.join(d, LOOT_REL.replace("/", os.sep)), "w", encoding="utf-8", newline="\n") as f:
+        f.write(src.replace(SETTLE_ANCHOR, SETTLE_ANCHOR + PLANT_SETTLE, 1))
+    args.overlay = list(args.overlay or []) + ["%s=%s" % (d, LOOT_REL)]
+    return d
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
@@ -283,13 +361,20 @@ def main():
     ap.add_argument("--maps", default=",".join(C.MAPS), help="comma list (default all 3)")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--houses", type=int, default=10, help="covered floor-loot spots per map (each adds up to 4 offsets)")
+    ap.add_argument("--settle-only", action="store_true", help="run only the floorless-drop settle row (+ the error rows): the plant / a quick check")
+    ap.add_argument("--plant", default=None, choices=["settle-requery"],
+                    help="negative control: settle-requery = the served loot.js's settle() probes 160 extra points (the settle row MUST FAIL)")
     args = ap.parse_args()
     PL.prepare(args)
+    plant_dir = apply_plant(args)
     maps = [m for m in args.maps.split(",") if m]
 
     def body(v):
         control_viol = 0
         diag_all = []
+        if args.plant:
+            v.data["plant"] = args.plant
+            v.info("PLANT %s (this run MUST FAIL the settle row)" % args.plant, {"served": plant_dir})
         for mid in maps:
             with C.Session(args, "player_camwall_" + mid) as s:
                 PL.overlay(s, args)
@@ -302,56 +387,64 @@ def main():
                 s.step_frames(10, 1 / 60, render=False)
                 info = s.js(PROBE_JS)
                 v.info("%s probe setup" % mid, info)
-                on = s.js(SWEEP_JS, [args.houses, False])
-                v.info("%s sweep (wall pull-in ON)" % mid, {k: on[k] for k in ("spots", "usedSpots", "wedgedSpots", "coveredLoot", "configs", "frames", "pulledConfigs", "pulledFrames", "violations", "eyeInWallFrames", "minDist", "hidden")})
-                if on["usedSpots"] == 0:
-                    v.cnj("%s: camera never inside or behind a wall" % mid, "no covered spot found on this seed/map (loot points under a roof: %s)" % on.get("coveredLoot"))
-                else:
-                    v.check("%s: the lens is never inside or behind a wall (%d configs, %d frames, %d spots; %d wedged teleports skipped)" % (mid, on["configs"], on["frames"], on["usedSpots"], on["wedgedSpots"]),
-                            on["violations"] == 0, {"violations": on["violations"], "examples": on["examples"]})
-                    v.check("%s: the pull-in actually engaged (some configs were blocked)" % mid, on["pulledConfigs"] > 0,
-                            {"pulledConfigs": on["pulledConfigs"], "configs": on["configs"], "minDist": round(on["minDist"], 2)})
-                    h = on["hidden"]
-                    v.check("%s: body hidden while the lens is < 0.75 m from the eye, shown when free" % mid,
-                            h["closeHidden"] == h["close"] and h["farShown"] == h["far"], h)
-                off = s.js(SWEEP_JS, [args.houses, True])
-                v.info("%s CONTROL sweep (W.noCamWall = true)" % mid, {k: off[k] for k in ("configs", "frames", "violations", "examples")})
-                control_viol += off["violations"]
-                op = s.js(OPEN_JS)
-                for _attempt in range(3):          # the same turn again when a bot hit the subject inside it (never judged hurt)
-                    if not (op.get("spot") and op.get("hurt")):
-                        break
-                    v.info("%s open field: the subject was hit inside the window (attempt %d), repeating" % (mid, _attempt + 1), op)
+                if not args.settle_only:
+                    on = s.js(SWEEP_JS, [args.houses, False])
+                    v.info("%s sweep (wall pull-in ON)" % mid, {k: on[k] for k in ("spots", "usedSpots", "wedgedSpots", "coveredLoot", "configs", "frames", "pulledConfigs", "pulledFrames", "violations", "eyeInWallFrames", "minDist", "hidden")})
+                    if on["usedSpots"] == 0:
+                        v.cnj("%s: camera never inside or behind a wall" % mid, "no covered spot found on this seed/map (loot points under a roof: %s)" % on.get("coveredLoot"))
+                    else:
+                        v.check("%s: the lens is never inside or behind a wall (%d configs, %d frames, %d spots; %d wedged teleports skipped)" % (mid, on["configs"], on["frames"], on["usedSpots"], on["wedgedSpots"]),
+                                on["violations"] == 0, {"violations": on["violations"], "examples": on["examples"]})
+                        v.check("%s: the pull-in actually engaged (some configs were blocked)" % mid, on["pulledConfigs"] > 0,
+                                {"pulledConfigs": on["pulledConfigs"], "configs": on["configs"], "minDist": round(on["minDist"], 2)})
+                        h = on["hidden"]
+                        v.check("%s: body hidden while the lens is < 0.75 m from the eye, shown when free" % mid,
+                                h["closeHidden"] == h["close"] and h["farShown"] == h["far"], h)
+                    off = s.js(SWEEP_JS, [args.houses, True])
+                    v.info("%s CONTROL sweep (W.noCamWall = true)" % mid, {k: off[k] for k in ("configs", "frames", "violations", "examples")})
+                    control_viol += off["violations"]
                     op = s.js(OPEN_JS)
-                v.info("%s open field" % mid, op)
-                if not op.get("spot"):
-                    v.cnj("%s: open field idle" % mid, "no open flat spot with no collider within 30 m")
-                elif op.get("hurt"):
-                    v.cnj("%s: open field idle" % mid, "the subject was hit by a bot inside the turn on all 4 attempts (the hit reaction kicks the camera)")
+                    for _attempt in range(3):          # the same turn again when a bot hit the subject inside it (never judged hurt)
+                        if not (op.get("spot") and op.get("hurt")):
+                            break
+                        v.info("%s open field: the subject was hit inside the window (attempt %d), repeating" % (mid, _attempt + 1), op)
+                        op = s.js(OPEN_JS)
+                    v.info("%s open field" % mid, op)
+                    if not op.get("spot"):
+                        v.cnj("%s: open field idle" % mid, "no open flat spot with no collider within 30 m")
+                    elif op.get("hurt"):
+                        v.cnj("%s: open field idle" % mid, "the subject was hit by a bot inside the turn on all 4 attempts (the hit reaction kicks the camera)")
+                    else:
+                        v.check("%s: open field: wall state idle on all %d turn frames, the lens sits exactly on the free boom, no vertical heave (< 0.05 m/frame)" % (mid, op["frames"]),
+                                op["idle"] and op["lensOnFreeBoomErr"] <= 1e-6 and op["maxFrameToFrameDy"] < 0.05, op)
+                    ea = s.js(EASE_JS)
+                    v.info("%s ease samples" % mid, ea)
+                    if not ea:
+                        v.cnj("%s: snap in / ease out" % mid, "no covered spot with a wall-blocked yaw (target < 0.6)")
+                    else:
+                        good = all(e["recov1"] < 0.1 and e["recov6"] < 0.4 and e["recov160"] >= 0.95 and e["monotone"] and 20 <= e["frames63"] <= 45 and e["snapGap"] < 0.03 for e in ea)
+                        v.check("%s: ease out slowly (<10%% of the gap after 1 frame, <40%% after 6, 63%% in 20-45 frames = ~0.45 s, >=95%% after 160, monotone), snap in within one frame" % mid, good, ea)
+                    ro = s.js(ROT_JS)
+                    v.info("%s rotation" % mid, ro)
+                    death = s.js("() => window.__PL_DEATH__")
+                    if death:
+                        v.info("%s the test subject DIED during the tour (never a verdict: configs after the death are skipped, not judged)" % mid, death)
+                    if not ro["tested"]:
+                        v.cnj("%s: orientation unchanged by the pull-in" % mid, "no blocked config to compare" + ("; the subject died at t=%s" % death["t"] if death else ""))
+                    else:
+                        v.check("%s: never rotates: orientation equals the wall-off orientation (<= 0.002 rad) while the lens moves > 5 cm" % mid,
+                                ro["maxAngle"] <= 0.002 and ro["minPosDiff"] > 0.05, ro)
+                    qy = s.js(QUERY_JS)
+                    v.info("%s queryColliders per frame" % mid, qy)
+                    v.check("%s: the pull-in makes exactly 1 queryColliders call per frame (0 when off; counted by caller) and no frame exceeds 150 in total" % mid,
+                            qy["ownPerFrameOn"] == [1, 1] and qy["ownPerFrameOffMax"] == 0 and qy["maxInOneFrame"] <= 150, qy)
+                st = s.js(SETTLE_JS, mid)
+                v.info("%s floorless-drop settle" % mid, st)
+                if st.get("error"):
+                    v.cnj("%s: a floorless drop settles in <= %d queryColliders calls" % (mid, SETTLE_BAR), st["error"])
                 else:
-                    v.check("%s: open field: wall state idle on all %d turn frames, the lens sits exactly on the free boom, no vertical heave (< 0.05 m/frame)" % (mid, op["frames"]),
-                            op["idle"] and op["lensOnFreeBoomErr"] <= 1e-6 and op["maxFrameToFrameDy"] < 0.05, op)
-                ea = s.js(EASE_JS)
-                v.info("%s ease samples" % mid, ea)
-                if not ea:
-                    v.cnj("%s: snap in / ease out" % mid, "no covered spot with a wall-blocked yaw (target < 0.6)")
-                else:
-                    good = all(e["recov1"] < 0.1 and e["recov6"] < 0.4 and e["recov160"] >= 0.95 and e["monotone"] and 20 <= e["frames63"] <= 45 and e["snapGap"] < 0.03 for e in ea)
-                    v.check("%s: ease out slowly (<10%% of the gap after 1 frame, <40%% after 6, 63%% in 20-45 frames = ~0.45 s, >=95%% after 160, monotone), snap in within one frame" % mid, good, ea)
-                ro = s.js(ROT_JS)
-                v.info("%s rotation" % mid, ro)
-                death = s.js("() => window.__PL_DEATH__")
-                if death:
-                    v.info("%s the test subject DIED during the tour (never a verdict: configs after the death are skipped, not judged)" % mid, death)
-                if not ro["tested"]:
-                    v.cnj("%s: orientation unchanged by the pull-in" % mid, "no blocked config to compare" + ("; the subject died at t=%s" % death["t"] if death else ""))
-                else:
-                    v.check("%s: never rotates: orientation equals the wall-off orientation (<= 0.002 rad) while the lens moves > 5 cm" % mid,
-                            ro["maxAngle"] <= 0.002 and ro["minPosDiff"] > 0.05, ro)
-                qy = s.js(QUERY_JS)
-                v.info("%s queryColliders per frame" % mid, qy)
-                v.check("%s: the pull-in makes exactly 1 queryColliders call per frame (0 when off; counted by caller) and no frame exceeds 150 in total" % mid,
-                        qy["ownPerFrameOn"] == [1, 1] and qy["ownPerFrameOffMax"] == 0 and qy["maxInOneFrame"] <= 150, qy)
+                    v.check("%s: a floorless drop (5 / 8 m over open ground, no collider within 3 m) settles in <= %d queryColliders calls (by caller settle) and keeps its x/z" % (mid, SETTLE_BAR),
+                            st["maxInSettle"] <= SETTLE_BAR and st["allStayed"], {k: st[k] for k in ("maxInSettle", "maxInSpawn", "allStayed", "drops")})
                 s.js("() => { const k = window.__LC__.W.kernel, i = k._updaters.indexOf(window.__PL_BUF_GUARD__); if (i >= 0) k._updaters.splice(i, 1); }")
                 s.guard_player(False)
                 d = s.diagnostics()
@@ -360,8 +453,9 @@ def main():
                 v.check("%s: 0 page / window errors" % mid, not (d["pageErrors"] or d["windowErrors"]), (d["pageErrors"] + d["windowErrors"])[:5])
                 v.check("%s: 0 failed requests" % mid, not d["failedRequests"], d["failedRequests"][:8])
                 v.check("%s: 0 shader errors, 0 [rig] lines" % mid, not d["shader"] and not d["rigWarnings"], (d["shader"] + d["rigWarnings"])[:4])
-        v.check("NEGATIVE CONTROL: with the pull-in switched off the sweep DOES find lens-in-wall frames (the probe can see the fault)", control_viol > 0,
-                {"controlViolations": control_viol})
+        if not args.settle_only:
+            v.check("NEGATIVE CONTROL: with the pull-in switched off the sweep DOES find lens-in-wall frames (the probe can see the fault)", control_viol > 0,
+                    {"controlViolations": control_viol})
         v.data["diagnostics"] = diag_all
     return C.run_gate("player_camwall", body, args)
 
