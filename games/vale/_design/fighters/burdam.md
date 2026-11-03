@@ -160,15 +160,15 @@ Value bands (area-weighted): top **73** (70-85) · mid **49** (45-65) · feet **
 
 *"Pauldrons printed like ruled pages, day-marks down the cleaver's back and a rigid almanac board hung at his belt."*
 
-The whole figure is a ledger (closing review: the deluxe has to read apart from the base at the game camera by more than the standard skin does). The felt coat and skirt are a deep ledger-ink slate-violet (`#4A4560`, hue ~250, saturation 0.28, outside the azure band), the cowl is parchment (`#AFA283`), the pauldrons are ruled parchment pages (`#A3987F` painted mean, ink rules `#2E2A26` every 3.2 cm and an oxblood margin rule `#7A2E2A`, 1.4 cm, every third), the coat's hem is a parchment ledger strip with day-marks inked ~1 cm wide, and day-marks run down the cleaver's back. The ink `#2E2A26` is the deep tone (spine, toe caps, ruled lines). **Extra geometry:** a rigid almanac board hung at the belt on the right (0.20 x 0.26 m, 2 cm thick, carved walnut with a parchment face, no sway bone) ruled in 1.2 cm ink lines with an oxblood margin; the ruled lines and the day-marks are texture. The accent notches and slabs are unchanged. VFX: an ink-on-parchment tint is requested from the engine lane (content/vfx.json).
+The whole figure is a ledger (closing review: the deluxe has to read apart from the base at the game camera by more than the standard skin does). The felt coat and skirt are a deep ledger-ink plum-slate (`#4D4559`, hue ~265, saturation 0.22, well off the azure team band), the cowl is the darker ink felt (`#3E3A4C`) framing the pale mask, the pauldrons are ruled parchment pages (`#A3987F` painted mean, ink rules `#2E2A26` every 3.2 cm and an oxblood margin rule `#7A2E2A`, 1.4 cm, every third), the coat's hem is a parchment ledger strip with day-marks inked ~1 cm wide, and day-marks run down the cleaver's back. The ink `#2E2A26` is the deep tone (spine, toe caps, ruled lines). **Extra geometry:** a rigid almanac board hung at the belt on the right (0.20 x 0.26 m, 2 cm thick, carved walnut with a parchment face, no sway bone) ruled in 1.2 cm ink lines with an oxblood margin; the ruled lines and the day-marks are texture. The accent notches and slabs are unchanged. VFX: an ink-on-parchment tint is requested from the engine lane (content/vfx.json).
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `cloth2` | `#AFA283` | 67 | 44° / 25% | parchment cowl |
+| `cloth2` | `#3E3A4C` | 25 | 254° / 24% | ink-felt cowl |
 | `rust` | `#D8CDB4` | 83 | 42° / 17% | parchment-printed pauldrons (the named #D8CDB4; painted mean #A3987F under the splash sun) |
 | `stone` | `#CFC8B8` | 81 | 42° / 11% | cleaver blade with day-marks |
 | `ironstone` | `#2E2A26` | 17 | 30° / 17% | the ink #2E2A26 (spine, toe caps, ruled lines) |
-| `cloth` | `#4A4560` | 30 | 250° / 28% | ledger-ink slate-violet coat and skirt |
+| `cloth` | `#4D4559` | 31 | 265° / 22% | ledger-ink plum-slate coat and skirt |
 | `oxblood` | `#7A2E2A` | 29 | 4° / 66% | margin rules (lines only, < 5 % of the surface) |
 
 Value bands (area-weighted): top **76** (70-85) · mid **52** (45-65) · feet **29** (20-35).

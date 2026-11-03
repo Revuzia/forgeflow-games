@@ -11,7 +11,13 @@
 //     run so the hit is the only sound. Per hit: the onset (first sample within 30 dB of the hit's peak) → context
 //     time → performance time at the OUTPUT via AudioContext.getOutputTimestamp() (which places a context time on the
 //     device clock), cross-checked by the inject-time clock + baseLatency + outputLatency. Offset = heard − the impact
-//     frame's rAF timestamp. Gate: p95 <= one frame (the median rAF interval) + outputLatency.
+//     frame's rAF timestamp. Then the PLATFORM REFERENCE (CW2 refix): --refs (20) bare clicks, a raw AudioBufferSource
+//     started at 0 straight into the recorded output from the same frame-loop point, measured the same way: what any
+//     WebAudio sound started that frame costs on this device (the main thread's start() reaches the audio thread at its
+//     next device callback: about one output buffer, ~16 ms on Chrome's fake output, a few ms on a real device; the
+//     engine itself schedules nothing ahead). Gates: p95 <= one frame (the median rAF interval) + outputLatency + the
+//     platform's start hop (the reference's own start-to-onset p50), and the engine adds <= ENGINE_OVER_MS over the
+//     bare platform (engine p95 − reference p50).
 //   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--out <json>]
 //     A real match at speed 1, default settings, the autopilot playing your seat. Per 4096-sample block: K-weighted
 //     mean square of the output and of each bus (the sfx bus plus the threat path = what sfx the player hears) →
@@ -35,6 +41,8 @@ const mode = args[0] === 'match' ? 'match' : 'sync';
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
 const HITS = Number(opt('--hits', 50));
+const REFS = Number(opt('--refs', 20));
+const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
 const SECONDS = Number(opt('--seconds', 420));
 const t0 = Date.now();
@@ -76,7 +84,7 @@ async function runSync() {
     log('match');
     await page.waitForFunction(() => { const m = window.__vale.state.match.value; return m && m.started !== false && m.view.players.length > 0; }, null, { timeout: 120000 });
     await page.waitForTimeout(4000);                         // loading done, first frames drawn
-    rep.setup = await page.evaluate(async (n) => {
+    rep.setup = await page.evaluate(async ([n, nRef]) => {
       const a = window.__valeAudio, g = a.graph, ctx = g.ctx, v = window.__vale, m = v.state.match.value;
       // only the hit: music and ambience off for the run
       for (const b of ['music', 'ambience']) { const p = g.bus[b].gain; p.cancelScheduledValues(0); p.value = 0; }
@@ -100,12 +108,23 @@ async function runSync() {
       // inject into the frame loop: the match's pump, wrapped
       const you = m.view.players.find((p) => p.player === m.you).entity;
       const hits = [];
-      let due = Infinity, left = n;
+      let due = Infinity, left = n, refLeft = nRef;
+      // the platform reference: a bare 1 kHz click (instant onset), not the engine's
+      const click = ctx.createBuffer(1, Math.round(0.05 * ctx.sampleRate), ctx.sampleRate);
+      { const d = click.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = 0.3 * Math.sin(2 * Math.PI * 1000 * i / ctx.sampleRate) * (1 - i / d.length); }
       const orig = m.pump.bind(m);
       m.pump = (dt) => {
         const r = orig(dt);
         const now = performance.now();
         if (due === Infinity && m.view.time >= 2) due = now + 1500;   // after the countdown and the match-start toll
+        if (left === 0 && refLeft > 0 && now >= due) {
+          refLeft--;
+          due = now + 400 + Math.random() * 300;
+          const ts = ctx.getOutputTimestamp();
+          const h = { ref: true, raf: document.timeline.currentTime, perf: now, ct: ctx.currentTime, oc: ts.contextTime, op: ts.performanceTime };
+          const s = ctx.createBufferSource(); s.buffer = click; s.connect(g.out); s.start();
+          hits.push(h);
+        }
         if (left > 0 && now >= due) {
           left--;
           due = now + 900 + Math.random() * 400;               // jittered against the audio blocks
@@ -119,11 +138,11 @@ async function runSync() {
         }
         return r;
       };
-      window.__sync = { chunks, frames, hits, sr: ctx.sampleRate, done: () => left === 0 };
+      window.__sync = { chunks, frames, hits, sr: ctx.sampleRate, done: () => left === 0 && refLeft === 0 };
       return { sampleRate: ctx.sampleRate, baseLatency: ctx.baseLatency, outputLatency: ctx.outputLatency, you };
-    }, HITS);
+    }, [HITS, REFS]);
     log('injecting', HITS, 'hits', JSON.stringify(rep.setup));
-    await page.waitForFunction(() => window.__sync.done(), null, { timeout: HITS * 2500 + 30000, polling: 500 });
+    await page.waitForFunction(() => window.__sync.done(), null, { timeout: HITS * 2500 + REFS * 1500 + 30000, polling: 500 });
     await page.waitForTimeout(1500);
     const raw = await page.evaluate(() => {
       const s = window.__sync, ctx = window.__valeAudio.graph.ctx;
@@ -151,14 +170,15 @@ async function runSync() {
     const rows = raw.hits.map((h) => {
       const heardTs = h.on30 === null ? null : h.op + (h.on30 - h.oc) * 1000;                         // the device clock
       const heardClk = h.on30 === null ? null : h.perf + (h.on30 - h.ct) * 1000 + baseLatMs + outLatMs;   // inject clock + latencies
-      return { cue: h.cue, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
+      return { ref: !!h.ref, cue: h.cue ?? null, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
         offTsMs: heardTs === null ? null : r2(heardTs - h.raf), offClkMs: heardClk === null ? null : r2(heardClk - h.raf), injectAfterRafMs: r2(h.perf - h.raf) };
     });
     // a hit is measured when its window holds the hit alone: its peak within 3 dB of the hits' median (a match toll or
     // a wave horn landing in the window is another sound) and its own cue logged
-    const medPk = pct(rows.filter((r) => r.peakDb !== null).map((r) => r.peakDb), 50);
-    const ok = rows.filter((r) => r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
-    rep.excluded = rows.length - ok.length;
+    const refRows = rows.filter((r) => r.ref && r.offTsMs !== null);
+    const medPk = pct(rows.filter((r) => !r.ref && r.peakDb !== null).map((r) => r.peakDb), 50);
+    const ok = rows.filter((r) => !r.ref && r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
+    rep.excluded = rows.length - refRows.length - ok.length;
     const tsValid = ok.every((r) => Number.isFinite(r.offTsMs)) && raw.hits.some((h) => h.op > 0);
     const offs = ok.map((r) => (tsValid ? r.offTsMs : r.offClkMs));
     rep.frameMs = r2(frame);
@@ -173,9 +193,17 @@ async function runSync() {
     const alt = ok.map((r) => r.offClkMs);
     rep.offsetAltMs = { p50: r2(pct(alt, 50)), p95: r2(pct(alt, 95)) };
     rep.schedMs = { p50: r2(pct(ok.map((r) => r.schedMs), 50)), p95: r2(pct(ok.map((r) => r.schedMs), 95)) };
-    rep.budgetMs = r2(frame + outLatMs);
+    // the platform reference: the same offset for a bare source started from the same frame-loop point
+    const refOffs = refRows.map((r) => (tsValid ? r.offTsMs : r.offClkMs));
+    rep.platform = { detected: refRows.length, offsetMs: { p50: r2(pct(refOffs, 50)), p95: r2(pct(refOffs, 95)) },
+      startHopMs: { p50: r2(pct(refRows.map((r) => r.schedMs), 50)), p95: r2(pct(refRows.map((r) => r.schedMs), 95)) },
+      note: 'a raw AudioBufferSource.start() into the output from the impact frame: the device-callback hop every WebAudio sound pays' };
+    rep.engineOverPlatformMs = { p50: r2(rep.offsetMs.p50 - rep.platform.offsetMs.p50), p95: r2(rep.offsetMs.p95 - rep.platform.offsetMs.p50) };
+    rep.budgetNoHopMs = r2(frame + outLatMs);
+    rep.budgetMs = r2(frame + outLatMs + (rep.platform.startHopMs.p50 ?? 0));
     rep.rows = rows;
-    rep.gates = { measured: ok.length >= HITS * 0.9, p95WithinFramePlusOutput: rep.offsetMs.p95 <= rep.budgetMs };
+    rep.gates = { measured: ok.length >= HITS * 0.9, platformMeasured: refRows.length >= REFS * 0.9,
+      p95WithinFramePlusOutputPlusHop: rep.offsetMs.p95 <= rep.budgetMs, engineOverPlatformP95: rep.engineOverPlatformMs.p95 <= ENGINE_OVER_MS };
     rep.pass = Object.values(rep.gates).every(Boolean);
   } catch (e) { rep.err = String(e?.message ?? e); }
   rep.logs = logs.slice(0, 30);

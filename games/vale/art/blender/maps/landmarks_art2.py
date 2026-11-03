@@ -1172,7 +1172,13 @@ def numeral(B, rng, glyph: str, tilt: float = NUM_TILT):
         # a thin stroke is cut 3 cm shallower on both faces, so where it crosses or meets a thick one the thick stone
         # stands proud over it (never two coplanar faces baking each other black)
         d = D if w >= NUM_W else D - 0.06
-        pieces.append(("dialstone", K.prism(_stroke_poly(a, b, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.07)))
+        # each stroke is coursed: three stones, level joints (the cut ends meet square), each stone its own value
+        (ax_, az_), (bx_, bz_) = a, b
+        ts = [0.0, rng.uniform(0.3, 0.38), rng.uniform(0.62, 0.7), 1.0]
+        for t0, t1 in zip(ts[:-1], ts[1:]):
+            pa = (ax_ + (bx_ - ax_) * t0, az_ + (bz_ - az_) * t0 + (0.012 if t0 > 0 else 0.0))
+            pb = (ax_ + (bx_ - ax_) * t1, az_ + (bz_ - az_) * t1 - (0.012 if t1 < 1 else 0.0))
+            pieces.append(("dialstone", K.prism(_stroke_poly(pa, pb, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.05)))
         # the inked channel: a narrow cut down the stroke's face (the mason's V-cut, filled dark), a hair proud of the
         # face it lies on; it stops short of the bars
         (ax, az), (bx, bz) = a, b
@@ -1273,13 +1279,13 @@ def drop_underground(ob, z: float = -0.06) -> int:
 # content `value` multiplier: >= 6 L* at >= 0.5 m in game (closing CW4 done 2, value_probe --landmarks).
 LICHEN_HEX = "#6F7559"
 NUM_MATS = {
-    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.22, speckle=0.3,
-                      grain=0.18, blotch=0.3, lichen=0.7),                     # carved dial-stone, weathered
+    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.24, speckle=0.3,
+                      grain=0.34, blotch=0.3, lichen=0.5),                     # carved dial-stone, weathered
     "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
-                   edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.14, blotch=0.2, lichen=0.4),
+                   edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.3, blotch=0.2, lichen=0.4),
     "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
-                  grain=0.22, blotch=0.25, lichen=0.7),                          # the bank: earth, grit and moss
-    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08), grain=0.12),
+                  grain=0.32, blotch=0.25, lichen=0.7),                          # the bank: earth, grit and moss
+    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08), grain=0.3),
     "groove": dict(hex="#2F2C27", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),   # the cut, inked
 }
 VI_MATS = {
@@ -1316,13 +1322,15 @@ def _detail(mat, s: dict, height: float):
     if s.get("blotch"):
         k = s["blotch"]
         n = g.noise(scale=1.3, detail=3.0, rough=0.6, distortion=0.5)
-        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.36, 1.0 - k), (0.64, 1.0 + k * 0.6)]), 1.0, "MULTIPLY")
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.36, 1.0 - k * 0.75), (0.64, 1.0 + k * 0.75)]), 1.0, "MULTIPLY")
     if s.get("grain"):
         k = s["grain"]
-        n = g.noise(scale=18.0, detail=5.0, rough=0.7)
-        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.32, 1.0 - k), (0.68, 1.0 + k * 0.8)]), 1.0, "MULTIPLY")
-        sp = g.voronoi(scale=34.0, feature="F1")                                  # pits: small dark grains
-        c = g.mix(c, M.shade_hex(hexcol, 0.62, 1.1), g.math("MULTIPLY", g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.16, 0.0)]), k * 2.2))
+        n = g.noise(scale=30.0, detail=6.0, rough=0.75)
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.35, 1.0 - k), (0.65, 1.0 + k * 0.8)]), 1.0, "MULTIPLY")
+        st = g.noise(g.mapping(g.obj, scale=(1.0, 1.0, 9.0)), scale=14.0, detail=3.0, rough=0.6)   # tool stria / grit
+        c = g.mix(c, g.ramp(st.outputs["Fac"], [(0.4, 1.0 - k * 0.6), (0.6, 1.0 + k * 0.5)]), 1.0, "MULTIPLY")
+        sp = g.voronoi(scale=40.0, feature="F1")                                  # pits: small dark grains
+        c = g.mix(c, M.shade_hex(hexcol, 0.55, 1.1), g.math("MULTIPLY", g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.2, 0.0)]), min(1.0, k * 2.6)))
     if s.get("lichen"):
         k = s["lichen"]
         n = g.noise(scale=2.4, detail=6.0, rough=0.72, distortion=0.3)
@@ -1630,45 +1638,45 @@ CAMP_MATS = {
 
 
 _TIMBER = dict(hex="#6B5642", chisel=0.25, var=0.22, streaks=0.2, chips=0.3, scale=0.8, rough=0.82,
-               edge_light=(0.02, 0.55, 0.6, 0.05), fibre=("X", 0.2), grain=0.1, blotch=0.15)
+               edge_light=(0.02, 0.55, 0.6, 0.05), fibre=("X", 0.32), grain=0.3, blotch=0.15)
 _WARE = dict(hex="#8C7A5E", chisel=0.1, var=0.25, streaks=0.0, chips=0.2, scale=1.0, rough=0.35, edge_light=(0.01, 0.6, 0.4, 0.03))
 STALL_MATS = {
-    "plinth": dict(DIAL, hex="#8F897F", var=0.18, grain=0.14, blotch=0.22, lichen=0.25),
-    "chalk": dict(CHALK, var=0.2, grain=0.14, blotch=0.24, lichen=0.2),
-    "steel": dict(DAWN_MATS["steel"], grain=0.1),
+    "plinth": dict(DIAL, hex="#8F897F", var=0.18, grain=0.3, blotch=0.22, lichen=0.25),
+    "chalk": dict(CHALK, var=0.2, grain=0.3, blotch=0.24, lichen=0.2),
+    "steel": dict(DAWN_MATS["steel"], grain=0.2),
     "slate": dict(hex="#5A5F6A", chisel=0.8, var=0.22, streaks=0.35, chips=0.6, speckle=0.3, scale=0.7, rough=0.6,
-                  edge_light=(0.03, 0.75, 0.6, 0.08), stripes=("Z", 0.075, "#454953", 0.45), grain=0.16, blotch=0.22, lichen=0.35),
-    "dialstone": dict(DIAL, var=0.15, grain=0.12, blotch=0.2),
+                  edge_light=(0.03, 0.75, 0.6, 0.08), stripes=("Z", 0.075, "#454953", 0.45), grain=0.3, blotch=0.22, lichen=0.35),
+    "dialstone": dict(DIAL, var=0.15, grain=0.3, blotch=0.2),
     "timber": _TIMBER,
     "ware": _WARE,
 }
 STALL_DOME_MATS = {
     "plinth": STALL_MATS["plinth"],
-    "sandstone": dict(_SAND, var=0.2, grain=0.15, blotch=0.24, lichen=0.2),
-    "ironstone": dict(_IRON, var=0.2, grain=0.15, blotch=0.22),
-    "iron": dict(GATE_MATS["iron"], grain=0.1),
+    "sandstone": dict(_SAND, var=0.2, grain=0.3, blotch=0.24, lichen=0.2),
+    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.22),
+    "iron": dict(GATE_MATS["iron"], grain=0.2),
     "timber": _TIMBER,
     "ware": _WARE,
 }
 CART_MATS = {
-    "timber": dict(_TIMBER, fibre=("Y", 0.22)),
-    "ironstone": dict(_IRON, var=0.2, grain=0.15, blotch=0.2),
-    "iron": dict(GATE_MATS["iron"], grain=0.1),
+    "timber": dict(_TIMBER, fibre=("Y", 0.32)),
+    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.2),
+    "iron": dict(GATE_MATS["iron"], grain=0.2),
     "canvas": dict(hex="#B79A6A", chisel=0.0, var=0.1, streaks=0.4, chips=0.0, scale=1.0, rough=0.9,
-                   stripes=("Y", 0.29, "#D9CDB0", 0.75), grain=0.1, blotch=0.22),     # ochre and chalk bands, weathered
-    "chockstone": dict(DIAL, hex="#7E786D", var=0.15, grain=0.14, blotch=0.2, lichen=0.3),
+                   stripes=("Y", 0.29, "#D9CDB0", 0.75), grain=0.3, blotch=0.22),     # ochre and chalk bands, weathered
+    "chockstone": dict(DIAL, hex="#7E786D", var=0.15, grain=0.3, blotch=0.2, lichen=0.3),
     "ware": _WARE,
 }
 FAIR_MATS = {
     "blockstone": dict(hex="#958B7C", chisel=0.9, var=0.24, streaks=0.4, chips=0.55, speckle=0.3, scale=0.6, rough=0.72,
-                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.16, blotch=0.24, lichen=0.3),
+                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.3, blotch=0.24, lichen=0.3),
     "nosing": dict(hex="#A59C8C", chisel=0.8, var=0.18, streaks=0.3, chips=0.6, scale=0.6, rough=0.7,
-                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.14, blotch=0.22, lichen=0.2),
+                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.3, blotch=0.22, lichen=0.2),
     "fill": dict(hex="#80786B", chisel=0.9, var=0.15, streaks=0.0, chips=0.3, speckle=0.3, scale=0.6, rough=0.8,
-                 grain=0.16, blotch=0.25, lichen=0.35),
+                 grain=0.3, blotch=0.25, lichen=0.35),
     "flag": dict(hex="#8A8173", chisel=0.9, var=0.24, streaks=0.0, chips=0.45, speckle=0.3, scale=0.6, rough=0.78,
-                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.16, blotch=0.24, lichen=0.35),
-    "timber": dict(_TIMBER, fibre=("X", 0.2)),
+                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.3, blotch=0.24, lichen=0.35),
+    "timber": dict(_TIMBER, fibre=("X", 0.32)),
 }
 
 

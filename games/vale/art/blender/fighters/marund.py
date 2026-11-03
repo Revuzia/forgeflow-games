@@ -47,7 +47,20 @@ PALETTE = materials.bible_palette(stone="#D0C6B3", ironstone="#4A4038", wood="#B
                                   cloth="#87776A", cloth2="#D0C5B1", under="#3A3430", leather="#4B3B30",
                                   lampresin="#BF8F52", ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
-MOTION = anim.motion_profile(weight="heavy", weapon="one_hand", stance="wide", run_ref_speed=3.35)
+# arm blocks (anim.ONE_HAND layout: R wrist rel, R pole, R aim, L wrist rel, L pole): his arms are short (0.55 m to
+# the wrist) under a 1.28 m cap, so the maul is carried one-handed at the right knee and taken in both hands
+# only where the hands can meet (bespoke clips below)
+BLOCKS = {
+    "guard":    ((-0.10, -0.30, -0.92), (-0.8, 0.5, -0.3), (-0.08, -0.88, -0.47), (0.04, -0.42, -0.88), None),
+    "run_fwd":  ((-0.06, -0.48, -0.84), (-0.8, 0.4, -0.4), (-0.06, -0.93, -0.36), (0.08, -0.40, -0.86), None),
+    "run_back": ((-0.12, 0.22, -0.94), (-0.6, 0.7, -0.2), (-0.08, -0.90, -0.42), (0.10, 0.30, -0.90), None),
+    "dash":     ((-0.20, 0.45, -0.80), (-0.7, 0.5, 0.2), (-0.20, 0.80, -0.56), (0.20, 0.50, -0.80), None),
+    "stunned":  ((-0.06, -0.20, -0.97), (-0.8, 0.5, -0.3), (-0.10, -0.82, -0.56), (0.05, -0.20, -0.96), None),
+}
+MOTION = anim.motion_profile(weight="heavy", weapon="one_hand", stance="wide", run_ref_speed=3.35, blocks=BLOCKS)
+MAUL_GRIP = (-0.566, -0.066, 0.773)     # palm.R of this rig (rig.build_rig joints): prop.R's head
+MAUL_BUTT = 0.24                        # haft behind the grip (m)
+MAUL_REACH = 0.74                       # grip -> head centre along the haft (m): 0.98 m haft, brief 0.95
 SOCKETS = None
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}
 TEXTURE_SIZE = 2048      # the painted base colour; normal + ORM at 1024 (CONTRACT §12 Materials)
@@ -70,7 +83,9 @@ SKIN_FLAT = {"rope_coil": "rope", "finial_post": "wood", "finial_vessel": "lampr
 
 HEIGHT = 2.35             # crown of the cap (the projection plates' scale)
 PROJECTION = {"concept": "marund", "height": HEIGHT, "tops": {"cap": ("marund_captop.png", 0.7)},
-              "flat": {"windows_frame": "#BF8F52"}}
+              # the re-modelled maul and the trowel sit where the concept paints other things: flat paint
+              "flat": {"windows_frame": "#BF8F52", "maul_haft": "#58443A", "maul_bands": "#BF8F52",
+                       "maul_head": "#5A4D44", "maul_faces": "#CFC4AF", "trowel": "#58443A"}}
 NOISE = sdf.Noise(7)
 VOXEL = 0.007
 
@@ -124,19 +139,19 @@ def sculpts() -> list:
         n /= np.linalg.norm(n)
         win.append((c, n))
         cap.sub(Capsule(c - n * 0.05, c + n * 0.05, 0.104), k=0.006)
-    part("cap", cap, "stone", "bone:head", 3600)
+    part("cap", cap, "stone", "bone:x_cap_tip", 3600)
     band = Sculpt("cap_band")
     band.add(Torus((0, 0, 2.02), 0.553, 0.026, rz=0.028), k=0.0)
     for i in range(24):
         a = 2 * math.pi * i / 24
         band.add(Sphere((math.cos(a) * 0.578, math.sin(a) * 0.578, 2.022), 0.011), k=0.004)
-    part("cap_band", band, "ironstone", "bone:head", 1100, 0.6)
+    part("cap_band", band, "ironstone", "bone:x_cap_tip", 1100, 0.6)
     frames, glass = Sculpt("windows_frame"), Sculpt("windows_glass")
     for c, n in win:
         frames.add(Torus(c - n * 0.004, 0.098, 0.018, axes=sdf.frame(n), rz=0.015), k=0.0)
         glass.add(Capsule(c - n * 0.022, c - n * 0.010, 0.089), k=0.0)
-    part("windows_frame", frames, "lampresin", "bone:head", 600, 0.6)
-    part("windows_glass", glass, "accent", "bone:head", 240, 0.6)
+    part("windows_frame", frames, "lampresin", "bone:x_cap_tip", 600, 0.6)
+    part("windows_glass", glass, "accent", "bone:x_cap_tip", 240, 0.6)
 
     # HEAD + MASK (rigid on the head)
     head = Sculpt("head")
@@ -220,22 +235,31 @@ def sculpts() -> list:
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     part("boots", boots, "leather", "auto", 1200)
 
-    # PROPS: the maul on prop.R, the rod in the left fist, the pail on the hips
-    fist_r = np.array([-0.545, -0.13, 0.765])
-    head_c = np.array([-0.285, -0.45, 0.79])
-    d = head_c - fist_r
-    d[2] = 0
-    d /= np.linalg.norm(d)
+    # PROPS: the maul on prop.R (modelled along the prop bone's rest axis, so an Aim points the haft exactly:
+    # grip at the palm, haft forward, head block 0.74 m out with its 0.40 m length across the haft, pale
+    # worn striking faces on both ends so the head reads against the road), the trowel through the belt
+    G = np.array(MAUL_GRIP)
+    ax = np.array([0.0, -1.0, 0.0])
     haft = Sculpt("maul_haft")
-    haft.add(Capsule(fist_r - d * 0.30, head_c, 0.036), k=0.0)
-    part("maul_haft", haft, "wood_dark", "bone:prop.R", 200)
+    haft.add(Capsule(G - ax * MAUL_BUTT, G + ax * (MAUL_REACH - 0.10), 0.034), k=0.0)
+    haft.add(Sphere(G - ax * MAUL_BUTT, 0.045), k=0.01)                            # the pommel knob
+    part("maul_haft", haft, "wood_dark", "bone:prop.R", 320)
+    bands = Sculpt("maul_bands")
+    for a in (0.42, 0.55):
+        bands.add(Torus(G + ax * a, 0.040, 0.011, axes=sdf.rot_x(90)), k=0.0)
+    part("maul_bands", bands, "lampresin", "bone:prop.R", 160, 0.6)
+    hc = G + ax * MAUL_REACH
     mh = Sculpt("maul_head")
-    mh.add(RoundBox(head_c, (0.13, 0.11, 0.185), 0.025, axes=sdf.rot_z(-math.degrees(math.atan2(d[0], -d[1])))).displaced(chips(0.014, 6.0), 0.014), k=0.0)
-    part("maul_head", mh, "ironstone", "bone:prop.R", 400)
-    fist_l = np.array([0.545, -0.13, 0.765])
-    rod = Sculpt("rod_l")
-    rod.add(Capsule(fist_l + np.array([0.27, 0.10, 0.0]), fist_l + np.array([-0.12, -0.20, 0.0]), 0.036), k=0.0)
-    part("rod_l", rod, "wood_dark", "bone:hand.L", 150)
+    mh.add(RoundBox(hc, (0.12, 0.12, 0.17), 0.03).displaced(chips(0.012, 6.0), 0.012), k=0.0)
+    part("maul_head", mh, "ironstone", "bone:prop.R", 420)
+    faces = Sculpt("maul_faces")
+    for sz in (-1, 1):
+        faces.add(RoundBox(hc + (0, 0, sz * 0.185), (0.128, 0.128, 0.026), 0.018).displaced(chips(0.006, 9.0), 0.006), k=0.0)
+    part("maul_faces", faces, "stone", "bone:prop.R", 300, 0.6)
+    trowel = Sculpt("trowel")
+    trowel.add(Capsule((-0.405, -0.06, 1.13), (-0.415, -0.05, 0.98), 0.024), k=0.0)
+    trowel.add(RoundBox((-0.425, -0.045, 0.88), (0.012, 0.075, 0.10), 0.01), k=0.01)
+    part("trowel", trowel, "wood_dark", "bone:hips", 150, 0.6)
     pc = np.array([0.31, -0.42, 0.72])
 
     def pail_prof(r, z):
@@ -268,8 +292,8 @@ def skin_extras(extra: dict) -> list:
                        0.04, 2.29, 2.37), k=0.0)
         post.add(Torus((0, 0, 2.362), 0.03, 0.007), k=0.004)
         vessel.add(Ellipsoid((0, 0, 2.383), (0.03, 0.03, 0.026)), k=0.0)        # top 2.409: +0.094 m over the crown
-        out.append(("finial_post", post, 0.5, "wood", "bone:head", 160))
-        out.append(("finial_vessel", vessel, 0.5, "lampresin", "bone:head", 120))
+        out.append(("finial_post", post, 0.5, "wood", "bone:x_cap_tip", 160))
+        out.append(("finial_vessel", vessel, 0.5, "lampresin", "bone:x_cap_tip", 120))
     return out
 
 
@@ -282,6 +306,331 @@ def model(ctx) -> list:
         ob.data.materials.append(ctx.mats[role])
         P.append(fighter.Part(name, high=ob, tris=tris, bind=bind))
     return P
+
+
+# ── RIG: the cap rides its own two bones ───────────────────────────────────────────────────────────
+# x_cap (pivot on the crown, child of head) is LEVEL-LOCKED in every clip (closing review marund-M1: the
+# 1.28 m disc pitching with the head 17-73 deg turned every action into a disc nod): clip_overrides
+# solves its rotation per frame so the disc stays level and only follows the head's yaw; a clip may let
+# it follow the head (`follow`, 0..1: Shoulder In's ram tip, the stunned slip, the death fall).
+# x_cap_tip (pivot on the rear rim, child of x_cap) carries the authored tips: the recall's lift of the
+# front rim, the knock in victory.
+CAP_PIVOT = (0.0, 0.004, 1.88)
+CAP_TIP_PIVOT = (0.0, 0.60, 1.93)
+
+
+def rig_extras(ctx) -> None:
+    from mathutils import Vector
+    from common import scene
+    arm = ctx.info.armature
+    scene.select_only([arm], arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    for nm, head, par in (("x_cap", CAP_PIVOT, "head"), ("x_cap_tip", CAP_TIP_PIVOT, "x_cap")):
+        b = eb.new(nm)
+        b.head = Vector(head)
+        b.tail = Vector(head) + Vector((0.0, 0.0, 0.12))
+        b.align_roll(Vector((0.0, -1.0, 0.0)))
+        b.parent = eb[par]
+        b.use_deform = True
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for nm in ("x_cap", "x_cap_tip"):
+        arm.pose.bones[nm].rotation_mode = "XYZ"
+        ctx.info.lengths[nm] = arm.data.bones[nm].length
+
+
+def _levelled(skel, clip, follow=None):
+    """wrap a clip: x_cap's rotation is solved every frame so the disc stays level (yaw follows the head);
+    follow(t) in 0..1 lets it ride the head instead (slerp)."""
+    from mathutils import Matrix, Quaternion
+    rest = skel.rest["x_cap"].to_3x3()
+    loc = skel.local["x_cap"].to_3x3()
+    src = clip.sample
+
+    def sample(t):
+        p = dict(src(t))
+        M = skel.fk(p)
+        Mh = M["head"].to_3x3()
+        f = Mh.col[2]
+        yaw = math.atan2(f.x, -f.y)
+        des = Matrix.Rotation(yaw, 3, "Z") @ rest
+        q = ((Mh @ loc).inverted() @ des).to_quaternion()
+        w = max(0.0, min(1.0, follow(t))) if follow else 0.0
+        if w > 0.0:
+            q = q.slerp(Quaternion(), w)
+        p["x_cap"] = tuple(math.degrees(a) for a in q.to_euler("XYZ"))
+        return p
+
+    return anim.Clip(clip.name, clip.frames, clip.loop, sample, clip.impact, clip.secondary, dict(clip.meta))
+
+
+def clip_overrides(ctx) -> dict:
+    """Marund's own clips (brief §8; closing review marund-M1/M2/M3). Every clip runs through _levelled.
+      attack1     overhead chop from high outside the right rim, the head landing ~1.3 m out on the ground
+      attack2     flat side sweep at knee height, right to left, a shoulder turn behind it
+      cast_a1     Shoulder In: the left shoulder drops under the rim, the disc tips like a ram (follow 0.55)
+      cast_a2     Shelter Dome: the maul raised level across the face, head out past the left rim (cap back 8
+                  deg), then planted head-down in front, both hands stacked on the pommel, held to f30
+      cast_a3     Mortar Pail: the left hand dips into the pail and flings underhand, the maul hangs behind
+      cast_ult    Domefall wind: crouch, arms swung back, explosive launch at the impact frame (the release);
+                  if no leap follows it slams and kneels
+      domefall_leap  the leap itself, made to play over the ult dash's progress: launch -> airborne apex
+                  (hips +0.5 m, knees tucked, maul raised high outside the right rim) -> two-footed slam with
+                  the maul head driven into the ground in front -> slam hold
+      idle        breathing (chest 2-3 cm), a slow weight shift, the maul bobbing at the knee
+      recall      7 s: plants the maul and leans on it, lifts the front-left of the dome off his brow,
+                  rubs the rim, sets it back with a settle and two knocks, taps the maul head into his palm,
+                  looks about, back to the lean (closes on its first pose)
+      channel     stirs the pail with the left hand, the maul planted
+      idle_lobby  taps the maul head into his palm twice, runs a hand along the rim, peers into the pail
+      victory     sets the maul head down, hands stacked, a nod, two knocks on the rim, chin up"""
+    prof = MOTION
+    skel = anim.Skeleton(ctx.info.armature)
+    g = anim.guard(prof)
+    gf = g["ik"]
+    F, H, A = anim.FootTarget, anim.HandTarget, anim.Aim
+    hip_h = skel.rest_point("hips").z
+
+    def feet(dl=(0, 0, 0), dr=(0, 0, 0), pl=0.0, pr=0.0, yl=None, yr=None, kl=0.0, kr=0.0):
+        fl, fr = gf["foot.L"], gf["foot.R"]
+        return {"foot.L": F(tuple(fl.ankle[i] + dl[i] for i in range(3)), pl, fl.yaw if yl is None else yl, 0.0, kl),
+                "foot.R": F(tuple(fr.ankle[i] + dr[i] for i in range(3)), pr, fr.yaw if yr is None else yr, 0.0, kr)}
+
+    def pose(torso=None, hips=(0, 0, 0), R=None, Rp=(-0.8, 0.4, -0.3), aim=None, L=None, Lp=None, Lprop=None,
+             ft=None, cap_tip=None, extra=None):
+        p = anim.add(g, anim.P(**(torso or {})))
+        ik = dict(g["ik"])
+        if R is not None:
+            ik["hand.R"] = H(rel=R, pole=Rp)
+        if aim is not None:
+            ik["aim.R"] = A(aim)
+        if Lprop is not None:
+            ik["hand.L"] = H(to_prop=("prop.R", Lprop), pole=(0.8, 0.4, -0.4))
+        elif L is not None:
+            ik["hand.L"] = H(rel=L, pole=Lp)
+        if ft:
+            ik.update(ft)
+        p["ik"] = ik
+        hx, hy, hz = g.get("hips_loc", (0, 0, 0))
+        p["hips_loc"] = (hx + hips[0], hy + hips[1], hz + hips[2])
+        if cap_tip is not None:
+            p["x_cap_tip"] = cap_tip
+        if extra:
+            p.update(anim.P(**extra))
+        return p
+
+    def strike(name, frames, wind, hit, fol, lags=None):
+        return anim.Clip(name, frames, False, anim.drag(anim.keyed(anim.strike_keys(prof, wind, hit, fol, g)), frames,
+                                                        lags or {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+
+    out = {}
+    # attack1 — overhead chop: wound up high outside the right rim, lands ~1.3 m out
+    out["attack1"] = strike(
+        "attack1", 40,
+        pose(dict(hips=(-4, -14, 0), spine=(-6, -8, 4), chest=(-8, -12, 6), head=(4, 10, 0)), (0.0, 0.05, 0.0),
+             R=(-0.42, 0.10, 0.80), Rp=(-0.9, 0.3, 0.3), aim=(-0.40, 0.50, 0.77), L=(0.10, -0.70, -0.45)),
+        pose(dict(hips=(10, 12, 0), spine=(10, 6, -2), chest=(12, 8, -3), head=(-12, -6, 0)), (0.0, -0.16, -0.06),
+             R=(0.12, -0.95, 0.20), Rp=(-0.8, 0.2, -0.5), aim=(0.05, -0.80, -0.60), L=(0.15, 0.15, -0.90),
+             ft=feet(dl=(0.0, -0.28, 0.0), pl=4)),
+        pose(dict(hips=(12, 14, 0), spine=(11, 7, -2), chest=(13, 9, -3), head=(-13, -7, 0)), (0.0, -0.18, -0.07),
+             R=(0.16, -0.94, 0.12), Rp=(-0.8, 0.2, -0.5), aim=(0.08, -0.72, -0.69), L=(0.18, 0.20, -0.88),
+             ft=feet(dl=(0.0, -0.28, 0.0), pl=2)))
+    # attack2 — flat sweep at knee height, right to left
+    out["attack2"] = strike(
+        "attack2", 40,
+        pose(dict(hips=(4, -24, 0), spine=(4, -14, 0), chest=(6, -18, 0), head=(0, 18, 0)), (0.0, 0.03, -0.04),
+             R=(-0.55, 0.20, -0.62), Rp=(-0.3, 0.8, -0.3), aim=(-0.72, 0.52, -0.46), L=(0.15, -0.60, -0.55)),
+        pose(dict(hips=(10, 20, 0), spine=(8, 12, 0), chest=(10, 16, 0), head=(-8, -16, 0)), (0.0, -0.10, -0.09),
+             R=(0.12, -0.94, -0.26), Rp=(-0.8, 0.3, -0.4), aim=(0.40, -0.82, -0.40), L=(0.30, 0.25, -0.80),
+             ft=feet(dr=(0.0, -0.10, 0.0), dl=(0.04, -0.12, 0.0))),
+        pose(dict(hips=(10, 30, 0), spine=(8, 18, 0), chest=(10, 22, 0), head=(-8, -22, 0)), (0.0, -0.10, -0.09),
+             R=(0.42, -0.74, -0.36), Rp=(-0.6, 0.4, -0.6), aim=(0.86, -0.34, -0.36), L=(0.32, 0.30, -0.78),
+             ft=feet(dr=(0.0, -0.10, 0.0), dl=(0.04, -0.12, 0.0))))
+    # cast_a1 — Shoulder In (25 f, impact f10): the left shoulder and the rim hit the line, maul tucked back
+    tuck = dict(R=(-0.30, 0.38, -0.84), Rp=(-0.7, 0.6, -0.2), aim=(-0.12, 0.62, -0.78))
+    out["cast_a1"] = strike(
+        "cast_a1", 25,
+        pose(dict(hips=(-3, -12, 0), spine=(-3, -8, 0), chest=(-4, -10, 0), head=(4, 8, 0)), (0.0, 0.05, -0.02),
+             L=(0.10, -0.30, -0.80), **tuck),
+        pose(dict(hips=(20, 20, -6), spine=(10, 10, -8), chest=(12, 14, -10), head=(-6, -10, 0)), (0.0, -0.20, -0.10),
+             L=(0.28, -0.55, -0.50), Lp=(0.6, 0.6, -0.4), ft=feet(dl=(0.0, -0.26, 0.0), dr=(0.0, -0.06, 0.0), pl=4, pr=-12),
+             **tuck),
+        pose(dict(hips=(22, 22, -6), spine=(11, 11, -8), chest=(13, 15, -10), head=(-7, -11, 0)), (0.0, -0.24, -0.11),
+             L=(0.30, -0.58, -0.48), Lp=(0.6, 0.6, -0.4), ft=feet(dl=(0.0, -0.26, 0.0), dr=(0.0, -0.14, 0.0), pl=2, pr=-20),
+             **tuck))
+    a1_follow = lambda t: 0.40 * anim.sine(min(1.0, max(0.0, (t - 0.20) / 0.18))) * (1.0 - anim.sine(min(1.0, max(0.0, (t - 0.62) / 0.30))))  # noqa: E731
+    # cast_a2 — Shelter Dome (40 f, impact f16): level across the face, then planted head-down, hands stacked
+    across = pose(dict(hips=(-4, 0, 0), spine=(-6, 4, 0), chest=(-8, 6, 0), head=(4, -4, 0)), (0.0, 0.02, 0.02),
+                  R=(0.52, -0.66, 0.36), Rp=(-0.6, -0.2, -0.8), aim=(0.97, -0.20, 0.10), Lprop=0.40,
+                  cap_tip=(-8.0, 0.0, 0.0))
+    plant = pose(dict(hips=(10, 0, 0), spine=(6, 4, 0), chest=(8, 6, 0), head=(-10, -4, 0)), (0.0, -0.06, -0.08),
+                 R=(0.50, -0.86, 0.10), Rp=(-0.8, 0.3, -0.4), aim=(0.0, -0.10, -0.99), Lprop=-0.16,
+                 ft=feet(dl=(0.08, -0.06, 0.0), dr=(-0.08, 0.02, 0.0)))
+    plant2 = anim.add(plant, anim.P(chest=(1.5, 0, 0)))
+    plant2["hips_loc"] = tuple(plant["hips_loc"][i] + (0, 0, -0.012)[i] for i in range(3))
+    out["cast_a2"] = anim.Clip("cast_a2", 40, False, anim.drag(anim.keyed([
+        (0.0, g, "linear"), (0.06, anim.lerp_pose(g, across, -0.08), "inout"), (0.20, across, "out"),
+        (0.28, anim.lerp_pose(g, across, 1.05), "out"), (0.40, plant2, "accel"), (0.46, plant, "out"),
+        (0.75, plant, "linear"), (0.88, anim.lerp_pose(plant, g, 0.6), "inout"), (1.0, g, "settle")]),
+        40, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    # cast_a3 — Mortar Pail (30 f, impact f12)
+    hang = dict(R=(-0.16, 0.28, -0.92), Rp=(-0.7, 0.6, -0.2), aim=(-0.10, 0.58, -0.81))
+    out["cast_a3"] = strike(
+        "cast_a3", 30,
+        pose(dict(hips=(12, 12, 0), spine=(10, 8, 0), chest=(12, 10, 0), head=(6, -6, 0)), (0.0, 0.04, -0.09),
+             L=(-0.22, -0.70, -0.62), Lp=(0.8, 0.5, -0.2), ft=feet(dr=(0.0, 0.06, 0.0)), **hang),
+        pose(dict(hips=(-2, -16, 0), spine=(-4, -10, 0), chest=(-6, -14, 0), head=(-4, 12, 0)), (0.0, -0.12, -0.04),
+             L=(-0.05, -0.90, 0.38), Lp=(0.8, 0.2, -0.5), ft=feet(dl=(0.0, -0.26, 0.0), dr=(0.0, 0.06, 0.0), pl=6),
+             **hang),
+        pose(dict(hips=(-3, -18, 0), spine=(-5, -11, 0), chest=(-7, -15, 0), head=(-5, 13, 0)), (0.0, -0.14, -0.04),
+             L=(-0.08, -0.76, 0.60), Lp=(0.8, 0.2, -0.5), ft=feet(dl=(0.0, -0.26, 0.0), dr=(0.0, 0.06, 0.0), pl=4),
+             **hang),
+        {"head": 1.5, "neck": 1.0})
+    # cast_ult — Domefall wind-up (45 f, impact f18 = the launch)
+    crouch = pose(dict(hips=(20, 0, 0), spine=(14, 0, 0), chest=(12, 0, 0), head=(-10, 0, 0)), (0.0, 0.06, -0.24),
+                  R=(-0.32, 0.42, -0.80), Rp=(-0.6, 0.7, -0.1), aim=(-0.22, 0.70, -0.68), L=(0.28, 0.40, -0.80),
+                  ft=feet(dl=(0.02, 0.0, 0.0), dr=(-0.02, 0.0, 0.0)))
+    launch = pose(dict(hips=(-4, 0, 0), spine=(-6, 0, 0), chest=(-8, 0, 0), head=(-6, 0, 0)), (0.0, -0.04, 0.12),
+                  R=(-0.46, -0.30, 0.78), Rp=(-0.9, 0.0, 0.3), aim=(-0.42, -0.08, 0.90), L=(0.55, -0.30, 0.60),
+                  Lp=(0.9, 0.0, 0.3), ft=feet(dl=(0.0, 0.0, 0.07), dr=(0.0, 0.0, 0.07), pl=-34, pr=-34))
+    slam = pose(dict(hips=(16, 0, 0), spine=(10, 0, 0), chest=(10, 0, 0), head=(-12, 0, 0)), (0.0, -0.10, -0.28),
+                R=(0.06, -0.97, 0.15), Rp=(-0.8, 0.2, -0.5), aim=(0.05, -0.60, -0.80), L=(0.30, -0.55, -0.60),
+                ft=feet(dl=(0.05, -0.16, 0.0), dr=(-0.05, 0.10, 0.0), pr=-30))
+    out["cast_ult"] = anim.Clip("cast_ult", 45, False, anim.drag(anim.keyed([
+        (0.0, g, "linear"), (0.08, anim.lerp_pose(g, crouch, -0.10), "inout"), (0.30, crouch, "inout"),
+        (0.36, anim.lerp_pose(g, crouch, 1.06), "out"), (0.40, launch, snap_in), (0.48, launch, "out"),
+        (0.56, slam, "in"), (0.67, slam, "linear"), (0.86, anim.lerp_pose(slam, g, 0.7), "inout"),
+        (1.0, g, "settle")]), 45, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    # domefall_leap — plays over the ult dash (progress-mapped): launch -> apex -> slam -> hold
+    apex = pose(dict(hips=(-6, 0, 0), spine=(-8, 0, 0), chest=(-10, 0, 0), head=(-4, 0, 0)), (0.0, 0.0, 0.50),
+                R=(-0.40, -0.12, 0.86), Rp=(-0.9, 0.0, 0.3), aim=(-0.36, 0.18, 0.92), L=(0.62, -0.20, 0.50),
+                Lp=(0.9, 0.0, 0.3), ft=feet(dl=(0.02, 0.06, 0.36), dr=(-0.02, 0.10, 0.32), pl=-24, pr=-28))
+    apex2 = anim.add(apex, anim.P(chest=(-3, 0, 0), spine=(-2, 0, 0)))
+    apex2["hips_loc"] = tuple(apex["hips_loc"][i] + (0, 0, -0.04)[i] for i in range(3))
+    slam_hold = anim.add(slam, anim.P(chest=(2, 0, 0)))
+    slam_hold["hips_loc"] = tuple(slam["hips_loc"][i] + (0, 0, -0.015)[i] for i in range(3))
+    out["domefall_leap"] = anim.Clip("domefall_leap", 20, False, anim.drag(anim.keyed([
+        (0.0, launch, "linear"), (0.40, apex, "out"), (0.55, apex2, "linear"), (0.82, slam, "in"),
+        (1.0, slam_hold, "out")]), 20, {"head": 1.0}), meta={"role": "dash", "apex_t": 0.40, "slam_t": 0.82})
+
+    # idle — breathing, weight shift, maul bob at the knee (90 f loop)
+    def idle(t):
+        b = anim.osc(t, 3)
+        s = anim.osc(t, 1, 0.1)
+        p = anim.add(g, anim.P(chest=(2.6 * b, 0, 0), spine=(0.8 * b, 0, 0.8 * s), neck=(-1.2 * b, 0, 0),
+                               head=(-1.0 * b, 3.0 * s, 0), hips=(0, 1.5 * s, -1.2 * s),
+                               shoulder_L=(0, 0, 1.8 * b), shoulder_R=(0, 0, -1.8 * b)))
+        ik = dict(p["ik"])
+        hR = ik["hand.R"]
+        ik["hand.R"] = H(rel=(hR.rel[0], hR.rel[1] - 0.03 * anim.osc(t, 3, 0.1), hR.rel[2] + 0.02 * anim.osc(t, 3, 0.15)), pole=hR.pole)
+        ik["aim.R"] = A((-0.08, -0.88 + 0.05 * anim.osc(t, 3, 0.2), -0.47))
+        p["ik"] = ik
+        hx, hy, hz = p["hips_loc"]
+        p["hips_loc"] = (hx + 0.022 * s, hy, hz - 0.010 * (0.5 + 0.5 * b))
+        return p
+    out["idle"] = anim.Clip("idle", 90, True, idle)
+
+    # the planted lean shared by recall and channel: maul head on the ground right-front, leaning on the haft
+    lean = pose(dict(hips=(4, -6, 0), spine=(4, -4, 2), chest=(5, -6, 2), head=(-3, 6, 0)), (0.02, 0.0, -0.02),
+                R=(-0.12, -0.56, -0.80), Rp=(-0.8, 0.4, -0.3), aim=(-0.10, -0.85, -0.52), L=(0.04, -0.42, -0.88))
+
+    def at(key_list):
+        return anim.keyed(key_list)
+
+    # recall — 7 s (210 f), closes on its first pose
+    rim_L = (0.30, -0.06, 0.96)
+    lift = pose(dict(hips=(2, 4, 0), spine=(0, 4, -2), chest=(-2, 6, -3), neck=(6, 0, 0), head=(14, -6, 0)),
+                (0.0, 0.0, 0.0), R=(-0.12, -0.56, -0.80), aim=(-0.10, -0.85, -0.52), L=rim_L, Lp=(0.9, 0.2, 0.0),
+                cap_tip=(-11.0, 0.0, 9.0))
+    rub_a = anim.merge(lift, {"ik": {"hand.L": H(rel=(0.34, -0.20, 0.92), pole=(0.9, 0.2, 0.0))}})
+    rub_b = anim.merge(lift, {"ik": {"hand.L": H(rel=(0.26, 0.10, 0.95), pole=(0.9, 0.2, 0.0))}})
+    seated = pose(dict(hips=(4, -2, 0), spine=(3, 0, 0), chest=(2, 2, 0), head=(-4, 0, 0)), (0.0, 0.0, -0.03),
+                  R=(-0.12, -0.56, -0.80), aim=(-0.10, -0.85, -0.52), L=(0.30, -0.04, 0.92), Lp=(0.9, 0.2, 0.0),
+                  cap_tip=(1.5, 0.0, -1.0))
+    seated0 = anim.merge(seated, {"x_cap_tip": (0.0, 0.0, 0.0)})
+    knock_out = anim.merge(seated0, {"ik": {"hand.L": H(rel=(0.42, -0.10, 0.80), pole=(0.9, 0.2, 0.0))}})
+    knock_in = anim.merge(seated0, {"ik": {"hand.L": H(rel=(0.31, -0.06, 0.95), pole=(0.9, 0.2, 0.0))}},
+                          {"x_cap_tip": (0.6, 0.0, -0.8)})
+    palm_up = pose(dict(hips=(4, 8, 0), spine=(4, 6, 0), chest=(6, 8, 0), head=(8, 8, 0)), (0.0, -0.02, -0.03),
+                   R=(0.22, -0.78, -0.48), Rp=(-0.8, 0.3, -0.5), aim=(0.62, -0.62, 0.24), Lprop=0.60)
+    palm_tap = anim.add(palm_up, anim.P(chest=(2, 0, 0)))
+    palm_tap["ik"] = dict(palm_up["ik"])
+    palm_tap["ik"]["hand.R"] = H(rel=(0.22, -0.78, -0.58), pole=(-0.8, 0.3, -0.5))
+    look_l = anim.add(lean, anim.P(chest=(0, 6, 0), neck=(0, 10, 0), head=(-4, 18, 0), hips=(0, 4, 0)))
+    look_r = anim.add(lean, anim.P(chest=(0, -6, 0), neck=(0, -10, 0), head=(-4, -18, 0), hips=(0, -4, 0)))
+    breathe_in = anim.add(lean, anim.P(chest=(-3, 0, 0), spine=(-1.5, 0, 0), head=(-4, 0, 0)))
+    breathe_in["hips_loc"] = tuple(lean["hips_loc"][i] + (0, 0, 0.012)[i] for i in range(3))
+    rec = at([
+        (0.00, lean, "linear"), (0.06, breathe_in, "inout"), (0.11, lean, "inout"),
+        (0.18, lift, "inout"), (0.24, rub_a, "inout"), (0.29, rub_b, "inout"), (0.34, rub_a, "inout"),
+        (0.39, rub_b, "inout"), (0.44, lift, "inout"),
+        (0.50, seated, "in"), (0.53, seated0, "settle"),
+        (0.56, knock_out, "out"), (0.58, knock_in, "in"), (0.61, knock_out, "out"), (0.63, knock_in, "in"),
+        (0.66, seated0, "inout"),
+        (0.71, palm_up, "inout"), (0.735, palm_tap, "in"), (0.76, palm_up, "out"), (0.785, palm_tap, "in"),
+        (0.81, palm_up, "out"),
+        (0.86, look_l, "inout"), (0.91, look_r, "inout"), (0.95, breathe_in, "inout"), (1.0, lean, "inout")])
+    out["recall"] = anim.Clip("recall", 210, True, anim.drag(rec, 210, {"head": 2.0, "neck": 1.0}, loop=True))
+
+    # channel — stirring the pail (60 f loop)
+    stir = pose(dict(hips=(8, 10, 0), spine=(8, 8, 0), chest=(10, 10, 0), neck=(6, 6, 0), head=(14, 12, 0)),
+                (0.0, 0.0, -0.05), R=(-0.12, -0.56, -0.80), aim=(-0.10, -0.85, -0.52), L=(-0.24, -0.74, -0.64),
+                Lp=(0.8, 0.5, -0.2))
+
+    def channel(t):
+        c, s = math.cos(2 * math.pi * t * 2), math.sin(2 * math.pi * t * 2)
+        b = anim.osc(t, 1, 0.2)
+        p = anim.add(stir, anim.P(chest=(3.0 * c, 4.0 * s, 1.5 * b), spine=(1.5 * c, 2.0 * s, 0), neck=(0, 3.0 * b, 0),
+                                  head=(3.0 * s, 4.0 * c + 6.0 * b, 0), hips=(0, 2.5 * s, 0)))
+        ik = dict(p["ik"])
+        ik["hand.L"] = H(rel=(-0.24 + 0.18 * c, -0.70 + 0.18 * s, -0.60 + 0.04 * c), pole=(0.8, 0.5, -0.2))
+        p["ik"] = ik
+        hx, hy, hz = p["hips_loc"]
+        p["hips_loc"] = (hx + 0.025 * s, hy - 0.015 * c, hz - 0.012 * (0.5 + 0.5 * c))
+        return p
+    out["channel"] = anim.Clip("channel", 60, True, channel)
+
+    # idle_lobby — palm taps, a hand along the rim, a look into the pail (120 f loop)
+    rest_l = pose(dict(hips=(2, -4, 0), spine=(2, -2, 0), chest=(3, -4, 0), head=(-2, 4, 0)), (0.0, 0.0, -0.02),
+                  R=(-0.14, -0.50, -0.84), aim=(-0.10, -0.85, -0.52), L=(0.04, -0.42, -0.88))
+    rim_a = anim.merge(rest_l, anim.add(rest_l, anim.P(head=(4, 10, 0), neck=(0, 6, 0))),
+                       {"ik": {"hand.L": H(rel=(0.30, -0.24, 0.90), pole=(0.9, 0.2, 0.0))}})
+    rim_b = anim.merge(rim_a, {"ik": {"hand.L": H(rel=(0.30, 0.16, 0.92), pole=(0.9, 0.2, 0.0))}})
+    peer = pose(dict(hips=(8, 10, 0), spine=(8, 8, 0), chest=(10, 10, 0), neck=(8, 8, 0), head=(18, 14, 0)),
+                (0.0, 0.0, -0.05), R=(-0.14, -0.50, -0.84), aim=(-0.10, -0.85, -0.52), L=(-0.10, -0.62, -0.74),
+                Lp=(0.8, 0.5, -0.2))
+    lob = at([
+        (0.00, rest_l, "linear"), (0.10, palm_up, "inout"), (0.14, palm_tap, "in"), (0.18, palm_up, "out"),
+        (0.22, palm_tap, "in"), (0.26, palm_up, "out"), (0.34, rest_l, "inout"),
+        (0.42, rim_a, "inout"), (0.54, rim_b, "inout"), (0.60, rest_l, "inout"),
+        (0.70, peer, "inout"), (0.80, anim.add(peer, anim.P(head=(4, -10, 0))), "inout"), (0.90, rest_l, "inout"),
+        (1.0, rest_l, "linear")])
+    out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, anim.drag(lob, 120, {"head": 2.0, "neck": 1.0}, loop=True))
+
+    # victory — maul head set down, hands stacked, a nod, two knocks on the rim, chin up (60 f, hold)
+    stack = pose(dict(hips=(8, 0, 0), spine=(8, 2, 0), chest=(10, 4, 0), head=(-6, 0, 0)), (0.0, -0.04, -0.06),
+                 R=(0.42, -0.86, 0.10), Rp=(-0.8, 0.3, -0.4), aim=(0.0, -0.12, -0.99), Lprop=-0.16,
+                 ft=feet(dl=(0.0, -0.14, 0.0)))
+    nod = anim.add(stack, anim.P(neck=(6, 0, 0), head=(14, 0, 0)))
+    kn_o = anim.merge(stack, {"ik": {"hand.L": H(rel=(0.42, -0.10, 0.80), pole=(0.9, 0.2, 0.0))}})
+    kn_i = anim.merge(stack, {"ik": {"hand.L": H(rel=(0.31, -0.06, 0.95), pole=(0.9, 0.2, 0.0))}},
+                      {"x_cap_tip": (0.6, 0.0, -0.8)})
+    proud = anim.add(stack, anim.P(chest=(-4, 0, 0), neck=(-4, 0, 0), head=(-8, 0, 0)))
+    out["victory"] = anim.Clip("victory", 60, False, anim.drag(at([
+        (0.0, g, "linear"), (0.18, stack, "inout"), (0.28, nod, "inout"), (0.36, stack, "inout"),
+        (0.46, kn_o, "inout"), (0.52, kn_i, "in"), (0.57, kn_o, "out"), (0.62, kn_i, "in"), (0.68, kn_o, "out"),
+        (0.78, proud, "inout"), (1.0, proud, "linear")]), 60, {"head": 2.0, "neck": 1.0}))
+
+    # level-lock everything (generic run / death / stunned / dash too)
+    clips = anim.standard_clips(skel, prof, out)
+    follows = {"cast_a1": a1_follow,
+               "stunned": lambda t: 0.20,
+               "death": lambda t: anim.sine(min(1.0, max(0.0, (t - 0.10) / 0.35)))}
+    return {k: _levelled(skel, c, follows.get(k)) for k, c in clips.items()}
+
+
+def snap_in(t):
+    return t ** 1.6
 
 
 if __name__ == "__main__":

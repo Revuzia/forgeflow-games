@@ -1,7 +1,10 @@
 // VALE audio — the WebAudio engine (CONTRACT §11; tokens.json `audio`). Implements the UI's AudioPort.
 //
-//   buses       music · sfx · ui · voice · ambience → mix → [soften] → master → limiter → soft clip → out
-//               (Settings.audio volumes; `muteInBackground` silences a hidden tab). The limiter (a compressor) can
+//   buses       music · sfx · ui · voice · ambience → mix → [soften] → master → trim → limiter → soft clip → out
+//               (Settings.audio volumes; `muteInBackground` silences a hidden tab). The trim (MIX_TRIM_DB) is the
+//               engine's mix makeup, the same for every bus and the alert path, so the default settings (master 0.8)
+//               land the match on the tokens' −18 ± 1.5 LUFS integrated (closing critic 'audio-runtime': two RIFT
+//               captures read −21.5 / −21.8 before it; _harness/probe_audio_runtime.mjs match). The limiter (a compressor) can
 //               overshoot on a fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing
 //               passes −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both
 //               speakers carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle
@@ -19,7 +22,7 @@
 //               SFX_DUCK_NEWS_DB, so it sits on top of a teamfight (closing AUD-C7, measured by
 //               _harness/probe_audio_runtime.mjs: line peak over the sfx bus's short-term p99)
 //   alert path  the GATE cues — whatever content binds to the UI roles queue_pop / queue_remind and the event
-//               roles countdown / matchStart — skip the master and join at the limiter through their own
+//               roles countdown / matchStart — skip the master and join at the trim through their own
 //               per-bus alert gain: max(ALERT_FLOOR, master × bus). So a match found while the tab is hidden
 //               is still heard (a missed ready check costs a re-queue lockout), the UI slider cannot take it
 //               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
@@ -282,6 +285,7 @@ const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame 
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
+const MIX_TRIM_DB = 3.5;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
 const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
 const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
@@ -574,8 +578,11 @@ class Engine implements ValeAudioPort {
       tail = tail.connect(clip);
     }
     tail.connect(this.out).connect(ctx.destination);
+    const trim = ctx.createGain();
+    trim.gain.value = Math.pow(10, MIX_TRIM_DB / 20);
+    trim.connect(limiter);
     this.master = ctx.createGain();
-    this.master.connect(limiter);
+    this.master.connect(trim);
     this.mix = ctx.createGain();
     this.mix.connect(this.master);
     soft.connect(this.softMakeup).connect(this.master);
@@ -599,10 +606,10 @@ class Engine implements ValeAudioPort {
     }
     this.threat = ctx.createGain();
     this.threat.connect(this.mix);
-    // the alert path joins after the master (the background mute), before the limiter
+    // the alert path joins after the master (the background mute), at the trim before the limiter
     for (const b of BUSES) {
       const g = ctx.createGain();
-      g.connect(limiter);
+      g.connect(trim);
       this.alertBus.set(b, g);
     }
     // the ambience emitters' combat duck, into the ambience bus

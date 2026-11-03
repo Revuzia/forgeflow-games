@@ -37,31 +37,31 @@
   },
   "uv_coverage": 0.614,
   "bake": {
-    "base": 4.98,
-    "rough_metal": 3.88,
-    "normal": 2.55,
-    "ao": 3.08,
+    "base": 6.13,
+    "rough_metal": 7.95,
+    "normal": 7.12,
+    "ao": 6.62,
     "normal_fixed_px": 38895,
-    "projection": 125.26,
-    "pack_save": 125.47,
-    "total": 140.21
+    "projection": 238.7,
+    "pack_save": 239.05,
+    "total": 267.35
   },
   "tris": 21168,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2671032,
+  "glb_bytes_raw": 2701808,
   "optimize": {
     "ok": true,
-    "before": 2671032,
-    "after": 1028900
+    "before": 2701808,
+    "after": 1042712
   },
-  "glb_bytes": 1028900,
+  "glb_bytes": 1042712,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1005 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_almanac_base 2048x2048 238K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 65K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (1018 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_almanac_base 2048x2048 251K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 64K",
       "  skinned meshes: burdam_accent(332v), burdam_almanac(18758v)",
-      "  bones: 26 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid thighL shinL footL toeL thighR shinR footR toeR)",
+      "  bones: 31 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid x_cowl_b_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
       "  tris: 21168; bind-pose bounds (three units, Y up): 1.44 x 2.16 x 1.96; facing (0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
@@ -74,8 +74,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 7.17,
-      "portrait": 3.03
+      "splash": 116.6,
+      "portrait": 15.34
     }
   },
   "three_qa": {
@@ -107,24 +107,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 6.5,
+    "seconds": 9.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.36,
-      "model": 8.59,
-      "lows_bind": 5.13,
-      "uv": 5.41,
-      "bake": 140.21,
-      "export": 0.09,
-      "optimize": 0.57,
-      "load_test": 0.12,
-      "render": 10.26,
-      "three_qa": 6.67
+      "rig": 0.01,
+      "materials": 0.35,
+      "model": 8.45,
+      "lows_bind": 12.75,
+      "uv": 10.38,
+      "bake": 267.36,
+      "export": 0.14,
+      "optimize": 1.13,
+      "load_test": 0.25,
+      "render": 132.09,
+      "three_qa": 9.89
     },
-    "total_s": 177.6
+    "total_s": 443.19
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

@@ -57,11 +57,13 @@
 //                        frames is reported as laneHp for reference)
 //               breakup  p95 - p5 of the 0.5 m band: L* smoothed over a 0.5 m box minus L* smoothed over a 2.5 m box,
 //                        both inside the pixel's own face (the class pass writes the geometric view-space normal of the
-//                        landmark under test in 5 x 5 bins: a face = one bin), over the pixels a 0.5 m box fits inside
-//                        their face: the face's own value pattern at >= 0.5 m; the light / shade split between faces
+//                        landmark under test in 5 x 5 bins: a face = one bin), over the pixels a 0.25 m box fits inside
+//                        their face (eroded by a quarter metre): the face's own value pattern at >= 0.5 m; the light / shade split between faces
 //                        and the silhouette never count. hp is taken inside the faces the same way
 //               range05  p95 - p5 of L* smoothed over 0.5 m (info: includes the light / shade split of its faces)
-//             Gate (closing CW4 done 2): hp >= 2.9 (the lane flagstone) and breakup >= 6 L* on every gated landmark
+//             Gate (closing CW4 done 2): hp >= the lane flagstone's hp in this same metric (refs.laneHpMedian: the lane
+//             at the map's lane spots; the review's 2.9 was another tool's scale, where this metric reads ~1.2) and
+//             breakup >= 6 L* on every gated landmark. refs also carries the Art 2.0 structures' (team 1) hp and breakup
 //   --report  the report's file name under _harness/_reports (default value_probe.json)
 //   --vfxcaps the flash test again per VFX lift cap (e.g. off,1.3,1.6: renderer.vfx.liftCap, combat F4; off = effects
 //             lifted like the ground), reported as flash.byCap
@@ -96,8 +98,8 @@ const FOG_ONLY = FOG === 'only';
 const LMK = opt('landmarks', '0');
 const LMK_ONLY = LMK === 'only';
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
-const LMK_RE = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
-const LMK_HP = 2.9, LMK_BREAKUP = 6;
+const LMK_RE = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
+const LMK_HP = 1.0, LMK_BREAKUP = 6;   // hp bar: the lane's own hp in the same metric (median of the lane spots), never under 1.0
 /** combat F4: the flash test once per VFX lift cap (renderer.vfx.liftCap; 'off' = effects lifted like the ground) */
 const VFX_CAPS = opt('vfxcaps', '').split(',').filter(Boolean).map((c) => (c === 'off' ? null : Number(c)));
 /** env F3: the unseen / lit display ratio band (tokens grade.fogOfWar.valueMul 0.55) */
@@ -187,7 +189,7 @@ function install() {
     const ob = m.onBeforeCompile, ck = m.customProgramCacheKey;
     // env E1: the landmark under test (G 1) writes its face orientation into B: the geometric view-space normal in 5 x 5
     // bins (1-25), so the face-detail stats stay inside one flat face (never across a lit top and a shaded side)
-    const faceB = g === 1 && (cls === C.landmark || cls === C.lamp)
+    const faceB = g === 1 && (cls === C.landmark || cls === C.lamp || cls === C.structure)
       ? `vec3 qn = normalize( cross( dFdx( vViewPosition ), dFdy( vViewPosition ) ) ); float qb = 1.0 + min( 4.0, floor( ( qn.x * 0.5 + 0.5 ) * 5.0 ) ) + 5.0 * min( 4.0, floor( ( qn.y * 0.5 + 0.5 ) * 5.0 ) );`
       : 'float qb = 0.0;';
     const snip = kind === 'ground' ? GROUND_SNIP : kind === 'wall' ? WALL_SNIP : `{ ${faceB} gl_FragColor = vec4( ${cls}.0 / 255.0, ${g}.0 / 255.0, qb / 255.0, 1.0 ); }`;
@@ -218,7 +220,8 @@ function install() {
         if (!g) { figs.push(a.def); g = figs.length; }
         return { cls: C.fighter, g };
       }
-      return { cls: k === 'minion' ? C.wick : k === 'monster' ? C.monster : k === 'structure' ? C.structure : C.actor };
+      // env E1 reference: an Art 2.0 structure under test carries G = 1 (its faces binned like a landmark's)
+      return { cls: k === 'minion' ? C.wick : k === 'monster' ? C.monster : k === 'structure' ? C.structure : C.actor, g: lmkRoot && k === 'structure' && lmkTagged(o) ? 1 : 0 };
     }
     if (names.includes('vale_crowd')) return { cls: C.wick };
     if (!names.includes('vale_terrain')) return { cls: C.landmark };
@@ -426,18 +429,25 @@ function install() {
       // the instance: the terrain object standing at its `at` whose subtree holds a node named after the GLB
       let root = null, bd = 1e9;
       R.scene.traverse((o) => {
+        if (l.structure) {                                   // the reference: the structure actor nearest `at`
+          if (!o.name.startsWith('actor_structure')) return;
+          const p = new Vec3(); o.getWorldPosition(p);
+          const d = Math.hypot(p.x - l.at[0], p.z - l.at[1]);
+          if (d < bd) { bd = d; root = o; }
+          return;
+        }
         if ((o.name !== l.glb && !o.name.startsWith(`${l.glb}_`)) || !o.parent) return;
         let top = o; while (top.parent && top.parent.name !== 'vale_terrain' && top.parent !== R.scene) top = top.parent;
         const p = new Vec3(); top.getWorldPosition(p);
         const d = Math.hypot(p.x - l.at[0], p.z - l.at[1]);
         if (d < bd) { bd = d; root = top; }
       });
-      if (!root || bd > 1.0) return { error: `instance not found (${bd})` };
+      if (!l.laneOnly && (!root || bd > (l.structure ? 6.0 : 1.0))) return { error: `instance not found (${bd})` };
       b.focus(l.at[0] + off[0], l.at[1] + off[1]); b.zoom(28.5);
       R.vfx.clear(); fx.reset();
       settle(12);
       const frame = readFrame();
-      lmkTag = l.glb; lmkRoot = root;
+      lmkTag = l.glb; lmkRoot = l.laneOnly ? null : root;
       const cls = classPass();
       lmkTag = null; lmkRoot = null;
       const { w, h } = frame, F = frame.buf, K = cls.buf;
@@ -449,7 +459,7 @@ function install() {
       for (let i = 0; i < N; i++) {
         const j = i * 4;
         Ls[i] = lstarOf(F[j], F[j + 1], F[j + 2]);
-        if ((K[j] === C.landmark || K[j] === C.lamp) && K[j + 1] === 1) M[i] = Math.max(1, K[j + 2]);
+        if ((K[j] === C.landmark || K[j] === C.lamp || K[j] === C.structure) && K[j + 1] === 1) M[i] = Math.max(1, K[j + 2]);
         if (K[j] === C.lane) LN[i] = 1;
       }
       /** eroded: the 4-neighbours share the face id, r times */
@@ -479,7 +489,7 @@ function install() {
       const r05 = Math.max(1, Math.round(pxm * 0.25)), r25 = Math.max(2, Math.round(pxm * 1.25));
       const s05 = boxMean(M, r05), s25 = boxMean(M, r25);
       const band = [], sm = [], raw = [];
-      const er05 = erode(Me, Math.max(0, r05 - 2));          // the band only where a 0.5 m box fits inside the face
+      const er05 = erode(Me, Math.max(0, Math.round(r05 / 2) - 2));   // the band only where a 0.25 m box fits inside the face
       for (let i = 0; i < N; i++) if (Me[i]) { sm.push(s05[i]); raw.push(Ls[i]); if (er05[i]) band.push(s05[i] - s25[i]); }
       const r1 = (v) => (v == null ? null : +v.toFixed(1));
       return {
@@ -748,18 +758,38 @@ for (const map of MAPS) for (const tier of TIERS) {
     let landmarks = null;
     if (LMK === '1' || LMK_ONLY) {
       landmarks = {};
+      const bar = (refs) => Math.max(LMK_HP, refs.laneHpMedian ?? 0);
       const list = await V((v, re) => v.landmarkList(re), LMK_RE.source);
+      // references in the same metric: the lane at the map's lane spots (lane hp), and the Art 2.0 structures (every
+      // structure of team 1 on the map: its faces' hp and breakup, the tier the landmarks are held to)
+      const refs = { lane: [], structures: {} };
+      for (const [k, at] of Object.entries(spots)) {
+        if (!/^lane/.test(k)) continue;
+        const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: `ref_${k}`, glb: '__none__', at, laneOnly: true });
+        if (r.laneHp != null && r.lanePx > 20000) refs.lane.push(r.laneHp);
+      }
+      for (const st of await V((v) => { const bb = window.__VALE_BENCH__, m = bb.catalog.maps.find((x) => x.id === bb.host.setup.map); return (m.structures ?? []).filter((s) => s.team === 1).map((s) => ({ id: s.id ?? s.def, at: s.at })); })) {
+        const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: st.id, glb: '__none__', at: st.at, structure: true });
+        if (!r.error && r.px > 5000) refs.structures[st.id] = { px: r.px, hp: r.hp, breakup: r.breakup };
+      }
+      const med = (a) => { const x = [...a].sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)] : null; };
+      refs.laneHpMedian = med(refs.lane);
+      refs.structureHpMedian = med(Object.values(refs.structures).map((e) => e.hp));
+      refs.structureBreakupMedian = med(Object.values(refs.structures).map((e) => e.breakup));
+      console.log(`  references: lane hp ${refs.lane.join(' / ')} (median ${refs.laneHpMedian}); Art 2.0 structures hp median ${refs.structureHpMedian}, breakup median ${refs.structureBreakupMedian} (${Object.keys(refs.structures).length})`);
       // the camera stands a little south of the landmark (the gameplay camera looks north): it fills the frame's middle
       for (const l of list) {
         const r = await V((v, a) => v.landmarkAt(a.l, a.off), { l, off: [0, 0] });
         if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_lmk_${l.id}`);
-        const pass = r.hp != null && r.hp >= LMK_HP && r.breakup != null && r.breakup >= LMK_BREAKUP;
-        landmarks[l.id] = { ...r, verdict: r.error ? `FAIL (${r.error})` : `hp ${r.hp} (>= ${LMK_HP}) breakup ${r.breakup} (>= ${LMK_BREAKUP}) ${pass ? 'PASS' : 'FAIL'}` };
+        const hpBar = bar(refs);
+        const pass = r.hp != null && r.hp >= hpBar && r.breakup != null && r.breakup >= LMK_BREAKUP;
+        landmarks[l.id] = { ...r, verdict: r.error ? `FAIL (${r.error})` : `hp ${r.hp} (>= ${hpBar}: the lane's; Art 2.0 structures ${refs.structureHpMedian}) breakup ${r.breakup} (>= ${LMK_BREAKUP}) ${pass ? 'PASS' : 'FAIL'}` };
         console.log(`  landmark ${String(l.id).padEnd(20)} ${r.error ?? `${String(r.px).padStart(7)} px  ${r.pxPerM} px/m  hp ${r.hp}  breakup ${r.breakup}  range05 ${r.range05}  L* ${r.lstarP5}/${r.lstarP50}/${r.lstarP95}  lane hp ${r.laneHp}`}  ${landmarks[l.id].verdict}`);
       }
+      landmarks.__refs = refs;
       if (LMK_ONLY) {
         report.runs[TAG][`${map}_${tier}`] = { ...(report.runs[TAG][`${map}_${tier}`] ?? {}), tier, viewport: [w, h], t: T, seed: SEED, landmarks,
-          verdict: Object.fromEntries(Object.entries(landmarks).map(([k, e]) => [`landmark_${k}`, e.verdict])) };
+          verdict: Object.fromEntries(Object.entries(landmarks).filter(([k]) => k !== '__refs').map(([k, e]) => [`landmark_${k}`, e.verdict])) };
         report.generated = new Date().toISOString();
         writeFileSync(REPORT, JSON.stringify(report, null, 1));
         continue;
@@ -826,7 +856,7 @@ for (const map of MAPS) for (const tier of TIERS) {
     const s = summarise(res, C, fres);
     const bases = summariseBases(bres, C, s.fighters);
     const out = { tier, viewport: [w, h], t: T, seed: SEED, spots: Object.keys(res), ...s, bases, flash, fog, landmarks, verdict: { ...verdict(s, flash, map), ...baseVerdict(bases), ...(fog ? fogVerdict(fog) : {}),
-      ...(landmarks ? Object.fromEntries(Object.entries(landmarks).map(([k, e]) => [`landmark_${k}`, e.verdict])) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
+      ...(landmarks ? Object.fromEntries(Object.entries(landmarks).filter(([k]) => k !== '__refs').map(([k, e]) => [`landmark_${k}`, e.verdict])) : {}) }, logs: logs.filter((l) => !/favicon|toNonIndexed/.test(l)).slice(0, 12) };
     report.runs[TAG][`${map}_${tier}`] = out;
     report.generated = new Date().toISOString();
     writeFileSync(REPORT, JSON.stringify(report, null, 1));

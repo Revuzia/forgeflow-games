@@ -90,14 +90,14 @@ CARDS = {
     },
     "burdam_stillwater": {
         "splash": {"clip": "cast_a2", "t": 0.55, "yaw": 42.0, "pitch": -4.0, "lens": 58.0, "fill": 0.86, "x": 0.71,
-                   "key_az": 150.0, "key_el": 32.0, "key_color": "#CFE0E4", "sun": 2.4, "rim_cool": 2.0,
-                   "rim_warm": 0.3, "bounce": 0.35, "bounce_color": "#8FB3A8", "accent": 1.5, "exposure": -0.4,
-                   "focal": [{"at": "head", "az": 160.0, "el": 18.0, "dist": 0.8, "color": "#DDEDEE", "power": 20.0,
+                   "key_az": 150.0, "key_el": 32.0, "key_color": "#E6ECE8", "sun": 2.4, "rim_cool": 1.8,
+                   "rim_warm": 0.4, "bounce": 0.35, "bounce_color": "#9DB8AE", "accent": 1.5, "exposure": -0.4,
+                   "focal": [{"at": "head", "az": 175.0, "el": 18.0, "dist": 0.8, "color": "#FFE9CC", "power": 22.0,
                               "size": 0.25},
                              {"at": "x_notch_mid", "az": 140.0, "el": 15.0, "dist": 0.6, "color": "#BFE4D8",
                               "power": 35.0, "size": 0.2}]},
-        "portrait": {"yaw": 38.0},
-        "plate": {"tint": "#8FB0B4", "sat": 0.65, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
+        "portrait": {"yaw": 30.0, "t": 0.98},
+        "plate": {"tint": "#9DB4B4", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
                   "glow_color": "#B8D4D6"},
     },
     "burdam_almanac": {
@@ -145,18 +145,20 @@ SKINS: list = [
                  "reed": "#7D8460", "dawnglass": "#8FB3A8"}},
     # closing review burdam-M4 (the deluxe read as the base with whiter pauldrons, less change than the standard skin):
     # the ledger theme across the whole body, same silhouette and accents: the felt coat and skirt a deep ledger-ink
-    # slate-violet (hue ~250, sat 0.28, outside the azure band; L* ~30, the base coat's value), the cowl parchment, the
-    # parchment pauldrons ruled with oxblood margin rules among the ink ones, the board's rules and day-marks inked wide
+    # plum-slate (hue ~265, sat 0.22, well off the azure team band; L* ~31, the base coat's value; a 250-degree slate
+    # read team-blue under three.js's sky light), the cowl the darker ink felt (the pale mask framed by dark felt reads
+    # from the game camera, where the base's cowl is pale taupe), the parchment pauldrons ruled with oxblood margin
+    # rules among the ink ones, the board's rules and day-marks inked wide
     {"id": "burdam_almanac", "extra": {"almanac_board": True}, "match": ["rust", "cloth", "ironstone", "cloth2"],
      "card": {"primary": "#4A453E", "secondary": "#D8CDB4"},
      # parchment a step under the mask and the tunic a step down (the mask stays the brightest value); fix pass 4:
      # the parchment three steps down (#C2B69B blew 38 % of the pauldrons past L* 86 in the splash's sun); fix pass
      # 5: the tunic two more steps down (#6B6256 measured L* 70-72 in the splash against the mid band's 45-65, brief
      # 52: the top and middle bands merged)
-     "palette": {"cloth2": "#AFA283", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
+     "palette": {"cloth2": "#3E3A4C", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
                  # fix pass 8: the tunic the brief's WARM grey (#58503F read olive-khaki), at the same value
                  # polish: the board's walnut frame a cooler, darker brown (#5A4639 read pink in the splash's sun)
-                 "cloth": "#4A4560", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
+                 "cloth": "#4D4559", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
@@ -3043,16 +3045,16 @@ STONE_TOP = "#B9AC99"          # warm grey top faces (L* ~71; polish: was #9E928
                                # sky light cools a neutral grey); fix pass 8 a step lighter (the stack's splash median L* 47
                                # against the concept's 65)
 STONE_CHALK = "#DAD0BE"        # chalked convex bevels (L* ~84; was #CEC2AE, 79; closing burdam-M2: edges 8-10 L* over the top)
-STONE_SIDE = "#8A7C6C"         # the 8 cm side bands (L* ~53; was #776A5C, 46)
+STONE_SIDE = "#74675A"         # the 8 cm side bands (L* ~44; closing burdam-M2: was #8A7C6C, 53, the stack one pale block)
 STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
 STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step down: the vambrace never merges with the
                                # pauldron into one pale sleeve (polish: the right pauldron is the stack's stone now, no step)
 STONE_TIERS = ("tier1", "tier2", "tier3", "tier4")
 STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame", "pauldron_face"))   # plates that tuck under each other (recess paint)
 # closing review burdam-M2: the recess staining reached 2.8 cm and faded as a power (in the match the stack's interior read
-# p10/50/90 L* 53/71/81, no recess darkening at ~110 px): it now reaches 4.5 cm under the next tier, linear, at 0.86, so
+# p10/50/90 L* 53/71/81, no recess darkening at ~110 px): it now reaches 6 cm under the next tier, linear, at 0.9, so
 # each tuck reads as a dark band at the game camera; the chalked convex edges a step lighter (L* ~84, under the cap 86)
-STONE_OCC_REACH, STONE_OCC_POW, STONE_REC_K = 0.045, 1.0, 0.86
+STONE_OCC_REACH, STONE_OCC_POW, STONE_REC_K = 0.06, 1.0, 0.9
 LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
 CAP_PARTS = ("shoulder_plate", "pauldron_lame", "pauldron_face")
 CAP_CHROMA = 0.4               # fix round 2: the right cap's stone chroma (x, luminance kept; b* ~+11 -> ~+4): the verifier
@@ -3090,7 +3092,7 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
         fn = np.asarray(PAULDRON_FACE_N, dtype=np.float64)
         top = np.maximum(top, np.clip((Nm @ fn - 0.70) / 0.20, 0.0, 1.0) * 0.6)
     base = _hexlin(STONE_SIDE)[None] * (1 - top[:, None]) + _hexlin(STONE_TOP)[None] * top[:, None]
-    base = base * np.clip(1.0 + 0.35 * np.minimum(nz, 0.0), 0.55, 1.0)[:, None]          # undersides darker
+    base = base * np.clip(1.0 + 0.6 * np.minimum(nz, 0.0), 0.4, 1.0)[:, None]            # undersides darker (M2: 0.35)
     # the painting's own value variation (scratches, stains, the concept's cracks), a third of it
     Y = _lum(c)
     det = np.clip(1.0 + (Y / max(float(np.median(Y)), 1e-5) - 1.0) * 0.28, 0.65, 1.12)   # (projected highlight strokes

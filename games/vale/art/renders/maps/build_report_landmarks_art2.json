@@ -354,8 +354,8 @@
       -1.24,
       0.95
     ],
-    "kb_raw": 226,
-    "kb": 86,
+    "kb_raw": 297,
+    "kb": 144,
     "texture": 1024,
     "buried_faces_dropped": 36,
     "nodes": [
@@ -364,96 +364,96 @@
   },
   "numeral_xi": {
     "id": "numeral_xi",
-    "tris": 676,
+    "tris": 936,
     "size_m": [
-      6.93,
-      3.97
+      6.88,
+      3.9
     ],
     "height": 3.31,
     "x": [
-      -3.46,
-      3.46
+      -3.47,
+      3.41
     ],
     "y": [
-      -2.24,
+      -2.17,
       1.73
     ],
-    "kb_raw": 253,
-    "kb": 107,
+    "kb_raw": 314,
+    "kb": 161,
     "texture": 1024,
-    "buried_faces_dropped": 103,
+    "buried_faces_dropped": 105,
     "nodes": [
       "body"
     ]
   },
   "numeral_ii": {
     "id": "numeral_ii",
-    "tris": 610,
+    "tris": 768,
     "size_m": [
-      4.92,
-      3.84
+      4.89,
+      3.9
     ],
     "height": 3.31,
     "x": [
       -2.45,
-      2.48
+      2.45
     ],
     "y": [
-      -2.1,
+      -2.17,
       1.73
     ],
-    "kb_raw": 231,
-    "kb": 94,
+    "kb_raw": 293,
+    "kb": 148,
     "texture": 1024,
-    "buried_faces_dropped": 85,
+    "buried_faces_dropped": 99,
     "nodes": [
       "body"
     ]
   },
   "numeral_vii": {
     "id": "numeral_vii",
-    "tris": 741,
+    "tris": 1091,
     "size_m": [
-      8.53,
-      3.81
+      8.52,
+      3.93
     ],
     "height": 3.31,
     "x": [
-      -4.25,
-      4.28
+      -4.22,
+      4.3
     ],
     "y": [
-      -2.08,
+      -2.19,
       1.73
     ],
-    "kb_raw": 251,
-    "kb": 108,
+    "kb_raw": 330,
+    "kb": 173,
     "texture": 1024,
-    "buried_faces_dropped": 117,
+    "buried_faces_dropped": 120,
     "nodes": [
       "body"
     ]
   },
   "numeral_iiii": {
     "id": "numeral_iiii",
-    "tris": 747,
+    "tris": 1089,
     "size_m": [
-      8.2,
+      8.22,
       3.94
     ],
     "height": 3.31,
     "x": [
-      -4.08,
-      4.12
+      -4.11,
+      4.11
     ],
     "y": [
       -2.21,
       1.73
     ],
-    "kb_raw": 251,
-    "kb": 106,
+    "kb_raw": 327,
+    "kb": 173,
     "texture": 1024,
-    "buried_faces_dropped": 115,
+    "buried_faces_dropped": 121,
     "nodes": [
       "body"
     ]
@@ -474,8 +474,8 @@
       -1.79,
       1.52
     ],
-    "kb_raw": 319,
-    "kb": 147,
+    "kb_raw": 366,
+    "kb": 185,
     "texture": 1024,
     "buried_faces_dropped": 76,
     "nodes": [
@@ -499,8 +499,8 @@
       -1.79,
       1.36
     ],
-    "kb_raw": 366,
-    "kb": 177,
+    "kb_raw": 415,
+    "kb": 219,
     "texture": 1024,
     "buried_faces_dropped": 369,
     "nodes": [
@@ -524,8 +524,8 @@
       -1.35,
       2.09
     ],
-    "kb_raw": 405,
-    "kb": 204,
+    "kb_raw": 437,
+    "kb": 231,
     "texture": 1024,
     "buried_faces_dropped": 533,
     "nodes": [
@@ -549,10 +549,34 @@
       -3.03,
       2.99
     ],
-    "kb_raw": 1347,
-    "kb": 607,
+    "kb_raw": 1467,
+    "kb": 691,
     "texture": 2048,
     "buried_faces_dropped": 98,
+    "nodes": [
+      "body"
+    ]
+  },
+  "fair_stand_low": {
+    "id": "fair_stand_low",
+    "tris": 5283,
+    "size_m": [
+      6.02,
+      6.02
+    ],
+    "height": 1.32,
+    "x": [
+      -2.99,
+      3.03
+    ],
+    "y": [
+      -3.03,
+      2.99
+    ],
+    "kb_raw": 561,
+    "kb": 307,
+    "texture": 1024,
+    "buried_faces_dropped": 44,
     "nodes": [
       "body"
     ]
