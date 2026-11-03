@@ -278,13 +278,26 @@ def camp_lips(W):
         for tag, ((x, y), rot) in list(spots.items()) + [("strays_s", v) for v in south.values()]:
             model = "strays" if tag.startswith("strays") else tag
             at = (x if flip > 0 else W - x, y)
-            out.append(landmark(f"camp_lip_{side}_{tag}", f"{model} camp lip", at, (2.4, 1.4), 1.3 if model == "gloamoths" else 0.45,
+            out.append(landmark(f"camp_lip_{side}_{tag}", f"{model} camp lip", at, (2.4, 1.4), CAMP_LIP_H[model],
                                 f"low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_{model}", flush=True,
                                 model=f"assets/maps/landmarks/camp_{model}.glb", rot=rot * flip + 0.0, value=CAMP_LIP_VALUE.get(model, 1.0)))
     return out
 
 
 CAMP_LIP_VALUE = {"glasshorn": 0.8}      # the pale horn-glass lands L* <= 46 (shot_map --nofog at the camp)
+# closing env m-4: each cluster carries one rim set piece (antler rack, lamp-tree, toppled numerals, resin-bled stumps,
+# the scored boulder): their real heights (art/renders/maps/build_report_landmarks_art2.json)
+CAMP_LIP_H = {"glasshorn": 1.0, "gloamoths": 2.05, "strays": 0.6, "resinback": 1.0, "stilltusks": 0.85}
+
+
+def hour_lamps(W, fountains):
+    """closing env m-2: the Hour lamp (landmarks_art2.py hour_lamp, <= 1 m, one warm-white lamp-stone, no relationship
+    colour) on each base's fountain ring, 3 m out from the fountain's centre on the side away from the spawn (the map
+    edge), so it stands in the respawn view and never where a fighter heals or walks out. Flush: the sim never sees it."""
+    return [landmark(f"hour_lamp_{side}", "Hour lamp", (fx + 3.0 * sg, fy), (1.6, 1.6), 0.95,
+                     "closing env m-2: the fountain set piece on the far side of the fountain ring from the spawn (art/blender/maps/landmarks_art2.py hour_lamp): a low dial-stone drum, chalk hour-lugs, one warm-white lamp-stone, the same at both bases",
+                     flush=True, model="assets/maps/landmarks/hour_lamp.glb")
+            for side, (fx, fy), sg in (("a", fountains[0], -1), ("s", fountains[1], 1))]
 
 
 def skirts_rift(W, H):
@@ -614,6 +627,7 @@ def build_rift():
             landmark("lamp_dome", "Lamp Dome", (W + 10.0, CY), (18.4, 18.4), 8.0, "Serenade base, beyond the east edge (art/blender/maps/landmarks_art2.py): ribbed ironstone dome on a coursed sandstone drum, lampresin windows and oculus; its court fills the rim 44-66"),
             landmark("lampwright_stall_a", "Lampwright stall", (5.5, 41.5), (3, 3), 4.0, "Aubade shop kiosk on the wall lip north of the shop circle: the spire-roofed variant (stepped slate courses, one lamp off the front-west post)", model="assets/maps/landmarks/lampwright_stall.glb"),
             landmark("lampwright_stall_s", "Lampwright stall", (W - 5.5, 41.5), (3, 3), 4.0, "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)", model="assets/maps/landmarks/lampwright_stall_dome.glb"),
+            *hour_lamps(W, ((4.5, CY), (W - 4.5, CY))),
             landmark("the_seat", "the Seat", (CX, CY), (16, 16), 0.15, "the needle's base-stone, flush, carved rim and socket scar", flush=True),
             landmark("shadow_slab_w", "shadow slab", (CX - 5.6, 19.6), (2, 3), 4.0, "leaning basalt slab framing Longshade's north choke"),
             landmark("shadow_slab_e", "shadow slab", (CX + 5.6, 19.6), (2, 3), 4.0, "its mirror", rot=180),
@@ -731,6 +745,7 @@ def build_bridge():
             landmark("snap_crack", "the crack", (CX, CY), (1, 24), 0.05, "the fracture line across the Snap floor, engraved and lit from inside (emissive <= 0.8)", flush=True),
             landmark("lampwright_stall_a", "Lampwright stall", (5.0, 8.5), (3, 2.5), 3.5, "Aubade shop kiosk on the gorge lip north of the shop circle: the spire-roofed variant (stepped slate courses, one lamp off the front-west post)", model="assets/maps/landmarks/lampwright_stall.glb", value=1.5),
             landmark("lampwright_stall_s", "Lampwright stall", (W - 5.0, 8.5), (3, 2.5), 3.5, "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)", model="assets/maps/landmarks/lampwright_stall_dome.glb", value=1.5),
+            *hour_lamps(W, ((3.5, CY), (W - 3.5, CY))),
             *skirts_bridge(W, H),
         ],
         "colors": {"lane": "#988F7C", "clearing": "#7E786B", "inscription": "#B7B0A0"},

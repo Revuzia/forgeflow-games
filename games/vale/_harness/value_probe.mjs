@@ -68,6 +68,7 @@
 //             one live unit of each monster kind at the gameplay camera (28.5 m, fog off): hp / breakup over its faces
 //             (the landmark metric), L* p10/50/90 and mean-Lab chroma against its floor ring (ground 0.6-2.5 m past its
 //             screen box): dLstarP50, dE76; its 32 x 32 silhouette and the IoU between kinds (maxIoU per kind)
+//   --lmkre   regex alternation of landmark GLB names for --landmarks (default: the E1 gated set)
 //   --report  the report's file name under _harness/_reports (default value_probe.json)
 //   --vfxcaps the flash test again per VFX lift cap (e.g. off,1.3,1.6: renderer.vfx.liftCap, combat F4; off = effects
 //             lifted like the ground), reported as flash.byCap
@@ -105,7 +106,10 @@ const LMK_ONLY = LMK === 'only';
 const MON = opt('monsters', '0');
 const MON_IDS = opt('monsterIds', '').split(',').filter(Boolean);
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
-const LMK_RE = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
+const LMK_RE_GATED = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
+/** --lmkre <names> (closing CW4 polish): measure other landmark GLBs the same way, e.g. camp_[a-z]+|hour_lamp (their L* p50
+ *  against the camp-dressing bar L* <= 46; the hp / breakup verdict is the E1 gate's and only binds the gated set) */
+const LMK_RE = opt('lmkre', '') ? new RegExp(`[/-](${opt('lmkre', '')})\\.glb$`) : LMK_RE_GATED;
 const LMK_HP = 1.0, LMK_BREAKUP = 6;   // hp bar: the lane's own hp in the same metric (median of the lane spots), never under 1.0
 /** combat F4: the flash test once per VFX lift cap (renderer.vfx.liftCap; 'off' = effects lifted like the ground) */
 const VFX_CAPS = opt('vfxcaps', '').split(',').filter(Boolean).map((c) => (c === 'off' ? null : Number(c)));

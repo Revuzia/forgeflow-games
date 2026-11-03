@@ -1570,6 +1570,8 @@
      "height": 4.0,
      "note": "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)"
     },
+    {"id": "hour_lamp_a", "model": "assets/maps/landmarks/hour_lamp.glb", "name": "Hour lamp", "at": [1.5, 55], "size": [1.6, 1.6], "height": 0.95, "note": "closing env m-2: the fountain set piece on the far side of the fountain ring from the spawn (art/blender/maps/landmarks_art2.py hour_lamp): a low dial-stone drum, chalk hour-lugs, one warm-white lamp-stone, the same at both bases", "flush": true},
+    {"id": "hour_lamp_s", "model": "assets/maps/landmarks/hour_lamp.glb", "name": "Hour lamp", "at": [168.5, 55], "size": [1.6, 1.6], "height": 0.95, "note": "closing env m-2: the fountain set piece on the far side of the fountain ring from the spawn (art/blender/maps/landmarks_art2.py hour_lamp): a low dial-stone drum, chalk hour-lugs, one warm-white lamp-stone, the same at both bases", "flush": true},
     {
      "id": "the_seat",
      "name": "the Seat",
@@ -1944,7 +1946,7 @@
      "name": "glasshorn camp lip",
      "at": [61.6, 37.6],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 1.0,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_glasshorn",
      "flush": true,
      "value": 0.8
@@ -1955,7 +1957,7 @@
      "name": "gloamoths camp lip",
      "at": [67.3, 23.8],
      "size": [2.4, 1.4],
-     "height": 1.3,
+     "height": 2.05,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_gloamoths",
      "flush": true,
      "value": 1.0
@@ -1966,7 +1968,7 @@
      "name": "strays camp lip",
      "at": [44.5, 28.3],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.6,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_strays",
      "flush": true,
      "value": 1.0
@@ -1977,7 +1979,7 @@
      "name": "resinback camp lip",
      "at": [64.3, 80.8],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 1.0,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_resinback",
      "flush": true,
      "value": 1.0
@@ -1988,7 +1990,7 @@
      "name": "stilltusks camp lip",
      "at": [62.3, 64.8],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.85,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_stilltusks",
      "flush": true,
      "value": 1.0
@@ -1999,7 +2001,7 @@
      "name": "strays camp lip",
      "at": [47.6, 74.0],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.6,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_strays",
      "flush": true,
      "value": 1.0
@@ -2010,7 +2012,7 @@
      "name": "glasshorn camp lip",
      "at": [108.4, 37.6],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 1.0,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_glasshorn",
      "flush": true,
      "value": 0.8
@@ -2021,7 +2023,7 @@
      "name": "gloamoths camp lip",
      "at": [102.7, 23.8],
      "size": [2.4, 1.4],
-     "height": 1.3,
+     "height": 2.05,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_gloamoths",
      "flush": true,
      "value": 1.0
@@ -2032,7 +2034,7 @@
      "name": "strays camp lip",
      "at": [125.5, 28.3],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.6,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_strays",
      "flush": true,
      "value": 1.0
@@ -2043,7 +2045,7 @@
      "name": "resinback camp lip",
      "at": [105.7, 80.8],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 1.0,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_resinback",
      "flush": true,
      "value": 1.0
@@ -2054,7 +2056,7 @@
      "name": "stilltusks camp lip",
      "at": [107.7, 64.8],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.85,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_stilltusks",
      "flush": true,
      "value": 1.0
@@ -2065,7 +2067,7 @@
      "name": "strays camp lip",
      "at": [122.4, 74.0],
      "size": [2.4, 1.4],
-     "height": 0.45,
+     "height": 0.6,
      "note": "low camp dressing on the clearing's north lip (env m2): art/blender/maps/landmarks_art2.py camp_strays",
      "flush": true,
      "value": 1.0

@@ -556,6 +556,8 @@
      "note": "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)",
      "value": 1.5
     },
+    {"id": "hour_lamp_a", "model": "assets/maps/landmarks/hour_lamp.glb", "name": "Hour lamp", "at": [0.5, 22], "size": [1.6, 1.6], "height": 0.95, "note": "closing env m-2: the fountain set piece on the far side of the fountain ring from the spawn (art/blender/maps/landmarks_art2.py hour_lamp): a low dial-stone drum, chalk hour-lugs, one warm-white lamp-stone, the same at both bases", "flush": true},
+    {"id": "hour_lamp_s", "model": "assets/maps/landmarks/hour_lamp.glb", "name": "Hour lamp", "at": [155.5, 22], "size": [1.6, 1.6], "height": 0.95, "note": "closing env m-2: the fountain set piece on the far side of the fountain ring from the spawn (art/blender/maps/landmarks_art2.py hour_lamp): a low dial-stone drum, chalk hour-lugs, one warm-white lamp-stone, the same at both bases", "flush": true},
     {
      "id": "skirt_bridge_n1", "model": "assets/maps/landmarks/skirt_bridge.glb",
      "name": "far bank",
