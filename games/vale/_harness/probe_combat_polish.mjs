@@ -49,6 +49,8 @@ const OUT = join(REPS, `fw_W1_combat_polish${TAG ? '_' + TAG : ''}.json`);
 const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('$')).map(([k, x]) => [k, strip(x)])) : v);
 const defs = strip(JSON.parse(readFileSync(BEFORE || join(HERE, '../content/vfx.json'), 'utf8')));
 const LINEUP = ['lisvel', 'ardit', 'dunsom', 'ilsheta', 'odrum', 'kemdo', 'tunlan', 'hesmi', 'rishal', 'burdam'];
+const SELF_ULT = new Set(readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(HERE, '../content/fighters', f), 'utf8')))
+  .filter((f) => { const fx = (f.kit?.ult?.effects ?? []).filter((e) => e.op === 'area' || e.op === 'zone'); return fx.length > 0 && fx.every((e) => e.at === 'self'); }).map((f) => f.id));
 const ALL = readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
 
 const report = { at: new Date().toISOString(), defs: BEFORE || 'content/vfx.json', ult: [], cc: null, flash: [], hold: [], pass: true, fails: [] };
@@ -304,7 +306,9 @@ try {
       console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}`);
       if (!first) fail(`${def}: no beat ≥ 1.3`);
       else {
-        if (dV >= dC) fail(`${def}: the beat sits on the caster (${Math.round(dC)} px from it, ${Math.round(dV)} from the victim)`);
+        // a self-centred ultimate (every area / zone of it at the caster: Burdam's, Ilsheta's, Sukri's, Ulkro's, Ardit's)
+        // beats where it stands; the centre gate is for the ults aimed at a unit or a shape (Tunlan's cone, Rishal's track)
+        if (!SELF_ULT.has(def) && dV >= dC) fail(`${def}: the beat sits on the caster (${Math.round(dC)} px from it, ${Math.round(dV)} from the victim)`);
         if (res.beats.some((r) => r.bodyPx < 200)) fail(`${def}: the victim's body was not isolated (${res.beats.map((r) => r.bodyPx).join('/')} px)`);
         if (res.maxLiftAdds > 0.1) fail(`${def}: the lift whites ${res.maxLiftAdds} more of the victim's body at a beat (> 0.10)`);
         // W1 verify combat:F4: the review's box measure (victim box ±45 px, white = luma > 225 and chroma < 30) on every

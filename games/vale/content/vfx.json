@@ -42162,7 +42162,7 @@
             0
           ]
         ],
-        "emissive": 6,
+        "emissive": 4.5,
         "noise": 0.2,
         "mask": "ends",
         "maskParam": 0.08,
@@ -42200,7 +42200,7 @@
             0
           ]
         ],
-        "emissive": 6,
+        "emissive": 4.5,
         "noise": 0.2,
         "mask": "ends",
         "maskParam": 0.08,
@@ -62252,7 +62252,7 @@
             0.0
           ]
         ],
-        "emissive": 2.0,
+        "emissive": 1.4,
         "sharp": 2.4,
         "noise": 0.3,
         "fit": true
@@ -62509,7 +62509,7 @@
             0
           ]
         ],
-        "emissive": 2.0,
+        "emissive": 1.4,
         "sharp": 2.0,
         "noise": 0.3,
         "fit": true
@@ -74217,10 +74217,6 @@
         "color": [
           [
             0.0,
-            "#C7D9E8"
-          ],
-          [
-            0.12,
             "signature"
           ],
           [
@@ -74257,7 +74253,7 @@
         "emissive": [
           [
             0,
-            3.0
+            2.0
           ],
           [
             0.2,
@@ -74445,10 +74441,6 @@
         "color": [
           [
             0.0,
-            "#BFD3E6"
-          ],
-          [
-            0.12,
             "signature"
           ],
           [
@@ -74461,7 +74453,7 @@
           0.35,
           0
         ],
-        "emissive": 4,
+        "emissive": 3,
         "noise": 0.5,
         "noiseScale": 3,
         "align": "up",
