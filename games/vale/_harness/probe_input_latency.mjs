@@ -20,7 +20,7 @@
 //          your fighter after one frame; respawn (your fighter killed, the camera panned 1 s away while dead, back at
 //          the fountain): focus offset on the first live frame, in semi and in locked.
 //
-//   node _harness/probe_input_latency.mjs [--orders 50] [--tag x]   → _harness/_reports/fw_CW1_input_latency[_tag].json
+//   node _harness/probe_input_latency.mjs [--orders 50] [--tag x] [--only camera] [--kinds attack,windupMove]   → _harness/_reports/fw_CW1_input_latency[_tag].json
 //   shots _harness/_shots/fw_CW1_input_*.png
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -34,6 +34,8 @@ const TAG = opt('tag', '');
 const OUT = join(HERE, '_reports', `fw_CW1_input_latency${TAG ? '_' + TAG : ''}.json`);
 mkdirSync(dirname(OUT), { recursive: true });
 const NORD = Number(opt('orders', 50));
+/** --only camera: skip the 50 orders (the camera half alone) */
+const ONLY = opt('only', 'input,camera').split(',');
 const report = { at: new Date().toISOString(), orders: [], summary: {}, camera: {}, pass: true, fails: [] };
 const fail = (m) => { report.pass = false; report.fails.push(m); console.log('FAIL', m); };
 
@@ -65,14 +67,15 @@ try {
     W.command = (p, cmd) => { if (p === c.you || window.__allow) orig(p, cmd); };
     const foe = c.view.players.find((p) => p.team !== me.team);
     window.__ids = { me: me.entity, foe: foe.entity, you: c.you };
-    // near = true: the enemy 0.8 m outside your attack range (edge to edge; inside it your fighter's auto-attack
-    // would already be swinging), so an attack order steps in and winds up; false: 30 m away, so auto-attack does not
-    // take the move orders
+    // near = true: the enemy 0.6 m outside your attack range (edge to edge; inside it your fighter's auto-attack
+    // would already be swinging), so an attack order steps in and winds up; false: 3.5 m outside it (still in
+    // vision, so its actor stays drawn and pickable), so auto-attack does not take the move orders
     window.__park = (near = true) => {
       const s = W.entity(me.entity), e = W.entity(foe.entity);
       if (!e.alive) { e.alive = true; }
       s.target = null; if ('attackTarget' in s) s.attackTarget = null;
-      const d = near ? Math.max(1.2, Math.min(6, (s.stats?.range ?? 1.5) + s.radius + e.radius + 0.8)) : 30;
+      const reach = (s.stats?.range ?? 1.5) + s.radius + e.radius;
+      const d = near ? Math.max(1.2, reach + 0.6) : reach + 3.5;
       e.hp = e.maxHp; e.x = s.x + d; e.y = s.y; e.vx = 0; e.vy = 0; e.autoAttack = false; e.statuses.length = 0;
       s.hp = s.maxHp;
     };
@@ -130,6 +133,8 @@ try {
     return false;
   };
 
+  // --kinds attack,windupMove: only those order kinds (a targeted re-run)
+  const KINDS = opt('kinds', 'move,attack,attackMove,windupMove').split(',');
   const kinds = [];
   const n = (k) => Math.round(NORD * k);
   for (let i = 0; i < n(0.4); i++) kinds.push('move');
@@ -139,10 +144,11 @@ try {
   // interleave
   const order = [];
   const pools = { move: kinds.filter((k) => k === 'move'), attack: kinds.filter((k) => k === 'attack'), attackMove: kinds.filter((k) => k === 'attackMove'), windupMove: kinds.filter((k) => k === 'windupMove') };
-  while (order.length < NORD) for (const k of ['move', 'attack', 'move', 'attackMove', 'windupMove']) if (pools[k].length && order.length < NORD) order.push(pools[k].pop());
+  if (KINDS.length < 4) { for (let i = 0; i < NORD; i++) order.push(KINDS[i % KINDS.length]); }
+  else while (order.length < NORD) for (const k of ['move', 'attack', 'move', 'attackMove', 'windupMove']) if (pools[k].length && order.length < NORD) order.push(pools[k].pop());
 
   let dir = 1;
-  for (let i = 0; i < order.length; i++) {
+  for (let i = 0; i < (ONLY.includes('input') ? order.length : 0); i++) {
     const kind = order[i];
     const near = kind === 'attack' || kind === 'windupMove';
     await vale(page, (v, n) => window.__park(n), near);
@@ -224,10 +230,12 @@ try {
   const all = report.summary.all;
   console.log('summary', JSON.stringify(report.summary));
   // an input that lands while a frame is being built waits for that frame, then shows on the next: <= 2 frames
-  if (all.markerP95 === null || all.markerP95 > 2 * frameMs) fail(`marker p95 ${all.markerP95} ms > 2 frames`);
-  if (all.motionP95 === null || all.motionP95 > 67 + frameMs) fail(`motion p95 ${all.motionP95} ms > 2 ticks + 1 frame`);
-  if (all.markerMissing > 0) fail(`${all.markerMissing} orders drew no marker`);
-  if (all.motionMissing > 0) fail(`${all.motionMissing} orders never moved the fighter`);
+  if (ONLY.includes('input')) {
+    if (all.markerP95 === null || all.markerP95 > 2 * frameMs) fail(`marker p95 ${all.markerP95} ms > 2 frames`);
+    if (all.motionP95 === null || all.motionP95 > 67 + frameMs) fail(`motion p95 ${all.motionP95} ms > 2 ticks + 1 frame`);
+    if (all.markerMissing > 0) fail(`${all.markerMissing} orders drew no marker`);
+    if (all.motionMissing > 0) fail(`${all.motionMissing} orders never moved the fighter`);
+  }
 
   // ── camera, live ───────────────────────────────────────────────────────────────────────────────────────
   const camState = () => vale(page, (v) => { const R = v.state.renderer, a = R.actors.get(window.__ids.me), f = R.rig.focus; return { mode: R.rig.mode, fx: f.x, fz: f.z, sx: a.x, sz: a.y, off: Math.hypot(f.x - a.x, f.z - a.y), alive: !!a.view?.alive, zoom: R.rig.zoom }; });
@@ -244,13 +252,20 @@ try {
   await page.mouse.move(1919, 540);
   const tp0 = Date.now();
   for (let k = 0; k < 12; k++) { await page.waitForTimeout(90); const s = await camState(); trace.push({ t: Date.now() - tp0, offPx: s.off * pxm(s.zoom) }); }
+  // the glide back, frame by frame in the page (rAF), from the pointer leaving the edge
+  await vale(page, (v) => {
+    const R = v.state.renderer; window.__back = null; const rows = []; let t0 = null;
+    addEventListener('pointermove', function once(e) { if (e.clientX < 1800) { t0 = e.timeStamp; removeEventListener('pointermove', once, true); } }, true);
+    const f = (ts) => { const a = R.actors.get(window.__ids.me), q = R.rig.focus; if (t0 !== null) { const off = Math.hypot(q.x - a.x, q.z - a.y) * (540 / Math.tan(13 * Math.PI / 180)) / R.rig.zoom; rows.push({ t: +(performance.now() - t0).toFixed(1), offPx: +off.toFixed(1) }); if (off < 1 || rows.length > 240) { window.__back = rows; return; } } requestAnimationFrame(f); };
+    requestAnimationFrame(f);
+  });
   await page.mouse.move(960, 540);
-  const back = [];
-  const tb0 = Date.now();
-  for (let k = 0; k < 10; k++) { await page.waitForTimeout(60); const s = await camState(); back.push({ t: Date.now() - tb0, offPx: +(s.off * pxm(s.zoom)).toFixed(1) }); }
-  const moving = trace.filter((p) => p.offPx > 2);
+  try { await waitFor(page, () => !!window.__back, 10000); } catch { /* reported below */ }
+  const back = (await vale(page, () => window.__back)) ?? [];
+  // the pan's slope while it moves (a map-edge clamp ends it in a plateau, left out)
+  const moving = trace.filter((p, i) => p.offPx > 2 && !(i > 0 && Math.abs(p.offPx - trace[i - 1].offPx) < 1));
   const speed = moving.length >= 2 ? (moving[moving.length - 1].offPx - moving[0].offPx) / ((moving[moving.length - 1].t - moving[0].t) / 1000) : 0;
-  report.camera.peek = { dwellMsBefore: moving.length ? moving[0].t : null, pxPerS: Math.round(speed), trace: trace.map((p) => ({ t: p.t, offPx: Math.round(p.offPx) })), back, backWithinMs: back.find((p) => p.offPx < 1)?.t ?? null };
+  report.camera.peek = { dwellMsBefore: moving.length ? moving[0].t : null, pxPerS: Math.round(speed), trace: trace.map((p) => ({ t: p.t, offPx: Math.round(p.offPx) })), back: back.filter((_, i) => i % 3 === 0 || i === back.length - 1), backWithinMs: back.find((p) => p.offPx < 1)?.t ?? null };
   // lock toggle → semi, edge pan, centre key, toggle back
   await page.keyboard.press('KeyY'); await page.waitForTimeout(200);
   const semi = await camState();
@@ -293,7 +308,8 @@ try {
   if (cam.default.mode !== 'locked') fail(`default camera mode ${cam.default.mode}`);
   if (cam.default.offPx > 1) fail(`locked camera off the fighter by ${cam.default.offPx} px`);
   if (!(cam.peek.pxPerS > 500)) fail(`edge peek did not pan (${cam.peek.pxPerS} px/s)`);
-  if (cam.peek.backWithinMs === null || cam.peek.backWithinMs > 520) fail(`peek glide back ${cam.peek.backWithinMs} ms`);
+  // the rig lands within peekReturnMaxS (400 ms) of the pointer leaving the edge; one frame of slack
+  if (cam.peek.backWithinMs === null || cam.peek.backWithinMs > 400 + 2 * frameMs) fail(`peek glide back ${cam.peek.backWithinMs} ms`);
   if (cam.toggle.afterY === 'locked') fail('Y did not unlock');
   if (cam.toggle.spaceOffPx > 1) fail(`Space left the focus ${cam.toggle.spaceOffPx} px off`);
   if (cam.toggle.relockMode !== 'locked' || cam.toggle.relockOffPx > 1) fail(`Y relock ${cam.toggle.relockMode} ${cam.toggle.relockOffPx} px`);
