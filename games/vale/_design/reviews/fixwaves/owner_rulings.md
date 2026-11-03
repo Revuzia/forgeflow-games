@@ -103,3 +103,13 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 | Below par | Performance 7.0, Audio 6.5, Gameplay 6.0, all 16 fighters (5.5-6.5) |
 | Open blockers | Vashil's cowl (CW5), the Greatwick lantern (CW4) |
 | Not yet scored | Neutral monsters (CW4), the camera and input feel (CW1) |
+
+## 9. Voice stays scoped out (lead, by delegation, 2026-11-03)
+
+**Question (AUD-C2):** should VALE add fighter voice lines and a spoken announcer? CONTRACT §11 scopes voice out, and the closing review called it the largest audio difference a LoL player still hears.
+
+**Ruling:** voice stays out for this release.
+- CONTRACT §11 forbids imported or library samples, and the studio has no voice cast. Synthesized speech would sound worse than no speech, which is not the industry standard for a shipped game.
+- The standard alternative is what VALE already has: a tonal announcer with on-screen text, plus each fighter's non-verbal call (`f_<id>_call`).
+- AUD-C2 is an accepted scope gap. It does **not** count against the Audio score at the par bar (ruling 8). Reviewers grade audio on what is in scope.
+- Revisit it if the owner funds a voice cast.
