@@ -28,7 +28,7 @@ test('a grassed hill breaks up at mid distance: crests, hollows, drifts and bare
   const m = /float midK = smoothstep\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), camDist\);([\s\S]*?)gcol = mix\(gcol, g2, midK\);/.exec(TM);
   assert.ok(m, 'terrainmat fades a mid-distance breakup into the grass colour');
   const [a, b] = [Number(m![1]), Number(m![2])];
-  assert.ok(a >= 150 && a <= 400 && b >= 600 && b <= 1600, `faded in over ${a}-${b} m`);
+  assert.ok(a >= 100 && a <= 300 && b >= 400 && b <= 1000, `faded in over ${a}-${b} m`);
   const body = m![3];
   assert.match(body, /fbm3\(P \* 0\.00\d+/, 'a ~100-300 m drift term');
   assert.match(body, /concave/, 'crests and hollows from the ground curvature');
@@ -45,7 +45,7 @@ test('P18: a far wooded hill breaks up too (the canopy, not only the sward)', as
   // breakup left them one flat dark green
   const m = /float cMid = smoothstep\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), camDist\);([\s\S]*?)tc = mix\(tc, tc2, cMid/.exec(TM);
   assert.ok(m, 'terrainmat fades a mid-distance breakup into the far canopy colour');
-  assert.ok(+m![1] >= 150 && +m![1] <= 400 && +m![2] >= 600 && +m![2] <= 1500, `fade ${m![1]}..${m![2]} m`);
+  assert.ok(+m![1] >= 100 && +m![1] <= 300 && +m![2] >= 400 && +m![2] <= 1000, `fade ${m![1]}..${m![2]} m`);
   assert.match(m![3], /fbm3\(P \* 0\.0\d+/, 'grove-scale drifts');
   assert.match(m![3], /concave/, 'crests and hollows');
   const at = TM.indexOf('float cMid'), crown = TM.indexOf('tc *= 0.62 + 0.55 * crown'), inst = TM.indexOf('float inst = uVegFade');

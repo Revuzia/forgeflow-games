@@ -561,15 +561,16 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // grassed hill read as one smooth, untextured green (the cover image's top half). What a real hillside shows from
     // there: drier, yellower grass on crests, convex shoulders and the steeper sun-facing faces; darker, lusher growth
     // and scrub down the hollows and the ~200 m drifts of damper ground; the thin turf on the steepest pitches opening
-    // onto earth. Faded in over 250–900 m, so nothing changes where the near terms already carry the ground.
-    float midK = smoothstep(250.0, 900.0, camDist);
+    // onto earth. Faded in over 120–500 m (the cover framing's back hills stand only 300–450 m off; past ~120 m the
+    // near terms' 3–60 m texture is already sub-pixel), so nothing changes where the near terms carry the ground.
+    float midK = smoothstep(120.0, 500.0, camDist);
     if (midK > 0.0) {
       // (~220 m drifts plus a ~90 m octave: on a 400-800 m hill the 220 m term alone left two or three soft tones)
       float mA = fbm3(P * 0.0045 + 23.0) + 0.45 * snoise(P * 0.011 + warpV * 0.03 + 29.0);
       float mB = snoise(P * 0.019 + warpV * 0.05 + 31.0) * 0.6 + snoise(P * 0.052 + 37.0) * 0.4 * aaF(fw, 20.0);
       float ridgeK = smoothstep(0.05, 0.6, -concave), hollowK = smoothstep(0.05, 0.6, concave);
-      // (past ~600 m the drifts are all that is left of the ground's texture: they firm up, still broad and soft-edged)
-      float farK = 1.0 + 0.5 * smoothstep(600.0, 1500.0, camDist);
+      // (past ~400 m the drifts are all that is left of the ground's texture: they firm up, still broad and soft-edged)
+      float farK = 1.0 + 0.5 * smoothstep(400.0, 1300.0, camDist);
       vec3 g2 = gcol;
       g2 = mix(g2, g2 * vec3(1.32, 1.14, 0.66), clamp((0.45 * ridgeK + 0.5 * smoothstep(0.0, 0.45, mA) + 0.25 * max(sunny, 0.0) * steep) * farK, 0.0, 0.8));
       g2 = mix(g2, g2 * vec3(0.6, 0.76, 0.62), clamp((0.5 * hollowK + 0.5 * smoothstep(0.0, -0.45, mA)) * farK, 0.0, 0.75));
@@ -689,7 +690,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // MID-DISTANCE BREAKUP of the far canopy (punch P18): past a few hundred metres the crowns are under a pixel and a
       // wooded hill was one flat dark green (the cover's back hills). A real wood from there: groves of other species and
       // ages in ~100-250 m drifts (paler, yellower / darker, bluer), lighter crowns on the crests, dark in the hollows.
-      float cMid = smoothstep(250.0, 900.0, camDist);
+      float cMid = smoothstep(150.0, 550.0, camDist);
       if (cMid > 0.0) {
         float cA = fbm3(P * 0.006 + 53.0) + 0.5 * snoise(P * 0.014 + warpV * 0.03 + 59.0);
         float cRidge = smoothstep(0.05, 0.6, -concave), cHollow = smoothstep(0.05, 0.6, concave);
