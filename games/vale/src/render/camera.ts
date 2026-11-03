@@ -9,6 +9,7 @@
 //   semi         pan freely, but the focus stays within a 6 m leash of your fighter
 //   free         edge pan (pointer within 18 px of an edge) + keyboard pan at controls.panSpeed
 //   scout (hold) free pan while held; release snaps back to your fighter (cut, 1 frame)
+// Respawn (your fighter back after death): every mode re-centres on it (cut, 1 frame).
 // Focus is clamped to the map bounds inset by 4 m (env F1 step 4: the view never opens onto more out-of-play ground
 // than it must; W5's dressed skirt fills what is left at an edge, `_harness/probe_camera_edge.mjs` measures it).
 // Zoom eases over 200 ms. Screen shake (structure falls, own
@@ -79,8 +80,12 @@ export class CameraRig {
   /** the local fighter's interpolated ground position (null while unknown) */
   setSelf(x: number | null, z: number | null): void {
     if (x === null || z === null) { this.self = null; return; }
+    const back = this.self === null;
     this.self = { x, z };
     if (!this.seeded) { this.focus.set(x, 0, z); this.seeded = true; }
+    // CW1 critic:camera: back from death (or any absence): every mode re-centres on your fighter at the fountain
+    // (r04 §6 "re-center on respawn"); semi and free used to stay where the death cam was left, a leash away
+    else if (back && !this.scouting) { this.peeking = false; this.focusOn(x, z); }
   }
   /** jump the focus (minimap click, respawn, centerCamera) */
   focusOn(x: number, z: number): void { this.focus.set(x, 0, z); this.seeded = true; this.clamp(); }

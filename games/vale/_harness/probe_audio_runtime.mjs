@@ -26,11 +26,11 @@
 //     integrated loudness (gated as BS.1770), short-term (3 s) percentiles, momentary (~0.4 s) maxima; the cue log
 //     with match time. Gates (closing CW2 done, minors): heal chimes <= 6 per minute; enemyDown fires; announcer
 //     line peak (voice momentary max) >= 3 dB over the sfx short-term p99 (the sfx bus + threat path, measured
-//     before the voice duck). Reported: the lines against the teamfight windows (sfx short-term above its p90),
+//     before the voice duck); the master integrated within tokens.audio.loudness (-18 ± 1.5 LUFS; CW2 refix). Reported: the lines against the teamfight windows (sfx short-term above its p90),
 //     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience (about -28), music.
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -48,6 +48,7 @@ const REF_AT = ['out', 'master', 'sfx'];   // where a reference click joins: the
 const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
 const SECONDS = Number(opt('--seconds', 420));
+const TOK = JSON.parse(readFileSync(join(HERE, '..', '_design', 'tokens.json'), 'utf8')).audio.loudness;   // -18 ± 1.5 LUFS
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
 
@@ -341,7 +342,9 @@ async function runMatch() {
       healPerMinLe6: rep.cueLog.healPerMin <= 6,
       enemyDownFires: rep.cueLog.enemyDown > 0,
       announcerPeakOverSfxP99Ge3: rep.announcer.peakOverSfxP99 !== null && rep.announcer.peakOverSfxP99 >= 3,
+      masterIntegratedInTokens: loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
     };
+    rep.tokens = TOK;
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so
     // the contrast a player hears under a line is about 6 dB more)
     rep.announcer.medianOverTeamfightP99PlusDuck = r2(rep.announcer.medianOverTeamfightP99 + 6);

@@ -28,10 +28,9 @@
 //               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
 //               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
 //   sync        a cue starts the moment its event reaches the engine (the frame loop pumps the sim, then renders, in one rAF);
-//               a one-shot skips its file's silent lead under a 1 ms fade-in: the cue build's 5 ms pad AND whatever
-//               the platform's decoder leaves before it (Chrome's Ogg Opus decode keeps a few ms of the codec's
-//               pre-skip: the hit then sounded ~6.5 ms later than a sound on its bus); leadOf() finds it once per
-//               decoded buffer (the first sample within LEAD_FLOOR_DB of the file's peak, less LEAD_MARGIN_S).
+//               A decoded cue starts synchronously in the event's call (not in a promise's then(), which ran after the
+//               frame's render: one or two 256-frame device callbacks late, measured +5.3 / +10.7 ms); a
+//               one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in.
 //               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame.
 //               Nothing is scheduled ahead; the mastering chain's only latency is fixed and known: the limiter's
 //               built-in 6 ms look-ahead (WebAudio DynamicsCompressor) and the soft clip's 4x oversampler (4 ms)
@@ -287,9 +286,6 @@ const HEAL_MERGE_S = 0.25;   // one target's heals within this are one chime
 const LEAD_SKIP_S = 0.004;   // a one-shot starts this far into its file: audio/build.py pads 5 ms of silence before every
                              // one-shot (LEAD_S, the codec's pre-echo room); skipping 4 ms of it under a LEAD_RAMP_S
 const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame (closing critic 'audio-runtime')
-const LEAD_FLOOR_DB = -45;   // leadOf(): a decoded one-shot's lead ends at its first sample within this of its peak …
-const LEAD_MARGIN_S = 0.0005;  // … less this (the onset itself is never cut) …
-const LEAD_MAX_S = 0.03;     // … and never more than this (a deliberate swell is not a lead)
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
@@ -395,6 +391,8 @@ class Engine implements ValeAudioPort {
   /** the cue ids content binds to the gate roles */
   private readonly alertCues: Set<string>;
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
+  /** what each buffer promise settled to, once it has: a decoded cue starts in the event's own call (see `sync`) */
+  private readonly settled = new WeakMap<Promise<AudioBuffer | null>, AudioBuffer | null>();
   private readonly voices: Voice[] = [];
   private readonly lastPlay = new Map<string, number>();
   private vol: AudioSettings;
@@ -674,6 +672,7 @@ class Engine implements ValeAudioPort {
       p = ctx ? this.load(ctx, ref).catch(() => null) : Promise.resolve(null);   // never a rejected promise
       if (ctx) this.buffers.set(ref, p);
     }
+    if (!this.settled.has(p)) { const q = p; void q.then((b) => { this.settled.set(q, b); }); }
     return p;
   }
 
@@ -839,7 +838,7 @@ class Engine implements ValeAudioPort {
     const v: Voice = { src: null, gain: null, cue: cueId, bus: c.bus, priority: prio, rank, pooled: !alert, started: now };
     this.voices.push(v);
     const drop = (): void => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
-    void this.buffer(file).then((buf) => {
+    const begin = (buf: AudioBuffer | null): void => {
       if (v.dead) return;
       if (!buf || !this.ctx) { drop(); return; }
       const src = this.ctx.createBufferSource();
@@ -864,12 +863,17 @@ class Engine implements ValeAudioPort {
         const t = this.ctx.currentTime;
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(c.gain * att * gainMul, t + LEAD_RAMP_S);
-        src.start(0, leadOf(buf));
+        src.start(0, LEAD_SKIP_S);
       } else src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
       o.onVoice?.(v, buf);
-    });
+    };
+    // a decoded file starts now, inside the event's call: a promise's then() would wait for the rest of the frame
+    // (the render after the pump), a whole device callback or two late (closing critic 'audio-runtime')
+    const pb = this.buffer(file);
+    const ready = this.settled.get(pb);
+    if (ready !== undefined) begin(ready); else void pb.then(begin);
     return 'played';
   }
 
@@ -1195,6 +1199,7 @@ class Engine implements ValeAudioPort {
       },
     });
     if (r !== 'played') { this.annNow = null; this.pumpAnn(); return; }
+    if (slot.voice) return;                    // its file was decoded: onVoice already timed the line
     this.voiceDuck(slot.until, news);
     this.annLater(1);
   }
@@ -1841,29 +1846,6 @@ function ambientPoints(art: AmbientLike | undefined, source: string): { x: numbe
     if (p.fx?.vfx === source || file === source) at.push(...p.at);
   }
   return at.filter((a) => Number.isFinite(a[0]) && Number.isFinite(a[1])).map((a) => ({ x: a[0], y: a[1] }));
-}
-
-/** a decoded one-shot's silent lead (see `sync` in the header), measured once per buffer */
-const leads = new WeakMap<AudioBuffer, number>();
-function leadOf(buf: AudioBuffer): number {
-  let lead = leads.get(buf);
-  if (lead !== undefined) return lead;
-  let pk = 0;
-  const chans: Float32Array[] = [];
-  for (let c = 0; c < buf.numberOfChannels; c++) {
-    const d = buf.getChannelData(c);
-    chans.push(d);
-    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > pk) pk = v; }
-  }
-  lead = LEAD_SKIP_S;
-  if (pk > 0) {
-    const th = pk * Math.pow(10, LEAD_FLOOR_DB / 20), end = Math.min(buf.length, Math.ceil(LEAD_MAX_S * buf.sampleRate));
-    let first = -1;
-    for (let i = 0; i < end && first < 0; i++) for (const d of chans) if (Math.abs(d[i]) >= th) { first = i; break; }
-    lead = first < 0 ? LEAD_MAX_S : Math.max(0, first / buf.sampleRate - LEAD_MARGIN_S);
-  }
-  leads.set(buf, lead);
-  return lead;
 }
 
 /** the soft clip after the limiter (see `buses` in the header): linear to CLIP_KNEE, then a tanh knee that never

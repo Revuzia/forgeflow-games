@@ -1053,20 +1053,24 @@ def rig_extras(ctx) -> None:
 
 # ── secondary motion (closing review burdam-M5): the felt coat's skirt and the cowl's back drape on baked spring
 # chains (anim.secondary_motion; no cloth sim, STYLE_BIBLE). The skirt used to be bone heat on the trunk AND the
-# thighs, so in the run its front split and followed each thigh like trousers. Now its front and back panels hang on
-# their own chains from the hips (front pushed forward by the leading knee, back kicked out by the trailing one, both
-# springs, so the hem trails the stride), the sides stay on the hips with a small thigh share at the hem; a no-lag
-# floor keeps each panel clear of the thighs inside it. The cowl's back drape swings on one joint from the chest.
+# thighs, so in the run its front split and followed each thigh like trousers. Now it hangs as four panels (front,
+# back, left, right) on their own chains from the hips: the front pushed forward by the leading knee, the back kicked
+# out by the trailing one, each side swung by its own knee, all springs, so the hem trails the stride; a no-lag floor
+# keeps the front and back clear of the thighs inside them. The cowl's back drape swings on one joint from the chest.
 # The wrapped forearms are weighted along the elbow -> wrist axis on their own arm only (the old bone heat also took
 # the trunk and the hips they hang beside at rest, which stretched the wraps 7x when the arms rose: "candy-wrap").
 CHAINS = {          # name: (parent, joints (rest, m)); + rotation about each bone's X = the hem forward
     "skirt_f": ("hips", ((0.0, -0.258, 1.12), (0.0, -0.288, 0.89), (0.0, -0.318, 0.66))),
     "skirt_b": ("hips", ((0.0, 0.240, 1.12), (0.0, 0.272, 0.89), (0.0, 0.304, 0.66))),
+    "skirt_l": ("hips", ((0.290, 0.0, 1.12), (0.355, 0.0, 0.89), (0.420, 0.0, 0.66))),
+    "skirt_r": ("hips", ((-0.290, 0.0, 1.12), (-0.355, 0.0, 0.89), (-0.420, 0.0, 0.66))),
     "cowl_b": ("chest", ((-0.17, 0.16, 1.83), (-0.25, 0.22, 1.64))),
 }
 SKIRT_K, SKIRT_A0 = 0.45, 4.0        # the panel's push: share of the knee's swing past A0 deg (front: ahead; back: behind)
 SKIRT_CLEAR, SKIRT_THIGH_R = 0.025, 0.12    # the floor: the thigh's surface (its axis + R) stays CLEAR behind the panel
-SKIRT_SIDE_K = 0.18                  # the sides' thigh share at the hem
+SKIRT_SIDE_K = 0.35                  # the side panels: share of their own knee's swing (forward and back)
+SKIRT_AZ = {"skirt_f": 0.0, "skirt_l": 90.0, "skirt_b": 180.0, "skirt_r": -90.0}   # each panel's bearing (deg, 0 = front,
+                                                                                  # + toward his left)
 
 
 def _knee_angles(skel, pose) -> dict:
@@ -1112,16 +1116,19 @@ def chain_config(ctx) -> list:
             a = _knee_angles(skel, p)
             if nm == "skirt_f":
                 return SKIRT_K * max(0.0, max(a["L"][0], a["R"][0]) - SKIRT_A0)
-            return -SKIRT_K * max(0.0, max(-a["L"][0], -a["R"][0]) - SKIRT_A0)
+            if nm == "skirt_b":
+                return -SKIRT_K * max(0.0, max(-a["L"][0], -a["R"][0]) - SKIRT_A0)
+            return SKIRT_SIDE_K * a["L" if nm == "skirt_l" else "R"][0]
         return f
     out = []
     for nm, bones in ctx.chains.items():
         if nm.startswith("skirt"):
-            lim = (-6.0, 38.0) if nm == "skirt_f" else (-38.0, 6.0)
+            lim = {"skirt_f": (-6.0, 38.0), "skirt_b": (-38.0, 6.0)}.get(nm, (-25.0, 28.0))
             c = anim.ChainCfg(list(bones), gravity=0.7, stiffness=120.0, damping=12.0, inertia=0.5, drive=push(nm),
                               limit=lim)
-            c._burdam_floor = _skirt_floor(skel, nm)
-            c._burdam_front = nm == "skirt_f"
+            if nm in ("skirt_f", "skirt_b"):
+                c._burdam_floor = _skirt_floor(skel, nm)
+                c._burdam_front = nm == "skirt_f"
         else:
             c = anim.ChainCfg(list(bones), gravity=0.3, stiffness=70.0, damping=7.0, inertia=1.4, limit=(-14.0, 14.0))
         out.append(c)
@@ -3457,11 +3464,11 @@ ARM_BONES = tuple(f"{b}.{s}" for s in "LR" for b in ("shoulder", "upper_arm", "f
 
 
 MATCH_HUE = 0.25          # skin identity roles: share of the painting's own hue variation kept (see recolour)
-BASE_WEBP_Q = 62          # base-colour WebP quality (optimize.mjs default 80): the lifted painting carries more
+BASE_WEBP_Q = 56          # base-colour WebP quality (optimize.mjs default 80): the lifted painting carries more
                           # shadow detail; the GLB budget (1172 KiB) holds with the painting at q74 (polish: q66 -> 62
                           # and the ORM q72 -> 58: the right pauldron, its lame and the value lift's lighter, busier
                           # painting put the build at 1210 KiB)
-ORM_WEBP_Q = 58
+ORM_WEBP_Q = 54
 
 
 def _install_webp_quality() -> None:
@@ -3628,21 +3635,22 @@ def _bind_mix(ctx, obj, bind) -> None:
         p = mw @ v.co
         w = {}
         if kind == "skirtmix":
-            # by depth, not azimuth (the hem's flat bottom cap crosses the axis: an azimuth split tore it 5-9x): the front
-            # panel owns y < -0.22, the back y > 0.22, the middle (the sides and the cap's centre) the hips, with an
-            # 18 cm ramp between so any opening spreads over the cap
-            wf, wb = _smooth(0.04, 0.22, -p.y), _smooth(0.04, 0.22, p.y)
-            ws = max(0.0, 1.0 - wf - wb)
-            for nm, k in (("skirt_f", wf), ("skirt_b", wb)):
-                if k > 0:
+            # four panels round the skirt (front, his left, back, his right), each texel blended between its two
+            # nearest by bearing (cosine weights), so the opening between a swung panel and its neighbour spreads round
+            # the hem; the hem's flat bottom cap fades to the hips toward the axis (its centre has no bearing)
+            r = math.hypot(p.x, p.y)
+            phi = math.degrees(math.atan2(p.x, -p.y))
+            ks = {nm: max(0.0, math.cos(math.radians(phi - az))) for nm, az in SKIRT_AZ.items()}
+            tot = sum(ks.values()) or 1.0
+            kc = _smooth(0.06, 0.22, r)
+            for nm, k in ks.items():
+                k = k / tot * kc
+                if k > 1e-4:
                     pts = CHAINS[nm][1]
                     for b_, x in _chain_w(ctx.chains[nm], p.z, pts[0][2], pts[-1][2], "hips").items():
                         w[b_] = w.get(b_, 0.0) + x * k
-            if ws > 0:
-                kt = SKIRT_SIDE_K * _smooth(1.0, 0.66, p.z)
-                w["hips"] = w.get("hips", 0.0) + ws * (1.0 - kt)
-                th = "thigh.L" if p.x > 0 else "thigh.R"
-                w[th] = w.get(th, 0.0) + ws * kt
+            if kc < 1.0:
+                w["hips"] = w.get("hips", 0.0) + (1.0 - kc)
         elif kind == "cowlmix":
             _, lo, hi, z0, z1 = bind
             t = _smooth(z0, z1, p.z)

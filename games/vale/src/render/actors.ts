@@ -76,6 +76,8 @@ import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lod
 import { structureMaterial } from './structures.ts';
 import { BAR_CLEAR, fighterBarAnchor } from './bar_clearance.ts';
 import { CAMERA } from './camera.ts';
+import { turnToward } from './turn.ts';
+import { plantedRunRef } from './stride.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
@@ -147,6 +149,8 @@ interface Template {
   warmAccent?: MeshStandardMaterial;
   /** CW1 bar clearance: a fighter's computed overhead-bar anchor (m above its feet; bar_clearance.ts) */
   barAnchor?: number;
+  /** CW1 input-feel: the run clip's measured planted-foot speed (stride.ts), replacing art.runRefSpeed */
+  runRef?: number;
 }
 
 /** the AnimationAction / AnimationMixer surface the Actor drives (three's, or crowd.ts' baked stand-ins) */
@@ -497,7 +501,15 @@ export class ModelLibrary {
           const moves = [roles.idle, roles.run].map((n) => (n ? clips.get(n) : undefined)).filter((c): c is AnimationClip => !!c);
           barAnchor = fighterBarAnchor(body.gltf.scene, moves, def.art.sockets, floor, def.art.scale, { pitchDeg: CAMERA.pitchDeg, fovDeg: CAMERA.fovDeg, distance: CAMERA.distance, viewH: 1080 });
         } catch (e) { console.warn('[vale] bar clearance', def.id, e); }
-        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor };
+        // CW1 input-feel: the run clip's own planted-foot speed (stride.ts) replaces the authored runRefSpeed when it
+        // can be measured and is within a sane band of it
+        let runRef: number | undefined;
+        try {
+          const feet = [def.art.sockets.foot_l, def.art.sockets.foot_r].filter((b): b is string => !!b);
+          const r = plantedRunRef(body.gltf.scene, roles.run ? clips.get(roles.run) : undefined, feet, def.art.scale);
+          if (r !== null && r > def.art.runRefSpeed * 0.6 && r < def.art.runRefSpeed * 1.6) runRef = r;
+        } catch (e) { console.warn('[vale] stride', def.id, e); }
+        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor, runRef };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -666,6 +678,8 @@ export class Actor implements CrowdActor {
   px = 0; py = 0; ph = 0; pf = 0;
   cx = 0; cy = 0; ch = 0; cf = 0;
   x = 0; y = 0; h = 0; facing = 0;
+  /** take the sim heading at once on the next update (first tick, a jump) instead of turning to it (turn.ts) */
+  private turnSnap = true;
   seenTick = -1;
   view: EntityView | null = null;
   visible = true;
@@ -769,6 +783,7 @@ export class Actor implements CrowdActor {
     this.template = t;
     this.dev = t.dev;
     if (this.kind === 'fighter' && t.barAnchor !== undefined) this.barHeight = t.barAnchor;
+    if (this.kind === 'fighter' && t.runRef !== undefined) this.runRef = t.runRef;
     if (t.crowd) {
       // the crowd draws this unit (crowd.ts): an empty body node carries the root placement and the scale/squash
       const body = new Group();
@@ -868,8 +883,10 @@ export class Actor implements CrowdActor {
     this.radius = v.radius;
     if (this.seenTick < 0) {
       this.px = this.cx = v.x; this.py = this.cy = v.y; this.ph = this.ch = v.height; this.pf = this.cf = v.facing;
+      this.turnSnap = true;
     } else {
       const jump = Math.hypot(v.x - this.cx, v.y - this.cy) > SNAP_DIST;
+      if (jump) this.turnSnap = true;
       if (jump) { this.px = v.x; this.py = v.y; this.ph = v.height; this.pf = v.facing; } else { this.px = this.cx; this.py = this.cy; this.ph = this.ch; this.pf = this.cf; }
       this.cx = v.x; this.cy = v.y; this.ch = v.height; this.cf = v.facing;
     }
@@ -897,7 +914,11 @@ export class Actor implements CrowdActor {
     this.x = this.px + (this.cx - this.px) * a;
     this.y = this.py + (this.cy - this.py) * a;
     this.h = this.ph + (this.ch - this.ph) * a;
-    this.facing = lerpAngle(this.pf, this.cf, a);
+    // CW1 input-feel: the drawn heading eases toward the interpolated sim heading (turn.ts); a snap (spawn, blink,
+    // respawn) or a structure takes it at once
+    const heading = lerpAngle(this.pf, this.cf, a);
+    this.facing = this.turnSnap || this.kind === 'structure' ? heading : turnToward(this.facing, heading, dt);
+    this.turnSnap = false;
     this.root.position.set(this.x, this.h, this.y);
     this.root.rotation.y = Math.PI / 2 - this.facing;
     if (this.leaving >= 0) {
