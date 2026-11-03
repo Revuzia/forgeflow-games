@@ -136,8 +136,9 @@ async function runSync() {
           const ts = ctx.getOutputTimestamp();
           const h = { raf: document.timeline.currentTime, perf: now, ct: ctx.currentTime, oc: ts.contextTime, op: ts.performanceTime };
           const ev = [{ e: 'damage', t: m.view.time, src: you, dst: you, amount: 1, dtype: 'physical', crit: false, shielded: 0 }];
+          if (a.log.length > 300) a.log.length = 0;            // the engine logs its first 400 cues only
+          const k = a.log.length;                              // before the listeners: a decoded cue starts (and logs) in their call
           for (const l of m.listeners) l(ev);
-          const k = a.log.length;
           hits.push(h);
           setTimeout(() => { h.cue = a.log.slice(k).find((c) => /_attack_hit$|^c_hit_phys/.test(c)) ?? a.log[k] ?? null; }, 0);
         }
@@ -202,7 +203,7 @@ async function runSync() {
     const refOffs = refRows.map((r) => (tsValid ? r.offTsMs : r.offClkMs));
     rep.platform = { detected: refRows.length, offsetMs: { p50: r2(pct(refOffs, 50)), p95: r2(pct(refOffs, 95)) },
       startHopMs: { p50: r2(pct(refRows.map((r) => r.schedMs), 50)), p95: r2(pct(refRows.map((r) => r.schedMs), 95)) },
-      note: 'a raw AudioBufferSource.start() into the output from the impact frame: the device-callback hop every WebAudio sound pays' };
+      note: 'a raw AudioBufferSource.start() into the output from the impact frame: the platform floor (start to onset ~0 ms; the offset is outputLatency plus the frame phase)' };
     rep.engineOverPlatformMs = { p50: r2(rep.offsetMs.p50 - rep.platform.offsetMs.p50), p95: r2(rep.offsetMs.p95 - rep.platform.offsetMs.p50) };
     // the same click joining further up: the mastering chain's own fixed latency (limiter pre-delay, the soft clip's
     // oversampler) and the bus path, so the engine's share is what the cue path adds over a sound on the sfx bus
