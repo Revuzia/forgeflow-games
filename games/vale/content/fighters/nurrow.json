@@ -256,7 +256,7 @@
       "id": "nurrow_snuff",
       "name": "Snuff",
       "icon": "assets/ui/icons/abilities/nurrow_snuff.webp",
-      "desc": "Nurrow snuffs an adjacent enemy for {effects.1.amount} magic damage and silences them for {effects.2.duration}. Snuffing a sleeper deals {effects.0.then.2.amount} more, silences for {effects.0.then.1.duration} and gives back 70% of the cooldown.",
+      "desc": "Nurrow snuffs an adjacent enemy for {effects.1.amount} magic damage and silences them for {effects.2.duration}. Snuffing a sleeper deals no extra damage: the silence runs {effects.0.then.1.duration} instead and 70% of the cooldown comes back.",
       "maxRank": 5,
       "cooldown": [
         9,
@@ -299,22 +299,6 @@
                 2.2,
                 2.4
               ],
-              "to": "target"
-            },
-            {
-              "op": "damage",
-              "amount": {
-                "base": [
-                  35,
-                  52,
-                  70,
-                  87,
-                  105
-                ],
-                "ap": 0.3,
-                "bonusAd": 0.15
-              },
-              "type": "magic",
               "to": "target"
             }
           ]
