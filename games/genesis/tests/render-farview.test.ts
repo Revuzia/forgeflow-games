@@ -51,3 +51,17 @@ test('P18: a far wooded hill breaks up too (the canopy, not only the sward)', as
   const at = TM.indexOf('float cMid'), crown = TM.indexOf('tc *= 0.62 + 0.55 * crown'), inst = TM.indexOf('float inst = uVegFade');
   assert.ok(crown > 0 && crown < at && at < inst, 'after the crown shading, before the instanced-tree hand-over');
 });
+
+test('the mid-distance drifts also act on the assembled ground colour (punch P18, final pass)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const TM = readFileSync(new URL('../src/render/planet/terrainmat.ts', import.meta.url), 'utf8');
+  // the grass branch's drifts were diluted by the shrub tint, far canopy and soil mixed over them (~4 % of the lit tone at
+  // the cover framing): the same drifts once more on the final colour of vegetated ground
+  const m = /float mkF = smoothstep\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), camDist\)([\s\S]*?)s\.albedo = col;/.exec(TM);
+  assert.ok(m, 'a final mid-distance pass on col before s.albedo');
+  assert.ok(+m![1] >= 100 && +m![1] <= 300 && +m![2] >= 400 && +m![2] <= 1000, `fade ${m![1]}..${m![2]} m`);
+  assert.match(m![3], /vegTotal/, 'only on vegetated ground');
+  assert.match(m![3], /fbm3\(P \* 0\.0\d+/, 'broad drifts');
+  assert.match(m![3], /col \*= mix\(vec3\(1\.0\), vec3\(1\.\d+/, 'a dry-gold swing');
+  assert.match(m![3], /col \*= mix\(vec3\(1\.0\), vec3\(0\.\d+/, 'a dark-green swing');
+});

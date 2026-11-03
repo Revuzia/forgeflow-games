@@ -1392,6 +1392,17 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // shading normal (analytic: rk_joints)
   ao *= 1.0 - 0.35 * rockJoint * rockW;
   s.microG += rockG * rockW;
+  // MID-DISTANCE BREAKUP, final pass (punch P18): the grass branch's drifts are diluted by what is mixed over the sward
+  // after it (the shrubs' far tint, the far canopy, soil and sand margins) — an A/B at the cover framing measured them
+  // at ~4 % of the lit hill's tone. The same ~220 m / ~90 m drifts once more on the assembled colour of any vegetated
+  // ground past ~120 m: dry-gold where the field is high, dark-green where it is low; soft-edged, never a print.
+  float mkF = smoothstep(120.0, 500.0, camDist) * smoothstep(0.1, 0.42, vegTotal) * (1.0 - smoothstep(0.1, 0.5, snow));
+  if (uDebug > 6.5) mkF = 0.0;
+  if (mkF > 0.0) {
+    float dr = fbm3(P * 0.0045 + 23.0) + 0.45 * snoise(P * 0.011 + 29.0);
+    col *= mix(vec3(1.0), vec3(1.34, 1.18, 0.78), smoothstep(0.0, 0.45, dr) * 0.7 * mkF);
+    col *= mix(vec3(1.0), vec3(0.66, 0.76, 0.68), smoothstep(0.0, -0.45, dr) * 0.7 * mkF);
+  }
   s.albedo = col;
   s.rough = clamp(rough, 0.04, 1.0);
   s.bump = bump + macro * mix(1.0, 0.3, smoothstep(0.0, 0.25, uw));
