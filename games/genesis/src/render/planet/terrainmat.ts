@@ -101,7 +101,7 @@ uniform float uBrushOn;
 uniform sampler2D uOverlay;
 uniform vec3 uOverlayK;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
-uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only
+uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only, 5 albedo + mid-distance breakup tint
 ${GROUND_FRAG_PARS}
 
 // sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
@@ -579,6 +579,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       g2 = mix(g2, g2 * vec3(0.52, 0.62, 0.46), 0.6 * smoothstep(0.38, 0.68, scrub) * aaF(fw, 22.0) * (farK - 0.2));
       g2 = mix(g2, vec3(0.2, 0.16, 0.1), 0.45 * smoothstep(0.22, 0.45, slope) * smoothstep(-0.1, 0.5, mB));
       gcol = mix(gcol, g2, midK);
+      if (uDebug > 4.5) gcol = mix(gcol, vec3(1.0, 0.0, 1.0), midK);
     }
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
@@ -695,6 +696,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
         vec3 tc2 = mix(tc, tc * vec3(1.45, 1.35, 0.95), clamp(0.6 * smoothstep(0.0, 0.5, cA) + 0.35 * cRidge, 0.0, 0.8));
         tc2 = mix(tc2, tc2 * vec3(0.62, 0.72, 0.8), clamp(0.6 * smoothstep(0.0, -0.5, cA) + 0.4 * cHollow, 0.0, 0.75));
         tc = mix(tc, tc2, cMid * (1.0 - turn));
+        if (uDebug > 4.5) tc = mix(tc, vec3(0.0, 1.0, 1.0), cMid);
       }
       // within the instanced-tree range the real trees stand here: show their floor (litter, shade), not canopy
       // (no trees instanced at all — the planet view parks the band at 1e9 — means canopy everywhere, not floor)
@@ -1624,8 +1626,8 @@ const FRAG_AMBIENT = /* glsl */ `
 const FRAG_EMISSIVE = /* glsl */ `
   totalEmissiveRadiance = ts.emis;
   if (uDebug > 0.5 && uDebug < 1.5) { totalEmissiveRadiance = (normalize(transpose(uBodyToView) * normal) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
-  if (uDebug > 1.5 && uDebug < 2.5) { totalEmissiveRadiance = ts.albedo * 4.0; diffuseColor.rgb = vec3(0.0); }
-  if (uDebug > 3.5) { totalEmissiveRadiance = (normalize(vBodyN) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
+  if ((uDebug > 1.5 && uDebug < 2.5) || uDebug > 4.5) { totalEmissiveRadiance = ts.albedo * 4.0; diffuseColor.rgb = vec3(0.0); }
+  if (uDebug > 3.5 && uDebug < 4.5) { totalEmissiveRadiance = (normalize(vBodyN) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
   {
     // night-side lights of settlements: the life layer's per-cell light (lit buildings: hearth → lamps → electric;
     // render/life/buildings.ts) as clusters of lamp-lit spots that average into a soft glow from orbit; close up the

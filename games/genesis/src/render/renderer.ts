@@ -152,8 +152,9 @@ export class Renderer {
   };
   /** cloud / atmosphere / UI switches for photo mode and tests */
   showOrbits = true;
-  /** terrain debug view: 0 off, 1 normals, 2 albedo, 3 no bump, 4 macro normals */
-  debugView = 0;
+  /** terrain debug view: 0 off, 1 normals, 2 albedo, 3 no bump, 4 macro normals, 5 albedo + mid-distance breakup tint
+   *  (dev: the page URL's ?tdebug=N sets it, for diagnosis shots) */
+  debugView = (() => { try { return Number(new URLSearchParams(globalThis.location?.search ?? '').get('tdebug')) || 0; } catch { return 0; } })();
   private frustum = new Frustum();
   private frameNo = 0;
   private cssW = 1;
