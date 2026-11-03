@@ -37,3 +37,17 @@ test('a grassed hill breaks up at mid distance: crests, hollows, drifts and bare
   const at = TM.indexOf('float midK'), tint = TM.indexOf('gcol = meadowTint('), swd = TM.indexOf('vec4 swd = swardDetail(');
   assert.ok(tint > 0 && tint < at && at < swd);
 });
+
+test('P18: a far wooded hill breaks up too (the canopy, not only the sward)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const TM = readFileSync(new URL('../src/render/planet/terrainmat.ts', import.meta.url), 'utf8');
+  // the cover's back hills are wooded: past the instanced trees the canopy colour (tc) is what shows, and a grass-only
+  // breakup left them one flat dark green
+  const m = /float cMid = smoothstep\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), camDist\);([\s\S]*?)tc = mix\(tc, tc2, cMid/.exec(TM);
+  assert.ok(m, 'terrainmat fades a mid-distance breakup into the far canopy colour');
+  assert.ok(+m![1] >= 150 && +m![1] <= 400 && +m![2] >= 600 && +m![2] <= 1500, `fade ${m![1]}..${m![2]} m`);
+  assert.match(m![3], /fbm3\(P \* 0\.0\d+/, 'grove-scale drifts');
+  assert.match(m![3], /concave/, 'crests and hollows');
+  const at = TM.indexOf('float cMid'), crown = TM.indexOf('tc *= 0.62 + 0.55 * crown'), inst = TM.indexOf('float inst = uVegFade');
+  assert.ok(crown > 0 && crown < at && at < inst, 'after the crown shading, before the instanced-tree hand-over');
+});

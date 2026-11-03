@@ -685,6 +685,17 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       tc = mix(tc, tc * vec3(0.85, 0.8, 0.75), winter * (1.0 - conifer) * 0.6);
       float leaf = veryFine ? snoise(P * 2.1) * aaF(fw, 0.45) : 0.0;
       tc *= 0.62 + 0.55 * crown + 0.1 * leaf;
+      // MID-DISTANCE BREAKUP of the far canopy (punch P18): past a few hundred metres the crowns are under a pixel and a
+      // wooded hill was one flat dark green (the cover's back hills). A real wood from there: groves of other species and
+      // ages in ~100-250 m drifts (paler, yellower / darker, bluer), lighter crowns on the crests, dark in the hollows.
+      float cMid = smoothstep(250.0, 900.0, camDist);
+      if (cMid > 0.0) {
+        float cA = fbm3(P * 0.006 + 53.0) + 0.5 * snoise(P * 0.014 + warpV * 0.03 + 59.0);
+        float cRidge = smoothstep(0.05, 0.6, -concave), cHollow = smoothstep(0.05, 0.6, concave);
+        vec3 tc2 = mix(tc, tc * vec3(1.45, 1.35, 0.95), clamp(0.6 * smoothstep(0.0, 0.5, cA) + 0.35 * cRidge, 0.0, 0.8));
+        tc2 = mix(tc2, tc2 * vec3(0.62, 0.72, 0.8), clamp(0.6 * smoothstep(0.0, -0.5, cA) + 0.4 * cHollow, 0.0, 0.75));
+        tc = mix(tc, tc2, cMid * (1.0 - turn));
+      }
       // within the instanced-tree range the real trees stand here: show their floor (litter, shade), not canopy
       // (no trees instanced at all — the planet view parks the band at 1e9 — means canopy everywhere, not floor)
       float inst = uVegFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
