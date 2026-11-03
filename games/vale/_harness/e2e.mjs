@@ -255,6 +255,23 @@ async function journey(mode) {
       await page.waitForTimeout(800);
       return { route: await route(), wallet: await vale(page, (v) => v.state.profile.value.wallet) };
     });
+    // client F17: Profile › History lists the match just played, and its row reopens that match's post-game
+    await step('history_reopen', async () => {
+      const id = await vale(page, (v) => v.state.profile.value.history[0]?.matchId ?? null);
+      await click(page.locator('.nav__item', { hasText: 'Profile' }));
+      await page.waitForTimeout(600);
+      await click(page.locator('.scr--profile:not(.is-leaving) [role=tab]', { hasText: 'History' }).first());
+      await page.waitForTimeout(500);
+      const rows = await page.locator('.scr--profile:not(.is-leaving) .hrow').count();
+      await click(page.locator('.scr--profile:not(.is-leaving) .hrow__open').first());
+      await waitFor(page, (v) => v.router.route.value.screen === 'postgame', 10000);
+      await page.waitForTimeout(800);
+      const x = await vale(page, (v) => ({ from: v.router.route.value.params?.from ?? null, matchId: v.state.postgame.value?.result.matchId ?? null }));
+      if (!rows || x.matchId !== id || x.from !== 'history') throw new Error(`the history row did not reopen its post-game: ${JSON.stringify({ rows, id, ...x })}`);
+      await click(page.getByRole('button', { name: /Return home|Back/i }).first());
+      await page.waitForTimeout(800);
+      return { rows, matchId: id, from: x.from, back: await route() };
+    });
   } catch {
     ok = false;
   }

@@ -234,7 +234,8 @@ The budget is the shipped kit's (hud HUD-8, 2026-10-28). Sizes are the frame box
 
 ### 4.6 Kill feed, announcer, feed
 - **Kill feed** (3 rows, newest on top, 6 s): `killfeed.*` lines with portrait chips and the side or seat mark. Your own rows get the Noonwhite double frame. Fighter rows are pictographic: killer (or what they fell to: a structure, camp or the Wicks, as a drawn mark with the unit's name) → arrow → the fallen fighter's chip; a name a chip shows is never repeated in words, and the full sentence is the row's aria-label. FRAY eliminations read chip + `killfeed.tag.out`. Team rows (structure lost, objective taken, lamps out) keep their sentence (HUD-6). Wording is takedown and fall, never kill or slain; the one plain label that stays is Death recap, because players look for it.
-- **Announcer banner** under the sky strip: two lines (title in h1 24/28, sub in body-s). Minor events show 2.4 s, major 3.6 s, one at a time with a queue of 2. Lookup and texts are in §6. It is also the subtitle (`access.subtitles`).
+- **Announcer banner** under the sky strip: two lines (title in h1 24/28, sub in body-s). Minor events show 2.4 s, major 3.6 s, takedowns 3.5 s, one at a time with a queue of 2. Lookup and texts are in §6. It is also the subtitle (`access.subtitles`).
+- **Banner rank** (critic hud-states, `src/ui/hud/model.ts` `announce`): every banner carries a news rank. 5 a five-takedown peal (`multikill.5`); 4 four tolls, a team's lamps out; 3 three tolls, the first takedown, objectives, major structures; 2 two tolls, a run ended, runs of 5 or more, other major news; 1 the rest (runs of 3-4, your takedown banner, needles, minor lines). A higher rank pre-empts the banner on screen at once (an unread one, shown under 1 s, goes back into the queue); the queue is ordered by rank, first come first within a rank, and when it is full the lowest-ranked oldest line goes. A banner of the same story (`multi:<player>`, `streak:<player>`) replaces the queued one, so a five-takedown tick shows Full peal, not Two tolls → Three tolls. Measured live: a sim-shaped five-takedown batch pushed in while a banner showed and two waited painted Full peal 23-29 ms later (`_harness/_reports/fw_CW3c_hud_states.json` steps.banners), then First takedown, then Run ended (3.5 s each).
 - **Feed** (bottom left): up to 5 lines for 6 s each. Contents: ally ping log lines, `announce.shop_denied.*` refusals, `hint.*` first-run hints, surrender votes.
 
 ### 4.7 In-world
@@ -251,6 +252,61 @@ The budget is the shipped kit's (hud HUD-8, 2026-10-28). Sizes are the frame box
 - **Shop** (RIFT at base, BRIDGE at base or while down, FRAY at a Lampwright cart): a panel left of centre with search, suggested items, the component tree and buy / sell / undo (`hud.shopui.*`); refusals show as a feed line and `ui_error`. The tile list's last row fades out over 24 px and scrolls clear of the fade, never cut through its prices (HUD-11).
 - **Surrender vote** (RIFT 12:00, BRIDGE 8:00; 4 of 5): a plate under the announcer with the tally (`hud.surrender.tally`), Yes and No keys; result lines `surrender_passed` / `surrender_failed`.
 - **In-match menu** (Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing).
+
+### 4.9 Layout originality audit (critic ui-layout-originality, 2026-11-03)
+
+The owner bans copying any UI layout detail; LoL is a gauge only. Every element of the in-match layout and the menus that a League player would compare was classified against r04 §1-§2 and §5 (LoL: abilities, health and resource bottom centre, player info left of that cluster, minimap right, items right of the ability bar; portraits on the minimap; Tab scoreboard with K/D/A, CS and items) and against Dota 2, SMITE and Heroes of the Storm. **Convention** = the same placement ships in at least one of Dota 2, SMITE or HotS, so it is the genre's, not LoL's. **One-to-one** = only LoL does it this way, and VALE matched it.
+
+| Detail | VALE | Shared with | Verdict |
+|---|---|---|---|
+| Control strip at bottom centre (portrait, abilities, bars, items, currency) | the Dial Bar, one carved slab with a noon arc and gnomon | Dota 2 (portrait left, abilities centre, inventory right), HotS, SMITE | convention |
+| Portrait at the strip's left with the level | a medallion whose ring is the XP dial, gnomon wedge at the crown, the stats ledger rising off it | Dota 2 (portrait left of the abilities, level on the XP ring), HotS (portrait bottom left with level) | convention; the dial-ring treatment is VALE's |
+| Four abilities in a row on Q W E R | Q W E at 64 px, the ultimate larger (76 px) and raised under the arc | HotS (Q W E, heroic R), Dota 2 legacy keys | convention; the raised, larger ultimate is VALE's (LoL's R is the same size) |
+| Two pre-match spells in the ability strip immediately right of the ultimate, on D and F | Hour spells at 48 px right of R behind an engraved divider | none: Dota 2 puts D F between E and R as abilities, HotS has no loadout spells (D is a trait), SMITE's relics sit apart on their own keys | **one-to-one** → re-keyed below |
+| HP over resource bar under the abilities | the bar trough under Q to the spells, ticks per 100 / 1,000 HP | Dota 2 (HP and mana under the abilities), HotS | convention |
+| Inventory 3 x 2 right of the abilities | 3 x 2 sockets, keys 1-6 | Dota 2 (3 x 2 inventory right of the abilities, keys Z X C V B N) | convention; numbering differs from LoL (1-3 and 5-7, with 4 the trinket); VALE has no trinket socket |
+| Currency under the items | Gleam well under the sockets | Dota 2 (gold at the bottom right by the inventory) | convention |
+| Recall control beside the currency | recall socket right of the Gleam well | Dota 2 (the TP slot beside the inventory), HotS (Hearthstone B) | convention |
+| Minimap in a bottom corner, input surface (click camera, right-click move, pings) | bottom right, swappable left (`gameplay.minimapSide`), a map-shaped frame per mode (RIFT rect, BRIDGE strip, FRAY disc) | HotS (bottom right), Dota 2 (bottom left, swappable) | convention; the per-mode frame shapes are VALE's |
+| Portrait dots on the minimap | round portraits in relationship rings, enemy heading wedge, self gnomon wedge | Dota 2 (hero icons with facing arrows, 7.35), HotS | convention; the heading wedge follows Dota 2's idea, not LoL's (no heading) |
+| Camera-lock button beside the minimap | none: the lock is a key and a setting | LoL only | not mapped |
+| Top-centre match strip with the clock between the two teams' counts | the sky strip lintel, objective chips under it, ledger line at its right end | Dota 2 (top bar, clock centred between the teams) | convention; LoL keeps its score top right |
+| Team frames on a screen edge | ally frames at the left edge with the ultimate tick on the portrait ring | Dota 2 (top bar portraits with ult indicator), HotS (top) | convention (r04 §1.1 table) |
+| Kill feed top right, banner under the top strip | kill feed top right; banner under the sky strip | Dota 2 and HotS (transient kill notices at the top of the screen; r04 §1.1 lists the region as genre-wide, LoL's exact 2026 position unverified) | convention |
+| Tab scoreboard: two stacked team blocks | "Your team" over "The other team", Player · Spells · Lv · T/F/A · Wicks · Gleam · Damage · Items | Dota 2 (stacked Radiant/Dire, hero · level · K/D/A · LH · net worth · items) | convention; per-player Gleam and Damage columns follow Dota 2, not LoL (team gold difference only) |
+| Shop: categories at the left, item grid, detail with recipe tree | tags left (VALE families: Strike, Craft, Guard, Stride, Dialwood…), tiles, Builds from / Builds into | Dota 2 (categories, components and "upgrades into") | convention |
+| Death recap | killer plate, damage by type, a factual tip line | Dota 2 (death summary), HotS (death recap) | convention |
+
+**Re-key (the one one-to-one detail).** The Hour spells leave the ultimate's side. VALE's order is the dial read from the hand outward: medallion · the two Hour spells · Q W E · the ultimate under the arc's crown · sockets · Gleam and recall. The spells are the fighter's pre-match loadout, so they sit against the portrait; the ultimate closes the ability run at the crown, where the gnomon points. Keys stay D and F (rebindable; Dota 2 uses the same letters), so only the placement changes. Layout (CSS px at 1080p, `art/blender/ui/hud_layout.json` `dialbar.abilities`, x / y / size): spell1 176 / 62 / 48, spell2 232 / 62 / 48, a1 300 / 46 / 64, a2 372 / 46 / 64, a3 444 / 46 / 64, ult 524 / 34 / 76 (ends at 600, items stay at 624); the engraved divider moves to the spells' right (`hud_kit.py` `dx = spell2.x + spell2.size + 10`, 290); the hp and res troughs keep 176..604. The HUD code places every socket from `FRAME` (`src/ui/hud/frame_layout.ts`), so `python3 art/build.py hud --pieces dialbar` (the frame art and the generated layout together) is the whole change. The generator and its layout file are outside the client lane in this wave: handed off (CW3c package 1); until it lands, the shipped bar still shows the spells right of R.
+
+**Signature UI cues** (the critic's sound half) belong to the audio lane's r07 comparison and are not re-described here; §13 lists the cues.
+
+### 4.10 Live checks of the HUD states and the final review's done_unverified items (CW3c, 2026-11-03)
+
+Measured on the real Chrome GPU at :5190 (practice lab unless noted). Reports under `_harness/_reports/fw_CW3c_*`, shots under `_harness/_shots/fw_CW3c_*`.
+
+**HUD states (critic hud-states).**
+- *Refusal caption with a pool fighter* (Lisvel, Light): away from base, Light drained to 30 under Q's 55, Q pressed: "Not enough Light" over the Dial Bar (156 x 28 px), Q and E carry `is-nores` and their cost turns short (`fw_CW3c_hud_states_b.json` steps.resource; `fw_CW3c_b_hs_01_no_resource_full.png`).
+- *Ready wash:* it never fired at speed 1 (the writer compared the previous tick's cooldown with 0.05 s; the last tick before 0 reads 0.033). Fixed: a real cooldown arms it. Now 250 ms on every basic slot, 33-35 ms (one sim tick) after the cooldown reads 0 (`fw_CW3c_hud_states_b.json` steps.ready, two runs).
+- *Active border:* drawn while the ability's effect runs and drained by its bar: Dawn Line 4.0 s, Backstep 3.8 s, Morning Draw 4.7 s, bar 1 → 0.01 (steps.active; `fw_CW3c_b_hs_01_no_resource_full.png` shows the three lit borders).
+- *Banner order and latency:* §4.6 Banner rank.
+- *Colour-vision palettes:* the HUD tokens and the minimap swap per mode (`fw_CW3c_hud_states.json` steps.cvd; `fw_CW3c_cvd_de.json`). Under a Machado (2009) full-severity simulation of the matching deficiency, the closest relationship pair (self-neutral, also told apart by shape) is dE2000 20.2 / 20.4 / 20.4 (deutan / protan / tritan palettes) and ally-enemy 62.9 / 59.9 / 80.7. Shots `fw_CW3c_hs_04_cvd_<mode>_{full,minimap}.png`.
+- *BRIDGE and FRAY minimaps*, all four palettes: `fw_CW3c_mm_bridge_fray_cvd_sheet.png` (strip with ally triangles and enemy half-discs; FRAY disc with seat rings and stamps), report `fw_CW3c_minimap_modes.json`.
+- *720p:* no HUD text under 12 px (`fw_CW3c_hud_states_b.json` steps.small720 empty; before: objective chip timers at 10.4 px).
+
+**done_unverified verdicts** (each against its own done-bar in `final_parity_open.json`):
+
+| ID | Verdict | Evidence |
+|---|---|---|
+| HUD-5 | closed | A locked ultimate reads "Unlocks at level 6"; a rank-0 Q leads with rank 1's numbers; at rank 1 with a point free: "9 s → 8.5 s", "55 Light → 60 Light", "60 → 95"; held Shift shows 3 full rows, yours lit, 12 dimmed (`fw_CW3c_done_unverified.json` HUD5; `fw_CW3c_du_HUD5_*.png`). |
+| HUD-7 | closed | Scoreboard headers Player · Spells · Lv · T / F / A · Wicks · Gleam · Damage · Items; spell glyphs 24 x 24, faces 32 x 32, items 24 x 24 (HUD7; `fw_CW3c_du_HUD7_scoreboard.png`). |
+| HUD-9 | closed | At 1280 x 720 the HUD factor is 0.8 (Q 51.2 px, ult 60.8, items 30.4), the HP bar 13 px with its regen text at 12 px (HUD9). Ally names whole at 720p (`closing_hud_C01_720_full.png`: ashgrove_tam, tilda_rimwalk, mina_noonmark, hobb_ledger). The four sub-12 px HUD texts found on the way are floored (above). |
+| HUD-11 | closed | World ping: a 56 x 56 glyph disc lifted 40 px on its stem over two expanding rings (`wping-ring`); the shop list fades over its last 24 px with 28 px of bottom padding (HUD11; `fw_CW3c_du_HUD11_{ping,shop}.png`). |
+| F10 | closed | Decline on the ready check: 1 notice, 1 toast ("The match was declined. You can queue again in 9 s.") (`node _harness/e2e.mjs flow`, `fw_CW3c_e2e_flow.json` flow_readycheck.decline_once). |
+| F13 | closed | The selected tick spans y 250-254, the label's glyph box starts at 258 and the tick stands at the label's centre, not on its first letter (F13; `fw_CW3c_du_F13_seg_tick.png`). |
+| F14 | closed | Every number on the RIFT queue cards (rewards, level locks) is in Vale Prose Figures; 0 in the Mono face (F14). |
+| F16 | closed | `?server=ws://127.0.0.1:9`: 48 samples over 24 s, "Offline · vs bots" in 40 of 40 from 4 s, "Connecting…" 0; Try again shows Connecting… then Offline again with the action back (flow_netdown). |
+| F17 | closed | Profile: 9 earnable emblems (1 earned on a fresh profile, 8 locked); shop rows that run past the screen fade over 80 px with a chevron, rows that fit have neither (`fw_CW3c_done_unverified.json` F17); a played RIFT match's History row reopens its post-game (`from: history`, same matchId) and Return home goes back (`node _harness/e2e.mjs rift`, new step history_reopen, `fw_CW3c_e2e_rift.json`). |
 
 ---
 
