@@ -575,3 +575,14 @@ rebuilt; Aubade untouched.
 - Not done (minor): the attack1 t0.25-0.33 lapel flare at 3/4-r (a lapel standing out as its own tab) is unchanged:
   grading the lapels' 70 % / hem head share down (0.45 / 0.12) lifts attack1's rise to 3.3 cm (gate 2 cm), so
   MANTLE_HEAD stays as r8's.
+
+## Closing CW4 (originality GW-1, blocker) — 2026-10-29 / 2026-11-03
+- The back lantern's light is now odd narrow slits behind thick mullions, never two equal round panes: Aubade
+  AUB_LANT slit_x 3 slits (slit_a 0.025, slit_b 0.66, ~6:1 tall) between 0.034 m mullions; Serenade SER_DRUM 12 narrow
+  core slits round the drum (core_a 0.52, core_b 0.88). Serenade build 2 rebuilt 2026-11-03: 3809 tris, accent 4.43 %
+  (61 % top half); Aubade build 2 (aa788a3e).
+- Live sweep (`node _harness/probe_wick_sweep.mjs --tag r4`, RIFT High, 28.5 m camera, 8 headings x both tints, plus
+  every live Greatwick on its own lane heading): Greatwick pairs 0 (sweep and lane); the sheets
+  _harness/_shots/fw_CW4_r4_sweep_greatwick_greatwick_{aubade,serenade}_3x.png show a row of 3-4 slits or the drum's
+  slit ring at every heading, and one hood light. Crown metric (ruling 7, `_harness/probe_crown_radius.mjs`): every
+  Wick and the Hooded Lamp ward PASS (soft crowns 11.6-48.5 cm at 3 cm; _harness/_reports/fw_CW4_crown_now.json).

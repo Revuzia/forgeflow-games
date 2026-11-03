@@ -561,3 +561,11 @@ renders `art/renders/units/*brightwick*`.
   #7B848C, chalk circlet #8C887F -> #858178, rim #928E85 -> #8B877E (-1 / -2.7 / -2.7 L*); Serenade felt hood
   #9A846A -> #917C64, cap #93806A -> #8B7964 (-3.2 / -2.8 L*). Rebuilt both: 3961 / 3970 tris (unchanged), accent 5.96 %
   both (unchanged), three load test + QA OK. Re-measure: _harness/_reports/fw_CW4_final_wick_sweep.json.
+- (closing CW4 build 2, 2026-11-03) The first re-measure had run on the OLD GLBs: the dev server serves /catalog from
+  dist-catalog/, which only `npm run content` republishes (the hashed asset names); after the PART_HEX step it still read
+  65.6 / 66.6 (fw_CW4_r2). The RAMP top lift flattened over the hood (Aubade 1.05/1.09 -> 1.02/1.02 at 1.28/1.80 m,
+  Serenade 1.10/1.16 -> 1.05/1.05 at 1.35/1.80 m; mid and feet unchanged). Rebuilt both: 3959 / 3969 tris, accent 5.96 %.
+  Published with `npm run content`, then `node _harness/probe_wick_sweep.mjs --tag r4` (RIFT High t 978 seed 7): hood
+  top quarter Aubade 63.7, Serenade 62.0 (every Wick 56.4-63.7; fighters 81.6): M8 hood gate PASS
+  (_harness/_reports/fw_CW4_r4_wick_sweep.json). The sweep's Brightwick flags are the studded circlet seen edge-on (a
+  ring of lamps), reviewed on fw_CW4_r4_sweep_brightwick_*_3x.png: no face read.
