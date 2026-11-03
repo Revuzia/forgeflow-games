@@ -182,7 +182,7 @@ async function runSync() {
     const refRows = rows.filter((r) => r.ref === 'out' && r.offTsMs !== null);
     const medPk = pct(rows.filter((r) => !r.ref && r.peakDb !== null).map((r) => r.peakDb), 50);
     const ok = rows.filter((r) => !r.ref && r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
-    rep.excluded = rows.length - refRows.length - ok.length;
+    rep.excluded = rows.filter((r) => !r.ref).length - ok.length;
     const tsValid = ok.every((r) => Number.isFinite(r.offTsMs)) && raw.hits.some((h) => h.op > 0);
     const offs = ok.map((r) => (tsValid ? r.offTsMs : r.offClkMs));
     rep.frameMs = r2(frame);

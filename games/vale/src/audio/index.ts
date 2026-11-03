@@ -28,7 +28,10 @@
 //               below the floor (tokens.audio.motif.queuePop.ownSliderWithFloor), and every other cue stays
 //               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
 //   sync        a cue starts the moment its event reaches the engine (the frame loop pumps the sim, then renders, in one rAF);
-//               a one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in.
+//               a one-shot skips its file's silent lead under a 1 ms fade-in: the cue build's 5 ms pad AND whatever
+//               the platform's decoder leaves before it (Chrome's Ogg Opus decode keeps a few ms of the codec's
+//               pre-skip: the hit then sounded ~6.5 ms later than a sound on its bus); leadOf() finds it once per
+//               decoded buffer (the first sample within LEAD_FLOOR_DB of the file's peak, less LEAD_MARGIN_S).
 //               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame.
 //               Nothing is scheduled ahead; the mastering chain's only latency is fixed and known: the limiter's
 //               built-in 6 ms look-ahead (WebAudio DynamicsCompressor) and the soft clip's 4x oversampler (4 ms)
@@ -284,6 +287,9 @@ const HEAL_MERGE_S = 0.25;   // one target's heals within this are one chime
 const LEAD_SKIP_S = 0.004;   // a one-shot starts this far into its file: audio/build.py pads 5 ms of silence before every
                              // one-shot (LEAD_S, the codec's pre-echo room); skipping 4 ms of it under a LEAD_RAMP_S
 const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame (closing critic 'audio-runtime')
+const LEAD_FLOOR_DB = -45;   // leadOf(): a decoded one-shot's lead ends at its first sample within this of its peak …
+const LEAD_MARGIN_S = 0.0005;  // … less this (the onset itself is never cut) …
+const LEAD_MAX_S = 0.03;     // … and never more than this (a deliberate swell is not a lead)
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
@@ -858,7 +864,7 @@ class Engine implements ValeAudioPort {
         const t = this.ctx.currentTime;
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(c.gain * att * gainMul, t + LEAD_RAMP_S);
-        src.start(0, LEAD_SKIP_S);
+        src.start(0, leadOf(buf));
       } else src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
@@ -1835,6 +1841,29 @@ function ambientPoints(art: AmbientLike | undefined, source: string): { x: numbe
     if (p.fx?.vfx === source || file === source) at.push(...p.at);
   }
   return at.filter((a) => Number.isFinite(a[0]) && Number.isFinite(a[1])).map((a) => ({ x: a[0], y: a[1] }));
+}
+
+/** a decoded one-shot's silent lead (see `sync` in the header), measured once per buffer */
+const leads = new WeakMap<AudioBuffer, number>();
+function leadOf(buf: AudioBuffer): number {
+  let lead = leads.get(buf);
+  if (lead !== undefined) return lead;
+  let pk = 0;
+  const chans: Float32Array[] = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    chans.push(d);
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > pk) pk = v; }
+  }
+  lead = LEAD_SKIP_S;
+  if (pk > 0) {
+    const th = pk * Math.pow(10, LEAD_FLOOR_DB / 20), end = Math.min(buf.length, Math.ceil(LEAD_MAX_S * buf.sampleRate));
+    let first = -1;
+    for (let i = 0; i < end && first < 0; i++) for (const d of chans) if (Math.abs(d[i]) >= th) { first = i; break; }
+    lead = first < 0 ? LEAD_MAX_S : Math.max(0, first / buf.sampleRate - LEAD_MARGIN_S);
+  }
+  leads.set(buf, lead);
+  return lead;
 }
 
 /** the soft clip after the limiter (see `buses` in the header): linear to CLIP_KNEE, then a tanh knee that never
