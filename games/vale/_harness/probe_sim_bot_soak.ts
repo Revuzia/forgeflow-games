@@ -899,6 +899,24 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     detail.pace = pace;
     text.push('', `RIFT pace (full games): ${Object.entries(pace).map(([d, p]) => `${d} median ${p.median.toFixed(1)} mean ${p.mean.toFixed(1)} p90 ${p.p90.toFixed(1)} max ${p.max.toFixed(1)} min (n ${p.n}, sudden ${p.sudden})`).join(' / ')}`);
     if (pace.adept) gates.push({ group: 'pace', item: 'gameplay:g2', label: 'RIFT adept match length p90', value: `${pace.adept.p90.toFixed(1)} min (median ${pace.adept.median.toFixed(1)})`, target: '≤ 32 min', pass: pace.adept.p90 <= 32, n: pace.adept.n });
+    // ── balance (CW3 gameplay CL-g4, report): every fighter's RIFT win rate over the decided same-tier games, with a
+    // Wilson 95 % interval. Only --lineup shuffle seats teammates independently; on 'rotate' the same fighters always
+    // share a team and their rates are confounded (the report says so). Judge it on ≥ 200 games (--seeds 100).
+    const same = fullRift.filter((g) => g.winner >= 0 && g.job.diffs[0] === g.job.diffs[1]);
+    const wr = new Map<string, { w: number; n: number }>();
+    for (const g of same) for (const s of g.seats) { const r = wr.get(s.fighter) ?? { w: 0, n: 0 }; r.n++; if (s.team === g.winner) r.w++; wr.set(s.fighter, r); }
+    const wilson = (w: number, n: number): [number, number] => {
+      const z = 1.96, p = w / n, d = 1 + z * z / n, c = p + z * z / (2 * n), h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+      return [(c - h) / d, (c + h) / d];
+    };
+    const bal = [...wr].map(([f, r]) => { const [lo, hi] = wilson(r.w, r.n); return { fighter: f, games: r.n, rate: r.w / r.n, lo, hi }; }).sort((a, b) => b.rate - a.rate);
+    detail.balance = { lineup: LINEUP, games: same.length, fighters: bal };
+    if (bal.length) {
+      const out = bal.filter((b) => b.lo > 0.55 || b.hi < 0.45).map((b) => b.fighter);
+      text.push('', `balance (CL-g4, report; ${same.length} decided same-tier RIFT games, lineup ${LINEUP}${LINEUP === 'shuffle' ? '' : ': teammates locked together, rates confounded'}): ` +
+        bal.map((b) => `${b.fighter} ${pct(b.rate)} [${pct(b.lo)}–${pct(b.hi)}] n${b.games}`).join(' · ') +
+        `\n  outside the 45–55 % band with 95 % confidence: ${out.length ? out.join(', ') : 'none'}`);
+    }
   }
   if (rift.length) {
     const cr: Record<string, { credited: number; executed: number }> = {};

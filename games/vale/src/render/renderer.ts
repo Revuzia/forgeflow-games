@@ -806,13 +806,44 @@ class ValeRenderer implements Renderer {
     }
   }
 
+  /** polish OBS-camjump: visible actors the frustum culled this frame (re-checked once the camera has moved) */
+  private readonly culledVis: Actor[] = [];
+
+  /** polish OBS-camjump: the actors are culled against the camera BEFORE it follows this frame (the follow reads their
+   *  interpolated positions). After a focus jump (respawn re-centre, Space, a minimap click) that camera looked
+   *  elsewhere and every body at the new spot was dropped for one frame while its bar still drew. Once the rig has
+   *  moved, the visible actors culled this frame are tested against the new frustum and the ones it now holds are
+   *  drawn (and animated with the time they held) on this same frame. */
+  private recullActors(alpha: number): void {
+    if (!this.culledVis.length) return;
+    const cam = this.rig.camera;
+    _frustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const back = this.culledVis.filter((a) => this.actorLod(a) !== 2);
+    this.culledVis.length = 0;
+    for (const a of back) this.updateActor(a, 0, alpha, true);
+  }
+
+  /** the animation LOD of an actor against the current _frustum (2 = outside it and its shadow reach) */
+  private actorLod(a: Actor): 0 | 1 | 2 {
+    const sdx = this.shadowDir.x, sdz = this.shadowDir.y, sdl = Math.hypot(sdx, sdz);
+    const H = a.artHeight;
+    _sphere.center.set(a.x + sdx * H * 0.5, a.h + H * 0.5, a.y + sdz * H * 0.5);
+    _sphere.radius = H * 0.5 + a.radius + 2 + sdl * H * 0.5;
+    return !_frustum.intersectsSphere(_sphere) ? 2 : a.view?.kind === 'minion' && Math.hypot(a.x - this.rig.focus.x, a.y - this.rig.focus.z) > ANIM_FAR_M ? 1 : 0;
+  }
+
   private updateActors(dt: number, alpha: number): void {
-    const hoverOn = this.hover;
-    const p = this.palette;
     // animation LOD (presentation only): clips hold outside the view frustum (+ 2 m), distant wicks tick at 15 Hz
     const cam = this.rig.camera;
     _frustum.setFromProjectionMatrix(_m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
-    const fx = this.rig.focus.x, fz = this.rig.focus.z;
+    this.culledVis.length = 0;
+    for (const a of this.actors.values()) this.updateActor(a, dt, alpha, false);
+  }
+
+  private updateActor(a: Actor, dt: number, alpha: number, recheck: boolean): void {
+    const hoverOn = this.hover;
+    const p = this.palette;
+    const cam = this.rig.camera;
     // outline styles (tokens hud.unitOutline): rest = ink at 60 % tinted 18 % (display space) toward the
     // relationship, in the scene; hover = a clean rim in the overlay pass, HARM 2.5 px (enemy, neutral) or ally 1.5 px
     const O = UNIT_OUTLINE;
@@ -821,24 +852,22 @@ class ValeRenderer implements Renderer {
       _rest[r].copy(ink).convertLinearToSRGB().lerp(this.tmpColor.copy(p.relationColor(r)).convertLinearToSRGB(), O.rest.relationTint).convertSRGBToLinear();
     }
     const harm = p.relationColor('enemy'), allyC = p.relationColor('ally');
-    const sdx = this.shadowDir.x, sdz = this.shadowDir.y, sdl = Math.hypot(sdx, sdz);
-    for (const a of this.actors.values()) {
+    {
       const v = a.view;
-      if (!v) continue;
+      if (!v) return;
       const vis = this.entityVisible(v) && (v.alive || v.kind === 'fighter' || a.leaving >= 0 || v.state === 'dead');
       a.visible = vis;
       // out of the viewer's vision: not drawn, no matrix work, and any reaction ends now (actors.ts hidden())
-      if (!vis) { a.root.visible = false; a.culled = true; a.hidden(); continue; }
+      if (!vis) { a.root.visible = false; a.culled = true; a.hidden(); return; }
       const hex = accentHexFor(p, v);
       a.setAccentColor(hex, p.get(hex));
       // the body (+ 2 m for swings and leaps) and the shadow it throws (half its height along the sun's
       // ground offset, covering the whole shadow) must miss the frustum for the actor to be culled
-      const H = a.artHeight;
-      _sphere.center.set(a.x + sdx * H * 0.5, a.h + H * 0.5, a.y + sdz * H * 0.5);
-      _sphere.radius = H * 0.5 + a.radius + 2 + sdl * H * 0.5;
-      const lod = !_frustum.intersectsSphere(_sphere) ? 2 : v.kind === 'minion' && Math.hypot(a.x - fx, a.y - fz) > ANIM_FAR_M ? 1 : 0;
+      // (recheck: the second pass after the camera moved, with the time this frame held; recullActors)
+      const lod = recheck ? 0 : this.actorLod(a);
       a.culled = lod === 2 && a.leaving < 0;
       a.root.visible = !a.culled;
+      if (a.culled) this.culledVis.push(a);
       a.update(dt, alpha, lod);
       if (a.model) {
         const rel = p.relation(v.team, v.owner, v.kind === 'fighter');
@@ -1102,15 +1131,17 @@ class ValeRenderer implements Renderer {
     if (this.pending.length) { const evs = this.pending.splice(0, this.pending.length); this.reactions.handle(evs, this.actors, this.time); this.director.handle(evs); this.structs.handle(evs); }
     this.director.update(view);
     this.updateActors(d, alpha);
-    // the crowd's instances: every live, visible, on-screen crowd unit, after its envelopes ran
-    this.crowd.begin();
-    for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
-    this.crowd.end();
     // camera follows your fighter
     const me = view.players.find((p) => p.player === client.you);
     const a = me ? this.actors.get(me.entity) : undefined;
     if (a && a.view?.alive) this.rig.setSelf(a.x, a.y); else this.rig.setSelf(null, null);
     this.rig.update(d);
+    this.recullActors(alpha);
+    // the crowd's instances: every live, visible, on-screen crowd unit, after its envelopes ran (and after the camera
+    // moved: a unit the re-cull brought back is drawn this frame)
+    this.crowd.begin();
+    for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
+    this.crowd.end();
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
     this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);
     // fog of war

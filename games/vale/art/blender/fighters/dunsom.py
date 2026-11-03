@@ -216,7 +216,8 @@ HAT_R, HAT_EDGE, HAT_RISE, HAT_T = 0.355, 1.946, 0.095, 0.026
 # rises less than the top): the 2.6 cm shell's underside z-fought its top through the double-sided material in
 # three's depth buffer (the 1-px dark specks on the disc from the game camera)
 HAT_TE, HAT_TC = 0.036, 0.055       # thickness at the edge, + extra toward the crown (5-7 cm mid-radius)
-HAT_BAND = (0.300, 0.334)           # the stitched edge band (r from / to)
+HAT_BAND = (0.294, 0.336)           # the stitched edge band (r from / to) (closing: 4.2 cm, was 3.4: one ring at 50 px)
+HAT_CREASE0 = math.radians(22.5)    # the first of the felt's eight radial creases (off the front / side axes)
 
 
 def hat_top(r):
@@ -1491,7 +1492,20 @@ def _hat_paint(p, n):
     on_top = ss(zt - hat_thick(r) * 0.75, zt - hat_thick(r) * 0.35, p[:, 2]) * up
     nap = 1 + 0.050 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([0.0, 0.0, 0.0]), 16.0) + 0.030 * _fbm(p, 55.0)
     brush = 1 + 0.035 * NOISE(np.stack([th * 3.0, r * 18.0, p[:, 2] * 0.0], 1), 1.0)
-    c = top[None, :] * (nap * brush * (0.88 + 0.18 * ss(0.30, 0.04, r)) * (0.92 + 0.12 * ss(-0.2, 0.8, n @ KEY)))[:, None]
+    # closing dunsom-hat-flat-plate (the disc read as one flat L* 84-85 plate from the gameplay camera, a 3 L* ramp:
+    # the old 0.88-1.06 crown lift sat above the highlight cap's knee and was flattened): the crown-to-rim value
+    # ramp now spans the WHOLE top, x1.12 at the crown (under the cap: ~L* 82) down to x0.76 at the band (~L* 71),
+    # broad felt blotches 16-24 cm across (+-5 % linear, ~4-6 L*) over the fine nap, and eight shallow radial
+    # creases pressed into the felt every 45 degrees (a dark fold line with a lit lip on its key side)
+    blot = 1 + 0.10 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
+    ramp = 0.76 + 0.36 * (1.0 - ss(0.03, 0.31, r))
+    k8 = 2 * math.pi / 8
+    da = (((th - HAT_CREASE0) / k8 + 0.5) % 1.0 - 0.5) * k8 * np.maximum(r, 1e-3)      # signed arc distance (m)
+    span = ss(0.07, 0.12, r) * (1 - ss(0.27, 0.295, r))
+    crease = np.exp(-(da / 0.0065) ** 2) * span
+    lip = np.exp(-((da - 0.010) / 0.006) ** 2) * span
+    fold = 1 - 0.20 * crease + 0.07 * lip
+    c = top[None, :] * (nap * brush * blot * fold * ramp * (0.92 + 0.12 * ss(-0.2, 0.8, n @ KEY)))[:, None]
     bw = ss(HAT_BAND[0] - 0.002, HAT_BAND[0] + 0.002, r) * (1 - ss(HAT_BAND[1] - 0.002, HAT_BAND[1] + 0.002, r))
     bc = band_c[None, :] * (nap * (0.95 + 0.08 * ss(-0.2, 0.8, n @ KEY)))[:, None]
     c = c * (1 - bw[:, None]) + bc * bw[:, None]
@@ -2736,16 +2750,25 @@ def clip_overrides(ctx) -> dict:
         M = skel.fk(r)
         return M["x_lantern"].translation.copy()
 
-    # IDLE: upright on the crook, breathing, the free hand drifting, the lantern settling
+    # IDLE (closing dunsom-idle-recall-frozen: a 2.4 s loop where no bone moved over 3.1 degrees, head 2.2 cm): a 3 s
+    # loop (90 f) in which he settles his weight onto the crook and back: the hips shift 2.5 cm toward it and sink
+    # 1.2 cm, the chest leans 3-4 degrees into the shaft, the head rides it and comes back level (the hat stays level:
+    # level() takes back half), the free hand drifts with the breath, the lantern swings 3-4 degrees on each settle.
+    # (brief 8 asks the left hand on the right wrist: the fist rides the crook at x -0.47, 0.67 m from the left
+    # shoulder against a 0.50 m arm; the left hand hangs as in the approved concept)
     def idle_s(t):
-        b = math.sin(2 * math.pi * 2 * t)
+        w = 0.5 - 0.5 * math.cos(2 * math.pi * t)             # the settle onto the crook (0 -> 1 -> 0)
+        b = math.sin(2 * math.pi * 3 * t)                     # three breaths
         s = math.sin(2 * math.pi * t)
-        return pose(torso=dict(hips=(0, 0.8 * s, -0.6 * s), spine=(0.4 * b, 0, 0.4 * s), chest=(0.9 * b, 0.6 * s, 0),
-                               neck=(-0.5 * b, 0, 0), head=(-0.3 * b, 1.2 * s, 0.4 * s)),
-                    hips=(0.006 * s, 0, -0.003 * (0.5 + 0.5 * b)),
-                    R=(GUARD_R[0], GUARD_R[1], GUARD_R[2] + 0.006 * b), Rp=POLE_R,
-                    L=(GUARD_L[0] + 0.012 * s, GUARD_L[1] - 0.01 * b, GUARD_L[2]))
-    out["idle"] = anim.Clip("idle", 72, True, idle_s)
+        p = pose(torso=dict(hips=(0.6 * b, -1.5 * w, -2.0 * w), spine=(0.8 * b + 1.0 * w, 0, -1.6 * w),
+                            chest=(1.8 * b + 1.2 * w, 1.0 * s, -2.2 * w), neck=(-0.9 * b, 0, 1.2 * w),
+                            head=(-0.6 * b - 1.0 * w, 2.0 * s, 1.6 * w)),
+                 hips=(-0.025 * w, 0.004 * s, -0.012 * w - 0.003 * (0.5 + 0.5 * b)),
+                 R=(GUARD_R[0], GUARD_R[1], GUARD_R[2] + 0.006 * b), Rp=POLE_R,
+                 L=(GUARD_L[0] + 0.020 * s, GUARD_L[1] - 0.025 * b - 0.02 * w, GUARD_L[2] + 0.01 * w))
+        p["x_lantern"] = (3.5 * math.sin(2 * math.pi * (t - 0.08)), 0.0, 2.0 * math.sin(2 * math.pi * (t - 0.12)))
+        return p
+    out["idle"] = anim.Clip("idle", 90, True, anim.drag(idle_s, 90, {"head": 2.0}, loop=True))
 
     # RUN: the generator's planted gait (medium, 3.35 m/s); the crook carried across the body, leaning forward to
     # his left, the right fist on the low wrap at the hip, the left hand on the rest grip before the chest
@@ -2933,22 +2956,57 @@ def clip_overrides(ctx) -> dict:
               Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
     scene.log(f"dunsom recall: lantern pivot at {tuple(round(v, 3) for v in lp)}, cupped hand at z {cup.z:.2f}")
 
-    def recall_s(t):
-        p = dict(rc)
-        b = math.sin(2 * math.pi * 2 * t)
-        p["chest"] = (-2 + 0.8 * b, 6, 0)
-        p["head"] = (-2 + 1.0 * math.sin(2 * math.pi * t), 8, 0)
-        return p
-    out["recall"] = anim.Clip("recall", 60, True, recall_s)
+    # (closing dunsom-idle-recall-frozen: the recall was a 2 s held pose under 1 degree looped through RIFT's 7 s)
+    # RECALL, 6 s (180 f; the load test caps a clip at 6 s; seamless: it closes on its first pose, so over RIFT's 7 s
+    # the loop replays its opening): he lowers the crook in his fist until the lantern hangs at eye level (0.12),
+    # cups it with the free hand (0.18), counts under his breath: three nods, a breath, three nods (0.24-0.58, the
+    # core brightening in steps), bends to look into it (0.66), then lifts the crook high (0.80: the departure),
+    # holds it up a beat and brings it back down to the guard (1.0)
+    rc_rel = pose(torso=dict(chest=(-2, 6, 0), neck=(-2, 4, 0), head=(-2, 8, 0)), R=RC_R, aim=RC_AIM, slide=RC_S,
+                  L=left_at(rc), Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
+    lower = pose(torso=dict(chest=(1, 3, 0), neck=(0, 2, 0), head=(2, 4, 0)), hips=(0, 0, -0.01),
+                 R=tuple(0.5 * (np.array(RC_R) + np.array(GUARD_R))), aim=tuple(unit(np.add(RC_AIM, UP))),
+                 slide=RC_S * 0.5, L=(GUARD_L[0] - 0.05, GUARD_L[1] - 0.15, GUARD_L[2] + 0.15))
+    peer = pose(torso=dict(hips=(4, 2, 0), spine=(4, 4, 0), chest=(4, 8, 0), neck=(4, 4, 0), head=(8, 10, 4)),
+                hips=(0, 0.02, -0.025), R=RC_R, aim=RC_AIM, slide=RC_S,
+                L=tuple(np.add(left_at(rc), (0.0, -0.03, 0.04))), Lp=(0.9, 0.2, -0.3), fk=dict(hand_L=(-20, 0, 30)))
+    raise_ = pose(torso=dict(spine=(-3, 0, 0), chest=(-6, -2, 0), neck=(-4, 0, 0), head=(-10, -4, 0)), hips=(0, 0, 0.005),
+                  R=(-0.30, -0.36, 0.60), aim=(-0.22, -0.08, 0.97), L=(0.18, -0.22, -0.72), fk=dict(prop_R=(0, TWIST_OUT, 0)))
+    raise2 = anim.add(raise_, P_(chest=(-1.5, 0, 0), head=(-3, 0, 0)))
+    rk = anim.keyed([(0.0, G, "linear"), (0.07, lower, "inout"), (0.12, anim.lerp_pose(lower, rc_rel, 0.85), "inout"),
+                     (0.18, rc_rel, "out"), (0.62, rc_rel, "linear"), (0.68, peer, "inout"), (0.73, peer, "linear"),
+                     (0.80, raise_, "out"), (0.87, raise2, "inout"), (0.94, anim.lerp_pose(raise2, G, 0.7), "inout"),
+                     (1.0, G, "settle")])
+    NODS = (0.26, 0.30, 0.34, 0.44, 0.48, 0.52)               # three nods, a breath, three nods
 
-    # CHANNEL: the crook raised forward, the lantern out before him, the free hand open (loops)
+    def recall_s(t):
+        p = dict(rk(t))
+        if 0.18 < t < 0.64:
+            env = min(1.0, (t - 0.18) / 0.04, (0.64 - t) / 0.04)
+            nod = sum(math.exp(-((t - c) / 0.012) ** 2) for c in NODS)
+            br = math.sin(2 * math.pi * (t - 0.18) / 0.23)
+            p = anim.add(p, P_(neck=(4.0 * nod, 0, 0), head=(9.0 * nod, 0, 0), chest=(1.6 * br * env, 0, 0),
+                               spine=(0.8 * br * env, 0, 0)))
+            hl = p.get("hips_loc", (0.0, 0.0, 0.0))
+            p["hips_loc"] = (hl[0] - 0.012 * env * (0.5 + 0.5 * br), hl[1], hl[2] - 0.006 * env * (0.5 - 0.5 * br))
+        return p
+    out["recall"] = anim.Clip("recall", 180, True, anim.drag(recall_s, 180, {"head": 1.5, "neck": 0.8}, loop=True))
+
+    # CHANNEL (60 f): the crook raised forward, the lantern out before him, lifting slowly on the breath and settling
     ch = pose(torso=dict(chest=(2, 3, 0), head=(-3, -2, 0)), R=(-0.20, -0.70, -0.05), aim=(-0.05, -0.40, 0.92),
               L=(0.05, -0.80, -0.30), Lp=(0.8, 0.3, -0.4))
 
     def channel_s(t):
         b = math.sin(2 * math.pi * 2 * t)
-        return anim.add(ch, P_(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
-    out["channel"] = anim.Clip("channel", 40, True, channel_s)
+        w = 0.5 - 0.5 * math.cos(2 * math.pi * t)
+        p = pose(torso=dict(hips=(0, -1.5 * w, -1.5 * w), spine=(0.8 * b, 0, -1.0 * w), chest=(2 + 2.4 * b, 3, -1.5 * w),
+                            neck=(0, 0, 1.0 * w), head=(-3 - 1.6 * b - 2.0 * w, -2, 1.2 * w)),
+                 hips=(-0.018 * w, 0.0, -0.004 * (0.5 + 0.5 * b)),
+                 R=(-0.20, -0.70, -0.05 + 0.10 * w), aim=(-0.05, -0.40, 0.92),
+                 L=(0.05, -0.80 + 0.03 * b, -0.30 + 0.06 * w), Lp=(0.8, 0.3, -0.4))
+        p["x_lantern"] = (2.5 * math.sin(2 * math.pi * (t - 0.1)), 0.0, 0.0)
+        return p
+    out["channel"] = anim.Clip("channel", 60, True, channel_s)
 
     # DASH: a low glide, the crook carried forward-up in both hands, the feet sliding (no step)
     gl = pose(torso=dict(hips=(12, 0, 0), spine=(8, 0, 0), chest=(6, 0, 0), neck=(-8, 0, 0), head=(-8, 0, 0)),

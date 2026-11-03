@@ -46,7 +46,7 @@ import {
   SMAAPreset, ToneMappingEffect, ToneMappingMode, VignetteEffect,
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
-import { LIFT_BODY_CAP, MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
+import { LIFT_BODY_CAP, LIFT_GROUND_TOP, MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
 import { setFogGrade } from './world_material.ts';
 
 export interface PostQuality {
@@ -109,6 +109,18 @@ uniform highp sampler2D uLiftDepth;
 uniform float uLiftDepthOn;
 uniform mat4 uLiftInvProj;
 uniform mat4 uLiftCamWorld;
+// the display luma the NEUTRAL tone map (three's NeutralToneMapping, exposure 1) makes of a linear colour
+float liftDispLuma( vec3 col ) {
+  float x = min( col.r, min( col.g, col.b ) );
+  col -= x < 0.08 ? x - 6.25 * x * x : 0.04;
+  float peak = max( col.r, max( col.g, col.b ) );
+  if ( peak >= 0.76 ) {
+    float np = 1.0 - 0.0576 / ( peak + 0.24 - 0.76 );
+    col *= np / peak;
+    col = mix( col, vec3( np ), 1.0 - 1.0 / ( 0.15 * ( peak - np ) + 1.0 ) );
+  }
+  return pow( max( dot( col, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-6 ), 1.0 / 2.2 );
+}
 void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
   vec3 c = inputColor.rgb * pow( max( uExpo, 0.0 ), 2.2 );
   float lift = 0.0, desat = 0.0;
@@ -120,18 +132,36 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     lift += a.w * ( k + uBreath * ( 1.0 - k ) );
     desat = max( desat, uLiftB[ i ].x * k );
   }
+  float body = 0.0;
   if ( lift > 0.02 && uLiftDepthOn > 0.5 ) {
     float z = texture2D( uLiftDepth, uv ).r;
     vec4 v = uLiftInvProj * vec4( vec3( uv, z ) * 2.0 - 1.0, 1.0 );
     vec3 w = ( uLiftCamWorld * vec4( v.xyz / v.w, 1.0 ) ).xyz;
-    float body = smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 );
+    body = smoothstep( 0.05, 0.2, w.y ) * step( z, 0.99999 );
     // a pale body part takes less: its display value stops at 0.86 (never the stopped-sun white), a dark one up to the cap
     float bodyV = pow( max( dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-5 ), 1.0 / 2.2 );
     float capB = clamp( 0.86 / bodyV, 1.0, ${LIFT_BODY_CAP.toFixed(3)} );
     lift = mix( lift, min( lift, capB - 1.0 ), body );
     desat *= 1.0 - body;
   }
-  c *= pow( 1.0 + lift, 2.2 );
+  float m = pow( 1.0 + lift, 2.2 );
+  // combat C2: on the GROUND the envelope's ratio is a display ratio through the tone curve too. The NEUTRAL tone map
+  // that follows compresses everything over ~0.76 linear, so a plain ×2.4^2.2 read ×1.9-2.2 on a mid-value ground
+  // (closing review: Hesmi ×1.93, Marund ×1.58). The ground's multiplier is solved so the TONE-MAPPED display luma is
+  // ×(1 + lift), stopping short of white (display ${LIFT_GROUND_TOP}); bodies keep the capped multiplier above.
+  if ( lift > 0.05 && body < 0.5 ) {
+    float d0 = liftDispLuma( c );
+    float target = min( d0 * ( 1.0 + lift ), ${LIFT_GROUND_TOP.toFixed(3)} );
+    if ( liftDispLuma( c * m ) < target ) {
+      float lo = log2( m ), hi = log2( m ) + 6.0;
+      for ( int j = 0; j < 9; j ++ ) {
+        float mid = 0.5 * ( lo + hi );
+        if ( liftDispLuma( c * exp2( mid ) ) < target ) lo = mid; else hi = mid;
+      }
+      m = mix( exp2( lo ), m, body * 2.0 );
+    }
+  }
+  c *= m;
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
   outputColor = vec4( mix( c, vec3( l ), desat ), inputColor.a );
 }`, {

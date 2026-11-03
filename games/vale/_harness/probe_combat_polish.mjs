@@ -26,8 +26,9 @@
 //           event, the pixels the VFX pass adds inside the victim box (luma delta ≥ 0.08) are counted every frame for
 //           12 frames (30 Hz), with the lit region's reach (2 × the 90th-percentile distance from its centroid) over the
 //           victim's art height. `sizeMs` = how long the reach stays ≥ 0.5; done: ≥ 200 ms (r12 M5: ≈ 0.7 × victim
-//           height for ≈ 200 ms). Info: `eqd` the lit area as a disc's diameter over the victim's height, `readMs` how
-//           long the count stays ≥ 25 % of its peak.
+//           height for ≈ 200 ms). `eqd` the lit area as a disc's diameter over the victim's height; polish C3: the done
+//           gate is `discMs` (eqd ≥ 0.5 from the hit) ≥ 167 ms, `sizeMs` (reach, noisy) is info; `readMs` how long the
+//           count stays ≥ 25 % of its peak.
 //
 //   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all]
 //   (--ults all: the 16 fighters, critic combat-16; a fighter outside the first lineup's enemy side is cast from a lineup of its own)
@@ -443,10 +444,13 @@ try {
       // as a disc (a thin four-point glint reads larger than its area)
       let sizeF = 0; for (let i = 0; i < spans.length; i++) { if (spans[i] >= 0.5) sizeF = i + 1; else break; }
       const eqd = counts.map((n) => +(2 * Math.sqrt(n / Math.PI) / vH).toFixed(2));
-      const res = { def, hitFrame: hitF, victimPx: Math.round(vH), counts, spans, eqd, peak, readMs: Math.round(readF * 1000 / 30), sizeMs: Math.round(sizeF * 1000 / 30), spanAtHit: spans[0] };
+      // polish C3: the done gate is the lit area as a disc ≥ 0.5 × the victim's height for ≥ 167 ms (5 frames from the
+      // hit); the reach (`sizeMs`) is noisy run to run and stays info
+      let discF = 0; for (let i = 0; i < eqd.length; i++) { if (eqd[i] >= 0.5) discF = i + 1; else break; }
+      const res = { def, hitFrame: hitF, victimPx: Math.round(vH), counts, spans, eqd, peak, readMs: Math.round(readF * 1000 / 30), sizeMs: Math.round(sizeF * 1000 / 30), discMs: Math.round(discF * 1000 / 30), spanAtHit: spans[0] };
       report.hold.push(res);
-      console.log(`hold ${def.padEnd(7)} px per frame from the hit ${counts.join(' ')}  reach/victim ${spans.join(' ')}  ≥0.5 for ${res.sizeMs} ms · disc/victim ${eqd.join(' ')} (count ≥25 % of peak ${res.readMs} ms)`);
-      if (!BEFORE && res.sizeMs < 200) fail(`${def}: the impact reaches ≥ 0.5 × the victim for ${res.sizeMs} ms < 200`);
+      console.log(`hold ${def.padEnd(7)} px per frame from the hit ${counts.join(' ')}  reach/victim ${spans.join(' ')}  ≥0.5 for ${res.sizeMs} ms · disc/victim ${eqd.join(' ')} ≥0.5 for ${res.discMs} ms (count ≥25 % of peak ${res.readMs} ms)`);
+      if (!BEFORE && res.discMs < 167) fail(`${def}: the impact's disc is ≥ 0.5 × the victim for ${res.discMs} ms < 167`);
       await B((b) => { b.__park(); b.__step(30); });
     }
   }

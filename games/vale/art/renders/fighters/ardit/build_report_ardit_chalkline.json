@@ -190,14 +190,14 @@
   },
   "uv_coverage": 0.602,
   "bake": {
-    "base": 19.78,
-    "rough_metal": 18.33,
-    "normal": 10.41,
-    "ao": 8.59,
+    "base": 7.0,
+    "rough_metal": 9.8,
+    "normal": 6.73,
+    "ao": 6.17,
     "normal_fixed_px": 117968,
-    "projection": 199.38,
-    "pack_save": 199.76,
-    "total": 258.2
+    "projection": 117.23,
+    "pack_save": 117.63,
+    "total": 147.71
   },
   "tris": 20589,
   "mesh_top_m": 2.476,
@@ -229,8 +229,8 @@
       "portrait": "art/out/fighters/ardit/ardit_chalkline_portrait.png"
     },
     "seconds": {
-      "splash": 455.37,
-      "portrait": 77.6
+      "splash": 230.24,
+      "portrait": 14.18
     }
   },
   "three_qa": {
@@ -262,24 +262,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_chalkline.png",
-    "seconds": 50.5,
+    "seconds": 20.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 1.07,
-      "model": 22.63,
-      "lows_bind": 30.81,
-      "uv": 15.95,
-      "bake": 258.2,
-      "export": 0.22,
-      "optimize": 1.07,
-      "load_test": 0.26,
-      "render": 533.91,
-      "three_qa": 51.54
+      "rig": 0.0,
+      "materials": 0.17,
+      "model": 3.57,
+      "lows_bind": 5.2,
+      "uv": 5.18,
+      "bake": 147.71,
+      "export": 0.15,
+      "optimize": 1.12,
+      "load_test": 0.23,
+      "render": 244.47,
+      "three_qa": 21.1
     },
-    "total_s": 916.71
+    "total_s": 429.03
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

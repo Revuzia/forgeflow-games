@@ -513,6 +513,13 @@ export class Bot extends BotBase implements BotController {
         // and the base. Other lanes are their laners' and the jungler's to answer.
         if (d > 0.05 && b.defendFighters[this.lane] > b.lanersOn(this.lane)) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
         else if (b.baseThreat >= 0.7 && follow) consider('defend', 0.55 + 0.2 * b.baseThreat);
+        else {
+          // (CW3 gameplay CL-g1: a siege of three or more enemy fighters on any road ends the hold for the whole team —
+          // the other roads used to keep farming while one road and then the base fell)
+          let siege = 0;
+          for (let i = 0; i < b.defend.length; i++) if (b.defendFighters[i] >= 3) siege = Math.max(siege, b.defend[i]);
+          if (siege > 0.05 && follow && hpF > 0.4) consider('defend', 0.55 + 0.2 * siege);
+        }
       } else if (d > 0.05) consider('defend', (0.5 + 0.35 * d) * (follow ? 1 : 0.85));
       else if (global >= 0.7 && follow && (!this.diff.objectiveSense || kind !== 'rift' || hpF > 0.4)) consider('defend', 0.55 + 0.2 * global);
       // laning: only the laners of the lane beside an objective go, and only on an opening (it is up

@@ -2213,6 +2213,50 @@ def ik(*ds):
     return {"ik": out}
 
 
+SKEL = None               # the rig (clip_overrides sets it): absify() resolves poses against it
+
+
+def absify(pose):
+    """the pose with every reach target (hand.L / hand.R) turned into the armature-space place it resolves to.
+    HandTarget.lerp cannot blend a chest-frame (rel) target into an absolute one: it keeps one or the other and
+    snaps at the halfway frame (closing TUN-C2: the 0.41 m recovery pops of cast_a1 / cast_ult). A clip that mixes
+    the two keys every pose through here, so the wrists travel along straight, eased paths."""
+    ikd = pose.get("ik") or {}
+    if SKEL is None or not any(k.startswith("hand.") and v.rel is not None for k, v in ikd.items()):
+        return pose
+    q = dict(pose)
+    q["ik"] = {k: v for k, v in ikd.items() if not k.startswith("orient.")}
+    M = SKEL.fk(_orig_resolve(SKEL, q))
+    new = dict(ikd)
+    for k, v in ikd.items():
+        if k.startswith("hand.") and v.rel is not None and not v.to_prop:
+            new[k] = anim.HandTarget(pos=tuple(M[k].translation), pole=v.pole, weight=v.weight)
+    out = dict(pose)
+    out["ik"] = new
+    return out
+
+
+def akeys(keys):
+    """anim.keyed over absified key poses"""
+    return anim.keyed([(t, absify(p), e) for t, p, e in keys])
+
+
+def nudge(p, side, d):
+    """shift an absolute wrist target by d (m, armature space)"""
+    k = f"hand.{side}"
+    ht = (p.get("ik") or {}).get(k)
+    if ht is None or ht.pos is None:
+        return p
+    p["ik"] = dict(p["ik"])
+    p["ik"][k] = anim.HandTarget(pos=tuple(ht.pos[i] + d[i] for i in range(3)), pole=ht.pole, weight=ht.weight)
+    return p
+
+
+def sine_in(u):
+    """accelerates into the strike and arrives moving (peak speed pi/2 x the mean, at the impact frame)"""
+    return 1.0 - math.cos(0.5 * math.pi * u)
+
+
 # guard: the puppeteer's hands — held before the chest, the hands reaching forward palm-down, the fingers half-curled
 # as if they held a marionette's strings (brief §8: "both hands held loosely in front of the chest, about to shape")
 # (fix pass 2: the wrists lifted to the chest and the hands pitched UP from them, so the half-curled fingers arch
@@ -2254,9 +2298,12 @@ def clip_idle():
         b = anim.osc(t, 2)
         s_ = anim.osc(t, 1, 0.1)
         f1, f2 = anim.osc(t, 2, 0.2), anim.osc(t, 2, 0.45)
-        p = compose(g, body(chest=(1.2 * b, 0, 0), spine=(0.5 * b, 0, 0.6 * s_), neck=(-0.6 * b, 0, 0),
-                            head=(-0.4 * b, 1.5 * s_, 0), hips=(0, 1.0 * s_, -0.8 * s_), side=0.010 * s_, drop=0.003 * b),
-                    ik(guard_wrist("L", 0.016 * f1, 0.008 * f2), guard_wrist("R", 0.016 * f2, 0.008 * f1)))
+        # (closing CW6: a weight shift from foot to foot under the breath, the head carried on it, so the hat drifts
+        # ~5 cm at the gameplay camera; was 2.9 cm)
+        p = compose(g, body(chest=(2.4 * b, 0, 0), spine=(1.0 * b, 0, 1.6 * s_), neck=(-1.2 * b, 0, -0.8 * s_),
+                            head=(-1.0 * b, 3.0 * s_, 1.2 * s_), hips=(0, 2.0 * s_, -2.2 * s_), side=0.024 * s_,
+                            drop=0.010 * (0.5 + 0.5 * b)),
+                    ik(guard_wrist("L", 0.022 * f1, 0.012 * f2), guard_wrist("R", 0.022 * f2, 0.012 * f1)))
         # the fingers never quite still: they work the strings in turn, as if testing a shape
         for sd, ph in (("L", 0.0), ("R", 0.5)):
             w = anim.osc(t, 3, ph)
@@ -2371,12 +2418,33 @@ def clip_cast_a1():
                              drop=0.035), hound_hands(x=0.045, z=1.36, y=-0.86, jaw=34, ears=50, snout=-8, pitch=0.50, absolute=True))
     fol = compose(st_, body(hips=(11, 7, 0), spine=(10, 5, 0), chest=(10, 7, 0), neck=(-8, -3, 0), head=(-10, -3, 0), fwd=0.14,
                             drop=0.04), hound_hands(x=0.045, z=1.32, y=-0.88, jaw=24, ears=46, snout=-4, pitch=0.40, absolute=True))
-    keys = [(0.0, g, "linear"), (0.12, hold, "out"), (0.22, compose(hold, hound_hands(z=1.32, y=-0.36, jaw=18)), "inout"),
-            (0.30, hold2, "inout"), (0.34, compose(hold2, hound_hands(z=1.35, y=-0.30, jaw=4)), "inout"),
-            (anim.IMPACT, snap, anim.snap), (0.50, fol, "out"),
-            (0.66, compose(fol, hound_hands(x=0.045, z=1.28, y=-0.80, jaw=8, ears=30, pitch=0.32, absolute=True)), "inout"),
-            (0.84, anim.lerp_pose(fol, g, 0.6), "inout"), (1.0, g, "settle")]
-    return anim.Clip("cast_a1", N, False, anim.drag(anim.keyed(keys), N, {"head": 1.0}), impact=anim.IMPACT)
+    # (closing TUN-C2 re-key: the wind-up tightens to 0.27; the lunge accelerates over 0.27 -> 0.40 (~6 display
+    # frames at the in-game 1.33x) and arrives moving, overshoots 8 % by 0.46 and settles by 0.53 with the head (and
+    # the hat on it) a frame behind; the jaw keeps working through the hold; the recovery eases over ~7 frames, every
+    # wrist on one absolute path (absify) so nothing snaps halfway)
+    hold2b = compose(hold2, body(chest=(-2, 0, 0), drop=0.005), hound_hands(z=1.35, y=-0.30, jaw=4))
+    fol2 = compose(fol, body(chest=(-1, 0, 0)), hound_hands(x=0.045, z=1.28, y=-0.80, jaw=8, ears=30, pitch=0.32, absolute=True))
+    A = {k: absify(v) for k, v in dict(g=g, hold=hold, hold2=hold2, hold2b=hold2b, snap=snap, fol=fol, fol2=fol2).items()}
+    over = anim.lerp_pose(A["hold2b"], A["snap"], 1.08)
+    keys = [(0.0, A["g"], "linear"), (0.10, A["hold"], "out"),
+            (0.17, absify(compose(hold, hound_hands(z=1.32, y=-0.36, jaw=18))), "inout"),
+            (0.23, A["hold2"], "inout"), (0.27, A["hold2b"], "inout"),
+            (anim.IMPACT, A["snap"], sine_in), (0.46, over, "out"), (0.53, A["fol"], "inout"),
+            (0.68, A["fol2"], "sine"), (0.85, anim.lerp_pose(A["fol2"], A["g"], 0.6), "inout"), (1.0, A["g"], "settle")]
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        p = fn(t)
+        if 0.50 < t < 0.74:                      # the hound's jaw works and the wrists drift through the hold
+            k = math.sin(math.pi * (t - 0.50) / 0.24)
+            for sd, z in (("L", 1.0), ("R", -1.0)):
+                a = p.get(f"x_fb1.{sd}", (0, 0, 0))
+                p[f"x_fb1.{sd}"] = (a[0], a[1], a[2] - z * 10 * k * max(0.0, anim.osc(t, 5)))
+                nudge(p, sd, (0.0, -0.015 * k * anim.osc(t, 2, 0.1), 0.012 * k * anim.osc(t, 2, 0.3)))
+            p = anim.add(p, P_(chest=(0.8 * k * anim.osc(t, 4), 0, 0)))
+        return p
+
+    return anim.Clip("cast_a1", N, False, anim.drag(sample, N, {"head": 1.0}), impact=anim.IMPACT)
 
 
 def clip_cast_a2():
@@ -2484,23 +2552,38 @@ def clip_cast_ult():
                             drop=0.06), pounce_hands())
     hold = compose(st_, body(hips=(13, 0, 0), spine=(11, 0, 0), chest=(11, 0, 0), neck=(-7, 0, 0), head=(-9, 0, 0), fwd=0.09,
                              drop=0.065), pounce_hands(y=-0.76, z=1.12, curl=1.2))
-    keys = [(0.0, g, "linear"), (0.10, compose(g, body(drop=0.015, chest=(4, 0, 0))), "inout"), (0.24, rise, "out"),
-            (0.32, rise2, "inout"), (0.36, compose(rise2, body(chest=(-1, 0, 0))), "inout"), (anim.IMPACT, hit, anim.snap),
-            (0.48, hold, "out"), (0.75, hold, "linear"), (0.88, anim.lerp_pose(hold, g, 0.6), "inout"), (1.0, g, "settle")]
+    # (closing TUN-C2 re-key: the rise and its breathing hold by 0.27; the sweep accelerates over 0.27 -> 0.40
+    # (~6 display frames at the in-game 1.78x) and arrives moving, overshoots 8 % by 0.45 and settles by 0.52 with the
+    # head and hat 1.5 frames behind; through the hold the claws flex and the arms drift; the recovery eases over
+    # 0.74 -> 1.0; every wrist on one absolute path (absify): the old rel/abs mix snapped 0.41 m at f32)
+    hold2 = compose(hold, body(chest=(1, 0, 0), drop=0.005), pounce_hands(y=-0.72, z=1.15, curl=1.1))
+    A = {k: absify(v) for k, v in dict(g=g, rise=rise, rise2=rise2, rise2b=compose(rise2, body(chest=(-1, 0, 0))),
+                                       hit=hit, hold=hold, hold2=hold2).items()}
+    over = anim.lerp_pose(A["rise2b"], A["hit"], 1.08)
+    keys = [(0.0, A["g"], "linear"), (0.08, absify(compose(g, body(drop=0.015, chest=(4, 0, 0)))), "inout"),
+            (0.17, A["rise"], "out"), (0.24, A["rise2"], "inout"), (0.27, A["rise2b"], "inout"),
+            (anim.IMPACT, A["hit"], sine_in), (0.45, over, "out"), (0.52, A["hold"], "inout"),
+            (0.74, A["hold2"], "sine"), (0.87, anim.lerp_pose(A["hold2"], A["g"], 0.6), "inout"), (1.0, A["g"], "settle")]
     fn = anim.keyed(keys)
 
     def sample(t):
         p = fn(t)
-        if 0.18 < t < 0.38:                       # the fingers move in turn: the beast's claws flex
-            k = math.sin(math.pi * (t - 0.18) / 0.20)
+        if 0.15 < t < 0.29:                       # the fingers move in turn: the beast's claws flex
+            k = math.sin(math.pi * (t - 0.15) / 0.14)
             for sd, ph in (("L", 0.0), ("R", 0.33)):
                 for i, w in enumerate("ab"):
                     nm = f"x_f{w}2.{sd}"
                     a = p.get(nm, (0, 0, 0))
                     p[nm] = (a[0] + 14 * k * anim.osc(t, 6, ph + 0.2 * i), a[1], a[2])
-        if 0.48 < t < 0.76:
-            k = math.sin(math.pi * (t - 0.48) / 0.28)
-            p = anim.add(p, P_(chest=(0.8 * k * anim.osc(t, 7), 0, 0)))
+        if 0.48 < t < 0.78:                       # a moving hold: the claws ripple, the arms and chest drift
+            k = math.sin(math.pi * (t - 0.48) / 0.30)
+            p = anim.add(p, P_(chest=(1.2 * k * anim.osc(t, 5), 0, 0)))
+            for sd, ph in (("L", 0.0), ("R", 0.4)):
+                for i, w in enumerate("ab"):
+                    nm = f"x_f{w}2.{sd}"
+                    a = p.get(nm, (0, 0, 0))
+                    p[nm] = (a[0] + 10 * k * anim.osc(t, 5, ph + 0.2 * i), a[1], a[2])
+                nudge(p, sd, (0.0, -0.02 * k * anim.osc(t, 2, ph), 0.015 * k * anim.osc(t, 2, ph + 0.25)))
         return p
 
     return anim.Clip("cast_ult", N, False, anim.drag(sample, N, {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
@@ -2568,22 +2651,59 @@ def clip_death():
 
 
 def clip_recall():
-    """cups both hands round the lantern and blows it out, a slow breath held; loops"""
-    N = 60
+    """recall (180 f = 6 s, seamless: closes on its first pose; over RIFT's 7 s the loop replays its opening reach):
+    she turns to the lantern and cups both hands round it (0.10), breathes over the glow three times, the hat dipping
+    as the head bows to it and the cupped hands drifting with each breath (0.10 -> 0.66), draws one long breath
+    (0.71), blows the lamp out (0.78: the head and chest drive forward, the hands part a little), holds the dark
+    (0.78 -> 0.90) and lowers her hands to the guard (1.0) (closing TUN-c4)"""
+    N = 180
+    g = guard()
     # (the lantern hangs from the hat at her right: the torso turns toward it and the head turns back, so the lamp
     # stays where the cupped hands are: the right hand round it from outside, the left from the front)
-    base = compose(stance_pose(), body(hips=(0, -6, 0), spine=(2, -5, 0), chest=(4, -6, 0), neck=(4, 8, 0), head=(6, 9, 6)),
-                   ik(wrist_abs("R", -0.62, 0.10, 1.36, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.30, -0.24, 1.36, (0.6, 0.4, -0.6)),
-                      orient("R", (0.45, -0.15, 0.88), (0.88, -0.10, -0.45)), orient("L", (-0.30, 0.45, 0.84), (-0.40, 0.78, -0.30))),
-                   fingers("R", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4),
-                   fingers("L", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4))
+    cup_f = dict(**fingers("R", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4),
+                 **fingers("L", a=(30, 40, 34), b=(34, 44, 36), t=(10, 14), sa=4, sb=4))
+    cup_ik = ik(wrist_abs("R", -0.62, 0.10, 1.36, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.30, -0.24, 1.36, (0.6, 0.4, -0.6)),
+                orient("R", (0.45, -0.15, 0.88), (0.88, -0.10, -0.45)), orient("L", (-0.30, 0.45, 0.84), (-0.40, 0.78, -0.30)))
+    cup = compose(stance_pose(), body(hips=(0, -6, 0), spine=(2, -5, 0), chest=(4, -6, 0), neck=(4, 8, 0), head=(6, 9, 6)),
+                  cup_ik, cup_f)
+    reach = compose(stance_pose(), body(hips=(0, -4, 0), spine=(1, -3, 0), chest=(2, -4, 0), neck=(2, 5, 0), head=(3, 6, 3)),
+                    ik(wrist_abs("R", -0.50, -0.06, 1.30, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.18, -0.30, 1.30, (0.6, 0.4, -0.6)),
+                       orient("R", (0.30, -0.30, 0.90), (0.88, -0.10, -0.45)), orient("L", (-0.30, 0.30, 0.90), (-0.40, 0.78, -0.30))),
+                    both(fingers, **HALF))
+    bow = compose(cup, body(spine=(3, -1, 0), chest=(5, -2, 0), neck=(6, 3, 0), head=(10, 4, 4), drop=0.012))
+    draw = compose(cup, body(spine=(-2, 0, 0), chest=(-5, 0, 0), neck=(-3, 0, 0), head=(-6, -2, 0), drop=-0.005))
+    blow = compose(cup, body(spine=(4, -2, 0), chest=(8, -3, 0), neck=(8, 4, 0), head=(14, 6, 6), fwd=0.03, drop=0.015),
+                   ik(wrist_abs("R", -0.66, 0.12, 1.33, (-0.9, 0.3, -0.4)), wrist_abs("L", -0.26, -0.30, 1.33, (0.6, 0.4, -0.6))),
+                   both(fingers, a=(18, 24, 22), b=(22, 28, 24), t=(6, 10)))
+    dark = compose(blow, body(chest=(-3, 0, 0), head=(-5, 0, 0), drop=-0.006))
+    A = {k: absify(v) for k, v in dict(g=g, reach=reach, cup=cup, bow=bow, draw=draw, blow=blow, dark=dark).items()}
+    keys = [(0.0, A["g"], "linear"), (0.05, A["reach"], "inout"), (0.10, A["cup"], "inout"),
+            (0.66, A["cup"], "linear"), (0.71, A["draw"], "inout"), (0.78, A["blow"], "out"), (0.81, A["blow"], "linear"),
+            (0.90, A["dark"], "inout"), (0.95, anim.lerp_pose(A["dark"], A["g"], 0.6), "inout"), (1.0, A["g"], "inout")]
+    fn = anim.keyed(keys)
 
     def sample(t):
-        b = anim.osc(t, 2)
-        p = compose(base, body(chest=(1.4 * b, 0, 0), head=(-1.0 * b, 0, 0), neck=(1.0 * anim.osc(t, 1, 0.2), 0, 0)))
+        p = fn(t)
+        if 0.10 < t < 0.66:
+            # three slow breaths over the glow: on each the head bows to the lamp (the hat dips), the chest rises
+            # and the cupped hands close in and drift with it
+            u = (t - 0.10) / 0.56
+            env = math.sin(math.pi * min(1.0, u * 4.0)) if u < 0.125 else (math.sin(math.pi * (1.0 - u) * 4.0) if u > 0.875 else 1.0)
+            b = 0.5 - 0.5 * math.cos(2 * math.pi * 3 * u)
+            p = anim.add(p, P_(spine=(3 * b * env, 0, 0), chest=(-3 * b * env + 4 * (1 - b) * env, 0, 0),
+                               neck=(5 * b * env, 0, 0), head=(9 * b * env, 0, 3 * b * env)))
+            hl = p.get("hips_loc", (0.0, 0.0, 0.0))
+            p["hips_loc"] = (hl[0] - 0.012 * b * env, hl[1], hl[2] - 0.010 * b * env)
+            for sd, sx in (("R", -1.0), ("L", 1.0)):
+                nudge(p, sd, (0.020 * sx * b * env, -0.015 * b * env, 0.035 * b * env))
+            for sd in "LR":
+                for g_ in "ab":
+                    nm = f"x_f{g_}2.{sd}"
+                    a = p.get(nm, (0, 0, 0))
+                    p[nm] = (a[0] + 6 * env * anim.osc(t, 9, 0.2 if sd == "L" else 0.0), a[1], a[2])
         return p
 
-    return anim.Clip("recall", N, True, sample)
+    return anim.Clip("recall", N, True, anim.drag(sample, N, {"head": 2.0, "neck": 1.0}, loop=True))
 
 
 def clip_idle_lobby():
@@ -2723,7 +2843,11 @@ def clip_channel():
 
     def sample(t):
         b = anim.osc(t, 2)
-        p = compose(base, body(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
+        s_ = anim.osc(t, 1, 0.15)
+        # (closing CW6: the breath and a slow weight shift carry the head ~5 cm, the hound's head bobbing with it)
+        p = compose(base, body(chest=(3.0 * b, 0, 0), spine=(1.0 * b, 0, 2.0 * s_), head=(-2.0 * b, 4.0 * s_, 2.0 * s_),
+                               hips=(0, 2.0 * s_, -2.0 * s_), side=0.022 * s_, drop=0.008 * (0.5 + 0.5 * b)),
+                    hound_hands(x=0.05, y=-0.34 - 0.02 * b, z=1.24 + 0.025 * anim.osc(t, 2, 0.2), jaw=4, ears=30))
         w = max(0.0, anim.osc(t, 2, 0.1))
         for sd, z in (("L", 1.0), ("R", -1.0)):
             a = p.get(f"x_fb1.{sd}", (0, 0, 0))
@@ -2794,6 +2918,8 @@ def clip_taunt():
 
 
 def clip_overrides(ctx) -> dict:
+    global SKEL
+    SKEL = anim.Skeleton(ctx.info.armature)
     return {"idle": clip_idle(), "run": clip_run(), "attack1": clip_attack1(), "attack2": clip_attack2(),
             "cast_a1": clip_cast_a1(), "cast_a2": clip_cast_a2(), "cast_a3": clip_cast_a3(), "cast_ult": clip_cast_ult(),
             "death": clip_death(), "recall": clip_recall(), "idle_lobby": clip_idle_lobby(), "victory": clip_victory(),

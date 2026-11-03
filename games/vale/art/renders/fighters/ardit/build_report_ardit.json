@@ -190,14 +190,14 @@
   },
   "uv_coverage": 0.602,
   "bake": {
-    "base": 10.66,
-    "rough_metal": 7.09,
-    "normal": 7.37,
-    "ao": 12.43,
+    "base": 9.23,
+    "rough_metal": 6.32,
+    "normal": 4.05,
+    "ao": 3.92,
     "normal_fixed_px": 117970,
-    "projection": 103.4,
-    "pack_save": 104.12,
-    "total": 142.2
+    "projection": 78.53,
+    "pack_save": 78.83,
+    "total": 103.11
   },
   "tris": 20589,
   "mesh_top_m": 2.476,
@@ -306,15 +306,15 @@
   "optimize": {
     "ok": true,
     "before": 2998252,
-    "after": 1177932,
+    "after": 1176716,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 1177932,
+  "glb_bytes": 1176716,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1150 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1149 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: ardit_base 2048x2048 232K, ardit_normal 512x512 36K, ardit_orm 512x512 54K",
       "  skinned meshes: ardit(17147v), ardit_accent(302v)",
       "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
@@ -333,10 +333,10 @@
       "turntable": "art/renders/fighters/ardit/turntable.png"
     },
     "seconds": {
-      "splash": 249.39,
-      "portrait": 74.9,
-      "icon": 6.52,
-      "turntable": 52.44
+      "splash": 93.47,
+      "portrait": 21.58,
+      "icon": 5.25,
+      "turntable": 7.34
     }
   },
   "three_qa": {
@@ -368,26 +368,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ardit/three_ardit.png",
-    "seconds": 139.8,
+    "seconds": 11.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.13,
-      "model": 4.67,
-      "lows_bind": 4.92,
-      "uv": 4.15,
-      "bake": 142.21,
-      "clips": 1.15,
-      "export": 3.39,
-      "optimize": 1.34,
-      "load_test": 0.32,
-      "render": 383.53,
-      "three_qa": 140.81,
-      "cache": 1.02
+      "rig": 0.01,
+      "materials": 0.39,
+      "model": 8.83,
+      "lows_bind": 12.71,
+      "uv": 7.27,
+      "bake": 103.12,
+      "clips": 0.66,
+      "export": 2.38,
+      "optimize": 1.28,
+      "load_test": 0.26,
+      "render": 127.83,
+      "three_qa": 11.8,
+      "cache": 0.16
     },
-    "total_s": 687.69
+    "total_s": 276.9
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3
