@@ -27,7 +27,7 @@
     {"sku":"sku_odrum_noon_fair","kind":"skin","ref":"odrum_noon_fair","price":{"currency":"candles","amount":600}},
     {"sku":"sku_odrum_shadeprint","kind":"skin","ref":"odrum_shadeprint","price":{"currency":"candles","amount":1500}},
     {"sku":"sku_rishal_chalkline","kind":"skin","ref":"rishal_chalkline","price":{"currency":"candles","amount":600}},
-    {"sku":"sku_rishal_lamplit","kind":"skin","ref":"rishal_lamplit","price":{"currency":"candles","amount":600}},
+    {"sku":"sku_rishal_lamplit","kind":"skin","ref":"rishal_lamplit","price":{"currency":"candles","amount":1500}},
     {"sku":"sku_sukri_stillwater","kind":"skin","ref":"sukri_stillwater","price":{"currency":"candles","amount":600}},
     {"sku":"sku_sukri_shadeprint","kind":"skin","ref":"sukri_shadeprint","price":{"currency":"candles","amount":1500}},
     {"sku":"sku_tunlan_noon_fair","kind":"skin","ref":"tunlan_noon_fair","price":{"currency":"candles","amount":600}},
