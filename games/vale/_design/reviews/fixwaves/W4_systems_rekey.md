@@ -96,6 +96,22 @@ Measured in `fw_W4_soak_g7_final` (bot soak, 40 RIFT games); see the G7 status i
 
 ---
 
+## 8. The Quick queue, Hourcleaver and the boons (closing review CW3, added 2026-11-03)
+
+The closing originality audit found three rows outside the gate (`_design/reviews/closing/originality.json` C1, m1, m2). They fall under the same ruling 4 and the same probe. `node _harness/probe_sim_rekey.ts`: **40 passed, 0 failed**, now with 76 headline numbers (13 new), none within 10 %.
+
+| | Reads as | Before | After (VALE) | Closest gap |
+|---|---|---|---|---|
+| Quick RIFT start (`rift_quick`) | Swiftplay: pre-pick, level 3 with 1,400 gold | Level 3 with 1,250 Gleam, Gleam and XP ×1.15 (level 0 %, Gleam −11 %) | **Everyone starts at the first hour:** level 1 with RIFT's 480 Gleam. The speed comes from the dial being wound fast: Quick's own shorter level dial (each step 75 % of RIFT's, XP ×1), Gleam from the first bell (`passiveGoldStart` 0), waves from 0:20 every 25 s, and the Dawn Seal lifting at 5:00 instead of 7:00. The pre-pick stays (a genre convention, the reviewer's note). | level −67 % · Gleam −66 % · rule (no level-3 lump) |
+| Hourcleaver | Sterak's Gage: a low-health shield on bonus health, with tenacity | Below 35 %: shield 100 + 35 % bonus health and 30 % tenacity, 60 s | **Split Hour:** an ability hit on an enemy fighter cleaves the hour: 20 + 30 % bonus attack physical damage within 3 m of it, and a 40 + 15 % bonus-health shield for 2.5 s, once every 10 s. No low-health trigger, no tenacity. | price −13 % · health −50 % · rule |
+| Second Shadow (boon) | low-health shield runes | unchanged: below 35 %, 50 + 14/level for 3 s, 75 s | Now the only low-health shield in the game (the probe fails a finished item that carries one). | threshold +17 % · cooldown +25 % |
+| Sunstring | Blade of the Ruined King: % current-health on-hit with life steal | unchanged | Gated: 2.5 % current health, 5 % life steal, 24 attack, 2,700 Gleam. | price −16 % · on-hit −58 % |
+| Nurrow's Snuff on a sleeper | the waking hit's bonus damage (Lillia, Zoe) | +35–105 magic damage, 1.6–2.4 s silence, 70 % refund | **No extra damage**: the longer silence and the refund stay, so ROSTER §5's "no wake bonus" holds. | rule |
+
+Quick's pace is unchanged (bot soak, 10 seeds × adept and veteran, RIFT with Quick's rules): adept median **20.2** min against 21.3 before, veteran **18.9** against 18.9 (`_harness/_reports/fw_W4_soak_CW3s_quick_new.txt` vs `fw_W4_soak_CW3s_quick_old.txt`).
+
+---
+
 ## Match effect (bot soak, same seeds as the G1 baseline)
 
 `node _harness/probe_sim_bot_soak.ts --full --seeds 10 --diffs adept,veteran --suites rift,bridge --jobs 3 --label rekey3`

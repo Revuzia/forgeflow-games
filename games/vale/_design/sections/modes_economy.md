@@ -89,16 +89,16 @@ Ability ranks are the same everywhere: a basic ability caps at rank 5, and the u
 | `custom` | Custom game | any (host picks) · custom | the mode's | 1 per team | 20/20/15; BRIDGE Lot as `bridge_standard` | host sets per seat | 10 | 1 |
 | `practice` | Practice | rift · practice | preset or solo blind | 0 | —/30/5 | none | 1 | 1 |
 
-**Quick, the faster queue** *(r01 §2.5, the reference's pre-pick fast queue, is the calibration)*:
+**Quick, the faster queue** *(r01 §2.5 measured the reference's pre-pick fast queue; it is a gauge for pace only, and since the CW3 re-key of 2026-11-03 (closing originality C1) none of its rules is ours)*:
 
-- *Pick.* You choose your role and fighter before you queue, so there is no draft and no dodge.
-- *Start.* You start at level 3 with 1,250 Gleam (the reference uses level 3 and 1,400).
-- *Economy.* Passive income is 3.6/s (W4 G7; was 2.6), and gold and XP are ×1.15.
+- *Pick.* You choose your role and fighter before you queue, so there is no draft and no dodge (a genre convention since 2015's hero-brawler quick match).
+- *Start: the first hour.* Everyone starts where RIFT starts: level 1 with 480 Gleam. There is no level lump (the old level 3 with 1,250 Gleam sat on the reference's level 3 with 1,400; `_harness/probe_sim_rekey.ts` now gates both numbers and fails a level-3 start).
+- *The dial wound fast.* Quick has its own shorter level dial: each step costs 75 % of RIFT's (180, 240, 300 … 1,140) with XP ×1, Gleam flows from the first bell (`passiveGoldStart` 0, RIFT 0:30) at 3.6/s (W4 G7; was 2.6) with Gleam ×1.15, and the Dawn Seal on the outer Needles lifts at 5:00 instead of 7:00, so the first sieges come sooner.
 - *Waves.* The first wave comes at 0:20, then every 25 s. Wicks upgrade every 75 s, and Brightwicks start at 11:00.
 - *Logistics.* Recall takes 5 s. Respawns are 5 s + 2/level, max 38, ×1.2 after 16:00.
 - *Ending.* Surrender opens at 9:00. Sudden death comes at 23:00, with a gentler ×1.3 respawn multiplier; like RIFT it keeps structure protection and brings the Gorge Wind (inherited from the mode's rules).
 
-The reference moved its sudden death to about 25:00 and caps games at about 36 min, a shape marked [conflicting] in r01. Ours lands matches at about 18 min, under r01 §6a.3's browser target of 15–25 min.
+Ours lands matches at about 19–20 min, inside r01 §6a.3's browser target of 15–25 min. Measured with the bot soak on RIFT with Quick's rules (10 seeds × adept and veteran): adept median 20.2 min, veteran 18.9, the same pace as the old level-3 start (21.3 / 18.9; `_harness/_reports/fw_W4_soak_CW3s_quick_new.txt` and `_quick_old.txt`).
 
 **Grants** are in Candles, the only `earnedOnly` currency. The table is in §8.
 

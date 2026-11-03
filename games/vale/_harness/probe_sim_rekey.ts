@@ -2,8 +2,10 @@
 // (built in memory from content/) and the real maps. Before/after table and owner sign-off:
 // _design/reviews/fixwaves/W4_systems_rekey.md.
 //   1. the gauge: no headline number of an Hour spell, starter, potion, boots, ward, camp buff, the epic buff, the
-//      BRIDGE start or the economy and finished line (block 7: passive Gleam, Wick bounties, the Gloam/Noonlit price
-//      band, Lampblack, Quarry Pick) within 10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets)
+//      BRIDGE start, the Quick RIFT start (CW3 C1), the economy and finished line (block 7: passive Gleam, Wick bounties,
+//      the Gloam/Noonlit price band, Lampblack, Quarry Pick; CW3 m2: Hourcleaver, Sunstring, the Second Shadow boon) within
+//      10 % of its reference-genre counterpart (LoL used ONLY as a gauge: numbers, never assets); Quick has no level-3
+//      start and no finished item carries a low-health shield
 //   2. rules that no longer map one-to-one, exercised in the sim:
 //      · default spell pair is not blink + heal; Glint Step leaves its shadow behind as a slowing patch
 //      · starters fold into the first Gloam core (foldsInto) — the starter grows into the role's first core
@@ -72,6 +74,9 @@ const glassAmt = (buffDef('clearglass').passives[0].triggers[0].effects[0] as Ex
 const bridge = mode('bridge').rules;
 const finished = catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex');
 const lampblack = catalog.items.filter((i) => i.uniqueGroup === 'lampblack');
+const quick = queue('rift_quick').rules;
+const shadowLow = catalog.setup.boons.find((b) => b.id === 'second_shadow')!.triggers.find((t) => t.on === 'lowHp')!;
+const shadowAmt = firstOp(shadowLow.effects, 'shield')!.amount as { base: number; level: number };
 const ROWS: Row[] = [
   { sys: 'Glint Step ~ Flash', what: 'distance m', vale: firstOp(glint.effects, 'blink')!.distance, lol: [4] },
   { sys: 'Glint Step ~ Flash', what: 'cooldown s', vale: cd(glint.cooldown), lol: [300] },
@@ -126,6 +131,21 @@ const ROWS: Row[] = [
   { sys: 'BRIDGE ~ ARAM', what: 'start level', vale: bridge.startLevel, lol: [3] },
   { sys: 'BRIDGE ~ ARAM', what: 'start Gleam', vale: bridge.startGold, lol: [1400] },
   { sys: 'BRIDGE Lot ~ ARAM bench', what: 'redraws per seat', vale: queue('bridge_standard').bench!.rerolls, lol: [1, 2] },
+  // CW3 (originality C1, 2026-11-03): the Quick queue's start state against the reference's pre-pick fast queue (level 3, 1,400)
+  { sys: 'quick RIFT ~ Swiftplay', what: 'start level', vale: quick.startLevel ?? mode('rift').rules.startLevel, lol: [3] },
+  { sys: 'quick RIFT ~ Swiftplay', what: 'start Gleam', vale: quick.startGold ?? mode('rift').rules.startGold, lol: [1400] },
+  // CW3 (originality m2, 2026-11-03): the finished items and boons that sit near a reference archetype
+  { sys: 'Hourcleaver ~ Sterak\'s Gage', what: 'price', vale: item('hourcleaver').cost, lol: [3100, 3200] },
+  { sys: 'Hourcleaver ~ Sterak\'s Gage', what: 'health', vale: item('hourcleaver').stats.hp ?? 0, lol: [400] },
+  { sys: 'Sunstring ~ Blade of the Ruined King', what: 'price', vale: item('sunstring').cost, lol: [3200, 3300] },
+  { sys: 'Sunstring ~ Blade of the Ruined King', what: 'attack', vale: item('sunstring').stats.ad ?? 0, lol: [40] },
+  { sys: 'Sunstring ~ Blade of the Ruined King', what: 'attack speed', vale: item('sunstring').stats.attackSpeed ?? 0, lol: [0.25] },
+  { sys: 'Sunstring ~ Blade of the Ruined King', what: 'life steal', vale: item('sunstring').stats.lifesteal ?? 0, lol: [0.08, 0.1, 0.12] },
+  { sys: 'Sunstring ~ Blade of the Ruined King', what: 'on-hit share of current health', vale: (firstOp(item('sunstring').passives[0].triggers[0].effects, 'damage')!.amount as { targetCurrentHp: number }).targetCurrentHp, lol: [0.06, 0.08, 0.09, 0.1] },
+  { sys: 'Second Shadow ~ low-health shield runes', what: 'health threshold', vale: (shadowLow.cond as { pct: number }).pct, lol: [0.3] },
+  { sys: 'Second Shadow ~ low-health shield runes', what: 'L1 shield', vale: shadowAmt.base + shadowAmt.level, lol: [40] },
+  { sys: 'Second Shadow ~ low-health shield runes', what: 'L18 shield', vale: shadowAmt.base + 18 * shadowAmt.level, lol: [120] },
+  { sys: 'Second Shadow ~ low-health shield runes', what: 'cooldown s', vale: shadowLow.cooldown ?? 0, lol: [60] },
   // block 7 (gameplay G7, economy and the finished line): under the same gate by owner ruling 4
   { sys: 'RIFT passive Gleam ~ passive gold', what: 'per s', vale: mode('rift').rules.passiveGoldPerSec, lol: [2.04] },
   { sys: 'quick RIFT passive Gleam ~ passive gold', what: 'per s', vale: queue('rift_quick').rules.passiveGoldPerSec ?? mode('rift').rules.passiveGoldPerSec, lol: [2.04] },
@@ -146,6 +166,12 @@ section('gauge: every headline number at least 10 % from its counterpart', () =>
   }
   console.log(lines.map((l) => `  ${l}`).join('\n'));
   check(`${ROWS.length} headline numbers, none within 10 % of the counterpart`, close.length === 0, close);
+  // CW3 (originality C1): no lump start on Quick: it begins where RIFT begins, the speed comes from the dial's tempo
+  check(`quick RIFT has no level-3 start (level ${quick.startLevel ?? mode('rift').rules.startLevel})`, (quick.startLevel ?? mode('rift').rules.startLevel) < 3);
+  // CW3 (originality m2): the low-health shield is one boon's (Second Shadow), never a finished item's too
+  const lowShield = (trs: readonly { on: string; effects: readonly EffectT[] }[]): boolean => trs.some((t) => t.on === 'lowHp' && !!firstOp(t.effects, 'shield'));
+  const twins = finished.filter((i) => i.passives.some((p) => lowShield(p.triggers))).map((i) => i.id);
+  check('no finished item carries a low-health shield (Second Shadow keeps that rule alone)', twins.length === 0, twins);
 });
 
 // ── 2. rules in the sim ─────────────────────────────────────────────────────────────────────────
