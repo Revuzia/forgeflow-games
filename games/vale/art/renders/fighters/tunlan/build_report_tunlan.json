@@ -47,14 +47,14 @@
   },
   "uv_coverage": 0.628,
   "bake": {
-    "base": 3.66,
-    "rough_metal": 2.74,
-    "normal": 2.35,
-    "ao": 2.5,
+    "base": 11.54,
+    "rough_metal": 7.18,
+    "normal": 4.37,
+    "ao": 6.73,
     "normal_fixed_px": 41278,
-    "projection": 55.49,
-    "pack_save": 55.89,
-    "total": 67.32
+    "projection": 102.91,
+    "pack_save": 103.24,
+    "total": 134.19
   },
   "tris": 21224,
   "mesh_top_m": 2.05,
@@ -163,13 +163,13 @@
   "optimize": {
     "ok": true,
     "before": 3068664,
-    "after": 1218448
+    "after": 1217364
   },
-  "glb_bytes": 1218448,
+  "glb_bytes": 1217364,
   "three_load_test": {
     "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan.glb (1190 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan.glb (1189 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: tunlan_base 2048x2048 156K, tunlan_normal 512x512 36K, tunlan_orm 512x512 59K",
       "  skinned meshes: tunlan(17504v), tunlan_accent(155v)",
       "  bones: 45 (root hips spine chest neck head x_hat x_lantern x_lamp shoulderL upper_armL forearmL handL propL x_fa1L x_fa2L x_fa3L x_gesture_l x_fb1L x_fb2L x_fb3L x_ft1L x_ft2L shoulderR upper_armR forearmR handR propR x_fa1R x_fa2R x_fa3R x_gesture_r x_fb1R x_fb2R x_fb3R x_ft1R x_ft2R thighL shinL footL toeL thighR shinR footR toeR)",
@@ -178,7 +178,7 @@
       "  tris: 21224; bind-pose bounds (three units, Y up): 1.10 x 2.05 x 1.10; facing (0.00, 1.00); head bone y 1.57; runRefSpeed 3.35",
       "  run: 16 f, planted samples 2, max foot-speed error 0.6%",
       "[three] FAIL (1)",
-      "  - GLB is 1190 KiB > budget 1172 KiB"
+      "  - GLB is 1189 KiB > budget 1172 KiB"
     ]
   },
   "three_qa": {
@@ -210,25 +210,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/tunlan/three_tunlan.png",
-    "seconds": 35,
+    "seconds": 18.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.24,
-      "model": 5.84,
-      "lows_bind": 3.47,
-      "uv": 6.92,
-      "bake": 68.42,
-      "clips": 1.6,
-      "export": 15.54,
-      "optimize": 3.48,
-      "load_test": 1.46,
-      "three_qa": 36.13,
-      "cache": 0.38
+      "rig": 0.03,
+      "materials": 0.88,
+      "model": 12.04,
+      "lows_bind": 14.77,
+      "uv": 37.8,
+      "bake": 134.49,
+      "clips": 0.5,
+      "export": 3.41,
+      "optimize": 1.1,
+      "load_test": 0.3,
+      "three_qa": 19.19,
+      "cache": 0.17
     },
-    "total_s": 143.75
+    "total_s": 224.84
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
