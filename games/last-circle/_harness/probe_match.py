@@ -32,6 +32,8 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --sweep (W9 R1B): the episode sweep, 3 maps x seeds 1-6 (18 runs, no paths): the worst bot's stuck episodes <= 4 in every run (the R2 movers bar)
   --swimcheck (W9 R1B): the scripted swimmer trap (natural swim traps: 0 in the 18-run sweep, base and lane alike) - see SWIMCHECK_JS
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
+  --pencheck (W9 R1B pass 3): ONLY the scripted Volcano Rim pen (isla_viva seed 5, 3 setups; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
+  --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
@@ -57,12 +59,14 @@ PLANTS = {
     # (W9 R1B) the loop breaker's trap test exempts swimmers again (the pre-W9 term): swim-trap MUST FAIL (deepwood seed 1, bot s4)
     "swim-exempt": [("if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {",
                      "if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {")],
-    # (W9 R1B pass 1b) the two pen fixes off: requestPath's per-bot drop limit + steep-face run (PER_BOT_DROP) and edgeGuard's route-corner walk
-    # (EDGE_TURN) - the sweep MUST FAIL (isla_viva seed 5: s19 penned at the Volcano Rim face (-71, -78), 5 stuck episodes)
-    # (W9 R1B pass 2) NO LONGER DISCRIMINATES at this HEAD (crate back to 2 bigs, far-big seeking off): sweep PASS 13/0, isla s5 worst s39 1.
-    # Tried as replacement controls, both PASS too (not registered): + WANT_BIG on (isla s5 s19 4 episodes, bar 4); PER_BOT_DROP off + the
-    # window planner's step limit raised to 14 m (identical episode list to no-pen-fix). The sweep row has no failing control - reported open.
-    "no-pen-fix": [("const PER_BOT_DROP = true;", "const PER_BOT_DROP = false;"), ("const EDGE_TURN = true;", "const EDGE_TURN = false;")],
+    # (W9 R1B pass 3) the pen fix off: edgeGuard's route-corner walk (EDGE_TURN) - the scripted pen (--pencheck) MUST FAIL. (Pass 1b's second
+    # half, requestPath's per-bot drop limit + steep-face run (PER_BOT_DROP), is removed from bots.js: the scripted pen and the sweep read the
+    # same with it off as on.) On the natural sweep this plant no longer discriminates (pass 2: PASS 13/0) - the sweep row's control is stall-surge.
+    "no-pen-fix": [("const EDGE_TURN = true;", "const EDGE_TURN = false;")],
+    # (W9 R1B pass 3) a MEASURE control for the sweep row (worst bot stuck episodes <= 4): every bot on the ground in a moving state is held still
+    # (no legs) for 3.6 s of every 25 s of match time - >= 3 s windows inside 0.4 m, ~30 per bot per match. The sweep row MUST FAIL.
+    "stall-surge": [("const wyE = W.map.waterY;          // (R1, tierprof kb)",
+                     "const wyE = W.map.waterY; if (MOVING_STATES[b.state] && (W.t % 25) < 3.6) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }          // (R1, tierprof kb)")],
 }
 GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
 
@@ -142,6 +146,87 @@ def swimcheck(s, v):
     v.check(name, ok, {"spots": setup_ok, "found": r["found"]}, "tripped while penned; 0 swimming stuck episodes after")
 
 
+# (W9 R1B pass 3) --pencheck: the Volcano Rim pen, SCRIPTED (the natural reproducer - isla_viva seed 5, s19 held 3-5 times at (-70.7, -77.9) - is gone
+# from the sweep since pass 2). Isla Viva seed 5 geometry: the village terrace top at y 26.7 runs west to x -72, where a face falls to 18.4 m by x -80
+# (8.4 m: more than a calm bot walks off, CALM_DROP_H 6.3). The town grid's route from the terrace to the north (a big shield at PEN_GOAL, 33 m
+# away along the top) runs WEST to the corner (-71.6, -77.6), 1.5-2 m short of the face, then north along its top. edgeGuard's look-ahead sees the face
+# past the corner on every look; before EDGE_TURN it held the bot there for good. One quick match per setup (PEN_SETUPS: start x, z, hp): after the
+# landings (PEN_PRE_S) a free bot is put on the terrace with that hp, shield 50, an AR, no shield item, every other actor kept > 260 m away (no sight,
+# no shot heard), and the big shield is spawned at PEN_GOAL (its own shield scan sends it there in LOOT). Judged per setup, from the placement until
+# it reaches the goal (2.5 m) or PEN_T s pass: it REACHES the goal in PEN_T s with 0 stuck episodes on the way (probe_match.js's definition: a 3 s
+# window, 0.5 s samples, net < 0.4 m, every sample a MOVING state). SETUP (else could-not-judge): the terrace and face are where they were (start
+# terrain 26-27.5 m, face foot >= 7 m lower) and the bot's route ran through the corner (a waypoint within 1.5 m of it). --plant no-pen-fix: FAILS.
+# Measured (fix3, 2026-11-02): lane 3/3 reach in 8-9.5 s, 0 episodes - PASS; --plant no-pen-fix: setups 1 and 3 never reach (2 episodes each, held at the
+# corner), setup 2 reaches in 7.5 s - FAIL. (PER_BOT_DROP off read the same as the lane on setups 1 and 3 and on 6 goal-below-the-face variants: removed.)
+PEN_MAP, PEN_SEED, PEN_PRE_S, PEN_T = "isla_viva", 5, 20.0, 30.0
+PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)
+PEN_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))
+PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T]) => {
+  const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM, wy = M.waterY, H = (M.half || 760) - 30;
+  const cl = (v) => Math.max(-H, Math.min(H, v));
+  const geo = { start: +M.heightAt(sx, sz).toFixed(2), foot: +M.heightAt(fx, fz).toFixed(2), goal: +M.heightAt(gx, gz).toFixed(2) };
+  const b = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding).sort((p, q) => Math.hypot(p.pos.x - sx, p.pos.z - sz) - Math.hypot(q.pos.x - sx, q.pos.z - sz))[0];
+  if (!b || !b.brain) return { geo, error: 'no free bot' };
+  const put = (a, x, z, y) => { a.pos.set(x, y, z); a.vel.set(0, 0, 0); a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
+  const fence = () => { for (const o of W.actors) { if (o === b || !o.alive || o.gliding) continue; const dx = o.pos.x - b.pos.x, dz = o.pos.z - b.pos.z, d = Math.hypot(dx, dz);
+    if (d < 260) { const s = 265 / Math.max(0.1, d), nx = cl(b.pos.x + dx * s), nz = cl(b.pos.z + dz * s); put(o, nx, nz, Math.max(M.heightAt(nx, nz), wy) + 0.05); o.onGround = true; } } };
+  fence();
+  put(b, sx, sz, M.heightAt(sx, sz) + 0.05); b.onGround = true;
+  const sl = b.inventory.slots; for (let i = 0; i < sl.length; i++) sl[i] = null; for (const q in b.inventory.ammo) b.inventory.ammo[q] = 0;
+  sl[0] = { kind: 'weapon', id: 'ar', rarity: 1, mag: K.WEAPONS.ar.mag }; b.inventory.ammo.medium = 120; b.inventory.active = 0;
+  b.hp = hp; b.shield = 50; b.lastDamageT = -99;
+  { const bb = b.brain.bb; bb.target = null; bb.targetPos = null; bb.path = null; bb.pathGoal = null; bb.moveTo = null; bb.lootId = null; bb.shieldScanT = 0; bb.escUntil = -99; bb.trapLastT = -99; bb.nextPathT = 0; b.brain.nextThink = 0; }
+  W.netSpawnItem({ id: 'p23pen', data: { kind: 'consumable', id: 'big_shield', count: 1 }, x: gx, y: M.heightAt(gx, gz) + 0.15, z: gz });
+  const prev = W._tickHook;
+  W._tickHook = (w) => { if (prev) prev(w); fence(); };
+  const MOV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1 };
+  const t0 = W.t, ring = [], eps = [], states = {}, track = [];
+  let open = false, reachT = null, cornerD = 1e9, minD = 1e9;
+  for (let i = 0; i < T * 2 && reachT == null; i++) {
+    C.fastForward(0.5, 1 / 30);
+    if (!b.alive) break;
+    const bb = b.brain.bb, st = b.brain.state, d = Math.hypot(b.pos.x - gx, b.pos.z - gz);
+    states[st] = (states[st] || 0) + 1; if (d < minD) minD = d;
+    if (bb.path) for (let k = 0; k < bb.path.length && k < 4; k++) cornerD = Math.min(cornerD, Math.hypot(bb.path[k].x - cx, bb.path[k].z - cz));
+    track.push([+(W.t - t0).toFixed(1), +b.pos.x.toFixed(1), +b.pos.y.toFixed(1), +b.pos.z.toFixed(1), st]);
+    if (d < 2.5) { reachT = +(W.t - t0).toFixed(1); break; }
+    const mv = !!MOV[st] && !bb.chestId && !b.healing && !b.emoting;
+    ring.push({ x: b.pos.x, z: b.pos.z, mv }); if (ring.length > 7) ring.shift();
+    if (ring.length === 7 && ring.every((r) => r.mv) && Math.hypot(ring[6].x - ring[0].x, ring[6].z - ring[0].z) < 0.4) {
+      if (!open) { open = true; const mt = bb.moveTo; eps.push({ t: +(W.t - t0).toFixed(1), x: +b.pos.x.toFixed(1), y: +b.pos.y.toFixed(1), z: +b.pos.z.toFixed(1), st,
+        goalD: mt ? +Math.hypot(mt.x - b.pos.x, mt.z - b.pos.z).toFixed(1) : null }); }
+    } else open = false;
+  }
+  W._tickHook = prev;
+  return { geo, bot: b.id, hp, reachT, minD: +minD.toFixed(1), cornerD: +cornerD.toFixed(2), episodes: eps.length, eps, alive: b.alive, states,
+           end: [+b.pos.x.toFixed(1), +b.pos.y.toFixed(1), +b.pos.z.toFixed(1)], track: track.filter((_, i) => i % 4 === 0) };
+}"""
+
+
+def pencheck(s, v):
+    out = []
+    for (sx, sz, hp) in PEN_SETUPS:
+        st = s.start_match("quick", PEN_SEED, PEN_MAP, enter=True)
+        s.freeze_loop()
+        s.page.evaluate("(t) => window.__LC__.fastForward(t, 1 / 30)", PEN_PRE_S)
+        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, PEN_GOAL[0], PEN_GOAL[1], PEN_CORNER[0], PEN_CORNER[1], PEN_FACE_FOOT[0], PEN_FACE_FOOT[1], PEN_T])
+        r["start"], r["load"] = [sx, sz], st
+        out.append(r)
+        print("  pencheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
+            sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
+    v.data["pencheck"] = out
+    name = ("pen scripted (Volcano Rim, %s seed %d: an hp-limited calm bot on the terrace top, its goal %.0f m north along the top past a corner 1.5-2 m "
+            "short of an 8.4 m face, %d setups): every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (PEN_MAP, PEN_SEED, 33, len(PEN_SETUPS), PEN_T))
+    bad = [r for r in out if r.get("error") or not (26.0 <= r["geo"]["start"] <= 27.5 and r["geo"]["start"] - r["geo"]["foot"] >= 7.0) or r.get("cornerD", 1e9) > 1.5]
+    if bad:
+        v.cnj(name, "SETUP missed in %d of %d setups (geometry moved, no bot, or the route did not use the corner): %s" % (
+            len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "geo", "cornerD")} for r in bad]))
+        return
+    ok = all(r["reachT"] is not None and r["reachT"] <= PEN_T and r["episodes"] == 0 for r in out)
+    v.check(name, ok, [{k: r.get(k) for k in ("start", "hp", "bot", "reachT", "episodes", "eps", "cornerD", "minD", "end")} for r in out],
+            "reach <= %.0f s and 0 stuck episodes, every setup" % PEN_T)
+
+
 def pct(a, b):
     return round(100.0 * a / b, 1) if b else None
 
@@ -183,6 +268,7 @@ def main():
                     help="the run list is too small for the 'sniper kills in MOST matches' row (a share of matches: Wave 7's Savanna run has 2 distinct matches): that one row is information; every other row is judged as usual")
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     ap.add_argument("--swimcheck", action="store_true", help="W9 R1B: the scripted swimmer trap (see SWIMCHECK_JS); --plant swim-exempt must FAIL it")
+    ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: ONLY the scripted Volcano Rim pen (no match runs; see PENCHECK_JS); --plant no-pen-fix must FAIL it")
     ap.add_argument("--sweep", action="store_true", help="W9 R1B: the episode sweep (3 maps x seeds 1-6, --no-paths, --small-run); adds the worst <= %d row" % SWEEP_WORST_MAX)
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS), help="a planted fault served into bots.js (this gate must then FAIL); needs --disk / --rev")
     args = ap.parse_args()
@@ -206,6 +292,12 @@ def main():
                 v.data["plant"] = {"name": args.plant, "edits": p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant])}
             s.boot()
             s.freeze_loop()
+            if args.pencheck:                      # (W9 R1B pass 3) its own row: the scripted pen alone (no match runs, no paths)
+                pencheck(s, v)
+                d = s.diagnostics()
+                v.check("no page errors / window errors during the runs", not (d["pageErrors"] or d["windowErrors"]),
+                        {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
+                return
             for k, (seed, mp) in enumerate(runs):
                 t0 = time.time()
                 st = s.start_match("standard", seed, mp, enter=True)

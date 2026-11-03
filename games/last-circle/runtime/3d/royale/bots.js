@@ -1108,6 +1108,7 @@ function think(W, b) {
   // counted 11 big shields lying unclaimed inside the next circle: after the mid-game fights a bot had no big shield to refill past 50, and nothing
   // sent it for one unless its bar sat exactly at the mini cap. From WANT_BIG_T a calm, upgraded bot with no big shield in the bag and a bar under
   // 100 (not on a pressing rotation: it would walk away from the circle) wants one too (wantBig): the same scans, a big shield only (shieldGoal).
+  // PARKED PER OD-16 (known gap): WANT_BIG is false, so wantBig is always false here and the far scan keeps the pre-W9 mini-cap rule (see WANT_BIG).
   const wantBig = WANT_BIG && calm && upgraded && W.t >= WANT_BIG_T && a.shield < 100 && !shieldItem && !bb.rotPress && bigCount(a) === 0;
   bb.wantShield = (calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP())) || wantBig;
   if (!bb.wantShield) bb.shieldGo = null;
@@ -2888,9 +2889,9 @@ const NAV_NODES = NAV_CELLS * NAV_L;
 const NAV_STEP_UP = 0.55;                 // player.js STEP_UP
 const NAV_RAMP_EXTRA = 0.45;              // a ramp may rise faster than a step per 0.5 m sub-step
 const NAV_DROP_MAX = 6.0;
-let navDropLim = NAV_DROP_MAX;               // (W9 R1B) this search's drop limit: requestPath sets min(NAV_DROP_MAX, walkDrop(bot)) round its findPath ...
-let navDropRun = false;                      // ... and turns on the steep-face run test (navWalk); probes and the exit searches keep the per-step rule
-const NAV_STEEP = 0.9 / 0.8;                 // edgeGuard's STEEP_STEP per metre: a step falling more than this per metre is a flight, not a walk
+// (W9 R1B pass 3) the per-bot drop limit + steep-face run in requestPath's window planner (PER_BOT_DROP / navDropLim / navDropRun, pass 1b) is
+// REMOVED: it never changed a measured outcome. probe_match --pencheck (the scripted Volcano Rim pen, 3 setups) and the 18-run sweep read the same
+// with it off as on; the routes the pen is planned on there are town-grid routes, which it never touched. The pen fix is edgeGuard's corner rule (EDGE_TURN).
 const CALM_DROP_H = NAV_DROP_MAX + 0.3;     // (W9 R1B) a calm bot's walk-off limit: the planner's own drop limit + 0.3 m of sampling slack (walkDrop)
 const NAV_DROP_COST = 2.0;
 const NAV_LAYER_EPS = 1.0;
@@ -3081,7 +3082,7 @@ function navWalk(W) {
   const n = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dz * dz) / 0.5));
   let h = h0;
   let swim = h0 < W.map.waterY - 0.4;               // starting afloat
-  let drop = 0, wet = 0, run = 0;
+  let drop = 0, wet = 0;
   const stepM = Math.sqrt(dx * dx + dz * dz) / n;
   for (let k = 1; k <= n; k++) {
     const f = k / n, x = x0 + dx * f, z = z0 + dz * f;
@@ -3091,12 +3092,7 @@ function navWalk(W) {
     NF[4] = x; NF[5] = z; NF[6] = h + (swim ? NAV_SWIM_UP : NAV_STEP_UP);
     navSupport(W, ci);
     const s = NF[0];
-    if (h - s > navDropLim) return false;
-    // (W9 R1B) A BOT'S ROUTE (requestPath: navDropRun) is also refused a STEEP FACE that falls more than its drop limit in all: the 0.5 m steps each
-    // fall less than the limit, but the mover leaves the ground on any step steeper than edgeGuard's STEEP_STEP (~48 deg) and flies the whole face,
-    // and edgeGuard measures that run and holds the bot at its top (probe_match isla_viva seed 5: s19 at 17 hp routed down the 26.8 -> 18.4 m face
-    // west of (-71, -78) again and again, held at the lip each time - 5 stuck episodes)
-    if (navDropRun) { run = !navSwim && h - s > stepM * NAV_STEEP ? run + (h - s) : 0; if (run > navDropLim) return false; }
+    if (h - s > NAV_DROP_MAX) return false;
     if (navWall(ci)) return false;
     // (T-tick-actors B1) a DROP is walked off at the OLD feet height: a slab edge in
     // that band (the floor above a stair ramp) blocks the capsule before it falls
@@ -4030,7 +4026,6 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
-const PER_BOT_DROP = true;        // (W9 R1B) requestPath's per-bot drop limit; false = the planner's NAV_DROP_MAX for every bot (probe_match --plant no-bot-drop)
 let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck, 6 calm drop cap: W9)
 function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
@@ -4043,10 +4038,7 @@ function requestPath(W, b, tx, tz, ty, urgent) {
     nav.q--;
     nav.st.req[reqWhy]++;
   }
-  // (W9 R1B) THE BOT'S OWN DROP LIMIT in the window planner (navWalk): min(NAV_DROP_MAX, walkDrop) per step, and the same limit on a steep face's
-  // whole run - no route over a drop or a face its walk-off limit (edgeGuard) would then refuse at the lip (a pen: the planner routed it there again).
-  if (PER_BOT_DROP) { const lim = walkDrop(a); navDropLim = lim < NAV_DROP_MAX ? lim : NAV_DROP_MAX; navDropRun = true; }
-  try { bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty); } finally { navDropLim = NAV_DROP_MAX; navDropRun = false; }
+  bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
   bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
   bb.noRouteT = (!bb.path && !navMiss) ? W.t : -99;       // (Wave 7, round 2) a real "no way": a bot on a roof may walk off it (deckExitPath)
@@ -5423,7 +5415,7 @@ function edgeGuard(W, b) {
 }
 /** (W9 R1B) edgeGuard's corner rule: the bot is heading (wx, wz) for its path's next waypoint, on its own level, more than EDGE_TURN_M short of the
  *  face (faceD m ahead), and the route turns there (the next leg leaves this heading by more than 45 deg) - the face is not on the route. */
-const EDGE_TURN = true;           // false = every face in the look-ahead holds the bot, as before W9 (probe_match --plant no-edge-turn)
+const EDGE_TURN = true;           // false = every face in the look-ahead holds the bot, as before W9 (probe_match --pencheck --plant no-pen-fix: MUST FAIL)
 const EDGE_TURN_M = 1.6;          // the corner at least this short of the face: a walk's run-on past a waypoint it consumes 0.55 m early
 function routeTurnsBefore(b, wx, wz, faceD) {
   const P = b.bb.path, a = b.actor;
@@ -5553,6 +5545,9 @@ const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
 // (W9 R1B, OD-16) the reserve-big trigger (think: wantBig) and the far scan at any bar; WANT_BIG false = the pre-W9 rules.
 // (W9 R1B pass 2) OFF: with it on, p23_tierprof kb [ashgrid ultra] read 97-101 KB/frame (bar 85; off: 77) - the far walks put more bots in fights
 // inside the profiled window - and it bought no shield (botbatch 24 shield-600: on 12, off 25 vs bar 75). OD-16 parks the shield economy.
+// PARKED PER OD-16 (KNOWN GAP, owner 2026-11-02): WANT_BIG stays false. Every WANT_BIG branch (wantBig in think, the far scan at any bar,
+// claimFree / shieldClaims below) is parked code that does not run in this build; the shield-600 row stays registered and red. Do not turn it
+// on without re-running p23_tierprof kb [ashgrid ultra] and p23_botbatch.
 const WANT_BIG = false;
 const WANT_BIG_T = 420;           // from this match time (the batch measures from 600 s: a reserve picked up at 420-600 s refills the bar after the 600 s fights)
 function farShield(W, a) {
