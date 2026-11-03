@@ -21,7 +21,7 @@
 //             The everyday grievances (tribute, distance, tongue, outgrown, friction) make a town restless up to 0.45
 //             together, no further: it breaks away over a wrong done to it on top (neglect, hunger, raids, a feud), so a
 //             capital that stands by its daughters in hard times keeps them (LIVING.md §5.6)
-//   secession grievance > 0.6: a daily chance rising to 0.02 by 0.72, carried by the independence party's strength
+//   secession grievance > 0.6: a daily chance rising to 0.05 by 0.72, carried by the independence party's strength
 //             (0.5 .. 1: the hawks and the seekers of the new) — a bitter one (most of it raids or unrelieved famine, or grievance
 //             > 0.85 with a strong war party) is a revolt and war (war.ts secede / declareWar); otherwise a peaceful parting,
 //             sealed by a pact to keep the roads open between them unless a feud was at its root — or refused: a capital
@@ -112,7 +112,9 @@ export const POLITICS = {
   raidDays: 2,
   /** a trade caravan or a gift between them (they come often: a little each) */
   visit: 0.0005,
-  threshold: 0.6, maxP: 0.02, revolt: 0.85,
+  /** (sim-fix-r2 #5: maxP 0.02 -> 0.05 — a year is ~10 days, so 0.02 a day was ~13 % a year even at a grievance of 0.8,
+   * and a daughter who had every cause to go stayed for a decade: the kin fixture met secession on 3 seeds of 8) */
+  threshold: 0.6, maxP: 0.05, revolt: 0.85,
   /** (second pass) a disaster on the town, or a day of calamity deaths, that the capital with food to spare did not
    * relieve within judgeDays: the town buried its dead alone. calamityDeaths a day (fire, flood, storm, cold, heat, the
    * god's blows), or epidemicDeaths of sickness in a day, make a hard time without a disaster seen on the town */
@@ -121,6 +123,12 @@ export const POLITICS = {
    * over fields — make a town restless, up to this much; it breaks away over a wrong done to it on top: hunger or a
    * disaster left unrelieved, raids, a feud (so a capital that stands by its daughters in hard times keeps them) */
   ambientCap: 0.45,
+  /** (sim-fix-r2 #5) ...for a young daughter. A daughter a generation on its own ground — its own leaders, its own fields,
+   * a tithe carried a long way for decades — may part over the everyday alone, as colonies and outlying villages always
+   * have: the cap rises from ambientCap at ambientFrom years after its founding to ambientOld at ambientFull years (above
+   * the threshold, below a revolt: a peaceful parting, unless the capital refuses it). Before this a world left alone
+   * never had politics: every daughter sat at 0.45 for good (acceptance §5.1: 0 secessions on 8 seeds over 50 years). */
+  ambientOld: 0.7, ambientFrom: 4, ambientFull: 12,
   /** a capital whose daughter parts in peace may not let it go (few rulers ever have): war if it is the stronger (× 1.2),
    * with the chance 0.35 + (its chief's aggression − 0.3) × 1.2 + hawks − ½ doves, 0 .. 0.8 (a calm chief with a
    * peace party lets it go) */
@@ -179,9 +187,18 @@ export function kinOpinion(x: PCtx, st: Settlement, o: Settlement): number {
   return Math.max(-1, Math.min(1, v));
 }
 
-function addG(h: HistState, why: string, v: number): void {
-  // the everyday makes a town restless, no more: past POLITICS.ambientCap only a wrong done to it raises the grievance
-  if (v > 0 && AMBIENT.has(why)) v = Math.min(v, Math.max(0, POLITICS.ambientCap - h.grievance));
+/** the everyday's cap for daughter d: POLITICS.ambientCap while young, rising to ambientOld as it comes of age */
+export function ambientCapOf(x: PCtx, d: Settlement): number {
+  const G = POLITICS;
+  if (d.founded < 0) return G.ambientCap;
+  const age = (x.tick - d.founded) / x.year;
+  const t = Math.max(0, Math.min(1, (age - G.ambientFrom) / (G.ambientFull - G.ambientFrom)));
+  return G.ambientCap + (G.ambientOld - G.ambientCap) * t;
+}
+
+function addG(h: HistState, why: string, v: number, amb = POLITICS.ambientCap): void {
+  // the everyday makes a town restless, no more: past its ambient cap only a wrong done to it raises the grievance
+  if (v > 0 && AMBIENT.has(why)) v = Math.min(v, Math.max(0, amb - h.grievance));
   if (v === 0) return;
   h.grievance = r6(Math.max(0, Math.min(1, h.grievance + v)));
   if (v > 0) h.why[why] = r6((h.why[why] ?? 0) + v);
@@ -232,10 +249,11 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   const G = POLITICS;
   decayAll(h);
   const P = Math.max(1, popOf(x, d)), Pc = Math.max(1, popOf(x, cap));
+  const amb = ambientCapOf(x, d);
   // tribute: a tithe each season, carried to the capital (or taken by its men when no bearers can go)
   if (x.tick - h.paid >= G.tributeDays * x.day) {
     h.paid = x.tick;
-    if (payTithe(x, d, cap, P)) addG(h, 'tribute', G.tribute);
+    if (payTithe(x, d, cap, P)) addG(h, 'tribute', G.tribute, amb);
   }
   // hard times — a famine (under a day of food a head, or a death of hunger), or a disaster on the town (a disaster
   // over it today, or a day of calamity deaths, or an epidemic): did the capital, with food to spare, relieve them?
@@ -272,7 +290,7 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   }
   if (!lean && !struck && h.famine >= 0 && h.judged && foodDays(x, d) >= P * G.leanDays * 1.5) h.famine = -1;
   // a daughter grown as large as its mother
-  if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(3, (P / Pc - 0.8) / 0.4));
+  if (P >= Pc * 0.9) addG(h, 'outgrown', G.outgrown * Math.min(3, (P / Pc - 0.8) / 0.4), amb);
   // the leaders: a feud between them, or a rival party leading the daughter (weighed once for each pair of leaders)
   const pair = `${d.leader}:${cap.leader}`;
   if (d.leader && cap.leader && pair !== h.feud) {
@@ -287,21 +305,21 @@ function grievanceDaily(x: PCtx, d: Settlement, cap: Settlement, h: HistState): 
   }
   // distance: the farther the capital, the less it is their own
   const days = walkDays(x, d, cap);
-  if (days > 1) addG(h, 'distance', G.distance * Math.min(2, days - 0.5));
+  if (days > 1) addG(h, 'distance', G.distance * Math.min(2, days - 0.5), amb);
   // a tongue drifting apart: a generation with little contact
   if (x.tick - h.genAt >= G.generationYears * x.year) {
     if (h.visits < G.rareVisits) {
       d.langSeed = driftLanguage(d.langSeed, d.id + Math.floor(x.tick / x.year)) >>> 0;
       d.language = d.langSeed;
       d.langLine = [...(d.langLine ?? []), d.langSeed].slice(-12);
-      addG(h, 'tongue', G.drift);
+      addG(h, 'tongue', G.drift, amb);
       tell(x.u, x.p, 'grievance.tongue', vars(x, d, -1, { other: cap.name }), d, [settlementRef(x, d)], 1);
     }
     h.genAt = x.tick;
     h.visits = 0;
   }
   const ld = langDistance(d, cap);
-  if (ld > 0.3) addG(h, 'tongue', G.tongue * Math.min(3, (ld - 0.18) / 0.18));
+  if (ld > 0.3) addG(h, 'tongue', G.tongue * Math.min(3, (ld - 0.18) / 0.18), amb);
 }
 
 /**
@@ -485,7 +503,7 @@ function friction(x: PCtx, st: Settlement): void {
     for (const [a, b] of [[st, o], [o, st]] as const) {
       const h = histOf(x, a);
       h.kin[String(b.id)] = r3(Math.max(-1, (h.kin[String(b.id)] ?? 0.5) - G.frictionOp));
-      if (capitalOf(x, a)?.id === b.id) addG(h, 'friction', G.friction);
+      if (capitalOf(x, a)?.id === b.id) addG(h, 'friction', G.friction, ambientCapOf(x, a));
     }
   }
 }

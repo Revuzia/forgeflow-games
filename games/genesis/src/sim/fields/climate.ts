@@ -61,6 +61,13 @@ const CLOUD_LW = 0.08;
 const SNOW_ALBEDO = 0.7;
 const SNOW_FULL = 0.25;
 const TREE_SNOW_MASK = 0.65;
+/** sunlit ablation: snow lying in air near its freezing point melts by the sunlight it absorbs as well as by the
+ * degree-hours (m of snow per W·h/m² absorbed: 3600 J over the ~3.3e7 J that melts 1 m of 1:10 snow, about half of it
+ * to the melt — the rest warms the pack or sublimes), within SUN_MELT_BELOW °C below freezing. Without it a heavy
+ * snowfall in a mild place locked itself in: the pack's albedo held the cell just under freezing, the degree-hour melt
+ * never ran, and a lakeshore camp snowed under in one storm stayed white for good (sim-fix-r2 item 2, opening seed 3). */
+const SUN_MELT = 5e-5;
+const SUN_MELT_BELOW = 4;
 /** floating ice: thin new ice is dark (nilas), it brightens to 0.5 by this thickness; sea water freezes this much lower */
 const ICE_FULL = 0.6;
 const SALT_FREEZE = 1.9;
@@ -715,7 +722,7 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
     const alt = w0 > 0.5 && sea ? 0 : Math.max(0, surface[c] - datum);
     const lv = lava[c];
     // degree-hours above freezing (and above freezing + 2 °C) and hours at or below it, for the melt / compaction below
-    let degH = 0, iceH = 0, coldH = 0;
+    let degH = 0, iceH = 0, coldH = 0, sunH = 0;
     if (H1) {
       const TK = Math.max(3, Tp + 273.15);
       const E = em * TK * TK * TK * TK;
@@ -830,13 +837,17 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
         lm += (light - lm) * INV_24;
         ly += (light - ly) * rY;
         if (temp > freeze) { degH += temp - freeze; if (temp > freeze + 2) iceH += temp - freeze; } else coldH++;
+        if (insk > 0 && temp > freeze - SUN_MELT_BELOW) sunH += insk * a1;
       }
       tPot[c] = Tn; temperature[c] = temp; tempMean[c] = tm; tempYear[c] = tyr; tHi[c] = hi; tLo[c] = lo;
       lightMean[c] = lm; lightYear[c] = ly; climMem[c] = nMem;
     }
     const T = temperature[c];
     // (an hourly pass: its own hour, from the stored temperature exactly as before)
-    if (H1) { if (T > freeze) { degH = T - freeze; if (T > freeze + 2) iceH = degH; } else coldH = 1; }
+    if (H1) {
+      if (T > freeze) { degH = T - freeze; if (T > freeze + 2) iceH = degH; } else coldH = 1;
+      if (ins > 0 && T > freeze - SUN_MELT_BELOW) sunH = ins * (1 - a);
+    }
 
     // ── humidity: advection, sources, precipitation, climate clouds ──
     if (airy) {
@@ -922,8 +933,8 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       // snow melt (degree-hour) feeds surface water; deep old snow compacts into glacier ice
       // (by the degree-hours of the hours this pass stands for: an hourly pass's own hour exactly as before)
       if (snow[c] > 0) {
-        if (degH > 0) {
-          const m = Math.min(snow[c], 0.004 * degH);
+        if (degH > 0 || sunH > 0) {
+          const m = Math.min(snow[c], 0.004 * degH + SUN_MELT * sunH);
           snow[c] -= m;
           if (airy && T < boil) {
             water[c] += m * 0.25;

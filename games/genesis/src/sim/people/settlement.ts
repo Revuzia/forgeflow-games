@@ -1274,7 +1274,12 @@ function splitCheck(x: PCtx, st: Settlement): boolean {
 }
 
 /** (fix r1 #10/#17) a village this big presses on its land (the young look for ground of their own) */
-export const BUD_POP = 48;
+export const BUD_POP = 40;
+/** (sim-fix-r2 #5) adults a budding party takes at least, and the people it leaves at home at least. 48 / 10 / 28 kept a
+ * world left alone one village for 20-40 years (bands of 30-45 grow slowly): its first daughter came at year 20-45 and
+ * its politics after the 50th year if ever. Forager and early farming bands part at 25-50 people. */
+export const BUD_ADULTS = 8;
+export const BUD_HOME_POP = 24;
 /** (fix r3 #17) a daughter village stands at least this far from every live town (budCheck's rule, kept by the band) */
 export const BUD_APART = 600;
 /** (fix r3 #17) days a budding band looks for free ground before it goes home to its mother */
@@ -1291,8 +1296,8 @@ export const BUD_HOME = 12;
  *
  * Land pressure (free fertile ground near running out, fewer fields than half the households, or thin stores) makes it
  * likelier on any day (6 % against 2 %); a village buds at most once in eight years. The leavers are whole households
- * (none with a member away), youngest heads first, never the leader's: about a third of the people and at least ten
- * adults, leaving at least 28 at home. Nothing new is saved: `recent.budAt` / `recent.bud` are keys of a saved Record.
+ * (none with a member away), youngest heads first, never the leader's: about a third of the people and at least BUD_ADULTS
+ * adults, leaving at least BUD_HOME_POP at home. Nothing new is saved: `recent.budAt` / `recent.bud` are keys of a saved Record.
  */
 function budCheck(x: PCtx, st: Settlement): void {
   if (st.band || st.fallen >= 0 || x.tick - st.founded < 5 * x.year) return;
@@ -1323,10 +1328,10 @@ function budCheck(x: PCtx, st: Settlement): void {
   const leaving: Household[] = [];
   let n = 0, adults = 0;
   for (const c of cands) {
-    if (n >= want && adults >= 10) break;
+    if (n >= want && adults >= BUD_ADULTS) break;
     leaving.push(c.h); n += c.n; adults += c.adults;
   }
-  if (adults < 10 || leaving.length < 3 || pop - n < 28) return;
+  if (adults < BUD_ADULTS || leaving.length < 3 || pop - n < BUD_HOME_POP) return;
   // the new ground: the best site 0.7-2.5 km off that no other town holds, nearer preferred, that they can walk to
   const p = x.p;
   const cells = p.cellsNear(st.pos, 2500).slice().sort((a, b) => a - b);

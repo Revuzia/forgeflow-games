@@ -15,7 +15,7 @@ import { landingCell } from '../src/sim/people/spawn.ts';
 import { pathOptsFor } from '../src/sim/people/resources.ts';
 import { findPath } from '../src/sim/grid/pathfind.ts';
 import { accident, computeEra, refreshLibrary, inputsSeen } from '../src/sim/people/knowledge.ts';
-import { histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
+import { ambientCapOf, histOf, kinOpinion, POLITICS, sendAid, popOf, walkDays } from '../src/sim/people/politics.ts';
 import { politicsDaily, polityOf, plunder, conquer, resolveArrival, secede } from '../src/sim/people/war.ts';
 import { spawnHerd } from '../src/sim/life/herds.ts';
 import { BUD_POP, BUD_APART, BUD_HOME, splitOff } from '../src/sim/people/settlement.ts';
@@ -516,6 +516,36 @@ test('the everyday makes a town restless, no more: tribute and distance stop at 
     must(sim, { k: 'disaster.spawn', kind: 'flood', pos: [...d.pos] } as Command);
     days(x, 3);
     assert.ok(h.grievance > POLITICS.threshold, `neglect on the restless: ${h.grievance}`);
+  } finally { POLITICS.aidP = aidP; }
+});
+
+// (sim-fix-r2 #5) a world left alone never had politics: every daughter sat at the ambient cap (0.45) for good —
+// acceptance §5.1, 0 secessions on 8 seeds in 50 years. A daughter a generation on its own ground parts over the everyday.
+test('a daughter come of age parts over the everyday alone (distance, tribute): past 0.6, and gone within 20 years', () => {
+  const aidP = POLITICS.aidP;
+  try {
+    POLITICS.aidP = 0;
+    const { sim, cap, d } = kinTowns();
+    const x = ctx(sim);
+    feed(x, cap, 30);
+    feed(x, d, 30);
+    x.tick += 16 * x.year;
+    d.founded = x.tick - 15 * x.year;
+    assert.ok(ambientCapOf(x, d) > POLITICS.threshold + 0.05, `the cap of a daughter 15 years old: ${ambientCapOf(x, d)}`);
+    const h = histOf(x, d);
+    h.grievance = POLITICS.ambientCap - 0.01;
+    h.why = { distance: 0.3, tribute: POLITICS.ambientCap - 0.31 };
+    let top = 0;
+    days(x, 200, () => { top = Math.max(top, histOf(x, d).grievance); });
+    assert.ok(top > POLITICS.threshold, `the everyday carries an old daughter past ${POLITICS.threshold}: ${top}`);
+    assert.ok(!h.why.famine && !h.why.neglect && !h.why.feud && !h.why.raids, `no wrong done: ${JSON.stringify(h.why)}`);
+    const left = d.polity === d.id || sim.u.planets[0].people.polities.some((q) => q.capital === d.id);
+    const war = sim.u.planets[0].people.relations.some((r) => (r.a === d.id || r.b === d.id) && r.war >= 0);
+    assert.ok(left || war, `within 20 years it went its own way (or its capital made war to keep it)`);
+    // a young daughter stays restless, no more
+    const y = kinTowns();
+    const xy = ctx(y.sim);
+    assert.ok(Math.abs(ambientCapOf(xy, y.d) - POLITICS.ambientCap) < 1e-9, 'a new daughter: the old cap');
   } finally { POLITICS.aidP = aidP; }
 });
 

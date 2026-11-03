@@ -123,3 +123,27 @@ test('a pinned season holds, and a frozen sun stops the day', () => {
   assert.equal(params.sunFrozen, true);
   assert.ok(Math.abs(params.hourAtLon0 / params.dayHours * 24 - 12) < 0.6, `hour stays at noon (${params.hourAtLon0})`);
 });
+
+// (sim-fix-r2 #2) a heavy snowfall in a mild place locked itself in: the pack's albedo held the cell just under freezing,
+// the degree-hour melt never ran, and the opening band's lakeshore (seed 3) stayed white for good and froze. Snow lying
+// in sunlit air a little under freezing melts by the sunlight it absorbs.
+test('sunlit snow just under freezing melts by the sun it absorbs (no snow-albedo lock)', () => {
+  const sim = new Sim({ seed: 2, scenario: 'sandbox', overrides: { n: 32 } });
+  const p = sim.u.planets[0];
+  sim.step(60);
+  const sun = sim.u.sun(p, sim.u.tick).dir, P = p.grid.pos;
+  const cells: number[] = [];
+  for (let c = 0; c < p.count; c++) {
+    if (p.s.ocean[c] || p.f.water[c] > 0.05) continue;
+    const mu = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2];
+    const T = p.f.temperature[c];
+    if (mu > 0.3 && T > -3.5 && T < -0.3) cells.push(c);
+  }
+  assert.ok(cells.length >= 5, `sunlit land a little under freezing: ${cells.length} cells`);
+  for (const c of cells) p.f.snow[c] = 1;
+  sim.step(120);
+  let melted = 0, stillCold = 0;
+  for (const c of cells) { if (p.f.snow[c] < 0.995) melted++; if (p.f.temperature[c] <= 0) stillCold++; }
+  assert.ok(stillCold >= cells.length * 0.5, `the air stays under freezing over the pack (${stillCold}/${cells.length})`);
+  assert.ok(melted >= cells.length * 0.8, `and the sun melts it anyway: ${melted} of ${cells.length}`);
+});

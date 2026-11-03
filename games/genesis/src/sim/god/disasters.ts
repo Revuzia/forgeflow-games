@@ -323,13 +323,17 @@ function consequences(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
     const drowned = p.f.water[c] > 0.4 || !!p.s.ocean[c];
     // (LIVING §3.7: below full wrath a dry pit does not drive them out — they rebuild around the crater; water and lava
     // still do. Nature's impacts and the god's at wrath 1 keep the old rule)
-    const pit = p.f.surface[c] < p.st.seaLevel - 0.2 && (d.st.Wr === undefined || d.st.Wr >= 1);
+    // (sim-fix-r2 #2: and only a heart inside the blow itself is in its pit — a lakeshore town of a dry world stands
+    // below the world's datum anyway, and every quake or fall nearby used to send it walking: the opening band moved
+    // three times in ten years so)
+    const pit = p.f.surface[c] < p.st.seaLevel - 0.2 && (d.st.Wr === undefined || d.st.Wr >= 1) && distM(p, st.pos, d.pos) <= effR(d);
     // (fix r1 #15: the flood omen, `Om`, never takes a town: it is a sign)
     if ((drowned && !d.st.Om) || p.f.lava[c] > 0.05 || pit) {
       // (fix r2 #12, LIVING §3.7: below full wrath a god-sent quake, sinkhole or rift that leaves water or lava at the
       // heart moves the heart to the sound ground in the town's reach, as a flood does (abandonCheck): the town stands.
-      // Nature's and the god's at wrath 1 keep the old rule, and a town with no sound ground in reach still leaves)
-      const spared = d.st.Wr !== undefined && d.st.Wr < 1;
+      // The god's at wrath 1 keep the old rule, and a town with no sound ground in reach still leaves)
+      // (sim-fix-r2 #2: nature's blows too — a town moves its heart to sound ground in reach before it leaves)
+      const spared = d.st.Wr === undefined || d.st.Wr < 1;
       if (spared && moveHeart(x, st, drowned && p.f.lava[c] <= 0.05 ? 'flood' : 'ruin')) { delete st.recent.floodSince; }
       else if ((x.ps.members.get(st.id)?.length ?? 0) > 0) { abandon(x, st, drowned ? 'flood' : 'disaster'); continue; }
     }
