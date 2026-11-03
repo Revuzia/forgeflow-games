@@ -213,13 +213,15 @@ export abstract class BotBase {
       for (const [id, s] of this.projSeen) if (now - s.seen > 6) this.projSeen.delete(id);
     }
     if (this.dodgeUntil > now) {
-      this.moveTo(this.dodgeX, this.dodgeY, false, true);
+      this.moveTo(this.dodgeX, this.dodgeY, false, this.k.kind === 'rift');
       return true;
     }
     const ms = Math.max(0.5, e.stats.moveSpeed);
     const myR = e.radius + 0.2;
     // telegraphs (delayed areas), and the same areas read from their caster's windup (CW3 critic bot-micro: a cast time
     // earlier; one roll per cast — the area it becomes keeps the windup's decision)
+    // (RIFT: BRIDGE and FRAY keep the dodging their G5/G6 pace was measured with — on BRIDGE the sharper dodge took its
+    // median game from 15.8 to 14.8 min on seeds 501–520, under G5's band)
     const wu = this.k.kind === 'rift' ? this.m.windups : NO_WINDUPS, tg = this.m.telegraphs;
     for (let i = 0; i < wu.length + tg.length; i++) {
       const t = i < wu.length ? wu[i] : tg[i - wu.length];
@@ -275,7 +277,7 @@ export abstract class BotBase {
         if (!inShape(zd.shape, e.x, e.y, e.radius, h.x, h.y, zd.dirX, zd.dirY)) continue;
         const dx = e.x - h.x, dy = e.y - h.y, d = dhypot(dx, dy) || 1;
         const reach = h.radius + myR + 0.4 - d;
-        if (reach > 0) { this.dodgeX = e.x + (dx / d) * reach; this.dodgeY = e.y + (dy / d) * reach; this.dodgeUntil = now + Math.min(1, reach / ms + 0.1); this.moveTo(this.dodgeX, this.dodgeY, false, true); return true; }
+        if (reach > 0) { this.dodgeX = e.x + (dx / d) * reach; this.dodgeY = e.y + (dy / d) * reach; this.dodgeUntil = now + Math.min(1, reach / ms + 0.1); this.moveTo(this.dodgeX, this.dodgeY, false, this.k.kind === 'rift'); return true; }
       }
     }
     return false;
@@ -289,7 +291,7 @@ export abstract class BotBase {
     if (need / ms > left && this.diff.dodgeChance >= 0.8 && this.escapeTo(tx, ty, need)) return true;
     if (e.cast && e.cast.phase === 'windup' && !e.cast.def.canMoveWhileCasting && e.cast.dur - e.cast.t > left) return false;
     this.dodgeX = tx; this.dodgeY = ty; this.dodgeUntil = until;
-    this.moveTo(tx, ty, false, true);
+    this.moveTo(tx, ty, false, this.k.kind === 'rift');
     return true;
   }
 
@@ -732,9 +734,9 @@ export abstract class BotBase {
     // 1. dodge owns movement (and the hands: a cast started mid-dodge plants the feet in the telegraph — CW3 critic
     // bot-micro; an escape the dodge needs is fired by startDodge itself)
     const dodging = this.dodge();
-    if (dodging) return;
+    if (dodging && this.k.kind === 'rift') return;
     // 2. abilities
-    if (this.useAbilities()) return;
+    if (this.useAbilities() || dodging) return;
     // 3. fight (an endgame structure first)
     const sf = this.pSiege;
     if (this.pSiegeFirst && sf && sf.alive && sf.targetable && attackable(w, e, sf) && !(this.pFight && this.pFight.alive && inAttackRange(e, this.pFight))) {
