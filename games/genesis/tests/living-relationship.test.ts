@@ -914,3 +914,36 @@ test('wrath (fix r4 #17): the god ending its own drought is seen — mercy and a
   assert.ok(Math.abs(god.dh - nat.dh - RELENT_HELP) < 0.02 && Math.abs(god.dw - nat.dw - RELENT_WONDER) < 0.02, JSON.stringify({ god, nat }));
   assert.ok(god.faith > nat.faith && god.trust >= nat.trust, `the relent is witnessed: ${JSON.stringify({ god, nat })}`);
 });
+
+/** sim-fix-r1 (owner decision 3, items 4/9): one default drought scares the town; the god then answers its prayer — the
+ * frightened town takes the help (it asked for it, and it comes inside the mercy window) and trust rises. Out of those
+ * windows a town that fears more than it loves still leaves the gift to rot. */
+test('mercy after wrath: a town frightened by a default drought takes the answer to its own prayer, and trusts more', () => {
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const x = makeCtx(sim.u, p);
+  const wood = x.c.items.idx('wood');
+  assert.equal(sim.u.god.laws['god.wrath'] ?? 0.3, 0.3, 'the default wrath');
+  must(sim, { k: 'disaster.spawn', kind: 'drought', pos: st.pos });
+  sim.step(Math.round(p.st.dayHours * 60 * 0.5));
+  // the drought's fright as run10 measured it (fear 0.4 over a love near 0): fear > love + 0.3
+  st.fearGod = 0.4; st.belief = 0.02;
+  const r = srelOf(sim, st.id);
+  assert.ok(r.acts.some((a) => a.kind === 'harm'), `the drought is the god's harm here: ${JSON.stringify(r.acts.map((a) => a.kind))}`);
+  r.prayers = [{ id: rel(sim).next++, kind: 'rebuilding', since: sim.u.tick, until: sim.u.tick + 4 * p.st.dayHours * 60, urgency: 0.6, god: 0 }];
+  const before = means(sim, st.id), w0 = st.store[wood] ?? 0;
+  sim.drainEvents();
+  const res = must(sim, { k: 'prayer.answer', settlement: st.id });
+  const refused = sim.drainEvents().filter((e) => e.t === 'gift' && /refused/.test(String(e.text)));
+  assert.equal(refused.length, 0, `the answer was refused: ${res.msg}`);
+  assert.ok((st.store[wood] ?? 0) > w0, 'the wood is in their store');
+  sim.step(Math.round(p.st.dayHours * 60));
+  const after = means(sim, st.id);
+  assert.ok(after.trust > before.trust + 0.02, `trust rose: ${before.trust.toFixed(3)} → ${after.trust.toFixed(3)}`);
+  // out of the windows (no prayer open, the harm long past) fear still refuses an unasked gift
+  r.prayers = []; r.acts = r.acts.filter((a) => a.kind !== 'harm');
+  st.fearGod = 0.6; st.belief = 0.02;
+  sim.drainEvents();
+  must(sim, { k: 'miracle.wood', pos: [...st.pos], radius: st.territory + 150 });
+  assert.ok(sim.drainEvents().some((e) => e.t === 'gift' && /refused: fear/.test(String(e.text))), 'an unasked gift from a feared god still rots');
+});

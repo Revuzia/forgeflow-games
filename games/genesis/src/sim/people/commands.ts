@@ -33,6 +33,7 @@ import { introduceSpecies, plural } from '../life/ecology.ts';
 import { seedDisease } from '../life/disease.ts';
 import { declareWar, makePeace, polityName, polityOf, relationOf, ensureRelation } from './war.ts';
 import { splitOff } from './settlement.ts';
+import { hashFloat } from '../core/rng.ts';
 import { insertSorted } from './lifecycle.ts';
 
 function ok(msg: string, created?: EntityRef[]): CommandResult {
@@ -145,6 +146,7 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     const sp = x.c.species.get(a.species as string);
     const st = spawnPeople(u, p, { species: sp.id, count: a.count as number, pos: at, era: (a.era as string) ?? 'stone', settled: a.settled as boolean });
     if (!st) return fail(`${sp.name} could not be placed on ${p.name}.`);
+    if (a.wildGame !== false) gameForNewcomers(x, st.pos);
     const people = sp.plural.replace(/^the /, '');
     tell(u, p, 'spawn', { people, count: a.count as number }, null, [settlementRef(x, st)]);
     const air = p.st.atmosphere;
@@ -156,6 +158,7 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       species: { type: 'enum', values: speciesEnum, default: 'plains-folk' }, count: { type: 'int', min: 1, max: 2000, default: 20 },
       pos: pos(), settlement: { type: 'any', desc: 'join this settlement (its people and era unless given)' }, era: { type: 'enum', values: [...ERAS], default: 'stone' },
       settled: { type: 'boolean', default: false }, children: { type: 'boolean', default: false, desc: 'into a settlement: born as children' },
+      wildGame: { type: 'boolean', default: true, desc: 'on a world with no wild game yet (a world just greened), real game of the land comes with them' },
     },
   });
   // (which of species / era the caller actually gave: a settlement's own are the defaults when joining it)
@@ -767,4 +770,49 @@ export function registerPeopleCommands(r: CommandRegistry): void {
 export function focusHook(u: Universe, p: Planet, at: UnitVec): void {
   if (!p.people || !p.people.settlements.length) return;
   focusPeople(makeCtx(u, p), at);
+}
+
+/** the real game a newly greened world is given with its first people (deer, rabbits, wild goats, boar, aurochs, wild sheep) */
+const NEWCOMER_GAME = ['deer', 'rabbit', 'wild-goat', 'boar', 'aurochs', 'wild-sheep'];
+
+/**
+ * sim-fix-r1 (the barren opening, CONTRACT §21.1 / §16.1): a band set down on a world that has no wild land game at all
+ * — a dead rock the god has just given air, rain and grass — had nothing to hunt; it lived on the first year's berries and a
+ * crater pond's fish, fished it out and starved in its second to fifth year on most seeds. The god's people come down with
+ * the land's real game: a few herds of the animals the country around the spot can feed (habitatFit), 0.6-3 km out, so
+ * the band can hunt from its first season. A world that already has wild game anywhere gets none (every other start).
+ */
+export function gameForNewcomers(x: PCtx, at: ArrayLike<number>): number {
+  const p = x.p;
+  for (const h of x.ps.herds) {
+    if (h.owner >= 0 || h.count < 1) continue;
+    const d = animalDef(x, h.species);
+    if (d.habitat === 'land' && !d.domesticable && d.diet.every((q) => q !== 'meat')) return 0;
+  }
+  const kinds = NEWCOMER_GAME.map((id) => animalIdx(x, id)).filter((i) => i >= 0);
+  if (!kinds.length) return 0;
+  const P = p.grid.pos;
+  const cells: number[] = [];
+  for (let c = 0; c < p.count; c++) {
+    const d = distM(p, [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], at);
+    if (d >= 600 && d <= 3000 && p.f.water[c] < 0.05) cells.push(c);
+  }
+  let made = 0;
+  const used = new Set<number>();
+  for (let k = 0; k < kinds.length && made < 4; k++) {
+    const sp = kinds[(k + (x.u.seed >>> 0)) % kinds.length];
+    let best = -1, bf = 0.35;
+    for (const c of cells) {
+      if (used.has(c)) continue;
+      const f = habitatFit(x, sp, c) + hashFloat(c, sp, 0x9a3e) * 0.05;
+      if (f > bf) { bf = f; best = c; }
+    }
+    if (best < 0) continue;
+    used.add(best);
+    const [lo, hi] = animalDef(x, sp).herd;
+    spawnHerd(x, sp, best, Math.max(lo, Math.round((lo + hi) * 0.6)));
+    made++;
+  }
+  if (made) { reindexHerds(x); x.ps.version++; }
+  return made;
 }

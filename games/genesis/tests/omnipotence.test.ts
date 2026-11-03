@@ -107,7 +107,6 @@ const PHRASES: [string, Want][] = [
   ['silence Hesh', (c, _s, w) => (c[0].k === 'agent.silence' && c[0].id === w.hesh) || json(c)],
   ['possess Hesh', (c, _s, w) => (c[0].k === 'agent.possess' && c[0].id === w.hesh) || json(c)],
   ['make Hesh the chief of Aru', (c, _s, w) => (c[0].k === 'agent.role' && c[0].id === w.hesh && c[0].role === 'leader') || json(c)],
-  ['turn Hesh into a frog', (c, _s, w) => (c.some((x) => x.k === 'agent.transform' && x.id === w.hesh && x.into === 'frog')) || json(c)],
   ['send a meteor at Hesh', (c) => (c[0].k === 'disaster.spawn' && c[0].kind === 'meteor') || json(c)],
   ['teach Aru iron', (c) => (c[0].k === 'settlement.teach' && c[0].knowledge === 'iron-smelting') || json(c)],
   // the Touch, the rivals, saves (the creature is gone: LIVING §3.5 — tests/creature.test.ts)
@@ -146,7 +145,9 @@ test('what the words cannot do (or lack a target for) is said plainly, with what
     ['possess', /whom/i, 'agent.possess'], ['move the sun', /what hour/i, 'time.set-hour'], ['make a disciple', /whom/i, 'agent.make-disciple'],
     ['make the planet bigger', /cannot be made bigger/i], ['give the world rings', /rings/i],
     ['move the tornado to Lune', /no tornado/i, 'disaster.spawn'], ['tilt the world', /how far/i],
-    ['smite the wicked', /whom|who|which/i], ['tell my disciples to farm', /none are called/i, 'disciple.order'], // (the restyle: the reply names the Called)
+    ['smite the wicked', /whom|who|which/i],
+    // a real world (owner decision 4): no shape-shifting — the words are answered, a person stays a person
+    ['turn Hesh into a frog', /no one changes shape/i], ['transform Hesh into a wolf', /no one changes shape/i], ['tell my disciples to farm', /none are called/i, 'disciple.order'], // (the restyle: the reply names the Called)
   ];
   for (const [text, re, hint] of cases) {
     const r = sim.parse(text);
@@ -597,4 +598,16 @@ test('LIVING §5.3: one Firestorm (the two duplicate powers merged); the old fir
   const r = sim.parse('raise a firestorm near Lune');
   assert.ok(r.resolved?.some((c) => c.k === 'disaster.spawn' && c.kind === 'firestorm'), JSON.stringify(r.resolved));
   assert.ok(sim.applyNow({ k: 'fire.firestorm', pos: [...sim.u.planets[0].people.settlements[1].pos] }).ok, 'an old log still replays');
+});
+
+/** owner decision 4 / LIVING §0.2: real phenomena only — no power, description or synonym promises shape-shifting */
+test('no power turns a person into an animal (no shape-shifting in a real world)', () => {
+  const { sim } = twoTowns();
+  const bad = /\b(transform|metamorph|shape-?shift|into an? (animal|beast|frog)|turn (him|her|them|a person) into)/i;
+  const hits = sim.u.content.powers.list.filter((p) => bad.test(`${p.name} ${p.desc} ${(p.synonyms ?? []).join(' | ')}`)).map((p) => p.id);
+  assert.deepEqual(hits, [], `powers promising shape-shifting: ${hits.join(', ')}`);
+  for (const text of ['turn Hesh into a frog', 'transform Hesh into a wolf', 'change Hesh into a deer']) {
+    const r = sim.parse(text);
+    assert.ok(!r.resolved?.some((c) => c.k === 'agent.transform' || c.k === 'content.animal'), `${text}: ${JSON.stringify(r)}`);
+  }
 });

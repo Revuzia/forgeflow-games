@@ -26,6 +26,9 @@ export interface TimeGuardDeps {
   /** "Pause when hidden": 'auto' (on inside the site's frame), 'on', 'off' */
   hiddenPref(): string;
   toast(t: ToastSpec): void;
+  /** the page is going hidden or away: keep the world (the autosave), best effort — a player who leaves the site's
+   *  frame or closes the tab comes back to it */
+  keep?(): void;
 }
 
 /** the site bar's pause, and the pause of a hidden page */
@@ -38,6 +41,8 @@ export class TimeGuard {
   hiddenPaused = false;
   private hiddenSpeed = 1;
   private hiddenAt = 0;
+  /** the world was kept as this page went hidden (cleared when it shows again) */
+  private kept = false;
 
   constructor(deps: TimeGuardDeps) {
     this.deps = deps;
@@ -48,6 +53,15 @@ export class TimeGuard {
       paused: () => this.sitePaused,
     };
     document.addEventListener('visibilitychange', () => this.visibility());
+    // (pagehide: the tab closed, or the site navigated its frame away; a page in the back/forward cache keeps it too)
+    window.addEventListener?.('pagehide', () => this.leaving());
+  }
+
+  /** keep the world as the page goes (once per hide: visibilitychange and pagehide both fire on the way out) */
+  private leaving(): void {
+    if (this.kept) return;
+    this.kept = true;
+    try { this.deps.keep?.(); } catch { /* best effort */ }
   }
 
   /** is "pause when hidden" on here */
@@ -95,6 +109,8 @@ export class TimeGuard {
   private visibility(): void {
     const d = this.deps;
     if (document.hidden) {
+      // the world is kept first, whatever the pause setting says: a hidden page may never come back
+      this.leaving();
       if (!this.hiddenPauseOn() || this.sitePaused || d.speed() === 0) return;
       this.hiddenPaused = true;
       this.hiddenSpeed = d.speed();
@@ -102,6 +118,7 @@ export class TimeGuard {
       d.setSpeed(0);
       return;
     }
+    this.kept = false;
     if (!this.hiddenPaused) return;
     this.hiddenPaused = false;
     if (d.speed() === 0) {

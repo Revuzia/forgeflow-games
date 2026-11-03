@@ -360,6 +360,8 @@ export class Shell {
       titleOpen: () => this.titleOpen(),
       hiddenPref: () => host.prefs.value.game.pauseHidden,
       toast: (t) => host.toast(t),
+      // a hidden or closing page keeps the world as the autosave (Saves skips the title, autosave off, a fresh autosave)
+      keep: () => this.saves.leaving(),
     });
     // a file the site's frame will not download is offered in a new tab instead
     installDownloadFallback((t) => host.toast(t));

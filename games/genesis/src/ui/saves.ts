@@ -239,6 +239,22 @@ export interface SavesDeps {
   keepable?(): boolean;
 }
 
+/** the first autosave in a world comes this soon (wall time), so a short visit keeps its world */
+export const FIRST_AUTOSAVE_MS = 90_000;
+/** a page going hidden keeps the world unless the autosave is younger than this */
+export const LEAVE_GAP_MS = 20_000;
+
+/** is the autosave due: `since` ms after the last one (or the world's start), every `minutes` (0: off), the first early */
+export function autosaveDue(since: number, minutes: number, first: boolean): boolean {
+  if (!minutes) return false;
+  const every = minutes * 60000;
+  return since >= (first ? Math.min(FIRST_AUTOSAVE_MS, every) : every);
+}
+
+function pageHidden(): boolean {
+  try { return typeof document !== 'undefined' && document.hidden === true; } catch { return false; }
+}
+
 export class Saves {
   readonly panel: Panel;
   private deps: SavesDeps;
@@ -252,6 +268,10 @@ export class Saves {
   private autoNote: HTMLSpanElement;
   private lastAuto = performance.now();
   private autoAt = 0;
+  /** no autosave yet in this world: the first comes after FIRST_AUTOSAVE_MS */
+  private firstAuto = true;
+  /** the last picture taken (a hidden page renders none: its autosave reuses this) */
+  private lastThumb: string | null = null;
   private busy = false;
   /** the last outcome (test surface) */
   last: { ok: boolean; msg: string } | null = null;
@@ -312,7 +332,7 @@ export class Saves {
     this.autoSel.value = String(min);
     this.autoNote.textContent = !min ? 'Autosave is off: only what you keep is kept.'
       : this.autoAt ? `Last kept ${Math.max(1, Math.round((Date.now() - this.autoAt) / 60000))} min ago; again in ${Math.max(1, Math.round((min * 60000 - (performance.now() - this.lastAuto)) / 60000))} min.`
-        : `The world is kept as “Autosave” ${min === 1 ? 'every minute' : `every ${min} minutes`}, and when you leave it for a new one.`;
+        : `The world is kept as “Autosave” ${min === 1 ? 'every minute' : `every ${min} minutes`} (the first a minute or two in), when you leave it for a new one, and when the page is hidden or closed.`;
   }
 
   private async refresh(): Promise<void> {
@@ -387,7 +407,9 @@ export class Saves {
     try {
       const bytes = await this.deps.save();
       if (!bytes) { if (!quiet) this.host.toast({ text: 'There is no living world to save here.', kind: 'warn' }); return false; }
-      const thumb = await this.deps.thumb().catch(() => null);
+      // (a hidden page draws nothing: its picture would wait out the capture's timeout, so the last one serves)
+      const thumb = pageHidden() ? this.lastThumb : await this.deps.thumb().catch(() => null);
+      if (thumb) this.lastThumb = thumb;
       const hdr = readSaveHeader(bytes);
       const need = new Set(neededPacks(hdr));
       const packJson = this.deps.packs().filter((p) => need.has(p.id));
@@ -537,22 +559,33 @@ export class Saves {
     return ok;
   }
 
-  /** autosave on its timer (called every frame) */
+  /** autosave on its timer (called every frame): the first one early in a world (a short visit keeps its world), then
+   *  every N minutes */
   frame(): void {
     const min = this.host.prefs.value.game.autosaveMinutes;
     if (!min || this.host.source !== 'worker') return;
-    // the title's scenery is never kept (its timer waits for a real world)
-    if (!(this.deps.keepable?.() ?? true)) { this.lastAuto = performance.now(); return; }
+    // the title's scenery is never kept (its timer waits for a real world, and that world's first autosave comes early)
+    if (!(this.deps.keepable?.() ?? true)) { this.lastAuto = performance.now(); this.firstAuto = true; return; }
     const now = performance.now();
-    if (now - this.lastAuto < min * 60000) return;
+    if (!autosaveDue(now - this.lastAuto, min, this.firstAuto)) return;
     this.lastAuto = now;
+    void this.autosave();
+  }
+
+  /** the page is going hidden or away (a tab switched, the site's frame navigated, the tab closed): keep the world as the
+   *  autosave, best effort, unless it was kept a moment ago */
+  leaving(): void {
+    if (!this.host.prefs.value.game.autosaveMinutes || this.host.source !== 'worker') return;
+    if (!(this.deps.keepable?.() ?? true) || this.busy) return;
+    if (this.autoAt && Date.now() - this.autoAt < LEAVE_GAP_MS) return;
+    this.lastAuto = performance.now();
     void this.autosave();
   }
 
   /** keep the world as the autosave now (also before leaving it for a new one) */
   async autosave(): Promise<boolean> {
     const ok = await this.saveSlot('auto', 'Autosave', true, true);
-    if (ok) { this.autoAt = Date.now(); this.lastAuto = performance.now(); }
+    if (ok) { this.autoAt = Date.now(); this.lastAuto = performance.now(); this.firstAuto = false; }
     return ok;
   }
 

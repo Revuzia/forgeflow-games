@@ -47,6 +47,8 @@ import { distM } from '../people/world.ts';
 import { MIRACLES } from './miracles.ts';
 import { LAWS } from './acts.ts';
 import { NO_CREATURE } from './creature.ts';
+/** the answer to shape-shifting words: this is a real world, a person stays a person */
+export const NO_SHAPESHIFT = (nm: string): string => `No one changes shape in this world: ${nm} stays a person. You can move, bless, age, teach or smite ${nm}.`;
 import { intentSigns, signsWrath } from './freeform-signs.ts';
 import { intentContent } from './freeform-content.ts';
 import { intentHistory } from './freeform-history.ts';
@@ -897,7 +899,7 @@ function coerceValue(s: string): unknown {
 function question(c: Command, param: string, label: string): string {
   const k = c.k;
   const Q: Record<string, string> = {
-    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh one of the Called"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.transform': '"turn Hesh into a frog"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : `${label} — which one? Name it.`,
+    id: k.startsWith('agent.') || k.startsWith('possess.') ? `${label} — whom? Name a person (${({ 'agent.make-disciple': '"make Hesh one of the Called"', 'agent.kill': '"smite Hesh"', 'agent.possess': '"possess Hesh"', 'agent.move': '"move Hesh to Lune"', 'agent.silence': '"silence Hesh"', 'agent.teach': '"teach Hesh bronze"', 'agent.rename': '"rename Hesh to Asha"', 'agent.role': '"make Hesh the chief"', 'agent.age': '"make Hesh younger"' } as Record<string, string>)[k] ?? `"${label.toLowerCase().split(' ')[0]} Hesh"`}) or click one.` : `${label} — which one? Name it.`,
     items: 'Give what? ("give Aru 20 bread", "give Lune a telescope")',
     settlement: 'Which settlements? Name them ("make Aru and Lune allies", "merge Aru into Lune").',
     other: 'With whom? Name the other settlement ("make peace between Aru and Lune").',
@@ -2310,21 +2312,15 @@ function intentPerson(c: Clause): boolean {
     if (mods.place?.pos && mods.place.settlement === undefined) return mods.place.pos;
     return null;
   };
-  // a new form: "turn Hesh into a frog", "make Hesh a wolf"
+  // "turn Hesh into a frog", "make Hesh a wolf": a real world (owner decision 4, LIVING §0.2) has no shape-shifting —
+  // the words are answered plainly with what the god can do to a person, and nothing happens (agent.transform stays
+  // registered in god/civic.ts only so that old command logs replay)
   const intoM = full.match(/\b(?:turn|transform|change|make|shape)\b.+?\b(?:into|to)\b (?:a |an |the )?([a-z' -]+)$/) ?? full.match(/\bmake\b.+?\b(?:a|an) ([a-z' -]+)$/);
   if (intoM) {
     const word = intoM[1].trim();
     const an = findNoun(u.content, p, word, ['animal']);
     const sing = singular(word.split(' ').pop() ?? word);
-    if (an?.type === 'animal') { c.add({ k: 'agent.transform', id, into: an.id, planet: pl }, `${nm} becomes a ${an.text}`); return true; }
-    if (!an && (cx.L.animalish.has(sing) || cx.L.animalish.has(word)) && !cx.L.creatureWords.includes(word)) {
-      const name = word.split(' ').length > 1 ? `${word.split(' ').slice(0, -1).join(' ')} ${sing}` : sing;
-      const aid = slug(name);
-      cx.made.add(aid);
-      c.add({ k: 'content.animal', name, count: 1 }, `a new animal: ${name}`);
-      c.add({ k: 'agent.transform', id, into: aid, planet: pl }, `${nm} becomes a ${name}`);
-      return true;
-    }
+    if (an?.type === 'animal' || cx.L.animalish.has(sing) || cx.L.animalish.has(word)) return c.ask(NO_SHAPESHIFT(nm));
   }
   if (verb(cx, s, 'possess') || /\bpossessing\b|\bunpossess\b/.test(s) || (/\brelease\b/.test(s) && possessed)) {
     const off = /\b(release|leave|stop|unpossess|let go|free)\b/.test(s);

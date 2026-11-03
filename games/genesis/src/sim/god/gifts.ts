@@ -26,10 +26,22 @@ export function refusesGift(u: Universe, p: Planet, st: Settlement, item: number
   if (taboo) return 'taboo';
   const love = god === 0 ? st.belief : st.faith[god] ?? 0;
   const fear = god === 0 ? st.fearGod : 0;
-  if (fear > love + 0.3) return 'fear';
+  // (sim-fix-r1, owner decision 3) a frightened town still takes the god's help while it is praying to it, or in the
+  // days after the god struck it (the mercy window, god/regard.ts): help after harm is how fear turns into trust, and a
+  // single default drought made the first answered prayer rot outside the gate. Out of those windows fear still refuses.
+  if (fear > love + 0.3 && !askedOrSpared(u, p, st, god)) return 'fear';
   // the god of their enemies: a settlement devoted to another god will not take this one's gifts
   if (st.god > 0 && st.god !== god && (st.faith[st.god] ?? 0) > love + 0.25) return 'faith';
   return '';
+}
+
+/** is the settlement praying to this god right now, or did the god harm it within the last 3 days (mercy) */
+export function askedOrSpared(u: Universe, p: Planet, st: Settlement, god = 0): boolean {
+  const r = u.god.rel?.st[`${p.id}:${st.id}`];
+  if (!r) return false;
+  if (r.prayers.some((q) => q.god === god && u.tick <= q.until)) return true;
+  const day = Math.max(60, Math.round(p.st.dayHours * 60));
+  return r.acts.some((a) => a.god === god && a.kind === 'harm' && u.tick - a.tick <= 3 * day);
 }
 
 /** give `qty` of item to a settlement's store; refused gifts lie outside the settlement to rot */

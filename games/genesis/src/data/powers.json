@@ -9479,46 +9479,6 @@
    }
   },
   {
-   "id": "transform",
-   "name": "Transform a person",
-   "category": "Peoples",
-   "icon": "spark",
-   "ring": 3,
-   "gesture": null,
-   "command": "agent.transform",
-   "params": {},
-   "schema": {
-    "id": {
-     "type": "entity",
-     "min": 1,
-     "desc": "agent id",
-     "entity": [
-      "agent"
-     ]
-    },
-    "into": {
-     "type": "enum",
-     "values": "animals"
-    }
-   },
-   "target": "agent",
-   "synonyms": [
-    "transform",
-    "turn into an animal",
-    "turn him into a frog",
-    "turn her into a frog",
-    "change into a beast",
-    "metamorphose"
-   ],
-   "desc": "Turn a person into an animal.",
-   "cost": 10,
-   "witness": {
-    "wonder": 0.8,
-    "harm": 0.4,
-    "radius": 400
-   }
-  },
-  {
    "id": "wind",
    "name": "Wind",
    "category": "Sky",
