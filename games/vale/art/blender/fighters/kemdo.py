@@ -76,7 +76,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.9, "x": 0.6
 # PER-SKIN CARDS (closing review kemdo-M3; schema: art/blender/portraits.py header). Each card its own beat and light:
 # base: the brief's hero beat, the victory's visor hold (f24-34): the lens tilted into the low sun, the left forearm
 # shading the eyes, warm low key from behind her lens side, the lens glint lit;
-# Highrim: Heat Shimmer's skid (the glaive dragged low, the lens flaring) under hard high noon light, cool rim;
+# Highrim: Vent's open hold on the high rim (the glaive planted as the centre post, the arms thrown wide, the head
+# back, exhaling) under hard high noon light and a cool rim (Heat Shimmer's skid showed her back and hid the face);
 # Long Evening: the lobby's lens held low to throw a glint on the ground, in festival lantern light (a warm amber
 # focal from low on the lens side, a lilac dusk key and rim).
 # The portraits derive from each card's frame and light; their camera sits wider on the lens side (x < 0.5 leaves
@@ -94,7 +95,7 @@ CARDS = {
         "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890"},
     },
     "kemdo_highrim": {
-        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 40.0, "pitch": -4.0, "lens": 50.0, "fill": 0.80, "x": 0.68,
+        "splash": {"clip": "cast_a3", "t": 0.52, "yaw": 18.0, "pitch": -5.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
                    "key_az": 175.0, "key_el": 58.0, "key_color": "#FFF4E4", "sun": 3.6, "rim_cool": 1.6,
                    "rim_warm": 0.5, "bounce": 0.45, "bounce_color": "#E8DCC6", "accent": 1.4, "exposure": -0.6,
                    "focal": [{"at": "x_lens", "az": 150.0, "el": 45.0, "dist": 0.6, "color": "#FFFFFF",
@@ -2085,6 +2086,7 @@ ROBE_CHAINS = {     # name: (parent, joints (rest, m)); + rotation about each bo
 ROBE_K, ROBE_A0 = 0.45, 4.0           # the front / back panel's push: share of the knee's swing past A0 deg
 ROBE_CLEAR, ROBE_THIGH_R = 0.02, 0.11     # the floor: the trouser's surface (thigh axis + R) stays CLEAR inside the panel
 ROBE_SIDE_K = 0.35                    # the side panels: share of their own knee's swing
+ROBE_SPREAD_K = 0.28                  # the back panel: share of the stride's spread (|thigh L - thigh R|, deg)
 ROBE_AZ = {"robe_f": 0.0, "robe_l": 90.0, "robe_b": 180.0, "robe_r": -90.0}   # bearing (deg, 0 = front, + her left)
 
 
@@ -2130,8 +2132,9 @@ def chain_config(ctx) -> list:
             a = _knee_angles(skel, p)
             if nm == "robe_f":
                 return ROBE_K * max(0.0, max(a["L"][0], a["R"][0]) - ROBE_A0)
-            if nm == "robe_b":
-                return -ROBE_K * max(0.0, max(-a["L"][0], -a["R"][0]) - ROBE_A0)
+            if nm == "robe_b":       # her run lifts the knees but barely trails a thigh: the stride's spread kicks
+                return (-ROBE_K * max(0.0, max(-a["L"][0], -a["R"][0]) - ROBE_A0)     # the back out too
+                        - ROBE_SPREAD_K * abs(a["L"][0] - a["R"][0]))
             return ROBE_SIDE_K * a["L" if nm == "robe_l" else "R"][0]
         return f
     out = []

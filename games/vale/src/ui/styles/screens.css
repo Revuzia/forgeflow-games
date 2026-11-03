@@ -408,10 +408,12 @@
 .stagecard__art { position: absolute !important; inset: 0; border-radius: 0; }
 /* no splash over the live scene: the stage is open (the showcase fighter stands there) */
 .stagecard:not(:has(.stagecard__art)) { box-shadow: none; background: none; }
-/* closing CL-1: the caption sits in the stage's top-left corner, the sky over the painted set, never on the subject: the
-   plinth fighter stands at ~76 % across the frame (render/menu.ts), from about 44 % of the stage height down, and the
-   caption's column ends at 40 % of the stage width (_harness/_reports/fw_CW3c_cl1_after.json measures the overlap) */
-.stagecard__cap { position: absolute; left: calc(2 * var(--u)); top: calc(2 * var(--u)); display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); padding: calc(2 * var(--u)); width: min(40%, calc(46 * var(--u))); max-height: calc(44% - 2 * var(--u)); overflow: hidden; }
+/* closing CL-1: the caption is a band across the top of the stage, never on the subject: the plinth fighter is fitted
+   to at most half the frame's height with its feet near the bottom (render/menu.ts SUBJECT_MAX_FRAC), so it starts a
+   third of the way down; the description keeps to three lines (its full text is the plate's title).
+   _harness/_reports/fw_CW3c_cl1_after*.json counts the subject's vertices under the caption (0 is the bar). */
+.stagecard__cap { position: absolute; left: calc(2 * var(--u)); right: calc(2 * var(--u)); top: calc(2 * var(--u)); display: flex; flex-direction: column; gap: calc(0.5 * var(--u)); padding: calc(1.5 * var(--u)) calc(2 * var(--u)); max-width: calc(72 * var(--u)); }
+.stagecard__cap .stagecard__desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 
 /* ── loading ────────────────────────────────────────────────────────────────────────────────── */
 /* the foot (tip + progress) rides 52 px up at least: clear of the portal control bar, bottom-left (client F9) */

@@ -29,6 +29,9 @@ import { patchWorldMaterial } from './world_material.ts';
 /** tokens.json grade.maps.menu (design tokens, not content) */
 const MENU_SUN = { dir: [-0.8937, 0.309, 0.3253] as [number, number, number], color: '#FFC27E', intensity: 2.4, env: 0.8 };
 const MOVE_MS = 720;
+/** closing CL-1: on the painted set the showcase fighter stands at most this share of the frame's height tall (a taller
+ *  fighter is scaled down on its plinth), so the stage caption's band across the top of the stage never covers it */
+const SUBJECT_MAX_FRAC = 0.5;
 
 function bezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
   const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
@@ -64,6 +67,8 @@ export class MenuWorld {
   idle = 0;
   private showcase: Actor | null = null;
   private showcaseKey = '';
+  /** the showcase fighter's posed height in metres at scale 1 (0 until its model is in and measured) */
+  private showcaseH = 0;
   private readonly showcaseRoot = new Group();
   private map: MapDefT | null = null;
   private backdrop: Mesh | null = null;
@@ -81,7 +86,7 @@ export class MenuWorld {
     // dev build: the harness reads the showcase subject's screen box (closing CL-1 caption overlap)
     let dev = false;
     try { dev = !!import.meta.env?.DEV; } catch { dev = false; }
-    if (dev) (globalThis as { __valeMenuSubject?: () => unknown }).__valeMenuSubject = () => this.subjectRect(innerWidth, innerHeight);
+    if (dev) (globalThis as { __valeMenuSubject?: (clip?: { x: number; y: number; w: number; h: number }) => unknown }).__valeMenuSubject = (clip?: { x: number; y: number; w: number; h: number }) => this.subjectRect(innerWidth, innerHeight, clip);
   }
 
   /** build once (async parts resolve later); never throws */
@@ -251,6 +256,7 @@ export class MenuWorld {
     if (key === this.showcaseKey) return;
     this.showcaseKey = key;
     if (this.showcase) { this.showcase.dispose(); this.showcase = null; }
+    this.showcaseH = 0;
     if (!lib || !fighter) return;
     const def = lib.fighter(fighter);
     if (!def) return;
@@ -261,12 +267,29 @@ export class MenuWorld {
     lib.fighterTemplate(fighter, skin ?? undefined).then((t) => { if (this.showcase === a) a.attach(t, def.art.scale, def.art.accentMaterial); });
   }
 
+  /** the showcase fighter's top above its feet in metres (every skinned vertex, as posed now); 0 before its model is in */
+  private subjectHeight(): number {
+    if (!this.showcase) return 0;
+    const root = this.showcase.root;
+    root.updateMatrixWorld(true);
+    const v = new Vector3();
+    let top = -Infinity, any = false;
+    root.traverseVisible((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      const pos = m.geometry.getAttribute('position');
+      if (!pos) return;
+      for (let i = 0; i < pos.count; i++) { m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); if (v.y > top) top = v.y; any = true; }
+    });
+    return any ? Math.max(0, top - root.position.y) : 0;
+  }
+
   /** the showcase fighter's on-screen box in CSS pixels of a `w`×`h` viewport: every (skinned) vertex of its visible
    *  meshes projected, so the box is the silhouette's, not a loose 3D AABB's; null without a subject. Dev / harness
    *  only (the stage caption is measured against it, closing CL-1) */
-  subjectRect(w: number, h: number): { x: number; y: number; w: number; h: number } | null {
+  subjectRect(w: number, h: number, clip?: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number; hits: number } | null {
     if (!this.showcase) return null;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, hits = 0;
     const v = new Vector3();
     this.showcase.root.updateMatrixWorld(true);
     this.showcase.root.traverseVisible((o) => {
@@ -279,10 +302,12 @@ export class MenuWorld {
         v.applyMatrix4(m.matrixWorld).project(this.camera);
         const sx = (v.x * 0.5 + 0.5) * w, sy = (1 - (v.y * 0.5 + 0.5)) * h;
         if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy < y0) y0 = sy; if (sy > y1) y1 = sy;
+        // `clip` (the caption's box): how many of the subject's vertices land under it
+        if (clip && sx >= clip.x && sx <= clip.x + clip.w && sy >= clip.y && sy <= clip.y + clip.h) hits++;
       }
     });
     if (!Number.isFinite(x0)) return null;
-    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), hits };
   }
 
   setAspect(aspect: number): void {
@@ -322,6 +347,11 @@ export class MenuWorld {
       const toCam = new Vector3(this.camera.position.x - px, 0, this.camera.position.z - pz).normalize();
       this.showcase.root.rotation.y = Math.atan2(toCam.x, toCam.z) - 0.35;
       this.showcase.pose('idle_lobby', dt);
+      // fit: no taller than SUBJECT_MAX_FRAC of the frame at the plinth's distance (measured once, posed, at scale 1)
+      if (!this.showcaseH) { this.showcase.root.scale.setScalar(1); this.showcaseH = this.subjectHeight(); }
+      const d = Math.hypot(this.camera.position.x - px, this.camera.position.z - pz);
+      const frameH = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
+      this.showcase.root.scale.setScalar(this.showcaseH > 0 ? Math.min(1, (SUBJECT_MAX_FRAC * frameH) / this.showcaseH) : 1);
     } else if (this.showcase) {
       // stand on the plinth in front of the station's look-at point, facing the camera
       const t = this.target;

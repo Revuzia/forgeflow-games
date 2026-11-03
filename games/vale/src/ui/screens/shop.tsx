@@ -132,7 +132,7 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
             <span class="row row--s"><HourTicks n={TIER_TICKS[selTier]} label={cv.t(`shop.tier.${selTier}`, selTier)} /><span class="t-label muted">{cv.t(`shop.tier.${selTier}`, selTier)}</span></span>
             <span class="t-h1">{selSkin.name}</span>
             <span class="t-body-s muted">{cv.t('shop.for_fighter', 'For {fighter}', { fighter: selFighter?.name ?? '' })}</span>
-            {selSkin.desc ? <p class="t-body-s">{selSkin.desc}</p> : null}
+            {selSkin.desc ? <p class="t-body-s stagecard__desc" title={selSkin.desc}>{selSkin.desc}</p> : null}
             <span class="row row--s">{owned(sel) ? <span class="chip chip--ok">{equipped(sel) ? cv.t('shop.equipped', 'Equipped') : cv.t('shop.owned', 'Owned')}</span> : <Currency id={sel.price.currency} amount={sel.price.amount} tick={false} />}</span>
           </div>
         </div>

@@ -37,19 +37,19 @@
     "tris_glaive_grip": 120,
     "validate_kemdo": "18100->18089"
   },
-  "uv_coverage": 0.6,
+  "uv_coverage": 0.603,
   "bake": {
-    "base": 8.38,
-    "rough_metal": 7.35,
-    "normal": 4.3,
-    "ao": 4.46,
-    "normal_fixed_px": 15280,
-    "projection": 140.4,
-    "pack_save": 140.85,
-    "total": 165.97
+    "base": 7.9,
+    "rough_metal": 7.4,
+    "normal": 3.52,
+    "ao": 5.47,
+    "normal_fixed_px": 14135,
+    "projection": 153.75,
+    "pack_save": 154.22,
+    "total": 178.96
   },
   "tris": 18389,
-  "mesh_top_m": 2.121,
+  "mesh_top_m": 2.117,
   "clips": {
     "idle": {
       "frames": 72,
@@ -151,25 +151,26 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2701000,
+  "glb_bytes_raw": 2874972,
   "optimize": {
     "ok": true,
-    "before": 2701000,
-    "after": 1149876
+    "before": 2874972,
+    "after": 1219004
   },
-  "glb_bytes": 1149876,
+  "glb_bytes": 1219004,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo.glb (1123 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: kemdo_base 2048x2048 242K, kemdo_normal 512x512 51K, kemdo_orm 256x256 28K",
-      "  skinned meshes: kemdo(17714v), kemdo_accent(149v)",
-      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.833s/19tr, attack2:1.000s/19tr, cast_a1:0.833s/21tr, cast_a2:0.667s/21tr, cast_a3:0.833s/23tr, cast_ult:1.333s/18tr, channel:3.000s/20tr, dash:0.500s/21tr, death:1.667s/22tr, idle:2.400s/20tr, idle_lobby:4.000s/20tr, recall:2.000s/19tr, run:0.667s/23tr, stunned:1.333s/18tr, taunt:2.000s/20tr, victory:2.000s/18tr",
-      "  tracks checked: 322; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo.glb (1190 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_base 2048x2048 241K, kemdo_normal 512x512 50K, kemdo_orm 256x256 28K",
+      "  skinned meshes: kemdo(17721v), kemdo_accent(149v)",
+      "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR x_robe_b_1 x_robe_b_2 x_robe_f_1 x_robe_f_2 x_robe_l_1 x_robe_l_2 x_robe_r_1 x_robe_r_2)",
+      "  clips: attack1:0.833s/27tr, attack2:1.000s/27tr, cast_a1:0.833s/29tr, cast_a2:0.667s/29tr, cast_a3:0.833s/31tr, cast_ult:1.333s/26tr, channel:3.000s/28tr, dash:0.500s/29tr, death:1.667s/30tr, idle:2.400s/28tr, idle_lobby:4.000s/28tr, recall:2.000s/27tr, run:0.667s/31tr, stunned:1.333s/26tr, taunt:2.000s/28tr, victory:2.000s/26tr",
+      "  tracks checked: 450; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
       "  tris: 18389; bind-pose bounds (three units, Y up): 1.21 x 2.12 x 2.17; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
       "  run: 20 f, planted samples 6, max foot-speed error 5.7%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (1)",
+      "  - GLB is 1190 KiB > budget 1172 KiB"
     ]
   },
   "renders": {
@@ -180,10 +181,10 @@
       "turntable": "art/renders/fighters/kemdo/turntable.png"
     },
     "seconds": {
-      "splash": 15.96,
-      "portrait": 5.64,
-      "icon": 6.04,
-      "turntable": 11.14
+      "splash": 171.68,
+      "portrait": 36.27,
+      "icon": 12.83,
+      "turntable": 14.97
     }
   },
   "three_qa": {
@@ -197,7 +198,7 @@
       ],
       [
         0.456,
-        2.121,
+        2.117,
         1.329
       ]
     ],
@@ -206,8 +207,8 @@
       1
     ],
     "headY": 1.808,
-    "accentPct": 1.92,
-    "accentTopHalfPct": 100,
+    "accentPct": 1.89,
+    "accentTopHalfPct": 99.8,
     "heightPx1080": 114,
     "size": [
       2400,
@@ -215,26 +216,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/kemdo/three_kemdo.png",
-    "seconds": 23,
+    "seconds": 21,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 1.42,
-      "model": 72.44,
-      "lows_bind": 18.06,
-      "uv": 6.63,
-      "bake": 165.99,
-      "clips": 6.77,
-      "export": 4.05,
-      "optimize": 1.58,
-      "load_test": 0.33,
-      "render": 39.41,
-      "three_qa": 23.46,
-      "cache": 0.22
+      "materials": 0.43,
+      "model": 43.48,
+      "lows_bind": 14.29,
+      "uv": 4.49,
+      "bake": 178.96,
+      "clips": 7.7,
+      "export": 3.52,
+      "optimize": 1.47,
+      "load_test": 0.58,
+      "render": 241.19,
+      "three_qa": 21.67,
+      "cache": 0.29
     },
-    "total_s": 340.62
+    "total_s": 518.23
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1
