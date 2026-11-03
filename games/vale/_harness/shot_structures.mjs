@@ -9,6 +9,9 @@
 // (collision radius + 0.65 / 1.0 / 1.6 / 2.4 m, every 15° from −165° to −15°), the camera on the structure; the
 // fighter's visibility = |frame − frame without the fighter| / the same with the structure hidden, over the fighter's
 // screen box. FAILS (exit 1) if any spot leaves the fighter < 0.5 visible while the structure's fade is off.
+// collapse / respawn (closing env m-6) kill through every shield and damage cut (the Dawn Seal, the ringshade), so they
+// work at the default --t; FAILS (exit 1) unless the Outer Needle collapses to a ruin and the gate lantern falls to a
+// ruin and rises again as a new entity. The camera sits on the structure for every collapse frame.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -136,6 +139,22 @@ const you = await B((b) => b.you());
 // the camera looks toward −y (sim): "behind" a structure is smaller y
 const focusOn = (x, y) => B((b, p) => { b.focus(p[0], p[1]); b.zoom(28.5); b.$.still(45); }, [x, y]);
 
+/** kill a structure through the real dealDamage: hp + every shield + 10, repeated (the Dawn Seal shield, the ringshade
+ *  cut and any damage modifier stand in front of hp) until it is down; returns whether it died */
+const kill = (id, src) => page.evaluate(async (p) => {
+  const b = window.__VALE_BENCH__;
+  const c = await import('/src/sim/combat.ts');
+  const w = b.host.view;
+  const e = w.entities.find((x) => x.id === p.id);
+  const k = p.src == null ? null : w.entities.find((x) => x.id === p.src) ?? null;
+  for (let i = 0; i < 12 && e && e.alive; i++) {
+    const sh = (e.shields ?? []).reduce((a, x) => a + x.amount, 0);
+    c.dealDamage(w, k, e, (e.hp + sh + 10) * 4, 'true');
+  }
+  return !!e && !e.alive;
+}, { id, src });
+const fail = (msg) => { console.error('FAIL: ' + msg); process.exitCode = 1; };
+
 if (states.has('scale') && S.length) {
   // every structure kind of both sides, your fighter standing beside it (same depth), at the gameplay camera
   const kinds = [...new Set(S.map((s) => `${s.def}:${s.team}`))];
@@ -258,15 +277,10 @@ if (states.has('damage') && outer) {
 }
 
 if (states.has('collapse') && outer) {
-  // the real death path: dealDamage from the bench's sim module (events, protection, nav) — a harness hook only
-  await page.evaluate(async (p) => {
-    const b = window.__VALE_BENCH__;
-    const c = await import('/src/sim/combat.ts');
-    const w = b.host.view;
-    const e = w.entities.find((x) => x.id === p.id);
-    const k = w.entities.find((x) => x.id === p.you);
-    c.dealDamage(w, k ?? null, e, e.hp + 10, 'true');
-  }, { id: outer.id, you: you.id });
+  // the real death path: dealDamage from the bench's sim module (events, protection, nav) — a harness hook only.
+  // The Dawn Seal shield and the ringshade cut sit in front of hp, so kill() repeats until the structure is down.
+  await B((b, p) => { b.focus(p[0], p[1]); b.zoom(28.5); }, [outer.x, outer.y]);
+  report.collapse.push({ killed: await kill(outer.id, you.id) });
   await B((b) => b.frames(1, 1 / 30));
   let t = 0;
   for (const at of [0.1, 0.35, 0.7, 1.05, 1.4, 1.75, 2.4]) {
@@ -279,6 +293,8 @@ if (states.has('collapse') && outer) {
   await B((b) => b.frames(60, 1 / 30));
   const ruin = await B((b, id) => ({ info: b.$.info().find((s) => s.id === id), box: b.$.box(id) }), outer.id);
   report.collapse.push({ t: 'ruin', ...ruin });
+  if (!report.collapse.some((r) => r.collapsing || r.falling > 0)) fail(`collapse: ${outer.id} never collapsed`);
+  if (!ruin.info?.dead || !ruin.info?.ruin) fail(`collapse: ${outer.id} is not a ruin after 4.4 s (dead ${ruin.info?.dead}, ruin ${ruin.info?.ruin})`);
   await shot(page, `${name}${tag}_ruin`);
   // the shell on the next structure breaks when its protection drops
   const inner = S.find((s) => s.def === 'needle_inner' && s.team === outer.team);
@@ -291,13 +307,7 @@ if (states.has('respawn')) {
   const chain = lan ? S.filter((s) => s.team === lan.team && (s.def === 'needle_outer' || s.def === 'needle_inner') && Math.abs(s.y - lan.y) < 8) : [];
   if (lan) {
     for (const s of [...chain, lan]) {
-      await page.evaluate(async (p) => {
-        const b = window.__VALE_BENCH__;
-        const c = await import('/src/sim/combat.ts');
-        const w = b.host.view;
-        const e = w.entities.find((x) => x.id === p.id);
-        if (e && e.alive) c.dealDamage(w, null, e, e.hp + 10, 'true');
-      }, { id: s.id });
+      await kill(s.id, null);
       await B((b) => b.frames(3, 1 / 30));
     }
     await B((b) => b.frames(90, 1 / 30));
@@ -321,7 +331,10 @@ if (states.has('respawn')) {
     report.respawn.after = await B((b, id) => b.$.info().find((s) => s.id === id) ?? null, back);
     report.respawn.oldGone = await B((b, id) => !b.$.info().some((s) => s.id === id), lan.id);
     await shot(page, `${name}${tag}_gate_back`);
-  }
+    if (!report.respawn.ruin?.dead || !report.respawn.ruin?.ruin) fail(`respawn: lantern ${lan.id} did not fall to a ruin`);
+    if (back < 0 || back === lan.id) fail(`respawn: no new lantern rose (newId ${back})`);
+    if (!report.respawn.oldGone) fail(`respawn: the old lantern ${lan.id} (its ruin) is still drawn`);
+  } else fail('respawn: no team-1 lantern on this map');
 }
 
 mkdirSync(join(HERE, '_reports'), { recursive: true });
