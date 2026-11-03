@@ -12423,7 +12423,7 @@
     ]
   },
   {
-    "$comment": "T0 ambient · FRAY: the fair's resin lamps, a flame and a thin smoke curl (polish env m-5: the core lifted into the 55-60 flame band; it read L* max 51.5 in play at the old 0.3 / 0.4)",
+    "$comment": "T0 ambient · FRAY: the fair's resin lamps, a flame and a thin smoke curl",
     "id": "amb_fray_lamp_flame",
     "duration": 2.6,
     "teamTint": false,
@@ -12447,7 +12447,7 @@
             0.55
           ]
         ],
-        "emissive": 0.38,
+        "emissive": 0.3,
         "color": "#C98457",
         "blend": "add"
       },
@@ -12514,11 +12514,11 @@
         "emissive": [
           [
             0,
-            0.5
+            0.4
           ],
           [
             1,
-            0.33
+            0.26
           ]
         ],
         "texture": "light_puff",
