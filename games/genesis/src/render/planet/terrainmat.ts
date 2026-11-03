@@ -567,10 +567,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float mA = fbm3(P * 0.0045 + 23.0);
       float mB = snoise(P * 0.019 + warpV * 0.05 + 31.0) * 0.6 + snoise(P * 0.052 + 37.0) * 0.4 * aaF(fw, 20.0);
       float ridgeK = smoothstep(0.05, 0.6, -concave), hollowK = smoothstep(0.05, 0.6, concave);
+      // (past ~600 m the drifts are all that is left of the ground's texture: they firm up, still broad and soft-edged)
+      float farK = 1.0 + 0.5 * smoothstep(600.0, 1500.0, camDist);
       vec3 g2 = gcol;
-      g2 = mix(g2, g2 * vec3(1.32, 1.14, 0.66), clamp(0.45 * ridgeK + 0.4 * smoothstep(0.05, 0.6, mA) + 0.25 * max(sunny, 0.0) * steep, 0.0, 0.7));
-      g2 = mix(g2, g2 * vec3(0.6, 0.76, 0.62), clamp(0.5 * hollowK + 0.4 * smoothstep(-0.05, -0.6, mA), 0.0, 0.65));
-      g2 *= 0.84 + 0.32 * (0.5 + 0.5 * mB);
+      g2 = mix(g2, g2 * vec3(1.32, 1.14, 0.66), clamp((0.45 * ridgeK + 0.4 * smoothstep(0.05, 0.6, mA) + 0.25 * max(sunny, 0.0) * steep) * farK, 0.0, 0.8));
+      g2 = mix(g2, g2 * vec3(0.6, 0.76, 0.62), clamp((0.5 * hollowK + 0.4 * smoothstep(-0.05, -0.6, mA)) * farK, 0.0, 0.75));
+      g2 *= 1.0 + 0.16 * mB * farK;
       g2 = mix(g2, vec3(0.2, 0.16, 0.1), 0.45 * smoothstep(0.22, 0.45, slope) * smoothstep(-0.1, 0.5, mB));
       gcol = mix(gcol, g2, midK);
     }

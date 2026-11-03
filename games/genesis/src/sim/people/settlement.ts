@@ -1503,9 +1503,11 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   // the people can live through, and no roofs to sit it out under (enduresSeason) — leaves while the walk is still
   // survivable (the cold not yet at its depth), rather than when the cold has begun to kill: set down on a green
   // lakeshore of a young world still cooling (its year's mean fell from 25 to -13 °C in two years), the town learned of
-  // its -18 °C winter by freezing, and the walk away killed 17 of 24)
+  // its -18 °C winter by freezing, and the walk away killed 17 of 24. Only a town in its first year, which has not
+  // yet lived through a winter there: an old town that has knows its winters, and fleeing a hard one killed 35 of 39 on
+  // seed 3 at Y7)
   const foresee = !harsh && !st.band && !dead && season.winter < lo - (lo - tMinOf(x, st)) * 0.75 && season.now > season.winter + 3
-    && x.tick - st.founded > 2 * x.day && !enduresSeason(x, st);
+    && x.tick - st.founded > 2 * x.day && x.tick - st.founded < 1.5 * x.year && !enduresSeason(x, st);
   if (foresee) st.recent.foresee = st.recent.foresee ?? x.tick; else delete st.recent.foresee;
   if (!dead && st.recent.thermalAt !== undefined && x.tick - st.recent.thermalAt >= 3 * x.day) { delete st.recent.thermalDead; delete st.recent.thermalAt; }
   const cause = st.recent.floodSince !== undefined && x.tick - st.recent.floodSince > 0.5 * x.day ? 'flood'
