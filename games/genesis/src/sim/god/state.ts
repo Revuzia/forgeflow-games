@@ -169,6 +169,9 @@ export interface ActRecord {
   provoked: boolean;
   /** the act it was (records of one act — a disaster's whole life — are merged) */
   key?: string;
+  /** sim-fix-r1: the tick the act last touched them (a merged record's latest), and whether its survivors have rallied */
+  until?: number;
+  weathered?: boolean;
 }
 
 /** a request a settlement makes of its god (LIVING §3.3) */

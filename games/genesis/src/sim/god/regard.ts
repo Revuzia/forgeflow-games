@@ -212,12 +212,13 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
     const last = r.acts.length ? r.acts[r.acts.length - 1] : null;
     if (last && last.key === ctx.key) {
       last.dead += dead;
+      last.until = u.tick;
       if (kind === 'harm') last.kind = 'harm';
       last.foretold ||= !!seen?.foretold;
       last.provoked ||= !!seen?.provoked;
       continue;
     }
-    const rec: ActRecord = { kind, tick: u.tick, god: ctx.god, dead, foretold: !!seen?.foretold, provoked: !!seen?.provoked, key: ctx.key };
+    const rec: ActRecord = { kind, tick: u.tick, god: ctx.god, dead, foretold: !!seen?.foretold, provoked: !!seen?.provoked, key: ctx.key, until: u.tick };
     r.acts.push(rec);
     if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);
   }
@@ -433,9 +434,14 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
   const fk = 1 - (seen ? 0.003 : 0.01) * dk;
   const ek = 1 - (seen ? 0.01 : 0.045) * dk;
   const tk = 1 - 0.005 * dk;
+  const rally = weathered(x, r, members.length);
   const m = [0, 0, 0, 0];
   for (const s of members) {
     freshen(A, s, r.means);
+    if (rally) {
+      const i = s * GODS + rally.g;
+      if (A.faith[i] > 0.2) { A.love[i] = riseTrust(A.love[i], rally.trust); A.loyalty[i] = clamp01(A.loyalty[i] + rally.loyalty); }
+    }
     for (let g = 0; g < GODS; g++) {
       const i = s * GODS + g;
       if (A.faith[i] === 0 && A.love[i] === 0 && A.fear[i] === 0) continue;
@@ -451,6 +457,29 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
   const n = Math.max(1, members.length);
   r.means = [r3(m[0] / n), r3(m[1] / n), r3(m[2] / n), r3(m[3] / n)];
   return r.means;
+}
+
+/**
+ * sim-fix-r1 (owner decision 3: disasters "although they scare and kill, ... build FEAR, trust, loyalty"; release owner-r1
+ * verdicts 2-3): a town the god's harm struck and left standing rallies once it has had a day's quiet after the last
+ * of it — the survivors draw together around their shrine and their god (loyalty +0.07) and read their survival as being
+ * spared (trust +0.12, less where many died: × max(0.4, 1 − 2 × the share killed)), each believer (faith > 0.2) once
+ * per act. Without it a default tornado left trust and loyalty below a quiet world's on 8 of 8 seeds and only an answered
+ * prayer could raise them. A cruel act — unprovoked harm that killed a third or more of them — earns no rally.
+ */
+function weathered(x: PCtx, r: SettlementRel, n: number): { g: number; trust: number; loyalty: number } | null {
+  if (n <= 0) return null;
+  const day = Math.max(60, Math.round(x.p.st.dayHours * 60));
+  for (const a of r.acts) {
+    if (a.kind !== 'harm' || a.weathered || a.god < 0 || a.god >= GODS) continue;
+    if (x.tick - (a.until ?? a.tick) < day) continue;
+    a.weathered = true;
+    if (x.tick - (a.until ?? a.tick) > 6 * day) continue; // an old record (a save from before): no late rally
+    const share = a.dead / (n + a.dead);
+    if (share >= 1 / 3 && !a.foretold && !a.provoked) continue;
+    return { g: a.god, trust: 0.12 * Math.max(0.4, 1 - 2 * share), loyalty: 0.07 };
+  }
+  return null;
 }
 
 /** a settlement's four values toward god g, now (member means) */

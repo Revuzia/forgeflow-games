@@ -34,6 +34,7 @@ import { seedDisease } from '../life/disease.ts';
 import { declareWar, makePeace, polityName, polityOf, relationOf, ensureRelation } from './war.ts';
 import { splitOff } from './settlement.ts';
 import { hashFloat } from '../core/rng.ts';
+import { forestArea, plantArea, airSupportsLife } from '../fields/vegetation.ts';
 import { insertSorted } from './lifecycle.ts';
 
 function ok(msg: string, created?: EntityRef[]): CommandResult {
@@ -772,6 +773,31 @@ export function focusHook(u: Universe, p: Planet, at: UnitVec): void {
   focusPeople(makeCtx(u, p), at);
 }
 
+/**
+ * sim-fix-r1 (the barren opening): the god's grass, berries and grove on a dead rock are sown where the sun stood, and
+ * the band is set down wherever the opening's ring lands — on most seeds a bare grass plain with no tree, no shrub and no
+ * soil within a day's walk: no sticks for a spear, no firewood for the winter, no berries or roots, only a little wild
+ * grain. Real people are not set down on a lawn: on a world that has no wild game yet (a world just greened), the
+ * country around the spot gets what any homeland of a stone-age band has — a grove with its understory and soil, a berry
+ * thicket and a stand of wild grain — unless it already has them.
+ */
+function landForNewcomers(x: PCtx, at: ArrayLike<number>): void {
+  const u = x.u, p = x.p, f = p.f;
+  if (!airSupportsLife(p)) return;
+  const near = p.cellsNear(at, 1500);
+  let tree = 0, shrub = 0, n = 0;
+  for (const c of near) { if (f.water[c] > 0.3 || p.s.ocean[c]) continue; tree += f.tree[c]; shrub += f.shrub[c]; n++; }
+  if (!n) return;
+  if (tree / n < 0.15) forestArea(u, p, at, 1500, 0.5);
+  const berry = u.content.plants.idx('berry-bush'), grain = u.content.plants.idx('wild-grain');
+  if (shrub / n < 0.2 && berry >= 0) plantArea(u, p, berry, at, 1500, 0.6);
+  if (grain >= 0) {
+    let g = 0, m = 0;
+    for (const c of p.cellsNear(at, 2500)) { if (f.water[c] > 0.3 || p.s.ocean[c]) continue; m++; if (f.grassSpecies[c] === grain) g += f.grass[c]; }
+    if (m && g / m < 0.15) plantArea(u, p, grain, at, 2500, 0.5);
+  }
+}
+
 /** the real game a newly greened world is given with its first people (deer, rabbits, wild goats, boar, aurochs, wild sheep) */
 const NEWCOMER_GAME = ['deer', 'rabbit', 'wild-goat', 'boar', 'aurochs', 'wild-sheep'];
 
@@ -789,6 +815,7 @@ export function gameForNewcomers(x: PCtx, at: ArrayLike<number>): number {
     const d = animalDef(x, h.species);
     if (d.habitat === 'land' && !d.domesticable && d.diet.every((q) => q !== 'meat')) return 0;
   }
+  landForNewcomers(x, at);
   const kinds = NEWCOMER_GAME.map((id) => animalIdx(x, id)).filter((i) => i >= 0);
   if (!kinds.length) return 0;
   const P = p.grid.pos;

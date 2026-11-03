@@ -26,7 +26,7 @@ export function town(seed = 20261008): Town {
     const sim = new Sim({ seed, scenario: 'sandbox', overrides: { n: 20, vegetation: 1 } });
     // a quiet world: natural disasters off unless a test turns them on
     must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
-    const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 30, era: 'bronze', settled: true });
+    const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 30, era: 'bronze', settled: true, wildGame: false });
     const sid = r.created!.find((e) => e.kind === 'settlement')!.id;
     must(sim, { k: 'settlement.rename', settlement: sid, name: 'Aru' });
     sim.step(60);
@@ -75,7 +75,7 @@ export function twoTowns(): TwoTowns {
       const l = landingCell(x, coastal, c);
       if (dist(l) >= 900 && dist(l) <= 1600) { best = c; break; }
     }
-    const r = must(sim, { k: 'life.spawn-people', species: 'coastal-folk', count: 20, era: 'bronze', settled: true, pos: [g.pos[best * 3], g.pos[best * 3 + 1], g.pos[best * 3 + 2]] });
+    const r = must(sim, { k: 'life.spawn-people', species: 'coastal-folk', count: 20, era: 'bronze', settled: true, wildGame: false, pos: [g.pos[best * 3], g.pos[best * 3 + 1], g.pos[best * 3 + 2]] });
     const lune = r.created!.find((e) => e.kind === 'settlement')!.id;
     must(sim, { k: 'settlement.rename', settlement: lune, name: 'Lune' });
     sim.step(30);

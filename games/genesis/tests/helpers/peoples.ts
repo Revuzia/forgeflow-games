@@ -20,7 +20,7 @@ export function must(sim: Sim, cmd: Command): ReturnType<Sim['applyNow']> {
 
 /** set a people down through `life.spawn-people`; returns its settlement (a band unless settled / above stone) */
 export function people(sim: Sim, species = 'plains-folk', count = 24, more: Record<string, unknown> = {}): Settlement {
-  const r = must(sim, { k: 'life.spawn-people', species, count, ...more } as Command);
+  const r = must(sim, { k: 'life.spawn-people', species, count, wildGame: false, ...more } as Command);
   const id = r.created?.find((e) => e.kind === 'settlement')?.id;
   assert.ok(id !== undefined, 'spawn-people names the new settlement');
   const st = sim.u.planets[0].people.settlement(id!);

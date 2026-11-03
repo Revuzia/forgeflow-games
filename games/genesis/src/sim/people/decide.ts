@@ -285,6 +285,11 @@ export function decide(x: PCtx, s: number): void {
       U[C.work] = (0.55 + dil * 0.35) * day * (elder ? 0.6 : 1);
       const low = lowHearth(x, st);
       if (low) U[C.tendFire] = (night ? 1.1 : 0.7) * (low.fuel <= 0 ? 1.4 : 1);
+      // (sim-fix-r1, the barren opening seed 2: a town with a built hearth and 124 wood in store let it go out in a
+      // -15 °C winter — every grown person chose 'warm' (up to 3.8) over tending the fire (at most 1.54) and huddled
+      // round the cold hearth until 29 of 33 froze. A cold grown person whose hearth is out relights it: that is how
+      // one gets warm. Only while it is out — once it burns, the warm and the work go on as before.)
+      if (low && low.fuel <= 0 && U[C.warm] > U[C.tendFire] && storeAny(st, x.c.itemsByTag.get('fuel') ?? []) >= 1) U[C.tendFire] = U[C.warm] + 0.05;
       if (carriesGoods(x, s)) U[C.store] = 1.15;
     }
     U[C.social] = (1 - N[nb + BELONG]) * 0.75 * (0.5 + A.traits[s * NT + TRAIT.sociability]) * (child ? 1.6 : 1);

@@ -45,7 +45,25 @@ pack>`, `?quality=low|medium|high|ultra|cinematic`.
 ## Publishing
 
 The site reads `public/game_meta.json` (title, descriptions, controls, genre) and `public/thumbnail.png` (the cover,
-1280x720). Vite copies both into `dist/`. Deployment follows the repository's `DEPLOY.md`. `public/game_controls.js`
+1280x720). Vite copies both into `dist/`. **The site gets `dist/`, never this folder.** The folder's own
+`index.html` is the Vite dev entry (it loads `/src/main.ts`). Uploading it would put the TypeScript source tree on the
+live site, and that page never boots. It would also overwrite the site's row with default metadata, because there is
+no `game_meta.json` at the folder root.
+
+To publish, run these in order:
+
+```
+cd games/genesis && npm run check && npm run build      # gate, then build into dist/
+cd ../..                                                 # the repository root
+python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dry-run   # expect ~53 files, game_meta.json last
+python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis
+```
+
+**Do not publish GENESIS with `upload_game.py`, `upload-game.bat` or `python upload_game.py --all`** (the "easy way" in
+`UPLOAD_GAMES.md`). They deploy `games/<slug>/` itself rather than its `dist/`, so they would upload the dev tree
+described above. This holds until the pipeline learns to deploy `dist/`. A fleet redeploy with `--all` needs the
+same care, because it picks up `games/genesis` too. Other deployment details are in the repository's `DEPLOY.md`.
+`public/game_controls.js`
 is the ForgeFlow site bar (fullscreen, mute, pause). Its pause stops time and shows the game menu, and pressing it
 again restores the speed. `index.html` sets `GAME_CONFIG` for the bar.
 

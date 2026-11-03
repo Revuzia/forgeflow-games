@@ -947,3 +947,38 @@ test('mercy after wrath: a town frightened by a default drought takes the answer
   must(sim, { k: 'miracle.wood', pos: [...st.pos], radius: st.territory + 150 });
   assert.ok(sim.drainEvents().some((e) => e.t === 'gift' && /refused: fear/.test(String(e.text))), 'an unasked gift from a feared god still rots');
 });
+
+// sim-fix-r1 (owner decision 3; release owner-r1 verdicts 2-3, acceptance extras-r4: a default tornado left trust and
+// loyalty below a quiet world's on 8 of 8 seeds): survivors of the god's harm rally once the quiet returns.
+test('a default tornado the town survives builds trust and loyalty above a quiet world\'s', () => {
+  const day = (sim: S) => Math.round(sim.u.planets[0].st.dayHours * 60);
+  const quiet = town(), hit = town();
+  assert.equal(hit.sim.u.god.laws['god.wrath'] ?? 0.3, 0.3, 'the default wrath');
+  must(hit.sim, { k: 'disaster.spawn', kind: 'tornado', pos: [...hit.st.pos] });
+  quiet.sim.step(6 * day(quiet.sim)); hit.sim.step(6 * day(hit.sim));
+  const q = means(quiet.sim, quiet.st.id), h = means(hit.sim, hit.st.id);
+  assert.ok(h.fear > q.fear + 0.1, `it frightened them: fear ${q.fear.toFixed(3)} vs ${h.fear.toFixed(3)}`);
+  assert.ok(h.trust > q.trust, `trust above a quiet world's: ${q.trust.toFixed(3)} vs ${h.trust.toFixed(3)}`);
+  assert.ok(h.loyalty > q.loyalty + 0.03, `loyalty above a quiet world's: ${q.loyalty.toFixed(3)} vs ${h.loyalty.toFixed(3)}`);
+});
+
+test('the owner\'s session at the default wrath (storm, drought, the prayer answered, meteor): trust and loyalty pass 0.15', () => {
+  const { sim, st } = town();
+  const p = sim.u.planets[0], day = Math.round(p.st.dayHours * 60);
+  let peakT = 0, peakL = 0;
+  const look = () => { const m = means(sim, st.id); peakT = Math.max(peakT, m.trust); peakL = Math.max(peakL, m.loyalty); };
+  must(sim, { k: 'disaster.spawn', kind: 'tornado', pos: [...st.pos] });
+  sim.step(4 * day); look();
+  must(sim, { k: 'disaster.spawn', kind: 'drought', pos: [...st.pos] });
+  sim.step(day);
+  const r = srel(sim.u, p.id, st.id);
+  assert.ok(r.prayers.length > 0, 'the drought raised a prayer');
+  const a = must(sim, { k: 'prayer.answer', settlement: st.id });
+  assert.ok(!/will not take|refus/.test(a.msg), `the answer was taken: ${a.msg}`);
+  sim.step(7 * day); look();
+  must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: [...st.pos] });
+  for (let d = 0; d < 12; d++) { sim.step(day); look(); }
+  assert.ok(peakT > 0.15 && peakL > 0.15, `trust ${peakT.toFixed(3)}, loyalty ${peakL.toFixed(3)}`);
+  const end = means(sim, st.id);
+  assert.ok(end.loyalty > 0.15, `loyalty holds after the meteor: ${end.loyalty.toFixed(3)}`);
+});

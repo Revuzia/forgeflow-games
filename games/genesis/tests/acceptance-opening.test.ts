@@ -1,0 +1,66 @@
+// GENESIS — CONTRACT §21.1 / §16.1 on the path players actually take (sim-fix-r1, release owner-r1 verdict 1): the UI
+// opening (src/ui/opening.ts) on scenario `barren` — breathe, a storm and a sea, sow where the sun stands, set 30 plains
+// folk down at the ring the opening picks (client/poi.ts homesteadCell on the lit face), teach fire — and then the world
+// is left running at the opening's hand-over speed with no further act of the god. On the old tree the band starved to
+// extinction by about Year 2 (no tree, shrub or soil within reach of the ring, no game on the planet: no sticks, no
+// spears, no firewood, no berries). The band must live, and find something nobody gave it.
+//
+// Grid n = 32 to keep the gate short; the full n = 64, 8 seeds x 10 years run is _harness/scratch/sim-fix-r1/run8.sh
+// (opening-probe.ts), recorded in _harness/scratch/ledgers/sim-fix-r1.md.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Sim } from '../src/sim/sim.ts';
+import type { Command } from '../src/sim/types.ts';
+import { homesteadCell } from '../src/client/poi.ts';
+
+function opening(seed: number): { sim: Sim; sid: number; lib0: number } {
+  const sim = new Sim({ seed, scenario: 'barren', overrides: { n: 32 } });
+  const u = sim.u, p = u.planets[0];
+  const day = p.st.dayHours * 60;
+  const must = (c: Command) => { const r = sim.applyNow(c); assert.ok(r.ok, `${c.k}: ${r.msg}`); return r; };
+  const posOf = (c: number) => [p.grid.pos[c * 3], p.grid.pos[c * 3 + 1], p.grid.pos[c * 3 + 2]];
+  must({ k: 'planet.add-air', amount: 1 } as Command);
+  sim.step(Math.round(day * 0.3));
+  must({ k: 'weather.global', kind: 'storm' } as Command);
+  must({ k: 'water.sea-level', value: -40 } as Command);
+  sim.step(day);
+  const s0 = u.sun(p, u.tick).dir; const here = [s0[0], s0[1], s0[2]];
+  must({ k: 'weather.global', kind: 'none' } as Command);
+  must({ k: 'life.plant', species: 'meadow-grass', pos: here, radius: 12000, density: 0.8 } as Command);
+  must({ k: 'life.plant', species: 'berry-bush', pos: here, radius: 1800, density: 0.5 } as Command);
+  must({ k: 'life.forest', pos: here, radius: 1400 } as Command);
+  sim.step(Math.round(day * 0.5));
+  // the ring: homesteadCell over the lit morning face (opening.ts focusGround + poi.ts)
+  const fields = new Map<string, Float32Array>();
+  for (const [k, v] of Object.entries(p.f)) if (v instanceof Float32Array) fields.set(k, v); else if (v instanceof Float64Array) fields.set(k, Float32Array.from(v));
+  const sun = u.sun(p, u.tick).dir, P = p.grid.pos, t0 = fields.get('temperature')!, tm = new Float32Array(t0.length);
+  for (let c = 0; c < tm.length; c++) {
+    const el = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2], east = P[c * 3] * sun[2] - P[c * 3 + 2] * sun[0];
+    tm[c] = el > 0.25 && east < 0.15 ? t0[c] : -99;
+  }
+  fields.set('temperature', tm);
+  const pv = { grid: p.grid, params: { radius: p.st.radius }, fields, settlements: [] } as never;
+  let h = homesteadCell(pv);
+  if (h.cell < 0) { fields.set('temperature', t0); h = homesteadCell(pv); }
+  const r = must({ k: 'life.spawn-people', species: 'plains-folk', count: 30, ...(h.cell >= 0 ? { pos: posOf(h.cell) } : {}) } as Command);
+  const sid = r.created!.find((e) => e.kind === 'settlement')!.id as number;
+  must({ k: 'idea.teach', knowledge: 'fire-keeping', settlement: sid } as Command);
+  must({ k: 'idea.teach', knowledge: 'fire-making', settlement: sid } as Command);
+  const lib0 = p.people.settlements.find((s) => s.id === sid)!.library.length;
+  return { sim, sid, lib0 };
+}
+
+for (const seed of [1, 8]) {
+  test(`the barren opening, left running with no further act: the band set down at the ring lives (seed ${seed})`, () => {
+    const { sim, lib0 } = opening(seed);
+    const p = sim.u.planets[0];
+    const year = Math.round(p.st.orbit.period);
+    const alive = () => p.people.settlements.filter((s) => s.fallen < 0).reduce((a, s) => a + (p.people.members.get(s.id)?.length ?? 0), 0);
+    let low = 30;
+    for (let q = 0; q < 12; q++) { sim.step(Math.round(year / 4)); low = Math.min(low, alive()); assert.ok(alive() > 0, `extinct at Y${(q + 1) / 4}`); }
+    const n = alive();
+    assert.ok(n >= 20, `the band holds on through three years (alive ${n}, low ${low})`);
+    const lib = Math.max(...p.people.settlements.filter((s) => s.fallen < 0).map((s) => s.library.length));
+    assert.ok(lib > lib0 + 2, `it found things nobody gave it (library ${lib0} -> ${lib})`);
+  });
+}
