@@ -96,7 +96,9 @@ CARDS = {
                               "size": 0.25},
                              {"at": "x_notch_mid", "az": 140.0, "el": 15.0, "dist": 0.6, "color": "#BFE4D8",
                               "power": 35.0, "size": 0.2}]},
-        "portrait": {"yaw": 30.0, "t": 0.98},
+        # (the bowed Stubborn bust hid the face behind the fist and showed the pale dome from above: the bust is the
+        # lobby carry under the card's river light, the lacquered face lit warm)
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 28.0},
         "plate": {"tint": "#9DB4B4", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
                   "glow_color": "#B8D4D6"},
     },
