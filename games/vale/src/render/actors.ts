@@ -74,6 +74,8 @@ import type { FeelEvent } from './vfx/system.ts';
 import { opaqueVeilable, patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
 import { composeIndex, dequantUnit, faceLockedLod, indexView, LOD, lodIndex, lodReady, lodSwitch, prepareShadowLod, shadowLods } from './lod.ts';
 import { structureMaterial } from './structures.ts';
+import { BAR_CLEAR, fighterBarAnchor } from './bar_clearance.ts';
+import { CAMERA } from './camera.ts';
 
 const DEV_MANNEQUIN_HEIGHT = 1.95;
 /** baked rows a crowd texture may hold (WebGL2 guarantees 2048; every desktop GPU VALE targets has ≥ 8192) */
@@ -143,6 +145,8 @@ interface Template {
   crowd?: CrowdBake | null;
   /** a patched accent clone that only holds the warm-up program (ModelLibrary.ready) */
   warmAccent?: MeshStandardMaterial;
+  /** CW1 bar clearance: a fighter's computed overhead-bar anchor (m above its feet; bar_clearance.ts) */
+  barAnchor?: number;
 }
 
 /** the AnimationAction / AnimationMixer surface the Actor drives (three's, or crowd.ts' baked stand-ins) */
@@ -484,7 +488,16 @@ export class ModelLibrary {
         this.patchMaterials(body.gltf.scene, charLight('fighter'), def.art.accentMaterial);
         const hull = hullPlan(body.gltf.scene);
         await lodReady;                                                    // perf PERF-m5: the match body's LOD1
-        return { scene: body.gltf.scene, clips, roles: def.art.clips as Record<string, string | undefined>, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull) };
+        const roles = def.art.clips as Record<string, string | undefined>;
+        // CW1 bar clearance: the bar anchor that keeps this body's focal props out from under its own bar (once per
+        // template, at load: the loading screen pays the ~50-100 ms of CPU skinning, never a frame in play)
+        const floor = def.art.height * def.art.scale + BAR_CLEAR.gap;
+        let barAnchor = floor;
+        try {
+          const moves = [roles.idle, roles.run].map((n) => (n ? clips.get(n) : undefined)).filter((c): c is AnimationClip => !!c);
+          barAnchor = fighterBarAnchor(body.gltf.scene, moves, def.art.sockets, floor, def.art.scale, { pitchDeg: CAMERA.pitchDeg, fovDeg: CAMERA.fovDeg, distance: CAMERA.distance, viewH: 1080 });
+        } catch (e) { console.warn('[vale] bar clearance', def.id, e); }
+        return { scene: body.gltf.scene, clips, roles, fit: 1, dev: false, hull, bodyLod: bodyLodOf(body.gltf.scene, hull), barAnchor };
       }
       if (this.opts.dev && this.opts.devModelUrl) {
         const m = await this.assets.modelUrl(this.opts.devModelUrl);
@@ -642,7 +655,8 @@ export class Actor implements CrowdActor {
   readonly root = new Group();
   model: Object3D | null = null;
   dev = false;
-  /** bar anchor height above the ground (art height × scale + 0.35 m) */
+  /** bar anchor height above the ground (art height × scale + 0.35 m; a fighter's is computed from its model once it
+   *  attaches: bar_clearance.ts) */
   barHeight = 2.2;
   artHeight = 1.9;
   radius = 0.5;
@@ -754,6 +768,7 @@ export class Actor implements CrowdActor {
     if (this.disposed || !t) return;
     this.template = t;
     this.dev = t.dev;
+    if (this.kind === 'fighter' && t.barAnchor !== undefined) this.barHeight = t.barAnchor;
     if (t.crowd) {
       // the crowd draws this unit (crowd.ts): an empty body node carries the root placement and the scale/squash
       const body = new Group();
