@@ -222,7 +222,9 @@ SKIN_FLAT: dict = {}
 #               light on the halo, every clapper lit), a low three-quarter, the bust at the brief's 28 degrees
 #   Chalkline   the taunt's rod tap on the ring under ink-dark night light (a cold moon key from the camera's right,
 #               a strong cool rim, a cold glint on the rod head and ring), a higher, longer lens, more profile
-#   First Bell  the ult's grounded toll (the striker held on the ground, the back bent over it) with every bell lit:
+#   First Bell  the ult's grounded toll (the striker held on the ground, the back bent over it) with every bell lit
+#               (pitch -4: at -9 the long lens put the camera under the floor; render._fit_camera now guards it);
+#               its bust is the ult's first beat (t 0.10: the rod upright beside the visor, the face up to the light):
 #               a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm
 CARDS = {
     "vashil": {
@@ -248,14 +250,14 @@ CARDS = {
                   "glow_color": "#B8C6EC"},
     },
     "vashil_first_bell": {
-        "splash": {"clip": "cast_ult", "t": 0.56, "yaw": 16.0, "pitch": -9.0, "lens": 46.0, "fill": 0.84, "x": 0.70,
+        "splash": {"clip": "cast_ult", "t": 0.56, "yaw": 16.0, "pitch": -4.0, "lens": 46.0, "fill": 0.84, "x": 0.70,
                    "key_az": 235.0, "key_el": 32.0, "key_color": "#FFE4B5", "sun": 3.4, "rim_cool": 0.9,
                    "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C48E", "accent": 2.4,
                    "focal": [{"at": "x_halo", "off": [0.0, 0.0, -0.05], "az": 180.0, "el": 45.0, "dist": 1.0,
                               "color": "#FFD48A", "power": 110.0, "size": 0.4},
                              {"at": "x_rod_head", "az": 190.0, "el": 10.0, "dist": 0.6, "color": "#FFE2B0",
                               "power": 40.0, "size": 0.25}]},
-        "portrait": {"yaw": 20.0, "t": 0.29},
+        "portrait": {"yaw": 24.0, "t": 0.10},
         "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
     },
 }

@@ -179,7 +179,7 @@ Value bands (area-weighted): top **78** (70-85) · mid **63** (45-65) · feet **
 - Cards (closing review VAS-M3): every card has its own staging in `CARDS` (vashil.py; schema in art/blender/portraits.py), and each portrait derives from its card's staging.
   - Base splash: `victory` t 0.92, yaw 31, a low three-quarter. The raised finger is on the camera side as the ring catches the low sun: a dawn key low from the front-left, warm light on the halo, every clapper lit. Portrait: the same moment at yaw 28.
   - Chalkline splash: `taunt` t 0.40, the rod tapping the ring, yaw 42, a higher and longer lens. Ink-dark night light: a cold moon key from the camera's right, a strong cool rim, a cold glint on the rod head and ring. Portrait: yaw 36.
-  - First Bell splash: `cast_ult` t 0.56, the grounded toll with the striker held on the ground, yaw 16, low. Every bell is lit: a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm. Portrait: the ult's raised rod (t 0.29) at yaw 20.
+  - First Bell splash: `cast_ult` t 0.56, the grounded toll with the striker held on the ground, yaw 16, pitch -4 (low). Every bell is lit: a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm. Portrait: the ult's first beat (t 0.10, the rod upright beside the visor, the face lifted to the light) at yaw 24 (the overhead raise at t 0.29 hid the visor behind the arms).
   - Render: the subject at 2x with 128 samples and OpenImageDenoise, highlights to luma 230 or more. Measure with `python3 art/tools/card_qa.py vashil`.
 - Icon (128 square): the arched visor under the ring with two bells.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.

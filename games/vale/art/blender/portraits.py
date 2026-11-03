@@ -44,9 +44,11 @@ An image with no CARDS entry renders as before (the shared SPLASH, the idle_lobb
 OpenImageDenoise (albedo + normal guides, CPU), reduced premultiplied; exposes it CARD_EXPOSURE (-0.5 EV) so a pale
 kit keeps highlight headroom; the composite (plates.finish) brushes the subject with the plate's Kuwahara at radius
 sub_paint_r (1 px at 1600) and expands its top 5 % so its p99.7 reaches display 0.93 (sub_hi: highlights at luma
->= 230 after the LUT); the shadow catcher keeps the contact shadow. Measure the cards with
+>= 230 after the LUT); the shadow catcher keeps the contact shadow. A low "pitch" on a long lens is safe: render._fit_camera
+lifts the camera to CAM_FLOOR (0.15 m) when the staging would put it under the floor (the shadow catcher would hide
+the figure: Vashil First Bell at pitch -9 rendered only its rod head). Measure the cards with
     python3 art/tools/card_qa.py <id> [...] --out _harness/_reports/<name>.txt
-(grain: figure vs plate blocks; highlights p99.9 >= 230; figure-box MAD of each skin vs its base >= 30; framing).
+(grain: figure vs plate blocks; speckle: the pixel-scale part of it (3x3 median residual); highlights p99.9 >= 230; figure-box MAD of each skin vs its base >= 30; framing).
 """
 import glob
 import importlib.util

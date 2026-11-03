@@ -819,6 +819,9 @@ def splash_post(fg: np.ndarray, plate: np.ndarray, strength: float = 1.0) -> np.
     return comp
 
 
+CAM_FLOOR = 0.15         # m: the lowest a card camera may sit (the floor guard in _fit_camera)
+
+
 def _fit_camera(cam, lo: V, hi: V, yaw: float, pitch: float, lens: float, fill: float, aspect: float, x_frac: float,
                 y_center: float | None = None):
     """Aim a perspective camera at the subject box from (yaw, pitch) so its height fills `fill` of the
@@ -831,6 +834,11 @@ def _fit_camera(cam, lo: V, hi: V, yaw: float, pitch: float, lens: float, fill: 
     sw = 36.0
     vfov = 2 * math.atan((sw / 2) / lens / max(aspect, 1.0)) if aspect >= 1 else 2 * math.atan((sw / 2) / lens)
     dist = hgt / fill / (2 * math.tan(vfov / 2)) + 0.5 * max(hi.x - lo.x, hi.y - lo.y) * 0.5
+    # FLOOR GUARD (CW5 cards): a low hero pitch on a long lens can put the camera under the floor (z < 0), where the
+    # splash's shadow-catcher plane hides the whole figure but whatever pokes through it (Vashil First Bell's
+    # struck rod head: only the striker rendered). Keep the camera at least CAM_FLOOR over the ground.
+    if lo.z > -0.5 and ctr.z + dist * math.sin(math.radians(pitch)) < CAM_FLOOR:
+        pitch = math.degrees(math.asin(max(-1.0, min(1.0, (CAM_FLOOR - ctr.z) / dist))))
     look_at(cam, ctr, orbit(ctr, dist, yaw, pitch))
     cam.data.shift_x = -(x_frac - 0.5) * (1.0 if aspect >= 1 else aspect)
     cam.data.shift_y = 0.0
