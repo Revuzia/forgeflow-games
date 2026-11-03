@@ -32,30 +32,30 @@
   },
   "uv_coverage": 0.59,
   "bake": {
-    "base": 11.51,
-    "rough_metal": 9.04,
-    "normal": 5.21,
-    "ao": 6.48,
-    "normal_fixed_px": 75857,
-    "projection": 241.14,
-    "pack_save": 242.5,
-    "total": 275.89
+    "base": 16.17,
+    "rough_metal": 13.38,
+    "normal": 8.24,
+    "ao": 6.28,
+    "normal_fixed_px": 69880,
+    "projection": 111.03,
+    "pack_save": 111.45,
+    "total": 156.61
   },
   "tris": 23446,
   "mesh_top_m": 2.054,
-  "glb_bytes_raw": 2588940,
+  "glb_bytes_raw": 2569120,
   "optimize": {
     "ok": true,
-    "before": 2588940,
-    "after": 1068752
+    "before": 2569120,
+    "after": 1057656
   },
-  "glb_bytes": 1068752,
+  "glb_bytes": 1057656,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_almanac.glb (1044 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_almanac_base 2048x2048 214K, dunsom_almanac_normal 512x512 46K, dunsom_almanac_orm 512x512 69K",
-      "  skinned meshes: dunsom_accent(354v), dunsom_almanac(20328v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_almanac.glb (1033 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_almanac_base 2048x2048 211K, dunsom_almanac_normal 512x512 46K, dunsom_almanac_orm 512x512 69K",
+      "  skinned meshes: dunsom_accent(354v), dunsom_almanac(20051v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
@@ -69,8 +69,8 @@
       "portrait": "art/out/fighters/dunsom/dunsom_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 28.47,
-      "portrait": 16.52
+      "splash": 124.39,
+      "portrait": 19.02
     }
   },
   "three_qa": {
@@ -102,24 +102,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_almanac.png",
-    "seconds": 116.8,
+    "seconds": 23,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.32,
-      "model": 253.43,
-      "lows_bind": 24.67,
-      "uv": 11.39,
-      "bake": 276.83,
-      "export": 0.55,
-      "optimize": 4.53,
-      "load_test": 0.72,
-      "render": 45.12,
-      "three_qa": 117.9
+      "rig": 0.0,
+      "materials": 0.23,
+      "model": 363.81,
+      "lows_bind": 63.08,
+      "uv": 33.5,
+      "bake": 157.1,
+      "export": 0.46,
+      "optimize": 1.49,
+      "load_test": 0.33,
+      "render": 143.54,
+      "three_qa": 23.63
     },
-    "total_s": 736.03
+    "total_s": 787.72
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,
