@@ -110,7 +110,10 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
     };
     raf = requestAnimationFrame(loop);
     const stopSettings = effect(() => { input.setSettings(state.settings.value); });
-    return () => { cancelAnimationFrame(raf); detach(); stopSettings(); model.dispose(); };
+    // dev build (?dev=1, the harness handle is on): the HUD model, so a probe can inject events and time the banners
+    const w = window as unknown as { __vale?: unknown; __valeHud?: HudModel };
+    if (w.__vale) w.__valeHud = model;
+    return () => { cancelAnimationFrame(raf); detach(); stopSettings(); model.dispose(); if (w.__valeHud === model) delete w.__valeHud; };
   }, [input]);
 
   // first-match hints (strings hint.*), once per device

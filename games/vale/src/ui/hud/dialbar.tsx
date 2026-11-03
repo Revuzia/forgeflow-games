@@ -238,17 +238,20 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
   const sweep = useRef<HTMLSpanElement>(null);
   const secs = useRef<HTMLSpanElement>(null);
   const actEl = useRef<HTMLSpanElement>(null);
-  const prevCd = useRef(-1);
+  /** a real cooldown is running (the ready wash fires when it ends) */
+  const armed = useRef(false);
   const actMax = useRef(0);
   useWriter(() => {
     const s = get();
     if (s.onCd) { setVar(sweep.current, '--e', s.elapsed.toFixed(4)); const t = cdText(s.cd); put(secs.current, t); setCls(secs.current, 'is-long', t.length > 3); }
-    // the ready moment when a cooldown ends: a chalk wash that settles (250 ms) and the glint
-    if (prevCd.current > 0.05 && s.cd <= 0 && s.learned && !reduced()) {
+    // the ready moment when a cooldown ends: a chalk wash that settles (250 ms) and the glint. Armed by a real cooldown
+    // (> 0.05 s) and fired on the first tick it reads 0: the tick before is one sim step (0.033 s at 30 Hz), so comparing
+    // only the previous tick's value against 0.05 never fired at speed 1 (critic hud-states, measured live)
+    if (s.cd > 0.05) armed.current = true;
+    if (armed.current && s.cd <= 0) { armed.current = false; if (s.learned && !reduced()) {
       glint.current?.animate([{ opacity: 0.9, transform: 'translateX(-60%) skewX(-30deg)' }, { opacity: 0, transform: 'translateX(160%) skewX(-30deg)' }], { duration: 360, easing: DAWN });
       el.current?.animate([{ filter: 'brightness(1.9) saturate(0.4)', boxShadow: '0 0 0 2px rgba(255,248,234,0.95)' }, { filter: 'brightness(1) saturate(1)', boxShadow: '0 0 0 2px rgba(255,248,234,0)' }], { duration: 250, easing: DAWN });
-    }
-    prevCd.current = s.cd;
+    } }
     if (s.act !== undefined) {
       if (Number.isFinite(s.act)) { if (s.act > actMax.current) actMax.current = s.act; setVar(actEl.current, '--a', clamp01(s.act / Math.max(0.01, actMax.current)).toFixed(3)); }
       else setVar(actEl.current, '--a', '1');

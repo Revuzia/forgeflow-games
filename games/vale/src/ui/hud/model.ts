@@ -28,7 +28,13 @@ export interface KillRow { id: number; at: number; kind: 'takedown' | 'fell' | '
   text: string; mine: boolean; cause?: Cause }
 export interface Banner { id: number; title: string; sub: string; major: boolean; ms: number; tone: 'own' | 'foe' | 'plain';
   /** kill banners: the fighter who scored (a) and the one who fell (b), shown as round portraits */
-  a?: Who; b?: Who }
+  a?: Who; b?: Who;
+  /** news rank (critic hud-states): a higher rank pre-empts a lower one on screen and jumps the queue. 5 a five-takedown
+   *  peal; 4 four tolls, a team's lamps out; 3 three tolls, first takedown, objectives, major structures; 2 other major
+   *  news, two tolls, a run ended, long runs; 1 the rest */
+  rank: number;
+  /** a story key ('multi:<player>', 'streak:<player>'): a newer banner of the same story replaces the queued one */
+  story?: string }
 export interface FeedLine { id: number; at: number; text: string; tone: 'info' | 'warn' | 'ally' | 'hint' }
 export interface PingMark { id: number; at: number; kind: PingKind; x: number; y: number; target?: EntityId; player: PlayerId; self: boolean; fromX: number; fromY: number }
 export interface Recap { at: number; open: boolean; killer: EntityId | -1; killerName: string; killerDef: string; log: readonly DamageLogEntry[]; structure: boolean }
@@ -37,6 +43,9 @@ export interface NumberPop { kind: 'damage' | 'heal' | 'gold'; dtype?: 'phys' | 
 
 const KILLFEED_MS = 6000, FEED_MS = 6000, PING_MS = 4000;
 const MINOR_MS = 2400, MAJOR_MS = 3600, KILL_MS = 3500;
+/** a banner pre-empted within this long of appearing goes back into the queue (it was not read yet); later, it was */
+const GLANCE_MS = 1000;
+const QUEUE_MAX = 2;
 /** statuses that stop casting (sim status.ts canCast: hard CC, taunt, fear); silence stops abilities only */
 export const CAST_LOCK = new Set<string>(['stun', 'airborne', 'sleep', 'taunt', 'fear']);
 /** loss of control the CC chip names, strongest first */
@@ -303,15 +312,38 @@ export class HudModel {
     const line: FeedLine = { id: seq++, at: performance.now(), text, tone };
     this.feed.value = [...this.feed.peek().slice(-4), line];
   }
-  announce(title: string, sub: string, major: boolean, tone: Banner['tone'] = 'plain', who?: { a?: Who; b?: Who }): void {
+  announce(title: string, sub: string, major: boolean, tone: Banner['tone'] = 'plain', who?: { a?: Who; b?: Who }, o?: { rank?: number; story?: string }): void {
     if (!title) return;
-    const b: Banner = { id: seq++, title, sub, major, ms: who ? KILL_MS : major ? MAJOR_MS : MINOR_MS, tone, ...(who?.a ? { a: who.a } : {}), ...(who?.b ? { b: who.b } : {}) };
-    if (!this.banner.peek()) { this.showBanner(b); return; }
-    this.bannerQ.push(b);
-    if (this.bannerQ.length > 2) this.bannerQ.shift();
+    const b: Banner = { id: seq++, title, sub, major, ms: who ? KILL_MS : major ? MAJOR_MS : MINOR_MS, tone, ...(who?.a ? { a: who.a } : {}), ...(who?.b ? { b: who.b } : {}),
+      rank: o?.rank ?? (major ? 2 : 1), ...(o?.story ? { story: o.story } : {}) };
+    // the same story told again (three tolls after two, a longer run): the newer line replaces the queued one
+    if (b.story) this.bannerQ = this.bannerQ.filter((q) => q.story !== b.story);
+    const cur = this.banner.peek();
+    if (!cur) { this.showBanner(b); return; }
+    if (b.rank > cur.rank) {
+      // bigger news pre-empts what is on screen; an unread banner of another story goes back into the queue
+      if (cur.story !== b.story && performance.now() - this.bannerAt < GLANCE_MS) this.enqueue(cur);
+      this.showBanner(b);
+      return;
+    }
+    if (b.story && cur.story === b.story) { this.showBanner(b); return; }
+    this.enqueue(b);
   }
+  /** the queue is ordered by rank (first come first within a rank); when it is full the lowest-ranked oldest line goes */
+  private enqueue(b: Banner): void {
+    const q = this.bannerQ;
+    let i = q.findIndex((x) => x.rank < b.rank);
+    if (i < 0) i = q.length;
+    q.splice(i, 0, b);
+    while (q.length > QUEUE_MAX) {
+      const low = Math.min(...q.map((x) => x.rank));
+      q.splice(q.findIndex((x) => x.rank === low), 1);
+    }
+  }
+  private bannerAt = 0;
   private showBanner(b: Banner): void {
     this.banner.value = b;
+    this.bannerAt = performance.now();
     clearTimeout(this.bannerTimer);
     this.bannerTimer = window.setTimeout(() => {
       if (this.disposed) return;
@@ -375,7 +407,7 @@ export class HudModel {
           if (ev.streak >= 3 && !this.ffa) {
             const n = Math.min(7, ev.streak);
             const title = this.t(`announce.streak.${n}.title`);
-            if (title) { this.pendingKill = null; this.announce(title, this.t(`announce.streak.${n}.sub`, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team), { a: this.who(ev.killer), b: victim }); }
+            if (title) { this.pendingKill = null; this.announce(title, this.t(`announce.streak.${n}.sub`, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team), { a: this.who(ev.killer), b: victim }, { rank: ev.streak >= 5 ? 2 : 1, story: `streak:${ev.killer}` }); }
           }
         } else {
           const vp = v.players[ev.victim];
@@ -493,7 +525,7 @@ export class HudModel {
       if (ps.length < 2 || !ps.every((p) => p.respawnIn > 0 || !(v.entity(p.entity)?.alive ?? false))) continue;
       this.wiped.add(team);
       const side = this.side(team);
-      this.announce(this.t(`announce.team_wipe.${side}.title`), this.t(`announce.team_wipe.${side}.sub`, { team: this.teamName(team) }), true, side === 'own' ? 'foe' : 'own');
+      this.announce(this.t(`announce.team_wipe.${side}.title`), this.t(`announce.team_wipe.${side}.sub`, { team: this.teamName(team) }), true, side === 'own' ? 'foe' : 'own', undefined, { rank: 4 });
       this.killRow({ kind: 'wipe', victim: { name: this.teamName(team), rel: this.relOfTeam(team), team }, assists: [], text: this.cv.t('killfeed.wipe', 'Lamps out for {team}', { team: this.teamName(team) }), mine: false });
     }
   }
@@ -507,11 +539,11 @@ export class HudModel {
         this.announce(this.t(`announce.match_start.${mode}.title`) || this.cv.t('hud.live', 'Live'), this.t(`announce.match_start.${mode}.sub`), true);
         break;
       }
-      case 'first_blood': this.pendingKill = null; this.announce(this.t('announce.first_blood.title'), this.t('announce.first_blood.sub', { name }), true, this.side(ev.team), this.killWho(ev.player)); break;
+      case 'first_blood': this.pendingKill = null; this.announce(this.t('announce.first_blood.title'), this.t('announce.first_blood.sub', { name }), true, this.side(ev.team), this.killWho(ev.player), { rank: 3 }); break;
       case 'multikill': {
         const n = Math.max(2, Math.min(5, Number(p.n) || 2));
         this.pendingKill = null;
-        this.announce(this.t(`announce.multikill.${n}.title`), this.t(`announce.multikill.${n}.sub`, { name }), n >= 3, this.side(ev.team), this.killWho(ev.player));
+        this.announce(this.t(`announce.multikill.${n}.title`), this.t(`announce.multikill.${n}.sub`, { name }), n >= 3, this.side(ev.team), this.killWho(ev.player), { rank: n, story: `multi:${ev.player ?? -1}` });
         break;
       }
       case 'shutdown': {
@@ -519,7 +551,7 @@ export class HudModel {
         const victim = this.nameOf(vp);
         this.pendingKill = null;
         this.announce(this.t('announce.shutdown.title'), this.t('announce.shutdown.sub', { name, victim, gold: fmtInt(Number(p.gold) || 0) }), false, this.side(ev.team),
-          { a: ev.player !== undefined ? this.who(ev.player) : undefined, b: Number.isFinite(vp) && this.view.players[vp] ? this.who(vp) : undefined });
+          { a: ev.player !== undefined ? this.who(ev.player) : undefined, b: Number.isFinite(vp) && this.view.players[vp] ? this.who(vp) : undefined }, { rank: 2 });
         break;
       }
       case 'structure_destroyed': {
@@ -527,7 +559,8 @@ export class HudModel {
         const side = this.side(ev.team);
         const params = { team: this.teamName(ev.team ?? 0) };
         // the fallen structure's side: "own" is bad news, so the banner tone flips
-        this.announce(this.t(`announce.structure_destroyed.${fam}.${side}.title`, params), this.t(`announce.structure_destroyed.${fam}.${side}.sub`, params), fam !== 'other' && !this.isNeedleFamily(fam), side === 'own' ? 'foe' : 'own');
+        this.announce(this.t(`announce.structure_destroyed.${fam}.${side}.title`, params), this.t(`announce.structure_destroyed.${fam}.${side}.sub`, params), fam !== 'other' && !this.isNeedleFamily(fam), side === 'own' ? 'foe' : 'own',
+          undefined, { rank: fam !== 'other' && !this.isNeedleFamily(fam) ? 3 : 1 });
         break;
       }
       case 'structure_respawned': {
@@ -542,7 +575,7 @@ export class HudModel {
         const key = this.has(`announce.objective_taken.${unit}.own.title`) ? unit : 'other';
         const side = this.side(ev.team);
         const params = { team: this.teamName(ev.team ?? 0) };
-        this.announce(this.t(`announce.objective_taken.${key}.${side}.title`, params), this.t(`announce.objective_taken.${key}.${side}.sub`, params), true, side);
+        this.announce(this.t(`announce.objective_taken.${key}.${side}.title`, params), this.t(`announce.objective_taken.${key}.${side}.sub`, params), true, side, undefined, { rank: 3 });
         break;
       }
       case 'eliminated': {
