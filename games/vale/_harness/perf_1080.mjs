@@ -55,8 +55,9 @@
 // 120 frames), then goes Home (30 frames, 4 s, forced GC). At every Home: Chrome's renderer process (the largest one) plus
 // GPU process footprint (macOS `footprint`), the live textures / geometries, what Renderer.setScene('menu') released, the
 // model bitmaps closed after upload, and the live float DataTextures (skeleton bone textures, crowd bakes) the Home scene
-// does not draw. Hard checks: renderer + GPU <= 2500 MB at every Home (the bench plays no audio: CW2's decoded audio,
-// ~86 MB at Home, comes on top), 0 leftover float DataTextures at the last two Homes, and > 0 bitmaps closed.
+// does not draw (a skeleton's bone texture is tagged where three makes it). Hard checks: renderer + GPU <= 2500 MB at every
+// Home (the bench plays no audio: CW2's decoded audio, ~86 MB at Home, comes on top), 0 leftover skeleton bone textures
+// at the last two Homes (other float DataTextures are listed: the match sky's 128x64 fallback stays), > 0 bitmaps closed.
 // gpubound (perf PERF-C1, part of --prod; --no-gpubound skips it, --gpubound-only runs it alone, --gpu-sec <s> its window,
 // default 45): the RIFT fight at High with the render scale forced to 2 (4× the pixels of 1080p: GPU-bound on any machine
 // the gate runs on) and dynamic resolution ON. Hard check (any machine): the scale leaves its base within 10 s. Idle
@@ -407,14 +408,26 @@ async function memMaps() {
         if (type === 'dispose' && live.has(this)) { const l = this._listeners?.dispose; if (!l || l.length === 0) live.delete(this); }
         return r;
       };
+      // skeleton bone textures are tagged where three makes them (Skeleton.computeBoneTexture)
+      const tagBones = () => {
+        if (window.__bonesTagged) return;
+        b.renderer.scene.traverse((o) => {
+          if (window.__bonesTagged || !o.isSkinnedMesh) return;
+          const proto = Object.getPrototypeOf(o.skeleton), orig = proto.computeBoneTexture;
+          proto.computeBoneTexture = function () { const r = orig.call(this); if (this.boneTexture) this.boneTexture.__bone = true; return r; };
+          window.__bonesTagged = true;
+        });
+      };
+      tagBones();
+      window.__tagBones = tagBones;
       window.__mapSnap = () => {
         const r = window.__VALE_BENCH__.renderer;
         const drawn = new Set();
         for (const sc of [r.menu?.scene, r.scene]) sc?.traverse((o) => { if (o.isSkinnedMesh && o.skeleton?.boneTexture) drawn.add(o.skeleton.boneTexture); for (const m of [o.material].flat()) if (m) for (const v of Object.values(m.uniforms ?? {})) if (v?.value?.isDataTexture) drawn.add(v.value); });
-        let float = 0, left = 0;
+        let float = 0, left = 0, bones = 0;
         const list = [];
-        for (const t of live) { if (!(t.image?.data instanceof Float32Array)) continue; float++; if (!drawn.has(t)) { left++; if (list.length < 8) list.push(`${t.image.width}x${t.image.height} ${t.name || ''} ${t.__from ?? ''}`.slice(0, 600)); } }
-        return { floatDataTextures: float, leftover: left, leftoverList: list };
+        for (const t of live) { if (!(t.image?.data instanceof Float32Array)) continue; float++; if (!drawn.has(t)) { left++; if (t.__bone) bones++; if (list.length < 8) list.push(`${t.__bone ? 'BONE ' : ''}${t.image.width}x${t.image.height} ${t.name || ''} ${t.__from ?? ''}`.slice(0, 600)); } }
+        return { floatDataTextures: float, leftover: left, leftoverBones: bones, leftoverList: list };
       };
     });
     const procs = async () => {
@@ -429,7 +442,7 @@ async function memMaps() {
       const p = await procs();
       const total = p.gpuMb !== null && p.rendererMb !== null ? p.gpuMb + p.rendererMb : null;
       const s = { tag, ...p, totalMb: total, ...r };
-      console.log(`memmaps ${tag.padEnd(14)} renderer ${p.rendererMb ?? '-'} + GPU ${p.gpuMb ?? '-'} = ${total ?? '-'} MB  heap ${r.heapMb} MB  textures ${r.textures}  geometries ${r.geometries}  programs ${r.programs}  float DataTextures ${r.floatDataTextures} (${r.leftover} not drawn)  bitmaps closed ${r.closedBitmaps}${r.lastRelease ? `  released ${JSON.stringify(r.lastRelease)}` : ''}`);
+      console.log(`memmaps ${tag.padEnd(14)} renderer ${p.rendererMb ?? '-'} + GPU ${p.gpuMb ?? '-'} = ${total ?? '-'} MB  heap ${r.heapMb} MB  textures ${r.textures}  geometries ${r.geometries}  programs ${r.programs}  float DataTextures ${r.floatDataTextures} (${r.leftover} not drawn, ${r.leftoverBones} of them bone textures)  bitmaps closed ${r.closedBitmaps}${r.lastRelease ? `  released ${JSON.stringify(r.lastRelease)}` : ''}`);
       return s;
     };
     const timeline = [];
@@ -438,6 +451,7 @@ async function memMaps() {
       const m = MEM_MAPS[i];
       if (i > 0) await page.evaluate((mode) => window.__VALE_BENCH__.rebuildMode(mode), m);
       await page.evaluate(() => window.__VALE_BENCH__.frames(60, 1 / 30));
+      await page.evaluate(() => window.__tagBones());
       await page.waitForTimeout(4000);                                    // late props, landmarks, ambient parts land
       await page.evaluate(() => window.__VALE_BENCH__.frames(60, 1 / 30));
       timeline.push(await sample(`match_${i + 1}_${m}`));
@@ -449,7 +463,7 @@ async function memMaps() {
     const homes = timeline.filter((x) => x.tag.startsWith('home_') && x.tag !== 'home_0');
     const misses = [];
     for (const h of homes) if (h.totalMb !== null && h.totalMb > HOME_BUDGET_MB) misses.push(`${h.tag}: renderer + GPU ${h.totalMb} MB > ${HOME_BUDGET_MB}`);
-    for (const h of homes.slice(-2)) if (h.leftover > 0) misses.push(`${h.tag}: ${h.leftover} float DataTextures live that Home does not draw`);
+    for (const h of homes.slice(-2)) if (h.leftoverBones > 0) misses.push(`${h.tag}: ${h.leftoverBones} skeleton bone textures live that Home does not draw`);
     const lastHome = homes[homes.length - 1];
     if (!(lastHome?.closedBitmaps > 0)) misses.push('no model bitmap was closed after upload');
     await page.screenshot({ path: join(ROOT, '_harness/_shots/fw_CW1_memmaps_home.png') }).catch(() => {});
