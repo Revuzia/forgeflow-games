@@ -541,6 +541,9 @@ export class TeamBrain {
           // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers a short one
           // only when the team is near (no road is under threat here: that returned above)
           desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' && near ? d.objectiveEven : 0;
+          // (CW3s refix, done:2: the laning phase's own objective is taken at even numbers once it is up and short for us
+          // — the grovehunter and the roads beside it; it used to wait for a fighter more, 8.5 min past its spawn)
+          if (this.phase === 'early' && !long && aa >= ae) desire = Math.max(desire, 0.75);
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
           if (this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
           if (d.contests && aa >= ae) {
@@ -559,6 +562,8 @@ export class TeamBrain {
         if (desire > 0 && prev === c) desire = Math.max(desire, Math.min(0.8, desire + 0.06));
       } else if (alive) {
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
+        // (CW3s refix, done:2: the laning phase's objective at even numbers, as above)
+        if (this.phase === 'early' && aa >= ae) desire = Math.max(desire, 0.75);
         // (contest: the enemy is at it and we are not short of bodies)
         if (d.contests && aa >= ae) {
           for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }

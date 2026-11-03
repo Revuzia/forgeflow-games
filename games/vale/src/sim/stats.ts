@@ -74,8 +74,9 @@ export function computeStats(w: World, e: Entity): void {
   if (e.team >= 0 && e.team < w.teams.length) {
     const tb = w.teams[e.team].buffs;
     for (let i = 0; i < tb.length; i++) {
-      if (e.kind === 'fighter') s.addBlock(tb[i].def.stats);
-      else if (e.kind === 'minion') s.addBlock(tb[i].def.minionStats);
+      // (a stacking team buff, CW3 CL-2: its stats count once per stack)
+      if (e.kind === 'fighter') s.addBlock(tb[i].def.stats, tb[i].stacks);
+      else if (e.kind === 'minion') s.addBlock(tb[i].def.minionStats, tb[i].stacks);
     }
   }
 

@@ -25,6 +25,7 @@ import type { SlotT } from '../../contracts/catalog.ts';
 import type { Command, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import { attackable, inAttackRange } from '../attack.ts';
 import { mitigated } from '../combat.ts';
+import { canMove } from '../status.ts';
 import { matchesFilter } from '../effects.ts';
 import {
   ORDER_ATTACK, ORDER_ATTACK_MOVE, ORDER_CAST, ORDER_MOVE, ORDER_NONE, SLOT_INDEX, type AbilitySlot, type Entity, type Player,
@@ -94,6 +95,8 @@ export abstract class BotBase {
   pMonsters = false;
   pMonsterX = 0; pMonsterY = 0;
   pAggro = 0;
+  /** RIFT laning (CW3 CL-1): a trade or all-in still takes a last hit that is there now, unless the kill is on */
+  pLhFight = false;
   pDive = false;
   /** where safety is (retreat / escape direction) */
   safeX = 0; safeY = 0;
@@ -440,7 +443,10 @@ export abstract class BotBase {
         const n = this.alliesIn(e.x, e.y, R, 0.65);
         // (CW3 CL-1: a group heal or shield also saves ONE ally — or me — about to fall in a fight; waiting for a second
         // one held the lampglass ults back to the late game)
-        const save = this.k.kind === 'rift' && info.minTargets > 1 && this.alliesIn(e.x, e.y, R, this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
+        // (CW3s refix: an ultimate's group heal saves at 10 points more health: its long cooldown is better spent than
+        // held, and the lampglass ult still sat unused past 10:00)
+        const lift = s.slot === 'ult' ? 0.1 : 0;
+        const save = this.k.kind === 'rift' && info.minTargets > 1 && this.alliesIn(e.x, e.y, R, (this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) + lift) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
         if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
         const gate = info.selfHpBelow <= 1 ? 1 : (u & U_SHIELD) ? 0.7 : 0.55;
@@ -542,6 +548,7 @@ export abstract class BotBase {
           const cx = info.areaAt === 'self' ? e.x : o.x, cy = info.areaAt === 'self' ? e.y : o.y;
           if (this.countIn(cx, cy, info.radius, true, false) < need) return false;
         }
+        if (this.diff.shotPatience > 0 && !(u & U_EXECUTE) && this.walkable(info, t, dd)) return false;
         this.cast(s, info, t, o.x, o.y);
         if (this.tel && (info.delivery === 'projectile' || info.delivery === 'area' || info.delivery === 'zone')) this.tel.shot(this.now, e.id, s.def.id, t.id);
         return true;
@@ -557,6 +564,19 @@ export abstract class BotBase {
         return true;
       }
     }
+  }
+
+  /** shot patience (CW3s refix, critic bot-micro: the veteran's skillshots hit less often than the adept's): a far
+   *  skillshot at a free, moving target that can walk out of it before it lands is held for a better moment — the
+   *  target held, slowed into a cast or a swing, or closer. `dd`: the aim distance. */
+  private walkable(info: AbilityInfo, t: Entity, dd: number): boolean {
+    if (info.delivery !== 'projectile' && info.delivery !== 'area') return false;
+    if (!canMove(t) || t.cast || t.atkWindup >= 0 || (t.vx === 0 && t.vy === 0)) return false;
+    const reach = info.delivery === 'projectile' ? info.projRange : Math.max(info.range, 1);
+    if (dd < reach * 0.6) return false;
+    const land = info.castTime + (info.delivery === 'projectile' ? dd / Math.max(1, info.projSpeed) : info.delay);
+    const out = (info.delivery === 'projectile' ? info.projWidth * 0.5 : info.radius) + t.radius;
+    return land * Math.max(0.5, t.stats.moveSpeed) * this.diff.shotPatience > out * 1.6;
   }
 
   private farmCast(s: AbilitySlot, info: AbilityInfo): boolean {
@@ -684,6 +704,15 @@ export abstract class BotBase {
     return best;
   }
 
+  /** the fighter `f` falls to my next swings: in reach and within two attacks, or under a fifth of its health */
+  protected killOn(f: Entity): boolean {
+    const e = this.e, ad = e.attackDef;
+    const ehp = f.hp + f.shield;
+    if (ehp < f.maxHp * 0.2) return true;
+    if (!ad || !inAttackRange(e, f)) return false;
+    return ehp <= mitigated(e, f, e.stats.ad, ad.damageType) * 2;
+  }
+
   /** a minion that will be last-hittable soon (stand near it); null if none */
   protected lastHitSoon(): Entity | null {
     const e = this.e, w = this.w, ad = e.attackDef;
@@ -748,7 +777,10 @@ export abstract class BotBase {
       // a last hit that is there now — or due within one swing — beats harass (not an all-in or a
       // teamfight): a harass swing then would spend the attack the last hit needs
       const harass = f.kind === 'fighter' && this.pFarm > 0 && this.pAggro < 0.9;
-      if (harass) { const lh = this.lastHitTarget(); if (lh) { this.attack(lh); return; } }
+      // (CW3 CL-1 fight-time last hits: a laner in a trade or an all-in takes the Wick its swing kills now, unless the
+      // fighter is about to fall — the kill is on when it is in reach and two more swings, or a fifth of its health, end it)
+      const fightLh = !harass && f.kind === 'fighter' && this.pLhFight && !this.killOn(f);
+      if (harass || fightLh) { const lh = this.lastHitTarget(); if (lh) { this.attack(lh); return; } }
       const due = harass && e.atkWindup < 0 && this.lastHitDue();
       const towerOk = this.pDive || f.kind !== 'fighter' || this.towerSafe(f.x, f.y, 0.2) || inAttackRange(e, f);
       if (towerOk && !due) { this.fightTarget(f); return; }

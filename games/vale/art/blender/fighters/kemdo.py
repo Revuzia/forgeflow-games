@@ -78,8 +78,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.9, "x": 0.6
 # shading the eyes, warm low key from behind her lens side, the lens glint lit;
 # Highrim: Vent's open hold on the high rim (the glaive planted as the centre post, the arms thrown wide, the head
 # back, exhaling) under hard high noon light and a cool rim (Heat Shimmer's skid showed her back and hid the face);
-# Long Evening: the lobby's lens held low to throw a glint on the ground, in festival lantern light (a warm amber
-# focal from low on the lens side, a lilac dusk key and rim).
+# Long Evening: Held Focus's channel, the lens held low before her at the target, in festival lantern light (a warm
+# amber focal from low on the lens side, a lilac dusk key and rim; the recall's bow put the lens over her face).
 # The portraits derive from each card's frame and light; their camera sits wider on the lens side (x < 0.5 leaves
 # the frame's room on the lens side) so the lens rim enters the edge and catches the light (brief section 10-11).
 CARDS = {
@@ -91,7 +91,7 @@ CARDS = {
                               "power": 80.0, "size": 0.3},
                              {"at": "head", "az": 160.0, "el": 10.0, "dist": 0.8, "color": "#FFE0C0", "power": 20.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 22.0, "lens": 70.0, "fill": 0.86, "x": 0.58},
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 26.0, "lens": 70.0, "fill": 0.70, "x": 0.62},
         "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890"},
     },
     "kemdo_highrim": {
@@ -106,14 +106,14 @@ CARDS = {
         "plate": {"glow": [0.50, 0.35, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.8},
     },
     "kemdo_long_evening": {
-        "splash": {"clip": "idle_lobby", "t": 0.32, "yaw": -22.0, "pitch": -5.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
-                   "key_az": 140.0, "key_el": 22.0, "key_color": "#E6CDEB", "sun": 2.4, "rim_cool": 1.4,
-                   "rim_warm": 0.9, "bounce": 0.7, "bounce_color": "#E3A060", "accent": 1.5, "exposure": -0.4,
+        "splash": {"clip": "channel", "t": 0.50, "yaw": 32.0, "pitch": -4.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 140.0, "key_el": 24.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.4,
+                   "rim_warm": 0.9, "bounce": 0.45, "bounce_color": "#E3A060", "accent": 1.5, "exposure": -0.6,
                    "focal": [{"at": "x_lens", "az": 175.0, "el": 5.0, "dist": 0.7, "color": "#FFB46A",
-                              "power": 90.0, "size": 0.35},
+                              "power": 55.0, "size": 0.35},
                              {"at": "head", "az": 200.0, "el": 5.0, "dist": 0.8, "color": "#FFC890", "power": 24.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": -20.0, "lens": 70.0, "fill": 0.86, "x": 0.44},
+        "portrait": {"yaw": 26.0, "lens": 70.0, "fill": 0.80, "x": 0.56},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
     },
 }
@@ -1357,11 +1357,11 @@ def _lantern_festival(out, maps, names, pid, iy, ix, log=print):
             continue
         P = Pall[m]
         if n == "robe":         # a hem band of lanterns (two staggered rows) and a thin amber hem rule under them
-            c = _paint_lanterns(out[m], P, 0.085, 0.052, 0.24, 0.70, 0.84)
+            c = _paint_lanterns(out[m], P, 0.10, 0.075, 0.24, 0.70, 0.86, scale=1.5)
             rule = np.clip(1.0 - np.abs(P[:, 2] - 0.885) / 0.006, 0, 1)[:, None]
             out[m] = c * (1 - 0.85 * rule) + _hexlin(LANTERN)[None, :] * 0.85 * rule
         elif n == "cowl":       # a sparser, smaller scatter
-            out[m] = _paint_lanterns(out[m], P, 0.11, 0.075, 0.20, scale=0.8)
+            out[m] = _paint_lanterns(out[m], P, 0.12, 0.09, 0.20, scale=1.1)
         elif n == "wrap":       # the deep lacquered plum sash: sheen streaks along the cloth
             d = np.array([0.55, 0.0, 0.84])
             ph = (P @ d) * 70.0 + 3.0 * NOISE(P, 8.0)
@@ -2176,6 +2176,36 @@ def _install_chain_floor() -> None:
 
 
 _install_chain_floor()
+
+
+# ── GLB budget (closing review kemdo-M4: the baked chain tracks pushed the base GLB past 1172 KiB): after the shared
+# optimize, the chain tracks keep every 2nd key (smooth springs hold under linear interpolation) and the ORM WebP is
+# re-encoded at q30 (art/tools/decimate_chains.mjs); skins carry no clips and are left alone
+def _install_chain_budget() -> None:
+    from common import export as _export
+    if getattr(_export.optimize, "_kemdo_chains", False):
+        return
+    orig = _export.optimize
+
+    def optimize(path, out=None, quantize=False, fighter=False):
+        res = orig(path, out, quantize, fighter)
+        dst = out or path
+        if not (fighter and res.get("ok") and os.path.basename(dst) == "kemdo.glb"):
+            return res
+        import subprocess
+        node = _export.node_exe()
+        script = os.path.join(scene.TOOLS_DIR, "decimate_chains.mjs")
+        if node and os.path.isfile(script):
+            r = subprocess.run([node, script, dst, "--every", "2", "--prefix", "x_robe", "--orm-q", "30"],
+                               cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+            scene.log((r.stdout or r.stderr).strip()[-600:])
+            res = dict(res, after=os.path.getsize(dst), chains_decimated=r.returncode == 0)
+        return res
+    optimize._kemdo_chains = True
+    _export.optimize = optimize
+
+
+_install_chain_budget()
 
 
 # ── motion (brief §8) ───────────────────────────────────────────────────────────────────────────────

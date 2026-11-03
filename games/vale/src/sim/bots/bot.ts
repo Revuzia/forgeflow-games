@@ -33,6 +33,7 @@ import type { Rng } from '../rng.ts';
 import type { BotController } from '../sim.ts';
 import { noonTollOn } from '../modes/match.ts';
 import { seatState } from '../units/fighters.ts';
+import { SLOT_ULT } from '../entity.ts';
 import type { World } from '../world.ts';
 import type { DifficultyProfile } from './difficulty.ts';
 import { Economy } from './economy.ts';
@@ -148,7 +149,7 @@ export class Bot extends BotBase implements BotController {
   }
 
   private clearPlan(): void {
-    this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false;
+    this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false; this.pLhFight = false;
     this.caged = false;
   }
 
@@ -175,6 +176,24 @@ export class Bot extends BotBase implements BotController {
     const period = 1 / Math.max(0.05, e.stats.attackSpeed);
     if (ad) dmg += (3 / period) * (e.stats.ad * (1 + e.stats.crit * 0.75)) * (100 / (100 + Math.max(0, ad.damageType === 'magic' ? t.stats.resist : t.stats.armor)));
     return dmg;
+  }
+  /** a ready ultimate the burst estimate cannot price (a stance, form or empowering buff, or a heal or shield that
+   *  outlasts the trade) still turns a fight: x 1.3 on the kill read (CW3s refix, CL-1: such ults sat unused past 10:00) */
+  private ultBoost(): number {
+    const u = this.e.slots[SLOT_ULT];
+    if (!u || !u.ready || u.rank <= 0) return 1;
+    return abilityInfo(u.def).dmg.length ? 1 : 1.3;
+  }
+  /** RIFT laning trade bonus for a power spike over the lane opponent `le`: my ultimate ready while it has none up
+   *  (+0.18), a level on it at 2-3 (+0.12, the item-less early spikes), any other level lead (+0.06) */
+  private spikeEdge(le: Entity): number {
+    const e = this.e, u = e.slots[SLOT_ULT];
+    if (u && u.ready && u.rank > 0) {
+      const lu = le.slots[SLOT_ULT];
+      if (!lu || lu.rank <= 0 || !lu.ready) return 0.18;
+    }
+    if (e.level > le.level) return e.level <= 3 ? 0.12 : 0.06;
+    return 0;
   }
   private abilityDamage(def: AbilityCoreT, rank: number, t: Entity): number {
     const info = abilityInfo(def);
@@ -225,7 +244,7 @@ export class Bot extends BotBase implements BotController {
     for (const f of tp.enemyFighters) {
       if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > 10 * 10) continue;
       // (CW3 CL-1: a ready hold — stun, root, sleep — keeps the target in reach for the whole combo: a kill window)
-      let dmg = this.burstOn(f) * (hold ? 1.2 : 1);
+      let dmg = this.burstOn(f) * (hold ? 1.2 : 1) * (rift ? this.ultBoost() : 1);
       for (const a of tp.allyFighters) {
         if (a === e || !a.alive) continue;
         // (an ally beside it, or one already committing to it — its published focus — on the way)
@@ -436,9 +455,15 @@ export class Bot extends BotBase implements BotController {
       // 40 games: +1 takedown by 10:00 for −2 to −3 points of the roads' last-hit share; they stay out)
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
-      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
-      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive - wavePenalty;
+      // (CW3s refix: 0.3 after 12 s; at 0.15 after 20 s a passive seat took less damage than the bot-played one)
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 12 && now - this.foeHitAt > 12 ? 0.3 : 0;
+      // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
+      // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
+      const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive + lvl - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
+      // (a passive opponent that let me take half its health without answering is finished, as a player would)
+      if (passive > 0 && leF < 0.55 && hpF - leF >= 0.15 && this.enemiesNear(le.x, le.y, 10) <= 1 && this.towerSafe(le.x, le.y, 0)) { this.killTarget = le; consider('allin', 0.72); }
     }
     // all-in
     const kt = this.killTarget;
@@ -755,12 +780,14 @@ export class Bot extends BotBase implements BotController {
     this.execLane();
     const t = this.laneEnemy;
     if (t && this.isNoticed(t) && attackable(this.w, this.e, t) && !(this.unitDps > 0 && this.pFarm === 0)) { this.pFight = t; this.pAggro = 0.6; }
+    this.pLhFight = this.lanePhase();
   }
 
   private execAllin(): void {
     const t = this.killTarget ?? this.pickFightTarget(12);
     if (!t) { this.execLaneOrPush(); return; }
     this.pFight = t; this.pAggro = 1;
+    this.pLhFight = this.lanePhase();
     this.pDive = t.hp < t.maxHp * 0.25 && this.hpF > 0.5;
     this.pMove = true; this.pMoveX = t.x; this.pMoveY = t.y;
   }

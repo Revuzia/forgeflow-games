@@ -471,7 +471,8 @@ export class Player implements PlayerView {
 }
 const EMPTY_STATS = new Stats();
 
-export interface TeamBuffInst { id: string; remaining: number; def: TeamBuffDefT }
+/** `stacks`: how many takes it holds (1 unless the def stacks, TeamBuffDef.maxStacks; stats × stacks) */
+export interface TeamBuffInst { id: string; remaining: number; def: TeamBuffDefT; stacks: number }
 export class TeamState implements TeamView {
   readonly team: TeamId;
   kills = 0;

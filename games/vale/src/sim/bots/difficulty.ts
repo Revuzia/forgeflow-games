@@ -39,6 +39,9 @@ export interface DifficultyProfile {
   readonly lastHitMiss: number;
   /** chance a perceived telegraph / skillshot is dodged */
   readonly dodgeChance: number;
+  /** 0..1 (CW3s refix): how much a far skillshot at a free, moving target that could walk out of it is held back
+   *  (0: fires whenever it reaches; 1: waits for a held, committed or nearer target) */
+  readonly shotPatience: number;
   /** 0..1 chance / quality of orb-walking away from melee chasers */
   readonly kiteSkill: number;
   /** chance a team intent (push / defend / objective / group) is followed */
@@ -84,18 +87,19 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   // 39/40 and 38/40 mirrored games on soak seeds 1-20 / 21-40 (was 36 / 32), 150/160 over seeds 1-80 (was 129); no stat,
   // Gleam or rule changes, and no other suite plays novice. CW3 gameplay CL-g3: on untuned windows with independent
   // lineups veteran won only 32/40 (seeds 601-620, --lineup shuffle); the macro and intent gap widens again: the team's
-  // calls are followed less often (0.4, was 0.5) and an opening or a dive must hold 15 s (was 10)
+  // calls are followed less often (0.4, was 0.5) and an opening or a dive must hold 15 s (was 10). CW3s refix (done:3, fresh
+  // seeds 901-920: 33/40): calls followed 0.3, an opening must hold 22 s, dodges 0.02, skillshot lead 0.05, aim 22 deg
   novice: {
-    id: 'novice', reaction: 0.7, reactionJitter: 0.2, aimErrorDeg: 20, leadSkill: 0.15,
-    lastHitSigma: 0.25, lastHitMiss: 0.45, dodgeChance: 0.05, kiteSkill: 0.05,
-    intentFollow: 0.4, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
+    id: 'novice', reaction: 0.7, reactionJitter: 0.2, aimErrorDeg: 22, leadSkill: 0.05,
+    lastHitSigma: 0.25, lastHitMiss: 0.45, dodgeChance: 0.02, kiteSkill: 0.05, shotPatience: 0,
+    intentFollow: 0.3, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
     decisionNoise: 0.2, focusDiscipline: 0.1, abilityEvery: 0.85,
-    macroDelay: 15, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    macroDelay: 22, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },
   adept: {
     id: 'adept', reaction: 0.25, reactionJitter: 0.07, aimErrorDeg: 6, leadSkill: 0.75,
-    lastHitSigma: 0.05, lastHitMiss: 0.07, dodgeChance: 0.5, kiteSkill: 0.55,
+    lastHitSigma: 0.05, lastHitMiss: 0.07, dodgeChance: 0.5, kiteSkill: 0.55, shotPatience: 0,
     intentFollow: 0.85, recallBias: 0, retreatBias: 0, knowsCooldowns: false,
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
@@ -103,7 +107,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
-    lastHitSigma: 0.03, lastHitMiss: 0.03, dodgeChance: 0.85, kiteSkill: 0.9,
+    lastHitSigma: 0.03, lastHitMiss: 0.03, dodgeChance: 0.85, kiteSkill: 0.9, shotPatience: 1,
     intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,

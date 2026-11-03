@@ -39,14 +39,14 @@
   },
   "uv_coverage": 0.603,
   "bake": {
-    "base": 7.9,
-    "rough_metal": 7.4,
-    "normal": 3.52,
-    "ao": 5.47,
+    "base": 9.79,
+    "rough_metal": 6.99,
+    "normal": 6.01,
+    "ao": 5.43,
     "normal_fixed_px": 14135,
-    "projection": 153.75,
-    "pack_save": 154.22,
-    "total": 178.96
+    "projection": 183.17,
+    "pack_save": 183.51,
+    "total": 212.22
   },
   "tris": 18389,
   "mesh_top_m": 2.117,
@@ -151,17 +151,17 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2874972,
+  "glb_bytes_raw": 2875888,
   "optimize": {
     "ok": true,
-    "before": 2874972,
-    "after": 1219004
+    "before": 2875888,
+    "after": 1219888
   },
-  "glb_bytes": 1219004,
+  "glb_bytes": 1219888,
   "three_load_test": {
     "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo.glb (1190 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo.glb (1191 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: kemdo_base 2048x2048 241K, kemdo_normal 512x512 50K, kemdo_orm 256x256 28K",
       "  skinned meshes: kemdo(17721v), kemdo_accent(149v)",
       "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR x_robe_b_1 x_robe_b_2 x_robe_f_1 x_robe_f_2 x_robe_l_1 x_robe_l_2 x_robe_r_1 x_robe_r_2)",
@@ -170,7 +170,7 @@
       "  tris: 18389; bind-pose bounds (three units, Y up): 1.21 x 2.12 x 2.17; facing (0.00, 1.00); head bone y 1.81; runRefSpeed 3.45",
       "  run: 20 f, planted samples 6, max foot-speed error 5.7%",
       "[three] FAIL (1)",
-      "  - GLB is 1190 KiB > budget 1172 KiB"
+      "  - GLB is 1191 KiB > budget 1172 KiB"
     ]
   },
   "renders": {
@@ -181,10 +181,10 @@
       "turntable": "art/renders/fighters/kemdo/turntable.png"
     },
     "seconds": {
-      "splash": 171.68,
-      "portrait": 36.27,
-      "icon": 12.83,
-      "turntable": 14.97
+      "splash": 78.94,
+      "portrait": 13.97,
+      "icon": 5.37,
+      "turntable": 17.86
     }
   },
   "three_qa": {
@@ -216,26 +216,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/kemdo/three_kemdo.png",
-    "seconds": 21,
+    "seconds": 54.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.43,
-      "model": 43.48,
-      "lows_bind": 14.29,
-      "uv": 4.49,
-      "bake": 178.96,
-      "clips": 7.7,
-      "export": 3.52,
-      "optimize": 1.47,
-      "load_test": 0.58,
-      "render": 241.19,
-      "three_qa": 21.67,
-      "cache": 0.29
+      "materials": 0.45,
+      "model": 34.95,
+      "lows_bind": 10.82,
+      "uv": 4.65,
+      "bake": 212.23,
+      "clips": 6.39,
+      "export": 2.39,
+      "optimize": 1.24,
+      "load_test": 0.25,
+      "render": 116.77,
+      "three_qa": 55.87,
+      "cache": 0.31
     },
-    "total_s": 518.23
+    "total_s": 446.46
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1

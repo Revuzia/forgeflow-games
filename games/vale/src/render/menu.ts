@@ -29,8 +29,8 @@ import { patchWorldMaterial } from './world_material.ts';
 /** tokens.json grade.maps.menu (design tokens, not content) */
 const MENU_SUN = { dir: [-0.8937, 0.309, 0.3253] as [number, number, number], color: '#FFC27E', intensity: 2.4, env: 0.8 };
 const MOVE_MS = 720;
-/** closing CL-1: on the painted set the showcase fighter stands at most this share of the frame's height tall (a taller
- *  fighter is scaled down on its plinth), so the stage caption's band across the top of the stage never covers it */
+/** closing CL-1: on the painted set the showcase fighter stands at most this share of the frame's height tall on screen (a
+ *  taller fighter is scaled down on its plinth), so the stage caption's band across the top of the stage never covers it */
 const SUBJECT_MAX_FRAC = 0.5;
 
 function bezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
@@ -67,8 +67,12 @@ export class MenuWorld {
   idle = 0;
   private showcase: Actor | null = null;
   private showcaseKey = '';
-  /** the showcase fighter's posed height in metres at scale 1 (0 until its model is in and measured) */
+  /** the showcase fighter's on-screen height as a share of the frame at scale 1 (0 until its model is in and measured) */
   private showcaseH = 0;
+  /** the station showcaseH was measured from (a new station re-measures once its camera move ends) */
+  private showcaseAt = '';
+  /** the model showcaseH was measured on (the actor swaps its stand-in for the GLB when the template arrives) */
+  private showcaseModel: Object3D | null = null;
   private readonly showcaseRoot = new Group();
   private map: MapDefT | null = null;
   private backdrop: Mesh | null = null;
@@ -257,6 +261,7 @@ export class MenuWorld {
     this.showcaseKey = key;
     if (this.showcase) { this.showcase.dispose(); this.showcase = null; }
     this.showcaseH = 0;
+    this.showcaseModel = null;
     if (!lib || !fighter) return;
     const def = lib.fighter(fighter);
     if (!def) return;
@@ -267,27 +272,10 @@ export class MenuWorld {
     lib.fighterTemplate(fighter, skin ?? undefined).then((t) => { if (this.showcase === a) a.attach(t, def.art.scale, def.art.accentMaterial); });
   }
 
-  /** the showcase fighter's top above its feet in metres (every skinned vertex, as posed now); 0 before its model is in */
-  private subjectHeight(): number {
-    if (!this.showcase) return 0;
-    const root = this.showcase.root;
-    root.updateMatrixWorld(true);
-    const v = new Vector3();
-    let top = -Infinity, any = false;
-    root.traverseVisible((o) => {
-      const m = o as Mesh;
-      if (!m.isMesh) return;
-      const pos = m.geometry.getAttribute('position');
-      if (!pos) return;
-      for (let i = 0; i < pos.count; i++) { m.getVertexPosition(i, v); v.applyMatrix4(m.matrixWorld); if (v.y > top) top = v.y; any = true; }
-    });
-    return any ? Math.max(0, top - root.position.y) : 0;
-  }
-
   /** the showcase fighter's on-screen box in CSS pixels of a `w`×`h` viewport: every (skinned) vertex of its visible
    *  meshes projected, so the box is the silhouette's, not a loose 3D AABB's; null without a subject. Dev / harness
    *  only (the stage caption is measured against it, closing CL-1) */
-  subjectRect(w: number, h: number, clip?: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number; hits: number } | null {
+  subjectRect(w: number, h: number, clip?: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number; hits: number; h0: number; fitH: number; scale: number } | null {
     if (!this.showcase) return null;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, hits = 0;
     const v = new Vector3();
@@ -307,7 +295,8 @@ export class MenuWorld {
       }
     });
     if (!Number.isFinite(x0)) return null;
-    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), hits };
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), hits, h0: (y1 - y0) / h,
+      fitH: Math.round(this.showcaseH * 100) / 100, scale: Math.round(this.showcase.root.scale.x * 1000) / 1000 };
   }
 
   setAspect(aspect: number): void {
@@ -348,10 +337,14 @@ export class MenuWorld {
       this.showcase.root.rotation.y = Math.atan2(toCam.x, toCam.z) - 0.35;
       this.showcase.pose('idle_lobby', dt);
       // fit: no taller than SUBJECT_MAX_FRAC of the frame at the plinth's distance (measured once, posed, at scale 1)
-      if (!this.showcaseH) { this.showcase.root.scale.setScalar(1); this.showcaseH = this.subjectHeight(); }
-      const d = Math.hypot(this.camera.position.x - px, this.camera.position.z - pz);
-      const frameH = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
-      this.showcase.root.scale.setScalar(this.showcaseH > 0 ? Math.min(1, (SUBJECT_MAX_FRAC * frameH) / this.showcaseH) : 1);
+      // fit: measured on screen at scale 1, posed, once the camera has arrived (and again for a new model or station)
+      if (this.showcase.model && this.moveT >= 1 && (this.showcase.model !== this.showcaseModel || !this.showcaseH || this.showcaseAt !== this.station)) {
+        this.showcase.root.scale.setScalar(1);
+        this.showcaseH = (this.subjectRect(1, 1)?.h0 ?? 0);
+        this.showcaseModel = this.showcase.model;
+        this.showcaseAt = this.station;
+      }
+      this.showcase.root.scale.setScalar(this.showcaseH > 0 ? Math.min(1, SUBJECT_MAX_FRAC / this.showcaseH) : 1);
     } else if (this.showcase) {
       // stand on the plinth in front of the station's look-at point, facing the camera
       const t = this.target;

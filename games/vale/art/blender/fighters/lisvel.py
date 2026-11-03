@@ -1574,6 +1574,36 @@ def _install_chain_floor() -> None:
 _install_chain_floor()
 
 
+# ── GLB budget (closing review lisvel-M4: the baked chain tracks pushed the base GLB past 1172 KiB): after the shared
+# optimize, the chain tracks keep every 2nd key (smooth springs hold under linear interpolation) and the ORM WebP is
+# re-encoded at q30 (art/tools/decimate_chains.mjs); skins carry no clips and are left alone
+def _install_chain_budget() -> None:
+    from common import export as _export
+    if getattr(_export.optimize, "_lisvel_chains", False):
+        return
+    orig = _export.optimize
+
+    def optimize(path, out=None, quantize=False, fighter=False):
+        res = orig(path, out, quantize, fighter)
+        dst = out or path
+        if not (fighter and res.get("ok") and os.path.basename(dst) == "lisvel.glb"):
+            return res
+        import subprocess
+        node = _export.node_exe()
+        script = os.path.join(scene.TOOLS_DIR, "decimate_chains.mjs")
+        if node and os.path.isfile(script):
+            r = subprocess.run([node, script, dst, "--every", "2", "--prefix", "x_tabard", "--orm-q", "30"],
+                               cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+            scene.log((r.stdout or r.stderr).strip()[-600:])
+            res = dict(res, after=os.path.getsize(dst), chains_decimated=r.returncode == 0)
+        return res
+    optimize._lisvel_chains = True
+    _export.optimize = optimize
+
+
+_install_chain_budget()
+
+
 # ── analytic weights ───────────────────────────────────────────────────────────────────────────────────────────
 def _ss(a, b, x):
     t = np.clip((x - a) / (b - a), 0.0, 1.0)

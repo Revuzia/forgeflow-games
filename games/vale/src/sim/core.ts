@@ -139,8 +139,18 @@ export function addTeamBuff(w: World, team: number, buffId: string): void {
   const t = w.teams[team];
   if (!def || !t) return;
   const existing = t.buffs.find((b) => b.id === buffId);
-  if (existing) { existing.remaining = def.duration ?? Infinity; return; }
-  t.buffs.push({ id: buffId, remaining: def.duration ?? Infinity, def });
+  // (CW3 CL-2: a buff with maxStacks > 1 gains a stack on every take up to its cap — stats × stacks — and every take
+  // renews the timer; one without refreshes, as before. Read optionally until TeamBuffDef carries the key.)
+  const maxStacks = Math.max(1, (def as { maxStacks?: number }).maxStacks ?? 1);
+  if (existing) {
+    existing.remaining = def.duration ?? Infinity;
+    if (existing.stacks < maxStacks) {
+      existing.stacks++;
+      for (const e of w.entities) if (e.team === team && (e.kind === 'fighter' || e.kind === 'minion')) markStatsDirty(e);
+    }
+    return;
+  }
+  t.buffs.push({ id: buffId, remaining: def.duration ?? Infinity, def, stacks: 1 });
   for (const e of w.entities) {
     if (e.team !== team) continue;
     if (e.kind === 'fighter') for (const pd of def.passives) addPassive(w, e, pd, 'passive', `team:${buffId}`);
