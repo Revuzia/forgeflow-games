@@ -760,6 +760,9 @@ P23_PENDING_NEG = [
     ("probe_match-plant-swim-exempt", "probe_match.py", ["--swimcheck", "--plant", "swim-exempt"], 1800),
     ("probe_match-plant-stall-surge", "probe_match.py", ["--sweep", "--plant", "stall-surge"], 7200),        # probe_match_sweep worst <= 4 row
     ("probe_match-plant-no-pen-fix", "probe_match.py", ["--pencheck", "--plant", "no-pen-fix"], 1800),        # probe_match_pencheck (EDGE_TURN off)
+    # ---- Wave 9 R1 fix round (lanes hudfeel / camwall): each new row's planted fault MUST FAIL (exit 1)
+    ("hud_checks-plant-pill-unclamped", "new/hud_checks.py", ["--only", "edges", "--plant", "pill-unclamped"], 1800),   # W9 R1 hudfeel: hud.js served without the loot pill's horizontal clamp -> the edges row MUST FAIL (exit 1)
+    ("player_camwall-plant-settle-requery", "new/player_camwall.py", ["--maps", "isla_viva,ashgrid,deepwood", "--settle-only", "--plant", "settle-requery"], 1800),   # W9 R1 camwall: loot.js settle() served with 160 extra probes (reads 163 calls) -> the floorless-settle row MUST FAIL
     ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
     ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
     # p23_netlive (fix round): the host's order gate off (every packet 'new') must FAIL the late / duplicate row; the guest's revive gate off must

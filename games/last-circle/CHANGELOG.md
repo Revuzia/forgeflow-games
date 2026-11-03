@@ -40,6 +40,15 @@ Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R
   the same replayed query stream (x1.25 kept); framecheck draws drop frame 1 from the live build's landing zone (x1.25 kept).
 - `MAP_GEN_TARGET` 8; housegen_demo_looks is counted now (`LOOKS_INFO = False`).
 
+
+**Fix round (lanes hudfeel, camwall)**
+- W9 R1 fix (hudfeel): loot pills are clamped 4 px inside the viewport, so they are never clipped by the screen edge, and they are hidden while the local player is dead or spectating. Fixes hud_checks pixel7 915x412 death 'CHEST' clipped 21 px past the edge.
+- W9 R1 fix (hudfeel): hud_checks gains an EDGES row (loot anchor at NDC x +/-0.99 -> 0 pills clipped) with the falsifier --only edges --plant pill-unclamped (must FAIL). hud_checks is now 118 rows.
+- W9 R1 fix (hudfeel): feelcheck places its pinned targets on the round's own line of fire (eye to body, K.segmentColliders + terrain, in front of the muzzle) and turns the subject on the spot to a clear 4-14 m facing. MAP_GEN 8 lands the ashgrid 4242 subject 0.53 m from a wall, which had left every pinned row could-not-judge.
+- W9 R1 fix (camwall): loot.js settle(): a floorless swap / death drop asked the map 322 times in one frame (player_camwall isla_viva maxInOneFrame 388 > 150 on 8eaae688); settle now queries the colliders once over its whole reach and runs the same box tests on that list - 3 calls per settle, same settled spots (6000 settles x 3 maps, diff 0), seeded worlds unchanged.
+- W9 R1 fix (camwall): player_camwall: new deterministic row, a floorless drop settles in <= 4 queryColliders calls (by caller settle) and keeps its x/z, on all 3 maps; plant settle-requery must FAIL it.
+- gate.py registers both new plants: hud_checks-plant-pill-unclamped and player_camwall-plant-settle-requery.
+
 **Known gaps**
 - OD-16 bot shield economy: the median late-match bot shield is about 11-15 against a target of 75. Accepted by the owner on 2026-11-02;
   the bar stays at 75 and the p23_botbatch shield-600 row stays registered and red.
