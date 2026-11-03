@@ -54,10 +54,19 @@ report: art/renders/maps/build_report_landmarks_art2.json; looks: art/renders/ma
                dial-stone on a bedding course, its east end snapped off askew (a raw break), VI cut and inked in its
                top inside a cut border, the V's point to the camera (south).
   numeral_*    RIFT, the four jungle callouts (Elevenmark XI, Twomark II, Sevenmark VII, Fourmark IIII; brief §2): giant
-               numerals of carved dial-stone, each stroke its own chamfered stone between a foot and a head bar, laid
-               back 52 deg so the face looks up the camera's line, sunk 0.9 m (the buried faces dropped), broken stone
-               spilled at the foot.
-The SDF landmarks that remain (the stalls, FRAY's cart and stands) stay in landmarks.py;
+               numerals of weathered carved dial-stone, each stroke its own chamfered stone with an inked channel down
+               its face, between a foot bar and a head bar snapped at its east end; leaning back 20 deg (env E1: the
+               brief's lean, <= 25), sunk 1.3 m in an earth-and-rubble bank (the buried faces dropped), lichen on the
+               upper faces, broken stone spilled at the foot.
+  lampwright_stall / lampwright_stall_dome   RIFT / BRIDGE shop kiosks (env E1): Aubade's spire-roofed chalk kiosk and
+               Serenade's dome-roofed sandstone one; a counter of wares, ONE lit lamp each, hung off a front corner post.
+  lampwright_cart  FRAY's shared shop (env E1): a two-wheeled lampwright's wagon, banded ironstone over planked
+               timber, a painted canvas tilt, wares on the tailboard, one lamp on its mast.
+  fair_stand_high / fair_stand_low   FRAY's fair seating (env E1): tiers of coursed stone with timber benches stepping
+               up to the map corner, facing the plate.
+Env E1 detail layer (`_detail`): grain, blotches, lichen, timber fibre and canvas bands over the painted stone, authored
+so the breakup survives each landmark's content value (value_probe --landmarks: in-game hp and the 0.5 m breakup).
+No SDF landmark remains in landmarks.py (its builders stay for reference);
 the skirts beyond the map bounds are art/blender/maps/skirts.py.
 """
 from __future__ import annotations
@@ -1264,8 +1273,8 @@ def drop_underground(ob, z: float = -0.06) -> int:
 # content `value` multiplier: >= 6 L* at >= 0.5 m in game (closing CW4 done 2, value_probe --landmarks).
 LICHEN_HEX = "#6F7559"
 NUM_MATS = {
-    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.2, speckle=0.3,
-                      grain=0.16, blotch=0.26, lichen=0.55),                     # carved dial-stone, weathered
+    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.22, speckle=0.3,
+                      grain=0.18, blotch=0.3, lichen=0.7),                     # carved dial-stone, weathered
     "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
                    edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.14, blotch=0.2, lichen=0.4),
     "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
@@ -1339,20 +1348,24 @@ def _square_frustum(B, mat, c, r0, r1, z0, z1, var=None):
 
 
 def _hanging_lamp(B, x, y, z_hook, glass="lampglow", cage="steel"):
-    """ONE shop lamp hung from a bracket: a cage cap, a lit glass body, a drip knob (the stall's only emissive)."""
+    """ONE shop lamp hung from a bracket at (x, y): a cage cap, a lit glass body, a drip knob (the only emissive)."""
+    def at(piece):
+        v, f = piece
+        return K.move(v, (x, y, 0.0)), f
     rod(B, cage, [(x, y, z_hook), (x, y, z_hook - 0.22)], 0.018, 0.018, 5)
-    B.add(cage, K.lathe([(0.0, z_hook - 0.2), (0.1, z_hook - 0.24), (0.15, z_hook - 0.3), (0.0, z_hook - 0.3)], 8), node="body")
-    B.add(glass, K.lathe([(0.0, z_hook - 0.29), (0.13, z_hook - 0.33), (0.14, z_hook - 0.5), (0.08, z_hook - 0.6), (0.0, z_hook - 0.62)], 10), node="lamp")
-    B.add(cage, K.lathe([(0.0, z_hook - 0.6), (0.06, z_hook - 0.61), (0.03, z_hook - 0.68), (0.0, z_hook - 0.69)], 8))
+    B.add(cage, at(K.lathe([(0.0, z_hook - 0.2), (0.1, z_hook - 0.24), (0.15, z_hook - 0.3), (0.0, z_hook - 0.3)], 8)))
+    B.add(glass, at(K.lathe([(0.0, z_hook - 0.29), (0.13, z_hook - 0.33), (0.14, z_hook - 0.5), (0.08, z_hook - 0.6), (0.0, z_hook - 0.62)], 10)), node="lamp")
+    B.add(cage, at(K.lathe([(0.0, z_hook - 0.6), (0.06, z_hook - 0.61), (0.03, z_hook - 0.68), (0.0, z_hook - 0.69)], 8)))
 
 
 def _wares(B, rng, x0, x1, y, z, mat="ware"):
-    """Unlit lamps for sale along a counter: different sizes and heights, never an even pair."""
+    """Unlit lamps for sale in a row at (x0..x1, y) on a surface at z: different sizes and heights, never an even pair."""
     x = x0
     while x < x1:
         h = rng.uniform(0.16, 0.3)
         r = rng.uniform(0.06, 0.1)
-        B.add(mat, K.lathe([(0.0, z), (r, z + 0.02), (r * 1.1, z + h * 0.6), (r * 0.5, z + h), (0.0, z + h + 0.02)], 8))
+        v, f = K.lathe([(0.0, z), (r, z + 0.02), (r * 1.1, z + h * 0.6), (r * 0.5, z + h), (0.0, z + h + 0.02)], 8)
+        B.add(mat, (K.move(v, (x + r, y, 0.0)), f))
         x += r * 2 + rng.uniform(0.12, 0.3)
     return x
 
@@ -1383,69 +1396,71 @@ def _kiosk_base(B, rng, W, Dp, stone, wood):
 
 
 def lampwright_stall(B, rng):
-    """The Aubade-side lampwright kiosk (RIFT / BRIDGE shop, footprint 3 x 2.5 m, <= 3.6 m): a dial-stone plinth, a
-    coursed chalk back wall and counter with timber tops, four chalk posts banded in blued steel, a stepped slate spire
-    roof in four courses (each its own value) with a dial-stone cap and a rounded knob, and ONE amber lamp hung from a
-    steel bracket off the front-west post (never a symmetric pair over the dark opening: closing env E1). Unlit lamps
-    for sale on the counter. +Y north, the camera side -Y."""
+    """The Aubade-side lampwright kiosk (RIFT / BRIDGE shop, footprint 3 x 2.5 m, <= 3.5 m): a dial-stone plinth, a
+    coursed chalk back wall and counter with timber tops, four chalk posts banded in blued steel, a spire roof of five
+    stepped slate courses (each its own value, painted shingle rows) with a dial-stone cap and a rounded knob, and ONE
+    amber lamp hung from a steel bracket off the front-west post (never a symmetric pair over the dark opening:
+    closing env E1). Unlit lamps for sale on the counter and the shelf. +Y north, the camera side -Y."""
     W, Dp = 1.42, 1.18
     _kiosk_base(B, rng, W, Dp, "chalk", "timber")
     for sx in (-1, 1):
         for sy in (-1, 1):
             x, y = sx * (W - 0.12), sy * (Dp - 0.12)
-            B.add("chalk", K.box((x, y, 1.33), (0.1, 0.1, 1.09), 0.02))
-            for zb in (0.62, 2.2):
+            B.add("chalk", K.box((x, y, 1.2), (0.1, 0.1, 0.96), 0.02))
+            for zb in (0.62, 1.98):
                 B.add("steel", K.box((x, y, zb), (0.115, 0.115, 0.035), 0.008))
-    B.add("timber", K.box((0.0, -(Dp - 0.12), 2.36), (W - 0.02, 0.07, 0.07), 0.012))              # the lintels
-    B.add("timber", K.box((0.0, Dp - 0.12, 2.36), (W - 0.02, 0.07, 0.07), 0.012))
+    for sy in (-1, 1):                                                           # the lintels
+        B.add("timber", K.box((0.0, sy * (Dp - 0.12), 2.1), (W - 0.02, 0.07, 0.07), 0.012))
     for sx in (-1, 1):
-        B.add("timber", K.box((sx * (W - 0.12), 0.0, 2.36), (0.07, Dp - 0.05, 0.07), 0.012))
-    # the spire roof: an eave slab, then four stepped slate courses and a dial-stone cap with a rounded knob
-    B.add("slate", K.box((0.0, 0.0, 2.48), (W + 0.12, Dp + 0.12, 0.05), 0.02))
-    zs = [2.53, 2.74, 2.92, 3.07, 3.19]
-    rs = [W + 0.1, 1.05, 0.72, 0.44, 0.22]
-    for k in range(4):
-        _square_frustum(B, "slate", (0.0, 0.0), rs[k], rs[k + 1] + 0.06, zs[k], zs[k + 1])
-    _square_frustum(B, "dialstone", (0.0, 0.0), 0.24, 0.2, 3.19, 3.26)
-    B.add("steel", K.lathe([(0.0, 3.26), (0.08, 3.28), (0.1, 3.34), (0.06, 3.41), (0.0, 3.42)], 10))
+        B.add("timber", K.box((sx * (W - 0.12), 0.0, 2.1), (0.07, Dp - 0.05, 0.07), 0.012))
+    # the spire roof: an eave slab, five stepped slate courses (each lapping the one below), a cap and a rounded knob
+    B.add("slate", K.box((0.0, 0.0, 2.22), (W + 0.12, Dp + 0.12, 0.05), 0.02))
+    zs = [2.27, 2.58, 2.86, 3.08, 3.24, 3.3]
+    rs = [W + 0.1, 1.13, 0.8, 0.52, 0.3, 0.2]
+    for k in range(5):
+        _square_frustum(B, "slate", (0.0, 0.0), rs[k], rs[k + 1] + 0.07, zs[k], zs[k + 1])
+    _square_frustum(B, "dialstone", (0.0, 0.0), 0.22, 0.18, 3.3, 3.36)
+    B.add("steel", K.lathe([(0.0, 3.36), (0.07, 3.37), (0.09, 3.42), (0.05, 3.48), (0.0, 3.49)], 10))
     # the one lamp: a steel bracket off the front-west post, the lamp hanging clear of the eave's corner
     px, py = -(W - 0.12), -(Dp - 0.12)
-    rod(B, "steel", [(px, py - 0.05, 2.05), (px - 0.2, py - 0.38, 2.12), (px - 0.24, py - 0.5, 2.1)], 0.025, 0.02, 5)
-    _hanging_lamp(B, px - 0.24, py - 0.5, 2.1)
+    rod(B, "steel", [(px, py - 0.05, 1.9), (px - 0.05, py - 0.4, 1.97), (px - 0.06, py - 0.58, 1.95)], 0.025, 0.02, 5)
+    _hanging_lamp(B, px - 0.06, py - 0.58, 1.95)
     _wares(B, rng, -W + 0.4, -0.2, -Dp + 0.45, 1.04)                              # wares on the west half of the counter
-    B.add("ware", K.box((0.55, -Dp + 0.45, 1.1), (0.24, 0.16, 0.06), 0.01))      # a wick-box and a coil of wick
+    B.add("ware", K.box((0.55, -Dp + 0.45, 1.1), (0.24, 0.16, 0.06), 0.01))      # a wick-box and a tally board
     B.add("timber", K.box((0.95, -Dp + 0.42, 1.08), (0.16, 0.13, 0.04), 0.01))
     _wares(B, rng, -W + 0.3, W - 0.4, Dp - 0.2, 1.41)                             # the shelf's stock
 
 
 def lampwright_stall_dome(B, rng):
-    """The Serenade-side kiosk (same footprint): a sandstone plinth and counter, ironstone posts with iron bands, a
-    ribbed ironstone dome roof on a sandstone ring with a lampresin knob (unlit), and ONE amber lamp hung off the
-    front-east post (the Aubade kiosk hangs its own off the west one)."""
+    """The Serenade-side kiosk (same footprint, <= 3.5 m): a sandstone counter and back wall on the plinth, ironstone
+    posts with iron bands, a ribbed ironstone dome in eight gores (each its own value) on a sandstone ring with an
+    unlit lampresin knob, and ONE amber lamp hung off the front-east post (the Aubade kiosk hangs its own off the west)."""
     W, Dp = 1.42, 1.18
     _kiosk_base(B, rng, W, Dp, "sandstone", "timber")
     for sx in (-1, 1):
         for sy in (-1, 1):
             x, y = sx * (W - 0.12), sy * (Dp - 0.12)
-            B.add("ironstone", K.lathe([(0.0, 0.24), (0.13, 0.24), (0.11, 0.4), (0.09, 2.3), (0.12, 2.42), (0.0, 2.42)], 8))
-            for zb in (0.7, 1.9):
-                B.add("iron", K.lathe([(0.0, zb - 0.03), (0.105, zb - 0.03), (0.105, zb + 0.03), (0.0, zb + 0.03)], 8))
-    B.add("sandstone", K.box((0.0, 0.0, 2.48), (W + 0.1, Dp + 0.1, 0.07), 0.025))                # the entablature
-    # the dome: a sandstone ring, an ironstone shell in eight ribbed gores (each gore its own piece) and a knob
-    R0 = 1.32
-    B.add("sandstone", K.lathe([(0.0, 2.55), (R0 + 0.06, 2.55), (R0 + 0.06, 2.68), (0.0, 2.68)], 24))
-    prof = [(R0 * math.cos(a), 2.68 + 0.68 * math.sin(a)) for a in np.linspace(0.0, PI / 2 - 0.12, 8)]
+            v, f = K.lathe([(0.0, 0.24), (0.13, 0.24), (0.11, 0.4), (0.09, 2.06), (0.12, 2.16), (0.0, 2.16)], 8)
+            B.add("ironstone", (K.move(v, (x, y, 0.0)), f))
+            for zb in (0.7, 1.75):
+                v, f = K.lathe([(0.0, zb - 0.03), (0.105, zb - 0.03), (0.105, zb + 0.03), (0.0, zb + 0.03)], 8)
+                B.add("iron", (K.move(v, (x, y, 0.0)), f))
+    B.add("sandstone", K.box((0.0, 0.0, 2.22), (W + 0.1, Dp + 0.1, 0.07), 0.025))                # the entablature
+    R0, Z0, RISE = 1.3, 2.4, 0.72
+    B.add("sandstone", K.lathe([(0.0, 2.29), (R0 + 0.06, 2.29), (R0 + 0.06, Z0), (0.0, Z0)], 24))
+    prof = [(R0 * math.cos(a), Z0 + RISE * math.sin(a)) for a in np.linspace(0.0, PI / 2 - 0.14, 8)]
     for k in range(8):
         a0, a1 = TAU * k / 8, TAU * (k + 1) / 8
-        v, f = K.lathe([(0.0, 2.68)] + prof + [(0.0, prof[-1][1])], 4, a0=a0, a1=a1)
-        B.add("ironstone", (v, f))
-        rod(B, "iron", [(R0 * math.cos(a0) * 1.01, R0 * math.sin(a0) * 1.01, 2.68), (R0 * 0.72 * math.cos(a0) * 1.01, R0 * 0.72 * math.sin(a0) * 1.01, 2.68 + 0.68 * 0.7),
-                        (0.2 * math.cos(a0), 0.2 * math.sin(a0), 3.36)], 0.035, 0.025, 5)
-    B.add("iron", K.lathe([(0.0, 3.32), (0.2, 3.32), (0.17, 3.38), (0.0, 3.39)], 12))
-    B.add("ware", K.lathe([(0.0, 3.38), (0.07, 3.4), (0.08, 3.45), (0.0, 3.49)], 10))
+        B.add("ironstone", K.lathe([(0.0, Z0)] + prof + [(0.0, prof[-1][1])], 4, a0=a0, a1=a1))
+        rib = [(R0 * 1.01 * math.cos(t) * math.cos(a0), R0 * 1.01 * math.cos(t) * math.sin(a0), Z0 + RISE * 1.01 * math.sin(t))
+               for t in np.linspace(0.0, PI / 2 - 0.2, 5)]
+        rod(B, "iron", rib, 0.035, 0.025, 5)
+    zt = prof[-1][1]
+    B.add("iron", K.lathe([(0.0, zt - 0.02), (0.22, zt - 0.02), (0.18, zt + 0.05), (0.0, zt + 0.06)], 12))
+    B.add("ware", K.lathe([(0.0, zt + 0.05), (0.07, zt + 0.07), (0.08, zt + 0.12), (0.0, zt + 0.16)], 10))
     px, py = W - 0.12, -(Dp - 0.12)
-    rod(B, "iron", [(px, py - 0.05, 2.0), (px + 0.2, py - 0.38, 2.08), (px + 0.24, py - 0.5, 2.06)], 0.025, 0.02, 5)
-    _hanging_lamp(B, px + 0.24, py - 0.5, 2.06, cage="iron")
+    rod(B, "iron", [(px, py - 0.05, 1.9), (px + 0.05, py - 0.4, 1.97), (px + 0.06, py - 0.58, 1.95)], 0.025, 0.02, 5)
+    _hanging_lamp(B, px + 0.06, py - 0.58, 1.95, cage="iron")
     _wares(B, rng, 0.2, W - 0.4, -Dp + 0.45, 1.04)
     B.add("timber", K.box((-0.9, -Dp + 0.42, 1.08), (0.18, 0.13, 0.04), 0.01))
     _wares(B, rng, -W + 0.3, W - 0.4, Dp - 0.2, 1.41)
@@ -1508,12 +1523,14 @@ def lampwright_cart(B, rng):
         rod(B, "iron", [(sx * (BW - 0.06), -BL, z0 + 0.34), (sx * (BW - 0.06), -BL - 0.38, z0 + 0.15)], 0.015, 0.015, 4)
     _wares(B, rng, -BW + 0.1, BW - 0.1, -BL - 0.22, z0 + 0.15)
     _wares(B, rng, -BW + 0.18, BW - 0.2, -BL - 0.08, z0 + 0.39)
-    # the lamp mast at the back-east corner, ONE lit lamp on its arm
-    mx, my = BW - 0.1, BL - 0.1
-    rod(B, "timber", [(mx, my, z0), (mx, my, 2.85)], 0.045, 0.035, 6)
-    rod(B, "iron", [(mx, my, 2.78), (mx - 0.28, my - 0.1, 2.86), (mx - 0.4, my - 0.12, 2.82)], 0.02, 0.018, 5)
-    _hanging_lamp(B, mx - 0.4, my - 0.12, 2.82, cage="iron")
-    B.add("iron", K.lathe([(0.0, 2.84), (0.06, 2.86), (0.05, 2.92), (0.0, 2.94)], 8))
+    # the lamp mast on the back board's east end, ONE lit lamp on its arm, clear above the tilt
+    mx, my = BW - 0.12, BL + 0.07
+    rod(B, "timber", [(mx, my, z0 - 0.1), (mx, my, 2.85)], 0.045, 0.035, 6)
+    B.add("iron", K.box((mx, my - 0.04, z1 - 0.1), (0.07, 0.03, 0.05), 0.01))           # its clamp on the back board
+    rod(B, "iron", [(mx, my, 2.78), (mx - 0.28, my - 0.1, 2.86), (mx - 0.42, my - 0.12, 2.82)], 0.02, 0.018, 5)
+    _hanging_lamp(B, mx - 0.42, my - 0.12, 2.82, cage="iron")
+    v, f = K.lathe([(0.0, 2.84), (0.06, 2.86), (0.05, 2.92), (0.0, 2.94)], 8)
+    B.add("iron", (K.move(v, (mx, my, 0.0)), f))
 
 
 def fair_stand(B, rng, tiers: int, step: float):
@@ -1560,8 +1577,14 @@ def fair_stand(B, rng, tiers: int, step: float):
                         continue
                     B.add("blockstone", K.box(c, hh, 0.03))
         # the nosing: a proud chamfered course on the front edges, and the flags of the tier's tread
-        B.add("nosing", K.box((xb - 0.3, (ya + yb) / 2, zb + 0.03), (0.33, (yb - ya) / 2, 0.035), 0.02))
-        B.add("nosing", K.box(((xa + xb) / 2 - 0.0, ya + 0.3, zb + 0.03), ((xb - xa) / 2 - 0.0, 0.33, 0.035), 0.02))
+        for (a0, a1, e) in ((ya + 0.63, yb, "E"), (xa, xb, "S")):               # nosing stones, ~1.1 m each
+            n = max(1, int(round((a1 - a0) / 1.1)))
+            for k in range(n):
+                p0, p1 = a0 + (a1 - a0) * k / n, a0 + (a1 - a0) * (k + 1) / n
+                if e == "E":
+                    B.add("nosing", K.box((xb - 0.3, (p0 + p1) / 2, zb + 0.03), (0.33, (p1 - p0) / 2 - 0.006, 0.035), 0.02))
+                else:
+                    B.add("nosing", K.box(((p0 + p1) / 2, ya + 0.3, zb + 0.03), ((p1 - p0) / 2 - 0.006, 0.33, 0.035), 0.02))
         if i < tiers - 1:
             tx0, ty1 = xb - dx, ya + dx                                              # the tread between this front and the next riser
         else:
@@ -1614,7 +1637,7 @@ STALL_MATS = {
     "chalk": dict(CHALK, var=0.2, grain=0.14, blotch=0.24, lichen=0.2),
     "steel": dict(DAWN_MATS["steel"], grain=0.1),
     "slate": dict(hex="#5A5F6A", chisel=0.8, var=0.22, streaks=0.35, chips=0.6, speckle=0.3, scale=0.7, rough=0.6,
-                  edge_light=(0.03, 0.75, 0.6, 0.08), brick=(0.32, 0.25, 0.012), brick_k=0.9, grain=0.16, blotch=0.22, lichen=0.35),
+                  edge_light=(0.03, 0.75, 0.6, 0.08), stripes=("Z", 0.075, "#454953", 0.45), grain=0.16, blotch=0.22, lichen=0.35),
     "dialstone": dict(DIAL, var=0.15, grain=0.12, blotch=0.2),
     "timber": _TIMBER,
     "ware": _WARE,

@@ -177,7 +177,7 @@ Value bands (area-weighted): top **76** (70-85) · mid **52** (45-65) · feet **
 
 ## 10-11. Export and renders
 
-- Splash: every card has its own staging (`CARDS` in burdam.py, schema in art/blender/portraits.py). Base: the Settled Account reach (the arm thrown out, the cleaver cocked, the notches lit) under the burning city's warm rim and bounce. Stillwater: Stubborn's planted post, head bowed, in cold river light. Almanac Ledger: the victory's tally scored with the thumbnail, the ledger board on his right hip under a lamp. Each portrait is a bust of its own splash moment. QA: `python3 art/tools/card_qa.py burdam`.
+- Splash: every card has its own staging (`CARDS` in burdam.py, schema in art/blender/portraits.py). Base: the Settled Account stamp (the cleaver slammed down in front, its flat and the five lit notches to the viewer) under the burning city's warm rim and bounce. Stillwater: Stubborn's planted post, head bowed, in cold river light. Almanac Ledger: the victory's tally scored with the thumbnail, the ledger board on his right hip under a lamp. Each portrait is a bust of its own splash moment. QA: `python3 art/tools/card_qa.py burdam`.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the ledger mask in the felt cowl, the left pauldron's ruled relief, the cleaver's edge entering from the top right. Icon (128 square): the scored mask with one lit notch above it.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

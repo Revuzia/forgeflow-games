@@ -5,8 +5,9 @@
 //   Low      0.75   off    1024² hard     off    off    0          0        1
 //   Medium   0.90   half   2048² PCF      on     SMAA   1          1        1
 //   High     1.00   half*  2048² PCF      on     SMAA   2          2        1
-//   Ultra    1.00   full   4096² PCF      on     SMAA   2          2        ≤ 2
-//   (* the UI ladder ships High with half-res AO; `video.ao` decides: 1 half, 2 full)
+//   Ultra    1.00   fine   4096² PCF      on     SMAA   2          2        ≤ 2
+//   (* `video.ao` decides: 1 half-resolution "Medium" samples, 2 half-resolution "High" samples — perf PERF-C1: the
+//   full-resolution AO Ultra had ran 1080p at 33-35 fps on the M5, 60.1 with this, post.ts)
 //
 // The renderer honours the individual Settings.video fields (the UI writes a preset into them);
 // `tier` is only a label for SMAA preset, bloom levels and the particle budget. Telegraphs, the grade,

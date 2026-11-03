@@ -31,6 +31,8 @@ def main():
     ap.add_argument("--clips", default="")
     ap.add_argument("--fps", type=float, default=30.0)
     ap.add_argument("--step", type=int, default=1)
+    ap.add_argument("--ref", default="idle", choices=("idle", "bind"),
+                    help="the edge lengths the stretch is measured against: idle f0 (the audit's) or the bind pose")
     ap.add_argument("--where", action="store_true", help="print the rest position of each clip's worst stretched edges")
     a = ap.parse_args()
     rig = Rig(a.glb)
@@ -66,19 +68,19 @@ def main():
             out += W[:, c:c + 1] * np.einsum("nij,nj->ni", M, P4)[:, :3]
         return out
 
-    ref = skinned("idle", 0.0)
+    ref = skinned("idle", 0.0) if a.ref == "idle" else skinned(None, 0.0)
     L0 = np.linalg.norm(ref[ed[:, 0]] - ref[ed[:, 1]], axis=1)
     big = L0 >= 0.01
     rest = skinned(None, 0.0)                   # region boxes on the bind pose (the rig's rest: A-pose arms)
     regs = {k: f(rest)[ed[:, 0]] & f(rest)[ed[:, 1]] & big for k, f in REGIONS.items()}
     names = [c for c in (a.clips.split(",") if a.clips else rig.anims.keys()) if c in rig.anims]
-    print(f"# {a.glb}: {len(pos)} verts, {len(ed)} edges ({int(big.sum())} >= 1 cm); stretch > 1.5x vs idle f0, worst frame")
+    print(f"# {a.glb}: {len(pos)} verts, {len(ed)} edges ({int(big.sum())} >= 1 cm); stretch > 1.5x vs {a.ref}, worst frame")
     print(f"  {'clip':12s} {'all n':>6s} {'max':>5s} | " + " | ".join(f"{k:>8s} n  max" for k in REGIONS))
     tot = {k: 0 for k in ["all"] + list(REGIONS)}
     for nm in names:
         _, dur = rig.clip(nm)
         nf = max(1, int(round(dur * a.fps)))
-        worst = {k: (0, 1.0) for k in ["all"] + list(REGIONS)}
+        worst: dict = {k: (0, 1.0) for k in ["all"] + list(REGIONS)}
         for f in range(0, nf + 1, a.step):
             co = skinned(nm, min(f / a.fps, dur))
             r = np.where(big, np.linalg.norm(co[ed[:, 0]] - co[ed[:, 1]], axis=1) / np.maximum(L0, 1e-9), 1.0)
@@ -86,15 +88,21 @@ def main():
                 n = int((r[m] > 1.5).sum())
                 mx = float(r[m].max()) if m.any() else 1.0
                 worst[k] = (max(worst[k][0], n), max(worst[k][1], mx))
-            if a.where and float(r.max()) >= worst["all"][1] - 1e-9:
-                bad = np.argsort(-r)[:6]
-                worst["_at"] = [(round(float(r[i]), 2), np.round(rest[ed[i, 0]], 2).tolist()) for i in bad]
+            if a.where:
+                for k, m in [("all", big)] + list(regs.items()):
+                    rr = np.where(m, r, 0.0)
+                    if float(rr.max()) >= worst[k][1] - 1e-9:
+                        bad = np.argsort(-rr)[:4]
+                        worst["_at_" + k] = (f, [(round(float(rr[i]), 2), np.round(rest[ed[i, 0]], 2).tolist())
+                                                 for i in bad])
         for k in tot:
             tot[k] += worst[k][0]
         print(f"  {nm:12s} {worst['all'][0]:6d} {worst['all'][1]:5.2f} | " +
               " | ".join(f"{worst[k][0]:8d} {worst[k][1]:4.2f}" for k in REGIONS))
-        if a.where and "_at" in worst:
-            print("      worst edges (ratio, bind-pose point x/y/z):", worst["_at"])
+        for k in ["all"] + list(REGIONS):
+            if a.where and "_at_" + k in worst:
+                f_, at = worst["_at_" + k]
+                print(f"      {k} worst edges at f{f_} (ratio, bind-pose point x/y/z):", at)
     print("  total worst-frame counts: " + ", ".join(f"{k} {v}" for k, v in tot.items()))
 
 

@@ -289,11 +289,10 @@ def fair_stand(tiers: int, step: float) -> dict:
 # so is FRAY's hour-stone (env F2: landmarks_art2.hour_stone); hour_stone() above is its old pale cap; and so are the four
 # numerals and the VI slab (W5a minor:landmark-leftovers: landmarks_art2.numeral / vi_slab); numeral() and vi_slab() above
 # are their old SDF pillows (the old VI slab's V even pointed away from the camera)
-DESIGNS = {
-    "lampwright_stall": (stall, 3000, 0.04),
-    "lampwright_cart": (lampwright_cart, 4000, 0.025),
-    "fair_stand_high": (lambda: fair_stand(3, 1.0), 2000, 0.05), "fair_stand_low": (lambda: fair_stand(2, 0.5), 1500, 0.05),
-}
+# env E1 (closing CW4): the lampwright stall, FRAY's cart and the fair stands are Art 2.0 builds now too
+# (landmarks_art2.lampwright_stall / lampwright_stall_dome / lampwright_cart / fair_stand); stall(), lampwright_cart() and
+# fair_stand() above are their old SDF looks. This script writes nothing any more; its builders stay for reference.
+DESIGNS: dict = {}
 
 
 def preview(groups):

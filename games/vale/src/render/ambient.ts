@@ -565,7 +565,11 @@ class Critter {
     if (animate) this.mixer.update(dt);
   }
 
-  dispose(): void { this.mixer.stopAllAction(); this.mixer.uncacheRoot(this.root); }
+  dispose(): void {
+    this.mixer.stopAllAction(); this.mixer.uncacheRoot(this.root);
+    // perf PERF-C2: the clone's own skeleton holds a bone DataTexture once drawn (it outlived the match before)
+    this.root.traverse((o) => { const sm = o as import('three').SkinnedMesh; if (sm.isSkinnedMesh) sm.skeleton.dispose(); });
+  }
 }
 
 function turnTo(a: number, b: number, k: number): number {

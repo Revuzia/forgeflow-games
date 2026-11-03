@@ -60,6 +60,8 @@ const JUNGLE_GANK_FROM = 180;
 const LANE_ROAM_EVERY = 75;
 /** an all-in keeps chasing the fighter it was started on for at most this long (s) once its combo is spent (CW3 CL-1) */
 const ALLIN_COMMIT = 7;
+const TRADE_WIN_K = 0;
+const LANE_ROAM_OFF = true;
 /** a roam is given up after this long without its kill (s) */
 const ROAM_MAX = 25;
 /** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
@@ -85,6 +87,9 @@ export class Bot extends BotBase implements BotController {
   private laneFoe = -1;
   private foeRecallAt = -1e9;
   private lastRoamAt = -1e9;
+  /** since when that opponent has been my lane foe, and when it last swung at me or cast (castSeen's estimate) */
+  private foeSince = 0;
+  private foeHitAt = -1e9;
   /** the fighter my current all-in was started on (-1: none) */
   private allinTarget = -1;
   // situation (5 Hz)
@@ -237,7 +242,10 @@ export class Bot extends BotBase implements BotController {
     // lane opponent: the nearest noticed enemy fighter on my lane, close by
     this.laneEnemy = this.nearestEnemyFighter(this.prof.attackRange + 6);
     if (this.laneEnemy && this.lane >= 0 && !this.jungle) {
+      if (this.laneFoe !== this.laneEnemy.id) { this.foeSince = this.now; this.foeHitAt = -1e9; }
       this.laneFoe = this.laneEnemy.id;
+      const fs = this.m.castSeen.get(this.laneEnemy.id);
+      if (this.laneEnemy.atkTarget === e.id || (fs && fs.some((x) => x > this.now))) this.foeHitAt = this.now;
       if (this.laneEnemy.stateOverride === 'recall') this.foeRecallAt = this.now;
     }
     // Wicks, summons and monsters hitting me
@@ -264,7 +272,7 @@ export class Bot extends BotBase implements BotController {
    *  road whatever its opponents do — its carry keeps the road (and its Wicks' light) alone meanwhile */
   private laneRoamWindow(): boolean {
     const e = this.e, li = this.lane;
-    if (li < 0 || e.level < (this.support ? 2 : 3) || this.now - this.lastRoamAt < LANE_ROAM_EVERY) return false;
+    if (LANE_ROAM_OFF || li < 0 || e.level < (this.support ? 2 : 3) || this.now - this.lastRoamAt < LANE_ROAM_EVERY) return false;
     const pushed = this.perc.ownN[li] >= 2 && this.perc.enemyN[li] <= 2;
     if (this.support && pushed && this.hpF > 0.6) return true;
     const foe = this.laneFoe >= 0 ? this.w.entity(this.laneFoe) : null;
@@ -446,7 +454,10 @@ export class Bot extends BotBase implements BotController {
       const ready = Math.min(0.2, (this.burstOn(le) / Math.max(1, le.hp + le.shield)) * 0.25);
       const lt = le.atkTarget >= 0 ? this.w.entity(le.atkTarget) : null;
       const busy = lt && lt.kind === 'minion' ? 0.06 : 0;
-      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + lvl + ready + busy - wavePenalty;
+      // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
+      // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
+      const passive = le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + (lvl + ready + busy) * TRADE_WIN_K + passive - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
     }
     // all-in

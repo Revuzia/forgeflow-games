@@ -354,8 +354,8 @@
       -1.24,
       0.95
     ],
-    "kb_raw": 176,
-    "kb": 60,
+    "kb_raw": 226,
+    "kb": 86,
     "texture": 1024,
     "buried_faces_dropped": 36,
     "nodes": [
@@ -378,9 +378,9 @@
       -2.24,
       1.73
     ],
-    "kb_raw": 107,
-    "kb": 57,
-    "texture": 512,
+    "kb_raw": 253,
+    "kb": 107,
+    "texture": 1024,
     "buried_faces_dropped": 103,
     "nodes": [
       "body"
@@ -388,96 +388,96 @@
   },
   "numeral_ii": {
     "id": "numeral_ii",
-    "tris": 330,
+    "tris": 610,
     "size_m": [
-      4.64,
-      4.74
+      4.92,
+      3.84
     ],
-    "height": 2.77,
+    "height": 3.31,
     "x": [
-      -2.32,
-      2.32
+      -2.45,
+      2.48
     ],
     "y": [
-      -1.45,
-      3.29
+      -2.1,
+      1.73
     ],
-    "kb_raw": 167,
-    "kb": 52,
+    "kb_raw": 231,
+    "kb": 94,
     "texture": 1024,
-    "buried_faces_dropped": 34,
+    "buried_faces_dropped": 85,
     "nodes": [
       "body"
     ]
   },
   "numeral_vii": {
     "id": "numeral_vii",
-    "tris": 443,
+    "tris": 741,
     "size_m": [
-      8.23,
-      4.92
+      8.53,
+      3.81
     ],
-    "height": 2.77,
+    "height": 3.31,
     "x": [
-      -4.08,
-      4.15
+      -4.25,
+      4.28
     ],
     "y": [
-      -1.63,
-      3.29
+      -2.08,
+      1.73
     ],
-    "kb_raw": 184,
-    "kb": 60,
+    "kb_raw": 251,
+    "kb": 108,
     "texture": 1024,
-    "buried_faces_dropped": 42,
+    "buried_faces_dropped": 117,
     "nodes": [
       "body"
     ]
   },
   "numeral_iiii": {
     "id": "numeral_iiii",
-    "tris": 419,
+    "tris": 747,
     "size_m": [
-      7.86,
-      4.83
+      8.2,
+      3.94
     ],
-    "height": 2.77,
+    "height": 3.31,
     "x": [
-      -3.95,
-      3.91
+      -4.08,
+      4.12
     ],
     "y": [
-      -1.54,
-      3.29
+      -2.21,
+      1.73
     ],
-    "kb_raw": 181,
-    "kb": 57,
+    "kb_raw": 251,
+    "kb": 106,
     "texture": 1024,
-    "buried_faces_dropped": 33,
+    "buried_faces_dropped": 115,
     "nodes": [
       "body"
     ]
   },
   "lampwright_stall": {
     "id": "lampwright_stall",
-    "tris": 1839,
+    "tris": 2164,
     "size_m": [
-      3.1,
-      3.1
+      3.08,
+      3.31
     ],
-    "height": 3.42,
+    "height": 3.49,
     "x": [
-      -1.56,
+      -1.54,
       1.54
     ],
     "y": [
-      -1.58,
+      -1.79,
       1.52
     ],
-    "kb_raw": 175,
-    "kb": 100,
-    "texture": 512,
-    "buried_faces_dropped": 261,
+    "kb_raw": 319,
+    "kb": 147,
+    "texture": 1024,
+    "buried_faces_dropped": 76,
     "nodes": [
       "body",
       "lamp"
@@ -485,24 +485,24 @@
   },
   "lampwright_stall_dome": {
     "id": "lampwright_stall_dome",
-    "tris": 2253,
+    "tris": 2768,
     "size_m": [
-      3.08,
-      2.96
+      3.04,
+      3.15
     ],
-    "height": 3.49,
+    "height": 3.27,
     "x": [
       -1.52,
-      1.56
+      1.52
     ],
     "y": [
-      -1.58,
-      1.38
+      -1.79,
+      1.36
     ],
-    "kb_raw": 192,
-    "kb": 113,
-    "texture": 512,
-    "buried_faces_dropped": 466,
+    "kb_raw": 366,
+    "kb": 177,
+    "texture": 1024,
+    "buried_faces_dropped": 369,
     "nodes": [
       "body",
       "lamp"
@@ -510,7 +510,7 @@
   },
   "lampwright_cart": {
     "id": "lampwright_cart",
-    "tris": 3381,
+    "tris": 3467,
     "size_m": [
       1.74,
       3.44
@@ -524,10 +524,10 @@
       -1.35,
       2.09
     ],
-    "kb_raw": 256,
-    "kb": 153,
-    "texture": 512,
-    "buried_faces_dropped": 568,
+    "kb_raw": 405,
+    "kb": 204,
+    "texture": 1024,
+    "buried_faces_dropped": 533,
     "nodes": [
       "body",
       "lamp"
@@ -535,24 +535,24 @@
   },
   "fair_stand_high": {
     "id": "fair_stand_high",
-    "tris": 7806,
+    "tris": 8596,
     "size_m": [
-      6.03,
-      6.03
+      6.02,
+      6.02
     ],
     "height": 3.32,
     "x": [
-      -3.0,
+      -2.99,
       3.03
     ],
     "y": [
       -3.03,
-      3.0
+      2.99
     ],
-    "kb_raw": 530,
-    "kb": 336,
-    "texture": 512,
-    "buried_faces_dropped": 125,
+    "kb_raw": 1347,
+    "kb": 607,
+    "texture": 2048,
+    "buried_faces_dropped": 98,
     "nodes": [
       "body"
     ]

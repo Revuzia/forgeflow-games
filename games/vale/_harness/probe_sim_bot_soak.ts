@@ -73,7 +73,9 @@ import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import type { BotTelemetry } from '../src/sim/bots/micro.ts';
 import { inTelegraph, telegraphFromEvent } from '../src/sim/bots/perception.ts';
-import { fighterProfile, itemRole, laneProject, proj } from '../src/sim/bots/knowledge.ts';
+import { abilityInfo, fighterProfile, itemRole, laneProject, proj, U_DAMAGE } from '../src/sim/bots/knowledge.ts';
+import { SLOT_INDEX } from '../src/sim/entity.ts';
+import { DIFFICULTIES } from '../src/sim/bots/difficulty.ts';
 import type { Player } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
 import { structuresOf } from '../src/sim/units/structures.ts';
@@ -228,7 +230,7 @@ interface FDeath { t: number; p: number; role: string; mode: string; killer: Kil
 /** per-seat micro counters (critic bot-micro): [aimed, hit] skillshots · [inside, dodged] telegraphs · [attacks with ≥ 2 enemy
  *  fighters in reach, on the lowest-EHP one] · health fraction at each recall start · damage from enemy fighters 3:00–8:00 ·
  *  deaths 3:00–8:00 */
-interface Micro { shots: number[][]; tele: number[][]; focus: number[][]; recallHp: number[][]; dmg38: number[]; deaths38: number[] }
+interface Micro { shots: number[][]; tele: number[][]; teleW: number[][]; teleF: number[][]; focus: number[][]; recallHp: number[][]; dmg38: number[]; deaths38: number[] }
 interface GameRec {
   job: Job; reason: string; dur: number; winner: number; sudden: number; faults: string[];
   seats: { p: number; team: number; fighter: string; role: string; spells: string[] }[];
@@ -274,10 +276,10 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   // dropped, so it walks, farms and recalls like a laner and never fights back. The seat stays a 'bot' seat because the sim
   // drives only bot seats; no RIFT bot decision reads a seat's controller kind (only FRAY's hunter cap does).)
   const human = job.suite === 'human' ? setup.seats.findIndex((s) => s.team === 0 && s.role === 'dialcross') : -1;
-  const micro: Micro = { shots: [], tele: [], focus: [], recallHp: [], dmg38: new Array<number>(n).fill(0), deaths38: new Array<number>(n).fill(0) };
-  for (let i = 0; i < n; i++) { micro.shots.push([0, 0]); micro.tele.push([0, 0]); micro.focus.push([0, 0]); micro.recallHp.push([]); }
+  const micro: Micro = { shots: [], tele: [], teleW: [], teleF: [], focus: [], recallHp: [], dmg38: new Array<number>(n).fill(0), deaths38: new Array<number>(n).fill(0) };
+  for (let i = 0; i < n; i++) { micro.shots.push([0, 0]); micro.tele.push([0, 0]); micro.teleW.push([0, 0]); micro.teleF.push([0, 0]); micro.focus.push([0, 0]); micro.recallHp.push([]); }
   const pendingShots: { t: number; p: number; src: number; ability: string; hit: boolean }[] = [];
-  const pendingTele: { p: number; ent: number; src: number; ability: string; until: number; hit: boolean }[] = [];
+  const pendingTele: { p: number; ent: number; src: number; ability: string; until: number; hit: boolean; windup?: boolean; can?: boolean }[] = [];
   const lowFor = new Array<number>(n).fill(0);
   const finished = new Set(catalog.items.filter((i) => i.tier === 'core' || i.tier === 'apex').map((i) => i.id));
   const modeTicks: Record<string, number>[] = setup.seats.map(() => ({}));
@@ -389,9 +391,9 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
                   const c = ctrls[pl.player] as unknown as { lane?: number; jungle?: boolean; support?: boolean; mode?: string } | null;
                   if (!c || c.jungle || c.lane !== li) continue;
                   const f = pl.ent;
-                  const s2 = !f || !f.alive ? 'dead' : (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2 <= 14 * 14 ? 'here' : `away/${c.mode}`;
-                  if (st === 'nolaner' || st.startsWith('away') || (st === 'dead' && s2 === 'here')) st = s2;
-                  if (st === 'here') break;
+                  const s2 = !f || !f.alive ? 'dead' : (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2 <= 14 * 14 ? `here/${c.mode}` : `away/${c.mode}`;
+                  if (st === 'nolaner' || st.startsWith('away') || (st === 'dead' && s2.startsWith('here'))) st = s2;
+                  if (st.startsWith('here')) break;
                 }
                 rec.wickMissed['A:' + st] = (rec.wickMissed['A:' + st] ?? 0) + 1;
               }
@@ -431,7 +433,29 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'objective': rec.objs.push({ t: e.t, unit: e.unit, team: e.team }); break;
         case 'takedown': rec.tds.push({ t: e.t, k: e.killer, v: e.victim }); break;
         case 'levelUp': if (e.level === 6 && rec.lvl6[e.player] < 0) rec.lvl6[e.player] = e.t; break;
-        case 'cast': if (e.slot === 'ult') { const pi = seatOf(e.src); if (pi >= 0 && rec.firstUlt[pi] < 0) rec.firstUlt[pi] = e.t; } break;
+        case 'cast': {
+          if (e.slot === 'ult') { const pi = seatOf(e.src); if (pi >= 0 && rec.firstUlt[pi] < 0) rec.firstUlt[pi] = e.t; }
+          // (a point-targeted delayed circle can be read from its caster's windup — the bots dodge it from there, CW3 critic
+          // bot-micro — so a fighter standing where it will land when the cast starts is in it, even if it has left by the time
+          // the area appears)
+          const src = world().entity(e.src);
+          const si = SLOT_INDEX[e.slot];
+          const sl = src && si !== undefined && si <= 3 ? src.slots[si] : null;
+          if (!src || !sl || !(e.castTime > 0.05)) break;
+          const info = abilityInfo(sl.def);
+          if (info.tk !== 'point' || info.delivery !== 'area' || !(info.radius > 0) || !(e.castTime + info.delay >= 0.3) || !((info.use & U_DAMAGE) !== 0 || info.cc)) break;
+          const dx = e.x - src.x, dy = e.y - src.y, d = Math.hypot(dx, dy) || 1;
+          const kk = info.range > 0 && d > info.range ? info.range / d : 1;
+          const cx = src.x + dx * kk, cy = src.y + dy * kk;
+          for (const pl of world().players) {
+            const f = pl.ent;
+            if (!f || !f.alive || pl.team === src.team || pl.player === human || (f.x - cx) ** 2 + (f.y - cy) ** 2 > (info.radius + f.radius) ** 2) continue;
+            const out = info.radius + f.radius + 0.2 - Math.hypot(f.x - cx, f.y - cy);
+            const can = DIFFICULTIES[job.diffs[pl.team] as 'adept'].reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.castTime + info.delay;
+            pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: sl.def.id, until: e.t + e.castTime + info.delay + 0.2, hit: false, windup: true, can });
+          }
+          break;
+        }
         case 'hit': {
           const dst = world().entity(e.dst), src = world().entity(e.src);
           if (!dst || dst.kind !== 'fighter' || !src || src.team === dst.team) break;
@@ -446,7 +470,14 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
           for (const pl of world().players) {
             const f = pl.ent;
             if (!f || !f.alive || pl.team === tg.srcTeam || pl.player === human || !inTelegraph(tg, f.x, f.y, f.radius)) continue;
-            pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: e.ability, until: e.t + e.delay + 0.2, hit: false });
+            if (pendingTele.some((pt) => pt.windup && pt.ent === f.id && pt.src === e.src && pt.ability === e.ability && e.t <= pt.until)) continue;
+            let out = 0;
+            if (tg.kind === 'rect' || tg.kind === 'cone') {
+              const side = Math.abs(-(f.x - tg.x) * tg.dirY + (f.y - tg.y) * tg.dirX);
+              out = tg.kind === 'rect' ? tg.width * 0.5 + f.radius + 0.2 - side : Math.max(1, tg.radius * Math.sin(tg.half) + f.radius - side);
+            } else out = tg.radius + f.radius + 0.2 - Math.hypot(f.x - tg.x, f.y - tg.y);
+            const can = DIFFICULTIES[job.diffs[pl.team] as 'adept'].reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.delay;
+            pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: e.ability, until: e.t + e.delay + 0.2, hit: false, can });
           }
           break;
         }
@@ -499,7 +530,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
       const pt = pendingTele[i];
       if (t < pt.until) continue;
       const pl = world().players[pt.p];
-      if (pl.ent && (pl.ent.alive || pt.hit)) { micro.tele[pt.p][0]++; if (!pt.hit) micro.tele[pt.p][1]++; }
+      if (pl.ent && (pl.ent.alive || pt.hit)) { micro.tele[pt.p][0]++; if (!pt.hit) micro.tele[pt.p][1]++; if (pt.windup) { micro.teleW[pt.p][0]++; if (!pt.hit) micro.teleW[pt.p][1]++; } if (pt.can) { micro.teleF[pt.p][0]++; if (!pt.hit) micro.teleF[pt.p][1]++; } }
       pendingTele.splice(i, 1);
     }
     if (t >= limit) break;
@@ -748,21 +779,23 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
   const tiers = [...new Set(tierGames.flatMap((g) => g.job.diffs))];
   const microD: Record<string, unknown> = {};
   for (const tier of ['novice', 'adept', 'veteran'].filter((x) => tiers.includes(x))) {
-    const a = { shot: [0, 0], tele: [0, 0], focus: [0, 0], deaths: 0, low: 0, recall: [] as number[] };
+    const a = { shot: [0, 0], tele: [0, 0], teleW: [0, 0], teleF: [0, 0], focus: [0, 0], deaths: 0, low: 0, recall: [] as number[] };
     for (const g of tierGames) for (const s of g.seats) {
       if (g.job.diffs[s.team] !== tier) continue;
       const m = g.micro;
       a.shot[0] += m.shots[s.p][0]; a.shot[1] += m.shots[s.p][1];
       a.tele[0] += m.tele[s.p][0]; a.tele[1] += m.tele[s.p][1];
+      if (m.teleW) { a.teleW[0] += m.teleW[s.p][0]; a.teleW[1] += m.teleW[s.p][1]; }
+      if (m.teleF) { a.teleF[0] += m.teleF[s.p][0]; a.teleF[1] += m.teleF[s.p][1]; }
       a.focus[0] += m.focus[s.p][0]; a.focus[1] += m.focus[s.p][1];
       a.recall.push(...m.recallHp[s.p]);
       for (const x of g.fdeaths) if (x.p === s.p) { a.deaths++; if (x.lowStay) a.low++; }
     }
-    const r = { skillshotHit: a.shot[1] / Math.max(1, a.shot[0]), shots: a.shot[0], dodge: a.tele[1] / Math.max(1, a.tele[0]), teles: a.tele[0],
+    const r = { skillshotHit: a.shot[1] / Math.max(1, a.shot[0]), shots: a.shot[0], dodge: a.tele[1] / Math.max(1, a.tele[0]), teles: a.tele[0], dodgeWindup: a.teleW[1] / Math.max(1, a.teleW[0]), telesWindup: a.teleW[0], dodgeFeasible: a.teleF[1] / Math.max(1, a.teleF[0]), telesFeasible: a.teleF[0],
       lowStay: a.low / Math.max(1, a.deaths), deaths: a.deaths, focusLowest: a.focus[1] / Math.max(1, a.focus[0]), focusN: a.focus[0],
       recallHpMedian: median(a.recall), recallUnder30: a.recall.filter((x) => x < 0.3).length / Math.max(1, a.recall.length), recalls: a.recall.length };
     microD[tier] = r;
-    text.push('', `micro ${tier}: skillshots hit ${pct(r.skillshotHit)} of ${r.shots} · telegraphs dodged ${pct(r.dodge)} of ${r.teles} · deaths after ≥ 1.5 s under the retreat threshold outside retreat ${pct(r.lowStay)} of ${r.deaths}`
+    text.push('', `micro ${tier}: skillshots hit ${pct(r.skillshotHit)} of ${r.shots} · telegraphs dodged ${pct(r.dodge)} of ${r.teles} (read from the caster's windup ${pct(r.dodgeWindup)} of ${r.telesWindup}; walkable after the tier's reaction ${pct(r.dodgeFeasible)} of ${r.telesFeasible}) · deaths after ≥ 1.5 s under the retreat threshold outside retreat ${pct(r.lowStay)} of ${r.deaths}`
       + ` · attacks on the lowest-EHP fighter in reach ${pct(r.focusLowest)} of ${r.focusN} · health at recall start median ${pct(r.recallHpMedian)}, under 30 % ${pct(r.recallUnder30)} of ${r.recalls}`);
   }
   detail.micro = microD;

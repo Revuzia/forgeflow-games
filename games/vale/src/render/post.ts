@@ -2,7 +2,10 @@
 // LUT → vignette → overlay → SMAA; tokens.json `grade.passOrder`).
 //
 //   RenderPass(world)                       HalfFloat buffers, renderer.toneMapping = NoToneMapping
-//   N8AOPostPass                            ao 1 = half resolution "Medium", ao 2 = full "High"; off on Low; one
+//   N8AOPostPass                            ao 1 = half resolution "Medium", ao 2 = half resolution "High" (perf
+//                                           PERF-C1: full-resolution AO cost Ultra 1080p 25 fps on the M5 — 34.8 fps vs
+//                                           60.1 at half resolution, A/B in one page; the "High" samples keep Ultra's
+//                                           finer contact shading); off on Low; one
 //                                           denoise pass instead of two while dynamic resolution holds the scale
 //                                           down (r12 B4; a JS-side count: no shader recompiles, no new programs)
 //   VfxPass                                 the VFX scene drawn into the HDR buffer (premultiplied, soft
@@ -301,7 +304,7 @@ export class PostChain {
       ao.configuration.transparencyAware = false;
       ao.setQualityMode(q.ao === 2 ? 'High' : 'Medium');
       ao.configuration.denoiseIterations = this.aoLow ? 1 : 2;
-      ao.configuration.halfRes = q.ao === 1;
+      ao.configuration.halfRes = true;
       ao.configuration.aoRadius = 1.4;
       ao.configuration.distanceFalloff = 1.0;
       ao.configuration.intensity = 2.5;

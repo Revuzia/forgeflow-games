@@ -72,14 +72,15 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
           # final parity client F3: the figure at 0.81 of the splash's height (0.68 of W2's loading card) -> ~0.86
           "fill": 0.94}
 # per-skin card staging (closing review burdam-M3; schema: art/blender/portraits.py header). Base: the Settled Account
-# reach (the arm thrown out, the cleaver cocked, the notches lit) under the burning city's warm rim and bounce;
+# stamp (the cleaver slammed down in front, its flat and the five lit notches to the viewer, the body rocked back)
+# under the burning city's warm rim and bounce;
 # Stillwater: Stubborn's planted post, head bowed, in cold river light; Almanac Ledger: the victory's tally scored with
 # the thumbnail, the ledger board on his right hip under a lamp
 CARDS = {
     "burdam": {
-        "splash": {"clip": "cast_ult", "t": 0.25, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
-                   "key_az": 215.0, "key_el": 28.0, "key_color": "#FFD9B0", "sun": 2.6, "rim_cool": 0.6,
-                   "rim_warm": 1.6, "bounce": 0.9, "bounce_color": "#F0A868", "accent": 2.2,
+        "splash": {"clip": "cast_ult", "t": 0.45, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.88, "x": 0.70,
+                   "key_az": 215.0, "key_el": 28.0, "key_color": "#FFE6CC", "sun": 2.6, "rim_cool": 0.7,
+                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#EDB27A", "accent": 2.2,
                    "focal": [{"at": "x_notch_mid", "az": 200.0, "el": 20.0, "dist": 0.7, "color": "#FFD08A",
                               "power": 55.0, "size": 0.3},
                              {"at": "head", "az": 205.0, "el": 15.0, "dist": 0.8, "color": "#FFE2C0", "power": 18.0,
@@ -1120,7 +1121,7 @@ def chain_config(ctx) -> list:
             c._burdam_floor = _skirt_floor(skel, nm)
             c._burdam_front = nm == "skirt_f"
         else:
-            c = anim.ChainCfg(list(bones), gravity=0.45, stiffness=85.0, damping=9.0, inertia=0.6, limit=(-14.0, 14.0))
+            c = anim.ChainCfg(list(bones), gravity=0.3, stiffness=70.0, damping=7.0, inertia=1.4, limit=(-14.0, 14.0))
         out.append(c)
     return out
 
@@ -2525,14 +2526,14 @@ def _post_paint(img: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
 
 # closing review burdam-M2: the concept's crossed chest and back straps are paint on the felt coat (projected relief),
 # and the coat's value lift took them with it: the strap read L* 63 against the coat's 38 in the three close. They are
-# re-painted as the darkest leather on the torso (the belt's), with a darker edge line and the painting's own grain, on
+# re-painted as the darkest leather on the torso (a step under the belt), with a darker edge line and the painting's own grain, on
 # bands traced from the concept plates (world x / z of each strap's centre line, half-width; front: y < 0, back: y > 0)
 HARNESS_FRONT = (((-0.200, 1.599), (0.296, 1.358), 0.040),    # the broad diagonal, his right shoulder -> left hip
                  ((-0.285, 1.371), (-0.004, 1.487), 0.029),   # the lower strap rising from the buckle under it
                  ((0.062, 1.517), (0.127, 1.620), 0.025))     # the short strap up to the left shoulder
 HARNESS_BACK = (((0.148, 1.633), (-0.199, 1.352), 0.038),
                 ((0.242, 1.352), (-0.142, 1.586), 0.033))
-HARNESS_LEATHER = "#45311F"   # = BELT_MEAN (L* ~22)
+HARNESS_LEATHER = "#32241A"   # a step under BELT_MEAN (L* ~15): the coat's lit chest renders ~L* 40-55 in the three close
 HARNESS_EDGE = 0.55           # x the leather on the strap's outer 8 mm
 
 
@@ -3625,9 +3626,10 @@ def _bind_mix(ctx, obj, bind) -> None:
         p = mw @ v.co
         w = {}
         if kind == "skirtmix":
-            r = math.hypot(p.x, p.y) or 1e-6
-            u = -p.y / r
-            wf, wb = _smooth(0.15, 0.75, u), _smooth(0.15, 0.75, -u)
+            # by depth, not azimuth (the hem's flat bottom cap crosses the axis: an azimuth split tore it 5-9x): the front
+            # panel owns y < -0.22, the back y > 0.22, the middle (the sides and the cap's centre) the hips, with an
+            # 18 cm ramp between so any opening spreads over the cap
+            wf, wb = _smooth(0.04, 0.22, -p.y), _smooth(0.04, 0.22, p.y)
             ws = max(0.0, 1.0 - wf - wb)
             for nm, k in (("skirt_f", wf), ("skirt_b", wb)):
                 if k > 0:
@@ -3651,7 +3653,7 @@ def _bind_mix(ctx, obj, bind) -> None:
             E, Wr = ax[s_]
             d = Wr - E
             t = (p - E).dot(d) / max(1e-9, d.length_squared)
-            wu = 1.0 - _smooth(-0.12, 0.12, t)
+            wu = 1.0 - _smooth(-0.30, 0.25, t)       # a wide elbow blend (a +-3 cm one creased 5x in the chop)
             wh = 0.25 * _smooth(0.85, 1.05, t)
             w = {f"upper_arm.{s_}": wu, f"forearm.{s_}": max(0.0, 1.0 - wu - wh), f"hand.{s_}": wh}
         rows.append(w)
