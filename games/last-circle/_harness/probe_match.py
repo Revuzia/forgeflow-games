@@ -32,7 +32,7 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --sweep (W9 R1B): the episode sweep, 3 maps x seeds 1-6 (18 runs, no paths): the worst bot's stuck episodes <= 4 in every run (the R2 movers bar)
   --swimcheck (W9 R1B): the scripted swimmer trap (natural swim traps: 0 in the 18-run sweep, base and lane alike) - see SWIMCHECK_JS
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
-  --pencheck (W9 R1B pass 3): the scripted Volcano Rim pen (isla_viva seed 5, 3 setups) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
+  --pencheck (W9 R1B pass 3): ONLY the scripted Volcano Rim pen (isla_viva seed 5, 3 setups; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
   --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
@@ -156,10 +156,11 @@ def swimcheck(s, v):
 # it reaches the goal (2.5 m) or PEN_T s pass: it REACHES the goal in PEN_T s with 0 stuck episodes on the way (probe_match.js's definition: a 3 s
 # window, 0.5 s samples, net < 0.4 m, every sample a MOVING state). SETUP (else could-not-judge): the terrace and face are where they were (start
 # terrain 26-27.5 m, face foot >= 7 m lower) and the bot's route ran through the corner (a waypoint within 1.5 m of it). --plant no-pen-fix: FAILS.
-# Measured (fix3, 2026-11-02): lane 3/3 reach in 7.5-9.5 s, 0 episodes; EDGE_TURN off 0/3 pass (2 never reach, 1 at 18 s with 2 episodes).
+# Measured (fix3, 2026-11-02): lane 3/3 reach in 8-9.5 s, 0 episodes - PASS; --plant no-pen-fix: setups 1 and 3 never reach (2 episodes each, held at the
+# corner), setup 2 reaches in 7.5 s - FAIL. (PER_BOT_DROP off read the same as the lane on setups 1 and 3 and on 6 goal-below-the-face variants: removed.)
 PEN_MAP, PEN_SEED, PEN_PRE_S, PEN_T = "isla_viva", 5, 20.0, 30.0
 PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)
-PEN_SETUPS = ((-63.4, -77.6, 17), (-60.0, -79.0, 17), (-63.4, -77.6, 40))
+PEN_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))
 PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T]) => {
   const W = window.__LC__.W, C = window.__LC__, M = W.map, K = W.SIM, wy = M.waterY, H = (M.half || 760) - 30;
   const cl = (v) => Math.max(-H, Math.min(H, v));
@@ -267,7 +268,7 @@ def main():
                     help="the run list is too small for the 'sniper kills in MOST matches' row (a share of matches: Wave 7's Savanna run has 2 distinct matches): that one row is information; every other row is judged as usual")
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     ap.add_argument("--swimcheck", action="store_true", help="W9 R1B: the scripted swimmer trap (see SWIMCHECK_JS); --plant swim-exempt must FAIL it")
-    ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: the scripted Volcano Rim pen (see PENCHECK_JS); --plant no-pen-fix must FAIL it")
+    ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: ONLY the scripted Volcano Rim pen (no match runs; see PENCHECK_JS); --plant no-pen-fix must FAIL it")
     ap.add_argument("--sweep", action="store_true", help="W9 R1B: the episode sweep (3 maps x seeds 1-6, --no-paths, --small-run); adds the worst <= %d row" % SWEEP_WORST_MAX)
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS), help="a planted fault served into bots.js (this gate must then FAIL); needs --disk / --rev")
     args = ap.parse_args()
@@ -291,6 +292,12 @@ def main():
                 v.data["plant"] = {"name": args.plant, "edits": p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant])}
             s.boot()
             s.freeze_loop()
+            if args.pencheck:                      # (W9 R1B pass 3) its own row: the scripted pen alone (no match runs, no paths)
+                pencheck(s, v)
+                d = s.diagnostics()
+                v.check("no page errors / window errors during the runs", not (d["pageErrors"] or d["windowErrors"]),
+                        {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
+                return
             for k, (seed, mp) in enumerate(runs):
                 t0 = time.time()
                 st = s.start_match("standard", seed, mp, enter=True)
@@ -319,8 +326,6 @@ def main():
                         print("     D=%4s n=%2d game-useful %2d | verbatim-mid %2d | start-centred %2d" % (D, row["n"], row["gameUseful"], row["midUseful"], row["startUseful"]))
             if args.swimcheck:
                 swimcheck(s, v)
-            if args.pencheck:
-                pencheck(s, v)
             if args.farwall:
                 for seed, mp in ((1, "isla_viva"), (7, "isla_viva")):
                     s.start_match("standard", seed, mp, enter=True)
