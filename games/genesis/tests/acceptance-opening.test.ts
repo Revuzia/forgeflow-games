@@ -13,8 +13,8 @@ import { Sim } from '../src/sim/sim.ts';
 import type { Command } from '../src/sim/types.ts';
 import { homesteadCell } from '../src/client/poi.ts';
 
-function opening(seed: number): { sim: Sim; sid: number; lib0: number } {
-  const sim = new Sim({ seed, scenario: 'barren', overrides: { n: 32 } });
+function opening(seed: number, n: number | undefined = 32): { sim: Sim; sid: number; lib0: number } {
+  const sim = new Sim({ seed, scenario: 'barren', overrides: n ? { n } : {} });
   const u = sim.u, p = u.planets[0];
   const day = p.st.dayHours * 60;
   const must = (c: Command) => { const r = sim.applyNow(c); assert.ok(r.ok, `${c.k}: ${r.msg}`); return r; };
@@ -50,9 +50,12 @@ function opening(seed: number): { sim: Sim; sid: number; lib0: number } {
   return { sim, sid, lib0 };
 }
 
-for (const seed of [1, 8]) {
-  test(`the barren opening, left running with no further act: the band set down at the ring lives (seed ${seed})`, () => {
-    const { sim, lib0 } = opening(seed);
+// (seed 2 at the full grid: the young world goes on cooling under the band — its lakeshore's year fell from 25 to -13 °C
+// in two years — and the town froze at its hearth and on the midwinter walk away, alive 7 of 34 at Y2 on the old tree;
+// it must leave while the walk is survivable: settlement.ts abandonCheck 'foresee')
+for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
+  test(`the barren opening, left running with no further act: the band set down at the ring lives (seed ${seed}${grid ? "" : ", full grid"})`, () => {
+    const { sim, lib0 } = opening(seed, grid || undefined);
     const p = sim.u.planets[0];
     const year = Math.round(p.st.orbit.period);
     const alive = () => p.people.settlements.filter((s) => s.fallen < 0).reduce((a, s) => a + (p.people.members.get(s.id)?.length ?? 0), 0);

@@ -1499,14 +1499,22 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const dead = (st.recent.thermalDead ?? 0) >= 3 && x.tick - (st.recent.thermalAt ?? -1e9) < 3 * x.day;
   const harsh = (suffering > members.length * 0.4 || dead) && !kinder && !enduresSeason(x, st) && !(tooCold && wintersByHearth(x, st, members.length));
   if (harsh) st.recent.harsh = st.recent.harsh ?? x.tick; else delete st.recent.harsh;
+  // (sim-fix-r1, the barren opening seed 2: a town whose winter will be past bearing — within a quarter of the cold
+  // the people can live through, and no roofs to sit it out under (enduresSeason) — leaves while the walk is still
+  // survivable (the cold not yet at its depth), rather than when the cold has begun to kill: set down on a green
+  // lakeshore of a young world still cooling (its year's mean fell from 25 to -13 °C in two years), the town learned of
+  // its -18 °C winter by freezing, and the walk away killed 17 of 24)
+  const foresee = !harsh && !st.band && !dead && season.winter < lo - (lo - tMinOf(x, st)) * 0.75 && season.now > season.winter + 3
+    && x.tick - st.founded > 2 * x.day && !enduresSeason(x, st);
+  if (foresee) st.recent.foresee = st.recent.foresee ?? x.tick; else delete st.recent.foresee;
   if (!dead && st.recent.thermalAt !== undefined && x.tick - st.recent.thermalAt >= 3 * x.day) { delete st.recent.thermalDead; delete st.recent.thermalAt; }
   const cause = st.recent.floodSince !== undefined && x.tick - st.recent.floodSince > 0.5 * x.day ? 'flood'
     // (a dry town leaves within the day: thirst kills in two or three, and a people waiting longer died where it stood)
     : st.recent.dry !== undefined && x.tick - st.recent.dry > 0.75 * x.day ? 'drought'
     : st.recent.harsh !== undefined && (x.tick - st.recent.harsh > 2 * x.day || dead) ? (tooCold ? 'cold' : 'heat')
+    : st.recent.foresee !== undefined && x.tick - st.recent.foresee > 0.5 * x.day ? 'cold'
     : st.recent.hungry !== undefined && x.tick - st.recent.hungry > 2 * x.day ? 'famine' : null;
   if (!cause) return false;
-  if (process.env.SFDBG) console.log('SFDBG', cause, members.length, JSON.stringify({ td: st.recent.thermalDead, tat: st.recent.thermalAt, tick: x.tick, year: seasonTemps(x, st.cell), suffering, band: st.band, w: wintersByHearth(x, st, members.length), fire: fireSourceNear(x, st), fuel: storeAny(st, x.c.itemsByTag.get('fuel') ?? []) }));
   // (LIVING integration, 2026-10-20: water over the heart of a town with dry ground beside it — the pond a default
   // meteor's crater became, a swollen stream — moves the town there, its deep-drowned houses lost, instead of ending it:
   // the seed-4 town of the acceptance sessions walked away from a crater lake and was founded anew 400 m off under a new
@@ -1561,6 +1569,8 @@ export function moveHeart(x: PCtx, st: Settlement, why: 'flood' | 'ruin' = 'floo
  * land' in a -15 °C midwinter, founded a camp in the snow and 25 froze. They go, if they must, when the thaw comes.
  * A town that is dying of the cold by its hearth (a quarter of it lost in three days) still flees.
  */
+function tMinOf(x: PCtx, st: Settlement): number { return x.info[st.species].def.temp[0]; }
+
 export function wintersByHearth(x: PCtx, st: Settlement, people: number): boolean {
   if (st.band || people <= 0) return false;
   // (no rule on the year's mean here: the seed-2 lake town's reckoned year, -14 °C, failed it and the walk out into
