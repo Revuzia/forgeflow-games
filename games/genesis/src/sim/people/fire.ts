@@ -27,6 +27,25 @@ export function fireSourceNear(x: PCtx, st: Settlement): boolean {
   return false;
 }
 
+/**
+ * sim-fix-r1 (the barren opening seed 2): may a people melt snow and ice for water? A people of the cold always; any
+ * people that can make fire too (a pot or a skin of snow by the hearth). Before, only the cold-adapted could: a plains
+ * town with a lit hearth and 130 wood called its frozen lake 'the water failed' in a -16 °C midwinter, walked out
+ * into it and froze (29 of 33).
+ */
+export function meltsSnow(x: PCtx, st: Settlement | null | undefined, cold: boolean): boolean {
+  if (cold) return true;
+  if (!st) return false;
+  const fm = x.rt.byId.get('fire-making');
+  return fm !== undefined && st.library.includes(fm);
+}
+
+/** agent s's people (its settlement) may melt snow — meltsSnow */
+export function meltsSnowAgent(x: PCtx, s: number): boolean {
+  const sid = x.A.settlement[s];
+  return meltsSnow(x, sid >= 0 ? x.ps.settlement(sid) : null, x.info[x.A.species[s]].def.habitat.includes('cold'));
+}
+
 /** hourly: hearths burn their fuel (lit flag for the renderer) */
 export function burnHearths(x: PCtx, st: Settlement, ticks: number): void {
   for (const b of x.ps.of(st.id)) {

@@ -21,7 +21,7 @@ import { libHas, isTaboo, planExperiment } from './knowledge.ts';
 import { placeFor } from './context.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
 import { eat, finishTask } from './work.ts';
-import { fireSourceNear } from './fire.ts';
+import { fireSourceNear, meltsSnowAgent } from './fire.ts';
 import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
@@ -484,7 +484,7 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     }
   }
   // nothing known: search around, farther the thirstier
-  const melt = x.info[A.species[s]].def.habitat.includes('cold');
+  const melt = meltsSnowAgent(x, s);
   if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   // LIVING.md §2.7 (a dust bowl): a thirsty body goes to water it can WALK to (waterway.ts) — the rings above count water
   // across a strait or below a cliff, which the walk never reaches. A band member keeps to the band's road while their
@@ -546,7 +546,7 @@ export function waterHere(x: PCtx, s: number, at = -1): boolean {
 function waterAtCell(x: PCtx, s: number, c: number): boolean {
   const p = x.p, A = x.A;
   if (p.f.water[c] < 0.6 && (drinkable(p, c) || nbrFresh(x, c))) return true;
-  if (x.info[A.species[s]].def.habitat.includes('cold') && snowWater(p, c)) return true;
+  if (snowWater(p, c) && meltsSnowAgent(x, s)) return true;
   // a well (or cistern) in this cell or the next
   const g = p.grid;
   for (let e = g.nbrStart[c] - 1; e < g.nbrStart[c + 1]; e++) {
@@ -563,7 +563,7 @@ function waterAtCell(x: PCtx, s: number, c: number): boolean {
 /** the nearest drinking spot around the agent other than cell `not` (a drink whose spot proved out of reach) */
 export function planDrinkNear(x: PCtx, s: number, not: number): TaskSpec | null {
   const p = x.p, A = x.A;
-  const melt = x.info[A.species[s]].def.habitat.includes('cold');
+  const melt = meltsSnowAgent(x, s);
   const c = nearestCell(x, A.cell[s], 4, (o) => o !== not && p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_BURN && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 5), goalCell: c, work: 15, data: 1 };

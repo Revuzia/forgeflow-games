@@ -974,7 +974,7 @@ test('the owner\'s session at the default wrath (storm, drought, the prayer answ
   const r = srel(sim.u, p.id, st.id);
   assert.ok(r.prayers.length > 0, 'the drought raised a prayer');
   const a = must(sim, { k: 'prayer.answer', settlement: st.id });
-  assert.ok(!/will not take|refus/.test(a.msg), `the answer was taken: ${a.msg}`);
+  assert.ok(!/will not take|refus/.test(a.msg ?? ''), `the answer was taken: ${a.msg}`);
   sim.step(7 * day); look();
   must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: [...st.pos] });
   for (let d = 0; d < 12; d++) { sim.step(day); look(); }

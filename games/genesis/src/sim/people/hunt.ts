@@ -48,6 +48,14 @@ export const LOAD_KG = 30;
 export const DRESSED = 0.42;
 /** a party gives up after this many days out */
 export const PARTY_DAYS = 4;
+/**
+ * (sim-fix-r1, P02 lever 3) a day trip: game within this of the settlement's centre (m) is hunted out and back in a day
+ * — the party may set out with only DAY_TRIP_LIGHT minutes of daylight left, takes a day's food and is home by the next
+ * morning at the latest. Every trip used to want six hours of light and could last four days: the morning check masked
+ * 3,967 of 4,300 idle town-hours over 8 worlds (`_harness/scratch/punch/gateprobe.ts`), and a party out after one deer
+ * a kilometre off kept its hunters for days.
+ */
+export const DAY_TRIP_M = 1500, DAY_TRIP_LIGHT = 3 * 60;
 const _route: number[] = [];
 /**
  * LAND round 5 (2026-10-21): a band with hunters enough sends out a second party while the first is away — a party
@@ -319,7 +327,11 @@ export function huntHourly(x: PCtx, st: Settlement): void {
   // in store runs low (a store full of grain is no reason to rest the spears; one full of meat is)
   const k = x.rt.byId.get('hunting');
   if (k === undefined || !libHas(st, k) || st.besieged >= 0) return;
-  if (daylightAt(x, st) < 6 * 60) return;
+  const light = daylightAt(x, st);
+  if (light < DAY_TRIP_LIGHT) return;
+  // (less than six hours of light: only game near enough for a day trip)
+  const near = (g: Herd) => distM(x.p, cellPos(x.p, g.cell, _q), st.pos) <= DAY_TRIP_M;
+  const shortDay = light < 6 * 60;
   const heads = (x.ps.members.get(st.id)?.length ?? 0) + st.cohort.n[1];
   // (fix r1 #11) why the spears go out: meat running low or famine, hides and furs wanted, a pack that took the town's
   // beasts, or a farming town's folk hunt (the last two muster other able adults at home too)
@@ -352,12 +364,14 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     const party = hunters.slice(0, PARTY_MAX);
     const bold = party.length >= 4 && armed(x, st);
     const g = raid !== null ? (isGame(x, st, raid, bold, true) ? raid : null) : gameOnFoot(x, st, st.pos, party.length, bold);
-    if (!g) return;
-    const day = folk && HUNT_TUNE.folkReach > 0;
-    if (day && distM(x.p, cellPos(x.p, g.cell, _q), st.pos) > HUNT_TUNE.folkReach) return;
+    if (!g || (shortDay && !near(g))) return;
+    const folkDay = folk && HUNT_TUNE.folkReach > 0;
+    if (folkDay && distM(x.p, cellPos(x.p, g.cell, _q), st.pos) > HUNT_TUNE.folkReach) return;
+    const day = folkDay || near(g);
     // they are hunters until the party is home (assignRoles keeps a party out hunting, then gives the roles out again)
     for (const m of party) A.role[m] = ROLE.hunter;
     const np: HuntParty = { id: x.tick, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
+    if (near(g)) np.day = true;
     L.party = np;
     for (const m of party) provision(x, st, m, day ? 1 : PARTY_FOOD_DAYS);
     ledger(x, st).huntTrips++;
@@ -373,11 +387,12 @@ export function huntHourly(x: PCtx, st: Settlement): void {
     let party = free.slice(0, n);
     let g = gameOnFoot(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip);
     if (!g && n < all) { party = free.slice(0, all); g = gameOnFoot(x, st, st.pos, party.length, party.length >= 4 && armed(x, st), skip); }
-    if (!g) return;
+    if (!g || (shortDay && !near(g))) return;
     const np: HuntParty = { id: x.tick + out.length, members: party.map((m) => A.id[m]), herd: g.id, species: g.species, since: x.tick, lastTry: -1, kills: 0 };
+    if (near(g)) np.day = true;
     if (!L.party) L.party = np; else (L.more ??= []).push(np);
     out.push(np);
-    for (const m of party) provision(x, st, m, PARTY_FOOD_DAYS);
+    for (const m of party) provision(x, st, m, np.day ? 1 : PARTY_FOOD_DAYS);
     ledger(x, st).huntTrips++;
     free = free.slice(party.length);
   }
@@ -418,7 +433,7 @@ function keepParty(x: PCtx, st: Settlement, p: HuntParty): boolean {
   const A = x.A;
   p.members = p.members.filter((id) => { const s = A.slotOf(id); return s >= 0 && A.alive[s] && A.settlement[s] === st.id && A.role[s] === ROLE.hunter; });
   const out = p.members.some((id) => { const s = A.slotOf(id); return s >= 0 && (A.camp[s] >= 0 || (A.task[s] === TASK.hunt)); });
-  const old = x.tick - p.since > PARTY_DAYS * x.day;
+  const old = x.tick - p.since > (p.day ? 1 : PARTY_DAYS) * x.day;
   // (the rest of the kill left by it: kept for them while it is fresh, then the scavengers' and the flies')
   if (p.cache && x.tick - p.cache.t > CACHE_DAYS * x.day) delete p.cache;
   if (p.members.length === 0 || old || (p.kills > 0 && !out && !p.cache)) return false;

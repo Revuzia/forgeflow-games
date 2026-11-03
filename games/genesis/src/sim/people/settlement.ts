@@ -21,7 +21,7 @@ import { cellPos, distM, drinkable, freshWater, hollowDepth, isLand, offsetPoint
 import { settlementName, rootLanguage, driftLanguage, placeRoot } from './names.ts';
 import { tell, remember } from './story.ts';
 import { settlementRef, vars, emitSt } from './util.ts';
-import { burnHearths } from './fire.ts';
+import { burnHearths, fireSourceNear, meltsSnow } from './fire.ts';
 import { cohortStep, cohortTotal } from './cohorts.ts';
 import { diseaseStep } from '../life/disease.ts';
 import { bandWater, campBeats, inputsAvailable, seedItems } from './decide.ts';
@@ -958,8 +958,15 @@ export function planConstruction(x: PCtx, st: Settlement): void {
     else if (cap > 0) shelterSites++;
   }
   const homeless = st.households.some((h) => h.home < 0 && h.members.length > 0);
-  const wantBeds = beds < pop || (homeless && shelterSites === 0 && bedsUp < pop + 6);
-  if (st.sites.length >= (wantBeds && shelterSites === 0 ? 3 : 2)) return;
+  // (sim-fix-r1, P11: the census asks for standing beds for 0.9 of the people at every year end, and 0/8 seeds met it —
+  // a house begun counted as beds already, so a town of 40 in 35 standing beds with one slow site wanted none, and
+  // the children born that year outgrew the roofs before they stood. Beds still building count half; the town builds
+  // ahead of its growth (a tenth over its people), and while the standing beds fall short of 0.9 a second dwelling
+  // may be begun beside the first, in a slot of its own)
+  const short = bedsUp < pop * 0.9;
+  const wantBeds = bedsUp + (beds - bedsUp) * 0.5 < pop * 1.1 + 1 || (homeless && shelterSites === 0 && bedsUp < pop + 6);
+  const extra = wantBeds && (shelterSites === 0 || (short && shelterSites < 2));
+  if (st.sites.length >= (extra ? 3 : 2)) return;
   const have = (id: string) => mine.some((b) => x.c.buildings.list[b.type].id === id);
   const tIdx = (id: string) => x.c.buildings.idx(id);
   const ok = (id: string) => { const t = tIdx(id); return t >= 0 && canBuild(x, st, t); };
@@ -1490,7 +1497,7 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const tooCold = season.now < (lo + hi) / 2;
   const kinder = tooCold ? season.ahead >= lo : season.ahead <= hi;
   const dead = (st.recent.thermalDead ?? 0) >= 3 && x.tick - (st.recent.thermalAt ?? -1e9) < 3 * x.day;
-  const harsh = (suffering > members.length * 0.4 || dead) && !kinder && !enduresSeason(x, st);
+  const harsh = (suffering > members.length * 0.4 || dead) && !kinder && !enduresSeason(x, st) && !(tooCold && wintersByHearth(x, st, members.length));
   if (harsh) st.recent.harsh = st.recent.harsh ?? x.tick; else delete st.recent.harsh;
   if (!dead && st.recent.thermalAt !== undefined && x.tick - st.recent.thermalAt >= 3 * x.day) { delete st.recent.thermalDead; delete st.recent.thermalAt; }
   const cause = st.recent.floodSince !== undefined && x.tick - st.recent.floodSince > 0.5 * x.day ? 'flood'
@@ -1499,6 +1506,7 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
     : st.recent.harsh !== undefined && (x.tick - st.recent.harsh > 2 * x.day || dead) ? (tooCold ? 'cold' : 'heat')
     : st.recent.hungry !== undefined && x.tick - st.recent.hungry > 2 * x.day ? 'famine' : null;
   if (!cause) return false;
+  if (process.env.SFDBG) console.log('SFDBG', cause, members.length, JSON.stringify({ td: st.recent.thermalDead, tat: st.recent.thermalAt, tick: x.tick, year: seasonTemps(x, st.cell), suffering, band: st.band, w: wintersByHearth(x, st, members.length), fire: fireSourceNear(x, st), fuel: storeAny(st, x.c.itemsByTag.get('fuel') ?? []) }));
   // (LIVING integration, 2026-10-20: water over the heart of a town with dry ground beside it — the pond a default
   // meteor's crater became, a swollen stream — moves the town there, its deep-drowned houses lost, instead of ending it:
   // the seed-4 town of the acceptance sessions walked away from a crater lake and was founded anew 400 m off under a new
@@ -1544,6 +1552,29 @@ export function moveHeart(x: PCtx, st: Settlement, why: 'flood' | 'ruin' = 'floo
   // (fix r2 #12: a god-sent disaster below full wrath that leaves lava or a pit at the heart moves it too — 'heart.ruin')
   tell(x.u, x.p, why === 'ruin' ? 'heart.ruin' : 'heart.flood', vars(x, st, -1, {}), st, [settlementRef(x, st)]);
   return true;
+}
+
+/**
+ * sim-fix-r1 (the barren opening seed 2): does a town sit out a cold season by its fire rather than walk out into it? A
+ * town (not a band on the move) with a built hearth, fire at hand and fuel in store for the season stays through the
+ * winter: at Y1.75 a plains town of 33 with a lit hearth and 120 wood 'left for warmer
+ * land' in a -15 °C midwinter, founded a camp in the snow and 25 froze. They go, if they must, when the thaw comes.
+ * A town that is dying of the cold by its hearth (a quarter of it lost in three days) still flees.
+ */
+export function wintersByHearth(x: PCtx, st: Settlement, people: number): boolean {
+  if (st.band || people <= 0) return false;
+  // (no rule on the year's mean here: the seed-2 lake town's reckoned year, -14 °C, failed it and the walk out into
+  // its winter killed 25. A place too cold to live in shows itself by deaths at the hearth — then they go — or they
+  // leave when the season turns)
+  if ((st.recent.thermalDead ?? 0) >= Math.max(3, people * 0.25) && x.tick - (st.recent.thermalAt ?? -1e9) < 3 * x.day) return false;
+  let hearth = false;
+  for (const b of x.ps.of(st.id)) {
+    if (b.progress < 1 || b.flags & BuildingFlag.ruined) continue;
+    const def = x.c.buildings.list[b.type];
+    if (def.function === 'hearth' && def.heat > 0) { hearth = true; break; }
+  }
+  if (!hearth || !fireSourceNear(x, st)) return false;
+  return storeAny(st, x.c.itemsByTag.get('fuel') ?? []) >= Math.max(10, people);
 }
 
 /**
@@ -1657,7 +1688,7 @@ function freshAt(x: PCtx, st: Settlement, c: number): boolean {
   const p = x.p;
   if (p.f.water[c] >= 0.6) return false;
   if (drinkable(p, c)) return true;
-  if (x.info[st.species].def.habitat.includes('cold') && snowWater(p, c)) return true;
+  if (snowWater(p, c) && meltsSnow(x, st, x.info[st.species].def.habitat.includes('cold'))) return true;
   const g = p.grid;
   for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (freshWater(p, g.nbr[e])) return true;
   return false;

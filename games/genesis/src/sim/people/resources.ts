@@ -8,6 +8,7 @@ import type { Settlement, ResourceCache } from './state.ts';
 import { buildFlowField, type PathOpts } from '../grid/pathfind.ts';
 import { cellContexts } from './context.ts';
 import { drinkable, freshWater, isLand, snowWater, wellFlows } from './world.ts';
+import { meltsSnow } from './fire.ts';
 import { BuildingFlag } from '../types.ts';
 import { animalDef } from '../life/herds.ts';
 import { BASE_WALK, DAY_TRIP } from './defs.ts';
@@ -248,7 +249,7 @@ export function updateResources(x: PCtx, st: Settlement): void {
   const fertile: number[] = [];
   let dune = -1;
   const g2 = p.grid;
-  const melt = sp.def.habitat.includes('cold');
+  const melt = meltsSnow(x, st, sp.def.habitat.includes('cold'));
   for (const c of nearC) {
     // a drinking spot: fresh water you can stand in, or dry land beside it
     if (f.water[c] < 0.6) {

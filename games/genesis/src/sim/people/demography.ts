@@ -27,7 +27,9 @@ import { famine } from './hunt.ts';
 import { worldSalt } from './lifecycle.ts';
 
 /** a mother's births are at least this many game years apart (her own gap is drawn in [GAP_MIN, GAP_MAX]) */
-export const GAP_MIN = 2.0, GAP_MAX = 3.0;
+// (sim-fix-r1, P12: 2.0-3.0 gave a measured median interval of 3.43 years and growth over years 5-30 of 0.33 %/yr
+// (target 1.5-3): the waiting for a conception after the gap adds most of a year. 1.8-2.6 puts the interval near 3.)
+export const GAP_MIN = 1.8, GAP_MAX = 2.6;
 /** yearly hazards of childhood by age: under 1, 1 to 5, 5 to 15 */
 export const CHILD_HAZARD = [0.07, 0.012, 0.0025] as const;
 /** (fix r1 #13) × the childhood hazard while households of the village have no roof */

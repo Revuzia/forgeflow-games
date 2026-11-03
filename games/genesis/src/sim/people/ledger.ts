@@ -97,6 +97,8 @@ export interface HuntParty {
   lastTry: number;
   /** head killed so far on this trip */
   kills: number;
+  /** (sim-fix-r1, P02) a day trip: game near home, out and back by dusk (people/hunt.ts DAY_TRIP_M) */
+  day?: boolean;
   /** what was left of a kill too big for the hunters there to carry, by item id, and where and when (people/hunt.ts:
    * they come back for it while it keeps) */
   cache?: { c: number; pos: [number, number, number]; goods: Record<string, number>; t: number };

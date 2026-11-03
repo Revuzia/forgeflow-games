@@ -7,7 +7,7 @@
 // is kept for the death notice. Health heals when the body is fed, watered and warm.
 
 import type { PCtx } from './ctx.ts';
-import { AgentFlag } from '../types.ts';
+import { AgentFlag, BuildingFlag } from '../types.ts';
 import { NEED, NT, TASK, TRAIT } from './defs.ts';
 import { DEATH } from './defs.ts';
 import { airTemp, sunElevation } from './world.ts';
@@ -28,6 +28,16 @@ export function fireAt(x: PCtx, cell: number): boolean {
   for (let i = 0; i < ids.length; i++) {
     const b = x.ps.building(ids[i]);
     if (b && b.fuel > 0 && b.progress >= 1 && x.c.buildings.list[b.type].heat > 0) return true;
+  }
+  return false;
+}
+
+/** (sim-fix-r1) does a hearth of agent s's settlement burn (embers for the fire pit of the roof s sleeps under) */
+function hearthLitAt(x: PCtx, s: number): boolean {
+  const sid = x.A.settlement[s];
+  if (sid < 0) return false;
+  for (const b of x.ps.of(sid)) {
+    if (b.fuel > 0 && b.progress >= 1 && !(b.flags & BuildingFlag.ruined) && x.c.buildings.list[b.type].function === 'hearth') return true;
   }
   return false;
 }
@@ -69,6 +79,10 @@ export function thermalStress(x: PCtx, s: number, out?: { teff: number; cold: nu
   const mid = (lo + hi) * 0.5;
   let tc = t;
   if (ins > 0 && tc < mid) tc = Math.min(mid, tc + (mid - tc) * ins * 0.7 + bodyHeat(x, s) * ins);
+  // (sim-fix-r1, the barren opening seed 2: a town of 33 with a lit hearth and 100 wood froze in its huts at -20 °C —
+  // 4 by the hearth, then 17 more on the walk away. A roof over a people whose hearth burns has a fire pit under it:
+  // the embers carried in from the hearth. Asked only when the roof alone leaves them cold.)
+  if (!fire && ins > 0 && tc < lo && hearthLitAt(x, s)) tc = Math.min(mid, tc + 16);
   if (fire && tc < mid) tc = Math.min(mid, tc + 16);
   tc += clothes * 26;
   const cold = tc < lo ? Math.min(2, (lo - tc) / Math.max(4, lo - tMin)) : 0;
