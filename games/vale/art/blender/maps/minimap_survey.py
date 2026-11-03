@@ -46,6 +46,8 @@ ROAD_W = 6.2                # m, as the painter's ribbon (minimap_paint.py build
 INK_W = 0.55                # m, the road's ink edge
 RIM_W = 0.9                 # m, the walls' ink rim
 CAMP_R = 3.2                # m, a camp clearing dot (map_gen.py keep-out disc)
+GLYPH_H, GLYPH_W, GLYPH_THIN = 6.0, 1.15, 0.7   # m, the jungle numerals' chart glyphs (closing CW4: height, stem, hairline)
+GLYPH_INK = 0.45            # m, their ink outline
 RESID = {"wall": 0.10, "floor": 0.16, "grass": 0.14, "road": 0.08}
 FOG_A = 140 / 255           # minimap.tsx fog alpha
 
@@ -78,7 +80,39 @@ PAL = {
     "wall": lab2rgb(19, -8, 7), "rim": lab2rgb(11, -5, 4),
     "floor": lab2rgb(35, 1, 11), "grass": lab2rgb(26, -11, 11), "camp": lab2rgb(50, 2, 10),
     "road": lab2rgb(75, 2, 13), "ink": lab2rgb(12, 1, 4), "seat": lab2rgb(56, 2, 9),
+    "glyph": lab2rgb(64, 1, 9),
 }
+NUMERAL_RE = re.compile(r"numeral_([a-z]+)\.glb$")
+
+
+def glyph_polys(text: str, at, h: float = GLYPH_H):
+    """closing CW4 (wave done, minors): a Roman numeral as stroke quads in sim metres, centred on `at`, upright on the
+    chart (its head toward -y, the map's north): stems and the first diagonal of a V or X thick, the second thin,
+    a foot and a head serif bar under and over each stem. The cut follows the landmark's own (numeral_strokes)."""
+    w, thin, gap = GLYPH_W, GLYPH_THIN, 0.55
+    dw = h * 0.55                                       # a V's or X's width
+    strokes, x = [], 0.0
+    for ch in text:
+        if ch == "I":
+            strokes.append(((x + w / 2, 0.0), (x + w / 2, h), w)); x += w + gap
+        elif ch == "V":
+            strokes.append(((x + dw / 2, 0.0), (x + w / 2, h), w))
+            strokes.append(((x + dw / 2, 0.0), (x + dw - thin / 2, h), thin)); x += dw + gap
+        elif ch == "X":
+            strokes.append(((x + dw - w / 2, 0.0), (x + w / 2, h), w))
+            strokes.append(((x + thin / 2, 0.0), (x + dw - thin / 2, h), thin)); x += dw + gap
+    total = x - gap
+    bars = [((-0.2, 0.0), (total + 0.2, 0.0), 0.5), ((-0.2, h), (total + 0.2, h), 0.5)]
+    out = []
+    for (a, b, sw) in strokes + bars:
+        ax, ay = a; bx, by = b
+        dx, dy = bx - ax, by - ay
+        L = max(np.hypot(dx, dy), 1e-6)
+        nx, ny = -dy / L * sw / 2, dx / L * sw / 2
+        quad = [(ax - nx, ay - ny), (ax + nx, ay + ny), (bx + nx, by + ny), (bx - nx, by - ny)]
+        # glyph plane (x along, up) -> sim (x, y): centred on `at`, up = -y
+        out.append([(at[0] + qx - total / 2, at[1] - (qy - h / 2)) for qx, qy in quad])
+    return out
 
 
 # ── masks ─────────────────────────────────────────────────────────────────────────────────────────
@@ -240,6 +274,19 @@ def survey(mid: str, pad=None, out_png: str = "") -> dict:
         out = mix(out, PAL["ink"], ring(f["at"], f["radius"], 0.35) * walk * 0.85)
     if "seat" in t:
         out = mix(out, PAL["ink"], ring(t["seat"]["at"], t["seat"]["radius"], 0.45) * 0.9)
+    # the four jungle numerals (closing CW4 seam): each landmark's own numeral drawn at its place, pale stone in an ink
+    # outline, so the chart names the same callouts the world shows (Elevenmark XI, Twomark II, Sevenmark VII, Fourmark IIII)
+    glyphs = []
+    for l in t.get("landmarks", []):
+        mm = NUMERAL_RE.search(str(l.get("model", "")))
+        if mm and isinstance(l.get("at"), list):
+            glyphs.append((mm.group(1).upper(), l["at"]))
+    if glyphs:
+        gm = R.polys([q for g, at in glyphs for q in glyph_polys(g, at)])
+        gi = np.asarray(Image.fromarray((gm * 255).astype(np.uint8)).filter(
+            ImageFilter.MaxFilter(2 * max(1, int(round(GLYPH_INK * ppm))) + 1)), dtype=np.float64) / 255.0
+        out = mix(out, PAL["ink"], gi * 0.9)
+        out = mix(out, PAL["glyph"], gm)
     keep = np.zeros_like(walls)
     for mask, _ in fields:
         keep = np.maximum(keep, mask * walk)
@@ -248,6 +295,7 @@ def survey(mid: str, pad=None, out_png: str = "") -> dict:
     rep = {"out": os.path.relpath(out_png, GAME) if os.path.abspath(out_png).startswith(GAME + os.sep) else out_png, "size": [w, h], "bounds": b,
            "px_per_m": [round(R.sx, 3), round(R.sy, 3)], "inside_bounds_m": inside_report(m, b)}
     rep.update(measure(m, R, out8.astype(np.float64), walls_in, road, keep))
+    rep["numerals"] = [{"glyph": g, "at": at} for g, at in glyphs]
     return rep
 
 
