@@ -1,0 +1,73 @@
+{
+ "id": "resinback",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "package": "monsters-2",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method (as monsters-1). Sheet: art/renders/units/<id>.png (three.js, built by art/blender/units/creatures[_b].py). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370 --monsterIds <ids> --report fw_CW4_monsters2.json (RIFT, 1920x1080, 28.5 m, fog off) -> _harness/_reports/fw_CW4_monsters2.json, shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. Metrics as in glasshorn/_review.json.",
+ "refs": {
+  "laneHpMedian": 1.18
+ },
+ "gate": "hp >= the lane's hp (1.18-1.19) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no horror/face read; sensitivity: no tall/pointed hood",
+ "before": {
+  "read": "a dark umber bear-like hide (#544234) under amber plates: the hide sank into the dark camp flagstone; only the plates read",
+  "inGame": {
+   "px": 3337,
+   "hp": 1.64,
+   "breakup": 0,
+   "unitLstar": [
+    10.3,
+    27.9,
+    60.5
+   ],
+   "floorLstar": [
+    11.6,
+    30.5,
+    37
+   ],
+   "dLstarP50": -2.6,
+   "unitChroma": 30.7,
+   "floorChroma": 8.6,
+   "dE76": 26.8,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.62
+   }
+  }
+ },
+ "changes": [
+  "pale silver-grey bark coat (#BEB29B) with staggered dark lenticel dashes over flanks and haunches (birch bark): the amber plates now sit on it like resin weeping from a trunk",
+  "plate rims lifted from #6A2C0A to #964A1A, mid #BE6A1E; legs/paws stay dark umber",
+  "icon re-rendered"
+ ],
+ "after": {
+  "inGame": {
+   "px": 3337,
+   "hp": 2.96,
+   "breakup": 0,
+   "unitLstar": [
+    27,
+    53.5,
+    72.6
+   ],
+   "floorLstar": [
+    11.6,
+    30.5,
+    37
+   ],
+   "dLstarP50": 23,
+   "unitChroma": 31.2,
+   "floorChroma": 8.6,
+   "dE76": 35.5,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.62
+   }
+  },
+  "runTag": "fw_CW4_m2_after2_t70",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_after2_t70_mon_resinback.png",
+  "tris": 10200
+ },
+ "horrorFaceRead": "a natural broad-muzzled beast, dark nose and small dark eyes; no horror read",
+ "verdict": "pass"
+}

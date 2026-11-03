@@ -1,0 +1,73 @@
+{
+ "id": "stilltusk",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "package": "monsters-2",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method (as monsters-1). Sheet: art/renders/units/<id>.png (three.js, built by art/blender/units/creatures[_b].py). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370 --monsterIds <ids> --report fw_CW4_monsters2.json (RIFT, 1920x1080, 28.5 m, fog off) -> _harness/_reports/fw_CW4_monsters2.json, shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. Metrics as in glasshorn/_review.json.",
+ "refs": {
+  "laneHpMedian": 1.18
+ },
+ "gate": "hp >= the lane's hp (1.18-1.19) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no horror/face read; sensitivity: no tall/pointed hood",
+ "before": {
+  "read": "grey-brown boar with a near-black bristle mane: in game a dark smudge on the dark flagstone",
+  "inGame": {
+   "px": 1377,
+   "hp": 0.98,
+   "breakup": 0,
+   "unitLstar": [
+    2.3,
+    19.2,
+    30.4
+   ],
+   "floorLstar": [
+    10.1,
+    26.3,
+    38.3
+   ],
+   "dLstarP50": -7.1,
+   "unitChroma": 5.6,
+   "floorChroma": 9.8,
+   "dE76": 12.1,
+   "maxIoU": {
+    "with": "resinback",
+    "iou": 0.62
+   }
+  }
+ },
+ "changes": [
+  "sun-burnt rust-ochre coat (#C4864F back, #A86A3E flanks) with umber hour ticks at 0.75 (was 0.45)",
+  "umber mane (#6A4630) frosted cream at the tips (#EAD6B2, tips start lower)",
+  "cream belly, dark legs and hooves; carved-stone tusks unchanged"
+ ],
+ "after": {
+  "inGame": {
+   "px": 1377,
+   "hp": 1.43,
+   "breakup": 0,
+   "unitLstar": [
+    16.6,
+    49.6,
+    64.3
+   ],
+   "floorLstar": [
+    10.1,
+    26.3,
+    38.3
+   ],
+   "dLstarP50": 23.3,
+   "unitChroma": 30.1,
+   "floorChroma": 9.8,
+   "dE76": 31.8,
+   "maxIoU": {
+    "with": "resinback",
+    "iou": 0.62
+   }
+  },
+  "runTag": "fw_CW4_m2_after2_t70",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_after2_t70_mon_stilltusk.png",
+  "tris": 6820
+ },
+ "horrorFaceRead": "a natural boar head (small dark eyes, snout, stone tusks); no horror read",
+ "verdict": "pass"
+}

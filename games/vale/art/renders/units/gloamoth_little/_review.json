@@ -1,0 +1,72 @@
+{
+ "id": "gloamoth_little",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "package": "monsters-2",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method (as monsters-1). Sheet: art/renders/units/<id>.png (three.js, built by art/blender/units/creatures[_b].py). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370 --monsterIds <ids> --report fw_CW4_monsters2.json (RIFT, 1920x1080, 28.5 m, fog off) -> _harness/_reports/fw_CW4_monsters2.json, shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. Metrics as in glasshorn/_review.json.",
+ "refs": {
+  "laneHpMedian": 1.19
+ },
+ "gate": "hp >= the lane's hp (1.18-1.19) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no horror/face read; sensitivity: no tall/pointed hood",
+ "before": {
+  "read": "finished art, the rounder companion; passes every gate (fw_CW4_mon_after2: hp 7.72, dL 25)",
+  "inGame": {
+   "px": 386,
+   "hp": 7.72,
+   "breakup": 0,
+   "unitLstar": [
+    37.7,
+    58.1,
+    76.8
+   ],
+   "floorLstar": [
+    18.3,
+    33.1,
+    37.9
+   ],
+   "dLstarP50": 25,
+   "unitChroma": 23.4,
+   "floorChroma": 9.9,
+   "dE76": 33.7,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.77
+   }
+  }
+ },
+ "changes": [
+  "none: the gate is met; re-measured"
+ ],
+ "after": {
+  "inGame": {
+   "px": 315,
+   "hp": 7.39,
+   "breakup": 0,
+   "unitLstar": [
+    36.8,
+    59.7,
+    78.5
+   ],
+   "floorLstar": [
+    17.3,
+    32.9,
+    37.7
+   ],
+   "dLstarP50": 26.8,
+   "unitChroma": 20.9,
+   "floorChroma": 9.7,
+   "dE76": 33.8,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.75
+   }
+  },
+  "runTag": "fw_CW4_m2_t370",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_t370_mon_gloamoth_little.png",
+  "tris": 3020
+ },
+ "horrorFaceRead": "a fluffy little moth; no horror read",
+ "note": "breakup n/a (faces < 0.5 m)",
+ "verdict": "pass"
+}

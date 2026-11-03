@@ -1,0 +1,71 @@
+{
+ "id": "stilltusk_young",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "package": "monsters-2",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method (as monsters-1). Sheet: art/renders/units/<id>.png (three.js, built by art/blender/units/creatures[_b].py). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370 --monsterIds <ids> --report fw_CW4_monsters2.json (RIFT, 1920x1080, 28.5 m, fog off) -> _harness/_reports/fw_CW4_monsters2.json, shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. Metrics as in glasshorn/_review.json.",
+ "refs": {
+  "laneHpMedian": 1.18
+ },
+ "gate": "hp >= the lane's hp (1.18-1.19) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no horror/face read; sensitivity: no tall/pointed hood",
+ "before": {
+  "read": "a dull brown juvenile with faint pale bands; dE 11 against the floor",
+  "inGame": {
+   "px": 869,
+   "hp": 2.62,
+   "breakup": 0,
+   "unitLstar": [
+    11.9,
+    29.2,
+    38.1
+   ],
+   "floorLstar": [
+    9.8,
+    25,
+    36.8
+   ],
+   "dLstarP50": 4.2,
+   "unitChroma": 11.9,
+   "floorChroma": 9.9,
+   "dE76": 11.1,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.56
+   }
+  }
+ },
+ "changes": [
+  "honey-ochre coat (#D29E68) with cream juvenile bands (#F2E4C6), a lighter umber mane (#7A5A40): the family read of the adult, one step lighter"
+ ],
+ "after": {
+  "inGame": {
+   "px": 869,
+   "hp": 1.79,
+   "breakup": 0,
+   "unitLstar": [
+    32,
+    61.2,
+    69.7
+   ],
+   "floorLstar": [
+    9.8,
+    25,
+    36.8
+   ],
+   "dLstarP50": 36.2,
+   "unitChroma": 28.1,
+   "floorChroma": 9.9,
+   "dE76": 38.6,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.56
+   }
+  },
+  "runTag": "fw_CW4_m2_after2_t70",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_after2_t70_mon_stilltusk_young.png",
+  "tris": 3820
+ },
+ "horrorFaceRead": "a round piglet head; no horror read",
+ "verdict": "pass"
+}

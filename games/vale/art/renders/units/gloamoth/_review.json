@@ -1,0 +1,72 @@
+{
+ "id": "gloamoth",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "package": "monsters-2",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method (as monsters-1). Sheet: art/renders/units/<id>.png (three.js, built by art/blender/units/creatures[_b].py). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370 --monsterIds <ids> --report fw_CW4_monsters2.json (RIFT, 1920x1080, 28.5 m, fog off) -> _harness/_reports/fw_CW4_monsters2.json, shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. Metrics as in glasshorn/_review.json.",
+ "refs": {
+  "laneHpMedian": 1.19
+ },
+ "gate": "hp >= the lane's hp (1.18-1.19) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no horror/face read; sensitivity: no tall/pointed hood",
+ "before": {
+  "read": "already finished art: dusk-lilac fur body, peach-to-lilac lamp-shade wings with veins and a rim band; passes every gate (monsters-1 run fw_CW4_mon_after2: hp 6.09, dL 24.6)",
+  "inGame": {
+   "px": 2798,
+   "hp": 6.09,
+   "breakup": 0.9,
+   "unitLstar": [
+    31.3,
+    57.2,
+    77.7
+   ],
+   "floorLstar": [
+    11.5,
+    32.6,
+    38.1
+   ],
+   "dLstarP50": 24.6,
+   "unitChroma": 25.2,
+   "floorChroma": 9.3,
+   "dE76": 34.7,
+   "maxIoU": {
+    "with": "gloamoth_little",
+    "iou": 0.77
+   }
+  }
+ },
+ "changes": [
+  "none: the gate is met; re-measured"
+ ],
+ "after": {
+  "inGame": {
+   "px": 3265,
+   "hp": 5.51,
+   "breakup": 2.6,
+   "unitLstar": [
+    34.7,
+    60.5,
+    79.2
+   ],
+   "floorLstar": [
+    11.2,
+    32.4,
+    38
+   ],
+   "dLstarP50": 28.1,
+   "unitChroma": 24.1,
+   "floorChroma": 9.2,
+   "dE76": 36.3,
+   "maxIoU": {
+    "with": "gloamoth_little",
+    "iou": 0.75
+   }
+  },
+  "runTag": "fw_CW4_m2_t370",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_t370_mon_gloamoth.png",
+  "tris": 4700
+ },
+ "horrorFaceRead": "a soft moth with two dark compound eyes (a natural insect head, not a stone figure or a Wick); no horror read",
+ "note": "maxIoU 0.75 is with gloamoth_little in its own camp (the same family by design; 3265 vs 315 px). The three_snapshot sheet crops the wings in the clip rows (the sheet framing of a hovering unit), not the model.",
+ "verdict": "pass"
+}

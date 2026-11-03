@@ -666,9 +666,12 @@ class Resinback(Creature):
     BAKE_RAY = (0.025, 0.08)
     WRIST_MIN = 0.10
     BALL_MIN = 0.058
-    PAL = {"hide": "#544234", "belly": "#6A5644", "leg": "#45372B", "paw": "#2F2721", "claw": "#CDBFA3",
-           "muzzle": "#6E6153", "nose": "#211B17", "eye": "#140E0A", "throat": "#7B6551", "stain": "#8E5A28",
-           "ear_in": "#8A6A58", "rim": "#6A2C0A", "mid": "#B25F18", "core": "#F2A83C"}
+    # CW4 critic:monsters: a pale bark coat (silver-grey birch bark with dark lenticel dashes) so the beast
+    # separates from the dark camp flagstone by value (was a #544234 umber hide: dL* -2.6 in game) and the
+    # amber plates sit on it like resin weeping from a trunk; legs and paws stay dark
+    PAL = {"hide": "#BEB29B", "belly": "#CCC2AE", "leg": "#5E5246", "paw": "#2F2721", "claw": "#CDBFA3",
+           "muzzle": "#9A8E7E", "nose": "#211B17", "eye": "#140E0A", "throat": "#CFC6B4", "stain": "#9A5E26",
+           "ear_in": "#8A6A58", "rim": "#964A1A", "mid": "#BE6A1E", "core": "#F2A83C", "lenticel": "#3E352D"}
 
     def joints(self):
         return dict(
@@ -828,6 +831,15 @@ class Resinback(Creature):
         nz = N[:, 2]
         belly = (_smooth_arr(-0.2, -0.75, nz) * _smooth_arr(0.9, 0.6, z))[:, None]
         col = col * (1 - belly) + c("belly") * belly
+        # bark lenticels: short horizontal dark dashes in staggered rows over the flanks and haunches
+        r_ = z / 0.06
+        row = np.floor(r_)
+        fz = np.abs(r_ - row - 0.5)
+        off = (np.sin(row * 12.9898) * 43758.5453) % 1.0
+        fy = (y / 0.17 + off) % 1.0
+        dash = _smooth_arr(0.16, 0.08, fz) * _smooth_arr(0.02, 0.06, fy) * _smooth_arr(0.42, 0.36, fy)
+        dash *= _smooth_arr(0.45, 0.6, z) * _smooth_arr(-0.35, -0.1, nz)
+        col = col * (1 - 0.8 * dash[:, None]) + c("lenticel") * 0.8 * dash[:, None]
         legz = _smooth_arr(0.55, 0.3, z)[:, None]
         col = col * (1 - legz) + c("leg") * legz
         # resin seeps into the hide around the plate bases
@@ -1007,9 +1019,12 @@ class Stilltusk(Creature):
     WRIST_MIN = 0.04
     S = 1.0                         # overall scale (the juvenile is built from the same joints, smaller)
     YOUNG = False
-    PAL = {"hide": "#5A4D44", "flank": "#4D423B", "belly": "#76695C", "leg": "#362E29", "hoof": "#26201C",
-           "mane": "#1E1916", "mane_tip": "#9C8E7B", "snout": "#7E655C", "nose": "#3A2C28", "eye": "#120D0B",
-           "ear_in": "#7A5E55", "tick": "#4A423C", "stripe": "#A1937F", "tusk": "#DCCFB5"}
+    # CW4 critic:monsters: a sun-burnt rust-ochre coat (was a #5A4D44 grey-brown with a near-black mane: in game
+    # L* p50 19 on a 26 floor, dE 12, hp 0.98): warm ochre back, darker rust flanks with umber hour ticks, a cream
+    # belly, an umber mane frosted cream at the tips, dark legs
+    PAL = {"hide": "#C4864F", "flank": "#A86A3E", "belly": "#DEC49C", "leg": "#4A3426", "hoof": "#2A1E17",
+           "mane": "#6A4630", "mane_tip": "#EAD6B2", "snout": "#B08068", "nose": "#3A2C28", "eye": "#120D0B",
+           "ear_in": "#9A6E5A", "tick": "#3E281C", "stripe": "#F0E0C0", "tusk": "#DCCFB5"}
 
     def joints(self):
         J = dict(
@@ -1194,7 +1209,7 @@ class Stilltusk(Creature):
             ang = np.arctan2(z - 0.62, np.abs(x))
             ticks = np.clip(1 - np.abs((y + 0.45) / 0.13 % 1.0 - 0.5) / 0.08, 0, 1) ** 2
             ticks *= _smooth_arr(0.2, 0.35, ang) * _smooth_arr(0.75, 0.6, ang) * _smooth_arr(-0.4, -0.25, y) * _smooth_arr(0.5, 0.38, y)
-            col = col * (1 - 0.45 * ticks[:, None]) + c("tick") * 0.45 * ticks[:, None]
+            col = col * (1 - 0.75 * ticks[:, None]) + c("tick") * 0.75 * ticks[:, None]
         rough = np.full(n, 0.86)
         dmin = np.min(np.stack(list(tags.values())), 0)
         for tag, key, r in (("mane", None, 0.9), ("snout", "snout", 0.55), ("eye", "eye", 0.15), ("hoof", "hoof", 0.5),
@@ -1203,7 +1218,7 @@ class Stilltusk(Creature):
                 continue
             w = np.clip(1 - (tags[tag] - dmin) / (0.01 * s), 0, 1) * (tags[tag] < 0.03 * s)
             if tag == "mane":
-                tip = (_smooth_arr(1.24, 1.38, z) if not self.YOUNG else _smooth_arr(0.9, 1.0, z)) * 0.8
+                tip = (_smooth_arr(1.14, 1.32, z) if not self.YOUNG else _smooth_arr(0.86, 0.98, z)) * 0.85
                 kc = c("mane") * (1 - tip[:, None]) + c("mane_tip") * tip[:, None]
             elif tag == "ear":
                 inner = _smooth_arr(0.1, 0.6, -N[:, 1])
@@ -1374,7 +1389,7 @@ class StilltuskYoung(Stilltusk):
     LEG_SHORTEN = 0.13
     YOUNG = True
     WRIST_MIN = 0.03
-    PAL = dict(Stilltusk.PAL, hide="#6E5847", flank="#634E3E", belly="#8E7B68", mane="#3A2C24", stripe="#C2AE8E")
+    PAL = dict(Stilltusk.PAL, hide="#D29E68", flank="#BC8654", belly="#E4CEA8", mane="#7A5A40", stripe="#F2E4C6")
 
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════

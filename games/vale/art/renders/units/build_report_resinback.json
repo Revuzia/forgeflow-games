@@ -9,15 +9,15 @@
   "tris": 10200,
   "uv_coverage": 0.693,
   "bake": {
-    "base": 0.95,
-    "rough_metal": 0.68,
-    "normal": 0.7,
-    "ao": 0.78,
+    "base": 2.81,
+    "rough_metal": 1.89,
+    "normal": 1.62,
+    "ao": 1.43,
     "normal_fixed_px": 2179,
-    "pack_save": 0.09,
-    "total": 3.29
+    "pack_save": 0.31,
+    "total": 8.44
   },
-  "bake_holes_filled": 1,
+  "bake_holes_filled": 0,
   "clips": {
     "idle": {
       "frames": 90,
@@ -118,13 +118,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 2201600,
+  "glb_bytes_raw": 2262872,
   "optimize": {
     "ok": true,
-    "before": 2201600,
-    "after": 568460
+    "before": 2262872,
+    "after": 595980
   },
-  "glb_bytes": 568460,
+  "glb_bytes": 595980,
   "inspect": [
     "    prim material=resinback_body tris=7000 verts=4983 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "    prim material=resinback_lampresin tris=3200 verts=3039 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
@@ -132,7 +132,7 @@
     "  material resinback_lampresin: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.60,0.60,0.60 base=1,1,1,1",
     "  texture resinback_normal: image/webp ? 81.6 KiB",
     "  texture resinback_orm: image/webp ? 35.6 KiB",
-    "  texture resinback_base: image/webp ? 67.7 KiB",
+    "  texture resinback_base: image/webp ? 94.6 KiB",
     "  clip attack1      1.000 s (30 f) channels=27 bones=26",
     "  clip cast_a1      1.167 s (35 f) channels=25 bones=24",
     "  clip death        1.500 s (45 f) channels=27 bones=26",
@@ -142,8 +142,8 @@
   "load_test": {
     "ok": true,
     "log": [
-      "[three] art/out/units/resinback.glb (555 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: resinback_base 1024x1024 68K, resinback_normal 1024x1024 82K, resinback_orm 512x512 36K",
+      "[three] art/out/units/resinback.glb (582 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: resinback_base 1024x1024 95K, resinback_normal 1024x1024 82K, resinback_orm 512x512 36K",
       "  skinned meshes: resinback_1(4983v), resinback_2(3039v)",
       "  bones: 29 (root hips spine chest neck head earL earR jaw scapulaL upper_armL forearmL handL pawL scapulaR upper_armR forearmR handR pawR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/27tr, cast_a1:1.167s/25tr, death:1.500s/27tr, idle:3.000s/29tr, run:0.600s/29tr",
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/resinback.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.572,0.004,-1.192],[0.586,1.807,1.4]],\"facing\":[-0.009,1],\"headY\":1,\"heightPx1080\":96,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/resinback.png\",\"seconds\":7}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.572,0.004,-1.192],[0.586,1.807,1.4]],\"facing\":[-0.009,1],\"headY\":1,\"heightPx1080\":96,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/resinback.png\",\"seconds\":28.4}"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "sculpt": 10.88,
-      "bind": 0.17,
-      "uv": 11.71,
-      "bake": 3.66,
-      "clips": 0.25,
-      "ground_qa": 0.11,
-      "export": 0.41,
-      "optimize": 0.54,
-      "qa": 7.48
+      "rig": 0.01,
+      "sculpt": 38.13,
+      "bind": 0.51,
+      "uv": 43.71,
+      "bake": 9.15,
+      "clips": 0.74,
+      "ground_qa": 0.4,
+      "export": 0.98,
+      "optimize": 1.42,
+      "qa": 29.55
     },
-    "total_s": 35.28
+    "total_s": 124.77
   }
 }
