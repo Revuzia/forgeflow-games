@@ -776,10 +776,14 @@ section('item passives and actives fire in the sim', () => {
       dmgBy(ev, 'seatstone_hold').some((d) => d.dst === a.foe.id) && a.foe.statuses.some((s) => s.kind === 'slow'), r);
   }
   {
+    // CW3 originality m2 (2026-11-03): Split Hour, an ability-hit cleave + shield (was a low-health shield + tenacity)
     const a = arena('rift', 'breaker', ['hourcleaver']);
     hit(a, a.foe, a.e, a.e.hp * 0.75, 'true');
     a.sim.step();
-    check('Hourcleaver: dropping below 35% gives a shield and tenacity', a.e.shield > 0 && a.e.buffs.some((b) => b.id === 'hourcleaver_last_hour'));
+    check('Hourcleaver: no low-health shield any more', a.e.shield === 0 && !a.e.buffs.some((b) => b.id === 'hourcleaver_last_hour'), a.e.shield);
+    const ev1 = castA1(a);
+    check('Hourcleaver: an ability hit splits the hour (damage around the target + a shield)', dmgBy(ev1, 'hourcleaver_split_hour').some((d) => d.dst === a.foe.id) && a.e.shield > 0,
+      { dmg: dmgBy(ev1, 'hourcleaver_split_hour').length, shield: a.e.shield });
   }
   {
     const a = arena('rift', 'tender', ['shelter_lamp']);

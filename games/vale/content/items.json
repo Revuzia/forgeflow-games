@@ -2501,7 +2501,7 @@
     {
       "id": "hourcleaver",
       "name": "Hourcleaver",
-      "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s. Stands at four on the dial: another Noonlit item must stand 4 or more hours away.",
+      "desc": "When one of your abilities hits an enemy fighter, the cleaver splits the hour: enemies within 3 m of it take 20 + 30% bonus attack physical damage, and you gain a shield of 40 + 15% of your bonus health for 2.5 s. Once every 10 s. Stands at four on the dial: another Noonlit item must stand 4 or more hours away.",
       "icon": "assets/ui/icons/items/hourcleaver.webp",
       "tier": "apex",
       "cost": 2700,
@@ -2518,35 +2518,56 @@
       },
       "passives": [
         {
-          "id": "hourcleaver_last_hour",
-          "name": "Last Hour",
-          "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s.",
+          "id": "hourcleaver_split_hour",
+          "name": "Split Hour",
+          "desc": "When one of your abilities hits an enemy fighter, the cleaver splits the hour: enemies within 3 m of it take 20 + 30% bonus attack physical damage, and you gain a shield of 40 + 15% of your bonus health for 2.5 s. Once every 10 s.",
           "icon": "assets/ui/icons/items/hourcleaver.webp",
           "triggers": [
             {
-              "on": "lowHp",
-              "cond": {
-                "kind": "selfHpBelow",
-                "pct": 0.35
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
               },
-              "cooldown": 60,
+              "cooldown": 10,
               "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 3
+                  },
+                  "at": "hit",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": true,
+                    "fighters": true,
+                    "minions": true,
+                    "monsters": true,
+                    "summons": true
+                  },
+                  "onHit": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 20,
+                        "bonusAd": 0.3
+                      },
+                      "type": "phys",
+                      "to": "hit"
+                    }
+                  ]
+                },
                 {
                   "op": "shield",
                   "amount": {
-                    "base": 100,
-                    "bonusHp": 0.35
+                    "base": 40,
+                    "bonusHp": 0.15
                   },
-                  "duration": 3,
-                  "to": "self"
-                },
-                {
-                  "op": "buff",
-                  "id": "hourcleaver_last_hour",
-                  "duration": 3,
-                  "stats": {
-                    "tenacity": 0.3
-                  },
+                  "duration": 2.5,
                   "to": "self"
                 }
               ]
@@ -2554,7 +2575,9 @@
           ],
           "present": {
             "vfx": "lib_shield_up",
-            "sfx": "c_shield"
+            "sfx": "c_shield",
+            "hitVfx": "lib_hit_phys_heavy",
+            "hitSfx": "c_hit_phys_heavy"
           }
         }
       ],
