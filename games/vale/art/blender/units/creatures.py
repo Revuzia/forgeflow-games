@@ -230,9 +230,13 @@ class Glasshorn(Creature):
     HEAT_EXCLUDE = ("root", "antler.L", "antler.R")
     GLOW = {"antlers": ("glasshorn_dawnglass", 0.55)}
     UV_WEIGHTS = {1: 0.55}
-    PAL = {"hide": "#D9D1C1", "flank": "#CCC2AF", "belly": "#ECE7DC", "leg": "#9A9083", "sock": "#6E655B",
-           "ruff": "#BBAD97", "muzzle": "#6A615A", "nose": "#2E2A28", "eye": "#1B1917", "hoof": "#3F3832",
-           "ear_in": "#C7A99A", "rump": "#F1EDE5", "tick": "#A79C8C", "pedicle": "#E8E1D2"}
+    # CW4 (closing critic:monsters): a dawn-fawn coat (it read as an untextured off-white solid): warm fawn back
+    # with a dark umber saddle stripe, paler flanks dappled with rows of cream hour-dots, cream belly, dark legs
+    # and socks, a cream ruff and rump; the cool dawnglass antlers now stand off a warm body
+    PAL = {"hide": "#B48D63", "flank": "#C8A57C", "belly": "#E6DAC2", "leg": "#6F5741", "sock": "#3B3029",
+           "ruff": "#E2D3B6", "muzzle": "#4F3F33", "nose": "#2A2522", "eye": "#1B1917", "hoof": "#2F2925",
+           "ear_in": "#C99C88", "rump": "#EDE4D2", "tick": "#5A4433", "pedicle": "#E8E1D2", "saddle": "#7B5A3E",
+           "dot": "#EFE4CC"}
 
     def joints(self):
         return dict(
@@ -403,7 +407,21 @@ class Glasshorn(Creature):
         # hour-tick bands across the back (faint dial marks), from above
         top = _smooth_arr(0.3, 0.8, nz) * _smooth_arr(0.98, 1.15, z) * _smooth_arr(-0.25, -0.15, y) * _smooth_arr(0.62, 0.52, y)
         ticks = np.clip(1 - np.abs(((y + 0.2) / 0.16) % 1.0 - 0.5) / 0.09, 0, 1) ** 2 * top
-        col = col * (1 - 0.55 * ticks[:, None]) + c("tick") * 0.55 * ticks[:, None]
+        # the dark saddle stripe along the spine (neck to rump), from above
+        spine = _smooth_arr(0.11, 0.03, np.abs(x)) * _smooth_arr(0.35, 0.75, nz) * _smooth_arr(1.0, 1.12, z) \
+            * _smooth_arr(-0.75, -0.55, y) * _smooth_arr(0.62, 0.5, y)
+        col = col * (1 - 0.8 * spine[:, None]) + c("saddle") * 0.8 * spine[:, None]
+        col = col * (1 - 0.7 * ticks[:, None]) + c("tick") * 0.7 * ticks[:, None]
+        # rows of cream hour-dots along each flank (a fawn's dapple, laid out like dial marks)
+        side = _smooth_arr(0.15, 0.55, np.abs(N[:, 0])) * _smooth_arr(0.85, 0.95, z) * _smooth_arr(1.32, 1.22, z) \
+            * _smooth_arr(-0.36, -0.26, y) * _smooth_arr(0.5, 0.4, y)
+        dots = np.zeros(n)
+        for row_z, off in ((1.15, 0.0), (1.04, 0.5)):
+            cy = (y + 0.3) / 0.13 + off
+            dy = (cy - np.round(cy)) * 0.13
+            dd = np.hypot(dy, z - row_z)
+            dots = np.maximum(dots, _smooth_arr(0.032, 0.022, dd))
+        col = col * (1 - 0.85 * (dots * side)[:, None]) + c("dot") * 0.85 * (dots * side)[:, None]
         rough = np.full(n, 0.82)
         # tagged regions (nearest tag wins, 1 cm blend)
         dmin = np.min(np.stack(list(tags.values())), 0)
@@ -434,7 +452,7 @@ class Glasshorn(Creature):
         return K.painted_material(f"{self.ID}_{part}_src", self.PAL["hide"], grad, fur=0.05, fur_scale=(2.0, 0.6, 2.0))
 
     def hard_material(self, part, grad):
-        pal = materials.bible_palette(dawnglass="#C9DDEB")
+        pal = materials.bible_palette(dawnglass="#A6CDEB")   # CW4: a clearer dawn blue off the warm coat
         return materials.glass(f"{self.ID}_{part}_src", pal, "dawnglass", grad, rough=0.12, depth=0.45, inclusions=0.25)
 
     def weight_fix(self, ob):

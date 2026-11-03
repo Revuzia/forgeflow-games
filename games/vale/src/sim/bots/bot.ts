@@ -219,7 +219,9 @@ export class Bot extends BotBase implements BotController {
     for (const st of tp.enemyStructs) if (st.alive && st.atkTarget === e.id && inAttackRange(st, e)) { this.towerAggro = true; break; }
     // killable target
     this.killTarget = null; this.killMargin = 0;
-    const hold = this.ccReady();
+    // (the CL-1 kill-window reads are RIFT's laning; BRIDGE keeps the reads its G5 pace was measured with)
+    const rift = this.k.kind === 'rift';
+    const hold = rift && this.ccReady();
     for (const f of tp.enemyFighters) {
       if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > 10 * 10) continue;
       // (CW3 CL-1: a ready hold — stun, root, sleep — keeps the target in reach for the whole combo: a kill window)
@@ -228,7 +230,7 @@ export class Bot extends BotBase implements BotController {
         if (a === e || !a.alive) continue;
         // (an ally beside it, or one already committing to it — its published focus — on the way)
         const d2 = this.dist2(a, f.x, f.y);
-        if (d2 > 8 * 8 && !(d2 <= 15 * 15 && this.brain && this.brain.focus.get(a.player?.player ?? -1) === f.id)) continue;
+        if (d2 > 8 * 8 && !(rift && d2 <= 15 * 15 && this.brain && this.brain.focus.get(a.player?.player ?? -1) === f.id)) continue;
         dmg += a.stats.ad * a.stats.attackSpeed * 3 + a.level * 25;
       }
       const margin = dmg / Math.max(1, f.hp + f.shield);
@@ -434,7 +436,7 @@ export class Bot extends BotBase implements BotController {
       // 40 games: +1 takedown by 10:00 for −2 to −3 points of the roads' last-hit share; they stay out)
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
-      const passive = le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
       const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
     }
@@ -467,7 +469,8 @@ export class Bot extends BotBase implements BotController {
     // dropping the chase then let every wounded target walk home; it holds while the target stays in reach, is hurt
     // worse than I am, and I am not the one about to fall)
     const ct = this.allinTarget >= 0 ? this.w.entity(this.allinTarget) : null;
-    if (this.mode === 'allin' && ct && ct.alive && ct !== this.killTarget && this.isNoticed(ct) && now - this.modeSince < ALLIN_COMMIT) {
+    // (RIFT only: BRIDGE's pace — G5's 15–18 min median — was measured on all-ins that let go)
+    if (kind === 'rift' && this.mode === 'allin' && ct && ct.alive && ct !== this.killTarget && this.isNoticed(ct) && now - this.modeSince < ALLIN_COMMIT) {
       const cF = (ct.hp + ct.shield) / Math.max(1, ct.maxHp);
       if (this.dist2(ct, e.x, e.y) < 12 * 12 && hpF > 0.3 && (cF < 0.35 || cF < hpF - 0.1) && (this.towerSafe(ct.x, ct.y, 0) || (cF < 0.2 && hpF > 0.5))) {
         if (!this.killTarget) this.killTarget = ct;

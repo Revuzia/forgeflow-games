@@ -65,11 +65,14 @@ try {
     W.command = (p, cmd) => { if (p === c.you || window.__allow) orig(p, cmd); };
     const foe = c.view.players.find((p) => p.team !== me.team);
     window.__ids = { me: me.entity, foe: foe.entity, you: c.you };
-    window.__park = () => {
+    // near = true: the enemy 0.8 m outside your attack range (edge to edge; inside it your fighter's auto-attack
+    // would already be swinging), so an attack order steps in and winds up; false: 30 m away, so auto-attack does not
+    // take the move orders
+    window.__park = (near = true) => {
       const s = W.entity(me.entity), e = W.entity(foe.entity);
       if (!e.alive) { e.alive = true; }
-      // inside your attack range (edge to edge), so an attack winds up at once
-      const d = Math.max(1.2, Math.min(3.5, (s.stats?.range ?? 1.5) + s.radius + e.radius - 0.3));
+      s.target = null; if ('attackTarget' in s) s.attackTarget = null;
+      const d = near ? Math.max(1.2, Math.min(6, (s.stats?.range ?? 1.5) + s.radius + e.radius + 0.8)) : 30;
       e.hp = e.maxHp; e.x = s.x + d; e.y = s.y; e.vx = 0; e.vy = 0; e.autoAttack = false; e.statuses.length = 0;
       s.hp = s.maxHp;
     };
@@ -113,8 +116,10 @@ try {
     const s = P.clone().project(cam);
     const Q = e ? e.root.position.clone().setY(e.root.position.y + 1.0).project(cam) : null;
     const W = innerWidth, H = innerHeight;
+    const pick = Q ? R.pickEntity((Q.x + 1) / 2 * innerWidth, (1 - Q.y) / 2 * innerHeight) : null;
+    const fv = v.state.match.value.view.entity(window.__ids.foe);
     const A = window.__anchor ? P.clone().set(window.__anchor.x, 0, window.__anchor.y).project(cam) : null;
-    return { x: (s.x + 1) / 2 * W, y: (1 - s.y) / 2 * H, fx: Q ? (Q.x + 1) / 2 * W : -1, fy: Q ? (1 - Q.y) / 2 * H : -1, key: a.currentKey, ...(A ? { ax: (A.x + 1) / 2 * W, ay: (1 - A.y) / 2 * H } : {}) };
+    return { x: (s.x + 1) / 2 * W, y: (1 - s.y) / 2 * H, fx: Q ? (Q.x + 1) / 2 * W : -1, fy: Q ? (1 - Q.y) / 2 * H : -1, key: a.currentKey, pick, foeAlive: fv?.alive, foeVis: fv?.visibleMask, dist: e ? Math.hypot(e.x - a.x, e.y - a.y) : null, ...(A ? { ax: (A.x + 1) / 2 * W, ay: (1 - A.y) / 2 * H } : {}) };
   });
   const stationary = async () => {
     for (let i = 0; i < 40; i++) {
@@ -139,10 +144,13 @@ try {
   let dir = 1;
   for (let i = 0; i < order.length; i++) {
     const kind = order[i];
-    await vale(page, () => window.__park());
+    const near = kind === 'attack' || kind === 'windupMove';
+    await vale(page, (v, n) => window.__park(n), near);
     await page.keyboard.press('KeyS'); // stop
     await page.waitForTimeout(250);
     await stationary();
+    // settle into idle (a running attack finishes first)
+    for (let k = 0; k < 20; k++) { const key = await vale(page, (v) => v.state.renderer.actors.get(window.__ids.me)?.currentKey); if (key === 'idle') break; await page.waitForTimeout(60); }
     const s = await selfScreen();
     const ang = (i * 2.399) % (Math.PI * 2);
     const r = 160 + (i % 4) * 20;
@@ -168,7 +176,7 @@ try {
       await page.mouse.move(s.fx, s.fy); await page.waitForTimeout(120);
       await page.mouse.down({ button: 'right' }); await page.mouse.up({ button: 'right' });
       // wait for the attack clip
-      for (let k = 0; k < 60; k++) { const key = await vale(page, (v) => v.state.renderer.actors.get(window.__ids.me)?.currentKey); if (/^attack|^crit/.test(key ?? '')) break; await page.waitForTimeout(10); }
+      for (let k = 0; k < 150; k++) { const key = await vale(page, (v) => v.state.renderer.actors.get(window.__ids.me)?.currentKey); if (/^attack|^crit/.test(key ?? '')) break; await page.waitForTimeout(10); }
       t0ev = await vale(page, () => window.__L.events.length);
       await page.mouse.move(gx, gy);
       await page.mouse.down({ button: 'right' }); await page.mouse.up({ button: 'right' });
@@ -196,10 +204,11 @@ try {
       }
       return { marker, motion, pos, anim, baseKey: base.key, frameMs: fr.length > 2 ? (fr[fr.length - 1].ts - fr[Math.max(0, fr.length - 61)].ts) / Math.min(60, fr.length - 1) : null };
     }, { ev: t0ev, windup: kind === 'windupMove' });
-    report.orders.push({ i, kind, ...res });
+    const markerKind = await vale(page, () => [...document.querySelectorAll('.wmark')].map((x) => x.className).join(' '));
+    report.orders.push({ i, kind, ...res, pick: s.pick, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind });
     console.log(i, kind, JSON.stringify(res));
   }
-  await shot(page, 'fw_CW1_input_after_orders');
+  await shot(page, 'fw_CW1_input_after_orders').catch(() => {});
 
   // summary
   const pct = (a, p) => { const b = a.filter((x) => typeof x === 'number').sort((x, y) => x - y); return b.length ? +b[Math.min(b.length - 1, Math.floor(p * b.length))].toFixed(1) : null; };
@@ -226,7 +235,7 @@ try {
   // back to the anchor (open ground, away from the camera's map-edge clamp)
   await vale(page, (v) => v.state.match.value.send({ type: 'move', ...window.__anchor }));
   await page.mouse.move(960, 540); await page.waitForTimeout(5000);
-  await vale(page, () => window.__park());
+  await vale(page, () => window.__park(false));
   await page.keyboard.press('KeyS'); await page.waitForTimeout(400);
   const c0 = await camState();
   report.camera.default = { mode: c0.mode, offPx: +(c0.off * pxm(c0.zoom)).toFixed(2), zoom: c0.zoom };
@@ -276,9 +285,9 @@ try {
     const r = await vale(page, () => window.__resp);
     report.camera.respawn[mode] = { deadPannedPx: Math.round(dead.off * pxm(dead.zoom) || 0), firstLiveOffPx: r ? +(r.off * pxm(r.zoom)).toFixed(2) : null };
     await page.waitForTimeout(800);
-    await vale(page, () => window.__park());
+    await vale(page, () => window.__park(false));
   }
-  await shot(page, 'fw_CW1_input_camera_end');
+  await shot(page, 'fw_CW1_input_camera_end').catch(() => {});
   console.log('camera', JSON.stringify(report.camera));
   const cam = report.camera;
   if (cam.default.mode !== 'locked') fail(`default camera mode ${cam.default.mode}`);

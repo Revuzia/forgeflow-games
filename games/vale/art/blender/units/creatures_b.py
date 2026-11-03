@@ -1633,7 +1633,10 @@ class Sunsplinter(Monster):
     TB = np.array([0.0, -0.25, 1.98])
     TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.3, 0.25
     TCUT = 0.5                                          # the stone pyramid stops here; the glazed point continues
-    PAL = {"chalk": "#E6E0D3", "break": "#D2C5AC", "groove": "#6B635A", "iron": "#5A524B", "under": "#BDBCB8"}
+    # CW4 (closing critic:monsters): a warm needle-stone (honey limestone in noon light) instead of flat chalk-grey;
+    # umber bronze bands, gold-leaf hour ticks catching the noon, fresh pale fractures, inked shard ridges
+    PAL = {"chalk": "#D2BE98", "chalk_hi": "#E9DCC0", "break": "#F0E4C8", "groove": "#C99A3E", "iron": "#5C4431",
+           "under": "#8E7A5E", "ink": "#3A2C22", "blotch": "#B69F78"}
 
     def __init__(self):
         rng = np.random.RandomState(17)
@@ -1702,19 +1705,28 @@ class Sunsplinter(Monster):
         return {"stone": ("tags", tb)}
 
     # ── sculpt ──
+    SHARD_LS = 0.56                       # CW4: each halo stone is a splinter: a tapered shaft to a point outward
+
+    def shard_hw(self, st, zl):
+        """half-width of a halo splinter at local z (0 at its broken inner end)"""
+        Ls, Lp = st["L"] * self.SHARD_LS, st["L"] * (1 - self.SHARD_LS)
+        w0, w1 = st["w"], st["w"] * 0.8
+        return np.where(zl < Ls, w0 + (w1 - w0) * np.clip(zl / Ls, 0, 1), w1 * np.clip(1 - (zl - Ls) / Lp, 0, 1))
+
     def stone_piece(self, i, st, detail):
         S = Sculpt(f"s{i}")
         rng = np.random.RandomState(st["seed"])
         F = sdf.frame(st["ax"], K.rodrigues(st["v"], st["ax"], math.radians(st["roll"])))
-        half = (st["w"], st["w"] * 0.9, st["L"] / 2)
-        base = RoundBox(st["c"], half, 0.03, axes=F)
+        # CW4: a splinter of the Needle (square shaft tapering into a pyramid point, pointing out of the halo) in place
+        # of the old rounded box: the halo reads as a sunburst of broken needle-tips at 28.5 m, not a heap of blocks
+        st["B"] = st["c"] - F[2] * st["L"] / 2
+        base = Pyramidion(st["B"], F, st["w"], st["w"] * 0.8, st["L"] * self.SHARD_LS, st["L"] * (1 - self.SHARD_LS))
         planes = []
-        for sgn in (1, -1):                       # both ends broken: two slanted fracture planes each
-            for _ in range(2):
-                n = K.nrm(F[2] * sgn + F[0] * rng.uniform(-0.8, 0.8) + F[1] * rng.uniform(-0.8, 0.8))
-                planes.append((st["c"] + F[2] * sgn * st["L"] * rng.uniform(0.3, 0.42), n))
-        n = K.nrm(F[0] + F[1] * rng.uniform(0.6, 1.4))           # one corner sheared off
-        planes.append((st["c"] + n * st["w"] * rng.uniform(0.8, 0.95), n))
+        for _ in range(2):                        # the inner end broken: two slanted fracture planes
+            n = K.nrm(-F[2] + F[0] * rng.uniform(-0.8, 0.8) + F[1] * rng.uniform(-0.8, 0.8))
+            planes.append((st["B"] + F[2] * st["L"] * rng.uniform(0.06, 0.14), n))
+        n = K.nrm(F[0] + F[1] * rng.uniform(0.6, 1.4))           # one shaft corner sheared off
+        planes.append((st["B"] + F[2] * st["L"] * 0.25 + n * st["w"] * rng.uniform(0.8, 0.95), n))
         prim = Cut(base, planes, k=0.01)
         st["planes"], st["F"] = planes, F
         if detail:
@@ -1725,9 +1737,10 @@ class Sunsplinter(Monster):
         if detail:
             # hour-tick grooves across one face
             for j in range(3):
-                z = (j - 1) * st["L"] * 0.22
-                p = st["c"] + F[2] * z + F[1] * half[1]
-                a_, b_ = p - F[0] * st["w"] * 0.6, p + F[0] * st["w"] * 0.6
+                zl = st["L"] * (0.22 + 0.15 * j)
+                hw = float(self.shard_hw(st, np.array([zl]))[0])
+                p = st["B"] + F[2] * zl + F[1] * hw
+                a_, b_ = p - F[0] * hw * 0.6, p + F[0] * hw * 0.6
                 S.sub(Capsule(a_, b_, 0.016), k=0.004)
                 st["grooves"].append((a_, b_))
         return S
@@ -1841,9 +1854,13 @@ class Sunsplinter(Monster):
             return np.tile(K.hexc("#FFF0C4"), (n, 1)), np.full(n, 0.3)
         nz = N[:, 2]
         col = np.tile(c("chalk"), (n, 1))
-        col = mix_hex(col, c("under"), sarr(-0.3, -0.85, nz) * 0.6)
+        # value structure: noon-lit tops, a warm umber underside, broad blotches (>= 0.5 m breakup at game distance)
+        col = mix_hex(col, c("chalk_hi"), sarr(0.3, 0.85, nz) * 0.55)
+        col = mix_hex(col, c("under"), sarr(-0.2, -0.85, nz) * 0.75)
+        col = mix_hex(col, c("blotch"), sarr(0.05, 0.3, NOISE.fbm(V * 1.6, 2.0, 3)) * 0.6)
         rough = np.full(n, 0.66)
         key = next(iter(tags))
+        ridge = np.zeros(n)
         if key == "tip":
             planes, grooves = self.tip_planes[1:], self.tip_grooves
             # the glazed point continues the pyramid: a fresh pale ring where stone meets glass
@@ -1853,9 +1870,20 @@ class Sunsplinter(Monster):
             col = mix_hex(col, c("iron"), sarr(bw + 0.012, bw - 0.004, d_band) * 0.9)
             d_col = np.abs((V - (self.TB + self.TA * (self.TLS - 0.02))) @ self.TA)
             col = mix_hex(col, c("iron"), sarr(0.07, 0.05, d_col) * 0.9)
+            Ft = sdf.frame(self.TA, (1, 0, 0))
+            pl = (V - self.TB) @ Ft.T
+            hw = self.TW0 + (self.TW1 - self.TW0) * np.clip(pl[:, 2] / self.TLS, 0, 1)
+            hw = np.where(pl[:, 2] < self.TLS, hw, self.TW1 * np.clip(1 - (pl[:, 2] - self.TLS) / self.TLP, 0, 1))
+            ridge = sarr(0.8, 0.95, np.abs(pl[:, 0]) / np.maximum(hw, 1e-3)) * sarr(0.8, 0.95, np.abs(pl[:, 1]) / np.maximum(hw, 1e-3))
         elif key.startswith("s"):
             st = self.stones[int(key[1:])]
             planes, grooves = st["planes"], st["grooves"]
+            pl = (V - st["B"]) @ st["F"].T
+            hw = np.maximum(self.shard_hw(st, pl[:, 2]), 1e-3)
+            # the shard's long ridges, inked (the edge ink of the Art 2.0 structures)
+            ridge = sarr(0.8, 0.95, np.abs(pl[:, 0]) / hw) * sarr(0.8, 0.95, np.abs(pl[:, 1]) / hw)
+            # sun-warmed toward the point, the broken inner end greyed by the old shaft's grime
+            col = mix_hex(col, c("under"), sarr(0.35, 0.05, pl[:, 2] / st["L"]) * 0.35)
             if st["iron"]:
                 col = mix_hex(np.tile(c("iron"), (n, 1)), K.hexc("#4A433D"), sarr(-0.3, -0.85, nz) * 0.6)
             if st["band"]:
@@ -1868,13 +1896,18 @@ class Sunsplinter(Monster):
             on = sarr(0.02, 0.004, np.abs((V - p_) @ n_)) * sarr(0.6, 0.9, N @ n_)
             col = mix_hex(col, c("break"), on * 0.85)
             rough = rough * (1 - on) + 0.82 * on
+        col = mix_hex(col, c("ink"), ridge * 0.7)
         if grooves:
+            # gold-leaf hour ticks: inlaid, a little glossier
             _, gd = Longshade._along(None, V, [(a_, b_, 1.0) for a_, b_ in grooves])
-            col = mix_hex(col, c("groove"), sarr(0.028, 0.012, gd) * 0.85)
+            g_ = sarr(0.03, 0.012, gd)
+            col = mix_hex(col, c("ink"), sarr(0.045, 0.03, gd) * (1 - g_) * 0.6)
+            col = mix_hex(col, c("groove"), g_ * 0.95)
+            rough = rough * (1 - g_) + 0.35 * g_
         return col, rough
 
     def high_material(self, part, grad):
-        return painted_stone(f"{self.ID}_stone_src", self.PAL["chalk"], grad, chisel=0.8, scale=2.2, chalk=(1.1, 0.5))
+        return painted_stone(f"{self.ID}_stone_src", self.PAL["chalk"], grad, chisel=0.8, scale=2.2, chalk=(1.05, 0.7))
 
     def hard_material(self, part, grad):
         if part == "glass":
@@ -2604,8 +2637,13 @@ class StrayBase(Monster):
     UV_WEIGHTS = {}
     BAKE_RAY = (0.015, 0.05)
     AO_DIST = 0.2
-    PAL = {"chalk": "#DCD6C8", "chalk_lo": "#C4BBA9", "grime": "#968A78", "lichen": "#8A946A", "lichen2": "#B3AE80",
-           "eye": "#2A2521", "crack": "#7E7466", "groove": "#A99F8E", "break": "#E6DCC8"}
+    # CW4 (closing critic:monsters): the dial's own carved stone (the E1 numeral landmarks' dialstone family, a step
+    # lighter so the unit stands off its camp floor) with the carver's inked channel down every stroke, coursed
+    # joints, a gold-leaf hour notch on the head; no drilled eye pair (a blank slab with two dark holes read as a face)
+    PAL = {"chalk": "#BDB4A3", "chalk_hi": "#D9D1C0", "chalk_lo": "#978E7E", "grime": "#6F665A", "lichen": "#7A8458",
+           "lichen2": "#A3A06E", "eye": "#2A2521", "crack": "#4A433A", "groove": "#2F2A25", "break": "#E3D9C4",
+           "course": "#6E665A", "gold": "#C99B45"}
+    COURSE = 0.42                  # coursed-joint spacing (m, world z)
 
     # to implement: figure(detail) -> list of (prim, k), cuts -> {piece: [(point, normal, seed)]} (inside = n.(P-p)+f <= 0),
     # piece_box(piece), eyes (list of points), piece_bone
@@ -2663,8 +2701,13 @@ class StrayBase(Monster):
         nz = N[:, 2]
         z = V[:, 2] / self.HEIGHT
         col = np.tile(c("chalk"), (n, 1))
+        col = mix_hex(col, c("chalk_hi"), sarr(0.35, 0.9, nz) * 0.6)                 # lit tops
         col = mix_hex(col, c("chalk_lo"), sarr(0.1, -0.7, nz) * 0.55)
-        col = mix_hex(col, c("grime"), sarr(0.16, 0.0, z) * 0.8)                     # dial grit on the feet
+        col = mix_hex(col, c("grime"), sarr(0.22, 0.0, z) * 0.8)                     # dial grit on the feet
+        # coursed joints (the stroke was laid in blocks like the dial's numerals), on the steep faces
+        zc = V[:, 2] / (self.COURSE * self.CRACK)
+        jd = np.abs(zc - np.round(zc)) * self.COURSE * self.CRACK
+        col = mix_hex(col, c("course"), sarr(0.012, 0.004, jd) * sarr(0.75, 0.4, np.abs(nz)) * sarr(0.05, 0.12, V[:, 2]) * 0.8)
         streak = sarr(0.15, 0.4, NOISE.fbm(V * np.array([3.0, 3.0, 0.4]), 2.0, 3)) * sarr(0.0, -0.3, nz + 0.1) * 0.0
         col = mix_hex(col, c("chalk_lo"), sarr(0.1, 0.35, NOISE.fbm(V * np.array([2.5, 2.5, 0.35]), 2.5, 3)) * 0.35 + streak)
         ln = NOISE.fbm(V * 1.0, 2.2, 3)
@@ -2690,9 +2733,20 @@ class StrayBase(Monster):
             _, d = Longshade._along(None, V, [(e[0], e[1], 1.0)])
             col = mix_hex(col, c("eye"), sarr(self.EYE_R + 0.02, self.EYE_R + 0.004, d))
         if self.grooves():
+            # the carver's channel, inked (as the E1 numerals' channels)
             _, gd = Longshade._along(None, V, [(a_, b_, 1.0) for a_, b_ in self.grooves()])
-            col = mix_hex(col, c("groove"), sarr(0.03 * self.CRACK, 0.012 * self.CRACK, gd) * 0.6)
+            col = mix_hex(col, c("groove"), sarr(0.032 * self.CRACK, 0.016 * self.CRACK, gd) * 0.95)
+            rough = np.maximum(rough, sarr(0.032 * self.CRACK, 0.016 * self.CRACK, gd) * 0.9)
+        for nc, nr in self.notches():
+            # one gold-leaf hour notch (a single mark, never a pair)
+            d = np.abs(V - V3(nc))
+            w_ = sarr(nr + 0.01, nr - 0.004, d[:, 0] + d[:, 2]) * sarr(0.08, 0.03, d[:, 1])
+            col = mix_hex(col, c("gold"), w_)
+            rough = rough * (1 - w_) + 0.4 * w_
         return col, rough
+
+    def notches(self):
+        return []
 
     def high_material(self, part, grad):
         return painted_stone(f"{self.ID}_stone_src", self.PAL["chalk"], grad, chisel=1.0, scale=2.5 / self.CRACK,
@@ -2795,7 +2849,7 @@ class StrayNumeral(StrayBase):
     A = np.array([0.0, 0.0, 1.62])                # apex (body pivot)
     FL = np.array([0.56, 0.0, 0.0])               # foot contacts
     FR = np.array([-0.5, 0.0, 0.0])
-    WL, WR, DEPTH = 0.43, 0.25, 0.36              # stroke widths (thick / thin), depth (front-back)
+    WL, WR, DEPTH = 0.43, 0.25, 0.42              # stroke widths (thick / thin), depth (front-back; CW4 0.36 -> 0.42)
 
     def figure(self, detail):
         A, D = self.A, self.DEPTH
@@ -2850,9 +2904,10 @@ class StrayNumeral(StrayBase):
         return piece
 
     def eyes(self):
-        z = self.A[2] + 0.48
-        y = -self.DEPTH / 2 - 0.03
-        return [(np.array([sx * 0.22, y - 0.02, z]), np.array([sx * 0.22, y + 0.09, z])) for sx in (1, -1)]
+        return []                  # CW4: no drilled eye pair (face read); the hour notch marks its front
+
+    def notches(self):
+        return [(np.array([0.0, -self.DEPTH / 2 - 0.01, self.A[2] + 0.47]), 0.075)]
 
     def chips(self):
         A, d = self.A, self.DEPTH / 2
@@ -2860,13 +2915,18 @@ class StrayNumeral(StrayBase):
                 ((-0.7, -d, A[2] + 0.36), 0.06), ((0.2, -d, 1.05), 0.05), ((-0.3, d, 0.9), 0.045)]
 
     def grooves(self):
-        # an engraved line down the face of the thick stroke (the carver's inline)
-        top = self.A + np.array([0, 0, 0.0])
-        bot = self.FL + np.array([0, 0, 0.25])
-        y = -self.DEPTH / 2 - 0.01
-        a = np.array([top[0] * 0.8 + bot[0] * 0.2, y, top[2] * 0.8 + bot[2] * 0.2])
-        b = np.array([top[0] * 0.15 + bot[0] * 0.85, y, top[2] * 0.15 + bot[2] * 0.85])
-        return [(a, b)]
+        # the carver's inline down both strokes, front and back (CW4: inked), and along the head bar's top
+        out = []
+        for foot in (self.FL, self.FR):
+            top = self.A + np.array([0, 0, 0.0])
+            bot = foot + np.array([0, 0, 0.25])
+            for y in (-self.DEPTH / 2 - 0.01, self.DEPTH / 2 + 0.01):
+                a = np.array([top[0] * 0.8 + bot[0] * 0.2, y, top[2] * 0.8 + bot[2] * 0.2])
+                b = np.array([top[0] * 0.15 + bot[0] * 0.85, y, top[2] * 0.15 + bot[2] * 0.85])
+                out.append((a, b))
+        zt = self.A[2] + 0.47 + 0.15 + 0.004
+        out.append((np.array([0.42, 0.0, zt]), np.array([-0.42, 0.0, zt])))
+        return out
 
     def bones(self):
         A = self.A
@@ -3079,8 +3139,15 @@ class StrayTick(StrayBase):
         return {"foot": "foot", "mid": "mid", "top": "head"}[piece]
 
     def eyes(self):
-        y = -self.D / 2 - 0.02
-        return [(np.array([sx * 0.06, y - 0.01, 0.8]), np.array([sx * 0.06, y + 0.05, 0.8])) for sx in (1, -1)]
+        return []                  # CW4: no drilled eye pair (face read); the hour notch marks its front
+
+    def notches(self):
+        return [(np.array([0.0, -self.D / 2 - 0.01, 0.8]), 0.05)]
+
+    def grooves(self):
+        # the carver's inline down the stroke, front and back (inked), and across the top serif
+        return [(np.array([0.0, y, 0.22]), np.array([0.0, y, 0.7])) for y in (-self.D / 2 - 0.005, self.D / 2 + 0.005)] + \
+               [(np.array([0.17, 0.0, 1.005]), np.array([-0.17, 0.0, 1.005]))]
 
     def chips(self):
         d = self.D / 2

@@ -39,7 +39,7 @@ import {
   U_SUMMON, U_VISION, U_WAVECLEAR, U_ZONE, type AbilityInfo, type FighterProfile, type Knowledge,
 } from './knowledge.ts';
 import type { BotMatch } from './match.ts';
-import { inTelegraph, type TeamPerc } from './perception.ts';
+import { inTelegraph, type TeamPerc, type Telegraph } from './perception.ts';
 import type { TeamBrain } from './team.ts';
 import { dcos, dhypot, dsin, sq } from '../dmath.ts';
 
@@ -60,6 +60,8 @@ export interface BotTelemetry {
   /** a skillshot (point/direction projectile or delayed area) aimed at an enemy fighter */
   shot(t: number, src: number, ability: string, target: number): void;
 }
+
+const NO_WINDUPS: readonly Telegraph[] = [];
 
 export abstract class BotBase {
   readonly m: BotMatch;
@@ -218,7 +220,7 @@ export abstract class BotBase {
     const myR = e.radius + 0.2;
     // telegraphs (delayed areas), and the same areas read from their caster's windup (CW3 critic bot-micro: a cast time
     // earlier; one roll per cast — the area it becomes keeps the windup's decision)
-    const wu = this.m.windups, tg = this.m.telegraphs;
+    const wu = this.k.kind === 'rift' ? this.m.windups : NO_WINDUPS, tg = this.m.telegraphs;
     for (let i = 0; i < wu.length + tg.length; i++) {
       const t = i < wu.length ? wu[i] : tg[i - wu.length];
       if (t.srcTeam === this.team) continue;
@@ -436,7 +438,7 @@ export abstract class BotBase {
         const n = this.alliesIn(e.x, e.y, R, 0.65);
         // (CW3 CL-1: a group heal or shield also saves ONE ally — or me — about to fall in a fight; waiting for a second
         // one held the lampglass ults back to the late game)
-        const save = info.minTargets > 1 && this.alliesIn(e.x, e.y, R, this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
+        const save = this.k.kind === 'rift' && info.minTargets > 1 && this.alliesIn(e.x, e.y, R, this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
         if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
         const gate = info.selfHpBelow <= 1 ? 1 : (u & U_SHIELD) ? 0.7 : 0.55;
@@ -502,7 +504,8 @@ export abstract class BotBase {
     // (CW3 CL-1: committed to a kill — an all-in, a gank, or a target this low — an area that wants several targets is
     // spent on one: the kill is the point, not the second body)
     // (and a 1-on-1 trade on a road spends it once the opponent is under 60 %: a laner's ult is how a lane trade becomes a kill)
-    const need = (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? 0.6 : 0.45)) ? 1 : info.minTargets;
+    // (RIFT's laning only: BRIDGE keeps the casts its G5 pace was measured with)
+    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? 0.6 : 0.45)) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;
@@ -545,7 +548,7 @@ export abstract class BotBase {
         // self-anchored areas (and none-targeted effects): the target must be inside — a stance or form (a buff on me)
         // fights at my attack range (CW3 CL-1: a 1.5 m self circle kept a marksman's run-and-shoot ult for melee range)
         let r = info.radius > 0 ? info.radius : info.reach;
-        if ((u & U_BUFF) && (info.tk === 'self' || info.tk === 'none')) r = Math.max(r, this.prof.attackRange + 1.5);
+        if (this.k.kind === 'rift' && (u & U_BUFF) && (info.tk === 'self' || info.tk === 'none')) r = Math.max(r, this.prof.attackRange + 1.5);
         if (d > r + t.radius * 0.8) return false;
         if (need > 1 && this.countIn(e.x, e.y, r, true, false) < need) return false;
         this.cast(s, info, t, e.x, e.y);
