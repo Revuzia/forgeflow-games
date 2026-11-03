@@ -1,0 +1,18 @@
+{
+  "wave": "CW2",
+  "round": "verify-only 2",
+  "verifier": "adversarial verifier",
+  "date": "2026-11-03",
+  "pass": false,
+  "items": [
+    {
+      "id": "critic:audio-runtime",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "LOUDNESS holds. src/audio/index.ts:292 sets MIX_TRIM_DB = 3.5, and :587-591 wires master -> trim -> limiter. Re-capture: `node _harness/probe_audio_runtime.mjs match --out _harness/_reports/fw_CW2_v2_runtime_match.json`, RIFT, 421.8 s, default settings. Out integrated -16.59 LUFS: inside -18 ± 1.5, but only 0.09 LU under the upper bound (the engineer measured -17.43). Short-term p99 -12.13, momentary max -8.62. Announcer peak is +3.35 dB over the sfx p99 (gate 3). Heal chimes 1.85 per minute. Gates masterIntegratedInTokens and announcerPeakOverSfxP99Ge3 are true. The run's overall FAIL comes from enemyDownFires=false: the autopilot match had 0 takedowns, so this is gameplay variance, not audio. SYNC does not hold up on re-measure. Two independent runs: `node _harness/probe_audio_runtime.mjs sync --out _harness/_reports/fw_CW2_v2_runtime_sync.json` FAIL, offset p50 31.64 / p95 40.14 ms, engineOverSfxBus p50 0.69 / p95 5.45 ms (gate 4). `... --out _harness/_reports/fw_CW2_v2_runtime_sync2.json` FAIL, offset p95 43.07 ms against the re-documented 42.72 ms budget (gate p95WithinFramePlusOutputPlusHop false), engineOverSfxBus p50 3.73 / p95 7.62 ms. Of the engineer's own runs, r1_runtime_sync..sync4 failed and only sync5 passed, so 1 PASS in 7 runs. The per-hit start-to-onset still clusters at 11.2 ms with a tail at 13.8 / 16.5 / 21.8 ms. Some cues still miss a 256-frame device quantum after the synchronous-start fix (src/audio/index.ts:873-876). The sfx-bus reference click is a flat 10.02 ms. Against the original 32.7 ms budget, p95 is 7-10 ms over. The 10 ms limiter plus 4x-oversampler chain latency is legitimately documented in the probe, and I accept the 42.72 ms budget. The gate still does not pass reproducibly under shared-machine load.",
+      "fixHint": "Find the cues whose onset lands 2.6-10 ms past the chain latency. Check whether their buffers were still unsettled when the event fired: the settled WeakMap is only filled in a then(), so the first play of each file, and any file evicted or re-requested, still takes the async path. Prewarm the settled map for the kit and combat cues at match load, or record the settled value when the decode resolves rather than on the next buffer() call. Also consider a fixed dejitter: start(ctx.currentTime + one quantum) for every cue, which is constant latency inside the budget instead of jitter. Then make the gate robust: run the sync probe 3 times and require all 3 to pass, or gate on the median of 3 runs' p95. Raise --refs so the sfx-bus reference has more than 10 samples, since a 10-sample p95 is noisy. For the loudness, -16.59 sits at the edge of the token band. A 3.0 dB trim, about -17.1 on this capture, would centre it better, but it is within the band now."
+    }
+  ],
+  "regressions": [],
+  "notes": "Typecheck is clean for src/audio (tsc --noEmit, 0 errors). Measured on a loaded machine: Blender fighter builds held the other heavy slots. The same conditions apply to the engineer's runs, and the gate must survive them."
+}
