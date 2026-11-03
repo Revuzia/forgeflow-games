@@ -637,8 +637,9 @@ CALM_GUARD_OFF = [("const CALM_DROP_H = NAV_DROP_MAX + 0.3;", "const CALM_DROP_H
 # (W9 R1B pass 2) + PER_BOT_DROP off: the lane's route guard (requestPath's per-bot drop limit + steep-face run, navDropRun) is a fall guard too and
 # stayed ON under the two-anchor plant (walkDrop = Infinity still turned navDropRun on at NAV_DROP_MAX), so the plant no longer modelled "no fall
 # guard": fix1 1 fall death of 4 lips (FAIL), pass 2 (far-big seeking off) 0 of 4 (PASS - control lost). With all three off it is the base bots again.
-NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;"),
-                 ("const PER_BOT_DROP = true;", "const PER_BOT_DROP = false;")]
+# (W9 R1B pass 3) PER_BOT_DROP and its route guard are removed from bots.js (unproven: see probe_match --pencheck), so the two remaining anchors
+# are the whole plant again - functionally the bots.js the pass-2 three-anchor plant served (lip seeds 77 + 7).
+NO_FALL_GUARD = [("LETHAL_H = dropTable(() => 2);", "LETHAL_H = null;"), ("WALK_H = dropTable((hp) => Math.max(6, hp * 0.25));", "WALK_H = null;")]
 
 
 def part_glide(s, v, args):
