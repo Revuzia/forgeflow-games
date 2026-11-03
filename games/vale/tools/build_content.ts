@@ -40,7 +40,9 @@
 // rewrites the ref to assets/<sha256-12>-<name>.webp. Images under 32 KB, a WebP that comes out larger, and a machine
 // without Pillow keep the PNG (the last with a warning). --keep-png ships every PNG as is. --check encodes nothing.
 // PRUNE (perf PERF-m2): --prune deletes every file in <out>/assets that no catalog the new manifest lists refers to
-// (old builds' leftovers: a content-addressed name changes with every edit of the source file).
+// (old builds' leftovers: a content-addressed name changes with every edit of the source file), every WITHDRAWN_ASSETS
+// image, and the schema-<n>/<version> catalogs the new manifest no longer lists. WITHDRAWN_ASSETS (originality m5):
+// content addresses of withdrawn images; the build fails if one would ship again.
 //
 // OUTPUT (§3.1, §3.2):
 //   <out>/schema-<n>/<version>/catalog.json   minified; one per schema in MIGRATIONS.reachable()
@@ -71,7 +73,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync,
-  renameSync, statSync, unlinkSync, writeFileSync,
+  renameSync, rmdirSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1251,19 +1253,37 @@ export function referencedAssets(outDir: string, m: CatalogManifest): Set<string
   return used;
 }
 
-/** --prune: delete <out>/assets files the manifest's catalogs never name; returns the count and bytes freed */
+/** originality m5: images withdrawn for sensitivity or originality (content-address prefix → why). The build refuses
+ *  to emit one again (a reverted source file would bring back the same bytes, so the same address), and --prune
+ *  deletes it from <out>/assets whatever still names it. */
+export const WITHDRAWN_ASSETS: Readonly<Record<string, string>> = {
+  '28184e129720': 'collection_highlight before the closing originality fix',
+  '8ccebd0539e2': 'rift_card before the closing originality fix',
+};
+
+/** --prune: delete <out>/assets files the manifest's catalogs never name (and every withdrawn image), and the
+ *  schema-<n>/<version> catalogs the manifest no longer lists (a stale catalog names withdrawn or stale assets);
+ *  returns the count and bytes freed */
 function pruneAssets(outDir: string, m: CatalogManifest): { files: number; bytes: number } {
   const used = referencedAssets(outDir, m);
   const dir = join(outDir, 'assets');
   const r = { files: 0, bytes: 0 };
-  if (!existsSync(dir)) return r;
-  for (const name of readdirSync(dir)) {
-    if (used.has(`assets/${name}`)) continue;
-    const f = join(dir, name);
-    const st = statSync(f);
-    if (!st.isFile()) continue;
-    unlinkSync(f);
-    r.files++; r.bytes += st.size;
+  const drop = (f: string): void => { const st = statSync(f); if (!st.isFile()) return; unlinkSync(f); r.files++; r.bytes += st.size; };
+  if (existsSync(dir)) {
+    for (const name of readdirSync(dir)) {
+      if (used.has(`assets/${name}`) && !WITHDRAWN_ASSETS[name.slice(0, 12)]) continue;
+      drop(join(dir, name));
+    }
+  }
+  const listed = new Set(Object.values(m.schemas).map((e) => e.catalog));
+  for (const sd of readdirSync(outDir)) {
+    if (!/^schema-\d+$/.test(sd) || !statSync(join(outDir, sd)).isDirectory()) continue;
+    for (const ver of readdirSync(join(outDir, sd))) {
+      const vd = join(outDir, sd, ver);
+      if (!statSync(vd).isDirectory() || listed.has(`${sd}/${ver}/catalog.json`)) continue;
+      for (const f of readdirSync(vd)) drop(join(vd, f));
+      if (readdirSync(vd).length === 0) rmdirSync(vd);
+    }
   }
   return r;
 }
@@ -1530,6 +1550,8 @@ export function buildContent(opts: BuildOptions): BuildResult {
     const prevSha = byOut.get(outName);
     if (prevSha && prevSha !== a.sha256) { dg.fileErr(displayPath(a.abs), `content-address collision on ${outName}`); continue; }
     byOut.set(outName, a.sha256);
+    const gone = WITHDRAWN_ASSETS[a.sha256.slice(0, 12)];
+    if (gone) { dg.fileErr(displayPath(a.abs), `withdrawn image ${outName} (${gone}): it must never ship again — restore the fixed art`); continue; }
     a.out = `assets/${outName}`;
     const dest = join(assetsDir, outName);
     if (!existsSync(dest) || statSync(dest).size !== bytes.length) copyFileSync(a.abs, dest);
