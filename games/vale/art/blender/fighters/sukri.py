@@ -711,7 +711,7 @@ def sculpts() -> list:
             r = 1.0 / ((abs(math.sin(a)) ** HOOD_E_BACK + abs(math.cos(a)) ** HOOD_E_BACK) ** (1 / HOOD_E_BACK))
             pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(back_hy(z)) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
-    part("hood", hood, "cloth2", ("weights", "hood"), 1900, uvw=1.3)
+    part("hood", hood, "cloth2", ("weights", "hood"), 1650, uvw=1.3)   # CW6: 1900 -> 1650 (GLB budget)
 
     # FACE: the big carved wooden face in the opening, 3 cm behind the rim; the painted features carved
     def face_d(P):
@@ -730,7 +730,7 @@ def sculpts() -> list:
     for sx in (-1, 1):
         face.add(Sphere((sx * 0.034, yt - 0.012, NOSE[1] - 0.002), 0.019), k=0.012)
         face.sub(Ellipsoid((sx * 0.020, yt - 0.026, NOSE[1] - 0.016), (0.009, 0.010, 0.006)), k=0.004)
-    part("face", face, "wood", "bone:head", 1520, 0.5, uvw=3.0)
+    part("face", face, "wood", "bone:head", 1420, 0.5, uvw=3.0)   # CW6: 1520 -> 1420 (GLB budget)
 
     # TORSO: the barrel under the wraps (widest at 0.55 m), the shoulders' mass under the plates
     torso = Sculpt("torso")
@@ -742,7 +742,7 @@ def sculpts() -> list:
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
     torso.ops = [(op, prim.displaced(painted(0.8, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
-    part("torso", torso, "cloth", ("weights", "torso"), 1600, uvw=1.1)   # fp2: 1640 (GLB size)
+    part("torso", torso, "cloth", ("weights", "torso"), 1450, uvw=1.1)   # fp2: 1640, CW6: 1450 (GLB size)
 
     # BELT: the thick dark sash (7.5 cm) round the waist and a thin strap over it, a knot of torn ends at the front
     BY = 0.75
@@ -837,7 +837,7 @@ def sculpts() -> list:
         br.add(FlatCapsule(a_, b_, 0.080, 0.082, 0.068, 0.070, side=(0, 1, 0)).displaced(wraps(0.0045, 0.030, a_, b_, 1.8), 0.0045), k=0.0)
         br.add(Torus(b_ - fo * 0.006, 0.070, 0.008, axes=sdf.frame(fo)), k=0.006)
         part(f"bracer_{s}", br, "leather", f"bone:forearm.{s}", 520, 0.7)
-    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 780, curl=1.0, grip=True))
+    out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 680, curl=1.0, grip=True))   # CW6: 780 -> 680 (GLB budget)
     # CW6 (closing SUK-M3: every open-hand beat played as a fist): the free hand is two meshes on two child bones of
     # hand.L, the loose fist (x_fist_L) and an OPEN hand, fingers out and a little spread (x_open_L); the clips key
     # their scales (HAND_OPEN): Mote Toss's palm-up follow-through, Draw Near's welcome, the attacks' guiding hand
@@ -846,7 +846,7 @@ def sculpts() -> list:
                      filled=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
-    out.append(mantle_part(1560))
+    out.append(mantle_part(1180))   # CW6: 1560 -> 1180 (the GLB was 1212 KiB > the 1172 KiB budget)
 
     # THE CORD: a coil of weighted cord at the left hip, on the sash (Wrap Cast leaves from here)
     cord = Sculpt("cord")
@@ -1112,7 +1112,7 @@ def staff_parts() -> list:
     shaft.sub(HalfSpace(t0 + d1 * HEAD_LEN - e * (HEAD_W - 0.012), -unit(d1 - e), 0.3), k=0.004)
     shaft.sub(Capsule(t0 + u * 0.115 + h * 0.020 - side * 0.05, t0 + u * 0.115 + h * 0.020 + side * 0.05, 0.016), k=0.006)
     shaft.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), 2.0), k=0.0)
-    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 850, 1.1))   # fp2: 880 (GLB size)
+    out.append(("staff", shaft, 0.5, "wood", "bone:prop.R", 760, 1.1))   # fp2: 880, CW6: 760 (GLB size)
     grip = Sculpt("staff_grip")
     for a_, b_ in GRIPS:
         g0, g1 = staff_at(a_), staff_at(b_)
@@ -2200,8 +2200,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
 # part keeps its painted VALUE and takes the concept's hue at a chroma target (Lab, faded toward white and black):
 # cream wraps warm (C ~17 in the albedo, ~13 after the game's light and grade), honey wood face and staff, a cooler
 # stone cape; the face disc's median sits FACE_DROP L* under the hood's lit median (the concept: 20-35)
-SEP = {"torso": (80.0, 17.0, 0.85), "skirt": (80.0, 17.0, 0.85), "sleeve_L": (80.0, 17.0, 0.85),
-       "sleeve_R": (80.0, 17.0, 0.85), "shins": (78.0, 15.0, 0.80), "hood": (86.0, 8.0, 0.70),
+# (CW6 build 2: at C 17 in the albedo the wraps measured C 6.6 in three (three_sukri.png front, the cool sky takes
+# ~10 off b*): the cloth targets go to C 23 so the game shows the concept's warm cream at C >= 10)
+SEP = {"torso": (80.0, 23.0, 0.90), "skirt": (80.0, 23.0, 0.90), "sleeve_L": (80.0, 23.0, 0.90),
+       "sleeve_R": (80.0, 23.0, 0.90), "shins": (78.0, 19.0, 0.85), "hood": (86.0, 8.0, 0.70),
        "face": (70.0, 19.0, 0.90), "staff": (68.0, 19.0, 0.85), "plates": (100.0, 6.5, 0.80)}
 FACE_DROP = 19.0
 _D65 = np.array([0.95047, 1.0, 1.08883])

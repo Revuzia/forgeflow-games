@@ -76,6 +76,18 @@ def m_ally_down(v: int):
     return finish(room(L.out(), 'hall', wet=0.12), hp_hz=60, lp_hz=8000)
 
 
+
+@cue('m_enemy_down', 'match', ('m', -19.0), (0.8, 2.4), instant=True, **EVTK)
+def m_enemy_down(v: int):
+    """An enemy fighter fell (heard anywhere; the rising answer to m_ally_down): a muffled D3 knock, then a clear A4
+    hourbell lifting to a D5 glass, a breath of light rising under them. Lighter than your own takedown."""
+    L = Layers(1.6)
+    L.add(drum('D3', 0.45, 'ghost', seed='ed', dur=0.45, t60=0.25), 0.0, peak_db=-10)
+    L.add(bell('A4', 1.2, 0.75, decay=0.25, bright=0.7, seed='ed'), 0.0, peak_db=-1)
+    L.add(glass('D5', 1.1, 0.65, decay=0.4, bright=0.6, seed='ed'), 0.11, peak_db=0)
+    L.add(breath(0.8, 500, 2400, shape='swell', q=1.6, seed='ed', vel=0.6, peak_at=0.35), 0.0, peak_db=-12)
+    return finish(room(L.out(), 'hall', wet=0.12), hp_hz=60, lp_hz=9000, eq=[('peak', 3300, -2.0, 0.8)])
+
 @cue('m_self_down', 'match', ('m', -16.0), (1.5, 3.2), instant=True, **EVTK)
 def m_self_down(v: int):
     """You died: a muffled blow, a low D3 bell whose brightness closes as the world goes dark, a held B4

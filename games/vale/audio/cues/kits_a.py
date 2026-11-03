@@ -418,15 +418,17 @@ def f_burdam_call(v: int):
 # ══ Dunsom, Dusk herder ══════════════════════════════════════════════════════════════════════════
 @cue('f_dunsom_attack_swing', 'combat', T_SW, SWING, variants=V3, **SWK)
 def f_dunsom_attack_swing(v: int):
-    """Dunsom sends a mote of dusk off the crook: a knock in the crook's hook, the lantern clinking, and a narrow
-    dusk breath falling 3.4 kHz → 1.1 kHz as the mote leaves (a sigh, not a blade's air)."""
+    """Dunsom sends a mote of dusk off the crook: the crook's wooden hook knocking as it turns (the body), a low
+    whump of the staff through the air, the lantern clinking, and a broad dusk breath falling 1.8 kHz → 500 Hz as
+    the mote leaves (a sigh, not a blade's air; closing AUD-C8: no narrow tone in 2-5 kHz)."""
     r = R('f_dunsom_attack_swing', v=v)
     d = detune(v, 30)
     L = Layers(0.34)
-    L.add(S.knock(r, 520 * d, 0.03, 4, 'wood'), 0.0, peak_db=-8)
-    L.add(tink(hz('G6') * d, 0.08, 0.05, 0.2), 0.01, peak_db=-14)
-    L.add(breath(0.3, 3400 * d, 1100, shape='breath', q=3.2, seed=f'dus{v}', peak_at=0.06), 0.02, peak_db=0, width=0.5)
-    return _fin(room(L.out(), 'tiny', wet=0.08), hp_hz=90, lp_hz=9000, eq=SOFT_TOP)
+    L.add(S.knock(r, 360 * d, 0.05, 4, 'wood'), 0.0, peak_db=0)
+    L.add(whump(r, 0.2, 600 * d), 0.0, peak_db=-3)
+    L.add(tink(hz('G6') * d, 0.08, 0.05, 0.2), 0.01, peak_db=-18)
+    L.add(breath(0.3, 1800 * d, 500, shape='breath', q=1.3, seed=f'dus{v}', peak_at=0.06), 0.02, peak_db=-2, width=0.5)
+    return _fin(room(L.out(), 'tiny', wet=0.08), hp_hz=90, lp_hz=7000, eq=SOFT_TOP)
 
 
 @cue('f_dunsom_attack_hit', 'combat', T_HIT, HITW, variants=V3, **HTK)

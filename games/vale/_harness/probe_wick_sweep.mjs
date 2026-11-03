@@ -121,7 +121,9 @@ function install(HEAD) {
       const mh = (A.h + B.h) / 2, mw = (A.w + B.w) / 2, dx = Math.abs(A.cx - B.cx), dy = Math.abs(A.cy - B.cy);
       // dx < 1.5 x their width: a gap under half a light wide, one lamp split by a cage bar or a mullion
       if (dy > 0.5 * mh || dx < 1.5 * mw || dx > 4.5 * mw) continue;
-      const lo = Math.min(A.cx, B.cx) - 1.5 * mw, hi = Math.max(A.cx, B.cx) + 1.5 * mw, cyy = (A.cy + B.cy) / 2;
+      // (r2: the row reaches one pair spacing past either member, not 1.5 light widths: three equal slits evenly
+      // spaced under a lantern's eave were each flagged as a pair with its neighbour, the third one spacing away)
+      const lo = Math.min(A.cx, B.cx) - Math.max(1.5 * mw, 1.25 * dx), hi = Math.max(A.cx, B.cx) + Math.max(1.5 * mw, 1.25 * dx), cyy = (A.cy + B.cy) / 2;
       const comp = blobs.filter((q) => q !== A && q !== B && q.n >= 0.5 * Math.min(A.n, B.n));
       // a third comparable light in the same row: a row of lights, not a pair
       if (comp.some((q) => Math.abs(q.cy - cyy) <= mh && q.cx >= lo && q.cx <= hi)) continue;
@@ -391,6 +393,36 @@ try {
     await W((w) => w.ff(10));
     inv = await W((w) => w.inventory());
   }
+  // the Hooded Lamp ward (critic sensitivity-sweep: the ruling-5 knob never had a live look): bots rarely have one out
+  // at the probe's t, so place one per team with the sim's own spawnUnit (the same module instance the bench runs, via
+  // the dev server) on an open patch of each team's side, then let the renderer build its actors
+  if (PARTS.has('sweep') && (!inv['hooded_lamp|0'] || !inv['hooded_lamp|1'])) {
+    const placed = await page.evaluate(async () => {
+      const b = window.__VALE_BENCH__, w = b.host.sim.world;
+      const { spawnUnit } = await import('/src/sim/spawn.ts');
+      const ents = w.entities;
+      const out = [];
+      for (const team of [0, 1]) {
+        if ([...ents].some((e) => e.alive && e.def === 'hooded_lamp' && e.team === team)) continue;
+        // an open spot on the road (walkable by construction): the lane waypoint on the team's half farthest from
+        // every live entity
+        const W = w.mapDef.size[0];
+        let best = null;
+        for (const lane of w.mapDef.lanes) for (const [x, y] of lane.path) {
+          if ((team === 0) !== (x < W / 2)) continue;
+          let m = Infinity; for (const e of ents) if (e.alive) m = Math.min(m, Math.hypot(e.x - x, e.y - y));
+          if (!best || m > best.m) best = { x, y, m };
+        }
+        const e = spawnUnit(w, 'hooded_lamp', team, best.x, best.y, { duration: 9999 });
+        out.push({ team, id: e.id, at: [best.x, best.y], clearance: +best.m.toFixed(1) });
+      }
+      b.frames(8, 1 / 30);
+      return out;
+    });
+    console.log(`  placed Hooded Lamp wards ${JSON.stringify(placed)}`);
+    report.placedWards = placed;
+    inv = await W((w) => w.inventory());
+  }
   report.inventory = inv;
   report.time = await B((b) => b.time());
   console.log(`t=${report.time} inventory ${JSON.stringify(inv)}`);
@@ -409,7 +441,7 @@ try {
     for (const def of KINDS) for (const team of [0, 1]) {
       const r = await W((w, a) => w.sweep(a[0], a[1]), [def, team]);
       if (!r) { console.log(`  sweep ${def} team ${team}: none live`); continue; }
-      const base = `fw_CW4_${TAG}_sweep_${def}_${r.model}`;
+      const base = `fw_CW4_${TAG}_sweep_${def}_${r.model}${r.model === def ? `_t${team}` : ''}`;
       dataUrl(join(SHOTS, `${base}_1x.png`), r.png1); dataUrl(join(SHOTS, `${base}_3x.png`), r.png3);
       delete r.png1; delete r.png3;
       r.shots = [`_harness/_shots/${base}_1x.png`, `_harness/_shots/${base}_3x.png`];

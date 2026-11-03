@@ -408,7 +408,7 @@ export class Director {
   /** the caster's signature pair: a fighter's own (its skin's kit palette first, SKIN-FX), and for a summon, projectile
    *  or zone a fighter owns, its owner's (C1: a lamp or a summon carries its caster's hue, never the team's); minions,
    *  monsters, structures, wards and pickups keep the relationship colour */
-  private signatureOf(e: EntityView | undefined): { sig: Color; sec: Color } | null {
+  private signatureOf(e: EntityView | undefined): { sig: Color; sec: Color; base?: Color } | null {
     if (!e) return null;
     let f: EntityView | undefined = e;
     if (e.kind !== 'fighter') {
@@ -418,7 +418,10 @@ export class Director {
       f = p && view ? view.entity(p.entity) : undefined;
       if (!f || f.kind !== 'fighter') return null;
     }
-    return this.host.skinSignature?.(f) ?? this.signature.get(f.def) ?? null;
+    const own = this.signature.get(f.def) ?? null;
+    const skin = this.host.skinSignature?.(f) ?? null;
+    // a skin palette also turns the kit's fixed kit-hued hexes (SKIN-FX): the base signature is where they turn from
+    return skin ? { sig: skin.sig, sec: skin.sec, base: own?.sig } : own;
   }
 
   /** spawn a def anchored on/around a source entity; returns the VFX handle (0 = nothing spawned) */
@@ -439,7 +442,7 @@ export class Director {
     const { c, rel } = this.colorFor(src, team, owner);
     const sg = this.signatureOf(src);
     return this.vfx.spawnHandle(id, {
-      tier, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null,
+      tier, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, hueFrom: sg?.base ?? null,
       ally: rel === 'ally', ownT1: rel === 'self' && tier <= 1,
       origin: o.origin ?? null, target: o.target ?? null, ground: o.ground ?? null, scale: o.scale, dir: o.dir,
       follow: o.follow, followFor: o.followFor, targetId: o.targetId, sourceId: srcId, anchor: o.anchor, loopWhile: o.loopWhile,
@@ -1068,7 +1071,7 @@ export class Director {
         // the caster's signature carries the zone (M12): resin, dome, shadow, tracks … in the fighter's own hue
         const sg = this.signatureOf(src);
         this.vfx.spawn(e.vfx, {
-          tier: 3, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, ally: rel === 'ally',
+          tier: 3, team: c, element: this.elementOf(src), signature: sg?.sig ?? null, secondary: sg?.sec ?? null, hueFrom: sg?.base ?? null, ally: rel === 'ally',
           origin: C, ground: C, scale: R, dir: e.facing, anchor: 'ground', loopWhile: e.id, sourceId: src ? src.id : -1,
         });
       }

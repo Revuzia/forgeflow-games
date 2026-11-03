@@ -58,6 +58,8 @@ const JUNGLE_OBJECTIVE_FROM = 360;
 const JUNGLE_GANK_FROM = 180;
 /** a laner leaves its shoved road for a roam at most once in this many seconds during the laning phase (CW3 CL-1) */
 const LANE_ROAM_EVERY = 75;
+/** an all-in keeps chasing the fighter it was started on for at most this long (s) once its combo is spent (CW3 CL-1) */
+const ALLIN_COMMIT = 7;
 /** a roam is given up after this long without its kill (s) */
 const ROAM_MAX = 25;
 /** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
@@ -83,6 +85,8 @@ export class Bot extends BotBase implements BotController {
   private laneFoe = -1;
   private foeRecallAt = -1e9;
   private lastRoamAt = -1e9;
+  /** the fighter my current all-in was started on (-1: none) */
+  private allinTarget = -1;
   // situation (5 Hz)
   hpF = 1;
   nearE = 0;
@@ -269,6 +273,15 @@ export class Bot extends BotBase implements BotController {
     return pushed;
   }
 
+  /** my lane opponent is dead, or was seen starting a recall in the last 9 s and is not back in sight */
+  private foeAway(): boolean {
+    if (this.lane < 0 || this.jungle || this.support || this.laneFoe < 0) return false;
+    const foe = this.w.entity(this.laneFoe);
+    if (!foe) return false;
+    if (!foe.alive) return true;
+    return this.now - this.foeRecallAt < 9 && !(this.isNoticed(foe) && this.dist2(foe, this.e.x, this.e.y) < 25 * 25);
+  }
+
   /** a ready ability that holds its target (stun, root, sleep...) */
   private ccReady(): boolean {
     const e = this.e;
@@ -382,7 +395,9 @@ export class Bot extends BotBase implements BotController {
         const camp = this.jungle && kind === 'rift' && this.campAtHand(14);
         const lowAt = (k.rules.recall ? (lp ? 0.3 : camp ? 0.22 : 0.36) : 0.22) + this.diff.recallBias;
         if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
-        else if (hpF < lowAt && this.nearE === 0) recall = 0.74;
+        // (CW3 CL-1: a laner with a wave of its own to take and no enemy fighter in sight takes it before going home,
+        // unless it is nearly out — a recall at every trade's end cost the roads their last hits)
+        else if (hpF < lowAt && this.nearE === 0 && !(lp && hpF > 0.18 && this.unitDps <= 0 && this.wicksNear(e.x, e.y, 12) >= 3 && this.nearestEnemyFighter(22) === null)) recall = 0.74;
         else if (camp) recall = 0;
         else if (k.rules.recall && lp) {
           // laning: shop on a real purchase, and not while a wave is there to farm
@@ -441,6 +456,17 @@ export class Bot extends BotBase implements BotController {
       // into an all-in instead of a step back: that is where laning kills come from)
       const leF = (le.hp + le.shield) / Math.max(1, le.maxHp);
       if (leF < 0.5 && hpF - leF >= 0.2 && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
+    }
+    // (CW3 CL-1: a committed all-in is seen through — the combo it was started on is spent the moment it lands, and
+    // dropping the chase then let every wounded target walk home; it holds while the target stays in reach, is hurt
+    // worse than I am, and I am not the one about to fall)
+    const ct = this.allinTarget >= 0 ? this.w.entity(this.allinTarget) : null;
+    if (this.mode === 'allin' && ct && ct.alive && ct !== this.killTarget && this.isNoticed(ct) && now - this.modeSince < ALLIN_COMMIT) {
+      const cF = (ct.hp + ct.shield) / Math.max(1, ct.maxHp);
+      if (this.dist2(ct, e.x, e.y) < 12 * 12 && hpF > 0.3 && (cF < 0.35 || cF < hpF - 0.1) && (this.towerSafe(ct.x, ct.y, 0) || (cF < 0.2 && hpF > 0.5))) {
+        if (!this.killTarget) this.killTarget = ct;
+        consider('allin', 0.74);
+      }
     }
     // teamfight (laning: two against two is a lane, not a fight — join only one that has started)
     if (this.nearE >= 2 && this.nearA >= 2 && this.adv >= 0.42 && (!lp || this.nearE + this.nearA >= 5 || this.fightOn())) {
@@ -519,8 +545,11 @@ export class Bot extends BotBase implements BotController {
     }
     if (bestS < 0) best = laner ? 'lane' : this.jungle ? 'farm' : kind === 'fray' ? 'hunt' : 'push';
     // hysteresis: a young mode is kept unless the newcomer is urgent
+    if (best === 'allin' && this.killTarget && (best !== this.mode || this.allinTarget < 0)) this.allinTarget = this.killTarget.id;
     if (best !== this.mode) {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
+      if (this.mode === 'allin') this.allinTarget = -1;
+      if (best === 'allin' && this.killTarget) this.allinTarget = this.killTarget.id;
       if (best === 'roam') this.lastRoamAt = now;
       this.mode = best;
       this.modeSince = now;
@@ -660,7 +689,10 @@ export class Bot extends BotBase implements BotController {
     // a wave crashing into my tower with no enemy fighter around: clear it (when healthy enough to
     // take its hits — else last hits only, the tower does the rest); one-lane modes always shove
     const li = Math.max(0, this.lane);
+    // (CW3 CL-1: and with my lane opponent dead or gone home, the road is mine to shove — its Wicks die to me, not to
+    // mine, and my own are not ground down by a wave nobody of theirs is there to farm)
     const clear = (this.nearE === 0 && this.hpF > 0.45 && this.perc.enemyN[li] >= 4 && this.perc.ownN[li] <= 1) ||
+      (this.nearE === 0 && this.hpF > 0.35 && this.foeAway()) ||
       this.k.kind === 'bridge' || this.k.kind === 'brawl';
     this.computeHold(!clear);
     this.pMove = true; this.pMoveX = this.holdX; this.pMoveY = this.holdY;

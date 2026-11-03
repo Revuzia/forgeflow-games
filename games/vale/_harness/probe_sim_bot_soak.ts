@@ -233,6 +233,8 @@ interface GameRec {
   job: Job; reason: string; dur: number; winner: number; sudden: number; faults: string[];
   seats: { p: number; team: number; fighter: string; role: string; spells: string[] }[];
   wick14: Record<string, number>;
+  /** diagnostic: Wicks finished by Wicks ≤ 14:00, by the nearest other-team fighter within 14 m ('role/mode', or 'none') */
+  wickMissed: Record<string, number>;
   cs10: number[]; cs14: number[]; lvl10: number[]; lvl15: number[];
   modeTicks: Record<string, number>[];
   recalls: number[];
@@ -315,7 +317,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     tds: [], firstUlt: new Array<number>(n).fill(-1), lvl6: new Array<number>(n).fill(-1), lvl8: [], micro, human,
     job, reason: 'cut', dur: 0, winner: -1, sudden: -1, faults: [],
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
-    wick14: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
+    wick14: {}, wickMissed: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
     buys: [], fin25: [], gold25: [], finSpent25: [], bank25: [], cons25: [], finalItems: [], goldGraph: [], kills: [], deaths: [], cs: [], levels: [],
     placement: [], elim: [],
   };
@@ -363,6 +365,17 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             const victim = world().entity(e.dst);
             const kk = killerKind(e.killer, victim ? victim.team : -1).kind;
             rec.wick14[kk] = (rec.wick14[kk] ?? 0) + 1;
+            // (diagnostic: a Wick finished by a Wick — was a fighter of the other team there to take it, and in which mode?)
+            if (kk === 'minion' && victim) {
+              let near = 'none', bd = 14 * 14;
+              for (const pl of world().players) {
+                const f = pl.ent;
+                if (!f || !f.alive || pl.team === victim.team) continue;
+                const d2 = (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2;
+                if (d2 < bd) { bd = d2; near = `${setup.seats[pl.player]?.role ?? '?'}/${modeOf(pl.player)}`; }
+              }
+              rec.wickMissed[near] = (rec.wickMissed[near] ?? 0) + 1;
+            }
           } else if (e.kind === 'fighter') {
             const w = world();
             const pi = w.players.findIndex((p) => p.entity === e.dst);
@@ -620,6 +633,10 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     for (const g of gs) for (const x of g.fdeaths) if (!x.involved && (x.killer === 'minion' || x.killer === 'monster')) {
       const key = `${x.role}/${x.mode}/${x.t < 840 ? 'lane' : x.t < 1500 ? 'mid' : 'late'}`; alone[key] = (alone[key] ?? 0) + 1;
     }
+    const miss: Record<string, number> = {};
+    for (const g of gs) for (const [k, v] of Object.entries(g.wickMissed ?? {})) miss[k] = (miss[k] ?? 0) + v;
+    const mTot = Object.values(miss).reduce((a, b) => a + b, 0) || 1;
+    text.push(`  Wicks finished by Wicks, nearest other-team fighter in 14 m: ${Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${pct(v / mTot)}`).join(', ')}`);
     if (Object.keys(alone).length) text.push(`  alone deaths by role/mode/phase: ${Object.entries(alone).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   }
   detail.laning = lan;

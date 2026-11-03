@@ -19879,7 +19879,7 @@
           0.8,
           0
         ],
-        "emissive": 2.0,
+        "emissive": 1.0,
         "sharp": 2.0,
         "noise": 0.35,
         "delay": 0.3,
@@ -20277,7 +20277,7 @@
             0.75
           ]
         ],
-        "emissive": 1.6,
+        "emissive": 1.1,
         "sharp": 2.0,
         "blend": "add"
       },
@@ -70697,7 +70697,7 @@
           0.8,
           0
         ],
-        "emissive": 2.0,
+        "emissive": 1.0,
         "sharp": 2.0,
         "noise": 0.3
       },
@@ -71185,7 +71185,7 @@
             0.75
           ]
         ],
-        "emissive": 1.6,
+        "emissive": 0.8,
         "sharp": 2.0,
         "blend": "add"
       },

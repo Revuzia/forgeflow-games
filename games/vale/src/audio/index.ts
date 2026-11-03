@@ -14,7 +14,10 @@
 //               short-term range 13.2 -> 7.6 LU)
 //   ducking     voice > sfx > music (CONTRACT §11): while an announcer line plays, music and ambience sit
 //               VOICE_DUCK_DB lower and the sfx bus SFX_DUCK_DB lower, except threats to your fighter (the
-//               awareness pass below), which are never ducked (r07 §2.2.7)
+//               awareness pass below), which are never ducked (r07 §2.2.7). A news line (bands 1-3: a wipe,
+//               takedown news, structures, objectives) plays ANN_LIFT_DB over its cue gain and ducks the sfx bus
+//               SFX_DUCK_NEWS_DB, so it sits on top of a teamfight (closing AUD-C7, measured by
+//               _harness/probe_audio_runtime.mjs: line peak over the sfx bus's short-term p99)
 //   alert path  the GATE cues — whatever content binds to the UI roles queue_pop / queue_remind and the event
 //               roles countdown / matchStart — skip the master and join at the limiter through their own
 //               per-bus alert gain: max(ALERT_FLOOR, master × bus). So a match found while the tab is hidden
@@ -90,7 +93,17 @@
 //               surrender vote / its outcome only for the team voting (the HUD shows neither for the other
 //               team; online play is lockstep, so every client receives every seat's commands). Heals: a
 //               lifesteal / omnivamp heal (a unit healing itself in the tick of its own damage) is not voiced, and
-//               one target's heals within HEAL_MERGE_S are one chime.
+//               one target's heals within HEAL_MERGE_S are one chime. Only a fighter's heal chimes, and only a
+//               heal of at least HEAL_MIN_FRAC of its max HP that does not follow another heal on it within
+//               HEAL_CHAIN_S (closing AUD-C5): a repeat chain (a flask, a regen zone) chimes on its first tick and
+//               small item sustain (an on-kill or on-hit heal) is silent; an item active's cast plays its
+//               present.sfx (the flask's one drink). A fighter's death is heard team-relative: yours
+//               ('selfDown'), an ally's ('allyDown'), an enemy fighter's ('enemyDown', a rising answer; AUD-C6).
+//               Vision (AUD-C9): an ability or item active that summons a ward unit plays 'wardSet' on its cast
+//               (not the shared summon cue), a ward's end (killed, or its time up) 'wardOut' and a summon's
+//               'summonOut', where it stood (fog-gated like every death)
+//   dead        while your fighter is down the music bed closes to DEAD_LPF_HZ and DEAD_DB (a muffled world you
+//               watch from outside) and opens again on the respawn (closing AUD-C4)
 //   kits        a fighter's own sounds (final parity AUD-1): content names them f_<fighter>_<slot>, slots
 //               attack_swing · attack_hit · a1 · a2 · a3 · ult_windup · ult_release · passive · death · call · hit ·
 //               dash, and
@@ -183,8 +196,8 @@ interface CatalogLike {
     ambience?: Record<string, { source: string; cue: string }[]>; ui?: Record<string, string>; m4a?: Record<string, string> };
   fighters: { id: string; attack?: { present?: PresentLike };
     kit: Record<string, (AbilityLike & { forms?: Record<string, { kit?: Record<string, AbilityLike | undefined> }> }) | undefined> }[];
-  units?: { id: string; attack?: { present?: PresentLike }; passive?: PassiveLike; abilities?: { id: string }[] }[];
-  items?: { id: string; passives?: PassiveLike[] }[];
+  units?: { id: string; kind?: string; attack?: { present?: PresentLike }; passive?: PassiveLike; abilities?: { id: string }[] }[];
+  items?: { id: string; passives?: PassiveLike[]; active?: AbilityLike }[];
   setup?: { boons?: PassiveLike[] };
   teamBuffs?: { id: string; passives?: PassiveLike[] }[];
   maps?: { id: string; art?: { ambient?: AmbientLike } }[];
@@ -216,6 +229,7 @@ interface Bed { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; 
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
 interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
+  maxHp?: number;
   statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
 interface Place { att: number; pan: number; lpf: number }
@@ -259,11 +273,19 @@ const AWARE_GAIN = 0.8;      // … play at least this loud (−2 dB), unfiltere
 const NEAR_COMBAT_M = 14;    // fighter damage within this of the listener (or of your living fighter) feeds the combat layer
 const MAX_VOICES = 32;       // the global budget (r07 §4.3: 32-48 in a browser): past it the lowest-ranked voice yields
 const HEAL_MERGE_S = 0.25;   // one target's heals within this are one chime
+const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
+const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
 const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
 const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
-const SFX_DUCK_DB = 3;       // … and the sfx bus (threats to your fighter excepted)
+const SFX_DUCK_DB = 3;       // … and the sfx bus (threats to your fighter excepted) …
+const SFX_DUCK_NEWS_DB = 6;  // … this much under a band 1-3 line (a wipe, takedown news, structures, objectives) …
+const ANN_LIFT_DB = 5;       // … whose line also plays this much over its cue gain: the line wins a teamfight (closing AUD-C7)
+const ANN_LIFT_BANDS = 3;    // bands 1..this are the news lines
+const DEAD_LPF_HZ = 900;     // the music while YOUR fighter is down: low-passed here and DEAD_DB quieter (closing AUD-C4) …
+const DEAD_DB = -3;
+const DEAD_IN_S = 0.35;      // … closing over this time constant, opening again on the respawn
 const DUCK_IN_S = 0.01;      // time constants: in fast (r07 §4.2: 10-30 ms attack), out over a few hundred ms
 const DUCK_OUT_S = 0.12;
 const SOFT_THRESHOLD_DB = -26;   // `soften`: a gentle compressor between the mix and the master volume …
@@ -427,6 +449,14 @@ class Engine implements ValeAudioPort {
   private readonly pits = new Map<string, Emitter>();
   /** ability ids whose enemy wind-up plays the shade-breath swell (see `threat` in the header; ults always do) */
   private readonly threats = new Set<string>();
+  /** ability / item-active ids that set a ward (a summon of a ward unit): their cast plays 'wardSet' (see `match`) */
+  private readonly wardSetAb = new Set<string>();
+  /** heal target entity → ctx time of its last heal, voiced or not (a repeat chain; see `match`) */
+  private readonly healAny = new Map<number, number>();
+  /** the music's dead state (see `dead` in the header): its filter, its gain, and whether it is closed */
+  private deadLpf: BiquadFilterNode | null = null;
+  private deadGain: GainNode | null = null;
+  private deadOn = false;
   /** cue id → the index of the file it played last (round-robin never repeats a take back to back) */
   private readonly lastFile = new Map<string, number>();
   /** caster entity → its ultimate waiting for the wind-up's end (see `kits` in the header) */
@@ -463,6 +493,18 @@ class Engine implements ValeAudioPort {
       if (f.attack?.present) this.abilitySfx.set(`attack:${f.id}`, f.attack.present);
     }
     for (const u of cat.units ?? []) if (u.attack?.present) this.abilitySfx.set(`attack:${u.id}`, u.attack.present);   // Needles, Wicks, monsters
+    // item actives voice their present.sfx on the cast (the flask's drink); a ward-setting one plays 'wardSet' instead
+    for (const it of cat.items ?? []) if (it.active?.present) this.abilitySfx.set(it.active.id, it.active.present);
+    const wardUnits = new Set((cat.units ?? []).filter((u) => u.kind === 'ward').map((u) => u.id));
+    const setsWard = (node: unknown): boolean => {
+      if (Array.isArray(node)) return node.some(setsWard);
+      if (!node || typeof node !== 'object') return false;
+      const o = node as Record<string, unknown>;
+      if (o.op === 'summon' && wardUnits.has(o.unit as string)) return true;
+      return Object.values(o).some((v) => v && typeof v === 'object' && setsWard(v));
+    };
+    for (const it of cat.items ?? []) if (it.active && setsWard(it.active.effects)) this.wardSetAb.add(it.active.id);
+    for (const f of cat.fighters) for (const a of Object.values(f.kit)) if (a && setsWard(a.effects)) this.wardSetAb.add(a.id);
     for (const f of cat.fighters) {
       const k: Partial<Record<KitSlot, string>> = {};
       for (const s of KIT_SLOTS) if (this.cues[`f_${f.id}_${s}`]) k[s] = `f_${f.id}_${s}`;
@@ -539,7 +581,13 @@ class Engine implements ValeAudioPort {
         const d = ctx.createGain();
         this.vduck.set(b, d);
         d.connect(this.mix);
-        if (b === 'music') g.connect(this.duckGain).connect(d); else g.connect(d);
+        if (b === 'music') {
+          // the dead state (see `dead` in the header): open (20 kHz, unity) until your fighter is down
+          const lpf = ctx.createBiquadFilter(); lpf.type = 'lowpass'; lpf.frequency.value = 20000; lpf.Q.value = 0.7071;
+          const dg = ctx.createGain();
+          this.deadLpf = lpf; this.deadGain = dg;
+          g.connect(this.duckGain).connect(lpf).connect(dg).connect(d);
+        } else g.connect(d);
       } else g.connect(this.mix);
     }
     this.threat = ctx.createGain();
@@ -1106,18 +1154,19 @@ class Engine implements ValeAudioPort {
     this.annQ.shift();
     const slot: { item: AnnItem; voice: Voice | null; until: number } = { item: top, voice: null, until: now + 1 };
     this.annNow = slot;
-    const r = this.cue(top.cue, null, 1, 0, {
+    const news = top.band >= 1 && top.band <= ANN_LIFT_BANDS;
+    const r = this.cue(top.cue, null, news ? Math.pow(10, ANN_LIFT_DB / 20) : 1, 0, {
       onVoice: (v, buf) => {
         if (this.annNow !== slot) { this.stopVoice(v, ANN_CUT_S); return; }    // cut before its file was in
         if (!this.ctx) return;
         slot.voice = v;
         slot.until = v.started + Math.max(ANN_MIN_S, buf.duration - ANN_TAIL_S);
-        this.voiceDuck(slot.until);
+        this.voiceDuck(slot.until, news);
         this.annLater(slot.until - this.ctx.currentTime);
       },
     });
     if (r !== 'played') { this.annNow = null; this.pumpAnn(); return; }
-    this.voiceDuck(slot.until);
+    this.voiceDuck(slot.until, news);
     this.annLater(1);
   }
 
@@ -1127,11 +1176,11 @@ class Engine implements ValeAudioPort {
   }
 
   /** duck music / ambience / sfx under the voice bus until `until` (see `ducking` in the header) */
-  private voiceDuck(until: number): void {
+  private voiceDuck(until: number, news = false): void {
     const ctx = this.ctx;
     if (!ctx) return;
     const now = ctx.currentTime;
-    for (const [b, d] of [['music', VOICE_DUCK_DB], ['ambience', VOICE_DUCK_DB], ['sfx', SFX_DUCK_DB]] as const) {
+    for (const [b, d] of [['music', VOICE_DUCK_DB], ['ambience', VOICE_DUCK_DB], ['sfx', news ? SFX_DUCK_NEWS_DB : SFX_DUCK_DB]] as const) {
       const p = this.vduck.get(b)?.gain;
       if (!p) continue;
       p.cancelScheduledValues(now);
@@ -1158,7 +1207,7 @@ class Engine implements ValeAudioPort {
     this.gorgeSeen = client?.view.gorgeWind ?? 0;
     this.procLast.clear();
     this.ults.clear();
-    this.dealt.clear(); this.healLast.clear(); this.wiped.clear();
+    this.dealt.clear(); this.healLast.clear(); this.healAny.clear(); this.wiped.clear();
     this.hurtLast.clear(); this.objAlive.clear();
     for (const o of client?.view.objectives ?? []) this.objAlive.set(o.id, o.alive);
     this.annQ = [];
@@ -1404,6 +1453,24 @@ class Engine implements ValeAudioPort {
     }
   }
 
+  /** the music's dead state follows your fighter (see `dead` in the header) */
+  private deadState(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.deadLpf || !this.deadGain) return;
+    const me = this.client ? this.you() : undefined;
+    const dead = !!me && me.alive === false;
+    if (dead === this.deadOn) return;
+    this.deadOn = dead;
+    const now = ctx.currentTime;
+    this.deadLpf.frequency.cancelScheduledValues(now);
+    this.deadLpf.frequency.setTargetAtTime(dead ? DEAD_LPF_HZ : 20000, now, DEAD_IN_S);
+    this.deadGain.gain.cancelScheduledValues(now);
+    this.deadGain.gain.setTargetAtTime(dead ? Math.pow(10, DEAD_DB / 20) : 1, now, DEAD_IN_S);
+  }
+
+  /** dev / probes: whether the music is in its dead state */
+  get musicDead(): boolean { return this.deadOn; }
+
   /** the ult cooldown of the fighter `entity` (0 when ready or unknown): the sim starts it on a release */
   private ultCooldown(entity: number): number {
     const p = this.client?.view.players.find((x) => x.entity === entity);
@@ -1450,6 +1517,7 @@ class Engine implements ValeAudioPort {
         const pr = this.abilitySfx.get(e.ability as string);
         // an epic unit's cast: its ability's own wind-up, else its shared one; never castMonster (see `epic`)
         if (uk) this.cue((ua ? uk[ua.slot] : undefined) ?? uk.cast, at(src), 1, 0, aw);
+        else if (this.wardSetAb.has(e.ability as string) && this.ev('wardSet')) this.cue(this.ev('wardSet'), at(src), 1, 0, aw);
         else this.cue(own ?? pr?.sfx ?? this.ev(slot === 'ult' ? 'castUlt' : src?.kind === 'monster' ? 'castMonster' : 'cast'), at(src), 1, 0, aw);
         // the shared shade-breath swell for every enemy fighter's T3+ wind-up (STYLE_BIBLE 'enemy T3+ wind-ups share one
         // shade-breath swell'; see `threat` in the header), placed at the caster like any spatial cue
@@ -1534,7 +1602,12 @@ class Engine implements ValeAudioPort {
         // lifesteal / omnivamp (a self-heal in the tick of its own damage) is not voiced; one target's heals merge
         if (e.src === e.dst && this.dealt.get(e.src as number) === e.t) break;
         const now = this.ctx?.currentTime ?? 0;
-        if (dst && now - (this.healLast.get(dst.id) ?? -1e9) < HEAL_MERGE_S) break;
+        // a fighter's heal of some size, and a repeat chain's first tick only (see `match` in the header)
+        if (!dst || dst.kind !== 'fighter') break;
+        const chained = now - (this.healAny.get(dst.id) ?? -1e9) < HEAL_CHAIN_S;
+        this.healAny.set(dst.id, now);
+        if (chained || (dst.maxHp ?? 0) <= 0 || (e.amount as number) < HEAL_MIN_FRAC * (dst.maxHp as number)) break;
+        if (now - (this.healLast.get(dst.id) ?? -1e9) < HEAL_MERGE_S) break;
         if (this.cue(this.ev('heal'), at(dst), 0.7, 0, aw) === 'played' && dst) this.healLast.set(dst.id, now);
         break;
       }
@@ -1574,7 +1647,10 @@ class Engine implements ValeAudioPort {
           const youEnt = this.client?.view.players.find((x) => x.player === this.client?.you)?.entity;
           if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
           else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);
+          else if (dst) this.cue(this.ev('enemyDown'), null);
         } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.6);
+        else if (k === 'ward') this.cue(this.ev('wardOut'), at(dst));
+        else if (k === 'summon') this.cue(this.ev('summonOut'), at(dst), 0.8);
         else if (k === 'monster') {
           const uk = this.uk(dst);
           this.cue(uk ? uk.death : this.ev('monsterDeath'), at(dst));   // an epic unit's own fall (see `epic`)
@@ -1687,6 +1763,7 @@ class Engine implements ValeAudioPort {
       }
     }
     this.lastT = view ? view.time : null;
+    this.deadState();
     this.intensity = Math.max(0, this.intensity - dt * 0.12);
     this.fight = Math.max(0, this.fight - dt * FIGHT_DECAY);
     this.syncAmbience();

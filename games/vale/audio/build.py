@@ -57,7 +57,8 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              the kits' attack swings, attack hits, ult releases and ability hits (LAPTOP_SLOTS) lose <= LAPTOP_MAX_LU on
              a laptop, a physical fighter's attack hit and ability hit (CONTACT_SLOTS: they replace the library's
              c_hit_phys_* on every auto and ability) has a contact (>= KIT_TRANSIENT_MIN) and no fighter's passes the
-             soft top for frequent hits (TRANSIENT_SOFT_TOP); and every cue that can fire more than once a second (attacks,
+             soft top for frequent hits (TRANSIENT_SOFT_TOP); every fighter's attack swing and attack hit puts at most
+             AUTO_BAND_MAX (0.6) of its energy in 2-5 kHz (closing AUD-C8: never shrill); and every cue that can fire more than once a second (attacks,
              hits, ability hits, procs, FAST_ROLES) has >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
   as heard   (closing AUD-C1) summing every cue the engine plays for each kitted fighter's cast, area / zone, projectile
              and hit chain (heard_chains, resolved as src/audio/index.ts does): 0 library cues on a kitted fighter's
@@ -333,6 +334,14 @@ def encode_opus_loop(x: np.ndarray, wav: str, ogg: str, ch: int) -> None:
         f.write(bytes(data))
 
 
+def band_share(x: np.ndarray) -> float:
+    """The share of a decoded file's energy in BAND_LO_HZ..BAND_HI_HZ (Welch, 2048-point, the channels summed to mono)."""
+    from scipy import signal
+    f, p = signal.welch(x.mean(axis=0), SR, nperseg=2048)
+    tot = float(p.sum()) or 1e-30
+    return float(p[(f >= BAND_LO_HZ) & (f < BAND_HI_HZ)].sum()) / tot
+
+
 def decode(path: str) -> np.ndarray:
     """Decode as the browser does: a mono file plays at unity in both speakers (WebAudio up-mix), not
     at ffmpeg's -3 dB centre mix, so mono is decoded as one channel and duplicated."""
@@ -549,6 +558,9 @@ KIT_TRANSIENT_MIN = 0.07  # a physical fighter's attack / ability hit's contact:
                           # … and TRANSIENT_SOFT_TOP every kit hit's top (they are the most frequent cues of a match)
 LAPTOP_SLOTS = ('attack_swing', 'attack_hit', 'ult_release', 'hit')   # the kit cues held to LAPTOP_MAX_LU (AUD-4)
 CONTACT_SLOTS = ('attack_hit', 'hit')                                 # … and to the contact band
+AUTO_SLOTS = ('attack_swing', 'attack_hit')   # the kit autos (closing AUD-C8): fire about once a second, so never shrill:
+BAND_LO_HZ, BAND_HI_HZ = 2000.0, 5000.0       # … at most AUTO_BAND_MAX of their energy (Welch, the whole file) in the
+AUTO_BAND_MAX = 0.6                           # … ear's most sensitive band, 2-5 kHz (STYLE_BIBLE 'never shrill')
 RR_MIN = 3               # round-robin variants for a cue that can fire more than once a second
 RR_SLOW_COOLDOWN = 1.0   # … a cue whose own cooldown is at least this cannot
 # engine roles that can fire more than once a second (every basic attack, hit, projectile, wave death, heal tick, last hit)
@@ -651,7 +663,7 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
         with open(path, encoding='utf8') as f:
             fighters.append(json.load(f))
     units = _read('units.json')['units']
-    rep: dict = {'fighters': {}, 'nearest': {}, 'nearestConfuse': {}, 'fast': {}, 'laptop': {}, 'contact': {}}
+    rep: dict = {'fighters': {}, 'nearest': {}, 'nearestConfuse': {}, 'fast': {}, 'laptop': {}, 'contact': {}, 'band': {}}
     resolved = {fd['id']: fighter_kit(fd, cues, ev) for fd in fighters}
     # completeness
     for fd in fighters:
@@ -753,6 +765,17 @@ def kit_gate(contract: dict) -> tuple[list[str], dict]:
                 if max(hf) > TRANSIENT_SOFT_TOP:
                     fails.append(f'kits: {c} has {max(hf):.3f} of its first 30 ms above 2 kHz (> {TRANSIENT_SOFT_TOP:g}):'
                                  f' the soft top for frequent hits is gone')
+    # the autos are never shrill (closing AUD-C8): <= AUTO_BAND_MAX of each take's energy in 2-5 kHz
+    for fd in fighters:
+        for s in AUTO_SLOTS:
+            c = f"f_{fd['id']}_{s}"
+            if c not in cues or not all(os.path.exists(out_path(x)) for x in cues[c]['files']):
+                continue
+            sh = max(band_share(decode(out_path(x))) for x in cues[c]['files'])
+            rep['band'][c] = round(sh, 3)
+            if sh > AUTO_BAND_MAX:
+                fails.append(f'kits: {c} puts {sh:.2f} of its energy in {BAND_LO_HZ / 1000:g}-{BAND_HI_HZ / 1000:g} kHz'
+                             f' (> {AUTO_BAND_MAX:g}): a near-tone in the ear\'s most sensitive band, fired about once a second')
     # round-robin for every cue that can fire more than once a second
     fast: dict[str, str] = {}
     for fid, k in resolved.items():
@@ -1333,6 +1356,9 @@ def print_gates(fails: list[str], rep: dict) -> None:
         ct = '  '.join(f"{s.replace('attack_', 'atk_')} {kr['contact'][f'f_{f}_{s}'][0]:.3f}-{kr['contact'][f'f_{f}_{s}'][1]:.3f}"
                        for s in CONTACT_SLOTS if f'f_{f}_{s}' in kr['contact'])
         print(f"  {f:9s} {x['kit']:2d}/{len(KIT_SLOTS)}  {near}  laptop swing/hit/release/ability {lap} LU" + (f"  contact {ct}" if ct else ''))
+    if kr.get('band'):
+        top = sorted(kr['band'].items(), key=lambda kv: -kv[1])[:4]
+        print(f"auto band gate (<= {AUTO_BAND_MAX:g} of energy in 2-5 kHz): highest " + ', '.join(f'{c} {v:.2f}' for c, v in top))
     ip = rep.get('impact', {})
     late = {c: v for c, v in ip.get('instant', {}).items() if v is not None}
     print(f"instant gate: {len(late)} instant cues, slowest {max(late.values(), default=0):.1f} ms to -20 dB (<= {INSTANT_MS:g})")

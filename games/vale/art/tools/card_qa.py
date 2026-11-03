@@ -10,6 +10,8 @@ Reads the shipped cards (art/out/fighters/<fid>/[<skin>_]splash.png / portrait.p
            as p50 / p90 over the blocks. GATE: figure p50 <= 2 x the plate's p50 (grain is the speckle the
            reviewers saw on flat cloth; the p90 blocks hold the figure's real edges and are reported only), and the
            reviewers' half-image p90 pair (x >= 800 / x < 800) for comparison with closing_vashil_splash_grain.txt.
+  speckle  (diagnostic, not a gate) std of (grey - 3x3 median) per block, figure vs plate p50: pixel-scale render
+           noise only (painted strokes and folds wider than ~2 px survive the median), to tell grain from detail.
   hi       the figure's luma (Rec. 709, 0-255) p99 / p99.7 / p99.9 / max. GATE: p99.9 >= 230 (highlights).
   mad      figure-box mean absolute difference (RGB, /255) against the base card of the fighter (the box: the
            union of both figures' bounds + 16 px). GATE for a skin: >= 30.
@@ -69,6 +71,26 @@ def blocks(grey: np.ndarray, sel, B: int = 16) -> np.ndarray:
     return np.array(v, np.float32)
 
 
+def median3(a: np.ndarray) -> np.ndarray:
+    p = np.pad(a, 1, mode="edge")
+    H, W = a.shape
+    st = np.stack([p[y:y + H, x:x + W] for y in range(3) for x in range(3)])
+    return np.median(st, axis=0)
+
+
+def speckle_blocks(grey: np.ndarray, sel, B: int = 16) -> np.ndarray:
+    """pixel-scale speckle only: std of (grey - its 3x3 median) per block (a painted stroke or a fold wider than
+    ~2 px survives the median, so this separates render noise from the figure's painted detail)"""
+    hp = grey - median3(grey)
+    H, W = grey.shape
+    v = []
+    for by in range(0, H - B + 1, B):
+        for bx in range(0, W - B + 1, B):
+            if sel(by, bx):
+                v.append(float(hp[by:by + B, bx:bx + B].std()))
+    return np.array(v, np.float32)
+
+
 def q(v, f):
     return float(np.percentile(v, f)) if len(v) else float("nan")
 
@@ -105,6 +127,8 @@ def card(sid: str, fid: str, kind: str) -> dict | None:
         r["grain"]["half_left_p90"] = round(q(hl, 90), 2)
     m = a > 0.9
     L = grey[m]
+    sf, sp = speckle_blocks(grey, inside), speckle_blocks(grey, empty)
+    r["speckle"] = {"fig_p50": round(q(sf, 50), 2), "plate_p50": round(q(sp, 50), 2)}
     r["hi"] = {"p50": round(q(L, 50)), "p99": round(q(L, 99)), "p99_7": round(q(L, 99.7)), "p99_9": round(q(L, 99.9)),
                "max": round(float(L.max())) if len(L) else None}
     ys, xs = np.nonzero(a > 0.6)
@@ -165,6 +189,7 @@ def main(argv: list[str]) -> int:
                     f"  {sid:<22} {kind:<8} grain fig p50 {g['fig_p50']:5.2f} p90 {g['fig_p90']:5.2f} | plate p50 "
                     f"{g['plate_p50']:5.2f} p90 {g['plate_p90']:5.2f}{'' if ok_g else ' !'}"
                     + (f" | halves R/L p90 {g['half_right_p90']:.2f}/{g['half_left_p90']:.2f}" if "half_right_p90" in g else "")
+                    + f" | speckle fig/plate p50 {r['speckle']['fig_p50']:.2f}/{r['speckle']['plate_p50']:.2f}"
                     + f" || hi p50 {h['p50']} p99 {h['p99']} p99.7 {h['p99_7']} p99.9 {h['p99_9']} max {h['max']}"
                     f"{'' if ok_h else ' !'}"
                     + (f" || mad {r['mad']:.1f}{'' if ok_m else ' !'}" if r["mad"] is not None else "")

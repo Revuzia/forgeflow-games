@@ -30,7 +30,7 @@ from synth import sfx as S
 from synth.core import SR, TAU, fade, hz, ns
 
 from .kit import (Layers, R, at_len, bell, breath, crackle, crumble, drum, esc, finish, flutter, fm_tone, glass, harp,
-                  hollow, ink, litho, lp, rev, roll, room, scrape, shimmer, sweep, tink)
+                  hiss, hollow, ink, litho, lp, rev, roll, room, scrape, shimmer, sweep, tink)
 
 AIR = (0.12, 0.45)          # QA duration windows (s)
 HIT = (0.12, 0.75)
@@ -692,6 +692,48 @@ def c_summon(v: int):
     L.add(S.sparkle(r, 0.4, 8, 86, 100, t60=0.12, rise=True), t + 0.01, peak_db=-14)
     return finish(room(L.out(), 'glass', wet=0.13), hp_hz=50, eq=[('peak', 3300, -2.5, 0.8)])
 
+
+
+# ── vision (closing AUD-C9): a Hooded Lamp has its own small sounds; a summon fades out ──────────────────────
+@cue('c_lamp_set', 'combat', ('m', -21.0), (0.4, 1.2), instant=True, **CASTK)
+def c_lamp_set(v: int):
+    """A Hooded Lamp set down and lit: its wooden foot knocked onto the ground, a flint tick, the resin catching
+    (a soft low rush of flame) and its little hood ringing one warm F#5 under the flame."""
+    r = R('c_lamp_set', v=v)
+    L = Layers(0.9)
+    L.add(S.knock(r, 300, 0.05, 4, 'wood'), 0.0, peak_db=-2)
+    L.add(S.snap(r, 3800, 1.5), 0.03, peak_db=-14)
+    fl = F.apply(O.coloured(ns(0.45), r, -4.0), [F.lowpass(900, 0.8)]) * E.stages([(0, 0, 0), (0.06, 1, -1.5), (0.45, 0, 2.5)], ns(0.45))
+    L.add(fl, 0.05, peak_db=-4)
+    L.add(lp(bell('F#5', 0.7, 0.6, decay=0.3, bright=0.45, seed=f'ls{v}'), 3500), 0.07, peak_db=-8)
+    L.add(crackle(r, 0.4, 14, 1200, 4000), 0.1, peak_db=-20)
+    return finish(room(L.out(), 'small', wet=0.07), hp_hz=70, lp_hz=8000, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('c_lamp_out', 'combat', ('m', -20.0), (0.3, 1.0), instant=True, **CASTK)
+def c_lamp_out(v: int):
+    """A Hooded Lamp snuffed: a short puff of breath, the flame's rush pinched off, a falling resin hiss and the
+    hood dropping with a dull clonk; no ring left after it (the light is gone)."""
+    r = R('c_lamp_out', v=v)
+    L = Layers(0.8)
+    L.add(breath(0.18, 1400, 500, shape='breath', q=1.4, seed=f'lo{v}', peak_at=0.02), 0.0, peak_db=0)
+    L.add(hiss(r, 0.35, 2600, 700, q=1.6, attack=0.01, fall=2.2), 0.03, peak_db=-9)
+    L.add(S.knock(r, 210, 0.06, 4, 'wood'), 0.06, peak_db=-5)
+    L.add(lp(bell('C#5', 0.25, 0.5, decay=0.08, bright=0.3, seed=f'lo{v}'), 2000), 0.06, peak_db=-16)
+    return finish(room(L.out(), 'small', wet=0.05), hp_hz=80, lp_hz=7000)
+
+
+@cue('c_summon_out', 'combat', ('m', -21.0), (0.4, 1.4), instant=True, **CASTK)
+def c_summon_out(v: int):
+    """A summon fades out (the answer to c_summon's pop): an A5 glass falling to D5, a soft breath drawn down
+    and the sparkle sinking (a light going out, never a death)."""
+    r = R('c_summon_out', v=v)
+    L = Layers(1.0)
+    L.add(glass('A5', 0.5, 0.6, decay=0.25, seed=f'so{v}'), 0.0, peak_db=-2)
+    L.add(glass('D5', 0.7, 0.55, decay=0.35, seed=f'so{v}d'), 0.09, peak_db=0)
+    L.add(breath(0.45, 2400, 400, shape='breath', q=1.4, seed=f'so{v}', vel=0.6, peak_at=0.03), 0.0, peak_db=-10, width=0.6)
+    L.add(S.sparkle(r, 0.4, 6, 86, 100, t60=0.12, rise=False), 0.0, peak_db=-16)
+    return finish(room(L.out(), 'glass', wet=0.12), hp_hz=60, eq=[('peak', 3300, -2.5, 0.8)])
 
 # ── big moments ──────────────────────────────────────────────────────────────────────────────────
 @cue('c_ult_windup', 'combat', ('m', -16.0), (0.7, 1.2), **CASTK)

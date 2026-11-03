@@ -36,7 +36,7 @@
 
 import {
   AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DynamicDrawUsage, Euler, GLSL3, Group, HalfFloatType, InstancedBufferAttribute,
-  InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, OneFactor, type PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, RawShaderMaterial, Scene,
+  InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, OneFactor, type PerspectiveCamera, PlaneGeometry, PointLight, Quaternion, RawShaderMaterial, Scene, SRGBColorSpace,
   type ShaderMaterial, type Texture, Vector2, Vector3, type WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { uberAttrs } from '../uber.ts';
@@ -73,6 +73,10 @@ export interface SpawnOpts {
   /** the caster fighter's signature hue and its companion (r12 M12; `signature` / `secondary` refs); null = team */
   signature?: Color | null;
   secondary?: Color | null;
+  /** CW1 SKIN-FX: the fighter's own (base) signature when a skin palette replaces it: the effect's fixed kit-hued hexes
+   *  (saturation >= 0.25, within 45 deg of this hue) turn by the skin's hue shift, so a deluxe skin recolours the whole
+   *  kit, not only its signature-keyed layers; neutrals (whites, greys, inks) and team keys stay. null = no shift */
+  hueFrom?: Color | null;
   /** ally (not self) effects render at 65 % */
   ally: boolean;
   /** own basic attacks at 85 % */
@@ -158,6 +162,9 @@ class Inst {
   element = new Color();
   sig = new Color();
   sec = new Color();
+  /** SKIN-FX hue shift of fixed kit hexes: the base signature's HSL hue (-1 = none) and the turn to the skin's */
+  hueFrom = -1;
+  hueBy = 0;
   origin = new Vector3();
   target = new Vector3();
   ground = new Vector3();
@@ -226,6 +233,19 @@ const _up = new Vector3(0, 1, 0);
 const _fwd = new Vector3(0, 0, 1);
 
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
+
+const _hslA = { h: 0, s: 0, l: 0 }, _hslB = { h: 0, s: 0, l: 0 }, _hslC = { h: 0, s: 0, l: 0 };
+/** SKIN-FX: turn a fixed kit-hued colour (HSL saturation >= 0.25, within 45 deg of the base signature `from`) by `by`
+ *  (both in turns, 0-1); whites, greys and inks (low saturation), other hues and HEAL green are left alone */
+function shiftHue(out: Color, from: number, by: number): void {
+  out.getHSL(_hslC, SRGBColorSpace);
+  if (_hslC.s < 0.25 || _hslC.l < 0.08 || _hslC.l > 0.94) return;
+  let d = _hslC.h - from; d -= Math.round(d);
+  if (Math.abs(d) > 45 / 360) return;
+  // HEAL green (tokens vfx.reservedHuesHSV.heal, 125-150 deg) is a relationship colour: a mend stays green in any skin
+  if (_hslC.h >= 125 / 360 && _hslC.h <= 150 / 360) return;
+  out.setHSL((((_hslC.h + by) % 1) + 1) % 1, _hslC.s, _hslC.l, SRGBColorSpace);
+}
 
 /** relative luminance of a linear colour; Y 0.13 ≈ L* 43 */
 const lumY = (c: Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -481,6 +501,12 @@ export class VfxSystem {
     it.element.copy(o.element ?? o.team);
     it.sig.copy(o.signature ?? o.team);
     it.sec.copy(o.secondary ?? o.signature ?? o.team);
+    it.hueFrom = -1; it.hueBy = 0;
+    if (o.hueFrom && o.signature) {
+      const a = o.hueFrom.getHSL(_hslA, SRGBColorSpace).h, b = o.signature.getHSL(_hslB, SRGBColorSpace).h;
+      let d = b - a; d -= Math.round(d);
+      if (Math.abs(d) > 1 / 360) { it.hueFrom = a; it.hueBy = d; }
+    }
     const fallback = o.ground ?? o.origin ?? o.target ?? _v.set(0, 0, 0);
     it.origin.copy(o.origin ?? fallback);
     it.target.copy(o.target ?? fallback);
@@ -547,7 +573,7 @@ export class VfxSystem {
   // ── colour helpers ───────────────────────────────────────────────────────────────────────────
   private resolve(ref: ColorRef | null, it: Inst, out: Color): Color {
     if (!ref || ref.k === 1) out.copy(it.team);
-    else if (ref.k === 0) out.copy(ref.c);
+    else if (ref.k === 0) { out.copy(ref.c); if (it.hueFrom >= 0) shiftHue(out, it.hueFrom, it.hueBy); }
     else if (ref.k === 3) out.copy(it.sig);
     else if (ref.k === 4) out.copy(it.sec);
     else out.copy(it.element);

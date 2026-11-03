@@ -436,7 +436,7 @@ export abstract class BotBase {
         const n = this.alliesIn(e.x, e.y, R, 0.65);
         // (CW3 CL-1: a group heal or shield also saves ONE ally — or me — about to fall in a fight; waiting for a second
         // one held the lampglass ults back to the late game)
-        const save = info.minTargets > 1 && this.alliesIn(e.x, e.y, R, 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
+        const save = info.minTargets > 1 && this.alliesIn(e.x, e.y, R, this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
         if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
         const gate = info.selfHpBelow <= 1 ? 1 : (u & U_SHIELD) ? 0.7 : 0.55;
@@ -501,7 +501,8 @@ export abstract class BotBase {
     const pureExecute = (u & U_EXECUTE) && !(u & (U_DAMAGE | U_POKE | U_CC | U_ENGAGE | U_ZONE));
     // (CW3 CL-1: committed to a kill — an all-in, a gank, or a target this low — an area that wants several targets is
     // spent on one: the kill is the point, not the second body)
-    const need = (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < 0.45) ? 1 : info.minTargets;
+    // (and a 1-on-1 trade on a road spends it once the opponent is under 60 %: a laner's ult is how a lane trade becomes a kill)
+    const need = (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? 0.6 : 0.45)) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;

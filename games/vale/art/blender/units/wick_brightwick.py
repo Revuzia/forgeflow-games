@@ -2406,11 +2406,14 @@ ROUGH = {"cloth": 0.93, "cloth2": 0.92, "under": 0.92, "chalk": 0.86, "stone": 0
          "leather": 0.66, "wood": 0.76, "wood_dark": 0.74, "ink": 0.95}
 RAMP = {   # value (linear multiplier) by height: light top, dark feet (bible §2.4)
     # (fix round 3: the top lifts trimmed, 1.18 -> 1.09 / 1.26 -> 1.14: the hoods stay under L* 65 in game)
-    "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.05), (1.80, 1.09)],
+    # (closing CW4 build 2, r12 M8: the PART_HEX step alone left the hood top quarter at L* 65.6 / 66.6 in game, RIFT High
+    # fw_CW4_r2: the Brightwick is the tallest Wick, so the ramp's top lift sat on its whole hood) the top lift flattened
+    # over the hood: 1.05 / 1.09 -> 1.02 / 1.02 (Aubade), 1.10 / 1.16 -> 1.05 / 1.05 (Serenade); feet and mid unchanged
+    "aubade": [(0.0, 0.45), (0.20, 0.55), (0.45, 0.75), (0.80, 0.93), (1.05, 1.0), (1.28, 1.02), (1.80, 1.02)],
     # (fix round 4: in game the Serenade feet read lighter than its top, 30-35 against 26-28) the feet a step darker
     # (r6, review r4: in game top / mid / feet 34 / 31 / 28 on High, 34 / 34 / 33 on Low: flat) the lower coat darker
     # toward the hem (the feet quarter <= L* 28 on screen), the top kept
-    "serenade": [(0.0, 0.21), (0.20, 0.28), (0.45, 0.50), (0.80, 0.83), (1.05, 1.02), (1.35, 1.10), (1.80, 1.16)],
+    "serenade": [(0.0, 0.21), (0.20, 0.28), (0.45, 0.50), (0.80, 0.83), (1.05, 1.02), (1.35, 1.05), (1.80, 1.05)],
 }
 SHADOW_TINT = {"aubade": (-0.10, -0.03, 0.14), "serenade": (0.10, -0.02, -0.14)}
 KEY = np.array((-0.35, -0.60, 0.72)) / np.linalg.norm((-0.35, -0.60, 0.72))   # painted key: front, upper right
