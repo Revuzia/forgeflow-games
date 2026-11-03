@@ -44,14 +44,14 @@ try {
           const to = far[(a.t * 5) % far.length];
           b.focus(from.x, from.y); b.frames(10, 1 / 30);
           b.focusEntity(to.id); b.frames(1, 1 / 30);
-          const { Frustum, Matrix4, Sphere, Vector3 } = await import('three');
           const cam = R.rig.camera;
-          const fr = new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+          const V = cam.position.constructor;
           let inView = 0, dropped = 0; const drop = [];
           for (const ac of R.actors.values()) {
             if (!ac.visible || !ac.model || !ac.view || !ac.view.alive) continue;
-            const H = ac.artHeight;
-            if (!fr.intersectsSphere(new Sphere(new Vector3(ac.x, ac.h + H * 0.5, ac.y), H * 0.5))) continue;
+            // the body's middle projects inside the frame (5 % in from the edges)
+            const q = new V(ac.x, ac.h + ac.artHeight * 0.5, ac.y).project(cam);
+            if (Math.abs(q.x) > 0.95 || Math.abs(q.y) > 0.95 || q.z < -1 || q.z > 1) continue;
             inView++;
             if (!ac.root.visible) { dropped++; drop.push(`${ac.view.kind}:${ac.view.def}`); }
           }
