@@ -27,7 +27,7 @@ import { FullscreenQuad } from './post/fsquad.ts';
 import { PostPipeline, type PostSettings, type SunScreen } from './post/pipeline.ts';
 import { GtaoPass, aoFor } from './post/gtao.ts';
 import { FX_EXPOSURE } from './fx/particles.ts';
-import { QUALITY, type Quality, type QualityName } from './quality.ts';
+import { QUALITY, farViewQuality, type Quality, type QualityName } from './quality.ts';
 import { nearestPlanet, sunIlluminance, type CameraPose } from './frame.ts';
 import { blackbody } from '../client/orbits.ts';
 import { GodFx } from './fx/godfx.ts';
@@ -211,7 +211,7 @@ export class Renderer {
     const w = Math.max(2, Math.round(this.cssW * pr * this.quality.renderScale));
     const h = Math.max(2, Math.round(this.cssH * pr * this.quality.renderScale));
     this.post.setSize(w, h, this.quality.msaa);
-    this.clouds.setSize(w, h, this.quality.cloudScale);
+    this.clouds.setSize(w, h, this.farClouds ? farViewQuality(this.quality, 2).cloudScale : this.quality.cloudScale);
     this.orbits.setResolution(w, h);
     this.ships.setResolution(w, h, pr * this.quality.renderScale);
     this.starfield.setPixelRatio(pr * this.quality.renderScale);
@@ -231,6 +231,9 @@ export class Renderer {
   // a cut also invalidates last frame's image: the water's reflections must not read a view from another place
   cut(): void { this.post.cutExposure(); this.post.prevValid = false; this.clouds.resetHistory(); this.wbSnap = true; this.cutFrames = 4; }
   private cutFrames = 0;
+  /** the primary planet's radius last frame and whether the clouds march the far view's finer blocks (farViewQuality) */
+  private lastRadius = 1;
+  private farClouds = false;
 
   private syncPlanets(view: WorldView): void {
     // a planet view replaced under the same id (a save loaded in place) gets a fresh visual (planetsync.ts)
@@ -279,7 +282,13 @@ export class Renderer {
     const starCol = blackbody(view.star.temperature || 5800);
     // LOD error → split distance factor (render pixels)
     const hPx = this.stats.renderH;
-    const K = Math.max(3, hPx / (2 * Math.tan((cam.fov * Math.PI) / 360) * q.terrainPixelError * PATCH_RES));
+    // (a whole-disc view — the title's backdrop, a far orbit — takes a finer error and finer cloud blocks: quality.ts
+    // farViewQuality; last frame's altitude over the radius, the cloud switch held between 0.8 and 1 R)
+    const altR = this.stats.altitude / Math.max(1, this.lastRadius);
+    const far = farViewQuality(q, altR);
+    const farClouds = this.farClouds ? altR >= 0.8 : altR >= 1;
+    if (farClouds !== this.farClouds) { this.farClouds = farClouds; this.clouds.setSize(this.stats.renderW, this.stats.renderH, farClouds ? far.cloudScale : q.cloudScale); }
+    const K = Math.max(3, hPx / (2 * Math.tan((cam.fov * Math.PI) / 360) * far.pixelError * PATCH_RES));
     const camWorldInverse = cam.matrixWorldInverse;
     let primaryVis: PlanetVisual | null = null;
     for (const vis of this.planets.values()) {
@@ -370,6 +379,7 @@ export class Renderer {
     // ── shadows near the surface of the primary planet ──
     const alt = primaryVis ? primaryVis.altitude : 1e9;
     this.stats.altitude = alt;
+    this.lastRadius = primaryVis ? primaryVis.pv.params.radius : 1;
     this.stats.primary = primaryPv?.name ?? '';
     const wantShadows = !!primaryVis && q.shadowCascades > 0 && alt < 3500;
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;

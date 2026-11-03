@@ -557,6 +557,23 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     gcol = mix(gcol, gcol * vec3(0.86, 0.96, 0.9), smoothstep(0.6, -0.8, patchy) * 0.10);
     gcol *= 0.88 + 0.16 * clump + 0.12 * blades + 0.1 * m2;
     gcol = meadowTint(gcol, P, fw, moist, autumn, winter, cold, warpV);
+    // MID-DISTANCE BREAKUP (punch P18): from a few hundred metres the sward's own texture (3–60 m) is under a pixel and a
+    // grassed hill read as one smooth, untextured green (the cover image's top half). What a real hillside shows from
+    // there: drier, yellower grass on crests, convex shoulders and the steeper sun-facing faces; darker, lusher growth
+    // and scrub down the hollows and the ~200 m drifts of damper ground; the thin turf on the steepest pitches opening
+    // onto earth. Faded in over 250–900 m, so nothing changes where the near terms already carry the ground.
+    float midK = smoothstep(250.0, 900.0, camDist);
+    if (midK > 0.0) {
+      float mA = fbm3(P * 0.0045 + 23.0);
+      float mB = snoise(P * 0.019 + warpV * 0.05 + 31.0) * 0.6 + snoise(P * 0.052 + 37.0) * 0.4 * aaF(fw, 20.0);
+      float ridgeK = smoothstep(0.05, 0.6, -concave), hollowK = smoothstep(0.05, 0.6, concave);
+      vec3 g2 = gcol;
+      g2 = mix(g2, g2 * vec3(1.32, 1.14, 0.66), clamp(0.45 * ridgeK + 0.4 * smoothstep(0.05, 0.6, mA) + 0.25 * max(sunny, 0.0) * steep, 0.0, 0.7));
+      g2 = mix(g2, g2 * vec3(0.6, 0.76, 0.62), clamp(0.5 * hollowK + 0.4 * smoothstep(-0.05, -0.6, mA), 0.0, 0.65));
+      g2 *= 0.84 + 0.32 * (0.5 + 0.5 * mB);
+      g2 = mix(g2, vec3(0.2, 0.16, 0.1), 0.45 * smoothstep(0.22, 0.45, slope) * smoothstep(-0.1, 0.5, mB));
+      gcol = mix(gcol, g2, midK);
+    }
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
     vec4 swd = swardDetail(P, fw, dot(up, vEye));

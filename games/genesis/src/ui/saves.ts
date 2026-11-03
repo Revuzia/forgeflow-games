@@ -407,8 +407,8 @@ export class Saves {
     try {
       const bytes = await this.deps.save();
       if (!bytes) { if (!quiet) this.host.toast({ text: 'There is no living world to save here.', kind: 'warn' }); return false; }
-      // (a hidden page draws nothing: its picture would wait out the capture's timeout, so the last one serves)
-      const thumb = pageHidden() ? this.lastThumb : await this.deps.thumb().catch(() => null);
+      // (a hidden page draws nothing: its picture would wait out the capture's timeout, so the last one, or the slot's own, serves)
+      const thumb = pageHidden() ? this.lastThumb ?? (await this.store.get(id).catch(() => undefined))?.thumb ?? null : await this.deps.thumb().catch(() => null);
       if (thumb) this.lastThumb = thumb;
       const hdr = readSaveHeader(bytes);
       const need = new Set(neededPacks(hdr));

@@ -58,6 +58,22 @@ export const QUALITY: Record<QualityName, Quality> = {
   cinematic: { ...BASE, name: 'cinematic', maxDpr: 2, msaa: 4, terrainPixelError: 3, patchBudget: 48, shadowCascades: 4, shadowMapSize: 4096, shadowDistance: 6000, atmoSteps: 32, cloudSteps: 96, cloudLightSteps: 8, cloudScale: 0.5, vegetationDensity: 1.35, vegetationRange: 1.5, particleBudget: 80000, lightBudget: 16, ssao: true, dof: true },
 };
 
+/**
+ * Whole-disc views — the title's backdrop, any far orbit — lift a coarse preset (punch P10). There the limb and the cloud
+ * deck are the whole picture and they are cheap (no vegetation, a few dozen patches): Low's terrain error of 14 px left a
+ * ragged, lumpy limb and its 4-px cloud blocks smeared. From half a radius up the error eases to ≤ 6 px; from one radius
+ * up (the renderer holds it down to 0.8 R) the clouds march 3-px blocks. Near the ground the preset stands as it is.
+ */
+export function farViewQuality(q: Quality, altOverR: number): { pixelError: number; cloudScale: number } {
+  const t = Math.min(1, Math.max(0, (altOverR - 0.5) / 0.7));
+  const f = t * t * (3 - 2 * t);
+  const fine = Math.min(q.terrainPixelError, 6);
+  return {
+    pixelError: q.terrainPixelError + (fine - q.terrainPixelError) * f,
+    cloudScale: altOverR >= 1 ? Math.max(q.cloudScale, 0.35) : q.cloudScale,
+  };
+}
+
 export function isQualityName(s: string | null | undefined): s is QualityName {
   return !!s && (QUALITY_NAMES as string[]).includes(s);
 }
