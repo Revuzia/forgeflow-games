@@ -40,7 +40,6 @@ Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R
   the same replayed query stream (x1.25 kept); framecheck draws drop frame 1 from the live build's landing zone (x1.25 kept).
 - `MAP_GEN_TARGET` 8; housegen_demo_looks is counted now (`LOOKS_INFO = False`).
 
-
 **Fix round (lanes hudfeel, camwall)**
 - W9 R1 fix (hudfeel): loot pills are clamped 4 px inside the viewport, so they are never clipped by the screen edge, and they are hidden while the local player is dead or spectating. Fixes hud_checks pixel7 915x412 death 'CHEST' clipped 21 px past the edge.
 - W9 R1 fix (hudfeel): hud_checks gains an EDGES row (loot anchor at NDC x +/-0.99 -> 0 pills clipped) with the falsifier --only edges --plant pill-unclamped (must FAIL). hud_checks is now 118 rows.
