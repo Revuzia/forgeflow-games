@@ -1465,7 +1465,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         // per-material multiplier, valeFogLocal, now that the fog solves the display value)
         .replace('#include <opaque_fragment>', 'valeFogLocal = 0.9;\n#include <opaque_fragment>');
     };
-    mat.customProgramCacheKey = () => 'vale_shadow_v4';
+    mat.customProgramCacheKey = () => 'vale_shadow_v5';
     patchWorldMaterial(mat, { keepColor: true });
     const mesh = new Mesh(fill, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_standing_shadow';
@@ -1500,6 +1500,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   float lap = 1.0 - smoothstep( 0.0, 0.35, -sd );
   diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
   outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( uWaterLap ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
+  // closing env m-1: the film's hue drifts green-ochre over the shallow banks to a quiet cool in the middle, at a stone's
+  // chroma (the luminance kept), and a 0.15 m bright wet lip runs where it meets the stone
+  {
+    float dk = smoothstep( 0.0, 2.6, -sd );
+    vec3 hd = mix( vec3( 1.06, 1.02, 0.82 ), vec3( 0.94, 0.99, 1.02 ), dk );
+    float ol = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
+    vec3 tinted = outgoingLight * hd;
+    outgoingLight = mix( vec3( ol ), tinted * ( ol / max( dot( tinted, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-5 ) ), 0.8 );
+    float lipW = ( 1.0 - smoothstep( 0.0, 0.15, -sd ) ) * step( sd, 0.0 );
+    outgoingLight = mix( outgoingLight, vec3( ol * 1.45 + uWaterLap * 1.4 ) * vec3( 1.02, 1.0, 0.94 ), lipW * 0.6 );
+    diffuseColor.a = max( diffuseColor.a, lipW * 0.8 );
+  }
   // env m2: foam along the banks: a broken pale line lapping 0.12-0.2 m out from the stone and a fainter one ~0.45 m
   // out, breathing in and out with the swell; pale from the film's own light (never a painted white)
   {
@@ -1512,7 +1524,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     float brk2 = smoothstep( 0.45, 0.7, valeNoise( wp * 1.1 + vec2( 9.0 - uWaterT * 0.09, 4.0 ) ) );
     float foam = clamp( l1 * ( 0.35 + 0.65 * brk ) + 0.55 * l2 * brk2, 0.0, 1.0 ) * step( sd, 0.0 );
     float fl = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-    outgoingLight = mix( outgoingLight, vec3( fl * 1.55 + uWaterLap ) * vec3( 1.0, 0.99, 0.95 ), foam * 0.75 );
+    // the lace is capped at display L* ~46 (linear luminance 0.155 before the grade): pale, never a white line
+    outgoingLight = mix( outgoingLight, vec3( min( fl * 1.55 + uWaterLap, 0.155 ) ) * vec3( 1.0, 0.99, 0.95 ), foam * 0.75 );
     diffuseColor.a = max( diffuseColor.a, foam * 0.85 );
   }
   // the sky in the film (roughness stays ≥ 0.5 on walkable ground): a cool sheen off the ripples at grazing view
@@ -1521,7 +1534,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
 }
 #include <opaque_fragment>`);
     };
-    mat.customProgramCacheKey = () => 'vale_water_v5';
+    mat.customProgramCacheKey = () => 'vale_water_v6';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';

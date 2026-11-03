@@ -1501,16 +1501,20 @@ def skin_extras(extra: dict) -> list:
     out = []
     if extra.get("lamp_cage"):
         # before the crest's front edge, above the accent fin (POLISH: the fin now stands where the cage hung)
-        c = np.array([0.0, -0.150, 1.796])
+        # (closing rishal-M3: the 7 cm cage did not read from the gameplay camera: x1.3, 9 cm, its glossy lampresin
+        # bead painted with a warm lit interior by lamplit_paint, never emissive)
+        c = np.array([0.0, -0.150, 1.800])
+        S = 1.3
         slats, bead = Sculpt("cage_slats"), Sculpt("cage_bead")
         for i in range(4):
             a = math.radians(45 + 90 * i)
-            o = np.array([math.cos(a) * 0.021, math.sin(a) * 0.017, 0.0])
-            slats.add(Tube([c + o + (0, 0, -0.034), c + o * 1.18 + (0, 0, 0.0), c + o + (0, 0, 0.034)], [0.0042, 0.0048, 0.0042]), k=0.003)
-        slats.add(Torus(c + (0, 0, -0.034), 0.021, 0.0045, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
-        slats.add(Torus(c + (0, 0, 0.034), 0.020, 0.0045, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
-        slats.add(RoundCone(c + (0, 0, 0.036), c + (0, 0, 0.047), 0.008, 0.003), k=0.003)
-        bead.add(Ellipsoid(c, (0.014, 0.012, 0.018)), k=0.0)
+            o = np.array([math.cos(a) * 0.021, math.sin(a) * 0.017, 0.0]) * S
+            slats.add(Tube([c + o + (0, 0, -0.034 * S), c + o * 1.18 + (0, 0, 0.0), c + o + (0, 0, 0.034 * S)],
+                           [0.0042 * S, 0.0048 * S, 0.0042 * S]), k=0.003)
+        slats.add(Torus(c + (0, 0, -0.034 * S), 0.021 * S, 0.0045 * S, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
+        slats.add(Torus(c + (0, 0, 0.034 * S), 0.020 * S, 0.0045 * S, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
+        slats.add(RoundCone(c + (0, 0, 0.036 * S), c + (0, 0, 0.047 * S), 0.008 * S, 0.003 * S), k=0.003)
+        bead.add(Ellipsoid(c, (0.014 * S, 0.012 * S, 0.018 * S)), k=0.0)
         out.append(("cage_slats", slats, 0.45, "wood_dark", "bone:head", 300))
         out.append(("cage_bead", bead, 0.45, "lampresin", "bone:head", 120))
     return out
@@ -3211,6 +3215,92 @@ def chalk_linework(img_lin, maps, names, col_hex, log=print):
 
 _SKIN: dict = {}
 
+# Lamplit's carved-walnut inlay and lampresin glazing (closing rishal-M3: the 1,500-candle deluxe read as a palette
+# swap): on each pauldron and forearm guard a round LAMP WINDOW, a walnut ring with four walnut muntins round a pane of
+# glossy amber lampresin glaze; walnut cross-ribs along the crest's crescent under a light amber glaze. Paint only:
+# no outline changes (owner ruling: skins keep the silhouette and the accent places; the ridge and fins untouched)
+LAMPLIT_WALNUT, LAMPLIT_GLAZE = "#4A3627", "#C08F4C"
+LAMPLIT_WINDOWS = {"pauldron_L": 0.060, "pauldron_R": 0.060, "bracer_R": 0.030, "bracer_L": 0.030}
+
+
+def lamplit_paint(out, maps, names, iy, ix, pid, log=print):
+    P, N = maps["P"], maps["N"]
+    wal, gl = _lin(_hexrgb(LAMPLIT_WALNUT)), _lin(_hexrgb(LAMPLIT_GLAZE))
+    lw_ = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    up = np.array([0.0, 0.0, 1.0])
+
+    def part_px(pn):
+        if pn not in names:
+            return None
+        sel = pid == names.index(pn)
+        if not sel.any():
+            return None
+        jy, jx = np.nonzero(sel)
+        return jy, jx, P[iy[jy, jx], ix[jy, jx]].astype(np.float64), N[iy[jy, jx], ix[jy, jx]].astype(np.float64)
+
+    def shade(c):                                   # each texel's painted light relative to its part's mean
+        Y = c @ lw_
+        return (Y / max(float(Y.mean()), 1e-4))[:, None]
+    n_tex = 0
+    for pn, R0 in LAMPLIT_WINDOWS.items():
+        got = part_px(pn)
+        if got is None:
+            continue
+        jy, jx, pp, nn = got
+        zone = np.ones(len(pp))
+        if pn.startswith("bracer_"):
+            wg, _wl = bracer_paint(pp, nn, pn[-1], zones=True)
+            zone = np.clip((wg - 0.4) / 0.3, 0, 1)
+        nrm = unit(nn[zone > 0.5].mean(0) if (zone > 0.5).any() else nn.mean(0))
+        cen = pp[zone > 0.5].mean(0) if (zone > 0.5).any() else pp.mean(0)
+        cen = cen + nrm * float(((pp - cen) @ nrm).max())
+        u = unit(np.cross(nrm, up)) if abs(float(nrm @ up)) < 0.95 else unit(np.cross(nrm, (1.0, 0.0, 0.0)))
+        v = np.cross(nrm, u)
+        q = pp - cen
+        a, b = q @ u, q @ v
+        r = np.hypot(a, b)
+        th = np.arctan2(b, a)
+        ring = np.clip(1.0 - np.abs(r - R0) / (0.16 * R0), 0, 1)
+        k4 = math.pi / 2
+        arc = np.abs(((th - math.pi / 4) / k4 + 0.5) % 1.0 - 0.5) * k4 * r
+        spoke = np.clip(1.0 - arc / (0.07 * R0), 0, 1) * (r < R0)
+        w_w = np.clip(ring + spoke, 0, 1) * zone
+        w_g = (r < R0 - 0.08 * R0) * (1.0 - w_w) * zone
+        c = out[jy, jx]
+        sh = shade(c)
+        grain = 1.0 + 0.12 * np.sin(a * 420.0 + 3.0 * np.sin(b * 90.0))
+        cw = wal[None] * (sh * grain[:, None])
+        # the glaze: a warm amber pane over the painted surface, a gloss streak across its upper left
+        streak = np.exp(-(((a + b) / R0 - 0.45) / 0.18) ** 2) * (r < R0)
+        cg = c * 0.35 + gl[None] * sh * 0.65 + 0.10 * streak[:, None]
+        out[jy, jx] = c * (1 - w_w - w_g)[:, None] + cw * w_w[:, None] + cg * w_g[:, None]
+        n_tex += int((w_w + w_g > 0.5).sum())
+    got = part_px("crest")
+    if got is not None:
+        jy, jx, pp, nn = got
+        q = pp - pp.mean(0)
+        ax = np.linalg.svd(q, full_matrices=False)[2][0]
+        sct = q @ ax
+        rib = np.clip(1.0 - np.abs(((sct / 0.045) + 0.5) % 1.0 - 0.5) * 0.045 / 0.006, 0, 1)
+        c = out[jy, jx]
+        sh = shade(c)
+        glazed = c * 0.80 + gl[None] * sh * 0.20
+        out[jy, jx] = glazed * (1 - rib)[:, None] + (wal[None] * sh) * rib[:, None]
+        n_tex += int((rib > 0.5).sum())
+    got = part_px("cage_bead")
+    if got is not None:
+        # the bead: glossy lampresin with a warm lit interior (deep at the rim, honey at the core, a white catch-light)
+        jy, jx, pp, nn = got
+        cen = pp.mean(0)
+        f = np.clip((nn @ unit((0.0, -0.55, 0.83)) + 0.2) / 1.2, 0, 1)
+        core = np.clip(1.0 - np.linalg.norm((pp - cen) * (1.0, 1.0, 0.7), axis=1) / 0.016, 0, 1)
+        deep, honey = _lin(_hexrgb("#5A3A1E")), _lin(_hexrgb("#E2B266"))
+        k = np.clip(0.25 + 0.55 * f + 0.35 * core, 0, 1)[:, None]
+        cat = (np.exp(-((nn @ unit((-0.3, -0.5, 0.81)) - 1.0) / 0.06) ** 2) * 0.6)[:, None]
+        out[jy, jx] = deep[None] * (1 - k) + honey[None] * k + cat
+    log(f"  lamplit inlay / glaze: {n_tex} texels")
+    return out
+
 
 def rishal_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
     """each role the skin changes takes the brief's change, skin colour / base colour per channel in linear light (the
@@ -3275,6 +3365,8 @@ def rishal_recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=
         gz = wg[:, None] * g_stone[None] + wl[:, None] * g_leather[None] + wc[:, None] * g_cloth[None]
         out[iy2, ix2] = lin[iy2, ix2] * gz
     log(f"  recolour bracers by zone: leather {np.round(g_leather, 2).tolist()}, cloth {np.round(g_cloth, 2).tolist()}")
+    if (_SKIN.get("extra") or {}).get("lamp_cage"):
+        out = lamplit_paint(out, maps, names, iy, ix, pid, log=log)
     # the bible's value limit after the gains (fix pass 2: Lamplit's warm linen gain lifted the lit sleeves and scarf
     # past L* 86): luminance above L* 81 is compressed, capped at L* 85 (the chalk line-work after this is exempt)
     lw_ = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
@@ -3737,24 +3829,74 @@ def _stunned(g) -> anim.Clip:
 
 
 def _recall(g) -> anim.Clip:
-    """recall (60 f loop): he presses the two knives together before his chest, points down, and bows his head; the
-    weight settles, the shoulders breathe"""
-    base = _pose(g, dict(hips=(2, 6, 0), spine=(4, 0, 0), chest=(6, 0, 0), neck=(14, 0, 0), head=(16, 0, 0)), (0.0, 0.02, -0.03),
-                 R=(0.40, -0.58, -0.30), Rp=(-0.8, 0.2, -0.6), Rb=(0.04, -0.20, -0.98),
-                 L=(-0.40, -0.58, -0.28), Lp=(0.8, 0.2, -0.6), Lb=(-0.04, -0.20, -0.98),
-                 feet=_feet(g, dl=(-0.02, 0.08, 0.0), dr=(0.02, -0.06, 0.0), yr=-14.0))
+    """recall (closing rishal-M2: was a 2 s held pose, 1.8 degrees at most, looped through RIFT's 7 s): 6 s (180 f;
+    the load test caps a clip at 6 s; seamless: it closes on its first pose, so over RIFT's 7 s it replays its
+    opening). A race start, fitted to the dial clock:
+      0.00-0.22  he flips the right knife into a forward grip (the blade swings out and round) and taps the two
+                 glass tips together before his chest, twice
+      0.26-0.70  drops into a sprinter's set, the left foot forward, the knives laid back along his forearms, the head
+                 bowed; breathes twice and glances once back over his right shoulder (0.50)
+      0.74-0.80  rises onto his toes, the hips lifting
+      0.84-0.92  the blades cross before the visor as the dawnglass column gathers
+      0.92-1.00  back down to the guard"""
+    N = 180
+    fwd = dict(Rb=(0.25, -0.75, 0.60), Lb=(-0.25, -0.75, 0.60))
+    flip = _pose(g, dict(spine=(2, 0, 0), chest=(2, -6, 0), head=(4, -6, 0)), (0.0, 0.0, -0.01),
+                 R=(0.10, -0.55, -0.45), Rp=(-0.8, 0.2, -0.6), Rb=(-0.90, -0.35, 0.20))
+    tap_o = _pose(g, dict(spine=(3, 0, 0), chest=(4, 0, 0), neck=(4, 0, 0), head=(8, 0, 0)), (0.0, 0.0, -0.015),
+                  R=(0.30, -0.62, -0.20), Rp=(-0.8, 0.2, -0.6), L=(-0.30, -0.62, -0.20), Lp=(0.8, 0.2, -0.6), **fwd)
+    tap_i = _pose(g, dict(spine=(3, 0, 0), chest=(4, 0, 0), neck=(4, 0, 0), head=(9, 0, 0)), (0.0, 0.0, -0.015),
+                  R=(0.37, -0.64, -0.19), Rp=(-0.8, 0.2, -0.6), L=(-0.37, -0.64, -0.19), Lp=(0.8, 0.2, -0.6), **fwd)
+    sfeet = _feet(g, dl=(0.0, -0.14, 0.0), dr=(0.0, 0.22, 0.0), pr=-34.0)
+    sset = _pose(g, dict(hips=(18, 4, 0), spine=(12, 0, 0), chest=(10, 0, 0), neck=(6, 0, 0), head=(14, 0, 0)),
+                 (0.0, 0.05, -0.20), R=(0.05, -0.42, -0.90), Rp=(-0.8, 0.4, -0.3), Rb=(-0.10, 0.40, 0.91),
+                 L=(-0.05, -0.46, -0.88), Lp=(0.8, 0.4, -0.3), Lb=(0.10, 0.40, 0.91), feet=sfeet)
+    s_in = anim.add(sset, anim.P(spine=(-2, 0, 0), chest=(-3, 0, 0), head=(-3, 0, 0)))
+    s_in["hips_loc"] = tuple(sset["hips_loc"][i] + (0.0, 0.0, 0.012)[i] for i in range(3))
+    look = anim.add(sset, anim.P(chest=(-2, -8, 0), neck=(-4, -14, 0), head=(-8, -24, -4)))
+    toes = _pose(g, dict(hips=(4, 2, 0), spine=(4, 0, 0), chest=(2, 0, 0), neck=(0, 0, 0), head=(2, 0, 0)),
+                 (0.0, 0.02, 0.03), R=(0.20, -0.50, -0.55), Rp=(-0.8, 0.3, -0.5), Rb=(-0.10, 0.40, 0.91),
+                 L=(-0.20, -0.52, -0.55), Lp=(0.8, 0.3, -0.5), Lb=(0.10, 0.40, 0.91),
+                 feet=_feet(g, dl=(0.0, -0.04, 0.0), dr=(0.0, 0.06, 0.0), pl=-22.0, pr=-22.0))
+    cross = _pose(g, dict(hips=(-2, 0, 0), spine=(-2, 0, 0), chest=(-3, 0, 0), neck=(2, 0, 0), head=(6, 0, 0)),
+                  (0.0, 0.0, 0.02), R=(0.52, -0.55, 0.30), Rp=(-0.8, 0.2, -0.6), Rb=(-0.45, -0.25, 0.86),
+                  L=(-0.52, -0.55, 0.28), Lp=(0.8, 0.2, -0.6), Lb=(0.45, -0.25, 0.86),
+                  feet=_feet(g, pl=-14.0, pr=-14.0))
+    cross2 = anim.add(cross, anim.P(chest=(-1.5, 0, 0), head=(2, 0, 0)))
+    keys = [(0.00, g, "linear"), (0.06, flip, "inout"), (0.11, tap_o, "out"), (0.14, tap_i, "in"), (0.165, tap_o, "out"),
+            (0.19, tap_i, "in"), (0.22, tap_o, "out"), (0.30, sset, "inout"), (0.36, s_in, "inout"), (0.42, sset, "inout"),
+            (0.50, look, "inout"), (0.57, sset, "inout"), (0.63, s_in, "inout"), (0.70, sset, "inout"),
+            (0.78, toes, "back"), (0.86, cross, "inout"), (0.92, cross2, "inout"), (1.00, g, "inout")]
+    fn = anim.keyed(keys)
 
     def sample(t):
-        b = anim.osc(t, 2)
-        return anim.add(base, anim.P(chest=(1.5 * b, 0, 0), neck=(-0.8 * b, 0, 0), shoulder_L=(0, 0, 1.6 * b),
-                                     shoulder_R=(0, 0, -1.6 * b)))
-    return anim.Clip("recall", 60, True, sample)
+        p = fn(t)
+        if 0.30 < t < 0.92:                           # the knife tips never quite still
+            k = min(1.0, (t - 0.30) / 0.04, (0.92 - t) / 0.04)
+            p = anim.add(p, anim.P(shoulder_L=(0, 0, 1.2 * k * anim.osc(t, 6)), shoulder_R=(0, 0, -1.2 * k * anim.osc(t, 6))))
+        return p
+    return anim.Clip("recall", N, True, anim.drag(sample, N, {"head": 2.0, "neck": 1.0}, loop=True))
 
 
 def _channel(g) -> anim.Clip:
+    """channel (40 f loop; closing rishal-M2): the knives held low before him, breathing, the tips trembling, a weight
+    shift foot to foot"""
     base = _pose(g, dict(spine=(3, 0, 0), chest=(4, 0, 0), head=(4, 0, 0)), R=(0.30, -0.62, -0.30), Rb=(0.1, -0.3, -0.95),
                  L=(-0.30, -0.62, -0.30), Lb=(-0.1, -0.3, -0.95))
-    return anim.Clip("channel", 40, True, lambda t: anim.add(base, anim.P(chest=(1.4 * anim.osc(t, 2), 0, 0))))
+
+    def sample(t):
+        b, s = anim.osc(t, 2), anim.osc(t, 1, 0.1)
+        p = anim.add(base, anim.P(chest=(2.6 * b, 0, -1.2 * s), spine=(1.0 * b, 0, 2.0 * s), neck=(-1.2 * b, 0, 0),
+                                  head=(-1.4 * b, 3.0 * s, 1.5 * s), hips=(0, 2.0 * s, -2.0 * s)))
+        ik = dict(p["ik"])
+        for side, ph, d in (("R", 0.0, (0.1, -0.3, -0.95)), ("L", 0.37, (-0.1, -0.3, -0.95))):
+            tr = anim.osc(t, 5, ph)
+            ik[f"aim.{side}"] = _blade((d[0] + 0.05 * tr, d[1] + 0.04 * anim.osc(t, 4, ph + 0.2), d[2]))
+        p["ik"] = ik
+        hx, hy, hz = p["hips_loc"]
+        p["hips_loc"] = (hx + 0.020 * s, hy, hz - 0.008 * (0.5 + 0.5 * b))
+        return p
+    return anim.Clip("channel", 40, True, sample)
 
 
 def _death(g, skel) -> anim.Clip:

@@ -27,6 +27,16 @@ vec3 valeOrganic( vec3 t, vec3 mean, vec3 band, float k ) {
 }
 // the site (centre) of a valePavers cell, in metres
 vec2 valePaverSite( vec4 f, float size ) { return ( f.zw + valeHash22( f.zw ) * 0.76 + 0.12 ) * size; }
+// closing env m-3: painted strokes that follow rings round a centre (r = radius, a = atan angle): long round the ring
+// (~3 m), short across it (~0.4 m), 0..1; the two ends of the angle blend into each other, so no seam at ±pi
+float valeRingStroke( float r, float a, float seed ) {
+  float t = a / 6.2831853 + 0.5;
+  float n = 6.2831853 * max( r, 1.0 ) * 0.33;
+  float rq = r * 2.4 + seed;
+  float g0 = valeNoise( vec2( t * n, rq ) ), g1 = valeNoise( vec2( ( t - 1.0 ) * n, rq ) );
+  float h0 = valeNoise( vec2( t * n * 2.7, rq * 2.1 + 5.0 ) ), h1 = valeNoise( vec2( ( t - 1.0 ) * n * 2.7, rq * 2.1 + 5.0 ) );
+  return mix( g0, g1, t ) * 0.7 + mix( h0, h1, t ) * 0.3;
+}
 // flags laid in rings round a centre (plazas, camp rooms, the Seat, the Noonplate): x = flag hash, y = distance
 // to the nearest joint (m), zw = (ring, segment); ring −7 is the centre disc
 vec4 valeRingFlags( vec2 p, vec2 c, float r0, float ringW, float segLen ) {
@@ -380,13 +390,16 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     vec4 sf = valeCourses( sq + vec2( 31.0, 0.4 ), 1.05, 2.1 );
     vec3 sfc = valeFlag( uShaftFloor * ( 0.95 + 0.1 * nMid ), sf, grainN, chip, mix( 0.06, 0.035, shw ), uShaftFloor * mix( 0.5, 0.8, shw ), mix( 0.18, 0.1, shw ), hs, js );
     sfc *= mix( 0.78, 1.0, smoothstep( -0.9, -0.15, shaftSD ) );
-    // depth darkening: the deeper water drinks the warm light first (cool, ≈ −14 % value in the middle)
-    sfc *= mix( vec3( 1.0 ), vec3( 0.8, 0.87, 0.92 ), depthK * shw );
+    // depth darkening: the deeper water drinks the warm light first (≈ −12 % value in the middle). Closing env m-1:
+    // a hue drift, not a blue wash: green-ochre over the shallow stone at the banks, a quiet cool in the middle, both
+    // at a stone's chroma (the pit read as a saturated blue pool at HSV 0.58)
+    vec3 bankT = vec3( 1.03, 1.0, 0.86 ), midT = vec3( 0.84, 0.88, 0.9 );
+    sfc *= mix( vec3( 1.0 ), mix( bankT, midT, depthK ), shw );
     // light through the ripples: drifting caustic threads on the stone
     float ca = abs( valeNoise( p * 1.25 + vec2( ct * 0.21, ct * 0.13 ) ) * 2.0 - 1.0 );
     float cb = abs( valeNoise( p * 1.9 - vec2( ct * 0.17, -ct * 0.11 ) + 4.0 ) * 2.0 - 1.0 );
     float caust = pow( 1.0 - min( ca, cb ), 7.0 );
-    sfc *= vec3( 0.8, 0.9, 0.96 );
+    sfc *= vec3( 0.92, 0.96, 0.97 );
     emit += uShaftFloor * caust * 0.09 * shw;
     sfc *= 1.0 + caust * 0.35;
     col = mix( col, sfc, shw ); h = mix( h, hs * mix( 0.5, 0.3, depthK ), shw ); rough = mix( rough, 0.6, shw );
@@ -538,7 +551,12 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     vec3 pband = PZ.w < 0.5 ? uPlazaA : uPlazaS;
     vec3 ic = PZ.w < 0.5 ? uInlayA : uInlayS;
     float ph, pj;
-    vec3 pc = valeFlag( pband * ( 0.96 + 0.08 * nMid ), pf, grainN, chip, 0.04, pband * 0.68, 0.1, ph, pj );
+    // closing env m-3: the breakup runs as strokes along the rings (a long stretch round the fountain, short across
+    // it), at <= 4 L*: never the cloud blotch the low-frequency nMid left on the flags
+    vec2 prq = p - FT.xy;
+    float prr = length( prq );
+    float pstk = valeRingStroke( prr, atan( prq.y, prq.x ), PZ.w * 7.0 + float( k ) * 3.1 );
+    vec3 pc = valeFlag( pband * ( 0.975 + 0.05 * pstk ), pf, grainN, chip, 0.04, pband * 0.68, 0.1, ph, pj );
     pc = mix( pc, uMoss * mossN * 0.85, pj * smoothstep( PZ.z - 3.0, PZ.z - 0.6, pd + wob ) );
     float fr = length( p - FT.xy );
     // the fountain floor: one honed disc engraved with the twelve hours
@@ -601,7 +619,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     if ( sd < uSeat.z + 0.5 ) {
       vec4 sf = valeRingFlags( p, uSeat.xy, 3.45, 1.52, 2.2 );
       float shh, sj;
-      vec3 sc = valeFlag( uSeatC * ( 0.98 + 0.05 * nMid ), sf, grainN, chip * 0.5, 0.025, uSeatC * 0.8, 0.06, shh, sj );
+      vec2 srq = p - uSeat.xy;
+      float sstk = valeRingStroke( sd, atan( srq.y, srq.x ), 11.0 );   // env m-3: ring strokes, never cloud blotches
+      vec3 sc = valeFlag( uSeatC * ( 0.98 + 0.045 * sstk ), sf, grainN, chip * 0.5, 0.025, uSeatC * 0.8, 0.06, shh, sj );
       float sock = 1.0 - smoothstep( 0.0, 0.06 + aa, abs( sd - 3.05 ) - 0.38 );
       sc = mix( sc, uSeatC * 0.84 * grainN * ( 0.85 + 0.3 * valeNoise( p * 6.0 ) ), sock );
       float inner = 1.0 - smoothstep( 2.6 - aa, 2.6 + aa, sd );
@@ -1025,7 +1045,10 @@ export const SHADOW_MAIN_GLSL = /* glsl */`
   vec3 slab = mix( vec3( lum ), uShadowC * vec3( 1.05, 0.99, 0.93 ), 0.2 + 0.16 * r1 );
   slab *= mix( vec3( 0.97, 1.0, 1.04 ), vec3( 1.05, 0.98, 0.98 ), r2 );
   float mott = valeFbm( p * 0.35 + 3.0 );
-  slab *= ( 0.9 + 0.2 * mott + 0.06 * ( valeNoise( p * 1.7 ) - 0.5 ) ) * ( 0.9 + 0.2 * r3 );
+  // closing env m-3: the damp / dust breakup is drawn as strokes along the courses (long down the shadow, short across
+  // it), <= 4 L*; the old fbm mottle (0.9-1.1 over 3 m clouds) read as staining. mott still settles dust in the joints
+  float stk = valeNoise( vec2( al * 0.32, acW * 2.2 ) + 3.0 ) * 0.7 + valeNoise( vec2( al * 0.9, acW * 5.3 ) + 9.0 ) * 0.3;
+  slab *= ( 0.95 + 0.1 * stk ) * ( 0.9 + 0.2 * r3 );
   vec3 sc0 = mix( vec3( lum ), uShadowC * vec3( 1.05, 0.99, 0.93 ), 0.3 );
   vec3 c = valeFlag( slab, fl, grainN, chip, 0.04, sc0 * 0.58, 0.16, fh, jw );
   // worn arrises: each slab's edge rubbed paler just inside its joint, chipped by the grain

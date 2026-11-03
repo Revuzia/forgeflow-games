@@ -73,6 +73,49 @@ VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_blade_tip", "lens": "x_lens", "vent": "x_vent_chest"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.9, "x": 0.66, "yaw": 30.0, "rim_cool": 0.35, "rim_warm": 0.45, "sun": 3.6,
           "portrait_clip": "idle", "portrait_t": 0.0, "portrait_yaw": 22.0, "icon_yaw": 18.0}
+# PER-SKIN CARDS (closing review kemdo-M3; schema: art/blender/portraits.py header). Each card its own beat and light:
+# base: the brief's hero beat, the victory's visor hold (f24-34): the lens tilted into the low sun, the left forearm
+# shading the eyes, warm low key from behind her lens side, the lens glint lit;
+# Highrim: Heat Shimmer's skid (the glaive dragged low, the lens flaring) under hard high noon light, cool rim;
+# Long Evening: the lobby's lens held low to throw a glint on the ground, in festival lantern light (a warm amber
+# focal from low on the lens side, a lilac dusk key and rim).
+# The portraits derive from each card's frame and light; their camera sits wider on the lens side (x < 0.5 leaves
+# the frame's room on the lens side) so the lens rim enters the edge and catches the light (brief section 10-11).
+CARDS = {
+    "kemdo": {
+        "splash": {"clip": "victory", "t": 0.47, "yaw": 26.0, "pitch": -6.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 215.0, "key_el": 16.0, "key_color": "#FFD7A6", "sun": 3.2, "rim_cool": 0.6,
+                   "rim_warm": 1.6, "bounce": 0.55, "bounce_color": "#E9B88A", "accent": 1.6,
+                   "focal": [{"at": "x_lens", "az": 200.0, "el": 25.0, "dist": 0.7, "color": "#FFE2B4",
+                              "power": 80.0, "size": 0.3},
+                             {"at": "head", "az": 160.0, "el": 10.0, "dist": 0.8, "color": "#FFE0C0", "power": 20.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 22.0, "lens": 70.0, "fill": 0.86, "x": 0.58},
+        "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890"},
+    },
+    "kemdo_highrim": {
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 40.0, "pitch": -4.0, "lens": 50.0, "fill": 0.80, "x": 0.68,
+                   "key_az": 175.0, "key_el": 58.0, "key_color": "#FFF4E4", "sun": 3.6, "rim_cool": 1.6,
+                   "rim_warm": 0.5, "bounce": 0.45, "bounce_color": "#E8DCC6", "accent": 1.4, "exposure": -0.6,
+                   "focal": [{"at": "x_lens", "az": 150.0, "el": 45.0, "dist": 0.6, "color": "#FFFFFF",
+                              "power": 70.0, "size": 0.2},
+                             {"at": "head", "az": 180.0, "el": 20.0, "dist": 0.8, "color": "#FFF0DC", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "victory", "t": 0.95, "yaw": 34.0, "lens": 70.0, "fill": 0.86, "x": 0.58},
+        "plate": {"glow": [0.50, 0.35, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.8},
+    },
+    "kemdo_long_evening": {
+        "splash": {"clip": "idle_lobby", "t": 0.32, "yaw": -22.0, "pitch": -5.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 140.0, "key_el": 22.0, "key_color": "#E6CDEB", "sun": 2.4, "rim_cool": 1.4,
+                   "rim_warm": 0.9, "bounce": 0.7, "bounce_color": "#E3A060", "accent": 1.5, "exposure": -0.4,
+                   "focal": [{"at": "x_lens", "az": 175.0, "el": 5.0, "dist": 0.7, "color": "#FFB46A",
+                              "power": 90.0, "size": 0.35},
+                             {"at": "head", "az": 200.0, "el": 5.0, "dist": 0.8, "color": "#FFC890", "power": 24.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": -20.0, "lens": 70.0, "fill": 0.86, "x": 0.44},
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}         # ORM 256: GLB headroom (AO + roughness only; the AO is also in the base)
 GLB_COMPRESS = True
@@ -88,7 +131,8 @@ ATLAS_SOFTEN = 0.45          # px: the base atlas is softened by this after the 
 # per-part skin roles (SKIN_PART_ROLES) so the shoulder cowl, the skirt and the plates can differ.
 SKIN_PART_ROLES = {"cowl": "cloth_top", "pauldron_1": "plate", "pauldron_2": "plate", "pauldron_3": "plate",
                    "vambrace": "plate", "glaive_blade": "ironstone", "glaive_collar": "stone", "hood": "hood",
-                   "face": "face", "glaive_wrap": "frame_wrap", "glaive_butt": "wood", "lining": "lining"}
+                   "face": "face", "glaive_wrap": "frame_wrap", "glaive_butt": "wood", "lining": "lining",
+                   "wrap": "sash"}
 # a skin's `boot_shaft` colour (Long Evening: the brief's plum bound shins and lacing) re-colours the boots above the
 # ankle only (the foot keeps the skin's leather)
 BOOT_SHAFT_Z = 0.15
@@ -105,11 +149,12 @@ SKINS: list = [
      "palette": {"hood": "#BDB4A3", "face": "#CBC2B1", "cloth_top": "#C2B9A8", "frame_wrap": "#DCD3C2",
                  "cloth": "#564B41", "leather": "#3A2F27", "stone": "#CDBB9C"}},
     {"id": "kemdo_long_evening", "extra": {"tassel_plates": True}, "card": {"primary": "#4A3550", "secondary": "#B9A6D6"},
-     "palette": {"hood": "#9E9297", "face": "#B8AEAE", "cloth_top": "#A1949B", "cloth": "#8A7D84", "stone": "#9C8566",
+     "palette": {"hood": "#9E9297", "face": "#B8AEAE", "cloth_top": "#A1949B", "cloth": "#7C6479", "stone": "#9A7A52",
+                 "sash": "#563452", "frame_wrap": "#5E3C5A",
                  "dawnglass": "#B9A6D6", "wood": "#957F6C", "under": "#553846", "ironstone": "#3E2B40", "boot_shaft": "#5A3A5C",
                  "lampresin": "#7A4E70"}},
 ]
-SKIN_FX = {"kemdo_highrim": "wind_grain"}
+SKIN_FX = {"kemdo_highrim": "wind_grain", "kemdo_long_evening": "lantern_festival"}
 SKIN_FLAT = {"tassel_plates": "lampresin"}
 
 # ART 2.0 base re-tone (brief sections 5-6: light head, mid body, dark feet). The concept's own painted light is
@@ -510,6 +555,46 @@ def _w_boots(P, J):
     return out
 
 
+def _chain_w(bones, z, z_top, z_hem, root="hips"):
+    """a straight hanging chain's weights by height (numpy): the top 35 % of the first bone shared with `root` (the
+    attachment stays glued), then blended between the bone centres"""
+    n = len(bones)
+    s_ = np.clip((z_top - z) / (z_top - z_hem), 0.0, None) * n
+    out = {root: np.where(s_ < 0.35, 1.0 - s_ / 0.35, 0.0)}
+    for b in bones:
+        out[b] = np.zeros_like(z)
+    out[bones[0]] = out[bones[0]] + np.where(s_ < 0.35, s_ / 0.35, 0.0)
+    x = s_ - 0.5
+    k0 = np.floor(x).astype(int)
+    f = x - k0
+    deep = s_ >= 0.35
+    for i, b in enumerate(bones):
+        wa = np.where(np.clip(k0, 0, n - 1) == i, 1.0 - f, 0.0)
+        wb = np.where(np.clip(k0 + 1, 0, n - 1) == i, f, 0.0)
+        out[b] = out[b] + np.where(deep, wa + wb, 0.0)
+    return out
+
+
+def _w_robe(P, J, front_only=False):
+    """the robe on its four chains (ROBE_CHAINS), each texel blended between its two nearest panels by bearing
+    (cosine weights); the linen panel and the lining on the front chain alone; above the chains' roots the hips"""
+    x, y, z = P[:, 0] + 0.005, P[:, 1] - 0.01, P[:, 2]
+    phi = np.degrees(np.arctan2(x, -y))
+    if front_only:
+        ks = {"robe_f": np.ones_like(z)}
+    else:
+        ks = {nm: np.maximum(0.0, np.cos(np.radians(phi - az))) for nm, az in ROBE_AZ.items()}
+        tot = np.maximum(sum(ks.values()), 1e-6)
+        ks = {nm: k / tot for nm, k in ks.items()}
+    W = {}
+    for nm, k in ks.items():
+        pts = ROBE_CHAINS[nm][1]
+        bones = [f"x_{nm}_{i + 1}" for i in range(len(pts) - 1)]
+        for b_, w in _chain_w(bones, z, pts[0][2], pts[-1][2]).items():
+            W[b_] = W.get(b_, 0.0) + w * k
+    return W
+
+
 def _bind_weights(arm, obj, how) -> None:
     me = obj.data
     co = np.empty(len(me.vertices) * 3)
@@ -520,7 +605,8 @@ def _bind_weights(arm, obj, how) -> None:
     if isinstance(how, tuple) and how[0] == "const":
         W = {k: np.full(len(P), v) for k, v in how[1].items() if v > 0}
     else:
-        W = {"torso": _w_torso, "sleeves": _w_sleeves, "forearms": _w_forearms, "boots": _w_boots}[how](P, J)
+        W = {"torso": _w_torso, "sleeves": _w_sleeves, "forearms": _w_forearms, "boots": _w_boots, "robe": _w_robe,
+             "robe_front": lambda P_, J_: _w_robe(P_, J_, True)}[how](P, J)
     tot = np.maximum(sum(W.values()), 1e-6)
     obj.vertex_groups.clear()
     for name, w in W.items():
@@ -1174,6 +1260,8 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
     skip = skip or set()
     for i, n in enumerate(names):
         r = SKIN_PART_ROLES.get(n) or roles.get(n)        # a part with its own skin role never falls back
+        if r == "sash" and "sash" not in skin_pal:        # (the sash is the robe's cloth unless a skin names it)
+            r = "cloth"
         m = pid == i
         core = part == i
         if n == "boots" and "boot_shaft" in skin_pal and core.any() and n not in skip:
@@ -1209,7 +1297,88 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         P = maps["P"][iy, ix][m]
         out[m] = out[m] * _wind_grain(P)[:, None]
         log(f"  {sid}: wind-grain on the frame ({int(m.sum())} texels)")
+    if SKIN_FX.get(sid) == "lantern_festival":
+        _lantern_festival(out, maps, names, pid, iy, ix, log)
     return _project._srgb(out).astype(np.float32)
+
+
+# ── Long Evening Lens, the deluxe re-theme (closing review kemdo-M5; owner ruling: skins change material and palette,
+# not silhouette or accent placement): the Serenade dusk festival painted into the cloth and the frame, so the deluxe
+# reads at the game camera and in the store, not only as a recolour + four tassel plates:
+#   * a band of painted festival lanterns (amber bodies with a lit core, ink caps and tassel threads) round the robe's
+#     hem, a sparser scatter over the shoulder cowl, amber lantern-beads along the frame binding;
+#   * the waist sash in a deep lacquered plum with painted lacquer sheen streaks (its own role, `sash`);
+#   * the frame smoked: soot streaks darkening toward its lower rim, so the amber reads as smoked, not sand.
+LANTERN = "#C68A48"          # the lantern bodies (H 31, S 0.64, L* 62): amber, clear of the reserved blue-violet / jade
+LANTERN_CORE = "#F0C988"     # the lit core (paint only: never emissive)
+LANTERN_INK = "#2E1E2C"      # caps, outline and tassel threads (plum ink)
+
+
+def _glyph(du, dv, w=0.011, h=0.016):
+    """a festival lantern in a cell's local (across, up) coordinates (m) -> (body, core, ink) masks in 0..1"""
+    qx, qy = np.abs(du) - (w - 0.005), np.abs(dv) - (h - 0.005)
+    sd = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - 0.005
+    body = np.clip(0.5 - sd / 0.0015, 0, 1)
+    core = np.clip(1.0 - np.hypot(du / (0.55 * w), dv / (0.55 * h)), 0, 1) ** 1.5
+    ring = np.clip(1.0 - np.abs(sd + 0.0012) / 0.0012, 0, 1)
+    cap = ((np.abs(du) < 0.65 * w) & (dv > h - 0.001) & (dv < h + 0.005)).astype(float)
+    thread = ((np.abs(du) < 0.0014) & (dv < -h) & (dv > -h - 0.016)).astype(float)
+    hook = ((np.abs(du) < 0.0012) & (dv > h + 0.004) & (dv < h + 0.012)).astype(float)
+    return body, core * body, np.clip(ring + cap + thread + hook, 0, 1)
+
+
+def _paint_lanterns(col, P, su, sv, r, z0=None, z1=None, scale=1.0):
+    """lanterns on a staggered (around, up) lattice over the body axis; z0..z1 limits them to a band"""
+    x, y, z = P[:, 0] + 0.005, P[:, 1] - 0.01, P[:, 2]
+    u = np.arctan2(x, -y) * r
+    row = np.round(z / sv)
+    uu = u + 0.5 * su * (row % 2)
+    du = uu - np.round(uu / su) * su
+    dv = z - row * sv
+    body, core, ink = _glyph(du / scale, dv / scale)
+    if z0 is not None:
+        band = ((row * sv > z0) & (row * sv < z1)).astype(float)
+        body, core, ink = body * band, core * band, ink * band
+    lan, lc, li = _hexlin(LANTERN), _hexlin(LANTERN_CORE), _hexlin(LANTERN_INK)
+    shade = np.clip(_ylin(col) / max(float(np.median(_ylin(col))), 1e-5), 0.6, 1.25)[:, None]   # keep the folds
+    c = col * (1 - body[:, None]) + lan[None, :] * shade * body[:, None]
+    c = c * (1 - core[:, None]) + lc[None, :] * shade * core[:, None]
+    return c * (1 - ink[:, None]) + li[None, :] * ink[:, None]
+
+
+def _lantern_festival(out, maps, names, pid, iy, ix, log=print):
+    Pall = maps["P"][iy, ix]
+    for n in ("robe", "cowl", "wrap", "glaive_frame", "glaive_wrap"):
+        if n not in names:
+            continue
+        m = pid == names.index(n)
+        if not m.any():
+            continue
+        P = Pall[m]
+        if n == "robe":         # a hem band of lanterns (two staggered rows) and a thin amber hem rule under them
+            c = _paint_lanterns(out[m], P, 0.085, 0.052, 0.24, 0.70, 0.84)
+            rule = np.clip(1.0 - np.abs(P[:, 2] - 0.885) / 0.006, 0, 1)[:, None]
+            out[m] = c * (1 - 0.85 * rule) + _hexlin(LANTERN)[None, :] * 0.85 * rule
+        elif n == "cowl":       # a sparser, smaller scatter
+            out[m] = _paint_lanterns(out[m], P, 0.11, 0.075, 0.20, scale=0.8)
+        elif n == "wrap":       # the deep lacquered plum sash: sheen streaks along the cloth
+            d = np.array([0.55, 0.0, 0.84])
+            ph = (P @ d) * 70.0 + 3.0 * NOISE(P, 8.0)
+            hl = np.clip((np.sin(ph) - 0.72) * 3.6, 0, 1) * (0.55 + 0.45 * NOISE(P, 3.0, (2.0, 1.0, 0.0)))
+            out[m] = out[m] * (1 - 0.5 * hl[:, None]) + _hexlin("#C9A6C4")[None, :] * 0.5 * hl[:, None]
+        elif n == "glaive_frame":   # smoked: soot darkening toward the lower rim, broken in streaks
+            rel = P - LENS_C
+            low = np.clip(-(rel @ np.array([0.0, 0.0, 1.0])) / R_FRAME, 0, 1)
+            streak = 0.5 + 0.5 * np.sin((rel @ LAT) * 95.0 + 4.0 * NOISE(P, 9.0))
+            out[m] = out[m] * (1.0 - 0.38 * low * (0.55 + 0.45 * streak))[:, None]
+        else:                   # amber lantern-beads along the frame binding
+            g = np.round(P / 0.045) * 0.045
+            dd = np.linalg.norm(P - g, axis=1)
+            bead = np.clip(1.0 - (dd - 0.008) / 0.002, 0, 1)
+            ring = np.clip(1.0 - np.abs(dd - 0.0095) / 0.0016, 0, 1)
+            out[m] = out[m] * (1 - bead[:, None]) + _hexlin(LANTERN)[None, :] * bead[:, None]
+            out[m] = out[m] * (1 - ring[:, None]) + _hexlin(LANTERN_INK)[None, :] * ring[:, None]
+        log(f"  kemdo_long_evening: lantern festival paint on {n} ({int(m.sum())} texels)")
 
 
 def _shift_to(lin, Ycore, hex_):
@@ -1419,7 +1588,9 @@ def sculpts() -> list:
     # point) at the same top (2.112: art.height, the hood crown, unchanged), leaning forward a little less
     hood = Sculpt("hood")
     hood.add(Ellipsoid((0, 0.02, 1.93), (0.138, 0.175, 0.172)), k=0.0)
-    hood.add(RoundCone((0, 0.035, 2.0), (0, 0.012, 2.070), 0.075, 0.042), k=0.05)
+    # closing review (owner ruling 7, the crown gate: fit radius >= 10 cm 3 cm under the top): the crown is a broad
+    # flattened dome, no cone (the 4.2 cm round cap on a cone measured R3 8.1 cm, a soft peak from behind); top 2.105
+    hood.add(Ellipsoid((0, 0.03, 1.995), (0.125, 0.145, 0.110)), k=0.05)
     hood.add(Ellipsoid((0, 0.03, 1.80), (0.16, 0.18, 0.07)), k=0.07)
     hood.sub(Ellipsoid((0, -0.185, 1.885), (0.104, 0.12, 0.158)), k=0.02)
     hood.add(Torus((0, -0.118, 1.885), 0.112, 0.016, axes=sdf.frame((0, -1, 0.12), (1, 0, 0)) * np.array([[1.0], [0.72], [1.0]]),
@@ -1598,19 +1769,19 @@ def sculpts() -> list:
     robe.sub(slot, k=0.012)
     robe.add(Torus((-0.005, 0.01, 1.185), 0.19, 0.018, axes=np.stack([np.eye(3)[0], np.eye(3)[1] * (0.19 / 0.15), np.eye(3)[2]])),
              k=0.01)
-    part("robe", robe, "cloth", ("auto_ex", NO_LEGS_EX), 1500)
+    part("robe", robe, "cloth", ("weights", "robe"), 1500)          # kemdo-M4: the four spring panels
     panel = Sculpt("panel")
     pn = RoundBox((-0.005, -0.13, 0.93), (0.115, 0.022, 0.27), 0.012)
     panel.add(pn.displaced(folds(0.008, 70.0, axis=0, phase=0.2), 0.008), k=0.0)
     panel.inter(HalfSpace((-0.005, 0, 0.655), (-0.5, 0, -0.87), 1.0), k=0.008)
     panel.inter(HalfSpace((-0.005, 0, 0.655), (0.5, 0, -0.87), 1.0), k=0.008)
-    part("panel", panel, "cloth2", ("auto_ex", NO_LEGS_EX), 520)
+    part("panel", panel, "cloth2", ("weights", "robe_front"), 520)
     # the robe's dark lining between the legs behind the panel (review: a pale grey bag under the panel read as a
     # diaper): set back, ending above the trouser bags, painted shadow-dark
     lining = Sculpt("lining")
     lining.add(RoundBox((-0.005, -0.045, 0.86), (0.13, 0.03, 0.15), 0.025).displaced(folds(0.008, 40.0, axis=0), 0.008), k=0.0)
     lining.inter(HalfSpace((0, 0, 0.73), (0, 0, -1), 1.0), k=0.01)
-    part("lining", lining, "under", ("auto_ex", NO_LEGS_EX), 160, 1.0, 0.4)
+    part("lining", lining, "under", ("weights", "robe_front"), 160, 1.0, 0.4)
 
     # LEGS: the trousers bloused over the boot tops (the concept): a full drape that widens to a wavy hem just above
     # the boot cuff, hanging in vertical folds (no knee ball)
@@ -1893,6 +2064,115 @@ def rig_extras(ctx) -> None:
     rig.add_socket(info, "x_blade_tip", "prop.R", tuple(axis_at(BLADE_TOP)), tuple(AXU * 0.08), z_hint=(0, -1, 0))
     rig.add_socket(info, "x_lens", "prop.R", tuple(LENS_C), tuple(LENS_N * 0.08), z_hint=(0, 0, 1))
     rig.add_socket(info, "x_vent_chest", "chest", (0.0, -0.19, 1.47), (0.0, -0.08, 0.0), z_hint=(0, 0, 1))
+    for nm, (parent, pts) in ROBE_CHAINS.items():
+        ctx.chains[nm] = rig.add_chain(info, nm, parent, [V(p) for p in pts])
+
+
+# ── secondary motion (closing review kemdo-M4): the knee-length robe on baked spring chains (anim.secondary_motion;
+# no cloth sim, STYLE_BIBLE). The robe, the linen front panel and the lining used to be bone heat on the hips and
+# the thighs, so in the run the front panel lifted and split with each knee like trousers and nothing trailed or
+# settled. Now the skirt hangs as four panels (front = the linen panel and the robe's front edges, back, her left,
+# her right) on 2-bone chains from the hips: the front pushed out by the leading knee, the back kicked out by the
+# trailing one, each side swung by its own knee, all springs, so the hem lags 2-4 frames and overshoots on run
+# contacts, the a2 skid, the a3 stamp and the ult lift; a no-lag floor keeps the front and back clear of the thighs.
+# The shoulder wraps and Long Evening's tassel plates stay rigid (brief section 4 / 9).
+ROBE_CHAINS = {     # name: (parent, joints (rest, m)); + rotation about each bone's X = the hem forward
+    "robe_f": ("hips", ((-0.005, -0.140, 1.13), (-0.005, -0.146, 0.91), (-0.005, -0.152, 0.66))),
+    "robe_b": ("hips", ((-0.005, 0.165, 1.13), (-0.005, 0.190, 0.91), (-0.005, 0.215, 0.62))),
+    "robe_l": ("hips", ((0.205, 0.010, 1.13), (0.250, 0.010, 0.91), (0.290, 0.010, 0.68))),
+    "robe_r": ("hips", ((-0.215, 0.010, 1.13), (-0.260, 0.010, 0.91), (-0.300, 0.010, 0.68))),
+}
+ROBE_K, ROBE_A0 = 0.45, 4.0           # the front / back panel's push: share of the knee's swing past A0 deg
+ROBE_CLEAR, ROBE_THIGH_R = 0.02, 0.11     # the floor: the trouser's surface (thigh axis + R) stays CLEAR inside the panel
+ROBE_SIDE_K = 0.35                    # the side panels: share of their own knee's swing
+ROBE_AZ = {"robe_f": 0.0, "robe_l": 90.0, "robe_b": 180.0, "robe_r": -90.0}   # bearing (deg, 0 = front, + her left)
+
+
+def _knee_angles(skel, pose) -> dict:
+    """each thigh's swing in the hips' rest frame (deg, + = the knee ahead of the hip), the hip and knee points"""
+    M = skel.fk(pose)
+    T = skel.rest["hips"] @ M["hips"].inverted()
+    out = {}
+    for s_ in "LR":
+        h = T @ M[f"thigh.{s_}"].translation
+        k = T @ M[f"shin.{s_}"].translation
+        d = k - h
+        out[s_] = (math.degrees(math.atan2(-d.y, max(1e-6, -d.z))), h, k)
+    return out
+
+
+def _robe_floor(skel, nm):
+    """the least swing (deg, signed like the chain) that keeps the panel's line from its root to its hem in front of
+    (robe_f) / behind (robe_b) both thighs' surfaces at the panel's heights"""
+    pts = ROBE_CHAINS[nm][1]
+    R, Hm = V(pts[0]), V(pts[-1])
+    sgn = -1.0 if nm == "robe_f" else 1.0
+    rest = math.atan2(sgn * (Hm.y - R.y), R.z - Hm.z)
+
+    def f(pose):
+        need = -90.0
+        for _, h, k in _knee_angles(skel, pose).values():
+            for t in (0.35, 0.55, 0.75, 0.9, 1.0):
+                Pp = h.lerp(k, t)
+                if not (Hm.z - 0.04 < Pp.z < R.z - 0.02):
+                    continue
+                out = sgn * (Pp.y - R.y) + ROBE_THIGH_R + ROBE_CLEAR
+                need = max(need, math.degrees(math.atan2(out, R.z - Pp.z) - rest))
+        return need if nm == "robe_f" else -need
+    return f
+
+
+def chain_config(ctx) -> list:
+    skel = anim.Skeleton(ctx.info.armature)
+
+    def push(nm):
+        def f(p):
+            a = _knee_angles(skel, p)
+            if nm == "robe_f":
+                return ROBE_K * max(0.0, max(a["L"][0], a["R"][0]) - ROBE_A0)
+            if nm == "robe_b":
+                return -ROBE_K * max(0.0, max(-a["L"][0], -a["R"][0]) - ROBE_A0)
+            return ROBE_SIDE_K * a["L" if nm == "robe_l" else "R"][0]
+        return f
+    out = []
+    for nm, bones in ctx.chains.items():
+        lim = {"robe_f": (-6.0, 40.0), "robe_b": (-40.0, 6.0)}.get(nm, (-25.0, 28.0))
+        c = anim.ChainCfg(list(bones), gravity=0.7, stiffness=120.0, damping=11.0, inertia=0.6, drive=push(nm),
+                          limit=lim)
+        if nm in ("robe_f", "robe_b"):
+            c._kemdo_floor = _robe_floor(skel, nm)
+            c._kemdo_front = nm == "robe_f"
+        out.append(c)
+    return out
+
+
+def _install_chain_floor() -> None:
+    """the shared spring pass, then the front / back panels' no-lag floor (a knee driven up in two frames must not
+    pass through the robe while the spring catches up)"""
+    if getattr(anim.secondary_motion, "_kemdo", False):
+        return
+    orig = anim.secondary_motion
+
+    def secondary_motion(skel, poses, cfgs, loop):
+        out = orig(skel, poses, cfgs, loop)
+        for cfg in cfgs or []:
+            fl = getattr(cfg, "_kemdo_floor", None)
+            if fl is None:
+                continue
+            b = cfg.bones[0]
+            for f, p in enumerate(out):
+                a = p.get(b, (0.0, 0.0, 0.0))
+                m = fl(poses[f])
+                if (cfg._kemdo_front and m > a[0]) or (not cfg._kemdo_front and m < a[0]):
+                    p[b] = (max(cfg.limit[0] - 10.0, min(cfg.limit[1] + 10.0, m)), a[1], a[2])
+            if loop:
+                out[-1][b] = out[0][b]
+        return out
+    secondary_motion._kemdo = True
+    anim.secondary_motion = secondary_motion
+
+
+_install_chain_floor()
 
 
 # ── motion (brief §8) ───────────────────────────────────────────────────────────────────────────────

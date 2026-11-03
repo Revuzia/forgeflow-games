@@ -54,12 +54,13 @@ SHAPE = body.shape(girth=1.02, torso_w=1.1, torso_d=1.04, chest=1.14, waist=0.9,
 
 - **Hourless hood and wrap.** A rigid hood (`kit.hood`) with a linen face wrap over the nose and jaw (`cloth2`), and a carved sandstone brow eave, a short shelf 8 cm deep and 0.20 m wide over the eyes with a narrow ink slit under it (the sun-shade of a woman who works under a lens). The eave's forward edge is the facing cue from above.
 - No bare face, no hair.
-- **The hood's crown is round** (integration pass, sensitivity rule: no tall, pointed or conical hood): it rises in a broad 4 cm cap to the same 2.10 m crown, never to a point (kemdo.py `sculpts`, the hood's RoundCone).
+- **The hood's crown is a rounded dome** (sensitivity rule: no tall, pointed or conical hood; owner ruling 7, the crown gate: fit radius >= 10 cm 3 cm under the top): a broad flattened ellipsoid (12.5 x 14.5 x 11 cm semi-axes) blended into the hood, top ~2.11 m, never a cone or a point (kemdo.py `sculpts`, the hood; `node art/tools/crown_gate.mjs art/out/fighters/kemdo`).
 
 ## 4. Armour, cloth and props (template 4)
 
 - **Shoulder wraps.** Heavy rigid layered wraps (`cloth`), three bands per shoulder, sculpted folds 2 cm deep, 10% heavier on the right (weapon side); they form the top of the wedge and are rigid bone-bound shapes with no sway.
 - **Torso and legs.** A close linen under-shirt (`cloth2`), a wide leather belt, a waist wrap, trousers (`under`) bound from the knee to the ankle with leather lacing (the bound shins), narrow boots (x1.2 wide) with ironstone toe caps.
+- **The knee-length robe moves (closing review kemdo-M4).** The robe skirt, its linen front panel and the lining hang on four baked 2-bone spring chains from the hips (`x_robe_f/b/l/r_1-2`; no cloth sim): the front pushed out by the leading knee, the back kicked out by the trailing one, each side swung by its own knee, so the hem lags 2-4 frames and overshoots on run contacts, the a2 skid, the a3 stamp and the ult lift; a no-lag floor keeps the front and back clear of the thighs. The shoulder wraps and Long Evening's tassel plates stay rigid.
 - **Prop: the glaive** (prop space: grip at the origin, shaft +Z, length 2.70 m). A 1.95 m carved pale-ash haft (`wood`) with two leather grip wraps; at the top a wrapped stone frame (`stone`, honed, 0.50 m tall, wrapped in `cloth2` bands), a 40 cm dawnglass lens in it (glossy, never emissive) angled 25 degrees toward the sky, an `accent` ring (outer 46 cm, inner 40 cm) set in the frame round the lens, and above it a carved ironstone blade tip 0.25 m long (the thrust point; no metal edge). The glaive is carried vertically at 12 degrees outward on her right side.
 
 Sockets (`art.json` `sockets`; the standard set stays exactly as in the content JSON):
@@ -167,6 +168,8 @@ Plum wraps (`#5B3A5E`), a smoked-amber frame (`#9C8566`) and a lilac-tinted lens
 | `ironstone` | `#3E2B40` | 21 | 294° / 33% | plum-dark toe caps and blade tip |
 
 Value bands (area-weighted): top **71** (70-85) · mid **55** (45-65) · feet **31** (20-35).
+
+**Deluxe re-theme (closing review kemdo-M5; ruling: skins change material and palette, not silhouette or accent placement).** The Serenade dusk festival is painted into the cloth and the frame, so the deluxe reads at the game camera and in the store: a band of painted festival lanterns (amber #C68A48 bodies with a lit core, plum-ink caps and tassel threads) round the robe's hem under an amber hem rule, a sparser scatter over the shoulder cowl, amber lantern-beads on a plum frame binding (#5E3C5A); the waist sash in a deep lacquered plum (#563452, its own `sash` role) with painted lacquer sheen; the robe a deeper lilac-plum (#7C6479); the frame a smoked amber (#9A7A52) with soot streaks darkening toward its lower rim. The kit's effects take the skin's `vfxTint` (content/skins/kemdo.json). Its card has its own beat (the lobby's lens held low in festival lantern light).
 
 `SKINS` entry: `{"id": "kemdo_long_evening", "palette": {...as above...}, "extra": {"tassel_plates": True}, "card": {"primary": "#4A3550", "secondary": "#B9A6D6"}}`
 

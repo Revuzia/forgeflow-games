@@ -2602,7 +2602,7 @@
     ]
   },
   {
-    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (light: 1.25-1.55 m, emissive 2.4: its four points reach ~0.6 x the victim), warm white turning to the signature, holds full for about 5.5 sim frames (180 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (polish C3: glint emissive 2.8, 1.4-1.75 m, so a dim signature still covers >= 0.5 x the victim as a disc for >= 167 ms) (the warm white holds to 50 % of the glint before the signature, so a deep signature such as a crimson still reads as a disc)",
+    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (light: 1.25-1.55 m, emissive 2.4: its four points reach ~0.6 x the victim), warm white turning to the signature, holds full for about 5.5 sim frames (180 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (the warm white holds to 62 % of the glint before the signature, so a deep signature such as a crimson still reads as a disc) (the cut holds 200 ms) (polish C3: glint 1.45-1.78 m at emissive 2.8, just under the heavy glint)",
     "id": "lib_hit_phys_light",
     "duration": 0.5,
     "teamTint": true,
@@ -2660,15 +2660,15 @@
         "size": [
           [
             0,
-            1.4
+            1.45
           ],
           [
             0.2,
-            1.65
+            1.68
           ],
           [
             1,
-            1.75
+            1.78
           ]
         ],
         "color": [
@@ -2677,7 +2677,7 @@
             "#FFEFD8"
           ],
           [
-            0.5,
+            0.62,
             "signature"
           ],
           [
@@ -2745,7 +2745,7 @@
           1.0,
           0.8
         ],
-        "life": 0.11,
+        "life": 0.2,
         "color": [
           "#FFEFD8",
           "signature"
@@ -12251,7 +12251,7 @@
     ]
   },
   {
-    "$comment": "T0 ambient · BRIDGE: a lampresin flame in the terrace lamps by the Dawn Arch and the Lamp Gate (the long evening's warmer cast) (polish env m-5: the core lifted into the 55-60 flame band; it read L* max 47.4 in play at the old 0.3 / 0.4)",
+    "$comment": "T0 ambient · BRIDGE: a lampresin flame in the terrace lamps by the Dawn Arch and the Lamp Gate (the long evening's warmer cast) (polish env m-5: the core lifted toward the 55-60 flame band as far as the T0 cap allows: layer-only max stays <= 60 at the Lamp Gate; it read L* max 47.4 in play at the old 0.3 / 0.4)",
     "id": "amb_bridge_resin_flame",
     "duration": 2.6,
     "teamTint": false,
@@ -12275,7 +12275,7 @@
             0.55
           ]
         ],
-        "emissive": 0.46,
+        "emissive": 0.56,
         "color": "#CB7E54",
         "blend": "add"
       },
@@ -12342,11 +12342,11 @@
         "emissive": [
           [
             0,
-            0.6
+            0.73
           ],
           [
             1,
-            0.39
+            0.48
           ]
         ],
         "texture": "light_puff",

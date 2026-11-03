@@ -87,6 +87,50 @@ SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 22.0, "pitch": -2.0, "rim_cool": 0.35,
           "rim_warm": 0.45,
           "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0}
+# PER-SKIN CARDS (closing review lisvel-M2 / m4; schema: art/blender/portraits.py header): each card its own beat,
+# camera and light, the face lit and the recurve in the portrait:
+# base: the Dawn Line release (cast_a1 f10-11): the bow on its long steep diagonal, the body rocking back, the line
+# of light running out of frame (the base renders' lightline), a warm dawn key low from behind the bow, a cool sky
+# rim, the visor's glass catching the sun;
+# Gorgewalk: Sun Corridor's loose (cast_ult f14): braced wide with the bow turned flat on the aim line, cold gorge
+# light from high on the far side, the slate bow rim-lit;
+# Almanac: Morning Draw (cast_a3 f8): the page-fletched fan spread above her shoulder under a warm reading lamp.
+CARDS = {
+    "lisvel": {
+        "splash": {"clip": "cast_a1", "t": 0.44, "yaw": 34.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 230.0, "key_el": 18.0, "key_color": "#FFDDB0", "sun": 3.2, "rim_cool": 1.4,
+                   "rim_warm": 1.0, "bounce": 0.5, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.45,
+                   "focal": [{"at": "head", "az": 205.0, "el": 18.0, "dist": 0.7, "color": "#FFE6C4", "power": 26.0,
+                              "size": 0.2},
+                             {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
+                              "power": 40.0, "size": 0.25}]},
+        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4"},
+    },
+    "lisvel_gorgewalk": {
+        "splash": {"clip": "cast_ult", "t": 0.42, "yaw": 40.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 145.0, "key_el": 40.0, "key_color": "#DDE6EE", "sun": 2.8, "rim_cool": 2.0,
+                   "rim_warm": 0.4, "bounce": 0.3, "bounce_color": "#A8B4BE", "accent": 1.5, "exposure": -0.35,
+                   "focal": [{"at": "head", "az": 165.0, "el": 20.0, "dist": 0.7, "color": "#F0F4F8", "power": 24.0,
+                              "size": 0.2},
+                             {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",
+                              "power": 40.0, "size": 0.25}]},
+        "portrait": {"yaw": 34.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        "plate": {"tint": "#9AA6B2", "sat": 0.75, "median": 0.30, "glow": [0.12, 0.50, 0.40, 0.06],
+                  "glow_color": "#C8D4DE"},
+    },
+    "lisvel_almanac": {
+        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": 22.0, "pitch": -4.0, "lens": 52.0, "fill": 0.88, "x": 0.70,
+                   "key_az": 200.0, "key_el": 30.0, "key_color": "#FFE3B8", "sun": 2.8, "rim_cool": 0.8,
+                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.5,
+                   "focal": [{"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 50.0,
+                              "size": 0.3},
+                             {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
+                              "size": 0.2}]},
+        "portrait": {"yaw": 20.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        "plate": {"glow": [0.35, 0.60, 0.45, 0.10], "glow_color": "#E9D2A8", "sat": 0.85},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -330,7 +374,9 @@ def _band_h(S):
     edge = np.clip(s / 0.07, 0.0, 1.0)
     edge = edge * edge * (3 - 2 * edge)
     body = np.clip(1.0 - s, 0.0, 1.0) ** 0.7
-    return np.where((S >= 0.0) & (S <= 1.0), (0.0012 + 0.0040 * body) * edge, 0.0)
+    # (closing lisvel-M1: broader folded bands, each lower edge standing ~7 mm proud: the layers read as wound
+    # cloth at chip size, not stripes on a dome)
+    return np.where((S >= 0.0) & (S <= 1.0), (0.0020 + 0.0068 * body) * edge, 0.0)
 
 
 def turban_layers(P):
@@ -820,9 +866,14 @@ def sculpts() -> list:
     wrap.add(Ellipsoid(HEAD_C + (0.0, 0.040, 0.010), (0.095, 0.100, 0.108)), k=0.04)                # back bulge
     wrap.add(Ellipsoid(HEAD_C + (0.0, 0.004, -0.075), (0.097, 0.100, 0.070)), k=0.05)               # sides to the jaw
     wrap.add(Capsule((0.0, 0.03, 1.60), (0.0, 0.02, 1.66), 0.072), k=0.04)                          # the nape
+    # closing review lisvel-M1 (the head read as a bandaged egg from every camera): the wrap's tail end tucked into
+    # a short knot at the nape with a stub tail hanging over the cowl's roll, so the head has a designed back and
+    # its silhouette breaks from the top-down camera (rigid on the head; it ends above the roll)
+    wrap.add(Ellipsoid((0.0, 0.110, 1.722), (0.042, 0.030, 0.034)), k=0.014)                          # the knot
+    wrap.add(RoundCone((0.004, 0.124, 1.708), (0.016, 0.138, 1.652), 0.024, 0.015), k=0.012)          # its tail
     wrap.sub(Ellipsoid((0.0, -0.118, 1.695), (0.070, 0.075, 0.098)), k=0.014)                        # the face opening
     wrap.inter(HalfSpace((0, 0, 1.585), (0, 0, -1), 1.0), k=0.02)
-    part("wrap", _with_disp(wrap, turban_layers, 0.0062), "wrap", "bone:head", 1250, vs=0.8, uvw=1.6)
+    part("wrap", _with_disp(wrap, turban_layers, 0.0095), "wrap", "bone:head", 1300, vs=0.8, uvw=1.6)
 
     # FACE-PLATE (rigid on the head): a smooth, calm chalk face (review item 3: the deep shell, the beak nose and the
     # parted lips read as an aged statue): a broad oval brow, a narrower jaw and a soft chin, a short soft nose, closed
@@ -897,7 +948,7 @@ def sculpts() -> list:
     sk.inter(_HemCut(_tabard_hem), k=0.004)
     for sl_ in SKIRT_SLITS:
         sk.sub(sl_, k=0.004)
-    part("tabard_skirt", sk, "cloth", "skirt", 1100, uvw=1.2)
+    part("tabard_skirt", sk, "cloth", "tabard_chain", 1100, uvw=1.2)      # (closing lisvel-M4: spring panels)
 
     # LINEN TUNIC (analytic): the pale under-tunic seen between the panels, pointed hems front and back
     tn = Sculpt("tunic")
@@ -1158,7 +1209,10 @@ def extra_materials(ctx) -> dict:
             "rope": materials.heavy_cloth("rope", pal, "rope", g, rough=0.95, weave=1.0),
             "chalk": materials.honed_stone("chalk", pal, "chalk", g, rough=0.80, chisel=0.4),
             "wood": materials.carved_wood("wood", pal, "wood", g, rough=0.72),
-            "leather": materials.waxed_leather("leather_matte", pal, "leather", g, rough=0.76)}
+            "leather": materials.waxed_leather("leather_matte", pal, "leather", g, rough=0.76),
+            # closing lisvel-M1/M3: glossy dawnglass (the visor, the tip caps, the brooch): a crisp real glint over
+            # the painted sky streak; never emissive
+            "dawnglass": materials.glass("dawnglass", pal, "dawnglass", g, rough=0.14)}
 
 
 # ── decimation: the shared collapse keeps X symmetry, which stalls on one-sided parts ─────────────────────────────
@@ -1411,6 +1465,113 @@ def rig_extras(ctx) -> None:
     rig.add_socket(info, "x_bow_tip_l", "prop.L", tuple(TIP_L), tuple(bow_tangent(NOCK_U) * 0.06), z_hint=tuple(-D_REST))
     rig.add_socket(info, "x_bow_tip_r", "prop.L", tuple(TIP_R), tuple(-bow_tangent(-NOCK_U) * 0.06), z_hint=tuple(-D_REST))
     rig.add_socket(info, "x_quiver", "hips", tuple(Q_TOP + Q_U * 0.02), tuple(Q_U * 0.08), z_hint=(0, -1, 0))
+    for nm, (parent, pts) in TABARD_CHAINS.items():
+        ctx.chains[nm] = rig.add_chain(info, nm, parent, [V(tuple(q)) for q in pts])
+
+
+# ── secondary motion (closing review lisvel-M4; brief section 4: an x_tabard bone per panel): the tabard's four lower
+# panels (front and back, her left and right: the skirt is slit at the front, the back and both sides) on 2-bone
+# baked spring chains from the hips (anim.secondary_motion; no cloth sim). Each panel is pushed by its own thigh
+# (a front panel ahead of the knee as it rises, a back panel out behind the trailing thigh), lags 2-3 frames and
+# settles; a no-lag floor keeps a front panel ahead of / a back panel behind its thigh. The linen tunic under them
+# stays on the thighs (it is the under-layer seen in the slits).
+TABARD_CHAINS = {   # name: (parent, joints (rest, m)); + rotation about each bone's X = the hem forward
+    "tabard_fl": ("hips", ((0.072, -0.122, 1.15), (0.078, -0.140, 0.97), (0.084, -0.160, 0.79))),
+    "tabard_fr": ("hips", ((-0.072, -0.122, 1.15), (-0.078, -0.140, 0.97), (-0.084, -0.160, 0.79))),
+    "tabard_bl": ("hips", ((0.072, 0.128, 1.15), (0.078, 0.146, 0.97), (0.084, 0.166, 0.79))),
+    "tabard_br": ("hips", ((-0.072, 0.128, 1.15), (-0.078, 0.146, 0.97), (-0.084, 0.166, 0.79))),
+}
+TAB_K, TAB_A0 = 0.55, 3.0              # a panel's push: share of its thigh's swing past A0 deg (front: ahead; back: behind)
+TAB_CLEAR, TAB_THIGH_R = 0.018, 0.085  # the floor: the legging's surface (thigh axis + R) stays CLEAR inside the panel
+
+
+def _thigh_angles(skel, pose) -> dict:
+    """each thigh's swing in the hips' rest frame (deg, + = the knee ahead of the hip), its hip and knee points"""
+    M = skel.fk(pose)
+    T = skel.rest["hips"] @ M["hips"].inverted()
+    out = {}
+    for s_ in "LR":
+        h = T @ M[f"thigh.{s_}"].translation
+        k = T @ M[f"shin.{s_}"].translation
+        d = k - h
+        out[s_] = (math.degrees(math.atan2(-d.y, max(1e-6, -d.z))), h, k)
+    return out
+
+
+def _tab_floor(skel, nm):
+    """the least swing (deg, signed like the chain) keeping the panel's root -> hem line in front of (front panels) /
+    behind (back panels) its own thigh's surface at the panel's heights"""
+    pts = TABARD_CHAINS[nm][1]
+    R, Hm = V(tuple(pts[0])), V(tuple(pts[-1]))
+    front = nm[-2] == "f"
+    side = "L" if nm[-1] == "l" else "R"
+    sgn = -1.0 if front else 1.0
+    rest = math.atan2(sgn * (Hm.y - R.y), R.z - Hm.z)
+
+    def f(pose):
+        need = -90.0
+        _, h, k = _thigh_angles(skel, pose)[side]
+        for t in (0.35, 0.55, 0.75, 0.9, 1.0):
+            Pp = h.lerp(k, t)
+            if not (Hm.z - 0.04 < Pp.z < R.z - 0.02):
+                continue
+            o = sgn * (Pp.y - R.y) + TAB_THIGH_R + TAB_CLEAR
+            need = max(need, math.degrees(math.atan2(o, R.z - Pp.z) - rest))
+        return need if front else -need
+    return f
+
+
+def chain_config(ctx) -> list:
+    skel = anim.Skeleton(ctx.info.armature)
+
+    def push(nm):
+        front = nm[-2] == "f"
+        side = "L" if nm[-1] == "l" else "R"
+
+        def f(p):
+            a = _thigh_angles(skel, p)[side][0]
+            return TAB_K * max(0.0, a - TAB_A0) if front else -TAB_K * max(0.0, -a - TAB_A0)
+        return f
+    out = []
+    for nm, bones in ctx.chains.items():
+        if not nm.startswith("tabard_"):
+            continue
+        front = nm[-2] == "f"
+        c = anim.ChainCfg(list(bones), gravity=0.7, stiffness=150.0, damping=13.0, inertia=0.5, drive=push(nm),
+                          limit=(-8.0, 45.0) if front else (-45.0, 8.0))
+        c._lisvel_floor = _tab_floor(skel, nm)
+        c._lisvel_front = front
+        out.append(c)
+    return out
+
+
+def _install_chain_floor() -> None:
+    """the shared spring pass, then each panel's no-lag floor (a knee driven up in two frames must not pass through
+    the felt while the spring catches up)"""
+    if getattr(anim.secondary_motion, "_lisvel", False):
+        return
+    orig = anim.secondary_motion
+
+    def secondary_motion(skel, poses, cfgs, loop):
+        out = orig(skel, poses, cfgs, loop)
+        for cfg in cfgs or []:
+            fl = getattr(cfg, "_lisvel_floor", None)
+            if fl is None:
+                continue
+            b = cfg.bones[0]
+            for f, p in enumerate(out):
+                a = p.get(b, (0.0, 0.0, 0.0))
+                m = fl(poses[f])
+                if (cfg._lisvel_front and m > a[0]) or (not cfg._lisvel_front and m < a[0]):
+                    p[b] = (max(cfg.limit[0] - 10.0, min(cfg.limit[1] + 10.0, m)), a[1], a[2])
+            if loop:
+                out[-1][b] = out[0][b]
+        return out
+    secondary_motion._lisvel = True
+    anim.secondary_motion = secondary_motion
+
+
+_install_chain_floor()
 
 
 # ── analytic weights ───────────────────────────────────────────────────────────────────────────────────────────
@@ -1427,6 +1588,30 @@ def _skirt_weights(co):
     wh = wh + (1 - wh) * 0.40 * _ss(0.02, 0.12, y)
     sL = _ss(-0.05, 0.05, x)
     return {"hips": wh, "thigh.L": (1 - wh) * sL, "thigh.R": (1 - wh) * (1 - sL)}
+
+
+def _tabard_chain_weights(co):
+    """the tabard's lower panels on their chains (TABARD_CHAINS): by side (x) and front / back (y), blended softly
+    across the slits, each panel's chain weighted by height (the top 35 % of its first bone shared with the hips)"""
+    x, y, z = co[:, 0], co[:, 1] - 0.004, co[:, 2]
+    wl = _ss(-0.012, 0.012, x)
+    wf = _ss(0.012, -0.012, y)
+    W = {}
+    for nm, (_, pts) in TABARD_CHAINS.items():
+        k = (wl if nm[-1] == "l" else 1.0 - wl) * (wf if nm[-2] == "f" else 1.0 - wf)
+        bones = [f"x_{nm}_{i + 1}" for i in range(len(pts) - 1)]
+        z_top, z_hem = pts[0][2], pts[-1][2]
+        s_ = np.clip((z_top - z) / (z_top - z_hem), 0.0, None) * len(bones)
+        W["hips"] = W.get("hips", 0.0) + k * np.where(s_ < 0.35, 1.0 - s_ / 0.35, 0.0)
+        xx = s_ - 0.5
+        k0 = np.floor(xx).astype(int)
+        f = xx - k0
+        for i, b in enumerate(bones):
+            w = np.where(s_ < 0.35, (s_ / 0.35) * (i == 0), 0.0)
+            w = w + np.where(s_ >= 0.35, np.where(np.clip(k0, 0, len(bones) - 1) == i, 1.0 - f, 0.0)
+                             + np.where(np.clip(k0 + 1, 0, len(bones) - 1) == i, f, 0.0), 0.0)
+            W[b] = W.get(b, 0.0) + k * w
+    return W
 
 
 def _seg_t(p, a, b):
@@ -1496,6 +1681,11 @@ def _install_bind() -> None:
         if part.bind == "skirt":
             _assign(obj, ctx.info.armature, _skirt_weights)
             return {}
+        if part.bind == "tabard_chain":
+            _assign(obj, ctx.info.armature, _tabard_chain_weights)
+            from common import mesh as _mesh
+            _mesh.limit_weights(obj)
+            return {}
         if part.bind == "string":
             _assign(obj, ctx.info.armature, _string_weights)
             return {}
@@ -1559,8 +1749,8 @@ _install_bind()
 # folds and forms come through the baked normal map and the AO in the base (AO_INTO_BASE). The skins paint in their
 # own colours (PAINT_SKIN over PAINT_BASE), so the recolour pass leaves them as painted.
 PAINT_BASE = dict(
-    wrap="#B3AFA6", mask="#C4BFB4", lip="#AE9F95", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
-    glass_eye="#46596A", cowl="#B2AEA6", sleeve="#B4AFA6", shirt="#AAA69D", tabard="#66737E", trim="#878C90",
+    wrap="#B3AFA6", mask="#C9BCA6", lip="#B39684", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
+    glass_eye="#46596A", glass_deep="#2A3946", glass_sky="#EEF5F8", glass_lid="#9DB8CB", horizon="#59544C", cowl="#B2AEA6", sleeve="#B4AFA6", shirt="#AAA69D", tabard="#66737E", trim="#878C90",
     chevron="#878C90", tunic="#8A867E", belt="#40372F", strap="#3F3630", bracer="#433A34", buckle="#4A4743",
     legs="#34302E", boots="#3A3532", sole="#24211F", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
     quiver_in="#211B17", wood="#C6BDAB", grip="#3E3530", shaft="#BDB29E", fletch="#A9B6C0", string="#CFC8B8",
@@ -1581,6 +1771,7 @@ PAINT_SKIN = {
 }
 _SKIN = {"id": None}
 MAX_LIN = 0.60          # no texel lighter than ~L* 81 in the albedo (the brief's L* 86 cap after the top light)
+GLASS_CAP = {"visor": 0.86, "bow_caps": 0.80, "brooch_glass": 0.80, "fan_heads": 0.80}   # (painted sky streaks)
 
 
 def _hl(h):
@@ -1643,6 +1834,25 @@ def _limb_sec(p):
 
 def _cloth(p, n, key, a=0.05):
     return C(key) * (_brk(p, a) * _tl(n, 0.10))[:, None]
+
+
+# ── closing review lisvel-M3 (every material read as one matte clay): each material painted as itself in the albedo
+def _weave(p, amp=0.025, f=900.0):
+    """a fine linen weave: crossing threads at ~1 mm (a 2-3 % value breakup)"""
+    a = np.sin((p[:, 0] + 0.6 * p[:, 1]) * f + 2.0 * NOISE(p, 40.0))
+    b = np.sin((p[:, 2] - 0.4 * p[:, 1]) * f * 1.07 + 2.0 * NOISE(p, 41.0, (3.0, 1.0, 2.0)))
+    return 1.0 + amp * 0.5 * (a * b + 0.5 * np.sign(a) * 0.3)
+
+
+def _nap(p, amp=0.05):
+    """felt nap: a soft mottle at two scales plus short brushed streaks running down the cloth"""
+    st = NOISE(np.stack([p[:, 0] * 160.0, p[:, 1] * 160.0, p[:, 2] * 30.0], 1), 1.0)
+    return 1.0 + amp * (0.5 * NOISE(p, 18.0) + 0.3 * NOISE(p, 55.0) + 0.4 * st)
+
+
+def _scuffs(p, f=22.0, amp=0.18):
+    """pale worn scuffs on leather (ridged noise peaks)"""
+    return 1.0 + amp * np.clip((NOISE.ridged(p, f, 2) - 0.72) * 4.0, 0, 1)
 
 
 # — head —
@@ -1727,27 +1937,45 @@ def paint_mask(p, n):
 
 
 def paint_visor(p, n):
-    """the dawnglass band painted as glass the face shows through (FIX PASS 2, review item 5: an opaque plank with
-    cartoon eye ovals): pale icy glass, the ink recess behind it as a soft smoky band across the middle (no eye
-    shapes), the sky's reflection lighter over the upper third with a crisp highlight line and two slanted glints,
-    polished pale top and bottom edges, the ends darker where they turn into the wrap"""
+    """the dawnglass band as GLOSSY glass the face shows through (closing review lisvel-M1: an opaque pale slab with no
+    highlight, nothing behind it): the ink recess behind the glass as a deep smoky band across the middle, the two
+    carved CLOSED eyelids reading through it (a calm lid curve, a soft lit lid above each), a painted sky streak
+    along the top edge (the brightest texels on the figure, ~L* 95), a crisp highlight line under it and two slanted
+    glints, the warm ground's reflection along the lower edge; the ends darker where they turn into the wrap"""
     x, y, z = p[:, 0], p[:, 1], p[:, 2] - VIS_Z
     outv = np.stack([x / VIS_AX ** 2, (y - VIS_Y0) / VIS_AY ** 2, np.zeros(len(p))], 1)
     outv = outv / (np.linalg.norm(outv, axis=1, keepdims=True) + 1e-9)
     fr = _ss(0.35, 0.75, (n * outv).sum(1)) * (1.0 - _ss(0.6, 0.85, np.abs(n[:, 2])))
     ax = np.abs(x)
     col = np.tile(C("glass"), (len(p), 1))
-    core = np.exp(-(z / 0.0125) ** 2) * fr * _ss(0.078, 0.050, ax)
-    col = _mix(col, C("glass_core"), 0.30 * core)
-    sky = 1.0 + 0.09 * _ss(-0.004, 0.018, z) * fr
-    line = 0.26 * np.exp(-((z - 0.0148) / 0.0017) ** 2) + 0.10 * np.exp(-((z + 0.0170) / 0.0015) ** 2)
+    # the recess behind the glass: a deep smoky band, densest at the middle
+    deep = np.exp(-((z + 0.001) / 0.0115) ** 2) * fr * _ss(0.074, 0.046, ax)
+    col = _mix(col, C("glass_deep"), 0.68 * deep)
+    # the closed eyelids seen through it: the lid line a gentle downward curve, the lid above it catching light
+    for sx in (-1.0, 1.0):
+        dx = x - sx * 0.030
+        zl = -0.0015 - 0.0042 * np.clip(1.0 - (dx / 0.0165) ** 2, 0.0, 1.0)
+        span = _ss(0.0175, 0.0135, np.abs(dx)) * fr
+        lid = np.exp(-((dx / 0.0150) ** 2 + ((z - zl - 0.0052) / 0.0050) ** 2)) * fr
+        col = _mix(col, C("glass_lid"), 0.55 * lid)
+        lash = np.exp(-((z - zl) / 0.0012) ** 2) * span
+        col = _mix(col, C("glass_eye") * 0.45, 0.85 * lash)
+    # the sky's reflection over the upper third, the streak along the top edge, the highlight line and glints
+    sky_band = _ss(0.002, 0.016, z) * fr
+    col = _mix(col, C("glass_sky"), 0.35 * sky_band)
+    streak = np.exp(-((z - 0.0175) / 0.0028) ** 2) * fr * _ss(0.074, 0.050, ax)
+    col = _mix(col, C("glass_sky"), 0.92 * streak)
+    line = 0.30 * np.exp(-((z - 0.0108) / 0.0012) ** 2) * fr * _ss(0.070, 0.050, ax)
     glint = 0.0
     for x0, w in ((-0.034, 0.0045), (-0.022, 0.0020), (0.040, 0.0030)):
         glint = glint + np.exp(-(((x - x0) + 0.55 * z) / w) ** 2)
-    col = col * (sky + (line + 0.16 * np.clip(glint, 0, 1)) * fr * _ss(0.080, 0.060, ax))[:, None]
+    glint = np.clip(glint, 0, 1) * fr * _ss(0.075, 0.060, ax) * _ss(-0.016, 0.004, z)
+    col = _mix(col, C("glass_sky"), np.clip(line + 0.65 * glint, 0, 1))
+    ground = np.exp(-((z + 0.0185) / 0.0035) ** 2) * fr
+    col = _mix(col, C("horizon"), 0.45 * ground)
     topb = _ss(0.5, 0.8, np.abs(n[:, 2]))
-    col = _mix(col, C("glass")[None, :] * (1.06 + 0.06 * (n[:, 2] > 0))[:, None], topb)
-    col = col * (1.0 - 0.26 * _ss(0.060, 0.078, ax) * (1.0 - topb))[:, None]
+    col = _mix(col, C("glass_sky") * (0.92 + 0.08 * (n[:, 2] > 0))[:, None], 0.7 * topb * (n[:, 2] > 0))
+    col = col * (1.0 - 0.30 * _ss(0.056, 0.074, ax) * (1.0 - topb))[:, None]
     inner = _ss(-0.3, -0.7, (n * outv).sum(1))
     return _mix(col, C("glass_core") * 0.7, 0.6 * inner)
 
@@ -1812,7 +2040,7 @@ def _trim_band(d, w=0.017):
 def paint_tabard(p, n):
     """the steel-blue felt tabard (review item 4: hue 209, sat 19 % in the albedo, under the 40 % ceiling) with the
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""
-    col = _cloth(p, n, "tabard", 0.05)
+    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]       # (closing lisvel-M3: the felt's nap)
     trim = np.zeros(len(p))
     on_pad = np.max(np.stack([_ss(0.006, 0.0, e.d(p)) for e in PADS]), axis=0)
     for e in ARMHOLES + [NECKHOLE]:
@@ -1830,7 +2058,9 @@ def paint_tabard(p, n):
 def paint_skirt(p, n):
     """the tabard's four lower panels: grey trims along the hem and every slit edge, a small chevron mark on each
     front panel above the hem (the painting's)"""
-    col = _cloth(p, n, "tabard", 0.05)
+    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]
+    # (closing lisvel-M3) the hem a step darker above its trim (the felt's weight and the dirt of the road)
+    col = col * (1.0 - 0.16 * _ss(0.10, 0.025, p[:, 2] - _tabard_hem(p)))[:, None]
     trim = _trim_band(p[:, 2] - _tabard_hem(p), 0.022) * (p[:, 2] < _tabard_hem(p) + 0.04)
     for s_ in SKIRT_SLITS:
         trim = np.maximum(trim, _trim_band(s_.d(p), 0.016))
@@ -1900,7 +2130,12 @@ def paint_straps(p, n):
     lat = np.sqrt(np.maximum(d * d - (STRAP_GAP + 2.0 * STRAP_T) ** 2, 0.0))
     edge = _ss(STRAP_W - 0.0060, STRAP_W - 0.0030, lat) * _ss(STRAP_W + 0.0005, STRAP_W - 0.0012, lat)
     side = _ss(STRAP_W - 0.0008, STRAP_W + 0.0015, lat)
-    k = (1.0 + 0.16 * edge) * (1.0 - 0.18 * side) * (1.0 - 0.25 * _drape_shadow(p))
+    # (closing lisvel-M3) a stitched border 4 mm in from each edge (short dashes), pale scuffs where the quiver and the
+    # bow rub, the lit top edge stronger
+    stl = np.exp(-((lat - (STRAP_W - 0.0042)) / 0.0007) ** 2)
+    dash = np.clip(np.sin((p[:, 0] * 0.7 + p[:, 2]) * 1100.0) * 3.0, 0, 1)
+    k = (1.0 + 0.26 * edge) * (1.0 - 0.18 * side) * (1.0 - 0.25 * _drape_shadow(p)) * _scuffs(p, 24.0, 0.20)
+    k = k * (1.0 - 0.30 * stl * dash) * (1.0 + 0.18 * stl * (1.0 - dash))
     return col * k[:, None]
 
 
@@ -1934,10 +2169,17 @@ def paint_sleeves(p, n):
         ax = _n(wr - el)
         e1 = _n(np.cross(ax, [0.0, 0.0, 1.0]))
         th = np.arctan2((q - el) @ np.cross(ax, e1), (q - el) @ e1)
-        gather = _ss(0.12, 0.30, t) * (1.0 - _ss(0.40, 0.48, t))
+        gather = _ss(0.05, 0.30, t) * (1.0 - _ss(0.40, 0.48, t))
         crease = 0.5 + 0.5 * np.sin(th * 7.0 + 3.0 * NOISE(q, 25.0))
         inner = _ss(0.2, 0.8, -(n[sel] @ np.array([np.sign(sh[0]), 0.0, 0.0])))
-        k = (1.0 - 0.12 * gather * crease) * (1.0 - 0.07 * inner)
+        # (closing lisvel-M3) the fold shadows gather into the bracers, long soft folds hang down the upper arm, and
+        # the linen carries its weave
+        tu, _ = _seg_t(q, sh, el)
+        ax_u = _n(el - sh)
+        e1u = _n(np.cross(ax_u, [0.0, 1.0, 0.0]))
+        thu = np.arctan2((q - sh) @ np.cross(ax_u, e1u), (q - sh) @ e1u)
+        longf = (0.5 + 0.5 * np.sin(thu * 5.0 + 2.0 * NOISE(q, 9.0))) * _ss(0.15, 0.5, tu) * (tu < 1.05)
+        k = (1.0 - 0.24 * gather * crease ** 1.5) * (1.0 - 0.09 * inner) * (1.0 - 0.10 * longf) * _weave(q)
         out[sel] = col[sel] * k[:, None]
     return out
 
@@ -1997,7 +2239,15 @@ def paint_boots(p, n):
     crease = np.exp(-((z - 0.12) / 0.04) ** 2) * (0.5 + 0.5 * np.sin(z * 260.0 + 2.0 * NOISE(p, 20.0)))
     col = col * (1.0 - 0.12 * crease)[:, None]
     cuff = _ss(0.445, 0.458, z)
-    return col * (1.0 + 0.10 * cuff)[:, None]
+    col = col * (1.0 + 0.10 * cuff)[:, None]
+    # (closing lisvel-M3) the sole: a paler worn welt edge over the dark sole, a stitch line round the upper above it,
+    # scuffed toes
+    welt = np.exp(-((z - 0.023) / 0.0025) ** 2)
+    col = _mix(col, C("boots") * 1.55, 0.6 * welt)
+    stitch = np.exp(-((z - 0.031) / 0.0009) ** 2) * np.clip(np.sin((p[:, 0] + p[:, 1]) * 900.0) * 3.0, 0, 1)
+    col = col * (1.0 + 0.45 * stitch)[:, None]
+    toe = _ss(-0.05, -0.12, p[:, 1]) * _ss(0.08, 0.04, z)
+    return col * (1.0 + 0.25 * toe * np.clip((NOISE.ridged(p, 30.0, 2) - 0.6) * 3.0, 0, 1))[:, None]
 
 
 # — quiver —
@@ -2064,8 +2314,15 @@ def paint_bow(p, n):
     g1 = NOISE(np.stack([u * 3.0, dv * 50.0, w * 50.0], 1), 1.0)
     g2 = NOISE(np.stack([u * 9.0, dv * 140.0, w * 140.0], 1), 1.0)
     col = C("wood") * (1.0 + 0.05 * g1 + 0.03 * g2)[:, None]
+    # (closing lisvel-M3) the ash's long grain: dark streaks running along the limb, wavering across its width
+    gl = np.sin(w * 900.0 + dv * 300.0 + 6.0 * NOISE(np.stack([u * 4.0, w * 20.0, dv * 20.0], 1), 1.0))
+    col = col * (1.0 - 0.13 * np.clip((gl - 0.55) * 2.2, 0, 1))[:, None]
+    # growth lines near the grip: nested arcs of the ring figure where the strip cuts the rings
+    au0 = np.abs(u)
+    ring = np.sin((au0 * 40.0 + (w / np.maximum(hw, 1e-3)) ** 2 * 3.0 + 0.8 * NOISE(p, 12.0)) * 2.0 * math.pi)
+    col = col * (1.0 - 0.10 * np.clip((ring - 0.6) * 2.5, 0, 1) * _ss(0.34, 0.12, au0))[:, None]
     bevel = _ss(0.55, 0.85, np.minimum(np.abs(w) / np.maximum(hw, 1e-3), np.abs(dv) / np.maximum(ht, 1e-3)))
-    col = col * (1.0 + 0.07 * bevel)[:, None]
+    col = col * (1.0 + 0.16 * bevel * (0.7 + 0.3 * NOISE(p, 70.0)))[:, None]     # worn pale bevels
     col = col * (1.0 + 0.04 * _ss(0.0, -0.01, dv))[:, None]
     col = col * (1.0 - 0.05 * _ss(0.0, -0.4, u))[:, None]
     sid = _SKIN["id"]
@@ -2102,6 +2359,11 @@ def paint_caps(p, n):
     core = (1.0 - edge) * _ss(CAP0 + 0.01, CAP0 + 0.04, au)
     col = _mix(np.tile(C("glass"), (len(p), 1)), C("glass_core"), 0.35 * core)
     col = col * (1.0 + 0.12 * edge + 0.10 * _ss(TIP_U - 0.03, TIP_U, au))[:, None]
+    # (closing lisvel-M3) a painted horizon in the glass: the sky bright above a crisp line, the ground dark under it
+    hz = n[:, 2]
+    col = _mix(col, C("glass_sky"), 0.55 * _ss(0.05, 0.45, hz))
+    col = _mix(col, C("glass_deep"), 0.45 * _ss(0.0, -0.35, hz))
+    col = _mix(col, C("glass_sky"), 0.8 * np.exp(-((hz - 0.08) / 0.05) ** 2))
     return col
 
 
@@ -2166,7 +2428,11 @@ def post_paint(maps: dict, names: list, log=print) -> np.ndarray:
         L[m] = fn(P[m], N[m])
         log(f"  paint {name}: {int(m.sum())} texels")
     L = np.clip(L, 0.0, None)
-    L = L * np.minimum(1.0, MAX_LIN / np.maximum(L.max(1), 1e-6))[:, None]
+    cap = np.full(len(K), MAX_LIN)
+    for i, name in enumerate(names):          # glass may carry a painted sky reflection above the cloth cap
+        if name in GLASS_CAP:
+            cap[K == i] = GLASS_CAP[name]
+    L = L * np.minimum(1.0, cap / np.maximum(L.max(1), 1e-6))[:, None]
     lin[idx] = L
     out = project._srgb(lin).astype(np.float32)
     iy, ix = project.nearest_index(have)
@@ -2975,14 +3241,25 @@ def gen_backstep() -> anim.Clip:
 
 
 def gen_dash() -> anim.Clip:
-    """the Backstep's flight (cast_a2's follow-through): the apex tuck held, a small float (loops)"""
-    N = 10
-
-    def sample(t):
-        b = 0.5 + 0.5 * math.cos(2 * math.pi * t)
-        return anim.lerp_pose(_hop(0.24, 0.28), _hop(0.27, 0.31), b)
-
-    return anim.Clip("dash", N, True, sample)
+    """the Backstep's flight as a full arc (closing review lisvel-M4: the old clip held the apex tuck and the actor's
+    0.1 s fade to idle dropped her 29 cm with no landing). The game plays `dash` on normalised dash time (actors.ts:
+    clip time = dash progress x duration), so the arc lands inside the dash: from cast_a2's apex (f0) she drifts back
+    with the bow raised (f0-f5), falls with the legs reaching for the ground (f5-f9), touches down at ~70 % and sinks
+    into a landing crouch at ~85 % (hips 12 cm down, the chest pitched over the knees, the bow level), then rises
+    into the ready stance's first beat (the idle fade picks up a settling body, not a hanging one)"""
+    N = 15
+    g = G()
+    apex = _hop(0.26, 0.30)
+    drift = _hop(0.24, 0.24, lean=-2.0, draw=0.08)
+    drift["ik"].update(bowl(rel=(REST_L[0] - 0.02, REST_L[1] - 0.12, REST_L[2] + 0.24), yaw=-30.0))
+    fall = _hop(0.10, 0.08, lean=3.0, draw=0.05)
+    touch = pz(lean=6.0, yaw=-40.0, drop=0.03, dy=0.0, feet=FEET_READY, string=0.2, lift=IDLE_LIFT + 0.04)
+    land = pz(lean=14.0, yaw=-44.0, drop=0.125, dy=0.01, feet=FEET_READY, string=0.0, lift=IDLE_LIFT - 0.01,
+              look=(-6.0, 0.0, 0.0))
+    rise = anim._with_hips(anim.lerp_pose(land, g, 0.55), (0, 0, 0.004))
+    keys = [(0.0, apex, "linear"), (0.30, drift, "out"), (0.58, fall, "in"), (0.70, touch, "in"),
+            (0.85, land, "out"), (1.0, rise, "inout")]
+    return clip("dash", N, keys, lags={"head": 1.0, "neck": 0.5})
 
 
 Q_REACH = chest_rel((Q_TOP + np.array([-0.01, 0.0, 0.10]) - SH_R) / L_ARM)
@@ -3092,7 +3369,17 @@ def gen_recall() -> anim.Clip:
         pl = 0.5 + 0.5 * math.sin(2 * math.pi * 4 * t)
         p["ik"].update(rh(along=-(BRACE + 0.012 * pl), uoff=0.05 + 0.13 * a, k=1.0, pole=(-0.8, 0.2, -0.5)))
         b = anim.osc(t, 3)
-        p = anim.add(p, anim.P(chest=(1.0 * b, 0, 0), head=(0, 3.0 * a, 1.5 * b)))
+        # (closing review lisvel-M4: the hips were static through the 7 s recall) a breathing weight shift: the hips
+        # sway 1.5 cm side to side and sink 1 cm on each exhale, the chest rolls with them, the bow hand lifts the
+        # harp a little on each counted beat of the dawn motif
+        sw = math.sin(2 * math.pi * t)
+        hx, hy, hz = p["hips_loc"]
+        p["hips_loc"] = (hx + 0.015 * sw, hy, hz - 0.010 * (0.5 + 0.5 * b))
+        p = anim.add(p, anim.P(hips=(0, 0, 2.0 * sw), spine=(0, 0, -1.2 * sw), chest=(1.6 * b, 1.5 * sw, -1.0 * sw),
+                               head=(0, 3.0 * a, 1.5 * b)))
+        beat = max(0.0, math.sin(2 * math.pi * 4 * t)) ** 3
+        p["ik"].update(bowl(rel=(-0.10, -0.62, -0.36 + 0.03 * beat), aim=(-1.0, -0.05, 0.0), up=(0.0, 0.0, 1.0),
+                            pole=(0.8, 0.4, -0.4)))
         p["_str"] = (0.35 * pl, 0.0, 0.0)
         return p
 
@@ -3299,7 +3586,8 @@ def model(ctx) -> list:
 
 
 VIS_T, VIS_H = 0.0028, 0.025                          # the visor glass: half thickness, half height
-VIS_XE = 0.082                                        # the band's ends (inside the wrap at the temples)
+VIS_XE = 0.076                                        # the band's ends, tucked inside the wrap's silhouette at the
+                                                      # temples (closing lisvel-M1: 0.082 stood 3-4 px past it)
 VIS_AX, VIS_Y0, VIS_AY = 0.0855, 0.0255, 0.1620       # its path: an elliptic arc, the front 3.2 cm off the face
 
 

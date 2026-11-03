@@ -160,6 +160,9 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
       }
       m = mix( exp2( lo ), m, body * 2.0 );
     }
+    // near the top the ground keeps its own tint (the saturation drop eases off): warm light, never a white-out around
+    // the struck unit (the victim box stays under the white gate)
+    desat *= 1.0 - smoothstep( 0.7, ${LIFT_GROUND_TOP.toFixed(3)}, target );
   }
   c *= m;
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );

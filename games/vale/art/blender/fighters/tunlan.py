@@ -2253,8 +2253,19 @@ def nudge(p, side, d):
 
 
 def sine_in(u):
-    """accelerates into the strike and arrives moving (peak speed pi/2 x the mean, at the impact frame)"""
+    """accelerates and arrives moving (peak speed pi/2 x the mean, at the key)"""
     return 1.0 - math.cos(0.5 * math.pi * u)
+
+
+def sine_out(u):
+    """leaves moving and eases to rest (the other half of sine_in: a recovery split in two without a stop)"""
+    return math.sin(0.5 * math.pi * u)
+
+
+def strike_in(u):
+    """into the impact: accelerates, peaks at ~0.7 and arrives still moving at 0.8 x the mean speed, so the 12 %
+    overshoot that follows carries the same speed on and decays over 3-4 display frames (no hard stop)"""
+    return 0.5 * sine_in(u) + 0.5 * (0.5 - 0.5 * math.cos(math.pi * u))
 
 
 # guard: the puppeteer's hands — held before the chest, the hands reaching forward palm-down, the fingers half-curled
@@ -2419,24 +2430,24 @@ def clip_cast_a1():
     fol = compose(st_, body(hips=(11, 7, 0), spine=(10, 5, 0), chest=(10, 7, 0), neck=(-8, -3, 0), head=(-10, -3, 0), fwd=0.14,
                             drop=0.04), hound_hands(x=0.045, z=1.32, y=-0.88, jaw=24, ears=46, snout=-4, pitch=0.40, absolute=True))
     # (closing TUN-C2 re-key: the wind-up tightens to 0.27; the lunge accelerates over 0.27 -> 0.40 (~6 display
-    # frames at the in-game 1.33x) and arrives moving, overshoots 8 % by 0.46 and settles by 0.53 with the head (and
+    # frames at the in-game 1.33x) and arrives moving, overshoots 12 % by 0.47 and settles by 0.54 with the head (and
     # the hat on it) a frame behind; the jaw keeps working through the hold; the recovery eases over ~7 frames, every
     # wrist on one absolute path (absify) so nothing snaps halfway)
     hold2b = compose(hold2, body(chest=(-2, 0, 0), drop=0.005), hound_hands(z=1.35, y=-0.30, jaw=4))
     fol2 = compose(fol, body(chest=(-1, 0, 0)), hound_hands(x=0.045, z=1.28, y=-0.80, jaw=8, ears=30, pitch=0.32, absolute=True))
     A = {k: absify(v) for k, v in dict(g=g, hold=hold, hold2=hold2, hold2b=hold2b, snap=snap, fol=fol, fol2=fol2).items()}
-    over = anim.lerp_pose(A["hold2b"], A["snap"], 1.08)
+    over = anim.lerp_pose(A["hold2b"], A["snap"], 1.12)
     keys = [(0.0, A["g"], "linear"), (0.10, A["hold"], "out"),
             (0.17, absify(compose(hold, hound_hands(z=1.32, y=-0.36, jaw=18))), "inout"),
             (0.23, A["hold2"], "inout"), (0.27, A["hold2b"], "inout"),
-            (anim.IMPACT, A["snap"], sine_in), (0.46, over, "out"), (0.53, A["fol"], "inout"),
-            (0.68, A["fol2"], "sine"), (0.85, anim.lerp_pose(A["fol2"], A["g"], 0.6), "inout"), (1.0, A["g"], "settle")]
+            (anim.IMPACT, A["snap"], strike_in), (0.47, over, "out"), (0.54, A["fol"], "inout"),
+            (0.68, A["fol2"], "sine"), (0.84, anim.lerp_pose(A["fol2"], A["g"], 0.55), sine_in), (1.0, A["g"], sine_out)]
     fn = anim.keyed(keys)
 
     def sample(t):
         p = fn(t)
-        if 0.50 < t < 0.74:                      # the hound's jaw works and the wrists drift through the hold
-            k = math.sin(math.pi * (t - 0.50) / 0.24)
+        if 0.53 < t < 0.77:                      # the hound's jaw works and the wrists drift through the hold
+            k = math.sin(math.pi * (t - 0.53) / 0.24)
             for sd, z in (("L", 1.0), ("R", -1.0)):
                 a = p.get(f"x_fb1.{sd}", (0, 0, 0))
                 p[f"x_fb1.{sd}"] = (a[0], a[1], a[2] - z * 10 * k * max(0.0, anim.osc(t, 5)))
@@ -2553,17 +2564,17 @@ def clip_cast_ult():
     hold = compose(st_, body(hips=(13, 0, 0), spine=(11, 0, 0), chest=(11, 0, 0), neck=(-7, 0, 0), head=(-9, 0, 0), fwd=0.09,
                              drop=0.065), pounce_hands(y=-0.76, z=1.12, curl=1.2))
     # (closing TUN-C2 re-key: the rise and its breathing hold by 0.27; the sweep accelerates over 0.27 -> 0.40
-    # (~6 display frames at the in-game 1.78x) and arrives moving, overshoots 8 % by 0.45 and settles by 0.52 with the
+    # (~6 display frames at the in-game 1.78x) and arrives moving, overshoots 12 % by 0.47 and settles by 0.54 with the
     # head and hat 1.5 frames behind; through the hold the claws flex and the arms drift; the recovery eases over
     # 0.74 -> 1.0; every wrist on one absolute path (absify): the old rel/abs mix snapped 0.41 m at f32)
     hold2 = compose(hold, body(chest=(1, 0, 0), drop=0.005), pounce_hands(y=-0.72, z=1.15, curl=1.1))
     A = {k: absify(v) for k, v in dict(g=g, rise=rise, rise2=rise2, rise2b=compose(rise2, body(chest=(-1, 0, 0))),
                                        hit=hit, hold=hold, hold2=hold2).items()}
-    over = anim.lerp_pose(A["rise2b"], A["hit"], 1.08)
-    keys = [(0.0, A["g"], "linear"), (0.08, absify(compose(g, body(drop=0.015, chest=(4, 0, 0)))), "inout"),
-            (0.17, A["rise"], "out"), (0.24, A["rise2"], "inout"), (0.27, A["rise2b"], "inout"),
-            (anim.IMPACT, A["hit"], sine_in), (0.45, over, "out"), (0.52, A["hold"], "inout"),
-            (0.74, A["hold2"], "sine"), (0.87, anim.lerp_pose(A["hold2"], A["g"], 0.6), "inout"), (1.0, A["g"], "settle")]
+    over = anim.lerp_pose(A["rise2b"], A["hit"], 1.12)
+    keys = [(0.0, A["g"], "linear"), (0.06, absify(compose(g, body(drop=0.015, chest=(4, 0, 0)))), "inout"),
+            (0.17, A["rise"], "sine"), (0.24, A["rise2"], "inout"), (0.27, A["rise2b"], "inout"),
+            (anim.IMPACT, A["hit"], strike_in), (0.47, over, "out"), (0.54, A["hold"], "inout"),
+            (0.74, A["hold2"], "sine"), (0.87, anim.lerp_pose(A["hold2"], A["g"], 0.55), sine_in), (1.0, A["g"], sine_out)]
     fn = anim.keyed(keys)
 
     def sample(t):
@@ -2575,8 +2586,8 @@ def clip_cast_ult():
                     nm = f"x_f{w}2.{sd}"
                     a = p.get(nm, (0, 0, 0))
                     p[nm] = (a[0] + 14 * k * anim.osc(t, 6, ph + 0.2 * i), a[1], a[2])
-        if 0.48 < t < 0.78:                       # a moving hold: the claws ripple, the arms and chest drift
-            k = math.sin(math.pi * (t - 0.48) / 0.30)
+        if 0.53 < t < 0.80:                       # a moving hold: the claws ripple, the arms and chest drift
+            k = math.sin(math.pi * (t - 0.53) / 0.27)
             p = anim.add(p, P_(chest=(1.2 * k * anim.osc(t, 5), 0, 0)))
             for sd, ph in (("L", 0.0), ("R", 0.4)):
                 for i, w in enumerate("ab"):

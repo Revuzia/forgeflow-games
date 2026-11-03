@@ -220,6 +220,50 @@ SKINS: list = [
      "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "fill": 0.90}},
 ]
 SKIN_FLAT = {"reed_plates": "reed", "glass_bell": "dawnglass", "hour_marks": "chalk"}
+
+# CARDS (closing ilsheta-skins-indistinct; CW5 cards pipeline, schema: art/blender/portraits.py): each card its own beat
+#   base        the brief's victory hold: the lamp held out at arm's length toward the camera, the head bowed, a low
+#               dawn key from the front-left, the blue flame lit (a focal on the lamp), her face lit through the glass
+#   Stillwater  the recall's wick-trim over still water: turned to the lamp, two fingers at the wick, a cool teal
+#               moon key from the camera's right, a teal water bounce from below, a higher, longer lens
+#   First Bell  the ult's bloom (arms wide, the lamp the star over her) in warm first light, gold on the bell; its
+#               bust is the recall's last beat (t 0.82): the lamp raised to her brow beside the face, the glass bell
+#               in front of the core and the hour-marked mantle hem in frame, from her other side
+CARDS = {
+    "ilsheta": {
+        "splash": {"clip": "victory", "t": 0.95, "yaw": 34.0, "pitch": -5.0, "lens": 52.0, "fill": 0.86, "x": 0.71,
+                   "key_az": 212.0, "key_el": 22.0, "key_color": "#FFD9B4", "sun": 2.8, "rim_cool": 1.1,
+                   "rim_warm": 0.35, "bounce": 0.45, "bounce_color": "#D9B48E", "accent": 1.5,
+                   "focal": [{"at": "x_lamp", "az": 190.0, "el": 15.0, "dist": 0.7, "color": "#CFE4FF", "power": 45.0,
+                              "size": 0.3},
+                             {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.8, "color": "#FFE8D2", "power": 24.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 28.0},
+    },
+    "ilsheta_stillwater": {
+        "splash": {"clip": "recall", "t": 0.33, "yaw": 52.0, "pitch": 2.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 140.0, "key_el": 34.0, "key_color": "#C4DCDA", "sun": 2.4, "rim_cool": 1.8,
+                   "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 1.4, "exposure": -0.4,
+                   "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 40.0,
+                              "size": 0.25},
+                             {"at": "head", "az": 150.0, "el": 18.0, "dist": 0.8, "color": "#D6ECEA", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 40.0, "t": 0.33},
+        "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
+                  "glow_color": "#A9D2CC"},
+    },
+    "ilsheta_first_bell": {
+        "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "pitch": -4.0, "lens": 46.0, "fill": 0.90, "x": 0.70,
+                   "key_az": 235.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
+                   "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
+                   "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 90.0,
+                              "size": 0.35},
+                             {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE4C0", "power": 22.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "recall", "t": 0.82, "yaw": -26.0, "key_az": 150.0},
+        "plate": {"glow": [0.78, 0.60, 0.38, 0.14], "glow_color": "#F6CF98"},
+    },
+}
 HEIGHT = 1.72             # the plates' scale: the chimney's top rim (content art.height)
 PROJECTION = {"concept": "ilsheta", "height": HEIGHT}
 NOISE = sdf.Noise(23)
@@ -1958,18 +2002,23 @@ def clip_overrides(ctx) -> dict:
     G = K["guard"]
     g = G
 
-    # idle: the lamp tended at the chest; breath, a 2-degree shoulder sway, the lamp's slow swing, the panels breathing
+    # idle: the lamp tended at the chest; breath, a weight shift, the lamp's swing, the panels breathing (closing
+    # ilsheta-idle-recall-frozen: head 2.1 cm, the lamp 3.8 cm; now a 2-3 cm breath and weight shift in chest and hips
+    # carrying the head ~6 cm, the lamp swinging 10-12 degrees a few frames behind the hand, the mantle panels 6-8
+    # degrees behind the hips)
     def idle(t):
         b, s = osc(t, 2), osc(t, 1, 0.1)
-        p = add(G, P_(chest=(1.0 * b, 0, 0), spine=(0.4 * b, 0, 1.2 * s), neck=(-0.6 * b, 0, 0), head=(-0.5 * b, 1.4 * s, 0),
-                      shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.2 * b), hips=(0, 1.0 * s, -0.8 * s),
-                      x_mantle_l=(0.8 * s, 0, 1.0 * b), x_mantle_r=(-0.8 * s, 0, -1.0 * b)))
-        p = _nudge(p, (0.0, 0.0, 0.008 * osc(t, 2, 0.05)), (0.0, 0.0, 0.010 * osc(t, 2, 0.12)))
-        p["lamp"] = (2.5 * osc(t, 1, 0.3), 1.5 * osc(t, 1, 0.55), 0.0)
+        sl = osc(t, 1, 0.1 - 4.0 / 72)                      # the hips' sway 4 frames late: the lamp and panels
+        p = add(G, P_(chest=(2.6 * b, 0.8 * s, -1.2 * s), spine=(1.0 * b, 0, 2.6 * s), neck=(-1.2 * b, 0, 1.0 * s),
+                      head=(-1.2 * b, 3.0 * s, 2.0 * s), shoulder_L=(0, 0, 1.6 * b), shoulder_R=(0, 0, -1.6 * b),
+                      hips=(0, 2.0 * s, -2.8 * s), x_mantle_l=(3.0 * sl, 0, 3.0 * b - 5.0 * sl),
+                      x_mantle_r=(-3.0 * sl, 0, -3.0 * b - 5.0 * sl)))
+        p = _nudge(p, (0.0, 0.0, 0.012 * osc(t, 2, 0.05)), (0.012 * s, 0.0, 0.016 * osc(t, 2, 0.12)))
+        p["lamp"] = (10.0 * osc(t, 1, 0.3 - 4.0 / 72), 6.0 * sl, 0.0)
         hx, hy, hz = p["hips_loc"]
-        p["hips_loc"] = (hx + 0.010 * s, hy, hz - 0.004 * (0.5 + 0.5 * b))
+        p["hips_loc"] = (hx + 0.024 * s, hy, hz - 0.012 * (0.5 + 0.5 * b))
         return p
-    out["idle"] = anim.Clip("idle", 72, True, idle)
+    out["idle"] = anim.Clip("idle", 72, True, anim.drag(idle, 72, {"head": 2.0}, loop=True))
 
     # run: the generator's legs at 3.35 m/s; the lamp carried close before her chest, the left hand at its side, the
     # panels trailing (the striding knee carries its panel: the resolve wrapper)
@@ -2082,16 +2131,56 @@ def clip_overrides(ctx) -> dict:
             (0.84, fold, "in"), (0.91, anim.lerp_pose(fold, rest, 1.4), "out"), (1.0, rest, "settle")]
     out["death"] = keyed_clip("death", 50, keys, lags={"head": 2.0, "neck": 1.0})
 
-    # recall (60 f loop): she cups the lamp and bows over it
+    # recall (closing ilsheta-idle-recall-frozen: a 2 s bow under 7.5 degrees looped through RIFT's 7 s): 6 s (180 f;
+    # the load test caps a clip at 6 s; seamless, it closes on its first pose, so over 7 s it replays its opening):
+    # she draws the lamp in and lifts its chimney cap (0.12), trims the wick with two fingers (0.24-0.42: small
+    # pinches), sets the cap back (0.46), cups the lamp to her chest and bows over it while its light climbs the
+    # mantle (0.52-0.70: the panels open on each breath), then raises it to her brow, the head bowed to it (0.80),
+    # holds, and lowers it to the guard (1.0)
     rc = K["rc"]
+    lb = K["lb"]
+    L_cap = (wr("L", 0.020, -0.290, 1.200, POLE_L), hand_or((-0.30, -0.40, -0.86), (0.0, 0.1, -1.0)))
+    L_trim = (wr("L", 0.010, -0.300, 1.170, POLE_L), hand_or((-0.55, -0.80, -0.10), (0.1, -0.1, -1.0)))
+
+    def with_L(base, L, lamp=None, **bones):
+        p = dict(base)
+        p["ik"] = dict(base["ik"])
+        p["ik"]["hand.L"], p["ik"]["orient.L"] = L
+        if lamp is not None:
+            p["lamp"] = lamp
+        return add(p, P_(**bones)) if bones else p
+    r_draw = with_L(lb, G_L, (2, 0, 0))
+    r_cap = with_L(lb, L_cap, (2, 0, 0), head=(6, -3, 6), neck=(2, 0, 2))
+    r_trim = with_L(lb, L_trim, (-2, 0, 0), head=(12, -6, 10), neck=(4, 0, 3))
+    brow = guard_pose(torso=T(hips=(1, -2, 0), spine=(2, 2, 0), chest=(2, 4, 0), neck=(4, 0, 0), head=(12, 2, 0)),
+                      hips=(0, 0.01, -0.03),
+                      R=(wr("R", -0.230, -0.290, 1.330, (-0.9, 0.2, -0.4)), staff_or((0.22, -0.02, 0.97), (0.55, -0.83, 0.0))),
+                      L=(wr("L", 0.070, -0.270, 1.260, POLE_L), hand_or((-0.25, -0.60, 0.76), (-0.95, -0.10, 0.20))),
+                      lamp=(0, 0, 0), **mant(8.0, 2.0))
+    brow2 = add(brow, P_(head=(3, 0, 0), chest=(1, 0, 0)))
+    rkeys = anim.keyed([(0.00, G, "linear"), (0.06, r_draw, "inout"), (0.12, r_cap, "inout"), (0.22, r_cap, "linear"),
+                        (0.26, r_trim, "inout"), (0.42, r_trim, "linear"), (0.46, r_cap, "inout"), (0.52, rc, "inout"),
+                        (0.70, rc, "linear"), (0.80, brow, "inout"), (0.90, brow2, "inout"),
+                        (0.95, anim.lerp_pose(brow2, G, 0.6), "inout"), (1.00, G, "inout")])
 
     def recall(t):
-        b = osc(t, 2)
-        p = add(rc, P_(chest=(1.2 * b, 0, 0), head=(-0.8 * b, 0, 0)))
-        p = _nudge(p, (0, 0, 0.004 * b), (0.0, -0.006 * osc(t, 1), 0.008 * osc(t, 2, 0.2)))
-        p["lamp"] = (1.5 * osc(t, 1, 0.2), 1.0 * osc(t, 1, 0.45), 0)
+        p = rkeys(t)
+        if 0.26 < t < 0.42:                                   # the two-finger pinches at the wick
+            k = math.sin(math.pi * (t - 0.26) / 0.16)
+            p = _nudge(p, (0, 0, 0), (0.0, -0.012 * k * max(0.0, osc(t, 12)), 0.010 * k * osc(t, 12, 0.25)))
+        if 0.50 < t < 0.72:                                   # two breaths over the cupped lamp; the light climbs the mantle
+            k = min(1.0, (t - 0.50) / 0.03, (0.72 - t) / 0.03)
+            b = math.sin(2 * math.pi * (t - 0.50) / 0.11)
+            p = add(p, P_(chest=(2.5 * b * k, 0, 0), spine=(1.0 * b * k, 0, 0), head=(-2.0 * b * k, 0, 0),
+                          x_mantle_l=(2.0 * k, 0, (4.0 + 4.0 * b) * k), x_mantle_r=(2.0 * k, 0, -(4.0 + 4.0 * b) * k)))
+            hx, hy, hz = p["hips_loc"]
+            p["hips_loc"] = (hx, hy, hz - 0.010 * k * (0.5 + 0.5 * b))
+        s = osc(t, 2, 0.1)                                      # a slow sway under it all; the lamp swings with it
+        p = add(p, P_(hips=(0, 1.5 * s, -1.5 * s), spine=(0, 0, 1.2 * s)))
+        lp = p.get("lamp", (0.0, 0.0, 0.0))
+        p["lamp"] = (lp[0] + 3.0 * osc(t, 2, 0.1 - 4.0 / 180), lp[1] + 2.0 * osc(t, 2, 0.35), lp[2])
         return p
-    out["recall"] = anim.Clip("recall", 60, True, recall)
+    out["recall"] = anim.Clip("recall", 180, True, anim.drag(recall, 180, {"head": 2.0, "neck": 1.0}, loop=True))
 
     # idle_lobby (120 f loop, first = last): she tends the lamp in four beats: draws it in and lifts the cap (the left
     # fingers at its top), trims the wick (small pinches), cups it against a draught (turned from it, the panels
@@ -2160,8 +2249,14 @@ def clip_overrides(ctx) -> dict:
     chp = K["ch"]
 
     def channel(t):
-        p = add(chp, P_(chest=(1.2 * osc(t, 2), 0, 0), head=(-0.8 * osc(t, 2), 0, 0)))
-        p["lamp"] = (2 * osc(t, 1), 1.5 * osc(t, 1, 0.3), 0)
+        # (closing CW6: the idle's breath and weight shift under the channel, the lamp swaying slowly)
+        b, s = osc(t, 2), osc(t, 1, 0.1)
+        p = add(chp, P_(chest=(2.4 * b, 0, -1.0 * s), spine=(1.0 * b, 0, 2.0 * s), head=(-1.6 * b, 2.0 * s, 1.5 * s),
+                        hips=(0, 1.5 * s, -2.2 * s), x_mantle_l=(0, 0, 2.5 * b - 3.0 * s), x_mantle_r=(0, 0, -2.5 * b - 3.0 * s)))
+        p = _nudge(p, (0.0, 0.0, 0.015 * osc(t, 2, 0.1)), (0.0, -0.010 * b, 0.012 * osc(t, 2, 0.2)))
+        p["lamp"] = (6 * osc(t, 1, -0.06), 3 * osc(t, 1, 0.24), 0)
+        hx, hy, hz = p["hips_loc"]
+        p["hips_loc"] = (hx + 0.018 * s, hy, hz - 0.008 * (0.5 + 0.5 * b))
         return p
     out["channel"] = anim.Clip("channel", 40, True, channel)
 

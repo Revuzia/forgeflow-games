@@ -78,6 +78,10 @@ export class MenuWorld {
     this.sky = new Sky(renderer);
     this.scene.add(this.sun.light, this.sun.target, this.showcaseRoot);
     this.scene.name = 'vale_menu';
+    // dev build: the harness reads the showcase subject's screen box (closing CL-1 caption overlap)
+    let dev = false;
+    try { dev = !!import.meta.env?.DEV; } catch { dev = false; }
+    if (dev) (globalThis as { __valeMenuSubject?: () => unknown }).__valeMenuSubject = () => this.subjectRect(innerWidth, innerHeight);
   }
 
   /** build once (async parts resolve later); never throws */
@@ -255,6 +259,30 @@ export class MenuWorld {
     this.showcase = a;
     this.showcaseRoot.add(a.root);
     lib.fighterTemplate(fighter, skin ?? undefined).then((t) => { if (this.showcase === a) a.attach(t, def.art.scale, def.art.accentMaterial); });
+  }
+
+  /** the showcase fighter's on-screen box in CSS pixels of a `w`×`h` viewport: every (skinned) vertex of its visible
+   *  meshes projected, so the box is the silhouette's, not a loose 3D AABB's; null without a subject. Dev / harness
+   *  only (the stage caption is measured against it, closing CL-1) */
+  subjectRect(w: number, h: number): { x: number; y: number; w: number; h: number } | null {
+    if (!this.showcase) return null;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const v = new Vector3();
+    this.showcase.root.updateMatrixWorld(true);
+    this.showcase.root.traverseVisible((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      const pos = m.geometry.getAttribute('position');
+      if (!pos) return;
+      for (let i = 0; i < pos.count; i++) {
+        m.getVertexPosition(i, v);
+        v.applyMatrix4(m.matrixWorld).project(this.camera);
+        const sx = (v.x * 0.5 + 0.5) * w, sy = (1 - (v.y * 0.5 + 0.5)) * h;
+        if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy < y0) y0 = sy; if (sy > y1) y1 = sy;
+      }
+    });
+    if (!Number.isFinite(x0)) return null;
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
   }
 
   setAspect(aspect: number): void {

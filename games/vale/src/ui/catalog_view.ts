@@ -86,6 +86,16 @@ export class CatalogView {
   skinsOf(fighter: string): SkinDefT[] { return this.c.skins.filter((s) => s.fighter === fighter); }
   baseSkin(fighter: string): SkinDefT | undefined { return this.skinsOf(fighter).find((s) => s.tier === 'base') ?? this.skinsOf(fighter)[0]; }
   offerForSkin(skin: string): OfferT | undefined { return this.c.store.offers.find((o) => o.kind === 'skin' && o.ref === skin); }
+  /** the tier a skin is SOLD at: its own tier, unless the store prices it as a standard skin (tools/gen_store.ts re-tiers
+   *  a deluxe whose portrait reads within ΔE 18 of its base, closing CL-1), so the tier marks never promise more than
+   *  the price does */
+  shownTier(skin: SkinDefT | undefined): SkinDefT['tier'] | undefined {
+    if (!skin || skin.tier === 'base' || skin.tier === 'standard') return skin?.tier;
+    const o = this.offerForSkin(skin.id);
+    if (!o) return skin.tier;
+    const std = this.c.store.offers.filter((x) => x.price.currency === o.price.currency && this.skin(x.ref)?.tier === 'standard').map((x) => x.price.amount);
+    return std.length && o.price.amount <= Math.max(...std) ? 'standard' : skin.tier;
+  }
   /** offers whose date window contains `now` */
   offerAvailable(o: OfferT, now = Date.now()): boolean {
     if (o.from && Date.parse(o.from) > now) return false;

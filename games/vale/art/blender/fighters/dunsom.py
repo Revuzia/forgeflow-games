@@ -1494,11 +1494,11 @@ def _hat_paint(p, n):
     brush = 1 + 0.035 * NOISE(np.stack([th * 3.0, r * 18.0, p[:, 2] * 0.0], 1), 1.0)
     # closing dunsom-hat-flat-plate (the disc read as one flat L* 84-85 plate from the gameplay camera, a 3 L* ramp:
     # the old 0.88-1.06 crown lift sat above the highlight cap's knee and was flattened): the crown-to-rim value
-    # ramp now spans the WHOLE top, x1.12 at the crown (under the cap: ~L* 82) down to x0.76 at the band (~L* 71),
+    # ramp now spans the WHOLE top, x1.14 at the crown (under the cap: ~L* 82) down to x0.58 at the band (~L* 64 painted),
     # broad felt blotches 16-24 cm across (+-5 % linear, ~4-6 L*) over the fine nap, and eight shallow radial
     # creases pressed into the felt every 45 degrees (a dark fold line with a lit lip on its key side)
     blot = 1 + 0.10 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
-    ramp = 0.76 + 0.36 * (1.0 - ss(0.03, 0.31, r))
+    ramp = 0.58 + 0.56 * (1.0 - ss(0.02, 0.30, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
     k8 = 2 * math.pi / 8
     da = (((th - HAT_CREASE0) / k8 + 0.5) % 1.0 - 0.5) * k8 * np.maximum(r, 1e-3)      # signed arc distance (m)
     span = ss(0.07, 0.12, r) * (1 - ss(0.27, 0.295, r))

@@ -32,7 +32,10 @@ import { ClassMark, RoleIcon } from '../components/FighterCard.tsx';
 import { FighterGrid, NO_FILTER, type GridFilter } from '../components/FighterGrid.tsx';
 import { Icon } from '../components/Glyphs.tsx';
 import { LoadoutPanel } from '../components/LoadoutPanel.tsx';
+import type { SkinDefT } from '../../contracts/catalog.ts';
 import { confirmDialog } from '../components/Modal.tsx';
+import { HourTicks } from '../components/Plate.tsx';
+import { ownsSkin } from '../components/LoadoutPanel.tsx';
 import { Portrait, SetupIcon } from '../components/Portrait.tsx';
 import { AbilityTip, useTip } from '../components/Tooltip.tsx';
 import { keyShort } from '../keys.ts';
@@ -242,6 +245,44 @@ function KitIcon(p: { f: FighterDefT; slot: typeof KIT[number] }): JSX.Element {
 /** your hovered or locked fighter, large (client F5): the painted plate on the right fading into ink, the name, title,
  *  class, role and kit on the left; a new hover crossfades over the last one (240 ms). The dial seal in the corner
  *  rests with its gnomon at ten o'clock and a dashed ring while you hover; locking in swings it to noon and closes it. */
+const TIER_TICKS: Record<SkinDefT['tier'], number> = { base: 1, standard: 2, deluxe: 3, legend: 4 };
+
+/** finalize's skin showcase (closing CL-1): the hovered or chosen skin's painted card large in its own column, the
+ *  fighter whole (never under the caption), crossfading as you move across the skin cards; the caption names the skin,
+ *  its tier and whether this is a preview, your choice, or a skin you do not own */
+function SkinShow(p: { f: FighterDefT; skin: string | undefined; chosen: string | undefined }): JSX.Element {
+  const { cv, state } = useApp();
+  const s = (cv.skin(p.skin)?.fighter === p.f.id ? cv.skin(p.skin) : undefined) ?? cv.baseSkin(p.f.id);
+  const key = s?.id ?? p.f.id;
+  const last = useRef(key);
+  const [prev, setPrev] = useState<string | null>(null);
+  useEffect(() => {
+    const was = last.current;
+    last.current = key;
+    if (was === key) return;
+    setPrev(was);
+    const t = setTimeout(() => setPrev(null), 260);
+    return () => clearTimeout(t);
+  }, [key]);
+  const tier = cv.shownTier(s) ?? 'base';
+  const owned = !s || s.tier === 'base' || ownsSkin(state.profile.value.owned, s.id);
+  const chosen = (p.chosen ?? cv.baseSkin(p.f.id)?.id) === s?.id;
+  const kick = !owned ? cv.t('draft.finalize.show_locked', 'Not owned') : chosen ? cv.t('draft.finalize.show_chosen', 'Your skin') : cv.t('draft.finalize.show_preview', 'Preview');
+  return (
+    <section class={`fshow plate ${chosen ? 'is-chosen' : 'is-preview'}`} aria-label={cv.t('draft.finalize.show', 'Skin preview')} aria-live="polite">
+      <span class="fshow__stage">
+        {prev ? <span class="fshow__art is-out" key={`out:${prev}`}><Portrait fighter={p.f} skin={prev === p.f.id ? undefined : prev} kind="splash" size="fill" position="86% 40%" /></span> : null}
+        <span class="fshow__art" key={key}><Portrait fighter={p.f} skin={s?.id} kind="splash" size="fill" position="86% 40%" /></span>
+      </span>
+      <span class="fshow__cap">
+        <span class="t-label fshow__kick">{kick}</span>
+        <span class="t-h1 fshow__name">{!s || s.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : s.name}</span>
+        <span class="row row--s fshow__tier"><HourTicks n={TIER_TICKS[tier]} label={cv.t(`shop.tier.${tier}`, tier)} /><span class="t-caption muted">{cv.t(`shop.tier.${tier}`, tier)}</span></span>
+      </span>
+    </section>
+  );
+}
+
 function Showcase(p: { fighter: FighterDefT | undefined; skin?: string; role?: string; locked: boolean; beat: boolean }): JSX.Element {
   const { cv } = useApp();
   const f = p.fighter;
@@ -547,6 +588,8 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
   const mode = cv.mode(d.mode);
   const rules = cv.rulesOf(queue);
   const [pressed, setPressed] = useState(false);
+  // closing CL-1: the skin under the pointer (or focus) fills the showcase; without one, the skin you chose
+  const [preview, setPreview] = useState<string | null>(null);
   // play roles-720: at 720 the loadout runs past the column; its bottom edge fades instead of cutting a line through
   const [finalBox, finalMore] = useMoreBelow<HTMLElement>();
   // client F12: with the session's ready flag, Lock in is "I am ready" and the session's word is final
@@ -597,7 +640,7 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
           <PhaseHead d={d} title={done ? cv.t('draft.phase.done', 'Draft complete') : cv.t('draft.finalize.title', 'Skin and loadout')}
             prompt={p.ffa ? cv.t('fray.pick.spells', 'FRAY starts you at level 6 with your ultimate ready.') : cv.t('draft.finalize.prompt', 'Choose your skin and loadout. You can trade fighters with a locked teammate.')} />
         </header>
-        <div class={`draft__main ${p.ffa ? 'draft__main--ffa' : ''}`}>
+        <div class={`draft__main ${f ? 'draft__main--final' : ''} ${p.ffa ? 'draft__main--ffa' : ''}`}>
           {p.ffa ? (
             <aside class="dteam" aria-label={cv.t('hourboard.title', 'Hour Board')}>
               {d.seats.map((s) => {
@@ -622,10 +665,12 @@ function Finalize(p: { d: DraftState; ffa: boolean; onLeave: () => void }): JSX.
                 <LoadoutPanel fighter={f} skin={me.skin} loadout={loadout} pool={rules.itemPool} modeName={mode?.name} draft tabs
                   readOnly={done || lockedIn ? (done ? cv.t('draft.phase.done', 'Draft complete') : cv.t('loadout.locked_in', 'Locked in')) : undefined}
                   onSkin={(s) => { session.draft({ a: 'skin', skin: s.id }); sound.play('equip'); }}
+                  onSkinPreview={(s) => setPreview(s?.id ?? null)}
                   onLoadout={(l) => session.draft({ a: 'loadout', loadout: l })} />
               </div>
             ) : <EmptyState text={cv.t('error.draft.not_locked', 'Lock in a fighter first.')} />}
           </section>
+          {f ? <SkinShow f={f} skin={preview ?? me.skin ?? state.profile.value.equipped[f.id]} chosen={me.skin ?? state.profile.value.equipped[f.id]} /> : null}
           {!p.ffa && other !== undefined ? <TeamColumn d={d} team={other} rel="enemy" hideLocks={blind && d.phase !== 'finalize'} /> : null}
         </div>
       </div>

@@ -101,6 +101,8 @@ def fan_leaf(L: float, spread: float, K: int = 6, pleat: float = 0.015, droop: f
     `pleat` folds the fan along its ribs (alternate edge points up and down, per metre of length): hour-lines
     radiating from the stem that catch the light; `droop` bends the tip down, `curl` the two corners;
     `notch` (even K) draws the middle of the leading edge in by that fraction: the fan leaf's cleft.
+    `notch` (env m-7; 0 = none): the middle point of the leading edge drawn in by this fraction of the length, so
+    the tip reads as a notched (two-lobed) fan rather than a straight cut; no extra vertex or triangle.
     Attributes: u (0 stem → 1 edge), lobe (+1 rib, -1 valley, 0 stem), corner (1 on the two fan corners)."""
     a = np.linspace(-spread / 2, spread / 2, K + 1)
     w = np.abs(a) / (spread / 2)
@@ -120,7 +122,8 @@ def fan_leaf(L: float, spread: float, K: int = 6, pleat: float = 0.015, droop: f
 
 
 def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: float = 0.02, droop: float = 0.08,
-              curl: float = 0.06, round_: float = 0.30, midrib: float = 0.0, ridge: float = 0.5) -> Part:
+              curl: float = 0.06, round_: float = 0.30, midrib: float = 0.0, ridge: float = 0.5,
+              notch: float = 0.0) -> Part:
     """The Dialwood fan leaf as a crimped, pleated plate: apex (the stem) at the origin, opening along +Y, top
     facing +Z; the apex and K+1 points on the leading edge, K triangles (K even). The edge alternates RIB
     (odd points: full length, raised by `pleat`) and VALLEY (even points, the two corners among them: drawn
@@ -130,6 +133,8 @@ def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: f
     `midrib` (0 < f < 1; 0 = none, the old K-triangle plate): one more vertex on the middle rib, f of the way from
     the stem to its tip, raised `ridge` × the pleat over the plate: the two middle wedges split there (K + 2
     triangles), so the painter can lay a MIDRIB vein down the leaf (attribute vein = 1 on that vertex).
+    `notch` (env m-7; 0 = none): the middle point of the leading edge drawn in by this fraction of the length, so
+    the tip reads as a notched (two-lobed) fan rather than a straight cut; no extra vertex or triangle.
     Attributes: u (0 stem → 1 edge), lobe (+1 rib, -1 valley, 0 stem), corner (1 on the two corners),
     side (-1 … 1 across the fan), vein (1 on the midrib vertex)."""
     a = np.linspace(-spread / 2, spread / 2, K + 1)
@@ -137,6 +142,8 @@ def fan_plate(L: float, spread: float, K: int = 6, crimp: float = 0.12, pleat: f
     rib = (np.arange(K + 1) % 2 == 1)
     lobe = np.where(rib, 1.0, -1.0)
     prof = (1.0 - round_ * w ** 2.2) * np.where(rib, 1.0, 1.0 - crimp)
+    if notch > 0 and K % 2 == 0:
+        prof[K // 2] *= 1.0 - notch
     x, y = L * prof * np.sin(a), L * prof * np.cos(a)
     z = pleat * L * lobe * (0.6 + 0.4 * (1 - w)) - droop * L * (y / L) ** 2 - curl * L * (x / L) ** 2
     P = np.vstack([[0.0, 0.0, 0.0], np.column_stack([x, y, z])])

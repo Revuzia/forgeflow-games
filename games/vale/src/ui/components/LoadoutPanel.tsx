@@ -19,7 +19,7 @@ import { keyShort } from '../keys.ts';
 import { Icon } from './Glyphs.tsx';
 import { Currency } from './Currency.tsx';
 import { HourTicks } from './Plate.tsx';
-import { Portrait, SetupIcon } from './Portrait.tsx';
+import { Portrait, SetupIcon, useSkinFocus } from './Portrait.tsx';
 import { AbilityTip, TipText, useTip } from './Tooltip.tsx';
 
 const TIER_TICKS: Record<SkinDefT['tier'], number> = { base: 1, standard: 2, deluxe: 3, legend: 4 };
@@ -27,6 +27,8 @@ const TIER_TICKS: Record<SkinDefT['tier'], number> = { base: 1, standard: 2, del
 export function ownsSkin(owned: readonly { kind: string; ref: string }[], skin: string): boolean { return owned.some((o) => o.kind === 'skin' && o.ref === skin); }
 
 export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; onPick: (s: SkinDefT) => void; onShop?: (sku: string) => void; draftOnly?: boolean; size?: 's' | 'm';
+  /** the skin under the pointer or keyboard focus (null when it leaves): finalize's large showcase follows it (closing CL-1) */
+  onPreview?: (s: SkinDefT | null) => void;
   /** 'cells': the cards alone, for a parent grid (the collection's Skins tab) */
   as?: 'strip' | 'cells' }): JSX.Element {
   const { cv, state, sound } = useApp();
@@ -47,7 +49,7 @@ export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; 
           : offer ? <Currency id={offer.price.currency} amount={offer.price.amount} size="s" tick={false} />
             : <span class="t-caption">{cv.t('collection.skin.not_for_sale', 'Not for sale')}</span>;
         return (
-          <SkinCard skin={s} fighter={p.fighter} selected={sel} owned={owned} stateLine={state2 ?? ''} lockLine={lockLine} chip={chip} equipped={s.id === equipped}
+          <SkinCard skin={s} fighter={p.fighter} selected={sel} owned={owned} stateLine={state2 ?? ''} lockLine={lockLine} chip={chip} equipped={s.id === equipped} onPreview={p.onPreview}
             onPress={() => {
               if (owned) { if (!sel) { sound.play('toggle'); p.onPick(s); } }
               else if (offer && p.onShop && !p.draftOnly) p.onShop(offer.sku);
@@ -64,20 +66,22 @@ export function SkinStrip(p: { fighter: FighterDefT; value: string | undefined; 
   );
 }
 
-function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; owned: boolean; equipped?: boolean; stateLine: string; lockLine: string | null; chip: JSX.Element; onPress: () => void }): JSX.Element {
+function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; owned: boolean; equipped?: boolean; stateLine: string; lockLine: string | null; chip: JSX.Element; onPress: () => void; onPreview?: (s: SkinDefT | null) => void }): JSX.Element {
   const { cv, sound } = useApp();
+  const focus = useSkinFocus(p.fighter);
   const tip = useTip(() => <TipText text={p.skin.name} sub={p.lockLine ?? cv.t('loadout.skin_hint', 'Skins change how a fighter looks, never how they play.')} />, { place: 'above' });
   return (
     <button type="button" role="radio" aria-checked={p.selected} data-nav="" class={`skin ${p.selected ? 'is-selected' : ''} ${p.owned ? '' : 'is-locked'}`}
       aria-label={`${p.skin.name}. ${p.stateLine}`}
-      onPointerEnter={(e) => { tip.onPointerEnter(e); sound.play('hover'); }} onPointerLeave={tip.onPointerLeave} onFocus={tip.onFocus} onBlur={tip.onBlur}
+      onPointerEnter={(e) => { tip.onPointerEnter(e); sound.play('hover'); p.onPreview?.(p.skin); }} onPointerLeave={() => { tip.onPointerLeave(); p.onPreview?.(null); }}
+      onFocus={(e) => { tip.onFocus(e); p.onPreview?.(p.skin); }} onBlur={() => { tip.onBlur(); p.onPreview?.(null); }}
       onPointerDown={() => { if (!p.owned) sound.play('click'); }} onClick={p.onPress}>
-      <Portrait fighter={p.fighter} skin={p.skin.id} size="fill" class="skin__art" />
+      <Portrait fighter={p.fighter} skin={p.skin.id} size="fill" class="skin__art" position={focus} />
       {p.selected ? <span class="tick" aria-hidden="true" /> : null}
       {!p.owned ? <Icon name="lock" class="skin__lock" /> : null}
       <span class="skin__meta">
         <span class="skin__name t-body-s">{p.skin.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : p.skin.name}</span>
-        <span class={`skin__chip ${p.equipped ? 'is-equipped' : p.owned ? 'is-owned' : 'is-shop'}`}><HourTicks n={TIER_TICKS[p.skin.tier]} label={cv.t(`shop.tier.${p.skin.tier}`, p.skin.tier)} />{p.chip}</span>
+        <span class={`skin__chip ${p.equipped ? 'is-equipped' : p.owned ? 'is-owned' : 'is-shop'}`}><HourTicks n={TIER_TICKS[cv.shownTier(p.skin) ?? p.skin.tier]} label={cv.t(`shop.tier.${cv.shownTier(p.skin) ?? p.skin.tier}`, p.skin.tier)} />{p.chip}</span>
       </span>
     </button>
   );
@@ -90,6 +94,8 @@ export interface LoadoutPanelProps {
   pool?: string;
   modeName?: string;
   onSkin?: (s: SkinDefT) => void;
+  /** a skin card hovered or focused (null on leave): finalize's showcase */
+  onSkinPreview?: (s: SkinDefT | null) => void;
   onLoadout: (l: LoadoutChoice) => void;
   onShop?: (sku: string) => void;
   /** draft finalize: only owned skins, no shop links */
@@ -144,7 +150,7 @@ export function LoadoutPanel(p: LoadoutPanelProps): JSX.Element {
       {!p.hideSkins ? (
         <section class="loadout__sect stg">
           <div class="sect__head"><h3 class="t-h2">{cv.t('loadout.skin', 'Skin')}</h3><span class="t-body-s sect__hint">{cv.t('loadout.skin_hint', 'Skins change how a fighter looks, never how they play.')}</span></div>
-          <SkinStrip fighter={p.fighter} value={p.skin} onPick={(s) => p.onSkin?.(s)} onShop={p.onShop} draftOnly={p.draft} size="s" />
+          <SkinStrip fighter={p.fighter} value={p.skin} onPick={(s) => p.onSkin?.(s)} onShop={p.onShop} draftOnly={p.draft} size="s" onPreview={p.onSkinPreview} />
         </section>
       ) : null}
 

@@ -82,13 +82,15 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   // step further on the same knobs — later reactions, wider aim, more missed last hits, rarer dodges and kites, noisier
   // reads, slower combos, staying in a losing fight longer and answering the team's calls later — veteran beats it in
   // 39/40 and 38/40 mirrored games on soak seeds 1-20 / 21-40 (was 36 / 32), 150/160 over seeds 1-80 (was 129); no stat,
-  // Gleam or rule changes, and no other suite plays novice)
+  // Gleam or rule changes, and no other suite plays novice. CW3 gameplay CL-g3: on untuned windows with independent
+  // lineups veteran won only 32/40 (seeds 601-620, --lineup shuffle); the macro and intent gap widens again: the team's
+  // calls are followed less often (0.4, was 0.5) and an opening or a dive must hold 15 s (was 10)
   novice: {
     id: 'novice', reaction: 0.7, reactionJitter: 0.2, aimErrorDeg: 20, leadSkill: 0.15,
     lastHitSigma: 0.25, lastHitMiss: 0.45, dodgeChance: 0.05, kiteSkill: 0.05,
-    intentFollow: 0.5, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
+    intentFollow: 0.4, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
     decisionNoise: 0.2, focusDiscipline: 0.1, abilityEvery: 0.85,
-    macroDelay: 10, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
+    macroDelay: 15, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },
   adept: {

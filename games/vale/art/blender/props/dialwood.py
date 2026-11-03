@@ -99,8 +99,11 @@ UPSTREAM = 0.44                # the stems' spread sits this far (× pad radius)
 GAP = 0.045                    # the outer ring's stems ride this far over the cushion
 STEM = 0.20                    # value: stem → tip ramp on every leaf (env F5: 0.12 → 0.20, the plates read painted)
 STEM_C = 0.80                  # the ramp's pivot (u): a stem darkens STEM × STEM_C, a tip lightens STEM × (1 − STEM_C)
-STROKE = 0.06                  # value: rib light / valley dark (env F5: 0.035 → 0.06)
-VEIN = 0.07                    # value: the midrib vein's light stroke down the middle rib (env F5)
+STROKE = 0.085                 # value: rib light / valley dark (env F5: 0.035 → 0.06; closing m-7: 0.085, the two side
+#                                ribs read as painted vein strokes either side of the midrib: three strokes a plate)
+VEIN = 0.09                    # value: the midrib vein's light stroke down the middle rib (env F5 0.07; m-7 0.09)
+NOTCH = (0.16, 0.30)           # closing m-7: every plate's tip notched in by this fraction of its length (per leaf,
+#                                from a hash of its pad and slot: no RNG drawn, the layout is unchanged)
 CAV_D = 0.26                   # cavity between plates (env F5): occlusion against every plate within this (m) ...
 CAV_K = 0.40                   # ... darkens a leaf by up to this (linear ×) where it tucks under the ring above
 LIFT = 0.07                    # value: a leaf's whole stroke (keeps the canopy band with the stronger brushwork)
@@ -216,7 +219,8 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator,
         ax = ax2 / np.linalg.norm(ax2)
         leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=K_LEAF, crimp=rng.uniform(0.10, 0.16),
                          pleat=rng.uniform(0.012, 0.018), droop=kappa * L, curl=kappa * L * 0.5,
-                         round_=rng.uniform(0.22, 0.32), midrib=MIDRIB if L >= rib_min else 0.0)
+                         round_=rng.uniform(0.22, 0.32), midrib=MIDRIB if L >= rib_min else 0.0,
+                         notch=NOTCH[0] + (NOTCH[1] - NOTCH[0]) * float(hash01(pi * 7.31 + a_xy[0] * 13.1 + a_xy[1] * 5.7)))
         part = leaf.transformed(frame(apex, ax, nz))
         part.A["leafL"] = np.full(len(part.P), L)
         # the dome normal at each vertex (local, before the pad's transform)
