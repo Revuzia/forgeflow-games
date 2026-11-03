@@ -3,7 +3,7 @@
   "portrait": "assets/fighters/odrum/portrait.png",
   "splash": "assets/fighters/odrum/splash.png",
   "icon": "assets/fighters/odrum/icon.png",
-  "height": 1.91,
+  "height": 1.89,
   "scale": 1,
   "runRefSpeed": 3.35,
   "clips": {

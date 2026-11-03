@@ -1,106 +1,106 @@
 {
   "cap": {
-    "hex": "#AA8D76",
-    "texels": 63320
+    "hex": "#9D9584",
+    "texels": 62948
   },
   "mask": {
     "hex": "#C3A87D",
-    "texels": 338748
+    "texels": 338962
   },
   "neckwrap": {
-    "hex": "#928670",
-    "texels": 21654
+    "hex": "#928671",
+    "texels": 21672
   },
   "coat": {
-    "hex": "#83614E",
-    "texels": 199791
+    "hex": "#786959",
+    "texels": 200121
   },
   "straps": {
     "hex": "#4E3425",
-    "texels": 32979
+    "texels": 33103
   },
   "belt": {
     "hex": "#513523",
-    "texels": 36573
+    "texels": 36668
   },
   "skirt": {
-    "hex": "#694939",
-    "texels": 188505
+    "hex": "#644D3D",
+    "texels": 188634
   },
   "trousers": {
     "hex": "#3B2C23",
-    "texels": 83573
+    "texels": 83678
   },
   "boots": {
     "hex": "#302119",
-    "texels": 91882
+    "texels": 92048
   },
   "wrap_L": {
     "hex": "#412A1D",
-    "texels": 18512
+    "texels": 18530
   },
   "wrap_R": {
     "hex": "#422B1D",
-    "texels": 18151
+    "texels": 18126
   },
   "hand_L": {
     "hex": "#A67B4F",
-    "texels": 19512
+    "texels": 19541
   },
   "hand_R": {
     "hex": "#A3794E",
-    "texels": 24773
+    "texels": 24834
   },
   "staff": {
     "hex": "#B9A489",
-    "texels": 35633
+    "texels": 35662
   },
   "staff_wraps": {
-    "hex": "#5C4231",
-    "texels": 19929
+    "hex": "#5C4230",
+    "texels": 19944
   },
   "staff_caps": {
     "hex": "#B16D2A",
-    "texels": 10582
+    "texels": 10585
   },
   "staff_collars": {
     "hex": "#3F2B1F",
-    "texels": 2889
+    "texels": 2923
   },
   "pouch": {
     "hex": "#5A402F",
-    "texels": 10998
+    "texels": 11017
   },
   "cords_R": {
     "hex": "#402F25",
-    "texels": 946
+    "texels": 932
   },
   "pot_R": {
     "hex": "#A28764",
-    "texels": 95280
+    "texels": 95339
   },
   "pot_rim_R": {
     "hex": "#9A8262",
-    "texels": 15624
+    "texels": 15663
   },
   "resin_R": {
     "hex": "#C48742",
-    "texels": 11021
+    "texels": 11054
   },
   "cords_L": {
     "hex": "#402F25",
-    "texels": 1088
+    "texels": 1072
   },
   "pot_L": {
     "hex": "#A38764",
-    "texels": 93985
+    "texels": 94181
   },
   "pot_rim_L": {
     "hex": "#998162",
-    "texels": 15663
+    "texels": 15640
   },
   "resin_L": {
     "hex": "#C48742",
-    "texels": 10972
+    "texels": 11035
   }
 }

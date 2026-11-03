@@ -1298,10 +1298,12 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 #    the skirt, trousers and boots are untouched (the dark-feet end of the gradient)
 # CLOSING (odrum-M2): the cap read as a bald peach scalp and the lifted jerkin as bare skin (game HSV 25 / 0.30-0.36,
 # the light-skin range). Same values, hue and chroma moved off skin: the cap an oat felt (hue 41 / sat 0.15 here; the
-# warm character light takes ~5 deg of hue and adds ~0.03 sat, so it lands at hue ~36 / sat <= 0.20 in game) with
-# darker stitched panels radiating from the crown (CAP_SEAMS), the jerkin a cooler brown and its lifted top faded
+# warm character light takes ~5 deg of hue and adds ~0.03 sat, so it lands at hue ~36 / sat <= 0.20 in game; the first
+# build's mean came out hue 35.6 / sat 0.17, so the target sits at hue 44) with darker stitched panels radiating
+# from the crown (CAP_SEAMS), the jerkin a cooler walnut-brown felt (#5E5345, hue 34; the first build's chocolate
+# #674F3D measured a mean hue 24.9 / sat 0.33) and its lifted top faded
 # further toward a grey-brown felt (COAT_FADED / COAT_FADE), its folds darkened (FOLD_CAVITY)
-TONE = {"mask": ("#BBA37C", 0.04), "cap": ("#968F80", 0.08), "coat": ("#674F3D", 0.30), "skirt": ("#634434", 0.30),
+TONE = {"mask": ("#BBA37C", 0.04), "cap": ("#958F7E", 0.04), "coat": ("#5E5345", 0.18), "skirt": ("#5F4A3A", 0.22),
         "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
 POT_GLAZE = "#B79871"                     # the jars' golden-ochre glaze (L* 65, hue 33.5, sat 38.5 %; was #C07E32;
                                           # at hue 36-37 its shade drifted olive under the hero renders' sky fill)
@@ -2260,11 +2262,11 @@ PIV = Vector((0.0, 0.17, staff_z(0.0)))                  # behind the neck: the 
 # through the body (57.8 % of match samples). He carries it as a porter's diagonal rest carry instead: balanced on
 # the RIGHT shoulder (PR_CARRY), yawed CARRY_YAW off the shoulder line, the sling end low and forward at his
 # right, the long end high behind the left shoulder (CARRY_TILT). Modelled on the closing review's own match
-# facings (_harness/_reports/closing_odrum_yoke_facing.json): 52 deg / 10 deg puts the bar within 30 deg of
-# vertical in ~17-19 % of samples (<= 20 %), and within 30 deg of horizontal in ~45 % (was 15.5 %). Idle, run,
+# facings (_harness/_reports/closing_odrum_yoke_facing.json; fw_CW6_odrum_yoke.mjs): 52 deg measured 21.5 % of
+# samples within 30 deg of vertical (attack2's lance and the run's extra tilt add to it), so 60 deg / 10 deg. Idle, run,
 # recall and the entries / exits of every gesture start from it (gI), the pots hang plumb from the ends.
 PR_CARRY = Vector((-0.25, 0.17, staff_z(-0.25)))
-CARRY_YAW, CARRY_TILT = 52.0, 10.0
+CARRY_YAW, CARRY_TILT = 60.0, 10.0
 GRIP0, WRIST0, AX0 = Vector(tuple(GRIP_R)), Vector(tuple(WRIST_R)), Vector(tuple(STAFF_AX))
 ARM_BONES = ("upper_arm.L", "forearm.L", "hand.L", "upper_arm.R", "forearm.R", "hand.R")
 

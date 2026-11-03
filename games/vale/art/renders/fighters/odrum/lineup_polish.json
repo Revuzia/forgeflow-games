@@ -1,0 +1,363 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "odrum": {
+      "glb": "art/out/fighters/odrum/odrum.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 63.2,
+            "mid": 48.8,
+            "bottom": 16.4
+          },
+          "accentPct": 1.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.16
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 55.2,
+            "mid": 47.1,
+            "bottom": 34.2
+          },
+          "accentPct": 1.86,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.86
+        },
+        "180": {
+          "heightPx": 114,
+          "valueBands": {
+            "top": 64.8,
+            "mid": 42.9,
+            "bottom": 12.4
+          },
+          "accentPct": 1.4,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.4
+        },
+        "270": {
+          "heightPx": 158,
+          "valueBands": {
+            "top": 57.1,
+            "mid": 56.7,
+            "bottom": 43.0
+          },
+          "accentPct": 1.43,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.43
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.86,
+      "accentOk": true
+    },
+    "odrum_noon_fair": {
+      "glb": "art/out/fighters/odrum/odrum_noon_fair.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 63.8,
+            "mid": 48.3,
+            "bottom": 16.2
+          },
+          "accentPct": 1.22,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.22
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 54.4,
+            "mid": 48.4,
+            "bottom": 34.6
+          },
+          "accentPct": 1.5,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.5
+        },
+        "180": {
+          "heightPx": 114,
+          "valueBands": {
+            "top": 77.1,
+            "mid": 39.9,
+            "bottom": 12.0
+          },
+          "accentPct": 1.38,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.38
+        },
+        "270": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 56.3,
+            "mid": 56.0,
+            "bottom": 43.9
+          },
+          "accentPct": 1.58,
+          "accentTopHalfShare": 0.984,
+          "accentTopHalfPctOfFighter": 1.55
+        }
+      },
+      "clipsFrom": "odrum",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.58,
+      "accentOk": true
+    },
+    "odrum_shadeprint": {
+      "glb": "art/out/fighters/odrum/odrum_shadeprint.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 113,
+          "valueBands": {
+            "top": 59.4,
+            "mid": 44.9,
+            "bottom": 14.4
+          },
+          "accentPct": 1.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.16
+        },
+        "90": {
+          "heightPx": 159,
+          "valueBands": {
+            "top": 43.0,
+            "mid": 50.0,
+            "bottom": 21.0
+          },
+          "accentPct": 1.86,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.86
+        },
+        "180": {
+          "heightPx": 114,
+          "valueBands": {
+            "top": 54.1,
+            "mid": 40.4,
+            "bottom": 13.2
+          },
+          "accentPct": 1.4,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.4
+        },
+        "270": {
+          "heightPx": 158,
+          "valueBands": {
+            "top": 44.2,
+            "mid": 57.5,
+            "bottom": 27.0
+          },
+          "accentPct": 1.43,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.43
+        }
+      },
+      "clipsFrom": "odrum",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.86,
+      "accentOk": true
+    },
+    "marund": {
+      "glb": "art/out/fighters/marund/marund.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 58.0,
+            "mid": 43.5,
+            "bottom": 18.2
+          },
+          "accentPct": 2.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "90": {
+          "heightPx": 182,
+          "valueBands": {
+            "top": 62.0,
+            "mid": 39.1,
+            "bottom": 17.9
+          },
+          "accentPct": 2.26,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.26
+        },
+        "180": {
+          "heightPx": 165,
+          "valueBands": {
+            "top": 58.6,
+            "mid": 38.0,
+            "bottom": 20.1
+          },
+          "accentPct": 1.35,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.35
+        },
+        "270": {
+          "heightPx": 178,
+          "valueBands": {
+            "top": 61.5,
+            "mid": 38.6,
+            "bottom": 16.5
+          },
+          "accentPct": 2.41,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.41
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.72,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "odrum",
+      "b": "odrum_noon_fair",
+      "sameFighter": true,
+      "iou64": {
+        "0": 0.952,
+        "90": 0.976,
+        "180": 0.964,
+        "270": 0.982
+      },
+      "iou64Max": 0.982,
+      "iou64_norm": {
+        "0": 0.614,
+        "90": 0.971,
+        "180": 0.653,
+        "270": 0.868
+      },
+      "iou64NormMax": 0.971,
+      "ok": true
+    },
+    {
+      "a": "odrum",
+      "b": "odrum_shadeprint",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 0.999,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "odrum",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.29,
+        "90": 0.298,
+        "180": 0.269,
+        "270": 0.301
+      },
+      "iou64Max": 0.301,
+      "iou64_norm": {
+        "0": 0.238,
+        "90": 0.368,
+        "180": 0.235,
+        "270": 0.358
+      },
+      "iou64NormMax": 0.368,
+      "ok": true
+    },
+    {
+      "a": "odrum_noon_fair",
+      "b": "odrum_shadeprint",
+      "sameFighter": true,
+      "iou64": {
+        "0": 0.952,
+        "90": 0.976,
+        "180": 0.963,
+        "270": 0.982
+      },
+      "iou64Max": 0.982,
+      "iou64_norm": {
+        "0": 0.615,
+        "90": 0.971,
+        "180": 0.653,
+        "270": 0.868
+      },
+      "iou64NormMax": 0.971,
+      "ok": true
+    },
+    {
+      "a": "odrum_noon_fair",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.291,
+        "90": 0.292,
+        "180": 0.268,
+        "270": 0.296
+      },
+      "iou64Max": 0.296,
+      "iou64_norm": {
+        "0": 0.223,
+        "90": 0.361,
+        "180": 0.213,
+        "270": 0.352
+      },
+      "iou64NormMax": 0.361,
+      "ok": true
+    },
+    {
+      "a": "odrum_shadeprint",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.29,
+        "90": 0.298,
+        "180": 0.269,
+        "270": 0.301
+      },
+      "iou64Max": 0.301,
+      "iou64_norm": {
+        "0": 0.238,
+        "90": 0.368,
+        "180": 0.235,
+        "270": 0.358
+      },
+      "iou64NormMax": 0.368,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/fighters/odrum/lineup_polish.png",
+  "seconds": 10.8
+}
