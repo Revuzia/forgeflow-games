@@ -13,9 +13,11 @@
 //                         behind its loading screen.
 //   closed bitmaps        a GLB's ImageBitmap is closed once three has uploaded it (texture.onUpdate) when its
 //                         Source feeds one texture only; the GPU copy is all that stays. Such a texture cannot
-//                         upload twice, so a GPU context loss calls restoreImages(): every landed GLB with closed
-//                         images is fetched and decoded again and its textures' sources swapped in place
-//                         (GLTFLoader's parser.associations gives each texture its glTF index).
+//                         upload twice: a GPU context loss first gives every closed source a 1×1 stand-in
+//                         (contextLost(): frames drawn while the view restores upload that, never a detached
+//                         bitmap), then restoreImages() fetches and decodes every such GLB again and swaps each
+//                         texture's source in place (GLTFLoader's parser.associations gives each texture its glTF
+//                         index), disposing the stand-in's GL texture so the real size is allocated.
 
 import {
   type BufferGeometry, type DataTexture, type Material, type Mesh, type SkinnedMesh, FloatType, HalfFloatType, LinearMipmapLinearFilter, type Object3D, RepeatWrapping, SRGBColorSpace, type Texture,
@@ -188,6 +190,20 @@ export class Assets {
    * and each texture's Source gets the new image (matched by glTF texture index), so three can upload it on the new
    * context. Resolves when every swap is done (textures already re-uploaded meanwhile simply upload once more).
    */
+  contextLost(): void {
+    if (typeof ImageData === 'undefined') return;
+    const stand = new ImageData(new Uint8ClampedArray([128, 128, 128, 255]), 1, 1);
+    for (const { m } of this.landedModels.values()) {
+      if (!m) continue;
+      const res = new Set<object>();
+      collectGpu(m.gltf.scene, res);
+      for (const t of res) {
+        const x = t as Texture;
+        if (x.isTexture && (x.source as { closed?: boolean }).closed) x.source.data = stand;
+      }
+    }
+  }
+
   async restoreImages(): Promise<number> {
     const jobs: Promise<number>[] = [];
     for (const { url, m } of this.landedModels.values()) {
@@ -211,6 +227,7 @@ export class Assets {
           if (!f) continue;
           t.source.data = f.source.data;
           (t.source as { closed?: boolean }).closed = false;
+          t.dispose();                                                     // the stand-in's 1×1 storage goes
           t.needsUpdate = true;
           n++;
         }

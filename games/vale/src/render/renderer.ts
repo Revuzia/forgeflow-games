@@ -1273,6 +1273,7 @@ class ValeRenderer implements Renderer {
     // the timer's queries died with the context: never poll them again (a restored context calls them foreign objects)
     this.gpuTimer.abandon();
     this.dyn.reset();
+    this.assets.contextLost();                                             // perf PERF-C2: closed bitmaps get a stand-in
     this.setView('lost');
   };
 
