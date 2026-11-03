@@ -158,7 +158,14 @@ PLACE_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.came
   let d = args.d;
   // args.clear: the pin must have a clear line of fire (a fence or wall between the camera and the pin turns a legitimate cover block into a false 'no kill'):
   // walk the distance in until nothing stands between the camera and the pin (never closer than 4 m)
-  if (args.clear && W.map.losBlocked) { while (d > 4 && W.map.losBlocked(cam.position.x, cam.position.y, cam.position.z, cam.position.x + dir.x * d, cam.position.y + dir.y * d, cam.position.z + dir.z * d)) d -= 1; }
+  // W9 R1 fix (hudfeel): ... and judged the way the ROUND flies, not only the crosshair: weapons.js fire() aims from the camera (crosshairPoint) but the
+  // round leaves the shooter's EYE (eyePos) and is stopped by K.segmentColliders (testSegment). The camera line alone let a pin sit behind the muzzle: on
+  // MAP_GEN 8 ashgrid 4242 the subject lands 0.53 m in front of a wall, every camera line past 4 m was blocked, and the 4 m floor put the pin 0.2 m BEHIND
+  // the eye (3 clicks, 0 hurt events). FIRE_LINE_JS is that test (installed before the pinned rows); the pin reports it (fireLine).
+  const fl = window.__FJ_FIRELINE__, aimY = args.aimY || 1.15;
+  const clearAt = (dd) => !W.map.losBlocked(cam.position.x, cam.position.y, cam.position.z, cam.position.x + dir.x * dd, cam.position.y + dir.y * dd, cam.position.z + dir.z * dd)
+    && (!fl || fl(cam.position.x + dir.x * dd, cam.position.y + dir.y * dd - aimY, cam.position.z + dir.z * dd).ok);
+  if (args.clear && W.map.losBlocked) { while (d > 4 && !clearAt(d)) d -= 1; }
   const x = cam.position.x + dir.x * d, z = cam.position.z + dir.z * d, y = cam.position.y + dir.y * d;
   const bot = W.actors.find((a) => a !== p && a.alive && !(args.skip || []).includes(a.id));
   if (!bot) return null;
@@ -172,8 +179,53 @@ PLACE_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.came
   if (!window.__FJ_HOOKED__) { window.__FJ_HOOKED__ = true;
     W.events.on('actorHurt', (v, info) => { if (v.id === window.__FJ_TGT__) window.__FJ_HURT__.push({ t: performance.now(), dmg: info.dmg, toShield: info.toShield, broke: !!info.broke }); });
     W.events.on('actorDied', (v) => { if (v.id === window.__FJ_TGT__) window.__FJ_HURT__.push({ t: performance.now(), died: true }); }); }
-  return { id: bot.id, d, groundGap: +(bot.pos.y - g).toFixed(2) };
+  return { id: bot.id, d, groundGap: +(bot.pos.y - g).toFixed(2), fireLine: fl ? fl(bot.pos.x, bot.pos.y, bot.pos.z) : null };
 }"""
+
+# W9 R1 fix (hudfeel): the ROUND's own line of fire to a body standing at (x, y, z) - the same origin and the same world test the bullets use
+# (weapons.js fire(): eyePos(shooter) -> the aim point; testSegment(): K.segmentColliders over map.queryColliders, nearest hit; the terrain by
+# maps.js losBlocked's heightfield march). ok = the chest AND the head lines reach the body with no collider / ground in between, and the body
+# stands in FRONT of the muzzle (>= 3 m along the shooter's facing): a pin behind the eye is no line of fire at all.
+FIRE_LINE_JS = r"""() => { const W = window.__LC__.W, S = W.SIM;
+  window.__FJ_FIRELINE__ = (x, y, z, yawOpt) => { const p = W.player, yaw = yawOpt == null ? p.input.yaw : yawOpt;
+    const ex = p.pos.x, ey = p.pos.y + S.actorEyeY(p), ez = p.pos.z;
+    const fwd = (x - ex) * -Math.sin(yaw) + (z - ez) * -Math.cos(yaw);
+    const seg = (ty) => { const cols = W.map.queryColliders((ex + x) / 2, (ez + z) / 2, Math.hypot(x - ex, z - ez) / 2 + 0.6);
+      const h = S.segmentColliders(ex, ey, ez, x, ty, z, cols);
+      return h ? { t: +h.t.toFixed(3), box: [h.c.minX, h.c.maxX, h.c.minY, h.c.maxY, h.c.minZ, h.c.maxZ].map((v) => +v.toFixed(2)), door: h.c.door, dslab: h.c.dslab } : null; };
+    const chest = seg(y + 1.0), head = seg(y + 1.6);
+    const ground = W.map.losBlocked(ex, ey, ez, x, y + 1.0, z, true);
+    return { ok: !chest && !head && !ground && fwd >= 3, fwd: +fwd.toFixed(2), chest, head, ground }; };
+  return 'on'; }"""
+
+# W9 R1 fix (hudfeel): face a clear line of fire before the pinned-target rows. The subject keeps the spot it stands on (the landing protection and
+# its spy stay exactly as they were); only its facing turns, in 15 degree steps alternating either side of where it already looks (k = 0 first: a
+# subject that already faces open ground is not turned at all). A facing passes when FIRE_LINE_JS is ok for a body at every metre 4..args.need along
+# it (the ground under the body within 1.5 m of the subject's) AND the camera's line to that body is clear (the crosshair stops where losBlocked does).
+FACE_CLEAR_JS = r"""(args) => { const W = window.__LC__.W, p = W.player, cam = W.camera, fl = window.__FJ_FIRELINE__;
+  cam.updateMatrixWorld(true);
+  const y0 = p.input.yaw, g0 = W.map.heightAt(p.pos.x, p.pos.z);
+  // the camera's offset from the subject in the subject's own frame (third-person boom + shoulder), rotated with each candidate facing
+  const ox = cam.position.x - p.pos.x, oy = cam.position.y - p.pos.y, oz = cam.position.z - p.pos.z;
+  const lr = ox * Math.cos(y0) - oz * Math.sin(y0), lb = ox * Math.sin(y0) + oz * Math.cos(y0);
+  const tried = [];
+  for (let k = 0; k < 24; k++) {
+    const yaw = y0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 12;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const cx = p.pos.x + lr * Math.cos(yaw) + lb * Math.sin(yaw), cz = p.pos.z - lr * Math.sin(yaw) + lb * Math.cos(yaw), cy = p.pos.y + oy;
+    let bad = null;
+    for (let dd = 4; dd <= args.need && !bad; dd++) {
+      const x = p.pos.x + fx * dd, z = p.pos.z + fz * dd, g = W.map.heightAt(x, z);
+      if (Math.abs(g - g0) > 1.5) { bad = { dd, why: 'ground', dg: +(g - g0).toFixed(2) }; break; }
+      const r = fl(x, g, z, yaw);
+      if (!r.ok) { bad = { dd, why: 'fire', chest: r.chest, head: r.head, ground: r.ground, fwd: r.fwd }; break; }
+      if (W.map.losBlocked(cx, cy, cz, x, g + 1.0, z, true)) { bad = { dd, why: 'camera' }; break; }
+    }
+    const deg = +((yaw - y0) * 180 / Math.PI).toFixed(0);
+    tried.push({ deg, bad });
+    if (!bad) { p.input.yaw = yaw; p.yaw = yaw; p.input.pitch = 0; return { clear: true, turnedDeg: deg, pos: [p.pos.x, p.pos.y, p.pos.z].map((v) => +v.toFixed(2)), tried: tried.slice(0, 3) }; }
+  }
+  return { clear: false, pos: [p.pos.x, p.pos.y, p.pos.z].map((v) => +v.toFixed(2)), tried: tried.slice(0, 6) }; }"""
 
 RETICLE_JS = r"""async () => {
   if (!window.__FJ_MODS__) {
@@ -543,6 +595,16 @@ def main():
             v.data["reticle"] = ret
             bad = {k: r for k, r in ret.items() if not (r.get("arms", 0) >= 2 and (r.get("thick") or 0) >= 2 and (r.get("len") or 0) >= 6)}
             v.check("reticle arms >= 2 px thick x >= 6 px long at rest, crouched-still and sprinting", not bad, ret)
+            # ---------------- line of fire (W9 R1 fix, hudfeel) ----------------
+            # the pinned-target rows need a clear line of fire by the ROUND's own test from where the subject stands now (after the reticle
+            # row's sprint): face one, or say there is none (could-not-judge, never a false 'no kill')
+            s.js(FIRE_LINE_JS)
+            face = s.js(FACE_CLEAR_JS, {"need": 14})
+            v.info("line of fire faced (FIRE_LINE_JS: eye -> body, K.segmentColliders + terrain; camera line clear)", face)
+            if not face.get("clear"):
+                v.cnj("feel checks (pinned target)", "no facing with a clear 4-14 m line of fire from the subject's spot %s: %s" % (face.get("pos"), face.get("tried")))
+                return
+            s.step_frames(20, 1 / 60, render=False)          # the camera follows the new facing before the pins are placed along it
             # ---------------- pistol kill: the kill style must win and hold ----------------
             # The semi-auto click edge lives 420 ms of WALL time (weapons.js edgeLive). On this box one pumped frame can
             # cost more than that, so the click is followed by SYNCHRONOUSLY stepped frames (pump paused): the edge is
@@ -555,6 +617,8 @@ def main():
                 tgt = s.js(PLACE_JS, {"d": 11, "hp": 5, "shield": 0, "live": True, "skip": [], "clear": True})
                 if not tgt:
                     break
+                if tries == 1:
+                    v.info("pistol pin (d along the camera ray; fireLine = the round's own line)", tgt)
                 f0 = s.js("() => window.__LC__.W.stats.shotsFired")
                 s.page.mouse.down()
                 s.step_frames(3, 1 / 60, render=False)
@@ -575,7 +639,7 @@ def main():
             domlog = s.js("(k) => window.__FJ__.log.slice(k).filter((e) => e.k === 'mark')", k0)
             if not died:
                 v.cnj("pistol kill: the marker ends in the kill style, held >= 250 ms",
-                      "no kill in %d clicks (shots %d, hurt events %s)" % (tries, shots_k, hurt[:3]))
+                      "no kill in %d clicks (shots %d, hurt events %s, pin %s)" % (tries, shots_k, hurt[:3], tgt))
             else:
                 ok_k, det_k = judge_kill(samples, died[0]["t"])
                 det_k.update({"domMarkerLog": domlog[-4:], "clicks": tries})
@@ -588,7 +652,7 @@ def main():
             # held until >= --burst-shots rounds left the gun (a wall-clock burst fires 5 rounds when a pumped frame costs
             # 600 ms on this box - 21:31 run); the target is a practice dummy (absorbs and resets, never dies)
             s.js("() => { const W = window.__LC__.W, p = W.player; p.inventory.slots[1] = { kind: 'weapon', id: 'smg', rarity: 2, mag: 400 }; p.inventory.ammo.light = 999; }")
-            tgt2 = s.js(PLACE_JS, {"d": 9, "hp": 100, "shield": 100, "skip": [tgt["id"]]})
+            tgt2 = s.js(PLACE_JS, {"d": 9, "hp": 100, "shield": 100, "skip": [tgt["id"]], "clear": True})
             s.press("Digit2")
             s.sleep(0.9)
             aud0 = (s.js(READ_JS).get("r") or {}).get("audio")
@@ -645,7 +709,7 @@ def main():
                     s.js("(id) => { const W = window.__LC__.W, b = W.actorById.get(id); if (!b) return; b.pos.x += 40; b.pos.z += 40;"
                          " b.pos.y = Math.max(W.map.heightAt(b.pos.x, b.pos.z), W.map.waterY); b.obj.position.copy(b.pos); }", tgt2["id"])
                 s.sleep(0.5)
-                tgt3 = s.js(PLACE_JS, {"d": 8, "hp": 100, "shield": 20, "skip": [tgt["id"], tgt2["id"] if tgt2 else None]})
+                tgt3 = s.js(PLACE_JS, {"d": 8, "hp": 100, "shield": 20, "skip": [tgt["id"], tgt2["id"] if tgt2 else None], "clear": True})
                 n_sb = s.js("() => (window.__FJ_S__ || []).length")
                 s.sleep(0.3)
                 f_s = s.js("() => window.__LC__.W.stats.shotsFired")
