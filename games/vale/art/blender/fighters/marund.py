@@ -139,18 +139,18 @@ def sculpts() -> list:
         n /= np.linalg.norm(n)
         win.append((c, n))
         cap.sub(Capsule(c - n * 0.05, c + n * 0.05, 0.104), k=0.006)
-    part("cap", cap, "stone", "bone:x_cap_tip", 3600)
+    part("cap", cap, "stone", "bone:x_cap_tip", 2900)
     band = Sculpt("cap_band")
     band.add(Torus((0, 0, 2.02), 0.553, 0.026, rz=0.028), k=0.0)
     for i in range(24):
         a = 2 * math.pi * i / 24
         band.add(Sphere((math.cos(a) * 0.578, math.sin(a) * 0.578, 2.022), 0.011), k=0.004)
-    part("cap_band", band, "ironstone", "bone:x_cap_tip", 1100, 0.6)
+    part("cap_band", band, "ironstone", "bone:x_cap_tip", 800, 0.6)
     frames, glass = Sculpt("windows_frame"), Sculpt("windows_glass")
     for c, n in win:
         frames.add(Torus(c - n * 0.004, 0.098, 0.018, axes=sdf.frame(n), rz=0.015), k=0.0)
         glass.add(Capsule(c - n * 0.022, c - n * 0.010, 0.089), k=0.0)
-    part("windows_frame", frames, "lampresin", "bone:x_cap_tip", 600, 0.6)
+    part("windows_frame", frames, "lampresin", "bone:x_cap_tip", 500, 0.6)
     part("windows_glass", glass, "accent", "bone:x_cap_tip", 240, 0.6)
 
     # HEAD + MASK (rigid on the head)
@@ -160,7 +160,7 @@ def sculpts() -> list:
     head.add(RoundBox((0, -0.17, 1.585), (0.19, 0.08, 0.055), 0.025), k=0.015)
     for sx in (-1, 1):
         head.add(RoundBox((sx * 0.325, -0.07, 1.70), (0.045, 0.13, 0.15), 0.02), k=0.01)
-    part("head", head, "wood", "bone:head", 1000)
+    part("head", head, "wood", "bone:head", 850)
     mask = Sculpt("mask")
     face = Ellipsoid((0, -0.02, 1.735), (0.305, 0.25, 0.165))
     mask.add(face.displaced(lambda P: -0.004 * NOISE(P, 18.0), 0.004), k=0.0)
@@ -182,12 +182,12 @@ def sculpts() -> list:
         torso.add(Ellipsoid((sx * 0.30, 0.05, 1.50), (0.20, 0.20, 0.12)), k=0.08)
         torso.add(Sphere((sx * 0.46, 0.03, 1.33), 0.17), k=0.08)
         torso.add(FlatCapsule((sx * 0.51, 0.03, 1.30), (sx * 0.565, 0.0, 1.06), 0.155, 0.15, 0.15, 0.145, side=(1, 0, 0)), k=0.06)
-    part("shirt", torso, "cloth2", "auto", 2600)
+    part("shirt", torso, "cloth2", "auto", 2200)
     wraps = Sculpt("forearms")
     for sx in (-1, 1):
         fa = FlatCapsule((sx * 0.57, -0.02, 1.04), (sx * 0.55, -0.10, 0.88), 0.14, 0.13, 0.125, 0.12, side=(1, 0, 0))
         wraps.add(fa.displaced(lambda P: 0.006 * np.sin(P[:, 2] * 95.0 + 2.0 * P[:, 0]), 0.006), k=0.0)
-    part("forearms", wraps, "leather", "auto", 800)
+    part("forearms", wraps, "leather", "auto", 650)
     for s, sx in (("R", -1), ("L", 1)):
         hand = Sculpt(f"hand_{s}")
         c = np.array([sx * 0.545, -0.13, 0.795])
@@ -203,26 +203,26 @@ def sculpts() -> list:
     skirt = RoundBox((0, -0.31, 0.71), (0.355, 0.035, 0.29), 0.02, axes=sdf.rot_x(4))
     apron.add(skirt.displaced(folds(0.018, 16.0, axis=0, zfade=(0.95, 0.45)), 0.018), k=0.05)
     apron.add(RoundBox((-0.06, -0.30, 1.20), (0.26, 0.04, 0.16), 0.03, axes=sdf.rot_y(-28) @ sdf.rot_x(-8)), k=0.02)
-    part("apron", apron, "cloth", "auto", 1800)
+    part("apron", apron, "cloth", "auto", 1500)
     tunic = Sculpt("tunic")
     tun = FlatCapsule((0, 0.02, 0.42), (0, 0.01, 1.02), 0.47, 0.35, 0.41, 0.30, side=(1, 0, 0))
     tunic.add(tun.displaced(folds(0.014, 13.0, axis=0, phase=1.3, zfade=(1.0, 0.45)), 0.014), k=0.0)
     tunic.inter(HalfSpace((0, 0, 0.44), (0, 0, -1), 2.0), k=0.01)
-    part("tunic", tunic, "cloth", "auto", 1700)
+    part("tunic", tunic, "cloth", "auto", 1450)
     belt = Sculpt("belt")
     belt.add(Torus((0, 0.0, 1.0), 0.41, 0.045, axes=np.diag([1.0, 0.41 / 0.31, 1.0]), rz=0.035), k=0.0)
     belt.add(RoundBox((0.0, -0.33, 1.0), (0.05, 0.02, 0.035), 0.008), k=0.0)
     for sx in (-1, 1):
         belt.add(Tube([(sx * 0.17, -0.27, 1.38), (sx * 0.20, -0.22, 1.47), (sx * 0.24, -0.05, 1.53), (sx * 0.24, 0.20, 1.45)],
                       [0.022, 0.022, 0.022, 0.022], k=0.01), k=0.0)
-    part("belt", belt, "leather", "auto", 900)
+    part("belt", belt, "leather", "auto", 750)
 
     # LEGS (heat weights), knee slabs rigid on the shins
     legs = Sculpt("legs")
     for sx in (-1, 1):
         legs.add(FlatCapsule((sx * 0.22, 0.03, 0.62), (sx * 0.32, 0.0, 0.26), 0.16, 0.15, 0.14, 0.13, side=(1, 0, 0)), k=0.0)
         legs.add(FlatCapsule((sx * 0.32, 0.0, 0.30), (sx * 0.33, 0.0, 0.14), 0.135, 0.13, 0.13, 0.13, side=(1, 0, 0)), k=0.04)
-    part("legs", legs, "under", "auto", 900)
+    part("legs", legs, "under", "auto", 750)
     for s, sx in (("R", -1), ("L", 1)):
         kn = Sculpt(f"knee_{s}")
         kn.add(RoundBox((sx * 0.335, -0.10, 0.285), (0.13, 0.05, 0.105), 0.025, axes=sdf.rot_x(-6)).displaced(chips(0.01, 7.0), 0.01), k=0.0)
@@ -233,7 +233,7 @@ def sculpts() -> list:
         boots.add(FlatCapsule((sx * 0.335, 0.02, 0.10), (sx * 0.335, 0.02, 0.22), 0.15, 0.14, 0.145, 0.135, side=(1, 0, 0)), k=0.05)
         boots.add(Torus((sx * 0.335, 0.02, 0.20), 0.145, 0.018), k=0.01)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
-    part("boots", boots, "leather", "auto", 1200)
+    part("boots", boots, "leather", "auto", 1000)
 
     # PROPS: the maul on prop.R (modelled along the prop bone's rest axis, so an Aim points the haft exactly:
     # grip at the palm, haft forward, head block 0.74 m out with its 0.40 m length across the haft, pale
@@ -247,7 +247,7 @@ def sculpts() -> list:
     bands = Sculpt("maul_bands")
     for a in (0.42, 0.55):
         bands.add(Torus(G + ax * a, 0.040, 0.011, axes=sdf.rot_x(90)), k=0.0)
-    part("maul_bands", bands, "lampresin", "bone:prop.R", 160, 0.6)
+    part("maul_bands", bands, "lampresin", "bone:prop.R", 100, 0.6)
     hc = G + ax * MAUL_REACH
     mh = Sculpt("maul_head")
     mh.add(RoundBox(hc, (0.12, 0.12, 0.17), 0.03).displaced(chips(0.012, 6.0), 0.012), k=0.0)
@@ -255,7 +255,7 @@ def sculpts() -> list:
     faces = Sculpt("maul_faces")
     for sz in (-1, 1):
         faces.add(RoundBox(hc + (0, 0, sz * 0.185), (0.128, 0.128, 0.026), 0.018).displaced(chips(0.006, 9.0), 0.006), k=0.0)
-    part("maul_faces", faces, "stone", "bone:prop.R", 300, 0.6)
+    part("maul_faces", faces, "stone", "bone:prop.R", 220, 0.6)
     trowel = Sculpt("trowel")
     trowel.add(Capsule((-0.405, -0.06, 1.13), (-0.415, -0.05, 0.98), 0.024), k=0.0)
     trowel.add(RoundBox((-0.425, -0.045, 0.88), (0.012, 0.075, 0.10), 0.01), k=0.01)
@@ -271,7 +271,7 @@ def sculpts() -> list:
     pail.add(Lathe(pc, pail_prof, 0.17, 0.0, 0.29), k=0.0)
     for zz in (0.08, 0.20):
         pail.add(Torus(pc + (0, 0, zz), 0.135 + 0.025 * (zz / 0.28) + 0.004, 0.012, rz=0.022), k=0.0)
-    part("pail", pail, "wood", "bone:hips", 900)
+    part("pail", pail, "wood", "bone:hips", 750)
     return out
 
 
@@ -378,7 +378,7 @@ def clip_overrides(ctx) -> dict:
                   (hips +0.5 m, knees tucked, maul raised high outside the right rim) -> two-footed slam with
                   the maul head driven into the ground in front -> slam hold
       idle        breathing (chest 2-3 cm), a slow weight shift, the maul bobbing at the knee
-      recall      7 s: plants the maul and leans on it, lifts the front-left of the dome off his brow,
+      recall      6 s: plants the maul and leans on it, lifts the front-left of the dome off his brow,
                   rubs the rim, sets it back with a settle and two knocks, taps the maul head into his palm,
                   looks about, back to the lean (closes on its first pose)
       channel     stirs the pail with the left hand, the maul planted
@@ -513,22 +513,22 @@ def clip_overrides(ctx) -> dict:
         (0.0, launch, "linear"), (0.40, apex, "out"), (0.55, apex2, "linear"), (0.82, slam, "in"),
         (1.0, slam_hold, "out")]), 20, {"head": 1.0}), meta={"role": "dash", "apex_t": 0.40, "slam_t": 0.82})
 
-    # idle — breathing, weight shift, maul bob at the knee (90 f loop)
+    # idle — breathing, weight shift, maul bob at the knee (72 f loop)
     def idle(t):
-        b = anim.osc(t, 3)
+        b = anim.osc(t, 2)
         s = anim.osc(t, 1, 0.1)
         p = anim.add(g, anim.P(chest=(2.6 * b, 0, 0), spine=(0.8 * b, 0, 0.8 * s), neck=(-1.2 * b, 0, 0),
                                head=(-1.0 * b, 3.0 * s, 0), hips=(0, 1.5 * s, -1.2 * s),
                                shoulder_L=(0, 0, 1.8 * b), shoulder_R=(0, 0, -1.8 * b)))
         ik = dict(p["ik"])
         hR = ik["hand.R"]
-        ik["hand.R"] = H(rel=(hR.rel[0], hR.rel[1] - 0.03 * anim.osc(t, 3, 0.1), hR.rel[2] + 0.02 * anim.osc(t, 3, 0.15)), pole=hR.pole)
-        ik["aim.R"] = A((-0.08, -0.88 + 0.05 * anim.osc(t, 3, 0.2), -0.47))
+        ik["hand.R"] = H(rel=(hR.rel[0], hR.rel[1] - 0.03 * anim.osc(t, 2, 0.1), hR.rel[2] + 0.02 * anim.osc(t, 2, 0.15)), pole=hR.pole)
+        ik["aim.R"] = A((-0.08, -0.88 + 0.05 * anim.osc(t, 2, 0.2), -0.47))
         p["ik"] = ik
         hx, hy, hz = p["hips_loc"]
         p["hips_loc"] = (hx + 0.022 * s, hy, hz - 0.010 * (0.5 + 0.5 * b))
         return p
-    out["idle"] = anim.Clip("idle", 90, True, idle)
+    out["idle"] = anim.Clip("idle", 72, True, idle)
 
     # the planted lean shared by recall and channel: maul head on the ground right-front, leaning on the haft
     lean = pose(dict(hips=(4, -6, 0), spine=(4, -4, 2), chest=(5, -6, 2), head=(-3, 6, 0)), (0.02, 0.0, -0.02),
@@ -537,7 +537,8 @@ def clip_overrides(ctx) -> dict:
     def at(key_list):
         return anim.keyed(key_list)
 
-    # recall — 7 s (210 f), closes on its first pose
+    # recall — 6 s (180 f, the load test caps a clip at 6 s; over RIFT's 7 s the loop replays its opening lean and
+    # breath, seamless: it closes on its first pose)
     rim_L = (0.30, -0.06, 0.96)
     lift = pose(dict(hips=(2, 4, 0), spine=(0, 4, -2), chest=(-2, 6, -3), neck=(6, 0, 0), head=(14, -6, 0)),
                 (0.0, 0.0, 0.0), R=(-0.12, -0.56, -0.80), aim=(-0.10, -0.85, -0.52), L=rim_L, Lp=(0.9, 0.2, 0.0),
@@ -570,7 +571,7 @@ def clip_overrides(ctx) -> dict:
         (0.71, palm_up, "inout"), (0.735, palm_tap, "in"), (0.76, palm_up, "out"), (0.785, palm_tap, "in"),
         (0.81, palm_up, "out"),
         (0.86, look_l, "inout"), (0.91, look_r, "inout"), (0.95, breathe_in, "inout"), (1.0, lean, "inout")])
-    out["recall"] = anim.Clip("recall", 210, True, anim.drag(rec, 210, {"head": 2.0, "neck": 1.0}, loop=True))
+    out["recall"] = anim.Clip("recall", 180, True, anim.drag(rec, 180, {"head": 2.0, "neck": 1.0}, loop=True))
 
     # channel — stirring the pail (60 f loop)
     stir = pose(dict(hips=(8, 10, 0), spine=(8, 8, 0), chest=(10, 10, 0), neck=(6, 6, 0), head=(14, 12, 0)),
@@ -588,7 +589,7 @@ def clip_overrides(ctx) -> dict:
         hx, hy, hz = p["hips_loc"]
         p["hips_loc"] = (hx + 0.025 * s, hy - 0.015 * c, hz - 0.012 * (0.5 + 0.5 * c))
         return p
-    out["channel"] = anim.Clip("channel", 60, True, channel)
+    out["channel"] = anim.Clip("channel", 48, True, channel)
 
     # idle_lobby — palm taps, a hand along the rim, a look into the pail (120 f loop)
     rest_l = pose(dict(hips=(2, -4, 0), spine=(2, -2, 0), chest=(3, -4, 0), head=(-2, 4, 0)), (0.0, 0.0, -0.02),

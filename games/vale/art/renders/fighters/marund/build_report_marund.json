@@ -59,7 +59,7 @@
         "foot.R"
       ]
     },
-    "tris_apron": 1800,
+    "tris_apron": 1798,
     "bind_tunic": {
       "heat_ok": true,
       "unweighted": 0,
@@ -73,7 +73,6 @@
         "shoulder.R",
         "upper_arm.R",
         "forearm.R",
-        "hand.R",
         "shin.L",
         "foot.L",
         "toe.L",
@@ -141,41 +140,43 @@
         "hand.R"
       ]
     },
-    "tris_boots": 1198,
+    "tris_boots": 1200,
     "tris_cap": 3600,
     "tris_cap_band": 1098,
     "tris_windows_frame": 600,
     "tris_windows_glass": 240,
     "tris_head": 1000,
-    "tris_mask": 1498,
+    "tris_mask": 1500,
     "tris_hand_R": 600,
     "tris_hand_L": 600,
     "tris_knee_R": 250,
     "tris_knee_L": 250,
-    "tris_maul_haft": 200,
-    "tris_maul_head": 400,
-    "tris_rod_l": 150,
+    "tris_maul_haft": 320,
+    "tris_maul_bands": 160,
+    "tris_maul_head": 420,
+    "tris_maul_faces": 300,
+    "tris_trowel": 150,
     "tris_pail": 900,
-    "validate_marund": "21038->21029",
+    "validate_marund": "21640->21628",
     "validate_marund_accent": "240->236"
   },
-  "uv_coverage": 0.638,
+  "uv_coverage": 0.621,
   "bake": {
-    "base": 2.26,
-    "rough_metal": 1.6,
-    "normal": 1.21,
-    "ao": 1.86,
-    "normal_fixed_px": 27696,
-    "projection": 15.05,
-    "pack_save": 15.17,
-    "total": 22.29
+    "base": 13.44,
+    "rough_metal": 25.0,
+    "normal": 27.47,
+    "ao": 11.64,
+    "normal_fixed_px": 25072,
+    "projection": 139.57,
+    "pack_save": 140.78,
+    "total": 219.62
   },
-  "tris": 21265,
+  "tris": 21864,
   "mesh_top_m": 2.317,
   "clips": {
     "idle": {
-      "frames": 72,
-      "duration_s": 2.4,
+      "frames": 90,
+      "duration_s": 3.0,
       "loop": true,
       "impact": null
     },
@@ -189,38 +190,38 @@
       "cycle_s": 0.8
     },
     "attack1": {
-      "frames": 30,
-      "duration_s": 1.0,
-      "loop": false,
-      "impact": 0.4
-    },
-    "attack2": {
-      "frames": 30,
-      "duration_s": 1.0,
-      "loop": false,
-      "impact": 0.4
-    },
-    "cast_a1": {
-      "frames": 35,
-      "duration_s": 1.1667,
-      "loop": false,
-      "impact": 0.4
-    },
-    "cast_a2": {
-      "frames": 35,
-      "duration_s": 1.1667,
-      "loop": false,
-      "impact": 0.4
-    },
-    "cast_a3": {
       "frames": 40,
       "duration_s": 1.3333,
       "loop": false,
       "impact": 0.4
     },
+    "attack2": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
     "cast_ult": {
-      "frames": 60,
-      "duration_s": 2.0,
+      "frames": 45,
+      "duration_s": 1.5,
       "loop": false,
       "impact": 0.4
     },
@@ -231,14 +232,14 @@
       "impact": null
     },
     "recall": {
-      "frames": 60,
-      "duration_s": 2.0,
+      "frames": 210,
+      "duration_s": 7.0,
       "loop": true,
       "impact": null
     },
     "idle_lobby": {
-      "frames": 96,
-      "duration_s": 3.2,
+      "frames": 120,
+      "duration_s": 4.0,
       "loop": true,
       "impact": null
     },
@@ -249,8 +250,8 @@
       "impact": null
     },
     "channel": {
-      "frames": 40,
-      "duration_s": 1.3333,
+      "frames": 60,
+      "duration_s": 2.0,
       "loop": true,
       "impact": null
     },
@@ -265,27 +266,38 @@
       "duration_s": 1.3333,
       "loop": true,
       "impact": null
+    },
+    "domefall_leap": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": null,
+      "role": "dash",
+      "apex_t": 0.4,
+      "slam_t": 0.82
     }
   },
-  "glb_bytes_raw": 2821432,
+  "glb_bytes_raw": 3006520,
   "optimize": {
     "ok": true,
-    "before": 2821432,
-    "after": 1189488
+    "before": 3006520,
+    "after": 1260160
   },
-  "glb_bytes": 1189488,
+  "glb_bytes": 1260160,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1162 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_base 2048x2048 296K, marund_normal 512x512 36K, marund_orm 512x512 58K",
-      "  skinned meshes: marund(17352v), marund_accent(126v)",
-      "  bones: 24 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:1.000s/20tr, attack2:1.000s/20tr, cast_a1:1.167s/20tr, cast_a2:1.167s/20tr, cast_a3:1.333s/20tr, cast_ult:2.000s/20tr, channel:1.333s/20tr, dash:0.667s/21tr, death:2.000s/20tr, idle:2.400s/20tr, idle_lobby:3.200s/20tr, recall:2.000s/21tr, run:0.800s/22tr, stunned:1.333s/20tr, victory:2.000s/20tr",
-      "  tracks checked: 304; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 21265; bind-pose bounds (three units, Y up): 1.62 x 2.32 x 1.28; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1231 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_base 2048x2048 296K, marund_normal 512x512 38K, marund_orm 512x512 59K",
+      "  skinned meshes: marund(18082v), marund_accent(126v)",
+      "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
+      "  clips: attack1:1.333s/22tr, attack2:1.333s/21tr, cast_a1:0.833s/23tr, cast_a2:1.333s/22tr, cast_a3:1.000s/22tr, cast_ult:1.500s/23tr, channel:2.000s/21tr, dash:0.667s/22tr, death:2.000s/21tr, domefall_leap:0.667s/23tr, idle:3.000s/21tr, idle_lobby:4.000s/21tr, recall:7.000s/22tr, run:0.800s/23tr, stunned:1.333s/21tr, victory:2.000s/22tr",
+      "  tracks checked: 350; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
+      "  tris: 21864; bind-pose bounds (three units, Y up): 1.43 x 2.32 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
       "  run: 24 f, planted samples 6, max foot-speed error 1.2%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (2)",
+      "  - GLB is 1231 KiB > budget 1172 KiB",
+      "  - recall: duration 7.00 s out of range"
     ]
   },
   "three_qa": {
@@ -293,14 +305,14 @@
     "mode": "sheet",
     "bindBox": [
       [
-        -0.77,
+        -0.715,
         0,
         -0.638
       ],
       [
-        0.852,
+        0.717,
         2.317,
-        0.638
+        0.933
       ]
     ],
     "facing": [
@@ -308,34 +320,35 @@
       1
     ],
     "headY": 1.579,
-    "accentPct": 2.12,
+    "accentPct": 2.08,
     "accentTopHalfPct": 100,
     "heightPx1080": 125,
     "size": [
       2400,
       900
     ],
-    "clips": 15,
+    "clips": 16,
     "out": "art/renders/fighters/marund/three_marund.png",
-    "seconds": 5.6,
-    "exit": 0
+    "seconds": 120.7,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/marund/three_clips_marund.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.11,
-      "model": 3.43,
-      "lows_bind": 3.81,
-      "uv": 4.94,
-      "bake": 22.29,
-      "clips": 0.07,
-      "export": 0.63,
-      "optimize": 0.57,
-      "load_test": 0.1,
-      "three_qa": 5.78,
-      "cache": 0.04
+      "rig": 0.61,
+      "materials": 2.63,
+      "model": 46.54,
+      "lows_bind": 27.28,
+      "uv": 45.48,
+      "bake": 219.62,
+      "clips": 0.86,
+      "export": 14.35,
+      "optimize": 7.29,
+      "load_test": 1.24,
+      "three_qa": 295.56,
+      "cache": 0.7
     },
-    "total_s": 41.8
+    "total_s": 662.65
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

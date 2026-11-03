@@ -11,13 +11,15 @@
 //     run so the hit is the only sound. Per hit: the onset (first sample within 30 dB of the hit's peak) → context
 //     time → performance time at the OUTPUT via AudioContext.getOutputTimestamp() (which places a context time on the
 //     device clock), cross-checked by the inject-time clock + baseLatency + outputLatency. Offset = heard − the impact
-//     frame's rAF timestamp. Then the PLATFORM REFERENCE (CW2 refix): --refs (20) bare clicks, a raw AudioBufferSource
-//     started at 0 straight into the recorded output from the same frame-loop point, measured the same way: what any
-//     WebAudio sound started that frame costs on this device (the main thread's start() reaches the audio thread at its
-//     next device callback: about one output buffer, ~16 ms on Chrome's fake output, a few ms on a real device; the
-//     engine itself schedules nothing ahead). Gates: p95 <= one frame (the median rAF interval) + outputLatency + the
-//     platform's start hop (the reference's own start-to-onset p50), and the engine adds <= ENGINE_OVER_MS over the
-//     bare platform (engine p95 − reference p50).
+//     frame's rAF timestamp. Then REFERENCE CLICKS (CW2 refix): --refs (30) bare 1 kHz clicks, a raw AudioBufferSource
+//     started at 0 from the same frame-loop point, a third each joining at the output itself ('out': the platform,
+//     no engine), the master's input ('master': + the mastering chain) and the sfx bus ('sfx': + the bus path),
+//     measured the same way. The engine schedules nothing ahead (a cue starts at 0 the moment its event arrives); the
+//     mastering chain has a FIXED latency of its own: the limiter's (WebAudio DynamicsCompressor) built-in 6 ms
+//     look-ahead and the soft clip's 4x oversampler (4 ms; an OfflineAudioContext render of the same nodes reads
+//     comp 6.0 / clip4 4.0 / both 10.0 ms). Gates: p95 <= one frame (the median rAF interval) + outputLatency + the
+//     sfx-bus click's start-to-onset p50 (the chain's latency, documented here instead of dropping the limiter), and
+//     the cue path adds <= ENGINE_OVER_MS over a sound on the sfx bus (p50 vs p50, p95 vs p95).
 //   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--out <json>]
 //     A real match at speed 1, default settings, the autopilot playing your seat. Per 4096-sample block: K-weighted
 //     mean square of the output and of each bus (the sfx bus plus the threat path = what sfx the player hears) →
@@ -41,7 +43,8 @@ const mode = args[0] === 'match' ? 'match' : 'sync';
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
 const HITS = Number(opt('--hits', 50));
-const REFS = Number(opt('--refs', 20));
+const REFS = Number(opt('--refs', 30));
+const REF_AT = ['out', 'master', 'sfx'];   // where a reference click joins: the output itself, the master's input, the sfx bus
 const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
 const SECONDS = Number(opt('--seconds', 420));
@@ -121,8 +124,9 @@ async function runSync() {
           refLeft--;
           due = now + 400 + Math.random() * 300;
           const ts = ctx.getOutputTimestamp();
-          const h = { ref: true, raf: document.timeline.currentTime, perf: now, ct: ctx.currentTime, oc: ts.contextTime, op: ts.performanceTime };
-          const s = ctx.createBufferSource(); s.buffer = click; s.connect(g.out); s.start();
+          const at = ['out', 'master', 'sfx'][refLeft % 3];
+          const h = { ref: at, raf: document.timeline.currentTime, perf: now, ct: ctx.currentTime, oc: ts.contextTime, op: ts.performanceTime };
+          const s = ctx.createBufferSource(); s.buffer = click; s.connect(at === 'out' ? g.out : at === 'master' ? g.master : g.bus.sfx); s.start();
           hits.push(h);
         }
         if (left > 0 && now >= due) {
@@ -170,12 +174,12 @@ async function runSync() {
     const rows = raw.hits.map((h) => {
       const heardTs = h.on30 === null ? null : h.op + (h.on30 - h.oc) * 1000;                         // the device clock
       const heardClk = h.on30 === null ? null : h.perf + (h.on30 - h.ct) * 1000 + baseLatMs + outLatMs;   // inject clock + latencies
-      return { ref: !!h.ref, cue: h.cue ?? null, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
+      return { ref: h.ref ?? null, cue: h.cue ?? null, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
         offTsMs: heardTs === null ? null : r2(heardTs - h.raf), offClkMs: heardClk === null ? null : r2(heardClk - h.raf), injectAfterRafMs: r2(h.perf - h.raf) };
     });
     // a hit is measured when its window holds the hit alone: its peak within 3 dB of the hits' median (a match toll or
     // a wave horn landing in the window is another sound) and its own cue logged
-    const refRows = rows.filter((r) => r.ref && r.offTsMs !== null);
+    const refRows = rows.filter((r) => r.ref === 'out' && r.offTsMs !== null);
     const medPk = pct(rows.filter((r) => !r.ref && r.peakDb !== null).map((r) => r.peakDb), 50);
     const ok = rows.filter((r) => !r.ref && r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
     rep.excluded = rows.length - refRows.length - ok.length;
@@ -199,11 +203,18 @@ async function runSync() {
       startHopMs: { p50: r2(pct(refRows.map((r) => r.schedMs), 50)), p95: r2(pct(refRows.map((r) => r.schedMs), 95)) },
       note: 'a raw AudioBufferSource.start() into the output from the impact frame: the device-callback hop every WebAudio sound pays' };
     rep.engineOverPlatformMs = { p50: r2(rep.offsetMs.p50 - rep.platform.offsetMs.p50), p95: r2(rep.offsetMs.p95 - rep.platform.offsetMs.p50) };
+    // the same click joining further up: the mastering chain's own fixed latency (limiter pre-delay, the soft clip's
+    // oversampler) and the bus path, so the engine's share is what the cue path adds over a sound on the sfx bus
+    rep.chain = Object.fromEntries(REF_AT.map((k) => { const rr = rows.filter((r) => r.ref === k && r.offTsMs !== null);
+      return [k, { n: rr.length, startToOnsetMs: { p50: r2(pct(rr.map((r) => r.schedMs), 50)), p95: r2(pct(rr.map((r) => r.schedMs), 95)) },
+        offsetMs: { p50: r2(pct(rr.map((r) => (tsValid ? r.offTsMs : r.offClkMs)), 50)), p95: r2(pct(rr.map((r) => (tsValid ? r.offTsMs : r.offClkMs)), 95)) } }]; }));
+    const busRef = rep.chain.sfx;
+    rep.engineOverSfxBusMs = { p50: r2(rep.offsetMs.p50 - busRef.offsetMs.p50), p95: r2(rep.offsetMs.p95 - busRef.offsetMs.p95) };
     rep.budgetNoHopMs = r2(frame + outLatMs);
-    rep.budgetMs = r2(frame + outLatMs + (rep.platform.startHopMs.p50 ?? 0));
+    rep.budgetMs = r2(frame + outLatMs + (busRef.startToOnsetMs.p50 ?? 0));
     rep.rows = rows;
-    rep.gates = { measured: ok.length >= HITS * 0.9, platformMeasured: refRows.length >= REFS * 0.9,
-      p95WithinFramePlusOutputPlusHop: rep.offsetMs.p95 <= rep.budgetMs, engineOverPlatformP95: rep.engineOverPlatformMs.p95 <= ENGINE_OVER_MS };
+    rep.gates = { measured: ok.length >= HITS * 0.9, platformMeasured: refRows.length >= (REFS / 3) * 0.9 && busRef.n >= (REFS / 3) * 0.9,
+      p95WithinFramePlusOutputPlusHop: rep.offsetMs.p95 <= rep.budgetMs, engineOverSfxBus: rep.engineOverSfxBusMs.p50 <= ENGINE_OVER_MS && rep.engineOverSfxBusMs.p95 <= ENGINE_OVER_MS };
     rep.pass = Object.values(rep.gates).every(Boolean);
   } catch (e) { rep.err = String(e?.message ?? e); }
   rep.logs = logs.slice(0, 30);

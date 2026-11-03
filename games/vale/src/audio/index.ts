@@ -29,7 +29,9 @@
 //               muted in the background. A master at exactly 0 is the player's explicit full mute and is kept
 //   sync        a cue starts the moment its event reaches the engine (the frame loop pumps the sim, then renders, in one rAF);
 //               a one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in.
-//               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame
+//               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame.
+//               Nothing is scheduled ahead; the mastering chain's only latency is fixed and known: the limiter's
+//               built-in 6 ms look-ahead (WebAudio DynamicsCompressor) and the soft clip's 4x oversampler (4 ms)
 //   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices, cooldown (s), loop; files
 //               decode lazily on first use, UI cues preload; an unknown or missing cue is silently ignored (art
 //               may still be rendering)

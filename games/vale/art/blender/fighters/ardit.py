@@ -788,31 +788,33 @@ def _tab_lower_floor(skel, pose, cfg) -> None:
             _tab_hang(pose, cfg, j + 1, math.degrees(need))
 
 
-TAB_ATTACK, TAB_RELEASE = 18.0, 9.0      # deg / frame: how far ahead a lower bone starts to rise / how fast it falls
+TAB_ATTACK, TAB_RELEASE, TAB_TRAIL = 30.0, 22.0, 2   # deg / frame up a frame early / down; frames of trail
 
 
 def _tab_envelope(out, cfg, loop) -> None:
     """closing ardit-M3: with the top segment held back, the knee's floor kicked the lower bones up to 40 deg in one
-    frame and dropped them as fast (a pop). Each lower bone's swing is an envelope over its floored series: it starts
-    up a frame early (TAB_ATTACK) and settles back at TAB_RELEASE deg per frame, the cloth trailing the knee down; it
-    never sits under the floor"""
+    frame and dropped them as fast (a pop). Each lower bone's swing is a short envelope over its floored series: it
+    starts up a frame early (TAB_ATTACK) and falls at most TAB_RELEASE deg per frame for TAB_TRAIL frames, so the cloth
+    eases off the knee; it never sits under the floor. The bone below counter-rotates by gravity's share of any lift
+    (as _tab_hang), so it keeps hanging instead of riding up with it"""
     n = len(out) - 1 if loop else len(out)
     if n < 3:
         return
-    for b in cfg.bones[1:]:
+    for j, b in enumerate(cfg.bones[1:], 1):
         a = [out[f].get(b, (0.0, 0.0, 0.0))[0] for f in range(n)]
-        e = list(a)
         for f in range(n):
-            for k in range(1, 6):
+            e = a[f]
+            for k in range(1, TAB_TRAIL + 1):
                 g = (f - k) % n if loop else f - k
                 if 0 <= g < n:
-                    e[f] = max(e[f], a[g] - TAB_RELEASE * k)
+                    e = max(e, a[g] - TAB_RELEASE * k)
             g = (f + 1) % n if loop else f + 1
             if 0 <= g < n:
-                e[f] = max(e[f], a[g] - TAB_ATTACK)
-        for f in range(n):
-            r = out[f].get(b, (0.0, 0.0, 0.0))
-            out[f][b] = (e[f], r[1], r[2])
+                e = max(e, a[g] - TAB_ATTACK)
+            if e > a[f] + 1e-6:
+                r = out[f].get(b, (0.0, 0.0, 0.0))
+                out[f][b] = (e, r[1], r[2])
+                _tab_hang(out[f], cfg, j + 1, e - a[f])
 
 
 def _tab_hang(pose, cfg, j, lift) -> None:

@@ -600,8 +600,9 @@ def sculpts(lanterns: bool = False) -> list:
     cap.sub(as_prim(tuck), k=0.012)
     dome = Ellipsoid((0, -0.005, 1.765), (0.134, 0.122, 0.12))
     cap.add(dome.displaced(felt(0.0025, 24.0), 0.003), k=0.02)
-    cap.add(Capsule((0, -0.005, 1.872), (0, -0.005, 1.885), 0.02), k=0.012)
-    cap.add(Sphere((0, -0.005, 1.893), 0.021), k=0.008)
+    # ruling 7 (crown rule for soft head coverings, fit radius >= 10 cm at 3 cm under the top): the 4 cm knob on the
+    # crown (5.0 cm) is now a flat stitched felt button ring 3 mm proud of the dome (the dome's own crown, ~11 cm)
+    cap.add(Torus((0, -0.005, 1.881), 0.024, 0.0065), k=0.006)
     cap.sub(Tube([(0.004, -0.124, 1.80), (0.006, -0.10, 1.85), (0.003, -0.05, 1.88)], [0.004] * 3), k=0.003)
     cap.sub(Tube([(0.0, 0.112, 1.80), (0.0, 0.09, 1.85), (0.0, 0.04, 1.88)], [0.004] * 3), k=0.003)
     part("cap", cap, "cloth2", "bone:head", 1000)
@@ -1295,7 +1296,12 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 #    RIFT, 62 on FRAY (seen from behind) -> the head, cap, jars, fists and the bar a clear step lighter (mask L* 62 ->
 #    68, cap 45 -> 58, jars 58 -> 65, bar 66 -> 75) and the jerkin lifted by height toward the shoulders (COAT_LIFT);
 #    the skirt, trousers and boots are untouched (the dark-feet end of the gradient)
-TONE = {"mask": ("#BBA37C", 0.04), "cap": ("#9E8872", 0.22), "coat": ("#6A4937", 0.30), "skirt": ("#634434", 0.30),
+# CLOSING (odrum-M2): the cap read as a bald peach scalp and the lifted jerkin as bare skin (game HSV 25 / 0.30-0.36,
+# the light-skin range). Same values, hue and chroma moved off skin: the cap an oat felt (hue 41 / sat 0.15 here; the
+# warm character light takes ~5 deg of hue and adds ~0.03 sat, so it lands at hue ~36 / sat <= 0.20 in game) with
+# darker stitched panels radiating from the crown (CAP_SEAMS), the jerkin a cooler brown and its lifted top faded
+# further toward a grey-brown felt (COAT_FADED / COAT_FADE), its folds darkened (FOLD_CAVITY)
+TONE = {"mask": ("#BBA37C", 0.04), "cap": ("#968F80", 0.08), "coat": ("#674F3D", 0.30), "skirt": ("#634434", 0.30),
         "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
 POT_GLAZE = "#B79871"                     # the jars' golden-ochre glaze (L* 65, hue 33.5, sat 38.5 %; was #C07E32;
                                           # at hue 36-37 its shade drifted olive under the hero renders' sky fill)
@@ -1313,8 +1319,10 @@ FIST = "#C08F5C"                          # the carved ochre fists: the mask's o
 # toward a sun-faded felt as it lifts (COAT_FADED: the chocolate lightened alone read salmon-pink in game; faded
 # felt on the shoulders under the yoke, not copper)
 COAT_LIFT = ((1.08, 1.0), (1.20, 1.32), (1.32, 1.80), (1.42, 2.25))
-COAT_FADE = 0.45
-COAT_FADED = "#95806D"                    # ... toward this sun-faded felt (hue 28, sat 27 %), at the texel's own value
+COAT_FADE = 0.65
+COAT_FADED = "#8E8473"                    # ... toward this sun-faded felt (hue 38, sat 19 %), at the texel's own value
+CAP_SEAMS = (6, 0.72, 0.035)              # the cap's stitched felt panels: seam count, seam luminance x, half-width (rad)
+FOLD_CAVITY = 0.65                        # the jerkin's and skirt's fold cavities: luminance x at the deepest (~8-10 L*)
 BACK_LIFT = 0.80                          # the jars' and the bar's painted light also takes the back key (x this)
 
 
@@ -1868,6 +1876,31 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
         c = out[m] * nap[:, None]
         g_ = (c @ LUMA)[:, None]
         out[m] = np.clip(g_ + (c - g_) * 0.92, 0, 1)                # a touch less saturated in the lit nap
+    # the cap's stitched felt panels (odrum-M2: felt, not a scalp): CAP_SEAMS seams radiating from the crown, each a
+    # darker sunk line, the panels between them alternating a step in value; only on the dome above the rolled brim
+    m = sel("cap")
+    if m is not None:
+        p = Pw[m].astype(np.float64)
+        n_s, k_s, w_s = CAP_SEAMS
+        ang = np.arctan2(p[:, 0], p[:, 1] + 0.005) + 0.5 * math.pi / n_s
+        u = ang * n_s / (2.0 * math.pi)
+        dist = np.abs((u + 0.5) % 1.0 - 0.5) * 2.0 * math.pi / n_s
+        dome = np.clip((p[:, 2] - 1.785) / 0.025, 0.0, 1.0)
+        seam = np.clip(1.0 - dist / w_s, 0.0, 1.0) ** 0.7 * dome
+        par = np.where(np.floor(u + 0.5).astype(int) % 2 == 0, 1.0, -1.0) * dome
+        f = (1.0 - (1.0 - k_s) * seam) * (1.0 + 0.035 * par)
+        out[m] = np.clip(out[m] * f[:, None], 0, 1)
+    # the jerkin's and skirt's fold cavities (odrum-M2): narrow dark creases running down from the belt and the
+    # yoke's shoulders, so the felt reads as folded cloth at the gameplay camera, not a smooth bare surface
+    for nm in ("coat", "skirt"):
+        m = sel(nm)
+        if m is None:
+            continue
+        p = Pw[m].astype(np.float64)
+        th = np.arctan2(p[:, 0], p[:, 1])
+        u = th * (7.0 if nm == "coat" else 9.0) + 0.9 * NOISE(p, 3.0) + 0.6 * p[:, 2]
+        crease = np.clip(1.0 - np.abs(np.sin(u)) / 0.30, 0.0, 1.0) ** 1.5
+        out[m] = np.clip(out[m] * (1.0 - (1.0 - FOLD_CAVITY) * crease)[:, None], 0, 1)
     # the eye voids: ink, darkest at the floor (the projection blends the head's back paint onto their walls)
     m = sel("mask")
     if m is not None:
@@ -2222,6 +2255,16 @@ anim.resolve = _resolve_plumb
 MOTION = anim.motion_profile(weight="medium", weapon="staff", stance="neutral", run_ref_speed=3.35)
 HT, Aim, FT, P = anim.HandTarget, anim.Aim, anim.FootTarget, anim.P
 PIV = Vector((0.0, 0.17, staff_z(0.0)))                  # behind the neck: the yoke turns about it on the shoulders
+# THE CARRY (closing review odrum-M1): square across the shoulders the 2.06 m bar lies along the screen's depth axis
+# whenever he walks or trades along a RIFT lane (every lane runs screen-left/right) and reads as a vertical pole
+# through the body (57.8 % of match samples). He carries it as a porter's diagonal rest carry instead: balanced on
+# the RIGHT shoulder (PR_CARRY), yawed CARRY_YAW off the shoulder line, the sling end low and forward at his
+# right, the long end high behind the left shoulder (CARRY_TILT). Modelled on the closing review's own match
+# facings (_harness/_reports/closing_odrum_yoke_facing.json): 52 deg / 10 deg puts the bar within 30 deg of
+# vertical in ~17-19 % of samples (<= 20 %), and within 30 deg of horizontal in ~45 % (was 15.5 %). Idle, run,
+# recall and the entries / exits of every gesture start from it (gI), the pots hang plumb from the ends.
+PR_CARRY = Vector((-0.25, 0.17, staff_z(-0.25)))
+CARRY_YAW, CARRY_TILT = 52.0, 10.0
 GRIP0, WRIST0, AX0 = Vector(tuple(GRIP_R)), Vector(tuple(WRIST_R)), Vector(tuple(STAFF_AX))
 ARM_BONES = ("upper_arm.L", "forearm.L", "hand.L", "upper_arm.R", "forearm.R", "hand.R")
 
@@ -2393,6 +2436,11 @@ def clip_overrides(ctx) -> dict:
         _POLES[sd] = tuple(Rc.inverted() @ (e - a * e.dot(a)).normalized())
         rest_ik[sd] = HT(pos=tuple(wr), pole=_POLES[sd])
     gI = anim.merge(g, {"ik": {"hand.R": rest_ik["R"], "aim.R": Aim(tuple(M["prop.R"].to_3x3().col[1].normalized()))}})
+    CARRY = yoke_about(PR_CARRY, CARRY_YAW, CARRY_TILT)
+    gI = anim.merge(gI, ride(skel, g, *CARRY))              # the guard IS the diagonal carry (odrum-M1)
+
+    def carried(body):
+        return anim.merge(body, ride(skel, body, *CARRY))
 
     # IDLE (72, loop)
     def idle_s(t):
@@ -2400,7 +2448,7 @@ def clip_overrides(ctx) -> dict:
         d = P(chest=(1.2 * b, 0, 0), spine=(0.5 * b, 0, 0.6 * w), neck=(-0.8 * b, 0, 0), head=(-0.4 * b, 1.5 * w, 0),
               hips=(0, 1.2 * w, -1.0 * w), shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.0 * b),
               upper_arm_L=(1.5 * w, 0, 0), forearm_L=(3.0 + 2.0 * b, 0, 0))
-        return with_hips(anim.add(g, d), (0.012 * w, 0.0, -0.004 * (0.5 + 0.5 * b)))
+        return carried(with_hips(anim.add(g, d), (0.012 * w, 0.0, -0.004 * (0.5 + 0.5 * b))))
     out["idle"] = anim.Clip("idle", 72, True, idle_s)
 
     # RUN (the shared run cycle for the legs, torso and bob; the yoke stays on the shoulders). On this rig the
@@ -2447,6 +2495,7 @@ def clip_overrides(ctx) -> dict:
         p["forearm.L"] = (24.0 + 16.0 * max(0.0, -sw), 0.0, 0.0)
         p["hand.L"] = (4.0, 0.0, 0.0)
         p["upper_arm.R"] = (0.0, 0.0, 0.0)
+        p["ik"].update(ride(skel, p, *CARRY)["ik"])
         return p
     out["run"] = anim.Clip("run", base_run.frames, True, run_s, meta=dict(base_run.meta))
 
@@ -2473,9 +2522,9 @@ def clip_overrides(ctx) -> dict:
     b_f = pose(g, P(hips=(4, 7, 0), spine=(5, 6, 0), chest=(7, 8, -2), head=(-5, -8, 0), upper_arm_L=(55, 0, 10),
                     forearm_L=(22, 0, 0), hand_L=(15, 0, 0)), (0, -0.035, -0.025))
     out["attack1"] = strike("attack1", 25, gI,
-                            rp(b_w, yoke_about(PIV, -6, -12, (0.0, 0.01, 0.0)), swing(8, 0)),
-                            rp(b_h, yoke_about(PIV, 13, 10, (0.0, 0.015, 0.0)), swing(26, 6)),
-                            rp(b_f, yoke_about(PIV, 15, 8, (0.0, 0.015, 0.0)), swing(14, 4)))
+                            rp(b_w, yoke_about(PR_CARRY, CARRY_YAW - 6, CARRY_TILT - 12, (0.0, 0.01, 0.0)), swing(8, 0)),
+                            rp(b_h, yoke_about(PR_CARRY, CARRY_YAW + 13, CARRY_TILT + 10, (0.0, 0.015, 0.0)), swing(26, 6)),
+                            rp(b_f, yoke_about(PR_CARRY, CARRY_YAW + 15, CARRY_TILT + 8, (0.0, 0.015, 0.0)), swing(14, 4)))
 
     # ATTACK2 (25, f10): the staff jab as a LANCE, two-handed, the LONG end leading (the seventh pass: with the short
     # sling end forward the 1.4 m long part trailed behind him and dominated the read, and the near pot hung over the
@@ -2656,7 +2705,7 @@ def clip_overrides(ctx) -> dict:
     out["cast_a3"] = anim.Clip("cast_a3", 20, False, anim.drag(seq(keys), 20, {"head": 1.0}), impact=anim.IMPACT)
 
     out["cast_ult"] = _ult(skel, g, gI)
-    out.update(_others(skel, g, gI, rest_ik, hip_h))
+    out.update(_others(skel, g, gI, rest_ik, hip_h, carried))
     return out
 
 
@@ -2806,7 +2855,7 @@ def _ult(skel, g, gI) -> anim.Clip:
     return anim.Clip("cast_ult", N, False, anim.drag(sample, N, {"head": 1.0, "neck": 0.7}), impact=anim.IMPACT)
 
 
-def _others(skel, g, gI, rest_ik, hip_h) -> dict:
+def _others(skel, g, gI, rest_ik, hip_h, carried=lambda b: b) -> dict:
     out = {}
     osc = anim.osc
 
@@ -2862,7 +2911,7 @@ def _others(skel, g, gI, rest_ik, hip_h) -> dict:
         p = anim.add(kneel, P(chest=(1.2 * b - 4 * shrug + 6 * bow, 0, 0), spine=(-2 * shrug + 3 * bow, 0, 0),
                               neck=(-6 * shrug + 4 * bow, 0, 0), head=(-0.8 * b - 8 * shrug + 8 * bow, 0, 0),
                               shoulder_L=(0, 0, 6 * shrug), shoulder_R=(0, 0, -6 * shrug)))
-        return with_hips(p, (0.0, 0.0, 0.003 * b + 0.012 * shrug))
+        return carried(with_hips(p, (0.0, 0.0, 0.003 * b + 0.012 * shrug)))
     out["recall"] = anim.Clip("recall", 60, True, recall_s)
 
     # IDLE_LOBBY (120, loop): reaches out to the near (left) pot at the yoke's end and taps it twice with a knuckle,
