@@ -3,6 +3,52 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-02 — Wave 9 round 1: doors on houses, bot fall guard + revive fixes, terminal velocity (LIVE ?v=1793664196)
+
+Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R1B bots / fall). Every map's buildings changed, so
+`MAP_GEN_VERSION` is 8: an older page and this one cannot share a squad room. Phones are unchanged.
+
+**Doors (LC-91, geometry only this round)**
+- Every outside door and about half the inside doors now have swinging double doors, drawn in one batch (`houses:doors@all`), with solid
+  "closed" and "open" collision slabs and a door API on the map (`setDoor`, `doorNear`, `doorAt`, `doorStates`, `applyDoorStates`, `doorChanged`).
+- Every door starts **open** this round. The start state is read once per map build from `K.DOOR_START` (only the word "closed" shuts a door);
+  the sim does not set it yet, so all doors stay open until players and bots can open doors (round 2).
+- Doors swing clear of furniture: wall art and decorations taller than a rug are kept out of a door's swing.
+- Furnished rooms keep every route between doorways and stair ends at least 1.4 m wide, so bots never climb a stair they cannot come back down.
+- The furniture check judges what you actually see from the third-person camera; every building passes (116 of 116 views).
+- Runtime colliders: `maps.js` gains `addDynamicCollider` / `removeDynamicCollider`; the city kit's collider shape matches `maps.js` again.
+
+**Bots**
+- Swimmers are no longer exempt from the stuck-loop breaker: a bot stuck swimming heads for the nearest shore.
+- Calm drop guard: a calm bot no longer walks off ledges higher than 6.3 m (Isla Viva Volcano Rim); it re-plans, and its edge guard walks it
+  to a route corner short of the drop instead of holding it at the lip.
+- A downed bot's teammate commits to fighting or reviving instead of dithering; no revive starts while an enemy was seen in the last 10 s;
+  a pressing storm rotation still outranks a committed revive.
+- Shields (OD-16): far big-shield seeking is parked (it cost about 25 KB per frame in fights and bought no shield); the supply crate is
+  unchanged.
+
+**Falling (LC-61)**
+- Falls now have a terminal velocity. A fall of more than 12 m ends in a heavy landing that blocks firing and aiming for at least 0.3 s
+  (not after a glide or parachute landing).
+
+**Gates**
+- New rows, each with a planted fault that must fail it: collisioncheck doors-open / doors-closed / door-cycle; interiorcheck reads door leaves
+  where the GPU draws them; housegen selftest C3 (no-hash) and C1 start-state (start-ignored); p23_fall terminal / heavy / heavy-12.2 / rim and
+  the lip part over Isla Viva seeds 77 + 7; p23_dbno bot dither / revive-start and the two-human size row; p23_tierprof bots p95 <= 3 ms;
+  p23_botbatch census-600; probe_match sweep + swim-trap and the scripted Volcano Rim pen (`--pencheck`).
+- Corrected measures (bars unchanged): housegen_demo_nav's stand-in skips dead colliders like the game does; houseload compares both builds on
+  the same replayed query stream (x1.25 kept); framecheck draws drop frame 1 from the live build's landing zone (x1.25 kept).
+- `MAP_GEN_TARGET` 8; housegen_demo_looks is counted now (`LOOKS_INFO = False`).
+
+**Known gaps**
+- OD-16 bot shield economy: the median late-match bot shield is about 11-15 against a target of 75. Accepted by the owner on 2026-11-02;
+  the bar stays at 75 and the p23_botbatch shield-600 row stays registered and red.
+- houseload `--seed 9`: the Savanna (ashgrid) outpost district draws 19 calls against a bar of 16. This is the same on the live build
+  (pre-existing, not caused by this round); the counted houseload run uses seed 7.
+- p23_tierprof auto-ground on Savanna: raw p50 about 20.1-20.3 ms against 20 ms. This is shared-machine timing; the live build's base
+  09720db0 fails the same row.
+- A calm bot can still be penned at the Volcano Rim face by a town-grid route (navgrid, outside this round's files); scheduled for a later round.
+
 ## 2026-10-30 — Wave 8 + parity waves P1 / P2 / P3: team modes, revives, fall damage, grenades, new guns, furnished houses (LIVE ?v=1793384602)
 
 One release for four waves of work: Wave 8 (furnished interiors) and the parity waves P1, P2 and P3 (what the big battle royales do that we did
