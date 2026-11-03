@@ -59,10 +59,11 @@ python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dr
 python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis
 ```
 
-**Do not publish GENESIS with `upload_game.py`, `upload-game.bat` or `python upload_game.py --all`** (the "easy way" in
-`UPLOAD_GAMES.md`). They deploy `games/<slug>/` itself rather than its `dist/`, so they would upload the dev tree
-described above. This holds until the pipeline learns to deploy `dist/`. A fleet redeploy with `--all` needs the
-same care, because it picks up `games/genesis` too. Other deployment details are in the repository's `DEPLOY.md`.
+`upload_game.py`, `upload-game.bat` and `python upload_game.py --all` (the "easy way" in `UPLOAD_GAMES.md`) are
+safe for GENESIS too: they see that `games/genesis/index.html` is a Vite dev entry and upload `games/genesis/dist/`
+instead, and they skip GENESIS (never upload the dev tree) when `dist/` is missing or older than `src/`, `public/` or
+`index.html`. Build first either way; `python upload_game.py --check` says which folder each game will use.
+Other deployment details are in the repository's `DEPLOY.md`.
 `public/game_controls.js`
 is the ForgeFlow site bar (fullscreen, mute, pause). Its pause stops time and shows the game menu, and pressing it
 again restores the speed. `index.html` sets `GAME_CONFIG` for the bar.

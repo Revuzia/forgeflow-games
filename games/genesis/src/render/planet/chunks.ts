@@ -167,7 +167,10 @@ export interface ChunkMaterials {
  */
 class PatchBatch {
   readonly mesh: BatchedMesh;
-  private cap: number;
+  /** slot capacity (the pool's CPU attribute arrays and their GPU mirrors are sized to it) */
+  cap: number;
+  /** the capacity it was made with (it never shrinks below) */
+  readonly minCap: number;
   private used = 0;
   private free: number[] = [];
   private geomId: number[] = [];
@@ -177,6 +180,7 @@ class PatchBatch {
 
   constructor(material: Material, cap: number, layer: number, name: string) {
     this.cap = cap;
+    this.minCap = cap;
     this.vis = new Uint8Array(cap);
     this.mesh = new BatchedMesh(cap, cap * NVERT, cap * NINDEX, material);
     this.mesh.name = name;
@@ -222,6 +226,9 @@ class PatchBatch {
   }
 
   isShown(s: number): boolean { return s >= 0 && this.vis[s] === 1; }
+
+  /** slots holding a patch */
+  get liveSlots(): number { return this.used - this.free.length; }
 
   /** a copy of a slot's vertex data as a stand-alone geometry (a patch that turns wet takes a water slot from it) */
   extract(s: number): BufferGeometry {
@@ -612,12 +619,70 @@ export class ChunkLOD {
     let b = list[level];
     if (!b) {
       // (dry patches never take a water slot: the water pools start small)
-      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 8 : 32, water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`);
-      if (!water && this.castShadows) b.mesh.layers.enable(1);
+      b = this.newBatch(level, water, water ? 8 : 32);
       list[level] = b;
-      this.group.add(b.mesh);
     }
     return b;
+  }
+
+  private newBatch(level: number, water: boolean, cap: number): PatchBatch {
+    const b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), cap, water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`);
+    if (!water && this.castShadows) b.mesh.layers.enable(1);
+    this.group.add(b.mesh);
+    return b;
+  }
+
+  /**
+   * Give back the memory of pools the eviction emptied. A pool only ever doubled (BatchedMesh can't shrink in place),
+   * so each level held its slots — CPU copies of every attribute plus three's GPU mirrors — at its high-water mark
+   * for the whole session, and a camera tour through the LOD depths grew the page by ~1 GB in 30 minutes. Now a pool
+   * whose live slots fit in half its capacity (with a 1.5× margin) is rebuilt at that smaller size, its patches copied
+   * over with their visibility; an empty pool is dropped. The 2× gap between the shrink and grow points keeps a level
+   * from flapping, and the total capacity stays within ~3× the live patch count (≤ maxCached + the eviction slack).
+   */
+  private shrinkPools(): void {
+    for (const water of [false, true]) {
+      const list = water ? this.wBatch : this.tBatch;
+      for (let level = 0; level < list.length; level++) {
+        const b = list[level];
+        if (!b) continue;
+        const n = b.liveSlots;
+        if (n === 0) {
+          this.group.remove(b.mesh);
+          b.dispose();
+          list[level] = null;
+          continue;
+        }
+        const cap = Math.max(b.minCap, Math.ceil(n * 1.5));
+        if (cap > b.cap / 2) continue;
+        const nb = this.newBatch(level, water, cap);
+        for (const p of this.live) {
+          if (p.level !== level) continue;
+          const s = water ? p.wSlot : p.tSlot;
+          if (s < 0) continue;
+          const geo = b.extract(s);
+          const ns = nb.alloc(geo);
+          geo.dispose();
+          nb.show(ns, b.isShown(s));
+          if (water) p.wSlot = ns;
+          else { p.tSlot = ns; p.mesh = nb.mesh; }
+        }
+        nb.mesh.material = b.mesh.material;
+        this.group.remove(b.mesh);
+        b.dispose();
+        list[level] = nb;
+      }
+    }
+  }
+
+  /** slot capacity of every terrain + water pool (memory regression tests) */
+  poolCapacity(): { slots: number; live: number; pools: number } {
+    let slots = 0, live = 0, pools = 0;
+    for (const b of [...this.tBatch, ...this.wBatch]) {
+      if (!b) continue;
+      slots += b.cap; live += b.liveSlots; pools++;
+    }
+    return { slots, live, pools };
   }
 
   private ensureGeometry(p: Patch, budget: boolean): boolean {
@@ -828,7 +893,10 @@ export class ChunkLOD {
   /** drop geometry of long-unused patches when over the cache budget */
   private evict(frame: number): void {
     if (this.live.size <= this.maxCached) return;
-    const cands = [...this.live].filter((p) => frame - p.lastUsed > 120 && p.level > 1).sort((a, b) => a.lastUsed - b.lastUsed);
+    // least recently used first, anything not in use this frame. (It once also had to be 120 frames old: at the few
+    // frames a minute of a starved software renderer nothing ever qualified, and the cache grew past its budget for
+    // the whole session — 2,000+ patches, ~250 MB of CPU attribute copies plus their GPU mirrors, in 9 minutes.)
+    const cands = [...this.live].filter((p) => p.lastUsed < frame && p.level > 1).sort((a, b) => a.lastUsed - b.lastUsed);
     const drop = this.live.size - this.maxCached + 64;
     for (let i = 0; i < Math.min(drop, cands.length); i++) {
       const p = cands[i];
@@ -837,6 +905,7 @@ export class ChunkLOD {
       p.tSlot = -1; p.wSlot = -1; p.built = false; p.mesh = null;
       this.live.delete(p);
     }
+    this.shrinkPools();
   }
 
   /** morph distances for a level: (full-morph distance, morph start) — infinity for level 0 */

@@ -37,6 +37,7 @@ import { emptyRel } from './state.ts';
 import { AgentFlag } from '../types.ts';
 import { GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
 import { speciesInfo } from '../people/ctx.ts';
+import { currentWrath, wrathLaw, WRATH_DEFAULT } from './wrath.ts';
 
 // ───────────────────────────── the universe a planet belongs to ─────────────────────────────
 
@@ -219,6 +220,7 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
       continue;
     }
     const rec: ActRecord = { kind, tick: u.tick, god: ctx.god, dead, foretold: !!seen?.foretold, provoked: !!seen?.provoked, key: ctx.key, until: u.tick };
+    if (ctx.natural) rec.natural = true;
     r.acts.push(rec);
     if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);
   }
@@ -236,6 +238,18 @@ export function noteDeath(p: Planet | number, sid: number): void {
 }
 
 // ───────────────────────────── witnessing (people/culture.ts witness) ─────────────────────────────
+
+/**
+ * sim-fix-r2 #1 (owner decision 3: disasters "although they scare and kill, ... build FEAR, trust, loyalty"; release
+ * owner-r2 runB): how much of unprovoked harm's trust and loyalty penalty (−0.20 / −0.05 in the §3.1 table) an act at
+ * wrath w carries. At or below the default 0.3 — survivable, warnings first, most live — a quarter: the people read it
+ * as a trial they came through, not cruelty; it grows to the full penalty at wrath 0.7 and above. Before, one default
+ * meteor took the trust an answered prayer had built (0.29) to 0.011, and the HUD read Trust 1 five years in.
+ */
+export function cruelty(w: number): number {
+  const x = Math.max(0, Math.min(1, w));
+  return x <= WRATH_DEFAULT ? 0.25 : Math.min(1, 0.25 + 0.75 * (x - WRATH_DEFAULT) / 0.4);
+}
 
 /** is this harm foretold here: an open prophecy of harm (or a sign) for the settlement, or an omen within 2 days */
 function foretoldAt(u: Universe, p: Planet, sid: number, tick: number, day: number): boolean {
@@ -305,6 +319,8 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
   const store = ctx ? ctx.store : {};
   const killed = !!ctx?.killed;
   const natural = !!ctx?.natural;
+  const wrathful = currentWrath() !== null;
+  const cruel = cruelty(currentWrath() ?? (u ? wrathLaw(u) : WRATH_DEFAULT));
   // what the act is to each settlement (decided once per call)
   const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean }>();
   const classify = (sid: number) => {
@@ -351,11 +367,13 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
       } else if (o.kind === 'harm') {
         if (o.foretold) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; }
         else if (o.provoked) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; dT = -0.05 * mk; }
-        else { dF = 0.15 * mk; dFe = 0.35 * mk * fk; dT = -0.2 * mk; dL = -0.05 * mag; }
+        else { dF = 0.15 * mk; dFe = 0.35 * mk * fk; dT = -0.2 * mk * cruel; dL = -0.05 * mag * cruel; }
       } else {
         dF = 0.25 * mk;
         dFe = 0.08 * mk * f;
-        if (o.favour) dT = 0.05 * Math.min(1, mk);
+        // (sim-fix-r2 #1) a harmful cast's own wonder (the funnel coming, the sky splitting) is no favour: what the town
+        // makes of a disaster it survives is its rally afterwards (weathered), not the moment it sees it come
+        if (o.favour && !wrathful) dT = 0.05 * Math.min(1, mk);
       }
     }
     _idx[n] = s;
@@ -440,7 +458,7 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
     freshen(A, s, r.means);
     if (rally) {
       const i = s * GODS + rally.g;
-      if (A.faith[i] > 0.2) { A.love[i] = riseTrust(A.love[i], rally.trust); A.loyalty[i] = clamp01(A.loyalty[i] + rally.loyalty); }
+      if (!rally.natural || A.faith[i] > 0.3) { A.love[i] = riseTrust(A.love[i], rally.trust); A.loyalty[i] = clamp01(A.loyalty[i] + rally.loyalty); }
     }
     for (let g = 0; g < GODS; g++) {
       const i = s * GODS + g;
@@ -463,23 +481,34 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
  * sim-fix-r1 (owner decision 3: disasters "although they scare and kill, ... build FEAR, trust, loyalty"; release owner-r1
  * verdicts 2-3): a town the god's harm struck and left standing rallies once it has had a day's quiet after the last
  * of it — the survivors draw together around their shrine and their god (loyalty +0.07) and read their survival as being
- * spared (trust +0.12, less where many died: × max(0.4, 1 − 2 × the share killed)), each believer (faith > 0.2) once
- * per act. Without it a default tornado left trust and loyalty below a quiet world's on 8 of 8 seeds and only an answered
- * prayer could raise them. A cruel act — unprovoked harm that killed a third or more of them — earns no rally.
+ * spared (trust +0.12, less where many died: × max(0.4, 1 − 2 × the share killed)), once per act. Without it a default
+ * tornado left trust and loyalty below a quiet world's on 8 of 8 seeds and only an answered prayer could raise them. A
+ * cruel act — unprovoked harm that killed a third or more of them — earns no rally.
+ * sim-fix-r2 #1 (owner-r2 runB: Trust 1, Loyalty 12 five years into a storm + drought + prayer + meteor session): the
+ * rally reaches every survivor, not only believers with faith > 0.2 (nature's harm still only those who read it as the
+ * god's, faith > 0.3), and the town keeps recovering its trust as it rebuilds — +0.02 trust, +0.01 loyalty (× the same
+ * scale) each further day to the sixth after the harm.
  */
-function weathered(x: PCtx, r: SettlementRel, n: number): { g: number; trust: number; loyalty: number } | null {
+function weathered(x: PCtx, r: SettlementRel, n: number): { g: number; trust: number; loyalty: number; natural: boolean } | null {
   if (n <= 0) return null;
   const day = Math.max(60, Math.round(x.p.st.dayHours * 60));
+  let out: { g: number; trust: number; loyalty: number; natural: boolean } | null = null;
   for (const a of r.acts) {
-    if (a.kind !== 'harm' || a.weathered || a.god < 0 || a.god >= GODS) continue;
-    if (x.tick - (a.until ?? a.tick) < day) continue;
-    a.weathered = true;
-    if (x.tick - (a.until ?? a.tick) > 6 * day) continue; // an old record (a save from before): no late rally
+    if (a.kind !== 'harm' || a.god < 0 || a.god >= GODS) continue;
+    const age = x.tick - (a.until ?? a.tick);
+    if (age < day) continue;
     const share = a.dead / (n + a.dead);
-    if (share >= 1 / 3 && !a.foretold && !a.provoked) continue;
-    return { g: a.god, trust: 0.12 * Math.max(0.4, 1 - 2 * share), loyalty: 0.07 };
+    const spared = !(share >= 1 / 3 && !a.foretold && !a.provoked);
+    const k = Math.max(0.4, 1 - 2 * share);
+    if (!a.weathered) {
+      a.weathered = true;
+      if (age > 6 * day || !spared) continue; // an old record (a save from before): no late rally
+      if (!out) out = { g: a.god, trust: 0.12 * k, loyalty: 0.07, natural: !!a.natural };
+    } else if (spared && age <= 6 * day && !out) {
+      out = { g: a.god, trust: 0.02 * k, loyalty: 0.01, natural: !!a.natural };
+    }
   }
-  return null;
+  return out;
 }
 
 /** a settlement's four values toward god g, now (member means) */

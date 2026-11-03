@@ -172,6 +172,8 @@ export interface ActRecord {
   /** sim-fix-r1: the tick the act last touched them (a merged record's latest), and whether its survivors have rallied */
   until?: number;
   weathered?: boolean;
+  /** sim-fix-r2 #1: nature's (read as the god's only by believers) — its rally reaches only them */
+  natural?: boolean;
 }
 
 /** a request a settlement makes of its god (LIVING §3.3) */

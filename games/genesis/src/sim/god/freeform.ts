@@ -25,7 +25,7 @@
 //      planet-wide, the wind); ideas, inventions and gifts; miracles; death and healing (death always needs a target:
 //      with none it asks); species laws; then every power's synonyms (powers.json)
 //   5. unknown nouns become NEW CONTENT (god/inventions.ts) only when they are plausibly new things: "introduce
-//      chocolate" (an item with guessed tags, and its craft), "invent telepathy" (an idea with an effect from the effect
+//      chocolate" (an item with guessed tags, and its craft), "invent soap" (an idea with an effect from the effect
 //      vocabulary), "rain frogs" (a weather that rains a new animal), "release unicorns" (a new animal). Words that are
 //      names, verbs, adjectives or powers never become things; then it says what it CAN do, with the nearest powers.
 //   6. a clause that is exactly a power's name or synonym (powers.json) means that power, whatever came first
@@ -49,6 +49,9 @@ import { LAWS } from './acts.ts';
 import { NO_CREATURE } from './creature.ts';
 /** the answer to shape-shifting words: this is a real world, a person stays a person */
 export const NO_SHAPESHIFT = (nm: string): string => `No one changes shape in this world: ${nm} stays a person. You can move, bless, age, teach or smite ${nm}.`;
+/** sim-fix-r2 #6 (owner decision 4, LIVING §0.2 "real phenomena; fantasy nouns map to the nearest real thing or get a
+ *  polite refusal"): the answer to inventing or teaching a fantasy power */
+export const NO_FANTASY = (w: string): string => `There is no ${w} in this world: people can only learn what is real. Teach them something they could discover — writing, medicine, the wheel, astronomy.`;
 import { intentSigns, signsWrath } from './freeform-signs.ts';
 import { intentContent } from './freeform-content.ts';
 import { intentHistory } from './freeform-history.ts';
@@ -94,6 +97,8 @@ interface Lex {
   rains: Record<string, [number, number, number]>;
   animalish: Set<string>;
   abstract: Set<string>;
+  /** sim-fix-r2 #6: fantasy powers no one can learn in a real world (telepathy, magic, ...) */
+  fantasy: string[];
   /** everyday names of sicknesses -> the disease they are ("influenza" -> wasting-cough) */
   diseases: Record<string, string>;
   /** colour words -> sky tint */
@@ -122,7 +127,7 @@ function lexOf(c: Content): Lex {
     stop: new Set(arr('stopwords')), numbers: obj('numbers'), durations: obj('durations'), intensities: obj('intensities'), sizes: obj('sizes'),
     everywhere: arr('everywhere').sort((a, b) => b.length - a.length), here: arr('here').sort((a, b) => b.length - a.length), directions: obj('directions'),
     places: obj('places'), verbs: obj('verbs'), tags: obj('tags'), effects: obj('effects'), laws: obj('laws'), rains: obj('rains'),
-    animalish: new Set(arr('animalish')), abstract: new Set(arr('abstract')), diseases: obj('diseases'), colours: obj('colours'),
+    animalish: new Set(arr('animalish')), abstract: new Set(arr('abstract')), fantasy: arr('fantasyIdeas').sort((a, b) => b.length - a.length), diseases: obj('diseases'), colours: obj('colours'),
     weatherWords: obj('weatherWords'), creatureWords: arr('creatureWords'), animalAliases: obj('animalAliases'), reserved: new Set(arr('reserved')),
     biomeWords: obj('biomeWords'),
   };
@@ -909,7 +914,7 @@ function question(c: Command, param: string, label: string): string {
     degrees: 'Tilt the world how far? ("tilt the world 30 degrees", "remove the tilt", "tilt it more").',
     speed: 'How fast should time run? ("speed 10", "run at 1000x", "pause", "resume").',
     cmd: 'Change the past how? ("two days ago, send a meteor at Aru").',
-    name: k === 'content.animal' ? 'Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").' : k === 'content.weather' ? 'Invent which weather? ("rain frogs", "a rain of honey").' : k === 'content.idea' ? 'Invent which idea? ("invent telepathy").' : k === 'settlement.rename' || k === 'agent.rename' ? 'Rename to what? ("rename Aru to Bright Haven").' : 'Invent what? Name it ("invent chocolate").',
+    name: k === 'content.animal' ? 'Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").' : k === 'content.weather' ? 'Invent which weather? ("rain frogs", "a rain of honey").' : k === 'content.idea' ? 'Invent which idea? ("invent the wheel", "invent soap").' : k === 'settlement.rename' || k === 'agent.rename' ? 'Rename to what? ("rename Aru to Bright Haven").' : 'Invent what? Name it ("invent chocolate").',
     species: k === 'world.seed-species' ? 'Seed which kind of life? ("seed plains folk on Rust").' : 'Which kind? ("plant oak", "send wolves").',
     path: 'Set which law? ("set gravity to 3", "set the day length to 30").',
     value: 'Set it to what? ("set gravity to 3").',
@@ -2947,6 +2952,10 @@ function intentIdeas(c: Clause): boolean {
   const { u, p, L } = cx;
   const force = /\b(make|force|compel)\b.*\b(learn|know|understand|accept|discover)\b|\binsist\b/.test(s);
   const teachV = verb(cx, s, 'teach') ?? (force ? 'learn' : null);
+  if (teachV || verb(cx, s, 'invent') || verb(cx, s, 'introduce')) {
+    const f = fantasyIn(L, s);
+    if (f) return c.ask(NO_FANTASY(f));
+  }
   if (teachV && !has(s, ...L.creatureWords)) {
     const k = recipeOf(cx, s);
     if (k) {
@@ -2988,7 +2997,7 @@ function intentIdeas(c: Clause): boolean {
       const k = findNoun(u.content, p, noun, ['recipe']) ?? recipeOf(cx, noun);
       if (k) { c.add({ k: mods.place?.settlement !== undefined ? 'settlement.teach' : 'idea.teach', knowledge: k.id }, 'teach'); return true; }
       if (/^(an? )?(animal|beast|creature)$/.test(noun)) return c.ask('Which animal? This is a real world: name a real one ("introduce zebras", "release wolves near Aru").');
-      if (/^(an? )?(idea|thing|weather|rain|item)$/.test(noun)) return c.ask(`Invent what? Name it ("invent telepathy", "introduce chocolate", "rain frogs").`);
+      if (/^(an? )?(idea|thing|weather|rain|item)$/.test(noun)) return c.ask(`Invent what? Name it ("invent the wheel", "introduce chocolate", "rain frogs").`);
       // an animal ("invent a zebra", "invent a winged horse"): content.animal makes only real animals (life/fauna.ts)
       const aw = animalWord(u.content, noun).kind;
       if (aw === 'real' || aw === 'fantasy' || aw === 'base') { c.add({ k: 'content.animal', name: singular(noun.replace(/^(an?|the|some) /, '')), ...(mods.qty && mods.qty > 1 ? { count: Math.round(mods.qty) } : {}) }, `a new animal: ${noun}`); return true; }
@@ -3252,6 +3261,8 @@ function intentInvent(c: Clause): boolean {
   const { L } = cx;
   const createV = verb(cx, s, 'create');
   if (!createV || /\b(?:make|let) (?:it|them|everything|everyone|everybody|the world|us)\b/.test(s)) return false;
+  const fw = fantasyIn(L, s);
+  if (fw) return c.ask(NO_FANTASY(fw));
   const obj = objectOf(cx, s, createV);
   if (!obj || !plausibleNew(cx, obj)) return false;
   const sing = singular(obj.split(' ').pop() ?? obj);
@@ -3536,6 +3547,12 @@ function objectOf(cx: PCtx2, s: string, v: string): string | null {
   const words = s.slice(at + v.length).trim().split(' ').filter((w) => w && !cx.L.stop.has(w) && !/^-?\d/.test(w) && !/^(to|the|a|an|of|for|them|us|people|me|my|i)$/.test(w));
   if (!words.length) return null;
   return words.slice(0, 3).join(' ');
+}
+
+/** the fantasy power a sentence names (lexicon.json fantasyIdeas), or null */
+function fantasyIn(L: Lex, s: string): string | null {
+  for (const w of L.fantasy) if (wordAt(s, w) >= 0) return w;
+  return null;
 }
 
 function isAbstract(L: Lex, noun: string): boolean {

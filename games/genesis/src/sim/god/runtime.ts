@@ -1,5 +1,5 @@
 // GENESIS — runtime content (CONTRACT.md §11.6): what the god invents in words becomes content. "Introduce chocolate"
-// makes an item (with tags guessed from word lists) and the idea of making it; "invent telepathy" makes a knowledge id
+// makes an item (with tags guessed from word lists) and the idea of making it; "invent soap" makes a knowledge id
 // with an effect from the effect vocabulary; "rain frogs" makes a weather kind that rains a new animal. Species laws
 // (species.<id>.fertility ...) are content too.
 //

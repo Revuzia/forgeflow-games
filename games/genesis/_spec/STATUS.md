@@ -18,10 +18,9 @@ scripts with the sim worker and the DSP worker, 21 .ogg, 12 fonts); `node _harne
 missing, 0 console errors, HTML no-store + COEP credentialless, 18 / 18 hashed assets immutable); the deploy rehearsal
 `python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dry-run` OK (53 files, `index.html` then
 `game_meta.json` last). The real deploy needs the Cloudflare credentials, which this container does not hold.
-**Publish only `dist/`** (README "Publishing" gives the exact commands). `upload_game.py`, `upload-game.bat` and `--all`
-deploy `games/genesis/` itself, which is the Vite dev tree: 425 files, 363 of them `src/*.ts`, with default metadata.
-They must not be used for GENESIS until the pipeline (`upload_game.py` discover_games/deploy_one, not owned by
-the docs role) deploys `<game>/dist` for games that have a build script. That pipeline change is still open. The punch
+**Publish only `dist/`** (README "Publishing" gives the exact commands). `upload_game.py`, `upload-game.bat` and `--all` are now
+safe as well (fixed 2026-11-03): `resolve_deploy_dir` sees the Vite dev entry and uploads `games/genesis/dist/`, and skips
+GENESIS when `dist/` is missing or older than the source (`ALLOW_STALE_DIST=1` overrides); `UPLOAD_GAMES.md` says so. The punch
 program's first full gate on the tree it is fixing (23:15–23:44Z, `_harness/scratch/punch/check-s1.log`) is green too:
 detban 146 clean, tsc clean, **605 / 605**.
 

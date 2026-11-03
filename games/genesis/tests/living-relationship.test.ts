@@ -982,3 +982,54 @@ test('the owner\'s session at the default wrath (storm, drought, the prayer answ
   const end = means(sim, st.id);
   assert.ok(end.loyalty > 0.15, `loyalty holds after the meteor: ${end.loyalty.toFixed(3)}`);
 });
+
+// sim-fix-r2 #1 (owner decision 3; release owner-r2 runB: five years into a storm + drought + answered prayer + meteor
+// session the HUD read Trust 1, Loyalty 12 — one default meteor took trust 0.29 → 0.011, a painted storm added none).
+// The owner's own path: a town that has never trusted its god (trust 0), a thunderstorm painted over it, the drought, its
+// prayer answered, a meteor — at the default wrath its trust ends above a quiet world's, the storm alone already lifts
+// it, and the meteor does not undo what the answered prayer built.
+test('the owner\'s session from nothing (painted storm, drought, answer, meteor) ends with trust and loyalty above a quiet world\'s', () => {
+  for (const seed of [20261001, 20261008]) {
+    const hit = town(seed), quiet = town(seed);
+    const { sim, st } = hit;
+    const p = sim.u.planets[0], day = Math.round(p.st.dayHours * 60);
+    assert.equal(sim.u.god.laws['god.wrath'] ?? 0.3, 0.3, 'the default wrath');
+    for (const S of [sim, quiet.sim]) {
+      const A = S.u.planets[0].people.agents;
+      for (let s = 0; s < A.hi; s++) { const i = s * GODS; A.love[i] = 0; A.loyalty[i] = 0; A.fear[i] = Math.min(A.fear[i], 0.04); A.faith[i] = Math.min(A.faith[i], 0.14) || 1e-4; }
+    }
+    must(sim, { k: 'weather.paint', kind: 'thunderstorm', pos: [...st.pos], radius: 700 });
+    sim.step(4 * day); quiet.sim.step(4 * day);
+    const s4 = means(sim, st.id), q4 = means(quiet.sim, quiet.st.id);
+    assert.ok(s4.trust > q4.trust + 0.05, `${seed}: the storm they came through lifts trust: ${q4.trust.toFixed(3)} vs ${s4.trust.toFixed(3)}`);
+    must(sim, { k: 'disaster.spawn', kind: 'drought', pos: [...st.pos] });
+    sim.step(day);
+    assert.ok(srel(sim.u, p.id, st.id).prayers.length > 0, 'the drought raised a prayer');
+    must(sim, { k: 'prayer.answer', settlement: st.id });
+    sim.step(7 * day);
+    const pre = means(sim, st.id);
+    must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: [...st.pos] });
+    sim.step(day);
+    const m1 = means(sim, st.id);
+    sim.step(5 * day); quiet.sim.step(14 * day);
+    const end = means(sim, st.id), q = means(quiet.sim, quiet.st.id);
+    assert.ok(m1.fear > pre.fear + 0.1, `${seed}: the meteor frightened them: fear ${pre.fear.toFixed(3)} → ${m1.fear.toFixed(3)}`);
+    assert.ok(m1.trust > 0.5 * pre.trust, `${seed}: one default meteor does not wipe out trust: ${pre.trust.toFixed(3)} → ${m1.trust.toFixed(3)}`);
+    assert.ok(end.trust > q.trust + 0.15, `${seed}: trust above a quiet world's: ${q.trust.toFixed(3)} vs ${end.trust.toFixed(3)}`);
+    assert.ok(end.loyalty > q.loyalty + 0.1, `${seed}: loyalty above a quiet world's: ${q.loyalty.toFixed(3)} vs ${end.loyalty.toFixed(3)}`);
+  }
+});
+
+test('above the default wrath cruelty still costs trust: a meteor at wrath 1 leaves less than one at 0.3', () => {
+  const run = (w: number) => {
+    const { sim, st } = town();
+    const A = sim.u.planets[0].people.agents;
+    for (const s of sim.u.planets[0].people.members.get(st.id) ?? []) A.love[s * GODS] = 0.5;
+    must(sim, { k: 'disaster.spawn', kind: 'meteor', pos: [...st.pos], wrath: w });
+    sim.step(60);
+    return means(sim, st.id).trust;
+  };
+  const gentle = run(0.3), cruel = run(1);
+  assert.ok(cruel < gentle - 0.05, `wrath 1 ${cruel.toFixed(3)} vs wrath 0.3 ${gentle.toFixed(3)}`);
+  assert.ok(gentle > 0.4, `the default meteor costs a little trust at most: ${gentle.toFixed(3)}`);
+});

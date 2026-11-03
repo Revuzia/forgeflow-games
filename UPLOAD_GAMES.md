@@ -54,6 +54,13 @@ Expected:
 - **`python upload_game.py iron-tide`** — upload a specific game by folder name.
 - **`python upload_game.py --all`** — push every game under `games/`.
 
+**Vite/TypeScript games (GENESIS, BLOCKTOOTH): build first.** Their folder is a dev tree whose `index.html`
+loads `/src/main.ts`; the shippable game is `games/<slug>/dist/` (gitignored, so a fresh clone has none). Run
+`npm run build` in the game folder first. The uploader then uploads `dist/` for these games, and it skips them
+(✗ in the summary) when `dist/` is missing or older than the source. `--check` lists which folder each will use.
+For GENESIS the documented route is `python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis`
+(see `games/genesis/README.md`).
+
 After each upload it prints a live check (`index.html=200 thumbnail.png=200
 content.json=200`) and the URL. If R2 ever fails it **does not** touch the site
 database, so you never get a broken listing with a missing image/game.

@@ -1,7 +1,7 @@
 // GENESIS — freeform "do this" (CONTRACT.md §11.6): sentences resolve, deterministically and without changing the
 // world, to the commands they mean (more than forty phrases across every family of power); compound sentences give
 // several commands with the place carried over; places, durations, quantities, sizes and intensities land in the
-// parameters; unknown nouns become new content when the command runs ("introduce chocolate", "invent telepathy",
+// parameters; unknown nouns become new content when the command runs ("introduce chocolate", "invent soap",
 // "rain frogs", "unicorns"); and nonsense never throws — it says what can be done.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,7 +60,7 @@ const PHRASES: [string, Want][] = [
   // new content
   ['introduce chocolate', (c) => (c[0].k === 'settlement.introduce' && c[0].substance === 'chocolate') || JSON.stringify(c)],
   ['introduce cats to Aru', (c) => (c[0].k === 'content.animal' && c[1]?.k === 'settlement.introduce' && c[1].animal === 'cat') || JSON.stringify(c)],
-  ['invent telepathy', (c) => (c[0].k === 'content.idea' && c[0].name === 'telepathy') || JSON.stringify(c)],
+  ['invent soap', (c) => (c[0].k === 'content.idea' && c[0].name === 'soap') || JSON.stringify(c)],
   ['rain frogs over Aru', (c) => (c[0].k === 'content.weather' && c[0].animal === 'frog') || JSON.stringify(c)],
   ['unicorns', (c) => (c[0].k === 'life.spawn-animal' && c[0].species === 'wild-horse') || JSON.stringify(c)],
 ];
@@ -164,9 +164,9 @@ test('unknown nouns become new content when the words are carried out', () => {
   const back = Sim.load(sim.save());
   assert.ok(back.u.content.items.idx('chocolate') >= 0);
   assert.equal(back.hash(), sim.hash());
-  // an idea
-  sim = run('invent telepathy');
-  assert.ok(sim.u.content.recipes.idx('telepathy') >= 0, 'the idea of telepathy');
+  // an idea (a real one: a real world has no telepathy — see the refusal test below)
+  sim = run('invent beekeeping lore');
+  assert.ok(sim.u.content.recipes.idx('beekeeping-lore') >= 0, 'the idea of beekeeping lore');
   // a rain of an animal nobody ever saw
   sim = run('rain frogs over Aru');
   assert.ok(sim.u.content.weather.idx('rain-of-frogs') >= 0, 'a weather that rains frogs');
@@ -237,4 +237,22 @@ test('war and peace in words: one side named (or none) finds the nearest other p
   const done = sim.applyNow({ k: 'freeform', text: 'end all wars' });
   assert.ok(done.ok, done.msg);
   assert.match(sim.parse('end all wars').msg ?? '', /No one .* is at war/);
+});
+
+// sim-fix-r2 #6 (owner decision 4, LIVING §0.2): a fantasy power is no idea people can have — the words get a polite
+// real-world refusal, like shape-shifting, and nothing is made
+test('fantasy powers (telepathy, magic, ...) are refused plainly, and nothing is invented', () => {
+  const base = town();
+  const sim = base.sim;
+  must(sim, { k: 'focus', planet: 0, pos: base.st.pos });
+  const h = sim.hash();
+  for (const text of ['invent telepathy', 'invent magic', 'teach Aru telepathy', 'teach them magic', 'introduce sorcery to Aru', 'create teleportation', 'invent mind reading']) {
+    const r = sim.parse(text);
+    assert.equal(r.ok, false, `${text}: ${JSON.stringify(r)}`);
+    assert.match(r.msg ?? '', /no (telepathy|magic|sorcery|teleportation|mind reading) in this world.*real/i, text);
+    const run = sim.applyNow({ k: 'freeform', text });
+    assert.equal(run.ok, false, `${text} is not carried out`);
+  }
+  for (const id of ['telepathy', 'magic', 'sorcery', 'teleportation', 'mind-reading']) assert.equal(sim.u.content.recipes.idx(id), -1, `no recipe ${id}`);
+  assert.equal(sim.hash(), h, 'nothing happened');
 });

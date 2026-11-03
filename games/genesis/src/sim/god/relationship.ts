@@ -126,6 +126,7 @@ function delayedHarm(u: Universe, pl: number, sid: number, god: number): void {
 
 /** what the act was, and what it does to prayers, prophecies, omens and sacred animals */
 function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: Args, ctx: ActCtx): void {
+  if (cmd.k === 'weather.paint') stormSeen(u, p, a);
   const list = actsOf(u, p, cmd, a, ctx);
   list.push(...omensOfCommand(u, p, cmd, res, a, ctx.killed));
   if (!list.length) return;
@@ -174,6 +175,20 @@ function relentDroughts(u: Universe, p: Planet, acts: ActInfo[]): void {
 }
 
 const RAINY = new Set(['rain', 'drizzle', 'storm', 'thunderstorm', 'monsoon', 'snow']);
+
+/**
+ * sim-fix-r2 #1 (owner decision 3: "the god brings storms"; owner-r2 runB: a thunderstorm painted over the town moved
+ * nobody — trust 0 → 0.001): a violent weather the god paints over a town (wind ≥ 9 or lightning ≥ 3: storm,
+ * thunderstorm, hurricane, blizzard, hail, sandstorm, ashfall) is seen as its act, like the storm miracle: a wonder
+ * (0.5) with a little harm (0.1), × its intensity. The town that comes through it rallies (regard.ts weathered).
+ */
+function stormSeen(u: Universe, p: Planet, a: Args): void {
+  const w = u.content.weather.find(String(a.kind));
+  if (!w || !a.pos || (w.wind < 9 && w.lightning < 3)) return;
+  const k = Math.max(0.2, Math.min(2, typeof a.intensity === 'number' ? a.intensity : 1));
+  const R = typeof a.radius === 'number' ? a.radius : 700;
+  godAct(u, p, a.pos as [number, number, number], R + 400, { wonder: 0.5 * k, harm: 0.1 * k }, actor(a), 'storm');
+}
 
 /** the act's kinds: what it gives the people, or does to them */
 function actsOf(u: Universe, p: Planet, cmd: Command, a: Args, ctx: ActCtx): ActInfo[] {

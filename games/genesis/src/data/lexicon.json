@@ -1034,7 +1034,6 @@
   },
   "effects": {
     "teach": [
-      "telepathy",
       "language",
       "writing",
       "school",
@@ -1063,7 +1062,6 @@
       "soul",
       "heaven",
       "spirit",
-      "magic",
       "ritual"
     ],
     "trade": [
@@ -1428,9 +1426,13 @@
     "creature",
     "monster"
   ],
+  "fantasyIdeas": [
+    "telepathy", "telekinesis", "teleportation", "teleporting", "magic", "sorcery", "witchcraft", "wizardry", "spells",
+    "spellcraft", "necromancy", "mind reading", "mind-reading", "clairvoyance", "levitation", "invisibility", "time travel",
+    "immortality", "eternal youth", "shape-shifting", "shapeshifting", "curses", "hexes", "enchantment", "enchantments",
+    "psychic powers", "precognition", "mana"
+  ],
   "abstract": [
-    "telepathy",
-    "magic",
     "love",
     "philosophy",
     "democracy",
