@@ -451,7 +451,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
             const f = pl.ent;
             if (!f || !f.alive || pl.team === src.team || pl.player === human || (f.x - cx) ** 2 + (f.y - cy) ** 2 > (info.radius + f.radius) ** 2) continue;
             const out = info.radius + f.radius + 0.2 - Math.hypot(f.x - cx, f.y - cy);
-            const can = DIFFICULTIES[job.diffs[pl.team] as 'adept'].reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.castTime + info.delay;
+            const can = (DIFFICULTIES[(job.diffs[pl.team] ?? job.diffs[0]) as 'adept'] ?? DIFFICULTIES.adept).reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.castTime + info.delay;
             pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: sl.def.id, until: e.t + e.castTime + info.delay + 0.2, hit: false, windup: true, can });
           }
           break;
@@ -476,7 +476,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
               const side = Math.abs(-(f.x - tg.x) * tg.dirY + (f.y - tg.y) * tg.dirX);
               out = tg.kind === 'rect' ? tg.width * 0.5 + f.radius + 0.2 - side : Math.max(1, tg.radius * Math.sin(tg.half) + f.radius - side);
             } else out = tg.radius + f.radius + 0.2 - Math.hypot(f.x - tg.x, f.y - tg.y);
-            const can = DIFFICULTIES[job.diffs[pl.team] as 'adept'].reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.delay;
+            const can = (DIFFICULTIES[(job.diffs[pl.team] ?? job.diffs[0]) as 'adept'] ?? DIFFICULTIES.adept).reaction + out / Math.max(0.5, f.stats.moveSpeed) <= e.delay;
             pendingTele.push({ p: pl.player, ent: f.id, src: e.src, ability: e.ability, until: e.t + e.delay + 0.2, hit: false, can });
           }
           break;
