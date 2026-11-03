@@ -403,7 +403,9 @@ export class Bot extends BotBase implements BotController {
           // laning: shop on a real purchase, and not while a wave is there to farm
           const farm = this.wicksNear(e.x, e.y, 12) >= 3 && hpF > 0.35;
           if (this.nearE === 0 && !farm) {
-            if (this.p.gold >= Math.max(nextPrice, 1250) && hpF < 0.6) recall = 0.5;
+            // (CW3 CL-1: a laner fresh from a won trade or a kill does not walk home on 1,250 Gleam at 59 % — the road pays
+            // more; it goes once it is really worn down or the purchase is a big one)
+            if (this.p.gold >= Math.max(nextPrice, 1250) && hpF < 0.45) recall = 0.5;
             else if (this.p.gold >= Math.max(nextPrice, 2000)) recall = 0.46;
             else if (resF < 0.1 && hpF < 0.7) recall = 0.5;
           }
@@ -464,6 +466,9 @@ export class Bot extends BotBase implements BotController {
       let mate = false;
       for (const a of this.perc.allyFighters) {
         if (a === e || !a.alive || !a.player) continue;
+        const al = b ? b.laneOf(a.player.player) : null;
+        // (my lane partner makes it two on one only when the road's power is ours: a dead-even 2v2 trades carries)
+        if (al && !al.jungle && al.lane === this.lane && this.adv < 0.56) continue;
         if (this.dist2(a, gk.x, gk.y) < 9 * 9 || (b && b.focus.get(a.player.player) === gk.id)) { mate = true; break; }
       }
       if (mate) { if (!this.killTarget || this.killTarget === gk) { this.killTarget = gk; consider('allin', 0.76); } }

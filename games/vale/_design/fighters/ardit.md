@@ -59,7 +59,7 @@ SHAPE = body.shape(girth=1.1, torso_w=1.18, torso_d=1.08, chest=1.16, waist=1.0,
 ## 4. Armour, cloth and props (template 4)
 
 - **Pauldrons.** Square honed `stone` plates, 0.36 m wide each, flat on top, with a 3 cm bevel. They are the widest horizontal edge on the figure and carry the Plinth read.
-- **Cuirass and tabard.** A blued painted-plate cuirass (`cloth`, matte, no gloss) under a chalk tabard that hangs to the knee in two rigid panels (one `x_tabard` bone each, at most 2 sway bones); a light linen scarf (`cloth2`) at the throat.
+- **Cuirass and tabard.** A blued painted-plate cuirass (`cloth`, matte, no gloss) under a chalk tabard that hangs to the knee in two cloth panels (a three-bone `x_tabard` spring chain each); a light linen scarf (`cloth2`) at the throat.
 - **Arms and legs.** Blued vambraces, the left one carrying the pavise grip; ironstone greaves over dark leggings; heavy `leather` boots.
 - **Pavise** (left forearm, `prop.L`, grip behind the pane): chalk frame 1.5 m x 0.62 m, 6 cm wide with 3 cm bevels; the pane inside is clear dawnglass 1.38 m x 0.50 m, 1.5 cm thick, glossy and never emissive. A blued spire tip, 0.16 m tall and 0.07 m wide at the base, stands on the top edge; an accent glass inlay is cut into its face. The pane keeps its transparent look from all angles (an opaque pale backing at 40% of its area keeps it from reading as a hole).
 - **Spear** (right hand, `prop.R`): ash shaft 1.35 m, 6 cm thick, leaf head in dawnglass 0.22 m, a chalk collar. Carried upright at rest.
@@ -107,7 +107,7 @@ The spire-tip inlay, about 12 x 4 cm = 48 cm2 plus a 10 x 2 cm helm brow line (2
 
 `BLOCKS` (override both arm blocks, because the left arm always carries the pavise):
 - **guard / idle:** the pavise grounded at the left side with its top edge leaning 8 degrees outward, the spear upright in the right hand; feet wide, weight even.
-- **run:** the pavise held back and low on the left, tilted so it does not hide the legs, the spear carried upright; contact 0.34, a heavy bob of 2 cm; the tabard panels sway one bone each.
+- **run:** the pavise held back and low on the left, tilted so it does not hide the legs, the spear carried upright; contact 0.34, a heavy bob of 2 cm. The tabard panels are cloth, not boards (closing review): each hangs on a three-bone baked spring chain; the top segment takes 0.4 of the thigh's swing, capped at 28 degrees, and trails the thigh by 2 frames; the lower segments drape over the raised knee and settle back after it (measure: `python3 art/tools/chain_motion.py art/out/fighters/ardit/ardit.glb --clip run --chain tabard_l --ref thigh.L`, gate: seg1 <= 30 degrees, lag >= 2 frames).
 - **lobby:** the pavise angled to catch the light, the spear grounded; see below.
 
 Four distinct ability gestures. Frame counts are multiples of 5 at 30 fps; the impact is at exactly 40% of the clip (frame = 0.4 × N). The sim's `castTime` is the windup before the effect lands; the clip's impact frame is the visual hit. A `castTime` of 0 means the effect starts at once, so the anticipation stays at 4 frames or fewer and the gesture must not hide a dash.
@@ -173,7 +173,7 @@ Value bands (area-weighted): top **76** (70-85) · mid **58** (45-65) · feet **
 
 ## 10-11. Export and renders
 
-- Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The planted pavise stands on the left of the frame and catches the low sun from behind-left; the visor looks into the frame, clear of the UI side.
+- Splash: every card has its own staging (`CARDS` in ardit.py, schema in art/blender/portraits.py). Base: the victory hold from a low 3/4, the dawn sun raking in low from the left through the planted pane, the visor caught. Chalkline: dusk, braced behind the squared pavise with the spear couched (Lancing Run), under a cold rim. First Bell: a close 3/4 at first light, the pavise swung up into Glare with the glass bell on its spire lit. Each portrait is a bust of its own splash moment. QA: `python3 art/tools/card_qa.py ardit`.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the helm, the visor and the top of the pavise with its spire tip. Icon (128 square): the visor slit under the flat crown, the spire tip on the edge.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 
@@ -181,6 +181,6 @@ Value bands (area-weighted): top **76** (70-85) · mid **58** (45-65) · feet **
 
 - [ ] The shoulders are at least 1.4 times the hips, the crown is flat, and the pavise reads as a tall pale rectangle in black at 64 px.
 - [ ] IoU against Marund and Hesmi <= 0.80; the pavise never hides both legs from the camera (check the run clip).
-- [ ] The pavise is rigid and moves only with the left arm; the tabard panels use one bone each.
+- [ ] The pavise is rigid and moves only with the left arm; the tabard panels trail the thighs (top segment <= 30 degrees in the run).
 - [ ] The accent inlay is the only emissive material; the pane never glows and the bell on the first_bell skin is duller than the accent.
 - [ ] `cast_a1` has at most 3 frames of anticipation before the charge (castTime 0.15), and the pavise stays in front of the body during the dash.

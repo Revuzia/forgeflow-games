@@ -190,14 +190,14 @@
   },
   "uv_coverage": 0.602,
   "bake": {
-    "base": 25.92,
-    "rough_metal": 17.93,
-    "normal": 11.54,
-    "ao": 20.95,
+    "base": 16.09,
+    "rough_metal": 6.74,
+    "normal": 2.97,
+    "ao": 6.8,
     "normal_fixed_px": 117970,
-    "projection": 182.19,
-    "pack_save": 182.79,
-    "total": 260.81
+    "projection": 105.19,
+    "pack_save": 105.63,
+    "total": 139.17
   },
   "tris": 20589,
   "mesh_top_m": 2.476,
@@ -302,19 +302,19 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2995292,
+  "glb_bytes_raw": 2998108,
   "optimize": {
     "ok": true,
-    "before": 2995292,
-    "after": 1172308,
+    "before": 2998108,
+    "after": 1175268,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 1172308,
+  "glb_bytes": 1175268,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1145 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1148 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: ardit_base 2048x2048 232K, ardit_normal 512x512 36K, ardit_orm 512x512 54K",
       "  skinned meshes: ardit(17147v), ardit_accent(302v)",
       "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
@@ -333,10 +333,10 @@
       "turntable": "art/renders/fighters/ardit/turntable.png"
     },
     "seconds": {
-      "splash": 29.59,
-      "portrait": 15.29,
-      "icon": 2.44,
-      "turntable": 12.19
+      "splash": 108.89,
+      "portrait": 25.35,
+      "icon": 7.62,
+      "turntable": 9.12
     }
   },
   "three_qa": {
@@ -368,27 +368,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ardit/three_ardit.png",
-    "seconds": 44.8,
-    "exit": 0,
-    "clip_sheet": "art/renders/fighters/ardit/three_clips_ardit.png"
+    "seconds": 17.4,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.85,
-      "model": 20.95,
-      "lows_bind": 27.91,
-      "uv": 19.03,
-      "bake": 260.81,
-      "clips": 1.11,
-      "export": 3.89,
-      "optimize": 2.08,
-      "load_test": 0.46,
-      "render": 59.78,
-      "three_qa": 137.79,
-      "cache": 0.38
+      "materials": 1.0,
+      "model": 30.9,
+      "lows_bind": 39.95,
+      "uv": 13.71,
+      "bake": 139.17,
+      "clips": 2.18,
+      "export": 5.67,
+      "optimize": 2.41,
+      "load_test": 0.4,
+      "render": 151.25,
+      "three_qa": 17.83,
+      "cache": 0.18
     },
-    "total_s": 535.27
+    "total_s": 405.01
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

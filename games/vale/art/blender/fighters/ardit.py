@@ -76,6 +76,46 @@ PALETTE = materials.bible_palette(chalk="#D4D7CE", stone="#C5C8BF", cloth="#6A7B
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_spear_tip", "spear_tip": "x_spear_tip", "pavise_top": "x_pavise_top"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
+# per-skin card staging (closing review ardit-M1; schema: art/blender/portraits.py header). Base: a low 3/4 at dawn,
+# the sun raking in low from screen-left through the planted pane onto the dial floor, the visor caught; Chalkline:
+# dusk, braced behind the squared pavise with the spear couched low (Lancing Run's set), under a cold rim; First Bell:
+# a close 3/4 at first light, the pavise swung up into Glare toward the sun, the glass bell on its spire lit
+CARDS = {
+    "ardit": {
+        "splash": {"clip": "victory", "t": 0.92, "yaw": 34.0, "pitch": -9.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+                   "key_az": 250.0, "key_el": 16.0, "key_color": "#FFE6CC", "sun": 3.0, "rim_cool": 1.2,
+                   "rim_warm": 0.8, "bounce": 0.5, "bounce_color": "#E6C8A6", "accent": 1.5,
+                   "focal": [{"at": "head", "az": 215.0, "el": 14.0, "dist": 0.8, "color": "#FFE2C0", "power": 26.0,
+                              "size": 0.25},
+                             {"at": "x_pavise", "az": 260.0, "el": 10.0, "dist": 1.0, "color": "#FFD6A0",
+                              "power": 60.0, "size": 0.35}]},
+        "portrait": {"yaw": 30.0},
+        "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F2D6B0"},
+    },
+    "ardit_chalkline": {
+        "splash": {"clip": "cast_a1", "t": 0.45, "yaw": 26.0, "pitch": -3.0, "lens": 58.0, "fill": 0.82, "x": 0.70,
+                   "key_az": 150.0, "key_el": 34.0, "key_color": "#C9D4F0", "sun": 2.5, "rim_cool": 2.2,
+                   "rim_warm": 0.3, "bounce": 0.25, "bounce_color": "#8E9CC0", "accent": 1.4, "exposure": -0.35,
+                   "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 22.0,
+                              "size": 0.25},
+                             {"at": "x_spear_tip", "az": 140.0, "el": 20.0, "dist": 0.6, "color": "#E4EEFF",
+                              "power": 40.0, "size": 0.2}]},
+        "portrait": {"yaw": 24.0},
+        "plate": {"tint": "#8E9CCB", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
+                  "glow_color": "#B8C6EC"},
+    },
+    "ardit_first_bell": {
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 40.0, "pitch": -5.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 232.0, "key_el": 30.0, "key_color": "#FFE4B5", "sun": 3.4, "rim_cool": 0.8,
+                   "rim_warm": 1.5, "bounce": 0.9, "bounce_color": "#F0C48E", "accent": 2.2,
+                   "focal": [{"at": "x_pavise_top", "az": 190.0, "el": 30.0, "dist": 0.7, "color": "#FFD48A",
+                              "power": 80.0, "size": 0.3},
+                             {"at": "head", "az": 205.0, "el": 12.0, "dist": 0.8, "color": "#FFE6CC", "power": 22.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 34.0},
+        "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -658,7 +698,11 @@ def rig_extras(ctx) -> None:
 
 
 TAB_G = 0.8                # the tabard's pull toward hanging straight down
-TAB_K, TAB_MARGIN, TAB_CAP = 0.85, 3.0, 62.0
+# closing review ardit-M3: the top segment used to follow 0.85 of the thigh to 62 deg with no lag (a board on a hinge,
+# 54 deg in the run, peaking on the thigh's own frame). It now takes 0.4 of the thigh's swing, capped at 28 deg, and its
+# hard floor reads the thigh TAB_LAG frames late; the lower bones (_tab_lower_floor) drape the panel over the knee
+TAB_K, TAB_MARGIN, TAB_CAP = 0.4, 3.0, 28.0
+TAB_LAG = 2                # frames the top segment's floor trails the thigh
 
 
 def chain_config(ctx) -> list:
@@ -742,6 +786,33 @@ def _tab_lower_floor(skel, pose, cfg) -> None:
             a = pose.get(b, (0.0, 0.0, 0.0))
             pose[b] = (a[0] + math.degrees(need), a[1], a[2])
             _tab_hang(pose, cfg, j + 1, math.degrees(need))
+
+
+TAB_ATTACK, TAB_RELEASE = 18.0, 9.0      # deg / frame: how far ahead a lower bone starts to rise / how fast it falls
+
+
+def _tab_envelope(out, cfg, loop) -> None:
+    """closing ardit-M3: with the top segment held back, the knee's floor kicked the lower bones up to 40 deg in one
+    frame and dropped them as fast (a pop). Each lower bone's swing is an envelope over its floored series: it starts
+    up a frame early (TAB_ATTACK) and settles back at TAB_RELEASE deg per frame, the cloth trailing the knee down; it
+    never sits under the floor"""
+    n = len(out) - 1 if loop else len(out)
+    if n < 3:
+        return
+    for b in cfg.bones[1:]:
+        a = [out[f].get(b, (0.0, 0.0, 0.0))[0] for f in range(n)]
+        e = list(a)
+        for f in range(n):
+            for k in range(1, 6):
+                g = (f - k) % n if loop else f - k
+                if 0 <= g < n:
+                    e[f] = max(e[f], a[g] - TAB_RELEASE * k)
+            g = (f + 1) % n if loop else f + 1
+            if 0 <= g < n:
+                e[f] = max(e[f], a[g] - TAB_ATTACK)
+        for f in range(n):
+            r = out[f].get(b, (0.0, 0.0, 0.0))
+            out[f][b] = (e[f], r[1], r[2])
 
 
 def _tab_hang(pose, cfg, j, lift) -> None:
@@ -1537,14 +1608,15 @@ def _install_anim() -> None:
                 b = cfg.bones[0]
                 for f, p in enumerate(out):
                     a = p.get(b, (0.0, 0.0, 0.0))
-                    m = least(poses[f])
+                    m = least(poses[(f - TAB_LAG) % (len(poses) - 1) if loop else max(0, f - TAB_LAG)])
                     if m > a[0]:
                         p[b] = (m, a[1], a[2])
                         _tab_hang(p, cfg, 1, m - a[0])
                     _tab_lower_floor(skel, p, cfg)      # then the lower bones clear the coat wall / knee
-                    if loop and f == len(out) - 1:
-                        for bb in cfg.bones:
-                            p[bb] = out[0][bb]
+                _tab_envelope(out, cfg, loop)
+                if loop:
+                    for bb in cfg.bones:
+                        out[-1][bb] = out[0][bb]
             return out
         secondary_motion._ardit = True
         anim.secondary_motion = secondary_motion

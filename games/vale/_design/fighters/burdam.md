@@ -58,7 +58,7 @@ SHAPE = body.shape(girth=1.06, torso_w=1.14, torso_d=1.06, chest=1.16, waist=0.9
 ## 4. Armour, cloth and props (template 4)
 
 - **Pauldrons.** Oxidised-iron look, matte and non-metallic, rust-grey (`rust`, desaturated) with darker staining only in the recesses. Right: three overlapping tiers, 0.55 x 0.42 m, 8 cm thick with 2-4 cm bevels, forming a cradle for the cleaver. Left: one plate 0.60 x 0.45 m with a flat top and horizontal ledger-line relief (one row per day, 6 rows, 1.5 cm deep). Edge chalking on the convex edges lifts the top band.
-- **Torso.** A waxed-leather harness crossing the chest diagonally (left shoulder to right hip), a heavy leather belt, a felt tunic (`cloth`), a bundle of five carved tally sticks hanging on the left of the belt (rigid, 0.20 m, no sway).
+- **Torso.** A waxed-leather harness crossing the chest diagonally (left shoulder to right hip), painted the belt's dark leather (L* ~22, at least 15 L* under the felt), a heavy leather belt, a felt tunic (`cloth`) whose skirt front and back hang on baked spring chains (`x_skirt_f`, `x_skirt_b`, two bones each, on the hips; the hem trails the stride, never follows the thighs like trousers) and whose cowl drape swings on one joint (`x_cowl_b_1`), a bundle of five carved tally sticks hanging on the left of the belt (rigid, 0.20 m, no sway). Pauldron recesses are stained 15-20 L* under the plate faces and the convex edges chalked 8-10 L* over them; the mask is lacquer (roughness 0.5) against matte felt.
 - **Legs.** Tapered ironstone tassets over dark leggings, waxed-leather boots (x1.25 wide) with ironstone toe caps.
 - **Prop: the cleaver** (prop space: grip at the origin, haft +Z). Haft 0.70 m, wrapped (`leather`), pommel a flat disc; blade 1.45 m long, 34 cm at the heel tapering to a 20 cm squared tip, honed `stone` with an ironstone spine. Seven notches along the back (spine), each a 9 cm wide, 7 cm deep chevron cut; the five nearest the heel carry accent slabs. 3 cm bevels on the edge, never a bright metal edge: the cutting edge is a honed band at most one step lighter than the blade.
 
@@ -160,15 +160,16 @@ Value bands (area-weighted): top **73** (70-85) · mid **49** (45-65) · feet **
 
 *"Pauldrons printed like ruled pages, day-marks down the cleaver's back and a rigid almanac board hung at his belt."*
 
-Pauldrons printed like ruled parchment pages (`#D8CDB4`, ink ledger lines `#2E2A26`) and day-marks printed down the cleaver's back. The ink `#2E2A26` is the deep tone (spine, toe caps, ruled lines). **Extra geometry:** a rigid almanac board hung at the belt on the right (0.20 x 0.26 m, 2 cm thick, carved walnut with a parchment face, no sway bone); the ruled lines and the day-marks are texture. The accent notches and slabs are unchanged.
+The whole figure is a ledger (closing review: the deluxe has to read apart from the base at the game camera by more than the standard skin does). The felt coat and skirt are a deep ledger-ink slate-violet (`#4A4560`, hue ~250, saturation 0.28, outside the azure band), the cowl is parchment (`#AFA283`), the pauldrons are ruled parchment pages (`#A3987F` painted mean, ink rules `#2E2A26` every 3.2 cm and an oxblood margin rule `#7A2E2A`, 1.4 cm, every third), the coat's hem is a parchment ledger strip with day-marks inked ~1 cm wide, and day-marks run down the cleaver's back. The ink `#2E2A26` is the deep tone (spine, toe caps, ruled lines). **Extra geometry:** a rigid almanac board hung at the belt on the right (0.20 x 0.26 m, 2 cm thick, carved walnut with a parchment face, no sway bone) ruled in 1.2 cm ink lines with an oxblood margin; the ruled lines and the day-marks are texture. The accent notches and slabs are unchanged. VFX: an ink-on-parchment tint is requested from the engine lane (content/vfx.json).
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `cloth2` | `#C6B9A5` | 76 | 36° / 17% | cowl |
-| `rust` | `#D8CDB4` | 83 | 42° / 17% | parchment-printed pauldrons (the named #D8CDB4) |
+| `cloth2` | `#AFA283` | 67 | 44° / 25% | parchment cowl |
+| `rust` | `#D8CDB4` | 83 | 42° / 17% | parchment-printed pauldrons (the named #D8CDB4; painted mean #A3987F under the splash sun) |
 | `stone` | `#CFC8B8` | 81 | 42° / 11% | cleaver blade with day-marks |
 | `ironstone` | `#2E2A26` | 17 | 30° / 17% | the ink #2E2A26 (spine, toe caps, ruled lines) |
-| `cloth` | `#8A7F72` | 54 | 33° / 17% | warm grey tunic |
+| `cloth` | `#4A4560` | 30 | 250° / 28% | ledger-ink slate-violet coat and skirt |
+| `oxblood` | `#7A2E2A` | 29 | 4° / 66% | margin rules (lines only, < 5 % of the surface) |
 
 Value bands (area-weighted): top **76** (70-85) · mid **52** (45-65) · feet **29** (20-35).
 
@@ -176,7 +177,7 @@ Value bands (area-weighted): top **76** (70-85) · mid **52** (45-65) · feet **
 
 ## 10-11. Export and renders
 
-- Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The final hold (cleaver planted, open left hand) is a calm pose; the camera is on the character's left so the stacked right pauldron and the notched blade-back face the viewer.
+- Splash: every card has its own staging (`CARDS` in burdam.py, schema in art/blender/portraits.py). Base: the Settled Account reach (the arm thrown out, the cleaver cocked, the notches lit) under the burning city's warm rim and bounce. Stillwater: Stubborn's planted post, head bowed, in cold river light. Almanac Ledger: the victory's tally scored with the thumbnail, the ledger board on his right hip under a lamp. Each portrait is a bust of its own splash moment. QA: `python3 art/tools/card_qa.py burdam`.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the ledger mask in the felt cowl, the left pauldron's ruled relief, the cleaver's edge entering from the top right. Icon (128 square): the scored mask with one lit notch above it.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

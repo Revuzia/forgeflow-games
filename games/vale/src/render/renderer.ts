@@ -26,6 +26,10 @@
 //                                     timer is rebuilt on the new context, the generated textures (VFX atlas, sky
 //                                     PMREM) are baked again and every program of the scene, the templates and the VFX
 //                                     is compiled again in parallel before the view says 'ok'
+//     calibrate(seconds?)             perf PERF-C1: first-run preset from a ~3 s sample of the Home vale at High
+//                                     (the menu idle cap suspended): frame-interval p95 ≤ 18 ms → 'high', ≤ 26 ms →
+//                                     'medium', else 'low'; the player's video settings come back afterwards. The
+//                                     caller keeps calling render(dt) (its own loop) while the promise is pending
 //     stats() · dispose()
 //
 // Frame: sim views → actors (interpolated with MatchClient.alpha) → director (events → VFX,
@@ -41,7 +45,7 @@ import type { MatchClient, Settings } from '../contracts/session.ts';
 import type { EntityId, EntityView, MatchSetup, SimEvent, WorldView } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import { Actor, accentHexFor, ANIM_FAR_M, HitReactions, ModelLibrary, outlineUniforms, UNIT_OUTLINE } from './actors.ts';
-import { Assets, type AssetUrlFn } from './assets.ts';
+import { Assets, type AssetUrlFn, collectGpu } from './assets.ts';
 import { CameraRig, type CameraMode } from './camera.ts';
 import { Director, type EventVfxMap, type StatusVfxMap } from './director.ts';
 import { FogOfWar } from './fog.ts';
@@ -57,7 +61,7 @@ import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
-import { DynamicResolution, type FrameBound, GpuTimer, resolveQuality, type ResolvedQuality } from './quality.ts';
+import { DynamicResolution, type FrameBound, GpuTimer, PRESETS, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
 import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
 import { SocketResolver } from './vfx/sockets.ts';
@@ -109,11 +113,28 @@ export interface RenderStats {
   /** GPU time of the last measured frame (ms; null = no timer query, or dynamic resolution off) and what the
    *  dynamic-resolution controller last found limiting a slow second ('cpu' holds the scale) */
   gpuMs: number | null; bound: FrameBound;
+  /** perf PERF-C1: the GPU timer's standing — 'none' (no extension), 'trusted', or 'untrusted' (ANGLE Metal: its
+   *  readings are not frame times, dynamic resolution then classifies windows by the renderer's CPU) */
+  gpuTimer?: 'none' | 'trusted' | 'untrusted';
   /** r12 M14 ambient life (ambient.ts): its CPU ms (EMA), particles / critters drawn; null outside a match */
   ambient?: AmbientStats | null;
   /** crowd units drawn this frame (crowd.ts; perf PERF-m5 reports) */
   crowd?: number;
 }
+
+/** perf PERF-C1: Renderer.calibrate()'s verdict and the sample behind it */
+export interface CalibrationResult {
+  preset: 'high' | 'medium' | 'low';
+  /** frame intervals sampled, their p50 / p95 (ms); frames 0 when the page was hidden or not drawing (preset 'high') */
+  frames: number; p50Ms: number; p95Ms: number;
+}
+
+/** perf PERF-C1: calibrate()'s thresholds — p95 at High within 18 ms holds 60 Hz; within 26 ms (≈ 40 fps) Medium's
+ *  0.9 scale, half AO and 2048² shadows recover it; slower goes Low */
+const CALIB_HIGH_P95_MS = 18;
+const CALIB_MEDIUM_P95_MS = 26;
+/** the first 0.5 s after the switch to High is warm-up (programs, shadow maps), not the machine's pace */
+const CALIB_WARM_MS = 500;
 
 /** perf PERF-m4: the 3D view's health (see the header) */
 export type ViewState = 'ok' | 'lost' | 'restoring';
@@ -152,6 +173,8 @@ export interface Renderer {
   setMenuView(view: { screen: string; fighter?: string; skin?: string; mode?: string }): void;
   preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void>;
   stats(): RenderStats;
+  /** perf PERF-C1: the first-run preset from a short sample of the Home vale at High (see the header) */
+  calibrate(seconds?: number): Promise<CalibrationResult>;
   /** perf PERF-m4: 'lost' while the GPU context is gone, 'restoring' until its programs are rebuilt, then 'ok' */
   readonly viewState: ViewState;
   /** call `fn` on every viewState change; returns the unsubscribe */
@@ -421,7 +444,11 @@ class ValeRenderer implements Renderer {
     this.ticks = s.gameplay.healthBarTicks;
   }
 
+  /** the video settings last applied (calibrate() restores them) */
+  private video!: Settings['video'];
+
   setQuality(video: Settings['video']): void {
+    this.video = video;
     this.q = resolveQuality(video);
     // dynamic resolution: the caller's option (harness benches turn it off) and the player's Settings › Video choice
     // (`video.dynamicResolution`, on unless false)
@@ -468,7 +495,9 @@ class ValeRenderer implements Renderer {
     if (scene === 'menu') {
       this.teardownMatch();
       lodSwitch.outline = lodSwitch.body = false;                          // perf PERF-m5: the showcase keeps its full body and hull
+      this.assets.mark();
       this.menu.build(this.catalog, this.assets);
+      this.releaseMatchContent();
       this.mode = 'menu';
       this.post.setScene(this.menu.scene, this.menu.camera);
       this.overlay.camera = this.menu.camera;
@@ -568,6 +597,17 @@ class ValeRenderer implements Renderer {
     this.rig.setZoom(cam.distance);
     this.offEvents = client.onEvents((evs) => { for (const ev of evs) this.pending.push(ev); });
     this.lastTick = -1;
+  }
+
+  /** perf PERF-C2: what the last match loaded and Home does not draw leaves the caches and the GPU (assets.ts) */
+  lastRelease: { templates: number; models: number; textures: number; skies: number; disposed: number } | null = null;
+  private releaseMatchContent(): void {
+    const inUse = new Set<object>();
+    collectGpu(this.menu.scene, inUse);
+    const ms = this.catalog.client.menuScene as { sky?: string; model?: string; backdrop?: string };
+    const keep = new Set([ms.sky, ms.model, ms.backdrop].filter((x): x is string => typeof x === 'string'));
+    const templates = this.lib.release(inUse);
+    this.lastRelease = { templates, ...this.assets.release(inUse, keep) };
   }
 
   private teardownMatch(): void {
@@ -1008,13 +1048,14 @@ class ValeRenderer implements Renderer {
     // the display's own frame interval (every call is one display frame, drawn or skipped by a cap)
     if (d > 0.002 && d < 0.1) this.displayMs = this.displayMs > 0 ? this.displayMs * 0.95 + d * 50 : d * 1000;
     // fps cap (and the menu's 30 fps idle cap after 4 s)
-    const cap = this.mode === 'menu' && this.menu.idle > 4 ? 30 : this.q.fpsCap;
+    const cap = this.calib ? 0 : this.mode === 'menu' && this.menu.idle > 4 ? 30 : this.q.fpsCap;
     if (cap > 0) {
       this.skipAcc += d;
       if (this.skipAcc < 1 / cap - 0.002) return;
       this.skipAcc = 0;
     }
     const t0 = performance.now();
+    if (this.calib) this.calibSample(t0);
     if (this.lastFrameAt > 0) {
       const iv = t0 - this.lastFrameAt;
       this.fpsEma = this.fpsEma > 0 ? this.fpsEma * 0.9 + (1000 / Math.max(1, iv)) * 0.1 : 1000 / Math.max(1, iv);
@@ -1250,6 +1291,8 @@ class ValeRenderer implements Renderer {
     // ambient), the unit templates, the structures and the VFX shapes
     this.warmed = new WeakSet();
     const jobs: Promise<unknown>[] = [];
+    // perf PERF-C2: model bitmaps were closed after their first upload; decode them again for the new context
+    jobs.push(this.assets.restoreImages().catch(() => 0));
     this.asIfComposer(() => {
       const cam = this.rig.camera;
       if (this.mode === 'match') jobs.push(this.gl.compileAsync(this.scene, cam).catch(() => undefined));
@@ -1302,6 +1345,46 @@ class ValeRenderer implements Renderer {
     onProgress?.(1);
   }
 
+  // ── first-run calibration (perf PERF-C1) ───────────────────────────────────────────────────────
+  private calib: { start: number; end: number; last: number; iv: number[]; video: Settings['video']; done: (r: CalibrationResult) => void } | null = null;
+
+  calibrate(seconds = 3): Promise<CalibrationResult> {
+    if (this.calib) return Promise.resolve({ preset: 'high', frames: 0, p50Ms: 0, p95Ms: 0 });
+    return new Promise((res) => {
+      const video = this.video;
+      // the sample is taken at High whatever the player has now (dynamic resolution off: it would hide the cost)
+      this.setQuality({ ...video, ...PRESETS.high, preset: 'high', fpsCap: 0 });
+      this.dyn.enabled = false;
+      this.applySize();
+      const now = performance.now();
+      const finish = (r: CalibrationResult): void => {
+        clearTimeout(guard);
+        this.calib = null;
+        this.setQuality(video);
+        res(r);
+      };
+      // a hidden page or a caller that stops drawing: give up after 3× the window and keep the default (High)
+      const guard = setTimeout(() => { if (this.calib) this.calibFinish(); }, (seconds * 3 + 1) * 1000);
+      this.calib = { start: now + CALIB_WARM_MS, end: now + CALIB_WARM_MS + seconds * 1000, last: 0, iv: [], video, done: finish };
+    });
+  }
+
+  private calibSample(now: number): void {
+    const c = this.calib!;
+    if (now >= c.start && c.last > 0) c.iv.push(now - c.last);
+    c.last = now;
+    if (now >= c.end) this.calibFinish();
+  }
+
+  private calibFinish(): void {
+    const c = this.calib!;
+    const s = c.iv.slice().sort((a, b) => a - b);
+    const at = (k: number): number => (s.length ? s[Math.min(s.length - 1, Math.floor(s.length * k))] : 0);
+    const p50 = at(0.5), p95 = at(0.95);
+    const preset = s.length < 30 ? 'high' : p95 <= CALIB_HIGH_P95_MS ? 'high' : p95 <= CALIB_MEDIUM_P95_MS ? 'medium' : 'low';
+    c.done({ preset, frames: s.length, p50Ms: Math.round(p50 * 100) / 100, p95Ms: Math.round(p95 * 100) / 100 });
+  }
+
   stats(): RenderStats {
     const info = this.gl.info;
     const size = this.gl.getDrawingBufferSize(new Vector2());
@@ -1312,6 +1395,7 @@ class ValeRenderer implements Renderer {
       renderScale: this.dyn.scale, pixelRatio: this.gl.getPixelRatio(), tier: this.q.tier, width: size.x, height: size.y,
       particles: this.vfx.particleCount, vfx: this.vfx.instanceCount, actors: this.actors.size, telegraphs: this.teles.size, mode: this.mode,
       gpuMs: this.dyn.enabled ? this.gpuTimer.last : null, bound: this.dyn.bound,
+      gpuTimer: !this.gpuTimer.available ? 'none' : this.dyn.timerTrusted ? 'trusted' : 'untrusted',
       ambient: this.ambient?.stats() ?? null,
       crowd: this.crowd.instances,
     };

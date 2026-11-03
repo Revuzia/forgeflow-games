@@ -21,8 +21,15 @@
 //   gpu   GPU time ≥ 85 % of the target (or, with no timer at all, renderer CPU < 60 % of it) → step down
 //   cpu   otherwise → hold the scale
 // A GPU time longer than the frame interval it is fed with is not that frame's draws (another process holding the
-// GPU, a timer straddling a hitch): it is dropped, and a window whose readings were all dropped is never GPU-bound
-// (perf PERF-M2: 29–31 ms readings at a steady 60 fps made contention hitches look GPU-bound).
+// GPU, a timer straddling a hitch): it is dropped (perf PERF-M2: 29–31 ms readings at a steady 60 fps made contention
+// hitches look GPU-bound).
+// perf PERF-C1: on ANGLE Metal (Chrome on a Mac) the timer is not a frame's GPU time at all: 90 % of its readings
+// run past the frame interval even at a steady, uncontended 60 fps, and 100 % in a GPU-bound frame, so a rule that
+// only trusted kept readings never saw a GPU-bound window. Each timed window votes: most readings dropped → the timer
+// is untrusted. Two such windows, and more of them than trusted ones, distrust it for the renderer's life (a driver
+// property: it survives configure()); an untrusted timer is ignored and the window is classified as with no timer —
+// late with renderer CPU < 60 % of the target → GPU-bound. A window more than 40 % late steps every window, not
+// every second one (a GPU-bound Ultra at 33 fps leaves 1.0 in ~2 s and reaches the floor in ~6 s).
 // Back up (perf PERF-M2): vsync holds the interval at the display rate, so spare GPU time never shows as a faster
 // frame on a 60 Hz display. A lowered scale therefore PROBES: after 3 on-target windows it steps up 0.05 and keeps
 // the step only if the next 2 windows stay on target; a GPU-bound slow window inside the probe takes it back and
@@ -128,6 +135,11 @@ export class DynamicResolution {
   private targetMs = 1000 / 60;
   /** what limited the last slow window ('' = on target) */
   bound: FrameBound = '';
+  /** perf PERF-C1: timed windows whose readings were mostly dropped / mostly kept (never reset by configure) */
+  private timerBad = 0;
+  private timerGood = 0;
+  /** false once the GPU timer has proved it does not measure frames (see the header) */
+  get timerTrusted(): boolean { return !(this.timerBad >= 2 && this.timerBad > this.timerGood); }
 
   configure(base: number, fpsCap: number): void {
     this.base = base;
@@ -161,12 +173,16 @@ export class DynamicResolution {
     if (this.acc < 1000) return false;
     const avg = this.sum / this.frames, cpu = this.cpuSum / this.frames, gpu = this.gpuN > 0 ? this.gpuSum / this.gpuN : null;
     const timed = this.gpuN + this.gpuDropped > 0;
+    if (timed) { if (this.gpuDropped > this.gpuN) this.timerBad++; else this.timerGood++; }
+    const trusted = this.timerTrusted;
     this.reset();
     const t = this.targetMs;
-    const gpuBound = gpu !== null ? gpu >= t * 0.85 : !timed && cpu < t * 0.6;
+    // trusted timer: its kept readings decide (a window whose readings were all dropped is never GPU-bound);
+    // no timer or an untrusted one: a late window the renderer's CPU cannot explain is the GPU's
+    const gpuBound = trusted && timed ? gpu !== null && gpu >= t * 0.85 : cpu < t * 0.6;
     const late = avg > t * 1.12;
     // a CPU-late window with a light GPU (measured) says the resolution has room; without a reading it says nothing
-    const room = !late || (!gpuBound && gpu !== null && gpu < t * 0.6);
+    const room = !late || (!gpuBound && trusted && gpu !== null && gpu < t * 0.6);
     this.bound = late ? (gpuBound ? 'gpu' : 'cpu') : '';
     if (this.probeFrom >= 0) {
       if (late && gpuBound) {
@@ -183,7 +199,7 @@ export class DynamicResolution {
     }
     if (late && gpuBound) {
       this.onTarget = 0;
-      if (++this.slow >= 2 && this.current > this.floor + 1e-3) {
+      if ((++this.slow >= 2 || avg > t * 1.4) && this.current > this.floor + 1e-3) {
         this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = 0; return true;
       }
       return false;

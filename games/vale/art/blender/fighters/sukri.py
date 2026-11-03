@@ -711,7 +711,7 @@ def sculpts() -> list:
             r = 1.0 / ((abs(math.sin(a)) ** HOOD_E_BACK + abs(math.cos(a)) ** HOOD_E_BACK) ** (1 / HOOD_E_BACK))
             pts.append((sx * float(hx) * math.sin(a) * r * 0.985, float(yc) + float(back_hy(z)) * math.cos(a) * r * 0.985, z))
         hood.add(Tube(pts, [0.006, 0.010, 0.012, 0.010], k=0.01), k=0.03)
-    part("hood", hood, "cloth2", ("weights", "hood"), 1650, uvw=1.3)   # CW6: 1900 -> 1650 (GLB budget)
+    part("hood", hood, "cloth2", ("weights", "hood"), 1450, uvw=1.3)   # CW6: 1900 -> 1450 (GLB budget 1172 KiB)
 
     # FACE: the big carved wooden face in the opening, 3 cm behind the rim; the painted features carved
     def face_d(P):
@@ -730,7 +730,7 @@ def sculpts() -> list:
     for sx in (-1, 1):
         face.add(Sphere((sx * 0.034, yt - 0.012, NOSE[1] - 0.002), 0.019), k=0.012)
         face.sub(Ellipsoid((sx * 0.020, yt - 0.026, NOSE[1] - 0.016), (0.009, 0.010, 0.006)), k=0.004)
-    part("face", face, "wood", "bone:head", 1420, 0.5, uvw=3.0)   # CW6: 1520 -> 1420 (GLB budget)
+    part("face", face, "wood", "bone:head", 1320, 0.5, uvw=3.0)   # CW6: 1520 -> 1320 (GLB budget)
 
     # TORSO: the barrel under the wraps (widest at 0.55 m), the shoulders' mass under the plates
     torso = Sculpt("torso")
@@ -742,7 +742,7 @@ def sculpts() -> list:
     torso.inter(HalfSpace((0, 0, 0.455), (0, 0, -1), 2.0), k=0.01)
     torso.ops = [(op, prim.displaced(painted(0.8, 0.02, 0.32, cloth_noise(0.0012, 9.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in torso.ops]
-    part("torso", torso, "cloth", ("weights", "torso"), 1450, uvw=1.1)   # fp2: 1640, CW6: 1450 (GLB size)
+    part("torso", torso, "cloth", ("weights", "torso"), 1350, uvw=1.1)   # fp2: 1640, CW6: 1350 (GLB size)
 
     # BELT: the thick dark sash (7.5 cm) round the waist and a thin strap over it, a knot of torn ends at the front
     BY = 0.75
@@ -759,7 +759,7 @@ def sculpts() -> list:
         return np.minimum(d, d2) * BY
     belt = Sculpt("belt")
     belt.add(Fn(belt_d, (-0.48, -0.34, 0.46), (0.48, 0.38, 0.57)).displaced(wraps(0.0030, 0.030, (0, 0.02, 0.45), (0, 0.02, 0.57), 0.4), 0.003), k=0.0)
-    part("belt", belt, "leather", ("weights", "belt"), 620, 0.6)
+    part("belt", belt, "leather", ("weights", "belt"), 540, 0.6)   # CW6: 620 -> 540 (GLB size)
 
     # SKIRT: panels under the sash: a long rounded front apron, side flaps, two back panels (slits between)
     def skirt_d(P):
@@ -782,7 +782,7 @@ def sculpts() -> list:
         return np.maximum(d, -sl)
     skirt = Sculpt("skirt")
     skirt.add(Fn(skirt_d, (-0.48, -0.38, 0.24), (0.48, 0.38, 0.51)).displaced(painted(0.7, 0.02, 0.33, cloth_noise(0.0015, 10.0)), 0.009), k=0.0)
-    part("skirt", skirt, "cloth", ("weights", "skirt"), 790, 0.8)   # fp2: 820 (GLB size)
+    part("skirt", skirt, "cloth", ("weights", "skirt"), 700, 0.8)   # fp2: 820, CW6: 700 (GLB size)
 
     # BLOOMERS: the dark round trousers under the skirt (0.30 m wide per leg at the knee)
     pants = Sculpt("pants")
@@ -794,7 +794,7 @@ def sculpts() -> list:
     pants.inter(HalfSpace((0, 0, 0.185), (0, 0, -1), 2.0), k=0.012)
     pants.ops = [(op, prim.displaced(painted(0.8, 0.03, 0.17, cloth_noise(0.003, 8.0)), 0.0095) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in pants.ops]
-    part("pants", pants, "under", ("weights", "pants"), 720)   # fp2: 750 (GLB size)
+    part("pants", pants, "under", ("weights", "pants"), 640)   # fp2: 750, CW6: 640 (GLB size)
 
     # SHINS: thick bandage wraps from the bloomers to the boots
     shins = Sculpt("shins")
@@ -803,7 +803,7 @@ def sculpts() -> list:
         shins.add(FlatCapsule(a_, b_, 0.108, 0.104, 0.100, 0.098, side=(1, 0, 0)).displaced(
             painted(1.2, 0.02, 0.10, wraps(0.0020, 0.034, b_, a_, 1.6)), 0.012), k=0.0)
     shins.inter(HalfSpace((0, 0, 0.060), (0, 0, -1), 2.0), k=0.004)      # (inside the boots, never under the ground)
-    part("shins", shins, "cloth2", ("weights", "shins"), 720, 0.8)   # fp2: 750 (GLB size)
+    part("shins", shins, "cloth2", ("weights", "shins"), 640, 0.8)   # fp2: 750, CW6: 640 (GLB size)
 
     # BOOTS: soft wide dark leather boots with rounded toes (8 degrees out)
     boots = Sculpt("boots")
@@ -820,7 +820,7 @@ def sculpts() -> list:
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     boots.ops = [(op, prim.displaced(cloth_noise(0.0025, 12.0), 0.0025) if op == "add" else prim, k, tg)
                  for op, prim, k, tg in boots.ops]
-    part("boots", boots, "leather", ("weights", "boots"), 730)   # fp2: 760 (GLB size)
+    part("boots", boots, "leather", ("weights", "boots"), 650)   # fp2: 760, CW6: 650 (GLB size)
 
     # SLEEVES (cream wraps over the upper arms), BRACERS (dark leather wraps over the forearms), GLOVES
     for s, sh, el, wr, fo in (("L", SH_L, E_L, W_L, FO_L), ("R", SH_R, E_R, W_R, FO_R)):
@@ -829,20 +829,20 @@ def sculpts() -> list:
         top_ = sh + np.array([sx * 0.006, 0.0, 0.010])
         sl.add(FlatCapsule(top_, el, 0.105, 0.100, 0.090, 0.088, side=(0, 1, 0)).displaced(
             painted(1.0, float(sh[1]), 0.10, wraps(0.0020, 0.036, top_, el, 1.3)), 0.011), k=0.0)
-        part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 620)
+        part(f"sleeve_{s}", sl, "cloth", ("weights", "sleeves"), 560)   # CW6: 620 -> 560 (GLB size)
         br = Sculpt(f"bracer_{s}")
         # fix pass 2: the bracer starts 1.5 cm further down and a little thinner, so its start stays inside the
         # sleeve's elbow end (a bent elbow pushed it through the sleeve cap in ragged patches: the victory splash)
         a_, b_ = el + fo * 0.025, wr - fo * 0.005
         br.add(FlatCapsule(a_, b_, 0.080, 0.082, 0.068, 0.070, side=(0, 1, 0)).displaced(wraps(0.0045, 0.030, a_, b_, 1.8), 0.0045), k=0.0)
         br.add(Torus(b_ - fo * 0.006, 0.070, 0.008, axes=sdf.frame(fo)), k=0.006)
-        part(f"bracer_{s}", br, "leather", f"bone:forearm.{s}", 520, 0.7)
+        part(f"bracer_{s}", br, "leather", f"bone:forearm.{s}", 460, 0.7)   # CW6: 520 -> 460 (GLB size)
     out.append(glove("hand_R", *HAND_R_FRAME, "bone:hand.R", 680, curl=1.0, grip=True))   # CW6: 780 -> 680 (GLB budget)
     # CW6 (closing SUK-M3: every open-hand beat played as a fist): the free hand is two meshes on two child bones of
     # hand.L, the loose fist (x_fist_L) and an OPEN hand, fingers out and a little spread (x_open_L); the clips key
     # their scales (HAND_OPEN): Mote Toss's palm-up follow-through, Draw Near's welcome, the attacks' guiding hand
-    out.append(glove("hand_L", *HAND_L_FRAME, "bone:x_fist_L", 640, curl=LEFT_CURL, grip=False, relaxed=False))
-    out.append(glove("hand_L_open", *HAND_L_FRAME, "bone:x_open_L", 520, curl=OPEN_CURL, grip=False, relaxed=True,
+    out.append(glove("hand_L", *HAND_L_FRAME, "bone:x_fist_L", 580, curl=LEFT_CURL, grip=False, relaxed=False))
+    out.append(glove("hand_L_open", *HAND_L_FRAME, "bone:x_open_L", 460, curl=OPEN_CURL, grip=False, relaxed=True,
                      filled=False))
 
     # STONE PLATES: two tiers on each shoulder, three rows across the upper back (chunky chipped slabs, shingled)
@@ -2032,7 +2032,7 @@ def _cup_rim_paint(p, n):
     return c * (facet * (1 + 0.30 * chip) * (1 + 0.35 * top))[:, None]
 
 
-GLOW_HEX = {None: "#FFF1CC", "sukri_stillwater": "#D6F0E2", "sukri_shadeprint": "#B9A6FF"}
+GLOW_HEX = {None: "#FFF1CC", "sukri_stillwater": "#D6F0E2", "sukri_shadeprint": "#A48CFF"}   # (CW6 build 2: #B9A6FF read pale lavender)
 # CW6 (closing SUK-M2 / SUK-M5): the light ring inside the glass: warm dawn light on the base, sea-light on
 # Stillwater, VIOLET light on Shadeprint (the deluxe's 'the cup holds violet light'); painted, never emissive
 
@@ -2201,9 +2201,10 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
 # cream wraps warm (C ~17 in the albedo, ~13 after the game's light and grade), honey wood face and staff, a cooler
 # stone cape; the face disc's median sits FACE_DROP L* under the hood's lit median (the concept: 20-35)
 # (CW6 build 2: at C 17 in the albedo the wraps measured C 6.6 in three (three_sukri.png front, the cool sky takes
-# ~10 off b*): the cloth targets go to C 23 so the game shows the concept's warm cream at C >= 10)
-SEP = {"torso": (80.0, 23.0, 0.90), "skirt": (80.0, 23.0, 0.90), "sleeve_L": (80.0, 23.0, 0.90),
-       "sleeve_R": (80.0, 23.0, 0.90), "shins": (78.0, 19.0, 0.85), "hood": (86.0, 8.0, 0.70),
+# ~10 off b*): the cloth targets go to C 27 so the game shows the concept's warm cream at C >= 10 (at C 23 the
+# torso measured C 9.7 in three)
+SEP = {"torso": (80.0, 27.0, 0.95), "skirt": (80.0, 27.0, 0.95), "sleeve_L": (80.0, 27.0, 0.95),
+       "sleeve_R": (80.0, 27.0, 0.95), "shins": (78.0, 21.0, 0.90), "hood": (86.0, 8.0, 0.70),
        "face": (70.0, 19.0, 0.90), "staff": (68.0, 19.0, 0.85), "plates": (100.0, 6.5, 0.80)}
 FACE_DROP = 19.0
 _D65 = np.array([0.95047, 1.0, 1.08883])

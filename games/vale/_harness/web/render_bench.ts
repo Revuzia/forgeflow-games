@@ -15,7 +15,7 @@
 //             path into a match (perf PERF-M2: perf_1080 --prod's dynres step); __VALE_BENCH__.menuScale is the render
 //             scale the menu left
 //
-// URL: mode, q (tier), t (fast-forward s), seed, you (seat 0's fighter), picks (comma list: a fighter per seat), dev, hud,
+// URL: mode, q (tier), t (fast-forward s), seed, rot (rotate the default seats' fighters), you (seat 0's fighter), picks (comma list: a fighter per seat), dev, hud,
 //   manual, dyn, crowd, bodylod, cb, menu, fighter, menufirst
 // window.__VALE_BENCH__: { ready, stats(), timing(), profile(), frames(n, dt), ff(sec), fight(), focus(x, y), focusEntity(id),
 //   setQuality(tier), telegraphTest(), clearAim(), zoom(d), entities(kind), you(), menu(station), rebuild() }
@@ -48,7 +48,8 @@ function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): Ma
   const picks = (qs.get('picks') ?? '').split(',');
   for (let i = 0; i < n; i++) {
     const pinned = i === 0 ? qs.get('you') ?? picks[0] : picks[i] || null;
-    const fighter = pinned && fighters.includes(pinned) ? pinned : fighters[(i * 7 + 3) % fighters.length];
+    // rot=k rotates every default seat's fighter by k (perf_1080's match peak over seeds with rotated seats)
+    const fighter = pinned && fighters.includes(pinned) ? pinned : fighters[(i * 7 + 3 + Number(qs.get('rot') ?? 0)) % fighters.length];
     const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
     const team = ffa ? i : Math.floor(i / mode.perTeam);
     const roles = catalog.roles.filter((r) => r.assign).sort((a, b) => (a.assign?.order ?? 0) - (b.assign?.order ?? 0));
@@ -116,10 +117,20 @@ async function main(): Promise<void> {
 
   const setup = buildSetup(catalog, qs.get('mode'), Number(qs.get('seed') ?? 7));
   const ffTo = Number(qs.get('t') ?? 0);
-  const makeHost = (): LocalMatchHost => {
-    const h = new LocalMatchHost(catalog, setup, 0, { bots: createBots(catalog, setup), autopilot: true, maxTimeScale: 16, pregameSeconds: 0 });
+  const makeHost = (s: MatchSetup = setup): LocalMatchHost => {
+    const h = new LocalMatchHost(catalog, s, 0, { bots: createBots(catalog, s), autopilot: true, maxTimeScale: 16, pregameSeconds: 0 });
     h.start();
     return h;
+  };
+  // perf PERF-C2: another mode's match, the real client's way (preload behind a loading screen, then the scene)
+  rebuildMode = async (mode: string): Promise<boolean> => {
+    const s = buildSetup(catalog, mode, Number(qs.get('seed') ?? 7));
+    const h = makeHost(s);
+    await renderer.preload(s);
+    if (ffTo > 0) ff(h, ffTo);
+    setHost(h);
+    renderer.setScene(h);
+    return true;
   };
   const host = makeHost();
   await renderer.preload(setup, (p) => { hud.textContent = `loading ${(p * 100) | 0}%`; });
@@ -138,6 +149,9 @@ function ff(host: LocalMatchHost, seconds: number): void {
 }
 
 let manual = qs.get('manual') === '1';
+/** set by main(): a match of another mode on a fresh host (install's rebuildMode) */
+let rebuildMode: ((mode: string) => Promise<boolean>) | null = null;
+let setHost: (h: LocalMatchHost) => void = () => undefined;
 /** per-frame main-thread cost of the live loop (ms): the match pump (sim) and renderer.render (perf_1080.mjs) */
 const timing = { pump: [] as number[], render: [] as number[] };
 function loop(renderer: Renderer, host: LocalMatchHost | null): void {
@@ -159,6 +173,7 @@ function loop(renderer: Renderer, host: LocalMatchHost | null): void {
 }
 
 function install(renderer: Renderer, host: LocalMatchHost | null, catalog: CatalogT, makeHost?: () => LocalMatchHost): void {
+  setHost = (h) => { host = h; };
   const view = () => host?.view;
   const you = () => { const v = view(); const p = v?.players.find((x) => x.player === 0); return p ? v!.entity(p.entity) : undefined; };
   const api = {
@@ -205,6 +220,8 @@ function install(renderer: Renderer, host: LocalMatchHost | null, catalog: Catal
     follow: () => renderer.camera.setMode('locked'),
     zoom: (d: number) => renderer.camera.setZoom(d),
     setQuality: (t: Tier) => renderer.setQuality(presetVideo(t)),
+    /** a preset with fields overridden (perf_1080's GPU-bound step: High at render scale 2) */
+    setVideo: (t: Tier, patch: Record<string, unknown>) => renderer.setQuality({ ...presetVideo(t), ...patch } as ReturnType<typeof presetVideo>),
     menu: (station: string, fighter?: string) => renderer.setMenuView({ screen: station, fighter }),
     /** synthetic telegraphs around a point: enemy delayed circle, enemy cone, enemy line, ally ring, own aim */
     telegraphTest: (x: number, y: number) => {
@@ -233,6 +250,13 @@ function install(renderer: Renderer, host: LocalMatchHost | null, catalog: Catal
       host = makeHost();
       renderer.setScene(host);
       return true;
+    },
+    /** a match of another mode (rift | bridge | fray) on a fresh host, preloaded first (perf_1080's map memory step) */
+    rebuildMode: (mode: string): Promise<boolean> => (rebuildMode ? rebuildMode(mode) : Promise.resolve(false)),
+    /** what the last return to Home released and how many model bitmaps were closed after upload (perf PERF-C2) */
+    memInfo: () => {
+      const r = renderer as unknown as { lastRelease?: unknown; assets?: { closedBitmaps?: number } };
+      return { lastRelease: r.lastRelease ?? null, closedBitmaps: r.assets?.closedBitmaps ?? null };
     },
     hover: (id: number | null) => renderer.setHover(id),
     pick: (x: number, y: number) => renderer.pickEntity(x, y),

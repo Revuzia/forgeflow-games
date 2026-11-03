@@ -73,7 +73,7 @@ import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import type { BotTelemetry } from '../src/sim/bots/micro.ts';
 import { inTelegraph, telegraphFromEvent } from '../src/sim/bots/perception.ts';
-import { fighterProfile, itemRole } from '../src/sim/bots/knowledge.ts';
+import { fighterProfile, itemRole, laneProject, proj } from '../src/sim/bots/knowledge.ts';
 import type { Player } from '../src/sim/entity.ts';
 import { createSim, type BotController } from '../src/sim/sim.ts';
 import { structuresOf } from '../src/sim/units/structures.ts';
@@ -377,12 +377,30 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
               rec.wickMissed[near] = (rec.wickMissed[near] ?? 0) + 1;
               let nf: ReturnType<typeof world>['players'][number]['ent'] = null, nd = 14 * 14;
               for (const pl of world().players) { const f = pl.ent; if (!f || !f.alive || pl.team === victim.team) continue; const d2 = (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2; if (d2 < nd) { nd = d2; nf = f; } }
+              {
+                // the other team's laners of this Wick's road: present (in 14 m) or where they are
+                const bc = ctrls.find((c) => c) as unknown as { k?: { lanes: Parameters<typeof laneProject>[0][] } } | undefined;
+                const lanes = bc?.k?.lanes ?? [];
+                let li = -1, bd2 = Infinity;
+                for (const l of lanes) { laneProject(l, victim.x, victim.y); if (proj.d2 < bd2) { bd2 = proj.d2; li = l.index; } }
+                let st = 'nolaner';
+                for (const pl of world().players) {
+                  if (pl.team === victim.team) continue;
+                  const c = ctrls[pl.player] as unknown as { lane?: number; jungle?: boolean; support?: boolean; mode?: string } | null;
+                  if (!c || c.jungle || c.lane !== li) continue;
+                  const f = pl.ent;
+                  const s2 = !f || !f.alive ? 'dead' : (f.x - victim.x) ** 2 + (f.y - victim.y) ** 2 <= 14 * 14 ? 'here' : `away/${c.mode}`;
+                  if (st === 'nolaner' || st.startsWith('away') || (st === 'dead' && s2 === 'here')) st = s2;
+                  if (st === 'here') break;
+                }
+                rec.wickMissed['A:' + st] = (rec.wickMissed['A:' + st] ?? 0) + 1;
+              }
               if (nf && modeOf(world().players.findIndex((pp) => pp.ent === nf)) === 'lane') {
                 const d = Math.sqrt(nd), reach = nf.stats.range + nf.radius + victim.radius;
                 let tower = false;
                 for (const st of structuresOf(world())) if (st.ent.alive && st.ent.team === victim.team && st.ent.attackDef && (st.ent.x - victim.x) ** 2 + (st.ent.y - victim.y) ** 2 <= (st.ent.stats.range + st.ent.radius + 1) ** 2) tower = true;
                 const tg = nf.atkTarget >= 0 ? world().entity(nf.atkTarget) : null;
-                const why = tower ? 'tower' : d <= reach + 0.5 ? (nf.atkWindup >= 0 && nf.atkTarget !== victim.id ? `reach:swing-${tg?.kind ?? '?'}` : nf.atkCd > 0.05 ? 'reach:cd' : 'reach:idle') : d <= reach + 4 ? 'near' : 'far';
+                const why = tower ? 'tower' : d <= reach + 0.5 ? (nf.atkWindup >= 0 && nf.atkTarget !== victim.id ? `reach:swing-${tg?.kind ?? '?'}` : nf.atkCd > 0.05 ? `reach:cd-${tg?.kind ?? 'none'}${tg && tg.kind === 'minion' ? (tg.alive ? '-alive' : '-dead') : ''}` : `reach:idle-o${nf.order}`) : d <= reach + 4 ? 'near' : 'far';
                 rec.wickMissed['L:' + why] = (rec.wickMissed['L:' + why] ?? 0) + 1;
               }
             }
@@ -646,7 +664,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const miss: Record<string, number> = {};
     for (const g of gs) for (const [k, v] of Object.entries(g.wickMissed ?? {})) miss[k] = (miss[k] ?? 0) + v;
     const mTot = Object.values(miss).reduce((a, b) => a + b, 0) || 1;
-    text.push(`  Wicks finished by Wicks, nearest other-team fighter (far: beyond 14 m): ${Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${pct(v / mTot)}`).join(', ')}`);
+    text.push(`  Wicks finished by Wicks, nearest other-team fighter (far: beyond 14 m): ${Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, v]) => `${k} ${pct(v / mTot)}`).join(', ')}`);
     if (Object.keys(alone).length) text.push(`  alone deaths by role/mode/phase: ${Object.entries(alone).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   }
   detail.laning = lan;

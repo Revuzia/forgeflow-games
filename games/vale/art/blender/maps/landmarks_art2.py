@@ -72,6 +72,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "units"))
+from common import materials as M  # noqa: E402
 from common import scene  # noqa: E402
 import structure_kit as K  # noqa: E402
 import structures as ST  # noqa: E402
@@ -1145,11 +1146,16 @@ def numeral_strokes(glyph: str):
     return out, x - gap
 
 
-def numeral(B, rng, glyph: str, tilt: float = 52.0):
-    """A giant numeral of the dial, fallen into the Dialwood block and half buried: dressed dial-stone strokes (each
-    its own stone, chamfered, the paint's chalked arrises and inked joints) between a foot bar and a head bar, laid
-    back `tilt` degrees so its face looks up the gameplay camera's line (brief map_rift_landmarks.md §2: the callout
-    reads as a pale glyph on the dark block), sunk 0.9 m, a spill of broken stone at its foot. Blender +Y is north."""
+NUM_TILT, NUM_SINK = 20.0, 1.3        # env E1: the brief's 20 deg lean (map_rift_landmarks.md §2), half buried
+
+
+def numeral(B, rng, glyph: str, tilt: float = NUM_TILT):
+    """A giant numeral of the dial, fallen into the Dialwood block and half buried (env E1, closing CW4): weathered
+    carved dial-stone strokes, each its own stone with its own value (chamfered, the paint's chalked arrises and inked
+    joints), an inked channel cut down the face of every stroke, between a foot bar and a head bar whose east end has
+    snapped off (the broken piece lies at the foot, its fracture raw). It leans back `tilt` degrees (the brief's 20,
+    <= 25: a standing stone, no longer a sign laid toward the camera), sunk NUM_SINK m into an earth-and-rubble bank
+    banked up on the camera side; lichen and grime on the upper faces (the material's detail layer). +Y is north."""
     strokes, width = numeral_strokes(glyph)
     D = NUM_D
     pieces = []
@@ -1158,23 +1164,44 @@ def numeral(B, rng, glyph: str, tilt: float = 52.0):
         # stands proud over it (never two coplanar faces baking each other black)
         d = D if w >= NUM_W else D - 0.06
         pieces.append(("dialstone", K.prism(_stroke_poly(a, b, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.07)))
-    for zc in (0.16, NUM_H - 0.16):                                              # foot and head bars: a proud slab each
-        pieces.append(("dialstone", K.box((width / 2, 0.0, zc), (width / 2 + 0.35, D / 2 + 0.06, 0.16), 0.05)))
+        # the inked channel: a narrow cut down the stroke's face (the mason's V-cut, filled dark), a hair proud of the
+        # face it lies on; it stops short of the bars
+        (ax, az), (bx, bz) = a, b
+        k0, k1 = 0.42 / (bz - az), 1.0 - 0.42 / (bz - az)
+        ca, cb = (ax + (bx - ax) * k0, az + (bz - az) * k0), (ax + (bx - ax) * k1, az + (bz - az) * k1)
+        cw = 0.16 if w >= NUM_W else 0.1
+        pieces.append(("groove", K.prism(_stroke_poly(ca, cb, cw), origin=(0, -d / 2 - 0.012, 0), u=(1, 0, 0), v=(0, 0, 1),
+                                         depth=0.03, chamfer=0.005)))
+    brk = width * rng.uniform(0.2, 0.3)                                          # the head bar's snapped east end
+    pieces.append(("dialstone", K.box((width / 2, 0.0, 0.16), (width / 2 + 0.35, D / 2 + 0.06, 0.16), 0.05)))
+    hx0, hx1 = -0.35, width + 0.35 - brk
+    pieces.append(("dialstone", K.box(((hx0 + hx1) / 2, 0.0, NUM_H - 0.16), ((hx1 - hx0) / 2, D / 2 + 0.06, 0.16), 0.05)))
+    pieces.append(("raw", K.box((hx1 + 0.006, 0.0, NUM_H - 0.16), (0.012, D / 2 - 0.02, 0.12), 0.004)))   # its fracture
     t = -math.radians(tilt)                                                      # the top away from the camera (+Y)
     for mat, (v, f) in pieces:
-        v = K.rot(K.move(np.asarray(v, dtype=np.float64), (-width / 2, 0.0, -0.9)), (1, 0, 0), t)
+        v = K.rot(K.move(np.asarray(v, dtype=np.float64), (-width / 2, 0.0, -NUM_SINK)), (1, 0, 0), t)
         B.add(mat, (v, f))
-    # the spill at its foot: flat broken spalls half sunk along the camera side (lying, never standing on a corner),
-    # two larger flat spalls on the block top
-    n = max(3, int(width / 1.5))
+    # the snapped-off bar end lying at the foot on the east side, its raw face up
+    v, f = K.box((0, 0, 0), (brk / 2, D / 2 * 0.9, 0.15), 0.04, rz=rng.uniform(0.3, 0.6))
+    v = K.rot(v, (1, 0, 0), 0.12)
+    B.add("dialstone", (K.move(v, (width / 2 + 0.2, -1.35, 0.1)), f))
+    # the bank: earth and rubble heaped against the buried foot on the camera side (low, flattened lumps)
+    n = max(3, int(width / 1.6))
     for k in range(n):
-        x = -width / 2 - 0.2 + (width + 0.4) * (k + 0.5) / n + rng.uniform(-0.25, 0.25)
-        s = rng.uniform(0.2, 0.32)
-        v, f = K.box((0, 0, 0), (s, s * rng.uniform(0.65, 0.9), s * 0.32), 0.03, rz=rng.uniform(0, PI))
+        x = -width / 2 + width * (k + 0.5) / n + rng.uniform(-0.3, 0.3)
+        r = rng.uniform(0.9, 1.25)
+        v, f = K.lathe([(0.0, 0.32), (r * 0.45, 0.28), (r * 0.85, 0.14), (r, -0.05)], 10, phase=rng.uniform(0, PI))
+        v = v * np.array([1.0, rng.uniform(0.55, 0.75), rng.uniform(0.8, 1.15)])
+        B.add("earth", (K.move(v, (x, -0.95 + rng.uniform(-0.1, 0.1), 0.0)), f))
+    # the spill: flat broken spalls half sunk along the camera side (lying, never standing on a corner)
+    for k in range(n + 1):
+        x = -width / 2 - 0.2 + (width + 0.4) * (k + 0.5) / (n + 1) + rng.uniform(-0.25, 0.25)
+        sz = rng.uniform(0.2, 0.32)
+        v, f = K.box((0, 0, 0), (sz, sz * rng.uniform(0.65, 0.9), sz * 0.32), 0.03, rz=rng.uniform(0, PI))
         v = K.rot(v, (rng.uniform(-1, 1), rng.uniform(-1, 1), 0.0), rng.uniform(0.08, 0.25))
-        B.add("rubble", (K.move(v, (x, rng.uniform(-1.3, -1.0), s * 0.12)), f))
+        B.add("rubble", (K.move(v, (x, rng.uniform(-1.9, -1.6), sz * 0.12)), f))
     for sx in (-1, 1):
-        B.add("rubble", K.box((sx * (width / 2 + 0.55), -0.4, 0.05), (0.42, 0.3, 0.07), 0.025, rz=rng.uniform(-0.5, 0.5)))
+        B.add("rubble", K.box((sx * (width / 2 + 0.7), -0.5, 0.05), (0.42, 0.3, 0.07), 0.025, rz=rng.uniform(-0.5, 0.5)))
 
 
 def _vi(B, rng):
@@ -1231,17 +1258,336 @@ def drop_underground(ob, z: float = -0.06) -> int:
     return len(kill)
 
 
+# env E1 detail keys (the landmark detail layer, `_detail` below): grain (a fine value grain, ± at 4-8 cm), blotch (value
+# blotches at 0.5-1.5 m, ±), lichen (grey-green crust patches, more on the upper faces), fibre (timber grain: (axis,
+# amount)), stripes (painted canvas bands: (axis, width m, second hex, amount)). Authored so the breakup survives the
+# content `value` multiplier: >= 6 L* at >= 0.5 m in game (closing CW4 done 2, value_probe --landmarks).
+LICHEN_HEX = "#6F7559"
 NUM_MATS = {
-    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.45, chips=0.6),             # carved dial-stone, weathered
-    "rubble": dict(hex="#7C776D", chisel=0.9, var=0.09, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
-                   edge_light=(0.03, 0.55, 0.6, 0.08)),
+    "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.2, speckle=0.3,
+                      grain=0.16, blotch=0.26, lichen=0.55),                     # carved dial-stone, weathered
+    "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
+                   edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.14, blotch=0.2, lichen=0.4),
+    "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
+                  grain=0.22, blotch=0.25, lichen=0.7),                          # the bank: earth, grit and moss
+    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08), grain=0.12),
+    "groove": dict(hex="#2F2C27", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),   # the cut, inked
 }
 VI_MATS = {
     "dialstone": NUM_MATS["dialstone"],
     "footing": NUM_MATS["rubble"],
-    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08)),       # the fresh break: paler, unweathered
+    "raw": NUM_MATS["raw"],                                                      # the fresh break: paler, unweathered
     "groove": dict(hex="#3B3731", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),   # the cut, inked
 }
+
+
+def _detail(mat, s: dict, height: float):
+    """env E1: the landmark detail layer over a painted material's base colour (see the keys above NUM_MATS)."""
+    keys = ("grain", "blotch", "lichen", "fibre", "stripes")
+    if not any(s.get(k) for k in keys):
+        return
+    g = M.G.__new__(M.G)
+    g.mat, g.nt, g.x, g._coord, g._geo = mat, mat.node_tree, -5000, None, None
+    g.bsdf = mat.node_tree.nodes.get("BSDF")
+    sock = g.bsdf.inputs["Base Color"]
+    c = sock.links[0].from_socket
+    hexcol = s["hex"]
+    if s.get("stripes"):
+        ax, w, hex2, k = s["stripes"]
+        sep = g.n("ShaderNodeSeparateXYZ")
+        g.link(g.obj, sep.inputs[0])
+        band = g.math("FLOORED_MODULO", g.math("FLOOR", g.math("DIVIDE", sep.outputs[ax], w)), 2.0)
+        c = g.mix(c, g.mix(c, M.shade_hex(hex2), 1.0, "COLOR"), g.math("MULTIPLY", band, k))
+        c = g.mix(c, M.shade_hex(hex2, 0.85), g.math("MULTIPLY", band, k * 0.6))
+    if s.get("fibre"):
+        ax, k = s["fibre"]
+        sc = {"X": (0.06, 1.0, 1.0), "Y": (1.0, 0.06, 1.0), "Z": (1.0, 1.0, 0.06)}[ax]
+        n = g.noise(g.mapping(g.obj, scale=sc), scale=26.0, detail=4.0, rough=0.6, distortion=1.2)
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.3, 1.0 - k), (0.7, 1.0 + k * 0.7)]), 1.0, "MULTIPLY")
+    if s.get("blotch"):
+        k = s["blotch"]
+        n = g.noise(scale=1.3, detail=3.0, rough=0.6, distortion=0.5)
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.36, 1.0 - k), (0.64, 1.0 + k * 0.6)]), 1.0, "MULTIPLY")
+    if s.get("grain"):
+        k = s["grain"]
+        n = g.noise(scale=18.0, detail=5.0, rough=0.7)
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.32, 1.0 - k), (0.68, 1.0 + k * 0.8)]), 1.0, "MULTIPLY")
+        sp = g.voronoi(scale=34.0, feature="F1")                                  # pits: small dark grains
+        c = g.mix(c, M.shade_hex(hexcol, 0.62, 1.1), g.math("MULTIPLY", g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.16, 0.0)]), k * 2.2))
+    if s.get("lichen"):
+        k = s["lichen"]
+        n = g.noise(scale=2.4, detail=6.0, rough=0.72, distortion=0.3)
+        sep = g.n("ShaderNodeSeparateXYZ")
+        g.link(g.geo.outputs["Normal"], sep.inputs[0])
+        up = g.math("ADD", 0.45, g.math("MULTIPLY", sep.outputs["Z"], 0.75), clamp=True)    # more on the upper faces
+        patch = g.math("MULTIPLY", g.ramp(n.outputs["Fac"], [(0.55, 0.0), (0.6, 1.0)]), up)
+        dots = g.ramp(g.voronoi(scale=26.0, feature="F1").outputs["Distance"], [(0.0, 1.0), (0.2, 0.0)])
+        fringe = g.math("MULTIPLY", g.ramp(n.outputs["Fac"], [(0.47, 0.0), (0.53, 1.0)]), dots)
+        cover = g.math("MULTIPLY", g.math("MAXIMUM", patch, fringe), k, clamp=True)
+        lich = g.mix(M.shade_hex(LICHEN_HEX, 0.9), M.shade_hex(LICHEN_HEX, 1.25, 0.8), g.ramp(g.noise(scale=9.0, detail=2.0).outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)]))
+        c = g.mix(c, lich, cover)
+    g.link(c, sock)
+
+
+# ── the lampwright's shop: the RIFT / BRIDGE kiosks and FRAY's cart; FRAY's fair stands (env E1, closing CW4: the last
+# landmarks still on landmarks.py's Oct 14 SDF builds, now in the structures' painted, baked method) ─────────────────
+def _square_frustum(B, mat, c, r0, r1, z0, z1, var=None):
+    """A square course (flats facing the axes) from half-width r0 at z0 to r1 at z1."""
+    q = math.sqrt(2.0)
+    v, f = K.lathe([(0.0, z0), (r0 * q, z0), (r1 * q, z1), (0.0, z1)], 4, phase=PI / 4)
+    B.add(mat, (K.move(v, (c[0], c[1], 0.0)), f), var=var)
+
+
+def _hanging_lamp(B, x, y, z_hook, glass="lampglow", cage="steel"):
+    """ONE shop lamp hung from a bracket: a cage cap, a lit glass body, a drip knob (the stall's only emissive)."""
+    rod(B, cage, [(x, y, z_hook), (x, y, z_hook - 0.22)], 0.018, 0.018, 5)
+    B.add(cage, K.lathe([(0.0, z_hook - 0.2), (0.1, z_hook - 0.24), (0.15, z_hook - 0.3), (0.0, z_hook - 0.3)], 8), node="body")
+    B.add(glass, K.lathe([(0.0, z_hook - 0.29), (0.13, z_hook - 0.33), (0.14, z_hook - 0.5), (0.08, z_hook - 0.6), (0.0, z_hook - 0.62)], 10), node="lamp")
+    B.add(cage, K.lathe([(0.0, z_hook - 0.6), (0.06, z_hook - 0.61), (0.03, z_hook - 0.68), (0.0, z_hook - 0.69)], 8))
+
+
+def _wares(B, rng, x0, x1, y, z, mat="ware"):
+    """Unlit lamps for sale along a counter: different sizes and heights, never an even pair."""
+    x = x0
+    while x < x1:
+        h = rng.uniform(0.16, 0.3)
+        r = rng.uniform(0.06, 0.1)
+        B.add(mat, K.lathe([(0.0, z), (r, z + 0.02), (r * 1.1, z + h * 0.6), (r * 0.5, z + h), (0.0, z + h + 0.02)], 8))
+        x += r * 2 + rng.uniform(0.12, 0.3)
+    return x
+
+
+def _kiosk_base(B, rng, W, Dp, stone, wood):
+    """The kiosk's floor and body: a dial-stone plinth of two slabs, a coursed back wall with a shelf, a stone counter on
+    the camera side (-Y) with a timber top, the side cheeks."""
+    for k, (x0, x1) in enumerate(((-W, -0.05), (0.05 - 0.0, W))):
+        B.add("plinth", K.box(((x0 + x1) / 2, 0.0, 0.12), ((x1 - x0) / 2, Dp, 0.12), 0.03))
+    # the back wall: two courses of blocks, staggered, each its own stone
+    for row, (z0, z1) in enumerate(((0.24, 0.78), (0.78, 1.3))):
+        x = -W + 0.12
+        off = 0.0 if row == 0 else 0.35
+        cuts = [-W + 0.12]
+        while x < W - 0.12:
+            x += rng.uniform(0.55, 0.85) + (off if x == -W + 0.12 else 0.0)
+            cuts.append(min(x, W - 0.12))
+        for a, b in zip(cuts[:-1], cuts[1:]):
+            if b - a < 0.15:
+                continue
+            B.add(stone, K.box(((a + b) / 2, Dp - 0.2, (z0 + z1) / 2), ((b - a) / 2 - 0.01, 0.16, (z1 - z0) / 2 - 0.008), 0.025))
+    B.add(wood, K.box((0.0, Dp - 0.2, 1.36), (W - 0.1, 0.24, 0.05), 0.012))                       # the back shelf
+    # the counter: three stones and a timber top board in two planks
+    for k, (a, b) in enumerate(((-W + 0.25, -0.35), (-0.35, 0.5), (0.5, W - 0.25))):
+        B.add(stone, K.box(((a + b) / 2, -Dp + 0.45, 0.6), ((b - a) / 2 - 0.01, 0.24, 0.36), 0.03))
+    for k, (y0, y1) in enumerate(((-Dp + 0.17, -Dp + 0.45), (-Dp + 0.45, -Dp + 0.74))):
+        B.add(wood, K.box((0.0, (y0 + y1) / 2, 1.0), (W - 0.18, (y1 - y0) / 2 - 0.006, 0.04), 0.01))
+
+
+def lampwright_stall(B, rng):
+    """The Aubade-side lampwright kiosk (RIFT / BRIDGE shop, footprint 3 x 2.5 m, <= 3.6 m): a dial-stone plinth, a
+    coursed chalk back wall and counter with timber tops, four chalk posts banded in blued steel, a stepped slate spire
+    roof in four courses (each its own value) with a dial-stone cap and a rounded knob, and ONE amber lamp hung from a
+    steel bracket off the front-west post (never a symmetric pair over the dark opening: closing env E1). Unlit lamps
+    for sale on the counter. +Y north, the camera side -Y."""
+    W, Dp = 1.42, 1.18
+    _kiosk_base(B, rng, W, Dp, "chalk", "timber")
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            x, y = sx * (W - 0.12), sy * (Dp - 0.12)
+            B.add("chalk", K.box((x, y, 1.33), (0.1, 0.1, 1.09), 0.02))
+            for zb in (0.62, 2.2):
+                B.add("steel", K.box((x, y, zb), (0.115, 0.115, 0.035), 0.008))
+    B.add("timber", K.box((0.0, -(Dp - 0.12), 2.36), (W - 0.02, 0.07, 0.07), 0.012))              # the lintels
+    B.add("timber", K.box((0.0, Dp - 0.12, 2.36), (W - 0.02, 0.07, 0.07), 0.012))
+    for sx in (-1, 1):
+        B.add("timber", K.box((sx * (W - 0.12), 0.0, 2.36), (0.07, Dp - 0.05, 0.07), 0.012))
+    # the spire roof: an eave slab, then four stepped slate courses and a dial-stone cap with a rounded knob
+    B.add("slate", K.box((0.0, 0.0, 2.48), (W + 0.12, Dp + 0.12, 0.05), 0.02))
+    zs = [2.53, 2.74, 2.92, 3.07, 3.19]
+    rs = [W + 0.1, 1.05, 0.72, 0.44, 0.22]
+    for k in range(4):
+        _square_frustum(B, "slate", (0.0, 0.0), rs[k], rs[k + 1] + 0.06, zs[k], zs[k + 1])
+    _square_frustum(B, "dialstone", (0.0, 0.0), 0.24, 0.2, 3.19, 3.26)
+    B.add("steel", K.lathe([(0.0, 3.26), (0.08, 3.28), (0.1, 3.34), (0.06, 3.41), (0.0, 3.42)], 10))
+    # the one lamp: a steel bracket off the front-west post, the lamp hanging clear of the eave's corner
+    px, py = -(W - 0.12), -(Dp - 0.12)
+    rod(B, "steel", [(px, py - 0.05, 2.05), (px - 0.2, py - 0.38, 2.12), (px - 0.24, py - 0.5, 2.1)], 0.025, 0.02, 5)
+    _hanging_lamp(B, px - 0.24, py - 0.5, 2.1)
+    _wares(B, rng, -W + 0.4, -0.2, -Dp + 0.45, 1.04)                              # wares on the west half of the counter
+    B.add("ware", K.box((0.55, -Dp + 0.45, 1.1), (0.24, 0.16, 0.06), 0.01))      # a wick-box and a coil of wick
+    B.add("timber", K.box((0.95, -Dp + 0.42, 1.08), (0.16, 0.13, 0.04), 0.01))
+    _wares(B, rng, -W + 0.3, W - 0.4, Dp - 0.2, 1.41)                             # the shelf's stock
+
+
+def lampwright_stall_dome(B, rng):
+    """The Serenade-side kiosk (same footprint): a sandstone plinth and counter, ironstone posts with iron bands, a
+    ribbed ironstone dome roof on a sandstone ring with a lampresin knob (unlit), and ONE amber lamp hung off the
+    front-east post (the Aubade kiosk hangs its own off the west one)."""
+    W, Dp = 1.42, 1.18
+    _kiosk_base(B, rng, W, Dp, "sandstone", "timber")
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            x, y = sx * (W - 0.12), sy * (Dp - 0.12)
+            B.add("ironstone", K.lathe([(0.0, 0.24), (0.13, 0.24), (0.11, 0.4), (0.09, 2.3), (0.12, 2.42), (0.0, 2.42)], 8))
+            for zb in (0.7, 1.9):
+                B.add("iron", K.lathe([(0.0, zb - 0.03), (0.105, zb - 0.03), (0.105, zb + 0.03), (0.0, zb + 0.03)], 8))
+    B.add("sandstone", K.box((0.0, 0.0, 2.48), (W + 0.1, Dp + 0.1, 0.07), 0.025))                # the entablature
+    # the dome: a sandstone ring, an ironstone shell in eight ribbed gores (each gore its own piece) and a knob
+    R0 = 1.32
+    B.add("sandstone", K.lathe([(0.0, 2.55), (R0 + 0.06, 2.55), (R0 + 0.06, 2.68), (0.0, 2.68)], 24))
+    prof = [(R0 * math.cos(a), 2.68 + 0.68 * math.sin(a)) for a in np.linspace(0.0, PI / 2 - 0.12, 8)]
+    for k in range(8):
+        a0, a1 = TAU * k / 8, TAU * (k + 1) / 8
+        v, f = K.lathe([(0.0, 2.68)] + prof + [(0.0, prof[-1][1])], 4, a0=a0, a1=a1)
+        B.add("ironstone", (v, f))
+        rod(B, "iron", [(R0 * math.cos(a0) * 1.01, R0 * math.sin(a0) * 1.01, 2.68), (R0 * 0.72 * math.cos(a0) * 1.01, R0 * 0.72 * math.sin(a0) * 1.01, 2.68 + 0.68 * 0.7),
+                        (0.2 * math.cos(a0), 0.2 * math.sin(a0), 3.36)], 0.035, 0.025, 5)
+    B.add("iron", K.lathe([(0.0, 3.32), (0.2, 3.32), (0.17, 3.38), (0.0, 3.39)], 12))
+    B.add("ware", K.lathe([(0.0, 3.38), (0.07, 3.4), (0.08, 3.45), (0.0, 3.49)], 10))
+    px, py = W - 0.12, -(Dp - 0.12)
+    rod(B, "iron", [(px, py - 0.05, 2.0), (px + 0.2, py - 0.38, 2.08), (px + 0.24, py - 0.5, 2.06)], 0.025, 0.02, 5)
+    _hanging_lamp(B, px + 0.24, py - 0.5, 2.06, cage="iron")
+    _wares(B, rng, 0.2, W - 0.4, -Dp + 0.45, 1.04)
+    B.add("timber", K.box((-0.9, -Dp + 0.42, 1.08), (0.18, 0.13, 0.04), 0.01))
+    _wares(B, rng, -W + 0.3, W - 0.4, Dp - 0.2, 1.41)
+
+
+def _wheel(B, x, y, zc, R, mat_rim="iron", mat_wood="timber", n=8, rot0=0.0):
+    """A cart wheel standing in the y-z plane (axle along X) at (x, y, zc): an iron tyre, a felloe ring, spokes, a hub."""
+    def axle_x(v):
+        return K.move(K.rot(v, (0, 1, 0), PI / 2), (x, y, zc))
+    v, f = K.lathe([(R - 0.05, -0.05), (R, -0.05), (R, 0.05), (R - 0.05, 0.05)], 28, closed=True)
+    B.add(mat_rim, (axle_x(v), f))
+    v, f = K.lathe([(R - 0.13, -0.04), (R - 0.05, -0.04), (R - 0.05, 0.04), (R - 0.13, 0.04)], 28, closed=True)
+    B.add(mat_wood, (axle_x(v), f))
+    v, f = K.lathe([(0.0, -0.12), (0.1, -0.12), (0.12, -0.05), (0.12, 0.05), (0.1, 0.12), (0.0, 0.12)], 10)
+    B.add(mat_rim, (axle_x(v), f))
+    for k in range(n):
+        a = rot0 + TAU * k / n
+        c = np.array([0.0, math.cos(a), math.sin(a)]) * (R * 0.5)
+        v, f = K.box((0, 0, 0), (0.025, 0.035, (R - 0.2) / 2), 0.008)
+        v = K.rot(v, (1, 0, 0), -a + PI / 2)
+        B.add(mat_wood, (K.move(v, (x + c[0], y + c[1], zc + c[2])), f))
+
+
+def lampwright_cart(B, rng):
+    """FRAY's shared shop (footprint 2.6 m, <= 3 m): a lampwright's two-wheeled wagon. A planked timber box (each plank
+    its own value) bound with banded ironstone straps and corner plates, iron-tyred spoked wheels, shafts resting on a
+    stone chock, a painted canvas tilt in ochre and chalk bands over three timber hoops, a stepped tailboard shelf of
+    unlit lamps for sale at the camera side, and a lamp mast at the back carrying ONE lit amber lamp."""
+    BW, BL, z0, z1 = 0.62, 0.95, 0.62, 1.22                                      # the box: half width / half length
+    # the bed and the planked sides
+    B.add("timber", K.box((0.0, 0.0, z0 - 0.04), (BW, BL, 0.05), 0.015))
+    for side in (-1, 1):
+        for k, (za, zb) in enumerate(((z0, z0 + 0.2), (z0 + 0.2, z0 + 0.4), (z0 + 0.4, z1))):
+            B.add("timber", K.box((side * (BW - 0.03), 0.0, (za + zb) / 2), (0.03, BL - 0.02, (zb - za) / 2 - 0.006), 0.008))
+            B.add("timber", K.box((0.0, side * (BL - 0.03), (za + zb) / 2), (BW - 0.06, 0.03, (zb - za) / 2 - 0.006), 0.008))
+        for yb in (-0.55, 0.0, 0.55):                                             # the ironstone straps
+            B.add("ironstone", K.box((side * (BW + 0.005), yb, (z0 + z1) / 2), (0.018, 0.06, (z1 - z0) / 2 + 0.02), 0.005))
+        for sy in (-1, 1):                                                        # corner plates
+            B.add("ironstone", K.box((side * (BW - 0.02), sy * (BL - 0.02), (z0 + z1) / 2), (0.045, 0.045, (z1 - z0) / 2 + 0.03), 0.008))
+    B.add("ironstone", K.box((0.0, 0.0, z0 - 0.12), (0.06, BL - 0.1, 0.06), 0.01))                # the spine beam
+    B.add("iron", K.box((0.0, 0.0, 0.5), (BW + 0.2, 0.05, 0.05), 0.01))                           # the axle
+    for side in (-1, 1):
+        _wheel(B, side * (BW + 0.13), 0.0, 0.5, 0.5, rot0=0.2 * side)
+    # the shafts, forward (north, +Y), down to a stone chock
+    for sx in (-1, 1):
+        rod(B, "timber", [(sx * 0.4, BL - 0.05, z0 - 0.05), (sx * 0.36, BL + 0.6, 0.42), (sx * 0.33, BL + 0.95, 0.24)], 0.045, 0.035, 6)
+    B.add("chockstone", K.box((0.0, BL + 0.98, 0.1), (0.5, 0.16, 0.1), 0.03))
+    # the tilt: three timber hoops and a canvas shell in painted bands
+    for yh in (-0.75, 0.0, 0.75):
+        pts = [(math.cos(a) * (BW - 0.02), yh, z1 + 0.05 + math.sin(a) * 0.6) for a in np.linspace(0.0, PI, 9)]
+        rod(B, "timber", pts, 0.025, 0.025, 5)
+    arc = [(math.cos(a) * BW, math.sin(a) * 0.64) for a in np.linspace(0.0, PI, 12)]
+    inner = [(math.cos(a) * (BW - 0.04), math.sin(a) * 0.6) for a in np.linspace(PI, 0.0, 12)]
+    # (u x v = -Y: extruded from y 0.86 south to -0.86)
+    B.add("canvas", K.prism(arc + inner, origin=(0.0, 0.86, z1 + 0.05), u=(1, 0, 0), v=(0, 0, 1), depth=1.72, chamfer=0.0, center=False))
+    # the tailboard at the camera side (-Y): a stepped shelf of wares, and a hanging sign board (no lettering)
+    B.add("timber", K.box((0.0, -BL - 0.2, z0 + 0.12), (BW - 0.04, 0.2, 0.03), 0.01))
+    B.add("timber", K.box((0.0, -BL - 0.08, z0 + 0.36), (BW - 0.04, 0.1, 0.03), 0.01))
+    for sx in (-1, 1):
+        rod(B, "iron", [(sx * (BW - 0.06), -BL, z0 + 0.34), (sx * (BW - 0.06), -BL - 0.38, z0 + 0.15)], 0.015, 0.015, 4)
+    _wares(B, rng, -BW + 0.1, BW - 0.1, -BL - 0.22, z0 + 0.15)
+    _wares(B, rng, -BW + 0.18, BW - 0.2, -BL - 0.08, z0 + 0.39)
+    # the lamp mast at the back-east corner, ONE lit lamp on its arm
+    mx, my = BW - 0.1, BL - 0.1
+    rod(B, "timber", [(mx, my, z0), (mx, my, 2.85)], 0.045, 0.035, 6)
+    rod(B, "iron", [(mx, my, 2.78), (mx - 0.28, my - 0.1, 2.86), (mx - 0.4, my - 0.12, 2.82)], 0.02, 0.018, 5)
+    _hanging_lamp(B, mx - 0.4, my - 0.12, 2.82, cage="iron")
+    B.add("iron", K.lathe([(0.0, 2.84), (0.06, 2.86), (0.05, 2.92), (0.0, 2.94)], 8))
+
+
+def fair_stand(B, rng, tiers: int, step: float):
+    """FRAY's noon-fair seating (footprint 6 x 6 m; 3 tiers of 1 m or 2 of 0.5 m): tiers of coursed stone stepping up
+    to the back (north-west) corner, each tier an L of dressed blocks along its two front edges (each block its own
+    stone and value), a flagged tread, a chamfered nosing course, timber bench boards on stone feet along every
+    tier's front. It faces Blender (+X, -Y) (the plate's centre from the NW
+    corner); content turns the other three (rot -90 / 90 / 180). Stone kept dark (L* <= 52 in game: closing E1)."""
+    H0 = 3.0
+    dx = 1.35 if tiers == 3 else 1.8                                              # each tier steps back by dx in x and y
+    for i in range(tiers):
+        za, zb = i * step, (i + 1) * step
+        xa, xb = -H0, H0 - i * dx                                               # this tier's square: [xa, xb] x [ya, yb]
+        ya, yb = -H0 + i * dx, H0
+        # the fill under the flags
+        B.add("fill", K.box(((xa + xb) / 2 - 0.2, (ya + yb) / 2 + 0.2, (za + zb) / 2 - 0.045), ((xb - xa) / 2 - 0.25, (yb - ya) / 2 - 0.25, (zb - za) / 2 - 0.045), 0.0))
+        # the tread's flags (each its own stone) over the fill, behind the front blocks
+        flags(B, "flag", rng, xa + 0.05, xb - 0.62, ya + 0.62, yb - 0.05, z=zb, size=(0.7, 1.1), gap=0.03, th=0.09, ch=0.02)
+        # the two front edges: the east edge (x = xb, y ya..yb) and the south edge (y = ya, x xa..xb), coursed blocks
+        rows = max(1, int(round(step / 0.5)))
+        for r in range(rows):
+            z0 = za + (zb - za) * r / rows
+            z1 = za + (zb - za) * (r + 1) / rows
+            for edge in ("E", "S"):
+                L0, L1 = (ya, yb) if edge == "E" else (xa, xb)
+                t = L0 + (0.0 if r % 2 == 0 else rng.uniform(0.3, 0.5))
+                cuts = [L0]
+                while t < L1 - 0.3:
+                    t += rng.uniform(0.8, 1.3)
+                    cuts.append(min(t, L1))
+                if cuts[-1] < L1:
+                    cuts.append(L1)
+                for a, b in zip(cuts[:-1], cuts[1:]):
+                    if b - a < 0.12:
+                        continue
+                    if edge == "E":
+                        a2 = a + (0.62 if a == ya else 0.0)                       # the corner block belongs to S
+                        c = (xb - 0.31, (a2 + b) / 2, (z0 + z1) / 2)
+                        hh = (0.3, (b - a2) / 2 - 0.008, (z1 - z0) / 2 - 0.006)
+                    else:
+                        c = ((a + b) / 2, ya + 0.31, (z0 + z1) / 2)
+                        hh = ((b - a) / 2 - 0.008, 0.3, (z1 - z0) / 2 - 0.006)
+                    if min(hh) <= 0.02:
+                        continue
+                    B.add("blockstone", K.box(c, hh, 0.03))
+        # the nosing: a proud chamfered course on the front edges, and the flags of the tier's tread
+        B.add("nosing", K.box((xb - 0.3, (ya + yb) / 2, zb + 0.03), (0.33, (yb - ya) / 2, 0.035), 0.02))
+        B.add("nosing", K.box(((xa + xb) / 2 - 0.0, ya + 0.3, zb + 0.03), ((xb - xa) / 2 - 0.0, 0.33, 0.035), 0.02))
+        if i < tiers - 1:
+            tx0, ty1 = xb - dx, ya + dx                                              # the tread between this front and the next riser
+        else:
+            tx0, ty1 = xa + 0.3, yb - 0.3
+        # bench boards on stone feet along the tread (east run and south run), each board its own plank
+        zb2 = zb
+        for run in ("E", "S"):
+            if run == "E":
+                xr = (xb - 0.62 + tx0) / 2 if i < tiers - 1 else xb - 0.95
+                spans = [(ya + 0.75, yb - 0.4)]
+            else:
+                yr = (ya + 0.62 + ty1) / 2 if i < tiers - 1 else ya + 0.95
+                xr_e = (xb - 0.62 + tx0) / 2 if i < tiers - 1 else xb - 0.95
+                spans = [(xa + 0.4, xr_e - 0.3)]
+            for (s0, s1) in spans:
+                n = max(2, int((s1 - s0) / 1.4))
+                for k in range(n):
+                    a = s0 + (s1 - s0) * k / n + 0.03
+                    b = s0 + (s1 - s0) * (k + 1) / n - 0.03
+                    for fx in (a + 0.15, b - 0.15):
+                        cf = (xr, fx, zb2 + 0.13) if run == "E" else (fx, yr, zb2 + 0.13)
+                        B.add("blockstone", K.box(cf, (0.1, 0.1, 0.13), 0.02))
+                    for pl in (-0.1, 0.1):
+                        cb = (xr + pl, (a + b) / 2, zb2 + 0.29) if run == "E" else ((a + b) / 2, yr + pl, zb2 + 0.29)
+                        hb = (0.085, (b - a) / 2, 0.03) if run == "E" else ((b - a) / 2, 0.085, 0.03)
+                        B.add("timber", K.box(cb, hb, 0.008))
 
 
 LIP = dict(hex="#8A857A", chisel=0.8, var=0.08, streaks=0.3, chips=0.5, speckle=0.3, scale=0.6, rough=0.75,
@@ -1257,6 +1603,49 @@ CAMP_MATS = {
     "ivory": dict(hex="#CFC3A3", chisel=0.3, var=0.06, streaks=0.2, chips=0.2, scale=0.8, rough=0.6,
                   edge_light=(0.02, 0.5, 0.5, 0.05)),
     "groove": dict(hex="#3A352F", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),
+}
+
+
+_TIMBER = dict(hex="#6B5642", chisel=0.25, var=0.22, streaks=0.2, chips=0.3, scale=0.8, rough=0.82,
+               edge_light=(0.02, 0.55, 0.6, 0.05), fibre=("X", 0.2), grain=0.1, blotch=0.15)
+_WARE = dict(hex="#8C7A5E", chisel=0.1, var=0.25, streaks=0.0, chips=0.2, scale=1.0, rough=0.35, edge_light=(0.01, 0.6, 0.4, 0.03))
+STALL_MATS = {
+    "plinth": dict(DIAL, hex="#8F897F", var=0.18, grain=0.14, blotch=0.22, lichen=0.25),
+    "chalk": dict(CHALK, var=0.2, grain=0.14, blotch=0.24, lichen=0.2),
+    "steel": dict(DAWN_MATS["steel"], grain=0.1),
+    "slate": dict(hex="#5A5F6A", chisel=0.8, var=0.22, streaks=0.35, chips=0.6, speckle=0.3, scale=0.7, rough=0.6,
+                  edge_light=(0.03, 0.75, 0.6, 0.08), brick=(0.32, 0.25, 0.012), brick_k=0.9, grain=0.16, blotch=0.22, lichen=0.35),
+    "dialstone": dict(DIAL, var=0.15, grain=0.12, blotch=0.2),
+    "timber": _TIMBER,
+    "ware": _WARE,
+}
+STALL_DOME_MATS = {
+    "plinth": STALL_MATS["plinth"],
+    "sandstone": dict(_SAND, var=0.2, grain=0.15, blotch=0.24, lichen=0.2),
+    "ironstone": dict(_IRON, var=0.2, grain=0.15, blotch=0.22),
+    "iron": dict(GATE_MATS["iron"], grain=0.1),
+    "timber": _TIMBER,
+    "ware": _WARE,
+}
+CART_MATS = {
+    "timber": dict(_TIMBER, fibre=("Y", 0.22)),
+    "ironstone": dict(_IRON, var=0.2, grain=0.15, blotch=0.2),
+    "iron": dict(GATE_MATS["iron"], grain=0.1),
+    "canvas": dict(hex="#B79A6A", chisel=0.0, var=0.1, streaks=0.4, chips=0.0, scale=1.0, rough=0.9,
+                   stripes=("Y", 0.29, "#D9CDB0", 0.75), grain=0.1, blotch=0.22),     # ochre and chalk bands, weathered
+    "chockstone": dict(DIAL, hex="#7E786D", var=0.15, grain=0.14, blotch=0.2, lichen=0.3),
+    "ware": _WARE,
+}
+FAIR_MATS = {
+    "blockstone": dict(hex="#958B7C", chisel=0.9, var=0.24, streaks=0.4, chips=0.55, speckle=0.3, scale=0.6, rough=0.72,
+                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.16, blotch=0.24, lichen=0.3),
+    "nosing": dict(hex="#A59C8C", chisel=0.8, var=0.18, streaks=0.3, chips=0.6, scale=0.6, rough=0.7,
+                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.14, blotch=0.22, lichen=0.2),
+    "fill": dict(hex="#80786B", chisel=0.9, var=0.15, streaks=0.0, chips=0.3, speckle=0.3, scale=0.6, rough=0.8,
+                 grain=0.16, blotch=0.25, lichen=0.35),
+    "flag": dict(hex="#8A8173", chisel=0.9, var=0.24, streaks=0.0, chips=0.45, speckle=0.3, scale=0.6, rough=0.78,
+                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.16, blotch=0.24, lichen=0.35),
+    "timber": dict(_TIMBER, fibre=("X", 0.2)),
 }
 
 
@@ -1298,6 +1687,11 @@ DESIGNS = {
     "camp_strays": (camp_strays, CAMP_MATS, 512, 0.3),
     "camp_resinback": (camp_resinback, CAMP_MATS, 512, 0.3),
     "camp_stilltusks": (camp_stilltusks, CAMP_MATS, 512, 0.3),
+    "lampwright_stall": (lampwright_stall, STALL_MATS, 1024, 0.5),
+    "lampwright_stall_dome": (lampwright_stall_dome, STALL_DOME_MATS, 1024, 0.5),
+    "lampwright_cart": (lampwright_cart, CART_MATS, 1024, 0.4),
+    "fair_stand_high": (lambda B, rng: fair_stand(B, rng, 3, 1.0), FAIR_MATS, 2048, 0.8),
+    "fair_stand_low": (lambda B, rng: fair_stand(B, rng, 2, 0.5), FAIR_MATS, 1024, 0.6),
 }
 SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
@@ -1319,7 +1713,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
     if name in AFTER:
         AFTER[name](B, rng)
     zmax = max(float(v[:, 2].max()) for lst in B.parts.values() for v, _, _, _ in lst)
-    K.paint_set(spec, zmax)
+    for mname, mat in K.paint_set(spec, zmax).items():
+        _detail(mat, spec[mname], zmax)
     lamp_material()
     lamp_material("bellglow", BELL_HEX, BELL_EMIT)
     objs = B.objects(col)
@@ -1362,7 +1757,8 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
         "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
         "hour_stone": (0.0, 0.0, 12.0), "vi_slab": (0.0, 0.0, 12.0),
-        **{f"numeral_{g}": (0.0, 0.0, 22.0) for g in ("xi", "ii", "vii", "iiii")}, **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}}
+        **{f"numeral_{g}": (0.0, 0.0, 22.0) for g in ("xi", "ii", "vii", "iiii")}, **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}, "lampwright_stall": (0.0, 0.0, 12.0), "lampwright_stall_dome": (0.0, 0.0, 12.0),
+        "lampwright_cart": (0.0, 0.0, 11.0), "fair_stand_high": (1.5, 1.5, 20.0), "fair_stand_low": (1.5, 1.5, 16.0)}
 
 
 def look(name, objs, lo, hi, fast):

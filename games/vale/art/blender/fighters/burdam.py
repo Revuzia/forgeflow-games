@@ -71,6 +71,46 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
           "sun": 2.6,
           # final parity client F3: the figure at 0.81 of the splash's height (0.68 of W2's loading card) -> ~0.86
           "fill": 0.94}
+# per-skin card staging (closing review burdam-M3; schema: art/blender/portraits.py header). Base: the Settled Account
+# reach (the arm thrown out, the cleaver cocked, the notches lit) under the burning city's warm rim and bounce;
+# Stillwater: Stubborn's planted post, head bowed, in cold river light; Almanac Ledger: the victory's tally scored with
+# the thumbnail, the ledger board on his right hip under a lamp
+CARDS = {
+    "burdam": {
+        "splash": {"clip": "cast_ult", "t": 0.25, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 215.0, "key_el": 28.0, "key_color": "#FFD9B0", "sun": 2.6, "rim_cool": 0.6,
+                   "rim_warm": 1.6, "bounce": 0.9, "bounce_color": "#F0A868", "accent": 2.2,
+                   "focal": [{"at": "x_notch_mid", "az": 200.0, "el": 20.0, "dist": 0.7, "color": "#FFD08A",
+                              "power": 55.0, "size": 0.3},
+                             {"at": "head", "az": 205.0, "el": 15.0, "dist": 0.8, "color": "#FFE2C0", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 30.0},
+        "plate": {"glow": [0.75, 0.55, 0.42, 0.16], "glow_color": "#F2A666"},
+    },
+    "burdam_stillwater": {
+        "splash": {"clip": "cast_a2", "t": 0.55, "yaw": 42.0, "pitch": -4.0, "lens": 58.0, "fill": 0.86, "x": 0.71,
+                   "key_az": 150.0, "key_el": 32.0, "key_color": "#CFE0E4", "sun": 2.4, "rim_cool": 2.0,
+                   "rim_warm": 0.3, "bounce": 0.35, "bounce_color": "#8FB3A8", "accent": 1.5, "exposure": -0.4,
+                   "focal": [{"at": "head", "az": 160.0, "el": 18.0, "dist": 0.8, "color": "#DDEDEE", "power": 20.0,
+                              "size": 0.25},
+                             {"at": "x_notch_mid", "az": 140.0, "el": 15.0, "dist": 0.6, "color": "#BFE4D8",
+                              "power": 35.0, "size": 0.2}]},
+        "portrait": {"yaw": 38.0},
+        "plate": {"tint": "#8FB0B4", "sat": 0.65, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
+                  "glow_color": "#B8D4D6"},
+    },
+    "burdam_almanac": {
+        "splash": {"clip": "victory", "t": 0.48, "yaw": -24.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 140.0, "key_el": 26.0, "key_color": "#FFE7C2", "sun": 2.6, "rim_cool": 0.9,
+                   "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E8C79A", "accent": 1.6,
+                   "focal": [{"at": "hips", "off": [-0.28, -0.22, 0.10], "az": 150.0, "el": 30.0, "dist": 0.7,
+                              "color": "#FFDDA8", "power": 45.0, "size": 0.3},
+                             {"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#FFE6CC", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": -20.0},
+        "plate": {"glow": [0.35, 0.60, 0.45, 0.10], "glow_color": "#E9D2A8", "sat": 0.85},
+    },
+}
 TEXTURE_SIZE = 2048      # the painted base colour; normal + ORM at 512 (CONTRACT §12 Materials)
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -102,16 +142,20 @@ SKINS: list = [
      "palette": {"sandstone": "#D4C9A9", "cloth2": "#363D3A", "rust": "#6F7B7A", "stone": "#C4C8C4",
                  "ironstone": "#3E4A4C", "leather": "#554A3E", "cloth": "#45504E", "under": "#343B3D",
                  "reed": "#7D8460", "dawnglass": "#8FB3A8"}},
-    {"id": "burdam_almanac", "extra": {"almanac_board": True}, "match": ["rust", "cloth", "ironstone"],
+    # closing review burdam-M4 (the deluxe read as the base with whiter pauldrons, less change than the standard skin):
+    # the ledger theme across the whole body, same silhouette and accents: the felt coat and skirt a deep ledger-ink
+    # slate-violet (hue ~250, sat 0.28, outside the azure band; L* ~30, the base coat's value), the cowl parchment, the
+    # parchment pauldrons ruled with oxblood margin rules among the ink ones, the board's rules and day-marks inked wide
+    {"id": "burdam_almanac", "extra": {"almanac_board": True}, "match": ["rust", "cloth", "ironstone", "cloth2"],
      "card": {"primary": "#4A453E", "secondary": "#D8CDB4"},
      # parchment a step under the mask and the tunic a step down (the mask stays the brightest value); fix pass 4:
      # the parchment three steps down (#C2B69B blew 38 % of the pauldrons past L* 86 in the splash's sun); fix pass
      # 5: the tunic two more steps down (#6B6256 measured L* 70-72 in the splash against the mid band's 45-65, brief
      # 52: the top and middle bands merged)
-     "palette": {"cloth2": "#C6B9A5", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
+     "palette": {"cloth2": "#AFA283", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
                  # fix pass 8: the tunic the brief's WARM grey (#58503F read olive-khaki), at the same value
                  # polish: the board's walnut frame a cooler, darker brown (#5A4639 read pink in the splash's sun)
-                 "cloth": "#5D534A", "parchment": "#A3987F", "walnut": "#4B3E33"}},
+                 "cloth": "#4A4560", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
@@ -553,7 +597,7 @@ def sculpts() -> list:
     cowl.sub(RoundBox((-0.012, -0.27, 1.96), (0.135, 0.15, 0.13), 0.03), k=0.02)      # opened in front of the face
     cowl.add(Ellipsoid((-0.012, -0.15, 1.784), (0.13, 0.068, 0.040)), k=0.025)         # the felt roll the chin sits on
     part("cowl", _displaced(cowl, folds(0.012, 22.0, axis=2, phase=0.7)), "cloth2",
-         ("zblend", "chest", "neck", 1.74, 1.90), 1450)
+         ("cowlmix", "chest", "neck", 1.74, 1.90), 1450)
 
     # COAT (heat weights): a barrel chest over a narrow waist, heavy short sleeves
     coat = Sculpt("coat")
@@ -571,7 +615,7 @@ def sculpts() -> list:
     skirt.add(sk.displaced(folds(0.016, 14.0, axis=0, phase=1.3, zfade=(1.05, 0.66)), 0.016), k=0.0)
     skirt.inter(HalfSpace((0, 0, 0.665), (0, 0, -1), 2.0), k=0.01)
     skirt.sub(RoundBox((-0.25, -0.30, 0.74), (0.006, 0.06, 0.10), 0.003), k=0.004)        # the front slit
-    part("skirt", skirt, "cloth", "body", 1250)
+    part("skirt", skirt, "cloth", ("skirtmix",), 1250)
 
     # BELTS (heat weights)
     belt = Sculpt("belt")
@@ -609,7 +653,7 @@ def sculpts() -> list:
         fa = FlatCapsule((sx * 0.465, -0.012, 1.31), (sx * 0.518, -0.055, 1.08), 0.152, 0.142, 0.106, 0.108,
                          side=(1, 0, 0))                                  # fix pass 5: heavier (brief x1.3)
         fore.add(fa.displaced(wraps(0.006, 70.0), 0.007), k=0.0)
-    part("forearms", fore, "leather", "coat", 900)
+    part("forearms", fore, "leather", ("forearm",), 900)
     fist = Sculpt("fist_R")
     c = np.array([-0.505, -0.075, 0.952])
     k_ = FIST_SCALE                                                   # fix pass 5: the brief's big fists (x1.55)
@@ -1000,6 +1044,114 @@ def rig_extras(ctx) -> None:
     axis = M[:3, 2] * 0.08
     rig.add_socket(ctx.info, "x_blade_tip", "prop.R", tip, tuple(axis))
     rig.add_socket(ctx.info, "x_notch_mid", "prop.R", notch, tuple(axis))
+    for nm, (parent, pts) in CHAINS.items():
+        ctx.chains[nm] = rig.add_chain(ctx.info, nm, parent, [V(p) for p in pts])
+
+
+# ── secondary motion (closing review burdam-M5): the felt coat's skirt and the cowl's back drape on baked spring
+# chains (anim.secondary_motion; no cloth sim, STYLE_BIBLE). The skirt used to be bone heat on the trunk AND the
+# thighs, so in the run its front split and followed each thigh like trousers. Now its front and back panels hang on
+# their own chains from the hips (front pushed forward by the leading knee, back kicked out by the trailing one, both
+# springs, so the hem trails the stride), the sides stay on the hips with a small thigh share at the hem; a no-lag
+# floor keeps each panel clear of the thighs inside it. The cowl's back drape swings on one joint from the chest.
+# The wrapped forearms are weighted along the elbow -> wrist axis on their own arm only (the old bone heat also took
+# the trunk and the hips they hang beside at rest, which stretched the wraps 7x when the arms rose: "candy-wrap").
+CHAINS = {          # name: (parent, joints (rest, m)); + rotation about each bone's X = the hem forward
+    "skirt_f": ("hips", ((0.0, -0.258, 1.12), (0.0, -0.288, 0.89), (0.0, -0.318, 0.66))),
+    "skirt_b": ("hips", ((0.0, 0.240, 1.12), (0.0, 0.272, 0.89), (0.0, 0.304, 0.66))),
+    "cowl_b": ("chest", ((-0.17, 0.16, 1.83), (-0.25, 0.22, 1.64))),
+}
+SKIRT_K, SKIRT_A0 = 0.45, 4.0        # the panel's push: share of the knee's swing past A0 deg (front: ahead; back: behind)
+SKIRT_CLEAR, SKIRT_THIGH_R = 0.025, 0.12    # the floor: the thigh's surface (its axis + R) stays CLEAR behind the panel
+SKIRT_SIDE_K = 0.18                  # the sides' thigh share at the hem
+
+
+def _knee_angles(skel, pose) -> dict:
+    """each thigh's swing in the hips' rest frame (deg, + = the knee ahead of the hip), and the rest-hips-frame hip and
+    knee points"""
+    M = skel.fk(pose)
+    T = skel.rest["hips"] @ M["hips"].inverted()
+    out = {}
+    for s in "LR":
+        h = T @ M[f"thigh.{s}"].translation
+        k = T @ M[f"shin.{s}"].translation
+        d = k - h
+        out[s] = (math.degrees(math.atan2(-d.y, max(1e-6, -d.z))), h, k)
+    return out
+
+
+def _skirt_floor(skel, nm):
+    """the least swing (deg, signed like the chain) that keeps the panel's line from its root to its hem in front of
+    (skirt_f) / behind (skirt_b) both thighs' surfaces at the panel's heights"""
+    pts = CHAINS[nm][1]
+    R, Hm = V(pts[0]), V(pts[-1])
+    sgn = -1.0 if nm == "skirt_f" else 1.0          # the panel's outward direction along y
+    rest = math.atan2(sgn * (Hm.y - R.y), R.z - Hm.z)
+
+    def f(pose):
+        need = -90.0
+        for _, h, k in _knee_angles(skel, pose).values():
+            for t in (0.35, 0.55, 0.75, 0.9, 1.0):
+                P = h.lerp(k, t)
+                if not (Hm.z - 0.04 < P.z < R.z - 0.02):
+                    continue
+                out = sgn * (P.y - R.y) + SKIRT_THIGH_R + SKIRT_CLEAR
+                need = max(need, math.degrees(math.atan2(out, R.z - P.z) - rest))
+        return need if nm == "skirt_f" else -need
+    return f
+
+
+def chain_config(ctx) -> list:
+    skel = anim.Skeleton(ctx.info.armature)
+
+    def push(nm):
+        def f(p):
+            a = _knee_angles(skel, p)
+            if nm == "skirt_f":
+                return SKIRT_K * max(0.0, max(a["L"][0], a["R"][0]) - SKIRT_A0)
+            return -SKIRT_K * max(0.0, max(-a["L"][0], -a["R"][0]) - SKIRT_A0)
+        return f
+    out = []
+    for nm, bones in ctx.chains.items():
+        if nm.startswith("skirt"):
+            lim = (-6.0, 38.0) if nm == "skirt_f" else (-38.0, 6.0)
+            c = anim.ChainCfg(list(bones), gravity=0.7, stiffness=120.0, damping=12.0, inertia=0.5, drive=push(nm),
+                              limit=lim)
+            c._burdam_floor = _skirt_floor(skel, nm)
+            c._burdam_front = nm == "skirt_f"
+        else:
+            c = anim.ChainCfg(list(bones), gravity=0.45, stiffness=85.0, damping=9.0, inertia=0.6, limit=(-14.0, 14.0))
+        out.append(c)
+    return out
+
+
+def _install_chain_floor() -> None:
+    """the shared spring pass, then each skirt panel's no-lag floor (a knee driven up in two frames must not pass
+    through the felt while the spring catches up)"""
+    if getattr(anim.secondary_motion, "_burdam", False):
+        return
+    orig = anim.secondary_motion
+
+    def secondary_motion(skel, poses, cfgs, loop):
+        out = orig(skel, poses, cfgs, loop)
+        for cfg in cfgs or []:
+            fl = getattr(cfg, "_burdam_floor", None)
+            if fl is None:
+                continue
+            b = cfg.bones[0]
+            for f, p in enumerate(out):
+                a = p.get(b, (0.0, 0.0, 0.0))
+                m = fl(poses[f])
+                if (cfg._burdam_front and m > a[0]) or (not cfg._burdam_front and m < a[0]):
+                    p[b] = (max(cfg.limit[0] - 10.0, min(cfg.limit[1] + 10.0, m)), a[1], a[2])
+            if loop:
+                out[-1][b] = out[0][b]
+        return out
+    secondary_motion._burdam = True
+    anim.secondary_motion = secondary_motion
+
+
+_install_chain_floor()
 
 
 _STATE: dict = {}
@@ -1029,7 +1181,8 @@ def extra_materials(ctx) -> dict:
     cleaver's `stone` honed smooth (the shared honed stone's pore bump bakes a sandpaper speckle into a thin
     blade's normals) and the lacquered mask matte"""
     stone = materials.honed_stone("stone", ctx.palette, "stone", ctx.gradient, rough=0.8, chisel=0.35)
-    mask = materials.honed_stone("sandstone", ctx.palette, "sandstone", ctx.gradient, rough=0.8, chisel=0.5, veins=0.2)
+    # closing burdam-M2: the mask is lacquer (roughness 0.5) against the felt's 0.9, not one matte clay
+    mask = materials.honed_stone("sandstone", ctx.palette, "sandstone", ctx.gradient, rough=0.5, chisel=0.5, veins=0.2)
     for m, k in ((stone, 0.015), (mask, 0.04)):
         for n in m.node_tree.nodes:
             if n.type == "BUMP":
@@ -2362,11 +2515,52 @@ def _post_paint(img: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
     log("burdam: value lift " + ", ".join(report))
     out = cowl_mirror(out, maps, names, log=log)
     out = grade_parts(out, maps, names, log=log)
+    out = harness_paint(out, maps, names, log=log)
     out = mask_paint(out, maps, names, log=log)
     out = blade_back(out, maps, names)
     out = blade_rim(out, maps, names)
     out = heel_paint(out, maps, names)
     return project._srgb(out).astype(np.float32)
+
+
+# closing review burdam-M2: the concept's crossed chest and back straps are paint on the felt coat (projected relief),
+# and the coat's value lift took them with it: the strap read L* 63 against the coat's 38 in the three close. They are
+# re-painted as the darkest leather on the torso (the belt's), with a darker edge line and the painting's own grain, on
+# bands traced from the concept plates (world x / z of each strap's centre line, half-width; front: y < 0, back: y > 0)
+HARNESS_FRONT = (((-0.200, 1.599), (0.296, 1.358), 0.040),    # the broad diagonal, his right shoulder -> left hip
+                 ((-0.285, 1.371), (-0.004, 1.487), 0.029),   # the lower strap rising from the buckle under it
+                 ((0.062, 1.517), (0.127, 1.620), 0.025))     # the short strap up to the left shoulder
+HARNESS_BACK = (((0.148, 1.633), (-0.199, 1.352), 0.038),
+                ((0.242, 1.352), (-0.142, 1.586), 0.033))
+HARNESS_LEATHER = "#45311F"   # = BELT_MEAN (L* ~22)
+HARNESS_EDGE = 0.55           # x the leather on the strap's outer 8 mm
+
+
+def harness_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarray:
+    if "coat" not in names:
+        return lin
+    out = lin.copy()
+    m = maps["part"] == names.index("coat")
+    P = maps["P"][m].astype(np.float64)
+    c = out[m]
+    band = np.zeros(len(P))
+    edge = np.zeros(len(P))
+    for bands, side in ((HARNESS_FRONT, P[:, 1] < 0.0), (HARNESS_BACK, P[:, 1] >= 0.0)):
+        for (x0, z0), (x1, z1), hw in bands:
+            d = _seg_d(P[:, 0], P[:, 2], x0, z0, x1, z1)
+            b = np.clip((hw - d) / 0.004 + 0.5, 0.0, 1.0) * side * (np.abs(P[:, 0]) < 0.36)
+            e = b * np.clip((d - (hw - 0.008)) / 0.004 + 0.5, 0.0, 1.0)
+            band, edge = np.maximum(band, b), np.maximum(edge, e)
+    if not band.any():
+        return lin
+    Y = _lum(c)
+    sel = band > 0.5
+    det = np.clip(1.0 + (Y / max(float(np.median(Y[sel])), 1e-6) - 1.0) * 0.35, 0.7, 1.3)
+    leather = _hexlin(HARNESS_LEATHER)[None] * det[:, None] * (1.0 - (1.0 - HARNESS_EDGE) * edge)[:, None]
+    out[m] = c * (1.0 - band[:, None]) + leather * band[:, None]
+    log(f"burdam: harness painted on {int(sel.sum())} coat texels (coat L* {_lstar(float(np.median(Y[~sel]))):.0f}, "
+        f"strap L* {_lstar(float(np.median(_lum(out[m][sel])))):.0f})")
+    return out
 
 
 def blade_rim(lin: np.ndarray, maps: dict, names: list) -> np.ndarray:
@@ -2847,13 +3041,17 @@ def tally_paint(c: np.ndarray, P: np.ndarray, N: np.ndarray) -> np.ndarray:
 STONE_TOP = "#B9AC99"          # warm grey top faces (L* ~71; polish: was #9E9282, L* 61, the value lift; b* ~+11: three.js's
                                # sky light cools a neutral grey); fix pass 8 a step lighter (the stack's splash median L* 47
                                # against the concept's 65)
-STONE_CHALK = "#CEC2AE"        # chalked convex bevels (L* ~79; was #C3B6A2, 75)
+STONE_CHALK = "#DAD0BE"        # chalked convex bevels (L* ~84; was #CEC2AE, 79; closing burdam-M2: edges 8-10 L* over the top)
 STONE_SIDE = "#8A7C6C"         # the 8 cm side bands (L* ~53; was #776A5C, 46)
 STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
 STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step down: the vambrace never merges with the
                                # pauldron into one pale sleeve (polish: the right pauldron is the stack's stone now, no step)
 STONE_TIERS = ("tier1", "tier2", "tier3", "tier4")
 STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame", "pauldron_face"))   # plates that tuck under each other (recess paint)
+# closing review burdam-M2: the recess staining reached 2.8 cm and faded as a power (in the match the stack's interior read
+# p10/50/90 L* 53/71/81, no recess darkening at ~110 px): it now reaches 4.5 cm under the next tier, linear, at 0.86, so
+# each tuck reads as a dark band at the game camera; the chalked convex edges a step lighter (L* ~84, under the cap 86)
+STONE_OCC_REACH, STONE_OCC_POW, STONE_REC_K = 0.045, 1.0, 0.86
 LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
 CAP_PARTS = ("shoulder_plate", "pauldron_lame", "pauldron_face")
 CAP_CHROMA = 0.4               # fix round 2: the right cap's stone chroma (x, luminance kept; b* ~+11 -> ~+4): the verifier
@@ -2909,7 +3107,7 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
             if other == nm or other not in S:
                 continue
             d = sculpt_d(S[other], Pm)
-            occ = np.maximum(occ, np.clip(1.0 - (d - 0.003) / 0.028, 0.0, 1.0) ** 1.4)
+            occ = np.maximum(occ, np.clip(1.0 - (d - 0.003) / STONE_OCC_REACH, 0.0, 1.0) ** STONE_OCC_POW)
     rec = np.clip(np.maximum(occ * (1.0 - 0.5 * chalk), crease), 0.0, 1.0)
     if nm == "tier1":
         rec = rec * (1.0 - 0.7 * top)                  # (the light top keeps its value where it meets the felt)
@@ -2942,7 +3140,7 @@ def stone_paint(nm: str, c: np.ndarray, maps: dict, m: np.ndarray, cache: dict) 
             lip = np.clip(1.0 - np.abs(dy - 0.0085) / 0.004, 0.0, 1.0) * topw * 0.6
         col = col * (1 - 0.5 * lip[:, None]) + _hexlin(STONE_CHALK)[None] * 0.5 * lip[:, None]
         rec = np.maximum(rec, cut * 0.85)
-    col = col * (1 - 0.78 * rec[:, None]) + _hexlin(STONE_RECESS)[None] * 0.78 * rec[:, None]
+    col = col * (1 - STONE_REC_K * rec[:, None]) + _hexlin(STONE_RECESS)[None] * STONE_REC_K * rec[:, None]
     if nm in CAP_PARTS:
         # (fix round 2) the right cap a greyer stone than the warm felt beside it, at the same luminance (the value probe
         # reads L*): the two separate by hue at its edge instead of reading as one pale family
@@ -3050,7 +3248,8 @@ def grade_parts(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarr
 ALMANAC_HEM = (0.668, 0.738)      # fix pass 8: the coat's hem printed as a ledger strip (z range, rest pose)
 
 
-def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchment_hex: str = "#A3987F") -> np.ndarray:
+def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchment_hex: str = "#A3987F",
+                  oxblood_hex: str = "#7A2E2A") -> np.ndarray:
     """Almanac Ledger's printing (brief section 9: texture, not geometry): ruled ledger lines across the
     parchment pauldrons and plates (every 3.2 cm of height), and day-marks down the cleaver's back (tallies
     of five: four strokes and a slash). Drawn into the re-coloured atlas from each texel's surface point
@@ -3069,22 +3268,34 @@ def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchm
         d = np.minimum(t, 1.0 - t) * 0.032
         a = (np.clip(1.0 - d / 0.0028, 0.0, 1.0) * 0.55 * np.clip((nz - 0.45) / 0.25, 0.0, 1.0))[:, None]
         out[rust] = out[rust] * (1 - a) + ink * a
+        # closing burdam-M4: the ledger's oxblood margin rules, every third rule a 1.4 cm red band on every face (the
+        # print reads at the game camera: the ink hairlines alone are sub-pixel there)
+        ox = np.asarray(scene.hex_srgb(oxblood_hex), dtype=np.float32)
+        t3 = ((z + 0.016) / 0.096) % 1.0
+        d3 = np.minimum(t3, 1.0 - t3) * 0.096
+        a3 = (np.clip(1.0 - d3 / 0.007, 0.0, 1.0) * 0.85 * np.clip((nz + 0.6) / 0.4, 0.0, 1.0))[:, None]
+        out[rust] = out[rust] * (1 - a3) + ox * a3
     if "almanac_face" in names:
         # the board's parchment: a ledger page (ruled every 2 cm, a margin rule, faint foxing), not a flat card
         fc = part == names.index("almanac_face")
         if fc.any():
             p = P[fc]
-            t = (p[:, 2] / 0.020) % 1.0
-            d = np.minimum(t, 1.0 - t) * 0.020
-            zc, hh = ALMANAC_C[2], ALMANAC_HALF[1] - 0.045
-            line = np.clip(1.0 - d / 0.0027, 0.0, 1.0) * (p[:, 2] < zc + hh) * (p[:, 2] > zc - hh)
+            # closing burdam-M4: the rules inked wide (1.2 cm every 4 cm; the 5 mm hairlines left a blank white card at
+            # the game camera) and the margin rule oxblood, 2 cm
+            t = (p[:, 2] / 0.040) % 1.0
+            d = np.minimum(t, 1.0 - t) * 0.040
+            zc, hh = ALMANAC_C[2], ALMANAC_HALF[1] - 0.03
+            line = np.clip(1.0 - d / 0.006, 0.0, 1.0) * (p[:, 2] < zc + hh) * (p[:, 2] > zc - hh)
             ax = np.array([np.cos(np.radians(ALMANAC_RZ)), np.sin(np.radians(ALMANAC_RZ))])   # the board's width axis
             along = (p[:, 0] - ALMANAC_C[0]) * ax[0] + (p[:, 1] - ALMANAC_C[1]) * ax[1]
-            margin = np.clip(1.0 - np.abs(along + 0.060) / 0.0025, 0.0, 1.0)
+            margin = np.clip(1.0 - np.abs(along + 0.060) / 0.010, 0.0, 1.0)
             fox = 0.93 + 0.07 * np.sin(p[:, 0] * 90.0 + p[:, 2] * 70.0) * np.sin(p[:, 2] * 45.0 - p[:, 1] * 60.0)
             out[fc] = out[fc] * fox[:, None] * ALMANAC_PAGE_GAIN
-            a = (np.maximum(line * 0.78, margin * 0.85))[:, None]
+            a = (line * 0.85)[:, None]
             out[fc] = out[fc] * (1 - a) + ink * a
+            ox = np.asarray(scene.hex_srgb(oxblood_hex), dtype=np.float32)
+            a2 = (margin * 0.9)[:, None]
+            out[fc] = out[fc] * (1 - a2) + ox * a2
     if "almanac_tabs" in names:
         tb = part == names.index("almanac_tabs")
         if tb.any():
@@ -3109,14 +3320,15 @@ def almanac_print(img: np.ndarray, maps: dict, names: list, ink_hex: str, parchm
             det = np.clip(1.0 + (Y / max(float(np.median(Y)), 1e-5) - 1.0) * 0.45, 0.6, 1.25)[:, None]
             lin = lin * (1 - band[:, None]) + par[None] * det * band[:, None]
             s_ = np.arctan2(p[:, 1], p[:, 0]) * 0.36                # arc length round the skirt (m)
-            w = s_ - np.floor(s_ / 0.085) * 0.085
+            # (closing burdam-M4: the day-marks inked ~1 cm wide on a wider pitch, legible at the game camera)
+            w = s_ - np.floor(s_ / 0.13) * 0.13
             stroke = np.zeros(len(p))
-            for c0 in (0.012, 0.024, 0.036, 0.048):
-                stroke = np.maximum(stroke, np.clip(1.0 - np.abs(w - c0) / 0.0026, 0.0, 1.0))
+            for c0 in (0.016, 0.036, 0.056, 0.076):
+                stroke = np.maximum(stroke, np.clip(1.0 - np.abs(w - c0) / 0.0050, 0.0, 1.0))
             zz = (p[:, 2] - (z0 + 0.012)) / (z1 - z0 - 0.026)
             stroke *= ((zz > 0.0) & (zz < 1.0)).astype(np.float32)
-            slash = np.abs((w - 0.006) - zz * 0.050)               # the fifth stroke, across the four
-            stroke = np.maximum(stroke, np.clip(1.0 - slash / 0.0028, 0.0, 1.0) * ((zz > 0.0) & (zz < 1.0)))
+            slash = np.abs((w - 0.008) - zz * 0.076)               # the fifth stroke, across the four
+            stroke = np.maximum(stroke, np.clip(1.0 - slash / 0.0050, 0.0, 1.0) * ((zz > 0.0) & (zz < 1.0)))
             rule = np.maximum(np.clip(1.0 - np.abs(p[:, 2] - (z1 - 0.006)) / 0.0018, 0.0, 1.0),
                               np.clip(1.0 - np.abs(p[:, 2] - (z0 + 0.004)) / 0.0018, 0.0, 1.0))
             a_ = (np.maximum(stroke * 0.7, rule * 0.75) * band)[:, None]
@@ -3231,7 +3443,7 @@ def _install_skin_print() -> None:
         if (skin.get("extra") or {}).get("almanac_board"):
             log("burdam: Almanac Ledger print (ruled pauldrons, day-marks on the cleaver's back)")
             out = almanac_print(out, maps, list(names), skin_pal.get("ironstone", "#2E2A26"),
-                                skin_pal.get("parchment", "#A3987F"))
+                                skin_pal.get("parchment", "#A3987F"), skin_pal.get("oxblood", "#7A2E2A"))
         return out
 
     recolour._burdam = True
@@ -3376,6 +3588,87 @@ def shoulder_weights(obj, arm, sel=None, iters: int = 8, elbows: bool = True, lo
     return changed
 
 
+def _smooth(a, b, x):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def _chain_w(bones, z, z_top, z_hem, root):
+    """chain_weights' scheme on a straight hanging chain, by height: the top 35 % of the first bone shared with
+    `root` (the attachment stays glued), then blended between bone centres"""
+    s = max(0.0, (z_top - z) / (z_top - z_hem)) * len(bones)
+    if s < 0.35:
+        return {root: 1.0 - s / 0.35, bones[0]: s / 0.35}
+    x = s - 0.5
+    k0 = int(math.floor(x))
+    f = x - k0
+    a, b = bones[max(0, min(len(bones) - 1, k0))], bones[max(0, min(len(bones) - 1, k0 + 1))]
+    out = {a: 1.0 - f}
+    out[b] = out.get(b, 0.0) + f
+    return out
+
+
+def _bind_mix(ctx, obj, bind) -> None:
+    """the skirt on its front / back chains (sides on the hips + a little thigh), the cowl's back drape on cowl_b over
+    its chest / neck blend, the forearm wraps along their own elbow -> wrist axis (see CHAINS)"""
+    from common import mesh
+    arm = ctx.info.armature
+    mw, aw = obj.matrix_world, arm.matrix_world
+    kind = bind[0]
+    rows = []
+    if kind == "forearm":
+        ax = {}
+        for s_ in "LR":
+            b = arm.data.bones[f"forearm.{s_}"]
+            ax[s_] = (aw @ b.head_local, aw @ b.tail_local)
+    for v in obj.data.vertices:
+        p = mw @ v.co
+        w = {}
+        if kind == "skirtmix":
+            r = math.hypot(p.x, p.y) or 1e-6
+            u = -p.y / r
+            wf, wb = _smooth(0.15, 0.75, u), _smooth(0.15, 0.75, -u)
+            ws = max(0.0, 1.0 - wf - wb)
+            for nm, k in (("skirt_f", wf), ("skirt_b", wb)):
+                if k > 0:
+                    pts = CHAINS[nm][1]
+                    for b_, x in _chain_w(ctx.chains[nm], p.z, pts[0][2], pts[-1][2], "hips").items():
+                        w[b_] = w.get(b_, 0.0) + x * k
+            if ws > 0:
+                kt = SKIRT_SIDE_K * _smooth(1.0, 0.66, p.z)
+                w["hips"] = w.get("hips", 0.0) + ws * (1.0 - kt)
+                th = "thigh.L" if p.x > 0 else "thigh.R"
+                w[th] = w.get(th, 0.0) + ws * kt
+        elif kind == "cowlmix":
+            _, lo, hi, z0, z1 = bind
+            t = _smooth(z0, z1, p.z)
+            kc = 0.85 * _smooth(0.05, 0.17, p.y) * _smooth(1.86, 1.72, p.z)
+            w = {lo: (1 - t) * (1 - kc), hi: t * (1 - kc)}
+            if kc > 0:
+                w[ctx.chains["cowl_b"][0]] = kc
+        else:
+            s_ = "L" if p.x > 0 else "R"
+            E, Wr = ax[s_]
+            d = Wr - E
+            t = (p - E).dot(d) / max(1e-9, d.length_squared)
+            wu = 1.0 - _smooth(-0.12, 0.12, t)
+            wh = 0.25 * _smooth(0.85, 1.05, t)
+            w = {f"upper_arm.{s_}": wu, f"forearm.{s_}": max(0.0, 1.0 - wu - wh), f"hand.{s_}": wh}
+        rows.append(w)
+    obj.vertex_groups.clear()
+    groups = {}
+    for i, w in enumerate(rows):
+        tot = sum(w.values()) or 1.0
+        for b_, x in w.items():
+            if x / tot < 1e-3:
+                continue
+            g = groups.get(b_) or obj.vertex_groups.new(name=b_)
+            groups[b_] = g
+            g.add([i], x / tot, "REPLACE")
+    mesh.add_armature_modifier(obj, arm)
+    mesh.parent_keep(obj, arm)
+
+
 def _install_body_bind() -> None:
     """bind 'body': bone heat from the trunk and legs only. The fists hang beside the belt and the coat's
     skirt at rest, so plain heat weights let the raised carry arm drag the belts and the hem; the shared
@@ -3394,6 +3687,10 @@ def _install_body_bind() -> None:
             shoulder_weights(obj, ctx.info.armature)
             mesh.limit_weights(obj)
             return res
+        if isinstance(part.bind, tuple) and part.bind[0] in ("skirtmix", "cowlmix", "forearm"):
+            _bind_mix(ctx, obj, part.bind)
+            mesh.limit_weights(obj)
+            return {}
         return orig(ctx, part, obj, body_low)
 
     bind_part._burdam = True
@@ -3719,6 +4016,14 @@ def _install_bar_height() -> None:
 
     art_fragment._burdam = True
     pipeline.art_fragment = art_fragment
+
+
+def install_card_hooks() -> None:
+    """the render-side wrappers a card re-render needs (art/blender/portraits.py calls this; the build installs them
+    below with the rest)"""
+    _install_render_specular()
+    _install_portrait_rim()
+    _install_icon()
 
 
 if __name__ == "__main__":

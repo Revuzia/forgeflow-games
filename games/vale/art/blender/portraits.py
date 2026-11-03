@@ -77,6 +77,8 @@ def load_spec(fid: str):
     m = importlib.util.module_from_spec(s)
     sys.modules[s.name] = m          # (W5b: a fighter module with a @dataclass needs itself in sys.modules)
     s.loader.exec_module(m)
+    if hasattr(m, "install_card_hooks"):     # render wrappers a module installs only when built as __main__ (Burdam)
+        m.install_card_hooks()
     _SPECS[fid] = m
     return m
 

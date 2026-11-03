@@ -192,14 +192,14 @@
   },
   "uv_coverage": 0.592,
   "bake": {
-    "base": 14.01,
-    "rough_metal": 11.99,
-    "normal": 7.05,
-    "ao": 10.34,
+    "base": 4.94,
+    "rough_metal": 5.49,
+    "normal": 2.83,
+    "ao": 4.17,
     "normal_fixed_px": 113748,
-    "projection": 188.21,
-    "pack_save": 188.97,
-    "total": 233.59
+    "projection": 90.41,
+    "pack_save": 90.84,
+    "total": 108.66
   },
   "tris": 21109,
   "mesh_top_m": 2.476,
@@ -231,8 +231,8 @@
       "portrait": "art/out/fighters/ardit/ardit_first_bell_portrait.png"
     },
     "seconds": {
-      "splash": 23.34,
-      "portrait": 12.7
+      "splash": 159.09,
+      "portrait": 22.65
     }
   },
   "three_qa": {
@@ -264,24 +264,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_first_bell.png",
-    "seconds": 52.6,
+    "seconds": 32.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 2.78,
-      "model": 35.06,
-      "lows_bind": 28.43,
-      "uv": 11.22,
-      "bake": 233.62,
-      "export": 0.3,
-      "optimize": 1.68,
-      "load_test": 0.46,
-      "render": 36.17,
-      "three_qa": 53.34
+      "materials": 0.27,
+      "model": 6.06,
+      "lows_bind": 5.95,
+      "uv": 5.35,
+      "bake": 108.67,
+      "export": 0.16,
+      "optimize": 1.15,
+      "load_test": 0.28,
+      "render": 181.84,
+      "three_qa": 33.22
     },
-    "total_s": 404.11
+    "total_s": 343.31
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

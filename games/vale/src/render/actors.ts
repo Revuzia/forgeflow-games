@@ -63,7 +63,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import type { CatalogT, FighterDefT, UnitDefT } from '../contracts/catalog.ts';
 import type { EntityView, SimEvent, TeamId } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
-import type { Assets, LoadedModel } from './assets.ts';
+import { type Assets, collectGpu, disposeGpu, type LoadedModel } from './assets.ts';
 import { INK, type Palette } from './palette.ts';
 import { BakedMixer, bakeCrowd, type CrowdActor, type CrowdBake } from './crowd.ts';
 import {
@@ -399,6 +399,8 @@ export class ModelLibrary {
   private readonly units = new Map<string, UnitDefT>();
   private readonly skins = new Map<string, string>(); // skin id → model ref
   private readonly templates = new Map<string, Promise<Template | null>>();
+  /** perf PERF-C2: the templates that have landed (release() judges these; a pending one is kept) */
+  private readonly landed = new Map<string, Template | null>();
   private readonly patched = new WeakSet<Material>();
   private readonly assets: Assets;
   private readonly opts: ActorOptions;
@@ -496,7 +498,7 @@ export class ModelLibrary {
         }
       }
       return null;
-    })().then((t) => this.ready(t, def.art.accentMaterial, charLight('fighter')));
+    })().then((t) => this.ready(t, def.art.accentMaterial, charLight('fighter'))).then((t) => this.land(key, p!, t));
     this.templates.set(key, p);
     return p;
   }
@@ -514,6 +516,32 @@ export class ModelLibrary {
       this.warm(b, false);
     }
     return t;
+  }
+
+  private land(key: string, p: Promise<Template | null>, t: Template | null): Template | null {
+    if (this.templates.get(key) === p) this.landed.set(key, t);
+    return t;
+  }
+
+  /**
+   * perf PERF-C2: at Home, drop every landed template nothing in `inUse` draws (the menu scene's resources: the
+   * showcase fighter's clone shares its template's geometry) and dispose its GPU side — the scene, hull, body LOD,
+   * crowd bake (its animation DataTexture) and warm-up accent. Returns the templates dropped.
+   */
+  release(inUse: Set<object>): number {
+    let n = 0;
+    for (const [key, t] of [...this.landed]) {
+      const res = new Set<object>();
+      if (t) collectGpu(t, res);
+      let used = false;
+      for (const x of res) if (inUse.has(x)) { used = true; break; }
+      if (used) continue;
+      disposeGpu(res, inUse);
+      this.landed.delete(key); this.templates.delete(key);
+      if (t) { const i = this.built.findIndex((b) => b.t === t); if (i >= 0) this.built.splice(i, 1); }
+      n++;
+    }
+    return n;
   }
 
   /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
@@ -559,7 +587,7 @@ export class ModelLibrary {
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })().then((t) => this.ready(t, 'accent', charLight(def.kind), def.kind === 'structure'));
+    })().then((t) => this.ready(t, 'accent', charLight(def.kind), def.kind === 'structure')).then((t) => this.land(key, p!, t));
     this.templates.set(key, p);
     return p;
   }
