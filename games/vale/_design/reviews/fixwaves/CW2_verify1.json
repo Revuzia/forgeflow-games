@@ -1,0 +1,143 @@
+{
+ "wave": "CW2",
+ "round": 1,
+ "verifier": "adversarial verifier, 2026-11-03, re-measured at 7bf8e0f3 (engineer reports not trusted)",
+ "pass": false,
+ "summary": "CW2 does not pass round 1, on one major: critic:audio-runtime is partly met. All six done-criteria pass on my own re-measures. AUD-C1: build.py as-heard gate shows 0 library cues, K9 PASS, and 66 ult pairs have first-300 ms median 19.9 dB with 0 inside the take max. AUD-C3: the epic gate and E1-E8 pass. Decoded memory is 85.8 MB at Home after every map. Heal chimes run at 0.28/min. The announcer line sits 6.35 dB over sfx p99 at +7 dB. Band shares are 0 of 96 at or above 0.6. Lamp and enemyDown cues are confirmed on the real engine. The critic's runtime re-verification, which I ran myself, shows two open problems. (1) Master integrated loudness at default settings is -21.46 LUFS, 2.0 LU under the token floor of -19.5 and 2.5 LU quieter than the closing capture's -19.0. (2) The new sync probe's own gate fails: p95 is 36.6 ms against a 32.7 ms budget. That is perceptually fine under ITU BT.1359, but the gate is red. Also, both new CW2 probes exit 1 by default. session_mem S2 flags the 16 draft call cues. runtime match fails enemyDownFires when no enemy dies. AUD-C4 is partly done and AUD-C2 is not done. Both are minors, and AUD-C2 needs an owner scope ruling.",
+ "regressions": [
+  "Master loudness at default settings: -21.46 LUFS (fw_CW2_v1_runtime_match.json) vs -19.0 at the closing capture and tokens -18 +/- 1.5; consistent with the engineers' -21.6 / -21.8. Likely from heal-chime removal plus the 6 dB news duck; no mix trim followed.",
+  "_harness/probe_audio_session_mem.mjs (committed by CW2) now exits 1 on S2 (f_*_call draft cues at Home)."
+ ],
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-ran ~/.venv python3 audio/build.py --gates (_harness/_reports/fw_CW2_v1_gates.log, EXIT 0): 'as-heard gate: 0 library cue(s) on kitted fighters' areas / zones, 0 under their ultimates'; all 16 ult chains are f_<id>_* only. node _harness/probe_audio_kits.mjs (fw_CW2_v1_kits.log, EXIT 0): 'K9: 4725 kitted ability areas, 274 ult areas ... 0 requested a library cue'. Engine path checked: src/audio/index.ts:740-753 areaCue returns only an f_<fighter>_ cue or an area.<vfx> binding for kitted fighters (14 content/fighters files still name c_ult_release in present.sfx, but the engine skips it)."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Ran _harness/_reports/closing_audio_verify_tool_ultid.py UNCHANGED (fw_CW2_v1_ultid_tool_asis.txt): it still mixes c_ult_release, which the engine no longer plays (areaCue above), so its 'heard' column is stale; its own-release column, which is now what plays, gives onset300 min 11.09 / median 19.92 dB against take max 5.23, 0 pairs inside; whole-landing own pairs inside take max 0. probe_audio_ultid.py with the engine's real chain (fw_CW2_v1_ultid.json, EXIT 0): review12 66 pairs first-300 ms min 11.09 median 19.87, 0 inside take max 5.23; all16 120 pairs median 21.22, 0 inside."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "build.py --gates epic gate (fw_CW2_v1_gates.log): sunsplinter and longshade each a 9-slot kit of their own; autos as heard swing -23.9 / hit -18.9 and -18.7 LUFS vs loudest fighter auto swing -26.4 / hit -21.1; monsterDeath -> c_monster_fall. node _harness/probe_audio_epic.mjs (fw_CW2_v1_epic.log, EXIT 0): E1 u_<unit>_attack_swing@0.6 / attack_hit@0.8, no projectile; ability areas u_<unit>_a<n>_land held for the sim delay; roar from rest and after calm; own death; pit presence while alive; camps fall on c_monster_fall."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-ran node _harness/probe_audio_session_mem.mjs in real Chrome (fw_CW2_v1_session_mem.json/.log): Home after RIFT / BRIDGE / FRAY 85.8 / 85.8 / 85.8 MB in 52 files (<= 150; closing 360.6/524.1/657.3); in match 151.5-202.9 MB; postgame 44.8 MB; at Home only the menu bed's 3 files (S3), so match and postgame beds are freed on a bed change. NOTE the probe itself exits 1 on S2 (see probe:session_mem-S2)."
+  },
+  {
+   "id": "done:5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Own 7-min RIFT capture (node _harness/probe_audio_runtime.mjs match --queue rift_coop --seconds 420 -> fw_CW2_v1_runtime_match.json, as Vashil): heal 2 chimes = 0.28/min (<= 6). Announcer at the shipped +7 dB lift: 6 lines, peak -11.35 vs sfx short-term p99 -17.70 = +6.35 dB, median over teamfight p99 +4.53 (>= 3; but no line fell inside a teamfight window in this run). enemyDown 0 in my run (takedown 0, allyDown 2: apparently no enemy fighter fell), but 3 / 2 in the engineers' captures (fw_CW2_runtime_match_run1.json, fw_CW2_runtime_match.json) and B5 PASS in probe_audio_announcer (enemyByAlly -> m_enemy_down; enemyByYou suppressed; sim DeathEvent.by is the killer's player id, src/sim/combat.ts:283, matching src/audio/index.ts:1664). Band: closing_audio_verify_tool_band.py (fw_CW2_v1_band.txt) 0 of 96 autos >= 0.6, ulkro swing max 0.55, dunsom max 0.39. Lamp set / out: B5 lampSet [c_lamp_set], wardOut [c_lamp_out], summonOut [c_summon_out] (node real-engine probe only; bots set no lamps live: lampSet 0 in all three captures)."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Pre-existing audio probes all EXIT 0 on the shipped tree (fw_CW2_v1_probes.txt): kits, procs, epic, announcer, team_private, ambience, cc, listener, world, plus probe_audio_ultid.py. npm run typecheck EXIT 0, npm run content:check OK 0 warnings. Captures used the fake output device (probe_audio_runtime / session_mem). The pw.mjs metered audio probes (mix, qpop, soften, pieces) were not re-run (they meter silence on this Mac per the done text). The two NEW CW2 probes exit 1, listed separately."
+  },
+  {
+   "id": "audio:AUD-C1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:1 and done:2 (fw_CW2_v1_gates.log, fw_CW2_v1_kits.log, fw_CW2_v1_ultid.json, fw_CW2_v1_ultid_tool_asis.txt)."
+  },
+  {
+   "id": "audio:AUD-C3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:3 (fw_CW2_v1_gates.log epic gate, fw_CW2_v1_epic.log E1-E8 PASS)."
+  },
+  {
+   "id": "audio:decoded-memory",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:4 (fw_CW2_v1_session_mem.json: 85.8 MB at Home after each map)."
+  },
+  {
+   "id": "critic:audio-runtime",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The measurement the critic asked for now exists and I re-ran it. SYNC (node _harness/probe_audio_runtime.mjs sync -> fw_CW2_v1_runtime_sync.json, EXIT 1): 47/50 hits measured, offset impact-frame rAF -> heard p50 34.61 / p95 36.55 ms (from the pump p50 33.47 / p95 35.66; schedMs p50 16.29), outputLatency 16, budget 32.7 ms: the probe's own p95 gate FAILS by 3.9 ms (engineers: 46.9). Audio-late ~18-20 ms after the presented picture is inside ITU-R BT.1359, so not felt. LOUDNESS (verifier re-run once, fw_CW2_v1_runtime_match.json, default settings master 0.8): master integrated -21.46 LUFS (engineers -21.6 / -21.8), against tokens -18 +/- 1.5 (floor -19.5) and the closing capture -19.0; ambience -27.2 (ok), music -28.4. So the runtime re-verification shows the master 2.0 LU under the token floor and 2.5 LU quieter than the closing review measured; unresolved (handed to the lead).",
+   "fixHint": "CW2 owns src/audio: add an engine mix trim of about +2.5 dB on the master stage (after the buses, before the limiter/soft clip; do not lift only sfx, which would erode the AUD-C7 margin), or have the lead set the default master to ~1.0 in session settings; then one more 'probe_audio_runtime.mjs match' capture must land -18 +/- 1.5 LUFS with the announcer still >= 3 dB over sfx p99. For sync: either justify the gate as frame + outputLatency + one render-quantum buffering (~16 ms schedMs measured) and document it in the probe, or cut the extra quantum (start one-shots at ctx.currentTime with no scheduling look-ahead) so p95 <= 32.7 ms."
+  },
+  {
+   "id": "audio:AUD-C5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/audio/index.ts:1615-1627 (fighter only, >= 5 % max HP, chain first tick via HEAL_CHAIN_S 1.2). Live: 0.28/min in my capture (2 in 421 s), 0.86 / 1.57 in the engineers'. probe_audio_announcer B2: vampHealCues 0, chainTicks 0, smallOrWick 0."
+  },
+  {
+   "id": "audio:AUD-C6",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "src/audio/index.ts:1664 plays enemyDown unless e.by === client.you (by = killer player id, src/sim/combat.ts:283). B5 PASS. Live fires 3 / 2 in the engineers' captures; 0 in mine, where no enemy fighter appears to have died (takedown 0)."
+  },
+  {
+   "id": "audio:AUD-C7",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "ANN_LIFT_DB 7, SFX_DUCK_NEWS_DB 6 (src/audio/index.ts:289-290, 1172, 1197). A7 PASS (newsLineLiftDb 7, sfxDb -6, threatNotDucked). Live at +7 dB (my capture): line peak -11.35 vs sfx p99 -17.70 = +6.35 dB; median over teamfight p99 +4.53. Caveat: no line landed inside a teamfight window in my run (linesInTeamfight [])."
+  },
+  {
+   "id": "audio:AUD-C8",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "closing_audio_verify_tool_band.py re-run (fw_CW2_v1_band.txt): 0 of 96 autos >= 0.6 in 2-5 kHz; ulkro swing 0.50-0.55, dunsom swing max 0.39. build.py auto band gate in fw_CW2_v1_gates.log; dunsom identity 10.4/10.8 dB."
+  },
+  {
+   "id": "audio:AUD-C9",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Data-driven ward detection (src/audio/index.ts:505-514, units kind 'ward' + op summon), death branches :1666-1667. B5: lampSet [c_lamp_set], wardOut [c_lamp_out], summonOut [c_summon_out]. Not heard live: bots set 0 lamps in all three captures (CW3s handoff)."
+  },
+  {
+   "id": "audio:AUD-C4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Dead state present (src/audio/index.ts:1471-1483, DEAD_LPF_HZ 900; B5 deadOn true / deadOff false). Not done: phase segments and an objective music layer. Dead state never exercised live (selfDown 0, deadPolls 0 in my capture).",
+   "fixHint": "Build phase segments (early / mid / late keyed to match time or structures lost) and an objective layer near Longshade / Sunsplinter from audio/build_music.py's palette; add a probe that kills your fighter in a live capture to measure the dead-state LPF at the output."
+  },
+  {
+   "id": "audio:AUD-C2",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Not attempted; needs an owner scope ruling on CONTRACT §11 (no voice in this slice). Correctly handed to the lead.",
+   "fixHint": "Lead: record a ruling in fixwaves/owner_rulings.md; if lifted, schedule as its own XL package."
+  },
+  {
+   "id": "probe:session_mem-S2",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "node _harness/probe_audio_session_mem.mjs EXIT 1 (fw_CW2_v1_session_mem.log): S2 lists 16 'match-only' files at every Home: f_<id>_call.ogg x16 (the draft lock-in calls, 372 KB on disk). The engineers' claim that S2 'passed vacuously' and the committed regex fix shows 'no match cue was kept' is wrong: the fixed regex (line 56, /(^|\\/)(f_|u_|c_|mus_match)/) fails the run. The memory budget itself holds.",
+   "fixHint": "Either exclude the draft call cues (f_*_call) from the S2 match-only pattern, since the draft runs from Home, or free them on returning Home; then the probe must exit 0."
+  },
+  {
+   "id": "probe:runtime-gates",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Both modes of the new probe exit 1 on the shipped tree: sync p95 36.55 > budget 32.7 (fw_CW2_v1_runtime_sync.json); match gate enemyDownFires false in my run (fw_CW2_v1_runtime_match.json) because no enemy fighter died. A committed probe that fails by default is not a usable regression gate.",
+   "fixHint": "Make enemyDownFires 'not measured' (not a failure) when no enemy fighter death occurs in the capture, and settle the sync gate (see critic:audio-runtime)."
+  }
+ ],
+ "commands": [
+  "~/Developer/forgeflow-games/.venv/bin/python3 audio/build.py --gates",
+  "~/Developer/forgeflow-games/.venv/bin/python3 _harness/_reports/closing_audio_verify_tool_ultid.py",
+  "~/Developer/forgeflow-games/.venv/bin/python3 _harness/probe_audio_ultid.py --out _harness/_reports/fw_CW2_v1_ultid.json",
+  "~/Developer/forgeflow-games/.venv/bin/python3 _harness/_reports/closing_audio_verify_tool_band.py",
+  "node _harness/probe_audio_{kits,procs,epic,announcer,team_private,ambience,cc,listener,world}.mjs --out _harness/_reports/fw_CW2_v1_<n>.json",
+  "node _harness/probe_audio_session_mem.mjs --out _harness/_reports/fw_CW2_v1_session_mem.json",
+  "node _harness/probe_audio_runtime.mjs sync --out _harness/_reports/fw_CW2_v1_runtime_sync.json",
+  "node _harness/probe_audio_runtime.mjs match --queue rift_coop --seconds 420 --out _harness/_reports/fw_CW2_v1_runtime_match.json",
+  "npm run typecheck; npm run content:check"
+ ]
+}
