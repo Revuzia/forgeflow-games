@@ -107,9 +107,9 @@ CARDS = {
     "ardit_first_bell": {
         "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 40.0, "pitch": -5.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
                    "key_az": 225.0, "key_el": 34.0, "key_color": "#FFEAC8", "sun": 3.4, "rim_cool": 0.9,
-                   "rim_warm": 1.6, "bounce": 0.8, "bounce_color": "#F0C48E", "accent": 2.2, "exposure": -1.1,
-                   # (the pale pane faces the sun square: at -0.5 EV it clipped flat and the card's top end stopped
-                   # at luma 199; exposed down, the finish's highlight expansion has a gradient to lift)
+                   "rim_warm": 1.6, "bounce": 0.8, "bounce_color": "#F0C48E", "accent": 2.2, "exposure": -0.6,
+                   # (the pale pane faces the sun square and fills the subject's top 5 % at one value: the finish's
+                   # highlight curve now knees from the p80 there, common/plates._expand_hi)
                    "focal": [{"at": "x_pavise_top", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFE0A8",
                               "power": 110.0, "size": 0.3},
                              {"at": "head", "az": 205.0, "el": 12.0, "dist": 0.8, "color": "#FFEBD6", "power": 30.0,

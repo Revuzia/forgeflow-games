@@ -554,6 +554,13 @@ def _expand_hi(d: np.ndarray, m: np.ndarray, hi: float, q: float) -> np.ndarray:
     ys = L[m]
     x0 = float(np.percentile(ys, 95))
     top = float(np.percentile(ys, q))
+    for qk in (80.0, 65.0, 50.0):
+        # (CW5, Ardit First Bell: a large flat pale surface, the pavise's pane square to the sun, filled the top 5 %
+        # (the portrait: the top third) at one value, so the curve had no headroom and the card stopped at luma ~199)
+        # knee lower until there is some
+        if top > x0 + 0.01:
+            break
+        x0 = float(np.percentile(ys, qk))
     if top <= x0 + 0.01 or hi <= x0 + 0.01:
         return d
     a = float(np.clip((top - x0) / (hi - x0), 0.0, 1.0))
