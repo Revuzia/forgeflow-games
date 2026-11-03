@@ -43,6 +43,10 @@ export const BAR_CLEAR = {
   minPart: 12,
   /** a focal part = the vertices within this radius (m) of its socket bone at rest */
   partRadius: 0.25,
+  /** polish TUN-c2: past the half-covered gate the anchor keeps rising (≤ meanExtra m) while a part's mean share under
+   *  the plate is over meanTarget (a brim's far edge under the under-panel) */
+  meanTarget: 0.02,
+  meanExtra: 0.2,
 } as const;
 
 export interface BarCam { pitchDeg: number; fovDeg: number; distance: number; viewH: number }
@@ -192,16 +196,38 @@ export function barAnchorFrom(b: BodySamples, floor: number, cam: BarCam): { anc
     }
     return worst;
   };
+  // polish TUN-c2: the mean share of a part under the plate (the worse clip; a wide brim is never HALF under it, yet the
+  // plate's under-panel sat on its far edge in most facings)
+  const meanAt = (anchor: number): number => {
+    let worst = 0;
+    for (const cases of byClip) {
+      if (!cases.length) continue;
+      let sum = 0;
+      for (const row of cases) {
+        let m = 0;
+        for (const e of row) m = Math.max(m, (lowerBound(e.h, anchor + above) - lowerBound(e.h, anchor - below)) / e.n);
+        sum += m;
+      }
+      worst = Math.max(worst, sum / cases.length);
+    }
+    return worst;
+  };
   const coveredAtFloor = coveredAt(floor);
+  const top = floor + BAR_CLEAR.maxLift + 1e-9;
   let best = floor, bestCov = coveredAtFloor;
   if (bestCov > BAR_CLEAR.target) {
-    for (let a = floor + BAR_CLEAR.step; a <= floor + BAR_CLEAR.maxLift + 1e-9; a += BAR_CLEAR.step) {
+    for (let a = floor + BAR_CLEAR.step; a <= top; a += BAR_CLEAR.step) {
       const cov = coveredAt(a);
       if (cov < bestCov - 1e-9) { best = a; bestCov = cov; }
       if (cov <= BAR_CLEAR.target) break;
     }
   }
-  return { anchor: best, covered: bestCov, coveredAtFloor };
+  // once the half-covered gate is met, keep rising (at most meanExtra) until the mean share under the plate is small
+  if (bestCov <= BAR_CLEAR.target) {
+    const stop = Math.min(top, best + BAR_CLEAR.meanExtra + 1e-9);
+    for (let a = best; a <= stop && meanAt(a) > BAR_CLEAR.meanTarget; a += BAR_CLEAR.step) best = Math.min(a + BAR_CLEAR.step, stop);
+  }
+  return { anchor: best, covered: coveredAt(best), coveredAtFloor };
 }
 
 /** the computed bar anchor for a fighter template (idle + run clips; its focal sockets); `floor` = art.height × scale + 0.35 */

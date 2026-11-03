@@ -10,7 +10,9 @@
 //
 // Gate (closing plan, CW1 done): Kemdo's lens, Dunsom's lantern, Hesmi's rack top, Vashil's halo ring and Tunlan's hat
 // brim are half-covered in ≤ 10 % of idle cases and ≤ 10 % of run cases, at the default distance and at 28.5 m.
-// Info: every other fighter's computed lift over the old anchor.
+// polish hesmi-m3: Hesmi's rack top also ≤ 10 % over her attack clips (every prop's attack row is reported). Info:
+// `deep`, the most px a covered prop vertex sits above the plate's lower edge in idle/run (TUN-c2: the under-panel on
+// the far brim), and every other fighter's computed lift over the old anchor.
 //
 //   node _harness/probe_bar_clearance.ts [--out <json>]   → _harness/_reports/fw_CW1_bar_clearance.json; exit 0 = PASS
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
@@ -34,10 +36,10 @@ const { ALL_EXTENSIONS } = await import(req.resolve('@gltf-transform/extensions'
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 /** the gated props: fighter → the bone the prop is skinned to (the probe's own list: a harness may name content) */
-const PROPS: Record<string, { bone: string; what: string }> = {
+const PROPS: Record<string, { bone: string; what: string; attackGate?: boolean }> = {
   kemdo: { bone: 'x_lens', what: 'lens' },
   dunsom: { bone: 'x_lantern', what: 'lantern' },
-  hesmi: { bone: 'x_rack_top', what: 'rack top' },
+  hesmi: { bone: 'x_rack_top', what: 'rack top', attackGate: true },
   vashil: { bone: 'x_halo', what: 'halo ring' },
   tunlan: { bone: 'x_hat', what: 'hat brim' },
 };
@@ -89,8 +91,8 @@ function propVerts(scene: Object3D, boneName: string): { m: SkinnedMesh; idx: nu
   return out;
 }
 
-interface Case { idle: number; run: number; idleMean: number; runMean: number }
-function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMesh; idx: number[] }[], anchor: number, distance: number): Case {
+interface Case { idle: number; run: number; idleMean: number; runMean: number; attack?: number; attackMean?: number; attackClips?: number; brimPx?: number }
+function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMesh; idx: number[] }[], anchor: number, distance: number, attacks: string[] = []): Case {
   const r = rig(distance), cam = r.camera;
   const v = new Vector3();
   const px = (p: Vector3): [number, number] => { p.project(cam); return [(p.x + 1) * W / 2, (1 - p.y) * H / 2]; };
@@ -98,12 +100,17 @@ function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMe
   const inBox = (x: number, y: number): boolean => { const dx = x - ax, dy = y - ay; return dx >= BAR_BOX.left && dx <= BAR_BOX.right && dy >= -BAR_BOX.above && dy <= BAR_BOX.below; };
   const mixer = new AnimationMixer(scene);
   const res: Record<string, { half: number; mean: number }> = {};
-  for (const role of ['idle', 'run']) {
-    const clip = clips.find((c) => c.name === role);
-    if (!clip) { res[role] = { half: NaN, mean: NaN }; continue; }
+  // polish hesmi-m3 / TUN-c2: the attack clips pooled into one more row; `deep` = the most px a covered prop vertex
+  // sits above the plate's lower edge (the under-panel's overlap on a brim), over idle and run
+  let deep = 0;
+  const groups: [string, string[]][] = [['idle', ['idle']], ['run', ['run']], ['attack', attacks]];
+  for (const [role, names] of groups) {
+    const list = names.map((nm) => clips.find((c) => c.name === nm)).filter((c): c is AnimationClip => !!c);
+    if (!list.length) { res[role] = { half: NaN, mean: NaN }; continue; }
+    let half = 0, n = 0, sum = 0;
+    for (const clip of list) {
     mixer.stopAllAction();
     const act = mixer.clipAction(clip); act.reset(); act.play();
-    let half = 0, n = 0, sum = 0;
     for (let k = 0; k < SAMPLES; k++) {
       act.time = clip.duration * k / SAMPLES; mixer.update(0); scene.updateMatrixWorld(true);
       const pts: number[] = [];
@@ -113,16 +120,19 @@ function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMe
         let inside = 0;
         for (let i = 0; i < pts.length; i += 3) {
           const [sx, sy] = px(v.set(200 + c * pts[i] + s * pts[i + 2], pts[i + 1], 200 - s * pts[i] + c * pts[i + 2]));
-          if (inBox(sx, sy)) inside++;
+          if (inBox(sx, sy)) { inside++; if (role !== 'attack') deep = Math.max(deep, ay + BAR_BOX.below - sy); }
         }
         const f = inside / (pts.length / 3);
         sum += f; n++; if (f >= 0.5) half++;
       }
     }
+    }
     res[role] = { half: half / n, mean: sum / n };
   }
   mixer.stopAllAction();
-  return { idle: +res.idle.half.toFixed(3), run: +res.run.half.toFixed(3), idleMean: +res.idle.mean.toFixed(3), runMean: +res.run.mean.toFixed(3) };
+  const out: Case = { idle: +res.idle.half.toFixed(3), run: +res.run.half.toFixed(3), idleMean: +res.idle.mean.toFixed(3), runMean: +res.run.mean.toFixed(3), brimPx: +deep.toFixed(1) };
+  if (attacks.length) Object.assign(out, { attack: +res.attack.half.toFixed(3), attackMean: +res.attack.mean.toFixed(3), attackClips: attacks.length });
+  return out;
 }
 
 const ids = readdirSync(join(ROOT, 'content', 'fighters')).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
@@ -149,10 +159,15 @@ for (const id of ids) {
     if (!nv) { fails.push(`${id}: no vertices for ${prop.bone}`); line += ` NO ${prop.bone}`; }
     else {
       const out: Record<string, Case> = {};
-      for (const [k, d, a] of [['new', CAMERA.distance, anchor], ['new_28.5', 28.5, anchor], ['old', CAMERA.distance, floor], ['old_28.5', 28.5, floor]] as [string, number, number][]) out[k] = coverage(scene, clips.map((c) => c.name === (roles.idle ?? 'idle') ? Object.assign(c.clone(), { name: 'idle' }) : c.name === (roles.run ?? 'run') ? Object.assign(c.clone(), { name: 'run' }) : c), verts, a, d);
+      // the attack clips (roles attack*, the fighter's basic-attack swings) by their clip names
+      const attacks = [...new Set(Object.entries(roles).filter(([r]) => /^attack/.test(r)).map(([, n]) => n as string))].filter((n) => clips.some((c) => c.name === n));
+      for (const [k, d, a] of [['new', CAMERA.distance, anchor], ['new_28.5', 28.5, anchor], ['old', CAMERA.distance, floor], ['old_28.5', 28.5, floor]] as [string, number, number][]) out[k] = coverage(scene, clips.map((c) => c.name === (roles.idle ?? 'idle') ? Object.assign(c.clone(), { name: 'idle' }) : c.name === (roles.run ?? 'run') ? Object.assign(c.clone(), { name: 'run' }) : c), verts, a, d, attacks);
       row.prop = { ...prop, verts: nv, ...out };
-      line += `  ${prop.what}: new ${fmt(out.new)} | @28.5 ${fmt(out['new_28.5'])} | old ${fmt(out.old)}`;
+      const atk = (c: Case): string => (c.attack !== undefined ? ` atk ${(c.attack * 100).toFixed(0).padStart(3)}%` : '');
+      line += `  ${prop.what}: new ${fmt(out.new)}${atk(out.new)} deep ${out.new.brimPx} px | @28.5 ${fmt(out['new_28.5'])}${atk(out['new_28.5'])} | old ${fmt(out.old)}${atk(out.old)} deep ${out.old.brimPx} px`;
       for (const k of ['new', 'new_28.5']) for (const r of ['idle', 'run'] as const) if (!(out[k][r] <= 0.1)) fails.push(`${id} ${prop.what} ${k} ${r} half-covered ${(out[k][r] * 100).toFixed(1)} % > 10 %`);
+      // polish hesmi-m3: the rack top clears the bar through her swings too
+      if (prop.attackGate) for (const k of ['new', 'new_28.5']) if (!((out[k].attack ?? 0) <= 0.1)) fails.push(`${id} ${prop.what} ${k} attack half-covered ${((out[k].attack ?? 0) * 100).toFixed(1)} % > 10 %`);
     }
   }
   (report.fighters as Record<string, unknown>)[id] = row;
