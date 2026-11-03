@@ -564,7 +564,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     float seg = 6.2831853 / 12.0;
     float al = abs( mod( ang + seg * 0.5, seg ) - seg * 0.5 ) * fr;
     float inner = 1.0 - smoothstep( FT.z + 0.4 - aa, FT.z + 0.4 + aa, fr );
-    pc = mix( pc, pband * 1.03 * grainN, inner );
+    // env m-3: the honed disc keeps a third of the grain painting (at full strength its 3 m tiles read as cloud
+    // stains across the floor) and takes the ring strokes instead
+    pc = mix( pc, pband * 1.03 * mix( vec3( 1.0 ), grainN, 0.3 ) * ( 0.98 + 0.04 * pstk ), inner );
     float hourL = ( 1.0 - smoothstep( -aa, aa, al - 0.04 ) ) * step( 1.0, fr ) * inner;
     // inlay: the fountain's rim ring and the twelve hour-ticks round it, each set in a carved channel; the ticks are
     // cut into the dais top (a faint inlay, never a stamped stripe)
@@ -625,7 +627,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
       float sock = 1.0 - smoothstep( 0.0, 0.06 + aa, abs( sd - 3.05 ) - 0.38 );
       sc = mix( sc, uSeatC * 0.84 * grainN * ( 0.85 + 0.3 * valeNoise( p * 6.0 ) ), sock );
       float inner = 1.0 - smoothstep( 2.6 - aa, 2.6 + aa, sd );
-      sc = mix( sc, uSeatC * 1.03 * grainN, inner );
+      sc = mix( sc, uSeatC * 1.03 * mix( vec3( 1.0 ), grainN, 0.3 ) * ( 0.98 + 0.04 * sstk ), inner );   // env m-3
       float ang = atan( p.y - uSeat.y, p.x - uSeat.x );
       float seg = 6.2831853 / 12.0;
       float al = abs( mod( ang + seg * 0.5, seg ) - seg * 0.5 ) * sd;
