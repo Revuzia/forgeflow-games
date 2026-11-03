@@ -3682,7 +3682,10 @@ export function update(W, dt) {
   // loot labels: project nearby items/chests to screen (7 projections, cheap)
   if (R.lootLbls) {
     let li = 0;
-    if (p && p.alive && W.phase === "match" && W.nearbyLoot && W.kernel && W.kernel.camera) {
+    // W9 R1 fix (hudfeel): loot pills are the LOCAL looter's pickup cue. While the local player is dead (death banner /
+    // recap / spectating someone else) nothing can be picked up, so the pills are hidden - the same rule as the other
+    // interaction prompts - and a spectated bot's nearby chests no longer paint labels over the death screen.
+    if (p && p.alive && p === W.player && W.phase === "match" && W.nearbyLoot && W.kernel && W.kernel.camera) {
       if (!R._lv) R._lv = new p.pos.constructor();
       const near = W.nearbyLoot(p.pos, 9);
       const cam = W.kernel.camera;
@@ -3698,16 +3701,28 @@ export function update(W, dt) {
         const txt = n.type === "chest" ? (n.supply && !touchOn ? "SUPPLY DROP" : "CHEST")      // (release blockers) the supply crate by name (touch: unchanged)
                   : shortName(n.data) + (isW ? " · " + (K.RARITY[n.data.rarity || 0] || "").toUpperCase() : "");
         let lx = (R._lv.x * 0.5 + 0.5) * sw, ly = (-R._lv.y * 0.5 + 0.5) * sh;   // the pill's bottom-centre
-        if (koOn) { ly = koPlace(txt, lx, ly); if (ly === null) continue; }    // under a control: not drawn, slot kept
-        const el = R.lootLbls[li++];
+        const el = R.lootLbls[li];             // the next free slot (claimed below only if the pill is drawn)
         if (el._t !== txt) {
-          el._t = txt; el.textContent = txt;
+          el._t = txt; el.textContent = txt; el._w = 0;
           el.style.color = n.type === "chest" ? "#ffd254"
                         : isW ? (K.RARITY_COLOR[K.RARITY[n.data.rarity || 0]] || "#dfe7f2") : "#8fd3a0";
         }
+        if (el.style.display !== "block") el.style.display = "block";   // an unclaimed slot is hidden by the tail loop
+        // W9 R1 fix (hudfeel): a world label is CLAMPED into the viewport (edge inset LOOT_EDGE px), never clipped by it:
+        // a chest whose anchor projects within half a pill of the edge used to hang its pill past the screen (pixel7
+        // 915x412 death screen: "CHEST" r=[882,247,936,267]). The pill's size is measured once per text (one layout
+        // read on a text change, never per frame); the anchor itself is already inside the frustum (projection test above).
+        if (!el._w) { el._w = el.offsetWidth; el._h = el.offsetHeight; }
+        const hw = (el._w || 0) / 2, ph = el._h || 0;
+        lx = Math.min(Math.max(lx, hw + LOOT_EDGE), sw - hw - LOOT_EDGE);
+        ly = Math.min(Math.max(ly, ph + LOOT_EDGE), sh - LOOT_EDGE);
+        if (koOn) {                            // under a control: not drawn, slot kept
+          ly = koPlace(txt, lx, ly);
+          if (ly === null || ly < ph + LOOT_EDGE || ly > sh - LOOT_EDGE) continue;   // nudged off-screen: not drawn either
+        }
+        li++;
         el.style.transform = "translate(-50%,-100%) translate(" + lx.toFixed(0) + "px," + ly.toFixed(0) + "px)";
         el.style.opacity = (n.d < 3 ? 1 : Math.max(0.3, 1 - (n.d - 3) / 7)).toFixed(2);
-        if (el.style.display !== "block") el.style.display = "block";
       }
     }
     for (; li < R.lootLbls.length; li++) if (R.lootLbls[li].style.display !== "none") R.lootLbls[li].style.display = "none";
@@ -3773,6 +3788,7 @@ const _sq = { ads: false, speed: 0, airborne: false, crouching: false, sinceLast
 // changes, and every 10 HUD frames otherwise (the stick floats under the
 // thumb): one getBoundingClientRect batch, then plain numbers - nothing is
 // allocated per frame. Desktop never enters this path.
+const LOOT_EDGE = 4;                     // px a loot pill keeps from the viewport edge (W9 R1 hudfeel clamp)
 const KO_PAD = 3;                        // px of air between a pill and a control
 const _ko = { f: 99, vis: null, vw: -1, vh: -1, n: 0, box: new Float64Array(4 * 16), els: null, wid: new Map(), h: 0, rr: 31 };
 function koRefresh(W, sw, sh) {
