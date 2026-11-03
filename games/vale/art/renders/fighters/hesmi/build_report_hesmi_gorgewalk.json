@@ -36,38 +36,38 @@
     "tris_inlays": 60,
     "tris_rope_coils": 1342,
     "tris_iron_pins": 300,
-    "validate_hesmi": "21470->21466"
+    "validate_hesmi": "21470->21465"
   },
   "uv_coverage": 0.598,
   "bake": {
-    "base": 10.13,
-    "rough_metal": 6.83,
-    "normal": 3.33,
-    "ao": 4.19,
-    "normal_fixed_px": 118060,
-    "projection": 29.02,
-    "pack_save": 29.98,
-    "total": 55.21
+    "base": 10.91,
+    "rough_metal": 8.51,
+    "normal": 13.39,
+    "ao": 10.69,
+    "normal_fixed_px": 118791,
+    "projection": 79.37,
+    "pack_save": 80.93,
+    "total": 126.28
   },
-  "tris": 21526,
+  "tris": 21525,
   "mesh_top_m": 2.301,
-  "glb_bytes_raw": 2691852,
+  "glb_bytes_raw": 2685680,
   "optimize": {
     "ok": true,
-    "before": 2691852,
-    "after": 1154328
+    "before": 2685680,
+    "after": 1152608
   },
-  "glb_bytes": 1154328,
+  "glb_bytes": 1152608,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1127 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_gorgewalk_base 2048x2048 292K, hesmi_gorgewalk_normal 512x512 55K, hesmi_gorgewalk_orm 512x512 82K",
-      "  skinned meshes: hesmi_accent(120v), hesmi_gorgewalk(20393v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi_gorgewalk.glb (1126 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_gorgewalk_base 2048x2048 291K, hesmi_gorgewalk_normal 512x512 54K, hesmi_gorgewalk_orm 512x512 82K",
+      "  skinned meshes: hesmi_accent(120v), hesmi_gorgewalk(20355v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 21526; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
+      "  tris: 21525; bind-pose bounds (three units, Y up): 1.40 x 2.30 x 0.97; facing (-0.00, 1.00); head bone y 1.96; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
@@ -77,8 +77,8 @@
       "portrait": "art/out/fighters/hesmi/hesmi_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 70.48,
-      "portrait": 27.51
+      "splash": 289.04,
+      "portrait": 16.19
     }
   },
   "three_qa": {
@@ -110,24 +110,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/hesmi/three_hesmi_gorgewalk.png",
-    "seconds": 67.2,
+    "seconds": 18.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.31,
-      "model": 12.16,
-      "lows_bind": 11.59,
-      "uv": 7.03,
-      "bake": 55.23,
-      "export": 0.33,
-      "optimize": 2.91,
-      "load_test": 0.37,
-      "render": 98.13,
-      "three_qa": 68.51
+      "rig": 0.06,
+      "materials": 0.52,
+      "model": 24.39,
+      "lows_bind": 32.52,
+      "uv": 9.2,
+      "bake": 126.29,
+      "export": 1.05,
+      "optimize": 3.31,
+      "load_test": 0.97,
+      "render": 305.6,
+      "three_qa": 18.5
     },
-    "total_s": 256.79
+    "total_s": 523.08
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22
