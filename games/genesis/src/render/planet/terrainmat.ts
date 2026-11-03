@@ -101,7 +101,7 @@ uniform float uBrushOn;
 uniform sampler2D uOverlay;
 uniform vec3 uOverlayK;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
-uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only, 5 albedo + mid-distance breakup tint
+uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only, 5 albedo + mid-distance breakup tint, 6 camera distance (blue <120 m, red ramp to 500 m, yellow beyond), 7 lit but without the mid-distance breakup (A/B)
 ${GROUND_FRAG_PARS}
 
 // sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
@@ -564,23 +564,26 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // onto earth. Faded in over 120–500 m (the cover framing's back hills stand only 300–450 m off; past ~120 m the
     // near terms' 3–60 m texture is already sub-pixel), so nothing changes where the near terms carry the ground.
     float midK = smoothstep(120.0, 500.0, camDist);
+    if (uDebug > 6.5) midK = 0.0;
     if (midK > 0.0) {
       // (~220 m drifts plus a ~90 m octave: on a 400-800 m hill the 220 m term alone left two or three soft tones)
       float mA = fbm3(P * 0.0045 + 23.0) + 0.45 * snoise(P * 0.011 + warpV * 0.03 + 29.0);
       float mB = snoise(P * 0.019 + warpV * 0.05 + 31.0) * 0.6 + snoise(P * 0.052 + 37.0) * 0.4 * aaF(fw, 20.0);
       float ridgeK = smoothstep(0.05, 0.6, -concave), hollowK = smoothstep(0.05, 0.6, concave);
       // (past ~400 m the drifts are all that is left of the ground's texture: they firm up, still broad and soft-edged)
+      // (an A/B at the cover framing measured the first strengths at ~4 % of the lit hill's tone after light, haze and grade:
+      // invisible; these give the ~200 m drifts a real dry-gold / dark-green swing, still soft-edged)
       float farK = 1.0 + 0.5 * smoothstep(400.0, 1300.0, camDist);
       vec3 g2 = gcol;
-      g2 = mix(g2, g2 * vec3(1.32, 1.14, 0.66), clamp((0.45 * ridgeK + 0.5 * smoothstep(0.0, 0.45, mA) + 0.25 * max(sunny, 0.0) * steep) * farK, 0.0, 0.8));
-      g2 = mix(g2, g2 * vec3(0.6, 0.76, 0.62), clamp((0.5 * hollowK + 0.5 * smoothstep(0.0, -0.45, mA)) * farK, 0.0, 0.75));
-      g2 *= 1.0 + 0.16 * mB * farK;
+      g2 = mix(g2, g2 * vec3(1.6, 1.36, 0.72), clamp((0.45 * ridgeK + 0.6 * smoothstep(0.0, 0.4, mA) + 0.25 * max(sunny, 0.0) * steep) * farK, 0.0, 0.85));
+      g2 = mix(g2, g2 * vec3(0.48, 0.62, 0.5), clamp((0.5 * hollowK + 0.65 * smoothstep(0.0, -0.4, mA)) * farK, 0.0, 0.8));
+      g2 *= 1.0 + 0.24 * mB * farK;
       // scattered scrub and gorse clumps (~15-40 m): what gives a far grassed slope its stipple; denser down the hollows
       float scrub = snoise(P * 0.03 + warpV * 0.08 + 41.0) + 0.35 * hollowK - 0.25 * ridgeK;
       g2 = mix(g2, g2 * vec3(0.52, 0.62, 0.46), 0.6 * smoothstep(0.38, 0.68, scrub) * aaF(fw, 22.0) * (farK - 0.2));
       g2 = mix(g2, vec3(0.2, 0.16, 0.1), 0.45 * smoothstep(0.22, 0.45, slope) * smoothstep(-0.1, 0.5, mB));
       gcol = mix(gcol, g2, midK);
-      if (uDebug > 4.5) gcol = mix(gcol, vec3(1.0, 0.0, 1.0), midK);
+      if (uDebug > 4.5 && uDebug < 5.5) gcol = mix(gcol, vec3(1.0, 0.0, 1.0), midK);
     }
     // tufts, tips and gaps (groundfloor.ts swardDetail): the sward's own texture at 3–60 m
     vec3 vEye = normalize(transpose(uBodyToView) * normalize(vViewPosition));
@@ -691,13 +694,14 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       // wooded hill was one flat dark green (the cover's back hills). A real wood from there: groves of other species and
       // ages in ~100-250 m drifts (paler, yellower / darker, bluer), lighter crowns on the crests, dark in the hollows.
       float cMid = smoothstep(150.0, 550.0, camDist);
+      if (uDebug > 6.5) cMid = 0.0;
       if (cMid > 0.0) {
         float cA = fbm3(P * 0.006 + 53.0) + 0.5 * snoise(P * 0.014 + warpV * 0.03 + 59.0);
         float cRidge = smoothstep(0.05, 0.6, -concave), cHollow = smoothstep(0.05, 0.6, concave);
         vec3 tc2 = mix(tc, tc * vec3(1.45, 1.35, 0.95), clamp(0.6 * smoothstep(0.0, 0.5, cA) + 0.35 * cRidge, 0.0, 0.8));
         tc2 = mix(tc2, tc2 * vec3(0.62, 0.72, 0.8), clamp(0.6 * smoothstep(0.0, -0.5, cA) + 0.4 * cHollow, 0.0, 0.75));
         tc = mix(tc, tc2, cMid * (1.0 - turn));
-        if (uDebug > 4.5) tc = mix(tc, vec3(0.0, 1.0, 1.0), cMid);
+        if (uDebug > 4.5 && uDebug < 5.5) tc = mix(tc, vec3(0.0, 1.0, 1.0), cMid);
       }
       // within the instanced-tree range the real trees stand here: show their floor (litter, shade), not canopy
       // (no trees instanced at all — the planet view parks the band at 1e9 — means canopy everywhere, not floor)
@@ -1627,7 +1631,8 @@ const FRAG_AMBIENT = /* glsl */ `
 const FRAG_EMISSIVE = /* glsl */ `
   totalEmissiveRadiance = ts.emis;
   if (uDebug > 0.5 && uDebug < 1.5) { totalEmissiveRadiance = (normalize(transpose(uBodyToView) * normal) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
-  if ((uDebug > 1.5 && uDebug < 2.5) || uDebug > 4.5) { totalEmissiveRadiance = ts.albedo * 4.0; diffuseColor.rgb = vec3(0.0); }
+  if ((uDebug > 1.5 && uDebug < 2.5) || (uDebug > 4.5 && uDebug < 5.5)) { totalEmissiveRadiance = ts.albedo * 4.0; diffuseColor.rgb = vec3(0.0); }
+  if (uDebug > 5.5 && uDebug < 6.5) { float dK = smoothstep(120.0, 500.0, length(vViewPosition)); totalEmissiveRadiance = mix(vec3(0.0, 0.0, 2.0), vec3(2.0, 0.0, 0.0), dK) + vec3(0.0, 2.0 * step(500.0, length(vViewPosition)), 0.0); diffuseColor.rgb = vec3(0.0); }
   if (uDebug > 3.5 && uDebug < 4.5) { totalEmissiveRadiance = (normalize(vBodyN) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
   {
     // night-side lights of settlements: the life layer's per-cell light (lit buildings: hearth → lamps → electric;
