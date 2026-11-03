@@ -1,0 +1,75 @@
+{
+ "id": "sunsplinter",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method. Sheet: node art/tools/three_snapshot.mjs art/out/units/<id>.glb --unit (before: _harness/_shots/fw_CW4_m_before_<id>.png; after: art/renders/units/<id>.png). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 370|70 (RIFT, 1920x1080, 28.5 m, fog off, the camps forced visible) -> _harness/_reports/fw_CW4_monsters.json (tags fw_CW4_mon_before, fw_CW4_mon_after1, fw_CW4_mon_after2, fw_CW4_mon_after1_t70) and shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. hp = std of display L* minus its 5x5 masked box mean inside the unit's faces (the E1 landmark metric); breakup = p95-p5 of the 0.5 m band (needs >= 0.5 m faces: 0 on small units); dL/dE76 against the floor ring 0.6-2.5 m past the unit's screen box; maxIoU = silhouette IoU (32x32 square-padded screen box) with the most similar other kind.",
+ "refs": {
+  "laneHpMedian": 1.19,
+  "art2StructureHpMedian": 3.83,
+  "art2StructureBreakupMedian": 10.15
+ },
+ "gate": "hp >= the lane's hp (the E1 landmark bar) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no eye pair or face on a stone figure; sensitivity: no tall/pointed hood, no horror mask",
+ "before": {
+  "read": "a heap of grey and brown rounded boxes around a flat yellow ball; chalk-grey stone with no value structure; dark iron blocks read as holes",
+  "albedoLstar": "p10/50/90 24/71/89",
+  "inGame": {
+   "px": 16188,
+   "hp": 2.82,
+   "breakup": 44.6,
+   "unitLstar": [
+    28.4,
+    70.1,
+    89.6
+   ],
+   "floorLstar": [
+    27.4,
+    29.2,
+    31.3
+   ],
+   "dLstarP50": 40.9,
+   "unitChroma": 8.8,
+   "floorChroma": 12.6,
+   "dE76": 40,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.55
+   }
+  }
+ },
+ "changes": [
+  "the 9 halo stones and 3 keel stones are Needle splinters (square shaft tapering to a pyramid point outward, the inner end broken) instead of rounded boxes: a sunburst of broken needle-tips",
+  "warm honey needle-stone palette (#D2BE98) with noon-lit tops, umber undersides and broad blotches; umber-bronze bands (#5C4431) in place of grey iron",
+  "gold-leaf hour-tick inlays in the grooves (glossier), inked shard ridges (edge ink), fresh pale fracture faces",
+  "icon re-rendered from the new model"
+ ],
+ "after": {
+  "albedoLstar": "p10/50/90 2/56/83",
+  "inGame": {
+   "px": 14146,
+   "hp": 2.6,
+   "breakup": 13.3,
+   "unitLstar": [
+    23.2,
+    63.2,
+    85.4
+   ],
+   "floorLstar": [
+    27.4,
+    29.2,
+    31.3
+   ],
+   "dLstarP50": 34,
+   "unitChroma": 16.9,
+   "floorChroma": 12.6,
+   "dE76": 41.2,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.5
+   }
+  },
+  "glb": "8216 tris, 826 KiB (was 762)"
+ },
+ "horrorFaceRead": "none: no face, no eye pair; the orb is a single light",
+ "motion": "unchanged clips (idle halo drift, Shard Rain, Noon Glare, Splinter Spray, death scatter) read on the sheet; pieces bind per island, the splinters rest on their actual vertices in death"
+}

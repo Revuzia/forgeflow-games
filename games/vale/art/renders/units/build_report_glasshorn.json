@@ -9,13 +9,13 @@
   "tris": 8032,
   "uv_coverage": 0.574,
   "bake": {
-    "base": 0.57,
-    "rough_metal": 0.41,
-    "normal": 0.54,
-    "ao": 0.54,
+    "base": 2.1,
+    "rough_metal": 1.36,
+    "normal": 1.38,
+    "ao": 1.25,
     "normal_fixed_px": 2966,
-    "pack_save": 0.08,
-    "total": 2.16
+    "pack_save": 0.44,
+    "total": 6.65
   },
   "bake_holes_filled": 0,
   "clips": {
@@ -118,13 +118,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 1768652,
+  "glb_bytes_raw": 1773244,
   "optimize": {
     "ok": true,
-    "before": 1768652,
-    "after": 478780
+    "before": 1773244,
+    "after": 482732
   },
-  "glb_bytes": 478780,
+  "glb_bytes": 482732,
   "inspect": [
     "    prim material=glasshorn_body tris=7600 verts=5296 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "    prim material=glasshorn_dawnglass tris=432 verts=912 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
@@ -132,7 +132,7 @@
     "  material glasshorn_dawnglass: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.55,0.55,0.55 base=1,1,1,1",
     "  texture glasshorn_normal: image/webp ? 54.3 KiB",
     "  texture glasshorn_orm: image/webp ? 32.1 KiB",
-    "  texture glasshorn_base: image/webp ? 72.8 KiB",
+    "  texture glasshorn_base: image/webp ? 76.7 KiB",
     "  clip attack1      1.000 s (30 f) channels=26 bones=25",
     "  clip cast_a1      1.167 s (35 f) channels=27 bones=26",
     "  clip death        1.500 s (45 f) channels=29 bones=28",
@@ -142,8 +142,8 @@
   "load_test": {
     "ok": true,
     "log": [
-      "[three] art/out/units/glasshorn.glb (468 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: glasshorn_base 1024x1024 73K, glasshorn_normal 1024x1024 54K, glasshorn_orm 512x512 32K",
+      "[three] art/out/units/glasshorn.glb (471 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: glasshorn_base 1024x1024 77K, glasshorn_normal 1024x1024 54K, glasshorn_orm 512x512 32K",
       "  skinned meshes: glasshorn_1(5296v), glasshorn_2(912v)",
       "  bones: 32 (root hips spine chest neck neck2 head antlerL antlerR earL earR jaw scapulaL upper_armL forearmL handL hoofL scapulaR upper_armR forearmR handR hoofR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.000s/26tr, cast_a1:1.167s/27tr, death:1.500s/29tr, idle:3.000s/30tr, run:0.700s/30tr",
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/glasshorn.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.398,0.004,-0.809],[0.398,2.201,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":6.1}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.398,0.004,-0.809],[0.398,2.201,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":30.6}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "sculpt": 3.27,
-      "bind": 0.16,
-      "uv": 5.1,
-      "bake": 2.32,
-      "clips": 0.17,
-      "ground_qa": 0.07,
-      "export": 0.28,
-      "optimize": 0.32,
-      "qa": 6.37
+      "sculpt": 8.39,
+      "bind": 0.36,
+      "uv": 13.49,
+      "bake": 7.44,
+      "clips": 0.79,
+      "ground_qa": 0.28,
+      "export": 1.27,
+      "optimize": 0.9,
+      "qa": 31.35
     },
-    "total_s": 18.09
+    "total_s": 64.36
   }
 }

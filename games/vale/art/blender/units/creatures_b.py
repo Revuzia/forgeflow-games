@@ -2629,7 +2629,7 @@ def crack_fn(seed: int, amp: float, freq: float):
 class StrayBase(Monster):
     """Shared machinery for the carved-stone Strays: the figure is a union of carved primitives cut into rigid
     chunks along noisy crack surfaces (each chunk its own SDF piece and bone, the pieces fit together), chalk paint
-    with grime at the foot, lichen, drilled eyes and hairline cracks along the future break lines; death crumbles
+    with grime at the foot, lichen, an inked carver's channel, coursed joints and hairline cracks along the future break lines; death crumbles
     the chunks into a heap (absolute per-chunk transforms, gravity, PCA resting poses)."""
     TEX = 1024
     VOX_LOW = 0.01
@@ -2834,7 +2834,7 @@ class StrayBase(Monster):
 class StrayNumeral(StrayBase):
     """A carved numeral that walked off the dial: an inverted V of chalk strokes (the thick stroke left, the thin
     one right, as the carvers cut them) standing on bracketed foot-serifs, a neck block at the apex and a crossbar
-    with flared serif ends riding on top as its head; two drilled holes for eyes. Chipped, lichened, grimy at the
+    with flared serif ends riding on top as its head; a gold-leaf hour notch on its front (CW4: no eye pair). Chipped, lichened, grimy at the
     foot, hairline cracks along the lines it will crumble on. It moves like a stiff stone puppet: a hop-waddle,
     rocking from foot to foot."""
     ID = "stray_numeral"
@@ -3100,7 +3100,7 @@ class StrayNumeral(StrayBase):
 
 class StrayTick(StrayBase):
     """A single tick mark that wandered off the dial: one short chalk stroke with a bracketed serif top and foot,
-    two drilled eyes under the top serif. It pogo-hops on its foot serif."""
+    a gold-leaf hour notch under the top serif (CW4: no eye pair). It pogo-hops on its foot serif."""
     ID = "stray_tick"
     HEIGHT = 1.0
     BODY_TOP = 1.0
@@ -3112,6 +3112,7 @@ class StrayTick(StrayBase):
     TRIS = {"stone": 1500}
     CLIPS = ("idle", "run", "attack1", "death")
     CRACK = 0.5
+    COURSE = 0.62                  # CW4: three courses on the 1 m stroke (0.21 m read as wrapped cord)
     EYE_R = 0.018
     W, D = 0.25, 0.25
 
@@ -3142,7 +3143,7 @@ class StrayTick(StrayBase):
         return []                  # CW4: no drilled eye pair (face read); the hour notch marks its front
 
     def notches(self):
-        return [(np.array([0.0, -self.D / 2 - 0.01, 0.8]), 0.05)]
+        return [(np.array([0.0, -self.D / 2 - 0.01, 0.8]), 0.065)]
 
     def grooves(self):
         # the carver's inline down the stroke, front and back (inked), and across the top serif

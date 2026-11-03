@@ -1,0 +1,73 @@
+{
+ "id": "stray_tick",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method. Sheet: node art/tools/three_snapshot.mjs art/out/units/<id>.glb --unit (before: _harness/_shots/fw_CW4_m_before_<id>.png; after: art/renders/units/<id>.png). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 370|70 (RIFT, 1920x1080, 28.5 m, fog off, the camps forced visible) -> _harness/_reports/fw_CW4_monsters.json (tags fw_CW4_mon_before, fw_CW4_mon_after1, fw_CW4_mon_after2, fw_CW4_mon_after1_t70) and shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. hp = std of display L* minus its 5x5 masked box mean inside the unit's faces (the E1 landmark metric); breakup = p95-p5 of the 0.5 m band (needs >= 0.5 m faces: 0 on small units); dL/dE76 against the floor ring 0.6-2.5 m past the unit's screen box; maxIoU = silhouette IoU (32x32 square-padded screen box) with the most similar other kind.",
+ "refs": {
+  "laneHpMedian": 1.19,
+  "art2StructureHpMedian": 3.83,
+  "art2StructureBreakupMedian": 10.15
+ },
+ "gate": "hp >= the lane's hp (the E1 landmark bar) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no eye pair or face on a stone figure; sensitivity: no tall/pointed hood, no horror mask",
+ "before": {
+  "read": "a pale chalk post with two dark eye dots",
+  "albedoLstar": "p10/50/90 46/75/87",
+  "inGame": {
+   "px": 741,
+   "hp": 3.96,
+   "breakup": 0,
+   "unitLstar": [
+    48,
+    68.6,
+    87.2
+   ],
+   "floorLstar": [
+    12.8,
+    30.1,
+    37.4
+   ],
+   "dLstarP50": 38.5,
+   "unitChroma": 4.4,
+   "floorChroma": 8.5,
+   "dE76": 41.7,
+   "maxIoU": {
+    "with": "stray_numeral",
+    "iou": 0.57
+   }
+  }
+ },
+ "changes": [
+  "eye pair removed; one gold-leaf hour notch under the top serif",
+  "dialstone paint, inked channel front/back and across the top serif, three coursed joints (0.31 m), lit tops"
+ ],
+ "after": {
+  "albedoLstar": "p10/50/90 36/61/77 (r1)",
+  "inGame": {
+   "px": 745,
+   "hp": 5.89,
+   "breakup": 0,
+   "unitLstar": [
+    34.9,
+    56.3,
+    80.8
+   ],
+   "floorLstar": [
+    12.7,
+    29.9,
+    37.4
+   ],
+   "dLstarP50": 26.4,
+   "unitChroma": 5.9,
+   "floorChroma": 8.5,
+   "dE76": 30.7,
+   "maxIoU": {
+    "with": "stray_numeral",
+    "iou": 0.66
+   }
+  },
+  "glb": "1500 tris, 119 KiB"
+ },
+ "horrorFaceRead": "no face",
+ "motion": "unchanged (bounce idle, pogo run, chop attack1, three-chunk death)"
+}

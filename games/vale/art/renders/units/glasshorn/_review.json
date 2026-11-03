@@ -1,0 +1,51 @@
+{
+ "id": "glasshorn",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method. Sheet: node art/tools/three_snapshot.mjs art/out/units/<id>.glb --unit (before: _harness/_shots/fw_CW4_m_before_<id>.png; after: art/renders/units/<id>.png). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 370|70 (RIFT, 1920x1080, 28.5 m, fog off, the camps forced visible) -> _harness/_reports/fw_CW4_monsters.json (tags fw_CW4_mon_before, fw_CW4_mon_after1, fw_CW4_mon_after2, fw_CW4_mon_after1_t70) and shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. hp = std of display L* minus its 5x5 masked box mean inside the unit's faces (the E1 landmark metric); breakup = p95-p5 of the 0.5 m band (needs >= 0.5 m faces: 0 on small units); dL/dE76 against the floor ring 0.6-2.5 m past the unit's screen box; maxIoU = silhouette IoU (32x32 square-padded screen box) with the most similar other kind.",
+ "refs": {
+  "laneHpMedian": 1.19,
+  "art2StructureHpMedian": 3.83,
+  "art2StructureBreakupMedian": 10.15
+ },
+ "gate": "hp >= the lane's hp (the E1 landmark bar) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no eye pair or face on a stone figure; sensitivity: no tall/pointed hood, no horror mask",
+ "before": {
+  "read": "a near-untextured off-white stag (#D9D1C1 hide, faint ticks); white glass antlers on a white body",
+  "albedoLstar": "p10/50/90 1/75/87"
+ },
+ "changes": [
+  "dawn-fawn coat: warm fawn back (#B48D63), dark umber saddle stripe and inked hour-tick bands along the spine, lighter flanks dappled with two rows of cream hour-dots, cream belly/ruff/rump, dark legs and socks, dark muzzle",
+  "dawnglass antlers a clearer dawn blue (#A6CDEB) standing off the warm coat",
+  "icon re-rendered"
+ ],
+ "after": {
+  "albedoLstar": "p10/50/90 1/62/79",
+  "inGame": {
+   "px": 1670,
+   "hp": 2.2,
+   "breakup": 0,
+   "unitLstar": [
+    34.8,
+    62.9,
+    78.4
+   ],
+   "floorLstar": [
+    11.6,
+    32.3,
+    38.3
+   ],
+   "dLstarP50": 30.6,
+   "unitChroma": 18.9,
+   "floorChroma": 7.6,
+   "dE76": 32,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.42
+   }
+  },
+  "glb": "8032 tris, 471 KiB"
+ },
+ "horrorFaceRead": "a natural stag head (dark eyes, muzzle); no horror read",
+ "motion": "unchanged (idle, gallop 3.4 m/s, attack1 antler hook, cast_a1, death)"
+}

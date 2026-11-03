@@ -1,0 +1,38 @@
+{
+ "id": "longshade",
+ "wave": "CW4",
+ "item": "critic:monsters",
+ "date": "2026-11-03",
+ "method": "closing critic:monsters, fighter-review method. Sheet: node art/tools/three_snapshot.mjs art/out/units/<id>.glb --unit (before: _harness/_shots/fw_CW4_m_before_<id>.png; after: art/renders/units/<id>.png). In game: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 370|70 (RIFT, 1920x1080, 28.5 m, fog off, the camps forced visible) -> _harness/_reports/fw_CW4_monsters.json (tags fw_CW4_mon_before, fw_CW4_mon_after1, fw_CW4_mon_after2, fw_CW4_mon_after1_t70) and shots _harness/_shots/value_rift_high_<tag>_mon_<id>.png. hp = std of display L* minus its 5x5 masked box mean inside the unit's faces (the E1 landmark metric); breakup = p95-p5 of the 0.5 m band (needs >= 0.5 m faces: 0 on small units); dL/dE76 against the floor ring 0.6-2.5 m past the unit's screen box; maxIoU = silhouette IoU (32x32 square-padded screen box) with the most similar other kind.",
+ "refs": {
+  "laneHpMedian": 1.19,
+  "art2StructureHpMedian": 3.83,
+  "art2StructureBreakupMedian": 10.15
+ },
+ "gate": "hp >= the lane's hp (the E1 landmark bar) and breakup >= 6 where the faces allow; |dL*| >= 20 against the camp floor; L* p90 <= 86; no eye pair or face on a stone figure; sensitivity: no tall/pointed hood, no horror mask",
+ "checkOnly": true,
+ "ruling": "owner ruling 1 (owner_rulings.md): the ink tears are removed, the chalk plate reads as a sundial with a brass hour-line inlay, lamp eyes kept (lamp eyes on a monster are allowed; the no-face rule is for Wicks)",
+ "verified": "art/blender/units/creatures_b.py:1328 (tears removed, W5a commit cc7dc7f5); sheet _harness/_shots/fw_CW4_m_before_longshade.png shows the plate with two lamp eyes and no tear streaks",
+ "inGame": {
+  "t": 1000,
+  "px": 37940,
+  "hp": 0.65,
+  "breakup": 3.8,
+  "unitLstar": [
+   2.2,
+   4.5,
+   14.7
+  ],
+  "floorLstar": [
+   8.3,
+   16.3,
+   19.5
+  ],
+  "dLstarP50": -11.8,
+  "dE76": 8.6,
+  "note": "from the first fw_CW4_mon_before run at --t 1000 (shot _harness/_shots/value_rift_high_fw_CW4_mon_before_mon_longshade.png; the report key was later overwritten by the --t 370 run of the same tag)"
+ },
+ "findings": [
+  "minor (not in this package's scope): the ink-shade body sits at L* p50 4.5 on a floor of 16.3 and its billows have little face detail (hp 0.65 < lane 1.19): a dark-on-dark read; a value lift on the crest billows would be the next Longshade pass"
+ ]
+}
