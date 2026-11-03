@@ -64,6 +64,10 @@
 //             Gate (closing CW4 done 2): hp >= the lane flagstone's hp in this same metric (refs.laneHpMedian: the lane
 //             at the map's lane spots; the review's 2.9 was another tool's scale, where this metric reads ~1.2) and
 //             breakup >= 6 L* on every gated landmark. refs also carries the Art 2.0 structures' (team 1) hp and breakup
+//   monsters  (closing CW4 critic:monsters; --monsters 1 adds it, --monsters only runs nothing else; --monsterIds a,b)
+//             one live unit of each monster kind at the gameplay camera (28.5 m, fog off): hp / breakup over its faces
+//             (the landmark metric), L* p10/50/90 and mean-Lab chroma against its floor ring (ground 0.6-2.5 m past its
+//             screen box): dLstarP50, dE76; its 32 x 32 silhouette and the IoU between kinds (maxIoU per kind)
 //   --report  the report's file name under _harness/_reports (default value_probe.json)
 //   --vfxcaps the flash test again per VFX lift cap (e.g. off,1.3,1.6: renderer.vfx.liftCap, combat F4; off = effects
 //             lifted like the ground), reported as flash.byCap
@@ -97,6 +101,9 @@ const FOG = opt('fog', '0');
 const FOG_ONLY = FOG === 'only';
 const LMK = opt('landmarks', '0');
 const LMK_ONLY = LMK === 'only';
+/** closing CW4 critic:monsters: the neutral-unit review (--monsters only|1; --monsterIds a,b filters by unit def) */
+const MON = opt('monsters', '0');
+const MON_IDS = opt('monsterIds', '').split(',').filter(Boolean);
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
 const LMK_RE = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
 const LMK_HP = 1.0, LMK_BREAKUP = 6;   // hp bar: the lane's own hp in the same metric (median of the lane spots), never under 1.0
@@ -189,7 +196,7 @@ function install() {
     const ob = m.onBeforeCompile, ck = m.customProgramCacheKey;
     // env E1: the landmark under test (G 1) writes its face orientation into B: the geometric view-space normal in 5 x 5
     // bins (1-25), so the face-detail stats stay inside one flat face (never across a lit top and a shaded side)
-    const faceB = g === 1 && (cls === C.landmark || cls === C.lamp || cls === C.structure)
+    const faceB = g === 1 && (cls === C.landmark || cls === C.lamp || cls === C.structure || cls === C.monster)
       ? `vec3 qn = normalize( cross( dFdx( vViewPosition ), dFdy( vViewPosition ) ) ); float qb = 1.0 + min( 4.0, floor( ( qn.x * 0.5 + 0.5 ) * 5.0 ) ) + 5.0 * min( 4.0, floor( ( qn.y * 0.5 + 0.5 ) * 5.0 ) );`
       : 'float qb = 0.0;';
     const snip = kind === 'ground' ? GROUND_SNIP : kind === 'wall' ? WALL_SNIP : `{ ${faceB} gl_FragColor = vec4( ${cls}.0 / 255.0, ${g}.0 / 255.0, qb / 255.0, 1.0 ); }`;
@@ -221,7 +228,7 @@ function install() {
         return { cls: C.fighter, g };
       }
       // env E1 reference: an Art 2.0 structure under test carries G = 1 (its faces binned like a landmark's)
-      return { cls: k === 'minion' ? C.wick : k === 'monster' ? C.monster : k === 'structure' ? C.structure : C.actor, g: lmkRoot && k === 'structure' && lmkTagged(o) ? 1 : 0 };
+      return { cls: k === 'minion' ? C.wick : k === 'monster' ? C.monster : k === 'structure' ? C.structure : C.actor, g: lmkRoot && (k === 'structure' || k === 'monster') && lmkTagged(o) ? 1 : 0 };
     }
     if (names.includes('vale_crowd')) return { cls: C.wick };
     if (!names.includes('vale_terrain')) return { cls: C.landmark };
@@ -337,8 +344,67 @@ function install() {
     }
     return { mean: n ? s / n : 0, n, centre: [c.x * sx, c.y * sx] };
   };
+  /** CW4 monsters: the unit (M > 0) against its floor (ground classes 1-9 and 17 in a ring 0.6-2.5 m past its
+   *  screen box): display L* medians and mean CIELAB (D65) -> dL, chroma, dE76; and its silhouette as a 32 x 32
+   *  occupancy grid of its square-padded screen box (IoU between units in node) */
+  const labOf = (r, g, bb) => {
+    const R_ = lin8[r], G_ = lin8[g], B_ = lin8[bb];
+    const X = (0.4124 * R_ + 0.3576 * G_ + 0.1805 * B_) / 0.95047, Y = 0.2126 * R_ + 0.7152 * G_ + 0.0722 * B_, Z = (0.0193 * R_ + 0.1192 * G_ + 0.9505 * B_) / 1.08883;
+    const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const monsterStats = (F, K, M, w, h, pxm) => {
+    let x0 = w, x1 = -1, y0 = h, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (M[y * w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return { monsterError: 'no unit pixels' };
+    const acc = () => ({ n: 0, L: [], a: 0, b: 0 });
+    const U = acc(), G = acc();
+    const pad0 = pxm * 0.6, pad1 = pxm * 2.5;
+    const groundCls = (c) => (c >= 1 && c <= 9) || c === 17;
+    for (let y = Math.max(0, Math.floor(y0 - pad1)); y < Math.min(h, y1 + pad1); y++) for (let x = Math.max(0, Math.floor(x0 - pad1)); x < Math.min(w, x1 + pad1); x++) {
+      const i = y * w + x, j = i * 4;
+      let tgt = null;
+      if (M[i]) tgt = U;
+      else if (groundCls(K[j])) {
+        const dx = Math.max(x0 - x, 0, x - x1), dy = Math.max(y0 - y, 0, y - y1), d = Math.hypot(dx, dy);
+        if (d >= pad0 && d <= pad1) tgt = G;
+      }
+      if (!tgt) continue;
+      const [L, a, bb] = labOf(F[j], F[j + 1], F[j + 2]);
+      tgt.n++; tgt.L.push(L); tgt.a += a; tgt.b += bb;
+    }
+    const sum = (A) => { const s = Float32Array.from(A.L).sort(); const n = s.length; let m = 0; for (const v of s) m += v; return { n, p50: n ? +s[n >> 1].toFixed(1) : null, p10: n ? +s[Math.floor(n * 0.1)].toFixed(1) : null, p90: n ? +s[Math.floor(n * 0.9)].toFixed(1) : null, L: n ? m / n : 0, a: n ? A.a / n : 0, b: n ? A.b / n : 0 }; };
+    const u = sum(U), g = sum(G);
+    const chroma = (e) => +Math.hypot(e.a, e.b).toFixed(1);
+    // silhouette (the frame is bottom-up: row 0 = screen bottom; the grid is top-down)
+    const side = Math.max(x1 - x0, y1 - y0) + 1, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, NG = 32;
+    const sil = new Array(NG * NG).fill(0);
+    for (let gy = 0; gy < NG; gy++) for (let gx = 0; gx < NG; gx++) {
+      let on = 0, n = 0;
+      for (let sy = 0; sy < 2; sy++) for (let sx2 = 0; sx2 < 2; sx2++) {
+        const x = Math.round(cx - side / 2 + ((gx + (sx2 + 0.5) / 2) / NG) * side), y = Math.round(cy + side / 2 - ((gy + (sy + 0.5) / 2) / NG) * side);
+        n++; if (x >= 0 && y >= 0 && x < w && y < h && M[y * w + x]) on++;
+      }
+      sil[gy * NG + gx] = on * 2 >= n ? 1 : 0;
+    }
+    return {
+      unitPx: u.n, floorPx: g.n, unitLstar: [u.p10, u.p50, u.p90], floorLstar: [g.p10, g.p50, g.p90], dLstarP50: u.p50 != null && g.p50 != null ? +(u.p50 - g.p50).toFixed(1) : null,
+      unitChroma: chroma(u), floorChroma: chroma(g), dE76: +Math.hypot(u.L - g.L, u.a - g.a, u.b - g.b).toFixed(1),
+      boxPx: [x1 - x0 + 1, y1 - y0 + 1], sil: sil.join(''),
+    };
+  };
   const api = {
     C,
+    /** CW4 monsters: every live monster actor (def, position) */
+    monsterList: () => {
+      // the camps sit outside the bench seat's vision: every unit drawn (the review looks at the art, not the fog)
+      const ev = R.entityVisible.bind(R);
+      R.entityVisible = (e) => e.kind === 'monster' || ev(e);
+      settle(4);
+      const out = [];
+      for (const [id, a] of R.actors) if (a.kind === 'monster' && a.view?.alive !== false) out.push({ id: `${a.def}_${id}`, actorId: id, def: a.def, at: [a.x, a.y], inScene: !!a.root.parent, dev: !!a.dev });
+      return out;
+    },
     spots: () => {
       const m = b.catalog.maps.find((x) => x.id === b.host.setup.map);
       const [W, H] = m.size;
@@ -428,9 +494,10 @@ function install() {
     landmarkAt: (l, off) => {
       // the instance: the terrain object standing at its `at` whose subtree holds a node named after the GLB
       let root = null, bd = 1e9;
-      R.scene.traverse((o) => {
-        if (l.structure) {                                   // the reference: the structure actor nearest `at`
-          if (!o.name.startsWith('actor_structure')) return;
+      if (l.actorId != null) { const a = R.actors.get(l.actorId); if (a?.root.parent) { root = a.root; bd = 0; l.at = [a.x, a.y]; } }
+      if (l.actorId == null) R.scene.traverse((o) => {
+        if (l.structure || l.monster) {                      // the reference / CW4 monsters: the actor nearest `at`
+          if (!o.name.startsWith(l.monster ? 'actor_monster' : 'actor_structure')) return;
           const p = new Vec3(); o.getWorldPosition(p);
           const d = Math.hypot(p.x - l.at[0], p.z - l.at[1]);
           if (d < bd) { bd = d; root = o; }
@@ -442,7 +509,7 @@ function install() {
         const d = Math.hypot(p.x - l.at[0], p.z - l.at[1]);
         if (d < bd) { bd = d; root = top; }
       });
-      if (!l.laneOnly && (!root || bd > (l.structure ? 6.0 : 1.0))) return { error: `instance not found (${bd})` };
+      if (!l.laneOnly && (!root || bd > (l.structure ? 6.0 : l.monster ? 3.0 : 1.0))) return { error: `instance not found (${bd})` };
       b.focus(l.at[0] + off[0], l.at[1] + off[1]); b.zoom(28.5);
       R.vfx.clear(); fx.reset();
       settle(12);
@@ -459,7 +526,7 @@ function install() {
       for (let i = 0; i < N; i++) {
         const j = i * 4;
         Ls[i] = lstarOf(F[j], F[j + 1], F[j + 2]);
-        if ((K[j] === C.landmark || K[j] === C.lamp || K[j] === C.structure) && K[j + 1] === 1) M[i] = Math.max(1, K[j + 2]);
+        if ((K[j] === C.landmark || K[j] === C.lamp || K[j] === C.structure || K[j] === C.monster) && K[j + 1] === 1) M[i] = Math.max(1, K[j + 2]);
         if (K[j] === C.lane) LN[i] = 1;
       }
       /** eroded: the 4-neighbours share the face id, r times */
@@ -492,7 +559,9 @@ function install() {
       const er05 = erode(Me, Math.max(0, Math.round(r05 / 2) - 2));   // the band only where a 0.25 m box fits inside the face
       for (let i = 0; i < N; i++) if (Me[i]) { sm.push(s05[i]); raw.push(Ls[i]); if (er05[i]) band.push(s05[i] - s25[i]); }
       const r1 = (v) => (v == null ? null : +v.toFixed(1));
+      const mon = l.monster ? monsterStats(F, K, M, w, h, pxm) : null;
       return {
+        ...(mon ?? {}),
         id: l.id, glb: l.glb, value: l.value, px: own.n, bandPx: band.length, pxPerM: +pxm.toFixed(1), hp: own.hp, laneHp: lane.hp, lanePx: lane.n,
         breakup: r1(q(band, 0.95) - q(band, 0.05)), range05: r1(q(sm, 0.95) - q(sm, 0.05)), lstarP5: r1(q(raw, 0.05)), lstarP50: r1(q(raw, 0.5)), lstarP95: r1(q(raw, 0.95)),
       };
@@ -743,7 +812,7 @@ const report = existsSync(REPORT) ? JSON.parse(readFileSync(REPORT, 'utf8')) : {
 report.runs[TAG] ??= {};
 for (const map of MAPS) for (const tier of TIERS) {
   const [w, h] = RES[tier] ?? RES.high;
-  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${map}&q=${tier}&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1${YOU ? `&you=${YOU}` : ''}`, { wait: false, hmr: false, width: w, height: h });
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=${map}&q=${tier}&t=${T}&seed=${SEED}&dev=1&hud=0&manual=1${YOU ? `&you=${YOU}` : ''}${MON !== '0' ? '&crowd=0' : ''}`, { wait: false, hmr: false, width: w, height: h });
   try {
     await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 180000 });
     const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
@@ -794,6 +863,49 @@ for (const map of MAPS) for (const tier of TIERS) {
         writeFileSync(REPORT, JSON.stringify(report, null, 1));
         continue;
       }
+    }
+    if (MON === '1' || MON === 'only') {
+      // CW4 critic:monsters: each live monster at the gameplay camera (28.5 m, fog off, VFX/UI hidden): its faces'
+      // hp and 0.5 m breakup (the landmark gate's metric), its L* / chroma against the camp floor, and its silhouette;
+      // the references: the lane hp and the Art 2.0 structures (team 1) in the same metric
+      const monsters = {};
+      const refs = { lane: [], structures: {} };
+      for (const [k, at] of Object.entries(spots)) {
+        if (!/^lane/.test(k)) continue;
+        const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: `ref_${k}`, glb: '__none__', at, laneOnly: true });
+        if (r.laneHp != null && r.lanePx > 20000) refs.lane.push(r.laneHp);
+      }
+      for (const st of await V((v) => { const bb = window.__VALE_BENCH__, m = bb.catalog.maps.find((x) => x.id === bb.host.setup.map); return (m.structures ?? []).filter((s) => s.team === 1).map((s) => ({ id: s.id ?? s.def, at: s.at })); })) {
+        const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: st.id, glb: '__none__', at: st.at, structure: true });
+        if (!r.error && r.px > 5000) refs.structures[st.id] = { px: r.px, hp: r.hp, breakup: r.breakup };
+      }
+      const med = (a) => { const x = [...a].filter((q) => q != null).sort((p, q) => p - q), n = x.length; return n ? +(n % 2 ? x[(n - 1) / 2] : (x[n / 2 - 1] + x[n / 2]) / 2).toFixed(2) : null; };
+      refs.laneHpMedian = med(refs.lane);
+      refs.structureHpMedian = med(Object.values(refs.structures).map((e) => e.hp));
+      refs.structureBreakupMedian = med(Object.values(refs.structures).map((e) => e.breakup));
+      console.log(`  references: lane hp median ${refs.laneHpMedian}; Art 2.0 structures hp median ${refs.structureHpMedian}, breakup median ${refs.structureBreakupMedian}`);
+      const seen = new Set();
+      for (const mo of await V((v) => v.monsterList())) {
+        if (seen.has(mo.def) || (MON_IDS.length && !MON_IDS.includes(mo.def))) continue;   // one of each kind
+        const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: mo.id, glb: mo.def, at: mo.at, monster: true, actorId: mo.actorId });
+        if (r.error || r.monsterError) { console.log(`  monster ${mo.def}: ${r.error ?? r.monsterError}`); continue; }
+        seen.add(mo.def);
+        if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_mon_${mo.def}`);
+        monsters[mo.def] = { at: mo.at.map((x) => +x.toFixed(1)), ...r };
+        console.log(`  monster ${mo.def.padEnd(16)} ${String(r.px).padStart(6)} px  hp ${r.hp}  breakup ${r.breakup}  L* p10/50/90 ${r.unitLstar.join('/')} floor ${r.floorLstar.join('/')} dL ${r.dLstarP50}  chroma ${r.unitChroma} vs ${r.floorChroma}  dE ${r.dE76}`);
+      }
+      // silhouette IoU between kinds (square-padded screen boxes, 32 x 32)
+      const ids = Object.keys(monsters), iou = {};
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const A = monsters[ids[i]].sil, Bs = monsters[ids[j]].sil; let n = 0, u = 0;
+        for (let q = 0; q < A.length; q++) { const x = A[q] === '1', y = Bs[q] === '1'; if (x && y) n++; if (x || y) u++; }
+        iou[`${ids[i]}|${ids[j]}`] = u ? +(n / u).toFixed(2) : null;
+      }
+      for (const id of ids) { const e = Object.entries(iou).filter(([k]) => k.split('|').includes(id)).sort((a, b) => b[1] - a[1])[0]; monsters[id].maxIoU = e ? { with: e[0].split('|').find((x) => x !== id), iou: e[1] } : null; }
+      report.runs[TAG][`${map}_${tier}`] = { ...(report.runs[TAG][`${map}_${tier}`] ?? {}), tier, viewport: [w, h], t: T, seed: SEED, monsters, monsterRefs: refs, silhouetteIoU: iou };
+      report.generated = new Date().toISOString();
+      writeFileSync(REPORT, JSON.stringify(report, null, 1));
+      if (MON === 'only') continue;
     }
     let fog = null;
     if (FOG === '1' || FOG_ONLY) {
