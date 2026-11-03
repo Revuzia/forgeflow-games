@@ -54,14 +54,11 @@ const LANE_OBJECTIVE_REACH = 40;
 const JUNGLE_INVADE_COST = 25;
 /** a jungler leaves its clear for an objective only from this time (s): its first clears come first */
 const JUNGLE_OBJECTIVE_FROM = 360;
-/** a grovehunter ganks from this time (s) — its first clear comes first (CW3 CL-1) */
-const JUNGLE_GANK_FROM = 180;
-/** a laner leaves its shoved road for a roam at most once in this many seconds during the laning phase (CW3 CL-1) */
-const LANE_ROAM_EVERY = 75;
+/** a grovehunter ganks from this time (s) — its first clears come first (CW3 CL-1: ganks from 3:00 doubled the early
+ *  takedowns but cost the roads ~2 points of last-hit share, the G1 bar's whole margin) */
+const JUNGLE_GANK_FROM = 360;
 /** an all-in keeps chasing the fighter it was started on for at most this long (s) once its combo is spent (CW3 CL-1) */
 const ALLIN_COMMIT = 7;
-const TRADE_WIN_K = 0;
-const LANE_ROAM_OFF = true;
 /** a roam is given up after this long without its kill (s) */
 const ROAM_MAX = 25;
 /** Wicks within this distance of an enemy fighter turn on whoever hits that fighter (call for help) */
@@ -83,10 +80,9 @@ export class Bot extends BotBase implements BotController {
   private recallTriedAt = -1e9;
   private campTarget = -1;
   private tradeRestUntil = 0;
-  /** the enemy fighter I lane against (last noticed in my lane), when I last saw it start a recall, and my last roam */
+  /** the enemy fighter I lane against (last noticed in my lane), and when I last saw it start a recall */
   private laneFoe = -1;
   private foeRecallAt = -1e9;
-  private lastRoamAt = -1e9;
   /** since when that opponent has been my lane foe, and when it last swung at me or cast (castSeen's estimate) */
   private foeSince = 0;
   private foeHitAt = -1e9;
@@ -267,20 +263,6 @@ export class Bot extends BotBase implements BotController {
     return false;
   }
 
-  /** a laner may roam: level 3 (a lampglass 2), its lane opponent dead or seen recalling, its own wave on the road
-   *  and the enemy's thinned, and no roam in the last LANE_ROAM_EVERY s (CW3 CL-1); a lampglass roams from a shoved
-   *  road whatever its opponents do — its carry keeps the road (and its Wicks' light) alone meanwhile */
-  private laneRoamWindow(): boolean {
-    const e = this.e, li = this.lane;
-    if (LANE_ROAM_OFF || li < 0 || e.level < (this.support ? 2 : 3) || this.now - this.lastRoamAt < LANE_ROAM_EVERY) return false;
-    const pushed = this.perc.ownN[li] >= 2 && this.perc.enemyN[li] <= 2;
-    if (this.support && pushed && this.hpF > 0.6) return true;
-    const foe = this.laneFoe >= 0 ? this.w.entity(this.laneFoe) : null;
-    if (!foe || (foe.alive && this.now - this.foeRecallAt > 9)) return false;
-    if (foe.alive && this.isNoticed(foe) && this.dist2(foe, e.x, e.y) < 30 * 30) return false;
-    return pushed;
-  }
-
   /** my lane opponent is dead, or was seen starting a recall in the last 9 s and is not back in sight */
   private foeAway(): boolean {
     if (this.lane < 0 || this.jungle || this.support || this.laneFoe < 0) return false;
@@ -448,16 +430,12 @@ export class Bot extends BotBase implements BotController {
       const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
       // hitting a fighter that stands in its own wave turns that wave on me: a trade there costs more
       const wavePenalty = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
-      // (CW3 CL-1: laning windows — a level on the opponent (the 2, 3 and 6 spikes), my damage ready against its health,
-      // and the opponent turning to a Wick for a last hit make a trade, not only a health lead)
-      const lvl = Math.max(-2, Math.min(2, e.level - le.level)) * 0.1;
-      const ready = Math.min(0.2, (this.burstOn(le) / Math.max(1, le.hp + le.shield)) * 0.25);
-      const lt = le.atkTarget >= 0 ? this.w.entity(le.atkTarget) : null;
-      const busy = lt && lt.kind === 'minion' ? 0.06 : 0;
+      // (CW3 CL-1 measured trade windows — a level on the opponent, my burst ready, the opponent turning to a Wick — on
+      // 40 games: +1 takedown by 10:00 for −2 to −3 points of the roads' last-hit share; they stay out)
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
       const passive = le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
-      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + (lvl + ready + busy) * TRADE_WIN_K + passive - wavePenalty;
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
     }
     // all-in
@@ -478,8 +456,9 @@ export class Bot extends BotBase implements BotController {
       for (const a of this.perc.allyFighters) {
         if (a === e || !a.alive || !a.player) continue;
         const al = b ? b.laneOf(a.player.player) : null;
-        // (my lane partner makes it two on one only when the road's power is ours: a dead-even 2v2 trades carries)
-        if (al && !al.jungle && al.lane === this.lane && this.adv < 0.56) continue;
+        // (my lane partner is the lane, not the gank: a duo road turning every 2v2 into an all-in measured +1 takedown by
+        // 10:00 for −1.5 points of last-hit share)
+        if (al && !al.jungle && al.lane === this.lane) continue;
         if (this.dist2(a, gk.x, gk.y) < 9 * 9 || (b && b.focus.get(a.player.player) === gk.id)) { mate = true; break; }
       }
       if (mate) { if (!this.killTarget || this.killTarget === gk) { this.killTarget = gk; consider('allin', 0.76); } }
@@ -544,8 +523,8 @@ export class Bot extends BotBase implements BotController {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }
       // (a jungler ganks between its camps from JUNGLE_GANK_FROM: not with a camp up right here, and only a road in reach;
-      // CW3 CL-1: a laner in the laning phase roams once in a while from a shoved road while its opponent is dead or
-      // recalling — the rest of the phase it holds its road)
+      // a laner holds its road through the laning phase — CW3 CL-1 measured laners' roams from a shoved road: the road
+      // they left lost more Wicks than the roams won takedowns)
       const g = b.gank;
       if (g && g.alive && hpF > 0.6) {
         const d2 = this.dist2(e, g.x, g.y);
@@ -554,7 +533,7 @@ export class Bot extends BotBase implements BotController {
           if (now >= JUNGLE_GANK_FROM && e.level >= 3 && (roaming || !this.campAtHand(10)) && d2 < sq(roaming ? 70 : 55)) consider('roam', 0.53);
         } else if (!lp) {
           if ((this.prof.style === 'burst' || this.prof.style === 'diver') && d2 < sq(50)) consider('roam', 0.44);
-        } else if (b.gankLane !== this.lane && d2 < sq(roaming ? 70 : 60) && (roaming || this.laneRoamWindow())) consider('roam', 0.5);
+        }
       }
     }
     // Fray hunting
@@ -577,7 +556,6 @@ export class Bot extends BotBase implements BotController {
       if (now - this.modeSince < MIN_MODE_TIME && bestS < 0.8) return;
       if (this.mode === 'allin') this.allinTarget = -1;
       if (best === 'allin' && this.killTarget) this.allinTarget = this.killTarget.id;
-      if (best === 'roam') this.lastRoamAt = now;
       this.mode = best;
       this.modeSince = now;
       this.recallTriedAt = -1e9;
