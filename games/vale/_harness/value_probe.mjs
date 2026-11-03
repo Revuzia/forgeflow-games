@@ -772,7 +772,7 @@ for (const map of MAPS) for (const tier of TIERS) {
         const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: st.id, glb: '__none__', at: st.at, structure: true });
         if (!r.error && r.px > 5000) refs.structures[st.id] = { px: r.px, hp: r.hp, breakup: r.breakup };
       }
-      const med = (a) => { const x = [...a].sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)] : null; };
+      const med = (a) => { const x = [...a].sort((p, q) => p - q), n = x.length; return n ? +(n % 2 ? x[(n - 1) / 2] : (x[n / 2 - 1] + x[n / 2]) / 2).toFixed(2) : null; };
       refs.laneHpMedian = med(refs.lane);
       refs.structureHpMedian = med(Object.values(refs.structures).map((e) => e.hp));
       refs.structureBreakupMedian = med(Object.values(refs.structures).map((e) => e.breakup));

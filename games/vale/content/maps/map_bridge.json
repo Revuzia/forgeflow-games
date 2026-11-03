@@ -544,7 +544,8 @@
      "at": [5.0, 8.5],
      "size": [3.0, 2.5],
      "height": 3.5,
-     "note": "Aubade shop kiosk on the gorge lip north of the shop circle: the spire-roofed variant (stepped slate courses, one lamp off the front-west post)"
+     "note": "Aubade shop kiosk on the gorge lip north of the shop circle: the spire-roofed variant (stepped slate courses, one lamp off the front-west post)",
+     "value": 1.5
     },
     {
      "id": "lampwright_stall_s", "model": "assets/maps/landmarks/lampwright_stall_dome.glb",
@@ -552,7 +553,8 @@
      "at": [151.0, 8.5],
      "size": [3.0, 2.5],
      "height": 3.5,
-     "note": "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)"
+     "note": "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)",
+     "value": 1.5
     },
     {
      "id": "skirt_bridge_n1", "model": "assets/maps/landmarks/skirt_bridge.glb",
