@@ -55,6 +55,9 @@ Plants (--plant, applied to the CANDIDATE page after the match is loaded, never 
   district-split       20 extra 1-triangle meshes tagged with the first district id                         -> district-calls FAILS
   look-flood           (R3) W.map.hasCollidersNear builds the r-list and reads all of it (same answers, no early exit) -> collider-load FAILS (look reads)
   look-true            (R3) W.map.hasCollidersNear always answers true                                         -> collider-load FAILS (wrong answers)
+  house-dup            (W9) every furnished house's colliders added again as live runtime colliders (addDynamicCollider) -> collider-load-frame FAILS
+W9 R1A 1b: collider-load-frame is judged LIKE FOR LIKE - the candidate's 600-frame query stream replayed against both builds (see REPLAY_JS); the
+live per-build 'returned per frame' (bots differ between builds) is printed beside it as INFO.
 R3 (gates): each band is evaluated with the module constants its file declares (bots.js WALL_BAND_UP / WALL_REUSE_DY / NAV_STEP_UP, player.js STEP_UP), an
 infinite band edge is issued as such (wallCols' -Infinity), player.js supportA / supportAt are followed into supportBand (the r2-movers query), and the
 look measure counts the reads of the REAL hasCollidersNear (a c.dead read tap) instead of a replica's, a wrong answer failing the row.
@@ -80,6 +83,8 @@ RATIO_MAX = 1.25            # the same tolerance perf_district gives triangles: 
 QC_CALLS_MAX = 150          # framecheck's queryColliders calls per match frame
 DISTRICT_CALLS_MAX = 16     # plan section 3 WAVE 8, lane 8B: "batch per material per district (12-16 calls)"
 PLANT_ROWS = {"query-flood": {"collider-load", "collider-load-frame"}, "district-split": {"district-calls"},
+              # (W9 R1A 1b) the like-for-like row's real-density control: every furnished house's colliders added again (W.map.addDynamicCollider)
+              "house-dup": {"collider-load-frame"},
               # (R3) the look measure's own controls: hasCollidersNear builds and scans the whole r-list (same answers, the list's cost), or answers true
               "look-flood": {"collider-load"}, "look-true": {"collider-load"}}
 # (R3) under a plant the collider-load row is judged on the queries that plant breaks ONLY: the steer query is over the bar on the R3 head (game work,
@@ -91,7 +96,12 @@ WRAP_JS = r"""(plant) => {
   const W = window.__LC__.W, M = W.map;
   if (M.__hl) return 'already';
   const q = M.queryColliders;
-  const st = M.__hl = { on: false, calls: 0, ret: 0, b: {} };
+  const st = M.__hl = { on: false, calls: 0, ret: 0, b: {}, rec: null };
+  // (W9 R1A 1b) house-dup: a REAL density regression (no wrapper trick): every furnished house's colliders are added again as live runtime colliders
+  // (W.map.addDynamicCollider, the C3 API) - every query near a house returns twice its share -> collider-load-frame (the like-for-like replay) FAILS
+  if (plant === 'house-dup' && M.addDynamicCollider) { let n = 0; for (const H of (M.houses || [])) { if (!H || !H.cols) continue;
+    for (let i = H.cols[0], e = H.cols[0] + H.cols[2]; i < e; i++) { const c = M.colliders[i]; if (c && !c.dead && c.kind === 'box') { M.addDynamicCollider(c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ); n++; } } }
+    st.planted = n; }
   const dummies = [];
   if (plant === 'query-flood') for (let i = 0; i < 64; i++) dummies.push({ kind: 'box', minX: 9e5 + i, maxX: 9e5 + i + 0.1, minY: -9e5, maxY: -9e5 + 0.1, minZ: 9e5, maxZ: 9e5 + 0.1, dir: -1, prop: null, idx: -1, hp: 0, dead: true, _qs: 0 });
   // (R3) look plants: W.map.hasCollidersNear broken the two ways the look measure must see - it floods (builds the r-list and reads all of it, no
@@ -105,6 +115,7 @@ WRAP_JS = r"""(plant) => {
     if (st.on) {
       const n = res ? res.length : 0;
       st.calls++; st.ret += n;
+      if (st.rec) st.rec.push(+x.toFixed(3), +z.toFixed(3), +r.toFixed(4), arguments.length > 5 && arguments[4] !== undefined ? +(+arguments[4]).toFixed(3) : null, arguments.length > 5 && arguments[5] !== undefined ? +(+arguments[5]).toFixed(3) : null);
       const k = r < 1 ? 'r<1' : r < 2 ? 'r1-2' : r < 8 ? 'r2-8' : r < 20 ? 'r8-20' : 'r20+';
       const e = st.b[k] || (st.b[k] = { calls: 0, ret: 0, max: 0 });
       e.calls++; e.ret += n; if (n > e.max) e.max = n;
@@ -112,6 +123,24 @@ WRAP_JS = r"""(plant) => {
     return res;
   };
   return 'ok';
+}"""
+
+# (W9 R1A 1b) LIKE FOR LIKE: the match's queries differ between builds because the bots do (where 50 bots stand after 600 frames is a coin toss per build:
+# ashgrid seed 7 had 2-9 of 50 indoors on the baseline, 10-13 on the W9 head - x1.75 'returned per frame' with the battery's fixed points at x1.00). The row
+# is judged on ONE query stream - the candidate's own 600-frame stream, every queryColliders call (x, z, r, band) recorded through the wrapper - replayed
+# against BOTH builds' maps after their matches (the same calls, the same frames): returned per frame = what the houses hand back to the game's real per-frame
+# query load, the bots' positions held equal. The wrapped queryColliders answers the replay (a plant in the wrapper counts). The live per-build numbers stay
+# printed (INFO) and calls per frame stays judged on the candidate's own match.
+REPLAY_JS = r"""(rec) => {
+  const M = window.__LC__.W.map, st = M.__hl, keep = st.rec;
+  st.rec = null; st.on = true; st.calls = 0; st.ret = 0; st.b = {};
+  for (let i = 0; i + 4 < rec.length; i += 5) {
+    const out = [];
+    if (rec[i + 3] === null) M.queryColliders(rec[i], rec[i + 1], rec[i + 2], out);
+    else M.queryColliders(rec[i], rec[i + 1], rec[i + 2], out, rec[i + 3], rec[i + 4]);
+  }
+  st.on = false; st.rec = keep;
+  return { calls: st.calls, ret: st.ret, buckets: st.b };
 }"""
 
 BATTERY_JS = r"""([pts, Q]) => {
@@ -440,7 +469,7 @@ def _pre_note(pre):
     return (" with `%s`" % " ".join(pre.split())) if pre else ""
 
 
-def measure(args, label, map_id, rev, plant, Q, pts=None):
+def measure(args, label, map_id, rev, plant, Q, pts=None, stream=None):
     a = copy.copy(args)
     a.rev = rev
     a.disk = True
@@ -456,9 +485,19 @@ def measure(args, label, map_id, rev, plant, Q, pts=None):
         res["wrap"] = s.js(WRAP_JS, plant)
         res["battery"] = s.js(BATTERY_JS, [pts, Q])
         res["draws"] = s.js(DRAWS_JS, plant)
-        s.js("() => { const st = window.__LC__.W.map.__hl; st.on = true; st.calls = 0; st.ret = 0; st.b = {}; }")
+        s.js("() => { const st = window.__LC__.W.map.__hl; st.on = true; st.calls = 0; st.ret = 0; st.b = {}; st.rec = []; }")
         s.step_frames(FRAMES, 1 / 60, render=False)
         res["match"] = s.js("(n) => { const st = window.__LC__.W.map.__hl; st.on = false; return { frames: n, calls: st.calls, ret: st.ret, callsPerFrame: +(st.calls / n).toFixed(1), retPerFrame: +(st.ret / n).toFixed(1), buckets: st.b, t: +window.__LC__.W.t.toFixed(1), alive: window.__LC__.W.actors.filter((x) => x.alive !== false && !x.dead).length }; }", FRAMES)
+        if stream is None:      # the candidate: its own stream is the one both builds answer
+            stream = s.js("() => { const st = window.__LC__.W.map.__hl, r = st.rec; st.rec = null; return r; }")
+            res["stream"] = stream
+        else:
+            s.js("() => { window.__LC__.W.map.__hl.rec = null; return 1; }")
+        rp = s.js(REPLAY_JS, stream)
+        rp["frames"] = FRAMES
+        rp["retPerFrame"] = round(rp["ret"] / FRAMES, 1)
+        res["replay"] = rp
+        res["planted"] = s.js("() => window.__LC__.W.map.__hl.planted || 0")
         d = s.diagnostics()
         res["problems"] = C.diag_problems(d, rig=False)
         res["pageErrors"] = d["pageErrors"][:3]
@@ -493,7 +532,11 @@ def main_fn(v, args):
     for m in maps:
         cand = measure(args, clabel, m, crev, plant, QC)
         pts = cand["battery"].pop("pts")
-        base = measure(args, "baseline %s" % bsha[:8], m, bsha, None, QB, pts)
+        stream = cand.pop("stream")
+        base = measure(args, "baseline %s" % bsha[:8], m, bsha, None, QB, pts, stream)
+        print("  [%s] like-for-like replay of the candidate's %d calls: candidate %s returned/frame, baseline %s (live: %s vs %s)%s" % (
+            m, cand["replay"]["calls"], cand["replay"]["retPerFrame"], base["replay"]["retPerFrame"], cand["match"]["retPerFrame"], base["match"]["retPerFrame"],
+            ("; planted %d colliders" % cand["planted"]) if cand.get("planted") else ""), flush=True)
         v.data[m] = {"candidate": cand, "baseline": base}
         cb, bb = cand["battery"], base["battery"]
         if not cb["points"]:
@@ -529,11 +572,16 @@ def main_fn(v, args):
                 chk("collider-load [%s]" % m, ok, {"overBar": over, "judgedQueries": list(judged), "points": cb["points"], "colliders": [cb["colliders"], bb["colliders"]], "notes": cb["notes"], "byQuery": rows},
                     expect="look (bots' look-around) and steer mean and p95, move and support mean: colliders <= x%.2f the baseline (%s, its own call sites) at the same %d footprint centres" % (RATIO_MAX, bsha[:8], cb["points"]))
         cm, bm = cand["match"], base["match"]
-        rr = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
-        chk("collider-load-frame [%s]" % m, rr <= RATIO_MAX and cm["callsPerFrame"] <= QC_CALLS_MAX,
-            {"retPerFrame": cm["retPerFrame"], "baseRetPerFrame": bm["retPerFrame"], "ratio": round(rr, 3), "callsPerFrame": cm["callsPerFrame"], "baseCallsPerFrame": bm["callsPerFrame"],
-             "buckets": cm["buckets"], "baseBuckets": bm["buckets"], "alive": [cm["alive"], bm["alive"]]},
-            expect="colliders returned per frame <= x%.2f the baseline, calls per frame <= %d (%d stepped frames after landing)" % (RATIO_MAX, QC_CALLS_MAX, FRAMES))
+        cr, br = cand["replay"], base["replay"]
+        rr = cr["retPerFrame"] / br["retPerFrame"] if br["retPerFrame"] else 99.0
+        rl = cm["retPerFrame"] / bm["retPerFrame"] if bm["retPerFrame"] else 99.0
+        chk("collider-load-frame [%s]" % m, rr <= RATIO_MAX and cm["callsPerFrame"] <= QC_CALLS_MAX and cr["calls"] == br["calls"] == cm["calls"],
+            {"retPerFrame": cr["retPerFrame"], "baseRetPerFrame": br["retPerFrame"], "ratio": round(rr, 3), "replayedCalls": [cr["calls"], br["calls"], cm["calls"]],
+             "callsPerFrame": cm["callsPerFrame"], "baseCallsPerFrame": bm["callsPerFrame"], "planted": cand.get("planted", 0),
+             "liveRetPerFrame": [cm["retPerFrame"], bm["retPerFrame"]], "liveRatioInfo": round(rl, 3), "alive": [cm["alive"], bm["alive"]],
+             "buckets": cr["buckets"], "baseBuckets": br["buckets"], "liveBuckets": cm["buckets"], "liveBaseBuckets": bm["buckets"]},
+            expect="colliders returned per frame <= x%.2f the baseline on the SAME query stream (the candidate's %d-frame match, every call replayed against both builds' maps), "
+                   "calls per frame <= %d in the candidate's own match" % (RATIO_MAX, FRAMES, QC_CALLS_MAX))
         cd, bd = cand["draws"], base["draws"]
         if not cd["districts"]:
             v.cnj("district-calls [%s]" % m, "no district mesh found under the map group")

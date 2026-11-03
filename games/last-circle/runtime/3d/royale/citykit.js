@@ -350,12 +350,14 @@ const BUILDING_PALETTES = { suburban: 1, commercial: 1 };      // the palettes t
 // pure part (no THREE)
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 
-/** The game's collider constructor, copied from maps.js:228 field for field and in the same ORDER, so every kit collider shares the ONE hidden class
- *  every reader site (queryColliders, bot nav, bullets, mover) is specialised on. The probe asserts the key order against the live game's colliders. */
+/** The game's collider constructor, copied from maps.js mkCollider field for field and in the same ORDER, so every kit collider shares the ONE hidden class
+ *  every reader site (queryColliders, bot nav, bullets, mover) is specialised on. The probe asserts the key order against the live game's colliders.
+ *  (Wave 9, LC-91, contract C1) door -1 / dslab 0: maps.js colliders gained the door fields (a kit box is never a door leaf); the selftest pins this literal
+ *  against maps.js's, so the copy cannot drift. */
 export function mkCollider(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp) {
-  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 };
+  return { kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0, door: -1, dslab: 0 };
 }
-export const COLLIDER_KEYS = Object.freeze(["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs"]);
+export const COLLIDER_KEYS = Object.freeze(["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs", "door", "dslab"]);
 
 export function typeIds() { return Object.keys(COLLIDER_BOXES); }
 export function hasType(type) { return Object.prototype.hasOwnProperty.call(COLLIDER_BOXES, type); }
