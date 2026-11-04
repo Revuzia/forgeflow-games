@@ -173,6 +173,7 @@ This skin re-mixes the top band: the walnut is 6% of it, the lit panel paper is 
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The great hound shadow is a VFX layer thrown on the splash backdrop; the lantern is the brightest point in the frame and sits clear of the UI side.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/tunlan.py, the CW5 card pipeline): each skin its own staging. base Hound Shadow's held hand-hound with the lantern as the key and the great hound shadow thrown across the dusk behind her (a camera-invisible hound cut-out, one lantern-side projector, a shadow-catcher wall, light-linked so it is the only shadow on it); Lamplit Lamp Flare from below the brim with a warm practical under the walnut shade and a violet grade; Noon Fair Shadow Play's raised beast-hands on the fair plate.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the hat's brim from below the front, the lantern and the mask. Icon (128 square): the lantern under the brim over the mask's eyes.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

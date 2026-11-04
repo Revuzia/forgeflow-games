@@ -97,6 +97,49 @@ ARMOUR_CONFORM = False
 AO_INTO_BASE = 0.0           # (POLISH: no occlusion in the painted colour; the ORM occlusion is rewritten, _install_bake)
 # ART 2.0 skins re-colour the projected painting role by role (each role's painted mean lands on the skin's colour,
 # the painted detail kept: rishal_recolour), plus skin-only paint and extras. Palettes: _design/fighters/rishal.md §9.
+# PER-SKIN CARDS (closing review rishal-M1, CW6 cards; schema: art/blender/portraits.py header). Every card lights
+# the face: a soft focal on the head from the camera side, so the visor and face plate are the focal value:
+#   base        Glint Cut's first cut (cast_a2 f10: the right knife flung out, shoulders snapping round) at Aubade
+#               dawn, the visor ridge catching the low sun
+#   Chalkline   the Glass Dash sprint (cast_a1 f6: the 35 degree lean, knives dragged back) along a chalk-pale wall
+#               of its own plate grade (a cool grey chalk morning), and its own bust (the lean, from his other side)
+#   Lamplit     Long Glint's coil (cast_ult f3: crouched, knives crossed at the chest) on a dusk-side rail, the smoked
+#               visor catching a warm lamp
+CARDS = {
+    "rishal": {
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 26.0, "pitch": -3.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 215.0, "key_el": 20.0, "key_color": "#FFE2C8", "sun": 2.6, "rim_cool": 1.4,
+                   "rim_warm": 0.8, "bounce": 0.5, "bounce_color": "#D8B8A0", "accent": 1.6,
+                   "focal": [{"at": "head", "az": 185.0, "el": 12.0, "dist": 0.7, "color": "#FFEADA", "power": 35.0,
+                              "size": 0.25},
+                             {"at": "x_visor_ridge", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE6C8",
+                              "power": 15.0, "size": 0.15}]},
+        "portrait": {"yaw": 28.0, "clip": "idle_lobby", "t": 0.0},
+        "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44},
+    },
+    "rishal_chalkline": {
+        "splash": {"clip": "cast_a1", "t": 0.40, "yaw": -28.0, "pitch": -2.0, "lens": 52.0, "fill": 0.84, "x": 0.71,
+                   "key_az": 150.0, "key_el": 35.0, "key_color": "#E4E8F0", "sun": 2.8, "rim_cool": 1.2,
+                   "rim_warm": 0.4, "bounce": 0.7, "bounce_color": "#C8CCD4", "accent": 1.4,
+                   "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 35.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": -32.0},
+        "plate": {"tint": "#B4B8C4", "sat": 0.45, "median": 0.34, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
+                  "glow_color": "#E8ECF4"},
+    },
+    "rishal_lamplit": {
+        "splash": {"clip": "cast_ult", "t": 0.10, "yaw": 34.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
+                   "key_az": 225.0, "key_el": 15.0, "key_color": "#FFC48C", "sun": 2.0, "rim_cool": 0.8,
+                   "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E09A5A", "accent": 2.2,
+                   "focal": [{"at": "head", "az": 175.0, "el": 8.0, "dist": 0.5, "color": "#FFC888", "power": 40.0,
+                              "size": 0.18},
+                             {"at": "x_visor_ridge", "az": 200.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
+                              "power": 18.0, "size": 0.12}]},
+        "portrait": {"yaw": 20.0, "clip": "cast_ult", "t": 0.10},
+        "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
+                  "glow_color": "#FFB067"},
+    },
+}
 SKINS: list = [
     # Chalkline Runner: ink-grey armour drawn over with children's chalk sketches (runners, speed lines, a sun), lines
     # under 1 cm, well under 20 % of the surface (chalk_linework); no extra geometry
@@ -1887,7 +1930,10 @@ SOFTEN = 0.55             # px gaussian on the finished atlas (the painting is s
 # (POLISH: more value range across the blade so it reads on the pale lane and the dark one: a deeper blue core and
 # spine against the bright bevels)
 GLASS_COL = {"core": "#7CA2C2", "mid": "#A9C6DC", "edge": "#E2EDF4", "spine": "#557A9C"}
-GRIP_COL = {"wrap": "#4A3A30", "dark": "#2C241F"}
+# closing polish rishal-m6 (the model carried none of his crimson signature #B3004A and sat in the roster's cool grey
+# cluster): the knife-grip wraps are a muted crimson leather (hue ~354, HSV sat 40 %, under the cap), a small warm cue
+# that is never the accent (was #4A3A30 / #2C241F)
+GRIP_COL = {"wrap": "#6B4045", "dark": "#3A2226"}
 SIDE_SOFT = 4.0
 
 
@@ -4092,6 +4138,15 @@ def clip_overrides(ctx) -> dict:
 
 
 _GUARD: dict = {}
+
+
+def install_card_hooks() -> None:
+    """the hero-render wrappers (matte specular, sky fill, the lit glass visor, the bust framing) for a card re-render
+    from the cache (art/blender/portraits.py calls this; the build installs them in model()). The cards render with
+    OpenImageDenoise at 2x, so the old nlmeans-era sample multiplier stays off for them."""
+    global HERO_SAMPLES
+    HERO_SAMPLES = 1.0
+    _install_render()
 
 if __name__ == "__main__":
     fighter.main(sys.modules[__name__])

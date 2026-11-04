@@ -113,6 +113,47 @@ AO_INTO_BASE = 0.25       # the projected painting already carries its painted o
 # ART 2.0 skins re-colour the projected painting part by part (each part's painted texels take the skin role /
 # base role gain per channel; pipeline -> project.recolour), plus skin-only extras painted flat (SKIN_FLAT part ->
 # role). Palettes: _design/fighters/hesmi.md section 9.
+# PER-SKIN CARDS (closing review hesmi-M3, CW6 cards; schema: art/blender/portraits.py header):
+#   base        Plant Shard's two-fisted stab (cast_a1 f14) from a low camera at the stopped dusk: a low warm key
+#               raking from the left so the three cut tops catch the last light
+#   Gorgewalk   mid-stride (run) on the gorge under a slate sky, a cool key, the rope binding catching a warm rim
+#   Shadeprint  Felled Shard's lift (cast_ult f6: both gauntlets overhead, the rack tipping back) in an ink-violet
+#               dusk, a violet rim and bounce
+CARDS = {
+    "hesmi": {
+        "splash": {"clip": "cast_a1", "t": 0.40, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 240.0, "key_el": 12.0, "key_color": "#FFC896", "sun": 3.0, "rim_cool": 1.0,
+                   "rim_warm": 1.3, "bounce": 0.5, "bounce_color": "#D8A880", "accent": 1.4,
+                   "focal": [{"at": "x_rack_top", "az": 230.0, "el": 30.0, "dist": 0.8, "color": "#FFD8A8",
+                              "power": 40.0, "size": 0.3},
+                             {"at": "head", "az": 200.0, "el": 10.0, "dist": 0.8, "color": "#FFE4C8", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
+        "plate": {"glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46},
+    },
+    "hesmi_gorgewalk": {
+        "splash": {"clip": "run", "t": 0.30, "yaw": -24.0, "pitch": 2.0, "lens": 55.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 150.0, "key_el": 30.0, "key_color": "#C8D0DC", "sun": 2.6, "rim_cool": 1.5,
+                   "rim_warm": 0.8, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.2,
+                   "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#E0E6F0", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": -28.0},
+        "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.75, 0.40, 0.40, 0.05],
+                  "glow_color": "#D8DCE8"},
+    },
+    "hesmi_shadeprint": {
+        "splash": {"clip": "cast_ult", "t": 0.28, "yaw": 20.0, "pitch": -5.0, "lens": 48.0, "fill": 0.88, "x": 0.70,
+                   "key_az": 235.0, "key_el": 40.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
+                   "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
+                   "focal": [{"at": "x_shard_mid", "az": 200.0, "el": 30.0, "dist": 0.8, "color": "#C8B8FF",
+                              "power": 35.0, "size": 0.3},
+                             {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 34.0, "clip": "cast_ult", "t": 0.20},
+        "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
+                  "glow_color": "#B7A6F0"},
+    },
+}
 SKINS: list = [
     # fix pass 3 (the two skins read as the same cool-grey figure at game scale): each skin owns a HUE family the base
     # lacks (base: warm linen and tan; Gorgewalk: blue slate; Shadeprint: violet ink and lilac), pushed by `chroma`
@@ -1457,6 +1498,17 @@ def hesmi_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         wz = (wz * wz * (3 - 2 * wz))[:, None]
         bx, by = plates.to_px("front", p[sel, 0], np.full(int(sel.sum()), zt))
         col[sel] = col[sel] * (1 - wz) + pj.bilinear(f, bx / s_, by / s_) * wz
+    # closing polish hesmi-m1 (the boots rendered a saturated violet, not the brief's plain leather; feet band under
+    # L* 22): the boots keep the painting's value and folds but take the leather's hue and chroma (#4A4036), their
+    # value floored at L* ~22 so the feet band reads
+    if "boots" in names:
+        sel = k == names.index("boots")
+        if sel.any():
+            lea = np.array([0x4A, 0x40, 0x36], dtype=np.float64) / 255.0
+            Lb = _lum(col[sel])
+            Lb = np.maximum(Lb, 0.20 + 0.25 * (Lb - 0.20).clip(None, 0))
+            col[sel] = np.clip(lea[None, :] * (Lb / max(float(_lum(lea[None, :])[0]), 1e-4))[:, None], 0, 1).astype(col.dtype)
+            log("project (hesmi): boots re-hued to the leather (closing hesmi-m1)")
     # the hood crown (what the 52 degree camera sees most): the front / back projection streaks the painting's top
     # edge highlight along Y across the whole dome (a satin sheen), so the up-facing texels are REPAINTED: the hood's
     # own painted linen (the median of its front-facing paint), folds round the crown (crests light, valleys dark),

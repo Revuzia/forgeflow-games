@@ -61,7 +61,7 @@ SHAPE = body.shape(girth=0.98, torso_w=1.0, torso_d=1.0, chest=1.0, waist=0.92, 
 - **Jerkin.** A knee-length heavy felt jerkin (`cloth`) with sculpted vertical folds, a front panel on one `x_jerkin_f` chain and a back panel on `x_jerkin_b`; rolled sleeves; leather cross-straps. A leather pellet pouch on the right hip (for the resin pellets of Step and Load), rigid.
 - **Legs.** Dark trousers (`under`), waxed-leather boots (x1.2 wide) with ironstone toe caps.
 - **Prop: the yoke, a staff-sling** (prop space: grip at the origin, shaft +Z, length 2.2 m). Carved pale walnut (`wood`, oiled, not dark) with three 6 cm grip bands (`leather`) and a ring of lampresin at each end. The right end carries the sling: a leather pouch 0.14 m with a short rigid cord loop. At rest the staff sits across the shoulders; in casts it comes off into both hands.
-- **Pots.** Two carved sandstone pots (`sandstone`), 0.24 m wide, hung on short rigid leather cords from the staff ends. Each has a rim opening showing lampresin resin and a round `accent` window 12 cm across on the side facing the camera. The pots are rigid children of the staff (`x_pot_l`, `x_pot_r` as sockets, no sway), clear of the shoulders by 8 cm in every pose.
+- **Pots.** Two carved sandstone pots (`sandstone`), 0.24 m wide, hung on short rigid leather cords from the staff ends. Each has a rim opening showing lampresin resin ringed by a thin `accent` glass ring laid just inside the lip (closing polish odrum-m3: seen on both jars from every facing at the 52 degree camera), and a round `accent` window 12 cm across on the side facing the camera. The pots are rigid children of the staff (`x_pot_l`, `x_pot_r` as sockets, no sway), clear of the shoulders by 8 cm in every pose.
 
 Sockets (`art.json` `sockets`; the standard set stays exactly as in the content JSON):
 
@@ -82,8 +82,8 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#4D3D32` | 27 | 24° / 35% | cross-straps, pouch, boots, grip bands |
 | `under` | `#3A3532` | 23 | 23° / 14% | trousers |
 | `ironstone` | `#453B35` | 26 | 23° / 23% | toe caps |
-| `ink` | `#17181B` | 8 | 225° / 15% | mask eye recesses |
-| `accent` | `#3F9CFF` | 63 | 211° / 75% | the two pot windows |
+| `ink` | `#17181B` | 8 | 225° / 15% | trims (the base eye recesses are a warm umber-ink glaze `#4E3828`, L* ~26 walls to ~17 floor, the lower wall a step lighter: carved depth, never black holes; closing polish odrum-m2) |
+| `accent` | `#3F9CFF` | 63 | 211° / 75% | the two pot windows and the two thin mouth rings |
 
 The yoke is the largest warm area: it is pale oiled walnut (hue 34 degrees, 32% saturation), under the 40% limit. Lampresin is the one saturated warm role and stays under 4% of the silhouette.
 
@@ -184,6 +184,7 @@ Value bands (area-weighted): top **70** (70-85) · mid **49** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The tipped-cap hold lets the yoke run across the frame at 73% of the width; the span fills the subject columns, so use `fill` 0.80 to keep the pots inside the frame.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/odrum.py, the CW5 card pipeline): each skin its own staging. base the Amber Hour throw (cast_ult f18) with the pouch's amber the focal; Noon Fair the festival carry in noon light; Shadeprint the ink-pot pour (cast_a1 f7) in an ink-violet dusk.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the mask under the cap with the near pot and its lit window in the corner of the frame. Icon (128 square): the mask and cap with the pot window beside it.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

@@ -233,6 +233,49 @@ AO_INTO_BASE = 0.25
 ATLAS_SOFTEN = 0.60       # fix pass 2: 0.55 -> 0.60 (GLB headroom: fp2 build 1 was 1170.5 KiB)
 
 # ART 2.0 skins (brief §9): each part moves onto the skin's colours (_recolour below, the painting's values kept)
+# PER-SKIN CARDS (closing review SUK-M4, CW6 cards; schema: art/blender/portraits.py header). The cup is the light:
+#   base        the victory's offered cup (the brief's beat: the cup at chest height in the open hand, the staff on the
+#               shoulder, the hood a quarter from camera): a warm practical inside the dawnglass, a cup-light on the
+#               face disc and the hands from below, the sun dropped so the cup is the brightest point
+#   Stillwater  the recall (the cup in both hands, breathed on) under a teal moon, the cup a cool lamp, a water bounce
+#   Shadeprint  Mote Toss's crouched wind-up (the cup tipped and held) in an ink-violet dusk, a violet rim
+CARDS = {
+    "sukri": {
+        "splash": {"clip": "victory", "t": 0.96, "yaw": 48.0, "pitch": -4.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 220.0, "key_el": 24.0, "key_color": "#E8CFB4", "sun": 1.6, "rim_cool": 1.2,
+                   "rim_warm": 0.5, "bounce": 0.35, "bounce_color": "#E2B48A", "accent": 2.8,
+                   "focal": [{"at": "x_cup", "az": 180.0, "el": 5.0, "dist": 0.05, "color": "#FFE2A8", "power": 14.0,
+                              "size": 0.04},
+                             {"at": "head", "az": 180.0, "el": -32.0, "dist": 0.40, "color": "#FFD69A",
+                              "power": 30.0, "size": 0.12}]},
+        "portrait": {"yaw": 40.0},
+        "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26},
+    },
+    "sukri_stillwater": {
+        "splash": {"clip": "recall", "t": 0.40, "yaw": -22.0, "pitch": 1.0, "lens": 62.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 140.0, "key_el": 32.0, "key_color": "#C4DCDA", "sun": 2.2, "rim_cool": 1.8,
+                   "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 2.2,
+                   "focal": [{"at": "x_cup", "az": 180.0, "el": 0.0, "dist": 0.05, "color": "#CFF2EA", "power": 10.0,
+                              "size": 0.04},
+                             {"at": "head", "az": 175.0, "el": -25.0, "dist": 0.40, "color": "#D6F0EA",
+                              "power": 20.0, "size": 0.12}]},
+        "portrait": {"yaw": -30.0},
+        "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
+                  "glow_color": "#A9D2CC", "cx": 0.42},
+    },
+    "sukri_shadeprint": {
+        "splash": {"clip": "cast_a1", "t": 0.28, "yaw": 26.0, "pitch": -6.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
+                   "key_az": 240.0, "key_el": 30.0, "key_color": "#D9CCF0", "sun": 2.0, "rim_cool": 1.9,
+                   "rim_warm": 0.3, "bounce": 0.5, "bounce_color": "#7C6CB0", "accent": 2.4,
+                   "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 12.0,
+                              "size": 0.04},
+                             {"at": "head", "az": 160.0, "el": -20.0, "dist": 0.45, "color": "#E6DAFF",
+                              "power": 20.0, "size": 0.12}]},
+        "portrait": {"yaw": 18.0},
+        "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "glow": [0.30, 0.50, 0.40, 0.08],
+                  "glow_color": "#B7A6F0", "cx": 0.60},
+    },
+}
 SKINS: list = [
     {"id": "sukri_stillwater", "extra": {"reed_plates": True}, "card": {"primary": "#59666A", "secondary": "#8FB3A8"},
      "palette": {"cloth": "#59666A", "dawnglass": "#8FB3A8", "stone": "#C0BCB0", "cloth2": "#D6D1C2", "reed": "#A6AC8E"}},

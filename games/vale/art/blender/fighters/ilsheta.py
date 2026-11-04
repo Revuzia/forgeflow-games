@@ -262,12 +262,14 @@ CARDS = {
                   "glow_color": "#A9D2CC"},
     },
     "ilsheta_first_bell": {
-        "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "pitch": -4.0, "lens": 46.0, "fill": 0.90, "x": 0.70,
-                   "key_az": 235.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
+        # (CW6 cards: the ult's bloom tipped her head back, so the splash saw the top of the hood and no face): the
+        # recall's last beat (t 0.82, the lamp raised to her brow beside the face) from her other side, the face lit
+        "splash": {"clip": "recall", "t": 0.82, "yaw": -24.0, "pitch": -3.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+                   "key_az": 150.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 90.0,
                               "size": 0.35},
-                             {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE4C0", "power": 22.0,
+                             {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 40.0,
                               "size": 0.25}]},
         "portrait": {"clip": "recall", "t": 0.82, "yaw": -26.0, "key_az": 150.0},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
@@ -1084,6 +1086,19 @@ def _paint_chimney(c, p, n, pal=None):
         m = np.median(fc[qm], axis=0, keepdims=True)
         fc[qm] = np.clip(m + (fc[qm] - m) * 1.45, 0.0, 1.0)
     flin = _lin(fc) * 0.93 + glass * 0.05
+    # closing polish ilsheta-face-seam (a dark, stepped 'battlement' band of the projection at the plate's top edge,
+    # above the brow mark, in the portrait and splash): the top 2.2 cm of the face patch is a soft baked occlusion
+    # gradient instead, from the plate's own median value down into the hood-lining tone at the very edge
+    _, pz, ax, az = FACE_PATCH
+    zt = pz + az * np.sqrt(np.clip(1.0 - (x / ax) ** 2, 0.0, 1.0))
+    dtop = zt - z
+    band = (np.abs(x) < ax) & (n[:, 1] < -0.2) & (dtop > -0.004) & (dtop < 0.026)
+    if band.any() and qm.any():
+        fmed = np.median(flin[qm & ~band], axis=0) if np.any(qm & ~band) else np.median(flin[qm], axis=0)
+        occ = ss(0.022, 0.0, dtop)
+        tgt = fmed[None, :] * (1.0 - 0.42 * occ)[:, None] + _lin(_hex(LINING))[None, :] * (0.42 * occ)[:, None]
+        w = (band * ss(0.026, 0.016, dtop))[:, None]
+        flin = flin * (1 - w) + tgt * w
     gl = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
     flin = flin + 0.14 * gl[:, None]
     back = ss(-0.05, 0.35, n[:, 1])[:, None]                          # the shell's back, seen through the glass

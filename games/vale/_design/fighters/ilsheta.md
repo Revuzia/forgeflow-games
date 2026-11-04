@@ -175,6 +175,7 @@ Value bands (area-weighted): top **75** (70-85) · mid **60** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The outstretched lamp points toward the UI side of the frame; the pale mantle needs the darker Aubade backdrop, so keep the sun behind-left and the lamp out of the highlight.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/ilsheta.py, the CW5 card pipeline): each skin its own staging. base the victory's lamp held out; Stillwater the recall's wick-trim under a teal moon; First Bell the recall's last beat (the lamp at her brow, the face lit) in warm first light.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the chimney visor and the hood, the lamp's glow in the lower corner. Icon (128 square): the chimney visor with the lamp core below it.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

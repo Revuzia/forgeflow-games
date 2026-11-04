@@ -52,7 +52,7 @@ SHAPE = body.shape(girth=0.92, torso_w=0.94, torso_d=0.94, chest=0.95, waist=0.9
 
 ## 3. Face (template 3)
 
-- **Serenade carved ochre mask** (`kit.carved_mask`): planar facets, a brow shelf of at least 6 cm, ink almond eye recesses and a short rounded bill as the facing cue (owner ruling 5, 2026-10-28: the old 4 cm beak keel read as a plague-doctor beak; the bill is a soft dome under the brow, 6.2 cm from root to a round tip above the scarf, 1.5 cm proud, never longer than the mask's eye-to-chin height), framed by a deep felt hood whose broad round rim is the disc (`kit.hood` with a flat brim; the hood is rigid, no sway). A scarf (`cloth2`) covers the lower face.
+- **Serenade carved ochre mask** (`kit.carved_mask`): planar facets, a brow shelf of at least 6 cm, almond eye recesses (1.2 cm deep) set with honey-amber lampresin inlays, each with one small warm painted catch-light at the same upper offset (closing polish dunsom-face-skull: the bare ink recesses read hollow and skull-adjacent at chip size; the inlays are paint, never emissive), the cracks under the eyes eased by half, and a short rounded bill as the facing cue (owner ruling 5, 2026-10-28: the old 4 cm beak keel read as a plague-doctor beak; the bill is a soft dome under the brow, 6.2 cm from root to a round tip above the scarf, 1.5 cm proud, never longer than the mask's eye-to-chin height), framed by a deep felt hood whose broad round rim is the disc (`kit.hood` with a flat brim; the hood is rigid, no sway). A scarf (`cloth2`) covers the lower face.
 - The rim must clear the brow by 3 cm so the eyes read at the portrait angle; the rim is rigid and never droops.
 
 ## 4. Armour, cloth and props (template 4)
@@ -82,7 +82,8 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#42382E` | 24 | 30° / 30% | belt, boots, grip wrap |
 | `under` | `#35323B` | 21 | 260° / 15% | trousers |
 | `ironstone` | `#444048` | 28 | 270° / 11% | toe caps, crook ferrule |
-| `ink` | `#17181B` | 8 | 225° / 15% | mask eye recesses |
+| `ink` | `#17181B` | 8 | 225° / 15% | (was the mask eye recesses; now the inlays' surround) |
+| `inlay` | `#6A4520` to `#B8853F` | 33-58 | 33° / 60% | lampresin eye inlays (brow to lower lid), catch-light `#FFF0CF` |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the lantern core |
 
 Lampresin stays under 4% of the silhouette (the lantern panes). The hood-rim felt is a pale dusk-lavender grey (hue 260 degrees, 7% saturation), well away from both reserved hues; the card primary `#4E4A5C` is the backdrop only.
@@ -121,7 +122,7 @@ Four distinct ability gestures. Frame counts are multiples of 5 at 30 fps; the i
 | `cast_a3` | 20 (f8) | **Step Through Dusk** · castTime 0 s · blink 4 m | Instant (castTime 0): the crook planted, a 3-frame cross-step sideways through his own shade, a shoulders-squared arrival at f8 with the free hand raised to the hood-rim in a salute (the impact is the arrival pose). The pose reads on both ends of the blink: the same silhouette without motion blur. Recover to guard by f20. |
 | `cast_ult` | 45 (f18) | **Driving Hour** · castTime 0.35 s · 5 m ring herded to a point, 2.5 m eruption | The crook sweeps a full horizontal ring around him at chest height as he turns 360 degrees (f0-f14, the herding circle); at f18 the hook points at the destination point with the arm extended, the lantern swinging forward, and he stamps the crook butt: the drive. Hold the point to f30, then relax by f45. Silhouette: a spinning ring, then one long pointing line. |
 
-Other clips: `run` at 3.35 m/s (medium, foot slide under 8%); `attack1` a crook flick forward (a ranged magic bolt), `attack2` a back-handed flick (both 25 frames, impact f10); `death` lets go of the crook, which falls across him, and he folds at the knees; `recall` (6 s, seamless) lowers the crook so the lantern hangs at eye level, cups it, nods in threes (three, a breath, three) as the core brightens, bends to look in, then lifts the crook high for the departure; the `idle` (3 s) settles his weight onto the crook and back with the lantern swinging 3-4 degrees on each settle (the left hand hangs: the fist on the crook is out of its reach); `stunned` clutches the crook as it wobbles; `dash` and `taunt` follow the standard generators (the taunt rings the lantern against the hook).
+Other clips: `run` at 3.35 m/s (medium, foot slide under 8%); `attack1` a crook flick forward (a ranged magic bolt), `attack2` a back-handed flick (both 25 frames, impact f10); `death` lets go of the crook, which falls across him, and he folds at the knees; `recall` (6 s, seamless) lowers the crook so the lantern hangs at eye level, cups it, nods in threes (three, a breath, three) as the core brightens, bends to look in, then lifts the crook high for the departure; the `idle` (3 s) leans the crook 9 degrees further out to his right than the guard, so the lantern hangs beside the nameplate's end and not behind its text, and settles his weight onto the crook and back with the lantern swinging 3-4 degrees on each settle (the left hand hangs: the fist on the crook is out of its reach); `stunned` clutches the crook as it wobbles; `dash` and `taunt` follow the standard generators (the taunt rings the lantern against the hook).
 
 **`idle_lobby`** (loops, closed first = last pose): A watchful shepherd. He leans on the crook with both hands stacked, lifts the lantern with the hook to look into it, counts under his breath (the head nods in threes), then tilts the hood-rim to look at the sky. The lantern sways within its 6 degree amplitude. 120 frames.
 
@@ -170,6 +171,7 @@ Value bands (area-weighted): top **72** (70-85) · mid **48** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The bow hold keeps the crook inside the frame; use `fill` 0.84 so the lantern above the hood-rim is not cropped.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/dunsom.py, the CW5 card pipeline): each skin its own staging. base the Driving Hour point (cast_ult f18) with the lantern lighting the mask from below; Highrim the Step Through Dusk salute on the gorge rim under a grazing warm sun; Almanac the recall's cupped lantern read by night on the dial-wood plate.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the mask under the hood-rim with the lantern glowing in the top corner. Icon (128 square): the mask under the rim and the lantern.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

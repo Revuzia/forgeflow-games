@@ -110,6 +110,46 @@ MATERIAL_SET = "bible"
 # ART 2.0 skins (brief section 9): the painting re-coloured role by role + skin-only extras painted flat (lit, see
 # _paint_lit). Noon Fair swaps the pots for paper lanterns and hangs rigid ribbon pairs at both ends; Shadeprint is
 # ink below and pale above, with ink pots under pale rims (no extra geometry).
+# PER-SKIN CARDS (closing review odrum-M4, CW6 cards; schema: art/blender/portraits.py header):
+#   base         the Amber Hour throw (cast_ult f18: the great resin ball leaving the pouch, the bar mid-swing), the
+#                pouch's amber the focal, a warm dusk key
+#   Noon Fair    the festival carry (run, the yoke on his shoulders with its paper lanterns) in flat noon light on
+#                the fair plate, from his other side
+#   Shadeprint   the ink-pot pour (cast_a1 f7: the right pot tipped into the sling pouch) in an ink-violet dusk
+CARDS = {
+    "odrum": {
+        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 30.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
+                   "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
+                   "focal": [{"at": "x_sling_pouch", "az": 190.0, "el": 20.0, "dist": 0.5, "color": "#FFC060",
+                              "power": 35.0, "size": 0.2},
+                             {"at": "head", "az": 195.0, "el": 5.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "victory", "t": 0.96},
+        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
+    },
+    "odrum_noon_fair": {
+        "splash": {"clip": "run", "t": 0.25, "yaw": -24.0, "pitch": 0.0, "lens": 55.0, "fill": 0.84, "x": 0.71,
+                   "key_az": 240.0, "key_el": 55.0, "key_color": "#FFF1DA", "sun": 3.4, "rim_cool": 0.8,
+                   "rim_warm": 1.0, "bounce": 0.9, "bounce_color": "#E8C9A2", "accent": 1.3,
+                   "focal": [{"at": "head", "az": 200.0, "el": 25.0, "dist": 0.8, "color": "#FFF0DC", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "key_az": 150.0, "key_el": 55.0},
+        "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4"},
+    },
+    "odrum_shadeprint": {
+        "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 22.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 235.0, "key_el": 35.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
+                   "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
+                   "focal": [{"at": "x_pot_r", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#C8B8FF",
+                              "power": 30.0, "size": 0.2},
+                             {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"clip": "cast_a1", "t": 0.25, "key_az": 250.0},
+        "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
+                  "glow_color": "#B7A6F0"},
+    },
+}
 SKINS: list = [
     # Noon Fair also takes the brief's pale fair cap and mouth-wrap (cloth2 #D0C3AE) and a mulberry fair-day jerkin
     # (#6A4655: the base jerkin's value, L* 34, hue 335, sat 34 %, in tune with the lilac yoke): at gameplay zoom the
@@ -919,11 +959,15 @@ def sculpts(lanterns: bool = False) -> list:
             pot, rim = pot_sculpt(side), lip_sculpt(side)
             window_carve(Sculpt("_w"), side, glass)
             resin.add(Ellipsoid((px, POT_Y, z0 + 0.233 * POT_S), (0.067 * POT_S, 0.067 * POT_S, 0.010)), k=0.0)
+            # closing polish odrum-m3 (the inward windows left the accent under the 1.5 % team-tint floor at 3 of 4
+            # facings): a thin tinted ring of the window glass laid in the resin just inside the lip, which the 52
+            # degree camera sees on both jars from every facing (the inward windows stay)
+            glass.add(Torus((px, POT_Y, z0 + 0.233 * POT_S + 0.006), 0.056 * POT_S, 0.0065), k=0.0)
             part(f"pot_{side}", pot, "pot", hang, 1350, 0.7)
             part(f"pot_rim_{side}", rim, "rim", hang, 300, 0.6)
         # lampresin: amber, glossy, never emissive (the windows are the only emissive pixels at rest)
         part(f"resin_{side}", resin, "lampresin", hang, 100, 0.8)
-        part(f"window_{side}", glass, "accent", hang, 220, 0.6)
+        part(f"window_{side}", glass, "accent", hang, 220 if lanterns else 360, 0.6)
     return out
 
 
@@ -1911,7 +1955,15 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
         if ev.any():
             dep = np.clip((p[ev, 1] - (FY - 0.008)) / 0.03, 0.0, 1.0)
             c = out[m]
-            c[ev] = _hex("#2E2620")[None, :] * (1.0 - 0.55 * dep)[:, None]
+            # closing polish odrum-m2 (sensitivity watch: the base eye voids rendered as pure black holes, portrait L*
+            # 1.3-4.1): a warm umber-ink glaze, L* ~26 on the walls to ~17 on the floor, the lower wall (which faces the
+            # key) a step lighter like a carved lower-lid ledge, so they read as carved depth, not holes
+            low = np.zeros(int(ev.sum()))
+            for sx in (-1, 1):
+                cx, cz = EYES[sx][0], EYES[sx][1]
+                near = np.abs(p[ev, 0] - cx) < 0.06
+                low = np.where(near, np.clip((cz - p[ev, 2]) / 0.012, 0.0, 1.0), low)
+            c[ev] = _hex("#4E3828")[None, :] * ((1.0 - 0.32 * dep) * (1.0 + 0.30 * low))[:, None]
             out[m] = c
     # procedural props
     for nm, kind in PROCEDURAL.items():

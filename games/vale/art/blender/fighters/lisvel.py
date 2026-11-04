@@ -1650,10 +1650,14 @@ def _tabard_chain_weights(co):
     across the slits, each panel's chain weighted by height (the top 35 % of its first bone shared with the hips)"""
     x, y, z = co[:, 0], co[:, 1] - 0.004, co[:, 2]
     wl = _ss(-0.012, 0.012, x)
-    # (CW5: the front / back split centred ON the side slits (SKIRT_SLITS at y 0.012, cut 4-18 mm half-width) and
-    # kept inside them, so no panel carries a blend of front and back weights: the old +-12 mm blend centred 8 mm
-    # off the slit sheared the panel edges 2.5x in the run)
-    wf = _ss(0.004, -0.004, y - 0.008)
+    # (CW5: the front / back split centred ON the side slits (SKIRT_SLITS at y 0.012, cut 4-18 mm half-width): along
+    # the open slit a sharp split inside the cut, so no hanging panel carries a blend of front and back weights (the
+    # old +-12 mm blend 8 mm off the slit sheared the panel edges 2.5x in the run); above the slit's top (z 0.98),
+    # where the felt is whole, the blend widens to +-5 cm so the joined cloth spreads the shear instead of tearing
+    # one edge (a sharp split there stretched the slit-top edge 6.9x))
+    hw = 0.004 + 0.050 * _ss(0.95, 1.03, z)
+    wf = np.clip(0.5 - (y - 0.008) / (2.0 * hw), 0.0, 1.0)
+    wf = wf * wf * (3.0 - 2.0 * wf)
     W = {}
     for nm, (_, pts) in TABARD_CHAINS.items():
         k = (wl if nm[-1] == "l" else 1.0 - wl) * (wf if nm[-2] == "f" else 1.0 - wf)

@@ -83,14 +83,14 @@
   },
   "uv_coverage": 0.619,
   "bake": {
-    "base": 4.57,
-    "rough_metal": 3.91,
-    "normal": 4.73,
-    "ao": 4.5,
+    "base": 2.17,
+    "rough_metal": 1.4,
+    "normal": 1.49,
+    "ao": 1.55,
     "normal_fixed_px": 90271,
-    "projection": 7.96,
-    "pack_save": 8.21,
-    "total": 26.12
+    "projection": 3.67,
+    "pack_save": 3.82,
+    "total": 10.54
   },
   "tris": 22729,
   "mesh_top_m": 1.885,
@@ -227,10 +227,10 @@
       "turntable": "art/renders/fighters/lisvel/turntable.png"
     },
     "seconds": {
-      "splash": 64.76,
-      "portrait": 12.28,
-      "icon": 6.32,
-      "turntable": 14.57
+      "splash": 67.91,
+      "portrait": 10.5,
+      "icon": 3.85,
+      "turntable": 8.11
     }
   },
   "three_qa": {
@@ -262,26 +262,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/lisvel/three_lisvel.png",
-    "seconds": 15,
+    "seconds": 23,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.23,
-      "model": 4.95,
-      "lows_bind": 3.29,
-      "uv": 7.42,
-      "bake": 28.05,
-      "clips": 0.45,
-      "export": 1.19,
-      "optimize": 0.78,
+      "rig": 0.0,
+      "materials": 0.16,
+      "model": 3.1,
+      "lows_bind": 1.21,
+      "uv": 3.14,
+      "bake": 12.35,
+      "clips": 0.71,
+      "export": 1.39,
+      "optimize": 0.79,
       "load_test": 0.11,
-      "render": 98.08,
-      "three_qa": 15.42,
-      "cache": 0.1
+      "render": 90.49,
+      "three_qa": 23.69,
+      "cache": 0.17
     },
-    "total_s": 160.13
+    "total_s": 137.34
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

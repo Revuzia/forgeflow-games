@@ -177,6 +177,7 @@ Value bands (area-weighted): top **72** (70-85) · mid **50** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The crossed-arms hold puts the flat rack against the sky; the camera at the character's left shows the rack's three cut tops and the eye-band at once.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/hesmi.py, the CW5 card pipeline): each skin its own staging. base Plant Shard's two-fisted stab from a low camera, the cut tops in the last light; Gorgewalk mid-stride under a slate sky; Shadeprint Felled Shard's overhead lift in an ink-violet dusk.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the hood, the eye-band and the rack's cut tops above it. Icon (128 square): the eye-band under the hood with one cut top.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

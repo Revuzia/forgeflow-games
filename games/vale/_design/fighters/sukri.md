@@ -182,6 +182,7 @@ This skin re-mixes the bands: the ink wraps are 22% of the middle band and the l
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The offered cup is the brightest point in the frame at screen-centre-right, the hood turned a quarter from the camera.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/sukri.py, the CW5 card pipeline): each skin its own staging. base the victory's offered cup with a warm practical inside the dawnglass (the cup the brightest point, the face disc lit from it); Stillwater the recall's breath on the cup under a teal moon; Shadeprint Mote Toss's tipped wind-up in an ink-violet dusk.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the hood's rolled edge, the face disc and the cup at the lower corner. Icon (128 square): the face disc under the hood with the cup glowing in the corner.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

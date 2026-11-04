@@ -43,8 +43,11 @@ PROPORTIONS = rig.proportions(height=1.88, head=0.35, neck=0.04, shoulder_width=
                               ankle_height=0.10, spine_curve=0.0, stance=0.135, toe_out_deg=9.0, knee_bend=0.014,
                               a_pose_deg=78.0, arm_forward_deg=3.0, elbow_bend_deg=18.0, shoulder_drop=0.16)
 MATERIAL_SET = "bible"
+# closing polish marund-M5 (stone, linen and mask read as one pale low-chroma matte family in close views): the linen
+# steps warmer and a little darker than the stone (cloth2 #D0C5B1 -> #C6B293: hue 40, sat 26 %, L* ~73 vs the stone's
+# ~80), so shirt, collar and mouth-wrap part from the cap and the pale-walnut mask
 PALETTE = materials.bible_palette(stone="#D0C6B3", ironstone="#4A4038", wood="#B99B78", wood_dark="#58443A",
-                                  cloth="#87776A", cloth2="#D0C5B1", under="#3A3430", leather="#4B3B30",
+                                  cloth="#87776A", cloth2="#C6B293", under="#3A3430", leather="#4B3B30",
                                   lampresin="#BF8F52", ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 # arm blocks (anim.ONE_HAND layout: R wrist rel, R pole, R aim, L wrist rel, L pole): his arms are short (0.55 m to
@@ -71,6 +74,49 @@ AO_INTO_BASE = 0.25       # the projected painting already carries its painted o
 # ART 2.0 skins re-colour the projected painting part by part (each part's mean moves onto the skin's role
 # colour, its painted detail kept; pipeline -> project.recolour), plus skin-only extras painted flat
 # (SKIN_FLAT part -> role). Palettes: _design/fighters/marund.md section 9.
+# PER-SKIN CARDS (closing review marund-M4, CW6 cards; schema: art/blender/portraits.py header). Every bust is
+# framed wider and from above (fill 0.66, pitch 15) so the dome and its three windows read over the mask:
+#   base           Shelter Dome planted (cast_a2 f16: the haft driven in, both hands stacked on it) at dusk under a
+#                  warm low sun with a lamp-coloured bounce, the cap windows lit
+#   Gorgewalk      Domefall in the air (cast_ult f13: hips lifted, the maul overhead) from a low camera on the gorge,
+#                  a slate sky, a cool key
+#   Long Evening   the victory's knock on the cap (hands stacked, chin up) under evening lamps: a warm lamp from
+#                  above on the cap's lamp finial, a deep dusk grade
+CARDS = {
+    "marund": {
+        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": 28.0, "pitch": -4.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
+                   "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
+                   "focal": [{"at": "x_cap", "az": 210.0, "el": 45.0, "dist": 0.9, "color": "#FFE0B8", "power": 35.0,
+                              "size": 0.3},
+                             {"at": "head", "az": 190.0, "el": 0.0, "dist": 0.7, "color": "#FFE2C4", "power": 18.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 26.0, "pitch": 15.0, "fill": 0.66, "clip": "victory", "t": 0.96},
+        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
+    },
+    "marund_gorgewalk": {
+        "splash": {"clip": "cast_ult", "t": 0.30, "yaw": -22.0, "pitch": -9.0, "lens": 42.0, "fill": 0.86, "x": 0.71,
+                   "key_az": 150.0, "key_el": 40.0, "key_color": "#D0D8E4", "sun": 2.8, "rim_cool": 1.6,
+                   "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
+                   "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": -28.0, "pitch": 15.0, "fill": 0.66, "clip": "idle_lobby", "t": 0.0},
+        "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
+                  "glow_color": "#D8DCE8"},
+    },
+    "marund_long_evening": {
+        "splash": {"clip": "victory", "t": 0.80, "yaw": -30.0, "pitch": -2.0, "lens": 58.0, "fill": 0.86, "x": 0.72,
+                   "key_az": 140.0, "key_el": 28.0, "key_color": "#B8B4D8", "sun": 1.6, "rim_cool": 1.4,
+                   "rim_warm": 0.6, "bounce": 0.5, "bounce_color": "#D89060", "accent": 2.6,
+                   "focal": [{"at": "x_cap", "az": 190.0, "el": 70.0, "dist": 0.7, "color": "#FFC07A", "power": 55.0,
+                              "size": 0.25},
+                             {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.6, "color": "#FFCC90", "power": 22.0,
+                              "size": 0.2}]},
+        "portrait": {"yaw": -32.0, "pitch": 15.0, "fill": 0.66},
+        "plate": {"tint": "#B08C9C", "sat": 0.85, "median": 0.23, "cx": 0.60, "glow": [0.30, 0.55, 0.35, 0.12],
+                  "glow_color": "#FFB067"},
+    },
+}
 SKINS: list = [
     {"id": "marund_gorgewalk", "extra": {"rope_coil": True}, "card": {"primary": "#4A4F55", "secondary": "#9A8F7A"},
      "palette": {"stone": "#BAC0C6", "ironstone": "#3F4349", "wood": "#B09478", "cloth": "#6E747C", "cloth2": "#CDC6B6",

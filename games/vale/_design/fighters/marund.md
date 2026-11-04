@@ -80,7 +80,7 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `wood` | `#B99B78` | 66 | 32° / 35% | lacquered pale-walnut mask, mortar pail |
 | `wood_dark` | `#58443A` | 31 | 20° / 34% | maul haft, trowel handle, belt slab |
 | `cloth` | `#87776A` | 51 | 27° / 21% | felt apron, felt shoulder rolls, back panel |
-| `cloth2` | `#D0C5B1` | 80 | 39° / 15% | linen shirt, collar, mouth-wrap |
+| `cloth2` | `#C6B293` | 73 | 40° / 26% | linen shirt, collar, mouth-wrap (closing polish marund-M5: warmer and a step under the stone so the linen parts from the cap and mask) |
 | `under` | `#3A3430` | 22 | 24° / 17% | trousers |
 | `leather` | `#4B3B30` | 26 | 24° / 36% | belt, forearm wraps, boots, straps |
 | `lampresin` | `#BF8F52` | 63 | 34° / 57% | window frames, haft binding bands (under 4% of the silhouette) |
@@ -190,6 +190,7 @@ Value bands (area-weighted): top **72** (70-85) · mid **47** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92}`. The final hold (hands stacked on the maul, the cap catching the low sun) fits columns 7-12; the sun is behind-left of the camera so the rim and crown take the top light.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/marund.py, the CW5 card pipeline): each skin its own staging. base Shelter Dome planted (cast_a2 f16); Gorgewalk Domefall in the air from a low camera; Long Evening the victory under evening lamps. Every bust is framed wider and from above (fill 0.66, pitch 15) so the dome and its three windows read over the mask.
 - Portrait (512 square, head and shoulders, `idle_lobby` t 0, yaw 28): the cap rim must clear the frame top by 8%; frame the mask below it with the mouth-wrap. Icon (128 square): the mask under the rim, the three windows lit.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 

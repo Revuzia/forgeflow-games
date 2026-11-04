@@ -254,6 +254,48 @@ ATLAS_SOFTEN = 0.45
 
 # ART 2.0 skins (brief §9): each part moves onto the skin's colours (_recolour below, the painting's values kept);
 # Highrim adds a wind grain on the hat, Almanac printed tables on the hat and three folded pages on the crook
+# PER-SKIN CARDS (closing review dunsom-splash-single-pose, CW6 cards; schema: art/blender/portraits.py header):
+#   base     the Driving Hour point (cast_ult f18): the hook at the destination, the lantern swung forward and lit
+#            hot, lighting the mask from below (a lantern-coloured focal under the face), the dusk sun low behind
+#   Highrim  Step Through Dusk's arrival salute (cast_a3 f8: the free hand at the hat rim, the hat tipped) on the gorge
+#            rim under a warm grazing sun from the side, its own gorge plate
+#   Almanac  the recall's lantern at eye level, cupped and read by (t 0.45), at night on the dial-wood plate: the
+#            lantern the key, a cool moon rim
+CARDS = {
+    "dunsom": {
+        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 34.0, "pitch": -4.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 225.0, "key_el": 18.0, "key_color": "#FFD2A8", "sun": 2.2, "rim_cool": 1.0,
+                   "rim_warm": 1.2, "bounce": 0.5, "bounce_color": "#E2A46A", "accent": 2.4,
+                   "focal": [{"at": "head", "az": 180.0, "el": -30.0, "dist": 0.45, "color": "#FFC27A",
+                              "power": 40.0, "size": 0.14},
+                             {"at": "x_lantern", "az": 170.0, "el": 10.0, "dist": 0.35, "color": "#FFD9A0",
+                              "power": 25.0, "size": 0.10}]},
+        "portrait": {"yaw": 24.0, "clip": "idle_lobby", "t": 0.0},
+        "plate": {"glow": [0.82, 0.50, 0.30, 0.07], "median": 0.27},
+    },
+    "dunsom_highrim": {
+        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -24.0, "pitch": -2.0, "lens": 55.0, "fill": 0.86, "x": 0.71,
+                   "key_az": 265.0, "key_el": 9.0, "key_color": "#FFC88E", "sun": 3.2, "rim_cool": 0.7,
+                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8B07A", "accent": 1.5,
+                   "focal": [{"at": "head", "az": 215.0, "el": 8.0, "dist": 0.8, "color": "#FFD9B0", "power": 22.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": -30.0},
+        "plate": {"src": "needle_gorge", "tint": "#C8A88C", "sat": 0.85, "median": 0.32, "cx": 0.38,
+                  "glow": [0.90, 0.56, 0.40, 0.12], "glow_color": "#FFC08A"},
+    },
+    "dunsom_almanac": {
+        "splash": {"clip": "recall", "t": 0.45, "yaw": 40.0, "pitch": 0.0, "lens": 60.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 150.0, "key_el": 35.0, "key_color": "#AFC0E0", "sun": 1.4, "rim_cool": 1.8,
+                   "rim_warm": 0.3, "bounce": 0.3, "bounce_color": "#C09060", "accent": 2.8,
+                   "focal": [{"at": "head", "az": 185.0, "el": -10.0, "dist": 0.40, "color": "#FFC87E",
+                              "power": 45.0, "size": 0.12},
+                             {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
+                              "power": 20.0, "size": 0.08}]},
+        "portrait": {"yaw": 34.0},
+        "plate": {"src": "dialwood", "tint": "#8C98C0", "sat": 0.70, "median": 0.22, "cx": 0.62,
+                  "glow": [0.20, 0.35, 0.30, 0.05], "glow_color": "#C8D4F0"},
+    },
+}
 SKINS: list = [
     {"id": "dunsom_highrim", "extra": {}, "card": {"primary": "#6E5F4E", "secondary": "#CDBB9C"},
      "palette": {"cloth2": "#CDBB9C", "wood": "#BFAE95"}},
@@ -395,8 +437,11 @@ def mask_relief(P):
     tile = face_map("tile", x, z)
     crack = face_map("crack", x, z)
     eye = face_map("eye", x, z)
-    r = 0.0026 * ss(0.0, 1.0, tile) - 0.0042 * crack
-    r = r - 0.020 * eye
+    # closing polish (dunsom-face-skull / originality C2): the cracks under the eyes cut half as deep (a calmer lower
+    # face), and the almond recesses are shallower (2.0 -> 1.2 cm) so the lampresin inlays set in them catch the key
+    below = ss(1.822, 1.800, z) * ss(1.700, 1.716, z)
+    r = 0.0026 * ss(0.0, 1.0, tile) - 0.0042 * crack * (1.0 - 0.5 * below)
+    r = r - 0.012 * eye
     brow = ss(1.852, 1.866, z) * ss(1.912, 1.890, z) * (1 - ss(0.095, 0.118, np.abs(x - MX)))
     r = r + 0.006 * brow
     r = r + bill(x, z) * (1 - eye)
@@ -459,7 +504,9 @@ def glove(name, C, a, f, out, bind, tris, curl=1.0, grip=True, s=HS, relaxed=Fal
     if relaxed:
         # the cuff: the palm's oval section (wide across the knuckle line, flat through the hand) from inside the
         # sleeve's opening down into the palm, one smooth form
-        S.add(FlatCapsule(C - f * 0.112 * s, C - f * 0.050 * s, 0.035 * s, 0.025 * s, 0.040 * s, 0.027 * s, side=a), k=0.016)
+        # (closing dunsom-sleeve-fleck: an ochre fleck of the cuff showed through the left sleeve above the wrist; the
+        # cuff sits 4 mm further inside: widths 0.035 / 0.040 -> 0.032 / 0.037 x HS)
+        S.add(FlatCapsule(C - f * 0.112 * s, C - f * 0.050 * s, 0.032 * s, 0.025 * s, 0.037 * s, 0.027 * s, side=a), k=0.016)
     else:
         # the glove's flared gauntlet cuff over the wrist, a rolled edge
         S.add(RoundCone(C - f * 0.104 * s, C - f * 0.054 * s, 0.033 * s, 0.031 * s), k=0.010)      # (inside the sleeve's 5 cm
@@ -1776,6 +1823,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         pp = p[m]
         sd = face_sd(pp[:, 0], pp[:, 2])
         lin[m] = lin[m] * (1 - 0.35 * ss(-0.012, 0.0, sd))[:, None]
+        lin[m] = _mask_inlays(lin[m], pp)
     # lineup_qa (the game's chain) measured the middle band at L* 36.8 (bible 45-65) and the grade pushes the painted
     # lavender toward violet: the coat's cloth parts are lifted (COAT_LIFT, linear) and eased 20 % toward grey
     for name in ("coat_top", "skirt", "sleeve_L", "sleeve_R", "hood"):
@@ -1809,6 +1857,39 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         smooth = _project.blur(out, 6.0)
         out[far] = smooth[far]
         out = _project.blur(out, ATLAS_SOFTEN).astype(np.float32)
+    return out
+
+
+# closing polish (dunsom-face-skull, hud-c10, originality C2: the ink eye recesses read hollow and skull-adjacent at
+# chip size): honey-amber lampresin almond inlays set into the recesses (the treatment owner ruling 2 approved for Odrum
+# Shadeprint), deeper under the brow and warmer toward the lower lid, each with one small warm catch-light at the same
+# upper offset (a reflection, not a glow: nothing here is emissive); and the painted cracks under the eyes eased by half
+INLAY_TOP, INLAY_LOW, INLAY_CATCH = "#6A4520", "#B8853F", "#FFF0CF"
+
+
+def _mask_inlays(c, pp):
+    x, z = pp[:, 0], pp[:, 2]
+    eye = face_map("eye", x, z)
+    crack = face_map("crack", x, z)
+    below = ss(1.822, 1.800, z) * ss(1.700, 1.716, z)
+    med = np.median(c[(eye < 0.05) & (crack < 0.2)], axis=0) if np.any((eye < 0.05) & (crack < 0.2)) else c.mean(0)
+    a = (0.5 * ss(0.15, 0.7, crack) * below)[:, None]
+    c = c * (1 - a) + med[None, :] * a
+    out = c.copy()
+    w = ss(0.25, 0.75, eye)[:, None]
+    for cx, cz in ((-0.0809, 1.8372), (0.0407, 1.8416)):
+        side = np.abs(x - cx) < 0.045
+        if not side.any():
+            continue
+        v = np.clip((z[side] - (cz - 0.014)) / 0.028, 0.0, 1.0)[:, None]          # 0 lower lid .. 1 under the brow
+        col = _lin(_hex(INLAY_LOW))[None, :] * (1 - v) + _lin(_hex(INLAY_TOP))[None, :] * v
+        shade = (0.92 + 0.08 * NOISE(pp[side], 140.0))[:, None]
+        col = col * shade
+        d2 = ((x[side] - (cx + 0.009)) ** 2 + (z[side] - (cz + 0.004)) ** 2) / 0.0042 ** 2
+        catch = (np.exp(-d2) * ss(0.5, 0.9, eye[side]))[:, None]
+        col = col * (1 - catch) + _lin(_hex(INLAY_CATCH))[None, :] * catch
+        ws = w[side]
+        out[side] = c[side] * (1 - ws) + col * ws
     return out
 
 
@@ -2554,6 +2635,12 @@ anim._solve_foot = _solve_foot
 GUARD_R = tuple(np.round((W_R - SH_R) / ARM, 4))
 GUARD_L = tuple(np.round((W_L - SH_L) / ARM, 4))
 UP = tuple(np.round(CROOK_U, 4))
+# closing dunsom-lantern-nameplate: at idle the lantern hung behind the nameplate and the shaft crossed the HP bar;
+# the idle crook leans 9 degrees further out to his right (about the forward axis), so the lantern hangs beside the
+# bar's end instead of under its text (run, casts and the other clips keep UP)
+_ia = math.radians(9.0)
+IDLE_AIM = tuple(np.round(unit(np.array([CROOK_U[0] * math.cos(_ia) - CROOK_U[2] * math.sin(_ia), CROOK_U[1],
+                                         CROOK_U[0] * math.sin(_ia) + CROOK_U[2] * math.cos(_ia)])), 4))
 
 
 def _pole(S, E, W):
@@ -2768,7 +2855,8 @@ def clip_overrides(ctx) -> dict:
                             head=(-0.6 * b - 1.0 * w, 2.0 * s, 1.6 * w)),
                  hips=(-0.025 * w, 0.004 * s, -0.012 * w - 0.003 * (0.5 + 0.5 * b)),
                  R=(GUARD_R[0], GUARD_R[1], GUARD_R[2] + 0.006 * b), Rp=POLE_R,
-                 L=(GUARD_L[0] + 0.020 * s, GUARD_L[1] - 0.025 * b - 0.02 * w, GUARD_L[2] + 0.01 * w))
+                 L=(GUARD_L[0] + 0.020 * s, GUARD_L[1] - 0.025 * b - 0.02 * w, GUARD_L[2] + 0.01 * w),
+                 aim=IDLE_AIM)
         p["x_lantern"] = (3.5 * math.sin(2 * math.pi * (t - 0.08)), 0.0, 2.0 * math.sin(2 * math.pi * (t - 0.12)))
         return p
     out["idle"] = anim.Clip("idle", 90, True, anim.drag(idle_s, 90, {"head": 2.0}, loop=True))

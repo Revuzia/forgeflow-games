@@ -181,7 +181,7 @@ CARDS = {
                               "power": 40.0, "size": 0.10},
                              {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 25.0, "size": 0.08}],
-                   "hound": {"wall": 3.2, "across": -1.7, "up": 0.55, "mag": 4.2, "length": 0.62, "power": 2600.0,
+                   "hound": {"wall": 3.2, "across": -1.6, "up": 0.75, "mag": 4.2, "length": 0.80, "power": 2600.0,
                              "color": "#FFE2B8", "tilt": 14.0}},
         "portrait": {"yaw": 24.0},
         "plate": {"glow": [0.80, 0.52, 0.30, 0.05], "median": 0.27},
@@ -580,8 +580,10 @@ def sculpts() -> list:
         mask.add(Ellipsoid((sx * 0.074, -0.142, 1.642), (0.052, 0.024, 0.042)), k=0.022)                 # cheek plates
         mask.sub(Ellipsoid((sx * 0.066, -0.152, 1.726), (0.046, 0.030, 0.0125), axes=sdf.rot_y(sx * 6)), k=0.004)  # eyes
         mask.add(Capsule((sx * 0.030, -0.158, 1.736), (sx * 0.102, -0.150, 1.733), 0.0045), k=0.004)     # the upper lids
-        mask.sub(Tube([(sx * 0.130, -0.118, 1.810), (sx * 0.134, -0.120, 1.700), (sx * 0.112, -0.126, 1.590),
-                       (sx * 0.076, -0.130, 1.520)], [0.0028] * 4), k=0.0015)                               # side plates
+        # (closing polish TUN-c5: the incised side-plate line ran on down past the eye's outer corner to the chin and
+        # read as a crack running out of the eye: it now stops at the brow line, the planar turn alone marks the plate)
+        mask.sub(Tube([(sx * 0.130, -0.118, 1.810), (sx * 0.132, -0.119, 1.776), (sx * 0.133, -0.120, 1.752)],
+                      [0.0028, 0.0028, 0.0016]), k=0.0015)                                                  # side plates
         mask.sub(Tube([(sx * 0.024, -0.162, 1.700), (sx * 0.060, -0.156, 1.668), (sx * 0.110, -0.140, 1.660)],
                       [0.0022] * 3), k=0.001)                                                                # cheek seams
     mask.add(RoundCone((0.0, -0.148, 1.752), (0.0, -0.198, 1.632), 0.018, 0.016), k=0.012)              # the beak
@@ -1599,6 +1601,7 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
             lin[m] = b_[None, :] * ((0.82 + 0.26 * ss(-0.2, 0.9, n[m] @ KEY)) * (1 + 0.05 * _fbm(p[m], 30.0)))[:, None]
     m = sel("mask")                                           # the mask's back rims (seen past the head-box): walnut
     if m is not None:
+        lin[m] = _mask_face_clean(lin[m], p[m], n[m])
         # its edge faces (the plate's thickness, seen past the head-box's sides from behind: a pale sliver) in the
         # carved wood's shade, its back rims walnut
         wsd = (ss(-0.42, -0.12, n[m, 1]) * ss(0.55, 0.85, np.abs(n[m, 0])) * (1 - ss(0.05, 0.45, n[m, 1])))[:, None]
@@ -1787,6 +1790,35 @@ from common import render as _render  # noqa: E402
 
 SPEC_RENDER = 0.12
 _orig_fighter_renders = _render.fighter_renders
+# closing polish TUN-c5 (close views read 'a box with a cracked carved face'): the projected incised lines that ran
+# down from the eyes' outer corners along the side plates (x ~ +-0.10..0.15, under the eye line) are wiped to the
+# face's own pale wood, and the eye slits' maroon paint becomes an ink-brown (#3A2C22, a little lighter: calm lids)
+EYE_SLIT_HEX = "#3A2C22"
+
+
+def _mask_face_clean(c, pp, nn):
+    x, y, z = pp[:, 0], pp[:, 1], pp[:, 2]
+    front = nn[:, 1] < -0.35
+    Y = _Y(c)
+    face = front & (z > 1.56) & (z < 1.70) & (np.abs(x) < 0.09)
+    if not face.any():
+        return c
+    med = np.median(c[face], axis=0)
+    mY = float(_Y(med[None, :])[0])
+    out = c.copy()
+    band = front & (np.abs(x) > 0.095) & (np.abs(x) < 0.16) & (z > 1.50) & (z < 1.712)
+    a = (band * ss(0.80, 0.55, Y / max(mY, 1e-4)))[:, None]
+    out = out * (1 - a) + (med[None, :] * (0.92 + 0.08 * Y / max(mY, 1e-4))[:, None]) * a
+    for sx in (-1, 1):
+        e = ((x - sx * 0.066) / 0.050) ** 2 + ((z - 1.726) / 0.016) ** 2
+        slit = front & (e < 1.0) & (y > -0.160)
+        if slit.any():
+            w = ss(1.0, 0.6, e[slit])[:, None]
+            ink = _lin(_hex(EYE_SLIT_HEX))[None, :] * (0.85 + 0.30 * np.clip(Y[slit] / max(mY, 1e-4), 0, 1))[:, None]
+            out[slit] = out[slit] * (1 - w) + ink * w
+    return out
+
+
 _orig_fit_camera = _render._fit_camera
 _WIDEN = [False]
 PORTRAIT_WIDEN = 0.20      # the head boxes (portrait, icon) reach this much further to her right: the lantern beside the mask
@@ -1850,10 +1882,12 @@ _render.fighter_renders = _fighter_renders
 # outline (u, v) of unit length; it is the Hound Shadow her hands cast, so it is a SHADOW only: a camera-invisible
 # cut-out lit by one projector light at her lantern, falling on a shadow-catcher wall behind her. Light linking keeps
 # it a single layer: the projector lights only the wall and only the cut-out blocks it; every other light skips both.
-HOUND = [(-0.50, 0.13), (-0.36, 0.17), (-0.30, 0.22), (-0.27, 0.36), (-0.21, 0.25), (-0.12, 0.21), (0.05, 0.17),
-         (0.25, 0.16), (0.38, 0.21), (0.52, 0.31), (0.45, 0.17), (0.31, 0.09), (0.43, -0.05), (0.56, -0.14),
-         (0.50, -0.16), (0.36, -0.07), (0.24, -0.02), (0.05, 0.00), (-0.10, 0.00), (-0.22, -0.08), (-0.38, -0.12),
-         (-0.40, -0.09), (-0.25, 0.02), (-0.31, 0.06), (-0.40, 0.05), (-0.48, 0.03), (-0.39, 0.10)]
+HOUND = [(-0.52, 0.20), (-0.40, 0.25), (-0.33, 0.29), (-0.30, 0.42), (-0.25, 0.31), (-0.21, 0.43), (-0.19, 0.28),
+         (-0.10, 0.22), (0.05, 0.19), (0.22, 0.18), (0.32, 0.19), (0.45, 0.26), (0.60, 0.36), (0.47, 0.20),
+         (0.36, 0.13), (0.48, 0.06), (0.62, 0.00), (0.60, -0.03), (0.44, 0.02), (0.40, 0.03), (0.50, -0.04),
+         (0.56, -0.07), (0.52, -0.09), (0.36, 0.01), (0.25, 0.06), (0.08, 0.07), (-0.08, 0.06), (-0.20, 0.02),
+         (-0.36, -0.08), (-0.48, -0.12), (-0.49, -0.09), (-0.35, -0.03), (-0.30, 0.02), (-0.42, 0.00),
+         (-0.52, -0.01), (-0.51, 0.02), (-0.36, 0.06), (-0.26, 0.11), (-0.34, 0.16), (-0.47, 0.13), (-0.38, 0.19)]
 _HOUND_OBJS = ("vale_hound_wall", "vale_hound_cut", "vale_hound_lamp")
 
 

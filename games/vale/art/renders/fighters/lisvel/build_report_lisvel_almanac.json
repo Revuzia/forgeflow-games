@@ -83,14 +83,14 @@
   },
   "uv_coverage": 0.624,
   "bake": {
-    "base": 2.03,
-    "rough_metal": 1.64,
-    "normal": 1.47,
-    "ao": 3.05,
+    "base": 24.34,
+    "rough_metal": 11.9,
+    "normal": 9.4,
+    "ao": 12.44,
     "normal_fixed_px": 85734,
-    "projection": 8.56,
-    "pack_save": 8.92,
-    "total": 17.2
+    "projection": 34.14,
+    "pack_save": 35.29,
+    "total": 94.41
   },
   "tris": 22045,
   "mesh_top_m": 1.885,
@@ -122,8 +122,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 60.02,
-      "portrait": 10.09
+      "splash": 365.95,
+      "portrait": 34.32
     }
   },
   "three_qa": {
@@ -155,24 +155,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 11.4,
+    "seconds": 101.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.41,
-      "model": 3.75,
-      "lows_bind": 1.87,
-      "uv": 2.53,
-      "bake": 19.93,
-      "export": 0.2,
-      "optimize": 0.92,
-      "load_test": 0.2,
-      "render": 70.18,
-      "three_qa": 12.13
+      "materials": 0.55,
+      "model": 5.87,
+      "lows_bind": 9.95,
+      "uv": 12.26,
+      "bake": 106.14,
+      "export": 1.23,
+      "optimize": 5.94,
+      "load_test": 0.84,
+      "render": 400.64,
+      "three_qa": 102.41
     },
-    "total_s": 112.35
+    "total_s": 646.1
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

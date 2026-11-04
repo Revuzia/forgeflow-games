@@ -61,7 +61,7 @@ SHAPE = body.shape(girth=0.94, torso_w=0.96, torso_d=0.95, chest=0.98, waist=0.8
 - **Pauldrons.** Asymmetric honed `stone` plates: left 0.20 m wide with a 0.30 m spike angled up and back; right 0.16 m wide and round. A chalk gorget below the visor.
 - **Torso.** A short cool-slate tabard (`cloth`) over a close under-suit, a leather chest strap, a scarf of light linen (`cloth2`) knotted behind (rigid, one-bone `x_scarf`, a short 0.25 m panel). Forearm guards of honed stone, the reverse-grip knives mounted along their outer sides.
 - **Legs.** Close dark leggings (`under`), ironstone shin plates, light boots with a wedge heel (`leather`).
-- **Props: two knives** (prop space: grip at the origin, blade -Z for reverse grip). Dawnglass blade 0.42 m long, 5 cm wide, 1.5 cm thick, 2 cm bevels along both edges (glossy, never emissive, no bright edge); leather-wrapped hilt 0.12 m, an ironstone guard. The blade is long enough to read as a spike behind the elbow.
+- **Props: two knives** (prop space: grip at the origin, blade -Z for reverse grip). Dawnglass blade 0.42 m long, 5 cm wide, 1.5 cm thick, 2 cm bevels along both edges (glossy, never emissive, no bright edge); leather-wrapped hilt 0.12 m (a muted crimson leather `#6B4045`, his signature as a small warm cue, never the accent; closing polish rishal-m6), an ironstone guard. The blade is long enough to read as a spike behind the elbow.
 
 Sockets (`art.json` `sockets`; the standard set stays exactly as in the content JSON):
 
@@ -181,6 +181,7 @@ Value bands (area-weighted): top **71** (70-85) · mid **50** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The arms-crossed-behind hold keeps the crest and the knives sweeping toward screen-right, away from the UI side; the visor tip points into the frame.
+- Cards (CW6, closing review; `CARDS` in art/blender/fighters/rishal.py, the CW5 card pipeline): each skin its own staging. base Glint Cut's first cut at Aubade dawn; Chalkline the Glass Dash lean on its own chalk-grey plate and bust; Lamplit Long Glint's coil with the smoked visor catching a warm lamp. Every card lights the face with a soft camera-side focal.
 - Portrait (512 square, `idle_lobby` t 0, yaw 28): the visor and the crest in profile with the left pauldron spike entering the frame. Icon (128 square): the visor blade and the ridge fin.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 
