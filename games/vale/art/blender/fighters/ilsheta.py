@@ -215,7 +215,16 @@ SKINS: list = [
      "splash": {"clip": "idle_lobby", "t": 0.60, "yaw": 34.0}},
     {"id": "ilsheta_first_bell", "extra": {"glass_bell": True, "hour_marks": True},
      "card": {"primary": "#3A3633", "secondary": "#CFCAC0"},
-     "palette": {"cloth2": "#CFCAC0", "chalk": "#D4CEBF", "cloth": "#8C8780", "cloth3": "#3A3633"},
+     # (closing ilsheta-skins-indistinct, CW6: the deluxe read as base: cloth2 #CFCAC0 sat on the base's #D6CCBE, so
+     # hood, scarf, sleeves and mantle top were the base's pale cream; portrait dE 14.4 < the deluxe floor 18.) The
+     # first-light dress: the hood, scarf and sleeves a warm bell-bronze felt (#B07A48, L* 56), the chimney visor and
+     # the glass bell a honey first-light glass (dawnglass #D9B57A, L* 76, still the brightest vertical, never
+     # emissive), the pale dial-stone (#D4CEBF, `chalk`) kept for the mantle's top half (SKIN_GRADE) and the lamp
+     # rings, a warm bronze-grey lower mantle over the dark hem with its pale hour-marks. The accent core is untouched.
+     # (CW6 round 2: at #C49A62 the warm card key lifted the hood to a pale peach, portrait dE 15.5 < 18: a deeper
+     # bronze, L* 56)
+     "palette": {"cloth2": "#B07A48", "chalk": "#D4CEBF", "cloth": "#8A7560", "cloth3": "#3A3633",
+                 "dawnglass": "#D9B57A"},
      # (final parity client F3: fill 0.84 -> 0.90, the figure at 0.81 of the splash's height, 0.68 of W2's card)
      "splash": {"clip": "cast_ult", "t": 0.52, "yaw": 18.0, "fill": 0.90}},
 ]
@@ -261,7 +270,10 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE4C0", "power": 22.0,
                               "size": 0.25}]},
         "portrait": {"clip": "recall", "t": 0.82, "yaw": -26.0, "key_az": 150.0},
-        "plate": {"glow": [0.78, 0.60, 0.38, 0.14], "glow_color": "#F6CF98"},
+        # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
+        # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
+        "plate": {"tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],
+                  "glow_color": "#F6CF98"},
     },
 }
 HEIGHT = 1.72             # the plates' scale: the chimney's top rim (content art.height)
@@ -1371,7 +1383,7 @@ SKIN_GRADE = {
     # wet-stone #59666A is the mantle's whole lower half (the brief) from a wavy TIDE LINE at TIDE_Z (a pale salt rim
     # above it), so the mantle reads two-tone (pale stone over dark wet stone) where the base fades cream -> slate
     "ilsheta_stillwater": [(1.30, "cloth2"), (0.805, "cloth2"), (0.795, "cloth"), (0.52, "cloth"), (0.43, "cloth3"), (0.0, "cloth3")],
-    "ilsheta_first_bell": [(1.30, "cloth2"), (0.93, "cloth2"), (0.80, "cloth"), (0.56, "cloth"), (0.49, "cloth3"), (0.0, "cloth3")],
+    "ilsheta_first_bell": [(1.30, "chalk"), (0.93, "chalk"), (0.80, "cloth"), (0.56, "cloth"), (0.49, "cloth3"), (0.0, "cloth3")],
 }
 
 

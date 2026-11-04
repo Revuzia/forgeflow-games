@@ -27,29 +27,29 @@
   },
   "uv_coverage": 0.627,
   "bake": {
-    "base": 5.12,
-    "rough_metal": 5.97,
-    "normal": 3.86,
-    "ao": 3.2,
+    "base": 3.14,
+    "rough_metal": 2.12,
+    "normal": 1.81,
+    "ao": 3.97,
     "normal_fixed_px": 14237,
-    "projection": 19.54,
-    "pack_save": 19.69,
-    "total": 38.01
+    "projection": 24.21,
+    "pack_save": 24.38,
+    "total": 35.57
   },
   "tris": 19092,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2373144,
+  "glb_bytes_raw": 2352508,
   "optimize": {
     "ok": true,
-    "before": 2373144,
-    "after": 981488
+    "before": 2352508,
+    "after": 973392
   },
-  "glb_bytes": 981488,
+  "glb_bytes": 973392,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (958 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_first_bell_base 2048x2048 270K, ilsheta_first_bell_normal 512x512 38K, ilsheta_first_bell_orm 512x512 62K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (951 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_first_bell_base 2048x2048 262K, ilsheta_first_bell_normal 512x512 38K, ilsheta_first_bell_orm 512x512 62K",
       "  skinned meshes: ilsheta_accent_1(564v), ilsheta_accent_2(152v), ilsheta_first_bell(16331v)",
       "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -57,16 +57,6 @@
       "  tris: 19092; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/ilsheta/ilsheta_first_bell_splash.png",
-      "portrait": "art/out/fighters/ilsheta/ilsheta_first_bell_portrait.png"
-    },
-    "seconds": {
-      "splash": 6.79,
-      "portrait": 2.9
-    }
   },
   "three_qa": {
     "ok": true,
@@ -97,24 +87,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_first_bell.png",
-    "seconds": 7.7,
+    "seconds": 9.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.27,
-      "model": 3.77,
-      "lows_bind": 4.51,
-      "uv": 7.55,
-      "bake": 38.01,
-      "export": 0.09,
-      "optimize": 0.52,
-      "load_test": 0.1,
-      "render": 9.71,
-      "three_qa": 7.91
+      "rig": 0.0,
+      "materials": 0.1,
+      "model": 2.45,
+      "lows_bind": 2.95,
+      "uv": 4.97,
+      "bake": 35.57,
+      "export": 0.1,
+      "optimize": 0.75,
+      "load_test": 0.14,
+      "three_qa": 9.4
     },
-    "total_s": 72.66
+    "total_s": 56.47
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

@@ -162,9 +162,10 @@ The honour of the year's first bell: a pale dial-stone mantle (`#CFCAC0`) carved
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `cloth2` | `#CFCAC0` | 81 | 40° / 7% | the named pale dial-stone mantle #CFCAC0 |
-| `chalk` | `#D4CEBF` | 83 | 43° / 10% | lamp rings |
-| `cloth` | `#8C8780` | 57 | 35° / 9% | warm grey lower mantle |
+| `cloth2` | `#B07A48` | 56 | 29° / 59% | bell-bronze felt: hood, scarf and sleeves (CW6: the deluxe read as base at #CFCAC0) |
+| `chalk` | `#D4CEBF` | 83 | 43° / 10% | the pale dial-stone: the mantle's top half (graded) and the lamp rings |
+| `dawnglass` | `#D9B57A` | 76 | 37° / 44% | honey first-light glass: the chimney visor and the glass bell (never emissive) |
+| `cloth` | `#8A7560` | 51 | 31° / 30% | warm bronze-grey lower mantle |
 | `cloth3` | `#3A3633` | 23 | 26° / 12% | the named dark base #3A3633 (hem) |
 
 Value bands (area-weighted): top **75** (70-85) · mid **60** (45-65) · feet **28** (20-35).
