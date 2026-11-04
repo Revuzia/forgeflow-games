@@ -34,14 +34,14 @@
   },
   "uv_coverage": 0.625,
   "bake": {
-    "base": 9.06,
-    "rough_metal": 6.81,
-    "normal": 4.51,
-    "ao": 4.85,
+    "base": 29.39,
+    "rough_metal": 21.96,
+    "normal": 12.75,
+    "ao": 11.51,
     "normal_fixed_px": 39506,
-    "projection": 565.27,
-    "pack_save": 565.87,
-    "total": 591.8
+    "projection": 271.41,
+    "pack_save": 272.09,
+    "total": 349.79
   },
   "tris": 20448,
   "mesh_top_m": 2.157,
@@ -140,13 +140,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3248092,
+  "glb_bytes_raw": 3247920,
   "optimize": {
     "ok": true,
-    "before": 3248092,
-    "after": 1233592
+    "before": 3247920,
+    "after": 1233864
   },
-  "glb_bytes": 1233592,
+  "glb_bytes": 1233864,
   "three_load_test": {
     "ok": false,
     "log": [
@@ -170,10 +170,10 @@
       "turntable": "art/renders/fighters/burdam/turntable.png"
     },
     "seconds": {
-      "splash": 263.47,
-      "portrait": 38.34,
-      "icon": 14.03,
-      "turntable": 28.5
+      "splash": 242.74,
+      "portrait": 21.7,
+      "icon": 12.36,
+      "turntable": 17.4
     }
   },
   "three_qa": {
@@ -205,26 +205,26 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/burdam/three_burdam.png",
-    "seconds": 61.4,
+    "seconds": 22,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.61,
-      "model": 12.97,
-      "lows_bind": 15.42,
-      "uv": 14.08,
-      "bake": 591.8,
-      "clips": 3.91,
-      "export": 8.84,
-      "optimize": 2.48,
-      "load_test": 0.43,
-      "render": 344.95,
-      "three_qa": 62.36,
-      "cache": 0.3
+      "materials": 0.43,
+      "model": 15.19,
+      "lows_bind": 41.33,
+      "uv": 42.85,
+      "bake": 349.79,
+      "clips": 3.07,
+      "export": 8.92,
+      "optimize": 2.3,
+      "load_test": 0.61,
+      "render": 294.89,
+      "three_qa": 23.08,
+      "cache": 0.22
     },
-    "total_s": 1058.3
+    "total_s": 782.8
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15
