@@ -53,7 +53,7 @@
       ],
       "peoples": [
         { "phase": 4, "species": "plains-folk", "planet": 2, "count": 120, "era": "electric", "knowledge": ["liquid-fuel-rocket"], "store": { "steel": 30, "rocket-fuel": 24, "engine-parts": 8 } },
-        { "phase": 2, "species": "coastal-folk", "planet": 1, "count": 60, "era": "stone" },
+        { "phase": 2, "species": "coastal-folk", "planet": 1, "count": 60, "era": "stone", "knowledge": ["hunting"] },
         { "phase": 2, "species": "hive", "planet": 3, "count": 80, "era": "iron" },
         { "phase": 2, "species": "cold-folk", "planet": 4, "count": 40, "era": "stone" },
         { "phase": 2, "species": "methane-drifters", "planet": 5, "count": 50, "era": "classical" }
