@@ -165,7 +165,7 @@ function FirstWinCell(): JSX.Element {
         <path d="M7 37h18" class="fwcandle__foot" />
       </svg>
       <span class="hband__text">
-        <span class="t-label hband__k">{cv.t('grant.first_win', 'First win of the day')}</span>
+        <span class="t-label hband__k">{cv.t('grant.first_win', 'First win today')}</span>
         {lit
           ? <span class="t-body-s hband__v">{reward ? cv.t('home.firstwin.ready', 'Ready: {reward}', { reward }) : cv.t('home.firstwin.ready_plain', 'Ready today')}</span>
           : <span class="t-body-s hband__v">{cv.t('home.firstwin.spent', 'Taken today')}</span>}

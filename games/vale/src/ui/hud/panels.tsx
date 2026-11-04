@@ -361,8 +361,8 @@ export function PracticePanel(): JSX.Element | null {
     );
   };
   return (
-    <section class="ptools plate" aria-label={cv.t('practice.panel.title', 'Practice tools')}>
-      <span class="t-label">{cv.t('practice.panel.title', 'Practice tools')}</span>
+    <section class="ptools plate" aria-label={cv.t('practice.panel.title', 'Practice bench')}>
+      <span class="t-label">{cv.t('practice.panel.title', 'Practice bench')}</span>
       <div class="ptools__grid">
         <button type="button" class="hbtn" onClick={() => act('gold')}>{cv.t('practice.panel.gold', 'Add 5,000 Gleam')}</button>
         <button type="button" class="hbtn" onClick={() => act('level')}>{cv.t('practice.panel.level', 'Level up')}</button>

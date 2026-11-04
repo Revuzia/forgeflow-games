@@ -4,7 +4,7 @@
 //   node _harness/probe_audio_session_mem.mjs [--modes rift,bridge,fray] [--speed 16] [--out _harness/_reports/fw_CW2_session_mem.json]
 //
 // The closing verifier's method (closing_perf_verify_mem): ONE page (the dev server, ?dev=1&autopilot=match), Home → for
-// each mode in turn: Play → the mode's station → (RIFT: Co-op vs bots) → Find match → Ready → a fighter locked → loading →
+// each mode in turn: Play → the mode's station → (RIFT: Lantern Drill) → Find match → Ready → a fighter locked → loading →
 // the match on the dev autopilot at --speed to its REAL end → post-game → Return home; a forced GC (CDP
 // HeapProfiler.collectGarbage), 3 s settle, then a sample of the audio engine's own buffer cache
 // (window.__valeAudio.buffers: every settled AudioBuffer's length x channels x 4 bytes) with its biggest files, plus the
@@ -27,7 +27,7 @@ const MODES = String(opt('modes', 'rift,bridge,fray')).split(',');
 const SPEED = Number(opt('speed', 16));
 const OUT = opt('out', join(HERE, '_reports', 'fw_CW2_session_mem.json'));
 const HOME_MB = 150;
-const QUEUE_CARD = { rift: 'Co-op vs bots', bridge: null, fray: null };
+const QUEUE_CARD = { rift: 'Lantern Drill', bridge: null, fray: null };
 
 const report = { probe: 'probe_audio_session_mem', at: new Date().toISOString(), speed: SPEED, samples: [], gates: {}, errors: [] };
 const t0 = Date.now();

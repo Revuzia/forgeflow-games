@@ -168,7 +168,7 @@ function queueTerms(cv: ReturnType<typeof useApp>['cv'], q: QueueDefT): { reward
     reward = `${cv.t('play.queue.reward_win', 'Win: {n} Candles', { n: fmtInt(g.win) })} · ${cv.t('play.queue.reward_loss', 'Loss: {n} Candles', { n: fmtInt(g.loss) })}`;
     if (g.perMinute > 0) more.push(cv.t('play.queue.reward_note', 'Plus {n} Candles a minute, up to {cap} per match.', { n: fmtInt(g.perMinute), cap: fmtInt(g.cap) }));
     if (g.placement?.length) more.push(cv.t('play.queue.placement_note', 'Top five places earn extra Candles.'));
-    more.push(cv.t('play.queue.first_win', 'First win of the day pays a bonus.'));
+    more.push(cv.t('play.queue.first_win', 'Your first win each day pays a bonus.'));
   }
   const bans = cv.pickOf(q) === 'draft' ? q.draft?.bansPerTeam ?? 0 : null;
   if (bans !== null) more.push(bans === 0 ? cv.t('play.queue.bans_none', 'No bans') : bans === 1 ? cv.t('play.queue.bans', '{n} ban per team', { n: bans }) : cv.t('play.queue.bans_plural', '{n} bans per team', { n: bans }));

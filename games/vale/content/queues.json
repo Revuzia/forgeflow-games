@@ -77,7 +77,7 @@
     {
       "id": "rift_coop",
       "mode": "rift",
-      "name": "Co-op vs bots",
+      "name": "Lantern Drill",
       "desc": "Your team against five bots that play at an easy pace. A calm place to learn a fighter or a role.",
       "kind": "coop",
       "pick": "blind",

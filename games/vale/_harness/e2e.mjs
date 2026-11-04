@@ -33,7 +33,7 @@
 //
 // PRACTICE (`practice` only, not under `all`; gameplay g3, the lab): Play → Practice → a fighter chosen now, a Veteran
 // sparring partner (real clicks on the setup screen) → the match on the queue's map: the partner is a bot of that
-// fighter on the other team; the Practice tools panel turns Wicks and structures off, sets the training targets' armor,
+// fighter on the other team; the Practice bench panel turns Wicks and structures off, sets the training targets' armor,
 // removes and places them, moves you to a clicked point, and its damage readout follows the sim's meter and clears.
 // Then BRIDGE from the setup's Map choice: the match must load on BRIDGE's map (the bar reads BRIDGE · Practice); if the
 // session cannot start it, the step fails and records whether the client recovered (an error notice and the setup
@@ -60,7 +60,7 @@ const STORE = MODES.length > 0 || which === 'store';
 const purse = { start: null, granted: 0, matches: 0 };
 /** the genre words VALE's own vocabulary replaces (Gleam, Dialwood, Wicks, Needles, fighters) */
 const GENRE_WORDS = /\b(jungle|gold|minions?|turrets?|champions?)\b/i;
-const QUEUE_CARD = { rift: 'Co-op vs bots', bridge: null, fray: null };
+const QUEUE_CARD = { rift: 'Lantern Drill', bridge: null, fray: null };
 
 const report = { started: new Date().toISOString(), speed, journeys: [] };
 
@@ -443,7 +443,7 @@ async function flowJourneys() {
     await page.waitForTimeout(500);
     await click(page.locator('.station', { hasText: 'RIFT' }).first());
     await page.waitForTimeout(400);
-    await click(page.locator('.qcard', { hasText: 'Co-op vs bots' }));
+    await click(page.locator('.qcard', { hasText: 'Lantern Drill' }));
     await page.waitForTimeout(300);
   };
   const lockoutClear = () => waitFor(page, (v) => v.state.lockoutLeft.value <= 0, 70000);
@@ -727,7 +727,7 @@ async function practiceJourney() {
       });
       expect(x.seats === 2 && x.other && x.other.team !== x.mine && x.other.controller === 'bot' && x.other.name === spar && x.other.difficulty === 'veteran', 'the sparring partner is not a Veteran bot of the chosen fighter on the other team', x);
       expect(x.entity && x.entity.hp > 0, 'the sparring partner has no fighter on the map', x);
-      expect(x.panel, 'no Practice tools panel', x);
+      expect(x.panel, 'no Practice bench panel', x);
       return x;
     });
     await step('tools', async () => {

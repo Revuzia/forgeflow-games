@@ -3,9 +3,7 @@
   "agentCount": 5,
   "logs": [
     "CW3s:bots-laning → gameplay:CL-1=partly, critic:gauge-source=partly, critic:bot-micro=partly",
-    "CW3s:quick-rekey-polish → originality:C1=done, originality:m1=done, originality:m2=done, gameplay:CL-g1=done, gameplay:CL-g3=done, gameplay:CL-g4=partly, gameplay:CL-g5=partly, gameplay:CL-g2=not_done, gameplay:CL-2=not_done, originality:m3=not_done, originality:m6=done",
-    "[CW3s:refix1] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
-    "[CW3s:verify2] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)"
+    "CW3s:quick-rekey-polish → originality:C1=done, originality:m1=done, originality:m2=done, gameplay:CL-g1=done, gameplay:CL-g3=done, gameplay:CL-g4=partly, gameplay:CL-g5=partly, gameplay:CL-g2=not_done, gameplay:CL-2=not_done, originality:m3=not_done, originality:m6=done"
   ],
   "result": {
     "wave": "CW3s",
@@ -15,43 +13,38 @@
         "id": "done:1",
         "severity": "major",
         "status": "fail",
-        "evidence": "Fresh soak _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt (--suites rift,mirror,bridge,human --seeds 20 --seed0 901 --cut 0 --lineup shuffle --mirror-weak novice), HEAD 67f00021: takedowns by 10:00 4.25 adept / 3.80 veteran (target >= 6, FAIL). Games with no takedown: 0/20 at both tiers (PASS). No-death stretch from 3:00: 4.1 / 4.1 min (target <= 3, FAIL). Shadehold takedowns before 14:00: 0.90 / 0.85 (target >= 1, FAIL; the claimed veteran 1.15 does not reproduce). Median first ult after 10:00: ulkro 10.5 (adept), ulkro 10.3 and ilsheta 10.2 (veteran) (FAIL). The r09 §4.4 gates exist in probe_sim_bot_soak.ts (group early).",
-        "fixHint": "Add fight-time last-hitting: a laner in a trade or all-in within 14 m of a dying Wick takes the last hit when the kill is not on. Then the trade windows and duo all-ins can ship without breaking G1. Add shadehold spike windows at levels 2, 3 and 6, and count the ult in killMargin for ulkro and ilsheta."
+        "evidence": "I re-measured at HEAD c01659e6 on a fresh window the engineer had not tuned on (seeds 941-960). Command: node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 941 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_v2. Report: _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt, 200 matches, 0 bot faults. Numbers are adept / veteran. Takedowns by 10:00: 5.05 / 4.65 (target >= 6, FAIL). Games with no takedown: 0/20 and 0/20 (PASS). Longest no-death stretch from 3:00: 3.4 / 3.4 min (target <= 3, FAIL). Shadehold takedowns before 14:00: 1.45 / 2.05 (PASS). Median first ult after 10:00: ulkro 10.4 (adept) and vashil 10.4 (veteran), FAIL. The engineer's claim of no late ult does not reproduce on this window.",
+        "fixHint": "Find about one more takedown by 10:00 without costing G1 last hits. Make sure ulkro, vashil and ilsheta use their ult in lane trades before 10:00, checked on two untuned windows."
       },
       {
         "id": "done:2",
         "severity": "major",
         "status": "fail",
-        "evidence": "Same soak. Last-hit share: 50.8 % adept, 49.2 % veteran (FAIL; the quick gate on seeds 1-8 passes 50.9 / 51.0, fw_W4_soak_fw_CW3s_v1_quick.txt). In lane: 76.7 / 73.3 % (veteran under the 75 % in the done-list). Cores fallen before 16:00: 0 / 0 (PASS). Sunsplinter first take after its 6:00 spawn: median 8.5 / 8.8 min (target <= 3, FAIL; computed from objs[] in fw_W4_soak_fw_CW3s_v1.json). Splinters only refresh and do not stack (src/sim/core.ts:142) (FAIL). pacing.ts PASS: RIFT adept p90 30.0 min.",
-        "fixHint": "Splinters: after the lead adds TeamBuffDef.maxStacks in catalog.ts, make addTeamBuff stack (stats × stacks, every take renews the timer) and set splinters maxStacks to 3. Sunsplinter: let the objective intent gather the adjacent roads and the grovehunter before spawn once their waves are shoved. After any CL-1 change, re-check G1 on a second untuned window."
+        "evidence": "Same report, _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt. Fighters' last-hit share: 46.9 / 46.9 % (target >= 50, FAIL; this regressed from 50.8 / 49.2). Laners in lane: 72.7 / 71.2 % (below the 75 % in the done-list). Sunsplinter first take after spawn: 2.1 / 3.0 min (PASS; veteran sits exactly on the bar). Splinters stack: maxStacks 3 in content/team_buffs.json, and addTeamBuff in src/sim/core.ts:137-159 adds a stack and renews the timer; probe_sim_rekey gives 45 passed, 0 failed (PASS). Cores fallen before 16:00: 0 (PASS). RIFT p90: 29.1 min (PASS)."
       },
       {
         "id": "done:3",
         "severity": "major",
-        "status": "fail",
-        "evidence": "Fresh seeds 901-920, 40 mirrored games: veteran beats novice 33/40 = 82.5 % (target >= 85 %, FAIL). Duo road level 6 median: 8.2 / 8.5 min (target <= 8:00, FAIL).",
-        "fixHint": "Widen the novice gaps further without stat changes: lower intent follow, longer macroDelay, weaker dodge and skillshot lead. Judge it on >= 80 games over two untuned windows. Duo XP needs an original rules key (handoff to the catalog.ts owner) or a change to lane XP sharing."
+        "status": "partly",
+        "evidence": "Veteran beats novice 38/40 = 95 % on seeds 941-960. With the engineer's 36/40 on seeds 901-920 that is 74/80 = 92.5 % over two windows (PASS). Veteran beats adept 30/40 (PASS). Duo road level 6 median: 7.9 adept / 8.0 veteran. The soak's own veteran gate reports FAIL because 8.0 is on the 8:00 bar, not under it (_harness/_reports/fw_W4_soak_fw_CW3s_v2.txt)."
       },
       {
         "id": "gameplay:CL-1",
         "severity": "major",
         "status": "fail",
-        "evidence": "See done:1. Takedowns by 10:00 rose from 1.9 / 1.75 to 4.25 / 3.80, but the >= 6 target is still missed, and veteran last-hit drops to 49.2 % on the fresh window.",
-        "fixHint": "See done:1."
+        "evidence": "Takedowns by 10:00 rose to 5.05 / 4.65, still under 6. The no-death stretch is 3.4 min (target <= 3), and two fighters still take their first ult after 10:00. The G1 last-hit share regressed to 46.9 % (fw_W4_soak_fw_CW3s_v2.txt)."
       },
       {
         "id": "critic:gauge-source",
         "severity": "major",
         "status": "partly",
-        "evidence": "I read the LeagueMath page myself: 96,851 NA Diamond+ games, patches 5.1-5.3, role means about 0.174-0.184 deaths per minute, matching modes_economy.md:54. No kills-at-10:00 or first-blood source was found, and CL-1 was not re-graded. The >= 6 bar is derived as one third of the whole-game rate.",
-        "fixHint": "Find a readable published per-team kills-at-10:00 or first-blood-time figure, without downloading anything, and re-grade CL-1 against it."
+        "evidence": "I repeated the search without downloading anything. The RPubs analysis 1380267 prints no blueKills or redKills mean, and openml.org/d/43635 renders no statistics. I found no readable kills-at-10:00 or first-blood figure, so the >= 6 bar is still derived from LeagueMath's whole-game rate (modes_economy.md:54)."
       },
       {
         "id": "critic:bot-micro",
         "severity": "major",
         "status": "partly",
-        "evidence": "Fresh soak, novice / adept / veteran: skillshot hit 53.4 / 76.8 / 73.8 % (veteran below adept). Telegraph dodge 10.6 / 26.6 / 49.4 %. Lowest-EHP focus 86-88.5 %. Recall HP median 41 / 32 / 33 %. The passive human seat took 264 / 173 damage per minute and died 0.00 times a game; the bot-played seat took 314 / 259 and died 0.15 / 0.10 times. Bots punish a passive player less than a bot. BRIDGE: 15.3 min median, 5/40 sudden death (PASS).",
-        "fixHint": "Raise lane aggression toward a passive foe (the 0.15 bonus at bot.ts:439) until the passive seat takes at least the bot seat's damage. Fix the veteran skillshot hit rate falling below adept's. Gate these numbers."
+        "evidence": "Skillshot hit rate, novice / adept / veteran: 50.4 / 72.7 / 76.7 %. On the same adept targets, veteran shooters hit 79.0 % against adept's 76.5 % (PASS, fixed). Telegraph dodge: 10.2 / 27.2 / 49.0 %. The passive human seat still takes less damage than the bot-played seat: 292 vs 320 per minute against adept bots and 241 vs 261 against veteran bots (FAIL; the gate is report-only and shows 'open')."
       },
       {
         "id": "originality:m1",
@@ -128,6 +121,11 @@
         "from": "quick-rekey-polish",
         "to": "tools/imagegen owner (CW3c/CW5)",
         "what": "Optional: Hourcleaver's passive is now 'Split Hour', an ability-hit cleave plus shield (it was a low-health shield). If tools/imagegen/item_subjects.json describes the hourcleaver icon by the shield, update the subject text. The icon itself can stay."
+      },
+      {
+        "from": "refix1",
+        "to": "CW3c",
+        "what": "Splinters now stack to 3 (TeamView buff entries carry stacks; TeamView.objectives gets one 'splinters' entry per take). Show 'Splinters xN' on the HUD team-buff chip (modes_economy.md section 10)."
       }
     ],
     "packages": [
@@ -173,17 +171,27 @@
       },
       {
         "key": "refix1",
-        "items": [],
-        "commits": [],
-        "notes": "agent died"
+        "items": [
+          "done:1=partly",
+          "done:2=partly",
+          "done:3=partly",
+          "gameplay:CL-1=partly",
+          "critic:gauge-source=partly",
+          "critic:bot-micro=partly"
+        ],
+        "commits": [
+          "99c9cfd1 vale CW3s: Splinters stack to 3 (CL-2): maxStacks 3 in team_buffs; probe_sim_rekey Splinters section 5/5 PASS",
+          "c01659e6 vale CW3s refix 2: laning kill windows and macro (CL-1, done:1-3) — the micro.ts, difficulty.ts, ulkro.json, modes.json and soak-probe edits landed through the wip syncs e9352941 / 23c74525"
+        ],
+        "notes": "Budget: two quick RIFT tuning runs on seeds 1-16 (r3_q1, r3_q2) and one verification run on seeds 901-920 (r3_v: rift cut at 15:00, plus human and mirror vs novice). I killed a broader run partway because it would have taken about 4 hours on this battery-powered, heavily loaded machine. BRIDGE was not re-run; none of the laning changes apply there. Still open: CL-1's >= 6 takedowns by 10:00 (4.70 / 3.90), the no-death stretch (3.5 / 4.0 min), and the passive human seat (293 / 255 vs 328 / 284 damage per minute). G1's last-hit share also regressed to 45.9 / 47.1 %, below 50; every extra laning "
       }
     ],
     "regressions": [
-      "Fresh-window G1: veteran last-hit 49.2 % (< 50 %) and veteran in-lane 73.3 % (< 75 %) on seeds 901-920; the tuned quick gate still passes",
-      "Veteran beats novice 82.5 % on seeds 901-920 (claimed done at 90-92 %)",
-      "Stale nurrow.json:184 Lullaby Dart description still says Snuff 'hits harder' on a sleeper"
+      "G1 fighters' last-hit share fell to 46.9 / 46.9 % (was 50.8 / 49.2 in round 1), in _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt",
+      "The jungle gate (grovehunter deaths no higher than the worst laner role's) now fails for adept at 3.5 vs 3.5; it passed in round 1 at 2.9 vs 3.8",
+      "The veteran duo level 6 gate fails at exactly 8.0 min"
     ],
-    "summary": "CW3s does not pass round 1 (verdict at _design/reviews/fixwaves/CW3s_verify1.json, commit c6fbcacd, pushed). Pass: done:4 / originality C1 (Quick re-key, probe_sim_rekey 40/0), m2, m6, CL-g1 (no early core falls), regression probes and pacing. Fail on my fresh untuned soak (seeds 901-920, shuffle, _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt): CL-1 major still open (takedowns by 10:00 4.25 / 3.80 vs >= 6, no-death stretch 4.1 min, shadehold 0.90 / 0.85, ulkro/ilsheta first ult > 10 min); G1 veteran last-hit 49.2 % and in-lane 73.3 %; veteran beats novice 82.5 % (< 85 %, so CL-g3 'done' does not hold); Sunsplinter first take 8.5-8.8 min after spawn and Splinters do not stack; duo road level 6 at 8.2-8.5 min. The critic items gauge-source and bot-micro are partly met: the LeagueMath source checks out, but no 10:00 kill count or first-blood time was sourced, and bots punish the passive human seat less than a bot-played seat. m3 is not done (handoffs only). m1 leaves a stale Lullaby Dart description."
+    "summary": "CW3s does not pass verify round 2. I re-measured at c01659e6 on seeds 941-960, a window the engineer had not tuned on (200 matches, _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt).\n\nFixed and confirmed:\n- Splinters stack to 3; probe_sim_rekey gives 45 passed, 0 failed.\n- Sunsplinter is first taken 2.1 / 3.0 min after spawn.\n- Shadehold takedowns before 14:00 are 1.45 / 2.05.\n- Veteran beats novice 38/40, which makes 74/80 over two windows.\n- Veteran skillshots now hit adept targets more often than adept shooters do.\n- BRIDGE, match pace (RIFT p90 29.1 min), typecheck (0 errors) and content:check (0 warnings) all pass.\n\nStill failing:\n- Takedowns by 10:00 are 5.05 / 4.65 against the target of 6.\n- The longest stretch without a death from 3:00 is 3.4 min (target <= 3).\n- First ult comes after 10:00 for ulkro and vashil (10.4).\n- A passive human seat still takes less damage than a bot-played seat.\n- Veteran duo level 6 is at 8.0 min, on the bar rather than under it.\n\nRegressions: the fighters' last-hit share fell to 46.9 % (target >= 50), and the adept jungle gate (grovehunter deaths) now fails.\n\nThe verdict is in _design/reviews/fixwaves/CW3s_verify2.json, committed as 5200a804 and pushed."
   },
   "workflowProgress": [
     {
@@ -210,8 +218,8 @@
       "agentId": "a4a3e542119538ba0",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793742307865,
-      "lastProgressAt": 1793742307865,
+      "startedAt": 1793754116923,
+      "lastProgressAt": 1793754116923,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"gameplay:CL-1\",\"status\":\"partly\",\"evidence\":\"Final full soak on a fresh window (seeds 501-520, shuffled per-role lineups, 400 matches): _harness/_reports/fw_W4_soak_fw_CW3s_final.txt. RIFT credited takedowns by 10:00 were 3.65 adept / 4.30 veteran. The verified build 09d330c0 scored 1.3 / 2.4 on seeds 401-410, and the earlier CW3s baseline scored 1.6 / 2.55. The >= 6 target is sti…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -225,8 +233,8 @@
       "agentId": "ad2445ab0a8ec2c6e",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793742307865,
-      "lastProgressAt": 1793742307865,
+      "startedAt": 1793754116923,
+      "lastProgressAt": 1793754116923,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"originality:C1\",\"status\":\"done\",\"evidence\":\"content/queues.json rift_quick now starts at level 1 with 480 Gleam (was level 3 with 1,250). The speed comes from a dial wound fast: Quick's own xpTable with every step at 75 % of RIFT's and xpMult 1, passiveGoldStart 0, the Dawn Seal lifting at 5:00 instead of 7:00, and the existing 0:20/25 s waves. The queue description is updated. `n…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -240,8 +248,8 @@
       "agentId": "a6ea2f8cba8258159",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793742307865,
-      "lastProgressAt": 1793742307865,
+      "startedAt": 1793754116923,
+      "lastProgressAt": 1793754116923,
       "cached": true,
       "resultPreview": "{\"pass\":false,\"summary\":\"CW3s does not pass round 1 (verdict at _design/reviews/fixwaves/CW3s_verify1.json, commit c6fbcacd, pushed). Pass: done:4 / originality C1 (Quick re-key, probe_sim_rekey 40/0), m2, m6, CL-g1 (no early core falls), regression probes and pacing. Fail on my fresh untuned soak (seeds 901-920, shuffle, _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt): CL-1 major still open (takedow…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -252,22 +260,22 @@
       "label": "CW3s:refix1",
       "phaseIndex": 3,
       "phaseTitle": "Refix",
-      "agentId": "a222a21a74f53fcae",
+      "agentId": "a7a2bb0c93c1daa63",
       "agentType": "general-purpose",
       "model": "claude-opus-5-5",
-      "state": "error",
-      "startedAt": 1793742307875,
-      "queuedAt": 1793742307866,
+      "state": "done",
+      "startedAt": 1793754116932,
+      "queuedAt": 1793754116923,
       "attempt": 1,
-      "lastToolName": "Bash",
-      "lastToolSummary": "until grep -q \"^report:\\|Error\\|FAIL:\" /private/tmp/claude-…",
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Budget: two quick RIFT tuning runs on seeds 1-16 (r3_q1, r3…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
       "promptFramed": true,
-      "lastProgressAt": 1793747852226,
-      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
-      "tokens": 171259,
-      "toolCalls": 68,
-      "durationMs": 5544351
+      "lastProgressAt": 1793787192511,
+      "tokens": 198723,
+      "toolCalls": 118,
+      "durationMs": 33075579,
+      "resultPreview": "{\"items\":[{\"id\":\"done:1\",\"status\":\"partly\",\"evidence\":\"Fresh window, seeds 901-920, verifier's shuffled seating: `_harness/probe_sim_bot_soak.ts --suites rift,human,mirror --seeds 20 --seed0 901 --cut 900 --lineup shuffle --mirror-weak novice`. Report: _harness/_reports/fw_W4_soak_fw_CW3s_r3_v.txt. Numbers are adept / veteran. Now PASS: shadehold takedowns before 14:00 are 1.05 / 1.10 (was 0.90 / …"
     },
     {
       "type": "workflow_agent",
@@ -275,22 +283,24 @@
       "label": "CW3s:verify2",
       "phaseIndex": 3,
       "phaseTitle": "Refix",
-      "agentId": "a6b4f4e9dc8f4274e",
+      "agentId": "a2757b5f03f7a1142",
       "agentType": "general-purpose",
       "model": "claude-opus-5-5",
-      "state": "error",
-      "startedAt": 1793747852431,
-      "queuedAt": 1793747852289,
+      "state": "done",
+      "startedAt": 1793787192530,
+      "queuedAt": 1793787192516,
       "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CW3s does not pass verify round 2. I re-measured at c01659e…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
       "promptFramed": true,
-      "lastProgressAt": 1793752708130,
-      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
-      "tokens": 0,
-      "toolCalls": 0,
-      "durationMs": 4855696
+      "lastProgressAt": 1793795586302,
+      "tokens": 97599,
+      "toolCalls": 38,
+      "durationMs": 8393772,
+      "resultPreview": "{\"pass\":false,\"items\":[{\"id\":\"done:1\",\"severity\":\"major\",\"status\":\"fail\",\"evidence\":\"I re-measured at HEAD c01659e6 on a fresh window the engineer had not tuned on (seeds 941-960). Command: node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 941 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_v2. Report: _harness/_reports/fw_W4_soak…"
     }
   ],
-  "totalTokens": 171259,
-  "totalToolCalls": 68
+  "totalTokens": 296322,
+  "totalToolCalls": 156
 }

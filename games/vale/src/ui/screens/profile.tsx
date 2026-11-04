@@ -79,7 +79,7 @@ function RenameForm(p: { current: string; onDone: (n: string) => void; onCancel:
 
 function ledgerLabel(cv: ReturnType<typeof useApp>['cv'], e: LedgerEntry): string {
   if (e.reason === 'purchase') { const s = cv.skin(cv.offer(e.ref)?.ref); return s ? s.name : cv.t('profile.ledger.purchase', 'Purchase'); }
-  const fall: Record<LedgerEntry['reason'], string> = { match_grant: 'Match reward', first_win: 'First win of the day', purchase: 'Purchase', starter: 'Starting Candles', refund: 'Refund', migration: 'Carried over' };
+  const fall: Record<LedgerEntry['reason'], string> = { match_grant: 'Match reward', first_win: 'First win today', purchase: 'Purchase', starter: 'Starting Candles', refund: 'Refund', migration: 'Carried over' };
   return cv.t(e.reason === 'first_win' ? 'grant.first_win' : `profile.ledger.${e.reason}`, fall[e.reason]);
 }
 

@@ -46,7 +46,7 @@ try {
   await page.waitForTimeout(2000);
   await click(page.locator('.nav__item', { hasText: 'Play' })); await page.waitForTimeout(500);
   await click(page.locator('.station', { hasText: 'RIFT' }).first()); await page.waitForTimeout(500);
-  await click(page.locator('.qcard', { hasText: 'Co-op vs bots' })); await page.waitForTimeout(300);
+  await click(page.locator('.qcard', { hasText: 'Lantern Drill' })); await page.waitForTimeout(300);
   await click(page.getByRole('button', { name: 'Find match' }));
   await waitFor(page, (v) => v.state.queue.value?.state === 'found' || !!v.state.draft.value, 30000);
   const ready = page.getByRole('button', { name: /^Ready/ }); if (await ready.count()) await click(ready.first());

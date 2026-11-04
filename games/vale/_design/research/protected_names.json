@@ -1167,7 +1167,9 @@
    "Ultimate Spellbook",
    "Ultra Rapid Fire",
    "URF",
-   "Valoran City Park"
+   "Valoran City Park",
+   "Co-op vs bots",
+   "Co-op vs. bots"
   ],
   "lol_objectives_structures": [
    "Ancient Krug",
@@ -1970,7 +1972,8 @@
    "Team Chaos",
    "Team Order",
    "Ultimate Skin",
-   "Ward Skin"
+   "Ward Skin",
+   "First Win of the Day"
   ],
   "lol_skins_lines": [
    "Anima Squad",

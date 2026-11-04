@@ -181,7 +181,7 @@
       "id": "nurrow_lullaby_dart",
       "name": "Lullaby Dart",
       "icon": "assets/ui/icons/abilities/nurrow_lullaby_dart.webp",
-      "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage, and damage wakes the sleeper. Felt Step does not wake them; Snuff on a sleeper hits harder, silences longer and comes back sooner.",
+      "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage, and damage wakes the sleeper. Felt Step does not wake them; Snuff on a sleeper silences longer and comes back sooner.",
       "maxRank": 5,
       "cooldown": [
         12,
