@@ -2051,7 +2051,9 @@ def _victory(g) -> anim.Clip:
                    Rpos=ps, Rpole=(-0.9, 0.2, -0.3), aim=ds, feet=_feet(st, dr=(-0.04, -0.10, 0.0)))
     # the hold: the whole blade grounded ahead of her at a long diagonal, both hands on top of it (the right on
     # the grip, the left over the pommel), chin up, the mantle a quarter turned
-    ph, dh = _plant((-0.04, -0.22, 1.10), (-0.26, -1.04, 0.0))      # hands low: the forearms angle down
+    # closing ervet-m2: the held point hovered 11 cm over the ground (palm 1.10 m, aimed at (-0.26, -1.04, 0)); the palm
+    # 8 cm lower and the blade a little steeper put the point on the ground (palm-to-point 1.25 m)
+    ph, dh = _plant((-0.04, -0.22, 1.02), (-0.22, -0.92, 0.0))      # hands low: the forearms angle down
     hold = _pose(st, dict(hips=(-2, -10, 0), spine=(-3, -4, 0), chest=(-5, -4, 0), neck=(-4, 4, 0), head=(-12, 8, 0)),
                  (0.0, 0.0, 0.0), Rpos=ph, Rpole=(-0.55, 0.2, -0.8), aim=dh, L=-0.12, Lpole=(0.55, 0.2, -0.8),
                  feet=_feet(st, dl=(0.03, 0.0, 0.0), dr=(-0.05, -0.06, 0.0), yr=-14))
@@ -2070,7 +2072,8 @@ def _victory(g) -> anim.Clip:
 
 
 def _recall(g, ctx) -> anim.Clip:
-    """recall (270 f = 9 s, longer than any recall: 5-8 s): from her stance she sets the blade point-down and
+    """recall (180 f = 6 s, the clip contract's cap; closing ervet-m5: it was 270 f = 9 s and failed three_load_test;
+    RIFT's 7 s channel wraps the last second into the set-down): from her stance she sets the blade point-down and
     kneels on the right knee behind it, both hands folded over the grip (0.4 s); a slow beat: she bows her
     head onto her hands, holds, lifts her chin and looks out; she rises back to the stance only in the last
     0.5 s (never seen: the recall ends first), which closes the loop the renderer plays. The holds are still
@@ -2090,17 +2093,17 @@ def _recall(g, ctx) -> anim.Clip:
     ps, ds = _grounded(g, hand_z=1.22, tip=(0.03, -0.62, 0.0))
     set_ = _pose(g, dict(hips=(4, 0, 0), spine=(4, 0, 0), head=(6, 0, 0)), (0.0, 0.0, -0.03), Rpos=ps, aim=ds,
                  L=-0.10)
-    N = 270
-    keys = [(0.0, g, "linear"), (0.022, set_, "inout"), (0.050, base, "inout"), (0.20, base, "linear"),
-            (0.26, bow, "inout"), (0.44, bow, "linear"), (0.50, look, "inout"), (0.90, look, "linear"),
-            (0.935, set_, "inout"), (0.97, g, "inout"), (1.0, g, "linear")]
+    N = 180
+    keys = [(0.0, g, "linear"), (0.033, set_, "inout"), (0.075, base, "inout"), (0.25, base, "linear"),
+            (0.333, bow, "inout"), (0.50, bow, "linear"), (0.583, look, "inout"), (0.883, look, "linear"),
+            (0.933, set_, "inout"), (0.975, g, "inout"), (1.0, g, "linear")]
     fn = anim.keyed(keys)
 
     def sample(t):
         p = fn(t)
-        if 0.05 < t < 0.93:
-            k = min(1.0, (t - 0.05) / 0.02, (0.93 - t) / 0.02)
-            b = anim.osc(t, 6)
+        if 0.075 < t < 0.92:
+            k = min(1.0, (t - 0.075) / 0.03, (0.92 - t) / 0.03)
+            b = anim.osc(t, 4)
             p = anim.add(p, anim.P(neck=(0.8 * b * k, 0, 0), head=(-1.2 * b * k, 0, 0)))
         return p
     return anim.Clip("recall", N, True, sample)

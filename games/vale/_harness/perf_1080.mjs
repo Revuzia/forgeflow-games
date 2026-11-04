@@ -741,7 +741,8 @@ try {
   if (MATCH && MATCH_SEEDS.length) {
     out.matchSeeds = [];
     for (let i = 0; i < MATCH_SEEDS.length; i++) {
-      const r = await matchPeak(MATCH_SEEDS[i], i * 5);
+      // --match-rot <n>: the first seed's rotation (a targeted re-run of one seed of the sweep: seed 11 is rot 5 there)
+      const r = await matchPeak(MATCH_SEEDS[i], Number(opt('match-rot', 0)) + i * 5);
       out.matchSeeds.push(r);
       if (!r.pass) out.pass = false;
     }

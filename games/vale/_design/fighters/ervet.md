@@ -25,12 +25,12 @@ Banned for every fighter: gears, clock hands, gold filigree, gems, glowing runes
 ## 1. Silhouette at 96 px
 
 - **Mass: Breaker, inverted wedge.** A heavy blued mantle makes shoulders 0.80 m against hips of 0.30 m (2.7 : 1) and greaves of 0.22 m at the ankle: the figure narrows steadily from the shoulders to the feet.
-- **Hook:** a **1.6 m translucent blade carried point-low** on the right side, a pale diagonal bar from hip to ankle (81 px long at 1080p) that no other fighter has. The blade is 0.16 m wide and 2 cm thick; the crossguard (0.44 m) holds the accent.
+- **Hook:** a **1.3 m translucent blade carried point-low** on the right side, a pale diagonal bar from hip to ankle (81 px long at 1080p) that no other fighter has. The blade is 0.16 m wide and 2 cm thick; the crossguard (0.44 m) holds the accent.
 - **Hilt form** is a deliberately different read: the blade is gone and a short jagged stub of 0.30 m (a broken sliver of the same glass) stands in the fist, so the silhouette loses its long diagonal and becomes a plain wedge. This is the cue that she is fast and fragile.
 - **Great form** (the ultimate, Whole Again) is the whole blade again at its **usual length and width**: the reformed blade reads by its **glowing shard seams**, not by size. Five fracture lines cross the glass edge to edge, with two short splits between them, so the blade shows eight fused shards and its point; the seams glow in the accent (team colour), and the glass beside each seam is a shade deeper. Ervet's reach stays 2.0 m in every form (W4 re-key 2026-10-28, ROSTER section 5: the first ult's oversized blade with +0.6 m reach was cut), so the blade must not grow.
 - **Size:** 106 px tall at 1080p (71 px at 720p). The wedge reads from the mantle's flat top edge down to a pointed base.
 - **At 64 px:** a dark top-heavy triangle with one pale diagonal on the right (whole) or no diagonal at all (Hilt). Nothing is thinner than 6 cm (5 px): the blade's 16 cm face is the thinnest part.
-- **Facing from above:** the slit visor's tip points forward, the blade lies on the right, the longer mantle point (the left pauldron) is on the left.
+- **Facing from above:** the face glass (the star's long arm) and the crest's front point forward, the blade lies on the right, the longer mantle point (the left pauldron) is on the left.
 
 Pairs to test first (IoU <= 0.80 at 64 px):
 
@@ -54,7 +54,7 @@ SHAPE = body.shape(girth=1.0, torso_w=1.15, torso_d=1.02, chest=1.12, waist=0.86
 
 ## 3. Face (template 3)
 
-- **Aubade glass visor.** One tall slit pane of dawnglass (`kit.glass_visor`), 0.26 m tall and 6 cm wide, over a carved chalk face-plate with an ink recess behind the glass. The slit's lower tip lengthens into a 4 cm beak that is the facing cue from above. A chalk brow plate runs back into a low rigid crest (0.12 m).
+- **Aubade glass visor.** A tall kite helm whose face glass is a four-point star of dawnglass (the vertical arm the long one, a tall slit) with two thin glass cheek lines under it, set in a carved chalk face-plate with an ink recess behind the glass (the concept's helm; the closing review ervet-m6 brought this section in line with the shipped model). The star's long lower arm points down the face and, with the transverse crest, is the facing cue from above. A chalk brow strip runs back into a low rigid transverse crest (0.12 m).
 - No bare face, no hair; the crest is carved stone, one rigid piece.
 
 ## 4. Armour, cloth and props (template 4)
@@ -62,7 +62,7 @@ SHAPE = body.shape(girth=1.0, torso_w=1.15, torso_d=1.02, chest=1.12, waist=0.86
 - **Mantle.** A heavy blued-steel mantle in matte painted plates (`cloth`, no gloss): three overlapping shoulder lames on each side, 0.80 m across at its widest, flat on top and a little higher on the left, with 3 cm bevels. It is the widest edge on the figure and carries the Breaker read.
 - **Torso and arms.** A close under-suit (`under`), a chalk breastplate, blued vambraces; a light linen scarf (`cloth2`) knotted at the right shoulder (rigid, one-bone `x_scarf`).
 - **Legs.** Narrow ironstone greaves over dark leggings and dark `leather` boots, so the figure narrows to a point.
-- **Greatsword** (`prop.R`, grip at the origin, blade along -Z; at rest the grip is at chest height on the right, pommel at the shoulder, the blade angled 55 degrees down and forward, point 0.35 m above the ground). The whole blade is dawnglass 1.6 m x 0.16 m x 2 cm with 2 cm bevels, glossy, never emissive; a chalk crossguard 0.44 m wide with a carved-stone pommel; leather-wrapped grip 0.30 m. The accent is two glass inlays in the crossguard's ends.
+- **Greatsword** (`prop.R`, grip at the origin, blade along -Z; at rest the grip is at chest height on the right, pommel at the shoulder, the blade angled 55 degrees down and forward, point 0.35 m above the ground). The whole blade is dawnglass 1.32 m (crossguard to point) x 0.16 m x 2 cm with 2 cm bevels (the concept's proportion, which the model follows over the brief's first 1.6 m), glossy, never emissive; a chalk crossguard 0.44 m wide with a carved-stone pommel; leather-wrapped grip 0.30 m. The accent is two glass inlays in the crossguard's ends.
 - **Three blade states in one GLB**, as separate mesh nodes the renderer toggles by form: `blade_whole` (above), `blade_hilt` (the same crossguard and grip with a 0.30 m jagged stub, sharing the grip and the accent inlays) and `blade_great` (the whole blade's size and material, plus the accent seams: a second node `form_great_1` holds the seam ribbons, 1.6 cm wide, 1.5 mm proud of both faces). The skeleton and clips are identical for all three; only the prop node changes. The shard field Shatter leaves is a VFX preset, not geometry.
 
 Sockets (`art.json` `sockets`; the standard set stays exactly as in the content JSON):
@@ -176,7 +176,7 @@ Value bands (area-weighted): top **71** (70-85) · mid **50** (45-65) · feet **
 ## 10-11. Export and renders
 
 - Splash: `SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}`. The whole blade grounded at the front, the wedge of the mantle turned a quarter from the camera, the long diagonal pointing toward the frame centre.
-- Portrait (512 square, `idle_lobby` t 0, yaw 28): the visor, the beak and the mantle's flat top edge with the crest. Icon (128 square): the slit visor and the brow-plate accent.
+- Portrait (512 square, `idle_lobby` t 0, yaw 28): the star visor with its cheek lines and the mantle's flat top edge with the crest. Icon (128 square): the star visor and the brow-strip accent.
 - GLB budget 10-25k tris and at most 1.2 MB, base and both skins.
 
 ## Per-fighter checks (on top of the template checklist)

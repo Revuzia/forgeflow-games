@@ -161,14 +161,14 @@
   },
   "uv_coverage": 0.633,
   "bake": {
-    "base": 73.65,
-    "rough_metal": 52.78,
-    "normal": 25.2,
-    "ao": 38.19,
+    "base": 13.98,
+    "rough_metal": 11.73,
+    "normal": 6.13,
+    "ao": 5.66,
     "normal_fixed_px": 21413,
-    "projection": 135.1,
-    "pack_save": 137.69,
-    "total": 332.44
+    "projection": 83.4,
+    "pack_save": 84.07,
+    "total": 122.65
   },
   "tris": 18722,
   "mesh_top_m": 2.316,
@@ -297,6 +297,20 @@
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/marund/splash.png",
+      "portrait": "art/out/fighters/marund/portrait.png",
+      "icon": "art/out/fighters/marund/icon.png",
+      "turntable": "art/renders/fighters/marund/turntable.png"
+    },
+    "seconds": {
+      "splash": 355.85,
+      "portrait": 13.18,
+      "icon": 3.56,
+      "turntable": 4.67
+    }
+  },
   "three_qa": {
     "ok": true,
     "mode": "sheet",
@@ -326,26 +340,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/marund/three_marund.png",
-    "seconds": 163.6,
-    "exit": 0,
-    "clip_sheet": "art/renders/fighters/marund/three_clips_marund.png"
+    "seconds": 10.5,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 0.42,
-      "model": 36.57,
-      "lows_bind": 59.9,
-      "uv": 47.75,
-      "bake": 332.45,
-      "clips": 2.52,
-      "export": 18.33,
-      "optimize": 7.39,
-      "load_test": 1.38,
-      "three_qa": 524.2,
-      "cache": 0.94
+      "rig": 0.01,
+      "materials": 0.58,
+      "model": 21.88,
+      "lows_bind": 29.82,
+      "uv": 14.7,
+      "bake": 122.66,
+      "clips": 0.61,
+      "export": 5.93,
+      "optimize": 2.23,
+      "load_test": 0.47,
+      "render": 377.4,
+      "three_qa": 10.76,
+      "cache": 0.27
     },
-    "total_s": 1032.19
+    "total_s": 587.5
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

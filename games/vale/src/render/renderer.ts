@@ -56,7 +56,7 @@ import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows } from './ink.ts';
 import { lodReady, lodSwitch, shadowLods } from './lod.ts';
-import { CrowdLayer } from './crowd.ts';
+import { CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
@@ -312,6 +312,8 @@ class ValeRenderer implements Renderer {
   private frameMs = 0;
   private sceneCalls = 0;
   private sceneTris = 0;
+  /** the crowd's rest-ink cap this frame (crowd.ts; the triangle governor) */
+  private crowdInkCap = CROWD_OUTLINE_MAX;
   private skipAcc = 0;
   private readonly resources = new Map<string, { color: Color; model: string }>();
   private readonly tmpColor = new Color();
@@ -1141,7 +1143,10 @@ class ValeRenderer implements Renderer {
     // moved: a unit the re-cull brought back is drawn this frame)
     this.crowd.begin();
     for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
-    this.crowd.end(this.rig.focus.x, this.rig.focus.z);
+    // the triangle governor (perf done:7): a frame over the soft mark holds the crowd's rest ink to its nearest units
+    if (this.sceneTris > CROWD_INK_TRIS_HIGH) this.crowdInkCap = CROWD_OUTLINE_CROWDED;
+    else if (this.sceneTris < CROWD_INK_TRIS_LOW) this.crowdInkCap = CROWD_OUTLINE_MAX;
+    this.crowd.end(this.rig.focus.x, this.rig.focus.z, this.crowdInkCap);
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
     this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);
     // fog of war

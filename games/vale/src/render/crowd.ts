@@ -25,7 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
-import { composeIndex, dequantUnit, LOD, lodIndex, prepareShadowLod, shadowLods } from './lod.ts';
+import { composeIndex, dequantUnit, indexView, LOD, lodIndex, prepareShadowLod, shadowLods } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -52,7 +52,7 @@ export interface CrowdBake {
   readonly parts: CrowdPart[];
   /** outline / flash hull geometry (template hull plan), its bind matrix and the index it draws through (its members'
    *  LODs: exactly the triangles the body and accents draw; null = its own) */
-  readonly hull: { geometry: BufferGeometry; bind: Matrix4; lod: BufferAttribute | null }[];
+  readonly hull: { geometry: BufferGeometry; bind: Matrix4; lod: BufferAttribute | null; unit: number }[];
   /** the template root's placement: the per-actor clone keeps it, so the crowd does too */
   readonly rootPos: Vector3;
   readonly rootQuat: Quaternion;
@@ -188,7 +188,7 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   return {
     id: ++bakeSeq, texture, bones: ref.bones.length, clips: table,
     parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i], unit: units[i] })),
-    hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0], lod: h.members ? composeIndex(h.geometry, h.members, (i) => (lods[i]?.array as ArrayLike<number> | undefined) ?? null) : null })),
+    hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0], lod: h.members ? composeIndex(h.geometry, h.members, (i) => (lods[i]?.array as ArrayLike<number> | undefined) ?? null) : null, unit: units[h.lead] ?? 1 })),
     rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(), monster,
   };
 }
@@ -349,6 +349,12 @@ export interface CrowdActor {
  *  multi-wave base push stops paying a hull per unit) */
 export const CROWD_OUTLINE_MAX = 16;
 export const CROWD_OUTLINE_FAR = 24;
+/** the triangle governor (renderer.ts): over CROWD_INK_TRIS_HIGH triangles in the last frame (a late multi-wave base
+ *  push) the rest ink holds to CROWD_OUTLINE_CROWDED unit a set (the nearest the focus) and the accents throw no shadow
+ *  of their own, until the frame is back under CROWD_INK_TRIS_LOW (perf budget 500k triangles a frame) */
+export const CROWD_OUTLINE_CROWDED = 1;
+export const CROWD_INK_TRIS_HIGH = 440000;
+export const CROWD_INK_TRIS_LOW = 380000;
 
 const ATTRS = ['aCrowdM0', 'aCrowdM1', 'aCrowdM2', 'aCrowdAnim', 'aCrowdStyle', 'aCrowdFlash', 'aCrowdFlashRim'] as const;
 type AttrName = (typeof ATTRS)[number];
@@ -439,6 +445,8 @@ class CrowdSet {
   private readonly outlineU = { uColor: { value: new Color() }, uAlpha: { value: 0.6 } };
   private readonly flashMeshes: Mesh[] = [];
   private readonly accentMats: MeshStandardMaterial[] = [];
+  /** the accent parts' meshes (the triangle governor drops their shadow in a crowded frame: the body's covers it) */
+  private readonly accentMeshes: Mesh[] = [];
   private colorSet = false;
   /** this frame's units, the flashing ones apart: end() writes those first, so the victim flash draws only them */
   private readonly units: CrowdActor[] = [];
@@ -476,6 +484,7 @@ class CrowdSet {
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       mesh.name = `crowd_part_${p.accent ? 'accent' : 'body'}`;
+      if (p.accent) this.accentMeshes.push(mesh);
       shadowLods(mesh);                                                    // hooked now (its LOD is built above)
       this.group.add(mesh);
     }
@@ -483,10 +492,15 @@ class CrowdSet {
       // the rest ink (per-instance width, collapsed when 0) and the victim flash (per-instance, while one flashes)
       const bk = { uCrowdBake: { value: bake.texture }, uCrowdBind: { value: h.bind } };
       const om = inkMaterial('crowd', INK.outline, { side: BackSide, blend: 'normal', depthWrite: false, offset: [1, 2], uniforms: { ...bk, ...this.outlineU, uOutlineRes: outlineRes } });
-      // perf PERF-m5: the hull draws through its members' LODs (bakeCrowd)
+      // perf PERF-m5: the hull draws through its members' LODs (bakeCrowd); CW1 refix (perf done:7): the rest ink
+      // through a welded LOD of that hull within 8 mm (LOD.ink, as a match fighter's outline draws: an untextured shell
+      // needs no seams), about half its triangles. The victim flash keeps the body's own triangles (it covers the body)
       const hullLod = h.lod;
+      const base = hullLod ?? h.geometry.index;
+      const inkLod = base ? lodIndex(indexView(h.geometry, base, 'crowd_ink'), 'ink', LOD.minTrisCrowd, h.unit) : null;
       const hv = this.buf.view(h.geometry);
-      if (hullLod) { hv.userData.fullIndex = h.geometry.index; hv.setIndex(hullLod); }
+      const hullIdx = inkLod ?? hullLod;
+      if (hullIdx) { hv.userData.fullIndex = h.geometry.index; hv.setIndex(hullIdx); }
       const o = new Mesh(hv, om);
       hv.userData.outlineOnly = true;
       o.frustumCulled = false; o.matrixAutoUpdate = false; o.renderOrder = 1; o.name = 'crowd_outline';
@@ -517,7 +531,7 @@ class CrowdSet {
     (a.flashState.k > 0.002 ? this.flashing : this.units).push(a);
   }
 
-  end(fx = 0, fz = 0): void {
+  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX): void {
     // perf PERF-m5: the flashing units take the first slots and the victim flash draws only those (it drew every unit
     // of the set, its triangles counted for each, while any one of them flashed)
     const b = this.buf, nf = this.flashing.length, n = nf + this.units.length;
@@ -539,12 +553,16 @@ class CrowdSet {
     let kept = 0;
     for (let i = 0; i < nu; i++) {
       const r = ranked[i], a = r.a!;
-      const ink = kept < CROWD_OUTLINE_MAX && r.d2 !== Infinity;
+      const ink = kept < cap && r.d2 !== Infinity;
       if (ink) kept++;
       writeInstance(b, b.count++, a, this.bake, ink ? a.restOutline.px : 0, false);
     }
     b.commit();
     for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf; else if (g.userData.outlineOnly) g.instanceCount = nf + kept;
+    // a crowded frame (the governor's cap): the team-colour accents throw no shadow of their own (a stripe or band on
+    // the body, inside the body's shadow; ~0.4k triangles a unit in the shadow pass)
+    const accentShadow = cap >= CROWD_OUTLINE_MAX;
+    for (const m of this.accentMeshes) m.castShadow = accentShadow;
     this.group.visible = b.count > 0;
     for (const f of this.flashMeshes) f.visible = nf > 0;
   }
@@ -628,8 +646,9 @@ export class CrowdLayer {
     s.push(a);
   }
 
-  /** fx, fz: the camera's focus on the ground (the outline LOD ranks by distance from it) */
-  end(fx = 0, fz = 0): void { for (const s of this.sets.values()) s.end(fx, fz); }
+  /** fx, fz: the camera's focus on the ground (the outline LOD ranks by distance from it); cap: the most units of a set
+   *  that take the rest ink this frame (the renderer's triangle governor lowers it in a crowded frame) */
+  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX): void { for (const s of this.sets.values()) s.end(fx, fz, cap); }
 
   /** units drawn this frame (harness) */
   get instances(): number { let n = 0; for (const s of this.sets.values()) n += s.buf.count; return n; }

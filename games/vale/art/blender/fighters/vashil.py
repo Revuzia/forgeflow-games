@@ -167,7 +167,9 @@ CLAP_IN = (0.017, 0.012, 0.028, 0.008)              # the mouth clapper: (w, up,
 # and those two hang higher and a little smaller (the high notes of a graduated chime): crowns set into the band's
 # underside, 10 cm tall, so their lips sit over the visor's arch point in a level three-quarter view
 FRONT_BELL_H, FRONT_BELL_UP = 0.100, 0.024
-DROP_K = {7: 1.17, 10: 0.94}
+DROP_K = {7: 1.17, 10: 0.94}                        # (legacy: the faceted drops, replaced in the closing pass)
+BEAD_R, BEAD_DROP = 0.012, 0.002                    # closing VAS-m5: the clapper bead (2.4 cm) in each bell mouth
+INLAY_HW, INLAY_ZC, INLAY_HZ = 0.0050, HALO_HZ - 0.0009, 0.0021   # the azure inlay line in the band's top channel
 _N_BELLS = [7]                                      # the bells on the halo being built (First Bell: 10)
 
 
@@ -774,28 +776,30 @@ def halo_parts(n_bells: int = 7) -> list:
                 return np.maximum(np.maximum(d, -zz - 0.012), np.abs(r) - 0.013)
             cl.add(Fn(fin, c + np.array([-0.05, -0.05, 0.03]), c + np.array([0.05, 0.10, 0.062 + FIN_H + 0.01])), k=0.004)
     out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
+    # closing VAS-m5: the clappers are round 2.4 cm beads in the bell mouths (brief §4: '2 cm beads', no gems; the
+    # 7 cm faceted drops on stems read as hanging gems in the cards); the accent share and the team-tint read from the
+    # game camera are held by a thin azure inlay line laid in the carved channel round the band's top face
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
-    kd = DROP_K.get(n_bells, 1.0)
-    dw, du, dd = DROP_W * kd, DROP_UP * kd, DROP_DN * kd
     for ang in bell_angles(n_bells):
         top, bh = bell_geo(ang)
         bells.add(Lathe(top, lambda r, z, bh=bh: bell_prof(r, z, bh), 0.05, -bh - 0.004, 0.004), k=0.0)
         a = math.radians(ang)
         tang = np.array([math.cos(a), math.sin(a), 0.0])
-        if is_front_bell(ang):
-            # a front bell (fix pass 2): set into the band (no hook), the clapper in its mouth, clear of the visor
-            w_, u_, d_, g_ = CLAP_IN
-            cdrop = top + np.array([0, 0, -bh - g_])
-            beads.add(Fn(lambda P, c=cdrop, a_=a, w_=w_, u_=u_, d_=d_: drop_d(P, c, w_, u_, d_, rot=a_),
-                         cdrop - np.array([0.03, 0.03, d_ + 0.01]), cdrop + np.array([0.03, 0.03, u_ + 0.01])), k=0.0)
-            continue
-        hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
-        bot = top + np.array([0, 0, -BELL_H - DROP_GAP])            # the drop hangs clear of the lip (read from above)
-        stems.add(Capsule(top + np.array([0, 0, -0.06]), bot + np.array([0, 0, -0.006]), 0.0050), k=0.0)
-        stems.add(Sphere(bot - np.array([0, 0, 0.002]), 0.008 * kd), k=0.003)             # the drop's cap
-        cdrop = bot - np.array([0.0, 0.0, du])
-        beads.add(Fn(lambda P, c=cdrop, a_=a: drop_d(P, c, dw, du, dd, rot=a_),
-                     cdrop - np.array([0.04, 0.04, dd + 0.01]), cdrop + np.array([0.04, 0.04, du + 0.01])), k=0.0)
+        lip = top + np.array([0, 0, -bh])
+        if not is_front_bell(ang):
+            hooks.add(Torus(top + np.array([0, 0, 0.012]), 0.0085, 0.0035, axes=sdf.frame(tang)), k=0.0)
+        stems.add(Capsule(top + np.array([0, 0, -0.03]), lip + np.array([0, 0, 0.006]), 0.0040), k=0.0)
+        beads.add(Sphere(lip + np.array([0, 0, -BEAD_DROP]), BEAD_R * (0.92 if is_front_bell(ang) else 1.0)), k=0.0)
+    inlay = Sculpt("halo_inlay")
+
+    def inlay_d(P):
+        q = P - HALO_C
+        r = np.hypot(q[:, 0], q[:, 1])
+        return np.maximum(np.abs(r - HALO_RM) - INLAY_HW, np.abs(q[:, 2] - INLAY_ZC) - INLAY_HZ)
+    lo = HALO_C - np.array([HALO_RO, HALO_RO, 0.0]) + np.array([0, 0, INLAY_ZC - 0.01])
+    hi = HALO_C + np.array([HALO_RO, HALO_RO, 0.0]) + np.array([0, 0, INLAY_ZC + 0.01])
+    inlay.add(Fn(inlay_d, lo, hi), k=0.0)
+    out.append(("halo_inlay", inlay, 0.3, "accent", "bone:x_halo", 360, 0.6))
     out.append(("bells", bells, 0.5, "dawnglass", "bone:x_halo", 160 * n_bells, 1.2))
     out.append(("bell_hooks", hooks, 0.4, "ironstone", "bone:x_halo", 26 * n_bells, 0.5))
     out.append(("clapper_stems", stems, 0.4, "ironstone", "bone:x_halo", 20 * n_bells, 0.5))
@@ -2278,25 +2282,46 @@ def clip_overrides(ctx) -> dict:
           (1.0, G, "settle")]
     out["attack2"] = clip("attack2", 20, k2, impact=0.4, rings=[(0.40, 3.0, (1, 0, 0.4))], lags={"head": 1.5, "neck": 1.0})
 
-    # CAST_A1 Peal: lift, circle, strike (f10), the halo rocking, the left hand opening to the target
+    def ramp(a, b, f0, f1, N, shape=0.3):
+        """Keys every clip frame from pose a (at frame f0) to b (at f1), all 'linear', progress e(x) = (1 - shape) x
+        + shape x^2 (shape > 0 accelerates into b): an even, display-frame-safe sweep (closing VAS-M2: no 60 Hz
+        display frame moves the rod head more than 0.3 m). Aims slerp (anim.Aim.lerp)."""
+        ks = []
+        for f in range(int(math.ceil(f0 + 1e-6)), int(f1) + 1):
+            x = (f - f0) / (f1 - f0)
+            ks.append((f / N, anim.lerp_pose(a, b, (1.0 - shape) * x + shape * x * x), "linear"))
+        if ks[-1][0] < f1 / N - 1e-6:
+            ks.append((f1 / N, b, "linear"))
+        return ks
+
+    # CAST_A1 Peal: lift, circle, strike (f10), the halo rocking, the left hand opening to the target.
+    # Closing VAS-M2: the game plays it at 1.67x (castTime 0.2 s), so the old f9 -> f10 strike (rod head 1.2 m) landed
+    # in ONE display frame and f11-f13 sat dead. Now the lift + circle (right, front, left, back: a tighter cone) runs
+    # f0-f5 at an even pace, the strike sweeps f5-f10 on per-frame keys accelerating into the hit, the rod follows
+    # through past the hit (f11.5) and recoils (f13.5), so the hit-hold moves.
     lift = dict(spine=(-2, 0, 0), chest=(-5, -4, 0), neck=(-2, 0, 0), head=(-4, 3, 0))
+    wind = pose(torso=dict(spine=(-3, 0, 0), chest=(-7, -6, 0), head=(-6, 4, 0)), R=(-0.18, -0.36, 0.30),
+                aim=(0.05, 0.12, 0.99))
+    hit = pose(torso=dict(hips=(3, 4, 0), spine=(5, 4, 0), chest=(9, 6, 0), neck=(-3, 0, 0), head=(-6, -4, 0)),
+               hips=(0, -0.03, -0.015), R=(-0.20, -0.78, 0.06), aim=(-0.05, -0.85, 0.52), L=(0.12, -0.80, -0.22),
+               Lp=(0.8, 0.3, -0.4))
     k = [(0.0, G, "linear"),
-         (0.08, pose(torso=lift, R=(-0.32, -0.42, -0.25), aim=(-0.10, -0.20, 0.97), hips=(0, 0, 0.01)), "inout"),
-         (0.16, pose(torso=lift, R=(-0.22, -0.38, 0.22), aim=(-0.50, -0.30, 0.81)), "inout"),
-         (0.22, pose(torso=lift, R=(-0.18, -0.46, 0.26), aim=(-0.05, -0.62, 0.78)), "linear"),
-         (0.28, pose(torso=lift, R=(-0.14, -0.40, 0.30), aim=(0.48, -0.28, 0.83)), "linear"),
-         (0.34, pose(torso=dict(spine=(-3, 0, 0), chest=(-7, -6, 0), head=(-6, 4, 0)), R=(-0.18, -0.30, 0.36),
-                     aim=(0.06, 0.18, 0.98)), "out"),
-         (0.40, pose(torso=dict(hips=(3, 4, 0), spine=(5, 4, 0), chest=(9, 6, 0), neck=(-3, 0, 0), head=(-6, -4, 0)),
-                     hips=(0, -0.03, -0.015), R=(-0.20, -0.78, 0.06), aim=(-0.05, -0.85, 0.52), L=(0.12, -0.80, -0.22),
-                     Lp=(0.8, 0.3, -0.4)), "accel"),
-         (0.50, pose(torso=dict(hips=(3, 5, 0), spine=(5, 5, 0), chest=(9, 7, 0), neck=(-3, 0, 0), head=(-7, -4, 0)),
-                     hips=(0, -0.03, -0.02), R=(-0.20, -0.79, 0.02), aim=(-0.05, -0.88, 0.47), L=(0.13, -0.82, -0.20),
-                     Lp=(0.8, 0.3, -0.4)), "out"),
-         (0.66, pose(torso=dict(chest=(4, 3, 0), head=(-3, -2, 0)), R=(-0.26, -0.62, -0.20), aim=(-0.06, -0.55, 0.83),
-                     L=(0.12, -0.50, -0.60)), "inout"),
-         (0.84, pose(R=(-0.34, -0.42, -0.55), aim=(-0.08, -0.15, 0.98), L=(0.13, -0.20, -0.90)), "inout"),
-         (1.0, G, "settle")]
+         (1.1 / 25, pose(torso=lift, R=(-0.32, -0.42, -0.25), aim=(-0.08, -0.15, 0.98), hips=(0, 0, 0.01)), "linear"),
+         (2.2 / 25, pose(torso=lift, R=(-0.22, -0.38, 0.20), aim=(-0.38, -0.22, 0.90)), "linear"),
+         (3.1 / 25, pose(torso=lift, R=(-0.18, -0.44, 0.24), aim=(-0.04, -0.46, 0.89)), "linear"),
+         (4.1 / 25, pose(torso=lift, R=(-0.15, -0.40, 0.28), aim=(0.36, -0.20, 0.91)), "linear"),
+         (5.0 / 25, wind, "linear")]
+    k += ramp(wind, hit, 5.0, 10.0, 25, shape=0.25)
+    k += [(11.5 / 25, pose(torso=dict(hips=(4, 5, 0), spine=(6, 5, 0), chest=(11, 7, 0), neck=(-3, 0, 0), head=(-7, -5, 0)),
+                           hips=(0, -0.035, -0.022), R=(-0.20, -0.81, -0.02), aim=(-0.05, -0.93, 0.36),
+                           L=(0.13, -0.84, -0.20), Lp=(0.8, 0.3, -0.4)), "out"),
+          (14.5 / 25, pose(torso=dict(hips=(3, 4, 0), spine=(4, 4, 0), chest=(7, 6, 0), neck=(-2, 0, 0), head=(-5, -4, 0)),
+                           hips=(0, -0.025, -0.012), R=(-0.21, -0.75, 0.10), aim=(-0.05, -0.76, 0.65),
+                           L=(0.13, -0.78, -0.24), Lp=(0.8, 0.3, -0.4)), "inout"),
+          (0.66, pose(torso=dict(chest=(4, 3, 0), head=(-3, -2, 0)), R=(-0.26, -0.62, -0.20), aim=(-0.06, -0.55, 0.83),
+                      L=(0.12, -0.50, -0.60)), "inout"),
+          (0.84, pose(R=(-0.34, -0.42, -0.55), aim=(-0.08, -0.15, 0.98), L=(0.13, -0.20, -0.90)), "inout"),
+          (1.0, G, "settle")]
     out["cast_a1"] = clip("cast_a1", 25, k, impact=0.4, rings=[(0.40, 5.0, (1, 0, 0.3))], lags={"head": 1.5, "neck": 1.0})
 
     # CAST_A2 Glass Chime: the rod slides forward through the fist like a cue and snaps back (f6); the body still
@@ -2337,40 +2362,59 @@ def clip_overrides(ctx) -> dict:
     out["cast_a3"] = clip("cast_a3", 20, k, impact=0.4, rings=[(0.36, 6.0, (0, 0, -1)), (0.62, 3.0, (0, 0, 1))],
                           lags={"head": 1.0, "neck": 0.5})
 
-    # CAST_ULT Morning Toll: raised high overhead in both hands like a sledge, head back, the halo tilted up
-    # (f0-f12, breathing, the bells swaying in turn), heaved back, then (f16) swung over and down so the striker
-    # lands on the ground a stride in front, hands low on the swing grip, the back bent over it (a hammer on a great
-    # bell), held grounded to f30, lifted. Fix pass 1: the hands sat near the butt off the leather and the strike
-    # read as a long diagonal poke; now both fists are on the swing grip and the rod lands steep and close.
+    # CAST_ULT Morning Toll: raised high in both hands like a sledge, head back, the halo tilted up, then swung over and
+    # down so the striker lands on the ground a stride in front (f16), hands low on the swing grip, the back bent over
+    # it (a hammer on a great bell), a grounded hold, lifted.
+    # Closing VAS-M2: at 1.78x (castTime 0.3 s) the old over-the-back slam moved the rod head 2.1 + 2.4 m in two clip
+    # frames, then sat dead f19-f30 and popped up at f33. Now: the raise reaches the top by f5 (the rod choked up
+    # through the fists, its head over the halo, not behind the back), a slow heave f5-f6, the slam an even sweep
+    # f6-f16 on per-frame keys while the rod slides out to the swing grip; the grounded hold f16-f28 MOVES (the
+    # weight sinks onto the rod, the head lifts to listen to the tolls and tips the other way, the bells ringing);
+    # the lift f28-f40 is two even sweeps. No display frame moves the rod head more than 0.3 m.
     S = SLIDE_SWING
     up_t = dict(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-8, 0, 0), neck=(-8, 0, 0), head=(-16, 0, 0))
-    raise_ = pose(torso=up_t, hips=(0, 0.02, 0.01), R=(0.16, -0.30, 0.90), aim=(0.0, 0.42, 0.91), slide=S, grip=0.15,
-                  halo=(-6, 0, 0))
-    reach_l = anim.resolve(skel, dict(raise_))
-    Ml = skel.fk(reach_l)
-    Rc = Ml["chest"].to_3x3() @ skel.rest["chest"].to_3x3().inverted()
-    wl = Rc.inverted() @ (Ml["hand.L"].translation - Ml["upper_arm.L"].translation) / ARM
-    pre = pose(torso=dict(chest=(-3, 0, 0), head=(-5, 0, 0)), R=(-0.04, -0.50, 0.30), aim=(-0.03, 0.05, 1.0),
-               slide=S * 0.7, L=tuple(wl), Lp=(0.8, 0.4, -0.4), halo=(-2, 0, 0))
-    raise2 = pose(torso=dict(hips=(-3, 0, 0), spine=(-5, 0, 0), chest=(-9, 0, 0), neck=(-9, 0, 0), head=(-18, 0, 0)),
-                  hips=(0, 0.025, 0.012), R=(0.16, -0.26, 0.93), aim=(0.0, 0.48, 0.88), slide=S, grip=0.15, halo=(-7, 0, 0))
-    back = pose(torso=dict(hips=(-4, 0, 0), spine=(-6, 0, 0), chest=(-11, 0, 0), neck=(-7, 0, 0), head=(-12, 0, 0)),
-                hips=(0, 0.03, 0.015), R=(0.14, -0.14, 0.95), aim=(0.0, 0.80, 0.60), slide=S, grip=0.15, halo=(-5, 0, 0))
-    over = pose(torso=dict(hips=(4, 0, 0), spine=(5, 0, 0), chest=(4, 0, 0), neck=(-4, 0, 0), head=(-6, 0, 0)),
-                hips=(0, -0.02, -0.03), R=(0.16, -0.62, 0.40), aim=(0.0, -0.55, 0.84), slide=S, grip=0.15, halo=(-1, 0, 0))
+
+    def grip_rel(p):
+        """the left hand's grip on the rod in pose p as a `rel` target (so a grip <-> free blend has no pop)"""
+        Ml = skel.fk(anim.resolve(skel, dict(p)))
+        Rc = Ml["chest"].to_3x3() @ skel.rest["chest"].to_3x3().inverted()
+        return tuple(Rc.inverted() @ (Ml["hand.L"].translation - Ml["upper_arm.L"].translation) / ARM)
+
+    top = pose(torso=dict(hips=(-2, 0, 0), spine=(-4, 0, 0), chest=(-8, 0, 0), neck=(-7, 0, 0), head=(-14, 0, 0)),
+               hips=(0, 0.02, 0.01), R=(0.10, -0.40, 0.50), aim=(0.0, -0.22, 0.97), slide=0.0, grip=0.15, halo=(-6, 0, 0))
+    heave = pose(torso=dict(hips=(-3, 0, 0), spine=(-5, 0, 0), chest=(-10, 0, 0), neck=(-8, 0, 0), head=(-16, 0, 0)),
+                 hips=(0, 0.025, 0.014), R=(0.11, -0.37, 0.54), aim=(0.0, -0.12, 0.99), slide=0.0, grip=0.15,
+                 halo=(-7, 0, 0))
     sfeet = _feet(l=(0.0, -0.18, 0.0), r=(0.0, 0.06, 0.0), yl=6.0, yr=-8.0)
     strike = pose(torso=dict(hips=(14, 0, 0), spine=(14, 0, 0), chest=(12, 0, 0), neck=(-8, 0, 0), head=(-10, 0, 0)),
                   hips=(0, -0.07, -0.12), R=(0.18, -0.70, -0.40), aim=(0.0, -0.62, -0.79), slide=S, grip=0.15,
                   feet=sfeet, halo=(4, 0, 0))
-    held = pose(torso=dict(hips=(15, 0, 0), spine=(15, 0, 0), chest=(13, 0, 0), neck=(-9, 0, 0), head=(-11, 0, 0)),
-                hips=(0, -0.075, -0.13), R=(0.18, -0.70, -0.42), aim=(0.0, -0.61, -0.80), slide=S, grip=0.15,
+    sink = pose(torso=dict(hips=(16, 0, 0), spine=(17, 0, 0), chest=(15, 0, 0), neck=(-9, 0, 0), head=(-12, 0, 0)),
+                hips=(0, -0.08, -0.14), R=(0.18, -0.70, -0.41), aim=(0.0, -0.61, -0.79), slide=S - 0.02, grip=0.15,
                 feet=sfeet, halo=(3, 0, 0))
-    lift2 = pose(torso=dict(chest=(2, 0, 0)), R=(-0.20, -0.62, -0.40), aim=(-0.05, -0.40, 0.91), slide=0.30,
-                 L=(0.15, -0.40, -0.80))
-    k = [(0.0, G, "linear"), (0.10, pre, "inout"), (0.20, raise_, "inout"), (0.29, raise2, "inout"),
-         (0.34, back, "out"), (0.375, over, "accel"), (0.40, strike, "accel"), (0.46, held, "out"),
-         (0.75, held, "linear"), (0.88, lift2, "inout"), (1.0, G, "settle")]
-    sway = [(0.12 + 0.04 * i, 2.2, (0.3 * (-1) ** i, 0, 1.0 * (-1) ** i)) for i in range(4)]
+    listen = pose(torso=dict(hips=(12, 3, 0), spine=(11, 2, 0), chest=(9, 4, 0), neck=(-12, 2, 0), head=(-20, 8, 5)),
+                  hips=(0, -0.065, -0.11), R=(0.18, -0.69, -0.42), aim=(0.02, -0.62, -0.78), slide=S, grip=0.15,
+                  feet=sfeet, halo=(-2, 0, 0))
+    tip = pose(torso=dict(hips=(14, -2, 0), spine=(14, -2, 0), chest=(12, -4, 0), neck=(-10, -2, 0), head=(-14, -8, -5)),
+               hips=(0, -0.072, -0.125), R=(0.18, -0.70, -0.41), aim=(-0.02, -0.62, -0.79), slide=S, grip=0.15,
+               feet=sfeet, halo=(2, 0, 0))
+    up1g = pose(torso=dict(hips=(4, 0, 0), spine=(3, 0, 0), chest=(3, 0, 0), head=(-4, 0, 0)), hips=(0, -0.02, -0.03),
+                R=(-0.24, -0.56, -0.42), aim=(-0.05, -0.38, 0.92), slide=0.08, grip=0.15)
+    preg = pose(torso=dict(chest=(-3, 0, 0), head=(-5, 0, 0)), R=(-0.08, -0.48, 0.18), aim=(-0.03, -0.05, 1.0),
+                slide=0.0, grip=0.15, halo=(-2, 0, 0))
+    pre = dict(preg)                                 # the left hand reaches the rod as a rel target, then grips it
+    pre["ik"] = dict(preg["ik"])
+    pre["ik"]["hand.L"] = HandTarget(rel=grip_rel(preg), pole=(0.8, 0.4, -0.4))
+    up1 = pose(torso=dict(hips=(4, 0, 0), spine=(3, 0, 0), chest=(3, 0, 0), head=(-4, 0, 0)), hips=(0, -0.02, -0.03),
+               R=(-0.24, -0.56, -0.42), aim=(-0.05, -0.38, 0.92), slide=0.08, L=grip_rel(up1g), Lp=(0.8, 0.4, -0.4))
+    k = [(0.0, G, "linear"), (3.0 / 40, pre, "linear"), (3.4 / 40, preg, "linear"), (4.8 / 40, top, "out"),
+         (5.5 / 40, heave, "linear")]
+    k += ramp(heave, strike, 5.5, 16.0, 40, shape=-0.15)    # < 0: the swing's own arc accelerates the head
+    k += [(18.0 / 40, sink, "out"), (22.0 / 40, listen, "inout"), (26.0 / 40, tip, "inout"),
+          (27.0 / 40, anim.lerp_pose(tip, sink, 0.5), "inout")]
+    k += ramp(anim.lerp_pose(tip, sink, 0.5), up1g, 27.0, 35.5, 40, shape=0.15)
+    k += [(36.0 / 40, up1, "linear"), (1.0, G, "inout")]          # the left hand lets go where it held (no pop)
+    sway = [(0.02 + 0.03 * i, 2.2, (0.3 * (-1) ** i, 0, 1.0 * (-1) ** i)) for i in range(4)]
     out["cast_ult"] = clip("cast_ult", 40, k, impact=0.4, rings=sway + [(0.40, 7.0, (1, 0, 0.3)), (0.55, 4.0, (0.3, 0, 1)),
                                                                           (0.66, 3.0, (1, 0, -0.4))],
                            lags={"head": 1.0, "neck": 0.5})
@@ -2394,18 +2438,44 @@ def clip_overrides(ctx) -> dict:
          (0.56, kneel, "in"), (0.64, anim.lerp_pose(kneel, slump, 1.15), "out"), (0.80, slump, "inout"), (1.0, slump, "linear")]
     out["death"] = clip("death", 50, k, rings=[(0.18, 4.0, (1, 0, 0)), (0.56, 5.0, (0.3, 0, 1))])
 
-    # RECALL: the rod grounded, the wrist bell rung three times at the chest, head tilted to listen (loops)
-    rc = pose(torso=dict(chest=(2, 4, 0), neck=(2, 0, 0), head=(6, 8, 8)), L=(-0.10, -0.62, -0.30), Lp=(0.9, 0.3, -0.2))
+    # RECALL (180 f = 6 s, loops; RIFT's 7 s channel wraps into the plant): brief §8 'grounds the rod and rings the
+    # wrist bell three times'. Closing VAS-M1: the old 60 f loop moved no node more than 2.4 cm (the flick was an FK
+    # hand twist under the left-hand IK). Now the rod is planted with a small dip (f0-f18), the left forearm lifts
+    # the wrist bell to the chest (f18-f40), three flicks (f48, f78, f108: the forearm snaps up ~10 cm and falls
+    # back through the rest, the bell swinging 10-15 cm), the head tipping about 10 degrees toward each note, the
+    # halo answering each flick with a 3.5 degree rock two frames late; after the third he raises the bell beside
+    # his ear and listens (f120-f145), lowers it and nods (f145-f180). 1.5 cm of chest breath throughout.
+    RN = 180
+    bell = (-0.10, -0.62, -0.30)                    # the wrist bell held before the chest (rel, arm lengths)
+    LP = (0.9, 0.3, -0.2)
+    rest = pose(torso=dict(chest=(0, 2, 0)), L=GUARD_L)
+    plant = pose(torso=dict(hips=(2, 0, 0), spine=(2, 0, 0), chest=(2, 2, 0), head=(4, 0, 0)), hips=(0, 0, -0.018),
+                 R=(GUARD_R[0], GUARD_R[1] - 0.04, GUARD_R[2] - 0.05), slide=-0.04)
+    lifted = pose(torso=dict(chest=(2, 4, 0), neck=(2, 0, 0), head=(6, 8, 4)), L=bell, Lp=LP)
 
-    def recall_s(t):
-        p = dict(rc)
-        b = math.sin(2 * math.pi * 2 * t)
-        ringt = math.sin(2 * math.pi * 3 * t) * (0.5 + 0.5 * math.sin(2 * math.pi * 6 * t))
-        p["hand.L"] = (0.0, 0.0, 14.0 * ringt)
-        p["chest"] = (2 + 0.8 * b, 4, 0)
-        p["x_halo"] = (0.8 * math.sin(2 * math.pi * 3 * t), 0.0, 1.2 * math.sin(2 * math.pi * 3 * t + 0.5))
-        return p
-    out["recall"] = anim.Clip("recall", 60, True, recall_s)
+    def flicked(side, up=0.17, tilt=10.0):
+        """the forearm snapped up with the wrist cocked, the head tipped toward the note (side +1 / -1)"""
+        return pose(torso=dict(chest=(1, 5, 0), neck=(2, 2 * side, 0), head=(4, 8 + 4 * side, 4 + tilt * side)),
+                    L=(bell[0] + 0.02, bell[1] - 0.04, bell[2] + up), Lp=LP, fk=dict(hand_L=(0, 0, 22)))
+
+    def fall(side):
+        return pose(torso=dict(chest=(2, 4, 0), neck=(2, 2 * side, 0), head=(6, 8 + 2 * side, 4 + 6 * side)),
+                    L=(bell[0] - 0.01, bell[1] + 0.02, bell[2] - 0.06), Lp=LP, fk=dict(hand_L=(0, 0, -12)))
+
+    def held(side):
+        return pose(torso=dict(chest=(2, 4, 0), neck=(2, 2 * side, 0), head=(5, 8 + 2 * side, 4 + 8 * side)),
+                    L=bell, Lp=LP)
+    ear = pose(torso=dict(chest=(0, 6, 0), neck=(3, 4, 0), head=(8, 12, 14)), L=(-0.02, -0.40, 0.02), Lp=(0.9, 0.1, 0.1))
+    nod = pose(torso=dict(chest=(2, 0, 0), neck=(6, 0, 0), head=(10, 0, 0)), L=(0.10, -0.30, -0.70))
+    rk = [(0.0, rest, "linear"), (10 / RN, plant, "inout"), (18 / RN, anim.lerp_pose(plant, rest, 0.6), "inout"),
+          (40 / RN, lifted, "inout")]
+    for i, (f, side) in enumerate(((48, 1), (78, -1), (108, 1))):
+        rk += [((f - 4) / RN, held(-side) if i else lifted, "inout"), (f / RN, flicked(side), "out"),
+               ((f + 4) / RN, fall(side), "inout"), ((f + 9) / RN, held(side), "inout")]
+    rk += [(132 / RN, ear, "inout"), (145 / RN, ear, "linear"), (160 / RN, nod, "inout"), (1.0, rest, "inout")]
+    bells = [((f + 2) / RN, 3.5, (0.4, 0, 1.0 * side)) for f, side in ((48, 1), (78, -1), (108, 1))]
+    rec = with_halo(breathe(anim.keyed(rk), 2.0, 3), bells + [(0.06, 1.5, (1, 0, 0))], RN)
+    out["recall"] = anim.Clip("recall", RN, True, rec)
 
     # CHANNEL: the rod raised forward, the free hand open to the front (loops)
     ch = pose(torso=dict(chest=(2, 3, 0), head=(-3, -2, 0)), R=(-0.25, -0.70, -0.25), aim=(-0.05, -0.35, 0.94),
