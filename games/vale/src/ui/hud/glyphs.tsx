@@ -50,24 +50,27 @@ function familyOf(a: AbilityCore): Family {
   return 'wedge';
 }
 
-const FAMILY_PATHS: Record<Family, JSX.Element> = {
-  bolt: <g {...S}><path d="M4 20L16.5 7.5" /><path d="M11 6.5h7v7" /><path d="M4 15.5l4.5 4.5" opacity="0.55" /></g>,
-  volley: <g {...S}><path d="M4 19L17 6" /><path d="M13 5.5h4.5V10" /><path d="M4 12.5L12 4.5" opacity="0.6" /><path d="M11.5 19.5l8-8" opacity="0.6" /></g>,
-  dash: <g {...S}><path d="M4 7l5 5-5 5" /><path d="M10.5 7l5 5-5 5" /><path d="M17 7l3 5-3 5" opacity="0.6" /></g>,
-  blink: <g {...S}><path d="M3.5 12h3M9 12h2.5" stroke-dasharray="1.5 2.5" /><path d="M17 6.5l4 5.5-4 5.5-4-5.5z" /></g>,
-  burst: <g {...S}><circle cx="12" cy="12" r="3.6" /><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2M5.3 5.3l2.3 2.3M16.4 16.4l2.3 2.3M5.3 18.7l2.3-2.3M16.4 7.6l2.3-2.3" /></g>,
-  cone: <g {...S}><path d="M4 12L19 5.5M4 12l15 6.5" /><path d="M19 5.5a14 14 0 0 1 0 13" /><path d="M10 9.5a7 7 0 0 1 0 5" opacity="0.6" /></g>,
-  line: <g {...S}><rect x="3.5" y="9" width="17" height="6" rx="1" /><path d="M7 12h10" opacity="0.6" /></g>,
-  zone: <g {...S}><circle cx="12" cy="12" r="8.5" stroke-dasharray="2.4 2.2" /><circle cx="12" cy="12" r="4.6" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /></g>,
-  shield: <g {...S}><path d="M12 3.5l7 2.6v5.4c0 4.3-3 7.4-7 9-4-1.6-7-4.7-7-9V6.1z" /><path d="M8.5 11.5l7-3.5" opacity="0.6" /></g>,
-  heal: <g {...S}><path d="M12 5v14M5 12h14" stroke-width="2.6" /><circle cx="12" cy="12" r="9" opacity="0.4" /></g>,
-  buff: <g {...S}><path d="M6 13.5l6-6 6 6" /><path d="M6 19l6-6 6 6" opacity="0.6" /><path d="M12 3.5v2" /></g>,
-  stun: <g {...S}><path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z" /><circle cx="12" cy="11" r="9" opacity="0.35" stroke-dasharray="2 3" /></g>,
-  slow: <g {...S}><path d="M5 18l4-12 3 8 2-5 5 9" /><path d="M3.5 20.5h17" opacity="0.6" /></g>,
-  summon: <g {...S}><path d="M12 4.5l4.5 8h-9z" /><path d="M8 16.5h8M6 20h12" /></g>,
-  mark: <g {...S}><circle cx="12" cy="12" r="7.5" /><path d="M12 4.5v4M12 15.5v4M4.5 12h4M15.5 12h4" /></g>,
-  self: <g {...S}><circle cx="12" cy="12" r="8" /><path d="M12 4l2.2 8L12 14l-2.2-2z" fill="currentColor" stroke="none" /></g>,
-  wedge: <g {...S}><path d="M5 19L12 4l7 15-7-4z" /></g>,
+// The three glyph tables hold thunks, never vnodes: a module-level vnode keeps its last parent (preact writes vnode.__ /
+// __e on it), which retained the last match's whole .hud tree after the match ended (e2e hud_leak, closing done:6).
+type Paths = () => JSX.Element;
+const FAMILY_PATHS: Record<Family, Paths> = {
+  bolt: () => <g {...S}><path d="M4 20L16.5 7.5" /><path d="M11 6.5h7v7" /><path d="M4 15.5l4.5 4.5" opacity="0.55" /></g>,
+  volley: () => <g {...S}><path d="M4 19L17 6" /><path d="M13 5.5h4.5V10" /><path d="M4 12.5L12 4.5" opacity="0.6" /><path d="M11.5 19.5l8-8" opacity="0.6" /></g>,
+  dash: () => <g {...S}><path d="M4 7l5 5-5 5" /><path d="M10.5 7l5 5-5 5" /><path d="M17 7l3 5-3 5" opacity="0.6" /></g>,
+  blink: () => <g {...S}><path d="M3.5 12h3M9 12h2.5" stroke-dasharray="1.5 2.5" /><path d="M17 6.5l4 5.5-4 5.5-4-5.5z" /></g>,
+  burst: () => <g {...S}><circle cx="12" cy="12" r="3.6" /><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2M5.3 5.3l2.3 2.3M16.4 16.4l2.3 2.3M5.3 18.7l2.3-2.3M16.4 7.6l2.3-2.3" /></g>,
+  cone: () => <g {...S}><path d="M4 12L19 5.5M4 12l15 6.5" /><path d="M19 5.5a14 14 0 0 1 0 13" /><path d="M10 9.5a7 7 0 0 1 0 5" opacity="0.6" /></g>,
+  line: () => <g {...S}><rect x="3.5" y="9" width="17" height="6" rx="1" /><path d="M7 12h10" opacity="0.6" /></g>,
+  zone: () => <g {...S}><circle cx="12" cy="12" r="8.5" stroke-dasharray="2.4 2.2" /><circle cx="12" cy="12" r="4.6" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /></g>,
+  shield: () => <g {...S}><path d="M12 3.5l7 2.6v5.4c0 4.3-3 7.4-7 9-4-1.6-7-4.7-7-9V6.1z" /><path d="M8.5 11.5l7-3.5" opacity="0.6" /></g>,
+  heal: () => <g {...S}><path d="M12 5v14M5 12h14" stroke-width="2.6" /><circle cx="12" cy="12" r="9" opacity="0.4" /></g>,
+  buff: () => <g {...S}><path d="M6 13.5l6-6 6 6" /><path d="M6 19l6-6 6 6" opacity="0.6" /><path d="M12 3.5v2" /></g>,
+  stun: () => <g {...S}><path d="M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z" /><circle cx="12" cy="11" r="9" opacity="0.35" stroke-dasharray="2 3" /></g>,
+  slow: () => <g {...S}><path d="M5 18l4-12 3 8 2-5 5 9" /><path d="M3.5 20.5h17" opacity="0.6" /></g>,
+  summon: () => <g {...S}><path d="M12 4.5l4.5 8h-9z" /><path d="M8 16.5h8M6 20h12" /></g>,
+  mark: () => <g {...S}><circle cx="12" cy="12" r="7.5" /><path d="M12 4.5v4M12 15.5v4M4.5 12h4M15.5 12h4" /></g>,
+  self: () => <g {...S}><circle cx="12" cy="12" r="8" /><path d="M12 4l2.2 8L12 14l-2.2-2z" fill="currentColor" stroke="none" /></g>,
+  wedge: () => <g {...S}><path d="M5 19L12 4l7 15-7-4z" /></g>,
 };
 
 /** an ability icon: the asset when it exists, else the family glyph over the fighter's ground (HUD-1: the painted
@@ -83,7 +86,7 @@ export function AbilityGlyph(p: { def: AbilityCore | undefined; src: string | nu
   return (
     <span class={`hglyph ${p.ult ? 'hglyph--ult' : ''}`} style={{ background: bg }} aria-hidden="true">
       {p.src ? <img src={p.src} alt="" draggable={false} /> : (
-        <svg viewBox="0 0 24 24" class="hglyph__svg">{FAMILY_PATHS[fam]}</svg>
+        <svg viewBox="0 0 24 24" class="hglyph__svg">{FAMILY_PATHS[fam]()}</svg>
       )}
       {p.ult && !p.src ? <span class="hglyph__ultmark" /> : null}
     </span>
@@ -92,20 +95,20 @@ export function AbilityGlyph(p: { def: AbilityCore | undefined; src: string | nu
 
 // ── items ────────────────────────────────────────────────────────────────────────────────────────
 type ItemTag = ItemDefT['tags'][number];
-const ITEM_PATHS: Partial<Record<ItemTag, JSX.Element>> & { plain: JSX.Element } = {
-  attack: <g {...S}><path d="M5 19L17 7" stroke-width="2.2" /><path d="M14 4.5l5.5 5.5" /><path d="M5 15.5l3.5 3.5" /></g>,
-  magic: <g {...S}><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="9" opacity="0.45" /><circle cx="10" cy="10" r="1.3" fill="currentColor" /></g>,
-  defense: <g {...S}><rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M5 12h14" opacity="0.6" /></g>,
-  speed: <g {...S}><path d="M4 8h9M6 12h11M4 16h9" /><path d="M16 6l4 6-4 6" /></g>,
-  sustain: <g {...S}><path d="M12 4c3.5 4.4 5.5 7.6 5.5 10a5.5 5.5 0 0 1-11 0c0-2.4 2-5.6 5.5-10z" /></g>,
-  support: <g {...S}><path d="M8 9h8l-1 9H9z" /><path d="M10 9V6.5h4V9" /><path d="M12 12.5v2.5" /></g>,
-  crit: <g {...S}><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /></g>,
-  onhit: <g {...S}><circle cx="12" cy="12" r="7.5" /><path d="M12 7.5v9M7.5 12h9" opacity="0.6" /></g>,
-  haste: <g {...S}><path d="M7 4h10L7 20h10" /><path d="M9 4.5h6M9 19.5h6" opacity="0.6" /></g>,
-  vision: <g {...S}><path d="M3 12c2.5-4 5.5-6 9-6s6.5 2 9 6c-2.5 4-5.5 6-9 6s-6.5-2-9-6z" /><circle cx="12" cy="12" r="2.5" /></g>,
-  jungle: <g {...S}><path d="M12 20V9M12 13l-4-4M12 11l4-5" /></g>,
-  utility: <g {...S}><path d="M12 4l7 8-7 8-7-8z" /></g>,
-  plain: <g {...S}><path d="M12 4l7 8-7 8-7-8z" /></g>,
+const ITEM_PATHS: Partial<Record<ItemTag, Paths>> & { plain: Paths } = {
+  attack: () => <g {...S}><path d="M5 19L17 7" stroke-width="2.2" /><path d="M14 4.5l5.5 5.5" /><path d="M5 15.5l3.5 3.5" /></g>,
+  magic: () => <g {...S}><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="9" opacity="0.45" /><circle cx="10" cy="10" r="1.3" fill="currentColor" /></g>,
+  defense: () => <g {...S}><rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M5 12h14" opacity="0.6" /></g>,
+  speed: () => <g {...S}><path d="M4 8h9M6 12h11M4 16h9" /><path d="M16 6l4 6-4 6" /></g>,
+  sustain: () => <g {...S}><path d="M12 4c3.5 4.4 5.5 7.6 5.5 10a5.5 5.5 0 0 1-11 0c0-2.4 2-5.6 5.5-10z" /></g>,
+  support: () => <g {...S}><path d="M8 9h8l-1 9H9z" /><path d="M10 9V6.5h4V9" /><path d="M12 12.5v2.5" /></g>,
+  crit: () => <g {...S}><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /></g>,
+  onhit: () => <g {...S}><circle cx="12" cy="12" r="7.5" /><path d="M12 7.5v9M7.5 12h9" opacity="0.6" /></g>,
+  haste: () => <g {...S}><path d="M7 4h10L7 20h10" /><path d="M9 4.5h6M9 19.5h6" opacity="0.6" /></g>,
+  vision: () => <g {...S}><path d="M3 12c2.5-4 5.5-6 9-6s6.5 2 9 6c-2.5 4-5.5 6-9 6s-6.5-2-9-6z" /><circle cx="12" cy="12" r="2.5" /></g>,
+  jungle: () => <g {...S}><path d="M12 20V9M12 13l-4-4M12 11l4-5" /></g>,
+  utility: () => <g {...S}><path d="M12 4l7 8-7 8-7-8z" /></g>,
+  plain: () => <g {...S}><path d="M12 4l7 8-7 8-7-8z" /></g>,
 };
 
 /** HUD-1: the Dial Bar ledger family an item belongs to (icon_families.json, the same rule as the icon grader and
@@ -149,7 +152,7 @@ export function ItemGlyph(p: { item: ItemDefT | undefined; src: string | null })
   const [g0, g1] = FAMILIES.families[fam].ground;
   return (
     <span class={`iglyph iglyph--h${hour} iglyph--${fam} ${p.src ? '' : 'iglyph--drawn'}`} style={{ '--hour': HOUR_COLOR[hour], '--fam0': g0, '--fam1': g1 } as CSSProperties} aria-hidden="true">
-      {p.src ? <img src={p.src} alt="" draggable={false} /> : <svg viewBox="0 0 24 24" class="iglyph__svg">{ITEM_PATHS[tag] ?? ITEM_PATHS.plain}</svg>}
+      {p.src ? <img src={p.src} alt="" draggable={false} /> : <svg viewBox="0 0 24 24" class="iglyph__svg">{(ITEM_PATHS[tag] ?? ITEM_PATHS.plain)()}</svg>}
       <span class="iglyph__ticks">{Array.from({ length: hour }, () => <i />)}</span>
       {it?.dial ? <DialMark hour={it.dial.hour} class="iglyph__dial" /> : null}
     </span>
@@ -182,30 +185,30 @@ export function GleamGlyph(p: { size?: number }): JSX.Element {
 // ── statuses (r12 M4) ────────────────────────────────────────────────────────────────────────────
 // One drawn mark per status kind, distinct by silhouette (never by colour): plate = structure, ring =
 // time and state, wedge = act. Loss of control converges or pins; help points up or forward.
-const STATUS_PATHS: Record<string, JSX.Element> = {
-  stun: <g {...S}><path d="M12 3.5v4.5M12 16v4.5M3.5 12H8M16 12h4.5" /><path d="M9.5 6.5L12 9l2.5-2.5M9.5 17.5L12 15l2.5 2.5M6.5 9.5L9 12l-2.5 2.5M17.5 9.5L15 12l2.5 2.5" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /></g>,
-  airborne: <g {...S}><path d="M6 13l6-6 6 6" /><path d="M6 19l6-6 6 6" opacity="0.6" /><path d="M8 4h8" /></g>,
-  sleep: <g {...S}><path d="M15.5 4.5a7.5 7.5 0 1 0 4 12.5 6 6 0 0 1-4-12.5z" /><path d="M5 5h3l-3 3h3" opacity="0.7" /></g>,
-  fear: <g {...S}><circle cx="12" cy="12" r="2.2" /><path d="M12 6.5V3M12 17.5V21M6.5 12H3M17.5 12H21" /><path d="M7.5 7.5L5.5 5.5M16.5 16.5l2 2M16.5 7.5l2-2M7.5 16.5l-2 2" opacity="0.6" /></g>,
-  taunt: <g {...S}><circle cx="18" cy="12" r="2.6" /><path d="M3.5 12h10" /><path d="M10 7.5l4.5 4.5-4.5 4.5" /></g>,
-  silence: <g {...S}><path d="M3.5 12c1.6-3 3.4-3 5 0s3.4 3 5 0 3.4-3 5 0" opacity="0.75" /><path d="M5 19.5L19 4.5" stroke-width="2.2" /></g>,
+const STATUS_PATHS: Record<string, Paths> = {
+  stun: () => <g {...S}><path d="M12 3.5v4.5M12 16v4.5M3.5 12H8M16 12h4.5" /><path d="M9.5 6.5L12 9l2.5-2.5M9.5 17.5L12 15l2.5 2.5M6.5 9.5L9 12l-2.5 2.5M17.5 9.5L15 12l2.5 2.5" /><circle cx="12" cy="12" r="1.3" fill="currentColor" /></g>,
+  airborne: () => <g {...S}><path d="M6 13l6-6 6 6" /><path d="M6 19l6-6 6 6" opacity="0.6" /><path d="M8 4h8" /></g>,
+  sleep: () => <g {...S}><path d="M15.5 4.5a7.5 7.5 0 1 0 4 12.5 6 6 0 0 1-4-12.5z" /><path d="M5 5h3l-3 3h3" opacity="0.7" /></g>,
+  fear: () => <g {...S}><circle cx="12" cy="12" r="2.2" /><path d="M12 6.5V3M12 17.5V21M6.5 12H3M17.5 12H21" /><path d="M7.5 7.5L5.5 5.5M16.5 16.5l2 2M16.5 7.5l2-2M7.5 16.5l-2 2" opacity="0.6" /></g>,
+  taunt: () => <g {...S}><circle cx="18" cy="12" r="2.6" /><path d="M3.5 12h10" /><path d="M10 7.5l4.5 4.5-4.5 4.5" /></g>,
+  silence: () => <g {...S}><path d="M3.5 12c1.6-3 3.4-3 5 0s3.4 3 5 0 3.4-3 5 0" opacity="0.75" /><path d="M5 19.5L19 4.5" stroke-width="2.2" /></g>,
   // root: the unit (a ring) held by three roots that fork down and out — no arrow and no ground line, so it never
   // reads as the Dial Bar's recall mark (an arrow onto the ground)
-  root: <g {...S}><circle cx="12" cy="6.5" r="3" /><path d="M12 9.5v11" /><path d="M11.2 11.5C9 13.5 7 15 4.5 19.5" /><path d="M12.8 11.5c2.2 2 4.2 3.5 6.7 8" /><path d="M6.6 16.6L4 15.5M17.4 16.6l2.6-1.1M12 16l-2 2.2" opacity="0.6" /></g>,
-  disarm: <g {...S}><path d="M4.5 19.5l5-5" stroke-width="2.2" /><path d="M13 11l6.5-6.5" stroke-width="2.2" /><path d="M10.5 10.5l3 3" opacity="0.6" /><path d="M16 4.5h3.5V8" /></g>,
-  slow: <g {...S}><path d="M4 6.5h5v5h5v5h6" /><path d="M17 19.5l3-3" opacity="0.6" /></g>,
-  haste: <g {...S}><path d="M4 7l5 5-5 5" /><path d="M11 7l5 5-5 5" /><path d="M18 9.5l2.5 2.5-2.5 2.5" opacity="0.6" /></g>,
-  invisible: <g {...S}><path d="M12 3.5l7 8.5-7 8.5-7-8.5z" stroke-dasharray="2.2 2.2" /></g>,
-  untargetable: <g {...S}><path d="M18.4 8.2A7.5 7.5 0 1 0 19.5 12" /><path d="M16.5 4.5l2 3.7-3.9 1" opacity="0.7" /></g>,
-  unstoppable: <g {...S}><path d="M4 12h12" stroke-width="2.4" /><path d="M13 6l7 6-7 6z" fill="currentColor" /></g>,
-  reveal: <g {...S}><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></g>,
-  grievous: <g {...S}><path d="M12 5v14M5 12h14" stroke-width="2.4" opacity="0.7" /><path d="M5.5 18.5l13-13" stroke-width="2" /></g>,
-  armor_shred: <g {...S}><rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M12 5l-2 4.5 3 2.5-2 3 1 4" /></g>,
-  resist_shred: <g {...S}><path d="M10.5 4.6A7.5 7.5 0 1 0 15 4.9" /><path d="M10.5 4.6l2 3-1 2.5 2.5-1 1-4.2" /></g>,
+  root: () => <g {...S}><circle cx="12" cy="6.5" r="3" /><path d="M12 9.5v11" /><path d="M11.2 11.5C9 13.5 7 15 4.5 19.5" /><path d="M12.8 11.5c2.2 2 4.2 3.5 6.7 8" /><path d="M6.6 16.6L4 15.5M17.4 16.6l2.6-1.1M12 16l-2 2.2" opacity="0.6" /></g>,
+  disarm: () => <g {...S}><path d="M4.5 19.5l5-5" stroke-width="2.2" /><path d="M13 11l6.5-6.5" stroke-width="2.2" /><path d="M10.5 10.5l3 3" opacity="0.6" /><path d="M16 4.5h3.5V8" /></g>,
+  slow: () => <g {...S}><path d="M4 6.5h5v5h5v5h6" /><path d="M17 19.5l3-3" opacity="0.6" /></g>,
+  haste: () => <g {...S}><path d="M4 7l5 5-5 5" /><path d="M11 7l5 5-5 5" /><path d="M18 9.5l2.5 2.5-2.5 2.5" opacity="0.6" /></g>,
+  invisible: () => <g {...S}><path d="M12 3.5l7 8.5-7 8.5-7-8.5z" stroke-dasharray="2.2 2.2" /></g>,
+  untargetable: () => <g {...S}><path d="M18.4 8.2A7.5 7.5 0 1 0 19.5 12" /><path d="M16.5 4.5l2 3.7-3.9 1" opacity="0.7" /></g>,
+  unstoppable: () => <g {...S}><path d="M4 12h12" stroke-width="2.4" /><path d="M13 6l7 6-7 6z" fill="currentColor" /></g>,
+  reveal: () => <g {...S}><circle cx="12" cy="12" r="6.5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></g>,
+  grievous: () => <g {...S}><path d="M12 5v14M5 12h14" stroke-width="2.4" opacity="0.7" /><path d="M5.5 18.5l13-13" stroke-width="2" /></g>,
+  armor_shred: () => <g {...S}><rect x="5" y="5" width="14" height="14" rx="1.5" /><path d="M12 5l-2 4.5 3 2.5-2 3 1 4" /></g>,
+  resist_shred: () => <g {...S}><path d="M10.5 4.6A7.5 7.5 0 1 0 15 4.9" /><path d="M10.5 4.6l2 3-1 2.5 2.5-1 1-4.2" /></g>,
 };
 /** a status's mark (unknown kinds fall back to the plain wedge) */
 export function StatusGlyph(p: { kind: string; class?: string }): JSX.Element {
-  return <svg viewBox="0 0 24 24" class={p.class ?? 'sglyph'} aria-hidden="true">{STATUS_PATHS[p.kind] ?? FAMILY_PATHS.wedge}</svg>;
+  return <svg viewBox="0 0 24 24" class={p.class ?? 'sglyph'} aria-hidden="true">{(STATUS_PATHS[p.kind] ?? FAMILY_PATHS.wedge)()}</svg>;
 }
 
 // ── pings ────────────────────────────────────────────────────────────────────────────────────────
