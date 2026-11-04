@@ -1360,7 +1360,7 @@ def drop_underground(ob, z: float = -0.06) -> int:
 LICHEN_HEX = "#6F7559"
 NUM_MATS = {
     "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.24, speckle=0.3,
-                      grain=0.34, blotch=0.3, lichen=0.68, dab=0.42, cracks=0.85),   # carved dial-stone, weathered
+                      grain=0.42, blotch=0.3, lichen=0.68, dab=0.6, cracks=0.95),   # carved dial-stone, weathered
     "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
                    edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.3, blotch=0.2, lichen=0.4, dab=0.45, cracks=0.7),
     "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
@@ -1821,10 +1821,10 @@ DESIGNS = {
     "lamp_dome": (lamp_dome, DOME_MATS, 2048, 1.2),
     "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
     "vi_slab": (vi_slab, VI_MATS, 1024, 0.4),
-    "numeral_xi": (lambda B, rng: numeral(B, rng, "XI"), NUM_MATS, 1024, 0.6),
-    "numeral_ii": (lambda B, rng: numeral(B, rng, "II"), NUM_MATS, 1024, 0.6),
-    "numeral_vii": (lambda B, rng: numeral(B, rng, "VII"), NUM_MATS, 1024, 0.6),
-    "numeral_iiii": (lambda B, rng: numeral(B, rng, "IIII"), NUM_MATS, 1024, 0.6),
+    "numeral_xi": (lambda B, rng: numeral(B, rng, "XI"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
+    "numeral_ii": (lambda B, rng: numeral(B, rng, "II"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
+    "numeral_vii": (lambda B, rng: numeral(B, rng, "VII"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
+    "numeral_iiii": (lambda B, rng: numeral(B, rng, "IIII"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
     "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
     "hour_stone": (hour_stone, HOUR_MATS, 1024, 0.4),
     "camp_glasshorn": (camp_glasshorn, CAMP_MATS, 512, 0.3),
@@ -1837,7 +1837,7 @@ DESIGNS = {
     "lampwright_stall_dome": (lampwright_stall_dome, STALL_DOME_MATS, 1024, 0.5),
     "lampwright_cart": (lampwright_cart, CART_MATS, 1024, 0.4),
     "fair_stand_high": (lambda B, rng: fair_stand(B, rng, 3, 1.0), FAIR_MATS, 2048, 0.8),
-    "fair_stand_low": (lambda B, rng: fair_stand(B, rng, 2, 0.5), FAIR_MATS, 1024, 0.6),
+    "fair_stand_low": (lambda B, rng: fair_stand(B, rng, 2, 0.5), FAIR_MATS, 2048, 0.6),
 }
 SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}

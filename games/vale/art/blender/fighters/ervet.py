@@ -88,6 +88,49 @@ SOCKETS = {"weapon": "prop.R", "blade_tip": "x_blade_tip", "crossguard": "x_cros
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.96, "yaw": 24.0, "pitch": -3.0, "sun": 1.45,
           "rim_cool": 0.35, "rim_warm": 0.5,
           "fill": 0.91}           # final parity client F3: 0.86 -> 0.91 (the figure at 0.82 of the height, 0.69 of the card)
+# PER-SKIN CARDS (closing review ervet-M1; schema: art/blender/portraits.py header). Each card is its own Ervet moment:
+# base: Shatter's raise, the whole blade held overhead in both hands a beat before it is smashed into the line, in the
+# Aubade dawn (a warm low key from behind her blade side, the cool dawn rim, the crossguard inlays lit);
+# Stillwater: Glass Guard's plant, the river-glass blade driven point-down before her as a wall, in the Dialwood's
+# shaded shallows (a cool green-grey key from high on her right, a teal rim off the water, a pale glint up the blade);
+# Lamplit: Whole Again's landing, the blade swung low and the pommel lamp cage hanging bright, under the lamp light of
+# the Serenade dusk (an amber focal from low at the lamp, a plum-dusk rim). The portraits derive from each card's frame
+# and light (the same clip, t and key; a closer lens).
+CARDS = {
+    "ervet": {
+        "splash": {"clip": "cast_a3", "t": 0.25, "yaw": 30.0, "pitch": -5.0, "lens": 50.0, "fill": 0.94, "x": 0.70,
+                   "key_az": 220.0, "key_el": 24.0, "key_color": "#FFDDB4", "sun": 3.2, "rim_cool": 1.3,
+                   "rim_warm": 0.9, "bounce": 0.5, "bounce_color": "#E6C49E", "accent": 1.7,
+                   "focal": [{"at": "x_crossguard", "az": 200.0, "el": 25.0, "dist": 0.8, "color": "#FFE6C4",
+                              "power": 60.0, "size": 0.3},
+                             {"at": "head", "az": 170.0, "el": 15.0, "dist": 0.9, "color": "#FFE4C8", "power": 22.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": 28.0, "lens": 70.0},
+        "plate": {"glow": [0.18, 0.58, 0.42, 0.10], "glow_color": "#F2D0A4"},
+    },
+    "ervet_stillwater": {
+        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 145.0, "key_el": 48.0, "key_color": "#E4F0EA", "sun": 3.0, "rim_cool": 1.6,
+                   "rim_warm": 0.4, "bounce": 0.55, "bounce_color": "#9FC4BA", "accent": 1.4, "exposure": -0.55,
+                   "focal": [{"at": "x_blade_tip", "az": 170.0, "el": 10.0, "dist": 0.9, "color": "#E6FFF6",
+                              "power": 45.0, "size": 0.35},
+                             {"at": "head", "az": 160.0, "el": 25.0, "dist": 0.9, "color": "#F0F6F2", "power": 20.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": -20.0, "lens": 70.0},
+        "plate": {"glow": [0.62, 0.40, 0.48, 0.08], "glow_color": "#CFE6DA", "sat": 0.8},
+    },
+    "ervet_lamplit": {
+        "splash": {"clip": "cast_ult", "t": 0.62, "yaw": 36.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 150.0, "key_el": 20.0, "key_color": "#E9D6E6", "sun": 2.6, "rim_cool": 1.2,
+                   "rim_warm": 1.2, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.5, "exposure": -0.55,
+                   "focal": [{"at": "prop.R", "az": 190.0, "el": -5.0, "dist": 0.7, "color": "#FFB466",
+                              "power": 70.0, "size": 0.35},
+                             {"at": "head", "az": 200.0, "el": 5.0, "dist": 0.9, "color": "#FFCB94", "power": 24.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": 30.0, "lens": 70.0},
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}       # the ORM at 256: its roughness is per material
 GLB_COMPRESS = True

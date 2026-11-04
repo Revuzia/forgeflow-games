@@ -1165,8 +1165,10 @@ def chain_config(ctx) -> list:
         return 0.85 * fl
     # fix pass 5: gravity 0.7 -> 0.5 (in the lunges the gravity-led lower bone hung the U-shaped felt straight down
     # round her legs: a rounded sack from behind; now it streams back off the pitched torso)
-    out = [anim.ChainCfg(ctx.chains["cape"], gravity=0.5, stiffness=140.0, damping=23.0, inertia=0.18,
-                         drive=cape_drive, limit=(-44.0, 30.0), floor=0.03),
+    # closing nurrow-M3: the felt was critically damped (stiffness 140 / damping 23, zeta 0.97: a board in the run);
+    # now under-damped (220 / 9, zeta 0.30) so the hem overshoots each step, and a stronger inertia for the lunges
+    out = [anim.ChainCfg(ctx.chains["cape"], gravity=0.5, stiffness=220.0, damping=9.0, inertia=0.45,
+                         drive=cape_drive, limit=(-60.0, 30.0), floor=0.03),
            anim.ChainCfg(ctx.chains["tabard"], gravity=0.85, stiffness=150.0, damping=16.0, inertia=0.6,
                          drive=tabard_drive, limit=(-8.0, 80.0), floor=0.03)]
     return out
@@ -2775,6 +2777,7 @@ def clip_overrides(ctx) -> dict:
         ik["aim.L"] = AIM((GLAIM[0] + 0.12 * anim.osc(t, 1, 0.4), GLAIM[1], GLAIM[2] + 0.1 * anim.osc(t, 2, 0.1)))
         p["ik"] = ik
         p["hips_loc"] = (G_HIPS[0] + 0.014 * sw, G_HIPS[1], G_HIPS[2] - 0.006 * (0.5 + 0.5 * b))
+        p["cape_drive"] = (2.5 * sw + 1.0 * b, 0.0, 0.0)       # nurrow-M3: the felt settles with the weight shift
         return p
     out["idle"] = anim.Clip("idle", 80, True, idle)
 
@@ -2822,7 +2825,9 @@ def clip_overrides(ctx) -> dict:
         ik["aim.L"] = AIM((0.10, 0.55, -0.83))
         p["ik"] = ik
         p["hips_loc"] = (0.012 * math.cos(2 * math.pi * (q - C / 2)), 0.03, -0.045 - bob)
-        p["cape_drive"] = (-24.0 + 3.0 * math.cos(4 * math.pi * q), 0.0, 0.0)
+        # closing nurrow-M3: the felt kicked back off each foot contact (+-8 deg per step, a per-stride 2.5 deg
+        # asymmetry so the two steps differ), into a livelier spring (chain_config): 10-15 deg of swing in the run
+        p["cape_drive"] = (-24.0 + 8.0 * math.cos(4 * math.pi * (q - 0.06)) + 2.5 * math.cos(2 * math.pi * q), 0.0, 0.0)
         return p
     out["run"] = anim.Clip("run", N_RUN, True, run, meta={"run_ref_speed": RUN_REF, "stride_m": round(RUN_REF * T_RUN / 2, 3),
                                                           "cycle_s": round(T_RUN, 3)})
@@ -2876,16 +2881,17 @@ def clip_overrides(ctx) -> dict:
     # dash: the stalker's sprint under the lunge (brief: the stalker-run loop): the torso and the blade hold the
     #    lunge, the legs run one full stride cycle (left forward -> right forward -> left forward), the lull hand
     #    pumping, the cape streaming; starts and ends on cast_a1's held pose (a clean hand-off, no second swing)
-    def dash_pose(lf, rf, lz, rz, lp, rp, sw):
+    def dash_pose(lf, rf, lz, rz, lp, rp, sw, cape=-36.0):
         return pose(dict(hips=(34, 4 - 5 * sw, 0), spine=(12, 2 + 3 * sw, 0), chest=(6, 3 * sw, 0), neck=(-20, 0, 0),
                          head=(-15, -2 * sw, 0)), (0, -0.21, -0.20 + 0.02 * abs(sw)),
                     R=((0.14, -0.97, -0.25), (-0.85, 0.3, -0.3)), aim=(0.08, -0.95, -0.30),
                     L=((0.30, 0.62 - 0.45 * sw, -0.58 + 0.10 * sw), (0.8, 0.4, 0.0)), laim=(0.2, 0.75 - 0.9 * sw, -0.62),
-                    ft=feet(dl=(0.04, lf, lz), dr=(0.02, rf, rz), pl=lp, pr=rp), cape=-36.0)
+                    ft=feet(dl=(0.04, lf, lz), dr=(0.02, rf, rz), pl=lp, pr=rp), cape=cape)
     d0 = dash_pose(-0.34, 0.44, 0.0, 0.06, 0.0, -52.0, 0.0)
-    d1 = dash_pose(0.02, -0.04, 0.0, 0.20, -10.0, -30.0, -0.6)
-    d2 = dash_pose(0.40, -0.34, 0.06, 0.0, -48.0, 0.0, 1.0)
-    d3 = dash_pose(-0.04, 0.02, 0.20, 0.0, -30.0, -10.0, 0.6)
+    # nurrow-M3: the cloak streams back hard in the sprint (the drive past the lunge's -24: >= 20 deg of swing)
+    d1 = dash_pose(0.02, -0.04, 0.0, 0.20, -10.0, -30.0, -0.6, cape=-54.0)
+    d2 = dash_pose(0.40, -0.34, 0.06, 0.0, -48.0, 0.0, 1.0, cape=-42.0)
+    d3 = dash_pose(-0.04, 0.02, 0.20, 0.0, -30.0, -10.0, 0.6, cape=-56.0)
     d0 = lunge2
     out["dash"] = anim.Clip("dash", 10, False, anim.keyed([(0.0, d0, "linear"), (0.25, d1, "inout"), (0.5, d2, "inout"),
                                                            (0.75, d3, "inout"), (1.0, d0, "inout")]))
@@ -3001,18 +3007,50 @@ def clip_overrides(ctx) -> dict:
         return p
     out["death"] = anim.Clip("death", 50, False, death, impact=None)
 
-    # ── recall: the blade lowered, a hand over her heart, humming ──
+    # ── recall (closing nurrow-M2): ONE 7 s performance that fills RIFT's recallTime (210 f; the runtime loops the
+    #    recall state, so the last 0.2 s eases back to frame 0 and a longer recall wraps cleanly):
+    #    f0-25 the blade slipped into her belt; f25-105 the lull hand cupped to the brim, humming, swaying;
+    #    f105-170 the hand lowered over her heart, she dozes: the hat nods twice, deeper, the knees soften;
+    #    f170-200 she snaps up with a fingertip at the mask's lips (the bell of the teleport); f200-210 eases out ──
+    BELT_R, BELT_AIM = ((0.0, -0.20, -0.74), (-0.9, 0.3, -0.2)), (-0.22, 0.10, -0.97)     # (victory's sheathed blade)
     rec = pose(dict(hips=(2, 0, 0), spine=(2, 0, 0), chest=(2, 0, 0), neck=(3, 0, 0), head=(3, 0, 0)), (0, 0.0, -0.02),
-               R=((-0.18, 0.02, -0.97), (-0.9, 0.3, -0.2)), aim=(0.05, -0.15, -0.99),
+               R=BELT_R, aim=BELT_AIM,
                L=((-0.42, -0.42, -0.30), (0.9, 0.2, -0.4)), laim=(-0.6, -0.2, 0.77), ft=feet(dl=(0.05, 0.04, 0), dr=(0.05, -0.04, 0)))
+    r_sheath = pose(dict(hips=(2, -6, 0), spine=(5, -4, 0), chest=(5, -6, 0), neck=(6, 4, 0), head=(10, 6, 0)), (0, 0.0, -0.02),
+                    R=BELT_R, aim=BELT_AIM, L=((0.10, -0.40, -0.70), GL[1]), ft=feet(dl=(0.05, 0.04, 0), dr=(0.05, -0.04, 0)))
+    r_brim = pose(dict(hips=(0, 6, 0), spine=(-1, 3, 0), chest=(-3, 4, 0), neck=(-4, -4, 0), head=(-6, -6, 6)), (0, 0.0, -0.02),
+                  R=BELT_R, aim=BELT_AIM, L=((-0.06, -0.60, 0.66), (0.9, 0.0, -0.3)), laim=(-0.3, -0.75, 0.6),
+                  ft=feet(dl=(0.05, 0.04, 0), dr=(0.05, -0.04, 0)))
+    r_heart = anim.add(rec, P_(neck=(6, 0, 0), head=(6, 0, 4)))
+    r_nod1 = anim.add(rec, P_(spine=(3, 0, 0), chest=(4, 0, 0), neck=(14, 0, 0), head=(14, 0, 5)))
+    r_nod1["hips_loc"] = (0.0, 0.0, -0.04)
+    r_lift = anim.add(rec, P_(neck=(4, 0, 0), head=(2, 0, 2)))
+    r_nod2 = anim.add(rec, P_(spine=(5, 0, 0), chest=(7, 0, 0), neck=(20, 0, 0), head=(22, 0, 8), shoulder_L=(0, 0, -4),
+                              shoulder_R=(0, 0, 4)))
+    r_nod2["hips_loc"] = (0.0, 0.0, -0.06)
+    r_snap = pose(dict(hips=(1, 8, 0), spine=(-2, 4, 0), chest=(-4, 4, 0), neck=(-8, -4, 0), head=(-10, -8, 0)), (0, 0.0, 0.0),
+                  R=BELT_R, aim=BELT_AIM, L=((-0.36, -0.48, 0.12), (0.9, 0.1, -0.4)), laim=(-0.3, -0.2, 0.93),
+                  ft=feet(dl=(0.05, 0.04, 0), dr=(0.05, -0.04, 0)))
+    r_snap = to_lips(r_snap, "recall")
+    rec_k = anim.keyed([(0.0, g, "linear"), (0.06, r_sheath, "inout"), (0.12, r_sheath, "linear"),
+                        (0.20, r_brim, "inout"), (0.48, r_brim, "linear"), (0.55, r_heart, "inout"),
+                        (0.62, r_nod1, "inout"), (0.68, r_lift, "out"), (0.78, r_nod2, "in"), (0.81, r_nod2, "linear"),
+                        (0.845, r_snap, "snap"), (0.95, r_snap, "linear"), (1.0, g, "inout")])
 
     def recall(t):
-        b = anim.osc(t, 2)
-        sw = anim.osc(t, 1)
-        p = anim.add(rec, P_(chest=(1.0 * b, 0, 0), spine=(0, 0, 1.5 * sw), neck=(0, 2.0 * sw, 0), head=(1.5 * b, 3.0 * sw, 2.0 * sw)))
-        p["hips_loc"] = (0.012 * sw, 0.0, -0.02 - 0.004 * b)
+        p = rec_k(t)
+        hum = _ss(0.16, 0.22, t) * (1.0 - _ss(0.46, 0.52, t))          # the hummed sway under the brim
+        doze = _ss(0.52, 0.58, t) * (1.0 - _ss(0.80, 0.83, t))         # the slow breathing of the doze
+        ph = 2 * math.pi * 3.0 * (t - 0.16) / 0.36                     # three sways over the hum
+        b = anim.osc(t, 14)
+        p = anim.add(p, P_(hips=(0, 4.0 * hum * math.sin(ph), -3.0 * hum * math.sin(ph)),
+                           spine=(0, -2.0 * hum * math.sin(ph), 2.5 * hum * math.sin(ph)),
+                           chest=(1.0 * b * (0.5 + doze), -2.0 * hum * math.sin(ph), 1.5 * hum * math.sin(ph)),
+                           head=(2.0 * doze * anim.osc(t, 7), 4.0 * hum * math.sin(ph + 0.6), 5.0 * hum * math.sin(ph + 0.3))))
+        hl_ = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (hl_[0] + 0.02 * hum * math.sin(ph), hl_[1], hl_[2] - 0.004 * b)
         return p
-    out["recall"] = anim.Clip("recall", 60, True, recall)
+    out["recall"] = anim.Clip("recall", 210, True, recall)
 
     # ── idle_lobby: the slow sway to a tune, the lull hand conducting, a nod and the snap up a quarter toward the
     #    camera, a finger to the lips; loops ──
@@ -3111,8 +3149,20 @@ def clip_overrides(ctx) -> dict:
     # ── channel: the lull hand raised, palm out, humming ──
     ch = pose(dict(neck=(-4, 0, 0), head=(-6, 0, 0)), (0, 0, -0.01), L=((0.12, -0.78, 0.10), (0.85, 0.2, -0.5)),
               laim=(0.0, -0.4, 0.92))
-    out["channel"] = anim.Clip("channel", 40, True, lambda t: anim.add(ch, P_(chest=(1.2 * anim.osc(t, 2), 0, 0),
-                                                                              head=(1.0 * anim.osc(t, 2, 0.2), 0, 0))))
+    # closing nurrow-M2: the channel hums too: a sway through the hips and chest, the head tilting to the tune, the
+    #    raised palm pressing out on each phrase (it was a 1.3 s loop moving no bone over 3 deg)
+    def channel(t):
+        sw, b = anim.osc(t, 1), anim.osc(t, 2)
+        p = anim.add(ch, P_(hips=(0, 4.0 * sw, -3.0 * sw), spine=(0, -2.5 * sw, 2.5 * sw),
+                            chest=(2.0 * b, -2.5 * sw, 2.0 * sw), neck=(2.0 * b, 2.0 * sw, 0),
+                            head=(3.0 * anim.osc(t, 2, 0.2), 4.0 * sw, 6.0 * anim.osc(t, 1, 0.25))))
+        ik = dict(p["ik"])
+        r_ = ik["hand.L"].rel
+        ik["hand.L"] = HT(rel=(r_[0] + 0.03 * sw, r_[1] - 0.06 * max(0.0, b), r_[2] + 0.03 * b), pole=ik["hand.L"].pole)
+        p["ik"] = ik
+        p["hips_loc"] = (0.018 * sw, 0.0, -0.01 - 0.008 * abs(b))
+        return p
+    out["channel"] = anim.Clip("channel", 80, True, channel)
     return out
 
 

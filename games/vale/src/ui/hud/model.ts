@@ -37,7 +37,9 @@ export interface Banner { id: number; title: string; sub: string; major: boolean
   story?: string }
 export interface FeedLine { id: number; at: number; text: string; tone: 'info' | 'warn' | 'ally' | 'hint' }
 export interface PingMark { id: number; at: number; kind: PingKind; x: number; y: number; target?: EntityId; player: PlayerId; self: boolean; fromX: number; fromY: number }
-export interface Recap { at: number; open: boolean; killer: EntityId | -1; killerName: string; killerDef: string; log: readonly DamageLogEntry[]; structure: boolean }
+export interface Recap { at: number; open: boolean; killer: EntityId | -1; killerName: string; killerDef: string; log: readonly DamageLogEntry[]; structure: boolean;
+  /** seconds you were held (any loss of control, LOC_ORDER) in the recap's 15 s window, overlaps counted once (closing done:6) */
+  held: number }
 export interface Vote { yes: number; no: number; needed: number; by: PlayerId; at: number; voted: boolean; mine?: boolean }
 export interface NumberPop { kind: 'damage' | 'heal' | 'gold'; dtype?: 'phys' | 'magic' | 'true'; amount: number; crit: boolean; dst: EntityId; x: number; y: number }
 
@@ -51,6 +53,16 @@ export const CAST_LOCK = new Set<string>(['stun', 'airborne', 'sleep', 'taunt', 
 /** loss of control the CC chip names, strongest first */
 export const LOC_ORDER: readonly string[] = ['stun', 'airborne', 'sleep', 'fear', 'taunt', 'silence', 'root', 'disarm'];
 /** statuses that help their holder (a buff border); every other one is a debuff */
+const LOC_SET = new Set<string>(LOC_ORDER);
+const RECAP_WINDOW_S = 15;
+/** the union of [t, t + d] intervals inside [a, b], in seconds (overlapping holds count once) */
+export function heldFor(log: readonly { t: number; d: number }[], a: number, b: number): number {
+  const iv = log.map((x) => [Math.max(a, x.t), Math.min(b, x.t + x.d)] as const).filter(([s, e]) => e > s).sort((x, y) => x[0] - y[0]);
+  let sum = 0, cs = -Infinity, ce = -Infinity;
+  for (const [s, e] of iv) { if (s > ce) { if (ce > cs) sum += ce - cs; cs = s; ce = e; } else ce = Math.max(ce, e); }
+  if (ce > cs) sum += ce - cs;
+  return sum;
+}
 export const HELPFUL = new Set<string>(['haste', 'invisible', 'untargetable', 'unstoppable']);
 /** one chip of a status row: a status kind (merged), a buff (per id and applier) or a team buff */
 export interface Chip {
@@ -134,6 +146,8 @@ export class HudModel {
   private wiped = new Set<number>();
   private units = new Map<string, UnitDefT>();
   private recapTimer = 0;
+  /** loss-of-control applied to you (sim time, seconds), for the recap's 'held for' line */
+  private ccLog: { t: number; d: number }[] = [];
   private disposed = false;
   private writers = new Set<() => void>();
   private writeTick = -1;
@@ -368,6 +382,12 @@ export class HudModel {
     return this.has(`${prefix}.${head}.own.title`) ? head : 'other';
   }
   private nameOf(p: PlayerId | undefined): string { return p === undefined ? '' : p === this.you ? this.cv.t('killfeed.you', 'You') : this.view.players[p]?.name ?? ''; }
+  /** a name in object position ('… took down you'): the player's own reads lower-case */
+  private objOf(p: PlayerId | undefined): string { return p !== undefined && p === this.you ? this.cv.t('killfeed.you_obj', 'you') : this.nameOf(p); }
+  /** a banner sub-line whose subject is `who`: the second-person `<key>_you` form when that is the player (closing done:6) */
+  private subOf(key: string, who: PlayerId | undefined, params: Record<string, string | number>): string {
+    return who !== undefined && who === this.you && this.has(`${key}_you`) ? this.t(`${key}_you`, params) : this.t(key, params);
+  }
   private unitName(def: string | undefined): string { return this.unit(def)?.name ?? ''; }
 
   // ── events ─────────────────────────────────────────────────────────────────────────────────────
@@ -401,13 +421,13 @@ export class HudModel {
         if (ev.killer >= 0) {
           const assists = ev.assists.filter((a) => a !== ev.killer).map((a) => this.who(a));
           const text = assists.length
-            ? this.cv.t('killfeed.takedown_assist', '{killer} took down {victim} with {names}', { killer: this.nameOf(ev.killer), victim: this.nameOf(ev.victim), names: assists.map((a) => this.nameOf(a.player)).join(', ') })
-            : this.cv.t('killfeed.takedown', '{killer} took down {victim}', { killer: this.nameOf(ev.killer), victim: this.nameOf(ev.victim) });
+            ? this.cv.t('killfeed.takedown_assist', '{killer} took down {victim} with {names}', { killer: this.nameOf(ev.killer), victim: this.objOf(ev.victim), names: assists.map((a) => this.nameOf(a.player)).join(', ') })
+            : this.cv.t('killfeed.takedown', '{killer} took down {victim}', { killer: this.nameOf(ev.killer), victim: this.objOf(ev.victim) });
           this.killRow({ kind: 'takedown', killer: this.who(ev.killer), victim, assists, text, mine });
           if (ev.streak >= 3 && !this.ffa) {
             const n = Math.min(7, ev.streak);
             const title = this.t(`announce.streak.${n}.title`);
-            if (title) { this.pendingKill = null; this.announce(title, this.t(`announce.streak.${n}.sub`, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team), { a: this.who(ev.killer), b: victim }, { rank: ev.streak >= 5 ? 2 : 1, story: `streak:${ev.killer}` }); }
+            if (title) { this.pendingKill = null; this.announce(title, this.subOf(`announce.streak.${n}.sub`, ev.killer, { name: this.nameOf(ev.killer), n: ev.streak }), ev.streak >= 5, this.side(v.players[ev.killer]?.team), { a: this.who(ev.killer), b: victim }, { rank: ev.streak >= 5 ? 2 : 1, story: `streak:${ev.killer}` }); }
           }
         } else {
           const vp = v.players[ev.victim];
@@ -439,6 +459,13 @@ export class HudModel {
         this.killRow({ kind: 'out', victim: this.who(ev.player), assists: [], text: this.cv.t('killfeed.eliminated', '{victim} is out', { victim: this.nameOf(ev.player) }), mine: ev.player === this.you });
         break;
       }
+      case 'status': {
+        if (this.me && ev.dst === this.me.entity && LOC_SET.has(ev.status) && ev.duration > 0) {
+          this.ccLog.push({ t: ev.t, d: ev.duration });
+          if (this.ccLog.length > 64) this.ccLog.splice(0, this.ccLog.length - 64);
+        }
+        break;
+      }
       case 'respawn': {
         const p = v.players[ev.player];
         if (p) this.wiped.delete(p.team);
@@ -457,7 +484,9 @@ export class HudModel {
             killerName: kp ? kp.name : k ? this.unitName(k.def) || (last?.srcName ?? '') : last?.srcName ?? '',
             killerDef: kp ? kp.fighter : k?.def ?? last?.srcDef ?? '',
             log: [...log], structure: k?.kind === 'structure' || k?.kind === 'minion' || k?.kind === 'monster',
+            held: heldFor(this.ccLog, ev.t - RECAP_WINDOW_S, ev.t),
           };
+          this.ccLog = [];
           this.recap.value = r;
           clearTimeout(this.recapTimer);
           this.recapTimer = window.setTimeout(() => { if (!this.disposed && this.recap.peek() === r) this.recap.value = { ...r, open: true }; }, RECAP_DELAY_MS);
@@ -539,18 +568,19 @@ export class HudModel {
         this.announce(this.t(`announce.match_start.${mode}.title`) || this.cv.t('hud.live', 'Live'), this.t(`announce.match_start.${mode}.sub`), true);
         break;
       }
-      case 'first_blood': this.pendingKill = null; this.announce(this.t('announce.first_blood.title'), this.t('announce.first_blood.sub', { name }), true, this.side(ev.team), this.killWho(ev.player), { rank: 3 }); break;
+      case 'first_blood': this.pendingKill = null; this.announce(this.t('announce.first_blood.title'), this.subOf('announce.first_blood.sub', ev.player, { name }), true, this.side(ev.team), this.killWho(ev.player), { rank: 3 }); break;
       case 'multikill': {
         const n = Math.max(2, Math.min(5, Number(p.n) || 2));
         this.pendingKill = null;
-        this.announce(this.t(`announce.multikill.${n}.title`), this.t(`announce.multikill.${n}.sub`, { name }), n >= 3, this.side(ev.team), this.killWho(ev.player), { rank: n, story: `multi:${ev.player ?? -1}` });
+        this.announce(this.t(`announce.multikill.${n}.title`), this.subOf(`announce.multikill.${n}.sub`, ev.player, { name }), n >= 3, this.side(ev.team), this.killWho(ev.player), { rank: n, story: `multi:${ev.player ?? -1}` });
         break;
       }
       case 'shutdown': {
         const vp = typeof p.victim === 'number' ? p.victim : Number(p.victim);
-        const victim = this.nameOf(vp);
+        const victim = this.objOf(vp);
         this.pendingKill = null;
-        this.announce(this.t('announce.shutdown.title'), this.t('announce.shutdown.sub', { name, victim, gold: fmtInt(Number(p.gold) || 0) }), false, this.side(ev.team),
+        const sp = { name, victim, gold: fmtInt(Number(p.gold) || 0) };
+        this.announce(this.t('announce.shutdown.title'), vp === this.you && this.has('announce.shutdown.sub_fell') ? this.t('announce.shutdown.sub_fell', sp) : this.subOf('announce.shutdown.sub', ev.player, sp), false, this.side(ev.team),
           { a: ev.player !== undefined ? this.who(ev.player) : undefined, b: Number.isFinite(vp) && this.view.players[vp] ? this.who(vp) : undefined }, { rank: 2 });
         break;
       }

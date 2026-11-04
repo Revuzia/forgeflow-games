@@ -352,10 +352,14 @@ GRAIN_PAINTED = ((-0.125, 1.50, 1.36), (-0.098, 1.50, 1.40), (0.100, 1.48, 1.37)
 # jaw); the chin cracks stay. The paint wipes the same spans (_face_clean over _eye_zone: the wood round each eye and
 # GRAIN_CLEAN's painted spans), so relief and paint agree.
 GRAIN = ((-0.125, 1.50, 1.44), (-0.098, 1.50, 1.45), (0.100, 1.48, 1.44), (0.118, 1.47, 1.45),
-         (-0.172, 1.17, 1.10), (0.170, 1.17, 1.12),
-         (-0.110, 1.12, 1.07), (0.110, 1.11, 1.06))          # the carved vertical cracks: (x, z top, z bottom)
+         (-0.172, 1.17, 1.10), (0.170, 1.17, 1.12))          # the carved vertical cracks: (x, z top, z bottom)
+# CW6 polish (SUK-M1, sensitivity watch): the two chin cracks under the mouth corners are gone from the relief AND the
+# paint (their painted spans join GRAIN_CLEAN), so the lower face carries only the two outer jaw cracks, never four to
+# six short vertical marks that could read as a dummy's hinged jaw.
 GRAIN_CLEAN = ((-0.125, 1.45, 1.34), (-0.098, 1.46, 1.38), (0.100, 1.45, 1.35), (0.118, 1.46, 1.38),
-               (-0.062, 1.31, 1.17), (0.064, 1.31, 1.19), (-0.172, 1.31, 1.16), (0.170, 1.29, 1.16))
+               (-0.062, 1.31, 1.17), (0.064, 1.31, 1.19), (-0.172, 1.31, 1.16), (0.170, 1.29, 1.16),
+               (-0.110, 1.13, 1.05), (0.110, 1.12, 1.04),
+               (0.0, 1.415, 1.375), (0.0, 1.200, 1.170))   # + the nose-bridge nick and the smudge under the tip
 GRAIN_CLEAN_R = (0.009, 0.016)           # the wipe's full / zero radius round a painted span (m)
 # ... and the eye slits take a warm inlaid amber (non-emissive, the floor lit honey, the walls deeper) in place of the
 # hollow dark holes (as Odrum Shadeprint's lacquer mask); every skin keeps it (_recolour restores it)

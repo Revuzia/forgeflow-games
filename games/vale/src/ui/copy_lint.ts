@@ -98,6 +98,12 @@ export function lintPlayerCopy(files: Readonly<Record<string, unknown>>, strings
     }
   };
   for (const [k, v] of Object.entries(strings)) if (typeof v === 'string') check(`strings.${k}`, v);
+  // second person (closing done:6): a banner sub-line that opens on {name} reads 'You takes five in a row.' when the
+  // name is the player's own, so every such line carries a `<key>_you` sibling the HUD uses for you
+  for (const [k, v] of Object.entries(strings)) {
+    if (typeof v !== 'string' || !/^announce\..*\.sub$/.test(k) || !v.startsWith('{name} ')) continue;
+    if (typeof strings[`${k}_you`] !== 'string') hits.push({ path: `strings.${k}`, word: '{name}', use: `a second-person sibling ${k}_you`, text: v });
+  }
   for (const [label, json] of Object.entries(files)) for (const p of proseOf(json)) check(`${label}:${p.path}`, p.text);
   return hits;
 }

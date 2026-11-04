@@ -147,6 +147,11 @@ function FighterDetail(p: { f: FighterDefT; preview?: string }): JSX.Element {
           {origin ? <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.origin', 'Origin')}</span><span class="t-body-s">{cv.t(`collection.origin.${origin}`, origin)}</span></span> : null}
         </div>
         <p class="t-body-l detail__job stg">{f.job}</p>
+        {/* the skin strip sits above the kit (closing CL-1): it drives the stage on the right, so its tiles stay whole in
+            the first view instead of under the body's bottom fade at 1080p */}
+        <Section title={cv.t('collection.detail.skins', 'Skins')}>
+          <SkinStrip fighter={f} value={shown} onPick={(s) => router.setParams({ skin: s.id })} onShop={(sku) => router.go('shop', { sku })} size="s" />
+        </Section>
         <Section title={cv.t('collection.detail.abilities', 'Abilities')}>
           <ul class="kit">
             {SLOTS.map((slot) => {
@@ -154,9 +159,6 @@ function FighterDetail(p: { f: FighterDefT; preview?: string }): JSX.Element {
               return <KitRow f={f} slot={slot} record={ab} keyLabel={slot === 'passive' ? undefined : keyShort(binds[slot])} resourceName={res?.name} />;
             })}
           </ul>
-        </Section>
-        <Section title={cv.t('collection.detail.skins', 'Skins')}>
-          <SkinStrip fighter={f} value={shown} onPick={(s) => router.setParams({ skin: s.id })} onShop={(sku) => router.go('shop', { sku })} size="s" />
         </Section>
         <Section title={cv.t('collection.detail.lore', 'Lore')}>
           <p class="t-body detail__lore">{f.lore}</p>

@@ -405,11 +405,7 @@
         }
       ],
       "ai": {
-        "use": [
-          "damage",
-          "buff",
-          "engage"
-        ]
+        "use": ["buff", "engage"]
       },
       "present": {
         "anim": "cast_ult",

@@ -59,22 +59,26 @@ export function Scoreboard(): JSX.Element | null {
         <span class="t-h2">{cv.t('score.title', 'Scoreboard')}</span>
         <span class="t-caption muted num">{cv.t('score.gold_lead', 'Gleam lead')} {lead >= 0 ? '+' : '−'}{fmtInt(Math.abs(lead))}</span>
       </header>
-      {[{ list: mine, rel: 'ally' as const, team: tm }, { list: theirs, rel: 'enemy' as const, team: tt }].map((blk) => (
-        <div class={`hscore__block hscore__block--${blk.rel}`}>
-          <div class="hscore__bhead">
-            <span style={{ color: REL_VAR[blk.rel] }}><SideGlyph team={blk.team?.team ?? (blk.rel === 'ally' ? model.myTeam : 1 - model.myTeam)} size={14} /></span>
-            <span class="t-label">{blk.rel === 'ally' ? cv.t('score.team.ally', 'Your team') : cv.t('score.team.enemy', 'The other team')}</span>
-            <span class="t-caption muted num">{cv.t('hud.takedowns', 'Takedowns')} {blk.team?.kills ?? 0} · {cv.t('score.structures_down', 'Structures down')} {blk.team?.structuresDestroyed ?? 0}</span>
-          </div>
-          <table class="hscore__table">
-            <thead><tr>
-              <th class="l">{cv.t('score.col.player', 'Player')}</th><th>{cv.t('score.col.spells', 'Spells')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('score.col.kda', 'T / F / A')}</th>
-              <th>{cv.t('score.col.cs', 'Wicks')}</th><th>{cv.t('score.col.gold', 'Gleam')}</th><th>{cv.t('score.col.damage', 'Damage')}</th><th class="l">{cv.t('score.col.items', 'Items')}</th>
-            </tr></thead>
-            <tbody>{blk.list.map((p) => <TeamRow p={p} enemy={blk.rel === 'enemy'} />)}</tbody>
-          </table>
-        </div>
-      ))}
+      {/* one grid for both teams (closing done:6): one header row, the two team blocks as tbody groups, so every
+          column lines up from your team to theirs */}
+      <table class="hscore__table hscore__table--teams">
+        <thead><tr>
+          <th class="l">{cv.t('score.col.player', 'Player')}</th><th>{cv.t('score.col.spells', 'Spells')}</th><th>{cv.t('score.col.level', 'Lv')}</th><th>{cv.t('score.col.kda', 'T / F / A')}</th>
+          <th>{cv.t('score.col.cs', 'Wicks')}</th><th>{cv.t('score.col.gold', 'Gleam')}</th><th>{cv.t('score.col.damage', 'Damage')}</th><th class="l">{cv.t('score.col.items', 'Items')}</th>
+        </tr></thead>
+        {[{ list: mine, rel: 'ally' as const, team: tm }, { list: theirs, rel: 'enemy' as const, team: tt }].map((blk) => (
+          <tbody class={`hscore__block hscore__block--${blk.rel}`}>
+            <tr class="hscore__bhrow"><td class="l" colSpan={8}>
+              <div class="hscore__bhead">
+                <span style={{ color: REL_VAR[blk.rel] }}><SideGlyph team={blk.team?.team ?? (blk.rel === 'ally' ? model.myTeam : 1 - model.myTeam)} size={14} /></span>
+                <span class="t-label">{blk.rel === 'ally' ? cv.t('score.team.ally', 'Your team') : cv.t('score.team.enemy', 'The other team')}</span>
+                <span class="t-caption muted num">{cv.t('hud.takedowns', 'Takedowns')} {blk.team?.kills ?? 0} · {cv.t('score.structures_down', 'Structures down')} {blk.team?.structuresDestroyed ?? 0}</span>
+              </div>
+            </td></tr>
+            {blk.list.map((p) => <TeamRow p={p} enemy={blk.rel === 'enemy'} />)}
+          </tbody>
+        ))}
+      </table>
     </section>
   );
 }
@@ -223,6 +227,7 @@ export function DeathRecap(): JSX.Element | null {
             <span class="recap__types">
               {(['phys', 'magic', 'true'] as const).map((t) => types[t] > 0 ? <span class={`dchip dchip--${t} num t-caption`} title={cv.t(`dmg.${t}_tip`, '')}>{cv.t(`dmg.${t}`, t)} {fmtInt(types[t])}</span> : null)}
             </span>
+            {rc.held >= 0.1 ? <p class="t-body-s recap__held num">{cv.t('recap.held', 'Held for {t} of the last 15 s.', { t: `${rc.held.toFixed(1)} s` })}</p> : null}
             {tipKey ? <p class="t-body-s recap__tip">{cv.t(tipKey, '')}{span <= 2 ? ` ${cv.t('recap.tip.burst', 'It all landed inside {t}.', { t: `${Math.max(0.1, span).toFixed(1)} s` })}` : ''}</p> : null}
           </footer>
         </>

@@ -682,7 +682,7 @@ export abstract class BotBase {
     const windup = ad.windup * period;
     const ms = Math.max(0.5, e.stats.moveSpeed);
     const bit = this.perc.bit;
-    let best: Entity | null = null, bestHp = Infinity;
+    let best: Entity | null = null, bestHp = Infinity, alt: Entity | null = null, altHp = Infinity;
     for (let i = 0; i < n; i++) {
       const c = scratch[i];
       if (c.kind !== 'minion' && c.kind !== 'summon') continue;
@@ -697,10 +697,12 @@ export abstract class BotBase {
       if (hpAt <= 0) continue;
       const dmg = mitigated(e, c, e.stats.ad, ad.damageType);
       if (hpAt > dmg * 0.97) continue;
-      if (hpAt < bestHp) { bestHp = hpAt; best = c; }
+      if (hpAt < bestHp) { alt = best; altHp = bestHp; bestHp = hpAt; best = c; }
+      else if (hpAt < altHp) { altHp = hpAt; alt = c; }
     }
     if (best && best.id !== this.lhMissId) { this.lhMissId = best.id; this.lhMissRoll = this.rng.chance(this.diff.lastHitMiss); }
-    if (best && this.lhMissRoll) return null;
+    // (CW3s refix 2, G1: a missed read costs that one Wick, not the other one dying beside it)
+    if (best && this.lhMissRoll) return alt;
     return best;
   }
 

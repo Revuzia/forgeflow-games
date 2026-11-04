@@ -221,23 +221,44 @@ def hfolds(amp, freq, phase=0.0, tilt=(0.0, 0.0)):
     return fn
 
 
-def wraps(amp, pitch, a, b, slant=0.35, phase=0.0):
-    """helical cloth bands round the segment a -> b: ridges every `pitch` metres, crossing at `slant`"""
+def wrap_phase(P, a, u, e1, e2, pitch, slant, phase=0.0, vary=0.0):
+    """the band phase of a wound wrap round the axis a + t u: `slant` bands advanced per turn (a diagonal wind), the
+    band width varied along the limb by `vary` (each band its own width: a hand-wound strip, not a ribbed tube)"""
+    q = P - a
+    t = q @ u
+    th = np.arctan2(q @ e2, q @ e1)
+    return (t / pitch + slant * th / (2 * math.pi) + phase + 0.15 * NOISE(P, 6.0)
+            + vary * np.sin(t / (pitch * 2.3) + 1.7 * phase))
+
+
+def _wrap_axes(a, b):
     a, b = np.asarray(a, float), np.asarray(b, float)
     u = _n(b - a)
     e1 = _n(np.cross(u, [0.0, 0.0, 1.0]) if abs(u[2]) < 0.9 else np.cross(u, [1.0, 0.0, 0.0]))
-    e2 = np.cross(u, e1)
+    return a, u, e1, np.cross(u, e1)
+
+
+def wraps(amp, pitch, a, b, slant=0.35, phase=0.0, overlap=False, vary=0.0):
+    """helical cloth bands round the segment a -> b: ridges every `pitch` metres, crossing at `slant`.
+    overlap (closing ULK-M3, 'ribbed tubes'): each band is a strip laid OVER the next one: it stands proud at its
+    leading edge and tucks in under the following band (a step at every seam, not a symmetric rib)"""
+    a, u, e1, e2 = _wrap_axes(a, b)
 
     def fn(P):
-        q = P - a
-        t = q @ u
-        th = np.arctan2(q @ e2, q @ e1)
-        ph = t / pitch + slant * th / (2 * math.pi) + phase + 0.15 * NOISE(P, 6.0)
+        ph = wrap_phase(P, a, u, e1, e2, pitch, slant, phase, vary)
         f = ph - np.floor(ph)
+        if overlap:
+            tuck = np.exp(-((f - 0.97) / 0.035) ** 2)
+            return -amp * 0.9 * (1.0 - f) ** 1.4 + amp * 0.7 * tuck
         ridge = np.clip(1.0 - np.abs(f - 0.5) * 4.0, 0.0, 1.0)       # a soft ridge mid-band, grooves at the seams
         groove = np.exp(-((f - 0.02) / 0.05) ** 2) + np.exp(-((f - 1.02) / 0.05) ** 2)
         return -amp * 0.5 * ridge + amp * groove
     return fn
+
+
+# closing ULK-M3: the sleeve and shin wraps wound DIAGONALLY (the concept's crossing bands), varied widths
+SLEEVE_WRAP = dict(slant=1.7, vary=0.35, overlap=True)
+SHIN_WRAP = dict(slant=1.9, vary=0.30, overlap=True)
 
 
 def chips(amp, freq):
@@ -450,8 +471,11 @@ def sculpts() -> list:
     # FIX PASS 2 (review: 'the dark diagonal notch on the right of the hood'): folds()'s |sin| cusp put a sharp crease
     # down her left side (x ~0.115); the hood's cloth swells in smooth sine folds instead
     hood.add(Ellipsoid(HOOD_C, (0.135, 0.168, 0.168)).displaced(soft_folds(0.0045, 22.0, axis=0, phase=0.6), 0.005), k=0.0)
-    # the peak: a soft, rounded cloth crown folding back (never a tall point; brief + the sensitivity note)
-    hood.add(RoundCone(HOOD_C + (0.0, 0.015, 0.05), (0.0, 0.072, 1.826), 0.090, 0.034), k=0.05)
+    # the crown (owner ruling 7, closing ruling7:ulkro-crown): a ROUNDED cloth dome folding back, never a point. The
+    # old peak (a round cone to a 3.4 cm tip at 1.826) fitted R 7.0 cm 3 cm under the top; this broad ellipsoid crown
+    # (top 1.845, curvature radii 14.7 cm across / 19 cm front-to-back at its top) keeps the hood's height and its
+    # backward lean into the trailing point
+    hood.add(Ellipsoid(HOOD_C + (0.0, 0.040, 0.075), (0.118, 0.135, 0.095)), k=0.05)
     hood.add(RoundCone(HOOD_C + (0.0, 0.09, 0.03), (0.0, 0.175, 1.705), 0.06, 0.03), k=0.05)       # the trailing point
     hood.add(Ellipsoid(HOOD_C + (0.0, 0.02, -0.10), (0.142, 0.16, 0.06)), k=0.04)                   # flare to the cowl
     hood.sub(Ellipsoid(HOOD_C + (0.0, -0.005, 0.0), (0.112, 0.142, 0.142)), k=0.01)                  # the hollow
@@ -541,11 +565,11 @@ def sculpts() -> list:
     # ARMS: pale wrapped sleeves (heat weights), dark bracers, sculpted fists (rigid on the hands)
     sl = Sculpt("sleeves")
     for sh, el, wr in ((SH_R, EL_R, WR_R), (SH_L, EL_L, WR_L)):
-        sl.add(FlatCapsule(sh, el, 0.064, 0.060, 0.054, 0.052, side=(1, 0, 0)).displaced(wraps(0.006, 0.045, sh, el), 0.006),
-               k=0.0)
+        sl.add(FlatCapsule(sh, el, 0.064, 0.060, 0.054, 0.052, side=(1, 0, 0))
+               .displaced(wraps(0.006, 0.045, sh, el, **SLEEVE_WRAP), 0.006), k=0.0)
         sl.add(Sphere(el, 0.054), k=0.03)
-        sl.add(FlatCapsule(el, wr, 0.052, 0.050, 0.040, 0.038, side=(1, 0, 0)).displaced(wraps(0.005, 0.04, el, wr, phase=0.3),
-                                                                                        0.005), k=0.02)
+        sl.add(FlatCapsule(el, wr, 0.052, 0.050, 0.040, 0.038, side=(1, 0, 0))
+               .displaced(wraps(0.005, 0.04, el, wr, phase=0.3, **SLEEVE_WRAP), 0.005), k=0.02)
     part("sleeves", sl, "cloth2", "auto", 1300)
     br = Sculpt("bracers")
     # right: a short dark wrist wrap / glove cuff
@@ -592,8 +616,8 @@ def sculpts() -> list:
     wr = Sculpt("wraps")
     for sx in (-1, 1):
         knee, ank = np.array([sx * 0.105, -0.01, 0.48]), np.array([sx * 0.115, 0.02, 0.12])
-        wr.add(FlatCapsule(knee, ank, 0.060, 0.062, 0.050, 0.052, side=(1, 0, 0)).displaced(wraps(0.006, 0.05, knee, ank, slant=0.6), 0.006),
-               k=0.0)
+        wr.add(FlatCapsule(knee, ank, 0.060, 0.062, 0.050, 0.052, side=(1, 0, 0))
+               .displaced(wraps(0.006, 0.05, knee, ank, **SHIN_WRAP), 0.006), k=0.0)
     part("wraps", wr, "wraps", "auto", 800)
     boots = Sculpt("boots")
     for sx in (-1, 1):
@@ -1159,15 +1183,18 @@ def paint_legs(p, n):
     return _hl("#2E2723") * v[:, None]
 
 
-def _helix(p, a, b, pitch, slant, phase=0.0):
+def _helix(p, a, b, pitch, slant, phase=0.0, vary=0.0):
     """the sculpt's wraps() phase round the segment a -> b (painted grooves land on the sculpted ones)"""
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    u = _n(b - a)
-    e1 = _n(np.cross(u, [0.0, 0.0, 1.0]) if abs(u[2]) < 0.9 else np.cross(u, [1.0, 0.0, 0.0]))
-    e2 = np.cross(u, e1)
-    q = p - a
-    th = np.arctan2(q @ e2, q @ e1)
-    return (q @ u) / pitch + slant * th / (2 * math.pi) + phase + 0.15 * NOISE(p, 6.0)
+    a, u, e1, e2 = _wrap_axes(a, b)
+    return wrap_phase(p, a, u, e1, e2, pitch, slant, phase, vary)
+
+
+def _band_value(f, band):
+    """an overlapping band's value: lit along its proud leading edge, shading into the tuck under the next band (a dark
+    seam line), each band its own value"""
+    lead = np.exp(-((f - 0.06) / 0.10) ** 2)
+    tuck = np.exp(-((f - 0.97) / 0.05) ** 2)
+    return (0.84 + 0.20 * lead - 0.12 * f) * (1 - 0.48 * np.clip(tuck, 0, 1)) * (1 + 0.16 * band)
 
 
 def _seg_dist(p, a, b):
@@ -1180,20 +1207,19 @@ def _seg_dist(p, a, b):
 def paint_sleeves(p, n):
     """the pale sleeve wraps: bands wound up each arm (the sculpt's helix), a dark seam between bands, each band its
     own value, grey-beige linen a step darker than the stone plates above them"""
-    segs = [(SH_R, EL_R, 0.045, 0.35, 0.0), (EL_R, WR_R, 0.04, 0.35, 0.3), (SH_L, EL_L, 0.045, 0.35, 0.0),
-            (EL_L, WR_L, 0.04, 0.35, 0.3)]
+    sl_, vy_ = SLEEVE_WRAP["slant"], SLEEVE_WRAP["vary"]
+    segs = [(SH_R, EL_R, 0.045, sl_, 0.0), (EL_R, WR_R, 0.04, sl_, 0.3), (SH_L, EL_L, 0.045, sl_, 0.0),
+            (EL_L, WR_L, 0.04, sl_, 0.3)]
     D = np.stack([_seg_dist(p, a, b) for a, b, *_ in segs], 1)
     which = np.argmin(D, 1)
     ph = np.zeros(len(p))
     for i, (a, b, pitch, slant, phs) in enumerate(segs):
         m = which == i
         if m.any():
-            ph[m] = _helix(p[m], a, b, pitch, slant, phs) + 7.0 * i
+            ph[m] = _helix(p[m], a, b, pitch, slant, phs, vy_) + 7.0 * i
     f = ph - np.floor(ph)
-    groove = np.exp(-((f - 0.02) / 0.08) ** 2) + np.exp(-((f - 1.02) / 0.08) ** 2)
-    ridge = np.sin(np.pi * f)
     band = _hash(np.floor(ph)) - 0.5
-    v = (0.80 + 0.24 * ridge) * (1 - 0.42 * np.clip(groove, 0, 1)) * (1 + 0.16 * band)
+    v = _band_value(f, band)
     v = v * (1 + 0.06 * NOISE(p, 28.0)) * (0.84 + 0.20 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
     return _hl("#8A7A62") * v[:, None]
 
@@ -1208,17 +1234,10 @@ def paint_wraps(p, n):
             continue
         a = np.array([sx * 0.105, -0.01, 0.48])
         b = np.array([sx * 0.115, 0.02, 0.12])
-        u = _n(b - a)
-        e1 = _n(np.cross(u, [0.0, 0.0, 1.0]) if abs(u[2]) < 0.9 else np.cross(u, [1.0, 0.0, 0.0]))
-        e2 = np.cross(u, e1)
-        q = p[sel] - a
-        th = np.arctan2(q @ e2, q @ e1)
-        ph = (q @ u) / 0.05 + 0.6 * th / (2 * math.pi) + 0.15 * NOISE(p[sel], 6.0)
+        ph = _helix(p[sel], a, b, 0.05, SHIN_WRAP["slant"], 0.0, SHIN_WRAP["vary"])
         f = ph - np.floor(ph)
-        groove = np.exp(-((f - 0.02) / 0.07) ** 2) + np.exp(-((f - 1.02) / 0.07) ** 2)
-        ridge = np.sin(np.pi * f)
         band = _hash(np.floor(ph) + sx * 31.0) - 0.5
-        v[sel] = (0.78 + 0.28 * ridge) * (1 - 0.5 * np.clip(groove, 0, 1)) * (1 + 0.14 * band)
+        v[sel] = _band_value(f, band)
     v = v * (1 + 0.06 * NOISE(p, 30.0)) * (0.86 + 0.18 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
     return _hl("#3E372F") * v[:, None]
 

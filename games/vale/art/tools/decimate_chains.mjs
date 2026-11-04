@@ -5,6 +5,9 @@
 // shared per source accessor). Spring chains are smooth, so linear interpolation over 2 frames holds them; the
 // bytes go back to the GLB budget (closing CW5: Burdam's four skirt panels pushed the GLB past 1172 KiB).
 //
+// --clip a,b limits the thinning to those animations (with --prefix '' every bone's rotation in them: a long,
+// slow one-shot such as a 7 s recall holds under linear interpolation over 2 frames too).
+//
 // --orm-q N also re-encodes the occlusion/roughness/metal texture (low-frequency data, WebP) at quality N.
 //
 //   node art/tools/decimate_chains.mjs art/out/fighters/burdam/burdam.glb [out.glb] [--every 2] [--prefix x_skirt]
@@ -16,7 +19,7 @@ import sharp from 'sharp';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--clip'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/decimate_chains.mjs in.glb [out.glb] [--every 2] [--prefix x_]');
   process.exit(2);
@@ -24,6 +27,8 @@ if (!files.length) {
 const [input, output = input] = files;
 const every = Math.max(2, Number(opt('--every', 2)));
 const prefix = opt('--prefix', 'x_');
+const clipArg = opt('--clip', null);
+const clips = clipArg ? new Set(clipArg.split(',')) : null;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(input);
 const root = doc.getRoot();
@@ -40,6 +45,7 @@ const pick = (n) => {
   return idx;
 };
 for (const anim of root.listAnimations()) {
+  if (clips && !clips.has(anim.getName())) continue;
   for (const ch of anim.listChannels()) {
     const node = ch.getTargetNode();
     if (!node || !node.getName().startsWith(prefix) || ch.getTargetPath() !== 'rotation') continue;

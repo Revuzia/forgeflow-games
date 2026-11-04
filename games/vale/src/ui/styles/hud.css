@@ -275,7 +275,7 @@
   box-shadow: inset 0 calc(3 * var(--px)) calc(8 * var(--px)) rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.6); }
 .aslot--basic, .aslot--ult, .aslot--spell { width: 100%; height: 100%; }
 .aslot--ult { border-radius: 5px; }
-.aslot.is-empty { opacity: 0.35; }
+.aslot.is-empty { background: var(--ink-2); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.75); }   /* an opaque empty well: nothing behind the bar shows through (closing done:6) */
 .aslot::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(160deg, rgba(255, 248, 234, 0.10), rgba(255, 248, 234, 0) 38%), radial-gradient(120% 90% at 50% 120%, rgba(0, 0, 0, 0.45), transparent 60%); }
 .aslot:hover { filter: brightness(1.12); }
@@ -347,7 +347,7 @@
 .islot { position: relative; width: calc(36 * var(--px)); height: calc(36 * var(--px)); border-radius: 3px; background: #0E1116; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.75); overflow: hidden; }
 .dbar .islot { position: absolute; z-index: 1; }
 .islot:hover { box-shadow: inset 0 0 0 1px var(--chalk); }
-.islot.is-empty { background: rgba(11, 13, 17, 0.55); }
+.islot.is-empty { background: var(--ink-2); }   /* opaque ink-2 well (closing done:6): the canopy never shows through */
 .islot__secs { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-size: max(12px, calc(14 * var(--px))); font-weight: 700; color: var(--text-1); text-shadow: 0 1px 2px var(--ink-0); }
 .islot__secs.is-long { letter-spacing: -0.06em; }
 .islot .aslot__lockglyph { width: 50%; height: 50%; }
@@ -460,8 +460,11 @@
 .hscore__table tr.is-you td { background: rgba(244, 239, 226, 0.06); }
 .hscore__table tr.is-you td:first-child { box-shadow: inset 2px 0 0 var(--team-self); }
 .hscore__table tr.is-dead td { color: var(--text-3); }
-.hscore__block--ally .hscore__table td:first-child { box-shadow: inset 2px 0 0 var(--team-ally); }
-.hscore__block--enemy .hscore__table td:first-child { box-shadow: inset 2px 0 0 var(--team-enemy); }
+.hscore__block--ally td:first-child { box-shadow: inset 2px 0 0 var(--team-ally); }
+.hscore__block--enemy td:first-child { box-shadow: inset 2px 0 0 var(--team-enemy); }
+/* the team header rows of the one shared grid (closing done:6) */
+.hscore__table tr.hscore__bhrow td { box-shadow: none; border-top: 0; padding: calc(10 * var(--px)) 6px calc(2 * var(--px)); }
+.hscore__table tbody.hscore__block--ally tr.hscore__bhrow td { padding-top: calc(4 * var(--px)); }
 .hscore__player { display: flex; align-items: center; gap: calc(8 * var(--px)); }
 /* HUD-7: 32 px faces with the respawn count over a fallen one, 24 px item and spell glyphs */
 .hscore__facewrap { position: relative; width: calc(32 * var(--px)); height: calc(32 * var(--px)); flex: none; }
@@ -496,6 +499,7 @@
 .recap__foot { display: flex; flex-wrap: wrap; align-items: center; gap: calc(8 * var(--px)); border-top: 1px solid var(--line-1); padding-top: calc(8 * var(--px)); }
 .recap__types { display: flex; gap: 4px; }
 .recap__tip { width: 100%; color: var(--text-2); }
+.recap__held { width: 100%; color: var(--text-1); margin: 0; }
 .dchip { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--ink-1); }
 .dchip--phys { color: var(--dmg-physical); }
 .dchip--magic { color: var(--dmg-magic); box-shadow: inset 0 0 0 1px var(--dmg-magic); }

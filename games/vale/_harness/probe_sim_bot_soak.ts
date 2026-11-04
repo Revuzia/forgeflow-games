@@ -759,6 +759,18 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const ultRows = [...ult.entries()].map(([f, a]) => ({ f, n: a.length, med: median(a) })).sort((a, b) => b.med - a.med);
     const late = ultRows.filter((r) => r.n >= 3 && r.med > 10);
     const early16 = gs.filter((g) => g.reason === 'core' && g.dur < 960).map((g) => `s${g.job.seed} ${(g.dur / 60).toFixed(1)}m`);
+    // (CW3s refix, done:2: the laning phase's objective — an objective camp first up before 10:00 — is taken within 3 min of
+    // its first spawn (median; a game with no take counts as its length))
+    const lanObj = catalog.maps.flatMap((m) => m.camps.filter((c) => c.objective && c.firstSpawn < 600));
+    const objFirst = lanObj.length ? gs.map((g) => {
+      let best = Infinity;
+      for (const c of lanObj) for (const o of g.objs) if (c.units.some((u) => u.unit === o.unit)) best = Math.min(best, (o.t - c.firstSpawn) / 60);
+      return Number.isFinite(best) ? best : (g.dur - lanObj[0].firstSpawn) / 60;
+    }) : [];
+    if (objFirst.length) {
+      text.push(`  laning objective (${lanObj.map((c) => c.id).join(', ')}) first take after its spawn: median ${median(objFirst).toFixed(1)} min`);
+      gates.push({ group: 'early', item: 'gameplay:CL-2', label: `RIFT ${d}: laning objective first taken after its spawn, median${tag}`, value: `${median(objFirst).toFixed(1)} min`, target: '≤ 3 min', pass: median(objFirst) <= 3, n: gs.length, reportOnly: few });
+    }
     const duo = gs.flatMap((g) => g.seats.filter((s) => s.role === 'shaftlight').map((s) => (g.lvl6[s.p] >= 0 ? g.lvl6[s.p] / 60 : Infinity)));
     const lvl8 = (role: string): number => mean(gs.flatMap((g) => (g.lvl8?.length ? g.seats.filter((s) => s.role === role).map((s) => g.lvl8[s.p]) : [])));
     earlyD[d] = { td10: mean(td10), zero, fb: median(fb), stretch: median(stretch), shade: mean(shade), ult: ultRows, early16, duo6: median(duo) };
@@ -806,6 +818,13 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       + ` · skillshots by target tier: ${Object.entries(shotsBy).map(([k, v]) => `→ ${k} ${pct(v.hit)} of ${v.n}`).join(', ')}`);
   }
   detail.micro = microD;
+  // (CW3s refix, critic bot-micro: a better tier aims better at the SAME targets — veteran → adept against adept → adept
+  // (the RIFT adept games and the veteran-vs-adept mirrors); needs both pairings in the run (--mirror-weak …,adept))
+  {
+    const sb = (t: string) => (microD[t] as { shotsByTarget?: Record<string, { hit: number; n: number }> } | undefined)?.shotsByTarget;
+    const va = sb('veteran')?.adept, aa = sb('adept')?.adept;
+    if (va && aa && va.n >= 200 && aa.n >= 200) gates.push({ group: 'micro', item: 'critic:bot-micro', label: 'skillshot hit rate at adept targets: veteran vs adept shooters', value: `${pct(va.hit)} vs ${pct(aa.hit)}`, target: 'veteran ≥ adept', pass: va.hit >= aa.hit, n: va.n });
+  }
   // ── passive human seat (critic bot-micro: aggression toward the player at 3:00–8:00) ──
   const hu = games.filter((g) => g.job.suite === 'human' && g.human >= 0);
   if (hu.length) {
@@ -817,6 +836,8 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       const ref = rift.filter((g) => g.job.diffs[0] === d && g.micro);
       const rs = ref.flatMap((g) => g.seats.filter((s) => s.role === 'dialcross').map((s) => ({ dmg: g.micro.dmg38[s.p] / 5, deaths: g.micro.deaths38[s.p] })));
       hd[d] = { games: gs.length, dmgPerMin: dmg, deaths, botSeatDmgPerMin: mean(rs.map((x) => x.dmg)), botSeatDeaths: mean(rs.map((x) => x.deaths)) };
+      // (CW3s refix, critic bot-micro: bots punish a passive player at least as hard as a bot-played seat)
+      if (rs.length) gates.push({ group: 'micro', item: 'critic:bot-micro', label: `passive human seat vs ${d} bots: damage taken 3:00–8:00 vs the bot-played seat`, value: `${dmg.toFixed(0)} vs ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min`, target: 'passive ≥ bot seat', pass: dmg >= mean(rs.map((x) => x.dmg)), n: gs.length });
       text.push('', `passive human seat (dialcross, team 0) vs ${d} bots, ${gs.length} games: damage taken from enemy fighters 3:00–8:00 ${dmg.toFixed(0)}/min, deaths ${deaths.toFixed(2)} a game`
         + (rs.length ? ` (the bot-played dialcross in this run's RIFT ${d} games: ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min, ${mean(rs.map((x) => x.deaths)).toFixed(2)} deaths)` : ''));
     }

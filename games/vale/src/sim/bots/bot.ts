@@ -456,10 +456,10 @@ export class Bot extends BotBase implements BotController {
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
       // (CW3s refix: 0.3 after 12 s; at 0.15 after 20 s a passive seat took less damage than the bot-played one)
-      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 20 && now - this.foeHitAt > 20 ? 0.15 : 0;
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 12 && now - this.foeHitAt > 12 ? 0.3 : 0;
       // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
       // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
-      const lvl = 0 && kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
+      const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
       const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive + lvl - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
       // (a passive opponent that let me take half its health without answering is finished, as a player would)
@@ -473,7 +473,9 @@ export class Bot extends BotBase implements BotController {
       // (CW3 CL-1: a trade I am winning — its health well under mine and below half, nobody of theirs beside it — is pressed
       // into an all-in instead of a step back: that is where laning kills come from)
       const leF = (le.hp + le.shield) / Math.max(1, le.maxHp);
-      if (leF < 0.5 && hpF - leF >= 0.2 && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
+      // (CW3s refix 2: pressed from 55 % and a 15-point lead in the laning phase — fight-time last hits keep the wave's)
+      const lpP = this.lanePhase();
+      if (leF < (lpP ? 0.55 : 0.5) && hpF - leF >= (lpP ? 0.15 : 0.2) && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
     }
     // (CW3 CL-1: a gank on my road is two on one only if I turn on its target too — the grovehunter at it, or already on
     // it, and me close enough to join: that is the laner's half of the gank)
