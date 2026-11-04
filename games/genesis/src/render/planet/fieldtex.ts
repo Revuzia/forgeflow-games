@@ -24,13 +24,24 @@
 // waterLevel: wet cells carry their true water surface; dry cells next to water carry the wet neighbours' mean level
 // clamped just under their own ground, so the water sheet stays FLAT up to the true shoreline (the terrain's depth
 // test draws the coast) instead of sloping up the beach; dry inland cells sit well under the ground (no water).
+//
+// The packing itself is fieldpack.ts (FieldPacker). After the first fill (synchronous, so the first frame has every
+// texture) it runs in a helper module worker (fieldpack.worker.ts, one for all planets): the main thread only posts the
+// changed source arrays and copies the packed arrays back into the textures — the same bytes, at most a frame or two
+// later (macfix r1: the refills cost ~30% of a core at 100x and hitched every few seconds at 1x). One job per planet is
+// in flight; changes that arrive meanwhile wait for it. Without module workers (node tests, ?packworker=0) it stays
+// synchronous.
 
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, ClampToEdgeWrapping } from 'three';
 import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
-import { curveMargin, duneAmpOf, MAX_GRAD, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
+import { surfaceGradients } from '../../sim/grid/surface.ts';
 import { CityLights } from './citylights.ts';
 import { BASE_PACK } from '../../data/index.ts';
+import { FIELD_ROW, FieldPacker, SOURCES, TEX_NAMES, type PackReply, type PackRequest, type TexName } from './fieldpack.ts';
+
+export { FIELD_ROW };
+
 
 /** linear-light colour of each ore (oreType − 1 indexes the content's ore list; the base pack's come first, invented
  * ores past it take a neutral mineral grey-green from their index) */
@@ -67,38 +78,46 @@ export function setOrePalette(list: readonly { id?: string; color?: string }[]):
   ORE_VIS = vis;
   orePaletteVersion++;
 }
-function oreRgb(type: number): [number, number, number] {
-  const i = Math.round(type) - 1;
-  if (i >= 0 && i < ORE_RGB.length) return ORE_RGB[i];
-  const k = ((i * 0.618034) % 1 + 1) % 1;
-  return [0.18 + 0.12 * k, 0.2 + 0.06 * (1 - k), 0.16 + 0.1 * k];
-}
-function oreVis(type: number): number {
-  const i = Math.round(type) - 1;
-  return i >= 0 && i < ORE_VIS.length ? ORE_VIS[i] : 0.9;
+
+/** how FieldTextures reaches a packing worker (the browser's shared one; tests pass an in-process stand-in) */
+export interface PackPort {
+  send(m: PackRequest, transfer?: Transferable[]): void;
+  listen(id: number, onReply: (r: PackReply) => void, onFail: () => void): void;
+  unlisten(id: number): void;
 }
 
-export const FIELD_ROW = 256;
-const WET = 0.02;
+let sharedPort: PackPort | null | undefined;
+/** the shared helper worker, or null where there is none (made on first use; a worker that fails is not retried) */
+function browserPort(): PackPort | null {
+  if (sharedPort !== undefined) return sharedPort;
+  sharedPort = null;
+  try {
+    if (typeof Worker === 'undefined' || typeof location === 'undefined') return null;
+    if (new URLSearchParams(location.search).get('packworker') === '0') return null;
+    const w = new Worker(new URL('./fieldpack.worker.ts', import.meta.url), { type: 'module', name: 'genesis-fieldpack' });
+    const subs = new Map<number, { reply: (r: PackReply) => void; fail: () => void }>();
+    const fail = (): void => {
+      sharedPort = null;
+      try { w.terminate(); } catch { /* gone */ }
+      for (const s of [...subs.values()]) s.fail();
+      subs.clear();
+    };
+    w.onmessage = (e: MessageEvent<PackReply>) => subs.get(e.data.id)?.reply(e.data);
+    w.onerror = (e) => { console.warn('[genesis] field packing worker failed; packing on the main thread', e.message ?? e); fail(); };
+    w.onmessageerror = fail;
+    sharedPort = {
+      send: (m, transfer) => w.postMessage(m, transfer ?? []),
+      listen: (id, reply, onFail) => { subs.set(id, { reply, fail: onFail }); },
+      unlisten: (id) => { subs.delete(id); },
+    };
+  } catch (e) {
+    console.warn('[genesis] no field packing worker; packing on the main thread', e);
+    sharedPort = null;
+  }
+  return sharedPort;
+}
 
-type TexName = 'A' | 'W' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D' | 'O';
-const SOURCES: Record<TexName, FieldName[]> = {
-  A: ['surface', 'soil', 'sand', 'snow', 'water'],
-  // (after A: built from A's water level)
-  W: ['surface', 'water'],
-  N: ['surface'],
-  M0: ['snow', 'sand', 'soil', 'ash'],
-  M1: ['lava', 'wetness', 'ice', 'burnt'],
-  V: ['grass', 'shrub', 'tree', 'crop'],
-  C: ['temperature', 'moisture', 'road', 'fire'],
-  F: ['flowX', 'flowY', 'flowZ', 'salinity'],
-  S: ['treeSpecies', 'cropSpecies', 'biome'],
-  G: ['surface'],
-  D: ['sand', 'windX', 'windY', 'windZ'],
-  O: ['ore', 'oreType'],
-};
-
-const TEX_NAMES = Object.keys(SOURCES) as TexName[];
+let nextId = 1;
 
 export class FieldTextures {
   readonly rows: number;
@@ -119,10 +138,20 @@ export class FieldTextures {
    * layer supplies a light field, bound to the terrain's uCityTex by the renderer
    */
   cityLights: CityLights | null = null;
-  private normalsStamp = -1;
   private pv: PlanetView;
+  /** the main thread's packer: writes straight into the textures (first fill, and whenever there is no worker) */
+  private packer: FieldPacker;
+  private port: PackPort | null;
+  private readonly id = nextId++;
+  private registered = false;
+  /** the job in flight: its sequence number, the textures it fills, what A / M1 / G need when it lands */
+  private job: { seq: number; names: TexName[]; lava: number; grad: Float32Array | null } | null = null;
+  private seq = 0;
+  /** jobs that landed (tests / probes) */
+  landed = 0;
 
-  constructor(pv: PlanetView) {
+  /** `port`: the packing worker to use (default: the browser's shared one; null = always on this thread) */
+  constructor(pv: PlanetView, port?: PackPort | null) {
     this.pv = pv;
     const count = pv.grid.count;
     this.rows = Math.ceil(count / FIELD_ROW);
@@ -139,6 +168,9 @@ export class FieldTextures {
     this.tex = { A: mk(), W: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk(), O: mk() };
     this.waterLevel = new Float32Array(count);
     this.waterDepth = new Float32Array(count);
+    const out = Object.fromEntries(TEX_NAMES.map((k) => [k, this.tex[k].image.data as Float32Array])) as Record<TexName, Float32Array>;
+    this.packer = new FieldPacker(pv.grid, pv.params.radius, out, this.waterLevel, this.waterDepth);
+    this.port = port === undefined ? browserPort() : port;
   }
 
   /**
@@ -163,323 +195,103 @@ export class FieldTextures {
     this.lightVersion = version;
   }
 
-  private field(f: FieldName): Float32Array | null {
-    return this.pv.fields.get(f) ?? null;
+  /** pv.ground.grad, or derived here if a source never set it (the WorldView keeps it in step with `surface`) */
+  private grad(): Float32Array | null {
+    const n = this.pv.grid.count;
+    const s = this.pv.fields.get('surface') ?? null;
+    let g = this.pv.ground.grad as Float32Array | null | undefined;
+    if (!g || g.length !== n * 4) g = s ? surfaceGradients(this.pv.grid, this.pv.params.radius, s) : null;
+    return g ?? null;
   }
 
-  /** upload whatever changed since the last call; returns true if heights / water changed */
+  /** a texture refilled: upload it, and tell the chunk system when the heights / water / lava moved */
+  private landedTex(name: TexName, lava: number): void {
+    this.tex[name].needsUpdate = true;
+    if (name === 'A') this.geomVersion++;
+    // (lava raises the terrain mesh by its depth: the chunk bounds follow a flow as they follow the ground)
+    else if (name === 'M1' && lava !== this.lavaVersion) { this.lavaVersion = lava; this.geomVersion++; }
+  }
+
+  /** upload whatever changed since the last call (or land the worker's job); true if heights / water changed */
   update(): boolean {
-    let geom = false;
-    for (const name of TEX_NAMES) {
-      if (!this.restamp(name)) continue;
-      this.fill(name);
-      this.tex[name].needsUpdate = true;
-      if (name === 'A') { geom = true; this.geomVersion++; }
-      // (lava raises the terrain mesh by its depth: the chunk bounds follow a flow as they follow the ground)
-      else if (name === 'M1' && (this.pv.fieldVersion.get('lava') ?? 0) !== this.lavaVersion) { this.lavaVersion = this.pv.fieldVersion.get('lava') ?? 0; this.geomVersion++; }
+    const g0 = this.geomVersion;
+    if (!this.job) {
+      const dirty: TexName[] = [];
+      for (const name of TEX_NAMES) if (this.restamp(name)) dirty.push(name);
+      if (dirty.length) {
+        const lava = this.pv.fieldVersion.get('lava') ?? 0;
+        // the first fill stays on this thread: the first frame draws every texture
+        const port = this.registered || this.landed > 0 || this.geomVersion > 0 ? this.port : null;
+        if (port && this.post(port, dirty, lava)) { /* lands in onReply */ } else {
+          const p = this.packer;
+          p.fields = this.pv.fields;
+          p.surfaceVersion = this.pv.fieldVersion.get('surface') ?? 0;
+          p.light = this.light;
+          p.palette = { rgb: ORE_RGB, vis: ORE_VIS };
+          if (dirty.includes('G')) p.grad = this.grad();
+          for (const name of dirty) { p.fill(name); this.landedTex(name, lava); }
+        }
+      }
     }
     if (this.light) {
       this.cityLights ??= new CityLights(this.pv.params.radius);
       this.cityLights.update(this.pv, this.light, this.lightVersion);
     }
-    return geom;
+    return this.geomVersion !== g0;
   }
 
-  private smoothBuf: Float32Array | null = null;
-
-  /**
-   * One relaxation step over the cell graph (half own value, half the neighbours' mean). Cover fields interpolated
-   * linearly across 50 m sim triangles crease along the triangle edges — long straight tonal seams on a hillside;
-   * softening the cell-to-cell jumps first leaves the shader's noisy thresholds nothing straight to follow. Only
-   * for COLOUR fields: heights, water and roads stay exact.
-   */
-  private smoothed(src: Float32Array, passes = 1): Float32Array {
-    const g = this.pv.grid;
-    const n = g.count;
-    if (!this.smoothBuf || this.smoothBuf.length !== n) this.smoothBuf = new Float32Array(n);
-    if (passes > 1 && (!this.smoothBuf2 || this.smoothBuf2.length !== n)) this.smoothBuf2 = new Float32Array(n);
-    let from = src;
-    let out = this.smoothBuf;
-    for (let k = 0; k < passes; k++) {
-      out = k % 2 === 0 ? this.smoothBuf : this.smoothBuf2!;
-      for (let c = 0; c < n; c++) {
-        const e0 = g.nbrStart[c], e1 = g.nbrStart[c + 1];
-        let sum = 0;
-        for (let e = e0; e < e1; e++) sum += from[g.nbr[e]];
-        out[c] = 0.5 * from[c] + (0.5 * sum) / (e1 - e0);
+  /** post a job for `dirty` (G stays here: a copy of pv.ground.grad when the job lands); false if it could not */
+  private post(port: PackPort, dirty: TexName[], lava: number): boolean {
+    try {
+      if (!this.registered) {
+        const g = this.pv.grid;
+        port.listen(this.id, (r) => this.onReply(r), () => this.onFail());
+        port.send({ k: 'init', id: this.id, grid: { count: g.count, pos: g.pos, nbrStart: g.nbrStart, nbr: g.nbr, meanEdgeAngle: g.meanEdgeAngle }, R: this.pv.params.radius });
+        this.registered = true;
       }
-      from = out;
-    }
-    return out;
-  }
-  private smoothBuf2: Float32Array | null = null;
-
-  private pack4(name: TexName, f: (FieldName | null)[], smooth: (boolean | number)[] = [false, false, false, false]): void {
-    const d = this.tex[name].image.data as Float32Array;
-    const n = this.pv.grid.count;
-    for (let ch = 0; ch < 4; ch++) {
-      const k = f[ch];
-      let src = k ? this.field(k) : null;
-      if (!src) { for (let c = 0; c < n; c++) d[c * 4 + ch] = ch === 0 && k === 'treeSpecies' ? -1 : 0; continue; }
-      if (smooth[ch]) src = this.smoothed(src, typeof smooth[ch] === 'number' ? smooth[ch] as number : 1);
-      for (let c = 0; c < n; c++) d[c * 4 + ch] = src[c];
+      const remote = dirty.filter((n) => n !== 'G');
+      const need = new Set<FieldName>();
+      for (const n of remote) for (const f of SOURCES[n]) need.add(f);
+      const fields: [FieldName, Float32Array][] = [];
+      for (const f of need) { const a = this.pv.fields.get(f); if (a) fields.push([f, a]); }
+      const seq = ++this.seq;
+      this.job = { seq, names: dirty, lava, grad: dirty.includes('G') ? this.grad() : null };
+      port.send({
+        k: 'job', id: this.id, seq, names: remote, fields,
+        surfaceVersion: this.pv.fieldVersion.get('surface') ?? 0,
+        light: remote.includes('S') ? this.light : null,
+        palette: remote.includes('O') ? { rgb: ORE_RGB, vis: ORE_VIS } : null,
+      });
+      return true;
+    } catch (e) {
+      console.warn('[genesis] field packing job failed to post; packing on the main thread', e);
+      this.port = null;
+      this.job = null;
+      return false;
     }
   }
 
-  private fill(name: TexName): void {
-    const g = this.pv.grid;
-    const n = g.count;
-    switch (name) {
-      case 'A': {
-        const d = this.tex.A.image.data as Float32Array;
-        const s = this.field('surface'), soil = this.field('soil'), sand = this.field('sand'), snow = this.field('snow');
-        const w = this.field('water');
-        const wl = this.waterLevel, wd = this.waterDepth;
-        for (let c = 0; c < n; c++) {
-          const sc = s ? s[c] : 0;
-          const wc = w ? w[c] : 0;
-          d[c * 4] = sc;
-          d[c * 4 + 1] = roughOf(soil ? soil[c] : 0, sand ? sand[c] : 0, snow ? snow[c] : 0);
-          wd[c] = wc;
-          d[c * 4 + 3] = wc;
-        }
-        // water level with flat shore extrapolation (see header). An inland cell (no wet neighbour) sits under its
-        // ground by more than the curved surface can sag below its cells' chord (twice curveMargin at the steepest
-        // gradient: the sag grows from zero at a cell as fast as the margin does): at the 4 m it had, a triangle from
-        // a river's bank cell up a concave cliff (bank 26 m, inland cells 80-115 m) tilted the level's chord up the
-        // cliff while the curved ground dipped 20-30 m under the cells' own heights — a glass pane of water standing
-        // on the cliff with trees inside it (lookdev valley). Nothing else reads an inland cell's level.
-        const inland = 4 + 2 * curveMargin(g, this.pv.params.radius, MAX_GRAD);
-        for (let c = 0; c < n; c++) {
-          const sc = s ? s[c] : 0;
-          if (wd[c] > WET) { wl[c] = sc + wd[c]; continue; }
-          let sum = 0, k = 0;
-          for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-            const o = g.nbr[e];
-            if (wd[o] > WET) { sum += (s ? s[o] : 0) + wd[o]; k++; }
-          }
-          wl[c] = k > 0 ? Math.min(sum / k, sc - 0.05) : sc - inland;
-        }
-        for (let c = 0; c < n; c++) d[c * 4 + 2] = wl[c];
-        break;
-      }
-      case 'W': this.fillSurge(); break;
-      case 'N': {
-        const d = this.tex.N.image.data as Float32Array;
-        const s = this.field('surface');
-        const R = this.pv.params.radius;
-        const P = g.pos;
-        const sv = this.pv.fieldVersion.get('surface') ?? 0;
-        if (sv !== this.normalsStamp) {
-          this.normalsStamp = sv;
-          for (let c = 0; c < n; c++) {
-            // concavity: snow drifts into hollows, rock breaks through on ridges (the shader reads it)
-            let ms = 0;
-            for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) ms += s ? s[g.nbr[e]] : 0;
-            d[c * 4 + 3] = ms / (g.nbrStart[c + 1] - g.nbrStart[c]) - (s ? s[c] : 0);
-            const rc = R + (s ? s[c] : 0);
-            const cx = P[c * 3] * rc, cy = P[c * 3 + 1] * rc, cz = P[c * 3 + 2] * rc;
-            let nx = 0, ny = 0, nz = 0;
-            const e0 = g.nbrStart[c], e1 = g.nbrStart[c + 1];
-            const deg = e1 - e0;
-            for (let k = 0; k < deg; k++) {
-              const a = g.nbr[e0 + k], b = g.nbr[e0 + ((k + 1) % deg)];
-              const ra = R + (s ? s[a] : 0), rb = R + (s ? s[b] : 0);
-              const ax = P[a * 3] * ra - cx, ay = P[a * 3 + 1] * ra - cy, az = P[a * 3 + 2] * ra - cz;
-              const bx = P[b * 3] * rb - cx, by = P[b * 3 + 1] * rb - cy, bz = P[b * 3 + 2] * rb - cz;
-              nx += ay * bz - az * by;
-              ny += az * bx - ax * bz;
-              nz += ax * by - ay * bx;
-            }
-            const l = Math.hypot(nx, ny, nz) || 1;
-            // CCW neighbours around the outward normal give an outward cross product
-            const sign = nx * P[c * 3] + ny * P[c * 3 + 1] + nz * P[c * 3 + 2] < 0 ? -1 : 1;
-            d[c * 4] = (sign * nx) / l;
-            d[c * 4 + 1] = (sign * ny) / l;
-            d[c * 4 + 2] = (sign * nz) / l;
-          }
-        }
-        break;
-      }
-      case 'M0': this.pack4('M0', ['snow', 'sand', 'soil', 'ash'], [true, true, true, true]); break;
-      case 'M1': this.pack4('M1', ['lava', 'wetness', 'ice', 'burnt']); break;
-      // vegetation and moisture vary cell to cell (a wood here, dry sward there): two passes, or the canopy / meadow
-      // contrast reads as a 50 m camouflage pattern on every hill
-      case 'V': this.pack4('V', ['grass', 'shrub', 'tree', 'crop'], [2, 2, 2, false]); break;
-      case 'C': {
-        this.pack4('C', ['temperature', 'moisture', 'road', 'fire'], [true, 2, false, false]);
-        // a LONE burning cell (no neighbour carrying the front level 0.25) is packed NEGATIVE: the terrain then draws
-        // scattered coals and char round it instead of the front contour, which around a single peak of the field is
-        // a perfect glowing circle about a black disc (a portal, not a fire). Only the terrain reads this channel.
-        const fire = this.field('fire');
-        if (fire) {
-          const d = this.tex.C.image.data as Float32Array;
-          for (let c = 0; c < n; c++) {
-            if (fire[c] < 0.25) continue;
-            let lone = true;
-            for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1] && lone; e++) if (fire[g.nbr[e]] >= 0.25) lone = false;
-            if (lone) d[c * 4 + 3] = -1;
-          }
-        }
-        break;
-      }
-      case 'F': {
-        this.pack4('F', ['flowX', 'flowY', 'flowZ', 'salinity']);
-        const d = this.tex.F.image.data as Float32Array;
-        for (let c = 0; c < n; c++) { d[c * 4] /= 60; d[c * 4 + 1] /= 60; d[c * 4 + 2] /= 60; }
-        break;
-      }
-      case 'S': {
-        this.pack4('S', ['treeSpecies', 'cropSpecies', null, 'biome']);
-        // night lights: two relaxation passes so a town's glow is a soft pool, not a facet of the sim triangles; the
-        // level compressed so a lit village still shows from orbit (a hamlet's few hearths vanished entirely) while a
-        // city stays the brightest
-        const L = this.light;
-        if (L && L.length === n) {
-          const d = this.tex.S.image.data as Float32Array;
-          const sm = this.smoothed(L, 2);
-          for (let c = 0; c < n; c++) { const x = sm[c]; d[c * 4 + 2] = x > 1e-4 ? Math.min(4, (2.2 * x) / (0.35 + x) + 0.25 * x) : 0; }
-        }
-        break;
-      }
-      case 'D': {
-        // dune amplitude (m) from the RAW sand depth — part of the ground function, so never smoothed
-        const d = this.tex.D.image.data as Float32Array;
-        const sand = this.field('sand');
-        for (let c = 0; c < n; c++) d[c * 4] = sand ? duneAmpOf(sand[c]) : 0;
-        // surface wind (sea state): the sim's, relaxed once (gust fronts stay, cell facets go)
-        const wx = this.field('windX'), wy = this.field('windY'), wz = this.field('windZ');
-        const P = g.pos;
-        if (wx && wy && wz) {
-          for (const [ch, f] of [[1, wx], [2, wy], [3, wz]] as const) {
-            const sm = this.smoothed(f, 1);
-            for (let c = 0; c < n; c++) d[c * 4 + ch] = sm[c];
-          }
-        } else {
-          // no wind field: easterly trades in the tropics, westerlies at mid latitudes, 3–11 m/s with broad gusty
-          // swells (a few hundred metres) so the sea is not one uniform state
-          for (let c = 0; c < n; c++) {
-            const x = P[c * 3], y = P[c * 3 + 1], z = P[c * 3 + 2];
-            const lat = Math.asin(Math.max(-1, Math.min(1, y)));
-            const band = Math.cos(lat * 3);   // +1 trades (equator), −1 westerlies (~60°), +1 polar easterlies
-            const gust = 0.5 + 0.5 * Math.sin(x * 9.1 + Math.sin(z * 7.3) * 2) * Math.sin(z * 8.3 + Math.sin(y * 6.1) * 2);
-            // (the belts turn through calm — the horse latitudes — instead of flipping: a sign switch at the belts' edge
-            // reversed the sea state's direction along a line, drawn across every ocean as a wavy seam in the glint)
-            const speed = (1 + 10 * gust) * Math.min(1, Math.abs(band) * 2.5);
-            // east unit vector (−z, 0, x)/|..| in this frame's longitude convention (lon = atan2(x, z))
-            let ex = z, ez = -x;
-            const el = Math.hypot(ex, ez) || 1;
-            ex /= el; ez /= el;
-            const k = -Math.sign(band); // trades blow toward the west
-            d[c * 4 + 1] = ex * speed * k;
-            d[c * 4 + 2] = 0;
-            d[c * 4 + 3] = ez * speed * k;
-          }
-        }
-        break;
-      }
-      case 'O': {
-        const d = this.tex.O.image.data as Float32Array;
-        const ore = this.field('ore'), ty = this.field('oreType');
-        for (let c = 0; c < n; c++) {
-          const a = ore && ty && ty[c] > 0 ? Math.max(0, Math.min(1, ore[c])) * oreVis(ty[c]) : 0;
-          const rgb = a > 0 ? oreRgb(ty![c]) : ORE_RGB[0] ?? [0, 0, 0];
-          d[c * 4] = rgb[0] * a; d[c * 4 + 1] = rgb[1] * a; d[c * 4 + 2] = rgb[2] * a; d[c * 4 + 3] = a;
-        }
-        break;
-      }
-      case 'G': {
-        const d = this.tex.G.image.data as Float32Array;
-        const s = this.field('surface');
-        // the WorldView keeps pv.ground.grad in step with `surface`; derive it here only if a source never set it
-        let g = this.pv.ground.grad as Float32Array | null | undefined;
-        if (!g || g.length !== n * 4) g = s ? surfaceGradients(this.pv.grid, this.pv.params.radius, s) : null;
-        if (g) d.set(g.subarray(0, n * 4)); else d.fill(0);
-        break;
-      }
-    }
+  private onReply(r: PackReply): void {
+    const job = this.job;
+    if (!job || r.seq !== job.seq) return;
+    this.job = null;
+    this.landed++;
+    for (const [name, data] of r.out) (this.tex[name].image.data as Float32Array).set(data);
+    if (r.waterLevel && r.waterDepth) { this.waterLevel.set(r.waterLevel); this.waterDepth.set(r.waterDepth); }
+    if (job.names.includes('G')) { this.packer.grad = job.grad; this.packer.fill('G'); }
+    for (const name of job.names) this.landedTex(name, job.lava);
   }
 
-  /**
-   * fillSurge's geometry, which depends only on the grid and the radius: each cell's tangent basis and each edge's
-   * neighbour offset (u, v) in it. Float64 and the same expressions as before, so W is bit-identical — it was
-   * recomputed (a hypot and six dot products per edge) every time the water changed (macfix smooth).
-   */
-  private surgeGeo: { grid: unknown; R: number; t: Float64Array; uv: Float64Array } | null = null;
-  private surgeGeometry(): { t: Float64Array; uv: Float64Array } {
-    const g = this.pv.grid;
-    const R = this.pv.params.radius;
-    if (this.surgeGeo && this.surgeGeo.grid === g && this.surgeGeo.R === R) return this.surgeGeo;
-    const n = g.count;
-    const P = g.pos;
-    const t = new Float64Array(n * 6);
-    const uv = new Float64Array(g.nbrStart[n] * 2);
-    for (let c = 0; c < n; c++) {
-      const px = P[c * 3], py = P[c * 3 + 1], pz = P[c * 3 + 2];
-      // tangent basis at the cell
-      let ax = 1, ay = 0, az = 0;
-      if (Math.abs(px) > 0.8) { ax = 0; ay = 1; }
-      let t1x = py * az - pz * ay, t1y = pz * ax - px * az, t1z = px * ay - py * ax;
-      const l1 = Math.hypot(t1x, t1y, t1z);
-      t1x /= l1; t1y /= l1; t1z /= l1;
-      const t2x = py * t1z - pz * t1y, t2y = pz * t1x - px * t1z, t2z = px * t1y - py * t1x;
-      t[c * 6] = t1x; t[c * 6 + 1] = t1y; t[c * 6 + 2] = t1z; t[c * 6 + 3] = t2x; t[c * 6 + 4] = t2y; t[c * 6 + 5] = t2z;
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-        const o = g.nbr[e];
-        const dx0 = (P[o * 3] - px) * R, dy0 = (P[o * 3 + 1] - py) * R, dz0 = (P[o * 3 + 2] - pz) * R;
-        uv[e * 2] = dx0 * t1x + dy0 * t1y + dz0 * t1z;
-        uv[e * 2 + 1] = dx0 * t2x + dy0 * t2y + dz0 * t2z;
-      }
-    }
-    this.surgeGeo = { grid: g, R, t, uv };
-    return this.surgeGeo;
-  }
-
-  /**
-   * W: the water level's own slope per CELL — x = excess (|grad level| less the bed's slope along it, m/m: a surge face where
-   * it is clearly positive), yzw = the level's gradient (body frame, m/m, tangent). Least-squares over the cell's wet
-   * neighbours. The ocean once took this slope from screen derivatives of the level, which is linear over each 50 m sim
-   * triangle: its slope jumped at every triangle edge and whole triangles of a wave's face switched to white (flat foam
-   * polygons with straight edges). Interpolated from the cells' values it is continuous, so the foam follows contours.
-   */
-  private fillSurge(): void {
-    const g = this.pv.grid;
-    const n = g.count;
-    const d = this.tex.W.image.data as Float32Array;
-    const s = this.field('surface');
-    const wl = this.waterLevel, wd = this.waterDepth;
-    d.fill(0);
-    if (!s) return;
-    const { t, uv } = this.surgeGeometry();
-    for (let c = 0; c < n; c++) {
-      if (wd[c] <= WET) continue;
-      let sxx = 0, sxy = 0, syy = 0, sxw = 0, syw = 0, sxb = 0, syb = 0, k = 0;
-      const wc = wl[c], sc = s[c];
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-        const o = g.nbr[e];
-        if (wd[o] <= WET) continue;
-        const u = uv[e * 2], v = uv[e * 2 + 1];
-        const dw = wl[o] - wc, db = s[o] - sc;
-        sxx += u * u; sxy += u * v; syy += v * v;
-        sxw += u * dw; syw += v * dw; sxb += u * db; syb += v * db;
-        k++;
-      }
-      if (k < 3) continue;
-      const det = sxx * syy - sxy * sxy;
-      if (det <= 1e-9 * (sxx * syy + 1e-9)) continue;
-      const gwu = (syy * sxw - sxy * syw) / det, gwv = (sxx * syw - sxy * sxw) / det;
-      const gbu = (syy * sxb - sxy * syb) / det, gbv = (sxx * syb - sxy * sxb) / det;
-      // (the bed's slope only excuses the part of the level's tilt that leans WITH it — a river running down its bed; a
-      // still sea over a shelving bed is flat, and a wave's face over that shelf owes nothing to the bed)
-      const gw = Math.hypot(gwu, gwv);
-      d[c * 4] = gw > 1e-6 ? gw - Math.max(0, gwu * gbu + gwv * gbv) / gw : 0;
-      d[c * 4 + 1] = gwu * t[c * 6] + gwv * t[c * 6 + 3];
-      d[c * 4 + 2] = gwu * t[c * 6 + 1] + gwv * t[c * 6 + 4];
-      d[c * 4 + 3] = gwu * t[c * 6 + 2] + gwv * t[c * 6 + 5];
-    }
+  /** the worker died: forget the job (its textures refill here on the next update) and pack on this thread */
+  private onFail(): void {
+    this.port = null;
+    if (this.job) for (const n of this.job.names) this.stamps[n].fill(NaN);
+    this.job = null;
+    this.registered = false;
   }
 
   dispose(): void {
+    if (this.port && this.registered) { try { this.port.send({ k: 'drop', id: this.id }); this.port.unlisten(this.id); } catch { /* gone */ } }
     for (const t of Object.values(this.tex)) t.dispose();
     this.cityLights?.dispose();
   }

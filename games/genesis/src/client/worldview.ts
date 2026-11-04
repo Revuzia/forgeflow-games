@@ -368,7 +368,8 @@ export class WorldView {
     while (hour < 0) { hour += p.dayHours; dayOfYear--; }
     while (dayOfYear >= yearDays) { dayOfYear -= yearDays; year++; }
     while (dayOfYear < 0) { dayOfYear += yearDays; year--; }
-    const yearFrac = (dayOfYear + hour / Math.max(1, p.dayHours)) / yearDays;
+    const yf = (dayOfYear + hour / Math.max(1, p.dayHours)) / yearDays;
+    const yearFrac = yf - Math.floor(yf); // the last, partial day of a fractional year can push it past 1
     const seasonIdx = p.seasonPinned != null ? p.seasonPinned : Math.floor(yearFrac * 4) % 4;
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
     // yearDays is fractional (orbit period / day length), so a wrap leaves dayOfYear fractional: the
