@@ -238,6 +238,25 @@ section('items: a starter grows into the first Gloam core; the dial-slot rule', 
   check('dial: no uniqueGroup noonlit is left anywhere', catalog.items.every((i) => i.uniqueGroup !== 'noonlit'));
 });
 
+section('Splinters stack to 3 (CW3 CL-2): stats x stacks, every take renews the timer', () => {
+  const sim = mkSim('rift', [seat(0, 0, melee), seat(1, 1, FIGHTERS[2])]);
+  const w = sim.world;
+  const def = catalog.teamBuffs.find((b) => b.id === 'splinters')!;
+  check('Splinters: maxStacks 3 in content', def.maxStacks === 3, def.maxStacks);
+  steps(sim, 0.2);
+  const h0 = E(sim).stats.haste, per = def.stats.haste ?? 0;
+  const tb = () => w.teams[0].buffs.find((b) => b.id === 'splinters');
+  addTeamBuff(w, 0, 'splinters'); steps(sim, 0.2);
+  check('Splinters x1: + one stack of haste', near(E(sim).stats.haste - h0, per, 1e-6), E(sim).stats.haste - h0);
+  steps(sim, 30);
+  addTeamBuff(w, 0, 'splinters'); steps(sim, 0.2);
+  check('Splinters x2: two stacks, timer renewed', near(E(sim).stats.haste - h0, per * 2, 1e-6) && tb()!.stacks === 2 && tb()!.remaining > (def.duration ?? 0) - 1, [E(sim).stats.haste - h0, tb()!.stacks, tb()!.remaining]);
+  addTeamBuff(w, 0, 'splinters'); addTeamBuff(w, 0, 'splinters'); steps(sim, 0.2);
+  check('Splinters: capped at 3 stacks', tb()!.stacks === 3 && near(E(sim).stats.haste - h0, per * 3, 1e-6), [tb()!.stacks, E(sim).stats.haste - h0]);
+  steps(sim, (def.duration ?? 0) + 1);
+  check('Splinters: all stacks expire together', !tb() && near(E(sim).stats.haste, h0, 1e-6), E(sim).stats.haste - h0);
+});
+
 section('camp buffs: Clearglass on your own side, Resinburn on the enemy side', () => {
   const sim = mkSim('rift', [seat(0, 0, melee), seat(1, 1, FIGHTERS[2])]);
   const w = sim.world;
