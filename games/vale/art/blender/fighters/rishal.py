@@ -194,9 +194,11 @@ SKINS: list = [
      # (closing round 2, par:rishal: cream-over-walnut still read as a warm tint at the game camera, the coat being the
      # biggest shape there: the coat, apron and torso go the carved walnut too, and the crest's panes, the visor and
      # the knife blades a real lampresin amber, so the only cool thing left on him is the accent)
-     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F", "chest_plate": "#7A5A40", "pauldron_L": "#8B6A4C",
+     "parts": {"cowl": "#B4A690", "sleeves": "#B39C7C", "chest_plate": "#7A5A40", "pauldron_L": "#8B6A4C",
                "lames_L": "#8B6A4C", "pauldron_R": "#8B6A4C", "nape": "#6B4E38", "visor": "#B0854A",
-               "skirt_L": "#86684D", "skirt_R": "#86684D", "apron": "#8E7054", "torso": "#7C5F46",
+               "skirt_L": "#76593F", "skirt_R": "#76593F", "apron": "#7E6148", "torso": "#6E523A",
+               "trousers": "#4A3C30", "greave_R": "#54443A", "greave_L": "#54443A", "calfwrap_R": "#5E4D3E",
+               "calfwrap_L": "#5E4D3E",
                "crest_glass": "#C8964F", "knife_blade_R": "#BC8F52", "knife_blade_L": "#BC8F52"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
      # amber glass: as dawnglass again they took the walnut-dark #A38C6B, the top band 73.6 -> 68.4)   # (fix pass 5: the scarf a step down again, L* 69: the
      # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
@@ -1581,12 +1583,14 @@ def _lamp(frame, glass, c, up, R, h, slat=None):
 #   the crest lamp: moved off the crest's front horn to its root on the crown, its foot collaring the crest's outer band
 #       behind the visor ridge (ridge top 1.73-1.75 m at y -0.05..-0.13; from the 52 degree camera a lamp behind it
 #       cannot cover it: art/tools fit check fw_CW6_r2_rishal_fit), 9 x 12 cm
-#   the back lamp: a walnut bracket off his right shoulder blade carrying a 17 x 24 cm lamp beside the head, the
+#   the back lamp: a walnut bracket off his right shoulder blade carrying a 12 x 17 cm lamp beside the head, the
 #       counterweight to the left pauldron's lames; leans back in the rest pose so the idle's 20 degree lean stands it up
 #   the lamp caps: each pauldron crowned with a raised walnut ring round a glossy lampresin dome
 LAMP_CREST = {"c": (0.0, -0.058, 1.822), "up": (0.0, -0.10, 1.0), "R": 0.040, "h": 0.105}
-LAMP_BACK = {"c": (-0.240, 0.235, 1.565), "up": (-0.16, 0.24, 1.0), "R": 0.080, "h": 0.235}
-LAMP_POST = ((-0.090, 0.085, 1.300), (-0.125, 0.145, 1.410), (-0.190, 0.205, 1.500), (-0.240, 0.235, 1.565))
+# (first build: 17 x 24 cm on a tall bracket stood over the head at the game camera, a lantern hat: 12 x 17 cm now, its
+# top under the crown, beside the ear in the idle's lean)
+LAMP_BACK = {"c": (-0.232, 0.205, 1.475), "up": (-0.12, 0.22, 1.0), "R": 0.058, "h": 0.170}
+LAMP_POST = ((-0.090, 0.085, 1.290), (-0.125, 0.135, 1.360), (-0.185, 0.180, 1.430), (-0.232, 0.205, 1.475))
 
 
 def skin_extras(extra: dict) -> list:
@@ -1603,7 +1607,7 @@ def skin_extras(extra: dict) -> list:
         post, frame, glass = Sculpt("lamp_post"), Sculpt("lamp_frame"), Sculpt("lamp_glass")
         post.add(Tube(list(LAMP_POST), [0.016, 0.0135, 0.012, 0.012]), k=0.0)
         post.add(Ellipsoid(LAMP_POST[0], (0.040, 0.016, 0.050)), k=0.006)            # the saddle on the shoulder blade
-        _lamp(frame, glass, LAMP_BACK["c"], LAMP_BACK["up"], LAMP_BACK["R"], LAMP_BACK["h"], slat=0.0095)
+        _lamp(frame, glass, LAMP_BACK["c"], LAMP_BACK["up"], LAMP_BACK["R"], LAMP_BACK["h"], slat=0.0072)
         out.append(("lamp_post", post, 0.6, "wood_dark", "bone:chest", 260))
         out.append(("lamp_frame", frame, 0.6, "wood_dark", "bone:chest", 620))
         out.append(("lamp_glass", glass, 0.6, "lampresin", "bone:chest", 300))
@@ -3400,7 +3404,7 @@ def lamplit_paint(out, maps, names, iy, ix, pid, log=print):
     # the lamps' glass: glossy lampresin with a warm lit interior (deep at the rim, honey at the core, a white
     # catch-light up-front), never emissive; the frames a warm grained walnut lit along the top
     deep, honey = _lin(_hexrgb("#6E4720")), _lin(_hexrgb("#F0BE68"))
-    for pn, rad in (("cage_bead", 0.040), ("lamp_glass", 0.080), ("lampcap_glass_R", 0.037), ("lampcap_glass_L", 0.045)):
+    for pn, rad in (("cage_bead", 0.040), ("lamp_glass", 0.058), ("lampcap_glass_R", 0.037), ("lampcap_glass_L", 0.045)):
         got = part_px(pn)
         if got is None:
             continue
