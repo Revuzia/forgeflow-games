@@ -1,0 +1,15 @@
+{
+  "wave": "CW4",
+  "round": 2,
+  "pass": false,
+  "items": [
+    {"id": "env:E1", "severity": "major", "status": "partly",
+     "evidence": "No CW4 commit since verify round 1 (git log f4c9be13..HEAD is empty for art/out/maps, content/maps, src/render/terrain*). art/blender/maps/landmarks_art2.py has an uncommitted diff (+107/-48 lines, mtime 15:56) that has not been built: the newest art/out/maps/landmarks GLB is hour_lamp.glb at 13:09, and the only rebuild run is a numeral_xi --preview (/tmp/fw_CW4_r1_xi.log). Landmark hp still measures 1.6-1.9 against 3.65-4.46 for structures (value_probe, round 1). The refix engineer claimed nothing.",
+     "fixHint": "Build the landmarks_art2.py changes into art/out/maps/landmarks, re-run _harness/value_probe.mjs with a target of landmark hp >= about 2.8, then commit."},
+    {"id": "critic:monsters", "severity": "major", "status": "partly",
+     "evidence": "The creatures.py and creatures_b.py diffs (Stilltusk Young bolder bands, deeper hide, umber edge lines) are uncommitted and unbuilt: stilltusk_young.glb is from 12:40 and stray_numeral.glb from 12:15. content/maps/map_rift.json has 0 'facing' keys, so the Strays are not turned toward the camera and the round-1 IoU of 0.66 stands (needs <= 0.5). There is no scored neutral-units row in _design/reviews/closing/. Sensitivity is still clean, with no new sheets.",
+     "fixHint": "CW3s adds camps[].units[].facing, then CW4 sets the RIFT Strays to face the camera and re-measures IoU. Rebuild Stilltusk Young and the darker Strays, then write the neutral-units score row."}
+  ],
+  "regressions": [],
+  "notes": "Nothing was re-measured because no refix output exists to measure. Source-only edits are in progress in the working tree."
+}
