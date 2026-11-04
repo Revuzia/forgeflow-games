@@ -63,6 +63,10 @@ for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
     for (let q = 0; q < 12; q++) { sim.step(Math.round(year / 4)); low = Math.min(low, alive()); assert.ok(alive() > 0, `extinct at Y${(q + 1) / 4}`); }
     const n = alive();
     assert.ok(n >= 20, `the band holds on through three years (alive ${n}, low ${low})`);
+    // (sim-fix-r2 #2: and it takes root — the village it founds still stands, not fallen and set up again elsewhere;
+    // the 10-year, 8-seed full-grid measure is in _harness/scratch/ledgers/sim-fix-r2.md: 0 moves in years 0-5)
+    const fell = p.people.settlements.filter((s) => !s.band && s.fallen >= 0).map((s) => s.name);
+    assert.deepEqual(fell, [], `no village of the opening band fell or was left in three years (fell: ${fell.join(', ')})`);
     const lib = Math.max(...p.people.settlements.filter((s) => s.fallen < 0).map((s) => s.library.length));
     assert.ok(lib > lib0 + 2, `it found things nobody gave it (library ${lib0} -> ${lib})`);
   });
