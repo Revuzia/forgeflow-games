@@ -132,14 +132,16 @@ CARDS = {
                   "glow_color": "#C8D4EC"},
     },
     "rishal_lamplit": {
-        "splash": {"clip": "cast_ult", "t": 0.10, "yaw": 34.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
-                   "key_az": 225.0, "key_el": 15.0, "key_color": "#FFC48C", "sun": 2.0, "rim_cool": 0.8,
-                   "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E09A5A", "accent": 2.2,
-                   "focal": [{"at": "head", "az": 175.0, "el": 8.0, "dist": 0.5, "color": "#FFC888", "power": 40.0,
+        # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
+        # walnut out to peach, a calmer warm key and focal keep the coat walnut and the glass amber)
+        "splash": {"clip": "cast_ult", "t": 0.10, "yaw": -30.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
+                   "key_az": 150.0, "key_el": 22.0, "key_color": "#FFDDB8", "sun": 1.25, "rim_cool": 0.6,
+                   "rim_warm": 1.1, "bounce": 0.25, "bounce_color": "#C88A50", "accent": 1.8,
+                   "focal": [{"at": "head", "az": 175.0, "el": 8.0, "dist": 0.5, "color": "#FFD8A8", "power": 12.0,
                               "size": 0.18},
-                             {"at": "x_visor_ridge", "az": 200.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
-                              "power": 18.0, "size": 0.12}]},
-        "portrait": {"yaw": 34.0, "clip": "idle_lobby", "t": 0.5},
+                             {"at": "x_visor_ridge", "az": 160.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
+                              "power": 7.0, "size": 0.12}]},
+        "portrait": {"yaw": -34.0, "clip": "idle_lobby", "t": 0.5},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },

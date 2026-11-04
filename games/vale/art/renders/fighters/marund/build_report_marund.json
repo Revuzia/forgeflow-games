@@ -161,14 +161,14 @@
   },
   "uv_coverage": 0.634,
   "bake": {
-    "base": 19.3,
-    "rough_metal": 20.81,
-    "normal": 7.0,
-    "ao": 13.0,
+    "base": 6.76,
+    "rough_metal": 7.76,
+    "normal": 4.8,
+    "ao": 5.0,
     "normal_fixed_px": 22336,
-    "projection": 135.56,
-    "pack_save": 136.57,
-    "total": 198.16
+    "projection": 65.66,
+    "pack_save": 66.0,
+    "total": 90.75
   },
   "tris": 18725,
   "mesh_top_m": 2.316,
@@ -280,9 +280,9 @@
   "optimize": {
     "ok": true,
     "before": 2843876,
-    "after": 1164620
+    "after": 1164204
   },
-  "glb_bytes": 1164620,
+  "glb_bytes": 1164204,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -326,25 +326,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/marund/three_marund.png",
-    "seconds": 87,
+    "seconds": 30.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.39,
-      "model": 15.65,
-      "lows_bind": 14.93,
-      "uv": 22.12,
-      "bake": 198.17,
-      "clips": 0.48,
-      "export": 7.66,
-      "optimize": 4.92,
-      "load_test": 0.78,
-      "three_qa": 90.75,
-      "cache": 6.79
+      "rig": 0.05,
+      "materials": 1.64,
+      "model": 38.33,
+      "lows_bind": 11.89,
+      "uv": 8.36,
+      "bake": 90.76,
+      "clips": 0.28,
+      "export": 2.75,
+      "optimize": 1.21,
+      "load_test": 0.23,
+      "three_qa": 32.47,
+      "cache": 1.64
     },
-    "total_s": 362.76
+    "total_s": 190.39
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88
