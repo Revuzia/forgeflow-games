@@ -1,0 +1,61 @@
+{
+ "wave": "CW3s",
+ "round": 2,
+ "verifier": "adversarial verifier, verify-only round 2, 2026-11-04, re-measured at c01659e6 on a fresh untuned window (seeds 941-960)",
+ "pass": false,
+ "summary": "CW3s does not pass round 2. Fixed and verified: Splinters stack to 3 (rekey 45/0), Sunsplinter early take (2.1 / 3.0 min), shadehold takedowns (1.45 / 2.05), veteran beats novice 38/40 (74/80 over two windows), same-target skillshot gate, BRIDGE and pace. Still failing on the untuned window: takedowns by 10:00 5.05 / 4.65 (< 6), no-death stretch 3.4 min, late first ult (ulkro / vashil 10.4), passive seat punished less than a bot seat, duo level 6 veteran at 8.0. Regressions: G1 last-hit share 46.9 / 46.9 % (was 50.8 / 49.2), grovehunter deaths gate now fails at adept (3.5 vs 3.5). typecheck 0, content:check 0 warnings.",
+ "commands": [
+  "node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 941 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_v2",
+  "node _harness/probe_sim_rekey.ts (45/0)",
+  "npm run typecheck (0)",
+  "npm run content:check (0 warnings)"
+ ],
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Fresh untuned window, HEAD c01659e6 (sim/content clean in the working tree): node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 941 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_v2; report _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt (200 matches, 0 bot faults). Adept / veteran: credited takedowns by 10:00 5.05 / 4.65 (target >= 6, FAIL; was 4.25 / 3.80 in round 1). Games with none 0/20 and 0/20 (PASS). Longest no-death stretch from 3:00 3.4 / 3.4 min (target <= 3, FAIL). Shadehold takedowns before 14:00 1.45 / 2.05 (PASS). Median first ult after 10:00: ulkro 10.4 (adept) and vashil 10.4 (veteran) (FAIL; the engineer's 'none' on seeds 901-920 does not hold on an untuned window).",
+   "fixHint": "Kill pace is still ~1 takedown short; reaching it must not cost G1 last hits (see done:2). The late-ult gate is noise-sensitive: give ult-carrying fighters (ulkro, vashil, ilsheta) a looser ult-use threshold in lane trades so the median clears 10:00 on two windows."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Same soak _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt. Fighters' last-hit share of Wicks dying by 14:00: 46.9 % / 46.9 % (target >= 50 %, FAIL; regressed from 50.8 / 49.2 in round 1). Laners in lane 72.7 / 71.2 % (passes the soak's 65 % gate, below the done-list's 75 %). Sunsplinter first take after spawn 2.1 / 3.0 min (PASS, veteran exactly at the bar). Splinters stack: content/team_buffs.json maxStacks 3, src/sim/core.ts:137-159 addTeamBuff stacks and renews; node _harness/probe_sim_rekey.ts 45 passed 0 failed incl. the 5 Splinters checks (PASS). Cores fallen before 16:00 0 / 0 (PASS); RIFT adept p90 29.1 min (PASS). Regression: [jungle] grovehunter deaths vs laners' highest FAILs at adept 3.5 vs 3.5 (was 2.9 vs 3.8 PASS in round 1).",
+   "fixHint": "G1 last-hit share is now the blocker for this item: the extra laning fights hand Wick kills to Wicks. Restore >= 50 % (fight-time last hits, finishing the wave before trading) before adding more trade windows."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Same soak _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt: veteran beats novice 38/40 = 95 % (PASS; with the engineer's 36/40 on 901-920 that is 74/80 = 92.5 % over two windows, PASS). Veteran beats adept 30/40 (PASS). Duo road (shaftlight) level 6 median 7.9 adept / 8.0 veteran (veteran gate FAILs on the soak's own check, it is at the 8:00 bar, not under it).",
+   "fixHint": "Only the duo level 6 margin is left: it sits on the 8:00 line on an untuned window; a small duo XP-share change would give it margin."
+  },
+  {
+   "id": "gameplay:CL-1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "See done:1/done:2. _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt: takedowns by 10:00 5.05 / 4.65 (< 6), no-death stretch 3.4 / 3.4 min (> 3), late ult ulkro / vashil 10.4, and the G1 last-hit share fell to 46.9 / 46.9 %. Improvement is real (+0.8 takedowns, shadehold and Sunsplinter now pass) but the item is not at its bar and caused a G1 regression.",
+   "fixHint": "See done:1 and done:2."
+  },
+  {
+   "id": "critic:gauge-source",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "_design/sections/modes_economy.md:54 records the search; I repeated it without downloading (WebSearch 'high_diamond_ranked_10min blueKills mean'; the RPubs page 1380267 prints no blueKills/redKills mean; openml.org/d/43635 renders no statistics). No readable published kills-at-10:00 or first-blood figure found, so CL-1 is still graded against the derived >= 6 bar. Honest partly, unchanged.",
+   "fixHint": "Still needs a readable source (e.g. a page that prints the describe() table of the 10-minute Diamond set) to re-grade CL-1."
+  },
+  {
+   "id": "critic:bot-micro",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "_harness/_reports/fw_W4_soak_fw_CW3s_v2.txt: skillshot hit novice / adept / veteran 50.4 / 72.7 / 76.7 %; same-target gate (adept targets) veteran 79.0 vs adept 76.5 % (PASS, fixed). Telegraph dodge 10.2 / 27.2 / 49.0 %. Lowest-EHP focus 88-90 %. Passive human seat still takes less than the bot-played seat: 292 vs 320 /min (adept), 241 vs 261 /min (veteran), deaths 0.05 vs 0.10 (FAIL, gate is report-only 'open').",
+   "fixHint": "Bots still punish a passive seat less than a bot seat; raise the passive-foe press (bot.ts:465-472) or zone the passive laner off Wicks, and make the gate enforced."
+  }
+ ],
+ "regressions": [
+  "gameplay:G1 last-hit share by fighters 46.9 % / 46.9 % (target >= 50; round 1 was 50.8 / 49.2) in _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt",
+  "[jungle] grovehunter deaths per game vs laners' highest: adept 3.5 vs 3.5 FAIL (round 1 2.9 vs 3.8 PASS) in _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt"
+ ]
+}
