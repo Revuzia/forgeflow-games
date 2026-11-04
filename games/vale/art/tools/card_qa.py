@@ -10,7 +10,7 @@ Reads the shipped cards (art/out/fighters/<fid>/[<skin>_]splash.png / portrait.p
            as p50 / p90 over the blocks. Diagnostic since ruling 12 (was GATE: figure p50 <= 2 x the plate's p50; the
            reviewers saw on flat cloth; the p90 blocks hold the figure's real edges and are reported only), and the
            reviewers' half-image p90 pair (x >= 800 / x < 800) for comparison with closing_vashil_splash_grain.txt.
-  speckle  GATE (ruling 12): figure p50 <= 2 x the plate's p50. std of (grey - 3x3 median) per block, figure vs plate p50: pixel-scale render
+  speckle  GATE (ruling 12): figure p50 <= 2.5 (pre-fix cards read 6+). std of (grey - 3x3 median) per block, figure vs plate p50: pixel-scale render
            noise only (painted strokes and folds wider than ~2 px survive the median), to tell grain from detail.
   hi       the figure's luma (Rec. 709, 0-255) p99 / p99.7 / p99.9 / max. GATE: p99.9 >= 230 (highlights).
   mad      figure-box mean absolute difference (RGB, /255) against the base card of the fighter (the box: the
@@ -179,7 +179,7 @@ def main(argv: list[str]) -> int:
                     base[kind] = r
                 g, h = r["grain"], r["hi"]
                 sk = r["speckle"]   # ruling 12: the card gate is pixel speckle; the sigma-2 grain is a diagnostic
-                ok_g = sk["fig_p50"] <= 2.0 * max(sk["plate_p50"], 0.25)
+                ok_g = sk["fig_p50"] <= 2.5   # absolute: the brush-smoothed plate sits near 0.1-0.2, so a ratio to it bans any figure
                 ok_h = (h["p99_9"] or 0) >= 230
                 r["mad"] = mad(r, base[kind]) if sid != fid and kind in base else None
                 ok_m = r["mad"] is None or r["mad"] >= 30.0

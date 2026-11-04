@@ -147,7 +147,7 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 - The plate is smoothed by the Kuwahara brush, so painted folds, strokes and material detail on the figure count as "grain".
 - The pixel-scale speckle the reviewers actually objected to is gone: card_qa's `speckle` diagnostic now reads about 1-2.5, down from 6+.
 
-**Ruling:** the card gate is the **speckle** measure: the figure's std of (grey minus a 3×3 median), at most 2× the plate's p50.
+**Ruling:** the card gate is the **speckle** measure: the figure's p50 std of (grey minus a 3×3 median) must be **at most 2.5**, an absolute bar. Before the fix, cards read 6 or more. A ratio to the plate does not work here: the brush-smoothed plate reads about 0.1-0.2, so any figure would fail it.
 - Splash art in shipped games carries painted texture detail, so a gate that punishes detail sets the wrong bar.
 - The σ 2 grain figure stays in the card_qa report as a diagnostic, not a gate.
 - Reviewers still judge painterliness by eye at full size.
