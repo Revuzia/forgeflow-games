@@ -103,8 +103,9 @@ CARDS = {
         # (CW5 refix, done:2: the Chalkline Line-Cast bust put the raised spear across the face: the bust is the guard
         # at rest instead, the spear grounded at his side, under the card's cold chalk light)
         "portrait": {"clip": "idle", "t": 0.0, "yaw": 24.0},
-        "plate": {"tint": "#8E9CCB", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
-                  "glow_color": "#B8C6EC"},
+        # (CW5 refix 2, done:2: every skin its own painting, not the origin's aubade_dawn: the seat at night here)
+        "plate": {"src": "seat_center", "tint": "#8E9CCB", "sat": 0.7, "median": 0.29,
+                  "glow": [0.12, 0.55, 0.40, 0.05], "glow_color": "#B8C6EC"},
     },
     "ardit_first_bell": {
         "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 40.0, "pitch": -5.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
@@ -117,7 +118,7 @@ CARDS = {
                              {"at": "head", "az": 205.0, "el": 12.0, "dist": 0.8, "color": "#FFEBD6", "power": 30.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 34.0},
-        "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
+        "plate": {"src": "noonplate", "median": 0.22, "glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
     },
 }
 TEXTURE_SIZE = 2048

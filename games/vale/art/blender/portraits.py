@@ -36,7 +36,9 @@ plates.py reads it with ast, without bpy, so no names or expressions in it):
                                                     # may leave the frame and the body fills the card
             "portrait": {"yaw": 28.0},              # the bust: the splash's clip / t / light, then these keys
                                                     # (clip, t, yaw, any light key; pitch / lens / fill / x only
-                                                    # when the fighter's own wrappers do not key off them)
+                                                    # when the fighter's own wrappers do not key off them;
+                                                    # "bust_lo" / "bust_hi": the bust box below the neck / above
+                                                    # the head, default 0.30 / 0.36 x H / 1.9: lower = tighter)
             "plate": {"src": "aubade_dawn", "glow": [0.2, 0.6, 0.4, 0.1], "median": 0.30},   # plates.params keys
         },
     }

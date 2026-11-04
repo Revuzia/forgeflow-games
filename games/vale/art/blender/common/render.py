@@ -939,8 +939,11 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     neck = bone_pos(arm, "neck")
     H = spec.PROPORTIONS["height"]
     top = posed_bounds(objs)[1].z
-    plo = V((head.x - 0.3, head.y - 0.3, neck.z - 0.30 * H / 1.9))
-    phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + 0.36 * H / 1.9) + 0.03))
+    # (CW5 refix 2) a staged portrait may tighten the bust: "bust_lo" / "bust_hi" (default 0.30 / 0.36, in units of
+    # H / 1.9 below the neck / above the head joint), so a weapon held at the chest drops out under a larger face
+    blo, bhi = float(pcfg.get("bust_lo", 0.30)), float(pcfg.get("bust_hi", 0.36))
+    plo = V((head.x - 0.3, head.y - 0.3, neck.z - blo * H / 1.9))
+    phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + bhi * H / 1.9) + 0.03))
     _fit_camera(cam, plo, phi, pcfg["yaw"], pcfg["pitch"], pcfg["lens"], pcfg["fill"], 1.0, pcfg["x"])
     bible_lights(cam, pcfg_a if stage else cfg_a, plight_a, rim=0.8, scale=0.8, pair=True, target=(plo + phi) * 0.5)
     if stage:

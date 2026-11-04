@@ -249,8 +249,9 @@ CARDS = {
                              {"at": "head", "az": 150.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 36.0},
-        "plate": {"tint": "#8E9CCB", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
-                  "glow_color": "#B8C6EC"},
+        # (CW5 refix 2, done:2: every skin its own painting, not the origin's aubade_dawn: the night gorge here)
+        "plate": {"src": "needle_gorge", "tint": "#8E9CCB", "sat": 0.7, "median": 0.29,
+                  "glow": [0.12, 0.55, 0.40, 0.05], "glow_color": "#B8C6EC"},
     },
     "vashil_first_bell": {
         "splash": {"clip": "cast_ult", "t": 0.56, "yaw": 16.0, "pitch": -4.0, "lens": 46.0, "fill": 0.84, "x": 0.70,
@@ -263,7 +264,7 @@ CARDS = {
         # (CW5 refix, done:2: the ult's raise matched the base bust's rod-beside-the-face beat: First Bell's bust is the
         # recall's first flick, the wrist bell lifted to the ear)
         "portrait": {"clip": "recall", "t": 0.27, "yaw": 20.0},
-        "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
+        "plate": {"src": "dialwood", "glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
     },
 }
 
