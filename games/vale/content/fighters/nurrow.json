@@ -471,7 +471,7 @@
     "splash": "assets/fighters/nurrow/splash.png",
     "icon": "assets/fighters/nurrow/icon.png",
     "height": 1.97,
-    "scale": 1,
+    "scale": 1.08,
     "runRefSpeed": 3.55,
     "clips": {
       "idle": "idle",

@@ -481,7 +481,7 @@
     "splash": "assets/fighters/odrum/splash.png",
     "icon": "assets/fighters/odrum/icon.png",
     "height": 1.91,
-    "scale": 1,
+    "scale": 1.085,
     "runRefSpeed": 3.35,
     "clips": {
       "idle": "idle",

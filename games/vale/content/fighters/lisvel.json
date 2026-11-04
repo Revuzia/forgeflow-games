@@ -506,7 +506,7 @@
     "splash": "assets/fighters/lisvel/splash.png",
     "icon": "assets/fighters/lisvel/icon.png",
     "height": 1.94,
-    "scale": 1,
+    "scale": 1.07,
     "runRefSpeed": 3.35,
     "clips": {
       "idle": "idle",
