@@ -182,30 +182,30 @@
   },
   "uv_coverage": 0.596,
   "bake": {
-    "base": 2.69,
-    "rough_metal": 2.45,
-    "normal": 1.79,
-    "ao": 2.17,
+    "base": 4.36,
+    "rough_metal": 3.21,
+    "normal": 2.61,
+    "ao": 3.01,
     "normal_fixed_px": 44419,
-    "projection": 32.45,
-    "pack_save": 32.59,
-    "total": 41.78
+    "projection": 49.44,
+    "pack_save": 49.6,
+    "total": 62.95
   },
   "tris": 19344,
   "mesh_top_m": 1.887,
-  "glb_bytes_raw": 2715604,
+  "glb_bytes_raw": 2715276,
   "optimize": {
     "ok": true,
-    "before": 2715604,
-    "after": 1037104,
-    "q_base": 63
+    "before": 2715276,
+    "after": 1027984,
+    "q_base": 60
   },
-  "glb_bytes": 1037104,
+  "glb_bytes": 1027984,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_noon_fair.glb (1013 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: odrum_noon_fair_base 2048x2048 253K, odrum_noon_fair_normal 512x512 48K, odrum_noon_fair_orm 512x512 78K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum_noon_fair.glb (1004 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: odrum_noon_fair_base 2048x2048 244K, odrum_noon_fair_normal 512x512 48K, odrum_noon_fair_orm 512x512 78K",
       "  skinned meshes: odrum_accent(224v), odrum_noon_fair(18371v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -220,8 +220,8 @@
       "portrait": "art/out/fighters/odrum/odrum_noon_fair_portrait.png"
     },
     "seconds": {
-      "splash": 116.07,
-      "portrait": 28.89
+      "splash": 49.06,
+      "portrait": 14.87
     }
   },
   "three_qa": {
@@ -253,24 +253,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_noon_fair.png",
-    "seconds": 12.1,
+    "seconds": 9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.2,
-      "model": 2.43,
-      "lows_bind": 2.45,
-      "uv": 3.47,
-      "bake": 41.79,
+      "materials": 0.23,
+      "model": 3.75,
+      "lows_bind": 3.89,
+      "uv": 5.96,
+      "bake": 62.95,
       "export": 0.06,
-      "optimize": 0.48,
+      "optimize": 0.47,
       "load_test": 0.1,
-      "render": 144.99,
-      "three_qa": 12.53
+      "render": 63.96,
+      "three_qa": 9.33
     },
-    "total_s": 208.59
+    "total_s": 150.79
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82

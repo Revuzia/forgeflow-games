@@ -170,26 +170,26 @@
     "tris_pot_R": 1350,
     "tris_pot_rim_R": 300,
     "tris_resin_R": 100,
-    "tris_window_R": 360,
+    "tris_window_R": 300,
     "tris_cords_L": 110,
     "tris_pot_L": 1350,
     "tris_pot_rim_L": 300,
     "tris_resin_L": 100,
-    "tris_window_L": 360,
+    "tris_window_L": 300,
     "validate_odrum": "18956->18944"
   },
   "uv_coverage": 0.603,
   "bake": {
-    "base": 2.02,
-    "rough_metal": 2.04,
-    "normal": 1.74,
-    "ao": 2.17,
+    "base": 10.24,
+    "rough_metal": 7.93,
+    "normal": 6.97,
+    "ao": 7.29,
     "normal_fixed_px": 46203,
-    "projection": 31.81,
-    "pack_save": 31.95,
-    "total": 40.02
+    "projection": 43.9,
+    "pack_save": 44.23,
+    "total": 77.28
   },
-  "tris": 19664,
+  "tris": 19544,
   "mesh_top_m": 1.887,
   "clips": {
     "idle": {
@@ -286,27 +286,27 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3181536,
+  "glb_bytes_raw": 3178196,
   "optimize": {
     "ok": true,
-    "before": 3181536,
-    "after": 1216448,
-    "q_base": 63
+    "before": 3178196,
+    "after": 1207928,
+    "q_base": 60
   },
-  "glb_bytes": 1216448,
+  "glb_bytes": 1207928,
   "three_load_test": {
     "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum.glb (1188 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: odrum_base 2048x2048 245K, odrum_normal 512x512 45K, odrum_orm 512x512 76K",
-      "  skinned meshes: odrum(18036v), odrum_accent(364v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/odrum/odrum.glb (1180 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: odrum_base 2048x2048 237K, odrum_normal 512x512 45K, odrum_orm 512x512 76K",
+      "  skinned meshes: odrum(18036v), odrum_accent(304v)",
       "  bones: 30 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_hang_l x_pot_l x_hang_r x_pot_r x_pellet x_sling_pouch thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.833s/20tr, attack2:0.833s/20tr, cast_a1:1.000s/19tr, cast_a2:1.000s/20tr, cast_a3:0.667s/21tr, cast_ult:1.500s/21tr, channel:2.667s/20tr, dash:0.500s/21tr, death:1.667s/22tr, idle:2.400s/21tr, idle_lobby:4.000s/16tr, recall:6.000s/22tr, run:0.667s/24tr, stunned:1.333s/19tr, victory:2.000s/20tr",
       "  tracks checked: 306; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19664; bind-pose bounds (three units, Y up): 2.06 x 1.89 x 0.46; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
+      "  tris: 19544; bind-pose bounds (three units, Y up): 2.06 x 1.89 x 0.46; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
       "  run: 20 f, planted samples 4, max foot-speed error 1%",
       "[three] FAIL (1)",
-      "  - GLB is 1188 KiB > budget 1172 KiB"
+      "  - GLB is 1180 KiB > budget 1172 KiB"
     ]
   },
   "renders": {
@@ -317,10 +317,10 @@
       "turntable": "art/renders/fighters/odrum/turntable.png"
     },
     "seconds": {
-      "splash": 41.05,
-      "portrait": 7.44,
-      "icon": 3.34,
-      "turntable": 5.66
+      "splash": 43.09,
+      "portrait": 7.8,
+      "icon": 2.64,
+      "turntable": 8.07
     }
   },
   "three_qa": {
@@ -344,7 +344,7 @@
     ],
     "headY": 1.536,
     "accentPct": 2.07,
-    "accentTopHalfPct": 57,
+    "accentTopHalfPct": 57.6,
     "heightPx1080": 101,
     "size": [
       2400,
@@ -352,26 +352,26 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/odrum/three_odrum.png",
-    "seconds": 7.1,
+    "seconds": 10.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.15,
-      "model": 2.39,
-      "lows_bind": 1.99,
-      "uv": 3.25,
-      "bake": 40.02,
+      "materials": 0.28,
+      "model": 11.15,
+      "lows_bind": 18.37,
+      "uv": 18.76,
+      "bake": 77.28,
       "clips": 0.12,
-      "export": 1.21,
-      "optimize": 0.63,
+      "export": 1.14,
+      "optimize": 0.52,
       "load_test": 0.11,
-      "render": 57.64,
-      "three_qa": 7.33,
-      "cache": 0.08
+      "render": 61.77,
+      "three_qa": 10.5,
+      "cache": 0.1
     },
-    "total_s": 114.97
+    "total_s": 200.16
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82
