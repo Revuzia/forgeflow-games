@@ -17,15 +17,15 @@
         "id": "env:E1",
         "severity": "major",
         "status": "partly",
-        "evidence": "There is no CW4 commit since 94eef49d. The landmarks_art2.py refix came in only through wip sync 23c74525 (+107/-48 lines), and the only GLB rebuilt is art/out/maps/landmarks/numeral_xi.glb (18:57, 1024 texture, 1444 tris, /tmp/fw_CW4_r1_xi.log). numeral_ii, numeral_vii, numeral_iiii, fair_stand_high, fair_stand_low, the kiosks and the wagon are not rebuilt (their mtimes are 13:09 or older). The working tree holds a further unbuilt diff: dialstone grain 0.34->0.42, dab 0.42->0.6, cracks 0.85->0.95, and numeral and fair_stand_low textures 1024->2048. There is no landmark hp re-measure. My value_probe --landmarks run waited more than 10 min for the 3 heavy slots, all of them busy, and I stopped it. The last measured figure therefore stands: hp 1.6-1.9 vs structures 3.65-4.46, target about 2.8. The refix engineer claimed nothing.",
-        "fixHint": "Build all four numerals and both fair stands from the current landmarks_art2.py, then run value_probe --landmarks (target landmark hp >= about 2.8) and commit with the numbers."
+        "evidence": "There are no CW4 commits since ccf9204a. The only change is a 12-line landmarks_art2.py edit that came in through wip sync e9352941, and it was never built. GLB mtimes in art/out/maps/landmarks: numeral_ii 09:57, numeral_vii 09:58, numeral_iiii 09:59, fair_stand_high 10:05, fair_stand_low 10:06; only numeral_xi was rebuilt (18:57). No new value_probe landmark report exists. The last measured figure stands: landmark hp 1.6-1.9 against 3.65-4.46 for structures (target about 2.8).",
+        "fixHint": "Build all four numerals and both fair stands with the current landmarks_art2.py, run value_probe --landmarks until landmark hp >= about 2.8, and commit with the numbers."
       },
       {
         "id": "critic:monsters",
         "severity": "major",
         "status": "partly",
-        "evidence": "The lead's commit cee04b68 added camps[].units[].facing to the catalog, but content/maps/map_rift.json has 0 'facing' keys (grep -c), so the Strays still stand side-on and the IoU of 0.66 stands (needs <= 0.5). art/out/units/stilltusk_young.glb (12:40) and stray_numeral.glb are older than the creatures.py / creatures_b.py edits that came in through wip sync 23c74525. So Stilltusk Young's bolder bands and the darker Stray albedo are not built. _design/reviews/closing/ has no scored neutral-units row. Sensitivity is still clean.",
-        "fixHint": "Set camera-facing facing on the RIFT Stray camp units in map_rift.json and re-measure IoU (<= 0.5). Rebuild stilltusk_young and stray_numeral, then write the scored neutral-units row."
+        "evidence": "grep -c facing content/maps/map_rift.json = 0, so the Strays are still side-on and the IoU of 0.66 stands (needs <= 0.5). stilltusk_young.glb (12:40) and stray_numeral.glb (12:15) were not rebuilt, so the banding and albedo changes are not in game. There is no neutral-units score row in _design/reviews/closing/. Sensitivity is still clean.",
+        "fixHint": "Add facing toward the camera on the RIFT Stray camp units in map_rift.json and re-measure IoU; rebuild stilltusk_young and stray_numeral; write a scored neutral-units row."
       },
       {
         "id": "critic:monsters (stilltusk_young)",
@@ -185,7 +185,7 @@
       }
     ],
     "regressions": [],
-    "summary": "Fail. Verdict is in _design/reviews/fixwaves/CW4_verify2.json, committed as ccf9204a and pushed after one retry (the first push hung and was killed). On E1, nothing was committed and only numeral_xi was rebuilt. The other three numerals and the fair stands are unchanged, plus the working tree holds a further unbuilt diff. I could not re-measure landmark hp because the heavy queue stayed full for more than 10 min. On monsters, Stray facing is still unset in map_rift.json (IoU 0.66 stands). The Stilltusk Young and Stray model edits are not built, and there is no neutral-units score row. No regressions seen, and sensitivity is clean."
+    "summary": "CW4 fails verify round 4. Nothing new landed for env:E1 or critic:monsters: no rebuilt landmark or monster GLBs, no Stray facing in map_rift.json, no re-measure, and no neutral-units row, so both majors stay partly. The verdict is in _design/reviews/fixwaves/CW4_verify2.json, committed as e56aa943 and pushed."
   },
   "workflowProgress": [
     {
@@ -212,8 +212,8 @@
       "agentId": "a5bdd8e8e66e5801b",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803592,
-      "lastProgressAt": 1793754803592,
+      "startedAt": 1793762947164,
+      "lastProgressAt": 1793762947164,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"originality:GW-1\",\"status\":\"done\",\"evidence\":\"Both Greatwick lanterns now light through narrow slits, never two equal round panes. Aubade: 3 slits behind thick mullions (build 2, aa788a3e). Serenade: a ring of 12 slit cores (build 2, rebuilt this session: 3809 tris, accent 4.43 %, wip sync 8f816f67). The live gate ran on the republished catalog: `node _harness/probe_wick_sweep.mjs…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -227,8 +227,8 @@
       "agentId": "a4d0a7fcf3550da64",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803594,
-      "lastProgressAt": 1793754803594,
+      "startedAt": 1793762947165,
+      "lastProgressAt": 1793762947165,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"env:E1\",\"status\":\"partly\",\"evidence\":\"Rebuilt in art/blender/maps/landmarks_art2.py using the Art 2.0 structure method (painted per-stone values, a baked atlas with AO, edge ink), plus a new detail layer `_detail` (grain, blotches, lichen, timber fibre, canvas bands) tuned to survive the content value multiplier.\\n\\nWhat changed:\\n- Four numerals: each stroke is three coursed ston…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -242,8 +242,8 @@
       "agentId": "a6d0c842b12c46a24",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803595,
-      "lastProgressAt": 1793754803595,
+      "startedAt": 1793762947166,
+      "lastProgressAt": 1793762947166,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"critic:monsters\",\"status\":\"partly\",\"evidence\":\"Each monster was reviewed before and after. Before sheets: _harness/_shots/fw_CW4_m_before_<id>.png. After sheets: art/renders/units/<id>.png. In-game RIFT 1920x1080 at 28.5 m with the new `node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 370|70`; results in _harness/_reports/fw_CW4_monsters.json (tags fw_CW4…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -257,8 +257,8 @@
       "agentId": "a625b0f49f858a60f",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803595,
-      "lastProgressAt": 1793754803595,
+      "startedAt": 1793762947166,
+      "lastProgressAt": 1793762947166,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"critic:monsters (resinback)\",\"status\":\"done\",\"evidence\":\"I gave it a pale silver-grey bark coat (#BEB29B) with staggered dark lenticel dashes, lifted the plate rims from #6A2C0A to #964A1A, and re-rendered the icon (2 rebuilds). In game (RIFT high, t=70, 28.5 m), against the camp floor: dL* went from -2.6 to +23, hp from 1.64 to 2.96 (lane 1.18), dE76 from 26.8 to 35.5, and L* p90…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -272,8 +272,8 @@
       "agentId": "ad21ce457e3141e70",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803596,
-      "lastProgressAt": 1793754803596,
+      "startedAt": 1793762947168,
+      "lastProgressAt": 1793762947168,
       "cached": true,
       "resultPreview": "{\"items\":[{\"id\":\"env:m-6 (shot_structures collapse/ruin)\",\"status\":\"done\",\"evidence\":\"_harness/shot_structures.mjs: kill() deals hp + every shield + 10, times 4, and repeats until the structure is down, so it gets past the Dawn Seal shield and the ringshade cut. The script now exits 1 unless the Outer Needle collapses to a ruin and the gate lantern falls, rises as a new entity and its ruin goes. T…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -287,8 +287,8 @@
       "agentId": "a143f6ee35ed4c5a5",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793754803597,
-      "lastProgressAt": 1793754803597,
+      "startedAt": 1793762947170,
+      "lastProgressAt": 1793762947170,
       "cached": true,
       "resultPreview": "{\"pass\":false,\"summary\":\"CW4 round 1 fails on two majors: env:E1 and critic:monsters. The Greatwick blocker GW-1 is closed. The verifier sweep's detector flagged 2 Greatwick pairs (engineer r4: 0). By eye on the 3x sheets both are adjacent slits in a ring of 4-6 (Serenade) or a row of 3 (Aubade), never two equal round panes. No Wick or the Hooded Lamp ward reads as a face. All five done-criteria p…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
@@ -299,22 +299,22 @@
       "label": "CW4:refix1",
       "phaseIndex": 3,
       "phaseTitle": "Refix",
-      "agentId": "a7a700ba435e7118d",
+      "agentId": "a1cc93dbde2d1fd32",
       "agentType": "general-purpose",
       "model": "claude-opus-5-5",
       "state": "error",
-      "startedAt": 1793754803773,
-      "queuedAt": 1793754803597,
+      "startedAt": 1793762947342,
+      "queuedAt": 1793762947171,
       "attempt": 1,
       "lastToolName": "Bash",
-      "lastToolSummary": "sed -n 866,940p _harness/value_probe.mjs",
+      "lastToolSummary": "grep -n 'keys = (\"grain\", \"blotch\", \"lichen\", \"fibre\", \"str…",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
       "promptFramed": true,
-      "lastProgressAt": 1793759348604,
+      "lastProgressAt": 1793769944087,
       "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
-      "tokens": 113716,
-      "toolCalls": 21,
-      "durationMs": 4544827
+      "tokens": 129202,
+      "toolCalls": 25,
+      "durationMs": 6996742
     },
     {
       "type": "workflow_agent",
@@ -322,24 +322,24 @@
       "label": "CW4:verify2",
       "phaseIndex": 3,
       "phaseTitle": "Refix",
-      "agentId": "a374286341c764498",
+      "agentId": "a2584e7bd95a9e998",
       "agentType": "general-purpose",
       "model": "claude-opus-5-5",
       "state": "done",
-      "startedAt": 1793759348661,
-      "queuedAt": 1793759348629,
+      "startedAt": 1793769944229,
+      "queuedAt": 1793769944218,
       "attempt": 1,
       "lastToolName": "StructuredOutput",
-      "lastToolSummary": "Fail. Verdict is in _design/reviews/fixwaves/CW4_verify2.js…",
+      "lastToolSummary": "CW4 fails verify round 4. Nothing new landed for env:E1 or …",
       "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
       "promptFramed": true,
-      "lastProgressAt": 1793762204918,
-      "tokens": 72015,
-      "toolCalls": 17,
-      "durationMs": 2856256,
-      "resultPreview": "{\"pass\":false,\"items\":[{\"id\":\"env:E1\",\"severity\":\"major\",\"status\":\"partly\",\"evidence\":\"There is no CW4 commit since 94eef49d. The landmarks_art2.py refix came in only through wip sync 23c74525 (+107/-48 lines), and the only GLB rebuilt is art/out/maps/landmarks/numeral_xi.glb (18:57, 1024 texture, 1444 tris, /tmp/fw_CW4_r1_xi.log). numeral_ii, numeral_vii, numeral_iiii, fair_stand_high, fair_stand…"
+      "lastProgressAt": 1793772370417,
+      "tokens": 55667,
+      "toolCalls": 6,
+      "durationMs": 2426188,
+      "resultPreview": "{\"pass\":false,\"items\":[{\"id\":\"env:E1\",\"severity\":\"major\",\"status\":\"partly\",\"evidence\":\"There are no CW4 commits since ccf9204a. The only change is a 12-line landmarks_art2.py edit that came in through wip sync e9352941, and it was never built. GLB mtimes in art/out/maps/landmarks: numeral_ii 09:57, numeral_vii 09:58, numeral_iiii 09:59, fair_stand_high 10:05, fair_stand_low 10:06; only numeral_xi …"
     }
   ],
-  "totalTokens": 185731,
-  "totalToolCalls": 38
+  "totalTokens": 184869,
+  "totalToolCalls": 31
 }
