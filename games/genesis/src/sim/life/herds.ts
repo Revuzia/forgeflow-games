@@ -10,6 +10,7 @@ import type { Herd, Settlement } from '../people/state.ts';
 import type { AnimalDef } from '../content.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { airSupportsLife } from '../fields/vegetation.ts';
+import { isGame, onFoot } from '../people/hunt.ts';
 
 export const HERD_CADENCE = 60;
 
@@ -361,14 +362,37 @@ export function herdArrivals(x: PCtx): void {
 /** a people with no wild game nearer than this (m) draws a herd toward it (herdArrivals), from this far out (m) */
 export const GAME_NEAR_M = 1000;
 export const DRAW_FROM: [number, number] = [300, 900];
+/**
+ * (postrel balance, punch P02) a full land (MAX_LAND_HERDS) no longer stops the draw: the herd of game farthest from every
+ * people, and at least this far (m), moves to the town's edge instead of a new one being made. Every grown world held
+ * 138-166 wild land herds against the cap of 90, so the draw never ran after the first years (round-4 year-50 saves).
+ */
+export const DRAW_MOVE_FAR_M = 4000;
+
+/** (postrel, P02) game the hunters of st could walk to within GAME_NEAR_M: the nearest few herds that are game for them,
+ * each tried on foot (a herd across a lake or a strait feeds nobody: seed 2's lakeside town of 74 had 13 herds in range,
+ * none on foot, and sent no party in 25 years) */
+function gameNearOnFoot(x: PCtx, st: Settlement, game: Herd[], reach: number): boolean {
+  const P = x.p.grid.pos;
+  const near: { h: Herd; d: number }[] = [];
+  for (const h of game) {
+    const d = P[h.cell * 3] * st.pos[0] + P[h.cell * 3 + 1] * st.pos[1] + P[h.cell * 3 + 2] * st.pos[2];
+    if (d >= reach && isGame(x, st, h, false, false) && !(x.p.f.water[h.cell] > 0.6 || x.p.s.ocean[h.cell])) near.push({ h, d });
+  }
+  if (!near.length) return false;
+  near.sort((a, b) => b.d - a.d || a.h.id - b.h.id);
+  for (let i = 0; i < near.length && i < 3; i++) if (onFoot(x, st, st.pos, near[i].h.cell)) return true;
+  return false;
+}
 
 /**
- * Daily: every standing settlement with no wild land game within GAME_NEAR_M draws one herd of the game of its own
- * country (the guild of its biome), DRAW_FROM it — never beyond MAX_LAND_HERDS or half again a guild's target (game
- * comes to the edge of the fields; it is not made from nothing everywhere).
+ * Daily: every standing settlement with no wild land game it can walk to within GAME_NEAR_M draws one herd of the game of
+ * its own country (the guild of its biome), DRAW_FROM it on its own side of the water — never beyond half again a guild's
+ * target; when the land holds MAX_LAND_HERDS the farthest herd of game moves there instead (game comes to the edge of the
+ * fields; it is not made from nothing everywhere).
  */
 function gameToPeople(x: PCtx, guilds: Guild[], only?: Settlement[]): void {
-  const ps = x.ps, P = x.p.grid.pos;
+  const ps = x.ps;
   if (!guilds.length || !ps.settlements.length) return;
   let land = 0;
   const game: Herd[] = [];
@@ -377,29 +401,52 @@ function gameToPeople(x: PCtx, guilds: Guild[], only?: Settlement[]): void {
     const a = animalDef(x, h.species);
     if (landGame(a)) { game.push(h); land++; } else if (landHunter(a)) land++;
   }
-  if (land >= MAX_LAND_HERDS) return;
   const have = guildCounts(x);
   const reach = Math.cos(GAME_NEAR_M / x.p.st.radius);
   for (const st of only ?? ps.settlements) {
     if (st.fallen >= 0) continue;
-    if (game.some((h) => P[h.cell * 3] * st.pos[0] + P[h.cell * 3 + 1] * st.pos[1] + P[h.cell * 3 + 2] * st.pos[2] >= reach)) continue;
+    if (gameNearOnFoot(x, st, game, reach)) continue;
+    const full = land >= MAX_LAND_HERDS;
     const g = guilds.find((q) => q.biome === x.p.f.biome[st.cell]) ?? guilds.slice().sort((a, b) => b.cells.length - a.cells.length)[0];
-    if ((have.get(g.biome)?.[0] ?? 0) >= g.preyTarget * 1.5) continue;
-    const sp = g.prey[hash32(x.tick, st.id, 0x6d5) % g.prey.length];
-    // the cells ARRIVE_NEAR out from it where the herd can live: the best of a few drawn
+    if (!full && (have.get(g.biome)?.[0] ?? 0) >= g.preyTarget * 1.5) continue;
+    // a full land: the herd of game farthest from every people moves (none far enough: nothing comes)
+    let mover: Herd | null = null;
+    if (full) {
+      let far = DRAW_MOVE_FAR_M;
+      for (const h of game) {
+        if (h.count < 3 || h.state === 2) continue;
+        const d = nearestPeopleM(x, h.cell);
+        if (d > far || (d === far && mover && h.id < mover.id)) { far = d; mover = h; }
+      }
+      if (!mover) continue;
+    }
+    const sp = mover ? mover.species : g.prey[hash32(x.tick, st.id, 0x6d5) % g.prey.length];
+    // the cells DRAW_FROM out from it where the herd can live, the best few drawn, the first the hunters can walk to
     const ring = x.p.cellsNear(st.pos, DRAW_FROM[1]);
-    let c = -1, bv = 0.3;
+    const cand: { c: number; v: number }[] = [];
     for (let k = 0; k < 16 && ring.length; k++) {
       const o = ring[hash32(x.tick, st.id, k, 0x6d6) % ring.length];
       const d = nearestPeopleM(x, o);
       if (d < DRAW_FROM[0] || d > DRAW_FROM[1]) continue;
       const v = habitatFit(x, sp, o);
-      if (v > bv) { bv = v; c = o; }
+      if (v > 0.3 && !cand.some((q) => q.c === o)) cand.push({ c: o, v });
     }
+    cand.sort((a, b) => b.v - a.v || a.c - b.c);
+    let c = -1;
+    for (let i = 0; i < cand.length && i < 4; i++) if (onFoot(x, st, st.pos, cand[i].c)) { c = cand[i].c; break; }
     if (c < 0) continue;
+    if (mover) { moveHerd(x, mover, c); continue; }
     game.push(herdOf(x, sp, c, 0x4e80));
-    if (++land >= MAX_LAND_HERDS) return;
+    land++;
   }
+}
+
+/** (postrel, P02) a wild herd set down at cell c (game drawn from the far country to a town's edge) */
+function moveHerd(x: PCtx, h: Herd, c: number): void {
+  const P = x.p.grid.pos;
+  const pos: [number, number, number] = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
+  h.from = [...pos]; h.to = [...pos]; h.t0 = x.tick; h.t1 = x.tick; h.cell = c; h.state = 0; h.goal = -1; h.iso = 0;
+  x.ps.version++;
 }
 
 /**
