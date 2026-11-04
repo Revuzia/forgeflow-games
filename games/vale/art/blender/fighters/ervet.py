@@ -108,7 +108,7 @@ CARDS = {
                               "size": 0.3}]},
         "portrait": {"clip": "cast_a3", "t": 0.08, "yaw": 26.0, "lens": 70.0},   # the gathering beat before the raise (the
                                                                               # raised arms hid the visor at t 0.25)
-        "plate": {"glow": [0.18, 0.58, 0.42, 0.10], "glow_color": "#F2D0A4"},
+        "plate": {"glow": [0.18, 0.58, 0.42, 0.10], "glow_color": "#F2D0A4", "sub_median": 2},
     },
     "ervet_stillwater": {
         "splash": {"clip": "cast_a2", "t": 0.42, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.92, "x": 0.70,
@@ -119,7 +119,7 @@ CARDS = {
                              {"at": "head", "az": 160.0, "el": 25.0, "dist": 0.9, "color": "#F0F6F2", "power": 20.0,
                               "size": 0.3}]},
         "portrait": {"yaw": -20.0, "lens": 70.0},
-        "plate": {"glow": [0.62, 0.40, 0.48, 0.08], "glow_color": "#CFE6DA", "sat": 0.8},
+        "plate": {"glow": [0.62, 0.40, 0.48, 0.08], "glow_color": "#CFE6DA", "sat": 0.8, "sub_median": 2},
     },
     "ervet_lamplit": {
         "splash": {"clip": "cast_ult", "t": 0.62, "yaw": 36.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,

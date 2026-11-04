@@ -89,6 +89,7 @@ DEFAULTS = {
     # the paint-over: the plate's brush (Kuwahara) over the subject at this radius (px at 1600 / 512), so the figure
     # and the painting share one finish (0 = off)
     "sub_paint_r": 1,
+    "sub_median": 0,            # 3x3 median passes over the subject before the paint-over (median3; per card)
     # a kit still under its floor after the scale (a face in a hat brim's shadow) gets a toe lift: a gamma that
     # takes its median to the floor (`sub_floor_p` for the portrait: a draft cell is a face) and keeps white white
     "sub_floor_p": 0.30, "sub_gamma_min": 0.62,
@@ -585,11 +586,31 @@ def paint_over(fg: np.ndarray, r: int) -> np.ndarray:
     return out
 
 
+def median3(fg: np.ndarray, passes: int) -> np.ndarray:
+    """pixel-scale clean-up of the subject (straight RGBA) before the paint-over: a 3x3 median of the solid pixels'
+    colour, `passes` times (a fine-textured pale kit, Ervet's chalk plate and lames, kept a single-pixel texture
+    speckle the Kuwahara cannot reach: card_qa speckle 3.4 > 2.5). Strokes wider than ~2 px and the edges survive;
+    the antialiased rim keeps its own colour and alpha. 0 = unchanged (no scipy: Blender's python runs this too)."""
+    if passes <= 0:
+        return fg
+    solid = fg[..., 3] > 0.98
+    out = fg.copy()
+    rgb = fg[..., :3]
+    for _ in range(passes):
+        p_ = np.pad(rgb, ((1, 1), (1, 1), (0, 0)), mode="edge")
+        h, w = rgb.shape[:2]
+        st = np.stack([p_[dy:dy + h, dx:dx + w] for dy in range(3) for dx in range(3)], 0)
+        rgb = np.where(solid[..., None], np.median(st, axis=0), rgb).astype(np.float32)
+    out[..., :3] = rgb
+    return out
+
+
 def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
     """Subject (straight RGBA, display sRGB, at the output size) over its plate, the post (x `post`: the fighter's
     SPLASH "post" switch), the LUT."""
     h, w = fg.shape[:2]
     pl = plate(p, kind, w, h)
+    fg = median3(fg.astype(np.float32), int(p.get("sub_median", 0)))
     fg = paint_over(fg.astype(np.float32),
                     int(round(float(p.get("sub_paint_r", 0)) * (w / 1600.0 if kind == "splash" else w / 512.0))))
     fg, _k = subject_grade(fg, p, kind)
