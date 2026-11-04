@@ -669,8 +669,10 @@ def clip_overrides(ctx) -> dict:
     lob = at([
         (0.00, rest_l, "linear"), (0.10, palm_up, "inout"), (0.14, palm_tap, "in"), (0.18, palm_up, "out"),
         (0.22, palm_tap, "in"), (0.26, palm_up, "out"), (0.34, rest_l, "inout"),
-        (0.42, rim_a, "sine"), (0.54, rim_b, "inout"), (0.62, rest_l, "sine"),
-        (0.70, peer, "inout"), (0.80, anim.add(peer, anim.P(head=(4, -10, 0))), "inout"), (0.90, rest_l, "inout"),
+        # (closing round 2: the hand came down off the dome in 0.32 s, a 0.104 m step in one 60 Hz frame at t 2.37 s;
+        # it takes 0.48 s now and the look into the pail starts later)
+        (0.42, rim_a, "sine"), (0.54, rim_b, "inout"), (0.66, rest_l, "sine"),
+        (0.74, peer, "inout"), (0.83, anim.add(peer, anim.P(head=(4, -10, 0))), "inout"), (0.92, rest_l, "inout"),
         (1.0, rest_l, "linear")])
     out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, anim.drag(lob, 120, {"head": 2.0, "neck": 1.0}, loop=True))
 

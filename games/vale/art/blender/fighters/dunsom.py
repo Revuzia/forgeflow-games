@@ -2638,7 +2638,9 @@ UP = tuple(np.round(CROOK_U, 4))
 # closing dunsom-lantern-nameplate: at idle the lantern hung behind the nameplate and the shaft crossed the HP bar;
 # the idle crook leans 9 degrees further out to his right (about the forward axis), so the lantern hangs beside the
 # bar's end instead of under its text (run, casts and the other clips keep UP)
-_ia = math.radians(9.0)
+# (closing round 2, handoff CW1: at 31 m facing 7 the lantern still sat half under the level chip, 12.5 % of idle cases;
+# 15 degrees takes it to 0 % at 31 m and 28.5 m: estimated first, +3 deg 4.7 %, +5 deg 0 %; probe_bar_clearance measures it)
+_ia = math.radians(15.0)
 IDLE_AIM = tuple(np.round(unit(np.array([CROOK_U[0] * math.cos(_ia) - CROOK_U[2] * math.sin(_ia), CROOK_U[1],
                                          CROOK_U[0] * math.sin(_ia) + CROOK_U[2] * math.cos(_ia)])), 4))
 

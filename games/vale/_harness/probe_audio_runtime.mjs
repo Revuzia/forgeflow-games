@@ -445,12 +445,16 @@ async function runDead() {
       for (const b of ['sfx', 'ui', 'voice', 'ambience']) { const p = g.bus[b].gain; p.cancelScheduledValues(0); p.value = 0; }
       a.threat.gain.cancelScheduledValues(0); a.threat.gain.value = 0;
       const lo = ctx.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = 500;
-      const hi = ctx.createBiquadFilter(); hi.type = 'highpass'; hi.frequency.value = 2000;
+      // three 12 dB/oct sections: one alone lets the bed's low end through at about the closed state's level (the first
+      // run read -53.8 dB there, a floor of the meter, not of the low-pass)
+      const hps = [0, 1, 2].map(() => { const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2000; return f; });
+      hps[0].connect(hps[1]); hps[1].connect(hps[2]);
+      const hi = hps[2];
       const merger = ctx.createChannelMerger(3);
       const mono = (n) => { const sp = ctx.createGain(); sp.channelCount = 1; sp.channelCountMode = 'explicit'; n.connect(sp); return sp; };
       mono(g.out).connect(merger, 0, 0);
       g.out.connect(lo); mono(lo).connect(merger, 0, 1);
-      g.out.connect(hi); mono(hi).connect(merger, 0, 2);
+      g.out.connect(hps[0]); mono(hi).connect(merger, 0, 2);
       const proc = ctx.createScriptProcessor(4096, 3, 1);
       const st = window.__dead = { blocks: [] };
       proc.onaudioprocess = (ev) => { const ib = ev.inputBuffer, row = [ctx.currentTime, a.musicDead ? 1 : 0];

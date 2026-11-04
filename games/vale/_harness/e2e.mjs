@@ -851,6 +851,15 @@ async function hudLeak() {
       // the query also returns the element prototypes (HTMLDivElement.prototype...), whose classList getter throws: guard each one
       functionDeclaration: 'function () { const isHud = (e) => { try { return e.classList.contains("hud"); } catch { return false; } }; const h = this.filter(isHud); return { detached: h.filter((e) => !e.isConnected).length, attached: h.filter((e) => e.isConnected).length, elements: this.length }; }' });
     if (res.exceptionDetails) throw new Error(`hud_leak query threw: ${res.exceptionDetails.exception?.description ?? res.exceptionDetails.text}`);
+    // --heap-out <file> (or VALE_HEAP_OUT): write a heap snapshot when a detached root remains, to read who retains it
+    const heapOut = process.env.VALE_HEAP_OUT;
+    if (heapOut && res.result.value?.detached > 0) {
+      const { createWriteStream } = await import('node:fs');
+      const ws = createWriteStream(heapOut);
+      cdp.on('HeapProfiler.addHeapSnapshotChunk', (e) => ws.write(e.chunk));
+      await cdp.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false, captureNumericValue: false });
+      await new Promise((r) => ws.end(r));
+    }
     await cdp.detach().catch(() => {});
     info = { matches: purse.matches, ...res.result.value };
     expect(info.attached === 0 && info.detached === 0, 'a .hud root outlived its match', info);

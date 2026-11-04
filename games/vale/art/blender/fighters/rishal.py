@@ -191,8 +191,13 @@ SKINS: list = [
      # the game camera ~2 % of pixels over 20. The brief's walnut ARMOUR now carries it: chest plate, pauldrons, lames
      # and nape a carved walnut, the visor the smoked lampresin it names; the cowl, sleeves, helm and crest keep the
      # warm cream top, so the figure reads cream-over-walnut where the base is white-over-white)
+     # (closing round 2, par:rishal: cream-over-walnut still read as a warm tint at the game camera, the coat being the
+     # biggest shape there: the coat, apron and torso go the carved walnut too, and the crest's panes, the visor and
+     # the knife blades a real lampresin amber, so the only cool thing left on him is the accent)
      "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F", "chest_plate": "#7A5A40", "pauldron_L": "#8B6A4C",
-               "lames_L": "#8B6A4C", "pauldron_R": "#8B6A4C", "nape": "#6B4E38", "visor": "#A07E52"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
+               "lames_L": "#8B6A4C", "pauldron_R": "#8B6A4C", "nape": "#6B4E38", "visor": "#B0854A",
+               "skirt_L": "#86684D", "skirt_R": "#86684D", "apron": "#8E7054", "torso": "#7C5F46",
+               "crest_glass": "#C8964F", "knife_blade_R": "#BC8F52", "knife_blade_L": "#BC8F52"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
      # amber glass: as dawnglass again they took the walnut-dark #A38C6B, the top band 73.6 -> 68.4)   # (fix pass 5: the scarf a step down again, L* 69: the
      # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
      # down, L* 74; fix pass 2: the sleeves keep the base's mid-light step under the scarf, L* 66)
@@ -200,7 +205,9 @@ SKINS: list = [
                  "leather": "#5E4D3E", "ironstone": "#3F3730", "under": "#3A332D", "wood_dark": "#5A4636",
                  "lampresin": "#94774F"}},
 ]
-SKIN_FLAT = {"cage_slats": "wood_dark", "cage_bead": "lampresin"}
+SKIN_FLAT = {"cage_slats": "wood_dark", "cage_bead": "lampresin", "lamp_post": "wood_dark", "lamp_frame": "wood_dark",
+             "lamp_glass": "lampresin", "lampcap_ring_R": "wood_dark", "lampcap_ring_L": "wood_dark",
+             "lampcap_glass_R": "lampresin", "lampcap_glass_L": "lampresin"}
 
 HEIGHT = 1.88             # the plates' scale: the crest arc's tip
 PROJECTION = {"concept": "rishal", "height": HEIGHT, "flat": {}}
@@ -1553,27 +1560,70 @@ def sculpts() -> list:
 THIN = ("fins", "lames_L", "crest", "crest_glass", "visor", "knife_blade_R", "knife_blade_L", "bracer_R", "bracer_L")
 
 
+def _lamp(frame, glass, c, up, R, h, slat=None):
+    """a four-slat carved lamp on axis `up` from its foot `c`, R the slats' radius, h its height: two rings, four bowed
+    slats, a rounded knob (no finial points on a lamp: owner ruling 6's rule), a fat lampresin bead filling the cage"""
+    c, up = np.asarray(c, dtype=np.float64), unit(up)
+    ax = sdf.frame(up)
+    e1, e2 = ax[0], ax[1]
+    slat = slat or R * 0.13
+    for i in range(4):
+        a = math.radians(45 + 90 * i)
+        o = (e1 * math.cos(a) + e2 * math.sin(a)) * R
+        frame.add(Tube([c + o, c + o * 1.16 + up * h * 0.5, c + o + up * h], [slat, slat * 1.15, slat]), k=0.003)
+    frame.add(Torus(c, R, slat * 1.25, axes=ax), k=0.003)
+    frame.add(Torus(c + up * h, R * 0.96, slat * 1.25, axes=ax), k=0.003)
+    frame.add(Sphere(c + up * (h + slat * 2.0), slat * 2.0), k=0.004)
+    glass.add(Ellipsoid(c + up * h * 0.5, (R * 0.86, R * 0.86, h * 0.47), axes=ax), k=0.0)
+
+
+# (closing round 2, par:rishal, rishal-M3: "a recolour with an 8 cm lamp": what the game camera sees has to change)
+#   the crest lamp: moved off the crest's front horn to its root on the crown, its foot collaring the crest's outer band
+#       behind the visor ridge (ridge top 1.73-1.75 m at y -0.05..-0.13; from the 52 degree camera a lamp behind it
+#       cannot cover it: art/tools fit check fw_CW6_r2_rishal_fit), 9 x 12 cm
+#   the back lamp: a walnut bracket off his right shoulder blade carrying a 17 x 24 cm lamp beside the head, the
+#       counterweight to the left pauldron's lames; leans back in the rest pose so the idle's 20 degree lean stands it up
+#   the lamp caps: each pauldron crowned with a raised walnut ring round a glossy lampresin dome
+LAMP_CREST = {"c": (0.0, -0.058, 1.822), "up": (0.0, -0.10, 1.0), "R": 0.040, "h": 0.105}
+LAMP_BACK = {"c": (-0.240, 0.235, 1.565), "up": (-0.16, 0.24, 1.0), "R": 0.080, "h": 0.235}
+LAMP_POST = ((-0.090, 0.085, 1.300), (-0.125, 0.145, 1.410), (-0.190, 0.205, 1.500), (-0.240, 0.235, 1.565))
+
+
 def skin_extras(extra: dict) -> list:
-    """Lamplit's lamp cage on the crest's front horn: four carved-wood slats round a lampresin bead (7 cm)"""
+    """Lamplit: the crest lamp, the back lamp on its bracket and the two pauldron lamp caps"""
     out = []
     if extra.get("lamp_cage"):
-        # before the crest's front edge, above the accent fin (POLISH: the fin now stands where the cage hung)
-        # (closing rishal-M3: the 7 cm cage did not read from the gameplay camera: x1.3, 9 cm, its glossy lampresin
-        # bead painted with a warm lit interior by lamplit_paint, never emissive)
-        c = np.array([0.0, -0.150, 1.800])
-        S = 1.3
         slats, bead = Sculpt("cage_slats"), Sculpt("cage_bead")
-        for i in range(4):
-            a = math.radians(45 + 90 * i)
-            o = np.array([math.cos(a) * 0.021, math.sin(a) * 0.017, 0.0]) * S
-            slats.add(Tube([c + o + (0, 0, -0.034 * S), c + o * 1.18 + (0, 0, 0.0), c + o + (0, 0, 0.034 * S)],
-                           [0.0042 * S, 0.0048 * S, 0.0042 * S]), k=0.003)
-        slats.add(Torus(c + (0, 0, -0.034 * S), 0.021 * S, 0.0045 * S, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
-        slats.add(Torus(c + (0, 0, 0.034 * S), 0.020 * S, 0.0045 * S, axes=np.diag([1.0, 1.22, 1.0])), k=0.003)
-        slats.add(RoundCone(c + (0, 0, 0.036 * S), c + (0, 0, 0.047 * S), 0.008 * S, 0.003 * S), k=0.003)
-        bead.add(Ellipsoid(c, (0.014 * S, 0.012 * S, 0.018 * S)), k=0.0)
-        out.append(("cage_slats", slats, 0.45, "wood_dark", "bone:head", 300))
-        out.append(("cage_bead", bead, 0.45, "lampresin", "bone:head", 120))
+        _lamp(slats, bead, LAMP_CREST["c"], LAMP_CREST["up"], LAMP_CREST["R"], LAMP_CREST["h"], slat=0.0058)
+        # the foot's collar round the crest's outer band (CREST_W 3.4 cm), so the lamp sits on the crest, not by it
+        slats.add(RoundBox((0.0, -0.058, 1.815), (0.026, 0.026, 0.014), 0.006), k=0.004)
+        out.append(("cage_slats", slats, 0.45, "wood_dark", "bone:head", 420))
+        out.append(("cage_bead", bead, 0.45, "lampresin", "bone:head", 160))
+        J = layout()
+        post, frame, glass = Sculpt("lamp_post"), Sculpt("lamp_frame"), Sculpt("lamp_glass")
+        post.add(Tube(list(LAMP_POST), [0.016, 0.0135, 0.012, 0.012]), k=0.0)
+        post.add(Ellipsoid(LAMP_POST[0], (0.040, 0.016, 0.050)), k=0.006)            # the saddle on the shoulder blade
+        _lamp(frame, glass, LAMP_BACK["c"], LAMP_BACK["up"], LAMP_BACK["R"], LAMP_BACK["h"], slat=0.0095)
+        out.append(("lamp_post", post, 0.6, "wood_dark", "bone:chest", 260))
+        out.append(("lamp_frame", frame, 0.6, "wood_dark", "bone:chest", 620))
+        out.append(("lamp_glass", glass, 0.6, "lampresin", "bone:chest", 300))
+        # the pauldron caps' crowns (same centres and tilts as the caps in sculpts())
+        for s, sx, cen, rz, deg, R in (("R", -1.0, (-0.014, 0.0, 0.018), 0.047, 30.0, 0.037),
+                                       ("L", 1.0, (0.028, 0.0, 0.035), 0.058, 26.0, 0.045)):
+            sh = J[f"shoulder.{s}"]
+            n = np.array([sx * math.sin(math.radians(deg)), 0.0, math.cos(math.radians(deg))])
+            top = sh + np.asarray(cen) + n * (rz - 0.006)
+            ring, dome = Sculpt(f"lampcap_ring_{s}"), Sculpt(f"lampcap_glass_{s}")
+            ax = sdf.frame(n)
+            ring.add(Torus(top, R, 0.0085, axes=ax), k=0.0)
+            for i in range(2):                                                       # the window's two crossed muntins
+                a = math.radians(45 + 90 * i)
+                d = (ax[0] * math.cos(a) + ax[1] * math.sin(a)) * R
+                ring.add(Tube([top - d, top + n * R * 0.48, top + d], [0.0042, 0.0042, 0.0042]), k=0.002)
+            dome.add(Ellipsoid(top, (R * 0.96, R * 0.96, R * 0.42), axes=ax), k=0.0)
+            bind = ("dblend", f"shoulder.{s}", f"upper_arm.{s}", tuple(sh + (0, 0, 0.05)), (sx * 0.4, 0, -1), 0.0, 0.10)
+            out.append((f"lampcap_ring_{s}", ring, 0.5, "wood_dark", bind, 180))
+            out.append((f"lampcap_glass_{s}", dome, 0.5, "lampresin", bind, 120))
     return out
 
 
@@ -3280,7 +3330,7 @@ _SKIN: dict = {}
 # glossy amber lampresin glaze; walnut cross-ribs along the crest's crescent under a light amber glaze. Paint only:
 # no outline changes (owner ruling: skins keep the silhouette and the accent places; the ridge and fins untouched)
 LAMPLIT_WALNUT, LAMPLIT_GLAZE = "#4A3627", "#C08F4C"
-LAMPLIT_WINDOWS = {"pauldron_L": 0.060, "pauldron_R": 0.060, "bracer_R": 0.030, "bracer_L": 0.030}
+LAMPLIT_WINDOWS = {"bracer_R": 0.030, "bracer_L": 0.030}     # (round 2: the pauldrons' windows are modelled now)
 
 
 def lamplit_paint(out, maps, names, iy, ix, pid, log=print):
@@ -3347,17 +3397,28 @@ def lamplit_paint(out, maps, names, iy, ix, pid, log=print):
         glazed = c * 0.80 + gl[None] * sh * 0.20
         out[jy, jx] = glazed * (1 - rib)[:, None] + (wal[None] * sh) * rib[:, None]
         n_tex += int((rib > 0.5).sum())
-    got = part_px("cage_bead")
-    if got is not None:
-        # the bead: glossy lampresin with a warm lit interior (deep at the rim, honey at the core, a white catch-light)
+    # the lamps' glass: glossy lampresin with a warm lit interior (deep at the rim, honey at the core, a white
+    # catch-light up-front), never emissive; the frames a warm grained walnut lit along the top
+    deep, honey = _lin(_hexrgb("#6E4720")), _lin(_hexrgb("#F0BE68"))
+    for pn, rad in (("cage_bead", 0.040), ("lamp_glass", 0.080), ("lampcap_glass_R", 0.037), ("lampcap_glass_L", 0.045)):
+        got = part_px(pn)
+        if got is None:
+            continue
         jy, jx, pp, nn = got
         cen = pp.mean(0)
-        f = np.clip((nn @ unit((0.0, -0.55, 0.83)) + 0.2) / 1.2, 0, 1)
-        core = np.clip(1.0 - np.linalg.norm((pp - cen) * (1.0, 1.0, 0.7), axis=1) / 0.016, 0, 1)
-        deep, honey = _lin(_hexrgb("#5A3A1E")), _lin(_hexrgb("#E2B266"))
-        k = np.clip(0.25 + 0.55 * f + 0.35 * core, 0, 1)[:, None]
-        cat = (np.exp(-((nn @ unit((-0.3, -0.5, 0.81)) - 1.0) / 0.06) ** 2) * 0.6)[:, None]
+        f = np.clip((nn @ unit((0.0, -0.45, 0.89)) + 0.35) / 1.35, 0, 1)
+        core = np.clip(1.0 - np.linalg.norm(pp - cen, axis=1) / (rad * 1.5), 0, 1)
+        k = np.clip(0.30 + 0.45 * f + 0.55 * core, 0, 1)[:, None]
+        cat = (np.exp(-((nn @ unit((-0.3, -0.5, 0.81)) - 1.0) / 0.05) ** 2) * 0.55)[:, None]
         out[jy, jx] = deep[None] * (1 - k) + honey[None] * k + cat
+    for pn in ("cage_slats", "lamp_post", "lamp_frame", "lampcap_ring_R", "lampcap_ring_L"):
+        got = part_px(pn)
+        if got is None:
+            continue
+        jy, jx, pp, nn = got
+        grain = 1.0 + 0.14 * np.sin(pp[:, 2] * 310.0 + 2.5 * np.sin(pp[:, 0] * 80.0))
+        lit = 0.85 + 0.45 * np.clip(nn[:, 2], 0, 1)
+        out[jy, jx] = _lin(_hexrgb("#6A4E36"))[None] * (grain * lit)[:, None]
     log(f"  lamplit inlay / glaze: {n_tex} texels")
     return out
 

@@ -176,6 +176,12 @@ Per-part overrides (closing rishal-M3, CW6: the armour stayed the base's pale cr
 
 Value bands (area-weighted): top **71** (70-85) · mid **50** (45-65) · feet **27** (20-35).
 
+Deluxe modelling (closing round 2, par:rishal; the skin's silhouette class and the accent places are unchanged, the ridge and fins untouched):
+- **Crest lamp:** off the front horn to the crest's root on the crown, its foot collaring the outer band behind the visor ridge, 9 x 12 cm, rounded knob.
+- **Back lamp:** a walnut bracket off his right shoulder blade carrying a 17 x 24 cm four-slat lamp beside the head, the counterweight to the left pauldron's lames. It leans back at rest so the idle's forward lean stands it up. This is what the game camera reads.
+- **Lamp caps:** each pauldron crowned with a raised walnut ring, crossed muntins and a glossy lampresin dome (replaces the painted pauldron windows; the bracers keep theirs).
+- **Materials:** coat, apron and torso go carved walnut (`#86684D`, `#8E7054`, `#7C5F46`); crest panes `#C8964F`, visor `#B0854A` and knife blades `#BC8F52` go real lampresin amber (these exceed the 35 % saturation note above on purpose: the visor has to read amber). All lamp glass is glossy with a painted warm interior, never emissive.
+
 `SKINS` entry: `{"id": "rishal_lamplit", "palette": {...as above...}, "extra": {"lamp_cage": True}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"}}`
 
 ## 10-11. Export and renders

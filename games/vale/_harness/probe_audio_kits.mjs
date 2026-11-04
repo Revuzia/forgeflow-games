@@ -193,6 +193,7 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
   let cur = null;
   const eng = createAudioEngine({ catalog: { ...catalog, audio }, assetUrl: (r) => r, settings: SETTINGS });
   eng.listener(() => { if (!cur) return null; const s = view.entity(cur.dst ?? cur.src ?? cur.id); return s ? { x: s.x, y: s.y } : null; });
+  eng.prewarm = () => {};                                  // a match's decode-ahead is no play: K3 / K7 read eng.buffer calls as plays
   const files = {};                                        // cue → file → fetches
   const lastFile = {}, repeats = {};                       // K7: cue → its last fetched file; cue → back-to-back repeats
   eng.buffer = (file) => ({ then: (f) => { f({ duration: DUR[file] ?? 1, length: 48000, sampleRate: 48000 }); return { catch() {} }; } });

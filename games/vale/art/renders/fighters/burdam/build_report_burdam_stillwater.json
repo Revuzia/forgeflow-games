@@ -42,29 +42,29 @@
   },
   "uv_coverage": 0.605,
   "bake": {
-    "base": 14.29,
-    "rough_metal": 7.96,
-    "normal": 4.32,
-    "ao": 5.71,
+    "base": 14.81,
+    "rough_metal": 8.87,
+    "normal": 7.22,
+    "ao": 20.69,
     "normal_fixed_px": 47086,
-    "projection": 281.31,
-    "pack_save": 281.61,
-    "total": 314.86
+    "projection": 523.42,
+    "pack_save": 525.21,
+    "total": 577.44
   },
   "tris": 23088,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2849524,
+  "glb_bytes_raw": 2855992,
   "optimize": {
     "ok": true,
-    "before": 2849524,
-    "after": 1100472
+    "before": 2855992,
+    "after": 1103376
   },
-  "glb_bytes": 1100472,
+  "glb_bytes": 1103376,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_stillwater.glb (1075 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_stillwater_base 2048x2048 211K, burdam_stillwater_normal 512x512 49K, burdam_stillwater_orm 512x512 66K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_stillwater.glb (1078 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_stillwater_base 2048x2048 214K, burdam_stillwater_normal 512x512 49K, burdam_stillwater_orm 512x512 66K",
       "  skinned meshes: burdam_accent(332v), burdam_stillwater(21613v)",
       "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid x_cowl_b_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
@@ -79,8 +79,8 @@
       "portrait": "art/out/fighters/burdam/burdam_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 71.51,
-      "portrait": 15.06
+      "splash": 495.47,
+      "portrait": 116.57
     }
   },
   "three_qa": {
@@ -112,24 +112,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_stillwater.png",
-    "seconds": 11.3,
+    "seconds": 69,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.34,
-      "model": 138.75,
-      "lows_bind": 21.96,
-      "uv": 10.4,
-      "bake": 314.86,
-      "export": 0.18,
-      "optimize": 0.8,
-      "load_test": 0.13,
-      "render": 86.63,
-      "three_qa": 11.74
+      "materials": 0.83,
+      "model": 318.25,
+      "lows_bind": 22.93,
+      "uv": 13.04,
+      "bake": 577.44,
+      "export": 1.2,
+      "optimize": 8.68,
+      "load_test": 0.86,
+      "render": 613.08,
+      "three_qa": 70.03
     },
-    "total_s": 586.02
+    "total_s": 1626.71
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

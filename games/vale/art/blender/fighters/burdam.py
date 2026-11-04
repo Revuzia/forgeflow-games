@@ -1073,7 +1073,7 @@ CHAINS = {          # name: (parent, joints (rest, m)); + rotation about each bo
 }
 SKIRT_K, SKIRT_A0 = 0.45, 4.0        # the panel's push: share of the knee's swing past A0 deg (front: ahead; back: behind)
 SKIRT_CLEAR, SKIRT_THIGH_R = 0.025, 0.12    # the floor: the thigh's surface (its axis + R) stays CLEAR behind the panel
-COWL_K = 0.22                        # the cowl drape's push: share of the right knee's swing (deg)
+COWL_K = 0.28                        # the cowl drape's push: share of the right knee's swing (deg)
 SKIRT_SIDE_K = 0.35                  # the side panels: share of their own knee's swing (forward and back)
 SKIRT_AZ = {"skirt_f": 0.0, "skirt_l": 90.0, "skirt_b": 180.0, "skirt_r": -90.0}   # each panel's bearing (deg, 0 = front,
                                                                                   # + toward his left)
