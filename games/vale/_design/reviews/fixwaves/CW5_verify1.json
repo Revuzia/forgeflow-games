@@ -1,0 +1,304 @@
+{
+ "pass": false,
+ "wave": "CW5",
+ "round": 1,
+ "verifier": "adversarial verifier",
+ "date": "2026-11-04",
+ "summary": "FAIL. Verified: Vashil's blocker is closed (crown R3 14.2 cm, w5 20.2 cm, dark stole, clean rear view). 24/24 GLBs pass the crown gate and three_load_test (bases <= 1168 KiB, Ervet recall 6 s). 48/48 cards pass card_qa under ruling 12. The Vashil rod steps are <= 0.3 m. The Nurrow, Kemdo and Burdam chains move, and the Lisvel dash lands. Failing: done:4 materials (pauldron recess, material-pair dE >= 8 and the Ervet bevel unmeasured or not done; Lisvel and Ulkro still read clay / ring-wrapped). The Lisvel Gorgewalk portrait is a blank face (sensitivity: blank mannequin). The Lisvel tabard lags 0-1 f. Burdam Almanac per-pixel is 10.3 < 10.8. Recalls loop at 6 s inside the 7 s RIFT channel (actors.ts). Par: Vashil 7.5, Kemdo 7.5, Nurrow 7.6, Ervet 7.5 pass; Ardit 7.2, Burdam 7.3, Ulkro 7.3, Lisvel 6.8 (blocker) fail.",
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "node art/tools/crown_gate.mjs (8 CW5 dirs) -> _harness/_reports/fw_CW5_v1_crown.txt: vashil / chalkline / first_bell R1 16.3, R3 14.2, R5 12.7 cm, w5 20.2 cm (targets >= 12 cm, >= 19 cm); 24/24 GLBs pass ruling 7. Viewed _harness/_shots/fw_CW5_vas_rear_back_x2.png: round pale dome over a dark slate stole yoke on all 3 skins, no peak from behind at 28.5 m. _design/fighters/vashil.md:56-57 says 'rounded cowl'. Gap: no true 3/4-behind capture (the ne/nw cells are side views); the rear shots predate the 2026-11-04 rebuild, but the crown geometry is unchanged.",
+   "fixHint": "Optional: re-shoot a true 3/4-behind cell (camera yaw +-135 deg) for the record."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "python3 art/tools/card_qa.py <8 fighters> -> _harness/_reports/fw_CW5_v1_cards.txt / .json: 48 cards, 0 gate misses. Speckle (the ruling-12 gate) figure p50 0.77-2.47 (worst ervet splash 2.47, ardit_chalkline splash 2.46); hi p99.9 238-252 (all >= 230); skin MAD 31.4-61.1 (all >= 30). The criterion as written ('figure high-pass <= 2x the plate's') still fails on 48/48 (sigma-2 grain fig p50 2.75-11.3 against plate 0.34-1.06); ruling 12 (lead, 2026-11-04) replaced it with speckle <= 2.5, so I count it met. Viewed every card (_harness/_shots/fw_CW5_v1_{splash,portrait}_{0,1}.png). Failing by eye: lisvel_gorgewalk_portrait.png is a featureless pale oval with a blue bar and no nose, mouth or lid line (see sens:lisvel-portrait-blank). ardit_chalkline_portrait.png puts the azure spear blade across the face. Vashil and Ardit use one identical backdrop plate for all three skins, and Vashil base and First Bell are near-identical standing poses (MAD 33.6, just over the bar). Vashil portrait yaw 28: per the claim, not re-measured.",
+   "fixHint": "Re-stage lisvel_gorgewalk (and check lisvel_almanac) portrait at a front 3/4 yaw with a grazing key so the lids, nose and mouth read. Re-stage ardit_chalkline portrait so the spear blade clears the face. Give Vashil First Bell a distinct clip and pose (not a second standing raise), and give each Vashil and Ardit skin its own plate or time-of-day grade."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "chain_motion.py -> _harness/_reports/fw_CW5_v1_chains.txt. Ardit tabard seg1 max 26.3 deg, lag 2 f (pass), but seg2 swings 86.8 deg with 30 deg/frame steps. Burdam skirt_f range 17.1 deg, xcorr lag 3 f; back 6.5; cowl_b only 4.5 deg in run (weak). Kemdo robe_f 24.7 deg, lag 1-2 f. Lisvel tabard_fl/fr range 40 deg but peak lag 0 f / xcorr 1 f, r 0.96: the front panels still track the thigh (the brief asks for a 2-3 f lag). Nurrow cape run 20.1 / 13.8 deg (about +-10, in band), idle 5.4, dash 23.4 (pass). Ulkro skirt_f 22.5 deg lag 1-2 f; tail 7.7 / 14.7 deg. Vashil: clip_steps.py, rod head max 0.265 m (Peal at 1.667x) and 0.273 m (Toll at 1.778x), both <= 0.3; the Toll hold moves 0.004-0.069 m per frame; the Toll rod dips to y -0.060 (through the floor). Recall: 3 rings visible at 1.6 / 2.6 / 3.6 s (hand.L +10-13 cm flicks, _harness/_reports/fw_CW5_v1_tools/track.mjs), but the clip is 6.0 s, RIFT recallTime is 7 (content/modes.json:28), and src/render/actors.ts:132 still loops 'recall', so it restarts for the last 1 s. Lisvel dash: lands (feet at 0.09 from 0.367 s, hips 1.225 -> 0.84 compress -> 0.90).",
+   "fixHint": "Lisvel: re-bake x_tabard_f* with a 2-3 f lag behind the thigh (drop the thigh-follow weight; use the Ardit _tab_envelope cap+lag). Burdam: raise the cowl_b drive to >= 10 deg in run. Vashil recall: hand CW1 the actors.ts fit (play recall once, timeScale = clipDur/recallTime, or clamp the last frame), or author 7 s. Clamp the Toll rod head above y 0."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Burdam strap: in the three harness close (art/renders/fighters/burdam/three_burdam.png, crop x1500-1800 y600-900) L* is bimodal, strap ~15-24 against coat ~35-45 (>= 15 under, pass in the lit close). Pauldron recess 15-20 L* darker: not measured by anyone; at the game camera (row 1 of the same sheet) the pauldrons still read as pale plaster blocks. Lisvel (three_lisvel.png closes): the sleeves are still uniform pale cylinders, and the linen/felt/leather read as matte clay with little visible weave or fold paint. Ulkro (three_ulkro.png closes): the sleeve wraps are still horizontal ring bands, not the concept's diagonal overlapping bands. Ervet blade bevel-to-core >= 20 L*: not attempted (ervet-M4 not_done). 'Each named material pair dE >= 8 at the gameplay camera': no measurement exists.",
+   "fixHint": "Measure and fix in order: (1) a Lab script over the gameplay-camera row of three_<id>.png with per-material masks (id pass) for each brief pair, gate dE >= 8; (2) Burdam pauldron recess AO paint to 15-20 L* under the face; (3) Lisvel linen weave and fold shadow plus a felt nap visible at 1:1; (4) Ulkro diagonal wraps; (5) Ervet blade edge bevel lighter by >= 20 L* than the core."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "skin_gamecam_delta.py -> _harness/_reports/fw_CW5_v1_skin_gamecam.txt: Kemdo Long Evening per-pixel 8.2 vs Highrim 4.0 (pass). Burdam Almanac per-pixel 10.3 < Stillwater 10.8 (fail, short by 0.5); figure-mean 4.8 vs 4.7 (pass). Portrait dE76, same measure as tools/gen_store.ts (256x256, mean per-pixel) -> _harness/_reports/fw_CW5_v1_store_de.txt: ardit_first_bell 25.3, vashil_first_bell 21.9 (>= 18, pass). But at the game camera Vashil First Bell differs from base by only 2.7 per-pixel / 0.6 mean, and Ardit First Bell by 3.7 / 1.4: the portrait passes on staging, not palette.",
+   "fixHint": "Burdam Almanac: push the board, coat or cowl contrast so per-pixel dE beats Stillwater (e.g. a darker ink cowl #34303F, or more parchment area) at the next scheduled rebuild. Flag Vashil and Ardit First Bell as in-game near-recolours for the skin-tier review."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "three_load_test.mjs on all 24 CW5 GLBs (skins --skin-only) -> _harness/_reports/fw_CW5_v1_load.txt: 24/24 OK, bases 1120-1168 KiB (<= 1172). Ervet recall 6.00 s. lineup_qa run by me (heavy queue): art/renders/lineup/fw_CW5_v1_lineup.json, silhouetteOk true, heightPx 119-177, valueGradientOk false for ardit/burdam/kemdo/lisvel/ulkro/ervet and accentOk false for vashil/burdam/kemdo/lisvel/ulkro/ervet (guide bands; Burdam top band 29.7 L* is far off the 70-85 guide). Re-score: 4/8 at par (Vashil 7.5, Kemdo 7.5, Nurrow 7.6, Ervet 7.5); Ardit 7.2, Burdam 7.3, Lisvel 6.8 (with a blocker), Ulkro 7.3.",
+   "fixHint": "See the par:* items; the lineup flags are guides, not gates."
+  },
+  {
+   "id": "par:vashil",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "7.5. The blocker is closed (crown 14.2 cm, dark stole, rear view clean). Recall rings, Peal and Toll steps all pass, cards pass. Holding it at 7.5: skins are near-recolours in game (First Bell dE 2.7), the splashes share one plate, the recall restarts at 6 s inside the 7 s channel, and the Toll rod dips 6 cm under the floor."
+  },
+  {
+   "id": "par:ardit",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "7.2. Tabard fixed (26.3 deg, lag 2) and cards pass card_qa. Against par: the recall is a frozen 3 s loop (FK _harness/_reports/fw_CW5_v1_fk.txt: hand.L 0 cm, hand.R 0.8 cm, hips 0); the box helm and plaster pauldrons (ardit-M4 open); in-game skin dE 3.7 / 5.6; the Chalkline portrait has the spear across the face.",
+   "fixHint": "Author a 6-7 s recall with real hand and hips motion, re-stage the Chalkline portrait, and do the ardit-M4 helm/pauldron form pass."
+  },
+  {
+   "id": "par:burdam",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "7.3. Cloth (M5) and cards (M3) are good. burdam-M2 is partly: pauldron recesses are unmeasured and the in-match pauldron still reads as plaster. burdam-M4 is partly: per-pixel 10.3 < 10.8. Lineup top band 29.7 L*. Splash feet at 0.86-0.92 and the base top at 0.17 (guide 0.95 / 0.10).",
+   "fixHint": "Close M2 (recess staining, measured in match) and M4 (Almanac contrast) in one rebuild."
+  },
+  {
+   "id": "par:kemdo",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "7.5. M3 (cards 6/6, MAD 47-54), M4 (robe chains 24.7 deg, lag 1-2 f), M5 (Long Evening 8.2 vs 4.0) and the crown (R3 13.9 cm) all verified. Open minors: recall is a 2 s loop, Highrim dE 4.0, and kemdo-M2/m3/m6/v1."
+  },
+  {
+   "id": "par:lisvel",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "6.8. lisvel-M1 is still open and, in the new cards, worse. lisvel_gorgewalk_portrait.png shows a featureless pale oval under a blue bar: no lids, nose or mouth (zoom _harness/_shots/fw_CW5_v1_faces_b.png, panel 2). The base splash reads as a pale egg head on stick legs. lisvel-M3 materials still read as clay in three_lisvel.png. lisvel-M4 tabard: lag 0-1 f.",
+   "fixHint": "Face rework per lisvel-M1 (carved lids and a dark recess visible through the visor, a stronger nose and mouth plane), then re-stage all three portraits at front 3/4; finish the M3 paint and the tabard lag."
+  },
+  {
+   "id": "par:nurrow",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "7.6. M1 cards 6/6 (MAD 40-61). M2 recall is a 6 s one-shot with real motion (head 21.5 cm, hand.L 64.7 cm, hips 7.3 cm; channel hands 6.7 cm). M3 cape 20 / 5.4 / 23.4 deg in run / idle / dash. Minors m1-m6 and M4 are open; the Shadeprint store copy is handed to CW1."
+  },
+  {
+   "id": "par:ulkro",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "7.3. M1 cards and M2 chains (skirt_f 22.5 deg, tail 14.7 deg) are verified, and the crown passes (R3 15.0). ULK-M3 is only partly done: three_ulkro.png still shows horizontal ring-band sleeve wraps. The recall is a frozen 3 s loop (head 1.2 cm, hands 0.8/8.2 cm, hips 0). ULK-V1 (face has no living cue) is open.",
+   "fixHint": "Diagonal overlapping wraps and boot soles (ULK-M3), then a 6-7 s recall with motion."
+  },
+  {
+   "id": "par:ervet",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "7.5. M1 cards 6/6 (MAD 37.7-51.8, speckle up to 2.47, at the limit). Recall 6.0 s with motion (hips 41.6 cm). Load OK. Open: ervet-M2/M3/M4 (blade does not read as glass), m3/m4."
+  },
+  {
+   "id": "fighter:vashil:VAS-B1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "See done:1: crown R3 14.2 cm, w5 20.2 cm on all 3 skins; the dark stole break is visible from behind."
+  },
+  {
+   "id": "fighter:vashil:VAS-M1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Three rings visible in the clip (hand.L 1.30 -> 1.40 -> 1.27 m at 1.6 / 2.6 / 3.6 s). The 6 s clip still loops in RIFT's 7 s recall (actors.ts:132 LOOPING has recall).",
+   "fixHint": "CW1: play recall once, fitted to recallTime."
+  },
+  {
+   "id": "fighter:vashil:VAS-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "clip_steps: Peal 0.265 m and Toll 0.273 m max per 60 Hz frame (<= 0.3), on all 3 GLBs. The Toll hold moves. Minor: rod head y -0.060 m at the slam."
+  },
+  {
+   "id": "fighter:vashil:VAS-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6, MAD 31.4-43.5, hi 238-250. Weakness: one shared plate, and base vs First Bell poses are similar."
+  },
+  {
+   "id": "fighter:ardit:ardit-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6 pass under ruling 12 (speckle 0.95-2.46, hi 249-252, MAD 34.0-54.3). Same plate for all skins; the Chalkline portrait face is occluded (minor)."
+  },
+  {
+   "id": "fighter:ardit:ardit-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Tabard seg1 26.3 deg, lag 2 f, r 0.98."
+  },
+  {
+   "id": "fighter:burdam:burdam-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Strap ~15-24 L* vs coat ~35-45 in the lit close (pass). Pauldron recess step and the in-match pauldron p10-p90 were not measured; the pauldrons still read as plaster at the game camera.",
+   "fixHint": "Measure the in-match pauldron p10-p90 (>= 35) and the recess step, and paint recess AO."
+  },
+  {
+   "id": "fighter:burdam:burdam-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6, MAD 42.9-56.0, hi 245-252. Framing guide misses (feet 0.86-0.92) are minor."
+  },
+  {
+   "id": "fighter:burdam:burdam-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Per-pixel 10.3 vs Stillwater 10.8 (fail), mean 4.8 vs 4.7 (pass).",
+   "fixHint": "More ink and parchment contrast on Almanac."
+  },
+  {
+   "id": "fighter:burdam:burdam-M5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "skirt_f 17 deg, xcorr lag 3; skirt_b trails. The cowl is weak at 4.5 deg (minor). GLB 1168 KiB loads."
+  },
+  {
+   "id": "fighter:kemdo:kemdo-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6 pass."
+  },
+  {
+   "id": "fighter:kemdo:kemdo-M4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "robe_f 24.7 deg, lag 1-2 f; sides 38.9 deg."
+  },
+  {
+   "id": "fighter:kemdo:kemdo-M5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Game camera 8.2 vs Highrim 4.0."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "The Gorgewalk portrait face is blank (no nose, mouth or lids); the base portrait shows only a faint nose. A blank-mannequin read: see par:lisvel.",
+   "fixHint": "Face rework plus portrait re-stage."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6, MAD 38.4-59.7, speckle 0.77-1.42."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "three_lisvel.png closes: the sleeves are still flat pale cylinders and the straps plain; little weave or nap reads.",
+   "fixHint": "Stronger fold and weave paint, visible at 1:1 in the three close."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Dash now lands (feet planted from 0.367 s, hips compress to 0.84 m). The tabard chains exist, but the front panels lag 0-1 f (r 0.96 with the thigh). Recall hips 3.2 cm, hand.R 18.7 cm (ok).",
+   "fixHint": "Tabard lag 2-3 f."
+  },
+  {
+   "id": "fighter:nurrow:nurrow-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6."
+  },
+  {
+   "id": "fighter:nurrow:nurrow-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Recall 6.0 s one-shot: head 21.5 cm, hand.L 64.7 cm. It still loops at 6 s in the 7 s channel (actors.ts)."
+  },
+  {
+   "id": "fighter:nurrow:nurrow-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Cape 20.1 deg in run (+-10), 5.4 in idle, 23.4 in dash."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6, MAD 42.3-47.8."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Skirt and tail chains bake with motion (skirt_f 22.5 deg, tail 14.7 deg). There is no sash chain (minor)."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Horizontal ring wraps remain in three_ulkro.png.",
+   "fixHint": "Diagonal bands, a sole welt, and glossy dawnglass."
+  },
+  {
+   "id": "fighter:ervet:ervet-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa: 6/6; the poses are distinct (raised blade, kneel, lamp)."
+  },
+  {
+   "id": "ruling7:crown-metric",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "crown_gate: 24/24 CW5 GLBs pass."
+  },
+  {
+   "id": "cards:pipeline",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "48/48 CW5 cards pass card_qa under ruling 12; CW6 renders with the same pipeline."
+  },
+  {
+   "id": "CW5-polish:OBS-metal",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Per the claim plus commit e243bdf9; three_load OK. Spot-check not re-run."
+  },
+  {
+   "id": "CW5-polish:ervet-m5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "ervet recall 6.00 s, three_load_test OK."
+  },
+  {
+   "id": "CW5-polish:remaining",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "ardit-M2/m3/M4, burdam-M1, ervet-M2/M3/M4, kemdo-M2/m3/m6/v1, lisvel-m1..m4, nurrow-m1..m6/M4, ULK-M4/V1 are not done (by the engineers' own report). Stray untracked art/tools/_tmp_lisvel_review_pose.mjs.",
+   "fixHint": "Backlog; delete the tmp tool."
+  }
+ ],
+ "regressions": [
+  "lisvel_gorgewalk_portrait.png (new CW5 staging) shows a featureless face: no lids, nose or mouth",
+  "Vashil cast_ult rod head dips to y -0.060 m (under the floor) after the new slam",
+  "untracked art/tools/_tmp_lisvel_review_pose.mjs left in the wave's tool dir"
+ ],
+ "artifacts": [
+  "_harness/_reports/fw_CW5_v1_cards.txt",
+  "_harness/_reports/fw_CW5_v1_crown.txt",
+  "_harness/_reports/fw_CW5_v1_load.txt",
+  "_harness/_reports/fw_CW5_v1_chains.txt",
+  "_harness/_reports/fw_CW5_v1_fk.txt",
+  "_harness/_reports/fw_CW5_v1_skin_gamecam.txt",
+  "_harness/_reports/fw_CW5_v1_store_de.txt",
+  "art/renders/lineup/fw_CW5_v1_lineup.json",
+  "_harness/_shots/fw_CW5_v1_splash_0.png",
+  "_harness/_shots/fw_CW5_v1_portrait_1.png",
+  "_harness/_shots/fw_CW5_v1_faces_b.png"
+ ]
+}
