@@ -236,6 +236,9 @@ export function die(x: PCtx, s: number, cause: number): void {
   // gatherings.ts)
   if (st) {
     noteDeath(x, st, DEATH_NAMES[cause] ?? String(cause), (x.tick - A.birth[s]) / x.year, keep);
+    // (fix-r3) the dead of a fire of their own making (buildings.ts burnBuildings' rule): what an oath is sworn on
+    if (cause === DEATH.fire && st.recent.ownFire !== undefined && x.tick - st.recent.ownFire < 3 * x.day
+      && !(st.recent.godSeen !== undefined && x.tick - st.recent.godSeen < 3 * x.day)) st.recent.ownFireDead = (st.recent.ownFireDead ?? 0) + 1;
     if (keep) funeralFor(x, st, id, [...kin].sort((a, b) => a - b));
   }
   // leave the world (and the shelter they lay in: its count leaked and kept an empty hut 'full' for years)

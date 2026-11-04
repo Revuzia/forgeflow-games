@@ -308,21 +308,28 @@ function tabooFromStories(x: PCtx, st: Settlement): void {
   const piety = members.length ? members.reduce((a, m) => a + A.traits[m * NT + TRAIT.piety], 0) / members.length : 0.5;
   const sp = x.c.species.list[st.species];
   const people = sp.plural.replace(/^the /, '');
-  // a village that burned remembers it: no fire, not even as a gift, for generations
+  // a village that burned tells of it. (fix-r3) An OATH follows only a deadly fire of their own making — a hearth
+  // that got away, 3+ buildings and 2+ dead (buildings.ts / lifecycle.ts count only those): never the god's meteor,
+  // lightning or fireball (fear and regard: god/regard.ts) nor an ordinary wildfire. And the oath is a rite, not the end
+  // of fire: they will kindle no new fire for some years and keep a fire-watch, but the old flame stays — fire-keeping
+  // (the hearth, cooking, pottery, charcoal, metal) is never sworn off — and they take up fire again within a generation
   if ((st.recent.burnedCount ?? 0) >= 3) {
     tell(x.u, x.p, 'burned', vars(x, st, -1, { count: st.recent.burnedCount }), st, [settlementRef(x, st)]);
-    for (const id of ['fire-making', 'fire-keeping']) {
-      const k = x.rt.byId.get(id);
-      if (k === undefined || st.culture.taboos.includes(k) || hashFloat(st.id, k, x.tick, 0xf1e) >= piety) continue;
-      st.culture.taboos.push(k);
-      st.culture.tabooSince![String(k)] = x.tick;
-      if (id === 'fire-making') {
-        remember(st, x.tick, 'taboo', `The ${people} of ${st.name} swore never to make fire again.`, 2);
-        tell(x.u, x.p, 'taboo.fire', vars(x, st), st, [settlementRef(x, st)], 2);
-      }
-    }
     st.recent.burnedCount = 0;
   }
+  const ownBurned = st.recent.ownBurned ?? 0, ownDead = st.recent.ownFireDead ?? 0;
+  if (ownBurned >= 3 && ownDead >= 2) {
+    const k = x.rt.byId.get('fire-making');
+    if (k !== undefined && !st.culture.taboos.includes(k) && hashFloat(st.id, k, x.tick, 0xf1e) < piety) {
+      st.culture.taboos.push(k);
+      st.culture.tabooSince![String(k)] = x.tick;
+      // a few years to a generation (5-20 years)
+      (st.culture.oathUntil ??= {})[String(k)] = x.tick + Math.round((5 + 15 * hashFloat(st.id, k, x.tick, 0xf1d)) * x.year);
+      remember(st, x.tick, 'taboo', `The ${people} of ${st.name} swore to kindle no new fire for years, and keep a fire-watch.`, 2);
+      tell(x.u, x.p, 'taboo.fire', vars(x, st), st, [settlementRef(x, st)], 2);
+    }
+  }
+  if (ownBurned || ownDead) { delete st.recent.ownBurned; delete st.recent.ownFireDead; }
   // the sea took their boats
   if ((st.recent.drowned ?? 0) >= 3) {
     const k = x.rt.byId.get('raft-making');
@@ -368,6 +375,15 @@ function fadeTaboos(x: PCtx, st: Settlement): void {
   const keep: number[] = [];
   for (const k of st.culture.taboos) {
     if (x.info[st.species].taboos.includes(k)) { keep.push(k); continue; }
+    // (fix-r3) an oath after a fire of their own lapses on its day: they take up fire again
+    const until = st.culture.oathUntil?.[String(k)];
+    if (until !== undefined) {
+      if (x.tick < until) { keep.push(k); continue; }
+      delete st.culture.oathUntil![String(k)];
+      delete since[String(k)];
+      tell(x.u, x.p, 'taboo.lifted', vars(x, st, -1, { knowledge: x.rt.list[k]?.name.toLowerCase() ?? 'it' }), st, [settlementRef(x, st)], 1);
+      continue;
+    }
     const t0 = since[String(k)] ?? -Infinity;
     const years = (x.tick - t0) / x.year;
     if (years < 50 || hashFloat(st.id, k, x.tick, 0x7ab) > 0.01) { keep.push(k); continue; }
