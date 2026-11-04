@@ -2709,6 +2709,96 @@
    "gauge": "LoL masked champions keep one clean, intended read for the face at portrait and splash size.",
    "verdict": "confirmed",
    "wave": "CW6"
+  },
+  {
+   "dim": "fighter:dunsom",
+   "id": "dunsom-death-mesh",
+   "severity": "minor",
+   "title": "Death pose: coat tears at the folded knees and the hatless hood reads as a tube.",
+   "what": "Death pose: coat tears at the folded knees and the hatless hood reads as a tube.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/dunsom.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:dunsom",
+   "id": "dunsom-lantern-glued",
+   "severity": "minor",
+   "title": "Lantern barely swings (lanternTiltMax 6 deg).",
+   "what": "Lantern barely swings (lanternTiltMax 6 deg).",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/dunsom.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:dunsom",
+   "id": "dunsom-value-gradient",
+   "severity": "minor",
+   "title": "Lineup value gradient f0 64.8 / 42.4 / 27.8.",
+   "what": "Lineup value gradient f0 64.8 / 42.4 / 27.8.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/dunsom.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:ilsheta",
+   "id": "ilsheta-guard-pose",
+   "severity": "minor",
+   "title": "Guard pose holds the lamp over the face with the arms tucked.",
+   "what": "Guard pose holds the lamp over the face with the arms tucked.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/ilsheta.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:ilsheta",
+   "id": "ilsheta-portrait-framing",
+   "severity": "minor",
+   "title": "Portrait framing off the card crop.",
+   "what": "Portrait framing off the card crop.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/ilsheta.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:ilsheta",
+   "id": "ilsheta-face-seam",
+   "severity": "minor",
+   "title": "Dark blocks remain at the face plate side edges (partly fixed).",
+   "what": "Dark blocks remain at the face plate side edges (partly fixed).",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/ilsheta.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:odrum",
+   "id": "odrum-m1",
+   "severity": "minor",
+   "title": "Ochre accent diluted to cream.",
+   "what": "Ochre accent diluted to cream.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/odrum.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:odrum",
+   "id": "odrum-m3",
+   "severity": "minor",
+   "title": "Lineup accent at facings 0/180 only 0.84 / 1.08 % (partly fixed).",
+   "what": "Lineup accent at facings 0/180 only 0.84 / 1.08 % (partly fixed).",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/odrum.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:odrum",
+   "id": "odrum-m4",
+   "severity": "minor",
+   "title": "Channel head travel 2.6 cm (partly fixed).",
+   "what": "Channel head travel 2.6 cm (partly fixed).",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/odrum.json; confirmed against the current GLB.",
+   "wave": "CW6"
+  },
+  {
+   "dim": "fighter:odrum",
+   "id": "odrum-m6",
+   "severity": "minor",
+   "title": "COAT_LIFT applied to every skin.",
+   "what": "COAT_LIFT applied to every skin.",
+   "evidence": "Recovered by CW6 polish-minors (2026-11-04) from _design/reviews/closing/fighters/odrum.json; confirmed against the current GLB.",
+   "wave": "CW6"
   }
  ],
  "meta": {
@@ -2909,5 +2999,77 @@
  "par_bar": {
   "score": 7.5,
   "rule": "ON PAR = verified score >= 7.5 and no blocker open; majors on a >= 7.5 item are backlog (owner_rulings.md ruling 8, 2026-10-29)"
- }
+ },
+ "closures": [
+  {
+   "id": "HUD-5",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "HUD-7",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "HUD-9",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "HUD-11",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "F10",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "F13",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "F14",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "F16",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "F17",
+   "status": "closed",
+   "by": "CW3c hud-unmeasured (critic:done-unverified)",
+   "date": "2026-11-04",
+   "evidence": "_design/sections/client_hud.md \u00a74.10; _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json, fw_CW3c_e2e_rift.json; CW3c verifier spot-check"
+  },
+  {
+   "id": "critic:ui-layout-originality (Dial Bar)",
+   "status": "closed-pending-verify",
+   "by": "lead e137e84f",
+   "date": "2026-11-04",
+   "evidence": "hud_layout.json re-key: summoner spells left of a divider, abilities, ult under the gnomon; dialbar.webp rebuilt; icon_probe OK"
+  }
+ ]
 }
