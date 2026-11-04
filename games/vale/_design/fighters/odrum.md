@@ -82,7 +82,7 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#4D3D32` | 27 | 24° / 35% | cross-straps, pouch, boots, grip bands |
 | `under` | `#3A3532` | 23 | 23° / 14% | trousers |
 | `ironstone` | `#453B35` | 26 | 23° / 23% | toe caps |
-| `ink` | `#17181B` | 8 | 225° / 15% | trims (the base eye recesses are a warm umber-ink glaze `#4E3828`, L* ~26 walls to ~17 floor, the lower wall a step lighter: carved depth, never black holes; closing polish odrum-m2) |
+| `ink` | `#17181B` | 8 | 225° / 15% | trims (the base eye recesses are a warm umber-ink glaze `#5A4130`, L* ~30 walls to ~21 floor, the lower wall a step lighter: carved depth, never black holes; closing polish odrum-m2) |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the two pot windows and the two thin mouth rings |
 
 The yoke is the largest warm area: it is pale oiled walnut (hue 34 degrees, 32% saturation), under the 40% limit. Lampresin is the one saturated warm role and stays under 4% of the silhouette.

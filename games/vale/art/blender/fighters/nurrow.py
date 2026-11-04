@@ -77,6 +77,46 @@ PALETTE = materials.bible_palette(sandstone="#CDB07E", wood="#92705B", hand_wood
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "hat_rim": "x_hat_rim", "dart_hand": "x_dart_hand", "weapon_tip": "x_blade_tip"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
+# PER-SKIN CARDS (closing review nurrow-M1; schema: art/blender/portraits.py header). Each card is its own moment:
+# base: the hush, Nurrow's Lull flung wide in the Serenade dusk, lit from below by a guttering street lamp at her lull
+# hand (an amber focal, a plum-dusk rim); Noon Fair: tipping the hat under the fair's paper lanterns at noon (a high warm
+# key, lantern-pink rims); Shadeprint: the slash of the woodblock print in the gorge, a cool violet key from high behind
+# and violet sleep-shadow bounce off the ground. The portraits derive from each card's frame and light (closer lens).
+CARDS = {
+    "nurrow": {
+        "splash": {"clip": "cast_ult", "t": 0.34, "yaw": 26.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 150.0, "key_el": 18.0, "key_color": "#F2DCC8", "sun": 2.8, "rim_cool": 1.2,
+                   "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.6, "exposure": -0.55,
+                   "focal": [{"at": "x_dart_hand", "az": 190.0, "el": -15.0, "dist": 0.7, "color": "#FFB466",
+                              "power": 70.0, "size": 0.35},
+                             {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.8, "color": "#FFC890", "power": 26.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": 24.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+    },
+    "nurrow_noon_fair": {
+        "splash": {"clip": "taunt", "t": 0.62, "yaw": -22.0, "pitch": -4.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 200.0, "key_el": 55.0, "key_color": "#FFF0DC", "sun": 3.4, "rim_cool": 0.6,
+                   "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#F0C8A8", "accent": 1.4, "exposure": -0.6,
+                   "focal": [{"at": "x_hat_rim", "az": 170.0, "el": 30.0, "dist": 0.8, "color": "#FFD8C8",
+                              "power": 40.0, "size": 0.4},
+                             {"at": "head", "az": 160.0, "el": 0.0, "dist": 0.8, "color": "#FFE8D0", "power": 24.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": -28.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.50},
+        "plate": {"glow": [0.55, 0.30, 0.50, 0.10], "glow_color": "#FFD6B8", "sat": 0.9},
+    },
+    "nurrow_shadeprint": {
+        "splash": {"clip": "attack2", "t": 0.55, "yaw": 38.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 130.0, "key_el": 45.0, "key_color": "#E2DAF2", "sun": 3.0, "rim_cool": 1.7,
+                   "rim_warm": 0.4, "bounce": 0.6, "bounce_color": "#8E7CC8", "accent": 1.5, "exposure": -0.55,
+                   "focal": [{"at": "x_blade_tip", "az": 170.0, "el": 20.0, "dist": 0.8, "color": "#E8E0FF",
+                              "power": 45.0, "size": 0.3},
+                             {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#F0ECFF", "power": 24.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": 34.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
+        "plate": {"glow": [0.25, 0.40, 0.50, 0.08], "glow_color": "#C8B8F0", "sat": 0.85},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}          # ORM 256: GLB headroom (AO + roughness; the AO is also in the base)
 GLB_COMPRESS = True

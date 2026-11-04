@@ -98,18 +98,20 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.96, "yaw": 24.0, "pitch":
 # and light (the same clip, t and key; a closer lens).
 CARDS = {
     "ervet": {
-        "splash": {"clip": "cast_a3", "t": 0.25, "yaw": 30.0, "pitch": -5.0, "lens": 50.0, "fill": 0.94, "x": 0.70,
+        "splash": {"clip": "cast_a3", "t": 0.25, "yaw": 30.0, "pitch": -5.0, "lens": 50.0, "fill": 0.88, "x": 0.70,
+                   "box_top": 2.25,      # the raised blade leaves the frame: the body fills the card (speckle 4.4 on a small figure)
                    "key_az": 220.0, "key_el": 24.0, "key_color": "#FFDDB4", "sun": 3.2, "rim_cool": 1.3,
                    "rim_warm": 0.9, "bounce": 0.5, "bounce_color": "#E6C49E", "accent": 1.7,
                    "focal": [{"at": "x_crossguard", "az": 200.0, "el": 25.0, "dist": 0.8, "color": "#FFE6C4",
                               "power": 60.0, "size": 0.3},
                              {"at": "head", "az": 170.0, "el": 15.0, "dist": 0.9, "color": "#FFE4C8", "power": 22.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 28.0, "lens": 70.0},
+        "portrait": {"clip": "cast_a3", "t": 0.08, "yaw": 26.0, "lens": 70.0},   # the gathering beat before the raise (the
+                                                                              # raised arms hid the visor at t 0.25)
         "plate": {"glow": [0.18, 0.58, 0.42, 0.10], "glow_color": "#F2D0A4"},
     },
     "ervet_stillwater": {
-        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": -24.0, "pitch": -4.0, "lens": 50.0, "fill": 0.92, "x": 0.70,
                    "key_az": 145.0, "key_el": 48.0, "key_color": "#E4F0EA", "sun": 3.0, "rim_cool": 1.6,
                    "rim_warm": 0.4, "bounce": 0.55, "bounce_color": "#9FC4BA", "accent": 1.4, "exposure": -0.55,
                    "focal": [{"at": "x_blade_tip", "az": 170.0, "el": 10.0, "dist": 0.9, "color": "#E6FFF6",

@@ -54,7 +54,7 @@
 
 import {
   type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
-  CylinderGeometry, Float32BufferAttribute, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
+  CylinderGeometry, DoubleSide, Float32BufferAttribute, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
   LoopRepeat, Mesh, MeshStandardMaterial, NoBlending, NormalBlending, type Object3D, OctahedronGeometry,
   PropertyBinding, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
   Vector3,
@@ -468,6 +468,10 @@ export class ModelLibrary {
         this.patched.add(mat);
         // opaque without the OPAQUE define: a veil or the structure fade then keys the same program (world_material.ts)
         opaqueVeilable(mat);
+        // CW1 refix (perf done:7 programs): a blended double-sided part (Ilsheta's chimney glass) draws in ONE pass:
+        // three's default two-pass back-then-front draw keys two programs of its own (flipSided / front), while one
+        // double-sided pass keys the same program as every other unmapped part (the accent): -2 live programs
+        if (mat.transparent && mat.side === DoubleSide) mat.forceSinglePass = true;
         if (mat.name === accentName) continue; // patched per actor clone
         patchWorldMaterial(mat, char);
       }

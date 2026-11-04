@@ -896,6 +896,8 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         pose_frame(arm, prof, cfg["clip"], t=cfg["t"], chains=chains, clips=clips)
         lo, hi = posed_bounds(objs)
         lo.z = min(lo.z, 0.0)
+        if cfg.get("box_top") is not None:        # a staged card may frame the body and let a raised weapon leave the
+            hi.z = min(hi.z, float(cfg["box_top"]))   # frame's top (the fit box capped at this height, m)
         _fit_camera(cam, lo, hi, cfg["yaw"], cfg["pitch"], cfg["lens"], cfg["fill"], 16 / 9, cfg["x"])
         bible_lights(cam, cfg_a, light_a, rim=1.0, scale=1.6, pair=True, target=(lo + hi) * 0.5)
         stage_lights(cam, cfg_a, arm, (lo + hi) * 0.5, scale=1.6)

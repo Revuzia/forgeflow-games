@@ -182,25 +182,25 @@
   },
   "uv_coverage": 0.596,
   "bake": {
-    "base": 5.95,
-    "rough_metal": 7.76,
-    "normal": 5.51,
-    "ao": 5.46,
+    "base": 2.69,
+    "rough_metal": 2.45,
+    "normal": 1.79,
+    "ao": 2.17,
     "normal_fixed_px": 44419,
-    "projection": 93.04,
-    "pack_save": 93.32,
-    "total": 118.24
+    "projection": 32.45,
+    "pack_save": 32.59,
+    "total": 41.78
   },
   "tris": 19344,
   "mesh_top_m": 1.887,
-  "glb_bytes_raw": 2716664,
+  "glb_bytes_raw": 2715604,
   "optimize": {
     "ok": true,
-    "before": 2716664,
-    "after": 1037704,
+    "before": 2715604,
+    "after": 1037104,
     "q_base": 63
   },
-  "glb_bytes": 1037704,
+  "glb_bytes": 1037104,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -213,6 +213,16 @@
       "  tris: 19344; bind-pose bounds (three units, Y up): 2.26 x 1.89 x 0.46; facing (0.00, 1.00); head bone y 1.54; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/odrum/odrum_noon_fair_splash.png",
+      "portrait": "art/out/fighters/odrum/odrum_noon_fair_portrait.png"
+    },
+    "seconds": {
+      "splash": 116.07,
+      "portrait": 28.89
+    }
   },
   "three_qa": {
     "ok": true,
@@ -243,23 +253,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/odrum/three_odrum_noon_fair.png",
-    "seconds": 14,
+    "seconds": 12.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.42,
-      "model": 5.45,
-      "lows_bind": 5.46,
-      "uv": 7.31,
-      "bake": 118.24,
-      "export": 0.12,
-      "optimize": 0.82,
-      "load_test": 0.18,
-      "three_qa": 14.28
+      "materials": 0.2,
+      "model": 2.43,
+      "lows_bind": 2.45,
+      "uv": 3.47,
+      "bake": 41.79,
+      "export": 0.06,
+      "optimize": 0.48,
+      "load_test": 0.1,
+      "render": 144.99,
+      "three_qa": 12.53
     },
-    "total_s": 152.42
+    "total_s": 208.59
   },
   "run_ref_speed": 3.35,
   "height_m": 1.82

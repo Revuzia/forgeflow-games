@@ -26,7 +26,7 @@ Banned for every fighter: gears, clock hands, gold filigree, gems, glowing runes
 
 - **Mass: Slinger, horizontal, on a runner.** A lean hunter, shoulders 0.40 m and hips 0.28 m, leaning 8 degrees forward in `idle` and 12 degrees in `run`. A long **spear-thrower lies across the right forearm with a 1.6 m dart laid along it**, a pale bar 131 px wide at 1080p at chest height, pointing forward.
 - **Hook:** a **crest of five radiating dart shafts behind the hood**. Five darts stand in the back quiver in a fan, each showing 0.55 m above the shoulder and spread 15 degrees apart (-30 to +30 degrees from vertical, tipped back), their leaf heads at the tips. From the camera the crest reads as a spray of lines behind the head over a horizontal bar: no other fighter has both.
-- **Head:** a deep hood in a wide sandstone wrap, the face a narrow carved-wood eye-slit band over a linen wrap; the hood's point trails 0.20 m behind the nape.
+- **Head:** a deep hood in a wide sandstone wrap, the face a narrow carved-wood eye-slit band over a linen wrap; the hood's crown is a rounded cloth dome (owner ruling 7: fit radius 15 cm at 3 cm under the top, `node art/tools/crown_gate.mjs art/out/fighters/ulkro`), and a cloth tail streams back from it behind the nape.
 - **Size:** 93 px tall at 1080p (62 px at 720p); the crest adds 28 px above the hood, and the dart on the thrower is the widest single read.
 - **At 64 px:** a leaning figure with a fan of thin lines behind the head and one long horizontal bar at the chest. The darts are 6 cm shafts (5 px at 1080p), the thinnest forms on the figure.
 - **Facing from above:** the eye-slit band is the beak (it extends 3 cm), the thrower and its dart point forward on the right, and the crest sweeps back.
@@ -53,14 +53,14 @@ SHAPE = body.shape(girth=0.93, torso_w=0.94, torso_d=0.93, chest=0.96, waist=0.8
 
 ## 3. Face (template 3)
 
-- **Hourless hood and wrap.** A deep sandstone hood (`kit.hood`, one rigid shell with a 0.20 m trailing point) over a linen face wrap (`cloth2`) across the nose and mouth, and a narrow carved-wood eye-slit band (`kit.glass_visor` style, but wood, 0.18 m wide and 4 cm tall) across the eyes with ink recesses. The band extends 3 cm forward as the beak and the facing cue. No bare face, no hair.
+- **Hourless hood and wrap.** A deep sandstone hood (`kit.hood`, one rigid shell with a rounded dome crown, never a peak; its 0.38 m cloth tail rides a 2-bone spring chain `x_tail_1/2` so it lags and flicks) over a linen face wrap (`cloth2`) across the nose and mouth, and a narrow carved-wood eye-slit band (`kit.glass_visor` style, but wood, 0.18 m wide and 4 cm tall) across the eyes with ink recesses. The band extends 3 cm forward as the beak and the facing cue. No bare face, no hair.
 - The hood's brim shades the slit from the 52 degree camera, so the band is mostly a portrait read; the brim must clear the brow by 3 cm so the slit shows in the portrait.
 
 ## 4. Armour, cloth and props (template 4)
 
-- **Torso.** A warm brown-grey wrap tunic (`cloth`) with a crossed leather chest strap (`leather`) that holds the quiver; shoulder wraps of pale stone-coloured linen plates (`stone`, rigid) on both shoulders.
+- **Torso.** A warm brown-grey wrap tunic (`cloth`, its knee-length skirt on four 2-bone spring chains from the hips, `x_skirt_f/b/l/r_1-2`: the front pushed by the leading knee, the back by the trailing one, the sash's tongue riding the front panel; closing ULK-M2) with a crossed leather chest strap (`leather`) that holds the quiver; shoulder wraps of pale stone-coloured linen plates (`stone`, rigid) on both shoulders.
 - **Arms.** Sandstone sleeve wraps (`sandstone`), a leather bracer on the right forearm that carries the thrower.
-- **Legs.** Close dark leggings (`under`), wrapped shins (`cloth2`) and soft waxed-leather boots with a low heel.
+- **Legs.** Close dark leggings (`under`), shins wrapped in overlapping diagonal bands of varied width (`cloth2`, as the sleeves), and shaped suede boots with a narrowing toe on a darker sole welt.
 - **Spear-thrower** (`prop.R`, grip at the origin, blade along -Z): a bleached carved-wood thrower 0.90 m long, 6 cm wide and 3 cm thick with a hooked peg at the back and a leather grip 0.12 m. The dart laid along it is a pale shaft 1.6 m long, 6 cm thick, with a dawnglass leaf head 0.16 m long carrying an accent inlay.
 - **Back quiver** (`x_quiver` on the upper back, rigid): a leather tube 0.50 m tall holding five darts in a fan; each shaft shows 0.55 m above the shoulder (pale wood, 6 cm), each leaf head is dawnglass 0.14 m long with one accent inlay. The quiver and the darts are one rigid mesh moving with the spine.
 
@@ -120,7 +120,7 @@ Four distinct ability gestures. Frame counts are multiples of 5 at 30 fps; the i
 | `cast_a3` | 20 (f8) | **Hamstring Dart** · castTime 0.2 s · 6 m dart, slow, reveal | She snaps a short dart from the quiver over her shoulder with the left hand (f0-f5) and flicks it low and sidearm at f8, the body dipping into a crouch as the dart skims toward the legs; the right arm keeps the thrower level. Recover to guard by f20. Silhouette: a crouch with one hand thrown out low. |
 | `cast_ult` | 25 (f10) | **Long Run** · castTime 0.2 s · 5 s run form, +35% move speed | A sprint start: a deep breath and a crouch (f0-f5, a short held pose), then the first two strides burst out at f10 and the clip ends mid-stride, flowing straight into `run`; the crest and the quiver rattle in one rigid motion. The accent blooms in the wind-up (f0-f5). Silhouette: a coil, then a stretched runner. |
 
-Other clips: `run` at 3.5 m/s (light, foot slide under 8%; in Long Run the renderer plays it 1.35 times faster); `attack1` a quick overhand throw of a short dart, `attack2` a sidearm throw with a half-step (both 20 frames, impact f8, the dart leaves at the impact frame); `death` stumbles and rolls onto her back, the darts spilling to one side (ends at rest); `recall` plants the thrower and checks the darts in her quiver one by one; `stunned` staggers with the crest rattling; `dash` is the leap loop; `taunt` taps the thrower twice on her shoulder and nods at the horizon.
+Other clips: `run` at 3.5 m/s (light, foot slide under 8%; in Long Run the renderer plays it 1.35 times faster); `attack1` a quick overhand throw of a short dart, `attack2` a sidearm throw with a half-step (both 20 frames, impact f8, the dart leaves at the impact frame); `death` stumbles and rolls onto her back, the darts spilling to one side, the right knee bent up with its sole on the ground (ends at rest, nothing under the floor: `art/tools/clip_floor.py`); `recall` plants the thrower and checks the darts in her quiver one by one; `stunned` staggers with the crest rattling; `dash` is the leap loop; `taunt` taps the thrower twice on her shoulder and nods at the horizon.
 
 **`idle_lobby`** (loops, closed first = last pose): She cannot stand still. She jogs lightly in place, checks the darts in her quiver with a thumb, glances at the far horizon as if something is moving there, shifts to a long stride and back, then looks at the camera with her head on one side as if asking why anyone is waiting. 90 frames.
 
@@ -181,6 +181,6 @@ This skin re-mixes the top band: the plum hood is 10% of it and the pale shafts,
 
 - [ ] The five-dart crest and the laid dart both read in black at 64 px: a spray of lines behind the head and one horizontal bar at the chest.
 - [ ] IoU against Lisvel, Odrum and Nurrow <= 0.80; the crest is at least 0.5 m above the shoulder.
-- [ ] The quiver, the darts and the thrower are rigid; the hood point is one rigid shell with no sway bone.
+- [ ] The quiver, the darts and the thrower are rigid; the hood is one rigid rounded shell (crown gate R3 >= 10 cm) and only its cloth tail sways.
 - [ ] The six dart-head inlays are the only emissive material; the dawnglass heads stay glossy and never glow.
 - [ ] The `run` clip has the longest stride in the roster at 3.5 m/s with foot slide under 8%, and `cast_ult` ends mid-stride so it blends straight into `run`.

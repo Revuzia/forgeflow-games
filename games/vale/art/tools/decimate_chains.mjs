@@ -9,6 +9,7 @@
 // slow one-shot such as a 7 s recall holds under linear interpolation over 2 frames too).
 //
 // --orm-q N also re-encodes the occlusion/roughness/metal texture (low-frequency data, WebP) at quality N.
+// --normal-q N likewise the normal map (Ulkro, closing ULK-M2: the skirt and tail chains pushed the GLB past budget).
 //
 //   node art/tools/decimate_chains.mjs art/out/fighters/burdam/burdam.glb [out.glb] [--every 2] [--prefix x_skirt]
 //        [--orm-q 40]
@@ -19,7 +20,7 @@ import sharp from 'sharp';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--clip'].includes(args[i - 1])));
+const files = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--every', '--prefix', '--orm-q', '--normal-q', '--clip'].includes(args[i - 1])));
 if (!files.length) {
   console.error('usage: node art/tools/decimate_chains.mjs in.glb [out.glb] [--every 2] [--prefix x_]');
   process.exit(2);
@@ -88,6 +89,19 @@ if (ormQ) {
       t.setImage(new Uint8Array(img));
       console.log(`[decimate] ${t.getName()}: webp q${ormQ} ${(b0 / 1024).toFixed(1)} -> ${(img.byteLength / 1024).toFixed(1)} KiB`);
     }
+  }
+}
+const normalQ = opt('--normal-q', null);
+if (normalQ) {
+  const seen = new Set();
+  for (const m of root.listMaterials()) {
+    const t = m.getNormalTexture();
+    if (!t || seen.has(t) || t.getMimeType() !== 'image/webp') continue;
+    seen.add(t);
+    const b0 = t.getImage().byteLength;
+    const img = await sharp(Buffer.from(t.getImage())).webp({ quality: Number(normalQ) }).toBuffer();
+    t.setImage(new Uint8Array(img));
+    console.log(`[decimate] ${t.getName()}: webp q${normalQ} ${(b0 / 1024).toFixed(1)} -> ${(img.byteLength / 1024).toFixed(1)} KiB`);
   }
 }
 for (const a of root.listAccessors()) {           // drop the accessors nothing references any more

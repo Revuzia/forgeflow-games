@@ -967,7 +967,7 @@ def sculpts(lanterns: bool = False) -> list:
             part(f"pot_rim_{side}", rim, "rim", hang, 300, 0.6)
         # lampresin: amber, glossy, never emissive (the windows are the only emissive pixels at rest)
         part(f"resin_{side}", resin, "lampresin", hang, 100, 0.8)
-        part(f"window_{side}", glass, "accent", hang, 220 if lanterns else 360, 0.6)
+        part(f"window_{side}", glass, "accent", hang, 220 if lanterns else 300, 0.6)
     return out
 
 
@@ -1046,7 +1046,8 @@ def model(ctx) -> list:
 # head's crisp cracks) costs more bytes at the default q80 than the 1172 KiB budget leaves ──
 from common import export as _export  # noqa: E402
 
-Q_BASE = 63                          # (polish 10-28: the paler, less saturated painting compresses ~35 KB larger: q66 -> 1171 KiB)
+Q_BASE = 60                          # (closing polish: the eye glaze and mouth rings put q63 at 1188 KiB; q60)
+# (polish 10-28: the paler, less saturated painting compresses ~35 KB larger: q66 -> 1171 KiB)
 _optimize0 = _export.optimize
 
 
@@ -1963,7 +1964,7 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
                 cx, cz = EYES[sx][0], EYES[sx][1]
                 near = np.abs(p[ev, 0] - cx) < 0.06
                 low = np.where(near, np.clip((cz - p[ev, 2]) / 0.012, 0.0, 1.0), low)
-            c[ev] = _hex("#4E3828")[None, :] * ((1.0 - 0.32 * dep) * (1.0 + 0.30 * low))[:, None]
+            c[ev] = _hex("#5A4130")[None, :] * ((1.0 - 0.28 * dep) * (1.0 + 0.30 * low))[:, None]
             out[m] = c
     # procedural props
     for nm, kind in PROCEDURAL.items():
@@ -2504,7 +2505,7 @@ def clip_overrides(ctx) -> dict:
         d = P(chest=(1.6 * b, 0, 0), spine=(0.7 * b, 0, 0.9 * w), neck=(-0.8 * b, 0, 0), head=(-1.0 * b, 2.6 * w, 0),
               hips=(0, 1.2 * w, -1.0 * w), shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.0 * b),
               upper_arm_L=(1.5 * w, 0, 0), forearm_L=(3.0 + 2.0 * b, 0, 0))
-        return carried(with_hips(anim.add(g, d), (0.012 * w, 0.0, -0.004 * (0.5 + 0.5 * b))))
+        return carried(with_hips(anim.add(g, d), (0.022 * w, 0.0, -0.006 * (0.5 + 0.5 * b))))
     out["idle"] = anim.Clip("idle", 72, True, idle_s)
 
     # RUN (the shared run cycle for the legs, torso and bob; the yoke stays on the shoulders). On this rig the
@@ -3090,7 +3091,7 @@ def _others(skel, g, gI, rest_ik, hip_h, carried=lambda b: b) -> dict:
     # slow sway with the weight rolling from foot to foot under the bar, the head turning with it)
     out["channel"] = anim.Clip("channel", 80, True, lambda t: with_hips(
         anim.add(ch, P(chest=(1.8 * osc(t, 2), 0, 2.0 * osc(t, 1)), spine=(0, 1.5 * osc(t, 1, 0.1), 2.4 * osc(t, 1)),
-                       head=(-1.5 * osc(t, 2), 4.0 * osc(t, 1, 0.2), 0))), (0.018 * osc(t, 1), 0.0, -0.004 * (0.5 + 0.5 * osc(t, 2)))))
+                       head=(-1.5 * osc(t, 2), 4.0 * osc(t, 1, 0.2), 0))), (0.028 * osc(t, 1), 0.0, -0.006 * (0.5 + 0.5 * osc(t, 2)))))
     return out
 
 

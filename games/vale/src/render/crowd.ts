@@ -344,6 +344,12 @@ export interface CrowdActor {
   crowdPose(out: { a: number; b: number; w: number }): void;
 }
 
+/** CW1 refix (perf done:7): the crowd outline LOD — the rest ink draws for at most this many units of a set, the
+ *  nearest to the camera's focus, within CROWD_OUTLINE_FAR m of it (a lane wave and its monsters stay inked; a late
+ *  multi-wave base push stops paying a hull per unit) */
+export const CROWD_OUTLINE_MAX = 16;
+export const CROWD_OUTLINE_FAR = 24;
+
 const ATTRS = ['aCrowdM0', 'aCrowdM1', 'aCrowdM2', 'aCrowdAnim', 'aCrowdStyle', 'aCrowdFlash', 'aCrowdFlashRim'] as const;
 type AttrName = (typeof ATTRS)[number];
 const SIZE: Record<AttrName, number> = { aCrowdM0: 4, aCrowdM1: 4, aCrowdM2: 4, aCrowdAnim: 4, aCrowdStyle: 4, aCrowdFlash: 3, aCrowdFlashRim: 3 };
@@ -482,6 +488,7 @@ class CrowdSet {
       const hv = this.buf.view(h.geometry);
       if (hullLod) { hv.userData.fullIndex = h.geometry.index; hv.setIndex(hullLod); }
       const o = new Mesh(hv, om);
+      hv.userData.outlineOnly = true;
       o.frustumCulled = false; o.matrixAutoUpdate = false; o.renderOrder = 1; o.name = 'crowd_outline';
       this.group.add(o);
       const fm = inkMaterial('crowd', INK.flash, { side: FrontSide, blend: 'premul', depthWrite: false, offset: [-1, -2], uniforms: { ...bk, ...flashU() } });
@@ -495,6 +502,9 @@ class CrowdSet {
     }
   }
 
+  /** the outline LOD's ranking (pooled: no garbage per frame) */
+  private readonly ranked: { a: CrowdActor | null; d2: number }[] = [];
+
   begin(): void { this.buf.count = 0; this.colorSet = false; this.units.length = 0; this.flashing.length = 0; }
 
   push(a: CrowdActor): void {
@@ -507,15 +517,34 @@ class CrowdSet {
     (a.flashState.k > 0.002 ? this.flashing : this.units).push(a);
   }
 
-  end(): void {
+  end(fx = 0, fz = 0): void {
     // perf PERF-m5: the flashing units take the first slots and the victim flash draws only those (it drew every unit
     // of the set, its triangles counted for each, while any one of them flashed)
     const b = this.buf, nf = this.flashing.length, n = nf + this.units.length;
     if (n > b.cap) { let c = b.cap; while (c < n) c *= 2; b.grow(c); }
     for (const a of this.flashing) writeInstance(b, b.count++, a, this.bake, a.restOutline.px, true);
-    for (const a of this.units) writeInstance(b, b.count++, a, this.bake, a.restOutline.px, false);
+    // CW1 refix (perf done:7, crowd outline LOD): the rest ink draws for the CROWD_OUTLINE_MAX outlined units of the set
+    // nearest the camera's focus within CROWD_OUTLINE_FAR m, and its hull draws only those slots (a late base push of
+    // three waves and their monsters peaked at 539k triangles, the collapsed hulls of the rest counted with them); the
+    // rest stand inked by the scene's grade alone
+    const ranked = this.ranked, nu = this.units.length;
+    while (ranked.length < nu) ranked.push({ a: null, d2: 0 });
+    const far2 = CROWD_OUTLINE_FAR * CROWD_OUTLINE_FAR;
+    for (let i = 0; i < nu; i++) {
+      const a = this.units[i], p = a.root.position, d2 = (p.x - fx) * (p.x - fx) + (p.z - fz) * (p.z - fz);
+      ranked[i].a = a; ranked[i].d2 = a.restOutline.px > 0 && d2 <= far2 ? d2 : Infinity;
+    }
+    for (let i = nu; i < ranked.length; i++) { ranked[i].a = null; ranked[i].d2 = Infinity; }
+    ranked.sort((x, y) => (x.a ? 0 : 1) - (y.a ? 0 : 1) || x.d2 - y.d2);
+    let kept = 0;
+    for (let i = 0; i < nu; i++) {
+      const r = ranked[i], a = r.a!;
+      const ink = kept < CROWD_OUTLINE_MAX && r.d2 !== Infinity;
+      if (ink) kept++;
+      writeInstance(b, b.count++, a, this.bake, ink ? a.restOutline.px : 0, false);
+    }
     b.commit();
-    for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf;
+    for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf; else if (g.userData.outlineOnly) g.instanceCount = nf + kept;
     this.group.visible = b.count > 0;
     for (const f of this.flashMeshes) f.visible = nf > 0;
   }
@@ -599,7 +628,8 @@ export class CrowdLayer {
     s.push(a);
   }
 
-  end(): void { for (const s of this.sets.values()) s.end(); }
+  /** fx, fz: the camera's focus on the ground (the outline LOD ranks by distance from it) */
+  end(fx = 0, fz = 0): void { for (const s of this.sets.values()) s.end(fx, fz); }
 
   /** units drawn this frame (harness) */
   get instances(): number { let n = 0; for (const s of this.sets.values()) n += s.buf.count; return n; }

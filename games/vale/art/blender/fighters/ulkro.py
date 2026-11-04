@@ -74,6 +74,45 @@ SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
 # low back rims put a grazing white sheen over the dark wraps and boots at full strength
 # (final parity client F3: fill 0.88 -> 0.94, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45}
+# PER-SKIN CARDS (closing review ULK-M1; schema: art/blender/portraits.py header). Each card is its own moment, the crest
+# of darts fanning to screen-right (the camera on her right side): base: the Hurl's draw on the high rim at dusk, low
+# stride, the thrower drawn back, the laid dart's dawnglass catching the low sun as the key; Highrim: Bound's leap
+# off the strata cliff at noon, side-lit hard from high on her left; Long Evening: the victory turn with the lacquer
+# fan, backlit by the festival lanterns (a warm rim pair, a soft lantern focal on the face). Portraits derive from
+# each card's frame and light (closer lens).
+CARDS = {
+    "ulkro": {
+        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": -32.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
+                   "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
+                   "focal": [{"at": "x_dart_tip", "az": 200.0, "el": 15.0, "dist": 0.6, "color": "#FFE6C0",
+                              "power": 55.0, "size": 0.25},
+                             {"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#FFDCB8", "power": 26.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": -30.0, "lens": 70.0},
+        "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496"},
+    },
+    "ulkro_highrim": {
+        "splash": {"clip": "cast_a2", "t": 0.45, "yaw": -24.0, "pitch": -6.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+                   "key_az": 120.0, "key_el": 58.0, "key_color": "#FFF6E6", "sun": 3.6, "rim_cool": 1.5,
+                   "rim_warm": 0.5, "bounce": 0.5, "bounce_color": "#E6D8BE", "accent": 1.4, "exposure": -0.6,
+                   "focal": [{"at": "head", "az": 150.0, "el": 25.0, "dist": 0.8, "color": "#FFF2E0", "power": 24.0,
+                              "size": 0.3}]},
+        "portrait": {"yaw": -22.0, "lens": 70.0},
+        "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85},
+    },
+    "ulkro_long_evening": {
+        "splash": {"clip": "victory", "t": 0.55, "yaw": -38.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
+                   "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.5, "exposure": -0.55,
+                   "focal": [{"at": "head", "az": 200.0, "el": 0.0, "dist": 0.8, "color": "#FFC890", "power": 30.0,
+                              "size": 0.35},
+                             {"at": "x_quiver", "az": 20.0, "el": 20.0, "dist": 0.9, "color": "#FFB070",
+                              "power": 40.0, "size": 0.4}]},
+        "portrait": {"yaw": -34.0, "lens": 70.0},
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -487,7 +526,8 @@ def sculpts() -> list:
     # head as the brief asks; painted, not projected)
     tail = Sculpt("hood_tail")
     tail.add(_Ribbon(TAIL_PTS, TAIL_W, TAIL_T, TAIL_TWIST), k=0.0)
-    part("hood_tail", tail, "sandstone", "bone:head", 420, vs=0.55)
+    # closing ULK-M2: the tail rides its own 2-bone chain off the head (x_tail_1-2, TAIL_CHAIN): it lags and flicks
+    part("hood_tail", tail, "sandstone", "tail", 420, vs=0.55)
 
     # HEAD + FACE WRAP (rigid on the head) and the carved eye band
     head = Sculpt("head")
@@ -539,8 +579,11 @@ def sculpts() -> list:
     sash.add(_Band((0.0, 0.0, 1.105), 0.158, 0.120, 0.012, 0.050, rr=0.005, tilt=8.0)
              .displaced(_sash_wrap, 0.003), k=0.0)
     sash.add(_Band((0.0, 0.0, 1.088), 0.170, 0.132, 0.006, 0.016, rr=0.003, tilt=8.0), k=0.004)        # the belt
-    sash.add(RoundBox((0.098, -0.142, 0.995), (0.017, 0.005, 0.072), 0.004, axes=sdf.rot_y(-8)), k=0.008)   # tongue end
     part("sash", sash, "leather", "auto", 760)
+    # the tongue end (closing ULK-M2): its own part on the skirt's chains, so it swings with the front panel
+    tongue = Sculpt("sash_tongue")
+    tongue.add(RoundBox((0.098, -0.146, 0.995), (0.017, 0.005, 0.072), 0.004, axes=sdf.rot_y(-8)), k=0.0)
+    part("sash_tongue", tongue, "leather", "skirt", 120, vs=0.6)
     bk = Sculpt("buckle")
     bk.add(RoundBox((0.035, -0.146, 1.071), (0.030, 0.007, 0.026), 0.005), k=0.0)
     bk.sub(RoundBox((0.035, -0.152, 1.071), (0.018, 0.008, 0.014), 0.003), k=0.002)                       # its window
@@ -1059,12 +1102,209 @@ def rig_extras(ctx) -> None:
         rig.add_socket(info, nm, "chest", tuple(crest_pivot(i)), tuple(crest_dart(i)[1] * 0.10), z_hint=tuple(Q_N))
         arm.data.bones[nm].use_deform = True
         info.lengths[nm] = arm.data.bones[nm].length
+    # closing ULK-M2: the skirt on four 2-bone chains from the hips and the hood's tail on a 2-bone chain off the head
+    for nm, (parent, pts) in SKIRT_CHAINS.items():
+        ctx.chains[nm] = rig.add_chain(info, nm, parent, [V(tuple(q)) for q in pts])
+    ctx.chains["tail"] = rig.add_chain(info, "tail", "head", [V(tuple(q)) for q in TAIL_CHAIN], z_hint=(0.0, 0.0, 1.0))
+
+
+# ── secondary motion (closing review ULK-M2): baked spring chains (anim.secondary_motion; no runtime cloth). The
+# knee-length skirt was skinned to the thighs, so in the run its front lifted as one board and the dark thigh showed
+# over it; the hood's tail never lagged. Now the skirt hangs as four panels (front, back, her left, her right) on
+# 2-bone chains from the hips: the front pushed out by the leading knee, the back kicked out by the trailing one and
+# the stride's spread, each side swung by its own knee, all springs (the hem lags 2-4 frames and overshoots on the
+# run's contacts, Bound's landing, the dash and the fall); a no-lag floor keeps the front and back panels clear of the
+# trousers. The tail streams off the head on a spring driven by the head's own bob (inertia) and pitch.
+SKIRT_CHAINS = {     # name: (parent, joints (rest, m)); + rotation about each bone's X = the hem forward
+    "skirt_f": ("hips", ((-0.005, -0.118, 1.06), (-0.005, -0.150, 0.84), (-0.005, -0.186, 0.60))),
+    "skirt_b": ("hips", ((0.0, 0.118, 1.06), (0.0, 0.150, 0.84), (0.0, 0.188, 0.60))),
+    "skirt_l": ("hips", ((0.155, 0.0, 1.06), (0.222, 0.004, 0.84), (0.285, 0.008, 0.61))),
+    "skirt_r": ("hips", ((-0.155, 0.0, 1.06), (-0.222, 0.004, 0.84), (-0.285, 0.008, 0.61))),
+}
+SKIRT_AZ = {"skirt_f": 0.0, "skirt_l": 90.0, "skirt_b": 180.0, "skirt_r": -90.0}   # bearing (deg, 0 front, + her left)
+SKIRT_K, SKIRT_A0 = 0.50, 4.0          # the front / back panel's push: share of the knee's swing past A0 deg
+SKIRT_SIDE_K = 0.35                    # the side panels: share of their own knee's swing
+SKIRT_SPREAD_K = 0.28                  # the back panel: share of the stride's spread (|thigh L - thigh R|, deg)
+SKIRT_CLEAR, SKIRT_THIGH_R = 0.02, 0.10    # the floor: the trouser's surface (thigh axis + R) stays CLEAR of the panel
+TAIL_CHAIN = (TAIL_PTS[0], TAIL_PTS[2], TAIL_PTS[5])
+SKIRT_LIE = {"skirt_b": (18.0, 6.0), "skirt_l": (12.0, 4.0), "skirt_r": (12.0, 4.0)}   # deg per bone, lying in death
+
+
+def _knee_angles(skel, pose) -> dict:
+    """each thigh's swing in the hips' rest frame (deg, + = the knee ahead of the hip), the hip and knee points"""
+    M = skel.fk(pose)
+    T = skel.rest["hips"] @ M["hips"].inverted()
+    out = {}
+    for s_ in "LR":
+        h = T @ M[f"thigh.{s_}"].translation
+        k = T @ M[f"shin.{s_}"].translation
+        d = k - h
+        out[s_] = (math.degrees(math.atan2(-d.y, max(1e-6, -d.z))), h, k)
+    return out
+
+
+def _skirt_floor(skel, nm):
+    """the least swing (deg, signed like the chain) that keeps the panel's line from its root to its hem in front of
+    (skirt_f) / behind (skirt_b) both thighs' surfaces at the panel's heights"""
+    pts = SKIRT_CHAINS[nm][1]
+    R, Hm = V(pts[0]), V(pts[-1])
+    sgn = -1.0 if nm == "skirt_f" else 1.0
+    rest = math.atan2(sgn * (Hm.y - R.y), R.z - Hm.z)
+
+    def f(pose):
+        need = -90.0
+        for _, h, k in _knee_angles(skel, pose).values():
+            for t in (0.35, 0.55, 0.75, 0.9, 1.0):
+                Pp = h.lerp(k, t)
+                if not (Hm.z - 0.04 < Pp.z < R.z - 0.02):
+                    continue
+                out = sgn * (Pp.y - R.y) + SKIRT_THIGH_R + SKIRT_CLEAR
+                need = max(need, math.degrees(math.atan2(out, R.z - Pp.z) - rest))
+        return need if nm == "skirt_f" else -need
+    return f
+
+
+def chain_config(ctx) -> list:
+    skel = anim.Skeleton(ctx.info.armature)
+
+    def push(nm):
+        def f(p):
+            sl = p.get("skirt_lift", (0.0, 0.0, 0.0))
+            return push0(p) + (sl[0] if nm == "skirt_b" else sl[1] if nm in ("skirt_l", "skirt_r") else 0.0)
+
+        def push0(p):
+            a = _knee_angles(skel, p)
+            if nm == "skirt_f":
+                return SKIRT_K * max(0.0, max(a["L"][0], a["R"][0]) - SKIRT_A0)
+            if nm == "skirt_b":
+                return (-SKIRT_K * max(0.0, max(-a["L"][0], -a["R"][0]) - SKIRT_A0)
+                        - SKIRT_SPREAD_K * abs(a["L"][0] - a["R"][0]))
+            return SKIRT_SIDE_K * a["L" if nm == "skirt_l" else "R"][0]
+        return f
+
+    def tail_drive(p):
+        # the head pitched down lifts the tail's free end (it trails the motion), plus the clip's own beat
+        hd = sum(p.get(b, (0.0, 0.0, 0.0))[0] for b in ("spine", "chest", "neck", "head"))
+        return 0.35 * hd + p.get("tail_drive", 0.0)
+    out = []
+    for nm, bones in ctx.chains.items():
+        if nm == "tail":
+            out.append(anim.ChainCfg(list(bones), gravity=0.0, stiffness=110.0, damping=7.0, inertia=1.1,
+                                     drive=tail_drive, limit=(-38.0, 38.0), floor=0.03))
+            continue
+        lim = {"skirt_f": (-6.0, 42.0), "skirt_b": (-42.0, 24.0)}.get(nm, (-26.0, 28.0))
+        c = anim.ChainCfg(list(bones), gravity=0.7, stiffness=120.0, damping=10.0, inertia=0.6, drive=push(nm),
+                          limit=lim, floor=0.05)        # the hem felt reaches a few cm past the bone line
+        c._ulkro_name = nm
+        if nm in ("skirt_f", "skirt_b"):
+            c._ulkro_floor = _skirt_floor(skel, nm)
+            c._ulkro_front = nm == "skirt_f"
+        out.append(c)
+    return out
+
+
+def _install_chain_floor() -> None:
+    """the shared spring pass, then the front / back panels' no-lag floor (a knee driven up in two frames must not
+    pass through the skirt while the spring catches up)"""
+    if getattr(anim.secondary_motion, "_ulkro", False):
+        return
+    orig = anim.secondary_motion
+
+    def secondary_motion(skel, poses, cfgs, loop):
+        out = orig(skel, poses, cfgs, loop)
+        for cfg in cfgs or []:              # the skirt lying under her in death (skirt_lift: the death keys)
+            nm = getattr(cfg, "_ulkro_name", "")
+            if nm not in ("skirt_b", "skirt_l", "skirt_r"):
+                continue
+            tgt = SKIRT_LIE[nm]
+            for f, p in enumerate(out):
+                sl = poses[f].get("skirt_lift", (0.0, 0.0, 0.0))
+                w = min(1.0, max(0.0, (sl[0] if nm == "skirt_b" else sl[1]) / (75.0 if nm == "skirt_b" else 40.0)))
+                if w <= 0.0:
+                    continue
+                for j, b in enumerate(cfg.bones):
+                    a = p.get(b, (0.0, 0.0, 0.0))
+                    p[b] = (a[0] + (tgt[j] - a[0]) * w, a[1], a[2])
+        for cfg in cfgs or []:
+            fl = getattr(cfg, "_ulkro_floor", None)
+            if fl is None:
+                continue
+            b = cfg.bones[0]
+            for f, p in enumerate(out):
+                a = p.get(b, (0.0, 0.0, 0.0))
+                m = fl(poses[f])
+                if (cfg._ulkro_front and m > a[0]) or (not cfg._ulkro_front and m < a[0]):
+                    p[b] = (max(cfg.limit[0] - 10.0, min(cfg.limit[1] + 10.0, m)), a[1], a[2])
+                    if cfg.floor is not None:              # the ground still wins (the back panel under her in death)
+                        anim._keep_above_floor(skel, p, cfg)
+            if loop:
+                out[-1][b] = out[0][b]
+        return out
+    secondary_motion._ulkro = True
+    anim.secondary_motion = secondary_motion
+
+
+_install_chain_floor()
 
 
 # ── analytic weights (the skirt) ──────────────────────────────────────────────────────────────────────────
 def _ss(a, b, x):
     t = np.clip((x - a) / (b - a), 0.0, 1.0)
     return t * t * (3 - 2 * t)
+
+
+def _chain_w(bones, s_, root):
+    """weights along a chain by its parameter s_ (0 at the root, len(bones) at the free end): the first 35 % of the
+    first bone shared with `root` (the attachment stays glued), then blended between the bone centres"""
+    n = len(bones)
+    s_ = np.clip(s_, 0.0, n)
+    out = {root: np.where(s_ < 0.35, 1.0 - s_ / 0.35, 0.0)}
+    for b in bones:
+        out[b] = np.zeros_like(s_)
+    out[bones[0]] = out[bones[0]] + np.where(s_ < 0.35, s_ / 0.35, 0.0)
+    x = s_ - 0.5
+    k0 = np.floor(x).astype(int)
+    f = x - k0
+    deep = s_ >= 0.35
+    for i, b in enumerate(bones):
+        wa = np.where(np.clip(k0, 0, n - 1) == i, 1.0 - f, 0.0)
+        wb = np.where(np.clip(k0 + 1, 0, n - 1) == i, f, 0.0)
+        out[b] = out[b] + np.where(deep, wa + wb, 0.0)
+    return out
+
+
+def _skirt_chain_weights(co):
+    """closing ULK-M2: the skirt (and the sash's tongue) on its four chains, each vertex blended between its two
+    nearest panels by bearing (cosine weights); above the chains' roots the hips"""
+    x, y, z = co[:, 0] + 0.003, co[:, 1], co[:, 2]
+    phi = np.degrees(np.arctan2(x, -y))
+    ks = {nm: np.maximum(0.0, np.cos(np.radians(phi - az))) for nm, az in SKIRT_AZ.items()}
+    tot = np.maximum(sum(ks.values()), 1e-6)
+    W = {}
+    for nm, k in ks.items():
+        pts = SKIRT_CHAINS[nm][1]
+        bones = [f"x_{nm}_{i + 1}" for i in range(len(pts) - 1)]
+        s_ = (pts[0][2] - z) / (pts[0][2] - pts[-1][2]) * len(bones)
+        for b_, w in _chain_w(bones, s_, "hips").items():
+            W[b_] = W.get(b_, 0.0) + w * k / tot
+    return W
+
+
+def _tail_weights(co):
+    """closing ULK-M2: the hood's tail on x_tail_1-2 by its arc parameter (the projection onto the chain's polyline),
+    its root glued to the head"""
+    J = [np.asarray(q, float) for q in TAIL_CHAIN]
+    L = [float(np.linalg.norm(J[i + 1] - J[i])) for i in range(2)]
+    best_d = np.full(len(co), 1e9)
+    s_ = np.zeros(len(co))
+    for i in range(2):
+        d = (J[i + 1] - J[i]) / L[i]
+        t = np.clip((co - J[i]) @ d, 0.0, L[i])
+        dist = np.linalg.norm(co - (J[i] + np.outer(t, d)), axis=1)
+        m = dist < best_d
+        best_d[m] = dist[m]
+        s_[m] = i + t[m] / L[i]
+    return _chain_w(["x_tail_1", "x_tail_2"], s_ * 1.0, "head")
 
 
 def _skirt_weights(co):
@@ -1124,7 +1364,10 @@ def _install_bind() -> None:
 
     def bind_part(ctx, part, obj, body_low=None):
         if part.bind == "skirt":
-            _assign(obj, ctx.info.armature, _skirt_weights)
+            _assign(obj, ctx.info.armature, _skirt_chain_weights)
+            return {}
+        if part.bind == "tail":
+            _assign(obj, ctx.info.armature, _tail_weights)
             return {}
         if part.bind == "crest":
             _assign(obj, ctx.info.armature, _crest_weights)
@@ -1150,7 +1393,7 @@ TONE = {
     # the target (no off-palette smears), nothing in the marigold band over 40 %
     "hood": ("#826B4F", 0.75, 0.5), "cowl": ("#7F684D", 0.8, 0.5),
     "head": ("#6E6350", 0.85, 0.8), "eyeband": ("#4A382B", 0.85, 0.65),
-    "torso": ("#5E5245", 1.0, 0.6), "straps": ("#3F2D22", 0.9, 0.55), "sash": ("#563A2B", 0.9, 0.55),
+    "torso": ("#5E5245", 1.0, 0.6), "straps": ("#3F2D22", 0.9, 0.55), "sash": ("#563A2B", 0.9, 0.55), "sash_tongue": ("#563A2B", 0.9, 0.55),
     "buckle": ("#4A4540", 0.8, 0.8),
     # FIX PASS 2: the plates the concept's cool pale stone (#DBD6CB / #C3B9AD, hue ~40 at 7-11 %), no longer the warm
     # cream of the linen quiver beside them; the lower tier a step darker (it sits in the top tier's shade)
@@ -1161,7 +1404,7 @@ TONE = {
 }
 # side-facing texels of these parts streak (neighbours along Y take one plate pixel): blended into the part's colour
 # with painted breakup; up-facing texels likewise (the hood's crown, the plates' tops, the quiver's mouth)
-SIDE_PARTS = ("hood", "cowl", "torso", "skirt", "sleeves", "quiver", "sash", "plate_R1", "plate_L1", "plate_R2",
+SIDE_PARTS = ("hood", "cowl", "torso", "skirt", "sleeves", "quiver", "sash", "sash_tongue", "plate_R1", "plate_L1", "plate_R2",
               "plate_L2", "head", "bracers", "straps", "quiver_bands", "buckle")
 MAX_LIN = 0.62          # no texel lighter than ~L* 82 in the albedo (the brief's L* 86 cap after the top light)
 
@@ -2130,8 +2373,8 @@ def gen_death(skel) -> anim.Clip:
     sit["ik"].update(lh((0.22, 0.06, -0.34)))
     down = anim.merge(anim.arms_relaxed(), anim.P(hips=DEATH_HIPS, spine=(6, 8, 0), chest=(6, 8, 0), neck=(10, 0, 0),
                                                   head=(8, 26, 0), thigh_L=(14, 0, 8), shin_L=(-26, 0, 0),
-                                                  foot_L=(20, 0, 0), thigh_R=(0, 0, -8), shin_R=(-8, 0, 0),
-                                                  foot_R=(30, 0, 0), upper_arm_L=(-10, 0, 10), forearm_L=(40, 0, 0)))
+                                                  foot_L=(20, 0, 0), upper_arm_L=(-10, 0, 10), forearm_L=(40, 0, 0),
+                                                  **DEATH_LEG_R))
     down["hips_loc"] = DEATH_LOC(hip_h)
     down["ik"] = {"hand.R": HT(pos=DEATH_HAND_R, pole=(-0.6, 0.0, 1.0)),
                   "aim.R": AimRoll(DEATH_AIM_R, 1.0, (0.0, 0.0, 1.0))}
@@ -2148,9 +2391,85 @@ def gen_death(skel) -> anim.Clip:
     for i, s_ in enumerate(CREST_SPILL):
         rest[f"x_crest{i}"] = tuple(s_)
     N = 45
+    # the skirt lying under her (closing ULK-M2): its back and side panels lifted toward her front (= up, on her back)
+    # against the spring's gravity, so the felt lies along the ground under the legs instead of through it
+    def lift(p, b_, s_):
+        p = dict(p)
+        p["skirt_lift"] = (b_, s_, 0.0)
+        return p
+    g, recoil, stagger = lift(g, 0.0, 0.0), lift(recoil, 0.0, 0.0), lift(stagger, 0.0, 0.0)
+    sit, down, bounce, rest = lift(sit, 20.0, 10.0), lift(down, 75.0, 40.0), lift(bounce, 75.0, 40.0), lift(rest, 75.0, 40.0)
     keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.28, stagger, "inout"), (0.46, sit, "in"),
             (0.66, down, "in"), (0.74, bounce, "out"), (0.86, rest, "inout"), (1.0, rest, "linear")]
-    return clip("death", N, keys)
+    fn = anim.keyed(keys)
+
+    def sample(t):
+        return floor_lift(skel, fn(t))
+    return anim.Clip("death", N, False, sample)
+
+
+# closing ULK-M2: the held death sank shin.R / foot.R 0.20 m into the floor (the right leg hung straight down off the
+# rolled pelvis); the right knee now bends up with the sole on the ground (thigh flexed, shin folded back)
+DEATH_LEG_R = dict(thigh_R=(46, 0, -6), shin_R=(-72, 0, 0), foot_R=(18, 0, 0))
+FLOOR_PTS = None
+
+
+def _floor_probes(skel) -> list:
+    """(bone, rest point) probes for floor_lift: a subsample of the bound body's vertices on the legs, the hands and
+    the thrower (each carried rigidly by its dominant bone), else the soles' rest-floor points and the knuckles"""
+    keep = ("foot.", "toe.", "shin.", "hand.", "prop.R", "x_dart")
+    pts = []
+    for o in bpy.data.objects:
+        if o.type != "MESH" or not o.vertex_groups or o.name.endswith("_high"):
+            continue
+        names = [g.name for g in o.vertex_groups]
+        if not any(n.startswith("foot.") for n in names):
+            continue
+        mw = o.matrix_world
+        for i, v in enumerate(o.data.vertices):
+            if not v.groups or i % 7:
+                continue
+            g = max(v.groups, key=lambda x: x.weight)
+            nm = names[g.group]
+            if nm.startswith(keep) and nm in skel.rest:
+                pts.append((nm, mw @ v.co))
+    if len(pts) > 60:
+        scene.log(f"ulkro floor probes: {len(pts)} body vertices")
+        return pts
+    pts = []
+    # no bound body in this process: conservative rings round the leg, hand and thrower bones (rest frame)
+    rings = {"shin": 0.065, "foot": 0.055, "toe": 0.035, "hand": 0.05}
+    for s_ in "LR":
+        for b, r in rings.items():
+            nm = f"{b}.{s_}"
+            R_ = skel.rest[nm]
+            for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+                for k in range(8):
+                    a = 2 * math.pi * k / 8
+                    pts.append((nm, R_ @ V((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
+    for t in np.linspace(THROWER_S[0], DART_S[2], 12):
+        pts.append(("prop.R", V(tuple(wpt(float(t))))))
+    scene.log(f"ulkro floor probes: {len(pts)} bone rings (no bound body found)")
+    return pts
+
+
+def floor_lift(skel, p: dict, floor: float = 0.004) -> dict:
+    """closing ULK-M2 (floor gate, art/tools/clip_floor.py): lift the pose's hips until the legs, the hands and the
+    thrower stay on or above the floor (probes: _floor_probes, carried by their bones' pose). The held keys are posed
+    on the floor, so the lift acts only in the fall's blends and the body never floats in a hold"""
+    global FLOOR_PTS
+    if FLOOR_PTS is None:
+        FLOOR_PTS = [(b, skel.rest[b].inverted() @ q) for b, q in _floor_probes(skel)]
+    # a foot still partly on its IK plant (the sit -> lying blend) rises by less than the hips: iterate
+    for _ in range(8):
+        M = skel.fk(anim.resolve(skel, p))
+        lo = min((M[b] @ q).z for b, q in FLOOR_PTS)
+        if lo >= floor - 0.002:
+            return p
+        p = dict(p)
+        h = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo) * 1.5)
+    return p
 
 
 DEATH_HIPS = (-80.0, 0.0, 22.0)          # on her back, rolled toward her left side about the spine
@@ -2176,10 +2495,10 @@ def crest_slide(i, t):
 
 
 def DEATH_LOC(hip_h):
-    return (0.0, 0.18, -hip_h + 0.17)
+    return (0.0, 0.18, -hip_h + 0.210)       # closing ULK-M2: the shoulders and the skirt under her rest ON the floor (were 2.2 / 6 cm under)
 
 
-DEATH_HAND_R = (-0.62, 0.30, 0.06)
+DEATH_HAND_R = (-0.62, 0.30, 0.115)     # closing ULK-M2: the flung thrower lies ON the floor (was 5 cm under)
 DEATH_AIM_R = (0.25, -0.97, 0.0)
 
 
