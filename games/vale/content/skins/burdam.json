@@ -31,7 +31,7 @@
     "splash": "assets/fighters/burdam/burdam_almanac_splash.png",
     "vfxTint": "#4E4466",
     "vfx": {
-      "signature": "#BA1028",
+      "signature": "#B30300",
       "secondary": "#F0E2BE"
     },
     "desc": "Pauldrons printed like ruled pages, day-marks down the cleaver's back and a rigid almanac board hung at his belt.",

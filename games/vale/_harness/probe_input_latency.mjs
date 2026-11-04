@@ -253,7 +253,7 @@ try {
       for (let i = b + 1; i < fr.length; i++) {
         const f = fr[i];
         frames++;
-        if (marker === null && f.marks > base.marks) marker = { ms: f.now - ev.t, frames };
+        if (marker === null && (f.marks > base.marks || f.mm > base.mm)) marker = { ms: f.now - ev.t, frames }; // mm: a windup-move's move ring can land the frame the attack ring expires
         const moved = Math.hypot(f.x - base.x, f.z - base.z) > 0.01;
         const turned = Math.abs(f.rot - base.rot) > 0.5 * Math.PI / 180;
         const clip = f.key !== base.key;
