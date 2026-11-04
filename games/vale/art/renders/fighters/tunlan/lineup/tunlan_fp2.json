@@ -1,0 +1,651 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "tunlan": {
+      "glb": "art/out/fighters/tunlan/tunlan.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 70.9,
+            "mid": 60.4,
+            "bottom": 32.3
+          },
+          "accentPct": 2.02,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.02
+        },
+        "90": {
+          "heightPx": 149,
+          "valueBands": {
+            "top": 69.1,
+            "mid": 55.4,
+            "bottom": 24.1
+          },
+          "accentPct": 1.5,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.5
+        },
+        "180": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 69.1,
+            "mid": 55.2,
+            "bottom": 20.7
+          },
+          "accentPct": 0.9,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.9
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 70.3,
+            "mid": 58.4,
+            "bottom": 21.7
+          },
+          "accentPct": 1.62,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.62
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.02,
+      "accentOk": false
+    },
+    "tunlan_noon_fair": {
+      "glb": "art/out/fighters/tunlan/tunlan_noon_fair.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 70.4,
+            "mid": 61.7,
+            "bottom": 32.2
+          },
+          "accentPct": 2.01,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.01
+        },
+        "90": {
+          "heightPx": 149,
+          "valueBands": {
+            "top": 68.3,
+            "mid": 57.1,
+            "bottom": 23.9
+          },
+          "accentPct": 1.5,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.5
+        },
+        "180": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 68.0,
+            "mid": 56.9,
+            "bottom": 20.2
+          },
+          "accentPct": 0.9,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.9
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 69.5,
+            "mid": 60.0,
+            "bottom": 21.4
+          },
+          "accentPct": 1.62,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.62
+        }
+      },
+      "clipsFrom": "tunlan",
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.01,
+      "accentOk": false
+    },
+    "tunlan_lamplit": {
+      "glb": "art/out/fighters/tunlan/tunlan_lamplit.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 69.0,
+            "mid": 58.4,
+            "bottom": 30.7
+          },
+          "accentPct": 2.02,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.02
+        },
+        "90": {
+          "heightPx": 149,
+          "valueBands": {
+            "top": 67.3,
+            "mid": 53.3,
+            "bottom": 21.5
+          },
+          "accentPct": 1.5,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.5
+        },
+        "180": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 67.2,
+            "mid": 52.8,
+            "bottom": 18.3
+          },
+          "accentPct": 0.9,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.9
+        },
+        "270": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 68.2,
+            "mid": 56.1,
+            "bottom": 19.1
+          },
+          "accentPct": 1.62,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.62
+        }
+      },
+      "clipsFrom": "tunlan",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.02,
+      "accentOk": false
+    },
+    "dunsom": {
+      "glb": "art/out/fighters/dunsom/dunsom.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 140,
+          "valueBands": {
+            "top": 71.9,
+            "mid": 43.3,
+            "bottom": 29.0
+          },
+          "accentPct": 1.57,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.57
+        },
+        "90": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 75.5,
+            "mid": 46.4,
+            "bottom": 36.3
+          },
+          "accentPct": 2.05,
+          "accentTopHalfShare": 0.978,
+          "accentTopHalfPctOfFighter": 2.0
+        },
+        "180": {
+          "heightPx": 163,
+          "valueBands": {
+            "top": 55.6,
+            "mid": 55.2,
+            "bottom": 34.6
+          },
+          "accentPct": 1.59,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.59
+        },
+        "270": {
+          "heightPx": 168,
+          "valueBands": {
+            "top": 64.4,
+            "mid": 61.2,
+            "bottom": 32.5
+          },
+          "accentPct": 1.1,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.1
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.05,
+      "accentOk": true
+    },
+    "vashil": {
+      "glb": "art/out/fighters/vashil/vashil.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 74.3,
+            "mid": 50.9,
+            "bottom": 26.2
+          },
+          "accentPct": 1.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.48
+        },
+        "90": {
+          "heightPx": 161,
+          "valueBands": {
+            "top": 75.1,
+            "mid": 49.3,
+            "bottom": 26.5
+          },
+          "accentPct": 1.49,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.49
+        },
+        "180": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 76.0,
+            "mid": 53.4,
+            "bottom": 34.1
+          },
+          "accentPct": 0.64,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.64
+        },
+        "270": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 74.0,
+            "mid": 57.8,
+            "bottom": 30.5
+          },
+          "accentPct": 1.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.48
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.49,
+      "accentOk": false
+    },
+    "nurrow": {
+      "glb": "art/out/fighters/nurrow/nurrow.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 128,
+          "valueBands": {
+            "top": 72.3,
+            "mid": 48.9,
+            "bottom": 20.4
+          },
+          "accentPct": 1.67,
+          "accentTopHalfShare": 0.991,
+          "accentTopHalfPctOfFighter": 1.66
+        },
+        "90": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 62.0,
+            "mid": 42.3,
+            "bottom": 34.8
+          },
+          "accentPct": 1.79,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.79
+        },
+        "180": {
+          "heightPx": 136,
+          "valueBands": {
+            "top": 60.8,
+            "mid": 41.2,
+            "bottom": 34.0
+          },
+          "accentPct": 1.2,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.2
+        },
+        "270": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 67.7,
+            "mid": 35.0,
+            "bottom": 16.0
+          },
+          "accentPct": 1.45,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.45
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.79,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "tunlan",
+      "b": "tunlan_noon_fair",
+      "sameFighter": true,
+      "iou64": {
+        "0": 0.996,
+        "90": 1.0,
+        "180": 0.995,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 0.997,
+        "90": 1.0,
+        "180": 0.996,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "tunlan",
+      "b": "tunlan_lamplit",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "tunlan",
+      "b": "dunsom",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.568,
+        "90": 0.632,
+        "180": 0.564,
+        "270": 0.535
+      },
+      "iou64Max": 0.632,
+      "iou64_norm": {
+        "0": 0.538,
+        "90": 0.638,
+        "180": 0.413,
+        "270": 0.437
+      },
+      "iou64NormMax": 0.638,
+      "ok": true
+    },
+    {
+      "a": "tunlan",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.577,
+        "90": 0.496,
+        "180": 0.53,
+        "270": 0.528
+      },
+      "iou64Max": 0.577,
+      "iou64_norm": {
+        "0": 0.567,
+        "90": 0.487,
+        "180": 0.495,
+        "270": 0.535
+      },
+      "iou64NormMax": 0.567,
+      "ok": true
+    },
+    {
+      "a": "tunlan",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.497,
+        "90": 0.531,
+        "180": 0.458,
+        "270": 0.455
+      },
+      "iou64Max": 0.531,
+      "iou64_norm": {
+        "0": 0.569,
+        "90": 0.512,
+        "180": 0.524,
+        "270": 0.583
+      },
+      "iou64NormMax": 0.583,
+      "ok": true
+    },
+    {
+      "a": "tunlan_noon_fair",
+      "b": "tunlan_lamplit",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.996,
+        "90": 1.0,
+        "180": 0.995,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 0.997,
+        "90": 1.0,
+        "180": 0.996,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": false
+    },
+    {
+      "a": "tunlan_noon_fair",
+      "b": "dunsom",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.571,
+        "90": 0.632,
+        "180": 0.568,
+        "270": 0.535
+      },
+      "iou64Max": 0.632,
+      "iou64_norm": {
+        "0": 0.541,
+        "90": 0.638,
+        "180": 0.416,
+        "270": 0.437
+      },
+      "iou64NormMax": 0.638,
+      "ok": true
+    },
+    {
+      "a": "tunlan_noon_fair",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.579,
+        "90": 0.496,
+        "180": 0.534,
+        "270": 0.528
+      },
+      "iou64Max": 0.579,
+      "iou64_norm": {
+        "0": 0.569,
+        "90": 0.487,
+        "180": 0.499,
+        "270": 0.535
+      },
+      "iou64NormMax": 0.569,
+      "ok": true
+    },
+    {
+      "a": "tunlan_noon_fair",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.499,
+        "90": 0.531,
+        "180": 0.461,
+        "270": 0.455
+      },
+      "iou64Max": 0.531,
+      "iou64_norm": {
+        "0": 0.571,
+        "90": 0.512,
+        "180": 0.527,
+        "270": 0.583
+      },
+      "iou64NormMax": 0.583,
+      "ok": true
+    },
+    {
+      "a": "tunlan_lamplit",
+      "b": "dunsom",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.568,
+        "90": 0.632,
+        "180": 0.564,
+        "270": 0.535
+      },
+      "iou64Max": 0.632,
+      "iou64_norm": {
+        "0": 0.538,
+        "90": 0.638,
+        "180": 0.413,
+        "270": 0.437
+      },
+      "iou64NormMax": 0.638,
+      "ok": true
+    },
+    {
+      "a": "tunlan_lamplit",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.577,
+        "90": 0.496,
+        "180": 0.53,
+        "270": 0.528
+      },
+      "iou64Max": 0.577,
+      "iou64_norm": {
+        "0": 0.567,
+        "90": 0.487,
+        "180": 0.495,
+        "270": 0.535
+      },
+      "iou64NormMax": 0.567,
+      "ok": true
+    },
+    {
+      "a": "tunlan_lamplit",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.497,
+        "90": 0.531,
+        "180": 0.458,
+        "270": 0.455
+      },
+      "iou64Max": 0.531,
+      "iou64_norm": {
+        "0": 0.569,
+        "90": 0.512,
+        "180": 0.524,
+        "270": 0.583
+      },
+      "iou64NormMax": 0.583,
+      "ok": true
+    },
+    {
+      "a": "dunsom",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.54,
+        "90": 0.525,
+        "180": 0.558,
+        "270": 0.57
+      },
+      "iou64Max": 0.57,
+      "iou64_norm": {
+        "0": 0.424,
+        "90": 0.44,
+        "180": 0.485,
+        "270": 0.474
+      },
+      "iou64NormMax": 0.485,
+      "ok": true
+    },
+    {
+      "a": "dunsom",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.509,
+        "90": 0.636,
+        "180": 0.546,
+        "270": 0.457
+      },
+      "iou64Max": 0.636,
+      "iou64_norm": {
+        "0": 0.561,
+        "90": 0.633,
+        "180": 0.481,
+        "270": 0.433
+      },
+      "iou64NormMax": 0.633,
+      "ok": true
+    },
+    {
+      "a": "vashil",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.571,
+        "90": 0.508,
+        "180": 0.567,
+        "270": 0.476
+      },
+      "iou64Max": 0.571,
+      "iou64_norm": {
+        "0": 0.506,
+        "90": 0.422,
+        "180": 0.503,
+        "270": 0.462
+      },
+      "iou64NormMax": 0.506,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": false,
+  "sheet": "art/renders/fighters/tunlan/lineup/tunlan_fp2.png",
+  "seconds": 77.6
+}
