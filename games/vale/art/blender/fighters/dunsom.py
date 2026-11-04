@@ -1485,7 +1485,7 @@ def _hat_paint(p, n):
     r = np.hypot(q[:, 0], q[:, 1])
     th = np.arctan2(q[:, 1], q[:, 0])
     top = _lin(_hex("#C8BFD2"))                     # fix pass 2: toward the brief's L* 80 felt (lineup top band 69.7)
-    band_c = _lin(_hex("#A196AE"))
+    band_c = _lin(_hex("#958AA2"))                 # CW6 refix: the outer band down with the rim (crown-rim >= 10 L*)
     under = _lin(_hex("#5E4A55"))
     up = ss(-0.15, 0.35, n[:, 2])
     zt = hat_top(r)
@@ -1498,7 +1498,9 @@ def _hat_paint(p, n):
     # broad felt blotches 16-24 cm across (+-5 % linear, ~4-6 L*) over the fine nap, and eight shallow radial
     # creases pressed into the felt every 45 degrees (a dark fold line with a lit lip on its key side)
     blot = 1 + 0.10 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
-    ramp = 0.58 + 0.56 * (1.0 - ss(0.02, 0.30, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
+    # CW6 refix (verify: crown r<0.3 vs rim 0.7-0.95 means 8.5 L*, target >= 10): the outer felt goes to x0.48 and
+    # the fall ends at r 0.27 (the band sits at 0.294), so the rim reads ~66-68 L* under a ~79 crown
+    ramp = 0.48 + 0.66 * (1.0 - ss(0.02, 0.27, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
     k8 = 2 * math.pi / 8
     da = (((th - HAT_CREASE0) / k8 + 0.5) % 1.0 - 0.5) * k8 * np.maximum(r, 1e-3)      # signed arc distance (m)
     span = ss(0.07, 0.12, r) * (1 - ss(0.27, 0.295, r))

@@ -7,10 +7,10 @@ Reads the shipped cards (art/out/fighters/<fid>/[<skin>_]splash.png / portrait.p
 (art/.cache/fighters/plates/<sid>_<kind>.png: their alpha is the figure mask). Per card:
   grain    the closing reviewers' measure: std of (grey - gaussian blur sigma 2) in 16 x 16 blocks. `fig` = blocks
            wholly inside the figure (mask > 0.98 over the block), `plate` = blocks with no figure in them; reported
-           as p50 / p90 over the blocks. GATE: figure p50 <= 2 x the plate's p50 (grain is the speckle the
+           as p50 / p90 over the blocks. Diagnostic since ruling 12 (was GATE: figure p50 <= 2 x the plate's p50; the
            reviewers saw on flat cloth; the p90 blocks hold the figure's real edges and are reported only), and the
            reviewers' half-image p90 pair (x >= 800 / x < 800) for comparison with closing_vashil_splash_grain.txt.
-  speckle  (diagnostic, not a gate) std of (grey - 3x3 median) per block, figure vs plate p50: pixel-scale render
+  speckle  GATE (ruling 12): figure p50 <= 2 x the plate's p50. std of (grey - 3x3 median) per block, figure vs plate p50: pixel-scale render
            noise only (painted strokes and folds wider than ~2 px survive the median), to tell grain from detail.
   hi       the figure's luma (Rec. 709, 0-255) p99 / p99.7 / p99.9 / max. GATE: p99.9 >= 230 (highlights).
   mad      figure-box mean absolute difference (RGB, /255) against the base card of the fighter (the box: the
@@ -178,11 +178,12 @@ def main(argv: list[str]) -> int:
                 if sid == fid:
                     base[kind] = r
                 g, h = r["grain"], r["hi"]
-                ok_g = g["fig_p50"] <= 2.0 * max(g["plate_p50"], 0.25)
+                sk = r["speckle"]   # ruling 12: the card gate is pixel speckle; the sigma-2 grain is a diagnostic
+                ok_g = sk["fig_p50"] <= 2.0 * max(sk["plate_p50"], 0.25)
                 ok_h = (h["p99_9"] or 0) >= 230
                 r["mad"] = mad(r, base[kind]) if sid != fid and kind in base else None
                 ok_m = r["mad"] is None or r["mad"] >= 30.0
-                r["gates"] = {"grain": ok_g, "highlights": ok_h, "mad": ok_m}
+                r["gates"] = {"speckle": ok_g, "highlights": ok_h, "mad": ok_m}
                 bad += (not ok_g) + (not ok_h) + (not ok_m)
                 fr = r.get("frame", {})
                 lines.append(

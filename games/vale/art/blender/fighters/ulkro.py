@@ -625,7 +625,12 @@ def sculpts() -> list:
         fwd = np.array([math.sin(to), -math.cos(to), 0.0])
         ank = np.array([sx * 0.115, 0.02, 0.0])
         boots.add(RoundBox(ank + fwd * 0.065 + (0, 0, 0.045), (0.050, 0.130, 0.045), 0.04, axes=sdf.rot_z(math.degrees(to))), k=0.0)
-        boots.add(Ellipsoid(ank + fwd * 0.15 + (0, 0, 0.04), (0.05, 0.06, 0.04)), k=0.03)        # rounded toe
+        # closing ULK-M3 ('sole-less bulb boots'): a shaped, lower toe narrowing forward, and a sole welt: a 2.2 cm
+        # slab 6 mm proud of the upper all round (painted one value darker), so the boot sits on a sole
+        boots.add(Ellipsoid(ank + fwd * 0.16 + (0, 0, 0.034), (0.044, 0.068, 0.034), axes=sdf.rot_z(math.degrees(to))),
+                  k=0.03)
+        boots.add(RoundBox(ank + fwd * 0.075 + (0, 0, 0.011), (0.058, 0.152, 0.011), 0.008,
+                           axes=sdf.rot_z(math.degrees(to))), k=0.004)
         boots.add(FlatCapsule(ank + (0, 0, 0.04), ank + (0, 0, 0.16), 0.058, 0.064, 0.054, 0.058, side=(1, 0, 0)), k=0.04)
     boots.inter(HalfSpace((0, 0, 0.0), (0, 0, -1), 2.0), k=0.0)
     part("boots", boots, "suede", "auto", 720)
@@ -645,6 +650,15 @@ def sculpts() -> list:
     qb.add(RoundBox(Q_TOP - Q_U * 0.008, (Q_HW + 0.004, Q_HD + 0.004, 0.012), 0.026, axes=qax), k=0.0)    # the mouth's rim
     qb.sub(RoundBox(Q_TOP + Q_U * 0.02, (Q_HW - 0.012, Q_HD - 0.012, 0.06), 0.02, axes=qax), k=0.004)
     part("quiver_bands", qb, "leather", "bone:chest", 360, vs=0.7)
+    # closing ULK-M3 ('a flat pale board'): cord bindings round the case (two crossed lashings and a wound cord above
+    # the bottom cap), proud of the linen so the case reads as a bound tube
+    qc_ = Sculpt("quiver_cords")
+    for zz, tilt in ((0.30, 12.0), (0.37, -12.0), (0.12, 0.0)):
+        c0 = Q_BOT + Q_U * zz
+        ax3 = np.stack([Q_W, Q_N, Q_U]) if tilt == 0.0 else \
+            np.stack([Q_W, Q_N, _n(Q_U * math.cos(math.radians(tilt)) + Q_W * math.sin(math.radians(tilt)))])
+        qc_.add(Torus(c0, Q_HW + 0.012, 0.0045, axes=np.diag([1.0, (Q_HD + 0.012) / (Q_HW + 0.012), 1.0]) @ ax3), k=0.0)
+    part("quiver_cords", qc_, "leather", "bone:chest", 260, vs=0.6)
     shafts, heads, inlays = Sculpt("crest_shafts"), Sculpt("crest_heads"), Sculpt("crest_inlays")
     for i in range(len(CREST)):
         base, d, tip = crest_dart(i)
@@ -1248,11 +1262,16 @@ def paint_boots(p, n):
     v = v * (0.84 + 0.22 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
     v = v * (1 - 0.18 * _ss(0.15, 0.19, z))                                       # the rolled top
     v = v * (1 + 0.12 * ((n[:, 1] < -0.5) & (z < 0.07)))                          # scuffed toes
+    # suede breakup (closing ULK-M3): soft nap patches and rubbed lighter creases over the instep and the ankle
+    v = v * (1 + 0.10 * NOISE(p, 45.0) * _ss(0.03, 0.05, z))
+    v = v * (1 + 0.08 * np.clip(np.sin(p[:, 1] * 140.0 + 3.0 * NOISE(p, 11.0)), 0, 1) * _ss(0.05, 0.09, z)
+             * (1 - _ss(0.12, 0.16, z)))
     col = _hl("#4A3D30") * v[:, None]
-    welt = _ss(0.036, 0.020, z)
-    col = col * (1 - 0.35 * welt)[:, None]
-    sole = (z < 0.016) | (n[:, 2] < -0.6)
-    col[sole] = _hl("#2C241E")
+    welt = _ss(0.036, 0.024, z)                                                     # the upper darkens into the welt
+    col = col * (1 - 0.25 * welt)[:, None]
+    sole = (z < 0.023) | (n[:, 2] < -0.6)                                           # the sole welt, one value darker
+    sv = (0.92 + 0.10 * NOISE(p[sole], 30.0)) * (1 + 0.10 * (n[sole][:, 2] > 0.5))   # its lit top edge
+    col[sole] = _hl("#332920") * sv[:, None]
     return col
 
 
@@ -1387,7 +1406,10 @@ def paint_glass(p, n):
     rim = np.clip(np.abs(a_) / (W_ * 0.9), 0, 1)
     vein = np.abs(np.sin((u * 7.0 - rim * 1.3) * math.pi))
     vein = np.clip((vein - 0.82) / 0.18, 0, 1) * _ss(0.12, 0.35, rim)
-    v = (0.94 + 0.06 * np.clip(n[:, 2], -1, 1)) * (1 - 0.20 * vein) * (1 + 0.10 * _ss(0.65, 1.0, rim))
+    # closing ULK-M3 ('matte frosted heads'): a thin bright rim along the feathered edge and a clear core (the gloss
+    # lobe is the roughness, GLASS_ROUGH, set in the baked roughness map by post_paint)
+    v = (0.90 + 0.06 * np.clip(n[:, 2], -1, 1)) * (1 - 0.22 * vein) * (1 + 0.38 * _ss(0.80, 0.97, rim))
+    v = v * (1 - 0.10 * np.exp(-(rim / 0.25) ** 2))
     return _hl("#9FB4C6") * v[:, None]
 
 
@@ -1425,9 +1447,39 @@ def skirt_fade(c, p, n):
     return c * (1 - k[:, None]) + sand * k[:, None]
 
 
+def paint_quiver(p, n):
+    """the linen case (closing ULK-M3: 'dark brush strokes'): linen paint aligned with its wound folds (the sculpt's
+    _quiver_wrap), lit on the ridges, a running stitch round the lip, the lower end worn darker"""
+    q = p - Q_BOT
+    t = q @ Q_U
+    w = q @ Q_W
+    u = (t + 0.35 * w) * 55.0 + 0.4 * NOISE(p, 5.0)
+    ridge = np.abs(np.sin(u))
+    lip = _ss(0.44, 0.47, t)
+    stitch = (np.sin(w * 260.0 + q @ Q_N * 260.0) > 0.55) * np.exp(-((t - 0.455) / 0.004) ** 2)
+    v = (0.86 + 0.16 * ridge) * (1 + 0.05 * NOISE(p, 25.0)) * (0.86 + 0.18 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
+    v = v * (1 - 0.14 * (1 - _ss(0.0, 0.14, t))) * (1 - 0.10 * lip) * (1 - 0.45 * stitch)
+    return _hl("#9C8D72") * v[:, None]
+
+
+def paint_torso(p, n):
+    """the wrapped tunic (closing ULK-M3: projected strokes that ignored the folds): painted from the sculpt's own
+    cross folds (_cross_folds: diagonals converging on the sash), each fold lit on its upper face and shaded under,
+    a darker overlap edge of the wrap down the front, worn soft"""
+    x, z = p[:, 0], p[:, 2]
+    u = (np.abs(x) * 0.9 + (1.40 - z)) * 38.0 + 0.6 * NOISE(p, 3.0)
+    fold = np.abs(np.sin(u)) * 2.0 - 1.0                  # the sculpt's fold field (-1 groove .. 1 crest)
+    a = np.clip((1.42 - z) / 0.2, 0.2, 1.0)
+    edge = np.exp(-((x + 0.012 * (1.40 - z) * 3.0 - 0.02) / 0.010) ** 2) * (p[:, 1] < -0.05) * (z < 1.46)
+    v = (1.0 + 0.16 * fold * a) * (1 + 0.05 * NOISE(p, 20.0)) * (0.84 + 0.22 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
+    v = v * (1 - 0.30 * edge)
+    return _hl("#5E5245") * v[:, None]
+
+
 PROC = {"legs": paint_legs, "wraps": paint_wraps, "boots": paint_boots, "hand_R": paint_hands, "hand_L": paint_hands,
         "sleeves": paint_sleeves, "hood_tail": paint_tail, "dart_shaft": paint_dart_shaft, "eyeband": paint_eyeband,
-        "thrower": paint_thrower, "crest_shafts": paint_shafts, "crest_heads": paint_glass, "dart_head": paint_glass}
+        "thrower": paint_thrower, "crest_shafts": paint_shafts, "crest_heads": paint_glass, "dart_head": paint_glass,
+        "quiver": paint_quiver, "torso": paint_torso}
 
 
 def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> np.ndarray:
@@ -1486,12 +1538,52 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
             c = c * (1 - slit[:, None]) + _hl("#17161A") * slit[:, None]
         L[m] = c
         log(f"  tone {name}: -> {hx}")
+    _glass_roughness(part, names, log)
     L = np.clip(L, 0.0, None)
     L = L * np.minimum(1.0, MAX_LIN / np.maximum(L.max(1), 1e-6))[:, None]     # cap keeping the hue (no bleaching)
     lin[idx] = L
     out = project._srgb(lin).astype(np.float32)
     iy, ix = project.nearest_index(have)
     return out[iy, ix]
+
+
+GLASS_ROUGH = 0.14       # the dawnglass heads' roughness in the baked map (the brief: glossy, never emissive)
+GLASS_PARTS = ("crest_heads", "dart_head")
+
+
+def _glass_roughness(part, names, log=print) -> None:
+    """closing ULK-M3: the dawnglass heads read frosted because the 256 ORM averaged their few texels with the matte
+    cloth round them. Their roughness (and the empty margin round each head island, 3 texels, never another part's
+    texels) is set to GLASS_ROUGH and the metallic to 0 in the baked body_rough image before it is packed (bake.py
+    reads it after base_fn)"""
+    import bpy
+    ids = [i for i, nm in enumerate(names) if nm in GLASS_PARTS]
+    if not ids:
+        return
+    cand = [im for im in bpy.data.images if im.name.endswith("_rough") and im.size[0] == part.shape[1]]
+    if not cand:
+        log("  glass roughness: no _rough image (skipped)")
+        return
+    r_ = cand[-1]
+    w, h = r_.size
+    b = np.empty(w * h * 4, dtype=np.float32)
+    r_.pixels.foreach_get(b)
+    b = b.reshape(h, w, 4)
+    g = np.isin(part, ids)
+    d = g.copy()
+    for _ in range(3):                                   # a 4-neighbour dilation (no scipy in Blender's python)
+        e = d.copy()
+        e[1:] |= d[:-1]
+        e[:-1] |= d[1:]
+        e[:, 1:] |= d[:, :-1]
+        e[:, :-1] |= d[:, 1:]
+        d = e
+    grow = d & (part < 0)
+    m = (g | grow)[::-1]
+    b[m, 0] = GLASS_ROUGH
+    b[m, 1] = 0.0
+    r_.pixels.foreach_set(b.ravel())
+    log(f"  glass roughness {GLASS_ROUGH}: {int(g.sum())} texels (+{int(grow.sum())} margin)")
 
 
 def _install_paint() -> None:
