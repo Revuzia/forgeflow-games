@@ -60,6 +60,10 @@ for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
   test(`the barren opening, left running with no further act: the band set down at the ring lives (seed ${seed}${grid ? "" : ", full grid"})`, () => {
     const { sim, lib0 } = opening(seed, grid);
     const p = sim.u.planets[0];
+    // (wildfires the sky lights: a village whose land a lightning fire burned bare may leave it — see below)
+    const wild: number[] = [];
+    const emit0 = sim.u.emit.bind(sim.u);
+    (sim.u as never as { emit: (e: never) => void }).emit = (e: never) => { const ev = e as { t: string; text?: string }; if (ev.t === 'fire.start' && ev.text === 'lightning') wild.push(sim.u.tick); emit0(e); };
     const year = Math.round(p.st.orbit.period);
     const alive = () => p.people.settlements.filter((s) => s.fallen < 0).reduce((a, s) => a + (p.people.members.get(s.id)?.length ?? 0), 0);
     let low = 30;
@@ -68,7 +72,13 @@ for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
     assert.ok(n >= 20, `the band holds on through three years (alive ${n}, low ${low})`);
     // (sim-fix-r2 #2: and it takes root — the village it founds still stands, not fallen and set up again elsewhere;
     // the 10-year, 8-seed full-grid measure is in _harness/scratch/ledgers/sim-fix-r2.md: 0 moves in years 0-5)
-    const fell = p.people.settlements.filter((s) => !s.band && s.fallen >= 0).map((s) => s.name);
+    // (sim-fix-r3: save a village whose own land a lightning wildfire burned bare in the year before it left — seed 1 at
+    // n = 32 with the young opening band: a fire at Y1.8 took every tree and blade of grass at Tosukha by the Lake, the
+    // store ran down, and its people walked off whole at Y2.7 and founded Deimaame on the River, 33 strong at Y3. That is
+    // the world, not the opening failing: the band still must hold on (above) and the village must not dry out or starve
+    // on a living land)
+    const burntOut = (s: (typeof p.people.settlements)[number]) => wild.some((t) => t <= s.fallen && s.fallen - t < year * 1.5) && p.f.grass[s.cell] + p.f.tree[s.cell] < 0.05;
+    const fell = p.people.settlements.filter((s) => !s.band && s.fallen >= 0 && !burntOut(s)).map((s) => s.name);
     assert.deepEqual(fell, [], `no village of the opening band fell or was left in three years (fell: ${fell.join(', ')})`);
     const lib = Math.max(...p.people.settlements.filter((s) => s.fallen < 0).map((s) => s.library.length));
     assert.ok(lib > lib0 + 2, `it found things nobody gave it (library ${lib0} -> ${lib})`);
