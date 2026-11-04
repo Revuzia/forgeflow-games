@@ -22,11 +22,11 @@
   },
   "dunsom": {
    "hue": "#0100D2",
-   "glow_v": 0.19,
+   "glow_v": 0.26,
    "glow_s": 1.0,
    "glow_r": 0.63,
    "rim": 1.3,
-   "ev": 0.01,
+   "ev": 0.2,
    "floor": 0.41,
    "head_frac": 0.58
   },
