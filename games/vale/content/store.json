@@ -19,7 +19,7 @@
     {"sku":"sku_kemdo_highrim","kind":"skin","ref":"kemdo_highrim","price":{"currency":"candles","amount":600}},
     {"sku":"sku_kemdo_long_evening","kind":"skin","ref":"kemdo_long_evening","price":{"currency":"candles","amount":1500},"badge":"new"},
     {"sku":"sku_lisvel_gorgewalk","kind":"skin","ref":"lisvel_gorgewalk","price":{"currency":"candles","amount":600}},
-    {"sku":"sku_lisvel_almanac","kind":"skin","ref":"lisvel_almanac","price":{"currency":"candles","amount":600}},
+    {"sku":"sku_lisvel_almanac","kind":"skin","ref":"lisvel_almanac","price":{"currency":"candles","amount":1500}},
     {"sku":"sku_marund_gorgewalk","kind":"skin","ref":"marund_gorgewalk","price":{"currency":"candles","amount":600}},
     {"sku":"sku_marund_long_evening","kind":"skin","ref":"marund_long_evening","price":{"currency":"candles","amount":600}},
     {"sku":"sku_nurrow_noon_fair","kind":"skin","ref":"nurrow_noon_fair","price":{"currency":"candles","amount":600},"badge":"new"},
