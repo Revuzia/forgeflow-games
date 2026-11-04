@@ -118,10 +118,15 @@ SKINS: list = [
      # pauldrons a light ink-grey so the top quarter holds its value
      # (FIX ROUND 2: the ink pieces and the pauldrons a hair lighter: with the fins no longer accent the front's top
      # and middle bands fell to 69.4 / 44.3, under the bible's 70 / 45)
-     "parts": {"apron": "#62686F", "sleeves": "#676E78", "chest_plate": "#72787F", "cowl": "#D4D1C8",
+     # (CW6 round 2: with the helm alone ink the bust stayed the base's, portrait dE 8.4: the collar-cowl and the
+     # chest plate go ink too, so only the crest and the chalk lines stay light)
+     "parts": {"apron": "#62686F", "sleeves": "#676E78", "chest_plate": "#5A6068", "cowl": "#8E949B",
                "skirt_L": "#5E646E", "skirt_R": "#5E646E", "torso": "#5E646E",
-               "pauldron_L": "#9CA2AA", "lames_L": "#9CA2AA", "pauldron_R": "#9CA2AA",
-               "helm": "#CFCCC4", "nape": "#7A7F87", "visor": "#7E858E", "neck": "#3E3A38",
+               "pauldron_L": "#8A9098", "lames_L": "#8A9098", "pauldron_R": "#8A9098",
+               # (closing rishal-M3, CW6: the bust is what the cards and the store compare, and the chalk-white helm
+               # and scarf kept it the base's: portrait dE 7.2 < 12. The helm goes the named ink-gray steel under its
+               # chalk sketches, the visor a darker smoked glass, the pauldrons a mid ink; the crest keeps #A7A9AC)
+               "helm": "#858A92", "nape": "#5A6068", "visor": "#5F656D", "neck": "#3E3A38",
                # (FIX ROUND 2 gave the dawnglass fins a pale chalky smoke "#CDD0D4" here; W5b: the fins are accent)
                },
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
@@ -135,7 +140,12 @@ SKINS: list = [
     # (the painting's cowl and sleeves are pale blue linen: their mean moves onto the warm scarf colour, `absolute`)
     {"id": "rishal_lamplit", "extra": {"lamp_cage": True}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
      "absolute": ("cloth2",),
-     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
+     # (closing rishal-M3, CW6: the armour stayed the base's pale cream, so the deluxe read as a warm tint: dE76 at
+     # the game camera ~2 % of pixels over 20. The brief's walnut ARMOUR now carries it: chest plate, pauldrons, lames
+     # and nape a carved walnut, the visor the smoked lampresin it names; the cowl, sleeves, helm and crest keep the
+     # warm cream top, so the figure reads cream-over-walnut where the base is white-over-white)
+     "parts": {"cowl": "#B4A690", "sleeves": "#ABA08F", "chest_plate": "#7A5A40", "pauldron_L": "#8B6A4C",
+               "lames_L": "#8B6A4C", "pauldron_R": "#8B6A4C", "nape": "#6B4E38", "visor": "#A07E52"},   # (W5b: the fins are accent; FIX ROUND 2 had them pale smoked
      # amber glass: as dawnglass again they took the walnut-dark #A38C6B, the top band 73.6 -> 68.4)   # (fix pass 5: the scarf a step down again, L* 69: the
      # hero light still blew the painted scarf's lit folds out to near white)   # (review: the cowl blew out near white: the scarf a step
      # down, L* 74; fix pass 2: the sleeves keep the base's mid-light step under the scarf, L* 66)

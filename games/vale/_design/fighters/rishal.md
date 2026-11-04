@@ -149,6 +149,8 @@ Ink-grey armour (`#3A3F47`, matte painted, non-metal) drawn over with chalk line
 | `under` | `#2E3238` | 21 | 216° / 18% | leggings |
 | `linework` | `#E6E0D2` | 89 | 42° / 9% | chalk line-work (thin lines only, at most 20% of the surface; exempt from the L* 86 area rule) |
 
+Per-part overrides (closing rishal-M3, CW6: the chalk-white helm kept the bust the base's, portrait dE 7.2 under the standard floor 12): the helm goes the named ink-grey steel `#858A92` (L* 57) under its chalk sketches, the visor a smoked `#5F656D`, the nape `#5A6068`, the pauldrons and lames `#8A9098`, the collar-cowl `#8E949B` and the chest plate `#5A6068`; the crest keeps `#A7A9AC`, so the crest and the chalk lines are the light notes.
+
 Value bands (area-weighted): top **73** (70-85) · mid **52** (45-65) · feet **25** (20-35).
 
 `SKINS` entry: `{"id": "rishal_chalkline", "palette": {...as above...}, "extra": {}, "card": {"primary": "#3A3F47", "secondary": "#E6E0D2"}}`
@@ -169,6 +171,8 @@ A smoked-lampresin visor (`#A38C6B`) and walnut armour (`#5E4D3E`), both at no m
 | `leather` | `#5E4D3E` | 34 | 28° / 34% | the named walnut #5E4D3E (strap, boots) |
 | `ironstone` | `#3F3730` | 24 | 28° / 24% | walnut-dark forearm guards and shin plates |
 | `under` | `#3A332D` | 22 | 28° / 22% | leggings |
+
+Per-part overrides (closing rishal-M3, CW6: the armour stayed the base's pale cream, so the deluxe read as a warm tint): the walnut ARMOUR carries the skin. Chest plate `#7A5A40` (L* 41), pauldrons and lames `#8B6A4C` (L* 47) with their round lampresin windows, nape `#6B4E38`, and the visor the smoked lampresin `#A07E52` (L* 55, glossy, never emissive). The cowl `#B4A690`, sleeves `#ABA08F`, helm and crest stay warm cream, so the figure reads cream over walnut where the base is white over white. The silhouette, the accent ridge and the fins are unchanged (owner ruling).
 
 Value bands (area-weighted): top **71** (70-85) · mid **50** (45-65) · feet **27** (20-35).
 
