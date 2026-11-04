@@ -818,7 +818,7 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
     exposureRepeat: 'unit' },
   bind: { event: 'str' },
 };
-const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element' || v === 'signature' || v === 'secondary');
+const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || /^element:#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element' || v === 'signature' || v === 'secondary');
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every(isNum);
 const isKeys = (v: unknown, val: (x: unknown) => boolean): boolean => Array.isArray(v) && v.length > 0 && v.every((k) => Array.isArray(k) && k.length === 2 && isNum(k[0]) && k[0] >= 0 && k[0] <= 1 && val(k[1]));

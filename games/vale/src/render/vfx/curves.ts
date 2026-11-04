@@ -19,7 +19,9 @@ export type Curve = Float32Array;
 
 /** k: 0 a fixed colour · 1 team (the relationship colour) · 2 element (palette / skin tint) · 3 signature (the
  *  caster fighter's signature hue, r12 M12) · 4 secondary (its companion); 3/4 fall back to team for non-fighters */
-export type ColorRef = { k: 0; c: Color } | { k: 1 } | { k: 2 } | { k: 3 } | { k: 4 };
+// · 5 "element:#rrggbb": a skin's own tint where the caster wears a skin with a kit palette, else exactly this hex (a kit's
+// neutral shadow or dust that a skin's vfxTint turns, the base look untouched)
+export type ColorRef = { k: 0; c: Color } | { k: 1 } | { k: 2 } | { k: 3 } | { k: 4 } | { k: 5; c: Color };
 export interface Gradient { t: number[]; c: ColorRef[] }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -77,6 +79,7 @@ export function colorRef(v: unknown): ColorRef | null {
   if (v === 'element') return { k: 2 };
   if (v === 'signature') return { k: 3 };
   if (v === 'secondary') return { k: 4 };
+  if (typeof v === 'string' && /^element:#[0-9a-fA-F]{6}$/.test(v)) return { k: 5, c: new Color().setStyle(v.slice(8)) };
   if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) return { k: 0, c: new Color().setStyle(v) };
   return null;
 }

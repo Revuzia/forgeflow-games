@@ -576,6 +576,7 @@ export class VfxSystem {
     else if (ref.k === 0) { out.copy(ref.c); if (it.hueFrom >= 0) shiftHue(out, it.hueFrom, it.hueBy); }
     else if (ref.k === 3) out.copy(it.sig);
     else if (ref.k === 4) out.copy(it.sec);
+    else if (ref.k === 5) out.copy(it.hueFrom >= 0 ? it.element : ref.c);
     else out.copy(it.element);
     if (it.tier < 4 && out.r > 0.88 && out.g > 0.88 && out.b > 0.88) out.copy(DAWNGLASS);
     return out;

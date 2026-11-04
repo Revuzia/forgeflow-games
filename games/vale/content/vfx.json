@@ -29941,7 +29941,7 @@
         ],
         "color": [
           "#D3CCDD",
-          "element",
+          "element:#4C4858",
           "#8A8496"
         ],
         "alpha": [
@@ -29987,7 +29987,7 @@
         ],
         "color": [
           "#6B6478",
-          "element"
+          "element:#55505F"
         ],
         "alpha": [
           0,
@@ -30075,7 +30075,7 @@
           1
         ],
         "life": 3.05,
-        "color": "element",
+        "color": "element:#4C4858",
         "alpha": [
           [
             0,
@@ -30420,7 +30420,7 @@
         ],
         "color": [
           "#6B6478",
-          "element"
+          "element:#55505F"
         ],
         "alpha": [
           0,
@@ -33825,7 +33825,7 @@
         ],
         "color": [
           "#D3CEC3",
-          "element"
+          "element:#8A867D"
         ],
         "alpha": [
           0,
@@ -33952,11 +33952,11 @@
           ],
           [
             0.03,
-            "element"
+            "element:#4C4A53"
           ],
           [
             1,
-            "element"
+            "element:#4C4A53"
           ]
         ],
         "alpha": [
@@ -34204,7 +34204,7 @@
         ],
         "color": [
           "#D3CEC3",
-          "element",
+          "element:#4C4A53",
           "#8A867D"
         ],
         "alpha": [
@@ -34250,7 +34250,7 @@
         ],
         "color": [
           "#6E6A62",
-          "element"
+          "element:#57544E"
         ],
         "alpha": [
           0,
@@ -59858,7 +59858,7 @@
         ],
         "color": [
           "#F1E2C6",
-          "element"
+          "element:#8A8478"
         ],
         "alpha": [
           1,
@@ -60118,7 +60118,7 @@
           ],
           [
             1.0,
-            "element"
+            "element:#F2F06C"
           ]
         ],
         "alpha": [
@@ -60750,7 +60750,7 @@
         ],
         "color": [
           "#EEDFB8",
-          "element"
+          "element:#BFD3E6"
         ],
         "alpha": [
           0,
@@ -62935,7 +62935,7 @@
         ],
         "color": [
           "#6E6A62",
-          "element"
+          "element:#57544E"
         ],
         "alpha": [
           0,

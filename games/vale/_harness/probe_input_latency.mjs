@@ -276,7 +276,9 @@ try {
         for (let i = 0; i < fr.length; i++) if (fr[i].now < ev.t) b = i;
         if (b < 0) return null;
         const out = [];
-        for (let i = b + 1; i < Math.min(fr.length, b + 9); i++) {
+        // up to the next press (a windup-move's ground click can follow within these frames: its ring is not this press's)
+        const until = L.events[n + 1]?.t ?? Infinity;
+        for (let i = b + 1; i < Math.min(fr.length, b + 9) && fr[i].now < until; i++) {
           if (fr[i].am > fr[b].am && !out.includes('wmark--attack')) out.push('wmark--attack');
           if (fr[i].mm > fr[b].mm && !out.includes('wmark--move')) out.push('wmark--move');
         }
