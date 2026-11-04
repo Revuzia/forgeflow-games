@@ -128,13 +128,21 @@ export function startDash(w: World, eff: EffOf<'dash'>, ctx: EffectCtx): void {
   e.atkWindup = -1;
   e.dash = {
     displace: false, fromX: e.x, fromY: e.y, toX, toY, t: 0, dur, eff, ctx,
-    passed: eff.onPass || eff.stopOnFirstHit ? [] : null, unstoppable: !!eff.unstoppable, arc: 0,
+    passed: eff.onPass || eff.stopOnFirstHit ? [] : null, unstoppable: !!eff.unstoppable, arc: selfDashArc(eff),
   };
   e.actionSeq++;
   if (len > 1e-6) e.facing = datan2(toY - e.y, toX - e.x);
   if (eff.unstoppable) applyStatus(w, e, e, 'unstoppable', dur + TICK_DT, { source: ctx.source.id });
   e.path.length = 0; e.pathGoalX = NaN;
   w.emit({ e: 'dash', t: w.time, src: e.id, fromX: e.x, fromY: e.y, toX, toY, duration: dur, vfx: eff.present?.vfx });
+}
+
+/** a self-dash's airborne arc peak (m): the effect's optional `arc` (a leap, e.g. a slam ult whose clip already
+ *  lifts the hips; marund-M2), clamped to [0, KNOCK_ARC]; 0 = a ground dash. Presentation only: e.height drives
+ *  the drawn root, never hits or pathing; the cast shadow stays on the floor. */
+function selfDashArc(eff: EffOf<'dash'>): number {
+  const a = (eff as { arc?: unknown }).arc;
+  return typeof a === 'number' && a > 0 ? Math.min(a, KNOCK_ARC) : 0;
 }
 
 export function interruptDash(w: World, e: Entity): void {

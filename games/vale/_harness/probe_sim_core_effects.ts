@@ -32,6 +32,16 @@ function run(w: World, a: Entity, effs: Record<string, unknown>[], o: RunOpts = 
   runEffects(w, effs.map(E), ctx);
   return w.events.slice(n);
 }
+/** a dash with a per-effect `arc` (until the catalog's dash schema carries `arc`, it is attached after parsing) */
+function runArc(w: World, a: Entity, eff: Record<string, unknown>, arc: number, o: RunOpts = {}): SimEvent[] {
+  const t = o.target ?? null;
+  const ctx = makeCtx(a, SRC, o.rank ?? 1, t, o.px ?? (t ? t.x : a.x + 1), o.py ?? (t ? t.y : a.y), o.present as never, 'a1');
+  const n = w.events.length;
+  const parsed = E(eff);
+  (parsed as { arc?: number }).arc = arc;
+  runEffects(w, [parsed], ctx);
+  return w.events.slice(n);
+}
 function world(): { w: World; a: Entity; b: Entity } {
   const w = makeWorld(cat, [{ fighter: 'fx_fighter_a', team: 0, x: 10, y: 20 }, { fighter: 'fx_fighter_b', team: 1, x: 14, y: 20 }]);
   return { w, a: fighterEnt(w, 0), b: fighterEnt(w, 1) };
@@ -184,6 +194,24 @@ section('dash', () => {
   ev = stepSec(w2, 1);
   check('onPass hits units within passWidth once each', dmgTo(ev, u1.id).length === 1 && dmgTo(ev, u2.id).length === 1 && dmgTo(ev, u3.id).length === 0);
   check('onPass emits hit events', ofType(ev, 'hit').filter((h) => h.dst === u1.id || h.dst === u2.id).length === 2);
+  a2.x = 10; a2.y = 20;
+  run(w2, a2, [{ op: 'dash', mode: 'toPoint', distance: 8, speed: 12, passWidth: 1, stopOnFirstHit: true, onPass: [{ op: 'damage', amount: 3, type: 'true' }],
+    onArrive: [{ op: 'heal', amount: 1, to: 'self' }] }], { px: 18, py: 20 });
+  ev = stepSec(w2, 1);
+  // per-effect self-dash arc (marund-M2): a leap rises to `arc` m mid-dash and lands at 0; a ground dash stays at 0
+  a2.x = 10; a2.y = 40;
+  runArc(w2, a2, { op: 'dash', mode: 'toPoint', distance: 7, speed: 12, unstoppable: true }, 0.55, { px: 17, py: 40 });
+  let peak = 0, peakF = 0;
+  for (let i = 0; i < 30 && a2.dash; i++) { stepN(w2, 1); if (a2.height > peak) { peak = a2.height; peakF = a2.dash ? a2.dash.t / a2.dash.dur : 1; } }
+  check('arc dash: peaks at ~0.55 m near mid-dash, lands at 0', near(peak, 0.55, 0.03) && peakF > 0.35 && peakF < 0.65 && a2.height === 0 && near(a2.x, 17, 0.05), [peak, peakF, a2.height, a2.x]);
+  run(w2, a2, [{ op: 'dash', mode: 'toPoint', distance: 5, speed: 12 }], { px: 12, py: 40 });
+  let gpk = 0;
+  for (let i = 0; i < 30 && a2.dash; i++) { stepN(w2, 1); gpk = Math.max(gpk, a2.height); }
+  check('a dash without arc stays on the ground', gpk === 0, gpk);
+  runArc(w2, a2, { op: 'dash', mode: 'toPoint', distance: 5, speed: 12 }, 9, { px: 17, py: 40 });
+  let cpk = 0;
+  for (let i = 0; i < 30 && a2.dash; i++) { stepN(w2, 1); cpk = Math.max(cpk, a2.height); }
+  check('an arc above the knock-up peak is clamped (<= 1.2 m)', cpk > 0 && cpk <= 1.2 + 1e-9, cpk);
   a2.x = 10; a2.y = 20;
   run(w2, a2, [{ op: 'dash', mode: 'toPoint', distance: 8, speed: 12, passWidth: 1, stopOnFirstHit: true, onPass: [{ op: 'damage', amount: 3, type: 'true' }],
     onArrive: [{ op: 'heal', amount: 1, to: 'self' }] }], { px: 18, py: 20 });
