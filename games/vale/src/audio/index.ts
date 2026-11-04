@@ -4,7 +4,8 @@
 //               (Settings.audio volumes; `muteInBackground` silences a hidden tab). The trim (MIX_TRIM_DB) is the
 //               engine's mix makeup, the same for every bus and the alert path, so the default settings (master 0.8)
 //               land the match on the tokens' −18 ± 1.5 LUFS integrated (closing critic 'audio-runtime': two RIFT
-//               captures read −21.5 / −21.8 before it; _harness/probe_audio_runtime.mjs match). The limiter (a compressor) can
+//               captures read −21.5 / −21.8 before it; at 3.0 dB −18.75 and −18.07 (245 s), at 3.5 dB −16.07 / −16.59 over the band's
+//               top, so most of the spread is the match; _harness/probe_audio_runtime.mjs match). The limiter (a compressor) can
 //               overshoot on a fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing
 //               passes −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both
 //               speakers carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle

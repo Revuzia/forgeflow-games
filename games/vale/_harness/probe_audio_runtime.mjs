@@ -38,9 +38,10 @@
 //   node _harness/probe_audio_runtime.mjs dead [--out <json>]
 //     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
 //     output split by two filters (< 500 Hz, > 2 kHz) and metered per block. 8 s alive, then your fighter is killed
-//     (killEntity) and stays down for the mode's own respawn timer, then 8 s alive again. Gates: the engine reports
-//     the dead state while down and not after; the > 2 kHz band falls >= 10 dB while down (the 900 Hz low-pass), the
-//     whole falls >= 2 dB (DEAD_DB -3), and both come back within 3 dB after the respawn (the bed itself moves a dB or two between 8 s windows).
+//     (killEntity) and stays down for the mode's own respawn timer, then 8 s alive again. Then a second death on two steady
+//     tones in place of the bed (200 Hz, 4 kHz, on the music bus). Gates: the engine reports the dead state while down
+//     and not after; the bed's > 2 kHz band falls >= 10 dB while down; the 200 Hz tone falls DEAD_DB (2.5-3.5 dB) and the
+//     4 kHz tone >= 20 dB (the 900 Hz low-pass); the bed's whole and high band come back within 3 dB after the respawn (the bed itself moves a dB or two between 8 s windows).
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -333,6 +334,7 @@ async function runMatch() {
         const me = m.view.players.find((p) => p.player === m.you), d = m.view.entity(e.dst);
         if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) st.enemyNotYours++; } } });
     });
+    const tMatch = Date.now();
     let deadSeen = 0;
     rep.forcedEnemyDeath = null;
     for (;;) {
@@ -362,7 +364,7 @@ async function runMatch() {
       for (const c of s.cues) rep.cues.push([r2(s.ct), s.t === null ? null : r2(s.t), c]);
       if (s.t === null && rep.cues.length > 5) { log('match left'); break; }
       if ((s.t ?? 0) >= SECONDS) break;
-      if ((Date.now() - t0) / 1000 > SECONDS * 1.6 + 300) { rep.err = 'wall-clock budget'; break; }
+      if ((Date.now() - tMatch) / 1000 > SECONDS * 1.6 + 300) { rep.err = 'wall-clock budget'; break; }   // from the match: a heavy-slot wait is not the run's
       await page.waitForTimeout(2000);
     }
     rep.deadPolls = deadSeen;
@@ -483,10 +485,33 @@ async function runDead() {
     w1.push(await mark());
     await page.waitForTimeout(1200);
     const w2 = [await mark()]; await page.waitForTimeout(SEG); w2.push(await mark());
+    // the same state on two steady tones in place of the bed (it moves a dB or more between windows): the transfer itself
+    await page.evaluate(() => {
+      const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
+      const bedGain = a.bed.gain.gain; bedGain.cancelScheduledValues(0); bedGain.value = 0;
+      for (const hz of [200, 4000]) { const o = ctx.createOscillator(); o.frequency.value = hz; const v = ctx.createGain(); v.gain.value = 0.05; o.connect(v).connect(g.bus.music); o.start(); }
+    });
+    await page.waitForTimeout(1000);
+    const t0a = [await mark()]; await page.waitForTimeout(3000); t0a.push(await mark());
+    await page.evaluate(async () => {
+      const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you);
+      const { killEntity } = await import('/src/sim/combat.ts');
+      const n0 = W.events.length;
+      killEntity(W, W.entity(me.entity), null);
+      const evs = W.events.slice(n0);
+      for (const l of m.listeners) l(evs);
+    });
+    await page.waitForTimeout(3000);                        // past the close and the news line's duck
+    const t0d = [await mark()];
+    await page.waitForFunction(() => window.__valeAudio.musicDead === false, null, { timeout: 120000, polling: 100 });
+    t0d.push(await mark());
     const raw = await page.evaluate(() => window.__dead);
     const db = (rows, k) => r2(10 * Math.log10(rows.reduce((s2, r) => s2 + r[k], 0) / Math.max(1, rows.length) + 1e-20));
     rep.windows = [['alive0', w0], ['dead', w1], ['alive1', w2]].map(([tag, [c0, c1]]) => { const w = raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
       return { tag, seconds: r2(c1 - c0), blocks: w.length, engineDead: r2(w.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, w.length)), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
+    rep.tones = [['alive', t0a], ['dead', t0d]].map(([tag, [c0, c1]]) => { const w = raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
+      return { tag, seconds: r2(c1 - c0), blocks: w.length, hz200Db: db(w, 3), hz4000Db: db(w, 4) }; });
+    rep.toneDrop = { hz200Db: r2(rep.tones[0].hz200Db - rep.tones[1].hz200Db), hz4000Db: r2(rep.tones[0].hz4000Db - rep.tones[1].hz4000Db) };
     const [a0, d, a1] = rep.windows;
     rep.drop = { allDb: r2(a0.allDb - d.allDb), lowDb: r2(a0.lowDb - d.lowDb), highDb: r2(a0.highDb - d.highDb) };
     rep.back = { allDb: r2(a1.allDb - a0.allDb), highDb: r2(a1.highDb - a0.highDb) };
@@ -494,7 +519,11 @@ async function runDead() {
       musicPlaying: a0.allDb > -60,
       engineDeadWhileDown: d.engineDead >= 0.95 && a0.engineDead === 0 && a1.engineDead === 0 && d.blocks >= 12,
       highFallsGe10: rep.drop.highDb >= 10,
-      wholeFallsGe2: rep.drop.allDb >= 2,
+      // the bed's whole level is reported, not gated (rep.drop.allDb: 2.63 and 1.54 dB in two runs, the bed itself moving
+      // about 1 dB between windows); the tones gate DEAD_DB (-3) and the 900 Hz low-pass (12 dB/oct: about -26 dB at 4 kHz)
+      tone200FallsDeadDb: rep.toneDrop.hz200Db >= 2.5 && rep.toneDrop.hz200Db <= 3.5,
+      tone4000FallsGe20: rep.toneDrop.hz4000Db >= 20,
+      tonesMeasured: rep.tones[1].blocks >= 12,
       backWithin3: Math.abs(rep.back.allDb) <= 3 && Math.abs(rep.back.highDb) <= 3,
     };
     rep.pass = Object.values(rep.gates).every(Boolean);
