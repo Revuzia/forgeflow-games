@@ -1,0 +1,259 @@
+{
+  "summary": "One VALE closing fix wave (after the closing parity review): budgeted work packages in order on the wave's own files, adversarial verify against its done-criteria (incl. per-fighter re-scores), targeted refix rounds",
+  "agentCount": 6,
+  "logs": [
+    "CW5:vashil-crown-cards → fighter:vashil:VAS-B1=done, ruling7:crown-metric=done, cards:pipeline=partly",
+    "CW5:ardit-burdam → fighter:ardit:ardit-M3=done, fighter:ardit:ardit-M1=partly, fighter:burdam:burdam-M5=done, fighter:burdam:burdam-M2=partly, fighter:burdam:burdam-M4=partly, fighter:burdam:burdam-M3=partly",
+    "[CW5:kemdo-lisvel] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    "CW5:kemdo-lisvel → ",
+    "[CW5:nurrow-ulkro-ervet] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+    "CW5:nurrow-ulkro-ervet → ",
+    "[CW5:vashil-rest-minors] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+    "CW5:vashil-rest-minors → ",
+    "[CW5:verify1] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete."
+  ],
+  "result": {
+    "wave": "CW5",
+    "pass": false,
+    "open": [],
+    "handoffs": [
+      {
+        "from": "vashil-crown-cards",
+        "to": "CW6",
+        "what": "The card pipeline is live: add a CARDS literal to your fighter script (schema in the art/blender/portraits.py header), then run `python3 art/build.py portraits <id> --skins --only splash,portrait` and measure with `python3 art/tools/card_qa.py <id>`. A low pitch is now safe because render._fit_camera keeps the camera above the floor. Odrum still fails the crown gate (R3 4.9 cm): check with `node art/tools/crown_gate.mjs art/out/fighters/odrum`."
+      },
+      {
+        "from": "ardit-burdam",
+        "to": "CW1",
+        "what": "content/vfx.json: give the deluxe skin burdam_almanac an ink-on-parchment vfxTint like the roster's other deluxe lines (ink #2E2A26 core on parchment #D8CDB4 / #A3987F, oxblood #7A2E2A accent). Asked for by burdam-M4."
+      },
+      {
+        "from": "ardit-burdam",
+        "to": "CW3c",
+        "what": "_design/ROSTER.md:152 (owner lane unclear; route to the doc owner if it is not CW3c): the Almanac Ledger line should match _design/fighters/burdam.md section 9: ledger-ink plum-slate coat and skirt #4D4559, ink-felt cowl #3E3A4C, parchment pauldrons ruled in ink with oxblood margin rules #7A2E2A, parchment hem strip with day-marks, the ruled almanac board on the right hip."
+      },
+      {
+        "from": "ardit-burdam",
+        "to": "CW6",
+        "what": "Two pipeline additions you can use (both additive). (1) common/plates._expand_hi now drops its highlight knee from p95 to p80/65/50 when a flat pale surface fills the subject's top 5 %; a card stuck at luma ~199 needs no light changes. (2) A fighter module can define install_card_hooks(); portraits.py calls it on load (Burdam uses it for the render wrappers it otherwise installs only when built). New tools: art/tools/chain_motion.py (GLB chain angle / lag), art/tools/glb_stretch.py (CPU-skinned edge stretch per clip), art/tools/skin_gamecam_delta.py (skin vs base at the game camera), art/tools/decimate_chains.mjs (thins x_ chain tracks, optional --orm-q, to get a GLB back under 1172 KiB)."
+      }
+    ],
+    "packages": [
+      {
+        "key": "vashil-crown-cards",
+        "items": [
+          "fighter:vashil:VAS-B1=done",
+          "ruling7:crown-metric=done",
+          "cards:pipeline=partly"
+        ],
+        "commits": [
+          "4ce883ae (vale CW5: Vashil rounded cowl + dark stole, staged per-skin cards, _fit_camera floor guard, card_qa speckle diagnostic)",
+          "6adc2ce8 (earlier attempt: crown gate art/tools/crown_gate.mjs)",
+          "WIP syncs aa788a3e / 7689570a / 8f816f67 carried the earlier and mid-build partial work (CARDS schema, render/plates staging, card_qa, base vashil.glb)"
+        ],
+        "notes": "I continued from the earlier attempt's partial work: hood, stole and CARDS were in vashil.py but unbuilt, and the pipeline code was committed but unverified. The rebuild budget used in this session is one full Vashil rebuild, one render-only re-render of First Bell's cards, three harness rear captures, and one debug Blender bounds run.\n\nOpen for the verifier:\n- The reviewers' grain gate (figure high-pass at most 2x the plate's) fails by its own measure on all 6 cards, while pixel speckle is visually gone. The gate needs a ruling, or a version of it that ignores painted texture.\n- In the First "
+      },
+      {
+        "key": "ardit-burdam",
+        "items": [
+          "fighter:ardit:ardit-M3=done",
+          "fighter:ardit:ardit-M1=partly",
+          "fighter:burdam:burdam-M5=done",
+          "fighter:burdam:burdam-M2=partly",
+          "fighter:burdam:burdam-M4=partly",
+          "fighter:burdam:burdam-M3=partly"
+        ],
+        "commits": [
+          "737e06a7",
+          "b050df73"
+        ],
+        "notes": "Every build of both fighters is used: Ardit 3 rebuilds; Burdam 3, one of them killed partway after its base GLB was checked. Card-only fixes after that were re-rendered from the cache with portraits.py.\n\n1) The grain gate (figure high-pass <= 2x the plate's) fails on all 12 Ardit and Burdam cards, as it does on Vashil. Pixel-scale speckle is now ~1-2.5 against 6+ before. What is left is painted texture detail measured against a plate the Kuwahara brush has smoothed, so this gate needs a ruling or a stronger subject brush.\n\n2) Burdam's GLB went over the 1172 KiB budget once the four skirt panel"
+      },
+      {
+        "key": "kemdo-lisvel",
+        "items": [
+          "fighter:kemdo:kemdo-M3=not_done",
+          "fighter:kemdo:kemdo-M4=not_done",
+          "fighter:kemdo:kemdo-M5=not_done",
+          "ruling7:kemdo-crown=not_done",
+          "fighter:lisvel:lisvel-M1=not_done",
+          "fighter:lisvel:lisvel-M2=not_done",
+          "fighter:lisvel:lisvel-M3=not_done",
+          "fighter:lisvel:lisvel-M4=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "nurrow-ulkro-ervet",
+        "items": [
+          "fighter:nurrow:nurrow-M1=not_done",
+          "fighter:nurrow:nurrow-M2=not_done",
+          "fighter:nurrow:nurrow-M3=not_done",
+          "fighter:ulkro:ULK-M1=not_done",
+          "fighter:ulkro:ULK-M2=not_done",
+          "fighter:ulkro:ULK-M3=not_done",
+          "ruling7:ulkro-crown=not_done",
+          "fighter:ervet:ervet-M1=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "vashil-rest-minors",
+        "items": [
+          "fighter:vashil:VAS-M1=not_done",
+          "fighter:vashil:VAS-M2=not_done",
+          "fighter:vashil:VAS-M3=not_done",
+          "CW5 polish=not_done",
+          "critic:recovered-minors (CW5 fighters)=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      }
+    ],
+    "regressions": [],
+    "summary": "no verdict"
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Fix"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Refix"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "CW5:vashil-crown-cards",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a655d598389e611ed",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742310219,
+      "lastProgressAt": 1793742310219,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"fighter:vashil:VAS-B1\",\"status\":\"done\",\"evidence\":\"I re-cut hood_shape in art/blender/fighters/vashil.py as a rounded dome: a round front arch, with the pointed bell-window outline kept only on the visor frame. I added a dark slate stole (#414955; warm charcoal #46403A on First Bell) as a yoke on the back of the cowl. One full rebuild covered all three GLBs; three load tests OK, 2…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "CW5:ardit-burdam",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "ab6ded3ac2b454344",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742310219,
+      "lastProgressAt": 1793742310219,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"fighter:ardit:ardit-M3\",\"status\":\"done\",\"evidence\":\"Gate met: the tabard's top segment peaks at 26.3 deg (limit 30) and trails the thigh by 2 frames (was 53.9 deg with 0 lag). The middle segment still swings up to ~83 deg, draped over the raised knee at the run's 61-deg stride peak; max frame step 30 deg/f. Measured with `python3 art/tools/chain_motion.py art/out/fighters/ardit/ar…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "CW5:kemdo-lisvel",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a6882e0fc23d21877",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793742310235,
+      "queuedAt": 1793742310220,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "L=/tmp/claude-501/fw_CW5_lisvel_build.log; for i in $(seq 1…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793749728143,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 109043,
+      "toolCalls": 31,
+      "durationMs": 7417908
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "CW5:nurrow-ulkro-ervet",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a98ed3965bed776ba",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793749728175,
+      "queuedAt": 1793749728169,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "grep -n \"def chain_weights\" -A30 art/blender/common/mesh.py…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793774787540,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 222312,
+      "toolCalls": 67,
+      "durationMs": 24871823
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "CW5:vashil-rest-minors",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "aae5cdbccbee10e79",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793774787581,
+      "queuedAt": 1793774787565,
+      "attempt": 1,
+      "lastToolName": "Write",
+      "lastToolSummary": "/Users/sitskovich/Developer/forgeflow-games/games/vale/art/…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793785015686,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 128546,
+      "toolCalls": 28,
+      "durationMs": 10228099
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "CW5:verify1",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "af8d74bb097940c93",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793785015797,
+      "queuedAt": 1793785015783,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "cat _harness/_reports/fw_CW5_kemdo_chains.txt | tail -12; g…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793789466184,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 101889,
+      "toolCalls": 20,
+      "durationMs": 4450387
+    }
+  ],
+  "totalTokens": 561790,
+  "totalToolCalls": 146
+}

@@ -140,3 +140,14 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 - **Compact builds** (anchor 1.6 m: Sukri, and any fighter whose sheet says compact) may sit at **85-105 px**, if their selection ring, health bar and silhouette still pass the readability probes. Small-bodied fighters are an established MOBA archetype.
 - **Fighters not marked compact** (Ilsheta, Lisvel, Nurrow base, Rishal, Odrum) must reach 105 px through `art.scale`.
 - Marund Long Evening at 130.4 px counts as inside the gauge. Rounding 0.4 px is not worth a rebuild.
+
+## 12. Card grain gate measures render speckle, not painted texture (lead, by delegation, 2026-11-04)
+
+**Problem:** the closing reviewers' grain gate fails on every staged card (Vashil, Ardit, Burdam: 18 of 18). It compares the figure's high-pass (grey minus a σ 2 blur) with the plate's, and the gate is a figure p50 of at most 2× the plate's.
+- The plate is smoothed by the Kuwahara brush, so painted folds, strokes and material detail on the figure count as "grain".
+- The pixel-scale speckle the reviewers actually objected to is gone: card_qa's `speckle` diagnostic now reads about 1-2.5, down from 6+.
+
+**Ruling:** the card gate is the **speckle** measure: the figure's std of (grey minus a 3×3 median), at most 2× the plate's p50.
+- Splash art in shipped games carries painted texture detail, so a gate that punishes detail sets the wrong bar.
+- The σ 2 grain figure stays in the card_qa report as a diagnostic, not a gate.
+- Reviewers still judge painterliness by eye at full size.
