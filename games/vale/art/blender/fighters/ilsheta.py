@@ -247,7 +247,10 @@ CARDS = {
                               "size": 0.3},
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.8, "color": "#FFE8D2", "power": 24.0,
                               "size": 0.25}]},
-        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 28.0},
+        # (CW6 refix, cards:ilsheta: every bust put the lamp, its hook and its ring before the face; each bust now
+        # picks a moment and a bearing with the lamp BESIDE the face, measured from the GLB: lamp-to-face offset across
+        # the screen >= 0.22 m, _harness/_reports/fw_CW6_r1_stage.mjs)
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 36.0},
     },
     "ilsheta_stillwater": {
         "splash": {"clip": "recall", "t": 0.33, "yaw": 52.0, "pitch": 2.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
@@ -257,7 +260,7 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 150.0, "el": 18.0, "dist": 0.8, "color": "#D6ECEA", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 40.0, "t": 0.33},
+        "portrait": {"yaw": 50.0, "clip": "idle_lobby", "t": 0.8},
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC"},
     },
@@ -271,7 +274,7 @@ CARDS = {
                               "size": 0.35},
                              {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 40.0,
                               "size": 0.25}]},
-        "portrait": {"clip": "recall", "t": 0.82, "yaw": -26.0, "key_az": 150.0},
+        "portrait": {"clip": "taunt", "t": 0.5, "yaw": 44.0, "key_az": 150.0},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
         "plate": {"tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],
@@ -2033,10 +2036,17 @@ def clip_overrides(ctx) -> dict:
     # ilsheta-idle-recall-frozen: head 2.1 cm, the lamp 3.8 cm; now a 2-3 cm breath and weight shift in chest and hips
     # carrying the head ~6 cm, the lamp swinging 10-12 degrees a few frames behind the hand, the mantle panels 6-8
     # degrees behind the hips)
+    # (CW6 refix, par:ilsheta / ilsheta-guard-pose: the guard's hook turned in toward her front-left, so from the
+    # game camera the lamp hung before her chin and covered the face in every front frame, the left hand tucked in to
+    # it. The idle guard turns the hook out to her front-right, so the lamp hangs BESIDE the face at her right
+    # shoulder (pivot ~4 cm lower), and the left arm hangs open at her side. The other clips keep the brief's guard.)
+    GI = guard_pose(R=(wr("R", -0.345, -0.150, 1.130, POLE_R), staff_or((0.08, 0.02, 0.99), (-0.30, -0.95, 0.0))),
+                    L=(wr("L", 0.150, -0.110, 0.990, POLE_L), hand_or((0.05, -0.30, -0.95), (-0.95, 0.0, 0.10))))
+
     def idle(t):
         b, s = osc(t, 2), osc(t, 1, 0.1)
         sl = osc(t, 1, 0.1 - 4.0 / 72)                      # the hips' sway 4 frames late: the lamp and panels
-        p = add(G, P_(chest=(2.6 * b, 0.8 * s, -1.2 * s), spine=(1.0 * b, 0, 2.6 * s), neck=(-1.2 * b, 0, 1.0 * s),
+        p = add(GI, P_(chest=(2.6 * b, 0.8 * s, -1.2 * s), spine=(1.0 * b, 0, 2.6 * s), neck=(-1.2 * b, 0, 1.0 * s),
                       head=(-1.2 * b, 3.0 * s, 2.0 * s), shoulder_L=(0, 0, 1.6 * b), shoulder_R=(0, 0, -1.6 * b),
                       hips=(0, 2.0 * s, -2.8 * s), x_mantle_l=(3.0 * sl, 0, 3.0 * b - 5.0 * sl),
                       x_mantle_r=(-3.0 * sl, 0, -3.0 * b - 5.0 * sl)))

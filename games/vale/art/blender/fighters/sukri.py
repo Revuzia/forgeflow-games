@@ -3181,9 +3181,12 @@ def clip_overrides(ctx) -> dict:
     def idle_s(t):
         b = math.sin(2 * math.pi * 2 * t)
         s = math.sin(2 * math.pi * t)
-        return pose(torso=dict(hips=(0, 0.8 * s, -0.6 * s), spine=(2.0 + 0.4 * b, 0, 0.4 * s), chest=(2.0 + 1.0 * b, 0.6 * s, 0),
-                               neck=(-1.5 - 0.5 * b, 0, 0), head=(-1.0 - 0.3 * b, 1.5 * s, 0.4 * s)),
-                    hips=(0.006 * s, 0, -0.004 * (0.5 + 0.5 * b)),
+        # (CW6 refix, par:sukri: the idle's head travelled 2.4 cm, under the 3.8 cm roster median: a fuller weight
+        # shift onto the staff, a deeper breath and the hood turning a little after the hips)
+        c = math.sin(2 * math.pi * t - 0.6)
+        return pose(torso=dict(hips=(0, 1.6 * s, -1.4 * s), spine=(2.0 + 0.8 * b, 0, 1.2 * s), chest=(2.0 + 1.8 * b, 1.4 * s, 0),
+                               neck=(-1.5 - 0.9 * b, 1.5 * c, 0), head=(-1.0 - 1.0 * b, 4.0 * c, 1.0 * s)),
+                    hips=(0.017 * s, 0, -0.009 * (0.5 + 0.5 * b)),
                     R=(GUARD_R[0], GUARD_R[1] + 0.02 * s, GUARD_R[2] + 0.008 * b), Rp=POLE_R,
                     aim=(UP[0] + 0.03 * s, UP[1] - 0.02 * s, UP[2]),
                     L=(GUARD_L[0] + 0.012 * s, GUARD_L[1] - 0.012 * b, GUARD_L[2]))
@@ -3410,13 +3413,41 @@ def clip_overrides(ctx) -> dict:
     rc = pose(torso=dict(spine=(5, 0, 0), chest=(5, 2, 0), neck=(8, 0, 0), head=(14, 3, 0)), R=(-0.30, -0.42, -0.18),
               aim=(-0.34, 0.02, 0.94), slide=-0.06, Lpos=(0.08, -0.36, 0.96), Lp=(0.9, 0.2, -0.3), aimL=(0.0, 0.0, 1.0))
 
+    # CW6 refix (par:sukri: a 2 s loop with 1.0 cm of head travel, replayed through RIFT's 7 s channel): a 6 s
+    # performance (180 f, the load test's cap) in the same hold: he raises the cup to his hood and breathes on it,
+    # bows over it as the motes stir, tips it to look in, glances left and right over the rim, breathes on it once
+    # more and settles back (closes on its first pose; the cup stays in the left fist, the staff leaned out at the
+    # right side clear of the hood throughout)
+    def rk(torso, hips=(0.0, 0.0, 0.0), L=(0.08, -0.36, 0.96), aimL=(0.0, 0.0, 1.0), R=(-0.30, -0.42, -0.18)):
+        t0 = dict(spine=(5, 0, 0), chest=(5, 2, 0), neck=(8, 0, 0), head=(14, 3, 0))
+        t0.update(torso)
+        return pose(torso=t0, hips=hips, R=R, aim=(-0.34, 0.02, 0.94), slide=-0.06, Lpos=L, Lp=(0.9, 0.2, -0.3),
+                    aimL=aimL)
+    rc_in = rk(dict(chest=(2, 2, 0), spine=(3, 0, 0), head=(10, 3, 0)), hips=(0.0, 0.0, 0.006))
+    raise_ = rk(dict(spine=(2, 0, 0), chest=(0, 2, 0), neck=(2, 0, 0), head=(4, 2, 0)), hips=(0.0, 0.01, 0.004),
+                L=(0.06, -0.30, 1.05))
+    breath = rk(dict(spine=(8, 0, 0), chest=(9, 2, 0), neck=(12, 0, 0), head=(20, 2, 0)), hips=(0.0, -0.012, -0.018),
+                L=(0.06, -0.31, 1.00))
+    bow = rk(dict(hips=(3, 0, 0), spine=(10, 0, 2), chest=(10, 4, 2), neck=(14, 4, 0), head=(24, 6, 4)),
+             hips=(0.006, -0.02, -0.03), L=(0.07, -0.34, 0.94))
+    tip = rk(dict(spine=(6, 4, 0), chest=(6, 8, 0), neck=(8, 6, 0), head=(18, 12, 8)), hips=(0.014, 0.0, -0.012),
+             L=(0.12, -0.36, 0.95), aimL=(0.35, 0.0, 0.94))
+    look_l = rk(dict(spine=(3, 6, 0), chest=(2, 10, 0), neck=(2, 10, 0), head=(2, 22, 0), hips=(0, 6, 0)),
+                hips=(0.018, 0.0, 0.0), L=(0.10, -0.36, 0.92))
+    look_r = rk(dict(spine=(3, -6, 0), chest=(2, -8, 0), neck=(2, -10, 0), head=(2, -24, 0), hips=(0, -6, 0)),
+                hips=(-0.018, 0.0, 0.0), L=(0.06, -0.37, 0.92))
+    rec_keys = [(0.00, rc, "linear"), (0.07, rc_in, "inout"), (0.15, raise_, "inout"), (0.22, breath, "inout"),
+                (0.29, raise_, "inout"), (0.37, bow, "inout"), (0.45, tip, "inout"), (0.52, bow, "inout"),
+                (0.60, look_l, "inout"), (0.69, look_r, "inout"), (0.77, raise_, "inout"), (0.84, breath, "inout"),
+                (0.92, rc_in, "inout"), (1.0, rc, "inout")]
+    rec_fn = anim.drag(anim.keyed(rec_keys), 180, {"head": 2.0, "neck": 1.0}, loop=True)
+
     def recall_s(t):
-        p = dict(rc)
-        b = math.sin(2 * math.pi * 2 * t)
-        p["chest"] = (5 + 0.8 * b, 2, 0)
-        p["head"] = (14 + 1.5 * math.sin(2 * math.pi * t), 3, 0)
+        p = dict(rec_fn(t))
+        b = math.sin(2 * math.pi * 6 * t)                      # the breathing under the performance
+        p["chest"] = tuple(np.add(p.get("chest", (0, 0, 0)), (0.8 * b, 0, 0)))
         return p
-    out["recall"] = anim.Clip("recall", 60, True, recall_s)
+    out["recall"] = anim.Clip("recall", 180, True, recall_s)
 
     # CHANNEL: the staff held forward, the cup raised before him, the free hand open toward it (loops)
     ch = pose(torso=dict(chest=(2, 3, 0), head=(-3, -2, 0)), R=(-0.30, -0.70, -0.20), aim=(-0.05, -0.40, 0.92),
@@ -3512,6 +3543,37 @@ def clip_overrides(ctx) -> dict:
         return p
     out["victory"] = anim.Clip("victory", 50, False, vic_s)
     return out
+
+
+# ── export: the shipping compression with the base colour at WebP q74 (CW6 refix: a full build landed at 1175 KiB
+# against the 1172 KiB budget at the default q80; the earlier package re-encoded it by hand with
+# `optimize.mjs --webp --q-base 74`: this wraps export.optimize in this build process only, as odrum.py does) ──
+from common import export as _export  # noqa: E402
+
+Q_BASE = 74
+_optimize0 = _export.optimize
+
+
+def _optimize_qbase(path, out=None, quantize=False, fighter=False):
+    if not fighter:
+        return _optimize0(path, out, quantize, fighter)
+    import subprocess
+    out = out or path
+    script = os.path.join(scene.TOOLS_DIR, "optimize.mjs")
+    node = _export.node_exe()
+    before = os.path.getsize(path)
+    if not node or not os.path.isfile(script):
+        return _optimize0(path, out, quantize, fighter)
+    args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+    r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
+        return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
+    scene.log(r.stdout.strip())
+    return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE}
+
+
+_export.optimize = _optimize_qbase
 
 
 if __name__ == "__main__":

@@ -156,21 +156,21 @@
     "tris_maul_faces": 220,
     "tris_trowel": 150,
     "tris_pail": 750,
-    "validate_marund": "18498->18486",
+    "validate_marund": "18498->18489",
     "validate_marund_accent": "240->236"
   },
-  "uv_coverage": 0.633,
+  "uv_coverage": 0.634,
   "bake": {
-    "base": 13.98,
-    "rough_metal": 11.73,
-    "normal": 6.13,
-    "ao": 5.66,
-    "normal_fixed_px": 21413,
-    "projection": 83.4,
-    "pack_save": 84.07,
-    "total": 122.65
+    "base": 8.64,
+    "rough_metal": 15.41,
+    "normal": 5.94,
+    "ao": 5.24,
+    "normal_fixed_px": 22336,
+    "projection": 65.71,
+    "pack_save": 65.93,
+    "total": 101.72
   },
-  "tris": 18722,
+  "tris": 18725,
   "mesh_top_m": 2.316,
   "clips": {
     "idle": {
@@ -276,23 +276,23 @@
       "slam_t": 0.82
     }
   },
-  "glb_bytes_raw": 2859852,
+  "glb_bytes_raw": 2843876,
   "optimize": {
     "ok": true,
-    "before": 2859852,
-    "after": 1176572
+    "before": 2843876,
+    "after": 1164804
   },
-  "glb_bytes": 1176572,
+  "glb_bytes": 1164804,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1149 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_base 2048x2048 298K, marund_normal 512x512 41K, marund_orm 512x512 58K",
-      "  skinned meshes: marund(15867v), marund_accent(126v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1138 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_base 2048x2048 290K, marund_normal 512x512 41K, marund_orm 512x512 57K",
+      "  skinned meshes: marund(15798v), marund_accent(126v)",
       "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.333s/22tr, attack2:1.333s/21tr, cast_a1:0.833s/23tr, cast_a2:1.333s/22tr, cast_a3:1.000s/22tr, cast_ult:1.500s/23tr, channel:1.600s/21tr, dash:0.667s/22tr, death:2.000s/21tr, domefall_leap:0.667s/23tr, idle:2.400s/21tr, idle_lobby:4.000s/21tr, recall:6.000s/22tr, run:0.800s/23tr, stunned:1.333s/21tr, victory:2.000s/22tr",
       "  tracks checked: 350; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 18722; bind-pose bounds (three units, Y up): 1.43 x 2.32 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
+      "  tris: 18725; bind-pose bounds (three units, Y up): 1.43 x 2.32 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
       "  run: 24 f, planted samples 6, max foot-speed error 1.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -305,10 +305,10 @@
       "turntable": "art/renders/fighters/marund/turntable.png"
     },
     "seconds": {
-      "splash": 355.85,
-      "portrait": 13.18,
-      "icon": 3.56,
-      "turntable": 4.67
+      "splash": 102.86,
+      "portrait": 17.34,
+      "icon": 6.13,
+      "turntable": 8.38
     }
   },
   "three_qa": {
@@ -340,26 +340,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/marund/three_marund.png",
-    "seconds": 10.5,
+    "seconds": 44.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.58,
-      "model": 21.88,
-      "lows_bind": 29.82,
-      "uv": 14.7,
-      "bake": 122.66,
-      "clips": 0.61,
-      "export": 5.93,
-      "optimize": 2.23,
-      "load_test": 0.47,
-      "render": 377.4,
-      "three_qa": 10.76,
-      "cache": 0.27
+      "rig": 0.0,
+      "materials": 0.2,
+      "model": 11.95,
+      "lows_bind": 5.82,
+      "uv": 5.46,
+      "bake": 101.72,
+      "clips": 0.2,
+      "export": 1.53,
+      "optimize": 0.6,
+      "load_test": 0.12,
+      "render": 134.81,
+      "three_qa": 45.19,
+      "cache": 0.43
     },
-    "total_s": 587.5
+    "total_s": 308.13
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

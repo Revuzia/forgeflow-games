@@ -114,7 +114,8 @@ CARDS = {
                               "size": 0.25},
                              {"at": "x_visor_ridge", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE6C8",
                               "power": 15.0, "size": 0.15}]},
-        "portrait": {"yaw": 28.0, "clip": "idle_lobby", "t": 0.0},
+        # (CW6 refix, par:rishal: the busts read as chaotic crest crops: each is a calm three-quarter visor bust now)
+        "portrait": {"yaw": 40.0, "clip": "idle_lobby", "t": 0.0},
         "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44},
     },
     "rishal_chalkline": {
@@ -123,9 +124,11 @@ CARDS = {
                    "rim_warm": 0.4, "bounce": 0.7, "bounce_color": "#C8CCD4", "accent": 1.4,
                    "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 35.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -32.0},
+        "portrait": {"yaw": -40.0, "clip": "idle", "t": 0.25},
         # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)
-        "plate": {"tint": "#6C7890", "sat": 0.70, "median": 0.24, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
+        # (CW6 refix, rishal-M1: a tint on the base's Aubade painting held the splash at MAD 27.6: its own painting, the
+        # pale Seat walls, under the same ink-blue chalk-dusk grade)
+        "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.24, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
                   "glow_color": "#C8D4EC"},
     },
     "rishal_lamplit": {
@@ -136,7 +139,7 @@ CARDS = {
                               "size": 0.18},
                              {"at": "x_visor_ridge", "az": 200.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
                               "power": 18.0, "size": 0.12}]},
-        "portrait": {"yaw": 20.0, "clip": "cast_ult", "t": 0.10},
+        "portrait": {"yaw": 34.0, "clip": "idle_lobby", "t": 0.5},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },
@@ -4148,6 +4151,37 @@ def install_card_hooks() -> None:
     global HERO_SAMPLES
     HERO_SAMPLES = 1.0
     _install_render()
+
+# ── export: the shipping compression with the base colour at WebP q74 (CW6 refix: a full build landed at 1177 KiB
+# against the 1172 KiB budget at the default q80; the earlier package re-encoded it by hand with
+# `optimize.mjs --webp --q-base 74`: this wraps export.optimize in this build process only, as odrum.py does) ──
+from common import export as _export, scene  # noqa: E402
+
+Q_BASE = 74
+_optimize0 = _export.optimize
+
+
+def _optimize_qbase(path, out=None, quantize=False, fighter=False):
+    if not fighter:
+        return _optimize0(path, out, quantize, fighter)
+    import subprocess
+    out = out or path
+    script = os.path.join(scene.TOOLS_DIR, "optimize.mjs")
+    node = _export.node_exe()
+    before = os.path.getsize(path)
+    if not node or not os.path.isfile(script):
+        return _optimize0(path, out, quantize, fighter)
+    args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+    r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
+        return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
+    scene.log(r.stdout.strip())
+    return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE}
+
+
+_export.optimize = _optimize_qbase
+
 
 if __name__ == "__main__":
     fighter.main(sys.modules[__name__])

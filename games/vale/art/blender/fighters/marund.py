@@ -93,7 +93,7 @@ CARDS = {
                               "size": 0.25}]},
         # (polish: at pitch 15 the cap hid the eyes and the white beak keel over the mouth line read as a fang;
         # the busts look up under the brim at pitch 5 so the eyes and the keel read together, as the brief asks)
-        "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.66, "clip": "victory", "t": 0.96},
+        "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.78, "clip": "victory", "t": 0.96},
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
     },
     "marund_gorgewalk": {
@@ -102,7 +102,7 @@ CARDS = {
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
                    "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.66, "clip": "idle_lobby", "t": 0.0},
+        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.78, "clip": "idle_lobby", "t": 0.0},
         "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
                   "glow_color": "#D8DCE8"},
     },
@@ -114,7 +114,7 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.6, "color": "#FFCC90", "power": 22.0,
                               "size": 0.2}]},
-        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.66},
+        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.78},
         "plate": {"tint": "#B08C9C", "sat": 0.85, "median": 0.23, "cx": 0.60, "glow": [0.30, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },
@@ -215,7 +215,9 @@ def sculpts() -> list:
     mask.inter(HalfSpace((0, -0.10, 1.7), (0, 1, 0), 1.0), k=0.01)
     mask.inter(HalfSpace((0, 0, 1.62), (0, 0, -1), 1.0), k=0.006)
     mask.add(RoundBox((0, -0.245, 1.84), (0.26, 0.035, 0.024), 0.014), k=0.014)
-    mask.add(RoundCone((0, -0.255, 1.80), (0, -0.33, 1.635), 0.06, 0.018), k=0.03)
+    # (CW6 refix, marund-M4: the keel's tip ran 1.5 cm under the painted beak tip, so the projection laid the
+    # painting's dark tip outline on it: a black speck at the beak tip on every bust; the tip ends inside the pale paint)
+    mask.add(RoundCone((0, -0.255, 1.80), (0, -0.322, 1.656), 0.06, 0.020), k=0.03)
     for sx in (-1, 1):
         mask.sub(Ellipsoid((sx * 0.135, -0.25, 1.785), (0.085, 0.06, 0.034), axes=sdf.rot_y(sx * -14)), k=0.01)
         mask.sub(RoundBox((sx * 0.20, -0.23, 1.69), (0.006, 0.04, 0.06), 0.003, axes=sdf.rot_y(sx * 18)), k=0.002)
@@ -602,6 +604,22 @@ def clip_overrides(ctx) -> dict:
                           {"x_cap_tip": (0.6, 0.0, -0.8)})
     palm_up = pose(dict(hips=(4, 8, 0), spine=(4, 6, 0), chest=(6, 8, 0), head=(8, 8, 0)), (0.0, -0.02, -0.03),
                    R=(0.22, -0.78, -0.48), Rp=(-0.8, 0.3, -0.5), aim=(0.62, -0.62, 0.24), Lprop=0.60)
+    # (CW6 refix, marund-M3: the left hand switched from a shoulder-relative target to a grip on the haft
+    # (to_prop) between keys; HandTarget.lerp cannot blend the two, so the wrist jumped 0.47-0.50 m in one 60 Hz
+    # frame at t 4.12 s and 0.25 m at 5.02 s. The palm-up hold now keys the SAME wrist place as a shoulder-relative
+    # target, solved from the grip pose once, so every key in and out of it is a rel -> rel blend; the long reaches
+    # in and out of it (and the lean -> lift) ease on a sine, whose peak speed is half the cubic's: <= 0.1 m a frame)
+    def as_rel(p, pole=(0.8, 0.4, -0.4)):
+        M = skel.fk(anim.resolve(skel, p))
+        up, fo = "upper_arm.L", "forearm.L"
+        Rc = M["chest"].to_3x3() @ skel.rest["chest"].to_3x3().inverted()
+        sh = (M[skel.parent[up]] @ skel.local[up]).translation
+        rel = Rc.inverted() @ ((M["hand.L"].translation - sh) / (skel.length[up] + skel.length[fo]))
+        q = dict(p)
+        q["ik"] = dict(p["ik"])
+        q["ik"]["hand.L"] = H(rel=tuple(round(float(v), 4) for v in rel), pole=pole)
+        return q
+    palm_up = as_rel(palm_up)
     palm_tap = anim.add(palm_up, anim.P(chest=(2, 0, 0)))
     palm_tap["ik"] = dict(palm_up["ik"])
     palm_tap["ik"]["hand.R"] = H(rel=(0.22, -0.78, -0.58), pole=(-0.8, 0.3, -0.5))
@@ -611,14 +629,14 @@ def clip_overrides(ctx) -> dict:
     breathe_in["hips_loc"] = tuple(lean["hips_loc"][i] + (0, 0, 0.012)[i] for i in range(3))
     rec = at([
         (0.00, lean, "linear"), (0.06, breathe_in, "inout"), (0.11, lean, "inout"),
-        (0.18, lift, "inout"), (0.24, rub_a, "inout"), (0.29, rub_b, "inout"), (0.34, rub_a, "inout"),
+        (0.18, lift, "sine"), (0.24, rub_a, "inout"), (0.29, rub_b, "inout"), (0.34, rub_a, "inout"),
         (0.39, rub_b, "inout"), (0.44, lift, "inout"),
         (0.50, seated, "in"), (0.53, seated0, "settle"),
         (0.56, knock_out, "out"), (0.58, knock_in, "in"), (0.61, knock_out, "out"), (0.63, knock_in, "in"),
         (0.66, seated0, "inout"),
-        (0.71, palm_up, "inout"), (0.735, palm_tap, "in"), (0.76, palm_up, "out"), (0.785, palm_tap, "in"),
+        (0.71, palm_up, "sine"), (0.735, palm_tap, "in"), (0.76, palm_up, "out"), (0.785, palm_tap, "in"),
         (0.81, palm_up, "out"),
-        (0.86, look_l, "inout"), (0.91, look_r, "inout"), (0.95, breathe_in, "inout"), (1.0, lean, "inout")])
+        (0.86, look_l, "sine"), (0.91, look_r, "inout"), (0.95, breathe_in, "inout"), (1.0, lean, "inout")])
     out["recall"] = anim.Clip("recall", 180, True, anim.drag(rec, 180, {"head": 2.0, "neck": 1.0}, loop=True))
 
     # channel — stirring the pail (60 f loop)
@@ -651,7 +669,7 @@ def clip_overrides(ctx) -> dict:
     lob = at([
         (0.00, rest_l, "linear"), (0.10, palm_up, "inout"), (0.14, palm_tap, "in"), (0.18, palm_up, "out"),
         (0.22, palm_tap, "in"), (0.26, palm_up, "out"), (0.34, rest_l, "inout"),
-        (0.42, rim_a, "inout"), (0.54, rim_b, "inout"), (0.60, rest_l, "inout"),
+        (0.42, rim_a, "sine"), (0.54, rim_b, "inout"), (0.62, rest_l, "sine"),
         (0.70, peer, "inout"), (0.80, anim.add(peer, anim.P(head=(4, -10, 0))), "inout"), (0.90, rest_l, "inout"),
         (1.0, rest_l, "linear")])
     out["idle_lobby"] = anim.Clip("idle_lobby", 120, True, anim.drag(lob, 120, {"head": 2.0, "neck": 1.0}, loop=True))
@@ -680,6 +698,35 @@ def clip_overrides(ctx) -> dict:
 
 def snap_in(t):
     return t ** 1.6
+
+
+# ── portrait framing (CW6 refix, marund-M4; wraps render._fit_camera in this process only, as odrum.py does): the
+# shared bust box tops out at head + 0.36 * H / 1.9 (0.36 m over the head bone), but the dome's crown is 0.46 m over
+# the cap pivot, so every bust cut the cap off through its three windows (z 2.10-2.29). Marund's busts (fill
+# PORTRAIT_FILL, keyed in CARDS) run the box up to the posed crown + 3 cm: the whole dome and its windows over the mask.
+PORTRAIT_FILL = 0.78
+
+
+def _install_portrait_fit() -> None:
+    from common import render
+    if getattr(render._fit_camera, "_marund", False):
+        return
+    orig = render._fit_camera
+
+    def fit(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=None):
+        if abs(aspect - 1.0) < 1e-6 and abs(lens - 85.0) < 1e-6 and abs(fill - PORTRAIT_FILL) < 1e-6:
+            arm = next((o for o in bpy.data.objects if o.type == "ARMATURE" and "x_cap" in o.pose.bones), None)
+            if arm is not None:
+                crown = render.bone_pos(arm, "x_cap").z + (HEIGHT - CAP_PIVOT[2]) + 0.03
+                if crown > hi.z:
+                    hi = hi.copy()
+                    hi.z = crown
+        return orig(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center)
+    fit._marund = True
+    render._fit_camera = fit
+
+
+_install_portrait_fit()
 
 
 if __name__ == "__main__":
