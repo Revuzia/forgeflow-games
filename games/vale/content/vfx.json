@@ -2602,7 +2602,7 @@
     ]
   },
   {
-    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (light: 1.25-1.55 m, emissive 2.4: its four points reach ~0.6 x the victim), warm white turning to the signature, holds full for about 5.5 sim frames (180 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (the warm white holds to 62 % of the glint before the signature, so a deep signature such as a crimson still reads as a disc) (the cut holds 200 ms) (polish C3: glint 1.45-1.78 m at emissive 2.8, just under the heavy glint)",
+    "$comment": "T1 · impact · basic physical hit: a warm-white core over an ink puff (reads on pale stone), a cut along the blow in the attacker's signature, 5 radial streaks, chalk chips settled by 0.4 s (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (light: 1.25-1.55 m, emissive 2.4: its four points reach ~0.6 x the victim), warm white turning to the signature, holds full for about 5.5 sim frames (180 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (the warm white holds to 62 % of the glint before the signature, so a deep signature such as a crimson still reads as a disc) (the cut holds 200 ms) (polish C3: glint 1.45-1.78 m at emissive 2.8, just under the heavy glint) (CW1 refix C3: the glint holds the warm white flat to 40 % of its life and is 8 % larger, so its lit disc stays >= 0.5 x the victim for 167 ms on a light hit)",
     "id": "lib_hit_phys_light",
     "duration": 0.5,
     "teamTint": true,
@@ -2660,15 +2660,15 @@
         "size": [
           [
             0,
-            1.45
+            1.57
           ],
           [
             0.2,
-            1.68
+            1.81
           ],
           [
             1,
-            1.78
+            1.92
           ]
         ],
         "color": [
@@ -2677,7 +2677,11 @@
             "#FFEFD8"
           ],
           [
-            0.62,
+            0.4,
+            "#FFEFD8"
+          ],
+          [
+            0.72,
             "signature"
           ],
           [
@@ -33832,7 +33836,7 @@
     ]
   },
   {
-    "$comment": "T4 · Shade · Felled Shard: a white streak from the sky and a white core; the great shard is driven in and stands for the shadow's 5 s (dark ironstone, pale honed edge, a team-lit cut top); a team ring to 2 m, an ink ring and a wide crack beyond it, heavy stone and dust thrown out (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark)",
+    "$comment": "T4 · Shade · Felled Shard: a white streak from the sky and a white core; the great shard is driven in and stands for the shadow's 5 s (dark ironstone, pale honed edge, a team-lit cut top); a team ring to 2 m, an ink ring and a wide crack beyond it, heavy stone and dust thrown out (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shard lands honed-pale and hot, settling to ironstone over 0.2 s, so the first beat reads as light at its core, not a dark stone)",
     "id": "hesmi_ult_shard",
     "duration": 2.4000000000000004,
     "teamTint": true,
@@ -33937,7 +33941,20 @@
           1
         ],
         "life": 5.75,
-        "color": "#4C4A53",
+        "color": [
+          [
+            0,
+            "#D3CEC3"
+          ],
+          [
+            0.03,
+            "#4C4A53"
+          ],
+          [
+            1,
+            "#4C4A53"
+          ]
+        ],
         "alpha": [
           [
             0,
@@ -33952,7 +33969,20 @@
             0
           ]
         ],
-        "emissive": 0,
+        "emissive": [
+          [
+            0,
+            1.8
+          ],
+          [
+            0.035,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
         "rim": "#D3CEC3",
         "rimPow": 3.5,
         "rimEmissive": 0.9,
@@ -46301,7 +46331,7 @@
     ]
   },
   {
-    "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark)",
+    "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shell lands lit, its glaze glowing jade at the slam and settling over 0.2 s, so the first beat reads as light over the core, not a dark lid)",
     "id": "marund_ult_domefall",
     "duration": 1.7,
     "teamTint": true,
@@ -46364,7 +46394,24 @@
             0
           ]
         ],
-        "emissive": 0.35,
+        "emissive": [
+          [
+            0,
+            6.0
+          ],
+          [
+            0.1,
+            2.4
+          ],
+          [
+            0.25,
+            0.35
+          ],
+          [
+            1,
+            0.35
+          ]
+        ],
         "rim": "signature",
         "rimPow": 2.6,
         "rimEmissive": 3.0,
@@ -70681,6 +70728,19 @@
           0.4,
           0
         ]
+      },
+      {
+        "$comment": "CW1 refix (SKIN-FX): the Long Run's own ring in the runner's hue, laid just inside the team ring and brighter than it, so a skin's palette (Long Evening's plum) carries the beat while the team stays one keyline",
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [[0, 0.15], [0.35, 1.0], [1, 1.4]],
+        "width": [0.3, 0.1],
+        "life": 0.5,
+        "color": "signature",
+        "alpha": [1, 0.85, 0],
+        "emissive": 4.0,
+        "sharp": 1.6,
+        "noise": 0.3
       },
       {
         "type": "shockwave",

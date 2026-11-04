@@ -416,8 +416,10 @@ export const SkinDef = z.object({
   /** CHANGED(RENDER), additive (CW1 SKIN-FX): a deluxe skin's own kit-effect palette. The fighter's own effects (its
    *  abilities, attacks and the units it owns) resolve "signature" / "secondary" to this pair instead of FighterDef.vfx,
    *  so the skin's effect theme reaches the kit; "team" layers stay the relationship colour. Cosmetic only. The content
-   *  build holds the signature to the fighter rules (HSV saturation >= 0.55, value 0.70-0.95, outside the reserved hues). */
-  vfx: z.object({ signature: Color, secondary: Color }).strict().optional(),
+   *  build holds the signature to the fighter rules (HSV saturation >= 0.55, value 0.70-0.95, outside the reserved hues).
+   *  `gain` (CW1 refix, SKIN-FX): the skin's signature light runs at this multiple, so a darker hue than the base kit's
+   *  (Ulkro's magenta against his green: half the luma) keeps the kit's light energy against the team keyline. */
+  vfx: z.object({ signature: Color, secondary: Color, gain: z.number().min(1).max(2).optional() }).strict().optional(),
   desc: z.string().default(''),
   releasedIn: z.string(),
 }).strict();

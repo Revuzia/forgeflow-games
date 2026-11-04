@@ -46,7 +46,8 @@ try {
   await page.waitForTimeout(2000);
   await click(page.locator('.nav__item', { hasText: 'Play' })); await page.waitForTimeout(500);
   await click(page.locator('.station', { hasText: 'RIFT' }).first()); await page.waitForTimeout(500);
-  await click(page.locator('.qcard', { hasText: 'Lantern Drill' })); await page.waitForTimeout(300);
+  // the co-op queue card (renamed 'Lantern Drill' in originality m1; a dev catalog not yet rebuilt still shows the old name)
+  await click(page.locator('.qcard').filter({ hasText: /Lantern Drill|Co-op vs/ }).first()); await page.waitForTimeout(300);
   await click(page.getByRole('button', { name: 'Find match' }));
   await waitFor(page, (v) => v.state.queue.value?.state === 'found' || !!v.state.draft.value, 30000);
   const ready = page.getByRole('button', { name: /^Ready/ }); if (await ready.count()) await click(ready.first());
@@ -58,8 +59,11 @@ try {
   await page.waitForTimeout(1500);
 
   // freeze the field: every other seat muted; one enemy fighter parked as the target
-  const setup = await vale(page, (v) => {
+  const setup = await vale(page, async (v) => {
     const c = v.state.match.value, W = c.sim.world, R = v.state.renderer;
+    // a parked foe that died is revived the sim's own way (a bare alive = true left it untargetable: death clears
+    // `targetable`, and the right-click on it then fell through to a ground move — critic:input-feel, a harness artefact)
+    const { respawnFighter } = await import('/src/sim/spawn.ts');
     const me = c.view.players.find((p) => p.player === c.you);
     const self = W.entity(me.entity);
     const orig = W.command.bind(W);
@@ -72,7 +76,7 @@ try {
     // vision, so its actor stays drawn and pickable), so auto-attack does not take the move orders
     window.__park = (near = true) => {
       const s = W.entity(me.entity), e = W.entity(foe.entity);
-      if (!e.alive) { e.alive = true; }
+      if (!e.alive) respawnFighter(W, e, e.x, e.y);
       s.target = null; if ('attackTarget' in s) s.attackTarget = null;
       const reach = (s.stats?.range ?? 1.5) + s.radius + e.radius;
       const d = near ? Math.max(1.2, reach + 0.6) : reach + 3.5;
@@ -99,7 +103,11 @@ try {
     const L = { frames: [], events: [] };
     window.__L = L;
     const a = () => R.actors.get(window.__ids.me);
-    addEventListener('pointerdown', (e) => { L.events.push({ t: e.timeStamp, button: e.button, x: e.clientX, y: e.clientY }); }, { capture: true });
+    addEventListener('pointerdown', (e) => {
+      // what the pick sees at the press (the controller's entityAt asks the same), with the foe's view state
+      const fv = c.view.entity(window.__ids.foe);
+      L.events.push({ t: e.timeStamp, button: e.button, x: e.clientX, y: e.clientY, pick: R.pickEntity(e.clientX, e.clientY), foeTargetable: fv?.targetable, foeVis: fv?.visibleMask, foeAlive: fv?.alive });
+    }, { capture: true });
     const tick = (ts) => {
       requestAnimationFrame(tick);
       const x = a();
@@ -119,10 +127,24 @@ try {
     const s = P.clone().project(cam);
     const Q = e ? e.root.position.clone().setY(e.root.position.y + 1.0).project(cam) : null;
     const W = innerWidth, H = innerHeight;
-    const pick = Q ? R.pickEntity((Q.x + 1) / 2 * innerWidth, (1 - Q.y) / 2 * innerHeight) : null;
+    const px = Q ? (Q.x + 1) / 2 * innerWidth : -1, py = Q ? (1 - Q.y) / 2 * innerHeight : -1;
+    const pick = Q ? R.pickEntity(px, py) : null;
+    // CW1 refix (critic:input-feel): why the pick rejects the foe — renderer.pickEntity's own tests, replayed on its actor
+    let why = null;
+    if (Q && pick !== window.__ids.foe && e) {
+      const ev = e.view, V3 = P.constructor;
+      const f = new V3(e.x, e.h, e.y).project(cam), h = new V3(e.x, e.h + e.artHeight, e.y).project(cam);
+      const sx = (f.x * 0.5 + 0.5) * R.cssW, sy = (-f.y * 0.5 + 0.5) * R.cssH, hy = (-h.y * 0.5 + 0.5) * R.cssH;
+      const ppm = Math.abs(sy - hy) / Math.max(0.3, e.artHeight), rx = Math.max(16, ((ev?.radius ?? 0) + 0.15) * ppm);
+      const top = Math.min(hy, sy - 24) - 6, bottom = sy + rx * 0.6;
+      why = { visible: e.visible, alive: ev?.alive, targetable: ev?.targetable, leaving: e.leaving, mode: R.mode, css: [R.cssW, R.cssH], inner: [innerWidth, innerHeight],
+        actorXY: [+e.x.toFixed(2), +e.y.toFixed(2), +e.h.toFixed(2)], rootXZ: [+e.root.position.x.toFixed(2), +e.root.position.z.toFixed(2)], simXY: [ev?.x, ev?.y],
+        artHeight: e.artHeight, feet: [Math.round(sx), Math.round(sy)], head: Math.round(hy), rx: Math.round(rx), band: [Math.round(top), Math.round(bottom)], at: [Math.round(px), Math.round(py)],
+        inBand: py >= top && py <= bottom, inX: Math.abs(px - sx) <= rx };
+    }
     const fv = v.state.match.value.view.entity(window.__ids.foe);
     const A = window.__anchor ? P.clone().set(window.__anchor.x, 0, window.__anchor.y).project(cam) : null;
-    return { x: (s.x + 1) / 2 * W, y: (1 - s.y) / 2 * H, fx: Q ? (Q.x + 1) / 2 * W : -1, fy: Q ? (1 - Q.y) / 2 * H : -1, key: a.currentKey, pick, foeAlive: fv?.alive, foeVis: fv?.visibleMask, dist: e ? Math.hypot(e.x - a.x, e.y - a.y) : null, ...(A ? { ax: (A.x + 1) / 2 * W, ay: (1 - A.y) / 2 * H } : {}) };
+    return { x: (s.x + 1) / 2 * W, y: (1 - s.y) / 2 * H, fx: Q ? (Q.x + 1) / 2 * W : -1, fy: Q ? (1 - Q.y) / 2 * H : -1, key: a.currentKey, pick, why, foeAlive: fv?.alive, foeVis: fv?.visibleMask, dist: e ? Math.hypot(e.x - a.x, e.y - a.y) : null, ...(A ? { ax: (A.x + 1) / 2 * W, ay: (1 - A.y) / 2 * H } : {}) };
   });
   const stationary = async () => {
     for (let i = 0; i < 40; i++) {
@@ -167,13 +189,15 @@ try {
     gx = Math.max(80, Math.min(1840, gx)); gy = Math.max(160, Math.min(860, gy));
     dir = -dir;
     const before = await vale(page, () => ({ ev: window.__L.events.length, fr: window.__L.frames.length }));
-    let t0ev = before.ev;
+    let t0ev = before.ev, firstMark = null;
     if (kind === 'move') {
       await page.mouse.move(gx, gy); await page.waitForTimeout(60);
       await page.mouse.down({ button: 'right' }); await page.mouse.up({ button: 'right' });
     } else if (kind === 'attack') {
       await page.mouse.move(s.fx, s.fy); await page.waitForTimeout(120);
       await page.mouse.down({ button: 'right' }); await page.mouse.up({ button: 'right' });
+      await frames(); await frames();
+      firstMark = await vale(page, () => [...document.querySelectorAll('.wmark')].map((x) => x.className).join(' '));
     } else if (kind === 'attackMove') {
       await page.mouse.move(gx, gy); await page.waitForTimeout(60);
       await page.keyboard.press('KeyA'); await page.waitForTimeout(80);
@@ -181,6 +205,8 @@ try {
     } else {
       await page.mouse.move(s.fx, s.fy); await page.waitForTimeout(120);
       await page.mouse.down({ button: 'right' }); await page.mouse.up({ button: 'right' });
+      await frames(); await frames();
+      firstMark = await vale(page, () => [...document.querySelectorAll('.wmark')].map((x) => x.className).join(' '));
       // wait for the attack clip
       for (let k = 0; k < 150; k++) { const key = await vale(page, (v) => v.state.renderer.actors.get(window.__ids.me)?.currentKey); if (/^attack|^crit/.test(key ?? '')) break; await page.waitForTimeout(10); }
       t0ev = await vale(page, () => window.__L.events.length);
@@ -211,8 +237,12 @@ try {
       return { marker, motion, pos, anim, baseKey: base.key, frameMs: fr.length > 2 ? (fr[fr.length - 1].ts - fr[Math.max(0, fr.length - 61)].ts) / Math.min(60, fr.length - 1) : null };
     }, { ev: t0ev, windup: kind === 'windupMove' });
     const markerKind = await vale(page, () => [...document.querySelectorAll('.wmark')].map((x) => x.className).join(' '));
-    report.orders.push({ i, kind, ...res, pick: s.pick, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind });
-    console.log(i, kind, JSON.stringify(res));
+    // an attack order (right-click on the enemy) must draw the ATTACK marker, never a ground move (critic:input-feel)
+    const attackMark = kind === 'attack' || kind === 'windupMove' ? firstMark : null;
+    const press = await vale(page, (v, n) => window.__L.events[n] ?? null, before.ev);
+    const wrongMark = attackMark !== null && !/wmark--attack/.test(attackMark ?? '');
+    report.orders.push({ i, kind, ...res, pick: s.pick, pickWhy: s.why, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind, firstMark, wrongMark, press });
+    console.log(i, kind, JSON.stringify(res), wrongMark ? `WRONG MARK (${attackMark}) pick ${s.pick} why ${JSON.stringify(s.why)} press ${JSON.stringify(press)}` : '');
   }
   await shot(page, 'fw_CW1_input_after_orders').catch(() => {});
 
@@ -235,6 +265,9 @@ try {
     if (all.motionP95 === null || all.motionP95 > 67 + frameMs) fail(`motion p95 ${all.motionP95} ms > 2 ticks + 1 frame`);
     if (all.markerMissing > 0) fail(`${all.markerMissing} orders drew no marker`);
     if (all.motionMissing > 0) fail(`${all.motionMissing} orders never moved the fighter`);
+    const wrong = report.orders.filter((o) => o.wrongMark);
+    report.summary.attackAsMove = wrong.length;
+    if (wrong.length) fail(`${wrong.length} attack orders on the enemy drew a move marker (orders ${wrong.map((o) => o.i).join(',')})`);
   }
 
   // ── camera, live ───────────────────────────────────────────────────────────────────────────────────────

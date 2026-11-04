@@ -16,7 +16,8 @@
 //                      with the VFX pass off; done (W1 verify combat:F4): boxWhite ≤ 0.35 on every beat frame
 //             core     mean luma inside 0.5 × the lift radius over the same circle after everything faded (the review's
 //                      measure) and the same with the victim's box left out (ground only); done: ≥ 2.3 on the first
-//                      beat (r12 M13 2.3-2.5×)
+//                      beat (r12 M13 2.3-2.5×); ×2.0 where the lifted ground reaches the ≈ 218 clip (owner ruling 10:
+//                      the beat's core at the clip, or its unlifted core × 2.3 past it)
 //   cc      combat F5. Each hard CC kind is put on one fighter in a row (applyStatus), the frame is shot; the label
 //           draw must carry one CC plate per fighter, and the plate's alpha must be 0 → 1 over 70 ms.
 //   flash   combat m-3. Tunlan's 9 m cone and Burdam's 7 m circle land on the viewer: on the landing-flash frames the
@@ -49,6 +50,8 @@ const BEFORE = opt('before', ''), TAG = opt('tag', BEFORE ? 'before' : '');
 const OUT = join(REPS, `fw_W1_combat_polish${TAG ? '_' + TAG : ''}.json`);
 const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('$')).map(([k, x]) => [k, strip(x)])) : v);
 const defs = strip(JSON.parse(readFileSync(BEFORE || join(HERE, '../content/vfx.json'), 'utf8')));
+/** owner ruling 10: the post-grade luma clip the lifted ground stops at (the first-beat core target drops to ×2.0 there) */
+const CORE_CLIP = 218;
 const LINEUP = ['lisvel', 'ardit', 'dunsom', 'ilsheta', 'odrum', 'kemdo', 'tunlan', 'hesmi', 'rishal', 'burdam'];
 const SELF_ULT = new Set(readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(HERE, '../content/fighters', f), 'utf8')))
   .filter((f) => { const fx = (f.kit?.ult?.effects ?? []).filter((e) => e.op === 'area' || e.op === 'zone'); return fx.length > 0 && fx.every((e) => e.at === 'self'); }).map((f) => f.id));
@@ -315,7 +318,14 @@ try {
         // W1 verify combat:F4: the review's box measure (victim box ±45 px, white = luma > 225 and chroma < 30) on every
         // beat frame, VFX on: the kit's own light over the struck unit included
         if (res.maxBoxWhite > 0.35) fail(`${def}: the victim box goes ${res.maxBoxWhite} white at a beat (> 0.35)`);
-        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < 2.3) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}) < 2.3 on the first beat`);
+        // owner ruling 10: where the lifted ground reaches the post-grade luma clip (≈ 218) the target is ×2.0, else ×2.3.
+        // The ground reaches it when ×2.3 of its own unlifted core would pass the clip (base × 2.3 ≥ 218: a mid-value
+        // ground of luma ≥ 95 cannot read ×2.3 without going white), or when the beat's core itself sits at the clip
+        const b0 = res.beats[0];
+        res.firstCore = b0?.core ?? null;
+        res.clipBound = !!b0 && (b0.core >= CORE_CLIP || (baseCore?.all ?? 0) * 2.3 >= CORE_CLIP);
+        res.coreTarget = res.clipBound ? 2.0 : 2.3;
+        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}) < ${res.coreTarget} on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });
     }

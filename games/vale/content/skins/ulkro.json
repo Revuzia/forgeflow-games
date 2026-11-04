@@ -32,7 +32,8 @@
     "vfxTint": "#A8609C",
     "vfx": {
       "signature": "#E838C8",
-      "secondary": "#E9CFA8"
+      "secondary": "#E9CFA8",
+      "gain": 1.8
     },
     "desc": "A plum hood and smoked-amber dart heads from the Serenade dusk festival. A rigid lacquered fan stands behind the quiver.",
     "releasedIn": "2026.10.0"

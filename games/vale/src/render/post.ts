@@ -151,15 +151,17 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     desat *= 1.0 - body;
   }
   float m = pow( 1.0 + lift, 2.2 );
-  // CW1 refix (combat C1): the effects' own light (the VFX drawn on top of the world, plus the bloom it throws) is split
-  // off against the pre-VFX world and takes the plain capped multiplier (the VFX shaders' vfxLift already holds it to
-  // the body cap) and no saturation drop: only the GROUND is solved through the tone curve and eased toward white, so an
-  // effect inside the beat keeps its kit hue (the solve on ground + light used to push a violet ult toward blue)
+  // CW1 refix (combat C1): the light the effects ADD (the VFX drawn over the world, plus the bloom it throws: per
+  // channel, what rose over the pre-VFX world) is split off and takes the plain capped multiplier (the VFX shaders'
+  // vfxLift already holds it to the body cap) and no saturation drop. What stays (the world, and whatever an ink, dust
+  // or stone layer darkened it to) is solved through the tone curve and eased toward white as the ground. So an effect
+  // inside the beat keeps its kit hue (the solve on ground + light pushed a violet ult toward blue: the ground's own
+  // multiplier fell where the light was, and the on - off difference lost the ground's warm channels)
   vec3 fx = vec3( 0.0 );
   if ( lift > 0.02 && uLiftPreOn > 0.5 ) {
     vec3 g = texture2D( uLiftPre, uv ).rgb * pow( max( uExpo, 0.0 ), 2.2 );
-    fx = c - g;
-    c = g;
+    fx = max( c - g, 0.0 );
+    c = min( c, g );
   }
   // combat C2: on the GROUND the envelope's ratio is a display ratio through the tone curve too. The NEUTRAL tone map
   // that follows compresses everything over ~0.76 linear, so a plain ×2.4^2.2 read ×1.9-2.2 on a mid-value ground

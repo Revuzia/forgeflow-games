@@ -757,9 +757,9 @@ class ValeRenderer implements Renderer {
     if (!e.skin) return null;
     const v = this.catalog.skins.find((x) => x.id === e.skin)?.vfx;
     if (!v) return null;
-    const key = v.signature + v.secondary;
+    const key = v.signature + v.secondary + (v.gain ?? 1);
     let c = this.skinSig.get(e.skin);
-    if (!c || c.key !== key) this.skinSig.set(e.skin, c = { key, sig: new Color().setStyle(v.signature), sec: new Color().setStyle(v.secondary) });
+    if (!c || c.key !== key) this.skinSig.set(e.skin, c = { key, sig: new Color().setStyle(v.signature).multiplyScalar(v.gain ?? 1), sec: new Color().setStyle(v.secondary) });
     return c;
   }
 
@@ -1141,7 +1141,7 @@ class ValeRenderer implements Renderer {
     // moved: a unit the re-cull brought back is drawn this frame)
     this.crowd.begin();
     for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
-    this.crowd.end();
+    this.crowd.end(this.rig.focus.x, this.rig.focus.z);
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
     this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);
     // fog of war
