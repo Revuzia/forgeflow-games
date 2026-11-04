@@ -1,16 +1,16 @@
 {
   "wave": "CW4",
-  "round": 3,
-  "note": "verify-only round after verify2 (file name kept per brief); supersedes the earlier verify2 content",
+  "round": 4,
+  "note": "verify-only round after verify2/round 3 (file name kept per brief); supersedes earlier content",
   "pass": false,
   "items": [
     {"id": "env:E1", "severity": "major", "status": "partly",
-     "evidence": "No CW4 commit since 94eef49d. The landmarks_art2.py refix landed only via wip sync 23c74525 (+107/-48), and only numeral_xi.glb was rebuilt (18:57, 1024 tex, 1444 tris, /tmp/fw_CW4_r1_xi.log). numeral_ii/vii/iiii, fair_stand_high/low, the kiosks and the wagon are unchanged (mtimes 12:59-13:09 or older). The working tree holds another unbuilt diff (dialstone grain 0.34->0.42, dab 0.42->0.6, cracks 0.85->0.95, numeral and fair_stand_low textures 1024->2048). No value_probe landmark re-measure exists: my --landmarks run waited more than 10 min in the full heavy queue and I stopped it, so the round-1 figure of hp 1.6-1.9 vs 3.65-4.46 for structures (target about 2.8) stands. The refix engineer claimed nothing.",
-     "fixHint": "Build all four numerals and the fair stands with the current landmarks_art2.py, run value_probe --landmarks (target landmark hp >= about 2.8), then commit with numbers."},
+     "evidence": "As of 2026-11-03 23:49 there are no CW4 commits since ccf9204a. The only change is a 12-line landmarks_art2.py edit that came in through wip sync e9352941, and it was never built. art/out/maps/landmarks: numeral_ii 09:57, numeral_vii 09:58, numeral_iiii 09:59, fair_stand_high 10:05, fair_stand_low 10:06; only numeral_xi was rebuilt (18:57). No new value_probe landmark report exists under _harness/_reports (newest fw_CW4_* reports are the earlier lmk/b5 runs). The last measured figure still stands: landmark hp 1.6-1.9 against 3.65-4.46 for structures, target about 2.8. The refix engineer claimed nothing.",
+     "fixHint": "Build all four numerals and both fair stands with the current landmarks_art2.py, run value_probe --landmarks until landmark hp >= about 2.8, and commit with the numbers."},
     {"id": "critic:monsters", "severity": "major", "status": "partly",
-     "evidence": "The catalog now allows camps[].units[].facing (lead commit cee04b68), but content/maps/map_rift.json has 0 'facing' keys (grep -c), so the Strays still stand side-on and the IoU of 0.66 stands (needs <= 0.5). stilltusk_young.glb (12:40) and stray_numeral.glb are older than the creatures.py / creatures_b.py edits that came in through wip sync 23c74525, so the bolder banding and darker Stray albedo are not built. _design/reviews/closing/ has no scored neutral-units row. Sensitivity is unchanged and still clean.",
-     "fixHint": "Set facing toward the camera on the RIFT Stray camp units in map_rift.json and re-measure IoU; rebuild stilltusk_young and stray_numeral; write the neutral-units score row."}
+     "evidence": "grep -c facing content/maps/map_rift.json = 0, although the catalog has allowed camps[].units[].facing since cee04b68. The Strays still stand side-on and the IoU of 0.66 stands (needs <= 0.5). art/out/units/stilltusk_young.glb (12:40) and stray_numeral.glb (12:15) were not rebuilt, so the bolder banding and darker albedo are not in game. _design/reviews/closing/ has no neutral-units score file or row (only combat.json and critic.json mention 'neutral'). Sensitivity is unchanged and clean.",
+     "fixHint": "Add facing toward the camera on the RIFT Stray camp units in map_rift.json and re-measure IoU; rebuild stilltusk_young and stray_numeral; write a scored neutral-units row."}
   ],
   "regressions": [],
-  "summary": "Fail. Nothing new was committed for CW4. Only numeral_xi was rebuilt, and no landmark hp was re-measured. Stray facing is still not set, and the Stilltusk Young and Stray changes are not built."
+  "summary": "Fail. Nothing new landed for CW4: no rebuilt landmark or monster GLBs, no Stray facing, no re-measure, no neutral-units row. Both majors stay partly."
 }
