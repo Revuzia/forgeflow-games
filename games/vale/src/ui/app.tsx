@@ -168,14 +168,16 @@ function bindRenderer(state: AppState, router: Router, r: RendererPort | null): 
 // loop keeps drawing; its verdict becomes the stored video preset in place of the fixed 'high' default. A verdict
 // below High says so in a toast that opens Settings > Video. Runs once per device (CALIB_KEY holds the verdict), only
 // while the stored video block is still the untouched High default; automated browsers (the harness) skip it so
-// their shots keep the fixed default, unless the URL asks with ?calibrate=1 (?calibrate=0 always skips).
+// their shots keep the fixed default, unless the URL asks with ?calibrate=1 (?calibrate=0 always skips; QA of the
+// notice: ?calibrate=low or =medium takes that verdict without sampling).
 const CALIB_KEY = 'vale.calib.v1';
 function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
   const { state, router, session, cv } = ctx;
   if (!r?.calibrate) return;
   const q = new URLSearchParams(location.search).get('calibrate');
   if (q === '0') return;
-  if (q !== '1') {
+  const forced = q === 'low' || q === 'medium' ? q : null;
+  if (q !== '1' && !forced) {
     if (navigator.webdriver) return;
     try { if (localStorage.getItem(CALIB_KEY)) return; } catch { return; }
     const v = state.settings.peek().video;
@@ -186,7 +188,8 @@ function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
     if (started || router.route.value.screen !== 'home' || state.match.value) return;
     started = true;
     queueMicrotask(() => stop());
-    void r.calibrate!(3).then((res) => {
+    const sample = forced ? Promise.resolve({ preset: forced, frames: 0, p50Ms: 0, p95Ms: 0 }) : r.calibrate!(3);
+    void sample.then((res) => {
       try { localStorage.setItem(CALIB_KEY, JSON.stringify({ ...res, at: new Date().toISOString() })); } catch { /* per-device only */ }
       const cur = state.settings.peek().video;
       if (res.preset === 'high' || cur.preset !== 'high') return;      // High holds, or the player changed it meanwhile

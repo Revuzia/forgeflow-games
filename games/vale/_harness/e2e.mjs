@@ -848,7 +848,9 @@ async function hudLeak() {
     const proto = await cdp.send('Runtime.evaluate', { expression: 'HTMLElement.prototype' });
     const all = await cdp.send('Runtime.queryObjects', { prototypeObjectId: proto.result.objectId });
     const res = await cdp.send('Runtime.callFunctionOn', { objectId: all.objects.objectId, returnByValue: true,
-      functionDeclaration: 'function () { const h = this.filter((e) => e.classList && e.classList.contains("hud")); return { detached: h.filter((e) => !e.isConnected).length, attached: h.filter((e) => e.isConnected).length, elements: this.length }; }' });
+      // the query also returns the element prototypes (HTMLDivElement.prototype...), whose classList getter throws: guard each one
+      functionDeclaration: 'function () { const isHud = (e) => { try { return e.classList.contains("hud"); } catch { return false; } }; const h = this.filter(isHud); return { detached: h.filter((e) => !e.isConnected).length, attached: h.filter((e) => e.isConnected).length, elements: this.length }; }' });
+    if (res.exceptionDetails) throw new Error(`hud_leak query threw: ${res.exceptionDetails.exception?.description ?? res.exceptionDetails.text}`);
     await cdp.detach().catch(() => {});
     info = { matches: purse.matches, ...res.result.value };
     expect(info.attached === 0 && info.detached === 0, 'a .hud root outlived its match', info);
