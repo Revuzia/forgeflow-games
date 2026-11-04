@@ -93,7 +93,7 @@ CARDS = {
                               "size": 0.25}]},
         # (polish: at pitch 15 the cap hid the eyes and the white beak keel over the mouth line read as a fang;
         # the busts look up under the brim at pitch 5 so the eyes and the keel read together, as the brief asks)
-        "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.78, "clip": "victory", "t": 0.96},
+        "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.88, "clip": "victory", "t": 0.96},
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
     },
     "marund_gorgewalk": {
@@ -102,7 +102,7 @@ CARDS = {
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
                    "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.78, "clip": "idle_lobby", "t": 0.0},
+        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.88, "clip": "idle_lobby", "t": 0.0},
         "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
                   "glow_color": "#D8DCE8"},
     },
@@ -114,7 +114,7 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.6, "color": "#FFCC90", "power": 22.0,
                               "size": 0.2}]},
-        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.78},
+        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.88},
         "plate": {"tint": "#B08C9C", "sat": 0.85, "median": 0.23, "cx": 0.60, "glow": [0.30, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },
@@ -704,7 +704,9 @@ def snap_in(t):
 # shared bust box tops out at head + 0.36 * H / 1.9 (0.36 m over the head bone), but the dome's crown is 0.46 m over
 # the cap pivot, so every bust cut the cap off through its three windows (z 2.10-2.29). Marund's busts (fill
 # PORTRAIT_FILL, keyed in CARDS) run the box up to the posed crown + 3 cm: the whole dome and its windows over the mask.
-PORTRAIT_FILL = 0.78
+# (at fill 0.78 the smaller bust carried finer painted detail per pixel: card_qa speckle 2.7 / 3.1 > 2.5; at 0.88
+# the bust keeps the old pixel scale, the crown still inside the frame)
+PORTRAIT_FILL = 0.88
 
 
 def _install_portrait_fit() -> None:
