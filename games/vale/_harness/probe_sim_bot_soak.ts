@@ -73,7 +73,7 @@ import type { MatchSetup, SeatSetup, SimEvent, WorldView, PlayerView } from '../
 import { createBots, pickLoadout } from '../src/sim/bots/index.ts';
 import type { BotTelemetry } from '../src/sim/bots/micro.ts';
 import { inTelegraph, telegraphFromEvent } from '../src/sim/bots/perception.ts';
-import { abilityInfo, fighterProfile, itemRole, laneProject, proj, U_DAMAGE } from '../src/sim/bots/knowledge.ts';
+import { abilityInfo, fighterProfile, itemRole, laneProject, proj, U_DAMAGE, U_VISION } from '../src/sim/bots/knowledge.ts';
 import { SLOT_INDEX } from '../src/sim/entity.ts';
 import { DIFFICULTIES } from '../src/sim/bots/difficulty.ts';
 import type { Player } from '../src/sim/entity.ts';
@@ -264,6 +264,8 @@ interface GameRec {
   micro: Micro;
   /** the passive seat of the `human` suite (-1: none) */
   human: number;
+  /** vision item actives used (a Spare Lamp set) per seat (CW2 handoff: bots never warded) */
+  lamps?: number[];
 }
 
 const LANE_MODES = new Set(['lane', 'trade', 'push', 'allin']);
@@ -316,7 +318,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
   };
   const sim = createSim(catalog, setup, { bots, pregameSeconds: 0 });
   const rec: GameRec = {
-    tds: [], firstUlt: new Array<number>(n).fill(-1), lvl6: new Array<number>(n).fill(-1), lvl8: [], micro, human,
+    lamps: new Array<number>(n).fill(0), tds: [], firstUlt: new Array<number>(n).fill(-1), lvl6: new Array<number>(n).fill(-1), lvl8: [], micro, human,
     job, reason: 'cut', dur: 0, winner: -1, sudden: -1, faults: [],
     seats: setup.seats.map((s) => ({ p: s.player, team: s.team, fighter: s.fighter, role: s.role ?? '', spells: s.loadout.spells.slice() })),
     wick14: {}, wickMissed: {}, cs10: [], cs14: [], lvl10: [], lvl15: [], modeTicks, recalls: new Array<number>(n).fill(0), fdeaths: [], structs: [], coreFalls: [], objs: [],
@@ -337,6 +339,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     rec.cons25 = consSpent.slice();
   };
   const consumables = new Set(catalog.items.filter((i) => i.tier === 'consumable').map((i) => i.id));
+  const visionActives = new Set(catalog.items.filter((i) => i.active && (abilityInfo(i.active).use & U_VISION)).map((i) => i.active!.id));
   const consSpent = new Array<number>(n).fill(0);
   const killerKind = (killerId: number, victimTeam: number): { kind: KillerKind; def: string; credited: boolean } => {
     const w = world();
@@ -434,6 +437,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'takedown': rec.tds.push({ t: e.t, k: e.killer, v: e.victim }); break;
         case 'levelUp': if (e.level === 6 && rec.lvl6[e.player] < 0) rec.lvl6[e.player] = e.t; break;
         case 'cast': {
+          if (visionActives.has(e.ability)) { const pi = seatOf(e.src); if (pi >= 0 && rec.lamps) rec.lamps[pi]++; }
           if (e.slot === 'ult') { const pi = seatOf(e.src); if (pi >= 0 && rec.firstUlt[pi] < 0) rec.firstUlt[pi] = e.t; }
           // (a point-targeted delayed circle can be read from its caster's windup — the bots dodge it from there, CW3 critic
           // bot-micro — so a fighter standing where it will land when the cast starts is in it, even if it has left by the time
@@ -816,6 +820,13 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     text.push('', `micro ${tier}: skillshots hit ${pct(r.skillshotHit)} of ${r.shots} · telegraphs dodged ${pct(r.dodge)} of ${r.teles} (read from the caster's windup ${pct(r.dodgeWindup)} of ${r.telesWindup}; walkable after the tier's reaction ${pct(r.dodgeFeasible)} of ${r.telesFeasible}) · deaths after ≥ 1.5 s under the retreat threshold outside retreat ${pct(r.lowStay)} of ${r.deaths}`
       + ` · attacks on the lowest-EHP fighter in reach ${pct(r.focusLowest)} of ${r.focusN} · health at recall start median ${pct(r.recallHpMedian)}, under 30 % ${pct(r.recallUnder30)} of ${r.recalls}`
       + ` · skillshots by target tier: ${Object.entries(shotsBy).map(([k, v]) => `→ ${k} ${pct(v.hit)} of ${v.n}`).join(', ')}`);
+    // vision (report): lamps set per game by this tier's seats, and the games where its team set none
+    const lampG = tierGames.filter((g) => g.lamps && g.job.diffs.includes(tier)).map((g) => g.seats.filter((s) => g.job.diffs[s.team] === tier).reduce((x, s) => x + (g.lamps as number[])[s.p], 0));
+    if (lampG.length) {
+      const lamps = { perGame: lampG.reduce((x, y) => x + y, 0) / lampG.length, none: lampG.filter((x) => x === 0).length, games: lampG.length };
+      (microD[tier] as Record<string, unknown>).lamps = lamps;
+      text.push(`vision ${tier}: lamps set ${lamps.perGame.toFixed(1)} a game (this tier's seats), games with none ${lamps.none}/${lamps.games}`);
+    }
   }
   detail.micro = microD;
   // (CW3s refix, critic bot-micro: a better tier aims better at the SAME targets — veteran → adept against adept → adept

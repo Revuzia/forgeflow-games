@@ -25,6 +25,9 @@ import { abilityInfo, U_HEAL, type BuildPlan, type FighterProfile, type Knowledg
 const LEVEL_SLOTS = ['a1', 'a2', 'a3'] as const;
 /** the laning phase (s): base visits top the healing consumable back up (two charges until 6:00, then one) */
 const LANING_END = 840;
+/** consumable vision a support carries (charges), and the gold that must remain to buy the second */
+const WARD_CHARGES = 2;
+const WARD_SPARE = 250;
 
 export class Economy {
   readonly k: Knowledge;
@@ -163,8 +166,15 @@ export class Economy {
       const q = quoteBuy(w, p, plan.consumable);
       if (q.ok && p.gold - q.price >= (early ? 0 : 300)) { this.consumablesBought++; out.push({ type: 'buy', item: plan.consumable }); return; }
     }
-    if (plan.ward && this.support && !this.wardBought && quoteBuy(w, p, plan.ward).ok && w.time > -1) {
-      this.wardBought = true; out.push({ type: 'buy', item: plan.ward }); return;
+    // the support keeps vision stocked: a ward item once, or a consumable lamp topped up to WARD_CHARGES on each trip
+    // home (the second charge only with WARD_SPARE gold left over, so lamps never delay the next item piece)
+    if (plan.ward && this.support) {
+      const consumable = !!this.k.idx.items.get(plan.ward)?.consumable;
+      const have = this.charges(p, plan.ward);
+      if (consumable ? have < WARD_CHARGES : !this.wardBought) {
+        const q = quoteBuy(w, p, plan.ward);
+        if (q.ok && (have === 0 || p.gold - q.price >= WARD_SPARE)) { this.wardBought = true; out.push({ type: 'buy', item: plan.ward }); return; }
+      }
     }
     const goal = this.goal(w, p);
     const st = goal ? this.step(w, p, goal) : { buy: null, full: false };

@@ -664,7 +664,8 @@ export function buildPlan(idx: CatalogIndex, rules: RulesParamsT, prof: FighterP
   const starter = (jungler ? starters.find((s) => s.tags.includes('jungle')) : undefined)
     ?? byScore(starters.filter((s) => !s.tags.includes('jungle')))[0] ?? null;
   const cons = items.filter((i) => i.tier === 'consumable' && i.active && (abilityInfo(i.active).use & U_HEAL)).sort((a, b) => a.cost - b.cost)[0] ?? null;
-  const ward = items.filter((i) => i.active && (abilityInfo(i.active).use & U_VISION) && !i.consumable).sort((a, b) => a.cost - b.cost)[0] ?? null;
+  // the cheapest vision item, consumable or not (RIFT's only one is the consumable Spare Lamp; CW2 handoff: bots never warded)
+  const ward = items.filter((i) => i.active && (abilityInfo(i.active).use & U_VISION)).sort((a, b) => a.cost - b.cost || (a.id < b.id ? -1 : 1))[0] ?? null;
   return { core, boots, starter: starter ? starter.id : null, consumable: cons ? cons.id : null, ward: ward ? ward.id : null };
 }
 
