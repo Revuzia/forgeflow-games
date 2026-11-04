@@ -25,6 +25,7 @@ import { attackable } from '../attack.ts';
 import { addTeamBuff } from '../core.ts';
 import { NEUTRAL_TEAM, ORDER_ATTACK, ORDER_MOVE, type Entity } from '../entity.ts';
 import { issueAttack, issueMove, issueStop } from '../movement.ts';
+import { DEG } from '../math.ts';
 import { spawnUnit } from '../spawn.ts';
 import { clearStatuses } from '../status.ts';
 import type { World } from '../world.ts';
@@ -40,7 +41,9 @@ interface CampEntry {
   attackers: Map<number, number>;
   timer: ObjectiveTimerView | null;
 }
-interface MonsterState { camp: CampEntry; homeX: number; homeY: number; target: number; resetting: boolean }
+interface MonsterState { camp: CampEntry; homeX: number; homeY: number; target: number; resetting: boolean;
+  /** the camp facing (radians) restored when a reset reaches home; undefined = keep whatever the walk left */
+  homeFacing?: number }
 interface CampsState { list: CampEntry[] }
 const KEY = 'camps';
 const MKEY = 'monster';
@@ -77,9 +80,11 @@ function spawnCamp(w: World, c: CampEntry): void {
   c.attackers.clear();
   c.spawnAt = -1;
   for (const u of c.def.units) {
-    const e = spawnUnit(w, u.unit, NEUTRAL_TEAM, u.at[0], u.at[1]);
+    // camp facing (content degrees, the sim's convention: 0 = +x, 90 = +y); absent = the unit default
+    const e = spawnUnit(w, u.unit, NEUTRAL_TEAM, u.at[0], u.at[1], u.facing === undefined ? {} : { facing: u.facing * DEG });
     e.autoAttack = false;
-    setExt<MonsterState>(e, MKEY, { camp: c, homeX: e.x, homeY: e.y, target: -1, resetting: false });
+    setExt<MonsterState>(e, MKEY, u.facing === undefined ? { camp: c, homeX: e.x, homeY: e.y, target: -1, resetting: false }
+      : { camp: c, homeX: e.x, homeY: e.y, target: -1, resetting: false, homeFacing: e.facing });
     c.units.push(e);
   }
 }
@@ -118,6 +123,7 @@ export function monsterSystem(w: World): void {
           e.hp = e.maxHp;
           clearStatuses(w, e);
           issueStop(w, e);
+          if (m.homeFacing !== undefined) e.facing = m.homeFacing;
         }
         continue;
       }

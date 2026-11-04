@@ -110,4 +110,22 @@ section('objective: team buff, minion empowerment, gold, events, expiry', () => 
   check('buff expires after 90 s: stats back', w.teams[0].buffs.length === 0 && near(f.stats.ad, adAt(f.level), 1e-6), [w.teams[0].buffs.length, f.stats.ad, f.level]);
 });
 
+section('camp facing (content degrees) at spawn and after a reset', () => {
+  const cat2 = matchCatalog({ rules: { passiveGoldPerSec: 0 } });
+  for (const m of cat2.maps) for (const c of m.camps) if (c.id === 'fx_camp_beasts') c.units[0].facing = -90;
+  const sim = createSim(cat2, laneSetup(seats), { pregameSeconds: 0 });
+  const w = sim.world;
+  run(sim, 10.2);
+  const [m1, m2] = monsters(w, 'fx_beast');
+  check('a camp unit with facing -90 spawns facing -y; one without keeps the default', near(m1.facing, -Math.PI / 2, 1e-9) && m2.facing === 0, [m1.facing, m2.facing]);
+  const f = w.players[1].ent!;
+  f.autoAttack = false;
+  park(f, 60, 9, w);
+  dealDamage(w, f, m1, 50, 'true');
+  run(sim, 2);
+  park(f, 60, 30, w);
+  run(sim, 8);
+  check('after a leash reset it faces its camp facing again', !monsterState(m1)!.resetting && near(m1.facing, -Math.PI / 2, 1e-9), m1.facing);
+});
+
 finish('probe_sim_camps');
