@@ -1,0 +1,651 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "rishal": {
+      "glb": "art/out/fighters/rishal/rishal.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 125,
+          "valueBands": {
+            "top": 66.0,
+            "mid": 44.1,
+            "bottom": 28.3
+          },
+          "accentPct": 2.93,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.93
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 67.9,
+            "mid": 40.6,
+            "bottom": 29.4
+          },
+          "accentPct": 3.84,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 3.84
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 57.8,
+            "mid": 42.0,
+            "bottom": 24.3
+          },
+          "accentPct": 1.62,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.62
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 64.4,
+            "mid": 39.1,
+            "bottom": 25.8
+          },
+          "accentPct": 4.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 4.48
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 4.48,
+      "accentOk": true
+    },
+    "marund": {
+      "glb": "art/out/fighters/marund/marund.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 57.4,
+            "mid": 43.1,
+            "bottom": 17.9
+          },
+          "accentPct": 2.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "90": {
+          "heightPx": 182,
+          "valueBands": {
+            "top": 61.3,
+            "mid": 38.7,
+            "bottom": 17.6
+          },
+          "accentPct": 2.26,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.26
+        },
+        "180": {
+          "heightPx": 165,
+          "valueBands": {
+            "top": 58.0,
+            "mid": 37.6,
+            "bottom": 19.7
+          },
+          "accentPct": 1.35,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.35
+        },
+        "270": {
+          "heightPx": 178,
+          "valueBands": {
+            "top": 60.9,
+            "mid": 38.2,
+            "bottom": 16.2
+          },
+          "accentPct": 2.41,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.41
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.72,
+      "accentOk": true
+    },
+    "kemdo": {
+      "glb": "art/out/fighters/kemdo/kemdo.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 139,
+          "valueBands": {
+            "top": 54.6,
+            "mid": 45.8,
+            "bottom": 18.5
+          },
+          "accentPct": 2.11,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.11
+        },
+        "90": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 49.6,
+            "mid": 47.4,
+            "bottom": 18.8
+          },
+          "accentPct": 1.49,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.49
+        },
+        "180": {
+          "heightPx": 163,
+          "valueBands": {
+            "top": 63.2,
+            "mid": 43.0,
+            "bottom": 23.7
+          },
+          "accentPct": 1.15,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.15
+        },
+        "270": {
+          "heightPx": 175,
+          "valueBands": {
+            "top": 60.9,
+            "mid": 50.9,
+            "bottom": 16.1
+          },
+          "accentPct": 0.18,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.18
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.11,
+      "accentOk": false
+    },
+    "nurrow": {
+      "glb": "art/out/fighters/nurrow/nurrow.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 128,
+          "valueBands": {
+            "top": 75.1,
+            "mid": 52.1,
+            "bottom": 20.3
+          },
+          "accentPct": 2.32,
+          "accentTopHalfShare": 0.948,
+          "accentTopHalfPctOfFighter": 2.2
+        },
+        "90": {
+          "heightPx": 149,
+          "valueBands": {
+            "top": 66.3,
+            "mid": 44.8,
+            "bottom": 34.6
+          },
+          "accentPct": 2.39,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.39
+        },
+        "180": {
+          "heightPx": 138,
+          "valueBands": {
+            "top": 65.3,
+            "mid": 38.7,
+            "bottom": 28.3
+          },
+          "accentPct": 1.17,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.17
+        },
+        "270": {
+          "heightPx": 133,
+          "valueBands": {
+            "top": 72.1,
+            "mid": 35.5,
+            "bottom": 16.3
+          },
+          "accentPct": 1.81,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.81
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.39,
+      "accentOk": true
+    },
+    "rishal_chalkline": {
+      "glb": "art/out/fighters/rishal/rishal_chalkline.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 125,
+          "valueBands": {
+            "top": 65.0,
+            "mid": 39.7,
+            "bottom": 26.2
+          },
+          "accentPct": 2.93,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.93
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 64.1,
+            "mid": 33.9,
+            "bottom": 19.8
+          },
+          "accentPct": 3.84,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 3.84
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 61.8,
+            "mid": 33.1,
+            "bottom": 17.9
+          },
+          "accentPct": 1.62,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.62
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 64.2,
+            "mid": 30.8,
+            "bottom": 20.3
+          },
+          "accentPct": 4.48,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 4.48
+        }
+      },
+      "clipsFrom": "rishal",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 4.48,
+      "accentOk": true
+    },
+    "rishal_lamplit": {
+      "glb": "art/out/fighters/rishal/rishal_lamplit.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 125,
+          "valueBands": {
+            "top": 64.5,
+            "mid": 45.9,
+            "bottom": 31.4
+          },
+          "accentPct": 2.45,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.45
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 66.2,
+            "mid": 42.6,
+            "bottom": 32.0
+          },
+          "accentPct": 3.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 3.72
+        },
+        "180": {
+          "heightPx": 127,
+          "valueBands": {
+            "top": 57.3,
+            "mid": 45.4,
+            "bottom": 29.8
+          },
+          "accentPct": 1.56,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.56
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 61.8,
+            "mid": 38.8,
+            "bottom": 29.7
+          },
+          "accentPct": 4.27,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 4.27
+        }
+      },
+      "clipsFrom": "rishal",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 4.27,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "rishal",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.226,
+        "90": 0.24,
+        "180": 0.228,
+        "270": 0.242
+      },
+      "iou64Max": 0.242,
+      "iou64_norm": {
+        "0": 0.35,
+        "90": 0.431,
+        "180": 0.42,
+        "270": 0.49
+      },
+      "iou64NormMax": 0.49,
+      "ok": true
+    },
+    {
+      "a": "rishal",
+      "b": "kemdo",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.357,
+        "90": 0.579,
+        "180": 0.431,
+        "270": 0.465
+      },
+      "iou64Max": 0.579,
+      "iou64_norm": {
+        "0": 0.313,
+        "90": 0.597,
+        "180": 0.303,
+        "270": 0.436
+      },
+      "iou64NormMax": 0.597,
+      "ok": true
+    },
+    {
+      "a": "rishal",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.446,
+        "90": 0.458,
+        "180": 0.439,
+        "270": 0.487
+      },
+      "iou64Max": 0.487,
+      "iou64_norm": {
+        "0": 0.463,
+        "90": 0.464,
+        "180": 0.559,
+        "270": 0.456
+      },
+      "iou64NormMax": 0.559,
+      "ok": true
+    },
+    {
+      "a": "rishal",
+      "b": "rishal_chalkline",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "rishal",
+      "b": "rishal_lamplit",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 0.994,
+        "180": 0.995,
+        "270": 0.994
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 0.997,
+        "180": 0.868,
+        "270": 0.993
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "kemdo",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.463,
+        "90": 0.356,
+        "180": 0.41,
+        "270": 0.32
+      },
+      "iou64Max": 0.463,
+      "iou64_norm": {
+        "0": 0.572,
+        "90": 0.628,
+        "180": 0.444,
+        "270": 0.322
+      },
+      "iou64NormMax": 0.628,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.458,
+        "90": 0.455,
+        "180": 0.441,
+        "270": 0.372
+      },
+      "iou64Max": 0.458,
+      "iou64_norm": {
+        "0": 0.689,
+        "90": 0.643,
+        "180": 0.618,
+        "270": 0.617
+      },
+      "iou64NormMax": 0.689,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "rishal_chalkline",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.226,
+        "90": 0.24,
+        "180": 0.228,
+        "270": 0.242
+      },
+      "iou64Max": 0.242,
+      "iou64_norm": {
+        "0": 0.35,
+        "90": 0.431,
+        "180": 0.42,
+        "270": 0.49
+      },
+      "iou64NormMax": 0.49,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "rishal_lamplit",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.226,
+        "90": 0.241,
+        "180": 0.229,
+        "270": 0.243
+      },
+      "iou64Max": 0.243,
+      "iou64_norm": {
+        "0": 0.35,
+        "90": 0.433,
+        "180": 0.403,
+        "270": 0.493
+      },
+      "iou64NormMax": 0.493,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "nurrow",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.551,
+        "90": 0.65,
+        "180": 0.5,
+        "270": 0.579
+      },
+      "iou64Max": 0.65,
+      "iou64_norm": {
+        "0": 0.519,
+        "90": 0.65,
+        "180": 0.425,
+        "270": 0.382
+      },
+      "iou64NormMax": 0.65,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "rishal_chalkline",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.357,
+        "90": 0.579,
+        "180": 0.431,
+        "270": 0.465
+      },
+      "iou64Max": 0.579,
+      "iou64_norm": {
+        "0": 0.313,
+        "90": 0.597,
+        "180": 0.303,
+        "270": 0.436
+      },
+      "iou64NormMax": 0.597,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "rishal_lamplit",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.357,
+        "90": 0.58,
+        "180": 0.433,
+        "270": 0.464
+      },
+      "iou64Max": 0.58,
+      "iou64_norm": {
+        "0": 0.313,
+        "90": 0.596,
+        "180": 0.302,
+        "270": 0.433
+      },
+      "iou64NormMax": 0.596,
+      "ok": true
+    },
+    {
+      "a": "nurrow",
+      "b": "rishal_chalkline",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.446,
+        "90": 0.458,
+        "180": 0.439,
+        "270": 0.487
+      },
+      "iou64Max": 0.487,
+      "iou64_norm": {
+        "0": 0.463,
+        "90": 0.464,
+        "180": 0.559,
+        "270": 0.456
+      },
+      "iou64NormMax": 0.559,
+      "ok": true
+    },
+    {
+      "a": "nurrow",
+      "b": "rishal_lamplit",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.446,
+        "90": 0.46,
+        "180": 0.442,
+        "270": 0.491
+      },
+      "iou64Max": 0.491,
+      "iou64_norm": {
+        "0": 0.463,
+        "90": 0.466,
+        "180": 0.536,
+        "270": 0.454
+      },
+      "iou64NormMax": 0.536,
+      "ok": true
+    },
+    {
+      "a": "rishal_chalkline",
+      "b": "rishal_lamplit",
+      "sameFighter": false,
+      "iou64": {
+        "0": 1.0,
+        "90": 0.994,
+        "180": 0.995,
+        "270": 0.994
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 0.997,
+        "180": 0.868,
+        "270": 0.993
+      },
+      "iou64NormMax": 1.0,
+      "ok": false
+    }
+  ],
+  "silhouetteOk": false,
+  "sheet": "art/renders/fighters/rishal/_fit/lineup_b5.png",
+  "seconds": 22.4
+}

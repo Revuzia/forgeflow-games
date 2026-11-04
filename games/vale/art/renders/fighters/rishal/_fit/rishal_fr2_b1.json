@@ -1,0 +1,78 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "rishal": {
+      "glb": "art/out/fighters/rishal/rishal.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 128,
+          "valueBands": {
+            "top": 76.9,
+            "mid": 55.1,
+            "bottom": 31.0
+          },
+          "accentPct": 1.6,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.6
+        },
+        "90": {
+          "heightPx": 131,
+          "valueBands": {
+            "top": 75.0,
+            "mid": 48.1,
+            "bottom": 28.6
+          },
+          "accentPct": 1.66,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.66
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 67.7,
+            "mid": 50.0,
+            "bottom": 22.3
+          },
+          "accentPct": 0.65,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.65
+        },
+        "270": {
+          "heightPx": 116,
+          "valueBands": {
+            "top": 73.2,
+            "mid": 46.4,
+            "bottom": 26.2
+          },
+          "accentPct": 1.84,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.84
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.84,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/rishal_fr2_b1.png",
+  "seconds": 3.7
+}
