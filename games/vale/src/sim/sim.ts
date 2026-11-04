@@ -136,7 +136,9 @@ function buildWorld(catalog: CatalogT, setup: MatchSetup, opts: SimOptions, idx:
     if (recent.length >= PING_LIMIT) { pings[p.player] = recent; return; }
     recent.push(ww.time);
     pings[p.player] = recent;
-    ww.emit({ e: 'ping', t: ww.time, player: p.player, kind: cmd.kind, x: cmd.x, y: cmd.y, target: cmd.target });
+    ww.emit(cmd.slot === undefined
+      ? { e: 'ping', t: ww.time, player: p.player, kind: cmd.kind, x: cmd.x, y: cmd.y, target: cmd.target }
+      : { e: 'ping', t: ww.time, player: p.player, kind: cmd.kind, x: cmd.x, y: cmd.y, target: cmd.target, slot: cmd.slot });
   };
   w.hooks.command.surrenderVote = (ww, p, cmd) => { if (cmd.type === 'surrenderVote') surrenderCommand(ww, p, cmd.yes); };
 

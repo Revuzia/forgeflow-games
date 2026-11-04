@@ -60,7 +60,8 @@ export type Command =
   | { type: 'undo' }
   | { type: 'swapItems'; a: number; b: number }
   | { type: 'recall' }
-  | { type: 'ping'; kind: PingKind; x: number; y: number; target?: EntityId }
+  /** slot: an Alt-click call-out of one of the sender's slots ('a1' 'a2' 'a3' 'ult' 'spell1' 'spell2' 'item0'..'item5') */
+  | { type: 'ping'; kind: PingKind; x: number; y: number; target?: EntityId; slot?: string }
   | { type: 'surrenderVote'; yes: boolean }
   // practice tool only
   | { type: 'practice'; action: 'gold' | 'level' | 'resetCooldowns' | 'toggleCooldowns' | 'spawnDummy' | 'heal' | 'resetMatch'
@@ -241,7 +242,7 @@ export type SimEvent =
   | { e: 'objective'; t: number; unit: string; team: TeamId; buff?: string }
   | { e: 'wave'; t: number; n: number }
   | { e: 'recall'; t: number; player: PlayerId; state: 'start' | 'cancel' | 'done' }
-  | { e: 'ping'; t: number; player: PlayerId; kind: PingKind; x: number; y: number; target?: EntityId }
+  | { e: 'ping'; t: number; player: PlayerId; kind: PingKind; x: number; y: number; target?: EntityId; slot?: string }
   | { e: 'pickup'; t: number; player: PlayerId; def: string; x: number; y: number }
   | { e: 'announce'; t: number; key: string; team?: TeamId; player?: PlayerId; params?: Record<string, string | number> }
   | { e: 'eliminated'; t: number; player: PlayerId; placement: number }

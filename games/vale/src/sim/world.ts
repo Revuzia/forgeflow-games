@@ -142,6 +142,8 @@ export class SpatialHash {
 }
 
 // ── command validation ──────────────────────────────────────────────────────────────────────────
+/** the slots a ping may call out (Alt-click on the Dial Bar): abilities, Hour spells, item slots 0-5 */
+const PING_SLOT = /^(a1|a2|a3|ult|spell1|spell2|item[0-5])$/;
 const PING_KINDS: ReadonlySet<PingKind> = new Set<PingKind>(['alert', 'danger', 'onMyWay', 'missing', 'assist', 'push', 'vision', 'objective', 'retreat']);
 const finite = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
 const optFinite = (v: unknown): boolean => v === undefined || finite(v);
@@ -164,7 +166,8 @@ export function validCommand(c: unknown): c is Command {
     case 'buy': return typeof o.item === 'string';
     case 'sell': return Number.isInteger(o.slot);
     case 'swapItems': return Number.isInteger(o.a) && Number.isInteger(o.b);
-    case 'ping': return PING_KINDS.has(o.kind as PingKind) && finite(o.x) && finite(o.y) && optInt(o.target);
+    case 'ping': return PING_KINDS.has(o.kind as PingKind) && finite(o.x) && finite(o.y) && optInt(o.target)
+      && (o.slot === undefined || (typeof o.slot === 'string' && PING_SLOT.test(o.slot)));
     case 'surrenderVote': return typeof o.yes === 'boolean';
     case 'practice': return typeof o.action === 'string';
     default: return false;

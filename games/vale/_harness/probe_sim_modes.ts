@@ -137,6 +137,15 @@ section('pings (rate limited) + setup validation', () => {
   for (let i = 0; i < 8; i++) sim.command(0, { type: 'ping', kind: 'danger', x: 50, y: 20 });
   const pings = ofType(sim.step(), 'ping');
   check('ping events carry player/kind/position; at most 5 per 4 s', pings.length === 5 && pings[0].player === 0 && pings[0].kind === 'danger' && pings[0].x === 50);
+  run(sim, 5);
+  sim.command(0, { type: 'ping', kind: 'alert', x: 50, y: 20, slot: 'ult' });
+  sim.command(0, { type: 'ping', kind: 'alert', x: 50, y: 20, slot: 'item3' });
+  sim.command(0, { type: 'ping', kind: 'alert', x: 50, y: 20, slot: 'item6' } as never);
+  sim.command(0, { type: 'ping', kind: 'alert', x: 50, y: 20, slot: 7 } as never);
+  sim.command(0, { type: 'ping', kind: 'alert', x: 50, y: 20 });
+  const sp = ofType(sim.step(), 'ping');
+  check('slot call-out pings carry their slot; a bad slot drops the ping; no slot = no field',
+    sp.length === 3 && sp[0].slot === 'ult' && sp[1].slot === 'item3' && !('slot' in sp[2]), sp);
   let threw = '';
   try { createSim(cat, laneSetup([{ fighter: 'fx_brawler', team: 0, skin: 'fx_ranger_skin' }])); } catch (err) { threw = (err as Error).message; }
   check('a skin of another fighter is rejected', /skin/.test(threw), threw);
