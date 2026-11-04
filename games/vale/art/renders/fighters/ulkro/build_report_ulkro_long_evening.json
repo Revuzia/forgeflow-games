@@ -107,7 +107,7 @@
         "toe.R"
       ]
     },
-    "tris_sleeves": 1300,
+    "tris_sleeves": 1334,
     "bind_bracers": {
       "heat_ok": true,
       "unweighted": 0,
@@ -178,7 +178,7 @@
         "toe.R"
       ]
     },
-    "tris_wraps": 800,
+    "tris_wraps": 2612,
     "bind_boots": {
       "heat_ok": true,
       "unweighted": 0,
@@ -226,42 +226,53 @@
     "tris_dart_head": 180,
     "tris_dart_inlay": 70,
     "tris_lacquer_fan": 700,
-    "validate_ulkro": "21366->21362",
+    "validate_ulkro": "23212->23208",
     "validate_ulkro_accent": "452->450"
   },
-  "uv_coverage": 0.577,
+  "uv_coverage": 0.552,
   "bake": {
-    "base": 13.93,
-    "rough_metal": 10.09,
-    "normal": 6.22,
-    "ao": 5.99,
-    "normal_fixed_px": 24950,
-    "projection": 98.85,
-    "pack_save": 99.58,
-    "total": 136.72
+    "base": 7.94,
+    "rough_metal": 4.77,
+    "normal": 3.33,
+    "ao": 6.87,
+    "normal_fixed_px": 29306,
+    "projection": 217.53,
+    "pack_save": 217.83,
+    "total": 241.41
   },
-  "tris": 21812,
+  "tris": 23658,
   "mesh_top_m": 2.023,
-  "glb_bytes_raw": 2549940,
+  "glb_bytes_raw": 2924060,
   "optimize": {
     "ok": true,
-    "before": 2549940,
-    "after": 1064452,
+    "before": 2924060,
+    "after": 1248356,
     "q_base": 70
   },
-  "glb_bytes": 1064452,
+  "glb_bytes": 1248356,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1040 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_long_evening_base 2048x2048 199K, ulkro_long_evening_normal 512x512 50K, ulkro_long_evening_orm 256x256 28K",
-      "  skinned meshes: ulkro_accent(187v), ulkro_long_evening(22417v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1219 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_long_evening_base 2048x2048 231K, ulkro_long_evening_normal 512x512 56K, ulkro_long_evening_orm 256x256 33K",
+      "  skinned meshes: ulkro_accent(187v), ulkro_long_evening(27038v)",
       "  bones: 42 (root hips spine chest neck head x_tail_1 x_tail_2 shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 21812; bind-pose bounds (three units, Y up): 1.37 x 2.02 x 0.61; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "  tris: 23658; bind-pose bounds (three units, Y up): 1.37 x 2.02 x 0.61; facing (-0.00, 1.00); head bone y 1.61; runRefSpeed 3.5",
+      "[three] FAIL (1)",
+      "  - GLB is 1219 KiB > budget 1172 KiB"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ulkro/ulkro_long_evening_splash.png",
+      "portrait": "art/out/fighters/ulkro/ulkro_long_evening_portrait.png"
+    },
+    "seconds": {
+      "splash": 146.17,
+      "portrait": 19.91
+    }
   },
   "three_qa": {
     "ok": true,
@@ -292,23 +303,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_long_evening.png",
-    "seconds": 39.9,
+    "seconds": 17.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.59,
-      "model": 7.05,
-      "lows_bind": 16.05,
-      "uv": 15.4,
-      "bake": 136.72,
-      "export": 0.34,
-      "optimize": 2.58,
-      "load_test": 0.51,
-      "three_qa": 40.7
+      "materials": 0.41,
+      "model": 5.76,
+      "lows_bind": 5.56,
+      "uv": 6.66,
+      "bake": 241.41,
+      "export": 0.17,
+      "optimize": 0.83,
+      "load_test": 0.15,
+      "render": 166.16,
+      "three_qa": 18.31
     },
-    "total_s": 220.07
+    "total_s": 446.06
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83
