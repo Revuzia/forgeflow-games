@@ -85,11 +85,12 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
 CARDS = {
     "nurrow": {
         "splash": {"clip": "cast_ult", "t": 0.34, "yaw": 26.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
-                   "key_az": 150.0, "key_el": 18.0, "key_color": "#F2DCC8", "sun": 2.8, "rim_cool": 1.2,
-                   "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.6, "exposure": -0.55,
-                   "focal": [{"at": "x_dart_hand", "az": 190.0, "el": -15.0, "dist": 0.7, "color": "#FFB466",
-                              "power": 70.0, "size": 0.35},
-                             {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.8, "color": "#FFC890", "power": 26.0,
+                   "key_az": 150.0, "key_el": 22.0, "key_color": "#E4DCEA", "sun": 2.8, "rim_cool": 1.3,
+                   "rim_warm": 0.9, "bounce": 0.35, "bounce_color": "#D8A87C", "accent": 1.6, "exposure": -0.55,
+                   # the lamp stays a focal at the lull hand only (the first pass washed the plum felt salmon-orange)
+                   "focal": [{"at": "x_dart_hand", "az": 190.0, "el": -15.0, "dist": 0.6, "color": "#FFC07A",
+                              "power": 35.0, "size": 0.3},
+                             {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
                               "size": 0.3}]},
         "portrait": {"yaw": 24.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},

@@ -82,14 +82,14 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 
 # each card's frame and light (closer lens).
 CARDS = {
     "ulkro": {
-        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": -32.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_a1", "t": 0.50, "yaw": 8.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
                    "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
                    "focal": [{"at": "x_dart_tip", "az": 200.0, "el": 15.0, "dist": 0.6, "color": "#FFE6C0",
                               "power": 55.0, "size": 0.25},
                              {"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#FFDCB8", "power": 26.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": -30.0, "lens": 70.0},
+        "portrait": {"yaw": 14.0, "lens": 70.0},
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496"},
     },
     "ulkro_highrim": {
@@ -102,14 +102,14 @@ CARDS = {
         "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85},
     },
     "ulkro_long_evening": {
-        "splash": {"clip": "victory", "t": 0.55, "yaw": -38.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "victory", "t": 0.55, "yaw": 34.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
                    "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
                    "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.5, "exposure": -0.55,
                    "focal": [{"at": "head", "az": 200.0, "el": 0.0, "dist": 0.8, "color": "#FFC890", "power": 30.0,
                               "size": 0.35},
                              {"at": "x_quiver", "az": 20.0, "el": 20.0, "dist": 0.9, "color": "#FFB070",
                               "power": 40.0, "size": 0.4}]},
-        "portrait": {"yaw": -34.0, "lens": 70.0},
+        "portrait": {"yaw": 30.0, "lens": 70.0},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
     },
 }
