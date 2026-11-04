@@ -1,0 +1,334 @@
+{
+ "wave": "CW6",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "FK re-run: Marund recall 6 s, head 23.2 cm, hand.L max step 0.075 m, seam 0; Sukri recall 6 s, head 23.1 cm, idle head 5.1 cm; Ilsheta idle head 7.8 cm. src/render/actors.ts:132 LOOPING still contains 'recall'.",
+   "fixHint": "CW1: fit the recall clip to the channel duration and hold the last frame."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "content/fighters/marund.json:541 still plays anim 'dash'; src/sim/movement.ts:131 still sets arc 0.",
+   "fixHint": "Land the CW3c, CW1 and CW3s Domefall handoffs."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "three_load OK (fw_CW6_r1_three_load.txt), but only 6 of 8 fighters reach 7.5; Marund and Rishal are at 7.3.",
+   "fixHint": "See par:marund and par:rishal."
+  },
+  {
+   "id": "fighter:marund:marund-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "marund.json:541 still plays 'dash'.",
+   "fixHint": "Cross-lane handoffs."
+  },
+  {
+   "id": "fighter:rishal:rishal-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "fw_CW6_r1_rishal_portraits.png panel 3: the Lamplit lamp cage is still at the crest tip, and the glazing barely reads.",
+   "fixHint": "Move the bead to the crest root with a fit check."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "content/vfx.json: 0 of 10 hesmi_* defs carry 'element'.",
+   "fixHint": "CW1: add the element colour layers."
+  },
+  {
+   "id": "fighter:sukri:SUK-M5",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "content/vfx.json: 0 of 16 sukri_* defs carry 'element'.",
+   "fixHint": "CW1: add the element colour layers."
+  },
+  {
+   "id": "par:marund",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Re-score 7.3: the ult is still a flat dash in game.",
+   "fixHint": "Land the Domefall handoffs."
+  },
+  {
+   "id": "par:rishal",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Re-score 7.3: the Chalkline card and the busts are fixed, but Lamplit is still mostly a recolour.",
+   "fixHint": "Lamplit modelling pass."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Spot-checked minors hold up: Odrum's warm eye voids, Sukri's chin cracks removed, Tunlan's eye lines cleaned. Many minors were not attempted."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Not verifiable: the engineer could not add these minors to closing_parity_open.json (not a CW6 file), so there is nothing to measure."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "hesmi-sukri",
+   "to": "CW1",
+   "what": "hesmi-M4 effect half: make Hesmi Shadeprint's vfxTint #6C5BA8 reach her shadows. In content/vfx.json add an 'element' colour layer (or switch the shadow body/edge colour ref to 'element') in hesmi_a1_shadow, hesmi_ult_shadow and hesmi_ult_shard. Keep the team rings on 'team'. Base keeps its signature violet through elementOf's fallback, if element falls back to the signature."
+  },
+  {
+   "from": "hesmi-sukri",
+   "to": "CW1",
+   "what": "SUK-M5 effect half: make Sukri Shadeprint's vfxTint #6C5BA8 reach the kit. Add 'element' refs (or route skinTint into signature) for the cup motes, the Mote Toss bolt, the Draw Near pull and the Gather In flare in the sukri_* defs of content/vfx.json. Keep team rings on 'team'. All 16 sukri_* defs have 0 element refs today, and every Sukri cast has its own windupVfx, so the generic element wind-up never plays."
+  },
+  {
+   "from": "marund-odrum",
+   "to": "CW3s",
+   "what": "marund-M2 sim half: give Domefall's self-dash a per-effect arc in src/sim/movement.ts (self-dashes get arc 0 at l.131; knockbacks already use KNOCK_ARC). Use a peak of about 0.5-0.6 m, not 0.8-1.0: the new domefall_leap clip already lifts the hips 0.50 m at 40 % of the dash, and the two add up. Keep the shadow on the floor."
+  },
+  {
+   "from": "marund-odrum",
+   "to": "CW3c",
+   "what": "marund-M2 content: in content/fighters/marund.json, ult recast/dash effect (the 'present' block next to vfx marund_ult_leap, ~l.540), change present.anim from 'dash' to 'domefall_leap'. Add \"domefall_leap\": \"domefall_leap\" to art.clips if the client resolves clips through that map. The GLB already carries the clip (20 f, 0.667 s; meta role dash, apex_t 0.40, slam_t 0.82)."
+  },
+  {
+   "from": "marund-odrum",
+   "to": "CW1",
+   "what": "marund-M2 playback: src/render/actors.ts maps clip time to dash progress only when role === 'dash' (~l.1037). Apply the same mapping to any clip played in the dash state (v.state === 'dash', e.g. role 'domefall_leap'), so the leap's apex and slam land on the dash's progress. Optionally flare the cap windows at the apex (t 0.40) as the warning beat."
+  },
+  {
+   "from": "marund-odrum",
+   "to": "CW3c",
+   "what": "Optional, Marund sockets: the brief names weapon_tip x_maul_head. The swing probe's glint currently lands on prop.R (the grip; dR 0) because Marund has no maul-head socket. If CW6 adds an x_maul_head bone in a later rebuild, map 'weapon_tip': 'x_maul_head' in content/fighters/marund.json art.sockets."
+  },
+  {
+   "from": "dunsom-ilsheta-rishal-tunlan",
+   "to": "CW1",
+   "what": "Recall playback in src/render/actors.ts. 'recall' is in LOOPING (l.132) and plays at timeScale 1. All recall clips are 6 s, because art/tools/three_load_test.mjs:263 fails any clip over 6 s, while RIFT's recall is 7 s (content/modes.json:28). So the opening replays for the last 1 s. Fit the recall clip to the channel the way the dash is fitted (~l.1069): when v.state === 'recall' and v.stateDuration > 0, set act.timeScale = 0 and act.time = min(clipDur - 1e-3, (stateTime / stateDuration) * clipDur). Use LoopOnce with clampWhenFinished, so the 6 s performance spans the whole 7 s channel with no restart. This affects Dunsom, Ilsheta, Rishal, Tunlan, Marund and the others."
+  },
+  {
+   "from": "dunsom-ilsheta-rishal-tunlan",
+   "to": "CW6 cards package",
+   "what": "Card follow-ups from this package. (1) Dunsom base was rebuilt with --no-render: art/out/fighters/dunsom/portrait.png and splash.png still show the old flat hat, so re-render them. The Highrim and Almanac skin GLBs still carry the old hat paint, so rebuild them if their hats should match. (2) Rishal has no CARDS entry. Chalkline's portrait shares the base's plate and bust, which holds it to dE 8.3 (floor 12). Give Chalkline its own plate grade and bust in the rishal-M1 staging. (3) Ilsheta First Bell now has a warm plate (tint #C7976A, sat 0.85, median 0.32). Its splash keeps the old cast_ult staging, in which her face does not read."
+  },
+  {
+   "from": "cards",
+   "to": "CW6 (next package / refix)",
+   "what": "Finish the card render chain I started at 08:44. Script: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/run_cards.sh, which runs `python3 art/build.py portraits <id> --skins --only splash,portrait` for tunlan, sukri, marund, rishal, dunsom, hesmi and odrum, then `portraits ilsheta --skin ilsheta_first_bell --no-base --only splash,portrait`. Logs: _harness/_reports/fw_CW6_p4_cards_<id>.log; progress in _harness/_reports/fw_CW6_p4_cards_chain.log. If the chain was killed, re-run it. Then: run `~/Developer/forgeflow-games/.venv/bin/python3 art/tools/card_qa.py dunsom hesmi ilsheta marund odrum rishal sukri tunlan --out _harness/_reports/fw_CW6_cards_after.txt` (gates: speckle <= 2.5, highlight p99.9 >= 230, skin MAD >= 30). View every card for sensitivity and face read. Check the Tunlan lantern is the frame maximum, on the right half, and that the hound shadow reads. Check Marund's bust shows the dome windows and has no mouth spikes. Re-stage any card that misses with a single --skin re-render. Then commit art/blender/fighters/{dunsom,hesmi,ilsheta,marund,odrum,rishal,sukri,tunlan}.py, _design/fighters/*.md and art/out/fighters/<id>/*portrait.png / *splash.png for the 8 fighters."
+  },
+  {
+   "from": "cards",
+   "to": "CW6 (Dunsom model)",
+   "what": "The dunsom_highrim and dunsom_almanac GLBs still carry the old flat hat paint. Rebuild them if their hats should match the base's crown-to-rim ramp. This package did not rebuild them."
+  },
+  {
+   "from": "polish-minors",
+   "to": "lead",
+   "what": "critic:recovered-minors: add the confirmed reviewer minors to _design/reviews/closing_parity_open.json polish with owner CW6 (I can't edit that file).\n\nStill open:\n- dunsom-death-mesh: coat tears at the folded knees and the hatless hood reads as a tube.\n- dunsom-lantern-glued: lanternTiltMax 6 deg.\n- dunsom-value-gradient: lineup f0 64.8 / 42.4 / 27.8.\n- ilsheta-guard-pose: lamp over the face, arms tucked.\n- ilsheta-portrait-framing.\n- odrum-m1: ochre diluted to cream.\n- odrum-m6: COAT_LIFT applied to every skin.\n\nPartly fixed in this package:\n- odrum-m3: lineup accent at facings 0 / 180 still 0.84 / 1.08 %.\n- odrum-m4: channel head travel 2.6 cm.\n- ilsheta-face-seam: dark blocks remain at the side edges.\n\nFixed: odrum-m2, dunsom-sleeve-fleck, ilsheta-run-upper-locked."
+  },
+  {
+   "from": "polish-minors",
+   "to": "lead",
+   "what": "dunsom-skin-qa-bindpose (tooling, not a CW6 file): art/tools three_snapshot should load the base GLB's clips for a skin, as src/render/actors.ts does, so three_<skin>.png and the skin accent numbers are not bind-pose. odrum-m5: calibrate lineup_qa to the in-game character light, or accept the in-match probe as the gate."
+  },
+  {
+   "from": "polish-minors",
+   "to": "lead",
+   "what": "PUSH PENDING: commits 04fb1349 (hesmi), b66dc008 (rishal), eef2636c (ilsheta) and 09aafd45 (tunlan) are committed locally but not on origin. A 550 s push timed out while several lanes were pushing at once, with git-remote-https stuck at about 90 % CPU. The next successful push from any lane or wip_sync carries them. e8ca3d85, 103cdc28, 6c7dae1d and d240b707 were pushed."
+  },
+  {
+   "from": "polish-minors",
+   "to": "CW6 (refix)",
+   "what": "Leftovers:\n(1) rishal_chalkline splash card_qa MAD 27.6 < 30. A plate tint change does not move it; give it its own plate src or another clip/yaw in rishal.py CARDS, then re-render with `portraits rishal --skins --skin rishal_chalkline --no-base --only splash,portrait`.\n(2) The ilsheta_first_bell portrait (recall t 0.82, yaw -26) puts the lamp over the face. Re-stage the bust, then re-check the deluxe dE >= 18.\n(3) sukri.py has no Q_BASE hook, so a sukri rebuild lands at 1175 KiB > 1172. rishal.py lands at 1177 KiB, and odrum at 1180 even with Q_BASE 60. I re-encoded these with `node art/tools/optimize.mjs in out --webp --q-base 74|60 --q-normal 96 --q-orm 92`. Add a q-base hook (as in odrum.py), or lower it.\n(4) Open minors not attempted: hesmi-m2, m4, m5, m6; ilsheta-chimney-hook-lost; ilsheta-no-own-hue; marund-v1; odrum-M3; rishal-m1 to m5; TUN-C1, TUN-c1, TUN-c3.\n(5) Dunsom icon: re-frame it so the lantern glow enters a top corner (dunsom-face-skull)."
+  },
+  {
+   "from": "refix1",
+   "to": "CW1",
+   "what": "Recall playback in src/render/actors.ts. 'recall' is in LOOPING (l.132), so the last 1 s of RIFT's 7 s recall replays the opening. When v.state === 'recall' && v.stateDuration > 0: set act.timeScale = 0 and act.time = min(clipDur - 1e-3, stateTime / stateDuration * clipDur), with LoopOnce and clampWhenFinished. All CW6 recall clips are 6 s."
+  },
+  {
+   "from": "refix1",
+   "to": "CW1",
+   "what": "Marund Domefall playback: actors.ts maps dash progress only for role 'dash' (~l.1037-1073). Apply the same mapping to any clip played in the dash state, e.g. 'domefall_leap' (meta role dash, apex_t 0.40, slam_t 0.82)."
+  },
+  {
+   "from": "refix1",
+   "to": "CW3c",
+   "what": "content/fighters/marund.json ~l.541: in the ult recast/dash present block, change anim 'dash' to 'domefall_leap'. Add art.clips 'domefall_leap' if the client resolves clips through that map."
+  },
+  {
+   "from": "refix1",
+   "to": "CW3s",
+   "what": "src/sim/movement.ts l.131: give Domefall's self-dash a per-effect arc peaking at 0.5-0.6 m (the clip already lifts the hips 0.50 m). Keep the shadow on the floor."
+  },
+  {
+   "from": "refix1",
+   "to": "CW1",
+   "what": "hesmi-M4 / SUK-M5 effect halves: in content/vfx.json add 'element' colour refs (team rings stay on 'team') to hesmi_a1_shadow, hesmi_ult_shadow and hesmi_ult_shard, and to the sukri_* cup motes, Mote Toss bolt, Draw Near pull and Gather In flare. Today there are 0 element refs in 10 hesmi_* and 16 sukri_* defs."
+  },
+  {
+   "from": "refix1",
+   "to": "lead",
+   "what": "PUSH PENDING: 12 local commits (including the 5 CW6 refix commits above) are not on origin. git-remote-https stalled for more than 10 min on every attempt. Another lane's push loop was running when I stopped. The next successful push carries them."
+  },
+  {
+   "from": "refix1",
+   "to": "CW6 (next round)",
+   "what": "rishal-M3 lamp bead: move the Lamplit cage to the crest root with a fit check against the accent ridge blade (top about 1.73-1.75 m at y -0.05 to -0.13), then rebuild only that skin: build.py fighter rishal --skin rishal_lamplit. Minor: Marund idle_lobby has one 0.104 m hand.L step at t 2.37 s."
+  }
+ ],
+ "packages": [
+  {
+   "key": "hesmi-sukri",
+   "items": [
+    "fighter:hesmi:hesmi-M1=done",
+    "fighter:hesmi:hesmi-M2=done",
+    "fighter:hesmi:hesmi-M4=partly",
+    "fighter:sukri:SUK-M2=done",
+    "fighter:sukri:SUK-M3=done",
+    "fighter:sukri:SUK-M5=partly"
+   ],
+   "commits": [
+    "0be3382e vale CW6: Hesmi rebuilt (base + Gorgewalk + Shadeprint) on the closing fixes",
+    "fc2c0274 vale CW6: Sukri rebuilt (base + Shadeprint; Stillwater in the same session)"
+   ],
+   "notes": "I picked up from the interrupted attempt's work in aa788a3e / 7689570a instead of redoing it. Budget used this session: Hesmi 1 full build (base + 2 skins). Sukri 2 base builds, 2 Shadeprint builds and 1 Stillwater build. Counting the earlier attempt, that is at most 3 per model.\n\nFindings:\n- **Sukri size budget:** the base GLB built by the earlier attempt was 1212 KiB, over the 1172 KiB budget, and failed three_load_test. I trimmed tri targets on hood, face, torso, belt, skirt, pants, shins, boots, sleeves, bracers, hands and staff, giving 16262 tris and 1161 KiB, load OK.\n- **Mantle tris:** "
+  },
+  {
+   "key": "marund-odrum",
+   "items": [
+    "fighter:marund:marund-M1=done",
+    "fighter:marund:marund-M2=partly",
+    "fighter:marund:marund-M3=done",
+    "fighter:odrum:odrum-M1=done",
+    "fighter:odrum:odrum-M2=done",
+    "ruling7:odrum-cap=done"
+   ],
+   "commits": [
+    "68284458 vale CW6: Marund maul and action read past the cap (marund-M1/M2/M3); source and base GLB first landed in wip syncs 02d606a8 and 8078795f",
+    "5cfc6f0d vale CW6: Odrum diagonal yoke carry, oat felt cap, ruling-7 crown (odrum-M1, odrum-M2, ruling7:odrum-cap)"
+   ],
+   "notes": "5 of 6 items are done; marund-M2 is partly done. The art half is in the GLB, but in game the ult still plays the old 'dash' clip until the content, sim and playback handoffs land.\n\n- **Git:** the wip-sync script committed my in-progress marund.py and odrum.py and the first Marund base GLB (02d606a8, 8078795f). My two CW6 commits hold the rest and the measured results. Both are pushed.\n- **Build budget:** Marund was built 2 times (one base-only, one full); Odrum 2 times (the first killed during its skins after the base was measured, one full). Builds used --no-render, so splash, portrait and ic"
+  },
+  {
+   "key": "dunsom-ilsheta-rishal-tunlan",
+   "items": [
+    "fighter:dunsom:dunsom-hat-flat-plate=done",
+    "fighter:dunsom:dunsom-idle-recall-frozen=done",
+    "fighter:ilsheta:ilsheta-idle-recall-frozen=done",
+    "fighter:ilsheta:ilsheta-skins-indistinct=done",
+    "fighter:rishal:rishal-M2=done",
+    "fighter:rishal:rishal-M3=partly",
+    "fighter:tunlan:TUN-C2=done",
+    "fighter:tunlan:TUN-c4=done"
+   ],
+   "commits": [
+    "486666bb vale CW6: Dunsom hat crown-to-rim ramp",
+    "9790b3e6 vale CW6: Ilsheta First Bell reads as deluxe",
+    "881e4633 vale CW6: Rishal Lamplit walnut armour + Chalkline ink helm",
+    "a2bebe22 vale CW6: fresh three.js clip sheets (Ilsheta, Rishal, Tunlan, Dunsom)"
+   ],
+   "notes": "The machine slept and ran on battery (no adapter, about 1 core for Blender), so the first Dunsom build took 44 min. Rebuilds used: Dunsom base 1, Ilsheta First Bell 2, Rishal Lamplit 1, Rishal Chalkline 2, all within budget. Only portrait/splash re-renders were run for the gate; no base rebuilds for the motion items, which were already in the GLBs. No src/ or content/ files were touched, so typecheck and content:check were not needed. tools/gen_store.ts was run only with --check --provisional plus a report; content/store.json was not written. With the new portraits, the provisional gate now pa"
+  },
+  {
+   "key": "cards",
+   "items": [
+    "fighter:tunlan:TUN-C3=partly",
+    "fighter:sukri:SUK-M4=partly",
+    "fighter:marund:marund-M4=partly",
+    "fighter:odrum:odrum-M4=partly",
+    "fighter:rishal:rishal-M1=partly",
+    "fighter:dunsom:dunsom-splash-single-pose=partly",
+    "fighter:hesmi:hesmi-M3=partly",
+    "cards:ilsheta=partly"
+   ],
+   "commits": [],
+   "notes": "I ran out of time before any card finished rendering, so all 8 items are partly done and nothing is committed. The CW5 card pipeline had landed (4ce883ae), so I wrote per-skin CARDS staging for all 7 unstaged fighters and restaged Ilsheta First Bell's splash. Each skin got its own clip and frame, yaw, key, rim, bounce, focal lights and plate grade/crop, and Dunsom's two skins no longer share the seat_center plate. I also added a one-line Cards note to each brief in _design/fighters/<id>.md.\n\nCode changes:\n- **tunlan.py:** a new card-only hound-shadow layer: a stage_lights wrapper, light linkin"
+  },
+  {
+   "key": "polish-minors",
+   "items": [
+    "hud:hud-c10=done",
+    "originality:C2=partly",
+    "fighter:dunsom:dunsom-face-skull=partly",
+    "fighter:dunsom:dunsom-lantern-nameplate=partly",
+    "fighter:dunsom:dunsom-sleeve-fleck=done",
+    "fighter:sukri:SUK-M1=done",
+    "fighter:sukri:SUK-m2=partly",
+    "fighter:tunlan:TUN-c5=done",
+    "fighter:tunlan:TUN-C1=not_done",
+    "fighter:tunlan:TUN-c1=not_done",
+    "fighter:tunlan:TUN-c3=not_done",
+    "fighter:hesmi:hesmi-m1=partly",
+    "fighter:hesmi:hesmi-m2=not_done",
+    "fighter:hesmi:hesmi-m4=not_done",
+    "fighter:hesmi:hesmi-m5=not_done",
+    "fighter:hesmi:hesmi-m6=not_done",
+    "fighter:ilsheta:ilsheta-chimney-hook-lost=not_done",
+    "fighter:ilsheta:ilsheta-no-own-hue=not_done",
+    "fighter:marund:marund-M5=partly",
+    "fighter:marund:marund-v1=not_done",
+    "fighter:odrum:odrum-M3=not_done",
+    "fighter:rishal:rishal-m6=done",
+    "fighter:rishal:rishal-m1=not_done",
+    "fighter:rishal:rishal-m2=not_done",
+    "fighter:rishal:rishal-m3=not_done",
+    "fighter:rishal:rishal-m4=not_done",
+    "fighter:rishal:rishal-m5=not_done",
+    "critic:recovered-minors=partly",
+    "gates:three_load/lineup/facechip/cards=partly"
+   ],
+   "commits": [
+    "e8ca3d85",
+    "103cdc28",
+    "6c7dae1d",
+    "d240b707",
+    "04fb1349",
+    "b66dc008",
+    "eef2636c",
+    "09aafd45"
+   ],
+   "notes": "This package also finished the card chain that package 4 left killed at 08:45. Every base and skin card for the 8 fighters is now re-rendered with the staged CARDS, and the uncommitted CARDS edits from package 4 are committed with each fighter. I re-staged 5 cards after viewing them:\n- Tunlan Lamplit bust: the cast_a3 hand covered the mask; now the recall's cupped lantern.\n- Hesmi Shadeprint bust: the face was turned away.\n- Marund's 3 busts: pitch 15 -> 5, so the eyes read under the cap and the white keel no longer reads as a fang.\n\nEvery card and chip I changed was viewed for sensitivity. No"
+  },
+  {
+   "key": "refix1",
+   "items": [
+    "done:1=partly",
+    "fighter:marund:marund-M3=done",
+    "done:2=partly",
+    "fighter:marund:marund-M2=partly",
+    "done:4=done",
+    "fighter:marund:marund-M4=done",
+    "cards:ilsheta=done",
+    "fighter:ilsheta:ilsheta-skins-indistinct=done",
+    "par:ilsheta=done",
+    "par:marund=partly",
+    "fighter:rishal:rishal-M1=done",
+    "par:rishal=partly",
+    "fighter:rishal:rishal-M3=partly",
+    "fighter:hesmi:hesmi-M4=partly",
+    "fighter:sukri:SUK-M5=partly",
+    "par:sukri=done",
+    "done:5=partly"
+   ],
+   "commits": [
+    "2c5b330c vale CW6 refix 1: Marund recall hand snap + busts + beak tip",
+    "06f49b7a vale CW6 refix 1: Sukri 6 s recall + livelier idle + Q_BASE hook",
+    "f89d4213 vale CW6 refix 1: Ilsheta lamp beside the face (idle guard + 3 busts)",
+    "5f5fd4ae vale CW6 refix 1: Rishal Chalkline own plate + calm three-quarter visor busts",
+    "c140111d vale CW6 refix 1: Marund busts framed at fill 0.88"
+   ],
+   "notes": "I ran 4 Blender builds, one more than the round's limit of 3 full rebuilds: Marund full (base + 2 skins) for the mask/beak and framing, a second Marund base-only build without renders (the first still showed 0.10-0.14 m recall steps), Sukri base-only and Ilsheta base-only. The rest were card re-renders, about 8 short portrait runs.\n\nSukri's shipped GLB was re-encoded by hand at base-colour q70 (1153 KiB), because the q74 build came out at 1174 KiB over the 1172 budget. Its source hook is now Q_BASE 68 for the next build.\n\nSeveral edits to rishal.py and marund.py were swept into wip-sync commit"
+  }
+ ],
+ "regressions": [],
+ "summary": "Verify round 2 for CW6: FAIL. I re-ran the checks myself: the FK gauge (fw_CW6_v1_fk.mjs) on the Marund, Sukri and Ilsheta GLBs, card_qa (_harness/_reports/fw_CW6_v2_card_qa.txt) and greps of the cross-lane files. I also viewed the shots and cards. The fixes in CW6's own files hold: Marund's recall hand snap is gone, Sukri's recall and idle now move, the cards pass the gate (48 cards, 0 misses), the Ilsheta lamp sits beside her face, and the Marund busts show the dome windows. Re-score: Ilsheta 7.5 and Sukri 7.5 now reach the par bar. Marund stays at 7.3 because the Domefall ult still plays the flat dash in game. Rishal stays at 7.3 because the Lamplit skin is still mostly a recolour with the lamp cage floating at the crest tip. None of the cross-lane handoffs have landed (actors.ts, marund.json, movement.ts, vfx.json). The verdict is committed locally in _design/reviews/fixwaves/CW6_verify2.json (commit 14390f0e) but is not on origin yet. The push timed out (HTTP 408) while other lanes were pushing at the same time, and the branch is 13 commits ahead of origin."
+}
