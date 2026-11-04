@@ -139,14 +139,14 @@
   },
   "uv_coverage": 0.581,
   "bake": {
-    "base": 8.48,
-    "rough_metal": 12.12,
-    "normal": 12.6,
-    "ao": 16.78,
+    "base": 3.76,
+    "rough_metal": 3.11,
+    "normal": 1.96,
+    "ao": 3.29,
     "normal_fixed_px": 37652,
-    "projection": 178.32,
-    "pack_save": 179.49,
-    "total": 230.02
+    "projection": 37.93,
+    "pack_save": 38.09,
+    "total": 50.4
   },
   "forms": [
     "form_base",
@@ -175,6 +175,16 @@
       "  tris: 16996; bind-pose bounds (three units, Y up): 1.39 x 2.15 x 0.71; facing (-0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ervet/ervet_stillwater_splash.png",
+      "portrait": "art/out/fighters/ervet/ervet_stillwater_portrait.png"
+    },
+    "seconds": {
+      "splash": 52.8,
+      "portrait": 11.3
+    }
   },
   "three_qa": {
     "ok": true,
@@ -205,23 +215,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ervet/three_ervet_stillwater.png",
-    "seconds": 94.1,
+    "seconds": 8.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.31,
-      "model": 26.67,
-      "lows_bind": 11.36,
-      "uv": 7.75,
-      "bake": 230.03,
-      "export": 0.59,
-      "optimize": 3.02,
-      "load_test": 0.61,
-      "three_qa": 95.09
+      "materials": 0.23,
+      "model": 12.06,
+      "lows_bind": 2.74,
+      "uv": 3.86,
+      "bake": 50.4,
+      "export": 0.08,
+      "optimize": 0.68,
+      "load_test": 0.15,
+      "render": 64.13,
+      "three_qa": 9.28
     },
-    "total_s": 375.69
+    "total_s": 143.73
   },
   "run_ref_speed": 3.45,
   "height_m": 2.06

@@ -2147,8 +2147,17 @@ def _death(g, skel) -> anim.Clip:
     rest["hips_loc"] = (0.10, -0.30, -hip_h + 0.195)
     for p_ in (kneel, sway):
         p_["ik"] = dict(p_.get("ik", {}))
+    # closing ervet-m1: the sway -> lying blend swung the straightening legs through the floor (toes -0.19 m); a tip
+    # key holds the kneel's folded legs (the IK solved into FK) while the torso goes down, then the legs extend
+    sr = anim.resolve(skel, sway)
+    tip = anim.lerp_pose(sway, side, 0.45)
+    for b in ("thigh.L", "shin.L", "foot.L", "toe.L", "thigh.R", "shin.R", "foot.R", "toe.R"):
+        if b in sr:
+            tip[b] = sr[b]
+    tip["ik"] = {}
     keys = [(0.0, g, "linear"), (0.12, recoil, "snap"), (0.28, sag, "inout"), (0.46, kneel, "accel"),
-            (0.56, sway, "inout"), (0.72, side, "in"), (0.78, bounce, "out"), (0.86, rest, "inout"), (1.0, rest, "linear")]
+            (0.56, sway, "inout"), (0.65, tip, "in"), (0.72, side, "inout"), (0.78, bounce, "out"), (0.86, rest, "inout"),
+            (1.0, rest, "linear")]
     fn = anim.keyed(keys)
     T_DROP, T_LAND = 0.24, 0.40
     # where the sword lands: flat on the ground out to her right (prop.R: +Y the blade, +X = the face normal N ->
@@ -2169,8 +2178,8 @@ def _death(g, skel) -> anim.Clip:
 
     def sample(t):
         p = fn(t)
-        if 0.56 < t < 0.86:          # closing ervet-m1: the topple's blend swung the feet through the floor
-            p = anim.floor_lift(skel, p)
+        if 0.60 < t < 0.86:          # closing ervet-m1: the topple's blend swung the feet through the floor
+            p = anim.floor_lift(skel, p, floor=-0.012, max_lift=0.10)
         if t <= T_DROP:
             return p
         if "rel" not in held:

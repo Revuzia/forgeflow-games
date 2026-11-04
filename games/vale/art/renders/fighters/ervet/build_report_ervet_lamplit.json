@@ -141,14 +141,14 @@
   },
   "uv_coverage": 0.585,
   "bake": {
-    "base": 4.18,
-    "rough_metal": 4.03,
-    "normal": 2.45,
-    "ao": 3.09,
+    "base": 3.81,
+    "rough_metal": 3.29,
+    "normal": 2.25,
+    "ao": 3.21,
     "normal_fixed_px": 40127,
-    "projection": 74.91,
-    "pack_save": 75.13,
-    "total": 89.14
+    "projection": 37.47,
+    "pack_save": 37.65,
+    "total": 50.39
   },
   "forms": [
     "form_base",
@@ -177,6 +177,16 @@
       "  tris: 17376; bind-pose bounds (three units, Y up): 1.39 x 2.15 x 0.71; facing (-0.00, 1.00); head bone y 1.85; runRefSpeed 3.45",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ervet/ervet_lamplit_splash.png",
+      "portrait": "art/out/fighters/ervet/ervet_lamplit_portrait.png"
+    },
+    "seconds": {
+      "splash": 57.8,
+      "portrait": 11.44
+    }
   },
   "three_qa": {
     "ok": true,
@@ -207,23 +217,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ervet/three_ervet_lamplit.png",
-    "seconds": 11.7,
+    "seconds": 9.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 1.03,
-      "model": 51.76,
-      "lows_bind": 5.2,
-      "uv": 5.32,
-      "bake": 89.14,
-      "export": 0.11,
-      "optimize": 0.91,
-      "load_test": 0.2,
-      "three_qa": 11.95
+      "rig": 0.0,
+      "materials": 0.2,
+      "model": 13.03,
+      "lows_bind": 3.3,
+      "uv": 3.88,
+      "bake": 50.39,
+      "export": 0.08,
+      "optimize": 0.69,
+      "load_test": 0.15,
+      "render": 69.27,
+      "three_qa": 10.01
     },
-    "total_s": 165.91
+    "total_s": 151.19
   },
   "run_ref_speed": 3.45,
   "height_m": 2.06

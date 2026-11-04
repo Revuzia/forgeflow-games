@@ -1295,11 +1295,13 @@ FLOOR_RINGS = {"shin": 0.065, "foot": 0.055, "toe": 0.035, "hand": 0.05}
 _FLOOR_PTS: dict = {}
 
 
-def floor_lift(skel: Skeleton, p: dict, floor: float = 0.004, rings: dict | None = None, extra=()) -> dict:
+def floor_lift(skel: Skeleton, p: dict, floor: float = 0.004, rings: dict | None = None, extra=(),
+               max_lift: float | None = None) -> dict:
     """Lift the pose's hips until conservative rings round the shins, feet, toes and hands (FLOOR_RINGS radii, m; plus
     `extra` (bone, point in the bone's rest frame) probes) stay on or above the floor (the floor gate,
     art/tools/clip_floor.py). Use it in a fall's blends: a held lying pose authored on the floor is left as it is, so
-    the body never floats in a hold. Generalised from Ulkro's death fix (closing ULK-M2) for the CW5 deaths."""
+    the body never floats in a hold. `max_lift` caps the total rise (m): a blend whose legs swing through the floor
+    would otherwise make the whole body hop. Generalised from Ulkro's death fix (closing ULK-M2) for the CW5 deaths."""
     key = (id(skel), tuple(sorted((rings or FLOOR_RINGS).items())), tuple(extra))
     pts = _FLOOR_PTS.get(key)
     if pts is None:
@@ -1315,14 +1317,24 @@ def floor_lift(skel: Skeleton, p: dict, floor: float = 0.004, rings: dict | None
                         pts.append((nm, V((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
         pts += [(b, V(q)) for b, q in extra]
         _FLOOR_PTS[key] = pts
+    prev = None
+    h0 = p.get("hips_loc", (0.0, 0.0, 0.0))[2]
     for _ in range(8):                   # a foot still partly on its IK plant rises by less than the hips: iterate
         M = skel.fk(resolve(skel, p))
         lo = min((M[b] @ q).z for b, q in pts)
         if lo >= floor - 0.002:
             return p
-        p = dict(p)
+        if prev is not None and lo < prev[0] + 0.25 * prev[2]:
+            return prev[1]               # the low point is IK-planted (a kneel): lifting the hips does not raise it
         h = p.get("hips_loc", (0.0, 0.0, 0.0))
-        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo) * 1.5)
+        d = (floor - lo) * 1.5
+        if max_lift is not None:
+            d = min(d, h0 + max_lift - h[2])
+            if d <= 1e-4:
+                return p
+        prev = (lo, p, d)
+        p = dict(p)
+        p["hips_loc"] = (h[0], h[1], h[2] + d)
     return p
 
 
