@@ -975,8 +975,11 @@ def extra_materials(ctx) -> dict:
 
 # ── decimation: the shared collapse keeps X symmetry, which stalls on this asymmetric figure's one-sided parts
 # (the skirt kept 4490 of 2200 tris); those parts decimate without it (wrapper, common/ untouched) ──────────
+# (CW5 refix 1: the shin wraps wound at 6 bands per turn are no longer mirror-symmetric, the symmetric collapse
+# stalled at 2612 of 800 tris and the base GLB built at 1425 KiB (1338 after decimate_chains --orm-q 40 --normal-q 70)
+# > 1172: that build was NOT shipped (shots/report fw_CW5_r1_ulkro_*_unshipped); "wraps" decimates without symmetry)
 ASYM = ("skirt", "hood_tail", "quiver", "crest_", "thrower", "dart_", "hand_", "bracers", "sash", "buckle",
-        "lacquer_fan")
+        "lacquer_fan", "wraps")
 
 
 def _install_decimate() -> None:
