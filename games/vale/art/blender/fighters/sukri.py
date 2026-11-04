@@ -3545,12 +3545,12 @@ def clip_overrides(ctx) -> dict:
     return out
 
 
-# ── export: the shipping compression with the base colour at WebP q74 (CW6 refix: a full build landed at 1175 KiB
+# ── export: the shipping compression with the base colour at WebP q68 (CW6 refix: a full build landed at 1175 KiB; at q74 the 6 s recall put it at 1174
 # against the 1172 KiB budget at the default q80; the earlier package re-encoded it by hand with
 # `optimize.mjs --webp --q-base 74`: this wraps export.optimize in this build process only, as odrum.py does) ──
 from common import export as _export  # noqa: E402
 
-Q_BASE = 74
+Q_BASE = 68
 _optimize0 = _export.optimize
 
 
