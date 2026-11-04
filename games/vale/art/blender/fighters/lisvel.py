@@ -106,9 +106,9 @@ CARDS = {
                               "power": 40.0, "size": 0.25}]},
         # (CW5, lisvel-M1: the splash's near-frontal head light flattened the carved face plate into a blank oval in
         # the bust; a key from her upper right, low power, so the nose, the lips and the visor's dark band model)
-        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44,
-                     "focal": [{"at": "head", "az": 245.0, "el": 32.0, "dist": 0.7, "color": "#FFE6C4", "power": 14.0,
-                                "size": 0.15},
+        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.0,
+                     "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 18.0,
+                                "size": 0.10},
                                {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
                                 "power": 40.0, "size": 0.25}]},
         "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4"},
