@@ -371,6 +371,8 @@ export class WorldView {
     const yearFrac = (dayOfYear + hour / Math.max(1, p.dayHours)) / yearDays;
     const seasonIdx = p.seasonPinned != null ? p.seasonPinned : Math.floor(yearFrac * 4) % 4;
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
-    return { year, day: dayOfYear + 1, hour, season: seasons[((seasonIdx % 4) + 4) % 4], yearFrac };
+    // yearDays is fractional (orbit period / day length), so a wrap leaves dayOfYear fractional: the
+    // displayed day is the whole day it falls in (postrel #4), yearFrac keeps the continuous value
+    return { year, day: Math.floor(dayOfYear) + 1, hour, season: seasons[((seasonIdx % 4) + 4) % 4], yearFrac };
   }
 }
