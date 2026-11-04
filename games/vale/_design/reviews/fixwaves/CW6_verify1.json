@@ -1,59 +1,297 @@
 {
-  "wave": "CW6",
-  "round": 1,
-  "verifier": "adversarial verifier, 2026-11-03",
-  "pass": false,
-  "summary": "FAIL. The model and animation fixes that landed hold up when re-measured: Hesmi M1/M2, Sukri M2/M3, Marund M1/M3, Odrum M1/M2/crown, Tunlan pops and recall, Dunsom idle/recall. All 24 GLBs pass the three.js load test. But the cards were not re-staged for any of the 8 fighters, Ilsheta's skins were not rebuilt, the Rishal/Ilsheta motion fixes and the Rishal Lamplit rebuild are uncommitted by CW6, Dunsom's hat ramp is 8.2-9.1 L* (needs >= 10), and the Marund/Hesmi/Sukri effect halves are still in hand-off. Done criteria 4 and 5 fail outright.",
-  "method": "Independent FK gauge _harness/_reports/fw_CW6_v1_fk.mjs (pairwise travel, 60 Hz step at a given playback rate, loop seam); node art/tools/three_load_test.mjs on 24 GLBs (--skin-only for skins); node art/tools/crown_gate.mjs art/out/fighters/odrum; Lab dE76 / chroma medians on three_* sheets (sRGB->Lab D65); fw_CW6_odrum_yoke.mjs re-run; every new render viewed.",
-  "items": [
-    {"id": "done:0", "severity": "major", "status": "pass", "evidence": "Hesmi eye-band: _harness/_shots/fw_CW6_hesmi_eyes_3skins.png (viewed at x3) shows two dark glossy lenses, each with a small cool catch-light, and no block joint between brow and bridge. The icon at 128/48/26 px (fw_CW6_hesmi_band_icon.png) reads as a stern eye line, not teeth, horror or a mannequin. Minor: the catch-lights are 2-3 px at portrait scale and vanish at 26 px."},
-    {"id": "done:1", "severity": "major", "status": "partly", "evidence": "FK (fw_CW6_v1_fk.mjs, idle/recall/channel; head travel cm, loop seam cm): Dunsom idle 6.6 / recall 6 s 17.5 / seam 0; Ilsheta idle 7.8 / recall 6 s 12.8 / seam 0; Marund idle 8.2 / recall 6 s 23.2 / seam 0; Rishal idle 4.8 / recall 6 s 54.2 / channel 7.6 / seam 0; Tunlan idle 7.2 / recall 6 s 17.0 / seam 0. Every number clears 3.8 cm with no seam. Partly because: (a) every recall is 6 s inside RIFT's 7 s recall, so the opening replays for 1 s, a seamless but visible restart; (b) the Ilsheta and Rishal GLBs (13:26 / 13:32) landed only through wip sync 8b93ac40, the engineers claim not_done, and the brief beats were not reviewed by eye.", "fixHint": "Commit Ilsheta and Rishal under CW6 with their clip sheets, and view the recall beats against each brief. Optionally hold the last pose for the final 1 s, since a loop restart at t = 6 s reads as a repeat."},
-    {"id": "done:2", "severity": "major", "status": "partly", "evidence": "Tunlan x_hat max 60 Hz step at playback rate 1 / 1.333 / 1.778 / 2.2: cast_a1 0.094 / 0.126 / 0.159 / 0.204 m and cast_ult 0.106 / 0.140 / 0.186 / 0.232 m, all <= 0.3. The settle after the peak runs 0.182 > 0.146 > 0.070 > 0.030 > 0.008, which is >= 4 frames: PASS. Sukri: three_clips_sukri.png (viewed) shows distinct attack1/attack2/Mote Toss rows and an open hand in the casts: PASS. Marund: the domefall_leap clip exists in the GLB, but the game still plays 'dash' (handed off to CW3c/CW3s/CW1), so in game the ult is not airborne: FAIL.", "fixHint": "Land the CW3c present.anim 'domefall_leap', the CW3s dash arc of about 0.5 m and the CW1 dash-role mapping, then capture a mid-leap frame in match."},
-    {"id": "done:3", "severity": "major", "status": "partly", "evidence": "Odrum crown gate R3 11.4 cm on 3/3 skins (pass). The yoke re-run gives a vertical-pole share of 16.9 % (<= 20, modelled from old facings, not a fresh match; dash 100 % vertical). Odrum cap HSV 36.8/0.146 comes from the engineers' single match frame (not re-captured). Marund: fw_CW6_marund_swing_zoom_x2.png shows the maul head outside the level cap rim (pass). Hesmi hood vs bands dE76 8.6 / 8.6 / 8.6 at three_hesmi.png row 1 back view, boxes (1333,77)-(1367,93) vs (1317,122)/(1345,120)/(1368,122) (pass, thin margin). Sukri wraps median C 11.7-12.6 on three_sukri.png (90-210, 780-835) and C 11.7 on fw_CW6_sukri_front_engine.png; see-through cup visible (pass). Dunsom hat: _harness/_reports/fw_CW6_dunsom_hat_ramp.txt crown-mean vs rim-mean ramp 8.2-9.1 L* (mean 8.5) across 8 cells; only the endpoint radial 80.3 -> 69.3 = 11.0 clears it. In fw_CW6_dunsom_hat_gamecam_x2.png (viewed) the hat still reads as a pale smooth dish: FAIL.", "fixHint": "Dunsom: deepen the outer 30 % of the felt (rim band about 66-68 L*) so the crown(r<0.3) vs rim(0.7-0.95) means differ by >= 10, and strengthen nap so it survives 60 px. Odrum: capture a fresh facing.mjs/match sample to replace the modelled share."},
-    {"id": "done:4", "severity": "major", "status": "fail", "evidence": "Cards: portrait/splash timestamps for marund/odrum/rishal/tunlan are Oct 28-29 (pre-closing). Hesmi/Sukri/Dunsom cards were regenerated only by the rebuilds and are not CW5-staged per skin. Ilsheta staged cards are in progress and uncommitted (git status: ilsheta_first_bell_portrait/splash.png modified; _harness/_reports/fw_CW6_ilsheta_cards.log). There is no Tunlan hound shadow and no First Bell dE >= 18 measurement. The engineers claim not_done for all of these.", "fixHint": "Run CW5's staged-card path (art/blender/portraits.py, as in 4ce883ae Vashil) per fighter and skin, then card_qa grain <= 2x plate. Tunlan: add the hound shadow keyed by the lantern. Ilsheta First Bell: measure the CW3 dE gate >= 18 vs base."},
-    {"id": "done:5", "severity": "major", "status": "fail", "evidence": "three_load_test: 24/24 OK (8 base, 16 with --skin-only). The per-fighter re-review fails: every fighter still has at least one open major (cards for all 8; plus effect halves, Ilsheta skins, Rishal M3), see the par:* items.", "fixHint": "Close the card majors and the handoffs, then re-score."},
-    {"id": "fighter:hesmi:hesmi-M1", "severity": "major", "status": "pass", "evidence": "See done:0; viewed fw_CW6_hesmi_eyes_3skins.png and fw_CW6_hesmi_band_icon.png. No sensitivity issue."},
-    {"id": "fighter:hesmi:hesmi-M2", "severity": "major", "status": "pass", "evidence": "dE76 8.6 x3 measured independently (see done:3); engineers' 8.4-10.3."},
-    {"id": "fighter:hesmi:hesmi-M4", "severity": "major", "status": "partly", "evidence": "Shadeprint model carries the violet shade (three_hesmi_shadeprint.png, eyes_3skins panel 3). The in-match vfxTint is still a CW1 handoff, and Shadeprint cards are not re-staged.", "fixHint": "CW1 element-colour layer in hesmi_a1_shadow / hesmi_ult_shadow / hesmi_ult_shard, then a match capture."},
-    {"id": "fighter:hesmi:hesmi-M3", "severity": "major", "status": "fail", "evidence": "Not done (claimed not_done). Cards are rebuild outputs of 08:34, not CW5 staged.", "fixHint": "Staged per-skin cards via the CW5 pipeline."},
-    {"id": "fighter:sukri:SUK-M2", "severity": "major", "status": "pass", "evidence": "Wraps C 11.7-12.6 (in 10-18); the cup is see-through in fw_CW6_sukri_front_engine.png. Caveat: art/blender/fighters/sukri.py is modified in the working tree after the 09:27 GLB, so the shipped GLB may not match the source."},
-    {"id": "fighter:sukri:SUK-M3", "severity": "major", "status": "pass", "evidence": "three_clips_sukri.png (viewed): attack1/attack2/Mote Toss are distinct, with an open hand in the casts and the Wrap Cast loop above the hood."},
-    {"id": "fighter:sukri:SUK-M5", "severity": "major", "status": "partly", "evidence": "Model ring #A48CFF in fw_CW6_sukri_shadeprint_cup.png. In-match VFX not done (CW1 handoff). Shadeprint splash not done.", "fixHint": "CW1 'element' refs in the sukri_* vfx defs; staged Shadeprint card."},
-    {"id": "fighter:sukri:SUK-M4", "severity": "major", "status": "fail", "evidence": "Claimed not_done; no staged cards.", "fixHint": "CW5 staged cards with the cup as the focal light."},
-    {"id": "fighter:marund:marund-M1", "severity": "major", "status": "pass", "evidence": "fw_CW6_marund_swing_zoom_x2.png (viewed): level cap, pale maul head clearly beyond the rim at impact on both attacks."},
-    {"id": "fighter:marund:marund-M2", "severity": "major", "status": "partly", "evidence": "The clip is authored; in game the ult still plays 'dash' (content/fighters/marund.json, handoff). Not airborne in match.", "fixHint": "See done:2 handoffs."},
-    {"id": "fighter:marund:marund-M3", "severity": "major", "status": "pass", "evidence": "FK: recall head 23.2 cm, hand.L 117.9 cm, 6 s, seam 0; idle 8.2; channel 14.4."},
-    {"id": "fighter:marund:marund-M4", "severity": "major", "status": "fail", "evidence": "Cards dated Oct 28-29.", "fixHint": "Staged per-skin cards; keep the cap and windows in the portrait."},
-    {"id": "fighter:odrum:odrum-M1", "severity": "major", "status": "pass", "evidence": "Re-ran fw_CW6_odrum_yoke.mjs: 16.9 % vertical (n 1176, modelled), and the enemy match frame (fw_CW6_odrum_match_x2.png panel 2, viewed) shows a diagonal bar. Watch item: dash samples 100 % vertical."},
-    {"id": "fighter:odrum:odrum-M2", "severity": "major", "status": "pass", "evidence": "Cap reads as grey-oat felt in fw_CW6_odrum_match_x2.png panel 2; reported HSV 36.8/0.146 from one frame (not re-captured by verifier)."},
-    {"id": "ruling7:odrum-cap", "severity": "major", "status": "pass", "evidence": "crown_gate R3 11.4 cm on odrum / noon_fair / shadeprint (pass 3/3). The rear-view check at the gameplay camera was not done by the engineers; the dome is round in the match frame."},
-    {"id": "fighter:odrum:odrum-M4", "severity": "major", "status": "fail", "evidence": "Cards dated Oct 28-29.", "fixHint": "Staged per-skin cards."},
-    {"id": "fighter:dunsom:dunsom-hat-flat-plate", "severity": "major", "status": "partly", "evidence": "Committed in 208f8372 (engineers' report lists not_done). Ramp mean 8.5 L* (< 10); radial endpoints 11.0. Still reads as a pale dish at the game camera.", "fixHint": "See done:3."},
-    {"id": "fighter:dunsom:dunsom-idle-recall-frozen", "severity": "major", "status": "pass", "evidence": "FK: idle head 6.6 cm, recall 6 s head 17.5 / hand.L 72 cm, channel 4.7, seams 0. Committed in 208f8372."},
-    {"id": "fighter:dunsom:dunsom-splash-single-pose", "severity": "major", "status": "fail", "evidence": "Cards were regenerated at 12:52 by the rebuild, not staged per skin.", "fixHint": "CW5 staged per-skin cards with distinct scenes for Highrim and Almanac."},
-    {"id": "fighter:tunlan:TUN-C2", "severity": "major", "status": "pass", "evidence": "x_hat step <= 0.232 m even at the 2.2x cap, with a >= 4-frame settle (see done:2). Committed in 50f7e6f4."},
-    {"id": "fighter:tunlan:TUN-c4", "severity": "major", "status": "pass", "evidence": "Recall 6 s, head 17.0 cm, hands 47-61 cm, seam 0."},
-    {"id": "fighter:tunlan:TUN-C3", "severity": "major", "status": "fail", "evidence": "Cards dated Oct 28-29; no hound shadow.", "fixHint": "Staged cards with the lantern as key and the hound shadow."},
-    {"id": "fighter:ilsheta:ilsheta-idle-recall-frozen", "severity": "major", "status": "partly", "evidence": "The ilsheta.glb in the tree (13:26, wip sync 8b93ac40) measures idle head 7.8 cm and recall 6 s head 12.8 cm, seam 0, but it is claimed not_done and has no CW6 commit or review.", "fixHint": "Commit under CW6 with a clip sheet; confirm the recall reads as a performance."},
-    {"id": "fighter:ilsheta:ilsheta-skins-indistinct", "severity": "major", "status": "fail", "evidence": "ilsheta_first_bell.glb and ilsheta_stillwater.glb are dated Oct 28; staged cards are in progress and uncommitted; no dE measurement.", "fixHint": "Rebuild First Bell with a distinct palette/prop read, then stage the cards and pass CW3's dE >= 18."},
-    {"id": "fighter:rishal:rishal-M2", "severity": "major", "status": "partly", "evidence": "The rishal.glb in the tree (13:32, wip sync) measures recall 6 s head 54.2 cm and channel 7.6 cm, seam 0. Claimed not_done, no CW6 commit.", "fixHint": "Commit under CW6 and review the beats."},
-    {"id": "fighter:rishal:rishal-M3", "severity": "major", "status": "partly", "evidence": "rishal_lamplit.glb was rebuilt at 13:40 (CW3c reports dE 23.4). In fw_CW6_rishal_base_vs_lamplit_close_x3.png (viewed) Lamplit reads warm cream vs pale blue, but it is still mostly a recolour; Chalkline GLB dated Oct 28; claimed not_done.", "fixHint": "Give Lamplit a distinct silhouette/light element beyond a recolour, rebuild Chalkline so the ink-grey steel reads, and commit."},
-    {"id": "fighter:rishal:rishal-M1", "severity": "major", "status": "fail", "evidence": "Cards dated Oct 28-29.", "fixHint": "Staged per-skin cards, face lit."},
-    {"id": "cards:ilsheta", "severity": "major", "status": "fail", "evidence": "In progress, uncommitted (fw_CW6_ilsheta_cards.log).", "fixHint": "Finish, run card_qa, commit."},
-    {"id": "CW6 polish", "severity": "minor", "status": "fail", "evidence": "26 polish items for CW6; none claimed or evidenced.", "fixHint": "Address after the majors."},
-    {"id": "critic:recovered-minors (CW6 fighters)", "severity": "minor", "status": "not_measured", "evidence": "Claimed not_done; not measured.", "fixHint": "Address per closing/critic.json gaps."},
-    {"id": "par:dunsom", "severity": "major", "status": "fail", "evidence": "Estimated 7.0: motion fixed, hat ramp short, cards open."},
-    {"id": "par:hesmi", "severity": "major", "status": "fail", "evidence": "Estimated 7.3: face and materials fixed, cards and Shadeprint FX open."},
-    {"id": "par:ilsheta", "severity": "major", "status": "fail", "evidence": "Estimated 6.8: motion uncommitted, skins and cards open."},
-    {"id": "par:marund", "severity": "major", "status": "fail", "evidence": "Estimated 7.2: read past the cap fixed, ult not airborne in game, cards open."},
-    {"id": "par:odrum", "severity": "major", "status": "fail", "evidence": "Estimated 7.3: yoke, cap and crown fixed, cards open."},
-    {"id": "par:rishal", "severity": "major", "status": "fail", "evidence": "Estimated 6.9: recall uncommitted, deluxe and cards open. Watch item: the blank slit visor reads close to a faceless mannequin from the front (fw_CW6_rishal_base_vs_lamplit_close_x3.png); previously accepted, so not a blocker."},
-    {"id": "par:sukri", "severity": "major", "status": "fail", "evidence": "Estimated 7.3: materials and attacks fixed, cards and Shadeprint FX open."},
-    {"id": "par:tunlan", "severity": "major", "status": "fail", "evidence": "Estimated 7.2: pops and recall fixed, cards/hound shadow open."}
-  ],
-  "regressions": [
-    "art/blender/fighters/sukri.py is modified in the working tree after sukri.glb (09:27) was built; the committed source and the GLB may diverge.",
-    "Dunsom and Tunlan fixes were committed (208f8372, 50f7e6f4) but the package report says 'agent returned nothing'; Ilsheta/Rishal GLBs were rebuilt but landed only via wip sync. Bookkeeping, not a render regression."
-  ],
-  "handoffs_pending": ["CW1: Hesmi/Sukri Shadeprint element colour layers; Marund dash-role playback", "CW3c: Marund present.anim domefall_leap", "CW3s: Marund self-dash arc about 0.5 m"]
+ "pass": false,
+ "wave": "CW6",
+ "round": 1,
+ "verifier": "adversarial verifier",
+ "date": "2026-11-04",
+ "summary": "FAIL. Verified: 24/24 GLBs load (bases under 1172 KiB), card_qa 47/48 pass, Dunsom hat ramp 10.7 L*, Tunlan hat steps <= 0.21 m/frame, recalls 6 s with seam 0, First Bell dE 25.2. Failing: Ilsheta portraits hide the face behind the lamp (all three skins), Marund portraits crop the dome windows and his recall has a 0.5 m/frame hand snap, Marund ult still plays 'dash' in game, Rishal Chalkline MAD 27.6 < 30, Sukri recall/idle frozen (head 1.0/2.4 cm), and the 6 s recall still loops inside the 7 s channel until CW1 lands the actors.ts fit. Par: Dunsom 7.5, Hesmi 7.6, Odrum 7.5, Tunlan 7.6 pass; Ilsheta 7.0, Marund 7.1, Rishal 7.2, Sukri 7.3 fail.",
+ "items": [
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Viewed all 3 Hesmi portraits and splashes (_harness/_shots/fw_CW6_v1_cards_hesmi.png): two eyes with cool glints on base/Gorgewalk/Shadeprint, nothing crossing the eyes, no teeth read. hesmi.glb loads OK (1140 KiB)."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "FK (_harness/_reports/fw_CW6_v1_fk_idle_recall.txt, node _harness/_reports/fw_CW6_v1_fk.mjs <glb> idle,recall,channel): idle head Dunsom 6.6, Ilsheta 7.8, Marund 8.2, Rishal 4.8, Tunlan 7.2 cm (all >= 3.8). Recall clips are 6.0 s, seam 0, head 17.5/12.8/23.2/54.2/17.0 cm. But RIFT recall is 7 s and src/render/actors.ts:132 still has 'recall' in LOOPING with no stateTime fit, so the last 1 s replays the opening (CW1 handoff not landed). New defect: Marund recall hand.L jumps 0.469 m then 0.498 m per 60 Hz frame at t 4.117-4.133 s and 0.25 m at t 5.02 s (_harness/_reports/fw_CW6_v1_pop.mjs art/out/fighters/marund/marund.glb recall hand.L) -- a visible snap in a calm gesture.",
+   "fixHint": "Marund: in marund.py recall keys around f123-f124 and f150-f151 (t 4.1 s, 5.0 s), add 4-6 in-between frames or blend the hand.L IK/FK switch so no hand.L step exceeds 0.10 m per 60 Hz frame; rebuild base only. Recall-to-channel fit: CW1 must land the actors.ts change (timeScale 0, time = stateTime/stateDuration*clipDur, LoopOnce+clamp)."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Tunlan x_hat max step per 60 Hz frame: cast_a1 0.094 / cast_ult 0.106 m at 1x, 0.188 / 0.210 m at 2x (<= 0.3). Sukri attacks distinct (prior verify, clips unchanged). Marund domefall_leap clip exists in the GLB, but content/fighters/marund.json:541 still plays anim 'dash' and actors.ts:1073 maps progress only for role 'dash'; src/sim/movement.ts:131 self-dash arc 0. So in game Marund's ult is still not airborne.",
+   "fixHint": "CW3c: marund.json present.anim 'dash' -> 'domefall_leap'; CW1: actors.ts progress mapping for any clip in state dash; CW3s: Domefall self-dash arc ~0.5 m."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Dunsom hat ramp re-measured: python3 _harness/_reports/fw_CW6_hat_ramp.py art/renders/fighters/dunsom/three_dunsom.png -> mean 10.7, min 10.5, max 11.1 L* over 8 facings (>= 10; three_dunsom.png 09:04 after dunsom.glb 09:00). Odrum yoke diagonal visible in three_odrum.png row 1 (_harness/_shots/fw_CW6_v1_three_sheet.png); the 16.9 % share is modelled from recorded facings, not re-captured (accepted, carried from round 1 pass). Marund level dome with maul head outside the rim, Hesmi dE, Sukri chroma carried from round-1 measurements; models touched since (Hesmi boots only) do not affect those regions."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "card_qa (art/tools/card_qa.py ... --out _harness/_reports/fw_CW6_v1_card_qa.txt): 48 cards, 1 gate miss: rishal_chalkline splash MAD 27.6 < 30. Each skin now has its own clip/plate (viewed _harness/_shots/fw_CW6_v1_cards_<id>.png for all 8). Ilsheta First Bell portrait dE 25.2 >= 18 (tools/gen_store.ts --check --provisional report). Tunlan base splash: brightest region x 0.721 y 0.307 (lantern/face, right half) and a hound-shaped hand shadow on the plate (_harness/_shots/fw_CW6_v1_tunlan_splash.png). Fails on viewing: all three Ilsheta portraits put the lamp bail/ring over the face so the face does not read (_harness/_shots/fw_CW6_v1_ilsheta_portraits.png); Marund base/Gorgewalk/Long Evening portraits crop the dome so its windows are only blue slivers at the top edge, and a black speck sits at the beak tip (_harness/_shots/fw_CW6_v1_marund_ilsfb_portraits.png). gen_store --check also reports content/store.json out of date (not a CW6 file).",
+   "fixHint": "Ilsheta: portrait entries with the lamp lifted BESIDE the face (yaw so the lamp sits screen-right of the head, camera slightly lower), all three skins. Marund: portrait pitch/frame up so the rim and front windows read above the mask; clean the beak-tip speck. Rishal Chalkline: own plate src or a different clip/yaw so splash MAD >= 30. Lead/CW3c: re-run node tools/gen_store.ts."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "three_load_test OK on all 24 GLBs (_harness/_reports/fw_CW6_v1_three_load.txt; bases 1131-1170 KiB under 1172). Per-fighter re-score: 4 of 8 >= 7.5 (Dunsom, Hesmi, Odrum, Tunlan); Ilsheta, Marund, Rishal, Sukri below (see par:*).",
+   "fixHint": "See par items."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Portraits viewed, two glinting eyes, no joint over eyes; see done:0."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Carried from round-1 measure (dE 10.3/9.0/8.4); the hood paint is unchanged by the 04fb1349 boot re-hue."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Own clip/plate per skin, card_qa 6/6 pass (fw_CW6_v1_card_qa.txt), viewed fw_CW6_v1_cards_hesmi.png."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Model half visible (violet Shadeprint cards); effect half (vfxTint in content/vfx.json) still CW1.",
+   "fixHint": "CW1 vfx.json element layers."
+  },
+  {
+   "id": "fighter:sukri:SUK-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Carried from round 1; sukri.glb rebuilt since (SUK-M1 chin cracks) without colour changes; three_sukri.png viewed."
+  },
+  {
+   "id": "fighter:sukri:SUK-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Carried from round 1 (attack1/attack2/cast_a1 distinct)."
+  },
+  {
+   "id": "fighter:sukri:SUK-M4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Base offered cup lit from the cup, Stillwater recall, Shadeprint wind-up; card_qa pass; viewed fw_CW6_v1_cards_sukri.png."
+  },
+  {
+   "id": "fighter:sukri:SUK-M5",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Model half only; effect half is CW1.",
+   "fixHint": "CW1 vfx.json element layers."
+  },
+  {
+   "id": "fighter:marund:marund-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Level dome in three_marund.png row 1; carried FK from round 1."
+  },
+  {
+   "id": "fighter:marund:marund-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Clip authored; not playing in game (marund.json:541 anim 'dash').",
+   "fixHint": "CW3c/CW1/CW3s handoffs must land."
+  },
+  {
+   "id": "fighter:marund:marund-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Recall 6 s head 23.2 cm, but hand.L snaps 0.50 m per 60 Hz frame at t 4.13 s (fw_CW6_v1_pop.mjs).",
+   "fixHint": "Add in-betweens around recall t 4.1 s and 5.0 s so hand.L <= 0.1 m per 60 Hz frame."
+  },
+  {
+   "id": "fighter:marund:marund-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Own clip per skin and card_qa pass, but portraits still crop the cap windows and a beak-tip speck remains (fw_CW6_v1_marund_ilsfb_portraits.png).",
+   "fixHint": "Raise portrait framing so the dome windows read; clean the beak-tip speck."
+  },
+  {
+   "id": "fighter:odrum:odrum-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Diagonal yoke in three_odrum.png and cards; modelled share 16.9 %."
+  },
+  {
+   "id": "fighter:odrum:odrum-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Carried from round 1 (match capture cap 36.8 deg / 0.146)."
+  },
+  {
+   "id": "ruling7:odrum-cap",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Carried crown_gate R3 11.4 cm; no new Odrum cap change."
+  },
+  {
+   "id": "fighter:odrum:odrum-M4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Base throw, Noon Fair walk, Shadeprint pole pose, own plates; card_qa pass."
+  },
+  {
+   "id": "fighter:dunsom:dunsom-hat-flat-plate",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Ramp 10.5-11.1 L* re-measured."
+  },
+  {
+   "id": "fighter:dunsom:dunsom-idle-recall-frozen",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Idle head 6.6 cm, recall 17.5 cm, seam 0."
+  },
+  {
+   "id": "fighter:dunsom:dunsom-splash-single-pose",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Three distinct poses/plates (lantern swing, Highrim stand in snow, Almanac hat-tip); card_qa pass."
+  },
+  {
+   "id": "fighter:tunlan:TUN-C2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Hat max step 0.21 m/frame at 2x."
+  },
+  {
+   "id": "fighter:tunlan:TUN-c4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Recall 6 s head 17 cm seam 0; idle 7.2 cm."
+  },
+  {
+   "id": "fighter:tunlan:TUN-C3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Lantern/face brightest at x 0.72 (right half); hound shadow present; per-skin poses. Minor: the shadow floats on the sky plate."
+  },
+  {
+   "id": "fighter:ilsheta:ilsheta-idle-recall-frozen",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Idle 7.8 cm, recall head 12.8 cm, lamp travel ~39 cm, seam 0."
+  },
+  {
+   "id": "fighter:ilsheta:ilsheta-skins-indistinct",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "First Bell dE 25.2 passes, base/Stillwater splashes now distinct, but the First Bell portrait still has the lamp in front of the face, the fix asked for the lamp beside the face.",
+   "fixHint": "Re-stage First Bell portrait with the lamp beside the face."
+  },
+  {
+   "id": "fighter:rishal:rishal-M1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Per-skin clips; rishal_chalkline splash MAD 27.6 < 30 (card_qa gate miss).",
+   "fixHint": "Give rishal_chalkline its own plate src or clip/yaw; re-render with --skin rishal_chalkline --no-base."
+  },
+  {
+   "id": "fighter:rishal:rishal-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Recall 6 s head 54.2 cm, seam 0."
+  },
+  {
+   "id": "fighter:rishal:rishal-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Lamplit cards are warm and distinct (dE 32.3) but the surface/lamp-bead/VFX asks are not done.",
+   "fixHint": "Walnut inlay/lampresin glazing on pauldrons and a crest-root lamp bead in the Lamplit skin."
+  },
+  {
+   "id": "cards:ilsheta",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "All three Ilsheta portraits hide the face behind the lamp ring (fw_CW6_v1_ilsheta_portraits.png).",
+   "fixHint": "Re-stage the three portraits (lamp beside the face, face lit)."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Claimed polish spot-checked: Odrum eye voids warm (portrait viewed), Hesmi boots brown, Sukri chin cracks gone (portrait viewed), Tunlan eye lines cleaned (portrait viewed). Many minors not attempted: hesmi-m2/m4/m5/m6, ilsheta-chimney-hook-lost, ilsheta-no-own-hue, marund-v1, odrum-M3, rishal-m1..m5, TUN-C1/c1/c3.",
+   "fixHint": "Backlog per ruling 8 for fighters at >= 7.5."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Engineer could not add them to closing_parity_open.json; not verifiable here."
+  },
+  {
+   "id": "par:dunsom",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "score 7.5: Hat ramp 10.7 L*, recall 6 s performs, idle 6.6 cm, three distinct cards, no sensitivity issue in viewed cards. Backlog: death-mesh tears, lanternTiltMax 6 deg, 6 s recall in 7 s channel (CW1)."
+  },
+  {
+   "id": "par:hesmi",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "score 7.6: Eyes read with glints at portrait and chip size, stone/linen separate, per-skin cards pass. Backlog: Shadeprint VFX tint (CW1)."
+  },
+  {
+   "id": "par:ilsheta",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "score 7.0: Motion fixed, First Bell distinct, but every portrait hides her face behind the lamp; guard pose still holds the lamp over the face (open item ilsheta-guard-pose).",
+   "fixHint": "Re-stage portraits (lamp beside face) and re-pose guard so the lamp sits at the hip/side."
+  },
+  {
+   "id": "par:marund",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "score 7.1: Maul/cap fix good, but the ult is not airborne in game, the recall has a 0.5 m/frame hand snap, and the portraits crop the dome windows.",
+   "fixHint": "Land the Domefall handoffs, smooth the recall hand.L snap, re-frame portraits."
+  },
+  {
+   "id": "par:odrum",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "score 7.5: Diagonal yoke, oat cap, crown gate pass, warm eye voids, per-skin cards. Backlog: channel head 2.6 cm (odrum-m4), accent 0.84-1.08 % at facings 0/180."
+  },
+  {
+   "id": "par:rishal",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "score 7.2: Recall strong (54 cm), but the Chalkline card misses the card_qa MAD gate (27.6), the portraits are chaotic crops of the crest with no readable visor/face plane, and the Lamplit deluxe is still mostly a recolour (M3 partly).",
+   "fixHint": "Chalkline own plate/pose to MAD >= 30; portrait bust that shows the visor front at 3/4; Lamplit surface glazing per rishal-M3."
+  },
+  {
+   "id": "par:sukri",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "score 7.3: Colour, cup and attacks fixed, but recall is a 2.0 s clip with head travel 1.0 cm and hands 0-0.5 cm looping through the 7 s recall, and idle head 2.4 cm < roster median 3.8 cm (fw_CW6_v1_fk_idle_recall.txt): the same frozen-recall class that was a major on Dunsom. VFX tint pending CW1.",
+   "fixHint": "Author a 6 s recall (e.g. tips the cup, raises the bead, cups it to the hood, nods) with head >= 10 cm and an idle with >= 4 cm head travel; one rebuild with the Q_BASE hook."
+  },
+  {
+   "id": "par:tunlan",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "score 7.6: Hat pops fixed, recall performs, lantern is the splash key with the hound shadow, per-skin cards. Backlog: TUN-C1/c1/c3 not attempted; shadow floats on the sky."
+  }
+ ],
+ "regressions": [
+  "Marund recall hand.L snaps 0.469+0.498 m in two 60 Hz frames at t 4.12-4.13 s and 0.25 m at t 5.02 s (new 6 s recall).",
+  "tools/gen_store.ts --check exits 1: content/store.json out of date after the new cards (not a CW6 file; lead/CW3c must regenerate).",
+  "7 local commits (incl. CW6 04fb1349, b66dc008, eef2636c, 09aafd45) were not on origin before this verdict push."
+ ]
 }
