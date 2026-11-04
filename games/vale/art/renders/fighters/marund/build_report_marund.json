@@ -161,14 +161,14 @@
   },
   "uv_coverage": 0.634,
   "bake": {
-    "base": 8.64,
-    "rough_metal": 15.41,
-    "normal": 5.94,
-    "ao": 5.24,
+    "base": 19.3,
+    "rough_metal": 20.81,
+    "normal": 7.0,
+    "ao": 13.0,
     "normal_fixed_px": 22336,
-    "projection": 65.71,
-    "pack_save": 65.93,
-    "total": 101.72
+    "projection": 135.56,
+    "pack_save": 136.57,
+    "total": 198.16
   },
   "tris": 18725,
   "mesh_top_m": 2.316,
@@ -280,13 +280,13 @@
   "optimize": {
     "ok": true,
     "before": 2843876,
-    "after": 1164804
+    "after": 1164620
   },
-  "glb_bytes": 1164804,
+  "glb_bytes": 1164620,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1138 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund.glb (1137 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: marund_base 2048x2048 290K, marund_normal 512x512 41K, marund_orm 512x512 57K",
       "  skinned meshes: marund(15798v), marund_accent(126v)",
       "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
@@ -296,20 +296,6 @@
       "  run: 24 f, planted samples 6, max foot-speed error 1.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/marund/splash.png",
-      "portrait": "art/out/fighters/marund/portrait.png",
-      "icon": "art/out/fighters/marund/icon.png",
-      "turntable": "art/renders/fighters/marund/turntable.png"
-    },
-    "seconds": {
-      "splash": 102.86,
-      "portrait": 17.34,
-      "icon": 6.13,
-      "turntable": 8.38
-    }
   },
   "three_qa": {
     "ok": true,
@@ -340,26 +326,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/marund/three_marund.png",
-    "seconds": 44.7,
+    "seconds": 87,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.2,
-      "model": 11.95,
-      "lows_bind": 5.82,
-      "uv": 5.46,
-      "bake": 101.72,
-      "clips": 0.2,
-      "export": 1.53,
-      "optimize": 0.6,
-      "load_test": 0.12,
-      "render": 134.81,
-      "three_qa": 45.19,
-      "cache": 0.43
+      "materials": 0.39,
+      "model": 15.65,
+      "lows_bind": 14.93,
+      "uv": 22.12,
+      "bake": 198.17,
+      "clips": 0.48,
+      "export": 7.66,
+      "optimize": 4.92,
+      "load_test": 0.78,
+      "three_qa": 90.75,
+      "cache": 6.79
     },
-    "total_s": 308.13
+    "total_s": 362.76
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88
