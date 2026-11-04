@@ -77,6 +77,9 @@ try {
     window.__park = (near = true) => {
       const s = W.entity(me.entity), e = W.entity(foe.entity);
       if (!e.alive) respawnFighter(W, e, e.x, e.y);
+      // the foe's own order from before the mute (a bot's walk) would carry it on past the park spot: stop it the
+      // sim's way (r2: orders 1 / 4 of fw_CW1_input_latency_r2a/b clicked where the walking foe had been)
+      orig(foe.player, { type: 'stop' });
       s.target = null; if ('attackTarget' in s) s.attackTarget = null;
       const reach = (s.stats?.range ?? 1.5) + s.radius + e.radius;
       const d = near ? Math.max(1.2, reach + 0.6) : reach + 3.5;
@@ -100,8 +103,11 @@ try {
   // the in-page logger
   await vale(page, (v) => {
     const c = v.state.match.value, R = v.state.renderer;
-    const L = { frames: [], events: [] };
+    const L = { frames: [], events: [], cmds: [] };
     window.__L = L;
+    // every command the client sends (r2 diagnosis: is a right-click on the foe sent as 'attack' or as 'move'?)
+    const send0 = c.send.bind(c);
+    c.send = (cmd) => { L.cmds.push({ t: performance.now(), type: cmd.type, target: cmd.target, attackMove: cmd.attackMove }); return send0(cmd); };
     const a = () => R.actors.get(window.__ids.me);
     addEventListener('pointerdown', (e) => {
       // what the pick sees at the press (the controller's entityAt asks the same), with the foe's view state
@@ -114,7 +120,10 @@ try {
       if (!x) return;
       const now = performance.now();
       const marks = document.querySelectorAll('.wmark').length;
-      L.frames.push({ ts, now, x: x.root.position.x, z: x.root.position.z, rot: x.root.rotation.y, key: x.currentKey, marks, tick: c.view.tick });
+      // the marker kinds on screen this frame (read in the frame itself: a CDP round trip under load can outlive the
+      // 520 ms marker, so a later DOM read is not evidence)
+      const am = document.querySelectorAll('.wmark--attack').length, mm = document.querySelectorAll('.wmark--move').length;
+      L.frames.push({ ts, now, x: x.root.position.x, z: x.root.position.z, rot: x.root.rotation.y, key: x.currentKey, marks, am, mm, tick: c.view.tick });
       if (L.frames.length > 20000) L.frames.splice(0, 5000);
     };
     requestAnimationFrame(tick);
@@ -179,16 +188,31 @@ try {
     await stationary();
     // settle into idle (a running attack finishes first)
     for (let k = 0; k < 20; k++) { const key = await vale(page, (v) => v.state.renderer.actors.get(window.__ids.me)?.currentKey); if (key === 'idle') break; await page.waitForTimeout(60); }
+    // the parked foe's actor glides to its new sim spot after __park's teleport: an attack order aimed at it before
+    // the drawn position settles clicks where it WAS (a harness artefact: orders 1 / 4 of fw_CW1_input_latency_v2b,
+    // press pick null at the click, actor 4.1 / 5.0 m away vs the 3.7 m park)
+    if (near) for (let k = 0; k < 40; k++) {
+      const d = await vale(page, (v) => { const e = v.state.renderer.actors.get(window.__ids.foe), ev = v.state.match.value.view.entity(window.__ids.foe); return e && ev ? Math.hypot(e.x - ev.x, e.y - ev.y) : 0; });
+      if (d < 0.03) break;
+      await page.waitForTimeout(50);
+    }
+    // the locked camera glides after your fighter stops: the foe's screen point is only valid once the focus holds
+    for (let k = 0; k < 40; k++) {
+      const m = await vale(page, async (v) => { const R = v.state.renderer, f0 = R.rig.focus.clone(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return Math.hypot(R.rig.focus.x - f0.x, R.rig.focus.z - f0.z); });
+      if (m < 0.002) break;
+      await page.waitForTimeout(50);
+    }
     const s = await selfScreen();
     const ang = (i * 2.399) % (Math.PI * 2);
     const r = 160 + (i % 4) * 20;
-    // ground points away from the parked enemy (its side is +x)
-    let gx = s.x - Math.abs(Math.cos(ang)) * r * dir, gy = s.y + Math.sin(ang) * r * 0.6;
+    // ground points away from the parked enemy (its side is +x); a windup-move's ground click always goes to the
+    // far side (r2: with dir -1 it could land on the foe and be sent, rightly, as a second attack)
+    let gx = s.x - Math.abs(Math.cos(ang)) * r * (near ? 1 : dir), gy = s.y + Math.sin(ang) * r * 0.6;
     // every other order walks back toward the anchor (the fighter stays in open ground)
-    if (i % 2 === 1 && s.ax !== undefined) { const dx = s.ax - s.x, dy = s.ay - s.y, l = Math.hypot(dx, dy); if (l > 40) { gx = s.x + dx / l * Math.min(l, 260); gy = s.y + dy / l * Math.min(l, 260); } }
+    if (i % 2 === 1 && s.ax !== undefined && !(near && s.ax > s.x)) { const dx = s.ax - s.x, dy = s.ay - s.y, l = Math.hypot(dx, dy); if (l > 40) { gx = s.x + dx / l * Math.min(l, 260); gy = s.y + dy / l * Math.min(l, 260); } }
     gx = Math.max(80, Math.min(1840, gx)); gy = Math.max(160, Math.min(860, gy));
     dir = -dir;
-    const before = await vale(page, () => ({ ev: window.__L.events.length, fr: window.__L.frames.length }));
+    const before = await vale(page, () => ({ ev: window.__L.events.length, fr: window.__L.frames.length, cmd: window.__L.cmds.length }));
     let t0ev = before.ev, firstMark = null;
     if (kind === 'move') {
       await page.mouse.move(gx, gy); await page.waitForTimeout(60);
@@ -238,11 +262,34 @@ try {
     }, { ev: t0ev, windup: kind === 'windupMove' });
     const markerKind = await vale(page, () => [...document.querySelectorAll('.wmark')].map((x) => x.className).join(' '));
     // an attack order (right-click on the enemy) must draw the ATTACK marker, never a ground move (critic:input-feel)
-    const attackMark = kind === 'attack' || kind === 'windupMove' ? firstMark : null;
     const press = await vale(page, (v, n) => window.__L.events[n] ?? null, before.ev);
-    const wrongMark = attackMark !== null && !/wmark--attack/.test(attackMark ?? '');
-    report.orders.push({ i, kind, ...res, pick: s.pick, pickWhy: s.why, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind, firstMark, wrongMark, press });
-    console.log(i, kind, JSON.stringify(res), wrongMark ? `WRONG MARK (${attackMark}) pick ${s.pick} why ${JSON.stringify(s.why)} press ${JSON.stringify(press)}` : '');
+    // the press's marker, from the in-page frame log: an attack / move ring that appears within 8 frames of the press
+    if (kind === 'attack' || kind === 'windupMove') {
+      firstMark = await vale(page, (v, n) => {
+        const L = window.__L, ev = L.events[n];
+        if (!ev) return null;
+        const fr = L.frames;
+        let b = -1;
+        for (let i = 0; i < fr.length; i++) if (fr[i].now < ev.t) b = i;
+        if (b < 0) return null;
+        const out = [];
+        for (let i = b + 1; i < Math.min(fr.length, b + 9); i++) {
+          if (fr[i].am > fr[b].am && !out.includes('wmark--attack')) out.push('wmark--attack');
+          if (fr[i].mm > fr[b].mm && !out.includes('wmark--move')) out.push('wmark--move');
+        }
+        return out.join(' ');
+      }, before.ev);
+    }
+    const cmds = await vale(page, (v, n) => window.__L.cmds.slice(n), before.cmd);
+    // what the controller SENT for the press (the first command after it): an attack order lost on its way to the
+    // command builder shows here as a 'move'
+    const attackMark = kind === 'attack' || kind === 'windupMove' ? firstMark : null;
+    const sentAs = cmds[0]?.type ?? null;
+    const wrongMark = attackMark !== null && (sentAs !== 'attack' || /wmark--move/.test(attackMark ?? ''));
+    // the attack was sent but its marker was not on screen 2 frames later (a HUD marker defect, reported apart)
+    const attackMarkMissing = attackMark !== null && sentAs === 'attack' && !/wmark--attack/.test(attackMark ?? '');
+    report.orders.push({ i, kind, ...res, pick: s.pick, pickWhy: s.why, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind, firstMark, wrongMark, attackMarkMissing, sentAs, press, cmds });
+    console.log(i, kind, JSON.stringify(res), wrongMark ? `WRONG MARK (${attackMark}) pick ${s.pick} why ${JSON.stringify(s.why)} press ${JSON.stringify(press)} cmds ${JSON.stringify(cmds)}` : '');
   }
   await shot(page, 'fw_CW1_input_after_orders').catch(() => {});
 
@@ -267,7 +314,10 @@ try {
     if (all.motionMissing > 0) fail(`${all.motionMissing} orders never moved the fighter`);
     const wrong = report.orders.filter((o) => o.wrongMark);
     report.summary.attackAsMove = wrong.length;
-    if (wrong.length) fail(`${wrong.length} attack orders on the enemy drew a move marker (orders ${wrong.map((o) => o.i).join(',')})`);
+    if (wrong.length) fail(`${wrong.length} attack orders on the enemy were sent or drawn as a move (orders ${wrong.map((o) => o.i).join(',')})`);
+    const noMark = report.orders.filter((o) => o.attackMarkMissing);
+    report.summary.attackMarkMissing = noMark.length;
+    if (noMark.length) fail(`${noMark.length} attack orders sent as attack showed no attack marker 2 frames later (orders ${noMark.map((o) => o.i).join(',')})`);
   }
 
   // ── camera, live ───────────────────────────────────────────────────────────────────────────────────────
