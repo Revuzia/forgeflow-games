@@ -124,8 +124,9 @@ CARDS = {
                    "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 35.0,
                               "size": 0.25}]},
         "portrait": {"yaw": -32.0},
-        "plate": {"tint": "#B4B8C4", "sat": 0.45, "median": 0.34, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
-                  "glow_color": "#E8ECF4"},
+        # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)
+        "plate": {"tint": "#6C7890", "sat": 0.70, "median": 0.24, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
+                  "glow_color": "#C8D4EC"},
     },
     "rishal_lamplit": {
         "splash": {"clip": "cast_ult", "t": 0.10, "yaw": 34.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,

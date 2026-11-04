@@ -149,7 +149,7 @@ CARDS = {
                               "power": 35.0, "size": 0.3},
                              {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 34.0, "clip": "cast_ult", "t": 0.20},
+        "portrait": {"yaw": 30.0, "clip": "idle_lobby", "t": 0.0},   # (polish: the cast_ult bust turned the face away)
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0"},
     },

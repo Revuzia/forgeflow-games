@@ -36,25 +36,26 @@
     "tris_wrist_clapper": 60,
     "tris_halo_ring": 1200,
     "tris_halo_clasps": 300,
+    "tris_halo_inlay": 644,
     "tris_bells": 1120,
     "tris_bell_hooks": 182,
-    "tris_clapper_stems": 140,
+    "tris_clapper_stems": 138,
     "tris_clappers": 280,
-    "validate_vashil": "22470->22459",
-    "validate_vashil_accent": "280->273"
+    "validate_vashil": "22468->22459",
+    "validate_vashil_accent": "924->922"
   },
-  "uv_coverage": 0.597,
+  "uv_coverage": 0.595,
   "bake": {
-    "base": 4.43,
-    "rough_metal": 3.42,
-    "normal": 1.88,
-    "ao": 2.07,
-    "normal_fixed_px": 22252,
-    "projection": 34.89,
-    "pack_save": 35.15,
-    "total": 47.22
+    "base": 15.96,
+    "rough_metal": 13.52,
+    "normal": 7.83,
+    "ao": 6.77,
+    "normal_fixed_px": 23138,
+    "projection": 169.33,
+    "pack_save": 169.78,
+    "total": 215.03
   },
-  "tris": 22732,
+  "tris": 23381,
   "mesh_top_m": 2.188,
   "clips": {
     "idle": {
@@ -115,8 +116,8 @@
       "impact": null
     },
     "recall": {
-      "frames": 60,
-      "duration_s": 2.0,
+      "frames": 180,
+      "duration_s": 6.0,
       "loop": true,
       "impact": null
     },
@@ -157,25 +158,26 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2744244,
+  "glb_bytes_raw": 2824256,
   "optimize": {
     "ok": true,
-    "before": 2744244,
-    "after": 1178280
+    "before": 2824256,
+    "after": 1208336
   },
-  "glb_bytes": 1178280,
+  "glb_bytes": 1208336,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil.glb (1151 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: vashil_base 2048x2048 208K, vashil_normal 512x512 48K, vashil_orm 256x256 24K",
-      "  skinned meshes: vashil(20832v), vashil_accent(154v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/vashil/vashil.glb (1180 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: vashil_base 2048x2048 209K, vashil_normal 512x512 47K, vashil_orm 256x256 24K",
+      "  skinned meshes: vashil(20820v), vashil_accent(476v)",
       "  bones: 30 (root hips spine chest neck head x_halo shoulderL upper_armL forearmL handL propL x_index1L x_index2L x_sleeveL_1 shoulderR upper_armR forearmR handR propR x_rod_head x_sleeveR_1 thighL shinL footL toeL thighR shinR footR toeR)",
-      "  clips: attack1:0.667s/20tr, attack2:0.667s/19tr, cast_a1:0.833s/20tr, cast_a2:0.500s/19tr, cast_a3:0.667s/22tr, cast_ult:1.333s/22tr, channel:1.333s/17tr, dash:0.500s/21tr, death:1.667s/23tr, idle:2.400s/20tr, idle_lobby:4.000s/21tr, recall:2.000s/19tr, run:0.533s/26tr, stunned:1.333s/20tr, taunt:1.500s/17tr, victory:1.833s/22tr",
-      "  tracks checked: 328; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 22732; bind-pose bounds (three units, Y up): 0.97 x 2.19 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
+      "  clips: attack1:0.667s/20tr, attack2:0.667s/19tr, cast_a1:0.833s/20tr, cast_a2:0.500s/19tr, cast_a3:0.667s/22tr, cast_ult:1.333s/22tr, channel:1.333s/17tr, dash:0.500s/21tr, death:1.667s/23tr, idle:2.400s/20tr, idle_lobby:4.000s/21tr, recall:6.000s/22tr, run:0.533s/26tr, stunned:1.333s/20tr, taunt:1.500s/17tr, victory:1.833s/22tr",
+      "  tracks checked: 331; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
+      "  tris: 23381; bind-pose bounds (three units, Y up): 0.97 x 2.19 x 0.83; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.35",
       "  run: 16 f, planted samples 2, max foot-speed error 0.2%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (1)",
+      "  - GLB is 1180 KiB > budget 1172 KiB"
     ]
   },
   "renders": {
@@ -186,10 +188,10 @@
       "turntable": "art/renders/fighters/vashil/turntable.png"
     },
     "seconds": {
-      "splash": 85.23,
-      "portrait": 44.03,
-      "icon": 5.09,
-      "turntable": 5.57
+      "splash": 207.07,
+      "portrait": 13.78,
+      "icon": 9.15,
+      "turntable": 33.59
     }
   },
   "three_qa": {
@@ -212,7 +214,7 @@
       1
     ],
     "headY": 1.642,
-    "accentPct": 1.63,
+    "accentPct": 6.66,
     "accentTopHalfPct": 100,
     "heightPx1080": 118,
     "size": [
@@ -221,26 +223,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/vashil/three_vashil.png",
-    "seconds": 21.4,
+    "seconds": 23.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.08,
-      "model": 5.85,
-      "lows_bind": 2.55,
-      "uv": 4.07,
-      "bake": 47.22,
-      "clips": 0.17,
-      "export": 1.35,
-      "optimize": 0.75,
-      "load_test": 0.14,
-      "render": 140.06,
-      "three_qa": 21.65,
-      "cache": 0.16
+      "rig": 0.01,
+      "materials": 0.22,
+      "model": 45.28,
+      "lows_bind": 22.67,
+      "uv": 16.44,
+      "bake": 215.03,
+      "clips": 0.34,
+      "export": 3.89,
+      "optimize": 1.93,
+      "load_test": 0.65,
+      "render": 264.41,
+      "three_qa": 24.83,
+      "cache": 0.23
     },
-    "total_s": 224.09
+    "total_s": 596.0
   },
   "run_ref_speed": 3.35,
   "height_m": 1.9

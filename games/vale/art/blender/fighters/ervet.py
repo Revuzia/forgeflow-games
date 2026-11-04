@@ -2128,13 +2128,16 @@ def _death(g, skel) -> anim.Clip:
     kneel["ik"] = anim.feet(l=(0.03, 0.42, 0.07), r=(-0.03, 0.42, 0.07), yl=-4, yr=4, pl=-64, pr=-64)
     sway = anim.add(kneel, anim.P(hips=(4, 0, 8), spine=(4, 0, 6), chest=(6, 0, 4), head=(6, 0, 8)))
     # she topples forward and to her left and ends lying face down, turned a little onto her left side: the
+    # (closing ervet-m1: the held pose sank the left boot 0.27 m and the left hand 0.15 m into the floor: the thighs
+    # now lie along the ground, the knees a little bent with the insteps down (feet plantar-flexed), the left arm
+    # alongside the body; the topple's blend is floor-lifted)
     # coat's tails settle over her legs (lying on her side the coat stood up off the body like a sail), both legs
     # lie along the ground, the helm turned to the side
     prone = anim.P(hips=(84, -6, -14), spine=(4, 0, -4), chest=(3, 0, -2), neck=(-12, 0, 0), head=(-18, 48, 0),
-                   thigh_R=(14, 0, -5), shin_R=(-4, 0, 0), foot_R=(48, 0, 0),
-                   thigh_L=(16, 0, 6), shin_L=(-10, 0, 0), foot_L=(44, 0, 0),
+                   thigh_R=(8, 0, -5), shin_R=(-10, 0, 0), foot_R=(-40, 0, 0),
+                   thigh_L=(4, 0, 6), shin_L=(-13, 0, 0), foot_L=(-40, 0, 0),
                    shoulder_R=(0, 0, 4), upper_arm_R=(14, 0, 10), forearm_R=(10, 0, 0), hand_R=(0, 0, 10),
-                   shoulder_L=(0, 0, -4), upper_arm_L=(22, 0, -14), forearm_L=(24, 0, 0), hand_L=(0, 0, -10))
+                   shoulder_L=(0, 0, -4), upper_arm_L=(-12, 0, -14), forearm_L=(30, 0, 0), hand_L=(0, 0, -10))
     side = dict(prone)
     side["hips_loc"] = (0.10, -0.30, -hip_h + 0.20)
     side["ik"] = {}
@@ -2166,6 +2169,8 @@ def _death(g, skel) -> anim.Clip:
 
     def sample(t):
         p = fn(t)
+        if 0.56 < t < 0.86:          # closing ervet-m1: the topple's blend swung the feet through the floor
+            p = anim.floor_lift(skel, p)
         if t <= T_DROP:
             return p
         if "rel" not in held:

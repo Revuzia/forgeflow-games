@@ -102,7 +102,7 @@ The halo, the bells, the cowl and the collar carry the top quarter; the pale rob
 
 ## 7. Accent (template 7)
 
-Seven round clapper beads, each 2.4 cm across, sitting in the bell mouths (no faceted drops, no gems), and a thin azure inlay line (1 cm wide) laid in the carved channel round the halo band's top face: the inlay carries the team-tint read from the high game camera, where the bell mouths face away; the beads glint in the cards. All of it is on the halo, 100% in the top half (closing review VAS-m5). At rest the emissive is 0.8; it blooms to 1.5 or more in the wind-ups of Peal and Morning Toll, as a warning that a stun is coming; the clappers swing, so they shimmer with the bell sway of the `idle` clip. Seven points spread round a 0.8 m ring, so the colour reads from any angle, including from above.
+Seven round clapper beads, each 2.4 cm across, sitting in the bell mouths (no faceted drops, no gems), and seven short azure inlay marks (8.5 cm x 8 mm) laid in the carved channel of the halo band's top face, one over each bell: the marks carry the team-tint read from the high game camera, where the bell mouths face away; the beads glint in the cards. All of it is on the halo, 100% in the top half (closing review VAS-m5). At rest the emissive is 0.8; it blooms to 1.5 or more in the wind-ups of Peal and Morning Toll, as a warning that a stun is coming; the clappers swing, so they shimmer with the bell sway of the `idle` clip. Seven points spread round a 0.8 m ring, so the colour reads from any angle, including from above.
 
 ## 8. Motion (template 8)
 

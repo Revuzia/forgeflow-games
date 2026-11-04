@@ -1291,6 +1291,41 @@ def _keep_above_floor(skel: Skeleton, pose: dict, cfg: "ChainCfg") -> None:
 
 
 # ── writing actions ────────────────────────────────────────────────────────────────────────────
+FLOOR_RINGS = {"shin": 0.065, "foot": 0.055, "toe": 0.035, "hand": 0.05}
+_FLOOR_PTS: dict = {}
+
+
+def floor_lift(skel: Skeleton, p: dict, floor: float = 0.004, rings: dict | None = None, extra=()) -> dict:
+    """Lift the pose's hips until conservative rings round the shins, feet, toes and hands (FLOOR_RINGS radii, m; plus
+    `extra` (bone, point in the bone's rest frame) probes) stay on or above the floor (the floor gate,
+    art/tools/clip_floor.py). Use it in a fall's blends: a held lying pose authored on the floor is left as it is, so
+    the body never floats in a hold. Generalised from Ulkro's death fix (closing ULK-M2) for the CW5 deaths."""
+    key = (id(skel), tuple(sorted((rings or FLOOR_RINGS).items())), tuple(extra))
+    pts = _FLOOR_PTS.get(key)
+    if pts is None:
+        pts = []
+        for b, r in (rings or FLOOR_RINGS).items():
+            for side in "LR":
+                nm = f"{b}.{side}"
+                if nm not in skel.rest:
+                    continue
+                for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+                    for k in range(8):
+                        a = 2 * math.pi * k / 8
+                        pts.append((nm, V((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
+        pts += [(b, V(q)) for b, q in extra]
+        _FLOOR_PTS[key] = pts
+    for _ in range(8):                   # a foot still partly on its IK plant rises by less than the hips: iterate
+        M = skel.fk(resolve(skel, p))
+        lo = min((M[b] @ q).z for b, q in pts)
+        if lo >= floor - 0.002:
+            return p
+        p = dict(p)
+        h = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo) * 1.5)
+    return p
+
+
 def sample_clip(skel: Skeleton, clip: Clip, chains: list | None = None) -> list:
     poses = [resolve(skel, clip.sample(f / clip.frames)) for f in range(clip.frames + 1)]
     if clip.loop:

@@ -91,7 +91,9 @@ CARDS = {
                               "size": 0.3},
                              {"at": "head", "az": 190.0, "el": 0.0, "dist": 0.7, "color": "#FFE2C4", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 26.0, "pitch": 15.0, "fill": 0.66, "clip": "victory", "t": 0.96},
+        # (polish: at pitch 15 the cap hid the eyes and the white beak keel over the mouth line read as a fang;
+        # the busts look up under the brim at pitch 5 so the eyes and the keel read together, as the brief asks)
+        "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.66, "clip": "victory", "t": 0.96},
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
     },
     "marund_gorgewalk": {
@@ -100,7 +102,7 @@ CARDS = {
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
                    "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -28.0, "pitch": 15.0, "fill": 0.66, "clip": "idle_lobby", "t": 0.0},
+        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.66, "clip": "idle_lobby", "t": 0.0},
         "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
                   "glow_color": "#D8DCE8"},
     },
@@ -112,7 +114,7 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.6, "color": "#FFCC90", "power": 22.0,
                               "size": 0.2}]},
-        "portrait": {"yaw": -32.0, "pitch": 15.0, "fill": 0.66},
+        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.66},
         "plate": {"tint": "#B08C9C", "sat": 0.85, "median": 0.23, "cx": 0.60, "glow": [0.30, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },

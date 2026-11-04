@@ -169,7 +169,8 @@ CLAP_IN = (0.017, 0.012, 0.028, 0.008)              # the mouth clapper: (w, up,
 FRONT_BELL_H, FRONT_BELL_UP = 0.100, 0.024
 DROP_K = {7: 1.17, 10: 0.94}                        # (legacy: the faceted drops, replaced in the closing pass)
 BEAD_R, BEAD_DROP = 0.012, 0.002                    # closing VAS-m5: the clapper bead (2.4 cm) in each bell mouth
-INLAY_HW, INLAY_ZC, INLAY_HZ = 0.0050, HALO_HZ - 0.0009, 0.0021   # the azure inlay line in the band's top channel
+INLAY_HW, INLAY_ZC, INLAY_HZ = 0.0040, HALO_HZ - 0.0009, 0.0021   # the azure inlay marks in the band's top channel
+INLAY_LEN = 0.085                                   # each mark's length over a bell (7 bells; First Bell's 10 share it)
 _N_BELLS = [7]                                      # the bells on the halo being built (First Bell: 10)
 
 
@@ -778,7 +779,9 @@ def halo_parts(n_bells: int = 7) -> list:
     out.append(("halo_clasps", cl, 0.5, "stone", "bone:x_halo", 300, 1.0))
     # closing VAS-m5: the clappers are round 2.4 cm beads in the bell mouths (brief §4: '2 cm beads', no gems; the
     # 7 cm faceted drops on stems read as hanging gems in the cards); the accent share and the team-tint read from the
-    # game camera are held by a thin azure inlay line laid in the carved channel round the band's top face
+    # game camera (the bell mouths face away from it) are held by short azure inlay marks laid in the carved channel
+    # of the band's top face over each bell: seven points round the ring, as the brief's accent read. (A full inlay
+    # ring took the accent to 6.7 % of the game-camera silhouette and turned the chalk halo azure.)
     bells, hooks, stems, beads = Sculpt("bells"), Sculpt("bell_hooks"), Sculpt("clapper_stems"), Sculpt("clappers")
     for ang in bell_angles(n_bells):
         top, bh = bell_geo(ang)
@@ -792,14 +795,20 @@ def halo_parts(n_bells: int = 7) -> list:
         beads.add(Sphere(lip + np.array([0, 0, -BEAD_DROP]), BEAD_R * (0.92 if is_front_bell(ang) else 1.0)), k=0.0)
     inlay = Sculpt("halo_inlay")
 
+    angs = np.radians(np.array(bell_angles(n_bells)))
+    half = INLAY_LEN * 0.5 * 7.0 / n_bells           # First Bell's ten marks keep the base's total length
+
     def inlay_d(P):
         q = P - HALO_C
         r = np.hypot(q[:, 0], q[:, 1])
-        return np.maximum(np.abs(r - HALO_RM) - INLAY_HW, np.abs(q[:, 2] - INLAY_ZC) - INLAY_HZ)
+        th = np.arctan2(q[:, 0], -q[:, 1])
+        da = np.min(np.abs((th[:, None] - angs[None, :] + np.pi) % (2 * np.pi) - np.pi), axis=1)
+        return np.maximum.reduce([np.abs(r - HALO_RM) - INLAY_HW, np.abs(q[:, 2] - INLAY_ZC) - INLAY_HZ,
+                                  da * HALO_RM - half])
     lo = HALO_C - np.array([HALO_RO, HALO_RO, 0.0]) + np.array([0, 0, INLAY_ZC - 0.01])
     hi = HALO_C + np.array([HALO_RO, HALO_RO, 0.0]) + np.array([0, 0, INLAY_ZC + 0.01])
     inlay.add(Fn(inlay_d, lo, hi), k=0.0)
-    out.append(("halo_inlay", inlay, 0.3, "accent", "bone:x_halo", 360, 0.6))
+    out.append(("halo_inlay", inlay, 0.3, "accent", "bone:x_halo", 30 * n_bells, 0.6))
     out.append(("bells", bells, 0.5, "dawnglass", "bone:x_halo", 160 * n_bells, 1.2))
     out.append(("bell_hooks", hooks, 0.4, "ironstone", "bone:x_halo", 26 * n_bells, 0.5))
     out.append(("clapper_stems", stems, 0.4, "ironstone", "bone:x_halo", 20 * n_bells, 0.5))
