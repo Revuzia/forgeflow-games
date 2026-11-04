@@ -1490,14 +1490,15 @@ def _hat_paint(p, n):
     up = ss(-0.15, 0.35, n[:, 2])
     zt = hat_top(r)
     on_top = ss(zt - hat_thick(r) * 0.75, zt - hat_thick(r) * 0.35, p[:, 2]) * up
-    nap = 1 + 0.050 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([0.0, 0.0, 0.0]), 16.0) + 0.030 * _fbm(p, 55.0)
+    # (CW6 refix: the nap a third stronger so a felt mottle survives the 60 px gameplay disc)
+    nap = 1 + 0.075 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([0.0, 0.0, 0.0]), 16.0) + 0.035 * _fbm(p, 55.0)
     brush = 1 + 0.035 * NOISE(np.stack([th * 3.0, r * 18.0, p[:, 2] * 0.0], 1), 1.0)
     # closing dunsom-hat-flat-plate (the disc read as one flat L* 84-85 plate from the gameplay camera, a 3 L* ramp:
     # the old 0.88-1.06 crown lift sat above the highlight cap's knee and was flattened): the crown-to-rim value
     # ramp now spans the WHOLE top, x1.14 at the crown (under the cap: ~L* 82) down to x0.58 at the band (~L* 64 painted),
     # broad felt blotches 16-24 cm across (+-5 % linear, ~4-6 L*) over the fine nap, and eight shallow radial
     # creases pressed into the felt every 45 degrees (a dark fold line with a lit lip on its key side)
-    blot = 1 + 0.10 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
+    blot = 1 + 0.13 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
     # CW6 refix (verify: crown r<0.3 vs rim 0.7-0.95 means 8.5 L*, target >= 10): the outer felt goes to x0.48 and
     # the fall ends at r 0.27 (the band sits at 0.294), so the rim reads ~66-68 L* under a ~79 crown
     ramp = 0.48 + 0.66 * (1.0 - ss(0.02, 0.27, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
