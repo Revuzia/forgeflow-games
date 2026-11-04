@@ -394,20 +394,13 @@ The **Lampwright cart** is one `MapDef.shops` circle at the plate's centre. The 
 |---|---|---|---|---|
 | **Clearglass** | Glasshorn | 90 s | **map-tied (W4 re-key):** while on your own side of the Noonline, +16 ability haste and +2 resource regeneration per second (an `interval` trigger with `cond selfOnSide own`) | — |
 | **Resinburn** | Resinback | 90 s | **map-tied (W4 re-key):** on the enemy side of the Noonline, an attack on a fighter or monster sticks resin (20 % slow for 1.5 s) and your next attack on it within 4 s ignites it for 20 + 4 per level magic; once every 4 s per target | — |
-| **Splinters** | Sunsplinter | 4:00, renewed by the next take | +5 % armor and resist penetration, +5 ability haste | — |
+| **Splinters** | Sunsplinter | 4:00, every take adds a stack (max 3) and renews it | per stack: +5 % armor and resist penetration, +5 ability haste | — |
 | **The Long Shade** | Longshade | 3:30 | +20 ability haste, +15 % tenacity (W4 re-key: no attack or power) | +400 hp, +30 ad, +25 armor and resist, +10 % move speed |
 | **Lanternwake** | an enemy Lantern | 4:00 (= the Lantern's relight) | — | +120 hp, +10 ad, +10 armor and resist |
 
 **Splinters is designed to stack.** Each Sunsplinter your team takes adds one Splinter, up to **3**, and every take renews the 4:00 timer. Each Splinter gives +5 % armor and resist penetration and +5 ability haste. At 3 Splinters that is +15 % penetration and +15 haste, which is a reason to contest every Sunsplinter rather than trade it.
 
-Today's sim (`core.ts addTeamBuff`) refreshes a held buff instead of stacking it, so the content ships the one-Splinter values, and its text says "renews". The HUD can already count takes, because `TeamView.objectives` gets one `splinters` entry per take.
-
-**Request:**
-
-- LEAD: additive `TeamBuffDef.maxStacks`.
-- SIM: `addTeamBuff` adds a stack up to the max, multiplies `stats` and `minionStats` by stacks, and renews the duration.
-
-Then content adds `"maxStacks": 3` and updates the text.
+Shipped (CW3 CL-2): `TeamBuffDef.maxStacks` is in the catalog, `core.ts addTeamBuff` adds a stack up to the max (stats and `minionStats` × stacks, `stats.ts`) and renews the duration on every take, and `content/team_buffs.json` gives Splinters `"maxStacks": 3`. The HUD can count takes from `TeamView.objectives` (one `splinters` entry per take).
 
 Calibration *(r02 §8.1)*: the repeating objective gives a stacking team boon, and the late objective gives a strong, timed boon that also lifts the minions. The effects, numbers and names are ours.
 

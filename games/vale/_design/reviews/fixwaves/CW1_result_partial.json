@@ -1,0 +1,257 @@
+{
+  "summary": "One VALE closing fix wave (after the closing parity review): budgeted work packages in order on the wave's own files, adversarial verify against its done-criteria (incl. per-fighter re-scores), targeted refix rounds",
+  "agentCount": 5,
+  "logs": [
+    "CW1:hue-skinfx → combat:C1=done, skins:SKIN-FX=partly, critic:combat-16=partly",
+    "CW1:perf → perf:PERF-C1=done, perf:PERF-C2=done, critic:b4-realtime=partly",
+    "CW1:camera-input → combat:bar-clearance=partly, critic:camera=partly, critic:input-feel=partly",
+    "CW1:polish → combat:C2=partly, combat:C3=partly, engine:OBS-camjump=done, env:m-5=partly, originality:m5=done, perf:PERF-C4=done, fighter:hesmi:hesmi-m3=done, fighter:kemdo:kemdo-M1=done, fighter:tunlan:TUN-c2=done",
+    "[CW1:verify1] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)"
+  ],
+  "result": {
+    "wave": "CW1",
+    "pass": false,
+    "open": [],
+    "handoffs": [
+      {
+        "from": "hue-skinfx",
+        "to": "lead",
+        "what": "Add `node _harness/probe_kit_hue.mjs --live` (64 slots: sig >= 0.5, team light <= 0.35 on a3/ult) and `--skins --live` to the integration gate. Burdam can come back 'not measured' in a full sweep (no cast event in its batch); `--kits burdam` measures it cleanly."
+      },
+      {
+        "from": "hue-skinfx",
+        "to": "CW1 (next package)",
+        "what": "Ult first-beat core is below 2.3 on 10 ults (probe_combat_polish ult --ults all: hesmi 1.93, marund 1.66, nurrow 1.94, kemdo 2.13, sukri 2.14, dunsom/ervet/odrum/burdam/vashil 2.24-2.26). Raising point-light intensity does not move the measure. Next try: a short signature-or-companion light-style ground decal (emissive ~4, life ~0.2 s) at the beat inside 0.5 x the lift radius, or a generic core glow in vfx/screen.ts pulse. Also open: victim-box white at Vashil 0.432 and Lisvel 0.376, and ulkro_long_evening ult skin sig 0.261."
+      },
+      {
+        "from": "perf",
+        "to": "CW3c",
+        "what": "content/strings.en.json: \"settings.video.ao.opt.2\" says \"Full resolution\", but ao 2 is now half-resolution AO with finer ('High') samples (src/render/post.ts, perf PERF-C1). Rename it to e.g. \"Fine\". Also wire first-run calibration: on the first boot at Home, call `await renderer.calibrate()` (returns {preset:'high'|'medium'|'low', frames, p50Ms, p95Ms}; keep calling render(dt) while it is pending). Store `preset` as the first-run video preset in place of the fixed 'high' default (src/session/settings.ts:65). If it is not 'high', show the VALE-styled notice linking Settings > Video."
+      },
+      {
+        "from": "perf",
+        "to": "lead",
+        "what": "Add to the integration gate: `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23` (it now includes the gpubound, calibrate and memmaps steps), plus `node _harness/probe_dynres_metal.ts` (also picked up by npm run probe). Match peak seed 23, rot 10 FAILS: 721k triangles at 1322.8 s (19 s over 500k), with crowd body 141k/14 draws and crowd outline 133k/7 draws in a late base push, and 41 programs (> 40) at 9.4 s from the rotated fighters' extra materials (gem_chimglass x2, glasshorn_dawnglass, dialwren_matte). My changes did not cause this: the gate never ran that seed before. It needs a crowd outline LOD / crowd-count cap and a program audit. The critic b4 real-time number needs an idle machine (load < 3); the load stayed at 12-270 all session."
+      },
+      {
+        "from": "perf",
+        "to": "CW2",
+        "what": "The PERF-C2 Home footprint gate (perf_1080 memmaps) does not include audio, because the bench plays none. Renderer+GPU at Home is 1120-1286 MB against the 2500 MB budget, so your ~86 MB of decoded audio at Home fits. Keep it budgeted."
+      },
+      {
+        "from": "camera-input",
+        "to": "CW6",
+        "what": "Dunsom lantern under his own bar (dunsom-lantern-nameplate / bar-clearance gate). In idle the x_lantern part is half under the bar plate or level chip at 1 of 8 facings (12.5 % > 10 %): facing 7, lantern at x -0.83 m (-63 px, under the level chip) at equivalent height 2.32 m with the anchor at 2.40 m. Its circle of equivalent heights (1.0-3.2 m) means no engine anchor up to +1.1 m clears it. In art/blender/fighters/dunsom.py idle, either hang the lantern about 0.25 m further out from the body axis on the crook side (so at facing 7 it sits beyond -1.06 m, outside the chip), or tilt the crook 8-10 degrees outward as the fighter review proposed. Verify with `node _harness/probe_bar_clearance.ts` (needs dunsom idle <= 10 % at 31 m and 28.5 m). The probe exits 1 until then."
+      },
+      {
+        "from": "camera-input",
+        "to": "CW5",
+        "what": "Body heights at the closing review's 28.5 m and 1080p (node _harness/probe_camera.ts --only heights; _harness/_reports/fw_CW1_camera_heights.json) are under the 105-130 px gauge for Ilsheta 90-91, Lisvel 99-100 and Nurrow base 98 (Noon Fair and Shadeprint are 105). Marund Long Evening is 130.4 (just over). At the owner's default 31 m every value is about 8 % lower. If these builds are not meant to read small, raise art.scale (for example Lisvel x1.06, Nurrow base to match its skins) and re-run the probe with --gate-heights."
+      },
+      {
+        "from": "camera-input",
+        "to": "CW6",
+        "what": "Body heights at 28.5 m / 1080p (node _harness/probe_camera.ts --only heights) are under the 105-130 px gauge for Sukri 87, Rishal 95-100 and Odrum 99-102. Sukri would need about x1.21 art.scale to reach 105, so if her small build is intended, record a ruling in fixwaves/owner_rulings.md instead. Note: the renderer now measures runRef from each run clip (src/render/stride.ts), so art.runRefSpeed no longer drives stride and needs no edit."
+      },
+      {
+        "from": "camera-input",
+        "to": "CW3c",
+        "what": "Possible input bug, or a harness artefact: in `node _harness/probe_input_latency.mjs --orders 12 --kinds attack,windupMove --tag attack` (_harness/_reports/fw_CW1_input_latency_attack.json), right-clicking the parked enemy fighter, 3.4-5.8 m away, visibleMask 3, alive, issued a ground move (wmark--move) in 12/12 orders. That includes orders 0-1, where renderer.pickEntity at the same screen point returned the foe 0.1-0.5 s before the click. In an earlier run with a melee fighter at 1.2-1.9 m, attack clicks did resolve (wmark--attack). Check src/input/controller.ts rightDown -> entityAt/enemy (ptr coordinates vs the pick, e.targetable) for teleported enemies."
+      },
+      {
+        "from": "camera-input",
+        "to": "lead",
+        "what": "Add to the integration gate: `node _harness/probe_camera.ts` (rig, foot slip <= 10 %, turn; heights WARN, or --gate-heights), `node _harness/probe_bar_clearance.ts` (expected FAIL on Dunsom's lantern until CW6's art change, and it is picked up by npm run probe), and `node _harness/probe_input_latency.mjs` (real client, heavy slot: marker p95 <= 2 frames, motion p95 <= 2 ticks + 1 frame, plus the live camera checks). overlay_regress --q high,low PASS after these changes."
+      },
+      {
+        "from": "polish",
+        "to": "lead",
+        "what": "CW1 regression set after this package. typecheck clean. Strict `npm run content:check`: OK, 0 warnings. `node _harness/overlay_regress.mjs --q high,low`: PASS. `node _harness/perf_1080.mjs --prod --q high,low` (fw_CW1_perf_polish.json) prints GATE FAIL on one item only: the match-peak triangle count is 534,665 > 500k at game 1749.7 s on seed 7 (4 s over; actors 310k/131 draws in a late base push). This is the same crowd-peak class as the seed 23 handoff. The cause is the sim, not render: the seed 7 match used to end at 1162 s and now runs to 1800 s. Everything else passes: High 57.7 fps, Low 58.8 fps, gpubound, calibrate, memmaps Home 1329 MB, 0 late programs. The fix is still a crowd outline LOD or crowd-count cap. Also add `node _harness/probe_camjump.mjs` (heavy slot; 0 bodies missing after a focus jump) to the integration gate. Correction: commit f77c7b03 says 'core >= 2.3 on 10/16'; the measured count in fw_W1_combat_polish_fw_CW1_polish_c.json is 9/16. C2's x2.3 core for Hesmi, Kemdo, Dunsom, Nurrow and Sukri cannot be reached with the tint kept: the lifted ground clips at about luma 218 on warm ground after the grade. Reaching it means letting the core go near-white, which conflicts with the victim-box white gate (luma > 225 and chroma < 30). Rule which way the gauge should go: a lower core target, or a 2-frame near-white allowance."
+      },
+      {
+        "from": "polish",
+        "to": "CW4",
+        "what": "`node _harness/value_probe.mjs --report fw_CW1_value_polish.json` (B5) exits 0 but prints FAIL on three environment lines. RIFT high env180 'other' is 0.152 % of env, RIFT low 0.158 %. BRIDGE low frame p99 is 165 (> 160). The lamps are 0.000 % of the frame, and the BRIDGE flame I brightened covers about 333 px, far too few to move a frame p99, so this most likely comes from the world art. Please check your landmarks and props. FRAY lamp flames (env m-5): the shot_ambient in-play flame reading at the fray spot covers 26,941 px and does not move when the flame changes. Pick a flame spot where the lamp is the only thing that changes, or move the lamps, if the flame band needs gating there."
+      },
+      {
+        "from": "polish",
+        "to": "CW6",
+        "what": "No change: Dunsom's lantern is still half-covered in 12.5 % of idle cases at 31 m and at 28.5 m (probe_bar_clearance FAIL). The art fix from the earlier handoff (hang it about 0.25 m further out, or tilt the crook 8-10 degrees outward) is still needed."
+      },
+      {
+        "from": "polish",
+        "to": "CW5",
+        "what": "kemdo-M1 pose half: Kemdo's bar anchor already sits at the clearance maximum (+0.60 m, 3.07 m), so it can rise no further. Lowering the lens to about 1.85 m in guard, idle and stunned (art/blender/fighters/kemdo.py) would let the computed anchor drop back down."
+      }
+    ],
+    "packages": [
+      {
+        "key": "hue-skinfx",
+        "items": [
+          "combat:C1=done",
+          "skins:SKIN-FX=partly",
+          "critic:combat-16=partly"
+        ],
+        "commits": [
+          "e283460d vale CW1: SKIN-FX palettes re-picked + fixed-hex hue shift (code landed in wip sync 8f816f67), C1 keylines for Burdam/Ulkro/Sukri, Vashil bell / Lisvel curtain, probe_combat_polish self-centred-ult gate (pushed to origin claude/youthful-ramanujan-gdud5w)",
+          "8f816f67 (wip sync, not mine to title) carried the SKIN-FX shiftHue/hueFrom code in src/render/vfx/system.ts and src/render/director.ts plus the first skin palette and Burdam/Ulkro keyline edits"
+        ],
+        "notes": "I started from the killed attempt's partial work (light_pass re-key, the probe's --slots/--teamgate/--skins, skin palettes) and ran no Blender. Harness runs (each one probe in one heavy slot):\n- kit_hue: 1 full 64-slot sweep, plus partial runs for burdam, ulkro, 5 skins runs and 1 burdam re-run.\n- probe_kit_capture: 4 batches.\n- combat_polish ult,hold all16: 2 runs.\n- perf_1080: not run, since only data tweaks and a per-spawn hue shift that runs once per layer bake changed.\n\nThe Mac was on battery the whole session (`pmset -g ac`: No adapter attached).\n\nwip_sync commits picked up some of my ed"
+      },
+      {
+        "key": "perf",
+        "items": [
+          "perf:PERF-C1=done",
+          "perf:PERF-C2=done",
+          "critic:b4-realtime=partly"
+        ],
+        "commits": [
+          "7bf8e0f3",
+          "046d6503",
+          "0f27da84 (wip sync carrying the bulk of CW1 perf code: quality.ts, renderer.ts, perf_1080.mjs, render_bench.ts, probe_dynres_metal.ts)",
+          "7d6eacec (wip sync carrying more of the same files)"
+        ],
+        "notes": "The machine was overloaded the whole package (load 12-270, all 3 heavy slots busy), so every idle-only timing target was reported as 'not measured: machine busy'. Hard checks and A/B comparisons in one page still stand. Budget used: 1 full perf_1080 gate sweep, 1 real-time sweep, plus smaller runs (1 ultra/gpubound/calibrate run, 3 memmaps runs: 1 prod, 1 dev attempt that failed, 1 final prod; 2 probe_ctxloss runs, 2 A/B runs). The tools/wip_sync.sh auto-sync committed most of my code before my own commits (0f27da84, 7d6eacec); 7bf8e0f3 and 046d6503 carry the rest and the descriptions.\n\nThe ol"
+      },
+      {
+        "key": "camera-input",
+        "items": [
+          "combat:bar-clearance=partly",
+          "critic:camera=partly",
+          "critic:input-feel=partly"
+        ],
+        "commits": [
+          "9393e298 vale CW1: computed overhead-bar clearance (focal sockets posed through idle/run over 8 facings; Kemdo lens 40->0 %, Hesmi rack 38->0 %) + probe_bar_clearance",
+          "53adb165 vale CW1: camera re-centres on respawn in every mode; drawn turn smoothing (180 deg in 100 ms, was one 33 ms tick); run stride matched to the clip's planted feet (slip 3-15 % -> 3-9 %); probe_camera (body heights, rig, foot slip, turn)",
+          "f91f13ad vale CW1: probe_input_latency (real client: 50 CDP orders, marker/motion latency by rAF; live camera: lock default, edge peek, glide back, Y toggle, Space, respawn re-centre)"
+        ],
+        "notes": "Budget used: 3 full real-client sweeps (one 50-order run had the fighter at the map-edge clamp; one 50-order run is in fw_CW1_input_latency_full.json), plus 1 five-order debug run, 1 camera-only run and 1 twelve-order attack re-run. 1 overlay_regress run. No Blender. Typecheck is clean and no content was touched. The default camera distance is 31 m (owner, 2026-10-29), so the critic's 28.5 m height gauge is reported both at 28.5 m and at 31 m. The wip-sync commit 67775e8a (not mine) also picked up early copies of probe_camera.ts and probe_input_latency.mjs. Debug scratch files were removed and"
+      },
+      {
+        "key": "polish",
+        "items": [
+          "combat:C2=partly",
+          "combat:C3=partly",
+          "engine:OBS-camjump=done",
+          "env:m-5=partly",
+          "originality:m5=done",
+          "perf:PERF-C4=done",
+          "fighter:hesmi:hesmi-m3=done",
+          "fighter:kemdo:kemdo-M1=done",
+          "fighter:tunlan:TUN-c2=done"
+        ],
+        "commits": [
+          "325cc335 vale CW1: originality m5 — WITHDRAWN_ASSETS deny list + prune of stale catalogs",
+          "502e3d6b vale CW1: bar clearance polish (hesmi-m3, kemdo-M1, TUN-c2)",
+          "e1f2e29f vale CW1: OBS-camjump — post-follow re-cull + probe_camjump",
+          "f77c7b03 vale CW1: combat C2/C3 + env m-5 (bulk landed earlier in wip sync 19fd7559)"
+        ],
+        "notes": "A wip sync (19fd7559) committed most of my vfx.json, renderer.ts and probe edits mid-session. My commits carry the rest and record the measurements. Not changed and not committed by me: the tracked _harness/_reports files (value_probe.json, perf_1080.json, ambient.json); every run wrote to fw_CW1_* outputs. The dist-catalog was rebuilt twice with `npm run content` (local and git-ignored) so the dev server serves the current content to the ambient harness. All harness processes I started have exited; the remaining node and soak processes belong to other lanes. Budget used: 1 full perf_1080 swee"
+      }
+    ],
+    "regressions": [],
+    "summary": "no verdict"
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Fix"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Refix"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "CW1:hue-skinfx",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "ad65b9b6d11cd0b90",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742306661,
+      "lastProgressAt": 1793742306661,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"combat:C1\",\"status\":\"done\",\"evidence\":\"I added no new commands for the gate. probe_kit_hue already had --slots and --teamgate (frame-integrated over release+1..+30, plus the team-blackout cast) from the earlier attempt. Final full sweep: `node _harness/probe_kit_hue.mjs --live --out _harness/_reports/fw_CW1_kit_hue_final.json` measured 60/60 passing; the 4 Burdam slots were not me…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "CW1:perf",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a2589fe6f5982eb45",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742306661,
+      "lastProgressAt": 1793742306661,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"perf:PERF-C1\",\"status\":\"done\",\"evidence\":\"Measured on Chrome / ANGLE Metal on the M5. Dynamic resolution was blind to GPU-bound frames; it now works. src/render/quality.ts: the GPU timer is distrusted when most readings in a window run past the frame interval (2 such windows, more bad than good). The distrust survives configure(). An untrusted timer falls back to the renderer-CPU …",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "CW1:camera-input",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a51ef3b6aa2c35b7a",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742306661,
+      "lastProgressAt": 1793742306661,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"combat:bar-clearance\",\"status\":\"partly\",\"evidence\":\"The bar anchor is now computed from each fighter's own GLB, with no content field (new src/render/bar_clearance.ts, hooked in at src/render/actors.ts fighterTemplate/attach). Focal parts are the art.sockets entries outside the shared rig set. They are posed through idle and run and turned through 8 facings. The anchor is the lowe…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "CW1:polish",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a0e3daa0aea46b34c",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742306661,
+      "lastProgressAt": 1793742306661,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"combat:C2\",\"status\":\"partly\",\"evidence\":\"White part met; core part not met. Changes: src/render/post.ts solves the exposure peak's ground multiplier through the NEUTRAL tone curve (LIFT_GROUND_TOP 0.90 in vfx/screen.ts), and the saturation drop eases off near the top. In content/vfx.json the ult ground scars (crack/ink/scorch in hesmi_ult_shard, marund_ult_leap/domefall, nurrow_ul…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "CW1:verify1",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ab708962babd45020",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793742306678,
+      "queuedAt": 1793742306661,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "n=0; until grep -q \"perf exit\" /tmp/claude-501/cw1v_chain.l…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793747852550,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 114883,
+      "toolCalls": 40,
+      "durationMs": 5545872
+    }
+  ],
+  "totalTokens": 114883,
+  "totalToolCalls": 40
+}

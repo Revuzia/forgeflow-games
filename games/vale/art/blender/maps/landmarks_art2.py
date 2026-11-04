@@ -1243,7 +1243,15 @@ def numeral(B, rng, glyph: str, tilt: float = NUM_TILT):
         for t0, t1 in zip(ts[:-1], ts[1:]):
             pa = (ax_ + (bx_ - ax_) * t0, az_ + (bz_ - az_) * t0 + (0.012 if t0 > 0 else 0.0))
             pb = (ax_ + (bx_ - ax_) * t1, az_ + (bz_ - az_) * t1 - (0.012 if t1 < 1 else 0.0))
-            pieces.append(("dialstone", K.prism(_stroke_poly(pa, pb, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.05)))
+            sv, sf = K.prism(_stroke_poly(pa, pb, w), u=(1, 0, 0), v=(0, 0, 1), depth=d, chamfer=0.05)
+            # closing CW4 refix (E1): each course stone sits a hair out of true (turned <= 1.2 deg in its face, set
+            # in or proud <= 1.5 cm) and its arrises are knocked about (verts jittered <= 0.9 cm): no perfect box
+            # edges, the joints step and catch a shadow
+            cen = np.asarray(sv, dtype=np.float64).mean(0)
+            sv = K.rot(np.asarray(sv, dtype=np.float64), (0, 1, 0), math.radians(rng.uniform(-1.2, 1.2)), about=tuple(cen))
+            sv = sv + np.array([0.0, rng.uniform(-0.015, 0.015), 0.0])
+            sv = sv + np.array([[rng.uniform(-0.009, 0.009) for _ in range(3)] for _ in range(len(sv))])
+            pieces.append(("dialstone", (sv, sf)))
         # the inked channel: a narrow cut down the stroke's face (the mason's V-cut, filled dark), a hair proud of the
         # face it lies on; it stops short of the bars
         (ax, az), (bx, bz) = a, b
@@ -1265,14 +1273,21 @@ def numeral(B, rng, glyph: str, tilt: float = NUM_TILT):
     v, f = K.box((0, 0, 0), (brk / 2, D / 2 * 0.9, 0.15), 0.04, rz=rng.uniform(0.3, 0.6))
     v = K.rot(v, (1, 0, 0), 0.12)
     B.add("dialstone", (K.move(v, (width / 2 + 0.2, -1.35, 0.1)), f))
-    # the bank: earth and rubble heaped against the buried foot on the camera side (low, flattened lumps)
+    # the skirt (closing CW4 refix E1: was three smooth boulders): a low, broken earth fillet against the buried foot on
+    # the camera side, many small flattened lumps (never a dome), heaped with angular rubble and spalls of the same
+    # dial-stone, each its own stone and value, half sunk in it
     n = max(3, int(width / 1.6))
-    for k in range(n):
-        x = -width / 2 + width * (k + 0.5) / n + rng.uniform(-0.3, 0.3)
-        r = rng.uniform(0.9, 1.25)
-        v, f = K.lathe([(0.0, 0.32), (r * 0.45, 0.28), (r * 0.85, 0.14), (r, -0.05)], 10, phase=rng.uniform(0, PI))
-        v = v * np.array([1.0, rng.uniform(0.55, 0.75), rng.uniform(0.8, 1.15)])
-        B.add("earth", (K.move(v, (x, -0.95 + rng.uniform(-0.1, 0.1), 0.0)), f))
+    for k in range(2 * n + 1):
+        x = -width / 2 - 0.2 + (width + 0.4) * (k + 0.5) / (2 * n + 1) + rng.uniform(-0.2, 0.2)
+        r = rng.uniform(0.5, 0.8)
+        v, f = K.lathe([(0.0, 0.17), (r * 0.5, 0.15), (r * 0.85, 0.07), (r, -0.05)], 7, phase=rng.uniform(0, PI))
+        v = v * np.array([1.0, rng.uniform(0.6, 0.9), rng.uniform(0.8, 1.2)])
+        v = v + np.array([[0.0, 0.0, rng.uniform(-0.025, 0.025)] for _ in range(len(v))])
+        B.add("earth", (K.move(v, (x, -0.8 + rng.uniform(-0.18, 0.12), 0.0)), f))
+    for k in range(3 * n + 2):
+        x = -width / 2 - 0.1 + (width + 0.2) * rng.random()
+        h = (rng.uniform(0.09, 0.24), rng.uniform(0.07, 0.17), rng.uniform(0.05, 0.11))
+        chunk(B, "rubble" if k % 3 else "dialstone", (x, rng.uniform(-1.25, -0.45), rng.uniform(0.02, 0.1)), h, rng)
     # the spill: flat broken spalls half sunk along the camera side (lying, never standing on a corner)
     for k in range(n + 1):
         x = -width / 2 - 0.2 + (width + 0.4) * (k + 0.5) / (n + 1) + rng.uniform(-0.25, 0.25)
@@ -1345,12 +1360,12 @@ def drop_underground(ob, z: float = -0.06) -> int:
 LICHEN_HEX = "#6F7559"
 NUM_MATS = {
     "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.24, speckle=0.3,
-                      grain=0.34, blotch=0.3, lichen=0.5),                     # carved dial-stone, weathered
+                      grain=0.34, blotch=0.3, lichen=0.68, dab=0.42, cracks=0.85),   # carved dial-stone, weathered
     "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
-                   edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.3, blotch=0.2, lichen=0.4),
+                   edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.3, blotch=0.2, lichen=0.4, dab=0.45, cracks=0.7),
     "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
-                  grain=0.32, blotch=0.25, lichen=0.7),                          # the bank: earth, grit and moss
-    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08), grain=0.3),
+                  grain=0.32, blotch=0.25, lichen=0.7, dab=0.5),                 # the bank: earth, grit and moss
+    "raw": dict(RAW, hex="#BDB5A7", edge_light=(0.03, 0.35, 0.8, 0.08), grain=0.3, dab=0.3),
     "groove": dict(hex="#2F2C27", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),   # the cut, inked
 }
 VI_MATS = {
@@ -1396,6 +1411,33 @@ def _detail(mat, s: dict, height: float):
         c = g.mix(c, g.ramp(st.outputs["Fac"], [(0.4, 1.0 - k * 0.6), (0.6, 1.0 + k * 0.5)]), 1.0, "MULTIPLY")
         sp = g.voronoi(scale=40.0, feature="F1")                                  # pits: small dark grains
         c = g.mix(c, M.shade_hex(hexcol, 0.55, 1.1), g.math("MULTIPLY", g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.2, 0.0)]), min(1.0, k * 2.6)))
+    if s.get("dab"):
+        # closing CW4 refix (E1 tier): the painter's dabbed mottle, hard-edged 3-6 cm value patches (a tight ramp on a
+        # low-detail noise), so a face carries the structures' fine breakup instead of a soft airbrush
+        k = s["dab"]
+        n = g.noise(scale=17.0, detail=1.5, rough=0.5, distortion=0.4)
+        c = g.mix(c, g.ramp(n.outputs["Fac"], [(0.44, 1.0 - k * 0.6), (0.56, 1.0 + k * 0.45)]), 1.0, "MULTIPLY")
+        fl = g.voronoi(g.mapping(g.obj, loc=(3.7, 1.3, 0.6)), scale=34.0, feature="F1")          # pale flecks
+        c = g.mix(c, M.shade_hex(hexcol, 1.32, 0.8), g.math("MULTIPLY", g.ramp(fl.outputs["Distance"], [(0.0, 1.0), (0.16, 0.0)]), min(1.0, k * 1.6)))
+    if s.get("cracks"):
+        # hairline crack network along the stone's weathering (a wobbled Voronoi edge net, ~40 cm cells, about half of it
+        # kept), each crack an inked line with a chalked lip on one side (the painted crack of the bible)
+        k = s["cracks"]
+        wob = g.noise(scale=3.0, detail=2.0, rough=0.5)
+        vec = g.n("ShaderNodeVectorMath")
+        vec.operation = "MULTIPLY_ADD"
+        g.link(wob.outputs["Color"], vec.inputs[0])
+        vec.inputs[1].default_value = (0.22, 0.22, 0.22)
+        g.link(g.obj, vec.inputs[2])
+        ed = g.voronoi(vec.outputs[0], scale=2.4, feature="DISTANCE_TO_EDGE")
+        keep = g.ramp(g.noise(scale=1.6, detail=2.0).outputs["Fac"], [(0.47, 0.0), (0.53, 1.0)])
+        line = g.math("MULTIPLY", g.ramp(ed.outputs["Distance"], [(0.0, 1.0), (0.022, 0.0)]), keep)
+        lip = g.math("MULTIPLY", g.ramp(ed.outputs["Distance"], [(0.024, 0.0), (0.034, 1.0), (0.06, 0.0)]), keep)
+        c = g.mix(c, M.shade_hex(hexcol, 1.25, 0.8), g.math("MULTIPLY", lip, k * 0.55))
+        c = g.mix(c, M.shade_hex(hexcol, 0.38, 1.1), g.math("MULTIPLY", line, k))
+        ed2 = g.voronoi(vec.outputs[0], scale=7.5, feature="DISTANCE_TO_EDGE")                  # finer crazing, sparser
+        keep2 = g.ramp(g.noise(scale=2.3, detail=2.0).outputs["Fac"], [(0.53, 0.0), (0.58, 1.0)])
+        c = g.mix(c, M.shade_hex(hexcol, 0.55, 1.05), g.math("MULTIPLY", g.math("MULTIPLY", g.ramp(ed2.outputs["Distance"], [(0.0, 1.0), (0.03, 0.0)]), keep2), k * 0.8))
     if s.get("lichen"):
         k = s["lichen"]
         n = g.noise(scale=2.4, detail=6.0, rough=0.72, distortion=0.3)
@@ -1684,6 +1726,11 @@ def fair_stand(B, rng, tiers: int, step: float):
                         cb = (xr + pl, (a + b) / 2, zb2 + 0.29) if run == "E" else ((a + b) / 2, yr + pl, zb2 + 0.29)
                         hb = (0.085, (b - a) / 2, 0.03) if run == "E" else ((b - a) / 2, 0.085, 0.03)
                         B.add("timber", K.box(cb, hb, 0.008))
+                    # closing CW4 refix (E1): the worn, grimed tread under the bench (a sitter's heels, dirt kicked
+                    # under it): a dark cavity patch flush on the flags, ragged by its own detail layer
+                    cc = (xr, (a + b) / 2, zb2 + 0.016) if run == "E" else ((a + b) / 2, yr, zb2 + 0.016)
+                    hc = (0.26, (b - a) / 2 + 0.04, 0.006) if run == "E" else ((b - a) / 2 + 0.04, 0.26, 0.006)
+                    B.add("cavity", K.box(cc, hc, 0.004))
 
 
 LIP = dict(hex="#8A857A", chisel=0.8, var=0.08, streaks=0.3, chips=0.5, speckle=0.3, scale=0.6, rough=0.75,
@@ -1703,45 +1750,47 @@ CAMP_MATS = {
 
 
 _TIMBER = dict(hex="#6B5642", chisel=0.25, var=0.22, streaks=0.2, chips=0.3, scale=0.8, rough=0.82,
-               edge_light=(0.02, 0.55, 0.6, 0.05), fibre=("X", 0.32), grain=0.3, blotch=0.15)
+               edge_light=(0.02, 0.55, 0.6, 0.05), fibre=("X", 0.42), grain=0.3, blotch=0.15, dab=0.3)
 _WARE = dict(hex="#8C7A5E", chisel=0.1, var=0.25, streaks=0.0, chips=0.2, scale=1.0, rough=0.35, edge_light=(0.01, 0.6, 0.4, 0.03))
 STALL_MATS = {
-    "plinth": dict(DIAL, hex="#8F897F", var=0.18, grain=0.3, blotch=0.22, lichen=0.25),
-    "chalk": dict(CHALK, var=0.2, grain=0.3, blotch=0.24, lichen=0.2),
+    "plinth": dict(DIAL, hex="#8F897F", var=0.18, grain=0.3, blotch=0.22, lichen=0.25, dab=0.42, cracks=0.8),
+    "chalk": dict(CHALK, var=0.2, grain=0.3, blotch=0.24, lichen=0.2, dab=0.4, cracks=0.75),
     "steel": dict(DAWN_MATS["steel"], grain=0.2),
     "slate": dict(hex="#5A5F6A", chisel=0.8, var=0.22, streaks=0.35, chips=0.6, speckle=0.3, scale=0.7, rough=0.6,
-                  edge_light=(0.03, 0.75, 0.6, 0.08), stripes=("Z", 0.075, "#454953", 0.45), grain=0.3, blotch=0.22, lichen=0.35),
-    "dialstone": dict(DIAL, var=0.15, grain=0.3, blotch=0.2),
+                  edge_light=(0.03, 0.75, 0.6, 0.08), stripes=("Z", 0.075, "#454953", 0.45), grain=0.3, blotch=0.22, lichen=0.35, dab=0.4),
+    "dialstone": dict(DIAL, var=0.15, grain=0.3, blotch=0.2, dab=0.4, cracks=0.75),
     "timber": _TIMBER,
     "ware": _WARE,
 }
 STALL_DOME_MATS = {
     "plinth": STALL_MATS["plinth"],
-    "sandstone": dict(_SAND, var=0.2, grain=0.3, blotch=0.24, lichen=0.2),
-    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.22),
+    "sandstone": dict(_SAND, var=0.2, grain=0.3, blotch=0.24, lichen=0.2, dab=0.42, cracks=0.75),
+    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.22, dab=0.4, cracks=0.6),
     "iron": dict(GATE_MATS["iron"], grain=0.2),
     "timber": _TIMBER,
     "ware": _WARE,
 }
 CART_MATS = {
     "timber": dict(_TIMBER, fibre=("Y", 0.32)),
-    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.2),
+    "ironstone": dict(_IRON, var=0.2, grain=0.3, blotch=0.2, dab=0.4, cracks=0.6),
     "iron": dict(GATE_MATS["iron"], grain=0.2),
     "canvas": dict(hex="#B79A6A", chisel=0.0, var=0.1, streaks=0.4, chips=0.0, scale=1.0, rough=0.9,
-                   stripes=("Y", 0.29, "#D9CDB0", 0.75), grain=0.3, blotch=0.22),     # ochre and chalk bands, weathered
-    "chockstone": dict(DIAL, hex="#7E786D", var=0.15, grain=0.3, blotch=0.2, lichen=0.3),
+                   stripes=("Y", 0.29, "#D9CDB0", 0.75), grain=0.3, blotch=0.22, dab=0.3),     # ochre and chalk bands, weathered
+    "chockstone": dict(DIAL, hex="#7E786D", var=0.15, grain=0.3, blotch=0.2, lichen=0.3, dab=0.4, cracks=0.7),
     "ware": _WARE,
 }
 FAIR_MATS = {
     "blockstone": dict(hex="#958B7C", chisel=0.9, var=0.24, streaks=0.4, chips=0.55, speckle=0.3, scale=0.6, rough=0.72,
-                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.3, blotch=0.24, lichen=0.3),
+                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.3, blotch=0.24, lichen=0.4, dab=0.45, cracks=0.85),
     "nosing": dict(hex="#A59C8C", chisel=0.8, var=0.18, streaks=0.3, chips=0.6, scale=0.6, rough=0.7,
-                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.3, blotch=0.22, lichen=0.2),
+                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.3, blotch=0.22, lichen=0.3, dab=0.4, cracks=0.7),
     "fill": dict(hex="#80786B", chisel=0.9, var=0.15, streaks=0.0, chips=0.3, speckle=0.3, scale=0.6, rough=0.8,
-                 grain=0.3, blotch=0.25, lichen=0.35),
+                 grain=0.3, blotch=0.25, lichen=0.35, dab=0.4, cracks=0.6),
     "flag": dict(hex="#8A8173", chisel=0.9, var=0.24, streaks=0.0, chips=0.45, speckle=0.3, scale=0.6, rough=0.78,
-                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.3, blotch=0.24, lichen=0.35),
+                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.3, blotch=0.24, lichen=0.45, dab=0.45, cracks=0.85),
     "timber": dict(_TIMBER, fibre=("X", 0.32)),
+    "cavity": dict(hex="#4A443B", chisel=0.6, var=0.12, streaks=0.0, chips=0.0, speckle=0.4, scale=0.6, rough=0.9,
+                   grain=0.35, dab=0.5, lichen=0.3),                          # the grimed tread under each bench
 }
 
 
@@ -1793,6 +1842,10 @@ DESIGNS = {
 SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
 AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
+# closing CW4 refix (E1 tier): the E1 landmarks take the joint and cavity AO deeper (the course joints, the skirt's
+# rubble and the benches' undersides read as painted cavity ink, as on the Art 2.0 structures)
+AO_INTO = {n: 0.72 for n in ("numeral_xi", "numeral_ii", "numeral_vii", "numeral_iiii", "lampwright_stall",
+                              "lampwright_stall_dome", "lampwright_cart", "fair_stand_high", "fair_stand_low")}
 UNDERGROUND = {"numeral_xi", "numeral_ii", "numeral_vii", "numeral_iiii"}   # half buried: faces wholly under z 0 dropped
 
 
@@ -1824,7 +1877,7 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
         buried += drop_underground(body)
     os.makedirs(SCRATCH, exist_ok=True)
     K.bake_body(body, others, SCRATCH, name, size=512 if fast else size, samples=6 if fast else 24,
-                ao_samples=16 if fast else 96, ao_distance=ao_d)
+                ao_samples=16 if fast else 96, ao_distance=ao_d, ao_into=AO_INTO.get(name, 0.55))
     root = bpy.data.objects.new(name, None)
     col.objects.link(root)
     for o in objs.values():

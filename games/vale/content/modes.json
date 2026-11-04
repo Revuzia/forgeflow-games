@@ -21,7 +21,7 @@
         "passiveGoldStart": 30,
         "goldMult": 1,
         "xpMult": 1,
-        "xpTable": [240, 320, 400, 480, 560, 640, 720, 800, 880, 960, 1040, 1120, 1200, 1280, 1360, 1440, 1520],
+        "xpTable": [200, 280, 360, 440, 520, 640, 720, 800, 880, 960, 1040, 1120, 1200, 1280, 1360, 1440, 1520],
         "respawn": { "base": 6, "perLevel": 2.4, "max": 50, "lateGameRampAt": 1500, "lateGameMult": 1.25 },
         "shopAccess": "base",
         "recall": true,

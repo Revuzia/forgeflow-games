@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). Re-keyed 2026-10-28 (W4, originality F4): Clearglass works on your own side of the Noonline, Resinburn on the enemy side (condition selfOnSide), the Long Shade gives haste and tenacity, not attack and power; table: _design/reviews/fixwaves/W4_systems_rekey.md. A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM/LEAD request: _design/sections/modes_economy.md §10).",
+  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). Re-keyed 2026-10-28 (W4, originality F4): Clearglass works on your own side of the Noonline, Resinburn on the enemy side (condition selfOnSide), the Long Shade gives haste and tenacity, not attack and power; table: _design/reviews/fixwaves/W4_systems_rekey.md. A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration, and adds a stack when the buff has maxStacks (sim core.ts addTeamBuff). Splinters stacks to 3 (maxStacks; stats x stacks, every take renews the timer; CW3 CL-2).",
   "teamBuffs": [
     {
       "id": "clearglass",
@@ -64,9 +64,10 @@
     {
       "id": "splinters",
       "name": "Splinters",
-      "desc": "From the Sunsplinter, for 4:00: your team gains +5% armor and resist penetration and +5 ability haste. The next Sunsplinter you take renews it.",
+      "desc": "From the Sunsplinter, for 4:00: your team gains a Splinter, +5% armor and resist penetration and +5 ability haste. Splinters stack up to 3, and every Sunsplinter you take renews them.",
       "icon": "assets/ui/icons/team_buffs/splinters.webp",
       "duration": 240,
+      "maxStacks": 3,
       "stats": { "armorPenPct": 0.05, "magicPenPct": 0.05, "haste": 5 }
     },
     {

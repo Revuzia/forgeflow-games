@@ -496,6 +496,8 @@ export const TeamBuffDef = z.object({
   stats: StatBlock.default({}), passives: z.array(PassiveDef).default([]),
   /** minion empowerment while active (Rift's late objective) */
   minionStats: StatBlock.optional(),
+  /** CHANGED(SIM), additive: takes stack up to this count (stats x stacks, each take renews the timer); absent = refresh only */
+  maxStacks: z.number().int().positive().optional(),
 }).strict();
 
 // ── maps ────────────────────────────────────────────────────────────────────────────────────────

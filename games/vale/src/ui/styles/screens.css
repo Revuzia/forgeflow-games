@@ -696,6 +696,12 @@
   /* finalize: the job line goes (the showcase said it); the spells' second row stays above the fold */
   .final__job { display: none; }
   .final { gap: calc(1.5 * var(--u)); }
+  /* finalize beside the skin showcase (closing CL-1) has a narrower loadout column: the skin cards' art goes 4:3 (the crop
+     keeps the top, where the face is), the spells take three to a row, so every pick stays above the fold at 720 */
+  .final .loadout { gap: var(--u); }
+  .final .skins--s .skin__art { aspect-ratio: 4 / 3; }
+  .final .picks { grid-template-columns: repeat(auto-fill, minmax(calc(15 * var(--u)), 1fr)); }
+  .final .slots { margin-bottom: var(--u); }
   .draft { gap: calc(1.5 * var(--u)); }
   /* loading: the map's name at Display M, so the cards keep their names whole */
   .loading { gap: calc(2 * var(--u)); }

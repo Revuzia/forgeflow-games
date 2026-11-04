@@ -1,0 +1,296 @@
+{
+  "summary": "One VALE closing fix wave (after the closing parity review): budgeted work packages in order on the wave's own files, adversarial verify against its done-criteria (incl. per-fighter re-scores), targeted refix rounds",
+  "agentCount": 5,
+  "logs": [
+    "CW3s:bots-laning → gameplay:CL-1=partly, critic:gauge-source=partly, critic:bot-micro=partly",
+    "CW3s:quick-rekey-polish → originality:C1=done, originality:m1=done, originality:m2=done, gameplay:CL-g1=done, gameplay:CL-g3=done, gameplay:CL-g4=partly, gameplay:CL-g5=partly, gameplay:CL-g2=not_done, gameplay:CL-2=not_done, originality:m3=not_done, originality:m6=done",
+    "[CW3s:refix1] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    "[CW3s:verify2] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)"
+  ],
+  "result": {
+    "wave": "CW3s",
+    "pass": false,
+    "open": [
+      {
+        "id": "done:1",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Fresh soak _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt (--suites rift,mirror,bridge,human --seeds 20 --seed0 901 --cut 0 --lineup shuffle --mirror-weak novice), HEAD 67f00021: takedowns by 10:00 4.25 adept / 3.80 veteran (target >= 6, FAIL). Games with no takedown: 0/20 at both tiers (PASS). No-death stretch from 3:00: 4.1 / 4.1 min (target <= 3, FAIL). Shadehold takedowns before 14:00: 0.90 / 0.85 (target >= 1, FAIL; the claimed veteran 1.15 does not reproduce). Median first ult after 10:00: ulkro 10.5 (adept), ulkro 10.3 and ilsheta 10.2 (veteran) (FAIL). The r09 §4.4 gates exist in probe_sim_bot_soak.ts (group early).",
+        "fixHint": "Add fight-time last-hitting: a laner in a trade or all-in within 14 m of a dying Wick takes the last hit when the kill is not on. Then the trade windows and duo all-ins can ship without breaking G1. Add shadehold spike windows at levels 2, 3 and 6, and count the ult in killMargin for ulkro and ilsheta."
+      },
+      {
+        "id": "done:2",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Same soak. Last-hit share: 50.8 % adept, 49.2 % veteran (FAIL; the quick gate on seeds 1-8 passes 50.9 / 51.0, fw_W4_soak_fw_CW3s_v1_quick.txt). In lane: 76.7 / 73.3 % (veteran under the 75 % in the done-list). Cores fallen before 16:00: 0 / 0 (PASS). Sunsplinter first take after its 6:00 spawn: median 8.5 / 8.8 min (target <= 3, FAIL; computed from objs[] in fw_W4_soak_fw_CW3s_v1.json). Splinters only refresh and do not stack (src/sim/core.ts:142) (FAIL). pacing.ts PASS: RIFT adept p90 30.0 min.",
+        "fixHint": "Splinters: after the lead adds TeamBuffDef.maxStacks in catalog.ts, make addTeamBuff stack (stats × stacks, every take renews the timer) and set splinters maxStacks to 3. Sunsplinter: let the objective intent gather the adjacent roads and the grovehunter before spawn once their waves are shoved. After any CL-1 change, re-check G1 on a second untuned window."
+      },
+      {
+        "id": "done:3",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Fresh seeds 901-920, 40 mirrored games: veteran beats novice 33/40 = 82.5 % (target >= 85 %, FAIL). Duo road level 6 median: 8.2 / 8.5 min (target <= 8:00, FAIL).",
+        "fixHint": "Widen the novice gaps further without stat changes: lower intent follow, longer macroDelay, weaker dodge and skillshot lead. Judge it on >= 80 games over two untuned windows. Duo XP needs an original rules key (handoff to the catalog.ts owner) or a change to lane XP sharing."
+      },
+      {
+        "id": "gameplay:CL-1",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "See done:1. Takedowns by 10:00 rose from 1.9 / 1.75 to 4.25 / 3.80, but the >= 6 target is still missed, and veteran last-hit drops to 49.2 % on the fresh window.",
+        "fixHint": "See done:1."
+      },
+      {
+        "id": "critic:gauge-source",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "I read the LeagueMath page myself: 96,851 NA Diamond+ games, patches 5.1-5.3, role means about 0.174-0.184 deaths per minute, matching modes_economy.md:54. No kills-at-10:00 or first-blood source was found, and CL-1 was not re-graded. The >= 6 bar is derived as one third of the whole-game rate.",
+        "fixHint": "Find a readable published per-team kills-at-10:00 or first-blood-time figure, without downloading anything, and re-grade CL-1 against it."
+      },
+      {
+        "id": "critic:bot-micro",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Fresh soak, novice / adept / veteran: skillshot hit 53.4 / 76.8 / 73.8 % (veteran below adept). Telegraph dodge 10.6 / 26.6 / 49.4 %. Lowest-EHP focus 86-88.5 %. Recall HP median 41 / 32 / 33 %. The passive human seat took 264 / 173 damage per minute and died 0.00 times a game; the bot-played seat took 314 / 259 and died 0.15 / 0.10 times. Bots punish a passive player less than a bot. BRIDGE: 15.3 min median, 5/40 sudden death (PASS).",
+        "fixHint": "Raise lane aggression toward a passive foe (the 0.15 bonus at bot.ts:439) until the passive seat takes at least the bot seat's damage. Fix the veteran skillshot hit rate falling below adept's. Gate these numbers."
+      },
+      {
+        "id": "originality:m1",
+        "severity": "minor",
+        "status": "partly",
+        "evidence": "The Snuff damage bonus is removed and probe_kits_B gives 733/0. But content/fighters/nurrow.json:184 (Lullaby Dart desc) still says 'Snuff on a sleeper hits harder'.",
+        "fixHint": "Change nurrow.json:184 to 'Snuff on a sleeper silences longer and comes back sooner.'"
+      },
+      {
+        "id": "originality:m3",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "content/queues.json:80 still reads 'Co-op vs bots'. The strings are unchanged, and the lint patch is not applied (it applies cleanly).",
+        "fixHint": "Land the coordinated renames with the selector updates, then git apply m3_names_lint.patch. content:check must show 0 errors."
+      },
+      {
+        "id": "gameplay:CL-g3",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "Veteran beats novice 82.5 % on untuned seeds 901-920.",
+        "fixHint": "See done:3."
+      },
+      {
+        "id": "gameplay:CL-g4",
+        "severity": "minor",
+        "status": "partly",
+        "evidence": "The balance report exists. 40 games give intervals of about ±18 points. The 200+ game read was not run.",
+        "fixHint": "Run >= 200 shuffled same-tier games."
+      },
+      {
+        "id": "gameplay:CL-g5",
+        "severity": "minor",
+        "status": "partly",
+        "evidence": "draft.ts:95 uses secondaryRole, and 14 fighters have one. Growing the roster is out of scope.",
+        "fixHint": "Roster growth is long-term work."
+      },
+      {
+        "id": "gameplay:CL-g2",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "Duo road level 6 at a median 8.2 / 8.5 min. Not attempted.",
+        "fixHint": "See done:3."
+      },
+      {
+        "id": "gameplay:CL-2",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "Splinters do not stack (core.ts:142). Sunsplinter first take comes 8.5 / 8.8 min after spawn.",
+        "fixHint": "See done:2."
+      }
+    ],
+    "handoffs": [
+      {
+        "from": "quick-rekey-polish",
+        "to": "CW3c",
+        "what": "originality m3, part 1 (your files). In content/strings.en.json rename 'practice.panel.title' 'Practice tools' to something in VALE's own words, e.g. 'Practice bench'. Rename 'play.queue.first_win' 'First win of the day pays a bonus.' to e.g. 'Your first win each day pays a bonus.'. Rename 'grant.first_win' 'First win of the day' to e.g. 'First win today'. Also update the fallbacks in src/ui/screens/play.tsx:171, home.tsx:168, profile.tsx:82 and hud/panels.tsx:359-360. In content/client.json tips[10], change 'your lanes' to 'your roads'."
+      },
+      {
+        "from": "quick-rekey-polish",
+        "to": "CW3c / CW1 / CW2 (coordinated)",
+        "what": "originality m3, part 2. Rename the rift_coop queue name 'Co-op vs bots' in content/queues.json (CW3s file; I can make the change) to a VALE name such as 'Lantern Drill'. In the same commit, update the '.qcard' hasText selectors: _harness/e2e.mjs:63 and :429 and _harness/hud_renders.mjs:14 (CW3c), _harness/probe_input_latency.mjs:49 (CW1), and _harness/probe_audio_session_mem.mjs:7 and :30 (CW2)."
+      },
+      {
+        "from": "quick-rekey-polish",
+        "to": "CW3s or integration (after both m3 renames land)",
+        "what": "Apply the names lint: in tools/names_check.ts add singulars(t), which turns tools into tool, boxes into box and berries into berry, and use it so a multi-word protected name also matches with its last word in the plural (in checkNames, compare the last variant token against singulars(tok)). In _design/research/protected_names.json add 'Co-op vs bots' and 'Co-op vs. bots' to lol_maps_modes and 'First Win of the Day' to lol_ui_terms. The ready patch is at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/m3_names_lint.patch (git apply). Then content:check must show 0 errors."
+      },
+      {
+        "from": "quick-rekey-polish",
+        "to": "owner of src/contracts/catalog.ts (lead)",
+        "what": "gameplay CL-2: add an optional `maxStacks: z.number().int().positive().optional()` to TeamBuffDef. Then CW3s can make addTeamBuff (src/sim/core.ts:137) stack Splinters to 3: stats multiplied by stacks, and every take renews the 4:00 timer. content/team_buffs.json splinters would get maxStacks 3 (modes_economy.md:399). For CL-g2 an original duo-road XP rule would also need a new RulesParams.tuning key."
+      },
+      {
+        "from": "quick-rekey-polish",
+        "to": "tools/imagegen owner (CW3c/CW5)",
+        "what": "Optional: Hourcleaver's passive is now 'Split Hour', an ability-hit cleave plus shield (it was a low-health shield). If tools/imagegen/item_subjects.json describes the hourcleaver icon by the shield, update the subject text. The icon itself can stay."
+      }
+    ],
+    "packages": [
+      {
+        "key": "bots-laning",
+        "items": [
+          "gameplay:CL-1=partly",
+          "critic:gauge-source=partly",
+          "critic:bot-micro=partly"
+        ],
+        "commits": [
+          "4d112624 vale CW3s: laning kill windows that keep the roads' last hits (CL-1) and soak micro instrumentation (critic bot-micro)",
+          "d44bd540 vale CW3s: soak feasibility read falls back to the match tier on FRAY seats",
+          "196ba997 vale CW3s: the CL-1 kill-window reads and the sharper dodging are RIFT's; BRIDGE keeps its G5 bots",
+          "d7d175d1 vale CW3s: kill-pace gauge — sources re-read and where the bots stand",
+          "cc2f2039 vale CW3s: modes_economy kill-pace note names the baseline windows exactly"
+        ],
+        "notes": "Budget used:\n- Full soaks: the prior attempt ran about 2. This package ran 2: one crashed in FRAY on a harness bug, fixed in d44bd540, and the second completed (fw_CW3s_final, 400 matches).\n- Everything else was 10-20-seed RIFT and BRIDGE dev runs on seeds 401-420 and 501-520 (tens of seconds to a few minutes each).\n\nBRIDGE recheck: the final full soak ran before 196ba997, which scoped the CL-1 reads and the sharper dodge to RIFT. Its BRIDGE G5 median of 14.7 min is superseded by the targeted 15.8 min PASS (fw_W4_soak_fw_CW3s_bridge7). RIFT play is unchanged by that commit (quick soak identica"
+      },
+      {
+        "key": "quick-rekey-polish",
+        "items": [
+          "originality:C1=done",
+          "originality:m1=done",
+          "originality:m2=done",
+          "gameplay:CL-g1=done",
+          "gameplay:CL-g3=done",
+          "gameplay:CL-g4=partly",
+          "gameplay:CL-g5=partly",
+          "gameplay:CL-g2=not_done",
+          "gameplay:CL-2=not_done",
+          "originality:m3=not_done",
+          "originality:m6=done"
+        ],
+        "commits": [
+          "d562e679",
+          "9f96ec8b",
+          "1711a52c",
+          "19fd7559 (wip sync swept CW3s bot.ts siege-defend + soak balance report)",
+          "abd508ea (wip sync swept CW3s difficulty.ts novice tier change)"
+        ],
+        "notes": "C1 is done: Quick now starts at level 1 with 480 Gleam, gets its pace from its own shorter level dial, Gleam from the first bell and an earlier Dawn Seal lift, and plays at the same length as before. The rekey gate covers this: 40 passed, 0 failed. Polish items done in my files: m1 (Nurrow's Snuff has no waking-hit damage), m2 (Hourcleaver re-keyed, items and boons gated), CL-g1 (a 3-fighter siege ends the laning hold; 0 early cores) and CL-g3 (veteran beats novice 91 % on fresh windows). CL-g4 is a report only and needs a run of 200+ games. Three items are blocked on other lanes' files: m3 (s"
+      },
+      {
+        "key": "refix1",
+        "items": [],
+        "commits": [],
+        "notes": "agent died"
+      }
+    ],
+    "regressions": [
+      "Fresh-window G1: veteran last-hit 49.2 % (< 50 %) and veteran in-lane 73.3 % (< 75 %) on seeds 901-920; the tuned quick gate still passes",
+      "Veteran beats novice 82.5 % on seeds 901-920 (claimed done at 90-92 %)",
+      "Stale nurrow.json:184 Lullaby Dart description still says Snuff 'hits harder' on a sleeper"
+    ],
+    "summary": "CW3s does not pass round 1 (verdict at _design/reviews/fixwaves/CW3s_verify1.json, commit c6fbcacd, pushed). Pass: done:4 / originality C1 (Quick re-key, probe_sim_rekey 40/0), m2, m6, CL-g1 (no early core falls), regression probes and pacing. Fail on my fresh untuned soak (seeds 901-920, shuffle, _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt): CL-1 major still open (takedowns by 10:00 4.25 / 3.80 vs >= 6, no-death stretch 4.1 min, shadehold 0.90 / 0.85, ulkro/ilsheta first ult > 10 min); G1 veteran last-hit 49.2 % and in-lane 73.3 %; veteran beats novice 82.5 % (< 85 %, so CL-g3 'done' does not hold); Sunsplinter first take 8.5-8.8 min after spawn and Splinters do not stack; duo road level 6 at 8.2-8.5 min. The critic items gauge-source and bot-micro are partly met: the LeagueMath source checks out, but no 10:00 kill count or first-blood time was sourced, and bots punish the passive human seat less than a bot-played seat. m3 is not done (handoffs only). m1 leaves a stale Lullaby Dart description."
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Fix"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Refix"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "CW3s:bots-laning",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a4a3e542119538ba0",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742307865,
+      "lastProgressAt": 1793742307865,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"gameplay:CL-1\",\"status\":\"partly\",\"evidence\":\"Final full soak on a fresh window (seeds 501-520, shuffled per-role lineups, 400 matches): _harness/_reports/fw_W4_soak_fw_CW3s_final.txt. RIFT credited takedowns by 10:00 were 3.65 adept / 4.30 veteran. The verified build 09d330c0 scored 1.3 / 2.4 on seeds 401-410, and the earlier CW3s baseline scored 1.6 / 2.55. The >= 6 target is sti…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "CW3s:quick-rekey-polish",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "ad2445ab0a8ec2c6e",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742307865,
+      "lastProgressAt": 1793742307865,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"originality:C1\",\"status\":\"done\",\"evidence\":\"content/queues.json rift_quick now starts at level 1 with 480 Gleam (was level 3 with 1,250). The speed comes from a dial wound fast: Quick's own xpTable with every step at 75 % of RIFT's and xpMult 1, passiveGoldStart 0, the Dawn Seal lifting at 5:00 instead of 7:00, and the existing 0:20/25 s waves. The queue description is updated. `n…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "CW3s:verify1",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a6ea2f8cba8258159",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742307865,
+      "lastProgressAt": 1793742307865,
+      "cached": true,
+      "resultPreview": "{\"pass\":false,\"summary\":\"CW3s does not pass round 1 (verdict at _design/reviews/fixwaves/CW3s_verify1.json, commit c6fbcacd, pushed). Pass: done:4 / originality C1 (Quick re-key, probe_sim_rekey 40/0), m2, m6, CL-g1 (no early core falls), regression probes and pacing. Fail on my fresh untuned soak (seeds 901-920, shuffle, _harness/_reports/fw_W4_soak_fw_CW3s_v1.txt): CL-1 major still open (takedow…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "CW3s:refix1",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "a222a21a74f53fcae",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793742307875,
+      "queuedAt": 1793742307866,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "until grep -q \"^report:\\|Error\\|FAIL:\" /private/tmp/claude-…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793747852226,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 171259,
+      "toolCalls": 68,
+      "durationMs": 5544351
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "CW3s:verify2",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "a6b4f4e9dc8f4274e",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793747852431,
+      "queuedAt": 1793747852289,
+      "attempt": 1,
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793752708130,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 0,
+      "toolCalls": 0,
+      "durationMs": 4855696
+    }
+  ],
+  "totalTokens": 171259,
+  "totalToolCalls": 68
+}

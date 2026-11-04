@@ -2640,9 +2640,10 @@ class StrayBase(Monster):
     # CW4 (closing critic:monsters): the dial's own carved stone (the E1 numeral landmarks' dialstone family, a step
     # lighter so the unit stands off its camp floor) with the carver's inked channel down every stroke, coursed
     # joints, a gold-leaf hour notch on the head; no drilled eye pair (a blank slab with two dark holes read as a face)
-    PAL = {"chalk": "#BDB4A3", "chalk_hi": "#D9D1C0", "chalk_lo": "#978E7E", "grime": "#6F665A", "lichen": "#7A8458",
-           "lichen2": "#A3A06E", "eye": "#2A2521", "crack": "#4A433A", "groove": "#2F2A25", "break": "#E3D9C4",
-           "course": "#6E665A", "gold": "#C99B45"}
+    # closing CW4 refix: the chalk about 8 L* down (the paint survives the camp's light), the joint grime darker
+    PAL = {"chalk": "#A89F8E", "chalk_hi": "#C5BDAC", "chalk_lo": "#847B6C", "grime": "#5A5247", "lichen": "#6E784E",
+           "lichen2": "#959262", "eye": "#2A2521", "crack": "#3E3830", "groove": "#2A2621", "break": "#D8CEB9",
+           "course": "#4C463D", "gold": "#C99B45"}
     COURSE = 0.42                  # coursed-joint spacing (m, world z)
 
     # to implement: figure(detail) -> list of (prim, k), cuts -> {piece: [(point, normal, seed)]} (inside = n.(P-p)+f <= 0),
@@ -2703,11 +2704,14 @@ class StrayBase(Monster):
         col = np.tile(c("chalk"), (n, 1))
         col = mix_hex(col, c("chalk_hi"), sarr(0.35, 0.9, nz) * 0.6)                 # lit tops
         col = mix_hex(col, c("chalk_lo"), sarr(0.1, -0.7, nz) * 0.55)
-        col = mix_hex(col, c("grime"), sarr(0.22, 0.0, z) * 0.8)                     # dial grit on the feet
+        col = mix_hex(col, c("grime"), sarr(0.3, 0.0, z) * 0.85)                     # dial grit on the feet
         # coursed joints (the stroke was laid in blocks like the dial's numerals), on the steep faces
         zc = V[:, 2] / (self.COURSE * self.CRACK)
         jd = np.abs(zc - np.round(zc)) * self.COURSE * self.CRACK
-        col = mix_hex(col, c("course"), sarr(0.012, 0.004, jd) * sarr(0.75, 0.4, np.abs(nz)) * sarr(0.05, 0.12, V[:, 2]) * 0.8)
+        col = mix_hex(col, c("course"), sarr(0.022, 0.006, jd) * sarr(0.75, 0.4, np.abs(nz)) * sarr(0.05, 0.12, V[:, 2]) * 0.92)
+        # grime washed down from each joint (a short darker skirt under the joint line, the cavity of the course)
+        below = (np.round(zc) - zc) * self.COURSE * self.CRACK                        # > 0: just under a joint
+        col = mix_hex(col, c("grime"), sarr(0.0, 0.01, below) * sarr(0.07, 0.02, below) * sarr(0.75, 0.4, np.abs(nz)) * 0.45)
         streak = sarr(0.15, 0.4, NOISE.fbm(V * np.array([3.0, 3.0, 0.4]), 2.0, 3)) * sarr(0.0, -0.3, nz + 0.1) * 0.0
         col = mix_hex(col, c("chalk_lo"), sarr(0.1, 0.35, NOISE.fbm(V * np.array([2.5, 2.5, 0.35]), 2.5, 3)) * 0.35 + streak)
         ln = NOISE.fbm(V * 1.0, 2.2, 3)
@@ -2847,8 +2851,11 @@ class StrayNumeral(StrayBase):
     CRACK = 1.0
     EYE_R = 0.035
     A = np.array([0.0, 0.0, 1.62])                # apex (body pivot)
-    FL = np.array([0.56, 0.0, 0.0])               # foot contacts
-    FR = np.array([-0.5, 0.0, 0.0])
+    # foot contacts. closing CW4 refix (critic:monsters): the feet splay fore and aft as well (the thick stroke's foot
+    # forward, the thin one's back), so from the side the figure is still a striding Λ, never a pillar: camps face
+    # the map centre, which the gameplay camera sees side-on
+    FL = np.array([0.56, -0.26, 0.0])
+    FR = np.array([-0.5, 0.26, 0.0])
     WL, WR, DEPTH = 0.43, 0.25, 0.42              # stroke widths (thick / thin), depth (front-back; CW4 0.36 -> 0.42)
 
     def figure(self, detail):
@@ -2859,7 +2866,8 @@ class StrayNumeral(StrayBase):
             top = A + np.array([0, 0, 0.12])
             bot = foot + np.array([0, 0, 0.1])
             ax = K.nrm(top - bot)
-            F = np.stack([K.nrm(np.cross((0, 1.0, 0), ax)), np.array([0, 1.0, 0]), ax])
+            ux = K.nrm(np.cross((0, 1.0, 0), ax))
+            F = np.stack([ux, K.nrm(np.cross(ax, ux)), ax])
             L = np.linalg.norm(top - bot)
             stroke = RoundBox((top + bot) / 2, (w / 2, D / 2, L / 2), 0.03, axes=F)
             prims.append((stroke.displaced(*chis) if detail else stroke, 0.0))
@@ -2893,7 +2901,7 @@ class StrayNumeral(StrayBase):
         return out
 
     def piece_box(self, piece):
-        d = self.DEPTH / 2 + 0.08
+        d = self.DEPTH / 2 + 0.08 + 0.3          # + the fore / aft splay
         A = self.A
         return {"footL": ((0.0, -d, -0.02), (1.05, d, 0.85)), "legL": ((-0.15, -d, 0.45), (0.75, d, 1.55)),
                 "footR": ((-1.0, -d, -0.02), (0.05, d, 1.0)), "legR": ((-0.7, -d, 0.6), (0.15, d, 1.55)),
@@ -2911,8 +2919,10 @@ class StrayNumeral(StrayBase):
 
     def chips(self):
         A, d = self.A, self.DEPTH / 2
-        return [((0.79, -d, 0.02), 0.07), ((-0.72, d, 0.13), 0.06), ((0.66, d, A[2] + 0.66), 0.08),
-                ((-0.7, -d, A[2] + 0.36), 0.06), ((0.2, -d, 1.05), 0.05), ((-0.3, d, 0.9), 0.045)]
+        yl = lambda z: self.FL[1] * (1 - z / A[2])  # noqa: E731  (the stroke's own fore / aft offset at height z)
+        yr = lambda z: self.FR[1] * (1 - z / A[2])  # noqa: E731
+        return [((0.79, self.FL[1] - d, 0.02), 0.07), ((-0.72, self.FR[1] + d, 0.13), 0.06), ((0.66, d, A[2] + 0.66), 0.08),
+                ((-0.7, -d, A[2] + 0.36), 0.06), ((0.2, yl(1.05) - d, 1.05), 0.05), ((-0.3, yr(0.9) + d, 0.9), 0.045)]
 
     def grooves(self):
         # the carver's inline down both strokes, front and back (CW4: inked), and along the head bar's top
@@ -2921,8 +2931,8 @@ class StrayNumeral(StrayBase):
             top = self.A + np.array([0, 0, 0.0])
             bot = foot + np.array([0, 0, 0.25])
             for y in (-self.DEPTH / 2 - 0.01, self.DEPTH / 2 + 0.01):
-                a = np.array([top[0] * 0.8 + bot[0] * 0.2, y, top[2] * 0.8 + bot[2] * 0.2])
-                b = np.array([top[0] * 0.15 + bot[0] * 0.85, y, top[2] * 0.15 + bot[2] * 0.85])
+                a = np.array([top[0] * 0.8 + bot[0] * 0.2, y + bot[1] * 0.2, top[2] * 0.8 + bot[2] * 0.2])
+                b = np.array([top[0] * 0.15 + bot[0] * 0.85, y + bot[1] * 0.85, top[2] * 0.15 + bot[2] * 0.85])
                 out.append((a, b))
         zt = self.A[2] + 0.47 + 0.15 + 0.004
         out.append((np.array([0.42, 0.0, zt]), np.array([-0.42, 0.0, zt])))
@@ -3066,10 +3076,10 @@ class StrayNumeral(StrayBase):
                 fall = lerp(-0.03, 0.0, smooth((t - 0.88) / 0.12))
             if t < 0.2:
                 R = rot(8 * back, 0, 0)
-                body_about(P, R, np.array([0, self.DEPTH / 2, 0.0]))
+                body_about(P, R, np.array([0, self.FR[1] + self.DEPTH / 2 + 0.02, 0.0]))
             else:
                 R = rot(-90 * fall, 0, 0)
-                body_about(P, R, np.array([0, -self.DEPTH / 2 - 0.02, 0.0]))
+                body_about(P, R, np.array([0, self.FL[1] - self.DEPTH / 2 - 0.04, 0.0]))   # over the forward toe
             P.r("neck", p=6 * bump(t, 0.4, 0.52) + 6 * bump(t, 0.85, 1.0))
             return P
 

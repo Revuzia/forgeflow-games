@@ -1200,10 +1200,14 @@ class Stilltusk(Creature):
         legz = _smooth_arr(0.48, 0.28, z)[:, None]
         col = col * (1 - legz) + c("leg") * legz
         if self.YOUNG:
-            # juvenile bands: pale stripes running along the flanks
-            band = np.clip(1 - np.abs(((z - 0.62 + 0.04 * np.sin(y * 8)) / 0.12) % 1.0 - 0.5) / 0.26, 0, 1) ** 1.2
-            band *= _smooth_arr(0.45, 0.55, z) * _smooth_arr(1.0, 0.9, z) * _smooth_arr(-0.55, -0.4, y) * _smooth_arr(0.65, 0.5, y)
-            col = col * (1 - 0.7 * band[:, None]) + c("stripe") * 0.7 * band[:, None]
+            # juvenile bands (closing CW4 refix: bolder, the camp's read at the gameplay camera): broad cream stripes
+            # running along the flanks and over the haunch, each edged by a dark umber line, on a deeper hide
+            u = np.abs(((z - 0.62 + 0.045 * np.sin(y * 7)) / 0.2) % 1.0 - 0.5)
+            cover = _smooth_arr(0.4, 0.5, z) * _smooth_arr(1.08, 0.98, z) * _smooth_arr(-0.7, -0.52, y) * _smooth_arr(0.78, 0.62, y)
+            band = _smooth_arr(0.24, 0.19, u) * cover
+            edge = _smooth_arr(0.2, 0.235, u) * _smooth_arr(0.33, 0.28, u) * cover
+            col = col * (1 - 0.85 * band[:, None]) + c("stripe") * 0.85 * band[:, None]
+            col = col * (1 - 0.8 * edge[:, None]) + c("band_dk") * 0.8 * edge[:, None]
         else:
             # hour ticks: short dark bars on the flank, the dial's numerals worn into the hide
             ang = np.arctan2(z - 0.62, np.abs(x))
@@ -1218,7 +1222,7 @@ class Stilltusk(Creature):
                 continue
             w = np.clip(1 - (tags[tag] - dmin) / (0.01 * s), 0, 1) * (tags[tag] < 0.03 * s)
             if tag == "mane":
-                tip = (_smooth_arr(1.14, 1.32, z) if not self.YOUNG else _smooth_arr(0.86, 0.98, z)) * 0.85
+                tip = (_smooth_arr(1.14, 1.32, z) if not self.YOUNG else 0.4 * _smooth_arr(0.9, 1.0, z)) * 0.85   # young: a dark ridge
                 kc = c("mane") * (1 - tip[:, None]) + c("mane_tip") * tip[:, None]
             elif tag == "ear":
                 inner = _smooth_arr(0.1, 0.6, -N[:, 1])
@@ -1389,7 +1393,8 @@ class StilltuskYoung(Stilltusk):
     LEG_SHORTEN = 0.13
     YOUNG = True
     WRIST_MIN = 0.03
-    PAL = dict(Stilltusk.PAL, hide="#D29E68", flank="#BC8654", belly="#E4CEA8", mane="#7A5A40", stripe="#F2E4C6")
+    PAL = dict(Stilltusk.PAL, hide="#B47C4A", flank="#9A663C", belly="#E0C8A0", mane="#4C3424", stripe="#EED9AE",
+               band_dk="#5A3C2A")              # closing CW4 refix: deeper hide, dark mane ridge, edged bands
 
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════

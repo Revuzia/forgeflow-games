@@ -780,10 +780,15 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
   const microD: Record<string, unknown> = {};
   for (const tier of ['novice', 'adept', 'veteran'].filter((x) => tiers.includes(x))) {
     const a = { shot: [0, 0], tele: [0, 0], teleW: [0, 0], teleF: [0, 0], focus: [0, 0], deaths: 0, low: 0, recall: [] as number[] };
+    // (CW3s refix, critic bot-micro: a tier's skillshots are aimed at its opponents' tier — a veteran shoots at dodging
+    // veterans, an adept at adepts — so the fair comparison is by the TARGET's tier: shooter → target)
+    const byTarget: Record<string, number[]> = {};
     for (const g of tierGames) for (const s of g.seats) {
       if (g.job.diffs[s.team] !== tier) continue;
       const m = g.micro;
       a.shot[0] += m.shots[s.p][0]; a.shot[1] += m.shots[s.p][1];
+      const tt = g.job.diffs[1 - s.team] ?? '?';
+      const bt = (byTarget[tt] ??= [0, 0]); bt[0] += m.shots[s.p][0]; bt[1] += m.shots[s.p][1];
       a.tele[0] += m.tele[s.p][0]; a.tele[1] += m.tele[s.p][1];
       if (m.teleW) { a.teleW[0] += m.teleW[s.p][0]; a.teleW[1] += m.teleW[s.p][1]; }
       if (m.teleF) { a.teleF[0] += m.teleF[s.p][0]; a.teleF[1] += m.teleF[s.p][1]; }
@@ -794,9 +799,11 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     const r = { skillshotHit: a.shot[1] / Math.max(1, a.shot[0]), shots: a.shot[0], dodge: a.tele[1] / Math.max(1, a.tele[0]), teles: a.tele[0], dodgeWindup: a.teleW[1] / Math.max(1, a.teleW[0]), telesWindup: a.teleW[0], dodgeFeasible: a.teleF[1] / Math.max(1, a.teleF[0]), telesFeasible: a.teleF[0],
       lowStay: a.low / Math.max(1, a.deaths), deaths: a.deaths, focusLowest: a.focus[1] / Math.max(1, a.focus[0]), focusN: a.focus[0],
       recallHpMedian: median(a.recall), recallUnder30: a.recall.filter((x) => x < 0.3).length / Math.max(1, a.recall.length), recalls: a.recall.length };
-    microD[tier] = r;
+    const shotsBy = Object.fromEntries(Object.entries(byTarget).map(([k, v]) => [k, { hit: v[1] / Math.max(1, v[0]), n: v[0] }]));
+    microD[tier] = { ...r, shotsByTarget: shotsBy };
     text.push('', `micro ${tier}: skillshots hit ${pct(r.skillshotHit)} of ${r.shots} · telegraphs dodged ${pct(r.dodge)} of ${r.teles} (read from the caster's windup ${pct(r.dodgeWindup)} of ${r.telesWindup}; walkable after the tier's reaction ${pct(r.dodgeFeasible)} of ${r.telesFeasible}) · deaths after ≥ 1.5 s under the retreat threshold outside retreat ${pct(r.lowStay)} of ${r.deaths}`
-      + ` · attacks on the lowest-EHP fighter in reach ${pct(r.focusLowest)} of ${r.focusN} · health at recall start median ${pct(r.recallHpMedian)}, under 30 % ${pct(r.recallUnder30)} of ${r.recalls}`);
+      + ` · attacks on the lowest-EHP fighter in reach ${pct(r.focusLowest)} of ${r.focusN} · health at recall start median ${pct(r.recallHpMedian)}, under 30 % ${pct(r.recallUnder30)} of ${r.recalls}`
+      + ` · skillshots by target tier: ${Object.entries(shotsBy).map(([k, v]) => `→ ${k} ${pct(v.hit)} of ${v.n}`).join(', ')}`);
   }
   detail.micro = microD;
   // ── passive human seat (critic bot-micro: aggression toward the player at 3:00–8:00) ──
