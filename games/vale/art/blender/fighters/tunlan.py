@@ -194,7 +194,9 @@ CARDS = {
                               "power": 60.0, "size": 0.20},
                              {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.45, "color": "#FFD2A0",
                               "power": 22.0, "size": 0.12}]},
-        "portrait": {"yaw": -30.0, "pitch": -4.0},
+        # (polish: the cast_a3 bust put her raised hand across the mask in a glare streak; the bust takes the
+        # recall's cupped lantern instead, its glow on the face from below)
+        "portrait": {"clip": "recall", "t": 0.10, "yaw": -30.0, "pitch": -4.0},
         "plate": {"tint": "#8A7AA0", "sat": 0.80, "median": 0.25, "glow": [0.85, 0.55, 0.35, 0.10],
                   "glow_color": "#C9A0E0", "cx": 0.40},
     },
