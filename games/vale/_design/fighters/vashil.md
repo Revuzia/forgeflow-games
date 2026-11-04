@@ -159,7 +159,7 @@ This skin re-mixes the bands: the ink-grey robe is dark, so the pale outer robe 
 
 *"Ten bells instead of seven, one for each hour-mark of the Shadowless Noon, over a pale dial-stone robe and a dark hem."*
 
-The FRAY winners' honour: the halo carries **ten bells**, one for each hour-mark, over a pale dial-stone robe with a dark hem, which keeps the value gradient steep. **Extra geometry:** three extra bells (and their clapper beads) on the same ring, closer together; the halo's diameter stays 0.80 m, so the footprint is unchanged and the new bells stay inside the halo's footprint. The accent now has ten clapper beads, still under 0.5% of the silhouette.
+The FRAY winners' honour: the halo carries **ten bells**, one for each hour-mark, over a pale dial-stone robe with a dark hem, which keeps the value gradient steep. **Extra geometry:** three extra bells (and their clapper beads) on the same ring, closer together; the halo's diameter stays 0.80 m, so the footprint is unchanged and the new bells stay inside the halo's footprint. The accent now has ten clapper beads and ten shorter inlay marks (the same total length as the base's seven): 0.33 % of the game-camera silhouette (three_qa), under the 0.5 % this line asks for.
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
