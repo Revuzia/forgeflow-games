@@ -369,7 +369,16 @@ def paint_object(obj, size: int, cfg: dict, names: list[str], part_attr: str = "
     tops = {k: (load_rgb(os.path.join(cache, f)), ext) for k, (f, ext) in (cfg.get("tops") or {}).items()}
     flat = {k: scene.hex_srgb(h) for k, h in (cfg.get("flat") or {}).items()}
     img = paint(maps, plates, vis, names, tops=tops, flat=flat, log=log)
+    if PARTMAP_DUMP:
+        # (CW5 refix 2, done:4) the texel-to-part map beside the bake, for the id-masked Lab tool
+        # (art/tools/part_lab.py): part index per texel (row 0 = top, the base colour's orientation) + the part names
+        os.makedirs(os.path.dirname(PARTMAP_DUMP), exist_ok=True)
+        np.savez_compressed(PARTMAP_DUMP, part=np.ascontiguousarray(maps["part"]), names=np.array(names))
+        log(f"[vale-art] part map -> {PARTMAP_DUMP}")
     return (img, maps) if return_maps else img
+
+
+PARTMAP_DUMP = None      # set by pipeline.build: art/.cache/fighters/partmap/<sid>.npz
 
 
 def _lin(c):

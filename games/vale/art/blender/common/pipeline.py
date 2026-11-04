@@ -296,6 +296,7 @@ def build(spec, args, skin=None) -> dict:
         # ART 2.0: the concept painting projected onto the game mesh is the base colour
         from .hifi import project
         names = [p.name for p in parts]
+        project.PARTMAP_DUMP = os.path.join(scene.CACHE_DIR, "fighters", "partmap", f"{sid}.npz")
         if skin is None:
             base_fn = lambda low, sz: project.paint_object(low, sz, spec.PROJECTION, names, log=scene.log)  # noqa: E731
         else:

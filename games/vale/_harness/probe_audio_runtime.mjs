@@ -34,11 +34,11 @@
 //     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience (about -28), music.
 //     enemyDownFires is gated only when an enemy fighter died in sight of the cue path: the probe counts the sim's own
 //     enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one (killEntity on an enemy
-//     fighter, killer = your fighter; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
+//     fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
 //   node _harness/probe_audio_runtime.mjs dead [--out <json>]
 //     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
 //     output split by two filters (< 500 Hz, > 2 kHz) and metered per block. 8 s alive, then your fighter is killed
-//     (killEntity) and held down 8 s, then respawned (respawnFighter) and 8 s alive again. Gates: the engine reports
+//     (killEntity) and stays down for the mode's own respawn timer, then 8 s alive again. Gates: the engine reports
 //     the dead state while down and not after; the > 2 kHz band falls >= 10 dB while down (the 900 Hz low-pass), the
 //     whole falls >= 2 dB (DEAD_DB -3), and both come back within 3 dB after the respawn (the bed itself moves a dB or two between 8 s windows).
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
@@ -452,16 +452,17 @@ async function runDead() {
       g.out.connect(lo); mono(lo).connect(merger, 0, 1);
       g.out.connect(hi); mono(hi).connect(merger, 0, 2);
       const proc = ctx.createScriptProcessor(4096, 3, 1);
-      const st = window.__dead = { blocks: [], dead: [] };
+      const st = window.__dead = { blocks: [] };
       proc.onaudioprocess = (ev) => { const ib = ev.inputBuffer, row = [ctx.currentTime, a.musicDead ? 1 : 0];
         for (let c = 0; c < 3; c++) { const d = ib.getChannelData(c); let ss = 0; for (let i = 0; i < d.length; i++) ss += d[i] * d[i]; row.push(ss / d.length); }
         st.blocks.push(row); };
       const z = ctx.createGain(); z.gain.value = 0; merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
       return { bed: a.wantBed ?? null, rate: ctx.sampleRate };
     });
-    const mark = async (tag) => page.evaluate((t) => { window.__dead.dead.push([t, window.__valeAudio.graph.ctx.currentTime]); }, tag);
+    // each window has its own start and end mark: the close and the open (0.35 s time constant) are outside them
+    const mark = async () => page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
     await page.waitForTimeout(1000);
-    await mark('alive0'); await page.waitForTimeout(SEG);
+    const w0 = [await mark()]; await page.waitForTimeout(SEG); w0.push(await mark());
     rep.kill = await page.evaluate(async () => {
       const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you), e = W.entity(me.entity);
       const { killEntity } = await import('/src/sim/combat.ts');
@@ -469,31 +470,25 @@ async function runDead() {
       killEntity(W, e, null);
       const evs = W.events.slice(n0);
       for (const l of m.listeners) l(evs);
-      if (e.player) e.player.respawnIn = 60;               // held down for the window
       return { fighter: e.def ?? null, alive: e.alive, events: evs.map((x) => x.e) };
     });
-    await page.waitForTimeout(1200);                        // the close's time constant (0.35 s) x 3, and a block
-    await mark('dead'); await page.waitForTimeout(SEG);
-    rep.respawn = await page.evaluate(async () => {
-      const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you), e = W.entity(me.entity);
-      const { respawnFighter } = await import('/src/sim/spawn.ts');
-      respawnFighter(W, e);
-      return { alive: e.alive };
-    });
+    await page.waitForTimeout(1200);                        // the close's time constant x 3, and a block
+    const w1 = [await mark()];
+    // the mode's own respawn timer decides how long the state lasts
+    await page.waitForFunction(() => window.__valeAudio.musicDead === false, null, { timeout: 120000, polling: 100 });
+    w1.push(await mark());
     await page.waitForTimeout(1200);
-    await mark('alive1'); await page.waitForTimeout(SEG);
-    await mark('end');
+    const w2 = [await mark()]; await page.waitForTimeout(SEG); w2.push(await mark());
     const raw = await page.evaluate(() => window.__dead);
-    const win = (i) => { const [, c0] = raw.dead[i], [, c1] = raw.dead[i + 1]; return raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1); };
     const db = (rows, k) => r2(10 * Math.log10(rows.reduce((s2, r) => s2 + r[k], 0) / Math.max(1, rows.length) + 1e-20));
-    rep.windows = ['alive0', 'dead', 'alive1'].map((tag, i) => { const w = win(i);
-      return { tag, blocks: w.length, engineDead: r2(w.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, w.length)), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
+    rep.windows = [['alive0', w0], ['dead', w1], ['alive1', w2]].map(([tag, [c0, c1]]) => { const w = raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
+      return { tag, seconds: r2(c1 - c0), blocks: w.length, engineDead: r2(w.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, w.length)), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
     const [a0, d, a1] = rep.windows;
     rep.drop = { allDb: r2(a0.allDb - d.allDb), lowDb: r2(a0.lowDb - d.lowDb), highDb: r2(a0.highDb - d.highDb) };
     rep.back = { allDb: r2(a1.allDb - a0.allDb), highDb: r2(a1.highDb - a0.highDb) };
     rep.gates = {
       musicPlaying: a0.allDb > -60,
-      engineDeadWhileDown: d.engineDead === 1 && a0.engineDead === 0 && a1.engineDead === 0,
+      engineDeadWhileDown: d.engineDead >= 0.95 && a0.engineDead === 0 && a1.engineDead === 0 && d.blocks >= 12,
       highFallsGe10: rep.drop.highDb >= 10,
       wholeFallsGe2: rep.drop.allDb >= 2,
       backWithin3: Math.abs(rep.back.allDb) <= 3 && Math.abs(rep.back.highDb) <= 3,

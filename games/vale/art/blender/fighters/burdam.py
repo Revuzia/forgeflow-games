@@ -162,7 +162,8 @@ SKINS: list = [
                  # polish: the board's walnut frame a cooler, darker brown (#5A4639 read pink in the splash's sun)
                  # (CW5 refix, burdam-M4: game-camera per-pixel dE vs the base 10.3 < Stillwater's 10.8: the deluxe
                  # line must read furthest from the base: the ledger-ink coat and the ink felt one step deeper)
-                 "cloth": "#433B50", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
+                 # (CW5 refix 2: dE 10.7 < 10.8: the coat one more step, #433B50 -> #3E3649)
+                 "cloth": "#3E3649", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
@@ -1072,7 +1073,7 @@ CHAINS = {          # name: (parent, joints (rest, m)); + rotation about each bo
 }
 SKIRT_K, SKIRT_A0 = 0.45, 4.0        # the panel's push: share of the knee's swing past A0 deg (front: ahead; back: behind)
 SKIRT_CLEAR, SKIRT_THIGH_R = 0.025, 0.12    # the floor: the thigh's surface (its axis + R) stays CLEAR behind the panel
-COWL_K = 0.16                        # the cowl drape's push: share of the right knee's swing (deg)
+COWL_K = 0.22                        # the cowl drape's push: share of the right knee's swing (deg)
 SKIRT_SIDE_K = 0.35                  # the side panels: share of their own knee's swing (forward and back)
 SKIRT_AZ = {"skirt_f": 0.0, "skirt_l": 90.0, "skirt_b": 180.0, "skirt_r": -90.0}   # each panel's bearing (deg, 0 = front,
                                                                                   # + toward his left)
@@ -1138,7 +1139,7 @@ def chain_config(ctx) -> list:
             # (CW5 refix, burdam-M3: the cowl's drape swung 4.5 deg in the run, read as rigid felt: its own (right)
             # knee's stride pushes it, the spring lagging it and the chest's bob adding inertia, >= 10 deg of swing)
             def cowl_drive(p):
-                return max(-12.0, min(12.0, COWL_K * _knee_angles(skel, p)["R"][0]))
+                return max(-15.0, min(15.0, COWL_K * _knee_angles(skel, p)["R"][0]))
             c = anim.ChainCfg(list(bones), gravity=0.3, stiffness=60.0, damping=6.0, inertia=2.0, drive=cowl_drive,
                               limit=(-18.0, 18.0))
         out.append(c)
@@ -3062,7 +3063,7 @@ STONE_TOP = "#B9AC99"          # warm grey top faces (L* ~71; polish: was #9E928
                                # sky light cools a neutral grey); fix pass 8 a step lighter (the stack's splash median L* 47
                                # against the concept's 65)
 STONE_CHALK = "#DAD0BE"        # chalked convex bevels (L* ~84; was #CEC2AE, 79; closing burdam-M2: edges 8-10 L* over the top)
-STONE_SIDE = "#74675A"         # the 8 cm side bands (L* ~44; closing burdam-M2: was #8A7C6C, 53, the stack one pale block)
+STONE_SIDE = "#65584B"         # the 8 cm side bands (CW5 refix 2, burdam-M2: was #74675A, L* ~44; now ~38; closing burdam-M2: was #8A7C6C, 53, the stack one pale block)
 STONE_RECESS = "#3E2D21"       # rust-brown recesses and creases (L* ~20)
 STONE_DARKER = {"vambrace": 0.70, "strap_plate": 0.78}   # forearm plates a step down: the vambrace never merges with the
                                # pauldron into one pale sleeve (polish: the right pauldron is the stack's stone now, no step)
@@ -3071,7 +3072,7 @@ STONE_GROUPS = (STONE_TIERS, ("shoulder_plate", "pauldron_lame", "pauldron_face"
 # closing review burdam-M2: the recess staining reached 2.8 cm and faded as a power (in the match the stack's interior read
 # p10/50/90 L* 53/71/81, no recess darkening at ~110 px): it now reaches 6 cm under the next tier, linear, at 0.9, so
 # each tuck reads as a dark band at the game camera; the chalked convex edges a step lighter (L* ~84, under the cap 86)
-STONE_OCC_REACH, STONE_OCC_POW, STONE_REC_K = 0.06, 1.0, 0.9
+STONE_OCC_REACH, STONE_OCC_POW, STONE_REC_K = 0.08, 1.0, 0.95   # CW5 refix 2: ROI spread 26.7 < 35: 8 cm, 0.95
 LEDGER_ROWS = 6                # the cap's top: the brief's ledger relief, one carved row per day (painted grooves)
 CAP_PARTS = ("shoulder_plate", "pauldron_lame", "pauldron_face")
 CAP_CHROMA = 0.4               # fix round 2: the right cap's stone chroma (x, luminance kept; b* ~+11 -> ~+4): the verifier

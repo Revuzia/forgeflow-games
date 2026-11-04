@@ -354,8 +354,8 @@
       -1.24,
       0.95
     ],
-    "kb_raw": 297,
-    "kb": 144,
+    "kb_raw": 378,
+    "kb": 213,
     "texture": 1024,
     "buried_faces_dropped": 36,
     "nodes": [
@@ -378,9 +378,9 @@
       -2.2,
       1.73
     ],
-    "kb_raw": 390,
-    "kb": 215,
-    "texture": 1024,
+    "kb_raw": 1165,
+    "kb": 616,
+    "texture": 2048,
     "buried_faces_dropped": 152,
     "nodes": [
       "body"

@@ -74,6 +74,9 @@ try {
     // near = true: the enemy 0.6 m outside your attack range (edge to edge; inside it your fighter's auto-attack
     // would already be swinging), so an attack order steps in and winds up; false: 3.5 m outside it (still in
     // vision, so its actor stays drawn and pickable), so auto-attack does not take the move orders
+    // the parked foe stands near your side's towers: keep it whole between orders (r2: order 44 of
+    // fw_CW1_input_latency_r2c clicked a foe a tower had just killed, rightly sent as a ground move)
+    setInterval(() => { const e = W.entity(foe.entity); if (e?.alive) e.hp = e.maxHp; }, 30);
     window.__park = (near = true) => {
       const s = W.entity(me.entity), e = W.entity(foe.entity);
       if (!e.alive) respawnFighter(W, e, e.x, e.y);
@@ -285,10 +288,12 @@ try {
     // command builder shows here as a 'move'
     const attackMark = kind === 'attack' || kind === 'windupMove' ? firstMark : null;
     const sentAs = cmds[0]?.type ?? null;
-    const wrongMark = attackMark !== null && (sentAs !== 'attack' || /wmark--move/.test(attackMark ?? ''));
+    // a foe that was dead or untargetable at the press is a staging miss, not a lost order (reported, not gated)
+    const foeUp = !!press?.foeAlive && press?.foeTargetable !== false;
+    const wrongMark = attackMark !== null && foeUp && (sentAs !== 'attack' || /wmark--move/.test(attackMark ?? ''));
     // the attack was sent but its marker was not on screen 2 frames later (a HUD marker defect, reported apart)
     const attackMarkMissing = attackMark !== null && sentAs === 'attack' && !/wmark--attack/.test(attackMark ?? '');
-    report.orders.push({ i, kind, ...res, pick: s.pick, pickWhy: s.why, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind, firstMark, wrongMark, attackMarkMissing, sentAs, press, cmds });
+    report.orders.push({ i, kind, ...res, pick: s.pick, pickWhy: s.why, foe: setup.foe, foeAlive: s.foeAlive, foeVis: s.foeVis, dist: s.dist, markerKind, firstMark, wrongMark, attackMarkMissing, sentAs, foeUp, press, cmds });
     console.log(i, kind, JSON.stringify(res), wrongMark ? `WRONG MARK (${attackMark}) pick ${s.pick} why ${JSON.stringify(s.why)} press ${JSON.stringify(press)} cmds ${JSON.stringify(cmds)}` : '');
   }
   await shot(page, 'fw_CW1_input_after_orders').catch(() => {});

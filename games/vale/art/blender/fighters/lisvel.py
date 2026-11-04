@@ -87,6 +87,8 @@ SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 22.0, "pitch": -2.0, "rim_cool": 0.35,
           "rim_warm": 0.45,
           "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0}
+# (CW5 refix 2, lisvel-M1: the 512 px bust was half bow fist under a small pale face: every bust is framed tight
+# on the head, bust_lo 0.10 / bust_hi 0.30, render._portrait box)
 # PER-SKIN CARDS (closing review lisvel-M2 / m4; schema: art/blender/portraits.py header): each card its own beat,
 # camera and light, the face lit and the recurve in the portrait:
 # base: the Dawn Line release (cast_a1 f10-11): the bow on its long steep diagonal, the body rocking back, the line
@@ -106,7 +108,7 @@ CARDS = {
                               "power": 40.0, "size": 0.25}]},
         # (CW5, lisvel-M1: the splash's near-frontal head light flattened the carved face plate into a blank oval in
         # the bust; a key from her upper right, low power, so the nose, the lips and the visor's dark band model)
-        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.0,
+        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.0, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 18.0,
                                 "size": 0.10},
                                {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
@@ -123,7 +125,7 @@ CARDS = {
                               "power": 40.0, "size": 0.25}]},
         # (CW5 refix, lisvel-M1: the Sun Corridor bust showed her in profile from behind the bow arm, the face a blank
         # pale side: a front three-quarter bust with a cold key from her upper right so the nose, lips and visor model)
-        "portrait": {"yaw": -10.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9,
+        "portrait": {"yaw": -10.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 262.0, "el": 45.0, "dist": 0.6, "color": "#EEF2F6", "power": 18.0,
                                 "size": 0.10},
                                {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",
@@ -140,7 +142,7 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
                               "size": 0.2}]},
         # (CW5 refix: the reading-lamp bust lit the face flat from the front: a warm key from her upper right)
-        "portrait": {"yaw": 5.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9,
+        "portrait": {"yaw": 5.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 262.0, "el": 45.0, "dist": 0.6, "color": "#FFE3B8", "power": 18.0,
                                 "size": 0.10},
                                {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,
@@ -2015,10 +2017,17 @@ def paint_mask(p, n):
     col = _mix(col, C("lip") * k[:, None], 0.62 * lip)
     line_z = 1.6515 + 0.0030 * (x / 0.0145) ** 2
     mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.087, -0.093, y)
-    col = col * (1.0 - 0.62 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads; refix 0.62)
+    col = col * (1.0 - 0.78 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads; refix 0.62; r2 0.78)
+    # (CW5 refix 2, lisvel-M1: at 512 px the face read as a pale oval: the mouth's corners tuck in as two small dark
+    # dimples, so the smile reads at card scale)
+    mc = sum(np.exp(-(((x - sx * 0.0165) / 0.0028) ** 2 + ((z - 1.6545) / 0.0024) ** 2)) for sx in (-1.0, 1.0))
+    col = col * (1.0 - 0.45 * mc * _ss(-0.084, -0.091, y))[:, None]
     # under the nose: one soft broad shade (FIX PASS 2, review item 6: two dark dots at the nose's base)
     ns = np.exp(-((x / 0.014) ** 2 + ((z - 1.681) / 0.006) ** 2)) * _ss(-0.092, -0.101, y)
-    col = col * (1.0 - 0.20 * ns)[:, None]
+    col = col * (1.0 - 0.30 * ns)[:, None]
+    # (CW5 refix 2, lisvel-M1) the nostrils as two soft shaded wings under the tip (soft, wide: no dark dots)
+    nw = sum(np.exp(-(((x - sx * 0.0085) / 0.0042) ** 2 + ((z - 1.6835) / 0.0030) ** 2)) for sx in (-1.0, 1.0))
+    col = col * (1.0 - 0.30 * nw * _ss(-0.090, -0.098, y))[:, None]
     # (CW5 refix) the nose's shadow side (away from the key, her left) and a lit bridge on the key side
     nside = np.exp(-(((x - 0.0085) / 0.006) ** 2 + ((z - 1.700) / 0.014) ** 2)) * _ss(-0.094, -0.104, y)
     nlit = np.exp(-(((x + 0.003) / 0.003) ** 2 + ((z - 1.706) / 0.012) ** 2)) * _ss(-0.096, -0.106, y)
@@ -2051,7 +2060,11 @@ def paint_mask(p, n):
     col = col * (1.0 - 0.66 * fac)[:, None] * (1.0 + 0.16 * liplit)[:, None]
     # the ink recess behind the glass
     rec = _ss(0.0185, 0.0150, np.abs(z - VIS_Z)) * _ss(-0.101, -0.094, y) * _ss(0.082, 0.070, np.abs(x))
-    return _mix(col, C("recess"), rec)
+    col = _mix(col, C("recess"), rec)
+    # (CW5 refix 2, lisvel-M1: the lid line under the visor) the visor's cast shade on the cheeks: a dark soft band
+    # right under the glass, so the eye line reads as a line across the face at card scale
+    ul = np.exp(-((z - (VIS_Z - 0.0215)) / 0.0042) ** 2) * _ss(0.072, 0.050, np.abs(x)) * _ss(-0.072, -0.086, y)
+    return col * (1.0 - 0.42 * ul)[:, None]
 
 
 def paint_visor(p, n):
@@ -2301,8 +2314,12 @@ def paint_sleeves(p, n):
         # each long fold, a darker inner arm, a seam down the outer arm and a coarser visible weave)
         seam = np.exp(-(np.angle(np.exp(1j * (thu - 0.5 * np.pi))) / 0.05) ** 2) * (tu < 1.0)
         crest = (0.5 + 0.5 * np.sin(thu * 5.0 + 2.0 * NOISE(q, 9.0) + 0.9)) ** 6 * _ss(0.15, 0.5, tu) * (tu < 1.05)
-        k = ((1.0 - 0.40 * gather * crease ** 1.5) * (1.0 - 0.16 * inner) * (1.0 - 0.24 * longf)
-             * (1.0 + 0.07 * crest) * (1.0 - 0.22 * seam) * _weave(q, amp=0.06, f=520.0))
+        # (CW5 refix 2, lisvel-M3: still pale near-uniform cylinders at the close camera: the long folds and the
+        # inner arm two steps deeper, hanging folds down the forearm too, the weave coarser)
+        lowf = ((0.5 + 0.5 * np.sin(th * 4.0 + 2.5 * NOISE(q, 11.0))) * _ss(0.05, 0.20, t) * (1.0 - _ss(0.80, 0.95, t))
+                * (1.0 - gather))
+        k = ((1.0 - 0.48 * gather * crease ** 1.5) * (1.0 - 0.26 * inner) * (1.0 - 0.36 * longf)
+             * (1.0 - 0.24 * lowf) * (1.0 + 0.10 * crest) * (1.0 - 0.26 * seam) * _weave(q, amp=0.09, f=420.0))
         out[sel] = col[sel] * k[:, None]
     return out
 
