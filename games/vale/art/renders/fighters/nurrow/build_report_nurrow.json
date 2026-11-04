@@ -35,14 +35,14 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 3.1,
-    "rough_metal": 2.56,
-    "normal": 1.61,
-    "ao": 2.05,
+    "base": 8.49,
+    "rough_metal": 14.91,
+    "normal": 6.35,
+    "ao": 10.97,
     "normal_fixed_px": 34288,
-    "projection": 45.95,
-    "pack_save": 46.07,
-    "total": 55.51
+    "projection": 82.25,
+    "pack_save": 82.62,
+    "total": 123.61
   },
   "tris": 21151,
   "mesh_top_m": 1.967,
@@ -105,8 +105,8 @@
       "impact": null
     },
     "recall": {
-      "frames": 60,
-      "duration_s": 2.0,
+      "frames": 180,
+      "duration_s": 6.0,
       "loop": true,
       "impact": null
     },
@@ -123,8 +123,8 @@
       "impact": null
     },
     "channel": {
-      "frames": 40,
-      "duration_s": 1.3333,
+      "frames": 80,
+      "duration_s": 2.6667,
       "loop": true,
       "impact": null
     },
@@ -153,40 +153,27 @@
       "impact": 0.4
     }
   },
-  "glb_bytes_raw": 2632364,
+  "glb_bytes_raw": 2697548,
   "optimize": {
     "ok": true,
-    "before": 2632364,
-    "after": 1171436
+    "before": 2697548,
+    "after": 1210416
   },
-  "glb_bytes": 1171436,
+  "glb_bytes": 1210416,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1144 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/nurrow/nurrow.glb (1182 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: nurrow_base 2048x2048 238K, nurrow_normal 512x512 16K, nurrow_orm 256x256 13K",
       "  skinned meshes: nurrow(19181v), nurrow_accent(391v)",
       "  bones: 31 (root hips spine chest neck head x_hat x_hat_rim shoulderL upper_armL forearmL handL propL x_dart_hand shoulderR upper_armR forearmR handR propR x_blade_tip x_cape_1 x_cape_2 thighL shinL footL toeL thighR shinR footR toeR x_tabard_1)",
-      "  clips: attack1:0.667s/23tr, attack2:0.667s/23tr, cast_a1:0.500s/24tr, cast_a2:0.833s/23tr, cast_a3:0.667s/23tr, cast_ult:1.333s/24tr, channel:1.333s/23tr, crit:0.833s/23tr, dash:0.333s/25tr, death:1.667s/26tr, idle:2.667s/23tr, idle_lobby:4.000s/23tr, recall:2.000s/23tr, run:0.533s/25tr, stunned:1.333s/23tr, taunt:2.000s/23tr, victory:2.000s/23tr",
+      "  clips: attack1:0.667s/23tr, attack2:0.667s/23tr, cast_a1:0.500s/24tr, cast_a2:0.833s/23tr, cast_a3:0.667s/23tr, cast_ult:1.333s/24tr, channel:2.667s/23tr, crit:0.833s/23tr, dash:0.333s/25tr, death:1.667s/26tr, idle:2.667s/23tr, idle_lobby:4.000s/23tr, recall:6.000s/23tr, run:0.533s/25tr, stunned:1.333s/23tr, taunt:2.000s/23tr, victory:2.000s/23tr",
       "  tracks checked: 400; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
       "  tris: 21151; bind-pose bounds (three units, Y up): 1.17 x 1.97 x 0.81; facing (0.00, 1.00); head bone y 1.50; runRefSpeed 3.55",
       "  run: 16 f, planted samples 4, max foot-speed error 0.2%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (1)",
+      "  - GLB is 1182 KiB > budget 1172 KiB"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/nurrow/splash.png",
-      "portrait": "art/out/fighters/nurrow/portrait.png",
-      "icon": "art/out/fighters/nurrow/icon.png",
-      "turntable": "art/renders/fighters/nurrow/turntable.png"
-    },
-    "seconds": {
-      "splash": 6.24,
-      "portrait": 2.79,
-      "icon": 1.22,
-      "turntable": 3.6
-    }
   },
   "three_qa": {
     "ok": true,
@@ -208,7 +195,7 @@
       1
     ],
     "headY": 1.5,
-    "accentPct": 2.19,
+    "accentPct": 2.21,
     "accentTopHalfPct": 97.3,
     "heightPx1080": 105,
     "size": [
@@ -217,27 +204,25 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/nurrow/three_nurrow.png",
-    "seconds": 7.5,
-    "exit": 0,
-    "clip_sheet": "art/renders/fighters/nurrow/three_clips_nurrow.png"
+    "seconds": 9.5,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.04,
-      "materials": 0.09,
-      "model": 7.52,
-      "lows_bind": 1.8,
-      "uv": 3.26,
-      "bake": 55.52,
-      "clips": 0.17,
-      "export": 0.97,
-      "optimize": 0.55,
-      "load_test": 0.11,
-      "render": 13.96,
-      "three_qa": 19.9,
-      "cache": 0.08
+      "rig": 0.09,
+      "materials": 0.24,
+      "model": 26.23,
+      "lows_bind": 5.77,
+      "uv": 7.2,
+      "bake": 123.61,
+      "clips": 0.31,
+      "export": 2.03,
+      "optimize": 0.78,
+      "load_test": 0.16,
+      "three_qa": 9.77,
+      "cache": 0.14
     },
-    "total_s": 104.0
+    "total_s": 176.41
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

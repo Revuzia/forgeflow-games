@@ -26,7 +26,7 @@ Banned for every fighter: gears, clock hands, gold filigree, gems, glowing runes
 
 - **Mass: Striker, forward diagonal.** A lean, crouched figure: shoulders 0.40 m, hips 0.28 m, leaning 12 degrees into the stance in `idle` and 15 degrees in `run`, with everything long swept back.
 - **Hook:** a **wide conical hat shaped like a lamp snuffer**, 0.70 m across at the brim and 0.42 m tall, tilted forward 20 degrees over the face. From the 52 degree camera the cone reads as an off-centre point leaning toward where she is going. The hat's iron rim (a dark ring, 3 cm thick) holds the accent.
-- **Behind the hat:** a felt mantle ending in three trailing points (rigid plates, 0.30 m long) that sweep back along the spine, so the back edge of the silhouette is spiked, like Rishal's but lower and softer.
+- **Behind the hat:** a knee-length felt cloak from the shoulders, its hem cut into ragged trailing points, that streams back along the spine and swings in the run (as shipped since art 2.0; it replaced the first draft's 0.30 m rigid mantle points), so the back edge of the silhouette is soft and moving, lower and softer than Rishal's.
 - **Size:** 91 px tall at 1080p (61 px at 720p); the hat is 57 px wide, the widest single read on the figure.
 - **At 64 px:** a forward-leaning figure under a pale cone, with three small points trailing behind; the hat's rim is a thin dark ring. Nothing is thinner than 6 cm (5 px at 1080p).
 - **Facing from above:** the hat tilts toward the front and its point is the facing cue; the blade is on the right, the open left hand is forward.
@@ -59,7 +59,7 @@ SHAPE = body.shape(girth=0.93, torso_w=0.94, torso_d=0.94, chest=0.96, waist=0.8
 ## 4. Armour, cloth and props (template 4)
 
 - **Hat.** A lacquered cone (`sandstone`, a pale ochre lacquer, rigid) 0.70 m wide at the brim, 0.42 m tall, tilted forward 20 degrees on a head band; an ironstone rim 3 cm thick runs round the brim and carries six accent glass inlays; the inside is `ink`.
-- **Mantle.** A felt mantle (`cloth`, a plum-grey) over the shoulders, ending behind in three rigid trailing points (0.30 m long, one bone `x_mantle` for the set, at most 2 sway bones); a short plate of the same felt over the left shoulder.
+- **Cloak.** A knee-length felt cloak (`cloth`, a plum-grey) over the shoulders on a 2-bone baked spring chain (`x_cape_1/2`, closing nurrow-M3): under-damped (stiffness 220, damping 9) so the hem overshoots each step; the run drives it +-8 deg off each foot contact (about 20 / 14 deg of swing per segment in the run, 5 / 3 in idle, 23 / 30 in the dash; `art/tools/chain_motion.py`); a short plate of the same felt over the left shoulder.
 - **Torso and arms.** A close under-suit (`under`), a waxed-leather chest wrap (`leather`), linen sleeve wraps (`cloth2`) on both forearms; the left hand is bare-fingered carved wood (stylized hand, no skin shader).
 - **Legs.** Close dark leggings, soft waxed-leather boots with a low wedge heel (`leather`).
 - **Snuffer-blade** (`prop.R`, grip at the origin, blade along -Z): a curved ironstone blade 0.55 m long, 5 cm wide, 1.5 cm thick, with a hooked back (the snuffer hook, 6 cm) and a 2 cm bevel along the edge, matte and painted (no bright edge); a lacquered wood handle 0.18 m, a leather wrap.
@@ -106,7 +106,7 @@ Six rim inlays, each about 4 x 1.5 cm = 36 cm2 in total, against roughly 9,500 c
 
 `BLOCKS` (the right hand holds the blade; the left hand is the lull hand):
 - **guard / idle:** the blade held low behind the right hip, the left hand open at chest height with the fingers loosely curled; the lean at 12 degrees, knees bent, the head tilted so the hat points slightly down.
-- **run:** a stalker's run, the lean at 15 degrees, the left hand trailing open, the blade low and quiet; contact 0.26, a light bob; the hat and the mantle points stay rigid.
+- **run:** a stalker's run, the lean at 15 degrees, the left hand trailing open, the blade low and quiet; contact 0.26, a light bob; the hat stays rigid and the cloak swings off each foot contact.
 - **lobby:** the left hand conducting a slow rhythm; see below.
 
 Four distinct ability gestures. Frame counts are multiples of 5 at 30 fps; the impact is at exactly 40% of the clip (frame = 0.4 × N). The sim's `castTime` is the windup before the effect lands; the clip's impact frame is the visual hit. A `castTime` of 0 means the effect starts at once, so the anticipation stays at 4 frames or fewer and the gesture must not hide a dash.
@@ -118,7 +118,7 @@ Four distinct ability gestures. Frame counts are multiples of 5 at 30 fps; the i
 | `cast_a3` | 20 (f8) | **Snuff** · castTime 0.15 s · adjacent enemy, silence | A quick capping motion: the blade hand sweeps from low-back up and over and down in a hooked arc, as if snuffing a flame, landing at f8; the hat dips with the shoulder and the left hand closes into a fist. Silhouette: a hooked arc under the cone. |
 | `cast_ult` | 40 (f16) | **Lull the Rest** · castTime 0.25 s · 6 m lunge, sleep ring 5 m | Both arms open wide like drawing a curtain, the head lifting so the hat points at the target (f0-f10, a held pose that breathes: the fingers move); at f16 she lunges (the sim dashes her at 20 m/s) with the blade forward and lands beside the target, the left hand lowered palm-down as the room falls quiet. Hold f16-f30, then straighten. Silhouette: a wide T, then a spear under a cone. |
 
-Other clips: `run` at 3.55 m/s (light, foot slide under 8%); `attack1` a quick right-hand hooked slash, `attack2` a left-hand open-palm tap followed by a right slash (both 20 frames, impact f8); `death` folds slowly, the hat rolling off to one side and the mantle settling (ends at rest); `recall` lowers the blade and hums with a hand over her heart; `stunned` blinks and sways; `dash` is the stalker-run loop; `taunt` tips the hat forward with two fingers and yawns.
+Other clips: `run` at 3.55 m/s (light, foot slide under 8%); `attack1` a quick right-hand hooked slash, `attack2` a left-hand open-palm tap followed by a right slash (both 20 frames, impact f8); `death` folds slowly, the hat rolling off to one side and the mantle settling (ends at rest); `recall` is one 6 s performance (180 f, the clip cap; RIFT's 7 s recall wraps into the start of the re-sheath): she slips the blade into her belt, cups the lull hand to the brim and hums, swaying, lowers the hand over her heart and dozes (the hat nods twice, deeper), then snaps up with a fingertip at the mask's lips; `stunned` blinks and sways; `dash` is the stalker-run loop; `taunt` tips the hat forward with two fingers and yawns.
 
 **`idle_lobby`** (loops, closed first = last pose): Drowsy and watchful at once. She sways slowly to a tune only she hears, the left hand conducting the rhythm, the hat nodding once as if she might nod off, then snapping up with the mask turned a quarter toward the camera. Every few seconds she lifts a finger to her lips. She never sits and never sleeps. 120 frames.
 
@@ -179,6 +179,6 @@ This skin re-mixes the top band: the ink-wash is limited to the hat's brim band 
 
 - [ ] The figure leans 12 degrees in `idle` and 15 degrees in `run` (measure the chest axis); the tilted cone reads as a forward point in black at 64 px.
 - [ ] IoU against Rishal and Tunlan <= 0.80; the cone is at least 0.70 m across and the mantle points are visible from the camera side.
-- [ ] The hat, the mantle points and the blade are rigid; the mantle uses one bone for its three points; the hat never hides both eyes in the portrait.
+- [ ] The hat and the blade are rigid; the cloak swings on its spring chain (10-15+ deg in the run); the hat never hides both eyes in the portrait.
 - [ ] The rim inlays are the only emissive material; no glow on the blade or the hat.
 - [ ] `cast_a1` has at most 3 frames of anticipation (castTime 0.1): the lunge must not be hidden by a long wind-up.
