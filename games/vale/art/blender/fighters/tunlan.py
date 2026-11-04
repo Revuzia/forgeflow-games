@@ -164,6 +164,50 @@ SKIN_FLAT = {"rod_0": "wood_dark", "rod_1": "wood_dark", "rodhead_0": "lilac", "
 SOCKETS = {"weapon": "prop.R", "lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_clip": "idle_lobby", "portrait_t": 0.0,
           "portrait_yaw": 28.0}
+# PER-SKIN CARDS (closing review TUN-C3, CW6 cards; schema: art/blender/portraits.py header). Each card its own beat:
+#   base       Hound Shadow's held hand-hound (cast_a1 f7): the lantern is the key (sun low, a warm lantern light
+#              under the mask, the accent hot), and the great hound shadow leaps across the dusk behind her: a
+#              hound cut-out between a lantern-side projector and a shadow-catcher wall (HOUND, _install_hound;
+#              only that projector lights the wall, only the cut-out shadows it, the cut-out is camera-invisible)
+#   Lamplit    Lamp Flare (cast_a3 f6: the brim knocked up, the lamp at the end of its swing) from below the brim:
+#              a warm practical under the walnut shade so its panels read lit, a violet dusk grade (vfxTint #6A5C7A)
+#   Noon Fair  Shadow Play's raised beast-hands (cast_ult f5) with the puppet rods, in flat noon light on the fair
+CARDS = {
+    "tunlan": {
+        "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 30.0, "pitch": -3.0, "lens": 50.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 215.0, "key_el": 18.0, "key_color": "#E9C8A8", "sun": 1.5, "rim_cool": 1.1,
+                   "rim_warm": 0.6, "bounce": 0.35, "bounce_color": "#E2A46A", "accent": 2.6,
+                   "focal": [{"at": "head", "az": 185.0, "el": -25.0, "dist": 0.35, "color": "#FFC27A",
+                              "power": 40.0, "size": 0.10},
+                             {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
+                              "power": 25.0, "size": 0.08}],
+                   "hound": {"wall": 3.2, "across": -1.7, "up": 0.55, "mag": 4.2, "length": 0.62, "power": 2600.0,
+                             "color": "#FFE2B8", "tilt": 14.0}},
+        "portrait": {"yaw": 24.0},
+        "plate": {"glow": [0.80, 0.52, 0.30, 0.05], "median": 0.27},
+    },
+    "tunlan_lamplit": {
+        "splash": {"clip": "cast_a3", "t": 0.40, "yaw": -26.0, "pitch": -9.0, "lens": 45.0, "fill": 0.86, "x": 0.70,
+                   "key_az": 150.0, "key_el": 20.0, "key_color": "#D8C2E6", "sun": 1.8, "rim_cool": 1.6,
+                   "rim_warm": 0.5, "bounce": 0.5, "bounce_color": "#8C76A8", "accent": 2.2,
+                   "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.30, "color": "#FFC680",
+                              "power": 60.0, "size": 0.20},
+                             {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.45, "color": "#FFD2A0",
+                              "power": 22.0, "size": 0.12}]},
+        "portrait": {"yaw": -30.0, "pitch": -4.0},
+        "plate": {"tint": "#8A7AA0", "sat": 0.80, "median": 0.25, "glow": [0.85, 0.55, 0.35, 0.10],
+                  "glow_color": "#C9A0E0", "cx": 0.40},
+    },
+    "tunlan_noon_fair": {
+        "splash": {"clip": "cast_ult", "t": 0.14, "yaw": 16.0, "pitch": -2.0, "lens": 55.0, "fill": 0.88, "x": 0.71,
+                   "key_az": 240.0, "key_el": 50.0, "key_color": "#FFF1DA", "sun": 3.2, "rim_cool": 0.8,
+                   "rim_warm": 1.2, "bounce": 0.8, "bounce_color": "#E8C9A2", "accent": 1.4,
+                   "focal": [{"at": "head", "az": 200.0, "el": 20.0, "dist": 0.8, "color": "#FFF0DC", "power": 20.0,
+                              "size": 0.25}]},
+        "portrait": {"yaw": 34.0, "t": 0.0, "clip": "idle_lobby"},
+        "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4"},
+    },
+}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 512}
 GLB_COMPRESS = True
@@ -1792,12 +1836,125 @@ def _fighter_renders(ctx, objs, P, skin, *a, **k):
     try:
         return _orig_fighter_renders(ctx, objs, P, skin, *a, **k)
     finally:
+        _hound_clear()
         _WIDEN[0] = False
         for inp, v in saved:
             inp.default_value = v
 
 
 _render.fighter_renders = _fighter_renders
+
+
+# ── the card's great hound shadow (closing TUN-C3: "a great hound shadow thrown on the backdrop") ────────────
+# A lean hound in mid-leap, nose up and jaws open, facing -u (screen-left: away from the figure, into the frame), as an
+# outline (u, v) of unit length; it is the Hound Shadow her hands cast, so it is a SHADOW only: a camera-invisible
+# cut-out lit by one projector light at her lantern, falling on a shadow-catcher wall behind her. Light linking keeps
+# it a single layer: the projector lights only the wall and only the cut-out blocks it; every other light skips both.
+HOUND = [(-0.50, 0.13), (-0.36, 0.17), (-0.30, 0.22), (-0.27, 0.36), (-0.21, 0.25), (-0.12, 0.21), (0.05, 0.17),
+         (0.25, 0.16), (0.38, 0.21), (0.52, 0.31), (0.45, 0.17), (0.31, 0.09), (0.43, -0.05), (0.56, -0.14),
+         (0.50, -0.16), (0.36, -0.07), (0.24, -0.02), (0.05, 0.00), (-0.10, 0.00), (-0.22, -0.08), (-0.38, -0.12),
+         (-0.40, -0.09), (-0.25, 0.02), (-0.31, 0.06), (-0.40, 0.05), (-0.48, 0.03), (-0.39, 0.10)]
+_HOUND_OBJS = ("vale_hound_wall", "vale_hound_cut", "vale_hound_lamp")
+
+
+def _hound_clear() -> None:
+    for n in _HOUND_OBJS:
+        ob = bpy.data.objects.get(n)
+        if ob is not None:
+            bpy.data.objects.remove(ob, do_unlink=True)
+    for n in ("vale_hound_rx", "vale_hound_bk", "vale_hound_w", "vale_hound_c"):
+        c = bpy.data.collections.get(n)
+        if c is not None:
+            bpy.data.collections.remove(c)
+
+
+def _hound_coll(name: str, objs) -> "bpy.types.Collection":
+    c = bpy.data.collections.new(name)
+    for o in objs:
+        c.objects.link(o)
+    return c
+
+
+def _hound_make(cam, cfg: dict, arm, target) -> None:
+    h = cfg["hound"]
+    f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+    f.z = 0
+    f.normalize()
+    r = f.cross(V((0, 0, 1))).normalized()
+    up = V((0, 0, 1))
+    tgt = V(target)
+    sc = bpy.context.scene.collection
+    # the wall: a shadow catcher square to the view, `wall` m behind the subject's centre
+    wc = tgt + f * float(h.get("wall", 3.2))
+    me = bpy.data.meshes.new("vale_hound_wall")
+    R = 30.0
+    corners = [wc + r * x + up * z for x, z in ((-R, -tgt.z), (R, -tgt.z), (R, 2 * R), (-R, 2 * R))]
+    me.from_pydata([tuple(c) for c in corners], [], [(0, 1, 2, 3)])
+    wall = bpy.data.objects.new("vale_hound_wall", me)
+    sc.objects.link(wall)
+    wall.is_shadow_catcher = True
+    # the projector: just in front of the lantern core
+    lamp = _render.bone_pos(arm, "x_lamp") if "x_lamp" in arm.pose.bones else tgt
+    P = lamp - f * 0.12
+    S = wc + r * float(h.get("across", -1.7)) + up * float(h.get("up", 0.55))
+    d = S - P
+    n = d.normalized()
+    C = P + d / float(h.get("mag", 4.2))
+    u = (r - n * r.dot(n)).normalized()
+    v = n.cross(u).normalized()
+    if v.z < 0:
+        v = -v
+    L = float(h.get("length", 0.62))
+    a = math.radians(float(h.get("tilt", 0.0)))           # + = nose up (the hound faces -u)
+    pts = []
+    for x, y in HOUND:
+        xr, yr = x * math.cos(a) + y * math.sin(a), -x * math.sin(a) + y * math.cos(a)
+        pts.append(tuple(C + u * (xr * L) + v * ((yr - 0.08) * L)))
+    cm = bpy.data.meshes.new("vale_hound_cut")
+    cm.from_pydata(pts, [], [tuple(range(len(pts)))])
+    cut = bpy.data.objects.new("vale_hound_cut", cm)
+    sc.objects.link(cut)
+    for k in ("visible_camera", "visible_diffuse", "visible_glossy", "visible_transmission", "visible_volume_scatter"):
+        if hasattr(cut, k):
+            setattr(cut, k, False)
+    cut.visible_shadow = True
+    ld = bpy.data.lights.new("vale_hound_lamp", "POINT")
+    ld.energy = float(h.get("power", 2600.0))
+    ld.color = scene.hex_rgb(h.get("color", "#FFE2B8"))
+    ld.shadow_soft_size = float(h.get("soft", 0.015))
+    lo = bpy.data.objects.new("vale_hound_lamp", ld)
+    lo.location = P
+    sc.objects.link(lo)
+    # light linking: the projector lights the wall only and only the cut-out shadows it; the rest skip both
+    try:
+        rest = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in (wall, cut)]
+        rx = _hound_coll("vale_hound_rx", rest)
+        bk = _hound_coll("vale_hound_bk", rest)
+        lo.light_linking.receiver_collection = _hound_coll("vale_hound_w", [wall])
+        lo.light_linking.blocker_collection = _hound_coll("vale_hound_c", [cut])
+        for o in bpy.context.scene.objects:
+            if o.type == "LIGHT" and o is not lo:
+                o.light_linking.receiver_collection = rx
+                o.light_linking.blocker_collection = bk
+        scene.log(f"hound shadow: wall {h.get('wall')} m, magnification {h.get('mag')}, light linking on")
+    except Exception as e:                 # (no light linking: the wall would catch every shadow, so no layer)
+        scene.log(f"WARNING hound shadow: light linking unavailable ({e}); the layer is skipped")
+        _hound_clear()
+
+
+_orig_stage_lights = _render.stage_lights
+
+
+def _stage_lights(cam, cfg, arm, target, scale=1.0):
+    _hound_clear()
+    out = _orig_stage_lights(cam, cfg, arm, target, scale=scale)
+    # the splash only (its rig is staged at scale 1.6; the bust at 0.8 keeps the lantern light without the layer)
+    if cfg.get("hound") and scale > 1.0 and arm is not None:
+        _hound_make(cam, cfg, arm, target)
+    return out
+
+
+_render.stage_lights = _stage_lights
 
 # the health bar (src/render/actors.ts: art height + 0.35 m, the 15 px bar centred there): from the 52 degree camera the
 # 1.10 m brim's far edge (r 0.55, z 1.89) projects ABOVE an anchor at 2.05 + 0.35 m, so the bar sits on the back of the

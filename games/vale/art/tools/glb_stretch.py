@@ -34,6 +34,8 @@ def main():
     ap.add_argument("--ref", default="idle", choices=("idle", "bind"),
                     help="the edge lengths the stretch is measured against: idle f0 (the audit's) or the bind pose")
     ap.add_argument("--where", action="store_true", help="print the rest position of each clip's worst stretched edges")
+    ap.add_argument("--box", action="append", default=[],
+                    help="extra region name=x0,x1,y0,y1,z0,z1 (bind pose, glTF space); repeatable")
     a = ap.parse_args()
     rig = Rig(a.glb)
     js, buf = rig.js, rig.buf
@@ -72,6 +74,11 @@ def main():
     L0 = np.linalg.norm(ref[ed[:, 0]] - ref[ed[:, 1]], axis=1)
     big = L0 >= 0.01
     rest = skinned(None, 0.0)                   # region boxes on the bind pose (the rig's rest: A-pose arms)
+    for b in a.box:
+        nm, v = b.split("=")
+        x0, x1, y0, y1, z0, z1 = (float(t) for t in v.split(","))
+        REGIONS[nm] = (lambda P, x0=x0, x1=x1, y0=y0, y1=y1, z0=z0, z1=z1:
+                       (P[:, 0] > x0) & (P[:, 0] < x1) & (P[:, 1] > y0) & (P[:, 1] < y1) & (P[:, 2] > z0) & (P[:, 2] < z1))
     regs = {k: f(rest)[ed[:, 0]] & f(rest)[ed[:, 1]] & big for k, f in REGIONS.items()}
     names = [c for c in (a.clips.split(",") if a.clips else rig.anims.keys()) if c in rig.anims]
     print(f"# {a.glb}: {len(pos)} verts, {len(ed)} edges ({int(big.sum())} >= 1 cm); stretch > 1.5x vs {a.ref}, worst frame")

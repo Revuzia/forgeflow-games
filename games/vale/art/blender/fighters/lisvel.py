@@ -104,7 +104,13 @@ CARDS = {
                               "size": 0.2},
                              {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
                               "power": 40.0, "size": 0.25}]},
-        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        # (CW5, lisvel-M1: the splash's near-frontal head light flattened the carved face plate into a blank oval in
+        # the bust; a key from her upper right, low power, so the nose, the lips and the visor's dark band model)
+        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44,
+                     "focal": [{"at": "head", "az": 245.0, "el": 32.0, "dist": 0.7, "color": "#FFE6C4", "power": 14.0,
+                                "size": 0.15},
+                               {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
+                                "power": 40.0, "size": 0.25}]},
         "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4"},
     },
     "lisvel_gorgewalk": {
@@ -1285,7 +1291,10 @@ def _install_optimize() -> None:
         before = os.path.getsize(path)
         if not node or not os.path.isfile(script):
             return orig(path, out, quantize, fighter)
-        args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+        # (CW5 budget: the closing passes' painted albedo and the tabard chains put the base GLB at 1235 KiB > 1172:
+        # 8-bit normals, int8 instead of int16 - the baked normal map carries the fine shading)
+        args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE),
+                                                                                    "--normal-bits", "8"]
         r = subprocess.run(args, cwd=_scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
         if r.returncode != 0:
             _scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
@@ -1529,8 +1538,15 @@ def chain_config(ctx) -> list:
         side = "L" if nm[-1] == "l" else "R"
 
         def f(p):
-            a = _thigh_angles(skel, p)[side][0]
-            return TAB_K * max(0.0, a - TAB_A0) if front else -TAB_K * max(0.0, -a - TAB_A0)
+            th = _thigh_angles(skel, p)
+            a = th[side][0]
+            if front:
+                return TAB_K * max(0.0, a - TAB_A0)
+            # (CW5: in the run both thighs stay ahead of the hips' rest line, so the absolute angle never went behind
+            # and the back panels swung 2.5 deg: a back panel follows its thigh's swing behind the pair's mean, the
+            # trailing leg kicking the felt out behind)
+            rel = a - 0.5 * (th["L"][0] + th["R"][0])
+            return -TAB_K * max(0.0, -min(a, rel) - TAB_A0)
         return f
     out = []
     for nm, bones in ctx.chains.items():
@@ -1592,13 +1608,22 @@ def _install_chain_budget() -> None:
         node = _export.node_exe()
         script = os.path.join(scene.TOOLS_DIR, "decimate_chains.mjs")
         if node and os.path.isfile(script):
-            r = subprocess.run([node, script, dst, "--every", "2", "--prefix", "x_tabard", "--orm-q", "30"],
+            # (CW5) the long, slow clips first: every bone's rotation every 2nd key (smooth under linear interpolation)
+            r0 = subprocess.run([node, script, dst, "--every", "2", "--prefix", "", "--clip", SLOW_CLIPS],
+                                cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+            scene.log((r0.stdout or r0.stderr).strip()[-600:])
+            r = subprocess.run([node, script, dst, "--every", "2", "--prefix", "x_tabard", "--orm-q", "30",
+                                "--clip", FAST_CLIPS],
                                cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
             scene.log((r.stdout or r.stderr).strip()[-600:])
             res = dict(res, after=os.path.getsize(dst), chains_decimated=r.returncode == 0)
         return res
     optimize._lisvel_chains = True
     _export.optimize = optimize
+
+
+SLOW_CLIPS = "idle,idle_lobby,recall,taunt,stunned,victory,channel"
+FAST_CLIPS = "attack1,attack2,cast_a1,cast_a2,cast_a3,cast_ult,dash,run,death"
 
 
 _install_chain_budget()
@@ -1625,7 +1650,10 @@ def _tabard_chain_weights(co):
     across the slits, each panel's chain weighted by height (the top 35 % of its first bone shared with the hips)"""
     x, y, z = co[:, 0], co[:, 1] - 0.004, co[:, 2]
     wl = _ss(-0.012, 0.012, x)
-    wf = _ss(0.012, -0.012, y)
+    # (CW5: the front / back split centred ON the side slits (SKIRT_SLITS at y 0.012, cut 4-18 mm half-width) and
+    # kept inside them, so no panel carries a blend of front and back weights: the old +-12 mm blend centred 8 mm
+    # off the slit sheared the panel edges 2.5x in the run)
+    wf = _ss(0.004, -0.004, y - 0.008)
     W = {}
     for nm, (_, pts) in TABARD_CHAINS.items():
         k = (wl if nm[-1] == "l" else 1.0 - wl) * (wf if nm[-2] == "f" else 1.0 - wf)

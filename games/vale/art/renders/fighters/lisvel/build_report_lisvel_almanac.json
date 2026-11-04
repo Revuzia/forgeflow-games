@@ -83,14 +83,14 @@
   },
   "uv_coverage": 0.624,
   "bake": {
-    "base": 5.64,
-    "rough_metal": 6.29,
-    "normal": 6.79,
-    "ao": 3.79,
+    "base": 2.03,
+    "rough_metal": 1.64,
+    "normal": 1.47,
+    "ao": 3.05,
     "normal_fixed_px": 85734,
-    "projection": 15.23,
-    "pack_save": 15.51,
-    "total": 38.37
+    "projection": 8.56,
+    "pack_save": 8.92,
+    "total": 17.2
   },
   "tris": 22045,
   "mesh_top_m": 1.885,
@@ -98,15 +98,15 @@
   "optimize": {
     "ok": true,
     "before": 2329424,
-    "after": 1004908,
+    "after": 912676,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 1004908,
+  "glb_bytes": 912676,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (981 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (891 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: lisvel_almanac_base 2048x2048 155K, lisvel_almanac_normal 512x512 40K, lisvel_almanac_orm 256x256 11K",
       "  skinned meshes: lisvel_accent(214v), lisvel_almanac(22843v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
@@ -122,8 +122,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 163.99,
-      "portrait": 32.66
+      "splash": 60.02,
+      "portrait": 10.09
     }
   },
   "three_qa": {
@@ -155,24 +155,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 361.9,
+    "seconds": 11.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.05,
-      "materials": 0.64,
-      "model": 9.86,
-      "lows_bind": 7.82,
-      "uv": 7.91,
-      "bake": 41.84,
-      "export": 1.4,
-      "optimize": 2.0,
-      "load_test": 0.32,
-      "render": 196.94,
-      "three_qa": 20.1
+      "rig": 0.01,
+      "materials": 0.41,
+      "model": 3.75,
+      "lows_bind": 1.87,
+      "uv": 2.53,
+      "bake": 19.93,
+      "export": 0.2,
+      "optimize": 0.92,
+      "load_test": 0.2,
+      "render": 70.18,
+      "three_qa": 12.13
     },
-    "total_s": 289.9
+    "total_s": 112.35
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
