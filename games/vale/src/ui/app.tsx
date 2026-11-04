@@ -188,7 +188,7 @@ function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
     if (started || router.route.value.screen !== 'home' || state.match.value) return;
     started = true;
     queueMicrotask(() => stop());
-    const sample = forced ? Promise.resolve({ preset: forced, frames: 0, p50Ms: 0, p95Ms: 0 }) : r.calibrate!(3);
+    const sample: ReturnType<NonNullable<RendererPort['calibrate']>> = forced ? Promise.resolve({ preset: forced, frames: 0, p50Ms: 0, p95Ms: 0 }) : r.calibrate!(3);
     void sample.then((res) => {
       try { localStorage.setItem(CALIB_KEY, JSON.stringify({ ...res, at: new Date().toISOString() })); } catch { /* per-device only */ }
       const cur = state.settings.peek().video;
