@@ -1661,8 +1661,15 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
   band.target = far.cell >= 0 && far.cell !== st.cell && far.score >= 3.2 ? cellPos(x.p, far.cell) as [number, number, number] : null;
   // (LIVING LAND §2.7: a town the drought drove out goes to its kin within 3 km where the water still runs — they take
   // them in: joinKin when it gets there — else toward the best site the band's own search finds, water weighing in it)
-  if (cause === 'drought') {
-    const kin = kinWithWater(x, st);
+  // (sim-fix-r2 #2: and a town the cold or heat or hunger drove out goes to its kin within 3 km too, when their place is
+  // no worse for it — the barren-world opening, seed 3 year 9: the lake town froze while its daughter 1 km off, by the
+  // river, wintered at +14 °C against its -16; its 21 set off to look for 'warmer land' and froze)
+  if (cause === 'drought' || cause === 'cold' || cause === 'heat' || cause === 'famine') {
+    let kin = kinWithWater(x, st);
+    if (kin && (cause === 'cold' || cause === 'heat')) {
+      const here = seasonTemps(x, st.cell), there = seasonTemps(x, kin.cell);
+      if (cause === 'cold' ? there.winter < here.winter - 0.5 : there.summer > here.summer + 0.5) kin = null;
+    }
     if (kin) {
       band.target = [kin.pos[0], kin.pos[1], kin.pos[2]];
       band.recent.kin = kin.id;

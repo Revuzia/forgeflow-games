@@ -17,7 +17,7 @@ import { distM, cellPos, isLand, drinkable, freshWater, sunElevation } from '../
 import { spawnHerd, reindexHerds, animalDef, herdPos } from '../src/sim/life/herds.ts';
 import { die } from '../src/sim/people/lifecycle.ts';
 import { formCouple } from '../src/sim/people/social.ts';
-import { abandon, assignRoles, oldAge, planConstruction, settlementStep } from '../src/sim/people/settlement.ts';
+import { abandon, assignRoles, oldAge, planConstruction, seasonTemps, settlementStep } from '../src/sim/people/settlement.ts';
 import { landOf, ledger, type LedgerYear } from '../src/sim/people/ledger.ts';
 import { HUNT_RANGE_M, HUNT_TUNE, carcass, fetchTask, huntEncounter, huntHourly, isGame, huntQuota, onFoot, parties, partyOf, partyOut } from '../src/sim/people/hunt.ts';
 import { daylightLeft } from '../src/sim/perf/pace.ts';
@@ -621,6 +621,34 @@ test('land: a drought — a town whose water fails goes to its kin where the wat
   const band = abandon(x2, st, 'drought');
   assert.equal(band.recent.kin, kin.id, 'they go to their kin');
   // they arrive
+  const A = x2.A;
+  for (const s of x2.ps.members.get(band.id) ?? []) { A.place(s, kin.pos[0], kin.pos[1], kin.pos[2], x2.tick); A.cell[s] = kin.cell; }
+  settlementStep(x2, band);
+  assert.ok(band.fallen >= 0, 'the band is no more');
+  assert.ok((x2.ps.members.get(kin.id) ?? []).length > before, 'its people live with their kin');
+});
+
+test('land: the cold — a town too cold to live in goes to its kin nearby who winter no colder, and joins them (sim-fix-r2 #2)', () => {
+  const { sim, st } = village('bronze', 20261008, 20);
+  const x = cx(sim);
+  let c = -1;
+  for (let k = 0; k < x.p.count && c < 0; k++) {
+    const d = distM(x.p, cellPos(x.p, k), st.pos);
+    if (d < 500 || d > 2500 || !isLand(x.p, k) || x.p.f.water[k] > 0.05) continue;
+    if (seasonTemps(x, k).winter < seasonTemps(x, st.cell).winter) continue;
+    if (drinkable(x.p, k)) { c = k; break; }
+    const g = x.p.grid;
+    for (let e = g.nbrStart[k]; e < g.nbrStart[k + 1]; e++) if (freshWater(x.p, g.nbr[e])) { c = k; break; }
+  }
+  assert.ok(c >= 0, 'a place by fresh water, no colder, for the kin');
+  const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 15, era: 'bronze', settled: true, pos: cellPos(x.p, c) });
+  const kin = x.ps.settlement(r.created!.find((e) => e.kind === 'settlement')!.id)!;
+  kin.polity = st.polity;
+  sim.step(120);
+  const x2 = cx(sim);
+  const before = (x2.ps.members.get(kin.id) ?? []).length;
+  const band = abandon(x2, st, 'cold');
+  assert.equal(band.recent.kin, kin.id, 'they go to their kin, not out into the cold to look for warmer land');
   const A = x2.A;
   for (const s of x2.ps.members.get(band.id) ?? []) { A.place(s, kin.pos[0], kin.pos[1], kin.pos[2], x2.tick); A.cell[s] = kin.cell; }
   settlementStep(x2, band);
