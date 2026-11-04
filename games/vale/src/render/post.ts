@@ -39,7 +39,7 @@
 // full-screen quads) before it builds the new set. The overlay and VFX passes are the chain's own and survive both.
 
 import {
-  type Camera, Color, HalfFloatType, Matrix4, type Scene, type Texture, Uniform, type WebGLRenderer, type WebGLRenderTarget,
+  type Camera, Color, HalfFloatType, Matrix4, NearestFilter, type Scene, type Texture, Uniform, type WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import {
   BlendFunction, BloomEffect, CopyPass, Effect, EffectComposer, EffectPass, LookupTexture, LUT3DEffect, Pass, RenderPass, SMAAEffect,
@@ -79,6 +79,10 @@ export { LIFT_BODY_CAP };
 /** the stable scene depth (the overlay pass's, forwarded) and the camera's matrices the envelope rebuilds height with */
 const liftDepth = {
   uLiftDepth: new Uniform<Texture | null>(null),
+  /** CW1 refix (combat C1): the world as it stood BEFORE the VFX were drawn (VfxPass blits it while an envelope lifts),
+   *  so the ground's tone-curve solve reads the ground alone and the effects' own light is never re-solved with it */
+  uLiftPre: new Uniform<Texture | null>(null),
+  uLiftPreOn: new Uniform(0),
   uLiftInvProj: new Uniform(new Matrix4()),
   uLiftCamWorld: new Uniform(new Matrix4()),
 };
@@ -109,6 +113,8 @@ uniform highp sampler2D uLiftDepth;
 uniform float uLiftDepthOn;
 uniform mat4 uLiftInvProj;
 uniform mat4 uLiftCamWorld;
+uniform highp sampler2D uLiftPre;
+uniform float uLiftPreOn;
 // the display luma the NEUTRAL tone map (three's NeutralToneMapping, exposure 1) makes of a linear colour
 float liftDispLuma( vec3 col ) {
   float x = min( col.r, min( col.g, col.b ) );
@@ -145,6 +151,16 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     desat *= 1.0 - body;
   }
   float m = pow( 1.0 + lift, 2.2 );
+  // CW1 refix (combat C1): the effects' own light (the VFX drawn on top of the world, plus the bloom it throws) is split
+  // off against the pre-VFX world and takes the plain capped multiplier (the VFX shaders' vfxLift already holds it to
+  // the body cap) and no saturation drop: only the GROUND is solved through the tone curve and eased toward white, so an
+  // effect inside the beat keeps its kit hue (the solve on ground + light used to push a violet ult toward blue)
+  vec3 fx = vec3( 0.0 );
+  if ( lift > 0.02 && uLiftPreOn > 0.5 ) {
+    vec3 g = texture2D( uLiftPre, uv ).rgb * pow( max( uExpo, 0.0 ), 2.2 );
+    fx = c - g;
+    c = g;
+  }
   // combat C2: on the GROUND the envelope's ratio is a display ratio through the tone curve too. The NEUTRAL tone map
   // that follows compresses everything over ~0.76 linear, so a plain ×2.4^2.2 read ×1.9-2.2 on a mid-value ground
   // (closing review: Hesmi ×1.93, Marund ×1.58). The ground's multiplier is solved so the TONE-MAPPED display luma is
@@ -166,12 +182,12 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
   }
   c *= m;
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-  outputColor = vec4( mix( c, vec3( l ), desat ), inputColor.a );
+  outputColor = vec4( mix( c, vec3( l ), desat ) + fx * pow( 1.0 + lift, 2.2 ), inputColor.a );
 }`, {
       blendFunction: BlendFunction.SET,
       uniforms: uniformsOf({
         uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect,
-        uLiftDepth: liftDepth.uLiftDepth, uLiftDepthOn: new Uniform(0), uLiftInvProj: liftDepth.uLiftInvProj, uLiftCamWorld: liftDepth.uLiftCamWorld,
+        uLiftDepth: liftDepth.uLiftDepth, uLiftDepthOn: new Uniform(0), uLiftPre: liftDepth.uLiftPre, uLiftPreOn: liftDepth.uLiftPreOn, uLiftInvProj: liftDepth.uLiftInvProj, uLiftCamWorld: liftDepth.uLiftCamWorld,
       }),
     });
     this.cam = cam;
@@ -226,9 +242,35 @@ class VfxPass extends Pass {
     this.needsDepthTexture = true;
   }
   override setDepthTexture(depthTexture: Texture): void { this.depth = depthTexture; }
+  /** the pre-VFX world (CW1 refix, combat C1): blitted from the HDR buffer only while an envelope lifts (a framebuffer
+   *  blit: no program, no draw); the exposure effect reads it so the ground's solve never includes the effects' light */
+  private pre: WebGLRenderTarget | null = null;
   override render(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget): void {
+    let lifting = false;
+    for (const a of U.uLiftA.value) if (a.w > 0) { lifting = true; break; }
+    liftDepth.uLiftPreOn.value = 0;
+    if (lifting) {
+      const w = inputBuffer.width, h = inputBuffer.height;
+      if (!this.pre) this.pre = new WebGLRenderTarget(w, h, { type: HalfFloatType, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter });
+      else if (this.pre.width !== w || this.pre.height !== h) this.pre.setSize(w, h);
+      renderer.initRenderTarget(this.pre);
+      renderer.initRenderTarget(inputBuffer);
+      const gl = renderer.getContext() as WebGL2RenderingContext;
+      const P = renderer.properties as unknown as { get(o: object): { __webglFramebuffer?: WebGLFramebuffer } };
+      const src = P.get(inputBuffer).__webglFramebuffer, dst = P.get(this.pre).__webglFramebuffer;
+      if (src && dst && typeof gl.blitFramebuffer === 'function') {
+        renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, src);
+        renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst);
+        gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+        renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+        liftDepth.uLiftPre.value = this.pre.texture;
+        liftDepth.uLiftPreOn.value = 1;
+      }
+    }
     this.draw(renderer, inputBuffer, this.depth, this.cam());
   }
+  override dispose(): void { this.pre?.dispose(); this.pre = null; liftDepth.uLiftPre.value = null; super.dispose(); }
 }
 
 export class PostChain {

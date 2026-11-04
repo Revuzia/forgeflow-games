@@ -2497,9 +2497,11 @@ def clip_overrides(ctx) -> dict:
         return anim.merge(body, ride(skel, body, *CARRY))
 
     # IDLE (72, loop)
+    # (closing polish odrum-m4: head travel 3.7 cm, under the roster median 3.8: the breath and the weight shift a
+    # little deeper, the head following the shift)
     def idle_s(t):
         b, w = osc(t, 2), osc(t, 1, 0.1)
-        d = P(chest=(1.2 * b, 0, 0), spine=(0.5 * b, 0, 0.6 * w), neck=(-0.8 * b, 0, 0), head=(-0.4 * b, 1.5 * w, 0),
+        d = P(chest=(1.6 * b, 0, 0), spine=(0.7 * b, 0, 0.9 * w), neck=(-0.8 * b, 0, 0), head=(-1.0 * b, 2.6 * w, 0),
               hips=(0, 1.2 * w, -1.0 * w), shoulder_L=(0, 0, 1.2 * b), shoulder_R=(0, 0, -1.0 * b),
               upper_arm_L=(1.5 * w, 0, 0), forearm_L=(3.0 + 2.0 * b, 0, 0))
         return carried(with_hips(anim.add(g, d), (0.012 * w, 0.0, -0.004 * (0.5 + 0.5 * b))))
@@ -2958,15 +2960,25 @@ def _others(skel, g, gI, rest_ik, hip_h, carried=lambda b: b) -> dict:
                  {"ik": anim.feet(l=(0.03, -0.30, 0.0), r=(-0.02, 0.36, 0.11), yl=-6, yr=-8, pr=-55, kr=8)},
                  lhand(0.15, -0.28, 0.58, pole=(0.9, 0.2, -0.3)))
 
+    # (closing polish odrum-m4: the 2 s loop replayed three and a half times inside RIFT's 7 s recall; now 6 s, 180 f,
+    # seamless like the roster's: three breaths and a shrug of the yoke to settle the pots (0-0.22), a look up and
+    # to each pot in turn (0.22-0.50), a long deep bow held over two breaths (0.52-0.86), and back up to the kneel)
+    def win(t, a, b_):
+        return math.sin(math.pi * min(1.0, max(0.0, (t - a) / (b_ - a)))) ** 2
+
     def recall_s(t):
-        b = osc(t, 2)
-        shrug = math.sin(math.pi * min(1.0, max(0.0, t / 0.4))) ** 2          # f0-f24: the yoke shrugged up
-        bow = math.sin(math.pi * min(1.0, max(0.0, (t - 0.45) / 0.5))) ** 2   # f27-f57: a deeper bow
-        p = anim.add(kneel, P(chest=(1.2 * b - 4 * shrug + 6 * bow, 0, 0), spine=(-2 * shrug + 3 * bow, 0, 0),
-                              neck=(-6 * shrug + 4 * bow, 0, 0), head=(-0.8 * b - 8 * shrug + 8 * bow, 0, 0),
+        b = osc(t, 6)
+        shrug = win(t, 0.06, 0.22)
+        look = win(t, 0.22, 0.50)
+        side = math.sin(2 * math.pi * min(1.0, max(0.0, (t - 0.24) / 0.24))) * look
+        bow = win(t, 0.50, 0.92) ** 0.6
+        p = anim.add(kneel, P(chest=(1.2 * b - 4 * shrug - 3 * look + 7 * bow, 4 * side, 0),
+                              spine=(-2 * shrug - 2 * look + 4 * bow, 3 * side, 0),
+                              neck=(-6 * shrug - 6 * look + 5 * bow, 6 * side, 0),
+                              head=(-0.8 * b - 8 * shrug - 10 * look + 10 * bow, 12 * side, 0),
                               shoulder_L=(0, 0, 6 * shrug), shoulder_R=(0, 0, -6 * shrug)))
-        return carried(with_hips(p, (0.0, 0.0, 0.003 * b + 0.012 * shrug)))
-    out["recall"] = anim.Clip("recall", 60, True, recall_s)
+        return carried(with_hips(p, (0.0, 0.0, 0.003 * b + 0.012 * shrug - 0.010 * bow)))
+    out["recall"] = anim.Clip("recall", 180, True, recall_s)
 
     # IDLE_LOBBY (120, loop): reaches out to the near (left) pot at the yoke's end and taps it twice with a knuckle,
     # dips a finger in the resin at its mouth, pulls a thread up to his chest, rolls it, bobs to a tune
@@ -3074,8 +3086,11 @@ def _others(skel, g, gI, rest_ik, hip_h, carried=lambda b: b) -> dict:
     # waiting stance, two arms over the bar, never the idle's hanging arm
     ch = rp(pose(g, P(spine=(-2, 0, 0), chest=(-3, 0, 0), head=(-5, 0, 0), hand_L=(30, 0, 0)), (0, 0, 0)),
             yoke_about(PIV, 0, 0, (0.0, 0.015, 0.005)), lhand(0.45, -0.06, 1.47, pole=(0.3, 0.5, 0.8)))
-    out["channel"] = anim.Clip("channel", 40, True, lambda t: anim.add(ch, P(chest=(1.5 * osc(t, 2), 0, 0), spine=(0, 0, 1.2 * osc(t, 1)),
-                                                                             head=(-1 * osc(t, 2), 2.0 * osc(t, 1, 0.2), 0))))
+    # (closing polish odrum-m4: the channel moved the head 2.5 cm and the hands 0 in 1.33 s: now an 80 f (2.67 s)
+    # slow sway with the weight rolling from foot to foot under the bar, the head turning with it)
+    out["channel"] = anim.Clip("channel", 80, True, lambda t: with_hips(
+        anim.add(ch, P(chest=(1.8 * osc(t, 2), 0, 2.0 * osc(t, 1)), spine=(0, 1.5 * osc(t, 1, 0.1), 2.4 * osc(t, 1)),
+                       head=(-1.5 * osc(t, 2), 4.0 * osc(t, 1, 0.2), 0))), (0.018 * osc(t, 1), 0.0, -0.004 * (0.5 + 0.5 * osc(t, 2)))))
     return out
 
 

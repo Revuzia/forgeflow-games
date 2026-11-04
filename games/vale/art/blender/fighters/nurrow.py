@@ -3007,11 +3007,12 @@ def clip_overrides(ctx) -> dict:
         return p
     out["death"] = anim.Clip("death", 50, False, death, impact=None)
 
-    # ── recall (closing nurrow-M2): ONE 7 s performance that fills RIFT's recallTime (210 f; the runtime loops the
-    #    recall state, so the last 0.2 s eases back to frame 0 and a longer recall wraps cleanly):
-    #    f0-25 the blade slipped into her belt; f25-105 the lull hand cupped to the brim, humming, swaying;
-    #    f105-170 the hand lowered over her heart, she dozes: the hat nods twice, deeper, the knees soften;
-    #    f170-200 she snaps up with a fingertip at the mask's lips (the bell of the teleport); f200-210 eases out ──
+    # ── recall (closing nurrow-M2): ONE 6 s performance (180 f: the clip contract's 6 s cap, three_load_test) for
+    #    RIFT's 7 s recallTime; the runtime loops the recall state, so the last 0.3 s eases back to frame 0 and the
+    #    7th second is only the start of the re-sheath, never a visible loop of a held pose:
+    #    0-0.7 s the blade slipped into her belt; 0.7-2.9 s the lull hand cupped to the brim, humming, swaying;
+    #    2.9-4.9 s the hand lowered over her heart, she dozes: the hat nods twice, deeper, the knees soften;
+    #    4.9-5.7 s she snaps up with a fingertip at the mask's lips (the bell of the teleport); 5.7-6 s eases out ──
     BELT_R, BELT_AIM = ((0.0, -0.20, -0.74), (-0.9, 0.3, -0.2)), (-0.22, 0.10, -0.97)     # (victory's sheathed blade)
     rec = pose(dict(hips=(2, 0, 0), spine=(2, 0, 0), chest=(2, 0, 0), neck=(3, 0, 0), head=(3, 0, 0)), (0, 0.0, -0.02),
                R=BELT_R, aim=BELT_AIM,
@@ -3050,7 +3051,7 @@ def clip_overrides(ctx) -> dict:
         hl_ = p.get("hips_loc", (0.0, 0.0, 0.0))
         p["hips_loc"] = (hl_[0] + 0.02 * hum * math.sin(ph), hl_[1], hl_[2] - 0.004 * b)
         return p
-    out["recall"] = anim.Clip("recall", 210, True, recall)
+    out["recall"] = anim.Clip("recall", 180, True, recall)
 
     # ── idle_lobby: the slow sway to a tune, the lull hand conducting, a nod and the snap up a quarter toward the
     #    camera, a finger to the lips; loops ──

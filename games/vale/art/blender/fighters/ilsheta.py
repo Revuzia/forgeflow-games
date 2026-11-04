@@ -2061,9 +2061,17 @@ def clip_overrides(ctx) -> dict:
         ik["hand.L"] = wr("L", 0.030 + 0.010 * sw, -0.210 - 0.015 * sw, 1.140 + 0.012 * abs(sw), POLE_L)
         ik["orient.L"] = hand_or((-0.10, -0.70, 0.70), (-0.96, -0.05, 0.15))
         p["ik"] = ik
-        p["lamp"] = (-8.0 + 3.0 * math.sin(4 * math.pi * q), 2.0 * sw, 0.0)
-        p["x_mantle_l"] = (-6.0, 0.0, 2.0)
-        p["x_mantle_r"] = (-6.0, 0.0, -2.0)
+        # closing polish ilsheta-run-upper-locked (the run was legs only: head 0.8 deg, the lamp barely swung): a 3.5
+        # degree chest counter-twist with the stride, a 2 degree head bob that follows the hips (the head turns back
+        # against the twist so the face holds the run line), the lamp swinging +-7 degrees half a step behind, and
+        # the mantle hem flaring 4 degrees on each step
+        def addp(key, d):
+            p[key] = tuple(float(a) + float(b) for a, b in zip(p.get(key, (0.0, 0.0, 0.0)), d))
+        addp("chest", (0.0, 3.5 * sw, 0.0))
+        addp("head", (2.0 * math.sin(4 * math.pi * q), -2.5 * sw, 0.0))
+        p["lamp"] = (-8.0 + 7.0 * math.sin(2 * math.pi * (q - 0.25)), 3.0 * sw, 0.0)
+        p["x_mantle_l"] = (-6.0 - 4.0 * (0.5 + 0.5 * sw), 0.0, 2.0)
+        p["x_mantle_r"] = (-6.0 - 4.0 * (0.5 - 0.5 * sw), 0.0, -2.0)
         return p
     out["run"] = anim.Clip("run", base_run.frames, True, run, meta=base_run.meta)
 
