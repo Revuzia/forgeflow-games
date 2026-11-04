@@ -681,6 +681,9 @@ function summarise(spots, C, fspots = {}) {
   for (const k of Object.keys(masks)) if (!masks[k]) delete masks[k];
   const frame = lumaStats(pool(hists, ['frame']), total);
   const envIds = Object.values(C).filter((v) => v < 20).map(String);
+  // closing CW4 r2 (info): the same luma stats over the environment's own pixels (eroded env classes: no fighter,
+  // minion, Wick, monster or structure): what the world art contributes to the frame's p99 when bots fight in a spot
+  const envFrame = lumaStats(pool(hists, envIds), total);
   const envN = pool(hists, envIds)?.n ?? 0;
   const e180 = pool(hists, ['env180'])?.n ?? 0, e180l = pool(hists, ['env180lamp'])?.n ?? 0;
   const fhists = [...hists, ...Object.values(fspots).map((s) => s.hist)];
@@ -711,7 +714,7 @@ function summarise(spots, C, fspots = {}) {
     fig.medianTop25 = tops.length ? tops[Math.floor(tops.length / 2)] : null;
   }
   return {
-    frame, masks, maskSpots: Object.keys(spots).filter((k) => !DYNAMIC_SPOTS.includes(k)),
+    frame, envFrame, masks, maskSpots: Object.keys(spots).filter((k) => !DYNAMIC_SPOTS.includes(k)),
     env180: { env: envN, other: e180, lamp: e180l, otherShare: envN ? +(e180 / envN).toFixed(5) : 0, lampShareOfFrame: total ? +(e180l / total).toFixed(5) : 0,
       byClass: Object.fromEntries([...new Set(hists.flatMap((h) => Object.keys(h)).filter((k) => k.startsWith('env180_')))].map((k) => [k.slice(7), pool(hists, [k])?.n ?? 0])) },
     fighters: fig,
@@ -799,6 +802,7 @@ function verdict(s, flash, map) {
   v.frameP50 = map === 'fray' ? `${s.frame.p50} ${ok(s.frame.p50 <= 90)} (<= 90, FRAY: follows the plate)` : `${s.frame.p50} ${ok(s.frame.p50 >= 55 && s.frame.p50 <= 75)} (55-75)`;
   v.frameP95 = `${s.frame.p95} ${ok(s.frame.p95 <= 130)} (<= 130)`;
   v.frameP99 = `${s.frame.p99} ${ok(s.frame.p99 <= 160)} (<= 160)`;
+  if (s.envFrame) v.frameP99Env = `info: environment pixels only p99 ${s.envFrame.p99} (the world art's share of the frame p99; <= 160)`;
   v.env180 = `other ${(s.env180.otherShare * 100).toFixed(3)} % of env, lamps ${(s.env180.lampShareOfFrame * 100).toFixed(3)} % of frame ${ok(s.env180.otherShare <= 0.0005 && s.env180.lampShareOfFrame <= 0.02)}`;
   if (s.masks.ground) v.groundSat = `${s.masks.ground.sat} ${ok(s.masks.ground.sat >= 0.17 && s.masks.ground.sat <= 0.40)} (0.17-0.40; spec 0.22-0.35)`;
   if (s.fighters) v.fighterTop25 = `${s.fighters.top25} ${ok(s.fighters.top25 >= 70 && s.fighters.top25 <= 85)} (70-85), over lane ${s.fighters.overLane} ${ok((s.fighters.overLane ?? 99) >= 30)} (>= 30)`;

@@ -636,8 +636,8 @@ def build_rift():
             landmark("lampwright_stall_s", "Lampwright stall", (W - 5.5, 41.5), (3, 3), 4.0, "Serenade shop kiosk: the dome-roofed variant (ironstone dome, one lamp off the front-east post)", model="assets/maps/landmarks/lampwright_stall_dome.glb"),
             *hour_lamps(W, ((4.5, CY), (W - 4.5, CY))),
             landmark("the_seat", "the Seat", (CX, CY), (16, 16), 0.15, "the needle's base-stone, flush, carved rim and socket scar", flush=True),
-            landmark("shadow_slab_w", "shadow slab", (CX - 5.6, 19.6), (2, 3), 4.0, "leaning basalt slab framing Longshade's north choke"),
-            landmark("shadow_slab_e", "shadow slab", (CX + 5.6, 19.6), (2, 3), 4.0, "its mirror", rot=180),
+            landmark("shadow_slab_w", "shadow slab", (CX - 5.6, 19.6), (2, 3), 4.0, "leaning basalt slab framing Longshade's north choke", value=0.8),   # closing CW4 r2: the chalk coping under luma 180 (env180)
+            landmark("shadow_slab_e", "shadow slab", (CX + 5.6, 19.6), (2, 3), 4.0, "its mirror", rot=180, value=0.8),
             landmark("shadow_tip", "shadow tip", (CX, 24.0), (2, 2), 0.02, "the Standing Shadow's engraved point on the pit floor", flush=True),
             landmark("shaft_drum", "needle drum", (CX, 66.6), (3, 6.4), 2.2, "lying drum of the fallen needle (it IS the wall there); broken face south"),
             landmark("numeral_xi", "Elevenmark numeral XI", (55.3, 28.2), (9, 4), 5.0, "half-buried: carved dial-stone strokes, each its own chamfered stone between a foot and a head bar, an inked channel down every stroke, the head bar snapped at its east end, leaning back 20 degrees, sunk 1.3 m in an earth-and-rubble bank, lichen on the upper faces, spalls at its foot (art/blender/maps/landmarks_art2.py)", value=0.6, model="assets/maps/landmarks/numeral_xi.glb"),

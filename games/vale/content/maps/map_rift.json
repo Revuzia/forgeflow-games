@@ -1599,7 +1599,8 @@
      "at": [79.4, 19.6],
      "size": [2.0, 3.0],
      "height": 4.0,
-     "note": "dressed basalt slab leaning toward the Noonline, framing Longshade's north choke: a chalk coping and chalk-beaded arrises (the lit edges), the shadow's hour-line inlaid in steel (art/blender/maps/landmarks_art2.py)"
+     "note": "dressed basalt slab leaning toward the Noonline, framing Longshade's north choke: a chalk coping and chalk-beaded arrises (the lit edges), the shadow's hour-line inlaid in steel (art/blender/maps/landmarks_art2.py); value 0.8 (closing CW4 r2): the sunlit chalk coping stays under display luma 180 (value_probe env180)",
+     "value": 0.8
     },
     {
      "id": "shadow_slab_e", "model": "assets/maps/landmarks/shadow_slab.glb",
@@ -1608,7 +1609,8 @@
      "at": [90.6, 19.6],
      "size": [2.0, 3.0],
      "height": 4.0,
-     "note": "its mirror"
+     "note": "its mirror",
+     "value": 0.8
     },
     {
      "id": "shadow_tip",
