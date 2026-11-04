@@ -27,7 +27,8 @@
 // "'s" dropped, other apostrophes removed (Kai'Sa → kaisa), any other non-letter/digit is a word
 // break, lowercase. A protected name also matches with its apostrophes read as word breaks
 // (Kog'Maw ~ "Kog Maw" / "Kog-Maw") and, when it has several words, written as one ("Baron Nashor"
-// ~ "BaronNashor"). A NAME is also compared as a whole with every separator removed ("Kai Sa" ~
+// ~ "BaronNashor"), and a multi-word name matches with its last word singular or plural ("Co-op vs
+// bot" ~ "Co-op vs bots", "Doran's Blades" ~ "Doran's Blade"; see singulars()). A NAME is also compared as a whole with every separator removed ("Kai Sa" ~
 // "Kaisa"), and a leading "the" is ignored for entire-name comparisons.
 //
 // TIERS (why: many protected names are ordinary English — "Rift" is the owner-chosen mode name,
@@ -271,6 +272,23 @@ export function scopeCovers(pattern: string, at: string): boolean {
   return at === pattern || at.startsWith(pattern + '.') || at.startsWith(pattern + '[');
 }
 
+/** Singular readings of a canonical token ("tools" → tool, "boxes" → box, "berries" → berry), the token
+ *  itself first. Conservative: "-ss", "-us" and "-is" words are left alone, short words keep their "s". */
+export function singulars(t: string): string[] {
+  const out = [t];
+  if (t.length < 4 || /(ss|us|is)$/.test(t)) return out;
+  if (t.endsWith('ies') && t.length > 4) out.push(t.slice(0, -3) + 'y');
+  else if (/(x|z|ch|sh|ss)es$/.test(t)) out.push(t.slice(0, -2));
+  else if (t.endsWith('s')) out.push(t.slice(0, -1));
+  return out;
+}
+/** last-word number match: a multi-word protected name also matches with its last word in the plural
+ *  (or, for a plural protected name, in the singular) — "Co-op vs bot" ~ "Co-op vs bots". */
+function lastWordMatches(tok: string, want: string): boolean {
+  return tok === want || singulars(tok).includes(want) || singulars(want).includes(tok)
+    || singulars(tok).slice(1).some((x) => singulars(want).slice(1).includes(x));
+}
+
 /** Every protected-name hit in `strings`. `kind` defaults to 'name' (the stricter reading). */
 export function checkNames(strings: readonly NameInput[], list?: DenyList): NameHit[] {
   const deny = list ?? (cachedDefault ??= loadDenyList());
@@ -294,7 +312,11 @@ export function checkNames(strings: readonly NameInput[], list?: DenyList): Name
         if (entry.tier === 'in_names' && kind !== 'name') continue;
         if (i + variant.length > toks.length) continue;
         let ok = true;
-        for (let k = 1; k < variant.length; k++) if (toks[i + k] !== variant[k]) { ok = false; break; }
+        const last = variant.length - 1;
+        for (let k = 1; k < variant.length; k++) {
+          const same = k === last && variant.length > 1 ? lastWordMatches(toks[i + k], variant[k]) : toks[i + k] === variant[k];
+          if (!same) { ok = false; break; }
+        }
         if (ok) report(entry);
       }
     }
