@@ -59,11 +59,12 @@ function lastingNear(x: PCtx, c: number): boolean {
 }
 
 /** a good land cell for a species near `from` (or anywhere on the planet): by water that lasts when there is any within
- * `wide` rings (default: `rings` + 3; a hand-set band looks 30 rings, ~1.7 km at 56 m cells — the barren opening's
+ * `wide` rings (opt-in, default 0 = off: sim-fix-r3 stint 2 found that turning it on for every spawn moved the living-land
+ * fixtures and the n = 32 seed-1 opening; to be wired to the opening's drop only; a hand-set band looks 30 rings, ~1.7 km at 56 m cells — the barren opening's
  * lit face has its lasting water a median 9 rings from a drop, the upper quartile 26), else the best site within `rings` */
-export function landingCell(x: PCtx, species: number, from: number, rings = 5, wide = rings + 3): number {
+export function landingCell(x: PCtx, species: number, from: number, rings = 5, wide = 0): number {
   const best = searchSite(x, species, from, rings);
-  if (x.info[species].needW[1] > 0 && !(best.cell >= 0 && lastingNear(x, best.cell))) {
+  if (wide > rings && x.info[species].needW[1] > 0 && !(best.cell >= 0 && lastingNear(x, best.cell))) {
     const lasting = searchSite(x, species, from, wide, -1, (c) => !lastingNear(x, c));
     // (as good as a band keeps on its walk there — settlement.ts bandStep gives up a target scoring under 3.2 — and not
     // much worse than the best at hand: a lake 1.5 km off, out of the god's new forest and berries and up in the cold,
@@ -100,6 +101,16 @@ export function bestSiteOnPlanet(x: PCtx, species: number, salt: number): number
   return best;
 }
 
+/** how far (rings) a hand-set band looks for water that lasts: ~1.7 km for a stone band set down by the hand (spec.pos,
+ * not settled at once) on a world where no settlement stands yet — the opening's 'set them down' (sim-fix-r3 items 4/8:
+ * the owner's first village 'dried out' in Year 1); 0 (off) for every other spawn, so scenarios and fixtures stay put */
+export function handWide(x: PCtx, spec: SpawnSpec, settle: boolean): number {
+  if (settle || !spec.pos || spec.band) return 0;
+  if (x.p.people.settlements.some((s) => s.fallen < 0)) return 0;
+  const spacing = x.p.st.radius * Math.sqrt((4 * Math.PI) / x.p.count);
+  return Math.max(6, Math.min(30, Math.round(1700 / spacing)));
+}
+
 /** spawn a people; returns its settlement */
 export function spawnPeople(u: Universe, p: Planet, spec: SpawnSpec): Settlement | null {
   const x = makeCtx(u, p);
@@ -109,13 +120,15 @@ export function spawnPeople(u: Universe, p: Planet, spec: SpawnSpec): Settlement
   if (at < 0) return null;
   const era = Math.max(0, ERAS.indexOf((spec.era ?? 'stone') as (typeof ERAS)[number]));
   const settle = !spec.band && (era > 0 || !!spec.settled);
-  // where they will live: the best site near the drop
-  const site = landingCell(x, sp, at, 5, 30);
+  // where they will live: the best site near the drop — for a stone band set down by the hand on a world with nobody yet
+  // living on it (the opening's 'set them down'), by water that lasts the year when there is any within ~1.7 km
+  const wide = handWide(x, spec, settle);
+  const site = landingCell(x, sp, at, 5, wide);
   // an established people stands on its site at once; a band set down by the hand stands where it was put (on the
   // nearest dry land) and walks to the place it chose — it used to appear ~165 m from the hand
   const stand = settle ? site : nearestDryLand(x, at);
   const all = eraKnowledge(x.rt, era, sp, x.info[sp].start);
-  const st = createBand(x, sp, stand, Math.max(1, Math.round(spec.count)), { era, skill: 0.3 + era * 0.04 });
+  const st = createBand(x, sp, stand, Math.max(1, Math.round(spec.count)), { era, skill: 0.3 + era * 0.04, young: wide > 0 });
   distributeKnowledge(x, st, all);
   refreshLibrary(x, st);
   if (settle) establish(x, st, site, era, spec.size ?? (spec.count > 100 ? 'city' : spec.count > 50 ? 'town' : 'village'));

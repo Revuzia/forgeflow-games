@@ -13,9 +13,10 @@ import { Sim } from '../src/sim/sim.ts';
 import type { Command } from '../src/sim/types.ts';
 import { homesteadCell } from '../src/client/poi.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
-import { landingCell, lastingWater } from '../src/sim/people/spawn.ts';
+import { landingCell, lastingWater, handWide } from '../src/sim/people/spawn.ts';
 
-function opening(seed: number, n: number | undefined = 32): { sim: Sim; sid: number; lib0: number } {
+// (n = 0: the full grid — an `undefined` here used to fall back to the default 32, so 'full grid' ran at n = 32)
+function opening(seed: number, n = 32): { sim: Sim; sid: number; lib0: number } {
   const sim = new Sim({ seed, scenario: 'barren', overrides: n ? { n } : {} });
   const u = sim.u, p = u.planets[0];
   const day = p.st.dayHours * 60;
@@ -57,7 +58,7 @@ function opening(seed: number, n: number | undefined = 32): { sim: Sim; sid: num
 // it must leave while the walk is survivable: settlement.ts abandonCheck 'foresee')
 for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
   test(`the barren opening, left running with no further act: the band set down at the ring lives (seed ${seed}${grid ? "" : ", full grid"})`, () => {
-    const { sim, lib0 } = opening(seed, grid || undefined);
+    const { sim, lib0 } = opening(seed, grid);
     const p = sim.u.planets[0];
     const year = Math.round(p.st.orbit.period);
     const alive = () => p.people.settlements.filter((s) => s.fallen < 0).reduce((a, s) => a + (p.people.members.get(s.id)?.length ?? 0), 0);
@@ -99,6 +100,9 @@ test('the barren opening: wherever the UI ring can stand, the band settles by wa
   const sun = u.sun(p, u.tick).dir, P = g.pos;
   const wetW = (o: number) => f.water[o] > 0.04 && f.water[o] < 4;
   const lastingBy = (c: number) => { if (lastingWater(x, c)) return true; for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (lastingWater(x, g.nbr[e])) return true; return false; };
+  // (the rings spawnPeople itself looks for a hand-set stone band on a world with nobody on it: the opening's drop)
+  const wide = handWide(x, { species: 'plains-folk', count: 30, pos: [P[0], P[1], P[2]] }, false);
+  assert.ok(wide >= 20, `the opening's hand drop looks wide (${wide} rings)`);
   let drops = 0, good = 0;
   for (let c = 0; c < p.count; c += 2) {
     const el = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2];
@@ -107,8 +111,25 @@ test('the barren opening: wherever the UI ring can stand, the band settles by wa
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1] && !wet; e++) { const o = g.nbr[e]; if (wetW(o)) wet = true; for (let e2 = g.nbrStart[o]; e2 < g.nbrStart[o + 1]; e2++) if (wetW(g.nbr[e2])) wet = true; }
     if (!wet) continue;
     drops++;
-    if (lastingBy(landingCell(x, sp, c, 5, 30))) good++;
+    if (lastingBy(landingCell(x, sp, c, 5, wide))) good++;
   }
   assert.ok(drops >= 50, `drops ${drops}`);
   assert.ok(good >= drops * 0.9, `a band set down at the ring settles by water that lasts (${good} of ${drops} drops; 92 of 193 on the old site choice)`);
+});
+
+// sim-fix-r3 (items 4 / 8, release owner-r3 runA: 'alive at 29, 30, 31, 32, 31 and 30 from Year 2 to Year 8'): on the
+// default seed at the full grid, the opening's band takes root and GROWS — about 1-3 %/yr. The band the hand sets down on
+// an empty world walks to water that lasts (spawn.ts handWide / landingCell) and is a young band (settlement.ts createBand
+// opts.young): on the old tree it stood at 32 at Year 8 (every grown age 14-50 alike, its women aged out of child-bearing
+// faster than they bore). 9 seeds x 8 years: _harness/scratch/sim-fix-r3/op4 (ledger sim-fix-r3.md, stint 3).
+test('the barren opening takes root and grows: the default seed, full grid, 8 years, no village falls', () => {
+  const { sim } = opening(20260, 0);
+  const p = sim.u.planets[0];
+  const year = Math.round(p.st.orbit.period);
+  const alive = () => p.people.settlements.filter((s) => s.fallen < 0).reduce((a, s) => a + (p.people.members.get(s.id)?.length ?? 0), 0);
+  for (let y = 0; y < 8; y++) { sim.step(year); assert.ok(alive() > 0, `extinct at Y${y + 1}`); }
+  const n = alive();
+  assert.ok(n >= 34, `the band grows by Year 8 (alive ${n} from 30; >= 34 is ~1.6 %/yr)`);
+  const fell = p.people.settlements.filter((s) => !s.band && s.fallen >= 0).map((s) => s.name);
+  assert.deepEqual(fell, [], `no village of the opening band fell or was left (fell: ${fell.join(', ')})`);
 });

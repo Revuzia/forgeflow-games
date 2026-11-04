@@ -327,7 +327,7 @@ export function formHouseholds(x: PCtx, st: Settlement): void {
 }
 
 /** create a wandering band of n people of a species at a cell (god spawn, scenario, split) */
-export function createBand(x: PCtx, species: number, cell: number, n: number, opts: { knowledge?: number[]; era?: number; skill?: number; parent?: Settlement | null } = {}): Settlement {
+export function createBand(x: PCtx, species: number, cell: number, n: number, opts: { knowledge?: number[]; era?: number; skill?: number; parent?: Settlement | null; young?: boolean } = {}): Settlement {
   const st = newSettlement(x, species, cell, true, opts.parent ?? null);
   const def = x.info[species].def;
   const P = x.p.grid.pos;
@@ -355,9 +355,13 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
     }
     const r = roll[i];
     const u = hashFloat(st.id, i, movedDice);
+    // (opts.young: a band that sets out to a new land is a young one — its grown members mostly in their twenties, not
+    // spread evenly to the edge of old age; sim-fix-r3 items 4/8: the opening's band of 30 on the default seed lost its
+    // women of child-bearing age to the years faster than it bore children, and stood at 29-32 from Year 2 to Year 8)
+    const grown = (v: number) => def.maturity + (opts.young ? Math.pow(v, 1.8) : v) * (def.elder - def.maturity);
     const age = (r < 0.22 ? 0 : r < 0.9 ? 1 : 2) === b
-      ? (r < 0.22 ? r / 0.22 * def.maturity * 0.95 : r < 0.9 ? def.maturity + (r - 0.22) / 0.68 * (def.elder - def.maturity) : def.elder + (r - 0.9) * 10 * Math.max(1, def.lifespan - def.elder) * 0.5)
-      : b === 0 ? u * def.maturity * 0.95 : b === 1 ? def.maturity + u * (def.elder - def.maturity) : def.elder + u * Math.max(1, def.lifespan - def.elder) * 0.5;
+      ? (r < 0.22 ? r / 0.22 * def.maturity * 0.95 : r < 0.9 ? grown((r - 0.22) / 0.68) : def.elder + (r - 0.9) * 10 * Math.max(1, def.lifespan - def.elder) * 0.5)
+      : b === 0 ? u * def.maturity * 0.95 : b === 1 ? grown(u) : def.elder + u * Math.max(1, def.lifespan - def.elder) * 0.5;
     const a = hashFloat(st.id, i, angleDice) * Math.PI * 2;
     const d = 3 + 18 * Math.sqrt(hashFloat(st.id, i, distDice));
     const pos = [0, 0, 0];
