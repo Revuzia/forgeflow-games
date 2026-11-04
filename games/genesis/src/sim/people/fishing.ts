@@ -20,7 +20,7 @@ import { NS, SKILL, TASK } from './defs.ts';
 import { animalDef } from '../life/herds.ts';
 import { availability, itemIdx } from './resources.ts';
 import { libHas, libraryEffect } from './knowledge.ts';
-import { storeAdd, storeAny } from './store.ts';
+import { storeAdd, storeAny, storeHas } from './store.ts';
 import { practise } from './lifecycle.ts';
 import { spotInCell } from './world.ts';
 import { tell } from './story.ts';
@@ -28,7 +28,7 @@ import { settlementRef, vars } from './util.ts';
 import { addFood, ledger, landWorld, type FishStock } from './ledger.ts';
 import { FOOD_YIELD, foodSessionDone } from '../perf/pace.ts';
 import { FOOD_SESSION } from './decide.ts';
-import { bestBoat } from './missions.ts';
+import { bestBoat, shoreBoat } from './missions.ts';
 import { carcass } from './hunt.ts';
 import { sacredAnimal } from './culture.ts';
 
@@ -182,10 +182,18 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
     }
   } else c = nearest(4, (o) => p.f.water[o] > 0.3 && !thin(x, o));
   if (c < 0) return null;
-  // stand on the bank unless a swimmer
-  const sp = x.info[A.species[s]].def;
+  // (PUNCH P22) a town with a boat in its store sends its fishers out on it, onto open water: the boat is theirs while
+  // they fish and is left at the shore when they step back on land (tasks.ts moveLeg). Boats for as many as they hold.
   let stand = c;
-  if (sp.swim < 1 && p.f.water[c] > 0.6) {
+  if (st && !st.band && !A.mission[s] && p.f.water[c] > 0.6) {
+    const boat = shoreBoat(x, st);
+    if (boat >= 0 && hashFloat(A.id[s], x.tick, 0xb0f) < Math.min(0.85, storeHas(st, boat) * 0.4)) {
+      A.boat[s] = boat;
+      return { kind: TASK.fish, goal: spotInCell(p, c, A.id[s], 29, [0, 0, 0]), goalCell: c, work: 180, target: c };
+    }
+  }
+  // stand on the bank (PUNCH P22: a strong swimmer too — nobody swims out over open water to fish; the boat takes them)
+  if (p.f.water[c] > 0.6 && A.boat[s] < 0) {
     const g = p.grid;
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.water[g.nbr[e]] < 0.4) { stand = g.nbr[e]; break; }
   }

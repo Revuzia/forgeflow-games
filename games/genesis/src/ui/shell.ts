@@ -1160,7 +1160,8 @@ export class Shell {
     if (!this.tools.isArmed) this.deps.setBrush(null);
     const photo = this.photo.isActive;
     const pointerOwned = photo || this.tools.isArmed || this.gestures.armed || this.gestures.active || this.press === 'tool' || this.press === 'gesture';
-    this.hand.frame(!photo && (this.press === 'none' || this.press === 'hand' || this.press === 'camera') ? c : null, pointerOwned);
+    // (never over the title: its world is a backdrop, the pointer a plain arrow there)
+    this.hand.frame(!photo && !this.title.isOpen && (this.press === 'none' || this.press === 'hand' || this.press === 'camera') ? c : null, pointerOwned);
     this.gestures.frame();
     this.overlays.frame();
     this.chronicle.frame();

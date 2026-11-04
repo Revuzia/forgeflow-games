@@ -171,7 +171,7 @@ export function controlsMarkdown(): string {
     '',
     '## The Touch and the mouse',
     '',
-    'The Touch is the god\'s presence on the land: light where the people trust you, storm-dark where they fear you.',
+    'The Touch is the god\'s presence on the land, a ring of light at your pointer: warm gold where the people trust you, cold blue-white where they fear you.',
     '',
     mdTable(['mouse', 'what it does'], mouseRows(k, slap)),
     '',

@@ -26,6 +26,7 @@ import type { Settlement } from '../people/state.ts';
 import type { PCtx } from '../people/ctx.ts';
 import type { Command, CommandResult } from '../types.ts';
 import type { V3 } from './state.ts';
+import type { AnimalDef } from '../content.ts';
 import type { ActInfo } from './prayers.ts';
 import { AgentFlag } from '../types.ts';
 import { hashFloat } from '../core/rng.ts';
@@ -37,6 +38,7 @@ import { distM, sunElevation } from '../people/world.ts';
 import { paintWeather } from '../fields/weather.ts';
 import { igniteCell } from '../fields/fire.ts';
 import { spawnHerd, animalDef } from '../life/herds.ts';
+import { plural } from '../life/ecology.ts';
 import { anchorSpin } from './params.ts';
 import { fail, ok, cellPos3, nearestSettlement, norm, herePos, moveBy, bearingDir } from './util.ts';
 import { meansNow, moveSettlement, relOf, relStat, srel } from './regard.ts';
@@ -356,14 +358,20 @@ function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null,
       const tag = sacredAnimalOf(st);
       if (tag) sp = x.c.animals.idx(tag);
       if (sp < 0) {
-        // the wild herd nearest the town is the one they will revere
-        let bd = 3000;
+        // (PUNCH P16) the beast they will revere is the largest land mammal of their country (a herd of deer, bison,
+        // wild horses — a sign that reads from the hill), nearest first among equals; a bird of their sky only where no
+        // land mammal lives within 3 km (before, the nearest herd won, and a flock of mallards by the houses was sent)
+        let bd = 3000, bs = -1, bm = 0;
         for (const h of x.ps.herds) {
           if (h.owner >= 0) continue;
           const a = animalDef(x, h.species);
-          if (!reverable(a)) continue;
+          if (!a || !reverable(a)) continue;
           const d = distM(p, h.from, st.pos);
-          if (d < bd) { bd = d; sp = h.species; }
+          if (d >= 3000) continue;
+          // a grazing herd before a hunting pack: six lions sent to the edge of a town would be a wrath, not a favour
+          const m = landMammal(a) ? (a.kind === 'herbivore' ? 2 : 1) : 0;
+          if (m < bm) continue;
+          if (m > bm || a.size > bs || (a.size === bs && d < bd)) { bd = d; bs = a.size; bm = m; sp = h.species; }
         }
         if (sp < 0) return fail(`There are no beasts near ${st.name} to send.`);
         const a = animalDef(x, sp);
@@ -372,7 +380,7 @@ function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null,
       const c = p.cellAt(moveBy(st.pos, bearingDir(st.pos, 0.7), st.territory + 120, p.st.radius));
       spawnHerd(x, sp, c, 6);
       readOmen(u, p, 'sacred-animal', cellPos3(p, c), 600, god);
-      return ok(`The sacred ${(animalDef(x, sp)?.name ?? 'beasts').toLowerCase()} come to ${st.name}.`);
+      return ok(`The sacred ${plural(animalDef(x, sp)?.name ?? 'beasts')} come to ${st.name}.`);
     }
     case 'spring': {
       const c0 = p.cellAt(st ? moveBy(st.pos, bearingDir(st.pos, 2.2), st.territory + 60, p.st.radius) : at);
@@ -412,6 +420,11 @@ export function omensTick(u: Universe): void {
     anchorSpin(u, p);
     p.st.sunFrozen = false;
   }
+}
+
+/** a mammal that walks the land (a deer, a bison, a hare, a macaque, a camel): not a bird, a lizard or a crocodile */
+function landMammal(a: AnimalDef): boolean {
+  return a.habitat === 'land' && !a.domestic && a.kind !== 'insect' && /^(quadruped-|small-hopper$|primate$|camel$)/.test(a.body);
 }
 
 export function registerOmenCommands(r: CommandRegistry): void {

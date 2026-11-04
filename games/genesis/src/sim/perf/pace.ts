@@ -309,7 +309,8 @@ export function paceSleep(x: PCtx, s: number, st: Settlement, night: boolean, du
     if (distM(x.p, _a, st.pos) <= st.territory) return null;
   }
   // (fix r3 #7) never a camp afloat: one caught by the night in the water (no boat) goes on to the shore and home
-  if (A.boat[s] < 0 && x.p.f.water[A.cell[s]] > 0.6) return null;
+  // (PUNCH P22: nor a town's fisher out in its boat — they row in at night; a band's or a mission's crew sleeps aboard)
+  if (x.p.f.water[A.cell[s]] > 0.6 && (A.boat[s] < 0 || (!A.mission[s] && !st.band))) return null;
   return { kind: TASK.camp, goal: null, goalCell: A.cell[s], work: dur, target: -1 };
 }
 

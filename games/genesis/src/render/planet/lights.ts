@@ -209,6 +209,25 @@ export class SunShadows {
    * cannot use — ground near the camera in the far cascades (those pixels read cascade 0), casters smaller than a
    * texel — instead of drawing the whole view's geometry once per cascade.
    */
+  /**
+   * link the casters' depth programs (the depth twins `swap(true)` puts on) against the atlas, as render() would draw
+   * them, without drawing: for the load-time warm-up (Renderer.warmUp). The twins are switched back before it returns
+   * (three reads the materials synchronously); resolves when the browser has linked them.
+   */
+  warm(renderer: WebGLRenderer, scene: Object3D, swap: (depth: boolean) => void): Promise<Object3D> {
+    const cam = this.cams[0];
+    if (!cam) return Promise.resolve(scene);
+    const prevTarget = renderer.getRenderTarget();
+    swap(true);
+    try {
+      renderer.setRenderTarget(this.rt);
+      return renderer.compileAsync(scene, cam);
+    } finally {
+      swap(false);
+      renderer.setRenderTarget(prevTarget);
+    }
+  }
+
   render(renderer: WebGLRenderer, scene: Object3D, swap: (depth: boolean) => void, perCascade?: (k: number) => void): void {
     if (!this.cascades) return;
     const prevTarget = renderer.getRenderTarget();

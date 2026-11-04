@@ -109,8 +109,12 @@ const WATCH_SPEED = 10;
  * 10x had. The first night comes 4 to 8 s after the band is set down. Once fire is given, the first hearth glows some 14
  * to 16 s later (0.8 to 0.9 of a day, measured on the barren path over three seeds), and the KINDLE_DAYS offer of
  * Kindling comes after 54 s. At 10x those were 1 to 1.5 min to nightfall, 2.5 min to the hearth and 9 min to the offer.
+ * (The opening brief's "3x-10x" for this button was written on the old clock, whose 1x was ten times today's (LIVING
+ * §1.1): that range is 30x-100x today and 100x is its upper end, unchanged in real pace. The
+ * owner's "slow and realistic 1x" is the default the player returns to; this is an explicit fast-forward they press.
+ * tests/ui-opening-dayspeed.test.ts holds it to that range and to a Cinder day in under half a minute.)
  */
-const DAY_SPEED = 100;
+export const DAY_SPEED = 100;
 /** "Let a century run": 1000x, the time-lapse. A year takes about 17 s and a century about half an hour (100x: 4.8 hours) */
 const CENTURY_SPEED = 1000;
 

@@ -76,6 +76,19 @@ export function bestBoat(x: PCtx, st: Settlement): number {
   return best;
 }
 
+/**
+ * the boat a town lends its fishers and its travellers over water: a rowing boat or a raft before a sailing ship (-1 none;
+ * PUNCH P22 — fishing.ts fishTask, tasks.ts nextSegment). Lent, not taken from the store: left at the shore after.
+ */
+export function shoreBoat(x: PCtx, st: Settlement): number {
+  let best = -1;
+  for (const it of x.c.itemsByTag.get('boat') ?? []) {
+    if (storeHas(st, it) < 1) continue;
+    if (best < 0 || (x.c.items.list[best].tags.includes('ship') && !x.c.items.list[it].tags.includes('ship'))) best = it;
+  }
+  return best;
+}
+
 // ───────────────────────────── routes ─────────────────────────────
 
 function routeKey(a: number, b: number): string {

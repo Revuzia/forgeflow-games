@@ -593,13 +593,17 @@ export class PostPipeline {
   get depthTexture(): DepthTexture { return this.hdr.depthTexture as DepthTexture; }
 
   /** step 2: colour + linear depth copies for the water pass */
-  copyForWater(r: WebGLRenderer, fsq: FullscreenQuad, far: number): void {
+  copyForWater(r: WebGLRenderer, fsq: FullscreenQuad, far: number, colour = true): void {
     const u = this.copyMat.uniforms;
     u.tColor.value = this.hdr.texture;
     u.tDepth.value = this.hdr.depthTexture;
     u.uFar.value = far;
-    u.uMode.value = 0;
-    fsq.render(r, this.copyMat, this.sceneCopy);
+    // (the colour copy is read only by the water's refraction and a launch's heat shimmer: a frame with neither
+    // skips that full-screen RGBA16F pass — the image is the same, macfix smooth)
+    if (colour) {
+      u.uMode.value = 0;
+      fsq.render(r, this.copyMat, this.sceneCopy);
+    }
     u.uMode.value = 1;
     fsq.render(r, this.copyMat, this.linDepth);
   }

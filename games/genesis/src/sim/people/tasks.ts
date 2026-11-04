@@ -15,7 +15,7 @@ import { distM, spotInCell, stepFactor, walkSpeed } from './world.ts';
 import { itemIdx, pathOptsFor } from './resources.ts';
 import { schedule } from './sched.ts';
 import { wearRoad } from './roads.ts';
-import { boatSwim } from './missions.ts';
+import { boatSwim, shoreBoat } from './missions.ts';
 import { libraryEffect } from './knowledge.ts';
 import { hashFloat } from '../core/rng.ts';
 import { DEATH } from './defs.ts';
@@ -198,6 +198,13 @@ export function nextSegment(x: PCtx, s: number): void {
   }
   const d = distM(p, _a, goal);
   const sp = x.info[A.species[s]].def;
+  // (PUNCH P22) a townsman whose way leads onto open water — over a lake to the far shore, out to the fishing grounds —
+  // takes the town's boat at the water's edge rather than swimming (and leaves it at the far shore, below). A band and a
+  // mission's crew carry their own; a bather goes in to swim.
+  if (A.boat[s] < 0 && to !== from && p.f.water[to] > 0.6 && !sp.fly && !A.mission[s] && A.task[s] !== TASK.bathe) {
+    const st = x.ps.settlement(A.settlement[s]);
+    if (st && !st.band) A.boat[s] = shoreBoat(x, st);
+  }
   const afloat = A.boat[s] >= 0;
   const swim = afloat ? Math.max(sp.swim, boatSwim(x, A.boat[s])) : sp.swim;
   // a hull glides over deep water as over shallow (a swimmer tires in the deep; a boat does not)
@@ -249,6 +256,9 @@ export function nextSegment(x: PCtx, s: number): void {
     if (p.f.precip[to] > 5 && capsize(x, s, to)) return;
   } else {
     A.flags[s] &= ~AgentFlag.boat;
+    // (PUNCH P22) a fisher of a town back on land leaves the boat at the shore (fishing.ts fishTask: only a fishing
+    // trip puts a settled person in a boat; a mission's crew and a band keep theirs)
+    if (afloat && !onWater && A.task[s] !== TASK.fish && !A.mission[s] && !x.ps.settlement(A.settlement[s])?.band) A.boat[s] = -1;
     A.anim[s] = A.task[s] === TASK.flee ? AnimState.flee : A.task[s] === TASK.evacuate || A.task[s] === TASK.shelter ? AnimState.run : onWater ? AnimState.swim : sp.fly ? AnimState.fly : A.carryItem(s) >= 0 ? AnimState.carry : AnimState.walk;
     // (LIVING LAND: a hunter home with the kill shoulders the game)
     if (A.anim[s] === AnimState.carry && A.carryItem(s) === itemIdx(x, 'meat')) A.anim[s] = AnimState.carryGame;

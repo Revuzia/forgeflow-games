@@ -49,7 +49,7 @@ import { bestFood, storeAdd, storeTake } from '../people/store.ts';
 import { fail, ok } from './util.ts';
 import { meansNow, moveSettlement, relOf, relStat, rise, riseTrust, srel } from './regard.ts';
 import { actReaches, PRAYER_WORDS } from './prayers.ts';
-import { addSacredPlace, foundShrine, sacredNear } from './sacred.ts';
+import { addSacredPlace, foundShrine, PILGRIM_REACH, sacredNear } from './sacred.ts';
 
 /** prophets a world may have at once */
 export const MAX_PROPHETS = 6;
@@ -229,6 +229,7 @@ function fulfilled(x: PCtx, pr: Prophecy, st: Settlement): void {
   if (ph) {
     ph.credibility = r3(ph.credibility + 0.25 * (1 - ph.credibility));
     ph.fulfilled++;
+    ph.fulfilledAt = x.tick;
     if (pr.kind === 'harm') ph.harmCame = x.tick;
     // (LIVING §2.9: a fulfilled prophecy is the prophet's standing — LAND's outlet, wired at integration 2026-10-20)
     if (s >= 0) statusGain(x, s, 0.3);
@@ -296,11 +297,16 @@ export function prophetsHourly(u: Universe, p: Planet): void {
       if (away && distM(x.p, _p, away.pos) <= away.territory + 100) { relStat(u, 'prophet.awayHours', 1); relStat(u, 'prophet.awayHeard', n); }
     }
     // an open prayer before them: they foretell its answer (once a prayer, p = 0.5 × credibility)
+    // (postrel P25: not while the god's own word through them is still open — the year-50 probe's prophet, given three
+    // words to speak and made true, also read an open prayer on their own, the prayer lapsed, and the failure (-0.25)
+    // left them at 0.56-0.65 after three fulfilled prophecies on 3 of 8 seeds; they wait on the god's word, not their own)
     const r = srel(u, p.id, ph.settlement);
+    const waiting = relOf(u).prophecies.some((q) => q.agent === ph.agent && q.by === 'god' && q.until >= u.tick);
     for (const pr of r.prayers) {
       const key = `f:${pr.id}`;
       if (r.since[key] !== undefined || !heard(u, ph)) continue;
       r.since[key] = u.tick;
+      if (waiting) continue;
       if (hashFloat(ph.agent, pr.id, 0xf07e) < 0.5 * ph.credibility) foretell(x, ph, pr.kind, Math.max(1, Math.round((pr.until - u.tick) / x.day)), 'prophet');
     }
     for (const k of Object.keys(r.since)) if (k.startsWith('f:') && !r.prayers.some((q) => `f:${q.id}` === k)) delete r.since[k];
@@ -377,10 +383,15 @@ export function prophetsDaily(u: Universe, p: Planet): void {
     }
     persecute(x, ph, s, st);
     if (!x.A.alive[s] || prophetOf(u, p.id, ph.agent) !== ph) continue;
-    // a shrine at a sacred place (credibility ≥ 0.5, none within 1 km)
+    // a shrine at a sacred place (credibility ≥ 0.5, none within 1 km); one whose site was given up (a stalled site,
+    // buildings.ts reviseSite) or that fell may be founded again
+    if (ph.shrine > 0 && !x.ps.building(ph.shrine)) ph.shrine = -1;
     if (ph.credibility >= 0.5 && ph.shrine < 0 && heard(u, ph)) {
-      const place = sacredNear(u, p, st.pos, 2000) ?? addSacredPlace(u, p, st, null, 'prophet');
-      if (place && !x.ps.buildings.some((b) => !(b.flags & 2) && x.c.buildings.list[b.type].id === 'shrine' && distM(p, b.pos, place.pos) < 1000)) {
+      // (at a sacred place the town can walk to and build at: P32 — a place 2 km out was never built nor visited)
+      const place = sacredNear(u, p, st.pos, PILGRIM_REACH) ?? addSacredPlace(u, p, st, null, 'prophet');
+      // (no holy shrine within 1 km of it: the town's own everyday shrine by the hearth does not count — every grown
+      // town has one, so a prophet in a town older than a few years never founded a shrine at all, P32)
+      if (place && !x.ps.buildings.some((b) => !(b.flags & 2) && b.flags & 8 && x.c.buildings.list[b.type].id === 'shrine' && distM(p, b.pos, place.pos) < 1000)) {
         const b = foundShrine(x, st, place);
         if (b) {
           ph.shrine = b.id;

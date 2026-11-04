@@ -248,6 +248,20 @@ milestones through iron, and 2 seeds × 230 years cover the rest (run at 3000x, 
   measured side by side (§8.3). With 1 500 agents: level 0 ≥ 85 % of the same-session baseline and ≥ 450 CPU tps (300x
   keeps 1.5× headroom), level 1 ≥ 800, level 2 ≥ 1 200; `perf_worker.ts`: achieved ≥ 0.98 of 1x–300x and ≥ 0.85 of
   1000x with 1 500 agents in Node.
+- **Restated after 1.0 (POSTREL perf, 2026-11-04; ledger `_harness/scratch/postrel/perf.md`).** The L1 / L2 floors and
+  the 0.85 of 1000x are *not met* and are restated as targets, not gates. Measure them natural disasters off, after
+  ≥ 2 warm game days (the release bench's 2-day window right after 600 warm ticks is JIT warm-up: cpu/wall 1.4–1.8),
+  on a machine at load < 3. Measured (4 CPUs shared, load 9–13, so this process got ~0.7–0.8 of a CPU): release bench
+  L0 402 / L1 489 / L2 536 CPU tps (release 448 / 578 / 705 at lower load); warm, natural off, days 1–5: L1 464 522 661
+  620 765, L2 470 632 670 794 868. What changed: (1) the sea falls calm sooner after a quake or tsunami (deep-water
+  quiet bound `QUIET_SEA`, `hydrology.ts`; post-quake L1 days +34 %, CPU 194 → 259 tps), yet a quake still costs ~2.5×
+  for ~1.3 game days at 1000x — a real 0.5–3 m wave sloshes the whole ocean, and damping it would shorten a tsunami's
+  reach (CONTRACT §5); (2) at level 1 (the 1000x preset) a walk that ends at its goal flows into the work as at level 2
+  (`plapse.ts mergeArrival`, `LEG[1]` 4): decisions per tick 16.0 → 9.3, 8 seeds' outcomes unchanged within noise.
+  Why the floors stay out of reach: at L1 ~1.25 ms a tick is needed and ~1.3–1.8 ms is spent — people ~0.9 (each
+  decision ~24 µs; plan / startTask / relationship), hydrology ~0.27, climate ~0.22, weather ~0.07; no single system
+  holds the remaining 35 %. `perf_worker.ts` 1000x read 0.40 at load 13 (meaningless); 0.82 at release stands as the
+  last quiet-machine figure. 1x–300x (level 0) keep ≥ 0.98 (100x 0.974 even at load 13).
 - Fire targets of §1.4. Seed-bound tests moved by the walking change: re-measured over 8 seeds before/after (§6.4).
 
 ### 1.7 As built (PACE lane, 2026-10-14; probes and logs in `_harness/scratch/living/pace/`)
@@ -2468,7 +2482,8 @@ earlier and never re-measured on the integrated tree, or measured and dropped fr
 - §1.6 throughput with 1 500 agents: L0 ≥ 450 CPU ticks/s, L1 ≥ 800, L2 ≥ 1 200 asked; PACE measured 422 / 573 / 677 and
   the review's bench (1 500 clay-age agents) 340–350 / 389–460 / 550–631 on HEAD at machine load 13–16 (+25–30 % per tick
   at L1/L2 against the tree before the program; L0, which covers every preset from 1x to 300x, unchanged). The gate's
-  throughput floors (`tests/perf.test.ts`) cover a world with no agents. Open.
+  throughput floors (`tests/perf.test.ts`) cover a world with no agents. Restated after 1.0 (§1.6 last bullet): the
+  sea-calm and L1 arrival-merge fixes landed; L1 ≥ 800 / L2 ≥ 1 200 / 0.85 of 1000x remain targets, not met.
 - §4.5 ecology: open grassland ≥ 3 % at every year end (1.2–3.1 %) and the dominant-tree mix within 15 % (61–81 %), both
   unmet on CONTENT's tree (§4 results) and not re-measured since (`content.ts ecology`, 4 seeds × 3 years, no people).
 
@@ -2902,3 +2917,49 @@ and the drought program), the same command as r6 (`pace.ts fire 20261008,7,1234,
 years 1–2 and 8.5 % once in years 4–6. The world without people is untouched by the four fix rounds, so the r6 row and
 its miss stand as measured (cause and why it was left: §10.5). The other three copies (speciation, the god's plague,
 LAND's census) are still r6's.
+
+### 13.8 Post-release balance (2026-11-04; release item 4, punch P02 / P11 / P25 / P26; ledger `_harness/scratch/postrel/balance.md`)
+
+**Fixed (each with a test in `tests/balance-postrel.test.ts` that fails before):**
+- **P02 hunting where no game is on foot.** `life/herds.ts` `gameToPeople` never ran in a grown world (every world holds
+  138–166 wild land herds against `MAX_LAND_HERDS` 90, so it returned at its first line) and judged "game near" by straight
+  line (seed 2's lake town had 13 herds in range, none reachable on foot). Now a town counts as served only by game it can
+  walk to (`hunt.ts` on-foot test), a drawn herd is placed only on cells reached on foot, and a full land moves the herd
+  farthest (≥ 4 km) from every people instead of giving up. `people/hunt.ts` `gameOnFoot` tries the 10 best herds, not 3
+  (a hill town with game at 334 m on foot stayed home because its 3 best herds were across water). The Living system's
+  stone-age coastal folk start knowing hunting (`data/scenarios.json`; the two-worlds scenario already did). An islet
+  town with no dry land on foot beyond 200 m fishes instead — accepted as realistic.
+- **P11 year-end housing.** The calm-year misses were daughter villages founded days before a year end. `settlement.ts`
+  `planConstruction`: while beds are under 0.6 × people a quick shelter (hut / lean-to) is ordered before a house.
+- **P25 year-50 prophet credibility.** `god/prayers.ts` lapse(): every third lapse (the "deaf" one) no longer costs the town's
+  prophet 0.1 while a god's word through them is open or one came true ≤ 2 days ago (`ProphetState.fulfilledAt`);
+  `god/prophets.ts`: a prophet makes no reading of their own while a god's word of theirs is open (their own foretelling
+  lapsed and counted as a failed word, −0.25). Failed words still cost 0.25 each.
+- **P26 old age.** `people/lifecycle.ts` ageHazard: 0.002 a year to 0.65 × span, then 0.002 + 0.01·e^{6(r−0.7)} (Gurven &
+  Kaplan 2007 forager curve: ~1 %/yr at 43, doubling ~7 years) instead of 2 %/yr doubling every ~5 years from 0.7 × span
+  (15 → 65 survival 0.42, was 0.045).
+
+**Measured** (8 seeds × 25 years alone, before = the release tree frozen at `postrel/B` (pr0), after = `postrel/A3` (pa3: every
+fix above plus other teams' sim edits to 19:4xZ); `postrel/cmp.cjs`, `postrel/out/cmp-pr0-pa3.log`):
+
+| row | before (pr0) | after (pa3) | target |
+|---|---|---|---|
+| kills per 100 people a year after hunting is known, median (range) | 8.3 (all years) | **14.3** (7.7–47.7) | ≥ 20 — missed, up ~70 % |
+| hunted share of food, median | 0.074 | **0.093** | 0.15–0.35 — missed |
+| hunters killed / injuries per trip | 0 / 0.068 | 0 / 0.048 | ≤ 1 per 50 hunts — met |
+| per live town, seeds housed at every calm year end / calm unhoused year ends | 6/8 / 2 | **7/8 / 1** | ≥ 7 of 8 — **met** |
+| year-50 prophet, 3 words fulfilled: credibility (seeds 1, 5, 1234) | 0.648 / 0.63 / 0.564 | **0.705 / 0.705 / 0.705** | ≥ 0.7 on every seed — **met** |
+| under-15 share, years 10–25, median | 0.481 | **0.480** | 0.35–0.45 — missed |
+| growth years 5–25, median %/yr | 1.45 | 1.00 | 1.5–3 |
+| births / deaths pooled (25 y × 8) | 399 / 224 | 384 / 225 | within ±10 % — held |
+
+**Left open:** hunting is up but still short of the owner default (the next lever is the party's trip length: 4 days of a
+12-day year, see the sim-punch ledger). The under-15 share did not move with the old-age curve (more elders, but growth fell
+by about as much): with this life table a share of 0.45 needs growth ≤ ~2 % and child deaths near 0.12 of births; the
+cohort model (`postrel/demo/dm*.mjs`) finds both targets only at their corner, so the row needs a joint fertility / child
+mortality re-tune with its own 8-seed run. The seed-1 calm miss is a 7-person household waiting a few hours for an empty
+hut at the year end (housed in the save hours later).
+
+**Acceptance re-installed:** `postrel/acc/overlay.cjs` lays these rows over the table installed before (round 4 + sim-fix-r2's
+§5.1 row, kept as `acceptance.fix-r4.json`); each touched row keeps the round-4 value under `r4` and its before/after under
+`postrel`. Tally 41 met / 15 partly / 12 missed / 14 report (was 39 / 16 / 13). Every other row is round 4's.

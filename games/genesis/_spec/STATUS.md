@@ -39,12 +39,16 @@ P11 shelter (housed 20–27 of 30 year ends on the measured seeds), P12 growth (
 - Sim speed floors not met at 1 500 agents (L1 ≥ 800 and L2 ≥ 1 200 asked in LIVING §1.6 / CONTRACT §6.1; 1000x 0.82 vs
   0.85). Needs an architectural cut (no single hotspot: hydrology 15 %, climate 11 %, decide 10 %) or a restated floor.
 - The opening's "let the day pass" hands back at 100x (`src/ui/opening.ts` `DAY_SPEED`); 3x–10x was asked.
-- Hunting still below the owner default on seeds without game on foot; the under-15 share and year-end housing rows of
-  the acceptance table (`_harness/scratch/living/acceptance.json`, round 4: 38 met / 16 partly / 13 missed) were not
-  re-installed after the fix rounds.
+- Post-release balance (LIVING §13.8, 8 seeds × 25 years before/after): fixed P11 year-end housing (7 of 8 seeds housed
+  at every calm year end, per live town) and P25 year-50 prophet credibility (0.705 on the three seeds that missed);
+  P02 hunting where no game was on foot fixed at its cause (herds drawn and judged by what a town can walk to; stone-age
+  folk start knowing hunting), kills per 100 people a year up from 8 to 14 but still short of the owner default 20
+  (hunted share 0.09 of food, 0.15 asked); the under-15 share stays 0.48 (0.35–0.45 asked; needs a joint fertility /
+  child-mortality re-tune). Acceptance table re-installed (`_harness/scratch/living/acceptance.json`: 41 met / 15 partly
+  / 12 missed, round 4 + these rows).
 - The free-form field's examples still include "invent telepathy" (`src/ui/freeform.ts:36`).
 - Open minors from the punch list: P16 the sacred-animal sign, P19 Cinder's craters, P22 people never take to the water,
-  P25 prophet credibility at year 50, P26 remaining balance misses, P27 a band treating any visible water as camp water,
+  P26 remaining balance misses (under-15 share, hunting volume), P27 a band treating any visible water as camp water,
   P28 (half) daughter village spacing, P30 `slot.sh` dead holders, P32 proof gaps (shrines, pilgrimages); one seed's
   snow-locked climate step (s3, sim-fix-r2).
 

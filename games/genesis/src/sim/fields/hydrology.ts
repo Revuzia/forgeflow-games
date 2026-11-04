@@ -64,6 +64,11 @@ const QUIET = 1e-4;
 /** outflow per step as a fraction of the cell's water column below which a cell counts as still */
 const QUIET_REL = 0.002;
 const QUIET_STEPS = 4;
+/** extra per-step level change an OCEAN cell may still have and count as still, per m of depth up to LEVEL_EPS_MAXD
+ * (2.5 mm a step over deep water): after a quake's tsunami a sub-centimetre swell changed the level of ~25k deep-sea
+ * cells by >0.1 mm a step for two game days and kept them all stepping (3.5x slower at 1 500 agents). The level test
+ * (levelEps) still keeps any visible wave awake (tests/hydrology-quiet.test.ts) */
+const QUIET_SEA = 1e-4;
 /** level difference (m) across a wet edge below which neighbours count as level: 2 mm in a puddle, ~2 cm over deep
  * water (an invisible swell on the open sea must not keep the whole ocean awake) */
 const LEVEL_EPS = 0.002;
@@ -904,7 +909,7 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
     // no real change; it sleeps if it is also level with every wet neighbour
     const ldv = lastDv[c];
     const dv = ldv < 0 ? -ldv : ldv;
-    const cand = dv < quietDv && maxOut < quietRel * A[c] * (w > 0.075 ? w : 0.075);
+    const cand = dv < (sea ? quietDv + QUIET_SEA * kf * (w < LEVEL_EPS_MAXD ? w : LEVEL_EPS_MAXD) : quietDv) && maxOut < quietRel * A[c] * (w > 0.075 ? w : 0.075);
     let level = true;
     for (let e = e0; e < e1; e++) {
       const o = nbr[e];

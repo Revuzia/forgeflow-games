@@ -250,6 +250,8 @@ test('a boat\'s water casks serve only afloat', () => {
   decide(ctx(sim), s);
   assert.ok(A.needs[s * NEED_N + WATER] < 0.75, `on dry land the casks do not water them (${A.needs[s * NEED_N + WATER]})`);
   f.water[c] = 1;
+  // (PUNCH P22: a settled walker who stepped ashore left the boat at the shore — put them back in it on the water)
+  A.boat[s] = itemIdx(x, 'raft');
   assert.equal(waterHere(x, s, c), true, 'afloat, the casks are at hand');
   A.needs[s * NEED_N + WATER] = 0.2;
   A.task[s] = TASK.idle;
@@ -413,7 +415,8 @@ test('a band by its camp\'s pond does not keep dropping and retaking a far walk 
 // the verifier's break test (round 2): the pond fills only every two hours. The whole band lay up through its first filling
 // (planDrink's lie-up in the shade), woke to a dry pond and — the camp water only remembered once someone drank there —
 // walked off for water 1.5 km away: village sizes 28-32 on seed 4 lost 2/4/3/0/0 to thirst where the game before the
-// drought change lost none. Water running within WATER_NEAR's walk of the camp is now the camp water once seen (bandStep)
+// drought change lost none. Water within WATER_NEAR's walk of the camp that runs dry and comes back is camp water once seen
+// again (bandStep; PUNCH P27: water only seen, never drunk at and never gone and back, is not)
 test('a band whose camp pond fills only every two hours waits for it and loses no one to thirst', () => {
   const r = pondCamp(4, { n: 29, period: 2 });
   assert.equal(r.deaths.thirst ?? 0, 0, `no one dies of thirst (${r.tell})`);

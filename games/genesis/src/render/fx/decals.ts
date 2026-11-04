@@ -149,6 +149,14 @@ void main() {
   vec3 d = P - vC;
   float hgt = dot(d, up);
   vec3 lat = d - up * hgt;
+  if (vType > 14.5 && vType < 15.5 && vQ.y > 0.5) {
+    // a ripple pinned to a screen point (the pointer's ring): measured where the camera's ray through this pixel crosses
+    // the ground plane at its centre, so it stays centred on that point even where the drawn terrain sits a few
+    // metres off the sampled ground height (the ring had drifted ~20 px off the pointer on rolling ground)
+    vec3 vd = normalize(P - uCamBody);
+    float du = dot(vd, up);
+    if (abs(du) > 0.05) lat = d - vd * (hgt / du);
+  }
   vec3 ax = vAxis - up * dot(vAxis, up);
   ax = dot(ax, ax) > 1e-8 ? normalize(ax) : normalize(cross(up, abs(up.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
   vec3 bx = cross(ax, up);
@@ -259,7 +267,8 @@ void main() {
     o = vec4(vCol.rgb * a, a);
   } else if (t == 15) {
     // an expanding ring of light (additive; display-referred mix)
-    float w = max(vP.y, 0.5);
+    // (the pointer's pinned ring sizes its line in screen pixels: no 0.5 m floor, which had made it a thick donut up close)
+    float w = vQ.y > 0.5 ? max(vP.y, 0.02) : max(vP.y, 0.5);
     float k = exp(-pow((r - vP.x) / w, 2.0));
     float n = 0.8 + 0.2 * snoise(vec3(q * 0.08, uTime));
     o = vec4(vCol.rgb * vP.z * k * n * hf * mix(1.0, disp, 0.7), 0.0);

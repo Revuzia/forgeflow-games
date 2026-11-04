@@ -219,6 +219,59 @@ vec3 rk_joints(vec3 P, vec3 up, vec3 Nb, float sp, float fw, float tiltK, float 
   return vec3(mix(mix(1.0, tone, smoothstep(2.0, 6.0, blockPx)), 0.55, open * 0.85), open, id);
 }
 
+// SUB-GRID CRATERS on airless worlds (punch P19): the sim stamps craters of 70-900 m radius only (planet.ts floors them
+// at 1.3 grid edges), so Cinder read as dozens of near-identical rings. Real cratered ground has a power-law spread —
+// for every crater, ~8 more of a third its size — down to the smallest pits. Four tiers of hash-placed craters, cells of
+// 240, 96, 36 and 13 m, fill in below the sim's floor (radii 0-65, 0-26, 0-10, 0-3.5 m). Each crater is a SPHERE in the
+// body frame cut by the ground (radius r3, centre jittered in its 3D cell): its circle on the ground has
+// rs = sqrt(r3² - h²), so sizes run continuously from nothing up to the tier's largest with no seam between cells, and
+// the 8 cells round P hold every sphere that can reach it (r3 · 1.8 ≤ half a cell). Profile: a parabolic bowl ~0.2 rs
+// deep (gardened old ones shallower), a raised rim and its ejecta apron, as an analytic height GRADIENT (body frame,
+// tangent; shaded by the sun like the rock's facets, smooth per pixel). The young ones (a few in ten) are fresh, bright
+// broken ground on the wall and apron: what shows a crater's size on a full-lit disc. Tiers under a pixel are skipped.
+//   dens: crater density 0..1 (thinned on maria and under cover). Returns the albedo factor; g gets the gradient.
+float craterField(vec3 P, vec3 up, float fw, float dens, inout vec3 g) {
+  float alb = 1.0;
+  for (int t = 0; t < 4; t++) {
+    float s = t == 0 ? 240.0 : t == 1 ? 96.0 : t == 2 ? 36.0 : 13.0;
+    float rMax = 0.27 * s;
+    if (fw > rMax * 0.8) continue;
+    vec3 base = floor(P / s - 0.5);
+    for (int i = 0; i < 8; i++) {
+      vec3 cell = base + vec3(float(i - (i / 2) * 2), float((i / 2) - (i / 4) * 2), float(i / 4));
+      vec3 ck = cell + float(t) * 31.7;
+      float hr = gn_hash13(ck * 1.37 + 0.71);
+      if (hr > dens * 0.6) continue;
+      vec3 C = (cell + gn_hash33(ck + 4.3)) * s;
+      float r3 = rMax * mix(0.35, 1.0, hr / max(dens * 0.6, 1e-4));
+      vec3 d = P - C;
+      float hv = dot(d, up);
+      if (abs(hv) >= r3) continue;
+      float rs = sqrt(r3 * r3 - hv * hv);
+      vec3 dt = d - up * hv;
+      float dist = length(dt);
+      float tt = dist / max(rs, 1e-3);
+      if (tt > 1.8 || dist < 1e-4) continue;
+      float age = gn_hash13(ck * 2.13 + 9.1);
+      float fresh = smoothstep(0.72, 0.95, age);
+      // height (m) and its slope along the radius (m per unit tt)
+      float D = rs * (0.09 + 0.12 * smoothstep(0.3, 0.95, age));
+      float H = rs * (0.025 + 0.035 * fresh);
+      float dh = tt < 1.0 ? 2.0 * D * tt : 0.0;
+      float rw = (tt - 1.0) / 0.32;
+      dh += H * exp(-rw * rw) * (-2.0 * rw / 0.32);
+      dh *= 1.0 - smoothstep(1.45, 1.8, tt);
+      float aG = 1.0 - smoothstep(0.3, 0.9, fw / rs);
+      g += (dt / dist) * (dh / rs) * aG;
+      // fresh broken ground: the inner wall and the apron, brightest at the rim, fading out to ~1.7 rs
+      float aA = 1.0 - smoothstep(0.7, 1.6, fw / rs);
+      float halo = smoothstep(0.45, 0.95, tt) * (1.0 - smoothstep(1.0, 1.7, tt));
+      alb *= 1.0 + (0.38 * fresh + 0.05) * halo * aA;
+    }
+  }
+  return alb;
+}
+
 // 0..1: this fragment is coarse ground under open water seen from afar, standing in for the water's surface (evalTerrain)
 float uwFar = 0.0;
 TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
@@ -1392,6 +1445,16 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // shading normal (analytic: rk_joints)
   ao *= 1.0 - 0.35 * rockJoint * rockW;
   s.microG += rockG * rockW;
+  // the small craters below the sim's grid (craterField): on bare airless ground, fewer on the younger maria, none under
+  // ice, snow, lava or a road
+  if (airless) {
+    float cDens = (1.0 - 0.6 * smoothstep(0.02, 0.3, ash)) * (1.0 - smoothstep(0.1, 0.5, max(max(snow, ice), max(lava, road))));
+    if (cDens > 0.02) {
+      vec3 cg = vec3(0.0);
+      col *= craterField(P, up, fw, cDens, cg);
+      s.microG += cg - up * dot(cg, up);
+    }
+  }
   // MID-DISTANCE BREAKUP, final pass (punch P18): the grass branch's drifts are diluted by what is mixed over the sward
   // after it (the shrubs' far tint, the far canopy, soil and sand margins) — an A/B at the cover framing measured them
   // at ~4 % of the lit hill's tone. The same ~220 m / ~90 m drifts once more on the assembled colour of any vegetated

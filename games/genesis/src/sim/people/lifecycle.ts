@@ -132,7 +132,7 @@ export function ageFlags(x: PCtx, s: number): void {
   if (age >= def.maturity && A.role[s] === ROLE.child) A.role[s] = ROLE.none;
 }
 
-/** yearly chance of dying of old age at this age (Gompertz-like past 70 % of the lifespan) */
+/** yearly chance of dying of old age at this age (Gompertz-like past 65 % of the lifespan) */
 export function ageHazard(x: PCtx, s: number): number {
   const A = x.A;
   const def = x.info[A.species[s]].def;
@@ -140,8 +140,12 @@ export function ageHazard(x: PCtx, s: number): number {
   if (def.hive && def.hive.castes[A.caste[s]] === def.hive.queen) span *= def.hive.queenLifespan ?? 3;
   const age = (x.tick - A.birth[s]) / x.year;
   const r = age / span;
-  if (r < 0.7) return 0.002;
-  return Math.min(1, 0.02 * Math.exp((r - 0.7) * 9));
+  // (postrel P26, LIVING §2.8: it was 0.002 to 70 % of the span, then 2 %/yr doubling every ~5 years — 6 % of
+  // 15-year-olds reached 65, villages had 4 % of their people past 50 and were 48 % children. Now as hunter-gatherers age
+  // (Gurven & Kaplan 2007): ~1 %/yr at 43, doubling every ~7 years, so the modal old-age death falls near 70 for a span
+  // of 62; the young keep their 0.2 %)
+  if (r < 0.65) return 0.002;
+  return Math.min(1, 0.002 + 0.01 * Math.exp((r - 0.7) * 6));
 }
 
 /** a child is born to mother (slot) [and father (slot or -1)] in st */

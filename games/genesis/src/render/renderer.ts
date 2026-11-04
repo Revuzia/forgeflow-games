@@ -23,7 +23,7 @@ import { BASE_PACK } from '../data/index.ts';
 import { StarVisual } from './sky/star.ts';
 import { Starfield } from './sky/starfield.ts';
 import { OrbitLines } from './orbitlines.ts';
-import { FullscreenQuad } from './post/fsquad.ts';
+import { FullscreenQuad, PASS_MATERIALS } from './post/fsquad.ts';
 import { PostPipeline, type PostSettings, type SunScreen } from './post/pipeline.ts';
 import { GtaoPass, aoFor } from './post/gtao.ts';
 import { FX_EXPOSURE } from './fx/particles.ts';
@@ -35,6 +35,7 @@ import { ShipLayer, type ShipPlanetRef } from './life/ships.ts';
 import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
+import { perfmon } from './perfmon.ts';
 
 export interface RenderStats {
   drawCalls: number;
@@ -94,6 +95,12 @@ const _moonK = new Vector3();
 const _moonEc = new Vector3();
 const _v3 = new Vector3();
 const _sunView = new Vector3();
+/** dev A/B for the smoothness fixes (macfix/smooth.md): ?buildms=N sets the terrain build time cap (0 = off, the old
+ *  count-only budget), ?warm=0 skips the load-time shader warm-up, ?skipcopy=0 always makes the water colour copy */
+const DEV_Q = (() => { try { return new URLSearchParams(globalThis.location?.search ?? ''); } catch { return new URLSearchParams(); } })();
+const BUILD_MS = DEV_Q.has('buildms') ? Number(DEV_Q.get('buildms')) || 0 : 6;
+const WARM_UP = DEV_Q.get('warm') !== '0';
+const SKIP_COPY = DEV_Q.get('skipcopy') !== '0';
 /** weather / shadow cube face size per preset (cloud steps → resolution) */
 const WX_RES = (steps: number): number => (steps <= 24 ? 96 : steps <= 32 ? 128 : steps <= 48 ? 192 : 256);
 /**
@@ -230,6 +237,47 @@ export class Renderer {
    * the dozens of frames the steady per-frame budget would take (a hitch at a cut is fine; streaming in view is not).
    */
   // a cut also invalidates last frame's image: the water's reflections must not read a view from another place
+  /**
+   * load-time shader warm-up (macfix/smooth.md): links every material the scene graph holds — hidden ones too (three's
+   * compile walks the whole graph, not only what is visible) — while the boot card still shows, in parallel where the
+   * browser can (KHR_parallel_shader_compile), so the first storm, fire or hand gesture does not stall a frame on a
+   * shader link (tens of ms each on ANGLE / Metal). Draws nothing: the image is unchanged. Resolves with the number of
+   * programs it linked; never takes longer than `maxMs`.
+   */
+  async warmUp(maxMs = 4000): Promise<number> {
+    const r = this.three;
+    if (!WARM_UP) return 0;
+    const before = r.info.programs?.length ?? 0;
+    // (into the HDR target the scene is drawn into: a program's key holds the target's tone mapping / colour space, so
+    // linked against the canvas they would be other programs than the frame uses)
+    const prev = r.getRenderTarget();
+    try {
+      r.setRenderTarget(this.post.hdr);
+      const done = [r.compileAsync(this.scene, this.camera)];
+      // the same materials with the night-light pool switched on (a different program per point-light count: the
+      // first fire or lit window near the camera linked every lit material at once). compile() reads the lights
+      // synchronously, so the pool is put back before anything draws.
+      const lit = [...this.planets.values()].filter((v) => v.life);
+      if (lit.length) {
+        for (const v of lit) v.life.lights.warmShow(true);
+        try { done.push(r.compileAsync(this.scene, this.camera)); } finally { for (const v of lit) v.life.lights.warmShow(false); }
+      }
+      // the casters' depth twins as the shadow pass draws them (a held prop's twin linked on the first grab: macfix)
+      for (const vis of this.planets.values()) {
+        done.push(this.shadows.warm(r, this.scene, (depth) => { vis.swapDepth(depth); this.godfx.swapDepth(depth); this.ships.swapDepth(depth); }));
+      }
+      r.setRenderTarget(this.post.hdr);
+      // the full-screen passes (fsquad.ts PASS_MATERIALS), drawn outside the scene graph: linked against an offscreen
+      // target, as all but the last pass draw (one already linked is a cache hit)
+      const q = new FullscreenQuad();
+      for (const m of PASS_MATERIALS) { q.mesh.material = m; done.push(r.compileAsync(q.mesh, q.camera)); }
+      q.mesh.geometry.dispose();
+      r.setRenderTarget(prev);
+      await Promise.race([Promise.all(done), new Promise((ok) => setTimeout(ok, maxMs))]);
+    } catch (e) { r.setRenderTarget(prev); console.warn('[genesis] shader warm-up failed', e); }
+    return (r.info.programs?.length ?? 0) - before;
+  }
+
   cut(): void { this.post.cutExposure(); this.post.prevValid = false; this.clouds.resetHistory(); this.wbSnap = true; this.cutFrames = 4; }
   private cutFrames = 0;
   /** the primary planet's radius last frame and whether the clouds march the far view's finer blocks (farViewQuality) */
@@ -277,6 +325,7 @@ export class Renderer {
     _proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(_proj);
 
+    perfmon.begin('planets');
     this.syncPlanets(view);
     const primaryPv: PlanetView | null = (pose.planet >= 0 ? view.planet(pose.planet) : null) ?? nearestPlanet(view.planets, pose.pos);
     this.primaryId = primaryPv ? primaryPv.id : -1;
@@ -307,7 +356,7 @@ export class Renderer {
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
         sunE: this.godfx.tintSun(_sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), isPrimary), time, K, frame: this.frameNo,
-        budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
+        budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, buildMs: this.cutFrames > 0 || !BUILD_MS ? undefined : BUILD_MS, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
         vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity, proj: cam.projectionMatrix, grass: q.grass,
         lightBudget: q.lightBudget, particleBudget: q.particleBudget, viewH: this.cssH,
       });
@@ -317,13 +366,17 @@ export class Renderer {
       u.uBrushOn.value = 0;
       vis.atmo.update(r, this.fsq);
     }
+    perfmon.end('planets');
     // ── the sun's elevation at the camera (exposure, grade, AO) and the moon over the primary planet ──
     const camSunEl = this.camSunElevation(primaryVis);
     this.forestAtCamera(view, primaryVis);
     const moonOn = primaryVis ? this.moonLight(view, primaryVis, starCol) : false;
     // ── the god layer: hand, creatures, disasters, weather, miracles (placed before the shadows and the scene) ──
     this.godfx.brush = this.brush;
+    perfmon.begin('godfx');
     this.godfx.update(view, primaryVis, cam, dt, time, q);
+    perfmon.end('godfx');
+    perfmon.begin('actors');
     // ── ships: placed, animated and their engines reported before the shadows and the scene ──
     this.shipRefs.clear();
     for (const v of this.planets.values()) {
@@ -383,6 +436,8 @@ export class Renderer {
     this.lastRadius = primaryVis ? primaryVis.pv.params.radius : 1;
     this.stats.primary = primaryPv?.name ?? '';
     const wantShadows = !!primaryVis && q.shadowCascades > 0 && alt < 3500;
+    perfmon.end('actors');
+    perfmon.begin('shadows');
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;
     if (wantShadows && primaryVis) {
@@ -398,6 +453,8 @@ export class Renderer {
       this.shadows.uniforms.uShadowOn.value = 0;
     }
     const callsShadow = r.info.render.calls, trisShadow = r.info.render.triangles;
+    perfmon.end('shadows');
+    perfmon.begin('scene');
 
     // ── opaque scene → HDR ──
     const post = this.post;
@@ -406,6 +463,8 @@ export class Renderer {
     r.setClearColor(0x000000, 1);
     r.render(this.scene, cam);
     const callsScene = r.info.render.calls, trisScene = r.info.render.triangles;
+    perfmon.end('scene');
+    perfmon.begin('post');
     // contact shadows (GTAO, Medium+) from the OPAQUE depth, before the water is drawn: computed after the water, the
     // sheet's edge against the beach was a crease it darkened — a dashed black line along every waterline — and the
     // water surface itself took AO. (aoFactor weighs each AO sample by depth, so water pixels, whose depth is the
@@ -420,7 +479,9 @@ export class Renderer {
       this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
     }
     // ── water (reads copies of colour and linear depth) ──
-    post.copyForWater(r, this.fsq, cam.far);
+    let anyWater = false;
+    for (const vis of this.planets.values()) if (vis.lod.stats.waterPatches > 0) anyWater = true;
+    post.copyForWater(r, this.fsq, cam.far, anyWater || this.ships.fx.wantsSceneCopy || !SKIP_COPY);
     // ground decals and FX lights (brush, reticles, the hand's shadow, crater glow, cracks…) under the water and haze
     this.godfx.renderDecals(r, this.scene, cam, post);
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
@@ -430,8 +491,6 @@ export class Renderer {
     this.waterScene.uPrevValid.value = post.prevValid ? 1 : 0;
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
-    let anyWater = false;
-    for (const vis of this.planets.values()) if (vis.lod.stats.waterPatches > 0) anyWater = true;
     if (anyWater) {
       cam.layers.set(2);
       r.autoClear = false;
@@ -624,6 +683,8 @@ export class Renderer {
     post.finish(r, this.fsq, finishIn, this.photoPost.settings(this.settings, this.photoSettings), sun, dt, time, null);
     this.settings.exposureBias -= evGod;
     if (this.cutFrames > 0) this.cutFrames--;
+    perfmon.end('post');
+    if (perfmon.on) perfmon.programs = r.info.programs?.length ?? 0;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
   }

@@ -98,13 +98,16 @@ const SOURCES: Record<TexName, FieldName[]> = {
   O: ['ore', 'oreType'],
 };
 
+const TEX_NAMES = Object.keys(SOURCES) as TexName[];
+
 export class FieldTextures {
   readonly rows: number;
   readonly tex: Record<TexName, DataTexture>;
   /** CPU copies used by the chunk system for bounds / water presence (same arrays as the textures) */
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
-  private stamps: Record<TexName, string> = { A: '', W: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '', O: '' };
+  /** per texture: its source fields' versions (+ light / ore palette version) at its last fill; NaN = never filled */
+  private stamps = Object.fromEntries((Object.keys(SOURCES) as TexName[]).map((k) => [k, new Float64Array(SOURCES[k].length + 1).fill(NaN)])) as Record<TexName, Float64Array>;
   /** night light per cell, supplied by the life layer (lit buildings), packed into S.z; and its version */
   private light: Float32Array | null = null;
   private lightVersion = 0;
@@ -138,12 +141,19 @@ export class FieldTextures {
     this.waterDepth = new Float32Array(count);
   }
 
-  private stamp(name: TexName): string {
-    let s = '';
-    for (const f of SOURCES[name]) s += (this.pv.fieldVersion.get(f) ?? 0) + ',';
-    if (name === 'S') s += `L${this.lightVersion}`;
-    if (name === 'O') s += `P${orePaletteVersion}`;
-    return s;
+  /**
+   * true (and the stamp taken) when any source of `name` changed since its last fill. Compared in place: it ran for 12
+   * textures every frame and built a string each time (per-frame garbage, macfix smooth).
+   */
+  private restamp(name: TexName): boolean {
+    const src = SOURCES[name], st = this.stamps[name];
+    const extra = name === 'S' ? this.lightVersion : name === 'O' ? orePaletteVersion : 0;
+    let same = st[src.length] === extra;
+    for (let i = 0; i < src.length && same; i++) same = st[i] === (this.pv.fieldVersion.get(src[i]) ?? 0);
+    if (same) return false;
+    for (let i = 0; i < src.length; i++) st[i] = this.pv.fieldVersion.get(src[i]) ?? 0;
+    st[src.length] = extra;
+    return true;
   }
 
   /** the life layer's per-cell night light (render/life/buildings.ts lightField); uploaded with S when it changes */
@@ -160,10 +170,8 @@ export class FieldTextures {
   /** upload whatever changed since the last call; returns true if heights / water changed */
   update(): boolean {
     let geom = false;
-    for (const name of Object.keys(SOURCES) as TexName[]) {
-      const st = this.stamp(name);
-      if (st === this.stamps[name]) continue;
-      this.stamps[name] = st;
+    for (const name of TEX_NAMES) {
+      if (!this.restamp(name)) continue;
       this.fill(name);
       this.tex[name].needsUpdate = true;
       if (name === 'A') { geom = true; this.geomVersion++; }
@@ -393,6 +401,41 @@ export class FieldTextures {
   }
 
   /**
+   * fillSurge's geometry, which depends only on the grid and the radius: each cell's tangent basis and each edge's
+   * neighbour offset (u, v) in it. Float64 and the same expressions as before, so W is bit-identical — it was
+   * recomputed (a hypot and six dot products per edge) every time the water changed (macfix smooth).
+   */
+  private surgeGeo: { grid: unknown; R: number; t: Float64Array; uv: Float64Array } | null = null;
+  private surgeGeometry(): { t: Float64Array; uv: Float64Array } {
+    const g = this.pv.grid;
+    const R = this.pv.params.radius;
+    if (this.surgeGeo && this.surgeGeo.grid === g && this.surgeGeo.R === R) return this.surgeGeo;
+    const n = g.count;
+    const P = g.pos;
+    const t = new Float64Array(n * 6);
+    const uv = new Float64Array(g.nbrStart[n] * 2);
+    for (let c = 0; c < n; c++) {
+      const px = P[c * 3], py = P[c * 3 + 1], pz = P[c * 3 + 2];
+      // tangent basis at the cell
+      let ax = 1, ay = 0, az = 0;
+      if (Math.abs(px) > 0.8) { ax = 0; ay = 1; }
+      let t1x = py * az - pz * ay, t1y = pz * ax - px * az, t1z = px * ay - py * ax;
+      const l1 = Math.hypot(t1x, t1y, t1z);
+      t1x /= l1; t1y /= l1; t1z /= l1;
+      const t2x = py * t1z - pz * t1y, t2y = pz * t1x - px * t1z, t2z = px * t1y - py * t1x;
+      t[c * 6] = t1x; t[c * 6 + 1] = t1y; t[c * 6 + 2] = t1z; t[c * 6 + 3] = t2x; t[c * 6 + 4] = t2y; t[c * 6 + 5] = t2z;
+      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+        const o = g.nbr[e];
+        const dx0 = (P[o * 3] - px) * R, dy0 = (P[o * 3 + 1] - py) * R, dz0 = (P[o * 3 + 2] - pz) * R;
+        uv[e * 2] = dx0 * t1x + dy0 * t1y + dz0 * t1z;
+        uv[e * 2 + 1] = dx0 * t2x + dy0 * t2y + dz0 * t2z;
+      }
+    }
+    this.surgeGeo = { grid: g, R, t, uv };
+    return this.surgeGeo;
+  }
+
+  /**
    * W: the water level's own slope per CELL — x = excess (|grad level| less the bed's slope along it, m/m: a surge face where
    * it is clearly positive), yzw = the level's gradient (body frame, m/m, tangent). Least-squares over the cell's wet
    * neighbours. The ocean once took this slope from screen derivatives of the level, which is linear over each 50 m sim
@@ -402,30 +445,20 @@ export class FieldTextures {
   private fillSurge(): void {
     const g = this.pv.grid;
     const n = g.count;
-    const R = this.pv.params.radius;
     const d = this.tex.W.image.data as Float32Array;
     const s = this.field('surface');
     const wl = this.waterLevel, wd = this.waterDepth;
-    const P = g.pos;
     d.fill(0);
     if (!s) return;
+    const { t, uv } = this.surgeGeometry();
     for (let c = 0; c < n; c++) {
       if (wd[c] <= WET) continue;
-      const px = P[c * 3], py = P[c * 3 + 1], pz = P[c * 3 + 2];
-      // tangent basis at the cell
-      let ax = 1, ay = 0, az = 0;
-      if (Math.abs(px) > 0.8) { ax = 0; ay = 1; }
-      let t1x = py * az - pz * ay, t1y = pz * ax - px * az, t1z = px * ay - py * ax;
-      const l1 = Math.hypot(t1x, t1y, t1z);
-      t1x /= l1; t1y /= l1; t1z /= l1;
-      const t2x = py * t1z - pz * t1y, t2y = pz * t1x - px * t1z, t2z = px * t1y - py * t1x;
       let sxx = 0, sxy = 0, syy = 0, sxw = 0, syw = 0, sxb = 0, syb = 0, k = 0;
       const wc = wl[c], sc = s[c];
       for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
         const o = g.nbr[e];
         if (wd[o] <= WET) continue;
-        const dx0 = (P[o * 3] - px) * R, dy0 = (P[o * 3 + 1] - py) * R, dz0 = (P[o * 3 + 2] - pz) * R;
-        const u = dx0 * t1x + dy0 * t1y + dz0 * t1z, v = dx0 * t2x + dy0 * t2y + dz0 * t2z;
+        const u = uv[e * 2], v = uv[e * 2 + 1];
         const dw = wl[o] - wc, db = s[o] - sc;
         sxx += u * u; sxy += u * v; syy += v * v;
         sxw += u * dw; syw += v * dw; sxb += u * db; syb += v * db;
@@ -440,9 +473,9 @@ export class FieldTextures {
       // still sea over a shelving bed is flat, and a wave's face over that shelf owes nothing to the bed)
       const gw = Math.hypot(gwu, gwv);
       d[c * 4] = gw > 1e-6 ? gw - Math.max(0, gwu * gbu + gwv * gbv) / gw : 0;
-      d[c * 4 + 1] = gwu * t1x + gwv * t2x;
-      d[c * 4 + 2] = gwu * t1y + gwv * t2y;
-      d[c * 4 + 3] = gwu * t1z + gwv * t2z;
+      d[c * 4 + 1] = gwu * t[c * 6] + gwv * t[c * 6 + 3];
+      d[c * 4 + 2] = gwu * t[c * 6 + 1] + gwv * t[c * 6 + 4];
+      d[c * 4 + 3] = gwu * t[c * 6 + 2] + gwv * t[c * 6 + 5];
     }
   }
 

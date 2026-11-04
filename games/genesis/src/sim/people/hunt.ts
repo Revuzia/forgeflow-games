@@ -196,10 +196,15 @@ export function onFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, cell: n
   return true;
 }
 
+/** (postrel P02) how many of the best herds a party weighs before it gives up on game it can walk to. Was 3: in a grown
+ * world a lakeside or coastal town has a dozen herds in range across the water ranked above the one on its own shore
+ * (seed 1's "Hogan in the Hills": game on foot at 334 m, the three best across the water, no party in years) */
+export const FOOT_TRIES = 10;
+
 /** (fix r3 #7) bestGame for a party setting out: the best game they can WALK to (the next best when water lies between) */
-function gameOnFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, n: number, bold: boolean, skip?: readonly number[]): Herd | null {
+export function gameOnFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, n: number, bold: boolean, skip?: readonly number[]): Herd | null {
   const sk = skip ? skip.slice() : [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < FOOT_TRIES; i++) {
     const g = bestGame(x, st, from, n, bold, sk);
     if (!g || onFoot(x, st, from, g.cell)) return g;
     sk.push(g.id);

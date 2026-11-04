@@ -29,7 +29,7 @@
 //     happen once (sowing, harvest, storing, hauling and building, mourning, burial, exploring, a band's march),
 //     missions, boats, the possessed and the god's disciples are never stretched.
 //   * BATCHED WALKS. A walk's segment runs on through several waypoints (straight between them, as the renderer's
-//     snapshots 1-2 game hours apart draw it anyway) up to a longer leg (tasks.ts MAX_LEG × LEG[level]): a couple of
+//     snapshots 1-2 game hours apart draw it anyway) up to a longer leg (tasks.ts MAX_LEG × LEG[level], 4 at both levels): a couple of
 //     wake-ups per walk instead of one per cell. Every cell passed is still worn. (Round 2: a flight from fire is
 //     walked as at 1x — plain legs, woken on arrival: see mergeArrival.)
 //   * COARSE SETTLEMENT STEP. settlement.ts settlementStep runs every SETTLE_HOURS[level] = 2 / 4 hours (staggered
@@ -72,7 +72,7 @@ import { foodSessionsLeft } from './pace.ts';
 /** most sessions a stretched task stands for, per level (lapse.ts planetLevel: 3 = a world the camera is not on) */
 export const STRETCH: readonly [number, number, number, number] = [1, 2, 4, 4];
 /** longest walking leg (× tasks.ts MAX_LEG), per level */
-export const LEG: readonly [number, number, number, number] = [1, 2, 4, 4];
+export const LEG: readonly [number, number, number, number] = [1, 4, 4, 4];
 /** hours a settlement step integrates, per level */
 export const SETTLE_HOURS: readonly [number, number, number, number] = [1, 2, 4, 6];
 
@@ -121,7 +121,8 @@ export function stretchFor(x: PCtx, s: number, t: { kind: number; data?: number;
   // is mostly something else; stretched in time it took 40 % more of the children's day at 1000x)
   const mode = kind === TASK.farm ? (t.data2 === 1 ? REPEAT : NONE) : MODE[kind];
   if (mode === NONE || lastStress > 0.05) return 0;
-  if (A.mission[s] || A.boat[s] >= 0 || A.flags[s] & (AgentFlag.possessed | AgentFlag.disciple)) return 0;
+  // (a fisher out in the town's boat is stretched like one on the bank: PUNCH P22, fishing.ts)
+  if (A.mission[s] || (A.boat[s] >= 0 && kind !== TASK.fish) || A.flags[s] & (AgentFlag.possessed | AgentFlag.disciple)) return 0;
   const st = x.ps.settlement(A.settlement[s]);
   if (!st || st.band) return 0;
   const cx = ctxOf(x, st);
@@ -241,16 +242,18 @@ export function batchHops(x: PCtx, s: number, to: number, goal: number[], dur: n
 }
 
 /**
- * At 1000x a walk that ends at the task's goal point goes straight on into the work (tasks.ts nextSegment →
- * beginWork at the segment's end): the agent is not woken on arrival — one turn less per errand. (At 100x the
- * renderer still draws the walk, so the arrival keeps its own turn.) Never for a flight from fire (push 3 round 2): a
+ * At levels >= 1 a walk that ends at the task's goal point goes straight on into the work (tasks.ts nextSegment →
+ * beginWork at the segment's end): the agent is not woken on arrival — one turn less per errand. (POSTREL perf: level
+ * 1 too — it was 3000x only from when level 1 was the 100x preset and the renderer still drew each walk; level 1 is
+ * now the 1000x preset, a day in 1.4 real seconds, snapshots game hours apart. Decisions per tick at 1 500 agents
+ * 16.0 -> 9.3 (3000x: 8.2); 8 seeds' births, deaths, stores as before: _harness/scratch/postrel/perf.md.) Never for a flight from fire (push 3 round 2): a
  * walker counts as standing in the cell it walks to (tasks.ts nextSegment) and a fleeing agent is not interrupted by
  * the fire (people.ts fireCheck), so a long merged leg toward a cell the fire then reached burnt it all the way there —
  * 1x wakes it on arrival and it flees on. Fire deaths at 1000x ran far above 1x (seed 3: 137 of 400 in two fires died
  * fleeing on such legs; 5 of 127 at 1x).
  */
 export function mergeArrival(x: PCtx, kind = -1): boolean {
-  return kind !== TASK.flee && level(x) >= 2;
+  return kind !== TASK.flee && level(x) >= 1;
 }
 
 /**

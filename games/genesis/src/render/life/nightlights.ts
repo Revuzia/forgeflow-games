@@ -59,6 +59,16 @@ export class NightLights {
     }
   }
 
+  /**
+   * (load-time shader warm-up, Renderer.warmUp) show the whole pool, or put back what update() decided. Every lit
+   * material has one program per point-light count, so the first fire or lamp near the camera linked them all in one
+   * frame (terrain, buildings, every instanced kind: 8 programs in the lightning case, macfix/progs.json). The pool
+   * keeps intensity 0 until update() places it, so nothing is drawn differently.
+   */
+  warmShow(show: boolean): void {
+    for (const l of this.pool) l.visible = show || this.on;
+  }
+
   /** the candidate sources (rebuilt when the emitters change) */
   setSources(emitters: LifeEmitter[], extra: LightSource[]): void {
     this.sources = [];

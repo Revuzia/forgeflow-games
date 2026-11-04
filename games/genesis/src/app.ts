@@ -46,6 +46,7 @@ import type { ToastSpec, ToastAction } from './ui/toasts.ts';
 import { store } from './ui/dom.ts';
 import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
+import { perfmon } from './render/perfmon.ts';
 
 export interface AppOptions {
   scenario: string;
@@ -143,6 +144,24 @@ const DESTRUCTIVE = /^(disaster\.spawn|miracle\.(lightning|fireball|meteor|fire)
 /** the audio module (src/audio/**, its own lane), loaded lazily so a world without sound still runs */
 const AUDIO_MODULE = import.meta.glob<{ createAudio: (o?: Record<string, unknown>) => GenesisAudio }>('./audio/engine.ts');
 
+
+/**
+ * a canvas as a JPEG data URL, encoded off the main thread (toBlob) — toDataURL encodes synchronously and, on a canvas
+ * drawn from the GPU, waits for the GPU there and then (macfix smooth: it showed as a stall in the autosave's frame)
+ */
+function jpegURL(c: HTMLCanvasElement): Promise<string | null> {
+  return new Promise((ok) => {
+    try {
+      c.toBlob((b) => {
+        if (!b) { ok(null); return; }
+        const r = new FileReader();
+        r.onload = () => ok(typeof r.result === 'string' ? r.result : null);
+        r.onerror = () => ok(null);
+        r.readAsDataURL(b);
+      }, 'image/jpeg', 0.8);
+    } catch { ok(null); }
+  });
+}
 export class App implements UiHost {
   readonly canvas: HTMLCanvasElement;
   readonly opts: AppOptions;
@@ -173,6 +192,8 @@ export class App implements UiHost {
   private running = false;
   private frameErrors = 0;
   private captureWaiters: ((url: string) => void)[] = [];
+  /** a save's picture: a small bitmap of the next frame (see thumb()) */
+  private thumbWaiters: ((b: Promise<ImageBitmap | null>) => void)[] = [];
   private frameWaiters: { n: number; ok: () => void }[] = [];
   private hover: PickHit | null = null;
   private hoverAt: [number, number] = [-1, -1];
@@ -363,15 +384,19 @@ export class App implements UiHost {
     progress('The first light…', 0.86);
     // warm-up frames: build the near terrain, the LUTs and the cloud noise before the boot card fades
     for (let i = 0; i < 3; i++) this.frame(performance.now());
+    // …and link every shader the scene holds, hidden effects included, before play (no first-use hitch; draws nothing)
+    perfmon.warmed = await this.renderer.warmUp();
     this.startAt = performance.now();
     progress('', 1);
     this.running = true;
+    // ?perf=1 opens the frame monitor's overlay from the start (Shift+F12 toggles it)
+    if (/[?&]perf=1(&|$)/.test(location.search)) perfmon.toggleOverlay(document.body, true);
     this.last = performance.now();
     const loop = (t: number) => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
       // a hidden tab renders nothing (the sim keeps its own pace in the worker)
-      if (document.hidden && !this.frameWaiters.length && !this.captureWaiters.length) { this.last = t; return; }
+      if (document.hidden && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
       this.frame(t);
     };
     this.raf = requestAnimationFrame(loop);
@@ -715,32 +740,55 @@ export class App implements UiHost {
     this.last = now;
     // the frame rate shown is the true one (dt is clamped for the camera and the clock, the rate is not)
     if (raw > 0) { this.frameSec = raw; this.fps = this.fps * 0.85 + (1 / raw) * 0.15; if (1 / raw < this.fps * 0.5) this.fps = 1 / raw; }
+    perfmon.frameStart(now);
     try {
       const view = this.sim.view;
+      perfmon.begin('view');
       view.update(now);
+      perfmon.end('view');
+      perfmon.begin('ui.pre');
       this.ui.preFrame(dt);
+      perfmon.end('ui.pre');
+      perfmon.begin('camera');
       this.cameraModesFrame(dt);
       const pose = this.titlePose(this.rig.update(dt, view, this.input), dt);
       this.syncModes();
       this.applyLook();
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
+      perfmon.end('camera');
+      perfmon.begin('hover');
       this.updateHover();
+      perfmon.end('hover');
       // the god hand follows the ground under the cursor and takes the UI hand's pose (render/hand.ts) — never over the
       // title: its world is a backdrop (punch P17)
       if (this.titleOn) this.renderer.godfx.setInput(null, 'none', false);
       else this.renderer.godfx.setInput(this.hover, this.ui.hand.cursor, this.ui.hand.isAiming);
       this.renderer.render(view, pose, dt, (now - this.startAt) / 1000);
+      if (this.thumbWaiters.length) {
+        // (the drawing buffer is copied now, in the frame that drew it; the scaling happens off this frame)
+        const W = this.canvas.width, H = this.canvas.height;
+        const bmp = typeof createImageBitmap === 'function'
+          ? createImageBitmap(this.canvas, { resizeWidth: 256, resizeHeight: Math.max(1, Math.round((256 * H) / Math.max(1, W))), resizeQuality: 'medium' }).catch(() => null)
+          : Promise.resolve(null);
+        for (const w of this.thumbWaiters.splice(0)) w(bmp);
+      }
       if (this.captureWaiters.length) {
         const url = this.renderer.snapshotDataURL();
         for (const w of this.captureWaiters.splice(0)) w(url);
       }
+      perfmon.begin('sim.pump');
       this.sim.pump(now);
       this.sendFocus(now);
+      perfmon.end('sim.pump');
+      perfmon.begin('audio');
       if (this.audio) {
         // before the toasts drain the events: the audio hears them first (it does not consume them)
         try { this.audio.setListener(pose, this.renderer.primaryId, this.renderer.stats.altitude); this.audio.update(view, dt); } catch (e) { console.warn('[genesis] audio frame failed', e); this.audio = null; }
       }
+      perfmon.end('audio');
+      perfmon.begin('ui.post');
       this.ui.postFrame(dt);
+      perfmon.end('ui.post');
       this.pruneUndone();
       this.updateMarker();
       this.updateHoverRing();
@@ -760,6 +808,7 @@ export class App implements UiHost {
     for (let i = this.frameWaiters.length - 1; i >= 0; i--) {
       if (--this.frameWaiters[i].n <= 0) { this.frameWaiters[i].ok(); this.frameWaiters.splice(i, 1); }
     }
+    perfmon.frameEnd();
   }
 
   private hudFrame() {
@@ -830,7 +879,11 @@ export class App implements UiHost {
     }, { passive: false });
     // middle-click autoscroll must not start over the world
     c.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-    window.addEventListener('keydown', (e) => this.ui.keyDown(e));
+    // the hidden frame monitor (render/perfmon.ts): Shift+F12 shows fps, the frame-time graph and ms per subsystem
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'F12' && e.shiftKey) { e.preventDefault(); perfmon.toggleOverlay(document.body); return; }
+      this.ui.keyDown(e);
+    });
     window.addEventListener('keyup', (e) => this.ui.keyUp(e));
     window.addEventListener('blur', () => this.ui.blur());
   }
@@ -1786,6 +1839,20 @@ export class App implements UiHost {
 
   /** a small picture of the view for a save slot */
   private async thumb(): Promise<string | null> {
+    // A save's picture (256 px wide). Not a PNG of the whole canvas: that was a synchronous read-back and a full-size PNG
+    // encode inside a frame (tens of ms at a Retina fullscreen; an autosave comes every few minutes and soon after a
+    // god's act) — the frame's bitmap is copied as it is drawn and scaled down asynchronously (macfix smooth).
+    const bmp = await Promise.race([new Promise<Promise<ImageBitmap | null>>((ok) => this.thumbWaiters.push(ok)).then((p) => p), new Promise<'late'>((ok) => setTimeout(() => ok('late'), 8000))]);
+    // (a GPU too busy to copy within 8 s gets no new picture — the save keeps its last one — rather than a full-size
+    // synchronous PNG read-back on top: under a software GPU that fallback stalled a frame for 20 s)
+    if (bmp === 'late') return null;
+    if (bmp) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = Math.max(1, Math.round((256 * bmp.height) / Math.max(1, bmp.width)));
+      c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height);
+      bmp.close();
+      return jpegURL(c);
+    }
     const url = await Promise.race([this.capture(), new Promise<string>((ok) => setTimeout(() => ok(''), 8000))]);
     if (!url) return null;
     return new Promise((ok) => {
@@ -1794,7 +1861,7 @@ export class App implements UiHost {
         const c = document.createElement('canvas');
         c.width = 256; c.height = Math.round(256 * img.height / Math.max(1, img.width));
         c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
-        ok(c.toDataURL('image/jpeg', 0.8));
+        void jpegURL(c).then(ok);
       };
       img.onerror = () => ok(null);
       img.src = url;

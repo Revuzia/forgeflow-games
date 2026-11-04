@@ -177,7 +177,18 @@ export class DisasterFx {
     this.shared = shared;
     this.group.name = 'disasters';
     this.group.matrixAutoUpdate = false;
+    // shader warm-up holders (macfix/smooth.md F11): one never-drawn instance of each effect mesh that is otherwise
+    // created at a disaster's first frame. Renderer.warmUp's compile walks hidden objects too, so their programs link at
+    // load instead of stalling the first meteor / tornado / tsunami frame; and since a program lives while a material
+    // uses it, a finished disaster's dispose() no longer deletes it for the next one to link again. Never visible:
+    // the image is unchanged.
+    this.warm.name = 'disasters-warm';
+    this.warm.visible = false;
+    this.warm.matrixAutoUpdate = false;
+    this.warm.add(new Comet(fx).group, new Bolide(fx).group, new Funnel(fx).group, new Dome(fx).mesh, new TsunamiCrest(fx, shared).mesh);
+    this.group.add(this.warm);
   }
+  private readonly warm = new Group();
 
   // ───────────────────────────── events ─────────────────────────────
 

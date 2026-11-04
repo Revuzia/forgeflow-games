@@ -466,7 +466,7 @@ export function settlementStep(x: PCtx, st: Settlement): void {
 }
 
 /** a wandering band: the leader picks a site, the band walks there, and settles */
-const _bt = [0, 0, 0];
+const _bt = [0, 0, 0], _bw = [0, 0, 0];
 /** (fix r3 #17) a cell within `m` metres of a live town other than `st` (a budding daughter's own rule, BUD_APART) */
 function nearTown(x: PCtx, st: Settlement, c: number, m: number): boolean {
   cellPos(x.p, c, _bt);
@@ -487,11 +487,22 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   A.posAt(lead, x.tick, at);
   const here = x.p.cellAt(at);
   refreshLibrary(x, st);
-  // (LIVING.md §2.7: water running within WATER_NEAR's walk of the camp is the band's camp water — decide.ts bandWater —
-  // once it is seen, not only once someone has drunk there: a band that lay up through its pond's filling woke to a dry
-  // pond and walked off for water 1.5 km away)
+  // (LIVING.md §2.7: the water near the camp that someone drank at — work.ts records the drink — is the band's camp
+  // water, decide.ts bandWater, kept while the leader sees it running. (PUNCH P27) Water the leader merely sees is not:
+  // any water in sight used to become camp water, though no one had drunk there. Seen water that runs dry and comes back
+  // is, though — a pond that fills and drains: a band that lay up through its first filling woke to a dry pond and walked
+  // off for water 1.5 km away (wsaw: the water last seen; wgone: when it went out of sight)
   const seen = waterOnFoot(x, A.species[lead], here, false, WATER_NEAR);
-  if (seen.drink >= 0) { st.recent.wcell = seen.drink; st.recent.wseen = x.tick; }
+  const R = st.recent;
+  if (seen.drink >= 0) {
+    const same = (c: number | undefined) => c !== undefined && (c === seen.drink || distM(x.p, cellPos(x.p, seen.drink, _bt), cellPos(x.p, c, _bw)) <= WATER_NEAR);
+    if (same(R.wcell) || (R.wgone !== undefined && same(R.wsaw))) { R.wcell = seen.drink; R.wseen = x.tick; }
+    R.wsaw = seen.drink;
+    delete R.wgone;
+  } else if (R.wsaw !== undefined) {
+    if (R.wgone === undefined) R.wgone = x.tick;
+    else if (x.tick - R.wgone > x.day) { delete R.wsaw; delete R.wgone; }
+  }
   // (the band's camp water came back: members walking out to water farther off are called back to it — by planDrink's
   // own rule, decide.ts campBeats; at time-lapse a walk is lived in legs of hours, too long to wait for the walker's own
   // next look)
@@ -507,7 +518,10 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   // her (siteScore's keep-away is a soft 260 m): no site within BUD_APART of a live town, and a bud that has found no
   // free ground in BUD_HOME days goes home to its mother (they ask again at her next bud check)
   const bud = st.recent.bud !== undefined;
-  if (!st.target && bud && x.tick - st.recent.bud! > BUD_HOME * x.day && st.recent.kin === undefined) {
+  // (PUNCH P28) every daughter village keeps it, not only a bud: households a crowded or split town sends off
+  // (splitOff, recent.daughter) used to settle wherever 250 m from their mother was enough
+  const apart = bud || st.recent.daughter !== undefined;
+  if (!st.target && apart && x.tick - (st.recent.bud ?? st.recent.daughter)! > BUD_HOME * x.day && st.recent.kin === undefined) {
     const mother = st.parent >= 0 ? x.ps.settlement(st.parent) : undefined;
     if (mother && mother.fallen < 0 && !mother.band) {
       st.target = [mother.pos[0], mother.pos[1], mother.pos[2]];
@@ -528,7 +542,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
     // (LIVING.md §2.7: the band judges by the land it can WALK to within three days (waterway.ts) — a site or a bearing
     // across the sea or up a cliff is passed over, not swum for blind)
     waterReach(x, st, here, 3 * DAY_WALK);
-    const skip = (c: number) => skip0(c) || reachCost(x, c) === Infinity || (bud && nearTown(x, st, c, BUD_APART));
+    const skip = (c: number) => skip0(c) || reachCost(x, c) === Infinity || (apart && nearTown(x, st, c, BUD_APART));
     let site = searchSite(x, st.species, here, 3, st.id, skip);
     // nothing good within sight: scouts range out over a kilometre before the band moves on blind
     if (!(site.cell >= 0 && site.score >= 3.2)) site = scoutFar(x, st, at, skip);
@@ -582,7 +596,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   const roaming = st.recent.roam !== undefined;
   // (a place the god chose is kept unless it floods: the god's word outweighs the band's judgement of the site)
   const godSite = st.recent.godSite !== undefined;
-  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && (siteScore(x, st.species, tc, st.id) < 3.2 || (bud && nearTown(x, st, tc, BUD_APART))));
+  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && (siteScore(x, st.species, tc, st.id) < 3.2 || (apart && nearTown(x, st, tc, BUD_APART))));
   if (leadD < (st.recent.tgtBest ?? Infinity) - 30) { st.recent.tgtBest = Math.round(leadD); st.recent.tgtAt = x.tick; }
   const stuck = x.tick - (st.recent.tgtAt ?? x.tick) > 3 * x.day;
   // a bearing is judged again every six hours: given up when the band can no longer walk to it (LIVING.md §2.7)
@@ -606,10 +620,10 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   if (near >= members.length * 0.5 || (leadD < 60 && near * 3 >= members.length)) {
     // (LIVING LAND: drought refugees join their kin — abandon)
     const kin = st.recent.kin !== undefined ? x.ps.settlement(st.recent.kin) : undefined;
-    if (kin && kin.fallen < 0 && !kin.band) { joinKin(x, st, kin, bud ? 'bud.home' : 'abandon.joined'); return; }
+    if (kin && kin.fallen < 0 && !kin.band) { joinKin(x, st, kin, apart ? 'bud.home' : 'abandon.joined'); return; }
     const v = siteScore(x, st.species, tc, st.id);
     // (fix r3 #17: a bud never founds where it wandered inside another town's BUD_APART)
-    const crowded = bud && !godSite && nearTown(x, st, tc, BUD_APART);
+    const crowded = apart && !godSite && nearTown(x, st, tc, BUD_APART);
     if (crowded && !roaming) st.recent[`u${tc}`] = x.tick;
     if (!crowded && (v >= 3.2 || godSite || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day))) {
       // ruins of a fallen settlement here?
@@ -938,6 +952,8 @@ function planWants(x: PCtx, st: Settlement): void {
 // ───────────────────────────── construction ─────────────────────────────
 
 const SHELTER_PREF = ['house', 'longhouse', 'hive-mound', 'igloo', 'hut', 'lean-to'];
+/** (postrel P11) a town far short of roofs: the quickest beds first (a hut's 300 work for 5 beds, a house's 700 for 6) */
+export const QUICK_SHELTER = ['hive-mound', 'igloo', 'hut', 'lean-to', 'house', 'longhouse'];
 const ONE_EACH = ['hearth', 'kiln', 'furnace', 'forge', 'oven', 'workshop', 'pen', 'well', 'shrine', 'temple', 'library', 'school', 'market', 'dock',
   'shipyard', 'mill', 'observatory', 'lighthouse', 'mine', 'factory', 'powerplant', 'radio-mast', 'refinery', 'lab', 'launchpad', 'aqueduct', 'tower', 'blast-furnace'];
 
@@ -984,7 +1000,10 @@ export function planConstruction(x: PCtx, st: Settlement): void {
   // shelter for everyone
   if (wantBeds) {
     const sp = x.c.species.list[st.species].id;
-    for (const id of SHELTER_PREF) {
+    // (postrel P11: a daughter village of 19 founded two days before a year end slept in the open into the next year
+    // while its first houses — 700 work each — rose. A town with roofs for under 0.6 of its people puts up the quick
+    // shelters first, huts and lean-tos, and builds houses once everyone sleeps under one)
+    for (const id of bedsUp < pop * 0.6 ? QUICK_SHELTER : SHELTER_PREF) {
       if (!ok(id)) continue;
       if (id === 'igloo' && !(x.p.f.snow[st.cell] > 0.1 || x.p.f.temperature[st.cell] < -2)) continue;
       if (id === 'hive-mound' && sp !== 'hive') continue;
@@ -1410,11 +1429,17 @@ export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: s
   child.era = computeEra(x, child);
   // where to: a good site well away from the parent, by land — or over the water when they have boats and it is better
   // (fix r1 #10/#17: a budding daughter village goes to the ground chosen for it, `site`, on foot)
-  const far = site >= 0 ? { cell: site, score: Infinity } : searchSite(x, st.species, st.cell, 9, st.id);
-  let target = far.cell >= 0 && distM(x.p, cellPos(x.p, far.cell), st.pos) > 250 ? far.cell : -1;
+  // (PUNCH P28) a daughter village of any cause keeps BUD_APART from every live town, her mother first (before, a site
+  // 250 m off was enough, and a crowded town's daughter was founded beside her); the band keeps the rule (bandStep)
+  if (site < 0) child.recent.daughter = x.tick;
+  const far = site >= 0 ? { cell: site, score: Infinity } : searchSite(x, st.species, st.cell, 9, st.id, (c) => nearTown(x, child, c, BUD_APART));
+  let target = far.cell >= 0 ? far.cell : -1;
   const boat = site >= 0 ? -1 : bestBoat(x, st);
   if (boat >= 0) {
-    const over = colonySite(x, st, boat, target >= 0 ? far.score : -Infinity);
+    // (PUNCH P28) the land site counts against a voyage only if it can be walked to: kept BUD_APART from the mother, the
+    // best site of a small island's town lies over the water, and the colonists set out on foot for it
+    const walk = target >= 0 && findPath(x.p, st.cell, target, walkOpts(x, st), []);
+    const over = colonySite(x, st, boat, walk ? far.score : -Infinity, (c) => nearTown(x, child, c, BUD_APART));
     if (over >= 0) {
       target = over;
       const boats = Math.min(Math.floor(storeHas(st, boat)), Math.ceil(moved / boatSeats(x, boat)));
@@ -1429,11 +1454,19 @@ export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: s
   return child;
 }
 
+/** the way a family with its goods goes on foot: it does not swim a strait (amphibious peoples do) */
+function walkOpts(x: PCtx, st: Settlement): ReturnType<typeof pathOptsFor> {
+  const land = pathOptsFor(x, st.species);
+  land.maxExpand = 3000;
+  if (land.swim < 1) land.swim = 0;
+  return land;
+}
+
 /**
  * A site across the water worth the voyage: the best site within ~16 rings that the band could not walk to but could
  * sail to, if it beats the best site by land (`landScore`). -1 when there is none.
  */
-function colonySite(x: PCtx, st: Settlement, boat: number, landScore: number): number {
+function colonySite(x: PCtx, st: Settlement, boat: number, landScore: number, skip?: (c: number) => boolean): number {
   const g = x.p.grid;
   const seen = new Set<number>([st.cell]);
   let fr = [st.cell];
@@ -1442,14 +1475,11 @@ function colonySite(x: PCtx, st: Settlement, boat: number, landScore: number): n
     const nf: number[] = [];
     for (const c of fr) for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) { const o = g.nbr[e]; if (!seen.has(o)) { seen.add(o); nf.push(o); } }
     nf.sort((a, b) => a - b);
-    if (d >= 5) for (let i = d % 2; i < nf.length; i += 2) { const v = siteScore(x, st.species, nf[i], st.id); if (v >= 3.2 && v > landScore + 0.5) cands.push([nf[i], v]); }
+    if (d >= 5) for (let i = d % 2; i < nf.length; i += 2) { const v = siteScore(x, st.species, nf[i], st.id); if (v >= 3.2 && v > landScore + 0.5 && !skip?.(nf[i])) cands.push([nf[i], v]); }
     fr = nf;
   }
   cands.sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  const land = pathOptsFor(x, st.species);
-  land.maxExpand = 3000;
-  // a family with its goods does not swim a strait (amphibious peoples do)
-  if (land.swim < 1) land.swim = 0;
+  const land = walkOpts(x, st);
   const sea = pathOptsFor(x, st.species);
   sea.swim = Math.max(sea.swim, 2.2);
   sea.maxExpand = 5000;

@@ -16,6 +16,7 @@
 
 import type { Command, CommandResult, FromWorker, Snapshot, ToWorker } from '../sim/types.ts';
 import { WorldView } from './worldview.ts';
+import { perfmon } from '../render/perfmon.ts';
 
 export type SnapshotSink = (snap: Snapshot) => void;
 
@@ -286,6 +287,7 @@ export class SimClient {
       else this.speedAt = -1;
     }
     this.view.apply(s, now);
+    perfmon.message(performance.now() - now);
     this.inFlight = false;
     if (this.freshWaiters.length) {
       for (let i = this.freshWaiters.length - 1; i >= 0; i--) if (this.freshWaiters[i].after < now) { this.freshWaiters[i].ok(); this.freshWaiters.splice(i, 1); }

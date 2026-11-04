@@ -5,10 +5,10 @@
 // Buckets grow by doubling; the CPU writes only what moved.
 
 import {
-  DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, type IUniform, type ShaderMaterial,
-  type MeshStandardMaterial,
+  BufferGeometry, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4,
+  type IUniform, type Material, type ShaderMaterial, type MeshStandardMaterial,
 } from 'three';
-import type { BodyMesh } from '../gen/bodygen.ts';
+import { PLAN, STILL_RIG, type BodyMesh } from '../gen/bodygen.ts';
 import { makeBodyDepthMaterial, makeBodyMaterial, type BodyMaterialOpts } from './bodymat.ts';
 
 export interface BodyBucket {
@@ -42,6 +42,33 @@ export class BodyBuckets {
     this.shared = shared;
     this.group.name = name;
     this.group.matrixAutoUpdate = false;
+    this.warmBodies();
+  }
+
+  /**
+   * shader warm-up holders (macfix/smooth.md F12): a bucket is made at the first sight of its kind, so its programs
+   * (shared per body plan: bodymat.ts customProgramCacheKey) linked in the frame a crowd or herd first came into view
+   * (tens of ms each on ANGLE / Metal). One never-drawn three-vertex instanced mesh per plan, with the body material
+   * and its shadow-caster material, lets Renderer.warmUp's compile (it walks hidden objects too) link them at load.
+   */
+  private warmBodies(): void {
+    const warm = new Group();
+    warm.name = `${this.group.name}-warm`;
+    warm.visible = false;
+    warm.matrixAutoUpdate = false;
+    const g = new BufferGeometry();
+    // (the attributes a body mesh has: bodygen.ts; the per-instance ones do not enter a program's key)
+    g.setAttribute('position', new Float32BufferAttribute(new Float32Array(9), 3));
+    g.setAttribute('normal', new Float32BufferAttribute(new Float32Array(9), 3));
+    g.setAttribute('aRig', new Float32BufferAttribute(new Float32Array(12), 4));
+    g.setAttribute('aSel', new Float32BufferAttribute(new Float32Array(12), 4));
+    const add = (m: Material) => { const mesh = new InstancedMesh(g, m, 1); mesh.count = 0; mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; warm.add(mesh); };
+    for (const plan of Object.values(PLAN)) {
+      const opts = { plan, rig: STILL_RIG };
+      add(makeBodyMaterial(this.shared, this.animTime, opts));
+      add(makeBodyDepthMaterial(this.animTime, opts));
+    }
+    this.group.add(warm);
   }
 
   /** the bucket for a mesh key (built on first use by `make`) */

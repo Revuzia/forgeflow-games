@@ -1,18 +1,14 @@
 // GENESIS — the god's presence, generated and drawn (render lane; LIVING §0.1.6–7, §3.4, §3.6, hooks H4–H8), without a
 // GPU:
-//   * the Touch's form (gen/handgen.ts): its look follows regard — warm daylight trusted, storm-dark and crackling
-//     feared — monotonically; open, its mantle rides the whirl up from a wide foot on the ground; holding, it gathers
-//     into a closed cradle round what it holds (every tuft near the cradle, on all sides of it, the crown left open),
-//     the low tufts last; the cradle fits a person, a boulder, a tree; its geometry is well formed; a crackle's arc is a
-//     connected jagged channel from one end to the other; nothing of it is a hand (no fingers, no palm, no rig)
-//   * the Touch at work (render/hand.ts HandVisual, driven frame by frame as the renderer drives it): it appears where
-//     the cursor is and goes when nothing calls it; it lifts a person (the cradle gathers round them, below the grip)
-//     and lets go; hurled fast it leaves a trail; a rebuke is a downdraft that throws dust and a cold flash; casting, it
-//     traces the miracle's sigil; feared it crackles (an arc struck at the moment nextCrackle names) under a gloom of
-//     its storm on the land round it, by day and night, trusted never;
-//     its shadow and its pool of light lie on the ground; a person it hurls is drawn flying by their own id (the
-//     sim's 'thrown' event names the projectile, a different id sequence), never a stranger; what it hurls flies as it held it
-//     (a tree as its own uprooted tree, upright as it left, end over end; a boulder at its mass's size)
+//   * the pointer (gen/handgen.ts, render/hand.ts HandVisual; owner 2026-11-04: "it can just be a hand, or the mouse
+//     pointer"): the god acts through the player's own cursor; in the world only a small ring of light on the ground
+//     under it (a constant size on screen, tinted by regard: warm trusted, cold feared), gone when the cursor leaves;
+//     what it holds floats just under the cursor (on the camera's ray through it) with a shadow under it, the throw's
+//     arc and landing reticle while it carries; a flick leaves a short streak; a rebuke or a soothing is a brief ground
+//     pulse; a cast traces the miracle's sigil; none of the old Touch's weather (vortex, cradle, crackles) is left; a
+//     person it hurls is drawn flying by their own id (the sim's 'thrown' event names the projectile, a different id
+//     sequence), never a stranger; what it hurls flies as it held it (a tree as its own uprooted tree, upright as it
+//     left, end over end; a boulder at its mass's size)
 //   * the creature is gone from the renderer: no creature layer or generator module ships
 //   * the sigils (fx/sigils.ts): ONE glyph per sigil — the stroke the Touch traces and the miracle writes on the land
 //     is the UI recogniser's own template, so the recogniser reads each drawn glyph back as its sigil; every power's
@@ -28,11 +24,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Color, Group, Vector3, type BufferGeometry, type IUniform, type Mesh, type Object3D, type ShaderMaterial } from 'three';
-import {
-  CRADLE_ALPHA, TOUCH_N, bandGeometry, crackleArc, cradleOf, discGeometry, gathered, mantlePoint, moteGeometry, stripGeometry, touchLook,
-  touchRng, tuftGeometry, vortexR, type VortexFrame,
-} from '../src/render/gen/handgen.ts';
+import { Color, Group, Vector3, type BufferGeometry, type IUniform, type Material, type Mesh, type Object3D, type ShaderMaterial } from 'three';
+import { TOUCH_N, stripGeometry, touchLook } from '../src/render/gen/handgen.ts';
 import * as handgen from '../src/render/gen/handgen.ts';
 import { HandVisual, heldPropGeometry, type HandFrame } from '../src/render/hand.ts';
 import { heldTrueSize } from '../src/render/fx/present.ts';
@@ -56,136 +49,33 @@ import type { PlanetView } from '../src/client/worldview.ts';
 
 const lum = (c: [number, number, number]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 
-test('the Touch looks as the people see the god: warm daylight trusted, storm-dark and crackling feared', () => {
+test('the pointer\'s ring is tinted by regard: warm gold trusted, cold feared — a tint, never weather', () => {
   const trusted = touchLook(1), awed = touchLook(0), feared = touchLook(-1);
-  // warm: red over blue when trusted; cold: blue over red when feared
   assert.ok(trusted.light[0] > trusted.light[2] + 0.4, `trusted light is warm (${trusted.light})`);
   assert.ok(feared.light[2] > feared.light[0] + 0.2, `feared light is cold (${feared.light})`);
-  assert.ok(feared.dark > 0.85 && trusted.dark === 0 && awed.dark === 0, 'only the feared god is storm-dark');
-  assert.ok(feared.cloud < 0.2 && trusted.cloud > 0.8, `slate storm vs sunlit cloud (${feared.cloud}, ${trusted.cloud})`);
-  assert.ok(feared.crackle > 1 && feared.crackle < 3 && trusted.crackle === 0 && awed.crackle === 0, 'only a feared god crackles, now and then');
-  // monotonic from feared to trusted: darkness and crackling fall, the cloud brightens, the light warms
+  assert.ok(feared.dark > 0.85 && trusted.dark === 0 && awed.dark === 0, 'only a feared god\'s glow leans cold');
   let prev = touchLook(-1);
   for (let r = -0.95; r <= 1.0001; r += 0.05) {
     const l = touchLook(r);
-    assert.ok(l.dark <= prev.dark + 1e-9 && l.crackle <= prev.crackle + 1e-9 && l.cloud >= prev.cloud - 1e-9, `monotonic at ${r.toFixed(2)}`);
+    assert.ok(l.dark <= prev.dark + 1e-9, `monotonic at ${r.toFixed(2)}`);
     assert.ok(l.light[0] - l.light[2] >= prev.light[0] - prev.light[2] - 1e-9, `warms at ${r.toFixed(2)}`);
     prev = l;
   }
-  // out-of-range and missing regard are clamped, never NaN
   for (const r of [-7, 7, Number.NaN]) for (const v of [...touchLook(r).light, touchLook(r).dark]) assert.ok(Number.isFinite(v));
   assert.ok(lum(trusted.light) > 0.6, 'a trusted god gives real light');
-});
-
-function frame(grasp: number, held = 'rock', drawn = 2.5, L = 12): VortexFrame {
-  // a vertical vortex at the north pole of a 3 km world, the grip 6 m up
-  const R = 3000, hg = 6;
-  const c = cradleOf(held, drawn, L);
-  return {
-    base: [0, R, 0], ax: [0, 1, 0], e1: [1, 0, 0], e2: [0, 0, 1], hg, L, rg: L * 0.85, rk: L * 0.36, spin: 1.3, flow: 7.7, grasp,
-    c: [0, R + hg - c.drop, 0], cr: c.r, ch: c.h,
-  };
-}
-
-test('open, the mantle rides a whirl up from a wide foot on the ground', () => {
-  const f = frame(0);
-  // the vortex is wide at the ground and narrow at the grip, flaring above it
-  assert.ok(vortexR(f, 0, 0.5) > vortexR(f, f.hg, 0.5) * 1.8, 'wide foot, narrow grip');
-  assert.ok(vortexR(f, f.hg + f.L, 0.5) > vortexR(f, f.hg, 0.5), 'it flares above the grip');
-  const g = tuftGeometry();
-  const seed = g.getAttribute('iSeed').array as ArrayLike<number>;
-  const p = [0, 0, 0];
-  let low = 0, wideLow = 0, maxH = 0;
-  for (let i = 0; i < TOUCH_N.tufts; i++) {
-    const env = mantlePoint(f, seed[i * 4], seed[i * 4 + 1], seed[i * 4 + 2], seed[i * 4 + 3], p);
-    assert.ok(env >= 0 && env <= 1 && p.every(Number.isFinite), 'finite tuft');
-    const h = p[1] - f.base[1], r = Math.hypot(p[0], p[2]);
-    assert.ok(h >= -1e-6 && h <= f.hg + 0.9 * f.L + 1e-6, `tuft within the whirl (${h.toFixed(2)})`);
-    maxH = Math.max(maxH, h);
-    if (h < f.hg * 0.3) { low++; if (r > f.rk) wideLow++; }
+  // the old Touch's weather is gone from the generator: no vortex, cradle, tufts, bands, crackles, hand
+  for (const k of ['vortexR', 'mantlePoint', 'cradleOf', 'tuftGeometry', 'bandGeometry', 'crackleArc', 'discGeometry', 'moteGeometry', 'handMesh', 'handRig', 'HAND_FINGERS']) {
+    assert.ok(!(k in handgen), `no ${k}`);
   }
-  assert.ok(low >= 8 && wideLow / low > 0.7, `the whirl reaches the ground wide (${wideLow}/${low})`);
-  assert.ok(maxH > f.hg, 'and rises past the grip');
+  const strip = stripGeometry(TOUCH_N.glyph, 2);
+  const idx = strip.getIndex()!;
+  assert.ok(idx.count % 3 === 0 && idx.count > 0, 'strips: triangles');
+  for (let i = 0; i < idx.count; i++) assert.ok(idx.getX(i) < strip.getAttribute('position').count, 'index in range');
 });
 
-test('holding, the mantle gathers into a closed cradle round what it holds, the low tufts last', () => {
-  for (const [kind, drawn] of [['rock', 2.6], ['agent', 1.8], ['tree', 12], ['building', 4.5]] as [string, number][]) {
-    const f = frame(1, kind, drawn);
-    const g = tuftGeometry();
-    const seed = g.getAttribute('iSeed').array as ArrayLike<number>;
-    const p = [0, 0, 0];
-    const oct = new Set<number>();
-    let below = 0, above = 0;
-    for (let i = 0; i < TOUCH_N.tufts; i++) {
-      const env = mantlePoint(f, seed[i * 4], seed[i * 4 + 1], seed[i * 4 + 2], seed[i * 4 + 3], p);
-      assert.ok(Math.abs(env - CRADLE_ALPHA) < 1e-9, 'gathered tufts stay, lighter than the whirl\'s billows');
-      const dx = (p[0] - f.c[0]) / f.cr, dy = (p[1] - f.c[1]) / f.ch, dz = (p[2] - f.c[2]) / f.cr;
-      const d = Math.hypot(dx, dy, dz);
-      assert.ok(d > 0.75 && d < 1.25, `${kind}: on the cradle's shell (${d.toFixed(2)})`);
-      // the crown is left open for the light: no tuft right over the top
-      assert.ok(dy < 0.88, `${kind}: crown open (${dy.toFixed(2)})`);
-      oct.add((dx > 0 ? 1 : 0) + (dz > 0 ? 2 : 0) + (dy > 0 ? 4 : 0));
-      if (dy < -0.3) below++; if (dy > 0.2) above++;
-    }
-    assert.equal(oct.size, 8, `${kind}: the cradle closes round it on every side`);
-    assert.ok(below > 10 && above > 10, `${kind}: under and over it (${below}, ${above})`);
-  }
-  // the cradle is larger than what it holds and fits it
-  for (const L of [4, 12, 40]) {
-    const a = cradleOf('agent', 1.8, L), r = cradleOf('rock', 2.6, L), t = cradleOf('tree', 12, L);
-    assert.ok(a.h > 0.9 && a.r > 0.5 && a.drop > 0, 'a person hangs inside it, below the grip');
-    assert.ok(r.r > 1.3 && r.h > 1.3, 'a boulder inside');
-    assert.ok(t.h > 6 && t.h > t.r * 0.8, 'a tree inside, the cradle tall');
-  }
-  // the gathering is staggered: at half grasp the high tufts are in, the low ones still out
-  assert.ok(gathered(0.5, 0.95) > 0.6 && gathered(0.5, 0.05) < 0.3, 'low tufts come in last');
-  assert.equal(gathered(0, 0.5), 0);
-  assert.equal(gathered(1, 0), 1);
-});
+// ───────────────────────────── the pointer at work (render/hand.ts) ─────────────────────────────
 
-test('the Touch is drawn from well-formed strips, bands, discs and instanced tufts — nothing hand-shaped', () => {
-  const check = (geo: BufferGeometry, what: string) => {
-    const idx = geo.getIndex();
-    assert.ok(idx && idx.count % 3 === 0, `${what}: triangles`);
-    const n = geo.getAttribute('position')?.count ?? geo.getAttribute('corner').count;
-    for (let i = 0; i < idx!.count; i++) assert.ok(idx!.getX(i) < n, `${what}: index in range`);
-  };
-  const strip = stripGeometry(TOUCH_N.arc, TOUCH_N.arcs);
-  check(strip, 'arc strips');
-  assert.equal(strip.getAttribute('aStrip').count, TOUCH_N.arc * 2 * TOUCH_N.arcs);
-  check(bandGeometry(), 'wind bands');
-  assert.equal(bandGeometry().getAttribute('aRib').count, TOUCH_N.ribs * TOUCH_N.rib * 2);
-  check(discGeometry(14, 48), 'whorl disc');
-  const mg = moteGeometry(), tg = tuftGeometry();
-  check(mg, 'motes'); check(tg, 'tufts');
-  assert.equal(mg.instanceCount, TOUCH_N.motes);
-  assert.equal(tg.instanceCount, TOUCH_N.tufts);
-  // the same Touch every time it appears (fixed seeds)
-  assert.deepEqual(Array.from(tuftGeometry().getAttribute('iSeed').array), Array.from(tg.getAttribute('iSeed').array));
-  // the old hand's skinned body is gone from the generator: no mesh, no rig, no fingers
-  for (const k of ['handMesh', 'handRig', 'HAND_FINGERS']) assert.ok(!(k in handgen), `no ${k}`);
-});
-
-test('a feared god crackles: each arc is one jagged channel from its start to its end', () => {
-  const rnd = touchRng(42);
-  const a = [0, 3006, 0], b = [9, 3000, 4];
-  const pts = crackleArc(a, b, 3, 5, rnd);
-  assert.equal(pts.length / 3, TOUCH_N.arc, 'the arc has the strip\'s sample count');
-  assert.deepEqual([pts[0], pts[1], pts[2]], a);
-  assert.deepEqual([pts[pts.length - 3], pts[pts.length - 2], pts[pts.length - 1]], b);
-  let len = 0, maxStep = 0;
-  for (let i = 3; i < pts.length; i += 3) {
-    const s = Math.hypot(pts[i] - pts[i - 3], pts[i + 1] - pts[i - 2], pts[i + 2] - pts[i - 1]);
-    len += s; maxStep = Math.max(maxStep, s);
-  }
-  const direct = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-  assert.ok(len > direct * 1.08, `jagged, not straight (${len.toFixed(1)} vs ${direct.toFixed(1)})`);
-  assert.ok(maxStep < direct * 0.4, 'connected: no long jumps');
-});
-
-// ───────────────────────────── the Touch at work (render/hand.ts) ─────────────────────────────
-
-/** the Touch's stage: the slope world, a point on its land, a camera 80 m off to the side looking at it */
+/** the pointer's stage: the slope world, a point on its land, a camera 80 m off to the side looking at it */
 function touchStage(sunUp = true) {
   const pv = { ...slopeWorld(), id: 0 } as PlanetView;
   const R = pv.params.radius;
@@ -199,7 +89,6 @@ function touchStage(sunUp = true) {
     uSunDirBody: { value: (sunUp ? u.clone().addScaledVector(e, 0.8) : u.clone().negate()).normalize() },
     uSunE: { value: new Vector3(8, 8, 8) },
   };
-  const bursts: string[] = [];
   let t = 0;
   /** run n frames of dt seconds; `over` changes the frame (the sim's hand, the cursor, the pose) */
   const run = (h: HandVisual, n: number, over: (i: number) => Partial<HandFrame> = () => ({}), dt = 0.05): Decal[] => {
@@ -208,173 +97,161 @@ function touchStage(sunUp = true) {
       decals.length = 0;
       h.update({
         pv, hand: null, camBody: cam, camFwd: fwd, camUp: u, dt, fxTime: t, fxDt: dt, cursor: null, uiPose: 'none', aiming: false,
-        decals: pass, shared, cloudBase: R + 900, air: true, fov: 55, viewH: 720, burst: (k) => { bursts.push(k); }, ...over(i),
+        decals: pass, shared, cloudBase: R + 900, air: true, fov: 55, viewH: 720, ...over(i),
       });
     }
     return decals;
   };
   const hand = (o: Partial<HandView> = {}): HandView => ({ planet: 0, pos: [u.x, u.y, u.z], alt: 0, held: null, pose: 'open', alignment: 0, regard: 0, ...o });
-  return { pv, R, u, e, cam, run, hand, bursts, now: () => t };
+  return { pv, R, u, e, cam, fwd, run, hand, now: () => t };
 }
 
-/** a private part of the Touch (its uniforms, its meshes) */
+/** a private part of the pointer (its uniforms, its meshes) */
 const inner = (h: HandVisual) => h as unknown as { u: Record<string, { value: number }>; glyph: Object3D; trailMesh: Object3D; sigil: { stroke: Float32Array } | null };
 
-test('the Touch appears where it is called and goes when nothing calls it', () => {
+/** the screen distance (px) between two body points seen from the stage's camera (55° fov, 720 px tall) */
+function screenPx(S: ReturnType<typeof touchStage>, a: Vector3, b: Vector3): number {
+  const f = S.fwd, up = S.u.clone().addScaledVector(f, -S.u.dot(f)).normalize(), right = f.clone().cross(up);
+  const k = 360 / Math.tan((55 * Math.PI) / 360);
+  const proj = (p: Vector3) => { const d = p.clone().sub(S.cam); const z = d.dot(f); return [d.dot(right) / z * k, d.dot(up) / z * k]; };
+  const [ax, ay] = proj(a), [bx, by] = proj(b);
+  return Math.hypot(ax - bx, ay - by);
+}
+
+test('the pointer: a small ring of light on the ground under the cursor, nothing else, gone when the cursor leaves', () => {
   const S = touchStage();
   const h = new HandVisual();
   S.run(h, 20);
   assert.ok(!h.visible && h.presence === 0, 'nobody calls it: it is not there');
   const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
-  S.run(h, 30, () => ({ cursor }));
-  assert.ok(h.visible && h.presence > 0.9, `under the cursor it gathers (${h.presence.toFixed(2)})`);
-  const up = h.pos.clone().normalize();
-  assert.ok(up.angleTo(S.u) < 1e-3, 'over the ground the cursor points at');
-  const above = h.pos.length() - (S.R + S.pv.grid.sample(S.pv.fields.get('surface')!, up.x, up.y, up.z));
-  assert.ok(above > 0.3 * h.scale && above < 0.7 * h.scale, `hovering low over it (${above.toFixed(1)} m, size ${h.scale.toFixed(1)})`);
-  assert.equal(h.behaviour, 'open');
-  // it follows the cursor on a spring that holds at any frame rate (8 fps here, and a 2-s stall): no overshoot past
-  // where it goes, no flying apart
-  for (const dt of [0.1, 2]) {
-    const q = S.u.clone().addScaledVector(S.e, (dt < 1 ? 9 : -9) / S.R).normalize();
-    const to = { planet: 0, dir: [q.x, q.y, q.z] };
-    const target = () => h.pos.clone().normalize().angleTo(q) * S.R;
-    const start = target();
-    let worst = 0;
-    for (let i = 0; i < 30; i++) { S.run(h, 1, () => ({ cursor: to }), dt); worst = Math.max(worst, target()); }
-    assert.ok(start > 5 && worst <= start + 1e-6 && target() < 0.05, `dt ${dt}: it closes on the cursor steadily (${start.toFixed(2)} → worst ${worst.toFixed(2)} → ${target().toFixed(3)} m)`);
-  }
-  S.run(h, 20, () => ({ cursor, uiPose: 'open' }));
-  assert.equal(h.behaviour, 'reach', 'reaching for something, the whirl quickens and lowers');
-  // the cursor leaves: it lingers a moment, then goes
-  S.run(h, 100);
+  const d = S.run(h, 6, () => ({ cursor, uiPose: 'open' }));
+  assert.ok(h.visible && h.presence > 0.9, `under the cursor at once (${h.presence.toFixed(2)})`);
+  assert.equal(h.behaviour, 'reach');
+  // one decal: the ring, on the ground exactly under the cursor, ~14 px across on screen whatever the distance
+  assert.equal(d.length, 1, `idle it is one decal (${d.map((x) => x.type)})`);
+  const ring = { ...d[0] };
+  assert.equal(ring.type, 15, 'a ring of light');
+  const at = new Vector3(ring.x, ring.y, ring.z);
+  assert.ok(at.clone().normalize().angleTo(S.u) < 1e-6, 'centred under the cursor');
+  const gR = S.R + S.pv.grid.sample(S.pv.fields.get('surface')!, S.u.x, S.u.y, S.u.z);
+  assert.ok(Math.abs(at.length() - gR) < 0.01, 'on the ground');
+  const ringPx = ring.p0 / h.mPerPx;
+  assert.ok(ringPx > 8 && ringPx < 20, `small on screen (${ringPx.toFixed(1)} px)`);
+  // the warm ring of a trusted god, the cold one of a feared god
+  const ht = new HandVisual(), hf = new HandVisual();
+  // (decals are pooled: read each frame's before the next)
+  const rt = { ...S.run(ht, 40, () => ({ cursor, hand: S.hand({ regard: 1 }) })).find((x) => x.type === 15)! };
+  const rf = { ...S.run(hf, 40, () => ({ cursor, hand: S.hand({ regard: -1 }) })).find((x) => x.type === 15)! };
+  assert.ok(rt.cr > rt.cb + 0.4 && rf.cb > rf.cr + 0.2, `regard tints the ring (${[rt.cr, rt.cb, rf.cr, rf.cb].map((x) => x.toFixed(2))})`);
+  assert.ok(rt.p0 === rf.p0, 'and nothing else: the same size feared or trusted');
+  // nothing of it is drawn in the air: no meshes but what it holds (none) and the hidden sigil / trail / arc
+  let shown = 0;
+  h.group.traverse((o) => { if (o !== h.group && o.visible && (o as Mesh).isMesh) shown++; });
+  assert.equal(shown, 0, 'nothing in the air');
+  // it follows the cursor without lag (the pointer is the player's)
+  const q = S.u.clone().addScaledVector(S.e, 9 / S.R).normalize();
+  const d2 = S.run(h, 1, () => ({ cursor: { planet: 0, dir: [q.x, q.y, q.z] } }));
+  assert.ok(new Vector3(d2[0].x, d2[0].y, d2[0].z).normalize().angleTo(q) < 1e-6, 'the ring is where the cursor is, the same frame');
+  // the cursor leaves: gone within half a second
+  S.run(h, 20);
   assert.ok(!h.visible, 'gone when the cursor left');
-  // from four radii out it is never drawn (from the system view it would be a weather system)
   const far = { camBody: S.u.clone().multiplyScalar(S.R * 6) };
   S.run(h, 40, () => ({ cursor, ...far }));
   assert.ok(!h.visible, 'not from space');
+  // a power armed: the cursor is a crosshair, the ring steps back (the tool draws its own brush)
+  const p = new HandVisual();
+  const dp = S.run(p, 20, () => ({ cursor, uiPose: 'tool' }));
+  assert.equal(p.behaviour, 'point');
+  assert.ok(dp.every((x) => x.type !== 15 || x.p2 < ring.p2 * 0.4), 'with a power armed the ring is faint');
+  h.dispose(); ht.dispose(); hf.dispose(); p.dispose();
 });
 
-test('a god\'s camera low over a town: the idle shaft thins to a thread, busy it stays whole (punch P05)', () => {
-  // (from 60 m over a village the idle shaft climbed past the camera to the deck and crossed the whole frame as a
-  // slanting white ribbon — gone with the Touch hidden, run6 fr4k-village-notouch)
+test('the pointer carries: what it holds floats just under the cursor with its shadow, and is set down', () => {
   const S = touchStage();
   const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
-  const idle = new HandVisual();
-  S.run(idle, 60, () => ({ cursor }));
-  const U = inner(idle).u;
-  assert.ok(idle.visible && idle.presence > 0.9, 'it is there, under the cursor');
-  assert.ok(U.uColK.value <= 0.35, `idle, low: the shaft is a thread (uColK ${U.uColK.value.toFixed(2)})`);
-  assert.ok(U.uStreakK.value <= 0.15, `and its wind-streaks with it (uStreakK ${U.uStreakK.value.toFixed(2)})`);
-  assert.ok(U.uGroundK.value > 0.1, 'the pool of its light at the foot still says where it is');
-  // pointing (a power aimed), or holding: whole
-  const busy = new HandVisual();
-  S.run(busy, 60, () => ({ cursor, uiPose: 'tool' }));
-  assert.ok(inner(busy).u.uColK.value > 0.9, `pointing: whole (${inner(busy).u.uColK.value.toFixed(2)})`);
-  // from the god's height (600 m up) the idle shaft is whole: it no longer climbs past the camera
-  const high = new HandVisual();
-  const camHigh = S.u.clone().multiplyScalar(S.R + 600).addScaledVector(S.e, 200);
-  S.run(high, 60, () => ({ cursor, camBody: camHigh, camFwd: S.u.clone().multiplyScalar(S.R).sub(camHigh).normalize() }));
-  assert.ok(inner(high).u.uColK.value > 0.95, `from 600 m: whole (${inner(high).u.uColK.value.toFixed(2)})`);
-  idle.dispose(); busy.dispose(); high.dispose();
-});
-
-test('the Touch lifts a person into its cradle and lets them go', () => {
-  const S = touchStage();
-  const h = new HandVisual();
-  const held: EntityRef = { kind: 'agent', id: 7, planet: 0 };
-  S.run(h, 60, () => ({ hand: S.hand({ held, pose: 'grab', alt: 6, regard: 0.8 }) }));
-  assert.equal(h.behaviour, 'lift');
-  assert.ok(h.grasp > 0.95, `gathered round them (${h.grasp.toFixed(2)})`);
-  assert.deepEqual([h.heldKind, h.heldId], ['agent', 7]);
-  const up = h.grip.clone().normalize();
-  // the person hangs through the grip: the people layer draws them at the pinch, the cradle round their middle
-  assert.ok(Math.abs(h.pinch.clone().sub(h.grip).dot(up) - 0.95) < 1e-6, 'held by the top of them, at the grip');
-  assert.ok(h.cradle.clone().sub(h.pinch).dot(up) < -0.5, 'the cradle round their body, below the grip');
-  assert.ok(h.pos.length() - S.R > 2, 'lifted clear of the ground');
-  // set down: the cradle opens back into the whirl
-  S.run(h, 80, () => ({ hand: S.hand({ pose: 'open', regard: 0.8 }) }));
-  assert.ok(h.grasp < 0.05 && h.heldKind === '' && (h.behaviour as string) === 'open', `released (${h.grasp.toFixed(2)}, ${h.behaviour})`);
-});
-
-test('feared, the Touch is storm-dark and crackles; trusted, it is warm light and never does', () => {
-  const S = touchStage();
-  const h = new HandVisual();
-  S.run(h, 80, () => ({ hand: S.hand({ pose: 'point', regard: -1 }) }));
-  assert.ok(h.regard < -0.9, `its look eases to the people's regard (${h.regard.toFixed(2)})`);
-  assert.ok(inner(h).u.uDark.value > 0.85, 'storm-dark');
-  const at = h.nextCrackle(100, -1);
-  assert.ok(at !== null && at >= 100, 'a feared god crackles now and then');
-  h.hold = at;
-  const d = S.run(h, 1, () => ({ hand: S.hand({ pose: 'point', regard: -1 }) }));
-  assert.ok(h.crackling >= 1, 'an arc struck at the moment nextCrackle named');
-  assert.ok(d.some((x) => x.type === 10 && x.cb > x.cr && x.p1 > 0), 'its cold light on the ground under the arc');
-  // its storm's gloom: a broad soft shade on the land round it (not thrown by the sun: under it, by night as well)
-  const under = (x: Decal) => new Vector3(x.x, x.y, x.z).normalize().angleTo(h.pos.clone().normalize()) * S.R;
-  const gloom = (ds: Decal[]) => ds.find((x) => x.type === 0 && x.p0 >= h.scale * 4 && x.p1 >= h.scale * 4 && under(x) < 1);
-  const gl = gloom(d);
-  assert.ok(gl && gl.ca > 0.2, `a gloom round it (${gl ? `${gl.p0.toFixed(0)} m, ${gl.ca.toFixed(2)}` : 'none'})`);
-  const N = touchStage(false);
-  const hn = new HandVisual();
-  const dn = N.run(hn, 80, () => ({ hand: N.hand({ pose: 'point', regard: -1 }) }));
-  assert.ok(dn.some((x) => x.type === 0 && x.p0 >= hn.scale * 4), 'the gloom by night too');
-  hn.dispose();
-  h.hold = null;
-  const g = new HandVisual();
-  assert.equal(g.nextCrackle(100, 1), null);
-  let arcs = 0;
-  S.run(g, 200, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) }));
-  for (let i = 0; i < 40; i++) { S.run(g, 1, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) })); arcs += g.crackling; }
-  assert.equal(arcs, 0, 'a trusted god never crackles');
-  assert.ok(inner(g).u.uDark.value === 0 && g.light.r > g.light.b + 0.3, 'warm light, no storm');
-  const dg = S.run(g, 1, () => ({ hand: S.hand({ pose: 'point', regard: 1 }) }));
-  assert.ok(!dg.some((x) => x.type === 0 && x.p0 >= g.scale * 4), 'no gloom round a trusted god');
-});
-
-test('trusted, the Touch is warm light more than weather; holding, its cradle still shows what it holds', () => {
-  const S = touchStage();
-  const look = (regard: number, held: EntityRef | null) => {
+  const gR = S.R + S.pv.grid.sample(S.pv.fields.get('surface')!, S.u.x, S.u.y, S.u.z);
+  const G = S.u.clone().multiplyScalar(gR);
+  for (const held of [{ kind: 'agent', id: 7, planet: 0 }, { kind: 'rock', id: 2600, planet: 0 }, { kind: 'tree', id: 3, planet: 0 }] as EntityRef[]) {
     const h = new HandVisual();
-    h.force = true;
-    S.run(h, 80, () => ({ hand: S.hand({ regard, held, pose: held ? 'grab' : 'open' }) }));
-    const u = inner(h).u;
-    return { tuft: u.uTuftK.value, heart: u.uHeartK.value, dust: u.uDustK.value, motes: u.uMoteK.value, moteS: u.uMoteS.value, beam: u.uBeamK.value, grasp: h.grasp };
-  };
-  const awed = look(0, null), trusted = look(1, null), feared = look(-1, null);
-  // open: a trusted god's cloud thins, the light at its heart swells, its motes of light thicken and grow, its shaft
-  // brightens, and it raises almost no dust (a sunlit whirl of cloud and dust read as a white dust devil)
-  assert.ok(trusted.tuft < awed.tuft * 0.5, `less cloud (${trusted.tuft.toFixed(2)} vs ${awed.tuft.toFixed(2)})`);
-  assert.ok(trusted.heart > awed.heart * 2.5, `more light at its heart (${trusted.heart.toFixed(2)} vs ${awed.heart.toFixed(2)})`);
-  assert.ok(trusted.motes > awed.motes * 2 && trusted.moteS > awed.moteS * 1.5, 'more and larger motes of light');
-  assert.ok(trusted.beam > awed.beam * 2, `a brighter shaft (${trusted.beam.toFixed(2)} vs ${awed.beam.toFixed(2)})`);
-  assert.ok(trusted.dust < awed.dust * 0.25, `almost no dust (${trusted.dust.toFixed(3)} vs ${awed.dust.toFixed(3)})`);
-  // a feared god is the storm: its cloud is thickest
-  assert.ok(feared.tuft > awed.tuft && feared.heart < trusted.heart, 'feared: thick dark cloud, little light');
-  // holding, the trusted god keeps more of its cradle and less glow than open (the weave must show; what it holds
-  // stands dark against the light instead of drowning in it)
-  const holding = look(1, { kind: 'rock', id: 2600 });
-  assert.ok(holding.grasp > 0.95, 'it gathered');
-  assert.ok(holding.tuft > trusted.tuft, `the cradle is woven of cloud (${holding.tuft.toFixed(2)} vs open ${trusted.tuft.toFixed(2)})`);
-  assert.ok(holding.heart / trusted.heart < 1.2, 'its heart no brighter than open (what it holds is not drowned)');
+    const d = S.run(h, 40, () => ({ cursor, uiPose: 'carry', hand: S.hand({ held, pose: 'grab', alt: 6 }) }));
+    assert.equal(h.behaviour, 'lift', held.kind);
+    assert.deepEqual([h.heldKind, h.heldId], [held.kind, held.id]);
+    // on screen, its top is at the pointer (the camera's ray through the cursor), lifted clear of the ground
+    const top = held.kind === 'agent' ? h.pinch : h.pos;
+    assert.ok(screenPx(S, top, G) < 1, `${held.kind}: at the pointer on screen (${screenPx(S, top, G).toFixed(2)} px)`);
+    const lift = top.length() - gR;
+    assert.ok(lift > 1.2, `${held.kind}: lifted clear (${lift.toFixed(1)} m)`);
+    if (held.kind === 'agent') assert.ok(Math.abs(h.pinch.clone().sub(h.grip).dot(h.pinch.clone().normalize()) - 0.95) < 1e-6, 'a person hangs by the top of them');
+    // a soft shadow under it on the ground, and the throw's arc and landing reticle while it is carried
+    const sh = d.find((x) => x.type === 0);
+    assert.ok(sh && sh.ca > 0.1, `${held.kind}: a shadow under it`);
+    assert.ok(d.some((x) => x.type === 2), `${held.kind}: the landing reticle`);
+    if (held.kind !== 'agent') {
+      let mesh = 0;
+      h.group.traverse((o) => { if ((o as Mesh).isMesh && o.visible && o.layers.isEnabled(1)) mesh++; });
+      assert.equal(mesh, 1, `${held.kind}: drawn as a lit prop that casts its own shadow`);
+    }
+    // set down: nothing held, the ring again
+    const d2 = S.run(h, 20, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+    assert.ok(h.heldKind === '' && h.grasp < 0.05 && !d2.some((x) => x.type === 0), `${held.kind}: set down`);
+    h.dispose();
+  }
 });
 
-test('the Touch at work: a throw leaves a trail, a rebuke is a downdraft and a flash, a cast traces its sigil', () => {
+test('the held props exist (hidden) before the first lift, so the load-time shader warm-up links them (no hitch on the grab)', () => {
+  const S = touchStage();
+  const h = new HandVisual();
+  // (no cursor, no hand: the warm-up's frames come before the pointer is ever shown)
+  S.run(h, 2);
+  assert.equal(h.group.visible, false, 'the pointer is not shown');
+  const held = (h as unknown as { heldMeshes: Map<string, Mesh> }).heldMeshes;
+  for (const k of ['rock', 'building', 'tree']) {
+    const m = held.get(k);
+    assert.ok(m, `${k}: made before any lift`);
+    assert.equal(m!.visible, false, `${k}: hidden until held`);
+    // three's compile() walks hidden objects: reachable from the pointer's group, with its depth twin for the shadows
+    let inGraph = false;
+    h.group.traverse((o) => { if (o === m) inGraph = true; });
+    assert.ok(inGraph, `${k}: in the scene graph`);
+    assert.ok((m!.material as Material).userData.propDepth, `${k}: a prop material with its depth twin`);
+  }
+  // a lift shows the one already made (no new mesh, no new material)
+  const before = held.get('tree');
+  S.run(h, 3, () => ({ cursor: { planet: 0, dir: [S.u.x, S.u.y, S.u.z] }, uiPose: 'carry', hand: S.hand({ held: { kind: 'tree', id: 3, planet: 0 } as EntityRef, pose: 'grab', alt: 6 }) }));
+  assert.equal(held.get('tree'), before);
+  assert.equal(before!.visible, true);
+  h.dispose();
+});
+
+test('the pointer at work: a flick leaves a streak, a rebuke and a soothing are a brief ground pulse, a cast traces its sigil', () => {
   const S = touchStage();
   const h = new HandVisual();
   const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
-  S.run(h, 30, () => ({ cursor }));
-  // swept fast across the land (a throw): a ribbon of its light behind it
-  const sweep = (i: number) => { const q = S.u.clone().addScaledVector(S.e, 0.004 * Math.sin(i * 0.5)).normalize(); return { cursor: { planet: 0, dir: [q.x, q.y, q.z] } }; };
+  const rock = { kind: 'rock', id: 2600, planet: 0 } as EntityRef;
+  S.run(h, 30, () => ({ cursor, hand: S.hand({ held: rock, pose: 'grab' }) }));
+  // flicked fast while holding (a throw): a short streak of light behind what it holds
+  const sweep = (i: number) => { const q = S.u.clone().addScaledVector(S.e, 0.004 * Math.sin(i * 0.5)).normalize(); return { cursor: { planet: 0, dir: [q.x, q.y, q.z] }, hand: S.hand({ held: rock, pose: 'grab' }) }; };
   S.run(h, 12, sweep);
-  assert.ok(inner(h).u.uTrailK.value > 0.2 && inner(h).trailMesh.visible, `a trail (${inner(h).u.uTrailK.value.toFixed(2)})`);
-  // a rebuke: the sim's hand slaps — a downdraft gust thrown out along the ground, a cold flash
+  assert.ok(inner(h).u.uTrailK.value > 0.2 && inner(h).trailMesh.visible, `a streak (${inner(h).u.uTrailK.value.toFixed(2)})`);
+  // empty-handed, a sweep leaves nothing
+  const e = new HandVisual();
+  S.run(e, 30, () => ({ cursor }));
+  S.run(e, 12, (i) => ({ cursor: sweep(i).cursor }));
+  assert.ok(!inner(e).trailMesh.visible, 'no streak behind the bare pointer');
+  // a rebuke: a quick cold ring snapping out, gone in well under a second; nothing thrown into the air
   S.run(h, 40, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
-  S.bursts.length = 0;
   let d: Decal[] = [];
-  for (let i = 0; i < 4; i++) d = S.run(h, 1, () => ({ cursor, hand: S.hand({ pose: 'slap' }) }));
+  for (let i = 0; i < 3; i++) d = S.run(h, 1, () => ({ cursor, hand: S.hand({ pose: 'slap' }) }));
   assert.equal(h.behaviour, 'rebuke');
-  assert.ok(S.bursts.includes('gust') && S.bursts.includes('flash'), `dust and a flash (${S.bursts})`);
-  assert.ok(d.some((x) => x.type === 8 && x.ca > 0.1), 'the gust rolls out along the ground');
+  const pulse = d.filter((x) => x.type === 15 && x.cb > x.cr);
+  assert.ok(pulse.length >= 1 && pulse.some((x) => x.p0 / h.mPerPx > 20), 'a cold ring out from the pointer');
+  d = S.run(h, 14, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
+  assert.equal(d.filter((x) => x.type === 15).length, 1, 'and it is over: only the ring');
+  // a soothing: a warm ring opening slowly
+  S.run(h, 1, () => ({ cursor, hand: S.hand({ pose: 'stroke' }) }));
+  d = S.run(h, 6, () => ({ cursor, hand: S.hand({ pose: 'stroke' }) }));
+  assert.equal(h.behaviour, 'soothe');
+  assert.ok(d.some((x) => x.type === 15 && x.cr > x.cb + 0.4 && x.p0 / h.mPerPx > 20), 'a warm ring opening');
   // a cast: the miracle's sigil traced in light over it — the glyph the player draws for the mending
   S.run(h, 60, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
   h.pulse('cast', S.now(), 'heal');
@@ -384,6 +261,15 @@ test('the Touch at work: a throw leaves a trail, a rebuke is a downdraft and a f
   assert.deepEqual(inner(h).sigil?.stroke, sigilStroke('knot', TOUCH_N.glyph));
   S.run(h, 80, () => ({ cursor, hand: S.hand({ pose: 'open' }) }));
   assert.ok(!inner(h).glyph.visible, 'and fades');
+  // the cursor's springs hold at any frame rate: a 2-s stall does not throw what it holds
+  S.run(h, 20, () => ({ cursor, hand: S.hand({ held: rock, pose: 'grab' }) }));
+  const q = S.u.clone().addScaledVector(S.e, -9 / S.R).normalize();
+  const to = { planet: 0, dir: [q.x, q.y, q.z] }, grab = S.hand({ held: rock, pose: 'grab' });
+  for (let i = 0; i < 6; i++) S.run(h, 1, () => ({ cursor: to, hand: grab }), 2);
+  const settled = h.pos.clone();
+  S.run(h, 40, () => ({ cursor: to, hand: grab }));
+  assert.ok(settled.distanceTo(h.pos) < 0.05, `it settles under the cursor after a stall (${settled.distanceTo(h.pos).toFixed(3)} m)`);
+  h.dispose(); e.dispose();
 });
 
 test('a person the Touch hurls is drawn flying by their own id, never the projectile\'s', () => {
@@ -460,30 +346,6 @@ test('what the Touch hurls flies as it was held: a tree as the tree, upright as 
   assert.ok(sz(heavy) > sz(plain) * 1.5, `a boulder at its mass's size (${sz(heavy).toFixed(2)} vs ${sz(plain).toFixed(2)})`);
   assert.ok(Math.abs(sz(heavy) * 2 - heldTrueSize('rock', 2600 * 4).size) < 0.05, 'the size the Touch drew it at');
   f.dispose();
-});
-
-test('the Touch\'s weather lies on the ground: a pool of its light, its cloud\'s shadow in the sun', () => {
-  for (const sunUp of [true, false]) {
-    const S = touchStage(sunUp);
-    const h = new HandVisual();
-    const cursor = { planet: 0, dir: [S.u.x, S.u.y, S.u.z] };
-    const d = S.run(h, 30, () => ({ cursor }));
-    const ground = (x: Decal) => new Vector3(x.x, x.y, x.z).normalize().angleTo(S.u) * S.R;
-    const pool = d.find((x) => x.type === 10);
-    assert.ok(pool && pool.p1 > 0 && ground(pool) < 1, 'a pool of its light under it');
-    const shadow = d.find((x) => x.type === 0);
-    if (sunUp) assert.ok(shadow && shadow.ca > 0 && ground(shadow) < h.scale * 6, 'its shadow near it in the sun');
-    else assert.ok(!shadow, 'no shadow at night');
-  }
-  // nothing of the Touch is a hand: no skinned body, no bones, no fingers
-  const S = touchStage();
-  const h = new HandVisual();
-  S.run(h, 10, () => ({ cursor: { planet: 0, dir: [S.u.x, S.u.y, S.u.z] }, hand: S.hand({ held: { kind: 'rock', id: 900, planet: 0 }, pose: 'grab' }) }));
-  h.group.traverse((o) => {
-    assert.ok(!(o as { isSkinnedMesh?: boolean }).isSkinnedMesh && !(o as { isBone?: boolean }).isBone, `${o.name || o.type}: no skinned body`);
-    assert.ok(!/hand|finger|palm|thumb/i.test(o.name) || o.name === 'touch', `${o.name}: nothing named for a hand`);
-  });
-  h.dispose();
 });
 
 test('the god layer\'s shadow casters draw the atlas with depth twins that sample no texture (no GL feedback loop)', () => {

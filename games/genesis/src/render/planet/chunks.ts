@@ -272,8 +272,17 @@ export interface ChunkSelectContext {
   frame: number;
   /** max patches built this frame */
   buildBudget: number;
+  /**
+   * and a time cap on top (ms of building this frame, macfix/smooth.md): once BUILD_MIN patches are in, no more starts
+   * after this — a camera sweep spreads its builds over a few frames instead of one long one (16 patches were tens of
+   * ms of main thread in one frame: a visible hitch). Unset (a camera cut) = the count alone. The converged image is
+   * the same; only when it is reached changes.
+   */
+  buildMs?: number;
 }
 
+/** patches always built in a frame under the time cap (ChunkSelectContext.buildMs) */
+const BUILD_MIN = 4;
 const _v = new Vector3();
 const _pc = new Vector3();
 const _hit = newHit();
@@ -695,6 +704,7 @@ export class ChunkLOD {
   private ensureGeometry(p: Patch, budget: boolean): boolean {
     if (p.built) return true;
     if (budget && this.builtThisFrame >= this.buildBudgetNow) return false;
+    if (budget && this.buildMsNow > 0 && this.builtThisFrame >= BUILD_MIN && performance.now() - this.buildT0 > this.buildMsNow) return false;
     this.updateBounds(p);
     const geo = this.buildGeometry(p);
     // now that the vertex cells are known, the exact water test (bounds were derived before the build)
@@ -714,6 +724,8 @@ export class ChunkLOD {
   }
 
   private buildBudgetNow = 16;
+  private buildMsNow = 0;
+  private buildT0 = 0;
 
   setShadowCasting(on: boolean): void {
     if (on === this.castShadows) return;
@@ -776,6 +788,8 @@ export class ChunkLOD {
     this.builtThisFrame = 0;
     this.curFrame = ctx.frame;
     this.buildBudgetNow = ctx.buildBudget;
+    this.buildMsNow = ctx.buildMs ?? 0;
+    this.buildT0 = performance.now();
     this.stats.horizonCulled = 0;
     const out: Patch[] = [];
     const cam = ctx.camBody;

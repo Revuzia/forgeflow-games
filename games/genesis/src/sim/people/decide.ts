@@ -104,8 +104,9 @@ function staleDrink(x: PCtx, s: number): boolean {
 }
 
 /**
- * The water a band drank at, or saw running, near its camp within the last three hours, or -1 (work.ts records a drink,
- * settlement.ts bandStep the water it sees: st.recent.wcell / wseen). LIVING.md §2.7: a pond that fills and drains, water
+ * The water a band drank at near its camp, or saw dry up and run again there, seen within the last three hours, or -1
+ * (work.ts records a drink, settlement.ts bandStep the water that comes back and keeps either fresh while it runs:
+ * st.recent.wcell / wseen; PUNCH P27: water only seen is not camp water). LIVING.md §2.7: a pond that fills and drains, water
  * that comes back within about three hours, is gone back to and waited at — the parched who walked out for water two
  * kilometres off while their camp's pond came back every hour died on the way. (Water that comes back less often is
  * forgotten and the band goes on to farther water: measured, leaving was the better outcome there.)

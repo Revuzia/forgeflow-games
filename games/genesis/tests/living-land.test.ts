@@ -1204,16 +1204,20 @@ test('land: the three rules that keep hunters out of the sea, one by one — no 
   }
   assert.ok(wc >= 0 && far >= 0, 'deep water near Aru and dry land far from it');
   const s3 = hunters[1];
-  const night = (c: number, boat: number) => {
+  const night = (c: number, boat: number, mission = 0) => {
     const pc = cellPos(p, c);
+    const m0 = A.mission[s3];
+    A.mission[s3] = mission;
     A.place(s3, pc[0], pc[1], pc[2], x.tick);
     syncCell(x, s3);
     A.camp[s3] = c; A.trip[s3] = x.tick + 10000; A.boat[s3] = boat;
     const t = paceSleep(x, s3, aru, true, 480);
-    A.boat[s3] = -1;
+    A.boat[s3] = -1; A.mission[s3] = m0;
     return t;
   };
   assert.equal(night(far, -1)?.kind, TASK.camp, 'control: a camper on dry land far from home camps where night fell');
   assert.equal(night(wc, -1), null, `no camp afloat (water ${p.f.water[wc].toFixed(1)} m, no boat)`);
-  assert.equal(night(wc, 0)?.kind, TASK.camp, 'in a boat the night is spent on the water');
+  // (PUNCH P22: a voyage's crew sleeps aboard; a townsman out in the town's boat rows in for the night)
+  assert.equal(night(wc, 0, 1)?.kind, TASK.camp, 'on a voyage the night is spent on the water');
+  assert.equal(night(wc, 0), null, 'a townsman out in the town boat rows in for the night');
 });

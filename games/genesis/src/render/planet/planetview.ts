@@ -35,6 +35,8 @@ export interface PlanetFrameContext {
   K: number;
   frame: number;
   budget: number;
+  /** time cap on terrain patch builds this frame (ms; ChunkSelectContext.buildMs), unset = count only */
+  buildMs?: number;
   primary: boolean;
   /** vegetation range (m) and density multiplier from the quality preset */
   vegRange: number;
@@ -212,7 +214,7 @@ export class PlanetVisual {
     // LOD
     this.lod.setShadowCasting(ctx.primary && ctx.shadows);
     this.lod.select({
-      camBody: this.camBody, frustum: ctx.frustum, bodyToWorld: g.matrixWorld, K: ctx.K, frame: ctx.frame, buildBudget: ctx.budget,
+      camBody: this.camBody, frustum: ctx.frustum, bodyToWorld: g.matrixWorld, K: ctx.K, frame: ctx.frame, buildBudget: ctx.budget, buildMs: ctx.buildMs,
     });
     // trees near the camera (primary planet only)
     const veg = this.vegetation;

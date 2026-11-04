@@ -592,6 +592,7 @@ export class Vegetation {
           geo.setAttribute('iExtra', extra);
           const mesh = new InstancedMesh(geo, this.material, cap);
           mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+          whiteColors(mesh, cap);
           mesh.count = 0;
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
@@ -948,3 +949,16 @@ export class Vegetation {
     this.material.dispose();
   }
 }
+
+/**
+ * the per-instance colours made up front, all white (three's own default on its first setColorAt), instead of at the
+ * first fill: a program's key holds whether the mesh has them, so the shader Renderer.warmUp linked at load was not the
+ * one drawn, and the real one linked in the frame the first meadow or field came into view (macfix/smooth.md F12).
+ * Every fill writes every drawn instance's colour: the image is unchanged.
+ */
+export function whiteColors(m: InstancedMesh, cap: number): void {
+  if (!WHITE_UP_FRONT) return;
+  m.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
+}
+/** (dev A/B for the pixel diff: ?white=0 makes the colours at the first fill, as before) */
+const WHITE_UP_FRONT = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('white') !== '0'; } catch { return true; } })();

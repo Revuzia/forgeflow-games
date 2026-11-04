@@ -1,6 +1,6 @@
 {
   "name": "genesis",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "GENESIS — a multi-planet living-world god game. Three.js (WebGL2) + TypeScript + Vite, renderer-free deterministic sim core in a Web Worker. `npm install && npm run dev`.",

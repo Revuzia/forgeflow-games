@@ -216,7 +216,7 @@ export class Buildings {
     this.bFarCut = new BldBatch('buildings-far-cut', shared, true, false, 128, 1 << 16);
     this.bShadow = new BldBatch('buildings-shadow', shared, false, true, 512, 1 << 18, true);
     this.batches = [this.bNear, this.bNearCut, this.bFar, this.bFarCut, this.bShadow];
-    for (const b of this.batches) this.group.add(b.mesh);
+    for (const b of this.batches) this.group.add(b.mesh, b.warm);
     for (let i = 0; i < 2; i++) this.rubble.push(rubbleMesh(77 + i * 13, i === 0));
   }
 

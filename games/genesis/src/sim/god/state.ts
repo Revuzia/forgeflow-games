@@ -217,6 +217,8 @@ export interface ProphetState {
   /** a risen prophet waits on the god's next act: confirmed (+0.2) or discredited */
   confirmed: boolean;
   fulfilled: number;
+  /** (postrel P25) the tick of the last prophecy of theirs made true (absent: none yet) */
+  fulfilledAt?: number;
   failed: number;
   /** no preaching until this tick (persecution: silenced) */
   silenced: number;

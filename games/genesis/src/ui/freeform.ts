@@ -33,7 +33,7 @@ const EXAMPLES = [
   'make the people of {town} live twice as long',
   'start a war between {town} and {town2}',
   'a tornado heading for {town}',
-  'invent telepathy',
+  'invent soap',
   'how many people live in {town}?',
   'clear the skies everywhere',
   'turn the star red',

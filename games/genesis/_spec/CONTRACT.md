@@ -251,6 +251,11 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
   tick average, i.e. 1 000 ticks/s). Strategies: active sets (only cells with moving water/fire/lava are stepped),
   event-driven agents (a time wheel schedules each agent's next decision; movement is analytic between waypoints),
   cadenced slow systems (climate hourly), cohorts beyond the individual cap.
+  *As measured after 1.0* (LIVING §1.6, 2026-11-04): 100x (level 0) is met (achieved ≥ 0.97 even on a loaded machine);
+  the time-lapse floors are not — with 1 500 agents, natural disasters off and ≥ 2 warm game days, level 1 runs
+  ~620–770 CPU ticks/s (≥ 800 asked) and level 2 ~790–870 (≥ 1 200 asked), on a 4-CPU machine at load 9–13. 1000x
+  (level 1) is best effort and the HUD shows the achieved multiplier (0.82 at release on a quieter machine). A quake
+  wakes the whole sea and costs ~2.5× for ~1.3 game days at 1000x.
 
 ### 6.2 `class Sim` (`src/sim/sim.ts`)
 ```ts

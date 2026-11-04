@@ -187,7 +187,16 @@ function lapse(x: PCtx, st: Settlement, pr: Prayer): void {
   u.emit({ t: 'prayer.lapsed', planet: x.p.id, pos: [st.pos[0], st.pos[1], st.pos[2]], ref: settlementRef(x, st), data: { settlement: st.id, prayer: pr.id, kind: pr.kind } });
   if (r.lapses % 3 === 0) {
     tell(u, x.p, 'prayer.deaf', vars(x, st), st, [settlementRef(x, st)], 2);
-    for (const ph of relOf(u).prophets) if (ph.planet === x.p.id && ph.settlement === st.id) ph.credibility = Math.max(0, Math.round((ph.credibility - 0.1) * 1000) / 1000);
+    // (postrel P25: not a prophet still waiting on a word of the god's they spoke, nor one whose word came true in the
+    // last two days — the town holds its judgment of them; the year-50 probe's prophets lost 0.1 here between fulfilled prophecies and
+    // ended at 0.63-0.65 after three of them)
+    const R = relOf(u);
+    for (const ph of R.prophets) {
+      if (ph.planet !== x.p.id || ph.settlement !== st.id) continue;
+      if (ph.fulfilledAt !== undefined && u.tick - ph.fulfilledAt <= 2 * x.day) continue;
+      if (R.prophecies.some((q) => q.agent === ph.agent && q.by === 'god' && q.until >= u.tick)) continue;
+      ph.credibility = Math.max(0, Math.round((ph.credibility - 0.1) * 1000) / 1000);
+    }
   }
 }
 

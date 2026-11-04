@@ -20,6 +20,8 @@
 //   click(x, y)                a left click there (selects what is drawn, or recentres)
 //   agents(n?) / buildings(n?) ids of people / buildings drawn well inside the view right now, nearest first
 //   toastLife(ms)              how long toasts stay (a software-rendered capture takes seconds per frame)
+//   programs()                 names of the GPU programs linked so far (shader warm-up coverage)
+//   perf(on?)                  the frame monitor (render/perfmon.ts): on=true starts measuring, the summary of the last 240 frames
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
 //                              points, [x, y], size) / overlay(mode) / state() / pref(path, value) — panels include
@@ -40,6 +42,7 @@ import { newWorldUrl } from './ui/newworld.ts';
 import type { Command, CommandResult, EntityRef, UnitVec } from './sim/types.ts';
 import type { InspectRef } from './ui/host.ts';
 import { isQualityName } from './render/quality.ts';
+import { perfmon, type PerfSummary } from './render/perfmon.ts';
 import { SHAPES, type Pt } from './ui/unistroke.ts';
 
 export interface UiSurface {
@@ -104,6 +107,9 @@ export interface GenesisTestSurface {
   agents(n?: number): { id: number; dist: number; screen: [number, number] | null }[];
   buildings(n?: number): { id: number; dist: number; screen: [number, number] | null }[];
   toastLife(ms: number): void;
+  perf(on?: boolean): PerfSummary;
+  /** the GPU programs linked so far, by name (material type or name) — which effects link a shader during play */
+  programs(detail?: boolean | 'keys'): string[];
   ui_: UiSurface;
   cam_: CamSurface;
   worlds_: WorldsSurface;
@@ -225,6 +231,27 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     agents: (n) => need().drawnAgents(n ?? 20),
     buildings: (n) => need().drawnAgents(n ?? 20, 'building'),
     toastLife: (ms) => { need().ui.hud.toasts.life = Math.max(1000, ms); },
+    perf: (on) => { if (on !== undefined) perfmon.on = on || perfmon.overlayOpen; return perfmon.summary(); },
+    programs: (detail) => {
+      const R = need().renderer, r = R.three;
+      const out = (r.info.programs ?? []).map((p) => `${(p as { id?: number }).id}:${(p as { name?: string }).name ?? '?'}`);
+      if (!detail) return out;
+      // (which objects use each program: the scene's meshes, by name / class and material name)
+      const users = new Map<number, Set<string>>();
+      R.scene.traverse((o) => {
+        const ms = (o as { material?: unknown }).material;
+        for (const m of (Array.isArray(ms) ? ms : ms ? [ms] : []) as { name?: string; type?: string }[]) {
+          const prog = (r.properties.get(m) as { currentProgram?: { id?: number } }).currentProgram;
+          if (prog?.id === undefined) continue;
+          const set = users.get(prog.id) ?? new Set<string>();
+          if (set.size < 3) set.add(`${o.name || o.constructor.name}/${m.name || m.type}`);
+          users.set(prog.id, set);
+        }
+      });
+      // ('keys': plus each program's cache key after ' || ', to see which parameter made a second program of a material)
+      const keys = new Map((r.info.programs ?? []).map((p) => [(p as { id?: number }).id, (p as { cacheKey?: string }).cacheKey ?? '']));
+      return out.map((s) => { const id = Number(s.split(':')[0]); return `${s} <- ${[...(users.get(id) ?? [])].join(', ') || '(not in the scene graph: a pass)'}${detail === 'keys' ? ` || ${keys.get(id)}` : ''}`; });
+    },
     ui_: ui,
     cam_: {
       mode: () => need().cam.mode(),

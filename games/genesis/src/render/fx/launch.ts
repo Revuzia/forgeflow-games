@@ -1607,6 +1607,12 @@ export class LaunchFx {
   }
 
   /** draw every FX group into the composited HDR image (after the atmosphere), soft against the linear depth */
+  /** a heat shimmer is drawn this frame (it reads the opaque colour copy; without one the renderer skips that copy) */
+  get wantsSceneCopy(): boolean {
+    for (const s of this.plumes) if (s.group.visible && s.haze.visible) return true;
+    return false;
+  }
+
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number): void {
     let any = this.extraVisible;
     this.depthU.tSceneDepth.value = depth;

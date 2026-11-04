@@ -11,8 +11,8 @@
 //   * Per-object frustum culling (also against each shadow cascade's light box) and front-to-back sorting are three's.
 
 import {
-  BatchedMesh, DataTexture, FloatType, NearestFilter, RGBAFormat, type BufferGeometry, type Color, type IUniform, type Matrix4,
-  type MeshStandardMaterial, type ShaderMaterial,
+  BatchedMesh, BufferGeometry, Color, DataTexture, Float32BufferAttribute, FloatType, Group, Matrix4, NearestFilter, RGBAFormat,
+  type IUniform, type Material, type MeshStandardMaterial, type ShaderMaterial,
 } from 'three';
 import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
 
@@ -67,7 +67,10 @@ export class BldBatch {
     // (a shadow-only batch lives on the casters' layer alone)
     if (shadowOnly) m.layers.set(1);
     this.mesh = m;
+    this.warm = warmBatch(name, this.material, this.depth);
   }
+  /** never-drawn holder of this batch's programs (warmBatch) */
+  readonly warm: Group;
 
   /** the batch's geometry id for a source geometry (added on first use) */
   geom(geo: BufferGeometry): number {
@@ -173,5 +176,39 @@ export class BldBatch {
     this.material.dispose();
     this.depth.dispose();
     this.texU.value.dispose();
+    for (const w of this.warm.children) (w as BatchedMesh).dispose();
   }
+}
+
+/**
+ * shader warm-up holder (macfix/smooth.md F12): a batch's program key holds what its geometry and colours look like
+ * (batching, per-instance colour, vertex colours and normals), and an empty BatchedMesh has neither until its first
+ * building, so Renderer.warmUp's compile linked a different program and the real one linked in the frame the first
+ * town (or the first building cut open by a storm or a fire) came into view. A three-vertex batch with one instance and
+ * the same materials (colour pass and shadow caster), never drawn, links the very programs at load.
+ */
+function warmBatch(name: string, material: Material, depth: Material): Group {
+  const warm = new Group();
+  warm.name = `${name}-warm`;
+  warm.visible = false;
+  warm.matrixAutoUpdate = false;
+  // (the attributes a building mesh has: meshkit.ts toGeometry)
+  const g = new BufferGeometry();
+  g.setAttribute('position', new Float32BufferAttribute(new Float32Array(9), 3));
+  g.setAttribute('normal', new Float32BufferAttribute(new Float32Array(9), 3));
+  g.setAttribute('color', new Float32BufferAttribute(new Float32Array(9), 3));
+  g.setAttribute('uv', new Float32BufferAttribute(new Float32Array(6), 2));
+  g.setAttribute('aKit', new Float32BufferAttribute(new Float32Array(12), 4));
+  g.setIndex([0, 1, 2]);
+  for (const mat of [material, depth]) {
+    const b = new BatchedMesh(1, 3, 3, mat);
+    b.frustumCulled = false;
+    b.matrixAutoUpdate = false;
+    const i = b.addInstance(b.addGeometry(g));
+    b.setMatrixAt(i, new Matrix4());
+    b.setColorAt(i, new Color(1, 1, 1));
+    warm.add(b);
+  }
+  g.dispose();
+  return warm;
 }

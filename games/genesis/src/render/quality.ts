@@ -39,22 +39,22 @@ export interface Quality {
 }
 
 const BASE: Omit<Quality, 'name'> = {
-  renderScale: 1, maxDpr: 1.25, msaa: 0, terrainPixelError: 6, patchBudget: 16, shadowCascades: 3, shadowMapSize: 2048,
+  renderScale: 1, maxDpr: 1.5, msaa: 0, terrainPixelError: 6, patchBudget: 16, shadowCascades: 3, shadowMapSize: 2048,
   shadowDistance: 3000, atmoSteps: 16, cloudSteps: 48, cloudLightSteps: 5, cloudScale: 0.5, bloom: 0.045, godRays: true,
   flare: 1, fxaa: true, grain: 0.02, vegetationDensity: 1, vegetationRange: 1, grass: true, particleBudget: 20000,
   // ssao: GTAO contact shadows on Medium and up (post/gtao.ts has the per-preset cost)
   lightBudget: 8, ssao: true, dof: false,
 };
 
-// maxDpr (macfix 2026-11, the owner's Mac was choppy): a Retina screen at its full 2× is 4× the pixels of every pass;
-// the drawing buffer is capped at 1.25 on High, 1 below (Ultra 1.5, Cinematic 2) and the UI is DOM, crisp at any ratio
+// maxDpr: the shipped values (High 1.5, Medium 1.25, Ultra/Cinematic 2). macfix 2026-11: the owner said "i dont want you
+// to lower the quality" — smoothness comes from a cheaper/steadier frame, never from fewer pixels (macfix/smooth.md)
 export const QUALITY: Record<QualityName, Quality> = {
   low: { ...BASE, name: 'low', renderScale: 0.75, maxDpr: 1, terrainPixelError: 14, patchBudget: 8, shadowCascades: 0, shadowMapSize: 1024, atmoSteps: 10, cloudSteps: 24, cloudLightSteps: 3, cloudScale: 0.25, bloom: 0.035, godRays: false, flare: 0.6, grain: 0.015, vegetationDensity: 0.35, vegetationRange: 0.5, grass: false, particleBudget: 4000, lightBudget: 2, ssao: false },
-  medium: { ...BASE, name: 'medium', renderScale: 0.9, maxDpr: 1, terrainPixelError: 9, patchBudget: 12, shadowCascades: 2, shadowMapSize: 2048, atmoSteps: 12, cloudSteps: 32, cloudLightSteps: 4, cloudScale: 0.35, vegetationDensity: 0.65, vegetationRange: 0.75, particleBudget: 10000, lightBudget: 4 },
+  medium: { ...BASE, name: 'medium', renderScale: 0.9, maxDpr: 1.25, terrainPixelError: 9, patchBudget: 12, shadowCascades: 2, shadowMapSize: 2048, atmoSteps: 12, cloudSteps: 32, cloudLightSteps: 4, cloudScale: 0.35, vegetationDensity: 0.65, vegetationRange: 0.75, particleBudget: 10000, lightBudget: 4 },
   // (terrain pixel error 7, not BASE's 6: ~25 % fewer terrain patches and draws at settlement views for detail the
   // shading — analytic micro normals, bump — carries anyway)
   high: { ...BASE, name: 'high', terrainPixelError: 7 },
-  ultra: { ...BASE, name: 'ultra', maxDpr: 1.5, msaa: 4, terrainPixelError: 4, patchBudget: 24, shadowCascades: 4, shadowMapSize: 4096, shadowDistance: 4500, atmoSteps: 24, cloudSteps: 72, cloudLightSteps: 6, cloudScale: 0.5, vegetationDensity: 1.3, vegetationRange: 1.4, particleBudget: 40000, lightBudget: 12, ssao: true },
+  ultra: { ...BASE, name: 'ultra', maxDpr: 2, msaa: 4, terrainPixelError: 4, patchBudget: 24, shadowCascades: 4, shadowMapSize: 4096, shadowDistance: 4500, atmoSteps: 24, cloudSteps: 72, cloudLightSteps: 6, cloudScale: 0.5, vegetationDensity: 1.3, vegetationRange: 1.4, particleBudget: 40000, lightBudget: 12, ssao: true },
   // (cinematic clouds: k = 2 with 96 steps — every pixel marched each frame cost ~4× High; vegetation capped near Ultra:
   // 1.6 × 2.0² drew ~6× High's triangles)
   cinematic: { ...BASE, name: 'cinematic', maxDpr: 2, msaa: 4, terrainPixelError: 3, patchBudget: 48, shadowCascades: 4, shadowMapSize: 4096, shadowDistance: 6000, atmoSteps: 32, cloudSteps: 96, cloudLightSteps: 8, cloudScale: 0.5, vegetationDensity: 1.35, vegetationRange: 1.5, particleBudget: 80000, lightBudget: 16, ssao: true, dof: true },

@@ -28,7 +28,7 @@ import { chooseMaterial, styleOf } from '../people/buildings.ts';
 import { meet } from '../people/culture.ts';
 import { tell } from '../people/story.ts';
 import { settlementRef, vars } from '../people/util.ts';
-import { distM, spotInCell } from '../people/world.ts';
+import { distM, isLand, spotInCell } from '../people/world.ts';
 import { animalDef } from '../life/herds.ts';
 import type { AnimalDef } from '../content.ts';
 import { cellPos3, fail, nearestSettlement, ok, placeName } from './util.ts';
@@ -36,6 +36,14 @@ import { moveSettlement, relOf, relStat, srel } from './regard.ts';
 import { godAct } from './belief.ts';
 
 export const PLACE_KINDS = ['spring', 'grove', 'mountain', 'site'] as const;
+
+/**
+ * A day's walk there and back (P32): 12 waking hours at BASE_WALK (2 m a minute) is ~1.4 km of walking, so the holy place
+ * a pilgrim walks to lies within ~700 m of them, and the place a prophet founds a shrine at lies within that of the town
+ * (its builders carry the timber there; a site 2 km out — the old reach — was 16 hours' walk each way, so the shrine
+ * was never built and no pilgrim ever went: P32, proved in tests/sacred-chain.test.ts).
+ */
+export const PILGRIM_REACH = 700;
 
 const _p = [0, 0, 0];
 
@@ -72,7 +80,7 @@ export function sacredNear(u: Universe, p: Planet, pos: ArrayLike<number>, radiu
 
 /**
  * Make a place sacred: at `pos` (the god's choice, a martyr's death, an omen), or — pos null — the settlement's natural
- * holy place within 2 km: a spring, else the oldest grove, else the highest peak. Returns it (or the one already there).
+ * holy place within a pilgrim's reach (PILGRIM_REACH): a spring, else the oldest grove, else the highest peak. Returns it (or the one already there).
  */
 export function addSacredPlace(u: Universe, p: Planet, st: Settlement | null, pos: ArrayLike<number> | null, by: string, kind?: string): SacredPlace | null {
   const R = relOf(u);
@@ -83,7 +91,7 @@ export function addSacredPlace(u: Universe, p: Planet, st: Settlement | null, po
     k = kind ?? (by === 'martyr' ? 'site' : kindAt(p, cell));
   } else {
     if (!st) return null;
-    const near = p.cellsNear(st.pos, 2000);
+    const near = p.cellsNear(st.pos, PILGRIM_REACH);
     const spring = p.springs.filter((s) => near.includes(s.cell)).sort((a, b) => a.cell - b.cell)[0];
     let best = -1, bv = -Infinity;
     if (spring) { best = spring.cell; k = 'spring'; }
@@ -119,16 +127,34 @@ function placeWord(pl: SacredPlace): string {
   return pl.kind === 'site' ? (pl.by === 'martyr' ? 'martyr\'s grave' : 'holy place') : pl.kind;
 }
 
+/** the place's own cell if it is dry land, else the nearest dry land cell within 250 m of it (-1 none) */
+function dryCellAt(p: Planet, cell: number): number {
+  const dry = (c: number) => isLand(p, c) && p.f.water[c] <= 0.1;
+  if (dry(cell)) return cell;
+  const at = cellPos3(p, cell);
+  let best = -1, bd = Infinity;
+  for (const c of p.cellsNear(at, 250)) {
+    if (!dry(c)) continue;
+    const d = distM(p, cellPos3(p, c), at);
+    if (d < bd || (d === bd && c < best)) { bd = d; best = c; }
+  }
+  return best;
+}
+
 /** a shrine at a sacred place: a site the settlement builds (marked sacred) */
 export function foundShrine(x: PCtx, st: Settlement, place: SacredPlace): Building | null {
   const t = x.c.buildings.idx('shrine');
   if (t < 0) return null;
   const mat = chooseMaterial(x, st, t);
   if (mat < 0) return null;
+  // the shrine stands on dry ground at the place: a spring's own cell is water, and a site under water is given up at
+  // once (buildings.ts reviseSite) — seed 1's year-50 prophet founded one at a spring that vanished the same hour (P32)
+  const cell = dryCellAt(x.p, place.cell);
+  if (cell < 0) return null;
   const id = x.u.ids.alloc('building');
-  const at = spotInCell(x.p, place.cell, id, 0x5a1, [0, 0, 0]);
+  const at = spotInCell(x.p, cell, id, 0x5a1, [0, 0, 0]);
   const b: Building = {
-    id, type: t, material: mat, style: styleOf(st), pos: [at[0], at[1], at[2]], cell: place.cell, rot: Math.round(hashFloat(id, 0x5a2) * 6283) / 1000,
+    id, type: t, material: mat, style: styleOf(st), pos: [at[0], at[1], at[2]], cell, rot: Math.round(hashFloat(id, 0x5a2) * 6283) / 1000,
     scale: 1, progress: 0, delivered: 0, damage: 0, settlement: st.id, flags: BuildingFlag.sacred, books: [], built: -1, fuel: 0, occupants: 0, household: -1,
   };
   x.ps.addBuilding(b);
@@ -216,8 +242,8 @@ export function pilgrimTask(x: PCtx, s: number, st: Settlement, night: boolean, 
   if (hashFloat(A.id[s], from, 0x9112) >= (r.since.pilgrimShare ?? 0.2)) return null;
   for (let m = 0; m < 8; m++) if (A.memKind[s * 8 + m] === MEMK.pilgrimage && A.memTick[s * 8 + m] >= from) return null;
   A.posAt(s, x.tick, _p);
-  // the nearest sacred place within a day's walk (half a day out, half back: ~1.4 km at 2 m a minute)
-  const pl = sacredNear(u, x.p, _p, 1400);
+  // the nearest sacred place within a day's walk (half a day out, half back: ~1.4 km of walking at 2 m a minute)
+  const pl = sacredNear(u, x.p, _p, PILGRIM_REACH);
   if (!pl) return null;
   return { kind: TASK.pilgrimage, goal: spotInCell(x.p, pl.cell, A.id[s], 0x9113, [0, 0, 0]), goalCell: pl.cell, work: 60, target: pl.id };
 }

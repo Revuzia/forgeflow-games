@@ -1,5 +1,6 @@
-// GENESIS — the Touch under the mouse (LIVING.md §3.6: the god's presence, drawn by the render lane as light and
-// weather; was CONTRACT.md §11.4's hand). No tool armed, the left button IS the Touch:
+// GENESIS — the Touch under the mouse (LIVING.md §3.6; CONTRACT.md §11.4's hand): the god's hand IS the mouse pointer
+// (owner 2026-11-04), with only a small ring of light under it in the world (render/hand.ts). No tool armed, the left
+// button IS the Touch:
 //   press on someone and drag (or hold still ~0.4 s)     → LIFT: they rise with the Touch; let go with a flick to
 //                                                          HURL them (velocity from the mouse's motion over the ground),
 //                                                          or slowly to set them down there
@@ -16,8 +17,8 @@
 // from when a handler happened to run: on a machine that hitches, a flick still hurls, a rub still soothes, and a
 // slow click on a person still opens the inspector.
 //
-// The interface shows the Touch at the pointer: the cursor is light (a ring over someone it can lift, a held orb while
-// carrying, a red-gold strike while rebuking, a crosshair with a power armed or a hurl aimed), a badge at the pointer
+// The interface shows the Touch at the pointer: the cursor is a plain hand (open idle, closed while carrying or
+// pressing, flushed while rebuking; a crosshair with a power armed or a hurl aimed), a badge at the pointer
 // names what it carries and how high ("Kek ↑ 9 m"), and the hint over someone names them ("Kek, child — drag: lift …").
 // Its place in the world follows the cursor (hand.move: often while carrying, sparingly otherwise — every move is a
 // logged command). The command kinds keep their ids (hand.*): only what the player reads changed.
@@ -40,8 +41,11 @@ const HOLD_MS = 400;
 /** a release this soon after the last motion is a flick */
 const FLICK_MS = 120;
 
-/** the cursor's pose (body[data-hand]; styles.css draws a hand for each) */
-export type HandCursor = 'none' | 'open' | 'carry' | 'press' | 'tool' | 'aim' | 'slap';
+/**
+ * the cursor's pose (body[data-hand]; styles.css draws a plain hand for each): 'hover' over the world, 'open' over
+ * something it can lift, 'carry' / 'press' a closed hand, 'slap' a flushed hand, 'tool' / 'aim' a crosshair
+ */
+export type HandCursor = 'none' | 'hover' | 'open' | 'carry' | 'press' | 'tool' | 'aim' | 'slap';
 
 export class HandInput {
   private host: UiHost;
@@ -180,7 +184,7 @@ export class HandInput {
     this.updateBadge(pointer);
     this.updateAim(pointer);
     this.setCursor(this.aiming ? 'aim' : toolArmed ? 'tool' : this.state === 'carry' || (this.held() && this.state !== 'press') ? 'carry'
-      : this.state === 'press' || this.state === 'rub' ? (this.slapping ? 'slap' : 'press') : this.hoverRef ? 'open' : 'none');
+      : this.state === 'press' || this.state === 'rub' ? (this.slapping ? 'slap' : 'press') : this.hoverRef ? 'open' : pointer ? 'hover' : 'none');
   }
 
   /** the press ended; returns 'click' when it was a plain click the App should treat as select / inspect */

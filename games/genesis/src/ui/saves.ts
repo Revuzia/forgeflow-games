@@ -165,6 +165,9 @@ function storageWords(e: unknown): string {
 // ───────────────────────────── the store (IndexedDB) ─────────────────────────────
 
 const DB = 'genesis-saves';
+/** a slot as IndexedDB holds it: its bytes a Blob (an ArrayBuffer in slots kept by older builds) */
+type StoredRecord = Omit<SaveRecord, 'bytes'> & { bytes: Blob | ArrayBuffer };
+function storedSize(b: Blob | ArrayBuffer | undefined): number { return !b ? 0 : b instanceof Blob ? b.size : b.byteLength; }
 const STORE = 'saves';
 
 export class SaveStore {
@@ -196,12 +199,25 @@ export class SaveStore {
 
   async list(): Promise<SaveMeta[]> {
     // (older slots lack the newer fields: they read as unknown, never as an error)
-    const all = await this.tx<SaveRecord[]>('readonly', (s) => s.getAll() as IDBRequest<SaveRecord[]>);
-    return all.map(({ bytes, packJson, ...m }) => ({ ...m, worlds: m.worlds ?? (m.world ? [m.world] : []), calendar: m.calendar ?? '', packs: m.packs ?? (packJson ?? []).map((p) => ({ id: p.id, name: p.name ?? p.id, version: p.version ?? '' })), size: m.size ?? bytes.byteLength }))
+    const all = await this.tx<StoredRecord[]>('readonly', (s) => s.getAll() as IDBRequest<StoredRecord[]>);
+    return all.map(({ bytes, packJson, ...m }) => ({ ...m, worlds: m.worlds ?? (m.world ? [m.world] : []), calendar: m.calendar ?? '', packs: m.packs ?? (packJson ?? []).map((p) => ({ id: p.id, name: p.name ?? p.id, version: p.version ?? '' })), size: m.size ?? storedSize(bytes) }))
       .sort((a, b) => b.date - a.date);
   }
-  get(id: string): Promise<SaveRecord | undefined> { return this.tx<SaveRecord | undefined>('readonly', (s) => s.get(id) as IDBRequest<SaveRecord | undefined>); }
-  put(r: SaveRecord): Promise<IDBValidKey> { return this.tx('readwrite', (s) => s.put(r)); }
+  async get(id: string): Promise<SaveRecord | undefined> {
+    const r = await this.tx<StoredRecord | undefined>('readonly', (s) => s.get(id) as IDBRequest<StoredRecord | undefined>);
+    if (!r) return undefined;
+    // (a slot's bytes are kept as a Blob; slots kept before that hold the ArrayBuffer itself)
+    return { ...r, bytes: r.bytes instanceof Blob ? await r.bytes.arrayBuffer() : r.bytes };
+  }
+  /**
+   * the bytes go in as a Blob: IndexedDB copies an ArrayBuffer field by structured clone ON THE CALLING THREAD (a 27 MB
+   * world froze the frame 50-200 ms per autosave), while a Blob is handed to the browser's storage off the main thread
+   * (measured 0.2-0.4 ms for the same bytes). The bytes kept are the same.
+   */
+  put(r: SaveRecord): Promise<IDBValidKey> {
+    const rec: StoredRecord = { ...r, bytes: new Blob([r.bytes], { type: 'application/octet-stream' }) };
+    return this.tx('readwrite', (s) => s.put(rec));
+  }
   del(id: string): Promise<undefined> { return this.tx('readwrite', (s) => s.delete(id) as IDBRequest<undefined>); }
 }
 

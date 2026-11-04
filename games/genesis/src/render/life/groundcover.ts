@@ -30,7 +30,7 @@ import { treeGeometry } from '../gen/treegen.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import type { BufferGeometry } from 'three';
 import { leafClusterTexture } from '../gen/leaftex.ts';
-import { makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS } from './vegetation.ts';
+import { makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS, whiteColors } from './vegetation.ts';
 import type { Vector3 } from 'three';
 
 /** floats per cached item: dir xyz, ground radius, yaw, scale, kind, variant, tint r g b (crops: phase, height, -) */
@@ -193,6 +193,7 @@ export class GroundCover {
     for (let v = 0; v < KVARS[GK.crop]; v++) {
       const m = new InstancedMesh(plain(cropClump(CROP_TYPES[v >> 1], v & 1), 6000), farMat, 6000);
       m.instanceMatrix.setUsage(DynamicDrawUsage);
+      whiteColors(m, 6000);
       m.count = 0;
       m.frustumCulled = false;
       m.matrixAutoUpdate = false;
@@ -218,6 +219,7 @@ export class GroundCover {
         const [g, cap] = geo(k, v);
         const m = new InstancedMesh(plain(g, cap), mat, cap);
         m.instanceMatrix.setUsage(DynamicDrawUsage);
+        whiteColors(m, cap);
         m.count = 0;
         m.frustumCulled = false;
         m.matrixAutoUpdate = false;
@@ -715,3 +717,4 @@ function cropStage(fid: number, yf: number, variant: number): { grow: number; r:
   const mixc = (i: number) => (g0[i] + (g1[i] - g0[i]) * ripe) * (1 - k2) + hay[i] * k2;
   return { grow, r: mixc(0), g: mixc(1), b: mixc(2) };
 }
+

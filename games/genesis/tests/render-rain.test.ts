@@ -27,7 +27,7 @@ test('rain streaks are thin, fade out before the lens and are not drawn chalk-wh
 // the first rain seen from the god's height (punch P06, fr4i-first-rain-60: orbit 400 m in the storm): the downpour's
 // ground murk (0.5 x 0.011 /m over ~140 m of air, x(1 + 1.2 gust)) veiled the bare hill at 50-80 % in pale blue-grey —
 // the rock read as frost — and the Touch's cloud, lit by the full sun under the storm deck, stood on it as a white crescent
-test("a downpour's murk thins with the god's height, and the Touch's cloud is not sunlit under the storm deck (punch P06)", () => {
+test("a downpour's murk thins with the god's height, and the storm deck's overcast reaches every material (punch P06)", () => {
   const m = /const rainK = (type === 2 && precip > 6 \? [^;]+);/.exec(WX);
   assert.ok(m, 'the downpour murk has its own term');
   const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -41,11 +41,7 @@ test("a downpour's murk thins with the god's height, and the Touch's cloud is no
   const veil = 1 - Math.exp(-k400 * 0.011 * (1 + 1.2 * 0.6) * k);
   assert.ok(veil < 0.35, `the hill below is veiled ${(veil * 100).toFixed(0)} %`);
   assert.match(WX, /Math\.max\(fog, type === 7 \? [^,]+, rainK, hazeK\)/, 'the murk term feeds the fog');
-  const HAND = readFileSync(new URL('../src/render/hand.ts', import.meta.url), 'utf8');
-  const light = HAND.slice(HAND.indexOf('vec3 touchLight(vec3 P) {'), HAND.indexOf('}', HAND.indexOf('vec3 touchLight(vec3 P) {')));
-  assert.match(light, /overcastAt|uOvercastK/, "the Touch's light knows the storm overhead");
-  const sunK = Number((/sun \* 0\.24 \* \(1\.0 - ([\d.]+) \* ov\)/.exec(light) ?? [])[1]);
-  assert.ok(sunK >= 0.7, `under the deck the Touch's cloud keeps ${(1 - sunK) * 100} % of the sun`);
+  // (the Touch's lit cloud is gone — the god acts through the mouse pointer now — so only the sky's overcast is checked)
   const CL = readFileSync(new URL('../src/render/sky/clouds.ts', import.meta.url), 'utf8');
   assert.match(CL, /uOvercastC: \{ value: new Vector4\(/, "the overcast uniforms are among the planet's shared uniforms");
 });

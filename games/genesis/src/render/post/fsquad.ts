@@ -32,8 +32,22 @@ export class FullscreenQuad {
   }
 }
 
+/**
+ * every live pass material (macfix/smooth.md F13): passes are drawn outside the scene graph, so Renderer.warmUp's scene
+ * compile never saw them, and a pass that runs only in a storm, at night or in a cut-away linked its shader in the frame
+ * it first ran. warmUp links them all at load.
+ */
+export const PASS_MATERIALS = new Set<ShaderMaterial>();
+
 /** a full-screen ShaderMaterial with sane post-process defaults */
 export function passMaterial(frag: string, uniforms: Record<string, IUniform>, opts: { blending?: Blending; defines?: Record<string, string | number>; vert?: string } = {}): ShaderMaterial {
+  const m = makePass(frag, uniforms, opts);
+  PASS_MATERIALS.add(m);
+  m.addEventListener('dispose', () => { PASS_MATERIALS.delete(m); });
+  return m;
+}
+
+function makePass(frag: string, uniforms: Record<string, IUniform>, opts: { blending?: Blending; defines?: Record<string, string | number>; vert?: string }): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: opts.vert ?? FS_VERT,
     fragmentShader: frag,

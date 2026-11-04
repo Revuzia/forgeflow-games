@@ -851,7 +851,8 @@ function shade(hex: string, k: number): string {
 /** 'deer' -> 'deer', 'Wild boar' -> 'wild boar', 'Wolf' -> 'wolves' (chronicle plurals) */
 export function plural(name: string): string {
   const n = name.toLowerCase();
-  if (/(deer|sheep|bison|fish|shoal|swarm|cattle|aurochs)$/.test(n)) return n;
+  if (/(deer|sheep|bison|fish|shoal|swarm|cattle|aurochs|moose|bees)$/.test(n)) return n;
+  if (/\box$/.test(n)) return `${n}en`;
   if (/wolf$/.test(n)) return n.replace(/wolf$/, 'wolves');
   if (/(s|x|ch|sh)$/.test(n)) return `${n}es`;
   if (/[^aeiou]y$/.test(n)) return `${n.slice(0, -1)}ies`;

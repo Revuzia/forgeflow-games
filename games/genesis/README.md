@@ -5,8 +5,8 @@ world, pour seas, seed life and set a people down on the land. They live off it 
 real animals, farm, build, learn, forget, quarrel and move on. They also notice you. Every town keeps its own faith,
 fear, trust and loyalty toward its god, prays to you, and remembers what you did.
 
-- **The Touch**: the god's presence on the land, shown as light and weather. It is warm light where the people trust
-  you and storm-dark where they fear you. It lifts, sets down, hurls, soothes and rebukes.
+- **The Touch**: the god's presence on the land, a ring of light at your own pointer. It is warm gold where the people
+  trust you and cold blue-white where they fear you. It lifts, sets down, hurls, soothes and rebukes.
 - **Sigils**: original one-stroke glyphs that cast miracles. Hold G (or the middle button) and draw one. You can also
   say what you want in words (Enter).
 - **Prophets and signs**: make a person your prophet, foretell what you will do, then make it true. Send signs (an

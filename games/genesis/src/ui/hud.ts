@@ -179,6 +179,12 @@ export class Hud {
   private dev: HTMLDivElement | null = null;
   private lastText = '';
   private lastClock = '';
+  // (what the speed readout and the sky dot last showed: the DOM is written only when they change — a write every frame
+  // was an HTML parse, a style recalc and a layout of the top bar sixty times a second, macfix smooth)
+  private lastAchieved = '';
+  private lastAchievedTitle = '';
+  private lastSky = '';
+  private readonly markerState = new Map<number, string>();
   private v2 = new Vector2();
   private actions: HudActions;
   private speedIds: Record<number, string> = Object.fromEntries(SPEED_PRESETS.map((x) => [x, x === 0 ? 'time.pause' : `time.speed${x}`]));
@@ -444,7 +450,9 @@ export class Hud {
         this.worldBtns.set(pv.id, b);
         this.worlds.appendChild(b);
       }
-      (b.firstElementChild as HTMLElement).style.background = planetColor(pv.params.atmosphere.pressure > 0.05 && pv.params.kind === 'barren' ? 'terran' : pv.params.kind);
+      const dot = b.firstElementChild as HTMLElement;
+      const col = planetColor(pv.params.atmosphere.pressure > 0.05 && pv.params.kind === 'barren' ? 'terran' : pv.params.kind);
+      if (dot.dataset.col !== col) { dot.dataset.col = col; dot.style.background = col; }
       b.classList.toggle('gn-here', pv.id === primary);
       b.classList.toggle('gn-moonbtn', pv.params.orbit.parent >= 0);
       let pop = 0;
@@ -534,20 +542,24 @@ export class Hud {
         this.markers.appendChild(m);
       }
       const p = show ? f.project(pv.center, this.v2) : null;
-      if (!p) { m.style.opacity = '0'; m.style.pointerEvents = 'none'; continue; }
-      m.style.opacity = '1';
-      m.style.pointerEvents = 'auto';
-      m.style.left = `${p.x.toFixed(1)}px`;
-      m.style.top = `${p.y.toFixed(1)}px`;
+      if (!p) {
+        if (m.style.opacity !== '0') { m.style.opacity = '0'; m.style.pointerEvents = 'none'; }
+        continue;
+      }
+      if (m.style.opacity !== '1') { m.style.opacity = '1'; m.style.pointerEvents = 'auto'; }
+      const left = `${p.x.toFixed(1)}px`, top = `${p.y.toFixed(1)}px`;
+      if (m.style.left !== left) m.style.left = left;
+      if (m.style.top !== top) m.style.top = top;
       const parent = pv.params.orbit.parent >= 0 ? at.get(pv.params.orbit.parent) : undefined;
       m.classList.toggle('gn-near', !!parent && Math.hypot(parent[0] - p.x, parent[1] - p.y) < 64);
       const label = m.lastElementChild as HTMLDivElement;
       let pop = 0;
       for (const v of pv.population) pop += v;
       const txt = `${pv.name}<small>${pv.params.kind}${pop ? ` · ${fmtNum(pop)}` : ''}</small>`;
-      if (label.innerHTML !== txt) label.innerHTML = txt;
+      // (compared with what was written, not read back: reading innerHTML serialises the subtree every frame)
+      if (this.markerState.get(pv.id) !== txt) { this.markerState.set(pv.id, txt); label.innerHTML = txt; }
     }
-    for (const [id, m] of this.markerEls) if (!f.view.planet(id)) { m.remove(); this.markerEls.delete(id); }
+    for (const [id, m] of this.markerEls) if (!f.view.planet(id)) { m.remove(); this.markerEls.delete(id); this.markerState.delete(id); }
   }
 
   /**
@@ -709,8 +721,8 @@ export class Hud {
       const t = hour / pv.params.dayHours * 24;
       const day = t > 6 && t < 18;
       const dusk = (t > 5 && t <= 7) || (t >= 17 && t < 19.5);
-      this.skyDot.style.color = dusk ? '#f0a46b' : day ? '#f3dfae' : '#7d9cd6';
-      this.skyDot.style.background = this.skyDot.style.color;
+      const sky = dusk ? '#f0a46b' : day ? '#f3dfae' : '#7d9cd6';
+      if (sky !== this.lastSky) { this.lastSky = sky; this.skyDot.style.color = sky; this.skyDot.style.background = sky; }
       if (this.worldName.textContent !== pv.name) this.worldName.textContent = pv.name;
       const kind = pv.params.atmosphere.pressure > 0 ? pv.params.kind : `${pv.params.kind} · airless`;
       if (this.worldKind.textContent !== kind) this.worldKind.textContent = kind;
@@ -722,8 +734,10 @@ export class Hud {
     // 1x–300x the plain sim, 1000x time-lapse, 3000x deep time-lapse — sim/perf/lapse.ts)
     const lv = view.lapseLevel ?? (view.speed >= 3000 ? 2 : view.speed >= 1000 ? 1 : 0);
     const lapse = view.speed > 0 && lv > 0 ? ` <i class="gn-lapse">${lv > 1 ? 'deep time-lapse' : 'time-lapse'}</i>` : '';
-    this.achieved.innerHTML = `<b>${view.speed === 0 ? 'paused' : '×' + fmtSpeed(view.achievedSpeed)}</b>${lapse}${f.showFps ? ` · ${f.fps < 10 ? f.fps.toFixed(1) : f.fps.toFixed(0)} fps` : ''}`;
-    this.achieved.title = view.speed > 0 ? `Asked for ×${view.speed}; the worlds are keeping ×${fmtSpeed(view.achievedSpeed)}${lv > 0 ? ' — in time-lapse: the slow systems take longer steps, the same world' : ''}` : 'Time stands still';
+    const achieved = `<b>${view.speed === 0 ? 'paused' : '×' + fmtSpeed(view.achievedSpeed)}</b>${lapse}${f.showFps ? ` · ${f.fps < 10 ? f.fps.toFixed(1) : f.fps.toFixed(0)} fps` : ''}`;
+    if (achieved !== this.lastAchieved) { this.lastAchieved = achieved; this.achieved.innerHTML = achieved; }
+    const achievedTitle = view.speed > 0 ? `Asked for ×${view.speed}; the worlds are keeping ×${fmtSpeed(view.achievedSpeed)}${lv > 0 ? ' — in time-lapse: the slow systems take longer steps, the same world' : ''}` : 'Time stands still';
+    if (achievedTitle !== this.lastAchievedTitle) { this.lastAchievedTitle = achievedTitle; this.achieved.title = achievedTitle; }
     if (f.open) {
       const o = f.open;
       this.dockBtns.get('palette')?.classList.toggle('gn-on', o.palette);
