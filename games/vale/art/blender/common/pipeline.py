@@ -320,7 +320,8 @@ def build(spec, args, skin=None) -> dict:
                                   sizes=getattr(spec, "TEXTURE_SIZES", None),
                                   fast=args.fast, ao_extra=[accent] if accent else [],
                                   ao_into_base=getattr(spec, "AO_INTO_BASE",
-                                                       materials.BIBLE_BAKE["ao"] if _bible(spec) else 0.0))
+                                                       materials.BIBLE_BAKE["ao"] if _bible(spec) else 0.0),
+                                  zero_metal=_bible(spec))            # closing OBS-metal: bible fighters, metal 0
             report["bake"] = res["timings"]
     for o in list(bpy.data.objects):
         if o is not None and any(c.name == src.name for c in o.users_collection):

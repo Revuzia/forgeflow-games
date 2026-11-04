@@ -279,13 +279,16 @@ def _joined_high(highs: dict, slot: dict, col) -> bpy.types.Object:
 def bake_asset(low, highs: dict, out_dir: str, name: str = "body", size: int = 1024, samples: int = 4,
                ao_samples: int = 48, ao_distance: float = 0.25, ao_lift: float = 0.25, cage: float = 0.012,
                ray: float = 0.05, mat_name: str = "body", fast: bool = False, ao_extra=(),
-               base_quality: int = 90, ao_into_base: float = 0.0, base_fn=None, sizes: dict | None = None) -> dict:
+               base_quality: int = 90, ao_into_base: float = 0.0, base_fn=None, sizes: dict | None = None,
+               zero_metal: bool = False) -> dict:
     """Bake `highs` ({part: [objects]}) onto `low` into `<out_dir>/<name>_{base,orm,normal}`.
     `ao_into_base` (bible: 0.6, tokens.json fighter.bakeIntoBaseColor.aoStrength) multiplies the
     whole-body AO into the base colour (painted occlusion that survives direct light; three's
     aoMap only darkens indirect light); the ORM occlusion channel is then lifted so the two do not
     double up. `base_fn(low, size)` (ART 2.0 concept projection) replaces the baked base colour with
-    its own painted atlas (row 0 = top) before the AO multiply. Returns {'material', 'images':
+    its own painted atlas (row 0 = top) before the AO multiply. `zero_metal` writes metallic 0 into the ORM's
+    B channel (closing OBS-metal: the bible fighters are metalness 0 everywhere, but the bake picked up residual
+    metal from procedural sources: Kemdo 30 % of texels > 0.05, max 0.38). Returns {'material', 'images':
     {kind: path}, 'timings': {...}}."""
     t0 = time.perf_counter()
     T = {}
@@ -394,7 +397,8 @@ def bake_asset(low, highs: dict, out_dir: str, name: str = "body", size: int = 1
         ao_lift = max(ao_lift, 0.55)
     a = ao_lift + (1.0 - ao_lift) * a
     rm = image_array(rough)
-    orm_arr = np.stack([a, rm[..., 0], rm[..., 1], np.ones_like(a)], axis=-1)
+    met = np.zeros_like(a) if zero_metal else rm[..., 1]
+    orm_arr = np.stack([a, rm[..., 0], met, np.ones_like(a)], axis=-1)
     orm = new_image(f"{name}_orm", size, True)
     set_image_array(orm, orm_arr)
     for kind, img in (("orm", orm), ("normal", normal)):
