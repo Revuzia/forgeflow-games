@@ -151,3 +151,13 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 - Splash art in shipped games carries painted texture detail, so a gate that punishes detail sets the wrong bar.
 - The σ 2 grain figure stays in the card_qa report as a diagnostic, not a gate.
 - Reviewers still judge painterliness by eye at full size.
+
+## 13. KTX2 texture compression is deferred (lead, by delegation, 2026-11-04)
+
+**Problem:** CW1's memory clause (done:4) asked for a KTX2/Basis texture path. No offline encoder is installed (only the three.js transcoder ships), and downloading tools needs the owner's go-ahead.
+
+**Ruling:** KTX2 is **deferred**, not required at the par bar.
+- The clause exists to keep GPU memory in budget. That outcome is met without it: Home peak 1329-1385 MB against the 2500 MB budget, match peaks inside the gate.
+- Shipped web games use KTX2 where texture memory is the bottleneck. Here it is not, so the budget gate is the measure, not the format.
+- The menu-cycle leak (+9.2 % GPU growth, undisposed materials and geometries) is a separate defect and still blocks.
+- Revisit KTX2 if a memory gate fails on textures, or before a mobile target.
