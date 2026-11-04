@@ -382,11 +382,16 @@ export class Bot extends BotBase implements BotController {
     };
     // retreat
     let retreat = 0;
+    // (CW3s refix 2, CL-1: a RIFT laner in the laning phase plays its lane closer to the edge — it leaves a trade 5 points
+    // of health later and turns from a merely worse 2v2 only below 0.36, not 0.42: laning kills come from the
+    // trades a laner stays in a moment too long, and the wave's last hits from staying on it)
+    // (until 9:00: past it the first Needles go down early — 8.3 min veteran median, under G4's 9–12 band — when it lasts)
+    const edgy = this.lanePhase() && now < 540;
     if (this.nearE > 0) {
-      if (hpF < thr) retreat = 0.85 + (thr - hpF);
+      if (hpF < thr - (edgy ? 0.05 : 0)) retreat = 0.85 + (thr - hpF);
       else if (tolled) retreat = 0;
       else if (this.adv < 0.3 && this.nearE >= 2) retreat = 0.8;
-      else if (this.adv < 0.42 && hpF < 0.5) retreat = 0.7;
+      else if (this.adv < (edgy ? 0.36 : 0.42) && hpF < 0.5) retreat = 0.7;
     }
     if (this.towerAggro && !(this.mode === 'allin' && this.killTarget && this.killTarget.hp < this.killTarget.maxHp * 0.25 && hpF > 0.5)) retreat = Math.max(retreat, 0.86);
     if (kind === 'fray' && hpF < thr && this.recentDps > 0) retreat = Math.max(retreat, 0.75);
@@ -456,7 +461,8 @@ export class Bot extends BotBase implements BotController {
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
       // (CW3s refix: 0.3 after 12 s; at 0.15 after 20 s a passive seat took less damage than the bot-played one)
-      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 12 && now - this.foeHitAt > 12 ? 0.3 : 0;
+      // (refix 2: 0.3 after 12 s still left the passive seat at 288 vs 321 damage a minute: 0.4 after 8 s)
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 8 && now - this.foeHitAt > 8 ? 0.4 : 0;
       // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
       // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
       const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
@@ -473,9 +479,7 @@ export class Bot extends BotBase implements BotController {
       // (CW3 CL-1: a trade I am winning — its health well under mine and below half, nobody of theirs beside it — is pressed
       // into an all-in instead of a step back: that is where laning kills come from)
       const leF = (le.hp + le.shield) / Math.max(1, le.maxHp);
-      // (CW3s refix 2: pressed from 55 % and a 15-point lead in the laning phase — fight-time last hits keep the wave's)
-      const lpP = this.lanePhase();
-      if (leF < (lpP ? 0.55 : 0.5) && hpF - leF >= (lpP ? 0.15 : 0.2) && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
+      if (leF < 0.5 && hpF - leF >= 0.2 && this.adv >= 0.5 && this.enemiesNear(le.x, le.y, 10) <= 1) { this.killTarget = le; consider('allin', 0.72); }
     }
     // (CW3 CL-1: a gank on my road is two on one only if I turn on its target too — the grovehunter at it, or already on
     // it, and me close enough to join: that is the laner's half of the gank)
