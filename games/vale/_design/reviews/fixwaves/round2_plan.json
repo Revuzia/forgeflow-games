@@ -1,0 +1,675 @@
+{
+ "CW1": [
+  {
+   "key": "r2-kit-feel",
+   "brief": "Kit feel: Marund a3 signature hue >= 0.55 in 3 reruns; Kemdo ult disc hold stable over 2 consecutive full combat_polish runs; Rishal hold >= 167 ms; Hesmi core (ruling 10); attack orders that register as moves (find where the attack order is lost between pickEntity and the command builder; CW3c owns src/ui, so a UI-side fix goes as a handoff, but diagnose fully); recall clip fitted to the 7 s channel (all fighters); Marund domefall_leap playback mapped to dash progress; Hesmi/Sukri Shadeprint element refs in content/vfx.json; burdam_almanac vfxTint.",
+   "items": [
+    {
+     "id": "done:0",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "`probe_kit_hue --live` (fw_CW1_v2_kit_hue.json) exits 1: 63 of 64 slots pass and the highest team light is 0.28. hesmi.ult is fixed at 0.601. marund.a3 fails at 0.43, and a targeted rerun (fw_CW1_v2_kit_hue_marund.json) fails again at 0.491. Marund a3 has now failed 3 of the 4 measured runs.",
+     "fixHint": "Add signature-hued light to Marund's a3 so it reaches >= 0.55 in 3 reruns."
+    },
+    {
+     "id": "done:1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "`combat_polish ult,hold --ults all` (fw_W1_combat_polish_fw_CW1_v2.json) exits 1: Kemdo's disc holds >= 0.5 x victim for only 100 ms (it dips to 0.49 on the 4th frame). A targeted hold rerun reads 300 ms, so the gate is flaky. Rishal holds 200 ms and Tunlan 167 ms. Cores: Hesmi 2.07, Nurrow 2.05, Dunsom 2.06, all >= x2.0 with the lifted ground at about the clip (p90 213-223). Body white <= 0.09.",
+     "fixHint": "Keep Kemdo's disc at >= 0.55 through frame 4, and pass 2 consecutive full runs."
+    },
+    {
+     "id": "critic:combat-16",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "All 16 ult cores are >= x2.0 (Marund 2.11), but the full run exits 1 on Kemdo's hold. The probe's third clip-bound condition (b5fd4f36) is looser than the wording of ruling 10: it marks every ult as target x2.0.",
+     "fixHint": "Make the run pass end to end, and have the lead confirm how the probe reads ruling 10."
+    },
+    {
+     "id": "critic:input-feel",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "probe_input_latency fails in both 50-order runs. In fw_CW1_input_latency_v2.json, orders 4 and 11 drew a move marker or none, and one order never moved the fighter. In v2b.json, orders 1, 4 and 11 drew a move marker, even though pick was set and the foe was targetable. Latency is fine: marker p95 25-34 ms, motion p95 41-44 ms.",
+     "fixHint": "Find out where the attack order is lost between pickEntity and the command builder, then pass 2 runs of 50 orders."
+    },
+    {
+     "id": "combat:C2",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Hesmi's core is x1.99 on unclipped ground; the white-out is fixed (full frame 0.049)."
+    },
+    {
+     "id": "combat:C3",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Rishal's disc holds 133 ms (needs 167); Kemdo (300 ms) and Tunlan (167 ms) pass."
+    },
+    {
+     "id": "handoff:CW4:landmarks",
+     "to": "CW1",
+     "what": "The value_probe T4 flash test (marund_domefall, the default lift cap) read 1.91x on RIFT low and 1.98x on BRIDGE low in my runs (bar >= 2.0x). It passed on RIFT high and on BRIDGE in an earlier run. This is the VFX lift envelope, not the ground. Evidence: _harness/_reports/fw_CW4_b5.json, runs fw_CW4_e1_b5 and fw_CW4_e1_bridge3."
+    },
+    {
+     "id": "handoff:CW6:hesmi-sukri",
+     "to": "CW1",
+     "what": "hesmi-M4 effect half: make Hesmi Shadeprint's vfxTint #6C5BA8 reach her shadows. In content/vfx.json add an 'element' colour layer (or switch the shadow body/edge colour ref to 'element') in hesmi_a1_shadow, hesmi_ult_shadow and hesmi_ult_shard. Keep the team rings on 'team'. Base keeps its signature violet through elementOf's fallback, if element falls back to the signature."
+    },
+    {
+     "id": "handoff:CW6:hesmi-sukri",
+     "to": "CW1",
+     "what": "SUK-M5 effect half: make Sukri Shadeprint's vfxTint #6C5BA8 reach the kit. Add 'element' refs (or route skinTint into signature) for the cup motes, the Mote Toss bolt, the Draw Near pull and the Gather In flare in the sukri_* defs of content/vfx.json. Keep team rings on 'team'. All 16 sukri_* defs have 0 element refs today, and every Sukri cast has its own windupVfx, so the generic element wind-up never plays."
+    },
+    {
+     "id": "handoff:CW6:marund-odrum",
+     "to": "CW1",
+     "what": "marund-M2 playback: src/render/actors.ts maps clip time to dash progress only when role === 'dash' (~l.1037). Apply the same mapping to any clip played in the dash state (v.state === 'dash', e.g. role 'domefall_leap'), so the leap's apex and slam land on the dash's progress. Optionally flare the cap windows at the apex (t 0.40) as the warning beat."
+    },
+    {
+     "id": "handoff:CW6:dunsom-ilsheta-rishal-tunlan",
+     "to": "CW1",
+     "what": "Recall playback in src/render/actors.ts. 'recall' is in LOOPING (l.132) and plays at timeScale 1. All recall clips are 6 s, because art/tools/three_load_test.mjs:263 fails any clip over 6 s, while RIFT's recall is 7 s (content/modes.json:28). So the opening replays for the last 1 s. Fit the recall clip to the channel the way the dash is fitted (~l.1069): when v.state === 'recall' and v.stateDuration > 0, set act.timeScale = 0 and act.time = min(clipDur - 1e-3, (stateTime / stateDuration) * clipDur). Use LoopOnce with clampWhenFinished, so the 6 s performance spans the whole 7 s channel with no restart. This affects Dunsom, Ilsheta, Rishal, Tunlan, Marund and the others."
+    },
+    {
+     "id": "handoff:CW6:refix1",
+     "to": "CW1",
+     "what": "Recall playback in src/render/actors.ts. 'recall' is in LOOPING (l.132), so the last 1 s of RIFT's 7 s recall replays the opening. When v.state === 'recall' && v.stateDuration > 0: set act.timeScale = 0 and act.time = min(clipDur - 1e-3, stateTime / stateDuration * clipDur), with LoopOnce and clampWhenFinished. All CW6 recall clips are 6 s."
+    },
+    {
+     "id": "handoff:CW6:refix1",
+     "to": "CW1",
+     "what": "Marund Domefall playback: actors.ts maps dash progress only for role 'dash' (~l.1037-1073). Apply the same mapping to any clip played in the dash state, e.g. 'domefall_leap' (meta role dash, apex_t 0.40, slam_t 0.82)."
+    },
+    {
+     "id": "handoff:CW6:refix1",
+     "to": "CW1",
+     "what": "hesmi-M4 / SUK-M5 effect halves: in content/vfx.json add 'element' colour refs (team rings stay on 'team') to hesmi_a1_shadow, hesmi_ult_shadow and hesmi_ult_shard, and to the sukri_* cup motes, Mote Toss bolt, Draw Near pull and Gather In flare. Today there are 0 element refs in 10 hesmi_* and 16 sukri_* defs."
+    },
+    {
+     "id": "handoff:CW1:hue-skinfx",
+     "to": "CW1 (next package)",
+     "what": "Ult first-beat core is below 2.3 on 10 ults (probe_combat_polish ult --ults all: hesmi 1.93, marund 1.66, nurrow 1.94, kemdo 2.13, sukri 2.14, dunsom/ervet/odrum/burdam/vashil 2.24-2.26). Raising point-light intensity does not move the measure. Next try: a short signature-or-companion light-style ground decal (emissive ~4, life ~0.2 s) at the beat inside 0.5 x the lift radius, or a generic core glow in vfx/screen.ts pulse. Also open: victim-box white at Vashil 0.432 and Lisvel 0.376, and ulkro_long_evening ult skin sig 0.261."
+    }
+   ]
+  },
+  {
+   "key": "r2-memory-crowd",
+   "brief": "The menu-cycle GPU leak (dispose per-match materials/geometries/textures on teardown: perf_1080 memory step <= +5 % menu_2->menu_5 and tracked undisposed counts flat), then one perf_1080 --prod --match-seeds 7,11,23 sweep printing GATE PASS: crowd triangle peak <= 500k on seeds 7 and 23 (crowd outline LOD and/or crowd draw cap, render-side; never change sim), programs <= 40 at seed 23 rot 10 (program audit of the rotated fighters' extra materials). KTX2 is deferred by ruling 13. The idle-machine fps gates (gpubound tail >= 58, Ultra 60, b4 real-time) go to the integration pass: mark them needs idle machine.",
+   "items": [
+    {
+     "id": "done:3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "fw_CW1_v2_perf.json found no idle window during a 45 min --wait-idle. gpubound: the scale left 2.0 at 1.2 s (PASS), but the tail ran 57.7 fps (< 58) at load 6.6-7.2. Ultra ran 39.4 fps under load. Calibrate and dynres pass."
+    },
+    {
+     "id": "done:4",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "memmaps Home peak is 1335 MB (PASS). There is no KTX2 path and no ruling dropping that clause. The memory step FAILS: the GPU process grows +9.2 % from menu_2 to menu_5 (+20.1 % in the r1 sweep). Tracked undisposed materials grow 85 -> 271 and geometries 123 -> 336 at the menus (+62 / +71 per cycle).",
+     "fixHint": "Dispose the per-match materials and geometries on teardown, and get a KTX2 path or a ruling."
+    },
+    {
+     "id": "done:7",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "The perf_1080 --prod sweep prints GATE FAIL; its only failing check is the memory step at +9.2 %. Match peaks are 456k / 493k / 456k with 39 programs on every seed (PASS). typecheck and content:check are clean. overlay and value_probe were not re-run this round.",
+     "fixHint": "Fix the menu-cycle leak, then run one sweep that prints GATE PASS."
+    },
+    {
+     "id": "perf:PERF-C1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The functional half passes. The fps outcomes were measured only under load: gpubound tail 57.7 fps and Ultra 39.4 fps (fw_CW1_v2_perf.json)."
+    },
+    {
+     "id": "critic:b4-realtime",
+     "severity": "major",
+     "status": "not_measured",
+     "evidence": "No idle window came in 45 min (load 5-7, Blender jobs in the heavy slots). Every timing step reports 'machine busy'."
+    },
+    {
+     "id": "perf:PERF-C4",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Seed 23 rotation 10 reaches 41 programs, above 40.",
+     "fixHint": "Audit the programs added by the rotated fighters' extra materials."
+    },
+    {
+     "id": "env:m-5",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Not re-measured; only a spot check from value_probe."
+    },
+    {
+     "id": "handoff:CW1:perf",
+     "to": "lead->routed",
+     "what": "Add to the integration gate: `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23` (it now includes the gpubound, calibrate and memmaps steps), plus `node _harness/probe_dynres_metal.ts` (also picked up by npm run probe). Match peak seed 23, rot 10 FAILS: 721k triangles at 1322.8 s (19 s over 500k), with crowd body 141k/14 draws and crowd outline 133k/7 draws in a late base push, and 41 programs (> 40) at 9.4 s from the rotated fighters' extra materials (gem_chimglass x2, glasshorn_dawnglass, dialwren_matte). My changes did not cause this: the gate never ran that seed before. It needs a crowd outline LOD / crowd-count cap and a program audit. The critic b4 real-time number needs an idle machine (load < 3); the load stayed at 12-270 all session."
+    },
+    {
+     "id": "handoff:CW1:polish",
+     "to": "lead->routed",
+     "what": "CW1 regression set after this package. typecheck clean. Strict `npm run content:check`: OK, 0 warnings. `node _harness/overlay_regress.mjs --q high,low`: PASS. `node _harness/perf_1080.mjs --prod --q high,low` (fw_CW1_perf_polish.json) prints GATE FAIL on one item only: the match-peak triangle count is 534,665 > 500k at game 1749.7 s on seed 7 (4 s over; actors 310k/131 draws in a late base push). This is the same crowd-peak class as the seed 23 handoff. The cause is the sim, not render: the seed 7 match used to end at 1162 s and now runs to 1800 s. Everything else passes: High 57.7 fps, Low 58.8 fps, gpubound, calibrate, memmaps Home 1329 MB, 0 late programs. The fix is still a crowd outline LOD or crowd-count cap. Also add `node _harness/probe_camjump.mjs` (heavy slot; 0 bodies missing after a focus jump) to the integration gate. Correction: commit f77c7b03 says 'core >= 2.3 on 10/16'; the measured count in fw_W1_combat_polish_fw_CW1_polish_c.json is 9/16. C2's x2.3 core for Hesmi, Kemdo, Dunsom, Nurrow and Sukri cannot be reached with the tint kept: the lifted ground clips at about luma 218 on warm ground after the grade. Reaching it means letting the core go near-white, which conflicts with the victim-box white gate (luma > 225 and chroma < 30). Rule which way the gauge should go: a lower core target, or a 2-frame near-white allowance."
+    }
+   ]
+  }
+ ],
+ "CW2": [
+  {
+   "key": "r2-audio",
+   "brief": "Audio runtime: sync p95 within 1 frame + output latency (probe_audio_runtime sync), the match probe's enemyDownFires check made conditional on an enemy dying (or force a death), session_mem S2: no f_<id>_call draft cues decoded at Home (free/lazy-load them), AUD-C4 dead-state LPF exercised live plus phase segments / objective layer if within budget. AUD-C2 voice is out of scope (ruling 9). Keep master loudness at the round-1 verified level.",
+   "items": [
+    {
+     "id": "critic:audio-runtime",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "LOUDNESS holds. src/audio/index.ts:292 sets MIX_TRIM_DB=3.5 and :587-591 wires master->trim->limiter. My capture (_harness/_reports/fw_CW2_v2_runtime_match.json, RIFT, 421.8 s, default settings) measured out integrated -16.59 LUFS. That is inside -18\u00b11.5, with 0.09 LU to spare at the top of the band. Announcer peak is +3.35 dB over the sfx p99 and heal chimes run at 1.85 per minute. The run's overall FAIL comes only from enemyDownFires=false: 0 takedowns in the autopilot match, which is gameplay variance. SYNC fails on re-measure. Run 1 (fw_CW2_v2_runtime_sync.json) FAILs: offset p95 40.14 ms and engineOverSfxBus p95 5.45 ms against a 4 ms gate. Run 2 (fw_CW2_v2_runtime_sync2.json) FAILs: offset p95 43.07 ms is over even the re-documented 42.72 ms budget, and engineOverSfxBus p95 is 7.62 ms. Counting the engineer's runs, sync..sync4 failed and only sync5 passed, so 1 PASS in 7. Per-hit start-to-onset still has a tail at 13.8/16.5/21.8 ms against the flat 10.02 ms sfx-bus reference, so some cues still miss a device quantum. Against the original 32.7 ms budget, p95 is 7-10 ms over. I accept the 10 ms limiter and oversampler chain latency as documented.",
+     "fixHint": "Some cues still take the async path. The settled WeakMap is only filled in a then(), so first plays and re-requested files are affected. Prewarm the settled map for combat and kit cues at match load, or use a fixed dejitter start(currentTime + one quantum). Make the gate robust: all of 3 runs must pass, and raise --refs so the bus reference has more than 10 samples. Optionally trim to about 3.0 dB to centre the loudness in the band."
+    },
+    {
+     "id": "audio:AUD-C4",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Dead-state LPF exists (index.ts:1471-1483; B5 PASS) but was never exercised live. No phase segments or objective layer.",
+     "fixHint": "Add phase segments and an objective layer from build_music.py, plus a live dead-state capture."
+    },
+    {
+     "id": "audio:AUD-C2",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Not attempted; needs a ruling on CONTRACT \u00a711.",
+     "fixHint": "Lead records the ruling in owner_rulings.md; if the scope is lifted, schedule it as an XL package."
+    },
+    {
+     "id": "probe:session_mem-S2",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "probe_audio_session_mem.mjs exits 1: S2 flags 16 f_<id>_call.ogg draft cues at every Home. This contradicts the engineers' claim that no match cue was kept.",
+     "fixHint": "Exclude f_*_call from the S2 pattern (line 56), or free those cues at Home."
+    },
+    {
+     "id": "probe:runtime-gates",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "probe_audio_runtime sync exits 1 (p95 36.55 > 32.7). match exits 1 because enemyDownFires is false when no enemy dies.",
+     "fixHint": "Report enemyDownFires as not measured when no enemy fighter died, and settle the sync budget."
+    },
+    {
+     "id": "handoff:CW1:perf",
+     "to": "CW2",
+     "what": "The PERF-C2 Home footprint gate (perf_1080 memmaps) does not include audio, because the bench plays none. Renderer+GPU at Home is 1120-1286 MB against the 2500 MB budget, so your ~86 MB of decoded audio at Home fits. Keep it budgeted."
+    }
+   ]
+  }
+ ],
+ "CW3s": [
+  {
+   "key": "r2-content-handoffs",
+   "brief": "Content/sim handoffs first (fast): Marund Domefall: content/fighters/marund.json ult recast present.anim -> domefall_leap (+ art.clips map if needed) and a per-effect self-dash arc of 0.5-0.6 m in src/sim/movement.ts (shadow stays on the floor, deterministic); ruling 11: raise art.scale for Ilsheta, Lisvel, Nurrow base, Rishal and Odrum so each reaches >= 105 px at 28.5 m / 1080p (measure with node _harness/probe_camera.ts --only heights --gate-heights, heavy slot); tools/names_check.ts singular/plural forms lint for protected names; the sim ping `slot` field for Alt-click slot call-outs (CW3c needs it); any other CW3s handoffs.",
+   "items": [
+    {
+     "id": "handoff:CW2:runtime-polish",
+     "to": "CW3s",
+     "what": "Optional: bots never used the Spare Lamp in two 7-minute rift_coop matches (lampSet 0). If bots should ward (ai.use 'vision'), the live capture would then also show c_lamp_set and c_lamp_out."
+    },
+    {
+     "id": "handoff:CW2:refix1",
+     "to": "CW3s",
+     "what": "probe_audio_procs.mjs P2 fails: rift kemdo_cooling_kill fired once in sight and lost to the voice budget ({\"voices\":1}). It failed every time I ran it (3 runs, plus a run with my sync-start change switched off), so it is not caused by the CW2 change. It passed at 09:37 today (fw_CW2_v1_procs), so the likely cause is a sim/bot change in the working tree since then (src/sim/bots/bot.ts is modified). Re-run `node _harness/probe_audio_procs.mjs` once the sim settles. If it still fails, it is an audio voice-priority question for CW2 next round."
+    },
+    {
+     "id": "handoff:CW3c:refix1",
+     "to": "CW3s",
+     "what": "Slot call-outs (done:6): let a ping carry an optional ability or item slot. In src/contracts/sim.ts add `slot?: string` to the 'ping' command (line 63) and the 'ping' event (line 244). In src/sim/world.ts:167 add `&& (o.slot === undefined || (typeof o.slot === 'string' && /^(a1|a2|a3|ult|spell1|spell2|item[0-5])$/.test(o.slot)))`. In src/sim/sim.ts:139 emit `slot: cmd.slot` with the event. The HUD side (model.callout / calloutText) is already live and reads ev.slot."
+    },
+    {
+     "id": "handoff:CW4:monsters-1",
+     "to": "CW3s",
+     "what": "Add an optional per-unit camp facing so the Strays read in camp. In src/contracts/catalog.ts camps[].units[] allow `facing: z.number().optional()` (degrees, 0 = +x, or the sim's convention). In src/sim/units/monsters.ts, at the spawnUnit(w, u.unit, NEUTRAL_TEAM, ...) call (line ~80), pass { facing } when it is set; spawn.ts:139 already honours opts.facing. Leave the default as is (face the map centre, spawn.ts:78). Then CW4 sets the four RIFT Strays camps (a_/s_strays_north/south in content/maps/map_rift.json) to face the gameplay camera (south), so the Numeral shows its broad \u039b face instead of its 0.42 m side. Evidence: _harness/_shots/value_rift_high_fw_CW4_mon_after2_mon_stray_numeral.png; silhouette IoU numeral|tick 0.66 in _harness/_reports/fw_CW4_monsters.json."
+    },
+    {
+     "id": "handoff:CW6:marund-odrum",
+     "to": "CW3s",
+     "what": "marund-M2 sim half: give Domefall's self-dash a per-effect arc in src/sim/movement.ts (self-dashes get arc 0 at l.131; knockbacks already use KNOCK_ARC). Use a peak of about 0.5-0.6 m, not 0.8-1.0: the new domefall_leap clip already lifts the hips 0.50 m at 40 % of the dash, and the two add up. Keep the shadow on the floor."
+    },
+    {
+     "id": "handoff:CW6:refix1",
+     "to": "CW3s",
+     "what": "src/sim/movement.ts l.131: give Domefall's self-dash a per-effect arc peaking at 0.5-0.6 m (the clip already lifts the hips 0.50 m). Keep the shadow on the floor."
+    },
+    {
+     "id": "handoff:CW3s:quick-rekey-polish",
+     "to": "CW3s or integration (after both m3 renames land)",
+     "what": "Apply the names lint: in tools/names_check.ts add singulars(t), which turns tools into tool, boxes into box and berries into berry, and use it so a multi-word protected name also matches with its last word in the plural (in checkNames, compare the last variant token against singulars(tok)). In _design/research/protected_names.json add 'Co-op vs bots' and 'Co-op vs. bots' to lol_maps_modes and 'First Win of the Day' to lol_ui_terms. The ready patch is at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/m3_names_lint.patch (git apply). Then content:check must show 0 errors."
+    },
+    {
+     "id": "ruling11:art-scale",
+     "what": "Raise art.scale (content/fighters/<id>.json) for Ilsheta (89-91 px), Lisvel (99-100), Nurrow base (98), Rishal (95-100), Odrum (98-102) to >= 105 px, <= 130, at 28.5 m / 1080p; probe_camera --only heights --gate-heights passes for non-compact builds; compact Sukri 85-105 ok."
+    },
+    {
+     "id": "marund-M2:content",
+     "what": "content/fighters/marund.json ~l.541 ult recast present.anim dash -> domefall_leap; add art.clips entry if the client resolves through it (GLB carries the clip: 20 f, apex_t 0.40, slam_t 0.82)."
+    },
+    {
+     "id": "lead:names-singulars",
+     "what": "tools/names_check.ts: match singular/plural variants of protected names (e.g. a plural protected term also catches its singular) so the m3 class of names is linted; npm run names (or the check) passes on current content."
+    },
+    {
+     "id": "originality:m1",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The Snuff damage bonus is removed and probe_kits_B gives 733/0. But content/fighters/nurrow.json:184 (Lullaby Dart desc) still says 'Snuff on a sleeper hits harder'.",
+     "fixHint": "Change nurrow.json:184 to 'Snuff on a sleeper silences longer and comes back sooner.'"
+    },
+    {
+     "id": "originality:m3",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "content/queues.json:80 still reads 'Co-op vs bots'. The strings are unchanged, and the lint patch is not applied (it applies cleanly).",
+     "fixHint": "Land the coordinated renames with the selector updates, then git apply m3_names_lint.patch. content:check must show 0 errors."
+    },
+    {
+     "id": "gameplay:CL-2",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Splinters do not stack (core.ts:142). Sunsplinter first take comes 8.5 / 8.8 min after spawn.",
+     "fixHint": "See done:2."
+    }
+   ]
+  },
+  {
+   "key": "r2-bots",
+   "brief": "Bots and pacing on fresh untuned seeds (pick a new window, e.g. 961-980, and report it): takedowns by 10:00 at the sourced gauge (>= 6), no-death stretch <= 3 min, every fighter takes its first ult by the target, fighters' last-hit share >= 50 % (it regressed to 46.9 %), passive human seat pressured, veteran > novice >= 85 % holds, duo road level 6 by 8:00 (CL-g2) if within budget; critic:gauge-source: cite a page you READ for LoL kills-at-10 / first-blood time or state the gauge honestly as an internal target; bot-micro instrumentation report. Sim stays deterministic.",
+   "items": [
+    {
+     "id": "done:1",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "I re-measured at HEAD c01659e6 on a fresh window the engineer had not tuned on (seeds 941-960). Command: node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 941 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_v2. Report: _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt, 200 matches, 0 bot faults. Numbers are adept / veteran. Takedowns by 10:00: 5.05 / 4.65 (target >= 6, FAIL). Games with no takedown: 0/20 and 0/20 (PASS). Longest no-death stretch from 3:00: 3.4 / 3.4 min (target <= 3, FAIL). Shadehold takedowns before 14:00: 1.45 / 2.05 (PASS). Median first ult after 10:00: ulkro 10.4 (adept) and vashil 10.4 (veteran), FAIL. The engineer's claim of no late ult does not reproduce on this window.",
+     "fixHint": "Find about one more takedown by 10:00 without costing G1 last hits. Make sure ulkro, vashil and ilsheta use their ult in lane trades before 10:00, checked on two untuned windows."
+    },
+    {
+     "id": "done:2",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Same report, _harness/_reports/fw_W4_soak_fw_CW3s_v2.txt. Fighters' last-hit share: 46.9 / 46.9 % (target >= 50, FAIL; this regressed from 50.8 / 49.2). Laners in lane: 72.7 / 71.2 % (below the 75 % in the done-list). Sunsplinter first take after spawn: 2.1 / 3.0 min (PASS; veteran sits exactly on the bar). Splinters stack: maxStacks 3 in content/team_buffs.json, and addTeamBuff in src/sim/core.ts:137-159 adds a stack and renews the timer; probe_sim_rekey gives 45 passed, 0 failed (PASS). Cores fallen before 16:00: 0 (PASS). RIFT p90: 29.1 min (PASS)."
+    },
+    {
+     "id": "done:3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "Veteran beats novice 38/40 = 95 % on seeds 941-960. With the engineer's 36/40 on seeds 901-920 that is 74/80 = 92.5 % over two windows (PASS). Veteran beats adept 30/40 (PASS). Duo road level 6 median: 7.9 adept / 8.0 veteran. The soak's own veteran gate reports FAIL because 8.0 is on the 8:00 bar, not under it (_harness/_reports/fw_W4_soak_fw_CW3s_v2.txt)."
+    },
+    {
+     "id": "gameplay:CL-1",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Takedowns by 10:00 rose to 5.05 / 4.65, still under 6. The no-death stretch is 3.4 min (target <= 3), and two fighters still take their first ult after 10:00. The G1 last-hit share regressed to 46.9 % (fw_W4_soak_fw_CW3s_v2.txt)."
+    },
+    {
+     "id": "critic:gauge-source",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "I repeated the search without downloading anything. The RPubs analysis 1380267 prints no blueKills or redKills mean, and openml.org/d/43635 renders no statistics. I found no readable kills-at-10:00 or first-blood figure, so the >= 6 bar is still derived from LeagueMath's whole-game rate (modes_economy.md:54)."
+    },
+    {
+     "id": "critic:bot-micro",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "Skillshot hit rate, novice / adept / veteran: 50.4 / 72.7 / 76.7 %. On the same adept targets, veteran shooters hit 79.0 % against adept's 76.5 % (PASS, fixed). Telegraph dodge: 10.2 / 27.2 / 49.0 %. The passive human seat still takes less damage than the bot-played seat: 292 vs 320 per minute against adept bots and 241 vs 261 against veteran bots (FAIL; the gate is report-only and shows 'open')."
+    },
+    {
+     "id": "gameplay:CL-g3",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Veteran beats novice 82.5 % on untuned seeds 901-920.",
+     "fixHint": "See done:3."
+    },
+    {
+     "id": "gameplay:CL-g4",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The balance report exists. 40 games give intervals of about \u00b118 points. The 200+ game read was not run.",
+     "fixHint": "Run >= 200 shuffled same-tier games."
+    },
+    {
+     "id": "gameplay:CL-g5",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "draft.ts:95 uses secondaryRole, and 14 fighters have one. Growing the roster is out of scope.",
+     "fixHint": "Roster growth is long-term work."
+    },
+    {
+     "id": "gameplay:CL-g2",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Duo road level 6 at a median 8.2 / 8.5 min. Not attempted.",
+     "fixHint": "See done:3."
+    }
+   ]
+  }
+ ],
+ "CW3c": [
+  {
+   "key": "r2-hud-client",
+   "brief": "HUD/client minors and wiring: done:6 HUD items (nameOf \"You\" grammar such as \"You takes five\", one scoreboard table, transparent empty slots, recap CC line, Alt-click slot call-outs using the sim ping slot field once CW3s lands it), hud-c3 double \"%\", hud-c8 ring vs grayscale on .who__face, CL-3 stray \"|\"/\"I\" glyphs, CL-4 ally seats show fighter names, the AO option label, first-run renderer.calibrate() preset wiring, the attack-as-move input bug if it is UI-side (coordinate with CW1's diagnosis in git log), verify the lead's Dial Bar re-key (e137e84f) against the ui-layout-originality audit and update client_hud.md. Then done:7: e2e all, hud_renders --at 100, overlay_regress (heavy slot).",
+   "items": [
+    {
+     "id": "done:6",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Only banner rank is met (model.ts:315/:546; 'Full peal' painted at 26 ms). Still open: (1) model.ts:370 nameOf returns 'You', and strings.en.json:791 is '{name} takes five in a row.', giving 'You takes five in a row.'; there is no strings lint for this. (2) There are two scoreboard tables (panels.tsx:41, :69). (3) hud.css:350 empty slots are rgba 0.55, and the canopy shows through in fw_CW3c_b_hs_01_no_resource_bar.png. (4) The recap has no CC-time line. (5) The only Alt-click handler is minimap.tsx:159, so HUD slots cannot post call-outs. (6) e2e.mjs has no detached-.hud assert.",
+     "fixHint": "Add second-person 'you' sub-line strings plus a lint. Build one shared grid for both team blocks. Make the empty slot an opaque ink-2 well. Add a 'held for N s' recap line. Make Alt+click on aslot, islot and objective chips post a team call-out. Add an e2e step that plays 2 matches and then asserts no detached .hud roots."
+    },
+    {
+     "id": "done:7",
+     "severity": "major",
+     "status": "not_measured",
+     "evidence": "These pass: typecheck exit 0; content:check OK with 0 warnings; icon_probe OK (fill median 0.47, no missing icons). These did not: hud_renders --at 100 failed twice (page open timeout after 598 s queued; queue-found timeout after 1715 s queued; /tmp/cw3cv_hr2.log). e2e rift: RIFT FAIL at home (60 s timeout), STORE PASS (_harness/_reports/fw_CW3c_v1_e2e_rift.json). Both ran at load 52-78 on battery. The claimed fw_CW3c_cl1_e2e_rift.json is also a FAIL. overlay_regress was not run.",
+     "fixHint": "On an idle, charged machine, re-run `e2e.mjs all`, hud_renders --at 100 and overlay_regress, and cite PASS with 0 console lines. If RIFT home still times out, treat it as a real regression."
+    },
+    {
+     "id": "critic:done-unverified",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The verdicts per ID are in client_hud.md \u00a74.10. Spot-checked fw_CW3c_e2e_flow.json (readycheck and netdown ok, empty console) and fw_CW3c_done_unverified.json HUD5 ('Unlocks at level 6'). The record in closing_parity_open.json that the critic's measure requires is not made (lead file).",
+     "fixHint": "Lead: record closed + evidence path for HUD-5/7/9/11 and F10/13/14/16/17 in closing_parity_open.json."
+    },
+    {
+     "id": "critic:ui-layout-originality",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The audit is done (\u00a74.9, 17 rows), and it finds one one-to-one copy, which still ships. hud_layout.json has spell1 [500,62,48] and spell2 [556,62,48] right of ult [400,34,76]; hud_kit.py:387 is unchanged; the live shot shows Q W E R | D F. The sound half is deferred to audio.",
+     "fixHint": "Lead: apply the handoff: abilities spell1 176/62/48, spell2 232, a1 300, a2 372, a3 444, ult 524/34/76; divider at spell2.x+size+10. Run build.py hud --pieces dialbar via heavy.py. CW3c commits dialbar.webp and frame_layout.ts and re-runs icon_probe and hud_renders."
+    },
+    {
+     "id": "hud:hud-c3",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "itemtip.tsx:19 adds '%', and strings.en.json:1047/:1051 names also end in ' %'.",
+     "fixHint": "Drop the trailing ' %' from the stat.*Pct.name strings."
+    },
+    {
+     "id": "hud:hud-c8",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "hud.css:148-149: the ring and the grayscale filter are on the same .who__face.",
+     "fixHint": "Move the ring to a wrapper or an ::after."
+    },
+    {
+     "id": "client:CL-3",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "'| Equipped' appears in the finalize shot, and 'I Simple' in the collection shot.",
+     "fixHint": "Use a drawn tick mark with spacing, or put the label first."
+    },
+    {
+     "id": "client:CL-4",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "Ally seats read 'Ready' with no fighter name in fw_CW3c_cl1_after_finalize_hover2.png.",
+     "fixHint": "Keep the fighter name and show Ready as a chip."
+    },
+    {
+     "id": "handoff:CW1:perf",
+     "to": "CW3c",
+     "what": "content/strings.en.json: \"settings.video.ao.opt.2\" says \"Full resolution\", but ao 2 is now half-resolution AO with finer ('High') samples (src/render/post.ts, perf PERF-C1). Rename it to e.g. \"Fine\". Also wire first-run calibration: on the first boot at Home, call `await renderer.calibrate()` (returns {preset:'high'|'medium'|'low', frames, p50Ms, p95Ms}; keep calling render(dt) while it is pending). Store `preset` as the first-run video preset in place of the fixed 'high' default (src/session/settings.ts:65). If it is not 'high', show the VALE-styled notice linking Settings > Video."
+    },
+    {
+     "id": "handoff:CW1:camera-input",
+     "to": "CW3c",
+     "what": "Possible input bug, or a harness artefact: in `node _harness/probe_input_latency.mjs --orders 12 --kinds attack,windupMove --tag attack` (_harness/_reports/fw_CW1_input_latency_attack.json), right-clicking the parked enemy fighter, 3.4-5.8 m away, visibleMask 3, alive, issued a ground move (wmark--move) in 12/12 orders. That includes orders 0-1, where renderer.pickEntity at the same screen point returned the foe 0.1-0.5 s before the click. In an earlier run with a melee fighter at 1.2-1.9 m, attack clicks did resolve (wmark--attack). Check src/input/controller.ts rightDown -> entityAt/enemy (ptr coordinates vs the pick, e.targetable) for teleported enemies."
+    },
+    {
+     "id": "handoff:CW3s:quick-rekey-polish",
+     "to": "CW3c",
+     "what": "originality m3, part 1 (your files). In content/strings.en.json rename 'practice.panel.title' 'Practice tools' to something in VALE's own words, e.g. 'Practice bench'. Rename 'play.queue.first_win' 'First win of the day pays a bonus.' to e.g. 'Your first win each day pays a bonus.'. Rename 'grant.first_win' 'First win of the day' to e.g. 'First win today'. Also update the fallbacks in src/ui/screens/play.tsx:171, home.tsx:168, profile.tsx:82 and hud/panels.tsx:359-360. In content/client.json tips[10], change 'your lanes' to 'your roads'."
+    },
+    {
+     "id": "handoff:CW3s:refix1",
+     "to": "CW3c",
+     "what": "Splinters now stack to 3 (TeamView buff entries carry stacks; TeamView.objectives gets one 'splinters' entry per take). Show 'Splinters xN' on the HUD team-buff chip (modes_economy.md section 10)."
+    },
+    {
+     "id": "handoff:CW4:polish",
+     "to": "CW3c",
+     "what": "Seam: the RIFT minimap.png (art/out/maps/map_rift/minimap.png) now carries the four numeral glyphs; the fog feathering in minimap.tsx is yours."
+    },
+    {
+     "id": "handoff:CW3s:quick-rekey-polish",
+     "to": "tools/imagegen owner (CW3c/CW5)",
+     "what": "Optional: Hourcleaver's passive is now 'Split Hour', an ability-hit cleave plus shield (it was a low-health shield). If tools/imagegen/item_subjects.json describes the hourcleaver icon by the shield, update the subject text. The icon itself can stay."
+    }
+   ]
+  },
+  {
+   "key": "r2-store-skins",
+   "after": [
+    "CW6:r2-cards"
+   ],
+   "brief": "After CW6's cards: regenerate the store from current portraits (node tools/gen_store.ts, provisional tiers only where a skin still misses its dE floor: standard 12, deluxe 18), Shop/Collection tile crops showing each skin's difference, Featured offers, finalize showcase; re-measure CL-1 / done:5 for every paid skin (CW5 skins may still be mid-rebuild: measure them and report).",
+   "items": [
+    {
+     "id": "done:5",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "Met: the finalize skin showcase (src/ui/screens/draft.tsx:253-283, mounted at :673) follows hover, and fw_CW3c_cl1_after_finalize_hover2.png shows it large. The Shop caption sits top right, clear of the model (fw_CW3c_cl1_after_shop_ilsheta_fb.png). The gen_store \u0394E gate exists (floors 12/18): `node tools/gen_store.ts --check` exits 1 with 8 fails (marund_gorgewalk 5.5, ilsheta_first_bell 9.8, dunsom_almanac 17.9 and others). Open: `--check --provisional` exits 1 with 'content/store.json is out of date'. The Collection strip still crops Ilsheta's 3 tiles to the lamp chimney (fw_CW3c_cl1_after_coll_ilsheta_fb.png). The finalize CSS in screens.css is uncommitted.",
+     "fixHint": "Regenerate store.json with --provisional after the CW5/CW6 portraits settle, then commit. Give Collection tiles a vertical (y) focus per skin from the change centroid, or use taller tiles. Commit the screens.css finalize block."
+    },
+    {
+     "id": "client:CL-1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "Same as done:5. The store is stale against current portraits. 8 paid skins fail the gate, including the deluxes ilsheta_first_bell 9.8, marund_long_evening 10.0, tunlan_lamplit 10.1, ervet_lamplit 12.4 and dunsom_almanac 17.9. The Collection crops are still wrong. All Featured skus pass the current gate.",
+     "fixHint": "Re-run gen_store --provisional and commit it. Fix the Collection tile y-focus."
+    },
+    {
+     "id": "handoff:CW3c:refix1",
+     "to": "CW5/CW6",
+     "what": "CL-1 \u0394E gate (floors: standard 12, deluxe 18). These paid skins still read too close to their base portraits: marund_gorgewalk 5.5, rishal_chalkline 7.2, marund_long_evening 10.0, tunlan_lamplit 10.1, ilsheta_first_bell 14.4, lisvel_almanac 17.1, dunsom_almanac 17.9. They are re-tiered (provisional) until re-paletted. After any portrait re-render, ping CW3c or the lead to re-run `node tools/gen_store.ts --provisional`."
+    }
+   ]
+  }
+ ],
+ "CW4": [
+  {
+   "key": "r2-world",
+   "brief": "env:E1: actually rebuild the landmarks (jungle numerals, VI slab, FRAY lampwright cart, stalls, fair stands) to the Art 2.0 structure tier with the value_probe landmark face-detail gate (only numeral_xi was rebuilt), commit landmarks_art2.py properly; Strays facing in content/maps/map_rift.json (schema field exists since cee04b68: units[].facing in degrees) so the Stray camp silhouette IoU <= 0.5; stilltusk_young textured (hp back >= its previous 2.62); m-2 hour_lamp rim posts/banners/inlay, m-4 per-camp floor marks; the value_probe environment lines (RIFT env180 other, BRIDGE low frame p99 165 > 160); then the CW4 no-regression set (value_probe B5 all maps/tiers, wallmask, fog bands) and one perf_1080 --prod --q high,low check.",
+   "items": [
+    {
+     "id": "env:E1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "There are no CW4 commits since ccf9204a. The only change is a 12-line landmarks_art2.py edit that came in through wip sync e9352941, and it was never built. GLB mtimes in art/out/maps/landmarks: numeral_ii 09:57, numeral_vii 09:58, numeral_iiii 09:59, fair_stand_high 10:05, fair_stand_low 10:06; only numeral_xi was rebuilt (18:57). No new value_probe landmark report exists. The last measured figure stands: landmark hp 1.6-1.9 against 3.65-4.46 for structures (target about 2.8).",
+     "fixHint": "Build all four numerals and both fair stands with the current landmarks_art2.py, run value_probe --landmarks until landmark hp >= about 2.8, and commit with the numbers."
+    },
+    {
+     "id": "critic:monsters",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "grep -c facing content/maps/map_rift.json = 0, so the Strays are still side-on and the IoU of 0.66 stands (needs <= 0.5). stilltusk_young.glb (12:40) and stray_numeral.glb (12:15) were not rebuilt, so the banding and albedo changes are not in game. There is no neutral-units score row in _design/reviews/closing/. Sensitivity is still clean.",
+     "fixHint": "Add facing toward the camera on the RIFT Stray camp units in map_rift.json and re-measure IoU; rebuild stilltusk_young and stray_numeral; write a scored neutral-units row."
+    },
+    {
+     "id": "critic:monsters (stilltusk_young)",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "stilltusk_young.png is near-untextured; hp 2.62 -> 1.79.",
+     "fixHint": "Bolder bands (>= 8 L* at the 0.3 m scale)."
+    },
+    {
+     "id": "env:m-2",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The hour_lamp is placed (value_rift_high_fw_CW4_v1_base0.png); no rim posts or banners and no inlay to the shop.",
+     "fixHint": "Backlog."
+    },
+    {
+     "id": "env:m-4",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Rim set pieces are in; no per-camp floor mark.",
+     "fixHint": "Backlog."
+    },
+    {
+     "id": "regression:perf_1080",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "Not re-run (shared machine, the CW1 verifier's perf sweep was running).",
+     "fixHint": "Lead: run perf_1080 --prod on the integrated tree."
+    },
+    {
+     "id": "handoff:CW1:polish",
+     "to": "CW4",
+     "what": "`node _harness/value_probe.mjs --report fw_CW1_value_polish.json` (B5) exits 0 but prints FAIL on three environment lines. RIFT high env180 'other' is 0.152 % of env, RIFT low 0.158 %. BRIDGE low frame p99 is 165 (> 160). The lamps are 0.000 % of the frame, and the BRIDGE flame I brightened covers about 333 px, far too few to move a frame p99, so this most likely comes from the world art. Please check your landmarks and props. FRAY lamp flames (env m-5): the shot_ambient in-play flame reading at the fray spot covers 26,941 px and does not move when the flame changes. Pick a flame spot where the lamp is the only thing that changes, or move the lamps, if the flame band needs gating there."
+    },
+    {
+     "id": "handoff:CW1:refix1",
+     "to": "CW4",
+     "what": "value_probe environment lines from the CW1 verify (not CW1 code): RIFT env180 'other' 0.151 % / 0.154 % of env, and BRIDGE low frame p99 165 > 160. Please check the landmarks and props in those views."
+    }
+   ]
+  }
+ ],
+ "CW6": [
+  {
+   "key": "r2-models",
+   "brief": "Par blockers first. Rishal: Lamplit must read as a deluxe, not a recolour (re-score was 7.3): real modelled changes (the lamp cage moved to the crest root with a fit check, glazing that reads, deluxe silhouette and material changes visible at the game camera) - rebuild only that skin. Marund (7.3, flat dash): the art side is done; check the leap end-to-end once CW1 (playback) and CW3s (arc + anim) land, and fix any art-side issue (idle_lobby hand.L step 0.104 m at t 2.37 s). Dunsom: lantern out from under his own bar (probe_bar_clearance <= 10 % of idle frames over 8 facings at 28.5 m and 31 m), Highrim and Almanac skins rebuilt with the base's hat ramp.",
+   "items": [
+    {
+     "id": "done:1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "FK re-run: Marund recall 6 s, head 23.2 cm, hand.L max step 0.075 m, seam 0; Sukri recall 6 s, head 23.1 cm, idle head 5.1 cm; Ilsheta idle head 7.8 cm. src/render/actors.ts:132 LOOPING still contains 'recall'.",
+     "fixHint": "CW1: fit the recall clip to the channel duration and hold the last frame."
+    },
+    {
+     "id": "done:2",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "content/fighters/marund.json:541 still plays anim 'dash'; src/sim/movement.ts:131 still sets arc 0.",
+     "fixHint": "Land the CW3c, CW1 and CW3s Domefall handoffs."
+    },
+    {
+     "id": "done:5",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "three_load OK (fw_CW6_r1_three_load.txt), but only 6 of 8 fighters reach 7.5; Marund and Rishal are at 7.3.",
+     "fixHint": "See par:marund and par:rishal."
+    },
+    {
+     "id": "fighter:marund:marund-M2",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "marund.json:541 still plays 'dash'.",
+     "fixHint": "Cross-lane handoffs."
+    },
+    {
+     "id": "fighter:rishal:rishal-M3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "fw_CW6_r1_rishal_portraits.png panel 3: the Lamplit lamp cage is still at the crest tip, and the glazing barely reads.",
+     "fixHint": "Move the bead to the crest root with a fit check."
+    },
+    {
+     "id": "par:marund",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Re-score 7.3: the ult is still a flat dash in game.",
+     "fixHint": "Land the Domefall handoffs."
+    },
+    {
+     "id": "par:rishal",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Re-score 7.3: the Chalkline card and the busts are fixed, but Lamplit is still mostly a recolour.",
+     "fixHint": "Lamplit modelling pass."
+    },
+    {
+     "id": "handoff:CW1:camera-input",
+     "to": "CW6",
+     "what": "Dunsom lantern under his own bar (dunsom-lantern-nameplate / bar-clearance gate). In idle the x_lantern part is half under the bar plate or level chip at 1 of 8 facings (12.5 % > 10 %): facing 7, lantern at x -0.83 m (-63 px, under the level chip) at equivalent height 2.32 m with the anchor at 2.40 m. Its circle of equivalent heights (1.0-3.2 m) means no engine anchor up to +1.1 m clears it. In art/blender/fighters/dunsom.py idle, either hang the lantern about 0.25 m further out from the body axis on the crook side (so at facing 7 it sits beyond -1.06 m, outside the chip), or tilt the crook 8-10 degrees outward as the fighter review proposed. Verify with `node _harness/probe_bar_clearance.ts` (needs dunsom idle <= 10 % at 31 m and 28.5 m). The probe exits 1 until then."
+    },
+    {
+     "id": "handoff:CW1:polish",
+     "to": "CW6",
+     "what": "No change: Dunsom's lantern is still half-covered in 12.5 % of idle cases at 31 m and at 28.5 m (probe_bar_clearance FAIL). The art fix from the earlier handoff (hang it about 0.25 m further out, or tilt the crook 8-10 degrees outward) is still needed."
+    },
+    {
+     "id": "handoff:CW1:refix1",
+     "to": "CW6",
+     "what": "Dunsom's lantern is still under his own bar: `node _harness/probe_bar_clearance.ts` FAILs with dunsom idle half-covered 12.5 % > 10 % at 31 m and 28.5 m. In art/blender/fighters/dunsom.py idle, hang the lantern about 0.25 m further out on the crook side, so at facing 7 it sits beyond -1.06 m and clear of the level chip, or tilt the crook 8-10 degrees outward. Then re-run the probe. Separately (ruling 11), raise art.scale so these builds reach 105 px at 28.5 m: Ilsheta (89-91 px), Rishal (95-100) and Odrum (98-101). Verify with `node _harness/probe_camera.ts --only heights --gate-heights`."
+    },
+    {
+     "id": "handoff:CW6:dunsom-ilsheta-rishal-tunlan",
+     "to": "CW6 cards package",
+     "what": "Card follow-ups from this package. (1) Dunsom base was rebuilt with --no-render: art/out/fighters/dunsom/portrait.png and splash.png still show the old flat hat, so re-render them. The Highrim and Almanac skin GLBs still carry the old hat paint, so rebuild them if their hats should match. (2) Rishal has no CARDS entry. Chalkline's portrait shares the base's plate and bust, which holds it to dE 8.3 (floor 12). Give Chalkline its own plate grade and bust in the rishal-M1 staging. (3) Ilsheta First Bell now has a warm plate (tint #C7976A, sat 0.85, median 0.32). Its splash keeps the old cast_ult staging, in which her face does not read."
+    },
+    {
+     "id": "handoff:CW6:polish-minors",
+     "to": "CW6 (refix)",
+     "what": "Leftovers:\n(1) rishal_chalkline splash card_qa MAD 27.6 < 30. A plate tint change does not move it; give it its own plate src or another clip/yaw in rishal.py CARDS, then re-render with `portraits rishal --skins --skin rishal_chalkline --no-base --only splash,portrait`.\n(2) The ilsheta_first_bell portrait (recall t 0.82, yaw -26) puts the lamp over the face. Re-stage the bust, then re-check the deluxe dE >= 18.\n(3) sukri.py has no Q_BASE hook, so a sukri rebuild lands at 1175 KiB > 1172. rishal.py lands at 1177 KiB, and odrum at 1180 even with Q_BASE 60. I re-encoded these with `node art/tools/optimize.mjs in out --webp --q-base 74|60 --q-normal 96 --q-orm 92`. Add a q-base hook (as in odrum.py), or lower it.\n(4) Open minors not attempted: hesmi-m2, m4, m5, m6; ilsheta-chimney-hook-lost; ilsheta-no-own-hue; marund-v1; odrum-M3; rishal-m1 to m5; TUN-C1, TUN-c1, TUN-c3.\n(5) Dunsom icon: re-frame it so the lantern glow enters a top corner (dunsom-face-skull)."
+    },
+    {
+     "id": "handoff:CW6:refix1",
+     "to": "CW6 (next round)",
+     "what": "rishal-M3 lamp bead: move the Lamplit cage to the crest root with a fit check against the accent ridge blade (top about 1.73-1.75 m at y -0.05 to -0.13), then rebuild only that skin: build.py fighter rishal --skin rishal_lamplit. Minor: Marund idle_lobby has one 0.104 m hand.L step at t 2.37 s."
+    }
+   ]
+  },
+  {
+   "key": "r2-skin-reads",
+   "brief": "Paid-skin reads (CL-1 dE gate on portraits, floors: standard 12, deluxe 18) for CW6 skins: marund_gorgewalk 5.5, rishal_chalkline 7.2, marund_long_evening 10.0, tunlan_lamplit 10.1, ilsheta_first_bell 14.4, dunsom_almanac 17.9: re-palette/re-model each so it reads different at the game camera AND on its card (own plate grade and bust per skin). Keep the owner rulings (Rishal accent never recoloured; Odrum Shadeprint amber).",
+   "items": [
+    {
+     "id": "handoff:CW3c:refix1",
+     "to": "CW5/CW6",
+     "what": "CL-1 \u0394E gate (floors: standard 12, deluxe 18). These paid skins still read too close to their base portraits: marund_gorgewalk 5.5, rishal_chalkline 7.2, marund_long_evening 10.0, tunlan_lamplit 10.1, ilsheta_first_bell 14.4, lisvel_almanac 17.1, dunsom_almanac 17.9. They are re-tiered (provisional) until re-paletted. After any portrait re-render, ping CW3c or the lead to re-run `node tools/gen_store.ts --provisional`."
+    }
+   ]
+  },
+  {
+   "key": "r2-cards",
+   "brief": "Re-run the killed card chain for all 8 CW6 fighters (scratchpad run_cards.sh describes it; run it again through heavy.py, one fighter at a time), Dunsom base portrait/splash re-render (still the old flat hat), Rishal Chalkline own plate and bust (MAD >= 30, dE), Ilsheta First Bell splash re-staged so her face reads; then card_qa on all 8 (speckle <= 2.5 per ruling 12, highlight p99.9 >= 230, skin MAD >= 30), view every card yourself for sensitivity and face read, commit.",
+   "items": [
+    {
+     "id": "handoff:CW6:dunsom-ilsheta-rishal-tunlan",
+     "to": "CW6 cards package",
+     "what": "Card follow-ups from this package. (1) Dunsom base was rebuilt with --no-render: art/out/fighters/dunsom/portrait.png and splash.png still show the old flat hat, so re-render them. The Highrim and Almanac skin GLBs still carry the old hat paint, so rebuild them if their hats should match. (2) Rishal has no CARDS entry. Chalkline's portrait shares the base's plate and bust, which holds it to dE 8.3 (floor 12). Give Chalkline its own plate grade and bust in the rishal-M1 staging. (3) Ilsheta First Bell now has a warm plate (tint #C7976A, sat 0.85, median 0.32). Its splash keeps the old cast_ult staging, in which her face does not read."
+    },
+    {
+     "id": "handoff:CW6:cards",
+     "to": "CW6 (next package / refix)",
+     "what": "Finish the card render chain I started at 08:44. Script: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/4968ca64-9c2e-4f26-ac80-9c1269c9a02e/scratchpad/run_cards.sh, which runs `python3 art/build.py portraits <id> --skins --only splash,portrait` for tunlan, sukri, marund, rishal, dunsom, hesmi and odrum, then `portraits ilsheta --skin ilsheta_first_bell --no-base --only splash,portrait`. Logs: _harness/_reports/fw_CW6_p4_cards_<id>.log; progress in _harness/_reports/fw_CW6_p4_cards_chain.log. If the chain was killed, re-run it. Then: run `~/Developer/forgeflow-games/.venv/bin/python3 art/tools/card_qa.py dunsom hesmi ilsheta marund odrum rishal sukri tunlan --out _harness/_reports/fw_CW6_cards_after.txt` (gates: speckle <= 2.5, highlight p99.9 >= 230, skin MAD >= 30). View every card for sensitivity and face read. Check the Tunlan lantern is the frame maximum, on the right half, and that the hound shadow reads. Check Marund's bust shows the dome windows and has no mouth spikes. Re-stage any card that misses with a single --skin re-render. Then commit art/blender/fighters/{dunsom,hesmi,ilsheta,marund,odrum,rishal,sukri,tunlan}.py, _design/fighters/*.md and art/out/fighters/<id>/*portrait.png / *splash.png for the 8 fighters."
+    },
+    {
+     "id": "handoff:CW6:cards",
+     "to": "CW6 (Dunsom model)",
+     "what": "The dunsom_highrim and dunsom_almanac GLBs still carry the old flat hat paint. Rebuild them if their hats should match the base's crown-to-rim ramp. This package did not rebuild them."
+    },
+    {
+     "id": "handoff:CW6:polish-minors",
+     "to": "CW6 (refix)",
+     "what": "Leftovers:\n(1) rishal_chalkline splash card_qa MAD 27.6 < 30. A plate tint change does not move it; give it its own plate src or another clip/yaw in rishal.py CARDS, then re-render with `portraits rishal --skins --skin rishal_chalkline --no-base --only splash,portrait`.\n(2) The ilsheta_first_bell portrait (recall t 0.82, yaw -26) puts the lamp over the face. Re-stage the bust, then re-check the deluxe dE >= 18.\n(3) sukri.py has no Q_BASE hook, so a sukri rebuild lands at 1175 KiB > 1172. rishal.py lands at 1177 KiB, and odrum at 1180 even with Q_BASE 60. I re-encoded these with `node art/tools/optimize.mjs in out --webp --q-base 74|60 --q-normal 96 --q-orm 92`. Add a q-base hook (as in odrum.py), or lower it.\n(4) Open minors not attempted: hesmi-m2, m4, m5, m6; ilsheta-chimney-hook-lost; ilsheta-no-own-hue; marund-v1; odrum-M3; rishal-m1 to m5; TUN-C1, TUN-c1, TUN-c3.\n(5) Dunsom icon: re-frame it so the lantern glow enters a top corner (dunsom-face-skull)."
+    }
+   ]
+  },
+  {
+   "key": "r2-minors",
+   "brief": "The recovered reviewer minors now in closing_parity_open.json polish (wave CW6): dunsom-death-mesh, dunsom-lantern-glued, dunsom-value-gradient, ilsheta-guard-pose, ilsheta-portrait-framing, ilsheta-face-seam, odrum-m1, odrum-m3, odrum-m4, odrum-m6, plus remaining CW6 polish; three_load_test PASS on every GLB, lineup_qa, facechip gate.",
+   "items": [
+    {
+     "id": "CW6 polish (spot-check)",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Spot-checked minors hold up: Odrum's warm eye voids, Sukri's chin cracks removed, Tunlan's eye lines cleaned. Many minors were not attempted."
+    },
+    {
+     "id": "critic:recovered-minors",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "Not verifiable: the engineer could not add these minors to closing_parity_open.json (not a CW6 file), so there is nothing to measure."
+    }
+   ]
+  }
+ ]
+}
