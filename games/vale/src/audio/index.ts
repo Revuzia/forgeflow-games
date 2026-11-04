@@ -154,7 +154,9 @@
 //   memory      (closing PERF-C2, audio half) decoded audio is 48 kHz float PCM, so nothing piles up across a
 //               session: a bed change frees the previous bed's decoded files (main stem, layers, the stitched
 //               .m4a stem) once the new bed is chosen, and a match change (attach) frees every cue buffer but the
-//               UI set and the playing bed's. A voice still sounding keeps its own buffer until it ends
+//               UI set and the playing bed's. The fighters' lock-in calls (f_<fighter>_call, ui bus) are not of the
+//               UI set: they decode when a draft opens (draft(s)) and are freed when it closes (draft(null)) or at
+//               the match change. A voice still sounding keeps its own buffer until it ends
 //   procs       every 'proc' (a passive fired) sounds at its subject (dst, else the owner): a fighter's passive
 //               plays the per-fighter cue f_<fighter>_passive when content has one, else the passive's own
 //               present.sfx / hitSfx; an item / boon / team-buff / unit passive plays its present.sfx / hitSfx,
@@ -452,6 +454,8 @@ class Engine implements ValeAudioPort {
   private readonly passives = new Map<string, { kind: PassiveKind; cue?: string }>();
   /** fighter id → the kit slots content has a cue for (see `kits` in the header) */
   private readonly kits = new Map<string, Partial<Record<KitSlot, string>>>();
+  /** the kits' lock-in calls' files (see `memory` in the header): draft-only, decoded while a draft runs */
+  private readonly callFiles = new Set<string>();
   /** a fighter's own ability id (kit, passive, forms) → its fighter and slot (the as-heard area rule, see `kits`) */
   private readonly ownAb = new Map<string, { fighter: string; slot: string }>();
   /** epic unit id → its kit (see `epic` in the header); only units content gives a u_<unit>_* cue */
@@ -526,6 +530,7 @@ class Engine implements ValeAudioPort {
       const k: Partial<Record<KitSlot, string>> = {};
       for (const s of KIT_SLOTS) if (this.cues[`f_${f.id}_${s}`]) k[s] = `f_${f.id}_${s}`;
       this.kits.set(f.id, k);
+      if (k.call) for (const file of this.cues[k.call]?.files ?? []) this.callFiles.add(file);
       // T3 wind-ups: every non-ult ability, a form's overrides included
       const abs: [string, AbilityLike | undefined][] = Object.entries(f.kit);
       for (const fm of Object.values(f.kit.passive?.forms ?? {})) abs.push(...Object.entries(fm.kit ?? {}));
@@ -623,7 +628,8 @@ class Engine implements ValeAudioPort {
     this.ambDuck.connect(this.bus.get('ambience')!);
     this.applyVolumes();
     // preload the UI set (they must answer the first click)
-    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) void this.buffer(f);
+    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) if (!this.callFiles.has(f)) void this.buffer(f);
+    if (this.draftS) this.draftCalls(true);
     if (this.wantBed) this.startBed(this.wantBed);
     if (this.tick === null) this.tick = window.setInterval(() => this.update(0.25), 250);
     return ctx;
@@ -773,6 +779,7 @@ class Engine implements ValeAudioPort {
   musicUrgency(on: boolean): void { this.urgent = on; this.bedRoles(); }
 
   draft(s: DraftMusicState | null): void {
+    if (!!s !== !!this.draftS) this.draftCalls(!!s);
     this.draftS = s;
     this.phase = s ? s.phase : null; this.urgent = !!s?.urgent; this.phaseDriven = !!s;
     this.bedRoles();
@@ -1144,10 +1151,18 @@ class Engine implements ValeAudioPort {
     return d ? [d.file, ...d.layers.map((l) => l.file), ...(d.pieces ?? []).map((p) => p.file)] : [];
   }
 
-  /** a match change frees every cue buffer but the UI set's and the playing bed's (see `memory` in the header) */
+  /** the lock-in calls live only while a draft runs (see `memory` in the header): decoded when it opens (a lock-in
+   *  answers at once), freed when it closes (a call still sounding keeps its own buffer until it ends) */
+  private draftCalls(on: boolean): void {
+    if (on) { if (this.ctx) for (const f of this.callFiles) void this.buffer(f); return; }
+    for (const f of this.callFiles) this.buffers.delete(f);
+  }
+
+  /** a match change frees every cue buffer but the UI set's (the draft's lock-in calls are not of it) and the
+   *  playing bed's (see `memory` in the header) */
   private evictCues(): void {
     const keep = new Set(this.bedFiles(this.wantBed));
-    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) keep.add(f);
+    for (const c of Object.values(this.cues)) if (c.bus === 'ui') for (const f of c.files) if (!this.callFiles.has(f)) keep.add(f);
     for (const k of [...this.buffers.keys()]) if (!keep.has(k)) this.buffers.delete(k);
   }
 

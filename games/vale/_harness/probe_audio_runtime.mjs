@@ -28,6 +28,15 @@
 //     line peak (voice momentary max) >= 3 dB over the sfx short-term p99 (the sfx bus + threat path, measured
 //     before the voice duck); the master integrated within tokens.audio.loudness (-18 ± 1.5 LUFS; CW2 refix). Reported: the lines against the teamfight windows (sfx short-term above its p90),
 //     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience (about -28), music.
+//     enemyDownFires is gated only when an enemy fighter died in sight of the cue path: the probe counts the sim's own
+//     enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one (killEntity on an enemy
+//     fighter, killer = your fighter; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
+//   node _harness/probe_audio_runtime.mjs dead [--out <json>]
+//     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
+//     output split by two filters (< 500 Hz, > 2 kHz) and metered per block. 8 s alive, then your fighter is killed
+//     (killEntity) and held down 8 s, then respawned (respawnFighter) and 8 s alive again. Gates: the engine reports
+//     the dead state while down and not after; the > 2 kHz band falls >= 10 dB while down (the 900 Hz low-pass), the
+//     whole falls >= 2 dB (DEAD_DB -3), and both come back within 3 dB after the respawn (the bed itself moves a dB or two between 8 s windows).
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run itself failed. Reports → _harness/_reports/fw_CW2_runtime_<mode>.json.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -39,7 +48,7 @@ import { holdHeavy } from './heavy_slot.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.VALE_URL ?? 'http://localhost:5190';
 const args = process.argv.slice(2);
-const mode = args[0] === 'match' ? 'match' : 'sync';
+const mode = args[0] === 'match' ? 'match' : args[0] === 'dead' ? 'dead' : 'sync';
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
 const HITS = Number(opt('--hits', 50));
@@ -139,6 +148,8 @@ async function runSync() {
           if (a.log.length > 300) a.log.length = 0;            // the engine logs its first 400 cues only
           const k = a.log.length;                              // before the listeners: a decoded cue starts (and logs) in their call
           for (const l of m.listeners) l(ev);
+          // diagnostics: did the cue start inside the event's call, and did the context clock tick while the listeners ran
+          h.inCall = a.log.length > k; h.ctAfter = ctx.currentTime; h.listenMs = performance.now() - now;
           hits.push(h);
           setTimeout(() => { h.cue = a.log.slice(k).find((c) => /_attack_hit$|^c_hit_phys/.test(c)) ?? a.log[k] ?? null; }, 0);
         }
@@ -176,7 +187,7 @@ async function runSync() {
     const rows = raw.hits.map((h) => {
       const heardTs = h.on30 === null ? null : h.op + (h.on30 - h.oc) * 1000;                         // the device clock
       const heardClk = h.on30 === null ? null : h.perf + (h.on30 - h.ct) * 1000 + baseLatMs + outLatMs;   // inject clock + latencies
-      return { ref: h.ref ?? null, cue: h.cue ?? null, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000),
+      return { ref: h.ref ?? null, cue: h.cue ?? null, peakDb: r2(20 * Math.log10(h.peak + 1e-12)), schedMs: h.on30 === null ? null : r2((h.on30 - h.ct) * 1000), inCall: h.inCall ?? null, tickMs: h.ctAfter === undefined ? null : r2((h.ctAfter - h.ct) * 1000), listenMs: h.listenMs === undefined ? null : r2(h.listenMs),
         offTsMs: heardTs === null ? null : r2(heardTs - h.raf), offClkMs: heardClk === null ? null : r2(heardClk - h.raf), injectAfterRafMs: r2(h.perf - h.raf) };
     });
     // a hit is measured when its window holds the hit alone: its peak within 3 dB of the hits' median (a match toll or
@@ -280,13 +291,40 @@ async function runMatch() {
     const ct0 = await page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
     rep.you = await page.evaluate(() => { const m = window.__vale.state.match.value; const p = m?.view.players.find((x) => x.player === m.you); return p ? { fighter: p.fighter ?? null, team: p.team } : null; });
     log('match', JSON.stringify(rep.you));
+    // the sim's own enemy fighter deaths that the cue path answers with enemyDown (not yours: 'takedown' carries those)
+    await page.evaluate(() => {
+      const m = window.__vale.state.match.value;
+      const st = window.__deaths = { enemy: 0, enemyNotYours: 0 };
+      m.onEvents((evs) => { for (const e of evs) if (e.e === 'death' && e.kind === 'fighter') {
+        const me = m.view.players.find((p) => p.player === m.you), d = m.view.entity(e.dst);
+        if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) st.enemyNotYours++; } } });
+    });
     let deadSeen = 0;
+    rep.forcedEnemyDeath = null;
     for (;;) {
       const s = await page.evaluate(() => {
         const a = window.__valeAudio, v = window.__vale;
         return { ct: a.graph.ctx.currentTime, t: v?.state?.match?.value?.view?.time ?? null, cues: a.log.splice(0), dead: a.musicDead === true };
       });
       if (s.dead) deadSeen++;
+      // no enemy fighter has fallen by someone else's hand by the last 30 s: force one, so enemyDown is measured
+      if (rep.forcedEnemyDeath === null && (s.t ?? 0) >= SECONDS - 30) {
+        rep.forcedEnemyDeath = await page.evaluate(async () => {
+          if (window.__deaths.enemyNotYours > 0) return false;
+          const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you);
+          const { killEntity } = await import('/src/sim/combat.ts');
+          const foe = m.view.players.map((p) => W.entity(p.entity)).find((e) => e && e.alive && e.team !== me.team);
+          if (!foe) return 'no live enemy fighter';
+          // outside a tick: the world's event buffer is reset by the next step, so the batch goes to the match's
+          // listeners here (as the sync mode injects its hits)
+          const n0 = W.events.length;
+          killEntity(W, foe, null);
+          const evs = W.events.slice(n0);
+          for (const l of m.listeners) l(evs);
+          return { fighter: foe.def ?? null, t: W.time, events: evs.map((e) => e.e) };
+        });
+        log('forced enemy death', JSON.stringify(rep.forcedEnemyDeath));
+      }
       for (const c of s.cues) rep.cues.push([r2(s.ct), s.t === null ? null : r2(s.t), c]);
       if (s.t === null && rep.cues.length > 5) { log('match left'); break; }
       if ((s.t ?? 0) >= SECONDS) break;
@@ -294,6 +332,7 @@ async function runMatch() {
       await page.waitForTimeout(2000);
     }
     rep.deadPolls = deadSeen;
+    rep.enemyDeaths = await page.evaluate(() => window.__deaths);
     const blocks = await page.evaluate((c0) => window.__cap.blocks.filter((r) => r[0] >= c0 - 2), ct0);
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
@@ -341,7 +380,8 @@ async function runMatch() {
     rep.cueTop = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 30);
     rep.gates = {
       healPerMinLe6: rep.cueLog.healPerMin <= 6,
-      enemyDownFires: rep.cueLog.enemyDown > 0,
+      // gated only when an enemy fighter fell by another hand than yours (the run forces one when the match had none)
+      enemyDownFires: rep.enemyDeaths.enemyNotYours === 0 ? null : rep.cueLog.enemyDown > 0,
       announcerPeakOverSfxP99Ge3: rep.announcer.peakOverSfxP99 !== null && rep.announcer.peakOverSfxP99 >= 3,
       masterIntegratedInTokens: loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
     };
@@ -349,7 +389,8 @@ async function runMatch() {
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so
     // the contrast a player hears under a line is about 6 dB more)
     rep.announcer.medianOverTeamfightP99PlusDuck = r2(rep.announcer.medianOverTeamfightP99 + 6);
-    rep.pass = Object.values(rep.gates).every(Boolean) && !rep.err;
+    rep.notMeasured = Object.entries(rep.gates).filter(([, v]) => v === null).map(([k]) => k);
+    rep.pass = Object.values(rep.gates).every((v) => v !== false) && !rep.err;
     rep.cues = rep.cues.slice(0, 3000);
   } catch (e) { rep.err = String(e?.message ?? e); }
   rep.logs = logs.slice(0, 30);
@@ -357,7 +398,80 @@ async function runMatch() {
   return rep;
 }
 
-const rep = mode === 'sync' ? await runSync() : await runMatch();
+// ── the music's dead state, live (closing AUD-C4) ─────────────────────────────────────────────────
+async function runDead() {
+  const { browser, page, logs } = await openFake('/?dev=1&render=0&autoflow=1');
+  const rep = { probe: 'probe_audio_runtime', mode: 'dead', queue: QUEUE, err: null };
+  const SEG = 8000;
+  try {
+    await startMatch(page, QUEUE);
+    await page.waitForFunction(() => (window.__vale.state.match.value?.view.time ?? 0) > 12, null, { timeout: 180000, polling: 500 });
+    rep.setup = await page.evaluate(() => {
+      const a = window.__valeAudio, g = a.graph, ctx = g.ctx;
+      for (const b of ['sfx', 'ui', 'voice', 'ambience']) { const p = g.bus[b].gain; p.cancelScheduledValues(0); p.value = 0; }
+      a.threat.gain.cancelScheduledValues(0); a.threat.gain.value = 0;
+      const lo = ctx.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = 500;
+      const hi = ctx.createBiquadFilter(); hi.type = 'highpass'; hi.frequency.value = 2000;
+      const merger = ctx.createChannelMerger(3);
+      const mono = (n) => { const sp = ctx.createGain(); sp.channelCount = 1; sp.channelCountMode = 'explicit'; n.connect(sp); return sp; };
+      mono(g.out).connect(merger, 0, 0);
+      g.out.connect(lo); mono(lo).connect(merger, 0, 1);
+      g.out.connect(hi); mono(hi).connect(merger, 0, 2);
+      const proc = ctx.createScriptProcessor(4096, 3, 1);
+      const st = window.__dead = { blocks: [], dead: [] };
+      proc.onaudioprocess = (ev) => { const ib = ev.inputBuffer, row = [ctx.currentTime, a.musicDead ? 1 : 0];
+        for (let c = 0; c < 3; c++) { const d = ib.getChannelData(c); let ss = 0; for (let i = 0; i < d.length; i++) ss += d[i] * d[i]; row.push(ss / d.length); }
+        st.blocks.push(row); };
+      const z = ctx.createGain(); z.gain.value = 0; merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
+      return { bed: a.wantBed ?? null, rate: ctx.sampleRate };
+    });
+    const mark = async (tag) => page.evaluate((t) => { window.__dead.dead.push([t, window.__valeAudio.graph.ctx.currentTime]); }, tag);
+    await page.waitForTimeout(1000);
+    await mark('alive0'); await page.waitForTimeout(SEG);
+    rep.kill = await page.evaluate(async () => {
+      const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you), e = W.entity(me.entity);
+      const { killEntity } = await import('/src/sim/combat.ts');
+      const n0 = W.events.length;
+      killEntity(W, e, null);
+      const evs = W.events.slice(n0);
+      for (const l of m.listeners) l(evs);
+      if (e.player) e.player.respawnIn = 60;               // held down for the window
+      return { fighter: e.def ?? null, alive: e.alive, events: evs.map((x) => x.e) };
+    });
+    await page.waitForTimeout(1200);                        // the close's time constant (0.35 s) x 3, and a block
+    await mark('dead'); await page.waitForTimeout(SEG);
+    rep.respawn = await page.evaluate(async () => {
+      const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you), e = W.entity(me.entity);
+      const { respawnFighter } = await import('/src/sim/spawn.ts');
+      respawnFighter(W, e);
+      return { alive: e.alive };
+    });
+    await page.waitForTimeout(1200);
+    await mark('alive1'); await page.waitForTimeout(SEG);
+    await mark('end');
+    const raw = await page.evaluate(() => window.__dead);
+    const win = (i) => { const [, c0] = raw.dead[i], [, c1] = raw.dead[i + 1]; return raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1); };
+    const db = (rows, k) => r2(10 * Math.log10(rows.reduce((s2, r) => s2 + r[k], 0) / Math.max(1, rows.length) + 1e-20));
+    rep.windows = ['alive0', 'dead', 'alive1'].map((tag, i) => { const w = win(i);
+      return { tag, blocks: w.length, engineDead: r2(w.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, w.length)), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
+    const [a0, d, a1] = rep.windows;
+    rep.drop = { allDb: r2(a0.allDb - d.allDb), lowDb: r2(a0.lowDb - d.lowDb), highDb: r2(a0.highDb - d.highDb) };
+    rep.back = { allDb: r2(a1.allDb - a0.allDb), highDb: r2(a1.highDb - a0.highDb) };
+    rep.gates = {
+      musicPlaying: a0.allDb > -60,
+      engineDeadWhileDown: d.engineDead === 1 && a0.engineDead === 0 && a1.engineDead === 0,
+      highFallsGe10: rep.drop.highDb >= 10,
+      wholeFallsGe2: rep.drop.allDb >= 2,
+      backWithin3: Math.abs(rep.back.allDb) <= 3 && Math.abs(rep.back.highDb) <= 3,
+    };
+    rep.pass = Object.values(rep.gates).every(Boolean);
+  } catch (e) { rep.err = String(e?.message ?? e); }
+  rep.logs = logs.slice(0, 30);
+  await browser.close().catch(() => {});
+  return rep;
+}
+
+const rep = mode === 'sync' ? await runSync() : mode === 'dead' ? await runDead() : await runMatch();
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(rep, null, 1));
 const brief = { ...rep }; delete brief.rows; delete brief.cues; delete brief.logs;

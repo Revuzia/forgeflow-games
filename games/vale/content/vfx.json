@@ -45296,7 +45296,7 @@
           0.8,
           0
         ],
-        "emissive": 2.0,
+        "emissive": 1.5,
         "sharp": 1.6,
         "noise": 0.35,
         "fit": true,
@@ -45331,6 +45331,34 @@
         "rim": "signature",
         "texture": "ink_puff",
         "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.3,
+            0.95
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.5,
+        "color": "signature",
+        "alpha": [
+          0.7,
+          0.45,
+          0
+        ],
+        "emissive": 2.2
       },
       {
         "type": "emitter",

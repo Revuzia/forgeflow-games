@@ -570,7 +570,10 @@ def build_rift():
     # ── camps (UNITS doc §9.3–9.4) ─────────────────────────────────────────────────────────────
     camps = []
     def camp(cid, center, units, first, respawn, objective=False, facing_to=(CX, CY)):
-        rec = {"id": cid, "units": [{"unit": u, "at": P((center[0] + dx, center[1] + dy))} for u, dx, dy in units],
+        # a unit tuple may carry a 4th entry: its spawn facing in degrees (the sim's convention, 0 = +x toward +y; the
+        # catalog's camps[].units[].facing); absent = the sim's default (face the map centre)
+        rec = {"id": cid, "units": [{"unit": e[0], "at": P((center[0] + e[1], center[1] + e[2])), **({"facing": e[3]} if len(e) > 3 else {})}
+                                    for e in units],
                "firstSpawn": first, "respawn": respawn}
         if objective:
             rec["objective"] = True
@@ -578,14 +581,18 @@ def build_rift():
 
     def camp_pair(cid, center, units, first, respawn):
         camp(f"a_{cid}", center, units, first, respawn)
-        camp(f"s_{cid}", mpt(center, W), [(u, -dx, dy) for u, dx, dy in units], first, respawn)
+        # the mirror across x: a facing f (deg) becomes 180 - f
+        camp(f"s_{cid}", mpt(center, W), [(e[0], -e[1], e[2], *((round((180.0 - e[3]) % 360.0, 1),) if len(e) > 3 else ())) for e in units],
+             first, respawn)
 
     camp_pair("glasshorn", glasshorn, [("glasshorn", 0.0, 0.0)], 60, 270)
     camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0), ("gloamoth_little", -1.6, 1.0), ("gloamoth_little", 1.6, 1.0), ("gloamoth_little", 0.0, -1.7)], 60, 150)
-    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0), ("stray_tick", -1.7, 1.1), ("stray_tick", 1.7, -1.1)], 60, 150)
+    # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its
+    # broad stride, not its 0.42 m side; the Ticks three-quarter toward it, turned in toward their Numeral
+    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 90.0), ("stray_tick", -1.7, 1.1, 60.0), ("stray_tick", 1.7, -1.1, 120.0)], 60, 150)
     camp_pair("resinback", resinback, [("resinback", 0.0, 0.0)], 60, 270)
     camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0), ("stilltusk_young", -1.6, -1.0), ("stilltusk_young", 1.6, -1.0)], 60, 150)
-    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0), ("stray_tick", -1.7, -1.1), ("stray_tick", 1.7, 1.1)], 60, 150)
+    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 90.0), ("stray_tick", -1.7, -1.1, 60.0), ("stray_tick", 1.7, 1.1, 120.0)], 60, 150)
     camp("sunsplinter", ss_pit, [("sunsplinter", 0.0, 0.0)], 360, 270, objective=True)
     camp("longshade", ls_pit, [("longshade", 0.0, 0.0)], 960, 360, objective=True)
 
