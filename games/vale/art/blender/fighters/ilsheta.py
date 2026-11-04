@@ -250,7 +250,7 @@ CARDS = {
         # (CW6 refix, cards:ilsheta: every bust put the lamp, its hook and its ring before the face; each bust now
         # picks a moment and a bearing with the lamp BESIDE the face, measured from the GLB: lamp-to-face offset across
         # the screen >= 0.22 m, _harness/_reports/fw_CW6_r1_stage.mjs)
-        "portrait": {"clip": "idle", "t": 0.0, "yaw": 36.0},
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": -8.0},
     },
     "ilsheta_stillwater": {
         "splash": {"clip": "recall", "t": 0.33, "yaw": 52.0, "pitch": 2.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
@@ -274,7 +274,7 @@ CARDS = {
                               "size": 0.35},
                              {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 40.0,
                               "size": 0.25}]},
-        "portrait": {"clip": "taunt", "t": 0.5, "yaw": 44.0, "key_az": 150.0},
+        "portrait": {"clip": "idle_lobby", "t": 0.75, "yaw": 42.0, "key_az": 150.0},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
         "plate": {"tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],

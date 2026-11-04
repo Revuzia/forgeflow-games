@@ -25,14 +25,14 @@
   },
   "uv_coverage": 0.618,
   "bake": {
-    "base": 7.29,
-    "rough_metal": 5.18,
-    "normal": 3.63,
-    "ao": 5.45,
+    "base": 7.03,
+    "rough_metal": 4.99,
+    "normal": 5.26,
+    "ao": 4.94,
     "normal_fixed_px": 15468,
-    "projection": 39.91,
-    "pack_save": 40.26,
-    "total": 62.19
+    "projection": 32.81,
+    "pack_save": 33.21,
+    "total": 55.87
   },
   "tris": 18272,
   "mesh_top_m": 1.722,
@@ -143,13 +143,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2854460,
+  "glb_bytes_raw": 2854588,
   "optimize": {
     "ok": true,
-    "before": 2854460,
-    "after": 1173768
+    "before": 2854588,
+    "after": 1173776
   },
-  "glb_bytes": 1173768,
+  "glb_bytes": 1173776,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -163,20 +163,6 @@
       "  run: 16 f, planted samples 2, max foot-speed error 0.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/ilsheta/splash.png",
-      "portrait": "art/out/fighters/ilsheta/portrait.png",
-      "icon": "art/out/fighters/ilsheta/icon.png",
-      "turntable": "art/renders/fighters/ilsheta/turntable.png"
-    },
-    "seconds": {
-      "splash": 149.22,
-      "portrait": 7.69,
-      "icon": 5.28,
-      "turntable": 7.82
-    }
   },
   "three_qa": {
     "ok": true,
@@ -198,8 +184,8 @@
       1
     ],
     "headY": 1.238,
-    "accentPct": 1.81,
-    "accentTopHalfPct": 92.5,
+    "accentPct": 1.83,
+    "accentTopHalfPct": 74.7,
     "heightPx1080": 91,
     "size": [
       2400,
@@ -207,26 +193,26 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/ilsheta/three_ilsheta.png",
-    "seconds": 10,
-    "exit": 0
+    "seconds": 17.9,
+    "exit": 0,
+    "clip_sheet": "art/renders/fighters/ilsheta/three_clips_ilsheta.png"
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.36,
-      "model": 8.38,
-      "lows_bind": 9.63,
-      "uv": 15.5,
-      "bake": 62.2,
-      "clips": 0.41,
-      "export": 3.86,
-      "optimize": 1.47,
-      "load_test": 0.31,
-      "render": 170.23,
-      "three_qa": 10.45,
-      "cache": 0.11
+      "materials": 0.37,
+      "model": 7.09,
+      "lows_bind": 8.21,
+      "uv": 15.48,
+      "bake": 55.88,
+      "clips": 0.4,
+      "export": 3.22,
+      "optimize": 1.53,
+      "load_test": 0.33,
+      "three_qa": 41.12,
+      "cache": 0.15
     },
-    "total_s": 283.02
+    "total_s": 133.89
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47
