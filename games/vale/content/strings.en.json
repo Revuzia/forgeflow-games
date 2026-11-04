@@ -717,6 +717,7 @@
   "hud.status.lasting": "While it lasts",
   "hud.status.buff": "Help",
   "hud.status.debuff": "Harm",
+  "hud.teambuff.stacked": "{name} ×{n}",
   "hud.status.stacks": "{n} stacks",
   "hud.your_status": "Your status",
   "hud.target": "Target",

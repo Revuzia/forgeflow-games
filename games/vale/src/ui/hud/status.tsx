@@ -43,7 +43,8 @@ export function chipInfo(cv: CatalogView, index: AbilityIndex, ch: Chip): ChipIn
   if (ch.type === 'team') {
     const d = cv.c.teamBuffs.find((x) => x.id === ch.id);
     const src = cv.asset(d?.icon);
-    return { name: d?.name ?? humanize(ch.id), sub: d?.desc ?? '', art: src ? <span class="schip__img"><img src={src} alt="" draggable={false} /></span> : <StatusGlyph kind="haste" class="schip__glyph" /> };
+    const base = d?.name ?? humanize(ch.id);
+    return { name: ch.stacks > 1 ? cv.t('hud.teambuff.stacked', '{name} ×{n}', { name: base, n: ch.stacks }) : base, sub: d?.desc ?? '', art: src ? <span class="schip__img"><img src={src} alt="" draggable={false} /></span> : <StatusGlyph kind="haste" class="schip__glyph" /> };
   }
   const a = index.get(ch.source);
   if (a) return { name: a.name, sub: '', art: <AbilityGlyph def={a} src={cv.asset(a.icon)} /> };

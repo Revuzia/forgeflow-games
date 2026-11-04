@@ -248,7 +248,9 @@ export class HudModel {
       const t = v.teams.find((x) => x.team === e.team);
       if (t) for (const tb of t.buffs) {
         const def = (this.cv.c as CatalogT).teamBuffs.find((x) => x.id === tb.id);
-        good.push({ key: `t:${tb.id}`, type: 'team', id: tb.id, source: tb.id, good: true, stacks: 0, remaining: tb.remaining,
+        // CW3s refix1: a stacking team buff (Splinters, maxStacks 3) carries its stack count on the live entry
+        const n = (tb as { stacks?: number }).stacks ?? 1;
+        good.push({ key: `t:${tb.id}`, type: 'team', id: tb.id, source: tb.id, good: true, stacks: n > 1 ? n : 0, remaining: tb.remaining,
           duration: def?.duration ?? (Number.isFinite(tb.remaining) ? Math.max(tb.remaining, 0.01) : Infinity) });
       }
     }
