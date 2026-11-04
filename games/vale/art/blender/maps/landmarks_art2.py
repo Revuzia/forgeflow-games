@@ -1158,6 +1158,41 @@ def camp_stilltusks(B, rng):
 
 
 HEARTH_HEX, HEARTH_EMIT = "#B8AD96", 0.14   # the hour lamp's lamp-stone: neutral warm-white, never a relationship colour (core L* <= 60 in game)
+def _quad(a, b, w):
+    """A flat stroke from a to b, width w (plan coordinates)."""
+    a, b = np.array(a, dtype=np.float64), np.array(b, dtype=np.float64)
+    d = b - a
+    n = np.array((-d[1], d[0])) / max(1e-6, float(np.hypot(d[0], d[1]))) * w / 2
+    return [tuple(a - n), tuple(b - n), tuple(b + n), tuple(a + n)]
+
+
+CAMP_SIGNS = {
+    # closing env m-4: each camp's sign, cut and inked into its floor plaque (plan metres, +y north): (material, polygon)
+    "glasshorn": [("groove", _quad((0, -0.5), (0, 0.48), 0.1)), ("groove", _quad((0, -0.1), (0.36, 0.34), 0.08)),
+                  ("groove", _quad((0, 0.14), (-0.3, 0.5), 0.07)), ("groove", _quad((0, -0.3), (-0.34, 0.02), 0.07))],   # a shed antler
+    "gloamoths": [("groove", [(0.04, 0.26), (0.6, 0.44), (0.42, -0.02), (0.04, -0.06)]),
+                  ("groove", [(-0.04, 0.26), (-0.04, -0.06), (-0.42, -0.02), (-0.6, 0.44)]),
+                  ("groove", [(0.04, -0.12), (0.32, -0.08), (0.2, -0.42), (0.04, -0.3)]),
+                  ("groove", [(-0.04, -0.12), (-0.04, -0.3), (-0.2, -0.42), (-0.32, -0.08)])],                           # paper wings, closed cups
+    "strays": [("groove", _quad((0.0, 0.46), (-0.34, -0.46), 0.15)), ("groove", _quad((0.0, 0.46), (0.3, -0.46), 0.08)),
+               ("groove", _quad((-0.3, 0.46), (0.3, 0.46), 0.08))],                                                       # a walking numeral
+    "resinback": [("resin", [(0.0, 0.54), (0.28, 0.14), (0.36, -0.14), (0.2, -0.4), (-0.2, -0.4), (-0.36, -0.14), (-0.28, 0.14)])],   # a bead of resin
+    "stilltusks": [("groove", _quad((0.3, -0.42), (0.42, -0.04), 0.14)), ("groove", _quad((0.42, -0.04), (0.34, 0.26), 0.1)),
+                   ("groove", _quad((0.34, 0.26), (0.14, 0.46), 0.05)), ("groove", _quad((-0.3, -0.42), (-0.42, -0.04), 0.14)),
+                   ("groove", _quad((-0.42, -0.04), (-0.34, 0.26), 0.1)), ("groove", _quad((-0.34, 0.26), (-0.14, 0.46), 0.05))],   # a pair of tusks
+}
+
+
+def camp_mark(B, rng, sign: str):
+    """closing env m-4: the per-camp floor mark: a worn octagonal plaque let into the clearing's floor (1.7 m across,
+    3 cm proud) with the camp's sign cut and inked in it, so an empty camp still says what lives there."""
+    r = 0.86
+    poly = [(r * math.cos(PI / 8 + k * PI / 4) + rng.uniform(-0.03, 0.03), r * math.sin(PI / 8 + k * PI / 4) + rng.uniform(-0.03, 0.03)) for k in range(8)]
+    B.add("lipstone", K.prism(poly, origin=(0, 0, 0.015), u=(1, 0, 0), v=(0, 1, 0), depth=0.03, chamfer=0.012))
+    for mat, sp in CAMP_SIGNS[sign]:
+        B.add(mat, K.prism(sp, origin=(0, 0, 0.032), u=(1, 0, 0), v=(0, 1, 0), depth=0.006, chamfer=0.0))
+
+
 HOUR_LAMP_MATS = {"dialstone": dict(DIAL, edge_light=(0.03, 0.7, 0.6, 0.06), grain=0.3, blotch=0.2),
                   "chalk": dict(CHALK, grain=0.3, blotch=0.2),
                   "steel": dict(DAWN_MATS["steel"], grain=0.2)}
@@ -1360,7 +1395,7 @@ def drop_underground(ob, z: float = -0.06) -> int:
 LICHEN_HEX = "#6F7559"
 NUM_MATS = {
     "dialstone": dict(DIAL, hex="#A9A296", streaks=0.5, chips=0.6, var=0.24, speckle=0.3,
-                      grain=0.5, blotch=0.3, lichen=0.68, dab=0.8, cracks=0.95, tool=0.75),   # carved dial-stone, weathered (r2: tooled)
+                      grain=0.42, blotch=0.3, lichen=0.68, dab=0.55, cracks=0.95, tool=0.75),   # carved dial-stone, weathered (r2: tooled; dab 0.8 read as granite)
     "rubble": dict(hex="#7C776D", chisel=0.9, var=0.12, streaks=0.3, chips=0.55, speckle=0.3, scale=0.6, rough=0.78,
                    edge_light=(0.03, 0.55, 0.6, 0.08), grain=0.4, blotch=0.2, lichen=0.4, dab=0.6, cracks=0.7, tool=0.4),
     "earth": dict(hex="#57513F", chisel=0.3, var=0.1, streaks=0.0, chips=0.0, speckle=0.5, scale=0.9, rough=0.9,
@@ -1793,13 +1828,13 @@ CART_MATS = {
 }
 FAIR_MATS = {
     "blockstone": dict(hex="#958B7C", chisel=0.9, var=0.24, streaks=0.4, chips=0.55, speckle=0.3, scale=0.6, rough=0.72,
-                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.45, blotch=0.24, lichen=0.4, dab=0.65, cracks=0.85, tool=0.7),
+                       edge_light=(0.05, 0.7, 0.7, 0.1), grain=0.38, blotch=0.24, lichen=0.4, dab=0.45, cracks=0.85, tool=0.7),
     "nosing": dict(hex="#A59C8C", chisel=0.8, var=0.18, streaks=0.3, chips=0.6, scale=0.6, rough=0.7,
-                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.45, blotch=0.22, lichen=0.3, dab=0.6, cracks=0.7, tool=0.6),
+                   edge_light=(0.05, 0.8, 0.6, 0.1), grain=0.38, blotch=0.22, lichen=0.3, dab=0.42, cracks=0.7, tool=0.6),
     "fill": dict(hex="#80786B", chisel=0.9, var=0.15, streaks=0.0, chips=0.3, speckle=0.3, scale=0.6, rough=0.8,
-                 grain=0.45, blotch=0.25, lichen=0.35, dab=0.6, cracks=0.6, tool=0.5),
+                 grain=0.38, blotch=0.25, lichen=0.35, dab=0.42, cracks=0.6, tool=0.5),
     "flag": dict(hex="#8A8173", chisel=0.9, var=0.24, streaks=0.0, chips=0.45, speckle=0.3, scale=0.6, rough=0.78,
-                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.45, blotch=0.24, lichen=0.45, dab=0.65, cracks=0.85, tool=0.7),
+                 edge_light=(0.03, 0.6, 0.7, 0.06), grain=0.38, blotch=0.24, lichen=0.45, dab=0.45, cracks=0.85, tool=0.7),
     "timber": dict(_TIMBER, fibre=("X", 0.32)),
     "cavity": dict(hex="#4A443B", chisel=0.6, var=0.12, streaks=0.0, chips=0.0, speckle=0.4, scale=0.6, rough=0.9,
                    grain=0.35, dab=0.5, lichen=0.3),                          # the grimed tread under each bench
@@ -1833,6 +1868,7 @@ DESIGNS = {
     "lamp_dome": (lamp_dome, DOME_MATS, 2048, 1.2),
     "noon_stone": (noon_stone, NOON_MATS, 1024, 0.6),
     "vi_slab": (vi_slab, VI_MATS, 1024, 0.4),
+    **{f"camp_mark_{c}": ((lambda c_: lambda B, rng: camp_mark(B, rng, c_))(c), CAMP_MATS, 256, 0.1) for c in CAMP_SIGNS},   # closing env m-4
     "numeral_xi": (lambda B, rng: numeral(B, rng, "XI"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
     "numeral_ii": (lambda B, rng: numeral(B, rng, "II"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
     "numeral_vii": (lambda B, rng: numeral(B, rng, "VII"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
@@ -1920,6 +1956,7 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
         "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
         "hour_stone": (0.0, 0.0, 12.0), "vi_slab": (0.0, 0.0, 12.0),
+        **{f"camp_mark_{c}": (0.0, 0.0, 5.0) for c in CAMP_SIGNS},
         **{f"numeral_{g}": (0.0, 0.0, 22.0) for g in ("xi", "ii", "vii", "iiii")}, **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}, "lampwright_stall": (0.0, 0.0, 12.0), "lampwright_stall_dome": (0.0, 0.0, 12.0), "hour_lamp": (0.0, 0.0, 6.0),
         "lampwright_cart": (0.0, 0.0, 11.0), "fair_stand_high": (1.5, 1.5, 20.0), "fair_stand_low": (1.5, 1.5, 16.0)}
 

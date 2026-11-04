@@ -354,8 +354,8 @@
       -1.24,
       0.95
     ],
-    "kb_raw": 378,
-    "kb": 213,
+    "kb_raw": 361,
+    "kb": 201,
     "texture": 1024,
     "buried_faces_dropped": 36,
     "nodes": [
@@ -378,8 +378,8 @@
       -2.2,
       1.73
     ],
-    "kb_raw": 1165,
-    "kb": 616,
+    "kb_raw": 1102,
+    "kb": 563,
     "texture": 2048,
     "buried_faces_dropped": 152,
     "nodes": [
@@ -402,8 +402,8 @@
       -2.06,
       1.73
     ],
-    "kb_raw": 1123,
-    "kb": 574,
+    "kb_raw": 1073,
+    "kb": 530,
     "texture": 2048,
     "buried_faces_dropped": 177,
     "nodes": [
@@ -426,8 +426,8 @@
       -2.18,
       1.73
     ],
-    "kb_raw": 1259,
-    "kb": 683,
+    "kb_raw": 1191,
+    "kb": 628,
     "texture": 2048,
     "buried_faces_dropped": 175,
     "nodes": [
@@ -450,8 +450,8 @@
       -2.21,
       1.73
     ],
-    "kb_raw": 1315,
-    "kb": 720,
+    "kb_raw": 1243,
+    "kb": 658,
     "texture": 2048,
     "buried_faces_dropped": 196,
     "nodes": [
@@ -549,8 +549,8 @@
       -3.03,
       2.99
     ],
-    "kb_raw": 1585,
-    "kb": 820,
+    "kb_raw": 1540,
+    "kb": 769,
     "texture": 2048,
     "buried_faces_dropped": 156,
     "nodes": [
@@ -573,8 +573,8 @@
       -3.03,
       2.99
     ],
-    "kb_raw": 1343,
-    "kb": 663,
+    "kb_raw": 1295,
+    "kb": 616,
     "texture": 2048,
     "buried_faces_dropped": 92,
     "nodes": [
@@ -604,6 +604,126 @@
     "nodes": [
       "body",
       "lamp"
+    ]
+  },
+  "camp_mark_glasshorn": {
+    "id": "camp_mark_glasshorn",
+    "tris": 130,
+    "size_m": [
+      1.58,
+      1.58
+    ],
+    "height": 0.04,
+    "x": [
+      -0.81,
+      0.78
+    ],
+    "y": [
+      -0.8,
+      0.78
+    ],
+    "kb_raw": 21,
+    "kb": 10,
+    "texture": 256,
+    "buried_faces_dropped": 2,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_mark_gloamoths": {
+    "id": "camp_mark_gloamoths",
+    "tris": 134,
+    "size_m": [
+      1.6,
+      1.63
+    ],
+    "height": 0.04,
+    "x": [
+      -0.82,
+      0.78
+    ],
+    "y": [
+      -0.82,
+      0.82
+    ],
+    "kb_raw": 20,
+    "kb": 10,
+    "texture": 256,
+    "buried_faces_dropped": 0,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_mark_strays": {
+    "id": "camp_mark_strays",
+    "tris": 118,
+    "size_m": [
+      1.61,
+      1.6
+    ],
+    "height": 0.04,
+    "x": [
+      -0.81,
+      0.8
+    ],
+    "y": [
+      -0.81,
+      0.79
+    ],
+    "kb_raw": 20,
+    "kb": 9,
+    "texture": 256,
+    "buried_faces_dropped": 2,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_mark_resinback": {
+    "id": "camp_mark_resinback",
+    "tris": 110,
+    "size_m": [
+      1.62,
+      1.62
+    ],
+    "height": 0.04,
+    "x": [
+      -0.81,
+      0.81
+    ],
+    "y": [
+      -0.8,
+      0.82
+    ],
+    "kb_raw": 18,
+    "kb": 9,
+    "texture": 256,
+    "buried_faces_dropped": 0,
+    "nodes": [
+      "body"
+    ]
+  },
+  "camp_mark_stilltusks": {
+    "id": "camp_mark_stilltusks",
+    "tris": 158,
+    "size_m": [
+      1.6,
+      1.62
+    ],
+    "height": 0.04,
+    "x": [
+      -0.82,
+      0.78
+    ],
+    "y": [
+      -0.82,
+      0.79
+    ],
+    "kb_raw": 22,
+    "kb": 11,
+    "texture": 256,
+    "buried_faces_dropped": 0,
+    "nodes": [
+      "body"
     ]
   }
 }

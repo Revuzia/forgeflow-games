@@ -37,29 +37,29 @@
   },
   "uv_coverage": 0.614,
   "bake": {
-    "base": 5.64,
-    "rough_metal": 4.35,
-    "normal": 2.83,
-    "ao": 4.33,
+    "base": 40.54,
+    "rough_metal": 15.63,
+    "normal": 16.99,
+    "ao": 17.03,
     "normal_fixed_px": 38895,
-    "projection": 126.05,
-    "pack_save": 126.2,
-    "total": 143.53
+    "projection": 366.39,
+    "pack_save": 367.01,
+    "total": 461.3
   },
   "tris": 21168,
   "mesh_top_m": 2.157,
-  "glb_bytes_raw": 2670448,
+  "glb_bytes_raw": 2670928,
   "optimize": {
     "ok": true,
-    "before": 2670448,
-    "after": 1011576
+    "before": 2670928,
+    "after": 1012824
   },
-  "glb_bytes": 1011576,
+  "glb_bytes": 1012824,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (988 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: burdam_almanac_base 2048x2048 221K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 62K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/burdam/burdam_almanac.glb (989 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: burdam_almanac_base 2048x2048 223K, burdam_almanac_normal 512x512 45K, burdam_almanac_orm 512x512 62K",
       "  skinned meshes: burdam_accent(332v), burdam_almanac(18758v)",
       "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_notch_mid x_cowl_b_1 thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
@@ -74,8 +74,8 @@
       "portrait": "art/out/fighters/burdam/burdam_almanac_portrait.png"
     },
     "seconds": {
-      "splash": 72.55,
-      "portrait": 18.02
+      "splash": 286.92,
+      "portrait": 17.53
     }
   },
   "three_qa": {
@@ -107,24 +107,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/burdam/three_burdam_almanac.png",
-    "seconds": 21.5,
+    "seconds": 11.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.22,
-      "model": 5.17,
-      "lows_bind": 4.1,
-      "uv": 3.67,
-      "bake": 143.53,
-      "export": 0.07,
-      "optimize": 0.5,
-      "load_test": 0.11,
-      "render": 90.64,
-      "three_qa": 21.93
+      "rig": 0.02,
+      "materials": 0.26,
+      "model": 64.65,
+      "lows_bind": 75.32,
+      "uv": 40.94,
+      "bake": 461.3,
+      "export": 0.36,
+      "optimize": 3.42,
+      "load_test": 0.27,
+      "render": 304.67,
+      "three_qa": 11.79
     },
-    "total_s": 270.28
+    "total_s": 963.61
   },
   "run_ref_speed": 3.45,
   "height_m": 2.15

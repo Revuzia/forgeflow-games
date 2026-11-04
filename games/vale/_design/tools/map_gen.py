@@ -263,6 +263,21 @@ def landmark(lid, name, at, size, height, note, flush=False, **extra):
     return rec
 
 
+def camp_marks(W):
+    """closing env m-4: the per-camp floor mark (landmarks_art2.py camp_mark_*): a low plaque with the camp's sign let into
+    the clearing floor 2.9 m south of the lead unit (toward the camera, clear of the camp's units and of the lip cluster on
+    the north side); the Serenade copy is the mirror. Flush: the sim never sees it."""
+    centres = {"glasshorn": ("glasshorn", (61.6, 41.5)), "gloamoths": ("gloamoths", (64.3, 24.9)), "strays_north": ("strays", (46.0, 32.5)),
+               "resinback": ("resinback", (64.3, 85.1)), "stilltusks": ("stilltusks", (61.6, 68.5)), "strays_south": ("strays", (46.0, 77.5))}
+    out = []
+    for side, flip in (("a", 1), ("s", -1)):
+        for tag, (model, (x, y)) in centres.items():
+            out.append(landmark(f"camp_mark_{side}_{tag}", f"{model} camp mark", (x if flip > 0 else W - x, y + 2.9), (1.7, 1.7), 0.04,
+                                "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
+                                flush=True, model=f"assets/maps/landmarks/camp_mark_{model}.glb", value=0.8))
+    return out
+
+
 def camp_lips(W):
     """env m2: one low dressing cluster per camp on its clearing's north lip (art/blender/maps/landmarks_art2.py camp_*;
     brief map_rift_landmarks.md §3 "Dressing (low, flush or on the clearing's wall lip)"): 1.1 m inside the first wall
@@ -648,6 +663,7 @@ def build_rift():
             landmark("vi_slab", "VI slab", (CX, H - 3.0), (6, 2), 1.2, "lying flat south of the South Road: one dressed dial-stone on a bedding course, its east end snapped off askew, VI cut and inked in its top (the V's point to the camera) (art/blender/maps/landmarks_art2.py)", value=0.6),
             *skirts_rift(W, H),
             *camp_lips(W),
+            *camp_marks(W),
         ],
     }
     rec = {

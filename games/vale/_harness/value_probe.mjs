@@ -61,7 +61,7 @@
 //                        their face (eroded by a quarter metre): the face's own value pattern at >= 0.5 m; the light / shade split between faces
 //                        and the silhouette never count. hp is taken inside the faces the same way
 //               range05  p95 - p5 of L* smoothed over 0.5 m (info: includes the light / shade split of its faces)
-//             Gate (closing CW4 done 2): hp >= the lane flagstone's hp in this same metric (refs.laneHpMedian: the lane
+//             Gate (closing CW4 done 2, round 2: floor 2.75, the Art 2.0 tier): hp >= the lane flagstone's hp in this same metric (refs.laneHpMedian: the lane
 //             at the map's lane spots; the review's 2.9 was another tool's scale, where this metric reads ~1.2) and
 //             breakup >= 6 L* on every gated landmark. refs also carries the Art 2.0 structures' (team 1) hp and breakup
 //   monsters  (closing CW4 critic:monsters; --monsters 1 adds it, --monsters only runs nothing else; --monsterIds a,b)
@@ -110,7 +110,7 @@ const LMK_RE_GATED = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_sta
 /** --lmkre <names> (closing CW4 polish): measure other landmark GLBs the same way, e.g. camp_[a-z]+|hour_lamp (their L* p50
  *  against the camp-dressing bar L* <= 46; the hp / breakup verdict is the E1 gate's and only binds the gated set) */
 const LMK_RE = opt('lmkre', '') ? new RegExp(`[/-](${opt('lmkre', '')})\\.glb$`) : LMK_RE_GATED;
-const LMK_HP = 1.0, LMK_BREAKUP = 6;   // hp bar: the lane's own hp in the same metric (median of the lane spots), never under 1.0
+const LMK_HP = 2.75, LMK_BREAKUP = 6;   // hp bar: the Art 2.0 tier (closing CW4 round 2: ~2.8; the structures read 3.8 in this metric), never under the lane's own hp in the same metric
 /** combat F4: the flash test once per VFX lift cap (renderer.vfx.liftCap; 'off' = effects lifted like the ground) */
 const VFX_CAPS = opt('vfxcaps', '').split(',').filter(Boolean).map((c) => (c === 'off' ? null : Number(c)));
 /** env F3: the unseen / lit display ratio band (tokens grade.fogOfWar.valueMul 0.55) */
@@ -860,7 +860,7 @@ for (const map of MAPS) for (const tier of TIERS) {
         if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_lmk_${l.id}`);
         const hpBar = bar(refs);
         const pass = r.hp != null && r.hp >= hpBar && r.breakup != null && r.breakup >= LMK_BREAKUP;
-        landmarks[l.id] = { ...r, verdict: r.error ? `FAIL (${r.error})` : `hp ${r.hp} (>= ${hpBar}: the lane's; Art 2.0 structures ${refs.structureHpMedian}) breakup ${r.breakup} (>= ${LMK_BREAKUP}) ${pass ? 'PASS' : 'FAIL'}` };
+        landmarks[l.id] = { ...r, verdict: r.error ? `FAIL (${r.error})` : `hp ${r.hp} (>= ${hpBar}: the Art 2.0 tier bar; Art 2.0 structures ${refs.structureHpMedian}) breakup ${r.breakup} (>= ${LMK_BREAKUP}) ${pass ? 'PASS' : 'FAIL'}` };
         console.log(`  landmark ${String(l.id).padEnd(20)} ${r.error ?? `${String(r.px).padStart(7)} px  ${r.pxPerM} px/m  hp ${r.hp}  breakup ${r.breakup}  range05 ${r.range05}  L* ${r.lstarP5}/${r.lstarP50}/${r.lstarP95}  lane hp ${r.laneHp}`}  ${landmarks[l.id].verdict}`);
       }
       landmarks.__refs = refs;

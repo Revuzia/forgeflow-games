@@ -30,14 +30,14 @@
   },
   "uv_coverage": 0.608,
   "bake": {
-    "base": 13.27,
-    "rough_metal": 10.65,
-    "normal": 7.8,
-    "ao": 8.51,
+    "base": 41.52,
+    "rough_metal": 17.5,
+    "normal": 8.73,
+    "ao": 17.74,
     "normal_fixed_px": 51346,
-    "projection": 149.32,
-    "pack_save": 150.02,
-    "total": 191.56
+    "projection": 65.85,
+    "pack_save": 66.44,
+    "total": 155.61
   },
   "tris": 22406,
   "mesh_top_m": 2.054,
@@ -142,13 +142,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2927072,
+  "glb_bytes_raw": 2927320,
   "optimize": {
     "ok": true,
-    "before": 2927072,
-    "after": 1179504
+    "before": 2927320,
+    "after": 1179424
   },
-  "glb_bytes": 1179504,
+  "glb_bytes": 1179424,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -162,20 +162,6 @@
       "  run: 20 f, planted samples 4, max foot-speed error 1.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/dunsom/splash.png",
-      "portrait": "art/out/fighters/dunsom/portrait.png",
-      "icon": "art/out/fighters/dunsom/icon.png",
-      "turntable": "art/renders/fighters/dunsom/turntable.png"
-    },
-    "seconds": {
-      "splash": 192.51,
-      "portrait": 28.82,
-      "icon": 8.08,
-      "turntable": 13.14
-    }
   },
   "three_qa": {
     "ok": true,
@@ -197,8 +183,8 @@
       1
     ],
     "headY": 1.683,
-    "accentPct": 1.49,
-    "accentTopHalfPct": 55.9,
+    "accentPct": 1.05,
+    "accentTopHalfPct": 30.2,
     "heightPx1080": 110,
     "size": [
       2400,
@@ -206,26 +192,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 28.6,
+    "seconds": 57.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.86,
-      "model": 429.56,
-      "lows_bind": 18.54,
-      "uv": 23.1,
-      "bake": 192.13,
-      "clips": 0.64,
-      "export": 4.83,
-      "optimize": 1.77,
-      "load_test": 0.33,
-      "render": 242.8,
-      "three_qa": 29.14,
-      "cache": 0.27
+      "rig": 0.02,
+      "materials": 0.6,
+      "model": 390.21,
+      "lows_bind": 9.29,
+      "uv": 12.08,
+      "bake": 155.93,
+      "clips": 0.37,
+      "export": 2.88,
+      "optimize": 1.11,
+      "load_test": 0.89,
+      "three_qa": 58.26,
+      "cache": 0.81
     },
-    "total_s": 944.21
+    "total_s": 633.02
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,
