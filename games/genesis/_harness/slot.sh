@@ -16,7 +16,9 @@ DIR=${GENESIS_SLOT_DIR:-/tmp/genesis-slots}
 mkdir -p "$DIR/wait"
 
 if [ "${1:-}" = "--status" ]; then
-  echo "slots ($N):"; for i in $(seq 1 "$N"); do printf '  %s: %s\n' "$i" "$(cut -c1-140 "$DIR/slot.$i.who" 2>/dev/null)"; done
+  # (a holder that died leaves its record behind; its flock is already released, so show the slot free)
+  echo "slots ($N):"; for i in $(seq 1 "$N"); do w=$(head -n1 "$DIR/slot.$i.who" 2>/dev/null); p=${w%% *}
+    if [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; then : >"$DIR/slot.$i.who"; w=""; fi; printf '  %s: %s\n' "$i" "$(printf '%s' "$w" | cut -c1-140)"; done
   echo "waiting:"; for t in $(ls "$DIR/wait" 2>/dev/null | sort -n); do printf '  #%s %s\n' "$t" "$(cut -c1-140 "$DIR/wait/$t")"; done
   exit 0
 fi
