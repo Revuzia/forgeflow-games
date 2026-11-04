@@ -115,7 +115,10 @@ try {
     addEventListener('pointerdown', (e) => {
       // what the pick sees at the press (the controller's entityAt asks the same), with the foe's view state
       const fv = c.view.entity(window.__ids.foe);
-      L.events.push({ t: e.timeStamp, button: e.button, x: e.clientX, y: e.clientY, pick: R.pickEntity(e.clientX, e.clientY), foeTargetable: fv?.targetable, foeVis: fv?.visibleMask, foeAlive: fv?.alive });
+      // r2: where the foe is drawn at the press, and the actor flags the pick tests, so a null pick explains itself
+      const fa = R.actors.get(window.__ids.foe), Q = fa?.root.position.clone().setY(fa.root.position.y + 1.0).project(R.rig.camera);
+      L.events.push({ t: e.timeStamp, button: e.button, x: e.clientX, y: e.clientY, pick: R.pickEntity(e.clientX, e.clientY), foeTargetable: fv?.targetable, foeVis: fv?.visibleMask, foeAlive: fv?.alive,
+        foeDrawn: Q ? [Math.round((Q.x + 1) / 2 * innerWidth), Math.round((1 - Q.y) / 2 * innerHeight)] : null, foeActorVisible: fa?.visible, foeLeaving: fa?.leaving, foeRoot: fa ? [+fa.root.position.x.toFixed(2), +fa.root.position.z.toFixed(2)] : null, foeSim: fv ? [+fv.x.toFixed(2), +fv.y.toFixed(2)] : null });
     }, { capture: true });
     const tick = (ts) => {
       requestAnimationFrame(tick);
