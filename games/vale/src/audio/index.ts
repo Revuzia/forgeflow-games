@@ -30,12 +30,15 @@
 //   sync        a cue starts the moment its event reaches the engine (the frame loop pumps the sim, then renders, in one rAF);
 //               A decoded cue starts synchronously in the event's call (not in a promise's then(), which ran after the
 //               frame's render: one or two 256-frame device callbacks late, measured +5.3 / +10.7 ms); a
-//               one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in.
+//               one-shot skips LEAD_SKIP_S of the cue build's silent codec lead under a 1 ms fade-in. A match's
+//               combat cues (the event-bound sfx cues, the kits of its fighters) decode while it loads (prewarm),
+//               so first hits start in their call too.
 //               _harness/probe_audio_runtime.mjs sync measures the hit heard at the output against the impact frame.
 //               Nothing is scheduled ahead; the mastering chain's only latency is fixed and known: the limiter's
 //               built-in 6 ms look-ahead (WebAudio DynamicsCompressor) and the soft clip's 4x oversampler (4 ms)
 //   cues        AudioCue: random variant file, ±pitchVar semitones, gain, maxVoices, cooldown (s), loop; files
-//               decode lazily on first use, UI cues preload; an unknown or missing cue is silently ignored (art
+//               decode lazily on first use (a match prewarms its combat set, a draft its lock-in calls), UI cues
+//               preload; an unknown or missing cue is silently ignored (art
 //               may still be rendering)
 //   priority    a voice's priority is its cue's, LIFTED +1 when an enemy aims it at you (or it lands on you) and
 //               DROPPED −1 when an ally made it (threat > self > ally, content/audio.json). A voice ranks by
@@ -1151,6 +1154,20 @@ class Engine implements ValeAudioPort {
     return d ? [d.file, ...d.layers.map((l) => l.file), ...(d.pieces ?? []).map((p) => p.file)] : [];
   }
 
+  /** a match's combat cues decode while it loads (see `sync` in the header): the event-bound sfx cues and the kits of
+   *  the fighters in it (their calls aside), so a first hit starts inside its event's call like every later one
+   *  (a cue still decoding plays from a promise, a device quantum or two late; closing critic 'audio-runtime') */
+  private prewarm(client: MatchClient): void {
+    if (!this.ctx) return;
+    const ids = new Set<string>();
+    for (const id of Object.values(this.events)) if (this.cues[id]?.bus === 'sfx') ids.add(id);
+    for (const p of client.view.players) {
+      const k = this.kits.get(p.fighter);
+      if (k) for (const [slot, id] of Object.entries(k)) if (slot !== 'call' && id) ids.add(id);
+    }
+    for (const id of ids) for (const f of this.cues[id]?.files ?? []) void this.buffer(f);
+  }
+
   /** the lock-in calls live only while a draft runs (see `memory` in the header): decoded when it opens (a lock-in
    *  answers at once), freed when it closes (a call still sounding keeps its own buffer until it ends) */
   private draftCalls(on: boolean): void {
@@ -1264,6 +1281,7 @@ class Engine implements ValeAudioPort {
     this.evictCues();
     this.ambMap = client?.setup?.map ?? null;
     if (client) {
+      this.prewarm(client);
       this.off = client.onEvents((evs: SimEvent[]) => {
         this.shadedHits.clear();
         for (const e of evs) if (e.e === 'damage' && e.shaded && e.ability) this.shadedHits.add(`${e.src}:${e.dst}:${e.ability}`);

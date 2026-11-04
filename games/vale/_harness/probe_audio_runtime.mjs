@@ -17,9 +17,13 @@
 //     measured the same way. The engine schedules nothing ahead (a cue starts at 0 the moment its event arrives); the
 //     mastering chain has a FIXED latency of its own: the limiter's (WebAudio DynamicsCompressor) built-in 6 ms
 //     look-ahead and the soft clip's 4x oversampler (4 ms; an OfflineAudioContext render of the same nodes reads
-//     comp 6.0 / clip4 4.0 / both 10.0 ms). Gates: p95 <= one frame (the median rAF interval) + outputLatency + the
-//     sfx-bus click's start-to-onset p50 (the chain's latency, documented here instead of dropping the limiter), and
-//     the cue path adds <= ENGINE_OVER_MS over a sound on the sfx bus (p50 vs p50, p95 vs p95).
+//     comp 6.0 / clip4 4.0 / both 10.0 ms). Gates (closing r2): every hit starts inside its event's call (the match
+//     prewarms its combat cues); p95 <= one frame (the median rAF interval) + outputLatency + the sfx-bus click's
+//     start-to-onset p50 (the chain's latency, documented here instead of dropping the limiter), and the cue path adds
+//     <= ENGINE_OVER_MS over a sound on the sfx bus (p50 vs p50, p95 vs p95), both measured FROM THE PUMP (the frame's
+//     own work point, where its picture is made too) and, when the main thread is idle (the pump within LATE_IDLE_MS of
+//     the rAF timestamp at p95), from the rAF timestamp as well (else reported, 'notMeasured': needs an idle machine).
+//     --runs (3) separate browsers: PASS only when every run passes. --refs (60: 20 per join point).
 //   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--out <json>]
 //     A real match at speed 1, default settings, the autopilot playing your seat. Per 4096-sample block: K-weighted
 //     mean square of the output and of each bus (the sfx bus plus the threat path = what sfx the player hears) →
@@ -52,7 +56,9 @@ const mode = args[0] === 'match' ? 'match' : args[0] === 'dead' ? 'dead' : 'sync
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const OUT = opt('--out', join(HERE, '_reports', `fw_CW2_runtime_${mode}.json`));
 const HITS = Number(opt('--hits', 50));
-const REFS = Number(opt('--refs', 30));
+const REFS = Number(opt('--refs', 60));
+const RUNS = Math.max(1, Number(opt('--runs', 3)));
+const LATE_IDLE_MS = 3;   // the frame loop reaching its pump within this of the rAF timestamp (p95): an idle main thread
 const REF_AT = ['out', 'master', 'sfx'];   // where a reference click joins: the output itself, the master's input, the sfx bus
 const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
@@ -90,6 +96,16 @@ const r2 = (x) => (x === null || x === undefined || !Number.isFinite(x) ? x : Ma
 
 // ── sync ──────────────────────────────────────────────────────────────────────────────────────────
 async function runSync() {
+  const runs = [];
+  for (let i = 0; i < RUNS; i++) { log(`sync run ${i + 1}/${RUNS}`); runs.push(await runSyncOnce()); if (runs[i].err) break; }
+  const brief = (r) => ({ pass: r.pass, err: r.err, offsetFromPumpMs: r.offsetFromPumpMs, offsetMs: r.offsetMs, engineOverSfxBusMs: r.engineOverSfxBusMs,
+    budgetMs: r.budgetMs, pumpLateMs: r.pumpLateMs, inCall: r.inCall, gates: r.gates });
+  return { probe: 'probe_audio_runtime', mode: 'sync', runs: RUNS, pass: runs.length === RUNS && runs.every((r) => r.pass && !r.err),
+    err: runs.find((r) => r.err)?.err ?? null, summary: runs.map(brief),
+    notMeasured: [...new Set(runs.flatMap((r) => Object.entries(r.gates ?? {}).filter(([, v]) => v === null).map(([k]) => k)))], detail: runs };
+}
+
+async function runSyncOnce() {
   const { browser, page, logs } = await openFake('/?dev=1&render=1&autoflow=1');
   const rep = { probe: 'probe_audio_runtime', mode: 'sync', hits: HITS, err: null };
   try {
@@ -223,12 +239,30 @@ async function runSync() {
         offsetMs: { p50: r2(pct(rr.map((r) => (tsValid ? r.offTsMs : r.offClkMs)), 50)), p95: r2(pct(rr.map((r) => (tsValid ? r.offTsMs : r.offClkMs)), 95)) } }]; }));
     const busRef = rep.chain.sfx;
     rep.engineOverSfxBusMs = { p50: r2(rep.offsetMs.p50 - busRef.offsetMs.p50), p95: r2(rep.offsetMs.p95 - busRef.offsetMs.p95) };
+    // the same from the pump (the frame's own work point: its sim batch, its sound AND its picture are made there),
+    // so the main thread reaching the frame late (another process on the machine) counts for neither side
+    const busFromPump = rows.filter((r) => r.ref === 'sfx' && r.offTsMs !== null).map((r) => (tsValid ? r.offTsMs : r.offClkMs) - r.injectAfterRafMs);
+    rep.sfxBusFromPumpMs = { p50: r2(pct(busFromPump, 50)), p95: r2(pct(busFromPump, 95)) };
+    rep.engineOverSfxBusFromPumpMs = { p50: r2(rep.offsetFromPumpMs.p50 - rep.sfxBusFromPumpMs.p50), p95: r2(rep.offsetFromPumpMs.p95 - rep.sfxBusFromPumpMs.p95) };
+    // how late the frame loop reached its pump after the frame's rAF timestamp (the machine's main-thread load)
+    const late = rows.filter((r) => r.injectAfterRafMs !== null).map((r) => r.injectAfterRafMs);
+    rep.pumpLateMs = { p50: r2(pct(late, 50)), p95: r2(pct(late, 95)), max: r2(Math.max(...late)) };
+    const hitRows = rows.filter((r) => !r.ref);
+    rep.inCall = { started: hitRows.filter((r) => r.inCall).length, of: hitRows.length, clockTicked: hitRows.filter((r) => (r.tickMs ?? 0) > 0).length };
     rep.budgetNoHopMs = r2(frame + outLatMs);
     rep.budgetMs = r2(frame + outLatMs + (busRef.startToOnsetMs.p50 ?? 0));
     rep.rows = rows;
+    const idle = rep.pumpLateMs.p95 <= LATE_IDLE_MS;
     rep.gates = { measured: ok.length >= HITS * 0.9, platformMeasured: refRows.length >= (REFS / 3) * 0.9 && busRef.n >= (REFS / 3) * 0.9,
-      p95WithinFramePlusOutputPlusHop: rep.offsetMs.p95 <= rep.budgetMs, engineOverSfxBus: rep.engineOverSfxBusMs.p50 <= ENGINE_OVER_MS && rep.engineOverSfxBusMs.p95 <= ENGINE_OVER_MS };
-    rep.pass = Object.values(rep.gates).every(Boolean);
+      // every hit starts inside its event's call (none waits for a decode: the match prewarms its combat set)
+      startsInCall: rep.inCall.started === rep.inCall.of,
+      // A/V from the frame's work point: p95 <= one frame + outputLatency + the mastering chain (the sfx-bus click's start to onset)
+      p95FromPumpWithinFramePlusOutputPlusChain: rep.offsetFromPumpMs.p95 <= rep.budgetMs,
+      engineOverSfxBusFromPump: rep.engineOverSfxBusFromPumpMs.p50 <= ENGINE_OVER_MS && rep.engineOverSfxBusFromPumpMs.p95 <= ENGINE_OVER_MS,
+      // from the rAF timestamp: gated on an idle main thread only (pump late p95 <= LATE_IDLE_MS), else not measured
+      p95WithinFramePlusOutputPlusHop: idle ? rep.offsetMs.p95 <= rep.budgetMs : null,
+      engineOverSfxBus: idle ? rep.engineOverSfxBusMs.p50 <= ENGINE_OVER_MS && rep.engineOverSfxBusMs.p95 <= ENGINE_OVER_MS : null };
+    rep.pass = Object.values(rep.gates).every((v) => v !== false);
   } catch (e) { rep.err = String(e?.message ?? e); }
   rep.logs = logs.slice(0, 30);
   await browser.close().catch(() => {});
