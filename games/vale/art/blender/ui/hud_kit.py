@@ -383,8 +383,8 @@ def build_dialbar(mats):
     gy0 = arc_y(L, gx0)
     wedge = [(gx0 - g["w"] / 2, gy0 + 4), (gx0, gy0 - g["h"]), (gx0 + g["w"] / 2, gy0 + 4), (gx0, gy0 + 1)]
     slab(pc, "db_gnomon", [wedge], depth=2.6, bevel=1.4, z=4.0, mat=mats["chalk"], res=3)
-    # the divider between the ultimate and the spells: a short engraved wedge line
-    dx = L["abilities"]["spell1"][0] - 10
+    # the divider between the spells and the abilities: a short engraved wedge line
+    dx = L["abilities"]["spell2"][0] + L["abilities"]["spell2"][2] + 10  # spells sit left of the abilities (r CW3c ui-layout-originality)
     slab(pc, "db_divider", [[(dx - 1, 64), (dx + 1, 64), (dx + 1, 108), (dx - 1, 108)]], depth=0.3, bevel=0.2, z=5.0, mat=mats["lip"], res=1)
     return pc
 

@@ -1,0 +1,289 @@
+{
+  "summary": "One VALE closing fix wave (after the closing parity review): budgeted work packages in order on the wave's own files, adversarial verify against its done-criteria (incl. per-fighter re-scores), targeted refix rounds",
+  "agentCount": 5,
+  "logs": [
+    "CW3c:hud-unmeasured → critic:hud-states=done, critic:done-unverified=done, critic:ui-layout-originality=partly",
+    "[CW3c:skins-client] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    "CW3c:skins-client → ",
+    "[CW3c:verify2] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete."
+  ],
+  "result": {
+    "wave": "CW3c",
+    "pass": false,
+    "open": [
+      {
+        "id": "done:5",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Met: the finalize skin showcase (src/ui/screens/draft.tsx:253-283, mounted at :673) follows hover, and fw_CW3c_cl1_after_finalize_hover2.png shows it large. The Shop caption sits top right, clear of the model (fw_CW3c_cl1_after_shop_ilsheta_fb.png). The gen_store ΔE gate exists (floors 12/18): `node tools/gen_store.ts --check` exits 1 with 8 fails (marund_gorgewalk 5.5, ilsheta_first_bell 9.8, dunsom_almanac 17.9 and others). Open: `--check --provisional` exits 1 with 'content/store.json is out of date'. The Collection strip still crops Ilsheta's 3 tiles to the lamp chimney (fw_CW3c_cl1_after_coll_ilsheta_fb.png). The finalize CSS in screens.css is uncommitted.",
+        "fixHint": "Regenerate store.json with --provisional after the CW5/CW6 portraits settle, then commit. Give Collection tiles a vertical (y) focus per skin from the change centroid, or use taller tiles. Commit the screens.css finalize block."
+      },
+      {
+        "id": "done:6",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Only banner rank is met (model.ts:315/:546; 'Full peal' painted at 26 ms). Still open: (1) model.ts:370 nameOf returns 'You', and strings.en.json:791 is '{name} takes five in a row.', giving 'You takes five in a row.'; there is no strings lint for this. (2) There are two scoreboard tables (panels.tsx:41, :69). (3) hud.css:350 empty slots are rgba 0.55, and the canopy shows through in fw_CW3c_b_hs_01_no_resource_bar.png. (4) The recap has no CC-time line. (5) The only Alt-click handler is minimap.tsx:159, so HUD slots cannot post call-outs. (6) e2e.mjs has no detached-.hud assert.",
+        "fixHint": "Add second-person 'you' sub-line strings plus a lint. Build one shared grid for both team blocks. Make the empty slot an opaque ink-2 well. Add a 'held for N s' recap line. Make Alt+click on aslot, islot and objective chips post a team call-out. Add an e2e step that plays 2 matches and then asserts no detached .hud roots."
+      },
+      {
+        "id": "done:7",
+        "severity": "major",
+        "status": "not_measured",
+        "evidence": "These pass: typecheck exit 0; content:check OK with 0 warnings; icon_probe OK (fill median 0.47, no missing icons). These did not: hud_renders --at 100 failed twice (page open timeout after 598 s queued; queue-found timeout after 1715 s queued; /tmp/cw3cv_hr2.log). e2e rift: RIFT FAIL at home (60 s timeout), STORE PASS (_harness/_reports/fw_CW3c_v1_e2e_rift.json). Both ran at load 52-78 on battery. The claimed fw_CW3c_cl1_e2e_rift.json is also a FAIL. overlay_regress was not run.",
+        "fixHint": "On an idle, charged machine, re-run `e2e.mjs all`, hud_renders --at 100 and overlay_regress, and cite PASS with 0 console lines. If RIFT home still times out, treat it as a real regression."
+      },
+      {
+        "id": "critic:done-unverified",
+        "severity": "minor",
+        "status": "partly",
+        "evidence": "The verdicts per ID are in client_hud.md §4.10. Spot-checked fw_CW3c_e2e_flow.json (readycheck and netdown ok, empty console) and fw_CW3c_done_unverified.json HUD5 ('Unlocks at level 6'). The record in closing_parity_open.json that the critic's measure requires is not made (lead file).",
+        "fixHint": "Lead: record closed + evidence path for HUD-5/7/9/11 and F10/13/14/16/17 in closing_parity_open.json."
+      },
+      {
+        "id": "critic:ui-layout-originality",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "The audit is done (§4.9, 17 rows), and it finds one one-to-one copy, which still ships. hud_layout.json has spell1 [500,62,48] and spell2 [556,62,48] right of ult [400,34,76]; hud_kit.py:387 is unchanged; the live shot shows Q W E R | D F. The sound half is deferred to audio.",
+        "fixHint": "Lead: apply the handoff: abilities spell1 176/62/48, spell2 232, a1 300, a2 372, a3 444, ult 524/34/76; divider at spell2.x+size+10. Run build.py hud --pieces dialbar via heavy.py. CW3c commits dialbar.webp and frame_layout.ts and re-runs icon_probe and hud_renders."
+      },
+      {
+        "id": "client:CL-1",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Same as done:5. The store is stale against current portraits. 8 paid skins fail the gate, including the deluxes ilsheta_first_bell 9.8, marund_long_evening 10.0, tunlan_lamplit 10.1, ervet_lamplit 12.4 and dunsom_almanac 17.9. The Collection crops are still wrong. All Featured skus pass the current gate.",
+        "fixHint": "Re-run gen_store --provisional and commit it. Fix the Collection tile y-focus."
+      },
+      {
+        "id": "hud:hud-c3",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "itemtip.tsx:19 adds '%', and strings.en.json:1047/:1051 names also end in ' %'.",
+        "fixHint": "Drop the trailing ' %' from the stat.*Pct.name strings."
+      },
+      {
+        "id": "hud:hud-c8",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "hud.css:148-149: the ring and the grayscale filter are on the same .who__face.",
+        "fixHint": "Move the ring to a wrapper or an ::after."
+      },
+      {
+        "id": "client:CL-3",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "'| Equipped' appears in the finalize shot, and 'I Simple' in the collection shot.",
+        "fixHint": "Use a drawn tick mark with spacing, or put the label first."
+      },
+      {
+        "id": "client:CL-4",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "Ally seats read 'Ready' with no fighter name in fw_CW3c_cl1_after_finalize_hover2.png.",
+        "fixHint": "Keep the fighter name and show Ready as a chip."
+      }
+    ],
+    "handoffs": [
+      {
+        "from": "hud-unmeasured",
+        "to": "lead (owner of art/blender/ui; no CW lane owns it)",
+        "what": "critic:ui-layout-originality re-key of the Dial Bar.\n\n(1) In art/blender/ui/hud_layout.json, set dialbar.abilities (x, y, size) to: spell1 [176,62,48], spell2 [232,62,48], a1 [300,46,64], a2 [372,46,64], a3 [444,46,64], ult [524,34,76]. Keep hp [176,122,428,16], res, items x 624, gleam and recall as they are. Optionally move gnomon.x to 562 so it sits over the ult centre.\n\n(2) In art/blender/ui/hud_kit.py:387, change `dx = L[\"abilities\"][\"spell1\"][0] - 10` to `dx = L[\"abilities\"][\"spell2\"][0] + L[\"abilities\"][\"spell2\"][2] + 10` (290).\n\n(3) Run `python3 art/build.py hud --pieces dialbar` through the heavy queue. It rewrites src/ui/art/hud/dialbar.webp and src/ui/hud/frame_layout.ts, both CW3c files, so tell CW3c or just commit them. Then re-run `node _harness/icon_probe.mjs` and `VALE_URL=http://localhost:5190 node _harness/hud_renders.mjs --at 100`.\n\nSpec: _design/sections/client_hud.md §4.9."
+      },
+      {
+        "from": "hud-unmeasured",
+        "to": "lead (closing_parity_open.json)",
+        "what": "Record the critic:done-unverified verdicts per ID: HUD-5, HUD-7, HUD-9, HUD-11, F10, F13, F14, F16 and F17 are all closed. Evidence is in _design/sections/client_hud.md §4.10, _harness/_reports/fw_CW3c_done_unverified.json, fw_CW3c_e2e_flow.json and fw_CW3c_e2e_rift.json."
+      },
+      {
+        "from": "refix1",
+        "to": "lead",
+        "what": "critic:ui-layout-originality, Dial Bar re-key, still not applied. (1) In art/blender/ui/hud_layout.json, set dialbar.abilities to: spell1 [176,62,48], spell2 [232,62,48], a1 [300,46,64], a2 [372,46,64], a3 [444,46,64], ult [524,34,76]. Keep hp, res, items x 624, gleam and recall. Optionally set gnomon.x to 562. (2) In art/blender/ui/hud_kit.py:387, change `dx = L[\"abilities\"][\"spell1\"][0] - 10` to `dx = L[\"abilities\"][\"spell2\"][0] + L[\"abilities\"][\"spell2\"][2] + 10`. (3) Run `python3 art/blender/common/heavy.py run -- python3 art/build.py hud --pieces dialbar`. It rewrites src/ui/art/hud/dialbar.webp and src/ui/hud/frame_layout.ts; commit them or leave them for CW3c, then re-run icon_probe and hud_renders --at 100."
+      },
+      {
+        "from": "refix1",
+        "to": "CW3s",
+        "what": "Slot call-outs (done:6): let a ping carry an optional ability or item slot. In src/contracts/sim.ts add `slot?: string` to the 'ping' command (line 63) and the 'ping' event (line 244). In src/sim/world.ts:167 add `&& (o.slot === undefined || (typeof o.slot === 'string' && /^(a1|a2|a3|ult|spell1|spell2|item[0-5])$/.test(o.slot)))`. In src/sim/sim.ts:139 emit `slot: cmd.slot` with the event. The HUD side (model.callout / calloutText) is already live and reads ev.slot."
+      },
+      {
+        "from": "refix1",
+        "to": "CW5/CW6",
+        "what": "CL-1 ΔE gate (floors: standard 12, deluxe 18). These paid skins still read too close to their base portraits: marund_gorgewalk 5.5, rishal_chalkline 7.2, marund_long_evening 10.0, tunlan_lamplit 10.1, ilsheta_first_bell 14.4, lisvel_almanac 17.1, dunsom_almanac 17.9. They are re-tiered (provisional) until re-paletted. After any portrait re-render, ping CW3c or the lead to re-run `node tools/gen_store.ts --provisional`."
+      },
+      {
+        "from": "refix1",
+        "to": "lead",
+        "what": "done:7 needs a quiet machine. Re-run `node _harness/e2e.mjs all` (it now includes the hud_leak step), `VALE_URL=http://localhost:5190 node _harness/hud_renders.mjs --at 100` and `node _harness/overlay_regress.mjs` with the charger attached (pmset -g ac said 'No adapter attached') and no soak workers running. This round the page clock ran about 10x slower than wall time, which stalled the draft."
+      }
+    ],
+    "packages": [
+      {
+        "key": "hud-unmeasured",
+        "items": [
+          "critic:hud-states=done",
+          "critic:done-unverified=done",
+          "critic:ui-layout-originality=partly"
+        ],
+        "commits": [
+          "6082fb4e",
+          "76ba5d01"
+        ],
+        "notes": "I found and fixed a real defect: the 250 ms ready wash had never fired at normal speed. It only fired when the time scale was high enough that the last cooldown tick before 0 exceeded 0.05 s.\\n\\nThe banner rank in src/ui/hud/model.ts covers the critic's 'a 5-kill headline must pre-empt the queue'. The copy part of hud-c1 is NOT changed: the headline still reads 'You takes five in a row'. That and the second-person strings lint are left for package 2. Evidence: _harness/_shots/fw_CW3c_hs_03_headline_top.png.\\n\\nsrc/ui/hud/index.tsx now sets window.__valeHud to the HUD model, but only when the d"
+      },
+      {
+        "key": "skins-client",
+        "items": [
+          "client:CL-1=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "refix1",
+        "items": [
+          "done:5=partly",
+          "done:6=partly",
+          "done:7=not_done",
+          "critic:ui-layout-originality=not_done",
+          "client:CL-1=partly"
+        ],
+        "commits": [
+          "f7a8ff43 vale CW3c: store.json regenerated --provisional against current portraits (CL-1/done:5)",
+          "e43dd60d vale CW3c: done:6 HUD minors + CL-1 collection strip (second-person subs + lint, one scoreboard grid, opaque wells, recap held-for line, Alt+click call-outs, e2e hud_leak, skins above kit)",
+          "c4cb290e vale CW3c: store.json regenerated --provisional against the latest portraits (CL-1): gate 25/32 pass"
+        ],
+        "notes": "I couldn't get a live e2e or hud_renders pass this round: the Mac was on battery ('No adapter attached') with CW3s soak workers at about 365% CPU, and the page ran about 10x slower than wall time. So done:6 is code-complete (typecheck 0, content:check 0 warnings) but not checked live, and done:7 was not measured (reported as not_done because the schema has no not_measured status). Budget used: one full e2e sweep plus one launch that died before running, a 2-minute collection probe, two store regenerations, no Blender. Other changes: _harness/e2e.mjs gained a `hudleak` mode, and the Collection "
+      }
+    ],
+    "regressions": [
+      "content/store.json is out of date against the current portraits (gen_store --check --provisional exits 1); likely driven by concurrent CW5/CW6 portrait renders, but the file is CW3c's",
+      "Uncommitted CW3c finalize CSS in src/ui/styles/screens.css",
+      "No live regression check was possible: hud_renders x2 and e2e rift failed under load 52-78 on battery; the claimed fw_CW3c_cl1_e2e_rift.json is itself a FAIL"
+    ],
+    "summary": "CW3c fails round 1. The verdict is in _design/reviews/fixwaves/CW3c_verify1.json, commit fd5d2a85, pushed.\n\n- **Passes:** typecheck exit 0, content:check with 0 warnings, and icon_probe OK. critic:hud-states is verified: the refusal caption is visible in the shot crop, and the ready wash, active border, banner rank, colourblind and 720p evidence is consistent.\n- **Partly:** critic:done-unverified. The verdicts per ID are written in §4.10, but they are not yet recorded in closing_parity_open.json; that is a lead handoff.\n- **Partly:** critic:ui-layout-originality. The audit is done, but the one one-to-one copy (the Hour spells right of R) still ships until the lead applies the Dial Bar re-key.\n- **Partly:** CL-1 and done:5. The finalize showcase, the caption move and the ΔE gate are met. Still open:\n  - store.json is stale against the current portraits.\n  - The Collection crops still show Ilsheta's lamp chimney.\n  - The screens.css change is uncommitted.\n- **Fails:** done:6. Only the banner priority is done. Still open:\n  - \"You takes five in a row.\" banners, with no strings lint.\n  - Two scoreboard tables.\n  - See-through empty slots.\n  - No recap line for crowd-control time.\n  - No call-outs from HUD elements.\n  - No e2e assert for a detached HUD.\n- **Not measured:** done:7. hud_renders failed twice and e2e rift failed at the home step on a machine at load 52-78 on battery, so neither reproduced. Store passed.\n- **Spot-checked minors:** hud-c3, hud-c8, CL-3 and CL-4 are still open."
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Fix"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Refix"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "CW3c:hud-unmeasured",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a44292ba8ea43c3ed",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742312479,
+      "lastProgressAt": 1793742312479,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"critic:hud-states\",\"status\":\"done\",\"evidence\":\"Every state was measured live on the real Chrome GPU at :5190 using scratchpad probes hud_states.mjs, hud_states_b.mjs and mm_modes.mjs, which drive _harness/pw.mjs.\\n\\n(1) Refusal caption with a pool fighter (Lisvel, Light). Teleported away from base and drained Light to 30, under Q's cost of 55. Pressing Q showed 'Not enough Light' …",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "CW3c:skins-client",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a72280cd87a45a3c5",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793742312486,
+      "queuedAt": 1793742312479,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793749728164,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 115498,
+      "toolCalls": 35,
+      "durationMs": 7415678
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "CW3c:verify1",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "abc128bd2f8aa620c",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793749728251,
+      "queuedAt": 1793749728194,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CW3c fails round 1. The verdict is in _design/reviews/fixwa…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793760200836,
+      "tokens": 130503,
+      "toolCalls": 56,
+      "durationMs": 10284931,
+      "resultPreview": "{\"pass\":false,\"items\":[{\"id\":\"done:5\",\"severity\":\"major\",\"status\":\"partly\",\"evidence\":\"Met: the finalize skin showcase (src/ui/screens/draft.tsx:253-283, mounted at :673) follows hover, and fw_CW3c_cl1_after_finalize_hover2.png shows it large. The Shop caption sits top right, clear of the model (fw_CW3c_cl1_after_shop_ilsheta_fb.png). The gen_store ΔE gate exists (floors 12/18): `node tools/gen_st…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "CW3c:refix1",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "ad0cfc40a168772a7",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793760200890,
+      "queuedAt": 1793760200870,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "I couldn't get a live e2e or hud_renders pass this round: t…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793782734017,
+      "tokens": 190155,
+      "toolCalls": 113,
+      "durationMs": 22533125,
+      "resultPreview": "{\"items\":[{\"id\":\"done:5\",\"status\":\"partly\",\"evidence\":\"Store: I regenerated content/store.json with --provisional against the latest portraits (commits f7a8ff43 and c4cb290e). `node tools/gen_store.ts --check --provisional` now exits 0 and prints 'ΔE gate 25/32 pass, provisional' (/tmp/cw3c_store_gen.log, _harness/_reports/fw_CW3c_r1_store_gate.json). Collection: the cause was not the crop. Tiles …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "CW3c:verify2",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "adcac023b0871c828",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793782734029,
+      "queuedAt": 1793782734024,
+      "attempt": 1,
+      "lastToolName": "Read",
+      "lastToolSummary": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_har…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793786770059,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 74060,
+      "toolCalls": 18,
+      "durationMs": 4036029
+    }
+  ],
+  "totalTokens": 510216,
+  "totalToolCalls": 222
+}

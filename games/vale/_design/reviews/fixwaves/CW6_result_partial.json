@@ -1,0 +1,531 @@
+{
+  "summary": "One VALE closing fix wave (after the closing parity review): budgeted work packages in order on the wave's own files, adversarial verify against its done-criteria (incl. per-fighter re-scores), targeted refix rounds",
+  "agentCount": 8,
+  "logs": [
+    "CW6:hesmi-sukri → fighter:hesmi:hesmi-M1=done, fighter:hesmi:hesmi-M2=done, fighter:hesmi:hesmi-M4=partly, fighter:sukri:SUK-M2=done, fighter:sukri:SUK-M3=done, fighter:sukri:SUK-M5=partly",
+    "CW6:marund-odrum → fighter:marund:marund-M1=done, fighter:marund:marund-M2=partly, fighter:marund:marund-M3=done, fighter:odrum:odrum-M1=done, fighter:odrum:odrum-M2=done, ruling7:odrum-cap=done",
+    "[CW6:dunsom-ilsheta-rishal-tunlan] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    "CW6:dunsom-ilsheta-rishal-tunlan → ",
+    "[CW6:cards] failed: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    "CW6:cards → ",
+    "[CW6:polish-minors] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+    "CW6:polish-minors → ",
+    "[CW6:refix1] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+    "[CW6:verify2] failed: API Error: Your computer went to sleep mid-response. The response above may be incomplete."
+  ],
+  "result": {
+    "wave": "CW6",
+    "pass": false,
+    "open": [
+      {
+        "id": "done:1",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Independent FK gauge (_harness/_reports/fw_CW6_v1_fk.mjs), head travel in cm, loop seam 0 for all: Dunsom idle 6.6 / recall 17.5; Ilsheta 7.8 / 12.8; Marund 8.2 / 23.2; Rishal 4.8 / 54.2; Tunlan 7.2 / 17.0. Every recall is 6 s inside RIFT's 7 s recall. The Ilsheta and Rishal GLBs landed only through a wip sync and are claimed not_done, with no review.",
+        "fixHint": "Commit Ilsheta and Rishal under CW6 with clip sheets and check the brief beats; consider holding the last pose for the final 1 s."
+      },
+      {
+        "id": "done:2",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Tunlan x_hat max step 0.204 / 0.232 m at the 2.2x cap, settle 0.182 > 0.146 > 0.070 > 0.030: pass. Sukri clip sheet has distinct attacks and open hands: pass. Marund: the game still plays 'dash' on the ult, so it is not airborne in game: fail.",
+        "fixHint": "Land the CW3c present.anim domefall_leap, the CW3s arc of about 0.5 m and the CW1 dash-role mapping, then capture mid-leap in match."
+      },
+      {
+        "id": "done:3",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Odrum: crown R3 11.4 cm; yoke 16.9 % vertical (re-run, modelled from old facings); cap HSV taken from one frame. Marund maul clears the rim (swing_zoom_x2). Hesmi dE76 8.6 x3. Sukri wraps C 11.7-12.6. Dunsom hat ramp 8.2-9.1 L*, mean 8.5 (fw_CW6_dunsom_hat_ramp.txt) < 10, and it still reads as a pale dish.",
+        "fixHint": "Darken Dunsom's outer felt band to about 66-68 L* so the crown vs rim means differ by >= 10; run a fresh facing capture for Odrum."
+      },
+      {
+        "id": "done:4",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "No CW5-staged per-skin cards for any of the 8: Marund/Odrum/Rishal/Tunlan portrait and splash dated Oct 28-29; Ilsheta uncommitted (git status shows the modified first_bell pngs); no hound shadow; no First Bell dE measurement.",
+        "fixHint": "Run the CW5 staged-card pipeline (art/blender/portraits.py) per fighter and skin, then card_qa grain <= 2x plate and the CW3 dE >= 18 for First Bell."
+      },
+      {
+        "id": "done:5",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "three_load_test 24/24 OK (16 skins with --skin-only), but every fighter still has an open major (cards, plus effect halves, Ilsheta skins, Rishal M3).",
+        "fixHint": "Close the card majors and the handoffs, then re-score."
+      },
+      {
+        "id": "fighter:dunsom:dunsom-hat-flat-plate",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "208f8372: ramp mean 8.5 L*, only the radial endpoints reach 11.0.",
+        "fixHint": "See done:3."
+      },
+      {
+        "id": "fighter:dunsom:dunsom-splash-single-pose",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Cards were only re-rendered by the rebuild, not staged per skin.",
+        "fixHint": "Staged per-skin cards."
+      },
+      {
+        "id": "fighter:hesmi:hesmi-M3",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Not staged.",
+        "fixHint": "CW5 staged cards."
+      },
+      {
+        "id": "fighter:hesmi:hesmi-M4",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Model violet is present; the in-match vfxTint is a CW1 handoff.",
+        "fixHint": "CW1 element layer in hesmi_* shadow defs."
+      },
+      {
+        "id": "fighter:sukri:SUK-M4",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Not staged.",
+        "fixHint": "Staged cards with the cup as the focal light."
+      },
+      {
+        "id": "fighter:sukri:SUK-M5",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Model ring is present; VFX is a CW1 handoff.",
+        "fixHint": "CW1 element refs in the sukri_* defs."
+      },
+      {
+        "id": "fighter:marund:marund-M2",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Clip authored; not wired in game.",
+        "fixHint": "See done:2."
+      },
+      {
+        "id": "fighter:marund:marund-M4",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Cards dated Oct 28-29.",
+        "fixHint": "Staged cards."
+      },
+      {
+        "id": "fighter:odrum:odrum-M4",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Cards dated Oct 28-29.",
+        "fixHint": "Staged cards."
+      },
+      {
+        "id": "fighter:rishal:rishal-M1",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Cards dated Oct 28-29.",
+        "fixHint": "Staged cards, face lit."
+      },
+      {
+        "id": "fighter:rishal:rishal-M2",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "The GLB in the tree measures recall 54.2 cm, channel 7.6 cm; uncommitted by CW6.",
+        "fixHint": "Commit and review."
+      },
+      {
+        "id": "fighter:rishal:rishal-M3",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "Lamplit rebuilt but still mostly a recolour; Chalkline dated Oct 28.",
+        "fixHint": "Give Lamplit a distinct light element; rebuild Chalkline; commit."
+      },
+      {
+        "id": "fighter:tunlan:TUN-C3",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "No hound shadow; cards dated Oct 28-29.",
+        "fixHint": "Staged cards, lantern key, hound shadow."
+      },
+      {
+        "id": "fighter:ilsheta:ilsheta-idle-recall-frozen",
+        "severity": "major",
+        "status": "partly",
+        "evidence": "The GLB in the tree measures idle 7.8 cm, recall 12.8 cm; uncommitted by CW6.",
+        "fixHint": "Commit and review."
+      },
+      {
+        "id": "fighter:ilsheta:ilsheta-skins-indistinct",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Skin GLBs dated Oct 28; cards in progress.",
+        "fixHint": "Rebuild First Bell distinctly and pass dE >= 18."
+      },
+      {
+        "id": "cards:ilsheta",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Uncommitted, in progress.",
+        "fixHint": "Finish, run card_qa, commit."
+      },
+      {
+        "id": "CW6 polish",
+        "severity": "minor",
+        "status": "fail",
+        "evidence": "26 polish items, none evidenced.",
+        "fixHint": "After the majors."
+      },
+      {
+        "id": "critic:recovered-minors (CW6 fighters)",
+        "severity": "minor",
+        "status": "not_measured",
+        "evidence": "Claimed not_done."
+      },
+      {
+        "id": "par:dunsom",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.0: hat short of target, cards open."
+      },
+      {
+        "id": "par:hesmi",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.3: cards and Shadeprint VFX open."
+      },
+      {
+        "id": "par:ilsheta",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 6.8: skins and cards open."
+      },
+      {
+        "id": "par:marund",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.2: ult not in game, cards open."
+      },
+      {
+        "id": "par:odrum",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.3: cards open."
+      },
+      {
+        "id": "par:rishal",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 6.9: deluxe and cards open; slit visor is a watch item."
+      },
+      {
+        "id": "par:sukri",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.3: cards and VFX open."
+      },
+      {
+        "id": "par:tunlan",
+        "severity": "major",
+        "status": "fail",
+        "evidence": "Estimated 7.2: cards and hound shadow open."
+      }
+    ],
+    "handoffs": [
+      {
+        "from": "hesmi-sukri",
+        "to": "CW1",
+        "what": "hesmi-M4 effect half: make Hesmi Shadeprint's vfxTint #6C5BA8 reach her shadows. In content/vfx.json add an 'element' colour layer (or switch the shadow body/edge colour ref to 'element') in hesmi_a1_shadow, hesmi_ult_shadow and hesmi_ult_shard. Keep the team rings on 'team'. Base keeps its signature violet through elementOf's fallback, if element falls back to the signature."
+      },
+      {
+        "from": "hesmi-sukri",
+        "to": "CW1",
+        "what": "SUK-M5 effect half: make Sukri Shadeprint's vfxTint #6C5BA8 reach the kit. Add 'element' refs (or route skinTint into signature) for the cup motes, the Mote Toss bolt, the Draw Near pull and the Gather In flare in the sukri_* defs of content/vfx.json. Keep team rings on 'team'. All 16 sukri_* defs have 0 element refs today, and every Sukri cast has its own windupVfx, so the generic element wind-up never plays."
+      },
+      {
+        "from": "marund-odrum",
+        "to": "CW3s",
+        "what": "marund-M2 sim half: give Domefall's self-dash a per-effect arc in src/sim/movement.ts (self-dashes get arc 0 at l.131; knockbacks already use KNOCK_ARC). Use a peak of about 0.5-0.6 m, not 0.8-1.0: the new domefall_leap clip already lifts the hips 0.50 m at 40 % of the dash, and the two add up. Keep the shadow on the floor."
+      },
+      {
+        "from": "marund-odrum",
+        "to": "CW3c",
+        "what": "marund-M2 content: in content/fighters/marund.json, ult recast/dash effect (the 'present' block next to vfx marund_ult_leap, ~l.540), change present.anim from 'dash' to 'domefall_leap'. Add \"domefall_leap\": \"domefall_leap\" to art.clips if the client resolves clips through that map. The GLB already carries the clip (20 f, 0.667 s; meta role dash, apex_t 0.40, slam_t 0.82)."
+      },
+      {
+        "from": "marund-odrum",
+        "to": "CW1",
+        "what": "marund-M2 playback: src/render/actors.ts maps clip time to dash progress only when role === 'dash' (~l.1037). Apply the same mapping to any clip played in the dash state (v.state === 'dash', e.g. role 'domefall_leap'), so the leap's apex and slam land on the dash's progress. Optionally flare the cap windows at the apex (t 0.40) as the warning beat."
+      },
+      {
+        "from": "marund-odrum",
+        "to": "CW3c",
+        "what": "Optional, Marund sockets: the brief names weapon_tip x_maul_head. The swing probe's glint currently lands on prop.R (the grip; dR 0) because Marund has no maul-head socket. If CW6 adds an x_maul_head bone in a later rebuild, map 'weapon_tip': 'x_maul_head' in content/fighters/marund.json art.sockets."
+      }
+    ],
+    "packages": [
+      {
+        "key": "hesmi-sukri",
+        "items": [
+          "fighter:hesmi:hesmi-M1=done",
+          "fighter:hesmi:hesmi-M2=done",
+          "fighter:hesmi:hesmi-M4=partly",
+          "fighter:sukri:SUK-M2=done",
+          "fighter:sukri:SUK-M3=done",
+          "fighter:sukri:SUK-M5=partly"
+        ],
+        "commits": [
+          "0be3382e vale CW6: Hesmi rebuilt (base + Gorgewalk + Shadeprint) on the closing fixes",
+          "fc2c0274 vale CW6: Sukri rebuilt (base + Shadeprint; Stillwater in the same session)"
+        ],
+        "notes": "I picked up from the interrupted attempt's work in aa788a3e / 7689570a instead of redoing it. Budget used this session: Hesmi 1 full build (base + 2 skins). Sukri 2 base builds, 2 Shadeprint builds and 1 Stillwater build. Counting the earlier attempt, that is at most 3 per model.\n\nFindings:\n- **Sukri size budget:** the base GLB built by the earlier attempt was 1212 KiB, over the 1172 KiB budget, and failed three_load_test. I trimmed tri targets on hood, face, torso, belt, skirt, pants, shins, boots, sleeves, bracers, hands and staff, giving 16262 tris and 1161 KiB, load OK.\n- **Mantle tris:** "
+      },
+      {
+        "key": "marund-odrum",
+        "items": [
+          "fighter:marund:marund-M1=done",
+          "fighter:marund:marund-M2=partly",
+          "fighter:marund:marund-M3=done",
+          "fighter:odrum:odrum-M1=done",
+          "fighter:odrum:odrum-M2=done",
+          "ruling7:odrum-cap=done"
+        ],
+        "commits": [
+          "68284458 vale CW6: Marund maul and action read past the cap (marund-M1/M2/M3); source and base GLB first landed in wip syncs 02d606a8 and 8078795f",
+          "5cfc6f0d vale CW6: Odrum diagonal yoke carry, oat felt cap, ruling-7 crown (odrum-M1, odrum-M2, ruling7:odrum-cap)"
+        ],
+        "notes": "5 of 6 items are done; marund-M2 is partly done. The art half is in the GLB, but in game the ult still plays the old 'dash' clip until the content, sim and playback handoffs land.\n\n- **Git:** the wip-sync script committed my in-progress marund.py and odrum.py and the first Marund base GLB (02d606a8, 8078795f). My two CW6 commits hold the rest and the measured results. Both are pushed.\n- **Build budget:** Marund was built 2 times (one base-only, one full); Odrum 2 times (the first killed during its skins after the base was measured, one full). Builds used --no-render, so splash, portrait and ic"
+      },
+      {
+        "key": "dunsom-ilsheta-rishal-tunlan",
+        "items": [
+          "fighter:dunsom:dunsom-hat-flat-plate=not_done",
+          "fighter:dunsom:dunsom-idle-recall-frozen=not_done",
+          "fighter:ilsheta:ilsheta-idle-recall-frozen=not_done",
+          "fighter:ilsheta:ilsheta-skins-indistinct=not_done",
+          "fighter:rishal:rishal-M2=not_done",
+          "fighter:rishal:rishal-M3=not_done",
+          "fighter:tunlan:TUN-C2=not_done",
+          "fighter:tunlan:TUN-c4=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "cards",
+        "items": [
+          "fighter:dunsom:dunsom-splash-single-pose=not_done",
+          "fighter:hesmi:hesmi-M3=not_done",
+          "fighter:marund:marund-M4=not_done",
+          "fighter:odrum:odrum-M4=not_done",
+          "fighter:rishal:rishal-M1=not_done",
+          "fighter:sukri:SUK-M4=not_done",
+          "fighter:tunlan:TUN-C3=not_done",
+          "cards:ilsheta=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "polish-minors",
+        "items": [
+          "CW6 polish=not_done",
+          "critic:recovered-minors (CW6 fighters)=not_done"
+        ],
+        "commits": [],
+        "notes": "agent died"
+      },
+      {
+        "key": "refix1",
+        "items": [],
+        "commits": [],
+        "notes": "agent died"
+      }
+    ],
+    "regressions": [
+      "art/blender/fighters/sukri.py is modified in the working tree after sukri.glb (09:27) was built, so the committed source and the GLB may diverge.",
+      "Ilsheta and Rishal GLB rebuilds landed only through wip sync 8b93ac40, with no CW6 commit; the Dunsom and Tunlan commits exist although the package report says the agent returned nothing."
+    ],
+    "summary": "CW6 fails round 1. Verdict written to _design/reviews/fixwaves/CW6_verify1.json (commit 2b813f65, pushed). The model and animation fixes that landed hold up when re-measured: Hesmi M1 and M2 (hood vs bands dE76 8.6 x3), Sukri M2 and M3 (wraps C 11.7-12.6, see-through cup, distinct attack clips), Marund M1 and M3, Odrum M1 (16.9 % vertical, modelled), M2 and the crown (R3 11.4 cm on 3/3 skins), Tunlan C2 and c4 (hat step <= 0.232 m even at the 2.2x playback cap, with a >= 4-frame settle), and Dunsom's idle and recall. All 24 GLBs pass the three.js load test. What fails: none of the 8 fighters has staged per-skin cards (Marund, Odrum, Rishal and Tunlan cards date from Oct 28-29; Ilsheta's are uncommitted and in progress). Ilsheta's skins were not rebuilt. Dunsom's hat ramp averages 8.5 L* (needs >= 10). Marund's ult is still not airborne in game. The Hesmi and Sukri Shadeprint effect halves wait on CW1. The Ilsheta and Rishal motion fixes landed only through wip sync, with no CW6 commit or review. No fighter reaches the par bar with its majors closed. No sensitivity blocker was seen in the new renders; Rishal's blank slit visor is noted as a watch item."
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Fix"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Refix"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "CW6:hesmi-sukri",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "aedbd534eb3eb2049",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742311449,
+      "lastProgressAt": 1793742311449,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"fighter:hesmi:hesmi-M1\",\"status\":\"done\",\"evidence\":\"I rebuilt Hesmi base, Gorgewalk and Shadeprint at 08:30-08:52 on 2026-11-03 (python3 art/build.py fighter hesmi, log /tmp/fw_cw6_hesmi_build.log). Each build used the last hesmi.py: BAND_JOINTS (-44, 44), with no joint inside the eye span (3.5-36 deg) and no joint over the bridge; two glossy dawnglass lenses (roughness 0.12, not …",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "CW6:marund-odrum",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a1b86a8f01d8d1330",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793742311449,
+      "lastProgressAt": 1793742311449,
+      "cached": true,
+      "resultPreview": "{\"items\":[{\"id\":\"fighter:marund:marund-M1\",\"status\":\"done\",\"evidence\":\"The cap now rides two new bones, x_cap and x_cap_tip. x_cap is solved every frame to stay level and follows only the head's yaw (marund.py rig_extras, _levelled, clip_overrides). The maul was remodelled along the prop axis: 0.98 m haft, pale stone striking faces, flat-painted. FK on the GLB (node _harness/_reports/fw_CW6_marund…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "CW6:dunsom-ilsheta-rishal-tunlan",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "afab840c089e2b0b3",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793742311455,
+      "queuedAt": 1793742311449,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "for i in $(seq 1 58); do grep -q \"^EXIT\" _harness/_reports/…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793747852246,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 92795,
+      "toolCalls": 19,
+      "durationMs": 5540791
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "CW6:cards",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a493b04ec8ec9a1e7",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793747852560,
+      "queuedAt": 1793747852554,
+      "attempt": 1,
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793752708005,
+      "error": "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+      "tokens": 0,
+      "toolCalls": 0,
+      "durationMs": 4855445
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "CW6:polish-minors",
+      "phaseIndex": 1,
+      "phaseTitle": "Fix",
+      "agentId": "a4b828e2430bc3a09",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793752708061,
+      "queuedAt": 1793752708045,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "sed -n 1514,1600p art/blender/fighters/tunlan.py",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793757021635,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 101871,
+      "toolCalls": 21,
+      "durationMs": 4313571
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "CW6:verify1",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "acada8216da3cc117",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "done",
+      "startedAt": 1793757022688,
+      "queuedAt": 1793757022645,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "CW6 fails round 1. Verdict written to _design/reviews/fixwa…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793764184766,
+      "tokens": 119202,
+      "toolCalls": 38,
+      "durationMs": 7162076,
+      "resultPreview": "{\"pass\":false,\"summary\":\"CW6 fails round 1. Verdict written to _design/reviews/fixwaves/CW6_verify1.json (commit 2b813f65, pushed). The model and animation fixes that landed hold up when re-measured: Hesmi M1 and M2 (hood vs bands dE76 8.6 x3), Sukri M2 and M3 (wraps C 11.7-12.6, see-through cup, distinct attack clips), Marund M1 and M3, Odrum M1 (16.9 % vertical, modelled), M2 and the crown (R3 1…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "CW6:refix1",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "a5c9a08c2afec0fd3",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793764184777,
+      "queuedAt": 1793764184771,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "sed -n 3286,3310p art/blender/fighters/rishal.py; sed -n 33…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793783769952,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 141691,
+      "toolCalls": 42,
+      "durationMs": 19585174
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "CW6:verify2",
+      "phaseIndex": 3,
+      "phaseTitle": "Refix",
+      "agentId": "a252edd818d9659ac",
+      "agentType": "general-purpose",
+      "model": "claude-opus-5-5",
+      "state": "error",
+      "startedAt": 1793783770072,
+      "queuedAt": 1793783770063,
+      "attempt": 1,
+      "lastToolName": "Bash",
+      "lastToolSummary": "ls -lT art/out/fighters/dunsom/*.glb art/out/fighters/ilshe…",
+      "promptPreview": "PROJECT: VALE, an original 3D lane-brawler (MOBA) in /Users/sitskovich/Developer/forgeflow-games/games/vale, git branch claude/youthful-ramanujan-gdud5w. Three.js WebGL2 client, Preact signals, zod content catalog, deterministic 30 Hz sim. The owner's bar: League-of-Legends-level quality, 100 % original. LoL is ONLY A GAUGE of quality and polish: never copy a LoL champion, ability, item, effect, i…",
+      "promptFramed": true,
+      "lastProgressAt": 1793785211628,
+      "error": "API Error: Your computer went to sleep mid-response. The response above may be incomplete.",
+      "tokens": 59430,
+      "toolCalls": 4,
+      "durationMs": 1441555
+    }
+  ],
+  "totalTokens": 514989,
+  "totalToolCalls": 124
+}
