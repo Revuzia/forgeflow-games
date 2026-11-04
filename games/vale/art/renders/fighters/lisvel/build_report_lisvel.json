@@ -83,14 +83,14 @@
   },
   "uv_coverage": 0.619,
   "bake": {
-    "base": 59.51,
-    "rough_metal": 39.75,
-    "normal": 64.91,
-    "ao": 35.65,
+    "base": 9.4,
+    "rough_metal": 10.8,
+    "normal": 10.26,
+    "ao": 27.5,
     "normal_fixed_px": 90271,
-    "projection": 56.46,
-    "pack_save": 61.09,
-    "total": 262.19
+    "projection": 22.45,
+    "pack_save": 23.25,
+    "total": 81.9
   },
   "tris": 22729,
   "mesh_top_m": 1.885,
@@ -195,16 +195,16 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3012956,
+  "glb_bytes_raw": 3014052,
   "optimize": {
     "ok": true,
-    "before": 3012956,
-    "after": 1143828,
+    "before": 3014052,
+    "after": 1143980,
     "q_base": 58,
     "x_fan_rest": 1,
     "chains_decimated": true
   },
-  "glb_bytes": 1143828,
+  "glb_bytes": 1143980,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -227,10 +227,10 @@
       "turntable": "art/renders/fighters/lisvel/turntable.png"
     },
     "seconds": {
-      "splash": 186.93,
-      "portrait": 24.45,
-      "icon": 9.65,
-      "turntable": 28.27
+      "splash": 73.27,
+      "portrait": 51.13,
+      "icon": 26.33,
+      "turntable": 35.33
     }
   },
   "three_qa": {
@@ -262,26 +262,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/lisvel/three_lisvel.png",
-    "seconds": 65.9,
+    "seconds": 23.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.07,
-      "materials": 6.85,
-      "model": 46.13,
-      "lows_bind": 15.44,
-      "uv": 29.38,
-      "bake": 270.53,
-      "clips": 1.07,
-      "export": 3.02,
-      "optimize": 1.71,
-      "load_test": 0.28,
-      "render": 249.73,
-      "three_qa": 66.96,
-      "cache": 0.43
+      "rig": 0.01,
+      "materials": 0.69,
+      "model": 8.48,
+      "lows_bind": 2.46,
+      "uv": 7.81,
+      "bake": 88.84,
+      "clips": 2.52,
+      "export": 6.74,
+      "optimize": 3.91,
+      "load_test": 0.42,
+      "render": 186.53,
+      "three_qa": 23.66,
+      "cache": 0.31
     },
-    "total_s": 692.05
+    "total_s": 332.51
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
