@@ -321,6 +321,48 @@ export class HudModel {
   }
 
   // ── feed + banners ─────────────────────────────────────────────────────────────────────────────
+  // ── team call-outs (closing done:6): Alt + click on an ability slot, item slot or objective chip ─────────────
+  /** ability id → display name (set by the HUD root from its AbilityIndex) */
+  abilityName: (id: string) => string = () => '';
+  private calloutTimes: number[] = [];
+  private calloutOk(): boolean {
+    const now = performance.now();
+    this.calloutTimes = this.calloutTimes.filter((t) => now - t < 5000);
+    if (this.calloutTimes.length >= 3) return false;
+    this.calloutTimes.push(now);
+    return true;
+  }
+  /** call out one of your slots to the team: a ping on your fighter that carries the slot ('a1' … 'ult', 'spell1',
+   *  'spell2', 'item0' … 'item5'); every teammate's HUD words it from the shared view (ready / ready in N s / item) */
+  callout(slot: string): boolean {
+    const me = this.me, e = me ? this.view.entity(me.entity) : undefined;
+    if (!me || !e || this.ffa || !this.calloutOk()) return false;
+    const cmd = { type: 'ping' as const, kind: 'alert' as PingKind, x: e.x, y: e.y, target: me.entity, slot };
+    this.client.send(cmd);
+    return true;
+  }
+  /** call out an objective chip: an objective ping on its camp */
+  calloutObjective(at: readonly [number, number]): boolean {
+    if (this.ffa || !this.calloutOk()) return false;
+    this.client.send({ type: 'ping', kind: 'objective', x: at[0], y: at[1] });
+    return true;
+  }
+  /** the words for a slot call-out from player `pv` (null when the slot is empty or unknown) */
+  calloutText(pv: PlayerView, slot: string): string | null {
+    const name = pv.player === this.you ? this.cv.t('killfeed.you', 'You') : pv.name;
+    const im = /^item(\d)$/.exec(slot);
+    if (im) {
+      const it = this.cv.item(pv.items[Number(im[1])] ?? null);
+      return it ? this.t('hud.callout.item', { name, item: it.name }) : null;
+    }
+    const av = pv.abilities.find((a) => a.slot === slot);
+    if (!av) return null;
+    const ab = this.abilityName(av.id) || av.id;
+    if (av.rank <= 0 && slot !== 'spell1' && slot !== 'spell2') return this.t('hud.callout.unlearned', { name, ability: ab });
+    if (av.cooldown > 0) return this.t('hud.callout.cooldown', { name, ability: ab, t: `${Math.ceil(av.cooldown)} s` });
+    return this.t('hud.callout.ready', { name, ability: ab });
+  }
+
   say(text: string, tone: FeedLine['tone'] = 'info'): void {
     if (!text) return;
     const line: FeedLine = { id: seq++, at: performance.now(), text, tone };
@@ -504,7 +546,10 @@ export class HudModel {
         const mine = this.pings.peek().filter((p) => p.player === ev.player);
         const drop = mine.length >= 3 ? mine[0].id : -1;
         this.pings.value = [...this.pings.peek().filter((p) => p.id !== drop), mark];
-        if (ev.player !== this.you) this.say(this.cv.t(`ping.${ev.kind}.log`, '{name}', { name: pv.name }), 'ally');
+        const slot = (ev as { slot?: unknown }).slot;
+        const call = typeof slot === 'string' && ev.target === pv.entity ? this.calloutText(pv, slot) : null;
+        if (call) this.say(call, 'ally');
+        else if (ev.player !== this.you) this.say(this.cv.t(`ping.${ev.kind}.log`, '{name}', { name: pv.name }), 'ally');
         break;
       }
       case 'damage': {

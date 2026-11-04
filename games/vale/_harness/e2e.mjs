@@ -52,7 +52,7 @@ const audioFmt = args.includes('--audio') ? args[args.indexOf('--audio') + 1] : 
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : join(HERE, '_reports', 'e2e.json');
 const PREFIX = args.includes('--prefix') ? args[args.indexOf('--prefix') + 1] : 'e2e';
 if (args.includes('--headed')) process.env.VALE_HEADED = '1';
-const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'flow' || which === 'store' || which === 'practice' ? [] : [which];
+const MODES = which === 'all' ? ['rift', 'bridge', 'fray'] : which === 'hudleak' ? ['rift', 'rift'] : which === 'flow' || which === 'store' || which === 'practice' ? [] : [which];
 const PRACTICE = which === 'practice';
 const FLOW = which === 'all' || which === 'flow';
 const STORE = MODES.length > 0 || which === 'store';
@@ -831,10 +831,38 @@ async function practiceJourney() {
   return ok && ok2;
 }
 
+// HUD LEAK (closing done:6; under `all`, or `hudleak` = two RIFT matches): after two or more matches on one page, back on
+// Home, no .hud root may be left alive — attached (a HUD that never unmounted) or detached (an unmounted HUD something
+// still holds: a listener, a timer, a signal). Detached nodes are found through CDP: a forced GC, then every live
+// HTMLElement (Runtime.queryObjects) filtered to .hud roots that are not connected.
+async function hudLeak() {
+  const { page } = session;
+  const t0 = Date.now();
+  let ok = true, info = null, error = null;
+  try {
+    await waitFor(page, (v) => v.router.route.value.screen === 'home' && !v.state.match.value, 30000);
+    await page.waitForTimeout(1500);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('HeapProfiler.enable');
+    for (let i = 0; i < 3; i++) await cdp.send('HeapProfiler.collectGarbage');
+    const proto = await cdp.send('Runtime.evaluate', { expression: 'HTMLElement.prototype' });
+    const all = await cdp.send('Runtime.queryObjects', { prototypeObjectId: proto.result.objectId });
+    const res = await cdp.send('Runtime.callFunctionOn', { objectId: all.objects.objectId, returnByValue: true,
+      functionDeclaration: 'function () { const h = this.filter((e) => e.classList && e.classList.contains("hud")); return { detached: h.filter((e) => !e.isConnected).length, attached: h.filter((e) => e.isConnected).length, elements: this.length }; }' });
+    await cdp.detach().catch(() => {});
+    info = { matches: purse.matches, ...res.result.value };
+    expect(info.attached === 0 && info.detached === 0, 'a .hud root outlived its match', info);
+    console.log(`  ✓ hud_leak (${Date.now() - t0} ms) ${JSON.stringify(info)}`);
+  } catch (e) { ok = false; error = String(e?.message ?? e).slice(0, 400); console.log(`  ✗ hud_leak: ${error}`); }
+  report.journeys.push({ mode: 'hud_leak', ok, steps: [{ name: 'no_hud_roots_after_matches', ok, ms: Date.now() - t0, info, error }] });
+  return ok;
+}
+
 let all = true;
 if (PRACTICE) all = (await practiceJourney()) && all;
 if (FLOW) all = (await flowJourneys()) && all;
 for (const m of MODES) all = (await journey(m)) && all;
+if (MODES.length >= 2) all = (await hudLeak()) && all;
 if (STORE) all = (await store()) && all;
 await session?.browser.close();
 report.finished = new Date().toISOString();

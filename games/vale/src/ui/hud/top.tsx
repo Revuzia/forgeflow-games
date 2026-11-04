@@ -162,7 +162,7 @@ function ObjChip(p: { unit: string }): JSX.Element | null {
   if (!o) return null;
   const name = model.unit(o.unit)?.name ?? o.unit;
   return (
-    <span class={`objchip ${o.alive ? 'is-up' : ''}`} title={o.alive ? `${name} · ${cv.t('hud.objective_up', 'Up')}` : `${name} · ${cv.t('hud.objective_returns', 'Returns in {t}', { t: '' }).trim()}`}>
+    <span class={`objchip ${o.alive ? 'is-up' : ''}`} onPointerDown={(e) => { if (e.button === 0 && e.altKey) { e.preventDefault(); e.stopPropagation(); const cur = get(); if (cur) model.calloutObjective(cur.at); } }} title={o.alive ? `${name} · ${cv.t('hud.objective_up', 'Up')}` : `${name} · ${cv.t('hud.objective_returns', 'Returns in {t}', { t: '' }).trim()}`}>
       <span class="objchip__ring" ref={ring} />
       <span class="t-caption objchip__name">{name}</span>
       <span class="num objchip__t" ref={t} />

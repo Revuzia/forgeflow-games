@@ -63,6 +63,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
     return { model, index, shopOpen, board, statsOpen, marks };
   }, [client]);
   const { model, index, shopOpen, board, statsOpen, marks } = built;
+  model.abilityName = (id) => index.get(id)?.name ?? '';
 
   const mode = cv.mode(client.setup.mode);
   const lanes = cv.map(client.setup.map)?.lanes.length ?? 3;

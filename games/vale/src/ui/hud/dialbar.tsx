@@ -288,7 +288,7 @@ function AbilitySlot(p: { slot: SlotT }): JSX.Element | null {
         </button>
       ) : null}
       <button ref={el} type="button" class={cls} {...tip} aria-label={def?.name ?? p.slot}
-        onPointerDown={(e) => { if (e.button === 0) { e.preventDefault(); input.press(p.slot); } }}>
+        onPointerDown={(e) => { if (e.button === 0) { e.preventDefault(); if (e.altKey) { e.stopPropagation(); model.callout(p.slot); return; } input.press(p.slot); } }}>
         <AbilityGlyph def={def} src={cv.asset(def?.icon)} palette={f ? [f.palette.primary, f.palette.secondary] : undefined} hue={f?.vfx?.signature} ult={ult} spell={spell} />
         <span class="aslot__glint" ref={glint} aria-hidden="true" />
         {s.onCd ? <span class="aslot__cd" ref={sweep} aria-hidden="true" /> : null}
@@ -504,6 +504,7 @@ function ItemSlot(p: { i: number }): JSX.Element | null {
       aria-label={it ? it.name : cv.t('hud.item.empty', 'Empty slot')}
       onPointerDown={(e) => {
         e.preventDefault();
+        if (e.button === 0 && e.altKey) { e.stopPropagation(); if (it) model.callout(`item${p.i}`); return; }
         if (e.button === 0) { dragFrom = g.id ? p.i : -1; if (it?.active) input.press(slot); }
         if (e.button === 2 && it && (shopOpen.value || model.me?.canShop)) client.send({ type: 'sell', slot: p.i });
       }}
