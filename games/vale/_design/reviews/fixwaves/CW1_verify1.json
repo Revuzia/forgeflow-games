@@ -1,0 +1,182 @@
+{
+ "wave": "CW1",
+ "round": 1,
+ "verifier": "adversarial",
+ "at": "2026-11-04",
+ "pass": false,
+ "items": [
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "`node _harness/probe_kit_hue.mjs --live --out _harness/_reports/fw_CW1_v1_kit_hue.json`: 64/64 measured, 63 pass, max team light 0.292 (<= 0.35), Kemdo a3 passes. FAIL hesmi.ult sig 0.411 (white 0.343). Re-run `--kits hesmi --slots ult` (fw_CW1_v1_kit_hue_hesmi.json): sig 0.39, so it reproduces. The engineers' run before the polish package (fw_CW1_kit_hue_final.json) read 0.603 / white 0.184, so this is a regression from the later f77c7b03 exposure-peak and ground-scar changes. Shot: _harness/_shots/fw_CW1_v1_hue_hesmi_ult.png (the lifted ground reads pink-lavender, outside 266 +/- 25 deg). Joining the integration gate is still a lead step.",
+   "fixHint": "Keep Hesmi's ult lift and scar in her violet. The exposure peak's warm-ground lift (the top 0.90 / saturation ease in f77c7b03) turns her ground pink. Either key the ground lift's tint to the signature hue for this ult, or lower the white/pale companion share of hesmi_ult layers, then re-run `probe_kit_hue --live --kits hesmi` until sig >= 0.5."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "`node _harness/probe_combat_polish.mjs ult,hold --ults all --tag fw_CW1_v1` (_harness/_reports/fw_W1_combat_polish_fw_CW1_v1.json, exit 1, 9 fails). First-beat core: Hesmi x1.99 (ground x1.95), Nurrow x2.06, Dunsom x2.10 (ground 2.25). Their core luma is 198.6 / 197.3 / 207.4, under the ~218 clip, so ruling 10's x2.0 floor does not apply and the x2.3 target stands. Hesmi misses even x2.0. Full-frame body white passes: Hesmi 0.047/0.049, Nurrow 0.005/0.007, Dunsom 0.063/0.086 (<= 0.35). Impact disc >= 0.5 x victim: Kemdo 300 ms PASS, Tunlan 167 ms PASS, Rishal 133 ms FAIL (< 167).",
+   "fixHint": "The lift does not reach the target on unclipped ground. Raise the ult first-beat ground lift multiplier (vfx/screen.ts pulse or the per-ult lift) for Hesmi, Nurrow and Dunsom until core luma reaches about 2.3 x base (~225), or until the clip (~218), where ruling 10 allows x2.0. For Rishal's basic hit, hold its impact disc scale >= 0.5 x victim for one more frame (>= 167 ms), as Tunlan's does."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "`node _harness/probe_kit_hue.mjs --live --skins --out _harness/_reports/fw_CW1_v1_kit_hue_skins.json` (exit 1): hesmi_shadeprint a1 0.76 PASS but ult 0.359 FAIL (white 0.356); sukri_shadeprint a1 0.508 / ult 0.556 PASS (marginal a1); kemdo_long_evening 0.733 / 0.818 and rishal_lamplit 0.901 / 0.976 show their own tint. The team keyline stays team (teamLight > 0 on sukri 0.233/0.321, kemdo 0.245/0.202). Also ulkro_long_evening ult 0.214 FAIL (team 0.392). Shots: _harness/_shots/fw_CW1_v1_skin_*.png.",
+   "fixHint": "This is the same root cause as done:0. Hesmi's ult ground lift and white core drown the violet. Shift the lift/companion of hesmi_ult under the skin palette as well (shiftHue hueFrom covers the lift tint), then re-run `--skins --kits hesmi`. For Ulkro Long Evening, give the self-buff ult a small skin-hued body glow, or move its team keyline out of the window."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "`node _harness/perf_1080.mjs --prod --q high,low,ultra --match-seeds 7,11,23 --out _harness/_reports/fw_CW1_v1_perf.json`. gpubound: the scale left 2 at 1.2 s (hard check PASS). The last 8 s read 47.1 fps at load 8-13: the >= 58 recovery is NOT measured (machine busy). Ultra: 33.9 fps, p95 50 ms under load 8.9. 'Ultra holds 60' is not verified (the claimed 60.1 comes from an A/B scratch script, not the gate). Calibrate PASS: 1080p 'high' p95 17.5, 5760x3240 'medium' p95 25.8 (not 'high'), tier restored. `node _harness/probe_dynres_metal.ts` PASS; probe_render_dynres and probe_render_dynres_vsync PASS.",
+   "fixHint": "Re-run the gpubound and ultra steps on an idle machine (`perf_1080.mjs --prod --gpubound-only --wait-idle 30` and `--q ultra --wait-idle 30`), or gate Ultra explicitly (for example, calibrate never offers Ultra unless measured p95 <= 17.2)."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "memmaps (same perf run): Home renderer+GPU 1222 / 1296 / 1212 / 1452 MB (RIFT/BRIDGE/FRAY/RIFT; budget 2500, ~86 MB CW2 audio on top still fits), 292 bitmaps closed, 0 bone textures at every Home: PASS. `node _harness/probe_ctxloss.mjs --no-build --out _harness/_reports/fw_CW1_v1_ctxloss.json` PASS (luma 65.12/65.36, meanAbsDiff 1.86). NOT MET: 'model textures load as KTX2'. No KTX2 path exists; the engineers say no encoder is installed.",
+   "fixHint": "Either add a KTX2/Basis path with an encoder already available offline (Blender/three's basis transcoder ships with three/examples; the encoder could be a build-time step if one is installed), or have the lead record a ruling that bitmap close-after-upload replaces the KTX2 clause."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "fw_CW1_v1_perf.json match seeds 7/11/23 (rot 0/5/10): '0 programs first seen after 1:00' on all three. memmaps: 0 skeleton bone textures at every Home (4 cycles). The mem step from menu_2 to menu_5 is flat (targets 35, geometries 19, textures 53, GPU +2.3 %): PASS."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "`node _harness/probe_bar_clearance.ts --out _harness/_reports/fw_CW1_v1_bar_clearance.json` exit 1: Dunsom lantern idle half-covered 12.5 % at 31 m and 28.5 m (> 10 %; run 6 % / 0 %). Kemdo lens, Hesmi rack top, Vashil halo and Tunlan brim read 0 % in idle, run and attack (old anchors 40 / 38 / 0 / 0 %).",
+   "fixHint": "Needs CW6's art change in art/blender/fighters/dunsom.py idle: hang the lantern about 0.25 m further out on the crook side, or tilt the crook 8-10 deg outward. An engine alternative inside CW1 is to shift Dunsom's bar plate/level chip sideways when a focal part projects under the chip, which is a per-frame check."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "perf_1080 --prod (fw_CW1_v1_perf.json) prints GATE FAIL. Seed 11 / rot 5: peak 539,467 triangles at game 1703 s (actors 310k/117 draws). Seed 23 / rot 10: 41 programs at 11.6 s (> 40). The High/Low fixed views PASS on counts; timing is not measured (load 8-12). `node _harness/overlay_regress.mjs --q high,low` PASS. `npm run typecheck` clean; `npm run content:check` OK with 0 warnings. `node _harness/value_probe.mjs --report fw_CW1_v1_value.json` exits 0 but prints FAIL: RIFT env180 other 0.151 % and 0.154 %, BRIDGE low frameP99 165 (> 160).",
+   "fixHint": "Render-side (CW1): add a crowd outline LOD or skip the crowd outline pass beyond N instances, plus a crowd-count cap in the late base push, to keep the peak under 500k. Audit programs on rotated seats: share a material/program for gem_chimglass x2, glasshorn_dawnglass and dialwren_matte, or bake them into the fighter's standard material, to hold <= 40. Send the value_probe env lines to CW4 with proof that they are world art."
+  },
+  {
+   "id": "combat:C1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "See done:0. 63/64 slots pass; hesmi.ult 0.411, and 0.39 on the re-run, regressed from 0.603 after the polish package. The team-light gate passes (max 0.292).",
+   "fixHint": "As done:0: re-key Hesmi's ult lift and companion to her violet, re-run the full --live sweep, and confirm that `--kits burdam` measures."
+  },
+  {
+   "id": "skins:SKIN-FX",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "fw_CW1_v1_kit_hue_skins.json: 14/16 skin slots pass. hesmi_shadeprint ult 0.359 and ulkro_long_evening ult 0.214 FAIL. The engine hue shift (vfx/system.ts shiftHue) works on a1 for every skin.",
+   "fixHint": "Shift the ult ground lift and white companion with the skin palette, and give Ulkro Long Evening's self-buff ult its own skin-hued layer."
+  },
+  {
+   "id": "perf:PERF-C1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Functional half verified: gpubound scale leaves 2.0 at 1.2 s, GPU timer 'untrusted' fallback works, probe_dynres_metal PASS, calibrate PASS. The fps outcome is not measured: 47.1 fps last 8 s under load, Ultra 33.9 fps under load.",
+   "fixHint": "Measure on an idle machine with --wait-idle. If Ultra cannot hold 60 there, gate Ultra out of calibrate and auto presets."
+  },
+  {
+   "id": "perf:PERF-C2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "memmaps Home peak 1452 MB vs the closing review's ~4642 MB (budget 2500), bitmaps closed, ctxloss PASS (fw_CW1_v1_ctxloss.json). The KTX2 clause is open under done:4."
+  },
+  {
+   "id": "critic:combat-16",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Capture: fw_CW1_cap_g1..g4_kits.json hold 64/64 distinct casts. My check of each summary found 0 issues: 'everyone' teleFirst f0, antic > 0, camJitter 0, flashMax <= 1, all 16 ults liftMax 1.4 / 2 frames / distort 10-41. These captures predate f77c7b03 and were not re-captured. My combat_polish --ults all run fails 9 checks: core < 2.3 on burdam 2.27, hesmi 1.99, kemdo 2.2, dunsom 2.1, marund 1.58 (f77c7b03 claimed 2.54), nurrow 2.06, odrum 2.24, sukri 2.08, plus rishal hold 133 ms. Victim-box white is now fine (vashil 0.297, lisvel 0.258).",
+   "fixHint": "Apply ruling 10 in the probe: the target is x2.0 only where the lifted core reaches ~218. Then lift the unclipped ults (Hesmi, Nurrow, Sukri, Marund, Dunsom) to x2.3. Check why Marund's core fell from 2.54 to 1.58: is its ult beat timing or the vfx id changed by CW6's Marund ult work?"
+  },
+  {
+   "id": "critic:b4-realtime",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "No idle window: the load average ran 5-36 through this verify (uptime at 08:26-09:03). The engineers' fw_CW1_realtime.json is 'not measured: machine busy' (68.5 % of seconds at 58+).",
+   "fixHint": "Run `node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 19 --wait-idle 60` with every other lane paused."
+  },
+  {
+   "id": "combat:bar-clearance",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "See done:6: Dunsom lantern idle 12.5 % > 10 % at both distances. Computed anchors now reach up to +0.60 m (Kemdo 3.07 m, Ardit 3.35 m, Hesmi 3.21 m).",
+   "fixHint": "CW6 art change on Dunsom's lantern, or a CW1 sideways chip offset."
+  },
+  {
+   "id": "critic:camera",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "`node _harness/probe_camera.ts --out _harness/_reports/fw_CW1_v1_camera.json` PASS: edge pan 1358/2716/4074 px/s, locked default 0 px lag, lock toggle 0 px in 1 frame, re-centre 0 px, respawn 0 px in locked, semi and free. Foot slip with the measured runRef is 3-9.1 % (<= 10 %); 180 deg turn reaches 5 deg in 100 ms. Real client (patched scratch copy, see input-feel): locked 0 px, edge peek 2001 px/s, glide back and respawn PASS. Heights at 28.5 m: 17/48 models outside 105-130. Under ruling 11, Sukri 86.7-87.2 is compact and OK, and Marund LE 130.4 is OK. Not marked compact and under 105: Ilsheta 89-91, Lisvel 99-100, Nurrow base 98, Odrum 98-101, Rishal 95-100. Those are fighter-lane art.scale fixes.",
+   "fixHint": "Fighter lanes raise art.scale per ruling 11: CW6 for Ilsheta, Rishal and Odrum; CW5 for Lisvel and Nurrow base. Then re-run `node _harness/probe_camera.ts --only heights --gate-heights` (Sukri exempt as compact)."
+  },
+  {
+   "id": "critic:input-feel",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The repo's probe_input_latency.mjs FAILS before measuring: it waits for the queue card 'Lantern Drill' (lead's rename 45511c0f), but the dev server on :5190 still serves the old catalog. A scratch copy accepting either name (scratchpad probe_input_latency_v.mjs, tag v1c -> _harness/_reports/fw_CW1_input_latency_v1c.json) PASSES: 50 orders, marker p50 14 / p95 23 ms, motion p50 29 / p95 41.7 ms, 0 missing. BUT the right-click on the parked enemy resolved as a ground move in the full sequence: renderer.pickEntity at the foe's drawn point returned null in 19/20 attack and windup orders. A 6-order attack-only run (tag v1dbg) picked the foe 6/6 with attack markers. So enemy-click attack resolution is intermittent and unexplained.",
+   "fixHint": "Log pickEntity's rejection reason (visible / targetable / leaving / y-band / dx) in the full 50-order sequence. A likely suspect is the foe's actor after __park teleports: a.x/a.h is interpolated, or the y band of `top`/`bottom` is computed with artHeight while the probe aims at root +1.0 m. Fix in src/render/renderer.ts pickEntity, or in the probe's aim, then make the probe FAIL when an attack order yields a move marker. Rebuild the catalog (`npm run content`, lead) so the shipped probe can run."
+  },
+  {
+   "id": "combat:C2",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Hesmi core x1.99 (< 2.3; unclipped, core 198.6) with full-frame white 0.049. White-out is solved, the core target is not."
+  },
+  {
+   "id": "combat:C3",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Hold: Kemdo 300 ms and Tunlan 167 ms pass; Rishal disc >= 0.5 for 133 ms (< 167) FAIL."
+  },
+  {
+   "id": "perf:PERF-C4",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Claimed done, but seed 23 / rot 10 reads 41 programs at 11.6 s (> 40). memmaps match_2_bridge shows 42 live programs in match."
+  },
+  {
+   "id": "engine:OBS-camjump",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`node _harness/probe_camjump.mjs`: 12 jumps, 137 bodies in view, 0 not drawn (re-cull off: 151/151 missing)."
+  },
+  {
+   "id": "env:m-5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not re-measured. value_probe still reports lamps 0.000 % of frame on RIFT. Spot-checked only."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-m3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "fw_CW1_v1_bar_clearance.json: Hesmi rack top 0 % idle / run / attack (was 38/14/29 %)."
+  },
+  {
+   "id": "fighter:kemdo:kemdo-M1",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Kemdo lens 0 % idle / run / attack (was 40/25/22 %), anchor 3.07 m."
+  },
+  {
+   "id": "fighter:tunlan:TUN-c2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Tunlan brim 0 % idle / run / attack, deepest overlap 9.9 px (was 18.4)."
+  }
+ ],
+ "regressions": [
+  "Hesmi ult signature share 0.603 (fw_CW1_kit_hue_final.json) -> 0.411 / 0.39 now (fw_CW1_v1_kit_hue*.json), after f77c7b03's exposure-peak and ground-scar changes; hesmi_shadeprint ult 0.529 -> 0.359.",
+  "Marund ult first-beat core: f77c7b03 claims x2.54, measured x1.58 (fw_W1_combat_polish_fw_CW1_v1.json). This may be CW6's Marund ult work and needs attribution.",
+  "npm run probe / npm run check now exit non-zero, because _harness/probe_bar_clearance.ts (picked up by run_probes) FAILS on Dunsom until CW6's art lands. This blocks every lane's `npm run check`.",
+  "_harness/probe_input_latency.mjs cannot start against the running dev server: it waits for 'Lantern Drill' (lead rename) while the served catalog still says the old name (rebuild the catalog).",
+  "perf_1080 --prod match peak: seed 11 rot 5 reads 539k triangles (> 500k), and seed 23 rot 10 reads 41 programs (> 40)."
+ ],
+ "summary": "CW1 round 1 FAILS. Verified: typecheck and strict content:check clean; overlay_regress PASS; memmaps Home <= 1452 MB with 0 bone textures; ctxloss, camjump, dynres probes, calibrate, and the camera rig / foot slip PASS; input latency in budget. Failing: done:0 (Hesmi ult hue regressed to 0.39-0.41), done:1 (Hesmi 1.99 / Nurrow 2.06 / Dunsom 2.10 core, all unclipped; Rishal hold 133 ms), done:2 (hesmi_shadeprint ult 0.359), done:6 (Dunsom lantern 12.5 %), done:7 (perf_1080 GATE FAIL: 539k triangles on seed 11, 41 programs on seed 23; value_probe FAIL lines). Partly: done:3 (fps recovery and Ultra 60 unmeasured under load), done:4 (no KTX2). b4-realtime not measured (load 5-36). Right-click attack on the parked foe resolved as a move in 19/20 orders of the full input run."
+}
