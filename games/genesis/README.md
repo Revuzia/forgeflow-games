@@ -20,6 +20,26 @@ fear, trust and loyalty toward its god, prays to you, and remembers what you did
 The game has no creature, real animals only, and no fantasy kinds. `_spec/LIVING.md` §0 records the owner's decisions,
 `_spec/CONTRACT.md` is the build contract, and `_spec/STATUS.md` says what is built.
 
+## Version
+
+**Release 1.0 (2026-11-04)**, the first release for forgeflowgames.com (`package.json` still carries the scaffold's
+`0.1.0`; the site does not read it). Gate green (662 / 662 tests), build 8.5 MB / 53 files, local CDN smoke pass, deploy
+rehearsal OK. `_spec/STATUS.md` "Released state" has the numbers and the known minor gaps.
+
+What's new since the 2026-10-29 build:
+- **Living world**: hunting parties follow game farther and bring more home; towns short of beds build two or three
+  houses at once; late-era cities keep their farmland; the first band settles near lasting water and grows (no village
+  of the opening fell on 9 test seeds). A town that burns itself down may swear off making fire for a while (5–20
+  years), then take it up again.
+- **The god's hand**: the volcano at night, the meteor at the regional view, the tsunami's draw-back and the tidal wave
+  now read clearly; the first rain on a barren world looks like rain; the default meteor no longer flattens most of a
+  town. "Invent an animal" promises real animals only.
+- **Look**: the Cinder title at Low quality, textured mid-distance hills, the dock on the water, no stray light column
+  from the Touch; terrain memory stays level over long sessions.
+- **Saves and menus**: the first autosave comes 90 seconds into a world and another when you leave the page; saves made
+  while an autosave runs wait their turn; the title keeps your focus. The boot bar shows real progress.
+- **Music**: unchanged (approved).
+
 ## Run, build, test
 
 Node 22 runs the TypeScript directly, so there is no compile step for tests or tools.

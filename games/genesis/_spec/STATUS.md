@@ -1,4 +1,55 @@
-# GENESIS — status (2026-10-29: after the living-world, presentation and drought programs)
+# GENESIS — status (2026-11-04: release candidate, ready to publish to forgeflowgames.com)
+
+## Released state (2026-11-04)
+
+**What ships** (`dist/`, built 2026-11-04 05:18Z): the whole game as one Vite build — the front door (title, six doors,
+settings, saves with autosave, credits and licences, the 888×500 portal layout), the deterministic living-world sim in
+its Web Worker (peoples who gather, hunt real animals, herd, farm, fish, build, keep fire, hold festivals, quarrel, split
+and move), the god layer (the Touch, sigils, prophets and signs, storms and disasters, new materials, the wrath slider,
+survivable by default; per-town fear, trust and loyalty), the three.js WebGL2 world art and VFX, and the owner-approved
+authored score (21 .ogg cues, unchanged). No creature, real animals only.
+
+**Measured on the release tree** (`_harness/scratch/release/`, ledger `_harness/scratch/ledgers/release.md`):
+- `npm run check` **green**: detban + tsc clean, **662 / 662** tests pass, 0 fail, 0 skipped
+  (`_harness/scratch/sim-fix-r3/gate3.log`, 05:08–05:15Z through `slot.sh`; no file under `src/` or `tests/` changed after
+  it started — the newest, `tests/acceptance-opening.test.ts`, is 05:07:51Z).
+- `npm run build` OK: `dist/` 8.5 MB, 53 files — `index.js` 2.98 MB (930 kB gzipped), sim worker 1.54 MB, DSP worker,
+  21 .ogg, 12 font files, `thumbnail.png` 454 kB, `game_meta.json`, `game_controls.js`.
+- `node _harness/cdn.mjs` **PASS** (the real `workers/games-cdn` worker over a stand-in R2 bucket): 2 loads ready,
+  0 missing requests, 0 console errors, the sim ticked, HTML `no-store` + COEP `credentialless`, 18 / 18 hashed assets
+  immutable, all three workers served 200.
+- Deploy rehearsal `python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dry-run` (repo root):
+  exit 0, 53 files, 4 critical, `index.html` then `game_meta.json` uploaded last.
+- Sim speed at 1 500 agents (sim-fix-r3, CPU ticks/s): L0 448, L1 578, L2 705; the 1000x preset reaches 0.82 of its
+  target in the worker. The HUD shows the achieved speed when the sim falls behind.
+- The opening band (sim-fix-r3, 9 seeds, 8 years): 0 villages fell, growth +1.2 to +4.6 % a year. Terrain memory over a
+  30-minute 100x session levels at ~700–880 MB (was 1 478 MB; render-fix-r2).
+
+**Closed since the 2026-10-29 punch list** (`final-reports/punch.json`; the punch and fix-r1..r3 ledgers): P01 the
+"Invent an animal" wording, P03 volcano glare, P04 dock on grass, P05 the Touch's ribbon, P06 first rain, P07 meteor at
+the regional view, P08 the tsunami draw-back, P09 the tidal wave, P10 the Cinder title at Low, P13 late-era farmland,
+P15 the default meteor, P17 the Touch over the title, P18 mid-distance hills, P20 chronicle wording, P21 the boot bar,
+P23 VFX leftovers, P24 the opening ring label, P29 and P31 (docs, thumbnail). Also: the fire oath (a town that burned
+itself gives up fire-making only, for 5–20 years), a save/continue drift in hydrology, an early autosave (90 s) and
+autosave on leave, a save queue, the title's focus, the terrain patch pools, and the stale-`dist/` guard in
+`upload_game.py`. Partly improved: P02 hunting (kills per 100 people up from 4–14 to 18–32 a year on the seeds with game),
+P11 shelter (housed 20–27 of 30 year ends on the measured seeds), P12 growth (the opening, above).
+
+**Known minor gaps (shipping with them):**
+- Sim speed floors not met at 1 500 agents (L1 ≥ 800 and L2 ≥ 1 200 asked in LIVING §1.6 / CONTRACT §6.1; 1000x 0.82 vs
+  0.85). Needs an architectural cut (no single hotspot: hydrology 15 %, climate 11 %, decide 10 %) or a restated floor.
+- The opening's "let the day pass" hands back at 100x (`src/ui/opening.ts` `DAY_SPEED`); 3x–10x was asked.
+- Hunting still below the owner default on seeds without game on foot; the under-15 share and year-end housing rows of
+  the acceptance table (`_harness/scratch/living/acceptance.json`, round 4: 38 met / 16 partly / 13 missed) were not
+  re-installed after the fix rounds.
+- The free-form field's examples still include "invent telepathy" (`src/ui/freeform.ts:36`).
+- Open minors from the punch list: P16 the sacred-animal sign, P19 Cinder's craters, P22 people never take to the water,
+  P25 prophet credibility at year 50, P26 remaining balance misses, P27 a band treating any visible water as camp water,
+  P28 (half) daughter village spacing, P30 `slot.sh` dead holders, P32 proof gaps (shrines, pilgrimages); one seed's
+  snow-locked climate step (s3, sim-fix-r2).
+
+Publishing is in `README.md` "Publishing" and `_harness/scratch/continue/final-reports/release.md` (the credentials and
+the exact commands).
 
 Phase 1 built the deterministic sim core and the render foundation (kept below as a reference). Phase 2 adds the
 peoples, recipes, societies and ecology to the sim and draws them live in the browser: people walk, settle, build,
@@ -6,10 +57,10 @@ farm, keep fire, discover, forget, trade, fight, split and fall; herds graze, fl
 it all with procedural bodies, buildings, roads, crops, night lights, fire, toasts and an inspector.
 **Not built yet (phases 3–5):** the god hand and creature, command palette / radial / freeform field / chronicle panel,
 audio, the opening, ships between worlds, saves and settings UI, README / CONTROLS.
-*(That paragraph is phase 2's, kept as history: phases 3–5 have since been built, and the creature was dropped by the owner's decision (LIVING §0: prophets and signs instead). **The current state is "Where it stands" below**; the sections after it are the record, newest program first, phases 2 and 1 at the end.)*
+*(That paragraph is phase 2's, kept as history: phases 3–5 have since been built, and the creature was dropped by the owner's decision (LIVING §0: prophets and signs instead). **The current state is "Released state" at the top**; "Where it stood" below is the 2026-10-29 snapshot; the sections after it are the record, newest program first, phases 2 and 1 at the end.)*
 
 
-## Where it stands (2026-10-29)
+## Where it stood (2026-10-29, before the punch and fix rounds; superseded by "Released state" above)
 
 **Release checks** (the reconciler, 2026-10-29 22:45–22:55Z; `_harness/scratch/continue/final-reports/punch.json`):
 `npm run check` **green** — detban 146 sim files clean, tsc clean, **599 / 599** tests pass, 0 skipped
@@ -206,7 +257,7 @@ exists — both re-tunes failed their pooled 8-seed gate on injuries per trip an
 a year (≥ 20 asked; `HUNT_TUNE` stays off; LIVING §13.6). **Done since:** the round-4 acceptance re-run (`fix4/acc/`,
 launched 07:19 2026-10-29) finished and was installed as `acceptance.json` at 11:13Z — **38 met / 16 partly / 13 missed**
 (round 3: 36 / 13 / 16), 77 rows measured on this tree and 4 copied from r6 (LIVING §13.7, its "Provenance" note; the
-summary is under "Where it stands" above); `src/data/creatures.json` is deleted (nothing imported it). **Gate green** on the round-4 tree (`fix4/check/check-r4.log` "EXIT 0 07:35" 2026-10-29: 591 / 591
+summary is under "Where it stood" above); `src/data/creatures.json` is deleted (nothing imported it). **Gate green** on the round-4 tree (`fix4/check/check-r4.log` "EXIT 0 07:35" 2026-10-29: 591 / 591
 pass, 0 skipped, detban and tsc clean). UI hooks unchanged (no new Command kind or Snapshot field this round).
 
 ## How to run
