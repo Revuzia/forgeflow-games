@@ -119,6 +119,8 @@ try {
     b.__white = (g, box) => { const { px, Wd, Hd } = g; let w = 0, n = 0, s = 0; for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, box.y1 | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) { const o = ((Hd - 1 - y) * Wd + x) * 4; const l = luma(px[o], px[o + 1], px[o + 2]); const c = Math.max(px[o], px[o + 1], px[o + 2]) - Math.min(px[o], px[o + 1], px[o + 2]); n++; s += l; if (l > 225 && c < 30) w++; } return { white: +(w / Math.max(1, n)).toFixed(3), mean: +(s / Math.max(1, n)).toFixed(1) }; };
     // mean luma inside a circle, the box left out (ground only)
     b.__circ = (g, cx, cy, rad, box) => { const { px, Wd, Hd } = g; let s = 0, n = 0; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; s += luma(px[o], px[o + 1], px[o + 2]); n++; } return n ? s / n : 0; };
+    // a quantile of the luma inside the same circle (owner ruling 10: has the lifted ground reached its clip?)
+    b.__circQ = (g, cx, cy, rad, box, q) => { const { px, Wd, Hd } = g; const v = []; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; v.push(luma(px[o], px[o + 1], px[o + 2])); } v.sort((a, c) => a - c); return v.length ? v[Math.min(v.length - 1, Math.floor(q * v.length))] : 0; };
     // the victim's body: actor shown vs hidden (VFX and telegraphs off) inside the box, above its feet. White share of
     // those pixels (luma > 225, chroma < 30) in four frames: `base` no lift and no hit flash (the body's own pale parts),
     // `lift` the envelope alone (the hit flash hidden too: what the post chain does to the body), `flash` the envelope
@@ -271,6 +273,8 @@ try {
             out.ctr = [Math.round(cx), Math.round(cy)];
             out.core = +b.__circ(g, cx, cy, rad * 0.5, null).toFixed(1);
             out.coreGround = +b.__circ(g, cx, cy, rad * 0.5, a.vbox).toFixed(1);
+            // the lifted GROUND alone (the VFX pass off): its brightest tenth, against the faded frame's (ruling 10)
+            { const R = b.renderer, d = R.vfx.draw; R.vfx.draw = () => {}; let g0; try { g0 = b.__grab(); } finally { R.vfx.draw = d; } out.liftP90 = +b.__circQ(g0, cx, cy, rad * 0.5, a.vbox, 0.9).toFixed(1); }
             out.white = b.__body(a.pv, a.vbox, a.feetY);
             // the VFX instances alive on the beat (def id: count), for the box measure's culprits
             const live = {};
@@ -286,7 +290,7 @@ try {
       let baseCore = null;
       if (first) {
         await stage(c.seat);
-        baseCore = await B((b, a) => { const g = b.__grab(); const cx = a.q.ux * 1920, cy = (1 - a.q.uy) * 1080, r = a.q.rr * 1080 * 0.5; return { all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1) }; }, { q: first.q, vbox });
+        baseCore = await B((b, a) => { const g = b.__grab(); const cx = a.q.ux * 1920, cy = (1 - a.q.uy) * 1080, r = a.q.rr * 1080 * 0.5; return { all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1), p90: +b.__circQ(g, cx, cy, r, a.vbox, 0.9).toFixed(1) }; }, { q: first.q, vbox });
       }
       const beats = rows.map((r, i) => ({ f: i + 1, ...r })).filter((r) => r.white);
       const dC = first ? Math.hypot(first.ctr[0] - geo.c.gx, first.ctr[1] - geo.c.gy) : null, dV = first ? Math.hypot(first.ctr[0] - geo.v.gx, first.ctr[1] - geo.v.gy) : null;
@@ -323,9 +327,13 @@ try {
         // ground of luma ≥ 95 cannot read ×2.3 without going white), or when the beat's core itself sits at the clip
         const b0 = res.beats[0];
         res.firstCore = b0?.core ?? null;
-        res.clipBound = !!b0 && (b0.core >= CORE_CLIP || (baseCore?.all ?? 0) * 2.3 >= CORE_CLIP);
+        // ... or when the lifted ground's brightest tenth (VFX off) stops short of ×2.3 its faded value: the tone curve's
+        // top (post.ts LIFT_GROUND_TOP, then the grade) holds it, wherever that clip lands for the ground's own hue
+        res.liftP90 = first?.liftP90 ?? null; res.baseP90 = baseCore?.p90 ?? null;
+        res.groundClipped = res.liftP90 !== null && res.baseP90 > 0 && res.liftP90 < res.baseP90 * 2.3 - 3;
+        res.clipBound = !!b0 && (b0.core >= CORE_CLIP || (baseCore?.all ?? 0) * 2.3 >= CORE_CLIP || res.groundClipped);
         res.coreTarget = res.clipBound ? 2.0 : 2.3;
-        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}) < ${res.coreTarget} on the first beat`);
+        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });
     }
