@@ -29,6 +29,7 @@ import { ToastStack } from './components/Toast.tsx';
 import { TooltipLayer } from './components/Tooltip.tsx';
 import { arrowNav } from './components/arrownav.ts';
 import { NET_RETRY_EVENT } from '../session/online_link.ts';
+import { applyPreset, detectPreset } from '../session/settings.ts';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
@@ -61,6 +62,7 @@ export function mount(root: HTMLElement, o: MountOptions): MountedApp {
   const ctx: AppCtx = { cv, session: o.session, state, router, sound, overlay, hasScene: !!o.renderer };
   const stopLoop = startFrameLoop(state, o);
   bindRenderer(state, router, o.renderer ?? null);
+  firstRunCalibrate(ctx, o.renderer ?? null);
   // the audio engine follows the live match (spatial combat cues) and the audio settings
   if (o.audio) {
     const a = o.audio;
@@ -158,6 +160,41 @@ function bindRenderer(state: AppState, router: Router, r: RendererPort | null): 
     const fighter = p.fighter ?? (offer ? cv.skin(offer.ref)?.fighter : undefined);
     const skin = offer ? offer.ref : p.skin ?? (fighter ? state.profile.peek().equipped[fighter] : undefined);
     try { r.setMenuView?.({ screen: route.screen, ...(fighter ? { fighter } : {}), ...(skin ? { skin } : {}), ...(p.mode ? { mode: p.mode } : {}) }); } catch (e) { console.error('[vale] renderer menu view', e); }
+  });
+}
+
+// ── first-run video preset (perf PERF-C1, CW1 handoff) ──────────────────────────────────────────
+// On the first boot that reaches Home (no match), the renderer samples ~3 s of the Home vale at High while the frame
+// loop keeps drawing; its verdict becomes the stored video preset in place of the fixed 'high' default. A verdict
+// below High says so in a toast that opens Settings > Video. Runs once per device (CALIB_KEY holds the verdict), only
+// while the stored video block is still the untouched High default; automated browsers (the harness) skip it so
+// their shots keep the fixed default, unless the URL asks with ?calibrate=1 (?calibrate=0 always skips).
+const CALIB_KEY = 'vale.calib.v1';
+function firstRunCalibrate(ctx: AppCtx, r: RendererPort | null): void {
+  const { state, router, session, cv } = ctx;
+  if (!r?.calibrate) return;
+  const q = new URLSearchParams(location.search).get('calibrate');
+  if (q === '0') return;
+  if (q !== '1') {
+    if (navigator.webdriver) return;
+    try { if (localStorage.getItem(CALIB_KEY)) return; } catch { return; }
+    const v = state.settings.peek().video;
+    if (v.preset !== 'high' || detectPreset(v) !== 'high') return;   // the player has already chosen
+  }
+  let started = false;
+  const stop = effect(() => {
+    if (started || router.route.value.screen !== 'home' || state.match.value) return;
+    started = true;
+    queueMicrotask(() => stop());
+    void r.calibrate!(3).then((res) => {
+      try { localStorage.setItem(CALIB_KEY, JSON.stringify({ ...res, at: new Date().toISOString() })); } catch { /* per-device only */ }
+      const cur = state.settings.peek().video;
+      if (res.preset === 'high' || cur.preset !== 'high') return;      // High holds, or the player changed it meanwhile
+      session.updateSettings({ video: applyPreset(cur, res.preset) });
+      const name = cv.t(`settings.video.preset.opt.${res.preset}`, res.preset);
+      state.toast(cv.t('calibrate.notice', 'Graphics set to {preset} so the vale runs smoothly on this machine.', { preset: name }), 'info',
+        { label: cv.t('calibrate.notice.action', 'Video settings'), run: () => router.go('settings', { tab: 'video' }) }, 9000);
+    }).catch((e: unknown) => console.error('[vale] calibrate', e));
   });
 }
 

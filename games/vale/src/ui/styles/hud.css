@@ -146,7 +146,7 @@
 @keyframes krow-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 .who { display: inline-flex; align-items: center; gap: calc(6 * var(--px)); color: var(--c); }
 .who__face { width: calc(26 * var(--px)); height: calc(26 * var(--px)); border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 2px var(--c); flex: none; }
-.who.is-down .who__face { filter: grayscale(0.8) brightness(0.7); }
+.who.is-down .who__face > * { filter: grayscale(0.8) brightness(0.7); }   /* hud-c8: grey the face only; the relationship ring on .who__face keeps its colour */
 .who__mark { display: grid; place-items: center; }
 .who__name { color: var(--text-1); max-width: calc(120 * var(--px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who--self .who__name { color: var(--team-self); }

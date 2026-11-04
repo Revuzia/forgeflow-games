@@ -19,11 +19,12 @@ export function Plate(p: {
   );
 }
 
-/** 1–4 short ticks at a plate's top-left: the count is tier, rarity or rank */
-export function HourTicks(p: { n: number; color?: string; class?: string; label?: string }): JSX.Element {
+/** 1–4 short ticks at a plate's top-left: the count is tier, rarity or rank. `pips` draws them as small dial
+ *  diamonds for inline use beside a word, where upright bars read as a stray "I" / "|" (closing CL-3). */
+export function HourTicks(p: { n: number; color?: string; class?: string; label?: string; pips?: boolean }): JSX.Element {
   const n = Math.max(0, Math.min(4, Math.round(p.n)));
   return (
-    <span class={`hourticks ${p.class ?? ''}`} style={p.color ? { color: p.color } : undefined} aria-label={p.label} role={p.label ? 'img' : undefined}>
+    <span class={`hourticks ${p.pips ? 'hourticks--pips' : ''} ${p.class ?? ''}`} style={p.color ? { color: p.color } : undefined} aria-label={p.label} role={p.label ? 'img' : undefined}>
       {Array.from({ length: n }, () => <i />)}
     </span>
   );

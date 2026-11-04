@@ -81,7 +81,7 @@ function SkinCard(p: { skin: SkinDefT; fighter: FighterDefT; selected: boolean; 
       {!p.owned ? <Icon name="lock" class="skin__lock" /> : null}
       <span class="skin__meta">
         <span class="skin__name t-body-s">{p.skin.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : p.skin.name}</span>
-        <span class={`skin__chip ${p.equipped ? 'is-equipped' : p.owned ? 'is-owned' : 'is-shop'}`}><HourTicks n={TIER_TICKS[cv.shownTier(p.skin) ?? p.skin.tier]} label={cv.t(`shop.tier.${cv.shownTier(p.skin) ?? p.skin.tier}`, p.skin.tier)} />{p.chip}</span>
+        <span class={`skin__chip ${p.equipped ? 'is-equipped' : p.owned ? 'is-owned' : 'is-shop'}`}><HourTicks pips n={TIER_TICKS[cv.shownTier(p.skin) ?? p.skin.tier]} label={cv.t(`shop.tier.${cv.shownTier(p.skin) ?? p.skin.tier}`, p.skin.tier)} />{p.chip}</span>
       </span>
     </button>
   );

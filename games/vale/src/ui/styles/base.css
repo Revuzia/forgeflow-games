@@ -182,6 +182,9 @@ img, svg { display: block; }
 
 .hourticks { display: inline-flex; gap: 3px; color: var(--text-2); }
 .hourticks i { display: block; width: 2px; height: 10px; background: currentColor; }
+/* inline beside a word (chips, captions): small dial diamonds with a gap after, never upright bars that read as "I" (CL-3) */
+span.hourticks.hourticks--pips { gap: 4px; align-items: center; margin-right: 2px; padding-left: 1px; }
+span.hourticks.hourticks--pips i { width: 5px; height: 5px; border-radius: 1px; transform: rotate(45deg); }
 .hourline { display: block; position: relative; height: 1px; background: var(--line-2); margin-top: var(--u); }
 .hourline--1 { width: var(--col); } .hourline--2 { width: calc(2 * var(--col) + var(--gutter)); } .hourline--3 { width: calc(3 * var(--col) + 2 * var(--gutter)); }
 .hourline i { position: absolute; right: -2px; top: -1px; width: 3px; height: 3px; border-radius: 50%; background: var(--text-2); }

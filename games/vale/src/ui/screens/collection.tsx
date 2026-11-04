@@ -142,7 +142,7 @@ function FighterDetail(p: { f: FighterDefT; preview?: string }): JSX.Element {
         <div class="detail__facts stg">
           <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.class', 'Class')}</span><span class="t-body-s"><ClassMark classId={f.class} withName /></span></span>
           <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.role', 'Role')}</span><span class="t-body-s">{role ? <><span class="roledot" style={{ background: role.color }} />{role.name}</> : null}{role2 ? <span class="muted"> · {role2.name}</span> : null}</span></span>
-          <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.difficulty', 'Difficulty')}</span><span class="t-body-s"><HourTicks n={f.difficulty} label={cv.t(`difficulty.${f.difficulty}`, '')} /> {cv.t(`difficulty.${f.difficulty}`, String(f.difficulty))}</span></span>
+          <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.difficulty', 'Difficulty')}</span><span class="t-body-s"><HourTicks pips n={f.difficulty} label={cv.t(`difficulty.${f.difficulty}`, '')} /> {cv.t(`difficulty.${f.difficulty}`, String(f.difficulty))}</span></span>
           {res ? <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.resource', 'Resource')}</span><span class="t-body-s" title={res.desc}><span class="roledot" style={{ background: res.model === 'none' ? 'transparent' : res.color }} />{res.name}</span></span> : null}
           {origin ? <span class="fact"><span class="t-caption muted">{cv.t('collection.detail.origin', 'Origin')}</span><span class="t-body-s">{cv.t(`collection.origin.${origin}`, origin)}</span></span> : null}
         </div>

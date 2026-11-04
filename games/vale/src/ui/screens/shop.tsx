@@ -129,7 +129,7 @@ export function ShopScreen(p: { params: Record<string, string> }): JSX.Element {
         <div class="stagecard">
           <StageArt fighter={selFighter} skin={selSkin.id} />
           <div class="stagecard__cap plate">
-            <span class="row row--s"><HourTicks n={TIER_TICKS[selTier]} label={cv.t(`shop.tier.${selTier}`, selTier)} /><span class="t-label muted">{cv.t(`shop.tier.${selTier}`, selTier)}</span></span>
+            <span class="row row--s"><HourTicks pips n={TIER_TICKS[selTier]} label={cv.t(`shop.tier.${selTier}`, selTier)} /><span class="t-label muted">{cv.t(`shop.tier.${selTier}`, selTier)}</span></span>
             <span class="t-h1">{selSkin.name}</span>
             <span class="t-body-s muted">{cv.t('shop.for_fighter', 'For {fighter}', { fighter: selFighter?.name ?? '' })}</span>
             {selSkin.desc ? <p class="t-body-s stagecard__desc" title={selSkin.desc}>{selSkin.desc}</p> : null}
@@ -208,7 +208,7 @@ function OfferCard(p: { o: OfferT; hero: boolean; selected: boolean; owned: bool
       {p.selected ? <span class="tick" aria-hidden="true" /> : null}
       <span class="offer__meta">
         <span class="offer__name t-body-s">{s.name}</span>
-        <span class="offer__sub t-caption"><HourTicks n={TIER_TICKS[cv.shownTier(s) ?? s.tier]} />{f?.name}</span>
+        <span class="offer__sub t-caption"><HourTicks pips n={TIER_TICKS[cv.shownTier(s) ?? s.tier]} />{f?.name}</span>
         <span class="offer__price">{p.owned ? <span class="chip chip--ok">{p.equipped ? cv.t('shop.equipped', 'Equipped') : cv.t('shop.owned', 'Owned')}</span> : <Currency id={p.o.price.currency} amount={p.o.price.amount} size="s" tick={false} />}</span>
       </span>
     </button>

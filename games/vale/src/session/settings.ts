@@ -5,7 +5,7 @@
 //
 // VIDEO LADDER (CONTRACT §9.4) → Settings.video fields:
 //   shadows 0 off · 1 = 1024 hard · 2 = 2048 (PCF from High up) · 3 = 4096
-//   ao      0 off · 1 = half resolution · 2 = full resolution
+//   ao      0 off · 1 = half resolution 'Standard' · 2 = half resolution, finer samples 'Fine' (perf PERF-C1, post.ts)
 //   preset  renderScale shadows ao bloom antialias particles scatter maxDpr
 //   low        0.75       1     0  no    off       0         0       1
 //   medium     0.9        2     1  yes   smaa      1         1       1

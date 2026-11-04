@@ -181,7 +181,8 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
   const role = cv.role(s.role);
   const active = !!p.d.turn?.players.includes(s.player) && !s.locked;
   const ready = readyOf(s) === true && (p.d.phase === 'finalize' || p.d.phase === 'trade');
-  const status = ready ? cv.t('draft.seat.ready', 'Ready') : s.locked ? (p.hidden ? cv.t('draft.seat.locked', 'Locked in') : f?.name ?? '') : s.hover && !p.hidden ? cv.t('draft.seat.hovering', 'Hovering {fighter}', { fighter: cv.fighter(s.hover)?.name ?? '' })
+  // CL-4: the seat keeps its fighter's name once locked; Ready is a chip beside it, never a replacement
+  const status = s.locked ? (p.hidden ? cv.t('draft.seat.locked', 'Locked in') : f?.name ?? '') : s.hover && !p.hidden ? cv.t('draft.seat.hovering', 'Hovering {fighter}', { fighter: cv.fighter(s.hover)?.name ?? '' })
     : active ? cv.t('draft.seat.thinking', 'Choosing…') : '';
   return (
     <div class={`seat seat--${p.rel} ${active ? 'is-active' : ''} ${s.locked ? 'is-locked-in' : ''}`}>
@@ -191,7 +192,7 @@ function SeatCard(p: { s: DraftSeat; d: DraftState; rel: 'self' | 'ally' | 'enem
       <span class="seat__text">
         <span class="seat__name t-body-s" title={s.isYou ? undefined : s.name}>{s.isYou ? cv.t('draft.you', 'You') : s.name}</span>
         {role || s.isBot ? <span class="seat__role t-caption">{role ? <><span class="roledot" style={{ background: role.color }} /><span class="seat__rolename">{role.name}</span></> : null}{s.isBot ? <span class="chip chip--bot chip--glyph" role="img" title={cv.t('draft.seat.bot', 'Bot')} aria-label={cv.t('draft.seat.bot', 'Bot')}><Icon name="bot" size={12} /></span> : null}</span> : null}
-        <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''} ${ready ? 'is-ready' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}{status}</span>
+        <span class={`seat__status t-caption ${s.locked ? 'is-locked' : ''} ${ready ? 'is-ready' : ''}`}>{s.locked && !p.hidden ? <Icon name="check" size={12} /> : null}<span class="seat__statustext">{status}</span>{ready ? <span class="chip chip--ok chip--ready">{cv.t('draft.seat.ready', 'Ready')}</span> : null}</span>
       </span>
       {p.actions}
     </div>
@@ -277,7 +278,7 @@ function SkinShow(p: { f: FighterDefT; skin: string | undefined; chosen: string 
       <span class="fshow__cap">
         <span class="t-label fshow__kick">{kick}</span>
         <span class="t-h1 fshow__name">{!s || s.tier === 'base' ? cv.t('collection.skin.default', 'Base skin') : s.name}</span>
-        <span class="row row--s fshow__tier"><HourTicks n={TIER_TICKS[tier]} label={cv.t(`shop.tier.${tier}`, tier)} /><span class="t-caption muted">{cv.t(`shop.tier.${tier}`, tier)}</span></span>
+        <span class="row row--s fshow__tier"><HourTicks pips n={TIER_TICKS[tier]} label={cv.t(`shop.tier.${tier}`, tier)} /><span class="t-caption muted">{cv.t(`shop.tier.${tier}`, tier)}</span></span>
       </span>
     </section>
   );
