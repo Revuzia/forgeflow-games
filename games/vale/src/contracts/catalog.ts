@@ -537,7 +537,7 @@ export const MapDef = z.object({
   structures: z.array(z.object({ id: Id, unit: Id, team: z.number().int(), lane: Id.optional(), at: Vec2,
     /** structure ids that must fall before this one is damageable */
     requires: z.array(Id).default([]), respawn: z.number().optional() }).strict()).default([]),
-  camps: z.array(z.object({ id: Id, units: z.array(z.object({ unit: Id, at: Vec2 }).strict()), firstSpawn: z.number(), respawn: z.number(),
+  camps: z.array(z.object({ id: Id, units: z.array(z.object({ unit: Id, at: Vec2, /** CHANGED(SIM), additive: spawn facing in degrees (the sim's convention); absent = face the map centre */ facing: z.number().optional() }).strict()), firstSpawn: z.number(), respawn: z.number(),
     objective: z.boolean().default(false) }).strict()).default([]),
   pickups: z.array(z.object({ id: Id, unit: Id, at: Vec2, firstSpawn: z.number(), respawn: z.number() }).strict()).default([]),
   /** shared shops on the map (Fray) */

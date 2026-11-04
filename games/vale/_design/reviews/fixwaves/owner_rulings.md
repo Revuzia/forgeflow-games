@@ -62,6 +62,18 @@ Its own names, numbers and presentation complete it.
 
 **Hooded Lamp ward:** replace the pointed finial with a rounded knob. A plain rounded dome keeps the single blue lamp core with no eye-like pair, which follows the no-pointed-hoods rule. The change goes to unit art (W5a or the integration pass).
 
+## 6. Greatwick back lantern: slits, never a pair of panes (lead, by delegation, 2026-11-03)
+
+**Problem:** the closing review flagged the Greatwick back lantern as a blocker, because its two round lit panes read as a pair of eyes.
+
+**Ruling:** the lantern lights through narrow slits behind thick mullions, and never through two equal round panes.
+- Aubade has 3 slits.
+- Serenade has a ring of 12 slit cores.
+
+This follows the no-eyes-on-faceless-units rule (Wicks have no face).
+
+**Evidence:** `probe_wick_sweep` r4 finds 0 `greatwickPairs` on both the sweep frames and the lane frames (`_harness/_reports/fw_CW4_r4_wick_sweep.json`).
+
 ## 7. Crown rule for soft head coverings (2026-10-29, after the closing review)
 
 **Ruling:** one roster-wide threshold replaces case-by-case calls on hoods.
@@ -113,3 +125,18 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 - The standard alternative is what VALE already has: a tonal announcer with on-screen text, plus each fighter's non-verbal call (`f_<id>_call`).
 - AUD-C2 is an accepted scope gap. It does **not** count against the Audio score at the par bar (ruling 8). Reviewers grade audio on what is in scope.
 - Revisit it if the owner funds a voice cast.
+
+## 10. Ult first-beat core where the tint clips (lead, by delegation, 2026-11-03)
+
+**Problem:** CW1 found that a ×2.3 core on warm ground forces the core to near-white. That breaks the victim-box white gate: luma above 225 with chroma under 30.
+
+**Ruling:** keep the tint and the victim's readability.
+- When the lifted ground reaches the post-grade luma clip (about 218), the core target drops to **×2.0**. Everywhere else it stays ×2.3.
+- There is no near-white allowance. Industry practice is that the target under an effect must stay readable, and a white-out also hurts players with photosensitivity.
+
+## 11. Compact builds and the on-screen height gauge (lead, by delegation, 2026-11-03)
+
+**Rule:** the 105-130 px height gauge (measured at 28.5 m and 1080p) applies to standard builds.
+- **Compact builds** (anchor 1.6 m: Sukri, and any fighter whose sheet says compact) may sit at **85-105 px**, if their selection ring, health bar and silhouette still pass the readability probes. Small-bodied fighters are an established MOBA archetype.
+- **Fighters not marked compact** (Ilsheta, Lisvel, Nurrow base, Rishal, Odrum) must reach 105 px through `art.scale`.
+- Marund Long Evening at 130.4 px counts as inside the gauge. Rounding 0.4 px is not worth a rebuild.
