@@ -312,6 +312,16 @@ Measured on the real Chrome GPU at :5190 (practice lab unless noted). Reports un
 | F16 | closed | `?server=ws://127.0.0.1:9`: 48 samples over 24 s, "Offline · vs bots" in 40 of 40 from 4 s, "Connecting…" 0; Try again shows Connecting… then Offline again with the action back (flow_netdown). |
 | F17 | closed | Profile: 9 earnable emblems (1 earned on a fresh profile, 8 locked); shop rows that run past the screen fade over 80 px with a chevron, rows that fit have neither (`fw_CW3c_done_unverified.json` F17); a played RIFT match's History row reopens its post-game (`from: history`, same matchId) and Return home goes back (`node _harness/e2e.mjs rift`, new step history_reopen, `fw_CW3c_e2e_rift.json`). |
 
+
+**Round 2 live checks (CW3c, 2026-11-04).** Reports `_harness/_reports/fw_CW3c_r2_*`.
+- *HUD leak:* the e2e `hud_leak` step found one detached `.hud` root after two matches. The heap path ran from the module-level glyph table `STATUS_PATHS` through a static vnode's parent to the last match's tree: preact writes the parent onto a vnode, so a vnode kept at module level holds the last tree it rendered in. The three tables in `hud/glyphs.tsx` are thunks now: 0 detached, 0 attached after 3 matches (`fw_CW3c_r2_e2e_all_c.json`).
+- *Slot call-outs:* Alt+click on Q puts "You: <ability> is not learned yet" in the feed through the sim's ping `slot` field (`fw_CW3c_r2_callout.json`).
+- *Recap held line:* a real 2 s stun, then a kill, reads "Held for 2.0 s of the last 15 s." (`fw_CW3c_r2_callout.json` recap).
+- *Team-buff stacks:* a stacked Splinters chip reads "Splinters ×3" with the badge 3 (`fw_CW3c_r2_probe.json` steps.splinters).
+- *Down face:* on `.who.is-down` the face image takes the grey filter and the ring on `.who__face` keeps its colour (steps.whoDown).
+- *Inline hour-ticks:* beside a word they draw as small dial diamonds, not upright bars that read as "I". The tick at a plate's corner stays a bar. Draft seats keep the fighter name once locked, with Ready as a chip (steps.finalize, `fw_CW3c_r2_finalize.png`).
+- *First-run preset:* `?calibrate=1` sampled 163 frames at p95 17.5 ms and kept High; a forced Medium verdict sets the preset, shows the notice, and its action opens Settings > Video (steps.calibrate, steps.notice).
+- *Minimap numerals:* the four RIFT numerals stay legible under the fog (`fw_CW3c_r2_minimap_fog.png`).
 ---
 
 ## 5. Ping language
