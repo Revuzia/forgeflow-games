@@ -157,10 +157,12 @@ SKINS: list = [
      # the parchment three steps down (#C2B69B blew 38 % of the pauldrons past L* 86 in the splash's sun); fix pass
      # 5: the tunic two more steps down (#6B6256 measured L* 70-72 in the splash against the mid band's 45-65, brief
      # 52: the top and middle bands merged)
-     "palette": {"cloth2": "#3E3A4C", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
+     "palette": {"cloth2": "#34303F", "rust": "#A3987F", "stone": "#CFC8B8", "ironstone": "#2E2A26",
                  # fix pass 8: the tunic the brief's WARM grey (#58503F read olive-khaki), at the same value
                  # polish: the board's walnut frame a cooler, darker brown (#5A4639 read pink in the splash's sun)
-                 "cloth": "#4D4559", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
+                 # (CW5 refix, burdam-M4: game-camera per-pixel dE vs the base 10.3 < Stillwater's 10.8: the deluxe
+                 # line must read furthest from the base: the ledger-ink coat and the ink felt one step deeper)
+                 "cloth": "#433B50", "parchment": "#A3987F", "walnut": "#4B3E33", "oxblood": "#7A2E2A"}},
 ]
 ALMANAC_C = (-0.282, -0.212, 0.950)       # the board's centre (right hip), its yaw and half-size (m)
 ALMANAC_RZ = -38.0
@@ -1070,6 +1072,7 @@ CHAINS = {          # name: (parent, joints (rest, m)); + rotation about each bo
 }
 SKIRT_K, SKIRT_A0 = 0.45, 4.0        # the panel's push: share of the knee's swing past A0 deg (front: ahead; back: behind)
 SKIRT_CLEAR, SKIRT_THIGH_R = 0.025, 0.12    # the floor: the thigh's surface (its axis + R) stays CLEAR behind the panel
+COWL_K = 0.16                        # the cowl drape's push: share of the right knee's swing (deg)
 SKIRT_SIDE_K = 0.35                  # the side panels: share of their own knee's swing (forward and back)
 SKIRT_AZ = {"skirt_f": 0.0, "skirt_l": 90.0, "skirt_b": 180.0, "skirt_r": -90.0}   # each panel's bearing (deg, 0 = front,
                                                                                   # + toward his left)
@@ -1132,7 +1135,12 @@ def chain_config(ctx) -> list:
                 c._burdam_floor = _skirt_floor(skel, nm)
                 c._burdam_front = nm == "skirt_f"
         else:
-            c = anim.ChainCfg(list(bones), gravity=0.3, stiffness=70.0, damping=7.0, inertia=1.4, limit=(-14.0, 14.0))
+            # (CW5 refix, burdam-M3: the cowl's drape swung 4.5 deg in the run, read as rigid felt: its own (right)
+            # knee's stride pushes it, the spring lagging it and the chest's bob adding inertia, >= 10 deg of swing)
+            def cowl_drive(p):
+                return max(-12.0, min(12.0, COWL_K * _knee_angles(skel, p)["R"][0]))
+            c = anim.ChainCfg(list(bones), gravity=0.3, stiffness=60.0, damping=6.0, inertia=2.0, drive=cowl_drive,
+                              limit=(-18.0, 18.0))
         out.append(c)
     return out
 

@@ -84,31 +84,31 @@
   },
   "uv_coverage": 0.605,
   "bake": {
-    "base": 4.94,
-    "rough_metal": 3.99,
-    "normal": 3.58,
-    "ao": 4.8,
+    "base": 12.77,
+    "rough_metal": 8.41,
+    "normal": 7.47,
+    "ao": 6.83,
     "normal_fixed_px": 84023,
-    "projection": 8.67,
-    "pack_save": 9.0,
-    "total": 26.88
+    "projection": 29.76,
+    "pack_save": 30.6,
+    "total": 67.4
   },
   "tris": 23629,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2369088,
+  "glb_bytes_raw": 2371364,
   "optimize": {
     "ok": true,
-    "before": 2369088,
-    "after": 937928,
+    "before": 2371364,
+    "after": 939488,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 937928,
+  "glb_bytes": 939488,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (916 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_gorgewalk_base 2048x2048 141K, lisvel_gorgewalk_normal 512x512 39K, lisvel_gorgewalk_orm 256x256 11K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (917 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_gorgewalk_base 2048x2048 142K, lisvel_gorgewalk_normal 512x512 39K, lisvel_gorgewalk_orm 256x256 11K",
       "  skinned meshes: lisvel_accent(214v), lisvel_gorgewalk(24183v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
       "  clips: ",
@@ -123,8 +123,8 @@
       "portrait": "art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 77.8,
-      "portrait": 11.66
+      "splash": 296.73,
+      "portrait": 40.91
     }
   },
   "three_qa": {
@@ -156,24 +156,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_gorgewalk.png",
-    "seconds": 21.1,
+    "seconds": 67.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.41,
-      "model": 13.19,
-      "lows_bind": 6.41,
-      "uv": 9.72,
-      "bake": 29.33,
+      "rig": 0.05,
+      "materials": 1.86,
+      "model": 28.3,
+      "lows_bind": 16.38,
+      "uv": 17.13,
+      "bake": 77.82,
       "export": 0.29,
-      "optimize": 1.25,
-      "load_test": 0.22,
-      "render": 89.58,
-      "three_qa": 21.54
+      "optimize": 1.3,
+      "load_test": 0.3,
+      "render": 337.93,
+      "three_qa": 69.6
     },
-    "total_s": 172.16
+    "total_s": 551.84
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

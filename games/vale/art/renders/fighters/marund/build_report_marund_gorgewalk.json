@@ -157,60 +157,99 @@
     "tris_trowel": 150,
     "tris_pail": 750,
     "tris_rope_coil": 500,
-    "validate_marund": "18998->18986",
+    "validate_marund": "18998->18989",
     "validate_marund_accent": "240->236"
   },
-  "uv_coverage": 0.587,
+  "uv_coverage": 0.623,
   "bake": {
-    "base": 22.18,
-    "rough_metal": 16.44,
-    "normal": 7.87,
-    "ao": 8.37,
-    "normal_fixed_px": 23361,
-    "projection": 176.21,
-    "pack_save": 177.01,
-    "total": 234.23
+    "base": 49.22,
+    "rough_metal": 42.38,
+    "normal": 18.73,
+    "ao": 11.67,
+    "normal_fixed_px": 23349,
+    "projection": 158.44,
+    "pack_save": 159.02,
+    "total": 284.38
   },
-  "tris": 19222,
+  "tris": 19225,
   "mesh_top_m": 2.316,
-  "glb_bytes_raw": 2559080,
+  "glb_bytes_raw": 2409504,
   "optimize": {
     "ok": true,
-    "before": 2559080,
-    "after": 1079084
+    "before": 2409504,
+    "after": 1004788
   },
-  "glb_bytes": 1079084,
+  "glb_bytes": 1004788,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_gorgewalk.glb (1054 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_gorgewalk_base 2048x2048 328K, marund_gorgewalk_normal 512x512 44K, marund_gorgewalk_orm 512x512 71K",
-      "  skinned meshes: marund_accent(126v), marund_gorgewalk(17707v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_gorgewalk.glb (981 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_gorgewalk_base 2048x2048 303K, marund_gorgewalk_normal 512x512 42K, marund_gorgewalk_orm 512x512 59K",
+      "  skinned meshes: marund_accent(126v), marund_gorgewalk(16438v)",
       "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 19222; bind-pose bounds (three units, Y up): 1.43 x 2.32 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
+      "  tris: 19225; bind-pose bounds (three units, Y up): 1.43 x 2.32 x 1.57; facing (-0.00, 1.00); head bone y 1.58; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
   },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/marund/marund_gorgewalk_splash.png",
+      "portrait": "art/out/fighters/marund/marund_gorgewalk_portrait.png"
+    },
+    "seconds": {
+      "splash": 396.97,
+      "portrait": 71.71
+    }
+  },
   "three_qa": {
-    "ok": false,
-    "skipped": ""
+    "ok": true,
+    "mode": "sheet",
+    "bindBox": [
+      [
+        -0.718,
+        0,
+        -0.638
+      ],
+      [
+        0.717,
+        2.316,
+        0.932
+      ]
+    ],
+    "facing": [
+      0,
+      1
+    ],
+    "headY": 1.579,
+    "accentPct": 2.06,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 125,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/fighters/marund/three_marund_gorgewalk.png",
+    "seconds": 172.8,
+    "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 1.07,
-      "model": 35.21,
-      "lows_bind": 40.79,
-      "uv": 20.12,
-      "bake": 234.24,
-      "export": 0.27,
-      "optimize": 1.6,
-      "load_test": 0.33,
-      "three_qa": 4084.6
+      "rig": 0.0,
+      "materials": 0.49,
+      "model": 27.84,
+      "lows_bind": 27.38,
+      "uv": 18.77,
+      "bake": 284.39,
+      "export": 0.36,
+      "optimize": 1.67,
+      "load_test": 0.37,
+      "render": 468.84,
+      "three_qa": 180.92
     },
-    "total_s": 4418.63
+    "total_s": 1011.28
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

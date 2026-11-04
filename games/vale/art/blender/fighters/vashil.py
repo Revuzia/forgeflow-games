@@ -260,7 +260,9 @@ CARDS = {
                               "color": "#FFD48A", "power": 110.0, "size": 0.4},
                              {"at": "x_rod_head", "az": 190.0, "el": 10.0, "dist": 0.6, "color": "#FFE2B0",
                               "power": 40.0, "size": 0.25}]},
-        "portrait": {"yaw": 24.0, "t": 0.10},
+        # (CW5 refix, done:2: the ult's raise matched the base bust's rod-beside-the-face beat: First Bell's bust is the
+        # recall's first flick, the wrist bell lifted to the ear)
+        "portrait": {"clip": "recall", "t": 0.27, "yaw": 20.0},
         "plate": {"glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
     },
 }

@@ -100,7 +100,9 @@ CARDS = {
                               "size": 0.25},
                              {"at": "x_spear_tip", "az": 140.0, "el": 20.0, "dist": 0.6, "color": "#E4EEFF",
                               "power": 40.0, "size": 0.2}]},
-        "portrait": {"yaw": 24.0},
+        # (CW5 refix, done:2: the Chalkline Line-Cast bust put the raised spear across the face: the bust is the guard
+        # at rest instead, the spear grounded at his side, under the card's cold chalk light)
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 24.0},
         "plate": {"tint": "#8E9CCB", "sat": 0.7, "median": 0.29, "glow": [0.12, 0.55, 0.40, 0.05],
                   "glow_color": "#B8C6EC"},
     },

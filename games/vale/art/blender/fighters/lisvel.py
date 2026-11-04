@@ -121,7 +121,13 @@ CARDS = {
                               "size": 0.2},
                              {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",
                               "power": 40.0, "size": 0.25}]},
-        "portrait": {"yaw": 34.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        # (CW5 refix, lisvel-M1: the Sun Corridor bust showed her in profile from behind the bow arm, the face a blank
+        # pale side: a front three-quarter bust with a cold key from her upper right so the nose, lips and visor model)
+        "portrait": {"yaw": -10.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9,
+                     "focal": [{"at": "head", "az": 262.0, "el": 45.0, "dist": 0.6, "color": "#EEF2F6", "power": 18.0,
+                                "size": 0.10},
+                               {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",
+                                "power": 40.0, "size": 0.25}]},
         "plate": {"tint": "#9AA6B2", "sat": 0.75, "median": 0.30, "glow": [0.12, 0.50, 0.40, 0.06],
                   "glow_color": "#C8D4DE"},
     },
@@ -133,7 +139,12 @@ CARDS = {
                               "size": 0.3},
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
                               "size": 0.2}]},
-        "portrait": {"yaw": 20.0, "lens": 62.0, "fill": 0.84, "x": 0.44},
+        # (CW5 refix: the reading-lamp bust lit the face flat from the front: a warm key from her upper right)
+        "portrait": {"yaw": 5.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9,
+                     "focal": [{"at": "head", "az": 262.0, "el": 45.0, "dist": 0.6, "color": "#FFE3B8", "power": 18.0,
+                                "size": 0.10},
+                               {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,
+                                "size": 0.3}]},
         "plate": {"glow": [0.35, 0.60, 0.45, 0.10], "glow_color": "#E9D2A8", "sat": 0.85},
     },
 }
@@ -1561,6 +1572,41 @@ def chain_config(ctx) -> list:
     return out
 
 
+FT_K, FT_D, FT_GAIN = 80.0, 14.0, 0.6   # follow-through spring (1/s^2, 1/s) and the share of the knee's speed kept
+
+
+def _follow_through(out, b, cfg, loop) -> None:
+    """(CW5 refix, lisvel-M4: the no-lag floor pinned a front panel's peak to its knee's, lag 0-1 f) the felt keeps
+    the knee's momentum: a damped spring tracks the floored angle and never goes under it (no clipping), and when
+    the knee pushes it the panel takes FT_GAIN of the knee's speed, so it carries on 2-3 frames past the knee's peak
+    and settles back (prototype on the shipped run: peak f12 -> f14, xcorr lag 1 -> 2 f, max 50.6 -> 54.4 deg)"""
+    n = len(out)
+    if n < 3:
+        return
+    sg = 1.0 if cfg._lisvel_front else -1.0
+    base = [sg * out[f].get(b, (0.0, 0.0, 0.0))[0] for f in range(n)]
+    dt, sub = 1.0 / anim.FPS, 4
+    hi = cfg.limit[1] + 10.0 if sg > 0 else -(cfg.limit[0] - 10.0)
+    c, v = base[0], 0.0
+    res = list(base)
+    for _ in range(3 if loop else 1):
+        for f in range(n):
+            tgt = base[f]
+            prev = base[f - 1] if (f > 0 or loop) else base[f]
+            h = dt / sub
+            for _s in range(sub):
+                v += (-FT_K * (c - tgt) - FT_D * v) * h
+                c += v * h
+            if c <= tgt:
+                c = tgt
+                v = max(v, FT_GAIN * (tgt - prev) / dt)
+            c = min(c, max(hi, tgt))
+            res[f] = c
+    for f in range(n):
+        a = out[f].get(b, (0.0, 0.0, 0.0))
+        out[f][b] = (sg * res[f], a[1], a[2])
+
+
 def _install_chain_floor() -> None:
     """the shared spring pass, then each panel's no-lag floor (a knee driven up in two frames must not pass through
     the felt while the spring catches up)"""
@@ -1580,6 +1626,7 @@ def _install_chain_floor() -> None:
                 m = fl(poses[f])
                 if (cfg._lisvel_front and m > a[0]) or (not cfg._lisvel_front and m < a[0]):
                     p[b] = (max(cfg.limit[0] - 10.0, min(cfg.limit[1] + 10.0, m)), a[1], a[2])
+            _follow_through(out, b, cfg, loop)
             if loop:
                 out[-1][b] = out[0][b]
         return out
@@ -1956,17 +2003,26 @@ def paint_mask(p, n):
     # (W5b, originality F9: the carved planes parted by the painting's key from her upper right, so the cheek and jaw
     # planes and the nose's sides read as cut stone, not a smooth egg)
     lam = np.clip(n @ MASK_KEY, 0.0, 1.0)
-    k = (0.74 + 0.30 * lam) * (1.0 - 0.10 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
+    # (CW5 refix, lisvel-M1: under a flat card light the plate still read blank: a stronger painted key, so the nose's
+    # shadow side, the cheek planes and the jaw turn even when the light does not model them)
+    k = (0.64 + 0.46 * lam) * (1.0 - 0.14 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
     col = C("mask") * k[:, None]
+    # a living cue: a faint warm flush across the cheeks under the visor
+    flush = sum(np.exp(-(((x - sx * 0.036) / 0.016) ** 2 + ((z - 1.684) / 0.012) ** 2)) for sx in (-1.0, 1.0))
+    col = _mix(col, C("lip") * k[:, None], 0.22 * flush * _ss(-0.070, -0.085, y))
     # the lips: a soft warm mound and the smile line
     lip = np.exp(-((x / 0.016) ** 2 + ((z - 1.652) / 0.0080) ** 2)) * _ss(-0.086, -0.093, y)
-    col = _mix(col, C("lip") * k[:, None], 0.40 * lip)
+    col = _mix(col, C("lip") * k[:, None], 0.62 * lip)
     line_z = 1.6515 + 0.0030 * (x / 0.0145) ** 2
     mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.087, -0.093, y)
-    col = col * (1.0 - 0.50 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads)
+    col = col * (1.0 - 0.62 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads; refix 0.62)
     # under the nose: one soft broad shade (FIX PASS 2, review item 6: two dark dots at the nose's base)
     ns = np.exp(-((x / 0.014) ** 2 + ((z - 1.681) / 0.006) ** 2)) * _ss(-0.092, -0.101, y)
-    col = col * (1.0 - 0.07 * ns)[:, None]
+    col = col * (1.0 - 0.20 * ns)[:, None]
+    # (CW5 refix) the nose's shadow side (away from the key, her left) and a lit bridge on the key side
+    nside = np.exp(-(((x - 0.0085) / 0.006) ** 2 + ((z - 1.700) / 0.014) ** 2)) * _ss(-0.094, -0.104, y)
+    nlit = np.exp(-(((x + 0.003) / 0.003) ** 2 + ((z - 1.706) / 0.012) ** 2)) * _ss(-0.096, -0.106, y)
+    col = col * (1.0 - 0.18 * nside)[:, None] * (1.0 + 0.10 * nlit)[:, None]
     # the concept's incised segment lines (a carved plate, not a blank mannequin face): the forehead's centre line
     # and its branches above the visor, from each nose wing out under the visor to the temple, down past the
     # mouth corners to the jaw, along each cheekbone to the jaw's corner, the chin's outline
@@ -2241,7 +2297,12 @@ def paint_sleeves(p, n):
         e1u = _n(np.cross(ax_u, [0.0, 1.0, 0.0]))
         thu = np.arctan2((q - sh) @ np.cross(ax_u, e1u), (q - sh) @ e1u)
         longf = (0.5 + 0.5 * np.sin(thu * 5.0 + 2.0 * NOISE(q, 9.0))) * _ss(0.15, 0.5, tu) * (tu < 1.05)
-        k = (1.0 - 0.24 * gather * crease ** 1.5) * (1.0 - 0.09 * inner) * (1.0 - 0.10 * longf) * _weave(q)
+        # (CW5 refix, lisvel-M3: the sleeves still read as flat pale cylinders: deeper fold shadows, a lit crest on
+        # each long fold, a darker inner arm, a seam down the outer arm and a coarser visible weave)
+        seam = np.exp(-(np.angle(np.exp(1j * (thu - 0.5 * np.pi))) / 0.05) ** 2) * (tu < 1.0)
+        crest = (0.5 + 0.5 * np.sin(thu * 5.0 + 2.0 * NOISE(q, 9.0) + 0.9)) ** 6 * _ss(0.15, 0.5, tu) * (tu < 1.05)
+        k = ((1.0 - 0.40 * gather * crease ** 1.5) * (1.0 - 0.16 * inner) * (1.0 - 0.24 * longf)
+             * (1.0 + 0.07 * crest) * (1.0 - 0.22 * seam) * _weave(q, amp=0.06, f=520.0))
         out[sel] = col[sel] * k[:, None]
     return out
 

@@ -296,8 +296,8 @@ def wraps(amp, pitch, a, b, slant=0.35, phase=0.0, overlap=False, vary=0.0):
 
 
 # closing ULK-M3: the sleeve and shin wraps wound DIAGONALLY (the concept's crossing bands), varied widths
-SLEEVE_WRAP = dict(slant=1.7, vary=0.35, overlap=True)
-SHIN_WRAP = dict(slant=1.9, vary=0.30, overlap=True)
+SLEEVE_WRAP = dict(slant=5.0, vary=0.35, overlap=True)   # (CW5 refix: 1.7 bands per turn laid ~15 deg off a ring; 5 lays them ~40 deg: a diagonal wind, integer so the seam meets)
+SHIN_WRAP = dict(slant=6.0, vary=0.30, overlap=True)
 
 
 def chips(amp, freq):
@@ -2513,13 +2513,19 @@ def gen_recall() -> anim.Clip:
                   "aim.R": AimRoll((0.0, -0.05, 1.0), 1.0, (0.0, -1.0, 0.0))},
                L=lh((-0.27, 0.06, 0.12), pole=(0.5, -0.6, 0.5)))
 
+    # (CW5 refix, par:ulkro: the verifier measured the loop frozen, head 1.2 cm and hips 0: the hand travelled 3 cm):
+    # she counts the darts for real: the hand reaches 7 cm along the row and lifts each dart 7 cm, the chest turns
+    # after it, the head follows the count and glances back to the horizon, and she settles her weight on the knee
+    # with each breath (hips 1.2 cm across, 1.2 cm up)
     def sample(t):
         tap = 0.5 + 0.5 * math.sin(2 * math.pi * 3 * t)                 # three darts touched per loop
         side = math.sin(2 * math.pi * t)                                 # along the row and back
-        lw = (-0.27 - 0.03 * side, 0.06 + 0.02 * side, 0.12 + 0.035 * tap)
+        lw = (-0.27 - 0.07 * side, 0.06 + 0.04 * side, 0.12 + 0.07 * tap)
         p = anim.merge(kneel, {"ik": lh(lw, pole=(0.5, -0.6, 0.5))})
         b = anim.osc(t, 2)
-        return anim.add(p, anim.P(chest=(1.0 * b, 2.0 * side, 0), head=(2.0 * tap, -4.0 * side, 0)))
+        p = anim.add(p, anim.P(spine=(1.5 * b, 2.5 * side, 0), chest=(2.5 * b, 6.0 * side, 0),
+                               neck=(0, -4.0 * side, 0), head=(4.0 * tap - 2.0, -10.0 * side, 2.5 * side)))
+        return anim._with_hips(p, (0.012 * side, 0.0, 0.006 + 0.006 * b))      # never under the kneel (knee floor)
 
     return anim.Clip("recall", N, True, sample)
 
