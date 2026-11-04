@@ -53,7 +53,7 @@ SHAPE = body.shape(girth=0.92, torso_w=0.92, torso_d=0.92, chest=0.94, waist=0.8
 
 ## 3. Face (template 3)
 
-- **Serenade carved mask.** A lacquered pale mask (`kit.carved_mask`), planar facets, a brow shelf of at least 6 cm, ink almond eye recesses with a faint half-smile, and a beak keel (`kit.mask_beak`, 4 cm) as the facing cue. A linen mouth-wrap (`cloth2`) covers the jaw. No bare face, no hair.
+- **Serenade carved mask.** A lacquered pale mask (`kit.carved_mask`), planar facets, a brow shelf of at least 6 cm, ink almond eye recesses (painted ink-brown `#3A2C22`, never maroon) with a faint half-smile, and a beak keel (`kit.mask_beak`, 4 cm) as the facing cue; the incised side-plate lines stop at the brow line, so nothing runs down from the eyes (closing polish TUN-c5). A linen mouth-wrap (`cloth2`) covers the jaw. No bare face, no hair.
 - The hat's brim shades the mask from the 52 degree camera, so the mask is mostly a portrait and splash read; the brim must clear the brow by 5 cm and the lantern hangs clear of the eyes (0.10 m in front of the mask).
 
 ## 4. Armour, cloth and props (template 4)

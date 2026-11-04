@@ -38,14 +38,14 @@
   },
   "uv_coverage": 0.6,
   "bake": {
-    "base": 6.48,
-    "rough_metal": 7.63,
-    "normal": 3.0,
-    "ao": 2.57,
+    "base": 9.43,
+    "rough_metal": 8.13,
+    "normal": 3.67,
+    "ao": 4.13,
     "normal_fixed_px": 33355,
-    "projection": 17.05,
-    "pack_save": 17.3,
-    "total": 37.44
+    "projection": 34.99,
+    "pack_save": 35.34,
+    "total": 61.5
   },
   "tris": 19883,
   "mesh_top_m": 2.301,
@@ -144,18 +144,18 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2833888,
+  "glb_bytes_raw": 2829092,
   "optimize": {
     "ok": true,
-    "before": 2833888,
-    "after": 1169388
+    "before": 2829092,
+    "after": 1167132
   },
-  "glb_bytes": 1169388,
+  "glb_bytes": 1167132,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi.glb (1142 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: hesmi_base 2048x2048 264K, hesmi_normal 512x512 41K, hesmi_orm 512x512 69K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/hesmi/hesmi.glb (1140 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: hesmi_base 2048x2048 262K, hesmi_normal 512x512 41K, hesmi_orm 512x512 69K",
       "  skinned meshes: hesmi(17568v), hesmi_accent(120v)",
       "  bones: 28 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_fist_l shoulderR upper_armR forearmR handR propR x_fist_r x_rack_top x_shard_mid thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:1.333s/21tr, attack2:1.333s/21tr, cast_a1:1.167s/21tr, cast_a2:0.833s/21tr, cast_a3:0.833s/20tr, cast_ult:1.667s/22tr, channel:1.333s/20tr, dash:0.500s/22tr, death:2.000s/20tr, idle:2.400s/20tr, idle_lobby:4.000s/18tr, recall:3.000s/20tr, run:0.667s/22tr, stunned:1.333s/20tr, victory:2.000s/21tr",
@@ -173,10 +173,10 @@
       "turntable": "art/renders/fighters/hesmi/turntable.png"
     },
     "seconds": {
-      "splash": 201.33,
-      "portrait": 76.71,
-      "icon": 18.18,
-      "turntable": 19.53
+      "splash": 345.92,
+      "portrait": 27.6,
+      "icon": 7.84,
+      "turntable": 12.96
     }
   },
   "three_qa": {
@@ -208,26 +208,26 @@
     ],
     "clips": 15,
     "out": "art/renders/fighters/hesmi/three_hesmi.png",
-    "seconds": 110.5,
+    "seconds": 44.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.22,
-      "model": 16.11,
-      "lows_bind": 9.69,
-      "uv": 6.31,
-      "bake": 37.45,
-      "clips": 0.32,
-      "export": 2.09,
-      "optimize": 1.04,
-      "load_test": 0.16,
-      "render": 315.96,
-      "three_qa": 112.43,
-      "cache": 0.73
+      "rig": 0.01,
+      "materials": 0.62,
+      "model": 21.24,
+      "lows_bind": 18.3,
+      "uv": 11.65,
+      "bake": 61.51,
+      "clips": 0.62,
+      "export": 2.42,
+      "optimize": 1.52,
+      "load_test": 0.29,
+      "render": 394.51,
+      "three_qa": 45.57,
+      "cache": 0.56
     },
-    "total_s": 502.57
+    "total_s": 558.96
   },
   "run_ref_speed": 3.35,
   "height_m": 2.22
