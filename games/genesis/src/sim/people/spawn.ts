@@ -19,7 +19,7 @@ import { storeAdd } from './store.ts';
 import { updateResources, itemIdx } from './resources.ts';
 import { fieldsMax, MACHINE_ERA } from './crops.ts';
 import { seedFertility } from '../fields/vegetation.ts';
-import { cellPos, isLand } from './world.ts';
+import { cellPos, freshWater, isLand } from './world.ts';
 import { NS } from './defs.ts';
 
 export interface SpawnSpec {
@@ -37,9 +37,39 @@ export interface SpawnSpec {
   band?: boolean;
 }
 
-/** a good land cell for a species near `from` (or anywhere on the planet) */
-export function landingCell(x: PCtx, species: number, from: number, rings = 5): number {
+/**
+ * Water that lasts the year at cell c: fresh surface water deep enough to outlive a dry spell (a pond or lake, not the
+ * film a storm leaves), a stream, or a spring over a full aquifer. (sim-fix-r3, items 4/8: on the barren opening, right
+ * after the god's storm, 71 % of the lit face's drops chose a site whose only water was storm-wet ground and puddles
+ * (seed 20260, _harness/scratch/sim-fix-r3/wprobe.ts): it failed within the year, and the first village of the band
+ * 'dried out' and walked away in Year 1 of the owner's run.)
+ */
+export function lastingWater(x: PCtx, c: number): boolean {
+  const p = x.p, f = p.f;
+  if (!freshWater(p, c) || f.water[c] >= 4) return false;
+  return f.water[c] > 0.2 || (f.water[c] > 0.08 && Math.abs(f.flowX[c]) + Math.abs(f.flowY[c]) + Math.abs(f.flowZ[c]) > 0.004) || (f.aquifer[c] > 0.3 && f.moisture[c] > 0.42);
+}
+
+/** lasting water at c or a cell beside it */
+function lastingNear(x: PCtx, c: number): boolean {
+  if (lastingWater(x, c)) return true;
+  const g = x.p.grid;
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (lastingWater(x, g.nbr[e])) return true;
+  return false;
+}
+
+/** a good land cell for a species near `from` (or anywhere on the planet): by water that lasts when there is any within
+ * `wide` rings (default: `rings` + 3; a hand-set band looks 30 rings, ~1.7 km at 56 m cells — the barren opening's
+ * lit face has its lasting water a median 9 rings from a drop, the upper quartile 26), else the best site within `rings` */
+export function landingCell(x: PCtx, species: number, from: number, rings = 5, wide = rings + 3): number {
   const best = searchSite(x, species, from, rings);
+  if (x.info[species].needW[1] > 0 && !(best.cell >= 0 && lastingNear(x, best.cell))) {
+    const lasting = searchSite(x, species, from, wide, -1, (c) => !lastingNear(x, c));
+    // (as good as a band keeps on its walk there — settlement.ts bandStep gives up a target scoring under 3.2 — and not
+    // much worse than the best at hand: a lake 1.5 km off, out of the god's new forest and berries and up in the cold,
+    // starved and froze the seed-2 opening band in its first winter)
+    if (lasting.cell >= 0 && lasting.score >= Math.max(3.2, best.score - 1)) return lasting.cell;
+  }
   if (best.cell >= 0 && best.score > 0) return best.cell;
   if (isLand(x.p, from)) return from;
   // nearest land
@@ -80,7 +110,7 @@ export function spawnPeople(u: Universe, p: Planet, spec: SpawnSpec): Settlement
   const era = Math.max(0, ERAS.indexOf((spec.era ?? 'stone') as (typeof ERAS)[number]));
   const settle = !spec.band && (era > 0 || !!spec.settled);
   // where they will live: the best site near the drop
-  const site = landingCell(x, sp, at);
+  const site = landingCell(x, sp, at, 5, 30);
   // an established people stands on its site at once; a band set down by the hand stands where it was put (on the
   // nearest dry land) and walks to the place it chose — it used to appear ~165 m from the hand
   const stand = settle ? site : nearestDryLand(x, at);

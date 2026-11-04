@@ -66,7 +66,10 @@ export function mouths(x: PCtx, st: Settlement): number {
  * of LIVING §2.9 met, moods — another factor — rose too: births ran at 4-5 % a year and villages stayed half children.)
  */
 export function plentyFactor(daysAHead: number, fed: number): number {
-  const v = Math.max(daysAHead / 3, fed * 0.8);
+  // (sim-fix-r3, items 4/8: full bellies count at their worth, not × 0.8 — a forager band keeps no store and eats well,
+  // its mean food need ~0.7 (sim-fix-r3/demo.ts), and × 0.8 held it at 56 % of nature's rate: the opening's band of 30
+  // stood at 29-32 for seven years in the owner's run)
+  const v = Math.max(daysAHead / 3, fed);
   return v < 1 ? v : 1;
 }
 

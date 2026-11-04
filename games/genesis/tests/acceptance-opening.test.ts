@@ -12,6 +12,8 @@ import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import type { Command } from '../src/sim/types.ts';
 import { homesteadCell } from '../src/client/poi.ts';
+import { makeCtx } from '../src/sim/people/ctx.ts';
+import { landingCell, lastingWater } from '../src/sim/people/spawn.ts';
 
 function opening(seed: number, n: number | undefined = 32): { sim: Sim; sid: number; lib0: number } {
   const sim = new Sim({ seed, scenario: 'barren', overrides: n ? { n } : {} });
@@ -71,3 +73,42 @@ for (const [seed, grid] of [[1, 32], [8, 32], [2, 0]] as const) {
     assert.ok(lib > lib0 + 2, `it found things nobody gave it (library ${lib0} -> ${lib})`);
   });
 }
+
+// sim-fix-r3 (items 4 / 8, release owner-r3 runA): on the path the UI takes, the ring is any green cell with fresh water
+// (> 4 cm) within two rings (client/poi.ts homesteadCell) — after the god's storm, mostly puddles and storm-wet ground.
+// The old landing site (the best siteScore within 5 rings) sat by water that lasts the year for 92 of the 193 such drops on
+// the default seed (_harness/scratch/sim-fix-r3/wprobe.ts), and the owner's first village 'dried out' in Year 1. A
+// hand-set band now walks to water that lasts (spawn.ts landingCell / lastingWater) when there is any within ~1.7 km.
+test('the barren opening: wherever the UI ring can stand, the band settles by water that lasts (default seed 20260)', () => {
+  const sim = new Sim({ seed: 20260, scenario: 'barren' });
+  const u = sim.u, p = u.planets[0], f = p.f, g = p.grid;
+  const day = p.st.dayHours * 60;
+  const must = (c: Command) => { const r = sim.applyNow(c); assert.ok(r.ok, `${c.k}: ${r.msg}`); return r; };
+  must({ k: 'planet.add-air', amount: 1 } as Command);
+  sim.step(Math.round(day * 0.3));
+  must({ k: 'weather.global', kind: 'storm' } as Command);
+  must({ k: 'water.sea-level', value: -40 } as Command);
+  sim.step(day);
+  const s0 = u.sun(p, u.tick).dir; const here = [s0[0], s0[1], s0[2]];
+  must({ k: 'weather.global', kind: 'none' } as Command);
+  must({ k: 'life.plant', species: 'meadow-grass', pos: here, radius: 12000, density: 0.8 } as Command);
+  must({ k: 'life.plant', species: 'berry-bush', pos: here, radius: 1800, density: 0.5 } as Command);
+  must({ k: 'life.forest', pos: here, radius: 1400 } as Command);
+  sim.step(Math.round(day * 0.5));
+  const x = makeCtx(u, p), sp = x.c.species.idx('plains-folk');
+  const sun = u.sun(p, u.tick).dir, P = g.pos;
+  const wetW = (o: number) => f.water[o] > 0.04 && f.water[o] < 4;
+  const lastingBy = (c: number) => { if (lastingWater(x, c)) return true; for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (lastingWater(x, g.nbr[e])) return true; return false; };
+  let drops = 0, good = 0;
+  for (let c = 0; c < p.count; c += 2) {
+    const el = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2];
+    if (!(el > 0.4 && f.grass[c] > 0.05 && !p.s.ocean[c] && f.water[c] <= 0.03 && f.temperature[c] >= 8 && f.temperature[c] <= 30)) continue;
+    let wet = false;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1] && !wet; e++) { const o = g.nbr[e]; if (wetW(o)) wet = true; for (let e2 = g.nbrStart[o]; e2 < g.nbrStart[o + 1]; e2++) if (wetW(g.nbr[e2])) wet = true; }
+    if (!wet) continue;
+    drops++;
+    if (lastingBy(landingCell(x, sp, c, 5, 30))) good++;
+  }
+  assert.ok(drops >= 50, `drops ${drops}`);
+  assert.ok(good >= drops * 0.9, `a band set down at the ring settles by water that lasts (${good} of ${drops} drops; 92 of 193 on the old site choice)`);
+});
