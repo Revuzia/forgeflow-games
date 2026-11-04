@@ -29937,7 +29937,7 @@
         ],
         "color": [
           "#D3CCDD",
-          "#4C4858",
+          "element",
           "#8A8496"
         ],
         "alpha": [
@@ -29983,7 +29983,7 @@
         ],
         "color": [
           "#6B6478",
-          "#55505F"
+          "element"
         ],
         "alpha": [
           0,
@@ -30071,7 +30071,7 @@
           1
         ],
         "life": 3.05,
-        "color": "#4C4858",
+        "color": "element",
         "alpha": [
           [
             0,
@@ -30416,7 +30416,7 @@
         ],
         "color": [
           "#6B6478",
-          "#55505F"
+          "element"
         ],
         "alpha": [
           0,
@@ -33821,7 +33821,7 @@
         ],
         "color": [
           "#D3CEC3",
-          "#8A867D"
+          "element"
         ],
         "alpha": [
           0,
@@ -33948,11 +33948,11 @@
           ],
           [
             0.03,
-            "#4C4A53"
+            "element"
           ],
           [
             1,
-            "#4C4A53"
+            "element"
           ]
         ],
         "alpha": [
@@ -34200,7 +34200,7 @@
         ],
         "color": [
           "#D3CEC3",
-          "#4C4A53",
+          "element",
           "#8A867D"
         ],
         "alpha": [
@@ -34246,7 +34246,7 @@
         ],
         "color": [
           "#6E6A62",
-          "#57544E"
+          "element"
         ],
         "alpha": [
           0,
@@ -59822,7 +59822,7 @@
         ],
         "color": [
           "#F1E2C6",
-          "#8A8478"
+          "element"
         ],
         "alpha": [
           1,
@@ -60077,8 +60077,12 @@
             "signature"
           ],
           [
-            1.0,
+            0.6,
             "signature"
+          ],
+          [
+            1.0,
+            "element"
           ]
         ],
         "alpha": [
@@ -60710,7 +60714,7 @@
         ],
         "color": [
           "#EEDFB8",
-          "#BFD3E6"
+          "element"
         ],
         "alpha": [
           0,
@@ -62895,7 +62899,7 @@
         ],
         "color": [
           "#6E6A62",
-          "#57544E"
+          "element"
         ],
         "alpha": [
           0,
@@ -70733,11 +70737,31 @@
         "$comment": "CW1 refix (SKIN-FX): the Long Run's own ring in the runner's hue, laid just inside the team ring and brighter than it, so a skin's palette (Long Evening's plum) carries the beat while the team stays one keyline",
         "type": "shockwave",
         "at": "ground",
-        "radius": [[0, 0.15], [0.35, 1.0], [1, 1.4]],
-        "width": [0.3, 0.1],
+        "radius": [
+          [
+            0,
+            0.15
+          ],
+          [
+            0.35,
+            1.0
+          ],
+          [
+            1,
+            1.4
+          ]
+        ],
+        "width": [
+          0.3,
+          0.1
+        ],
         "life": 0.5,
         "color": "signature",
-        "alpha": [1, 0.85, 0],
+        "alpha": [
+          1,
+          0.85,
+          0
+        ],
         "emissive": 4.0,
         "sharp": 1.6,
         "noise": 0.3

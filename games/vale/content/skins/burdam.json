@@ -29,6 +29,11 @@
     "model": "assets/fighters/burdam/burdam_almanac.glb",
     "portrait": "assets/fighters/burdam/burdam_almanac_portrait.png",
     "splash": "assets/fighters/burdam/burdam_almanac_splash.png",
+    "vfxTint": "#4E4466",
+    "vfx": {
+      "signature": "#C0185A",
+      "secondary": "#F0E2BE"
+    },
     "desc": "Pauldrons printed like ruled pages, day-marks down the cleaver's back and a rigid almanac board hung at his belt.",
     "releasedIn": "2026.10.0"
   }

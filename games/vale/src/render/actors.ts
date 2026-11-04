@@ -960,6 +960,14 @@ export class Actor implements CrowdActor {
     return null;
   }
 
+  /** the model carries a clip of its own for this role (not a fallback from CLIP_CHAIN) */
+  private ownClip(role: string): boolean {
+    const t = this.template;
+    if (!t) return false;
+    const name = t.roles[role];
+    return !!((name && t.clips.get(name)) || t.clips.get(role));
+  }
+
   private action(role: string): ActionLike | null {
     let act = this.actions.get(role);
     if (act) return act;
@@ -1070,7 +1078,14 @@ export class Actor implements CrowdActor {
         act.timeScale = 0;
         // past the release (stateDuration), keep playing the follow-through at the same rate
         act.time = Math.min(clipDur - 1e-3, st * (IMPACT_AT * clipDur) / impact);
-      } else if (role === 'dash' && v.stateDuration > 0) {
+      } else if (v.state === 'dash' && role !== 'stunned' && v.stateDuration > 0) {
+        // any clip played in the dash state (the plain dash, or a leap like a 'domefall_leap' role): its apex
+        // and landing ride the dash's own progress
+        act.timeScale = 0;
+        act.time = Math.min(clipDur - 1e-3, (st / v.stateDuration) * clipDur);
+      } else if (role === 'recall' && v.state === 'recall' && v.stateDuration > 0 && this.ownClip('recall')) {
+        // the fighter's recall performance spans the whole channel once (a 6 s clip over RIFT's 7 s recall
+        // would otherwise replay its opening for the last second); the fallback chain (channel / idle) loops
         act.timeScale = 0;
         act.time = Math.min(clipDur - 1e-3, (st / v.stateDuration) * clipDur);
       } else if (role === 'death') {
