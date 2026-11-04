@@ -367,9 +367,12 @@
 /* the name gets two lines (client F8: never cut); ownership is ONE chip with the tier's hour-ticks inside */
 .skin__meta { flex: 1; }
 .skin__name { color: var(--text-1); line-height: 1.3; min-height: 2.6em; overflow-wrap: break-word; }
-.skin__chip { display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); align-self: flex-start; max-width: 100%; height: calc(3 * var(--u)); padding: 0 var(--u);
+.skin__chip { display: inline-flex; align-items: center; gap: calc(0.5 * var(--u)); align-self: flex-start; max-width: 100%; height: calc(3 * var(--u)); padding: 0 var(--u);
   border-radius: calc(1.5 * var(--u)); background: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-1); color: var(--text-2); white-space: nowrap; }
 .skin__chip .hourticks i { height: 8px; }
+/* CL-3 pips inside a skin chip stay as narrow as the old bars so a 4-digit price still fits the 15u tile */
+.skin__chip span.hourticks.hourticks--pips { gap: 2.5px; margin-right: 0; padding-left: 0.5px; }
+.skin__chip span.hourticks.hourticks--pips i { width: 3.5px; height: 3.5px; }
 .skin__chip.is-equipped { color: var(--text-1); box-shadow: inset 0 0 0 1px var(--chalk); }
 .skin__chip.is-owned { color: var(--text-1); }
 .skin__chip .cur { color: var(--text-1); }
@@ -744,7 +747,7 @@
 .pgbest--self .pgbest__art { box-shadow: inset 0 0 0 2px var(--team-self, var(--chalk)); }
 .pgbest__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pgbest__kick { position: relative; display: inline-flex; align-items: center; gap: calc(0.75 * var(--u)); color: var(--chalk); }
-.pgbest__kick .bestv__tick { position: static; display: inline-block; width: 2px; height: calc(1.25 * var(--u)); background: var(--chalk); transform: none; }
+.pgbest__kick .bestv__tick { position: static; display: inline-block; width: 5px; height: 5px; margin: 0 calc(0.75 * var(--u)) 0 1px; vertical-align: 0.2em; border-radius: 1px; background: var(--chalk); transform: rotate(45deg); }   /* a dial diamond, never an upright bar reading as 'I' (CL-3) */
 .pgbest__who { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pgbest__stat { color: var(--text-2); }
 .pgnod { display: flex; flex-direction: column; justify-content: center; gap: var(--u); padding: calc(1.25 * var(--u)) calc(1.5 * var(--u)); }
