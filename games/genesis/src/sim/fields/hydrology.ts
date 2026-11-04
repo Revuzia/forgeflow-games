@@ -755,7 +755,7 @@ function sheetPass(
         } else if (dh < 0) {
           // a higher neighbour: asleep, it may need waking; awake, what it sends here is this cell's inflow (only a higher
           // cell sends downhill — the inflow read skips the rest: scattered reads were the cost of this pass)
-          if (act[o] === 0) wakeHigher(o, -dh, bc, bo, Ho, water[o], act, quiet);
+          if (act[o] === 0) { if (wakeHigher(o, -dh, bc, bo, Ho, water[o], act, quiet)) fed[nf++] = o; }
           else {
             const fin = flux[rev[e]];
             if (fin > 0) { ix += fin * tx[e]; iy += fin * ty[e]; iz += fin * tz[e]; }
@@ -770,7 +770,7 @@ function sheetPass(
         if (act[o] !== 0) continue;
         const bo = surf[o];
         const Ho = bo + water[o];
-        if (Ho > Hc) wakeHigher(o, Ho - Hc, bc, bo, Ho, water[o], act, quiet);
+        if (Ho > Hc && wakeHigher(o, Ho - Hc, bc, bo, Ho, water[o], act, quiet)) fed[nf++] = o;
       }
     }
     if (nr === 0) {
@@ -823,11 +823,15 @@ function sheetPass(
 }
 
 /** wake sleeping neighbour o, higher than a sheet by `rise`, if it is wet and out of level across the edge (the pipes'
- * finishActive rule: only an awake cell sends, and o has to send water this way) */
-function wakeHigher(o: number, rise: number, bc: number, bo: number, Ho: number, wo: number, act: Uint8Array, quiet: Uint8Array): void {
-  if (wo <= DRY) return;
+ * finishActive rule: only an awake cell sends, and o has to send water this way). Returns true when it woke: the
+ * caller collects o into the fed list, marked 2 (woken; applyFed makes it 1). (fix-r3: it was marked 1 straight away —
+ * not in this step's list, so a later sheet's inflow to it was neither fed nor applied and sat in the scratch dV until
+ * the next step: state outside the save, and a loaded game diverged from the live one one tick after loading) */
+function wakeHigher(o: number, rise: number, bc: number, bo: number, Ho: number, wo: number, act: Uint8Array, quiet: Uint8Array): boolean {
+  if (wo <= DRY) return false;
   const d = Ho - (bc > bo ? bc : bo);
-  if (d > DRY && rise > LEVEL_EPS + LEVEL_EPS_DEPTH * (d < LEVEL_EPS_MAXD ? d : LEVEL_EPS_MAXD)) { act[o] = 1; quiet[o] = 0; }
+  if (d > DRY && rise > LEVEL_EPS + LEVEL_EPS_DEPTH * (d < LEVEL_EPS_MAXD ? d : LEVEL_EPS_MAXD)) { act[o] = 2; quiet[o] = 0; return true; }
+  return false;
 }
 
 /** apply the sheets' dV (a sheet put to sleep this step is applied here too; a fed one already was, dV is 0 then); a

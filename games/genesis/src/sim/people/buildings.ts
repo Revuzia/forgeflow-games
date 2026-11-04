@@ -595,6 +595,12 @@ export function burnBuildings(x: PCtx): number {
     if (!st || st.fallen >= 0) continue;
     st.recent.burned = x.tick;
     st.recent.burnedCount = (st.recent.burnedCount ?? 0) + n;
+    // (fix-r3) what a fire of their own making took (a hearth that got away in the last few days, and no act of god
+    // seen there meanwhile): only that can make an oath (culture.ts tabooFromStories). The god's meteor, lightning or
+    // fireball and an ordinary wildfire are fear and regard (god/regard.ts), never a reason to give up fire
+    const own = st.recent.ownFire !== undefined && x.tick - st.recent.ownFire < 3 * x.day;
+    const god = st.recent.godSeen !== undefined && x.tick - st.recent.godSeen < 3 * x.day;
+    if (own && !god) st.recent.ownBurned = (st.recent.ownBurned ?? 0) + n;
   }
   return ruined;
 }
@@ -606,7 +612,7 @@ export function hearthAccidents(x: PCtx, st: Settlement): void {
     const def = x.c.buildings.list[b.type];
     if (def.function !== 'hearth') continue;
     if (hashFloat(b.id, x.tick, 0x4ea7) < 0.0015 && x.p.f.water[b.cell] < 0.02) {
-      igniteCell(x.u, x.p, b.cell, 0.45, 'hearth');
+      if (igniteCell(x.u, x.p, b.cell, 0.45, 'hearth')) st.recent.ownFire = x.tick;
     }
   }
 }

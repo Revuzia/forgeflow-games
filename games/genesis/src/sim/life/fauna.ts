@@ -336,6 +336,7 @@ function remapPlanet(u: Universe, p: Planet, maps: Partial<Record<RegistryName, 
       st.secrets = st.secrets.map((k) => mapIdx(rm, k)).sort((a, b) => a - b);
       st.culture.taboos = st.culture.taboos.map((k) => mapIdx(rm, k));
       st.culture.tabooSince = mapKeys(rm, st.culture.tabooSince);
+      if (st.culture.oathUntil) st.culture.oathUntil = mapKeys(rm, st.culture.oathUntil);
       st.jobs = st.jobs.map((j) => ({ ...j, k: mapIdx(rm, j.k) }));
       if (st.places) st.places = { hour: st.places.hour, at: mapKeys(rm, st.places.at)! };
     }

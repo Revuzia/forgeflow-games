@@ -241,6 +241,10 @@ export interface SavesDeps {
 
 /** the first autosave in a world comes this soon (wall time), so a short visit keeps its world */
 export const FIRST_AUTOSAVE_MS = 90_000;
+/** a god's act brings the autosave forward: it comes this soon after the act (acts in a row share one) … */
+export const ACT_SAVE_DELAY_MS = 10_000;
+/** … unless the last autosave is younger than this (a world being shaped is kept about once a minute, no more) */
+export const ACT_SAVE_GAP_MS = 60_000;
 /** a page going hidden keeps the world unless the autosave is younger than this */
 export const LEAVE_GAP_MS = 20_000;
 
@@ -268,11 +272,19 @@ export class Saves {
   private autoNote: HTMLSpanElement;
   private lastAuto = performance.now();
   private autoAt = 0;
+  /** the god acted since the last autosave, at this moment (null: not) */
+  private actedAt: number | null = null;
   /** no autosave yet in this world: the first comes after FIRST_AUTOSAVE_MS */
   private firstAuto = true;
   /** the last picture taken (a hidden page renders none: its autosave reuses this) */
   private lastThumb: string | null = null;
+  /** a write or a load is in hand (the next one waits for it) */
   private busy = false;
+  private busyWhat: 'auto' | 'save' | 'load' | null = null;
+  /** the slots' work, one after another */
+  private queue: Promise<unknown> = Promise.resolve();
+  /** an autosave asked for and not yet begun (a second request joins it) */
+  private autoQueued: Promise<boolean> | null = null;
   /** the last outcome (test surface) */
   last: { ok: boolean; msg: string } | null = null;
 
@@ -290,8 +302,8 @@ export class Saves {
     this.alertEl.hidden = true;
     this.listEl = h('div', { class: 'gn-saves-list' });
     this.autoSel = h('select', { class: 'gn-select gn-saves-autosel', aria: { label: 'Autosave' } }) as HTMLSelectElement;
-    for (const [v, l] of [['0', 'Off'], ['5', 'every 5 minutes'], ['10', 'every 10 minutes'], ['20', 'every 20 minutes'], ['30', 'every 30 minutes']]) this.autoSel.append(h('option', { value: v, text: l }));
-    this.autoSel.addEventListener('change', () => { this.host.prefs.set('game.autosaveMinutes', Number(this.autoSel.value)); this.lastAuto = performance.now(); this.renderAutoNote(); });
+    for (const [v, l] of [['0', 'Off'], ['1', 'every minute'], ['2', 'every 2 minutes'], ['5', 'every 5 minutes'], ['10', 'every 10 minutes'], ['20', 'every 20 minutes'], ['30', 'every 30 minutes']]) this.autoSel.append(h('option', { value: v, text: l }));
+    this.autoSel.addEventListener('change', () => { this.host.prefs.set('game.autosaveMinutes', Number(this.autoSel.value)); this.host.prefs.set('game.autosaveChosen', true); this.lastAuto = performance.now(); this.renderAutoNote(); });
     this.autoSel.addEventListener('keydown', (e) => e.stopPropagation());
     this.autoNote = h('span', { class: 'gn-set-note' });
     this.worldEl = h('div', { class: 'gn-saves-this' });
@@ -402,8 +414,37 @@ export class Saves {
 
   /** keep the world in a slot */
   async saveSlot(id: string, name: string, quiet = false, auto = false): Promise<boolean> {
-    if (this.busy) return false;
-    this.busy = true;
+    // one write at a time, in order: a save asked for while another is being written waits for it and follows (it is
+    // never dropped). An autosave asked for while one is already waiting is the same autosave: it joins that one.
+    if (auto && this.autoQueued) return this.autoQueued;
+    if (this.busy && !quiet) {
+      const what = this.busyWhat === 'auto' ? 'the autosave' : this.busyWhat === 'load' ? 'the world being opened' : 'the last save';
+      const msg = `Still keeping ${what}… ${name === 'Quicksave' ? 'your quicksave' : 'your save'} will follow.`;
+      this.host.toast({ text: msg, kind: 'info', ms: 5000 });
+      if (this.isOpen) this.alert('info', msg);
+    }
+    const job = this.serial(auto ? 'auto' : 'save', () => this.writeSlot(id, name, quiet, auto));
+    if (auto) { this.autoQueued = job; void job.finally(() => { if (this.autoQueued === job) this.autoQueued = null; }); }
+    return job;
+  }
+
+  /** run `fn` after every write or load already asked for (the queue of the slots' work) */
+  private serial<T>(what: 'auto' | 'save' | 'load', fn: () => Promise<T>): Promise<T> {
+    const run = async (): Promise<T> => {
+      this.busy = true;
+      this.busyWhat = what;
+      if (what === 'auto') this.autoQueued = null;
+      try { return await fn(); } finally { this.busy = false; this.busyWhat = null; }
+    };
+    const job = this.queue.then(run, run);
+    this.queue = job.catch(() => undefined);
+    return job;
+  }
+
+  /** is a write or a load in hand or waiting (test surface) */
+  get pending(): boolean { return this.busy || !!this.autoQueued; }
+
+  private async writeSlot(id: string, name: string, quiet: boolean, auto: boolean): Promise<boolean> {
     try {
       const bytes = await this.deps.save();
       if (!bytes) { if (!quiet) this.host.toast({ text: 'There is no living world to save here.', kind: 'warn' }); return false; }
@@ -425,13 +466,15 @@ export class Saves {
       if (this.isOpen) this.alert('bad', msg, { label: 'Export to a file instead', run: () => void this.exportNow() });
       this.host.toast({ text: msg, kind: 'warn', ms: 9000 });
       return false;
-    } finally { this.busy = false; }
+    }
   }
 
   private async saveNew(): Promise<void> {
-    const name = this.nameIn.value.trim() || this.describe().calendar || 'A moment';
-    this.nameIn.value = '';
-    await this.saveSlot(`s${Date.now().toString(36)}`, name);
+    const typed = this.nameIn.value;
+    const name = typed.trim() || this.describe().calendar || 'A moment';
+    // (the name stays in the field until the save has landed: a save that fails, or waits behind another, keeps it)
+    const ok = await this.saveSlot(`s${Date.now().toString(36)}`, name);
+    if (ok && this.nameIn.value === typed) this.nameIn.value = '';
   }
 
   async loadSlot(id: string): Promise<boolean> {
@@ -440,27 +483,32 @@ export class Saves {
     return this.loadRecord(r);
   }
 
-  private async loadRecord(r: SaveRecord): Promise<boolean> {
-    if (this.busy) return false;
-    this.busy = true;
-    try {
-      // read before sending: a damaged or foreign file is refused in words, not by the simulation's stack
-      try { readSaveHeader(r.bytes); } catch (e) { this.fail(e instanceof Error ? e.message : String(e)); return false; }
-      const res = await this.deps.load(r.bytes.slice(0), r.packJson ?? []);
-      if (res.reload) { this.alert('ok', `Opening ${r.name} in a fresh world…`); this.deps.reloadInto(r.id); return true; }
-      if (!res.ok) {
-        if (res.missing?.length) {
-          const names = res.missing.map((p) => `'${p.name}' (${p.id}${p.version ? ` ${p.version}` : ''})`).join(', ');
-          this.fail(`This save needs the content pack${res.missing.length > 1 ? 's' : ''} ${names}, which ${res.missing.length > 1 ? 'are' : 'is'} not loaded. Load ${res.missing.length > 1 ? 'them' : 'it'} in Mods, then open the save again.`, { label: 'Open Mods', run: () => { this.close(); this.deps.openMods(); } });
-        } else this.fail(`It would not open: ${res.msg ?? 'no reason was given'}`);
-        return false;
-      }
-      this.last = { ok: true, msg: r.name };
-      this.host.toast({ text: `Returned to: ${r.name}.`, kind: 'info' });
-      this.close();
-      this.deps.loaded?.();
-      return true;
-    } finally { this.busy = false; }
+  private loadRecord(r: SaveRecord): Promise<boolean> {
+    if (this.busy) {
+      const msg = `Still keeping ${this.busyWhat === 'auto' ? 'the autosave' : 'the last save'}… ${r.name} opens as soon as it is done.`;
+      this.host.toast({ text: msg, kind: 'info', ms: 5000 });
+      if (this.isOpen) this.alert('info', msg);
+    }
+    return this.serial('load', () => this.openRecord(r));
+  }
+
+  private async openRecord(r: SaveRecord): Promise<boolean> {
+    // read before sending: a damaged or foreign file is refused in words, not by the simulation's stack
+    try { readSaveHeader(r.bytes); } catch (e) { this.fail(e instanceof Error ? e.message : String(e)); return false; }
+    const res = await this.deps.load(r.bytes.slice(0), r.packJson ?? []);
+    if (res.reload) { this.alert('ok', `Opening ${r.name} in a fresh world…`); this.deps.reloadInto(r.id); return true; }
+    if (!res.ok) {
+      if (res.missing?.length) {
+        const names = res.missing.map((p) => `'${p.name}' (${p.id}${p.version ? ` ${p.version}` : ''})`).join(', ');
+        this.fail(`This save needs the content pack${res.missing.length > 1 ? 's' : ''} ${names}, which ${res.missing.length > 1 ? 'are' : 'is'} not loaded. Load ${res.missing.length > 1 ? 'them' : 'it'} in Mods, then open the save again.`, { label: 'Open Mods', run: () => { this.close(); this.deps.openMods(); } });
+      } else this.fail(`It would not open: ${res.msg ?? 'no reason was given'}`);
+      return false;
+    }
+    this.last = { ok: true, msg: r.name };
+    this.host.toast({ text: `Returned to: ${r.name}.`, kind: 'info' });
+    this.close();
+    this.deps.loaded?.();
+    return true;
   }
 
   private fail(msg: string, act?: { label: string; run(): void }): void {
@@ -567,16 +615,25 @@ export class Saves {
     // the title's scenery is never kept (its timer waits for a real world, and that world's first autosave comes early)
     if (!(this.deps.keepable?.() ?? true)) { this.lastAuto = performance.now(); this.firstAuto = true; return; }
     const now = performance.now();
-    if (!autosaveDue(now - this.lastAuto, min, this.firstAuto)) return;
+    const act = this.actedAt !== null && now - this.actedAt >= ACT_SAVE_DELAY_MS && now - this.lastAuto >= ACT_SAVE_GAP_MS;
+    if (!act && !autosaveDue(now - this.lastAuto, min, this.firstAuto)) return;
     this.lastAuto = now;
+    this.actedAt = null;
     void this.autosave();
+  }
+
+  /** the god acted on the world (app.ts, after an obeyed command): the autosave comes soon, so a world just shaped is
+   *  not lost to a page that goes away before the next one on the timer */
+  acted(): void {
+    if (!this.host.prefs.value.game.autosaveMinutes || this.host.source !== 'worker') return;
+    if (this.actedAt === null) this.actedAt = performance.now();
   }
 
   /** the page is going hidden or away (a tab switched, the site's frame navigated, the tab closed): keep the world as the
    *  autosave, best effort, unless it was kept a moment ago */
   leaving(): void {
     if (!this.host.prefs.value.game.autosaveMinutes || this.host.source !== 'worker') return;
-    if (!(this.deps.keepable?.() ?? true) || this.busy) return;
+    if (!(this.deps.keepable?.() ?? true) || this.pending) return;
     if (this.autoAt && Date.now() - this.autoAt < LEAVE_GAP_MS) return;
     this.lastAuto = performance.now();
     void this.autosave();

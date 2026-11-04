@@ -121,8 +121,8 @@ export class Settings {
         this.content.append(
           field('Restraint', toggle(restraint, (on) => void this.host.cmd({ k: 'meta.restraint', on }), 'Restraint'), 'powers cost worship and need time — off: omnipotence'),
           field('Natural disasters', toggle(true, (on) => void this.host.cmd({ k: 'set', path: 'disasters.natural', value: on ? 1 : 0 }), 'Natural disasters'), 'the world sends its own (a law: see the laws of the world)'),
-          field('Autosave', select([{ value: '0', label: 'Off' }, { value: '5', label: 'Every 5 minutes' }, { value: '10', label: 'Every 10 minutes' }, { value: '20', label: 'Every 20 minutes' }, { value: '30', label: 'Every 30 minutes' }],
-            String(v.game.autosaveMinutes), (x) => P.set('game.autosaveMinutes', Number(x)))),
+          field('Autosave', select([{ value: '0', label: 'Off' }, { value: '1', label: 'Every minute' }, { value: '2', label: 'Every 2 minutes' }, { value: '5', label: 'Every 5 minutes' }, { value: '10', label: 'Every 10 minutes' }, { value: '20', label: 'Every 20 minutes' }, { value: '30', label: 'Every 30 minutes' }],
+            String(v.game.autosaveMinutes), (x) => { P.set('game.autosaveMinutes', Number(x)); P.set('game.autosaveChosen', true); })),
           field('Pause when hidden', select([{ value: 'auto', label: isEmbedded() ? 'Auto (on: playing inside the site)' : 'Auto (off: on its own page)' }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }],
             v.game.pauseHidden, (x) => P.set('game.pauseHidden', x)), 'time stands still while you look at another tab, and runs again when you come back'),
           h('div', { class: 'gn-set-note', text: 'Every other law of the world — gravity, the length of the day, the air, the star, how fast fire spreads — is in the laws of the world (U, or the inspector on a world).' }),

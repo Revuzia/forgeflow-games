@@ -1000,6 +1000,8 @@ export class App implements UiHost {
     if (r.ok && (c.k.startsWith('content.') || c.k === 'freeform')) void this.loadPowers();
     // (the opening answers an act at once: water poured on the airless rock, before the field shows it)
     if (c.k !== 'focus' && !c.k.startsWith('hand.move')) this.ui?.opening.heard(c, r);
+    // (an obeyed act on the world brings the autosave forward: a world just shaped is kept within seconds, not minutes)
+    if (r.ok && c.k !== 'focus' && !c.k.startsWith('hand.move') && !c.k.startsWith('meta.') && !c.k.startsWith('time.')) this.ui?.saves.acted();
     const ctl = r.control;
     if (ctl) {
       if (ctl.rewind !== undefined || ctl.edit !== undefined) this.sim.requestFull();

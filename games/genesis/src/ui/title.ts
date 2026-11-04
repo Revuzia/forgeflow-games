@@ -39,6 +39,8 @@ export class Title {
   private newest: SaveMeta | null = null;
   private listed = false;
   private busy: string | null = null;
+  /** the door the title focused by itself (null once the player moved the focus: theirs is kept) */
+  private autoId: string | null = null;
   /** shown after "Quit to title": Continue returns to the world behind it, as it is */
   private fromGame = false;
   private worldName = '';
@@ -60,6 +62,8 @@ export class Title {
       this.foot);
     this.root.hidden = true;
     this.root.addEventListener('keydown', (e) => this.key(e));
+    // (the player moved the focus — keys, the pad, the pointer: the title no longer moves it for them)
+    this.root.addEventListener('focusin', (e) => { const id = (e.target as HTMLElement | null)?.dataset?.id ?? null; if (id !== this.autoId) this.autoId = null; });
     this.root.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
     parent.appendChild(this.root);
   }
@@ -77,7 +81,16 @@ export class Title {
     this.listed = false;
     this.render();
     void this.refresh();
-    requestAnimationFrame(() => (this.menu.querySelector('button:not([disabled])') as HTMLButtonElement | null)?.focus({ preventScroll: true }));
+    this.autoId = '';
+    requestAnimationFrame(() => { if (this.autoId !== null) this.autoFocus(); });
+  }
+
+  /** focus the first open door (Continue once the kept worlds are listed and there is one), as the title's own choice */
+  private autoFocus(): void {
+    const b = this.menu.querySelector('button:not([disabled])') as HTMLButtonElement | null;
+    if (!b) return;
+    this.autoId = b.dataset.id ?? null;
+    b.focus({ preventScroll: true });
   }
 
   /** put the title away (a world chosen, continued or loaded) */
@@ -127,7 +140,9 @@ export class Title {
       b.addEventListener('click', () => { if (!this.busy) { this.deps.host.sound('ui.confirm'); it.run(); } });
       this.menu.append(b);
     }
-    if (focused) (this.menu.querySelector(`[data-id="${focused}"]`) as HTMLButtonElement | null)?.focus({ preventScroll: true });
+    // the focus stays where the player put it; the title's own choice follows the doors (Continue, once it opens)
+    if (this.autoId !== null && this.autoId !== '' && this.isOpen) this.autoFocus();
+    else if (focused) (this.menu.querySelector(`[data-id="${focused}"]`) as HTMLButtonElement | null)?.focus({ preventScroll: true });
     clear(this.foot);
     const n = this.newest;
     this.foot.append(

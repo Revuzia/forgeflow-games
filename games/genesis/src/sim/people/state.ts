@@ -47,6 +47,9 @@ export interface Culture {
   mode: number;
   /** when a taboo was sworn (recipe index -> tick): generations later it may be forgotten */
   tabooSince?: Record<string, number>;
+  /** (fix-r3) an oath sworn after a deadly fire of their own (recipe index -> tick it lapses): lifted then, with a
+   * 'took up fire again' line, not after the 50 years of a taboo */
+  oathUntil?: Record<string, number>;
 }
 
 /** a party within a settlement (CONTRACT §8.5): whose voice carries in war, faith and new ideas */
