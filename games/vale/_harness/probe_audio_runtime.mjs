@@ -32,9 +32,9 @@
 //     line peak (voice momentary max) >= 3 dB over the sfx short-term p99 (the sfx bus + threat path, measured
 //     before the voice duck); the master integrated within tokens.audio.loudness (-18 ± 1.5 LUFS; CW2 refix). Reported: the lines against the teamfight windows (sfx short-term above its p90),
 //     master integrated (tokens: -18 ± 1.5 LUFS; the closing review measured -19.0), ambience (about -28), music.
-//     enemyDownFires is gated only when an enemy fighter died in sight of the cue path: the probe counts the sim's own
-//     enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one (killEntity on an enemy
-//     fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
+//     enemyDownFires is gated only when an enemy fighter died in your team's sight (fog silences the rest): the probe
+//     counts the sim's own enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one beside
+//     your fighter (killEntity on an enemy fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
 //   node _harness/probe_audio_runtime.mjs dead [--out <json>]
 //     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
 //     output split by two filters (< 500 Hz, > 2 kHz) and metered per block. 8 s alive, then your fighter is killed
@@ -329,10 +329,12 @@ async function runMatch() {
     // the sim's own enemy fighter deaths that the cue path answers with enemyDown (not yours: 'takedown' carries those)
     await page.evaluate(() => {
       const m = window.__vale.state.match.value;
-      const st = window.__deaths = { enemy: 0, enemyNotYours: 0 };
+      const st = window.__deaths = { enemy: 0, enemyNotYours: 0, enemyNotYoursInSight: 0 };
       m.onEvents((evs) => { for (const e of evs) if (e.e === 'death' && e.kind === 'fighter') {
         const me = m.view.players.find((p) => p.player === m.you), d = m.view.entity(e.dst);
-        if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) st.enemyNotYours++; } } });
+        if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) { st.enemyNotYours++;
+          // fog: the engine hears only what your team sees (seen()), so a death out of sight is rightly silent
+          if (((d.visibleMask ?? 0) >>> me.team) & 1) st.enemyNotYoursInSight++; } } } });
     });
     const tMatch = Date.now();
     let deadSeen = 0;
@@ -346,11 +348,16 @@ async function runMatch() {
       // no enemy fighter has fallen by someone else's hand by the last 30 s: force one, so enemyDown is measured
       if (rep.forcedEnemyDeath === null && (s.t ?? 0) >= SECONDS - 30) {
         rep.forcedEnemyDeath = await page.evaluate(async () => {
-          if (window.__deaths.enemyNotYours > 0) return false;
+          if (window.__deaths.enemyNotYoursInSight > 0) return false;
           const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you);
           const { killEntity } = await import('/src/sim/combat.ts');
           const foe = m.view.players.map((p) => W.entity(p.entity)).find((e) => e && e.alive && e.team !== me.team);
           if (!foe) return 'no live enemy fighter';
+          // beside your fighter, so your team sees it fall: a tick or two for the vision pass
+          const mine = W.entity(me.entity);
+          foe.x = mine.x + 2; foe.y = mine.y;
+          const until = performance.now() + 3000;
+          while (performance.now() < until && !(((m.view.entity(foe.id)?.visibleMask ?? 0) >>> me.team) & 1)) await new Promise((r) => setTimeout(r, 100));
           // outside a tick: the world's event buffer is reset by the next step, so the batch goes to the match's
           // listeners here (as the sync mode injects its hits)
           const n0 = W.events.length;
@@ -416,10 +423,11 @@ async function runMatch() {
     rep.cueTop = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 30);
     rep.gates = {
       healPerMinLe6: rep.cueLog.healPerMin <= 6,
-      // gated only when an enemy fighter fell by another hand than yours (the run forces one when the match had none)
-      enemyDownFires: rep.enemyDeaths.enemyNotYours === 0 ? null : rep.cueLog.enemyDown > 0,
+      // gated only when an enemy fighter fell in your team's sight by another hand than yours (forced when the match had none)
+      enemyDownFires: rep.enemyDeaths.enemyNotYoursInSight === 0 ? null : rep.cueLog.enemyDown > 0,
       announcerPeakOverSfxP99Ge3: rep.announcer.peakOverSfxP99 !== null && rep.announcer.peakOverSfxP99 >= 3,
-      masterIntegratedInTokens: loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
+      // a match's loudness needs a match: a short capture (the countdown, no fights) reports it, not gates it
+      masterIntegratedInTokens: rep.seconds < 240 ? null : loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
     };
     rep.tokens = TOK;
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so
