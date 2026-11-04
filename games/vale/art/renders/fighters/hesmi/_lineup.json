@@ -1,0 +1,361 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "hesmi": {
+      "glb": "art/out/fighters/hesmi/hesmi.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 181,
+          "valueBands": {
+            "top": 60.2,
+            "mid": 45.4,
+            "bottom": 15.8
+          },
+          "accentPct": 1.84,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.84
+        },
+        "90": {
+          "heightPx": 179,
+          "valueBands": {
+            "top": 63.9,
+            "mid": 36.9,
+            "bottom": 15.3
+          },
+          "accentPct": 2.63,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.63
+        },
+        "180": {
+          "heightPx": 147,
+          "valueBands": {
+            "top": 66.7,
+            "mid": 37.7,
+            "bottom": 17.6
+          },
+          "accentPct": 2.64,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.64
+        },
+        "270": {
+          "heightPx": 174,
+          "valueBands": {
+            "top": 65.0,
+            "mid": 46.4,
+            "bottom": 19.1
+          },
+          "accentPct": 2.6,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.6
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.64,
+      "accentOk": true
+    },
+    "marund": {
+      "glb": "art/out/fighters/marund/marund.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 57.4,
+            "mid": 43.1,
+            "bottom": 17.9
+          },
+          "accentPct": 2.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "90": {
+          "heightPx": 182,
+          "valueBands": {
+            "top": 61.3,
+            "mid": 38.7,
+            "bottom": 17.6
+          },
+          "accentPct": 2.26,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.26
+        },
+        "180": {
+          "heightPx": 165,
+          "valueBands": {
+            "top": 58.0,
+            "mid": 37.6,
+            "bottom": 19.7
+          },
+          "accentPct": 1.35,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.35
+        },
+        "270": {
+          "heightPx": 178,
+          "valueBands": {
+            "top": 60.9,
+            "mid": 38.2,
+            "bottom": 16.2
+          },
+          "accentPct": 2.41,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.41
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.72,
+      "accentOk": true
+    },
+    "burdam": {
+      "glb": "art/out/fighters/burdam/burdam.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 177,
+          "valueBands": {
+            "top": 61.3,
+            "mid": 36.6,
+            "bottom": 22.3
+          },
+          "accentPct": 1.29,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.29
+        },
+        "90": {
+          "heightPx": 184,
+          "valueBands": {
+            "top": 49.5,
+            "mid": 24.4,
+            "bottom": 19.8
+          },
+          "accentPct": 1.79,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.79
+        },
+        "180": {
+          "heightPx": 153,
+          "valueBands": {
+            "top": 42.2,
+            "mid": 25.4,
+            "bottom": 20.9
+          },
+          "accentPct": 0.52,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.52
+        },
+        "270": {
+          "heightPx": 178,
+          "valueBands": {
+            "top": 45.4,
+            "mid": 35.9,
+            "bottom": 19.9
+          },
+          "accentPct": 0.37,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.37
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 1.79,
+      "accentOk": false
+    },
+    "kemdo": {
+      "glb": "art/out/fighters/kemdo/kemdo.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 139,
+          "valueBands": {
+            "top": 54.6,
+            "mid": 45.8,
+            "bottom": 18.5
+          },
+          "accentPct": 2.11,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.11
+        },
+        "90": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 49.6,
+            "mid": 47.4,
+            "bottom": 18.8
+          },
+          "accentPct": 1.49,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.49
+        },
+        "180": {
+          "heightPx": 163,
+          "valueBands": {
+            "top": 63.2,
+            "mid": 43.0,
+            "bottom": 23.7
+          },
+          "accentPct": 1.15,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.15
+        },
+        "270": {
+          "heightPx": 175,
+          "valueBands": {
+            "top": 60.9,
+            "mid": 50.9,
+            "bottom": 16.1
+          },
+          "accentPct": 0.18,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.18
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.11,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "hesmi",
+      "b": "marund",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.7,
+        "90": 0.645,
+        "180": 0.601,
+        "270": 0.612
+      },
+      "iou64Max": 0.7,
+      "iou64_norm": {
+        "0": 0.652,
+        "90": 0.612,
+        "180": 0.741,
+        "270": 0.565
+      },
+      "iou64NormMax": 0.741,
+      "ok": true
+    },
+    {
+      "a": "hesmi",
+      "b": "burdam",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.673,
+        "90": 0.616,
+        "180": 0.785,
+        "270": 0.57
+      },
+      "iou64Max": 0.785,
+      "iou64_norm": {
+        "0": 0.688,
+        "90": 0.56,
+        "180": 0.767,
+        "270": 0.556
+      },
+      "iou64NormMax": 0.767,
+      "ok": true
+    },
+    {
+      "a": "hesmi",
+      "b": "kemdo",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.451,
+        "90": 0.464,
+        "180": 0.497,
+        "270": 0.386
+      },
+      "iou64Max": 0.497,
+      "iou64_norm": {
+        "0": 0.451,
+        "90": 0.612,
+        "180": 0.421,
+        "270": 0.336
+      },
+      "iou64NormMax": 0.612,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "burdam",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.613,
+        "90": 0.498,
+        "180": 0.62,
+        "270": 0.508
+      },
+      "iou64Max": 0.62,
+      "iou64_norm": {
+        "0": 0.54,
+        "90": 0.48,
+        "180": 0.687,
+        "270": 0.476
+      },
+      "iou64NormMax": 0.687,
+      "ok": true
+    },
+    {
+      "a": "marund",
+      "b": "kemdo",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.463,
+        "90": 0.356,
+        "180": 0.41,
+        "270": 0.32
+      },
+      "iou64Max": 0.463,
+      "iou64_norm": {
+        "0": 0.572,
+        "90": 0.628,
+        "180": 0.444,
+        "270": 0.322
+      },
+      "iou64NormMax": 0.628,
+      "ok": true
+    },
+    {
+      "a": "burdam",
+      "b": "kemdo",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.543,
+        "90": 0.648,
+        "180": 0.499,
+        "270": 0.547
+      },
+      "iou64Max": 0.648,
+      "iou64_norm": {
+        "0": 0.387,
+        "90": 0.663,
+        "180": 0.481,
+        "270": 0.492
+      },
+      "iou64NormMax": 0.663,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/hesmi_p4.png",
+  "seconds": 14.9
+}
