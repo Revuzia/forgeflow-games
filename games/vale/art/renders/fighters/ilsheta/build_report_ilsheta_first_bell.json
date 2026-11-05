@@ -27,29 +27,29 @@
   },
   "uv_coverage": 0.627,
   "bake": {
-    "base": 3.14,
-    "rough_metal": 2.12,
-    "normal": 1.81,
-    "ao": 3.97,
+    "base": 11.19,
+    "rough_metal": 4.48,
+    "normal": 3.71,
+    "ao": 3.37,
     "normal_fixed_px": 14237,
-    "projection": 24.21,
-    "pack_save": 24.38,
-    "total": 35.57
+    "projection": 51.21,
+    "pack_save": 51.52,
+    "total": 74.75
   },
   "tris": 19092,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2352508,
+  "glb_bytes_raw": 2342100,
   "optimize": {
     "ok": true,
-    "before": 2352508,
-    "after": 973392
+    "before": 2342100,
+    "after": 964344
   },
-  "glb_bytes": 973392,
+  "glb_bytes": 964344,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (951 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_first_bell_base 2048x2048 262K, ilsheta_first_bell_normal 512x512 38K, ilsheta_first_bell_orm 512x512 62K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta_first_bell.glb (942 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ilsheta_first_bell_base 2048x2048 253K, ilsheta_first_bell_normal 512x512 38K, ilsheta_first_bell_orm 512x512 62K",
       "  skinned meshes: ilsheta_accent_1(564v), ilsheta_accent_2(152v), ilsheta_first_bell(16331v)",
       "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -87,23 +87,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_first_bell.png",
-    "seconds": 9.2,
+    "seconds": 68,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.1,
-      "model": 2.45,
-      "lows_bind": 2.95,
-      "uv": 4.97,
-      "bake": 35.57,
-      "export": 0.1,
-      "optimize": 0.75,
-      "load_test": 0.14,
-      "three_qa": 9.4
+      "rig": 0.02,
+      "materials": 1.28,
+      "model": 23.06,
+      "lows_bind": 20.24,
+      "uv": 17.31,
+      "bake": 74.75,
+      "export": 0.19,
+      "optimize": 1.09,
+      "load_test": 0.28,
+      "three_qa": 68.47
     },
-    "total_s": 56.47
+    "total_s": 206.91
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

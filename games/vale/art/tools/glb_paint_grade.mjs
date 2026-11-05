@@ -9,6 +9,8 @@
 //   --dark-gain k --dark-l v  inside the mask, texels under display luma v (0-1) multiply toward k (smoothly, a value at
 //                             v unchanged)
 //   --q N                     the WebP quality of the new base colour (default 88)
+//   --part-contrast mask.png:k  stretch the texels under a part mask round the part's median luma by k, hue kept (after
+//                             the rest; closing CW5 r2 refix 2)
 //   --part-gain mask.png:g    multiply the texels under a part mask by g (repeatable; applied after the rest; masks from
 //                             art/tools/partmap_mask.py, closing CW5 r2 refix: id-masked material steps)
 //
@@ -129,6 +131,21 @@ for (const spec of args.flatMap((a, i) => (a === '--part-gain' ? [args[i + 1]] :
   for (let p = 0; p < W * H; p++) {
     if (m.data[p * m.info.channels] < 128) continue;
     for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * g)));
+  }
+}
+for (const spec of args.flatMap((a, i) => (a === '--part-contrast' ? [args[i + 1]] : []))) {
+  const k = spec.lastIndexOf(':');
+  const g = Number(spec.slice(k + 1));
+  const m = await sharp(spec.slice(0, k)).resize(W, H, { kernel: 'nearest' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const under = [];
+  for (let p = 0; p < W * H; p++) if (m.data[p * m.info.channels] >= 128) under.push(lum(p * C));
+  under.sort((a, b) => a - b);
+  const mid = under[Math.floor(under.length / 2)] ?? 0.5;
+  for (let p = 0; p < W * H; p++) {
+    if (m.data[p * m.info.channels] < 128) continue;
+    const v = lum(p * C);
+    const r = v > 1e-4 ? (mid + (v - mid) * g) / v : 1;
+    for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * r)));
   }
 }
 const old = tex.getImage().byteLength;

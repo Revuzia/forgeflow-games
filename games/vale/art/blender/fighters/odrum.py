@@ -1051,7 +1051,7 @@ def model(ctx) -> list:
 # head's crisp cracks) costs more bytes at the default q80 than the 1172 KiB budget leaves ──
 from common import export as _export  # noqa: E402
 
-Q_BASE = 60                          # (closing polish: the eye glaze and mouth rings put q63 at 1188 KiB; q60)
+Q_BASE = 54                          # (closing polish: the eye glaze and mouth rings put q63 at 1188 KiB; q60; round 2, the richer ochre and wider rings: q54)
 # (polish 10-28: the paler, less saturated painting compresses ~35 KB larger: q66 -> 1171 KiB)
 _optimize0 = _export.optimize
 

@@ -105,6 +105,9 @@ CARDS = {
         # (CW5 r2, par:lisvel: the face was a blank oval 75 px tall, blown by a near-frontal head light: a three-quarter
         # shot from the knees up, the face about 150 px and turned to camera, keyed from her upper right so the nose,
         # lips and visor model; the bow's raised tip leaves the frame)
+        # (CW5 r2 refix 2, par:lisvel: the Dawn Line frame at yaw 22 looked along the bow's plane, its flat limb a plank
+        # across the torso: the full draw of her plain shot from her right, looking square onto the bow's plane, so the
+        # limb is thin, the string makes its V to the drawing hand and the torso stands clear)
         "splash": {"clip": "attack1", "t": 0.30, "yaw": -30.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
                    "box_top": 2.0, "box_lo": 0.62, "box_w": 0.42,
                    "key_az": 250.0, "key_el": 38.0, "key_color": "#FFDDB0", "sun": 2.2, "rim_cool": 1.6,
@@ -115,7 +118,7 @@ CARDS = {
                               "power": 40.0, "size": 0.25}]},
         # (CW5, lisvel-M1: the splash's near-frontal head light flattened the carved face plate into a blank oval in
         # the bust; a key from her upper right, low power, so the nose, the lips and the visor's dark band model)
-        "portrait": {"yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.0, "bust_lo": 0.10, "bust_hi": 0.30,
+        "portrait": {"clip": "cast_a1", "t": 0.44, "yaw": 30.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.0, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 18.0,
                                 "size": 0.10},
                                {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
@@ -2227,6 +2230,8 @@ def _trim_band(d, w=0.017):
     return _ss(w, w * 0.75, np.abs(d))
 
 
+# (CW5 r2 refix 2: the shipped base GLB's tabard, tabard_skirt x1.2 and legs x1.3 contrast round each part's median are
+# art/tools/glb_paint_grade.mjs --part-contrast grades on top of this paint: a rebuild loses them, re-apply)
 def paint_tabard(p, n):
     """the steel-blue felt tabard (review item 4: hue 209, sat 19 % in the albedo, under the 40 % ceiling) with the
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""

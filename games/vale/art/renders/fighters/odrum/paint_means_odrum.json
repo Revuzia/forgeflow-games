@@ -4,7 +4,7 @@
     "texels": 62948
   },
   "mask": {
-    "hex": "#C5A87E",
+    "hex": "#C6A36E",
     "texels": 338962
   },
   "neckwrap": {
@@ -76,7 +76,7 @@
     "texels": 932
   },
   "pot_R": {
-    "hex": "#A28764",
+    "hex": "#A48357",
     "texels": 95339
   },
   "pot_rim_R": {
@@ -92,7 +92,7 @@
     "texels": 1072
   },
   "pot_L": {
-    "hex": "#A38764",
+    "hex": "#A58457",
     "texels": 94181
   },
   "pot_rim_L": {

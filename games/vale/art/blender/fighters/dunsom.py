@@ -1831,6 +1831,15 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
         sd = face_sd(pp[:, 0], pp[:, 2])
         lin[m] = lin[m] * (1 - 0.35 * ss(-0.012, 0.0, sd))[:, None]
         lin[m] = _mask_inlays(lin[m], pp)
+    # (closing polish dunsom-death-mesh, round 2: the dome over the skull, bare only in the death, took the projection's
+    # dark 'under the hat' and read as a lid: it is the hood's own lavender)
+    m = sel("hood")
+    if m is not None:
+        zh = p[m][:, 2]
+        ref = (zh > 1.72) & (zh < 1.88) & (p[m][:, 1] > 0.0)
+        if ref.any():
+            w = ss(1.87, 1.93, zh)[:, None]
+            lin[m] = lin[m] * (1 - w) + np.median(lin[m][ref], axis=0)[None, :] * w
     # lineup_qa (the game's chain) measured the middle band at L* 36.8 (bible 45-65) and the grade pushes the painted
     # lavender toward violet: the coat's cloth parts are lifted (COAT_LIFT, linear) and eased 20 % toward grey
     for name in ("coat_top", "skirt", "sleeve_L", "sleeve_R", "hood"):
@@ -2304,11 +2313,15 @@ def _hang_lantern(skel, poses, loop, extra=None):
     if loop:
         rec.append(rec[0])
     out = [dict(p) for p in poses]
+    settle = min(8, n // 3)                   # (a one-shot clip hands over to the idle: the swing settles in its last frames)
     for f in range(n):
         Pm = frames[f % m]
         R = Pm.to_3x3()
         y = R.col[1].normalized()
         d = rec[f]
+        if not loop and f > n - 1 - settle:
+            u = (f - (n - 1 - settle)) / settle
+            d = d.lerp(down, u * u * (3 - 2 * u)).normalized()
         # fix pass 1: the lantern never goes through the floor (the sweep skimmed it, the fallen crook lies on it):
         # it tips toward the horizontal until its base clears the ground
         piv = Pm.translation
@@ -2771,6 +2784,16 @@ def _death_pins(skel, clip, keys, t_let, t_land, t_hat0, t_hat1):
         a0 = W0.to_3x3().col[1].normalized()
         a1 = V((DEATH_FALL[0], DEATH_FALL[1], 0.0)).normalized()
         q_end = a0.rotation_difference(a1)
+        # (round 2, clip_floor: the hook came to rest pointing down, its pivot 12 cm and the lantern 23 cm under the floor:
+        # the fallen crook rolls about its own shaft so the hook lies flat on the ground beside it)
+        hw = q_end.to_matrix() @ ((W0 @ (_prop_rest0(skel_).inverted() @ V(tuple(HANG)))) - piv)
+        perp = hw - a1 * hw.dot(a1)
+        flat = a1.cross(V((0.0, 0.0, 1.0))).normalized()
+        if perp.dot(flat) < 0.0:
+            flat = -flat
+        if perp.length > 1e-4:
+            sign = 1.0 if a1.dot(perp.cross(flat)) >= 0.0 else -1.0
+            q_end = Quaternion(a1, sign * perp.angle(flat)) @ q_end
         fH = int(round(t_hat0 * N))
         Wh0 = skel_.fk(out[fH])["x_hat"].copy()
         Rr = skel_.rest["x_hat"].to_3x3()
