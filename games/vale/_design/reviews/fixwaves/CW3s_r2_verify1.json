@@ -1,0 +1,200 @@
+{
+  "wave": "CW3s",
+  "round": 2,
+  "verify": 1,
+  "verifier": "adversarial verifier, round 2 verify 1, 2026-11-05. Sim and content measured at e8b004d3; HEAD 7f765818 has no diff in src/sim, src/contracts, content/modes.json, content/items.json, content/fighters or the soak.",
+  "pass": false,
+  "summary": "CW3s does not pass. The soak's seating fix is real (20 distinct team-0 lineups in 20 RIFT seeds), so these are the first verifier numbers on really shuffled seats. On fresh seeds 2101-2120, adept reaches takedowns 6.15 and stretch 3.0 min, but veteran falls to 4.35 and 3.5 min, last-hit share is 44.3 / 46.6 % (target >= 50), in lane is 70.1 / 69.2 % (done-list 75), ilsheta's first ult is 10.3 min at adept, and veteran Sunsplinter is 3.2 min. Veteran beats novice 34/40 and 36/40 on two fresh windows, but the engineers' earlier real-seat window read 30/40. Handoffs, the names lint, ruling 11 heights, duo level 6, BRIDGE pace, the balance read and the gauge source all check out. probe_sim_buildplan fails 14/1, and the bisect pins it on this lane's Hourcleaver re-key.",
+  "commands": [
+    "node _harness/probe_sim_bot_soak.ts --suites rift,mirror,bridge,human --seeds 20 --seed0 2101 --cut 0 --lineup shuffle --mirror-weak novice,adept --jobs 3 --label fw_CW3s_r2v1 (200 matches, 0 bot faults, _harness/_reports/fw_W4_soak_fw_CW3s_r2v1.txt)",
+    "node _harness/probe_sim_bot_soak.ts --suites mirror --seeds 20 --seed0 2201 --cut 0 --lineup shuffle --mirror-weak novice --jobs 3 --label fw_CW3s_r2v1b (_harness/_reports/fw_W4_soak_fw_CW3s_r2v1b.txt)",
+    "node _harness/probe_camera.ts --only heights --gate-heights --out _harness/_reports/fw_CW3s_r2v1_heights.json",
+    "node _harness/probe_audio_procs.mjs --seed 7 --out _harness/_reports/fw_CW3s_r2v1_procs.json",
+    "node _harness/probe_sim_buildplan.ts, plus the same probe on git archive copies of 10 commits and on 9f96ec8b~1",
+    "probes: rekey, modes, camps, core_effects, items, determinism, edge, fighters, economy, shop, structures, tempo, waves, units, practice, fray, skin_neutral, match_core, kit_hooks, draft_pace; pacing.ts; npm run typecheck; npm run content:check"
+  ],
+  "items": [
+    {
+      "id": "done:1",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "fw_W4_soak_fw_CW3s_r2v1.txt, seeds 2101-2120, real shuffled seats, adept / veteran. Takedowns by 10:00: 6.15 / 4.35 (target >= 6, veteran FAIL). Games with none: 0/20 and 0/20 (PASS). Longest no-death stretch from 3:00: 3.0 / 3.5 min (target <= 3, veteran FAIL). Shadehold takedowns before 14:00: 1.80 / 1.45 (PASS). First ult median after 10:00: ilsheta 10.3 at adept (FAIL), none at veteran. Pooling the engineers' real-seat windows (r2true 5.85 / 5.35, r2bal4 5.88 / 5.44) with this one, weighted by seeds: about 5.93 / 5.24. Adept is near the bar; veteran is clearly under it and varies a lot by window.",
+      "fixHint": "Work on veteran specifically: it scores fewer takedowns than adept on all three real-seat windows, and its dodge 0.85 and patience 1 in RIFT are the likely cause. Try firmer veteran commits in lane trades without lowering dodge, and give ilsheta a looser ult-use threshold in lane trades. Check on two untuned shuffled windows of 40+ games, because 20 seeds swing by more than 1 takedown."
+    },
+    {
+      "id": "done:2",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Same report. Last-hit share: 44.3 / 46.6 % (target >= 50, FAIL). Laners in lane: 70.1 / 69.2 %; the done-list says >= 75 (FAIL), while the soak gate at probe_sim_bot_soak.ts:712 tests >= 65 and prints PASS. Sunsplinter first take: 2.3 / 3.2 min (veteran FAIL; r2true read 8.3 and r2bal4 7.9 at veteran). Passing: Splinters stack (probe_sim_rekey 45/0, maxStacks 3), cores fallen before 16:00 0 / 0, first structure 9.8 / 10.6 min, RIFT adept p90 30.7 min, pacing.ts exit 0.",
+      "fixHint": "The lead must settle two gate conflicts: last-hit >= 50 against takedowns >= 6, and in lane 75 (done-list) against 65 (soak gate). Until then these stay failing. Separately, have veteran laners contest Sunsplinter in time: read why veteran windows run 3.2-8.3 min while adept stays at 1.0-2.3."
+    },
+    {
+      "id": "done:3",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "Veteran beats novice: 34/40 = 85.0 % on seeds 2101-2120 and 36/40 = 90.0 % on seeds 2201-2220 (fw_W4_soak_fw_CW3s_r2v1b.txt), both fresh real-seat windows at or over the bar. The engineers' r2true window (961-980) read 30/40 = 75 %. All three: 100/120 = 83.3 %, under 85. My two windows alone: 70/80 = 87.5 %. Duo level 6: 7.1 / 7.5 min (PASS). Marked partly rather than pass because one window sits exactly on the bar and the pooled figure is below it.",
+      "fixHint": "No lever needed if the lead accepts the fresh-window wording of the criterion. Otherwise measure one more untuned 40-game window and judge on the pool, reading the gate as >= 85 % over at least 120 games."
+    },
+    {
+      "id": "done:4",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "probe_sim_rekey 45/0 with rift_quick start level and start Gleam rows (probe_sim_rekey.ts:135-136) and the no-level-3-start check (:170). The rift_quick description and DESIGN_NOTE.md:53 both state the first-hour start."
+    },
+    {
+      "id": "done:7",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "CW3s part only: npm run typecheck prints no errors and content:check reports 0 warnings. The e2e and HUD parts belong to CW3c and were not measured here."
+    },
+    {
+      "id": "regression:probe_sim_buildplan",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "node _harness/probe_sim_buildplan.ts: 14 passed, 1 failed: 'never: hourcleaver'. Bisect on git archive copies: 15/0 at d562e679 (9f96ec8b~1), 14/1 at 9f96ec8b (this lane's Hourcleaver re-key) and at all 9 later commits tested, including 92b6372b, whose message says buildplan passed. So this is not a recent bot change, as the engineer suspected. run_probes.ts picks up every probe_*.ts, so npm run probe carries the failure. The soak's finished-items row reads 30/31.",
+      "fixHint": "Teach itemRole/buildPlan scoring in src/sim/bots/knowledge.ts what Split Hour does (ability-hit cleave plus shield) so an ability-focused bruiser values Hourcleaver, instead of adding raw stats (+4 attack did not help). If it should not be an early piece, the lead can record that and narrow the probe's check."
+    },
+    {
+      "id": "gameplay:CL-1",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "See done:1 and done:2. Veteran takedowns 4.35, stretch 3.5 min, ilsheta 10.3 at adept, last-hit share 44.3 / 46.6 %. The engineers' 'partly' overstates the late-ult part: the 'none' on their windows does not hold here.",
+      "fixHint": "See done:1."
+    },
+    {
+      "id": "critic:gauge-source",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Page read (no download): the report's describe() table shows count 9879, blueKills mean 6.18, blueDeaths mean 6.14, Diamond tier. blueFirstBlood is a binary flag, so no first-blood time, as the engineer said. modes_economy.md records it."
+    },
+    {
+      "id": "critic:bot-micro",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "Skillshots novice / adept / veteran 50.4 / 73.1 / 77.9 %; same adept targets veteran 80.3 vs adept 76.6 % (PASS). Telegraph dodge 10.8 / 27.0 / 47.5 %. Passive seat vs the bot-played seat: 364 vs 366/min at adept and 265 vs 330/min at veteran, both still under target. The engineer's adept PASS (323 vs 318) does not hold on this window; adept is within noise, veteran is a clear miss.",
+      "fixHint": "Veteran bots should press a passive lane foe harder: raise the pressure term in bot.ts:467 (0.55, kind rift) at veteran so damage on a passive seat reaches the bot-played seat's rate. This should also help veteran takedowns."
+    },
+    {
+      "id": "handoff:CW2:runtime-polish",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Lamps set per game: novice 10.2, adept 15.7, veteran 13.3; games with none 0/40, 0/60, 0/100. Observation, not a failure: Lampglass spends about 1,700-1,800 Gleam on consumables and holds 1.9-2.0 finished items by 25:00 against 2.6-3.0 for other roles; the items gate still passes at 2.56."
+    },
+    {
+      "id": "handoff:CW2:refix1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "probe_audio_procs --seed 7 (a second seed, engineer used 3): exit 0, PASS; kemdo_cooling_kill fired 6, played 6 (fw_CW3s_r2v1_procs.json)."
+    },
+    {
+      "id": "handoff:CW3c:refix1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "probe_sim_modes 30/0 including the slot ping check; probe_sim_edge 94/0; probe_sim_determinism 6/0; src/contracts/sim.ts:64 carries slot."
+    },
+    {
+      "id": "handoff:CW4:monsters-1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "probe_sim_camps 26/0 including spawn facing and restore after a leash reset; content/maps/map_rift.json carries facing values on its camp units."
+    },
+    {
+      "id": "handoff:CW6:marund-odrum",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Better than the engineers' 'partly': lead commit fe33cf48 added arc to the catalog dash schema (catalog.ts:162, :208) and the content value. content/fighters/marund.json:540-542 has arc 0.55 and anim leap; marund.glb contains the domefall_leap clip; probe_sim_core_effects 107/0; content:check 0 warnings. Sim-side check only: the leap was not watched in the client."
+    },
+    {
+      "id": "handoff:CW6:refix1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Same change as handoff:CW6:marund-odrum: movement.ts selfDashArc reads the 0.55 m arc, inside the requested 0.5-0.6 m."
+    },
+    {
+      "id": "marund-M2:content",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Closed by lead commit fe33cf48 after the engineers' not_done: content:check accepts anim 'leap' and art.clips 'leap' maps to domefall_leap (marund.json:575)."
+    },
+    {
+      "id": "handoff:CW3s:quick-rekey-polish",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "names_check CLI: 'Co-op vs bot' and 'Co-op vs. bot' hit 'Co-op vs bots'; \"Doran's Blades\" hits \"Doran's Blade\"; 'Lantern Drill' and 'Practice bench' are clean; content:check 0 warnings."
+    },
+    {
+      "id": "ruling11:art-scale",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "probe_camera --only heights --gate-heights exit 0: body at 28.5 m 86.5-130.4 px, 48/48 in band under ruling 11 (fw_CW3s_r2v1_heights.json). Scales in content: ilsheta 1.19, lisvel 1.07, nurrow 1.08, odrum 1.085, rishal 1.12, sukri 1. Measured on the GLBs in the working tree at the time, including CW6's uncommitted Odrum rebuild. No new render belongs to this lane, so there was no image to review for sensitivity."
+    },
+    {
+      "id": "originality:m1",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "content/fighters/nurrow.json Lullaby Dart text carries the silence-and-refund wording; probe_sim_rekey copy lint 0 hits."
+    },
+    {
+      "id": "originality:m3",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "content/queues.json:80 'Lantern Drill'; the lint is in; content:check 0 warnings."
+    },
+    {
+      "id": "gameplay:CL-2",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Claimed done, but only the stacking half holds (rekey 45/0). The soak's own CL-2 gate, first take <= 3 min, reads 2.3 / 3.2 here and veteran 8.3 / 7.9 on the engineers' real-seat windows. The engineer said the timing was not re-measured.",
+      "fixHint": "See done:2, Sunsplinter at veteran."
+    },
+    {
+      "id": "gameplay:CL-g2",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Duo road level 6 at 7.1 / 7.5 min. xpTable 180, 250, 320, 390, 460 in content/modes.json; rekey 45/0."
+    },
+    {
+      "id": "gameplay:CL-g3",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Same as done:3: 85.0 % and 90.0 % on fresh windows, 83.3 % pooled with r2true.",
+      "fixHint": "See done:3."
+    },
+    {
+      "id": "gameplay:CL-g4",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Re-pooled from the JSON: 200 same-tier RIFT-suite games (r2true 40, r2bal4 160). Reproduces kemdo 71.6, ervet 66.4, odrum 65.5, ulkro 36.1, tunlan 34.6, nurrow 31.3 outside 45-55 % at 95 %. The read is delivered; the imbalance itself is open. Bot piloting and kit strength are not separated."
+    },
+    {
+      "id": "gameplay:CL-g5",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "No change in this round; draft.ts:95 secondaryRole stands and roster growth is long-term.",
+      "fixHint": "Roster growth is long-term work."
+    },
+    {
+      "id": "handoff:CW5:ardit-burdam",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "_design/ROSTER.md Almanac Ledger entry agrees with _design/fighters/burdam.md: #4D4559, #3E3A4C, parchment #D8CDB4 (sheet line 168), oxblood rules."
+    },
+    {
+      "id": "regression:dawn-seal-tip",
+      "severity": "minor",
+      "status": "fail",
+      "evidence": "content/client.json:71 still says 'Until 7:00' while content/modes.json dawnSeal.until is 480 (8:00). The handoff to CW3c has not landed, so players read a wrong rule.",
+      "fixHint": "CW3c: change the tip to 'Until 8:00'."
+    }
+  ],
+  "regressions": [
+    "probe_sim_buildplan fails 14/1 (Hourcleaver never in a first three) since this lane's 9f96ec8b; npm run probe carries it.",
+    "Gameplay tip content/client.json:71 says Dawn Seal lifts at 7:00; the rule is now 8:00 (CW3c file).",
+    "Veteran takedowns (4.35) are below adept (6.15) on real seats. r2true and r2bal4 also put veteran under adept by about 0.5, so this looks like a tier effect rather than noise. No pre-change real-seat baseline exists, so it cannot be called a regression from earlier numbers."
+  ],
+  "notMeasured": [
+    "probe_sim_perf and probe_sim_core_perf were not run (load average 10-28, shared machine); no perf claim was made for this lane.",
+    "Domefall in the real client: only sim, catalog and GLB checks were done.",
+    "probe_sim_core_attack, casting, combat, nav, rng_math, status, vision and dmath, and probe_sim_shop's client use, were not run individually this pass."
+  ]
+}
