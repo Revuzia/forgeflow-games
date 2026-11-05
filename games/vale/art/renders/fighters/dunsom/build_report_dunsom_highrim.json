@@ -30,14 +30,14 @@
   },
   "uv_coverage": 0.608,
   "bake": {
-    "base": 9.15,
-    "rough_metal": 9.35,
-    "normal": 4.18,
-    "ao": 4.6,
+    "base": 5.06,
+    "rough_metal": 4.46,
+    "normal": 2.88,
+    "ao": 2.98,
     "normal_fixed_px": 51346,
-    "projection": 76.12,
-    "pack_save": 76.48,
-    "total": 104.29
+    "projection": 73.1,
+    "pack_save": 73.42,
+    "total": 89.15
   },
   "tris": 22406,
   "mesh_top_m": 2.054,
@@ -67,8 +67,8 @@
       "portrait": "art/out/fighters/dunsom/dunsom_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 262.96,
-      "portrait": 39.62
+      "splash": 76.58,
+      "portrait": 13.23
     }
   },
   "three_qa": {
@@ -100,24 +100,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_highrim.png",
-    "seconds": 39.1,
+    "seconds": 15.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.22,
-      "model": 132.78,
-      "lows_bind": 7.02,
-      "uv": 10.58,
-      "bake": 104.57,
-      "export": 0.24,
-      "optimize": 0.94,
-      "load_test": 0.19,
-      "render": 302.66,
-      "three_qa": 39.84
+      "materials": 0.2,
+      "model": 54.72,
+      "lows_bind": 6.32,
+      "uv": 8.56,
+      "bake": 89.49,
+      "export": 0.17,
+      "optimize": 1.17,
+      "load_test": 0.24,
+      "render": 89.95,
+      "three_qa": 15.84
     },
-    "total_s": 599.27
+    "total_s": 266.76
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,

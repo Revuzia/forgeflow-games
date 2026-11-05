@@ -256,6 +256,9 @@ CARDS = {
         "portrait": {"clip": "idle", "t": 0.0, "yaw": -8.0, "exposure": -1.1, "key_az": 240.0, "key_el": 28.0, "sun": 2.4,
                      "focal": [{"at": "x_lamp", "az": 190.0, "el": 15.0, "dist": 0.7, "color": "#CFE4FF", "power": 30.0,
                                 "size": 0.3}]},
+        # (closing round 2: the face plate's flecks took the bust's speckle p50 to 2.62 > 2.5; a wider Kuwahara (2, 3) only
+        # smeared the face into a blob and left the number alone: one 3x3 median pass under the default 1 px brush)
+        "plate": {"sub_median": 1},
     },
     "ilsheta_stillwater": {
         # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
