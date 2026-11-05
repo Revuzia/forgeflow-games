@@ -153,11 +153,11 @@ A slate cowl with matte painted iron bands (non-metal) and rigid gorge-rope wrap
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `stone` | `#BAC0C6` | 77 | 210° / 6% | cowl crown and rim |
+| `stone` | `#A4B3BD` | 72 | 204° / 13% | cowl crown and rim, a cold slate (closing round 2: the pale cap read as the base at the game camera) |
 | `ironstone` | `#3F4349` | 28 | 216° / 14% | matte iron bands and pins |
 | `wood` | `#B09478` | 63 | 30° / 32% | mask lacquer, pale |
-| `cloth` | `#6E747C` | 49 | 214° / 11% | slate felt apron and rolls (the named #6E747C) |
-| `cloth2` | `#CDC6B6` | 80 | 42° / 11% | linen |
+| `cloth` | `#626C78` | 45 | 213° / 18% | deep slate felt apron and rolls |
+| `cloth2` | `#98A2AC` | 66 | 210° / 12% | slate linen sleeves |
 | `under` | `#33363A` | 22 | 214° / 12% | trousers |
 | `leather` | `#463A31` | 25 | 26° / 30% | belt, forearm wraps, boots, straps |
 | `rope` | `#9A8F7A` | 60 | 39° / 21% | gorge-rope wraps and the coil plate |
@@ -174,11 +174,11 @@ Plum lacquer on the cowl and apron with smoked-amber windows (35% saturation) in
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `stone` | `#D0BCCB` | 78 | 315° / 10% | cowl crown, lilac-plum lacquer |
+| `stone` | `#BE9CC0` | 68 | 297° / 19% | cowl crown, plum lacquer (closing round 2: the lilac wash read as the base at the game camera) |
 | `ironstone` | `#5B3A5E` | 30 | 295° / 38% | the identity plum #5B3A5E (cap bands, toe caps, maul head) |
 | `wood` | `#B99B78` | 66 | 32° / 35% | lacquered pale-walnut mask, mortar pail |
-| `cloth` | `#8E6E98` | 51 | 286° / 28% | plum apron |
-| `cloth2` | `#D6CAD3` | 83 | 315° / 6% | linen, a pale lilac-grey |
+| `cloth` | `#7F5F8C` | 45 | 283° / 32% | plum apron |
+| `cloth2` | `#B89FB8` | 68 | 300° / 14% | linen sleeves, a dusty plum |
 | `under` | `#2F2630` | 17 | 294° / 21% | trousers |
 | `leather` | `#3E2E36` | 21 | 330° / 26% | boots, belt, wraps |
 | `lampresin` | `#9C8566` | 57 | 34° / 35% | smoked-amber window frames and the finial vessel |

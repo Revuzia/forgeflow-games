@@ -169,20 +169,23 @@ SKINS: list = [
      # and middle bands fell to 69.4 / 44.3, under the bible's 70 / 45)
      # (CW6 round 2: with the helm alone ink the bust stayed the base's, portrait dE 8.4: the collar-cowl and the
      # chest plate go ink too, so only the crest and the chalk lines stay light)
-     "parts": {"apron": "#62686F", "sleeves": "#676E78", "chest_plate": "#5A6068", "cowl": "#8E949B",
-               "skirt_L": "#5E646E", "skirt_R": "#5E646E", "torso": "#5E646E",
-               "pauldron_L": "#8A9098", "lames_L": "#8A9098", "pauldron_R": "#8A9098",
+     # (closing round 2, CL-1 game camera: figure-mean dE 3.4: the bands sit on their floors, so value cannot carry it
+     # and the cool ink stayed the base's blue. The whole figure turns on hue instead, a slate-green chalkboard ink
+     # with a warm chalk head; shins and guards keep the named #3A3F47. The accent is untouched, ruling 3)
+     "parts": {"apron": "#5F6C66", "sleeves": "#646F69", "chest_plate": "#56625C", "cowl": "#8A9690",
+               "skirt_L": "#5B6761", "skirt_R": "#5B6761", "torso": "#5B6761",
+               "pauldron_L": "#87938D", "lames_L": "#87938D", "pauldron_R": "#87938D",
                # (closing rishal-M3, CW6: the bust is what the cards and the store compare, and the chalk-white helm
                # and scarf kept it the base's: portrait dE 7.2 < 12. The helm goes the named ink-gray steel under its
                # chalk sketches, the visor a darker smoked glass, the pauldrons a mid ink; the crest keeps #A7A9AC)
-               "helm": "#858A92", "nape": "#5A6068", "visor": "#5F656D", "neck": "#3E3A38",
+               "helm": "#818D87", "nape": "#56625C", "visor": "#59635E", "neck": "#3E3A38",
                # (FIX ROUND 2 gave the dawnglass fins a pale chalky smoke "#CDD0D4" here; W5b: the fins are accent)
                },
      # (fix pass 3, review: the portrait was the base's: the helm itself goes a mid ink-grey under its chalk
      # sketches, the nape plates the deep ink, the crest the named #A7A9AC, and the visor and fins frosted to a
      # chalky smoke-grey glass: the role gain alone left the painted lavender-blue visor blue)
      # (the dawnglass frosted to a chalky smoke-grey: the blue visor made the select-screen portrait the base's)
-     "palette": {"chalk": "#A7A9AC", "stone": "#BAC0C6", "cloth2": "#C9C9C1", "cloth": "#68707C", "ironstone": "#3A3F47",
+     "palette": {"chalk": "#B4B9AE", "stone": "#BBC1B5", "cloth2": "#CBCDBF", "cloth": "#637068", "ironstone": "#3A3F47",
                  "under": "#2E3238", "leather": "#34383F", "linework": "#E6E0D2", "dawnglass": "#A9AEB5"}},
     # Lamplit Visor: smoked lampresin glass and walnut armour from the evening side, a small lamp cage on the crest's
     # front horn (four carved slats round a lampresin bead, 7 cm, duller than the accent ridge)

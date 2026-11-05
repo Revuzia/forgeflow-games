@@ -121,10 +121,14 @@ CARDS = {
 }
 SKINS: list = [
     {"id": "marund_gorgewalk", "extra": {"rope_coil": True}, "card": {"primary": "#4A4F55", "secondary": "#9A8F7A"},
-     "palette": {"stone": "#BAC0C6", "ironstone": "#3F4349", "wood": "#B09478", "cloth": "#6E747C", "cloth2": "#CDC6B6",
+     # (closing round 2, CL-1 game camera: figure-mean dE 3.5, the pale cap and linen sleeves were the base's: the cap
+     # a cold slate #A4B3BD, the apron and rolls the deep slate, the sleeves slate linen, so slate is the whole figure)
+     "palette": {"stone": "#A4B3BD", "ironstone": "#3F4349", "wood": "#B09478", "cloth": "#626C78", "cloth2": "#98A2AC",
                  "under": "#33363A", "leather": "#463A31", "rope": "#9A8F7A"}},
     {"id": "marund_long_evening", "extra": {"lamp_finial": True}, "card": {"primary": "#4A3550", "secondary": "#9C8566"},
-     "palette": {"stone": "#D0BCCB", "ironstone": "#5B3A5E", "wood": "#B99B78", "cloth": "#8E6E98", "cloth2": "#D6CAD3",
+     # (closing round 2, CL-1 game camera: figure-mean dE 5.7, a lilac wash over the base's pale cap: real plum lacquer
+     # on the cap #BE9CC0, the apron #7F5F8C and the sleeves #B89FB8; all under the 40 % saturation line)
+     "palette": {"stone": "#BE9CC0", "ironstone": "#5B3A5E", "wood": "#B99B78", "cloth": "#7F5F8C", "cloth2": "#B89FB8",
                  "under": "#2F2630", "leather": "#3E2E36", "lampresin": "#9C8566"}},
 ]
 SKIN_FLAT = {"rope_coil": "rope", "finial_post": "wood", "finial_vessel": "lampresin"}

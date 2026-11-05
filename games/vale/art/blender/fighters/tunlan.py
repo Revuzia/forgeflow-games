@@ -158,7 +158,9 @@ SKINS: list = [
     {"id": "tunlan_noon_fair", "extra": {"puppet_rods": True}, "card": {"primary": "#6A4F5E", "secondary": "#E2D6C3"},
      "palette": {"sandstone": "#E2D6C3", "lilac": "#B48AA6", "cloth": "#85727B", "wood": "#D3C0A0"}},
     {"id": "tunlan_lamplit", "extra": {}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
-     "palette": {"sandstone": "#5E4D3E", "panel": "#CDB98F", "lampresin": "#A38C6B", "cloth": "#7F6D60", "wood": "#D3C0A0"}},
+     # (closing round 2, CL-1 game camera: figure-mean dE 5.9, per-pixel 5.3: the panels a stronger lamp-lit honey
+     # #C9AD7E, the robe a walnut olive #776A56 away from the base's rose-brown)
+     "palette": {"sandstone": "#5E4D3E", "panel": "#C9AD7E", "lampresin": "#A38C6B", "cloth": "#776A56", "wood": "#D3C0A0"}},
 ]
 SKIN_FLAT = {"rod_0": "wood_dark", "rod_1": "wood_dark", "rodhead_0": "lilac", "rodhead_1": "lilac"}
 SOCKETS = {"weapon": "prop.R", "lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}

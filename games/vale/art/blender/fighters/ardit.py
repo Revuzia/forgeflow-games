@@ -2093,15 +2093,16 @@ def gen_death(skel) -> anim.Clip:
              feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.02, 0.40, 0.04), yl=2.0, yr=-8.0, pr=-60.0),
              R=rh((-0.12, -0.10, -0.46), aim=(-0.6, -0.2, 0.77)),
              L=lh((-0.04, -0.46, -0.30), aim=(0.0, -0.99, 0.12), face=(0.0, 0.12, 0.99)))
+    # (CW5 r2: the FK legs of this pose put the left foot 74 cm through the floor mid-fall and left it 20 cm under in
+    # the corpse hold, clip_floor -0.86 m: both feet stay on the ground by IK all through the fall, the knees drawn up)
     side = anim.merge(anim.arms_relaxed(), anim.P(hips=(10, 0, -78), spine=(8, 0, -6), chest=(6, 0, -4),
-                                                  neck=(4, 0, 8), head=(6, 10, 14), thigh_L=(30, 0, 0), shin_L=(-50, 0, 0),
-                                                  thigh_R=(40, 0, 0), shin_R=(-70, 0, 0), foot_L=(10, 0, 0),
-                                                  foot_R=(15, 0, 0)))
-    side["hips_loc"] = (-0.62, 0.06, -hip_h + 0.30)
+                                                  neck=(4, 0, 8), head=(6, 10, 14)))
+    side["hips_loc"] = (-0.62, 0.06, -hip_h + 0.36)
     side["ik"] = {"hand.L": HT(pos=(0.15, -0.70, 0.62), pole=(0.3, 0.8, 0.4)),
                   "aim.L": AimRoll((0.0, -1.0, 0.02), 1.0, (0.0, 0.0, 1.0)),
                   "hand.R": HT(pos=(-1.15, -0.20, 0.10), pole=(-0.2, 0.5, 1.0)),
                   "aim.R": AimRoll((0.60, -0.80, 0.02), 1.0, (0.0, 0.0, 1.0))}
+    side["ik"].update(feet_(l=(-0.22, -0.10, 0.0), r=(-0.34, 0.10, 0.0), yl=-20.0, yr=-30.0))
     rest = anim.add(side, anim.P(head=(4, 4, 4), spine=(-2, 0, 0)))
     keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.32, kneel, "in"), (0.50, tip, "inout"), (0.74, side, "in"),
             (0.84, rest, "out"), (1.0, rest, "linear")]

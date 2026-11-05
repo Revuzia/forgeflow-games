@@ -141,15 +141,15 @@ Ink-grey armour (`#3A3F47`, matte painted, non-metal) drawn over with chalk line
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
-| `chalk` | `#A7A9AC` | 69 | 216° / 3% | the named crest #A7A9AC |
-| `stone` | `#BAC0C6` | 77 | 210° / 6% | pauldrons, lighter ink-grey |
-| `cloth2` | `#C9C9C1` | 81 | 60° / 4% | scarf |
-| `cloth` | `#7B8390` | 55 | 217° / 15% | tabard, mid ink-grey |
+| `chalk` | `#B4B9AE` | 74 | 87° / 6% | the crest, a warm chalk (closing round 2) |
+| `stone` | `#BBC1B5` | 77 | 90° / 6% | pauldrons, lighter slate-green ink |
+| `cloth2` | `#CBCDBF` | 82 | 69° / 7% | scarf |
+| `cloth` | `#637068` | 46 | 143° / 12% | tabard, mid slate-green ink |
 | `ironstone` | `#3A3F47` | 26 | 217° / 18% | the named ink-grey #3A3F47 (shins, guards) |
 | `under` | `#2E3238` | 21 | 216° / 18% | leggings |
 | `linework` | `#E6E0D2` | 89 | 42° / 9% | chalk line-work (thin lines only, at most 20% of the surface; exempt from the L* 86 area rule) |
 
-Per-part overrides (closing rishal-M3, CW6: the chalk-white helm kept the bust the base's, portrait dE 7.2 under the standard floor 12): the helm goes the named ink-grey steel `#858A92` (L* 57) under its chalk sketches, the visor a smoked `#5F656D`, the nape `#5A6068`, the pauldrons and lames `#8A9098`, the collar-cowl `#8E949B` and the chest plate `#5A6068`; the crest keeps `#A7A9AC`, so the crest and the chalk lines are the light notes.
+Per-part overrides (closing rishal-M3, CW6, re-hued in closing round 2: the bands sit on their floors, so value could not carry the skin at the game camera, figure-mean dE 3.4; the figure turns on hue, a slate-green chalkboard ink): the helm `#818D87` (L* 57) under its chalk sketches, the visor a smoked `#59635E`, the nape `#56625C`, the pauldrons and lames `#87938D`, the collar-cowl `#8A9690` and the chest plate `#56625C`; the crest `#B4B9AE` and the chalk lines are the light notes. Shins and guards keep the named `#3A3F47`; the accent is never recoloured (ruling 3).
 
 Value bands (area-weighted): top **73** (70-85) · mid **52** (45-65) · feet **25** (20-35).
 

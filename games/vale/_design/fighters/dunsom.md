@@ -162,7 +162,7 @@ A parchment hood printed with tables of the day (`#D8CDB4`) and an ink-black cro
 | `cloth2` | `#D8CDB4` | 83 | 42° / 17% | the named parchment hood #D8CDB4 and scarf |
 | `wood` | `#2E2A26` | 17 | 30° / 17% | the named ink crook #2E2A26 |
 | `wood_dark` | `#2E2A26` | 17 | 30° / 17% | ink lantern frame |
-| `cloth` | `#85818F` | 55 | 257° / 10% | lighter dusk-grey coat so the middle band holds |
+| `cloth` | `#66708A` | 47 | 223° / 26% | iron-gall ink-blue coat (closing round 2: the dusk-grey coat read as the base's lilac at the game camera) |
 
 Value bands (area-weighted): top **72** (70-85) · mid **48** (45-65) · feet **28** (20-35).
 

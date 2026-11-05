@@ -300,7 +300,7 @@ SKINS: list = [
     {"id": "dunsom_highrim", "extra": {}, "card": {"primary": "#6E5F4E", "secondary": "#CDBB9C"},
      "palette": {"cloth2": "#CDBB9C", "wood": "#BFAE95"}},
     {"id": "dunsom_almanac", "extra": {"almanac_pages": True}, "card": {"primary": "#4A453E", "secondary": "#D8CDB4"},
-     "palette": {"cloth2": "#D8CDB4", "wood": "#2E2A26", "wood_dark": "#2E2A26", "cloth": "#85818F"}},
+     "palette": {"cloth2": "#D8CDB4", "wood": "#2E2A26", "wood_dark": "#2E2A26", "cloth": "#66708A"}},
 ]
 SKIN_FLAT = {"almanac_pages": "cloth2", "almanac_cords": "leather"}
 
@@ -2016,11 +2016,13 @@ SKIN_PARTS = {
     # frame and (SKIN_CLOTH) a dusty taupe coat at the base coat's value
     "dunsom_highrim": {"hat": "#B9A684", "scarf": "#B39C78", "crook_shaft": "#C6AF8C", "hand_R": "#7C5B3E",
                        "hand_L": "#7C5B3E", "lantern_frame": "#6C6258", "lantern_ring": "#6C6258"},
-    "dunsom_almanac": {"hat": "#BDB49E", "scarf": "#A39A86", "crook_shaft": "#2E2A26", "lantern_frame": "#2E2A26",
+    # (closing round 2, CL-1 game camera: figure-mean dE 2.1, a pale hat over the base's own lilac coat: the hat a warm
+    # parchment, the scarf parchment, and in SKIN_CLOTH an iron-gall ink-blue coat #66708A at the mid band's floor)
+    "dunsom_almanac": {"hat": "#CCBF9C", "scarf": "#C9BD9E", "crook_shaft": "#2E2A26", "lantern_frame": "#2E2A26",
                        "lantern_ring": "#2E2A26", "buckle": "#2E2A26", "crook_ferrule": "#262326"},
 }
 COAT_PARTS = ("coat_top", "skirt", "sleeve_L", "sleeve_R", "hood")
-SKIN_CLOTH = {"dunsom_almanac": ("#85818F", "#7D7185", COAT_PARTS),
+SKIN_CLOTH = {"dunsom_almanac": ("#66708A", "#7D7185", COAT_PARTS),
               "dunsom_highrim": ("#827A6E", "#7D7185", COAT_PARTS)}
 INK_HEX = "#3A342C"
 
