@@ -57,7 +57,7 @@ const JUNGLE_INVADE_COST = 25;
 const JUNGLE_OBJECTIVE_FROM = 360;
 /** a grovehunter ganks from this time (s) — its first clears come first (CW3 CL-1: ganks from 3:00 doubled the early
  *  takedowns but cost the roads ~2 points of last-hit share, the G1 bar's whole margin) */
-const JUNGLE_GANK_FROM = 360;
+const JUNGLE_GANK_FROM = 270;
 /** an all-in keeps chasing the fighter it was started on for at most this long (s) once its combo is spent (CW3 CL-1) */
 const ALLIN_COMMIT = 7;
 /** a roam is given up after this long without its kill (s) */
@@ -255,7 +255,7 @@ export class Bot extends BotBase implements BotController {
       const margin = dmg / Math.max(1, f.hp + f.shield);
       if (margin > this.killMargin) { this.killMargin = margin; this.killTarget = f; }
     }
-    if (this.killMargin < (rift && this.lanePhase() ? 0.95 : 1.1)) this.killTarget = null;
+    if (this.killMargin < (rift && this.lanePhase() ? (this.now < 600 ? 0.9 : 0.95) : 1.1)) this.killTarget = null;
     // lane opponent: the nearest noticed enemy fighter on my lane, close by
     this.laneEnemy = this.nearestEnemyFighter(this.prof.attackRange + 6);
     if (this.laneEnemy && this.lane >= 0 && !this.jungle) {
@@ -449,13 +449,14 @@ export class Bot extends BotBase implements BotController {
     else if (kind === 'rift' && b && b.phase !== 'early' && this.nearbyCamp(25) >= 0 && this.perc.enemyUnits.length === 0) consider('farm', 0.3);
     // trade: only with an edge (hp lead, their cooldowns spent, them low), short, then a breather
     const le = this.laneEnemy;
-    if (this.mode === 'trade' && now - this.modeSince > 3.5) this.tradeRestUntil = now + 6;
-    if (le && hpF > 0.55 && this.adv >= 0.45 && now >= this.tradeRestUntil && this.towerSafe(le.x, le.y, 0.5) &&
+    // (CW3s r2, critic bot-micro: the breather is short against an opponent that has not answered a blow)
+    if (this.mode === 'trade' && now - this.modeSince > 3.5) this.tradeRestUntil = now + (kind === 'rift' && now - this.foeHitAt > 8 ? 2 : 6);
+    if (le && hpF > (edgy ? 0.5 : 0.55) && this.adv >= 0.45 && now >= this.tradeRestUntil && this.towerSafe(le.x, le.y, 0.5) &&
       (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
       const leF = le.hp / Math.max(1, le.maxHp);
       const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
       // hitting a fighter that stands in its own wave turns that wave on me: a trade there costs more
-      const wavePenalty = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
+      const wavePenalty0 = Math.max(0, this.coverWicks(le) - 1) * 0.07 + (this.unitDps > 0 ? 0.1 : 0);
       // (CW3 CL-1 measured trade windows — a level on the opponent, my burst ready, the opponent turning to a Wick — on
       // 40 games: +1 takedown by 10:00 for −2 to −3 points of the roads' last-hit share; they stay out)
       // (CW3 critic bot-micro: an opponent that has not answered a single blow while it laned against me — no swing at me,
@@ -466,6 +467,8 @@ export class Bot extends BotBase implements BotController {
       // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
       // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
       const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
+      // (CW3s r2, critic bot-micro: a passive opponent's wave is half the deterrent: it never answers the trade that wakes it)
+      const wavePenalty = passive > 0 ? wavePenalty0 * 0.5 : wavePenalty0;
       const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5) + passive + lvl - wavePenalty;
       if (edge >= 0.12 || (this.mode === 'trade' && edge > -0.1)) consider('trade', 0.42 + Math.min(0.25, Math.max(0, edge)));
       // (a passive opponent that let me take half its health without answering is finished, as a player would)

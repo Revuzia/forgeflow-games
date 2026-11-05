@@ -355,6 +355,12 @@ export const CROWD_OUTLINE_FAR = 24;
 export const CROWD_OUTLINE_CROWDED = 1;
 export const CROWD_INK_TRIS_HIGH = 440000;
 export const CROWD_INK_TRIS_LOW = 380000;
+/** the governor's second step (a crowded frame still climbing, seed 7's final push peaked at 544k): the hit flash holds to
+ *  the CROWD_FLASH_CROWDED flashing units of a set nearest the focus (each flash draws the unit twice more, its flash and
+ *  its ink) and the crowd's bodies throw no shadow, until the frame is back under CROWD_HARD_TRIS_LOW */
+export const CROWD_HARD_TRIS_HIGH = 470000;
+export const CROWD_HARD_TRIS_LOW = 410000;
+export const CROWD_FLASH_CROWDED = 2;
 
 const ATTRS = ['aCrowdM0', 'aCrowdM1', 'aCrowdM2', 'aCrowdAnim', 'aCrowdStyle', 'aCrowdFlash', 'aCrowdFlashRim'] as const;
 type AttrName = (typeof ATTRS)[number];
@@ -447,6 +453,7 @@ class CrowdSet {
   private readonly accentMats: MeshStandardMaterial[] = [];
   /** the accent parts' meshes (the triangle governor drops their shadow in a crowded frame: the body's covers it) */
   private readonly accentMeshes: Mesh[] = [];
+  private readonly bodyMeshes: Mesh[] = [];
   private colorSet = false;
   /** this frame's units, the flashing ones apart: end() writes those first, so the victim flash draws only them */
   private readonly units: CrowdActor[] = [];
@@ -484,7 +491,7 @@ class CrowdSet {
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       mesh.name = `crowd_part_${p.accent ? 'accent' : 'body'}`;
-      if (p.accent) this.accentMeshes.push(mesh);
+      if (p.accent) this.accentMeshes.push(mesh); else this.bodyMeshes.push(mesh);
       shadowLods(mesh);                                                    // hooked now (its LOD is built above)
       this.group.add(mesh);
     }
@@ -531,7 +538,14 @@ class CrowdSet {
     (a.flashState.k > 0.002 ? this.flashing : this.units).push(a);
   }
 
-  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX): void {
+  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX, hard = false): void {
+    // the governor's second step: the flashing units past the nearest few draw as plain units this frame
+    if (hard && this.flashing.length > CROWD_FLASH_CROWDED) {
+      const d2 = (a: CrowdActor): number => { const p = a.root.position; return (p.x - fx) * (p.x - fx) + (p.z - fz) * (p.z - fz); };
+      this.flashing.sort((x, y) => d2(x) - d2(y));
+      for (let i = CROWD_FLASH_CROWDED; i < this.flashing.length; i++) this.units.push(this.flashing[i]);
+      this.flashing.length = CROWD_FLASH_CROWDED;
+    }
     // perf PERF-m5: the flashing units take the first slots and the victim flash draws only those (it drew every unit
     // of the set, its triangles counted for each, while any one of them flashed)
     const b = this.buf, nf = this.flashing.length, n = nf + this.units.length;
@@ -563,6 +577,7 @@ class CrowdSet {
     // the body, inside the body's shadow; ~0.4k triangles a unit in the shadow pass)
     const accentShadow = cap >= CROWD_OUTLINE_MAX;
     for (const m of this.accentMeshes) m.castShadow = accentShadow;
+    for (const m of this.bodyMeshes) m.castShadow = !hard;
     this.group.visible = b.count > 0;
     for (const f of this.flashMeshes) f.visible = nf > 0;
   }
@@ -648,7 +663,7 @@ export class CrowdLayer {
 
   /** fx, fz: the camera's focus on the ground (the outline LOD ranks by distance from it); cap: the most units of a set
    *  that take the rest ink this frame (the renderer's triangle governor lowers it in a crowded frame) */
-  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX): void { for (const s of this.sets.values()) s.end(fx, fz, cap); }
+  end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX, hard = false): void { for (const s of this.sets.values()) s.end(fx, fz, cap, hard); }
 
   /** units drawn this frame (harness) */
   get instances(): number { let n = 0; for (const s of this.sets.values()) n += s.buf.count; return n; }

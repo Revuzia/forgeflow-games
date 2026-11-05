@@ -128,6 +128,9 @@ export type ActorKind = 'fighter' | 'minion' | 'monster' | 'structure' | 'summon
 /** who takes the character light (world_material.ts): fighters all of it, wicks and monsters a share, the rest none;
  *  jungle monsters take the world's light and their own glow at their own share (CHAR_LIGHT.monsterLight) */
 interface CharLight { fighter: boolean; unit: boolean; monster: boolean }
+/** programs (perf PERF-C4): a rigid unit that stands where it is put (a ward) draws through a structure's programs (nothing
+ *  fades on it: SF_OFF), its accent one program with the Needles' instead of one of its own */
+const rigidProgram = (kind: string): boolean => kind === 'structure' || kind === 'ward';
 const charLight = (kind: string): CharLight => ({ fighter: kind === 'fighter', unit: kind === 'minion' || kind === 'monster', monster: kind === 'monster' });
 const LOOPING = new Set(['idle', 'run', 'recall', 'channel', 'stunned', 'idle_lobby', 'victory', 'taunt']);
 
@@ -616,7 +619,7 @@ export class ModelLibrary {
       }
       if (this.opts.dev) return devUnitTemplate(def);
       return null;
-    })().then((t) => this.ready(t, 'accent', charLight(def.kind), def.kind === 'structure')).then((t) => this.land(key, p!, t));
+    })().then((t) => this.ready(t, 'accent', charLight(def.kind), rigidProgram(def.kind))).then((t) => this.land(key, p!, t));
     this.templates.set(key, p);
     return p;
   }
@@ -827,6 +830,7 @@ export class Actor implements CrowdActor {
         if (mat.name !== accentName) return mat;
         const c = (mat as MeshStandardMaterial).clone();
         patchWorldMaterial(c, charLight(this.kind));
+        if (this.kind !== 'structure' && rigidProgram(this.kind)) structureMaterial(c);
         this.accent.push(c);
         return c;
       });

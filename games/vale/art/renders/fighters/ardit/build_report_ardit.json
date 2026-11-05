@@ -158,13 +158,13 @@
       ]
     },
     "tris_boots": 1000,
-    "tris_helm": 1500,
+    "tris_helm": 1900,
     "tris_visor": 320,
     "tris_face": 600,
     "tris_gorget": 760,
-    "tris_pauldron_R": 560,
+    "tris_pauldron_R": 640,
     "tris_tier_R": 420,
-    "tris_pauldron_L": 560,
+    "tris_pauldron_L": 640,
     "tris_tier_L": 420,
     "tris_bracer_R": 420,
     "tris_bracer_L": 420,
@@ -186,20 +186,20 @@
     "tris_pavise_handle": 220,
     "tris_spire": 520,
     "tris_inlays": 260,
-    "validate_ardit": "20016->20009"
+    "validate_ardit": "20576->20569"
   },
-  "uv_coverage": 0.602,
+  "uv_coverage": 0.59,
   "bake": {
-    "base": 9.23,
-    "rough_metal": 6.32,
-    "normal": 4.05,
-    "ao": 3.92,
-    "normal_fixed_px": 117970,
-    "projection": 78.53,
-    "pack_save": 78.83,
-    "total": 103.11
+    "base": 15.41,
+    "rough_metal": 11.99,
+    "normal": 6.79,
+    "ao": 15.35,
+    "normal_fixed_px": 115455,
+    "projection": 188.47,
+    "pack_save": 189.58,
+    "total": 240.8
   },
-  "tris": 20589,
+  "tris": 21149,
   "mesh_top_m": 2.476,
   "clips": {
     "idle": {
@@ -260,9 +260,9 @@
       "impact": null
     },
     "recall": {
-      "frames": 90,
-      "duration_s": 3.0,
-      "loop": true,
+      "frames": 150,
+      "duration_s": 5.0,
+      "loop": false,
       "impact": null
     },
     "idle_lobby": {
@@ -302,42 +302,30 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2998252,
+  "glb_bytes_raw": 3119712,
   "optimize": {
     "ok": true,
-    "before": 2998252,
-    "after": 1176716,
+    "before": 3119712,
+    "after": 1244612,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 1176716,
+  "glb_bytes": 1244612,
   "three_load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1149 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_base 2048x2048 232K, ardit_normal 512x512 36K, ardit_orm 512x512 54K",
-      "  skinned meshes: ardit(17147v), ardit_accent(302v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1215 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_base 2048x2048 244K, ardit_normal 512x512 37K, ardit_orm 512x512 55K",
+      "  skinned meshes: ardit(17792v), ardit_accent(302v)",
       "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
-      "  clips: attack1:0.833s/27tr, attack2:0.833s/27tr, cast_a1:0.667s/27tr, cast_a2:1.000s/26tr, cast_a3:0.833s/27tr, cast_ult:1.333s/26tr, channel:1.333s/26tr, dash:0.500s/27tr, death:1.667s/27tr, idle:2.667s/26tr, idle_lobby:4.000s/26tr, recall:3.000s/27tr, run:0.800s/28tr, stunned:1.333s/26tr, taunt:1.667s/26tr, victory:1.667s/29tr",
+      "  clips: attack1:0.833s/27tr, attack2:0.833s/27tr, cast_a1:0.667s/27tr, cast_a2:1.000s/26tr, cast_a3:0.833s/27tr, cast_ult:1.333s/26tr, channel:1.333s/26tr, dash:0.500s/27tr, death:1.667s/27tr, idle:2.667s/26tr, idle_lobby:4.000s/26tr, recall:5.000s/27tr, run:0.800s/28tr, stunned:1.333s/26tr, taunt:1.667s/26tr, victory:1.667s/29tr",
       "  tracks checked: 428; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20589; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "  tris: 21149; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "  run: 24 f, planted samples 6, max foot-speed error 1%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (2)",
+      "  - GLB is 1215 KiB > budget 1172 KiB",
+      "  - recall: loop seam 1.94e-1 (first != last pose)"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/ardit/splash.png",
-      "portrait": "art/out/fighters/ardit/portrait.png",
-      "icon": "art/out/fighters/ardit/icon.png",
-      "turntable": "art/renders/fighters/ardit/turntable.png"
-    },
-    "seconds": {
-      "splash": 93.47,
-      "portrait": 21.58,
-      "icon": 5.25,
-      "turntable": 7.34
-    }
   },
   "three_qa": {
     "ok": true,
@@ -368,26 +356,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ardit/three_ardit.png",
-    "seconds": 11.4,
+    "seconds": 179.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.39,
-      "model": 8.83,
-      "lows_bind": 12.71,
-      "uv": 7.27,
-      "bake": 103.12,
-      "clips": 0.66,
-      "export": 2.38,
-      "optimize": 1.28,
-      "load_test": 0.26,
-      "render": 127.83,
-      "three_qa": 11.8,
-      "cache": 0.16
+      "rig": 0.02,
+      "materials": 1.24,
+      "model": 31.3,
+      "lows_bind": 49.26,
+      "uv": 40.9,
+      "bake": 240.8,
+      "clips": 1.75,
+      "export": 9.21,
+      "optimize": 2.38,
+      "load_test": 0.45,
+      "three_qa": 184.26,
+      "cache": 1.14
     },
-    "total_s": 276.9
+    "total_s": 563.2
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

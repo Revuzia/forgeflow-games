@@ -445,7 +445,7 @@ export abstract class BotBase {
         // one held the lampglass ults back to the late game)
         // (CW3s refix: an ultimate's group heal saves at 10 points more health: its long cooldown is better spent than
         // held, and the lampglass ult still sat unused past 10:00)
-        const lift = s.slot === 'ult' ? 0.1 : 0;
+        const lift = s.slot === 'ult' ? 0.25 : 0;
         const save = this.k.kind === 'rift' && info.minTargets > 1 && this.alliesIn(e.x, e.y, R, (this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) + lift) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
         if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
@@ -513,7 +513,7 @@ export abstract class BotBase {
     // spent on one: the kill is the point, not the second body)
     // (and a 1-on-1 trade on a road spends it once the opponent is under 60 %: a laner's ult is how a lane trade becomes a kill)
     // (RIFT's laning only: BRIDGE keeps the casts its G5 pace was measured with)
-    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? 0.6 : 0.45)) ? 1 : info.minTargets;
+    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? (s.slot === 'ult' ? 0.8 : 0.6) : 0.45)) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;

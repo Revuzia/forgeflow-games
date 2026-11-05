@@ -56,7 +56,7 @@ import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
 import { inkShadows } from './ink.ts';
 import { lodReady, lodSwitch, shadowLods } from './lod.ts';
-import { CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdLayer } from './crowd.ts';
+import { CROWD_HARD_TRIS_HIGH, CROWD_HARD_TRIS_LOW, CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
@@ -314,6 +314,8 @@ class ValeRenderer implements Renderer {
   private sceneTris = 0;
   /** the crowd's rest-ink cap this frame (crowd.ts; the triangle governor) */
   private crowdInkCap = CROWD_OUTLINE_MAX;
+  /** the governor's second step (crowd.ts) */
+  private crowdHard = false;
   private skipAcc = 0;
   private readonly resources = new Map<string, { color: Color; model: string }>();
   private readonly tmpColor = new Color();
@@ -1147,7 +1149,9 @@ class ValeRenderer implements Renderer {
     // the triangle governor (perf done:7): a frame over the soft mark holds the crowd's rest ink to its nearest units
     if (this.sceneTris > CROWD_INK_TRIS_HIGH) this.crowdInkCap = CROWD_OUTLINE_CROWDED;
     else if (this.sceneTris < CROWD_INK_TRIS_LOW) this.crowdInkCap = CROWD_OUTLINE_MAX;
-    this.crowd.end(this.rig.focus.x, this.rig.focus.z, this.crowdInkCap);
+    if (this.sceneTris > CROWD_HARD_TRIS_HIGH) this.crowdHard = true;
+    else if (this.sceneTris < CROWD_HARD_TRIS_LOW) this.crowdHard = false;
+    this.crowd.end(this.rig.focus.x, this.rig.focus.z, this.crowdInkCap, this.crowdHard);
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
     this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);
     // fog of war
@@ -1366,6 +1370,14 @@ class ValeRenderer implements Renderer {
     if (map) { for (const s of map.structures) units.add(s.unit); for (const c of map.camps) for (const u of c.units) units.add(u.unit); for (const pk of map.pickups) units.add(pk.unit); }
     const mode = this.catalog.modes.find((m) => m.id === setup.mode);
     for (const w of mode?.rules.minionWaves?.composition ?? []) units.add(w.unit);
+    // what an item's effects can place on the field (a Spare Lamp's ward): loaded and
+    // compiled behind the loading screen too, not on the frame the first one lands
+    const placed = (v: unknown): void => {
+      if (Array.isArray(v)) { for (const x of v) placed(x); return; }
+      if (!v || typeof v !== 'object') return;
+      for (const [k, x] of Object.entries(v)) { if (k === 'unit' && typeof x === 'string') units.add(x); else placed(x); }
+    };
+    placed(this.catalog.items);
     // per-team unit models (art.teamModels): every side on the field, none in FFA modes
     const teams = isFfaMode(mode) ? null : [...setup.seats.map((s) => s.team), ...(map?.structures.map((s) => s.team) ?? [])];
     const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units, teams);
