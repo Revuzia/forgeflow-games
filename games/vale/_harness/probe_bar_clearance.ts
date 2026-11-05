@@ -36,11 +36,11 @@ const { ALL_EXTENSIONS } = await import(req.resolve('@gltf-transform/extensions'
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 /** the gated props: fighter → the bone the prop is skinned to (the probe's own list: a harness may name content) */
-const PROPS: Record<string, { bone: string; what: string; attackGate?: boolean }> = {
+const PROPS: Record<string, { bone: string; what: string; attackGate?: boolean; airGate?: number }> = {
   kemdo: { bone: 'x_lens', what: 'lens' },
   dunsom: { bone: 'x_lantern', what: 'lantern' },
   hesmi: { bone: 'x_rack_top', what: 'rack top', attackGate: true },
-  vashil: { bone: 'x_halo', what: 'halo ring' },
+  vashil: { bone: 'x_halo', what: 'halo ring', airGate: 3 },
   tunlan: { bone: 'x_hat', what: 'hat brim' },
 };
 const W = 1920, H = 1080, FACINGS = 8, SAMPLES = 24;
@@ -91,7 +91,7 @@ function propVerts(scene: Object3D, boneName: string): { m: SkinnedMesh; idx: nu
   return out;
 }
 
-interface Case { idle: number; run: number; idleMean: number; runMean: number; attack?: number; attackMean?: number; attackClips?: number; brimPx?: number }
+interface Case { idle: number; run: number; idleMean: number; runMean: number; attack?: number; attackMean?: number; attackClips?: number; brimPx?: number; airPx?: number }
 function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMesh; idx: number[] }[], anchor: number, distance: number, attacks: string[] = []): Case {
   const r = rig(distance), cam = r.camera;
   const v = new Vector3();
@@ -103,6 +103,9 @@ function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMe
   // polish hesmi-m3 / TUN-c2: the attack clips pooled into one more row; `deep` = the most px a covered prop vertex
   // sits above the plate's lower edge (the under-panel's overlap on a brim), over idle and run
   let deep = 0;
+  // the fewest px between the plate's lower edge and the prop's highest vertex across the plate's span, idle and run
+  // (negative: the prop reaches behind the plate)
+  let air = Infinity;
   const groups: [string, string[]][] = [['idle', ['idle']], ['run', ['run']], ['attack', attacks]];
   for (const [role, names] of groups) {
     const list = names.map((nm) => clips.find((c) => c.name === nm)).filter((c): c is AnimationClip => !!c);
@@ -121,6 +124,7 @@ function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMe
         for (let i = 0; i < pts.length; i += 3) {
           const [sx, sy] = px(v.set(200 + c * pts[i] + s * pts[i + 2], pts[i + 1], 200 - s * pts[i] + c * pts[i + 2]));
           if (inBox(sx, sy)) { inside++; if (role !== 'attack') deep = Math.max(deep, ay + BAR_BOX.below - sy); }
+          if (role !== 'attack' && sx - ax >= BAR_BOX.left && sx - ax <= BAR_BOX.right) air = Math.min(air, sy - (ay + BAR_BOX.below));
         }
         const f = inside / (pts.length / 3);
         sum += f; n++; if (f >= 0.5) half++;
@@ -130,7 +134,7 @@ function coverage(scene: Object3D, clips: AnimationClip[], verts: { m: SkinnedMe
     res[role] = { half: half / n, mean: sum / n };
   }
   mixer.stopAllAction();
-  const out: Case = { idle: +res.idle.half.toFixed(3), run: +res.run.half.toFixed(3), idleMean: +res.idle.mean.toFixed(3), runMean: +res.run.mean.toFixed(3), brimPx: +deep.toFixed(1) };
+  const out: Case = { idle: +res.idle.half.toFixed(3), run: +res.run.half.toFixed(3), idleMean: +res.idle.mean.toFixed(3), runMean: +res.run.mean.toFixed(3), brimPx: +deep.toFixed(1), airPx: +air.toFixed(1) };
   if (attacks.length) Object.assign(out, { attack: +res.attack.half.toFixed(3), attackMean: +res.attack.mean.toFixed(3), attackClips: attacks.length });
   return out;
 }
@@ -164,8 +168,10 @@ for (const id of ids) {
       for (const [k, d, a] of [['new', CAMERA.distance, anchor], ['new_28.5', 28.5, anchor], ['old', CAMERA.distance, floor], ['old_28.5', 28.5, floor]] as [string, number, number][]) out[k] = coverage(scene, clips.map((c) => c.name === (roles.idle ?? 'idle') ? Object.assign(c.clone(), { name: 'idle' }) : c.name === (roles.run ?? 'run') ? Object.assign(c.clone(), { name: 'run' }) : c), verts, a, d, attacks);
       row.prop = { ...prop, verts: nv, ...out };
       const atk = (c: Case): string => (c.attack !== undefined ? ` atk ${(c.attack * 100).toFixed(0).padStart(3)}%` : '');
-      line += `  ${prop.what}: new ${fmt(out.new)}${atk(out.new)} deep ${out.new.brimPx} px | @28.5 ${fmt(out['new_28.5'])}${atk(out['new_28.5'])} | old ${fmt(out.old)}${atk(out.old)} deep ${out.old.brimPx} px`;
+      line += `  ${prop.what}: new ${fmt(out.new)}${atk(out.new)} deep ${out.new.brimPx} px air ${out.new.airPx} px | @28.5 ${fmt(out['new_28.5'])}${atk(out['new_28.5'])} | old ${fmt(out.old)}${atk(out.old)} deep ${out.old.brimPx} px`;
       for (const k of ['new', 'new_28.5']) for (const r of ['idle', 'run'] as const) if (!(out[k][r] <= 0.1)) fails.push(`${id} ${prop.what} ${k} ${r} half-covered ${(out[k][r] * 100).toFixed(1)} % > 10 %`);
+      // handoff VAS gap-7: a floating ring has visible air under the plate, at both distances
+      if (prop.airGate) for (const k of ['new', 'new_28.5']) if (!((out[k].airPx ?? -1) >= prop.airGate)) fails.push(`${id} ${prop.what} ${k} air ${out[k].airPx} px < ${prop.airGate} px`);
       // polish hesmi-m3: the rack top clears the bar through her swings too
       if (prop.attackGate) for (const k of ['new', 'new_28.5']) if (!((out[k].attack ?? 0) <= 0.1)) fails.push(`${id} ${prop.what} ${k} attack half-covered ${((out[k].attack ?? 0) * 100).toFixed(1)} % > 10 %`);
     }

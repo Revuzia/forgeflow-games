@@ -217,7 +217,7 @@ def release(fam: str, S: str, k: float, cap: float, ult: bool) -> list:
     e2 = min(cap, 3.0)
     out = [L("sprite", phase="release", at="caster", socket=S, texture="flare", size=[1.0 * k, 0.6 * k], color=[SIG, SEC], emissive=cap,
              alpha=[1, 0], life=0.1, space="world", hold=0),
-           L("shockwave", phase="release", at="caster", radius=[[0, 0.3 * k], [1, 1.1 * k]], width=[0.16, 0.04], life=0.16, color="team",
+           L("shockwave", phase="release", at="caster", radius=[[0, 0.3 * k], [1, 1.1 * k]], width=[0.16, 0.04], life=0.16, color="signature",
              alpha=[0.8, 0], emissive=e2, blend="add")]
     if fam == "shade":
         out.append(L("emitter", phase="release", at="caster", socket=S, count=int(6 * k), shape="sphere", radius=0.15, dir="out", spreadDeg=120,
@@ -263,7 +263,7 @@ def windup(id_: str, rec: dict, ab: dict, slot: str) -> dict:
     who = rec["name"]
     return vfx(id_, 1.0, *layers, comment=f"{'T4' if ult else 'T2'} · {kit['fam']} · {who} {slot} wind-up ({ab['id']}, {ab['castTime']} s, fitted): the "
                f"{kit['motif']} motif gathers at {S} in {who}'s signature, a signature ring at the feet with a closing team edge"
-               f"{', an aim glint' if aim else ''}; the release flares for 0.1 s")
+               f"{', an aim glint' if aim else ''}; the release flares for 0.1 s; combat F6: the release ring is the signature (the closing team edge is the tell)")
 
 
 # ── basic attacks ────────────────────────────────────────────────────────────────────────────────

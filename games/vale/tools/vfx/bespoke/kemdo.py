@@ -13,6 +13,8 @@ from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK2, NOON, 
 HOT = "#FFF3E2"         # white-hot glass (the renderer keeps it Dawnglass below T4)
 GLOW = "#F6E0B8"        # hot pale light, low saturation
 STEAM = "#A8A398"       # vent steam (mid value, alpha)
+# the neutral steam and char smoke take a skin's vfxTint (Long Evening's plum); on the base kit they are exactly these hexes
+E_STEAM, E_DUST, E_DUST2, E_CHAR = f"element:{STEAM}", f"element:{DUST}", f"element:{DUST2}", "element:#3A3632"
 CHAR = "#2E2620"        # scorch
 
 
@@ -50,7 +52,7 @@ def defs() -> list:
     # ── passive · Cooling Kill (a takedown vents all her Heat; T1) ───────────────────────────────
     D.append(vfx("kemdo_passive_cool", 0.9,
                  L("emitter", at="target", count=7, shape="sphere", radius=0.35, dir="up", spreadDeg=35, speed=[1.0, 2.0], life=[0.5, 0.8],
-                   size=[0.4, 0.8, 1.0], color=[STEAM, DUST], alpha=[0, 0.4, 0.25, 0], gravity=-0.6, drag=2.0, turbulence=0.6, rotDeg=[0, 360],
+                   size=[0.4, 0.8, 1.0], color=[E_STEAM, E_DUST], alpha=[0, 0.4, 0.25, 0], gravity=-0.6, drag=2.0, turbulence=0.6, rotDeg=[0, 360],
                    spinDeg=[-40, 40], texture="dust_puff", blend="alpha", soft=0.3),
                  shockwave("target", color=[DAWNGLASS, "team"], radius=(0.6, 0.25), width=(0.12, 0.04), life=0.35, emissive=1.5, alpha=(0, 1, 0)),
                  motes("target", 8, color=[DAWNGLASS, "team"], rise=2.0, life=(0.4, 0.7), size=0.14, radius=0.4, emissive=1.5),
@@ -88,7 +90,7 @@ def defs() -> list:
                    texture="ember", blend="add", secondary=True),
                  L("emitter", at="path", rate=36, shape="disc", radius=0.45, dir="back", spreadDeg=15, speed=[5, 9], life=[0.08, 0.15],
                    size=[0.55, 0.1], color=[HOT, "team"], alpha=[0.9, 0], emissive=3.0, drag=3, texture="streak", stretch=0.06, blend="add"),
-                 dust("origin", 4, size=0.7, speed=(1, 2), radius=0.2, delay=0.0),
+                 dust("origin", 4, size=0.7, speed=(1, 2), radius=0.2, delay=0.0, color=(E_DUST, E_DUST2)),
                  comment="T3 · Lumen · Heat Shimmer dash: a lens flash, then a hot white core streak inside a team ground streak, embers"
                          " shed off her heels, side streaks (movement)"))
 
@@ -123,7 +125,7 @@ def defs() -> list:
                    secondary=True),
                  # steam billows thrown out and lifting off
                  L("emitter", at="ground", count=12, delay=0.04, shape="ring", radius=0.25, dir="out", spreadDeg=30, speed=[2, 4], velocity=[0, 0.8, 0],
-                   life=[0.45, 0.8], size=[0.5, 1.1, 1.4], color=[STEAM, DUST2], alpha=[0, 0.45, 0.25, 0], gravity=-0.4, drag=2.6, turbulence=0.5,
+                   life=[0.45, 0.8], size=[0.5, 1.1, 1.4], color=[E_STEAM, E_DUST2], alpha=[0, 0.45, 0.25, 0], gravity=-0.4, drag=2.6, turbulence=0.5,
                    rotDeg=[0, 360], spinDeg=[-40, 40], texture="dust_puff", blend="alpha", soft=0.3),
                  # her vented guard: a brief glass shell (20% less damage)
                  mesh("origin", "orb", [[0, 1.0], [0.3, 1.7], [1, 1.65]], 0.6, color=DAWNGLASS, alpha=[[0, 0.22], [0.5, 0.15], [1, 0]], emissive=1.2,
@@ -154,7 +156,7 @@ def defs() -> list:
                    size=[0.1, 0.03], color=[EMBER, "team"], alpha=[1, 0], emissive=3.5, gravity=3, drag=1.5, texture="ember", blend="add",
                    secondary=True),
                  L("emitter", at="ground", rate=6, shape="disc", radius=0.3, dir="up", spreadDeg=20, speed=[0.6, 1.2], life=[0.5, 0.8],
-                   size=[0.3, 0.6, 0.8], color=[DUST2, "#3A3632"], alpha=[0, 0.35, 0], gravity=-0.3, drag=1.5, turbulence=0.6, rotDeg=[0, 360],
+                   size=[0.3, 0.6, 0.8], color=[E_DUST2, E_CHAR], alpha=[0, 0.35, 0], gravity=-0.3, drag=1.5, turbulence=0.6, rotDeg=[0, 360],
                    texture="dust_puff", blend="alpha", soft=0.3, secondary=True),
                  light("ground", GLOW, 8, 5, LIFE),
                  comment="T3 · Lumen · Held Focus (loop, follows the target): a funnel of light pours down and converges on a 2 m spot, a"

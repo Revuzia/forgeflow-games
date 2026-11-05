@@ -6,7 +6,7 @@
 //             0.35 m of the head bone in plan view) drawn above the feet on the fighter's own screen column; for
 //             reference the top of everything (weapons held high) and the silhouette's full screen height over 8
 //             facings (median), at the closing review's 28.5 m and at the default distance. Gate (critic camera; r12
-//             §2, LoL 105-130 px): the body is 105-130 px at 28.5 m for every model (WARN; FAIL with --gate-heights).
+//             §2): the body is 105-130 px at 28.5 m, compact builds 85-105 px, ruling 11 (WARN; FAIL with --gate-heights).
 //   rig       edge-pan speed in px/s (pointer at the right edge, free mode) at panSpeed 0 / 0.5 / 1; locked is the
 //             default and keeps a running fighter at the exact centre (follow lag 0 px); the lock toggle (setMode
 //             locked) and the re-centre key (centerOnSelf) land on the fighter on the same frame; respawn (self gone
@@ -58,9 +58,12 @@ function rigAt(distance: number): CameraRig {
 const pxPerM = (d: number): number => (H / 2) / Math.tan((CAMERA.fovDeg / 2) * Math.PI / 180) / d;
 
 const fails: string[] = [];
-/** the 105-130 px band is reported (WARN) by default and gated with --gate-heights: the short builds (Sukri, Ilsheta,
- *  Rishal, Lisvel, Odrum, Nurrow) sit under it by design height, which is the fighter lanes' call, not the camera's */
+/** the 105-130 px band is reported (WARN) by default and gated with --gate-heights. Owner ruling 11: the band applies to
+ *  standard builds; a compact build (Sukri: a harness may name content) may sit at 85-105 px; every other fighter reaches
+ *  105 px through art.scale. Compared after rounding to whole px (Marund Long Evening 130.4 counts as inside). */
 const GATE_HEIGHTS = process.argv.includes('--gate-heights');
+const COMPACT = new Set(['sukri']);
+const heightBand = (fighter: string): [number, number] => (COMPACT.has(fighter) ? [85, 105] : [105, 130]);
 const warns: string[] = [];
 const report: Record<string, unknown> = { at: new Date().toISOString(), camera: CAMERA };
 const fighters = readdirSync(join(ROOT, 'content', 'fighters')).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(ROOT, 'content', 'fighters', f), 'utf8'))).sort((a, b) => a.id.localeCompare(b.id));
@@ -132,16 +135,17 @@ if (ONLY.has('heights')) {
         silPxDef: +med(sil[CAMERA.distance]).toFixed(1),
       };
       rows.push(row);
-      const ok = row.bodyPx285 >= 105 && row.bodyPx285 <= 130;
-      if (!ok) (GATE_HEIGHTS ? fails : warns).push(`height ${s.id}: body ${row.bodyPx285} px at 28.5 m outside 105-130`);
+      const [lo, hi] = heightBand(f.id);
+      const ok = Math.round(row.bodyPx285) >= lo && Math.round(row.bodyPx285) <= hi;
+      if (!ok) (GATE_HEIGHTS ? fails : warns).push(`height ${s.id}: body ${row.bodyPx285} px at 28.5 m outside ${lo}-${hi}`);
       console.log(`${ok ? '  ' : '! '}${s.id.padEnd(26)} body ${body.toFixed(2)} m / top ${crown.toFixed(2)} m  28.5 m: ${row.bodyPx285.toFixed(0).padStart(3)} / ${row.crownPx285.toFixed(0).padStart(3)} / ${row.silPx285.toFixed(0).padStart(3)} px   ${CAMERA.distance} m: ${row.bodyPxDef.toFixed(0).padStart(3)} / ${row.crownPxDef.toFixed(0).padStart(3)} / ${row.silPxDef.toFixed(0).padStart(3)} px`);
     }
   }
   const col = (k: string): number[] => rows.filter((r) => typeof r[k] === 'number').map((r) => r[k] as number).sort((a, b) => a - b);
   const b285 = col('bodyPx285'), bDef = col('bodyPxDef');
-  const inBand = b285.filter((x) => x >= 105 && x <= 130).length;
+  const inBand = rows.filter((r) => { if (typeof r.bodyPx285 !== 'number') return false; const [lo, hi] = heightBand(r.fighter as string); const p = Math.round(r.bodyPx285); return p >= lo && p <= hi; }).length;
   report.heights = { rows, body285: { min: b285[0], median: b285[b285.length >> 1], max: b285[b285.length - 1], inBand, of: b285.length }, bodyDefault: { min: bDef[0], median: bDef[bDef.length >> 1], max: bDef[bDef.length - 1] } };
-  console.log(`body height at 28.5 m: ${b285[0]}-${b285[b285.length - 1]} px (median ${b285[b285.length >> 1]}), ${inBand}/${b285.length} in 105-130; at ${CAMERA.distance} m: ${bDef[0]}-${bDef[bDef.length - 1]} px (median ${bDef[bDef.length >> 1]})`);
+  console.log(`body height at 28.5 m: ${b285[0]}-${b285[b285.length - 1]} px (median ${b285[b285.length >> 1]}), ${inBand}/${b285.length} in band (ruling 11); at ${CAMERA.distance} m: ${bDef[0]}-${bDef[bDef.length - 1]} px (median ${bDef[bDef.length >> 1]})`);
 }
 
 // ── rig ──────────────────────────────────────────────────────────────────────────────────────────────────
