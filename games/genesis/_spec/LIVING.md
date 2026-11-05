@@ -2980,3 +2980,6 @@ hut at the year end (housed in the save hours later).
   spares a prophet with more words fulfilled than failed. Test: 3 of 4 of the god's words true leaves ≥ 0.5 (0.455
   before). Same 8 saves: credibility at the end 0/0/0/–/0/0.03/0/0 -> 0.30/0.05/0/0.32/0.05/0.32/0/0.45; the zeros left
   are prophets the god let be persecuted (−0.2, words refused while silenced) or whose six words all missed (1234).
+- **Medicine test pooled.** `plague.test.ts` 'medicine' pinned one world at a 0.7 bar that sat inside the measured
+  spread (with/without deaths on worlds 21-24, before and after the prayer pauses: ratios 0.64-0.71); the pauses moved
+  the control town by one death (25 -> 24) and failed the gate. Now worlds 21+22 pooled, bar 0.75 (measured 0.69).
