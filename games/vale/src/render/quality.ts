@@ -34,11 +34,13 @@
 // Back up (perf PERF-M2): vsync holds the interval at the display rate, so spare GPU time never shows as a faster
 // frame on a 60 Hz display. A lowered scale therefore PROBES: after 3 on-target windows it steps up 0.05 and keeps
 // the step only if the next 2 windows stay on target; a GPU-bound slow window inside the probe takes it back and
-// doubles the wait before the next probe (≤ 32 windows), a kept probe resets it.
+// quadruples the wait before the next probe (≤ 32 windows), a kept probe resets it.
 // Drift (the integration pass's idle gpubound run): a frame cost wandering around the vsync budget misses a vsync now
 // and then, so a window averages 50-57 fps and is under 12 % late. Those windows read as on target: the scale held at
-// 54 fps and went on probing up. A window under 58 fps (over 3.5 % late) now counts as drifting: 3 in a row with the
-// GPU to blame take a step down, one inside a probe takes the probe back, and it never counts toward the next probe.
+// 54 fps and went on probing up. A window of 58 frames or fewer (3.3 % late) now counts as drifting: 3 in a row with the
+// GPU to blame take a step down and quadruple the wait before the next probe (a just-resized buffer runs a clean 60 for
+// a few seconds, so a quick probe says little), one inside a probe takes the probe back, and it never counts toward
+// the next probe.
 // The renderer feeds it only frames it wanted at the display rate: match frames, never the menu or its idle cap,
 // never under an fpsCap below the display rate (Renderer.render), and re-configures it for every match.
 
@@ -114,8 +116,12 @@ export type FrameBound = 'cpu' | 'gpu' | '';
 const PROBE_AFTER = 3;
 const PROBE_MAX = 32;
 const PROBE_HOLD = 2;
-/** a window this late (58 fps at 60) is drifting, and this many in a row step the scale down (see the header) */
-const DRIFT_LATE = 1.035;
+/** what a failed probe or a drift step multiplies that wait by: at the edge of the budget a retry is two windows of
+ *  missed vsyncs for a scale the last one just disproved */
+const PROBE_BACKOFF = 4;
+/** a window this late (at 60 Hz, 58 frames or fewer: two missed vsyncs a second) is drifting, and this many in a row
+ *  step the scale down (see the header) */
+const DRIFT_LATE = 1.033;
 const DRIFT_WINDOWS = 3;
 
 /** frame-interval driven render-scale controller (GPU-bound windows only; see the header) */
@@ -199,7 +205,7 @@ export class DynamicResolution {
       if ((late && gpuBound) || drifting) {
         // the probe step did not hold: back down, and wait longer before the next one
         this.current = this.probeFrom; this.probeFrom = -1; this.probeLeft = 0;
-        this.probeWait = Math.min(PROBE_MAX, this.probeWait * 2);
+        this.probeWait = Math.min(PROBE_MAX, this.probeWait * PROBE_BACKOFF);
         this.slow = this.drift = this.onTarget = 0;
         return true;
       }
@@ -212,7 +218,9 @@ export class DynamicResolution {
       this.onTarget = 0;
       this.drift++;
       if (late) this.slow++; else this.slow = 0;
-      if (((late && (this.slow >= 2 || avg > t * 1.4)) || this.drift >= DRIFT_WINDOWS) && this.current > this.floor + 1e-3) {
+      const stepNow = late && (this.slow >= 2 || avg > t * 1.4);
+      if ((stepNow || this.drift >= DRIFT_WINDOWS) && this.current > this.floor + 1e-3) {
+        if (!stepNow) this.probeWait = Math.min(PROBE_MAX, this.probeWait * PROBE_BACKOFF);
         this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = this.drift = 0; return true;
       }
       return false;

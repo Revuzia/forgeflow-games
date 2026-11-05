@@ -115,6 +115,8 @@ const MATCH_SEEDS = opt('match-seeds', '').split(',').filter(Boolean).map(Number
 const RT_SHARE = 0.99, RT_FPS = 58, RT_FLOOR = 45;
 const GPU_ONLY = args.includes('--gpubound-only');
 const GPUB = (PROD && !MEM_ONLY && !MATCH_ONLY && !args.includes('--no-gpubound')) || GPU_ONLY;
+/** diagnostic: --gpu-fixed <scale> holds that scale with dynamic resolution off (the bars do not apply: read the timeline) */
+const GPU_FIXED = Number(opt('gpu-fixed', 0));
 const GPU_SEC = Number(opt('gpu-sec', 45)), GPU_LEAVE_S = 10, GPU_RECOVER_FPS = 58, GPU_TAIL_S = 8;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
@@ -286,7 +288,7 @@ async function dynres() {
 
 /** perf PERF-C1: a forced GPU-bound fight with dynamic resolution on (see the header) */
 async function gpuBound() {
-  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=${T}&seed=${SEED}&dev=1&hud=1&dyn=1`, { wait: false, hmr: false });
+  const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=${T}&seed=${SEED}&dev=1&hud=1&dyn=${GPU_FIXED ? 0 : 1}`, { wait: false, hmr: false });
   try {
     await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
     const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
@@ -295,22 +297,22 @@ async function gpuBound() {
     await page.evaluate(() => { const b = window.__VALE_BENCH__; const f = b.fight(); if (f) b.focus(f.x, f.y); });
     await page.waitForTimeout(1500);
     const before = machine();
-    await page.evaluate(() => {
+    await page.evaluate((fixed) => {
       const b = window.__VALE_BENCH__;
-      b.setVideo('high', { renderScale: 2 });
+      b.setVideo('high', { renderScale: fixed || 2 });
       const S = { secs: [], t0: performance.now() }; window.__gpub = S;
       let last = performance.now(), secAt = last, n = 0, worst = 0;
       const tick = (now) => {
         n++; worst = Math.max(worst, now - last); last = now;
         if (now - secAt >= 1000) {
           const st = b.stats();
-          S.secs.push({ t: +((now - S.t0) / 1000).toFixed(1), fps: +(n * 1000 / (now - secAt)).toFixed(1), worstMs: +worst.toFixed(1), scale: st.renderScale, bound: st.bound, gpuTimer: st.gpuTimer ?? null, w: st.width, h: st.height, cpuMs: st.frameMs });
+          S.secs.push({ t: +((now - S.t0) / 1000).toFixed(1), fps: +(n * 1000 / (now - secAt)).toFixed(1), worstMs: +worst.toFixed(1), scale: st.renderScale, bound: st.bound, gpuTimer: st.gpuTimer ?? null, w: st.width, h: st.height, cpuMs: st.frameMs, tris: st.triangles, vfx: st.vfx, particles: st.particles, simT: +(b.host?.view?.time ?? 0).toFixed(1) });
           n = 0; worst = 0; secAt = now;
         }
         if (!S.stop) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
-    });
+    }, GPU_FIXED);
     await page.waitForTimeout(GPU_SEC * 1000);
     const secs = await page.evaluate(() => { window.__gpub.stop = true; return window.__gpub.secs; });
     const after = machine();
