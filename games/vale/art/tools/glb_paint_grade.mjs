@@ -11,6 +11,7 @@
 //   --q N                     the WebP quality of the new base colour (default 88)
 //   --part-contrast mask.png:k  stretch the texels under a part mask round the part's median luma by k, hue kept (after
 //                             the rest; closing CW5 r2 refix 2)
+//   --part-lift mask.png:t:y  under a part mask, lift luma below t (0-1) by t x (v / t)^y, y < 1; above t unchanged
 //   --part-gain mask.png:g    multiply the texels under a part mask by g (repeatable; applied after the rest; masks from
 //                             art/tools/partmap_mask.py, closing CW5 r2 refix: id-masked material steps)
 //
@@ -145,6 +146,18 @@ for (const spec of args.flatMap((a, i) => (a === '--part-contrast' ? [args[i + 1
     if (m.data[p * m.info.channels] < 128) continue;
     const v = lum(p * C);
     const r = v > 1e-4 ? (mid + (v - mid) * g) / v : 1;
+    for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * r)));
+  }
+}
+for (const spec of args.flatMap((a, i) => (a === '--part-lift' ? [args[i + 1]] : []))) {
+  const [path, pivot, gamma] = spec.split(':');
+  const t = Number(pivot);
+  const m = await sharp(path).resize(W, H, { kernel: 'nearest' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let p = 0; p < W * H; p++) {
+    if (m.data[p * m.info.channels] < 128) continue;
+    const v = lum(p * C);
+    if (v >= t || v < 1e-4) continue;
+    const r = (t * (v / t) ** Number(gamma)) / v;
     for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * r)));
   }
 }

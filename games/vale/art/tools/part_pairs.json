@@ -1,0 +1,19 @@
+{
+  "_doc": "VALE art: the named material pairs of closing CW5 done:4 ('at the gameplay camera each named material pair differs by dE >= 8'), per fighter, and the part groups they pool. Run: python3 art/tools/part_gamecam.py art/out/fighters/<id>/<id>.glb --named",
+  "vashil": {"groups": {"paul": "pauldron_R1,pauldron_R2,pauldron_R3,pauldron_L1,pauldron_L2,pauldron_L3"},
+    "pairs": ["hood:mask", "paul:robe_top", "robe_top:sash", "skirt:boots", "stole:robe_top", "sleeve_R:wrap_R", "rod_shaft:skirt"]},
+  "ardit": {"groups": {"paul": "pauldron_R,tier_R,pauldron_L,tier_L"},
+    "pairs": ["paul:cuirass", "cuirass:coat", "coat:belt", "legs:boots", "helm:gorget", "pavise_frame:pavise_pane", "tabard_R:coat"]},
+  "burdam": {"groups": {"pauldron": "tier1,tier2,tier3,tier4,shoulder_plate,pauldron_lame,pauldron_face"},
+    "pairs": ["trousers:boots", "coat:belt", "pauldron:coat", "pauldron:cowl", "skirt:trousers", "forearms:coat", "mask:cowl", "blade:mask"]},
+  "kemdo": {"groups": {"paul": "pauldron_1,pauldron_2,pauldron_3"},
+    "pairs": ["hood:face", "paul:robe", "robe:belt", "robe:trousers", "trousers:boots", "vambrace:sleeves", "glaive_blade:robe"]},
+  "lisvel": {"groups": {},
+    "pairs": ["sleeves:tabard", "tabard:belt", "straps:tabard", "wrap:mask", "visor:mask", "bow:tabard", "legs:tabard", "quiver:tabard", "sleeves:bracers", "legs:boots"]},
+  "nurrow": {"groups": {},
+    "pairs": ["hat_cone:head", "hat_cone:cape", "tabard:belt", "trousers:boots", "blade:cape", "sleeves:forearm_wraps"]},
+  "ulkro": {"groups": {"plate": "plate_R1,plate_R2,plate_L1,plate_L2", "glass": "crest_heads,dart_head"},
+    "pairs": ["hood:torso", "plate:torso", "sleeves:torso", "skirt:legs", "wraps:boots", "legs:wraps", "quiver:torso", "thrower:skirt", "hood:cowl", "glass:hood"]},
+  "ervet": {"groups": {},
+    "pairs": ["helm:crest", "helm:scarf", "breastplate:pauldron_L", "breastplate:pauldron_R", "breastplate:lames_R", "crest:coat", "lames_R:pauldron_R", "scarf:coat", "belt:coat", "boots:coat", "guard:coat"]}
+}

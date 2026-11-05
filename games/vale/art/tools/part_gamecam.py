@@ -11,6 +11,7 @@ the bake's part map (art/.cache/fighters/partmap/<sid>.npz, art/tools/partmap_du
 centroid's UV. For each part: the mean Lab of the sheet's pixels with that id over the 8 cells, leaving out pixels on
 a part's edge (their four neighbours must share the id). A pair FAILS under --min. Exit 1 on a failing pair."""
 import argparse
+import json
 import math
 import os
 import sys
@@ -110,8 +111,14 @@ def main():
     ap.add_argument("--pair", action="append", default=[])
     ap.add_argument("--min", type=float, default=8.0)
     ap.add_argument("--out")
+    ap.add_argument("--named", action="store_true", help="the fighter's groups and pairs from art/tools/part_pairs.json")
     a = ap.parse_args()
     sid = a.sid or os.path.splitext(os.path.basename(a.glb))[0]
+    if a.named:
+        with open(os.path.join(HERE, "part_pairs.json"), encoding="utf-8") as f:
+            nm = json.load(f)[sid.split("_")[0]]
+        a.group += [f"{k}={v}" for k, v in nm["groups"].items()]
+        a.pair += nm["pairs"]
     fid = sid.split("_")[0]
     z = np.load(os.path.join(PARTMAP, f"{sid}.npz"))
     part, names = z["part"], [str(n) for n in z["names"]]
