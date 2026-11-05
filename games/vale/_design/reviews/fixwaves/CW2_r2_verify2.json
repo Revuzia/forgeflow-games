@@ -1,0 +1,57 @@
+{
+ "pass": false,
+ "items": [
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Own full run to the end, exit 0, 19:32-19:38: _harness/_reports/fw_CW2_r2v2_session_mem.json and .log. Decoded audio at Home after RIFT, BRIDGE, FRAY: 79 / 79 / 79 MB in 36 files (<= 150). S2 match-only files at Home 0 / 0 / 0. S3 only the mus_menu files remain; post-game holds 38 MB with only mus_postgame of the beds. Awake 371 s, slept 9 s, no errors. The earlier 2299 s timeout: pmset -g log shows 'Maintenance Sleep' and DarkWake cycles from 16:22:52, so the sleep explanation holds; this run and the engineer's both reached every match's real end."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Full audio suite re-run on the live tree, 19:32-21:20 (fw_CW2_r2v2_suite.log, fw_CW2_r2v2_suite3.log); no commit touched src/audio, audio, content/audio.json or content/units.json in that time. Three probes do not hold. (1) probe_audio_mix FAILS 2 of 2: M2 RIFT floor lift by ambience 0.4 and 0.9 dB, needs >= 1 (fw_CW2_r2v2_mix.json, fw_CW2_r2v2_mix2.json; last pass on file fw_W3_v1_mix.json read 2.1 dB). The engineer did not run this probe. Cause not identified. (2) probe_audio_runtime match FAILS 1 of 2 and the result follows the seat: Lisvel -16.26 LUFS (band -18 +/- 1.5) with announcer peak +2.99 dB (needs >= 3), fw_CW2_r2v2_match.json; Burdam -18.53 LUFS and +6.26 dB, PASS, fw_CW2_r2v2_match2.json. The engineer's PASS was an Odrum seat (-17.76, +3.2). (3) probe_audio_runtime dead FAILS 2 of 3: stock run 4 kHz drop 13.6 dB (fw_CW2_r2v2_dead.json); diagnostic copy of the probe (same code, per-block dump added, kept in the scratchpad) 23.57 dB PASS and 1.94 dB FAIL (fw_CW2_r2v2_dead_diag1.json, diag2.json). Per-block data shows the engine is right: dead blocks hold steady at -56.9 dB against -27.79 alive, a 29 dB drop. The probe's window ends at a mark taken after musicDead flips, so blocks with the filter open leak in (diag2 had 26 such blocks at about -28 dB). The engine passes; the probe gate is unreliable under load. PASS with exit 0 and pass:true in each report: session_mem, audio/build.py --gates, ultid, runtime sync, kits (K9 4964 kitted areas, 319 ult areas, 0 library), epic, procs, announcer, cc, listener, world, team_private, ambience, pieces, qpop, soften.",
+   "fixHint": "Owner CW2. (1) Find why the RIFT floor lift fell from 2.1 to 0.4-0.9 dB, then fix the mix or justify a changed gate. (2) Run the match capture on several seats including Lisvel, and bring Lisvel's own hit/cast level (f_lisvel_hit 282 plays, sfx bus -18.01 vs -21.59 on Burdam) inside the band. (3) In runDead, select tone and dead-window blocks by the row's own musicDead flag (r[1] === 1), not only by the end mark."
+  },
+  {
+   "id": "handoff:CW1:perf",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Own real-Chrome read (fw_CW2_r2v2_session_mem.json, gate S4). CW1's written gate is renderer + GPU <= 2500 MB at Home with CW2 included: 676+895=1571, 749+954=1703, 743+876=1619 MB. The perf_1080 code applies HOME_BUDGET_MB at Home only (_harness/perf_1080.mjs:109, :474). Decoded audio in match: 227.1 (rift), 229.9 (bridge) MB polled, 222.8 (fray, 60 s sample only). The handoff's ask, keep Home audio budgeted, is met at 79 MB. Caveat in the next item."
+  },
+  {
+   "id": "note:match-footprint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not a gate, for the lead and CW1. Match peak renderer + GPU read 2729 (rift) and 3152 (bridge) MB, dev server at 16x under load. These exceed 2500 if that number were ever applied in match; decoded audio is about 7 % of the bridge peak. The readings are thin: polls were 2 / 1 / 0, because at 16x a match ends within a few polls, and the fray peak prints '0 MB' with polls 0 in the report and PASS line. Never read on --prod or at speed 1.",
+   "fixHint": "probe_audio_session_mem: print 'not polled' instead of 0 MB when polls is 0. If a match budget is wanted, read it on perf_1080 --prod."
+  },
+  {
+   "id": "done:5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Regression found by this verify, same two captures. Heal 1.57 and 0.85 per minute (<= 6); enemyDown 1 and 4 with no forced death; lampSet 3 in run 1. The announcer margin is seat-dependent: Lisvel +2.99 dB misses the >= 3 bar by 0.01, Burdam +6.26. Dunsom and Ulkro band shares come from the build gates, which exit 0 (fw_CW2_r2v2_gates.log).",
+   "fixHint": "Fixed with the Lisvel seat level in done:6 (2)."
+  },
+  {
+   "id": "critic:audio-runtime",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Still open, not on this re-check list. probe_audio_runtime sync passes 3/3 from the pump: p95 31.78 / 31.38 / 31.88 ms against 42.72, 50 of 50 hits in call (fw_CW2_r2v2_sync.json). The rAF gates stay null because pump-late p95 was 4.9 / 11 / 3.6 ms against the 3 ms needed.",
+   "fixHint": "Needs an idle machine; integration pass."
+  },
+  {
+   "id": "probe:runtime-gates",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Still open from verify 1, not on this re-check list. _harness/probe_audio_runtime.mjs:412 computes r2(linePeak - p99); a null linePeak coerces to 0 - p99, so the null check at :428 cannot fire and the gate can pass with 0 lines. All captures here had 5 real lines, so these readings are valid.",
+   "fixHint": "peakOverSfxP99: linePeak === null ? null : r2(linePeak - p99)."
+  }
+ ],
+ "regressions": [
+  "probe_audio_mix M2 fails 2 of 2 (RIFT floor lift 0.4 and 0.9 dB, needs >= 1; last pass on file 2.1 dB, 2026-10-28). Not caused by the refix, which changed only a probe; first run since then in this round.",
+  "probe_audio_runtime match fails on a Lisvel seat (-16.26 LUFS, announcer +2.99 dB); passes on Burdam and Odrum."
+ ],
+ "summary": "FAIL, on one item. done:4 and handoff:CW1:perf now pass on my own real-Chrome run: 79 / 79 / 79 MB at Home and 1571 / 1703 / 1619 MB renderer + GPU. done:6 fails: of 19 audio probes and gates, 16 pass on the current tree, but probe_audio_mix fails twice (a real open question), the match capture fails on a Lisvel seat (a real, small mix miss, 0.24 LU over the band and 0.01 dB under the announcer bar), and the dead probe is flaky from a window bug while the engine measures a correct 29 dB drop. The rAF sync gates remain unmeasured for lack of an idle machine."
+}
