@@ -562,10 +562,7 @@ export class Bot extends BotBase implements BotController {
       const oc = b.objective?.camp;
       const opening = !!b.objective && b.objective.desire >= 0.75;
       const jungleLaning = this.jungle && kind === 'rift' && now < LANE_PHASE_END && b.phase !== 'late';
-      // (CW3s r2, G1: the duo road's carry stays on the wave while the laning objective is taken by its partner and the
-      // grovehunter; it goes only when the enemy is at the camp too: Wicks are its whole income)
-      const carryStays = lp && !this.support && kind === 'rift' && b.lanersOn(this.lane) >= 2 && !!oc && b.objective!.desire < 0.76 && this.alliesNear(oc.x, oc.y, 18) >= 2;
-      if (b.objective && oc && follow && !carryStays && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
+      if (b.objective && oc && follow && (lp ? opening && this.nearestLane(oc.x, oc.y) === this.lane && this.laneDist2(oc.x, oc.y) <= sq(LANE_OBJECTIVE_REACH)
         : (!jungleLaning || opening) && (!this.jungle || now >= JUNGLE_OBJECTIVE_FROM)) && (!this.diff.objectiveSense || hpF > (this.mode === 'objective' ? 0.3 : 0.45))) {
         consider('objective', b.objective.desire + (this.jungle ? 0.05 : 0));
       }

@@ -726,9 +726,8 @@ export abstract class BotBase {
       const c = scratch[i];
       if (c.kind !== 'minion' || !attackable(w, e, c)) continue;
       const dmg = mitigated(e, c, e.stats.ad, ad.damageType);
-      const rift = this.k.kind === 'rift';
-      const left = c.hp - this.m.incoming.before(c.id, rift ? 2.5 : 2.0, bit, true);
-      if (left > dmg * (rift ? 2 : 1.6)) continue;
+      const left = c.hp - this.m.incoming.before(c.id, 2.0, bit, true);
+      if (left > dmg * 1.6) continue;
       const s = left + Math.sqrt(this.dist2(c, e.x, e.y)) * 10;
       if (s < bestS) { bestS = s; best = c; }
     }
