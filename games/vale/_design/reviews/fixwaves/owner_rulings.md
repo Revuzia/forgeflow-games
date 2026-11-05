@@ -161,3 +161,7 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 - Shipped web games use KTX2 where texture memory is the bottleneck. Here it is not, so the budget gate is the measure, not the format.
 - The menu-cycle leak (+9.2 % GPU growth, undisposed materials and geometries) is a separate defect and still blocks.
 - Revisit KTX2 if a memory gate fails on textures, or before a mobile target.
+
+## 10a. How ruling 10 reads in the probe (lead, by delegation, 2026-11-04)
+
+`probe_combat_polish` marks an ult clip-bound when the VFX-off lifted ground's brightest tenth stops short of x2.3 its faded value. That is true on all 16 ults, because the tone curve's top holds the lifted ground on every map colour we measure. **That reading stands: x2.0 is the working target for all 16 today** (they measure x2.06-2.69 with the tint kept), and x2.3 applies only if a future ground or grade change lets the lift through. Reviewers may still mark an individual ult weak by eye.

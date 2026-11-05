@@ -159,7 +159,7 @@ export type EffectT =
       empowerAttacks?: { count: number; effects: EffectT[]; rangeBonus?: number; resetAttack?: boolean }; onExpire?: EffectT[]; present?: PresentT }
   | { op: 'projectile'; speed: number; range: number; width: number; from: AnchorT; toward: 'dir' | 'target' | 'point'; pierce: number; filter?: FilterOut;
       homing?: boolean; returns?: boolean; spreadDeg?: number; count?: number; stopAtWalls?: boolean; onHit: EffectT[]; onEnd?: EffectT[]; present?: PresentT }
-  | { op: 'dash'; mode: 'toPoint' | 'toTarget' | 'direction' | 'away' | 'behindTarget'; distance: number; speed: number; unstoppable?: boolean;
+  | { op: 'dash'; mode: 'toPoint' | 'toTarget' | 'direction' | 'away' | 'behindTarget'; distance: number; speed: number; unstoppable?: boolean; arc?: number;
       stopOnFirstHit?: boolean; passFilter?: FilterOut; passWidth?: number; onPass?: EffectT[]; onArrive?: EffectT[]; present?: PresentT }
   | { op: 'blink'; distance: number; to: 'point' | 'behindTarget' }
   | { op: 'area'; shape: ShapeOut; at: AnchorT; delay: number; filter?: FilterOut; maxTargets?: number; onHit: EffectT[]; onCenter?: EffectT[]; present?: PresentT }
@@ -204,6 +204,8 @@ export const Effect: z.ZodType<EffectT, unknown> = z.lazy(() => z.discriminatedU
     stopAtWalls: z.boolean().optional(), onHit: Effects, onEnd: Effects.optional(), present: Present.optional() }).strict(),
   z.object({ op: z.literal('dash'), mode: z.enum(['toPoint', 'toTarget', 'direction', 'away', 'behindTarget']),
     distance: z.number().positive(), speed: z.number().positive(), unstoppable: z.boolean().optional(),
+    /** CHANGED(SIM), additive: a self-dash's airborne arc peak in metres (a leap); absent = flat */
+    arc: z.number().nonnegative().optional(),
     stopOnFirstHit: z.boolean().optional(), passFilter: TargetFilter.optional(), passWidth: z.number().optional(),
     onPass: Effects.optional(), onArrive: Effects.optional(), present: Present.optional() }).strict(),
   z.object({ op: z.literal('blink'), distance: z.number().positive(), to: z.enum(['point', 'behindTarget']).default('point') }).strict(),
@@ -342,7 +344,7 @@ export const ClassDef = z.object({
 
 // ── fighters ────────────────────────────────────────────────────────────────────────────────────
 export const ClipRole = z.enum(['idle', 'run', 'attack1', 'attack2', 'crit', 'cast_a1', 'cast_a2', 'cast_a3', 'cast_ult',
-  'channel', 'death', 'recall', 'spawn', 'victory', 'stunned', 'dash', 'idle_lobby', 'taunt']);
+  'channel', 'death', 'recall', 'spawn', 'victory', 'stunned', 'dash', 'leap', 'idle_lobby', 'taunt']);
 export const FighterArt = z.object({
   /** base GLB: mesh + skeleton + ALL animation clips */
   model: AssetRef,
@@ -362,6 +364,8 @@ export const FighterArt = z.object({
     death: z.string(), recall: z.string(), idle_lobby: z.string(), victory: z.string(),
     crit: z.string().optional(), channel: z.string().optional(), spawn: z.string().optional(),
     stunned: z.string().optional(), dash: z.string().optional(), taunt: z.string().optional(),
+    /** a leap dash's own clip, played fitted to the dash's progress (present.anim 'leap') */
+    leap: z.string().optional(),
   }).strict(),
   /** bone/empty names for VFX sockets */
   sockets: z.record(z.string(), z.string()).default({}),
