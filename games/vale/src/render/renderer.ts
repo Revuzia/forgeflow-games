@@ -609,6 +609,7 @@ class ValeRenderer implements Renderer {
     const ms = this.catalog.client.menuScene as { sky?: string; model?: string; backdrop?: string };
     const keep = new Set([ms.sky, ms.model, ms.backdrop].filter((x): x is string => typeof x === 'string'));
     const templates = this.lib.release(inUse);
+    this.crowd.releaseBakes();
     this.lastRelease = { templates, ...this.assets.release(inUse, keep) };
   }
 

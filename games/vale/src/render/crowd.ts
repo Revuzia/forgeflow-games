@@ -605,7 +605,7 @@ class CrowdSolo {
       this.group.add(m, r);
     }
   }
-  dispose(): void { this.maskMat.dispose(); this.rimMat.dispose(); }
+  dispose(): void { this.maskMat.dispose(); this.rimMat.dispose(); this.buf.dispose(); this.group.removeFromParent(); }
 }
 
 export interface CrowdHoverTarget {
@@ -691,12 +691,18 @@ export class CrowdLayer {
     this.sets.clear();
   }
 
-  dispose(): void {
+  /** Home released the match's templates (ModelLibrary.release): the bakes are gone, and the next match bakes anew under
+   *  new ids, so what is keyed by a bake goes with them (each menu cycle left its warm sets and hover copies behind) */
+  releaseBakes(): void {
     this.clear();
     for (const s of this.solos.values()) s.dispose();
     this.solos.clear();
     for (const s of this.warmSets.values()) s.dispose();
     this.warmSets.clear();
+  }
+
+  dispose(): void {
+    this.releaseBakes();
     this.group.removeFromParent();
   }
 }

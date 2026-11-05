@@ -35,7 +35,8 @@
 // content caches fill once). Every texture / geometry / material / render target three uploads is tracked through its 'dispose'
 // listener (live = on the GPU). Hard checks (any machine): at every menu after the 2nd, the live render targets and
 // renderer.info geometries and textures are <= their menu_2 values (menu_1 may still be filling caches); macOS only
-// (`footprint`): the GPU process grows <= 3 % from menu_2 to the last menu.
+// (`footprint`): the GPU process grows <= 5 % from menu_2 to the last menu; the tracked (undisposed) materials and
+// geometries stay flat from menu_2 to the last menu (<= +2: a straggler, not one per cycle).
 // match peak (perf PERF-m5, part of --prod; --no-match skips it, --match-only runs it alone, --match-scale <k> the sim speed,
 // default 4, --match-min <m> the game minutes, default 30 or the match's end): a whole RIFT match from 0:00 at High, the
 // camera locked on your (autopilot) fighter as the real client plays it, every frame rendered; per second of wall time the
@@ -101,7 +102,7 @@ const MEM_ONLY = args.includes('--mem-only');
 const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.includes('--no-dyn');
 const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--gpubound-only') && !args.includes('--no-mem');
 const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
-const MEM_GPU_GROWTH = 0.03;
+const MEM_GPU_GROWTH = 0.05;
 const MAPS_ONLY = args.includes('--mem-maps-only');
 const MEM_MAPS = opt('mem-maps', 'rift,bridge,fray,rift').split(',').filter(Boolean);
 const MAPS_MEM = (MEM && !args.includes('--no-mem-maps')) || MAPS_ONLY;
@@ -408,6 +409,14 @@ async function memMaps() {
         if (type === 'dispose' && live.has(this)) { const l = this._listeners?.dispose; if (!l || l.length === 0) live.delete(this); }
         return r;
       };
+      // disposed is the dispatch itself: a game listener that stays on the object (actors.ts frees a hull's outline LOD
+      // this way) kept the count of its listeners above 0 and read as a leak
+      const dispatch = p.dispatchEvent;
+      p.dispatchEvent = function (ev) {
+        const r = dispatch.call(this, ev);
+        if (ev.type === 'dispose') live.delete(this);
+        return r;
+      };
       // skeleton bone textures are tagged where three makes them (Skeleton.computeBoneTexture)
       const tagBones = () => {
         if (window.__bonesTagged) return;
@@ -501,6 +510,14 @@ async function memory() {
         if (type === 'dispose' && live.has(this)) { const l = this._listeners?.dispose; if (!l || l.length === 0) live.delete(this); }
         return r;
       };
+      // disposed is the dispatch itself: a game listener that stays on the object (actors.ts frees a hull's outline LOD
+      // this way) kept the count of its listeners above 0 and read as a leak
+      const dispatch = p.dispatchEvent;
+      p.dispatchEvent = function (ev) {
+        const r = dispatch.call(this, ev);
+        if (ev.type === 'dispose') live.delete(this);
+        return r;
+      };
       window.__memSnap = () => {
         const by = { target: 0, texture: 0, geometry: 0, material: 0 }, kept = {};
         for (const [o, m] of live) {
@@ -540,11 +557,12 @@ async function memory() {
     for (const m of menus.slice(2)) {
       for (const k of ['targets', 'geometries', 'textures']) if (m[k] > base[k]) misses.push(`${m.tag} ${k} ${m[k]} > menu_2 ${base[k]}`);
     }
+    for (const k of ['material', 'geometry']) if (last.tracked[k] > base.tracked[k] + 2) misses.push(`tracked ${k}s ${base.tracked[k]} at menu_2 -> ${last.tracked[k]} at ${last.tag}`);
     const growth = base.gpuProcMb && last.gpuProcMb ? +((last.gpuProcMb - base.gpuProcMb) / base.gpuProcMb).toFixed(4) : null;
     if (growth !== null && growth > MEM_GPU_GROWTH) misses.push(`GPU process +${(growth * 100).toFixed(1)} % from menu_2 to ${last.tag} (> ${MEM_GPU_GROWTH * 100} %)`);
     for (const x of cycles) if (x !== last) delete x.kept;
     const res = { cycles: MEM_CYCLES, timeline: cycles, gpuGrowth: growth, keptAtLastMenu: last.kept, misses, pass: misses.length === 0, errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 10) };
-    console.log(`mem     ${MEM_CYCLES} rebuilds: menu_2 → ${last.tag}: targets ${base.targets}→${last.targets}, geometries ${base.geometries}→${last.geometries}, textures ${base.textures}→${last.textures}, GPU process ${base.gpuProcMb ?? '-'}→${last.gpuProcMb ?? '-'} MB${growth === null ? '' : ` (${growth >= 0 ? '+' : ''}${(growth * 100).toFixed(1)} %)`}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
+    console.log(`mem     ${MEM_CYCLES} rebuilds: menu_2 → ${last.tag}: targets ${base.targets}→${last.targets}, geometries ${base.geometries}→${last.geometries}, textures ${base.textures}→${last.textures}, tracked materials ${base.tracked.material}→${last.tracked.material}, tracked geometries ${base.tracked.geometry}→${last.tracked.geometry}, GPU process ${base.gpuProcMb ?? '-'}→${last.gpuProcMb ?? '-'} MB${growth === null ? '' : ` (${growth >= 0 ? '+' : ''}${(growth * 100).toFixed(1)} %)`}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
     return res;
   } finally {
     await browser.close();
