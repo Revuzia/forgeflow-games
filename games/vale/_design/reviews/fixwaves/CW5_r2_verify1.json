@@ -1,0 +1,166 @@
+{
+ "wave": "CW5",
+ "round": 2,
+ "verify": 1,
+ "date": "2026-11-04",
+ "pass": false,
+ "summary": "FAIL, 6 of 8 at par. Ardit (7.5) and Burdam (7.5) now clear, Vashil, Kemdo, Nurrow and Ervet hold. Lisvel 7.0 keeps its blocker: the base splash face is still blank. Ulkro 7.4: its recall is still nearly frozen despite the claim. done:1, 2, 3, 5 pass; done:4 partly; done:6 fails on the two fighters.",
+ "regressions": [],
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "crown_gate re-run: vashil and both skins R3 14.2 cm, w5 20.2 cm, 24/24 CW5 GLBs pass (_harness/_reports/fw_CW5_r2v1_crown.txt). My own live capture walking away at the default camera shows a round dome over the dark stole, no peak (_harness/_shots/fw_CW5_r2v1_vashil_back_run.png, crop _back_crop.png). The GLB has not changed since 2ac1fc3d. No sensitivity concern."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "card_qa re-run on all 8: 48 cards, 0 misses; ruling 12 speckle max 2.47, hi p99.9 min 239, skin MAD min 37.7 (fw_CW5_r2v1_cards.txt). Per-skin plates and stagings seen on the contact sheets (_harness/_shots/fw_CW5_r2v1_portrait_0.png, _1.png, splash_0.png, splash_1.png). Vashil base bust yaw 28 at art/blender/fighters/vashil.py:241. The numeric criterion is met; the Lisvel face at splash size is charged to lisvel-M1, not here."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured (fw_CW5_r2v1_chains.txt): Ardit tabard seg1 26.3 deg, lag 2 f, r 0.98; Burdam cowl_b 10.4 deg, skirt_f 17.1 deg; Kemdo robe_f 24.7 deg, lag 2 f; Lisvel tabard 35.1 deg, lag 2 f; Nurrow cape 20.1 / 13.8 deg; Ulkro skirt_f 22.5 deg, tail 7.7 / 14.7 deg. Vashil recall run live through the actor: clip 6 s over the 7 s channel, 0 wraps, end at 0.99 (fw_CW5_r2v1_recall_vashil.json). Rod steps per 60 Hz frame: Peal 0.265 m, Toll 0.155 m (fw_CW5_r2v1_steps2.txt), both <= 0.3. Lisvel dash floor passes. Weak spots, not gating: Burdam cowl xcorr r 0.23; Ardit tabard seg2 has 30 deg single-frame steps."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Met: Ervet blade L* range 30.8 reproduced from form_base UVs on the shipped GLB (fw_CW5_r2v1_store_blade.txt); Ulkro wraps shipped; part_lab exists. Not met: Lisvel painted material pass, sleeves and straps still read as clay (art/renders/fighters/lisvel/three_lisvel.png row 3). Ulkro's pass is incomplete: quiver case still has brush smears, dawnglass is still matte. Burdam pauldron spread reproduced at 34.1 vs 35 on an ROI, not id-masked; part_lab reports no part map for burdam or vashil (fw_CW5_r2v1_part_lab.txt). Recess depth 25.2 L* overshoots the 15-20 band. Gameplay-camera dE >= 8 per named pair is still unmeasured by anyone.",
+   "fixHint": "Rebuild Lisvel with painted linen folds and weave, leather edges and bow grain. Rebuild Burdam to create its part map. Then measure the pairs with id masks in the gameplay-camera row."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "skin_gamecam_delta re-run: Burdam Almanac 10.9 vs Stillwater 10.7; Kemdo Long Evening 8.2 vs Highrim 4.0 (fw_CW5_r2v1_skin_gamecam.txt). Portrait dE76 by my own 256 px measure: Ardit First Bell 27.3, Vashil First Bell 23.1, both >= 18 (fw_CW5_r2v1_store_blade.txt)."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "three_load_test --budget-kb 1172 OK on 24/24 GLBs (fw_CW5_r2v1_load.txt; Burdam back under budget at 1142.9 KiB, Ardit 1171.7 KiB). Ervet recall stays 6 s. lineup_qa re-run after the Ardit rebuild: silhouetteOk true (art/renders/lineup/fw_CW5_r2v1_lineup.json). Value and accent guide bands miss on several fighters (guide only). Re-score: Lisvel 7.0 and Ulkro 7.4 are below 7.5, so 6 of 8 are at par.",
+   "fixHint": "See par:lisvel and par:ulkro."
+  },
+  {
+   "id": "par:vashil",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5. Crown clean, recall now spans the channel once, per-skin plates landed. In-game First Bell is still close to base at dE 2.7 per-pixel, and the rod dips under the floor (minor)."
+  },
+  {
+   "id": "par:ardit",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, up from 7.2. Recall really moves: head 57 cm, hips 56 cm, hand.R 57 cm (fw_CW5_r2v1_steps.txt). Helm is no longer a plain box (art/out/fighters/ardit/portrait.png). In-game skin dE is 9.7 / 6.3. Live: clip 5 s over 7 s, 0 wraps, max error 0 (fw_CW5_r2v1_recall_ardit.json). Backlog: the kneel holds nearly still for about 3 s of the clip (about 4.2 s of the channel); only 0.3 KiB of budget left."
+  },
+  {
+   "id": "par:burdam",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, up from 7.3. Almanac 10.9 > 10.7, cowl 10.4 deg, base 1142.9 KiB, all re-measured. Pauldrons now show recess and edge at the game camera (three_burdam.png row 1, _harness/_shots/fw_CW5_r2v1_burdam_gc.png). Backlog under ruling 8: spread 34.1 vs 35, cowl phase weak, top value band dark."
+  },
+  {
+   "id": "par:kemdo",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, unchanged. GLB unchanged since the prior pass; crown R3 13.9 cm, load OK, cards pass, robe 24.7 deg. Minor: recall is still a 2 s clip."
+  },
+  {
+   "id": "par:lisvel",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "Score 7.0. The base splash head is still a blank pale oval under the band: no nose, mouth or lids at 1600 x 900 (_harness/_shots/fw_CW5_r2v1_lisvel_splash_head.png, crop of art/out/fighters/lisvel/splash.png). That is the standing blank-mannequin sensitivity class, so the blocker stays open. Portraits improved, but Almanac is faint. Materials still clay. Base-only black patches on the back tabard in the close sheet. Recall barely moves: head 1.6 cm, hips 1.6 cm, hand.R 10 cm (fw_CW5_r2v1_steps.txt).",
+   "fixHint": "Re-stage the base splash so the face turns to camera at a size where the features read, and deepen nostril, mouth and lid paint. Then do the M3 material paint and fix the patches in one rebuild."
+  },
+  {
+   "id": "par:nurrow",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.6, unchanged. GLB unchanged, cape 20.1 / 13.8 deg, cards and load pass. Minor: death clip dips 0.58 m under the floor by the numbers, but the fall reads fine on the sheet (_harness/_shots/fw_CW5_r2v1_nurrow_death.png)."
+  },
+  {
+   "id": "par:ulkro",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Score 7.4, up from 7.3. Wraps ship and read well on the sleeves (three_ulkro.png). But the 'moving recall' is still nearly frozen: head 3.3 cm, hips 1.2 cm, hand.L 8.4 cm, hand.R 1.5 cm over the 3 s clip (fw_CW5_r2v1_steps.txt), and the client now stretches it over 7 s. Ardit's 57 cm shows the same tool sees real motion. The engineer's 'moving recall' does not hold up. Also open: quiver smears, matte dawnglass, ULK-V1 face.",
+   "fixHint": "Author a 5-6 s recall with a real kneel-in and rise, as Ardit's was, within 1172 KiB. Clean up the quiver paint in the same rebuild."
+  },
+  {
+   "id": "par:ervet",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, unchanged. GLB unchanged since ea5c3504, cards and load pass, blade range now confirmed at 30.8 L*. Minor: prop.R goes as low as -0.42 m in cast_ult and many clips fail the floor check (fw_CW5_r2v1_floor.txt)."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Claimed done. Base and Gorgewalk 512 px portraits do read (nose, smile). Almanac is faint (lisvel_almanac_portrait.png). The finding covers splash size too, and the base splash face is blank (fw_CW5_r2v1_lisvel_splash_head.png).",
+   "fixHint": "Fix the splash face; darken Almanac's features."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Confirmed as the engineer reports: sleeves remain smooth pale cylinders in three_lisvel.png row 3.",
+   "fixHint": "Paint folds and weave in the albedo through a rebuild."
+  },
+  {
+   "id": "finding:lisvel-back-patches",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Reproduced in three_lisvel.png row 3 (_harness/_shots/fw_CW5_r2v1_lisvel_back.png): black ragged patches on the back tabard. Not new: also in the sheets at 97fcafb6 and 0f174254. Base only: Almanac and Gorgewalk are clean (fw_CW5_r2v1_lisvel_backs_skins.png). The 2048 albedo shows no such blob on the tabard, so it is not simple paint; the cause is not confirmed. Not visible in my live back shot at the default camera (fw_CW5_r2v1_lisvel_back_live.png), so I do not class it as blocker, contrary to the engineer's 'blocker-class'.",
+   "fixHint": "Compare base and skin GLBs (24109 vs 23057 vertices over VEC3 accessors) and check whether the thigh pokes through the rear panel; fix in the Lisvel rebuild."
+  },
+  {
+   "id": "fighter:burdam:burdam-M4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "10.9 vs 10.7 re-measured."
+  },
+  {
+   "id": "fighter:burdam:burdam-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "ROI re-computed: L* p10/50/90 36.8/62.0/70.9, spread 34.1. Not id-masked. Backlog under ruling 8 because Burdam is at 7.5.",
+   "fixHint": "Id-mask at the next Burdam rebuild."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Claimed done. Diagonal wraps ship at 1168.9 KiB, load OK. The finding also lists boots, dawnglass gloss and quiver paint; quiver smears and matte heads remain in three_ulkro.png row 3.",
+   "fixHint": "Finish quiver and dawnglass in the recall rebuild."
+  },
+  {
+   "id": "fighter:vashil:VAS-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Verified live on Vashil himself, which the engineer had not done: 6 s over 7 s, 0 wraps, max error 0 (fw_CW5_r2v1_recall_vashil.json)."
+  },
+  {
+   "id": "handoff:ardit-recall-live",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Run with Ardit: clip 5 s, channel 7 s, 0 wraps, max error 0, end 0.99 (fw_CW5_r2v1_recall_ardit.json). Method note: run in render_bench with you=ardit through the real Actor, using a scratch copy of the probe's measurement, not the full menu flow of probe_recall_fit.mjs, whose draft does not pick the fighter."
+  },
+  {
+   "id": "minor:floor-sweep",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "clip_floor over all 8 (fw_CW5_r2v1_floor.txt): Nurrow death -0.581 m, Ervet cast_ult -0.417 m and recall -0.310 m, Lisvel death -0.285 m and taunt -0.273 m, Vashil death -0.259 m, Burdam channel -0.218 m. Ulkro 0 clips. Mostly props; Lisvel and Nurrow death are toe.R. Pre-existing, since these GLBs other than Ardit and Burdam are not from this package.",
+   "fixHint": "Backlog: lift props in those clips."
+  },
+  {
+   "id": "minor:stray-tool",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "art/tools/_tmp_lisvel_review_pose.mjs is still in the wave's tool folder.",
+   "fixHint": "Delete it."
+  }
+ ]
+}
