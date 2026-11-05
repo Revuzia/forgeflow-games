@@ -1,29 +1,51 @@
-# GENESIS — status (2026-11-04: release candidate, ready to publish to forgeflowgames.com)
+# GENESIS — status (2026-11-05: release candidate, ready to publish to forgeflowgames.com)
 
-## Released state (2026-11-04)
+## Release refresh (2026-11-05): smoothness
 
-**What ships** (`dist/`, built 2026-11-04 05:18Z): the whole game as one Vite build — the front door (title, six doors,
+What changed for smoothness since the 11-04 release (the "macfix" program; its ledger is
+`_harness/scratch/macfix/macfix.md`; no quality preset, DPR or render scale was lowered):
+- **Field textures off the main thread**: new `src/render/planet/fieldpack.ts` + `fieldpack.worker.ts`; `FieldTextures`
+  fills synchronously once (behind the loading screen), then packs in a shared worker. Main-thread cost at 100x fell from
+  ~305 to ~23 ms/s of wall time; no snapshot over 8 ms after t=0, at 1x or 100x.
+- **No shader compiles mid-play**: held props (rock, tree, house) built up front in `src/render/hand.ts`, `SunShadows.warm`,
+  flight materials warmed, road ribbons start as `emptyRibbon()` with their full attribute set, so the first lift, drop,
+  road and walk link 0 new programs (were +1 to +6).
+- **Autosave without hitches**: saves are stored as Blobs (`src/ui/saves.ts`); the save picture is JPEG-encoded in a lazy
+  `thumb.worker` (`src/client/thumbjpeg.ts`, 8 s timeout keeps the last picture) instead of `toBlob` on the GPU canvas.
+- Unused `src/render/governor.ts` deleted.
+- Still open (not blocking): `sim.save()` pauses the sim worker 200-380 ms; the IndexedDB put (~35 ms/save) is on main.
+
+Verified on this tree (ledger `_harness/scratch/ledgers/release.md`, logs `_harness/scratch/release/r5/`):
+`npm run check` **green**, 716 / 716 (check.log, 08:11-08:30Z through `slot.sh`; the one later edit,
+`src/client/thumbjpeg.ts` 08:20Z, a timeout constant, re-checked: detban + tsc clean, its tests 4/4); `npm run build` OK
+(08:3xZ: `dist/` 8.6 MB, 55 files, `index.js` 2.97 MB / 925 kB gz, sim worker 1.55 MB, 21 .ogg); `node _harness/cdn.mjs`
+**PASS** (2 loads ready, 0 missing, 0 console errors, ticked, 19 / 19 hashed immutable, 4 workers 200); deploy dry-run
+exit 0, 55 files, `index.html` then `game_meta.json` last. Publishing steps: README "Publishing" and
+`_harness/scratch/continue/final-reports/release.md`.
+
+## Released state (2026-11-05)
+
+**What ships** (`dist/`, built 2026-11-05 08:3xZ): the whole game as one Vite build — the front door (title, six doors,
 settings, saves with autosave, credits and licences, the 888×500 portal layout), the deterministic living-world sim in
 its Web Worker (peoples who gather, hunt real animals, herd, farm, fish, build, keep fire, hold festivals, quarrel, split
 and move), the god layer (the Touch, sigils, prophets and signs, storms and disasters, new materials, the wrath slider,
 survivable by default; per-town fear, trust and loyalty), the three.js WebGL2 world art and VFX, and the owner-approved
 authored score (21 .ogg cues, unchanged). No creature, real animals only.
 
-**Measured on the release tree** (`_harness/scratch/release/`, ledger `_harness/scratch/ledgers/release.md`):
-- `npm run check` **green**: detban + tsc clean, **662 / 662** tests pass, 0 fail, 0 skipped
-  (`_harness/scratch/sim-fix-r3/gate3.log`, 05:08–05:15Z through `slot.sh`; no file under `src/` or `tests/` changed after
-  it started — the newest, `tests/acceptance-opening.test.ts`, is 05:07:51Z).
-- `npm run build` OK: `dist/` 8.5 MB, 53 files — `index.js` 2.98 MB (930 kB gzipped), sim worker 1.54 MB, DSP worker,
-  21 .ogg, 12 font files, `thumbnail.png` 454 kB, `game_meta.json`, `game_controls.js`.
+**Measured on the release tree** (`_harness/scratch/release/r5/`, ledger `_harness/scratch/ledgers/release.md`):
+- `npm run check` **green** through `slot.sh` (08:11–08:31Z, `check.log`): detban 146 sim files clean, tsc clean,
+  **716 / 716** tests pass, 0 fail, 0 skipped. The one file changed after it started (`src/client/thumbjpeg.ts`, 08:20Z)
+  was re-checked with its focused test (4 / 4) and `tsc --noEmit`, and the build below is of that tree.
+- `npm run build` OK: `dist/` 8.6 MB, 55 files — `index.js` 2.97 MB (925 kB gzipped), sim worker 1.55 MB, field-pack,
+  DSP and autosave-picture workers, 21 .ogg, 12 font files, `thumbnail.png` 454 kB, `game_meta.json`, `game_controls.js`.
 - `node _harness/cdn.mjs` **PASS** (the real `workers/games-cdn` worker over a stand-in R2 bucket): 2 loads ready,
-  0 missing requests, 0 console errors, the sim ticked, HTML `no-store` + COEP `credentialless`, 18 / 18 hashed assets
-  immutable, all three workers served 200.
+  0 missing requests, 0 console errors, the sim ticked, HTML `no-store` + COEP `credentialless`, 19 / 19 hashed assets
+  immutable, the workers served 200.
 - Deploy rehearsal `python pipeline/deploy_game.py --game-dir games/genesis/dist --slug genesis --dry-run` (repo root):
-  exit 0, 53 files, 4 critical, `index.html` then `game_meta.json` uploaded last.
-- Sim speed at 1 500 agents (sim-fix-r3, CPU ticks/s): L0 448, L1 578, L2 705; the 1000x preset reaches 0.82 of its
-  target in the worker. The HUD shows the achieved speed when the sim falls behind.
-- The opening band (sim-fix-r3, 9 seeds, 8 years): 0 villages fell, growth +1.2 to +4.6 % a year. Terrain memory over a
-  30-minute 100x session levels at ~700–880 MB (was 1 478 MB; render-fix-r2).
+  exit 0, 55 files, 4 critical, `index.html` then `game_meta.json` uploaded last.
+- Sim speed at 1 500 agents (restated in LIVING §1.6 / CONTRACT §6.1 after 1.0): L1 ~620–770, L2 ~790–870 CPU ticks/s;
+  100x met; the 1000x preset reaches 0.82 of its target. The HUD shows the achieved speed when the sim falls behind.
+- Acceptance table re-installed (`_harness/scratch/living/acceptance.json`: 41 met / 15 partly / 12 missed).
 
 **Closed since the 2026-10-29 punch list** (`final-reports/punch.json`; the punch and fix-r1..r3 ledgers): P01 the
 "Invent an animal" wording, P03 volcano glare, P04 dock on grass, P05 the Touch's ribbon, P06 first rain, P07 meteor at
@@ -35,23 +57,21 @@ autosave on leave, a save queue, the title's focus, the terrain patch pools, and
 `upload_game.py`. Partly improved: P02 hunting (kills per 100 people up from 4–14 to 18–32 a year on the seeds with game),
 P11 shelter (housed 20–27 of 30 year ends on the measured seeds), P12 growth (the opening, above).
 
-**Known minor gaps (shipping with them):**
-- Sim speed floors not met at 1 500 agents (L1 ≥ 800 and L2 ≥ 1 200 asked in LIVING §1.6 / CONTRACT §6.1; 1000x 0.82 vs
-  0.85). Needs an architectural cut (no single hotspot: hydrology 15 %, climate 11 %, decide 10 %) or a restated floor.
-- The opening's "let the day pass" hands back at 100x (`src/ui/opening.ts` `DAY_SPEED`); 3x–10x was asked.
-- Post-release balance (LIVING §13.8, 8 seeds × 25 years before/after): fixed P11 year-end housing (7 of 8 seeds housed
-  at every calm year end, per live town) and P25 year-50 prophet credibility (0.705 on the three seeds that missed);
-  P02 hunting where no game was on foot fixed at its cause (herds drawn and judged by what a town can walk to; stone-age
-  folk start knowing hunting: since SIMFIX 2 the plains and coastal folk carry spear-making, hunting and fishing in their
-  species start, so a band the god sets down hunts from day 1, not only the two scenario bands), kills per 100 people a year up from 8 to 14 but still short of the owner default 20
-  (hunted share 0.09 of food, 0.15 asked); the under-15 share stays 0.48 (0.35–0.45 asked; needs a joint fertility /
-  child-mortality re-tune). Acceptance table re-installed (`_harness/scratch/living/acceptance.json`: 41 met / 15 partly
-  / 12 missed, round 4 + these rows).
-- The free-form field's examples still include "invent telepathy" (`src/ui/freeform.ts:36`).
-- Open minors from the punch list: P16 the sacred-animal sign, P19 Cinder's craters, P22 people never take to the water,
-  P26 remaining balance misses (under-15 share, hunting volume), P27 a band treating any visible water as camp water,
-  P28 (half) daughter village spacing, P30 `slot.sh` dead holders, P32 proof gaps (shrines, pilgrimages); one seed's
-  snow-locked climate step (s3, sim-fix-r2).
+**Closed since the 2026-11-04 release report** (postrel / macfix ledgers): the opening hands the world back at 1x when
+it ends ("let the day pass" stays 100x: the brief's 3x–10x was on the old 10-tick clock); "invent telepathy" is gone
+from the free-form examples; P11 year-end housing and P25 prophet credibility; punch P16 the sacred-animal sign, P19
+Cinder's craters, P27 camp water, P28 daughter-village spacing, P30 `slot.sh` dead holders, P32 shrine / pilgrimage
+proof; autosave pictures encoded off the main thread; `package.json` 1.0.0.
+
+**Known minor gaps (shipping with them; `final-reports/release.md` "Remaining minor items"):**
+- Sim speed below the original L1 / L2 floors and 1000x at 0.82 of 0.85 (restated, above); a quiet-machine 1000x figure
+  is still to be taken.
+- Balance: hunting 14 kills per 100 people a year (20 asked; hunted share 0.09 vs 0.15); the under-15 share ~0.47
+  (0.35–0.45 asked; needs a joint fertility / child-mortality re-tune).
+- P22: fishers take to the water in the sim; boats on screen not yet confirmed by a shot; travellers by water not built.
+- One seed's snow-locked climate step (s3); two fixes tried and backed out.
+- `LaunchFx.spaceGroup` is never added to the scene (space-frame launch puffs / plumes do not draw).
+- On a starved software GPU an autosave can keep its previous picture.
 
 Publishing is in `README.md` "Publishing" and `_harness/scratch/continue/final-reports/release.md` (the credentials and
 the exact commands).
