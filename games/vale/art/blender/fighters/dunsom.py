@@ -2782,7 +2782,7 @@ def _death_pins(skel, clip, keys, t_let, t_land, t_hat0, t_hat1):
         butt = _crook_world(skel_, M0, crook_at(S_BUTT))
         piv = V((butt.x, butt.y, 0.0))
         a0 = W0.to_3x3().col[1].normalized()
-        a1 = V((DEATH_FALL[0], DEATH_FALL[1], 0.0)).normalized()
+        a1 = V((DEATH_FALL[0], DEATH_FALL[1], 0.045)).normalized()     # (round 2: the shaft's far end propped on the fallen lantern)
         q_end = a0.rotation_difference(a1)
         # (round 2, clip_floor: the hook came to rest pointing down, its pivot 12 cm and the lantern 23 cm under the floor:
         # the fallen crook rolls about its own shaft so the hook lies flat on the ground beside it)

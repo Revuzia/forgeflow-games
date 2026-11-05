@@ -26,50 +26,40 @@
     "tris_lantern_frame": 1200,
     "tris_lantern_glass": 300,
     "tris_lantern_core": 680,
-    "validate_dunsom": "19810->19806"
+    "validate_dunsom": "19810->19807"
   },
-  "uv_coverage": 0.608,
+  "uv_coverage": 0.61,
   "bake": {
-    "base": 5.06,
-    "rough_metal": 4.46,
-    "normal": 2.88,
-    "ao": 2.98,
-    "normal_fixed_px": 51346,
-    "projection": 73.1,
-    "pack_save": 73.42,
-    "total": 89.15
+    "base": 5.0,
+    "rough_metal": 5.44,
+    "normal": 2.93,
+    "ao": 3.0,
+    "normal_fixed_px": 45671,
+    "projection": 33.94,
+    "pack_save": 34.09,
+    "total": 50.67
   },
-  "tris": 22406,
+  "tris": 22407,
   "mesh_top_m": 2.054,
-  "glb_bytes_raw": 2451744,
+  "glb_bytes_raw": 2432456,
   "optimize": {
     "ok": true,
-    "before": 2451744,
-    "after": 977060
+    "before": 2432456,
+    "after": 969860
   },
-  "glb_bytes": 977060,
+  "glb_bytes": 969860,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_highrim.glb (954 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: dunsom_highrim_base 2048x2048 181K, dunsom_highrim_normal 512x512 43K, dunsom_highrim_orm 512x512 69K",
-      "  skinned meshes: dunsom_accent(354v), dunsom_highrim(18638v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/dunsom/dunsom_highrim.glb (947 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: dunsom_highrim_base 2048x2048 182K, dunsom_highrim_normal 512x512 43K, dunsom_highrim_orm 512x512 68K",
+      "  skinned meshes: dunsom_accent(354v), dunsom_highrim(18397v)",
       "  bones: 28 (root hips spine chest neck head x_hat shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_crook_foot x_crook_hook x_lantern thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 22406; bind-pose bounds (three units, Y up): 1.21 x 2.05 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
+      "  tris: 22407; bind-pose bounds (three units, Y up): 1.21 x 2.05 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/dunsom/dunsom_highrim_splash.png",
-      "portrait": "art/out/fighters/dunsom/dunsom_highrim_portrait.png"
-    },
-    "seconds": {
-      "splash": 76.58,
-      "portrait": 13.23
-    }
   },
   "three_qa": {
     "ok": true,
@@ -100,24 +90,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_highrim.png",
-    "seconds": 15.3,
+    "seconds": 11.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.2,
-      "model": 54.72,
-      "lows_bind": 6.32,
-      "uv": 8.56,
-      "bake": 89.49,
-      "export": 0.17,
-      "optimize": 1.17,
-      "load_test": 0.24,
-      "render": 89.95,
-      "three_qa": 15.84
+      "materials": 0.15,
+      "model": 79.29,
+      "lows_bind": 17.81,
+      "uv": 8.02,
+      "bake": 50.82,
+      "export": 0.07,
+      "optimize": 0.77,
+      "load_test": 0.19,
+      "three_qa": 11.52
     },
-    "total_s": 266.76
+    "total_s": 168.69
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,

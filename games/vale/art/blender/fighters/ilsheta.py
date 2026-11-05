@@ -1118,8 +1118,9 @@ def _face_plate(x, z, pal):
     au = np.abs(u)
     chalk = _lin(_hex(pal.get("chalk", "#D4CEBF")))
     # (a first smooth pass read as a porcelain mannequin in three.js, a sensitivity miss: the plate is CARVED: faceted
-    # planes with a stepped cheek line, incised brow arcs, a dawn chevron on the brow and two hour-lines on each cheek, a
-    # warm chalk, deep ink recesses, and only a small catch-light in each)
+    # planes with a stepped cheek line, incised brow arcs, a dawn chevron on the brow, a
+    # warm chalk, deep ink recesses, and only a small catch-light in each; no vertical lines under the eyes: they read
+    # as tears, which the roster's masks do not carry)
     shade = 0.93 - 0.30 * ss(0.50, 0.58, au) - 0.12 * ss(0.58, 1.0, au) - 0.20 * ss(-0.30, -0.42, v)   # the facets step
     shade = shade + 0.10 * np.exp(-((v - 0.34) / 0.10) ** 2) * ss(0.90, 0.40, au)     # the brow shelf catches the light
     tilt = math.radians(6.0)
@@ -1133,11 +1134,10 @@ def _face_plate(x, z, pal):
     shade = shade * (1.0 - 0.36 * np.exp(-((u - 0.11) / 0.05) ** 2) * span)           # its shaded side
     shade = shade * (1.0 - 0.45 * np.exp(-((v + 0.33) / 0.04) ** 2) * np.exp(-(u / 0.15) ** 2))     # under the beak
     shade = shade * (1.0 - 0.55 * np.exp(-((v + 0.60) / 0.026) ** 2) * ss(0.32, 0.18, au))           # the mouth line
-    # the incised marks: an arc over each eye, the dawn chevron, two short hour-lines under each eye
+    # the incised marks: an arc over each eye, the dawn chevron
     arc = np.exp(-((v - (0.36 - 0.55 * (au - 0.43) ** 2)) / 0.022) ** 2) * ss(0.84, 0.72, au) * ss(0.12, 0.20, au)
     chev = np.exp(-((v - (0.70 - 0.55 * au)) / 0.024) ** 2) * ss(0.28, 0.20, au)
-    hour = (np.exp(-((au - 0.40) / 0.020) ** 2) + np.exp(-((au - 0.56) / 0.020) ** 2)) * ss(-0.34, -0.26, v) * ss(-0.06, -0.14, v)
-    shade = shade * (1.0 - 0.58 * np.clip(arc + chev + hour, 0.0, 1.0))
+    shade = shade * (1.0 - 0.58 * np.clip(arc + chev, 0.0, 1.0))
     warm = np.array([1.03, 1.0, 0.94])
     lin = (chalk * warm)[None, :] * np.clip(shade, 0.0, 1.25)[:, None]
     ink = _lin(_hex(pal.get("ink", "#17181B")))

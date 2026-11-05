@@ -2837,13 +2837,13 @@ def clip_death():
     # her knees at rest, not on hands and knees)
     bow = compose(stance_pose(), body(hips=(4, 2, 0), spine=(12, 0, 0), chest=(14, 2, 0), neck=(10, 0, 0), head=(16, 3, 0), fwd=0.02, drop=0.04),
                   ik(wrist("L", 0.28, -0.14, 1.00), wrist("R", -0.30, -0.12, 0.98)), both(fingers, **RELAX))
-    down = compose(down, body(hips=(6, 0, 0), spine=(6, 0, 0), chest=(5, 0, 0), head=(6, 0, 0), drop=0.05, fwd=0.03),
+    down = compose(down, body(hips=(3, 0, 0), spine=(6, 0, 0), chest=(5, 0, 0), head=(4, 0, 0), drop=0.0, fwd=0.03),
                    ik(wrist_abs("L", 0.32, -0.76, 0.075, (0.9, 0.3, 0.3)), wrist_abs("R", -0.32, -0.78, 0.075, (-0.9, 0.3, 0.3)),
                       orient("L", (0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True),
                       orient("R", (-0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True)))
     bounce = compose(down, body(chest=(-3, 0, 0), drop=-0.012))
     rest = compose(down, body(spine=(2, 0, 0), chest=(2, 0, 0), head=(2, 0, 0), drop=0.006))
-    body_fn = anim.keyed([(0.0, g, "linear"), (0.08, recoil, "snap"), (0.22, bow, "inout"), (0.42, sink, "inout"), (0.62, fold, "in"),
+    body_fn = anim.keyed([(0.0, g, "linear"), (0.08, recoil, "snap"), (0.27, bow, "inout"), (0.44, sink, "inout"), (0.62, fold, "in"),
                           (0.76, down, "in"), (0.84, bounce, "out"), (0.94, rest, "inout"), (1.0, rest, "linear")])
 
     def zp(th):                     # the pivot's height with the hat tilted th degrees resting on its low rim

@@ -48,14 +48,14 @@
   },
   "uv_coverage": 0.594,
   "bake": {
-    "base": 3.64,
-    "rough_metal": 3.04,
-    "normal": 2.53,
-    "ao": 3.7,
+    "base": 6.82,
+    "rough_metal": 4.88,
+    "normal": 4.12,
+    "ao": 4.66,
     "normal_fixed_px": 80921,
-    "projection": 41.54,
-    "pack_save": 41.82,
-    "total": 54.85
+    "projection": 122.55,
+    "pack_save": 122.86,
+    "total": 143.69
   },
   "tris": 20354,
   "mesh_top_m": 1.879,
@@ -170,37 +170,23 @@
   "optimize": {
     "ok": true,
     "before": 2884648,
-    "after": 1205352
+    "after": 1164520,
+    "q_base": 74
   },
-  "glb_bytes": 1205352,
+  "glb_bytes": 1164520,
   "three_load_test": {
-    "ok": false,
+    "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal.glb (1177 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: rishal_base 2048x2048 233K, rishal_normal 512x512 45K, rishal_orm 512x512 71K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/rishal/rishal.glb (1137 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: rishal_base 2048x2048 194K, rishal_normal 512x512 45K, rishal_orm 512x512 71K",
       "  skinned meshes: rishal(18124v), rishal_accent(438v)",
       "  bones: 27 (root hips spine chest neck head x_visor_ridge shoulderL upper_armL forearmL handL propL x_knife_tip_l shoulderR upper_armR forearmR handR propR x_knife_tip_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.667s/20tr, attack2:0.667s/20tr, cast_a1:0.500s/21tr, cast_a2:0.833s/20tr, cast_a3:0.667s/22tr, cast_ult:1.167s/21tr, channel:1.333s/20tr, crit:0.667s/20tr, dash:0.500s/21tr, death:1.500s/20tr, idle:2.000s/20tr, idle_lobby:3.000s/22tr, recall:6.000s/22tr, run:0.533s/22tr, stunned:1.333s/20tr, taunt:1.333s/20tr, victory:2.000s/21tr",
       "  tracks checked: 352; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
       "  tris: 20354; bind-pose bounds (three units, Y up): 0.79 x 1.88 x 0.61; facing (-0.00, 1.00); head bone y 1.55; runRefSpeed 3.55",
       "  run: 16 f, planted samples 2, max foot-speed error 1.6%",
-      "[three] FAIL (1)",
-      "  - GLB is 1177 KiB > budget 1172 KiB"
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/rishal/splash.png",
-      "portrait": "art/out/fighters/rishal/portrait.png",
-      "icon": "art/out/fighters/rishal/icon.png",
-      "turntable": "art/renders/fighters/rishal/turntable.png"
-    },
-    "seconds": {
-      "splash": 169.53,
-      "portrait": 35.52,
-      "icon": 8.21,
-      "turntable": 10.3
-    }
   },
   "three_qa": {
     "ok": true,
@@ -231,26 +217,25 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 31.6,
+    "seconds": 28.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.09,
-      "model": 13.15,
-      "lows_bind": 1.02,
-      "uv": 4.6,
-      "bake": 54.85,
-      "clips": 0.24,
-      "export": 1.63,
-      "optimize": 0.66,
-      "load_test": 0.14,
-      "render": 223.72,
-      "three_qa": 32.28,
-      "cache": 0.2
+      "materials": 0.24,
+      "model": 46.82,
+      "lows_bind": 3.39,
+      "uv": 10.03,
+      "bake": 143.69,
+      "clips": 0.33,
+      "export": 3.13,
+      "optimize": 1.32,
+      "load_test": 0.27,
+      "three_qa": 29.28,
+      "cache": 0.14
     },
-    "total_s": 332.61
+    "total_s": 238.72
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

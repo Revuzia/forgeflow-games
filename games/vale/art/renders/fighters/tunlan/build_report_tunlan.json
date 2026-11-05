@@ -47,14 +47,14 @@
   },
   "uv_coverage": 0.624,
   "bake": {
-    "base": 5.9,
-    "rough_metal": 5.43,
-    "normal": 5.09,
-    "ao": 4.71,
+    "base": 7.03,
+    "rough_metal": 4.2,
+    "normal": 4.79,
+    "ao": 6.2,
     "normal_fixed_px": 28942,
-    "projection": 76.76,
-    "pack_save": 77.12,
-    "total": 98.54
+    "projection": 105.73,
+    "pack_save": 106.11,
+    "total": 128.72
   },
   "tris": 21228,
   "mesh_top_m": 2.05,
@@ -159,17 +159,17 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3031180,
+  "glb_bytes_raw": 3031464,
   "optimize": {
     "ok": true,
-    "before": 3031180,
-    "after": 1198580
+    "before": 3031464,
+    "after": 1196896
   },
-  "glb_bytes": 1198580,
+  "glb_bytes": 1196896,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan.glb (1170 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan.glb (1169 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: tunlan_base 2048x2048 149K, tunlan_normal 512x512 35K, tunlan_orm 512x512 59K",
       "  skinned meshes: tunlan(17158v), tunlan_accent(155v)",
       "  bones: 45 (root hips spine chest neck head x_hat x_lantern x_lamp shoulderL upper_armL forearmL handL propL x_fa1L x_fa2L x_fa3L x_gesture_l x_fb1L x_fb2L x_fb3L x_ft1L x_ft2L shoulderR upper_armR forearmR handR propR x_fa1R x_fa2R x_fa3R x_gesture_r x_fb1R x_fb2R x_fb3R x_ft1R x_ft2R thighL shinL footL toeL thighR shinR footR toeR)",
@@ -179,20 +179,6 @@
       "  run: 16 f, planted samples 2, max foot-speed error 0.6%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/tunlan/splash.png",
-      "portrait": "art/out/fighters/tunlan/portrait.png",
-      "icon": "art/out/fighters/tunlan/icon.png",
-      "turntable": "art/renders/fighters/tunlan/turntable.png"
-    },
-    "seconds": {
-      "splash": 191.38,
-      "portrait": 21.48,
-      "icon": 6.22,
-      "turntable": 9.28
-    }
   },
   "three_qa": {
     "ok": true,
@@ -223,26 +209,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/tunlan/three_tunlan.png",
-    "seconds": 16.2,
+    "seconds": 11,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.17,
-      "model": 3.54,
-      "lows_bind": 2.6,
-      "uv": 9.26,
-      "bake": 99.04,
-      "clips": 0.65,
-      "export": 4.54,
-      "optimize": 1.5,
-      "load_test": 0.21,
-      "render": 228.56,
-      "three_qa": 16.74,
-      "cache": 0.17
+      "materials": 0.35,
+      "model": 7.01,
+      "lows_bind": 9.51,
+      "uv": 22.81,
+      "bake": 129.23,
+      "clips": 0.67,
+      "export": 4.21,
+      "optimize": 1.4,
+      "load_test": 0.3,
+      "three_qa": 11.3,
+      "cache": 0.08
     },
-    "total_s": 367.07
+    "total_s": 186.96
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86
