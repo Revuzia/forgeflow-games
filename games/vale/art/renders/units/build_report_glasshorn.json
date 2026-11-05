@@ -9,13 +9,13 @@
   "tris": 8032,
   "uv_coverage": 0.574,
   "bake": {
-    "base": 2.1,
-    "rough_metal": 1.36,
-    "normal": 1.38,
-    "ao": 1.25,
+    "base": 1.12,
+    "rough_metal": 1.05,
+    "normal": 0.99,
+    "ao": 1.06,
     "normal_fixed_px": 2966,
-    "pack_save": 0.44,
-    "total": 6.65
+    "pack_save": 0.35,
+    "total": 4.64
   },
   "bake_holes_filled": 0,
   "clips": {
@@ -118,13 +118,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 1773244,
+  "glb_bytes_raw": 1774416,
   "optimize": {
     "ok": true,
-    "before": 1773244,
-    "after": 482732
+    "before": 1774416,
+    "after": 482812
   },
-  "glb_bytes": 482732,
+  "glb_bytes": 482812,
   "inspect": [
     "    prim material=glasshorn_body tris=7600 verts=5296 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "    prim material=glasshorn_dawnglass tris=432 verts=912 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/glasshorn.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.398,0.004,-0.809],[0.398,2.201,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":30.6}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.398,0.004,-0.809],[0.398,2.201,1.197]],\"facing\":[0,1],\"headY\":1.67,\"heightPx1080\":118,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/glasshorn.png\",\"seconds\":19.6}"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "sculpt": 8.39,
+      "rig": 0.01,
+      "sculpt": 8.38,
       "bind": 0.36,
-      "uv": 13.49,
-      "bake": 7.44,
-      "clips": 0.79,
-      "ground_qa": 0.28,
-      "export": 1.27,
-      "optimize": 0.9,
-      "qa": 31.35
+      "uv": 11.13,
+      "bake": 5.34,
+      "clips": 0.72,
+      "ground_qa": 0.27,
+      "export": 1.01,
+      "optimize": 0.96,
+      "qa": 20.44
     },
-    "total_s": 64.36
+    "total_s": 48.74
   }
 }

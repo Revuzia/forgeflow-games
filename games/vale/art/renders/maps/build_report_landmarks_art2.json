@@ -680,48 +680,48 @@
   },
   "camp_mark_resinback": {
     "id": "camp_mark_resinback",
-    "tris": 110,
+    "tris": 180,
     "size_m": [
-      1.62,
-      1.62
+      1.75,
+      1.71
     ],
-    "height": 0.04,
+    "height": 0.02,
     "x": [
-      -0.81,
-      0.81
+      -0.86,
+      0.89
     ],
     "y": [
-      -0.8,
-      0.82
+      -0.82,
+      0.89
     ],
-    "kb_raw": 18,
-    "kb": 9,
+    "kb_raw": 22,
+    "kb": 12,
     "texture": 256,
-    "buried_faces_dropped": 0,
+    "buried_faces_dropped": 2,
     "nodes": [
       "body"
     ]
   },
   "camp_mark_stilltusks": {
     "id": "camp_mark_stilltusks",
-    "tris": 158,
+    "tris": 228,
     "size_m": [
-      1.6,
-      1.62
+      1.73,
+      1.67
     ],
-    "height": 0.04,
+    "height": 0.02,
     "x": [
-      -0.82,
-      0.78
+      -0.86,
+      0.87
     ],
     "y": [
       -0.82,
-      0.79
+      0.85
     ],
-    "kb_raw": 22,
-    "kb": 11,
+    "kb_raw": 27,
+    "kb": 15,
     "texture": 256,
-    "buried_faces_dropped": 0,
+    "buried_faces_dropped": 2,
     "nodes": [
       "body"
     ]

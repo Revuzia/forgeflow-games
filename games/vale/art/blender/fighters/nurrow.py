@@ -49,6 +49,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import bpy  # noqa: E402,F401
+import mathutils  # noqa: E402
 import numpy as np  # noqa: E402
 
 from common import anim, fighter, materials, rig  # noqa: E402
@@ -2716,7 +2717,7 @@ def _floor_probes(skel) -> list:
         for t in (0.0, 0.25, 0.5, 0.75, 1.0):
             for k in range(8):
                 a = 2 * math.pi * k / 8
-                pts.append((nm, skel.rest[nm] @ Vector((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
+                pts.append((nm, skel.rest[nm] @ mathutils.Vector((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
     return pts
 
 

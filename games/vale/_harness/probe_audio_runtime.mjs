@@ -36,6 +36,9 @@
 //     enemyDownFires is gated only when an enemy fighter died in your team's sight (fog silences the rest): the probe
 //     counts the sim's own enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one beside
 //     your fighter (killEntity on an enemy fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
+//     Lamp cues: lampSetFires / lampOutFires answer the sim's own lamps set or put out in sight AND inside the hearing range
+//     (a lamp farther away is rightly culled; null = this capture had none). No near lamp out by --seconds minus 25: one of
+//     your team's lit lamps is put out beside your fighter (killEntity), reported as forcedLampOut.
 //   node _harness/probe_audio_runtime.mjs dead [--out <json>]
 //     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
 //     output split by two filters (< 500 Hz, > 2 kHz) and metered per block. 8 s alive, then your fighter is killed
@@ -347,10 +350,12 @@ async function runMatch() {
       const cat = window.__vale.session.catalog;
       const wardIds = new Set((cat?.units ?? []).filter((u) => u.kind === 'ward').map((u) => u.id));
       const inSight = (d, me) => !!d && !!me && (d.team === me.team || (((d.visibleMask ?? 0) >>> me.team) & 1) === 1);
+      // a spatial cue is culled past the hearing range: a lamp far from you is rightly silent, so the gate counts the near ones
+      const audible = (d) => !!d && window.__valeAudio.place({ x: d.x, y: d.y }, false).att > 0;
       m.onEvents((evs) => { const me = m.view.players.find((p) => p.player === m.you);
         for (const e of evs) {
-          if (e.e === 'death' && e.kind === 'ward') { const d = m.view.entity(e.dst) ?? m.sim?.world?.entity(e.dst); const seen = inSight(d, me); if (seen) st.lampsOutSeen++; st.wardLog.push(['out', m.view.time, d?.team ?? null, seen]); }
-          if (e.e === 'cast' && typeof e.ability === 'string' && window.__wardAbilities?.has(e.ability)) { const d = m.view.entity(e.src); const seen = inSight(d, me); if (seen) st.lampsSetSeen++; st.wardLog.push(['set', m.view.time, d?.team ?? null, seen]); }
+          if (e.e === 'death' && e.kind === 'ward') { const d = m.view.entity(e.dst) ?? m.sim?.world?.entity(e.dst); const seen = inSight(d, me); const near = audible(d); if (seen && near) st.lampsOutSeen++; st.wardLog.push(['out', m.view.time, d?.team ?? null, seen, near]); }
+          if (e.e === 'cast' && typeof e.ability === 'string' && window.__wardAbilities?.has(e.ability)) { const d = m.view.entity(e.src); const seen = inSight(d, me); const near = audible(d); if (seen && near) st.lampsSetSeen++; st.wardLog.push(['set', m.view.time, d?.team ?? null, seen, near]); }
         }
       });
       const setsWard = (fx) => JSON.stringify(fx ?? []).match(/"unit":"([^"]+)"/g)?.some((x) => wardIds.has(x.slice(8, -1))) ?? false;
@@ -364,6 +369,7 @@ async function runMatch() {
     const tMatch = Date.now();
     let deadSeen = 0;
     rep.forcedEnemyDeath = null;
+    rep.forcedLampOut = null;
     for (;;) {
       const s = await page.evaluate(() => {
         const a = window.__valeAudio, v = window.__vale;
@@ -392,6 +398,24 @@ async function runMatch() {
           return { fighter: foe.def ?? null, t: W.time, events: evs.map((e) => e.e) };
         });
         log('forced enemy death', JSON.stringify(rep.forcedEnemyDeath));
+      }
+      // no lamp has gone out near you by the last 30 s: put one of your team's lit lamps out beside your fighter, so lampOut
+      // is measured through the real death path (forced as the enemy death above, and reported)
+      if (rep.forcedLampOut === null && (s.t ?? 0) >= SECONDS - 25) {
+        rep.forcedLampOut = await page.evaluate(async () => {
+          if (window.__deaths.lampsOutSeen > 0) return false;
+          const m = window.__vale.state.match.value, W = m.sim.world, me = m.view.players.find((p) => p.player === m.you), mine = W.entity(me.entity);
+          const { killEntity } = await import('/src/sim/combat.ts');
+          const ward = W.entities.find?.((e) => e.alive && e.kind === 'ward' && e.team === me.team) ?? null;
+          if (!ward) return 'no lit lamp on your team';
+          ward.x = mine.x + 2; ward.y = mine.y;
+          const n0 = W.events.length;
+          killEntity(W, ward, null);
+          const evs = W.events.slice(n0);
+          for (const l of m.listeners) l(evs);
+          return { t: W.time, events: evs.map((e) => e.e), kinds: evs.map((e) => e.kind ?? null) };
+        });
+        log('forced lamp out', JSON.stringify(rep.forcedLampOut));
       }
       for (const c of s.cues) rep.cues.push([r2(s.ct), s.t === null ? null : r2(s.t), c]);
       if (s.t === null && rep.cues.length > 5) { log('match left'); break; }
@@ -447,7 +471,7 @@ async function runMatch() {
     rep.cueLog = { total: rep.cues.length, matchSeconds: r2(tMax), heal: count(healId), healPerMin: r2(count(healId) / tMax * 60),
       enemyDown: count('m_enemy_down'), allyDown: count('m_ally_down'), selfDown: count('m_self_down'), takedown: count('m_takedown'),
       lampSet: count('c_lamp_set'), lampOut: count('c_lamp_out'), summonOut: count('c_summon_out'), summon: count('c_summon') };
-    rep.lamps = { sim: { setSeen: rep.enemyDeaths.lampsSetSeen, outSeen: rep.enemyDeaths.lampsOutSeen, log: rep.enemyDeaths.wardLog.map(([k, t, team, seen]) => [k, r2(t), team, seen]) },
+    rep.lamps = { sim: { setSeen: rep.enemyDeaths.lampsSetSeen, outSeen: rep.enemyDeaths.lampsOutSeen, log: rep.enemyDeaths.wardLog.map(([k, t, team, seen, near]) => [k, r2(t), team, seen, near]) },
       heard: rep.cues.filter((c) => c[2] === 'c_lamp_set' || c[2] === 'c_lamp_out').map(([, t, id]) => [id, t]) };
     const top = {}; for (const c of rep.cues) top[c[2]] = (top[c[2]] ?? 0) + 1;
     rep.cueTop = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 30);
@@ -521,7 +545,7 @@ async function runDead() {
     });
     await page.waitForTimeout(1200);                        // the close's time constant x 3, and a block
     const w1 = [await mark()];
-    // the mode's own respawn timer decides how long the state lasts
+    // the mode's own respawn timer decides how long the state lasts (the mark comes from a 100 ms poll: blocks are chosen by their own flag too)
     await page.waitForFunction(() => window.__valeAudio.musicDead === false, null, { timeout: 120000, polling: 100 });
     w1.push(await mark());
     await page.waitForTimeout(1200);

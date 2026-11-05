@@ -283,7 +283,7 @@ CARDS = {
         # opened a black gap over the collar and the eyes tipped up to arcs. Per-clip head pitch measured from the GLB (idle
         # 0-2 deg, attack1 t 0.55 -5, cast_a3 t 0.5 +26): the guard's raised lamp, beside the face, with the head level, the
         # plate seated and the amber eyes seen; a level neutral key, as the eyes went pink under the warm one; no head focal)
-        "splash": {"clip": "idle", "t": 0.25, "yaw": 10.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+        "splash": {"clip": "attack2", "t": 0.72, "yaw": 6.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
                    "exposure": -1.1, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFEAD0", "sun": 2.6, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#FFD48C", "power": 45.0,

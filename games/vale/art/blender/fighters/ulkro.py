@@ -1049,6 +1049,12 @@ def _install_optimize() -> None:
                 r2 = subprocess.run([node, tool, out] + ([] if "--every" in extra else ["--every", "2"]) + extra, cwd=_scene.GAME_DIR, capture_output=True,
                                     text=True, encoding="utf-8")
                 _scene.log((r2.stdout or r2.stderr).strip()[-400:])
+            # (CW5 round 3, minor:ulkro-recall-patch: was a by-hand GLB patch) recall keeps every 3rd key, and between keys the
+            # kneeling toe dips to -0.022 m (f138) under the floor gate's -0.02 whatever the plant: the whole clip 4 mm up
+            r2 = subprocess.run([node, os.path.join(_scene.TOOLS_DIR, "clip_lift.mjs"), out, "--clip", "recall", "--bone", "hips",
+                                 "--dy", "0.004", "--from", "-1", "--to", "-0.5"], cwd=_scene.GAME_DIR, capture_output=True,
+                                text=True, encoding="utf-8")
+            _scene.log((r2.stdout or r2.stderr).strip()[-200:])
         if os.path.getsize(out) > 1172 * 1024:
             kib = os.path.getsize(out) / 1024.0
             ratio = 0.75 if os.path.basename(out) == "ulkro.glb" else max(0.70, min(0.95, 0.97 - (kib - 1172.0) / 900.0))
@@ -2567,9 +2573,9 @@ def gen_recall() -> anim.Clip:
     to the far horizon; she leans on the thrower, pushes up off the knee and is standing as the recall lands. The
     thrower's hand stays absolute in every key (a lerp between rel and pos targets would jump). First = last."""
     N = 165
-    # (CW5 round 3, minor:ulkro-recall-patch: the trailing foot's plant 6 mm higher, in place of the GLB-only 4 mm hips
-    # patch: its toe went to -0.021 m against the floor gate's -0.02)
-    FK = feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.046), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0)
+    # (CW5 round 3, minor:ulkro-recall-patch: the trailing foot's plant 12 mm higher: its toe held at -0.021 m against the
+    # floor gate's -0.02; the keys' thinning takes the rest, the 4 mm lift in optimize below)
+    FK = feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.052), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0)
     A_K, U_K = (0.0, -0.05, 1.0), (0.0, -1.0, 0.0)
     P_R, P_L = (-0.8, 0.4, -0.3), (0.5, -0.6, 0.5)
     RK = np.array((-0.30, -0.24, 0.47))

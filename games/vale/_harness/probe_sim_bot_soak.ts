@@ -268,6 +268,9 @@ interface GameRec {
   human: number;
   /** vision item actives used (a Spare Lamp set) per seat (CW2 handoff: bots never warded) */
   lamps?: number[];
+  /** per-seat kit reading (CW3s r3-balance, pilot or kit): damage dealt to and taken from enemy fighters (dealt15: before 15:00), by
+   *  ability id ('auto' = attacks), healing done to allies, casts per slot, and casts that came while no enemy fighter was within 15 m */
+  kit?: { dealt: number[]; dealt15: number[]; taken: number[]; heal: number[]; by: Record<string, number>[]; casts: Record<string, number>[]; alone: Record<string, number>[] };
   /** --trace: samples every 10 s */
   trace?: { t: number; s: [string, number, number][] }[];
   /** --trace: each consumable bought */
@@ -332,6 +335,8 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     placement: [], elim: [],
   };
   const csNow = new Array<number>(n).fill(0);
+  const kit: NonNullable<GameRec['kit']> = { dealt: new Array<number>(n).fill(0), dealt15: new Array<number>(n).fill(0), taken: new Array<number>(n).fill(0), heal: new Array<number>(n).fill(0), by: setup.seats.map(() => ({})), casts: setup.seats.map(() => ({})), alone: setup.seats.map(() => ({})) };
+  rec.kit = kit;
   const world = () => sim.world;
   const coreUnit = catalog.modes.find((m) => m.id === job.mode)?.rules.end.coreStructure;
   const levels = () => world().players.map((p) => p.ent?.level ?? 0);
@@ -443,7 +448,21 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'objective': rec.objs.push({ t: e.t, unit: e.unit, team: e.team }); break;
         case 'takedown': rec.tds.push({ t: e.t, k: e.killer, v: e.victim }); break;
         case 'levelUp': if (e.level === 6 && rec.lvl6[e.player] < 0) rec.lvl6[e.player] = e.t; break;
+        case 'heal': {
+          const dst = world().entity(e.dst), cf = world().creditFighter(world().entity(e.src) ?? null);
+          if (dst && dst.kind === 'fighter' && cf && cf.team === dst.team) { const pi = seatOf(cf.id); if (pi >= 0) kit.heal[pi] += e.amount; }
+          break;
+        }
         case 'cast': {
+          {
+            const pi = seatOf(e.src), me = world().entity(e.src);
+            if (pi >= 0 && me) {
+              kit.casts[pi][e.slot] = (kit.casts[pi][e.slot] ?? 0) + 1;
+              let near = false;
+              for (const pl of world().players) { const f = pl.ent; if (f && f.alive && pl.team !== me.team && (f.x - me.x) ** 2 + (f.y - me.y) ** 2 <= 225) near = true; }
+              if (!near) kit.alone[pi][e.slot] = (kit.alone[pi][e.slot] ?? 0) + 1;
+            }
+          }
           if (visionActives.has(e.ability)) { const pi = seatOf(e.src); if (pi >= 0 && rec.lamps) rec.lamps[pi]++; }
           if (e.slot === 'ult') { const pi = seatOf(e.src); if (pi >= 0 && rec.firstUlt[pi] < 0) rec.firstUlt[pi] = e.t; }
           // (a point-targeted delayed circle can be read from its caster's windup — the bots dodge it from there, CW3 critic
@@ -511,12 +530,15 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
           break;
         }
         case 'damage': {
-          if (e.t < 180 || e.t > 480) break;
           const dst = world().entity(e.dst);
           if (!dst || dst.kind !== 'fighter') break;
           const cf = world().creditFighter(world().entity(e.src) ?? null);
           if (!cf || cf.team === dst.team) break;
           const pi = seatOf(dst.id);
+          const ki = seatOf(cf.id);
+          if (pi >= 0) kit.taken[pi] += e.amount;
+          if (ki >= 0) { kit.dealt[ki] += e.amount; if (e.t < 900) kit.dealt15[ki] += e.amount; const a = e.ability ?? 'auto'; kit.by[ki][a] = (kit.by[ki][a] ?? 0) + e.amount; }
+          if (e.t < 180 || e.t > 480) break;
           if (pi >= 0) micro.dmg38[pi] += e.amount;
           break;
         }

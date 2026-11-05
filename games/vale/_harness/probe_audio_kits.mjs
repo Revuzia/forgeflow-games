@@ -20,7 +20,7 @@
 //   K4  a fighter WITHOUT a kit keeps its catalog / generic cues (attack → its present.sfx, ult cast → present.sfx
 //       or the castUlt role) and requests no f_* kit cue but its passive
 //   K5  fighterCall(id): true and f_<id>_call for a kitted fighter, false and silent for one without a call
-//   K6  a kitted fighter's ability landing ('hit' from its abilities) → f_<id>_hit; its own dash (a 'dash' event the
+//   K6  a kitted fighter's ability landing on another team ('hit' from its abilities) → f_<id>_hit, one touching its own side never; its own dash (a 'dash' event the
 //       sim emits for a dash effect, the one carrying the effect's vfx key) → f_<id>_dash; a displacement (the sim's
 //       dash of a unit knocked airborne) keeps the generic events.dash and no kit dash
 //   K7  round-robin never repeats a take back to back: no cue with >= 2 files plays the same file twice in a row
@@ -292,6 +292,13 @@ for (const SEED of SEEDS) for (const [mi, modeId] of MODES.entries()) {
       const f = fighterOf(e.src);
       if (!f || !kitted.includes(f)) continue;
       const got = asked(e);
+      // a delivery touching its own side (a haste line, a dome, a mend) is no impact: never the kit hit
+      if (view.entity(e.dst)?.team === view.entity(e.src)?.team) {
+        const quiet = !got.includes(`f_${f}_hit`);
+        tally(f, 'hit on own side (silent)', quiet);
+        if (!quiet) miss.push(`${f} own-side touch (${e.ability}) → ${got.join(',')}`);
+        continue;
+      }
       const ok = got.includes(`f_${f}_hit`);
       tally(f, 'hit', ok);
       if (!ok) miss.push(`${f} ability hit (${e.ability}) → ${got.join(',') || 'nothing'}`);

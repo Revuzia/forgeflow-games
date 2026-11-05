@@ -130,7 +130,9 @@
 //               falls back on the sim's own commit, the ult's cooldown starting, at the end of that tick's batch;
 //               a wind-up cancelled by CC or death commits nothing and stays silent. An area release sounds where
 //               the area lands, the rest at the caster. hit is the fighter's own ability impact (every 'hit' of its
-//               abilities, before the ability's present.hitSfx; a hitSfx that content binds to a damage-type or crit
+//               abilities on a unit not of its team: an ally's or its own touch by a haste line, a dome or a mend, ticking
+//               every 0.5 s, is voiced by its buff / heal / shield and the zone's loop, and as impacts it was up to 41 % of
+//               the sfx energy in a match, closing r3; before the ability's present.hitSfx; a hitSfx that content binds to a damage-type or crit
 //               role, SEMANTIC_HIT_ROLES, still sounds under it at SEMANTIC_KIT_GAIN, so a true-damage or crit
 //               ability keeps that timbre), dash its own dash (a displacement, the 'dash' the sim
 //               emits for a unit in the tick it knocks it airborne, keeps the generic one). death replaces the generic fall, passive is the
@@ -1623,8 +1625,10 @@ class Engine implements ValeAudioPort {
         const pr = this.abilitySfx.get(e.ability as string);
         const uk = this.uk(src);
         if (uk) { this.cue(uk.hit, at(dst), 1, 0, aw); break; }     // an epic unit: its own impact or none (see `epic`)
-        const own = this.kit(src, 'hit');
         const lib = (e.sfx as string | undefined) ?? pr?.hitSfx;
+        // a delivery touching your own side is no impact (see `kits` in the header): only a hitSfx content wrote for it
+        if (src && dst && src.team === dst.team) { if (lib) this.cue(lib, at(dst), 1, 0, aw); break; }
+        const own = this.kit(src, 'hit');
         // a Ringshade-muffled ability blow (its damage, later in this batch, says `shaded`; the 'damage' case plays the thud)
         const hg = dst?.kind === 'structure' && !!this.ev('hitShaded') && this.shadedHits.has(`${e.src}:${e.dst}:${e.ability}`) ? SHADED_GAIN : 1;
         this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), hg, 0, aw);

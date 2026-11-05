@@ -108,6 +108,9 @@ const MON = opt('monsters', '0');
  *  is 12 render frames (0.2 s) on from the last. The report then carries iouCycle per pair: median, worst, and the phase
  *  count. Default 1 keeps the single-frame gate as it was. */
 const MON_PHASES = Math.max(1, Number(opt('monsterPhases', '1')) | 0);
+/** round 3: --monsterYaws 0,30,60 also samples each kind at those facings (degrees, the catalog's convention), 3 phases for the moths, 1 otherwise,
+ *  by turning the live actor; silByYaw in the report feeds the camp-facing choice (the facings a camp ships are in the map). */
+const MON_YAWS = opt('monsterYaws', '').split(',').filter(Boolean).map(Number);
 const MON_IDS = opt('monsterIds', '').split(',').filter(Boolean);
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
 const LMK_RE_GATED = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
@@ -404,6 +407,12 @@ function install() {
   const api = {
     C,
     /** CW4 monsters: every live monster actor (def, position) */
+    /** turn a live actor (presentation only; no sim tick runs while the probe renders) */
+    setActorFacing: (actorId, deg) => {
+      const a = R.actors.get(actorId); if (!a) return false;
+      const rad = (deg * Math.PI) / 180; a.pf = rad; a.cf = rad; a.facing = rad;
+      return true;
+    },
     monsterList: () => {
       // the camps sit outside the bench seat's vision: every unit drawn (the review looks at the art, not the fog)
       const ev = R.entityVisible.bind(R);
@@ -916,7 +925,16 @@ for (const map of MAPS) for (const tier of TIERS) {
           const r2 = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: mo.id, glb: mo.def, at: mo.at, monster: true, actorId: mo.actorId });
           if (r2.sil) sils.push(r2.sil);
         }
-        monsters[mo.def] = { at: mo.at.map((x) => +x.toFixed(1)), ...r, ...(MON_PHASES > 1 ? { sils } : {}) };
+        const silByYaw = {};
+        for (const yaw of MON_YAWS) {
+          await V((v, a) => v.setActorFacing(a.id, a.yaw), { id: mo.actorId, yaw });
+          silByYaw[yaw] = [];
+          for (let ph = 0; ph < (/gloamoth/.test(mo.def) ? 3 : 1); ph++) {
+            const r3 = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: mo.id, glb: mo.def, at: mo.at, monster: true, actorId: mo.actorId });
+            if (r3.sil) silByYaw[yaw].push(r3.sil);
+          }
+        }
+        monsters[mo.def] = { at: mo.at.map((x) => +x.toFixed(1)), ...r, ...(MON_PHASES > 1 ? { sils } : {}), ...(MON_YAWS.length ? { silByYaw } : {}) };
         console.log(`  monster ${mo.def.padEnd(16)} ${String(r.px).padStart(6)} px  hp ${r.hp}  breakup ${r.breakup}  L* p10/50/90 ${r.unitLstar.join('/')} floor ${r.floorLstar.join('/')} dL ${r.dLstarP50}  chroma ${r.unitChroma} vs ${r.floorChroma}  dE ${r.dE76}`);
       }
       // silhouette IoU between kinds (square-padded screen boxes, 32 x 32)

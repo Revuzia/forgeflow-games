@@ -229,14 +229,14 @@
   },
   "uv_coverage": 0.555,
   "bake": {
-    "base": 4.56,
-    "rough_metal": 3.19,
-    "normal": 2.45,
-    "ao": 2.98,
+    "base": 10.67,
+    "rough_metal": 4.12,
+    "normal": 3.45,
+    "ao": 3.47,
     "normal_fixed_px": 30391,
-    "projection": 64.52,
-    "pack_save": 64.81,
-    "total": 78.22
+    "projection": 67.21,
+    "pack_save": 67.48,
+    "total": 89.5
   },
   "tris": 22700,
   "mesh_top_m": 2.023,
@@ -341,10 +341,10 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3545868,
+  "glb_bytes_raw": 3545872,
   "optimize": {
     "ok": true,
-    "before": 3545868,
+    "before": 3545872,
     "after": 1183648,
     "q_base": 62
   },
@@ -392,25 +392,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ulkro/three_ulkro.png",
-    "seconds": 16.3,
+    "seconds": 10.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.03,
-      "materials": 1.58,
-      "model": 9.97,
-      "lows_bind": 3.84,
-      "uv": 5.05,
-      "bake": 78.22,
-      "clips": 1.26,
-      "export": 3.34,
-      "optimize": 2.74,
-      "load_test": 0.28,
-      "three_qa": 16.84,
-      "cache": 0.24
+      "rig": 0.02,
+      "materials": 0.41,
+      "model": 5.62,
+      "lows_bind": 4.62,
+      "uv": 5.41,
+      "bake": 89.51,
+      "clips": 1.22,
+      "export": 3.17,
+      "optimize": 2.4,
+      "load_test": 0.19,
+      "three_qa": 10.81,
+      "cache": 0.07
     },
-    "total_s": 123.55
+    "total_s": 123.58
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83
