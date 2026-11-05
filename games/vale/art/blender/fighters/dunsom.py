@@ -291,7 +291,12 @@ CARDS = {
                               "power": 45.0, "size": 0.12},
                              {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 20.0, "size": 0.08}]},
-        "portrait": {"yaw": 34.0},
+        # (closing round 2: the head focal blew the scarf and the mask: softer and off-axis)
+        "portrait": {"yaw": 34.0, "exposure": -0.9,
+                     "focal": [{"at": "head", "az": 215.0, "el": -5.0, "dist": 0.7, "color": "#FFC87E", "power": 8.0,
+                                "size": 0.3},
+                               {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
+                                "power": 20.0, "size": 0.08}]},
         "plate": {"src": "dialwood", "tint": "#8C98C0", "sat": 0.70, "median": 0.22, "cx": 0.62,
                   "glow": [0.20, 0.35, 0.30, 0.05], "glow_color": "#C8D4F0"},
     },

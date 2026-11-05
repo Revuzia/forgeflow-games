@@ -142,7 +142,8 @@ CARDS = {
                   "glow_color": "#D8DCE8"},
     },
     "hesmi_shadeprint": {
-        "splash": {"clip": "cast_ult", "t": 0.28, "yaw": 20.0, "pitch": -5.0, "lens": 48.0, "fill": 0.88, "x": 0.70,
+        # (closing round 2: the ult's bloom tipped the head back and the face read as a chin: the Felled Shard heave)
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 24.0, "pitch": -5.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
                    "key_az": 235.0, "key_el": 40.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
                    "focal": [{"at": "x_shard_mid", "az": 200.0, "el": 30.0, "dist": 0.8, "color": "#C8B8FF",

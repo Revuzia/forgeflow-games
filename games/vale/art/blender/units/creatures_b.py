@@ -2676,6 +2676,7 @@ class StrayBase(Monster):
            "lichen2": "#959262", "eye": "#2A2521", "crack": "#3E3830", "groove": "#2A2621", "break": "#D8CEB9",
            "course": "#4C463D", "gold": "#C99B45"}
     COURSE = 0.42                  # coursed-joint spacing (m, world z)
+    GRIME_Z = 0.3                  # dial grit up to this share of the height
 
     # to implement: figure(detail) -> list of (prim, k), cuts -> {piece: [(point, normal, seed)]} (inside = n.(P-p)+f <= 0),
     # piece_box(piece), eyes (list of points), piece_bone
@@ -2735,7 +2736,7 @@ class StrayBase(Monster):
         col = np.tile(c("chalk"), (n, 1))
         col = mix_hex(col, c("chalk_hi"), sarr(0.35, 0.9, nz) * 0.6)                 # lit tops
         col = mix_hex(col, c("chalk_lo"), sarr(0.1, -0.7, nz) * 0.55)
-        col = mix_hex(col, c("grime"), sarr(0.3, 0.0, z) * 0.85)                     # dial grit on the feet
+        col = mix_hex(col, c("grime"), sarr(self.GRIME_Z, 0.0, z) * 0.85)            # dial grit on the feet
         # coursed joints (the stroke was laid in blocks like the dial's numerals), on the steep faces
         zc = V[:, 2] / (self.COURSE * self.CRACK)
         jd = np.abs(zc - np.round(zc)) * self.COURSE * self.CRACK
@@ -3154,6 +3155,9 @@ class StrayTick(StrayBase):
     CLIPS = ("idle", "run", "attack1", "death")
     CRACK = 0.5
     COURSE = 0.62                  # CW4: three courses on the 1 m stroke (0.21 m read as wrapped cord)
+    # CW4 round 2: a paler stone than the Numeral's (dL* read 16-17 on the camp floor; the bar is 20)
+    PAL = dict(StrayBase.PAL, chalk="#BBB2A1", chalk_hi="#D5CDBD", chalk_lo="#978C7C")
+    GRIME_Z = 0.15                 # the grit stops at the foot plate: on a 1 m stroke 0.3 dirtied a third of the unit
     EYE_R = 0.018
     W, D = 0.25, 0.25
 

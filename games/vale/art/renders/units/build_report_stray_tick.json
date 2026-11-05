@@ -7,13 +7,13 @@
   },
   "uv_coverage": 0.671,
   "bake": {
-    "base": 8.84,
-    "rough_metal": 4.71,
-    "normal": 2.46,
-    "ao": 1.2,
+    "base": 5.31,
+    "rough_metal": 2.9,
+    "normal": 2.79,
+    "ao": 1.54,
     "normal_fixed_px": 15305,
-    "pack_save": 0.62,
-    "total": 18.98
+    "pack_save": 0.22,
+    "total": 13.33
   },
   "bake_holes_filled": 0,
   "no_ao_faces": 26059,
@@ -98,13 +98,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 545792,
+  "glb_bytes_raw": 546436,
   "optimize": {
     "ok": true,
-    "before": 545792,
-    "after": 122316
+    "before": 546436,
+    "after": 122244
   },
-  "glb_bytes": 122316,
+  "glb_bytes": 122244,
   "inspect": [
     "art/out/units/stray_tick.glb  119.4 KiB  1500 tris  extensions: EXT_texture_webp, KHR_mesh_quantization",
     "  skin stray_tick_rig: 5 joints: root hips foot head mid",
@@ -113,7 +113,7 @@
     "  material stray_tick_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  texture stray_tick_normal: image/webp ? 37.4 KiB",
     "  texture stray_tick_orm: image/webp ? 4.5 KiB",
-    "  texture stray_tick_base: image/webp ? 25.6 KiB",
+    "  texture stray_tick_base: image/webp ? 25.5 KiB",
     "  clip attack1      0.833 s (25 f) channels=2 bones=1",
     "  clip death        1.500 s (45 f) channels=6 bones=3",
     "  clip idle         2.000 s (60 f) channels=2 bones=1",
@@ -137,22 +137,22 @@
     "ok": true,
     "out": "art/renders/units/stray_tick.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.255,0,-0.147],[0.255,1,0.147]],\"facing\":[0,1],\"headY\":0.8,\"heightPx1080\":52,\"rows\":[\"facings\",\"attack1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1500],\"clips\":4,\"out\":\"art/renders/units/stray_tick.png\",\"seconds\":18.8}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.255,0,-0.147],[0.255,1,0.147]],\"facing\":[0,1],\"headY\":0.8,\"heightPx1080\":52,\"rows\":[\"facings\",\"attack1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1500],\"clips\":4,\"out\":\"art/renders/units/stray_tick.png\",\"seconds\":47.7}"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "sculpt": 51.29,
-      "bind": 0.1,
-      "uv": 58.03,
-      "bake": 24.86,
-      "clips": 0.12,
-      "ground_qa": 0.21,
-      "export": 0.6,
-      "optimize": 1.83,
-      "qa": 20.89
+      "rig": 0.01,
+      "sculpt": 64.35,
+      "bind": 0.02,
+      "uv": 64.49,
+      "bake": 16.08,
+      "clips": 0.1,
+      "ground_qa": 0.08,
+      "export": 0.46,
+      "optimize": 2.09,
+      "qa": 49.89
     },
-    "total_s": 158.15
+    "total_s": 198.06
   }
 }

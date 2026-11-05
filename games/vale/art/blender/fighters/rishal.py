@@ -107,15 +107,20 @@ AO_INTO_BASE = 0.0           # (POLISH: no occlusion in the painted colour; the 
 #               visor catching a warm lamp
 CARDS = {
     "rishal": {
+        # (closing round 2: -1.0 EV and a soft head focal: the head was a blown blank shape on the card)
         "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 26.0, "pitch": -3.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+                   "exposure": -1.0,
                    "key_az": 215.0, "key_el": 20.0, "key_color": "#FFE2C8", "sun": 2.6, "rim_cool": 1.4,
                    "rim_warm": 0.8, "bounce": 0.5, "bounce_color": "#D8B8A0", "accent": 1.6,
-                   "focal": [{"at": "head", "az": 185.0, "el": 12.0, "dist": 0.7, "color": "#FFEADA", "power": 35.0,
-                              "size": 0.25},
+                   "focal": [{"at": "head", "az": 215.0, "el": 12.0, "dist": 0.8, "color": "#FFEADA", "power": 8.0,
+                              "size": 0.35},
                              {"at": "x_visor_ridge", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE6C8",
                               "power": 15.0, "size": 0.15}]},
         # (CW6 refix, par:rishal: the busts read as chaotic crest crops: each is a calm three-quarter visor bust now)
-        "portrait": {"yaw": 40.0, "clip": "idle_lobby", "t": 0.0},
+        # (closing round 2: the head focal blew the chalk face-plate to a blank egg: a low side key and -1.1 EV)
+        "portrait": {"yaw": 28.0, "clip": "idle_lobby", "t": 0.0, "exposure": -1.1, "key_az": 240.0, "key_el": 26.0, "sun": 2.2,
+                     "focal": [{"at": "x_visor_ridge", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE6C8",
+                                "power": 8.0, "size": 0.15}]},
         "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44},
     },
     "rishal_chalkline": {
@@ -127,7 +132,10 @@ CARDS = {
                    "rim_warm": 0.4, "bounce": 0.4, "bounce_color": "#C8CCD4", "accent": 1.4,
                    "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -40.0, "clip": "idle", "t": 0.25},
+        # (closing round 2: the frontal head focal flattened the plate to a white oval: a side key, the relief reads)
+        "portrait": {"yaw": -34.0, "clip": "idle", "t": 0.25, "key_az": 120.0, "key_el": 28.0,
+                     "focal": [{"at": "head", "az": 120.0, "el": 20.0, "dist": 0.9, "color": "#F0F2F8", "power": 5.0,
+                                "size": 0.3}]},
         # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)
         # (CW6 refix, rishal-M1: a tint on the base's Aubade painting held the splash at MAD 27.6: its own painting, the
         # pale Seat walls, under the same ink-blue chalk-dusk grade)
@@ -138,13 +146,16 @@ CARDS = {
         # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
         # walnut out to peach, a calmer warm key and focal keep the coat walnut and the glass amber)
         "splash": {"clip": "cast_ult", "t": 0.10, "yaw": -30.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
-                   "key_az": 150.0, "key_el": 22.0, "key_color": "#FFDDB8", "sun": 1.25, "rim_cool": 0.6,
+                   # (closing round 2: still pale cream at -0.5 EV: -1.2 EV so the walnut coat is the card's mid value)
+                   "exposure": -1.2, "key_az": 140.0, "key_el": 22.0, "key_color": "#FFDDB8", "sun": 1.25, "rim_cool": 0.6,
                    "rim_warm": 1.1, "bounce": 0.25, "bounce_color": "#C88A50", "accent": 1.8,
                    "focal": [{"at": "head", "az": 175.0, "el": 8.0, "dist": 0.5, "color": "#FFD8A8", "power": 12.0,
                               "size": 0.18},
                              {"at": "x_visor_ridge", "az": 160.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
                               "power": 7.0, "size": 0.12}]},
-        "portrait": {"yaw": -34.0, "clip": "idle_lobby", "t": 0.5},
+        "portrait": {"yaw": -34.0, "clip": "idle_lobby", "t": 0.5, "exposure": -1.3, "key_az": 125.0, "sun": 1.1,
+                     "focal": [{"at": "x_visor_ridge", "az": 160.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A", "power": 5.0,
+                                "size": 0.12}]},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
                   "glow_color": "#FFB067"},
     },

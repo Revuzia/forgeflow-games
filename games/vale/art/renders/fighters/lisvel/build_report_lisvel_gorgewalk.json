@@ -80,52 +80,42 @@
     "tris_fan_fletch": 300,
     "tris_fan_heads": 120,
     "tris_rope_bind": 900,
-    "validate_lisvel": "21852->21847"
+    "validate_lisvel": "21852->21849"
   },
-  "uv_coverage": 0.605,
+  "uv_coverage": 0.609,
   "bake": {
-    "base": 9.57,
-    "rough_metal": 8.96,
-    "normal": 6.62,
-    "ao": 32.13,
-    "normal_fixed_px": 84023,
-    "projection": 24.19,
-    "pack_save": 25.09,
-    "total": 82.92
+    "base": 5.12,
+    "rough_metal": 3.59,
+    "normal": 2.78,
+    "ao": 2.89,
+    "normal_fixed_px": 85279,
+    "projection": 16.05,
+    "pack_save": 16.8,
+    "total": 31.5
   },
-  "tris": 23629,
+  "tris": 23631,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2372488,
+  "glb_bytes_raw": 2423808,
   "optimize": {
     "ok": true,
-    "before": 2372488,
-    "after": 939560,
+    "before": 2423808,
+    "after": 960240,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 939560,
+  "glb_bytes": 960240,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (918 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_gorgewalk_base 2048x2048 142K, lisvel_gorgewalk_normal 512x512 39K, lisvel_gorgewalk_orm 256x256 11K",
-      "  skinned meshes: lisvel_accent(214v), lisvel_gorgewalk(24183v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_gorgewalk.glb (938 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_gorgewalk_base 2048x2048 156K, lisvel_gorgewalk_normal 512x512 40K, lisvel_gorgewalk_orm 256x256 11K",
+      "  skinned meshes: lisvel_accent(214v), lisvel_gorgewalk(24425v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
-      "  tris: 23629; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
+      "  tris: 23631; bind-pose bounds (three units, Y up): 1.86 x 1.88 x 0.46; facing (-0.00, 1.00); head bone y 1.63; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/lisvel/lisvel_gorgewalk_splash.png",
-      "portrait": "art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png"
-    },
-    "seconds": {
-      "splash": 306.3,
-      "portrait": 30.86
-    }
   },
   "three_qa": {
     "ok": true,
@@ -156,24 +146,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_gorgewalk.png",
-    "seconds": 39.3,
+    "seconds": 52.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 0.68,
-      "model": 15.53,
-      "lows_bind": 6.99,
-      "uv": 11.71,
-      "bake": 93.65,
-      "export": 0.61,
-      "optimize": 3.3,
-      "load_test": 0.75,
-      "render": 337.46,
-      "three_qa": 39.96
+      "rig": 0.01,
+      "materials": 0.46,
+      "model": 11.25,
+      "lows_bind": 10.95,
+      "uv": 10.14,
+      "bake": 46.58,
+      "export": 0.66,
+      "optimize": 3.87,
+      "load_test": 0.72,
+      "three_qa": 53.94
     },
-    "total_s": 511.06
+    "total_s": 138.69
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

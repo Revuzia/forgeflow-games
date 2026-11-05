@@ -138,14 +138,18 @@ CARDS = {
         "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4"},
     },
     "odrum_shadeprint": {
-        "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 22.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+        # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 22.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+                   "box_top": 2.0,
                    "key_az": 235.0, "key_el": 35.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
                    "focal": [{"at": "x_pot_r", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#C8B8FF",
                               "power": 30.0, "size": 0.2},
                              {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"clip": "cast_a1", "t": 0.25, "key_az": 250.0},
+        # (closing round 2: the cast_a1 bust looked down, the eye inlays lost under the brow: the head level, the amber
+        # inlays toward the camera)
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 20.0, "key_az": 215.0, "key_el": 25.0},
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0"},
     },

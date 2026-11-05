@@ -1037,12 +1037,16 @@ def sculpts() -> list:
     legs = Sculpt("legs")
     for sx in (-1, 1):
         hip, knee, ank = np.array([sx * 0.095, 0.005, 0.95]), np.array([sx * 0.121, -0.012, 0.503]), np.array([sx * 0.145, 0.02, 0.09])
-        legs.add(RoundCone(hip + (0, 0, 0.04), knee + (0, 0, 0.07), 0.080, 0.055), k=0.0)
+        # (CW5 r2 refix, finding lisvel-back-patches: the black ragged patches on the back panels were the seat and the top
+        # of the thigh poking through the felt at rest z 0.94-1.0, in the guard's hip turn: rasterized albedo + triangle
+        # ids, fw_CW5_r2r_patch_*): the hip end of the thigh 1.6 cm slimmer and 4 cm shorter, the seat slimmer; all of it
+        # stays under the tunic and the panels)
+        legs.add(RoundCone(hip, knee + (0, 0, 0.07), 0.064, 0.055), k=0.0)
         legs.add(Ellipsoid(hip + (knee - hip) * 0.40 + (sx * 0.008, -0.016, 0.0), (0.066, 0.062, 0.17)), k=0.05)   # quad
         legs.add(Ellipsoid(knee + (0.0, -0.008, 0.012), (0.051, 0.052, 0.055)), k=0.025)                       # knee
         legs.add(RoundCone(knee, ank + (0, 0, 0.09), 0.047, 0.032), k=0.02)
         legs.add(Ellipsoid(knee + (ank - knee) * 0.30 + (0.0, 0.020, 0.0), (0.040, 0.042, 0.10)), k=0.03)      # calf
-    legs.add(Ellipsoid((0.0, 0.01, 0.94), (0.122, 0.088, 0.08)), k=0.05)
+    legs.add(Ellipsoid((0.0, 0.0, 0.93), (0.100, 0.070, 0.06)), k=0.05)
     part("legs", legs, "under", "auto", 680)
     # BOOTS: a sole and a low wedge heel, the instep rising to a slim ankle, the shaft swelling over the calf to a
     # soft cuff below the knee (review item 6: stovepipes on rounded slippers)
@@ -1983,7 +1987,7 @@ def _fold_lines(s, p, pitch=0.034, w=0.15):
     return valley, crest
 
 
-def _hang_folds(p, k_v=0.30, k_c=0.10, pitch=0.052, z0=1.08):
+def _hang_folds(p, k_v=0.22, k_c=0.09, pitch=0.052, z0=1.08):
     """hanging folds on a tabard or tunic panel: running down from the belt, deeper toward the hem"""
     va, cr = _fold_lines(np.arctan2(p[:, 0], p[:, 1]) * 0.17 + 0.06 * p[:, 2], p, pitch)
     env = _ss(0.0, 0.16, z0 - p[:, 2])
@@ -2107,7 +2111,7 @@ def paint_visor(p, n):
     ax = np.abs(x)
     col = np.tile(C("glass"), (len(p), 1))
     # the recess behind the glass: a deep smoky band, densest at the middle
-    deep = np.exp(-((z + 0.001) / 0.0115) ** 2) * fr * _ss(0.074, 0.046, ax)
+    deep = np.exp(-((z + 0.001) / 0.0150) ** 2) * fr * _ss(0.076, 0.050, ax)
     col = _mix(col, C("glass_deep"), 0.90 * deep)      # (r2 refix: the eye line reads as a dark band at splash size)
     # the closed eyelids seen through it: the lid line a gentle downward curve, the lid above it catching light
     for sx in (-1.0, 1.0):
@@ -2120,7 +2124,7 @@ def paint_visor(p, n):
         col = _mix(col, C("glass_eye") * 0.45, 0.85 * lash)
     # the sky's reflection over the upper third, the streak along the top edge, the highlight line and glints
     sky_band = _ss(0.002, 0.016, z) * fr
-    col = _mix(col, C("glass_sky"), 0.35 * sky_band)
+    col = _mix(col, C("glass_sky"), 0.18 * sky_band)
     streak = np.exp(-((z - 0.0175) / 0.0028) ** 2) * fr * _ss(0.074, 0.050, ax)
     col = _mix(col, C("glass_sky"), 0.92 * streak)
     line = 0.30 * np.exp(-((z - 0.0108) / 0.0012) ** 2) * fr * _ss(0.070, 0.050, ax)
@@ -2359,8 +2363,8 @@ def paint_sleeves(p, n):
         e2_ = _ss(-0.02, 0.10, t)
         elb = np.abs(np.sin((t * lf + 0.012 * np.cos(th * 2.0)) * 2.0 * math.pi / 0.021)) ** 6
         e3_ = np.exp(-(t / 0.13) ** 2) * _ss(-0.5, 0.2, -(n[sel] @ _n(el - (sh + wr) * 0.5)))
-        k = k * (1.0 - 0.58 * v1 * e1_) * (1.0 + 0.16 * c1 * e1_) * (1.0 - 0.52 * v2 * e2_) * (1.0 + 0.14 * c2 * e2_)
-        k = k * (1.0 - 0.34 * elb * e3_)
+        k = k * (1.0 - 0.46 * v1 * e1_) * (1.0 + 0.16 * c1 * e1_) * (1.0 - 0.42 * v2 * e2_) * (1.0 + 0.14 * c2 * e2_)
+        k = k * (1.0 - 0.20 * elb * e3_)
         out[sel] = col[sel] * k[:, None]
     return out
 
@@ -3562,26 +3566,27 @@ def gen_recall() -> anim.Clip:
     low_f = feet_(l=FL, r=FR, yl=-8.0, yr=-34.0, pr=-46.0)
     POLE_H, POLE_P = (0.8, 0.4, -0.4), (-0.8, 0.2, -0.5)
 
-    def harp(z=-0.24, x=-0.10, y=-0.62):
-        return bowl(rel=(x, y, z), aim=(-1.0, -0.05, 0.0), up=(0.0, 0.0, 1.0), pole=POLE_H)
+    def harp(z=-0.04, x=-0.10, y=-0.62):
+        # (the upper limb tilted away from her so the 1.76 m bow stands on its foot under the raised grip)
+        return bowl(rel=(x, y, z), aim=(-1.0, -0.05, 0.0), up=(0.0, -0.30, 0.95), pole=POLE_H)
 
-    def note(u, pull, drop, roll, look, string=0.0, lean=9.0, z=-0.24):
+    def note(u, pull, drop, roll, look, string=0.0, lean=9.0, z=-0.04):
         return pz(lean=lean, roll=roll, drop=drop, dy=0.03, look=look, feet=low_f, L=harp(z), string=string,
                   R=rh(along=-(BRACE + pull), uoff=u, k=1.0, pole=POLE_P))
 
     g = G()
-    step = pz(lean=5.0, yaw=-22.0, drop=0.10, look=(4.0, 0.0, 0.0), L=harp(-0.32),
+    step = pz(lean=5.0, yaw=-22.0, drop=0.10, look=(4.0, 0.0, 0.0), L=harp(-0.14),
               feet=feet_(l=(0.04, -0.17, 0.07), r=(-0.03, 0.14, 0.0), yl=-12.0, yr=-40.0, pl=10.0),
               R=rh(along=-BRACE, uoff=0.0, k=1.0, pole=POLE_P))
-    sink = note(0.12, 0.0, 0.33, 0.0, (20.0, 0.0, 0.0), lean=13.0)
-    settle = note(0.20, 0.0, 0.29, 2.0, (12.0, 8.0, 4.0))
+    sink = note(0.12, 0.0, 0.25, 0.0, (20.0, 0.0, 0.0), lean=11.0)
+    settle = note(0.20, 0.0, 0.215, 2.0, (12.0, 8.0, 4.0))
     keys = [(0.0, g, "linear"), (0.09, step, "inout"), (0.17, sink, "inout"), (0.23, settle, "out")]
     t0 = 0.30
     for u, sgn in ((0.26, 1.0), (0.06, -1.0), (-0.16, 1.0)):
-        keys += [(t0, note(u, 0.13, 0.27, 5.0 * sgn, (6.0, 20.0 * sgn, 8.0 * sgn), string=0.40), "inout"),
-                 (t0 + 0.035, note(u, 0.13, 0.27, 5.0 * sgn, (6.0, 22.0 * sgn, 8.0 * sgn), string=0.40), "linear"),
-                 (t0 + 0.055, note(u - 0.03 * sgn, 0.0, 0.20, -3.0 * sgn, (-4.0, 12.0 * sgn, -3.0 * sgn), lean=4.0), "accel"),
-                 (t0 + 0.12, note(u - 0.05 * sgn, 0.02, 0.29, -1.0 * sgn, (12.0, 4.0 * sgn, 0.0)), "out")]
+        keys += [(t0, note(u, 0.13, 0.20, 5.0 * sgn, (6.0, 20.0 * sgn, 8.0 * sgn), string=0.40), "inout"),
+                 (t0 + 0.035, note(u, 0.13, 0.20, 5.0 * sgn, (6.0, 22.0 * sgn, 8.0 * sgn), string=0.40), "linear"),
+                 (t0 + 0.055, note(u - 0.03 * sgn, 0.0, 0.13, -3.0 * sgn, (-4.0, 12.0 * sgn, -3.0 * sgn), lean=4.0), "accel"),
+                 (t0 + 0.12, note(u - 0.05 * sgn, 0.02, 0.22, -1.0 * sgn, (12.0, 4.0 * sgn, 0.0)), "out")]
         t0 += 0.14
     rise = pz(lean=-5.0, drop=0.07, dy=0.0, look=(-16.0, 0.0, 0.0), L=harp(0.02, -0.04, -0.72),
               feet=feet_(l=(0.04, -0.18, 0.0), r=(-0.03, 0.15, 0.02), yl=-10.0, yr=-40.0, pr=-14.0),

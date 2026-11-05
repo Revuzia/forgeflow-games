@@ -1,0 +1,33 @@
+"""VALE art: write a fighter's texel-to-part map from its cached build, without a rebuild (closing CW5 r2 refix: Burdam's
+GLB carries post-build grades a rebuild would lose, and the Lisvel build's own painter never reached the dump).
+
+    Blender -b art/.cache/fighters/<id>.blend --python art/tools/partmap_dump.py -- <id>
+
+Writes art/.cache/fighters/partmap/<id>.npz (part, names), the format of art/tools/part_lab.py: rasterizes the cached
+body mesh's active UV map at 2048 by its vale_part attribute; the names come from the fighter's sculpts() order."""
+import importlib.util
+import os
+import sys
+
+import bpy
+import numpy as np
+
+GAME = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BL = os.path.join(GAME, "art", "blender")
+sys.path.insert(0, BL)
+sys.path.insert(0, os.path.join(BL, "fighters"))
+from common.hifi import project  # noqa: E402
+
+fid = sys.argv[sys.argv.index("--") + 1]
+sp = importlib.util.spec_from_file_location(fid, os.path.join(BL, "fighters", f"{fid}.py"))
+mod = importlib.util.module_from_spec(sp)
+sys.modules[fid] = mod
+sp.loader.exec_module(mod)
+names = [it[0] for it in mod.sculpts()]
+body = max((o for o in bpy.data.objects if o.type == "MESH" and o.data.attributes.get("vale_part")),
+           key=lambda o: len(o.data.polygons))
+maps = project.rasterize(body, 2048, "vale_part")
+out = os.path.join(GAME, "art", ".cache", "fighters", "partmap", f"{fid}.npz")
+os.makedirs(os.path.dirname(out), exist_ok=True)
+np.savez_compressed(out, part=np.ascontiguousarray(maps["part"]), names=np.array(names))
+print(f"[partmap] {fid}: body {body.name}, {len(names)} names, parts in map {sorted(set(np.unique(maps['part']).tolist()))[:4]}... -> {out}")

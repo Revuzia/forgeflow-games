@@ -97,11 +97,12 @@ CARDS = {
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
     },
     "marund_gorgewalk": {
-        "splash": {"clip": "cast_ult", "t": 0.30, "yaw": -22.0, "pitch": -9.0, "lens": 42.0, "fill": 0.86, "x": 0.71,
-                   "key_az": 150.0, "key_el": 40.0, "key_color": "#D0D8E4", "sun": 2.8, "rim_cool": 1.6,
+        # (closing round 2: the low wide lens at fill 0.86 cut the dome at the frame top: head at 0.002)
+        "splash": {"clip": "cast_ult", "t": 0.30, "yaw": -22.0, "pitch": -9.0, "lens": 42.0, "fill": 0.74, "x": 0.71,
+                   "exposure": -0.9, "key_az": 150.0, "key_el": 40.0, "key_color": "#D0D8E4", "sun": 2.4, "rim_cool": 1.6,
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
-                   "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
-                              "size": 0.25}]},
+                   "focal": [{"at": "head", "az": 150.0, "el": 15.0, "dist": 0.9, "color": "#E0E6F0", "power": 7.0,
+                              "size": 0.3}]},
         "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.88, "clip": "idle_lobby", "t": 0.0},
         # (closing round 2: the slate's painted flecks took the bust's speckle p50 to 2.58 > 2.5: a 2 px subject brush)
         "plate": {"sub_paint_r": 2, "tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],

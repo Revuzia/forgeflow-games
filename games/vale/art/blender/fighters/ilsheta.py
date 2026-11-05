@@ -241,40 +241,52 @@ SKIN_FLAT = {"reed_plates": "reed", "glass_bell": "dawnglass", "hour_marks": "ch
 CARDS = {
     "ilsheta": {
         "splash": {"clip": "victory", "t": 0.95, "yaw": 34.0, "pitch": -5.0, "lens": 52.0, "fill": 0.86, "x": 0.71,
+                   "exposure": -1.0,
                    "key_az": 212.0, "key_el": 22.0, "key_color": "#FFD9B4", "sun": 2.8, "rim_cool": 1.1,
                    "rim_warm": 0.35, "bounce": 0.45, "bounce_color": "#D9B48E", "accent": 1.5,
                    "focal": [{"at": "x_lamp", "az": 190.0, "el": 15.0, "dist": 0.7, "color": "#CFE4FF", "power": 45.0,
                               "size": 0.3},
-                             {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.8, "color": "#FFE8D2", "power": 24.0,
-                              "size": 0.25}]},
+                             {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.8, "color": "#FFE8D2", "power": 8.0,
+                              "size": 0.35}]},
         # (CW6 refix, cards:ilsheta: every bust put the lamp, its hook and its ring before the face; each bust now
         # picks a moment and a bearing with the lamp BESIDE the face, measured from the GLB: lamp-to-face offset across
         # the screen >= 0.22 m, _harness/_reports/fw_CW6_r1_stage.mjs)
-        "portrait": {"clip": "idle", "t": 0.0, "yaw": -8.0},
+        # (closing round 2: the head focal and the +5 % highlight expansion blew the chalk face-plate to a blank egg: a
+        # low side key, no head focal, so the plate's recesses read as eyes)
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": -8.0, "exposure": -1.1, "key_az": 240.0, "key_el": 28.0, "sun": 2.4,
+                     "focal": [{"at": "x_lamp", "az": 190.0, "el": 15.0, "dist": 0.7, "color": "#CFE4FF", "power": 30.0,
+                                "size": 0.3}]},
     },
     "ilsheta_stillwater": {
-        "splash": {"clip": "recall", "t": 0.33, "yaw": 52.0, "pitch": 2.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
-                   "key_az": 140.0, "key_el": 34.0, "key_color": "#C4DCDA", "sun": 2.4, "rim_cool": 1.8,
+        # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
+        "splash": {"clip": "cast_a1", "t": 0.50, "yaw": -26.0, "pitch": 0.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
+                   "exposure": -0.9, "key_az": 140.0, "key_el": 34.0, "key_color": "#C4DCDA", "sun": 2.4, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 1.4, "exposure": -0.4,
                    "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 40.0,
                               "size": 0.25},
-                             {"at": "head", "az": 150.0, "el": 18.0, "dist": 0.8, "color": "#D6ECEA", "power": 18.0,
-                              "size": 0.25}]},
-        "portrait": {"yaw": 50.0, "clip": "idle_lobby", "t": 0.8},
+                             {"at": "head", "az": 150.0, "el": 18.0, "dist": 0.8, "color": "#D6ECEA", "power": 8.0,
+                              "size": 0.35}]},
+        "portrait": {"yaw": -12.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
+                     "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 30.0,
+                                "size": 0.25}]},
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC"},
     },
     "ilsheta_first_bell": {
         # (CW6 cards: the ult's bloom tipped her head back, so the splash saw the top of the hood and no face): the
         # recall's last beat (t 0.82, the lamp raised to her brow beside the face) from her other side, the face lit
-        "splash": {"clip": "recall", "t": 0.82, "yaw": -24.0, "pitch": -3.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
-                   "key_az": 150.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
+        # (closing round 2: the recall's last beat held the lamp over the head, the figure read headless: the lamp thrown
+        # out at arm's length (cast_a3), clear of the face, which looks at the camera)
+        "splash": {"clip": "cast_a3", "t": 0.50, "yaw": 6.0, "pitch": -3.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+                   "exposure": -0.9, "key_az": 150.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 90.0,
                               "size": 0.35},
-                             {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 40.0,
-                              "size": 0.25}]},
-        "portrait": {"clip": "idle_lobby", "t": 0.75, "yaw": 42.0, "key_az": 150.0},
+                             {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 12.0,
+                              "size": 0.35}]},
+        "portrait": {"clip": "idle_lobby", "t": 0.1, "yaw": -38.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
+                     "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
+                                "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
         "plate": {"tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],

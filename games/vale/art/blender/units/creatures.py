@@ -1022,7 +1022,8 @@ class Stilltusk(Creature):
     # CW4 critic:monsters: a sun-burnt rust-ochre coat (was a #5A4D44 grey-brown with a near-black mane: in game
     # L* p50 19 on a 26 floor, dE 12, hp 0.98): warm ochre back, darker rust flanks with umber hour ticks, a cream
     # belly, an umber mane frosted cream at the tips, dark legs
-    PAL = {"hide": "#C4864F", "flank": "#A86A3E", "belly": "#DEC49C", "leg": "#4A3426", "hoof": "#2A1E17",
+    # (round 2: hide and flank up about 6 L*: dL* read 14 on its lit home floor, L* p50 47 on 33)
+    PAL = {"hide": "#D49A62", "flank": "#BA7E4E", "belly": "#DEC49C", "leg": "#4A3426", "hoof": "#2A1E17",
            "mane": "#6A4630", "mane_tip": "#EAD6B2", "snout": "#B08068", "nose": "#3A2C28", "eye": "#120D0B",
            "ear_in": "#9A6E5A", "tick": "#3E281C", "stripe": "#F0E0C0", "tusk": "#DCCFB5"}
 
