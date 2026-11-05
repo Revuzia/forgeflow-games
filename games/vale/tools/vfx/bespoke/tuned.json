@@ -1597,7 +1597,7 @@
       0.55
      ]
     ],
-    "emissive": 0.72,
+    "emissive": 0.56,
     "color": "#CB7E54",
     "blend": "add"
    },
@@ -1664,11 +1664,11 @@
     "emissive": [
      [
       0,
-      0.94
+      0.73
      ],
      [
       1,
-      0.62
+      0.48
      ]
     ],
     "texture": "light_puff",
