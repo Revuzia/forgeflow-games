@@ -195,7 +195,10 @@ export function stormBreaks(x: PCtx, st: Settlement, interrupt: (x: PCtx, s: num
     // (SIMFIX 0) a band's raft and a mission's crew stay afloat; a town fisher in the lent boat rows in for shelter
     if (!BREAKS.has(A.task[s]) || A.inside[s] >= 0 || A.mission[s] || (A.boat[s] >= 0 && st.band)) continue;
     A.posAt(s, x.tick, _p);
-    if (stormSeverity(x, _p, A.cell[s]) < STORM_BREAK) continue;
+    // (SIMFIX 0b) out on the water in the town's boat, hard rain is enough (tasks.ts capsize: precip > 5) — they row in
+    // before it is a storm (8-seed sf2: boats built by the towns, 4 drownings on seed 1 in rain short of the break)
+    const rowIn = A.boat[s] >= 0 && A.task[s] === TASK.fish && p.f.water[A.cell[s]] > 0.6 && p.f.precip[A.cell[s]] > 5;
+    if (!rowIn && stormSeverity(x, _p, A.cell[s]) < STORM_BREAK) continue;
     interrupt(x, s);
     n++;
   }

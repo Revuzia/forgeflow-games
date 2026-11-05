@@ -11,7 +11,8 @@ import type { Settlement } from './state.ts';
 import { AgentFlag, AnimState } from '../types.ts';
 import { flowPath, findPath } from '../grid/pathfind.ts';
 import { PATH_MAX, PHASE, TASK, NS, SKILL } from './defs.ts';
-import { distM, spotInCell, stepFactor, walkSpeed } from './world.ts';
+import { cellPos, distM, spotInCell, stepFactor, walkSpeed } from './world.ts';
+import { STORM_BREAK, stormSeverity } from './shelter.ts';
 import { itemIdx, pathOptsFor } from './resources.ts';
 import { schedule } from './sched.ts';
 import { wearRoad } from './roads.ts';
@@ -274,8 +275,9 @@ export function nextSegment(x: PCtx, s: number): void {
   schedule(x, s, A.t1[s]);
 }
 
+const _cap = [0, 0, 0];
 /** a storm at sea: a raft goes over easily, a sailship rarely; the drowned are remembered (taboo on boats, culture.ts) */
-function capsize(x: PCtx, s: number, c: number): boolean {
+export function capsize(x: PCtx, s: number, c: number): boolean {
   const A = x.A;
   const it = x.c.items.list[A.boat[s]];
   const p = it?.id === 'raft' ? 0.05 : it?.tags.includes('ship') ? 0.004 : 0.015;
@@ -285,6 +287,10 @@ function capsize(x: PCtx, s: number, c: number): boolean {
   if (!A.mission[s] && st && !st.band) {
     const g = x.p.grid;
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] < 0.4) return false;
+    // (SIMFIX 0b) and a rowing boat on the home water rides out rain: only a storm at the shelter break overturns it (the
+    // fisher rows in at the first hard rain: shelter.ts stormBreaks) — sf2 seed 1 drowned 4 town fishers in rain
+    cellPos(x.p, c, _cap);
+    if (stormSeverity(x, _cap, c) < STORM_BREAK) return false;
   }
   if (st) {
     st.recent.drowned = (st.recent.drowned ?? 0) + 1;

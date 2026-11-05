@@ -42,6 +42,52 @@ test('SIMFIX0 no boat is lent into a storm, and a town fisher afloat breaks for 
   p.st.globalWeather = null;
 });
 
+// SIMFIX 0b: once the towns built boats (SIMFIX 1) the 8-seed sf2 run drowned 4 town fishers on seed 1 in hard rain short
+// of the storm break: capsize() rolled on any precip > 5. A town fisher afloat in the lent boat now rows in at hard rain,
+// is not sent back out on the boat they still hold, and the lent boat on the home water overturns only in a storm.
+test('SIMFIX0b a town fisher in the lent boat rows in at hard rain and does not capsize short of a storm', async () => {
+  const { twoTowns } = await import('./helpers/god.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { TASK } = await import('../src/sim/people/defs.ts');
+  const { fishTask } = await import('../src/sim/people/fishing.ts');
+  const { stormBreaks } = await import('../src/sim/people/shelter.ts');
+  const { capsize } = await import('../src/sim/people/tasks.ts');
+  const w = twoTowns();
+  const sim = w.sim, p = sim.u.planets[0], ps = p.people!;
+  const lune = ps.settlement(w.lune.id)!;
+  const x = makeCtx(sim.u, p), A = x.A;
+  const boat = x.c.items.idx('boat');
+  const members = (ps.members.get(lune.id) ?? []).filter((s) => A.alive[s] && !A.mission[s]);
+  const wet = lune.res!.fish.find((c) => p.f.water[c] > 0.6)!;
+  // hard rain on the water, no storm system: the fisher out in the boat breaks off (rows in)
+  p.st.globalWeather = 'rain';
+  for (const c of lune.res!.fish) p.f.precip[c] = 12;
+  const s = members[0];
+  A.task[s] = TASK.fish; A.boat[s] = boat; A.inside[s] = -1; A.cell[s] = wet;
+  const hit: number[] = [];
+  stormBreaks(x, lune, (_x, q) => { hit.push(q); });
+  assert.ok(hit.includes(s), 'the town fisher afloat in hard rain breaks off');
+  // re-planned, they make for the bank (the boat they hold is not taken back out)
+  const t = fishTask(x, s, lune, () => -1);
+  if (t) assert.ok(p.f.water[t.goalCell] <= 0.6, `the next fishing spot is on the bank (water ${p.f.water[t.goalCell]})`);
+  // and the boat does not go over in rain short of a storm, anywhere on the home water
+  // (open water out of a cell's reach of the shore, where the shore rule does not apply: rain on it too)
+  const g = p.grid;
+  let open = -1;
+  for (let c = 0; c < g.n && open < 0; c++) {
+    if (p.f.water[c] <= 0.6) continue;
+    let shore = false;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.water[g.nbr[e]] < 0.4) shore = true;
+    if (!shore) open = c;
+  }
+  assert.ok(open >= 0, 'open water on the planet');
+  p.f.precip[open] = 12;
+  let over = 0;
+  for (let i = 0; i < 400 && A.alive[s]; i++) { x.tick += 7; if (capsize(x, s, open)) over++; }
+  assert.equal(over, 0, 'no town fisher drowns in rain');
+  p.st.globalWeather = null;
+});
+
 // SIMFIX 2: a stone-age band the god sets down (the opening's 'people' power, life.spawn-people) knows hunting and
 // fishing from day 1 — hunter-gatherers do; before, only the two scenario rows carried knowledge ['hunting'] and a
 // fresh sandbox band showed no hunting for years with game beside camp.

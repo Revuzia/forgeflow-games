@@ -186,7 +186,11 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
   // (PUNCH P22) a town with a boat in its store sends its fishers out on it, onto open water: the boat is theirs while
   // they fish and is left at the shore when they step back on land (tasks.ts moveLeg). Boats for as many as they hold.
   let stand = c;
+  // (SIMFIX 0b) a town fisher still holding the lent boat (out on the water when the rain came) is not sent back out on
+  // it: unless it is lent again below, they make for the bank like the others
+  let ashore = A.boat[s] < 0;
   if (st && !st.band && !A.mission[s] && p.f.water[c] > 0.6) {
+    ashore = true;
     const boat = shoreBoat(x, st);
     // (SIMFIX 0) not into weather: no boat is lent while it rains hard on the water (tasks.ts capsize: precip > 5) or a
     // storm is at the shelter break there — they fish from the bank, and break for shelter like everyone else
@@ -199,7 +203,7 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
     }
   }
   // stand on the bank (PUNCH P22: a strong swimmer too — nobody swims out over open water to fish; the boat takes them)
-  if (p.f.water[c] > 0.6 && A.boat[s] < 0) {
+  if (p.f.water[c] > 0.6 && ashore) {
     const g = p.grid;
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.water[g.nbr[e]] < 0.4) { stand = g.nbr[e]; break; }
   }
