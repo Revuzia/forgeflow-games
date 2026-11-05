@@ -260,12 +260,12 @@ CARDS = {
     "ilsheta_stillwater": {
         # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
         "splash": {"clip": "cast_a1", "t": 0.50, "yaw": -26.0, "pitch": 0.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
-                   "exposure": -0.9, "key_az": 140.0, "key_el": 34.0, "key_color": "#C4DCDA", "sun": 2.4, "rim_cool": 1.8,
+                   "exposure": -1.2, "key_az": 130.0, "key_el": 30.0, "key_color": "#C4DCDA", "sun": 1.9, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 1.4, "exposure": -0.4,
                    "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 40.0,
                               "size": 0.25},
-                             {"at": "head", "az": 150.0, "el": 18.0, "dist": 0.8, "color": "#D6ECEA", "power": 8.0,
-                              "size": 0.35}]},
+                             {"at": "head", "az": 120.0, "el": 10.0, "dist": 0.9, "color": "#D6ECEA", "power": 3.0,
+                              "size": 0.4}]},
         "portrait": {"yaw": -12.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
                      "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 30.0,
                                 "size": 0.25}]},

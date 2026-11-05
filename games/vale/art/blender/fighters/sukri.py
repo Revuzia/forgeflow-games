@@ -271,12 +271,13 @@ CARDS = {
     },
     "sukri_shadeprint": {
         "splash": {"clip": "cast_a1", "t": 0.28, "yaw": 26.0, "pitch": -6.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
+                   "exposure": -1.0,
                    "key_az": 240.0, "key_el": 30.0, "key_color": "#D9CCF0", "sun": 2.0, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.5, "bounce_color": "#7C6CB0", "accent": 2.4,
                    "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 12.0,
                               "size": 0.04},
-                             {"at": "head", "az": 160.0, "el": -20.0, "dist": 0.45, "color": "#E6DAFF",
-                              "power": 20.0, "size": 0.12}]},
+                             {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#FFD6A8",
+                              "power": 12.0, "size": 0.3}]},
         # (closing round 2: the frontal key made a flat white mask: a side key, the face turns and warms)
         "portrait": {"yaw": 24.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
                      "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 8.0,

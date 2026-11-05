@@ -208,7 +208,8 @@ function shuffled(natives: Map<string, string[]>, roles: string[], seed: number)
  *  few fixed teams (160 games: four fighters at 62.3 %, four at 31.1 %, identical game for game), so its rates read team
  *  against team; here every role has its own stream of the seed, so teammates change game to game */
 function indep(natives: Map<string, string[]>, role: string, slot: number, seed: number): string[] {
-  let a = Math.imul((seed + 1) * 2654435761 >>> 0, slot * 2 + 1) >>> 0;
+  let a = 2166136261; // FNV-1a of 'seed:role' (a product of the seed and the slot left only 12 teams in 100 seeds)
+  for (const ch of `${seed}:${role}:${slot}`) a = Math.imul(a ^ ch.charCodeAt(0), 16777619) >>> 0;
   const rnd = (): number => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   rnd(); rnd();
   const l = (natives.get(role) ?? []).slice();

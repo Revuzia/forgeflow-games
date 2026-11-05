@@ -108,7 +108,7 @@ AO_INTO_BASE = 0.0           # (POLISH: no occlusion in the painted colour; the 
 CARDS = {
     "rishal": {
         # (closing round 2: -1.0 EV and a soft head focal: the head was a blown blank shape on the card)
-        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 26.0, "pitch": -3.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": -12.0, "pitch": -3.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
                    "exposure": -1.0,
                    "key_az": 215.0, "key_el": 20.0, "key_color": "#FFE2C8", "sun": 2.6, "rim_cool": 1.4,
                    "rim_warm": 0.8, "bounce": 0.5, "bounce_color": "#D8B8A0", "accent": 1.6,
@@ -128,10 +128,10 @@ CARDS = {
                    # (closing round 2: the card lit the slate-green ink up to a pale mint, the game camera's dark
                    # figure lost: figure p50 186. A calmer key and -1.1 EV, the chalk lines still the highlights)
                    "exposure": -1.1,
-                   "key_az": 150.0, "key_el": 35.0, "key_color": "#E4E8F0", "sun": 2.0, "rim_cool": 1.2,
+                   "key_az": 125.0, "key_el": 32.0, "key_color": "#E4E8F0", "sun": 2.0, "rim_cool": 1.2,
                    "rim_warm": 0.4, "bounce": 0.4, "bounce_color": "#C8CCD4", "accent": 1.4,
-                   "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 18.0,
-                              "size": 0.25}]},
+                   "focal": [{"at": "head", "az": 120.0, "el": 20.0, "dist": 0.9, "color": "#F0F2F8", "power": 5.0,
+                              "size": 0.3}]},
         # (closing round 2: the frontal head focal flattened the plate to a white oval: a side key, the relief reads)
         "portrait": {"yaw": -34.0, "clip": "idle", "t": 0.25, "key_az": 120.0, "key_el": 28.0,
                      "focal": [{"at": "head", "az": 120.0, "el": 20.0, "dist": 0.9, "color": "#F0F2F8", "power": 5.0,
@@ -145,7 +145,7 @@ CARDS = {
     "rishal_lamplit": {
         # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
         # walnut out to peach, a calmer warm key and focal keep the coat walnut and the glass amber)
-        "splash": {"clip": "cast_ult", "t": 0.10, "yaw": -30.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
+        "splash": {"clip": "cast_a3", "t": 0.40, "yaw": -24.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
                    # (closing round 2: still pale cream at -0.5 EV: -1.2 EV so the walnut coat is the card's mid value)
                    "exposure": -1.2, "key_az": 140.0, "key_el": 22.0, "key_color": "#FFDDB8", "sun": 1.25, "rim_cool": 0.6,
                    "rim_warm": 1.1, "bounce": 0.25, "bounce_color": "#C88A50", "accent": 1.8,
