@@ -514,7 +514,7 @@ export abstract class BotBase {
     // spent on one: the kill is the point, not the second body)
     // (and a 1-on-1 trade on a road spends it once the opponent is under 60 %: a laner's ult is how a lane trade becomes a kill)
     // (RIFT's laning only: BRIDGE keeps the casts its G5 pace was measured with)
-    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && tF < (this.mode === 'trade' ? (s.slot === 'ult' ? 0.8 : 0.6) : 0.45)) ? 1 : info.minTargets;
+    const need = this.k.kind !== 'rift' ? info.minTargets : (ag >= 0.9 && (this.mode === 'allin' || this.mode === 'roam')) || (ag >= 0.5 && (this.unanswering(t) || tF < (this.mode === 'trade' ? (s.slot === 'ult' ? 0.8 : 0.6) : 0.45))) ? 1 : info.minTargets;
     if (pureExecute && dmg < (t.hp + t.shield) * 0.9 && !(info.targetHpBelow <= 1)) return false;
     let ok = false;
     if ((u & U_EXECUTE) && dmg >= (t.hp + t.shield) * 0.9) ok = true;

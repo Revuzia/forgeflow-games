@@ -456,7 +456,9 @@ export class Bot extends BotBase implements BotController {
     // trade: only with an edge (hp lead, their cooldowns spent, them low), short, then a breather
     const le = this.laneEnemy;
     // (CW3s r2, critic bot-micro: the breather is short against an opponent that has not answered a blow)
-    if (this.mode === 'trade' && now - this.modeSince > 3.5) this.tradeRestUntil = now + (kind === 'rift' && now - this.foeHitAt > 8 ? 2 : 6);
+    // (r2 refix: 5 s long against it)
+    const unanswered = kind === 'rift' && now - this.foeHitAt > 8;
+    if (this.mode === 'trade' && now - this.modeSince > (unanswered ? 5 : 3.5)) this.tradeRestUntil = now + (unanswered ? 1.2 : 6);
     if (le && hpF > (edgy ? 0.5 : 0.55) && this.adv >= 0.45 && now >= this.tradeRestUntil && this.towerSafe(le.x, le.y, 0.5) &&
       (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
       const leF = le.hp / Math.max(1, le.maxHp);
