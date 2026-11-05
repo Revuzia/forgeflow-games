@@ -69,6 +69,8 @@ export function encodeOnMain(bmp: ImageBitmap, quality = 0.8): Promise<string | 
 interface Port { post(m: ThumbRequest): void; waiting: Map<number, (url: string | null) => void> }
 let port: Port | null | undefined;
 let nextId = 1;
+/** how long a save waits for the worker's picture */
+export const THUMB_WORKER_MS = 20_000;
 /** counters for the test surface: how many pictures each path encoded */
 export const thumbStats = { worker: 0, main: 0, workerFailed: false };
 
@@ -108,8 +110,10 @@ export function encodeThumb(bmp: ImageBitmap, quality = 0.8): Promise<string | n
   if (!p) { thumbStats.main++; return encodeOnMain(bmp, quality); }
   const id = nextId++;
   return new Promise((ok) => {
-    // (a worker that never answers must not hold the save: after 8 s the save goes ahead without a new picture)
-    const late = setTimeout(() => { if (p.waiting.delete(id)) ok(null); }, 8000);
+    // (a worker that never answers must not hold the save: after 20 s the save goes ahead without a new picture. The
+    // worker's drawImage of the frame's bitmap waits for the GPU — off the main thread now, but under a software GPU
+    // that took 12.8 s (r3/probe3), so the limit is generous; the save's bytes were taken before the picture)
+    const late = setTimeout(() => { if (p.waiting.delete(id)) ok(null); }, THUMB_WORKER_MS);
     p.waiting.set(id, (url) => { clearTimeout(late); if (url) thumbStats.worker++; ok(url); });
     try { p.post({ id, bmp, quality }); } catch { p.waiting.delete(id); thumbStats.main++; void encodeOnMain(bmp, quality).then(ok); }
   });
