@@ -1,0 +1,118 @@
+{
+ "wave": "CW4",
+ "round": 2,
+ "verify": 1,
+ "pass": false,
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "_harness/_reports/fw_CW4_fw_CW4_r2vv1_wick_sweep.json (RIFT High, t=975, 8 headings x ally/enemy, 5 live lane Greatwicks). The detector reports greatwickPairs 7 (verify 1 had 2): greatwick_serenade ally and enemy at 45 and 90 in the sweep; no lane row is flagged. The GLBs are unchanged since Nov 3 (greatwick_serenade 08:30), so the count is not an art change; I did not find why it rose. By eye on _harness/_shots/fw_CW4_fw_CW4_r2vv1_sweep_greatwick_greatwick_serenade_3x.png and _aubade_3x.png, and all five lane_greatwick_N_3x.png: slit rings and three-slit panels behind mullions, no pair of equal round panes and no face. The Brightwick flags are the circlet studs, as verify 1 found. My sensitivity read: pass."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "_harness/_reports/fw_CW4_r2vv1_b5.json, gate bars hp >= 2.75 and breakup >= 6, every gated landmark on all 6 map x tier runs PASS. Lowest hp: numeral_xi 2.86 high / 2.80 low, numeral_vii 2.97 / 2.90, lampwright_stall_s BRIDGE high 2.76, fair_stand_nw 2.79, vi_slab 4.21 / 4.89. Lowest breakup 7.0 (numeral_vii high). Numeral lean 20 deg (art/blender/maps/landmarks_art2.py:58). The stall frames show one lamp, not a symmetric pair. Fresh frames: value_*_fw_CW4_r2vv1_lmk_* and _harness/_shots/fw_CW4_r2vv1_fray_at0-2.png; I did not re-shoot the RIFT shot_map positions, the value_probe landmark frames cover those faces."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "_harness/_reports/fw_CW4_r2vv1_b5.json has 3 FAIL lines. BRIDGE frameP99 164 high / 173 low (bar <= 160). BRIDGE low flash 1.88x (bar >= 2.0x). The other four runs have no FAIL. Fog lane/jungle 0.537-0.542 PASS. Wallmask RIFT under50 0/48 minVis 0.73, FRAY 0/24 minVis 0.765 (_harness/_reports/fw_CW4_r2vv1_wallmask_rift.json, _fray.json). No ruling in owner_rulings.md (1-13, 10a) relaxes the frame p99 gate, so the criterion is unmet. The engineers' attribution reproduces: bright160 BRIDGE high 86853 px, fighters 73122, env 96; low 24642 px, fighters 18099, env 33; environment-only p99 106 / 107. World art is not the cause.",
+   "fixHint": "Lead rules on the gate (env-only p99, or accept fighter clusters) and records it. If the gate stays as is, CW5/CW6 or the fight spot must bring fighter pixels down. CW1 fixes the BRIDGE low flash envelope: base 95.7, peak 179.8 vs high 193.7, about 191 needed."
+  },
+  {
+   "id": "done:4",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Water sat 0.33 at L* 18.5 (high), 0.31 at L* 25 (low) in _harness/_reports/fw_CW4_r2vv1_b5.json; wet lip src/render/terrain.ts:1526. shot_structures rift --q high exit 0 with collapse killed true, ruin true at 0.33 s, respawn ruin true (_harness/_reports/structures_rift.json, re-run 19:50). Canopy p50 51 / 55. minimap.png unchanged since verify 1 passed it (67f00021); not re-viewed."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Wick sweep verdict.hood: per-template top25 56.7-62.4, fighters 82.3, all pass. value_probe wickTop25 RIFT high 61.4, RIFT low 65.0, exactly at the limit, BRIDGE 56.7 / 60.6."
+  },
+  {
+   "id": "env:E1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Claim confirmed by re-measure (done:2): all gated landmarks meet the Art 2.0 bar 2.75, against structure medians 3.77 / 4.44. GLB mtimes Nov 4 14:49-15:32. By eye the faces are no longer flat: coursing, inked channels, cracks, a rubble bank. Weak spots for the backlog: margins are thin (2.76-2.86), and the fine speckle on the VI slab, numerals and cart tarp reads as noise more than painted stone at 1x (_harness/_shots/value_rift_high_fw_CW4_r2vv1_lmk_vi_slab.png, value_fray_high_fw_CW4_r2vv1_lmk_lampwright_cart.png). Numbers can sit near the bar partly because of that grain."
+  },
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Still open, and wider than claimed. (1) No scored neutral-units row: grep finds 'neutral' only in closing/critic.json and combat.json. My own estimate is 6.5 of 10, under par, but that is not the review row the critic asked for. (2) Silhouettes, _harness/_reports/fw_CW4_r2vv1_mon.json: stray numeral|tick 0.49 at t=70 (the claim reproduces) but 0.56 at t=1000, over the 0.5 bar. Cross-camp pairs the engineers did not list: resinback|stilltusk 0.62 at t=70 and 0.76 at t=1000; resinback|stilltusk_young 0.54 / 0.75. (3) Longshade, the epic, t=1000: hp 0.66, dL* -11.9, dE 8.6, L* p50 4.2, against the wave's own |dL*| >= 20 gate; _harness/_shots/value_rift_high_fw_CW4_r2vv1_m1000_mon_longshade.png is a dark shape on a dark floor. (4) Sunsplinter, t=370: hp 2.6 (under 2.75), dL* 35.8, breakup 13.3; its core is a plain flat yellow sphere. (5) Stilltusk hp 1.43 / 1.32, just over the lane's 1.2. Sensitivity by eye on every monster frame and on the stilltusk_young and stray_numeral sheets: clean, no face pair or horror mask.",
+   "fixHint": "Lift Longshade's billow crest and rim to |dL*| >= 20 on its floor. Paint the Sunsplinter core (facets, a dial mark, value bands). Separate the Resinback and Stilltusk outlines (raised plate line or mane height, or camp facing) to <= 0.5 at both t=70 and t=1000. Write the neutral-units score row under _design/reviews/closing/ with the 10 units."
+  },
+  {
+   "id": "critic:monsters (stilltusk_young)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "The art is fixed: hp 5.55 (t=70) / 6.41 (t=1000), dL* 25.5 / 20.8, dE 32.1 / 28.8 (_harness/_reports/fw_CW4_r2vv1_mon.json), and the bands read on art/renders/units/stilltusk_young.png, a clear improvement. Not done as claimed: art/renders/units/stilltusk_young/_review.json is stale, still ending at hp 1.79, last committed fed01110.",
+   "fixHint": "Refresh that _review.json with the numbers above."
+  },
+  {
+   "id": "env:m-2",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "The edits are now committed and on origin (wip sync ce60e716), not uncommitted as the claim says. Viewed the final look: _harness/_shots/value_rift_high_fw_CW4_r2vv1_base1.png, value_rift_high_fw_CW4_r2c_base0.png, value_bridge_high_fw_CW4_r2c2_base0.png. The hand runs from the ring with its tip inside the kerb and does not read as a cross. Lamps and banners stand in _harness/_shots/value_rift_high_fw_CW4_r2c_lmk_lampwright_stall_a.png. Plaza saturation RIFT 0.26/0.35, BRIDGE 0.30/0.36, all PASS. Still, from the respawn spot the rim dressing is out of frame and the plaza is mostly bare paving with the hour lamp at the edge. On RIFT one banner and one lamp stand on the far side of the wall beside the shop, not on the plaza rim.",
+   "fixHint": "Backlog: move a lamp and banner pair to where the respawn frame sees them, on the plaza side of the wall."
+  },
+  {
+   "id": "env:m-4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "12 camp_mark entries confirmed in map_rift.json. Plaques visible for Glasshorn, Resinback, Gloamoth and Stilltusk (_harness/_shots/value_rift_high_fw_CW4_r2vv1_m70_mon_*.png); I could not find the Strays plaque in the frames I viewed. The claim's 'faint' was not met for all: the Glasshorn plaque is a flat pale octagon with a hard black sign (_harness/_shots/value_rift_high_fw_CW4_r2vv1_m70_mon_glasshorn.png), louder than the floor and untextured. No art/renders/maps sheet exists for the camp_mark GLBs. Watch: its three-branch sign reads close to a rune; not a blocker by itself, but worth a read against the originality and sensitivity rules.",
+   "fixHint": "Backlog: drop plaque contrast to the worn stone of the floor, add wear, make the antler curved so it does not read as a rune, confirm the Strays plaque, render a camp_mark sheet."
+  },
+  {
+   "id": "regression:perf_1080",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine: load 34-370 during this verify, with other lanes' Blender and perf runs active. Not run.",
+   "fixHint": "Integration pass: perf_1080 --prod --q high,low on an idle machine."
+  },
+  {
+   "id": "handoff:CW1:polish",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "RIFT env180 other 0 on high and low (_harness/_reports/fw_CW4_r2vv1_b5.json; better than the 0.005 % claimed). BRIDGE frame p99 still FAILs (done:3), fighter-driven. env m-5 is CW1's now: 055ca967 records BRIDGE resin flame held at 0.56 because brighter tries pushed T0 over 60.",
+   "fixHint": "Lead ruling on the frame p99 gate."
+  },
+  {
+   "id": "handoff:CW1:refix1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Same measurements. Landmarks and props are cleared: bright160 env 96 / 33 px on BRIDGE, landmark class absent. The FAIL line stands pending the ruling.",
+   "fixHint": "As above."
+  },
+  {
+   "id": "handoff:r2:Camp facing now works",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "map_rift.json carries 12 facing entries (d35d18f2). The Numeral's broad face reads at t=70 in _harness/_shots/value_rift_high_fw_CW4_r2vv1_m70_mon_stray_numeral.png. See critic:monsters for the t=1000 IoU of 0.56."
+  },
+  {
+   "id": "handoff:r2:BRIDGE low T4 flash",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Re-measured 1.88x: base 95.7, peak 179.8, at (74.55, 21.66). BRIDGE high 2.14x: base 90.7, peak 193.7. Same spot on both tiers, so the low tier's peak really is lower (FRAY low 181.8 vs 192.6, RIFT low 183.5 vs 193.5). The low-tier deficit looks general, about 10-14 luma, and BRIDGE low fails because its base is the brightest. RIFT low is thin at 2.02x and its fight landing moved between runs (2.64x in the engineers' r2c, 2.02x here), so it may flip too.",
+   "fixHint": "CW1: find why the low-tier disc peak sits 10-14 luma under high on every map, and lift it to about 191 at base 95.7."
+  },
+  {
+   "id": "regression:typecheck+content",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run typecheck exit 0; npm run content:check OK, 0 warnings (about 18:48)."
+  }
+ ],
+ "regressions": [
+  "BRIDGE frame p99 150 / 154 at round 1 verify (fw_CW4_v1_b5.json) -> 164 / 173 now (_harness/_reports/fw_CW4_r2vv1_b5.json). Environment-only p99 is 106 / 107, so the rise comes from fighters or where the fight lands; the cause is untested (ruling 11's art.scale growth is one candidate).",
+  "BRIDGE low flash 2.33x at round 1 verify -> 1.88x; RIFT low flash 2.02x has almost no margin."
+ ],
+ "summary": "Fail. Landmarks are the real gain: env:E1 and done:2 now pass on my own re-measure on all 6 runs. Wick sensitivity, wallmask, fog, the minors and hood value hold. done:3 does not pass: BRIDGE frame p99 164 / 173 and BRIDGE low flash 1.88x. The frame p99 is fighter-driven, not world art, and needs a lead ruling; the flash goes to CW1. critic:monsters stays partly and is wider than claimed: no neutral-units score row, Longshade dark on dark (dL* -11.9), plain Sunsplinter core, Resinback/Stilltusk IoU 0.62-0.76, Stray IoU 0.56 at t=1000. perf_1080 needs an idle machine."
+}
