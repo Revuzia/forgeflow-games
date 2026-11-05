@@ -13,9 +13,18 @@
 //   S1  decoded audio at Home after each map <= 150 MB
 //   S2  no match bed (mus_match_*) and no match-only cue (f_*, u_*, c_*) is left in the cache at Home
 //   S3  the previous bed is freed on a bed change: at Home only the menu bed's files of the music beds remain
-// Exit 0 = PASS, 1 = a gate fails, 2 = the journey broke (screens / timeouts).
+//   S4  CW1's footprint gate with the audio in it: renderer + GPU process (macOS `footprint`) <= 2500 MB at every Home (the
+//       renderer holds the decoded audio, so this is perf_1080's maps-memory number without its "audio comes on top").
+//       In-match readings (decoded audio with prewarm, renderer + GPU) are polled to the match's end; their peaks are
+//       reported against the same 2500 MB.
+// The wait for a match's end counts AWAKE seconds and watches the match clock: wall time the machine slept is reported
+// (Date.now runs through a sleep, performance.now does not; the r2v1 attempt "timed out" at 2299 s through a 33-minute
+// system sleep), and a stall is named only when the match clock stops moving while the machine is awake.
+// Exit 0 = PASS, 1 = a gate fails, 2 = the journey broke (screens / timeouts / a stalled match clock).
 
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { loadavg } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { open, shot, vale, waitFor } from './pw.mjs';
@@ -27,14 +36,38 @@ const MODES = String(opt('modes', 'rift,bridge,fray')).split(',');
 const SPEED = Number(opt('speed', 16));
 const OUT = opt('out', join(HERE, '_reports', 'fw_CW2_session_mem.json'));
 const HOME_MB = 150;
+const FOOTPRINT_MB = 2500;      // perf_1080 HOME_BUDGET_MB, CW1's maps-memory gate
+const END_AWAKE_S = 1500;       // a match's end, in awake seconds
+const STALL_AWAKE_S = 300;      // the match clock not moving for this long while awake = a stall
 const QUEUE_CARD = { rift: 'Lantern Drill', bridge: null, fray: null };
 
-const report = { probe: 'probe_audio_session_mem', at: new Date().toISOString(), speed: SPEED, samples: [], gates: {}, errors: [] };
+const report = { probe: 'probe_audio_session_mem', at: new Date().toISOString(), speed: SPEED, samples: [], matchPeaks: [], gates: {}, errors: [] };
 const t0 = Date.now();
 const log = (s) => console.log(`${((Date.now() - t0) / 1000).toFixed(0).padStart(5)} s  ${s}`);
 
 const { browser, page, logs } = await open(`/?dev=1&autopilot=match&speed=${SPEED}`, { hmr: false });
 const cdp = await page.context().newCDPSession(page);
+const bcdp = await browser.newBrowserCDPSession();
+
+/** awake seconds and seconds slept since t0 (performance.now stops in a system sleep, Date.now does not) */
+const pw0 = performance.now();
+const awakeS = () => (performance.now() - pw0) / 1000;
+const sleptS = () => Math.max(0, (Date.now() - t0) / 1000 - awakeS());
+
+function footprintMb(pid) {
+  try {
+    const m = /Footprint:\s+([\d.]+)\s+(MB|GB|KB)/.exec(execFileSync('footprint', ['-p', String(pid)], { encoding: 'utf8', timeout: 30000 }));
+    return m ? Math.round(Number(m[1]) * (m[2] === 'GB' ? 1024 : m[2] === 'KB' ? 1 / 1024 : 1)) : null;
+  } catch { return null; }
+}
+/** the largest renderer + the GPU process, as perf_1080's maps memory reads them */
+async function procs() {
+  const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
+  const gpu = ps.find((x) => x.type === 'GPU');
+  const rend = ps.filter((x) => x.type === 'renderer').map((x) => footprintMb(x.id) ?? 0).sort((a, b) => b - a)[0] ?? null;
+  const gpuMb = gpu ? footprintMb(gpu.id) : null;
+  return { rendererMb: rend, gpuMb, totalMb: rend !== null && gpuMb !== null ? rend + gpuMb : null };
+}
 
 /** the engine's cache: files settled, MB, biggest files, and which match-only / bed files are held */
 async function audioCache() {
@@ -63,9 +96,10 @@ async function sample(tag) {
   const audio = await audioCache();
   const heapMb = await page.evaluate(() => +((performance.memory?.usedJSHeapSize ?? 0) / 1048576).toFixed(1));
   const route = await vale(page, (v) => v.router.route.value.screen);
-  const s = { tag, route, heapMb, audio };
+  const footprint = await procs();
+  const s = { tag, route, heapMb, audio, footprint };
   report.samples.push(s);
-  log(`${tag}: route ${route}, heap ${heapMb} MB, audio ${audio?.mb} MB in ${audio?.files} files; top ${JSON.stringify(audio?.top.slice(0, 4))}`);
+  log(`${tag}: route ${route}, heap ${heapMb} MB, audio ${audio?.mb} MB in ${audio?.files} files; renderer ${footprint.rendererMb} + GPU ${footprint.gpuMb} = ${footprint.totalMb} MB; top ${JSON.stringify(audio?.top.slice(0, 4))}`);
   return s;
 }
 
@@ -73,6 +107,35 @@ async function click(locator) {
   await locator.first().waitFor({ state: 'visible', timeout: 20000 });
   for (let i = 0; i < 3; i++) {
     try { await locator.first().click({ timeout: 10000 }); return; } catch (e) { if (i === 2) throw e; await page.waitForTimeout(600); }
+  }
+}
+
+/** to the match's end: the clock, decoded audio and footprint polled; sleep discounted, a stopped clock named */
+async function waitEnd(mode) {
+  const peak = { mode, audioMb: 0, audioFiles: 0, audioAtMatchS: null, totalMb: 0, rendererMb: 0, gpuMb: 0, totalAtMatchS: null, polls: 0 };
+  report.matchPeaks.push(peak);
+  const a0 = awakeS();
+  let lastT = -1, lastMove = a0, lastLog = a0, lastPoll = -Infinity;
+  for (;;) {
+    const st = await vale(page, (v) => ({ end: !!v.state.ending.value || v.router.route.value.screen === 'postgame', t: v.state.match.value?.view.time ?? null }));
+    if (st.end) break;
+    const now = awakeS();
+    if (st.t !== null && st.t !== lastT) { lastT = st.t; lastMove = now; }
+    if (now - lastPoll >= 8) {
+      lastPoll = now;
+      const a = await audioCache();
+      peak.polls++;
+      if (a && a.mb > peak.audioMb) { peak.audioMb = a.mb; peak.audioFiles = a.files; peak.audioAtMatchS = st.t; peak.audioTop = a.top.slice(0, 6); }
+      const f = await procs();
+      if ((f.totalMb ?? 0) > peak.totalMb) { peak.totalMb = f.totalMb; peak.rendererMb = f.rendererMb; peak.gpuMb = f.gpuMb; peak.totalAtMatchS = st.t; }
+    }
+    if (now - lastLog >= 30) {
+      lastLog = now;
+      log(`${mode}: match ${Math.round(st.t ?? 0)} s (x${((st.t ?? 0) / Math.max(1, now - a0 + 60 / SPEED)).toFixed(1)}), awake ${Math.round(now)} s, slept ${Math.round(sleptS())} s, load ${loadavg()[0].toFixed(1)}, peak audio ${peak.audioMb} MB, peak renderer + GPU ${peak.totalMb} MB`);
+    }
+    if (now - lastMove > STALL_AWAKE_S) throw new Error(`STALL: the match clock stopped at ${lastT} s for ${STALL_AWAKE_S} awake seconds (slept ${Math.round(sleptS())} s)`);
+    if (now - a0 > END_AWAKE_S) throw new Error(`match still running at ${lastT} s after ${END_AWAKE_S} awake seconds (slept ${Math.round(sleptS())} s, load ${loadavg()[0].toFixed(1)})`);
+    await page.waitForTimeout(1000);
   }
 }
 
@@ -100,7 +163,7 @@ async function journey(mode) {
   log(`${mode}: match loaded`);
   await waitFor(page, (v) => (v.state.match.value?.view.time ?? 0) > 60, 240000);
   await sample(`${mode}_in_match_60s`);
-  await waitFor(page, (v) => v.state.ending.value || v.router.route.value.screen === 'postgame', 1500000);
+  await waitEnd(mode);
   await waitFor(page, (v) => v.router.route.value.screen === 'postgame', 30000);
   await page.waitForTimeout(2500);
   await sample(`${mode}_postgame`);
@@ -128,13 +191,19 @@ const homes = report.samples.filter((s) => /_home$/.test(s.tag));
 const s1 = homes.map((s) => ({ tag: s.tag, mb: s.audio?.mb ?? null, ok: (s.audio?.mb ?? Infinity) <= HOME_MB }));
 const s2 = homes.map((s) => ({ tag: s.tag, matchOnly: s.audio?.matchOnly ?? null, ok: (s.audio?.matchOnly?.length ?? 1) === 0 }));
 const s3 = homes.map((s) => ({ tag: s.tag, music: s.audio?.music ?? null, ok: (s.audio?.music ?? ['?']).every((f) => /mus_menu/.test(f)) }));
-report.gates = { S1: s1, S2: s2, S3: s3, homeMbMax: HOME_MB };
-const pass = !broke && homes.length === MODES.length && [...s1, ...s2, ...s3].every((g) => g.ok);
+const s4 = homes.map((s) => ({ tag: s.tag, ...s.footprint, ok: s.footprint?.totalMb !== null && s.footprint?.totalMb !== undefined && s.footprint.totalMb <= FOOTPRINT_MB }));
+report.gates = { S1: s1, S2: s2, S3: s3, S4: s4, homeMbMax: HOME_MB, footprintMbMax: FOOTPRINT_MB };
+report.sleptS = Math.round(sleptS());
+report.awakeS = Math.round(awakeS());
+const pass = !broke && homes.length === MODES.length && [...s1, ...s2, ...s3, ...s4].every((g) => g.ok);
 report.pass = pass;
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));
 console.log(`S1 Home after each map: ${s1.map((g) => `${g.tag} ${g.mb} MB`).join(', ')} (<= ${HOME_MB})`);
 console.log(`S2 match-only files at Home: ${s2.map((g) => `${g.tag} ${g.matchOnly?.length ?? '?'}`).join(', ')}`);
 console.log(`S3 beds at Home: ${s3.map((g) => `${g.tag} [${(g.music ?? []).join(' ')}]`).join(', ')}`);
+console.log(`S4 renderer + GPU at Home: ${s4.map((g) => `${g.tag} ${g.rendererMb} + ${g.gpuMb} = ${g.totalMb} MB`).join(', ')} (<= ${FOOTPRINT_MB})`);
+console.log(`match peaks (reported): ${report.matchPeaks.map((p) => `${p.mode} audio ${p.audioMb} MB in ${p.audioFiles} files at ${Math.round(p.audioAtMatchS ?? 0)} s, renderer + GPU ${p.rendererMb} + ${p.gpuMb} = ${p.totalMb} MB at ${Math.round(p.totalAtMatchS ?? 0)} s`).join('; ')} (against ${FOOTPRINT_MB})`);
+console.log(`awake ${report.awakeS} s, slept ${report.sleptS} s`);
 console.log(`${pass ? 'PASS' : broke ? 'BROKE' : 'FAIL'} → ${OUT}`);
 process.exit(pass ? 0 : broke ? 2 : 1);
