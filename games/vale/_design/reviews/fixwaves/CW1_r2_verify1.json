@@ -1,0 +1,254 @@
+{
+ "wave": "CW1",
+ "round": 2,
+ "verify": 1,
+ "pass": false,
+ "summary": "CW1 round 2 verify 1 FAILS on 3 major items that can be measured now, with 4 more waiting on an idle machine. Real progress: Marund a3, the combat gate (2 full passes), the menu-cycle leak, match peaks, programs, bar clearance, camera, lost attack orders, Domefall and recall all hold on my own re-measure. Still failing: done:0 (2 full kit_hue sweeps both 63/64, on different slots), done:7 (value_probe B5 has 3 FAIL lines and the engineers never ran it), and the BRIDGE low flash, whose peak is 14-15 luma low on the low tier on all maps and which currently has no owner. Not measured (needs idle machine): done:3, PERF-C1, b4-realtime, input-feel latency. The BRIDGE frame p99 needs a lead ruling.",
+ "items": [
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Two full `probe_kit_hue --live` sweeps at HEAD both exit 1 at 63/64, each on a different slot. fw_CW1_rv1_kit_hue.json: burdam a3 team light 0.438 (> 0.35). fw_CW1_rv1_kit_hue2.json: hesmi a1 sig 0.493 (< 0.5). Hesmi a1 also read 0.519 and 0.437 (fw_CW1_r2_kit_hue_all.log), so it sits on the line. Burdam a3 reads 0.185 / 0.226 / 0.205 in 3 targeted runs (fw_CW1_rv1_burdam{1,2,3}.log) and 0.273 in sweep 2, with A 9910 in the failing run against about 7600, so something extra lit that cast. Marund a3 itself is fixed: 0.85 and 0.849 with team light 0.06 and 0.052. Load was about 18-25. No full sweep has passed 64/64 in r2; the engineers re-ran Marund and Burdam only, not the whole set.",
+   "fixHint": "Hesmi a1: white is 0.66-0.67 of the added light, so add saturated violet until it holds >= 0.55. Ilsheta a2 (0.528-0.534) and Hesmi ult (0.538-0.551) have thin margins too. Burdam a3: find what added light in the sweep's run (A 9910, team 0.438), for example a leftover effect from the previous cast in the batch. Then pass 2 consecutive full sweeps."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Two consecutive `probe_combat_polish ult,hold --ults all` runs exit 0 with fails []: fw_W1_combat_polish_fw_CW1_rv1a.json and rv1b.json. Lowest core is x2.07-2.08 (best of core and ground), which meets x2.0 under rulings 10 and 10a. Hesmi 2.08-2.09, Nurrow 2.08, Dunsom 2.06-2.07. Highest full-frame white 0.32-0.326 (Lisvel), under 0.35. Disc holds: Kemdo 267 / 300 ms, Rishal 200 / 200, Tunlan 167 / 167. Tunlan is exactly at the limit."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "`probe_kit_hue --live --skins` exits 0 (fw_CW1_rv1_kit_skins.json). hesmi_shadeprint a1 0.554, ult 0.532; sukri_shadeprint a1 0.53, ult 0.557 (hue 268-271); team light 0.015-0.29. kemdo_long_evening 0.733 / 0.797; rishal_lamplit 0.898 / 0.977. I viewed fw_CW1_rv1_skin_{sukri_shadeprint,hesmi_shadeprint,kemdo_long_evening,rishal_lamplit}_ult.png: violet, violet, plum and gold effects, with target rings still team orange."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Load was 24-39 and Blender held a heavy slot. Functional half passes in fw_CW1_rv1_perf.json: gpubound left scale 2.0 at 1.2 s, end scale 1.05, calibrate and dynres PASS. gpubound tail 57.6 fps (target >= 58), reported 'not measured: machine busy'. Ultra has no entry in the report's presets, so 'Ultra holds 60 or is gated' is unmeasured.",
+   "fixHint": "Integration pass: `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30` at load < 3, and add an Ultra run (`--q ultra`)."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "fw_CW1_rv1_perf.json memory step PASS: GPU process menu_2 -> menu_5 679 -> 684 MB (+0.74 %), tracked materials 22 -> 23, geometries 22 -> 22 (was 85 -> 271 and 123 -> 336). The gate moved from 3 % to 5 %, but this run also passes 3 %. memMaps peak at Home 1319 MB against the 2500 MB budget, ImageBitmaps closed, 0 leftover bone textures. probe_ctxloss PASS (fw_CW1_rv1_ctxloss.json). KTX2 is deferred by ruling 13."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Three seeds with rotated seats in fw_CW1_rv1_perf.json: seed 7 rot 0 441k, seed 11 rot 5 473k, seed 23 rot 10 486k triangles; 40 programs on each, reached by 8.7-12.5 s; lateProgramsAfter60s []; overBudget empty. memMaps leftoverBones 0 on every step after 4 matches."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "`node _harness/probe_bar_clearance.ts` exits PASS (fw_CW1_bar_clearance.json, re-run by me). Dunsom's lantern idle 0 %, run 6 %, attack 7 %; idle 0 % at 28.5 m too. Hesmi rack, Kemdo lens, Tunlan brim and Vashil halo 0 % idle and run. Halo air 7.9 px."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "value_probe B5 does not pass, and the engineers claimed done without running it. fw_CW1_rv1_value.log has 3 FAIL lines: BRIDGE high frameP99 165 and BRIDGE low frameP99 174 (<= 160), and BRIDGE low flash 95.9 -> 177 = 1.85x (>= 2.0x). The rest of the criterion passes: perf_1080 --prod GATE PASS at HEAD (fw_CW1_rv1_perf.log), overlay_regress --q high,low PASS (fw_CW1_rv1_overlay.log), typecheck clean, content:check 0 warnings, npm run build OK.",
+   "fixHint": "Flash: see handoff:CW4:landmarks, this lane's renderer. Frame p99: CW4's verifier found it fighter-driven and asked for a lead ruling, and none exists in rulings 1-13; the lead must rule or the fight spot must change."
+  },
+  {
+   "id": "perf:PERF-C1",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Functional half passes (see done:3). Under load 22-39: High 58.0 fps, Low 59.9 fps, gpubound tail 57.6 fps; every timing line reads 'not measured: machine busy'. fw_CW1_rv1_perf.json.",
+   "fixHint": "Integration pass at load < 3."
+  },
+  {
+   "id": "perf:PERF-C2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same evidence as done:4 and done:5. Ruling 13 removes the KTX2 clause; the menu-cycle leak it called out is gone."
+  },
+  {
+   "id": "critic:b4-realtime",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Not run: load stayed about 7-100 during this verification and the real-time step needs load < 3.",
+   "fixHint": "Integration pass: perf_1080 --match-scale 1 at load < 3."
+  },
+  {
+   "id": "critic:combat-16",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "All 16 ults pass in both full runs (x2.07-2.71, fails []). Ruling 10a confirms x2.0 as the working target. Odrum alone reads clipBound false, so its target is x2.3 and it passes on ground x2.30 (core 2.27). 10a's 'true on all 16' is slightly off for Odrum, but the result is unaffected. Vashil and Ardit reach 0.317 and 0.265 victim-box white, under 0.35."
+  },
+  {
+   "id": "combat:C1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Spot check: the shipped team-light and hue defect is gone on every slot except the two done:0 flakes; highest team light in the clean sweep is 0.327 (Dunsom ult). The open margin is tracked under done:0."
+  },
+  {
+   "id": "skins:SKIN-FX",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same evidence as done:2. 15 defs carry element:#hex refs in content/vfx.json, and nine skins carry a vfxTint."
+  },
+  {
+   "id": "critic:camera",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "`node _harness/probe_camera.ts --only heights --gate-heights`: 48/48 in band under ruling 11, 86.5-130.4 px, PASS. Live camera half in fw_CW1_input_latency_rv1b.json has no camera fails: locked default 0 px off, peek 2135 px/s, back in 400 ms, Y and Space 0 px, respawn 0 px on the first live frame in both modes."
+  },
+  {
+   "id": "critic:input-feel",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Both of my 50-order runs exit 1 on latency only: marker p95 53.6 ms at frame 20.3 ms (fw_CW1_input_latency_rv1a.json) and 41.3 ms at frame 17.5 ms (rv1b.json), limit 2 frames. Load reached about 100, and r2h passed under load (20.7 ms). Motion p95 63.1 and 46.4 ms, within limit. The lost-order defect does not reproduce: attackAsMove 0 and attackMarkMissing 0 in both. In rv1b, order 16 was sent as a move because the foe was dead (foeAlive false, targetable false), which is correct.",
+   "fixHint": "Integration pass: run `node _harness/probe_input_latency.mjs --tag idle --only input` twice at load < 3. Keep the dead-foe case out of the attack set so the 20 presses all test a live target."
+  },
+  {
+   "id": "combat:bar-clearance",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same as done:6."
+  },
+  {
+   "id": "combat:C2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Hesmi core x2.08-2.09, ground x2.02, full-frame white 0.045-0.051, victim-box white 0.072 (rv1a, rv1b). Meets ruling 10a's x2.0."
+  },
+  {
+   "id": "combat:C3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Disc >= 0.5 x victim: Kemdo 267-300 ms, Rishal 200 ms, Tunlan 167 ms in both runs. Tunlan has no margin."
+  },
+  {
+   "id": "perf:PERF-C4",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Seed 23 rot 10: 40 programs, 0 late, peak 486k (fw_CW1_rv1_perf.json)."
+  },
+  {
+   "id": "env:m-5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "fw_CW1_rv1_ambient.log, all checks pass. Flame max: RIFT 57 / 59.1, BRIDGE High 51.5 / Low 55.5, FRAY 56.8 / 57.2. BRIDGE High stays under the 55-60 band, matching the claim.",
+   "fixHint": "Lead rules whether 51.5 is accepted, or CW4 thins the overlapping flames at the gate spot so the core can rise."
+  },
+  {
+   "id": "originality:m5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "dist-catalog/assets holds only the current b5ba5d0e5c90 and 160af27719c5 files; schema-1 holds only 2026.10.1."
+  },
+  {
+   "id": "polish:OBS-camjump",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`probe_camjump` PASS on the new governor (fw_CW1_rv1_camjump.log, exit 0)."
+  },
+  {
+   "id": "handoff:CW4:landmarks",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "BRIDGE low flash 1.85x (base 95.9, peak 177). The peak is 14-15 luma lower on low than on high on every map (fw_CW1_rv1_value.log): RIFT 195.1 / 181.1, BRIDGE 192.5 / 177, FRAY 192.6 / 178.4. That points to a render-tier difference in this lane rather than the BRIDGE ground. The engineers handed it to CW4, and CW4's verifier (CW4_r2_verify1.json) handed it back, so nobody owns it now.",
+   "fixHint": "CW1 owns it: diff the low and high post chain and the VFX envelope for this flash in src/render, and lift the low-tier disc peak to about 192 at base 95.9 (RIFT low 2.06x is thin too). Lowering the BRIDGE ground is only the fallback."
+  },
+  {
+   "id": "handoff:CW6:hesmi-sukri",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Team rings stay team and the violet family measures per done:2."
+  },
+  {
+   "id": "handoff:CW6:marund-odrum",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Better than claimed: the content change has landed (content/fighters/marund.json:542, clips.leap at :575). A real Marund ult in a scratch probe plays state dash:leap on clip domefall_leap, with clip fraction following dash progress: 0, 0.087 ... 0.872 over 0.382 s (fw_CW1_rv1_leap.json)."
+  },
+  {
+   "id": "handoff:CW6:dunsom-ilsheta-rishal-tunlan",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "`probe_recall_fit --tag rv1` PASS: 0 wraps, max error 0.0236 s, last second at clip fraction >= 0.864, on a real 7 s recall (fw_CW1_recall_fit_rv1.json)."
+  },
+  {
+   "id": "handoff:CW6:refix1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "All three parts now pass: recall, the Hesmi and Sukri refs, and Domefall playback (see the items above)."
+  },
+  {
+   "id": "handoff:CW1:hue-skinfx",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Core gate passes under ruling 10a. The remaining margin is tracked under done:0."
+  },
+  {
+   "id": "burdam_almanac-vfxTint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "a1 0.704, ult 0.646 (fw_CW1_rv1_kit_skins.json), both pass. In fw_CW1_rv1_skin_burdam_almanac_ult.png the effect reads red and pale; the ink tint is not visible at the ult's peak, and that gate measures the signature, not the tint.",
+   "fixHint": "Take a cast capture of the dust frames and confirm the ink tint can be seen, or accept it as a minor."
+  },
+  {
+   "id": "handoff:CW1:perf",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "GATE PASS on all three seeds at HEAD. probe_dynres_metal was not re-run by me; the dynres step in perf_1080 passes."
+  },
+  {
+   "id": "handoff:CW1:polish",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Governed and normal crops viewed (fw_CW1_r2m_crowd_hard.png, _normal.png): the bodies and team accents still read. Hard-LOD code keeps accent parts whole (crowd.ts lodsHard null for accents). probe_crowd_accent exits 1 on my 2 runs, but shipped / full is 0.984-1.017 on every crop measured; the only miss is 'greatwick team 1: no crop' and that crop shows bare fogged ground (fw_CW1_rv1b_accent_greatwick_1_shipped_on.png), so the unit is not in vision. This is a probe fixture problem."
+  },
+  {
+   "id": "handoff:CW5:kemdo-lisvel",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Refs present (kemdo_a2_dash and kemdo_a3_vent 2 each), base hexes unchanged; a1 0.733 and ult 0.797, plum at the ult in the shot. Steam on a2 and a3 was not captured."
+  },
+  {
+   "id": "handoff:CW5:nurrow-ulkro-ervet",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "content/skins/nurrow.json:37 carries the new copy; content:check 0 warnings."
+  },
+  {
+   "id": "handoff:CW5:vashil-rest-minors",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Anchor 3.05 m and halo air 7.9 px, re-run in probe_bar_clearance PASS. Computed geometry only, no live HUD shot."
+  },
+  {
+   "id": "handoff:r2:--gate-heights",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Re-run: 48/48, PASS."
+  },
+  {
+   "id": "handoff:r2:content/vfx.json is hand",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`python3 tools/vfx/build_vfx.py --check`: 285 defs, 50 from tuned.json, 0 a rebuild would change."
+  },
+  {
+   "id": "combat:beat-readability-eye",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "New eye note, not gated. At the first beat Marund's victim reads as a flat mint silhouette with no interior detail (fw_W1_polish_ult_marund_beat_fw_CW1_rv1a.png), and Burdam a3's victim reads as a pale white figure (fw_CW1_rv1_kit_burdam_a3.png). The white gates miss the mint because it has chroma. Duration was not measured. Ruling 10 asks that the target stay readable, and 10a lets reviewers mark an ult by eye.",
+   "fixHint": "Measure how many frames the victim's interior detail is lost; if more than 2, ease the body tint on the dome and flash."
+  }
+ ],
+ "regressions": [
+  "No confirmed regression from this lane's changes. perf_1080 GATE PASS, overlay_regress PASS, probe_ctxloss PASS, probe_camjump PASS.",
+  "probe_kit_hue full sweep still fails on a different slot each run (burdam a3 team 0.438, hesmi a1 0.493): gate noise plus thin margins, not a new defect in the defs.",
+  "probe_crowd_accent now exits 1 on 'greatwick team 1: no crop' at t 900 and 1200 (it passed in the last run on record, 2026-10-29). The crop holds only fogged ground; the accent ratios themselves hold. If left as is, it will fail any integration gate that adds it.",
+  "Not gated, to watch: Home footprint climbs across maps in one page, 1204 -> 1319 MB, and the same RIFT match reads 1637 -> 2182 MB between first and fourth match (fw_CW1_rv1_perf.json memMaps). It is under budget, but the same-map menu gate cannot see it."
+ ],
+ "measuredAt": "2026-11-04 21:20-23:05, load about 7-100, HEAD 618cdc6c and later; reports _harness/_reports/fw_CW1_rv1*, shots _harness/_shots/fw_CW1_rv1*"
+}
