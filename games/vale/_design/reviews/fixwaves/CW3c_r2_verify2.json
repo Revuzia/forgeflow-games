@@ -1,0 +1,25 @@
+{
+  "wave": "CW3c",
+  "round": 2,
+  "verify": 2,
+  "date": "2026-11-04",
+  "pass": false,
+  "items": [
+    {
+      "id": "client:CL-1",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "Re-measured after 9ab5f988. `node tools/gen_store.ts --check` exit 1: lisvel_almanac, deluxe, dE 16.6 vs floor 18; the other 31 of 32 pass. My own numpy CIE76 at 256 px on art/out/fighters/lisvel/portrait.png vs lisvel_almanac_portrait.png also gives mean 16.6, with 29.1 % of pixels over dE 20 (lisvel_gorgewalk, the standard skin: 25.4 and 58.3 %), so the standard skin differs from base far more than the deluxe one. `--check --provisional` exit 0, 'current, 32 offers, 8 shelves, gate 31/32'. content/store.json:22 sells it at 600 with no badge. Floor not lowered. By eye on _harness/_shots/fw_CW3c_r2v2_lisvel_base_almanac_gorge.png: base and Almanac are both a sand-coloured wrapped head, scarf and pale visor; mostly the backdrop and crop differ. The store handling is correct and honest, but the criterion (32 of 32 at their tier) is not met.",
+      "fixHint": "CW5: re-palette or re-stage lisvel_almanac to dE >= 18 by changing the figure, not only the plate, then run `node tools/gen_store.ts --provisional && npm run content` so it returns to 1,500."
+    },
+    {
+      "id": "handoff:CW6:tunlan-splash",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Unchanged: art/out/fighters/tunlan/splash.png git hash-object f402fd1d equals HEAD; last commit cff6f70d. Viewed at full size: a large black spiky blurred shape spans the sky, spires and terraces from about x 220 to x 1100, ending at her raised hand. Pixels with L < 45 are 44.1 % of the box x 200-800, y 40-320. The refix engineer's diagnosis is confirmed: this is the deliberate hound shadow (art/blender/fighters/tunlan.py:170-173, card :179-189, HOUND :1899), not a stray occluder. Subject pass art/.cache/fighters/plates/tunlan_splash.png: alpha max 0.784, 50.8 % above 0.05 in the upper-left box (x 10-55 %, y 0-45 %); Lamplit 0.0 %; Noon Fair 1.7 %. Intent does not clear it: it has no wall to fall on, it does not read as a hound, and it reads as a render fault on the fighter's main card. CW6_verify1 did accept it: line 39 says 'a hound-shaped hand shadow on the plate', and TUN-C3 passed with 'Minor: the shadow floats on the sky plate'. I rate the visible result higher than that minor.",
+      "fixHint": "CW6: keep TUN-C3's hound shadow but make it read: put it on a plate surface (a wall or cliff face) or at a much lower alpha with a clear hound silhouette, off the sky, then re-render, run card_qa and `npm run content`. Do not simply delete it, which reopens TUN-C3."
+    }
+  ],
+  "regressions": [],
+  "summary": "Fail. Neither item moved, and the refix engineer changed nothing, correctly, since both fixes are in other lanes' art (CW5 and CW6). The engineer's measurements reproduce. CL-1 stays partly at lisvel_almanac dE 16.6 vs 18, safely priced at 600. Tunlan's base splash still shows the dark floating shape, now confirmed as the intended hound shadow that does not read. No CW3c file is modified, tsc shows no errors in CW3c paths, content:check OK (0 warnings); e2e and sweep not re-run because nothing in the lane changed. CW3c cannot close without those two art handoffs."
+}
