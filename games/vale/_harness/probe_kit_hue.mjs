@@ -29,9 +29,10 @@
 //
 // CW1 r2 refix 1 (done:0): the pair never swings. The filter above passes an id the slot names, and the slots whose
 // present.hitVfx is the same lib_hit_phys_* as the fighter's attack.present.hitVfx let the idle auto-attack's hit through
-// (fired at tier 1, a landed swing in the window: the A jump the sweeps showed on Burdam a3, 0.438 team light against
-// 0.185-0.273, only when the slot before left the attack timer ready). Both units get autoAttack = false from the staging
-// on. Every row keeps the window's spawn trace ([frame, id, source, tier, passed]); --swing restores the old staging.
+// (fired at tier 1, a landed swing in the window). The most likely cause of the A jump the sweeps showed on Burdam a3 (0.438
+// team light against 0.185-0.273): not proven, since --swing --kits burdam --slots a1,a3 read 0.193 in its one run and only a
+// full --swing sweep could test it. Both units get autoAttack = false from the staging on. Every row keeps the window's spawn
+// trace ([frame, id, source, tier, passed]); --swing restores the old staging.
 //
 // CW1 (closing C1): every slot is measured FRAME-INTEGRATED: from release +1 to release +30 frames a sample every 3
 // frames, the gate is the integrated share Σ sig / Σ sat over the window (one bright frame cannot carry a slot, a long
@@ -43,8 +44,8 @@
 //              35° of the signature hue (Kemdo's coral and Burdam's red against HARM marigold), where the hue metric alone
 //              cannot tell team light from signature light
 // --skins (SKIN-FX): each fighter whose skins carry a `vfx` palette casts --skinslots (default a1,ult) in that skin;
-// the hue is measured against the SKIN's signature (gate ≥ 0.5) and the noTeam cast proves the team keyline stays
-// team (teamLight > 0 where the base kit has one; reported).
+// the hue is measured against the SKIN's signature (gate ≥ 0.5) and the noTeam cast gates the team light as on the base
+// kit (≤ 0.35, owner ruling 19: a skin must not blur which team an effect belongs to).
 //
 //   node _harness/probe_kit_hue.mjs [--kits a,b,c] [--slots a1,a2,a3,ult] [--teamgate a3,ult] [--out <json>] [--shots <prefix>]
 //                                   [--gate 0.5] [--teammax 0.35] [--live] [--status] [--skins] [--skinslots a1,ult] [--swing]
@@ -290,7 +291,7 @@ for (const bEntries of batches) {
         const sigNear = dTeam <= 35;
         const fails = [];
         if (N.measured && N.sig < GATE) fails.push(`sig ${N.sig} < ${GATE}`);
-        if (!SKINS && teamLight !== null && teamLight > TEAMMAX) fails.push(`team light ${teamLight} > ${TEAMMAX}`);
+        if (teamLight !== null && teamLight > TEAMMAX) fails.push(`team light ${teamLight} > ${TEAMMAX}`);
         if (!SKINS && T && sigNear && T.measured && T.sig < GATE) fails.push(`noTeam sig ${T.sig} < ${GATE} (team hue ${Math.round(dTeam)}° from the signature)`);
         const measured = N.measured && (!T || T.measured);
         const row = { fid, skin: skin || undefined, slot, view: v.name, sigHex, sigHue: Math.round(sh), teamHueDist: Math.round(dTeam), dist, sig: N.sig, peakSig: N.peakSig, teamLight, noTeamSig: T ? T.sig : null,

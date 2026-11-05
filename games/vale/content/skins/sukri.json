@@ -32,7 +32,8 @@
     "vfxTint": "#6C5BA8",
     "vfx": {
       "signature": "#9A40F0",
-      "secondary": "#E2DAF5"
+      "secondary": "#E2DAF5",
+      "gain": 1.4
     },
     "desc": "Ink wraps with light rims and a pale hood, printed in ink and light. The cup holds violet light.",
     "releasedIn": "2026.10.0"
