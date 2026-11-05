@@ -1,0 +1,231 @@
+{
+ "gates": [
+  {
+   "id": "1b_perf_gpubound_tail",
+   "status": "fail",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json ; node _harness/perf_1080.mjs --prod --q high,ultra --no-match --no-mem --no-dyn --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf_ultra.json",
+   "load": "run A window 1.02->0.79; run B window 1.59->1.38",
+   "measured": "Run A last 8 s 59.8 fps, scale left base at 1.1 s. Run B last 8 s 57.8 fps: MISS, scale left base at 1.1 s. The engineer's own idle reports also read MISS: 54.8 (fw_integ_idle_perf1.json, load 1.34->1.21) and 52.6 (fw_integ_idle_perf2_exact.json, load 2.9->1.98). The claim said no number existed, but those two reports hold real misses. Across these 4 idle runs: 1 pass, 3 misses.",
+   "bar": "last 8 s average >=58 fps; scale leaves base within 10 s",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log; _harness/_reports/fw_integ_vfy_perf_ultra.json; log fw_integ_vfy_perf_ultra.log",
+   "fixHint": "The tail is not stable at the bar. Still needs a fix or the lead's ruling on the window; the bar was not relaxed here."
+  },
+  {
+   "id": "1c_perf_calibrate",
+   "status": "fail",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "1.13->1.1",
+   "measured": "Claim not reproduced. Calibrate returned medium at 1080p on an idle machine: p50 16.7, p95 18.1 ms against its 18 ms threshold, 181 frames. This miss is what made the required command exit 1 (GATE FAIL). Run B returned high at p95 17.8 (load 1.43->1.61). The engineer's runs read 17.8 and 17.4. At 5760x3240 it returned medium in both of my runs (p95 18.2, 18.1); tier restored medium->medium.",
+   "bar": "returns a preset, gives the video back, never high at 9x pixels; high at 1080p when idle",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log; _harness/_reports/fw_integ_vfy_perf_ultra.json; log fw_integ_vfy_perf_ultra.log",
+   "fixHint": "p95 sits 0.1-0.6 ms from CALIB_HIGH_P95_MS (18) with no dropped frames, so one rAF jitter flips a player to medium. src/render/renderer.ts:134. Needs a fix or a ruling."
+  },
+  {
+   "id": "1a_perf_prod_high_low",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "run 0.87 before, 0.58 after; High window 0.96->0.81, Low window 0.99->0.84",
+   "measured": "High 60.1 fps, p95 16.7, p99 16.8, 0 dropped, cpu 2.69 ms, 170 draws, 40 programs, 252k tris. Low 60.1 fps, p95 16.8, 0 dropped, cpu 2.88 ms, 135 draws, 28 programs, 172k tris. This row passes, but the command as a whole exited 1 (see 1c).",
+   "bar": "High: <=1% dropped, avg >=59.4, p95 <=17.2, p99 <=25, cpu <=6. Low: no dropped frames, p95 <=17.2. Both: <=500k tris, <=450 draws, <=40 programs",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log"
+  },
+  {
+   "id": "1d_perf_dynres",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "1.31->1.5",
+   "measured": "menu 16 s scale 1; match 60 s ends at scale 1 (1920x1080, min 1), 60.5 fps",
+   "bar": "menu never moves the scale; match ends at High's own 1.0",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log"
+  },
+  {
+   "id": "1e_perf_memory_tracked_counts",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "run 0.87->0.58 (count and memory gates, any load)",
+   "measured": "menu_2->menu_5 GPU process 712->714 MB (+0.3%); tracked materials 23->23, geometries 22->22; targets 35->35; textures 53->53. Home peak renderer+GPU 1401 MB; 0 bone textures at any Home. Observation, not gated: match_4_rift in the multi-map page reads 41 programs against the 40 per-match budget.",
+   "bar": "GPU growth <=5%; tracked counts flat (<=+2); Home <=2500 MB; 0 leftover bone textures at the last two Homes",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log"
+  },
+  {
+   "id": "1f_perf_match_seed_triangles",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "hard count, any load; run 0.87->0.58",
+   "measured": "Peak over all passes: seed 7 465,758 at 1496 s, seed 11 450,440 at 1293 s, seed 23 460,028 at 1209 s. framesOverBudget 0, 0, 0. Peak draws 276, 261, 249. Close to the engineer's claimed peaks.",
+   "bar": "match peak <=500k triangles, every pass, all seeds (hard)",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log (matchSeeds[].peakFrames)"
+  },
+  {
+   "id": "1g_perf_late_programs",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "hard count, any load",
+   "measured": "0 programs first seen after 1:00 on all three seeds; 40 seen on each",
+   "bar": "0 on all three seeds",
+   "report": "_harness/_reports/fw_integ_vfy_perf.json; log fw_integ_vfy_perf.log"
+  },
+  {
+   "id": "2a_perf_high_60",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --q high,ultra --no-match --no-mem --no-dyn --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf_ultra.json",
+   "load": "High window 1.27->1.37; run 0.59->1.61",
+   "measured": "60.1 fps, p95 16.7, p99 16.8, 0 dropped, cpu 2.89 ms. Overall exit 1 comes from the 1b miss.",
+   "bar": "High bars as in 1a",
+   "report": "_harness/_reports/fw_integ_vfy_perf_ultra.json; log fw_integ_vfy_perf_ultra.log"
+  },
+  {
+   "id": "2b_perf_ultra_60",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --q high,ultra --no-match --no-mem --no-dyn --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf_ultra.json",
+   "load": "Ultra window 1.61->1.51",
+   "measured": "stats.tier reads ultra; 60.1 fps, p95 16.8, p99 16.8, 0 dropped, cpu 1.69 ms, 170 draws, 40 programs, 252k tris. Judged by hand against High's bars, since the harness has no Ultra target. Draws and tris are identical to High and cpu is lower; shadows 3 / ao 2 do not show in any count, and the report has no gpuMs (null), so Ultra's extra GPU cost is not demonstrated beyond holding vsync.",
+   "bar": "Ultra 1080p at 60 fps (PERF-C1); High's timing bars applied by hand",
+   "report": "_harness/_reports/fw_integ_vfy_perf_ultra.json; log fw_integ_vfy_perf_ultra.log"
+  },
+  {
+   "id": "2c_perf_ultra_harness_entry",
+   "status": "fail",
+   "severity": "minor",
+   "command": "grep TARGET _harness/perf_1080.mjs; node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_perf.json",
+   "load": "not a timing gate",
+   "measured": "Requested confirmation not given. TARGET holds high and low only, so the harness's Ultra PASS checks no timing (frameTargets absent on the row). The required --prod command does not measure Ultra at all, because PRESETS defaults to high,low; Ultra appears only with --q.",
+   "bar": "Ultra has a real entry",
+   "report": "_harness/perf_1080.mjs:83,93",
+   "fixHint": "Add an ultra entry to TARGET and include ultra in the --prod default."
+  },
+  {
+   "id": "3_perf_realtime_b4",
+   "status": "pass",
+   "severity": "major",
+   "command": "report read: fw_integ_idle_perf3.json (run --match-min 19). My re-run with --match-min 26 is 3x.",
+   "load": "report's own record: before 0.8, busiest 0.8, after 1.0",
+   "measured": "Report confirms 1124 s, share58 1.0, min 58 frames, verdict pass. Coverage is seed 7 only, ending at game 1140 s, so it stops before all three seeds' peak windows (1209-1496 s). Not measured by me at idle.",
+   "bar": ">=99% of wall-seconds at 58+, no second under 45",
+   "report": "_harness/_reports/fw_integ_idle_perf3.json"
+  },
+  {
+   "id": "3x_perf_realtime_full_match",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/perf_1080.mjs --prod --match-only --match-scale 1 --match-min 26 --wait-idle 30 --out _harness/_reports/fw_integ_vfy_realtime.json",
+   "load": "1.11 before, busiest 4.17 during, 0.76 after. Source of the 4.17 peak not identified (not sampled).",
+   "measured": "Whole match to game 1507.1 s: 1488 s, 100.0% at 58+, worst second 58 frames; would pass. Load peaked over 3, so it is not a pass. Peak 465,323 tris, 277 draws, 40 programs, 0 late programs (hard counts, valid). The harness printed GATE PASS and exit 0 although its own realtime verdict is not measured, so that exit code cannot be trusted here.",
+   "bar": ">=99% of wall-seconds at 58+, no second under 45",
+   "report": "_harness/_reports/fw_integ_vfy_realtime.json; log fw_integ_vfy_realtime.log",
+   "fixHint": "Rerun once at idle if the late-match window should be closed; 25 minutes."
+  },
+  {
+   "id": "4_input_latency",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/probe_input_latency.mjs --tag idle_verify --only input",
+   "load": "1.56 before, 0.93 after",
+   "measured": "Marker p95 19.8 ms (33.4 allowed), 0 missing. Motion p95 29.3 ms (83.7 allowed), 0 missing. attackAsMove 0. attackMarkMissing 0. Probe verdict PASS.",
+   "bar": "marker p95 <=2 frames; motion p95 <=2 ticks + 1 frame; attackAsMove 0; attackMarkMissing 0",
+   "report": "_harness/_reports/fw_CW1_input_latency_idle_verify.json; log fw_integ_vfy_input.log"
+  },
+  {
+   "id": "6_kit_hue_skins",
+   "status": "pass",
+   "severity": "minor",
+   "command": "node _harness/probe_kit_hue.mjs --skins --live --out _harness/_reports/fw_integ_vfy_hue_skins.json --shots fw_integ_vfy_hueskin",
+   "load": "2.53 before, 1.13 after",
+   "measured": "18/18 pass, min sig 0.51 (thin). Spot-check finding: maxTeamLight read 0.358 on sukri_shadeprint ult (engineer's run 0.309), over the 0.35 the base-kit sweep gates. The probe does not gate team light in --skins mode (line 293 has !SKINS), so it printed PASS. The claim's 'max team light 0.309' did not reproduce.",
+   "bar": "sig >=0.5 against the skin's signature (team light not gated on skins)",
+   "report": "_harness/_reports/fw_integ_vfy_hue_skins.json",
+   "fixHint": "Lead to decide whether the 0.35 team bar applies to skins; I did not apply or relax it."
+  },
+  {
+   "id": "7_combat_ult_hold",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/probe_combat_polish.mjs ult,hold --ults all --tag integ_vfy",
+   "load": "uptime 2.82 before, 2.66 after; not a frame-timing gate",
+   "measured": "16 ults PASS, 0 fails. Core x2.07 (nurrow) to x2.71 (ulkro). Odrum again reads not clip-bound and is held to x2.3: core x2.27, ground x2.30, passing only on the larger of the two; this contradicts ruling 10a's 'clip-bound on all 16'. Max lift adds 0.032 (vashil), max box white 0.314 at the vashil first beat. discMs kemdo 267, rishal 200, tunlan 167 (exactly at the bar, one frame of margin at most).",
+   "bar": "rulings 10 and 10a; lift adds <=0.10; box white <=0.35; discMs >=167",
+   "report": "_harness/_reports/fw_W1_combat_polish_integ_vfy.json; log fw_integ_vfy_combat.log"
+  },
+  {
+   "id": "8_audio_sync",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/probe_audio_runtime.mjs sync --out _harness/_reports/fw_integ_vfy_audio_sync.json",
+   "load": "1.44 before, 1.40 after",
+   "measured": "3/3 runs PASS, notMeasured empty. Pump-late p95 2.7 / 2.8 / 2.9 ms (arming limit 3; thin). rAF offset p95 33.99 / 33.46 / 34.22 ms; from pump p95 32.27 / 31.88 / 32.14 ms; budget 42.72. Engine over sfx bus p95 1.74 / 1.21 / 1.37 ms (bar 4). Started in call 50/50 in all runs. Offset min -28.17 / -29.67 / -31.95 ms in every run: hits before their impact frame reproduce, cause still unknown and ungated.",
+   "bar": "3/3 runs; rAF gates armed at pump-late p95 <=3 ms; p95 within budget; cue path <=4 ms over the sfx bus",
+   "report": "_harness/_reports/fw_integ_vfy_audio_sync.json; log fw_integ_vfy_audio.log"
+  },
+  {
+   "id": "10_value_probe",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 --tag integ_idle_v",
+   "load": "0.86 before, 1.47 after (not a timing gate)",
+   "measured": "6 map/tier cells, 104 PASS lines, 0 FAIL, exit 0. Lane p50 87-90. walkableSpread max 43 (fray high). Frame p50 rift 62/65, bridge 67/69, fray 85/85. Frame p99 max 173 (bridge low, bar 180, thin); env p99 max 119 (bar 160). Fog lane p50 0.537-0.542.",
+   "bar": "value_probe's own bars including ruling 14 (frame p99 <=180, env p99 <=160), fog 0.5-0.6",
+   "report": "_harness/_reports/fw_integ_vfy_value.json (copy of value_probe.json); log fw_integ_vfy_value.log"
+  },
+  {
+   "id": "11_typecheck",
+   "status": "pass",
+   "severity": "blocker",
+   "command": "npm run -s typecheck",
+   "load": "1.42 before (not timed)",
+   "measured": "exit 0",
+   "bar": "exit 0",
+   "report": "_harness/_reports/fw_integ_vfy_static.log"
+  },
+  {
+   "id": "12_content_check",
+   "status": "pass",
+   "severity": "blocker",
+   "command": "npm run -s content:check (no allow-missing flag)",
+   "load": "not timed; 1.42 after",
+   "measured": "OK, 0 warnings, exit 0; 1822 asset files, 240.20 MB",
+   "bar": "exit 0 with no allow-missing flag",
+   "report": "_harness/_reports/fw_integ_vfy_static.log"
+  },
+  {
+   "id": "13_e2e_flow",
+   "status": "pass",
+   "severity": "major",
+   "command": "node _harness/e2e.mjs flow",
+   "load": "1.31 before, 1.78 after",
+   "measured": "PASS: flow_dodge, flow_readycheck, flow_netdown all ok; no step failed; exit 0",
+   "bar": "all flow steps pass",
+   "report": "_harness/_reports/e2e.json; log fw_integ_vfy_e2e_flow.log"
+  },
+  {
+   "id": "9c_camera_edge",
+   "status": "not_measured",
+   "severity": "minor",
+   "command": "report review of the claim; not re-run",
+   "load": "n/a",
+   "measured": "The claim's pass only means the probe ran: it has no bar. It should not count as a passed gate.",
+   "bar": "none exists in the harness",
+   "report": "_harness/_reports/fw_W1_camera_edge.json"
+  },
+  {
+   "id": "claims_not_reverified",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "none",
+   "load": "n/a",
+   "measured": "Not re-measured: 5_kit_hue_live, 9a, 9b, 9d, 9e, 9f, 9g. The claim list reached me cut off at '10a_value_rulings_14', so every later claim id and number is unseen and unverified. Their pass status rests on the engineer alone.",
+   "bar": "re-measure or report",
+   "report": "none",
+   "fixHint": "Resend the claims from 10a on if they need checking."
+  }
+ ],
+ "notes": "VERDICT: FAIL. The required perf_1080 --prod command exited 1 (GATE FAIL) on an idle machine. Two major gates fail: 1b gpubound tail (57.8 in one of my two runs, 54.8 and 52.6 in the engineer's own idle reports, whose claim said no number existed) and 1c calibrate (claimed pass did not reproduce: medium at 1080p, p95 18.1 ms over its 18 ms threshold). 2c: Ultra has no TARGET entry and the default --prod run does not measure it. All other required commands passed: input, value, audio sync, typecheck, content:check, e2e flow. 1f passes on this run (peaks 465,758 / 450,440 / 460,028). Harness flaw: perf_1080 --match-only printed GATE PASS and exit 0 while its realtime verdict was not measured (load peaked 4.17), so 3x is not_measured despite that exit. Spot-check flags: team light 0.358 on sukri_shadeprint ult in the skins probe (ungated there; lead's call), Odrum not clip-bound against ruling 10a, audio hits before impact reproduce at about -30 ms. Machine actions outside the verdict: heavy slot0 was held by dead pid 48478, which is what deadlocked --wait-idle in the earlier remeasure and blocked the idle check; I reclaimed it through the protocol with heavy.py run -- true, deleting nothing by hand. No leftovers at the end (reap_orphans lists none, 3 slots free). My measurement runs wrote new fw_integ_vfy_* reports and overwrote value_probe.json, fw_CW1_input_latency_idle_verify.json and e2e.json; shared harness outputs, not source. Only the verdict file is committed by me; the wip sync may commit reports. No source or bar was changed."
+}
