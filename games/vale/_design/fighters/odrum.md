@@ -195,3 +195,5 @@ Value bands (area-weighted): top **70** (70-85) · mid **49** (45-65) · feet **
 - [ ] The pots stay rigid on the staff in every clip and clear the shoulders by at least 8 cm; no sway bone in the base model.
 - [ ] The camera-side pot window is visible in `idle`, `run` and the four casts; the windows are the only emissive pixels at rest.
 - [ ] `cast_a3` has at most 4 frames of anticipation (castTime 0).
+
+- Closing polish, round 2: the mask's ochre carries more chroma at the same L* (paint mean #C5A87E -> #C6A36E) and the jars' glaze with it (`odrum-m1`); the thin mouth ring is 65 % wider (`odrum-m3`); the value lift on the jerkin is per skin, Shadeprint takes a fifth of it because its pale upper body comes from its own wash (`odrum-m6`); the channel breathes through chest and spine, head travel 7.1 cm with the bar and hands still (`odrum-m4`).

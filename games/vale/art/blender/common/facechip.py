@@ -67,6 +67,7 @@ DEFAULTS = {
     "ev": 0.0,              # exposure (stops) before the value floor
     "floor": 0.36,          # value floor: median display luma of the lit head (sRGB 0..1)
     "max_ev": 1.5,          # the floor lifts at most this many stops
+    "corner_glow": None,    # {"x", "y" (frame fractions, may lie outside), "r", "v", "color"}: a screen-blended prop light
 }
 
 
@@ -220,6 +221,11 @@ def compose(raw: dict, p: dict, grade: bool = True) -> tuple[np.ndarray, dict]:
         fig = disp(ev)
     bg = ground(n, p)
     comp = fig * a + bg * (1 - a)
+    cg = p.get("corner_glow")
+    if cg:                                            # a prop's light entering from just out of frame (Dunsom's lantern)
+        yy, xx = np.mgrid[0:n, 0:n] / float(n)
+        g = np.exp(-(((xx - cg["x"]) ** 2 + (yy - cg["y"]) ** 2) / float(cg["r"]) ** 2))[..., None] * float(cg["v"])
+        comp = 1.0 - (1.0 - comp) * (1.0 - g * gl.hex_to_rgb(cg["color"])[None, None, :])
     comp = _down(comp, int(p["size"]))
     if grade and lut() is not None:
         comp = gl.apply_lut(comp, lut(), "trilinear")

@@ -30,14 +30,14 @@
   },
   "uv_coverage": 0.61,
   "bake": {
-    "base": 5.78,
-    "rough_metal": 4.44,
-    "normal": 2.67,
-    "ao": 4.08,
+    "base": 5.14,
+    "rough_metal": 4.19,
+    "normal": 2.71,
+    "ao": 2.94,
     "normal_fixed_px": 45671,
-    "projection": 52.8,
-    "pack_save": 53.09,
-    "total": 70.74
+    "projection": 41.26,
+    "pack_save": 41.5,
+    "total": 56.82
   },
   "tris": 22407,
   "mesh_top_m": 2.054,
@@ -142,10 +142,10 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2904248,
+  "glb_bytes_raw": 2904384,
   "optimize": {
     "ok": true,
-    "before": 2904248,
+    "before": 2904384,
     "after": 1172304
   },
   "glb_bytes": 1172304,
@@ -192,25 +192,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 14.3,
+    "seconds": 12.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.09,
-      "model": 112.66,
-      "lows_bind": 8.92,
-      "uv": 10.04,
-      "bake": 71.1,
-      "clips": 0.47,
-      "export": 2.91,
-      "optimize": 1.35,
-      "load_test": 0.32,
-      "three_qa": 14.71,
-      "cache": 0.15
+      "materials": 0.33,
+      "model": 62.81,
+      "lows_bind": 6.29,
+      "uv": 7.97,
+      "bake": 57.06,
+      "clips": 0.3,
+      "export": 2.07,
+      "optimize": 0.95,
+      "load_test": 0.2,
+      "three_qa": 12.38,
+      "cache": 0.17
     },
-    "total_s": 222.78
+    "total_s": 150.59
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,

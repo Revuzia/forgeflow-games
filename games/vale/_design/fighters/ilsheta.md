@@ -52,7 +52,7 @@ SHAPE = body.shape(girth=1.0, torso_w=1.0, torso_d=1.02, chest=1.0, waist=0.96, 
 
 ## 3. Face (template 3)
 
-- **Aubade glass visor, shaped like a lamp chimney.** One tall dawnglass pane (`kit.glass_visor` stretched to a chimney: 0.30 m high, 0.14 m wide, flaring to 0.18 m at the cheek) over a carved chalk face-plate with ink almond recesses and a beak keel inside the glass (its top edge a soft baked occlusion gradient into the hood lining, never a stepped dark band: closing polish ilsheta-face-seam). The flare at the cheek points forward: it is the facing cue from above. Glass is glossy and never emissive.
+- **Aubade glass visor, shaped like a lamp chimney.** One tall dawnglass pane (`kit.glass_visor` stretched to a chimney: 0.30 m high, 0.14 m wide, flaring to 0.18 m at the cheek) over a carved chalk face-plate with ink almond recesses and a beak keel inside the glass (painted directly, not projected: faceted planes, an incised arc over each eye and a dawn chevron on the brow, a small cool catch-light in each recess, no marks under the eyes; its edge a soft occlusion gradient into the hood lining, never a stepped dark band: closing polish ilsheta-face-seam). The flare at the cheek points forward: it is the facing cue from above. Glass is glossy and never emissive.
 - A heavy linen hood frames the chimney (rigid, `kit.hood`); no bare face, no hair.
 
 ## 4. Armour, cloth and props (template 4)

@@ -48,14 +48,14 @@
   },
   "uv_coverage": 0.594,
   "bake": {
-    "base": 2.34,
-    "rough_metal": 1.98,
-    "normal": 1.55,
-    "ao": 2.24,
+    "base": 3.81,
+    "rough_metal": 3.06,
+    "normal": 2.5,
+    "ao": 3.03,
     "normal_fixed_px": 80921,
-    "projection": 31.21,
-    "pack_save": 31.3,
-    "total": 39.51
+    "projection": 45.8,
+    "pack_save": 45.92,
+    "total": 58.52
   },
   "tris": 20354,
   "mesh_top_m": 1.879,
@@ -166,10 +166,10 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2884648,
+  "glb_bytes_raw": 2884512,
   "optimize": {
     "ok": true,
-    "before": 2884648,
+    "before": 2884512,
     "after": 1164520,
     "q_base": 74
   },
@@ -217,25 +217,25 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/rishal/three_rishal.png",
-    "seconds": 7.6,
+    "seconds": 6.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.09,
-      "model": 12.54,
-      "lows_bind": 0.9,
-      "uv": 3.74,
-      "bake": 39.51,
+      "materials": 0.2,
+      "model": 23.72,
+      "lows_bind": 1.9,
+      "uv": 7.44,
+      "bake": 58.52,
       "clips": 0.11,
       "export": 1.1,
-      "optimize": 0.51,
+      "optimize": 0.52,
       "load_test": 0.11,
-      "three_qa": 7.78,
-      "cache": 0.06
+      "three_qa": 6.86,
+      "cache": 0.07
     },
-    "total_s": 66.48
+    "total_s": 100.59
   },
   "run_ref_speed": 3.55,
   "height_m": 1.79

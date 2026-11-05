@@ -182,3 +182,5 @@ Value bands (area-weighted): top **72** (70-85) · mid **48** (45-65) · feet **
 - [ ] The lantern's pendulum amplitude is at most 16 degrees (closing polish dunsom-lantern-glued: the 6 degree clamp read as glued) and it is the only sway bone; the accent never blurs in `run`.
 - [ ] `art.height` is measured at the hood-rim crown, not at the crook tip or the lantern.
 - [ ] `cast_a3` has at most 4 frames of anticipation (castTime 0).
+
+- Closing polish, round 2: `death` keeps the hips over the knees with the fold in the spine and chest, and the fists hang clear of the skirt; the hood closes into a round dome under the hat; the fallen crook lies with its hook flat, propped on the lantern. The icon brings the lantern's warm light in from the top-left corner, just out of frame (`corner_glow` in face_chips.json).
