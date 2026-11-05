@@ -47,6 +47,7 @@ import { store } from './ui/dom.ts';
 import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
 import { perfmon } from './render/perfmon.ts';
+import { encodeThumb, cpuCanvas, canvasJpegURL } from './client/thumbjpeg.ts';
 
 export interface AppOptions {
   scenario: string;
@@ -145,23 +146,6 @@ const DESTRUCTIVE = /^(disaster\.spawn|miracle\.(lightning|fireball|meteor|fire)
 const AUDIO_MODULE = import.meta.glob<{ createAudio: (o?: Record<string, unknown>) => GenesisAudio }>('./audio/engine.ts');
 
 
-/**
- * a canvas as a JPEG data URL, encoded off the main thread (toBlob) — toDataURL encodes synchronously and, on a canvas
- * drawn from the GPU, waits for the GPU there and then (macfix smooth: it showed as a stall in the autosave's frame)
- */
-function jpegURL(c: HTMLCanvasElement): Promise<string | null> {
-  return new Promise((ok) => {
-    try {
-      c.toBlob((b) => {
-        if (!b) { ok(null); return; }
-        const r = new FileReader();
-        r.onload = () => ok(typeof r.result === 'string' ? r.result : null);
-        r.onerror = () => ok(null);
-        r.readAsDataURL(b);
-      }, 'image/jpeg', 0.8);
-    } catch { ok(null); }
-  });
-}
 export class App implements UiHost {
   readonly canvas: HTMLCanvasElement;
   readonly opts: AppOptions;
@@ -1846,22 +1830,18 @@ export class App implements UiHost {
     // (a GPU too busy to copy within 8 s gets no new picture — the save keeps its last one — rather than a full-size
     // synchronous PNG read-back on top: under a software GPU that fallback stalled a frame for 20 s)
     if (bmp === 'late') return null;
-    if (bmp) {
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = Math.max(1, Math.round((256 * bmp.height) / Math.max(1, bmp.width)));
-      c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height);
-      bmp.close();
-      return jpegURL(c);
-    }
+    // (the bitmap is already 256 px wide; it is transferred to a worker that encodes it on an OffscreenCanvas — a
+    // toBlob of a GPU-backed canvas here read it back synchronously and waited for the whole GPU queue: macfix r3)
+    if (bmp) return encodeThumb(bmp, 0.8);
     const url = await Promise.race([this.capture(), new Promise<string>((ok) => setTimeout(() => ok(''), 8000))]);
     if (!url) return null;
     return new Promise((ok) => {
       const img = new Image();
       img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = 256; c.height = Math.round(256 * img.height / Math.max(1, img.width));
-        c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
-        void jpegURL(c).then(ok);
+        // (a CPU-backed canvas: toBlob then reads CPU memory, never the GPU queue)
+        const { c, g } = cpuCanvas(256, Math.round(256 * img.height / Math.max(1, img.width)));
+        g?.drawImage(img, 0, 0, c.width, c.height);
+        void canvasJpegURL(c, 0.8).then(ok);
       };
       img.onerror = () => ok(null);
       img.src = url;
