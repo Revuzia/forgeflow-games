@@ -185,7 +185,7 @@ CARDS = {
                               "power": 6.0, "size": 0.14},
                              {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 8.0, "size": 0.08},
-                             {"at": "x_lamp", "point": True, "dist": 0.01, "color": "#FFA45C", "power": 9.0, "size": 0.03}],
+                             {"at": "x_lamp", "point": True, "dist": 0.01, "color": "#FFA45C", "power": 14.0, "size": 0.03}],
                    "lantern": {"cap": 0.82, "knee": 0.70, "glass": 26.0, "core_r": 15.0, "halo": 0.55, "halo_r": 42.0,
                                "air": 0.16, "air_r": 150.0, "color": "#FFB56E", "core_color": "#FFF4DC"},
                    "hound": {"x0": 0.085, "x1": 0.555, "top": 0.05, "hem": 0.735, "keystone": 0.07, "cx": 0.325, "cy": 0.385,

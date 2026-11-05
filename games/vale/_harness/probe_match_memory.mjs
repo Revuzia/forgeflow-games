@@ -6,7 +6,7 @@
 // served by `vite preview` on the first free port in 5191-5199, in real Chrome on the GPU. No dev handle exists in that
 // build, so the whole journey is real clicks: Home → Play → the mode → Find match → Ready → a fighter locked → loading →
 // the match. In the match your seat is played with real input for --sec wall-seconds (default 300: lane fights have begun,
-// every kit's effects and the decoded audio are in): a move order and the ability keys every few seconds. Every 10 s the
+// every kit's effects and the decoded audio are in): a move order on the minimap, skill points and the ability keys every few seconds. Every 10 s the
 // largest renderer process and the GPU process are read (macOS `footprint`); the peak of their sum is the reading. Then Esc →
 // Leave match → home, the footprint at Home after a forced GC, the next mode in the SAME page: what a session carries.
 // Bars (ruling 20): renderer + GPU <= 3000 MB in a match, on BRIDGE and RIFT; <= 2500 MB at Home.
@@ -134,8 +134,12 @@ async function journey(mode) {
   let lastPoll = 0, k = 0;
   while (Date.now() < end) {
     // real input: a move order across the screen (the seat walks the lane), then an ability
-    const dx = [420, 300, 520, 360][k % 4], dy = [-220, -160, -260, -120][k % 4];
-    await page.mouse.click(960 + dx * (k % 16 < 12 ? 1 : -1), 540 + dy * (k % 16 < 12 ? 1 : -1), { button: 'right' }).catch(() => {});
+    // to the middle of the map on the minimap (lanes cross it, the fights come there), every skill point spent
+    const mm = await page.locator('.hud .mmap').first().boundingBox().catch(() => null);
+    if (mm) await page.mouse.click(mm.x + mm.width * (0.5 + (k % 8) * 0.01), mm.y + mm.height * 0.5, { button: 'right' }).catch(() => {});
+    const lvl = page.locator('.hud .aslot__lvl').first();
+    if (await lvl.isVisible().catch(() => false)) await lvl.click({ timeout: 1000 }).catch(() => {});
+    await page.mouse.move(960 + (k % 5) * 40, 480).catch(() => {});
     await page.keyboard.press(['KeyQ', 'KeyW', 'KeyE', 'KeyR'][k % 4]).catch(() => {});
     k++;
     if (Date.now() - lastPoll >= 10000) {

@@ -969,15 +969,15 @@ class Longshade(Monster):
     HEIGHT = 4.2
     BODY_TOP = 3.7
     RUN_SPEED = 3.2
-    TEX = 2048
-    TEX_SIZES = {"orm": 512, "normal": 1024}
+    TEX = 1440
+    TEX_SIZES = {"orm": 256, "normal": 512}      # the 1024 KiB GLB budget: the mesh grew, the atlas gives way
     VOX_LOW = 0.022
     VOX_HIGH = 0.016
-    VOX_PART = {"mask": 0.009, "claws": 0.009, "eyes": 0.006, "dial": 0.011, "mantle": 0.016}
+    VOX_PART = {"mask": 0.009, "claws": 0.009, "eyes": 0.006, "mantle": 0.016}
     VOX_HIGH_PART = {"mask": 0.005, "claws": 0.006, "eyes": 0.004, "dial": 0.006, "mantle": 0.009}
-    TRIS = {"body": 11000, "mask": 1200, "claws": 800, "eyes": 300, "dial": 1500, "mantle": 2600}
+    TRIS = {"body": 7300, "mask": 800, "claws": 640, "eyes": 600, "mantle": 1700}
     CLIPS = ("idle", "run", "attack1", "cast_a1", "cast_a2", "cast_a3", "death")
-    GLOW = {"eyes": ("longshade_lamp", 0.8, "#FFE9B8")}
+    GLOW = {"eyes": ("longshade_lamp", 0.8, "#FFCE78")}
     UV_WEIGHTS = {"mask": 3.5, "claws": 1.4, "eyes": 0.2, "dial": 2.0, "mantle": 1.1}
     BAKE_RAY = (0.03, 0.1)
     AO_DIST = 0.5
@@ -989,10 +989,10 @@ class Longshade(Monster):
     ICON = True
     TAIL = ("tail", "tail2", "tail3", "tail4", "tail5", "tail6")
     # value is painted as light from above, each plume dark at the root and pale at the tip so the overlaps read as layers
-    PAL = {"ink": "#4A4664", "ink_top": "#6F6A8C", "ink_under": "#1F1C30", "seam": "#262239", "rim": "#A9A5C2",
-           "plume_root": "#26223A", "plume_mid": "#5F5A80", "plume_tip": "#BDB9D4", "plume_warm": "#C9B7B8",
-           "hour": "#D8D3DC", "tail_core": "#39354F", "tail_end": "#2B283C",
-           "hand": "#2F2B44", "band": "#C4BFCE", "claw": "#3B364F", "claw_tip": "#D4CDDD",
+    PAL = {"ink": "#615C7E", "ink_top": "#8A85A8", "ink_under": "#2C2840", "seam": "#37324C", "rim": "#C4C0DA",
+           "plume_root": "#3F3A5A", "plume_mid": "#8681AA", "plume_tip": "#D6D2E8", "plume_warm": "#DCCBC6",
+           "hour": "#E4DFE8", "tail_core": "#5A5578", "tail_end": "#3F3B56",
+           "hand": "#4A4566", "band": "#D4CFDE", "claw": "#4A4560", "claw_tip": "#DED8E6",
            "chalk": "#EDE5D2", "chalk_dirt": "#C6BCA6", "socket": "#2A2430", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
            "inlay": "#B98F3E", "inlay_edge": "#5E4524", "brass": "#C49A48", "brass_dark": "#6E5228", "stone": "#E6DFCD"}
     # mask frame: centre, lateral, up (along the plate), out (face normal, tilted up toward the game camera)
@@ -1072,7 +1072,6 @@ class Longshade(Monster):
         return {"mask": "mask",
                 "eyes": ("tags", {"eyeL": "eye.L", "eyeR": "eye.R", "dlamp": "dial"}),
                 "claws": ("tags", {"clawL": "claw.L", "clawR": "claw.R"}),
-                "dial": ("tags", {"ring": "dial", "cuffL": "forearm.L", "cuffR": "forearm.R"}),
                 "mantle": ("tags", {m[0]: m[0] for m in self.mantle_list()})}
 
     def legdefs(self):
@@ -1092,12 +1091,12 @@ class Longshade(Monster):
         ws = w * (0.66 + 0.34 * np.sin(np.minimum(ss / 0.4, 1.0) * math.pi / 2)) * (1 - 0.42 * sarr(0.45, 1.0, ss))
         ws = ws * np.sqrt(np.maximum(1 - (np.maximum(ss - 0.72, 0) / 0.28) ** 2, 0.06))
         floor_t = min_t if min_t is not None else self.tip_t
-        ts = np.maximum(t * (1 - 0.72 * ss), floor_t)
+        ts = np.maximum(t * 1.35 * (1 - 0.6 * ss), floor_t)     # thick enough that the blade edge does not alias on the voxel grid
         for i in range(segs):
             sd = pts[i + 1] - pts[i]
             side = K.nrm(np.cross(sd, n_))
             S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=side),
-                  k=k0 if i == 0 else 0.022, tag=tag)
+                  k=k0 if i == 0 else 0.05, tag=tag)
         if store:
             self.plumes.append((np.array(pts), ws, n_, len(self.plumes)))
 
@@ -1109,7 +1108,7 @@ class Longshade(Monster):
             smoke = ((lambda P: -0.03 * (1 - np.abs(NOISE(P, 2.2))) + 0.008 * NOISE.fbm(P * np.array([1.6, 0.35, 1.6]), 5.0, 3)), 0.045)
         else:
             smoke = ((lambda P: -0.03 * (1 - np.abs(NOISE(P, 2.2)))), 0.037)
-        self.tip_t = 0.014 if detail else 0.028      # plume thickness at the tips (the low keeps >= ~1.2 voxels)
+        self.tip_t = 0.03 if detail else 0.05      # plume thickness at the tips (the low keeps >= ~1.2 voxels)
 
         def add(prim, k, tag="ink", d=smoke):
             if d is not None:
@@ -1164,6 +1163,11 @@ class Longshade(Monster):
             rad = mu * math.cos(a) + mx * math.sin(a)
             self._plume(S, hc + rad * 0.20, K.nrm(rad - mn * 0.42), rng.uniform(0.84, 0.98), 0.27 + 0.04 * (j % 2), 0.08,
                         mn, curl=rng.uniform(22, 44), k0=0.08, sway=rng.uniform(-0.1, 0.1))
+        # the crown of the head, laid back and low: a mane, never a raised or pointed hood
+        for ang in (-34, 0, 34):
+            a = math.radians(ang)
+            self._plume(S, mc + mu * 0.42 - mn * 0.42 + mx * math.sin(a) * 0.26, K.nrm(mu * 0.62 - mn * 0.74 + mx * math.sin(a) * 0.5), 0.72, 0.2,
+                        0.075, mu, curl=24.0, k0=0.08)
         # smoke sleeves trailing off the backs of the arms, breaking the frog's-leg line
         for sx in (1, -1):
             e, w_ = np.array(mirror(J["elbow"], sx)), np.array(mirror(J["wrist"], sx))
@@ -1186,7 +1190,7 @@ class Longshade(Monster):
 
     def mantle_sculpt(self, detail):
         S = Sculpt("mantle")
-        self.tip_t = 0.014 if detail else 0.028
+        self.tip_t = 0.03 if detail else 0.05
         self.mantle_plumes = []
         for name, base, d, L, w, par, curl in self.mantle_list():
             keep, self.plumes = getattr(self, "plumes", []), []
@@ -1240,32 +1244,107 @@ class Longshade(Monster):
         for i in range(12):
             a = math.radians(15 + 30 * i)
             rad = mu * math.cos(a) + mx * math.sin(a)
-            S.add(Ellipsoid(self.DC + rad * (self.DIAL_R + 0.10) + mn * 0.09, (0.062, 0.062, 0.03), axes=ax), k=0.0, tag="dlamp")
+            S.add(Ellipsoid(self.DC + rad * (self.DIAL_R + 0.06) + mn * 0.068, (0.062, 0.062, 0.03), axes=ax), k=0.0, tag="dlamp")
         return S
 
-    def dial_sculpt(self, detail):
-        """The hour ring (12-fold, so a turn of one slot loops seamlessly) and the brass cuffs on the forearms."""
+    def _stone_axes(self, i):
+        a = math.radians(15 + 30 * i)
+        rad = self.MU * math.cos(a) + self.MX * math.sin(a)
+        return rad, np.cross(self.MN, rad)
+
+    STONE = (0.125, 0.19, 0.06)
+    CUFFS = ((0.8, 0.165, 0.042), (0.5, 0.215, 0.034))
+
+    def dial_sculpt(self):
+        """The bake source of the hour ring (12-fold, so a turn of one slot loops seamlessly)."""
         mu, mn, mx = self.MU, self.MN, self.MX
-        ax = np.stack([mx, mu, mn])
         S = Sculpt("dial")
-        S.add(sdf.Torus(self.DC, self.DIAL_R, 0.062, axes=ax, rz=0.05), k=0.0, tag="ring")
-        S.add(sdf.Torus(self.DC, self.DIAL_R - 0.11, 0.024, axes=ax, rz=0.024), k=0.0, tag="ring")
+        S.add(sdf.Torus(self.DC, self.DIAL_R, 0.062, axes=np.stack([mx, mu, mn]), rz=0.05), k=0.0, tag="ring")
         for i in range(12):
-            a = math.radians(15 + 30 * i)
-            rad = mu * math.cos(a) + mx * math.sin(a)
-            tan = np.cross(mn, rad)
-            bx = np.stack([tan, rad, mn])
-            S.add(RoundBox(self.DC + rad * (self.DIAL_R + 0.06), (0.125, 0.19, 0.06), 0.025, axes=bx), k=0.012, tag="ring")
-            # a spoke tying the inner hoop to the rim
-            S.add(RoundBox(self.DC + rad * (self.DIAL_R - 0.11), (0.024, 0.11, 0.022), 0.01, axes=bx), k=0.008, tag="ring")
+            rad, tan = self._stone_axes(i)
+            S.add(RoundBox(self.DC + rad * (self.DIAL_R + 0.06), self.STONE, 0.025, axes=np.stack([tan, rad, mn])), k=0.012, tag="ring")
+        return S
+
+    def cuff_sculpt(self):
+        S = Sculpt("cuffs")
+        for c_, d, rr, tt, tag in self._cuffs():
+            S.add(sdf.Torus(c_, rr, tt, axes=sdf.frame(d)), k=0.0, tag=tag)
+        return S
+
+    def _cuffs(self):
         J = self.J
+        out = []
         for sx, tag in ((1, "cuffL"), (-1, "cuffR")):
             e, w_ = np.array(mirror(J["elbow"], sx)), np.array(mirror(J["wrist"], sx))
-            d = K.nrm(w_ - e)
-            for f, rr, tt in ((0.8, 0.165, 0.042), (0.64, 0.195, 0.03), (0.32, 0.235, 0.03)):
-                c_ = e + (w_ - e) * f
-                S.add(sdf.Torus(c_, rr, tt, axes=sdf.frame(d)), k=0.0, tag=tag)
-        return S
+            for f, rr, tt in self.CUFFS:
+                out.append((e + (w_ - e) * f, K.nrm(w_ - e), rr, tt, tag))
+        return out
+
+    @staticmethod
+    def _torus_mesh(c, ax, R, r, rz, nu, nv, verts, faces):
+        """A low ring: `nu` segments round, `nv` sides, in the plane of ax[0], ax[1] (normal ax[2])."""
+        i0 = len(verts)
+        for i in range(nu):
+            a = 2 * math.pi * i / nu
+            rad = ax[0] * math.cos(a) + ax[1] * math.sin(a)
+            for j in range(nv):
+                b = 2 * math.pi * j / nv + math.pi / nv
+                verts.append(c + rad * (R + r * math.cos(b)) + ax[2] * (rz * math.sin(b)))
+        for i in range(nu):
+            for j in range(nv):
+                i2, j2 = (i + 1) % nu, (j + 1) % nv
+                faces.append((i0 + i * nv + j, i0 + i2 * nv + j, i0 + i2 * nv + j2, i0 + i * nv + j2))
+
+    def hard(self, col):
+        """Exact low geometry for the ring, its stones and the cuffs: decimating them from the sculpt left skewed stones and a
+        kinked ring at the game camera."""
+        mu, mn, mx = self.MU, self.MN, self.MX
+        verts, faces = [], []
+        self._torus_mesh(self.DC, (mx, mu, mn), self.DIAL_R, 0.062, 0.05, 64, 4, verts, faces)
+        n_ring = len(faces)
+        hx, hy, hz = self.STONE
+        for i in range(12):
+            rad, tan = self._stone_axes(i)
+            c_ = self.DC + rad * (self.DIAL_R + 0.06)
+            i0 = len(verts)
+            for sa in (-1, 1):
+                for sb in (-1, 1):
+                    for sc in (-1, 1):
+                        verts.append(c_ + tan * sa * hx + rad * sb * hy + mn * sc * hz)
+            faces += [(i0, i0 + 1, i0 + 3, i0 + 2), (i0 + 4, i0 + 6, i0 + 7, i0 + 5), (i0, i0 + 4, i0 + 5, i0 + 1),
+                      (i0 + 2, i0 + 3, i0 + 7, i0 + 6), (i0, i0 + 2, i0 + 6, i0 + 4), (i0 + 1, i0 + 5, i0 + 7, i0 + 3)]
+        import bmesh
+
+        def outward(ob):
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+            bm.to_mesh(ob.data)
+            bm.free()
+        ring = mesh_object("longshade_dial", verts, faces, col)
+        outward(ring)
+        sm = np.zeros(len(faces), dtype=bool)
+        sm[:n_ring] = True
+        ring.data.polygons.foreach_set("use_smooth", sm)
+        ring.data.update()
+        hi_r = K.high_from(self.dial_sculpt(), self.VOX_HIGH_PART["dial"], "longshade_dial_hi", col)
+        verts, faces = [], []
+        for c_, d, rr, tt, tag in self._cuffs():
+            ax = sdf.frame(d)
+            self._torus_mesh(c_, (ax[0], ax[1], ax[2]), rr, tt, tt, 14, 3, verts, faces)
+        cuffs = mesh_object("longshade_cuffs", verts, faces, col, smooth_shade=True)
+        outward(cuffs)
+        hi_c = K.high_from(self.cuff_sculpt(), self.VOX_HIGH_PART["dial"], "longshade_cuffs_hi", col)
+
+        def bind_cuffs(ob, arm):
+            V_, _ = K.arrays(ob)
+            ob.vertex_groups.clear()
+            for sx, bone in ((1, "forearm.L"), (-1, "forearm.R")):
+                vg = ob.vertex_groups.new(name=bone)
+                vg.add(np.nonzero(V_[:, 0] * sx > 0)[0].tolist(), 1.0, "REPLACE")
+            mesh.add_armature_modifier(ob, arm)
+            mesh.parent_keep(ob, arm)
+        return [("dial", ring, "dial", hi_r), ("cuffs", cuffs, bind_cuffs, hi_c)]
 
     def claw_sculpt(self, detail):
         J = self.J
@@ -1290,7 +1369,7 @@ class Longshade(Monster):
 
     def sculpts(self, detail):
         return {"body": self.body_sculpt(detail), "mantle": self.mantle_sculpt(detail), "mask": self.mask_sculpt(detail),
-                "claws": self.claw_sculpt(detail), "eyes": self.eye_sculpt(detail), "dial": self.dial_sculpt(detail)}
+                "claws": self.claw_sculpt(detail), "eyes": self.eye_sculpt(detail)}
 
     def tag_sculpt(self, name):
         return self.sculpts(False)[name]
@@ -1410,6 +1489,8 @@ class Longshade(Monster):
         if part == "mantle":
             col, _ = self._plume_paint(V, N, self.mantle_plumes)
             return col, np.full(n, 0.88)
+        if part == "cuffs":
+            return np.tile(c("brass"), (n, 1)), np.full(n, 0.42)
         if part == "dial":
             col = np.tile(c("brass"), (n, 1))
             dc, mu, mn, mx = self.DC, self.MU, self.MN, self.MX
@@ -1464,8 +1545,8 @@ class Longshade(Monster):
                                       chalk=(1.2, 0.8), cavity=(0.4, 1.1), breakup=0.05, top=0.1)
         if part == "mask":
             return painted_stone(f"{self.ID}_mask_src", self.PAL["chalk"], grad, chisel=0.5, scale=3.0, chalk=(1.1, 0.5))
-        if part == "dial":
-            return K.painted_material(f"{self.ID}_dial_src", self.PAL["brass"], None, fur=0.0, chalk=(1.35, 0.7), cavity=(0.5, 1.0),
+        if part in ("dial", "cuffs"):
+            return K.painted_material(f"{self.ID}_{part}_src", self.PAL["brass"], None, fur=0.0, chalk=(1.35, 0.7), cavity=(0.5, 1.0),
                                       breakup=0.04, top=0.06)
         if part == "claws":
             return K.painted_material(f"{self.ID}_claw_src", "#3B364F", grad, fur=0.0, chalk=(2.0, 0.6), breakup=0.04)

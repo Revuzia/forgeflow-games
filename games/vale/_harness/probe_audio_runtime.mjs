@@ -344,16 +344,17 @@ async function runMatch() {
       const st = window.__deaths = { enemy: 0, enemyNotYours: 0, enemyNotYoursInSight: 0, lampsSetSeen: 0, lampsOutSeen: 0, wardLog: [] };
       // the sim's own wards as your team sees them: what the lamp cues answer. A ward's cast is an item active, so a
       // lamp set is counted from the unit appearing; its end from its death event.
-      const wardIds = new Set((window.__vale.catalog?.units ?? []).filter((u) => u.kind === 'ward').map((u) => u.id));
+      const cat = window.__vale.session.catalog;
+      const wardIds = new Set((cat?.units ?? []).filter((u) => u.kind === 'ward').map((u) => u.id));
       const inSight = (d, me) => !!d && !!me && (d.team === me.team || (((d.visibleMask ?? 0) >>> me.team) & 1) === 1);
       m.onEvents((evs) => { const me = m.view.players.find((p) => p.player === m.you);
         for (const e of evs) {
-          if (e.e === 'death' && e.kind === 'ward') { const d = m.view.entity(e.dst); const seen = inSight(d, me); if (seen) st.lampsOutSeen++; st.wardLog.push(['out', m.view.time, d?.team ?? null, seen]); }
+          if (e.e === 'death' && e.kind === 'ward') { const d = m.view.entity(e.dst) ?? m.sim?.world?.entity(e.dst); const seen = inSight(d, me); if (seen) st.lampsOutSeen++; st.wardLog.push(['out', m.view.time, d?.team ?? null, seen]); }
           if (e.e === 'cast' && typeof e.ability === 'string' && window.__wardAbilities?.has(e.ability)) { const d = m.view.entity(e.src); const seen = inSight(d, me); if (seen) st.lampsSetSeen++; st.wardLog.push(['set', m.view.time, d?.team ?? null, seen]); }
         }
       });
       const setsWard = (fx) => JSON.stringify(fx ?? []).match(/"unit":"([^"]+)"/g)?.some((x) => wardIds.has(x.slice(8, -1))) ?? false;
-      window.__wardAbilities = new Set((window.__vale.catalog?.items ?? []).filter((i) => i.active && setsWard(i.active.effects)).map((i) => i.active.id));
+      window.__wardAbilities = new Set((cat?.items ?? []).filter((i) => i.active && setsWard(i.active.effects)).map((i) => i.active.id));
       m.onEvents((evs) => { for (const e of evs) if (e.e === 'death' && e.kind === 'fighter') {
         const me = m.view.players.find((p) => p.player === m.you), d = m.view.entity(e.dst);
         if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) { st.enemyNotYours++;
@@ -441,7 +442,7 @@ async function runMatch() {
     // the cue log: heal chimes per minute, enemyDown, the lamp cues
     const tMax = Math.max(1, ...rep.cues.map((c) => c[1] ?? 0));
     const count = (id) => rep.cues.filter((c) => c[2] === id).length;
-    const cat = await page.evaluate(() => ({ heal: window.__vale.catalog?.audio?.events?.heal ?? null })).catch(() => ({}));
+    const cat = await page.evaluate(() => ({ heal: window.__vale.session.catalog?.audio?.events?.heal ?? null })).catch(() => ({}));
     const healId = cat.heal ?? 'c_heal';
     rep.cueLog = { total: rep.cues.length, matchSeconds: r2(tMax), heal: count(healId), healPerMin: r2(count(healId) / tMax * 60),
       enemyDown: count('m_enemy_down'), allyDown: count('m_ally_down'), selfDown: count('m_self_down'), takedown: count('m_takedown'),

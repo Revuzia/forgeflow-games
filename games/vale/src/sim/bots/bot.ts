@@ -583,7 +583,7 @@ export class Bot extends BotBase implements BotController {
         const d2 = this.dist2(e, g.x, g.y);
         const roaming = this.mode === 'roam' && now - this.modeSince < ROAM_MAX;
         if (this.jungle) {
-          if (now >= JUNGLE_GANK_FROM && e.level >= 3 && (roaming || !this.campAtHand(10)) && d2 < sq(roaming ? 70 : 55)) consider('roam', 0.53);
+          if (now >= JUNGLE_GANK_FROM && e.level >= 3 && (roaming || g.hp < g.maxHp * 0.6 || !this.campAtHand(10)) && d2 < sq(roaming ? 70 : 55)) consider('roam', 0.53);
         } else if (!lp) {
           if ((this.prof.style === 'burst' || this.prof.style === 'diver') && d2 < sq(50)) consider('roam', 0.44);
         }

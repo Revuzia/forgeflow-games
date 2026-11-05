@@ -262,6 +262,8 @@ for (const bEntries of batches) {
             const m = await B((b, a) => { const c = b.__h(a.pc), w = b.__h(a.pv), o = a.c0; return b.__vfxHue({ x0: Math.min(c.gx, w.gx, o.gx) - 220, y0: Math.min(c.ty, w.ty, o.ty) - 120, x1: Math.max(c.gx, w.gx, o.gx) + 220, y1: Math.max(c.gy, w.gy, o.gy) + 120 }, a.sh); }, { ...st, sh });
             for (const k of ['A', 'n', 'sat', 'sigN', 'harmN', 'whiteN']) integ[k] += m[k];
             integ.samples++; integ.per.push([f - rel, Math.round(m.A), m.sig]);
+            // --frameshots: a shot every 9 frames of the window as well (a skin's vfxTint lives in the dust after the peak)
+            if (SHOTS && variant === 'normal' && args.includes('--frameshots') && (f - rel) % 9 === 1) await page.screenshot({ path: join(HERE, '_shots', `${SHOTS}_${skin || fid}_${slot}_f${f - rel}.png`) });
             if (m.n > best.n) {
               Object.assign(best, m, { f });
               if (SHOTS && variant === 'normal') {

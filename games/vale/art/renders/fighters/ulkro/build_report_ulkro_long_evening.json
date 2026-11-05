@@ -228,33 +228,33 @@
     "validate_ulkro": "22954->22950",
     "validate_ulkro_accent": "452->450"
   },
-  "uv_coverage": 0.542,
+  "uv_coverage": 0.545,
   "bake": {
-    "base": 4.82,
-    "rough_metal": 7.22,
-    "normal": 2.77,
-    "ao": 3.3,
-    "normal_fixed_px": 30400,
-    "projection": 159.34,
-    "pack_save": 160.73,
-    "total": 179.21
+    "base": 6.0,
+    "rough_metal": 3.8,
+    "normal": 2.68,
+    "ao": 2.81,
+    "normal_fixed_px": 32071,
+    "projection": 73.17,
+    "pack_save": 73.6,
+    "total": 89.31
   },
   "tris": 23400,
   "mesh_top_m": 2.023,
-  "glb_bytes_raw": 2890320,
+  "glb_bytes_raw": 2893156,
   "optimize": {
     "ok": true,
-    "before": 2890320,
-    "after": 1181668,
+    "before": 2893156,
+    "after": 1180436,
     "q_base": 62
   },
-  "glb_bytes": 1181668,
+  "glb_bytes": 1180436,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1154 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ulkro_long_evening_base 2048x2048 205K, ulkro_long_evening_normal 512x512 55K, ulkro_long_evening_orm 256x256 32K",
-      "  skinned meshes: ulkro_accent(179v), ulkro_long_evening(25984v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_long_evening.glb (1153 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ulkro_long_evening_base 2048x2048 204K, ulkro_long_evening_normal 512x512 56K, ulkro_long_evening_orm 256x256 32K",
+      "  skinned meshes: ulkro_accent(179v), ulkro_long_evening(25934v)",
       "  bones: 42 (root hips spine chest neck head x_tail_1 x_tail_2 shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -291,23 +291,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_long_evening.png",
-    "seconds": 95.3,
+    "seconds": 21.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.09,
-      "materials": 1.38,
-      "model": 7.75,
-      "lows_bind": 6.76,
-      "uv": 3.93,
-      "bake": 179.22,
-      "export": 0.72,
-      "optimize": 6.02,
-      "load_test": 1.18,
-      "three_qa": 97.09
+      "rig": 0.01,
+      "materials": 0.46,
+      "model": 7.87,
+      "lows_bind": 4.37,
+      "uv": 3.96,
+      "bake": 89.31,
+      "export": 0.21,
+      "optimize": 1.57,
+      "load_test": 0.25,
+      "three_qa": 21.76
     },
-    "total_s": 304.82
+    "total_s": 129.86
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83

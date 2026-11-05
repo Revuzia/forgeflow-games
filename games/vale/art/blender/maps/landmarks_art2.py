@@ -1166,10 +1166,22 @@ def _quad(a, b, w):
     return [tuple(a - n), tuple(b - n), tuple(b + n), tuple(a + n)]
 
 
+def _curve(p0, p1, p2, w0, w1, mat="groove", n=6):
+    """A curved, tapering carved stroke: a quadratic through p1, drawn as overlapping quads."""
+    out = []
+    pts = [tuple((1 - t) ** 2 * np.array(p0) + 2 * t * (1 - t) * np.array(p1) + t ** 2 * np.array(p2)) for t in np.linspace(0, 1, n + 1)]
+    for i in range(n):
+        out.append((mat, _quad(pts[i], pts[i + 1], w0 + (w1 - w0) * (i + 0.5) / n)))
+    return out
+
+
 CAMP_SIGNS = {
     # closing env m-4: each camp's sign, cut and inked into its floor plaque (plan metres, +y north): (material, polygon)
-    "glasshorn": [("groove", _quad((0, -0.5), (0, 0.48), 0.1)), ("groove", _quad((0, -0.1), (0.36, 0.34), 0.08)),
-                  ("groove", _quad((0, 0.14), (-0.3, 0.5), 0.07)), ("groove", _quad((0, -0.3), (-0.34, 0.02), 0.07))],   # a shed antler
+    # a shed antler: one sweeping beam with three curved tines all on its forward side, never a straight forked sign
+    "glasshorn": [*_curve((-0.32, -0.5), (0.16, -0.3), (0.26, 0.5), 0.11, 0.05),
+                  *_curve((0.03, -0.3), (-0.22, -0.2), (-0.34, 0.06), 0.08, 0.035),
+                  *_curve((0.15, -0.04), (-0.08, 0.04), (-0.2, 0.3), 0.07, 0.03),
+                  *_curve((0.22, 0.2), (0.02, 0.28), (-0.03, 0.5), 0.06, 0.03)],
     "gloamoths": [("groove", [(0.04, 0.26), (0.6, 0.44), (0.42, -0.02), (0.04, -0.06)]),
                   ("groove", [(-0.04, 0.26), (-0.04, -0.06), (-0.42, -0.02), (-0.6, 0.44)]),
                   ("groove", [(0.04, -0.12), (0.32, -0.08), (0.2, -0.42), (0.04, -0.3)]),
@@ -1187,10 +1199,19 @@ def camp_mark(B, rng, sign: str):
     """closing env m-4: the per-camp floor mark: a worn octagonal plaque let into the clearing's floor (1.7 m across,
     3 cm proud) with the camp's sign cut and inked in it, so an empty camp still says what lives there."""
     r = 0.86
-    poly = [(r * math.cos(PI / 8 + k * PI / 4) + rng.uniform(-0.03, 0.03), r * math.sin(PI / 8 + k * PI / 4) + rng.uniform(-0.03, 0.03)) for k in range(8)]
-    B.add("lipstone", K.prism(poly, origin=(0, 0, 0.015), u=(1, 0, 0), v=(0, 1, 0), depth=0.03, chamfer=0.012))
+    # round 3 (env:m-4): worn as the clearing's floor is: a rounded, chipped outline in a dark floor stone, barely proud, with
+    # a few scuffs across its face, so it sits in the floor instead of on it
+    poly = [(r * (1 + 0.035 * math.sin(3.0 * k + 0.7)) * math.cos(k * TAU / 16) + rng.uniform(-0.025, 0.025),
+             r * (1 + 0.035 * math.sin(3.0 * k + 0.7)) * math.sin(k * TAU / 16) + rng.uniform(-0.025, 0.025)) for k in range(16)]
+    B.add("plaquestone", K.prism(poly, origin=(0, 0, 0.01), u=(1, 0, 0), v=(0, 1, 0), depth=0.02, chamfer=0.012))
+    for _ in range(5):
+        a_ = rng.uniform(0, TAU)
+        c_ = (rng.uniform(-0.55, 0.55), rng.uniform(-0.55, 0.55))
+        L_ = rng.uniform(0.1, 0.26)
+        B.add("plaquewear", K.prism(_quad((c_[0] - L_ * math.cos(a_), c_[1] - L_ * math.sin(a_)), (c_[0] + L_ * math.cos(a_), c_[1] + L_ * math.sin(a_)),
+                                          rng.uniform(0.02, 0.05)), origin=(0, 0, 0.0205), u=(1, 0, 0), v=(0, 1, 0), depth=0.002, chamfer=0.0))
     for mat, sp in CAMP_SIGNS[sign]:
-        B.add(mat, K.prism(sp, origin=(0, 0, 0.032), u=(1, 0, 0), v=(0, 1, 0), depth=0.006, chamfer=0.0))
+        B.add(mat, K.prism(sp, origin=(0, 0, 0.0225), u=(1, 0, 0), v=(0, 1, 0), depth=0.004, chamfer=0.0))
 
 
 HOUR_LAMP_MATS = {"dialstone": dict(DIAL, edge_light=(0.03, 0.7, 0.6, 0.06), grain=0.3, blotch=0.2),
@@ -1792,7 +1813,9 @@ CAMP_MATS = {
     "resin": dict(hex="#B0702C", chisel=0.1, var=0.08, streaks=0.0, chips=0.0, scale=1.0, rough=0.35),
     "ivory": dict(hex="#CFC3A3", chisel=0.3, var=0.06, streaks=0.2, chips=0.2, scale=0.8, rough=0.6,
                   edge_light=(0.02, 0.5, 0.5, 0.05)),
-    "groove": dict(hex="#3A352F", chisel=0.2, var=0.05, streaks=0.0, chips=0.0, scale=1.0, rough=0.9),
+    "groove": dict(hex="#413B33", chisel=0.2, var=0.12, streaks=0.1, chips=0.2, scale=1.0, rough=0.9),
+    "plaquestone": dict(hex="#6A6253", chisel=0.45, var=0.14, streaks=0.25, chips=0.5, scale=0.9, rough=0.92),
+    "plaquewear": dict(hex="#7C7362", chisel=0.2, var=0.1, streaks=0.1, chips=0.1, scale=1.0, rough=0.92),
 }
 
 

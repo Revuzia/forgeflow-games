@@ -274,7 +274,7 @@ def camp_marks(W):
         for tag, (model, (x, y)) in centres.items():
             out.append(landmark(f"camp_mark_{side}_{tag}", f"{model} camp mark", (x if flip > 0 else W - x, y + 2.9), (1.7, 1.7), 0.04,
                                 "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
-                                flush=True, model=f"assets/maps/landmarks/camp_mark_{model}.glb", value=0.8))
+                                flush=True, model=f"assets/maps/landmarks/camp_mark_{model}.glb", value=0.72))
     return out
 
 

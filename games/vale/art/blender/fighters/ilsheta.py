@@ -278,20 +278,21 @@ CARDS = {
     "ilsheta_first_bell": {
         # (CW6 cards: the ult's bloom tipped her head back, so the splash saw the top of the hood and no face): the
         # recall's last beat (t 0.82, the lamp raised to her brow beside the face) from her other side, the face lit
-        # (closing round 2: the recall's last beat held the lamp over the head, the figure read headless: the lamp thrown
-        # out at arm's length (cast_a3), clear of the face, which looks at the camera)
-        "splash": {"clip": "cast_a3", "t": 0.50, "yaw": 6.0, "pitch": -3.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
-                   "exposure": -0.9, "key_az": 150.0, "key_el": 30.0, "key_color": "#FFE2B0", "sun": 3.3, "rim_cool": 0.8,
+        # (closing round 2: the recall's last beat held the lamp over the head, the figure read headless)
+        # (closing round 3, cards:ilsheta-first-bell-chin: cast_a3 at t 0.50 raised her head 26 deg, so the plate's chin rim
+        # opened a black gap over the collar and the eyes tipped up to arcs. Per-clip head pitch measured from the GLB (idle
+        # 0-2 deg, attack1 t 0.55 -5, cast_a3 t 0.5 +26): the guard's raised lamp, beside the face, with the head level, the
+        # plate seated and the amber eyes seen; a level neutral key, as the eyes went pink under the warm one; no head focal)
+        "splash": {"clip": "idle", "t": 0.25, "yaw": 10.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+                   "exposure": -1.1, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFEAD0", "sun": 2.6, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
-                   "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 90.0,
-                              "size": 0.35},
-                             {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 12.0,
-                              "size": 0.35}]},
+                   "focal": [{"at": "x_lamp", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#FFD48C", "power": 45.0,
+                              "size": 0.3}]},
         # (closing round 2 verify 1, cards:ilsheta-first-bell-chin: the bust took the splash's cast_a3 lean, the head tipped
         # back in the hood and the plate's chin rim opened a black bar over the collar: the bust stands on the idle, where
         # the plate stays seated, as the base and Stillwater busts do)
         "portrait": {"clip": "idle", "t": 0.25, "yaw": 4.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
-                     "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
+                     "key_color": "#FFE2B0", "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
                                 "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)

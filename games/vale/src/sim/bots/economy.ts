@@ -37,6 +37,8 @@ export class Economy {
   private startDone = false;
   private consumablesBought = 0;
   private wardBought = false;
+  /** when a consumable last went for room (CW3s r3, G7: see shop) */
+  private roomSoldAt = -1e9;
   /** goals the shop refused for good (unique conflicts) */
   private readonly skip = new Set<string>();
   readonly support: boolean;
@@ -162,13 +164,16 @@ export class Economy {
       this.startDone = true;
     }
     const early = w.time < 360;
+    // (CW3s r3, gameplay G7: a consumable sold for a piece's room was bought back on the next tick, and sold again: 25 lamps
+    // and 1,500 Gleam a game for the lampglass, a finished item, with 9 lamps set. No refill right after a sale)
+    const refill = w.time - this.roomSoldAt > 45;
     if (plan.consumable && this.consumablesBought < (early ? 2 : 0) && p.gold >= 50) {
       const q = quoteBuy(w, p, plan.consumable);
       if (q.ok && p.gold - q.price >= (early ? 0 : 300)) { this.consumablesBought++; out.push({ type: 'buy', item: plan.consumable }); return; }
     }
     // the support keeps vision stocked: a ward item once, or a consumable lamp topped up to WARD_CHARGES on each trip
     // home (the second charge only with WARD_SPARE gold left over, so lamps never delay the next item piece)
-    if (plan.ward && this.support) {
+    if (plan.ward && this.support && refill) {
       const consumable = !!this.k.idx.items.get(plan.ward)?.consumable;
       const have = this.charges(p, plan.ward);
       if (consumable ? have < WARD_CHARGES : !this.wardBought) {
@@ -181,13 +186,13 @@ export class Economy {
     if (st.buy) { out.push({ type: 'buy', item: st.buy }); return; }
     // laning: leftover gold refills the healing consumable (two charges in the first 6 minutes, then one), so a
     // trip home buys staying power as well as stats without eating the next finished piece
-    if (plan.consumable && w.time < LANING_END && this.charges(p, plan.consumable) < (w.time < 360 ? 2 : 1) && !st.full) {
+    if (plan.consumable && w.time < LANING_END && this.charges(p, plan.consumable) < (w.time < 360 ? 2 : 1) && !st.full && refill) {
       const q = quoteBuy(w, p, plan.consumable);
       if (q.ok) { out.push({ type: 'buy', item: plan.consumable }); return; }
     }
     if (st.full) {
       const slot = this.sellSlot(p);
-      if (slot >= 0) out.push({ type: 'sell', slot });
+      if (slot >= 0) { this.roomSoldAt = w.time; out.push({ type: 'sell', slot }); }
     }
   }
 

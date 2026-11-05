@@ -119,7 +119,7 @@ try {
       window.__mix.blocks = [];
       return { blocks: b, log: a.log.slice(), rate: a.graph.ctx.sampleRate, trim: a.graph.trim.gain.value };
     }, startCt);
-    const cues = await page.evaluate(() => Object.fromEntries(Object.entries(window.__vale?.catalog?.audio?.cues ?? {}).map(([k, c]) => [k, c.bus])));
+    const cues = await page.evaluate(() => Object.fromEntries(Object.entries(window.__vale?.session?.catalog?.audio?.cues ?? {}).map(([k, c]) => [k, c.bus])));
     const ambLogged = res.log.filter((c) => cues[c] === 'ambience' || /^amb_/.test(c));
     const st = { master: shortTerm(res.blocks, 1), music: shortTerm(res.blocks, 2), ambience: shortTerm(res.blocks, 3), sfx: shortTerm(res.blocks, 4) };
     const masterGain = report.settings?.master ?? 0.8;

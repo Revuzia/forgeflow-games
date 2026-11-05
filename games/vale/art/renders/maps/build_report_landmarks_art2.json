@@ -608,70 +608,70 @@
   },
   "camp_mark_glasshorn": {
     "id": "camp_mark_glasshorn",
-    "tris": 130,
+    "tris": 438,
     "size_m": [
-      1.58,
-      1.58
+      1.73,
+      1.69
     ],
-    "height": 0.04,
+    "height": 0.02,
     "x": [
-      -0.81,
-      0.78
+      -0.87,
+      0.86
     ],
     "y": [
-      -0.8,
-      0.78
+      -0.81,
+      0.88
     ],
-    "kb_raw": 21,
-    "kb": 10,
+    "kb_raw": 43,
+    "kb": 25,
     "texture": 256,
-    "buried_faces_dropped": 2,
+    "buried_faces_dropped": 5,
     "nodes": [
       "body"
     ]
   },
   "camp_mark_gloamoths": {
     "id": "camp_mark_gloamoths",
-    "tris": 134,
+    "tris": 206,
     "size_m": [
-      1.6,
-      1.63
+      1.7,
+      1.69
     ],
-    "height": 0.04,
+    "height": 0.02,
     "x": [
-      -0.82,
-      0.78
+      -0.84,
+      0.86
     ],
     "y": [
-      -0.82,
-      0.82
+      -0.85,
+      0.84
     ],
-    "kb_raw": 20,
-    "kb": 10,
+    "kb_raw": 26,
+    "kb": 14,
     "texture": 256,
-    "buried_faces_dropped": 0,
+    "buried_faces_dropped": 1,
     "nodes": [
       "body"
     ]
   },
   "camp_mark_strays": {
     "id": "camp_mark_strays",
-    "tris": 118,
+    "tris": 192,
     "size_m": [
-      1.61,
-      1.6
+      1.7,
+      1.72
     ],
-    "height": 0.04,
+    "height": 0.02,
     "x": [
-      -0.81,
-      0.8
+      -0.83,
+      0.87
     ],
     "y": [
-      -0.81,
-      0.79
+      -0.86,
+      0.87
     ],
-    "kb_raw": 20,
-    "kb": 9,
+    "kb_raw": 25,
+    "kb": 13,
     "texture": 256,
     "buried_faces_dropped": 2,
     "nodes": [

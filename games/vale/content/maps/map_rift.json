@@ -2095,7 +2095,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_a_gloamoths", "model": "assets/maps/landmarks/camp_mark_gloamoths.glb",
@@ -2105,7 +2105,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_a_strays_north", "model": "assets/maps/landmarks/camp_mark_strays.glb",
@@ -2115,7 +2115,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_a_resinback", "model": "assets/maps/landmarks/camp_mark_resinback.glb",
@@ -2125,7 +2125,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_a_stilltusks", "model": "assets/maps/landmarks/camp_mark_stilltusks.glb",
@@ -2135,7 +2135,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_a_strays_south", "model": "assets/maps/landmarks/camp_mark_strays.glb",
@@ -2145,7 +2145,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_glasshorn", "model": "assets/maps/landmarks/camp_mark_glasshorn.glb",
@@ -2155,7 +2155,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_gloamoths", "model": "assets/maps/landmarks/camp_mark_gloamoths.glb",
@@ -2165,7 +2165,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_strays_north", "model": "assets/maps/landmarks/camp_mark_strays.glb",
@@ -2175,7 +2175,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_resinback", "model": "assets/maps/landmarks/camp_mark_resinback.glb",
@@ -2185,7 +2185,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_stilltusks", "model": "assets/maps/landmarks/camp_mark_stilltusks.glb",
@@ -2195,7 +2195,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     },
     {
      "id": "camp_mark_s_strays_south", "model": "assets/maps/landmarks/camp_mark_strays.glb",
@@ -2205,7 +2205,7 @@
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.8
+     "value": 0.72
     }
    ]
   },
@@ -2695,7 +2695,7 @@
       ],
       [
        1.0,
-       46.5,
+       49.4,
        0
       ],
       [
@@ -2725,7 +2725,7 @@
       ],
       [
        169.0,
-       46.5,
+       49.4,
        0
       ],
       [
@@ -2762,9 +2762,9 @@
        -12
       ],
       [
-       9.5,
-       41.0,
-       10.1
+       2.6,
+       48.4,
+       -24
       ],
       [
        28.5,
@@ -2804,9 +2804,9 @@
        12
       ],
       [
-       160.5,
-       41.0,
-       -10.1
+       167.4,
+       48.4,
+       24
       ],
       [
        141.5,

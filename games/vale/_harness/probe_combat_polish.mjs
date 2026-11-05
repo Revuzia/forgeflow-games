@@ -36,7 +36,8 @@
 //                      or VFX: `detail` 1 = as drawn, 0 = a flat silhouette. `detailLost` counts the frames under 0.5; done:
 //                      at most 2 (a beat may blink, a body that stays flat is a readability bug).
 //           --q low runs the section on that preset (screen coordinates are mapped to its smaller buffer); --slot a3 casts that
-//           slot, measures the body on every frame of the window, and leaves out the ult-only core and anchor gates.
+//           slot, measures the body on every frame of the window, and leaves out the ult-only core and anchor gates (--every: an ult too,
+//           every frame, not only the beats).
 //   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all] [--q high|low] [--slot ult]
 //   (--ults all: the 16 fighters, critic combat-16; a fighter outside the first lineup's enemy side is cast from a lineup of its own)
 //                                         [--vfxcap off|1.3]   (renderer.vfx.liftCap: the most the envelope lifts an effect)
@@ -176,19 +177,21 @@ try {
       } finally { g.setRenderTarget(null); g.setClearColor(cc, ca); g.autoClear = ac; for (const [o, m] of skip) o.layers.mask = m; RT.dispose(); }
       hid = null;
       R.render(0);
-      let n = 0, wl = 0, wf = 0, wb = 0, wh = 0, sb = 0, sb2 = 0, sf = 0, sf2 = 0;
+      let n = 0, wl = 0, wf = 0, wb = 0, wh = 0, sb = 0, sb2 = 0, sf = 0, sf2 = 0, sh = 0, sh2 = 0, sl = 0, sl2 = 0;
       const white = (g, o) => { const l = luma(g.px[o], g.px[o + 1], g.px[o + 2]); const c = Math.max(g.px[o], g.px[o + 1], g.px[o + 2]) - Math.min(g.px[o], g.px[o + 1], g.px[o + 2]); return l > 225 && c < 30; };
       for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, feetY | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) {
         const o = ((Hd - 1 - y) * Wd + x) * 4;
         if (mask[o + 3] < 128) continue;   // the target's rows are bottom-up like readPixels
         const lb = luma(base.px[o], base.px[o + 1], base.px[o + 2]), lf = luma(full.px[o], full.px[o + 1], full.px[o + 2]);
         sb += lb; sb2 += lb * lb; sf += lf; sf2 += lf * lf;
+        const lh = luma(flash.px[o], flash.px[o + 1], flash.px[o + 2]), ll = luma(lift.px[o], lift.px[o + 1], lift.px[o + 2]);
+        sh += lh; sh2 += lh * lh; sl += ll; sl2 += ll * ll;
         n++; if (white(lift, o)) wl++; if (white(full, o)) wf++; if (white(base, o)) wb++; if (white(flash, o)) wh++;
       }
       const k = (w) => +(w / Math.max(1, n)).toFixed(3);
       const dev = (s1, s2) => (n ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) ** 2)) : 0);
       const stdBase = dev(sb, sb2), stdFull = dev(sf, sf2);
-      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box0), boxNoVfx: b.__white(flash, box0), stdBase: +stdBase.toFixed(1), stdFull: +stdFull.toFixed(1), detail: +(stdFull / Math.max(1, stdBase)).toFixed(2), meanFull: +(sf / Math.max(1, n)).toFixed(0), meanBase: +(sb / Math.max(1, n)).toFixed(0) };
+      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box0), boxNoVfx: b.__white(flash, box0), stdBase: +stdBase.toFixed(1), stdFull: +stdFull.toFixed(1), detail: +(stdFull / Math.max(1, stdBase)).toFixed(2), detailFlash: +(dev(sh, sh2) / Math.max(1, stdBase)).toFixed(2), detailLift: +(dev(sl, sl2) / Math.max(1, stdBase)).toFixed(2), meanFull: +(sf / Math.max(1, n)).toFixed(0), meanBase: +(sb / Math.max(1, n)).toFixed(0) };
     };
     // only these VFX ids spawn while set (the impact-hold window measures the hit's own look)
     b.__onlyIds = null;
@@ -299,7 +302,7 @@ try {
             out.live = live;
           }
           return out;
-        }, { ...st, vbox, feetY: geo.v.gy - 6, every: SLOT !== 'ult' }));
+        }, { ...st, vbox, feetY: geo.v.gy - 6, every: SLOT !== 'ult' || args.includes('--every') }));
         if (rows[rows.length - 1].white && !rows.slice(0, -1).some((r) => r.white)) await shot(`ult_${def}_beat`);
       }
       await B((b) => { b.__step(75); });
@@ -315,7 +318,7 @@ try {
         def, caster: [Math.round(geo.c.gx), Math.round(geo.c.gy)], victim: [Math.round(geo.v.gx), Math.round(geo.v.gy)], firstCtr: first?.ctr ?? null,
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
-          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live, detail: r.white.detail, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
+          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live, detail: r.white.detail, detailFlash: r.white.detailFlash, detailLift: r.white.detailLift, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
           core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;
@@ -326,10 +329,11 @@ try {
       res.maxBoxWhite = beats.length ? Math.max(...res.beats.map((r) => r.boxWhite)) : null;
       res.firstRatio = res.beats[0]?.ratio ?? null;
       res.firstRatioGround = res.beats[0]?.ratioGround ?? null;
+      res.maxLift = Math.max(...rows.map((r) => r.w));
       res.detailLost = res.beats.filter((r) => r.bodyPx >= 200 && r.detail < 0.5).length;
       res.minDetail = res.beats.length ? Math.min(...res.beats.map((r) => r.detail)) : null;
       report.ult.push(res);
-      console.log(`         ${def} ${SLOT} detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
+      console.log(`         ${def} ${SLOT} max lift ${res.maxLift}, detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} [noVfx ${r.detailFlash} noFlash ${r.detailLift}] (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
       if (res.detailLost > 2) fail(`${def} ${SLOT}: the struck body stays flat for ${res.detailLost} frames (detail < 0.5; at most 2)`);
       console.log(`         box white per beat (VFX off): ${res.beats.map((r) => `f${r.f} ${r.boxWhite} (${r.boxWhiteNoVfx})`).join(' · ')}`);
       console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}`);
@@ -339,7 +343,7 @@ try {
         // a self-centred ultimate (every area / zone of it at the caster: Burdam's, Ilsheta's, Sukri's, Ulkro's, Ardit's)
         // beats where it stands; the centre gate is for the ults aimed at a unit or a shape (Tunlan's cone, Rishal's track)
         if (!SELF_ULT.has(def) && dV >= dC) fail(`${def}: the beat sits on the caster (${Math.round(dC)} px from it, ${Math.round(dV)} from the victim)`);
-        if (res.beats.some((r) => r.bodyPx < 200)) fail(`${def}: the victim's body was not isolated (${res.beats.map((r) => r.bodyPx).join('/')} px)`);
+        if (!args.includes('--every') && res.beats.some((r) => r.bodyPx < 200)) fail(`${def}: the victim's body was not isolated (${res.beats.map((r) => r.bodyPx).join('/')} px)`);
         if (res.maxLiftAdds > 0.1) fail(`${def}: the lift whites ${res.maxLiftAdds} more of the victim's body at a beat (> 0.10)`);
         // W1 verify combat:F4: the review's box measure (victim box ±45 px, white = luma > 225 and chroma < 30) on every
         // beat frame, VFX on: the kit's own light over the struck unit included

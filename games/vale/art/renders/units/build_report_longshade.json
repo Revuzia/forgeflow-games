@@ -6,24 +6,27 @@
     "unweighted": 0,
     "fixed_vertices": 0
   },
-  "tris": 10858,
+  "tris": 12030,
   "parts": {
     "body": 0,
-    "mask": 1,
-    "claws": 2,
-    "eyes": 3
+    "mantle": 1,
+    "mask": 2,
+    "claws": 3,
+    "eyes": 4,
+    "dial": 5,
+    "cuffs": 6
   },
-  "uv_coverage": 0.686,
+  "uv_coverage": 0.608,
   "bake": {
-    "base": 10.31,
-    "rough_metal": 7.96,
-    "normal": 6.22,
-    "ao": 8.05,
-    "normal_fixed_px": 130,
-    "pack_save": 1.26,
-    "total": 34.64
+    "base": 9.32,
+    "rough_metal": 6.5,
+    "normal": 2.42,
+    "ao": 1.83,
+    "normal_fixed_px": 11468,
+    "pack_save": 0.33,
+    "total": 23.77
   },
-  "bake_holes_filled": 10,
+  "bake_holes_filled": 1774,
   "clips": {
     "idle": {
       "frames": 90,
@@ -82,38 +85,38 @@
       "soft_reach": 0
     }
   },
-  "mesh_top_m": 4.202,
+  "mesh_top_m": 3.95,
   "min_z": {
     "idle": [
-      -0.002,
+      -0.003,
       [
-        70,
+        28,
         [
-          -1.18,
-          -2.35,
+          -0.54,
+          -2.39,
           -0.0
         ]
       ]
     ],
     "run": [
-      -0.225,
+      -0.217,
       [
         14,
         [
-          -0.09,
-          0.85,
-          -0.23
+          -0.12,
+          0.81,
+          -0.22
         ]
       ]
     ],
     "attack1": [
-      -0.107,
+      -0.095,
       [
         14,
         [
-          -0.02,
-          0.7,
-          -0.11
+          -0.06,
+          0.77,
+          -0.09
         ]
       ]
     ],
@@ -129,73 +132,73 @@
       ]
     ],
     "cast_a2": [
-      -0.348,
+      -0.382,
       [
         22,
         [
-          -0.12,
-          0.3,
-          -0.35
+          0.06,
+          -1.71,
+          -0.38
         ]
       ]
     ],
     "cast_a3": [
-      -0.269,
+      -0.261,
       [
-        52,
+        54,
         [
-          -0.0,
-          0.51,
-          -0.27
+          -0.04,
+          0.46,
+          -0.26
         ]
       ]
     ],
     "death": [
-      -0.489,
+      -0.896,
       [
-        32,
+        30,
         [
-          -0.15,
-          0.39,
-          -0.49
+          -0.04,
+          -1.36,
+          -0.9
         ]
       ]
     ]
   },
-  "glb_bytes_raw": 3089212,
+  "glb_bytes_raw": 2318716,
   "optimize": {
     "ok": true,
-    "before": 3089212,
-    "after": 908508
+    "before": 2318716,
+    "after": 1018248
   },
-  "glb_bytes": 908508,
+  "glb_bytes": 1018248,
   "icon": {
     "out": "art/out/units/longshade_icon.png"
   },
   "inspect": [
     "  material longshade_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
-    "  material longshade_lamp: maps=[] emissive=0.80,0.65,0.38 base=1,0.815,0.479,1",
-    "  texture longshade_normal: image/webp ? 78.0 KiB",
-    "  texture longshade_orm: image/webp ? 122.6 KiB",
-    "  texture longshade_base: image/webp ? 260.5 KiB",
-    "  clip attack1      1.000 s (30 f) channels=24 bones=22",
-    "  clip cast_a1      1.167 s (35 f) channels=24 bones=22",
-    "  clip cast_a2      1.333 s (40 f) channels=25 bones=23",
-    "  clip cast_a3      2.167 s (65 f) channels=26 bones=24",
-    "  clip death        1.833 s (55 f) channels=26 bones=24",
-    "  clip idle         3.000 s (90 f) channels=26 bones=24",
-    "  clip run          0.800 s (24 f) channels=23 bones=21"
+    "  material longshade_lamp: maps=[] emissive=0.80,0.49,0.15 base=1,0.617,0.188,1",
+    "  texture longshade_normal: image/webp ? 65.5 KiB",
+    "  texture longshade_orm: image/webp ? 25.6 KiB",
+    "  texture longshade_base: image/webp ? 293.9 KiB",
+    "  clip attack1      1.000 s (30 f) channels=35 bones=33",
+    "  clip cast_a1      1.167 s (35 f) channels=35 bones=33",
+    "  clip cast_a2      1.333 s (40 f) channels=36 bones=34",
+    "  clip cast_a3      2.167 s (65 f) channels=37 bones=35",
+    "  clip death        1.833 s (55 f) channels=37 bones=35",
+    "  clip idle         3.000 s (90 f) channels=37 bones=35",
+    "  clip run          0.800 s (24 f) channels=34 bones=32"
   ],
   "load_test": {
     "ok": true,
     "log": [
-      "[three] art/out/units/longshade.glb (887 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: longshade_base 2048x2048 260K, longshade_normal 1024x1024 78K, longshade_orm 1024x1024 123K",
-      "  skinned meshes: longshade_1(8725v), longshade_2(155v)",
-      "  bones: 26 (root hips spine chest neck neck2 head eyeL eyeR mask scapulaL upper_armL forearmL handL clawL scapulaR upper_armR forearmR handR clawR tail tail2 tail3 tail4 tail5 tail6)",
-      "  clips: attack1:1.000s/24tr, cast_a1:1.167s/24tr, cast_a2:1.333s/25tr, cast_a3:2.167s/26tr, death:1.833s/26tr, idle:3.000s/26tr, run:0.800s/23tr",
-      "  tracks checked: 174; materials: longshade_body, longshade_lamp; textures: longshade_body.map=2048x2048, longshade_body.normalMap=1024x1024, longshade_body.roughnessMap=1024x1024, longshade_body.metalnessMap=1024x1024, longshade_body.aoMap=1024x1024",
-      "  tris: 10858; bind-pose bounds (three units, Y up): 2.37 x 4.20 x 9.08; facing (0.00, 1.00); head bone y 3.08; runRefSpeed 3.2",
+      "[three] art/out/units/longshade.glb (994 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: longshade_base 1440x1440 294K, longshade_normal 512x512 66K, longshade_orm 256x256 26K",
+      "  skinned meshes: longshade_1(12273v), longshade_2(706v)",
+      "  bones: 37 (root hips plume3L plume3R plume4L plume4R spine chest neck dial neck2 head eyeL eyeR mask plume0L plume0R plume1L plume1R scapulaL upper_armL forearmL handL clawL scapulaR upper_armR forearmR handR clawR plume2L plume2R tail tail2 tail3 tail4 tail5 tail6)",
+      "  clips: attack1:1.000s/35tr, cast_a1:1.167s/35tr, cast_a2:1.333s/36tr, cast_a3:2.167s/37tr, death:1.833s/37tr, idle:3.000s/37tr, run:0.800s/34tr",
+      "  tracks checked: 251; materials: longshade_body, longshade_lamp; textures: longshade_body.map=1440x1440, longshade_body.normalMap=512x512, longshade_body.roughnessMap=256x256, longshade_body.metalnessMap=256x256, longshade_body.aoMap=256x256",
+      "  tris: 12030; bind-pose bounds (three units, Y up): 4.22 x 3.95 x 8.42; facing (-0.00, 1.00); head bone y 3.08; runRefSpeed 3.2",
       "  run: 24 f, planted samples 26, max foot-speed error 0.2%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -204,23 +207,23 @@
     "ok": true,
     "out": "art/renders/units/longshade.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.186,0.004,-6.472],[1.185,4.202,2.606]],\"facing\":[0,1],\"headY\":3.08,\"heightPx1080\":240,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":62.5}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-2.104,0.003,-5.818],[2.113,3.949,2.606]],\"facing\":[-0.002,1],\"headY\":3.08,\"heightPx1080\":224,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":23.2}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "sculpt": 204.11,
-      "bind": 0.62,
-      "uv": 36.4,
-      "bake": 41.34,
-      "clips": 1.56,
-      "ground_qa": 0.79,
-      "export": 2.24,
-      "optimize": 2.22,
-      "icon": 3.22,
-      "qa": 64.1
+      "sculpt": 140.06,
+      "bind": 1.02,
+      "uv": 17.96,
+      "bake": 27.49,
+      "clips": 0.92,
+      "ground_qa": 0.42,
+      "export": 1.41,
+      "optimize": 1.09,
+      "icon": 2.05,
+      "qa": 24.11
     },
-    "total_s": 356.84
+    "total_s": 217.11
   }
 }

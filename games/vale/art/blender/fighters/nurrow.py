@@ -2688,6 +2688,55 @@ def _install_anim() -> None:
     anim.Aim.lerp = _aim_lerp
 
 
+_FLOOR_PTS = None
+
+
+def _floor_probes(skel) -> list:
+    """(bone, rest point) probes for _floor_lift: every 7th vertex of the bound body (limbs and trunk; not the cape's
+    chains or the hat, which have their own motion), carried rigidly by its dominant bone, else rings round the bones"""
+    keep = ("foot.", "toe.", "shin.", "thigh.", "hand.", "forearm.", "upper_arm.", "shoulder.", "hips", "spine", "chest", "neck")
+    pts = []
+    for o in bpy.data.objects:
+        if o.type != "MESH" or not o.vertex_groups or o.name.endswith("_high"):
+            continue
+        names = [g.name for g in o.vertex_groups]
+        if not any(n.startswith("foot.") for n in names):
+            continue
+        for i, v in enumerate(o.data.vertices):
+            if v.groups and not i % 7:
+                nm = names[max(v.groups, key=lambda x: x.weight).group]
+                if nm.startswith(keep) and nm in skel.rest:
+                    pts.append((nm, o.matrix_world @ v.co))
+    if len(pts) > 60:
+        return pts
+    rings = {"thigh.L": 0.08, "thigh.R": 0.08, "shin.L": 0.06, "shin.R": 0.06, "foot.L": 0.055, "foot.R": 0.055,
+             "toe.L": 0.035, "toe.R": 0.035, "hand.L": 0.05, "hand.R": 0.05, "upper_arm.L": 0.06, "upper_arm.R": 0.06,
+             "forearm.L": 0.05, "forearm.R": 0.05, "chest": 0.13, "spine": 0.12, "hips": 0.13}
+    for nm, r in rings.items():
+        for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+            for k in range(8):
+                a = 2 * math.pi * k / 8
+                pts.append((nm, skel.rest[nm] @ Vector((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
+    return pts
+
+
+def _floor_lift(skel, p: dict, floor: float = 0.004) -> dict:
+    """raise the pose's hips until the probes stay on the floor; a foot still on its IK plant rises by less than the
+    hips, so iterate. A pose already on the floor is returned as it is"""
+    global _FLOOR_PTS
+    if _FLOOR_PTS is None or len(_FLOOR_PTS) < 200:     # (a first call before the body exists keeps looking for it)
+        _FLOOR_PTS = [(b, skel.rest[b].inverted() @ q) for b, q in _floor_probes(skel)]
+    for _ in range(8):
+        M = skel.fk(anim.resolve(skel, p))
+        lo = min((M[b] @ q).z for b, q in _FLOOR_PTS)
+        if lo >= floor - 0.002:
+            return p
+        p = dict(p)
+        h = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo))
+    return p
+
+
 def clip_overrides(ctx) -> dict:
     """Brief §8 gestures; impact at exactly 40 % (frames multiples of 5). In game a cast clip plays only up to its
     impact (time-scaled onto the castTime), then the sim's next state takes over: Felt Step and Lull the Rest hand
@@ -3039,8 +3088,12 @@ def clip_overrides(ctx) -> dict:
     death_k = anim.keyed([(0.0, g, "linear"), (0.12, recoil, "snap"), (0.38, knees, "inout"), (0.54, sway, "inout"),
                           (0.74, lie, "in"), (0.81, bounce, "out"), (0.90, rest, "inout"), (1.0, rest, "linear")])
 
+    skel_d = anim.Skeleton(ctx.info.armature)
+
     def death(t):
-        p = death_k(t)
+        # (CW5 round 3, minor:floor-sweep: the fall took toe.R 58 cm through the floor at f36 and the lying hold kept
+        # the chest and arm 15 cm under it)
+        p = _floor_lift(skel_d, death_k(t))
         hr = hat_roll(t)
         if hr is not None:
             p = dict(p)

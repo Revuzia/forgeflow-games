@@ -227,33 +227,33 @@
     "validate_ulkro": "22254->22250",
     "validate_ulkro_accent": "452->450"
   },
-  "uv_coverage": 0.559,
+  "uv_coverage": 0.555,
   "bake": {
-    "base": 4.1,
-    "rough_metal": 3.42,
-    "normal": 4.64,
-    "ao": 5.9,
-    "normal_fixed_px": 30706,
-    "projection": 144.8,
-    "pack_save": 145.56,
-    "total": 163.84
+    "base": 5.56,
+    "rough_metal": 6.54,
+    "normal": 4.83,
+    "ao": 4.94,
+    "normal_fixed_px": 30391,
+    "projection": 80.29,
+    "pack_save": 80.6,
+    "total": 102.75
   },
   "tris": 22700,
   "mesh_top_m": 2.023,
-  "glb_bytes_raw": 2870732,
+  "glb_bytes_raw": 2870256,
   "optimize": {
     "ok": true,
-    "before": 2870732,
-    "after": 1189092,
+    "before": 2870256,
+    "after": 1187692,
     "q_base": 62
   },
-  "glb_bytes": 1189092,
+  "glb_bytes": 1187692,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (1161 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ulkro/ulkro_highrim.glb (1160 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: ulkro_highrim_base 2048x2048 222K, ulkro_highrim_normal 512x512 55K, ulkro_highrim_orm 256x256 32K",
-      "  skinned meshes: ulkro_accent(187v), ulkro_highrim(25529v)",
+      "  skinned meshes: ulkro_accent(187v), ulkro_highrim(25443v)",
       "  bones: 42 (root hips spine chest neck head x_tail_1 x_tail_2 shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_dart x_dart_tip x_crest0 x_crest1 x_crest2 x_crest3 x_crest4 x_quiver thighL shinL footL toeL thighR shinR footR toeR x_skirt_b_1 x_skirt_b_2 x_skirt_f_1 x_skirt_f_2 x_skirt_l_1 x_skirt_l_2 x_skirt_r_1 x_skirt_r_2)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=256x256, body.metalnessMap=256x256, body.aoMap=256x256",
@@ -290,23 +290,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ulkro/three_ulkro_highrim.png",
-    "seconds": 21.9,
+    "seconds": 17.3,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 0.5,
-      "model": 6.01,
-      "lows_bind": 4.49,
-      "uv": 4.68,
-      "bake": 163.84,
-      "export": 0.49,
-      "optimize": 1.59,
-      "load_test": 0.27,
-      "three_qa": 22.6
+      "rig": 0.01,
+      "materials": 0.84,
+      "model": 7.7,
+      "lows_bind": 4.99,
+      "uv": 4.99,
+      "bake": 102.75,
+      "export": 0.21,
+      "optimize": 1.09,
+      "load_test": 0.21,
+      "three_qa": 17.62
     },
-    "total_s": 204.66
+    "total_s": 140.52
   },
   "run_ref_speed": 3.5,
   "height_m": 1.83

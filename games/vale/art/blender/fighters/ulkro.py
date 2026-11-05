@@ -2600,7 +2600,7 @@ def gen_recall() -> anim.Clip:
              (0.755, kn(drop=0.36, lean=-1.0, yaw=-5.0, look=(-16.0, 26.0, 3.0), L=(0.03, -0.14, -0.26), pole=POLE_L), "linear"),
              (0.81, kn(drop=0.39, lean=18.0, yaw=2.0, look=(4.0, 0.0, 0.0), L=(0.03, -0.16, -0.30), r=(0.0, 0.0, 0.03), pole=POLE_L), "inout")]
     rising = pz(lean=13.0, drop=0.17, dy=0.02, look=(-4.0, 0.0, 0.0),
-                feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.03, 0.20, 0.055), pr=-26.0, yl=4.0, yr=-10.0),
+                feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.03, 0.20, 0.064), pr=-26.0, yl=4.0, yr=-10.0),
                 R={"hand.R": HT(pos=(-0.30, -0.24, 0.80), pole=P_R), "aim.R": AimRoll(tuple(_n((0.25, -0.10, 0.96))), 1.0, tuple(U_K))})
     keys += [(0.89, rising, "inout"), (0.97, stand, "inout"), (1.0, stand, "linear")]
     fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=True)

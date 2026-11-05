@@ -145,8 +145,8 @@ CARDS = {
     },
     "lisvel_almanac": {
         "splash": {"clip": "cast_a3", "t": 0.42, "yaw": 22.0, "pitch": -4.0, "lens": 52.0, "fill": 0.88, "x": 0.70,
-                   "key_az": 200.0, "key_el": 30.0, "key_color": "#FFE3B8", "sun": 2.8, "rim_cool": 0.8,
-                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.5,
+                   "key_az": 200.0, "key_el": 30.0, "key_color": "#FFE3B8", "sun": 2.2, "rim_cool": 0.8,
+                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.85,
                    "focal": [{"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 50.0,
                               "size": 0.3},
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
@@ -157,7 +157,8 @@ CARDS = {
                                 "size": 0.10},
                                {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,
                                 "size": 0.3}]},
-        "plate": {"glow": [0.35, 0.60, 0.45, 0.10], "glow_color": "#E9D2A8", "sat": 0.85},
+        # (CW5 round 3, client:CL-1: the reading lamp's warm evening behind her, against the base's cold dawn)
+        "plate": {"tint": "#D2AE86", "sat": 0.9, "median": 0.34, "glow": [0.35, 0.60, 0.45, 0.12], "glow_color": "#F0D2A0"},
     },
 }
 TEXTURE_SIZE = 2048
@@ -2049,13 +2050,12 @@ def paint_wrap(p, n):
     k = k * (1.0 - 0.35 * _ss(0.1, 0.6, inward) * near)
     col = C("wrap") * k[:, None]
     if _SKIN["id"] == "lisvel_almanac":
-        # each band a line of print: a ruled line along its upper edge, a column of short inked words under it
-        run = np.arctan2(p[:, 0], -p[:, 1]) * 0.10
-        rule = np.exp(-((s_top - 0.74) / 0.055) ** 2)
-        word = (0.5 + 0.5 * np.sign(np.sin(run * 2.0 * math.pi / 0.062 + 3.0 * _hash(top.astype(float)))))
-        tick = _ss(0.30, 0.40, np.abs(((run % 0.013) / 0.013) - 0.5) * 2.0)
-        text = word * tick * np.exp(-((s_top - 0.40) / 0.17) ** 2)
-        ink = np.clip(0.85 * rule + 0.80 * text, 0, 0.88) * any_ * (1.0 - near)
+        # the wrap is a ruled page wound round her head: slanted ink rules all the way round (6 mm wide, they must hold
+        # through the card's paint-over at about 1 px a mm), every third one darker, none round the face opening
+        ph = (p[:, 2] + 0.22 * p[:, 0]) / 0.030
+        rule = np.exp(-(((ph % 1.0) - 0.5) * 0.030 / 0.0030) ** 2)
+        strong = (np.floor(ph) % 3 < 1).astype(float)
+        ink = (0.42 + 0.30 * strong) * rule * (1.0 - near)
         col = _mix(col, C("ink") * k[:, None], ink)
     return col
 
@@ -3682,7 +3682,7 @@ def _floor_lift(skel, p: dict, floor: float = 0.004) -> dict:
             return p
         p = dict(p)
         h = p.get("hips_loc", (0.0, 0.0, 0.0))
-        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo) * 1.5)
+        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo))
     return p
 
 

@@ -160,13 +160,13 @@ This skin re-mixes the top band: the slate bow is darker than the ash bow, so th
 
 *"Parchment-printed limbs and ink fletching from the season almanac. The arrows are fletched with rigid page-cut plates."*
 
-Bow limbs printed with parchment (`#D8CDB4`) ruled in fine ink lines, and ink fletching (`#2E2A26`) on the quiver arrows, like a page of the almanac. The scarf and sleeves are the Almanac line's plum-slate ledger ink (`#3A3548` / `#4E4860`, off the azure team band), ruled in parchment; the head-wrap's bands are lines of print on parchment (round 3, client CL-1: the all-parchment figure read one beige, portrait dE 16.6 against the deluxe floor of 18). **Extra geometry:** the six quiver arrows are fletched with rigid page-cut plates (flat 3 x 8 cm rectangles, 3 mm thick) instead of the gull-feather plates; the quiver's silhouette stays within the footprint limit.
+Bow limbs printed with parchment (`#D8CDB4`) ruled in fine ink lines, and ink fletching (`#2E2A26`) on the quiver arrows, like a page of the almanac. The scarf and sleeves are the Almanac line's plum-slate ledger ink (`#3A3548` / `#4E4860`, off the azure team band), ruled in parchment; the head-wrap is a ruled page in slanted ink lines (round 3, client CL-1: the all-parchment figure read one beige, portrait dE 16.6 against the deluxe floor of 18). **Extra geometry:** the six quiver arrows are fletched with rigid page-cut plates (flat 3 x 8 cm rectangles, 3 mm thick) instead of the gull-feather plates; the quiver's silhouette stays within the footprint limit.
 
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
 | `wood` | `#D8CDB4` | 83 | 42° / 17% | the named parchment-printed limbs #D8CDB4 (ruled in ink, texture only) |
 | `fletching` | `#2E2A26` | 17 | 30° / 17% | the named ink fletching #2E2A26 (page plates on the arrows, 4% of the top band) |
-| `chalk` | `#BDB49E` | 73 | 43° / 19% | head-wrap, parchment, each band a line of print |
+| `chalk` | `#BDB49E` | 73 | 43° / 19% | head-wrap, parchment, ruled in slanted ink lines |
 | `cowl` / `sleeve` | `#3A3548` / `#4E4860` | 23 / 32 | 256° / 16% | plum-slate ledger-ink scarf and sleeves, ruled in parchment `#C9BFA5` |
 | `cloth` | `#8C8577` | 55 | 40° / 9% | tabard, parchment-grey, ruled in ink |
 

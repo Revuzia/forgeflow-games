@@ -270,6 +270,8 @@ interface GameRec {
   lamps?: number[];
   /** --trace: samples every 10 s */
   trace?: { t: number; s: [string, number, number][] }[];
+  /** --trace: each consumable bought */
+  consBuys?: { t: number; p: number; item: string }[];
 }
 
 const LANE_MODES = new Set(['lane', 'trade', 'push', 'allin']);
@@ -526,7 +528,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
         case 'eliminated': rec.elim.push({ t: e.t, p: e.player }); break;
         case 'buy':
           if (finished.has(e.item)) rec.buys.push({ t: e.t, p: e.player, item: e.item });
-          else if (consumables.has(e.item) && e.t < 1500) consSpent[e.player] += costOf.get(e.item) ?? 0;
+          else if (consumables.has(e.item) && e.t < 1500) { consSpent[e.player] += costOf.get(e.item) ?? 0; if (TRACE) (rec.consBuys ??= []).push({ t: e.t, p: e.player, item: e.item }); }
           break;
         default: break;
       }

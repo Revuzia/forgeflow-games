@@ -485,11 +485,7 @@ export abstract class BotBase {
       if (t && this.dist2(t, e.x, e.y) <= 64) { this.cast(s, info, t, t.x, t.y); return true; }
     }
     if (u & U_VISION) {
-      // (CW3s r3, gameplay G7: one every 45 s put out a lit lamp at a third of its life: the support's 1,600 Gleam of lamps a game
-      // was a finished item, 2.0 held against the others' 2.7. Now as fast as the lamps' own limit keeps them all lit)
-      let every = 45;
-      for (const fx of s.def.effects) if (fx.op === 'summon' && fx.duration && fx.maxAlive) every = Math.max(every, fx.duration / fx.maxAlive);
-      if (this.now - this.lastWardAt > every && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm')) {
+      if (this.now - this.lastWardAt > 45 && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm')) {
         const spot = this.wardSpot(info.range);
         if (spot) { this.lastWardAt = this.now; this.cast(s, info, null, spot.x, spot.y); return true; }
       }
