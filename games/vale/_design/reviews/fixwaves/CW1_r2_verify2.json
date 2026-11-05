@@ -1,0 +1,45 @@
+{
+  "wave": "CW1",
+  "round": 2,
+  "verify": 2,
+  "pass": false,
+  "summary": "CW1 round 2 verify 2 FAILS on one item: done:7, because value_probe B5 still has BRIDGE frameP99 164 high and 174 low (<= 160) with no lead ruling. Everything else in scope is now fixed on my own re-measure. done:0 passes: 2 consecutive full kit_hue sweeps at 64/64. handoff:CW4:landmarks passes: BRIDGE low flash 2.03x, and RIFT and FRAY low hold. No regression found, and the fix is committed (d8f0b43c, wip sync). The remaining item needs a lead ruling, not more CW1 engine work.",
+  "items": [
+    {
+      "id": "done:0",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Two consecutive `probe_kit_hue --live` sweeps exit 0 at 64/64 (fw_CW1_rv2_kit1.json/.log, fw_CW1_rv2_kit2.json/.log), load about 13-30. Lowest slot ilsheta a2 0.529 / 0.53, next hesmi ult 0.552 / 0.558. Highest team light 0.309 / 0.294 (<= 0.35). Kemdo a3 no-team sig 0.987 / 0.992. Hesmi a1 0.61 / 0.608, and 0.629 in a targeted run (fw_CW1_rv2_hesmi.log). Burdam a3 team 0.201 / 0.17. Marund a3 0.852 / 0.854. Caveat: these passes use the changed staging (autoAttack off for both units). That staging is defensible, since the gate measures the kit and not a basic attack, but its stated cause is unproven: see the minor item below.",
+      "regressionChecks": "`--live --skins --kits hesmi,sukri` exit 0: hesmi_shadeprint a1 0.699, ult 0.565; sukri_shadeprint a1 0.519, ult 0.546 (fw_CW1_rv2_skins.log). Viewed _harness/_shots/_harness/_shots/fw_CW1_rv2_hesmi_hesmi_a1.png: the violet slab reads, no sensitivity problem."
+    },
+    {
+      "id": "done:7",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "`value_probe --tag fw_CW1_rv2` (fw_CW1_rv2_value.log lines 123, 161) has 2 FAIL lines: BRIDGE frameP99 164 high and 174 low (<= 160). No ruling on this exists in owner_rulings.md, and the criterion says B5 PASS, so this stays fail. The probe exits 0 despite FAIL lines, so its exit code does not show this. RIFT (114 / 126) and FRAY (119 / 120) pass. Environment-only p99 on BRIDGE is 106 high and 107 low, which fits the refix engineer's claim that fighters drive the excess, though I did not re-derive their pixel counts. The other parts of the criterion pass: perf_1080 --prod GATE PASS (fw_CW1_rv2_perf.log line 60, load 47-118, so this is the gate result only, not a clean frame-time reading), overlay_regress PASS on all 4 tiers (fw_CW1_rv2_overlay.log), typecheck clean, content:check 0 warnings, npm run build OK.",
+      "fixHint": "Lead ruling needed: either gate BRIDGE on frameP99Env, or move the BRIDGE fight spot, which is outside this lane. No render-tier change is indicated."
+    },
+    {
+      "id": "handoff:CW4:landmarks",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Shipped constants through value_probe (fw_CW1_rv2_value.json): BRIDGE low 95.8 -> 194.7, 2.03x, against 1.85x before. RIFT low 87.7 -> 200.7, 2.29x. FRAY low 80.1 -> 200.7, 2.5x. High is unchanged: 196.3 / 189.7 / 193.4 (2.3x / 2.09x / 2.57x). The low-tier gap of 14-15 luma on the sustained beat is gone: about 193-198 on low against 190-196 on high. The BRIDGE margin is thin (0.03x). Hue on Low, which no gate covered: a throwaway copy of probe_kit_hue at q=low (not in the repo), `--slots ult`, exits 0 on 16/16, lowest ilsheta 0.51, next hesmi 0.554, max team 0.314 (fw_CW1_rv2_low_ult.log). High vs Low beat shots for 6 ults side by side (fw_W1_polish_ult_*_beat_fw_CW1_rv2_low.png against _fw_CW1_rv1a.png): hues hold, no wash-out."
+    },
+    {
+      "id": "minor:low-first-beat",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The side effect the engineer flagged is real: on Low the first beat is 195-201 against 178-182 on High (series frame 3 in fw_CW1_rv2_value.json), so Low's first beat is now brighter than High's and about level with its sustained beat. White share in the beat shots stays low, max 0.055 (ardit); hesmi rose 0.003 -> 0.019 and vashil 0.009 -> 0.021. These compare Low against High at the same probe moment. Not a measured gate: the combat white and core gates only run at q=high. My q=low copy of probe_combat_polish exits 1 with 32 FAILs, 'body not isolated (0/0 px)' on every checked ult, and core x1.1-1.6. I treat that as not a valid reading, most likely because the probe's screen coordinates do not fit Low's smaller buffer, but I did not prove this. So Low's body-white and core ratios are not measured.",
+      "fixHint": "Backlog: make probe_combat_polish tier-aware if a Low combat gate is wanted."
+    },
+    {
+      "id": "minor:probe-comment",
+      "severity": "minor",
+      "status": "fail",
+      "evidence": "The header of _harness/probe_kit_hue.mjs states the auto-attack cause of the Burdam a3 0.438 reading as fact. `--swing --kits burdam --slots a1,a3` did not reproduce it: team 0.193, exit 0 (fw_CW1_rv2_swing.log), one run. The cause is still unproven and the comment should say so.",
+      "fixHint": "Soften the comment. The earlier failing reading came from a full sweep's order, so only a full --swing sweep could test it, and that is not worth the budget."
+    }
+  ],
+  "regressions": [],
+  "regressionEvidence": "probe_combat_polish ult,hold --ults all at High exit 0, PASS (fw_W1_combat_polish_fw_CW1_rv2.json); overlay_regress PASS; perf_1080 --prod GATE PASS; skins subset PASS. No tracked _harness/_reports file was rewritten."
+}
