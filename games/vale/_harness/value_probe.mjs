@@ -1001,3 +1001,6 @@ for (const map of MAPS) for (const tier of TIERS) {
   }
 }
 console.log(`\nreport: ${REPORT}`);
+// a FAIL line is a failed gate (CW1 round 3): the verdicts of this run decide the exit code, not the reader of the log
+const failed = MAPS.flatMap((map) => TIERS.flatMap((tier) => Object.entries(report.runs[TAG][`${map}_${tier}`]?.verdict ?? {}).filter(([, v]) => /\bFAIL\b/.test(String(v))).map(([k]) => `${map}_${tier}.${k}`)));
+if (failed.length) { console.log(`value_probe: ${failed.length} FAIL: ${failed.join(', ')}`); process.exitCode = 1; }

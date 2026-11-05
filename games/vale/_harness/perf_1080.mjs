@@ -6,7 +6,7 @@
 //
 // --prod is the r12 B4 GATE: a production build of the bench (vite build into _harness/_prod/dist, gitignored),
 // served by `vite preview` on the first free port in 5191-5199 (started and stopped here), RIFT at t 900 s,
-// 10 s per preset, High and Low by default. It reports avg fps, p95 / p99 frame ms, the renderer's own CPU ms per
+// 10 s per preset, High, Low and Ultra by default. It reports avg fps, p95 / p99 frame ms, the renderer's own CPU ms per
 // frame (renderer.render, mean and p95) and the sim pump's, draw calls, programs and triangles per group
 // (grass, canopy, terrain, clutter, rocks, landmarks, actors, VFX, ambient, overlay, post: Renderer.profile; main and
 // shadow pass apart), the live programs (and how many the frame bound), the 5 worst frames, and
@@ -60,13 +60,17 @@
 // Home (the bench plays no audio: CW2's decoded audio, ~86 MB at Home, comes on top), 0 leftover skeleton bone textures
 // at the last two Homes (other float DataTextures are listed: the match sky's 128x64 fallback stays), > 0 bitmaps closed.
 // gpubound (perf PERF-C1, part of --prod; --no-gpubound skips it, --gpubound-only runs it alone, --gpu-sec <s> its window,
-// default 45): the RIFT fight at High with the render scale forced to 2 (4× the pixels of 1080p: GPU-bound on any machine
+// default 75, owner ruling 18: the last 8 s test recovery after the bench's largest VFX burst, not the burst itself): the RIFT fight at High with the render scale forced to 2 (4× the pixels of 1080p: GPU-bound on any machine
 // the gate runs on) and dynamic resolution ON. Hard check (any machine): the scale leaves its base within 10 s. Idle
 // machine only: the last 8 s average >= 58 fps (the controller found a scale the GPU carries). It also records the
 // GPU timer's standing (stats().gpuTimer: 'untrusted' on ANGLE Metal, the case the old drop rule never stepped for).
-// Then calibrate (perf PERF-C1): Renderer.calibrate(3) on the Home vale must return a preset and give the player's video
-// back (hard), and the same call with the canvas buffer at 3× each side (9× the pixels) must NOT return 'high' (hard: a
-// slow machine is never told to start at High); at 1080p on an idle machine it must return 'high'.
+// Then calibrate (perf PERF-C1; --calibrate-only runs it alone, --calib-runs <n> its 1080p calls, default 3): Renderer.calibrate(3)
+// on the Home vale must return a preset and give the player's video back (hard), and the same call with the canvas buffer at
+// 3× each side (9× the pixels) must NOT return 'high' (hard: src/render/calibration.ts's pixel cap); at 1080p on an idle machine
+// EVERY call must return 'high' (the verdict's rules: src/render/calibration.ts, held at any load by _harness/probe_calibrate.ts).
+// The last line: GATE PASS / GATE FAIL (exit 1), or GATE NOT MEASURED (exit 2) when a real-time run passed its hard checks but
+// its verdict could not be measured (a busy machine): that is not a pass. --prod's other timing halves stay "hard checks at
+// any load" and are named under GATE PASS as "timing not measured".
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -80,7 +84,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const PROD = args.includes('--prod');
 const T = Number(opt('t', PROD ? 900 : 600)), SEC = Number(opt('sec', PROD ? 10 : 8));
-const PRESETS = opt('q', PROD ? 'high,low' : 'low,medium,high,ultra').split(',');
+const PRESETS = opt('q', PROD ? 'high,low,ultra' : 'low,medium,high,ultra').split(',');
 const SEED = Number(opt('seed', 7));
 const OUT = resolve(ROOT, opt('out', '_harness/_reports/perf_1080.json'));
 const PROD_DIR = join(HERE, '_prod', 'dist');
@@ -93,14 +97,16 @@ const DROP_K = 1.5, DROP_SHARE = 0.01;
 const TARGET = {
   high: { fps: +(60 * (1 - DROP_SHARE)).toFixed(1), p95Ms: 16.7 + VSYNC_TOL_MS, p99Ms: 25, cpuMs: 6, dropShare: DROP_SHARE },
   low: { p95Ms: 16.7 + VSYNC_TOL_MS, cpuMs: 6, dropShare: DROP_SHARE },
+  // Ultra 1080p at 60 fps (PERF-C1): High's own targets (the idle run read 60.1 fps, p95 16.8, renderer CPU 1.69 ms)
+  ultra: { fps: +(60 * (1 - DROP_SHARE)).toFixed(1), p95Ms: 16.7 + VSYNC_TOL_MS, p99Ms: 25, cpuMs: 6, dropShare: DROP_SHARE },
 };
 /** the display's frame interval read from a window of rAF intervals: their median (a busy window that runs below the
  *  display rate reads as no vsync at all and falls back to 60 Hz; the fps target fails such a window anyway) */
 const vsyncOf = (r) => { const s = r.slice().sort((a, b) => a - b); const m = s.length ? s[Math.floor(s.length / 2)] : 0; return m > 4 && m < 17.5 ? m : 1000 / 60; };
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 const MEM_ONLY = args.includes('--mem-only');
-const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.includes('--no-dyn');
-const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--gpubound-only') && !args.includes('--no-mem');
+const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.includes('--no-dyn') && !args.includes('--calibrate-only');
+const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--gpubound-only') && !args.includes('--calibrate-only') && !args.includes('--no-mem');
 const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
 const MEM_GPU_GROWTH = 0.05;
 const MAPS_ONLY = args.includes('--mem-maps-only');
@@ -109,15 +115,16 @@ const MAPS_MEM = (MEM && !args.includes('--no-mem-maps')) || MAPS_ONLY;
 const HOME_BUDGET_MB = 2500;
 const DYN_SEC = Number(opt('dyn-sec', 60)), DYN_MENU_S = 16;
 const MATCH_ONLY = args.includes('--match-only');
-const MATCH = (PROD && !MEM_ONLY && !args.includes('--gpubound-only') && !args.includes('--mem-maps-only') && !args.includes('--no-match')) || MATCH_ONLY;
+const MATCH = (PROD && !MEM_ONLY && !args.includes('--gpubound-only') && !args.includes('--calibrate-only') && !args.includes('--mem-maps-only') && !args.includes('--no-match')) || MATCH_ONLY;
 const MATCH_SCALE = Number(opt('match-scale', 4)), MATCH_MAX_S = Number(opt('match-min', 30)) * 60;
 const MATCH_SEEDS = opt('match-seeds', '').split(',').filter(Boolean).map(Number);
 const RT_SHARE = 0.99, RT_FPS = 58, RT_FLOOR = 45;
 const GPU_ONLY = args.includes('--gpubound-only');
-const GPUB = (PROD && !MEM_ONLY && !MATCH_ONLY && !args.includes('--no-gpubound')) || GPU_ONLY;
+const CALIB_ONLY = args.includes('--calibrate-only'), CALIB_RUNS = Math.max(1, Number(opt('calib-runs', 3)));
+const GPUB = (PROD && !MEM_ONLY && !MATCH_ONLY && !args.includes('--no-gpubound') && !args.includes('--calibrate-only')) || GPU_ONLY;
 /** diagnostic: --gpu-fixed <scale> holds that scale with dynamic resolution off (the bars do not apply: read the timeline) */
 const GPU_FIXED = Number(opt('gpu-fixed', 0));
-const GPU_SEC = Number(opt('gpu-sec', 45)), GPU_LEAVE_S = 10, GPU_RECOVER_FPS = 58, GPU_TAIL_S = 8;
+const GPU_SEC = Number(opt('gpu-sec', 75)), GPU_LEAVE_S = 10, GPU_RECOVER_FPS = 58, GPU_TAIL_S = 8;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
 function heavyOthers() {
@@ -359,21 +366,23 @@ async function calibrateStep() {
       if (k > 1) r.resize(w, h);
       return { ...out, k, buffer: k > 1 ? `${w * k}x${h * k}` : `${w}x${h}`, tierBefore, tierAfter: st.tier };
     }, k);
-    const at1 = await run(1);
+    const runs1080 = [];
+    for (let i = 0; i < CALIB_RUNS; i++) runs1080.push(await run(1));
+    const at1 = runs1080.find((x) => x.preset !== 'high') ?? runs1080[runs1080.length - 1];
     const at3 = await run(3);
     const after = machine();
-    const res = { at1080: at1, at3x: at3, machine: { before, after, idle: before.idle && after.idle }, errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 10) };
+    const res = { at1080: at1, runs1080, at3x: at3, machine: { before, after, idle: before.idle && after.idle }, errors: logs.filter((l) => !/favicon/.test(l)).slice(0, 10) };
     const misses = [];
-    for (const x of [at1, at3]) {
+    for (const x of [...runs1080, at3]) {
       if (!['high', 'medium', 'low'].includes(x.preset)) misses.push(`calibrate returned ${x.preset}`);
       if (x.tierAfter !== x.tierBefore) misses.push(`calibrate left the tier at ${x.tierAfter} (was ${x.tierBefore})`);
       if (x.frames < 30) misses.push(`calibrate sampled only ${x.frames} frames at ${x.buffer}`);
     }
     if (at3.preset === 'high') misses.push(`calibrate said 'high' at ${at3.buffer} (p95 ${at3.p95Ms} ms)`);
-    if (res.machine.idle && at1.preset !== 'high') misses.push(`calibrate said '${at1.preset}' at 1080p on an idle machine (p95 ${at1.p95Ms} ms)`);
+    for (const x of runs1080) if (res.machine.idle && x.preset !== 'high') misses.push(`calibrate said '${x.preset}' at 1080p on an idle machine (p95 ${x.p95Ms} ms, ${x.windows} windows)`);
     res.misses = misses;
     res.pass = misses.length === 0;
-    console.log(`calib   1080p: ${at1.preset} (p50 ${at1.p50Ms} p95 ${at1.p95Ms} ms, ${at1.frames} frames, tier ${at1.tierBefore}→${at1.tierAfter}); ${at3.buffer}: ${at3.preset} (p95 ${at3.p95Ms} ms)  load ${before.load}→${after.load}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
+    console.log(`calib   1080p ×${runs1080.length}: ${runs1080.map((x) => `${x.preset} (p50 ${x.p50Ms} p95 ${x.p95Ms} ms, ${x.frames} frames, ${x.windows} win)`).join(', ')}, tier ${at1.tierBefore}→${at1.tierAfter}; ${at3.buffer}: ${at3.preset} (p95 ${at3.p95Ms} ms${at3.capped ? ', pixel cap' : ''})  load ${before.load}→${after.load}  ${res.pass ? 'PASS' : `FAIL: ${misses.join('; ')}`}`);
     return res;
   } finally {
     await browser.close();
@@ -733,7 +742,7 @@ async function waitIdle(sec) {
 
 try {
   const deadline = Date.now() + WAIT_IDLE_S * 1000;
-  for (const q of MEM_ONLY || MATCH_ONLY || GPU_ONLY || MAPS_ONLY ? [] : PRESETS) {
+  for (const q of MEM_ONLY || MATCH_ONLY || GPU_ONLY || MAPS_ONLY || CALIB_ONLY ? [] : PRESETS) {
     let res = null;
     for (;;) {
       if (WAIT_IDLE_S > 0) await waitIdle(Math.max(0, (deadline - Date.now()) / 1000));
@@ -748,6 +757,8 @@ try {
   if (GPUB && !MAPS_ONLY) {
     out.gpubound = await gpuBound();
     if (!out.gpubound.pass) out.pass = false;
+  }
+  if ((GPUB && !MAPS_ONLY) || CALIB_ONLY) {
     out.calibrate = await calibrateStep();
     if (!out.calibrate.pass) out.pass = false;
   }
@@ -783,4 +794,11 @@ try {
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out, null, 1));
 console.log(`GPU: ${out.gpu}  → ${OUT}`);
-if (PROD || MEM_ONLY || MATCH_ONLY || GPU_ONLY || MAPS_ONLY) { console.log(out.pass ? 'GATE PASS' : 'GATE FAIL'); if (!out.pass) process.exitCode = 1; }
+if (PROD || MEM_ONLY || MATCH_ONLY || GPU_ONLY || MAPS_ONLY || CALIB_ONLY) {
+  // a real-time verdict is the run's whole point: not measured is not a pass (exit 2); the other timing halves are named under the line
+  const rtNm = [...(out.matchSeeds ?? (out.match ? [out.match] : []))].map((m) => m.realtime?.verdict).filter((v) => /^not measured/.test(v ?? ''));
+  const timingNm = [...Object.entries(out.presets).map(([q, r]) => [q, r.frameTargets]), ['gpubound', out.gpubound?.recovery], ['dynres', out.dynres?.matchScale]].filter(([, v]) => /^not measured/.test(v ?? ''));
+  if (!out.pass) { console.log('GATE FAIL'); process.exitCode = 1; }
+  else if (rtNm.length) { console.log(`GATE NOT MEASURED: realtime ${rtNm[0]}`); process.exitCode = 2; }
+  else { console.log('GATE PASS'); if (timingNm.length) console.log(`        timing not measured: ${timingNm.map(([k, v]) => `${k} (${v})`).join('; ')}`); }
+}

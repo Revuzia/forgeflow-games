@@ -61,6 +61,7 @@ import { RING, RingLayer } from './overlay/rings.ts';
 import { FLASH_RING_OVER_M, TELE_SHAPE, TelegraphLayer, type TeleSpec, flashContourDepth } from './overlay/telegraphs.ts';
 import { FRAY_SEATS, INK, isFfaMode, Palette, type ColorblindMode } from './palette.ts';
 import { PostChain } from './post.ts';
+import { calibAgain, calibVerdict, calibWindow, type CalibWindow } from './calibration.ts';
 import { DynamicResolution, type FrameBound, GpuTimer, PRESETS, resolveQuality, type ResolvedQuality } from './quality.ts';
 import { Sky } from './sky.ts';
 import { buildTerrain, landmarkCull, loadTerrainLandmarks, loadTerrainProps, TERRAIN_TEX_ROLES, type TerrainTexRole, type TerrainBuild } from './terrain.ts';
@@ -127,12 +128,10 @@ export interface CalibrationResult {
   preset: 'high' | 'medium' | 'low';
   /** frame intervals sampled, their p50 / p95 (ms); frames 0 when the page was hidden or not drawing (preset 'high') */
   frames: number; p50Ms: number; p95Ms: number;
+  /** windows sampled (a narrow miss samples again) and whether the buffer's size alone held it off High (calibration.ts) */
+  windows?: number; capped?: boolean;
 }
 
-/** perf PERF-C1: calibrate()'s thresholds — p95 at High within 18 ms holds 60 Hz; within 26 ms (≈ 40 fps) Medium's
- *  0.9 scale, half AO and 2048² shadows recover it; slower goes Low */
-const CALIB_HIGH_P95_MS = 18;
-const CALIB_MEDIUM_P95_MS = 26;
 /** the first 0.5 s after the switch to High is warm-up (programs, shadow maps), not the machine's pace */
 const CALIB_WARM_MS = 500;
 
@@ -1397,7 +1396,7 @@ class ValeRenderer implements Renderer {
   }
 
   // ── first-run calibration (perf PERF-C1) ───────────────────────────────────────────────────────
-  private calib: { start: number; end: number; last: number; iv: number[]; video: Settings['video']; done: (r: CalibrationResult) => void } | null = null;
+  private calib: { start: number; end: number; last: number; iv: number[]; windows: CalibWindow[]; seconds: number; video: Settings['video']; done: (r: CalibrationResult) => void } | null = null;
 
   calibrate(seconds = 3): Promise<CalibrationResult> {
     if (this.calib) return Promise.resolve({ preset: 'high', frames: 0, p50Ms: 0, p95Ms: 0 });
@@ -1415,8 +1414,8 @@ class ValeRenderer implements Renderer {
         res(r);
       };
       // a hidden page or a caller that stops drawing: give up after 3× the window and keep the default (High)
-      const guard = setTimeout(() => { if (this.calib) this.calibFinish(); }, (seconds * 3 + 1) * 1000);
-      this.calib = { start: now + CALIB_WARM_MS, end: now + CALIB_WARM_MS + seconds * 1000, last: 0, iv: [], video, done: finish };
+      const guard = setTimeout(() => { if (this.calib) this.calibFinish(true); }, (seconds * 4 + 1) * 1000);
+      this.calib = { start: now + CALIB_WARM_MS, end: now + CALIB_WARM_MS + seconds * 1000, last: 0, iv: [], windows: [], seconds, video, done: finish };
     });
   }
 
@@ -1427,13 +1426,19 @@ class ValeRenderer implements Renderer {
     if (now >= c.end) this.calibFinish();
   }
 
-  private calibFinish(): void {
+  private calibFinish(force = false): void {
     const c = this.calib!;
-    const s = c.iv.slice().sort((a, b) => a - b);
-    const at = (k: number): number => (s.length ? s[Math.min(s.length - 1, Math.floor(s.length * k))] : 0);
-    const p50 = at(0.5), p95 = at(0.95);
-    const preset = s.length < 30 ? 'high' : p95 <= CALIB_HIGH_P95_MS ? 'high' : p95 <= CALIB_MEDIUM_P95_MS ? 'medium' : 'low';
-    c.done({ preset, frames: s.length, p50Ms: Math.round(p50 * 100) / 100, p95Ms: Math.round(p95 * 100) / 100 });
+    c.windows.push(calibWindow(c.iv));
+    if (!force && calibAgain(c.windows)) {
+      // a narrow miss samples again (calibration.ts): the verdict is the machine's pace, not one moment's jitter
+      const now = performance.now();
+      c.iv = []; c.start = now; c.end = now + c.seconds * 1000; c.last = 0;
+      return;
+    }
+    const size = this.gl.getDrawingBufferSize(new Vector2());
+    const v = calibVerdict(c.windows, size.x * size.y);
+    const ms = (x: number | undefined): number => Math.round((x ?? 0) * 100) / 100;
+    c.done({ preset: v.preset, frames: v.best?.frames ?? 0, p50Ms: ms(v.best?.p50Ms), p95Ms: ms(v.best?.p95Ms), windows: c.windows.length, capped: v.capped });
   }
 
   stats(): RenderStats {
