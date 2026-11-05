@@ -6,7 +6,7 @@
 
 import type { FieldName } from '../../sim/types.ts';
 import { curveMargin, duneAmpOf, MAX_GRAD, roughOf } from '../../sim/grid/surface.ts';
-import type { IcoGrid } from '../../sim/grid/icogrid.ts';
+import { getGrid, type IcoGrid } from '../../sim/grid/icogrid.ts';
 
 export const FIELD_ROW = 256;
 const WET = 0.02;
@@ -29,7 +29,7 @@ export const SOURCES: Record<TexName, FieldName[]> = {
 };
 export const TEX_NAMES = Object.keys(SOURCES) as TexName[];
 
-/** the parts of the grid the packing reads (a structured-clone-able copy goes to the worker once) */
+/** the parts of the grid the packing reads */
 export type PackGrid = Pick<IcoGrid, 'count' | 'pos' | 'nbrStart' | 'nbr' | 'meanEdgeAngle'>;
 
 /** the ore palette (linear rgb and showing per ore, oreType − 1 indexes them) */
@@ -54,6 +54,7 @@ function oreVis(p: OrePalette, type: number): number {
 export class FieldPacker {
   readonly grid: PackGrid;
   readonly R: number;
+  /** the texture arrays (FieldTextures swaps in the arrays a worker job hands back) */
   readonly out: Record<TexName, Float32Array>;
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
@@ -373,7 +374,7 @@ export class FieldPacker {
 // ---- the worker protocol (fieldpack.worker.ts runs handlePackMessage; tests run it in-process) ----
 
 export type PackRequest =
-  | { k: 'init'; id: number; grid: PackGrid; R: number }
+  | { k: 'init'; id: number; gridN: number; R: number }
   | { k: 'job'; id: number; seq: number; names: TexName[]; fields: [FieldName, Float32Array][]; surfaceVersion: number; light: Float32Array | null; palette: OrePalette | null }
   | { k: 'drop'; id: number };
 export interface PackReply { id: number; seq: number; out: [TexName, Float32Array][]; waterLevel: Float32Array | null; waterDepth: Float32Array | null }
@@ -383,7 +384,8 @@ export type PackState = Map<number, FieldPacker>;
 
 /** handle one request; a job's reply (copies, whose buffers can be transferred) is returned, with its transfer list */
 export function handlePackMessage(state: PackState, m: PackRequest): { reply: PackReply; transfer: ArrayBuffer[] } | null {
-  if (m.k === 'init') { state.set(m.id, new FieldPacker(m.grid, m.R)); return null; }
+  // (the worker builds the grid itself: the same deterministic code, instead of ~2 MB cloned off the main thread)
+  if (m.k === 'init') { state.set(m.id, new FieldPacker(getGrid(m.gridN), m.R)); return null; }
   if (m.k === 'drop') { state.delete(m.id); return null; }
   const p = state.get(m.id);
   if (!p) return null;
@@ -397,12 +399,12 @@ export function handlePackMessage(state: PackState, m: PackRequest): { reply: Pa
     p.fill(name);
     const copy = p.out[name].slice();
     out.push([name, copy]);
-    transfer.push(copy.buffer);
+    transfer.push(copy.buffer as ArrayBuffer);
   }
   let waterLevel: Float32Array | null = null, waterDepth: Float32Array | null = null;
   if (m.names.includes('A')) {
     waterLevel = p.waterLevel.slice(); waterDepth = p.waterDepth.slice();
-    transfer.push(waterLevel.buffer, waterDepth.buffer);
+    transfer.push(waterLevel.buffer as ArrayBuffer, waterDepth.buffer as ArrayBuffer);
   }
   return { reply: { id: m.id, seq: m.seq, out, waterLevel, waterDepth }, transfer };
 }

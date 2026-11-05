@@ -42,7 +42,8 @@ P11 shelter (housed 20–27 of 30 year ends on the measured seeds), P12 growth (
 - Post-release balance (LIVING §13.8, 8 seeds × 25 years before/after): fixed P11 year-end housing (7 of 8 seeds housed
   at every calm year end, per live town) and P25 year-50 prophet credibility (0.705 on the three seeds that missed);
   P02 hunting where no game was on foot fixed at its cause (herds drawn and judged by what a town can walk to; stone-age
-  folk start knowing hunting), kills per 100 people a year up from 8 to 14 but still short of the owner default 20
+  folk start knowing hunting: since SIMFIX 2 the plains and coastal folk carry spear-making, hunting and fishing in their
+  species start, so a band the god sets down hunts from day 1, not only the two scenario bands), kills per 100 people a year up from 8 to 14 but still short of the owner default 20
   (hunted share 0.09 of food, 0.15 asked); the under-15 share stays 0.48 (0.35–0.45 asked; needs a joint fertility /
   child-mortality re-tune). Acceptance table re-installed (`_harness/scratch/living/acceptance.json`: 41 met / 15 partly
   / 12 missed, round 4 + these rows).

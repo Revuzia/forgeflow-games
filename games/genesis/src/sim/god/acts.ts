@@ -18,7 +18,7 @@ import { seedDisease } from '../life/disease.ts';
 import { herdPos } from '../life/herds.ts';
 import { spawnPeople } from '../people/spawn.ts';
 import { tell } from '../people/story.ts';
-import { agentName, settlementRef, vars, kName } from '../people/util.ts';
+import { agentName, keepName, settlementRef, vars, kName } from '../people/util.ts';
 import { distM } from '../people/world.ts';
 import { insertSorted } from '../people/lifecycle.ts';
 import { interrupt } from '../people/people.ts';
@@ -465,6 +465,7 @@ export function registerActCommands(r: CommandRegistry): void {
         if (st && st.species === band.species && st.id !== band.id) {
           // they join: newcomers taken in (their knowledge with them)
           for (const m of (x.ps.members.get(band.id) ?? []).slice()) {
+            keepName(x, m);
             x.ps.removeMember(band.id, m);
             x.A.settlement[m] = st.id;
             x.A.home[m] = -1;

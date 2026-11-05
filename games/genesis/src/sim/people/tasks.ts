@@ -281,6 +281,11 @@ function capsize(x: PCtx, s: number, c: number): boolean {
   const p = it?.id === 'raft' ? 0.05 : it?.tags.includes('ship') ? 0.004 : 0.015;
   if (hashFloat(A.id[s], c, x.tick, 0xb0a7) >= p * Math.min(3, x.p.f.precip[c] / 5)) return false;
   const st = x.ps.settlement(A.settlement[s]);
+  // (SIMFIX 0) a townsman in the town's lent boat (fishing.ts fishTask, travel) within a cell of the shore makes land
+  if (!A.mission[s] && st && !st.band) {
+    const g = x.p.grid;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] < 0.4) return false;
+  }
   if (st) {
     st.recent.drowned = (st.recent.drowned ?? 0) + 1;
     if (st.recent.boatLost === undefined || x.tick - st.recent.boatLost > x.day) {

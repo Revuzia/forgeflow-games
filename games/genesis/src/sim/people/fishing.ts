@@ -24,6 +24,7 @@ import { storeAdd, storeAny, storeHas } from './store.ts';
 import { practise } from './lifecycle.ts';
 import { spotInCell } from './world.ts';
 import { tell } from './story.ts';
+import { STORM_BREAK, stormSeverity } from './shelter.ts';
 import { settlementRef, vars } from './util.ts';
 import { addFood, ledger, landWorld, type FishStock } from './ledger.ts';
 import { FOOD_YIELD, foodSessionDone } from '../perf/pace.ts';
@@ -187,9 +188,14 @@ export function fishTask(x: PCtx, s: number, st: Settlement | undefined, nearest
   let stand = c;
   if (st && !st.band && !A.mission[s] && p.f.water[c] > 0.6) {
     const boat = shoreBoat(x, st);
-    if (boat >= 0 && hashFloat(A.id[s], x.tick, 0xb0f) < Math.min(0.85, storeHas(st, boat) * 0.4)) {
-      A.boat[s] = boat;
-      return { kind: TASK.fish, goal: spotInCell(p, c, A.id[s], 29, [0, 0, 0]), goalCell: c, work: 180, target: c };
+    // (SIMFIX 0) not into weather: no boat is lent while it rains hard on the water (tasks.ts capsize: precip > 5) or a
+    // storm is at the shelter break there — they fish from the bank, and break for shelter like everyone else
+    if (boat >= 0 && hashFloat(A.id[s], x.tick, 0xb0f) < Math.min(0.85, storeHas(st, boat) * 0.4) && p.f.precip[c] <= 5) {
+      const goal = spotInCell(p, c, A.id[s], 29, [0, 0, 0]);
+      if (stormSeverity(x, goal, c) < STORM_BREAK) {
+        A.boat[s] = boat;
+        return { kind: TASK.fish, goal, goalCell: c, work: 180, target: c };
+      }
     }
   }
   // stand on the bank (PUNCH P22: a strong swimmer too — nobody swims out over open water to fish; the boat takes them)

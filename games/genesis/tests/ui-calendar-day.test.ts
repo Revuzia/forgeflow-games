@@ -28,3 +28,11 @@ test('the reported case: a save ~37k ticks past paramsTick reads as an integer d
   assert.ok(Number.isInteger(c.day), String(c.day));
   assert.match(`day ${c.day}`, /^day \d+$/);
 });
+
+test('saves kept with a fractional day read back whole (title Continue line, save list)', async () => {
+  const { tidyDay } = await import('../src/ui/saves.ts');
+  assert.equal(tidyDay('Year 7 · spring · day 1.1999999999999993 · 06:12'), 'Year 7 · spring · day 1 · 06:12');
+  assert.equal(tidyDay('Y7 · d12.4000001'), 'Y7 · d12');
+  assert.equal(tidyDay('Year 7 · spring · day 14 · 06:12'), 'Year 7 · spring · day 14 · 06:12');
+  assert.equal(tidyDay('A moment'), 'A moment');
+});

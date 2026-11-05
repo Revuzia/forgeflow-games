@@ -329,8 +329,10 @@ test('what the Touch hurls flies as it was held: a tree as the tree, upright as 
   f.onEvent(thrown(3, 'rock'), ctx);
   ctx.now = 0.02;
   f.update(ctx, []);
-  const meshes = f.group.children as Mesh[];
+  // (the hidden meshes Flights keeps for the shader warm-up are not flights)
+  const meshes = (f.group.children as Mesh[]).filter((m) => m.visible);
   assert.equal(meshes.length, 3);
+  assert.ok((f.group.children as Mesh[]).filter((m) => !m.visible).length >= 2, 'warm-up meshes for the flight materials exist before the first throw');
   // the tree is the Touch's own uprooted tree (the same geometry), not a boulder; leafed and casting a shadow
   const [tree, heavy, plain] = meshes;
   assert.equal(tree.geometry, heldPropGeometry('tree'), 'the tree the Touch held');

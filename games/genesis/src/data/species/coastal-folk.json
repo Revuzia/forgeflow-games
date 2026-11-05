@@ -15,5 +15,5 @@
   "style": { "materials": ["thatch", "wood", "timber", "fieldstone", "stone", "brick"], "form": "stilt", "roof": "steep", "palette": ["#e8e0c8", "#4a7a8a", "#d0a060"] },
   "taboos": [], "sacred": ["sea", "moon"],
   "god": { "awe": 1.1, "fear": 0.9 },
-  "start": ["foraging", "woodcutting", "fishing", "cordage", "stone-tools", "shelter-building", "burial-rites"]
+  "start": ["foraging", "woodcutting", "fishing", "cordage", "stone-tools", "spear-making", "hunting", "shelter-building", "burial-rites"]
 }

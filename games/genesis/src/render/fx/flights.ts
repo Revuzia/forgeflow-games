@@ -69,6 +69,31 @@ export class Flights {
     this.shared = shared;
     this.group.name = 'flights';
     this.group.matrixAutoUpdate = false;
+    // the materials and one hidden mesh per prop kind made up front, so Renderer.warmUp (three's compile walks hidden
+    // objects; SunShadows.warm their depth twins) links their programs behind the loading screen: made at the first
+    // throw, the first boulder or tree let go linked a program inside the frame — a stall of tens of ms on ANGLE /
+    // Metal right on the drop (macfix r1 lift2.mjs: 'genesis-prop-flight' at the first place)
+    this.mat = makePropMaterial(this.shared, { key: 'flight', roughness: 0.9 });
+    this.leafMat = makeLeafPropMaterial(this.shared);
+    for (const kind of ['rock', 'tree', 'item', 'building']) {
+      const m = new Mesh(this.geoOf(kind).geo, kind === 'tree' ? this.leafMat : this.mat);
+      m.matrixAutoUpdate = false;
+      m.frustumCulled = false;
+      m.layers.enable(1);
+      m.visible = false;
+      this.group.add(m);
+    }
+  }
+
+  private geoOf(kind: string): { geo: BufferGeometry; mid: Vector3 } {
+    let g = this.geos.get(kind);
+    if (!g) {
+      const geo = heldPropGeometry(kind);
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      g = { geo, mid: geo.boundingBox!.getCenter(new Vector3()) };
+      this.geos.set(kind, g);
+    }
+    return g;
   }
 
   /** (additive) every flight in the air now: id, kind, body-frame position and velocity, FX age (s) */
@@ -118,13 +143,7 @@ export class Flights {
       // (the mesh the Touch held it as — an uprooted tree's leaf sprays alpha-tested — tumbling about its middle)
       if (!this.mat) this.mat = makePropMaterial(this.shared, { key: 'flight', roughness: 0.9 });
       if (kind === 'tree' && !this.leafMat) this.leafMat = makeLeafPropMaterial(this.shared);
-      let g = this.geos.get(kind);
-      if (!g) {
-        const geo = heldPropGeometry(kind);
-        if (!geo.boundingBox) geo.computeBoundingBox();
-        g = { geo, mid: geo.boundingBox!.getCenter(new Vector3()) };
-        this.geos.set(kind, g);
-      }
+      const g = this.geoOf(kind);
       f.mesh = new Mesh(g.geo, kind === 'tree' ? this.leafMat! : this.mat);
       f.mesh.matrixAutoUpdate = false;
       f.mesh.frustumCulled = false;

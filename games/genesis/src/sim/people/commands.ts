@@ -20,7 +20,7 @@ import { die } from './lifecycle.ts';
 import { godTeach, silence, accident, refusalOf, refusalWords, forceTeach } from './knowledge.ts';
 import { interrupt, witness, dropItem } from './people.ts';
 import { storeAdd, storeTake, storeHas } from './store.ts';
-import { agentName, vars, settlementRef, agentRef, kName } from './util.ts';
+import { agentName, keepName, vars, settlementRef, agentRef, kName } from './util.ts';
 import { tell } from './story.ts';
 import { found, siteScore, updateTerritory, fall } from './settlement.ts';
 import { cellPos3 } from '../god/util.ts';
@@ -115,6 +115,7 @@ function joinSettlement(u: Universe, p: Planet, home: Settlement, o: { species?:
   const A = x.A;
   let n = 0;
   for (const m of (x.ps.members.get(band.id) ?? []).slice()) {
+    keepName(x, m);
     x.ps.removeMember(band.id, m);
     A.settlement[m] = home.id;
     A.home[m] = -1;
@@ -749,6 +750,7 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     const A = x.A;
     let n = 0;
     for (const s of (x.ps.members.get(st.id) ?? []).slice()) {
+      keepName(x, s);
       x.ps.removeMember(st.id, s);
       A.settlement[s] = into.id;
       A.home[s] = -1;

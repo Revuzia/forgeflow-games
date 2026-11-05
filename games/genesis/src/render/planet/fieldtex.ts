@@ -42,7 +42,6 @@ import { FIELD_ROW, FieldPacker, SOURCES, TEX_NAMES, type PackReply, type PackRe
 
 export { FIELD_ROW };
 
-
 /** linear-light colour of each ore (oreType − 1 indexes the content's ore list; the base pack's come first, invented
  * ores past it take a neutral mineral grey-green from their index) */
 function hexRgb(hex: string | undefined): [number, number, number] {
@@ -144,9 +143,14 @@ export class FieldTextures {
   private port: PackPort | null;
   private readonly id = nextId++;
   private registered = false;
+  /** the first fill done (it stays on this thread: the first frame draws every texture) */
+  private primed = false;
   /** the job in flight: its sequence number, the textures it fills, what A / M1 / G need when it lands */
   private job: { seq: number; names: TexName[]; lava: number; grad: Float32Array | null } | null = null;
   private seq = 0;
+  /** the version (and array) of each field the worker holds */
+  private sent = new Map<FieldName, number>();
+  private sentArr = new Map<FieldName, Float32Array>();
   /** jobs that landed (tests / probes) */
   landed = 0;
 
@@ -220,8 +224,8 @@ export class FieldTextures {
       for (const name of TEX_NAMES) if (this.restamp(name)) dirty.push(name);
       if (dirty.length) {
         const lava = this.pv.fieldVersion.get('lava') ?? 0;
-        // the first fill stays on this thread: the first frame draws every texture
-        const port = this.registered || this.landed > 0 || this.geomVersion > 0 ? this.port : null;
+        const port = this.primed ? this.port : null;
+        this.primed = true;
         if (port && this.post(port, dirty, lava)) { /* lands in onReply */ } else {
           const p = this.packer;
           p.fields = this.pv.fields;
@@ -244,16 +248,21 @@ export class FieldTextures {
   private post(port: PackPort, dirty: TexName[], lava: number): boolean {
     try {
       if (!this.registered) {
-        const g = this.pv.grid;
         port.listen(this.id, (r) => this.onReply(r), () => this.onFail());
-        port.send({ k: 'init', id: this.id, grid: { count: g.count, pos: g.pos, nbrStart: g.nbrStart, nbr: g.nbr, meanEdgeAngle: g.meanEdgeAngle }, R: this.pv.params.radius });
+        port.send({ k: 'init', id: this.id, gridN: this.pv.grid.n, R: this.pv.params.radius });
         this.registered = true;
       }
       const remote = dirty.filter((n) => n !== 'G');
       const need = new Set<FieldName>();
       for (const n of remote) for (const f of SOURCES[n]) need.add(f);
+      // only the arrays the worker does not hold yet (it keeps what it was sent: A refilled for a water arrival need
+      // not carry surface, soil, sand and snow again — the clones were most of the main thread's remaining cost)
       const fields: [FieldName, Float32Array][] = [];
-      for (const f of need) { const a = this.pv.fields.get(f); if (a) fields.push([f, a]); }
+      for (const f of need) {
+        const a = this.pv.fields.get(f);
+        const v = this.pv.fieldVersion.get(f) ?? 0;
+        if (a && (this.sent.get(f) !== v || this.sentArr.get(f) !== a)) { fields.push([f, a]); this.sent.set(f, v); this.sentArr.set(f, a); }
+      }
       const seq = ++this.seq;
       this.job = { seq, names: dirty, lava, grad: dirty.includes('G') ? this.grad() : null };
       port.send({
@@ -276,7 +285,8 @@ export class FieldTextures {
     if (!job || r.seq !== job.seq) return;
     this.job = null;
     this.landed++;
-    for (const [name, data] of r.out) (this.tex[name].image.data as Float32Array).set(data);
+    // (the packed arrays become the textures' data: transferred, nothing to copy)
+    for (const [name, data] of r.out) { this.tex[name].image.data = data; this.packer.out[name] = data; }
     if (r.waterLevel && r.waterDepth) { this.waterLevel.set(r.waterLevel); this.waterDepth.set(r.waterDepth); }
     if (job.names.includes('G')) { this.packer.grad = job.grad; this.packer.fill('G'); }
     for (const name of job.names) this.landedTex(name, job.lava);
@@ -288,6 +298,8 @@ export class FieldTextures {
     if (this.job) for (const n of this.job.names) this.stamps[n].fill(NaN);
     this.job = null;
     this.registered = false;
+    this.sent.clear();
+    this.sentArr.clear();
   }
 
   dispose(): void {

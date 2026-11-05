@@ -965,9 +965,14 @@ function planHerd(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   return herdTask(x, s, st);
 }
 
-function planCraft(x: PCtx, s: number, st: Settlement): TaskSpec | null {
+export function planCraft(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const A = x.A;
-  for (const j of st.jobs) {
+  // (SIMFIX 1) each crafter starts the queue at its own place, turn by turn: taking the head every time, the town's
+  // crafters all cooked and milled and never made the pots, baskets, spears or rafts behind
+  const L = st.jobs.length;
+  const o = L > 1 ? Math.floor(hashFloat(A.id[s], Math.floor(x.tick / 60), 0xc4af) * L) : 0;
+  for (let i = 0; i < L; i++) {
+    const j = st.jobs[(i + o) % L];
     if (j.n <= 0) continue;
     const r = x.rt.list[j.k];
     if (!r || !A.knows(s, j.k)) continue;

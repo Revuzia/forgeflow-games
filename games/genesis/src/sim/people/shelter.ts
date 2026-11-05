@@ -192,7 +192,8 @@ export function stormBreaks(x: PCtx, st: Settlement, interrupt: (x: PCtx, s: num
   const A = x.A;
   let n = 0;
   for (const s of x.ps.members.get(st.id) ?? []) {
-    if (!BREAKS.has(A.task[s]) || A.inside[s] >= 0 || A.boat[s] >= 0 || A.mission[s]) continue;
+    // (SIMFIX 0) a band's raft and a mission's crew stay afloat; a town fisher in the lent boat rows in for shelter
+    if (!BREAKS.has(A.task[s]) || A.inside[s] >= 0 || A.mission[s] || (A.boat[s] >= 0 && st.band)) continue;
     A.posAt(s, x.tick, _p);
     if (stormSeverity(x, _p, A.cell[s]) < STORM_BREAK) continue;
     interrupt(x, s);

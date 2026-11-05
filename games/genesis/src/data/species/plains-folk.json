@@ -16,5 +16,5 @@
   "style": { "materials": ["thatch", "wattle", "mudbrick", "timber", "fieldstone", "stone", "brick"], "form": "round", "roof": "pitched", "palette": ["#c8a060", "#a0522d", "#e0c890"] },
   "taboos": [], "sacred": ["river", "sun"],
   "god": { "awe": 1.0, "fear": 1.0 },
-  "start": ["foraging", "woodcutting", "stone-tools", "shelter-building", "burial-rites"]
+  "start": ["foraging", "woodcutting", "stone-tools", "spear-making", "hunting", "fishing", "shelter-building", "burial-rites"]
 }

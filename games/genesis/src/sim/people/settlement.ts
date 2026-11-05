@@ -20,7 +20,7 @@ import { capacity, foodDays, spoil, storeAdd, storeHas, storeAny } from './store
 import { cellPos, distM, drinkable, freshWater, hollowDepth, isLand, offsetPoint, snowWater, sunAt, wellFlows } from './world.ts';
 import { settlementName, rootLanguage, driftLanguage, placeRoot } from './names.ts';
 import { tell, remember } from './story.ts';
-import { settlementRef, vars, emitSt } from './util.ts';
+import { keepName, settlementRef, vars, emitSt } from './util.ts';
 import { burnHearths, fireSourceNear, meltsSnow } from './fire.ts';
 import { cohortStep, cohortTotal } from './cohorts.ts';
 import { diseaseStep } from '../life/disease.ts';
@@ -807,7 +807,7 @@ function godGivenRoles(st: Settlement): Map<number, number> | null {
 // ───────────────────────────── jobs and wants ─────────────────────────────
 
 /** what the settlement wants made this hour: tools, clothes, food processing, building materials, books... */
-function planJobs(x: PCtx, st: Settlement): void {
+export function planJobs(x: PCtx, st: Settlement): void {
   const A = x.A;
   const members = x.ps.members.get(st.id) ?? [];
   const jobs: { k: number; n: number; cell: number; building: number }[] = [];
@@ -838,9 +838,19 @@ function planJobs(x: PCtx, st: Settlement): void {
   // take it before the everyday crafts that fill the day's twelve jobs (god/materials.ts: at most its few crafts, only
   // while its stock is short)
   for (const k of materialJobs(x, st)) add(k, 1);
-  // food processing first: cook raw food, bake, grind, smoke surplus
-  for (const k of producersOf('cooked')) add(k, 2);
-  for (const k of producersOf('flour')) add(k, 2);
+  // (SIMFIX 1) a fishing town short of boats builds one (a raft, then boats once it knows how) — before, boats came only
+  // from the 'practice' roll at the back of the queue and towns by the water fished from the bank for fifty years; the
+  // raft's cordage first when that is what is missing
+  if (st.res?.fish.some((c) => x.p.f.water[c] > 0.6) && count('boat') < 1.5) {
+    const n0 = jobs.length;
+    for (const k of producersOf('boat')) add(k, 1);
+    if (jobs.length === n0 && count('cordage') < 2) for (const k of producersOf('cordage')) add(k, 1);
+  }
+  // food processing: cook raw food, bake, grind, smoke surplus — while what it makes is short (SIMFIX 1: always first
+  // and always doable in a town with a grain store, it was all the crafters ever made)
+  const P = Math.max(1, members.length);
+  if (count('cooked') < P * 3) for (const k of producersOf('cooked')) add(k, 2);
+  if (count('flour') < P * 1.5) for (const k of producersOf('flour')) add(k, 2);
   // tools for the workers
   if (count('tool') < adults * 0.8) for (const k of producersOf('tool')) add(k, Math.ceil(adults * 0.8 - count('tool')));
   if (count('hunt') < Math.max(1, (st.quota[ROLE.hunter] ?? 0))) for (const k of producersOf('hunt')) add(k, 1);
@@ -1405,6 +1415,7 @@ export function splitOff(x: PCtx, st: Settlement, leaving: Household[], cause: s
     const ids = movable(h);
     for (const id of ids) {
       const s = A.slotOf(id);
+      keepName(x, s);
       x.ps.removeMember(st.id, s);
       A.settlement[s] = child.id;
       A.home[s] = -1;
@@ -1662,6 +1673,7 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
   band.parent = -1;
   const members = (x.ps.members.get(st.id) ?? []).slice();
   for (const s of members) {
+    keepName(x, s);
     x.ps.removeMember(st.id, s);
     A.settlement[s] = band.id;
     A.home[s] = -1;
@@ -1774,6 +1786,7 @@ function kinWithWater(x: PCtx, st: Settlement): Settlement | null {
 function joinKin(x: PCtx, band: Settlement, kin: Settlement, line = 'abandon.joined'): void {
   const A = x.A;
   for (const s of (x.ps.members.get(band.id) ?? []).slice()) {
+    keepName(x, s);
     x.ps.removeMember(band.id, s);
     A.settlement[s] = kin.id;
     A.home[s] = -1;

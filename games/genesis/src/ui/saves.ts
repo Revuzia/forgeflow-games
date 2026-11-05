@@ -167,6 +167,10 @@ function storageWords(e: unknown): string {
 const DB = 'genesis-saves';
 /** a slot as IndexedDB holds it: its bytes a Blob (an ArrayBuffer in slots kept by older builds) */
 type StoredRecord = Omit<SaveRecord, 'bytes'> & { bytes: Blob | ArrayBuffer };
+/** saves kept before postrel #4 stored the calendar (and the default slot name) with a fractional day,
+ *  "day 1.1999999999999993": read those back as the whole day they fell in */
+export function tidyDay(s: string): string { return typeof s === 'string' ? s.replace(/\b(day|d)(\s?)(\d+)\.\d+/gi, '$1$2$3') : s; }
+
 function storedSize(b: Blob | ArrayBuffer | undefined): number { return !b ? 0 : b instanceof Blob ? b.size : b.byteLength; }
 const STORE = 'saves';
 
@@ -200,7 +204,7 @@ export class SaveStore {
   async list(): Promise<SaveMeta[]> {
     // (older slots lack the newer fields: they read as unknown, never as an error)
     const all = await this.tx<StoredRecord[]>('readonly', (s) => s.getAll() as IDBRequest<StoredRecord[]>);
-    return all.map(({ bytes, packJson, ...m }) => ({ ...m, worlds: m.worlds ?? (m.world ? [m.world] : []), calendar: m.calendar ?? '', packs: m.packs ?? (packJson ?? []).map((p) => ({ id: p.id, name: p.name ?? p.id, version: p.version ?? '' })), size: m.size ?? storedSize(bytes) }))
+    return all.map(({ bytes, packJson, ...m }) => ({ ...m, name: tidyDay(m.name), worlds: m.worlds ?? (m.world ? [m.world] : []), calendar: tidyDay(m.calendar ?? ''), packs: m.packs ?? (packJson ?? []).map((p) => ({ id: p.id, name: p.name ?? p.id, version: p.version ?? '' })), size: m.size ?? storedSize(bytes) }))
       .sort((a, b) => b.date - a.date);
   }
   async get(id: string): Promise<SaveRecord | undefined> {

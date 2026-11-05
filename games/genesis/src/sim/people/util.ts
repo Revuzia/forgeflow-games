@@ -18,6 +18,17 @@ export function agentName(x: PCtx, s: number): string {
   return personalName(x.c, A.species[s], st ? st.langSeed : 0, A.name[s]);
 }
 
+/**
+ * (SIMFIX 3) a person keeps the name they were given: before they leave for another settlement (driven out, a daughter
+ * village, a band taken in, a town left), the name under their own people's tongue is written down — agentName read the
+ * CURRENT settlement's langSeed, and a prophet driven out of one town was chronicled under a new name in the next.
+ */
+export function keepName(x: PCtx, s: number): void {
+  const key = String(x.A.id[s]);
+  if (x.ps.names[key] || x.A.settlement[s] < 0) return;
+  x.ps.names[key] = agentName(x, s);
+}
+
 export function settlementLabel(st: Settlement | undefined | null): string {
   if (!st) return 'the wilds';
   return st.band ? `the band of ${st.name}` : st.name;

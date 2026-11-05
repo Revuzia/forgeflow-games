@@ -28,7 +28,7 @@ import { hash32, hashFloat } from '../core/rng.ts';
 import { GODS, MEMK, NT, TRAIT } from './defs.ts';
 import { speciesInfo } from './ctx.ts';
 import { tell, remember } from './story.ts';
-import { settlementRef, vars } from './util.ts';
+import { keepName, settlementRef, vars } from './util.ts';
 import { distM } from './world.ts';
 import { accident } from './knowledge.ts';
 import { ensureRelation, polityName, polityOf } from './war.ts';
@@ -144,6 +144,7 @@ export function moveHousehold(x: PCtx, h: Household, from: Settlement, to: Settl
   if (!go.length) return 0;
   for (const id of go) {
     const s = A.slotOf(id);
+    keepName(x, s);
     x.ps.removeMember(from.id, s);
     if (from.leader === id) from.leader = 0;
     A.flags[s] &= ~AgentFlag.leader;

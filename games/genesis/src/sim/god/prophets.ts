@@ -42,7 +42,7 @@ import { interrupt } from '../people/people.ts';
 import { die } from '../people/lifecycle.ts';
 import { statusGain } from '../people/outlets.ts';
 import { tell } from '../people/story.ts';
-import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
+import { agentName, agentRef, keepName, settlementRef, vars } from '../people/util.ts';
 import { distM, spotInCell } from '../people/world.ts';
 import { planDrinkNear } from '../people/decide.ts';
 import { bestFood, storeAdd, storeTake } from '../people/store.ts';
@@ -476,6 +476,7 @@ export function exile(x: PCtx, s: number, from: Settlement, to: Settlement): voi
   // (fix r2 #0: only a member can be cast out of a town — a stale prophet record once 'exiled' someone from a town they
   // had left, into the town they lived in, and listed them there twice)
   if (A.settlement[s] !== from.id || from.id === to.id) return;
+  keepName(x, s);
   x.ps.removeMember(from.id, s);
   for (const h of from.households) h.members = h.members.filter((m) => m !== id);
   from.households = from.households.filter((h) => h.members.length > 0);
