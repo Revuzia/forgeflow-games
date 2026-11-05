@@ -113,7 +113,7 @@
           "multiKillWindow": 10,
           "fountainHealPerSec": 0.08,
           "suddenDeathRespawnMult": 2,
-          "structureHpMult": 0.7
+          "structureHpMult": 0.76
         }
       }
     },
