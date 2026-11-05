@@ -2097,7 +2097,7 @@ def gen_death(skel) -> anim.Clip:
     # the corpse hold, clip_floor -0.86 m: both feet stay on the ground by IK all through the fall, the knees drawn up)
     side = anim.merge(anim.arms_relaxed(), anim.P(hips=(10, 0, -78), spine=(8, 0, -6), chest=(6, 0, -4),
                                                   neck=(4, 0, 8), head=(6, 10, 14)))
-    side["hips_loc"] = (-0.62, 0.06, -hip_h + 0.36)
+    side["hips_loc"] = (-0.62, 0.06, -hip_h + 0.48)      # the left pauldron clears the floor in the hold
     side["ik"] = {"hand.L": HT(pos=(0.15, -0.70, 0.62), pole=(0.3, 0.8, 0.4)),
                   "aim.L": AimRoll((0.0, -1.0, 0.02), 1.0, (0.0, 0.0, 1.0)),
                   "hand.R": HT(pos=(-1.15, -0.20, 0.10), pole=(-0.2, 0.5, 1.0)),
