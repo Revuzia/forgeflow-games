@@ -18,19 +18,19 @@
     "tally"
   ],
   "base": {
-    "hp": 585,
+    "hp": 610,
     "hpRegen": 1.4,
     "ad": 62,
-    "armor": 27,
+    "armor": 29,
     "resist": 30,
     "attackSpeed": 0.67,
     "moveSpeed": 3.55
   },
   "growth": {
-    "hp": 95,
+    "hp": 99,
     "hpRegen": 0.12,
     "ad": 3.4,
-    "armor": 4.2,
+    "armor": 4.4,
     "resist": 1.4,
     "attackSpeed": 0.03
   },
@@ -141,11 +141,11 @@
                   "op": "damage",
                   "amount": {
                     "base": [
-                      60,
-                      90,
-                      120,
-                      150,
-                      180
+                      70,
+                      105,
+                      140,
+                      175,
+                      210
                     ],
                     "ap": 0.5,
                     "bonusAd": 0.4
@@ -166,7 +166,7 @@
         "use": [
           "gapclose",
           "damage",
-          "engage"
+          "escape"
         ]
       },
       "present": {
@@ -307,11 +307,11 @@
           "op": "damage",
           "amount": {
             "base": [
-              70,
-              105,
-              140,
-              175,
-              210
+              85,
+              120,
+              155,
+              190,
+              225
             ],
             "ap": 0.6,
             "bonusAd": 0.3

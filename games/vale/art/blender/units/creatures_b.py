@@ -3372,8 +3372,8 @@ class StrayTick(StrayBase):
     GRIME_Z = 0.15                 # the grit stops at the foot plate: on a 1 m stroke 0.3 dirtied a third of the unit
     EYE_R = 0.018
     W, D = 0.25, 0.25
-    GOLD_STROKES = (((0.17, 0.0, 1.0), (-0.17, 0.0, 1.0)), ((0.17, -0.11, 1.0), (0.17, 0.11, 1.0)),
-                    ((-0.17, -0.11, 1.0), (-0.17, 0.11, 1.0)),
+    GOLD_STROKES = (((0.12, 0.0, 1.0), (-0.12, 0.0, 1.0)), ((0.12, -0.09, 1.0), (0.12, 0.09, 1.0)),
+                    ((-0.12, -0.09, 1.0), (-0.12, 0.09, 1.0)),
                     ((-0.135, -0.135, 0.62), (0.135, -0.135, 0.62)), ((0.135, -0.135, 0.62), (0.135, 0.135, 0.62)),
                     ((0.135, 0.135, 0.62), (-0.135, 0.135, 0.62)), ((-0.135, 0.135, 0.62), (-0.135, -0.135, 0.62)))
 
@@ -3381,8 +3381,9 @@ class StrayTick(StrayBase):
         W, D = self.W, self.D
         chis = ((lambda P: -0.006 * np.clip(sdf.Noise(29).ridged(P, 9.0, 2) - 0.5, 0, 1) - 0.002 * NOISE(P, 30.0)), 0.008)
         stroke = RoundBox((0, 0, 0.5), (W / 2, D / 2, 0.38), 0.02)
-        foot = RoundBox((0, 0, 0.055), (W / 2 + 0.13, D / 2 + 0.015, 0.055), 0.018)
-        top = RoundBox((0, 0, 0.93), (W / 2 + 0.11, D / 2 + 0.015, 0.07), 0.018)
+        # round 3: narrow serifs: the wide top plate hid the stroke at the game camera and left a blank slab of a silhouette
+        foot = RoundBox((0, 0, 0.055), (W / 2 + 0.075, D / 2 + 0.015, 0.055), 0.018)
+        top = RoundBox((0, 0, 0.93), (W / 2 + 0.05, D / 2 + 0.015, 0.07), 0.018)
         prims = [(stroke.displaced(*chis) if detail else stroke, 0.0), (foot.displaced(*chis) if detail else foot, 0.08),
                  (top.displaced(*chis) if detail else top, 0.08)]
         return prims
@@ -3409,11 +3410,11 @@ class StrayTick(StrayBase):
     def grooves(self):
         # the carver's inline down the stroke, front and back (inked), and across the top serif
         return [(np.array([0.0, y, 0.22]), np.array([0.0, y, 0.7])) for y in (-self.D / 2 - 0.005, self.D / 2 + 0.005)] + \
-               [(np.array([0.17, 0.0, 1.005]), np.array([-0.17, 0.0, 1.005]))]
+               [(np.array([0.12, 0.0, 1.005]), np.array([-0.12, 0.0, 1.005]))]
 
     def chips(self):
         d = self.D / 2
-        return [((0.27, -d, 0.0), 0.04), ((-0.25, d, 0.97), 0.035), ((0.12, -d, 0.45), 0.025)]
+        return [((0.2, -d, 0.0), 0.04), ((-0.17, d, 0.97), 0.035), ((0.12, -d, 0.45), 0.025)]
 
     def bones(self):
         return [B("root", (0, 0, 0), (0, -0.3, 0)),

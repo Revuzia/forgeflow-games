@@ -253,26 +253,28 @@ CARDS = {
         # the screen >= 0.22 m, _harness/_reports/fw_CW6_r1_stage.mjs)
         # (closing round 2: the head focal and the +5 % highlight expansion blew the chalk face-plate to a blank egg: a
         # low side key, no head focal, so the plate's recesses read as eyes)
-        "portrait": {"clip": "idle", "t": 0.0, "yaw": -8.0, "exposure": -1.1, "key_az": 240.0, "key_el": 28.0, "sun": 2.4,
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": -3.0, "exposure": -1.1, "key_az": 240.0, "key_el": 28.0, "sun": 2.4,
                      "focal": [{"at": "x_lamp", "az": 190.0, "el": 15.0, "dist": 0.7, "color": "#CFE4FF", "power": 30.0,
                                 "size": 0.3}]},
         # (closing round 2: the face plate's flecks took the bust's speckle p50 to 2.62 > 2.5; a wider Kuwahara (2, 3) only
         # smeared the face into a blob and left the number alone: one 3x3 median pass under the default 1 px brush)
-        "plate": {"sub_median": 1},
+        # (closing round 3, ilsheta-face-seam: the 1 px brush itself stepped the dark glass beside the plate: no brush on her
+        # cards, the median alone keeps the speckle under its gate)
+        "plate": {"sub_median": 1, "sub_paint_r": 0},
     },
     "ilsheta_stillwater": {
         # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
-        "splash": {"clip": "cast_a1", "t": 0.50, "yaw": -26.0, "pitch": 0.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
+        "splash": {"clip": "cast_a1", "t": 0.50, "yaw": 2.0, "pitch": 0.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
                    "exposure": -1.2, "key_az": 130.0, "key_el": 30.0, "key_color": "#C4DCDA", "sun": 1.9, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 1.4, "exposure": -0.4,
                    "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 40.0,
                               "size": 0.25},
                              {"at": "head", "az": 120.0, "el": 10.0, "dist": 0.9, "color": "#D6ECEA", "power": 3.0,
                               "size": 0.4}]},
-        "portrait": {"yaw": -12.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
+        "portrait": {"yaw": -6.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
                      "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 30.0,
                                 "size": 0.25}]},
-        "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
+        "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC"},
     },
     "ilsheta_first_bell": {
@@ -284,8 +286,8 @@ CARDS = {
         # 0-2 deg, attack1 t 0.55 -5, cast_a3 t 0.5 +26): the guard's raised lamp, beside the face, with the head level, the
         # plate seated and the amber eyes seen; a level neutral key, as the eyes went pink under the warm one; no head focal)
         "splash": {"clip": "attack2", "t": 0.72, "yaw": 6.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
-                   "exposure": -1.1, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFEAD0", "sun": 2.6, "rim_cool": 0.8,
-                   "rim_warm": 1.4, "bounce": 0.9, "bounce_color": "#F0C890", "accent": 2.2,
+                   "exposure": -1.35, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFF3E2", "sun": 2.5, "rim_cool": 0.8,
+                   "rim_warm": 1.4, "bounce": 0.5, "bounce_color": "#E8D4B8", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#FFD48C", "power": 45.0,
                               "size": 0.3}]},
         # (closing round 2 verify 1, cards:ilsheta-first-bell-chin: the bust took the splash's cast_a3 lean, the head tipped
@@ -296,7 +298,7 @@ CARDS = {
                                 "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
-        "plate": {"tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],
+        "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],
                   "glow_color": "#F6CF98"},
     },
 }

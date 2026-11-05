@@ -186,8 +186,8 @@ CARDS = {
                              {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 8.0, "size": 0.08},
                              {"at": "x_lamp", "point": True, "dist": 0.01, "color": "#FFA45C", "power": 14.0, "size": 0.03}],
-                   "lantern": {"cap": 0.82, "knee": 0.70, "glass": 26.0, "core_r": 15.0, "halo": 0.55, "halo_r": 42.0,
-                               "air": 0.16, "air_r": 150.0, "color": "#FFB56E", "core_color": "#FFF4DC"},
+                   "lantern": {"cap": 0.82, "knee": 0.70, "glass": 16.0, "core_r": 14.0, "halo": 0.55, "halo_r": 42.0,
+                               "air": 0.16, "air_r": 150.0, "color": "#FFB56E", "core_color": "#FFFCF2"},
                    "hound": {"x0": 0.085, "x1": 0.555, "top": 0.05, "hem": 0.735, "keystone": 0.07, "cx": 0.325, "cy": 0.385,
                              "length": 0.345, "tilt": 8.0, "soft": 5.0, "depth": 0.82, "pool_x": 0.47, "pool_y": 0.36,
                              "floor": 0.22, "peak": 0.56, "color": "#E2965A", "shadow": "#2E2024"}},
@@ -2048,7 +2048,7 @@ def _lantern_key(comp, alpha, xy, k):
     out *= (g * (1.0 - keep) + keep)[..., None]
     # the light: the broad warm air, the halo, the core
     warm = np.array(scene.hex_srgb(k.get("color", "#FFB56E")), np.float32)
-    hot = np.array(scene.hex_srgb(k.get("core_color", "#FFF4DC")), np.float32)
+    hot = np.array(scene.hex_srgb(k.get("core_color", "#FFFCF2")), np.float32)
     air = float(k.get("air", 0.16)) * np.exp(-d / float(k.get("air_r", 150.0)))
     halo = float(k.get("halo", 0.55)) * np.exp(-(d / float(k.get("halo_r", 42.0))) ** 2)
     for a, c in ((air, warm), (halo, warm)):

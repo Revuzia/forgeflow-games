@@ -3083,11 +3083,21 @@ def clip_overrides(ctx) -> dict:
     lie = pose(dict(hips=(4, 0, 86), spine=(10, 0, 2), chest=(10, 0, 0), neck=(8, 0, 12), head=(4, 4, 16), **legs_curl),
                (0.24, 0.02, -(hip_h - 0.15) - G_HIPS[2]), R=((0.05, -0.50, 0.80), (-0.3, 0.2, 0.9)), aim=(-0.55, -0.83, 0.05),
                L=((-0.62, -0.62, 0.32), (0.6, 0.3, 0.6)), laim=(-0.25, -0.65, -0.72), ft=FK0, cape=-6.0)
+    # (CW5 round 3: the sway -> lying blend straightened the legs, toe.R 58 cm through the floor; lifting that frame would
+    # stand her back up: the topple keeps the knees folded on the way over)
+    topple = pose(dict(hips=(8, 2, 48), spine=(8, 0, 5), chest=(8, 0, 3), neck=(7, 0, 10), head=(6, 2, 13),
+                       thigh_L=(20, 0, -6), shin_L=(-100, 0, 0), foot_L=(24, 0, 0),
+                       thigh_R=(18, 0, 3), shin_R=(-96, 0, 0), foot_R=(26, 0, 0)),
+                  (0.06, 0.05, -hip_h * 0.66), R=((-0.02, -0.48, 0.0), (-0.3, 0.2, 0.9)), aim=(-0.45, -0.75, -0.35),
+                  L=((-0.30, -0.60, -0.15), (0.6, 0.3, 0.6)), laim=(-0.25, -0.65, -0.72), ft=FK0, cape=0.0)
     bounce = anim.add(lie, P_(spine=(-3, 0, -4), chest=(-3, 0, -3), head=(0, 0, -6)))
     bounce["hips_loc"] = (lie["hips_loc"][0], lie["hips_loc"][1], lie["hips_loc"][2] + 0.03)
     rest = anim.add(lie, P_(head=(2, 0, 2), thigh_L=(4, 0, 0)))
+    # (the plant lets go after the sway: the FK legs under it must already be folded, or they swing out straight)
+    sway = anim.add(sway, P_(thigh_L=(20, 0, -6), shin_L=(-100, 0, 0), foot_L=(24, 0, 0), thigh_R=(18, 0, 3),
+                             shin_R=(-96, 0, 0), foot_R=(26, 0, 0)))
     death_k = anim.keyed([(0.0, g, "linear"), (0.12, recoil, "snap"), (0.38, knees, "inout"), (0.54, sway, "inout"),
-                          (0.74, lie, "in"), (0.81, bounce, "out"), (0.90, rest, "inout"), (1.0, rest, "linear")])
+                          (0.64, topple, "inout"), (0.74, lie, "in"), (0.81, bounce, "out"), (0.90, rest, "inout"), (1.0, rest, "linear")])
 
     skel_d = anim.Skeleton(ctx.info.armature)
 

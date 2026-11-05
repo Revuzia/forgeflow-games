@@ -35,14 +35,14 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 5.64,
-    "rough_metal": 4.3,
-    "normal": 3.06,
-    "ao": 3.39,
+    "base": 4.37,
+    "rough_metal": 3.54,
+    "normal": 2.35,
+    "ao": 3.05,
     "normal_fixed_px": 34288,
-    "projection": 85.59,
-    "pack_save": 86.1,
-    "total": 102.84
+    "projection": 59.93,
+    "pack_save": 60.08,
+    "total": 73.59
   },
   "tris": 21151,
   "mesh_top_m": 1.967,
@@ -157,9 +157,9 @@
   "optimize": {
     "ok": true,
     "before": 2698724,
-    "after": 1210212
+    "after": 1210736
   },
-  "glb_bytes": 1210212,
+  "glb_bytes": 1210736,
   "three_load_test": {
     "ok": false,
     "log": [
@@ -204,25 +204,25 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/nurrow/three_nurrow.png",
-    "seconds": 15.9,
+    "seconds": 10.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.16,
-      "materials": 0.35,
-      "model": 19.29,
-      "lows_bind": 4.96,
-      "uv": 7.74,
-      "bake": 102.85,
-      "clips": 1.17,
-      "export": 4.24,
-      "optimize": 1.32,
-      "load_test": 0.29,
-      "three_qa": 16.26,
-      "cache": 0.16
+      "rig": 0.14,
+      "materials": 0.29,
+      "model": 13.76,
+      "lows_bind": 2.94,
+      "uv": 5.12,
+      "bake": 73.59,
+      "clips": 0.41,
+      "export": 2.5,
+      "optimize": 0.73,
+      "load_test": 0.16,
+      "three_qa": 10.73,
+      "cache": 0.13
     },
-    "total_s": 158.91
+    "total_s": 110.58
   },
   "run_ref_speed": 3.55,
   "height_m": 1.78

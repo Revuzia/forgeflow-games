@@ -3607,7 +3607,7 @@ def gen_death(skel) -> anim.Clip:
     recoil["ik"].update(bowl(rel=(REST_L[0] + 0.05, REST_L[1] + 0.05, REST_L[2] - 0.05), aim=(0.2, -0.3, -0.93),
                              up=(0.9, 0.1, 0.4), yaw=-20.0))
     recoil["ik"].update(rh(k=0.0, rel=(-0.20, 0.0, -0.80)))
-    kneel = pz(lean=18.0, yaw=6.0, drop=0.44, dy=0.08, look=(14.0, 0.0, 0.0), string=0.0, drop_bow=0.0,
+    kneel = pz(lean=18.0, yaw=6.0, drop=0.37, dy=0.08, look=(14.0, 0.0, 0.0), string=0.0, drop_bow=0.0,
                feet=feet_(l=(0.02, 0.22, 0.04), r=(-0.02, 0.26, 0.04), pl=-62.0, pr=-62.0, yl=2.0, yr=-6.0))
     kneel["ik"].update(bowl(rel=(0.16, -0.20, -0.95), aim=(0.4, -0.2, -0.9), up=(0.85, 0.3, 0.4)))
     kneel["ik"].update(rh(k=0.0, rel=(-0.12, -0.20, -0.95)))
@@ -3626,10 +3626,25 @@ def gen_death(skel) -> anim.Clip:
     down["_fan"] = (0.0, 0.0, 0.0)
     down["_slide"] = (0.0, 0.0, 0.0)
     down["_drop"] = (1.0, 0.0, 0.0)
+    # (CW5 round 3: the kneel -> lying blend straightened her legs on the way down, toe.R 28 cm through the floor; lifting
+    # that frame stood her back up: the topple keeps the knees folded on the way over)
+    topple = anim.merge(anim.arms_relaxed(), anim.P(hips=(2.0, 3.0, 38.0), spine=(9, 0, 3), chest=(6, 0, 2), neck=(8, 0, -5),
+                                                    head=(6, 0, -7), thigh_L=(22, 0, -4), shin_L=(-100, 0, 0), foot_L=(30, 0, 0),
+                                                    thigh_R=(18, 0, 3), shin_R=(-104, 0, 0), foot_R=(30, 0, 0),
+                                                    upper_arm_L=(20, 0, 20), forearm_L=(15, 0, 0),
+                                                    upper_arm_R=(30, 0, -8), forearm_R=(25, 0, 0)))
+    topple["hips_loc"] = (-0.14, 0.09, -hip_h + 0.42)
+    topple["ik"] = {}
+    for ch_ in ("_str", "_fan", "_slide"):
+        topple[ch_] = (0.0, 0.0, 0.0)
+    topple["_drop"] = (1.0, 0.0, 0.0)
     bounce = anim._with_hips(anim.add(down, anim.P(spine=(-3, 0, 0), chest=(-3, 0, 0))), (0.0, 0.0, 0.03))
     rest = anim.add(down, anim.P(head=(4, 0, -2)))
     N = 45
-    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.30, kneel, "in"), (0.46, kneel2, "in"),
+    # (the plant lets go between these two keys: the FK legs under it must already be folded, or they swing out straight)
+    kneel2 = anim.add(kneel2, anim.P(thigh_L=(22, 0, -4), shin_L=(-100, 0, 0), foot_L=(30, 0, 0), thigh_R=(18, 0, 3),
+                                     shin_R=(-104, 0, 0), foot_R=(30, 0, 0)))
+    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.30, kneel, "in"), (0.46, kneel2, "in"), (0.58, topple, "inout"),
             (0.70, down, "in"), (0.78, bounce, "out"), (0.88, rest, "inout"), (1.0, rest, "linear")]
     fn = anim.keyed(keys)
     # (CW5 round 3, minor:floor: the kneel -> lying blend took her right toe 28 cm through the floor at f29)

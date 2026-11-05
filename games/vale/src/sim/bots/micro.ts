@@ -25,7 +25,7 @@ import type { SlotT } from '../../contracts/catalog.ts';
 import type { Command, PlayerId, SeatSetup } from '../../contracts/sim.ts';
 import { attackable, inAttackRange } from '../attack.ts';
 import { mitigated } from '../combat.ts';
-import { canMove } from '../status.ts';
+import { canMove, hasStatus, markStacks } from '../status.ts';
 import { matchesFilter } from '../effects.ts';
 import {
   ORDER_ATTACK, ORDER_ATTACK_MOVE, ORDER_CAST, ORDER_MOVE, ORDER_NONE, SLOT_INDEX, type AbilitySlot, type Entity, type Player,
@@ -332,6 +332,10 @@ export abstract class BotBase {
     }
     this.out.push(c);
     this.castLockUntil = this.now + 0.2 + info.castTime;
+    if (target && info.applies.length > 0) {
+      const land = info.delivery === 'projectile' ? Math.sqrt(this.dist2(target, this.e.x, this.e.y)) / Math.max(1, info.projSpeed) : info.delay;
+      this.setupTarget = target.id; this.setupStatuses = info.applies; this.setupUntil = this.now + info.castTime + land + 0.2;
+    }
   }
 
   /** aim point for a skillshot/area at `t` (lead by intercept, scaled by skill, plus aim error) */
@@ -401,6 +405,10 @@ export abstract class BotBase {
   }
 
   private readonly aimOut = { x: 0, y: 0 };
+  /** a cast of mine on its way to `setupTarget` that will put these statuses on it (CW3s r3-balance: combos that read a status) */
+  private setupTarget = -1;
+  private setupUntil = 0;
+  private setupStatuses: readonly string[] = [];
 
   /** ability / spell / item use for this tick; true if a cast was issued */
   protected useAbilities(): boolean {
@@ -510,6 +518,16 @@ export abstract class BotBase {
     const e = this.e, u = info.use;
     const tF = (t.hp + t.shield) / Math.max(1, t.maxHp);
     if (info.targetHpBelow <= 1 && tF >= info.targetHpBelow) return false;
+    // (CW3s r3-balance, balance:real-seat: a cast gated on a mark does nothing without it: Burdam's Settled Account dealt 25 a
+    // cast, a third of them with no enemy fighter near. It waits for 3 stacks in its reach, or one on a target about to fall)
+    if (info.needMark) {
+      let stacks = 0;
+      for (const f of this.perc.enemyFighters) if (f.alive && this.dist2(f, e.x, e.y) <= sq(info.reach + f.radius)) stacks += markStacks(f, info.needMark, e);
+      if (stacks < (tF < 0.4 ? 1 : 3)) return false;
+    }
+    // (a skilled tier holds a cast its own setup is about to upgrade: Tunlan's Hand went out while the Hound was still
+    // running, so the fear never turned into the stun)
+    if (info.upgrade && this.diff.leadSkill >= 0.5 && this.now < this.setupUntil && t.id === this.setupTarget && this.setupStatuses.includes(info.upgrade) && !hasStatus(t, info.upgrade as Parameters<typeof hasStatus>[1])) return false;
     const d = Math.sqrt(this.dist2(t, e.x, e.y));
     const ag = this.pAggro;
     const rank = Math.max(1, s.rank);
@@ -543,6 +561,9 @@ export abstract class BotBase {
         const dx = o.x - e.x, dy = o.y - e.y, dd = dhypot(dx, dy) || 1;
         if (info.delivery === 'projectile') {
           if (dd > info.projRange + t.radius * 0.5) return false;
+          // (CW3s r3-balance: a skilled tier does not throw a stopping projectile into a Wick standing in the line: Ulkro's
+          // Hurl hit 55 % against 85 % for the other shaftlights, and each one the Wick ate spent her Run-up)
+          if (info.blockable && this.diff.leadSkill >= 0.5 && !(u & U_EXECUTE) && this.wickInLine(o.x, o.y, dd, info.projWidth * 0.5)) return false;
         } else if (info.delivery === 'dash' || info.delivery === 'blink') {
           if (dd > info.reach + 0.5) return false;
           if (dd > info.range && info.range > 0) { o.x = e.x + (dx / dd) * info.range; o.y = e.y + (dy / dd) * info.range; }
@@ -572,6 +593,19 @@ export abstract class BotBase {
     }
   }
 
+  /** an enemy Wick or summon stands in the line from me toward (x, y), `dd` away */
+  private wickInLine(x: number, y: number, dd: number, half: number): boolean {
+    const e = this.e, ux = (x - e.x) / dd, uy = (y - e.y) / dd;
+    for (const c of this.perc.enemyUnits) {
+      if (!c.alive || !c.targetable) continue;
+      const rx = c.x - e.x, ry = c.y - e.y, along = rx * ux + ry * uy;
+      if (along < 0 || along > dd) continue;
+      const side = rx * uy - ry * ux, w = half + c.radius;
+      if (side * side <= w * w) return true;
+    }
+    return false;
+  }
+
   /** `t` is my lane opponent and has not answered a blow; the bot layer knows (see Bot) */
   protected unanswering(_t: Entity): boolean { return false; }
 
@@ -597,6 +631,9 @@ export abstract class BotBase {
     if (!target) return false;
     if (info.tk === 'unit' && !matchesFilter(this.w, e, target, info.filter)) return false;
     const u = info.use;
+    // (CW3s r3-balance: an ultimate is not farm unless it says so or the monster is a big one: 20-35 % of the casters' and
+    // the frontline's ults went out with no enemy fighter within 15 m, Tunlan's averaging 112 damage to fighters a cast)
+    if (info.needMark || (s.slot === 'ult' && !(u & U_WAVECLEAR) && !(target.kind === 'monster' && target.maxHp >= 1500))) return false;
     // a pure execute (smite) waits for the killing blow
     if ((u & U_EXECUTE) && !(u & (U_DAMAGE | U_WAVECLEAR))) {
       const dmg = estimateDamage(info, e, Math.max(1, s.rank), target);
@@ -965,6 +1002,21 @@ export abstract class BotBase {
   /** attack a fight target; ranged styles orb-walk away from shorter-ranged targets */
   private fightTarget(f: Entity): void {
     const e = this.e;
+    // (CW3s r3-balance: a form that pays out on distance run is fought on the move, attacking when the swing is ready:
+    // Ulkro stood still through Long Run and it threw about one dart per ult, 2 % of her damage)
+    if (this.prof.moveForm && e.form === this.prof.moveForm && f.kind === 'fighter' && inAttackRange(e, f)) {
+      if (e.atkWindup >= 0) return;
+      if (e.atkCd > 0.35 / Math.max(0.05, e.stats.attackSpeed)) {
+        const dx = e.x - f.x, dy = e.y - f.y, d = dhypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+        const comfy = e.stats.range + e.radius + f.radius - 0.8;
+        const out = d < comfy ? 0.5 : -0.5;
+        const side = Math.floor(this.now / 1.5) % 2 === 0 ? 1 : -1;
+        const tx = e.x + (ux * out - uy * side) * 2.5, ty = e.y + (uy * out + ux * side) * 2.5;
+        if (this.w.nav.walkable(tx, ty)) { this.moveTo(tx, ty); return; }
+        const bx = e.x + (ux * out + uy * side) * 2.5, by = e.y + (uy * out - ux * side) * 2.5;
+        if (this.w.nav.walkable(bx, by)) { this.moveTo(bx, by); return; }
+      }
+    }
     if (this.prof.ranged && f.kind === 'fighter' && f.attackDef && f.stats.range + 0.8 < e.stats.range) {
       if (this.now - this.kiteRollAt > 4) { this.kiteRollAt = this.now; this.kiting = this.rng.chance(this.diff.kiteSkill); }
       if (this.kiting && inAttackRange(e, f)) {

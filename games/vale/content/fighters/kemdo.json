@@ -18,7 +18,7 @@
     "true_damage"
   ],
   "base": {
-    "hp": 640,
+    "hp": 630,
     "hpRegen": 1.6,
     "ad": 64,
     "armor": 33,
@@ -27,9 +27,9 @@
     "moveSpeed": 3.45
   },
   "growth": {
-    "hp": 104,
+    "hp": 100,
     "hpRegen": 0.14,
-    "ad": 3.7,
+    "ad": 3.5,
     "armor": 4.5,
     "resist": 1.8,
     "attackSpeed": 0.025
@@ -106,13 +106,13 @@
               "op": "damage",
               "amount": {
                 "base": [
-                  70,
-                  100,
-                  130,
-                  160,
-                  190
+                  62,
+                  90,
+                  118,
+                  146,
+                  174
                 ],
-                "bonusAd": 0.8
+                "bonusAd": 0.7
               },
               "type": "phys",
               "to": "hit"
@@ -390,9 +390,9 @@
               "op": "damage",
               "amount": {
                 "base": [
-                  30,
-                  45,
-                  60
+                  24,
+                  38,
+                  52
                 ],
                 "bonusAd": 0.15
               },

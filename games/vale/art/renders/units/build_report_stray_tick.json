@@ -5,18 +5,18 @@
   "parts": {
     "stone": 0
   },
-  "uv_coverage": 0.671,
+  "uv_coverage": 0.697,
   "bake": {
-    "base": 1.84,
-    "rough_metal": 1.15,
-    "normal": 0.99,
-    "ao": 0.84,
-    "normal_fixed_px": 15305,
-    "pack_save": 0.15,
-    "total": 5.11
+    "base": 2.99,
+    "rough_metal": 3.06,
+    "normal": 2.01,
+    "ao": 2.2,
+    "normal_fixed_px": 16295,
+    "pack_save": 0.67,
+    "total": 11.06
   },
   "bake_holes_filled": 0,
-  "no_ao_faces": 26059,
+  "no_ao_faces": 27907,
   "clips": {
     "idle": {
       "frames": 60,
@@ -54,35 +54,35 @@
   "mesh_top_m": 1.0,
   "min_z": {
     "idle": [
-      -0.02,
+      -0.017,
       [
         28,
         [
-          0.24,
-          0.13,
+          0.18,
+          0.12,
           -0.02
         ]
       ]
     ],
     "run": [
-      -0.021,
+      -0.02,
       [
         0,
         [
-          0.24,
+          0.18,
           -0.09,
           -0.02
         ]
       ]
     ],
     "attack1": [
-      -0.0,
+      0.0,
       [
         0,
         [
-          0.22,
-          -0.11,
-          -0.0
+          -0.18,
+          -0.12,
+          0.0
         ]
       ]
     ],
@@ -91,29 +91,29 @@
       [
         22,
         [
-          0.01,
           -0.01,
+          0.01,
           0.0
         ]
       ]
     ]
   },
-  "glb_bytes_raw": 551676,
+  "glb_bytes_raw": 558624,
   "optimize": {
     "ok": true,
-    "before": 551676,
-    "after": 124692
+    "before": 558624,
+    "after": 124980
   },
-  "glb_bytes": 124692,
+  "glb_bytes": 124980,
   "inspect": [
-    "art/out/units/stray_tick.glb  121.8 KiB  1500 tris  extensions: EXT_texture_webp, KHR_mesh_quantization",
+    "art/out/units/stray_tick.glb  122.1 KiB  1500 tris  extensions: EXT_texture_webp, KHR_mesh_quantization",
     "  skin stray_tick_rig: 5 joints: root hips foot head mid",
     "  mesh stray_tick_stone: 1500 tris",
-    "    prim material=stray_tick_body tris=1500 verts=1170 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
+    "    prim material=stray_tick_body tris=1500 verts=1175 [JOINTS_0,POSITION,NORMAL,TEXCOORD_0,WEIGHTS_0]",
     "  material stray_tick_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
-    "  texture stray_tick_normal: image/webp ? 37.4 KiB",
-    "  texture stray_tick_orm: image/webp ? 5.0 KiB",
-    "  texture stray_tick_base: image/webp ? 27.4 KiB",
+    "  texture stray_tick_normal: image/webp ? 37.1 KiB",
+    "  texture stray_tick_orm: image/webp ? 4.8 KiB",
+    "  texture stray_tick_base: image/webp ? 28.1 KiB",
     "  clip attack1      0.833 s (25 f) channels=2 bones=1",
     "  clip death        1.500 s (45 f) channels=6 bones=3",
     "  clip idle         2.000 s (60 f) channels=2 bones=1",
@@ -123,12 +123,12 @@
     "ok": true,
     "log": [
       "[three] art/out/units/stray_tick.glb (122 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: stray_tick_base 512x512 27K, stray_tick_normal 512x512 37K, stray_tick_orm 256x256 5K",
-      "  skinned meshes: stray_tick(1170v)",
+      "  webp: stray_tick_base 512x512 28K, stray_tick_normal 512x512 37K, stray_tick_orm 256x256 5K",
+      "  skinned meshes: stray_tick(1175v)",
       "  bones: 5 (root hips foot head mid)",
       "  clips: attack1:0.833s/2tr, death:1.500s/6tr, idle:2.000s/2tr, run:0.400s/2tr",
       "  tracks checked: 12; materials: stray_tick_body; textures: stray_tick_body.map=512x512, stray_tick_body.normalMap=512x512, stray_tick_body.roughnessMap=256x256, stray_tick_body.metalnessMap=256x256, stray_tick_body.aoMap=256x256",
-      "  tris: 1500; bind-pose bounds (three units, Y up): 0.51 x 1.00 x 0.29; facing (0.00, 1.00); head bone y 0.80; runRefSpeed -",
+      "  tris: 1500; bind-pose bounds (three units, Y up): 0.40 x 1.00 x 0.29; facing (-0.00, 1.00); head bone y 0.80; runRefSpeed -",
       "  run: 12 f, planted samples undefined, max foot-speed error undefined%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
@@ -137,22 +137,22 @@
     "ok": true,
     "out": "art/renders/units/stray_tick.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.255,0,-0.147],[0.255,1,0.147]],\"facing\":[0,1],\"headY\":0.8,\"heightPx1080\":52,\"rows\":[\"facings\",\"attack1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1500],\"clips\":4,\"out\":\"art/renders/units/stray_tick.png\",\"seconds\":26.7}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.2,0,-0.147],[0.2,1,0.147]],\"facing\":[0,1],\"headY\":0.8,\"heightPx1080\":52,\"rows\":[\"facings\",\"attack1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1500],\"clips\":4,\"out\":\"art/renders/units/stray_tick.png\",\"seconds\":26.6}"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "sculpt": 36.38,
-      "bind": 0.02,
-      "uv": 44.7,
-      "bake": 6.38,
-      "clips": 0.06,
-      "ground_qa": 0.06,
-      "export": 0.23,
-      "optimize": 0.83,
-      "qa": 27.78
+      "rig": 0.0,
+      "sculpt": 17.95,
+      "bind": 0.01,
+      "uv": 19.19,
+      "bake": 15.08,
+      "clips": 0.09,
+      "ground_qa": 0.08,
+      "export": 0.38,
+      "optimize": 2.63,
+      "qa": 30.5
     },
-    "total_s": 116.66
+    "total_s": 86.05
   }
 }

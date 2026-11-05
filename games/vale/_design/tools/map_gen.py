@@ -600,16 +600,16 @@ def build_rift():
         camp(f"s_{cid}", mpt(center, W), [(e[0], -e[1], e[2], *((round((180.0 - e[3]) % 360.0, 1),) if len(e) > 3 else ())) for e in units],
              first, respawn)
 
-    camp_pair("glasshorn", glasshorn, [("glasshorn", 0.0, 0.0)], 60, 270)
-    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0), ("gloamoth_little", -1.6, 1.0), ("gloamoth_little", 1.6, 1.0), ("gloamoth_little", 0.0, -1.7)], 60, 150)
+    camp_pair("glasshorn", glasshorn, [("glasshorn", 0.0, 0.0, 180.0)], 60, 270)
+    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0, 60.0), ("gloamoth_little", -1.6, 1.0, 60.0), ("gloamoth_little", 1.6, 1.0, 60.0), ("gloamoth_little", 0.0, -1.7, 60.0)], 60, 150)
     # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its
     # broad stride, not its 0.42 m side; the Ticks three-quarter toward it, turned in toward their Numeral
-    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 90.0), ("stray_tick", -1.0, 1.9, 30.0), ("stray_tick", 1.7, -1.1, 150.0)], 60, 150)
-    camp_pair("resinback", resinback, [("resinback", 0.0, 0.0, 60.0)], 60, 270)
-    camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0, 0.0), ("stilltusk_young", -1.6, -1.0, 0.0), ("stilltusk_young", 1.6, -1.0, 0.0)], 60, 150)
-    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 90.0), ("stray_tick", -1.7, -1.1, 30.0), ("stray_tick", 1.7, 1.1, 150.0)], 60, 150)
+    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 80.0), ("stray_tick", -1.0, 1.9, 270.0), ("stray_tick", 1.7, -1.1, 270.0)], 60, 150)
+    camp_pair("resinback", resinback, [("resinback", 0.0, 0.0, 90.0)], 60, 270)
+    camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0, 180.0), ("stilltusk_young", -1.6, -1.0, 180.0), ("stilltusk_young", 1.6, -1.0, 180.0)], 60, 150)
+    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 80.0), ("stray_tick", -1.7, -1.1, 270.0), ("stray_tick", 1.7, 1.1, 270.0)], 60, 150)
     camp("sunsplinter", ss_pit, [("sunsplinter", 0.0, 0.0)], 360, 270, objective=True)
-    camp("longshade", ls_pit, [("longshade", 0.0, 0.0, 90.0)], 960, 360, objective=True)
+    camp("longshade", ls_pit, [("longshade", 0.0, 0.0, 60.0)], 960, 360, objective=True)
 
     bases = []
     for team in (0, 1):

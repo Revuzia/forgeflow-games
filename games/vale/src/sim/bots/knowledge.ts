@@ -79,6 +79,14 @@ export interface AbilityInfo {
   readonly affectsAllies: boolean;
   /** the cast holds its own caster in place (a self root or stun: a stance, never an escape) */
   readonly selfHold: boolean;
+  /** a projectile stops at the first thing it hits (no pierce) and Wicks count: a Wick in the line eats it */
+  readonly blockable: boolean;
+  /** statuses the cast puts on enemies */
+  readonly applies: readonly string[];
+  /** a status on the target that upgrades this cast ("a feared enemy is stunned instead"): worth waiting for when it is on the way */
+  readonly upgrade: string | null;
+  /** everything the cast does is gated on this mark on the target: without it the cast does nothing */
+  readonly needMark: string | null;
 }
 
 const CC_STATUSES = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborne', 'taunt', 'fear', 'sleep']);
@@ -92,9 +100,28 @@ function shapeReach(s: ShapeT): number {
 }
 
 interface Acc {
-  delivery: Delivery; projSpeed: number; projWidth: number; projRange: number;
+  delivery: Delivery; projSpeed: number; projWidth: number; projRange: number; blockable: boolean;
   shape: ShapeT | null; areaAt: AbilityInfo['areaAt']; delay: number; dashDist: number; dashMode: string; blinkDist: number;
   cc: boolean; dmg: DmgTerm[]; heal: boolean; shield: boolean; selfBuff: boolean; affectsAllies: boolean; selfHold: boolean;
+  applies: string[];
+}
+
+/** the first `if targetHasStatus` in a cast's top level or the hit list of its area, its projectile or its dash's arrival */
+function readUpgrade(list: readonly EffectT[] | undefined): string | null {
+  for (const eff of list ?? []) {
+    if (eff.op === 'if' && eff.cond.kind === 'targetHasStatus') return eff.cond.status;
+    const sub = eff.op === 'area' || eff.op === 'projectile' ? eff.onHit : null;
+    const r = sub ? readUpgrade(sub) : null;
+    if (r) return r;
+  }
+  return null;
+}
+
+/** the mark a cast's single area does all its work behind (its hit list is one `if targetHasMark`), or null */
+function readNeedMark(list: readonly EffectT[] | undefined): string | null {
+  if (list?.length !== 1 || list[0].op !== 'area') return null;
+  const hit = list[0].onHit;
+  return hit?.length === 1 && hit[0].op === 'if' && hit[0].cond.kind === 'targetHasMark' && !hit[0].else ? hit[0].cond.mark : null;
 }
 
 function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, a: Acc, depth: number): void {
@@ -107,6 +134,7 @@ function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, 
       case 'heal': a.heal = true; break;
       case 'shield': a.shield = true; break;
       case 'status':
+        if (eff.to !== 'self' && !a.applies.includes(eff.status)) a.applies.push(eff.status);
         if (CC_STATUSES.has(eff.status) && eff.to !== 'self') a.cc = true;
         else if (top && eff.to === 'self' && (eff.status === 'root' || eff.status === 'stun')) a.selfHold = true;
         else if (SELF_BUFF_STATUSES.has(eff.status) && eff.to === 'self') a.selfBuff = true;
@@ -114,7 +142,7 @@ function walk(list: readonly EffectT[] | undefined, mult: number, top: boolean, 
       case 'buff': if (eff.to === 'self') a.selfBuff = true; if (eff.empowerAttacks) walk(eff.empowerAttacks.effects, mult * eff.empowerAttacks.count, false, a, depth + 1); break;
       case 'displace': if (eff.to !== 'self') a.cc = true; break;
       case 'projectile':
-        if (a.delivery === 'none') { a.delivery = 'projectile'; a.projSpeed = eff.speed; a.projWidth = eff.width; a.projRange = eff.range; }
+        if (a.delivery === 'none') { a.delivery = 'projectile'; a.projSpeed = eff.speed; a.projWidth = eff.width; a.projRange = eff.range; a.blockable = (eff.pierce ?? 0) === 0 && eff.filter?.minions !== false; }
         walk(eff.onHit, mult * Math.max(1, eff.count ?? 1) * (eff.returns ? 1.5 : 1), false, a, depth + 1);
         walk(eff.onEnd, mult, false, a, depth + 1);
         break;
@@ -160,7 +188,7 @@ export function abilityInfo(def: AbilityCoreT): AbilityInfo {
   let r = infoCache.get(def);
   if (r) return r;
   const a: Acc = {
-    delivery: 'none', projSpeed: 0, projWidth: 0, projRange: 0, shape: null, areaAt: 'point', delay: 0, dashDist: 0, dashMode: '',
+    delivery: 'none', projSpeed: 0, projWidth: 0, projRange: 0, blockable: false, applies: [], shape: null, areaAt: 'point', delay: 0, dashDist: 0, dashMode: '',
     blinkDist: 0, cc: false, dmg: [], heal: false, shield: false, selfBuff: false, affectsAllies: false, selfHold: false,
   };
   walk(def.effects, 1, true, a, 0);
@@ -192,6 +220,7 @@ export function abilityInfo(def: AbilityCoreT): AbilityInfo {
     projSpeed: a.projSpeed, projWidth: a.projWidth, projRange: a.projRange, shape: a.shape, areaAt: a.areaAt, delay: a.delay,
     dashDist: a.dashDist, dashMode: a.dashMode, blinkDist: a.blinkDist, reach, radius, castTime: def.castTime, cc: a.cc,
     dmg: a.dmg, heal: a.heal, shield: a.shield, selfBuff: a.selfBuff, affectsAllies: a.affectsAllies, selfHold: a.selfHold,
+    blockable: a.blockable, applies: a.applies, upgrade: readUpgrade(def.effects), needMark: readNeedMark(def.effects),
   };
   infoCache.set(def, r);
   return r;
@@ -333,6 +362,8 @@ export interface FighterProfile {
   readonly hardCc: boolean;
   /** squishy: ranged, or a burst / artillery / marksman style (what a burst ward protects) */
   readonly squishy: boolean;
+  /** a form whose payoff fires on distance run (a `moveDistance` passive gated on it): the bot keeps moving while it lasts */
+  readonly moveForm: string | null;
 }
 
 const RETREAT_HP: Readonly<Record<Style, number>> = {
@@ -350,6 +381,11 @@ function useRank(u: number): number {
   if (u & (U_HEAL | U_SHIELD)) return 2;
   if (u & (U_ENGAGE | U_GAPCLOSE | U_BUFF)) return 1.5;
   return 1;
+}
+
+function readMoveForm(def: FighterDefT): string | null {
+  for (const t of def.kit.passive.triggers ?? []) if (t.on === 'moveDistance' && t.cond?.kind === 'inForm') return t.cond.form;
+  return null;
 }
 
 export function fighterProfile(def: FighterDefT): FighterProfile {
@@ -379,6 +415,7 @@ export function fighterProfile(def: FighterDefT): FighterProfile {
     retreatHp: RETREAT_HP[style] ?? 0.28, front: FRONT_STYLES.has(style),
     heals: kitRead.heals || style === 'sustain', holds: kitRead.holds, hardCc: kitRead.hardCc,
     squishy: ranged || style === 'burst' || style === 'artillery' || style === 'marksman',
+    moveForm: readMoveForm(def),
   };
 }
 

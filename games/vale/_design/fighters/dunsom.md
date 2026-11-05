@@ -184,3 +184,9 @@ Value bands (area-weighted): top **72** (70-85) · mid **48** (45-65) · feet **
 - [ ] `cast_a3` has at most 4 frames of anticipation (castTime 0).
 
 - Closing polish, round 2: `death` keeps the hips over the knees with the fold in the spine and chest, and the fists hang clear of the skirt; the hood closes into a round dome under the hat; the fallen crook lies with its hook flat, propped on the lantern. The icon brings the lantern's warm light in from the top-left corner, just out of frame (`corner_glow` in face_chips.json).
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.087 -> -0.020 m). The lift is applied to the shipped GLB, not the source: re-run after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/dunsom/dunsom.glb --clip death --bone hips --dy 0.07 --from 0.36 --to 0.60

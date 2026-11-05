@@ -188,3 +188,9 @@ Value bands (area-weighted): top **72** (70-85) · mid **50** (45-65) · feet **
 - [ ] `art.height` is 2.30 m (the rack top); the hood crown is at 2.00 m. The overhead health bar clears the rack.
 - [ ] The rack stays level (tilt <= 3 degrees) in `idle`, `run` and the clack of `cast_a3`; no shard clips the hood.
 - [ ] The cut-top inlays are the only emissive pixels at rest; `cast_a3` has at most 4 frames of anticipation (castTime 0).
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.030 -> -0.020 m). The lift is applied to the shipped GLB, not the source: re-run after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/hesmi/hesmi.glb --clip death --bone hips --dy 0.012 --from 0.60 --to 0.80

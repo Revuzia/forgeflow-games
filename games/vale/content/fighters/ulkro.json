@@ -103,9 +103,9 @@
                     {
                       "op": "damage",
                       "amount": {
-                        "base": 12,
-                        "level": 2,
-                        "bonusAd": 0.25
+                        "base": 18,
+                        "level": 3,
+                        "bonusAd": 0.3
                       },
                       "type": "phys",
                       "to": "hit"

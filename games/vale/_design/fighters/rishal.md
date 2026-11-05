@@ -198,3 +198,11 @@ Deluxe modelling (closing round 2, par:rishal; the skin's silhouette class and t
 - [ ] Both crest plates are at least 30 cm long and rigid; the scarf is one bone.
 - [ ] The knife blades never become the brightest mid-band pixels; the accent ridge is the only emissive material.
 - [ ] `cast_a1` and `cast_a3` have at most 4 frames of anticipation (castTime 0): the dash must not be hidden by a long wind-up.
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.137 -> -0.003 m). The lift is applied to the shipped GLB, not the source: re-run after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/rishal/rishal.glb --clip death --bone hips --dy 0.07 --from 0.11 --to 0.20
+    node art/tools/clip_lift.mjs art/out/fighters/rishal/rishal.glb --clip death --bone hips --dy 0.07 --from 0.38 --to 0.466
+    node art/tools/clip_lift.mjs art/out/fighters/rishal/rishal.glb --clip death --bone hips --dy -0.07 --from 0.47 --to 0.53

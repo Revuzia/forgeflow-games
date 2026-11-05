@@ -193,3 +193,11 @@ This skin re-mixes the bands: the ink wraps are 22% of the middle band and the l
 - [ ] The hood, the shoulder cape and the cup are rigid; the cup hook is one pendulum bone; the wraps use no sway bones.
 - [ ] The cup core and rim inlay are the only emissive material; the glass cup stays glossy and never glows.
 - [ ] `cast_a2` carries a clear extend frame and a clear tug frame (f3 and f6) so Draw Near reads as a pull; the self-cast reuses the clip.
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.090 -> -0.015 m). The lift is applied to the shipped GLB, not the source: re-run after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/sukri/sukri.glb --clip death --bone hips --dy 0.075 --from 0.16 --to 0.30
+    node art/tools/clip_lift.mjs art/out/fighters/sukri/sukri.glb --clip death --bone hips --dy -0.075 --from 0.50 --to 0.62
+    node art/tools/clip_lift.mjs art/out/fighters/sukri/sukri.glb --clip death --bone hips --dy 0.006 --from 0.60 --to 0.70

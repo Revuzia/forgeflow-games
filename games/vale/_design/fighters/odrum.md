@@ -197,3 +197,9 @@ Value bands (area-weighted): top **70** (70-85) · mid **49** (45-65) · feet **
 - [ ] `cast_a3` has at most 4 frames of anticipation (castTime 0).
 
 - Closing polish, round 2: the mask's ochre carries more chroma at the same L* (paint mean #C5A87E -> #C6A36E) and the jars' glaze with it (`odrum-m1`); the thin mouth ring is 65 % wider (`odrum-m3`); the value lift on the jerkin is per skin, Shadeprint takes a fifth of it because its pale upper body comes from its own wash (`odrum-m6`); the channel breathes through chest and spine, head travel 7.1 cm with the bar and hands still (`odrum-m4`).
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.037 -> -0.017 m). The lift is applied to the shipped GLB, not the source: re-run after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/odrum/odrum.glb --clip death --bone hips --dy 0.02 --from 0.12 --to 0.24

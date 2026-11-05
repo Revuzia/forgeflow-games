@@ -135,6 +135,52 @@ SKINS: list = [
 ]
 SKIN_FLAT = {"rope_coil": "rope", "finial_post": "wood", "finial_vessel": "lampresin"}
 
+# (closing round 3, marund:gorgewalk-face: the pale-stone patches of the painted mask took the slate skin's gain and read as
+# jagged, tooth-like white blocks over the moustache in the bust: on this skin the mask's pale paint rolls off into its own
+# walnut, so the beak keel is the only pale form on the face. Display luma above SKIN_FACE_T keeps SKIN_FACE_K of its height)
+SKIN_FACE_T, SKIN_FACE_K, SKIN_FACE_WALNUT = 0.34, 0.35, (0.60, 0.44, 0.32)
+KEEL_A, KEEL_B = (0.0, -0.255, 1.80), (0.0, -0.322, 1.656)
+
+
+def _keel_only(img, maps, names, out):
+    """_recolour's Gorgewalk step: every mask texel outside the keel's cone (RoundCone KEEL_A r 0.06 -> KEEL_B r 0.02, + 1.2 cm)"""
+    from common.hifi import project as _project
+    part = maps["part"]
+    iy, ix = _project.nearest_index(part >= 0)
+    pid, Pm = part[iy, ix], maps["P"][iy, ix]
+    a, b = np.array(KEEL_A, np.float32), np.array(KEEL_B, np.float32)
+    ab = b - a
+    u = np.clip(((Pm - a) @ ab) / float(ab @ ab), 0.0, 1.0)
+    keel = np.linalg.norm(Pm - (a + u[..., None] * ab), axis=-1) < 0.072 - 0.04 * u
+    m = (pid == names.index("mask")) & ~keel
+    Y = np.array([0.2126, 0.7152, 0.0722], np.float32)
+    c = out[m]
+    L = np.maximum(c @ Y, 1e-4)
+    Ln = np.where(L > SKIN_FACE_T, SKIN_FACE_T + (L - SKIN_FACE_T) * SKIN_FACE_K, L)
+    wal = np.array(SKIN_FACE_WALNUT, np.float32)
+    w = (np.clip((L - SKIN_FACE_T) / 0.15, 0.0, 1.0) * 0.85)[:, None]
+    res = out.copy()
+    res[m] = np.clip(c * (Ln / L)[:, None] * (1.0 - w) + wal * (Ln / float(wal @ Y))[:, None] * w, 0.0, 1.0)
+    return res
+
+
+def _install_skin_face() -> None:
+    from common.hifi import project as _project
+    if getattr(_project.recolour, "_marund", False):
+        return
+    orig = _project.recolour
+
+    def recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):
+        out = orig(img, maps, names, roles, base_pal, skin_pal, skip=skip, log=log)
+        if "cap_band" in names and "mask" in names and skin_pal.get("stone") == "#A4B3BD":
+            out = _keel_only(img, maps, names, out)
+        return out
+    recolour._marund = True
+    _project.recolour = recolour
+
+
+_install_skin_face()
+
 HEIGHT = 2.35             # crown of the cap (the projection plates' scale)
 PROJECTION = {"concept": "marund", "height": HEIGHT, "tops": {"cap": ("marund_captop.png", 0.7)},
               # the re-modelled maul and the trowel sit where the concept paints other things: flat paint
@@ -700,7 +746,10 @@ def clip_overrides(ctx) -> dict:
     clips = anim.standard_clips(skel, prof, out)
     follows = {"cast_a1": a1_follow,
                "stunned": lambda t: 0.20,
-               "death": lambda t: anim.sine(min(1.0, max(0.0, (t - 0.10) / 0.35)))}
+               # (closing round 3, fighter:deaths:floor: riding the head all the way stood the 1.28 m disc on edge, 37 cm through
+               # the floor: 0.63 of the way, so he ends with the dome tipped on its rim. The shipped GLB took this in place, and
+               # its hips lift is not in this source: after any rebuild re-run the clip_lift lines in _design/fighters/marund.md)
+               "death": lambda t: 0.63 * anim.sine(min(1.0, max(0.0, (t - 0.10) / 0.35)))}
     return {k: _levelled(skel, c, follows.get(k)) for k, c in clips.items()}
 
 

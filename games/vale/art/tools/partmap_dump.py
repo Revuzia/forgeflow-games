@@ -42,6 +42,14 @@ except TypeError:
 body = max((o for o in bpy.data.objects if o.type == "MESH" and o.data.attributes.get("vale_part")),
            key=lambda o: len(o.data.polygons))
 maps = project.rasterize(body, 2048, "vale_part")
+# (CW5 round 3: Nurrow's build splits hat_cone into two parts, so sculpts() is one name short and every id after it read as the
+# wrong part: "trousers" measured a hand. A map with more parts than sculpts() names keeps the build's own names, or stops.)
+if int(maps["part"].max()) >= len(names):
+    prior = os.path.join(GAME, "art", ".cache", "fighters", "partmap", f"{fid}.npz")
+    built = [str(n) for n in np.load(prior)["names"]] if os.path.isfile(prior) else []
+    if int(maps["part"].max()) >= len(built):
+        raise SystemExit(f"[partmap] {fid}: ids reach {int(maps['part'].max())} but sculpts() names {len(names)}: rebuild for the build's own map")
+    names = built
 out = os.path.join(GAME, "art", ".cache", "fighters", "partmap", f"{fid}.npz")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 np.savez_compressed(out, part=np.ascontiguousarray(maps["part"]), names=np.array(names))

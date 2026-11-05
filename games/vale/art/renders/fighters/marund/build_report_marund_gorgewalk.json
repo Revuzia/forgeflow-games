@@ -162,29 +162,29 @@
   },
   "uv_coverage": 0.623,
   "bake": {
-    "base": 18.06,
-    "rough_metal": 20.78,
-    "normal": 125.62,
-    "ao": 56.63,
+    "base": 7.38,
+    "rough_metal": 6.54,
+    "normal": 3.3,
+    "ao": 4.43,
     "normal_fixed_px": 23349,
-    "projection": 535.92,
-    "pack_save": 538.86,
-    "total": 762.12
+    "projection": 56.04,
+    "pack_save": 56.39,
+    "total": 78.57
   },
   "tris": 19225,
   "mesh_top_m": 2.316,
-  "glb_bytes_raw": 2396856,
+  "glb_bytes_raw": 2393028,
   "optimize": {
     "ok": true,
-    "before": 2396856,
-    "after": 997348
+    "before": 2393028,
+    "after": 994620
   },
-  "glb_bytes": 997348,
+  "glb_bytes": 994620,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_gorgewalk.glb (974 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_gorgewalk_base 2048x2048 295K, marund_gorgewalk_normal 512x512 42K, marund_gorgewalk_orm 512x512 59K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_gorgewalk.glb (971 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_gorgewalk_base 2048x2048 293K, marund_gorgewalk_normal 512x512 42K, marund_gorgewalk_orm 512x512 59K",
       "  skinned meshes: marund_accent(126v), marund_gorgewalk(16438v)",
       "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -199,8 +199,8 @@
       "portrait": "art/out/fighters/marund/marund_gorgewalk_portrait.png"
     },
     "seconds": {
-      "splash": 381.74,
-      "portrait": 33.97
+      "splash": 96.71,
+      "portrait": 17.8
     }
   },
   "three_qa": {
@@ -232,24 +232,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/marund/three_marund_gorgewalk.png",
-    "seconds": 176.5,
+    "seconds": 19.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.03,
-      "materials": 1.64,
-      "model": 281.23,
-      "lows_bind": 204.14,
-      "uv": 17.54,
-      "bake": 762.13,
-      "export": 2.07,
-      "optimize": 8.04,
-      "load_test": 2.15,
-      "render": 416.15,
-      "three_qa": 177.32
+      "rig": 0.0,
+      "materials": 0.25,
+      "model": 9.38,
+      "lows_bind": 10.85,
+      "uv": 9.74,
+      "bake": 78.57,
+      "export": 0.19,
+      "optimize": 1.08,
+      "load_test": 0.23,
+      "render": 114.58,
+      "three_qa": 20.08
     },
-    "total_s": 1873.37
+    "total_s": 245.03
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

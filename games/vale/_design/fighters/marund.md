@@ -201,3 +201,18 @@ Value bands (area-weighted): top **72** (70-85) · mid **47** (45-65) · feet **
 - [ ] The cap stays level (tilt <= 3 degrees) in `run`, `idle` and the four casts; the cap never clips the shoulder rolls in `death`.
 - [ ] The three windows are the only emissive pixels at rest and stay below bloom (emissive <= 0.8).
 - [ ] The maul head reads as a separate block at the right knee in `idle` and `run`.
+
+## Closing round 3: shipped GLB notes
+
+Death floor (fighter:deaths:floor, clip_floor death -0.371 -> -0.018 m). Marund's death is a generic clip, so its body lift is applied to the shipped GLB; re-run these after any base rebuild, then check with `art/tools/clip_floor.py`:
+
+    node art/tools/clip_lift.mjs art/out/fighters/marund/marund.glb --clip death --bone hips --dy 0.14 --from 0.20 --to 0.35
+    node art/tools/clip_lift.mjs art/out/fighters/marund/marund.glb --clip death --bone hips --dy 0.10 --from 0.50 --to 0.75
+    node art/tools/clip_lift.mjs art/out/fighters/marund/marund.glb --clip death --bone hips --dy 0.025 --from 0.48 --to 0.60
+    node art/tools/clip_lift.mjs art/out/fighters/marund/marund.glb --clip death --bone hips --dy -0.025 --from 0.66 --to 0.75
+    node art/tools/clip_lift.mjs art/out/fighters/marund/marund.glb --clip death --bone hips --dy 0.052 --from 0.72 --to 0.85
+
+The cap comes to rest tipped on its rim: `follows["death"]` in art/blender/fighters/marund.py stops at 0.63 of the head's tilt. The shipped GLB got the same tilt (26 degrees back toward level) written straight into its x_cap track, so the source's value has not been through a rebuild yet.
+
+Gorgewalk's face (marund:gorgewalk-face): `_keel_only` rolls the mask's pale paint off into walnut on this skin, in the rebuilt skin GLB. The beak keel is the only pale form on the face.
+

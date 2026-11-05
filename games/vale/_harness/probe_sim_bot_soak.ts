@@ -40,6 +40,9 @@
 //                             lowest-EHP enemy fighter in reach (attacks with ≥ 2 in reach) · health at recall start; suite
 //                             `human`: a passive seat (team 0's dialcross: farms, never casts or hits a fighter) — damage it
 //                             takes from enemy fighters per minute and its deaths at 3:00–8:00, against the bot-played seat.
+//   balance    (balance:real-seat, owner_rulings 22) every fighter's win rate in the decided same-tier RIFT games on --lineup shuffle,
+//                             Wilson 95 %: no fighter's whole interval outside 40–60 %, enforced with ≥ BALANCE_MIN_GAMES games (--seeds 100
+//                             on two tiers). The 45–55 % design band, points outside the band and per-seat kit figures (`kit`) are reported.
 //   items      (gameplay:G7)  finished (core/apex) items held per player at min(25:00, end) ≥ 2.5 ·
 //                             ≥ 80 % of the finished items bought at least once · ≥ 1 anti-heal family
 //                             (an item that applies 'grievous') · builds vary (a fighter's first two
@@ -86,7 +89,7 @@ const SELF = fileURLToPath(import.meta.url);
 const REPORTS = join(HERE, '_reports');
 
 /** gate groups that fail the probe (the rest are reported as open) */
-const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace', 'difficulty', 'early']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28); difficulty: W4 refix round 1 (2026-10-29)
+const ENFORCED = new Set<string>(['laning', 'items', 'jungle', 'structures', 'bridge', 'fray', 'pace', 'difficulty', 'early', 'balance']); // items: W4 G7 package; jungle + structures: W4 tempo-jungle package; bridge: W4 difficulty-bridge package; fray + pace: W4 polish package (2026-10-28); difficulty: W4 refix round 1 (2026-10-29)
 /** the mirrored-difficulty bars need this many games a tier before they fail the probe (fewer: report only) */
 const MIRROR_MIN_GAMES = 40;
 /** a fighter's FRAY placement band is enforced on its mean over every FRAY game it played (both difficulties pooled:
@@ -97,6 +100,8 @@ const FRAY_MIN_GAMES = 100;
 /** the first-structure median and the role-deaths comparison need this many RIFT games per difficulty before
  *  they fail the probe (the 8-seed quick run is too few for either: it reports them) */
 const STRUCT_MIN_GAMES = 16;
+/** the real-seat balance band (owner_rulings 22) needs this many decided same-tier RIFT games on --lineup shuffle before it fails the probe */
+const BALANCE_MIN_GAMES = 200;
 /** the early-fight gates (CL-1) need this many RIFT games per difficulty before they fail the probe */
 const EARLY_MIN_GAMES = 16;
 
@@ -995,7 +1000,15 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       const out = bal.filter((b) => b.lo > 0.55 || b.hi < 0.45).map((b) => b.fighter);
       text.push('', `balance (CL-g4, report; ${same.length} decided same-tier RIFT games, lineup ${LINEUP}${LINEUP === 'shuffle' ? '' : ': teammates locked together, rates confounded'}): ` +
         bal.map((b) => `${b.fighter} ${pct(b.rate)} [${pct(b.lo)}–${pct(b.hi)}] n${b.games}`).join(' · ') +
-        `\n  outside the 45–55 % band with 95 % confidence: ${out.length ? out.join(', ') : 'none'}`);
+        `\n  outside the 45–55 % design band with 95 % confidence: ${out.length ? out.join(', ') : 'none'}`);
+      // (owner_rulings 22: the gate is 40–60 % at 95 % confidence over ≥ BALANCE_MIN_GAMES real-seat games: a fighter fails when
+      // its whole interval lies outside the band. Points outside the band and intervals wholly inside it are reported.)
+      const fail = bal.filter((b) => b.lo > 0.6 || b.hi < 0.4);
+      const pts = bal.filter((b) => b.rate > 0.6 || b.rate < 0.4);
+      const inside = bal.filter((b) => b.lo >= 0.4 && b.hi <= 0.6).length;
+      gates.push({ group: 'balance', item: 'balance:real-seat', label: `real-seat win rate, ${same.length} decided same-tier RIFT games, lineup ${LINEUP}: whole 95 % interval outside 40–60 %`,
+        value: `${fail.length ? fail.map((b) => `${b.fighter} ${pct(b.rate)}`).join(', ') : 'none'} (rates ${pct(bal[bal.length - 1].rate)}–${pct(bal[0].rate)}; point outside 40–60: ${pts.length ? pts.map((b) => `${b.fighter} ${pct(b.rate)}`).join(', ') : 'none'}; interval wholly inside: ${inside}/${bal.length})`,
+        target: 'none (owner_rulings 22)', pass: fail.length === 0, n: same.length, reportOnly: same.length < BALANCE_MIN_GAMES || LINEUP !== 'shuffle' });
     }
   }
   if (rift.length) {

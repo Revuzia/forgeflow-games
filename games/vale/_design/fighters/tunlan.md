@@ -184,3 +184,8 @@ This skin re-mixes the top band: the walnut is 6% of it, the lit panel paper is 
 - [ ] The hat, the lantern hook and the robe panels are rigid; the robe uses at most 2 sway bones; the fingers are at least 6 cm wide in profile.
 - [ ] The lantern core and the hat-rim notch are the only emissive materials; the lampresin stays glossy and never glows.
 - [ ] The `cast_a1` hound hands and the `cast_ult` beast hands read as different gestures in three_clips_tunlan.png (a head versus a full body).
+
+## Closing round 3: the base card's lantern
+
+The base splash's key is the lantern, measured on the frame's cluster list: the lantern's luma peak is 251.9 and every other cluster stays at or below 198.2 (`_harness/_reports/fw_CW6_r3_tun_clusters.json`). Camera yaw 38 clears it from the thumb. A shadowless point light in the glass spills warm on the hand and cheek, and `_lantern_key` adds the core and halo and holds the figure's highlights under them. The hung cloth stays as the hound's surface. The death hold's robe stays under the floor (-0.21 m), because lifting her would undo TUN-c1's ending at rest.
+
