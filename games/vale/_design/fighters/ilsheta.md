@@ -81,7 +81,7 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#4C443E` | 29 | 26° / 18% | belt, boots |
 | `under` | `#40444A` | 29 | 216° / 14% | leggings |
 | `ironstone` | `#47443F` | 29 | 37° / 11% | toe caps |
-| `ink` | `#17181B` | 8 | 225° / 15% | hood and lining darks (the face-plate eyes are amber inlays, `#E7AE5E` / `#8A5526`, painted in `_face_plate`) |
+| `ink` | `#17181B` | 8 | 225° / 15% | palette dark, not on the face (the face-plate eyes are amber inlays, `#E7AE5E` / `#8A5526`, painted in `_face_plate`) |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the lamp core |
 
 Nothing here is saturated: the cool glass is at most 19% saturation and the linen is under 6%. The mantle (L* 81) is the lightest large area on any half-A fighter but stays below the near-white limit (L* 86) so it never reads as Noonwhite.
