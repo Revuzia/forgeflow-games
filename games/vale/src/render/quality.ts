@@ -35,6 +35,10 @@
 // frame on a 60 Hz display. A lowered scale therefore PROBES: after 3 on-target windows it steps up 0.05 and keeps
 // the step only if the next 2 windows stay on target; a GPU-bound slow window inside the probe takes it back and
 // doubles the wait before the next probe (≤ 32 windows), a kept probe resets it.
+// Drift (the integration pass's idle gpubound run): a frame cost wandering around the vsync budget misses a vsync now
+// and then, so a window averages 50-57 fps and is under 12 % late. Those windows read as on target: the scale held at
+// 54 fps and went on probing up. A window under 58 fps (over 3.5 % late) now counts as drifting: 3 in a row with the
+// GPU to blame take a step down, one inside a probe takes the probe back, and it never counts toward the next probe.
 // The renderer feeds it only frames it wanted at the display rate: match frames, never the menu or its idle cap,
 // never under an fpsCap below the display rate (Renderer.render), and re-configures it for every match.
 
@@ -110,6 +114,9 @@ export type FrameBound = 'cpu' | 'gpu' | '';
 const PROBE_AFTER = 3;
 const PROBE_MAX = 32;
 const PROBE_HOLD = 2;
+/** a window this late (58 fps at 60) is drifting, and this many in a row step the scale down (see the header) */
+const DRIFT_LATE = 1.035;
+const DRIFT_WINDOWS = 3;
 
 /** frame-interval driven render-scale controller (GPU-bound windows only; see the header) */
 export class DynamicResolution {
@@ -126,6 +133,8 @@ export class DynamicResolution {
   /** GPU readings dropped this window (longer than their frame interval) */
   private gpuDropped = 0;
   private slow = 0;
+  /** GPU-bound windows in a row under the drift mark, late ones included */
+  private drift = 0;
   /** on-target windows in a row below base (toward the next up-probe) */
   private onTarget = 0;
   /** the scale before the running up-probe (−1: no probe running) and the windows it still has to hold */
@@ -148,7 +157,7 @@ export class DynamicResolution {
     this.current = base;
     this.targetMs = 1000 / (fpsCap > 0 ? Math.min(fpsCap, 144) : 60);
     this.reset();
-    this.slow = this.onTarget = this.probeLeft = 0;
+    this.slow = this.drift = this.onTarget = this.probeLeft = 0;
     this.probeFrom = -1;
     this.probeWait = PROBE_AFTER;
     this.bound = '';
@@ -182,15 +191,16 @@ export class DynamicResolution {
     // no timer or an untrusted one: a late window the renderer's CPU cannot explain is the GPU's
     const gpuBound = trusted && timed ? gpu !== null && gpu >= t * 0.85 : cpu < t * 0.6;
     const late = avg > t * 1.12;
+    const drifting = !late && gpuBound && avg > t * DRIFT_LATE;
     // a CPU-late window with a light GPU (measured) says the resolution has room; without a reading it says nothing
-    const room = !late || (!gpuBound && trusted && gpu !== null && gpu < t * 0.6);
-    this.bound = late ? (gpuBound ? 'gpu' : 'cpu') : '';
+    const room = (!late && !drifting) || (!gpuBound && trusted && gpu !== null && gpu < t * 0.6);
+    this.bound = late ? (gpuBound ? 'gpu' : 'cpu') : drifting ? 'gpu' : '';
     if (this.probeFrom >= 0) {
-      if (late && gpuBound) {
+      if ((late && gpuBound) || drifting) {
         // the probe step did not hold: back down, and wait longer before the next one
         this.current = this.probeFrom; this.probeFrom = -1; this.probeLeft = 0;
         this.probeWait = Math.min(PROBE_MAX, this.probeWait * 2);
-        this.slow = this.onTarget = 0;
+        this.slow = this.drift = this.onTarget = 0;
         return true;
       }
       if (!room || --this.probeLeft > 0) return false;
@@ -198,14 +208,16 @@ export class DynamicResolution {
       this.probeFrom = -1; this.probeWait = PROBE_AFTER;
       return this.probeUp();
     }
-    if (late && gpuBound) {
+    if ((late && gpuBound) || drifting) {
       this.onTarget = 0;
-      if ((++this.slow >= 2 || avg > t * 1.4) && this.current > this.floor + 1e-3) {
-        this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = 0; return true;
+      this.drift++;
+      if (late) this.slow++; else this.slow = 0;
+      if (((late && (this.slow >= 2 || avg > t * 1.4)) || this.drift >= DRIFT_WINDOWS) && this.current > this.floor + 1e-3) {
+        this.current = Math.max(this.floor, Math.round((this.current - 0.05) * 100) / 100); this.slow = this.drift = 0; return true;
       }
       return false;
     }
-    this.slow = 0;
+    this.slow = this.drift = 0;
     if (!room) return false;
     if (this.current < this.base - 1e-3 && ++this.onTarget >= this.probeWait) return this.probeUp();
     return false;

@@ -71,6 +71,30 @@ const show = (label: string, r: Run): void => console.log(`${label.padEnd(58)} l
   show('trusted timer, CPU-bound (GPU 8 ms)', b);
   expect(b.trusted && b.end === 1, 'a trusted timer holds a CPU-bound frame');
 }
+// 7. the idle miss (fw_integ_idle_perf1 gpubound): frame costs that wander around the vsync budget miss a vsync now and
+// then, so a window averages 54-57 fps at the scale that run held (1.45: a typical frame fits, the heavier one frame in
+// eight does not). Each window is under 12 % late, and the controller must not take that for on target.
+{
+  let seed = 11;
+  const rnd = (): number => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const r = sim(45, (s) => (1 + 6 * s * s) * (0.95 + 0.1 * rnd()) * (rnd() < 0.12 ? 1.35 : 1), metal, 3.5, 2);
+  show('Metal, x2, costs wandering around the vsync budget', r);
+  expect(r.leftAt !== null && r.leftAt <= 10, `wander: the scale must leave 2 within 10 s (left at ${r.leftAt})`);
+  expect(r.tailFps >= 58, `wander: fps must settle at >= 58 (last 8 s ${r.tailFps.toFixed(1)})`);
+}
+// 8. a steady 60 with a one-second hitch every few seconds (a window at 55 fps, the next two at 60) is not a GPU limit
+{
+  const d = new DynamicResolution();
+  d.configure(1, 0);
+  let moved = false;
+  for (let sec = 0; sec < 60; sec++) {
+    const iv = sec % 4 === 0 ? 1000 / 55 : VS;
+    for (let t = 0; t < 1000; t += iv) d.sample(iv, 3, iv * 3);
+    moved ||= d.scale !== 1;
+  }
+  console.log(`one slow window in four: scale ${moved ? 'moved' : 'held 1.00'}`);
+  expect(!moved, 'isolated slow windows must hold the scale');
+}
 // 6. distrust survives configure() (a driver property): a second match starts untrusted
 {
   const d = new DynamicResolution();

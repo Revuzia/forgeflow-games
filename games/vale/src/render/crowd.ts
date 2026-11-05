@@ -362,10 +362,43 @@ export const CROWD_INK_TRIS_LOW = 380000;
 /** the governor's second step (a crowded frame still climbing, late pushes peaked at 544-562k): the hit flash holds to the
  *  CROWD_FLASH_CROWDED flashing units of a set nearest the focus, the crowd draws no ink and no body shadow and its bodies
  *  take their coarser LOD; the renderer also holds the x-ray to your team's fighters and draws no shadow-only tree cells,
- *  until the frame is back under CROWD_HARD_TRIS_LOW */
+ *  until the frame it would release into is back under the mark (CrowdHardLatch) */
 export const CROWD_HARD_TRIS_HIGH = 450000;
-export const CROWD_HARD_TRIS_LOW = 410000;
 export const CROWD_FLASH_CROWDED = 2;
+/** the frames after the second step engages that measure what it saves; the seconds' worth of frames it holds at least;
+ *  and the least it is assumed to save (the shadow-only tree cells and the enemy x-ray, with no crowd left to scale by) */
+const HARD_MEASURE_FRAMES = 6;
+const HARD_HOLD_FRAMES = 120;
+const HARD_SAVING_MIN = 50000;
+/** how far under the engage mark the released frame must land, or the step would flip on it at every hold */
+const HARD_RELEASE_MARGIN = 20000;
+
+/**
+ * The second step's latch. A governed frame's count is low BECAUSE the step is on (the integration pass: 551k and 400k on
+ * alternating frames with 59 units on screen), so a fixed release mark let go while the frame it would release into was
+ * still far over budget, and each release was the peak. The step now measures what it saved when it engaged, scales that
+ * by the crowd on screen, and lets go only once the frame it would release into stays under the engage mark.
+ */
+export class CrowdHardLatch {
+  on = false;
+  private from = 0;
+  private crowdAt = 1;
+  private saving = 0;
+  private age = 0;
+
+  /** the last frame's triangles and the crowd units drawn; returns whether this frame runs governed */
+  update(tris: number, crowd: number): boolean {
+    if (!this.on) {
+      if (tris > CROWD_HARD_TRIS_HIGH) { this.on = true; this.from = tris; this.crowdAt = Math.max(1, crowd); this.saving = 0; this.age = 0; }
+      return this.on;
+    }
+    this.age++;
+    if (this.age <= HARD_MEASURE_FRAMES) this.saving = Math.max(this.saving, this.from - tris);
+    const released = tris + Math.max(HARD_SAVING_MIN, this.saving * crowd / this.crowdAt);
+    if (this.age >= HARD_HOLD_FRAMES && released < CROWD_HARD_TRIS_HIGH - HARD_RELEASE_MARGIN) this.on = false;
+    return this.on;
+  }
+}
 
 const ATTRS = ['aCrowdM0', 'aCrowdM1', 'aCrowdM2', 'aCrowdAnim', 'aCrowdStyle', 'aCrowdFlash', 'aCrowdFlashRim'] as const;
 type AttrName = (typeof ATTRS)[number];

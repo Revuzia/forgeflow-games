@@ -577,14 +577,14 @@ async function matchPeak(seed = SEED, rot = 0) {
     const err = await page.evaluate(() => window.__VALE_BENCH__?.error ?? null);
     if (err) throw new Error(`bench failed: ${err}`);
     await page.waitForTimeout(3000);                                        // models, textures, shader warm-up
-    await page.evaluate(([scale, maxT]) => {
+    await page.evaluate(([scale, maxT, BUDGET_TRIS]) => {
       const b = window.__VALE_BENCH__, r = b.renderer, host = b.host;
-      const S = { done: false, secs: [], progs: [], profiles: [], pending: false, error: null, endT: 0, ended: false, maxProg: 0, progsAtMax: [] };
+      const S = { done: false, secs: [], progs: [], profiles: [], pending: false, error: null, endT: 0, ended: false, maxProg: 0, progsAtMax: [], ring: [], peakTris: 0, peakFrames: [], peakFramesT: 0 };
       window.__peak = S;
       host.setTimeScale(scale);
       b.follow();
       const seen = new Set();
-      const fresh = () => ({ tris: 0, calls: 0, programs: 0, frames: 0, worstMs: 0, crowd: 0, pumpMs: 0, pumpMax: 0, renderMs: 0, renderMax: 0 });
+      const fresh = () => ({ tris: 0, calls: 0, programs: 0, frames: 0, worstMs: 0, crowd: 0, governed: 0, framesOver: 0, pumpMs: 0, pumpMax: 0, renderMs: 0, renderMax: 0 });
       S.slowProfiles = [];
       let wantSlow = false;
       let last = performance.now(), secAt = last, cur = fresh(), best = 0, want = false;
@@ -602,6 +602,11 @@ async function matchPeak(seed = SEED, rot = 0) {
           const st = r.stats();
           cur.frames++;
           cur.tris = Math.max(cur.tris, st.triangles); cur.calls = Math.max(cur.calls, st.calls); cur.programs = Math.max(cur.programs, st.programs);
+          // the frames around the peak: triangles and the governor's step, per frame (a profile only sees the frame after)
+          S.ring.push([st.triangles, r.crowdHard ? 1 : 0, st.crowd ?? 0]); if (S.ring.length > 24) S.ring.shift();
+          if (st.triangles > S.peakTris) { S.peakTris = st.triangles; S.peakFrames = S.ring.slice(); S.peakFramesT = +host.view.time.toFixed(1); }
+          cur.governed += r.crowdHard ? 1 : 0;
+          if (st.triangles > BUDGET_TRIS) cur.framesOver++;
           cur.crowd = Math.max(cur.crowd ?? 0, st.crowd ?? 0);
           // the live programs when their count first reaches its match maximum (which ones push it over the budget)
           if (st.programs > S.maxProg) {
@@ -649,7 +654,7 @@ async function matchPeak(seed = SEED, rot = 0) {
         } catch (e) { S.error = String(e?.stack ?? e); S.done = true; }
       };
       requestAnimationFrame(tick);
-    }, [MATCH_SCALE, MATCH_MAX_S]);
+    }, [MATCH_SCALE, MATCH_MAX_S, BUDGET.tris]);
     const t0 = Date.now();
     const before = machine();
     let busiest = before;
@@ -672,6 +677,7 @@ async function matchPeak(seed = SEED, rot = 0) {
     const after = machine();
     const res = {
       seed, rot, scale: MATCH_SCALE, endT: +S.endT.toFixed(1), ended: S.ended, seconds: secs.length,
+      peakFrames: { t: S.peakFramesT, tris: S.peakTris, frames: S.peakFrames, legend: '[triangles, governor hard, crowd]' }, framesOverBudget: secs.reduce((n, x) => n + (x.framesOver ?? 0), 0),
       peak: { tris: pt.tris, trisAt: pt.t, draws: pc.calls, drawsAt: pc.t, programs: pp.programs, programsAt: pp.t },
       overBudget: { tris: over('tris', BUDGET.tris), draws: over('calls', BUDGET.draws), programs: over('programs', BUDGET.programs) },
       lateProgramsAfter60s: S.progs.filter((x) => x.t > firstT + 60),
