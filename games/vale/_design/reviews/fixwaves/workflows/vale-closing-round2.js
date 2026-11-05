@@ -118,6 +118,7 @@ const R2_NOTE = `
 ROUND 2 (2026-11-04): round 1 of the closing waves ended. Your ITEMS below are the round-1 verifier's still-open items for your lane plus the cross-lane HANDOFFS routed to your lane (with their source). SOME MAY ALREADY BE DONE at HEAD by the lead or another lane (e.g. Dial Bar re-key e137e84f; 'Lantern Drill' and other originality renames 45511c0f; TeamBuffDef.maxStacks + camp unit 'facing' schema cee04b68 and Splinters stacking 99c9cfd1; card speckle gate d2530c25; owner rulings 9-13 in owner_rulings.md: 9 voice out of scope, 10 ult core x2.0 where ground clips, 11 compact builds / art.scale, 12 card speckle gate, 13 KTX2 deferred). Before working on any item: read \`git log --oneline -60\`, the commits and current code it names, and the round-1 result _design/reviews/fixwaves/<LANE>_result_round1.json; if it is already met, re-measure it once and report done with evidence instead of redoing it. Never redo committed work; continue from HEAD.
 A machine-idle measurement (fps gates that need load < 3) cannot be met while the other lanes run: measure what you can, then report it not_done with 'needs idle machine (integration pass)'. Do not wait for idle longer than 10 minutes.`
 
+const CUT_NOTE = `\nRESUME: an earlier attempt at THIS package was cut off by a power or network outage on 2026-11-04. Its partial work is in the repo (its own commits and 'vale wip sync' commits). Read git log and git status for your paths first and CONTINUE from there; never redo it. Count that attempt against your budget.`
 const itemText = (p) => JSON.stringify(p.items).slice(0, 16000)
 
 const pkgPrompt = (L, p, i, n, prior) => `${rulesFor(L)}
@@ -128,7 +129,7 @@ ${p.brief}
 ITEMS (open item objects and routed handoffs, JSON): ${itemText(p)}
 Earlier round-2 packages in this lane (already committed):
 ${brief(prior)}
-${(L === 'CW5' || L === 'CW6') ? CARD_BRIEF + '\n' : ''}Blockers first, then majors, then minors; meet each item's done-criterion (its fixHint / handoff text, waves[] id ${WAVES[L].base} .done in closing_parity_open.json, the owner rulings) and MEASURE it with the named harness. Before each commit: typecheck clean for your files, \`npm run content:check -- --allow-missing-assets\` if you touched content, the relevant probes. Return per-item status (use the item ids given; for a handoff use 'handoff:<from>:<short>') with measured evidence, commit hashes, handoffs for other lanes, and short notes.`
+${(L === 'CW5' || L === 'CW6') ? CARD_BRIEF + '\n' : ''}Blockers first, then majors, then minors; meet each item's done-criterion (its fixHint / handoff text, waves[] id ${WAVES[L].base} .done in closing_parity_open.json, the owner rulings) and MEASURE it with the named harness. Before each commit: typecheck clean for your files, \`npm run content:check -- --allow-missing-assets\` if you touched content, the relevant probes. Return per-item status (use the item ids given; for a handoff use 'handoff:<from>:<short>') with measured evidence, commit hashes, handoffs for other lanes, and short notes.${(args.cut || []).includes(`${L}:${p.key}`) ? CUT_NOTE : ''}`
 
 const verifyPrompt = (L, rs, open, n) => `${rulesFor(L)}
 
@@ -172,6 +173,16 @@ const lanesRun = Object.keys(args.lanes)
 const known = new Set(lanesRun.flatMap(L => args.lanes[L].packages.map(p => `${L}:${p.key}`)))
 const waitFor = async (deps) => { for (const d of deps || []) if (known.has(d)) await gate(d).p }
 
+// a null result = the agent died (outage, sleep): retry, and never treat it as finished work
+const tryAgent = async (prompt, opts) => {
+  for (let t = 0; t < 3; t++) {
+    const res = await slot(() => agent(prompt, t ? { ...opts, label: `${opts.label}#${t + 1}` } : opts))
+    if (res) return res
+    log(`${opts.label}: agent died (attempt ${t + 1})`)
+  }
+  throw new Error(`DEAD ${opts.label}`)
+}
+
 const runLane = async (L) => {
   const cfg = args.lanes[L]
   const results = [...(cfg.prior || [])]
@@ -179,23 +190,22 @@ const runLane = async (L) => {
   for (const [i, p] of cfg.packages.entries()) {
     if (doneKeys.has(p.key)) { gate(`${L}:${p.key}`).res(); continue }
     await waitFor(p.after)
-    const r = await slot(() => agent(pkgPrompt(L, p, i, cfg.packages.length, results), { label: `${L}:${p.key}`, phase: 'Fix', schema: PKG_SCHEMA, agentType: 'general-purpose' }))
-    results.push({ key: p.key, ...(r || { items: [], commits: [], handoffs: [], notes: 'agent died' }) })
+    const r = await tryAgent(pkgPrompt(L, p, i, cfg.packages.length, results), { label: `${L}:${p.key}`, phase: 'Fix', schema: PKG_SCHEMA, agentType: 'general-purpose' })
+    results.push({ key: p.key, ...r })
     gate(`${L}:${p.key}`).res()
     log(`${L}:${p.key} → ${(r && r.items || []).map(x => `${x.id}=${x.status}`).join(', ')}`)
   }
   await waitFor(cfg.verifyAfter)
-  let v = await slot(() => agent(verifyPrompt(L, results, cfg.open || [], 1), { label: `${L}:r2verify1`, phase: 'Verify', schema: VERIFY_SCHEMA, agentType: 'general-purpose' }))
+  let v = await tryAgent(verifyPrompt(L, results, cfg.open || [], 1), { label: `${L}:r2verify1`, phase: 'Verify', schema: VERIFY_SCHEMA, agentType: 'general-purpose' })
   const failing = (vv) => (vv && vv.items || []).filter(x => x.status !== 'pass' && x.severity !== 'minor' && !/^needs idle/i.test(x.evidence || ''))
   let n = 1
   while (v && failing(v).length && n <= 2) {
     if (n === 2 && !failing(v).some(x => x.severity === 'blocker' || /^par:/.test(x.id))) break
     const fails = failing(v)
-    const fx = await slot(() => agent(refixPrompt(L, fails, n, results), { label: `${L}:r2refix${n}`, phase: 'Refix', schema: PKG_SCHEMA, agentType: 'general-purpose' }))
-    results.push({ key: `r2refix${n}`, ...(fx || { items: [], commits: [], handoffs: [], notes: 'agent died' }) })
+    const fx = await tryAgent(refixPrompt(L, fails, n, results), { label: `${L}:r2refix${n}`, phase: 'Refix', schema: PKG_SCHEMA, agentType: 'general-purpose' })
+    results.push({ key: `r2refix${n}`, ...fx })
     n++
-    const rv = await slot(() => agent(recheckPrompt(L, fails, fx, n), { label: `${L}:r2verify${n}`, phase: 'Refix', schema: VERIFY_SCHEMA, agentType: 'general-purpose' }))
-    if (!rv) break
+    const rv = await tryAgent(recheckPrompt(L, fails, fx, n), { label: `${L}:r2verify${n}`, phase: 'Refix', schema: VERIFY_SCHEMA, agentType: 'general-purpose' })
     const byId = new Map(v.items.map(x => [x.id, x]))
     for (const x of rv.items) byId.set(x.id, x)
     v = { ...rv, items: [...byId.values()], pass: [...byId.values()].every(x => x.status === 'pass' || x.severity === 'minor') }
@@ -210,5 +220,10 @@ const runLane = async (L) => {
 }
 
 phase('Fix')
-const out = await parallel(lanesRun.map(L => () => runLane(L)))
+const out = await parallel(lanesRun.map(L => async () => {
+  try { return await runLane(L) } catch (e) {
+    log(`${L} stopped: ${e.message}`)
+    return { wave: L, pass: false, died: e.message, summary: 'lane stopped on a dead agent; resume this run' }
+  } finally { for (const p of args.lanes[L].packages) gate(`${L}:${p.key}`).res() }
+}))
 return Object.fromEntries(lanesRun.map((L, i) => [L, out[i] || { wave: L, pass: false, summary: 'lane crashed' }]))
