@@ -469,7 +469,11 @@ export function itemValue(it: ItemDefT, prof: FighterProfile): number {
     tags += w;
   }
   // passives and actives carry value the stat block cannot show
-  const extra = it.passives.length * 6 + (it.active ? 5 : 0);
+  let extra = it.passives.length * 6 + (it.active ? 5 : 0);
+  // (a physical strike off every ability hit, Split Hour's kind: a physical diver or skirmisher's kit fires it in each
+  // trade, which the stat block cannot show; since the Hourcleaver re-key no plan took it in its first three)
+  if (!magic && (prof.style === 'diver' || prof.style === 'skirmisher') &&
+    it.passives.some((p) => p.triggers.some((t) => t.on === 'abilityHit' && JSON.stringify(t.effects).includes('"type":"phys"')))) extra += 24;
   return v + tags * 4 + extra;
 }
 
