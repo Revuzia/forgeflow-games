@@ -47,29 +47,29 @@
   },
   "uv_coverage": 0.624,
   "bake": {
-    "base": 7.39,
-    "rough_metal": 6.26,
-    "normal": 4.88,
-    "ao": 5.36,
+    "base": 76.87,
+    "rough_metal": 50.37,
+    "normal": 21.79,
+    "ao": 13.08,
     "normal_fixed_px": 28942,
-    "projection": 201.74,
-    "pack_save": 203.25,
-    "total": 227.88
+    "projection": 779.55,
+    "pack_save": 780.31,
+    "total": 971.68
   },
   "tris": 21228,
   "mesh_top_m": 2.05,
-  "glb_bytes_raw": 2240464,
+  "glb_bytes_raw": 2242572,
   "optimize": {
     "ok": true,
-    "before": 2240464,
-    "after": 883168
+    "before": 2242572,
+    "after": 884384
   },
-  "glb_bytes": 883168,
+  "glb_bytes": 884384,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan_lamplit.glb (862 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: tunlan_lamplit_base 2048x2048 153K, tunlan_lamplit_normal 512x512 35K, tunlan_lamplit_orm 512x512 59K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/tunlan/tunlan_lamplit.glb (864 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: tunlan_lamplit_base 2048x2048 154K, tunlan_lamplit_normal 512x512 35K, tunlan_lamplit_orm 512x512 59K",
       "  skinned meshes: tunlan_accent(155v), tunlan_lamplit(17158v)",
       "  bones: 45 (root hips spine chest neck head x_hat x_lantern x_lamp shoulderL upper_armL forearmL handL propL x_fa1L x_fa2L x_fa3L x_gesture_l x_fb1L x_fb2L x_fb3L x_ft1L x_ft2L shoulderR upper_armR forearmR handR propR x_fa1R x_fa2R x_fa3R x_gesture_r x_fb1R x_fb2R x_fb3R x_ft1R x_ft2R thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -84,8 +84,8 @@
       "portrait": "art/out/fighters/tunlan/tunlan_lamplit_portrait.png"
     },
     "seconds": {
-      "splash": 186.38,
-      "portrait": 33.65
+      "splash": 191.26,
+      "portrait": 31.29
     }
   },
   "three_qa": {
@@ -117,24 +117,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/tunlan/three_tunlan_lamplit.png",
-    "seconds": 27.6,
+    "seconds": 56.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 2.77,
-      "model": 26.01,
-      "lows_bind": 17.92,
-      "uv": 13.15,
-      "bake": 228.65,
-      "export": 0.46,
-      "optimize": 1.7,
-      "load_test": 0.29,
-      "render": 220.21,
-      "three_qa": 28.35
+      "rig": 0.1,
+      "materials": 3.21,
+      "model": 73.02,
+      "lows_bind": 71.02,
+      "uv": 46.11,
+      "bake": 972.4,
+      "export": 1.76,
+      "optimize": 2.48,
+      "load_test": 0.37,
+      "render": 222.86,
+      "three_qa": 56.79
     },
-    "total_s": 539.87
+    "total_s": 1451.03
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

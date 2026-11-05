@@ -200,8 +200,8 @@ CARDS = {
         # recall's cupped lantern instead, its glow on the face from below)
         # (closing round 2: the head focal blew a white patch on the pale mask: softer and wider on the bust)
         "portrait": {"clip": "recall", "t": 0.10, "yaw": -30.0, "pitch": -4.0, "sun": 1.3,
-                     "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.30, "color": "#FFC680",
-                                "power": 35.0, "size": 0.25},
+                     "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.50, "color": "#FFC680",
+                                "power": 9.0, "size": 0.35},
                                {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.70, "color": "#FFD2A0",
                                 "power": 8.0, "size": 0.35}]},
         "plate": {"tint": "#8A7AA0", "sat": 0.80, "median": 0.25, "glow": [0.85, 0.55, 0.35, 0.10],

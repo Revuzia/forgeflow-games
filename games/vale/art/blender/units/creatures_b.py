@@ -991,9 +991,9 @@ class Longshade(Monster):
     # CW4 round 2 (critic:monsters): the ink stayed L* 4 on its L* 16 pit floor (dL* -11.9, hp 0.66), a boss that vanishes
     # at the gameplay camera. The shade is now a dusk violet, value painted as light from above: lit tops and billow
     # crests, seams and undersides in deep ink; the shadow-tail is crossed by chalk hour marks (it is the Needle's shadow)
-    PAL = {"ink": "#3F3A64", "ink_top": "#6F699E", "ink_under": "#1B1830", "seam": "#221E3C", "rim": "#908AC2",
-           "rim_hi": "#C0BBE4", "streak": "#514C7C", "hour": "#D2CDE6",
-           "hand": "#4E4970", "claw": "#5A5470", "claw_tip": "#C9C2D6", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
+    PAL = {"ink": "#4F4B68", "ink_top": "#87839E", "ink_under": "#211E33", "seam": "#2C2841", "rim": "#A5A2BC",
+           "rim_hi": "#CFCCDE", "streak": "#66627E", "hour": "#C8C5D6",
+           "hand": "#5E5A76", "claw": "#5A5470", "claw_tip": "#C9C2D6", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
            "groove": "#3B3542", "socket": "#221E29", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
            "inlay": "#9C7840", "inlay_edge": "#5A4630"}
     # mask frame: centre, lateral, up (along the plate), out (face normal, tilted 20 degrees up)
@@ -1306,7 +1306,7 @@ class Longshade(Monster):
             seam = sarr(1.01, 1.08, ratio) * (ratio < 9.0)
             col = mix_hex(col, c("rim"), ww * crest * 0.9)
             col = mix_hex(col, c("rim_hi"), ww * sarr(0.72, 1.0, crest) * 0.55)
-            col = mix_hex(col, c("seam"), ww * seam * 0.9)
+            col = mix_hex(col, c("seam"), ww * seam * 0.65)
             rough = rough * (1 - ww) + 0.9 * ww
             # the flat shadow-tail and its lobes: a pale rim on the edges, a darker core line, chalk hour marks across it
             tw = (np.clip(1 - (np.minimum(tags["tail"], tags["lobe"]) - dmin) / 0.02, 0, 1) *
@@ -1317,8 +1317,8 @@ class Longshade(Monster):
             col = mix_hex(col, c("rim"), tw * sarr(0.62, 1.05, xr) * 0.9)
             core = sarr(0.16, 0.04, xr) * (V[:, 1] > 1.6)
             col = mix_hex(col, c("ink"), core * 0.8)
-            for yk in (2.2, 2.95, 3.7, 4.45, 5.2):
-                col = mix_hex(col, c("hour"), tw * sarr(0.075, 0.05, np.abs(V[:, 1] - yk)) * sarr(0.62, 0.5, xr) * sarr(0.14, 0.2, xr) * 0.9)
+            for yk in (2.2, 2.95, 3.7, 4.45, 5.2):       # full lines across the shadow, as a dial's hour lines
+                col = mix_hex(col, c("hour"), tw * sarr(0.05, 0.03, np.abs(V[:, 1] - yk)) * sarr(0.78, 0.66, xr) * 0.8)
             hw_ = np.clip(1 - (tags["hand"] - dmin) / 0.02, 0, 1) * (tags["hand"] < 0.04)
             col = mix_hex(col, c("hand"), hw_ * 0.6)
             return col, rough
@@ -1353,7 +1353,7 @@ class Longshade(Monster):
 
     def high_material(self, part, grad):
         if part == "body":
-            return K.painted_material(f"{self.ID}_body_src", "#6F699E", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
+            return K.painted_material(f"{self.ID}_body_src", "#87839E", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
                                       chalk=(1.25, 0.75), cavity=(0.35, 1.1), breakup=0.05, top=0.1)
         if part == "mask":
             return painted_stone(f"{self.ID}_mask_src", self.PAL["chalk"], grad, chisel=0.6, scale=3.0, chalk=(1.12, 0.5))

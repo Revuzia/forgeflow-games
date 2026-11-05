@@ -120,9 +120,12 @@ CARDS = {
     },
     "rishal_chalkline": {
         "splash": {"clip": "cast_a1", "t": 0.40, "yaw": -28.0, "pitch": -2.0, "lens": 52.0, "fill": 0.84, "x": 0.71,
-                   "key_az": 150.0, "key_el": 35.0, "key_color": "#E4E8F0", "sun": 2.8, "rim_cool": 1.2,
-                   "rim_warm": 0.4, "bounce": 0.7, "bounce_color": "#C8CCD4", "accent": 1.4,
-                   "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 35.0,
+                   # (closing round 2: the card lit the slate-green ink up to a pale mint, the game camera's dark
+                   # figure lost: figure p50 186. A calmer key and -1.1 EV, the chalk lines still the highlights)
+                   "exposure": -1.1,
+                   "key_az": 150.0, "key_el": 35.0, "key_color": "#E4E8F0", "sun": 2.0, "rim_cool": 1.2,
+                   "rim_warm": 0.4, "bounce": 0.4, "bounce_color": "#C8CCD4", "accent": 1.4,
+                   "focal": [{"at": "head", "az": 170.0, "el": 15.0, "dist": 0.7, "color": "#F0F2F8", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": -40.0, "clip": "idle", "t": 0.25},
         # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)

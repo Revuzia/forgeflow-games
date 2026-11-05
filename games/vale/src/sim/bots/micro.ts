@@ -236,7 +236,7 @@ export abstract class BotBase {
       let st = this.teleSeen.get(t.id);
       if (!st) {
         const prior = this.castRoll.get(key);
-        st = prior && now - prior.seen < 3 ? prior : { notice: t.at + this.reaction(), dodge: this.rng.chance(this.diff.dodgeChance), seen: now };
+        st = prior && now - prior.seen < 3 ? prior : { notice: t.at + this.reaction(), dodge: this.rng.chance(this.dodgeP()), seen: now };
         this.teleSeen.set(t.id, st);
         if (i < wu.length) this.castRoll.set(key, st);
       }
@@ -270,7 +270,7 @@ export abstract class BotBase {
         const half = pd.width * 0.5 + myR;
         if (Math.abs(perp) > half) continue;
         let st = this.projSeen.get(h.id);
-        if (!st) { st = { notice: now + this.reaction(), dodge: this.rng.chance(this.diff.dodgeChance), seen: now }; this.projSeen.set(h.id, st); }
+        if (!st) { st = { notice: now + this.reaction(), dodge: this.rng.chance(this.dodgeP()), seen: now }; this.projSeen.set(h.id, st); }
         if (!st.dodge || now < st.notice) continue;
         const tti = Math.max(0, along) / Math.max(1, pd.speed);
         const sg = perp >= 0 ? 1 : -1;
@@ -291,7 +291,7 @@ export abstract class BotBase {
     let tx = e.x + ux * (need + 0.2), ty = e.y + uy * (need + 0.2);
     if (!w.nav.walkable(tx, ty)) { tx = e.x - ux * (need + 0.2); ty = e.y - uy * (need + 0.2); if (!w.nav.walkable(tx, ty)) return false; }
     // walking will not make it: a sharp bot burns an escape
-    if (need / ms > left && this.diff.dodgeChance >= 0.8 && this.escapeTo(tx, ty, need)) return true;
+    if (need / ms > left && this.dodgeP() >= 0.8 && this.escapeTo(tx, ty, need)) return true;
     if (e.cast && e.cast.phase === 'windup' && !e.cast.def.canMoveWhileCasting && e.cast.dur - e.cast.t > left) return false;
     this.dodgeX = tx; this.dodgeY = ty; this.dodgeUntil = until;
     this.moveTo(tx, ty, false, this.k.kind === 'rift');
@@ -548,7 +548,7 @@ export abstract class BotBase {
           const cx = info.areaAt === 'self' ? e.x : o.x, cy = info.areaAt === 'self' ? e.y : o.y;
           if (this.countIn(cx, cy, info.radius, true, false) < need) return false;
         }
-        if (this.diff.shotPatience > 0 && !(u & U_EXECUTE) && this.walkable(info, t, dd)) return false;
+        if (this.patienceP() > 0 && !(u & U_EXECUTE) && this.walkable(info, t, dd)) return false;
         this.cast(s, info, t, o.x, o.y);
         if (this.tel && (info.delivery === 'projectile' || info.delivery === 'area' || info.delivery === 'zone')) this.tel.shot(this.now, e.id, s.def.id, t.id);
         return true;
@@ -576,7 +576,7 @@ export abstract class BotBase {
     if (dd < reach * 0.6) return false;
     const land = info.castTime + (info.delivery === 'projectile' ? dd / Math.max(1, info.projSpeed) : info.delay);
     const out = (info.delivery === 'projectile' ? info.projWidth * 0.5 : info.radius) + t.radius;
-    return land * Math.max(0.5, t.stats.moveSpeed) * this.diff.shotPatience > out * 1.6;
+    return land * Math.max(0.5, t.stats.moveSpeed) * this.patienceP() > out * 1.6;
   }
 
   private farmCast(s: AbilitySlot, info: AbilityInfo): boolean {
@@ -669,6 +669,9 @@ export abstract class BotBase {
     return best;
   }
 
+  private dodgeP(): number { return this.k.kind === 'rift' ? this.diff.riftDodgeChance ?? this.diff.dodgeChance : this.diff.dodgeChance; }
+  private patienceP(): number { return this.k.kind === 'rift' ? this.diff.riftShotPatience ?? this.diff.shotPatience : this.diff.shotPatience; }
+
   // ── last hits ─────────────────────────────────────────────────────────────────────────────────
   /** the enemy minion my next attack should kill (or null); `waitOut` gets one worth staying near */
   protected lastHitTarget(): Entity | null {
@@ -700,7 +703,7 @@ export abstract class BotBase {
       if (hpAt < bestHp) { alt = best; altHp = bestHp; bestHp = hpAt; best = c; }
       else if (hpAt < altHp) { altHp = hpAt; alt = c; }
     }
-    if (best && best.id !== this.lhMissId) { this.lhMissId = best.id; this.lhMissRoll = this.rng.chance(this.diff.lastHitMiss); }
+    if (best && best.id !== this.lhMissId) { this.lhMissId = best.id; this.lhMissRoll = this.rng.chance(this.k.kind === 'rift' ? this.diff.riftLastHitMiss ?? this.diff.lastHitMiss : this.diff.lastHitMiss); }
     // (CW3s refix 2, G1: a missed read costs that one Wick, not the other one dying beside it)
     if (best && this.lhMissRoll) return alt;
     return best;
@@ -808,7 +811,7 @@ export abstract class BotBase {
         this.attack(lh);
         return;
       }
-      if (this.secureLastHit()) return;
+      if ((this.pFarm === 1 || this.k.kind === 'rift') && this.secureLastHit()) return;
       if (this.pFarm === 2) {
         // shoving still takes the last hits: hold the swing for a Wick that is about to be killable
         if (e.atkWindup < 0 && this.lastHitDue()) {
@@ -895,7 +898,7 @@ export abstract class BotBase {
         else { if (d > Math.max(info.radius, 1.5) + c.radius) continue; land += info.delay; }
         if (land >= next) continue;
         // (CW3s r2, G1: what the Wick has left when the cast lands, not what it has now: the hits it is about to take count)
-        if (estimateDamage(info, e, Math.max(1, s.rank), c) < hp - inc.before(c.id, land, bit, true)) continue;
+        if (estimateDamage(info, e, Math.max(1, s.rank), c) < hp - (this.k.kind === 'rift' ? inc.before(c.id, land, bit, true) : 0)) continue;
         this.cast(s, info, c, c.x, c.y);
         return true;
       }

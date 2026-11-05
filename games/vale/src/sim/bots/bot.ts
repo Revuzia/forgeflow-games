@@ -463,7 +463,8 @@ export class Bot extends BotBase implements BotController {
       // no cast seen — is pressed: a passive laner is zoned off its Wicks and punished, as a player would)
       // (CW3s refix: 0.3 after 12 s; at 0.15 after 20 s a passive seat took less damage than the bot-played one)
       // (refix 2: 0.3 after 12 s still left the passive seat at 288 vs 321 damage a minute: 0.4 after 8 s)
-      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 8 && now - this.foeHitAt > 8 ? 0.4 : 0;
+      // (r2-bots: 0.4 still left the passive seat under the bot-played one against veteran bots, 309 vs 356 a minute: 0.55 after 6 s)
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 6 && now - this.foeHitAt > 6 ? 0.55 : 0;
       // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
       // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
       const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;
