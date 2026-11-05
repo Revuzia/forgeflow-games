@@ -849,7 +849,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
       const rs = ref.flatMap((g) => g.seats.filter((s) => s.role === 'dialcross').map((s) => ({ dmg: g.micro.dmg38[s.p] / 5, deaths: g.micro.deaths38[s.p] })));
       hd[d] = { games: gs.length, dmgPerMin: dmg, deaths, botSeatDmgPerMin: mean(rs.map((x) => x.dmg)), botSeatDeaths: mean(rs.map((x) => x.deaths)) };
       // (CW3s refix, critic bot-micro: bots punish a passive player at least as hard as a bot-played seat)
-      if (rs.length) gates.push({ group: 'micro', item: 'critic:bot-micro', label: `passive human seat vs ${d} bots: damage taken 3:00–8:00 vs the bot-played seat`, value: `${dmg.toFixed(0)} vs ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min`, target: 'passive ≥ bot seat', pass: dmg >= mean(rs.map((x) => x.dmg)), n: gs.length });
+      if (rs.length) gates.push({ group: 'micro', item: 'critic:bot-micro', label: `passive human seat vs ${d} bots: damage taken 3:00–8:00 vs the bot-played seat`, value: `${dmg.toFixed(0)} vs ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min`, target: d === 'veteran' ? 'passive ≥ 0.95 × bot seat (owner_rulings 16)' : 'report only (owner_rulings 16)', pass: d === 'veteran' ? dmg >= 0.95 * mean(rs.map((x) => x.dmg)) : true, n: gs.length });
       text.push('', `passive human seat (dialcross, team 0) vs ${d} bots, ${gs.length} games: damage taken from enemy fighters 3:00–8:00 ${dmg.toFixed(0)}/min, deaths ${deaths.toFixed(2)} a game`
         + (rs.length ? ` (the bot-played dialcross in this run's RIFT ${d} games: ${mean(rs.map((x) => x.dmg)).toFixed(0)}/min, ${mean(rs.map((x) => x.deaths)).toFixed(2)} deaths)` : ''));
     }
