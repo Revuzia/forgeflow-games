@@ -149,7 +149,7 @@ How to read each entry:
 **Presentation:** `lib_hit_phys_heavy` · `lib_mark_stack` · `lib_empower` · `lib_cone_sweep` · ult `burdam_ult_account` · `c_swing_heavy`.
 **Skins:**
 - *Stillwater Cleaver* (standard). Wet basalt `#4D5A5C` armour with river-glass inlays `#8FB3A8` (hue 162, 20% saturation) and rigid reed plates `#7D8460`.
-- *Almanac Ledger* (deluxe). Parchment-printed pauldrons `#D8CDB4` ruled with ink ledger lines `#2E2A26`, and day-marks printed down the cleaver's back. Extra geometry: a rigid almanac board hung at the belt.
+- *Almanac Ledger* (deluxe). Ledger-ink plum-slate coat and skirt `#4D4559`, ink-felt cowl `#3E3A4C`, parchment pauldrons `#D8CDB4` ruled in ink `#2E2A26` with oxblood margin rules `#7A2E2A`, a parchment hem strip with day-marks, and day-marks down the cleaver's back. Extra geometry: a rigid ruled almanac board hung at the belt on the right hip.
 
 ### 3 · Rishal · Striker (`rishal`)
 **Title:** Glass runner · **Origin:** Aubade (he) · **Position:** `dialcross` / `grovehunter` · `res_heat` · melee 1.7 m phys · kit phys · difficulty 3 · bot `diver`, 2 · palette `#9AA6B4` / `#D9D4C8`
