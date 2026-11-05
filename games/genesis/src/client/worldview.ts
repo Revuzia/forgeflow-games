@@ -13,7 +13,11 @@ import type {
 import { TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import { getGrid, type IcoGrid } from '../sim/grid/icogrid.ts';
 import { Noise3 } from '../sim/grid/noise.ts';
-import { groundHeight, surfaceGradients, type GroundSource } from '../sim/grid/surface.ts';
+import { groundHeight, type GroundSource } from '../sim/grid/surface.ts';
+import { GroundGradients } from './groundgrad.ts';
+
+/** main-thread time a planet's new surface may take per snapshot (groundgrad.ts slices) */
+const GROUND_BUDGET_MS = 2;
 import { bodyQuat, orbitOffset, qRotate, qRotateInv, spinAt, type D3, type DQ } from './orbits.ts';
 
 export interface PlanetView {
@@ -210,43 +214,43 @@ export class WorldView {
     };
   }
 
+  private readonly grads = new WeakMap<PlanetView, GroundGradients>();
+
   private mergePlanet(pv: PlanetView, ps: PlanetSnap, tick: number): void {
     pv.name = ps.name;
     pv.params = ps.params;
     pv.paramsTick = tick;
     pv.alive = ps.alive;
     pv.ground.radius = ps.params.radius;
+    let gg = this.grads.get(pv);
     if (ps.fields) {
       let any = false;
       for (const k of Object.keys(ps.fields) as FieldName[]) {
         const arr = ps.fields[k];
         if (!arr || arr.length !== pv.grid.count) continue;
+        // a new surface after the first is held back until its gradients are worked off (below): heights, the
+        // texture refill and the curvature then change together, a snapshot or two later at most
+        if (k === 'surface' && gg) { gg.offer(arr, ps.params.radius); continue; }
         pv.fields.set(k, arr);
         pv.fieldVersion.set(k, (pv.fieldVersion.get(k) ?? 0) + 1);
         any = true;
       }
-      if (any) {
-        pv.anyFieldVersion++;
-        const z = zeros(pv.grid.count);
-        pv.ground.surface = pv.fields.get('surface') ?? z;
-        pv.ground.soil = pv.fields.get('soil') ?? z;
-        pv.ground.sand = pv.fields.get('sand') ?? z;
-        pv.ground.snow = pv.fields.get('snow') ?? z;
-        if (ps.fields.surface) {
-          let lo = Infinity, hi = -Infinity;
-          const s = ps.fields.surface;
-          for (let i = 0; i < s.length; i++) { const v = s[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
-          pv.minSurface = lo;
-          pv.maxSurface = hi;
-          // curvature of the ground (surface.ts): the same gradients the sim derives from the same array, so CPU
-          // placement, picking and the terrain shader all evaluate one curved surface
-          const g = surfaceGradients(pv.grid, ps.params.radius, s, (pv.ground.grad as Float32Array | null) ?? undefined);
-          pv.ground.grad = g;
-          let gm = 0;
-          for (let i = 0; i < g.length; i += 4) { const m = g[i] * g[i] + g[i + 1] * g[i + 1] + g[i + 2] * g[i + 2]; if (m > gm) gm = m; }
-          pv.maxGrad = Math.sqrt(gm);
-        }
+      if (!gg && ps.fields.surface && pv.fields.get('surface') === ps.fields.surface) {
+        gg = new GroundGradients(pv.grid);
+        this.grads.set(pv, gg);
+        gg.update(ps.fields.surface, ps.params.radius);
+        this.commitGround(pv, gg);
       }
+      if (any) this.groundLayers(pv);
+    }
+    // bounds and the curvature of the ground (surface.ts): the same gradients the sim derives from the same array, so
+    // CPU placement, picking and the terrain shader all evaluate one curved surface; only the cells a new surface
+    // changed are recomputed (groundgrad.ts, bit-identical to a full pass), in slices of at most ~2 ms a snapshot
+    if (gg?.pending() && gg.step(GROUND_BUDGET_MS)) {
+      pv.fields.set('surface', gg.surface as never);
+      pv.fieldVersion.set('surface', (pv.fieldVersion.get('surface') ?? 0) + 1);
+      this.commitGround(pv, gg);
+      this.groundLayers(pv);
     }
     if (ps.agents) pv.agents = ps.agents;
     if (ps.animals) pv.animals = ps.animals;
@@ -257,6 +261,22 @@ export class WorldView {
     // things in flight are sent only while something flies: absent means none
     pv.projectiles = ps.projectiles ?? [];
     if (ps.population) pv.population = ps.population;
+  }
+
+  private groundLayers(pv: PlanetView): void {
+    pv.anyFieldVersion++;
+    const z = zeros(pv.grid.count);
+    pv.ground.surface = pv.fields.get('surface') ?? z;
+    pv.ground.soil = pv.fields.get('soil') ?? z;
+    pv.ground.sand = pv.fields.get('sand') ?? z;
+    pv.ground.snow = pv.fields.get('snow') ?? z;
+  }
+
+  private commitGround(pv: PlanetView, gg: GroundGradients): void {
+    pv.minSurface = gg.minSurface;
+    pv.maxSurface = gg.maxSurface;
+    pv.ground.grad = gg.grad;
+    pv.maxGrad = gg.maxGrad;
   }
 
   fieldVersionOf(pv: PlanetView, f: FieldName): number {
