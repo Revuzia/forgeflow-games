@@ -982,15 +982,18 @@ class Longshade(Monster):
     PART_BIND = {"mask": "mask", "eyes": ("tags", {"eyeL": "eye.L", "eyeR": "eye.R"}),
                  "claws": ("tags", {"clawL": "claw.L", "clawR": "claw.R"})}
     FEET = ("claw.L", "claw.R")
-    ICON_LIGHT = (1.2, 1.4, 2.6)
+    ICON_LIGHT = (1.0, 1.1, 1.5)
     ICON_BG = ((0.30, 0.25, 0.31), (0.05, 0.045, 0.065))
     WRIST_MIN = 0.14
     BALL_MIN = 0.06
     ICON = True
     TAIL = ("tail", "tail2", "tail3", "tail4", "tail5", "tail6")
-    PAL = {"ink": "#141219", "ink_top": "#1E1B28", "ink_under": "#0B0A0F", "rim": "#4C4870", "rim_hi": "#8C88BE",
-           "streak": "#2E2A42",
-           "hand": "#26222F", "claw": "#35303F", "claw_tip": "#A39CB3", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
+    # CW4 round 2 (critic:monsters): the ink stayed L* 4 on its L* 16 pit floor (dL* -11.9, hp 0.66), a boss that vanishes
+    # at the gameplay camera. The shade is now a dusk violet, value painted as light from above: lit tops and billow
+    # crests, seams and undersides in deep ink; the shadow-tail is crossed by chalk hour marks (it is the Needle's shadow)
+    PAL = {"ink": "#3F3A64", "ink_top": "#6F699E", "ink_under": "#1B1830", "seam": "#221E3C", "rim": "#908AC2",
+           "rim_hi": "#C0BBE4", "streak": "#514C7C", "hour": "#D2CDE6",
+           "hand": "#4E4970", "claw": "#5A5470", "claw_tip": "#C9C2D6", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
            "groove": "#3B3542", "socket": "#221E29", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
            "inlay": "#9C7840", "inlay_edge": "#5A4630"}
     # mask frame: centre, lateral, up (along the plate), out (face normal, tilted 20 degrees up)
@@ -1281,39 +1284,43 @@ class Longshade(Monster):
         n = len(V)
         nz = N[:, 2]
         if part == "body":
-            col = mix_hex(np.tile(c("ink"), (n, 1)), c("ink_top"), sarr(0.1, 0.9, nz) * 0.8)
+            col = mix_hex(np.tile(c("ink"), (n, 1)), c("ink_top"), sarr(-0.05, 0.6, nz))
             col = mix_hex(col, c("ink_under"), sarr(-0.2, -0.8, nz))
-            # stretch streaks: faint long brush lines running down the body toward the tail
+            # stretch streaks: long brush lines running down the body toward the tail
             st = NOISE.fbm(V * np.array([7.0, 0.35, 7.0]), 1.0, 3)
             streak = sarr(0.18, 0.32, st) * sarr(0.0, 0.5, nz)
-            col = mix_hex(col, c("streak"), streak * 0.55)
+            col = mix_hex(col, c("streak"), streak * 0.7)
             rough = np.full(n, 0.86)
             dmin = np.min(np.stack(list(tags.values())), 0)
-            # smoke billows: a cool light rim on their outer, upper faces, growing toward the trail's end
+            # smoke billows: a pale crest on each billow's upper face, deep ink in the seams between billows
             ww = np.clip(1 - (tags["wisp"] - dmin) / 0.02, 0, 1) * (tags["wisp"] < 0.04)
-            # how far each point sits out on its billow (the billow's crown, not the seam where billows meet)
-            crown = np.zeros(n)
+            crest = np.zeros(n)
+            ratio = np.full(n, 9.0)
             for c_, r_ in self.billows:
-                dd = np.linalg.norm(V - c_, axis=1)
-                m = dd < r_ * 1.15
+                dv = V - c_
+                dd = np.linalg.norm(dv, axis=1)
+                m = dd < r_ * 1.3
                 if m.any():
-                    crown[m] = np.maximum(crown[m], sarr(0.75, 1.05, dd[m] / r_))
-            fr, _ = self._along(V, self.wisps) if self.wisps else (np.zeros(n), None)
-            rimf = ww * crown * (0.1 + 0.35 * sarr(0.0, 0.8, nz))
-            col = mix_hex(col, c("rim"), rimf)
-            col = mix_hex(col, c("rim_hi"), ww * crown * sarr(0.7, 1.0, nz) * 0.12)
+                    ratio[m] = np.minimum(ratio[m], dd[m] / r_)
+                    crest[m] = np.maximum(crest[m], sarr(0.3, 0.92, dv[m, 2] / np.maximum(dd[m], 1e-6)))
+            seam = sarr(1.01, 1.08, ratio) * (ratio < 9.0)
+            col = mix_hex(col, c("rim"), ww * crest * 0.9)
+            col = mix_hex(col, c("rim_hi"), ww * sarr(0.72, 1.0, crest) * 0.55)
+            col = mix_hex(col, c("seam"), ww * seam * 0.9)
             rough = rough * (1 - ww) + 0.9 * ww
-            # the flat shadow-tail and its ink lobes: a faint cool rim on the edges, a darker core line
+            # the flat shadow-tail and its lobes: a pale rim on the edges, a darker core line, chalk hour marks across it
             tw = (np.clip(1 - (np.minimum(tags["tail"], tags["lobe"]) - dmin) / 0.02, 0, 1) *
                   (np.minimum(tags["tail"], tags["lobe"]) < 0.04) * (V[:, 2] < 0.35))
             ys, wsd = self.tail_w
             hw = np.interp(V[:, 1], ys, wsd)
-            edge = sarr(0.55, 1.15, np.abs(V[:, 0]) / np.maximum(hw, 0.05))
-            col = mix_hex(col, c("rim"), tw * edge * 0.6)
-            core = sarr(0.3, 0.0, np.abs(V[:, 0]) / np.maximum(hw, 0.05)) * (V[:, 1] > 1.6)
-            col = mix_hex(col, c("ink_under"), core * 0.6)
+            xr = np.abs(V[:, 0]) / np.maximum(hw, 0.05)
+            col = mix_hex(col, c("rim"), tw * sarr(0.62, 1.05, xr) * 0.9)
+            core = sarr(0.16, 0.04, xr) * (V[:, 1] > 1.6)
+            col = mix_hex(col, c("ink"), core * 0.8)
+            for yk in (2.2, 2.95, 3.7, 4.45, 5.2):
+                col = mix_hex(col, c("hour"), tw * sarr(0.075, 0.05, np.abs(V[:, 1] - yk)) * sarr(0.62, 0.5, xr) * sarr(0.14, 0.2, xr) * 0.9)
             hw_ = np.clip(1 - (tags["hand"] - dmin) / 0.02, 0, 1) * (tags["hand"] < 0.04)
-            col = mix_hex(col, c("hand"), hw_ * 0.8)
+            col = mix_hex(col, c("hand"), hw_ * 0.6)
             return col, rough
         if part == "claws":
             fr, _ = self._along(V, self.claws)
@@ -1346,12 +1353,12 @@ class Longshade(Monster):
 
     def high_material(self, part, grad):
         if part == "body":
-            return K.painted_material(f"{self.ID}_body_src", "#433D58", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
-                                      chalk=(1.5, 0.75), cavity=(0.45, 1.1), breakup=0.05, top=0.1)
+            return K.painted_material(f"{self.ID}_body_src", "#6F699E", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
+                                      chalk=(1.25, 0.75), cavity=(0.35, 1.1), breakup=0.05, top=0.1)
         if part == "mask":
             return painted_stone(f"{self.ID}_mask_src", self.PAL["chalk"], grad, chisel=0.6, scale=3.0, chalk=(1.12, 0.5))
         if part == "claws":
-            return K.painted_material(f"{self.ID}_claw_src", "#4A4458", grad, fur=0.0, chalk=(2.0, 0.6), breakup=0.04)
+            return K.painted_material(f"{self.ID}_claw_src", "#5A5470", grad, fur=0.0, chalk=(2.0, 0.6), breakup=0.04)
         return K.painted_material(f"{self.ID}_eye_src", self.PAL["lamp"], None, fur=0.0, chalk=(1.0, 1.0),
                                   cavity=(1.0, 1.0), breakup=0.0, top=0.0)
 
@@ -1620,8 +1627,8 @@ class Sunsplinter(Monster):
     VOX_HIGH = 0.0065
     TRIS = {"stone": 7400}
     CLIPS = ("idle", "run", "attack1", "cast_a1", "cast_a2", "cast_a3", "death")
-    GLOW = {"core": ("sunsplinter_noon", 0.8, "#FFCB62")}
-    UV_WEIGHTS = {"glass": 0.6, "core": 0.15}
+    GLOW = {"core": ("sunsplinter_noon", 0.8)}     # CW4 round 2: textured (the painted noon dial lights up), was a flat #FFCB62
+    UV_WEIGHTS = {"glass": 0.6, "core": 1.0}
     BAKE_RAY = (0.02, 0.06)
     AO_DIST = 0.25
     ICON = True
@@ -1800,19 +1807,29 @@ class Sunsplinter(Monster):
     def hard(self, col):
         out = []
         # the noon core: a smooth orb of light (no facets: the Vale has no gems) + a crown of short dawnglass
-        # splinters radiating from it (bound to the core: they swell with it)
+        # splinters radiating from it (bound to the core: they swell with it). CW4 round 2: painted, not a flat disc:
+        # a dense bake source carries the noon dial (see paint_core)
         import bmesh
-        bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=12, radius=0.42)
-        for v in bm.verts:
-            v.co = v.co + Vector(self.C)
-        me = bpy.data.meshes.new("sunsplinter_core")
-        bm.to_mesh(me)
-        bm.free()
-        core = bpy.data.objects.new("sunsplinter_core", me)
-        col.objects.link(core)
-        core.data.polygons.foreach_set("use_smooth", np.ones(len(core.data.polygons), dtype=bool))
-        out.append(("core", core, "core", None))
+
+        def orb(name, u_, v_):
+            bm = bmesh.new()
+            bmesh.ops.create_uvsphere(bm, u_segments=u_, v_segments=v_, radius=0.42)
+            for b_ in bm.verts:
+                b_.co = b_.co + Vector(self.C)
+            me = bpy.data.meshes.new(name)
+            bm.to_mesh(me)
+            bm.free()
+            ob_ = bpy.data.objects.new(name, me)
+            col.objects.link(ob_)
+            ob_.data.polygons.foreach_set("use_smooth", np.ones(len(ob_.data.polygons), dtype=bool))
+            return ob_
+        core = orb("sunsplinter_core", 20, 12)
+        core_hi = orb("sunsplinter_core_hi", 240, 120)
+        Vh, Nh = K.arrays(core_hi)
+        K.set_colors(core_hi, *self.paint_core(Vh))
+        core_hi.data.materials.append(K.painted_material(f"{self.ID}_core_src", "#F7B648", None, fur=0.0, chalk=(1.0, 1.0),
+                                                         cavity=(1.0, 1.0), breakup=0.0, top=0.0))
+        out.append(("core", core, "core", core_hi))
         rng = np.random.RandomState(3)
         v, f = [], []
         for k in range(12):
@@ -1846,12 +1863,26 @@ class Sunsplinter(Monster):
         return out
 
     # ── paint / materials ──
+    def paint_core(self, V):
+        """The noon dial: a hot cap at the zenith, amber body, a burnt limb, an umber hour ring with twelve carved
+        ticks above it (a sundial's lines, no hands), mirrored under the orb so a turning clip still shows one."""
+        n = len(V)
+        rel = V - self.C
+        th = np.degrees(np.arccos(np.clip(np.abs(rel[:, 2]) / 0.42, 0, 1)))        # angle from the nearer pole
+        az = np.degrees(np.arctan2(rel[:, 1], rel[:, 0]))
+        col = np.tile(K.hexc("#F4AE3E"), (n, 1))
+        col = mix_hex(col, K.hexc("#D07C26"), sarr(62, 88, th) * 0.85)              # burnt limb, an equatorial band
+        col = mix_hex(col, K.hexc("#FFE6A8"), sarr(30, 12, th))                     # the hot cap
+        col = mix_hex(col, K.hexc("#FFD27A"), sarr(34, 30, th) * sarr(40, 36, th))
+        tick = sarr(5.5, 4.0, np.abs(((az + 15.0) % 30.0) - 15.0))
+        col = mix_hex(col, K.hexc("#7A4A20"), tick * sarr(33, 36, th) * sarr(54, 51, th) * 0.95)
+        col = mix_hex(col, K.hexc("#7A4A20"), sarr(5.5, 3.5, np.abs(th - 57.0)) * 0.95)
+        return col, np.full(n, 0.3)
+
     def paint(self, part, V, N, tags):
         P = self.PAL
         c = lambda k: K.hexc(P[k])  # noqa: E731
         n = len(V)
-        if part == "core":
-            return np.tile(K.hexc("#FFF0C4"), (n, 1)), np.full(n, 0.3)
         nz = N[:, 2]
         col = np.tile(c("chalk"), (n, 1))
         # value structure: noon-lit tops, a warm umber underside, broad blotches (>= 0.5 m breakup at game distance)
