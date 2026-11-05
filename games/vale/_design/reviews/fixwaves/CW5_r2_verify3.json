@@ -1,0 +1,66 @@
+{
+ "wave": "CW5",
+ "round": 2,
+ "verify": 3,
+ "date": "2026-11-05",
+ "pass": true,
+ "summary": "PASS: 8 of 8 at par. Lisvel re-scores 7.5, just on the bar and up from 7.4, because both causes named last pass are fixed: the tabard, tunic and legs carry real fold paint, and the splash bow is thin and off the torso. done:4 holds on sheets I re-rendered for all 8 fighters. Burdam's pauldron depth is 19.4, in band. Geometry, UVs and clip keys of Lisvel, Burdam and Ervet are unchanged, so the recall, motion and crown results carry over. Open minors only, and the live catalog still needs `npm run content`.",
+ "regressions": [],
+ "scores": {"lisvel": 7.5},
+ "handoffs": [
+  {
+   "to": "lead / integration",
+   "what": "dist-catalog/manifest.json is dated 23:03, older than Lisvel's final GLB (23:33) and Burdam's (23:40). Run `npm run content` once CW5 settles, or a live match will not serve this art. I did not re-run a live match this pass."
+  },
+  {
+   "to": "CW5 / anyone rebuilding Lisvel, Burdam or Ervet",
+   "what": "The last paint steps are post-build GLB grades: Lisvel's tabard 16 -> 19 and legs 9 -> 11 (engineer's figures), Burdam's pauldron lift, Ervet's helm, crest, scarf and breastplate. A plain Blender rebuild loses them unless glb_paint_grade is re-applied, so re-run part_gamecam --named after any rebuild."
+  }
+ ],
+ "items": [
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "I re-rendered all 8 sheets with three_snapshot and ran part_gamecam --named on them; every pair is >= 8 (_harness/_reports/fw_CW5_r2v3_<id>_gamecam_fresh.txt, exit 0). Counts: Vashil 7, Ardit 7, Burdam 8, Kemdo 7, Lisvel 10, Nurrow 6, Ulkro 10, Ervet 11. Tightest: Ulkro legs:wraps 8.0, then 8.2 pairs on Ulkro, Kemdo, Ardit and Burdam. Ervet's former misses on the fresh sheet: helm:crest 8.8, helm:scarf 8.3, breastplate:pauldron 9.2 / 9.3. art/tools/part_pairs.json now names the pairs. I also tested pairs left off the list. Burdam skirt:coat 3.3 is one felt per burdam.md's palette table, not two materials. Burdam belt:trousers 5.2 is omitted, and I treated it as not a touching pair without checking the mesh. Lisvel tabard_skirt:tabard 3.9 is the same cloth by part name. Ervet tabard:coat 4.1 is my reading of two blue cloths, not confirmed from its palette. Lisvel tunic:tabard 9.6, Ervet helm:breastplate 9.1 and tabard:belt 9.8 clear 8 anyway (fw_CW5_r2v3_{burdam,lisvel,ervet}_extra.txt). Lisvel's paint is covered under lisvel-M3. Ervet blade: the crest changed but no blade texels appeared in the body map, so the blade bevel pass was not re-measured; it passed earlier and the grade named no blade part."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "three_load_test --budget-kb 1172 OK on 24/24 GLBs, largest ulkro_highrim 1161 KiB (_harness/_reports/fw_CW5_r2v3_load.txt). Lineup silhouetteOk true in art/renders/lineup/fw_CW5_r2r_lineup.json, read, not re-run: positions on Lisvel, Burdam and Ervet are identical to the GLBs committed before the refix (46acb92f, d6724665, ea5c3504). Ervet's clip keys are identical there too, so its 6 s recall holds. Lisvel re-scores 7.5, so 8 of 8 are at par. Remaining majors on fighters at par are backlog under ruling 8."
+  },
+  {
+   "id": "par:lisvel",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, up from 7.4, and I judged it narrowly: it clears the bar, not by a margin. Blocker class clear. Bow: at attack1 t 0.30, yaw -30 the limb is thin and stands off the torso; it no longer reads as a plank (art/out/fighters/lisvel/splash.png). String: the two runs meet at the drawing hand by the ear (_harness/_shots/fw_CW5_r2v3_lisvel_splash_head.png). The x_string bone is 11 cm from hand.R at that frame. The lower run does cross the scarf and upper chest, which is minor. Face still reads: nose and mouth are visible, head about 150 px by eye on the crop. Paint: see lisvel-M3; the folds show on the splash torso (_harness/_shots/fw_CW5_r2v3_lisvel_splash_torso.png). card_qa 6 cards, 0 misses (_harness/_reports/fw_CW5_r2v3_lisvel_cards.txt). Clip keys and geometry are identical to pre-refix commit 46acb92f, on base and skins, so last pass's recall and crown results carry over without a new live probe. Minors: the drawing hand reads as a soft lump by the hood, and small black flecks remain under the belt."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Reproduced with part_paint_detail.py, and with my own masked high-pass (_harness/_reports/fw_CW5_r2v3_paint_detail.txt). Old GLB -> current on my metric, spread / s16: tabard 9 / 1.4 -> 19 / 5.4, skirt 11 / 1.5 -> 19 / 5.2, tunic 3 / 1.0 -> 11 / 4.4, legs 3 / 0.7 -> 11 / 3.2. Nurrow tabard on the same metric is 19 / 3.2, so Lisvel reaches its spread and exceeds its detail. The energy sits at fold scale (tabard s4 2.3, s32 6.1), not fine noise. UVs are unchanged, so the 21:53 part map is still valid. Fold valleys and chest tension folds are visible on the splash and in three_lisvel.png row 3; stitching I could not confirm at these sizes. Legs stay below Nurrow's trousers (11 vs 26), as the engineer disclosed; the fix asked for real folds there, and they are present. Skins are rebuilt and carry detail too (tabard s16 5.1 Gorgewalk, 9.2 Almanac)."
+  },
+  {
+   "id": "fighter:burdam:burdam-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "On my fresh sheet the game-camera pauldron reads L* 46.1 / 65.5 / 74.6, depth 19.4, inside 15-20, and pauldron:cowl is 8.5 (fw_CW5_r2v3_burdam_gamecam_fresh.txt). The stored sheet gives 46.3 / 65.4 / 74.3, depth 19.1, and 8.7. The texture diff touches the pauldron parts (tiers and shoulder plate +3.1 to +5.3 L*); every other part I listed moved <= 0.1 L*, so the coat is unchanged. CORRECTION to the engineer's claim: pauldron b* did not fall. The default render gives b* 7.5, like the old 7.3. The 3.6 comes from the stored sheet's different render setup: three_burdam.png has backdrop (193,191,186) against the default (198,192,181), and every part in it shifts cooler by about 4 b*. Burdam stays at 7.5 on sight of row 3; not formally re-scored. Skin gate like for like, all three sheets fresh: Almanac 19.3 >= Stillwater 18.2 (per-pixel dE); on the stored sheets 10.7 >= 10.5."
+  },
+  {
+   "id": "minor:stored-sheet-render-setup",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Stored three_burdam.png, three_lisvel.png and three_ervet.png have backdrop (193,191,186); the other five, and direct three_snapshot runs, have (198,192,181). I did not trace why. Named pairs pass on both. On the cool sheets skin_gamecam_delta reports Burdam's base figure at L* 57.1 against 44.5 on the fresh sheet, so that tool's numbers are only comparable between sheets from one setup.",
+   "fixHint": "Render all gate sheets one way, or record the setup in the report."
+  },
+  {
+   "id": "minor:stray-tool-file",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "art/tools/_tmp_lisvel_review_pose.mjs is untracked, dated Oct 28. It predates this round and is not part of the refix.",
+   "fixHint": "Delete it or leave it uncommitted."
+  }
+ ]
+}
