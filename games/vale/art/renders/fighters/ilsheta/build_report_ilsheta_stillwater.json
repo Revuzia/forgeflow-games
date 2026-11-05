@@ -26,24 +26,24 @@
   },
   "uv_coverage": 0.62,
   "bake": {
-    "base": 3.39,
-    "rough_metal": 2.39,
-    "normal": 1.64,
-    "ao": 2.48,
+    "base": 4.46,
+    "rough_metal": 3.38,
+    "normal": 2.52,
+    "ao": 3.01,
     "normal_fixed_px": 16229,
-    "projection": 19.02,
-    "pack_save": 19.14,
-    "total": 29.17
+    "projection": 31.61,
+    "pack_save": 31.86,
+    "total": 45.47
   },
   "tris": 18972,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2378280,
+  "glb_bytes_raw": 2377900,
   "optimize": {
     "ok": true,
-    "before": 2378280,
-    "after": 979856
+    "before": 2377900,
+    "after": 979672
   },
-  "glb_bytes": 979856,
+  "glb_bytes": 979672,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -56,6 +56,16 @@
       "  tris: 18972; bind-pose bounds (three units, Y up): 1.00 x 1.72 x 0.70; facing (-0.00, 1.00); head bone y 1.24; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ilsheta/ilsheta_stillwater_splash.png",
+      "portrait": "art/out/fighters/ilsheta/ilsheta_stillwater_portrait.png"
+    },
+    "seconds": {
+      "splash": 62.65,
+      "portrait": 11.47
+    }
   },
   "three_qa": {
     "ok": true,
@@ -86,23 +96,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_stillwater.png",
-    "seconds": 7.1,
+    "seconds": 12.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.17,
-      "model": 2.55,
-      "lows_bind": 2.48,
-      "uv": 4.42,
-      "bake": 29.17,
-      "export": 0.08,
-      "optimize": 0.46,
-      "load_test": 0.1,
-      "three_qa": 7.39
+      "materials": 0.25,
+      "model": 4.81,
+      "lows_bind": 4.92,
+      "uv": 8.32,
+      "bake": 45.48,
+      "export": 0.1,
+      "optimize": 0.87,
+      "load_test": 0.18,
+      "render": 74.15,
+      "three_qa": 12.92
     },
-    "total_s": 46.87
+    "total_s": 152.12
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

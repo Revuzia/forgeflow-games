@@ -30,14 +30,14 @@
   },
   "uv_coverage": 0.61,
   "bake": {
-    "base": 5.14,
-    "rough_metal": 4.19,
-    "normal": 2.71,
-    "ao": 2.94,
+    "base": 4.77,
+    "rough_metal": 4.09,
+    "normal": 2.63,
+    "ao": 2.87,
     "normal_fixed_px": 45671,
-    "projection": 41.26,
-    "pack_save": 41.5,
-    "total": 56.82
+    "projection": 40.81,
+    "pack_save": 41.04,
+    "total": 55.74
   },
   "tris": 22407,
   "mesh_top_m": 2.054,
@@ -146,9 +146,9 @@
   "optimize": {
     "ok": true,
     "before": 2904384,
-    "after": 1172304
+    "after": 1172488
   },
-  "glb_bytes": 1172304,
+  "glb_bytes": 1172488,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -162,6 +162,20 @@
       "  run: 20 f, planted samples 4, max foot-speed error 1.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/dunsom/splash.png",
+      "portrait": "art/out/fighters/dunsom/portrait.png",
+      "icon": "art/out/fighters/dunsom/icon.png",
+      "turntable": "art/renders/fighters/dunsom/turntable.png"
+    },
+    "seconds": {
+      "splash": 56.73,
+      "portrait": 6.31,
+      "icon": 1.94,
+      "turntable": 3.52
+    }
   },
   "three_qa": {
     "ok": true,
@@ -192,25 +206,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/dunsom/three_dunsom.png",
-    "seconds": 12.1,
+    "seconds": 7.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.33,
-      "model": 62.81,
-      "lows_bind": 6.29,
-      "uv": 7.97,
-      "bake": 57.06,
+      "materials": 0.2,
+      "model": 60.49,
+      "lows_bind": 5.99,
+      "uv": 7.3,
+      "bake": 55.97,
       "clips": 0.3,
-      "export": 2.07,
-      "optimize": 0.95,
+      "export": 2.05,
+      "optimize": 0.93,
       "load_test": 0.2,
-      "three_qa": 12.38,
-      "cache": 0.17
+      "render": 68.59,
+      "three_qa": 7.76,
+      "cache": 0.14
     },
-    "total_s": 150.59
+    "total_s": 210.0
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,

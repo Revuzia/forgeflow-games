@@ -100,12 +100,12 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   // lineups veteran won only 32/40 (seeds 601-620, --lineup shuffle); the macro and intent gap widens again: the team's
   // calls are followed less often (0.4, was 0.5) and an opening or a dive must hold 15 s (was 10). CW3s refix (done:3, fresh
   // seeds 901-920: 33/40): calls followed 0.3, an opening must hold 22 s, dodges 0.02, skillshot lead 0.05, aim 22 deg; refix 2 (still 33/40):
-  // reactions 0.85 s, no kiting, focus 0.05, an ability every 1.0 s; r2 refix (33/40 on seeds 3301-3320): a beginner misreads kills and passive laners (read 1.05, press 0.3)
+  // reactions 0.85 s, no kiting, focus 0.05, an ability every 1.0 s; r2 refix (33/40 on seeds 3301-3320): a beginner misreads kills and passive laners (read 1.05, press 0.3), an ability every 1.3 s, and takes the early objective only with a fighter more (team.ts)
   novice: {
     id: 'novice', reaction: 0.85, reactionJitter: 0.25, aimErrorDeg: 22, leadSkill: 0.05,
     lastHitSigma: 0.25, lastHitMiss: 0.45, riftKillRead: 1.05, riftPassivePress: 0.3, dodgeChance: 0.02, kiteSkill: 0, shotPatience: 0,
     intentFollow: 0.3, recallBias: -0.12, retreatBias: -0.12, knowsCooldowns: false,
-    decisionNoise: 0.2, focusDiscipline: 0.05, abilityEvery: 1.0,
+    decisionNoise: 0.2, focusDiscipline: 0.05, abilityEvery: 1.3,
     macroDelay: 22, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
     objectiveLead: 10, objectiveEven: 0, contests: false, objectiveSense: false,
   },

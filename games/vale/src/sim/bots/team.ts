@@ -33,9 +33,6 @@ import type { TeamPerc } from './perception.ts';
 import { dhypot, sq } from '../dmath.ts';
 import { DIFFICULTIES, type DifficultyProfile } from './difficulty.ts';
 
-/** the laning phase's end (bot.ts LANE_PHASE_END): the roads still answer their objective at even numbers until then */
-const LANING_OBJECTIVE_UNTIL = 840;
-
 export interface LaneAssign { lane: number; jungle: boolean; support: boolean }
 
 export const TEAM_THINK_TICKS = 15;
@@ -519,16 +516,14 @@ export class TeamBrain {
     let threat = 0;
     for (let i = 0; i < this.defend.length; i++) { if (this.defend[i] >= 0.7) return; threat = Math.max(threat, this.defend[i]); }
     const now = w.time, d = this.diff, sense = d.objectiveSense;
-    // (CW3s r2 refix, done:2: the roads' own objective stays at even numbers for the whole laning phase. The team's 'mid' phase
-    // starts at 10:00 or two fallen structures, its even-numbers desire 0.68 is under the 0.75 a laner answers, so a camp
-    // still up then waited for 14:00: veteran first takes were two clusters, 7-10 and 14+ min)
-    const laning = this.phase !== 'late' && now < LANING_OBJECTIVE_UNTIL;
+    const early = this.phase === 'early';
     // (objectiveSense: a road with a stacked enemy wave deep in our half is a threat too — no waiting at a door then)
     if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 5 && this.perc.enemyFront[l.index] < l.length * 0.5 && this.perc.ownN[l.index] <= this.perc.enemyN[l.index] - 3) threat = Math.max(threat, 0.5);
     // (objectiveSense: a road under threat comes first — Wicks crashing into an empty base end games, a camp does not)
-    // (CW3s r2 refix, done:2: not for the laning phase's own short camp: a wave deep in one half is the laning's normal state,
-    // and this read, with the 15 s bar below, left veteran Sunsplinter takes at 3.2-8.3 min after spawn; adept 1.0-2.3)
-    if (sense && threat >= (laning ? 0.6 : 0.3)) return;
+    // (CW3s r2 refix, done:2: not in the early phase: a wave deep in one half is the laning's normal state. This read, the time
+    // bars and the 60 s block below split veteran first Sunsplinter takes into 7-10 and 14+ min, where adept stays at 7-10;
+    // holding the even-numbers call past 10:00 instead cost far more: veteran beat novice 27/40, a core fell at 15.5 min)
+    if (sense && threat >= (early ? 0.6 : 0.3)) return;
     // (objectiveSense: where the team is — an even-numbers call is for a camp on its way, not one across the map)
     let cx = 0, cy = 0, cn = 0;
     for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
@@ -542,9 +537,9 @@ export class TeamBrain {
       if (now < 240) continue;
       let desire = 0;
       if (sense) {
-        if (now < this.campBlock[c.index]) continue;
+        if (!early && now < this.campBlock[c.index]) continue;
         const { ttk, hpF } = this.campTtk(w, c);
-        const long = ttk > (laning ? 24 : 15), up = aa >= ae + 1;
+        const long = ttk > 15, up = aa >= ae + 1;
         const near = cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 50 * 50;
         if (alive) {
           // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers a short one
@@ -552,9 +547,9 @@ export class TeamBrain {
           desire = ttk > 40 ? 0 : up ? 0.75 : !long && aa >= ae && this.phase !== 'early' && near ? d.objectiveEven : 0;
           // (CW3s refix, done:2: the laning phase's own objective is taken at even numbers once it is up and short for us
           // — the grovehunter and the roads beside it; it used to wait for a fighter more, 8.5 min past its spawn)
-          if (laning && !long && aa >= ae) desire = Math.max(desire, 0.75);
+          if (early && ttk <= 30 && aa >= ae) desire = Math.max(desire, 0.75);
           // (a won fight with a structure to take: a short camp is worth it only on the way — the structure first)
-          if (!laning && this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
+          if (!early && this.window && this.siege && !long && !(cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 35 * 35)) desire = 0;
           if (d.contests && aa >= ae) {
             for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }
           }
@@ -572,7 +567,8 @@ export class TeamBrain {
       } else if (alive) {
         desire = aa >= ae + 1 ? 0.75 : aa >= ae && this.phase !== 'early' ? d.objectiveEven : 0;
         // (CW3s refix, done:2: the laning phase's objective at even numbers, as above)
-        if (laning && aa >= ae) desire = Math.max(desire, 0.75);
+        // (a beginner, objectiveEven 0, takes it only with a fighter more: three Splinters at even numbers kept novice in games)
+        if (early && aa >= ae && d.objectiveEven > 0) desire = Math.max(desire, 0.75);
         // (contest: the enemy is at it and we are not short of bodies)
         if (d.contests && aa >= ae) {
           for (const f of this.perc.enemyFighters) if (f.alive && sq(f.x - c.x) + sq(f.y - c.y) <= 16 * 16) { desire = Math.max(desire, 0.76); break; }

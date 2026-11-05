@@ -3183,8 +3183,10 @@ def clip_overrides(ctx) -> dict:
     SR, SA, SS = (0.08, -0.56, -0.30), (-0.249, 0.040, 0.968), -0.045
     ST = dict(hips=(0, -6, 0), spine=(2, -5, 0), chest=(3, -7, 0), neck=(0, 6, 0), head=(2, 8, 0))
     stack = pose(torso=ST, hips=(0.0, 0.0, -0.01), R=SR, aim=SA, grip=0.12, slide=SS, fk=TW)
+    # (closing round 2 verify 1, dunsom:idle-lobby-pop: an off-crook left hand here switched the wrist's IK target from
+    # the crook grip to a shoulder-relative one at the blend's midpoint, a 0.41 m pop at f18.5: both hands stay on the crook)
     look = pose(torso=dict(chest=(-2, -4, 0), neck=(-4, -6, 0), head=(-8, -14, 0)), R=(-0.20, -0.60, 0.12),
-                aim=(-0.20, -0.30, 0.93), L=(0.10, -0.40, -0.70), fk=dict(prop_R=(0, -10.0, 0)))
+                aim=(-0.20, -0.30, 0.93), grip=0.12, fk=dict(prop_R=(0, -10.0, 0)))
     nod = lambda a: pose(torso=dict(hips=(0, -6, 0), spine=(2, -5, 0), chest=(3, -7, 0), neck=(2 + a, 6, 0), head=(4 + 2 * a, 8, 0)),
                          hips=(0.0, 0.0, -0.01), R=SR, aim=SA, grip=0.12, slide=SS, fk=TW)  # noqa: E731
     sky = pose(torso=dict(hips=(0, -6, 0), spine=(-2, -5, 0), chest=(-4, -7, 0), neck=(-8, 6, 0), head=(-16, 10, 0)),

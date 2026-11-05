@@ -287,7 +287,10 @@ CARDS = {
                               "size": 0.35},
                              {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 12.0,
                               "size": 0.35}]},
-        "portrait": {"yaw": 14.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
+        # (closing round 2 verify 1, cards:ilsheta-first-bell-chin: the bust took the splash's cast_a3 lean, the head tipped
+        # back in the hood and the plate's chin rim opened a black bar over the collar: the bust stands on the idle, where
+        # the plate stays seated, as the base and Stillwater busts do)
+        "portrait": {"clip": "idle", "t": 0.25, "yaw": 4.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
                      "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
                                 "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
@@ -1109,45 +1112,60 @@ def _paint_chimney(c, p, n, pal=None):
 
 
 def _face_plate(x, z, pal):
-    """the carved chalk face-plate (brief section 3), in the patch's own ellipse: broad planes, a brow shelf, two ink
-    almond recesses each with a cool painted glint (calm: the inner ends a touch higher, never slanted down to the
-    nose), the beak keel with its lit and shaded sides, one quiet carved mouth line; the edge falls off softly into the
-    hood lining. No projection, so no stepped blocks and no stray marks; never emissive"""
+    """the carved chalk face-plate (brief section 3), in the patch's own ellipse: broad planes, a brow shelf, two lit amber
+    glass inlays set in the carved eyes, each with a dark pupil and a small cool glint (calm: the inner ends a touch
+    higher, never slanted down to the nose), a warm cheek, the beak keel, one quiet carved mouth line; the edge falls off
+    softly into the hood lining. No projection, so no stepped blocks and no stray marks; never emissive"""
+    # (closing round 2 verify 1, sensitivity:ilsheta-face: ink recesses read as the hollow black eyes of a ghost mask on
+    # the icon and the portraits, ruling 2: the eyes are warm inlays with a pupil and a glint, the shading under them and
+    # along the beak falls warm and light, no grey smudges, and the plate's edge has no hard step)
     _, pz, ax, az = FACE_PATCH
     u, v = x / ax, (z - pz) / az
     au = np.abs(u)
     chalk = _lin(_hex(pal.get("chalk", "#D4CEBF")))
-    # (a first smooth pass read as a porcelain mannequin in three.js, a sensitivity miss: the plate is CARVED: faceted
-    # planes with a stepped cheek line, incised brow arcs, a dawn chevron on the brow, a
-    # warm chalk, deep ink recesses, and only a small catch-light in each; no vertical lines under the eyes: they read
-    # as tears, which the roster's masks do not carry)
-    shade = 0.93 - 0.30 * ss(0.50, 0.58, au) - 0.12 * ss(0.58, 1.0, au) - 0.20 * ss(-0.30, -0.42, v)   # the facets step
-    shade = shade + 0.10 * np.exp(-((v - 0.34) / 0.10) ** 2) * ss(0.90, 0.40, au)     # the brow shelf catches the light
+    # (a first smooth pass read as a porcelain mannequin in three.js, a sensitivity miss: the plate is CARVED: soft planes,
+    # incised brow arcs, a dawn chevron on the brow, a warm chalk; no vertical lines under the eyes: they read as tears,
+    # which the roster's masks do not carry)
+    shade = 0.95 - 0.20 * ss(0.46, 0.80, au) - 0.08 * ss(0.80, 1.0, au) - 0.10 * ss(-0.28, -0.60, v)
+    shade = shade + 0.08 * np.exp(-((v - 0.34) / 0.10) ** 2) * ss(0.90, 0.40, au)     # the brow shelf catches the light
     tilt = math.radians(6.0)
     du, dv = au - 0.43, v - 0.10
     uu = du * math.cos(tilt) - dv * math.sin(tilt)
     vv = du * math.sin(tilt) + dv * math.cos(tilt)
     d = np.abs(vv) / 0.125 + (uu / 0.31) ** 2                                        # < 1 inside the almond
-    shade = shade * (1.0 - 0.34 * ss(2.0, 1.0, d))                                    # the carved bevel round the recess
+    shade = shade * (1.0 - 0.24 * ss(2.0, 1.0, d) * ss(-0.01, 0.06, vv))              # the lid's carved shade, above only
     span = ss(-0.30, -0.16, v) * ss(0.46, 0.30, v)
-    shade = shade + 0.16 * np.exp(-(u / 0.06) ** 2) * span                            # the keel's lit ridge
-    shade = shade * (1.0 - 0.36 * np.exp(-((u - 0.11) / 0.05) ** 2) * span)           # its shaded side
-    shade = shade * (1.0 - 0.45 * np.exp(-((v + 0.33) / 0.04) ** 2) * np.exp(-(u / 0.15) ** 2))     # under the beak
-    shade = shade * (1.0 - 0.55 * np.exp(-((v + 0.60) / 0.026) ** 2) * ss(0.32, 0.18, au))           # the mouth line
+    shade = shade + 0.10 * np.exp(-(u / 0.06) ** 2) * span                            # the keel's lit ridge
+    shade = shade * (1.0 - 0.16 * np.exp(-((u - 0.11) / 0.06) ** 2) * span)           # its shaded side
+    shade = shade * (1.0 - 0.22 * np.exp(-((v + 0.33) / 0.05) ** 2) * np.exp(-(u / 0.15) ** 2))     # under the beak
+    shade = shade * (1.0 - 0.42 * np.exp(-((v + 0.60) / 0.026) ** 2) * ss(0.32, 0.18, au))           # the mouth line
     # the incised marks: an arc over each eye, the dawn chevron
     arc = np.exp(-((v - (0.36 - 0.55 * (au - 0.43) ** 2)) / 0.022) ** 2) * ss(0.84, 0.72, au) * ss(0.12, 0.20, au)
     chev = np.exp(-((v - (0.70 - 0.55 * au)) / 0.024) ** 2) * ss(0.28, 0.20, au)
-    shade = shade * (1.0 - 0.58 * np.clip(arc + chev, 0.0, 1.0))
-    warm = np.array([1.03, 1.0, 0.94])
-    lin = (chalk * warm)[None, :] * np.clip(shade, 0.0, 1.25)[:, None]
-    ink = _lin(_hex(pal.get("ink", "#17181B")))
+    shade = shade * (1.0 - 0.42 * np.clip(arc + chev, 0.0, 1.0))
+    shade = np.clip(shade, 0.0, 1.25)
+    # the plate's shadows fall warm, never grey; a warm cheek so the long pale plate is not a blank
+    lin = (chalk * np.array([1.03, 1.0, 0.94]))[None, :] * shade[:, None]
+    lin = lin * (1.0 + np.clip(1.0 - shade, 0.0, 1.0)[:, None] * np.array([0.16, -0.02, -0.24]))
+    cheek = np.exp(-(((au - 0.50) / 0.20) ** 2 + ((v + 0.16) / 0.15) ** 2))[:, None]
+    lin = lin * (1 - 0.30 * cheek) + _lin(_hex("#D9A183"))[None, :] * shade[:, None] * 0.30 * cheek
+    # the inlay: amber glass, lit from below inside its carved rim, a dark pupil, a small cool glint
+    amber = _lin(_hex("#E7AE5E"))[None, :]
+    deep = _lin(_hex("#8A5526"))[None, :]
+    lit = ss(0.08, -0.09, vv)[:, None]
+    inlay = deep * (1 - lit) + amber * lit
+    pr = np.hypot(uu + 0.005, vv - 0.008)
+    pw = ss(0.062, 0.040, pr)[:, None]
+    inlay = inlay * (1 - pw) + _lin(_hex("#2B1B14"))[None, :] * pw
     w = ss(1.05, 0.82, d)[:, None]
-    lin = lin * (1 - w) + ink[None, :] * w
-    glint = np.exp(-((uu + 0.07) / 0.030) ** 2 - ((vv - 0.040) / 0.018) ** 2)[:, None]   # the recess's wet catch-light
-    lin = lin + _lin(_hex("#BFD6E8"))[None, :] * 0.60 * glint
+    lin = lin * (1 - w) + inlay * w
+    lid = (ss(0.72, 0.98, d) * ss(1.26, 1.02, d) * ss(0.0, 0.05, vv))[:, None]        # the upper lid's thin warm line
+    lin = lin * (1 - 0.82 * lid) + _lin(_hex("#46301F"))[None, :] * 0.82 * lid
+    glint = np.exp(-((uu + 0.055) / 0.030) ** 2 - ((vv - 0.040) / 0.020) ** 2)[:, None]
+    lin = lin + _lin(_hex("#D3E6F2"))[None, :] * 0.70 * glint
     q = np.hypot(u, v)
-    lin = lin * (1.0 - 0.45 * ss(0.78, 1.0, q))[:, None]                              # the plate's edge in the hood's shade
-    e = ss(0.92, 1.02, q)[:, None]
+    lin = lin * (1.0 - 0.34 * ss(0.70, 1.0, q))[:, None]                              # the plate's edge in the hood's shade
+    e = ss(0.86, 1.04, q)[:, None]
     lin = lin * (1 - e) + _lin(_hex(LINING))[None, :] * e
     return _srgb(np.clip(lin, 0.0, 1.0))
 

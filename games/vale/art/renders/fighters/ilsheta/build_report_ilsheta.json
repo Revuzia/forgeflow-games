@@ -25,14 +25,14 @@
   },
   "uv_coverage": 0.618,
   "bake": {
-    "base": 2.83,
-    "rough_metal": 2.21,
-    "normal": 1.55,
-    "ao": 2.99,
+    "base": 3.93,
+    "rough_metal": 2.81,
+    "normal": 2.23,
+    "ao": 2.54,
     "normal_fixed_px": 15468,
-    "projection": 14.96,
-    "pack_save": 15.11,
-    "total": 24.79
+    "projection": 12.43,
+    "pack_save": 12.58,
+    "total": 24.26
   },
   "tris": 18272,
   "mesh_top_m": 1.722,
@@ -143,18 +143,18 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2844260,
+  "glb_bytes_raw": 2843664,
   "optimize": {
     "ok": true,
-    "before": 2844260,
-    "after": 1167256
+    "before": 2843664,
+    "after": 1167008
   },
-  "glb_bytes": 1167256,
+  "glb_bytes": 1167008,
   "three_load_test": {
     "ok": true,
     "log": [
       "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ilsheta/ilsheta.glb (1140 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ilsheta_base 2048x2048 263K, ilsheta_normal 512x512 36K, ilsheta_orm 512x512 60K",
+      "  webp: ilsheta_base 2048x2048 262K, ilsheta_normal 512x512 36K, ilsheta_orm 512x512 60K",
       "  skinned meshes: ilsheta(15472v), ilsheta_accent_1(564v), ilsheta_accent_2(152v)",
       "  bones: 28 (root hips spine chest neck head x_chimney_top shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_lamp x_mantle_l x_mantle_r thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.667s/21tr, attack2:0.667s/21tr, cast_a1:0.833s/21tr, cast_a2:1.000s/23tr, cast_a3:0.667s/21tr, cast_ult:1.500s/25tr, channel:1.333s/21tr, crit:0.833s/21tr, dash:0.500s/22tr, death:1.667s/23tr, idle:2.400s/23tr, idle_lobby:4.000s/21tr, recall:6.000s/21tr, run:0.533s/25tr, stunned:1.333s/21tr, taunt:1.333s/21tr, victory:2.000s/21tr",
@@ -163,6 +163,20 @@
       "  run: 16 f, planted samples 2, max foot-speed error 0.3%",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/ilsheta/splash.png",
+      "portrait": "art/out/fighters/ilsheta/portrait.png",
+      "icon": "art/out/fighters/ilsheta/icon.png",
+      "turntable": "art/renders/fighters/ilsheta/turntable.png"
+    },
+    "seconds": {
+      "splash": 54.36,
+      "portrait": 9.7,
+      "icon": 3.82,
+      "turntable": 6.42
+    }
   },
   "three_qa": {
     "ok": true,
@@ -193,25 +207,26 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/ilsheta/three_ilsheta.png",
-    "seconds": 7.2,
+    "seconds": 13.5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.1,
-      "model": 2.26,
-      "lows_bind": 2.23,
-      "uv": 5.02,
-      "bake": 24.8,
+      "materials": 0.24,
+      "model": 4.53,
+      "lows_bind": 3.71,
+      "uv": 8.22,
+      "bake": 24.27,
       "clips": 0.13,
-      "export": 1.17,
-      "optimize": 0.53,
+      "export": 1.15,
+      "optimize": 0.52,
       "load_test": 0.11,
-      "three_qa": 7.39,
-      "cache": 0.09
+      "render": 74.42,
+      "three_qa": 13.84,
+      "cache": 0.12
     },
-    "total_s": 43.86
+    "total_s": 131.32
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

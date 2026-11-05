@@ -52,7 +52,7 @@ SHAPE = body.shape(girth=1.0, torso_w=1.0, torso_d=1.02, chest=1.0, waist=0.96, 
 
 ## 3. Face (template 3)
 
-- **Aubade glass visor, shaped like a lamp chimney.** One tall dawnglass pane (`kit.glass_visor` stretched to a chimney: 0.30 m high, 0.14 m wide, flaring to 0.18 m at the cheek) over a carved chalk face-plate with ink almond recesses and a beak keel inside the glass (painted directly, not projected: faceted planes, an incised arc over each eye and a dawn chevron on the brow, a small cool catch-light in each recess, no marks under the eyes; its edge a soft occlusion gradient into the hood lining, never a stepped dark band: closing polish ilsheta-face-seam). The flare at the cheek points forward: it is the facing cue from above. Glass is glossy and never emissive.
+- **Aubade glass visor, shaped like a lamp chimney.** One tall dawnglass pane (`kit.glass_visor` stretched to a chimney: 0.30 m high, 0.14 m wide, flaring to 0.18 m at the cheek) over a carved chalk face-plate with lit amber glass eye inlays (dark pupil, small cool glint; closing round 2 sensitivity fix: never hollow black) and a beak keel inside the glass (painted directly, not projected: faceted planes, an incised arc over each eye and a dawn chevron on the brow, a small cool catch-light in each recess, no marks under the eyes; its edge a soft occlusion gradient into the hood lining, never a stepped dark band: closing polish ilsheta-face-seam). The flare at the cheek points forward: it is the facing cue from above. Glass is glossy and never emissive.
 - A heavy linen hood frames the chimney (rigid, `kit.hood`); no bare face, no hair.
 
 ## 4. Armour, cloth and props (template 4)
@@ -81,7 +81,7 @@ Hexes are authored albedo in the bible vocabulary (`materials.bible_palette` rol
 | `leather` | `#4C443E` | 29 | 26° / 18% | belt, boots |
 | `under` | `#40444A` | 29 | 216° / 14% | leggings |
 | `ironstone` | `#47443F` | 29 | 37° / 11% | toe caps |
-| `ink` | `#17181B` | 8 | 225° / 15% | face-plate recesses behind the glass |
+| `ink` | `#17181B` | 8 | 225° / 15% | hood and lining darks (the face-plate eyes are amber inlays, `#E7AE5E` / `#8A5526`, painted in `_face_plate`) |
 | `accent` | `#3F9CFF` | 63 | 211° / 75% | the lamp core |
 
 Nothing here is saturated: the cool glass is at most 19% saturation and the linen is under 6%. The mantle (L* 81) is the lightest large area on any half-A fighter but stays below the near-white limit (L* 86) so it never reads as Noonwhite.
