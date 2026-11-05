@@ -16,8 +16,9 @@
 // the god commits itself — or from the prophet: while a prayer is open they foretell its answer (p = 0.5 × credibility);
 // after an omen they foretell its meaning. FULFILLED when the god does a matching act there inside the window (harm: a
 // harmful act; sign: any omen): credibility + 0.25 × (1 − credibility) (0.30 → 0.48 → 0.61 → 0.71), the town faith
-// +0.15, trust +0.10, loyalty +0.10. FAILED when the window closes: credibility −0.25, faith −0.05, trust −0.08,
-// loyalty −0.05. This is the player's lever: say it through someone, then make it true.
+// +0.15, trust +0.10, loyalty +0.10. FAILED when the window closes: credibility −0.25 × (1 − credibility / 2), faith
+// −0.05, trust −0.08, loyalty −0.05 (the prophet's own reading — at most one a season, put to the god as a question —
+// risks a third of all that). This is the player's lever: say it through someone, then make it true.
 //
 // PERSECUTION: a ruler persecutes the prophet when their own loyalty to the god is below 0.3 and the prophet's
 // credibility above 0.4 (a rival authority), or when the town fears more than it trusts (by 0.3) and the prophet
@@ -48,7 +49,7 @@ import { planDrinkNear } from '../people/decide.ts';
 import { bestFood, storeAdd, storeTake } from '../people/store.ts';
 import { fail, ok } from './util.ts';
 import { meansNow, moveSettlement, relOf, relStat, rise, riseTrust, srel } from './regard.ts';
-import { actReaches, PRAYER_WORDS } from './prayers.ts';
+import { actReaches, PRAYER_WORDS, SEASON_DAYS } from './prayers.ts';
 import { addSacredPlace, foundShrine, PILGRIM_REACH, sacredNear } from './sacred.ts';
 
 /** prophets a world may have at once */
@@ -166,7 +167,8 @@ export function foretell(x: PCtx, ph: ProphetState, kind: string, days: number, 
   const st = x.ps.settlement(ph.settlement);
   if (st && s >= 0) {
     const what = WORDS[kind] ?? kind;
-    tell(u, x.p, 'prophet.foretold', vars(x, st, s, { what, What: what.charAt(0).toUpperCase() + what.slice(1), days: d }), st, [agentRef(x, s), settlementRef(x, st)], 1);
+    // (postrel SIMFIX r2) the prophet's own reading is put to the god as a question: make it true, or let it pass
+    tell(u, x.p, by === 'prophet' ? 'prophet.reads' : 'prophet.foretold', vars(x, st, s, { what, What: what.charAt(0).toUpperCase() + what.slice(1), days: d }), st, [agentRef(x, s), settlementRef(x, st)], 1);
   }
   u.emit({ t: 'prophet.foretold', planet: x.p.id, pos: st ? [st.pos[0], st.pos[1], st.pos[2]] : undefined, data: { prophecy: pr.id, agent: ph.agent, settlement: ph.settlement, kind, until: pr.until, by } });
   return pr;
@@ -242,16 +244,28 @@ function fulfilled(x: PCtx, pr: Prophecy, st: Settlement): void {
   u.emit({ t: 'prophet.fulfilled', planet: x.p.id, pos: [st.pos[0], st.pos[1], st.pos[2]], data: { prophecy: pr.id, agent: pr.agent, settlement: st.id, kind: pr.kind, credibility: ph?.credibility ?? 0 } });
 }
 
+/** what a failed word of the god's costs a prophet of credibility c */
+export function failCost(c: number): number {
+  return 0.25 * (1 - 0.5 * c);
+}
+/** the share of that a failed reading of the prophet's own risks */
+export const OWN_RISK = 1 / 3;
+
 function failed(x: PCtx, pr: Prophecy): void {
   const u = x.u;
   const R = relOf(u);
   R.prophecies = R.prophecies.filter((q) => q !== pr);
   const ph = prophetOf(u, pr.planet, pr.agent);
-  if (ph) { ph.credibility = r3(Math.max(0, ph.credibility - 0.25)); ph.failed++; }
+  // (postrel SIMFIX r2: every prophet of the year-50 probe ended at 0 — three of the god's words come true and one
+  // missed, then two of their own readings of open prayers failed) a word that fails costs 0.25 × (1 − credibility / 2):
+  // a prophet with a record is forgiven a little more (0.71 after three -> 0.55, not 0.46); their own reading, which
+  // the god never spoke, risks a third of that, and the town's doubt with it
+  const own = pr.by === 'prophet' ? OWN_RISK : 1;
+  if (ph) { ph.credibility = r3(Math.max(0, ph.credibility - own * failCost(ph.credibility))); ph.failed++; }
   relStat(u, 'prophecies.failed');
   const st = x.ps.settlement(pr.settlement);
   if (!st || st.fallen >= 0) return;
-  moveSettlement(x, st, { faith: -0.05, trust: -0.08, loyalty: -0.05 });
+  moveSettlement(x, st, { faith: -0.05 * own, trust: -0.08 * own, loyalty: -0.05 * own });
   const s = x.A.slotOf(pr.agent);
   if (s >= 0) tell(u, x.p, 'prophet.failed', vars(x, st, s, { what: WORDS[pr.kind] ?? pr.kind }), st, [agentRef(x, s), settlementRef(x, st)], 1);
   if (ph && ph.credibility < 0.1 && s >= 0) tell(u, x.p, 'prophet.ignored', vars(x, st, s), st, [agentRef(x, s)], 1);
@@ -302,11 +316,15 @@ export function prophetsHourly(u: Universe, p: Planet): void {
     // left them at 0.56-0.65 after three fulfilled prophecies on 3 of 8 seeds; they wait on the god's word, not their own)
     const r = srel(u, p.id, ph.settlement);
     const waiting = relOf(u).prophecies.some((q) => q.agent === ph.agent && q.by === 'god' && q.until >= u.tick);
+    // (postrel SIMFIX r2) and at most one reading of their own a season
+    const ownKey = `own:${ph.agent}`;
     for (const pr of r.prayers) {
       const key = `f:${pr.id}`;
       if (r.since[key] !== undefined || !heard(u, ph)) continue;
       r.since[key] = u.tick;
       if (waiting) continue;
+      if (r.since[ownKey] !== undefined && u.tick - r.since[ownKey] < SEASON_DAYS * x.day) continue;
+      if (hashFloat(ph.agent, pr.id, 0xf07e) < 0.5 * ph.credibility) r.since[ownKey] = u.tick;
       if (hashFloat(ph.agent, pr.id, 0xf07e) < 0.5 * ph.credibility) foretell(x, ph, pr.kind, Math.max(1, Math.round((pr.until - u.tick) / x.day)), 'prophet');
     }
     for (const k of Object.keys(r.since)) if (k.startsWith('f:') && !r.prayers.some((q) => `f:${q.id}` === k)) delete r.since[k];

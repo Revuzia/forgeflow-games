@@ -171,8 +171,10 @@ test('balance: a prophet whose word came true yesterday keeps their credibility 
   sim.step(120);
   assert.equal(r.lapses, 3, 'the third lapse');
   assert.equal(ph.credibility, c0, `credibility held (${c0} -> ${ph.credibility})`);
-  // three days on, with no word of the god's open, the next deaf lapse costs them 0.1
+  // three days on, with no word of the god's open, the next deaf lapse costs them 0.1 — once as many of their words
+  // failed as came true (postrel SIMFIX r2: a record ahead keeps them clear of the god's silence)
   sim.step(Math.round(3 * sim.u.planets[0].st.dayHours * 60));
+  ph.failed = ph.fulfilled;
   const c1 = ph.credibility;
   r.lapses = 5;
   r.prayers.push({ id: 9002, kind: 'food', since: sim.u.tick, until: sim.u.tick + 30, urgency: 0.5, god: 0 });

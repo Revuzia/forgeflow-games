@@ -1052,11 +1052,33 @@ export class LaunchFx {
   extraVisible = false;
   private glowList = new Map<number, { x: number; y: number; z: number; w: number; c: Vector3 }[]>();
 
+  /** one hidden instance of each kind made per world or per engine on first use, so Renderer.warmUp links their programs */
+  private warm: { puffs: PuffSystem; lights: LightQuads; shades: ShadeQuads; ribbon: TrailRibbon };
+
   constructor() {
     this.spaceGroup.name = 'launch-space';
     this.spaceGroup.matrixAutoUpdate = true;
     LAUNCH_FX.last = this;
+    // (the per-world puffs, light and shade quads are made at a world's first FX, a ribbon and a plume slot at an
+    // engine's first fire: the walking god's light pool linked a program on the first walk, macfix r2. three's
+    // compile walks hidden objects too and keys a ShaderMaterial's program by its source, so one hidden twin of each
+    // here links the program every later instance shares.)
+    const puffs = new PuffSystem(1, null, true);
+    const lights = new LightQuads(1), shades = new ShadeQuads(1);
+    const ribbon = new TrailRibbon({}, puffs.uniforms, 0);
+    this.warm = { puffs, lights, shades, ribbon };
+    const g = this.warmGroup;
+    g.name = 'launch-warm';
+    g.visible = false;
+    g.add(puffs.group, lights.mesh, shades.mesh, ribbon.mesh);
+    // a plume slot, free: plumeSlot() hands it to the first engine and parents it where that engine fires
+    const slot = this.plumeSlot();
+    slot.used = false;
+    slot.group.visible = false;
+    g.add(slot.group);
   }
+  /** the hidden twins above (the ship layer hangs it in the scene, so the load-time warm-up's compile reaches it) */
+  readonly warmGroup = new Group();
 
   /** how many births an emitter owes this frame for `exact` (fractional) births' worth, at most `cap` */
   private births(key: string, exact: number, cap: number): number {
@@ -1667,6 +1689,8 @@ export class LaunchFx {
   dispose(): void {
     for (const p of this.planets.values()) { p.puffs.dispose(); p.lights.dispose(); p.shades.dispose(); for (const r of p.ribbons.values()) r.dispose(); }
     for (const s of this.plumes) { s.shell.geometry.dispose(); for (const m of s.mats) m.dispose(); s.hazeMat.dispose(); }
+    const w = this.warm;
+    w.puffs.dispose(); w.lights.dispose(); w.shades.dispose(); w.ribbon.dispose();
   }
 }
 

@@ -713,8 +713,12 @@ export class ShipLayer {
   overlayVis = 0;
   /** drawn this frame */
   stats = { ships: 0, parts: 0 };
-  /** the god's body while walking (render/camera/avatar.ts, posed by camera/walk.ts) */
-  private avatar: Avatar | null = null;
+  /**
+   * the god's body while walking (render/camera/avatar.ts, posed by camera/walk.ts): made up front, hidden in the
+   * space group until the first walk, so Renderer.warmUp (three's compile walks hidden objects too) links its 3
+   * programs behind the loading screen — made on the first walk, it linked them in that frame (macfix r2)
+   */
+  private avatar: Avatar;
 
   constructor() {
     this.spaceGroup.name = 'ships-space';
@@ -745,6 +749,9 @@ export class ShipLayer {
     this.glints.frustumCulled = false;
     this.glints.renderOrder = 21;
     this.overlay.add(this.glints);
+    this.avatar = new Avatar(this.fx.depthU, FX_LAYER);
+    this.avatar.group.visible = false;
+    this.spaceGroup.add(this.avatar.group, this.fx.warmGroup);
   }
 
   setResolution(w: number, h: number, pixelRatio: number): void {
@@ -925,9 +932,8 @@ export class ShipLayer {
   private placeAvatar(planets: Map<number, ShipPlanetRef>, time: number): void {
     const s = AVATAR_STATE;
     const ref = s.active ? planets.get(s.planet) : undefined;
-    if (!ref) { if (this.avatar) this.avatar.group.visible = false; GOD_WIND.value.w = 0; this.fx.extraVisible = false; return; }
+    if (!ref) { this.avatar.group.visible = false; GOD_WIND.value.w = 0; this.fx.extraVisible = false; return; }
     // (drawn in the launch FX pass, over the composited image, tested against the scene's depth by hand)
-    if (!this.avatar) this.avatar = new Avatar(this.fx.depthU, FX_LAYER);
     const a = this.avatar;
     if (a.group.parent !== ref.group) ref.group.add(a.group);
     a.group.position.copy(s.pos);
@@ -1733,6 +1739,8 @@ export class ShipLayer {
     this.fx.dispose();
     this.glints.geometry.dispose();
     this.glintMat.dispose();
+    this.avatar.group.removeFromParent();
+    this.avatar.dispose();
   }
 }
 

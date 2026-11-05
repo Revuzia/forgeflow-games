@@ -14,7 +14,9 @@
 //   rebuilding  ≥ 25 % of the buildings ruined                  timber, a gift of wood or stone, buildings raised       4 days
 //
 // Answered: faith +0.10, trust +0.15, loyalty +0.05 and "The god heard Aru". Lapsed: faith −0.03, trust −0.05, loyalty
-// −0.02; three lapses in a row and "they say the god is deaf" (the prophet's credibility −0.1). `prayer.answer
+// −0.02; three lapses in a row and "they say the god is deaf" (the prophet's credibility −0.1 unless more of their
+// words came true than failed; then no new prayer for two seasons). A lapsed kind is not asked again for a season, and
+// the chronicle says 'nothing came' once a season a town. `prayer.answer
 // { settlement, prayer? }` performs the canonical answer (one-click answering in the UI; free text "answer the prayers
 // of Aru"); query 'prayers'.
 //
@@ -45,6 +47,14 @@ export type PrayerKind = (typeof PRAYER_KINDS)[number];
 
 /** the answer window of each prayer, in days */
 export const WINDOW: Record<PrayerKind, number> = { food: 3, rain: 3, healing: 2, warmth: 1, protection: 1, rebuilding: 4 };
+
+/** a season, in days (a 12-day year): the unit of the pauses below */
+export const SEASON_DAYS = 3;
+/** (postrel SIMFIX r2: a town with lasting sickness re-prayed for healing every 2 days and nearly every prayer lapsed —
+ * 270 raised / 266 lapsed in 2 years on a year-50 save, 33 'nothing came' lines) after a prayer lapses its kind is not
+ * raised again for a season; after 'they say the god is deaf' the town asks for nothing for two seasons */
+export const LAPSE_PAUSE_DAYS = SEASON_DAYS;
+export const DEAF_PAUSE_DAYS = 2 * SEASON_DAYS;
 
 /** what a prayer is for, in words ("they pray for rain") */
 export const PRAYER_WORDS: Record<string, string> = { food: 'food', rain: 'rain', healing: 'healing', warmth: 'warmth', protection: 'protection', rebuilding: 'help to rebuild' };
@@ -131,8 +141,10 @@ export function prayersHourly(x: PCtx, st: Settlement, night: boolean): number {
   r.since.hard = Math.round(h * 1000) / 1000;
   // lapsed prayers
   for (const pr of r.prayers.slice()) if (pr.until <= x.tick) lapse(x, st, pr);
-  // new prayers (at most 2 open; the same kind is not raised again within a day of its last)
+  // new prayers (at most 2 open; the same kind is not raised again within a day of its last, nor within a season of
+  // its last lapse; a town that has stopped asking asks for nothing for two seasons)
   if (st.band || r.prayers.length >= 2) return h;
+  if (r.since.deaf !== undefined && x.tick - r.since.deaf < DEAF_PAUSE_DAYS * x.day) return h;
   const want: [PrayerKind, number][] = [];
   if (days < 1.5 || famine) want.push(['food', Math.min(1, (1.5 - Math.min(1.5, days)) / 1.5 + (famine ? 0.5 : 0))]);
   if (drought || (dry && x.tick - (r.since.dry ?? x.tick) >= 2 * x.day)) want.push(['rain', drought ? 0.8 : 0.5]);
@@ -150,6 +162,8 @@ export function prayersHourly(x: PCtx, st: Settlement, night: boolean): number {
     if (r.prayers.some((q) => q.kind === kind)) continue;
     const last = r.since[`p:${kind}`];
     if (last !== undefined && x.tick - last < x.day) continue;
+    const lapsed = r.since[`l:${kind}`];
+    if (lapsed !== undefined && x.tick - lapsed < LAPSE_PAUSE_DAYS * x.day) continue;
     raise(x, st, kind, urgency);
   }
   return h;
@@ -183,9 +197,17 @@ function lapse(x: PCtx, st: Settlement, pr: Prayer): void {
   r.lapses++;
   relStat(u, 'prayers.lapsed');
   moveSettlement(x, st, { faith: -0.03, trust: -0.05, loyalty: -0.02 });
-  tell(u, x.p, 'prayer.lapsed', vars(x, st, -1, { prayer: PRAYER_WORDS[pr.kind] }), st, [settlementRef(x, st)], 1);
+  r.since[`l:${pr.kind}`] = x.tick;
+  // one 'nothing came' line a season per town (the record still counts every lapse)
+  const told = r.since.lapseTold;
+  if (told === undefined || x.tick - told >= SEASON_DAYS * x.day) {
+    r.since.lapseTold = x.tick;
+    tell(u, x.p, 'prayer.lapsed', vars(x, st, -1, { prayer: PRAYER_WORDS[pr.kind] }), st, [settlementRef(x, st)], 1);
+  }
   u.emit({ t: 'prayer.lapsed', planet: x.p.id, pos: [st.pos[0], st.pos[1], st.pos[2]], ref: settlementRef(x, st), data: { settlement: st.id, prayer: pr.id, kind: pr.kind } });
   if (r.lapses % 3 === 0) {
+    // the town has stopped asking: no new prayer for two seasons (no 'they pray for healing' the day the god is deaf)
+    r.since.deaf = x.tick;
     tell(u, x.p, 'prayer.deaf', vars(x, st), st, [settlementRef(x, st)], 2);
     // (postrel P25: not a prophet still waiting on a word of the god's they spoke, nor one whose word came true in the
     // last two days — the town holds its judgment of them; the year-50 probe's prophets lost 0.1 here between fulfilled prophecies and
@@ -195,6 +217,9 @@ function lapse(x: PCtx, st: Settlement, pr: Prayer): void {
       if (ph.planet !== x.p.id || ph.settlement !== st.id) continue;
       if (ph.fulfilledAt !== undefined && u.tick - ph.fulfilledAt <= 2 * x.day) continue;
       if (R.prophecies.some((q) => q.agent === ph.agent && q.by === 'god' && q.until >= u.tick)) continue;
+      // (postrel SIMFIX r2: nor one whose record of words come true is ahead of the failed — the town blames the god's
+      // silence, not the voice that was proved right; y50 credibility drained 0.53 -> 0.43 -> 0.33 on lapses alone)
+      if (ph.fulfilled > ph.failed) continue;
       ph.credibility = Math.max(0, Math.round((ph.credibility - 0.1) * 1000) / 1000);
     }
   }

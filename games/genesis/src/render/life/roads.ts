@@ -275,6 +275,22 @@ function makeRoadMaterial(shared: Record<string, IUniform>, transparent: boolean
   return mat;
 }
 
+/**
+ * a ribbon with no vertices but the attributes a built one has (position, normal and the road's own): what a road mesh
+ * holds before the first chain and after the last, so the program the load-time warm-up links is the one it draws with
+ * (no index: Roads.update shows a ribbon only once it has one)
+ */
+export function emptyRibbon(): BufferGeometry {
+  const bg = new BufferGeometry();
+  bg.setAttribute('position', new Float32BufferAttribute([], 3));
+  bg.setAttribute('normal', new Float32BufferAttribute([], 3));
+  bg.setAttribute('aRoad', new Float32BufferAttribute([], 4));
+  bg.setAttribute('aLamp', new Float32BufferAttribute([], 1));
+  bg.setAttribute('aEnd', new Float32BufferAttribute([], 1));
+  bg.setAttribute('aLift', new Float32BufferAttribute([], 1));
+  return bg;
+}
+
 /** lamp posts cast sun shadows within this distance of the camera (m) */
 const SHADOW_POST_M = 70;
 
@@ -310,8 +326,11 @@ export class Roads {
   constructor(shared: Record<string, IUniform>) {
     this.group.name = 'roads';
     this.group.matrixAutoUpdate = false;
-    this.dirt = new Mesh(new BufferGeometry(), makeRoadMaterial(shared, true));
-    this.paved = new Mesh(new BufferGeometry(), makeRoadMaterial(shared, false));
+    // (hidden ribbons with the real geometry's attribute set, empty: a program's key holds whether the geometry has
+    // normals, so a bare BufferGeometry made Renderer.warmUp link another program than the first road draws — the
+    // first road a village laid linked 4 programs mid-play, macfix r2)
+    this.dirt = new Mesh(emptyRibbon(), makeRoadMaterial(shared, true));
+    this.paved = new Mesh(emptyRibbon(), makeRoadMaterial(shared, false));
     for (const m of [this.dirt, this.paved]) { m.frustumCulled = false; m.matrixAutoUpdate = false; m.visible = false; this.group.add(m); }
     this.dirt.renderOrder = 1;
     this.lampMat = makeBuildingMaterial(shared);
@@ -611,7 +630,7 @@ export class Roads {
     }
     const put = (m: Mesh, g: { p: number[]; n: number[]; a: number[]; l: number[]; e: number[]; f: number[]; i: number[] }) => {
       m.geometry.dispose();
-      const bg = new BufferGeometry();
+      const bg = g.i.length ? new BufferGeometry() : emptyRibbon();
       if (g.i.length) {
         bg.setAttribute('position', new Float32BufferAttribute(g.p, 3));
         bg.setAttribute('aRoad', new Float32BufferAttribute(g.a, 4));
