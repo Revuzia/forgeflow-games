@@ -108,7 +108,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   },
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
-    lastHitSigma: 0.03, lastHitMiss: 0.02, dodgeChance: 0.85, kiteSkill: 0.9, shotPatience: 1,
+    lastHitSigma: 0.03, lastHitMiss: 0.02, dodgeChance: 0.72, kiteSkill: 0.9, shotPatience: 0.8,
     intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
