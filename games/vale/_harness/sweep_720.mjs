@@ -346,6 +346,32 @@ if (want('draft') && which === 'fast') await step('draft_fixture', async () => {
   await draftFixture({ phase: 'finalize', hover: 4 });
   await W(1500);
   await draftChecks('finalize');
+  // closing CL-1 (CW3 done:5): the showcase follows the skin under the pointer and shows it large
+  await each(async (w) => {
+    const tiles = page.locator('.scr--draft:not(.is-leaving) .loadout .skin');
+    const rows = [];
+    for (let i = 0, n = await tiles.count(); i < n; i++) {
+      await tiles.nth(i).hover();
+      await W(500);
+      rows.push(await page.evaluate((k) => {
+        const scr = document.querySelector('.scr--draft:not(.is-leaving)');
+        const img = [...scr.querySelectorAll('.fshow__art:not(.is-out) img')].pop();
+        const r = img?.getBoundingClientRect();
+        return { tile: scr.querySelectorAll('.loadout .skin')[k].getAttribute('aria-label'), name: scr.querySelector('.fshow__name')?.innerText ?? '', src: img?.getAttribute('src')?.split('/').pop() ?? '', art: r ? [Math.round(r.width), Math.round(r.height)] : null };
+      }, i));
+      if (i === n - 1) await shot(page, `${PREFIX}_${w}_draft_finalize_skin_hover`);
+    }
+    await page.mouse.move(2, 2);
+    await W(300);
+    (R.finalizeHover ??= {})[w] = rows;
+    const paid = rows.filter((x) => !/^base skin$/i.test(x.name));
+    const wrong = paid.filter((x) => !x.tile.toLowerCase().startsWith(`${x.name.toLowerCase()}.`));
+    const small = rows.filter((x) => !x.art || x.art[1] < 300);
+    if (new Set(rows.map((x) => x.src)).size !== rows.length) fail('finalize', w, 'the showcase art did not change with the hovered skin', rows);
+    if (wrong.length) fail('finalize', w, 'the showcase name is not the hovered skin', wrong);
+    if (small.length) fail('finalize', w, 'the showcase art is under 300 px tall', small);
+    console.log(`  finalize hover ${w}`, JSON.stringify(rows.map((x) => [x.name, x.art])));
+  });
   for (const tab of ['Boons', 'Hour spells']) {
     const t = page.locator('.scr--draft:not(.is-leaving) .loadout [role=tab]', { hasText: tab }).first();
     if (await t.count()) { await t.click(); await W(400); await each(async (w) => { await check(page, 'finalize', `${w}_${tab.replace(' ', '_').toLowerCase()}`); await shot(page, `${PREFIX}_${w}_draft_finalize_${tab.replace(' ', '_').toLowerCase()}`); }); }
