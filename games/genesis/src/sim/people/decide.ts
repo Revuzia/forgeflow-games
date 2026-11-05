@@ -495,7 +495,10 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
   // is found on foot no more than WATER_NEAR farther than it (every search below looks no farther than that) — the one
   // rule staleDrink and bandStep's recall apply to a walk already under way (campBeats)
   const dm = campDist(x, s, st), m = _cm;
-  if (st && st.band && st.target && w >= ROAD_W) return c < 0 ? null : dm < Infinity && campBeats(x, s, st, c) ? toCamp(x, s, here, m) : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
+  // (SIMFIX 2) the leader is the band's road (bandStep walks the band where the leader is): a thirsty leader looks for
+  // water on foot like anyone off the road — held to the ring in sight, a seed-16 dust bowl leader at w 0.21 slept the
+  // night 420 m out while the band's water ran out, and ten died walking to water 1.5 km off that it could have led to
+  if (st && st.band && st.target && w >= ROAD_W && st.leader !== A.id[s]) return c < 0 ? null : dm < Infinity && campBeats(x, s, st, c) ? toCamp(x, s, here, m) : { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
   const budget = st && !st.band ? Math.min(TOWN_WALK, thirstBudget(w)) : thirstBudget(w);
   const b = Math.min(budget, dm + WATER_NEAR);
   if (c >= 0 && budget > 0 && !(st && !st.band && st.res && st.res.water.length)) {
@@ -514,7 +517,7 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
     // rather than forage in the sun; a band's leader keeps going, and townsfolk go on with the day's work (a day worker
     // carries the skins: waterHere — lying up in a dried town cost the day trips that kept base villagers watered)
-    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === s))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
+    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === A.id[s]))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
   }
   if (c < 0) return null;
   // (a road walks faster than the crow flies: what campBeats would drop on the way is not picked)

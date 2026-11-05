@@ -44,7 +44,7 @@ import { pathOptsFor } from './resources.ts';
 import { recountShelters } from './tasks.ts';
 import { planetLevel } from '../perf/lapse.ts';
 import { DAY_WALK, WATER_NEAR, lastingWater, reachCost, waterOnFoot, waterReach } from './waterway.ts'; // LIVING.md §2.7: the water a band can walk to
-import { LOAD_KG } from '../perf/pace.ts';
+import { LOAD_KG, endTrip } from '../perf/pace.ts';
 // SIM perf push 3 — the coarse settlement step of the peoples' time-lapse (perf/plapse.ts)
 import { chanceIn, dueIn, hourly, settleHours } from '../perf/plapse.ts';
 import { fireSeen } from './firewatch.ts'; // LIVING PACE: a fire seen is a fire learned
@@ -605,6 +605,20 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
     st.recent.wjudged = x.tick;
     waterReach(x, st, here, 3 * DAY_WALK);
     lost = reachCost(x, tc) === Infinity;
+  }
+  // (SIMFIX 2) a band walking a bearing that has found water to drink (its camp water, bandWater) away from the bearing
+  // holds there: the water becomes its next mark, and the band gathers at it before it judges the land again — a seed-16
+  // dust bowl band's leader drank at the bowl's edge 1.5 km out, then walked back toward its bearing 470 m from the
+  // ruins while the rest, on their way to that same water, died of thirst (LIVING.md §2.7)
+  const cw = roaming ? bandWater(x, st) : -1;
+  if (cw >= 0 && cw !== tc) {
+    cellPos(x.p, cw, _bt);
+    if (distM(x.p, at, _bt) <= WATER_NEAR && distM(x.p, _bt, st.target) > WATER_NEAR) {
+      st.target = [_bt[0], _bt[1], _bt[2]];
+      st.recent.tgtAt = x.tick;
+      st.recent.tgtBest = Math.round(distM(x.p, at, st.target));
+      return;
+    }
   }
   if (spoilt || stuck || lost) {
     if (!roaming) st.recent[`u${tc}`] = x.tick;
@@ -1677,6 +1691,10 @@ export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {
     x.ps.removeMember(st.id, s);
     A.settlement[s] = band.id;
     A.home[s] = -1;
+    // (SIMFIX 2) a trip out of a town that is no more is over: its camp is struck and the hunter walks with the band (a
+    // seed-16 dust bowl band was led by a hunter still on a camp trip from the fallen town: it slept 12 h at its camp
+    // with its water skin while the band, holding to it, went thirsty 460 m out — LIVING.md §2.7)
+    endTrip(x, s);
     x.ps.addMember(band.id, s);
   }
   band.households = st.households.map((h) => ({ id: h.id, members: h.members.slice(), home: -1 }));
