@@ -111,12 +111,25 @@ const WATCH_SPEED = 10;
  * Kindling comes after 54 s. At 10x those were 1 to 1.5 min to nightfall, 2.5 min to the hearth and 9 min to the offer.
  * (The opening brief's "3x-10x" for this button was written on the old clock, whose 1x was ten times today's (LIVING
  * §1.1): that range is 30x-100x today and 100x is its upper end, unchanged in real pace. The
- * owner's "slow and realistic 1x" is the default the player returns to; this is an explicit fast-forward they press.
+ * owner's "slow and realistic 1x" is the default the player returns to — the opening's end() puts the world back at 1x
+ * (speedAfterOpening; tests/ui-opening-endspeed.test.ts) — and this is an explicit fast-forward they press.
  * tests/ui-opening-dayspeed.test.ts holds it to that range and to a Cinder day in under half a minute.)
  */
 export const DAY_SPEED = 100;
 /** "Let a century run": 1000x, the time-lapse. A year takes about 17 s and a century about half an hour (100x: 4.8 hours) */
 const CENTURY_SPEED = 1000;
+
+/**
+ * The speed the world goes to when the opening ends (null: leave it). The opening's own fast-forwards — "let the day
+ * pass" (DAY_SPEED) and the slow-down to WATCH_SPEED for the first day — go back to 1x, the owner's slow, realistic
+ * pace. "Let a century run" (CENTURY_SPEED) is the player's own ask for the time-lapse and stays; so does any speed the
+ * player set after the opening's last (the running speed is not the opening's), and pause.
+ */
+export function speedAfterOpening(running: number, ownSpeed: number): number | null {
+  if (ownSpeed <= 0 || ownSpeed === CENTURY_SPEED) return null;
+  if (running !== ownSpeed) return null;
+  return running === 1 ? null : 1;
+}
 
 export class Opening {
   readonly root: HTMLDivElement;
@@ -143,6 +156,9 @@ export class Opening {
   /** the world's tick when the whisper's 'give them fire' was taken (−1: not given), and the night the kindling line
    * was said at (it changes with the night) */
   private fireGivenAt = -1;
+  /** the speed the opening itself last set (its own fast-forwards and the watch slow-down; 0: none yet) — at its end
+   * the world goes back to 1x if that speed is still the one running (see speedAfterOpening) */
+  private ownSpeed = 0;
   private curNight = false;
   /** when the whisper on screen was last (re)worded */
   private renderedAt = 0;
@@ -211,6 +227,7 @@ export class Opening {
     this.uiShown = false;
     this.nightSaid = this.coldNight = this.fireSaid = false;
     this.fireGivenAt = -1;
+    this.ownSpeed = 0;
     this.stormAt = -1;
     this.rockWet0 = -1;
     this.spot = null;
@@ -305,6 +322,17 @@ export class Opening {
     this.ring.hidden = true;
     this.cur = null;
     this.setQuiet(false);
+    // (the owner's slow, realistic 1x: the opening's own "let the day pass" (100x) or watch speed (10x) does not
+    // outlive it; a century the player asked for, or a speed they picked themselves, stays)
+    const back = speedAfterOpening(this.host.view.speed, this.ownSpeed);
+    if (back !== null) this.host.setSpeed(back);
+    this.ownSpeed = 0;
+  }
+
+  /** the opening sets the world's speed (only through here, so its end knows which speed was its own) */
+  private setSpeed(x: number): void {
+    this.ownSpeed = x;
+    this.host.setSpeed(x);
   }
 
   /** the HUD quiets while the whispers speak (a few speeds, no key strip) and is whole again for the farewell */
@@ -672,7 +700,7 @@ export class Opening {
         return {
           beat, ack: late ? undefined : 'They know of fire now.',
           line: late ? 'Still no hearth. They know of fire, but none burns yet.' : night ? 'Night. Their first hearth is not lit yet.' : 'Watch for their first hearth.',
-          act: this.host.view.speed < DAY_SPEED ? { label: 'let the day pass', run: () => this.host.setSpeed(DAY_SPEED) } : undefined,
+          act: this.host.view.speed < DAY_SPEED ? { label: 'let the day pass', run: () => this.setSpeed(DAY_SPEED) } : undefined,
           later: late
             ? `Hold ${k('ui.gesture', 'G')} over them and draw the flame sigil: Kindling lights their hearths — or press ${k('ui.palette', '/')} and search “kindling”.`
             : `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}.`,
@@ -688,7 +716,7 @@ export class Opening {
       };
       case 'wait': return {
         beat, line: 'Watch them. Their first night is coming.',
-        act: { label: 'let the day pass', run: () => this.host.setSpeed(DAY_SPEED) },
+        act: { label: 'let the day pass', run: () => this.setSpeed(DAY_SPEED) },
         // (the Touch, suggested once there is someone to lift)
         later: `Time runs faster with ${k('time.speed10', '5')} and ${k('time.speed100', '7')}; ${k('time.pause', 'Space')} stops it. Or come close and lift one with the Touch — drag them, and set them down gently.`,
       };
@@ -697,7 +725,7 @@ export class Opening {
         // (CENTURY_SPEED, 1000×: the time-lapse, a year in ~17 s and a century in ~half an hour — the old 100× it was
         // written for; presets are ticks a second since the living-world pace, LIVING §1.1, and 100× now takes a century
         // 4.8 hours)
-        act: { label: 'let a century run', run: () => this.host.setSpeed(CENTURY_SPEED) },
+        act: { label: 'let a century run', run: () => this.setSpeed(CENTURY_SPEED) },
       };
     }
   }
@@ -715,7 +743,7 @@ export class Opening {
     if (pv) this.spot ??= this.findSpot(pv);
     const sp = this.spot;
     if (sp) this.host.lookAt(sp.planet, sp.pos, 520);
-    if (this.host.view.speed > WATCH_SPEED) this.host.setSpeed(WATCH_SPEED);
+    if (this.host.view.speed > WATCH_SPEED) this.setSpeed(WATCH_SPEED);
     const p = this.host.powers.get('people');
     if (p) { this.deps.arm(p, { species: 'plains-folk', count: 30 }); this.armedPeople = true; return; }
     const poi = this.host.poi?.('homestead');

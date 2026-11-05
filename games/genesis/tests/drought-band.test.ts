@@ -5,9 +5,9 @@
 // The miniature (the drought fixture): a 30-person stone-age village on the n = 64 sandbox, a dust bowl 1.5 km across held
 // over it for 96 hours, six days watched. (n = 32 does not reproduce the drought: the village finds water at hand.)
 import { test } from 'node:test';
+import { Worker } from 'node:worker_threads';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
-import type { Settlement } from '../src/sim/people/state.ts';
 import { world, people, must, ctx, membersOf } from './helpers/peoples.ts';
 import { INV, PHASE, TASK } from '../src/sim/people/defs.ts';
 import { NEED_N, WATER } from '../src/sim/people/needs.ts';
@@ -15,56 +15,11 @@ import { decide, waterHere } from '../src/sim/people/decide.ts';
 import { finishTask } from '../src/sim/people/work.ts';
 import { abandon } from '../src/sim/people/settlement.ts';
 import { itemIdx } from '../src/sim/people/resources.ts';
-import { ROAD_W, soakable, waterOnFoot } from '../src/sim/people/waterway.ts';
+import { soakable, waterOnFoot } from '../src/sim/people/waterway.ts';
 import { LOAD_KG } from '../src/sim/perf/pace.ts';
 import { cellPos, distM } from '../src/sim/people/world.ts';
 
-interface DustBowl { sim: Sim; town: Settlement; fellH: number; deaths: Record<string, number>; alive: number; road: { keep: number; drink: number } }
-
-/** the drought fixture set down: village, a day at 3000x; `dry` is the god holding the dust bowl (call it every hour) */
-function dustBowlStart(seed: number, radius = 1500, n = 30): { sim: Sim; town: Settlement; dry: (on: Sim) => void } {
-  const sim = world(64, seed);
-  people(sim, 'plains-folk', n, { era: 'stone', settled: true });
-  must(sim, { k: 'time.scale', tps: 3000 });
-  sim.step(1440);
-  const town = sim.u.planets[0].people.settlements.find((s) => s.fallen < 0 && !s.band);
-  assert.ok(town, `seed ${seed}: a village stands after a day`);
-  const disc = sim.u.planets[0].cellsNear(town.pos.slice(), radius).slice();
-  const dry = (on: Sim) => {
-    const p = on.u.planets[0], f = p.f;
-    for (const c of disc) { if (p.s.ocean[c]) continue; f.water[c] = 0; f.moisture[c] = 0; f.aquifer[c] = 0; f.wetness[c] = 0; f.precip[c] = 0; }
-  };
-  sim.drainEvents();
-  return { sim, town, dry };
-}
-
-/** the drought fixture: the dust bowl held for `hold` h over the village, `hours` h watched; on the band's first day,
- * how many members with water to spare (>= ROAD_W) keep to the band's road and how many are off on drink trips */
-function dustBowl(seed: number, hours = 144, hold = 96, radius = 1500): DustBowl {
-  const { sim, town, dry } = dustBowlStart(seed, radius);
-  const ps = sim.u.planets[0].people, A = ps.agents;
-  const deaths: Record<string, number> = {};
-  const road = { keep: 0, drink: 0 };
-  let fellH = -1;
-  for (let h = 0; h < hours; h++) {
-    if (h < hold) dry(sim);
-    sim.step(60);
-    for (const e of sim.drainEvents()) if (e.t === 'death') { const k = String((e.data as { cause?: string } | undefined)?.cause ?? '?'); deaths[k] = (deaths[k] ?? 0) + 1; }
-    if (fellH < 0 && town.fallen >= 0) fellH = h + 1;
-    if (fellH >= 0 && h + 1 - fellH < 24) {
-      for (const b of ps.settlements) {
-        if (!b.band || b.fallen >= 0) continue;
-        for (const m of ps.members.get(b.id) ?? []) {
-          if (A.needs[m * NEED_N + WATER] < ROAD_W) continue;
-          if (A.task[m] === TASK.drink) road.drink++; else road.keep++;
-        }
-      }
-    }
-  }
-  let alive = 0;
-  for (const s of ps.settlements) if (s.fallen < 0) alive += ps.members.get(s.id)?.length ?? 0;
-  return { sim, town, fellH, deaths, alive, road };
-}
+import { dustBowlStart, type DustBowlRow } from './helpers/dustbowl.ts';
 
 // seeds 11 and 16 under a held 1.5 km dust bowl: 30 and 14 died of thirst before the drought work (the band roamed and
 // swam blind, carried nothing, searched rings that crossed cliffs); after it, at most 2 each. Over seeds 1-16 the held
@@ -75,22 +30,33 @@ function dustBowl(seed: number, hours = 144, hold = 96, radius = 1500): DustBowl
 // was the worst case had become a coin toss on who walks with the band. Seed 1 is a cliff-ringed plateau whose band has
 // nothing to walk to (7 before, 6 after, 14 now). Seeds 11 and 16 keep their per-seed checks (the fall, the band
 // living on, the road guard).
-test('villages driven out by a dust bowl walk to water they can reach (seeds 1-16: at most 87 die of thirst in all)', () => {
+test('villages driven out by a dust bowl walk to water they can reach (seeds 1-16: at most 87 die of thirst in all)', async (t) => {
+  // four worker threads, seeds dealt round-robin (k, k+4, k+8, k+12): the same deterministic runs as one after another
+  // (POSTREL SIMFIX r3: run in series this was the gate's longest test, 905 s under load against 429 s for the next)
+  const lanes = [0, 1, 2, 3].map((k) => [1, 2, 3, 4].map((i) => k + 1 + (i - 1) * 4));
+  const t0 = Date.now();
+  const runs = await Promise.all(lanes.map((seeds) => new Promise<DustBowlRow[]>((ok, fail) => {
+    const w = new Worker(new URL('./helpers/dustbowl-worker.ts', import.meta.url), { workerData: { seeds } });
+    w.once('message', (rows: DustBowlRow[]) => { t.diagnostic(`seeds ${seeds.join(',')}: ${Math.round((Date.now() - t0) / 1000)} s`); ok(rows); void w.terminate(); });
+    w.once('error', fail);
+    w.once('exit', (code) => { if (code !== 0) fail(new Error(`dust-bowl worker for seeds ${seeds.join(',')} exited ${code}`)); });
+  })));
+  const rows = runs.flat().sort((a, b) => a.seed - b.seed);
+  assert.deepEqual(rows.map((r) => r.seed), Array.from({ length: 16 }, (_, i) => i + 1));
   let total = 0;
   const per: string[] = [];
-  for (let seed = 1; seed <= 16; seed++) {
-    const r = dustBowl(seed);
-    const t = r.deaths.thirst ?? 0;
-    total += t;
-    per.push(`${seed}:${t}`);
-    if (seed !== 11 && seed !== 16) continue;
+  for (const r of rows) {
+    total += r.thirst;
+    per.push(`${r.seed}:${r.thirst}`);
+    if (r.seed !== 11 && r.seed !== 16) continue;
+    const seed = r.seed;
     assert.ok(r.fellH >= 0, `seed ${seed}: the dust bowl drives the village out (it fell at h${r.fellH})`);
-    const ps = r.sim.u.planets[0].people;
-    assert.ok(ps.settlements.some((s) => s.fallen < 0 && (ps.members.get(s.id)?.length ?? 0) > 0), `seed ${seed}: a band or a new town lives on (${r.alive} alive)`);
+    assert.ok(r.livesOn, `seed ${seed}: a band or a new town lives on (${r.alive} alive)`);
     // the road guard: on the band's first day, those with water to spare keep to the band's road (without it, 21-32 of 46
     // were off on drink trips at once and the band never got anywhere)
     assert.ok(r.road.keep + r.road.drink > 0 && r.road.drink * 2 <= r.road.keep + r.road.drink, `seed ${seed}: on the band's first day most keep to its road (${r.road.keep} on it, ${r.road.drink} on drink trips, member-hours)`);
   }
+  t.diagnostic(`thirst ${total}: ${per.join(' ')}`);
   assert.ok(total <= 87, `seeds 1-16: at most 87 die of thirst in all (${total}; per seed ${per.join(' ')})`);
 });
 
