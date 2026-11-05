@@ -71,5 +71,67 @@
  },
  "horrorFaceRead": "no face: no eye pair, the gold notch is single",
  "motion": "unchanged (idle rock foot to foot, hop-waddle run, stomp + bar slam attack1, Topple cast_a1, crumble death)",
- "open": "in the camp it idles facing the map centre (src/sim/spawn.ts:78), so at the west/east Strays camps the gameplay camera sees its 0.42 m side: a pillar (in-game silhouette IoU with the Tick 0.66). Needs an optional per-unit camp facing (handoff CW3s), then content/maps sets the Strays to face the camera."
+ "open": "in the camp it idles facing the map centre (src/sim/spawn.ts:78), so at the west/east Strays camps the gameplay camera sees its 0.42 m side: a pillar (in-game silhouette IoU with the Tick 0.66). Needs an optional per-unit camp facing (handoff CW3s), then content/maps sets the Strays to face the camera.",
+ "round2": {
+  "date": "2026-11-04",
+  "t70": {
+   "px": 6637,
+   "hp": 5.15,
+   "breakup": 13.5,
+   "dLstarP50": 21.5,
+   "dE76": 20.3,
+   "unitChroma": 5.9,
+   "floorChroma": 4.7,
+   "lstarP10_50_90": [
+    17,
+    48.1,
+    72
+   ],
+   "floorLstarP50": 26.6,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.53
+   }
+  },
+  "t370": {
+   "px": 6829,
+   "hp": 5.2,
+   "breakup": 9.3,
+   "dLstarP50": 21.2,
+   "dE76": 19.9,
+   "unitChroma": 5.9,
+   "floorChroma": 5,
+   "lstarP10_50_90": [
+    17.4,
+    48.2,
+    71.6
+   ],
+   "floorLstarP50": 27,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.55
+   }
+  },
+  "t1000": {
+   "px": 6636,
+   "hp": 5.15,
+   "breakup": 13.6,
+   "dLstarP50": 19,
+   "dE76": 19.1,
+   "unitChroma": 5.9,
+   "floorChroma": 9,
+   "lstarP10_50_90": [
+    16.9,
+    48.1,
+    71.9
+   ],
+   "floorLstarP50": 29.1,
+   "maxIoU": {
+    "with": "gloamoth_little",
+    "iou": 0.53
+   }
+  },
+  "note": "Striding numeral with coursed joints; dL* 19-21.5 (19 is within the 2 L* guide tolerance).",
+  "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ }
 }

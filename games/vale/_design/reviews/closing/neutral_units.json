@@ -1,0 +1,558 @@
+{
+ "dimension": "neutral units",
+ "role": "CW4 engineer self-score: the verifier should re-score this row by eye; it is not an independent review",
+ "build": "e4b25754 plus this commit",
+ "date": "2026-11-04",
+ "score": 7.0,
+ "scoreMethod": "Mean of the unit scores is 7.2. Row score held at 7.0, under the 7.5 par bar: the epic reads now, but its billows are bubble-like and several surfaces are plain next to Art 2.0 structures (hp median 3.77 there; Longshade 1.49, Stilltusk 1.58-1.69, Glasshorn 2.17-2.2).",
+ "blockers": [],
+ "method": "closing critic:monsters method: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370|1000 --report fw_CW4_r3_mon.json, RIFT, 1920x1080, 28.5 m, fog off, seed 7. Gate: hp >= lane hp (1.18), |dL*| >= 20 on the camp floor, breakup >= 6 where faces allow, L* p90 <= 86, silhouette IoU <= 0.5 between camps, no horror or face read.",
+ "reports": "_harness/_reports/fw_CW4_r3_mon.json tags fw_CW4_r3g_m70, fw_CW4_r3g_m1000, fw_CW4_r3e_m370; shots _harness/_shots/value_rift_high_fw_CW4_r3g_m*_mon_*.png",
+ "silhouetteIoU": {
+  "t70": {
+   "glasshorn|gloamoth": 0.39,
+   "glasshorn|gloamoth_little": 0.36,
+   "glasshorn|stray_numeral": 0.27,
+   "glasshorn|stray_tick": 0.2,
+   "glasshorn|resinback": 0.24,
+   "glasshorn|stilltusk": 0.42,
+   "glasshorn|stilltusk_young": 0.46,
+   "gloamoth|gloamoth_little": 0.8,
+   "gloamoth|stray_numeral": 0.53,
+   "gloamoth|stray_tick": 0.44,
+   "gloamoth|resinback": 0.46,
+   "gloamoth|stilltusk": 0.36,
+   "gloamoth|stilltusk_young": 0.46,
+   "gloamoth_little|stray_numeral": 0.53,
+   "gloamoth_little|stray_tick": 0.48,
+   "gloamoth_little|resinback": 0.49,
+   "gloamoth_little|stilltusk": 0.39,
+   "gloamoth_little|stilltusk_young": 0.44,
+   "stray_numeral|stray_tick": 0.39,
+   "stray_numeral|resinback": 0.5,
+   "stray_numeral|stilltusk": 0.24,
+   "stray_numeral|stilltusk_young": 0.31,
+   "stray_tick|resinback": 0.47,
+   "stray_tick|stilltusk": 0.28,
+   "stray_tick|stilltusk_young": 0.28,
+   "resinback|stilltusk": 0.42,
+   "resinback|stilltusk_young": 0.37,
+   "stilltusk|stilltusk_young": 0.56
+  },
+  "t1000": {
+   "stilltusk|gloamoth": 0.54,
+   "stilltusk|gloamoth_little": 0.38,
+   "stilltusk|stray_numeral": 0.27,
+   "stilltusk|glasshorn": 0.43,
+   "stilltusk|resinback": 0.42,
+   "stilltusk|stray_tick": 0.32,
+   "stilltusk|longshade": 0.35,
+   "gloamoth|gloamoth_little": 0.5,
+   "gloamoth|stray_numeral": 0.35,
+   "gloamoth|glasshorn": 0.38,
+   "gloamoth|resinback": 0.52,
+   "gloamoth|stray_tick": 0.42,
+   "gloamoth|longshade": 0.32,
+   "gloamoth_little|stray_numeral": 0.53,
+   "gloamoth_little|glasshorn": 0.37,
+   "gloamoth_little|resinback": 0.61,
+   "gloamoth_little|stray_tick": 0.48,
+   "gloamoth_little|longshade": 0.23,
+   "stray_numeral|glasshorn": 0.27,
+   "stray_numeral|resinback": 0.49,
+   "stray_numeral|stray_tick": 0.45,
+   "stray_numeral|longshade": 0.16,
+   "glasshorn|resinback": 0.35,
+   "glasshorn|stray_tick": 0.22,
+   "glasshorn|longshade": 0.34,
+   "resinback|stray_tick": 0.51,
+   "resinback|longshade": 0.24,
+   "stray_tick|longshade": 0.15
+  }
+ },
+ "openBelowBar": [
+  "Cross-camp IoU still over 0.5: gloamoth_little|resinback 0.61 at t=1000 (0.49 at t=70), gloamoth|stray_numeral 0.53 at t=70, gloamoth_little|stray_numeral 0.53, stilltusk|gloamoth 0.54 at t=1000, gloamoth|resinback 0.52, resinback|stray_tick 0.51. Trials: gloamoth facing 90 and 30, resinback facing 50 made other pairs worse (fw_CW4_r3c_*, fw_CW4_r3d_*: gloamoth|resinback up to 0.64).",
+  "dL* under 20: stray_tick 12.0 at t=70 (wall shadow), stray_numeral 19.0, resinback 19.6, stilltusk 19.6 at t=1000 (all but the tick within 2 L*).",
+  "hp is over the lane bar but under the Art 2.0 structures on Longshade (1.49), Stilltusk (1.58-1.69) and Glasshorn (2.17-2.2)."
+ ],
+ "units": [
+  {
+   "id": "glasshorn",
+   "score": 7.0,
+   "t70": {
+    "px": 1670,
+    "hp": 2.2,
+    "breakup": 0,
+    "dLstarP50": 30.9,
+    "dE76": 32.3,
+    "unitChroma": 18.9,
+    "floorChroma": 7.5,
+    "lstarP10_50_90": [
+     34.8,
+     62.9,
+     78.4
+    ],
+    "floorLstarP50": 32,
+    "maxIoU": {
+     "with": "stilltusk_young",
+     "iou": 0.46
+    }
+   },
+   "t370": null,
+   "t1000": {
+    "px": 1673,
+    "hp": 2.17,
+    "breakup": 0,
+    "dLstarP50": 31.5,
+    "dE76": 32.3,
+    "unitChroma": 18.7,
+    "floorChroma": 8,
+    "lstarP10_50_90": [
+     32.9,
+     62.4,
+     77.7
+    ],
+    "floorLstarP50": 30.9,
+    "maxIoU": {
+     "with": "stilltusk",
+     "iou": 0.43
+    }
+   },
+   "note": "Dawn-fawn coat with umber saddle reads well; hp is modest (2.17-2.2) because the coat is smooth.",
+   "sensitivity": "art unchanged this round; clean in the round-2 verifier by-eye pass (fw_CW4_r2vv1 frames); not re-viewed by this engineer",
+   "review": "art/renders/units/glasshorn/_review.json"
+  },
+  {
+   "id": "gloamoth",
+   "score": 7.5,
+   "t70": {
+    "px": 2116,
+    "hp": 5.43,
+    "breakup": 3.7,
+    "dLstarP50": 29,
+    "dE76": 38.8,
+    "unitChroma": 22.4,
+    "floorChroma": 5.9,
+    "lstarP10_50_90": [
+     34.2,
+     59.4,
+     81.2
+    ],
+    "floorLstarP50": 30.4,
+    "maxIoU": {
+     "with": "gloamoth_little",
+     "iou": 0.8
+    }
+   },
+   "t370": {
+    "px": 3238,
+    "hp": 5.34,
+    "breakup": 4,
+    "dLstarP50": 26.5,
+    "dE76": 38.3,
+    "unitChroma": 24.6,
+    "floorChroma": 5.8,
+    "lstarP10_50_90": [
+     34.9,
+     57.4,
+     76.1
+    ],
+    "floorLstarP50": 30.9,
+    "maxIoU": {
+     "with": "gloamoth_little",
+     "iou": 0.7
+    }
+   },
+   "t1000": {
+    "px": 1414,
+    "hp": 5.12,
+    "breakup": 3,
+    "dLstarP50": 21.1,
+    "dE76": 31.6,
+    "unitChroma": 19.3,
+    "floorChroma": 6.3,
+    "lstarP10_50_90": [
+     29.5,
+     52.3,
+     77.7
+    ],
+    "floorLstarP50": 31.2,
+    "maxIoU": {
+     "with": "stilltusk",
+     "iou": 0.54
+    }
+   },
+   "note": "Round moth blob with a clear value step; its silhouette moves with the wing beat, and it is the one kind still over 0.5 against other camps (0.46-0.54).",
+   "sensitivity": "art unchanged this round; clean in the round-2 verifier by-eye pass (fw_CW4_r2vv1 frames); not re-viewed by this engineer",
+   "review": "art/renders/units/gloamoth/_review.json"
+  },
+  {
+   "id": "gloamoth_little",
+   "score": 7.0,
+   "t70": {
+    "px": 370,
+    "hp": 7.7,
+    "breakup": 0,
+    "dLstarP50": 26,
+    "dE76": 37.5,
+    "unitChroma": 21.1,
+    "floorChroma": 5.5,
+    "lstarP10_50_90": [
+     37.8,
+     57,
+     77.3
+    ],
+    "floorLstarP50": 31,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.8
+    }
+   },
+   "t370": {
+    "px": 376,
+    "hp": 7.24,
+    "breakup": 0,
+    "dLstarP50": 24.3,
+    "dE76": 36.2,
+    "unitChroma": 21.6,
+    "floorChroma": 5.5,
+    "lstarP10_50_90": [
+     34.9,
+     55.8,
+     77.5
+    ],
+    "floorLstarP50": 31.5,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.7
+    }
+   },
+   "t1000": {
+    "px": 370,
+    "hp": 7.69,
+    "breakup": 0,
+    "dLstarP50": 26.2,
+    "dE76": 37.4,
+    "unitChroma": 21.1,
+    "floorChroma": 5.7,
+    "lstarP10_50_90": [
+     37.8,
+     57.2,
+     77.5
+    ],
+    "floorLstarP50": 31,
+    "maxIoU": {
+     "with": "resinback",
+     "iou": 0.61
+    }
+   },
+   "note": "Reads as the small moth of the camp; IoU with Resinback 0.49 at t=70, 0.61 at t=1000, wing phase dependent.",
+   "sensitivity": "art unchanged this round; clean in the round-2 verifier by-eye pass (fw_CW4_r2vv1 frames); not re-viewed by this engineer",
+   "review": "art/renders/units/gloamoth_little/_review.json"
+  },
+  {
+   "id": "resinback",
+   "score": 7.5,
+   "t70": {
+    "px": 2923,
+    "hp": 2.96,
+    "breakup": 0,
+    "dLstarP50": 21.9,
+    "dE76": 33.2,
+    "unitChroma": 29.6,
+    "floorChroma": 9.2,
+    "lstarP10_50_90": [
+     25,
+     54.5,
+     74.4
+    ],
+    "floorLstarP50": 32.6,
+    "maxIoU": {
+     "with": "stray_numeral",
+     "iou": 0.5
+    }
+   },
+   "t370": null,
+   "t1000": {
+    "px": 2784,
+    "hp": 3.15,
+    "breakup": 0,
+    "dLstarP50": 19.6,
+    "dE76": 30.1,
+    "unitChroma": 28,
+    "floorChroma": 9.5,
+    "lstarP10_50_90": [
+     22.2,
+     51,
+     74.2
+    ],
+    "floorLstarP50": 31.4,
+    "maxIoU": {
+     "with": "gloamoth_little",
+     "iou": 0.61
+    }
+   },
+   "note": "Faces the camera three-quarter now (camp facing 60 / 120), so the amber plates and bark coat read at once and it no longer shares an outline with Stilltusk.",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/resinback/_review.json"
+  },
+  {
+   "id": "stilltusk",
+   "score": 7.0,
+   "t70": {
+    "px": 1377,
+    "hp": 1.58,
+    "breakup": 0,
+    "dLstarP50": 28.5,
+    "dE76": 33.2,
+    "unitChroma": 28.9,
+    "floorChroma": 9.7,
+    "lstarP10_50_90": [
+     16.6,
+     54.9,
+     69.1
+    ],
+    "floorLstarP50": 26.4,
+    "maxIoU": {
+     "with": "stilltusk_young",
+     "iou": 0.56
+    }
+   },
+   "t370": null,
+   "t1000": {
+    "px": 1434,
+    "hp": 1.69,
+    "breakup": 0,
+    "dLstarP50": 19.6,
+    "dE76": 28.9,
+    "unitChroma": 29.1,
+    "floorChroma": 9.4,
+    "lstarP10_50_90": [
+     19.1,
+     52.4,
+     70.9
+    ],
+    "floorLstarP50": 32.8,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.54
+    }
+   },
+   "note": "Hide lifted about 6 L*; hp 1.58-1.69 is the lowest among camp beasts, the body is still plain between mane and belly.",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/stilltusk/_review.json"
+  },
+  {
+   "id": "stilltusk_young",
+   "score": 7.0,
+   "t70": {
+    "px": 869,
+    "hp": 5.55,
+    "breakup": 0,
+    "dLstarP50": 25.5,
+    "dE76": 32.1,
+    "unitChroma": 25.5,
+    "floorChroma": 9.9,
+    "lstarP10_50_90": [
+     26.3,
+     50.6,
+     73.8
+    ],
+    "floorLstarP50": 25.1,
+    "maxIoU": {
+     "with": "stilltusk",
+     "iou": 0.56
+    }
+   },
+   "t370": null,
+   "t1000": null,
+   "note": "Banded juvenile, shares the family outline with Stilltusk (0.56), as a family should.",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/stilltusk_young/_review.json"
+  },
+  {
+   "id": "stray_numeral",
+   "score": 7.5,
+   "t70": {
+    "px": 6637,
+    "hp": 5.15,
+    "breakup": 13.5,
+    "dLstarP50": 21.5,
+    "dE76": 20.3,
+    "unitChroma": 5.9,
+    "floorChroma": 4.7,
+    "lstarP10_50_90": [
+     17,
+     48.1,
+     72
+    ],
+    "floorLstarP50": 26.6,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.53
+    }
+   },
+   "t370": {
+    "px": 6829,
+    "hp": 5.2,
+    "breakup": 9.3,
+    "dLstarP50": 21.2,
+    "dE76": 19.9,
+    "unitChroma": 5.9,
+    "floorChroma": 5,
+    "lstarP10_50_90": [
+     17.4,
+     48.2,
+     71.6
+    ],
+    "floorLstarP50": 27,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.55
+    }
+   },
+   "t1000": {
+    "px": 6636,
+    "hp": 5.15,
+    "breakup": 13.6,
+    "dLstarP50": 19,
+    "dE76": 19.1,
+    "unitChroma": 5.9,
+    "floorChroma": 9,
+    "lstarP10_50_90": [
+     16.9,
+     48.1,
+     71.9
+    ],
+    "floorLstarP50": 29.1,
+    "maxIoU": {
+     "with": "gloamoth_little",
+     "iou": 0.53
+    }
+   },
+   "note": "Striding numeral with coursed joints; dL* 19-21.5 (19 is within the 2 L* guide tolerance).",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/stray_numeral/_review.json"
+  },
+  {
+   "id": "stray_tick",
+   "score": 7.0,
+   "t70": {
+    "px": 800,
+    "hp": 5.3,
+    "breakup": 0,
+    "dLstarP50": 12,
+    "dE76": 19.6,
+    "unitChroma": 1.2,
+    "floorChroma": 5,
+    "lstarP10_50_90": [
+     23.6,
+     41.6,
+     78.6
+    ],
+    "floorLstarP50": 29.6,
+    "maxIoU": {
+     "with": "gloamoth_little",
+     "iou": 0.48
+    }
+   },
+   "t370": {
+    "px": 806,
+    "hp": 5.45,
+    "breakup": 0,
+    "dLstarP50": 17,
+    "dE76": 25.7,
+    "unitChroma": 4.8,
+    "floorChroma": 6.9,
+    "lstarP10_50_90": [
+     26.5,
+     47,
+     82.2
+    ],
+    "floorLstarP50": 30,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.54
+    }
+   },
+   "t1000": {
+    "px": 772,
+    "hp": 6.05,
+    "breakup": 0.1,
+    "dLstarP50": 21.4,
+    "dE76": 26.2,
+    "unitChroma": 6,
+    "floorChroma": 9.7,
+    "lstarP10_50_90": [
+     35.2,
+     54,
+     80.1
+    ],
+    "floorLstarP50": 32.6,
+    "maxIoU": {
+     "with": "resinback",
+     "iou": 0.51
+    }
+   },
+   "note": "Paler stone, grit only on the foot plate. Forward tick stands half in the wall shadow at (44.3, 33.6): dL* 12 there, 21.4 on the lit one.",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/stray_tick/_review.json"
+  },
+  {
+   "id": "sunsplinter",
+   "score": 7.5,
+   "t70": null,
+   "t370": {
+    "px": 9040,
+    "hp": 3.27,
+    "breakup": 30.4,
+    "dLstarP50": 27.4,
+    "dE76": 30.7,
+    "unitChroma": 11.3,
+    "floorChroma": 7.7,
+    "lstarP10_50_90": [
+     20.5,
+     54.8,
+     81.3
+    ],
+    "floorLstarP50": 27.4,
+    "maxIoU": {
+     "with": "gloamoth",
+     "iou": 0.45
+    }
+   },
+   "t1000": null,
+   "note": "Core is a painted noon dial now (hot cap, burnt limb, umber hour ring, 12 ticks, no hands, no facets because the Style Bible bans gems). hp 2.84-3.27 over the round-2 runs, breakup 11.8-30.4 (the pieces orbit).",
+   "sensitivity": "clean by eye on a live frame this round: no face pair, no horror mask, no pointed hood",
+   "review": "art/renders/units/sunsplinter/_review.json"
+  },
+  {
+   "id": "longshade",
+   "score": 7.0,
+   "t70": null,
+   "t370": null,
+   "t1000": {
+    "px": 38591,
+    "hp": 1.49,
+    "breakup": 12.1,
+    "dLstarP50": 24.5,
+    "dE76": 25.2,
+    "unitChroma": 20,
+    "floorChroma": 10.7,
+    "lstarP10_50_90": [
+     15.3,
+     41,
+     59.7
+    ],
+    "floorLstarP50": 16.5,
+    "maxIoU": {
+     "with": "stilltusk",
+     "iou": 0.35
+    }
+   },
+   "note": "Dusk-violet body with pale billow crests and chalk hour lines across the shadow-tail: dL* +24.5 (was -11.9), hp 1.49 (was 0.66), breakup 12.1 (was 3.8). Weakness by eye: the billows read as smooth bubbles rather than smoke, the limbs are plain.",
+   "sensitivity": "clean by eye: rounded cowl, the sundial plate with lamp eyes per owner ruling 1; no tears, not a blank or horror read (scratch crop from art/renders/units/longshade.png and the live frame)",
+   "review": "art/renders/units/longshade/_review.json"
+  }
+ ]
+}

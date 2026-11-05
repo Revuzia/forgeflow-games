@@ -67,5 +67,31 @@
   "tris": 3820
  },
  "horrorFaceRead": "a round piglet head; no horror read",
- "verdict": "pass"
+ "verdict": "pass",
+ "round2": {
+  "date": "2026-11-04",
+  "t70": {
+   "px": 869,
+   "hp": 5.55,
+   "breakup": 0,
+   "dLstarP50": 25.5,
+   "dE76": 32.1,
+   "unitChroma": 25.5,
+   "floorChroma": 9.9,
+   "lstarP10_50_90": [
+    26.3,
+    50.6,
+    73.8
+   ],
+   "floorLstarP50": 25.1,
+   "maxIoU": {
+    "with": "stilltusk",
+    "iou": 0.56
+   }
+  },
+  "t370": null,
+  "t1000": null,
+  "note": "Banded juvenile, shares the family outline with Stilltusk (0.56), as a family should.",
+  "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ }
 }

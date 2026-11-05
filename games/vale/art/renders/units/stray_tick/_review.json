@@ -69,5 +69,67 @@
   "glb": "1500 tris, 119 KiB"
  },
  "horrorFaceRead": "no face",
- "motion": "unchanged (bounce idle, pogo run, chop attack1, three-chunk death)"
+ "motion": "unchanged (bounce idle, pogo run, chop attack1, three-chunk death)",
+ "round2": {
+  "date": "2026-11-04",
+  "t70": {
+   "px": 800,
+   "hp": 5.3,
+   "breakup": 0,
+   "dLstarP50": 12,
+   "dE76": 19.6,
+   "unitChroma": 1.2,
+   "floorChroma": 5,
+   "lstarP10_50_90": [
+    23.6,
+    41.6,
+    78.6
+   ],
+   "floorLstarP50": 29.6,
+   "maxIoU": {
+    "with": "gloamoth_little",
+    "iou": 0.48
+   }
+  },
+  "t370": {
+   "px": 806,
+   "hp": 5.45,
+   "breakup": 0,
+   "dLstarP50": 17,
+   "dE76": 25.7,
+   "unitChroma": 4.8,
+   "floorChroma": 6.9,
+   "lstarP10_50_90": [
+    26.5,
+    47,
+    82.2
+   ],
+   "floorLstarP50": 30,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.54
+   }
+  },
+  "t1000": {
+   "px": 772,
+   "hp": 6.05,
+   "breakup": 0.1,
+   "dLstarP50": 21.4,
+   "dE76": 26.2,
+   "unitChroma": 6,
+   "floorChroma": 9.7,
+   "lstarP10_50_90": [
+    35.2,
+    54,
+    80.1
+   ],
+   "floorLstarP50": 32.6,
+   "maxIoU": {
+    "with": "resinback",
+    "iou": 0.51
+   }
+  },
+  "note": "Paler stone, grit only on the foot plate. Forward tick stands half in the wall shadow at (44.3, 33.6): dL* 12 there, 21.4 on the lit one.",
+  "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ }
 }

@@ -69,5 +69,49 @@
   "tris": 6820
  },
  "horrorFaceRead": "a natural boar head (small dark eyes, snout, stone tusks); no horror read",
- "verdict": "pass"
+ "verdict": "pass",
+ "round2": {
+  "date": "2026-11-04",
+  "t70": {
+   "px": 1377,
+   "hp": 1.58,
+   "breakup": 0,
+   "dLstarP50": 28.5,
+   "dE76": 33.2,
+   "unitChroma": 28.9,
+   "floorChroma": 9.7,
+   "lstarP10_50_90": [
+    16.6,
+    54.9,
+    69.1
+   ],
+   "floorLstarP50": 26.4,
+   "maxIoU": {
+    "with": "stilltusk_young",
+    "iou": 0.56
+   }
+  },
+  "t370": null,
+  "t1000": {
+   "px": 1434,
+   "hp": 1.69,
+   "breakup": 0,
+   "dLstarP50": 19.6,
+   "dE76": 28.9,
+   "unitChroma": 29.1,
+   "floorChroma": 9.4,
+   "lstarP10_50_90": [
+    19.1,
+    52.4,
+    70.9
+   ],
+   "floorLstarP50": 32.8,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.54
+   }
+  },
+  "note": "Hide lifted about 6 L*; hp 1.58-1.69 is the lowest among camp beasts, the body is still plain between mane and belly.",
+  "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ }
 }

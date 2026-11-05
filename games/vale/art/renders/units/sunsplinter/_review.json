@@ -71,5 +71,31 @@
   "glb": "8216 tris, 826 KiB (was 762)"
  },
  "horrorFaceRead": "none: no face, no eye pair; the orb is a single light",
- "motion": "unchanged clips (idle halo drift, Shard Rain, Noon Glare, Splinter Spray, death scatter) read on the sheet; pieces bind per island, the splinters rest on their actual vertices in death"
+ "motion": "unchanged clips (idle halo drift, Shard Rain, Noon Glare, Splinter Spray, death scatter) read on the sheet; pieces bind per island, the splinters rest on their actual vertices in death",
+ "round2": {
+  "date": "2026-11-04",
+  "t70": null,
+  "t370": {
+   "px": 9040,
+   "hp": 3.27,
+   "breakup": 30.4,
+   "dLstarP50": 27.4,
+   "dE76": 30.7,
+   "unitChroma": 11.3,
+   "floorChroma": 7.7,
+   "lstarP10_50_90": [
+    20.5,
+    54.8,
+    81.3
+   ],
+   "floorLstarP50": 27.4,
+   "maxIoU": {
+    "with": "gloamoth",
+    "iou": 0.45
+   }
+  },
+  "t1000": null,
+  "note": "Core is a painted noon dial now (hot cap, burnt limb, umber hour ring, 12 ticks, no hands, no facets because the Style Bible bans gems). hp 2.84-3.27 over the round-2 runs, breakup 11.8-30.4 (the pieces orbit).",
+  "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ }
 }
