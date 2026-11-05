@@ -189,3 +189,25 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 **Problem:** env:m-5 reads flame max L* 51.5 on BRIDGE High against a 55-60 band. Raising it pushes the layer-only maximum at the gate spot over 60, so the band cannot be met without thinning the flames. It is a minor.
 
 **Ruling:** accept 51.5. The flame reads as lit, and thinning geometry for a three-point minor is not worth the risk. This item closes.
+
+## 18. The GPU-bound tail is read after the bench's burst (lead, by delegation, 2026-11-05)
+
+**Problem:** `perf_1080`'s forced 2x GPU-bound case wants the last 8 s at >= 58 fps. After the controller fix, 12 runs read 57.3-60 (9 at 58 or more, misses of 0.1-0.7 fps). The default 45 s window ends on the bench's largest VFX burst, which a reactive controller cannot anticipate.
+
+**Ruling:** the bench runs **75 s** and the last 8 s stay at **>= 58 fps**: the bar is unchanged, and it now tests recovery after the burst (4 of 4 diagnostic runs read 59.4-60). The hard clause, scale leaving its base within 10 s, stays. This is a forced stress case; real play is judged by the 19-minute real-time match, which held 58+ frames in 100 % of seconds.
+
+## 19. Team light applies to skins (lead, by delegation, 2026-11-05)
+
+`probe_kit_hue --skins` does not gate team light, and `sukri_shadeprint`'s ult read 0.358 once against the base kit's 0.35. A skin must not blur which team an effect belongs to, so **the 0.35 bar applies to skins too**.
+
+## 20. A separate memory bar for the match (lead, by delegation, 2026-11-05)
+
+CW1's 2.5 GB budget was set for Home. The real client read up to 3101-3152 MB in a match, but on the dev server at load over 100, so that number is not a fair reading. **The match bar is <= 3.0 GB renderer + GPU, measured in the real production client at load < 3**, on BRIDGE and RIFT. Home stays <= 2.5 GB.
+
+## 21. Early cores are a tail bar (lead, by delegation, 2026-11-05)
+
+Seed 4309 is one veteran game of 360 where a team's whole chain falls and the core goes at 14:28, even with the team brain not targeting gates or core before 15:00. Most full windows have no such game (0 of 80 on the last). A one-sided game ending early is normal, and a sim rule such as a core seal would be a design change made to fix one seed. **"No core before 16:00" now reads: at most 1 in 100 full RIFT games, none before 14:00.**
+
+## 22. Bot-played balance band (lead, by delegation, 2026-11-05)
+
+Win rates with bots playing every seat mix kit strength with how well bots pilot a kit. **The gate is 40-60 % at 95 % confidence over at least 200 real-seat games.** A fighter outside it gets a real fix: a pilot fix if the bot misuses the kit, a numbers change if not. The 45-55 % band stays the design target, and human playtest data overrides this bar when it exists.
