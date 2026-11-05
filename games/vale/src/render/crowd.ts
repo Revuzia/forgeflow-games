@@ -358,7 +358,7 @@ export const CROWD_INK_TRIS_LOW = 380000;
 /** the governor's second step (a crowded frame still climbing, seed 7's final push peaked at 544k): the hit flash holds to
  *  the CROWD_FLASH_CROWDED flashing units of a set nearest the focus (each flash draws the unit twice more, its flash and
  *  its ink) and the crowd's bodies throw no shadow, until the frame is back under CROWD_HARD_TRIS_LOW */
-export const CROWD_HARD_TRIS_HIGH = 470000;
+export const CROWD_HARD_TRIS_HIGH = 450000;
 export const CROWD_HARD_TRIS_LOW = 410000;
 export const CROWD_FLASH_CROWDED = 2;
 

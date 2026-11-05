@@ -2106,7 +2106,13 @@ def gen_death(skel) -> anim.Clip:
     rest = anim.add(side, anim.P(head=(4, 4, 4), spine=(-2, 0, 0)))
     keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.32, kneel, "in"), (0.50, tip, "inout"), (0.74, side, "in"),
             (0.84, rest, "out"), (1.0, rest, "linear")]
-    return clip("death", 50, keys)
+    base = clip("death", 50, keys)
+
+    def sample(t):      # the left pauldron rolling onto the floor (clip_floor f37): the hips ride up over the roll
+        b = float(_ss(0.60, 0.72, t) * (1.0 - _ss(0.76, 0.86, t)))
+        return anim._with_hips(base.sample(t), (0.0, 0.0, 0.14 * b))
+
+    return anim.Clip("death", 50, False, sample)
 
 
 def kneel_pose(bow=0.0) -> dict:
@@ -2123,8 +2129,8 @@ def gen_recall() -> anim.Clip:
     """recall (CW5 r2, par:ardit, was a frozen vigil): one performance, no loop; the client spans it over the whole
     channel, 5 s of keys over RIFT's 7 s. He heaves the pavise up and steps down onto one knee, stamps pavise and spear
     into the ground, bows his head; a slow vigil in which he turns the pane to catch the light and looks into it, taps
-    the spear's butt twice as if counting the bell; then the head comes up, the chest opens and he is rising, on his
-    feet again as the recall lands. Every key uses absolute hands (a lerp between rel and pos targets would jump)."""
+    the spear's butt twice as if counting the bell; then the head comes up, the chest opens and he rises, standing on
+    his feet as the recall lands. Every key uses absolute hands (a lerp between rel and pos targets would jump)."""
     N = 150
     FK, FP = (0.06, -0.24, 0.0), (-0.02, 0.40, 0.05)
     kfeet = feet_(l=FK, r=FP, yl=6.0, yr=-10.0, pr=-58.0)
@@ -2158,16 +2164,16 @@ def gen_recall() -> anim.Clip:
     keys = [(0.0, stand, "linear"), (0.07, step, "inout"), (0.14, sink, "inout"), (0.185, stamp, "accel"),
             (0.24, kneel, "out"), (0.36, bowed, "inout"), (0.50, turn, "inout"), (0.58, turn, "linear"),
             (0.635, tap_up, "inout"), (0.665, tap, "accel"), (0.70, tap_up, "out"), (0.73, tap, "accel"),
-            (0.84, up, "inout"), (0.97, rising, "inout"), (1.0, rising, "linear")]
-    fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=False)
+            (0.82, up, "inout"), (0.89, rising, "inout"), (0.96, stand, "inout"), (1.0, stand, "linear")]
+    fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=True)
 
     def sample(t):
         # two slow breaths over the vigil, faded in and out so the moves above keep their keys
-        w = float(_ss(0.24, 0.32, t) * (1.0 - _ss(0.80, 0.86, t)))
+        w = float(_ss(0.24, 0.32, t) * (1.0 - _ss(0.76, 0.82, t)))
         b = anim.osc(t, 4) * w
         return anim.add(fn(t), anim.P(chest=(1.8 * b, 0, 0), spine=(0.6 * b, 0, 0), head=(1.5 * b, 0, 0)))
 
-    return anim.Clip("recall", N, False, sample)
+    return anim.Clip("recall", N, True, sample)     # first = last (three_load_test's seam gate; the chains stay periodic)
 
 
 def gen_idle_lobby() -> anim.Clip:

@@ -190,14 +190,14 @@
   },
   "uv_coverage": 0.59,
   "bake": {
-    "base": 15.41,
-    "rough_metal": 11.99,
-    "normal": 6.79,
-    "ao": 15.35,
+    "base": 8.11,
+    "rough_metal": 5.12,
+    "normal": 4.7,
+    "ao": 4.02,
     "normal_fixed_px": 115455,
-    "projection": 188.47,
-    "pack_save": 189.58,
-    "total": 240.8
+    "projection": 80.42,
+    "pack_save": 80.74,
+    "total": 103.1
   },
   "tris": 21149,
   "mesh_top_m": 2.476,
@@ -262,7 +262,7 @@
     "recall": {
       "frames": 150,
       "duration_s": 5.0,
-      "loop": false,
+      "loop": true,
       "impact": null
     },
     "idle_lobby": {
@@ -302,19 +302,19 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3119712,
+  "glb_bytes_raw": 3114024,
   "optimize": {
     "ok": true,
-    "before": 3119712,
-    "after": 1244612,
+    "before": 3114024,
+    "after": 1245544,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 1244612,
+  "glb_bytes": 1245544,
   "three_load_test": {
     "ok": false,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1215 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit.glb (1216 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
       "  webp: ardit_base 2048x2048 244K, ardit_normal 512x512 37K, ardit_orm 512x512 55K",
       "  skinned meshes: ardit(17792v), ardit_accent(302v)",
       "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
@@ -322,9 +322,8 @@
       "  tracks checked: 428; materials: body, accent; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
       "  tris: 21149; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "  run: 24 f, planted samples 6, max foot-speed error 1%",
-      "[three] FAIL (2)",
-      "  - GLB is 1215 KiB > budget 1172 KiB",
-      "  - recall: loop seam 1.94e-1 (first != last pose)"
+      "[three] FAIL (1)",
+      "  - GLB is 1216 KiB > budget 1172 KiB"
     ]
   },
   "three_qa": {
@@ -356,25 +355,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/ardit/three_ardit.png",
-    "seconds": 179.8,
+    "seconds": 41.6,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.02,
-      "materials": 1.24,
-      "model": 31.3,
-      "lows_bind": 49.26,
-      "uv": 40.9,
-      "bake": 240.8,
-      "clips": 1.75,
-      "export": 9.21,
-      "optimize": 2.38,
-      "load_test": 0.45,
-      "three_qa": 184.26,
-      "cache": 1.14
+      "materials": 0.24,
+      "model": 9.17,
+      "lows_bind": 10.73,
+      "uv": 6.56,
+      "bake": 103.11,
+      "clips": 1.13,
+      "export": 3.5,
+      "optimize": 1.96,
+      "load_test": 0.36,
+      "three_qa": 43.69,
+      "cache": 0.57
     },
-    "total_s": 563.2
+    "total_s": 181.19
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3

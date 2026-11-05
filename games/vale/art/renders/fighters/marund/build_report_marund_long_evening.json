@@ -163,29 +163,29 @@
   },
   "uv_coverage": 0.62,
   "bake": {
-    "base": 16.55,
-    "rough_metal": 9.12,
-    "normal": 4.86,
-    "ao": 5.98,
+    "base": 34.98,
+    "rough_metal": 14.22,
+    "normal": 6.47,
+    "ao": 5.95,
     "normal_fixed_px": 27319,
-    "projection": 124.24,
-    "pack_save": 125.17,
-    "total": 162.75
+    "projection": 99.03,
+    "pack_save": 100.06,
+    "total": 164.41
   },
   "tris": 19099,
   "mesh_top_m": 2.408,
-  "glb_bytes_raw": 2480732,
+  "glb_bytes_raw": 2457536,
   "optimize": {
     "ok": true,
-    "before": 2480732,
-    "after": 1040988
+    "before": 2457536,
+    "after": 1028708
   },
-  "glb_bytes": 1040988,
+  "glb_bytes": 1028708,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_long_evening.glb (1017 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: marund_long_evening_base 2048x2048 325K, marund_long_evening_normal 512x512 42K, marund_long_evening_orm 512x512 64K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/marund/marund_long_evening.glb (1005 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: marund_long_evening_base 2048x2048 313K, marund_long_evening_normal 512x512 42K, marund_long_evening_orm 512x512 64K",
       "  skinned meshes: marund_accent(126v), marund_long_evening(16769v)",
       "  bones: 26 (root hips spine chest neck head x_cap x_cap_tip shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: ",
@@ -200,8 +200,8 @@
       "portrait": "art/out/fighters/marund/marund_long_evening_portrait.png"
     },
     "seconds": {
-      "splash": 401.87,
-      "portrait": 60.82
+      "splash": 239.56,
+      "portrait": 27.27
     }
   },
   "three_qa": {
@@ -233,24 +233,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/marund/three_marund_long_evening.png",
-    "seconds": 56.1,
+    "seconds": 33.4,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.16,
-      "materials": 9.63,
-      "model": 105.87,
-      "lows_bind": 35.31,
-      "uv": 13.56,
-      "bake": 162.76,
-      "export": 0.54,
-      "optimize": 2.62,
-      "load_test": 0.4,
-      "render": 462.91,
-      "three_qa": 58.18
+      "rig": 0.01,
+      "materials": 1.51,
+      "model": 44.02,
+      "lows_bind": 77.95,
+      "uv": 32.11,
+      "bake": 164.41,
+      "export": 0.4,
+      "optimize": 3.48,
+      "load_test": 0.5,
+      "render": 266.99,
+      "three_qa": 34.09
     },
-    "total_s": 859.96
+    "total_s": 625.9
   },
   "run_ref_speed": 3.35,
   "height_m": 1.88

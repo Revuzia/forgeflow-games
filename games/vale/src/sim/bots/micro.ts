@@ -726,8 +726,9 @@ export abstract class BotBase {
       const c = scratch[i];
       if (c.kind !== 'minion' || !attackable(w, e, c)) continue;
       const dmg = mitigated(e, c, e.stats.ad, ad.damageType);
-      const left = c.hp - this.m.incoming.before(c.id, 2.0, bit, true);
-      if (left > dmg * 1.6) continue;
+      const rift = this.k.kind === 'rift';
+      const left = c.hp - this.m.incoming.before(c.id, rift ? 2.5 : 2.0, bit, true);
+      if (left > dmg * (rift ? 2 : 1.6)) continue;
       const s = left + Math.sqrt(this.dist2(c, e.x, e.y)) * 10;
       if (s < bestS) { bestS = s; best = c; }
     }
@@ -808,7 +809,7 @@ export abstract class BotBase {
         this.attack(lh);
         return;
       }
-      if (this.pFarm === 1 && this.secureLastHit()) return;
+      if (this.secureLastHit()) return;
       if (this.pFarm === 2) {
         // shoving still takes the last hits: hold the swing for a Wick that is about to be killable
         if (e.atkWindup < 0 && this.lastHitDue()) {
@@ -826,6 +827,18 @@ export abstract class BotBase {
           // nearest one and spends the attack the last hit needs; and walking back to the stand
           // point in between never lets the swing start
           const wp = this.waitOut;
+          if (this.k.kind === 'rift' && this.nearestEnemyFighter(11) === null) {
+            // (CW3s r2, G1: a RIFT laner waits inside its reach of the Wick and keeps its feet moving, as a player does: a walking
+            // fighter does not swing on its own, and the half-second walk in from outside its reach lost the Wick. It weaves
+            // across the line to the Wick: the point is always farther than a tick's step, so the walk never ends in an idle swing)
+            const rr = e.stats.range + e.radius + soon.radius - 0.25;
+            const dx = e.x - soon.x, dy = e.y - soon.y, d = dhypot(dx, dy) || 1;
+            if (d <= rr) {
+              const sd = Math.floor(this.now / 0.4) % 2 === 0 ? 1 : -1;
+              const tx = e.x - (dy / d) * sd * 0.6 - (dx / d) * 0.15, ty = e.y + (dx / d) * sd * 0.6 - (dy / d) * 0.15;
+              if (this.w.nav.walkable(tx, ty)) { this.moveTo(tx, ty); return; }
+            } else { this.moveTo(soon.x + (dx / d) * (rr - 0.2), soon.y + (dy / d) * (rr - 0.2)); return; }
+          }
           if (sq(e.x - wp.x) + sq(e.y - wp.y) > 0.25) this.moveTo(wp.x, wp.y);
           return;
         }

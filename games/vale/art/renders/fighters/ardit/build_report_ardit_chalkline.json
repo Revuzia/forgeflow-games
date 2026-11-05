@@ -158,13 +158,13 @@
       ]
     },
     "tris_boots": 1000,
-    "tris_helm": 1500,
+    "tris_helm": 1900,
     "tris_visor": 320,
     "tris_face": 600,
     "tris_gorget": 760,
-    "tris_pauldron_R": 560,
+    "tris_pauldron_R": 640,
     "tris_tier_R": 420,
-    "tris_pauldron_L": 560,
+    "tris_pauldron_L": 640,
     "tris_tier_L": 420,
     "tris_bracer_R": 420,
     "tris_bracer_L": 420,
@@ -186,52 +186,42 @@
     "tris_pavise_handle": 220,
     "tris_spire": 520,
     "tris_inlays": 260,
-    "validate_ardit": "20016->20009"
+    "validate_ardit": "20576->20569"
   },
-  "uv_coverage": 0.602,
+  "uv_coverage": 0.59,
   "bake": {
-    "base": 7.0,
-    "rough_metal": 9.8,
-    "normal": 6.73,
-    "ao": 6.17,
-    "normal_fixed_px": 117968,
-    "projection": 117.23,
-    "pack_save": 117.63,
-    "total": 147.71
+    "base": 32.81,
+    "rough_metal": 25.94,
+    "normal": 11.15,
+    "ao": 14.87,
+    "normal_fixed_px": 115455,
+    "projection": 183.34,
+    "pack_save": 184.32,
+    "total": 271.57
   },
-  "tris": 20589,
+  "tris": 21149,
   "mesh_top_m": 2.476,
-  "glb_bytes_raw": 2416452,
+  "glb_bytes_raw": 2480244,
   "optimize": {
     "ok": true,
-    "before": 2416452,
-    "after": 946472,
+    "before": 2480244,
+    "after": 978048,
     "q_base": 70,
     "q_orm": 64
   },
-  "glb_bytes": 946472,
+  "glb_bytes": 978048,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (924 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: ardit_chalkline_base 2048x2048 224K, ardit_chalkline_normal 512x512 36K, ardit_chalkline_orm 512x512 54K",
-      "  skinned meshes: ardit_accent(302v), ardit_chalkline(17147v)",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/ardit/ardit_chalkline.glb (955 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: ardit_chalkline_base 2048x2048 232K, ardit_chalkline_normal 512x512 37K, ardit_chalkline_orm 512x512 55K",
+      "  skinned meshes: ardit_accent(302v), ardit_chalkline(17792v)",
       "  bones: 34 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_pavise x_pavise_top shoulderR upper_armR forearmR handR propR x_spear x_spear_tip thighL shinL footL toeL thighR shinR footR toeR x_tabard_l_1 x_tabard_l_2 x_tabard_l_3 x_tabard_r_1 x_tabard_r_2 x_tabard_r_3)",
       "  clips: ",
       "  tracks checked: 0; materials: accent, body; textures: body.map=2048x2048, body.normalMap=512x512, body.roughnessMap=512x512, body.metalnessMap=512x512, body.aoMap=512x512",
-      "  tris: 20589; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
+      "  tris: 21149; bind-pose bounds (three units, Y up): 1.60 x 2.48 x 0.72; facing (-0.00, 1.00); head bone y 2.02; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
-  },
-  "renders": {
-    "files": {
-      "splash": "art/out/fighters/ardit/ardit_chalkline_splash.png",
-      "portrait": "art/out/fighters/ardit/ardit_chalkline_portrait.png"
-    },
-    "seconds": {
-      "splash": 230.24,
-      "portrait": 14.18
-    }
   },
   "three_qa": {
     "ok": true,
@@ -253,7 +243,7 @@
       1
     ],
     "headY": 2.025,
-    "accentPct": 1.98,
+    "accentPct": 1.97,
     "accentTopHalfPct": 96.7,
     "heightPx1080": 134,
     "size": [
@@ -262,24 +252,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ardit/three_ardit_chalkline.png",
-    "seconds": 20.6,
+    "seconds": 84.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.0,
-      "materials": 0.17,
-      "model": 3.57,
-      "lows_bind": 5.2,
-      "uv": 5.18,
-      "bake": 147.71,
-      "export": 0.15,
-      "optimize": 1.12,
-      "load_test": 0.23,
-      "render": 244.47,
-      "three_qa": 21.1
+      "rig": 0.09,
+      "materials": 2.53,
+      "model": 53.33,
+      "lows_bind": 45.45,
+      "uv": 26.66,
+      "bake": 271.57,
+      "export": 0.28,
+      "optimize": 3.43,
+      "load_test": 2.53,
+      "three_qa": 85.28
     },
-    "total_s": 429.03
+    "total_s": 492.2
   },
   "run_ref_speed": 3.35,
   "height_m": 2.3
