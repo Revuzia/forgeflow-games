@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from vfxkit import (DUST, DUST2, INK, INK2, NOON, WHITE, L, chips, decal, dust, flash, ink, light, mesh, shake, shockwave, sparks, vfx)
 
+# the dust takes a skin's vfxTint (Almanac's ink); on the base kit it is exactly these hexes
+E_DUST = (f"element:{DUST}", f"element:{DUST2}")
+
 SAND = "#D4C2A0"        # the ledger mask (pale ochre lacquer)
 RUST = "#B8A794"        # oxidised pauldrons
 IRON = "#4B4039"        # the cleaver spine
@@ -63,7 +66,7 @@ def defs() -> list:
     D.append(vfx("burdam_a1_beardown", 0.5,
                  ink("ground", 6, size=0.9, speed=(1.0, 2.4), life=(0.4, 0.7), radius=0.3, shape="disc", dir_="out", gravity=-0.1),
                  chips("ground", 6, color=(SAND, IRON), speed=(2, 4), size=0.14, delay=0.0),
-                 dust("ground", 5, size=0.8, speed=(1.2, 2.4), radius=0.25, delay=0.0),
+                 dust("ground", 5, size=0.8, speed=(1.2, 2.4), radius=0.25, delay=0.0, color=E_DUST),
                  # a dark drag mark along the ground and an ink wake off the shoulders
                  L("emitter", at="path", offset=[0, -0.95, 0], bursts=tr, shape="sphere", radius=0.12, dir="back", spreadDeg=4, speed=[2.4, 2.8],
                    life=[0.35, 0.45], size=[0.85, 0.7], color=[INK_W, INK], alpha=[0.6, 0.45, 0], texture="ink_puff", frame=2, blend="ink",
@@ -92,7 +95,7 @@ def defs() -> list:
                  decal("target", "crack", [[0, 0.5], [0.12, 1.0], [1, 1.0]], 1.0, color=INK2, alpha=(0.9, 0.7, 0), emissive=1.2, rim="team"),
                  chips("target", 14, color=(SAND, IRON), speed=(3, 7), size=0.16),
                  _drops("target", 6, speed=(2, 4.5), offset=[0, -0.3, 0]),
-                 dust("target", 4, size=0.8, radius=0.2),
+                 dust("target", 4, size=0.8, radius=0.2, color=E_DUST),
                  shake(0.2),
                  comment="T2 · Shade · Bear Down chop: the cleaver comes down through the target, top to bottom: a team edge with an ink "
                          "smear behind it, a crack opens at the feet, warm chips and ink drops fly"))
@@ -132,7 +135,7 @@ def defs() -> list:
                        fit=True),
                  chips("ground", 16, color=(SAND, IRON), speed=(3.5, 7.5), size=0.16),
                  _drops("ground", 10, speed=(3, 6), offset=[0, 0.2, 0], spread=80, shape="ring", radius=0.4, fit=False),
-                 dust("ground", 10, size=1.2, speed=(2.5, 4.5), radius=0.5),
+                 dust("ground", 10, size=1.2, speed=(2.5, 4.5), radius=0.5, color=E_DUST),
                  shake(0.3),
                  comment="T2 · Shade · Stubborn stamp: the debt lands at once: an ink ring and a team edge thrown out to 3 m, a crack "
                          "and an ink stain at his feet, warm chips and ink drops out, a dust ring settles"))
@@ -187,7 +190,7 @@ def defs() -> list:
                        fit=True, delay=0.3),
                  chips("ground", 22, color=(SAND, IRON), speed=(4, 9), size=0.18, delay=0.31),
                  _drops("ground", 14, speed=(3.5, 7), size=0.18, delay=0.31, shape="ring", radius=0.5, spread=60, fit=False),
-                 dust("ground", 12, size=1.5, speed=(2.5, 4.5), radius=0.8, delay=0.36),
+                 dust("ground", 12, size=1.5, speed=(2.5, 4.5), radius=0.8, delay=0.36, color=E_DUST),
                  light("ground", "team", 24, 10, 0.5, delay=0.3),
                  shake(0.6, delay=0.3),
                  comment="T4 · Shade · Settled Account: an ink ring with a team edge reaches out to 7 m and closes on him, ink and light "
