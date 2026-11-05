@@ -149,6 +149,26 @@
      "id": "handoff:CW1:polish",
      "to": "lead->routed",
      "what": "CW1 regression set after this package. typecheck clean. Strict `npm run content:check`: OK, 0 warnings. `node _harness/overlay_regress.mjs --q high,low`: PASS. `node _harness/perf_1080.mjs --prod --q high,low` (fw_CW1_perf_polish.json) prints GATE FAIL on one item only: the match-peak triangle count is 534,665 > 500k at game 1749.7 s on seed 7 (4 s over; actors 310k/131 draws in a late base push). This is the same crowd-peak class as the seed 23 handoff. The cause is the sim, not render: the seed 7 match used to end at 1162 s and now runs to 1800 s. Everything else passes: High 57.7 fps, Low 58.8 fps, gpubound, calibrate, memmaps Home 1329 MB, 0 late programs. The fix is still a crowd outline LOD or crowd-count cap. Also add `node _harness/probe_camjump.mjs` (heavy slot; 0 bodies missing after a focus jump) to the integration gate. Correction: commit f77c7b03 says 'core >= 2.3 on 10/16'; the measured count in fw_W1_combat_polish_fw_CW1_polish_c.json is 9/16. C2's x2.3 core for Hesmi, Kemdo, Dunsom, Nurrow and Sukri cannot be reached with the tint kept: the lifted ground clips at about luma 218 on warm ground after the grade. Reaching it means letting the core go near-white, which conflicts with the victim-box white gate (luma > 225 and chroma < 30). Rule which way the gauge should go: a lower core target, or a 2-frame near-white allowance."
+    },
+    {
+     "id": "handoff:CW5:kemdo-lisvel",
+     "what": "kemdo_long_evening already has vfxTint #9C6FB8 (content/skins/kemdo.json:32). For kemdo-M5's effect half, the kemdo kit defs in content/vfx.json still need element-keyed layers so the tint shows (SKIN-FX)."
+    },
+    {
+     "id": "handoff:CW5:nurrow-ulkro-ervet",
+     "what": "nurrow-m5 store copy: content/skins/nurrow.json:33 (Shadeprint) still says 'An ink hat with a light rim over a pale mask'. The skin that ships is a pale printed cone with ink lines and an ink-dipped brim; please reword it."
+    },
+    {
+     "id": "handoff:CW5:vashil-rest-minors",
+     "what": "The VAS gap-7 halo touches the HP bar. In src/render/actors.ts:705, barHeight = artHeight + 0.35 puts the bar's lower frame 0-1 px above Vashil's halo top. Raise the bar clearance for fighters whose art top is a floating ring (for example +0.08 m), or read a per-fighter bar offset from content. If the render code is CW1's, route it there."
+    },
+    {
+     "id": "handoff:r2:--gate-heights",
+     "what": "_harness/probe_camera.ts --gate-heights does not encode ruling 11, so it exits FAIL on allowed rows. Allow 85-105 px for compact builds (Sukri 86.5-87.1) and treat Marund Long Evening 130.4 as inside (for example, compare after rounding to whole px)."
+    },
+    {
+     "id": "handoff:r2:content/vfx.json is hand",
+     "what": "content/vfx.json is hand-edited in r2 (and in round 1, fdff8ed6), not in tools/vfx/bespoke/*.py. Running tools/vfx/build_vfx.py would overwrite defs that have a source, including these fixes. Port them to the generator, or do not regenerate. Also open: Marund's T4 flash on BRIDGE low, and the Burdam Almanac tint having no element refs to act on."
     }
    ]
   }
@@ -344,6 +364,10 @@
      "status": "fail",
      "evidence": "Duo road level 6 at a median 8.2 / 8.5 min. Not attempted.",
      "fixHint": "See done:3."
+    },
+    {
+     "id": "handoff:CW5:ardit-burdam",
+     "what": "_design/ROSTER.md:152 (owner lane unclear; route to the doc owner if it is not CW3c): the Almanac Ledger line should match _design/fighters/burdam.md section 9: ledger-ink plum-slate coat and skirt #4D4559, ink-felt cowl #3E3A4C, parchment pauldrons ruled in ink with oxblood margin rules #7A2E2A, parchment hem strip with day-marks, the ruled almanac board on the right hip."
     }
    ]
   }
@@ -526,6 +550,14 @@
      "id": "handoff:CW1:refix1",
      "to": "CW4",
      "what": "value_probe environment lines from the CW1 verify (not CW1 code): RIFT env180 'other' 0.151 % / 0.154 % of env, and BRIDGE low frame p99 165 > 160. Please check the landmarks and props in those views."
+    },
+    {
+     "id": "handoff:r2:Camp facing now works",
+     "what": "Camp facing now works in the sim. Set `\"facing\": 90` on the units of the four RIFT Strays camps (a_/s_strays_north/south in content/maps/map_rift.json). 90 means sim +y, which is toward the gameplay camera: actors.ts:927 has rotation.y = PI/2 - facing, and camera.ts:176 places the camera at +z. This is derived from the code, not rendered, so check the Numeral's broad face in your shot."
+    },
+    {
+     "id": "handoff:r2:BRIDGE low T4 flash",
+     "what": "BRIDGE low T4 flash reads 1.87x, with base luma now 95.8 (was about 91) and peak about 179. The disc peak did not respond to more Domefall light. If the BRIDGE ground rise came from your lane, about 89.5 or lower restores 2.0x at this peak; otherwise CW1 needs to look at the low-tier envelope."
     }
    ]
   }
@@ -613,6 +645,10 @@
      "id": "handoff:CW6:refix1",
      "to": "CW6 (next round)",
      "what": "rishal-M3 lamp bead: move the Lamplit cage to the crest root with a fit check against the accent ridge blade (top about 1.73-1.75 m at y -0.05 to -0.13), then rebuild only that skin: build.py fighter rishal --skin rishal_lamplit. Minor: Marund idle_lobby has one 0.104 m hand.L step at t 2.37 s."
+    },
+    {
+     "id": "lead:domefall-landed",
+     "what": "fe33cf48 landed the dash arc 0.55 and clip role leap -> domefall_leap: check the leap in the real client (clip 20 f vs dash ~0.58 s; shadow on the floor; slam on landing)."
     }
    ]
   },
@@ -668,6 +704,130 @@
      "severity": "minor",
      "status": "not_measured",
      "evidence": "Not verifiable: the engineer could not add these minors to closing_parity_open.json (not a CW6 file), so there is nothing to measure."
+    }
+   ]
+  }
+ ],
+ "CW5": [
+  {
+   "key": "r2-ardit-rest",
+   "items": [
+    {
+     "id": "done:2",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "In fw_CW5_r1_busts.png the Ardit Chalkline face is clear of the spear and Vashil First Bell has a distinct pose. card_qa shows 0 misses on 18 cards. The Lisvel face is still faint. The 2x-plate grain gate still fails, and Vashil and Ardit still share one plate across skins.",
+     "fixHint": "Per-skin plates; readable Lisvel face at 512 px."
+    },
+    {
+     "id": "done:3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The Lisvel tabard passes. Burdam cowl_b swing is 8.8 deg against the 10 deg target, with xcorr r 0.51 and a peak lag of 12 f (fw_CW5_v2_burdam_cowl.txt). The Vashil recall loop is still open (CW1 handoff).",
+     "fixHint": "Cowl swing >= 10 deg; CW1 plays the recall once."
+    },
+    {
+     "id": "done:4",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "No id-masked Lab tool was built. The Burdam pauldron ROI spread is 26.7 against 35. The Ulkro wraps are unshipped and Ervet's bevel was not attempted.",
+     "fixHint": "Texel-to-part map; ship the material passes."
+    },
+    {
+     "id": "done:5",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Burdam Almanac per-pixel dE is 10.7, still below Stillwater's 10.8 (fw_CW5_r1_burdam_skin_gamecam.txt).",
+     "fixHint": "One more palette step, in the same rebuild that fixes the base size."
+    },
+    {
+     "id": "done:6",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Lisvel 7.1, Ardit 7.2, Burdam 7.3 and Ulkro 7.3 are all below 7.5. lineup_qa was not re-run. The Burdam base now fails the load budget at 1205 KiB.",
+     "fixHint": "See the par items."
+    },
+    {
+     "id": "par:lisvel",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "Re-score 7.1. The face is faint at card scale, and the sleeves and materials still read as clay (fw_CW5_r1_lisvel_close.png). card_qa passes 6/6 and the load is OK at 1117 KiB.",
+     "fixHint": "Finish M1 at card scale and M3 sleeve value."
+    },
+    {
+     "id": "par:ardit",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Score 7.2, unchanged. The recall is frozen and the helm is still a plain box (fw_CW5_r1_busts.png, left).",
+     "fixHint": "Recall with motion plus the M4 helm pass."
+    },
+    {
+     "id": "par:burdam",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Score 7.3. Almanac dE 10.7 (needs > 10.8), cowl swing 8.8 deg (needs >= 10), pauldron spread 26.7 (needs >= 35). The base GLB is 1205 KiB, over the 1172 KiB budget.",
+     "fixHint": "One rebuild that closes all three and gets the base under budget."
+    },
+    {
+     "id": "par:ulkro",
+     "severity": "major",
+     "status": "fail",
+     "evidence": "Score 7.3, unchanged. The new recall exists only in source, and the shipped GLB is identical to HEAD.",
+     "fixHint": "Build with wraps in ASYM and ship under 1172 KiB."
+    },
+    {
+     "id": "fighter:lisvel:lisvel-M1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The 2x crop (fw_CW5_r1_lisvel_faces.png) shows a faint nose and a smile. In the shipped art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png (512 px) the face is a small pale oval under the visor with barely visible features, and the bow fist fills the lower half of the frame.",
+     "fixHint": "Darken the lid line under the visor and the nostril and mouth corners. Frame the bust tighter on the head."
+    },
+    {
+     "id": "fighter:burdam:burdam-M4",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "dE 10.7 against Stillwater's 10.8.",
+     "fixHint": "Palette step."
+    },
+    {
+     "id": "fighter:burdam:burdam-M2",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "ROI spread is 26.7 against the 35 target, and the ROI is not id-masked (fw_CW5_r1_burdam_pauldron_roi.txt).",
+     "fixHint": "Deepen recess staining."
+    },
+    {
+     "id": "fighter:ulkro:ULK-M3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The diagonal wraps appear only in an unshipped test build of 1338-1425 KiB, over budget (fw_CW5_r1_ulkro_three_unshipped.png).",
+     "fixHint": "Ship within budget."
+    },
+    {
+     "id": "fighter:lisvel:lisvel-M3",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The sleeves are still pale, near-uniform cylinders in fw_CW5_r1_lisvel_close.png. hpRMS was not measured.",
+     "fixHint": "Deepen fold value and add weave. Measure hpRMS."
+    },
+    {
+     "id": "fighter:vashil:VAS-M1",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "The clip is unchanged: a 6 s loop inside the 7 s channel. The CW1 handoff has not been verified as landed.",
+     "fixHint": "CW1: play the recall once, fitted to the channel."
+    },
+    {
+     "id": "handoff:CW5:refix1",
+     "what": "Rebuild ulkro (python3 art/build.py fighter ulkro). The source already has the diagonal wraps, the moving recall, and 'wraps' in ASYM so the shin wraps decimate to 800 tris. After the build, run decimate_chains --every 2 --prefix x_ --orm-q 40 --normal-q 70, then the slow clips with --prefix '' --clip idle,idle_lobby,recall,taunt,stunned,victory,channel, and check three_load_test --budget-kb 1172. One Burdam rebuild with Almanac cloth one more step (about #3E3649) and COWL_K about 0.20 should clear dE > 10.8 and cowl swing >= 10 deg. An Ardit rebuild is needed for the recall and the helm form."
+    },
+    {
+     "id": "handoff:CW5:refix2",
+     "what": "Ardit needs a rebuild for a moving recall and the helm pass; none of it has been started. It is the remaining par item with no work done."
+    },
+    {
+     "id": "handoff:CW5:refix2",
+     "what": "Shipped GLBs differ from a clean build. Rebuilding Burdam needs scale_track_swing (if COWL_K 0.28 falls short), decimate_chains, and glb_paint_grade: pauldrons with --box -0.80,-0.40,1.48,-0.44,0.40,1.98 --box -0.80,-0.40,1.72,-0.22,0.40,1.98 --box 0.46,-0.45,1.28,0.90,0.45,2.15 --box 0.22,-0.45,1.74,0.90,0.45,2.15 --recess 1.4 --ref-q 80 --q 60, Almanac with --dark-gain 0.72 --dark-l 0.40 --q 62. Rebuilding Ulkro needs decimate_chains, glb_simplify --ratio 0.78 --error 0.004, base colour q56, ORM q30, normal q55; Long Evening base colour q62. A rebuild is also what would give Burdam a part map."
     }
    ]
   }
