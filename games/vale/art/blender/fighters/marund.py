@@ -103,7 +103,8 @@ CARDS = {
                    "focal": [{"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#E0E6F0", "power": 20.0,
                               "size": 0.25}]},
         "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.88, "clip": "idle_lobby", "t": 0.0},
-        "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
+        # (closing round 2: the slate's painted flecks took the bust's speckle p50 to 2.58 > 2.5: a 2 px subject brush)
+        "plate": {"sub_paint_r": 2, "tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
                   "glow_color": "#D8DCE8"},
     },
     "marund_long_evening": {
