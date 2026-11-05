@@ -31,7 +31,13 @@
 //           gate is `discMs` (eqd ≥ 0.5 from the hit) ≥ 167 ms, `sizeMs` (reach, noisy) is info; `readMs` how long the
 //           count stays ≥ 25 % of its peak.
 //
-//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all]
+//             detail   the eye note (CW1 round 3, combat:beat-readability-eye): does the struck unit keep its inside? The luma
+//                      spread (stddev) over the body's pixels with everything on, over the same spread with no lift, flash
+//                      or VFX: `detail` 1 = as drawn, 0 = a flat silhouette. `detailLost` counts the frames under 0.5; done:
+//                      at most 2 (a beat may blink, a body that stays flat is a readability bug).
+//           --q low runs the section on that preset (screen coordinates are mapped to its smaller buffer); --slot a3 casts that
+//           slot, measures the body on every frame of the window, and leaves out the ult-only core and anchor gates.
+//   node _harness/probe_combat_polish.mjs [ult,cc,flash,hold] [--before <vfx.json>] [--tag <name>] [--ults kemdo,rishal,tunlan,hesmi | all] [--q high|low] [--slot ult]
 //   (--ults all: the 16 fighters, critic combat-16; a fighter outside the first lineup's enemy side is cast from a lineup of its own)
 //                                         [--vfxcap off|1.3]   (renderer.vfx.liftCap: the most the envelope lifts an effect)
 //   → _harness/_reports/fw_W1_combat_polish[_tag].json, shots _harness/_shots/fw_W1_polish_*.png
@@ -60,7 +66,9 @@ const ALL = readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsW
 const report = { at: new Date().toISOString(), defs: BEFORE || 'content/vfx.json', ult: [], cc: null, flash: [], hold: [], pass: true, fails: [] };
 const fail = (m) => { report.pass = false; report.fails.push(m); console.log('FAIL', m); };
 
-const { browser, page, logs } = await open('/_harness/web/render_bench.html?mode=rift&q=high&t=0&dev=1&hud=0&manual=1', { wait: false, hmr: false });
+const QUALITY = opt('q', 'high'), SLOT = opt('slot', 'ult');
+report.quality = QUALITY; report.slot = SLOT;
+const { browser, page, logs } = await open(`/_harness/web/render_bench.html?mode=rift&q=${QUALITY}&t=0&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
 try {
   await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 300000 });
   const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
@@ -116,16 +124,19 @@ try {
     b.__grab = () => { R.render(0); const c = gl(); const Wd = c.drawingBufferWidth, Hd = c.drawingBufferHeight; const px = new Uint8Array(Wd * Hd * 4); c.bindFramebuffer(c.FRAMEBUFFER, null); c.readPixels(0, 0, Wd, Hd, c.RGBA, c.UNSIGNED_BYTE, px); return { px, Wd, Hd }; };
     b.__h = (id) => { const a = R.actors.get(id); const e = h.view.entity(id); const x = a ? a.x : e.x, y = a ? a.y : e.y; const g = b.screen(x, y, 0), t = b.screen(x, y, a?.barHeight ?? 2.2), hd = b.screen(x, y, a?.artHeight ?? 1.9); return { gx: g.x, gy: g.y, ty: t.y, hy: hd.y }; };
     const luma = (r, g, bl) => 0.2126 * r + 0.7152 * g + 0.0722 * bl;
-    b.__white = (g, box) => { const { px, Wd, Hd } = g; let w = 0, n = 0, s = 0; for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, box.y1 | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) { const o = ((Hd - 1 - y) * Wd + x) * 4; const l = luma(px[o], px[o + 1], px[o + 2]); const c = Math.max(px[o], px[o + 1], px[o + 2]) - Math.min(px[o], px[o + 1], px[o + 2]); n++; s += l; if (l > 225 && c < 30) w++; } return { white: +(w / Math.max(1, n)).toFixed(3), mean: +(s / Math.max(1, n)).toFixed(1) }; };
+    // screen coordinates are CSS px (b.screen, the 1920 canvas): k maps them to a preset's smaller buffer (Low's 0.75)
+    const kOf = (g) => g.Wd / 1920;
+    const boxK = (box, k) => ({ x0: box.x0 * k, y0: box.y0 * k, x1: box.x1 * k, y1: box.y1 * k });
+    b.__white = (g, box0) => { const { px, Wd, Hd } = g; const box = boxK(box0, kOf(g)); let w = 0, n = 0, s = 0; for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, box.y1 | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) { const o = ((Hd - 1 - y) * Wd + x) * 4; const l = luma(px[o], px[o + 1], px[o + 2]); const c = Math.max(px[o], px[o + 1], px[o + 2]) - Math.min(px[o], px[o + 1], px[o + 2]); n++; s += l; if (l > 225 && c < 30) w++; } return { white: +(w / Math.max(1, n)).toFixed(3), mean: +(s / Math.max(1, n)).toFixed(1) }; };
     // mean luma inside a circle, the box left out (ground only)
-    b.__circ = (g, cx, cy, rad, box) => { const { px, Wd, Hd } = g; let s = 0, n = 0; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; s += luma(px[o], px[o + 1], px[o + 2]); n++; } return n ? s / n : 0; };
+    b.__circ = (g, cx0, cy0, rad0, box0) => { const { px, Wd, Hd } = g; const k = kOf(g), cx = cx0 * k, cy = cy0 * k, rad = rad0 * k, box = box0 && boxK(box0, k); let s = 0, n = 0; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; s += luma(px[o], px[o + 1], px[o + 2]); n++; } return n ? s / n : 0; };
     // a quantile of the luma inside the same circle (owner ruling 10: has the lifted ground reached its clip?)
-    b.__circQ = (g, cx, cy, rad, box, q) => { const { px, Wd, Hd } = g; const v = []; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; v.push(luma(px[o], px[o + 1], px[o + 2])); } v.sort((a, c) => a - c); return v.length ? v[Math.min(v.length - 1, Math.floor(q * v.length))] : 0; };
+    b.__circQ = (g, cx0, cy0, rad0, box0, q) => { const { px, Wd, Hd } = g; const k = kOf(g), cx = cx0 * k, cy = cy0 * k, rad = rad0 * k, box = box0 && boxK(box0, k); const v = []; for (let y = Math.max(0, cy - rad | 0); y < Math.min(Hd, cy + rad); y += 2) for (let x = Math.max(0, cx - rad | 0); x < Math.min(Wd, cx + rad); x += 2) { if ((x - cx) ** 2 + (y - cy) ** 2 > rad * rad) continue; if (box && x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) continue; const o = ((Hd - 1 - y) * Wd + x) * 4; v.push(luma(px[o], px[o + 1], px[o + 2])); } v.sort((a, c) => a - c); return v.length ? v[Math.min(v.length - 1, Math.floor(q * v.length))] : 0; };
     // the victim's body: actor shown vs hidden (VFX and telegraphs off) inside the box, above its feet. White share of
     // those pixels (luma > 225, chroma < 30) in four frames: `base` no lift and no hit flash (the body's own pale parts),
     // `lift` the envelope alone (the hit flash hidden too: what the post chain does to the body), `flash` the envelope
     // with the actor's own victim flash (the 1-2 frame hit flash, actors.ts VICTIM_FLASH), `full` everything
-    b.__body = (id, box, feetY) => {
+    b.__body = (id, box0, feetY0) => {
       const a = R.actors.get(id); const d = R.vfx.draw; const tv = R.overlay.teleScene.visible;
       const U = b.__U;
       // no lift for one grab: the envelope writes into stand-ins that ignore it, the dip and the breath read 1 and 0
@@ -151,6 +162,7 @@ try {
       // the body mask: the actor's skinned body alone rendered into an empty target (its shadow and contact blob on the
       // ground are not body)
       const { Wd, Hd } = full;
+      const box = boxK(box0, kOf(full)), feetY = feetY0 * kOf(full);
       const g = R.gl; const RT = new (R.overlay.teleTarget.constructor)(Wd, Hd);
       const skip = [];
       a.root.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { skip.push([o, o.layers.mask]); o.layers.disableAll(); } });
@@ -164,15 +176,19 @@ try {
       } finally { g.setRenderTarget(null); g.setClearColor(cc, ca); g.autoClear = ac; for (const [o, m] of skip) o.layers.mask = m; RT.dispose(); }
       hid = null;
       R.render(0);
-      let n = 0, wl = 0, wf = 0, wb = 0, wh = 0;
+      let n = 0, wl = 0, wf = 0, wb = 0, wh = 0, sb = 0, sb2 = 0, sf = 0, sf2 = 0;
       const white = (g, o) => { const l = luma(g.px[o], g.px[o + 1], g.px[o + 2]); const c = Math.max(g.px[o], g.px[o + 1], g.px[o + 2]) - Math.min(g.px[o], g.px[o + 1], g.px[o + 2]); return l > 225 && c < 30; };
       for (let y = Math.max(0, box.y0 | 0); y < Math.min(Hd, feetY | 0); y++) for (let x = Math.max(0, box.x0 | 0); x < Math.min(Wd, box.x1 | 0); x++) {
         const o = ((Hd - 1 - y) * Wd + x) * 4;
         if (mask[o + 3] < 128) continue;   // the target's rows are bottom-up like readPixels
+        const lb = luma(base.px[o], base.px[o + 1], base.px[o + 2]), lf = luma(full.px[o], full.px[o + 1], full.px[o + 2]);
+        sb += lb; sb2 += lb * lb; sf += lf; sf2 += lf * lf;
         n++; if (white(lift, o)) wl++; if (white(full, o)) wf++; if (white(base, o)) wb++; if (white(flash, o)) wh++;
       }
       const k = (w) => +(w / Math.max(1, n)).toFixed(3);
-      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box), boxNoVfx: b.__white(flash, box) };
+      const dev = (s1, s2) => (n ? Math.sqrt(Math.max(0, s2 / n - (s1 / n) ** 2)) : 0);
+      const stdBase = dev(sb, sb2), stdFull = dev(sf, sf2);
+      return { n, baseWhite: k(wb), liftWhite: k(wl), flashWhite: k(wh), fullWhite: k(wf), boxWhite: b.__white(full, box0), boxNoVfx: b.__white(flash, box0), stdBase: +stdBase.toFixed(1), stdFull: +stdFull.toFixed(1), detail: +(stdFull / Math.max(1, stdBase)).toFixed(2), meanFull: +(sf / Math.max(1, n)).toFixed(0), meanBase: +(sb / Math.max(1, n)).toFixed(0) };
     };
     // only these VFX ids spawn while set (the impact-hold window measures the hit's own look)
     b.__onlyIds = null;
@@ -256,7 +272,7 @@ try {
       const geo = await B((b, a) => ({ c: b.__h(a.pc), v: b.__h(a.pv) }), st);
       const vbox = { x0: geo.v.gx - 45, y0: geo.v.ty - 5, x1: geo.v.gx + 45, y1: geo.v.gy + 5 };
       const base = await B((b, a) => b.__white(b.__grab(), a.vbox), { vbox });
-      await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.c, { type: 'cast', slot: 'ult', x: me.x, y: me.y, target: a.pv }); }, { ...st, c: c.seat });
+      await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.c, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, c: c.seat, slot: SLOT });
       const rows = [];
       for (let f = 1; f <= 72; f++) {
         rows.push(await B((b, a) => {
@@ -265,7 +281,8 @@ try {
           const U = b.__U;
           const L = U.uLiftA.value.map((q) => ({ ux: q.x, uy: q.y, rr: q.z, w: q.w })).filter((q) => q.w > 0);
           const out = { w: L.length ? +Math.max(...L.map((q) => q.w)).toFixed(3) : 0 };
-          if (L.some((q) => q.w >= 1.3)) {
+          if (a.every && !L.some((q) => q.w >= 1.3)) out.white = b.__body(a.pv, a.vbox, a.feetY);
+          else if (L.some((q) => q.w >= 1.3)) {
             const q = L.reduce((m, x) => (x.w > m.w ? x : m));
             const g = b.__grab();
             const cx = q.ux * 1920, cy = (1 - q.uy) * 1080, rad = q.rr * 1080;
@@ -282,7 +299,7 @@ try {
             out.live = live;
           }
           return out;
-        }, { ...st, vbox, feetY: geo.v.gy - 6 }));
+        }, { ...st, vbox, feetY: geo.v.gy - 6, every: SLOT !== 'ult' }));
         if (rows[rows.length - 1].white && !rows.slice(0, -1).some((r) => r.white)) await shot(`ult_${def}_beat`);
       }
       await B((b) => { b.__step(75); });
@@ -298,7 +315,7 @@ try {
         def, caster: [Math.round(geo.c.gx), Math.round(geo.c.gy)], victim: [Math.round(geo.v.gx), Math.round(geo.v.gy)], firstCtr: first?.ctr ?? null,
         ctrToCaster: dC && Math.round(dC), ctrToVictim: dV && Math.round(dV), baseWhite: base, baseCore,
         beats: beats.map((r) => ({ f: r.f, w: r.w, bodyPx: r.white.n, bodyWhiteBase: r.white.baseWhite, bodyWhiteLift: r.white.liftWhite, bodyWhiteFlash: r.white.flashWhite, bodyWhiteFull: r.white.fullWhite, boxWhite: r.white.boxWhite.white,
-          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live,
+          boxWhiteNoVfx: r.white.boxNoVfx.white, live: r.live, detail: r.white.detail, stdBase: r.white.stdBase, stdFull: r.white.stdFull, meanBase: r.white.meanBase, meanFull: r.white.meanFull,
           core: r.core, ratio: baseCore ? +(r.core / baseCore.all).toFixed(2) : null, ratioGround: baseCore ? +(r.coreGround / baseCore.ground).toFixed(2) : null })),
       };
       res.maxWhite = beats.length ? Math.max(...res.beats.map((r) => r.bodyWhiteLift)) : null;
@@ -309,10 +326,15 @@ try {
       res.maxBoxWhite = beats.length ? Math.max(...res.beats.map((r) => r.boxWhite)) : null;
       res.firstRatio = res.beats[0]?.ratio ?? null;
       res.firstRatioGround = res.beats[0]?.ratioGround ?? null;
+      res.detailLost = res.beats.filter((r) => r.bodyPx >= 200 && r.detail < 0.5).length;
+      res.minDetail = res.beats.length ? Math.min(...res.beats.map((r) => r.detail)) : null;
       report.ult.push(res);
+      console.log(`         ${def} ${SLOT} detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
+      if (res.detailLost > 2) fail(`${def} ${SLOT}: the struck body stays flat for ${res.detailLost} frames (detail < 0.5; at most 2)`);
       console.log(`         box white per beat (VFX off): ${res.beats.map((r) => `f${r.f} ${r.boxWhite} (${r.boxWhiteNoVfx})`).join(' · ')}`);
       console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}`);
-      if (!first) fail(`${def}: no beat ≥ 1.3`);
+      if (SLOT !== 'ult') { /* a kit slot: only the body's detail is asked */ }
+      else if (!first) fail(`${def}: no beat ≥ 1.3`);
       else {
         // a self-centred ultimate (every area / zone of it at the caster: Burdam's, Ilsheta's, Sukri's, Ulkro's, Ardit's)
         // beats where it stands; the centre gate is for the ults aimed at a unit or a shape (Tunlan's cone, Rishal's track)

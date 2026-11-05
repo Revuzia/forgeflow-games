@@ -83,31 +83,31 @@
   },
   "uv_coverage": 0.611,
   "bake": {
-    "base": 5.9,
-    "rough_metal": 3.44,
-    "normal": 3.66,
-    "ao": 4.29,
+    "base": 4.89,
+    "rough_metal": 3.41,
+    "normal": 2.76,
+    "ao": 3.03,
     "normal_fixed_px": 84856,
-    "projection": 13.36,
-    "pack_save": 13.69,
-    "total": 32.07
+    "projection": 13.77,
+    "pack_save": 14.15,
+    "total": 28.46
   },
   "tris": 22047,
   "mesh_top_m": 1.885,
-  "glb_bytes_raw": 2443632,
+  "glb_bytes_raw": 2470476,
   "optimize": {
     "ok": true,
-    "before": 2443632,
-    "after": 949924,
+    "before": 2470476,
+    "after": 959116,
     "q_base": 58,
     "x_fan_rest": 1
   },
-  "glb_bytes": 949924,
+  "glb_bytes": 959116,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (928 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: lisvel_almanac_base 2048x2048 192K, lisvel_almanac_normal 512x512 40K, lisvel_almanac_orm 256x256 12K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/lisvel/lisvel_almanac.glb (937 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: lisvel_almanac_base 2048x2048 201K, lisvel_almanac_normal 512x512 40K, lisvel_almanac_orm 256x256 12K",
       "  skinned meshes: lisvel_accent(214v), lisvel_almanac(22836v)",
       "  bones: 38 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_bow_tip_l x_bow_tip_r x_string shoulderR upper_armR forearmR handR propR x_arrow_nock x_fan thighL shinL footL toeL thighR shinR footR toeR x_quiver x_tabard_bl_1 x_tabard_bl_2 x_tabard_br_1 x_tabard_br_2 x_tabard_fl_1 x_tabard_fl_2 x_tabard_fr_1 x_tabard_fr_2)",
       "  clips: ",
@@ -145,23 +145,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/lisvel/three_lisvel_almanac.png",
-    "seconds": 15.4,
+    "seconds": 22.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "materials": 0.6,
-      "model": 8.63,
-      "lows_bind": 5.85,
-      "uv": 7.28,
-      "bake": 35.64,
-      "export": 0.14,
-      "optimize": 1.04,
-      "load_test": 0.23,
-      "three_qa": 15.76
+      "materials": 0.55,
+      "model": 15.86,
+      "lows_bind": 3.95,
+      "uv": 5.95,
+      "bake": 31.96,
+      "export": 0.2,
+      "optimize": 1.1,
+      "load_test": 0.27,
+      "three_qa": 23.09
     },
-    "total_s": 75.28
+    "total_s": 83.03
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

@@ -24,7 +24,8 @@
 //     own work point, where its picture is made too) and, when the main thread is idle (the pump within LATE_IDLE_MS of
 //     the rAF timestamp at p95), from the rAF timestamp as well (else reported, 'notMeasured': needs an idle machine).
 //     --runs (3) separate browsers: PASS only when every run passes. --refs (60: 20 per join point).
-//   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--out <json>]
+//   node _harness/probe_audio_runtime.mjs match [--queue rift_coop] [--seconds 420] [--fighter id] [--seed N] [--out <json>]
+//     (--fighter pins your seat, the autopilot from the match on; --seed fixes the session's rng, so a capture repeats)
 //     A real match at speed 1, default settings, the autopilot playing your seat. Per 4096-sample block: K-weighted
 //     mean square of the output and of each bus (the sfx bus plus the threat path = what sfx the player hears) →
 //     integrated loudness (gated as BS.1770), short-term (3 s) percentiles, momentary (~0.4 s) maxima; the cue log
@@ -64,6 +65,8 @@ const REF_AT = ['out', 'master', 'sfx'];   // where a reference click joins: the
 const ENGINE_OVER_MS = 4;   // the engine's own share of the offset (a quarter frame): decode-cache promise, fade-in, onset
 const QUEUE = opt('--queue', 'rift_coop');
 const SECONDS = Number(opt('--seconds', 420));
+const FIGHTER = opt('--fighter', null);
+const SEED = opt('--seed', null);
 const TOK = JSON.parse(readFileSync(join(HERE, '..', '_design', 'tokens.json'), 'utf8')).audio.loudness;   // -18 ± 1.5 LUFS
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
@@ -100,7 +103,7 @@ async function runSync() {
   const runs = [];
   for (let i = 0; i < RUNS; i++) { log(`sync run ${i + 1}/${RUNS}`); runs.push(await runSyncOnce()); if (runs[i].err) break; }
   const brief = (r) => ({ pass: r.pass, err: r.err, offsetFromPumpMs: r.offsetFromPumpMs, offsetMs: r.offsetMs, engineOverSfxBusMs: r.engineOverSfxBusMs,
-    budgetMs: r.budgetMs, pumpLateMs: r.pumpLateMs, inCall: r.inCall, gates: r.gates });
+    budgetMs: r.budgetMs, pumpLateMs: r.pumpLateMs, inCall: r.inCall, preRoll: r.preRoll, gates: r.gates });
   return { probe: 'probe_audio_runtime', mode: 'sync', runs: RUNS, pass: runs.length === RUNS && runs.every((r) => r.pass && !r.err),
     err: runs.find((r) => r.err)?.err ?? null, summary: runs.map(brief),
     notMeasured: [...new Set(runs.flatMap((r) => Object.entries(r.gates ?? {}).filter(([, v]) => v === null).map(([k]) => k)))], detail: runs };
@@ -209,6 +212,11 @@ async function runSyncOnce() {
     });
     // a hit is measured when its window holds the hit alone: its peak within 3 dB of the hits' median (a match toll or
     // a wave horn landing in the window is another sound) and its own cue logged
+    // the onset search opens 50 ms before the inject (schedMs -50): a row whose onset lies before its own start call found
+    // ANOTHER sound already ringing at the window's opening (a bare reference click reads the same), so nothing starts
+    // early: -50 ms + the platform's +20 ms is the -30 ms 'minimum' (integ_idle_verify). Reported, not gated.
+    { const pre = rows.filter((r) => r.schedMs !== null && r.schedMs < 0), clean = rows.filter((r) => !r.ref && r.schedMs !== null && r.schedMs >= 0).map((r) => r.offTsMs);
+      rep.preRoll = { rows: pre.length, hits: pre.filter((r) => !r.ref).length, refs: pre.filter((r) => r.ref).length, schedMin: r2(Math.min(0, ...pre.map((r) => r.schedMs))), cleanHitOffsetMs: { min: r2(Math.min(...clean)), p50: r2(pct(clean, 50)), max: r2(Math.max(...clean)) } }; }
     const refRows = rows.filter((r) => r.ref === 'out' && r.offTsMs !== null);
     const medPk = pct(rows.filter((r) => !r.ref && r.peakDb !== null).map((r) => r.peakDb), 50);
     const ok = rows.filter((r) => !r.ref && r.offTsMs !== null && Math.abs(r.peakDb - medPk) <= 3 && r.cue && /_attack_hit$|^c_hit_phys/.test(r.cue));
@@ -312,8 +320,8 @@ function integrated(ms) {
 }
 
 async function runMatch() {
-  const { browser, page, logs } = await openFake('/?dev=1&render=0&autopilot=1&autoflow=1');
-  const rep = { probe: 'probe_audio_runtime', mode: 'match', queue: QUEUE, seconds: SECONDS, err: null, cues: [] };
+  const { browser, page, logs } = await openFake(`/?dev=1&render=0&autopilot=${FIGHTER ? 'match' : '1'}&autoflow=1${SEED ? `&seed=${SEED}` : ''}`);
+  const rep = { probe: 'probe_audio_runtime', mode: 'match', queue: QUEUE, seconds: SECONDS, seat: FIGHTER, sessionSeed: SEED, err: null, cues: [] };
   try {
     await page.waitForTimeout(1500);
     await page.keyboard.press('Shift');
@@ -322,6 +330,10 @@ async function runMatch() {
     rep.rate = await page.evaluate(() => window.__valeAudio.graph.ctx.sampleRate);
     await page.evaluate(TAP);
     await page.evaluate((q) => { const v = window.__vale; (v.state.queueFor ? v.state.queueFor({ queue: q }) : v.session.queue({ queue: q })); }, QUEUE);
+    if (FIGHTER) {
+      await page.waitForFunction(() => { const v = window.__vale, s = v.state.draft.value, m = s?.seats.find((x) => x.isYou); return !!v.state.match.value || (s?.phase === 'pick' && s.turn?.action !== 'ban' && s.turn?.players.includes(m?.player)); }, null, { timeout: 120000, polling: 200 });
+      await page.evaluate((f) => { const d = window.__vale.session; d.draft({ a: 'hover', fighter: f }); d.draft({ a: 'lock' }); }, FIGHTER);
+    }
     await page.waitForFunction(() => !!window.__vale.state.match.value, null, { timeout: 600000, polling: 500 });
     const ct0 = await page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
     rep.you = await page.evaluate(() => { const m = window.__vale.state.match.value; const p = m?.view.players.find((x) => x.player === m.you); return p ? { fighter: p.fighter ?? null, team: p.team } : null; });
@@ -329,7 +341,19 @@ async function runMatch() {
     // the sim's own enemy fighter deaths that the cue path answers with enemyDown (not yours: 'takedown' carries those)
     await page.evaluate(() => {
       const m = window.__vale.state.match.value;
-      const st = window.__deaths = { enemy: 0, enemyNotYours: 0, enemyNotYoursInSight: 0 };
+      const st = window.__deaths = { enemy: 0, enemyNotYours: 0, enemyNotYoursInSight: 0, lampsSetSeen: 0, lampsOutSeen: 0, wardLog: [] };
+      // the sim's own wards as your team sees them: what the lamp cues answer. A ward's cast is an item active, so a
+      // lamp set is counted from the unit appearing; its end from its death event.
+      const wardIds = new Set((window.__vale.catalog?.units ?? []).filter((u) => u.kind === 'ward').map((u) => u.id));
+      const inSight = (d, me) => !!d && !!me && (d.team === me.team || (((d.visibleMask ?? 0) >>> me.team) & 1) === 1);
+      m.onEvents((evs) => { const me = m.view.players.find((p) => p.player === m.you);
+        for (const e of evs) {
+          if (e.e === 'death' && e.kind === 'ward') { const d = m.view.entity(e.dst); const seen = inSight(d, me); if (seen) st.lampsOutSeen++; st.wardLog.push(['out', m.view.time, d?.team ?? null, seen]); }
+          if (e.e === 'cast' && typeof e.ability === 'string' && window.__wardAbilities?.has(e.ability)) { const d = m.view.entity(e.src); const seen = inSight(d, me); if (seen) st.lampsSetSeen++; st.wardLog.push(['set', m.view.time, d?.team ?? null, seen]); }
+        }
+      });
+      const setsWard = (fx) => JSON.stringify(fx ?? []).match(/"unit":"([^"]+)"/g)?.some((x) => wardIds.has(x.slice(8, -1))) ?? false;
+      window.__wardAbilities = new Set((window.__vale.catalog?.items ?? []).filter((i) => i.active && setsWard(i.active.effects)).map((i) => i.active.id));
       m.onEvents((evs) => { for (const e of evs) if (e.e === 'death' && e.kind === 'fighter') {
         const me = m.view.players.find((p) => p.player === m.you), d = m.view.entity(e.dst);
         if (d && me && d.team !== me.team) { st.enemy++; if (e.by !== m.you) { st.enemyNotYours++;
@@ -377,6 +401,7 @@ async function runMatch() {
     rep.deadPolls = deadSeen;
     rep.enemyDeaths = await page.evaluate(() => window.__deaths);
     const blocks = await page.evaluate((c0) => window.__cap.blocks.filter((r) => r[0] >= c0 - 2), ct0);
+    rep.heardG2 = await page.evaluate(() => Object.fromEntries(window.__valeAudio.heard ?? []));
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
     const col = (i) => blocks.map((r) => r[i]);
@@ -408,8 +433,10 @@ async function runMatch() {
     const p99 = loud.sfx.p99;
     const linePeak = lines.length ? Math.max(...lines.map((l) => l.db)) : null;
     const lineMedian = pct(lines.map((l) => l.db), 50);
+    const over = (a, b) => (a === null || b === null ? null : r2(a - b));
     rep.announcer = { lines: lines.length, linePeak: r2(linePeak), lineMedianPeak: r2(lineMedian), sfxP99: p99, teamfightSfxP99: r2(fightP99),
-      peakOverSfxP99: r2(linePeak - p99), medianOverSfxP99: r2(lineMedian - p99), medianOverTeamfightP99: r2(lineMedian - fightP99),
+      // with no line there is no margin: a null peak must not coerce to 0 and pass the gate (closing r2 probe:runtime-gates)
+      peakOverSfxP99: over(linePeak, p99), medianOverSfxP99: over(lineMedian, p99), medianOverTeamfightP99: over(lineMedian, fightP99),
       linesInTeamfight: lineRows.filter((r) => r.sfxShortHere >= sfxP90).map((r) => r), rows: lineRows.slice(0, 40) };
     // the cue log: heal chimes per minute, enemyDown, the lamp cues
     const tMax = Math.max(1, ...rep.cues.map((c) => c[1] ?? 0));
@@ -419,20 +446,25 @@ async function runMatch() {
     rep.cueLog = { total: rep.cues.length, matchSeconds: r2(tMax), heal: count(healId), healPerMin: r2(count(healId) / tMax * 60),
       enemyDown: count('m_enemy_down'), allyDown: count('m_ally_down'), selfDown: count('m_self_down'), takedown: count('m_takedown'),
       lampSet: count('c_lamp_set'), lampOut: count('c_lamp_out'), summonOut: count('c_summon_out'), summon: count('c_summon') };
+    rep.lamps = { sim: { setSeen: rep.enemyDeaths.lampsSetSeen, outSeen: rep.enemyDeaths.lampsOutSeen, log: rep.enemyDeaths.wardLog.map(([k, t, team, seen]) => [k, r2(t), team, seen]) },
+      heard: rep.cues.filter((c) => c[2] === 'c_lamp_set' || c[2] === 'c_lamp_out').map(([, t, id]) => [id, t]) };
     const top = {}; for (const c of rep.cues) top[c[2]] = (top[c[2]] ?? 0) + 1;
     rep.cueTop = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 30);
     rep.gates = {
       healPerMinLe6: rep.cueLog.healPerMin <= 6,
       // gated only when an enemy fighter fell in your team's sight by another hand than yours (forced when the match had none)
       enemyDownFires: rep.enemyDeaths.enemyNotYoursInSight === 0 ? null : rep.cueLog.enemyDown > 0,
-      announcerPeakOverSfxP99Ge3: rep.announcer.peakOverSfxP99 !== null && rep.announcer.peakOverSfxP99 >= 3,
+      // the lamp cues answer the sim's wards your team sees (null: this capture had none, not measured)
+      lampSetFires: rep.lamps.sim.setSeen === 0 ? null : rep.cueLog.lampSet > 0,
+      lampOutFires: rep.lamps.sim.outSeen === 0 ? null : rep.cueLog.lampOut > 0,
+      announcerPeakOverSfxP99Ge3: rep.announcer.lines > 0 && rep.announcer.peakOverSfxP99 >= 3,
       // a match's loudness needs a match: a short capture (the countdown, no fights) reports it, not gates it
       masterIntegratedInTokens: rep.seconds < 240 ? null : loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
     };
     rep.tokens = TOK;
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so
     // the contrast a player hears under a line is about 6 dB more)
-    rep.announcer.medianOverTeamfightP99PlusDuck = r2(rep.announcer.medianOverTeamfightP99 + 6);
+    rep.announcer.medianOverTeamfightP99PlusDuck = rep.announcer.medianOverTeamfightP99 === null ? null : r2(rep.announcer.medianOverTeamfightP99 + 6);
     rep.notMeasured = Object.entries(rep.gates).filter(([, v]) => v === null).map(([k]) => k);
     rep.pass = Object.values(rep.gates).every((v) => v !== false) && !rep.err;
     rep.cues = rep.cues.slice(0, 3000);
@@ -515,17 +547,24 @@ async function runDead() {
     t0d.push(await mark());
     const raw = await page.evaluate(() => window.__dead);
     const db = (rows, k) => r2(10 * Math.log10(rows.reduce((s2, r) => s2 + r[k], 0) / Math.max(1, rows.length) + 1e-20));
-    rep.windows = [['alive0', w0], ['dead', w1], ['alive1', w2]].map(([tag, [c0, c1]]) => { const w = raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
-      return { tag, seconds: r2(c1 - c0), blocks: w.length, engineDead: r2(w.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, w.length)), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
-    rep.tones = [['alive', t0a], ['dead', t0d]].map(([tag, [c0, c1]]) => { const w = raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
-      return { tag, seconds: r2(c1 - c0), blocks: w.length, hz200Db: db(w, 3), hz4000Db: db(w, 4) }; });
+    // a window's blocks by the marks AND the row's own flag (r[1], the engine's state as that block closed). The end mark
+    // of a dead window comes from a 100 ms poll after the flip, so without the flag the first blocks of the re-opening
+    // filter land in it, and they are up to 29 dB louder at 4 kHz: a few of them read a 29 dB drop as about 2 dB (closing
+    // r2 done:6). `leaked` counts those; the state itself is judged on what is left, which must be unbroken.
+    const pick = ([c0, c1], flag) => raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1 && r[1] === flag);
+    const inMarks = ([c0, c1]) => raw.blocks.filter((r) => r[0] >= c0 && r[0] < c1);
+    rep.windows = [['alive0', w0, 0], ['dead', w1, 1], ['alive1', w2, 0]].map(([tag, marks, flag]) => { const w = pick(marks, flag), all = inMarks(marks);
+      return { tag, seconds: r2(marks[1] - marks[0]), blocks: w.length, leaked: all.length - w.length, engineDead: r2(all.reduce((s2, r) => s2 + r[1], 0) / Math.max(1, all.length)),
+        unbroken: all.findIndex((r) => r[1] !== flag) === -1 || all.slice(all.findIndex((r) => r[1] !== flag)).every((r) => r[1] !== flag), allDb: db(w, 2), lowDb: db(w, 3), highDb: db(w, 4) }; });
+    rep.tones = [['alive', t0a, 0], ['dead', t0d, 1]].map(([tag, marks, flag]) => { const w = pick(marks, flag);
+      return { tag, seconds: r2(marks[1] - marks[0]), blocks: w.length, leaked: inMarks(marks).length - w.length, hz200Db: db(w, 3), hz4000Db: db(w, 4) }; });
     rep.toneDrop = { hz200Db: r2(rep.tones[0].hz200Db - rep.tones[1].hz200Db), hz4000Db: r2(rep.tones[0].hz4000Db - rep.tones[1].hz4000Db) };
     const [a0, d, a1] = rep.windows;
     rep.drop = { allDb: r2(a0.allDb - d.allDb), lowDb: r2(a0.lowDb - d.lowDb), highDb: r2(a0.highDb - d.highDb) };
     rep.back = { allDb: r2(a1.allDb - a0.allDb), highDb: r2(a1.highDb - a0.highDb) };
     rep.gates = {
       musicPlaying: a0.allDb > -60,
-      engineDeadWhileDown: d.engineDead >= 0.95 && a0.engineDead === 0 && a1.engineDead === 0 && d.blocks >= 12,
+      engineDeadWhileDown: d.unbroken && d.blocks >= 12 && d.leaked <= 3 && a0.engineDead === 0 && a1.engineDead === 0,
       highFallsGe10: rep.drop.highDb >= 10,
       // the bed's whole level is reported, not gated (rep.drop.allDb: 2.63 and 1.54 dB in two runs, the bed itself moving
       // about 1 dB between windows); the tones gate DEAD_DB (-3) and the 900 Hz low-pass (12 dB/oct: about -26 dB at 4 kHz)

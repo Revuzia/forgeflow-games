@@ -473,6 +473,11 @@ export abstract class BotBase {
       if (t && t.alive && inAttackRange(e, t) && (t.kind === 'fighter' ? this.pAggro >= 0.5 : this.pFarm === 2 || this.pMonsters || t === this.pSiege)) {
         this.cast(s, info, e, e.x, e.y); return true;
       }
+      // (CW3s r3, CL-1: an ultimate stance or form is spent on any enemy fighter in reach of it, not held for a trade the
+      // bot has already called: Ulkro's Long Run came at a 10.6 min median at adept with level 6 at 7:00)
+      if (s.slot === 'ult' && this.k.kind === 'rift' && this.pAggro >= 0.3 && this.fighterInReach(this.prof.attackRange + 1.5)) {
+        this.cast(s, info, e, e.x, e.y); return true;
+      }
       if (!(u & (U_OFFENSE | U_GAPCLOSE))) return false;
     }
     if (u & U_SUMMON) {
@@ -480,7 +485,11 @@ export abstract class BotBase {
       if (t && this.dist2(t, e.x, e.y) <= 64) { this.cast(s, info, t, t.x, t.y); return true; }
     }
     if (u & U_VISION) {
-      if (this.now - this.lastWardAt > 45 && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm')) {
+      // (CW3s r3, gameplay G7: one every 45 s put out a lit lamp at a third of its life: the support's 1,600 Gleam of lamps a game
+      // was a finished item, 2.0 held against the others' 2.7. Now as fast as the lamps' own limit keeps them all lit)
+      let every = 45;
+      for (const fx of s.def.effects) if (fx.op === 'summon' && fx.duration && fx.maxAlive) every = Math.max(every, fx.duration / fx.maxAlive);
+      if (this.now - this.lastWardAt > every && (this.mode === 'lane' || this.mode === 'push' || this.mode === 'objective' || this.mode === 'farm')) {
         const spot = this.wardSpot(info.range);
         if (spot) { this.lastWardAt = this.now; this.cast(s, info, null, spot.x, spot.y); return true; }
       }

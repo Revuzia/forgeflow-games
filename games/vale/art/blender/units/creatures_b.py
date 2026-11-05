@@ -958,29 +958,29 @@ def render_icon(cr: Monster, rig: RigB, low, fast: bool = False) -> dict:
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 class Longshade(Monster):
-    """The beast that lives where the Needle's shadow ends. It is its own shadow, peeled up off the stone at
-    the front: a hunched ink torso held up on two long clawed forelimbs, a pale chalk mask-plate on a hooded
-    neck, an ink-smoke crest; behind the shoulders the body pours down into a long flat shadow lying on the
-    ground. No hind legs: it hauls itself forward hand over hand and the shadow slides after it."""
+    """The beast that lives where the Needle's shadow ends. It is its own shadow, peeled up off the stone at the front:
+    a hunched shade on two long clawed forelimbs, its back a mantle of overlapping smoke plumes, a long flat shadow lying
+    on the ground behind it, ruled in chalk like a dial's hour lines. Round its neck turns the rim of a stopped dial: a
+    brass ring set with twelve chalk hour stones and lamps, the only thing in the valley still moving. Inside the ring,
+    a mane of shade and the round chalk dial plate with its two lamp eyes and a brass gnomon and hour-line inlay (ruling 1).
+    The ring and plate together are the focal point: a dial in the dark, readable at the game camera from any side.
+    No hind legs: it hauls itself forward hand over hand and the shadow slides after it."""
     ID = "longshade"
     HEIGHT = 4.2
     BODY_TOP = 3.7
     RUN_SPEED = 3.2
     TEX = 2048
-    TEX_SIZES = {"orm": 1024, "normal": 1024}
+    TEX_SIZES = {"orm": 512, "normal": 1024}
     VOX_LOW = 0.022
-    VOX_HIGH = 0.015
-    VOX_PART = {"mask": 0.008, "claws": 0.009, "eyes": 0.006}
-    VOX_HIGH_PART = {"mask": 0.0045, "claws": 0.006, "eyes": 0.004}
-    TRIS = {"body": 9000, "mask": 900, "claws": 800, "eyes": 160}
+    VOX_HIGH = 0.016
+    VOX_PART = {"mask": 0.009, "claws": 0.009, "eyes": 0.006, "dial": 0.011, "mantle": 0.016}
+    VOX_HIGH_PART = {"mask": 0.005, "claws": 0.006, "eyes": 0.004, "dial": 0.006, "mantle": 0.009}
+    TRIS = {"body": 11000, "mask": 1200, "claws": 800, "eyes": 300, "dial": 1500, "mantle": 2600}
     CLIPS = ("idle", "run", "attack1", "cast_a1", "cast_a2", "cast_a3", "death")
-    HEAT_EXCLUDE = ("root", "mask", "eye.L", "eye.R", "claw.L", "claw.R")
     GLOW = {"eyes": ("longshade_lamp", 0.8, "#FFE9B8")}
-    UV_WEIGHTS = {"mask": 5.0, "claws": 1.6, "eyes": 0.3}
+    UV_WEIGHTS = {"mask": 3.5, "claws": 1.4, "eyes": 0.2, "dial": 2.0, "mantle": 1.1}
     BAKE_RAY = (0.03, 0.1)
     AO_DIST = 0.5
-    PART_BIND = {"mask": "mask", "eyes": ("tags", {"eyeL": "eye.L", "eyeR": "eye.R"}),
-                 "claws": ("tags", {"clawL": "claw.L", "clawR": "claw.R"})}
     FEET = ("claw.L", "claw.R")
     ICON_LIGHT = (1.0, 1.1, 1.5)
     ICON_BG = ((0.30, 0.25, 0.31), (0.05, 0.045, 0.065))
@@ -988,19 +988,25 @@ class Longshade(Monster):
     BALL_MIN = 0.06
     ICON = True
     TAIL = ("tail", "tail2", "tail3", "tail4", "tail5", "tail6")
-    # CW4 round 2 (critic:monsters): the ink stayed L* 4 on its L* 16 pit floor (dL* -11.9, hp 0.66), a boss that vanishes
-    # at the gameplay camera. The shade is now a dusk violet, value painted as light from above: lit tops and billow
-    # crests, seams and undersides in deep ink; the shadow-tail is crossed by chalk hour marks (it is the Needle's shadow)
-    PAL = {"ink": "#4F4B68", "ink_top": "#87839E", "ink_under": "#211E33", "seam": "#2C2841", "rim": "#A5A2BC",
-           "rim_hi": "#CFCCDE", "streak": "#66627E", "hour": "#C8C5D6",
-           "hand": "#5E5A76", "claw": "#5A5470", "claw_tip": "#C9C2D6", "chalk": "#E4DED0", "chalk_dirt": "#B9B0A0",
-           "groove": "#3B3542", "socket": "#221E29", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
-           "inlay": "#9C7840", "inlay_edge": "#5A4630"}
-    # mask frame: centre, lateral, up (along the plate), out (face normal, tilted 20 degrees up)
-    MC = np.array([0.0, -1.74, 3.10])
-    MU = np.array([0.0, math.sin(math.radians(24)), math.cos(math.radians(24))])
-    MN = np.array([0.0, -math.cos(math.radians(24)), math.sin(math.radians(24))])
+    # value is painted as light from above, each plume dark at the root and pale at the tip so the overlaps read as layers
+    PAL = {"ink": "#4A4664", "ink_top": "#6F6A8C", "ink_under": "#1F1C30", "seam": "#262239", "rim": "#A9A5C2",
+           "plume_root": "#26223A", "plume_mid": "#5F5A80", "plume_tip": "#BDB9D4", "plume_warm": "#C9B7B8",
+           "hour": "#D8D3DC", "tail_core": "#39354F", "tail_end": "#2B283C",
+           "hand": "#2F2B44", "band": "#C4BFCE", "claw": "#3B364F", "claw_tip": "#D4CDDD",
+           "chalk": "#EDE5D2", "chalk_dirt": "#C6BCA6", "socket": "#2A2430", "lamp": "#FFF0CC", "lamp_edge": "#F2B45E",
+           "inlay": "#B98F3E", "inlay_edge": "#5E4524", "brass": "#C49A48", "brass_dark": "#6E5228", "stone": "#E6DFCD"}
+    # mask frame: centre, lateral, up (along the plate), out (face normal, tilted up toward the game camera)
+    TILT = 32.0
+    MC = np.array([0.0, -1.74, 3.06])
+    MU = np.array([0.0, math.sin(math.radians(TILT)), math.cos(math.radians(TILT))])
+    MN = np.array([0.0, -math.cos(math.radians(TILT)), math.sin(math.radians(TILT))])
     MX = np.array([1.0, 0.0, 0.0])
+    PLATE_R = 0.60
+    EYE_X = 0.21
+    EYE_U = 0.13
+    # the hour ring: round the neck, in the plate's plane
+    DC = MC - MN * 0.86
+    DIAL_R = 1.32
 
     def joints(self):
         return dict(
@@ -1012,9 +1018,23 @@ class Longshade(Monster):
             wrist=(0.86, -1.42, 0.44), fball=(0.86, -1.72, 0.11), ftip=(0.86, -2.42, 0.035),
         )
 
+    # the ten big mantle plumes (rigid islands, each on its own bone): base, direction, length, width, parent bone, curl
+    MANTLE = (((0.90, -0.30, 2.66), (0.80, 0.56, 0.12), 1.60, 0.42, "chest", 52.0),
+              ((0.42, 0.00, 2.72), (0.26, 0.92, 0.22), 1.80, 0.40, "chest", 40.0),
+              ((0.84, 0.56, 1.76), (0.78, 0.62, 0.06), 1.45, 0.37, "spine", 50.0),
+              ((0.66, 1.26, 0.94), (0.78, 0.62, 0.02), 1.30, 0.33, "hips", 46.0),
+              ((0.26, 1.02, 1.56), (0.14, 0.96, 0.04), 1.35, 0.28, "hips", 40.0))
+
+    def mantle_list(self):
+        out = []
+        for s, sx in (("L", 1), ("R", -1)):
+            for i, (b_, d_, L, w, par, curl) in enumerate(self.MANTLE):
+                out.append((f"plume{i}.{s}", np.array(mirror(b_, sx), dtype=np.float64), K.nrm(mirror(d_, sx)), L, w, par, curl))
+        return out
+
     def bones(self):
         J = self.J
-        mc, mu, mn = self.MC, self.MU, self.MN
+        mc, mn = self.MC, self.MN
         bl = [B("root", (0, 0, 0), (0, -0.6, 0)),
               B("hips", J["hips"], J["spine"], "root"),
               B("spine", J["spine"], J["chest"], "hips", True),
@@ -1022,9 +1042,10 @@ class Longshade(Monster):
               B("neck", J["neck"], J["neck2"], "chest", True),
               B("neck2", J["neck2"], J["head"], "neck", True),
               B("head", J["head"], J["snout"], "neck2", True),
-              B("mask", tuple(mc - mn * 0.05), tuple(mc + mn * 0.2), "head", xaxis=(1, 0, 0))]
+              B("mask", tuple(mc - mn * 0.05), tuple(mc + mn * 0.2), "head", xaxis=(1, 0, 0)),
+              B("dial", tuple(self.DC), tuple(self.DC + mn * 0.4), "neck", xaxis=(1, 0, 0))]
         for s, sx in (("L", 1), ("R", -1)):
-            e = mc + mu * 0.12 + self.MX * 0.15 * sx + mn * 0.04
+            e = mc + self.MU * self.EYE_U + self.MX * self.EYE_X * sx + mn * 0.04
             bl.append(B(f"eye.{s}", tuple(e), tuple(e + mn * 0.12), "head"))
         names = list(self.TAIL) + ["tail_end"]
         for i, n in enumerate(self.TAIL):
@@ -1036,203 +1057,214 @@ class Longshade(Monster):
                    B(f"forearm.{s}", m("elbow"), m("wrist"), f"upper_arm.{s}", True),
                    B(f"hand.{s}", m("wrist"), m("fball"), f"forearm.{s}", True),
                    B(f"claw.{s}", m("fball"), m("ftip"), f"hand.{s}", True)]
+        for name, base, d, L, w, par, curl in self.mantle_list():
+            bl.append(B(name, tuple(base), tuple(base + d * L * 0.5), par))
+        # the mantle's bones, for clips (name, base, direction, flap axis: + lifts the tip)
+        self.mantle_axes = [(name, base, d, K.nrm(np.cross(d, (0, 0, 1.0)))) for name, base, d, L, w, par, curl in self.mantle_list()]
         return bl
+
+    @property
+    def HEAT_EXCLUDE(self):
+        return ("root", "mask", "dial", "eye.L", "eye.R", "claw.L", "claw.R") + tuple(m[0] for m in self.mantle_list())
+
+    @property
+    def PART_BIND(self):
+        return {"mask": "mask",
+                "eyes": ("tags", {"eyeL": "eye.L", "eyeR": "eye.R", "dlamp": "dial"}),
+                "claws": ("tags", {"clawL": "claw.L", "clawR": "claw.R"}),
+                "dial": ("tags", {"ring": "dial", "cuffL": "forearm.L", "cuffR": "forearm.R"}),
+                "mantle": ("tags", {m[0]: m[0] for m in self.mantle_list()})}
 
     def legdefs(self):
         return [LegDef("FL", ("upper_arm.L", "forearm.L", "hand.L", "claw.L"), -1),
                 LegDef("FR", ("upper_arm.R", "forearm.R", "hand.R", "claw.R"), -1)]
 
     # ── sculpt ──
+    def _plume(self, S, base, d, L, w, t, normal, curl=30.0, segs=6, k0=0.07, tag="wisp", store=True, min_t=None, sway=0.0):
+        """One smoke plume: a flat billow, broad past a third of its length, swaying sideways, its round tip curling off the
+        surface (toward `normal`). Never a spike: the tip closes as a half circle. Records (pts, widths, normal, seed)."""
+        d = K.nrm(d)
+        n_ = K.nrm(np.asarray(normal, dtype=np.float64) - d * (np.asarray(normal, dtype=np.float64) @ d))
+        ax = K.nrm(np.cross(d, n_))
+        pts = tube_path(base, d, L, ax, curl, segs)
+        ss = np.linspace(0, 1, segs + 1)
+        pts = [q + ax * (sway * L * math.sin(math.pi * u * 1.4)) for q, u in zip(pts, ss)]
+        ws = w * (0.66 + 0.34 * np.sin(np.minimum(ss / 0.4, 1.0) * math.pi / 2)) * (1 - 0.42 * sarr(0.45, 1.0, ss))
+        ws = ws * np.sqrt(np.maximum(1 - (np.maximum(ss - 0.72, 0) / 0.28) ** 2, 0.06))
+        floor_t = min_t if min_t is not None else self.tip_t
+        ts = np.maximum(t * (1 - 0.72 * ss), floor_t)
+        for i in range(segs):
+            sd = pts[i + 1] - pts[i]
+            side = K.nrm(np.cross(sd, n_))
+            S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=side),
+                  k=k0 if i == 0 else 0.022, tag=tag)
+        if store:
+            self.plumes.append((np.array(pts), ws, n_, len(self.plumes)))
+
     def body_sculpt(self, detail):
         J = self.J
         S = GSculpt("body")
-        self.wisps = []
-        # billowing surface: puffy low-frequency lumps (both meshes) + fine smoke grain (bake only)
+        self.plumes = []
         if detail:
-            smoke = ((lambda P: -0.035 * (1 - np.abs(NOISE(P, 2.2))) + 0.008 * NOISE.fbm(P * np.array([1.6, 0.35, 1.6]), 5.0, 3)),
-                     0.045)
+            smoke = ((lambda P: -0.03 * (1 - np.abs(NOISE(P, 2.2))) + 0.008 * NOISE.fbm(P * np.array([1.6, 0.35, 1.6]), 5.0, 3)), 0.045)
         else:
-            smoke = ((lambda P: -0.035 * (1 - np.abs(NOISE(P, 2.2)))), 0.037)
-        tip_t = 0.012 if detail else 0.026          # ribbon thickness / width at the tips (the low keeps >= ~1.2 voxels)
+            smoke = ((lambda P: -0.03 * (1 - np.abs(NOISE(P, 2.2)))), 0.037)
+        self.tip_t = 0.014 if detail else 0.028      # plume thickness at the tips (the low keeps >= ~1.2 voxels)
 
         def add(prim, k, tag="ink", d=smoke):
             if d is not None:
                 prim = prim.displaced(d[0], d[1] + 0.004)
             S.add(prim, k=k, tag=tag)
 
-        def ribbon(base, direction, length, w0, t0, face, curl_axis=None, curl=0.0, segs=4, k0=0.08, w1=None):
-            """A flat curling smoke ribbon: width w0 -> tip, thickness t0 -> tip, broad face toward `face`."""
-            pts = tube_path(base, direction, length, curl_axis, curl, segs)
-            ws = np.linspace(w0, w1 if w1 is not None else tip_t * 1.4, len(pts))
-            ts = np.linspace(t0, tip_t, len(pts))
-            for i in range(segs):
-                d = pts[i + 1] - pts[i]
-                side = np.cross(d, face)
-                side = K.nrm(side) if np.linalg.norm(side) > 1e-6 else np.array([1.0, 0, 0])
-                S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=side),
-                      k=k0 if i == 0 else 0.03, tag="wisp")
-            self.wisps.append((pts[0], pts[-1], length))
-
-        def tendril(base, d, L, w0, wt, t0, face, amp=0.12, nwave=1.3, rise=0.0, segs=6, k0=0.09, phase=0.0):
-            """A long streaming smoke tendril: flat, wavy (an S in the plane of `face`), rounded tip."""
-            d = K.nrm(d)
-            up_ = K.nrm(np.asarray(face, dtype=np.float64) - d * (np.asarray(face) @ d))
-            ss = np.linspace(0, 1, segs + 1)
-            pts = [V3(base) + d * L * u + up_ * (amp * math.sin(math.pi * (nwave * u + phase)) * min(1.0, u * 3)
-                                                 + rise * u * u) for u in ss]
-            ws = w0 * (1 - ss) + wt * ss + 0.25 * w0 * np.sin(np.pi * ss)
-            ts = np.maximum(t0 * (1 - 0.6 * ss), tip_t)
-            for i in range(segs):
-                sd = pts[i + 1] - pts[i]
-                side = np.cross(sd, up_)
-                side = K.nrm(side) if np.linalg.norm(side) > 1e-6 else np.array([1.0, 0, 0])
-                S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=side),
-                      k=k0 if i == 0 else 0.035, tag="wisp")
-            self.wisps.append((pts[0], pts[-1], L))
-
-        def lick(base, d, L, r0, r1, face=(0, 0, 1.0), amp=0.12, phase=0.0, rise=0.0, hook=40.0, k0=0.1, segs=7):
-            """A fat smoke tendril: round, tapering fast then slowly to a rounded tip, an S along its length and
-            a final hook curling toward `face` (a lick of dark flame / a curl of smoke)."""
-            d = K.nrm(d)
-            up_ = K.nrm(np.asarray(face, dtype=np.float64) - d * (np.asarray(face) @ d))
-            side = K.nrm(np.cross(d, up_))
-            ss = np.linspace(0, 1, segs + 1)
-            pts = [V3(base)]
-            dd = d.copy()
-            for i in range(segs):
-                u = (ss[i] + ss[i + 1]) / 2
-                bend = amp * math.cos(math.pi * (1.3 * u + phase)) * 1.6 + (math.radians(hook) * 2.2 * max(0.0, u - 0.6))
-                dk = K.rodrigues(dd, side, -bend * (L / segs))
-                pts.append(pts[-1] + dk * L / segs + up_ * rise * (L / segs) * u)
-            rr = [r1 + (r0 - r1) * (1 - u) ** 1.6 for u in ss]
-            S.add(sdf.Tube(pts, rr, k=0.03), k=k0, tag="wisp")
-            self.wisps.append((pts[0], pts[-1], L))
-
-        # torso: deep chest, high shoulder hump, the belly pouring back and down into the ground
+        # torso: deep chest, shoulder hump, the belly pouring back and down into the ground
         add(Ellipsoid((0, -0.38, 2.16), (0.64, 0.56, 0.64)), 0.0)
         add(Ellipsoid((0, -0.36, 2.60), (0.80, 0.46, 0.36)), 0.22)
         add(RoundCone((0, -0.1, 2.0), (0, 0.85, 1.12), 0.58, 0.54), 0.25)
         add(Ellipsoid((0, 1.25, 0.66), (0.80, 0.85, 0.52)), 0.3)
-        # the shadow-tail: wide, flat, lying on the ground, tapering
+        # the shadow-tail: wide, flat, lying on the ground, tapering to a rounded end
         T = [(0, 1.70, 0.40), (0, 2.60, 0.15), (0, 3.45, 0.095), (0, 4.30, 0.08), (0, 5.10, 0.066), (0, 5.75, 0.05)]
-        W = [(0.86, 0.40), (0.80, 0.14), (0.68, 0.09), (0.52, 0.07), (0.32, 0.055), (0.12, 0.042)]
+        W = [(0.98, 0.40), (0.98, 0.14), (0.90, 0.09), (0.74, 0.07), (0.50, 0.055), (0.24, 0.042)]
         for i in range(len(T) - 1):
             add(sdf.FlatCapsule(T[i], T[i + 1], W[i][0], W[i][1], W[i + 1][0], W[i + 1][1], side=(1, 0, 0)), 0.1, tag="tail")
         self.tail_w = (np.array([t[1] for t in T]), np.array([w[0] for w in W]))
-        # neck and a hooded head (the face is the chalk mask, a separate rigid part)
+        # neck and a low, round head under the plate (the face is the chalk plate, a separate rigid part)
         add(RoundCone((0, -0.45, 2.55), (0, -1.08, 3.0), 0.52, 0.42), 0.2)
-        add(Ellipsoid((0, -1.28, 3.14), (0.47, 0.44, 0.5)), 0.14, tag="hood")
-        add(Ellipsoid((0, -1.02, 3.50), (0.34, 0.42, 0.3)), 0.14, tag="hood")
+        add(Ellipsoid((0, -1.10, 3.04), (0.47, 0.40, 0.42)), 0.14, tag="hood")
         # forelimbs: heavy upper arm, long forearm, a long narrow hand of fused fingers
         for sx in (1, -1):
             m = lambda k: np.array(mirror(J[k], sx))  # noqa: E731
-            add(Ellipsoid(mirror((0.62, -0.45, 2.42), sx), (0.34, 0.38, 0.36)), 0.18)
-            add(RoundCone(m("shoulder"), m("elbow"), 0.3, 0.21), 0.14)
-            add(RoundCone(m("elbow"), m("wrist"), 0.22, 0.135), 0.08)
-            add(Sphere(m("wrist"), 0.125), 0.05, tag="hand")
-            add(sdf.FlatCapsule(m("wrist"), m("fball"), 0.16, 0.095, 0.18, 0.065, side=(1, 0, 0)), 0.05, tag="hand")
+            add(Ellipsoid(mirror((0.62, -0.45, 2.42), sx), (0.36, 0.40, 0.38)), 0.18)
+            add(RoundCone(m("shoulder"), m("elbow"), 0.33, 0.25), 0.14)
+            add(RoundCone(m("elbow"), m("wrist"), 0.25, 0.15), 0.08)
+            add(Sphere(m("wrist"), 0.135), 0.05, tag="hand")
+            add(sdf.FlatCapsule(m("wrist"), m("fball"), 0.17, 0.10, 0.19, 0.07, side=(1, 0, 0)), 0.05, tag="hand")
             for dx in (-0.17, -0.06, 0.06, 0.17):                # knuckle pads the claws grow from
                 add(Sphere(m("fball") + np.array([dx * sx, -0.03, -0.005]), 0.07), 0.04, tag="hand")
-        # ── ink-smoke edges (geometry only): flat ribbons of shade rising and curling off the body ──
-        X = np.array([1.0, 0, 0])
-        UP = np.array([0, 0, 1.0])
         core = blend_of(S)
-        # the back dissolves into smoke: large overlapping billows over the dorsal surface, biggest over the
-        # shoulders, smaller toward the tail and down the flanks
-        rng_b = np.random.RandomState(31)
-        self.billows = []
-
-        def billow(c_, r_, k_=0.07):
-            S.add(Sphere(c_, r_), k=k_, tag="wisp")
-            self.billows.append((V3(c_), r_))
-        for j, yy in enumerate(np.linspace(-1.05, 2.0, 12)):
+        # the back: staggered rows of plumes laid root over tip toward the tail, largest over the shoulders
+        rng = np.random.RandomState(31)
+        for j, yy in enumerate(np.linspace(-0.62, 1.95, 8)):
             zc = float(np.interp(yy, [-1.05, -0.4, 0.4, 1.2, 2.05], [3.0, 2.35, 1.85, 1.0, 0.3]))
-            f = (yy + 1.05) / 3.05
-            for th in ((-60, -30, 0, 30, 60) if j % 2 == 0 else (-46, -15, 15, 46)):
-                th_ = th + rng_b.uniform(-9, 9)
-                if abs(th_) > 40 and yy > 1.5:
+            f = (yy + 0.62) / 2.57
+            for th in ((-68, -34, 0, 34, 68) if j % 2 == 0 else (-52, -17, 17, 52)):
+                th_ = th + rng.uniform(-7, 7)
+                if abs(th_) > 46 and yy > 1.5:
                     continue
-                dirn = K.nrm((math.sin(math.radians(th_)), rng_b.uniform(-0.1, 0.25), math.cos(math.radians(th_))))
-                sp = surface_point(core, (0, yy + rng_b.uniform(-0.1, 0.1), zc), dirn)
-                r_ = (0.34 * (1 - f) + 0.15 * f) * (1 - 0.3 * abs(th_) / 70) * rng_b.uniform(0.7, 1.3)
-                billow(sp + dirn * r_ * rng_b.uniform(0.0, 0.32), r_)
-        # billows rising off the cowl and the shoulders (the 4.2 m top), and down the backs of the arms
-        for cl in (((0.0, -1.02, 3.68), 0.25), ((0.05, -0.84, 3.98), 0.22), ((0.24, -0.95, 3.55), 0.17),
-                   ((-0.24, -0.95, 3.55), 0.17)):
-            billow(np.array(cl[0]), cl[1], 0.1)
+                n_ = K.nrm((math.sin(math.radians(th_)), rng.uniform(-0.05, 0.2), math.cos(math.radians(th_))))
+                sp = surface_point(core, (0, yy + rng.uniform(-0.08, 0.08), zc), n_)
+                d = K.nrm(np.array([0, 1.0, 0]) + np.array([math.sin(math.radians(th_)) * 0.75, 0, 0]) + n_ * 0.06)
+                L = (1.0 * (1 - f) + 0.6 * f) * rng.uniform(0.86, 1.14)
+                w = (0.36 * (1 - f) + 0.22 * f) * rng.uniform(0.88, 1.12)
+                self._plume(S, sp - n_ * 0.03, d, L, w, 0.075, n_, curl=rng.uniform(26, 56), k0=0.05, sway=rng.uniform(-0.1, 0.1))
+        # the mane: plumes radiating from the neck inside the hour ring, swept back from the plate; none at the throat
+        mc, mu, mn, mx = self.MC, self.MU, self.MN, self.MX
+        hc = mc - mn * 0.52
+        for j, ang in enumerate(np.linspace(-132, 132, 11)):
+            a = math.radians(ang + rng.uniform(-4, 4))
+            rad = mu * math.cos(a) + mx * math.sin(a)
+            self._plume(S, hc + rad * 0.20, K.nrm(rad - mn * 0.42), rng.uniform(0.84, 0.98), 0.27 + 0.04 * (j % 2), 0.08,
+                        mn, curl=rng.uniform(22, 44), k0=0.08, sway=rng.uniform(-0.1, 0.1))
+        # smoke sleeves trailing off the backs of the arms, breaking the frog's-leg line
         for sx in (1, -1):
-            for c_, r_ in (((0.72, -0.25, 2.85), 0.22), ((0.8, -0.05, 2.98), 0.17)):
-                billow(np.array(mirror(c_, sx)), r_, 0.1)
-            e = np.array(mirror(J["elbow"], sx))
-            w_ = np.array(mirror(J["wrist"], sx))
-            for f, r_ in ((0.0, 0.2), (0.25, 0.16), (0.5, 0.13), (0.75, 0.1)):
-                billow(e + (w_ - e) * f + np.array([sx * 0.03, 0.14 - 0.03 * f, 0.02]), r_, 0.05)
-            billow(e + np.array([sx * 0.02, 0.26, 0.1]), 0.15, 0.08)
-        # the tail's edge bleeds into scalloped lobes of ink, a few loose drops beside it, three tendrils at the end
+            e, w_ = np.array(mirror(J["elbow"], sx)), np.array(mirror(J["wrist"], sx))
+            sh = np.array(mirror(J["shoulder"], sx))
+            for base, d_, L, w, t in ((sh + (e - sh) * 0.5 + np.array([sx * 0.2, 0.14, 0]), (sx * 0.72, 0.62, -0.28), 1.0, 0.26, 0.065),
+                                      (e + np.array([sx * 0.1, 0.16, 0.04]), (sx * 0.62, 0.74, 0.08), 1.0, 0.25, 0.06),
+                                      (e + (w_ - e) * 0.42 + np.array([sx * 0.08, 0.1, 0.04]), (sx * 0.58, 0.8, 0.12), 0.8, 0.2, 0.05)):
+                self._plume(S, base, d_, L, w, t, (sx * 0.3, 0, 1.0), curl=38.0, k0=0.06)
+        # the shadow's edge: broad flat tongues, lying on the ground and running back
         ys, ws = self.tail_w
-        rng = np.random.RandomState(7)
-        for i, yy in enumerate(np.linspace(1.95, 5.35, 11)):
+        rng_e = np.random.RandomState(7)
+        for i, yy in enumerate(np.linspace(1.95, 5.2, 9)):
             hw = float(np.interp(yy, ys, ws))
             for sx in (1, -1):
-                big = 1.0 if (i + (sx > 0)) % 2 else 0.6
-                r_ = (0.16 + 0.1 * big) * (1.0 - 0.05 * i)
-                c_ = np.array([sx * (hw - 0.02 + r_ * 0.35), yy + rng.uniform(-0.08, 0.08), 0.045])
-                add(Ellipsoid(c_, (r_, r_ * 1.25, 0.04)), 0.06, tag="lobe", d=None)
-        for ang in (-34, 0, 34):
-            a = math.radians(ang)
-            pts = tube_path((0, 5.5, 0.04), (math.sin(a), math.cos(a), 0), 0.95, np.array([0, 0, 1.0]), ang * 0.9, 4)
-            ws = [0.13, 0.1, 0.075, 0.05, 0.035]
-            for i in range(4):
-                S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], 0.04, ws[i + 1], 0.035, side=np.cross(pts[i + 1] - pts[i], (0, 0, 1))),
-                      k=0.06 if i == 0 else 0.03, tag="wisp")
-            self.wisps.append((pts[0], pts[-1], 0.95))
+                big = 1.0 if (i + (sx > 0)) % 2 else 0.68
+                c_ = np.array([sx * (hw - 0.12), yy + rng_e.uniform(-0.08, 0.08), 0.05])
+                S.add(sdf.FlatCapsule(c_, c_ + np.array([sx * 0.44 * big, 0.5 * big, 0.0]), 0.2 * big + 0.04, 0.045, 0.06, 0.034,
+                                      side=np.cross((sx * 0.44, 0.5, 0.0), (0, 0, 1.0))), k=0.06, tag="lobe")
+        return S
+
+    def mantle_sculpt(self, detail):
+        S = Sculpt("mantle")
+        self.tip_t = 0.014 if detail else 0.028
+        self.mantle_plumes = []
+        for name, base, d, L, w, par, curl in self.mantle_list():
+            keep, self.plumes = getattr(self, "plumes", []), []
+            sx = 1.0 if base[0] > 0 else -1.0
+            self._plume(S, base, d, L, w, 0.085, (sx * 0.25, 0.0, 1.0), curl=curl, segs=7, k0=0.0, tag=name, sway=0.08 * sx)
+            self.mantle_plumes.append(self.plumes[0])
+            self.plumes = keep
         return S
 
     def mask_sculpt(self, detail):
         mc, mu, mn, mx = self.MC, self.MU, self.MN, self.MX
+        R = self.PLATE_R
         S = Sculpt("mask")
         ax = np.stack([mx, mu, mn])
-        S.add(Ellipsoid(mc, (0.36, 0.48, 0.085), axes=ax), k=0.0, tag="plate")
-        # the brow is cut straight, the chin drawn to a point
-        S.inter(HalfSpace(mc + mu * 0.36, mu, extent=1.0), k=0.03)
-        for sx in (1, -1):
-            nrm_ = K.nrm(-mu * 0.6 + mx * sx * 0.8)
-            S.inter(HalfSpace(mc - mu * 0.47, nrm_, extent=1.0), k=0.04)
-        S.sub(Ellipsoid(mc - mn * 0.08, (0.3, 0.4, 0.055), axes=ax), k=0.02)       # hollow back
-        S.sub(Sphere(mc + mu * 0.38 + mx * 0.31 + mn * 0.03, 0.08), k=0.01)          # a chip off the brow corner
-        S.add(RoundCone(mc + mu * 0.0 + mn * 0.068, mc - mu * 0.42 + mn * 0.035, 0.034, 0.018), k=0.025, tag="plate")
+        # the round dial plate: a shallow dish with a raised rim, hollow behind
+        S.add(Ellipsoid(mc, (R, R, 0.10), axes=ax), k=0.0, tag="plate")
+        S.sub(Ellipsoid(mc - mn * 0.10, (R - 0.05, R - 0.05, 0.07), axes=ax), k=0.02)
+        S.add(sdf.Torus(mc + mn * 0.015, R - 0.02, 0.042, axes=ax, rz=0.04), k=0.015, tag="rim")
+        # the gnomon: a low brass ridge from between the lamps to the plate's foot (a dial's style, not a beak)
+        S.add(RoundCone(mc + mu * 0.02 + mn * 0.10, mc - mu * (R - 0.08) + mn * 0.075, 0.042, 0.03), k=0.02, tag="gnomon")
         self.eyes_c = []
         for sx in (1, -1):
-            e = mc + mu * 0.12 + mx * 0.15 * sx
+            e = mc + mu * self.EYE_U + mx * self.EYE_X * sx
             self.eyes_c.append(e)
-            S.sub(Sphere(e + mn * 0.08, 0.1), k=0.012)                                 # shallow socket
-            S.add(sdf.Torus(e + mn * 0.06, 0.108, 0.017, axes=ax), k=0.01, tag="plate")   # carved rim
+            S.sub(Sphere(e + mn * 0.11, 0.135), k=0.012)                                 # shallow socket
+            S.add(sdf.Torus(e + mn * 0.075, 0.15, 0.022, axes=ax), k=0.01, tag="plate")  # carved rim, a lamp's bezel
         self.grooves = []
-        if detail:
-            chin = mc - mu * 0.44 + mn * 0.05
-            for ang in (-58, -36, -15, 15, 36, 58):                     # hour-lines fanning from the chin
-                a = math.radians(ang)
-                d = K.nrm(mu * math.cos(a) + mx * math.sin(a))
-                L = 0.34 if abs(ang) < 20 else 0.3
-                p0, p1 = chin + d * 0.06, chin + d * L + mn * 0.015
-                S.sub(Capsule(p0, p1, 0.009), k=0.003)
-                self.grooves.append((p0, p1))
-            g0, g1 = mc + mu * 0.3 - mx * 0.26 + mn * 0.062, mc + mu * 0.3 + mx * 0.24 + mn * 0.062
-            S.sub(Capsule(g0, g1, 0.008), k=0.003)                         # the brow band
-            self.grooves.append((g0, g1))
-            # a hairline crack from the chip, running OUT to the plate's edge above the eye (it ran down past the
-            # right socket: a third streak under an eye)
-            pts = [mc + mu * 0.35 + mx * 0.25, mc + mu * 0.29 + mx * 0.28, mc + mu * 0.24 + mx * 0.33]
-            for a_, b_ in zip(pts[:-1], pts[1:]):
-                S.sub(Capsule(a_ + mn * 0.08, b_ + mn * 0.08, 0.005), k=0.002)
+        foot = mc - mu * (R - 0.10)
+        self.dial_foot = foot
+        for ang in (-72, -50, -29, 29, 50, 72):                     # hour-lines fanning from the foot, grooved and inlaid
+            a = math.radians(ang)
+            d = K.nrm(mu * math.cos(a) + mx * math.sin(a))
+            # run to just inside the rim
+            rel = foot - mc
+            b_ = 2 * (rel @ d)
+            c_ = rel @ rel - (R - 0.075) ** 2
+            L = (-b_ + math.sqrt(b_ * b_ - 4 * c_)) / 2
+            p0, p1 = foot + d * 0.12 + mn * 0.082, foot + d * L + mn * 0.05
+            if detail:
+                S.sub(Capsule(p0, p1, 0.016), k=0.004)
+            self.grooves.append((p0, p1))
         return S
 
     def eye_sculpt(self, detail):
         S = Sculpt("eyes")
         mc, mu, mn, mx = self.MC, self.MU, self.MN, self.MX
+        ax = np.stack([mx, mu, mn])
         for sx, tag in ((1, "eyeL"), (-1, "eyeR")):
-            e = mc + mu * 0.12 + mx * 0.15 * sx
-            S.add(Ellipsoid(e + mn * 0.045, (0.08, 0.08, 0.055), axes=np.stack([mx, mu, mn])), k=0.0, tag=tag)
+            e = mc + mu * self.EYE_U + mx * self.EYE_X * sx
+            S.add(Ellipsoid(e + mn * 0.06, (0.105, 0.105, 0.06), axes=ax), k=0.0, tag=tag)
+        for i in range(12):
+            a = math.radians(15 + 30 * i)
+            rad = mu * math.cos(a) + mx * math.sin(a)
+            S.add(Ellipsoid(self.DC + rad * (self.DIAL_R + 0.10) + mn * 0.09, (0.062, 0.062, 0.03), axes=ax), k=0.0, tag="dlamp")
+        return S
+
+    def dial_sculpt(self, detail):
+        """The hour ring (12-fold, so a turn of one slot loops seamlessly) and the brass cuffs on the forearms."""
+        mu, mn, mx = self.MU, self.MN, self.MX
+        ax = np.stack([mx, mu, mn])
+        S = Sculpt("dial")
+        S.add(sdf.Torus(self.DC, self.DIAL_R, 0.062, axes=ax, rz=0.05), k=0.0, tag="ring")
+        S.add(sdf.Torus(self.DC, self.DIAL_R - 0.11, 0.024, axes=ax, rz=0.024), k=0.0, tag="ring")
+        for i in range(12):
+            a = math.radians(15 + 30 * i)
+            rad = mu * math.cos(a) + mx * math.sin(a)
+            tan = np.cross(mn, rad)
+            bx = np.stack([tan, rad, mn])
+            S.add(RoundBox(self.DC + rad * (self.DIAL_R + 0.06), (0.125, 0.19, 0.06), 0.025, axes=bx), k=0.012, tag="ring")
+            # a spoke tying the inner hoop to the rim
+            S.add(RoundBox(self.DC + rad * (self.DIAL_R - 0.11), (0.024, 0.11, 0.022), 0.01, axes=bx), k=0.008, tag="ring")
+        J = self.J
+        for sx, tag in ((1, "cuffL"), (-1, "cuffR")):
+            e, w_ = np.array(mirror(J["elbow"], sx)), np.array(mirror(J["wrist"], sx))
+            d = K.nrm(w_ - e)
+            for f, rr, tt in ((0.8, 0.165, 0.042), (0.64, 0.195, 0.03), (0.32, 0.235, 0.03)):
+                c_ = e + (w_ - e) * f
+                S.add(sdf.Torus(c_, rr, tt, axes=sdf.frame(d)), k=0.0, tag=tag)
         return S
 
     def claw_sculpt(self, detail):
@@ -1257,8 +1289,8 @@ class Longshade(Monster):
         return S
 
     def sculpts(self, detail):
-        return {"body": self.body_sculpt(detail), "mask": self.mask_sculpt(detail), "claws": self.claw_sculpt(detail),
-                "eyes": self.eye_sculpt(detail)}
+        return {"body": self.body_sculpt(detail), "mantle": self.mantle_sculpt(detail), "mask": self.mask_sculpt(detail),
+                "claws": self.claw_sculpt(detail), "eyes": self.eye_sculpt(detail), "dial": self.dial_sculpt(detail)}
 
     def tag_sculpt(self, name):
         return self.sculpts(False)[name]
@@ -1278,6 +1310,54 @@ class Longshade(Monster):
             frac[m] = t[m]
         return frac, best
 
+    def _plume_fields(self, V, plumes):
+        """For each vertex its nearest plume: fraction along, |lateral| / local half width (0 centre, 1 edge), a per-plume
+        random in 0..1, and whether it lies on it at all."""
+        n = len(V)
+        best = np.full(n, 1e9)
+        U, X, R = np.zeros(n), np.ones(n) * 9.0, np.zeros(n)
+        for pts, ws, nn, seed in plumes:
+            lo, hi = pts.min(0) - ws.max() - 0.1, pts.max(0) + ws.max() + 0.1
+            idx = np.nonzero(np.all((V >= lo) & (V <= hi), axis=1))[0]
+            if not len(idx):
+                continue
+            P_ = V[idx]
+            segs = len(pts) - 1
+            for i in range(segs):
+                a, b = pts[i], pts[i + 1]
+                ab = b - a
+                t = np.clip(((P_ - a) @ ab) / max(ab @ ab, 1e-9), 0, 1)
+                q = a + t[:, None] * ab
+                d = np.linalg.norm(P_ - q, axis=1)
+                wd = ws[i] + (ws[i + 1] - ws[i]) * t
+                # near in the plume's own metric: a wide plume claims its own width
+                dd = d / np.maximum(wd, 0.03)
+                m = dd < best[idx]
+                k = idx[m]
+                best[k] = dd[m]
+                U[k] = (i + t[m]) / segs
+                side = K.nrm(np.cross(ab, nn))
+                X[k] = np.abs((P_[m] - q[m]) @ side) / np.maximum(wd[m], 0.03)
+                R[k] = ((seed * 0.618) % 1.0)
+        return U, X, R, best
+
+    def _plume_paint(self, V, N, plumes, mask=None):
+        """Dark root -> mid -> pale tip; a darker rib down the middle, long brush streaks along it, a paler face toward the
+        sky. The dark roots lying under the pale tips of the row in front are what makes the mantle read as layers."""
+        P = self.PAL
+        c = lambda k: K.hexc(P[k])  # noqa: E731
+        U, X, R, best = self._plume_fields(V, plumes)
+        col = mix_hex(np.tile(c("plume_root"), (len(V), 1)), c("plume_mid"), sarr(0.1, 0.62, U))
+        col = mix_hex(col, c("plume_tip"), sarr(0.62, 1.0, U) * (0.78 + 0.34 * R))
+        col = mix_hex(col, c("rim"), sarr(0.72, 1.0, X) * sarr(0.3, 0.7, U) * 0.8)            # a lit edge round the billow
+        # smoke: long soft streaks drawn along the plume's own length, not a leaf's rib
+        st = NOISE.fbm(np.stack([X * 3.2 + R * 17.0, U * 1.1 + R * 5.0, R * 9.0], 1), 1.0, 3)
+        col = mix_hex(col, c("plume_root"), sarr(0.02, 0.26, st) * 0.55 * (1 - sarr(0.8, 1.0, U)))
+        col = mix_hex(col, c("rim"), sarr(-0.04, -0.26, st) * 0.32 * sarr(0.2, 0.6, U))
+        col = mix_hex(col, c("plume_warm"), sarr(0.78, 1.0, U) * 0.2)
+        col = mix_hex(col, c("plume_root"), sarr(-0.1, -0.6, N[:, 2]) * 0.8)                 # undersides drop to ink
+        return col, best
+
     def paint(self, part, V, N, tags):
         P = self.PAL
         c = lambda k: K.hexc(P[k])  # noqa: E731
@@ -1286,79 +1366,109 @@ class Longshade(Monster):
         if part == "body":
             col = mix_hex(np.tile(c("ink"), (n, 1)), c("ink_top"), sarr(-0.05, 0.6, nz))
             col = mix_hex(col, c("ink_under"), sarr(-0.2, -0.8, nz))
-            # stretch streaks: long brush lines running down the body toward the tail
             st = NOISE.fbm(V * np.array([7.0, 0.35, 7.0]), 1.0, 3)
-            streak = sarr(0.18, 0.32, st) * sarr(0.0, 0.5, nz)
-            col = mix_hex(col, c("streak"), streak * 0.7)
+            col = mix_hex(col, c("seam"), sarr(0.18, 0.34, st) * 0.45)
             rough = np.full(n, 0.86)
             dmin = np.min(np.stack(list(tags.values())), 0)
-            # smoke billows: a pale crest on each billow's upper face, deep ink in the seams between billows
-            ww = np.clip(1 - (tags["wisp"] - dmin) / 0.02, 0, 1) * (tags["wisp"] < 0.04)
-            crest = np.zeros(n)
-            ratio = np.full(n, 9.0)
-            for c_, r_ in self.billows:
-                dv = V - c_
-                dd = np.linalg.norm(dv, axis=1)
-                m = dd < r_ * 1.3
-                if m.any():
-                    ratio[m] = np.minimum(ratio[m], dd[m] / r_)
-                    crest[m] = np.maximum(crest[m], sarr(0.3, 0.92, dv[m, 2] / np.maximum(dd[m], 1e-6)))
-            seam = sarr(1.01, 1.08, ratio) * (ratio < 9.0)
-            col = mix_hex(col, c("rim"), ww * crest * 0.9)
-            col = mix_hex(col, c("rim_hi"), ww * sarr(0.72, 1.0, crest) * 0.55)
-            col = mix_hex(col, c("seam"), ww * seam * 0.65)
+            # the arms: a dusk upper arm into a dark glove, ruled with three chalk hour bands
+            J = self.J
+            ax = np.abs(V[:, 0])
+            on_arm = sarr(0.42, 0.56, ax) * sarr(1.0, 0.7, V[:, 1])
+            sh, el, wr = np.array(J["shoulder"]), np.array(J["elbow"]), np.array(J["wrist"])
+            Vm = np.stack([ax, V[:, 1], V[:, 2]], 1)
+            ua = np.clip(((Vm - sh) @ (el - sh)) / ((el - sh) @ (el - sh)), 0, 1)
+            fa = np.clip(((Vm - el) @ (wr - el)) / ((wr - el) @ (wr - el)), 0, 1)
+            near_fa = np.linalg.norm(Vm - (el + fa[:, None] * (wr - el)), axis=1) < np.linalg.norm(Vm - (sh + ua[:, None] * (el - sh)), axis=1)
+            col = mix_hex(col, c("hand"), on_arm * near_fa * sarr(0.3, 0.8, fa) * 0.8)
+            for f_ in (0.42, 0.72):
+                col = mix_hex(col, c("band"), on_arm * (~near_fa) * sarr(0.05, 0.03, np.abs(ua - f_)) * 0.85)
+            hw_ = np.clip(1 - (tags["hand"] - dmin) / 0.02, 0, 1) * (tags["hand"] < 0.04)
+            col = mix_hex(col, c("hand"), hw_ * 0.9)
+            # plumes (their own colour scheme where the wisp tag owns the surface)
+            pc, best = self._plume_paint(V, N, self.plumes)
+            ww = np.clip(1 - (tags["wisp"] - dmin) / 0.03, 0, 1) * (tags["wisp"] < 0.05)
+            col = col * (1 - ww[:, None]) + pc * ww[:, None]
             rough = rough * (1 - ww) + 0.9 * ww
-            # the flat shadow-tail and its lobes: a pale rim on the edges, a darker core line, chalk hour marks across it
+            # the flat shadow: a dark dial sector: pale edge, chalk arcs and rays from the shoulder, sinking into the stone at its end
             tw = (np.clip(1 - (np.minimum(tags["tail"], tags["lobe"]) - dmin) / 0.02, 0, 1) *
                   (np.minimum(tags["tail"], tags["lobe"]) < 0.04) * (V[:, 2] < 0.35))
             ys, wsd = self.tail_w
             hw = np.interp(V[:, 1], ys, wsd)
             xr = np.abs(V[:, 0]) / np.maximum(hw, 0.05)
-            col = mix_hex(col, c("rim"), tw * sarr(0.62, 1.05, xr) * 0.9)
-            core = sarr(0.16, 0.04, xr) * (V[:, 1] > 1.6)
-            col = mix_hex(col, c("ink"), core * 0.8)
-            for yk in (2.2, 2.95, 3.7, 4.45, 5.2):       # full lines across the shadow, as a dial's hour lines
-                col = mix_hex(col, c("hour"), tw * sarr(0.05, 0.03, np.abs(V[:, 1] - yk)) * sarr(0.78, 0.66, xr) * 0.8)
-            hw_ = np.clip(1 - (tags["hand"] - dmin) / 0.02, 0, 1) * (tags["hand"] < 0.04)
-            col = mix_hex(col, c("hand"), hw_ * 0.6)
+            col = mix_hex(col, c("tail_core"), tw)
+            col = mix_hex(col, c("rim"), tw * sarr(0.9, 1.3, xr) * 0.75)
+            O = np.array([0.0, 0.2])
+            rr = np.hypot(V[:, 0] - O[0], V[:, 1] - O[1])
+            ang = np.degrees(np.arctan2(V[:, 0] - O[0], V[:, 1] - O[1]))
+            for ak, r1 in ((-15.0, 4.7), (-9.0, 5.0), (-3.0, 5.25), (3.0, 5.25), (9.0, 5.0), (15.0, 4.7)):   # the hour rays
+                ray = sarr(0.052, 0.03, np.abs(ang - ak) * np.pi / 180 * rr) * (rr > 2.0) * sarr(r1 + 0.03, r1 - 0.03, rr)
+                col = mix_hex(col, c("hour"), tw * ray * 0.95)
+                tip_ = np.stack([np.sin(np.radians(ak)) * (r1 + 0.1) + O[0], np.cos(np.radians(ak)) * (r1 + 0.1) + O[1]], 0)
+                col = mix_hex(col, c("hour"), tw * sarr(0.11, 0.08, np.hypot(V[:, 0] - tip_[0], V[:, 1] - tip_[1])))   # a stud at its end
+            col = mix_hex(col, c("tail_end"), tw * sarr(4.4, 5.6, V[:, 1]) * 0.9)
             return col, rough
+        if part == "mantle":
+            col, _ = self._plume_paint(V, N, self.mantle_plumes)
+            return col, np.full(n, 0.88)
+        if part == "dial":
+            col = np.tile(c("brass"), (n, 1))
+            dc, mu, mn, mx = self.DC, self.MU, self.MN, self.MX
+            rel = V - dc
+            u_, x_, o_ = rel @ mu, rel @ mx, rel @ mn
+            rr = np.hypot(u_, x_)
+            ang = (np.degrees(np.arctan2(x_, u_)) - 15.0) % 30.0
+            ang = np.minimum(ang, 30.0 - ang)
+            stone = sarr(self.DIAL_R - 0.11, self.DIAL_R - 0.09, rr) * (np.radians(ang) * rr < 0.14) * (rr > self.DIAL_R - 0.13) * (np.abs(o_) < 0.2)
+            col = mix_hex(col, c("brass_dark"), sarr(-0.2, -0.8, N @ mn) * 0.6)
+            col = mix_hex(col, c("stone"), stone)
+            col = mix_hex(col, c("brass_dark"), stone * (np.radians(ang) * rr < 0.016) * (rr > self.DIAL_R + 0.1) * 0.8)
+            return col, 0.42 + 0.3 * stone
         if part == "claws":
             fr, _ = self._along(V, self.claws)
             col = mix_hex(np.tile(c("claw"), (n, 1)), c("claw_tip"), sarr(0.45, 1.0, fr))
             return col, 0.38 + 0.2 * fr
         if part == "eyes":
-            mn = self.MN
-            face = np.clip(N @ mn, 0, 1)
+            face = np.clip(N @ self.MN, 0, 1)
             col = mix_hex(np.tile(c("lamp_edge"), (n, 1)), c("lamp"), sarr(0.3, 0.9, face))
             return col, np.full(n, 0.25)
-        # mask: a chalk DIAL plate: its carved hour-lines fanning from the chin (the gnomon's foot) and the brow band
-        # inlaid in worn brass, dark sockets round the two lamps. (final parity originality F3: the ink tears that
-        # ran down from each socket read as a weeping horror mask; they are gone, the plate reads as a sundial face)
+        # mask: a chalk DIAL plate, its hour-lines fanning from the gnomon's foot inlaid in brass, a brass rim with twelve ticks,
+        # dark sockets round the two lamps (ruling 1: no tears; the plate reads as a sundial)
         mc, mu, mn, mx = self.MC, self.MU, self.MN, self.MX
         rel = V - mc
         u, x, o = rel @ mu, rel @ mx, rel @ mn
+        rr = np.hypot(u, x)
         col = np.tile(c("chalk"), (n, 1))
-        col = mix_hex(col, c("chalk_dirt"), sarr(-0.1, -0.4, u) * 0.5 + sarr(0.0, -0.06, o) * 0.6)
+        col = mix_hex(col, c("chalk_dirt"), sarr(-0.1, -0.5, u) * 0.4 + sarr(0.0, -0.06, o) * 0.8)
         rough = np.full(n, 0.72)
-        if self.grooves:
-            _, gd = self._along(V, [(a, b, 1.0) for a, b in self.grooves])
-            g = sarr(0.018, 0.007, gd)
-            col = mix_hex(col, c("inlay_edge"), g * 0.8)                 # the groove's shadowed walls
-            col = mix_hex(col, c("inlay"), sarr(0.010, 0.004, gd) * 0.9)  # the brass in its floor
-            rough = rough * (1 - g * 0.5) + 0.45 * g * 0.5
+        _, gd = self._along(V, [(a, b, 1.0) for a, b in self.grooves])
+        col = mix_hex(col, c("inlay_edge"), sarr(0.044, 0.03, gd) * 0.85)
+        col = mix_hex(col, c("inlay"), sarr(0.028, 0.018, gd))
+        rough = rough * (1 - sarr(0.03, 0.02, gd) * 0.5) + 0.2 * sarr(0.03, 0.02, gd)
+        R = self.PLATE_R
+        rim = sarr(R - 0.075, R - 0.055, rr)
+        col = mix_hex(col, c("brass"), rim)
+        tick = ((np.degrees(np.arctan2(x, u)) % 30.0))
+        tick = np.minimum(tick, 30.0 - tick)
+        col = mix_hex(col, c("inlay_edge"), rim * (np.radians(tick) * rr < 0.018) * (o > 0) * 0.9)
+        g_ = sarr(0.06, 0.04, np.abs(x)) * (u < 0.1) * (o > 0.03)
+        col = mix_hex(col, c("brass"), g_ * (rr < R - 0.06))                 # the gnomon
         for e in self.eyes_c:
-            d = np.linalg.norm(V - (e + mn * 0.04), axis=1)
-            col = mix_hex(col, c("socket"), sarr(0.13, 0.1, d) * (o > -0.02))
+            d = np.linalg.norm(V - (e + mn * 0.05), axis=1)
+            col = mix_hex(col, c("socket"), sarr(0.155, 0.125, d) * (o > -0.02))
+            col = mix_hex(col, c("brass"), sarr(0.155, 0.14, d) * sarr(0.19, 0.175, d) * (o > 0.02))   # bezel
         return col, rough
 
     def high_material(self, part, grad):
-        if part == "body":
-            return K.painted_material(f"{self.ID}_body_src", "#87839E", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
-                                      chalk=(1.25, 0.75), cavity=(0.35, 1.1), breakup=0.05, top=0.1)
+        if part in ("body", "mantle"):
+            return K.painted_material(f"{self.ID}_{part}_src", "#6F6A8C", grad, fur=0.02, fur_scale=(1.0, 0.6, 1.6),
+                                      chalk=(1.2, 0.8), cavity=(0.4, 1.1), breakup=0.05, top=0.1)
         if part == "mask":
-            return painted_stone(f"{self.ID}_mask_src", self.PAL["chalk"], grad, chisel=0.6, scale=3.0, chalk=(1.12, 0.5))
+            return painted_stone(f"{self.ID}_mask_src", self.PAL["chalk"], grad, chisel=0.5, scale=3.0, chalk=(1.1, 0.5))
+        if part == "dial":
+            return K.painted_material(f"{self.ID}_dial_src", self.PAL["brass"], None, fur=0.0, chalk=(1.35, 0.7), cavity=(0.5, 1.0),
+                                      breakup=0.04, top=0.06)
         if part == "claws":
-            return K.painted_material(f"{self.ID}_claw_src", "#5A5470", grad, fur=0.0, chalk=(2.0, 0.6), breakup=0.04)
+            return K.painted_material(f"{self.ID}_claw_src", "#3B364F", grad, fur=0.0, chalk=(2.0, 0.6), breakup=0.04)
         return K.painted_material(f"{self.ID}_eye_src", self.PAL["lamp"], None, fur=0.0, chalk=(1.0, 1.0),
                                   cavity=(1.0, 1.0), breakup=0.0, top=0.0)
 
@@ -1600,10 +1710,23 @@ class Longshade(Monster):
             P.root_scale = (1.0 + 0.08 * flat, 1.0 + 0.05 * flat, 1.0 - 0.72 * flat)
             return P
 
-        return [Clip("idle", 90, idle, loop=True), Clip("run", RUN_F, run, loop=True),
-                Clip("attack1", 30, attack, impact=0.4), Clip("cast_a1", 35, sweep, impact=0.4),
-                Clip("cast_a2", 40, pool, impact=0.4), Clip("cast_a3", 65, full_length, impact=0.4),
-                Clip("death", 55, death)]
+        # round 3: the mantle plumes breathe and trail, the hour ring turns. A loop turns a whole number of ring slots (12-fold
+        # symmetric, so the seam does not show); a cast winds it fast, death stops it and the plumes sink flat
+        def moving(fn, cycles, amp, slots, trail=0.0, droop=False):
+            def f(t):
+                P = fn(t)
+                for i, (bone, base, dirn, side_) in enumerate(self.mantle_axes):
+                    th = amp * wave(t, 0.09 * i + (0.5 if i % 2 else 0.0) * 0.2, cycles) + trail
+                    if droop:
+                        th = -34.0 * smooth((t - 0.2) / 0.5) + th * (1 - smooth(t / 0.4))
+                    P.R(bone, K.rodrigues_m(side_, math.radians(th)))
+                P.R("dial", K.rodrigues_m(self.MN, slots * math.radians(30.0) * (smooth(t) if not droop and slots > 1.5 else t)))
+                return P
+            return f
+        return [Clip("idle", 90, moving(idle, 2, 9.0, 1), loop=True), Clip("run", RUN_F, moving(run, 1, 15.0, 1, trail=6.0), loop=True),
+                Clip("attack1", 30, moving(attack, 1, 10.0, 2), impact=0.4), Clip("cast_a1", 35, moving(sweep, 1, 12.0, 3), impact=0.4),
+                Clip("cast_a2", 40, moving(pool, 1, 12.0, 3), impact=0.4), Clip("cast_a3", 65, moving(full_length, 2, 14.0, 8), impact=0.4),
+                Clip("death", 55, moving(death, 1, 8.0, 0.25, droop=True))]
 
     def icon_setup(self, rig):
         # the head and the shoulders at the idle's start, three-quarter from the front-left, a little above
@@ -2773,6 +2896,12 @@ class StrayBase(Monster):
             _, gd = Longshade._along(None, V, [(a_, b_, 1.0) for a_, b_ in self.grooves()])
             col = mix_hex(col, c("groove"), sarr(0.032 * self.CRACK, 0.016 * self.CRACK, gd) * 0.95)
             rough = np.maximum(rough, sarr(0.032 * self.CRACK, 0.016 * self.CRACK, gd) * 0.9)
+        gold = getattr(self, "GOLD_STROKES", ())
+        if gold:
+            _, gd = Longshade._along(None, V, [(V3(a_), V3(b_), 1.0) for a_, b_ in gold])
+            g_ = sarr(0.036, 0.024, gd)
+            col = mix_hex(col, c("gold"), g_)
+            rough = rough * (1 - g_) + 0.4 * g_
         for nc, nr in self.notches():
             # one gold-leaf hour notch (a single mark, never a pair)
             d = np.abs(V - V3(nc))
@@ -3156,10 +3285,16 @@ class StrayTick(StrayBase):
     CRACK = 0.5
     COURSE = 0.62                  # CW4: three courses on the 1 m stroke (0.21 m read as wrapped cord)
     # CW4 round 2: a paler stone than the Numeral's (dL* read 16-17 on the camp floor; the bar is 20)
-    PAL = dict(StrayBase.PAL, chalk="#BBB2A1", chalk_hi="#D5CDBD", chalk_lo="#978C7C")
+    # round 3: paler again for the wall shadow of the north camps; a gold-leaf hour mark inlaid across the top serif and a
+    # worn gold band round the stroke, so the piece reads from above as a marked dial stone, not a blank lectern
+    PAL = dict(StrayBase.PAL, chalk="#CDC4B3", chalk_hi="#E4DDCE", chalk_lo="#A89D8C")
     GRIME_Z = 0.15                 # the grit stops at the foot plate: on a 1 m stroke 0.3 dirtied a third of the unit
     EYE_R = 0.018
     W, D = 0.25, 0.25
+    GOLD_STROKES = (((0.17, 0.0, 1.0), (-0.17, 0.0, 1.0)), ((0.17, -0.11, 1.0), (0.17, 0.11, 1.0)),
+                    ((-0.17, -0.11, 1.0), (-0.17, 0.11, 1.0)),
+                    ((-0.135, -0.135, 0.62), (0.135, -0.135, 0.62)), ((0.135, -0.135, 0.62), (0.135, 0.135, 0.62)),
+                    ((0.135, 0.135, 0.62), (-0.135, 0.135, 0.62)), ((-0.135, 0.135, 0.62), (-0.135, -0.135, 0.62)))
 
     def figure(self, detail):
         W, D = self.W, self.D

@@ -175,15 +175,19 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrai
 #   Noon Fair  Shadow Play's raised beast-hands (cast_ult f5) with the puppet rods, in flat noon light on the fair
 CARDS = {
     "tunlan": {
-        "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 30.0, "pitch": -3.0, "lens": 50.0, "fill": 0.84, "x": 0.72,
-                   "key_az": 215.0, "key_el": 18.0, "key_color": "#E9C8A8", "sun": 1.15, "rim_cool": 1.1,
-                   "rim_warm": 0.6, "bounce": 0.35, "bounce_color": "#E2A46A", "accent": 7.0,
-                   # (closing round 2 verify 1, done:4: the lantern is the card's brightest light: the under-mask focal down, the
-                   # lantern up; the hound shadow no longer depends on them, it is on the hung screen in the plate)
+        # (closing round 3, done:4: yaw 30 hid the lantern behind the raised thumb; at 38 it hangs clear between the thumb and
+        # the cheek. The lantern is the key on the cluster list: a point light in the glass spills warm on the hand and the
+        # cheek, the frontal focals are down, and the composite holds the figure under the core: "lantern", _lantern_key)
+        "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 38.0, "pitch": -3.0, "lens": 50.0, "fill": 0.84, "x": 0.72,
+                   "key_az": 215.0, "key_el": 18.0, "key_color": "#E9C8A8", "sun": 1.0, "rim_cool": 1.0,
+                   "rim_warm": 0.5, "bounce": 0.3, "bounce_color": "#E2A46A", "accent": 7.0,
                    "focal": [{"at": "head", "az": 185.0, "el": -25.0, "dist": 0.35, "color": "#FFC27A",
-                              "power": 18.0, "size": 0.10},
+                              "power": 6.0, "size": 0.14},
                              {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
-                              "power": 55.0, "size": 0.08}],
+                              "power": 8.0, "size": 0.08},
+                             {"at": "x_lamp", "point": True, "dist": 0.01, "color": "#FFA45C", "power": 9.0, "size": 0.03}],
+                   "lantern": {"cap": 0.82, "knee": 0.70, "glass": 26.0, "core_r": 15.0, "halo": 0.55, "halo_r": 42.0,
+                               "air": 0.16, "air_r": 150.0, "color": "#FFB56E", "core_color": "#FFF4DC"},
                    "hound": {"x0": 0.085, "x1": 0.555, "top": 0.05, "hem": 0.735, "keystone": 0.07, "cx": 0.325, "cy": 0.385,
                              "length": 0.345, "tilt": 8.0, "soft": 5.0, "depth": 0.82, "pool_x": 0.47, "pool_y": 0.36,
                              "floor": 0.22, "peak": 0.56, "color": "#E2965A", "shadow": "#2E2024"}},
@@ -1894,6 +1898,39 @@ def _fighter_renders(ctx, objs, P, skin, *a, **k):
 
 _render.fighter_renders = _fighter_renders
 
+# ── the lantern is the card's key (closing round 3, done:4: measured as a frame maximum on a cluster list, not a centroid) ──
+# CARDS "lantern" = {"pos": ...} in a splash: the focal entry {"point": True} is a shadowless point light in the glass
+# (the warm spill on the hand, the cheek and under the brim, through the bars), and the composite gets the lantern's own
+# light: a white-hot core, a halo round it, and every other highlight of the figure held under it (_lantern_key).
+_LAMP_XY = [None]          # the lantern's place in the frame, measured by the staging's camera
+_orig_stage_lights = _render.stage_lights
+
+
+def _stage_lights(cam, cfg, arm, target, scale=1.0):
+    out = _orig_stage_lights(cam, cfg, arm, target, scale)
+    foc = cfg.get("focal") or []
+    for i, fo in enumerate(foc):
+        ld = bpy.data.lights.get(f"vale_focal{i}")
+        if ld is None:
+            continue
+        if fo.get("point"):
+            ld.type = "POINT"
+            ld.shadow_soft_size = float(fo.get("size", 0.04))
+        ld.use_shadow = not fo.get("point")
+    # (the fewer lights of the next render of this file: the bust must not inherit the splash's third focal)
+    for i in range(len(foc), 8):
+        o = bpy.data.objects.get(f"vale_focal{i}")
+        if o is not None:
+            bpy.data.objects.remove(o, do_unlink=True)
+    if arm is not None and "x_lamp" in arm.pose.bones:
+        from bpy_extras.object_utils import world_to_camera_view
+        c = world_to_camera_view(bpy.context.scene, cam, _render.bone_pos(arm, "x_lamp"))
+        _LAMP_XY[0] = (float(c.x), 1.0 - float(c.y))
+    return out
+
+
+_render.stage_lights = _stage_lights
+
 
 # ── the card's great hound shadow (closing TUN-C3: "a great hound shadow thrown on the backdrop") ────────────
 # (closing round 2 verify 1, done:4: the shadow fell on an unseen wall, so it floated black and streaked across the sky
@@ -1988,6 +2025,56 @@ def _plate(p, kind, w, h):
 
 
 _plates.plate = _plate
+_orig_finish = _plates.finish
+
+
+def _lantern_key(comp, alpha, xy, k):
+    """the lantern as the key of a finished card (display rgb; `alpha` the figure's mask): a warm halo screened over the
+    frame, the core white-hot, and outside the glass the figure's highlights rolled off to `cap` (luma, 0-1), so the frame's
+    maximum is the lantern and no cluster on the face, the hand or the cuff competes with it"""
+    H, W = comp.shape[:2]
+    s = W / 1600.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    d = np.hypot(xx - xy[0] * W, yy - (xy[1] + float(k.get("dy", 0.0))) * H) / s
+    Y = np.array([0.2126, 0.7152, 0.0722], np.float32)
+    out = comp[..., :3].astype(np.float32).copy()
+    # the rest of the figure under the lantern's value
+    keep = np.exp(-(d / float(k.get("glass", 26.0))) ** 4)
+    L = np.maximum(out @ Y, 1e-5)
+    knee, cap = float(k.get("knee", 0.70)), float(k.get("cap", 0.82))
+    over = np.maximum(L - knee, 0.0)
+    Ls = np.where(L > knee, knee + over / (1.0 + over / (cap - knee)), L)
+    g = (Ls / L) * alpha + (1.0 - alpha)
+    out *= (g * (1.0 - keep) + keep)[..., None]
+    # the light: the broad warm air, the halo, the core
+    warm = np.array(scene.hex_srgb(k.get("color", "#FFB56E")), np.float32)
+    hot = np.array(scene.hex_srgb(k.get("core_color", "#FFF4DC")), np.float32)
+    air = float(k.get("air", 0.16)) * np.exp(-d / float(k.get("air_r", 150.0)))
+    halo = float(k.get("halo", 0.55)) * np.exp(-(d / float(k.get("halo_r", 42.0))) ** 2)
+    for a, c in ((air, warm), (halo, warm)):
+        out = 1.0 - (1.0 - out) * (1.0 - a[..., None] * c)
+    core = np.exp(-(d / float(k.get("core_r", 15.0))) ** 2)[..., None]
+    out = out * (1.0 - core) + hot * core
+    # the light in front of the figure may not lift another cluster past the cap (the glass keeps its own value)
+    L = np.maximum(out @ Y, 1e-5)
+    over = np.maximum(L - knee, 0.0)
+    Ls = np.where(L > knee, knee + over / (1.0 + over / (cap - knee)), L)
+    rim = np.exp(-(d / float(k.get("glass", 26.0))) ** 4)
+    out *= ((Ls / L) * (1.0 - rim) + rim)[..., None]
+    res = comp.copy()
+    res[..., :3] = np.clip(out, 0.0, 1.0)
+    return res
+
+
+def _finish(fg, p, kind, post=1.0):
+    comp = _orig_finish(fg, p, kind, post)
+    k = CARDS.get(p.get("sid"), {}).get("splash", {}).get("lantern")
+    if kind == "splash" and k and _LAMP_XY[0] is not None:
+        comp = _lantern_key(comp, fg[..., 3].astype(np.float32), _LAMP_XY[0], k)
+    return comp
+
+
+_plates.finish = _finish
 
 # the health bar (src/render/actors.ts: art height + 0.35 m, the 15 px bar centred there): from the 52 degree camera the
 # 1.10 m brim's far edge (r 0.55, z 1.89) projects ABOVE an anchor at 2.05 + 0.35 m, so the bar sits on the back of the

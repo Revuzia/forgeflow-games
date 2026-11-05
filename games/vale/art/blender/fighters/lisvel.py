@@ -1879,7 +1879,7 @@ PAINT_BASE = dict(
     chevron="#878C90", tunic="#8A867E", belt="#40372F", strap="#3F3630", bracer="#433A34", buckle="#4A4743",
     legs="#34302E", boots="#4B433D", sole="#24211F", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
     quiver_in="#211B17", wood="#C6BDAB", grip="#3E3530", shaft="#BDB29E", fletch="#A9B6C0", string="#CFC8B8",
-    rope="#9A8F7A", skin="#B48F78", tab="#3B322C", brooch="#B6B1A6", neck="#8A6A58", ink="#2E2A26",
+    rope="#9A8F7A", skin="#B48F78", tab="#3B322C", brooch="#B6B1A6", neck="#8A6A58", ink="#2E2A26", page="#C9BFA5",
     fan_shaft="#D2C9B6", fan_fletch="#C4D0D9")
 PAINT_SKIN = {
     # Gorgewalk: the keepers of the Needlespan gorge: slate limbs, gorge-rope bindings and trims, the brief's
@@ -1889,10 +1889,13 @@ PAINT_SKIN = {
                              holster="#464B51", qstrap="#3F4348", wrap="#ABA79C", cowl="#A9A599", fletch="#A49C8A",
                              grip="#5A544B", bracer="#4A443D"),
     # Almanac: a page of the season almanac: parchment limbs ruled in ink, a parchment tabard ruled in ink with an
-    # ink border, ink fletching plates, an ink-dark quiver
+    # ink border, ink fletching plates, an ink-dark quiver. (CW5 round 3, client:CL-1: all parchment, the figure read
+    # one beige at dE 16.6: the line's plum-slate ledger ink (Burdam's, hue ~265: a 220-degree ink-blue read team azure
+    # beside the bow caps at the game camera) takes the scarf and the sleeves, ruled in parchment, and the head-wrap's
+    # bands are lines of print, so the bust and the game camera both read a page and its ink)
     "lisvel_almanac": dict(wood="#D0C5AC", tabard="#8C8577", trim="#2E2A26", chevron="#2E2A26", fletch="#2E2A26",
                            fan_fletch="#2E2A26", quiver="#3A3430", holster="#2E2A26", qstrap="#2A2623",
-                           wrap="#B8B2A3", cowl="#B6B0A2"),
+                           wrap="#BDB49E", cowl="#3A3548", sleeve="#4E4860", page="#C9BFA5", bracer="#2E2A26"),
 }
 _SKIN = {"id": None}
 MAX_LIN = 0.60          # no texel lighter than ~L* 81 in the albedo (the brief's L* 86 cap after the top light)
@@ -2044,7 +2047,17 @@ def paint_wrap(p, n):
     inward = (n * to_f).sum(1) / (np.linalg.norm(to_f, axis=1) + 1e-6)
     near = np.linalg.norm((p - np.array([0.0, -0.10, 1.70])) * np.array([1.0, 1.0, 0.75]), axis=1) < 0.105
     k = k * (1.0 - 0.35 * _ss(0.1, 0.6, inward) * near)
-    return C("wrap") * k[:, None]
+    col = C("wrap") * k[:, None]
+    if _SKIN["id"] == "lisvel_almanac":
+        # each band a line of print: a ruled line along its upper edge, a column of short inked words under it
+        run = np.arctan2(p[:, 0], -p[:, 1]) * 0.10
+        rule = np.exp(-((s_top - 0.74) / 0.055) ** 2)
+        word = (0.5 + 0.5 * np.sign(np.sin(run * 2.0 * math.pi / 0.062 + 3.0 * _hash(top.astype(float)))))
+        tick = _ss(0.30, 0.40, np.abs(((run % 0.013) / 0.013) - 0.5) * 2.0)
+        text = word * tick * np.exp(-((s_top - 0.40) / 0.17) ** 2)
+        ink = np.clip(0.85 * rule + 0.80 * text, 0, 0.88) * any_ * (1.0 - near)
+        col = _mix(col, C("ink") * k[:, None], ink)
+    return col
 
 
 MASK_KEY = np.array([-0.40, -0.72, 0.57]) / np.linalg.norm([-0.40, -0.72, 0.57])
@@ -2212,7 +2225,14 @@ def paint_cowl(p, n):
     k_ro = k_ro * (1.0 - 0.30 * _ss(0.15, 0.7, inward)) * (1.0 - 0.12 * _ss(-0.3, -0.8, n[:, 2]))
     k = on_roll * k_ro + (1.0 - on_roll) * k_dr
     k = k * _brk(p, 0.035, 8.0, 24.0) * _tl(n, 0.16)
-    return C("cowl") * k[:, None]
+    col = C("cowl") * k[:, None]
+    if _SKIN["id"] == "lisvel_almanac":
+        # the iron-gall scarf ruled in parchment, the rules following the drape (none on the neck roll), a broad
+        # parchment margin rule along the hem
+        rule = np.exp(-(((u + 0.004 * w) % 0.034 - 0.017) / 0.0024) ** 2) * (u > 0.024)
+        hem = np.exp(-((u - 0.014) / 0.0045) ** 2)
+        col = _mix(col, C("page") * k[:, None], np.clip(0.62 * rule + 0.85 * hem, 0, 0.9) * (1.0 - on_roll))
+    return col
 
 
 def _drape_shadow(p):
@@ -2415,6 +2435,10 @@ def paint_sleeves(p, n):
         k = k * (1.0 - 0.46 * v1 * e1_) * (1.0 + 0.16 * c1 * e1_) * (1.0 - 0.42 * v2 * e2_) * (1.0 + 0.14 * c2 * e2_)
         k = k * (1.0 - 0.20 * elb * e3_)
         out[sel] = col[sel] * k[:, None]
+        if _SKIN["id"] == "lisvel_almanac":
+            # (CW5 round 3, client:CL-1) ruled parchment cuff lines round the ink-blue sleeve above the bracer
+            cuff = np.exp(-(((t * lf) % 0.030 - 0.015) / 0.0022) ** 2) * _ss(0.30, 0.42, t)
+            out[sel] = _mix(out[sel], C("page") * k[:, None], 0.55 * cuff)
     return out
 
 
@@ -3607,7 +3631,59 @@ def gen_death(skel) -> anim.Clip:
     N = 45
     keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.30, kneel, "in"), (0.46, kneel2, "in"),
             (0.70, down, "in"), (0.78, bounce, "out"), (0.88, rest, "inout"), (1.0, rest, "linear")]
-    return clip("death", N, keys)
+    fn = anim.keyed(keys)
+    # (CW5 round 3, minor:floor: the kneel -> lying blend took her right toe 28 cm through the floor at f29)
+    return anim.Clip("death", N, False, lambda t: _floor_lift(skel, fn(t)))
+
+
+_FLOOR_PTS = None
+
+
+def _floor_probes(skel) -> list:
+    """(bone, rest point) probes for _floor_lift: every 7th vertex of the bound body (limbs and trunk), carried
+    rigidly by its dominant bone, else rings round those bones (the same gate as art/tools/clip_floor.py, minus the
+    bow, which the death's "_drop" channel lays on the ground on its own)"""
+    keep = ("foot.", "toe.", "shin.", "thigh.", "hand.", "forearm.", "upper_arm.", "shoulder.", "hips", "spine", "chest", "neck", "head")
+    pts = []
+    for o in bpy.data.objects:
+        if o.type != "MESH" or not o.vertex_groups or o.name.endswith("_high"):
+            continue
+        names = [g.name for g in o.vertex_groups]
+        if not any(n.startswith("foot.") for n in names):
+            continue
+        for i, v in enumerate(o.data.vertices):
+            if v.groups and not i % 7:
+                nm = names[max(v.groups, key=lambda x: x.weight).group]
+                if nm.startswith(keep) and nm in skel.rest:
+                    pts.append((nm, o.matrix_world @ v.co))
+    if len(pts) > 60:
+        return pts
+    rings = {"thigh": 0.08, "shin": 0.06, "foot": 0.055, "toe": 0.035, "hand": 0.05}
+    for s_ in "LR":
+        for b, r in rings.items():
+            nm = f"{b}.{s_}"
+            for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+                for k in range(8):
+                    a = 2 * math.pi * k / 8
+                    pts.append((nm, skel.rest[nm] @ V((r * math.cos(a), skel.length[nm] * t, r * math.sin(a)))))
+    return pts
+
+
+def _floor_lift(skel, p: dict, floor: float = 0.004) -> dict:
+    """raise the pose's hips until the probes stay on the floor; a foot still partly on its IK plant rises by less
+    than the hips, so iterate. A pose already on the floor is returned as it is (the body never floats in a hold)"""
+    global _FLOOR_PTS
+    if _FLOOR_PTS is None:
+        _FLOOR_PTS = [(b, skel.rest[b].inverted() @ q) for b, q in _floor_probes(skel)]
+    for _ in range(8):
+        M = skel.fk(anim.resolve(skel, p))
+        lo = min((M[b] @ q).z for b, q in _FLOOR_PTS)
+        if lo >= floor - 0.002:
+            return p
+        p = dict(p)
+        h = p.get("hips_loc", (0.0, 0.0, 0.0))
+        p["hips_loc"] = (h[0], h[1], h[2] + (floor - lo) * 1.5)
+    return p
 
 
 def gen_recall() -> anim.Clip:
@@ -3664,7 +3740,8 @@ def gen_idle_lobby() -> anim.Clip:
     supply the fifth; she turns and looks back over her left shoulder at the camera (a smile behind the visor), then
     counts again (120 f, closed loop)"""
     N = 120
-    low = bowl(rel=(0.16, -0.16, -0.86), aim=(0.30, -0.95, 0.0), up=(0.10, 0.12, 0.99), pole=(0.8, 0.4, -0.3))
+    # (CW5 round 3, minor:floor: the staff's foot stood 15 cm under the floor: the hand higher, the foot on the ground)
+    low = bowl(rel=(0.16, -0.16, -0.61), aim=(0.30, -0.95, 0.0), up=(0.10, 0.12, 0.99), pole=(0.8, 0.4, -0.3))
     rest_r = np.array((-0.16, -0.40, -0.48))
     g = pz(lean=1.0, yaw=-6.0, drop=0.02, L=low, R=rh(k=0.0, rel=tuple(rest_r)), keep_head=0.5)
     # the four beats: down, in across the chest, out to her right, up (a conductor's 4/4 at chest height)
@@ -3758,8 +3835,11 @@ def gen_victory() -> anim.Clip:
 def gen_taunt() -> anim.Clip:
     """taps the bow's lower tip on the ground twice, a clear glass note, and nods"""
     g = G()
-    side_l = bowl(rel=(0.34, -0.10, -0.88), aim=(1.0, -0.15, 0.0), up=(0.0, 0.0, 1.0), pole=(0.7, 0.5, -0.4))
-    up_ = pz(lean=4.0, yaw=8.0, roll=-6.0, drop=0.08, look=(10.0, 10.0, 0.0), L=side_l,
+    # (CW5 round 3, minor:floor: the tapping tip went 27 cm through the floor and never left it: the grip rides at her
+    # waist, the tip comes down onto the ground on each tap and lifts about 10 cm between them)
+    side_l = bowl(rel=(0.34, -0.10, -0.47), aim=(1.0, -0.15, 0.0), up=(0.0, 0.0, 1.0), pole=(0.7, 0.5, -0.4))
+    side_up = bowl(rel=(0.34, -0.10, -0.36), aim=(1.0, -0.15, 0.0), up=(0.0, 0.0, 1.0), pole=(0.7, 0.5, -0.4))
+    up_ = pz(lean=4.0, yaw=8.0, roll=-6.0, drop=0.08, look=(10.0, 10.0, 0.0), L=side_up,
              R=rh(k=0.0, rel=(-0.10, -0.25, -0.80)))
     tap = pz(lean=6.0, yaw=8.0, roll=-8.0, drop=0.13, look=(14.0, 12.0, 0.0), L=side_l,
              R=rh(k=0.0, rel=(-0.10, -0.25, -0.80)))

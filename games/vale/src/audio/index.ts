@@ -381,6 +381,10 @@ class Engine implements ValeAudioPort {
   private mix!: GainNode;
   private master!: GainNode;
   private limiter!: DynamicsCompressorNode;
+  /** dev / probes: per cue, the sum of its started voices' squared gains (what each cue adds to the mix, with its file's energy) */
+  readonly heard = new Map<string, number>();
+  /** MIX_TRIM_DB, between the master and the limiter (see `buses`) */
+  private trim!: GainNode;
   /** `soften`'s compressor and its makeup (wired between the mix and the master while it is on) */
   private soft!: DynamicsCompressorNode;
   private softMakeup!: GainNode;
@@ -596,6 +600,7 @@ class Engine implements ValeAudioPort {
     const trim = ctx.createGain();
     trim.gain.value = Math.pow(10, MIX_TRIM_DB / 20);
     trim.connect(limiter);
+    this.trim = trim;
     this.master = ctx.createGain();
     this.master.connect(trim);
     this.mix = ctx.createGain();
@@ -666,8 +671,8 @@ class Engine implements ValeAudioPort {
 
   /** dev / harness: the output graph (the probes meter `out`: what reaches the speakers, after the soft clip; the
    *  limiter's own output is before it) */
-  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; out: GainNode; master: GainNode; bus: Record<Bus, GainNode> } | null {
-    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, out: this.out, master: this.master, bus: Object.fromEntries(this.bus) as Record<Bus, GainNode> } : null;
+  get graph(): { ctx: AudioContext; limiter: DynamicsCompressorNode; trim: GainNode; out: GainNode; master: GainNode; bus: Record<Bus, GainNode> } | null {
+    return this.ctx ? { ctx: this.ctx, limiter: this.limiter, trim: this.trim, out: this.out, master: this.master, bus: Object.fromEntries(this.bus) as Record<Bus, GainNode> } : null;
   }
 
   /** dev / harness: the cue ids on the alert path */
@@ -878,6 +883,7 @@ class Engine implements ValeAudioPort {
       } else src.start();
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
+      this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + (c.gain * att * gainMul) ** 2);
       o.onVoice?.(v, buf);
     };
     // a decoded file starts now, inside the event's call: a promise's then() would wait for the rest of the frame

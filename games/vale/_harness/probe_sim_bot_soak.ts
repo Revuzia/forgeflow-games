@@ -124,6 +124,8 @@ const LINEUP = opt('lineup', 'rotate');
 /** which weaker tiers the mirror suite plays the veteran against */
 const MIRROR_WEAK = opt('mirror-weak', 'novice,adept').split(',');
 const HUMAN_CUT = 540;
+/** diagnostics (CW3s r3): every 10 s, per seat, [mode, health share, m to the nearest living enemy fighter] in the report's games */
+const TRACE = has('trace');
 
 // ── catalog ─────────────────────────────────────────────────────────────────────────────────────
 function loadCatalog(): CatalogT {
@@ -266,6 +268,8 @@ interface GameRec {
   human: number;
   /** vision item actives used (a Spare Lamp set) per seat (CW2 handoff: bots never warded) */
   lamps?: number[];
+  /** --trace: samples every 10 s */
+  trace?: { t: number; s: [string, number, number][] }[];
 }
 
 const LANE_MODES = new Set(['lane', 'trade', 'push', 'allin']);
@@ -358,6 +362,7 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     [1500, at25],
   ];
   let si = 0;
+  let nextTrace = 180;
   const limit = job.cut > 0 ? job.cut : 3600;
   const seatOf = (ent: number): number => world().players.findIndex((p) => p.entity === ent);
   let guard = 0;
@@ -528,6 +533,17 @@ function runGame(catalog: CatalogT, job: Job): GameRec {
     }
     const t = sim.view.time;
     while (si < samples.length && t >= samples[si][0]) { samples[si][1](); si++; }
+    if (TRACE && t >= nextTrace) {
+      nextTrace += 10;
+      const ps = world().players;
+      (rec.trace ??= []).push({ t, s: ps.map((pl, i) => {
+        const f = pl.ent;
+        if (!f || !f.alive) return ['dead', 0, 0];
+        let d = 1e9;
+        for (const o of ps) if (o.ent && o.ent.alive && setup.seats[o.player].team !== setup.seats[i].team) d = Math.min(d, Math.hypot(o.ent.x - f.x, o.ent.y - f.y));
+        return [modeOf(i), Math.round((f.hp / Math.max(1, f.maxHp)) * 100) / 100, Math.round(d)];
+      }) });
+    }
     // settle skillshots (3 s) and telegraphs (their resolve) into the per-seat counters
     while (pendingShots.length && t - pendingShots[0].t > 3) { const ps = pendingShots.shift()!; micro.shots[ps.p][0]++; if (ps.hit) micro.shots[ps.p][1]++; }
     for (let i = pendingTele.length - 1; i >= 0; i--) {
@@ -593,7 +609,7 @@ function runParallel(jobs: Job[], nJobs: number): Promise<GameRec[]> {
   jobs.forEach((j, i) => chunks[i % nJobs].push(j));
   return Promise.all(chunks.filter((c) => c.length).map((chunk) => new Promise<GameRec[]>((done, fail) => {
     // (CW3s r2-bots: the seating reaches the workers: before this every --jobs > 1 run labelled 'shuffle' was seated 'rotate', 12 fixed teams)
-    const pass = ['--lineup', LINEUP, ...(RULES ? ['--rules', RULES] : []), ...(PATCH ? ['--patch', PATCH] : [])];
+    const pass = ['--lineup', LINEUP, ...(TRACE ? ['--trace'] : []), ...(RULES ? ['--rules', RULES] : []), ...(PATCH ? ['--patch', PATCH] : [])];
     const child = spawn(process.execPath, [SELF, '--worker', JSON.stringify(chunk), ...pass], { stdio: ['ignore', 'pipe', 'inherit'] });
     const got: GameRec[] = [];
     let buf = '';

@@ -1,6 +1,7 @@
 // VALE harness — the world under the score: ambience in a real match, metered (final parity AUD-8).
 //
-//   node _harness/probe_audio_mix.mjs [--out <report.json>] [--laning S] [--short S] [--maps rift,bridge,fray]
+//   node _harness/probe_audio_mix.mjs [--out <report.json>] [--laning S] [--short S] [--maps rift,bridge,fray] [--fighter id] [--seed N]
+//   (--fighter pins your seat, autopilot from the match on; --seed fixes the session's rng, so a capture can be repeated)
 //
 // Real Chrome (pw.mjs, fresh profile = DEFAULT settings), the real client at speed 1 with the autopilot playing your
 // seat (?dev=1&render=0&autopilot=1&autoflow=1; render=0: no renderer, so the engine hears from your fighter), the
@@ -32,6 +33,8 @@ const OUT = arg('--out', join(HERE, '_reports', 'fw_W3_mix.json'));
 const LANING_S = Number(arg('--laning', 180));
 const SHORT_S = Number(arg('--short', 60));
 const MAPS = arg('--maps', 'rift,bridge,fray').split(',');
+const FIGHTER = arg('--fighter', null);
+const SEED = arg('--seed', null);
 const QUEUE = { rift: 'rift_coop', bridge: 'bridge_standard', fray: 'fray_standard' };
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
@@ -78,7 +81,7 @@ function shortTerm(blocks, col) {
 
 const failures = [];
 const report = { probe: 'probe_audio_mix', laningS: LANING_S, shortS: SHORT_S, maps: {} };
-const { browser, page, logs } = await open('/?dev=1&render=0&autopilot=1&autoflow=1', { hmr: false });
+const { browser, page, logs } = await open(`/?dev=1&render=0&autopilot=${FIGHTER ? 'match' : '1'}&autoflow=1${SEED ? `&seed=${SEED}` : ''}`, { hmr: false });
 try {
   for (const map of MAPS) {
     if (map !== MAPS[0]) { await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction(() => !!window.__vale, null, { timeout: 60000 }); }
@@ -90,8 +93,13 @@ try {
     await page.evaluate(TAP);
     await vale(page, (v, q) => { (v.state.queueFor ? v.state.queueFor({ queue: q }) : v.session.queue({ queue: q })); return true; }, QUEUE[map]);
     log(map, 'queued', QUEUE[map]);
+    if (FIGHTER) {
+      await page.waitForFunction(() => { const v = window.__vale, s = v.state.draft.value, m = s?.seats.find((x) => x.isYou); return !!v.state.match.value || (s?.phase === 'pick' && s.turn?.action !== 'ban' && s.turn?.players.includes(m?.player)); }, null, { timeout: 120000, polling: 200 });
+      await page.evaluate((f) => { const d = window.__vale.session; d.draft({ a: 'hover', fighter: f }); d.draft({ a: 'lock' }); }, FIGHTER);
+    }
     await waitFor(page, (v) => !!v.state.match.value, 600000);
-    log(map, 'match');
+    const you = await page.evaluate(() => { const m = window.__vale.state.match.value, p = m?.view.players.find((x) => x.player === m.you); return p ? { fighter: p.fighter ?? null, team: p.team } : null; });
+    log(map, 'match', JSON.stringify(you));
     await waitFor(page, (v) => (v.state.match.value?.view.time ?? -1) >= 30, 300000);
     const span = map === 'rift' ? LANING_S : SHORT_S;
     const sync = [];
@@ -109,17 +117,21 @@ try {
       const a = window.__valeAudio;
       const b = window.__mix.blocks.filter((r) => r[0] >= c0);
       window.__mix.blocks = [];
-      return { blocks: b, log: a.log.slice(), rate: a.graph.ctx.sampleRate };
+      return { blocks: b, log: a.log.slice(), rate: a.graph.ctx.sampleRate, trim: a.graph.trim.gain.value };
     }, startCt);
     const cues = await page.evaluate(() => Object.fromEntries(Object.entries(window.__vale?.catalog?.audio?.cues ?? {}).map(([k, c]) => [k, c.bus])));
     const ambLogged = res.log.filter((c) => cues[c] === 'ambience' || /^amb_/.test(c));
     const st = { master: shortTerm(res.blocks, 1), music: shortTerm(res.blocks, 2), ambience: shortTerm(res.blocks, 3), sfx: shortTerm(res.blocks, 4) };
     const masterGain = report.settings?.master ?? 0.8;
     // the same master without the ambience bus (it joins the master unducked by anything else: incoherent sum, the
-    // limiter idle in laning), so the floor's lift is attributed to the ambience and not to the fight's SFX
-    st.masterNoAmbience = shortTerm(res.blocks.map((r) => [r[0], Math.max(r[1] - masterGain * masterGain * r[3], 1e-20)]), 1);
+    // limiter idle in laning), so the floor's lift is attributed to the ambience and not to the fight's SFX. The bus
+    // reaches the tap through the master AND the engine's mix trim: leaving the trim out (it arrived in 5414aeb4, after
+    // this probe) took out only half of the ambience's energy at 3 dB and read the 2.1 dB floor lift as about 0.9.
+    const toLimiter = masterGain * res.trim;
+    st.masterNoAmbience = shortTerm(res.blocks.map((r) => [r[0], Math.max(r[1] - toLimiter * toLimiter * r[3], 1e-20)]), 1);
     const sum = Object.fromEntries(Object.entries(st).map(([k, a]) => [k, a.length ? { p10: +pct(a, 0.1).toFixed(1), p50: +pct(a, 0.5).toFixed(1), p90: +pct(a, 0.9).toFixed(1) } : null]));
     const m = {
+      you, trimGain: +res.trim.toFixed(3),
       seconds: +(res.blocks.length * 4096 / res.rate).toFixed(1), matchTime: [sync[0]?.[1], sync[sync.length - 1]?.[1]].map((x) => (x == null ? null : +x.toFixed(1))),
       emitters: emitters?.map((e) => ({ cue: e.cue, role: e.role, playing: e.playing, att: +e.att.toFixed(2) })) ?? [],
       ambienceCuesLogged: ambLogged.length, ambienceCues: [...new Set(ambLogged)], shortTermLufs: sum,

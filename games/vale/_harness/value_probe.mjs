@@ -104,6 +104,10 @@ const LMK = opt('landmarks', '0');
 const LMK_ONLY = LMK === 'only';
 /** closing CW4 critic:monsters: the neutral-unit review (--monsters only|1; --monsterIds a,b filters by unit def) */
 const MON = opt('monsters', '0');
+/** round 3: --monsterPhases N samples each monster's silhouette N times over its idle (a moth's wing cycle); every sample
+ *  is 12 render frames (0.2 s) on from the last. The report then carries iouCycle per pair: median, worst, and the phase
+ *  count. Default 1 keeps the single-frame gate as it was. */
+const MON_PHASES = Math.max(1, Number(opt('monsterPhases', '1')) | 0);
 const MON_IDS = opt('monsterIds', '').split(',').filter(Boolean);
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
 const LMK_RE_GATED = /[/-](numeral_[a-z]+|vi_slab|lampwright_cart|lampwright_stall(?:_dome)?|fair_stand_[a-z]+)\.glb$/;   // the published catalog's names carry a hash prefix
@@ -907,7 +911,12 @@ for (const map of MAPS) for (const tier of TIERS) {
         if (r.error || r.monsterError) { console.log(`  monster ${mo.def}: ${r.error ?? r.monsterError}`); continue; }
         seen.add(mo.def);
         if (SHOTS) await shot(page, `value_${map}_${tier}_${TAG}_mon_${mo.def}`);
-        monsters[mo.def] = { at: mo.at.map((x) => +x.toFixed(1)), ...r };
+        const sils = [r.sil];
+        for (let ph = 1; ph < MON_PHASES; ph++) {
+          const r2 = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: mo.id, glb: mo.def, at: mo.at, monster: true, actorId: mo.actorId });
+          if (r2.sil) sils.push(r2.sil);
+        }
+        monsters[mo.def] = { at: mo.at.map((x) => +x.toFixed(1)), ...r, ...(MON_PHASES > 1 ? { sils } : {}) };
         console.log(`  monster ${mo.def.padEnd(16)} ${String(r.px).padStart(6)} px  hp ${r.hp}  breakup ${r.breakup}  L* p10/50/90 ${r.unitLstar.join('/')} floor ${r.floorLstar.join('/')} dL ${r.dLstarP50}  chroma ${r.unitChroma} vs ${r.floorChroma}  dE ${r.dE76}`);
       }
       // silhouette IoU between kinds (square-padded screen boxes, 32 x 32)
@@ -918,7 +927,20 @@ for (const map of MAPS) for (const tier of TIERS) {
         iou[`${ids[i]}|${ids[j]}`] = u ? +(n / u).toFixed(2) : null;
       }
       for (const id of ids) { const e = Object.entries(iou).filter(([k]) => k.split('|').includes(id)).sort((a, b) => b[1] - a[1])[0]; monsters[id].maxIoU = e ? { with: e[0].split('|').find((x) => x !== id), iou: e[1] } : null; }
-      report.runs[TAG][`${map}_${tier}`] = { ...(report.runs[TAG][`${map}_${tier}`] ?? {}), tier, viewport: [w, h], t: T, seed: SEED, monsters, monsterRefs: refs, silhouetteIoU: iou };
+      // round 3: the same IoU over the sampled phases (one phase of each kind against every phase of the other)
+      const iouCycle = {};
+      if (MON_PHASES > 1) for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const vals = [];
+        for (const A of monsters[ids[i]].sils ?? []) for (const Bs of monsters[ids[j]].sils ?? []) {
+          let n = 0, u = 0;
+          for (let q = 0; q < A.length; q++) { const x = A[q] === '1', y = Bs[q] === '1'; if (x && y) n++; if (x || y) u++; }
+          if (u) vals.push(n / u);
+        }
+        vals.sort((a, b) => a - b);
+        if (vals.length) iouCycle[`${ids[i]}|${ids[j]}`] = { median: +vals[vals.length >> 1].toFixed(2), worst: +vals[vals.length - 1].toFixed(2), best: +vals[0].toFixed(2), n: vals.length };
+      }
+      for (const id of ids) delete monsters[id].sils;
+      report.runs[TAG][`${map}_${tier}`] = { ...(report.runs[TAG][`${map}_${tier}`] ?? {}), tier, viewport: [w, h], t: T, seed: SEED, monsters, monsterRefs: refs, silhouetteIoU: iou, iouCycle };
       report.generated = new Date().toISOString();
       writeFileSync(REPORT, JSON.stringify(report, null, 1));
       if (MON === 'only') continue;

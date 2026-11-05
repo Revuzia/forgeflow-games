@@ -655,6 +655,9 @@ def sculpts() -> list:
         legs.add(Ellipsoid(knee + (0.0, -0.002, 0.03), (0.060, 0.062, 0.07)).displaced(folds(0.006, 45.0, axis=0), 0.006), k=0.04)
         legs.add(FlatCapsule(knee, ank + (0, 0, 0.1), 0.05, 0.054, 0.042, 0.044, side=(1, 0, 0)), k=0.02)
     legs.add(Ellipsoid((0.0, 0.01, 0.93), (0.15, 0.105, 0.09)), k=0.05)
+    # (CW5 round 3, minor:ulkro-seat-lumps: the thigh tops stood 2 cm proud of the skirt's rounded back at x 12-16 cm, two
+    # black lumps on her rear hips: above the skirt's hem the trousers stay inside its shell)
+    legs.sub(_OutsideSkirt(0.86, 0.016), k=0.004)
     part("legs", legs, "under", "auto", 800)
     wr = Sculpt("wraps")
     for sx in (-1, 1):
@@ -828,6 +831,21 @@ class Displaced_plane(sdf.Prim):
 
     def d(self, P):
         return self.hfn(P) - P[:, 2]
+
+
+class _OutsideSkirt(sdf.Prim):
+    """everything outside the skirt's shell (art: sculpts(), SKIRT) drawn in by `inset`, above z_low"""
+
+    def __init__(self, z_low, inset):
+        self.z = z_low
+        self.shell = FlatCapsule((0.0, 0.0, 1.07), (0.0, 0.008, 0.57), 0.150 - inset, 0.110 - inset, 0.285 - inset,
+                                 0.185 - inset, side=(1, 0, 0))
+
+    def bounds(self):
+        return np.array([-0.5, -0.5, self.z - 0.02]), np.array([0.5, 0.5, 1.3])
+
+    def d(self, P):
+        return np.maximum(-self.shell.d(P), self.z - P[:, 2])
 
 
 class _Slit(sdf.Prim):
@@ -2549,7 +2567,9 @@ def gen_recall() -> anim.Clip:
     to the far horizon; she leans on the thrower, pushes up off the knee and is standing as the recall lands. The
     thrower's hand stays absolute in every key (a lerp between rel and pos targets would jump). First = last."""
     N = 165
-    FK = feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.04), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0)
+    # (CW5 round 3, minor:ulkro-recall-patch: the trailing foot's plant 6 mm higher, in place of the GLB-only 4 mm hips
+    # patch: its toe went to -0.021 m against the floor gate's -0.02)
+    FK = feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.046), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0)
     A_K, U_K = (0.0, -0.05, 1.0), (0.0, -1.0, 0.0)
     P_R, P_L = (-0.8, 0.4, -0.3), (0.5, -0.6, 0.5)
     RK = np.array((-0.30, -0.24, 0.47))

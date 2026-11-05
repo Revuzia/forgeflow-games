@@ -203,7 +203,7 @@ console.log(`S1 Home after each map: ${s1.map((g) => `${g.tag} ${g.mb} MB`).join
 console.log(`S2 match-only files at Home: ${s2.map((g) => `${g.tag} ${g.matchOnly?.length ?? '?'}`).join(', ')}`);
 console.log(`S3 beds at Home: ${s3.map((g) => `${g.tag} [${(g.music ?? []).join(' ')}]`).join(', ')}`);
 console.log(`S4 renderer + GPU at Home: ${s4.map((g) => `${g.tag} ${g.rendererMb} + ${g.gpuMb} = ${g.totalMb} MB`).join(', ')} (<= ${FOOTPRINT_MB})`);
-console.log(`match peaks (reported): ${report.matchPeaks.map((p) => `${p.mode} audio ${p.audioMb} MB in ${p.audioFiles} files at ${Math.round(p.audioAtMatchS ?? 0)} s, renderer + GPU ${p.rendererMb} + ${p.gpuMb} = ${p.totalMb} MB at ${Math.round(p.totalAtMatchS ?? 0)} s`).join('; ')} (against ${FOOTPRINT_MB})`);
+console.log(`match peaks (reported): ${report.matchPeaks.map((p) => !p.polls ? `${p.mode} not polled` : `${p.mode} (${p.polls} polls) audio ${p.audioMb} MB in ${p.audioFiles} files at ${Math.round(p.audioAtMatchS ?? 0)} s, renderer + GPU ${p.rendererMb} + ${p.gpuMb} = ${p.totalMb} MB at ${Math.round(p.totalAtMatchS ?? 0)} s`).join('; ')} (against ${FOOTPRINT_MB})`);
 console.log(`awake ${report.awakeS} s, slept ${report.sleptS} s`);
 console.log(`${pass ? 'PASS' : broke ? 'BROKE' : 'FAIL'} → ${OUT}`);
 process.exit(pass ? 0 : broke ? 2 : 1);

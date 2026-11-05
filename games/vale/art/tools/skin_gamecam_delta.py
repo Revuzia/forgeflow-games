@@ -7,6 +7,11 @@
 Per skin vs base, over the figure pixels (not the flat backdrop or the cast shadow) of the 8 cells: the mean CIE76 dE of the per-pixel
 Lab difference inside the union mask, and the dE of the figure's mean colour. Closing CW5 gate (burdam-M4): the deluxe
 skin's dE >= the standard skin's.
+
+SHEET SETUP (closing CW5 minor:stored-sheet-render-setup, traced): a sheet's light depends on how it was made. A build's three
+QA passes --sky art/out/maps/<first>/sky.hdr (backdrop 193,191,186); a direct three_snapshot run without --sky uses its
+default environment (198,192,181). Numbers compare only between sheets of one setup, so each line prints its sheet's
+backdrop and this tool warns when a skin's differs from its base's (re-render with export.three_qa's --sky).
 """
 import argparse
 import glob
@@ -40,6 +45,13 @@ def row1(path):
     return L, mask & ~shadow
 
 
+def backdrop(path):
+    """the sheet's commonest colour in row 1: tells its render setup apart"""
+    im = np.asarray(Image.open(path).convert("RGB"))
+    v, c = np.unique(im[:im.shape[0] // 3].reshape(-1, 3), axis=0, return_counts=True)
+    return tuple(int(x) for x in v[c.argmax()])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fid")
@@ -52,14 +64,19 @@ def main():
         os.path.basename(p)[6:-4] for p in glob.glob(os.path.join(d, f"three_{a.fid}_*.png"))
         if "clips" not in p)
     Lb, mb = row1(base)
+    bdb = backdrop(base)
     print(f"# skin vs base at the game camera (row 1 of three_*.png, 8 facings): {base}")
     for s in skins:
         Ls, ms = row1(os.path.join(d, f"three_{s}.png"))
+        bds = backdrop(os.path.join(d, f"three_{s}.png"))
         both = mb & ms
         px = float(np.linalg.norm(Ls - Lb, axis=-1)[both].mean())
         mean = float(np.linalg.norm(Ls[ms].mean(0) - Lb[mb].mean(0)))
         print(f"  {s:24s} per-pixel dE76 {px:5.1f} | figure-mean dE76 {mean:5.1f} | mean Lab base "
-              f"{np.round(Lb[mb].mean(0), 1).tolist()} skin {np.round(Ls[ms].mean(0), 1).tolist()} | px {int(both.sum())}")
+              f"{np.round(Lb[mb].mean(0), 1).tolist()} skin {np.round(Ls[ms].mean(0), 1).tolist()} | px {int(both.sum())} | "
+              f"backdrop {bds}")
+        if bds != bdb:
+            print(f"  WARNING {s}: sheet setup differs from the base's (backdrop {bdb}): this line is not comparable")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@
 //   ?autopilot=1 | draft | match   your seat is drafted and/or played by the bot brains
 //   ?speed=N                        every match runs at time scale N (1–16) once it starts
 //   ?autoflow=1                     accept ready checks by itself (the rest of the flow stays yours)
+//   ?seed=N                         the session's rng seed, so a capture can be repeated
 
 import { loadCatalog } from './catalog.ts';
 import { LocalSession } from '../session/index.ts';
@@ -28,6 +29,8 @@ const ap = query.get('autopilot');
 const autopilot = !dev || !ap ? undefined : ap === 'draft' || ap === 'match' ? ap : ap === '1' || ap === 'true' ? true : undefined;
 const speed = dev ? Math.max(1, Math.min(16, Number(query.get('speed')) || 1)) : 1;
 const autoflow = dev && query.get('autoflow') === '1';
+/** ?dev=1&seed=N: the session's rng seed (draft bots, seats, match seeds), so a capture can be repeated */
+const seed = dev && query.get('seed') ? Number(query.get('seed')) >>> 0 : undefined;
 
 // optional lanes, loaded only when present (AUDIO: src/audio/index.ts → createAudioEngine;
 // RENDER: src/render/index.ts → createRenderer, CONTRACT §9). Missing modules are simply skipped.
@@ -44,7 +47,7 @@ loadCatalog().then(
     const serverUrl = query.get('server') ?? (window as unknown as { VALE_CONFIG?: { server?: string | null } }).VALE_CONFIG?.server ?? null;
     let named: LocalSession | null = null;
     const online = serverUrl ? new OnlineLink(serverUrl, c.catalog.version, () => named?.identity.displayName ?? 'Player') : null;
-    const session = new LocalSession({ catalog: c.catalog, dev, online, ...(autopilot !== undefined ? { autopilot } : {}) });
+    const session = new LocalSession({ catalog: c.catalog, dev, online, ...(autopilot !== undefined ? { autopilot } : {}), ...(seed !== undefined ? { seed } : {}) });
     named = session;
     if (speed > 1 || autoflow) {
       session.on((e) => {

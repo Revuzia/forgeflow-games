@@ -412,6 +412,12 @@ class Glasshorn(Creature):
             * _smooth_arr(-0.75, -0.55, y) * _smooth_arr(0.62, 0.5, y)
         col = col * (1 - 0.8 * spine[:, None]) + c("saddle") * 0.8 * spine[:, None]
         col = col * (1 - 0.7 * ticks[:, None]) + c("tick") * 0.7 * ticks[:, None]
+        # round 3 (critic:monsters): a deep umber saddle over the back and a dark line dividing fawn flank from pale belly: the
+        # coat reads in three values from the game camera
+        cover = _smooth_arr(0.05, 0.5, nz) * _smooth_arr(1.1, 1.22, z) * _smooth_arr(-0.5, -0.36, y) * _smooth_arr(0.6, 0.46, y)
+        col = col * (1 - 0.62 * cover[:, None]) + c("saddle") * 0.62 * cover[:, None]
+        divide = _smooth_arr(0.05, 0.02, np.abs(z - 0.97 - 0.05 * np.sin(y * 9.0))) * _smooth_arr(-0.5, -0.4, y) * _smooth_arr(0.55, 0.45, y)
+        col = col * (1 - 0.8 * divide[:, None]) + c("tick") * 0.8 * divide[:, None]
         # rows of cream hour-dots along each flank (a fawn's dapple, laid out like dial marks)
         side = _smooth_arr(0.15, 0.55, np.abs(N[:, 0])) * _smooth_arr(0.85, 0.95, z) * _smooth_arr(1.32, 1.22, z) \
             * _smooth_arr(-0.36, -0.26, y) * _smooth_arr(0.5, 0.4, y)
@@ -420,7 +426,7 @@ class Glasshorn(Creature):
             cy = (y + 0.3) / 0.13 + off
             dy = (cy - np.round(cy)) * 0.13
             dd = np.hypot(dy, z - row_z)
-            dots = np.maximum(dots, _smooth_arr(0.032, 0.022, dd))
+            dots = np.maximum(dots, _smooth_arr(0.046, 0.034, dd))
         col = col * (1 - 0.85 * (dots * side)[:, None]) + c("dot") * 0.85 * (dots * side)[:, None]
         rough = np.full(n, 0.82)
         # tagged regions (nearest tag wins, 1 cm blend)
@@ -1215,6 +1221,16 @@ class Stilltusk(Creature):
             ticks = np.clip(1 - np.abs((y + 0.45) / 0.13 % 1.0 - 0.5) / 0.08, 0, 1) ** 2
             ticks *= _smooth_arr(0.2, 0.35, ang) * _smooth_arr(0.75, 0.6, ang) * _smooth_arr(-0.4, -0.25, y) * _smooth_arr(0.5, 0.38, y)
             col = col * (1 - 0.75 * ticks[:, None]) + c("tick") * 0.75 * ticks[:, None]
+            # round 3 (critic:monsters): the adult's back reads from above: a dark shoulder cape fading down the spine and
+            # hour chevrons across the hide behind it, the bands pointing back along the body, broken by noise at the edges
+            cape = _smooth_arr(0.15, -0.3, y + 0.25 * np.abs(x) + 0.06 * np.sin(x * 11)) * _smooth_arr(0.1, 0.55, nz) * _smooth_arr(0.74, 0.88, z)
+            col = col * (1 - 0.72 * cape[:, None]) + c("mane") * 0.72 * cape[:, None]
+            vv = (y - 0.85 * np.abs(x)) / 0.185 + 0.1 * np.sin(x * 13.0) + 0.08 * np.sin(y * 17.0)
+            u = np.abs(vv % 1.0 - 0.5)
+            chev = _smooth_arr(0.19, 0.11, u) * _smooth_arr(0.72, 0.86, z) * _smooth_arr(0.05, 0.2, y) * _smooth_arr(0.82, 0.68, y)
+            col = col * (1 - 0.82 * chev[:, None]) + c("tick") * 0.82 * chev[:, None]
+            pale = _smooth_arr(0.34, 0.46, u) * _smooth_arr(0.72, 0.9, z) * _smooth_arr(0.05, 0.2, y) * _smooth_arr(0.82, 0.68, y)
+            col = col * (1 - 0.5 * pale[:, None]) + c("stripe") * 0.5 * pale[:, None]
         rough = np.full(n, 0.86)
         dmin = np.min(np.stack(list(tags.values())), 0)
         for tag, key, r in (("mane", None, 0.9), ("snout", "snout", 0.55), ("eye", "eye", 0.15), ("hoof", "hoof", 0.5),
