@@ -609,6 +609,13 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     vec3 kc = pband * ( 0.86 + 0.1 * kr ) * grainN * ( 0.95 + 0.1 * n2 );
     kc *= mix( 0.62, 1.0, smoothstep( 0.0, 0.06, ke ) );
     kc = mix( kc, uMoss * mossN * 0.7, ( 1.0 - smoothstep( 0.0, 0.025, ke ) ) * smoothstep( 0.4, 0.7, nMid ) * 0.6 );
+    // closing env m-2: the flush dial hand from the fountain ring to the shop (terrain.ts): its shaft and tip in the ring's
+    // own inlay, the grooves and hour ticks cut dark; the plaza is painted over the ground's inlay pass, so it reads them here
+    float hhG = 1.0 - smoothstep( -aa, aa, inl.g );
+    float hhC = 1.0 - smoothstep( -aa, aa, inl.r );
+    pc *= 1.0 - 0.34 * hhG;
+    pc = mix( pc, mix( pband, icm, 0.7 ) * grainN * ( 0.96 + 0.08 * n2 ), hhC );
+    pH -= hhG * 0.004;
     pc = mix( pc, kc, kerb );
     pH = mix( pH, 0.012 + smoothstep( 0.0, 0.06, ke ) * 0.02, kerb );
     col = mix( col, pc, pw );

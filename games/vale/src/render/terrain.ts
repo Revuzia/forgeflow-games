@@ -932,6 +932,21 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       laneDecals(strokes, ring, { half: 2.0, every: [2.8, 6.5], seed: 9100 + k * 37, crack: INLAY.groove, chalk: null, pCrack: 0.5, pChalk: 0, keep: onPlate });
     });
   }
+  // closing env m-2: a flush dial hand on each base's plaza, from the fountain ring toward its shop: a thin chalk shaft
+  // between two cut grooves, a small dial diamond at its tip, stopping a metre short of the wall and inside the plaza's kerb
+  if (surface === 'dial' || surface === 'span') for (const b of map.bases ?? []) {
+    const f = b.fountain.at as unknown as V2, sh = b.shop.at as unknown as V2;
+    const dl = Math.hypot(sh[0] - f[0], sh[1] - f[1]) || 1;
+    const ux = (sh[0] - f[0]) / dl, uy = (sh[1] - f[1]) / dl, nx = -uy, ny = ux;
+    const P = (r: number, o = 0): V2 => [f[0] + ux * r + nx * o, f[1] + uy * r + ny * o];
+    const r0 = b.fountain.radius + 0.4;
+    let r1 = r0;
+    while (r1 < r0 + 12 && field(F.wd, ...P(r1 + 1.2)) > 1 && inPlaza(...P(r1 + 1.2), -1)) r1 += 0.25;
+    if (r1 - r0 < 2) continue;
+    strokes.seg(P(r0), P(r1 - 0.5), 0.1, INLAY.chalk);
+    for (const o of [-0.26, 0.26]) strokes.seg(P(r0, o), P(r1 - 0.7, o), 0.05, INLAY.groove);
+    strokes.poly([P(r1 - 0.7), P(r1, -0.32), P(r1 + 0.7), P(r1, 0.32)], 0.08, INLAY.chalk, true);
+  }
   const inlay = bakeInlay(strokes, [SX, SY], 0.125);
   disposables.push(inlay.tex, inlay.fine, inlay.index);
   const inlayU = {

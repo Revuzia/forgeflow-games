@@ -2658,6 +2658,16 @@
      "model": "assets/props/ambient/resin_lamp.glb",
      "at": [
       [
+       13.9,
+       42.9,
+       0
+      ],
+      [
+       156.1,
+       42.9,
+       0
+      ],
+      [
        14.0,
        40.0,
        0
@@ -2741,6 +2751,16 @@
      "model": "assets/props/ambient/banner_aubade.glb",
      "at": [
       [
+       7.8,
+       43.6,
+       12
+      ],
+      [
+       7.8,
+       66.5,
+       -12
+      ],
+      [
        9.5,
        41.0,
        10.1
@@ -2772,6 +2792,16 @@
     {
      "model": "assets/props/ambient/banner_serenade.glb",
      "at": [
+      [
+       162.2,
+       43.6,
+       -12
+      ],
+      [
+       162.2,
+       66.5,
+       12
+      ],
       [
        160.5,
        41.0,

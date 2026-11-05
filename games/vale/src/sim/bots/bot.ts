@@ -409,7 +409,7 @@ export class Bot extends BotBase implements BotController {
         // (a jungler with a camp to take now finishes it first: no shopping trip, and home on low
         // health only once the camp would take more than it has left)
         const camp = this.jungle && kind === 'rift' && this.campAtHand(14);
-        const lowAt = (k.rules.recall ? (lp ? 0.3 : camp ? 0.22 : 0.36) : 0.22) + this.diff.recallBias;
+        const lowAt = (k.rules.recall ? (lp ? 0.25 : camp ? 0.22 : 0.36) : 0.22) + this.diff.recallBias;
         if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
         // (CW3 CL-1: a laner with a wave of its own to take and no enemy fighter in sight takes it before going home,
         // unless it is nearly out — a recall at every trade's end cost the roads their last hits)
@@ -689,7 +689,7 @@ export class Bot extends BotBase implements BotController {
     else if (enF < Infinity) front = Math.max(Math.min(enF, towerP + 4), 4);
     else front = Math.max(towerP + 5, Math.min(l.length * 0.45, enemyTowerP - enemyTowerR - 4));
     // just outside my reach of the contact line (an idle fighter in reach swings at the nearest Wick)
-    const standoff = e.stats.range + e.radius + 1.2;
+    const standoff = e.stats.range + e.radius + (this.k.kind === 'rift' ? 0.8 : 1.2);
     let p = front - standoff - (this.support ? 1.2 : 0);
     if (wary && ownF < 0 && enF < Infinity) p = Math.min(p, enF - WICK_REACH);
     // never park inside the first enemy tower's reach (micro re-checks minions tanking it)

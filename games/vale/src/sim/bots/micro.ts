@@ -848,7 +848,7 @@ export abstract class BotBase {
     const e = this.e;
     if (e.cast || e.dash || this.now < this.castLockUntil || e.order === ORDER_CAST) return false;
     const res = e.resource;
-    if (res && res.model === 'pool' && e.maxRes > 0 && e.res / e.maxRes < 0.45) return false;
+    if (res && res.model === 'pool' && e.maxRes > 0 && e.res / e.maxRes < (this.k.kind === 'rift' ? 0.35 : 0.45)) return false;
     this.m.incoming.build(this.w);
     const inc = this.m.incoming, bit = this.perc.bit;
     const ad = e.attackDef;
@@ -876,13 +876,14 @@ export abstract class BotBase {
         if (!info.dmg.length || !(info.use & (U_DAMAGE | U_EXECUTE | U_WAVECLEAR | U_POKE)) || info.minTargets > 1) continue;
         if (info.delivery === 'dash' || info.delivery === 'blink') continue;
         if (info.tk === 'unit' && !matchesFilter(this.w, e, c, info.filter)) continue;
-        if (estimateDamage(info, e, Math.max(1, s.rank), c) < c.hp + c.shield) continue;
         let land = info.castTime;
         if (info.delivery === 'projectile') { if (d > info.projRange + c.radius * 0.5) continue; land += d / Math.max(1, info.projSpeed); }
         else if (info.tk === 'unit') { if (d > info.range + c.radius) continue; }
         else if (info.tk === 'point' || info.tk === 'direction') { if (info.range > 0 && d > info.range + info.radius * 0.5) continue; land += info.delay; }
         else { if (d > Math.max(info.radius, 1.5) + c.radius) continue; land += info.delay; }
         if (land >= next) continue;
+        // (CW3s r2, G1: what the Wick has left when the cast lands, not what it has now: the hits it is about to take count)
+        if (estimateDamage(info, e, Math.max(1, s.rank), c) < hp - inc.before(c.id, land, bit, true)) continue;
         this.cast(s, info, c, c.x, c.y);
         return true;
       }

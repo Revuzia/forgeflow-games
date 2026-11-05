@@ -685,6 +685,13 @@ function summarise(spots, C, fspots = {}) {
   // minion, Wick, monster or structure): what the world art contributes to the frame's p99 when bots fight in a spot
   const envFrame = lumaStats(pool(hists, envIds), total);
   const envN = pool(hists, envIds)?.n ?? 0;
+  // closing CW4 r2 (info): who owns the frame's pixels above luma 160, the frame p99 gate's level: px per class (class pass, eroded),
+  // so a p99 over the bar names its cause. env = the sum over the environment's classes
+  const nameOf = Object.fromEntries(Object.entries(C).map(([k, v]) => [String(v), k]));
+  const aboveLuma = (e, v) => (e?.luma ?? []).reduce((a, c, i) => (i > v ? a + c : a), 0);
+  const bright160 = { frame: aboveLuma(pool(hists, ['frame']), 160), byClass: {} };
+  for (const id of Object.keys(nameOf)) { const px = aboveLuma(pool(hists, [id]), 160); if (px) bright160.byClass[nameOf[id]] = px; }
+  bright160.env = envIds.reduce((a, id) => a + aboveLuma(pool(hists, [id]), 160), 0);
   const e180 = pool(hists, ['env180'])?.n ?? 0, e180l = pool(hists, ['env180lamp'])?.n ?? 0;
   const fhists = [...hists, ...Object.values(fspots).map((s) => s.hist)];
   const fighter = pool(fhists, [String(C.fighter)]);
@@ -714,7 +721,7 @@ function summarise(spots, C, fspots = {}) {
     fig.medianTop25 = tops.length ? tops[Math.floor(tops.length / 2)] : null;
   }
   return {
-    frame, envFrame, masks, maskSpots: Object.keys(spots).filter((k) => !DYNAMIC_SPOTS.includes(k)),
+    frame, envFrame, bright160, masks, maskSpots: Object.keys(spots).filter((k) => !DYNAMIC_SPOTS.includes(k)),
     env180: { env: envN, other: e180, lamp: e180l, otherShare: envN ? +(e180 / envN).toFixed(5) : 0, lampShareOfFrame: total ? +(e180l / total).toFixed(5) : 0,
       byClass: Object.fromEntries([...new Set(hists.flatMap((h) => Object.keys(h)).filter((k) => k.startsWith('env180_')))].map((k) => [k.slice(7), pool(hists, [k])?.n ?? 0])) },
     fighters: fig,

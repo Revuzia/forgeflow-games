@@ -270,10 +270,11 @@ def _band(c, a, b, hz, r):
     return Fn(d, lo, hi)
 
 
-def crown_diamond(hw, hl, zc, half_t):
+def crown_diamond(hw, hl, zc, half_t, cx=None, cy=0.0):
     """a diamond slab lying in the crown's plane (x across, y along the facing) about height zc"""
-    f = poly2d([(HX, -hl), (HX + hw, 0.0), (HX, hl), (HX - hw, 0.0)])
-    lo, hi = (HX - hw - 0.01, -hl - 0.01, zc - half_t - 0.01), (HX + hw + 0.01, hl + 0.01, zc + half_t + 0.01)
+    cx = HX if cx is None else cx
+    f = poly2d([(cx, cy - hl), (cx + hw, cy), (cx, cy + hl), (cx - hw, cy)])
+    lo, hi = (cx - hw - 0.01, cy - hl - 0.01, zc - half_t - 0.01), (cx + hw + 0.01, cy + hl + 0.01, zc + half_t + 0.01)
 
     def d(P):
         dp = f(P[:, 0], P[:, 1])
@@ -350,9 +351,18 @@ def sculpts() -> list:
 
     # HELM (rigid on the head): a chalk box with a projecting crown ledge, the visor band, the T face opening
     helm = Sculpt("helm")
-    box = RoundBox((HX, 0.0, 2.185), (0.160, 0.170, 0.163), 0.024)
+    # (CW5 r2, ardit-M4 / par:ardit: 'still a plain box': still the concept's flat-topped block, now built like a helm:
+    # chamfered corners, a crown ledge standing 1.6 cm proud, a raised crown plate round the inlay, a collar flare at
+    # the bottom, a carved panel with a riveted boss on each side, a rib down the back; the values in _carve_finish)
+    box = RoundBox((HX, 0.0, 2.185), (0.160, 0.170, 0.163), 0.036)
     helm.add(box.displaced(chips(0.008, 8.0), 0.008), k=0.0)
-    helm.add(RoundBox((HX, 0.0, 2.302), (0.167, 0.177, 0.046), 0.016).displaced(chips(0.009, 7.0), 0.009), k=0.004)
+    helm.add(RoundBox((HX, 0.0, 2.304), (0.176, 0.186, 0.044), 0.016).displaced(chips(0.009, 7.0), 0.009), k=0.004)
+    helm.add(RoundBox((HX, 0.0, 2.345), (0.135, 0.145, 0.012), 0.006), k=0.002)              # the raised crown plate
+    helm.add(RoundBox((HX, 0.0, 2.052), (0.176, 0.186, 0.034), 0.014).displaced(chips(0.006, 8.0), 0.006), k=0.004)  # collar
+    helm.add(RoundBox((HX, 0.176, 2.17), (0.024, 0.014, 0.085), 0.010), k=0.004)             # the back rib
+    for sx in (-1, 1):
+        helm.sub(RoundBox((HX + sx * 0.166, 0.015, 2.172), (0.018, 0.115, 0.058), 0.008), k=0.004)  # the side panel
+        helm.add(Ellipsoid((HX + sx * 0.150, 0.015, 2.172), (0.012, 0.032, 0.032)), k=0.003)  # its boss
     # the visor slit: ONE pale slit under the crown ledge, as on the concept (fix pass 2: the 6 cm band wrapped round
     # the corners plus a brow line read as two stacked saturated bars); the helm's corners stay solid chalk
     helm.sub(RoundBox((HX, -0.18, VISOR[2]), (VISOR[0] + 0.002, 0.05, VISOR[1] + 0.002), 0.005), k=0.004)
@@ -361,13 +371,13 @@ def sculpts() -> list:
     helm.add(RoundBox((HX, -0.163, 2.127), (0.022, 0.016, 0.076), 0.008), k=0.006)          # the nasal bar (to the slit)
     helm.add(RoundBox((HX, -0.172, 2.193), (0.050, 0.010, 0.010), 0.006), k=0.006)          # the nasal's brow root
     helm.inter(HalfSpace((0, 0, 2.018), (0, 0, -1), 0.5), k=0.0)
-    helm.sub(crown_diamond(CROWN_D[0] + 0.010, CROWN_D[1] + 0.016, 2.352, 0.012), k=0.003)   # the crown inlay's pocket
-    part("helm", helm, "chalk", "bone:head", 1500)
+    helm.sub(crown_diamond(CROWN_D[0] + 0.010, CROWN_D[1] + 0.016, 2.357, 0.012), k=0.003)   # the crown inlay's pocket
+    part("helm", helm, "chalk", "bone:head", 1900)
     visor = Sculpt("visor")
     visor.add(RoundBox((HX, -0.160, VISOR[2]), (VISOR[0], 0.012, VISOR[1]), 0.005), k=0.0)    # flush with the helm face
     # a glass diamond set in the flat crown, its long axis along the facing (the Aubade diamond of the spire; the team
     # colour reads from above in every facing, in the top of the figure: review fix 3)
-    visor.add(crown_diamond(CROWN_D[0], CROWN_D[1], 2.343, 0.006), k=0.0)
+    visor.add(crown_diamond(CROWN_D[0], CROWN_D[1], 2.351, 0.006), k=0.0)
     part("visor", visor, "accent", "bone:head", 320, 0.6)
     face = Sculpt("face")
     face.add(Ellipsoid((HX, -0.02, 2.11), (0.118, 0.132, 0.120)), k=0.0)
@@ -394,7 +404,8 @@ def sculpts() -> list:
         pu.add(RoundBox((sx * 0.385, 0.0, 1.915), (0.148, 0.218, 0.080), 0.034, axes=tilt).displaced(chips(0.009, 7.0), 0.009), k=0.0)
         pu.add(RoundBox((sx * 0.365, -0.005, 1.995), (0.118, 0.182, 0.026), 0.016, axes=tilt).displaced(chips(0.007, 9.0), 0.007), k=0.006)
         pu.sub(Capsule((sx * 0.25, -0.225, 1.975), (sx * 0.52, -0.225, 1.955), 0.007), k=0.004)   # the front lip line
-        part(f"pauldron_{s}", pu, "stone", f"bone:shoulder.{s}", 560)
+        pu.sub(crown_diamond(0.050, 0.075, 2.020, 0.016, cx=sx * 0.365, cy=-0.005), k=0.003)  # the carved Aubade diamond
+        part(f"pauldron_{s}", pu, "stone", f"bone:shoulder.{s}", 640)
         pl = Sculpt(f"tier_{s}")
         tc, th, tr = TIER_BOX[s]
         pl.add(RoundBox(tuple(tc), tuple(th), 0.030, axes=tr).displaced(chips(0.008, 8.0), 0.008), k=0.0)
@@ -924,7 +935,9 @@ def _pane(p, n):
     """the dawnglass pane as clear glass (review fix 9: the concept's ghosted fist read as a teal stain on an opaque
     pane): cool pale glass, two broad diagonal glints and a thin sharp one, a soft shade inside the frame, a little
     lighter toward the top (the sky in it)"""
-    b = _hex("#B3C5D1")
+    # (CW5 r2, ardit-M4: 'reads as a pale board in the match': a dawn gradient up the glass, deep cool at the foot to
+    # pale warm at the top, a darker inner rim, a harder glint band, so it reads as glass at 28.5 m)
+    b0, b1 = _hex("#7F9BB2"), _hex("#D5DEDC")
     u = (p[:, 0] * 0.9 + p[:, 2]) / 0.62 + 0.35
     back = n[:, 1] > 0
     u = np.where(back, u + 0.37, u)
@@ -932,10 +945,10 @@ def _pane(p, n):
     g2 = np.clip(np.sin(u * 2 * np.pi * 2.6 + 1.3) * 3.0 - 2.6, 0, 1)
     zf = np.clip((p[:, 2] - 0.40) / 1.40, 0, 1)
     edge = _ss(0.0, 0.045, _window_d(p[:, 0], p[:, 2]))
-    lift = (0.90 + 0.10 * zf) * (0.86 + 0.14 * edge)
-    col = b[None, :] * lift[:, None]
-    hi = np.array([0.90, 0.94, 0.96], dtype=np.float32)
-    k = np.clip(0.45 * g1 + 0.55 * g2, 0, 1)[:, None]
+    lift = 0.74 + 0.26 * edge
+    col = (b0[None, :] * (1 - zf[:, None]) + b1[None, :] * zf[:, None]) * lift[:, None]
+    hi = np.array([0.93, 0.96, 0.97], dtype=np.float32)
+    k = np.clip(0.55 * g1 + 0.75 * g2, 0, 1)[:, None]
     return np.clip(col * (1 - k) + hi[None, :] * k, 0, 1)
 
 
@@ -1022,6 +1035,71 @@ def _bracer_paint(name, p, n):
     lin = lin * (1 - 0.50 * g)[:, None] * (1 + 0.07 * lip)[:, None]
     lin = lin * (1 - 0.15 * _ss(0.0, -0.8, np.sum(n * (r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-6)), axis=1)))[:, None]
     return _srgb(_stone_breakup(p, lin))
+
+
+def _carve_finish(lin, p, n, k, names):
+    """(CW5 r2, ardit-M4) the carved value structure on the chalk: occlusion in every recess and under every ledge, a
+    lit lip on every edge the sculpt carves, as gains on the painted texels (linear light), so the helm, pauldrons and
+    pavise frame hold crisp value breaks at the game camera. The base painting runs through this, so skins inherit it"""
+    gain = np.ones(len(p), dtype=np.float32)
+
+    def under(sel, mask, g):
+        ii = np.nonzero(sel)[0][mask]
+        gain[ii] *= g
+
+    if "helm" in names:
+        sel = k == names.index("helm")
+        hp, hn = p[sel], n[sel]
+        x, y, z = np.abs(hp[:, 0] - HX), hp[:, 1], hp[:, 2]
+        up, wall = hn[:, 2] > 0.7, np.abs(hn[:, 2]) < 0.5
+        m = wall & (z < 2.26) & (z > 2.232)                         # under the crown ledge
+        under(sel, m, 1.0 - 0.46 * _ss(2.232, 2.258, z[m]))
+        m = wall & (z > 2.086) & (z < 2.110)                        # over the collar
+        under(sel, m, 0.60 + 0.40 * _ss(2.086, 2.110, z[m]))
+        under(sel, wall & (z > 2.332), 1.20)                        # the ledge's lit lip
+        under(sel, wall & (z < 2.086) & (z > 2.066), 1.14)          # the collar's lit lip
+        dp = np.maximum(x - 0.135, np.abs(y) - 0.145)               # the crown plate's step
+        under(sel, up & (np.abs(dp) < 0.009), 0.58)
+        under(sel, up & (dp < -0.009) & (dp > -0.022), 1.12)
+        under(sel, up & (dp > 0.026), 1.22)
+        side = np.abs(hn[:, 0]) > 0.6
+        ds = np.maximum(np.abs(y - 0.015) - 0.115, np.abs(z - 2.172) - 0.058)
+        rb = np.hypot(y - 0.015, z - 2.172)
+        under(sel, side & (ds < 0.0), 0.82)
+        under(sel, side & (ds < 0.0) & (ds > -0.013), 0.72)
+        under(sel, side & (ds >= 0.0) & (ds < 0.011), 1.20)
+        under(sel, side & (rb < 0.034), 1.45)
+        under(sel, side & (rb >= 0.034) & (rb < 0.044), 0.60)
+        rear = hn[:, 1] > 0.6
+        under(sel, rear & (x < 0.024) & (z < 2.256) & (z > 2.086), 1.16)
+        under(sel, rear & (x >= 0.024) & (x < 0.038) & (z < 2.256) & (z > 2.086), 0.60)
+        under(sel, wall & (x > 0.146) & (np.abs(y) > 0.156) & (z > 2.11) & (z < 2.25), 1.18)   # the corner chamfers
+    for s_, sx in (("R", -1), ("L", 1)):
+        nm = f"pauldron_{s_}"
+        if nm not in names:
+            continue
+        sel = k == names.index(nm)
+        pp, pn = p[sel], n[sel]
+        q = (pp - np.array([sx * 0.385, 0.0, 1.915])) @ sdf.rot_y(sx * 8).T
+        x, y = np.abs(pp[:, 0] - sx * 0.365), pp[:, 1] + 0.005
+        up, wall = pn[:, 2] > 0.6, np.abs(pn[:, 2]) < 0.5
+        dp = np.maximum(x - 0.118, np.abs(y) - 0.182)               # the upper plate's seat on the block
+        under(sel, up & (dp >= 0.0) & (dp < 0.016), 0.60)
+        under(sel, up & (dp < 0.0) & (dp > -0.012), 1.16)
+        dm = x / 0.050 + np.abs(y) / 0.075                          # the carved diamond
+        under(sel, up & (dm < 0.88), 0.72)
+        under(sel, up & (dm >= 0.88) & (dm < 1.0), 0.50)
+        under(sel, up & (dm >= 1.0) & (dm < 1.14), 1.20)
+        under(sel, wall & (q[:, 2] > 0.052), 1.16)                  # the lit top edge of the block
+        under(sel, wall & (q[:, 2] < -0.050), 0.70)                 # the shaded underside
+    if "pavise_frame" in names:
+        sel = k == names.index("pavise_frame")
+        fp, fn_ = p[sel], n[sel]
+        d = _frame_inside(fp[:, 0], fp[:, 2])
+        face = np.abs(fn_[:, 1]) > 0.6
+        under(sel, face & (d < 0.009), 1.20)
+        under(sel, face & (d > PAV_FRAME_W - 0.012), 0.60)
+    return lin * gain[:, None]
 
 
 def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True, log=print):
@@ -1255,6 +1333,7 @@ def ardit_paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=
         ch_c = cur / ym
         chroma = chroma * (1 - hue) + (chroma / np.maximum(ch_c, 1e-4) * ch_t) * hue
         lin[sel] = chroma * yy[:, None]
+    lin = _carve_finish(lin, p, n, k, names)
     Y = 0.2126 * lin[:, 0] + 0.7152 * lin[:, 1] + 0.0722 * lin[:, 2]
     Yc = np.where(Y > KNEE_Y, KNEE_Y + (Y - KNEE_Y) * SLOPE, Y)
     lin = lin * (Yc / np.maximum(Y, 1e-5))[:, None]
@@ -2040,16 +2119,54 @@ def kneel_pose(bow=0.0) -> dict:
 
 
 def gen_recall() -> anim.Clip:
-    """recall (loops): a vigil on one knee, the pavise stood up at his left, the spear stood on its butt, the head
-    bowed; slow breaths"""
-    N = 90
-    base = kneel_pose()
+    """recall (CW5 r2, par:ardit, was a frozen vigil): one performance, no loop; the client spans it over the whole
+    channel, 5 s of keys over RIFT's 7 s. He heaves the pavise up and steps down onto one knee, stamps pavise and spear
+    into the ground, bows his head; a slow vigil in which he turns the pane to catch the light and looks into it, taps
+    the spear's butt twice as if counting the bell; then the head comes up, the chest opens and he is rising, on his
+    feet again as the recall lands. Every key uses absolute hands (a lerp between rel and pos targets would jump)."""
+    N = 150
+    FK, FP = (0.06, -0.24, 0.0), (-0.02, 0.40, 0.05)
+    kfeet = feet_(l=FK, r=FP, yl=6.0, yr=-10.0, pr=-58.0)
+    RK, LK = np.array((-0.53, -0.30, 0.83)), np.array((0.60, -0.24, 0.93))
+    AR, AP = (-0.04, -0.06, 0.998), (0.04, 0.0, 0.999)
+    POLE_RK, POLE_LK = (-0.8, 0.5, -0.2), (0.8, 0.4, -0.3)
+
+    def R_(dz=0.0):
+        return rhp(RK + (0, 0, dz), aim=AR, pole=POLE_RK)
+
+    def L_(dz=0.0, turn=-12.0):
+        return lhp(LK + (0, 0, dz), aim=AP, face=_yawd(FRONT, turn), pole=POLE_LK)
+
+    stand = pz(R=rhp(W_R), L=lhp(W_L))
+    step = pz(lean=7.0, drop=0.14, dy=0.02, look=(4.0, 0.0, 0.0),
+              feet=feet_(l=(0.05, -0.16, 0.07), r=(-0.01, 0.08, 0.0), pl=8.0, yl=4.0, yr=-6.0),
+              R=rhp(W_R + (0.02, -0.08, 0.04)), L=lhp(W_L + (0.04, -0.08, 0.08), aim=AP))
+    sink = pz(lean=11.0, drop=0.38, dy=0.06, look=(8.0, 0.0, 0.0),
+              feet=feet_(l=FK, r=(-0.02, 0.32, 0.16), yl=6.0, yr=-8.0, pr=-42.0), R=R_(0.22), L=L_(0.24))
+    stamp = pz(lean=14.0, drop=0.585, dy=0.06, look=(24.0, 0.0, 0.0), feet=kfeet, R=R_(), L=L_())
+    kneel = pz(lean=8.0, drop=0.55, dy=0.06, look=(18.0, 0.0, 0.0), feet=kfeet, R=R_(), L=L_())
+    bowed = pz(lean=12.0, drop=0.56, dy=0.06, look=(30.0, 0.0, 0.0), feet=kfeet, R=R_(), L=L_())
+    turn = pz(lean=7.0, yaw=9.0, drop=0.55, dy=0.06, look=(8.0, 30.0, 0.0), feet=kfeet, R=R_(), L=L_(turn=20.0))
+    tap_up = pz(lean=9.0, yaw=4.0, drop=0.54, dy=0.06, look=(14.0, 8.0, 0.0), feet=kfeet, R=R_(0.09), L=L_(turn=8.0))
+    tap = pz(lean=11.0, yaw=4.0, drop=0.555, dy=0.06, look=(18.0, 8.0, 0.0), feet=kfeet, R=R_(), L=L_(turn=8.0))
+    up = pz(lean=0.0, drop=0.50, dy=0.05, look=(-20.0, 0.0, 0.0), feet=kfeet, R=R_(0.03), L=L_(0.02, turn=-6.0))
+    rising = pz(lean=5.0, drop=0.22, dy=0.04, look=(-10.0, 0.0, 0.0),
+                feet=feet_(l=FK, r=(-0.02, 0.20, 0.02), yl=6.0, yr=-6.0, pr=-16.0),
+                R=rhp(RK + (0.0, 0.08, 0.30), aim=AR, pole=POLE_RK),
+                L=lhp(LK + (-0.02, 0.04, 0.26), aim=AP, face=_yawd(FRONT, -4.0), pole=POLE_LK))
+    keys = [(0.0, stand, "linear"), (0.07, step, "inout"), (0.14, sink, "inout"), (0.185, stamp, "accel"),
+            (0.24, kneel, "out"), (0.36, bowed, "inout"), (0.50, turn, "inout"), (0.58, turn, "linear"),
+            (0.635, tap_up, "inout"), (0.665, tap, "accel"), (0.70, tap_up, "out"), (0.73, tap, "accel"),
+            (0.84, up, "inout"), (0.97, rising, "inout"), (1.0, rising, "linear")]
+    fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=False)
 
     def sample(t):
-        b = anim.osc(t, 2)
-        return anim.add(base, anim.P(chest=(1.2 * b, 0, 0), spine=(0.4 * b, 0, 0), head=(1.5 * b, 0, 0)))
+        # two slow breaths over the vigil, faded in and out so the moves above keep their keys
+        w = float(_ss(0.24, 0.32, t) * (1.0 - _ss(0.80, 0.86, t)))
+        b = anim.osc(t, 4) * w
+        return anim.add(fn(t), anim.P(chest=(1.8 * b, 0, 0), spine=(0.6 * b, 0, 0), head=(1.5 * b, 0, 0)))
 
-    return anim.Clip("recall", N, True, sample)
+    return anim.Clip("recall", N, False, sample)
 
 
 def gen_idle_lobby() -> anim.Clip:
