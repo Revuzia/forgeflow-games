@@ -1,0 +1,87 @@
+{
+ "pass": false,
+ "regressions": [],
+ "summary": "INCOMPLETE VERIFY, not a clean pass. The verifier was told to finish while its re-measure was still running, so the live sync, dead, match and session_mem runs did not complete and were stopped. Re-measured here: audio/build.py --gates exit 0 and probe_audio_ultid PASS. Kit, epic, procs, announcer, cc, listener, world, team_private and ambience rest on logs from an earlier verify attempt at 16:03-16:09 (after the last src/audio commit), not on fresh runs. One real defect: the announcer gate passes with 0 lines. Runtime claims stay open for the integration pass.",
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-run 18:16: audio/build.py --gates exit 0, _harness/_reports/fw_CW2_r2v1b_gates.log:56, 0 library cues on kitted areas/zones, 0 under ultimates. K9 not re-run: fw_CW2_r2v1_kits.log (16:09, earlier attempt) shows 4838 kitted areas, 284 ult areas, 0 library requests."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-run: probe_audio_ultid.py exit 0, fw_CW2_r2v1b_ultid.json: 66 pairs, 0 inside take max 5.23. First-300 ms median 19.87 dB is from the 16:06 log; the re-run tail showed the verdict and all-16 line (median 21.22). The as-is closing tool (fw_CW2_r2v1_ultid_tool_asis.txt) still mixes the removed c_ult_release, so its as-heard lines (median 6.09, 14 pairs) are stale by construction; its own-only line reads median 19.92, min 11.09."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-run build gate: fw_CW2_r2v1b_gates.log:73-75: loudest fighter auto swing -26.4 / hit -21.1, Longshade -23.9 / -18.7, Sunsplinter -23.9 / -18.9; monsterDeath is c_monster_fall. Own kit, death and pit presence from fw_CW2_r2v1_epic.log (16:07), not re-run."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "Not independently confirmed in real Chrome. My session_mem run never started because sync was stopped first. The earlier attempt BROKE: fw_CW2_r2v1_session_mem.log, waitFor timed out at 2299 s on rift. Only supporting data: engineer's fw_CW2_r2_session_mem.json (79 MB at each Home) and fw_CW2_r2v1_epic.log (79 MB, 36 files).",
+   "fixHint": "Run node _harness/probe_audio_session_mem.mjs to the end. Find out why the earlier attempt timed out waiting for the rift postgame; if it repeats, the probe or match ending has a stall."
+  },
+  {
+   "id": "done:5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Re-measured: auto band gate, highest f_ulkro_attack_swing 0.55, f_dunsom_attack_swing 0.39 (<= 0.6), fw_CW2_r2v1b_gates.log:52. NOT re-measured: heal, enemyDown and announcer margin; engineer's fw_CW2_r2_runtime_match_t3_1.json reads 1.71 heals/min, enemyDown 1, +6.72 dB. Lamp cues are proven only on a stub batch (probe_audio_announcer.mjs:404-418); lampSet 0 and lampOut 0 in the live engineer capture.",
+   "fixHint": "Run one full match capture; force a real lamp set and kill in it so both cues are heard live."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Logs from the 16:03-16:09 attempt end PASS for kits, epic, procs, announcer, cc, listener, world, team_private, ambience; not re-run after content commit fe33cf48 (18:14). probe_audio_runtime sync, dead and match and session_mem have no completed verifier run this round.",
+   "fixHint": "Re-run the suite on the current tree in the integration pass."
+  },
+  {
+   "id": "critic:audio-runtime",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine: the rAF-relative gates (p95WithinFramePlusOutputPlusHop, engineOverSfxBus) were null in all 3 engineer runs (pump late p95 13.5-14.7 ms vs 3 ms). My sync run started near idle but was stopped during run 2 of 3 with no report written, and load had reached 23. From-pump PASS 3/3 is the engineer's only (fw_CW2_r2_runtime_sync.json). Loudness unverified: engineer read -18.75 and -18.07 at 3.0 dB, but 3.5 dB read -16.07 and -16.59, so spread between captures is wide.",
+   "fixHint": "Integration pass on an idle machine: node _harness/probe_audio_runtime.mjs sync, then one full match. Lead decides whether from-pump stays the primary gate."
+  },
+  {
+   "id": "audio:AUD-C4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Dead state: engineer's fw_CW2_r2_runtime_dead3.json passes (high band -14.13 dB, 4 kHz tone -28.46 dB, 200 Hz -2.76 dB); code at src/audio/index.ts:1525-1536. My dead run did not complete. Engineer reports phase segments and objective layer not built.",
+   "fixHint": "Schedule phase segments and the objective layer as a package in audio/build_music.py, audio/synth/music_match.py and src/audio."
+  },
+  {
+   "id": "audio:AUD-C2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Ruling 9 (owner_rulings.md): voice is an accepted scope gap and does not count against the Audio score. Engineer's not_done is correct; no work is owed."
+  },
+  {
+   "id": "probe:session_mem-S2",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Engineer's fw_CW2_r2_session_mem.json log reads S2 0/0/0. The earlier verifier attempt broke before S2 printed values, and my re-run did not start. Code reviewed: draftCalls frees the calls and prewarm skips slot 'call' (src/audio/index.ts:1161-1177).",
+   "fixHint": "Same run as done:4."
+  },
+  {
+   "id": "probe:runtime-gates",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "announcerPeakOverSfxP99Ge3 passes with no announcer line. fw_CW2_r2_runtime_match_forced2.json: lines 0, linePeak null, peakOverSfxP99 26.06, gate true, pass true. Cause: linePeak - p99 with null linePeak coerces to 0 - p99 (_harness/probe_audio_runtime.mjs, rep.announcer block and gate at :428). Full captures have lines (5-6), so their reading stands.",
+   "fixHint": "Compute the margin only when lines.length > 0, and make the gate null (notMeasured) with 0 lines. Apply the same to medianOverSfxP99 and medianOverTeamfightP99."
+  },
+  {
+   "id": "handoff:CW1:perf",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "Home 79 MB comes from the engineer's report and epic log only; not confirmed in real Chrome by this verify. In-match decoded audio is 226-229 MB at 60 s (engineer log) and 328.8 MB in fw_CW2_r2v1_epic.log. No perf_1080 run here checks the match footprint with prewarm.",
+   "fixHint": "Integration pass: read the match peak with prewarm against CW1's footprint gate."
+  }
+ ]
+}
