@@ -1149,7 +1149,8 @@ class ValeRenderer implements Renderer {
     for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
     // the triangle governor (perf done:7): a frame over the soft mark holds the crowd's rest ink to its nearest units
     if (this.sceneTris > CROWD_INK_TRIS_HIGH) this.crowdInkCap = CROWD_OUTLINE_CROWDED;
-    else if (this.sceneTris < CROWD_INK_TRIS_LOW) this.crowdInkCap = CROWD_OUTLINE_MAX;
+    // (never while the second step runs: its frame is low because it is on, and the two letting go on one frame jumped 140k)
+    else if (this.sceneTris < CROWD_INK_TRIS_LOW && !this.crowdHard) this.crowdInkCap = CROWD_OUTLINE_MAX;
     this.crowdHard = this.crowdHardLatch.update(this.sceneTris, this.crowd.instances);
     this.crowd.end(this.rig.focus.x, this.rig.focus.z, this.crowdInkCap, this.crowdHard);
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit

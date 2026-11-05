@@ -355,7 +355,7 @@ export const CROWD_OUTLINE_MAX = 16;
 export const CROWD_OUTLINE_FAR = 24;
 /** the triangle governor (renderer.ts): over CROWD_INK_TRIS_HIGH triangles in the last frame (a late multi-wave base
  *  push) the rest ink holds to CROWD_OUTLINE_CROWDED unit a set (the nearest the focus) and the accents throw no shadow
- *  of their own, until the frame is back under CROWD_INK_TRIS_LOW (perf budget 500k triangles a frame) */
+ *  of their own, until the frame is back under CROWD_INK_TRIS_LOW with the second step off (perf budget 500k triangles a frame) */
 export const CROWD_OUTLINE_CROWDED = 1;
 export const CROWD_INK_TRIS_HIGH = 440000;
 export const CROWD_INK_TRIS_LOW = 380000;
