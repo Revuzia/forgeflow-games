@@ -1,0 +1,106 @@
+{
+ "wave": "CW5",
+ "round": 2,
+ "verify": 2,
+ "date": "2026-11-04",
+ "pass": false,
+ "summary": "FAIL, narrowly: 7 of 8 at par. Ulkro reaches 7.5 and Lisvel's blocker is closed (real face, recall that moves, patches gone), but Lisvel scores 7.4 because her tabard, tunic and legs are still flat paint and her splash bow reads as a plank. done:4 stays partly: Lisvel's paint, plus three Ervet pairs nobody had measured (5.9-6.9 dE). Two fixes remain: one Lisvel rebuild and a paint grade on Ervet.",
+ "regressions": [],
+ "handoffs": [
+  {
+   "to": "lead / integration",
+   "what": "dist-catalog is stale (manifest 21:32): a live match still serves Ulkro's old 3 s recall, and Lisvel's 21:22 GLB. Run `npm run content` once CW5 settles. My live recall checks routed the current art/out GLBs in with page.route; the game has not loaded them from its own catalog yet."
+  }
+ ],
+ "items": [
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Most of it now holds. Id-masked pairs re-run on the current sheets: Lisvel 10/10 of the engineer's pairs, Ulkro 8/8 visible as run without its groups (plate and glass are its own groups), Burdam 9/9 with trousers:boots 8.6 (fw_CW5_r2v2_<id>_gamecam.txt); Ardit, Vashil, Kemdo and Nurrow show no failing pair. The part maps checked out on Burdam, Lisvel and Ulkro: triangles land in the right body zones and 0.82-0.99 of the raster falls on the figure (_harness/_shots/fw_CW5_r2v2_burdam_idoverlay.png). Two gaps remain. (1) Ervet, which nobody had measured: I dumped its part ids from the cached blend and masked row 1 (fw_CW5_r2v2_ervet_gamecam.txt). Three pairs of different materials miss: helm:crest 5.9, helm:scarf 6.4, breastplate:pauldron 6.9. (2) Lisvel's painted pass only reached the sleeves. Id-masked albedo L* spread / local detail: sleeves 18 / 5.4, but tabard 9 / 1.3, tunic 3 / 1.3, legs 3 / 2.9, against Nurrow tabard 19 / 4.7 and Ardit coat 46 / 3.9 (fw_CW5_r2v2_paint_detail.txt). The Ulkro pass holds. Burdam's pauldron is backlog, see burdam-M2. Still no file lists the 'named' pairs, so the pair lists are the engineer's own choice.",
+   "fixHint": "Grade Ervet's helm, crest, scarf and pauldrons with glb_paint_grade --part-gain; the ervet_dump method (rasterize vale_part from art/.cache/fighters/ervet.blend) gives the map. Lisvel: see lisvel-M3."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Everything but the score holds. three_load_test --budget-kb 1172 OK on 24/24 GLBs (skins with --skin-only), largest ulkro_highrim 1161 KiB (fw_CW5_r2v2_load.txt). lineup_qa silhouetteOk true in art/renders/lineup/fw_CW5_r2r_lineup.json, written after Ulkro's last build; read, not re-run. accentOk false on 6 of 8, a guide band. Ervet recall 6 s. Re-score: Ulkro 7.5 clears, Lisvel 7.4 does not, so 7 of 8 are at par.",
+   "fixHint": "See par:lisvel."
+  },
+  {
+   "id": "par:lisvel",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Score 7.4, up from 7.0; the blocker is closed, she misses par by a little. Closed: at 1600 x 900 the head is about 150 px and has a real nose and mouth: nostril L* 46, nose shadow 49, mouth line 51-52, cheek 62 (_harness/_shots/fw_CW5_r2v2_lisvel_face_px.png, _splash_head.png). Not blank, and the sensitivity class is clear; crown R3 12.9 cm. Portraits, Almanac included, show nose and smile (_portraits.png). Recall really moves: 5 s, head 25.1 cm, hips 23.2 cm, hand.R 55.1 cm (fw_CW5_r2v2_motion.txt, floor -0.015 m), and I ran it live with the current GLB routed in: 5 s over 7 s, 0 wraps, error 0 (_harness/_reports/fw_CW5_r2v3_recall_lisvel.json). card_qa 12/12 for Lisvel and Ulkro, 0 misses (fw_CW5_r2v2_cards.txt). What holds her under par: her largest colour mass is still flat paint (see lisvel-M3), and next to Ardit the difference is plain (_lisvel_vs_ardit.png). The splash bow foreshortens into a wide grained plank across the torso, with no string read (art/out/fighters/lisvel/splash.png). Live she reads well at the game camera (_harness/_shots/fw_CW5_r2v2_live_sheet.png).",
+   "fixHint": "No new face or recall work. Paint the tabard, tunic and legs, then re-stage the splash so the bow reads as a bow, thin and with its string, off the torso. One rebuild should do it."
+  },
+  {
+   "id": "par:ulkro",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, up from 7.4. Recall is now a real performance: clip 5.5 s, head 37.4 cm, hips 36.7 cm, hand.L 61.9 cm, hand.R 45.7 cm, only 0.25 s below 4 cm/s (fw_CW5_r2v2_motion.txt, fw_CW5_r2v2_hold.txt). The kneel-in and rise are visible in fw_CW5_r2r_ulkro_recall_strip.png and live in fw_CW5_r2v3_ulkro_recall_2.png. Live with the current GLB routed in: 5.5 s over 7 s, 0 wraps, error 0, end 0.99 (_harness/_reports/fw_CW5_r2v3_recall_ulkro.json). Floor clean on all 16 clips, recall -0.019 m. Skirt 22.5 deg, tail 7.7 / 14.7 deg, unchanged (fw_CW5_r2v2_chains.txt). Crown gate passes (fw_CW5_r2v2_crown.txt); the wrapped face is canon cloth, no sensitivity issue. Backlog in the minors below."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Base splash and all three portraits reproduce the claim; numbers under par:lisvel. Almanac's nose and smile now read at 512 px (_harness/_shots/fw_CW5_r2v2_portraits.png, top middle)."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The sleeves are done, the rest of the claim is not. Sleeves carry visible fold paint, spread 18, detail 5.4 (fw_CW5_r2v2_lisvel_close.png), and the bow grain shows in the splash. But the claim also names tunic, tabard and leggings: tabard spread 9, detail 1.3; tunic 3 / 1.3; legs 3 / 2.9 (fw_CW5_r2v2_paint_detail.txt). Chest and back panels still read as smooth blue clay in three_lisvel.png row 3.",
+   "fixHint": "Bring the tabard to about Nurrow's level (spread near 19, detail near 4.7) with fold valleys and a stitched edge, and give the legs real folds."
+  },
+  {
+   "id": "finding:lisvel-back-patches",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "The black ragged patches are gone from the back tabard: three_lisvel.png row 3 now (_harness/_shots/fw_CW5_r2v2_lisvel_back.png, _belt_zoom.png) against 97fcafb6 (_lisvel_close_old.png). Both skins clean (_lisvel_skins_close.png). Residual, minor: small shards just under the belt, which show as black flecks on the splash (_lisvel_splash_torso.png)."
+  },
+  {
+   "id": "fighter:burdam:burdam-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Backlog under ruling 8, Burdam stays at 7.5. Id-masked paint reproduced: pauldron L* 1.2 / 19.8 / 63.7, spread 62.5, depth 18.6, inside 15-20. Game camera: 41.6 / 65.1 / 74.6, spread 33.0 pooling the tiers and plates (fw_CW5_r2v2_burdam_gamecam.txt); depth about 23.5 overshoots the band. The paint figures are texel-wide and include faces the camera never sees, so the game-camera figure is the one that counts."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Quiver smears gone, bindings painted closed around the case; dawnglass has a blue core and hard streaks (fw_CW5_r2v2_ulkro_close.png, _ulkro_head.png, three_ulkro.png row 3). Quiver spread 27, detail 5.3, wraps 9 / 3.6 (fw_CW5_r2v2_paint_detail.txt). Boots unchanged at spread 11, a minor. Wraps kept; glb 1144.6 KiB."
+  },
+  {
+   "id": "regression:done-3-5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Grades and rebuilds broke nothing checked here. Burdam Almanac 22.5 >= Stillwater 21.5, Kemdo Long Evening 17.7 >= Highrim 14.7 (fw_CW5_r2v2_skin_gamecam.txt; base sheets were re-shot, so the absolute values moved from verify 1). Ulkro chains as above. Lisvel tabard_fl 35.1 deg, lag 2 f, r 0.96; dash floor -0.001 m (fw_CW5_r2v2_chains_lisvel.txt)."
+  },
+  {
+   "id": "minor:floor",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "clip_floor on Lisvel, same as before the refix: death -0.285 m, taunt -0.273 m, idle_lobby -0.148 m on the bow (fw_CW5_r2v2_motion.txt, identical at 97fcafb6). Not caused by the refix. The lobby one is worth fixing in the rebuild."
+  },
+  {
+   "id": "minor:ulkro-seat-lumps",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Two black faceted lumps on Ulkro's rear hips at the skirt top in the close sheet (_harness/_shots/fw_CW5_r2v2_ulkro_back_zoom.png). Not new: also at 0f174254. Same class as Lisvel's patches. Not visible in game-camera row 1 or live walking away (fw_CW5_r2v2_live_sheet.png), so backlog."
+  },
+  {
+   "id": "minor:ulkro-recall-patch",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Ulkro's recall floor pass rests on a GLB-only hips patch, as the engineer states (source gives -0.021 m against the -0.02 limit). A rebuild loses it. Move it into art/blender/fighters/ulkro.py at the next build."
+  },
+  {
+   "id": "minor:stray-tool",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "art/tools/_tmp_lisvel_review_pose.mjs is still there, untracked.",
+   "fixHint": "Delete it."
+  }
+ ]
+}
