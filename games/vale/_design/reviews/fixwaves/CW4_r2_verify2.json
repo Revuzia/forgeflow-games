@@ -1,0 +1,67 @@
+{
+ "wave": "CW4",
+ "round": 2,
+ "verify": 2,
+ "pass": false,
+ "items": [
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Re-measured at HEAD on all 6 runs: node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 --tag fw_CW4_r3vv2 (_harness/_reports/fw_CW4_r3vv2_b5.json, log /tmp/fw_CW4_r3vv2_b5.log lines 189, 241, 248). 3 FAIL lines: BRIDGE frameP99 164 high and 173 low (bar <= 160), BRIDGE low flash 1.87x (bar >= 2.0x). Everything else passes: RIFT frameP99 116 / 127, FRAY 119 / 120; fog lane and jungle 0.537-0.542. Wallmask RIFT re-run because map_rift.json changed: under50 0/48, minVis 0.73 (fw_CW4_r3vv2_wallmask_rift.json). FRAY wallmask not re-run: no FRAY map file changed since 0/24, minVis 0.765 (fw_CW4_r2vv1_wallmask_fray.json). The gate is unchanged (_harness/value_probe.mjs:811, :819) and owner_rulings.md still ends at rulings 13 and 10a, so nothing relaxes it. Attribution reproduces: bright160 BRIDGE high 87021 px, fighters 73286, env 96; low 24639 px, fighters 18139, env 33; environment-only p99 106 / 107. World art is not the cause. The engineer's not_done is an accurate claim.",
+   "fixHint": "Lead rules on the frame p99 gate (environment-only p99, or accept fighter clusters) and records it. If the gate stays, CW5/CW6 or the fight spot must bring fighter pixels down. No world-art edit can clear it. The flash goes to CW1."
+  },
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Real gains, not at par. Report _harness/_reports/fw_CW4_r3vv2_mon.json, tags fw_CW4_r3vv2_m70, _m370, _m1000 (seed 7), _m1000s11 (seed 11). MET: Longshade t=1000 dL* +26.4, hp 1.54, breakup 10.0, dE 26.7 (was -11.9, 0.66, 3.8, 8.6). Sunsplinter t=370 hp 3.23, dL* 33.7, breakup 30.6 (was hp 2.6); the core is a painted dial with an hour ring. Stilltusk hp 1.58 / 1.70, dL* 28.5 / 20.1. Score row exists: _design/reviews/closing/neutral_units.json, all 10 units. Pairs named last round now pass: resinback|stilltusk 0.42 at t=70; resinback|stilltusk_young 0.37 at t=70; stray_numeral|stray_tick 0.39 / 0.49 / 0.49 at t=70 / 370 / 1000. At t=1000 no single run held both Resinback and a Stilltusk kind, so I compared their stored silhouettes across seeds 7 and 11: 0.44 and 0.43. That also fills the young t=1000 gap the engineer left, by a cross-run method. NOT MET: cross-camp IoU over 0.5 is worse than claimed. t=1000 seed 7: resinback|gloamoth_little 0.68 (claimed 0.61), resinback|gloamoth 0.66 (claimed 0.52), stray_numeral|gloamoth_little 0.60 (claimed 0.53), stray_tick|gloamoth 0.58, stray_tick|gloamoth_little 0.57, stray_numeral|gloamoth 0.56, stray_tick|resinback 0.51. t=70: gloamoth and gloamoth_little|stray_numeral 0.53. t=370: stray_numeral|gloamoth_little 0.54, stray_numeral|gloamoth 0.52. The moth values move with wing phase. By eye these kinds are never confused (colour and shape differ), so the risk is low, but the <= 0.5 gate is unmet. stray_tick dL* 12.0 / 12.7 / 19.9 (engineer 12.0 / 17 / 21.4): well under 20 in wall shadow; 12.7 at t=370 is more than the 2 L* tolerance. stray_numeral 19.6-19.7 is inside tolerance. MY RE-SCORE by eye and metrics: row 6.8, under the 7.5 par bar (engineer self-score 7.0). Units: gloamoth 7.5; glasshorn, gloamoth_little, resinback, stilltusk, stilltusk_young, stray_numeral, sunsplinter 7.0; stray_tick 6.5; longshade 6.0. Longshade weighs most as the epic: it now reads, but as a bare lavender crawler with smooth bubble clusters and plain limbs, not as smoke or shade (_harness/_shots/value_rift_high_fw_CW4_r3vv2_m1000_mon_longshade.png). Sensitivity by eye on my live frames of glasshorn, gloamoth and little, resinback, stilltusk and young, stray_numeral, stray_tick, sunsplinter, longshade: no blocker. Longshade plate and lamp eyes are covered by ruling 1, but see the minor below.",
+   "fixHint": "Longshade is the one fix that moves the row: break the bubble clusters into tapering, overlapping smoke shapes and give the limbs a value pattern, then re-score. Then the Stray Tick's value in wall shadow (or move it out of the shadow). Lead may decide whether the between-camp IoU gate should use a fixed wing pose: the wing-phase spread makes it unstable, and the by-eye read is fine."
+  },
+  {
+   "id": "critic:monsters (Longshade plate read)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Ruling 1 says the plate reads as a sundial with a brass hour-line inlay. The inlay exists in source (art/blender/units/creatures_b.py:1213, :1334-1347), but neither the sheet (art/renders/units/longshade.png, top row) nor a crop of the live frame (_harness/_shots/value_rift_high_fw_CW4_r3g_m1000_mon_longshade.png) shows the lines. It reads as a plain pale pointed plate with two ringed eyes. I read that as owlish, not horror, so it is not a blocker. The engineer's 'clean' sensitivity note holds, but the dial motif does not reach the game camera.",
+   "fixHint": "Deepen and widen the hour-line grooves so at least 3 lines survive at 28.5 m; a lead sensitivity look at the front view would close it."
+  },
+  {
+   "id": "handoff:CW1:polish",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "RIFT env180 other 0.000 % on high and low (1 px on high), BRIDGE 0, FRAY 0 with lamps 0.064 % / 0.059 % of frame (fw_CW4_r3vv2_b5.json). The environment side is clear. BRIDGE frame p99 still FAILs at 164 / 173, fighter-driven (see done:3).",
+   "fixHint": "Lead ruling on the frame p99 gate."
+  },
+  {
+   "id": "handoff:CW1:refix1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Same run: bright160 env 96 / 33 px on BRIDGE, landmark class absent, environment-only p99 106 / 107. Landmarks and props stay cleared. The FAIL line stands pending the ruling.",
+   "fixHint": "As done:3."
+  },
+  {
+   "id": "handoff:r2:BRIDGE low T4 flash",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "BRIDGE low 95.6 -> 178.8, 1.87x, FAIL; BRIDGE high 90.7 -> 191.7, 2.11x (fw_CW4_r3vv2_b5.json). The low tier's peak again sits 10-15 luma under high on every map: RIFT 183.2 vs 195.8, FRAY 179.1 vs 193.9, BRIDGE 178.8 vs 191.7. RIFT low 2.09x and FRAY low 2.23x pass.",
+   "fixHint": "CW1: find why the low-tier disc peak sits under high, and lift it to about 191 at base 95.6. CW1 owns the effect envelope, outside this lane."
+  },
+  {
+   "id": "regression:perf_1080",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "Not run: load average 22-53 during this verify (uptime), 5 other agents active, so frame timings would be meaningless. The engineer did not run it either. It must run in the idle-machine integration pass, because the Longshade rebuild and the other unit rebuilds changed the art.",
+   "fixHint": "Run perf_1080 --prod in the integration pass."
+  },
+  {
+   "id": "regression:typecheck+content+maps",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "npm run typecheck PASS; content:check OK, 0 warnings; npx tsx _harness/probe_maps.ts 102/102."
+  }
+ ],
+ "regressions": [
+  "Between-camp silhouette IoU: the Resinback facing change traded one overlap for others. resinback|gloamoth_little 0.68 and resinback|gloamoth 0.66 at t=1000 (engineer reports about 0.41 for the first pair before the turn). By-eye confusion risk is low, and the wing phase moves these values."
+ ],
+ "summary": "Fail. Monster art improved: Longshade is no longer dark on dark, Sunsplinter's core is painted, the Resinback / Stilltusk overlap is gone and the score row exists. But my re-score of the neutral row is 6.8, under the 7.5 bar, mainly because the epic reads as a bare crawler with bubble clusters. Between-camp silhouettes reach 0.68, worse than the 0.61 claimed. done:3 still fails on BRIDGE frame p99 164 / 173 and BRIDGE low flash 1.87x: the first needs a lead ruling (fighters own the pixels, environment-only p99 is 106 / 107), the second is CW1's. No blocker-class sensitivity problem. perf_1080 not measured because the machine was busy."
+}
