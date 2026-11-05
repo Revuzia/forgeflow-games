@@ -1,0 +1,356 @@
+{
+ "wave": "CW5",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "In fw_CW5_r1_busts.png the Ardit Chalkline face is clear of the spear and Vashil First Bell has a distinct pose. card_qa shows 0 misses on 18 cards. The Lisvel face is still faint. The 2x-plate grain gate still fails, and Vashil and Ardit still share one plate across skins.",
+   "fixHint": "Per-skin plates; readable Lisvel face at 512 px."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The Lisvel tabard passes. Burdam cowl_b swing is 8.8 deg against the 10 deg target, with xcorr r 0.51 and a peak lag of 12 f (fw_CW5_v2_burdam_cowl.txt). The Vashil recall loop is still open (CW1 handoff).",
+   "fixHint": "Cowl swing >= 10 deg; CW1 plays the recall once."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "No id-masked Lab tool was built. The Burdam pauldron ROI spread is 26.7 against 35. The Ulkro wraps are unshipped and Ervet's bevel was not attempted.",
+   "fixHint": "Texel-to-part map; ship the material passes."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Burdam Almanac per-pixel dE is 10.7, still below Stillwater's 10.8 (fw_CW5_r1_burdam_skin_gamecam.txt).",
+   "fixHint": "One more palette step, in the same rebuild that fixes the base size."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Lisvel 7.1, Ardit 7.2, Burdam 7.3 and Ulkro 7.3 are all below 7.5. lineup_qa was not re-run. The Burdam base now fails the load budget at 1205 KiB.",
+   "fixHint": "See the par items."
+  },
+  {
+   "id": "par:lisvel",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "Re-score 7.1. The face is faint at card scale, and the sleeves and materials still read as clay (fw_CW5_r1_lisvel_close.png). card_qa passes 6/6 and the load is OK at 1117 KiB.",
+   "fixHint": "Finish M1 at card scale and M3 sleeve value."
+  },
+  {
+   "id": "par:ardit",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Score 7.2, unchanged. The recall is frozen and the helm is still a plain box (fw_CW5_r1_busts.png, left).",
+   "fixHint": "Recall with motion plus the M4 helm pass."
+  },
+  {
+   "id": "par:burdam",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Score 7.3. Almanac dE 10.7 (needs > 10.8), cowl swing 8.8 deg (needs >= 10), pauldron spread 26.7 (needs >= 35). The base GLB is 1205 KiB, over the 1172 KiB budget.",
+   "fixHint": "One rebuild that closes all three and gets the base under budget."
+  },
+  {
+   "id": "par:ulkro",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Score 7.3, unchanged. The new recall exists only in source, and the shipped GLB is identical to HEAD.",
+   "fixHint": "Build with wraps in ASYM and ship under 1172 KiB."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The 2x crop (fw_CW5_r1_lisvel_faces.png) shows a faint nose and a smile. In the shipped art/out/fighters/lisvel/lisvel_gorgewalk_portrait.png (512 px) the face is a small pale oval under the visor with barely visible features, and the bow fist fills the lower half of the frame.",
+   "fixHint": "Darken the lid line under the visor and the nostril and mouth corners. Frame the bust tighter on the head."
+  },
+  {
+   "id": "fighter:burdam:burdam-M4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "dE 10.7 against Stillwater's 10.8.",
+   "fixHint": "Palette step."
+  },
+  {
+   "id": "fighter:burdam:burdam-M2",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "ROI spread is 26.7 against the 35 target, and the ROI is not id-masked (fw_CW5_r1_burdam_pauldron_roi.txt).",
+   "fixHint": "Deepen recess staining."
+  },
+  {
+   "id": "fighter:ulkro:ULK-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The diagonal wraps appear only in an unshipped test build of 1338-1425 KiB, over budget (fw_CW5_r1_ulkro_three_unshipped.png).",
+   "fixHint": "Ship within budget."
+  },
+  {
+   "id": "fighter:lisvel:lisvel-M3",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The sleeves are still pale, near-uniform cylinders in fw_CW5_r1_lisvel_close.png. hpRMS was not measured.",
+   "fixHint": "Deepen fold value and add weave. Measure hpRMS."
+  },
+  {
+   "id": "fighter:vashil:VAS-M1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "The clip is unchanged: a 6 s loop inside the 7 s channel. The CW1 handoff has not been verified as landed.",
+   "fixHint": "CW1: play the recall once, fitted to the channel."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "vashil-crown-cards",
+   "to": "CW6",
+   "what": "The card pipeline is live: add a CARDS literal to your fighter script (schema in the art/blender/portraits.py header), then run `python3 art/build.py portraits <id> --skins --only splash,portrait` and measure with `python3 art/tools/card_qa.py <id>`. A low pitch is now safe because render._fit_camera keeps the camera above the floor. Odrum still fails the crown gate (R3 4.9 cm): check with `node art/tools/crown_gate.mjs art/out/fighters/odrum`."
+  },
+  {
+   "from": "ardit-burdam",
+   "to": "CW1",
+   "what": "content/vfx.json: give the deluxe skin burdam_almanac an ink-on-parchment vfxTint like the roster's other deluxe lines (ink #2E2A26 core on parchment #D8CDB4 / #A3987F, oxblood #7A2E2A accent). Asked for by burdam-M4."
+  },
+  {
+   "from": "ardit-burdam",
+   "to": "CW3c",
+   "what": "_design/ROSTER.md:152 (owner lane unclear; route to the doc owner if it is not CW3c): the Almanac Ledger line should match _design/fighters/burdam.md section 9: ledger-ink plum-slate coat and skirt #4D4559, ink-felt cowl #3E3A4C, parchment pauldrons ruled in ink with oxblood margin rules #7A2E2A, parchment hem strip with day-marks, the ruled almanac board on the right hip."
+  },
+  {
+   "from": "ardit-burdam",
+   "to": "CW6",
+   "what": "Two pipeline additions you can use (both additive). (1) common/plates._expand_hi now drops its highlight knee from p95 to p80/65/50 when a flat pale surface fills the subject's top 5 %; a card stuck at luma ~199 needs no light changes. (2) A fighter module can define install_card_hooks(); portraits.py calls it on load (Burdam uses it for the render wrappers it otherwise installs only when built). New tools: art/tools/chain_motion.py (GLB chain angle / lag), art/tools/glb_stretch.py (CPU-skinned edge stretch per clip), art/tools/skin_gamecam_delta.py (skin vs base at the game camera), art/tools/decimate_chains.mjs (thins x_ chain tracks, optional --orm-q, to get a GLB back under 1172 KiB)."
+  },
+  {
+   "from": "kemdo-lisvel",
+   "to": "CW3s",
+   "what": "Lisvel is not marked compact and measures heightPx1080 100 (three_snapshot / three QA in /tmp/claude-501/fw_CW5_lisvel_build4.log). Under ruling 11 she must reach >= 105 px, so content/fighters/lisvel.json art.scale needs about x1.05 over its current value. Route to the lead if content/fighters is not CW3s's."
+  },
+  {
+   "from": "kemdo-lisvel",
+   "to": "CW1",
+   "what": "kemdo_long_evening already has vfxTint #9C6FB8 (content/skins/kemdo.json:32). For kemdo-M5's effect half, the kemdo kit defs in content/vfx.json still need element-keyed layers so the tint shows (SKIN-FX)."
+  },
+  {
+   "from": "nurrow-ulkro-ervet",
+   "to": "CW6",
+   "what": "Two additive pipeline features you can use. (1) A CARDS splash entry can set \"box_top\": <m>. It caps the fitted box's top so a raised weapon leaves the frame and the body fills the card (art/blender/common/render.py). (2) A CARDS plate entry can set \"sub_median\": N. It runs N 3x3 median passes on the subject before the paint-over, which clears single-pixel texture speckle that keeps card_qa above 2.5 (art/blender/common/plates.py median3). You can test it without Blender: `python3 art/blender/common/plates.py compose <sid> [--kind splash]`. Also, art/tools/decimate_chains.mjs now has --normal-q N. Do not thin a one-shot clip whose keys the optimizer already made irregular (death): it broke the floor gate."
+  },
+  {
+   "from": "nurrow-ulkro-ervet",
+   "to": "CW1",
+   "what": "nurrow-m5 store copy: content/skins/nurrow.json:33 (Shadeprint) still says 'An ink hat with a light rim over a pale mask'. The skin that ships is a pale printed cone with ink lines and an ink-dipped brim; please reword it."
+  },
+  {
+   "from": "vashil-rest-minors",
+   "to": "CW3c",
+   "what": "The VAS gap-7 halo touches the HP bar. In src/render/actors.ts:705, barHeight = artHeight + 0.35 puts the bar's lower frame 0-1 px above Vashil's halo top. Raise the bar clearance for fighters whose art top is a floating ring (for example +0.08 m), or read a per-fighter bar offset from content. If the render code is CW1's, route it there."
+  },
+  {
+   "from": "vashil-rest-minors",
+   "to": "CW6",
+   "what": "There is a new additive helper, common/anim.floor_lift(skel, pose, floor=0.004, rings=None, extra=(), max_lift=None). It lifts the hips until rings round the shins, feet, toes and hands clear the floor. It skips the lift when the low point is IK-planted, and max_lift caps the rise. Use it in a death's fall blend only, not in holds that already sit on the floor. Bakes are now metal 0 for bible fighters (bake_asset zero_metal). For the residual metal on already-shipped GLBs (Rishal and others), run `python3 art/tools/glb_zero_metal.py art/out/fighters/<id>/*.glb`; it sets metallicFactor to 0 in the JSON only."
+  },
+  {
+   "from": "refix1",
+   "to": "CW1",
+   "what": "VAS-M1, also Ervet and any recall shorter than the 7 s RIFT recall channel (src/render/actors.ts:132): play the recall clip once, scaled to the channel time (timeScale = clipDuration / channelSeconds, LoopOnce, clampWhenFinished), instead of looping a 6 s clip inside 7 s."
+  },
+  {
+   "from": "refix1",
+   "to": "lead / next CW5 round",
+   "what": "Rebuild ulkro (python3 art/build.py fighter ulkro). The source already has the diagonal wraps, the moving recall, and 'wraps' in ASYM so the shin wraps decimate to 800 tris. After the build, run decimate_chains --every 2 --prefix x_ --orm-q 40 --normal-q 70, then the slow clips with --prefix '' --clip idle,idle_lobby,recall,taunt,stunned,victory,channel, and check three_load_test --budget-kb 1172. One Burdam rebuild with Almanac cloth one more step (about #3E3649) and COWL_K about 0.20 should clear dE > 10.8 and cowl swing >= 10 deg. An Ardit rebuild is needed for the recall and the helm form."
+  },
+  {
+   "from": "refix1",
+   "to": "lead",
+   "what": "git push to origin failed all session: 'remote end hung up' / 'cannot lock ref' races, and other agents' pushes were hanging too. My 4 commits are local only; the branch is 14 ahead of origin. Please push once the remote responds."
+  },
+  {
+   "from": "refix2",
+   "to": "lead",
+   "what": "Push failed every time ('remote end hung up', timeouts). All 4 commits are local only; the branch was 51 ahead of origin at last check. Please push once the remote responds."
+  },
+  {
+   "from": "refix2",
+   "to": "lead",
+   "what": "The Mac is on battery with no adapter attached: 14% at last check, load was 34-62. Connect power before further heavy runs."
+  },
+  {
+   "from": "refix2",
+   "to": "lead / next CW5 round",
+   "what": "Ardit needs a rebuild for a moving recall and the helm pass; none of it has been started. It is the remaining par item with no work done."
+  },
+  {
+   "from": "refix2",
+   "to": "lead / next CW5 round",
+   "what": "Shipped GLBs differ from a clean build. Rebuilding Burdam needs scale_track_swing (if COWL_K 0.28 falls short), decimate_chains, and glb_paint_grade: pauldrons with --box -0.80,-0.40,1.48,-0.44,0.40,1.98 --box -0.80,-0.40,1.72,-0.22,0.40,1.98 --box 0.46,-0.45,1.28,0.90,0.45,2.15 --box 0.22,-0.45,1.74,0.90,0.45,2.15 --recess 1.4 --ref-q 80 --q 60, Almanac with --dark-gain 0.72 --dark-l 0.40 --q 62. Rebuilding Ulkro needs decimate_chains, glb_simplify --ratio 0.78 --error 0.004, base colour q56, ORM q30, normal q55; Long Evening base colour q62. A rebuild is also what would give Burdam a part map."
+  },
+  {
+   "from": "refix2",
+   "to": "verifier",
+   "what": "Please re-score Lisvel, Burdam and Ulkro; I did not self-score. Read the lineup results in _harness/_reports/fw_CW5_r2_lineup.log, which I only skimmed. The 2x-plate grain gate should be read under ruling 12."
+  }
+ ],
+ "packages": [
+  {
+   "key": "vashil-crown-cards",
+   "items": [
+    "fighter:vashil:VAS-B1=done",
+    "ruling7:crown-metric=done",
+    "cards:pipeline=partly"
+   ],
+   "commits": [
+    "4ce883ae (vale CW5: Vashil rounded cowl + dark stole, staged per-skin cards, _fit_camera floor guard, card_qa speckle diagnostic)",
+    "6adc2ce8 (earlier attempt: crown gate art/tools/crown_gate.mjs)",
+    "WIP syncs aa788a3e / 7689570a / 8f816f67 carried the earlier and mid-build partial work (CARDS schema, render/plates staging, card_qa, base vashil.glb)"
+   ],
+   "notes": "I continued from the earlier attempt's partial work: hood, stole and CARDS were in vashil.py but unbuilt, and the pipeline code was committed but unverified. The rebuild budget used in this session is one full Vashil rebuild, one render-only re-render of First Bell's cards, three harness rear captures, and one debug Blender bounds run.\n\nOpen for the verifier:\n- The reviewers' grain gate (figure high-pass at most 2x the plate's) fails by its own measure on all 6 cards, while pixel speckle is visually gone. The gate needs a ruling, or a version of it that ignores painted texture.\n- In the First "
+  },
+  {
+   "key": "ardit-burdam",
+   "items": [
+    "fighter:ardit:ardit-M3=done",
+    "fighter:ardit:ardit-M1=partly",
+    "fighter:burdam:burdam-M5=done",
+    "fighter:burdam:burdam-M2=partly",
+    "fighter:burdam:burdam-M4=partly",
+    "fighter:burdam:burdam-M3=partly"
+   ],
+   "commits": [
+    "737e06a7",
+    "b050df73"
+   ],
+   "notes": "Every build of both fighters is used: Ardit 3 rebuilds; Burdam 3, one of them killed partway after its base GLB was checked. Card-only fixes after that were re-rendered from the cache with portraits.py.\n\n1) The grain gate (figure high-pass <= 2x the plate's) fails on all 12 Ardit and Burdam cards, as it does on Vashil. Pixel-scale speckle is now ~1-2.5 against 6+ before. What is left is painted texture detail measured against a plate the Kuwahara brush has smoothed, so this gate needs a ruling or a stronger subject brush.\n\n2) Burdam's GLB went over the 1172 KiB budget once the four skirt panel"
+  },
+  {
+   "key": "kemdo-lisvel",
+   "items": [
+    "fighter:kemdo:kemdo-M3=done",
+    "fighter:kemdo:kemdo-M4=done",
+    "fighter:kemdo:kemdo-M5=done",
+    "ruling7:kemdo-crown=done",
+    "fighter:lisvel:lisvel-M1=partly",
+    "fighter:lisvel:lisvel-M2=done",
+    "fighter:lisvel:lisvel-M3=done",
+    "fighter:lisvel:lisvel-M4=done"
+   ],
+   "commits": [
+    "36d87197 (Kemdo, earlier attempt of this package)",
+    "3e1269a7"
+   ],
+   "notes": "The earlier run of this package died after committing Kemdo (36d87197) and after landing Lisvel's source and renders in wip syncs. I verified the Kemdo work and finished Lisvel.\n\nLisvel base GLB was 1235 KiB and failed the 1172 KiB load-test budget. It is now 1116 KiB, via lisvel.py's own optimize hooks: 8-bit normals, and every bone's rotations thinned to every 2nd key in the slow clips (idle, idle_lobby, recall, taunt, stunned, victory, channel). Base and skins are rebuilt to match.\n\nI used 3 full Lisvel rebuilds (the package cap) plus two portrait-only renders. Open residuals:\n- The tabard "
+  },
+  {
+   "key": "nurrow-ulkro-ervet",
+   "items": [
+    "fighter:nurrow:nurrow-M1=done",
+    "fighter:nurrow:nurrow-M2=done",
+    "fighter:nurrow:nurrow-M3=done",
+    "fighter:ulkro:ULK-M1=done",
+    "fighter:ulkro:ULK-M2=done",
+    "fighter:ulkro:ULK-M3=done",
+    "ruling7:ulkro-crown=done",
+    "fighter:ervet:ervet-M1=done"
+   ],
+   "commits": [
+    "50a4f167",
+    "860e8f41",
+    "0e22ae91",
+    "555c298c",
+    "483efbc9"
+   ],
+   "notes": "All 8 items are done; ULK-M2's floor gate is the standalone tool art/tools/clip_floor.py, not wired into pipeline.py. Earlier session work existed: the Ulkro crown, M3 sculpt/paint and Nurrow M2/M3 source were already in wip syncs but unbuilt. I finished that work, built it and measured it.\n\nBudget: Nurrow had 1 base build (animation only; the skin GLBs carry no clips). Ulkro had 3 builds: fast base, full base plus skins, and base only, which fixed the floor-probe lookup. The last GLB is a Blender re-export of the cached blend, not a 4th build. I needed it because thinning the death clip's opt"
+  },
+  {
+   "key": "vashil-rest-minors",
+   "items": [
+    "fighter:vashil:VAS-M1=done",
+    "fighter:vashil:VAS-M2=done",
+    "fighter:vashil:VAS-M3=done",
+    "CW5-polish:VAS-m5=partly",
+    "CW5-polish:OBS-metal=done",
+    "CW5-polish:ervet-m5=done",
+    "CW5-polish:ervet-m1=partly",
+    "CW5-polish:ervet-m2=partly",
+    "CW5-polish:ervet-m6=done",
+    "CW5-polish:remaining (ardit-M2, ardit-m3, ardit-M4, burdam-M1, OBS-burdam-clip, ervet-M2/M3/M4, ervet-m3/m4, kemdo-M2/m3/m6/v1, lisvel-m1..m4, nurrow-m1..m6, nurrow-M4, ULK-M4, ULK-V1)=not_done",
+    "critic:recovered-minors=partly",
+    "wave-gates=partly"
+   ],
+   "commits": [
+    "e243bdf9 vale CW5: OBS-metal (bake zero_metal + glb_zero_metal tool, 18 GLBs)",
+    "2ac1fc3d vale CW5: Vashil recall, Peal, Morning Toll, clapper beads (VAS-M1, VAS-M2, VAS-m5, cards re-rendered)",
+    "ea5c3504 vale CW5: Ervet polish (ervet-m5 recall 6 s, ervet-m1 death floor, ervet-m2 victory point, ervet-m6 brief) + common/anim.floor_lift"
+   ],
+   "notes": "I finished Vashil's three majors and the two Ervet fixes that mattered most: the load-test failure and the brief mismatch. OBS-metal is done for all 8 fighters. The other roughly 25 CW5 polish minors were not started, because each needs a full fighter rebuild and time ran out.\n\nWhat to know:\n- **Vashil accent is too weak now.** The new beads and inlay marks dropped the game-camera accent from 1.63 % to 0.43 % (0.33 % on First Bell). One more rebuild is needed to widen the marks. Vashil has had 2 of its 3 allowed rebuilds this package.\n- **Ervet death fall.** The floor lift adds about a 10 cm b"
+  },
+  {
+   "key": "refix1",
+   "items": [
+    "fighter:lisvel:lisvel-M4=done",
+    "fighter:lisvel:lisvel-M1=done",
+    "par:lisvel=partly",
+    "fighter:lisvel:lisvel-M3=partly",
+    "done:2=partly",
+    "done:3=partly",
+    "done:4=not_done",
+    "done:5=partly",
+    "done:6=partly",
+    "fighter:burdam:burdam-M4=partly",
+    "fighter:burdam:burdam-M2=partly",
+    "par:burdam=partly",
+    "fighter:ulkro:ULK-M3=partly",
+    "par:ulkro=partly",
+    "par:ardit=not_done",
+    "fighter:vashil:VAS-M1=partly"
+   ],
+   "commits": [
+    "53fced95 vale CW5 refix 1: Lisvel tabard follow-through, face paint, re-staged skin busts, sleeve folds",
+    "37e9f435 vale CW5 refix 1: Burdam cowl stride drive + deeper Almanac ink",
+    "002e01ed vale CW5 refix 1: Ardit Chalkline and Vashil First Bell busts re-staged",
+    "cce00b0f vale CW5 refix 1: Ulkro source only, NOT shipped (ULK-M3, par:ulkro)"
+   ],
+   "notes": "I used all 3 rebuilds (Lisvel, Burdam, Ulkro) plus 3 cheap portrait-only re-renders from the cache. Lisvel's blocker causes are fixed and measured: the face reads, the tabard lags 2-3 f, and the cards and load tests pass. Burdam improved but missed two targets narrowly: dE 10.7 against 10.8, and cowl swing 8.8 against 10 deg. The Ulkro build broke the GLB budget, so I restored the shipped Ulkro artifacts from HEAD and committed only the source with the root-cause fix. The id-masked Lab tool, Ervet's bevel and Ardit's recall and helm were not done. The commits are local; the push failed because"
+  },
+  {
+   "key": "refix2",
+   "items": [
+    "done:2=done",
+    "done:3=done",
+    "done:4=partly",
+    "done:5=done",
+    "done:6=partly",
+    "par:lisvel=partly",
+    "par:ardit=not_done",
+    "par:burdam=partly",
+    "par:ulkro=partly",
+    "fighter:lisvel:lisvel-M1=done",
+    "fighter:burdam:burdam-M4=done",
+    "fighter:burdam:burdam-M2=partly",
+    "fighter:ulkro:ULK-M3=done",
+    "fighter:lisvel:lisvel-M3=partly",
+    "fighter:vashil:VAS-M1=done"
+   ],
+   "commits": [
+    "5dcf4b0d",
+    "0f174254",
+    "6d0ef27a",
+    "c9beb122"
+   ],
+   "notes": "Not everything closed. Open: Ardit untouched, Burdam pauldron spread 34.1 vs 35, Lisvel sleeve hpRMS not improved, Ervet bevel not attempted, id-masked Lab only run on Ulkro, no scores re-taken. Nothing is pushed.\n\nBudget: 3 full rebuilds used (Burdam, Lisvel, Ulkro). Card plates were recomposed without Blender.\n\nSeveral results come from post-processing shipped GLBs rather than source, which is cheaper but fragile: Burdam cowl, pauldrons and Almanac grade, plus Ulkro's simplify and lower texture quality. Burdam's cards predate its grades. Tools added: art/tools/part_lab.py, glb_paint_grade.mj"
+  }
+ ],
+ "regressions": [
+  "burdam.glb (base) grew from 1195112 to 1233864 bytes (1205 KiB) in wip-sync e68cb168 after the refix rebuild. That is over the 1172 KiB three_load_test budget and over the 1.2 MB brief (_design/fighters/burdam.md:182). The refix load report ran without --budget-kb. Measured with: node art/tools/three_load_test.mjs art/out/fighters/burdam/burdam.glb --budget-kb 1172 -> 'GLB is 1205 KiB > budget 1172 KiB' (_harness/_reports/fw_CW5_v2_load.txt)."
+ ],
+ "summary": "CW5 verify round 2 fails. Lisvel improved: the tabard now lags 2-3 frames (re-measured) and the Gorgewalk face shows a faint nose and smile, but it still reads close to a mannequin at 512 px card scale. Burdam still misses all three numbers: Almanac dE is 10.7 against Stillwater's 10.8, cowl swing is 8.8 deg against a 10 deg target, and pauldron spread is 26.7 against 35. The Burdam rebuild also pushed the base GLB over budget, which is a regression. The Ulkro fix is not shipped, Ardit is untouched, and Vashil's recall depends on a CW1 handoff. 4 of 8 fighters are still below par. The verdict is committed locally as 1c8b06d8 (_design/reviews/fixwaves/CW5_verify2.json), but it is NOT pushed yet: every push from every lane is failing with HTTP 408 (branch is 26 commits ahead of origin). Any later push of this branch will carry the commit."
+}
