@@ -1,0 +1,57 @@
+{
+  "wave": "CW3s",
+  "round": 2,
+  "verify": "verify-only 2",
+  "head": "02258be1",
+  "pass": false,
+  "summary": "CW3s does not pass. The refix is a large real gain: veteran now clears every laning-fight bar and buildplan is fixed. On two fresh windows, adept median longest stretch reads 3.4 and 3.6 min (bar 3), Ulkro's first ult at adept reads 10.6 on one window, last-hit share stays 45-46 % (bar 50), in lane 68-71 % (done-list 75), and seed 4309's 14.46 min core reproduces. Veteran-beats-novice (done:3) and the buildplan regression pass.",
+  "method": "Seeds 7101-7120 and 7301-7320, never used before, final code, --lineup shuffle. RIFT re-run with --cut 0, because the default 15:00 cut hides core falls; per-seed takedowns and durations match between cut and full runs. Reports: _harness/_reports/fw_W4_soak_fw_CW3s_r2v2{a,b}.txt (rift, mirror, human) and r2v2{af,bf}.txt (full RIFT). The engineer's 4401-4403 and 4309 reproduced exactly (r2v2rep1, r2v2rep2), so its reports are real and the gap is window variance, not a bad harness.",
+  "items": [
+    {
+      "id": "done:1",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Fresh windows, adept / veteran. Takedowns by 10:00: 7.15 / 7.65 (r2v2af), 6.50 / 7.20 (r2v2bf), pass. No-takedown games 0/20 in all four runs, pass. Shadehold takedowns before 14:00: 1.80 / 1.80, 1.60 / 1.60, pass. FAIL: adept median longest stretch 3.4 and 3.6 min (bar 3); veteran 2.7 and 2.5 pass. FAIL: Ulkro's median first ult at adept is 10.6 min on r2v2af (n12); 8.5 on r2v2bf, veteran 9.4 and 9.3. The engineer's done claim held on its windows (adept stretch 2.8 and 2.5) but both its adept readings are below both fresh ones. Pooled over those four windows, adept stretch is 3.03 min (n80), still over the bar.",
+      "fixHint": "Stretch is the longest gap in the whole game, so first find where adept's long gap falls (not traced here), then raise adept's fights there. Ulkro: loosen its ult-use read at adept as was done for Ilsheta. Judge on at least 2 untuned windows."
+    },
+    {
+      "id": "done:2",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Pass: Sunsplinter first take 1.9 / 2.1 and 1.5 / 1.4 min (bar 3, veteran was 3.2); probe_sim_rekey 45/0; pacing.ts exit 0. FAIL: last-hit 45.1 / 45.3 and 46.5 / 45.9 % (bar 50); the default quick soak exits 1 on this gate alone at 44.5 / 44.5 % (r2v2quick). FAIL: in lane 69.3 / 67.6 and 71.1 / 68.0 % (done-list 75; soak gate 65 passes). FAIL once: seed 4309 veteran core falls at 14.46 min, reproduced (r2v2rep2): team 1 lost 12 structures from 8.3 to 14.5 min. Cores before 16:00 were 0 in 80 fresh full games, shortest 17.9 min. No ruling on last-hit or the 75 vs 65 lane bar exists in owner_rulings.md.",
+      "fixHint": "Lead must rule on last-hit 50 vs fights and on lane 75 vs 65, since three rounds have not moved them. Trace seed 4309 for the core; it reproduces deterministically."
+    },
+    {
+      "id": "done:3",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Veteran beats novice 34/40 (85.0 %, r2v2a) and 35/40 (87.5 %, r2v2b), fresh and untuned; with the engineer's 139/160 that is 208/240 = 86.7 %. Veteran beats adept 28/40 and 29/40. Duo road level 6 median adept / veteran 7.83 / 7.96 and 7.19 / 7.64 min (bar 8:00). Both 85.0 % and 7.96 min sit near their bars; the soak report rounds 7.96 to 8.0."
+    },
+    {
+      "id": "regression:probe_sim_buildplan",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "node _harness/probe_sim_buildplan.ts: 15 passed, 0 failed at HEAD 02258be1. All 30 probe_sim_* including it exit 0 (bot_soak excluded, judged above); pacing.ts exit 0; typecheck 0 errors; content:check 0 warnings."
+    },
+    {
+      "id": "gameplay:CL-1",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "The quiet laning phase is largely gone: takedowns by 10:00 were 1.90 / 1.75 at the closing review and are now 6.50-7.65; stretch was 6.4 / 6.3 min and is now 3.4-3.6 / 2.5-2.7. Still open as in done:1 and done:2: adept stretch over 3 min on 2 of 2 fresh windows, Ulkro 10.6 at adept on one, last-hit 45-46 %.",
+      "fixHint": "See done:1 and done:2."
+    },
+    {
+      "id": "critic:bot-micro",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "Pass: same-target skillshots veteran 80.9 vs adept 75.8 % and 78.5 vs 73.9 %. Pass at veteran: passive seat vs bot seat 343 vs 311 and 332 vs 299/min. Fail at adept: 324 vs 366 and 341 vs 342/min. Sums with the engineer's two windows: veteran 1283 vs 1289 (0.995, about even), adept 1322 vs 1418 (0.93). Target passive >= bot seat is not reliably met at either tier; the human-seat suite stays report-only. Tier dodge 27.4 / 47.9 % and retreat deaths are measured.",
+      "fixHint": "Raise adept's riftPassivePress, or have the lead accept adept as easier on a passive seat."
+    }
+  ],
+  "regressions": [],
+  "observations": [
+    "Kemdo won 78.6 % (n28, CI 60-90) and 81.3 % (n32, CI 65-91) in same-tier games on the two fresh windows, but 66 % (n32) and 41 % (n22) on the engineer's, about 68 % pooled (n114). Report-only balance read, worth a pooled check, not called a regression.",
+    "Adept fighter deaths with no enemy fighter read 4.4 % on r2v2af full games against the 5 % gate; passes, narrowly."
+  ],
+  "handoffs": []
+}
