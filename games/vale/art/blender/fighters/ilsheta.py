@@ -1097,32 +1097,59 @@ def _paint_chimney(c, p, n, pal=None):
     glint = np.exp(-((th + 0.60) / 0.35) ** 2) + 0.6 * np.exp(-((th - 2.5) / 0.35) ** 2)
     lin = np.repeat(edge[None, :], len(p), 0) * (0.80 + 0.20 * lit)[:, None]
     lin = lin * (1 - 0.18 * ss(0.2, -0.6, n[:, 2]))[:, None] + (0.20 * glint)[:, None]
-    # the face patch: the concept's face through the glass
-    fc = c.copy()
-    qm = np.hypot(x / (MASK_R[0] * 1.05), (z - MASK_C[2]) / (MASK_R[2] * 1.05)) < 1.0
-    if qm.any():
-        m = np.median(fc[qm], axis=0, keepdims=True)
-        fc[qm] = np.clip(m + (fc[qm] - m) * 1.45, 0.0, 1.0)
-    flin = _lin(fc) * 0.93 + glass * 0.05
-    # closing polish ilsheta-face-seam (a dark, stepped 'battlement' band of the projection at the plate's top edge,
-    # above the brow mark, in the portrait and splash): the top 2.2 cm of the face patch is a soft baked occlusion
-    # gradient instead, from the plate's own median value down into the hood-lining tone at the very edge
-    _, pz, ax, az = FACE_PATCH
-    zt = pz + az * np.sqrt(np.clip(1.0 - (x / ax) ** 2, 0.0, 1.0))
-    dtop = zt - z
-    band = (np.abs(x) < ax) & (n[:, 1] < -0.2) & (dtop > -0.004) & (dtop < 0.026)
-    if band.any() and qm.any():
-        fmed = np.median(flin[qm & ~band], axis=0) if np.any(qm & ~band) else np.median(flin[qm], axis=0)
-        occ = ss(0.022, 0.0, dtop)
-        tgt = fmed[None, :] * (1.0 - 0.42 * occ)[:, None] + _lin(_hex(LINING))[None, :] * (0.42 * occ)[:, None]
-        w = (band * ss(0.026, 0.016, dtop))[:, None]
-        flin = flin * (1 - w) + tgt * w
+    # the face patch (closing polish ilsheta-face-seam, round 2: the projected concept left scattered rings and arcs and
+    # dark stepped blocks at the plate's edges, no clear eyes): the brief's carved plate painted directly (_face_plate)
+    flin = _lin(_face_plate(x, z, pal)) * 0.95 + glass * 0.03
     gl = np.exp(-(((x - cx) * 0.8 + (z - 1.33) * 0.6 + 0.035) / 0.016) ** 2) * ss(-0.3, -0.7, n[:, 1])
     flin = flin + 0.14 * gl[:, None]
     back = ss(-0.05, 0.35, n[:, 1])[:, None]                          # the shell's back, seen through the glass
     flin = flin * (1 - back) + _lin(_hex("#7E8288")) * (0.75 + 0.25 * lit)[:, None] * back
     out = np.where(rim[:, None], lin, flin)
     return _srgb(np.clip(out, 0, 1))
+
+
+def _face_plate(x, z, pal):
+    """the carved chalk face-plate (brief section 3), in the patch's own ellipse: broad planes, a brow shelf, two ink
+    almond recesses each with a cool painted glint (calm: the inner ends a touch higher, never slanted down to the
+    nose), the beak keel with its lit and shaded sides, one quiet carved mouth line; the edge falls off softly into the
+    hood lining. No projection, so no stepped blocks and no stray marks; never emissive"""
+    _, pz, ax, az = FACE_PATCH
+    u, v = x / ax, (z - pz) / az
+    au = np.abs(u)
+    chalk = _lin(_hex(pal.get("chalk", "#D4CEBF")))
+    # (a first smooth pass read as a porcelain mannequin in three.js, a sensitivity miss: the plate is CARVED: faceted
+    # planes with a stepped cheek line, incised brow arcs, a dawn chevron on the brow and two hour-lines on each cheek, a
+    # warm chalk, deep ink recesses, and only a small catch-light in each)
+    shade = 0.93 - 0.30 * ss(0.50, 0.58, au) - 0.12 * ss(0.58, 1.0, au) - 0.20 * ss(-0.30, -0.42, v)   # the facets step
+    shade = shade + 0.10 * np.exp(-((v - 0.34) / 0.10) ** 2) * ss(0.90, 0.40, au)     # the brow shelf catches the light
+    tilt = math.radians(6.0)
+    du, dv = au - 0.43, v - 0.10
+    uu = du * math.cos(tilt) - dv * math.sin(tilt)
+    vv = du * math.sin(tilt) + dv * math.cos(tilt)
+    d = np.abs(vv) / 0.125 + (uu / 0.31) ** 2                                        # < 1 inside the almond
+    shade = shade * (1.0 - 0.34 * ss(2.0, 1.0, d))                                    # the carved bevel round the recess
+    span = ss(-0.30, -0.16, v) * ss(0.46, 0.30, v)
+    shade = shade + 0.16 * np.exp(-(u / 0.06) ** 2) * span                            # the keel's lit ridge
+    shade = shade * (1.0 - 0.36 * np.exp(-((u - 0.11) / 0.05) ** 2) * span)           # its shaded side
+    shade = shade * (1.0 - 0.45 * np.exp(-((v + 0.33) / 0.04) ** 2) * np.exp(-(u / 0.15) ** 2))     # under the beak
+    shade = shade * (1.0 - 0.55 * np.exp(-((v + 0.60) / 0.026) ** 2) * ss(0.32, 0.18, au))           # the mouth line
+    # the incised marks: an arc over each eye, the dawn chevron, two short hour-lines under each eye
+    arc = np.exp(-((v - (0.36 - 0.55 * (au - 0.43) ** 2)) / 0.022) ** 2) * ss(0.84, 0.72, au) * ss(0.12, 0.20, au)
+    chev = np.exp(-((v - (0.70 - 0.55 * au)) / 0.024) ** 2) * ss(0.28, 0.20, au)
+    hour = (np.exp(-((au - 0.40) / 0.020) ** 2) + np.exp(-((au - 0.56) / 0.020) ** 2)) * ss(-0.34, -0.26, v) * ss(-0.06, -0.14, v)
+    shade = shade * (1.0 - 0.58 * np.clip(arc + chev + hour, 0.0, 1.0))
+    warm = np.array([1.03, 1.0, 0.94])
+    lin = (chalk * warm)[None, :] * np.clip(shade, 0.0, 1.25)[:, None]
+    ink = _lin(_hex(pal.get("ink", "#17181B")))
+    w = ss(1.05, 0.82, d)[:, None]
+    lin = lin * (1 - w) + ink[None, :] * w
+    glint = np.exp(-((uu + 0.07) / 0.030) ** 2 - ((vv - 0.040) / 0.018) ** 2)[:, None]   # the recess's wet catch-light
+    lin = lin + _lin(_hex("#BFD6E8"))[None, :] * 0.60 * glint
+    q = np.hypot(u, v)
+    lin = lin * (1.0 - 0.45 * ss(0.78, 1.0, q))[:, None]                              # the plate's edge in the hood's shade
+    e = ss(0.92, 1.02, q)[:, None]
+    lin = lin * (1 - e) + _lin(_hex(LINING))[None, :] * e
+    return _srgb(np.clip(lin, 0.0, 1.0))
 
 
 def _paint_glove(p, n, pal):
@@ -1268,10 +1295,24 @@ def _hood_inside(c, p, n):
     inside the tube a shaded linen (the tube's floor from above)"""
     ow, oz, oh = HOOD_OPEN
     q = np.hypot(p[:, 0] / ow, (p[:, 2] - oz) / oh)
-    tun = ss(1.0, 0.95, q) * ss(-0.132, -0.122, p[:, 1]) * ss(-0.015, -0.028, p[:, 1])     # the tunnel only
+    # (round 2, ilsheta-face-seam: the tunnel's back half kept the projection's stepped blocks, seen through the glass
+    # beside the plate: the whole tunnel, front lip to back wall, is the plain lining; the hood's outer back never is)
+    tun = ss(1.0, 0.95, q) * ss(-0.132, -0.122, p[:, 1]) * ss(0.10, 0.06, p[:, 1])
     lin = _lin(c)
     lining = _lin(_hex(LINING)) * (0.85 + 0.25 * np.clip(-n[:, 1], 0, 1))[:, None]
-    lin = lin * (1 - 0.9 * tun[:, None]) + lining * 0.9 * tun[:, None]
+    lin = lin * (1 - tun[:, None]) + lining * tun[:, None]
+    # ... and the cloth round the opening: the projection's dark stepped patch on the hood's lower sides becomes the
+    # hood's own linen falling softly into the lining's shade at the opening
+    q2 = np.hypot(p[:, 0] / ow, (p[:, 2] - oz) / oh)
+    ring = ss(1.0, 1.04, q2) * ss(1.42, 1.28, q2) * ss(-0.02, -0.06, p[:, 1])
+    if (ring > 0.5).any():
+        Y = lin @ np.array([0.2126, 0.7152, 0.0722])
+        sel = ring > 0.5
+        linen = np.median(lin[sel & (Y > np.median(Y[sel]))], axis=0) if (sel & (Y > np.median(Y[sel]))).any() else np.median(lin[sel], axis=0)
+        fall = (0.12 + 0.88 * ss(1.0, 1.26, q2))[:, None]
+        clean = linen[None, :] * (0.30 + 0.70 * fall) + _lin(_hex(LINING))[None, :] * (1 - fall) * 0.35
+        clean = clean * (0.86 + 0.20 * np.clip(0.5 + 0.5 * n[:, 2], 0, 1))[:, None]
+        lin = lin * (1 - ring[:, None]) + clean * ring[:, None]
     r = np.hypot(p[:, 0] - CHIM_C[0], p[:, 1] - CHIM_C[1])
     crown = ss(1.455, 1.470, p[:, 2]) * ss(0.090, 0.080, r)
     lin = lin * (1 - 0.30 * crown)[:, None]

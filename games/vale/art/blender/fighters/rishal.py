@@ -4074,8 +4074,13 @@ def _death(g, skel) -> anim.Clip:
     buckle = _pose(g, dict(hips=(6, 45, -4), spine=(10, 12, 0), chest=(12, 10, 0), neck=(6, 0, 0), head=(4, 14, 0)),
                    (0.03, 0.08, -0.20), R=(-0.45, -0.10, -0.70), Rb=(-0.8, 0.3, -0.5), L=(0.50, -0.20, -0.45),
                    Lb=(0.8, 0.3, 0.2), feet=_feet(g, yr=-36.0, pr=12.0))
-    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.24, buckle, "inout"), (0.42, spin, "in"), (0.64, down, "in"),
-            (0.72, bounce, "out"), (0.84, rest, "inout"), (1.0, rest, "linear")]
+    # (closing polish rishal-m3, round 2: the last frames of the fall drove both feet 17-21 cm through the floor, f25-28:
+    # the hips dropped before the legs swung up. A key before the landing has the thighs already lifted)
+    swing = anim.add(anim.lerp_pose(spin, down, 0.5), anim.P(thigh_L=(30, 0, 0), thigh_R=(38, 0, 0)))
+    swing["hips_loc"] = (0.03, 0.30, -hip_h * 0.60)
+    swing["ik"] = down["ik"]
+    keys = [(0.0, g, "linear"), (0.10, recoil, "snap"), (0.24, buckle, "inout"), (0.42, spin, "in"), (0.54, swing, "inout"),
+            (0.64, down, "in"), (0.72, bounce, "out"), (0.84, rest, "inout"), (1.0, rest, "linear")]
     return _clip("death", 45, keys)
 
 

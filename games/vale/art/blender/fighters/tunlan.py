@@ -2832,9 +2832,18 @@ def clip_death():
                       orient("L", (0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True),
                       orient("R", (-0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True)),
                    both(fingers, a=(2, 4, 4), b=(4, 6, 6), t=(0, 4)))
+    # (closing polish TUN-c1, round 2: no opening bow, the hat left her head in one 0.18 m frame, she ended on all fours.
+    # The blow turns into a bow, the hat lifts off over 8 frames, and the hands slide forward so she ends folded low over
+    # her knees at rest, not on hands and knees)
+    bow = compose(stance_pose(), body(hips=(4, 2, 0), spine=(12, 0, 0), chest=(14, 2, 0), neck=(10, 0, 0), head=(16, 3, 0), fwd=0.02, drop=0.04),
+                  ik(wrist("L", 0.28, -0.14, 1.00), wrist("R", -0.30, -0.12, 0.98)), both(fingers, **RELAX))
+    down = compose(down, body(hips=(6, 0, 0), spine=(6, 0, 0), chest=(5, 0, 0), head=(6, 0, 0), drop=0.05, fwd=0.03),
+                   ik(wrist_abs("L", 0.32, -0.76, 0.075, (0.9, 0.3, 0.3)), wrist_abs("R", -0.32, -0.78, 0.075, (-0.9, 0.3, 0.3)),
+                      orient("L", (0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True),
+                      orient("R", (-0.22, -0.97, 0.05), (0.0, 0.05, -1.0), world=True)))
     bounce = compose(down, body(chest=(-3, 0, 0), drop=-0.012))
     rest = compose(down, body(spine=(2, 0, 0), chest=(2, 0, 0), head=(2, 0, 0), drop=0.006))
-    body_fn = anim.keyed([(0.0, g, "linear"), (0.12, recoil, "snap"), (0.40, sink, "inout"), (0.62, fold, "in"),
+    body_fn = anim.keyed([(0.0, g, "linear"), (0.08, recoil, "snap"), (0.22, bow, "inout"), (0.42, sink, "inout"), (0.62, fold, "in"),
                           (0.76, down, "in"), (0.84, bounce, "out"), (0.94, rest, "inout"), (1.0, rest, "linear")])
 
     def zp(th):                     # the pivot's height with the hat tilted th degrees resting on its low rim
@@ -2847,8 +2856,10 @@ def clip_death():
     # the hat's own track (world places of its pivot; the tilt raises her right side, where the lantern hangs)
     hat_fn = anim.keyed([
         (0.00, hk((0.0, -0.02, 1.86), 0, 0, 0.0, (0, 0, 0)), "linear"),
-        (0.30, hk((0.05, -0.08, 1.55), 12, 0, 0.0, (0, 0, 0), -6), "linear"),
-        (0.40, hk((0.42, -0.14, 1.28), 40, 0, 1.0, (0, 10, 0), -12), "in"),
+        (0.26, hk((0.05, -0.08, 1.60), 10, 0, 0.0, (0, 0, 0), -6), "linear"),
+        (0.33, hk((0.14, -0.10, 1.50), 20, -4, 0.30, (0, 4, 0), -8), "inout"),
+        (0.40, hk((0.34, -0.14, 1.32), 36, -8, 0.75, (0, 8, 0), -11), "inout"),
+        (0.45, hk((0.60, -0.20, 1.02), 50, -10, 1.0, (0, 6, -6), -12), "in"),
         (0.50, hk((0.84, -0.26, zp(62)), 62, -12, 1.0, (0, 0, -12)), "in"),
         (0.58, hk((0.93, -0.40, zp(52)), 52, -32, 1.0, (8, 0, -32)), "inout"),
         (0.68, hk((1.00, -0.50, zp(26)), 26, -46, 1.0, (30, 0, -46)), "in"),

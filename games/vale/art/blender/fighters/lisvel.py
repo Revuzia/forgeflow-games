@@ -97,12 +97,15 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 
 # Gorgewalk: Sun Corridor's loose (cast_ult f14): braced wide with the bow turned flat on the aim line, cold gorge
 # light from high on the far side, the slate bow rim-lit;
 # Almanac: Morning Draw (cast_a3 f8): the page-fletched fan spread above her shoulder under a warm reading lamp.
+# (CW5 r2 refix 2, par:lisvel: in the card's drawn pose the linen tunic and the shirt's and sleeve's shoulder came a few mm
+# through the tabard as torn pale patches; art/blender/portraits.py _card_inset, the card only)
+CARD_INSET = {"tunic": -0.28, "sleeves": 0.010, "body": 0.015}
 CARDS = {
     "lisvel": {
         # (CW5 r2, par:lisvel: the face was a blank oval 75 px tall, blown by a near-frontal head light: a three-quarter
         # shot from the knees up, the face about 150 px and turned to camera, keyed from her upper right so the nose,
         # lips and visor model; the bow's raised tip leaves the frame)
-        "splash": {"clip": "cast_a1", "t": 0.44, "yaw": 22.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
+        "splash": {"clip": "attack1", "t": 0.30, "yaw": -30.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
                    "box_top": 2.0, "box_lo": 0.62, "box_w": 0.42,
                    "key_az": 250.0, "key_el": 38.0, "key_color": "#FFDDB0", "sun": 2.2, "rim_cool": 1.6,
                    "rim_warm": 0.8, "bounce": 0.3, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.85,
@@ -1994,6 +1997,31 @@ def _hang_folds(p, k_v=0.22, k_c=0.09, pitch=0.052, z0=1.08):
     return (1.0 - k_v * va * env) * (1.0 + k_c * cr * env)
 
 
+def _drape(p, k_b=0.20, k_v=0.50, k_c=0.20, pitch=0.058, z0=1.42, floor=0.55):
+    """(CW5 r2 refix 2, lisvel-M3: the tabard's largest colour mass still read as flat paint, spread 9) a hanging cloth's
+    value structure, wide enough to move the part's p10 and p90: broad soft drapes, drawn valleys with a lit crest
+    beside each. The coordinate across the folds runs round the body without a jump at the centre line."""
+    s = np.arctan2(p[:, 0], np.abs(p[:, 1]) + 0.02) * 0.20 + 0.05 * p[:, 2]
+    va, cr = _fold_lines(s, p, pitch, 0.20)
+    broad = np.sin(s * 2.0 * math.pi / (pitch * 2.3) + 1.5 * NOISE(p, 4.0, (1.0, 5.0, 3.0)))
+    env = floor + (1.0 - floor) * _ss(0.0, 0.16, z0 - p[:, 2])
+    return (1.0 + k_b * broad * env) * (1.0 - k_v * va * env) * (1.0 + k_c * cr * env)
+
+
+def _stitch(d, p, off=0.006, w=0.0018, period=0.013):
+    """a running stitch along an edge: d is the distance to the edge (m), the row off from it. Returns (thread, furrow):
+    the pale dashes, and the shallow dark line the row sinks into the felt."""
+    row = np.exp(-((d - off) / w) ** 2)
+    dash = np.clip(np.sin((p[:, 0] * 0.7 + p[:, 1] * 0.7 + p[:, 2]) * 2.0 * math.pi / period) * 3.0, 0.0, 1.0)
+    return row * dash, row
+
+
+def _worn(p, n, amp=0.10):
+    """the felt's use: sun-faded patches on what faces the sky, dull road dirt low down"""
+    fade = np.clip(NOISE.fbm(p, 5.0, 3) * 1.6, -1.0, 1.0)
+    return 1.0 + amp * fade + 0.5 * amp * np.clip(n[:, 2], 0.0, 1.0)
+
+
 # — head —
 def paint_wrap(p, n):
     """the turban's layered bands: each band its own value, a soft shadow under every proud lower edge, a lit roll
@@ -2203,7 +2231,14 @@ def paint_tabard(p, n):
     """the steel-blue felt tabard (review item 4: hue 209, sat 19 % in the albedo, under the 40 % ceiling) with the
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""
     col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]       # (closing lisvel-M3: the felt's nap)
-    col = col * _hang_folds(p, 0.22, 0.08, 0.06, 1.42)[:, None]
+    # (CW5 r2 refix 2, lisvel-M3) folds with real depth, gathered creases just above the belt, worn patches
+    gather = _ss(1.24, 1.12, p[:, 2]) * _ss(1.02, 1.06, p[:, 2])
+    gv, gc = _fold_lines(p[:, 0] * 1.0 + 0.3 * p[:, 1], p, 0.030, 0.20)
+    # the straps and the belt pull the felt: diagonal tension folds from the shoulders down to the waist, chest and back
+    tv, tc = _fold_lines(np.abs(p[:, 0]) * 0.75 + (p[:, 2] - 1.3) * 0.62, p, 0.046, 0.22)
+    tens = _ss(1.06, 1.14, p[:, 2]) * _ss(1.52, 1.40, p[:, 2])
+    col = col * (_drape(p, 0.30, 0.50, 0.24, 0.060, 1.46, 0.85) * _worn(p, n, 0.15) * (1.0 - 0.38 * gv * gather)
+                 * (1.0 + 0.16 * gc * gather) * (1.0 - 0.40 * tv * tens) * (1.0 + 0.20 * tc * tens))[:, None]
     trim = np.zeros(len(p))
     on_pad = np.max(np.stack([_ss(0.006, 0.0, e.d(p)) for e in PADS]), axis=0)
     for e in ARMHOLES + [NECKHOLE]:
@@ -2213,7 +2248,11 @@ def paint_tabard(p, n):
         on = _ss(0.010, 0.003, np.abs(e.d(p)))
         edge = on * _ss(0.013, 0.006, p[:, 2] - PAD_Z) * _ss(0.185, 0.20, np.abs(p[:, 0]))
         trim = np.maximum(trim, edge)
-    col = _mix(col, C("trim") * (_brk(p, 0.04) * _tl(n, 0.12))[:, None], trim)
+    # (lisvel-M3) a stitched row beside the armhole and neck trims, the trim's own edge rubbed pale
+    edge_d = np.min(np.stack([np.abs(e.d(p)) for e in ARMHOLES + [NECKHOLE]]), axis=0)
+    th, fu = _stitch(edge_d, p, 0.024)
+    col = col * (1.0 - 0.22 * fu * (1.0 - on_pad))[:, None] * (1.0 + 0.55 * th * (1.0 - on_pad))[:, None]
+    col = _mix(col, C("trim") * (_brk(p, 0.04) * _tl(n, 0.12) * _worn(p, n, 0.12))[:, None], trim)
     col = col * (1.0 - 0.22 * _drape_shadow(p))[:, None]
     return _skin_print(col, p, n, trim)
 
@@ -2221,7 +2260,8 @@ def paint_tabard(p, n):
 def paint_skirt(p, n):
     """the tabard's four lower panels: grey trims along the hem and every slit edge, a small chevron mark on each
     front panel above the hem (the painting's)"""
-    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None] * _hang_folds(p)[:, None]
+    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]
+    col = col * (_drape(p, 0.30, 0.52, 0.24, 0.052, 1.10, 0.80) * _worn(p, n, 0.15))[:, None]     # (r2 refix 2, lisvel-M3)
     # (closing lisvel-M3) the hem a step darker above its trim (the felt's weight and the dirt of the road)
     col = col * (1.0 - 0.16 * _ss(0.10, 0.025, p[:, 2] - _tabard_hem(p)))[:, None]
     trim = _trim_band(p[:, 2] - _tabard_hem(p), 0.022) * (p[:, 2] < _tabard_hem(p) + 0.04)
@@ -2238,7 +2278,10 @@ def paint_skirt(p, n):
             d = np.linalg.norm(q - (a + np.outer(t, b - a)), axis=1)
             chev = np.maximum(chev, _ss(0.0032, 0.0018, d) * (p[:, 1] < -0.02))
     edge = np.maximum(trim, chev)
-    col = _mix(col, C("trim") * (_brk(p, 0.04) * _tl(n, 0.12))[:, None], trim)
+    # (r2 refix 2, lisvel-M3) a stitched row above the hem's trim, and the dirt of the road on the hem
+    th, fu = _stitch(np.abs(p[:, 2] - _tabard_hem(p)), p, 0.030)
+    col = col * ((1.0 - 0.22 * fu) * (1.0 + 0.55 * th))[:, None]
+    col = _mix(col, C("trim") * (_brk(p, 0.04) * _tl(n, 0.12) * _worn(p, n, 0.12))[:, None], trim)
     col = _mix(col, C("chevron") * _tl(n, 0.12)[:, None], chev)
     return _skin_print(col, p, n, edge)
 
@@ -2260,7 +2303,8 @@ def _skin_print(col, p, n, edge):
 
 
 def paint_tunic(p, n):
-    col = _cloth(p, n, "tunic", 0.05) * _hang_folds(p, 0.34, 0.10, 0.040, 1.02)[:, None] * _weave(p, 0.07, 420.0)[:, None]
+    # (r2 refix 2, lisvel-M3: spread 3) the linen falls in close deep folds
+    col = _cloth(p, n, "tunic", 0.05) * _drape(p, 0.24, 0.55, 0.26, 0.036, 1.10, 0.85)[:, None] * _weave(p, 0.07, 420.0)[:, None]
     hem = _ss(0.012, 0.0, p[:, 2] - _tunic_hem(p))
     return col * (1.0 - 0.10 * hem)[:, None]
 
@@ -2415,7 +2459,14 @@ def paint_legs(p, n):
     # (CW5 r2 refix, lisvel-M3) cloth, not rubber: long folds down the thigh and shin, creases behind the knee
     va, cr = _fold_lines(np.arctan2(p[:, 0] - np.sign(p[:, 0]) * 0.09, p[:, 1]) * 0.07 + 0.25 * p[:, 2], p, 0.030)
     bk = np.exp(-((p[:, 2] - 0.50) / 0.05) ** 2) * (0.5 + 0.5 * np.sin(p[:, 2] * 420.0 + 2.0 * NOISE(p, 20.0)))
-    return C("legs") * (v * (1 + 0.05 * knee) * (1.0 - 0.30 * va) * (1.0 + 0.30 * cr) * (1.0 - 0.28 * bk))[:, None]
+    # (r2 refix 2, lisvel-M3: spread 3, the verifier's "real folds") the folds wide enough to read, a broad soft drape
+    # round each leg, rubbed knees and shins, dust toward the boot
+    va2, cr2 = _fold_lines(np.arctan2(p[:, 0] - np.sign(p[:, 0]) * 0.09, p[:, 1]) * 0.07 + 0.25 * p[:, 2], p, 0.042, 0.22)
+    br = np.sin(np.arctan2(p[:, 0] - np.sign(p[:, 0]) * 0.09, p[:, 1]) * 3.0 + 5.0 * p[:, 2] + 1.6 * NOISE(p, 5.0, (2.0, 4.0, 1.0)))
+    rub = np.exp(-((p[:, 2] - 0.51) / 0.075) ** 2) * (n[:, 1] < 0.1) * (0.6 + 0.4 * NOISE(p, 16.0))
+    dust = _ss(0.36, 0.12, p[:, 2])
+    k2 = (1.0 + 0.34 * br) * (1.0 - 0.48 * va2) * (1.0 + 0.45 * cr2) * (1.0 + 0.40 * rub) * (1.0 + 0.22 * dust)
+    return C("legs") * (v * (1 + 0.05 * knee) * (1.0 - 0.30 * va) * (1.0 + 0.30 * cr) * (1.0 - 0.28 * bk) * k2)[:, None]
 
 
 def paint_boots(p, n):

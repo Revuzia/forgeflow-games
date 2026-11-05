@@ -4400,7 +4400,7 @@
   ]
  },
  {
-  "$comment": "T3 · Shade · Plant Shard (rect zone, whole life): the shard is driven in (chips, dust, a crack), a dark stone with a pale honed edge and a violet-lit cut top leaning toward its 9 × 2.5 m shadow; the shadow is a hard slab of shade with low ink drifting along it; the far end carries a team keyline that brightens as the shard trembles in the last half-second (combat F6: the shade slab is rimmed in her violet) (combat F6: her chips and dust are violet-grey shade)",
+  "$comment": "T3 · Shade · Plant Shard (rect zone, whole life): the shard is driven in (chips, dust, a crack), a dark stone with a pale honed edge and a violet-lit cut top leaning toward its 9 × 2.5 m shadow; the shadow is a hard slab of shade with low ink drifting along it; the far end carries a team keyline that brightens as the shard trembles in the last half-second (combat F6: the shade slab is rimmed in her violet) (combat F6: her chips and dust are violet-grey shade) (CW1 r2 refix 1, done:0: the slab breathes the signature violet on each 0.5 s slow tick, so the light on the shadow is Hesmi's and a tick reads on the ground; a1 sig was 0.49-0.52, white 0.66)",
   "id": "hesmi_a1_shadow",
   "duration": 3.3,
   "teamTint": true,
@@ -4552,6 +4552,95 @@
     "emissive": 1.2,
     "rim": "signature",
     "fit": false
+   },
+   {
+    "type": "decal",
+    "at": "ground",
+    "shape": "rect",
+    "length": 2.0,
+    "width": 2.5,
+    "offset": [
+     4.5,
+     0,
+     0
+    ],
+    "style": "plain",
+    "texture": "glow",
+    "radius": 1.0,
+    "life": 3.05,
+    "color": "signature",
+    "emissive": 2.2,
+    "alpha": [
+     [
+      0,
+      0.0
+     ],
+     [
+      0.015,
+      0.7
+     ],
+     [
+      0.12,
+      0.42
+     ],
+     [
+      0.164,
+      0.3
+     ],
+     [
+      0.18,
+      0.62
+     ],
+     [
+      0.3,
+      0.32
+     ],
+     [
+      0.328,
+      0.28
+     ],
+     [
+      0.344,
+      0.58
+     ],
+     [
+      0.47,
+      0.28
+     ],
+     [
+      0.492,
+      0.26
+     ],
+     [
+      0.508,
+      0.5
+     ],
+     [
+      0.64,
+      0.24
+     ],
+     [
+      0.656,
+      0.22
+     ],
+     [
+      0.672,
+      0.42
+     ],
+     [
+      0.82,
+      0.2
+     ],
+     [
+      0.95,
+      0.2
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "fit": true
    },
    {
     "type": "mesh",

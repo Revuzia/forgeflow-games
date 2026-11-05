@@ -21,7 +21,7 @@ Where the concept and the brief disagree:
     the mask's short rounded bill (1.5 cm proud, owner ruling 5) marks the front; the lantern is octagonal (0.19 m across, 0.41 m with its cupola
     and base: the painted 0.16 m lantern measured 0.3 % accent) with its four cardinal panes and a glass cupola
     glowing azure (the `accent`, ~1.9 % at the game camera: the painted blue centre pane between amber lampresin
-    panes, seen from every side and from above); it hangs on one pendulum bone x_lantern (<= 6 degrees off plumb).
+    panes, seen from every side and from above); it hangs on one pendulum bone x_lantern (<= 16 degrees off plumb).
   * the crook is 6 cm thick (brief), the hat's game mesh a clean lathe (hat_low), the hat on x_hat taking back half
     the body's pitch / roll (the disc stays near level), the boots, trousers, hat, crook, lantern and gloves paint
     procedurally (the projection sampled the floor round the painted boots and cannot see the hat's top).
@@ -30,7 +30,7 @@ Not in the shared pipeline, implemented here (module-level wrappers; common/ unt
   * rig_extras: the right arm re-seated on the concept carry, prop.R up the crook, prop.L in the left hand's curl (the
     two-handed grips land exactly), x_lantern (the lantern's pendulum), sockets x_crook_hook / x_crook_foot.
   * prop.R location tracks (the crook slides through the fist for the two-handed carry and the sweep).
-  * the lantern pendulum (anim.sample_clip wrapper): a spring-led hang, clamped to 6 degrees off plumb.
+  * the lantern pendulum (anim.sample_clip wrapper): a spring-led hang, clamped to 16 degrees off plumb.
   * skin weights for the coat, hood, scarf, sleeves, trousers and boots; the corrected foot roll (Vashil's).
   * the paint (project.paint wrapper): projected cloth / mask with side fill and back match; the hat (felt), the
     crook, the lantern and the gloves paint procedurally; light-head / dark-feet ramp and the L* 86 cap.
@@ -636,8 +636,10 @@ def sculpts() -> list:
     # sets the hood only round the face (1.4 cm margin + a 1 cm rolled edge)
     hood = Sculpt("hood")
     hz = np.array([1.56, 1.64, 1.70, 1.74, 1.78, 1.82, 1.86, 1.90, 1.93, 1.96, 1.99])
-    hxs = np.array([0.170, 0.164, 0.154, 0.148, 0.141, 0.132, 0.123, 0.113, 0.105, 0.098, 0.090])
-    hys = np.array([0.160, 0.156, 0.150, 0.148, 0.146, 0.142, 0.137, 0.130, 0.123, 0.114, 0.100])
+    # (closing polish dunsom-death-mesh, round 2: with the hat off the death still showed a straight tube with a flat lid:
+    # the top sections now close into a round dome over the skull, all of it still inside the hat's crown in play)
+    hxs = np.array([0.170, 0.164, 0.154, 0.148, 0.141, 0.132, 0.123, 0.113, 0.101, 0.082, 0.040])
+    hys = np.array([0.160, 0.156, 0.150, 0.148, 0.146, 0.142, 0.137, 0.130, 0.114, 0.092, 0.046])
     hyc = np.array([0.027, 0.024, 0.022, 0.020, 0.018, 0.016, 0.015, 0.014, 0.013, 0.012, 0.012])
 
     def cowl(P):
@@ -647,7 +649,7 @@ def sculpts() -> list:
         hx, hy, yc = np.interp(z, hz, hxs), np.interp(z, hz, hys), np.interp(z, hz, hyc)
         e = 2.6
         r = (np.abs(x / hx) ** e + np.abs((y - yc) / hy) ** e) ** (1.0 / e)
-        return np.maximum((r - 1.0) * np.minimum(hx, hy), np.maximum(1.56 - z, z - 1.97))
+        return np.maximum((r - 1.0) * np.minimum(hx, hy), np.maximum(1.56 - z, z - 1.988))
     hood.add(Fn(cowl, (MX - 0.20, -0.18, 1.54), (MX + 0.20, 0.21, 1.99)).displaced(cloth_noise(0.003, 8.0), 0.003), k=0.0)
     hood.add(Ellipsoid((MX, 0.012, 1.950), (0.097, 0.113, 0.058)), k=0.025)            # the rounded crown
 
@@ -1514,7 +1516,7 @@ def _match_back(k, p, cols, wb, names, log):
 
 
 KEY = unit((-0.45, -0.70, 0.55))                    # the painted key light: upper front, his right
-COAT_LIFT, COAT_DESAT = 1.52, 0.0       # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender);
+COAT_LIFT, COAT_DESAT = 1.60, 0.0       # fix pass 1: x1.52 / 22 % read white-washed in three (the concept's mid lavender);
                                         # fix pass 2: 1.26 left the coat albedo at L* 41 (bible cloth L* 49, 'not under
                                         # 45'): 1.52 with the hue kept (no grey wash), the ramp lifting the chest
                                         # (1.40 measured lineup mid 41.6, three coat L* ~54)
@@ -1553,7 +1555,7 @@ def _hat_paint(p, n):
     blot = 1 + 0.13 * _fbm(p * np.array([1.0, 1.0, 0.0]) + np.array([3.1, 7.7, 0.0]), 5.0)
     # CW6 refix (verify: crown r<0.3 vs rim 0.7-0.95 means 8.5 L*, target >= 10): the outer felt goes to x0.48 and
     # the fall ends at r 0.27 (the band sits at 0.294), so the rim reads ~66-68 L* under a ~79 crown
-    ramp = 0.48 + 0.66 * (1.0 - ss(0.02, 0.27, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
+    ramp = 0.52 + 0.72 * (1.0 - ss(0.02, 0.27, r))     # (x0.76 at the band measured 6.8 L* on the sheet: deeper)
     k8 = 2 * math.pi / 8
     da = (((th - HAT_CREASE0) / k8 + 0.5) % 1.0 - 0.5) * k8 * np.maximum(r, 1e-3)      # signed arc distance (m)
     span = ss(0.07, 0.12, r) * (1 - ss(0.27, 0.295, r))
@@ -2253,9 +2255,12 @@ def _floor_crook(skel, pose):
 
 # ── the lantern's pendulum (anim.sample_clip wrapper) ───────────────────────────────────────────────────
 # x_lantern hangs plumb: every frame its bone is pointed at a spring-led direction that follows straight down
-# (solved in world space, 2 axes), never more than LAN_MAX degrees off plumb (brief: <= 6 degrees, heavily damped, the
+# (solved in world space, 2 axes), never more than LAN_MAX degrees off plumb (brief: <= 16 degrees, lightly damped, the
 # accent never blurs). An authored "x_lantern" key (a knock in the taunt) rides on top. Loops run three cycles.
-LAN_K, LAN_D, LAN_MAX = 120.0, 15.0, 6.0
+# (closing polish dunsom-lantern-glued, round 2: the 6 degree clamp and the near-critical spring glued it to the hook, a
+# tilt of 6 at most in every clip: now a heavy pendulum's own period (~1 s, the 0.47 m hang), lightly damped, the
+# pivot's acceleration taken in full measure, up to 16 degrees off plumb; the accent still never blurs in a run)
+LAN_K, LAN_D, LAN_MAX = 40.0, 3.4, 16.0
 LAN_LEN = 0.47                            # the lantern's pivot -> its base knob (fix pass 2: the 0.27 m panes)
 _orig_sample_clip = anim.sample_clip
 
@@ -2276,14 +2281,15 @@ def _hang_lantern(skel, poses, loop, extra=None):
     cur = down.copy()
     vel = V((0.0, 0.0, 0.0))
     rec = []
-    for r in range(3 if loop else 1):
+    cycles = max(3, int(math.ceil(5.0 * FPS / max(m, 1)))) if loop else 1      # the light damping settles over ~5 s
+    for r in range(cycles):
         for f in range(m):
             # the pivot's acceleration swings the lantern (inertia, damped x0.35), springs pull it plumb
             acc = V((0.0, 0.0, 0.0))
             if 0 < f < m - 1 or loop:
                 a0, a1, a2 = frames[(f - 1) % m].translation, frames[f].translation, frames[(f + 1) % m].translation
                 acc = (a0 - 2 * a1 + a2) / (dt * dt)
-            g_eff = down * 9.81 - acc * 0.35
+            g_eff = down * 9.81 - acc * 0.75
             tgt = g_eff.normalized() if g_eff.length > 1e-6 else down
             vel += (tgt - cur) * (LAN_K * dt) - vel * (LAN_D * dt)
             cur = (cur + vel * dt).normalized()
@@ -2293,7 +2299,7 @@ def _hang_lantern(skel, poses, loop, extra=None):
                 if ax.length > 1e-8:
                     cur = (Matrix.Rotation(math.radians(LAN_MAX), 3, ax.normalized()) @ down).normalized()
                     vel *= 0.5
-            if r == (2 if loop else 0):
+            if r == cycles - 1:
                 rec.append(cur.copy())
     if loop:
         rec.append(rec[0])
@@ -3030,15 +3036,18 @@ def clip_overrides(ctx) -> dict:
     T_HAT0, T_HAT1 = 0.40, 0.64
     hit = pose(torso=dict(hips=(-3, 2, 0), spine=(-3, 0, 2), chest=(-4, 2, 3), neck=(-2, 0, 0), head=(-6, 4, 4)),
                hips=(0, 0.03, -0.02))
-    kfeet = _feet(l=(-0.06, 0.33, 0.04), r=(0.06, 0.35, 0.04), yl=4.0, yr=-6.0, pl=-62.0, pr=-62.0)   # boots clear of the coat
+    # (closing polish dunsom-death-mesh, round 2: hips at 0.44 m drove the knees out through the coat's front, dark tears
+    # at the thighs, and the fists sank into the skirt. The hips stay over the knees, the thighs near vertical under the
+    # hanging coat, the fold is in the spine and chest, and the arms hang wide of the skirt)
+    kfeet = _feet(l=(-0.07, 0.47, 0.04), r=(0.07, 0.49, 0.04), yl=4.0, yr=-6.0, pl=-72.0, pr=-72.0)   # boots clear of the coat
     limp_R = (-0.10, -0.20, -0.96)
     let_go = pose(torso=dict(hips=(2, 2, 2), spine=(6, 0, 3), chest=(8, 2, 4), neck=(6, 0, 0), head=(10, 4, 4)),
                   hips=(0.01, 0.03, -0.10), R=limp_R, aim=None, L=(0.10, -0.12, -0.92))
     kneel = pose(torso=dict(hips=(10, 3, 0), spine=(10, 0, 3), chest=(10, 3, 4), neck=(8, 0, 0), head=(12, 6, 6)),
-                 hips=(0.02, 0.06, -(hip_h - 0.60)), R=(-0.06, -0.45, -0.85), aim=None, L=(0.06, -0.45, -0.85),
+                 hips=(0.02, 0.08, -(hip_h - 0.62)), R=(-0.20, -0.45, -0.85), aim=None, L=(0.20, -0.45, -0.85),
                  feet=kfeet)
-    fold = pose(torso=dict(hips=(30, 4, 2), spine=(20, 0, 4), chest=(18, 3, 4), neck=(10, 0, 2), head=(14, 6, 6)),
-                hips=(0.02, 0.14, -(hip_h - 0.44)), R=(-0.04, -0.62, -0.78), aim=None, L=(0.08, -0.62, -0.78),
+    fold = pose(torso=dict(hips=(16, 4, 2), spine=(26, 0, 4), chest=(24, 3, 4), neck=(10, 0, 2), head=(14, 6, 6)),
+                hips=(0.02, 0.12, -(hip_h - 0.58)), R=(-0.24, -0.62, -0.76), aim=None, L=(0.26, -0.62, -0.76),
                 feet=kfeet)
     k = [(0.0, G, "linear"), (0.08, hit, "out"), (0.22, let_go, "inout"), (0.48, kneel, "in"),
          (0.56, anim.lerp_pose(kneel, fold, 0.45), "linear"), (0.74, fold, "out"),

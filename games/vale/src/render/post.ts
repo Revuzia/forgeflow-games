@@ -30,6 +30,8 @@
 //
 // The grade (tone map + LUT + vignette) and the overlay are identical on every tier; tiers only
 // change AO, bloom, AA, distortion and resolution. The identity LUT stands in until `map.art.lut` loads.
+// The one stand-in: with bloom off an ultimate's envelope lifts a little more and the light effects add inside it takes a
+// fixed gain (NO_BLOOM_LIFT_GAIN, NO_BLOOM_FX_GAIN): uniforms, no extra pass.
 // The exposure envelope and the death grade run on every tier (they are game information, and cheap:
 // a few ALU per pixel, early-out when idle).
 //
@@ -83,6 +85,9 @@ const liftDepth = {
    *  so the ground's tone-curve solve reads the ground alone and the effects' own light is never re-solved with it */
   uLiftPre: new Uniform<Texture | null>(null),
   uLiftPreOn: new Uniform(0),
+  /** CW1 r2 refix 1 (B5 flash): the gains on an envelope's local lift and on the effects' own light inside it (1 with bloom) */
+  uLiftGain: new Uniform(1),
+  uLiftFxGain: new Uniform(1),
   uLiftInvProj: new Uniform(new Matrix4()),
   uLiftCamWorld: new Uniform(new Matrix4()),
 };
@@ -90,6 +95,9 @@ const liftDepth = {
 export type VfxDraw = (renderer: WebGLRenderer, target: WebGLRenderTarget | null, sceneDepth: Texture | null, camera: Camera) => void;
 
 const U = screenUniforms;
+/** CW1 r2 refix 1: what an ultimate's envelope gains when the chain has no bloom: its local lift, and the light effects add */
+const NO_BLOOM_LIFT_GAIN = 1.2;
+const NO_BLOOM_FX_GAIN = 2;
 const uniformsOf = (o: Record<string, Uniform>): Map<string, Uniform> => new Map(Object.entries(o));
 
 /** the ultimate impact envelope (vfx/screen.ts): local eased lift + saturation drop + global dip, HDR. The envelope's
@@ -115,6 +123,8 @@ uniform mat4 uLiftInvProj;
 uniform mat4 uLiftCamWorld;
 uniform highp sampler2D uLiftPre;
 uniform float uLiftPreOn;
+uniform float uLiftGain;
+uniform float uLiftFxGain;
 // the display luma the NEUTRAL tone map (three's NeutralToneMapping, exposure 1) makes of a linear colour
 float liftDispLuma( vec3 col ) {
   float x = min( col.r, min( col.g, col.b ) );
@@ -135,7 +145,7 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
     if ( a.w <= 0.0 ) continue;
     vec2 d = ( uv - a.xy ) * vec2( uAspect, 1.0 );
     float k = 1.0 - smoothstep( a.z * 0.55, a.z * 1.35, length( d ) );
-    lift += a.w * ( k + uBreath * ( 1.0 - k ) );
+    lift += a.w * ( k * uLiftGain + uBreath * ( 1.0 - k ) );
     desat = max( desat, uLiftB[ i ].x * k );
   }
   float body = 0.0;
@@ -184,12 +194,12 @@ void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor
   }
   c *= m;
   float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-  outputColor = vec4( mix( c, vec3( l ), desat ) + fx * pow( 1.0 + lift, 2.2 ), inputColor.a );
+  outputColor = vec4( mix( c, vec3( l ), desat ) + fx * uLiftFxGain * pow( 1.0 + lift, 2.2 ), inputColor.a );
 }`, {
       blendFunction: BlendFunction.SET,
       uniforms: uniformsOf({
         uLiftA: U.uLiftA, uLiftB: U.uLiftB, uExpo: U.uExpo, uBreath: U.uBreath, uAspect: U.uAspect,
-        uLiftDepth: liftDepth.uLiftDepth, uLiftDepthOn: new Uniform(0), uLiftPre: liftDepth.uLiftPre, uLiftPreOn: liftDepth.uLiftPreOn, uLiftInvProj: liftDepth.uLiftInvProj, uLiftCamWorld: liftDepth.uLiftCamWorld,
+        uLiftDepth: liftDepth.uLiftDepth, uLiftDepthOn: new Uniform(0), uLiftPre: liftDepth.uLiftPre, uLiftPreOn: liftDepth.uLiftPreOn, uLiftGain: liftDepth.uLiftGain, uLiftFxGain: liftDepth.uLiftFxGain, uLiftInvProj: liftDepth.uLiftInvProj, uLiftCamWorld: liftDepth.uLiftCamWorld,
       }),
     });
     this.cam = cam;
@@ -339,6 +349,18 @@ export class PostChain {
     if (this.lutEffect) this.lutEffect.lut = this.lutTex;
   }
 
+  /** a harness seam (_harness/probe_flash_tier.mjs): overrides the no-bloom gains; null = the chain's own */
+  private bloomStandIn: { lift: number; fx: number } | null = null;
+  setBloomStandIn(gains: { lift: number; fx: number } | null): void {
+    this.bloomStandIn = gains;
+    this.applyStandIn();
+  }
+  private applyStandIn(): void {
+    const on = !this.quality.bloom;
+    liftDepth.uLiftGain.value = this.bloomStandIn?.lift ?? (on ? NO_BLOOM_LIFT_GAIN : 1);
+    liftDepth.uLiftFxGain.value = this.bloomStandIn?.fx ?? (on ? NO_BLOOM_FX_GAIN : 1);
+  }
+
   setQuality(q: PostQuality): void {
     const same = q.ao === this.quality.ao && q.bloom === this.quality.bloom && q.aa === this.quality.aa && q.tier === this.quality.tier;
     this.quality = { ...q };
@@ -401,6 +423,9 @@ export class PostChain {
         levels: q.tier === 'medium' ? 6 : 8,
       }));
     }
+    // no bloom (Low, or the video setting off): an ultimate's landing would peak 15 luma under High on every map, the
+    // light bloom throws around the effect (_harness/probe_flash_tier.mjs). A uniform stands in, inside envelopes only
+    this.applyStandIn();
     effects.push(new ExposureEffect(() => this.camera));
     effects.push(new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }));
     this.lutEffect = new LUT3DEffect(this.lutTex, { tetrahedralInterpolation: q.tier === 'ultra' || q.tier === 'high' });

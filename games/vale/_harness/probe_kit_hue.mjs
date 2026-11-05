@@ -27,6 +27,12 @@
 // or whose VFX left nothing to measure (n = 0), is staged and cast again once; if it still fails it is reported
 // `not measured` (status 'nm', never sig 0: it is a staging failure, not a hue).
 //
+// CW1 r2 refix 1 (done:0): the pair never swings. The filter above passes an id the slot names, and the slots whose
+// present.hitVfx is the same lib_hit_phys_* as the fighter's attack.present.hitVfx let the idle auto-attack's hit through
+// (fired at tier 1, a landed swing in the window: the A jump the sweeps showed on Burdam a3, 0.438 team light against
+// 0.185-0.273, only when the slot before left the attack timer ready). Both units get autoAttack = false from the staging
+// on. Every row keeps the window's spawn trace ([frame, id, source, tier, passed]); --swing restores the old staging.
+//
 // CW1 (closing C1): every slot is measured FRAME-INTEGRATED: from release +1 to release +30 frames a sample every 3
 // frames, the gate is the integrated share Σ sig / Σ sat over the window (one bright frame cannot carry a slot, a long
 // neutral tail cannot hide). `--slots` picks the slots (default a1,a2,a3,ult: 64 slots for 16 kits). On the slots in
@@ -41,7 +47,7 @@
 // team (teamLight > 0 where the base kit has one; reported).
 //
 //   node _harness/probe_kit_hue.mjs [--kits a,b,c] [--slots a1,a2,a3,ult] [--teamgate a3,ult] [--out <json>] [--shots <prefix>]
-//                                   [--gate 0.5] [--teammax 0.35] [--live] [--status] [--skins] [--skinslots a1,ult]
+//                                   [--gate 0.5] [--teammax 0.35] [--live] [--status] [--skins] [--skinslots a1,ult] [--swing]
 //   --live   content/vfx.json and content/skins/*.json as they stand on disk replace the catalog's in the page (tuning
 //            without a rebuild)
 //   exit 1 when any slot measured is under a gate; exit 2 when none is but a slot could not be measured.
@@ -54,7 +60,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const GATE = +opt('gate', 0.5), OUT = opt('out', ''), SHOTS = opt('shots', ''), LIVE = args.includes('--live'), STATUS = args.includes('--status');
-const SKINS = args.includes('--skins');
+const SKINS = args.includes('--skins'), SWING = args.includes('--swing');
 const SLOTS = (SKINS ? opt('skinslots', 'a1,ult') : opt('slots', 'a1,a2,a3,ult')).split(',').filter(Boolean);
 const TEAMGATE = new Set((SKINS ? SLOTS.join(',') : opt('teamgate', 'a3,ult')).split(',').filter(Boolean));
 const TEAMMAX = +opt('teammax', 0.35);
@@ -98,11 +104,12 @@ await B((b, status) => {
   b.__variant = 'normal';
   const blk = (c) => (c ? c.clone().setRGB(0, 0, 0) : c);
   R.vfx.spawnHandle = (id, o) => {
+    if (b.__only >= 0) b.__trace?.push([b.__frame ?? 0, id, o?.sourceId ?? -1, o?.tier ?? 0, mine(o?.sourceId ?? -1) && b.__ids.has(id) ? 1 : 0]);
     if (b.__only >= 0 && (!mine(o?.sourceId ?? -1) || !b.__ids.has(id))) return 0;
     if (b.__only >= 0 && b.__variant === 'noTeam') o = { ...o, team: blk(o.team) };
     return spawn0(id, o);
   };
-  b.__step = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) { b.__H.pump(dt); R.render(dt); } };
+  b.__step = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) { b.__frame = (b.__frame ?? 0) + 1; b.__H.pump(dt); R.render(dt); } };
   b.__grab = () => { R.render(0); const gl = R.gl.getContext(); const Wd = gl.drawingBufferWidth, Hd = gl.drawingBufferHeight; const px = new Uint8Array(Wd * Hd * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, Wd, Hd, gl.RGBA, gl.UNSIGNED_BYTE, px); return { px, Wd, Hd }; };
   b.__vfxHue = (box, sigH) => {
     const tv = R.overlay.teleScene.visible; R.overlay.teleScene.visible = false;
@@ -219,7 +226,7 @@ for (const bEntries of batches) {
         const dist = rg > 0 ? Math.max(1.5, Math.min(4.5, rg - 0.4)) : 4.5;
         const res = {};
         for (const variant of TEAMGATE.has(slot) ? ['normal', 'noTeam'] : ['normal']) {
-        let best = { n: -1 }, cast = false, st = null, tries = 0, integ = null;
+        let best = { n: -1 }, cast = false, st = null, tries = 0, integ = null, rel = 0, trace = [];
         for (; tries < 2; tries++) {
         st = await B((b, a) => {
           const W = b.__W;
@@ -231,20 +238,22 @@ for (const bEntries of batches) {
           const stage = () => {
             const pc = W.players[a.cp].entity, pv = W.players[a.vp].entity;
             b.__prep(pc, a.x - a.d / 2, a.y, 0); b.__prep(pv, a.x + a.d / 2, a.y, Math.PI);
+            // the pair never swings (see the header); --swing leaves the idle auto-acquire on, to reproduce the old staging
+            if (!a.swing) for (const id of [pc, pv]) { const e = W.entity(id); if (e) { e.autoAttack = false; e.atkTarget = -1; e.atkWindup = -1; } }
             b.__cmd(a.cp, { type: 'stop' }); b.__cmd(a.vp, { type: 'stop' });
             return { pc, pv };
           };
           b.__clear(); stage(); b.__step(30); b.__clear(); const r = stage(); b.__step(2);
           const ok = [r.pc, r.pv].every((id) => W.entity(id)?.alive);
           return { ...r, ok };
-        }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot });
+        }, { cp, vp: v.victim, x: SPOT.x, y: SPOT.y, d: dist, fid, slot, swing: SWING });
         // the caster's spot at the cast: a blink or a dash leaves its origin light behind, inside the box too
         st.c0 = await B((b, a) => b.__h(a.pc), st);
         await B((b, a) => {
           // a slot that never targets an enemy (a lamp hung on an ally or herself) is cast on the caster
-          b.renderer.vfx.clear(); b.__evs.length = 0; b.__variant = a.variant;
+          b.renderer.vfx.clear(); b.__evs.length = 0; b.__variant = a.variant; b.__frame = 0; b.__trace = [];
           const tid = a.self ? a.pc : a.pv; const me = b.__H.view.entity(tid); b.__cmd(a.cp, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: tid }); }, { ...st, cp, slot, fid, variant, self: info.self[slot] });
-        const rel = Math.max(1, Math.round(info.ct[slot] * 30));
+        rel = Math.max(1, Math.round(info.ct[slot] * 30));
         best = { n: -1 }; integ = { A: 0, n: 0, sat: 0, sigN: 0, harmN: 0, whiteN: 0, samples: 0, per: [] };
         for (let f = 1; f <= rel + WIN; f++) {
           await B((b, a) => { b.__step(1); b.__freshen([a.pc, a.pv]); }, st);
@@ -262,6 +271,7 @@ for (const bEntries of batches) {
             }
           }
         }
+        trace = await B((b) => b.__trace.slice(0, 200));
         // the cast really happened: the sim emitted a `cast` for this slot from the caster
         cast = await B((b, a) => b.__evs.some((e) => e.e === 'cast' && e.src === a.pc && e.slot === a.slot), { ...st, slot });
         // every effect of this cast ends before the next one: zones run out, statuses go, the VFX are cleared
@@ -272,7 +282,7 @@ for (const bEntries of batches) {
         const measured = cast && st.ok && best.n > 0;
         res[variant] = { measured, tries: tries + (measured ? 1 : 0), cast, f: best.f, n: best.n, sat: best.sat, peakSig: measured ? best.sig : null, harm: best.harm, white: best.white, bins30: best.bins30,
           A: Math.round(integ.A), sig: measured ? +(integ.sigN / Math.max(1, integ.sat)).toFixed(3) : null, harmInt: +(integ.harmN / Math.max(1, integ.sat)).toFixed(3),
-          whiteInt: +(integ.whiteN / Math.max(1, integ.n)).toFixed(3), per: integ.per };
+          whiteInt: +(integ.whiteN / Math.max(1, integ.n)).toFixed(3), per: integ.per, rel, trace };
         }
         const N = res.normal, T = res.noTeam;
         const teamLight = N.measured && T ? +(1 - T.A / Math.max(1, N.A)).toFixed(3) : null;

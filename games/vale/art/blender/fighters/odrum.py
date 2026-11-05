@@ -966,7 +966,8 @@ def sculpts(lanterns: bool = False) -> list:
             # closing polish odrum-m3 (the inward windows left the accent under the 1.5 % team-tint floor at 3 of 4
             # facings): a thin tinted ring of the window glass laid in the resin just inside the lip, which the 52
             # degree camera sees on both jars from every facing (the inward windows stay)
-            glass.add(Torus((px, POT_Y, z0 + 0.233 * POT_S + 0.006), 0.056 * POT_S, 0.0065), k=0.0)
+            # (round 2, odrum-m3: 0.84 / 1.08 % at facings 0 / 180: the ring 65 % wider, still inside the 0.067 lip)
+            glass.add(Torus((px, POT_Y, z0 + 0.233 * POT_S + 0.006), 0.055 * POT_S, 0.0108), k=0.0)
             part(f"pot_{side}", pot, "pot", hang, 1350, 0.7)
             part(f"pot_rim_{side}", rim, "rim", hang, 300, 0.6)
         # lampresin: amber, glossy, never emissive (the windows are the only emissive pixels at rest)
@@ -1352,11 +1353,13 @@ DESPECKLE = ("cap", "mask", "coat", "straps", "belt", "skirt", "trousers", "boot
 # from the crown (CAP_SEAMS), the jerkin a cooler walnut-brown felt (#5E5345, hue 34; the first build's chocolate
 # #674F3D measured a mean hue 24.9 / sat 0.33) and its lifted top faded
 # further toward a grey-brown felt (COAT_FADED / COAT_FADE), its folds darkened (FOLD_CAVITY)
-TONE = {"mask": ("#BBA37C", 0.04), "cap": ("#958F7E", 0.04), "coat": ("#5E5345", 0.18), "skirt": ("#5F4A3A", 0.22),
+# (closing polish odrum-m1, round 2: mask #C4A785 / sat 0.33 in game against the concept's golden ochre: the ochre
+# identity read cream. Same L*, chroma up: the mask to sat ~0.43, the jars' glaze to sat ~0.48, off the khaki band)
+TONE = {"mask": ("#BD9E6C", 0.04), "cap": ("#958F7E", 0.04), "coat": ("#5E5345", 0.18), "skirt": ("#5F4A3A", 0.22),
         "straps": ("#4A3324", 0.40), "belt": ("#45301F", 0.40), "trousers": ("#382B22", 0.30), "boots": ("#2C2018", 0.35)}
-POT_GLAZE = "#B79871"                     # the jars' golden-ochre glaze (L* 65, hue 33.5, sat 38.5 %; was #C07E32;
+POT_GLAZE = "#BA9460"                     # the jars' golden-ochre glaze (L* 65, hue 33.5, sat 38.5 %; was #C07E32;
                                           # at hue 36-37 its shade drifted olive under the hero renders' sky fill)
-POT_POOL = "#9C7E5E"                      # ... pooled thick toward the foot: warmer and deeper (L* 55, hue 31, sat 40 %)
+POT_POOL = "#9E7A50"                      # ... pooled thick toward the foot: warmer and deeper (L* 55, hue 31, sat 40 %)
 GLAZE_RUN = "#A87C40"                     # ... its runs down from the lip: deeper and richer (L* 55, sat 62 %, small)
 GLAZE_RUNS = 9                            # runs per jar
 GLAZE_RUN_W = 0.70                        # their opacity over the glaze
@@ -1370,6 +1373,10 @@ FIST = "#C08F5C"                          # the carved ochre fists: the mask's o
 # toward a sun-faded felt as it lifts (COAT_FADED: the chocolate lightened alone read salmon-pink in game; faded
 # felt on the shoulders under the yoke, not copper)
 COAT_LIFT = ((1.08, 1.0), (1.20, 1.32), (1.32, 1.80), (1.42, 2.25))
+# (closing polish odrum-m6, round 2: this base-only value lift ran for every skin, on top of Shadeprint's own pale wash,
+# so its chest printed paler than its brief. Each skin says how much of the lift it takes, 0 = none; Noon Fair's felt
+# keeps the base's value plan, Shadeprint's pale above comes from its own wash and takes a fifth)
+COAT_LIFT_SKIN = {"odrum_shadeprint": 0.2}
 COAT_FADE = 0.65
 COAT_FADED = "#8E8473"                    # ... toward this sun-faded felt (hue 38, sat 19 %), at the texel's own value
 CAP_SEAMS = (6, 0.72, 0.035)              # the cap's stitched felt panels: seam count, seam luminance x, half-width (rad)
@@ -1909,7 +1916,7 @@ def _paint_lit(maps, plates, vis, names, tops=None, flat=None, **kw):
     m = sel("coat")
     if m is not None:
         zz, gg = zip(*COAT_LIFT)
-        g = np.interp(Pw[m][:, 2].astype(np.float64), zz, gg)
+        g = 1.0 + (np.interp(Pw[m][:, 2].astype(np.float64), zz, gg) - 1.0) * COAT_LIFT_SKIN.get(_BUILD["id"], 1.0)
         lin = project._lin(out[m]) * g[:, None]
         Y = (lin @ LUMA)[:, None]
         f = (COAT_FADE * np.clip((g - 1.0) / max(gg[-1] - 1.0, 1e-4), 0.0, 1.0))[:, None]
@@ -3094,8 +3101,10 @@ def _others(skel, g, gI, rest_ik, hip_h, carried=lambda b: b) -> dict:
     # (closing polish odrum-m4: the channel moved the head 2.5 cm and the hands 0 in 1.33 s: now an 80 f (2.67 s)
     # slow sway with the weight rolling from foot to foot under the bar, the head turning with it)
     out["channel"] = anim.Clip("channel", 80, True, lambda t: with_hips(
-        anim.add(ch, P(chest=(1.8 * osc(t, 2), 0, 2.0 * osc(t, 1)), spine=(0, 1.5 * osc(t, 1, 0.1), 2.4 * osc(t, 1)),
-                       head=(-1.5 * osc(t, 2), 4.0 * osc(t, 1, 0.2), 0))), (0.028 * osc(t, 1), 0.0, -0.006 * (0.5 + 0.5 * osc(t, 2)))))
+        # (round 2: that left the head 2.6 cm, the torso's roll cancelling the hips' shift: a deeper breath at the chest
+        # and spine carries the head instead, >= the roster's median 3.8 cm; the bar and the hands stay still)
+        anim.add(ch, P(chest=(3.2 * osc(t, 2), 0, 1.0 * osc(t, 1)), spine=(1.6 * osc(t, 2), 1.5 * osc(t, 1, 0.1), 1.0 * osc(t, 1)),
+                       head=(-2.5 * osc(t, 2), 4.0 * osc(t, 1, 0.2), 0))), (0.028 * osc(t, 1), 0.0, -0.010 * (0.5 + 0.5 * osc(t, 2)))))
     return out
 
 

@@ -89,6 +89,30 @@ def load_spec(fid: str):
     return m
 
 
+def _card_inset(fid: str, objs: list) -> None:
+    """A fighter's optional CARD_INSET = {part: metres}: for the base card only, the part's vertices move in along their
+    normals (closing CW5 r2 refix 2: a card holds one pose at 150 px a head, so an under-layer that pokes a few mm through
+    the cloth over it in that pose shows as a torn pale patch; the shipped GLB is untouched)."""
+    mod = load_spec(fid)
+    inset = getattr(mod, "CARD_INSET", None)
+    if not inset:
+        return
+    names = [it[0] for it in mod.sculpts()]
+    body = max((o for o in objs if o.type == "MESH" and o.data.attributes.get("vale_part")), key=lambda o: len(o.data.polygons))
+    me = body.data
+    pv = [0] * len(me.vertices)
+    me.attributes["vale_part"].data.foreach_get("value", pv)
+    d = {names.index(k): v for k, v in inset.items()}
+    for v, i in zip(me.vertices, pv):
+        if i in d:
+            if d[i] < 0.0:       # (a negative value: a loose shell draws in toward the body's axis by that share)
+                v.co.x *= 1.0 + d[i]
+                v.co.y *= 1.0 + d[i]
+            else:
+                v.co -= v.normal * d[i]
+    me.update()
+
+
 def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0) -> dict:
     spec = load_spec(fid)
     P = pipeline.paths(spec)
@@ -105,6 +129,7 @@ def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0) -> dict:
             chains.setdefault(m.group(1), []).append((int(m.group(2)), b.name))
     ctx.chains = {k: [n for _, n in sorted(v)] for k, v in chains.items()}
     objs = [arm] + [o for o in bpy.context.scene.objects if o.type == "MESH" and o.parent == arm and not o.hide_render]
+    _card_inset(fid, objs)
     return render.fighter_renders(ctx, objs, P, None, fast=fast, only=only, scale=scale)
 
 

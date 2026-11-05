@@ -179,6 +179,6 @@ Value bands (area-weighted): top **72** (70-85) · mid **48** (45-65) · feet **
 
 - [ ] The crook shaft is at least 6 cm and reads as a continuous vertical line at 64 px; the disc is round, shallow and level in every pose.
 - [ ] IoU against Tunlan (once half B exists), Ilsheta and Odrum <= 0.80.
-- [ ] The lantern's pendulum amplitude is at most 6 degrees and it is the only sway bone; the accent never blurs in `run`.
+- [ ] The lantern's pendulum amplitude is at most 16 degrees (closing polish dunsom-lantern-glued: the 6 degree clamp read as glued) and it is the only sway bone; the accent never blurs in `run`.
 - [ ] `art.height` is measured at the hood-rim crown, not at the crook tip or the lantern.
 - [ ] `cast_a3` has at most 4 frames of anticipation (castTime 0).
