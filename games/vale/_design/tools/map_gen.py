@@ -601,7 +601,7 @@ def build_rift():
              first, respawn)
 
     camp_pair("glasshorn", glasshorn, [("glasshorn", 0.0, 0.0)], 60, 270)
-    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0, 90.0), ("gloamoth_little", -1.6, 1.0, 60.0), ("gloamoth_little", 1.6, 1.0, 120.0), ("gloamoth_little", 0.0, -1.7, 90.0)], 60, 150)
+    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0), ("gloamoth_little", -1.6, 1.0), ("gloamoth_little", 1.6, 1.0), ("gloamoth_little", 0.0, -1.7)], 60, 150)
     # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its
     # broad stride, not its 0.42 m side; the Ticks three-quarter toward it, turned in toward their Numeral
     camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 90.0), ("stray_tick", -1.7, 1.1, 30.0), ("stray_tick", 1.7, -1.1, 150.0)], 60, 150)

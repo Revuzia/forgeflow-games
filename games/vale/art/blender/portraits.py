@@ -32,8 +32,10 @@ plates.py reads it with ast, without bpy, so no names or expressions in it):
                 "accent": 1.6,                      # x the accent emission for this card (lit bells, a hot core)
                 "exposure": -0.5,                   # EV of the subject pass (render.CARD_EXPOSURE by default)
                 "samples": 128,                     # render.CARD_SAMPLES by default
-                "box_top": 2.3},                    # optional: cap the fitted box's top (m), so a raised weapon
+                "box_top": 2.3,                     # optional: cap the fitted box's top (m), so a raised weapon
                                                     # may leave the frame and the body fills the card
+                "box_lo": 0.55, "box_w": 0.45},     # optional: crop the box's bottom (m) and clamp its half width
+                                                    # and depth, a three-quarter shot with a large face
             "portrait": {"yaw": 28.0},              # the bust: the splash's clip / t / light, then these keys
                                                     # (clip, t, yaw, any light key; pitch / lens / fill / x only
                                                     # when the fighter's own wrappers do not key off them;

@@ -99,11 +99,15 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 
 # Almanac: Morning Draw (cast_a3 f8): the page-fletched fan spread above her shoulder under a warm reading lamp.
 CARDS = {
     "lisvel": {
-        "splash": {"clip": "cast_a1", "t": 0.44, "yaw": 34.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
-                   "key_az": 230.0, "key_el": 18.0, "key_color": "#FFDDB0", "sun": 3.2, "rim_cool": 1.4,
-                   "rim_warm": 1.0, "bounce": 0.5, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.45,
-                   "focal": [{"at": "head", "az": 205.0, "el": 18.0, "dist": 0.7, "color": "#FFE6C4", "power": 26.0,
-                              "size": 0.2},
+        # (CW5 r2, par:lisvel: the face was a blank oval 75 px tall, blown by a near-frontal head light: a three-quarter
+        # shot from the knees up, the face about 150 px and turned to camera, keyed from her upper right so the nose,
+        # lips and visor model; the bow's raised tip leaves the frame)
+        "splash": {"clip": "cast_a1", "t": 0.44, "yaw": 22.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
+                   "box_top": 2.0, "box_lo": 0.62, "box_w": 0.42,
+                   "key_az": 250.0, "key_el": 38.0, "key_color": "#FFDDB0", "sun": 2.2, "rim_cool": 1.6,
+                   "rim_warm": 0.8, "bounce": 0.3, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.85,
+                   "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 14.0,
+                              "size": 0.10},
                              {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
                               "power": 40.0, "size": 0.25}]},
         # (CW5, lisvel-M1: the splash's near-frontal head light flattened the carved face plate into a blank oval in
@@ -142,8 +146,8 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
                               "size": 0.2}]},
         # (CW5 refix: the reading-lamp bust lit the face flat from the front: a warm key from her upper right)
-        "portrait": {"yaw": 5.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -0.9, "bust_lo": 0.10, "bust_hi": 0.30,
-                     "focal": [{"at": "head", "az": 262.0, "el": 45.0, "dist": 0.6, "color": "#FFE3B8", "power": 18.0,
+        "portrait": {"yaw": 12.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.25, "bust_lo": 0.10, "bust_hi": 0.30,
+                     "focal": [{"at": "head", "az": 268.0, "el": 50.0, "dist": 0.6, "color": "#FFE3B8", "power": 15.0,
                                 "size": 0.10},
                                {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,
                                 "size": 0.3}]},
@@ -1966,6 +1970,26 @@ def _scuffs(p, f=22.0, amp=0.18):
     return 1.0 + amp * np.clip((NOISE.ridged(p, f, 2) - 0.72) * 4.0, 0, 1)
 
 
+def _fold_lines(s, p, pitch=0.034, w=0.15):
+    """(CW5 r2, lisvel-M3: soft low-frequency shading never read at the card or the close camera) drawn cloth folds: s is
+    the coordinate across the folds (m); returns (valley, crest): a crisp dark valley, the lit crest beside it, each
+    fold its own strength and broken along its length by noise"""
+    ph = s / pitch + 0.9 * NOISE(p, 7.0)
+    f = ph - np.floor(ph)
+    st = 0.45 + 0.55 * _hash(np.floor(ph) + 3.0)
+    brk = _ss(-0.35, 0.15, NOISE(p, 13.0, (5.0, 2.0, 7.0)))
+    valley = np.exp(-((f - 0.5) / w) ** 2) * st * brk
+    crest = np.exp(-((f - 0.5 - 2.2 * w) / (1.3 * w)) ** 2) * st * brk
+    return valley, crest
+
+
+def _hang_folds(p, k_v=0.30, k_c=0.10, pitch=0.052, z0=1.08):
+    """hanging folds on a tabard or tunic panel: running down from the belt, deeper toward the hem"""
+    va, cr = _fold_lines(np.arctan2(p[:, 0], p[:, 1]) * 0.17 + 0.06 * p[:, 2], p, pitch)
+    env = _ss(0.0, 0.16, z0 - p[:, 2])
+    return (1.0 - k_v * va * env) * (1.0 + k_c * cr * env)
+
+
 # — head —
 def paint_wrap(p, n):
     """the turban's layered bands: each band its own value, a soft shadow under every proud lower edge, a lit roll
@@ -2007,7 +2031,7 @@ def paint_mask(p, n):
     lam = np.clip(n @ MASK_KEY, 0.0, 1.0)
     # (CW5 refix, lisvel-M1: under a flat card light the plate still read blank: a stronger painted key, so the nose's
     # shadow side, the cheek planes and the jaw turn even when the light does not model them)
-    k = (0.64 + 0.46 * lam) * (1.0 - 0.14 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
+    k = (0.54 + 0.56 * lam) * (1.0 - 0.20 * _ss(0.045, 0.072, np.abs(x))) * _brk(p, 0.025, 20.0, 50.0)
     col = C("mask") * k[:, None]
     # a living cue: a faint warm flush across the cheeks under the visor
     flush = sum(np.exp(-(((x - sx * 0.036) / 0.016) ** 2 + ((z - 1.684) / 0.012) ** 2)) for sx in (-1.0, 1.0))
@@ -2017,21 +2041,24 @@ def paint_mask(p, n):
     col = _mix(col, C("lip") * k[:, None], 0.62 * lip)
     line_z = 1.6515 + 0.0030 * (x / 0.0145) ** 2
     mline = np.exp(-((z - line_z) / 0.0015) ** 2) * _ss(0.018, 0.011, np.abs(x)) * _ss(-0.087, -0.093, y)
-    col = col * (1.0 - 0.78 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads; refix 0.62; r2 0.78)
+    col = col * (1.0 - 0.90 * mline)[:, None]          # (W5b: 0.24 -> 0.50, the closed mouth reads; refix 0.62; r2 0.78; r2 refix 0.90)
+    # (CW5 r2 refix, par:lisvel: features that read at splash size) the shade under the lower lip
+    ulip = np.exp(-((x / 0.015) ** 2 + ((z - 1.6405) / 0.0042) ** 2)) * _ss(-0.082, -0.090, y)
+    col = col * (1.0 - 0.34 * ulip)[:, None]
     # (CW5 refix 2, lisvel-M1: at 512 px the face read as a pale oval: the mouth's corners tuck in as two small dark
     # dimples, so the smile reads at card scale)
     mc = sum(np.exp(-(((x - sx * 0.0165) / 0.0028) ** 2 + ((z - 1.6545) / 0.0024) ** 2)) for sx in (-1.0, 1.0))
-    col = col * (1.0 - 0.45 * mc * _ss(-0.084, -0.091, y))[:, None]
+    col = col * (1.0 - 0.72 * mc * _ss(-0.084, -0.091, y))[:, None]
     # under the nose: one soft broad shade (FIX PASS 2, review item 6: two dark dots at the nose's base)
     ns = np.exp(-((x / 0.014) ** 2 + ((z - 1.681) / 0.006) ** 2)) * _ss(-0.092, -0.101, y)
-    col = col * (1.0 - 0.30 * ns)[:, None]
+    col = col * (1.0 - 0.48 * ns)[:, None]
     # (CW5 refix 2, lisvel-M1) the nostrils as two soft shaded wings under the tip (soft, wide: no dark dots)
     nw = sum(np.exp(-(((x - sx * 0.0085) / 0.0042) ** 2 + ((z - 1.6835) / 0.0030) ** 2)) for sx in (-1.0, 1.0))
-    col = col * (1.0 - 0.30 * nw * _ss(-0.090, -0.098, y))[:, None]
+    col = col * (1.0 - 0.66 * nw * _ss(-0.090, -0.098, y))[:, None]
     # (CW5 refix) the nose's shadow side (away from the key, her left) and a lit bridge on the key side
     nside = np.exp(-(((x - 0.0085) / 0.006) ** 2 + ((z - 1.700) / 0.014) ** 2)) * _ss(-0.094, -0.104, y)
     nlit = np.exp(-(((x + 0.003) / 0.003) ** 2 + ((z - 1.706) / 0.012) ** 2)) * _ss(-0.096, -0.106, y)
-    col = col * (1.0 - 0.18 * nside)[:, None] * (1.0 + 0.10 * nlit)[:, None]
+    col = col * (1.0 - 0.40 * nside)[:, None] * (1.0 + 0.18 * nlit)[:, None]
     # the concept's incised segment lines (a carved plate, not a blank mannequin face): the forehead's centre line
     # and its branches above the visor, from each nose wing out under the visor to the temple, down past the
     # mouth corners to the jaw, along each cheekbone to the jaw's corner, the chin's outline
@@ -2064,7 +2091,7 @@ def paint_mask(p, n):
     # (CW5 refix 2, lisvel-M1: the lid line under the visor) the visor's cast shade on the cheeks: a dark soft band
     # right under the glass, so the eye line reads as a line across the face at card scale
     ul = np.exp(-((z - (VIS_Z - 0.0215)) / 0.0042) ** 2) * _ss(0.072, 0.050, np.abs(x)) * _ss(-0.072, -0.086, y)
-    return col * (1.0 - 0.42 * ul)[:, None]
+    return col * (1.0 - 0.66 * ul)[:, None]
 
 
 def paint_visor(p, n):
@@ -2081,7 +2108,7 @@ def paint_visor(p, n):
     col = np.tile(C("glass"), (len(p), 1))
     # the recess behind the glass: a deep smoky band, densest at the middle
     deep = np.exp(-((z + 0.001) / 0.0115) ** 2) * fr * _ss(0.074, 0.046, ax)
-    col = _mix(col, C("glass_deep"), 0.68 * deep)
+    col = _mix(col, C("glass_deep"), 0.90 * deep)      # (r2 refix: the eye line reads as a dark band at splash size)
     # the closed eyelids seen through it: the lid line a gentle downward curve, the lid above it catching light
     for sx in (-1.0, 1.0):
         dx = x - sx * 0.030
@@ -2172,6 +2199,7 @@ def paint_tabard(p, n):
     """the steel-blue felt tabard (review item 4: hue 209, sat 19 % in the albedo, under the 40 % ceiling) with the
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""
     col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]       # (closing lisvel-M3: the felt's nap)
+    col = col * _hang_folds(p, 0.22, 0.08, 0.06, 1.42)[:, None]
     trim = np.zeros(len(p))
     on_pad = np.max(np.stack([_ss(0.006, 0.0, e.d(p)) for e in PADS]), axis=0)
     for e in ARMHOLES + [NECKHOLE]:
@@ -2189,7 +2217,7 @@ def paint_tabard(p, n):
 def paint_skirt(p, n):
     """the tabard's four lower panels: grey trims along the hem and every slit edge, a small chevron mark on each
     front panel above the hem (the painting's)"""
-    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None]
+    col = _cloth(p, n, "tabard", 0.05) * _nap(p)[:, None] * _hang_folds(p)[:, None]
     # (closing lisvel-M3) the hem a step darker above its trim (the felt's weight and the dirt of the road)
     col = col * (1.0 - 0.16 * _ss(0.10, 0.025, p[:, 2] - _tabard_hem(p)))[:, None]
     trim = _trim_band(p[:, 2] - _tabard_hem(p), 0.022) * (p[:, 2] < _tabard_hem(p) + 0.04)
@@ -2228,14 +2256,16 @@ def _skin_print(col, p, n, edge):
 
 
 def paint_tunic(p, n):
-    col = _cloth(p, n, "tunic", 0.05)
+    col = _cloth(p, n, "tunic", 0.05) * _hang_folds(p, 0.34, 0.10, 0.040, 1.02)[:, None] * _weave(p, 0.07, 420.0)[:, None]
     hem = _ss(0.012, 0.0, p[:, 2] - _tunic_hem(p))
     return col * (1.0 - 0.10 * hem)[:, None]
 
 
 def paint_belt(p, n):
     grain = 1.0 + 0.05 * NOISE(p, 60.0)
-    return C("belt") * (grain * _tl(n, 0.16) * _brk(p, 0.05))[:, None]
+    # (CW5 r2 refix, lisvel-M3) worn leather: the top and bottom edges rubbed pale, scuffs across the face
+    edge = _ss(0.30, 0.70, np.abs(n[:, 2]))
+    return C("belt") * (grain * _tl(n, 0.16) * _brk(p, 0.05) * (1.0 + 0.55 * edge) * _scuffs(p, 24.0, 0.32))[:, None]
 
 
 _STRAP_C: list = []
@@ -2265,7 +2295,7 @@ def paint_straps(p, n):
     # bow rub, the lit top edge stronger
     stl = np.exp(-((lat - (STRAP_W - 0.0042)) / 0.0007) ** 2)
     dash = np.clip(np.sin((p[:, 0] * 0.7 + p[:, 2]) * 1100.0) * 3.0, 0, 1)
-    k = (1.0 + 0.26 * edge) * (1.0 - 0.18 * side) * (1.0 - 0.25 * _drape_shadow(p)) * _scuffs(p, 24.0, 0.20)
+    k = (1.0 + 0.50 * edge) * (1.0 - 0.22 * side) * (1.0 - 0.25 * _drape_shadow(p)) * _scuffs(p, 24.0, 0.32)
     k = k * (1.0 - 0.30 * stl * dash) * (1.0 + 0.18 * stl * (1.0 - dash))
     return col * k[:, None]
 
@@ -2320,6 +2350,17 @@ def paint_sleeves(p, n):
                 * (1.0 - gather))
         k = ((1.0 - 0.48 * gather * crease ** 1.5) * (1.0 - 0.26 * inner) * (1.0 - 0.36 * longf)
              * (1.0 - 0.24 * lowf) * (1.0 + 0.10 * crest) * (1.0 - 0.26 * seam) * _weave(q, amp=0.09, f=420.0))
+        # (CW5 r2 refix, lisvel-M3: the verifier still saw smooth pale cylinders) drawn folds with crisp dark valleys:
+        # diagonal down the upper arm, spiralling the other way into the bracer, short creases crossing the elbow
+        lu, lf = float(np.linalg.norm(el - sh)), float(np.linalg.norm(wr - el))
+        v1, c1 = _fold_lines(thu * 0.052 + 0.42 * tu * lu, q, 0.036)
+        e1_ = _ss(0.04, 0.26, tu) * (1.0 - _ss(0.92, 1.08, tu))
+        v2, c2 = _fold_lines(th * 0.046 - 0.50 * t * lf, q, 0.026)
+        e2_ = _ss(-0.02, 0.10, t)
+        elb = np.abs(np.sin((t * lf + 0.012 * np.cos(th * 2.0)) * 2.0 * math.pi / 0.021)) ** 6
+        e3_ = np.exp(-(t / 0.13) ** 2) * _ss(-0.5, 0.2, -(n[sel] @ _n(el - (sh + wr) * 0.5)))
+        k = k * (1.0 - 0.58 * v1 * e1_) * (1.0 + 0.16 * c1 * e1_) * (1.0 - 0.52 * v2 * e2_) * (1.0 + 0.14 * c2 * e2_)
+        k = k * (1.0 - 0.34 * elb * e3_)
         out[sel] = col[sel] * k[:, None]
     return out
 
@@ -2367,7 +2408,10 @@ def paint_legs(p, n):
     a soft top light, the knee a touch lighter"""
     v = (1.0 + 0.025 * NOISE(p, 9.0)) * _tl(n, 0.10)
     knee = np.exp(-((p[:, 2] - 0.51) / 0.05) ** 2) * (n[:, 1] < 0.1)
-    return C("legs") * (v * (1 + 0.05 * knee))[:, None]
+    # (CW5 r2 refix, lisvel-M3) cloth, not rubber: long folds down the thigh and shin, creases behind the knee
+    va, cr = _fold_lines(np.arctan2(p[:, 0] - np.sign(p[:, 0]) * 0.09, p[:, 1]) * 0.07 + 0.25 * p[:, 2], p, 0.030)
+    bk = np.exp(-((p[:, 2] - 0.50) / 0.05) ** 2) * (0.5 + 0.5 * np.sin(p[:, 2] * 420.0 + 2.0 * NOISE(p, 20.0)))
+    return C("legs") * (v * (1 + 0.05 * knee) * (1.0 - 0.30 * va) * (1.0 + 0.30 * cr) * (1.0 - 0.28 * bk))[:, None]
 
 
 def paint_boots(p, n):
@@ -2396,7 +2440,12 @@ def paint_quiver(p, n):
     (review item 2: no black shards)"""
     q = p - Q_BOT
     t, w, nn = q @ Q_U, q @ Q_W, q @ Q_N
-    col = C("quiver") * ((1.0 + 0.05 * NOISE(p, 50.0)) * _brk(p, 0.06) * _tl(n, 0.14))[:, None]
+    col = C("quiver") * ((1.0 + 0.05 * NOISE(p, 50.0)) * _brk(p, 0.06) * _tl(n, 0.14) * _scuffs(p, 18.0, 0.34))[:, None]
+    # (CW5 r2 refix, lisvel-M3) the tube's stitched collars at the mouth and the foot, burnished along their edges
+    _L = float(np.linalg.norm(Q_TOP - Q_BOT))
+    collar = np.maximum(_ss(_L - 0.060, _L - 0.054, t), _ss(0.062, 0.056, t))
+    col = col * (1.0 - 0.22 * collar)[:, None]
+    col = col * (1.0 + 0.45 * np.maximum(np.exp(-((t - (_L - 0.057)) / 0.0035) ** 2), np.exp(-((t - 0.059) / 0.0035) ** 2)))[:, None]
     seam = np.exp(-((nn + Q_HD) / 0.004) ** 2) * (0.5 + 0.5 * np.sign(np.sin(t * 2 * math.pi / 0.012)))
     col = col * (1.0 - 0.25 * seam)[:, None]
     L = float(np.linalg.norm(Q_TOP - Q_BOT))
@@ -2457,6 +2506,13 @@ def paint_bow(p, n):
     # (closing lisvel-M3) the ash's long grain: dark streaks running along the limb, wavering across its width
     gl = np.sin(w * 900.0 + dv * 300.0 + 6.0 * NOISE(np.stack([u * 4.0, w * 20.0, dv * 20.0], 1), 1.0))
     col = col * (1.0 - 0.13 * np.clip((gl - 0.55) * 2.2, 0, 1))[:, None]
+    # (CW5 r2 refix, lisvel-M3: the limb read as a flat pale strip at any distance) coarse grain lines ~1 cm apart that
+    # waver along the limb, a darker back with a laminate line, the bevel's dark hairline under its worn edge
+    gc = np.sin(w * 560.0 + dv * 240.0 + 7.0 * NOISE(np.stack([u * 2.5, w * 12.0, dv * 12.0], 1), 1.0))
+    col = col * (1.0 - 0.30 * np.clip((gc - 0.35) * 1.8, 0, 1))[:, None]
+    col = col * (1.0 - 0.16 * _ss(-0.002, 0.008, dv))[:, None]
+    lam_ = np.exp(-((dv / np.maximum(ht, 1e-3) - 0.30) / 0.09) ** 2)
+    col = col * (1.0 - 0.28 * lam_)[:, None]
     # growth lines near the grip: nested arcs of the ring figure where the strip cuts the rings
     au0 = np.abs(u)
     ring = np.sin((au0 * 40.0 + (w / np.maximum(hw, 1e-3)) ** 2 * 3.0 + 0.8 * NOISE(p, 12.0)) * 2.0 * math.pi)
@@ -3495,35 +3551,50 @@ def gen_death(skel) -> anim.Clip:
 
 
 def gen_recall() -> anim.Clip:
-    """recall (loops): the bow lowered and turned upright before her like a harp, the string to her chest; the right
-    hand plucks it slowly, up and down its length, the head tilted as she hums"""
-    N = 90
-    base = pz(lean=4.0, yaw=0.0, drop=0.03, look=(10.0, 0.0, 8.0), string=0.0)
-    harp_l = bowl(rel=(-0.10, -0.62, -0.36), aim=(-1.0, -0.05, 0.0), up=(0.0, 0.0, 1.0), pole=(0.8, 0.4, -0.4))
+    """recall (CW5 r2, par:lisvel: head 1.6 cm, hips 1.6 cm: a frozen loop): one performance, no loop; the client spans it
+    over the whole channel, 5 s of keys over RIFT's 7 s. From the guard she steps down into a long low lunge and swings
+    the bow upright before her like a harp, its foot on the ground; three notes plucked from high on the string to low,
+    each pulled away from the string and let go, her body rising and rocking with each and her head turning to the bow;
+    then she rises on the last note's ring, the bow lifted toward the light, and comes back to the guard as she lands.
+    First = last."""
+    N = 150
+    FL, FR = (0.05, -0.27, 0.0), (-0.03, 0.31, 0.04)
+    low_f = feet_(l=FL, r=FR, yl=-8.0, yr=-34.0, pr=-46.0)
+    POLE_H, POLE_P = (0.8, 0.4, -0.4), (-0.8, 0.2, -0.5)
+
+    def harp(z=-0.24, x=-0.10, y=-0.62):
+        return bowl(rel=(x, y, z), aim=(-1.0, -0.05, 0.0), up=(0.0, 0.0, 1.0), pole=POLE_H)
+
+    def note(u, pull, drop, roll, look, string=0.0, lean=9.0, z=-0.24):
+        return pz(lean=lean, roll=roll, drop=drop, dy=0.03, look=look, feet=low_f, L=harp(z), string=string,
+                  R=rh(along=-(BRACE + pull), uoff=u, k=1.0, pole=POLE_P))
+
+    g = G()
+    step = pz(lean=5.0, yaw=-22.0, drop=0.10, look=(4.0, 0.0, 0.0), L=harp(-0.32),
+              feet=feet_(l=(0.04, -0.17, 0.07), r=(-0.03, 0.14, 0.0), yl=-12.0, yr=-40.0, pl=10.0),
+              R=rh(along=-BRACE, uoff=0.0, k=1.0, pole=POLE_P))
+    sink = note(0.12, 0.0, 0.33, 0.0, (20.0, 0.0, 0.0), lean=13.0)
+    settle = note(0.20, 0.0, 0.29, 2.0, (12.0, 8.0, 4.0))
+    keys = [(0.0, g, "linear"), (0.09, step, "inout"), (0.17, sink, "inout"), (0.23, settle, "out")]
+    t0 = 0.30
+    for u, sgn in ((0.26, 1.0), (0.06, -1.0), (-0.16, 1.0)):
+        keys += [(t0, note(u, 0.13, 0.27, 5.0 * sgn, (6.0, 20.0 * sgn, 8.0 * sgn), string=0.40), "inout"),
+                 (t0 + 0.035, note(u, 0.13, 0.27, 5.0 * sgn, (6.0, 22.0 * sgn, 8.0 * sgn), string=0.40), "linear"),
+                 (t0 + 0.055, note(u - 0.03 * sgn, 0.0, 0.20, -3.0 * sgn, (-4.0, 12.0 * sgn, -3.0 * sgn), lean=4.0), "accel"),
+                 (t0 + 0.12, note(u - 0.05 * sgn, 0.02, 0.29, -1.0 * sgn, (12.0, 4.0 * sgn, 0.0)), "out")]
+        t0 += 0.14
+    rise = pz(lean=-5.0, drop=0.07, dy=0.0, look=(-16.0, 0.0, 0.0), L=harp(0.02, -0.04, -0.72),
+              feet=feet_(l=(0.04, -0.18, 0.0), r=(-0.03, 0.15, 0.02), yl=-10.0, yr=-40.0, pr=-14.0),
+              R=rh(along=-BRACE, uoff=0.20, k=1.0, pole=POLE_P))
+    keys += [(0.82, rise, "inout"), (0.87, rise, "linear"), (0.97, g, "inout"), (1.0, g, "linear")]
+    fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=True)
 
     def sample(t):
-        p = dict(base)
-        p["ik"] = dict(base["ik"])
-        p["ik"].update(harp_l)
-        a = math.sin(2 * math.pi * 2 * t)
-        pl = 0.5 + 0.5 * math.sin(2 * math.pi * 4 * t)
-        p["ik"].update(rh(along=-(BRACE + 0.012 * pl), uoff=0.05 + 0.13 * a, k=1.0, pole=(-0.8, 0.2, -0.5)))
-        b = anim.osc(t, 3)
-        # (closing review lisvel-M4: the hips were static through the 7 s recall) a breathing weight shift: the hips
-        # sway 1.5 cm side to side and sink 1 cm on each exhale, the chest rolls with them, the bow hand lifts the
-        # harp a little on each counted beat of the dawn motif
-        sw = math.sin(2 * math.pi * t)
-        hx, hy, hz = p["hips_loc"]
-        p["hips_loc"] = (hx + 0.015 * sw, hy, hz - 0.010 * (0.5 + 0.5 * b))
-        p = anim.add(p, anim.P(hips=(0, 0, 2.0 * sw), spine=(0, 0, -1.2 * sw), chest=(1.6 * b, 1.5 * sw, -1.0 * sw),
-                               head=(0, 3.0 * a, 1.5 * b)))
-        beat = max(0.0, math.sin(2 * math.pi * 4 * t)) ** 3
-        p["ik"].update(bowl(rel=(-0.10, -0.62, -0.36 + 0.03 * beat), aim=(-1.0, -0.05, 0.0), up=(0.0, 0.0, 1.0),
-                            pole=(0.8, 0.4, -0.4)))
-        p["_str"] = (0.35 * pl, 0.0, 0.0)
-        return p
+        w = float(_ss(0.20, 0.28, t) * (1.0 - _ss(0.72, 0.80, t)))
+        b = anim.osc(t, 4) * w
+        return anim.add(fn(t), anim.P(chest=(1.5 * b, 0, 0), spine=(0.5 * b, 0, 0)))
 
-    return anim.Clip("recall", N, True, sample)
+    return anim.Clip("recall", N, True, sample)     # first = last (three_load_test's seam gate; the chains stay periodic)
 
 
 def gen_idle_lobby() -> anim.Clip:

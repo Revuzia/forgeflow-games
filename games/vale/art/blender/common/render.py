@@ -898,6 +898,14 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         lo.z = min(lo.z, 0.0)
         if cfg.get("box_top") is not None:        # a staged card may frame the body and let a raised weapon leave the
             hi.z = min(hi.z, float(cfg["box_top"]))   # frame's top (the fit box capped at this height, m)
+        # (CW5 r2, par:lisvel) a three-quarter hero shot: "box_lo" crops the fit box's bottom (m, the legs leave the frame's
+        # bottom), "box_w" clamps its half width and depth round the fighter's axis (a long bow's tips do not push the
+        # camera back), so the face is large in the card
+        if cfg.get("box_lo") is not None:
+            lo.z = max(lo.z, float(cfg["box_lo"]))
+        if cfg.get("box_w") is not None:
+            _w = float(cfg["box_w"])
+            lo.x, lo.y, hi.x, hi.y = max(lo.x, -_w), max(lo.y, -_w), min(hi.x, _w), min(hi.y, _w)
         _fit_camera(cam, lo, hi, cfg["yaw"], cfg["pitch"], cfg["lens"], cfg["fill"], 16 / 9, cfg["x"])
         bible_lights(cam, cfg_a, light_a, rim=1.0, scale=1.6, pair=True, target=(lo + hi) * 0.5)
         stage_lights(cam, cfg_a, arm, (lo + hi) * 0.5, scale=1.6)

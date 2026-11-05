@@ -700,8 +700,10 @@ def sculpts() -> list:
         c0 = Q_BOT + Q_U * zz
         ax3 = np.stack([Q_W, Q_N, Q_U]) if tilt == 0.0 else \
             np.stack([Q_W, Q_N, _n(Q_U * math.cos(math.radians(tilt)) + Q_W * math.sin(math.radians(tilt)))])
-        qc_.add(Torus(c0, Q_HW + 0.012, 0.0045, axes=np.diag([1.0, (Q_HD + 0.012) / (Q_HW + 0.012), 1.0]) @ ax3), k=0.0)
-    part("quiver_cords", qc_, "leather", "bone:chest", 260, vs=0.6)
+        # (CW5 r2 refix, ULK-M3: an elliptic torus round a rounded-box case stood proud only in short arcs, the dark
+        # 'smears' on the back of the case: closed lashings that follow the case's own section)
+        qc_.add(RoundBox(c0, (Q_HW + 0.0045, Q_HD + 0.0045, 0.0085), 0.034, axes=ax3), k=0.0)
+    part("quiver_cords", qc_, "leather", "bone:chest", 360, vs=0.6)
     shafts, heads, inlays = Sculpt("crest_shafts"), Sculpt("crest_heads"), Sculpt("crest_inlays")
     for i in range(len(CREST)):
         base, d, tip = crest_dart(i)
@@ -1001,7 +1003,8 @@ _install_decimate()
 
 # ── export: the shipping compression with the base colour at a lower WebP quality (wraps export.optimize in this
 # build process only; the shared optimize.mjs takes --q-base): the 2048 painting at q80 left the GLB over 1172 KiB ──
-Q_BASE = 70
+Q_BASE = 62        # the skins (c9beb122)
+Q_BASE_MAIN = 56   # the base carries the clips
 
 
 def _install_optimize() -> None:
@@ -1021,12 +1024,29 @@ def _install_optimize() -> None:
         before = os.path.getsize(path)
         if not node or not os.path.isfile(script):
             return orig(path, out, quantize, fighter)
-        args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE)]
+        args = [node, script, path, out] + (["--quantize"] if quantize else []) + ["--fighter", "--q-base", str(Q_BASE if os.path.basename(out) != "ulkro.glb" else Q_BASE_MAIN)]
         r = subprocess.run(args, cwd=_scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
         if r.returncode != 0:
             _scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
             return {"ok": False, "before": before, "after": before, "error": r.stderr[-800:]}
         _scene.log(r.stdout.strip())
+        # (CW5 r2 refix: the budget recipe of c9beb122, run by hand then, now part of the build) the base: the slow clips'
+        # every bone and the chains' tracks keep every 2nd key, ORM q30, normal q55; any GLB still over 1172 KiB is thinned
+        # with glb_simplify (locked UV borders)
+        if os.path.basename(out) == "ulkro.glb":
+            tool = os.path.join(_scene.TOOLS_DIR, "decimate_chains.mjs")
+            for extra in (["--prefix", "", "--clip", "idle,idle_lobby,recall,taunt,stunned,victory,channel"],
+                          ["--prefix", "x_", "--orm-q", "30", "--normal-q", "55",
+                           "--clip", "attack1,attack2,cast_a1,cast_a2,cast_a3,cast_ult,dash,run,death"]):
+                r2 = subprocess.run([node, tool, out, "--every", "2"] + extra, cwd=_scene.GAME_DIR, capture_output=True,
+                                    text=True, encoding="utf-8")
+                _scene.log((r2.stdout or r2.stderr).strip()[-400:])
+        if os.path.getsize(out) > 1172 * 1024:
+            kib = os.path.getsize(out) / 1024.0
+            ratio = max(0.70, min(0.95, 0.97 - (kib - 1172.0) / 900.0))
+            r3 = subprocess.run([node, os.path.join(_scene.TOOLS_DIR, "glb_simplify.mjs"), out, out, "--ratio", f"{ratio:.3f}",
+                                 "--error", "0.004"], cwd=_scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+            _scene.log((r3.stdout or r3.stderr).strip()[-300:])
         return {"ok": True, "before": before, "after": os.path.getsize(out), "q_base": Q_BASE}
     optimize._ulkro = True
     export.optimize = optimize
@@ -1656,7 +1676,16 @@ def paint_glass(p, n):
     # lobe is the roughness, GLASS_ROUGH, set in the baked roughness map by post_paint)
     v = (0.90 + 0.06 * np.clip(n[:, 2], -1, 1)) * (1 - 0.22 * vein) * (1 + 0.38 * _ss(0.80, 0.97, rim))
     v = v * (1 - 0.10 * np.exp(-(rim / 0.25) ** 2))
-    return _hl("#9FB4C6") * v[:, None]
+    col = _hl("#9FB4C6") * v[:, None]
+    # (CW5 r2 refix, ULK-M3: the heads still read matte) glass is painted by its contrast: a deep clear core toward the
+    # midrib and the head's root, the sky's hard streak down one flank, its small second glint on the other
+    core = np.exp(-(rim / 0.42) ** 2) * (1.0 - 0.55 * _ss(0.55, 0.95, u))
+    col = col * (1 - 0.72 * core)[:, None] + _hl("#3F6480") * (0.72 * core)[:, None]
+    a_n = np.clip(a_ / (W_ * 0.9), -1, 1)
+    streak = np.exp(-((a_n - 0.46 + 0.18 * u) / 0.075) ** 2) * _ss(0.10, 0.28, u) * _ss(0.95, 0.72, u)
+    gl2 = np.exp(-((a_n + 0.52) / 0.05) ** 2) * np.exp(-((u - 0.62) / 0.16) ** 2)
+    w_ = np.clip(0.95 * streak + 0.75 * gl2, 0, 1)[:, None]
+    return col * (1 - w_) + _hl("#F2F8FC") * w_
 
 
 def paint_eyeband(p, n):
@@ -1708,6 +1737,15 @@ def paint_quiver(p, n):
     return _hl("#9C8D72") * v[:, None]
 
 
+def paint_cords(p, n):
+    """(CW5 r2 refix, ULK-M3) the case's lashings: twisted cord, each ply lit along its crown, a dark line between"""
+    q = p - Q_BOT
+    ph = (q @ Q_U + 0.45 * (q @ Q_W) + 0.45 * (q @ Q_N)) / 0.0075 + 0.3 * NOISE(p, 30.0)
+    f = ph - np.floor(ph)
+    v = (0.72 + 0.46 * np.sin(np.pi * f)) * (0.90 + 0.14 * np.clip(n[:, 2], -1, 1))
+    return _hl("#5A4431") * v[:, None]
+
+
 def paint_torso(p, n):
     """the wrapped tunic (closing ULK-M3: projected strokes that ignored the folds): painted from the sculpt's own
     cross folds (_cross_folds: diagonals converging on the sash), each fold lit on its upper face and shaded under,
@@ -1725,7 +1763,7 @@ def paint_torso(p, n):
 PROC = {"legs": paint_legs, "wraps": paint_wraps, "boots": paint_boots, "hand_R": paint_hands, "hand_L": paint_hands,
         "sleeves": paint_sleeves, "hood_tail": paint_tail, "dart_shaft": paint_dart_shaft, "eyeband": paint_eyeband,
         "thrower": paint_thrower, "crest_shafts": paint_shafts, "crest_heads": paint_glass, "dart_head": paint_glass,
-        "quiver": paint_quiver, "torso": paint_torso}
+        "quiver": paint_quiver, "quiver_cords": paint_cords, "torso": paint_torso}
 
 
 def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> np.ndarray:
@@ -1780,13 +1818,15 @@ def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> 
         elif name == "eyeband":
             # the eye slit: an ink line along the band's lower groove, the carved relief's recesses a step darker
             pz_ = P[m][:, 2]
-            slit = np.exp(-((pz_ - (BAND_Z - BAND_H + 0.006)) / 0.0035) ** 2) * (N[m][:, 1] < 0.2)
+            slit = np.exp(-((pz_ - (BAND_Z - BAND_H + 0.006)) / 0.0052) ** 2) * (N[m][:, 1] < 0.2)     # (r2 refix, ULK-V1: wider, reads at card size)
             c = c * (1 - slit[:, None]) + _hl("#17161A") * slit[:, None]
         L[m] = c
         log(f"  tone {name}: -> {hx}")
     _glass_roughness(part, names, log)
     L = np.clip(L, 0.0, None)
-    L = L * np.minimum(1.0, MAX_LIN / np.maximum(L.max(1), 1e-6))[:, None]     # cap keeping the hue (no bleaching)
+    cap = np.full(len(K), MAX_LIN)                       # (r2 refix) the glass's painted sky goes above the cloth cap
+    cap[np.isin(K, [i for i, nm in enumerate(names) if nm in GLASS_PARTS])] = 0.88
+    L = L * np.minimum(1.0, cap / np.maximum(L.max(1), 1e-6))[:, None]     # cap keeping the hue (no bleaching)
     lin[idx] = L
     out = project._srgb(lin).astype(np.float32)
     iy, ix = project.nearest_index(have)
@@ -2506,29 +2546,53 @@ DEATH_AIM_R = (0.25, -0.97, 0.0)
 
 
 def gen_recall() -> anim.Clip:
-    """recall (loops; FIX PASS 1, review: 'a standing loop, no plant'): down on her right knee, the thrower planted
-    upright beside her on its knob with the dart standing in it, the right hand on its grip; the left hand goes over her
-    right shoulder and touches the darts in the quiver one by one, the head turned to them"""
-    N = 90
-    kneel = pz(lean=6.0, yaw=8.0, drop=0.40, dy=0.04, look=(8.0, -26.0, 0.0),
-               feet=feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.04), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0),
-               R={"hand.R": HT(pos=(-0.30, -0.24, 0.47), pole=(-0.8, 0.4, -0.3)),
-                  "aim.R": AimRoll((0.0, -0.05, 1.0), 1.0, (0.0, -1.0, 0.0))},
-               L=lh((-0.27, 0.06, 0.12), pole=(0.5, -0.6, 0.5)))
+    """recall (CW5 r2 refix, par:ulkro: head 3.3 cm, hips 1.2 cm, a nearly frozen loop): one performance, no loop; the
+    client spans it over the whole channel, 5.5 s of keys over RIFT's 7 s. A long step down onto her right knee, the
+    thrower swung upright and stamped on its knob; she reaches over her shoulder and counts three darts, each lifted
+    out of the row with the chest turning after it and the head following; the hand drops to her knee and she looks up
+    to the far horizon; she leans on the thrower, pushes up off the knee and is standing as the recall lands. The
+    thrower's hand stays absolute in every key (a lerp between rel and pos targets would jump). First = last."""
+    N = 165
+    FK = feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.40, 0.04), pl=0.0, pr=-62.0, yl=4.0, yr=-10.0)
+    A_K, U_K = (0.0, -0.05, 1.0), (0.0, -1.0, 0.0)
+    P_R, P_L = (-0.8, 0.4, -0.3), (0.5, -0.6, 0.5)
+    RK = np.array((-0.30, -0.24, 0.47))
 
-    # (CW5 refix, par:ulkro: the verifier measured the loop frozen, head 1.2 cm and hips 0: the hand travelled 3 cm):
-    # she counts the darts for real: the hand reaches 7 cm along the row and lifts each dart 7 cm, the chest turns
-    # after it, the head follows the count and glances back to the horizon, and she settles her weight on the knee
-    # with each breath (hips 1.2 cm across, 1.2 cm up)
+    def R_(off=(0.0, 0.0, 0.0), a=A_K, u=U_K):
+        return {"hand.R": HT(pos=tuple(RK + np.array(off)), pole=P_R), "aim.R": AimRoll(tuple(_n(a)), 1.0, tuple(u))}
+
+    def kn(drop=0.40, lean=6.0, yaw=8.0, look=(8.0, -26.0, 0.0), L=(-0.27, 0.06, 0.12), r=(0.0, 0.0, 0.0), pole=P_L):
+        return pz(lean=lean, yaw=yaw, drop=drop, dy=0.04, look=look, feet=FK, R=R_(r), L=lh(L, pole=pole))
+
+    R_ST = {"hand.R": HT(pos=(-0.28, -0.20, 0.985), pole=POLE_R), "aim.R": AimRoll(tuple(AX), 1.0, tuple(UPW))}
+    stand = pz(R=R_ST)
+    step = pz(lean=9.0, drop=0.13, dy=0.02, look=(5.0, 0.0, 0.0),
+              feet=feet_(l=(0.04, -0.20, 0.07), r=(-0.02, 0.12, 0.0), pl=8.0, yl=4.0, yr=-10.0),
+              R={"hand.R": HT(pos=(-0.30, -0.26, 0.92), pole=P_R), "aim.R": AimRoll(tuple(_n((0.25, -0.10, 0.96))), 1.0, tuple(U_K))})
+    sink = pz(lean=11.0, yaw=4.0, drop=0.30, dy=0.03, look=(10.0, 0.0, 0.0),
+              feet=feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.34, 0.15), pr=-44.0, yl=4.0, yr=-10.0), R=R_((0.0, 0.0, 0.26)))
+    stamp = kn(drop=0.415, lean=13.0, yaw=2.0, look=(22.0, 0.0, 0.0), L=(0.02, -0.12, -0.22), pole=POLE_L)
+    keys = [(0.0, stand, "linear"), (0.07, step, "inout"), (0.135, sink, "inout"), (0.175, stamp, "accel"),
+            (0.235, kn(look=(6.0, -14.0, 0.0), L=(0.0, -0.08, -0.16), pole=POLE_L), "out")]
+    t0 = 0.30
+    for x, turn in ((-0.20, 4.0), (-0.28, 10.0), (-0.36, 16.0)):                # three darts along the row
+        keys += [(t0, kn(yaw=turn, look=(6.0, -18.0 - 1.4 * turn, 0.0), L=(x, 0.06, 0.09)), "inout"),
+                 (t0 + 0.045, kn(drop=0.385, yaw=turn + 2.0, lean=3.0, look=(-2.0, -24.0 - 1.4 * turn, 4.0), L=(x - 0.02, 0.04, 0.23)), "inout"),
+                 (t0 + 0.085, kn(drop=0.40, yaw=turn, look=(8.0, -18.0 - 1.4 * turn, 0.0), L=(x, 0.06, 0.10)), "inout")]
+        t0 += 0.105
+    keys += [(0.68, kn(drop=0.36, lean=-1.0, yaw=-4.0, look=(-18.0, 22.0, 3.0), L=(0.03, -0.14, -0.26), pole=POLE_L), "inout"),
+             (0.755, kn(drop=0.36, lean=-1.0, yaw=-5.0, look=(-16.0, 26.0, 3.0), L=(0.03, -0.14, -0.26), pole=POLE_L), "linear"),
+             (0.81, kn(drop=0.41, lean=18.0, yaw=2.0, look=(4.0, 0.0, 0.0), L=(0.03, -0.16, -0.30), r=(0.0, 0.0, 0.03), pole=POLE_L), "inout")]
+    rising = pz(lean=13.0, drop=0.17, dy=0.02, look=(-4.0, 0.0, 0.0),
+                feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.03, 0.20, 0.02), pr=-18.0, yl=4.0, yr=-10.0),
+                R={"hand.R": HT(pos=(-0.30, -0.24, 0.80), pole=P_R), "aim.R": AimRoll(tuple(_n((0.25, -0.10, 0.96))), 1.0, tuple(U_K))})
+    keys += [(0.89, rising, "inout"), (0.97, stand, "inout"), (1.0, stand, "linear")]
+    fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=True)
+
     def sample(t):
-        tap = 0.5 + 0.5 * math.sin(2 * math.pi * 3 * t)                 # three darts touched per loop
-        side = math.sin(2 * math.pi * t)                                 # along the row and back
-        lw = (-0.27 - 0.07 * side, 0.06 + 0.04 * side, 0.12 + 0.07 * tap)
-        p = anim.merge(kneel, {"ik": lh(lw, pole=(0.5, -0.6, 0.5))})
-        b = anim.osc(t, 2)
-        p = anim.add(p, anim.P(spine=(1.5 * b, 2.5 * side, 0), chest=(2.5 * b, 6.0 * side, 0),
-                               neck=(0, -4.0 * side, 0), head=(4.0 * tap - 2.0, -10.0 * side, 2.5 * side)))
-        return anim._with_hips(p, (0.012 * side, 0.0, 0.006 + 0.006 * b))      # never under the kneel (knee floor)
+        w = float(_ss(0.22, 0.28, t) * (1.0 - _ss(0.76, 0.81, t)))
+        b = anim.osc(t, 5) * w
+        return anim.add(fn(t), anim.P(chest=(1.6 * b, 0, 0), spine=(0.6 * b, 0, 0)))
 
     return anim.Clip("recall", N, True, sample)
 
