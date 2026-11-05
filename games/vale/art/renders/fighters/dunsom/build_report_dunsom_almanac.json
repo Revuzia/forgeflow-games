@@ -32,14 +32,14 @@
   },
   "uv_coverage": 0.571,
   "bake": {
-    "base": 21.28,
-    "rough_metal": 18.41,
-    "normal": 6.14,
-    "ao": 7.01,
+    "base": 5.17,
+    "rough_metal": 4.25,
+    "normal": 2.56,
+    "ao": 3.12,
     "normal_fixed_px": 73036,
-    "projection": 143.06,
-    "pack_save": 143.33,
-    "total": 197.65
+    "projection": 47.53,
+    "pack_save": 47.82,
+    "total": 63.28
   },
   "tris": 23447,
   "mesh_top_m": 2.054,
@@ -62,6 +62,16 @@
       "  tris: 23447; bind-pose bounds (three units, Y up): 1.21 x 2.05 x 2.43; facing (0.00, 1.00); head bone y 1.68; runRefSpeed 3.35",
       "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
     ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/fighters/dunsom/dunsom_almanac_splash.png",
+      "portrait": "art/out/fighters/dunsom/dunsom_almanac_portrait.png"
+    },
+    "seconds": {
+      "splash": 60.5,
+      "portrait": 9.95
+    }
   },
   "three_qa": {
     "ok": true,
@@ -92,23 +102,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/dunsom/three_dunsom_almanac.png",
-    "seconds": 17.1,
+    "seconds": 11.7,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.17,
-      "model": 199.0,
-      "lows_bind": 32.17,
-      "uv": 26.47,
-      "bake": 197.9,
+      "materials": 0.14,
+      "model": 48.82,
+      "lows_bind": 6.27,
+      "uv": 8.33,
+      "bake": 63.6,
       "export": 0.16,
-      "optimize": 0.81,
-      "load_test": 0.16,
-      "three_qa": 17.41
+      "optimize": 1.06,
+      "load_test": 0.22,
+      "render": 70.55,
+      "three_qa": 12.04
     },
-    "total_s": 474.37
+    "total_s": 211.35
   },
   "run_ref_speed": 3.35,
   "height_m": 2.05,
