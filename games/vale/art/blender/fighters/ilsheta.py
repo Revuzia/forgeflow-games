@@ -271,7 +271,7 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 120.0, "el": 10.0, "dist": 0.9, "color": "#D6ECEA", "power": 3.0,
                               "size": 0.4}]},
-        "portrait": {"yaw": -6.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
+        "portrait": {"yaw": 8.0, "clip": "idle", "t": 0.5, "exposure": -1.1, "key_az": 130.0, "key_el": 30.0,
                      "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 30.0,
                                 "size": 0.25}]},
         "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
@@ -293,7 +293,7 @@ CARDS = {
         # (closing round 2 verify 1, cards:ilsheta-first-bell-chin: the bust took the splash's cast_a3 lean, the head tipped
         # back in the hood and the plate's chin rim opened a black bar over the collar: the bust stands on the idle, where
         # the plate stays seated, as the base and Stillwater busts do)
-        "portrait": {"clip": "idle", "t": 0.25, "yaw": 4.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
+        "portrait": {"clip": "idle", "t": 0.25, "yaw": 12.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
                      "key_color": "#FFE2B0", "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
                                 "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
