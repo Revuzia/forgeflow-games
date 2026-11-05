@@ -1,0 +1,67 @@
+{
+ "wave": "CW6",
+ "round": 2,
+ "verify": 2,
+ "pass": false,
+ "summary": "FAIL, narrowly, on two card-only items. Fixed and verified: Ilsheta's hollow-eye blocker (amber inlays read as a calm face at 26-128 px and in three.js), her par score (7.5), 8 of 8 fighters at par, all 24 GLBs load, Dunsom's lobby pop (0.413 to 0.032 m). Still open: the First Bell splash keeps the same black chin gap the portrait lost, and Tunlan's lantern is not the key. The hound shadow itself now reads well, but the true frame maximum is on the cuff and the claimed lantern centroid is an average of jaw, cheek, cuff, hat and lantern clusters. Both fixes need card renders only, no GLB rebuild.",
+ "items": [
+  {
+   "id": "sensitivity:ilsheta-face",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Reviewed as the sensitivity reviewer: art/out/fighters/ilsheta/icon.png at 26-128 and 640 px, all 3 portraits, all 3 splashes, and a fresh three.js render (_harness/_shots/fw_CW6_r2v2_ils_small.png, fw_CW6_r2v2_ils_icon640.png, fw_CW6_r2v2_ils_faces2.png, fw_CW6_r2v2_ils_splash_heads.png, fw_CW6_r2v2_three_ils_close.png). The black voids and grey smudges are gone. Eyes are amber inlays with a pupil on the warm #D98A3A chip ground; she reads as a calm person, not hollow-eyed, horror or a hockey mask. Facechip gate rerun: lowest pairs listed are 59.8 and above, no pair under 55. Three leftovers, none blocker-class: a pale vertical streak crosses the inner corner of her left eye on the base and Stillwater portraits; the Stillwater splash turn hides one eye, so the plate shows a single centred eye; the face plate shows stepped squares in three.js."
+  },
+  {
+   "id": "cards:ilsheta-first-bell-chin",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Portrait fixed: ilsheta_first_bell_portrait.png has no black bar or beige hump (fw_CW6_r2v2_ils_faces2.png, lower middle). The same defect is still on the same deluxe skin's store splash: ilsheta_first_bell_splash.png keeps the cast_a3 lean (ilsheta.py line 283, clip cast_a3 t 0.50) and shows a hard black gap with a white line and dark struts under the chin, about 70 px wide at 1600 px (fw_CW6_r2v2_ils_splash_heads.png middle, crop fw_CW6_r2v2_fb_splash_chin.png; 32 pixels under luma 40 at y 288 alone across x 1105-1175). The eyes are also tipped up into faint pink arcs with no inlay visible, so this card does not show the new face. The ilsheta.py comment above the bust fix records that the lean came from the splash; only the bust was moved.",
+   "fixHint": "Re-stage only the First Bell splash on a pose or head angle where the plate stays seated and the amber eyes are visible, for example the idle bust's head with the bell raised. Card render only, no GLB rebuild needed."
+  },
+  {
+   "id": "par:ilsheta",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Re-score 7.5 (was 7.2). The void-eye blocker is gone and the portrait bar is gone; motion and rear silhouette were not touched by the refix. three_load_test exit 0. The First Bell splash gap is the open major above; under ruling 8 it does not lower her below par, but it holds that card's own item."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Hound half met: art/out/fighters/tunlan/splash.png shows a soft, clearly hound-shaped shadow on a hung cloth, attached to a surface. card_qa 48 cards, 0 misses (_harness/_reports/fw_CW6_r2v2_card_qa.txt); First Bell dE 25.0 against floor 18 (_harness/_reports/fw_CW6_r2v2_de.json; down from 29.3, still passes). Lantern-as-key half not met, and the engineer's claim that the frame maximum moved to the lantern is wrong. Connected clusters in the top 0.01 % luma (threshold 242.8): 40 px on the jaw at (1120,275) max 248.7; 31 px on the lantern at (1069,259) max 249.3; 23 px at the cheek edge (1103,239) max 248.8; 21 px on the cuff at (1015,340) max 250.6, the true frame maximum; 23 px on the hat rim near (1130,105). The centroid x 0.682, y 0.273 is an average of these clusters and only happens to land on the lantern. Box p90: lantern 205.9, face 207.7; p99 242.8 vs 230.5, maxima 249.3 vs 248.7. By eye the lantern is a small cage half behind the fingers with no halo or spill on the hand or face, while the large cream face and the cloth take the eye (fw_CW6_r2v2_tun_key.png).",
+   "fixHint": "Tunlan base splash: cut the jaw, cheek and cuff highlights about 15 % (the cut the last verify asked for), raise the lantern core, and add visible glow and warm spill from the lantern on the raised hand and cheek. Check the cluster list, not the centroid."
+  },
+  {
+   "id": "handoff:CW6:cards",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Dunsom half done. Tunlan hound shadow reads; lantern key does not, see done:4."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "three_load_test exit 0 on all 24 GLBs, bases within --budget-kb 1172 (_harness/_reports/fw_CW6_r2v2_three_load.txt). Re-score: 8 of 8 at >= 7.5 with no blocker (ruling 8 replaces the criterion's 'no major'). Ilsheta re-scored 7.5. Tunlan and Dunsom keep par; their changes this refix are improvements. Hesmi, Marund, Odrum, Rishal and Sukri art is unchanged since verify 1 (git diff 196e8775 HEAD), so their scores carry."
+  },
+  {
+   "id": "dunsom:idle-lobby-pop",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "art/tools/clip_steps.py art/out/fighters/dunsom/dunsom.glb --clip idle_lobby --nodes hand.L,prop.L,hand.R,head --limit 0.1 exit 0: hand.L 0.032, prop.L 0.032, hand.R 0.037, head 0.010 m (_harness/_reports/fw_CW6_r2v2_dun_steps.txt). Skin GLBs carry 0 animations and use the base clips, so the fix covers them. Fresh clip sheet row looks clean, hands stay on the crook (fw_CW6_r2v2_three_dun_lobby.png). Victory hand.L backlog stays open and is not a blocker under ruling 8."
+  }
+ ],
+ "scores": {
+  "ilsheta": 7.5,
+  "others": "dunsom, hesmi, marund, odrum, rishal, sukri, tunlan keep >= 7.5 from verify 1; dunsom and tunlan viewed again, the other five unchanged in git"
+ },
+ "regressions": [],
+ "new_minors": [
+  "Ilsheta base and Stillwater portraits: pale vertical streak crosses the inner corner of her left eye.",
+  "Ilsheta Stillwater splash: the turn hides one eye, leaving a single centred eye on the plate.",
+  "Ilsheta face plate shows stepped squares in three.js close view (fw_CW6_r2v2_three_ils_close.png).",
+  "First Bell dE fell from 29.3 to 25.0 after the bust change; still above floor 18."
+ ],
+ "not_ours": [
+  "gen_store --check exits 1 only on lisvel_almanac dE 16.6 (CW5's skin); all CW6 skins pass."
+ ]
+}
