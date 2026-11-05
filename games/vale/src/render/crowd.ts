@@ -40,6 +40,8 @@ export interface CrowdPart {
   accent: boolean;
   /** perf PERF-m5: the index the crowd draws it through (lod.ts LOD.crowd), null = its own */
   lod: BufferAttribute | null;
+  /** the index a governed frame draws it through (lod.ts LOD.crowdHard), null = its LOD */
+  lodHard: BufferAttribute | null;
   /** metres per position unit (lod.ts dequantUnit): its shadow LOD's bound is taken in metres */
   unit: number;
 }
@@ -143,6 +145,8 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   const accents = meshes.filter((m) => (m.material as Material).name === accentName);
   const lods = meshes.map((m, i) => ((m.material as Material).name === accentName ? null
     : lodIndex(m.geometry, 'crowd', LOD.minTrisCrowd, units[i], accentLock(m, accents, LOD.crowdAccentLockM))));
+  const lodsHard = meshes.map((m, i) => ((m.material as Material).name === accentName ? null
+    : lodIndex(m.geometry, 'crowdHard', LOD.minTrisCrowd, units[i], accentLock(m, accents, LOD.crowdAccentLockM))));
 
   // sample every clip on a private clone (root at the template's placement, unit scale)
   const clone = cloneSkinned(scene);
@@ -187,7 +191,7 @@ export function bakeCrowd(scene: Object3D, clips: Map<string, AnimationClip>, hu
   // (rootInv above), so the instance matrix is actorRoot · compose(rootPos, rootQuat, scale)
   return {
     id: ++bakeSeq, texture, bones: ref.bones.length, clips: table,
-    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i], unit: units[i] })),
+    parts: meshes.map((m, i) => ({ geometry: m.geometry, material: m.material as MeshStandardMaterial, bind: binds[i], accent: (m.material as Material).name === accentName, lod: lods[i], lodHard: lodsHard[i], unit: units[i] })),
     hull: hull.map((h) => ({ geometry: h.geometry, bind: binds[h.lead] ?? binds[0], lod: h.members ? composeIndex(h.geometry, h.members, (i) => (lods[i]?.array as ArrayLike<number> | undefined) ?? null) : null, unit: units[h.lead] ?? 1 })),
     rootPos: scene.position.clone(), rootQuat: scene.quaternion.clone(), monster,
   };
@@ -355,9 +359,10 @@ export const CROWD_OUTLINE_FAR = 24;
 export const CROWD_OUTLINE_CROWDED = 1;
 export const CROWD_INK_TRIS_HIGH = 440000;
 export const CROWD_INK_TRIS_LOW = 380000;
-/** the governor's second step (a crowded frame still climbing, seed 7's final push peaked at 544k): the hit flash holds to
- *  the CROWD_FLASH_CROWDED flashing units of a set nearest the focus (each flash draws the unit twice more, its flash and
- *  its ink) and the crowd's bodies throw no shadow, until the frame is back under CROWD_HARD_TRIS_LOW */
+/** the governor's second step (a crowded frame still climbing, late pushes peaked at 544-562k): the hit flash holds to the
+ *  CROWD_FLASH_CROWDED flashing units of a set nearest the focus, the crowd draws no ink and no body shadow and its bodies
+ *  take their coarser LOD; the renderer also holds the x-ray to your team's fighters and draws no shadow-only tree cells,
+ *  until the frame is back under CROWD_HARD_TRIS_LOW */
 export const CROWD_HARD_TRIS_HIGH = 450000;
 export const CROWD_HARD_TRIS_LOW = 410000;
 export const CROWD_FLASH_CROWDED = 2;
@@ -453,7 +458,8 @@ class CrowdSet {
   private readonly accentMats: MeshStandardMaterial[] = [];
   /** the accent parts' meshes (the triangle governor drops their shadow in a crowded frame: the body's covers it) */
   private readonly accentMeshes: Mesh[] = [];
-  private readonly bodyMeshes: Mesh[] = [];
+  private readonly bodyMeshes: { mesh: Mesh; lod: BufferAttribute | null; hard: BufferAttribute | null }[] = [];
+  private hardNow = false;
   private colorSet = false;
   /** this frame's units, the flashing ones apart: end() writes those first, so the victim flash draws only them */
   private readonly units: CrowdActor[] = [];
@@ -491,7 +497,7 @@ class CrowdSet {
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       mesh.name = `crowd_part_${p.accent ? 'accent' : 'body'}`;
-      if (p.accent) this.accentMeshes.push(mesh); else this.bodyMeshes.push(mesh);
+      if (p.accent) this.accentMeshes.push(mesh); else this.bodyMeshes.push({ mesh, lod: p.lod, hard: p.lodHard });
       shadowLods(mesh);                                                    // hooked now (its LOD is built above)
       this.group.add(mesh);
     }
@@ -572,12 +578,17 @@ class CrowdSet {
       writeInstance(b, b.count++, a, this.bake, ink ? a.restOutline.px : 0, false);
     }
     b.commit();
-    for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf; else if (g.userData.outlineOnly) g.instanceCount = nf + kept;
+    // the governor's second step takes the set's ink off altogether
+    for (const g of b.geos) if (g.userData.flashOnly) g.instanceCount = nf; else if (g.userData.outlineOnly) g.instanceCount = hard ? 0 : nf + kept;
     // a crowded frame (the governor's cap): the team-colour accents throw no shadow of their own (a stripe or band on
     // the body, inside the body's shadow; ~0.4k triangles a unit in the shadow pass)
     const accentShadow = cap >= CROWD_OUTLINE_MAX;
     for (const m of this.accentMeshes) m.castShadow = accentShadow;
-    for (const m of this.bodyMeshes) m.castShadow = !hard;
+    for (const m of this.bodyMeshes) m.mesh.castShadow = !hard;
+    if (hard !== this.hardNow) {
+      this.hardNow = hard;
+      for (const m of this.bodyMeshes) if (m.hard && m.lod) m.mesh.geometry.setIndex(hard ? m.hard : m.lod);
+    }
     this.group.visible = b.count > 0;
     for (const f of this.flashMeshes) f.visible = nf > 0;
   }

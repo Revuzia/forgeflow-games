@@ -159,9 +159,9 @@ A walnut shade-hat (`#5E4D3E`) with lampresin panels (`#A38C6B`, 34% saturation)
 | Role | Hex | L* | Hue / sat | Change |
 |---|---|---|---|---|
 | `sandstone` | `#5E4D3E` | 34 | 28° / 34% | the named walnut shade-hat #5E4D3E (the hat ring and the crown rim only, 6% of the top band) |
-| `panel` | `#C9AD7E` | 72 | 38° / 37% | lampresin panel paper, lit from within (the named #A38C6B is the panel's shaded edge, 3% of the band) |
+| `panel` | `#CDB98F` | 76 | 41° / 30% | lampresin panel paper, lit from within (the named #A38C6B is the panel's shaded edge, 3% of the band) |
 | `lampresin` | `#A38C6B` | 60 | 35° / 34% | the named lampresin #A38C6B (the panel edges and the lantern bead) |
-| `cloth` | `#776A56` | 45 | 36° / 28% | felt robe, a walnut olive (closing round 2: away from the base's rose-brown at the game camera) |
+| `cloth` | `#776A56` | 45 | 36° / 28% | felt robe, painted as a walnut olive `#6F5C44` (closing round 2: away from the base's rose-brown at the game camera); the lit hat paper paints `#DDBE84` / `#CFA56A` |
 | `wood` | `#D3C0A0` | 79 | 38° / 24% | mask and fingers |
 
 Value bands (area-weighted): top **71** (70-85) · mid **47** (45-65) · feet **26** (20-35).

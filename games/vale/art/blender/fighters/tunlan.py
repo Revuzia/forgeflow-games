@@ -158,9 +158,9 @@ SKINS: list = [
     {"id": "tunlan_noon_fair", "extra": {"puppet_rods": True}, "card": {"primary": "#6A4F5E", "secondary": "#E2D6C3"},
      "palette": {"sandstone": "#E2D6C3", "lilac": "#B48AA6", "cloth": "#85727B", "wood": "#D3C0A0"}},
     {"id": "tunlan_lamplit", "extra": {}, "card": {"primary": "#4A4036", "secondary": "#A38C6B"},
-     # (closing round 2, CL-1 game camera: figure-mean dE 5.9, per-pixel 5.3: the panels a stronger lamp-lit honey
-     # #C9AD7E, the robe a walnut olive #776A56 away from the base's rose-brown)
-     "palette": {"sandstone": "#5E4D3E", "panel": "#C9AD7E", "lampresin": "#A38C6B", "cloth": "#776A56", "wood": "#D3C0A0"}},
+     # (closing round 2, CL-1 game camera: figure-mean dE 5.9, per-pixel 5.3: the hat's paper is HAT_SCHEMES and the
+     # felt SKIN_FELT_HEX, both moved there; the cloth role here only switches the felt recolour on)
+     "palette": {"sandstone": "#5E4D3E", "panel": "#CDB98F", "lampresin": "#A38C6B", "cloth": "#776A56", "wood": "#D3C0A0"}},
 ]
 SKIN_FLAT = {"rod_0": "wood_dark", "rod_1": "wood_dark", "rodhead_0": "lilac", "rodhead_1": "lilac"}
 SOCKETS = {"weapon": "prop.R", "lamp": "x_lamp", "hand_gesture_r": "x_gesture_r", "hand_gesture_l": "x_gesture_l"}
@@ -198,7 +198,12 @@ CARDS = {
                               "power": 22.0, "size": 0.12}]},
         # (polish: the cast_a3 bust put her raised hand across the mask in a glare streak; the bust takes the
         # recall's cupped lantern instead, its glow on the face from below)
-        "portrait": {"clip": "recall", "t": 0.10, "yaw": -30.0, "pitch": -4.0},
+        # (closing round 2: the head focal blew a white patch on the pale mask: softer and wider on the bust)
+        "portrait": {"clip": "recall", "t": 0.10, "yaw": -30.0, "pitch": -4.0, "sun": 1.3,
+                     "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.30, "color": "#FFC680",
+                                "power": 35.0, "size": 0.25},
+                               {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.70, "color": "#FFD2A0",
+                                "power": 8.0, "size": 0.35}]},
         "plate": {"tint": "#8A7AA0", "sat": 0.80, "median": 0.25, "glow": [0.85, 0.55, 0.35, 0.10],
                   "glow_color": "#C9A0E0", "cx": 0.40},
     },
@@ -1299,8 +1304,10 @@ HAT_SCHEMES = {
     # in each panel fading to the named #A38C6B at its ribs)
     # (fix pass 2: golden panels lit from the middle out, the light falling off over most of the panel's width to a warm
     # tan, the named #A38C6B only at the ribs; the rim the brief's walnut #5E4D3E, which also carries the top band)
-    "tunlan_lamplit": {"top": "#ECD5A6", "edge": "#A38C6B", "mid": "#DDBB86", "glow": "#F2D49A", "seam": "#4E3D2F",
-                       "crown": "#E0CCA2", "under": "#3E3229", "rim": "#5E4D3E", "rim_hi": "#7E6650"},
+    # (closing round 2, CL-1 game camera: the disc is most of her at the camera and its cream stayed the base's: the
+    # paper a lit honey, the crown with it, so the lantern reads from above)
+    "tunlan_lamplit": {"top": "#DDBE84", "edge": "#A38C6B", "mid": "#CFA56A", "glow": "#E6C284", "seam": "#4E3D2F",
+                       "crown": "#D2B682", "under": "#3E3229", "rim": "#5E4D3E", "rim_hi": "#7E6650"},
 }
 
 
@@ -1729,7 +1736,8 @@ SKIN_FELT = {"tunlan_noon_fair": (1.7, 0.88), "tunlan_lamplit": (1.0, 0.84)}   #
 # the felt's target colour where the skin's cloth hex reads wrong on screen: Lamplit's #7F6D60 (24 % sat) came out a
 # neutral blue-grey under the sky ambient (hue 247, 3 %) and a beige wash in the splash; a deeper warm walnut (hue 23,
 # outside the marigold band; ~20 % saturation on screen)
-SKIN_FELT_HEX = {"tunlan_lamplit": "#7A5A46"}
+# (closing round 2: #7A5A46 stayed close to the base's rose felt at the game camera: a walnut olive, hue 34, 39 % sat)
+SKIN_FELT_HEX = {"tunlan_lamplit": "#6F5C44"}
 
 
 def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print):

@@ -887,7 +887,7 @@ class ValeRenderer implements Renderer {
         // readability colour (the cover gate is terrain.coverToward; the depth test picks the pixels)
         if (v.kind === 'fighter') {
           const cp = cam.position;
-          a.setXray(live && a.veil !== 1 && !!this.terrain?.coverToward(a.x, a.y, cp.x, cp.z, cp.y - a.h), p.get(hex));
+          a.setXray(live && a.veil !== 1 && (!this.crowdHard || rel !== 'enemy') && !!this.terrain?.coverToward(a.x, a.y, cp.x, cp.z, cp.y - a.h), p.get(hex));
         }
       }
     }
@@ -1179,7 +1179,7 @@ class ValeRenderer implements Renderer {
     if (!this.terrain) return;
     const cam = this.rig.camera, v = this.cullView;
     _m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    const sh = this.sun.shadowsOn;
+    const sh = this.sun.shadowsOn && !this.crowdHard;
     const sdx = sh ? this.shadowDir.x : 0, sdz = sh ? this.shadowDir.y : 0;
     const K = this.cullKey, e = _m4.elements;
     let same = v.version > 0 && K[16] === Math.fround(sdx) && K[17] === Math.fround(sdz);

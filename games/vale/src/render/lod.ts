@@ -45,6 +45,9 @@ export const LOD = {
   /** the crowd's body and outline hull (main pass; the accents draw whole, crowd.ts bakeCrowd): a bound in METRES (each
    *  mesh's dequantization); textured, so never welded (a collapse across a UV seam would smear the texture) */
   crowd: { ratio: 0.25, errorM: 0.012, weld: false },
+  /** the same body in a frame the triangle governor holds down (renderer.ts): within 30 mm, ~1.5 px at the closest zoom on a
+   *  55-65 px unit, drawn only for the seconds a late push runs over budget */
+  crowdHard: { ratio: 0.1, errorM: 0.03, weld: false },
   /** a crowd body's vertices within this many metres of an accent vertex (at rest) are locked in its LOD (crowd.ts
    *  accentLock), so the surface a stripe or band sits on keeps its shape and the accent shows as authored */
   crowdAccentLockM: 0.035,
@@ -67,7 +70,7 @@ let ready = false;
 /** resolves when the simplifier can run (the loading screen awaits it) */
 export const lodReady: Promise<void> = MeshoptSimplifier.ready.then(() => { ready = true; }, () => { ready = false; });
 
-type Key = 'shadow' | 'hull' | 'crowd' | 'ink';
+type Key = 'shadow' | 'hull' | 'crowd' | 'crowdHard' | 'ink';
 /** per source index (or position, for a non-indexed mesh) attribute: the LOD per kind, null = not worth one */
 const cache = new WeakMap<object, Partial<Record<Key, BufferAttribute | null>>>();
 
