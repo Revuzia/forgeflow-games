@@ -11,6 +11,7 @@ import sys
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
 GAME = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BL = os.path.join(GAME, "art", "blender")
@@ -23,7 +24,21 @@ sp = importlib.util.spec_from_file_location(fid, os.path.join(BL, "fighters", f"
 mod = importlib.util.module_from_spec(sp)
 sys.modules[fid] = mod
 sp.loader.exec_module(mod)
-names = [it[0] for it in mod.sculpts()]
+
+
+class _Joints(dict):
+    """(Ervet's sculpts take the rig's joints: only the names matter here) a bone's head, or the origin for a joint with
+    no bone of that name (palm.R)"""
+
+    def __missing__(self, k):
+        return Vector((0.0, 0.0, 0.0))
+
+
+try:
+    names = [it[0] for it in mod.sculpts()]
+except TypeError:
+    arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    names = [it[0] for it in mod.sculpts(_Joints({b.name: b.head_local.copy() for b in arm.data.bones}))]
 body = max((o for o in bpy.data.objects if o.type == "MESH" and o.data.attributes.get("vale_part")),
            key=lambda o: len(o.data.polygons))
 maps = project.rasterize(body, 2048, "vale_part")
