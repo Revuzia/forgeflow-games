@@ -1,0 +1,146 @@
+{
+ "wave": "CW3c",
+ "pass": false,
+ "open": [
+  {
+   "id": "client:CL-1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "`node tools/gen_store.ts --check` exit 1: lisvel_almanac, deluxe, dE 16.6 vs floor 18; the other 31 of 32 pass. My own numpy CIE76 at 256 px also gives 16.6, with 29.1 % of pixels over dE 20 (lisvel_gorgewalk, the standard skin: 25.4 and 58.3 %). `--check --provisional` exit 0, gate 31/32; content/store.json:22 sells it at 600. Floor not lowered. By eye (_harness/_shots/fw_CW3c_r2v2_lisvel_base_almanac_gorge.png), base and Almanac are both a sand-coloured wrapped head, scarf and pale visor; mostly the backdrop and crop differ.",
+   "fixHint": "CW5: re-palette or re-stage lisvel_almanac to dE >= 18 by changing the figure, not only the plate, then run `node tools/gen_store.ts --provisional && npm run content` so it returns to 1,500."
+  },
+  {
+   "id": "hud:you-grammar-feed",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Found live: starting a surrender vote feeds 'You proposes to surrender.' (fw_CW3c_r2v1_probe.json, model.ts:671). The lint only covers announce.*.sub. Same class in aria-label only: model.ts:503 gives 'You is out' on your own Fray elimination.",
+   "fixHint": "model.ts:671: use a second-person string such as 'You propose to surrender.' when ev.player === this.you. model.ts:503: use 'You are out' for your own row. Widen copy_lint to any string whose {name} comes from nameOf."
+  },
+  {
+   "id": "handoff:CW6:tunlan-splash",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "art/out/fighters/tunlan/splash.png hash f402fd1d equals HEAD, last commit cff6f70d. Viewed at full size: a large black spiky blurred shape spans the sky, spires and terraces from about x 220 to x 1100, ending at her raised hand; L < 45 covers 44.1 % of the box x 200-800, y 40-320. The engineer's diagnosis is confirmed: it is the deliberate hound shadow (art/blender/fighters/tunlan.py:170-173, :179-189, HOUND :1899). Subject pass alpha max 0.784, 50.8 % above 0.05 upper left; Lamplit 0.0 %; Noon Fair 1.7 %. CW6_verify1 accepted it (line 39, plus 'Minor: the shadow floats on the sky plate'), but it has no wall to fall on, does not read as a hound, and looks like a render fault on the fighter's main card.",
+   "fixHint": "CW6: keep TUN-C3's hound shadow but make it read: put it on a plate surface (a wall or cliff face) or at much lower alpha with a clear hound silhouette, off the sky, then re-render, run card_qa and `npm run content`. Do not simply delete it, which reopens TUN-C3."
+  },
+  {
+   "id": "handoff:CW6:first-bell-desc",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/skins/ilsheta.json still says 'a pale dial-stone mantle ... over a dark hem', while the Shop shows an ochre hood and scarf on a tan coat (fw_CW3c_r2s2_1920_shop_ilsheta_fb.png).",
+   "fixHint": "CW6: rewrite the desc to match the re-palette."
+  },
+  {
+   "id": "client:shop-featured-hole",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "At 1920 the Featured block leaves an empty cell under Long Evening Lens with 4 offers (fw_CW3c_r2s2_1920_shop_ilsheta_fb.png, x 730-948, y 460-710). Spot-check, not compared to earlier rounds.",
+   "fixHint": "Let the last Featured tile span the column, or lay out 4 offers as hero plus a 3-row stack."
+  },
+  {
+   "id": "sensitivity:spot-check",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "All 48 portraits and splashes viewed on fw_CW3c_r2s_sheet_a/b.png, plus Shop and Collection model shots. No tall, pointed or conical hood and no blocker. burdam_almanac's gold dome mask has dark sockets and reads somewhat skull-like at tile size; judgement call, unmeasured.",
+   "fixHint": "CW5: look at burdam_almanac at tile size; warm the sockets or add a brow if it reads as a skull."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-hud-client",
+   "to": "CW1",
+   "what": "overlay_regress gate B2 fails on the low tier: enemy delayed circle r 3 m draws 4969 px, floor 5000 (_harness/_reports/fw_CW3c_r2d_overlay.log; same value in 3 runs today). It looks like a real drop, not only a near miss on low. Low read 14515 px through fw_CW1_overlay_polish (Nov 3), then 5881 in fw_CW1_r1_overlay (Nov 4 11:01); medium fell from 13476 (fw_W1_v1) to 8930. high was 8680 in fw_CW1_r1 and 8467 now. Measured two frames after the event, in the telegraph layer only (alpha > 0 on a fixed 1920x1080 target), so tier renderScale should not explain it. Candidates not yet tested: src/render/overlay/telegraphs.ts and src/render/director.ts, including commits in the Nov 3 13:00 to Nov 4 11:05 window. Check whether the early warning of a delayed area got thinner. If the shrink was intended, the lead should re-base MIN_AREA_PX in _harness/overlay_regress.mjs:46 with a recorded reason. Not touched here: not CW3c's files."
+  },
+  {
+   "from": "r2-hud-client",
+   "to": "lead",
+   "what": "Integration pass: run one clean `node _harness/e2e.mjs all` on an idle machine to close done:7. CW3c's 3-sweep budget is spent and no single sweep passed everything: the last one failed the flow journeys, which passed when re-run alone."
+  },
+  {
+   "from": "r2-store-skins",
+   "to": "CW5",
+   "what": "lisvel_almanac portrait reads dE 16.6 vs base, floor 18 for deluxe (art/out/fighters/lisvel/lisvel_almanac_portrait.png). Re-palette it or re-stage the bust. Then have CW3c or the lead run `node tools/gen_store.ts --provisional && npm run content`; it then returns to 1,500."
+  },
+  {
+   "from": "r2-store-skins",
+   "to": "CW6",
+   "what": "Tunlan base splash (art/out/fighters/tunlan/splash.png) has a large dark spiky blurred shape across the sky left of the fighter, reading as a stray shadow or out-of-focus foreground object: _harness/_shots/fw_CW3c_r2s_tunlan_splash.png. Check it and re-render if unintended. It passes card_qa, so the gate does not catch it."
+  },
+  {
+   "from": "r2-store-skins",
+   "to": "CW6",
+   "what": "content/skins/ilsheta.json, ilsheta_first_bell desc says 'a pale dial-stone mantle ... over a dark hem', but the re-paletted skin now has an ochre hood and scarf over a tan coat (fw_CW3c_r2s2_1920_shop_ilsheta_fb.png). The Shop caption shows this text; update the desc to match."
+  },
+  {
+   "from": "r2-store-skins",
+   "to": "lead",
+   "what": "The client reads dist-catalog/, not content/, so a store or portrait change does not show until `npm run content` runs. It was 1.5 hours stale when this package started, and the first shots showed old prices. I rebuilt it at 23:03. Re-run gen_store --provisional and npm run content once at the integration pass, after CW5's Lisvel work lands."
+  },
+  {
+   "from": "r2refix1",
+   "to": "CW5",
+   "what": "lisvel_almanac portrait is still dE 16.6 vs floor 18 after 9ab5f988, and the mean needs about +1.4. Change the Almanac card in art/blender/fighters/lisvel.py:146-160 and re-render with --skin lisvel_almanac --only portrait. Show the skin's own difference in the bust first: the ink trim (#2E2A26) and ruled parchment tabard are mostly out of frame at bust_lo 0.10 / bust_hi 0.30, so lower the crop or turn her until they show, keeping the face read that closed the blank-face blocker. A warmer plate is the cheap extra lever: background is 63.5 % of the frame at dE 10.2 (base Lab 33/2/-9, Almanac 37/3/-6), and about 12.4 there would add roughly 1.4. This arithmetic is untested, and a plate-only fix would pass the number without fixing the tile's read. Then run card_qa and `node tools/gen_store.ts --check`."
+  },
+  {
+   "from": "r2refix1",
+   "to": "CW6",
+   "what": "The Tunlan base splash's dark shape is your intended hound shadow, not an occluder, so keep the shadow and make it read. As composited it looks like a blurred spiky hand over the sky and spires. In the card's hound params (art/blender/fighters/tunlan.py:179-189) and HOUND (:1899): tighten the edge with a smaller projector or less blur, give the outline clear ears and a muzzle, reduce its opacity from the current alpha 0.78, and move it onto something in the Rift plate that can hold a shadow. Your note at :175 warns that a softer head focal washes the shadow out, so leave that focal alone. Re-run card_qa and view the composite, since card_qa does not catch this. Then ask the lead or CW3c to run `npm run content`."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Decide whether a hound shadow that fails to read blocks the Tunlan card. Dropping it would reopen TUN-C3, so it should not be removed by default. After CW5's Lisvel fix lands, run `node tools/gen_store.ts --provisional && npm run content`: lisvel_almanac returns to 1,500 and Featured/New eligibility once it passes. dist-catalog was last built at 23:03, before the 23:39 Almanac portrait, so the client still shows the older art until then."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-hud-client",
+   "items": [
+    "done:6=done",
+    "done:7=partly",
+    "critic:done-unverified=done",
+    "critic:ui-layout-originality=done",
+    "hud:hud-c3=done",
+    "hud:hud-c8=done",
+    "client:CL-3=done",
+    "client:CL-4=done",
+    "handoff:CW1:perf=done",
+    "handoff:CW1:camera-input=done",
+    "handoff:CW3s:quick-rekey-polish=done",
+    "handoff:CW3s:refix1=done",
+    "handoff:CW4:polish=done"
+   ],
+   "commits": [
+    "8e69bb62",
+    "65ced044",
+    "54f29fdc",
+    "fbeb8fb9",
+    "c8dcd19e",
+    "f81b84f5"
+   ],
+   "notes": "The user asked whether progress is going well. For this package, mostly yes: 13 items are done and 1 is partly done, but done:7 is still open, so the package is not closed.\n\nThis session added no code and made no commits. The interrupted attempt had already committed every code item (the commits listed), so I re-measured at 5003dc27 rather than redoing them. Some item evidence is from that attempt's reports, not fresh runs; only typecheck, content:check, icon_probe, hud_renders and overlay_regress were re-run now.\n\nTwo things keep done:7 open:\n1. overlay_regress fails B2 low (4969 px, floor 50"
+  },
+  {
+   "key": "r2-store-skins",
+   "items": [
+    "done:5=done",
+    "client:CL-1=partly",
+    "handoff:CW3c:refix1=done"
+   ],
+   "commits": [
+    "3aa58750"
+   ],
+   "notes": "Progress on this package is good: 2 of 3 items are done and the third is waiting only on CW5's Lisvel Almanac skin, so it was marked partly rather than done. No e2e or perf sweep was spent; sweep_720 ran three times on the draft and skins screens, and one of those failures was a bug in my new assert (base tile's aria label), fixed before commit. Shots and reports are under _harness/_shots/fw_CW3c_r2s* and _harness/_reports/fw_CW3c_r2s*. Crop measuring scripts are at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/crop_de.py an"
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "client:CL-1=partly",
+    "handoff:CW6:tunlan-splash=not_done"
+   ],
+   "commits": [],
+   "notes": "Progress check: neither item is closed, and this refix produced no commits. Both fixes are in art owned by other lanes (CW5 and CW6), so under the lane rules I diagnosed them read-only and wrote exact handoffs. No rebuilds or sweeps were used.\n\nCL-1: the store is safe and consistent, with 31 of 32 skins passing. lisvel_almanac stays provisional at 600 and off Featured and New. CW5's 23:44 commit did not move its dE from 16.6.\n\nTunlan splash: the verifier's 'stray occluder' reading is wrong. The shape is the hound shadow the closing review asked for. It still reads badly by eye, so that part of"
+  }
+ ],
+ "summary": "Fail. Neither item moved: the refix engineer changed nothing, correctly, because both fixes are in other lanes' art (CW5 and CW6), and the engineer's measurements reproduce. CL-1 stays partly at lisvel_almanac dE 16.6 vs 18, safely priced at 600. Tunlan's base splash still shows the dark floating shape, confirmed as the intended hound shadow, which does not read as one. No regressions: no CW3c file is modified, tsc shows no errors in CW3c paths and content:check is OK; e2e and sweep were not re-run because nothing in the lane changed. CW3c cannot close without those two art handoffs. Verdict: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/CW3c_r2_verify2.json, committed as dc344227 and pushed."
+}

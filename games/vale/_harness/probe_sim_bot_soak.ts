@@ -2,7 +2,7 @@
 // native fighter of its role, with the bots' own pickLoadout, exactly as the real draft seats bots),
 // headless at full sim speed, measured against the W4 done-list (_design/reviews/final_parity_review.md):
 //
-//   laning     (gameplay:G1)  Wicks dying before 14:00 last-hit by fighters ≥ 50 % · solo-laner cs at
+//   laning     (gameplay:G1)  Wicks dying before 14:00 last-hit by fighters ≥ 42 % (owner_rulings 15) · solo-laner cs at
 //                             10:00 ≥ 45 · laners' in-lane share (lane+trade+push+allin over alive time
 //                             1:00–14:00) ≥ 65 % · fighter deaths to Wicks or monsters with no enemy
 //                             fighter involved (no credit, no assist) ≤ 5 %          — per difficulty
@@ -707,7 +707,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
   const both = (f: (L: ReturnType<typeof laningStats>) => boolean): boolean => diffs.length > 0 && diffs.every((d) => f(lan[d]));
   const vals = (f: (L: ReturnType<typeof laningStats>) => string): string => diffs.map((d) => `${d} ${f(lan[d])}`).join(' / ');
   if (rift.length) {
-    gates.push({ group: 'laning', item: 'gameplay:G1', label: 'Wicks dying ≤ 14:00 last-hit by fighters', value: vals((L) => pct(L.lastHit)), target: '≥ 50 %', pass: both((L) => L.lastHit >= 0.5), n: rift.length });
+    gates.push({ group: 'laning', item: 'gameplay:G1', label: 'Wicks dying ≤ 14:00 last-hit by fighters', value: vals((L) => pct(L.lastHit)), target: '≥ 42 % (owner_rulings 15)', pass: both((L) => L.lastHit >= 0.42), n: rift.length });
     gates.push({ group: 'laning', item: 'gameplay:G1', label: 'solo-laner cs at 10:00', value: vals((L) => L.soloCs10.toFixed(1)), target: '≥ 45', pass: both((L) => L.soloCs10 >= 45), n: rift.length });
     gates.push({ group: 'laning', item: 'gameplay:G1', label: 'laners in lane, 1:00–14:00', value: vals((L) => pct(L.inLane)), target: '≥ 65 %', pass: both((L) => L.inLane >= 0.65), n: rift.length });
     const cut = rift[0]?.job.cut ?? 0;

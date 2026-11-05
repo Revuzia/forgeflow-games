@@ -1,0 +1,213 @@
+{
+ "wave": "CW1",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Load 24-39. Functional half passes: gpubound left scale 2.0 at 1.2 s, calibrate and dynres PASS. Tail 57.6 fps (target >= 58) reported as machine busy. Ultra has no entry in the report's presets (fw_CW1_rv1_perf.json).",
+   "fixHint": "Integration pass at load < 3: perf_1080 --prod --match-seeds 7,11,23 --wait-idle 30, plus an Ultra run."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "value_probe (fw_CW1_rv2_value.log lines 123, 161) has 2 FAIL lines: BRIDGE frameP99 164 high and 174 low (<= 160). No ruling exists in owner_rulings.md. The probe exits 0 despite FAIL lines. Environment-only p99 on BRIDGE is 106 / 107, which fits the claim that fighters drive the excess, but I did not re-derive the pixel counts. The rest passes: perf_1080 --prod GATE PASS (fw_CW1_rv2_perf.log line 60, load 47-118, so gate result only), overlay_regress PASS, typecheck clean, content:check 0 warnings, build OK.",
+   "fixHint": "Lead ruling needed: gate BRIDGE on frameP99Env, or move the BRIDGE fight spot, which is outside this lane."
+  },
+  {
+   "id": "perf:PERF-C1",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Functional half passes. Under load 22-39: High 58.0 fps, Low 59.9 fps, gpubound tail 57.6 fps (fw_CW1_rv1_perf.json).",
+   "fixHint": "Integration pass at load < 3."
+  },
+  {
+   "id": "critic:b4-realtime",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Not run: load stayed about 7-100 and the step needs load < 3.",
+   "fixHint": "Integration pass: perf_1080 --match-scale 1 at load < 3."
+  },
+  {
+   "id": "critic:input-feel",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Two 50-order runs exit 1 on latency only: marker p95 53.6 ms and 41.3 ms (limit 2 frames) with frames at 20.3 and 17.5 ms and load up to about 100; r2h passed at 20.7 ms. Motion p95 is in limit. attackAsMove 0 and attackMarkMissing 0 in both. rv1b's order 16 was a correct move because the foe was dead.",
+   "fixHint": "Run probe_input_latency --tag idle --only input twice at load < 3; keep the dead-foe case out of the attack set."
+  },
+  {
+   "id": "env:m-5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "fw_CW1_rv1_ambient.log: BRIDGE High flame max 51.5, under the 55-60 band; BRIDGE Low 55.5, FRAY 56.8 / 57.2, RIFT 57 / 59.1.",
+   "fixHint": "Lead rules on 51.5, or CW4 thins the overlapping flames at the gate spot."
+  },
+  {
+   "id": "burdam_almanac-vfxTint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "a1 0.704, ult 0.646 pass, but the ink tint is not visible at the ult's peak in fw_CW1_rv1_skin_burdam_almanac_ult.png, and the gate measures the signature, not the tint.",
+   "fixHint": "Capture the dust frames and confirm the ink tint can be seen, or accept it as a minor."
+  },
+  {
+   "id": "combat:beat-readability-eye",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "New eye note, not gated: Marund's victim reads as a flat mint silhouette at the first beat, and Burdam a3's victim as a pale white figure. Duration not measured. Shots: fw_W1_polish_ult_marund_beat_fw_CW1_rv1a.png, fw_CW1_rv1_kit_burdam_a3.png.",
+   "fixHint": "Measure how many frames the victim's interior detail is lost; if more than 2, ease the body tint on the dome and flash."
+  },
+  {
+   "id": "minor:low-first-beat",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Low's first beat is now 195-201 against 178-182 on High (fw_CW1_rv2_value.json, series frame 3). White share in the beat shots stays low, max 0.055 (ardit). Low's body-white and core ratios are not measured: the combat gates only run at q=high, and my q=low copy of probe_combat_polish exits 1 with 32 FAILs ('body not isolated 0/0 px'). I treat that as an invalid reading, most likely screen coordinates not fitting Low's smaller buffer, but did not prove it.",
+   "fixHint": "Backlog: make probe_combat_polish tier-aware if a Low combat gate is wanted."
+  },
+  {
+   "id": "minor:probe-comment",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The header of _harness/probe_kit_hue.mjs states the auto-attack cause of the Burdam a3 0.438 reading as fact. --swing --kits burdam --slots a1,a3 did not reproduce it: team 0.193, exit 0, one run (fw_CW1_rv2_swing.log).",
+   "fixHint": "Soften the comment; a full --swing sweep would be the only real test and is not worth the budget."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-kit-feel",
+   "to": "lead",
+   "what": "Confirm how probe_combat_polish reads ruling 10. Its clipBound condition (line 334) is true on 16/16 ults, so x2.0 is effectively the target everywhere and 10 ults are below 2.3. If the ruling means only ults whose ground truly clips, those"
+  },
+  {
+   "from": "r2-kit-feel",
+   "to": "lead",
+   "what": "Re-run on an idle machine (load was 20-175): `node _harness/probe_input_latency.mjs --tag idle --only input` twice in a row, and `node _harness/probe_kit_hue.mjs --live` for one clean 64/64 sweep on the final defs. Rebuild the served catalo"
+  },
+  {
+   "from": "r2-kit-feel",
+   "to": "CW6",
+   "what": "marund-M2 content: in content/fighters/marund.json, on the ult dash effect's `present`, set anim to 'domefall_leap' (it needs a present block carrying anim on the dash op, as your handoff described). The render side is ready and resolves th"
+  },
+  {
+   "from": "r2-kit-feel",
+   "to": "CW4",
+   "what": "BRIDGE low T4 flash reads 1.87x, with base luma now 95.8 (was about 91) and peak about 179. The disc peak did not respond to more Domefall light. If the BRIDGE ground rise came from your lane, about 89.5 or lower restores 2.0x at this peak;"
+  },
+  {
+   "from": "r2-kit-feel",
+   "to": "CW1 (next package)",
+   "what": "content/vfx.json is hand-edited in r2 (and in round 1, fdff8ed6), not in tools/vfx/bespoke/*.py. Running tools/vfx/build_vfx.py would overwrite defs that have a source, including these fixes. Port them to the generator, or do not regenerate"
+  },
+  {
+   "from": "r2-memory-crowd",
+   "to": "lead",
+   "what": "Integration pass on an idle machine (load < 3): run `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30` for the gpubound tail >= 58, Ultra 60 and b4 real-time gates. Also add probe_crowd_accent and probe_camjump, not re-run on the new governor, and value_probe B5, not re-run here."
+  },
+  {
+   "from": "r2-memory-crowd",
+   "to": "lead",
+   "what": "The perf_1080 memory gate moved from <= 3 % to <= 5 % to match this package's brief, and gained a tracked-count gate. The last sweep measured +0.6 %, so the old 3 % gate would also have passed."
+  },
+  {
+   "from": "r2-memory-crowd",
+   "to": "lead",
+   "what": "env:m-5 needs a ruling or a mesh change: BRIDGE High's flame cannot reach L* 55 in play while the layer-only max at the gate spot stays <= 60 (54.9 in play with 63.9 layer-only; 52.2 with 61.3). Either accept 51.5 as this minor's result or thin the overlapping flames at that spot."
+  },
+  {
+   "from": "r2-memory-crowd",
+   "to": "CW4",
+   "what": "Marund's T4 flash on BRIDGE low stays open from the earlier package (1.87x, ground base luma 95.8). It was not re-measured here; lowering the BRIDGE ground to about 89.5 or below was the earlier estimate for restoring 2.0x."
+  },
+  {
+   "from": "r2-memory-crowd",
+   "to": "CW5",
+   "what": "tunlan_lamplit a3 reads sig 0.046 in probe_kit_hue --skins with a3 added (fw_CW1_r2m_kit_skins.log). a3 is outside the skin gate (a1, ult), so this is a note and nothing fails; it was not investigated."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Nothing from this refix is committed or pushed. Uncommitted in the working tree: src/render/post.ts, content/vfx.json, tools/vfx/bespoke/tuned.json, _harness/probe_kit_hue.mjs and the new _harness/probe_flash_tier.mjs. Check whether /tmp/cw1_rf1_chain.sh finished (/tmp/cw1_rf1_chain.log); it may stop when this agent ends. If it did not, re-run it. It runs the --swing proof, value_probe with --report fw_CW1_rf1_value.json, Hesmi skins and 2 full sweeps. Commit only if they pass. The served catalog was not rebuilt, so the Hesmi layer has only been measured via --live."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Rule on BRIDGE frameP99 (165 high, 174 low, <= 160). Environment-only p99 is 106 and fighter pixels make up 84.6 % of the pixels above luma 160 on BRIDGE high. Options: gate on the environment-only p99 on BRIDGE, or change the fight spot. Note lane_mid and centre share the same spot (78, 22), which doubles its weight in the pool."
+  },
+  {
+   "from": "r2refix1",
+   "to": "CW6",
+   "what": "Minor, not a gate failure: Hesmi a1's status-only zone ticks fire lib_hit_phys_heavy every 0.5 s (frames 9, 24, 39 in fw_CW1_rf1_trace.json), because the ability's present.hitVfx appears to apply to them. A slow tick therefore looks like a heavy hit. Consider giving that zone tick no hit look. The exact content change is untested."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-kit-feel",
+   "items": [
+    "done:0=done",
+    "done:1=done",
+    "critic:combat-16=partly",
+    "critic:input-feel=partly",
+    "combat:C2=done",
+    "combat:C3=done",
+    "handoff:CW4:landmarks=not_done",
+    "handoff:CW6:hesmi-sukri=done",
+    "handoff:CW6:marund-odrum=partly",
+    "handoff:CW6:dunsom-ilsheta-rishal-tunlan=done",
+    "handoff:CW6:refix1=partly",
+    "handoff:CW1:hue-skinfx=partly",
+    "burdam_almanac-vfxTint=partly"
+   ],
+   "commits": [
+    "e223309d",
+    "33526ee4 (wip sync that swept in the Marund a3 mortar edit)",
+    "bc868dc2",
+    "0caaa199",
+    "e3c15c4b",
+    "f9cca4a2",
+    "4dade72c"
+   ],
+   "notes": "Round-2 package r2-kit-feel: 7 items done, 5 partly, 1 not done. Done: Marund a3 hue, Kemdo hold over 2 full runs, Rishal hold, Hesmi core under ruling 10, recall fit. Not done: BRIDGE low T4 flash at 1.87x. Partly: input-feel, combat-16 pending the ruling 10 confirmation, Domefall clip waiting on c"
+  },
+  {
+   "key": "r2-memory-crowd",
+   "items": [
+    "done:3=partly",
+    "done:4=done",
+    "done:7=done",
+    "perf:PERF-C1=partly",
+    "critic:b4-realtime=not_done",
+    "perf:PERF-C4=done",
+    "env:m-5=partly",
+    "handoff:CW1:perf=done",
+    "handoff:CW1:polish=done",
+    "handoff:CW5:kemdo-lisvel=done",
+    "handoff:CW5:nurrow-ulkro-ervet=done",
+    "handoff:CW5:vashil-rest-minors=done",
+    "handoff:r2:--gate-heights=done",
+    "handoff:r2:content/vfx.json is hand=done"
+   ],
+   "commits": [
+    "9c4c9794",
+    "0fb67d66",
+    "055ca967",
+    "618cdc6c",
+    "ca6acab7 (wip sync, carried CW1 render edits)",
+    "9f8e2db6 (wip sync, carried CW1 render edits and an interim vfx value later corrected by 055ca967)",
+    "bd559ed9 (wip sync, carried the final governor step in crowd.ts, lod.ts, renderer.ts)"
+   ],
+   "notes": "Progress is good: the full `perf_1080 --prod --match-seeds 7,11,23` sweep now prints GATE PASS, and the menu-cycle GPU leak is fixed.\n\n**Still open**\n- Idle-machine fps gates (done:3, PERF-C1, b4): the machine never went idle, so these go to the integration pass.\n- env:m-5 is partly done; it needs the lead's ruling (see handoffs).\n\n**Things to know**\n- Sim changes moved match length and peak timing during the session: seed 7 ended at 1762 s, 1800 s, 1342 s and 1412 s across runs. The three seeds now peak at 444-466k, but the earlier 544-562k peaks came from these same seeds, so re-check after "
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "done:0=partly",
+    "done:7=not_done",
+    "handoff:CW4:landmarks=partly"
+   ],
+   "commits": [],
+   "notes": "The refix is not finished, and none of the three items can be called done. I had to report while the measurement chain was still running, so the post-fix value_probe and both full sweeps have no results I can cite. The budget count is also open: the chain includes 2 full sweeps plus one value_probe.\n\nWhat is established:\n- Missing bloom explains the Low flash gap.\n- A candidate fix reaches 2.03x on BRIDGE low through the harness seam.\n- Hesmi a1 reaches 0.633 in one targeted run.\n\nWhat is not established:\n- The Burdam a3 cause is only a hypothesis.\n- The probe now disables auto-attack during s"
+  }
+ ],
+ "summary": "CW1 round 2 verify 2 fails on one major item: done:7, because value_probe B5 still shows BRIDGE frameP99 164 high and 174 low (<= 160) with no lead ruling. done:0 and handoff:CW4:landmarks now pass on my own re-measure, and I found no regression. Progress is good: what remains needs a lead ruling, not more engine work. Verdict committed and pushed as 17aa0294: _design/reviews/fixwaves/CW1_r2_verify2.json. The fix itself is committed (d8f0b43c, wip sync)."
+}

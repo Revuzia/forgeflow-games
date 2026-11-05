@@ -1,0 +1,194 @@
+{
+ "wave": "CW3s",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Fresh seeds 7101-7120 / 7301-7320, shuffled seats, adept / veteran (fw_W4_soak_fw_CW3s_r2v2af.txt, r2v2bf.txt). Pass: takedowns 7.15/7.65, 6.50/7.20; no-takedown games 0/20 in all four runs; shadehold takedowns 1.80/1.80, 1.60/1.60. Fail: adept stretch 3.4 and 3.6 min (bar 3; veteran 2.7, 2.5); Ulkro first ult 10.6 min at adept on r2v2af. Adept stretch pooled with the engineer's two windows is 3.03 min (n80).",
+   "fixHint": "Find where adept's long gap falls (not traced here) and raise its fights there; loosen Ulkro's ult-use read at adept; judge on at least 2 untuned windows."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Pass: Sunsplinter 1.9/2.1, 1.5/1.4 min; probe_sim_rekey 45/0; pacing.ts exit 0. Fail: last-hit 45.1/45.3, 46.5/45.9 % (bar 50), and the quick soak exits 1 on this gate at 44.5/44.5 % (r2v2quick); in lane 69.3/67.6, 71.1/68.0 % (done-list 75, soak gate 65 passes). Fail once: seed 4309 veteran core at 14.46 min reproduced (r2v2rep2); 0 early cores in 80 fresh full games, shortest 17.9 min. owner_rulings.md has no ruling on either bar.",
+   "fixHint": "Lead rules on last-hit 50 and on lane 75 vs 65; trace seed 4309, which reproduces deterministically."
+  },
+  {
+   "id": "gameplay:CL-1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Quiet laning is largely gone: takedowns by 10:00 went from 1.90/1.75 to 6.50-7.65, stretch from 6.4/6.3 min to 3.4-3.6 / 2.5-2.7. Still open: adept stretch over 3 min on 2 of 2 fresh windows, Ulkro 10.6 at adept on one, last-hit 45-46 %.",
+   "fixHint": "See done:1 and done:2."
+  },
+  {
+   "id": "critic:bot-micro",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Pass: skillshots veteran 80.9 vs adept 75.8 %, 78.5 vs 73.9 %. Veteran passive vs bot seat 343 vs 311 and 332 vs 299/min (pass). Adept 324 vs 366 and 341 vs 342/min (fail). Sums with the engineer's two windows: veteran 1283 vs 1289 (0.995), adept 1322 vs 1418 (0.93). The target is not reliably met at either tier.",
+   "fixHint": "Raise adept's riftPassivePress, or the lead accepts adept as easier on a passive seat."
+  },
+  {
+   "id": "gameplay:CL-2",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Stacking holds (rekey 45/0). First take 2.3/3.2 min here and veteran 8.3/7.9 on r2true/r2bal4, so the claimed done covers only half.",
+   "fixHint": "See done:2, Sunsplinter at veteran."
+  },
+  {
+   "id": "gameplay:CL-g3",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "85.0 % and 90.0 % on fresh windows, 83.3 % pooled with r2true.",
+   "fixHint": "See done:3."
+  },
+  {
+   "id": "gameplay:CL-g5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "No change this round; draft.ts:95 secondaryRole stands.",
+   "fixHint": "Roster growth is long-term work."
+  },
+  {
+   "id": "regression:dawn-seal-tip",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/client.json:71 says 'Until 7:00'; content/modes.json dawnSeal.until is 480 (8:00).",
+   "fixHint": "CW3c: change the tip to 'Until 8:00'."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-content-handoffs",
+   "to": "lead",
+   "what": "Domefall needs two contract changes outside my files, or the leap stays out of the game. (1) src/contracts/catalog.ts dash effect: add `arc?: number` to the TS type at l.162 and `arc: z.number().nonnegative().optional()` to the zod object a"
+  },
+  {
+   "from": "r2-content-handoffs",
+   "to": "CW4",
+   "what": "Camp facing now works in the sim. Set `\"facing\": 90` on the units of the four RIFT Strays camps (a_/s_strays_north/south in content/maps/map_rift.json). 90 means sim +y, which is toward the gameplay camera: actors.ts:927 has rotation.y = PI"
+  },
+  {
+   "from": "r2-content-handoffs",
+   "to": "CW1",
+   "what": "_harness/probe_camera.ts --gate-heights does not encode ruling 11, so it exits FAIL on allowed rows. Allow 85-105 px for compact builds (Sukri 86.5-87.1) and treat Marund Long Evening 130.4 as inside (for example, compare after rounding to "
+  },
+  {
+   "from": "r2-bots",
+   "to": "CW3c",
+   "what": "content/client.json:71: change the tip's 'Until 7:00' to 'Until 8:00'. RIFT's Dawn Seal now lifts at 8:00 (content/modes.json dawnSeal.until 480)."
+  },
+  {
+   "from": "r2-bots",
+   "to": "lead",
+   "what": "Every earlier soak labelled '--lineup shuffle' with --jobs > 1 was really seated 'rotate', 12 fixed teams, including the round-1 verifier's fw_W4_soak_fw_CW3s_v2 (12 distinct team-0 lineups in 20 games). Fixed in 9d505252. Earlier verifier numbers (takedowns, tier win rates, balance) should not be compared directly with new ones. The verify step should re-measure with this harness."
+  },
+  {
+   "from": "r2-bots",
+   "to": "lead",
+   "what": "Decision needed: last-hit >= 50 % and takedowns >= 6 still pull against each other, about -2.5 points of share per takedown on the rotate-seated tuning runs (no baseline on real seats). Options: re-set one bar by ruling (the sourced reference is about 12.3 kills a game by 10:00, so >= 6 is already half of it) or accept the bots below one bar. I did not change either gate."
+  },
+  {
+   "from": "r2-bots",
+   "to": "lead",
+   "what": "Real-seat balance read (200 games, bots playing): kemdo 71.6, ervet 66.4, odrum 65.5, ulkro 36.1, tunlan 34.6, nurrow 31.3 are outside 45-55 % at 95 % confidence. Nothing was rebalanced. This needs a package; it may reflect bot piloting as well as kit strength."
+  },
+  {
+   "from": "r2-bots",
+   "to": "CW3s or lead",
+   "what": "_harness/probe_sim_buildplan.ts still fails 14/1: hourcleaver is never in any fighter's first three pieces. A trial +4 attack did not fix it and was reverted. Commit 92b6372b's message says buildplan passed; I did not find what changed since, and my bot edits do not touch buildPlan's scoring."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Rule on G1 last-hit >= 50 %. Final code reads 45.2-45.6 % with takedowns at 6.55-7.60. Against verify 1's veteran (4.35 takedowns, 46.6 %) the cost was about -0.5 points per takedown, so cutting kills back would not recover 4.5 points. Options: re-set the bar near 45 % or leave it open. I did not change the gate."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Rule on laners in lane: done-list 75 % or soak gate 65 % (probe_sim_bot_soak.ts:712). Final code reads 67.9-70.3 %, which passes 65 and misses 75."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Decide on the early core: seed 4309 veteran lost its core at 14.5 min, 1 of 360 full RIFT games. Its full chain fell by then even with the team brain not targeting gates or core before 15:00 (14.4 min, r2f1r). A bot change did not fix it; if a firm 16:00 floor is required, a sim rule such as a core seal is one option, and it needs a schema change in src/contracts/catalog.ts. The cause is untraced, so first log what deals the damage in that game."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Watch the items gate: finished items held at 25:00 read 2.48 on seeds 4401-4420 (r2f1t, bar 2.5, soak gate FAIL) and 2.52-2.65 on the other full and final windows. I left it alone as window noise, but faster games reduce the margin. watchbell was never bought on r2f1d; r2f1t reads 30/31, r2f1p 31/31."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-content-handoffs",
+   "items": [
+    "handoff:CW2:runtime-polish=done",
+    "handoff:CW2:refix1=done",
+    "handoff:CW3c:refix1=done",
+    "handoff:CW4:monsters-1=done",
+    "handoff:CW6:marund-odrum=partly",
+    "handoff:CW6:refix1=partly",
+    "handoff:CW3s:quick-rekey-polish=done",
+    "ruling11:art-scale=done",
+    "marund-M2:content=not_done",
+    "lead:names-singulars=done",
+    "originality:m1=done",
+    "originality:m3=done",
+    "gameplay:CL-2=done"
+   ],
+   "commits": [
+    "9bd4d0ca names lint singular/plural",
+    "57a40642 ping slot",
+    "d90415e5 camp facing",
+    "99df6250 self-dash arc (sim only)",
+    "24057a4f ruling 11 art.scale",
+    "92b6372b bots set Spare Lamps"
+   ],
+   "notes": "Of 13 items, 10 are done, 2 are partly done and 1 is not done. The open ones are all Domefall: the arc code is committed but the leap and its clip are not in the game until the contract change in handoffs lands.\n\n- **Not pushed:** all six commits are local only; see the lead handoff.\n- **Commit mess"
+  },
+  {
+   "key": "r2-bots",
+   "items": [
+    "done:1=not_done",
+    "done:2=not_done",
+    "done:3=partly",
+    "gameplay:CL-1=partly",
+    "critic:gauge-source=done",
+    "critic:bot-micro=partly",
+    "gameplay:CL-g3=not_done",
+    "gameplay:CL-g4=done",
+    "gameplay:CL-g5=partly",
+    "gameplay:CL-g2=done",
+    "handoff:CW5:ardit-burdam=done"
+   ],
+   "commits": [
+    "18a0c68b vale CW3s: kill-pace gauge sourced from a page read; ROSTER Almanac Ledger line",
+    "508ac8f8 vale CW3s: r2-bots tuning (recalls, ability last hits, weaving, passive pressure, ganks from 4:30, xp steps, Dawn Seal to 8:00)",
+    "9d505252 vale CW3s: soak passes --lineup to its workers; veteran keeps dodge 0.85 and patience 1; novice does not weave; r2-bots results in modes_economy",
+    "e8b004d3 vale CW3s: BRIDGE structures at 0.76; first true balance read recorded",
+    "24a35754 vale wip sync (carried the BRIDGE-scoping change: rift* overrides in difficulty.ts and micro.ts, passive 0.55 after 6 s in bot.ts; my own commit for it found nothing left to commit)"
+   ],
+   "notes": "The package's main targets are not met: on real seats (seeds 961-980) takedowns by 10:00 are 5.85 / 5.35, the no-death stretch 3.3 / 3.5 min, last-hit share 46.2 / 46.2 %, and veteran beats novice 30/40 (75 %). Done: first ults by 10:00, duo level 6 by 8:00, the gauge source, the ROSTER line and the balance read.\n\nThe key finding is a harness bug. The soak never passed --lineup to its workers, so every multi-worker 'shuffle' run, including the verifier's, played 12 fixed teams. I found it late, so all tuning was done on rotate seats. The final code was then measured on real seats, but there is"
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "regression:probe_sim_buildplan=done",
+    "done:1=done",
+    "done:2=partly",
+    "done:3=done",
+    "gameplay:CL-1=partly",
+    "critic:bot-micro=partly"
+   ],
+   "commits": [
+    "12add1af vale CW3s: buildPlan values an ability-hit physical strike for physical divers and skirmishers (regression:probe_sim_buildplan)",
+    "02258be1 vale CW3s r2 refix 1 (done:1, done:2, done:3, CL-1, critic:bot-micro)"
+   ],
+   "notes": "Progress check: mostly going well, but CW3s does not fully pass yet. Fixed: the buildplan regression, veteran takedowns and quiet stretch, Ilsheta's late ult, veteran Sunsplinter, and veteran vs novice (139/160). Still open: last-hit share and in-lane time, which need lead rulings, the passive-seat pressure target, and one early core in 360 games.\n\nChecks at the final code: typecheck and content:check clean (0 warnings), every probe_sim_* exit 0, probe_items 160/0, pacing.ts exit 0.\n\nCoverage gap: the last full run including BRIDGE was r2f1g (BRIDGE median 15.2 min), before the final team.ts a"
+  }
+ ],
+ "summary": "CW3s round 2 verify 2 does not pass, though the refix is a real gain: veteran clears every laning-fight bar and done:3 and the buildplan regression now pass. Two fresh windows (seeds 7101-7120, 7301-7320) fail done:1 at adept: stretch 3.4 and 3.6 min, and Ulkro's first ult 10.6 min on one window. done:2 still fails on last-hit 45-46 % and in lane 68-71 %, and seed 4309's 14.46 min core reproduces. CL-1 and bot-micro are partly met. The engineer's runs reproduce exactly, so its numbers are real and the gap is window variance. The lead needs to rule on the last-hit and in-lane bars. Verdict: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/CW3s_r2_verify2.json, commit 471b0297, pushed."
+}

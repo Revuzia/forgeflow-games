@@ -1,0 +1,169 @@
+{
+ "wave": "CW5",
+ "pass": true,
+ "open": [
+  {
+   "id": "minor:floor-sweep",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "clip_floor over all 8 (fw_CW5_r2v1_floor.txt): Nurrow death -0.581 m, Ervet cast_ult -0.417 m, Lisvel death -0.285 m, Vashil death -0.259 m, Burdam channel -0.218 m. Mostly props; Lisvel and Nurrow death are toe.R. Pre-existing, not a regression from this package.",
+   "fixHint": "Backlog: lift props in those clips."
+  },
+  {
+   "id": "minor:stray-tool",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "art/tools/_tmp_lisvel_review_pose.mjs is still present, untracked.",
+   "fixHint": "Delete it."
+  },
+  {
+   "id": "minor:floor",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Lisvel death -0.285 m, taunt -0.273 m, idle_lobby -0.148 m (fw_CW5_r2v2_motion.txt). The floor depths are identical at 97fcafb6, so the refix did not cause them."
+  },
+  {
+   "id": "minor:ulkro-seat-lumps",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Two black faceted lumps on Ulkro's rear hips in the close sheet (_harness/_shots/fw_CW5_r2v2_ulkro_back_zoom.png); also in the older sheet, so not new. Not visible at the game camera or live (fw_CW5_r2v2_live_sheet.png)."
+  },
+  {
+   "id": "minor:ulkro-recall-patch",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Ulkro's recall floor pass rests on a GLB-only hips patch, per the engineer (source gives -0.021 m against the -0.02 limit); a rebuild loses it.",
+   "fixHint": "Move it into art/blender/fighters/ulkro.py at the next build."
+  },
+  {
+   "id": "minor:stored-sheet-render-setup",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Stored Burdam, Lisvel and Ervet sheets have backdrop (193,191,186); the other five and direct three_snapshot runs have (198,192,181). Cause not traced. Named pairs pass on both, but skin_gamecam_delta numbers are only comparable between sheets from one setup (Burdam base L* 57.1 vs 44.5).",
+   "fixHint": "Render all gate sheets one way, or record the setup in the report."
+  },
+  {
+   "id": "minor:stray-tool-file",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "art/tools/_tmp_lisvel_review_pose.mjs is untracked, dated Oct 28; it predates this round.",
+   "fixHint": "Delete it or leave it uncommitted."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-ardit-rest",
+   "to": "lead / verifier",
+   "what": "Re-score Lisvel, Ardit, Burdam and Ulkro; the par items cannot close without it. Also run _harness/probe_recall_fit.mjs with Ardit in the live client to confirm the new 5 s recall spans the channel. Ardit is at 1171.7 KiB of 1172, so any added clip data pushes it over budget."
+  },
+  {
+   "from": "r2-ardit-rest",
+   "to": "next CW5 round",
+   "what": "Lisvel (blocker-class): dark ragged patches on the back skirt panel (_harness/_shots/fw_CW5_r3_lisvel_backskirt.png), probably a leg poking through and not confirmed; sleeves still read smooth. Both need a rebuild; none was used on Lisvel in this package. A Burdam rebuild would also create its part map so burdam-M2 can be id-masked."
+  },
+  {
+   "from": "r2refix1",
+   "to": "verifier",
+   "what": "Re-score Lisvel and Ulkro. Run probe_recall_fit live with both (5 s and 5.5 s clips over RIFT's 7 s). Re-read Burdam trousers:boots with part_gamecam.py. Confirm the part-gain grades did not cost a fighter its par read."
+  },
+  {
+   "from": "r2refix1",
+   "to": "next CW5 round",
+   "what": "Lisvel death clip fails clip_floor: -0.285 m on toe.R, 613 verts below. Not in this package's items, so I left it."
+  },
+  {
+   "from": "r2refix1",
+   "to": "next CW5 round",
+   "what": "These grades live only in the GLBs, so a rebuild loses them. Ardit: cuirass 0.965, coat 1.03, boots 0.748, legs 1.288, helm 0.865, gorget 1.134. Vashil: robe_top 1.02, pauldrons 1.082, sash 0.817. Kemdo: hood 0.98, face 1.02, boots 0.783, trousers 1.266. Nurrow: belt 0.95, tabard 1.05, sleeves 0.97, forearm_wraps 1.03. Ulkro: legs 0.736, wraps 1.247, cowl 0.96, hood 1.02, plus the 4 mm recall hips patch. Burdam: cowl 0.838, belt 0.704, trousers 0.642, boots 1.144. Lisvel boots x1.293 is already in the source, but its skin GLBs were built at an earlier value (#473F3A, the source is now #4B433D). Cards were not re-rendered for these grades, except Lisvel and Ulkro, whose cards came from the rebuilds but before their last GLB-only grades."
+  },
+  {
+   "from": "r2refix2",
+   "to": "verifier",
+   "what": "Re-score Lisvel; par:lisvel and done:6 cannot close without it. Check the new splash (art/out/fighters/lisvel/splash.png) and that Burdam still holds par with its greyer pauldron."
+  },
+  {
+   "from": "r2refix2",
+   "to": "lead / integration",
+   "what": "Run `npm run content` once CW5 settles. The earlier verify found dist-catalog stale, and this pass changed the Ervet, Lisvel and Burdam GLBs and the Lisvel cards. I did not run it."
+  },
+  {
+   "from": "r2refix2",
+   "to": "next CW5 round",
+   "what": "Lisvel's tunic comes through the tabard panels in drawn poses. CARD_INSET hides this on the base card only: the shipped GLB and the skin cards still have it, and it is tiny at the game camera. A real fix needs a rebuild that draws the tunic in by about 28 % toward the body axis."
+  },
+  {
+   "from": "r2refix2",
+   "to": "next CW5 round",
+   "what": "These grades live only in the GLBs, so a rebuild loses them. Lisvel: tabard and tabard_skirt contrast x1.2, legs x1.3 (a comment in lisvel.py records this). Ervet: crest 0.67, scarf 1.05, breastplate 0.94, helm 0.97. Burdam: pauldron lift, pivot 0.55, gamma 0.72, on tiers, shoulder_plate, pauldron_lame and pauldron_face. Lisvel's base cards were rendered before her contrast grades, and the Ervet and Burdam cards were not re-rendered."
+  },
+  {
+   "from": "r2refix2",
+   "to": "next CW5 round",
+   "what": "The Lisvel death clip failure from the last round (clip_floor -0.285 m on toe.R) was out of scope here and is untouched."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-ardit-rest",
+   "items": [
+    "done:2=done",
+    "done:3=done",
+    "done:4=partly",
+    "done:5=done",
+    "done:6=partly",
+    "par:lisvel=partly",
+    "par:ardit=partly",
+    "par:burdam=partly",
+    "par:ulkro=partly",
+    "fighter:lisvel:lisvel-M1=done",
+    "fighter:burdam:burdam-M4=done",
+    "fighter:burdam:burdam-M2=partly",
+    "fighter:ulkro:ULK-M3=done",
+    "fighter:lisvel:lisvel-M3=partly",
+    "fighter:vashil:VAS-M1=done"
+   ],
+   "commits": [
+    "45654de2",
+    "d2014dbc"
+   ],
+   "notes": "Progress check: mostly on track, but no par item is closed. The four par items need a verifier re-score, and Lisvel is the real risk.\n\nDone this package: re-measured all items at HEAD and finished Ardit, the one item with no work yet (moving recall, helm pass, re-rendered cards).\n\nArdit details:\n- Budget: 3 of 3 full rebuilds used, so further Ardit changes need a new package or GLB-only edits.\n- Clean build differs from the shipped GLB: ardit.glb was post-processed with decimate_chains (x_ tracks, then idle, idle_lobby, recall, stunned, taunt, channel) and the new art/tools/clip_lift.mjs (deat"
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "par:lisvel=partly",
+    "par:ulkro=partly",
+    "fighter:lisvel:lisvel-M1=done",
+    "fighter:lisvel:lisvel-M3=done",
+    "finding:lisvel-back-patches=done",
+    "fighter:ulkro:ULK-M3=done",
+    "fighter:burdam:burdam-M2=partly",
+    "done:4=partly",
+    "done:6=partly"
+   ],
+   "commits": [
+    "6e863b2b vale CW5 r2 refix: Ulkro rebuilt and id-masked game-camera pairs (message says Burdam 9/9; last read 8/9 with the final grade re-read not done)",
+    "bfd987c7 vale wip sync (carried Lisvel work)",
+    "46acb92f vale wip sync (carried Lisvel and Ulkro work)",
+    "d6724665 vale wip sync (carried Ulkro and graded GLBs)"
+   ],
+   "notes": "Progress check, since the relayed request asked how it is going: it is going well. Both failing fighters got real fixes and everything is pushed, but nothing here is closed until the verifier re-scores them. Five of the eight items landed fully or nearly; done:4 and burdam-M2 still have measured gaps.\n\nBudget: I went over one reading of it. Lisvel had 2 base rebuilds and 1 skins pass; Ulkro had 3 base rebuilds and 1 skins pass; Burdam had none. That meets the per-model cap of 3 but exceeds \"3 in total\" if that line counts across models. One Ulkro rebuild was spent because my first quiver fix ("
+  },
+  {
+   "key": "r2refix2",
+   "items": [
+    "done:4=done",
+    "done:6=partly",
+    "par:lisvel=partly",
+    "fighter:lisvel:lisvel-M3=done",
+    "fighter:burdam:burdam-M2=done"
+   ],
+   "commits": [
+    "bb4df3f4 vale CW5 r2 refix 2 (done:4): Ervet pairs",
+    "9ab5f988 vale CW5 r2 refix 2 (par:lisvel, lisvel-M3, burdam-M2, done:4): Lisvel paint and splash, Burdam pauldron, named pairs. lisvel.glb and part of the lisvel.py paint landed in wip sync cf2011a6 before this commit."
+   ],
+   "notes": "All five items were worked. lisvel-M3, burdam-M2 and done:4 meet their measured criteria; par:lisvel and done:6 stay partly until the verifier re-scores Lisvel (she was 7.4, par is 7.5). Budget used: 3 rebuilds (2 Lisvel base, 1 Lisvel skins-only), which is the full allowance. Some splash staging is a card-only fix: CARD_INSET draws in Lisvel's tunic, sleeves and shirt for the base card, because the tunic and shoulder poked through the tabard in the card pose. The relayed request asked to check progress: progress is good, with Lisvel's score the one open question. Key files: /Users/sitskovich/"
+  }
+ ],
+ "summary": "CW5 round 2 verify 3 PASSES: progress is good, and all 8 fighters are at par. Lisvel re-scores 7.5, up from 7.4, but only just on the bar, and that score is my visual judgement. All five re-checked items pass on fresh renders and new measurements. No live match was run this pass, and the live catalog is stale until `npm run content` runs. Verdict committed and pushed as 0555e8c6: _design/reviews/fixwaves/CW5_r2_verify3.json."
+}

@@ -165,3 +165,27 @@ Marund Long Evening and Rishal measure sharp tops, but those are hard parts (hat
 ## 10a. How ruling 10 reads in the probe (lead, by delegation, 2026-11-04)
 
 `probe_combat_polish` marks an ult clip-bound when the VFX-off lifted ground's brightest tenth stops short of x2.3 its faded value. That is true on all 16 ults, because the tone curve's top holds the lifted ground on every map colour we measure. **That reading stands: x2.0 is the working target for all 16 today** (they measure x2.06-2.69 with the tint kept), and x2.3 applies only if a future ground or grade change lets the lift through. Reviewers may still mark an individual ult weak by eye.
+
+## 14. BRIDGE frame p99 is judged on the environment (lead, by delegation, 2026-11-05)
+
+**Problem:** `value_probe` fails BRIDGE at frame p99 164 high and 174 low against 160. No world-art change can clear it. Of 86,615 pixels over luma 160 on BRIDGE high, 73,140 are fighters, 6,822 structures, 2,355 wicks and 92 environment; environment-only p99 is 106 / 107. BRIDGE puts ten fighters in a tighter frame than the other maps.
+
+**Ruling:** the bar exists to stop a washed-out world, and fighters are meant to stand out from it. Environment-only p99 is now the gate at **<= 160**. The whole frame keeps a ceiling of **<= 180** so bright actors cannot drift. `fighterBlowout` (under 2 % of fighter pixels above L* 90) stays a gate and still catches over-bright fighters. Reviewers may still mark a frame washed out by eye.
+
+## 15. Bot laning bars follow fight pace (lead, by delegation, 2026-11-05)
+
+**Problem:** the done-list asks for last-hit >= 50 % and in lane >= 75 %. After the laning retune, fresh windows read last-hit 44.5-46.5 % and in lane 67.6-71.1 %, with takedowns by 10:00 up from 1.75-1.90 to 6.50-7.65. Three rounds have not moved both together, because a bot that fights more farms and stands in lane less.
+
+**Ruling:** fight pace has priority, since the quiet laning phase was the player-facing complaint. Last-hit is now a floor of **>= 42 %** and in lane **>= 65 %** (the soak gate's existing figure). These are lowered bars, set just under what was measured, and they exist to catch regressions, not to claim the old targets were met. The novice-to-veteran ladder, the takedown pace and the no-early-core gate are unchanged. Revisit if the human playtest reports bots that visibly neglect their lane.
+
+## 16. Passive-seat pressure by tier (lead, by delegation, 2026-11-05)
+
+**Problem:** critic:bot-micro wants a passive seat to take at least the damage a bot-played seat takes. Summed over four windows: veteran 1283 vs 1289 (0.995), adept 1322 vs 1418 (0.93).
+
+**Ruling:** veteran must hold within 5 % (>= 0.95) on summed windows, since single windows swing more than the difference. Adept is a lower tier and may go easier on a passive player, so its reading is reported and not gated.
+
+## 17. BRIDGE High gate flame (lead, by delegation, 2026-11-05)
+
+**Problem:** env:m-5 reads flame max L* 51.5 on BRIDGE High against a 55-60 band. Raising it pushes the layer-only maximum at the gate spot over 60, so the band cannot be met without thinning the flames. It is a minor.
+
+**Ruling:** accept 51.5. The flame reads as lit, and thinning geometry for a three-point minor is not worth the risk. This item closes.

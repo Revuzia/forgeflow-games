@@ -1,0 +1,119 @@
+{
+ "wave": "CW2",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Heal 1.57 and 0.85 per minute; enemyDown 1 and 4 with no forced death; lampSet 3 in run 1. Announcer margin depends on seat: Lisvel +2.99 dB misses the >= 3 bar by 0.01, Burdam +6.26 (fw_CW2_r2v2_match.json, match2.json). Build gates exit 0 (fw_CW2_r2v2_gates.log).",
+   "fixHint": "Fixed along with the Lisvel seat level under done:6."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "19 audio probes and gates re-run 19:32-21:20 with no commits to the audio paths; 16 pass. probe_audio_mix fails 2 of 2: M2 floor lift 0.4 and 0.9 dB, needs >= 1 (fw_CW2_r2v2_mix.json, mix2.json; last pass on file 2.1 dB), cause not identified. Runtime match fails 1 of 2 by seat: Lisvel -16.26 LUFS and announcer +2.99 dB (fw_CW2_r2v2_match.json); Burdam -18.53 and +6.26, PASS (match2.json). Runtime dead fails 2 of 3 (13.6, 23.57 PASS, 1.94 dB at 4 kHz; fw_CW2_r2v2_dead.json, dead_diag1.json, dead_diag2.json), but per-block data shows the engine holds -56.9 dB against -27.79 alive, a 29 dB drop; blocks after musicDead flips leak into the window, so this one is a probe defect.",
+   "fixHint": "Owner CW2. (1) Find why the RIFT floor lift fell, then fix the mix or justify a changed gate. (2) Run the match capture on several seats and bring Lisvel inside the band. (3) In runDead, select blocks by the row's own musicDead flag (r[1] === 1), not only by the end mark."
+  },
+  {
+   "id": "critic:audio-runtime",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Sync passes 3/3 from the pump: p95 31.78 / 31.38 / 31.88 ms against 42.72, 50 of 50 hits in call (fw_CW2_r2v2_sync.json). The rAF gates stay null because pump-late p95 was 4.9 / 11 / 3.6 ms against the 3 ms needed.",
+   "fixHint": "Needs an idle machine; integration pass."
+  },
+  {
+   "id": "audio:AUD-C4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Dead state: engineer's fw_CW2_r2_runtime_dead3.json passes (high band -14.13 dB, 4 kHz tone -28.46 dB, 200 Hz -2.76 dB); code at src/audio/index.ts:1525-1536. My dead run never started. The engineer reports phase segments and the objective layer as not built.",
+   "fixHint": "Schedule phase segments and the objective layer as a package in audio/build_music.py, audio/synth/music_match.py and src/audio."
+  },
+  {
+   "id": "probe:session_mem-S2",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Engineer's fw_CW2_r2_session_mem log reads S2 0/0/0. The earlier verifier attempt broke before S2 printed values, and my re-run never started. Code reviewed: draftCalls frees the calls and prewarm skips slot 'call' (src/audio/index.ts:1161-1177).",
+   "fixHint": "Same run as done:4."
+  },
+  {
+   "id": "probe:runtime-gates",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Still open from verify 1. _harness/probe_audio_runtime.mjs:412 computes r2(linePeak - p99); a null linePeak coerces to 0 - p99, so the null check at :428 cannot fire. All captures here had 5 real lines, so these readings are valid.",
+   "fixHint": "peakOverSfxP99: linePeak === null ? null : r2(linePeak - p99)."
+  },
+  {
+   "id": "note:match-footprint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not a gate. Match peak renderer + GPU 2729 (rift) and 3152 (bridge) MB, dev server at 16x under load, audio about 7 % of the bridge peak. Readings are thin: polls 2 / 1 / 0, and fray prints 0 MB with polls 0. Never read on --prod or at speed 1.",
+   "fixHint": "probe_audio_session_mem: print 'not polled' when polls is 0. If a match budget is wanted, read it on perf_1080 --prod."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-audio",
+   "to": "lead",
+   "what": "Integration pass on an idle machine: run `node _harness/probe_audio_runtime.mjs sync`. The rAF-relative gates (p95WithinFramePlusOutputPlusHop, engineOverSfxBus) arm only at pump-late p95 <= 3 ms. Also decide whether the from-pump primary g"
+  },
+  {
+   "from": "r2-audio",
+   "to": "lead",
+   "what": "AUD-C4 remainder (match phase segments, objective layer near Longshade / Sunsplinter) is unscheduled composition work in audio/build_music.py and audio/synth/music_match.py, plus a new layer role in src/audio. Schedule it as its own package"
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Integration pass on an idle machine: run `node _harness/probe_audio_runtime.mjs sync` to arm the two rAF-relative gates (they need pump-late p95 <= 3 ms; best here was 4.7 ms). Also decide whether from-pump stays the primary gate."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Decide whether CW1's 2.5 GB footprint gate should also cover the match. The real client on the dev server peaked at 3101 MB renderer + GPU (bridge) under load above 100, of which 236 MB is decoded audio; perf_1080's bench read 1985 MB at most without audio or HUD (fw_CW1_r2m_mem1.log). The gap is mostly not audio. If it matters, measure it in --prod on an idle machine, with CW1 owning the follow-up."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "probe:runtime-gates is still open and was outside this refix list. _harness/probe_audio_runtime.mjs:412 computes `linePeak - p99` with a null linePeak, so announcerPeakOverSfxP99Ge3 can pass with 0 lines. This run had 5 lines, so its +3.2 dB reading stands, but the median margin is only +2.86 dB. Schedule the small fix: compute the margins only when lines.length > 0, otherwise report the gate as notMeasured."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "done:5 is still unproven live and was outside this refix list: lampSet and lampOut were both 0 in this match capture (fw_CW2_r2f1_runtime_match.json), so the lamp cues are still proven only on a stub batch. audio:AUD-C4 phase segments and the objective layer also remain unscheduled."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-audio",
+   "items": [
+    "critic:audio-runtime=partly",
+    "audio:AUD-C4=partly",
+    "audio:AUD-C2=not_done",
+    "probe:session_mem-S2=done",
+    "probe:runtime-gates=partly",
+    "handoff:CW1:perf=done"
+   ],
+   "commits": [
+    "5aa31bfb vale CW2 r2: match prewarm of combat cues, draft-scoped lock-in calls, sync gates and 'dead' mode in probe_audio_runtime",
+    "9f338862 vale CW2 r2: mix trim 3.5 -> 3.0 dB, dead-state probe fixes, probe_audio_kits stubs prewarm",
+    "c2dc9d0c vale CW2 r2: enemyDownFires gated on a death in your team's sight, loudness gate needs >= 240 s"
+   ],
+   "notes": "Status is partly overall: S2 and the CW1 handoff are done; sync, loudness and the dead state are measured, but the rAF-relative gate needs an idle machine and phase segments and the objective layer were not attempted. Regression probes run after the engine change: cc, procs, announcer, listener, epi"
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "done:4=done",
+    "done:6=partly",
+    "handoff:CW1:perf=done"
+   ],
+   "commits": [
+    "db65e070 vale CW2 r2 refix: probe_audio_session_mem counts awake seconds and watches the match clock, polls decoded audio and renderer + GPU to each match's end, adds gate S4 (pushed to origin/claude/youthful-ramanujan-gdud5w)"
+   ],
+   "notes": "Overall: progress is good but CW2 is not fully closed. Of the three refix items, done:4 and handoff:CW1:perf are done; done:6 is partly done because two A/V sync gates need an idle machine. The only code change is the session_mem probe; no game or audio files changed, and only 1 of the 3 allowed sweeps was used. The first gates step failed because my runner used the system Python (no numpy); the venv re-run exited 0, so ignore the `gates exit 1` line in fw_CW2_r2f1_suite.log. The suite took about 67 minutes, stretched by heavy-slot waits and load that peaked above 340 (1-minute average) with 3"
+  }
+ ],
+ "summary": "Progress is good but CW2 does not close yet: FAIL on done:6. done:4 and handoff:CW1:perf now pass on my own real-Chrome run (Home audio 79 / 79 / 79 MB; renderer + GPU 1571 / 1703 / 1619 MB against 2500). Of 19 audio probes and gates, 16 pass. probe_audio_mix fails twice (RIFT floor lift 0.4 and 0.9 dB, needs >= 1, cause not identified). The match capture fails on a Lisvel seat (-16.26 LUFS, 0.24 LU over the band; announcer 0.01 dB under the bar). The dead probe is flaky from a window bug, while the engine measures a correct 29 dB drop. The rAF sync gates remain unmeasured for lack of an idle machine. Verdict committed and pushed as 1d9f8316: _design/reviews/fixwaves/CW2_r2_verify2.json."
+}

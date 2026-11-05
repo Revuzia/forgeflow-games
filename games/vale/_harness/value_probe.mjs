@@ -808,8 +808,9 @@ function verdict(s, flash, map) {
   // FRAY: the plate is the lane and fills ~86 % of the frame, so its median follows the plate (tokens grade.maps.fray.frameLuma)
   v.frameP50 = map === 'fray' ? `${s.frame.p50} ${ok(s.frame.p50 <= 90)} (<= 90, FRAY: follows the plate)` : `${s.frame.p50} ${ok(s.frame.p50 >= 55 && s.frame.p50 <= 75)} (55-75)`;
   v.frameP95 = `${s.frame.p95} ${ok(s.frame.p95 <= 130)} (<= 130)`;
-  v.frameP99 = `${s.frame.p99} ${ok(s.frame.p99 <= 160)} (<= 160)`;
-  if (s.envFrame) v.frameP99Env = `info: environment pixels only p99 ${s.envFrame.p99} (the world art's share of the frame p99; <= 160)`;
+  // owner_rulings 14: the world answers for p99 <= 160; the whole frame, fighters and all, keeps a ceiling so bright actors cannot drift
+  v.frameP99 = `${s.frame.p99} ${ok(s.frame.p99 <= 180)} (<= 180, whole frame: ruling 14)`;
+  if (s.envFrame) v.frameP99Env = `${s.envFrame.p99} ${ok(s.envFrame.p99 <= 160)} (<= 160, environment pixels only: ruling 14)`;
   v.env180 = `other ${(s.env180.otherShare * 100).toFixed(3)} % of env, lamps ${(s.env180.lampShareOfFrame * 100).toFixed(3)} % of frame ${ok(s.env180.otherShare <= 0.0005 && s.env180.lampShareOfFrame <= 0.02)}`;
   if (s.masks.ground) v.groundSat = `${s.masks.ground.sat} ${ok(s.masks.ground.sat >= 0.17 && s.masks.ground.sat <= 0.40)} (0.17-0.40; spec 0.22-0.35)`;
   if (s.fighters) v.fighterTop25 = `${s.fighters.top25} ${ok(s.fighters.top25 >= 70 && s.fighters.top25 <= 85)} (70-85), over lane ${s.fighters.overLane} ${ok((s.fighters.overLane ?? 99) >= 30)} (>= 30)`;

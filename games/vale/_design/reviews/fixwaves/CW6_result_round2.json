@@ -1,0 +1,245 @@
+{
+ "wave": "CW6",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Hound shadow now reads on a hung cloth (art/out/fighters/tunlan/splash.png). card_qa 48 cards, 0 misses (_harness/_reports/fw_CW6_r2v2_card_qa.txt); First Bell dE 25.0, floor 18 (_harness/_reports/fw_CW6_r2v2_de.json). Lantern as key is not met: the true frame maximum is 250.6 on the cuff at (1015,340), lantern 249.3 at (1069,259), jaw 248.7 at (1120,275), cheek edge 248.8 at (1103,239). The claimed centroid averages these clusters. Box p90 is lantern 205.9, face 207.7. The lantern shows no halo or spill and sits half behind the fingers (fw_CW6_r2v2_tun_key.png).",
+   "fixHint": "Cut jaw, cheek and cuff highlights about 15 %, raise the lantern core, and add visible glow and warm spill on the hand and cheek. Gate on the cluster list, not the centroid."
+  },
+  {
+   "id": "cards:ilsheta-first-bell-chin",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Portrait fixed. ilsheta_first_bell_splash.png still uses cast_a3 t 0.50 (ilsheta.py line 283) and shows the same hard black gap with a white line and struts under the chin, about 70 px wide at 1600 px, with the eyes tipped up to faint arcs (fw_CW6_r2v2_ils_splash_heads.png middle, fw_CW6_r2v2_fb_splash_chin.png).",
+   "fixHint": "Re-stage only the First Bell splash on a pose or head angle where the plate stays seated and the amber eyes show. Card render only."
+  },
+  {
+   "id": "handoff:CW6:cards",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Dunsom half done. Tunlan hound shadow reads; lantern key does not, see done:4.",
+   "fixHint": "See done:4."
+  },
+  {
+   "id": "fighter:ilsheta:ilsheta-face-seam",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The claim 'no stepped blocks' is refuted: stepped blocks remain on the plate's sides and cheeks at 512 px (fw_CW6_r2v1_zoom.png panels 1-2).",
+   "fixHint": "Fix with sensitivity:ilsheta-face: smooth the bake at the plate edge."
+  },
+  {
+   "id": "fighter:marund:gorgewalk-face",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "marund_gorgewalk_portrait.png: white patches and central spike over the moustache read as jagged, tooth-like blocks (fw_CW6_r2v1_zoom.png panel 3). Not horror in my view.",
+   "fixHint": "Reduce the white range of the Gorgewalk face paint so the keel is the only pale form."
+  },
+  {
+   "id": "fighter:deaths:floor",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "clip_floor death: Marund -0.371 m (x_cap_tip, 2738 verts), Tunlan -0.210, Rishal -0.137, Sukri -0.090, Dunsom -0.087, Odrum -0.037, Hesmi -0.030; Ilsheta passes. The engineer listed only Dunsom, Rishal and Tunlan; Marund's is the deepest, unchanged since 46e630fb.",
+   "fixHint": "Marund: raise the death end pose so the cap does not sink, or tilt it onto its rim."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Spot-checked lantern swing, Hesmi icon tops, Odrum channel head 7.1 cm, Dunsom value bands not re-run. Per its own package only 12 of 36 polish items were worked."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Guard pose and framing hold on the viewed cards; face-seam fails as above. Remainder as the engineer reports, not individually re-measured."
+  },
+  {
+   "id": "handoff:lead:catalog-stale",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "dist-catalog/manifest.json is dated 23:03; dunsom, ilsheta, odrum, rishal and tunlan GLBs are newer (up to 00:20). My live runs used a temporary fresh build.",
+   "fixHint": "Lead: run node tools/gen_store.ts --provisional and npm run content before the next re-score. CW5: lisvel_almanac dE 16.6 still fails gen_store --check, against CW5's verify 3 pass."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r2-models",
+   "to": "lead",
+   "what": "Run `npm run content` whenever content or a GLB lands before anyone judges in the client, and always before the verifier re-scores. The client reads dist-catalog/, not content/ or art/out/. dist-catalog was built at 15:36, before fe33cf48, so my first probe run showed a flat dash (anim 'dash', height 0) even though HEAD was correct; it also predated the Lamplit commit and the Dunsom base GLB. Someone rebuilt it at 18:22 and it now has leap / arc 0.55 and the current Lamplit and Dunsom GLBs (size match). It will go stale again with each new landing. Also: _harness/web/render_bench.ts:70 hardcodes /catalog/manifest.json, so ?catalog= does not apply there."
+  },
+  {
+   "from": "r2-models",
+   "to": "CW6 r2-cards",
+   "what": "Two cards to re-stage: ilsheta_first_bell_splash.png (lamp over the head, figure looks headless; a sensitivity-adjacent read as well as a face-read miss) and rishal_lamplit_splash.png / portrait (upper body pale cream, walnut barely reads, although card_qa passes). Re-render only; no model change needed."
+  },
+  {
+   "from": "r2-skin-reads",
+   "to": "lead",
+   "what": "Portraits changed for marund_gorgewalk, marund_long_evening, dunsom_almanac, rishal_chalkline and tunlan_lamplit. Run `node tools/gen_store.ts --provisional` (CW3c or lead), since the handoff asks for this after any portrait re-render, and `npm run content` before any re-score. I ran content at about 20:50, but the Rishal, Tunlan and Gorgewalk cards landed after it, so dist-catalog is stale for those cards."
+  },
+  {
+   "from": "r2-skin-reads",
+   "to": "CW5",
+   "what": "lisvel_almanac is now the only CL-1 failure, roster-wide: dE 17.4 against the deluxe floor 18, so `gen_store --check` still exits 1. This is CW5's skin, not touched here."
+  },
+  {
+   "from": "r2-skin-reads",
+   "to": "lead",
+   "what": "Value bands for the verifier: lineup_qa (art/renders/lineup/fw_CW6_r2sr_a.json, facing 0, top/mid/feet): Chalkline 63.8/42.0/27.1, Gorgewalk 52.6/35.1/25.7, Long Evening 48.4/33.5/24.7, Almanac 62.6/42.9/23.3, all below the guide bands 70-85 / 45-65 and valueGradientOk false. Compare with base Marund 57.6/37.8/38.6 and base Dunsom 64.8/42.4/27.8 (fw_CW6_p5_lineup.json), which also miss the top band, so the wide-capped builds miss it regardless. Chalkline was 69.9/45.0/27.8 in an old W5b lineup and has lost about 6 L* at the top across several passes, so this is more than a <= 2 L* minor. I did not raise the values, because that would undo the read. Tunlan Lamplit's bands were not measured."
+  },
+  {
+   "from": "r2-cards",
+   "to": "lead",
+   "what": "Portraits changed for ilsheta (all 3), rishal (all 3), odrum_shadeprint, sukri_stillwater, sukri_shadeprint and dunsom_almanac. Splashes also changed for ilsheta (all 3), rishal (all 3), odrum_shadeprint, sukri_stillwater, sukri_shadeprint, hesmi_shadeprint, marund, marund_gorgewalk, dunsom and dunsom_highrim. Run `node tools/gen_store.ts --provisional` and `npm run content` before any verifier re-score, because the client reads dist-catalog/. Current dE gate for CW6: all 16 paid skins pass (lowest standard 17.8, lowest deluxe 26.5)."
+  },
+  {
+   "from": "r2-cards",
+   "to": "CW5",
+   "what": "lisvel_almanac is the only dE gate failure across the roster: 16.6 against the deluxe floor of 18 (it was 17.4 earlier), so `node tools/gen_store.ts --check` still exits 1. This is CW5's skin, not touched here."
+  },
+  {
+   "from": "r2-cards",
+   "to": "CW6 r2-minors",
+   "what": "Ilsheta's face needs model work, not a card fix. The raw bust (art/.cache/fighters/plates/ilsheta_portrait.png) shows scattered rings and arcs in the plate's relief instead of the brief's ink almond recesses. It no longer reads as a blank egg, but the eyes are not clear; fix it with ilsheta-face-seam. Also: Marund Gorgewalk's face reads as patchy white blocks (the brush over the slate paint), and the Dunsom icon still has no lantern glow in a top corner (see polish-minors item 5)."
+  },
+  {
+   "from": "r2-minors",
+   "to": "lead",
+   "what": "Run `node tools/gen_store.ts --provisional` and `npm run content` before any verifier re-score, because the client reads dist-catalog/. New GLBs: all of ilsheta, dunsom and odrum, plus rishal and tunlan base. New cards: all of ilsheta, dunsom and odrum. New icons: dunsom, hesmi, ilsheta, odrum, sukri."
+  },
+  {
+   "from": "r2-minors",
+   "to": "lead",
+   "what": "Ask a sensitivity reviewer to look at Ilsheta's new painted face plate at 26-128 px and at the First Bell portrait's black line under the chin. I viewed them and judged them not horror or blank, but that is the engineer's own check. Not every re-rendered splash was viewed one by one: the Dunsom and Odrum splashes passed card_qa only."
+  },
+  {
+   "from": "r2-minors",
+   "to": "CW5",
+   "what": "tools/gen_store.ts --check still exits 1 on lisvel_almanac: dE 16.6 against the deluxe floor of 18. This is CW5's skin, even though CW5's verify 3 records Lisvel passing at 7.5. Ulkro's chip also sits closest to the facechip gate floor (sukri-ulkro 55.0, dunsom-ulkro about 56.7), so any Ulkro chip change can fail it."
+  },
+  {
+   "from": "r2-minors",
+   "to": "lead",
+   "what": "Death floor clips remain in three fighters and those models are out of budget or need a design call: Dunsom lantern -0.087 m, Rishal toe -0.137 m at f21, Tunlan robe -0.210 m (pre-existing). Raising Tunlan's hips about 0.2 m would clear hers but leaves her kneeling more upright, against TUN-c1's request to end at rest."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Run `node tools/gen_store.ts --provisional` before the re-score. Cards changed: all Ilsheta portraits, splashes and icon, all Dunsom cards, and the Tunlan base splash and portrait. I ran `npm run content` after the last card, exit 0 with 1 warning, so dist-catalog is current unless more lands."
+  },
+  {
+   "from": "r2refix1",
+   "to": "lead",
+   "what": "Send Ilsheta to the verifier for an independent sensitivity review of the face at 26-128 px and a re-score. Ask it to judge three design calls I made: the new Tunlan hung cloth as the hound's surface (a new prop in the card), the warm orange Ilsheta chip ground, which no longer matches her green kit signature #74B300, and the Dunsom lobby look, where the left hand now stays on the crook."
+  },
+  {
+   "from": "r2refix1",
+   "to": "CW5",
+   "what": "`node tools/gen_store.ts --check` still fails only on lisvel_almanac: dE 16.6 against the deluxe floor of 18. This is CW5's skin, not touched here."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r2-models",
+   "items": [
+    "done:1=done",
+    "done:2=done",
+    "done:5=partly",
+    "fighter:marund:marund-M2=done",
+    "fighter:rishal:rishal-M3=done",
+    "par:marund=partly",
+    "par:rishal=partly",
+    "handoff:CW1:camera-input=done",
+    "handoff:CW1:polish=done",
+    "handoff:CW1:refix1=done",
+    "handoff:CW6:dunsom-ilsheta-rishal-tunlan=partly",
+    "handoff:CW6:polish-minors=partly",
+    "handoff:CW6:refix1=done",
+    "lead:domefall-landed=done"
+   ],
+   "commits": [
+    "3057a2b4 (earlier attempt) Rishal Lamplit modelled deluxe",
+    "45700584 (wip sync, earlier attempt) Dunsom idle lean GLB",
+    "c685a530 (earlier attempt) Lamplit cards, Marund idle_lobby, Dunsom crook lean",
+    "No new commits this attempt: it only verified, and no file in my paths changed"
+   ],
+   "notes": "Progress is going well: the r2-models work from the interrupted attempt is in the repo, and I re-checked it instead of redoing it. No Blender rebuilds this attempt.\n\nVerified this attempt:\n- **Marund's Domefall:** a real leap in the real renderer (0.55 m arc, shadow on the floor, slam on landing).\n- **Dunsom's lantern:** clears his bar, idle 0 % at 31 m and 28.5 m.\n- **Rishal Lamplit:** reads as a deluxe at the game camera.\n- **Marund's hand step:** idle_lobby is 0.084 m.\n\nStill open:\n- Marund and Rishal par scores need the verifier's re-score; I cannot claim 7.5 myself.\n- Two cards look wrong"
+  },
+  {
+   "key": "r2-skin-reads",
+   "items": [
+    "handoff:CW3c:refix1=done"
+   ],
+   "commits": [
+    "2637f86e vale CW6 r2 (handoff:CW3c:refix1): final Marund source, Gorgewalk and Chalkline cards",
+    "ea6bfe59, 9f8e2db6, 3f69fae6, bd559ed9, 24a35754: 'vale wip sync' commits that swept up the rest of this package's source, docs and GLBs while builds ran (the last two also carry other lanes' files)"
+   ],
+   "notes": "Progress check: this package went well and is finished. All six skins clear the portrait floors and the five re-paletted ones read clearly different in the real client, but the numeric game-camera delta moved only slightly, so that verdict is by eye. Palette changes: Gorgewalk slate cap, apron and sleeves; Long Evening plum lacquer (on-screen saturation p50 0.36, crop includes background); Almanac iron-gall ink-blue coat under a parchment hat and scarf (replaces the dusk-grey coat, brief updated); Chalkline slate-green chalkboard ink with a warm chalk crest, because value could not move furthe"
+  },
+  {
+   "key": "r2-cards",
+   "items": [
+    "handoff:CW6:dunsom-ilsheta-rishal-tunlan=done",
+    "handoff:CW6:cards=partly",
+    "handoff:CW6:cards=done",
+    "handoff:CW6:polish-minors=partly"
+   ],
+   "commits": [
+    "46e630fb (Ilsheta base cards; commit message summarises the package)",
+    "bfd987c7, 46acb92f, d6724665, 3ed0c18d (wip_sync swept my CARDS staging in art/blender/fighters/*.py and the other re-rendered cards into these)"
+   ],
+   "notes": "All 8 CW6 fighters now pass card_qa (48 cards, 0 gate misses), but I re-rendered 27 cards, not the whole chain, and two checks are still open: Tunlan's lantern is not the frame maximum, and the Dunsom icon is unchanged.\n\n- **Main finding:** every gate passed before I started, yet several cards had unreadable faces. The Ilsheta and Rishal plates were blown out to blank eggs, the First Bell splash read as headless, and Odrum Shadeprint's eye inlays were hidden. Lowering exposure by about 1 EV and using a low side key with little or no head light gave real faces, so the gates alone don't catch th"
+  },
+  {
+   "key": "r2-minors",
+   "items": [
+    "CW6 polish (spot-check)=partly",
+    "critic:recovered-minors=partly",
+    "fighter:dunsom:dunsom-death-mesh=partly",
+    "fighter:dunsom:dunsom-lantern-glued=done",
+    "fighter:dunsom:dunsom-value-gradient=partly",
+    "fighter:ilsheta:ilsheta-guard-pose=done",
+    "fighter:ilsheta:ilsheta-portrait-framing=done",
+    "fighter:ilsheta:ilsheta-face-seam=partly",
+    "fighter:odrum:odrum-m1=partly",
+    "fighter:odrum:odrum-m3=partly",
+    "fighter:odrum:odrum-m4=done",
+    "fighter:odrum:odrum-m6=done",
+    "fighter:tunlan:TUN-c1=partly",
+    "fighter:rishal:rishal-m3=partly",
+    "fighter:hesmi:hesmi-m5=done",
+    "fighter:dunsom:dunsom-face-skull=partly",
+    "gates:sukri-chip=done"
+   ],
+   "commits": [
+    "f6621d17",
+    "7f765818 (wip sync carrying CW6 art)",
+    "15db1dc1 (wip sync carrying CW6 art)",
+    "cf2011a6 (wip sync carrying CW6 art)",
+    "d8f0b43c (wip sync carrying CW6 art)"
+   ],
+   "notes": "Progress is moving, but this package did not close: 4 of the 10 named minors are done and 6 are partly done, each with numbers. Of the 3 extra polish items, hesmi-m5 is done and TUN-c1 and rishal-m3 are partly done. dunsom-face-skull also moved but stays partly done, and 18 other minors were not attempted. All work is pushed (branch at f6621d17 when pushed), and no blocker was added.\n\nBest results: Ilsheta's face now reads instead of showing scattered rings, Dunsom's lantern swings, and Odrum's channel moves. Weakest: Odrum's ochre barely changes on the staged cards, its accent is still under "
+  },
+  {
+   "key": "r2refix1",
+   "items": [
+    "sensitivity:ilsheta-face=partly",
+    "cards:ilsheta-first-bell-chin=done",
+    "par:ilsheta=partly",
+    "done:4=partly",
+    "handoff:CW6:cards=partly",
+    "done:5=partly",
+    "dunsom:idle-lobby-pop=done"
+   ],
+   "commits": [
+    "714ff36f (wip sync; carried the fighter scripts and most of the rebuilt art)",
+    "e681cdae"
+   ],
+   "notes": "Progress: the work is going well but this wave is not closed yet. All items have fixes pushed at e681cdae, and the measured gates pass: card_qa 48 cards with 0 misses, chip gate min 55.0, 24 of 24 GLBs load, Dunsom hand step 0.032 m. Still open: the independent sensitivity review and the re-score of Ilsheta and the 8-fighter par, which I cannot sign off myself, so those items stay partly.\n\nBudget used: one rebuild each for Ilsheta and Dunsom (each base plus 2 skins); Tunlan was card re-renders only.\n\nKnown leftovers:\n- Close-up, high-angle three.js views show small pale sawtooth shapes along t"
+  }
+ ],
+ "summary": "CW6 round 2 verify 2 fails narrowly on two card-only items; no GLB rebuild is needed for either. Progress is good: Ilsheta's sensitivity blocker is cleared and she re-scores 7.5, all 8 fighters are at par, all 24 GLBs load, and Dunsom's lobby pop is fixed (hand.L 0.413 to 0.032 m). Still open: (1) the First Bell splash keeps the black chin gap that only the portrait lost; (2) Tunlan's hound shadow now reads, but the lantern is not the key, because the true frame maximum (250.6) is on the cuff and the engineer's centroid averages several clusters. No regressions found. gen_store --check exits 1 only on lisvel_almanac (dE 16.6), which is CW5's skin. Verdict is in /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/CW6_r2_verify2.json, committed and pushed (49f130b5, corrected in a3854678)."
+}
