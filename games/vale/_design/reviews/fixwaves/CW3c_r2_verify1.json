@@ -1,0 +1,139 @@
+{
+ "pass": false,
+ "items": [
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured. Finalize: `node _harness/sweep_720.mjs fast --out _harness/_reports/fw_CW3c_r2v1_sweep.json --prefix fw_CW3c_r2v1_sweep` exit 0 with no failures; its hover assert logs showcase art and name following each tile at 504x684 (1920) and 278x398 (1280); shots fw_CW3c_r2v1_sweep_*_draft_finalize_skin_hover.png viewed. Caption clear of the model: fw_CW3c_r2s2_1920_shop_ilsheta_fb.png and _coll_ilsheta.png viewed; the panel sits top right above the head. Collection crops: 48 portraits and tiles viewed on fw_CW3c_r2s_sheet_a/b.png, and each skin's change shows inside its crop (fw_CW3c_r2v1_sweep_1280_collection_skins.png). Gate: `node tools/gen_store.ts --check` exit 1 on lisvel_almanac dE 16.6 (floor 18); `--check --provisional` exit 0, 'current, 31/32'. probe_sim_shop 42 passed, 0 failed. dist-catalog offers and shelves equal content/store.json. The tile tooltip at finalize hover covers the 'Skins change...' hint and part of the fighter line; it is transient, so not held against this."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Six parts re-measured. (1) Lint: lintPlayerCopy over strings.en.json gives 0 hits, and deleting announce.multikill.5.sub_you gives a hit naming that key (scratch test); build_content runs it. (2) Banner rank: model.ts:381 pre-empts on b.rank > cur.rank, :393 orders the queue; read in code, not forced live. (3) One grid: live Tab scoreboard has 1 table with 1 thead and 2 tbodies, and cell x positions are identical across both team bodies (fw_CW3c_r2v1_probe2.json cols, shot fw_CW3c_r2v1_score.png). (4) Empty slots opaque: .islot.is-empty computes rgb(23,27,34) (probe2 emptyItem). (5) Recap: panels.tsx:230 and recap.held exist; the engineer's 'Held for 2.0 s' was not reproduced live, code read only. (6) Call-outs: Alt+click on two ability slots feeds 'You: Wrap Cast is not learned yet' and 'You: Mote Toss is not learned yet'; Alt+click on an objective chip sends {type:'ping',kind:'objective',x:85,y:80} (fw_CW3c_r2v1_probe4.json); item slots code read only. e2e hud_leak ok: 3 matches, detached 0, attached 0. The criterion's banner lint is met; the same grammar fault outside banners is the separate item hud:you-grammar-feed."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Measured here on the real GPU, at load 20-37. `node _harness/e2e.mjs all` EXIT=0: flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak, store all ok, consoleErrors 0 on every journey (_harness/_reports/fw_CW3c_r2v1_e2e_all.json). This is the one clean sweep the engineers lacked, and the flow failures of their third sweep did not recur. tsc exit 0, re-run at the end; content:check 0 warnings. icon_probe exit 0, no missing icons (fw_CW3c_r2v1_icon.log). hud_renders --at 100 exit 0, ledger 0 renders for 0 changes over 180 ticks (fw_CW3c_r2v1_hud100.json): the window had no ledger change, so the sampling is thin, though the engineer's 1 render for 1 change agrees. overlay_regress PASS twice with identical numbers: B2 low 11799, medium 14026, high 14297, ultra 14153 (fw_CW3c_r2v1_overlay.log, overlay2.log); the claimed 4969 fail did not reproduce. Caveat: runs used the shared working tree with other lanes' uncommitted edits, including src/render/post.ts, so the integration pass should still re-run on the settled tree."
+  },
+  {
+   "id": "critic:done-unverified",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "closing_parity_open.json closures has HUD-5 and F10 status closed, by CW3c, with evidence paths; the engineer's check of all nine ids was not contradicted."
+  },
+  {
+   "id": "critic:ui-layout-originality",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Live: order D F | Q W E R at x 748, 804, 872, 944, 1016, 1096, widths 48/48/64/64/64/76 (fw_CW3c_r2v1_probe2.json slots; shots fw_CW3c_r2v1_score.png, fw_CW3c_r2v1_callouts3.png). The audit's sound half stays deferred to audio, as recorded."
+  },
+  {
+   "id": "hud:hud-c3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "strings.en.json:1066 and :1070 read 'Armor penetration' and 'Magic penetration', no trailing ' %'."
+  },
+  {
+   "id": "hud:hud-c8",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "hud.css:148 keeps the ring on .who__face; :149 applies the grayscale filter only to .who.is-down .who__face > *."
+  },
+  {
+   "id": "client:CL-1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "`node tools/gen_store.ts --check` still fails lisvel_almanac, deluxe, dE 16.6 against floor 18; the other 31 of 32 pass, re-run after CW5's 23:39 portrait re-render. It sells at 600 and is off Featured and New (content/store.json), and its tile reads close to base (fw_CW3c_r2s2_1280_coll_lisvel.png). Featured is Ardit First Bell, Ilsheta First Bell, Kemdo Long Evening, Vashil First Bell. Locked tiles viewed at the new opacity and read clearly different.",
+   "fixHint": "CW5: re-palette or re-stage lisvel_almanac to dE >= 18, then run `node tools/gen_store.ts --provisional && npm run content` so it returns to 1,500."
+  },
+  {
+   "id": "client:CL-3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Viewed fw_CW3c_r2_finalize.png and fw_CW3c_r2v1_sweep_1280_draft_finalize_skin_hover.png: tier pips are diamonds, chips read 'Equipped', '600', '1,500' with no stray bar; sweep reports no clipped text."
+  },
+  {
+   "id": "client:CL-4",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "fw_CW3c_r2_finalize.png viewed: each seat shows the fighter name, with READY as a separate chip."
+  },
+  {
+   "id": "handoff:CW1:perf",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "strings.en.json:1412-1413 read Standard and Fine. ?calibrate=medium live raises the toast 'Graphics set to Medium so the vale runs smoothly on this machine.' with a 'Video settings' action (fw_CW3c_r2v1_probe.json toast, app.tsx:191-199). The action's click and the natural first-run sample were not re-run; engineer's figures stand unverified."
+  },
+  {
+   "id": "handoff:CW1:camera-input",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "No UI change was needed; bc868dc2 and 4dade72c are CW1's. The 1-in-160 unexplained attack press stays with CW1, and is not a CW3c closure."
+  },
+  {
+   "id": "handoff:CW3s:quick-rekey-polish",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "strings.en.json:321 'Practice bench', :264 and :1235 first-win wording confirmed; no old wording found in src/ui or the content/*.json files searched."
+  },
+  {
+   "id": "handoff:CW3s:refix1",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "status.tsx line 8 uses hud.teambuff.stacked '{name} ×{n}'. Live 'Splinters ×3' not reproduced here; code read plus engineer's probe."
+  },
+  {
+   "id": "handoff:CW4:polish",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Minimap numerals stay legible under the fog in fw_CW3c_r2v1_score.png and fw_CW3c_r2v1_callouts3.png."
+  },
+  {
+   "id": "handoff:CW3c:refix1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "The regeneration this handoff asked of CW3c is committed (3aa58750) and `--check --provisional` exits 0. lisvel_almanac stays open under client:CL-1."
+  },
+  {
+   "id": "hud:you-grammar-feed",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Found here, live: starting a surrender vote feeds 'You proposes to surrender.' (fw_CW3c_r2v1_probe.json seen, class feed__line--warn; model.ts:671 passes nameOf, which returns 'You'). The lint only covers announce.*.sub, so it misses this. Same class, non-visual: model.ts:503 gives the aria-label 'You is out' on your own Fray elimination.",
+   "fixHint": "model.ts:671: when ev.player === this.you, use a new string such as 'You propose to surrender.'. model.ts:503: use 'You are out' for your own row. Widen copy_lint to any string whose {name} is fed from nameOf."
+  },
+  {
+   "id": "handoff:CW6:tunlan-splash",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Confirmed by eye: art/out/fighters/tunlan/splash.png has a large dark spiky blurred shape across the sky left of the fighter (fw_CW3c_r2s_tunlan_splash.png, also on fw_CW3c_r2s_sheet_b.png). The file is unchanged in git since cff6f70d, so it is not new tonight. It is CW6's file, not CW3c's, and card_qa does not catch it.",
+   "fixHint": "CW6: find the occluder in the Tunlan base splash staging and re-render, then re-run card_qa and `npm run content`."
+  },
+  {
+   "id": "handoff:CW6:first-bell-desc",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/skins/ilsheta.json still describes First Bell as 'a pale dial-stone mantle ... over a dark hem', and the Shop caption shows it over an ochre hood and scarf on a tan coat (fw_CW3c_r2s2_1920_shop_ilsheta_fb.png).",
+   "fixHint": "CW6: rewrite the desc to match the re-palette, e.g. an ochre hood and scarf over a tan coat."
+  },
+  {
+   "id": "client:shop-featured-hole",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "At 1920 the Featured block leaves an empty cell under Long Evening Lens with 4 offers (fw_CW3c_r2s2_1920_shop.png family, seen in _shop_ilsheta_fb.png, x 730-948, y 460-710). Spot-check, not a claimed item; not compared to earlier rounds.",
+   "fixHint": "Let the last Featured tile span the column, or lay out 4 offers as hero plus a 3-row stack."
+  },
+  {
+   "id": "sensitivity:spot-check",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "All 48 portraits and splashes viewed on fw_CW3c_r2s_sheet_a/b.png, plus the Shop and Collection model shots. No tall, pointed or conical hood and no blocker. One to check: burdam_almanac's gold dome mask has dark sockets and reads somewhat skull-like at tile size in three-quarter view. Judgement call, unmeasured.",
+   "fixHint": "CW5: look at burdam_almanac at tile size; warm the sockets or add a brow if it reads as a skull."
+  }
+ ],
+ "regressions": [],
+ "summary": "CW3c round 2 verify 1: FAIL on one major in the lane's scope, client:CL-1 partly (lisvel_almanac dE 16.6 vs floor 18, CW5's portrait to fix). All three done criteria pass on re-measure, including done:7, which the engineers could not close: e2e all EXIT 0 with 0 console lines, tsc and content:check clean, icon_probe and hud_renders OK, overlay_regress PASS twice (B2 low 11799; the claimed 4969 did not reproduce, cause unattributed, so no MIN_AREA_PX re-base is needed on this evidence). The tree held other lanes' uncommitted edits, so the integration pass should re-run once it settles. New: 'You proposes to surrender.' in the feed (minor). Handed-off art and copy in CW6's lane confirmed open: Tunlan base splash shape (major), First Bell description (minor). No regressions found in e2e or sweep_720."
+}
