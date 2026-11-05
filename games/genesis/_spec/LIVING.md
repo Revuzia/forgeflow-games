@@ -2963,3 +2963,20 @@ hut at the year end (housed in the save hours later).
 **Acceptance re-installed:** `postrel/acc/overlay.cjs` lays these rows over the table installed before (round 4 + sim-fix-r2's
 §5.1 row, kept as `acceptance.fix-r4.json`); each touched row keeps the round-4 value under `r4` and its before/after under
 `postrel`. Tally 41 met / 15 partly / 12 missed / 14 report (was 39 / 16 / 13). Every other row is round 4's.
+
+### 13.9 Post-release SIMFIX r2 (2026-11-05; punch items 0, 2, 3; ledger `_harness/scratch/postrel/simfix.md`)
+
+- **Drought band, the pin moved from one seed to sixteen.** Since plains- and coastal-folk start knowing spear-making,
+  hunting and fishing (SIMFIX 2), seed 16's dust-bowl band lost 10 to thirst (limit 2) while the 16-seed total under the
+  same script fell from 96 (old start, `postrel/agg-old.log`) to 82 (new start, `agg-new.log`). `tests/drought-band.test.ts`
+  now holds the 16-seed total to at most 87 (the drought work's figure; 208 before it); seeds 11 and 16 keep their
+  per-seed checks (the fall, a band living on, the road guard). No seed was swapped for one that passes. Open for a
+  later sim item: seed 16's band loses ~15 h on a wrong first target (h44-59) and is at water 0 before it walks.
+- **Prayers pause.** A lapsed kind is not asked again for a season (3 days); after "the god is deaf" a town asks for
+  nothing for two seasons; "nothing came" is told once a season a town. 8 year-50 saves, 24 god-acting days
+  (`postrel/r2/cmp.cjs`): prayers raised 117 -> 48, "nothing came" lines 118 -> 46, "deaf" lines 39 -> 21.
+- **Prophets keep their standing.** A failed word costs 0.25 × (1 − credibility/2); the prophet's own reading of a
+  prayer (at most one a season, told as "... Will the god make it true?") risks a third of that; the deaf town's −0.1
+  spares a prophet with more words fulfilled than failed. Test: 3 of 4 of the god's words true leaves ≥ 0.5 (0.455
+  before). Same 8 saves: credibility at the end 0/0/0/–/0/0.03/0/0 -> 0.30/0.05/0/0.32/0.05/0.32/0/0.45; the zeros left
+  are prophets the god let be persecuted (−0.2, words refused while silenced) or whose six words all missed (1234).

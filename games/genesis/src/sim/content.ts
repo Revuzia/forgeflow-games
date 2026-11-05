@@ -1305,6 +1305,8 @@ export const TEMPLATE_VARS = [
   // LIVING RELATIONSHIP (god/prayers.ts, prophets.ts, omens.ts, precursors.ts): what a prayer is for, an omen seen, what
   // a prophet foretold (and the same capitalised), the ruler who persecutes, the disaster fled
   'prayer', 'omen', 'what', 'What', 'ruler', 'disaster',
+  // (postrel SIMFIX r2) 'day' or 'days' after a prophecy's {days}
+  'dayWord',
   // LIVING HISTORY (people/eras.ts): a settlement's era label ("the copper age", "potters")
   'label',
 ] as const;

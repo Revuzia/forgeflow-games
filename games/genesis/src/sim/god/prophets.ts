@@ -168,7 +168,7 @@ export function foretell(x: PCtx, ph: ProphetState, kind: string, days: number, 
   if (st && s >= 0) {
     const what = WORDS[kind] ?? kind;
     // (postrel SIMFIX r2) the prophet's own reading is put to the god as a question: make it true, or let it pass
-    tell(u, x.p, by === 'prophet' ? 'prophet.reads' : 'prophet.foretold', vars(x, st, s, { what, What: what.charAt(0).toUpperCase() + what.slice(1), days: d }), st, [agentRef(x, s), settlementRef(x, st)], 1);
+    tell(u, x.p, by === 'prophet' ? 'prophet.reads' : 'prophet.foretold', vars(x, st, s, { what, What: what.charAt(0).toUpperCase() + what.slice(1), days: d, dayWord: d === 1 ? 'day' : 'days' }), st, [agentRef(x, s), settlementRef(x, st)], 1);
   }
   u.emit({ t: 'prophet.foretold', planet: x.p.id, pos: st ? [st.pos[0], st.pos[1], st.pos[2]] : undefined, data: { prophecy: pr.id, agent: ph.agent, settlement: ph.settlement, kind, until: pr.until, by } });
   return pr;
