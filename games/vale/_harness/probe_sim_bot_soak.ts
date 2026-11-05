@@ -964,7 +964,7 @@ function analyse(games: GameRec[], catalog: CatalogT): { gates: Gate[]; text: st
     detail.balance = { lineup: LINEUP, games: same.length, fighters: bal };
     if (bal.length) {
       const out = bal.filter((b) => b.lo > 0.55 || b.hi < 0.45).map((b) => b.fighter);
-      text.push('', `balance (CL-g4, report; ${same.length} decided same-tier RIFT games, lineup ${LINEUP}${LINEUP === 'shuffle' ? '' : ': teammates locked together, rates confounded'}): ` +
+      text.push('', `balance (CL-g4, report; ${same.length} decided same-tier RIFT games, lineup ${LINEUP}${LINEUP === 'rotate' ? ': teammates locked together, rates confounded' : LINEUP === 'shuffle' ? ': its small role lists fall into a few fixed teams, rates read team against team (--lineup indep)' : ''}): ` +
         bal.map((b) => `${b.fighter} ${pct(b.rate)} [${pct(b.lo)}–${pct(b.hi)}] n${b.games}`).join(' · ') +
         `\n  outside the 45–55 % band with 95 % confidence: ${out.length ? out.join(', ') : 'none'}`);
     }

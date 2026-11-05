@@ -9,6 +9,8 @@
 //   --dark-gain k --dark-l v  inside the mask, texels under display luma v (0-1) multiply toward k (smoothly, a value at
 //                             v unchanged)
 //   --q N                     the WebP quality of the new base colour (default 88)
+//   --part-gain mask.png:g    multiply the texels under a part mask by g (repeatable; applied after the rest; masks from
+//                             art/tools/partmap_mask.py, closing CW5 r2 refix: id-masked material steps)
 //
 //   node art/tools/glb_paint_grade.mjs art/out/fighters/burdam/burdam.glb --box 0.25,-0.4,1.45,0.8,0.4,2.15 --recess 0.6
 import { NodeIO } from '@gltf-transform/core';
@@ -119,6 +121,15 @@ for (let p = 0; p < W * H; p++) {
   if (recess > 0 && v < med) g *= 1 - recess * (1 - v / med);
   if (darkL > 0 && v < darkL) g *= 1 - (1 - darkK) * (1 - v / darkL) ** 0.5;
   for (let c = 0; c < 3; c++) data[i + c] = Math.max(0, Math.min(255, Math.round(data[i + c] * g)));
+}
+for (const spec of args.flatMap((a, i) => (a === '--part-gain' ? [args[i + 1]] : []))) {
+  const k = spec.lastIndexOf(':');
+  const g = Number(spec.slice(k + 1));
+  const m = await sharp(spec.slice(0, k)).resize(W, H, { kernel: 'nearest' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let p = 0; p < W * H; p++) {
+    if (m.data[p * m.info.channels] < 128) continue;
+    for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * g)));
+  }
 }
 const old = tex.getImage().byteLength;
 const webp = await sharp(data, { raw: { width: W, height: H, channels: C } }).webp({ quality }).toBuffer();

@@ -1871,7 +1871,7 @@ PAINT_BASE = dict(
     wrap="#B3AFA6", mask="#C9BCA6", lip="#B39684", recess="#1D2127", glass="#A6C2D6", glass_core="#6D8597",
     glass_eye="#46596A", glass_deep="#2A3946", glass_sky="#EEF5F8", glass_lid="#9DB8CB", horizon="#59544C", cowl="#B2AEA6", sleeve="#B4AFA6", shirt="#AAA69D", tabard="#66737E", trim="#878C90",
     chevron="#878C90", tunic="#8A867E", belt="#40372F", strap="#3F3630", bracer="#433A34", buckle="#4A4743",
-    legs="#34302E", boots="#3A3532", sole="#24211F", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
+    legs="#34302E", boots="#4B433D", sole="#24211F", quiver="#5A4A3C", holster="#4B3D32", qstrap="#352D28",
     quiver_in="#211B17", wood="#C6BDAB", grip="#3E3530", shaft="#BDB29E", fletch="#A9B6C0", string="#CFC8B8",
     rope="#9A8F7A", skin="#B48F78", tab="#3B322C", brooch="#B6B1A6", neck="#8A6A58", ink="#2E2A26",
     fan_shaft="#D2C9B6", fan_fletch="#C4D0D9")
