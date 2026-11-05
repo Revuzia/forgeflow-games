@@ -688,22 +688,11 @@ def sculpts() -> list:
     qv.sub(RoundBox(Q_TOP + Q_U * 0.02, (Q_HW - 0.012, Q_HD - 0.012, 0.06), 0.02, axes=qax), k=0.006)      # the open mouth
     part("quiver", qv, "linen", "bone:chest", 650)
     qb = Sculpt("quiver_bands")
-    for zz in (0.085, 0.125):
-        qb.add(RoundBox(Q_TOP - Q_U * zz, (Q_HW + 0.006, Q_HD + 0.006, 0.013), 0.028, axes=qax), k=0.0)
     qb.add(RoundBox(Q_TOP - Q_U * 0.008, (Q_HW + 0.004, Q_HD + 0.004, 0.012), 0.026, axes=qax), k=0.0)    # the mouth's rim
     qb.sub(RoundBox(Q_TOP + Q_U * 0.02, (Q_HW - 0.012, Q_HD - 0.012, 0.06), 0.02, axes=qax), k=0.004)
     part("quiver_bands", qb, "leather", "bone:chest", 360, vs=0.7)
-    # closing ULK-M3 ('a flat pale board'): cord bindings round the case (two crossed lashings and a wound cord above
-    # the bottom cap), proud of the linen so the case reads as a bound tube
-    qc_ = Sculpt("quiver_cords")
-    for zz, tilt in ((0.30, 12.0), (0.37, -12.0), (0.12, 0.0)):
-        c0 = Q_BOT + Q_U * zz
-        ax3 = np.stack([Q_W, Q_N, Q_U]) if tilt == 0.0 else \
-            np.stack([Q_W, Q_N, _n(Q_U * math.cos(math.radians(tilt)) + Q_W * math.sin(math.radians(tilt)))])
-        # (CW5 r2 refix, ULK-M3: an elliptic torus round a rounded-box case stood proud only in short arcs, the dark
-        # 'smears' on the back of the case: closed lashings that follow the case's own section)
-        qc_.add(RoundBox(c0, (Q_HW + 0.0045, Q_HD + 0.0045, 0.0085), 0.034, axes=ax3), k=0.0)
-    part("quiver_cords", qc_, "leather", "bone:chest", 360, vs=0.6)
+    # (CW5 r2 refix, ULK-M3: the case's cord and leather bands were geometry that surfaced only in short arcs over the
+    # flattened case, the verifier's 'quiver smears': they are painted on the case now, paint_quiver)
     shafts, heads, inlays = Sculpt("crest_shafts"), Sculpt("crest_heads"), Sculpt("crest_inlays")
     for i in range(len(CREST)):
         base, d, tip = crest_dart(i)
@@ -1004,7 +993,7 @@ _install_decimate()
 # ── export: the shipping compression with the base colour at a lower WebP quality (wraps export.optimize in this
 # build process only; the shared optimize.mjs takes --q-base): the 2048 painting at q80 left the GLB over 1172 KiB ──
 Q_BASE = 62        # the skins (c9beb122)
-Q_BASE_MAIN = 56   # the base carries the clips
+Q_BASE_MAIN = 52   # the base carries the clips
 
 
 def _install_optimize() -> None:
@@ -1035,15 +1024,16 @@ def _install_optimize() -> None:
         # with glb_simplify (locked UV borders)
         if os.path.basename(out) == "ulkro.glb":
             tool = os.path.join(_scene.TOOLS_DIR, "decimate_chains.mjs")
-            for extra in (["--prefix", "", "--clip", "idle,idle_lobby,recall,taunt,stunned,victory,channel"],
+            for extra in (["--prefix", "", "--clip", "idle,idle_lobby,taunt,stunned,victory,channel"],
+                          ["--every", "3", "--prefix", "", "--clip", "recall"],
                           ["--prefix", "x_", "--orm-q", "30", "--normal-q", "55",
                            "--clip", "attack1,attack2,cast_a1,cast_a2,cast_a3,cast_ult,dash,run,death"]):
-                r2 = subprocess.run([node, tool, out, "--every", "2"] + extra, cwd=_scene.GAME_DIR, capture_output=True,
+                r2 = subprocess.run([node, tool, out] + ([] if "--every" in extra else ["--every", "2"]) + extra, cwd=_scene.GAME_DIR, capture_output=True,
                                     text=True, encoding="utf-8")
                 _scene.log((r2.stdout or r2.stderr).strip()[-400:])
         if os.path.getsize(out) > 1172 * 1024:
             kib = os.path.getsize(out) / 1024.0
-            ratio = max(0.70, min(0.95, 0.97 - (kib - 1172.0) / 900.0))
+            ratio = 0.75 if os.path.basename(out) == "ulkro.glb" else max(0.70, min(0.95, 0.97 - (kib - 1172.0) / 900.0))
             r3 = subprocess.run([node, os.path.join(_scene.TOOLS_DIR, "glb_simplify.mjs"), out, out, "--ratio", f"{ratio:.3f}",
                                  "--error", "0.004"], cwd=_scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
             _scene.log((r3.stdout or r3.stderr).strip()[-300:])
@@ -1734,16 +1724,22 @@ def paint_quiver(p, n):
     stitch = (np.sin(w * 260.0 + q @ Q_N * 260.0) > 0.55) * np.exp(-((t - 0.455) / 0.004) ** 2)
     v = (0.86 + 0.16 * ridge) * (1 + 0.05 * NOISE(p, 25.0)) * (0.86 + 0.18 * np.clip(n[:, 2] * 0.5 + 0.5, 0, 1))
     v = v * (1 - 0.14 * (1 - _ss(0.0, 0.14, t))) * (1 - 0.10 * lip) * (1 - 0.45 * stitch)
-    return _hl("#9C8D72") * v[:, None]
-
-
-def paint_cords(p, n):
-    """(CW5 r2 refix, ULK-M3) the case's lashings: twisted cord, each ply lit along its crown, a dark line between"""
-    q = p - Q_BOT
-    ph = (q @ Q_U + 0.45 * (q @ Q_W) + 0.45 * (q @ Q_N)) / 0.0075 + 0.3 * NOISE(p, 30.0)
-    f = ph - np.floor(ph)
-    v = (0.72 + 0.46 * np.sin(np.pi * f)) * (0.90 + 0.14 * np.clip(n[:, 2], -1, 1))
-    return _hl("#5A4431") * v[:, None]
+    col = _hl("#9C8D72") * v[:, None]
+    # the bindings, painted (CW5 r2 refix, ULK-M3): two leather straps under the mouth and twisted cord lashings lower
+    # down, closed round the case, each with a lit top edge and a shadow on the linen under it
+    L_ = float(np.linalg.norm(Q_TOP - Q_BOT))
+    for c_, hw_, leather in ((L_ - 0.085, 0.014, True), (L_ - 0.125, 0.014, True), (0.34, 0.010, False), (0.12, 0.010, False)):
+        d_ = t - c_
+        band = _ss(hw_ + 0.0012, hw_ - 0.0012, np.abs(d_))
+        if leather:
+            b_ = _hl("#4E3A2A") * ((1 + 0.05 * NOISE(p, 60.0)) * (1 + 0.30 * np.exp(-((d_ - hw_ + 0.002) / 0.002) ** 2)))[:, None]
+        else:
+            ph = (t + 0.45 * w) / 0.0075 + 0.3 * NOISE(p, 30.0)
+            b_ = _hl("#5A4431") * (0.70 + 0.48 * np.sin(np.pi * (ph - np.floor(ph))))[:, None]
+        under = np.exp(-(np.maximum(-d_ - hw_, 0.0) / 0.006) ** 2) * (d_ < -hw_)
+        col = col * (1 - 0.30 * under)[:, None]
+        col = col * (1 - band)[:, None] + b_ * band[:, None]
+    return col
 
 
 def paint_torso(p, n):
@@ -1763,7 +1759,7 @@ def paint_torso(p, n):
 PROC = {"legs": paint_legs, "wraps": paint_wraps, "boots": paint_boots, "hand_R": paint_hands, "hand_L": paint_hands,
         "sleeves": paint_sleeves, "hood_tail": paint_tail, "dart_shaft": paint_dart_shaft, "eyeband": paint_eyeband,
         "thrower": paint_thrower, "crest_shafts": paint_shafts, "crest_heads": paint_glass, "dart_head": paint_glass,
-        "quiver": paint_quiver, "quiver_cords": paint_cords, "torso": paint_torso}
+        "quiver": paint_quiver, "torso": paint_torso}
 
 
 def post_paint(img: np.ndarray, maps: dict, names: list, skip=(), log=print) -> np.ndarray:
@@ -2571,7 +2567,7 @@ def gen_recall() -> anim.Clip:
               R={"hand.R": HT(pos=(-0.30, -0.26, 0.92), pole=P_R), "aim.R": AimRoll(tuple(_n((0.25, -0.10, 0.96))), 1.0, tuple(U_K))})
     sink = pz(lean=11.0, yaw=4.0, drop=0.30, dy=0.03, look=(10.0, 0.0, 0.0),
               feet=feet_(l=(0.04, -0.30, 0.0), r=(-0.03, 0.34, 0.15), pr=-44.0, yl=4.0, yr=-10.0), R=R_((0.0, 0.0, 0.26)))
-    stamp = kn(drop=0.415, lean=13.0, yaw=2.0, look=(22.0, 0.0, 0.0), L=(0.02, -0.12, -0.22), pole=POLE_L)
+    stamp = kn(drop=0.395, lean=13.0, yaw=2.0, look=(22.0, 0.0, 0.0), L=(0.02, -0.12, -0.22), pole=POLE_L)
     keys = [(0.0, stand, "linear"), (0.07, step, "inout"), (0.135, sink, "inout"), (0.175, stamp, "accel"),
             (0.235, kn(look=(6.0, -14.0, 0.0), L=(0.0, -0.08, -0.16), pole=POLE_L), "out")]
     t0 = 0.30
@@ -2582,9 +2578,9 @@ def gen_recall() -> anim.Clip:
         t0 += 0.105
     keys += [(0.68, kn(drop=0.36, lean=-1.0, yaw=-4.0, look=(-18.0, 22.0, 3.0), L=(0.03, -0.14, -0.26), pole=POLE_L), "inout"),
              (0.755, kn(drop=0.36, lean=-1.0, yaw=-5.0, look=(-16.0, 26.0, 3.0), L=(0.03, -0.14, -0.26), pole=POLE_L), "linear"),
-             (0.81, kn(drop=0.41, lean=18.0, yaw=2.0, look=(4.0, 0.0, 0.0), L=(0.03, -0.16, -0.30), r=(0.0, 0.0, 0.03), pole=POLE_L), "inout")]
+             (0.81, kn(drop=0.39, lean=18.0, yaw=2.0, look=(4.0, 0.0, 0.0), L=(0.03, -0.16, -0.30), r=(0.0, 0.0, 0.03), pole=POLE_L), "inout")]
     rising = pz(lean=13.0, drop=0.17, dy=0.02, look=(-4.0, 0.0, 0.0),
-                feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.03, 0.20, 0.02), pr=-18.0, yl=4.0, yr=-10.0),
+                feet=feet_(l=(0.04, -0.22, 0.0), r=(-0.03, 0.20, 0.055), pr=-26.0, yl=4.0, yr=-10.0),
                 R={"hand.R": HT(pos=(-0.30, -0.24, 0.80), pole=P_R), "aim.R": AimRoll(tuple(_n((0.25, -0.10, 0.96))), 1.0, tuple(U_K))})
     keys += [(0.89, rising, "inout"), (0.97, stand, "inout"), (1.0, stand, "linear")]
     fn = anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}, loop=True)

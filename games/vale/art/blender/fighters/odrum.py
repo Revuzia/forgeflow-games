@@ -139,7 +139,7 @@ CARDS = {
     },
     "odrum_shadeprint": {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
-        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 22.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 62.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
                    "box_top": 2.0,
                    "key_az": 235.0, "key_el": 35.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,

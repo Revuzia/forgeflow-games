@@ -829,7 +829,7 @@ export abstract class BotBase {
           // nearest one and spends the attack the last hit needs; and walking back to the stand
           // point in between never lets the swing start
           const wp = this.waitOut;
-          if (this.k.kind === 'rift' && this.nearestEnemyFighter(11) === null) {
+          if (this.k.kind === 'rift' && this.diff.kiteSkill > 0 && this.nearestEnemyFighter(11) === null) {
             // (CW3s r2, G1: a RIFT laner waits inside its reach of the Wick and keeps its feet moving, as a player does: a walking
             // fighter does not swing on its own, and the half-second walk in from outside its reach lost the Wick. It weaves
             // across the line to the Wick: the point is always farther than a tick's step, so the walk never ends in an idle swing)

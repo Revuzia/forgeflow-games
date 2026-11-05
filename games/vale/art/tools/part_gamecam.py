@@ -39,6 +39,8 @@ def skinned(rig, clip="idle", t=0.0):
         if "mesh" not in n:
             continue
         pr = js["meshes"][n["mesh"]]["primitives"][0]
+        if "TEXCOORD_0" not in pr["attributes"]:     # (the accent mesh has no UVs: skipped, it is never one of a pair)
+            continue
         P = accessor(js, b, pr["attributes"]["POSITION"])
         J = accessor(js, b, pr["attributes"]["JOINTS_0"]).astype(int)
         Wt = accessor(js, b, pr["attributes"]["WEIGHTS_0"])
@@ -140,7 +142,9 @@ def main():
     lines = [f"# part_gamecam {os.path.relpath(a.glb)} on {os.path.relpath(sheet)} row 1 (8 facings, game camera), id-masked mean Lab"]
     for k in sorted(data, key=lambda n: -len(data[n])):
         v = data[k]
-        lines.append(f"  {k:<22} L* {np.percentile(v[:, 0], 50):5.1f} | Lab {np.round(v.mean(0), 1).tolist()} | {len(v)} px")
+        q = np.percentile(v[:, 0], [10, 50, 90])
+        lines.append(f"  {k:<22} L* {q[0]:5.1f}/{q[1]:5.1f}/{q[2]:5.1f} spread {q[2] - q[0]:5.1f} | "
+                     f"Lab {np.round(v.mean(0), 1).tolist()} | {len(v)} px")
     bad = 0
     for pr in a.pair:
         x, y = pr.split(":")

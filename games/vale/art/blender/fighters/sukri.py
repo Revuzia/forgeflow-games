@@ -253,7 +253,7 @@ CARDS = {
     },
     "sukri_stillwater": {
         # (closing round 2: the recall's cup glared over the face: the Mote Toss, the face clear)
-        "splash": {"clip": "cast_a2", "t": 0.35, "yaw": -22.0, "pitch": 1.0, "lens": 62.0, "fill": 0.84, "x": 0.72,
+        "splash": {"clip": "cast_a3", "t": 0.50, "yaw": -10.0, "pitch": 1.0, "lens": 62.0, "fill": 0.84, "x": 0.72,
                    "exposure": -0.9, "key_az": 140.0, "key_el": 32.0, "key_color": "#C4DCDA", "sun": 2.2, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 2.2,
                    "focal": [{"at": "x_cup", "az": 180.0, "el": 0.0, "dist": 0.05, "color": "#CFF2EA", "power": 10.0,
@@ -281,7 +281,8 @@ CARDS = {
         "portrait": {"yaw": 24.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
                      "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 8.0,
                                 "size": 0.04},
-                               {"at": "head", "az": 215.0, "el": -15.0, "dist": 0.7, "color": "#E6DAFF", "power": 6.0,
+                               # (the cup's warm glow on the plate, so the pale stone does not read as a white mask)
+                               {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#FFD6A8", "power": 12.0,
                                 "size": 0.3}]},
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "glow": [0.30, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0", "cx": 0.60},

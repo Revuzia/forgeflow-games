@@ -146,7 +146,7 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
                               "size": 0.2}]},
         # (CW5 refix: the reading-lamp bust lit the face flat from the front: a warm key from her upper right)
-        "portrait": {"yaw": 12.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.25, "bust_lo": 0.10, "bust_hi": 0.30,
+        "portrait": {"yaw": -16.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.25, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 268.0, "el": 50.0, "dist": 0.6, "color": "#FFE3B8", "power": 15.0,
                                 "size": 0.10},
                                {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,

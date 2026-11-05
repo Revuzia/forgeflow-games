@@ -284,7 +284,7 @@ CARDS = {
                               "size": 0.35},
                              {"at": "head", "az": 175.0, "el": 10.0, "dist": 0.7, "color": "#FFE4C0", "power": 12.0,
                               "size": 0.35}]},
-        "portrait": {"clip": "idle_lobby", "t": 0.1, "yaw": -38.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
+        "portrait": {"yaw": 14.0, "exposure": -1.1, "key_az": 140.0, "key_el": 28.0, "sun": 2.4,
                      "focal": [{"at": "x_lamp", "az": 180.0, "el": 30.0, "dist": 0.8, "color": "#FFD48C", "power": 40.0,
                                 "size": 0.35}]},
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against

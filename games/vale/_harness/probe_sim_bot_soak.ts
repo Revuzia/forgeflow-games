@@ -59,7 +59,7 @@
 //          difficulty, so neither is tuned to one seed window; a FRAY game takes ~0.1 s)
 //          --jobs N (≤ 3) · --rules '<json>' (deep-merged into every probed mode's rules)
 //          --label <name> (report: _harness/_reports/fw_W4_soak_<label>.json + .txt)
-//          --lineup rotate|shuffle (seating; shuffle = the closing verifier's independent per-role draw) · --mirror-weak novice,adept
+//          --lineup rotate|shuffle|indep (seating; shuffle = the closing verifier's per-role draw, indep = one stream per role, for the CL-g4 balance read) · --mirror-weak novice,adept
 //
 // The catalog is built in memory from content/ (the source of truth; dist-catalog may be stale).
 // Determinism: every match is a pure function of (catalog, setup); the seat lineup is a pure function
@@ -119,7 +119,7 @@ const RULES = opt('rules', '');
 const PATCH = opt('patch', '');
 const LABEL = opt('label', FULL ? 'full' : 'quick');
 const MIRROR_SEEDS = Number(opt('mirror-seeds', '20'));
-/** seating: 'rotate' (seed + slot + team over each role's natives) or 'shuffle' (closing verifier's seeded per-role shuffle) */
+/** seating: 'rotate' (seed + slot + team over each role's natives), 'shuffle' (closing verifier's seeded per-role shuffle) or 'indep' (one stream per role) */
 const LINEUP = opt('lineup', 'rotate');
 /** which weaker tiers the mirror suite plays the veteran against */
 const MIRROR_WEAK = opt('mirror-weak', 'novice,adept').split(',');
@@ -180,7 +180,7 @@ export function roleLineup(catalog: CatalogT, modeId: string, seed: number, diff
     const slot = i % mode.perTeam;
     const role = roles[slot % roles.length];
     const pl = natives.get(role) ?? all;
-    const fighter = LINEUP === 'shuffle' ? shuffled(natives, roles, seed)[role][team] ?? pl[0] : pl[(seed + slot + team) % pl.length];
+    const fighter = LINEUP === 'shuffle' ? shuffled(natives, roles, seed)[role][team] ?? pl[0] : LINEUP === 'indep' ? indep(natives, role, slot, seed)[team] ?? pl[0] : pl[(seed + slot + team) % pl.length];
     const skin = catalog.skins.find((s) => s.fighter === fighter && s.tier === 'base')?.id ?? catalog.skins.find((s) => s.fighter === fighter)?.id ?? '';
     seats.push({
       player: i, team, name: catalog.botNames[i % catalog.botNames.length], fighter, skin, role,
@@ -202,6 +202,18 @@ function shuffled(natives: Map<string, string[]>, roles: string[], seed: number)
     out[role] = l;
   }
   return out;
+}
+
+/** an independent draw per role (CL-g4): 'shuffle' above walks one stream through the roles and its small role lists fall into a
+ *  few fixed teams (160 games: four fighters at 62.3 %, four at 31.1 %, identical game for game), so its rates read team
+ *  against team; here every role has its own stream of the seed, so teammates change game to game */
+function indep(natives: Map<string, string[]>, role: string, slot: number, seed: number): string[] {
+  let a = Math.imul((seed + 1) * 2654435761 >>> 0, slot * 2 + 1) >>> 0;
+  const rnd = (): number => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  rnd(); rnd();
+  const l = (natives.get(role) ?? []).slice();
+  for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; }
+  return l;
 }
 
 /** FRAY (no roles, every seat its own team): 10 distinct fighters, the window over the sorted roster moves 10 a seed and

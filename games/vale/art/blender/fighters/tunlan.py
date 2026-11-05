@@ -178,9 +178,11 @@ CARDS = {
     "tunlan": {
         "splash": {"clip": "cast_a1", "t": 0.25, "yaw": 30.0, "pitch": -3.0, "lens": 50.0, "fill": 0.84, "x": 0.72,
                    "key_az": 215.0, "key_el": 18.0, "key_color": "#E9C8A8", "sun": 1.5, "rim_cool": 1.1,
-                   "rim_warm": 0.6, "bounce": 0.35, "bounce_color": "#E2A46A", "accent": 2.6,
-                   "focal": [{"at": "head", "az": 185.0, "el": -25.0, "dist": 0.35, "color": "#FFC27A",
-                              "power": 40.0, "size": 0.10},
+                   # (closing round 2: the frame's maximum sat on the cheek: the head focal down, the lantern core up, so
+                   # the lantern is the card's brightest point)
+                   "rim_warm": 0.6, "bounce": 0.35, "bounce_color": "#E2A46A", "accent": 4.2,
+                   "focal": [{"at": "head", "az": 185.0, "el": -25.0, "dist": 0.45, "color": "#FFC27A",
+                              "power": 14.0, "size": 0.16},
                              {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 25.0, "size": 0.08}],
                    "hound": {"wall": 3.2, "across": -1.6, "up": 0.75, "mag": 4.2, "length": 0.80, "power": 2600.0,
