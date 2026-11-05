@@ -1,4 +1,8 @@
 {
+ "wave": "CW3c",
+ "round": 2,
+ "verify": 1,
+ "date": "2026-11-04",
  "pass": false,
  "items": [
   {
@@ -84,7 +88,7 @@
    "id": "handoff:CW3s:refix1",
    "severity": "minor",
    "status": "pass",
-   "evidence": "status.tsx line 8 uses hud.teambuff.stacked '{name} ×{n}'. Live 'Splinters ×3' not reproduced here; code read plus engineer's probe."
+   "evidence": "status.tsx:47 uses hud.teambuff.stacked '{name} ×{n}'. Live 'Splinters ×3' not reproduced here; code read plus engineer's probe."
   },
   {
    "id": "handoff:CW4:polish",
