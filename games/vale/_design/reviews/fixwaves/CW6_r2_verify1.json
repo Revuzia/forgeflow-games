@@ -1,0 +1,245 @@
+{
+ "wave": "CW6",
+ "round": 2,
+ "verify": 1,
+ "pass": false,
+ "summary": "FAIL. Live re-measures on a fresh catalog confirm the round's main fixes: recall fills the 7 s channel on all five named fighters, Marund's Domefall leaves the ground to hips 1.57 m with the maul overhead and a landing crouch, Lamplit is a modelled deluxe, and all 24 GLBs load. Marund and Rishal reach 7.5; 7 of 8 are at par. Three things hold the wave: Ilsheta's new hollow black eyes read as a menacing mask on the icon and portraits (sensitivity blocker, score 7.2); her First Bell portrait has a black bar under the chin; and the Tunlan base splash has a floating black shadow with the face, not the lantern, as key. Dunsom's lobby idle also has an unreported 0.41 m hand pop (pre-existing).",
+ "items": [
+  {
+   "id": "sensitivity:ilsheta-face",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "Viewed art/out/fighters/ilsheta/icon.png at 128 and 600 px, plus portrait.png and ilsheta_first_bell_portrait.png (_harness/_shots/fw_CW6_r2v1_ilsheta_rear.png, fw_CW6_r2v1_small.png, fw_CW6_r2v1_ils_before_after.png). The f6621d17 face paint fixes the scattered rings, but the result is a long pale plate with two solid black almond voids, no glint or inlay, with grey smudges under them. On the icon's black and neon-green ground it reads as a hollow-eyed alien or ghost mask. This is my judgement as the sensitivity reviewer the engineer asked for. Ruling 2 says the same of Odrum: hollow eye slits on a mask read 'blank or menacing at portrait size' and lit, warm inlays keep the face alive. It is not a new shape problem: rear views are blunt and rounded (crown gate R3 11.6 cm, three skins) and pass ruling 7.",
+   "fixHint": "art/blender/fighters/ilsheta.py face plate paint: replace the black voids with warm or lit inlays and a small cool glint (as Odrum Shadeprint and Hesmi), remove the grey smudges under the eyes, soften the plate edge. Re-render icon and all 3 portraits, then have a reviewer look at 26-128 px. Consider a warmer icon ground than black and neon green."
+  },
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Hesmi GLB and cards unchanged since the earlier pass. Viewed all 6 cards (_harness/_shots/fw_CW6_r2v1_cards_hesmi.jpg) and icon and portrait at 128/64/26 px (fw_CW6_r2v1_small.png): two eyes with cool glints, no joint across the eye span, reads as alive. Facechip gate exit 0."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Real client on the Chrome GPU with a fresh content build routed into /catalog (a temporary build, dist-catalog untouched): one 7 s recall per seat (_harness/_reports/fw_CW6_r2v1_live_recall.json). Dunsom, Ilsheta, Marund, Rishal, Tunlan: key recall, clip 6 s, wraps 0, end t 5.943, last second at clip fraction >= 0.857 (6/7). Frames viewed: _harness/_shots/fw_CW6_r2v1_rec_sheet.jpg. Idle head by FK (fw_CW6_v1_fk.mjs on current GLBs): Dunsom 6.6, Ilsheta 7.8, Marund 8.2, Rishal 4.8, Tunlan 7.2 cm, all >= 3.8. Seams 0."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Tunlan x_hat at 2x: cast_a1 0.188, cast_ult 0.210 m per 60 Hz frame (clip_steps, limit 0.3 exit 0). Marund in the real client, full 7 m cast: state dash, anim leap, clip domefall_leap, e.height peak 0.548 m, hips world y 0.419 -> 1.573 -> 0.482 m, crouch at landing (_harness/_reports/fw_CW6_r2v1_live.json). FK of the clip: at apex t 0.267 s hand.R 2.21 m against head 1.97 m, maul overhead; by t 0.6 s hand.R 0.51 m, the slam (fw_CW6_r2v1_apex.mjs). Sukri attacks and Mote Toss not re-measured: carried from verify 1; sukri.glb's only later rebuild is the recall and idle clips per its package."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Dunsom hat ramp mean 10.9, min 10.7 L* on three_dunsom.png of 00:19 (fw_CW6_hat_ramp.py). Odrum yoke vertical share 16.9 % (fw_CW6_odrum_yoke.mjs on the current GLB, modelled facings). Odrum cap, pale pixels in the live shot: median hue 35.0, sat 0.064 (coarse: the box also holds other pale parts); three sheet cap Lab 70.8 / -0.3 / 3.4 (_harness/_reports/fw_CW6_r2v1_gamecam_odrum.txt). Marund GLB unchanged since the maul pass. Hesmi stone/linen dE and Sukri wraps chroma and cup carried from verify 1: part_gamecam has no part map for hesmi or sukri here. Skin hat ramps: the script returns 0.0 on the Highrim and Almanac sheets (its mask does not fit them), so they are judged by eye only; the criterion names the base."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "card_qa re-run: 48 cards, 0 misses (_harness/_reports/fw_CW6_r2v1_card_qa.txt). First Bell dE 29.3 >= 18. But the Tunlan criterion is not met: on art/out/fighters/tunlan/splash.png the top 0.01 % of pixels centre at x 0.723, y 0.310, the face; luma p99 in the lantern box 212.9 against 247.6 in the face box, so the lantern is not the key. The engineer disclosed this. The hound shadow is a large black streaked shape floating across the sky and spires, attached to no surface, and does not read as a hound; CW3c's r2 verify 2 also recorded it as reading as a fault. I viewed it and agree.",
+   "fixHint": "Tunlan base splash: cast the shadow onto a real surface (the terrace wall or a near plate plane behind the figure), soften and lower it so the hound shape reads, and dim the face key about 15 % while raising the lantern emissive so the frame maximum sits on the lantern. Change only tunlan_splash staging."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "three_load_test exit 0 on all 24 GLBs, bases within --budget-kb 1172 (largest tunlan 1197220 bytes, _harness/_reports/fw_CW6_r2v1_three_load.txt). Re-score: 7 of 8 at >= 7.5; Ilsheta 7.2 with a sensitivity blocker open.",
+   "fixHint": "See sensitivity:ilsheta-face and cards:ilsheta-first-bell-chin."
+  },
+  {
+   "id": "par:dunsom",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5. Hat ramp, lantern swing 16 deg (fw_CW6_m_tilt.mjs), bar clearance PASS, 3 distinct cards, dE 28.5 / 33.9, face reads as an amber carved mask, not a skull, in my view. Backlog: dunsom:idle-lobby-pop, death floor -0.087 m."
+  },
+  {
+   "id": "par:hesmi",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.6, unchanged. Eyes, glints and per-skin cards hold; icon has its cut tops."
+  },
+  {
+   "id": "par:ilsheta",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "Score 7.2 (was 7.5). The eyes now exist, but the void-eye read is a sensitivity blocker and the First Bell deluxe portrait has a black bar under the chin. Motion and rear silhouette are good: recall performs, idle 7.8 cm, First Bell splash head clear of the lamp.",
+   "fixHint": "See sensitivity:ilsheta-face and cards:ilsheta-first-bell-chin."
+  },
+  {
+   "id": "par:marund",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5 (was 7.3). The flat-dash cause is closed: the leap is verified live (done:2), recall fills the channel, busts show the dome windows. Backlog: Gorgewalk face patches, death floor, victory hand.L step 0.522 m."
+  },
+  {
+   "id": "par:odrum",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5. Crown R3 11.4 cm passes, warm voids, Shadeprint amber inlays per ruling 2 viewed, channel head 7.1 cm (FK), card_qa pass, three_load OK."
+  },
+  {
+   "id": "par:rishal",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5 (was 7.3). Lamplit is now a modelled deluxe: crest, back and pauldron lamps, walnut and amber. Figure-mean game-camera dE 9.1, per-pixel 12.0 (skin_gamecam_delta); viewed in fw_CW6_r2v1_misc.png. Accent ridge and fins stay blue per ruling 3. Lamplit splash now shows walnut on legs and apron; the chest and head stay pale (minor)."
+  },
+  {
+   "id": "par:sukri",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5, unchanged. Recall 6 s head 23.1 cm, idle head 5.1 cm. Cards viewed, faces warm. Base cards (09:30) predate the 12:47 GLB, but the card pose is unaffected."
+  },
+  {
+   "id": "par:tunlan",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Score 7.5 (was 7.6). Recall, hat steps and faces hold; the base splash shadow costs 0.1. The card itself still fails done:4."
+  },
+  {
+   "id": "cards:ilsheta-first-bell-chin",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "ilsheta_first_bell_portrait.png: a hard black bar with a white line runs under the chin, and a beige hump sits above it (zoom _harness/_shots/fw_CW6_r2v1_zoom.png panel 1). It reads as a mesh gap on a deluxe store portrait. Present before f6621d17 as well (fw_CW6_r2v1_ils_before_after.png); the engineer flagged it for review.",
+   "fixHint": "Re-stage the First Bell bust on a pose where the plate stays seated in the hood, or close the gap between plate and collar for that clip in ilsheta.py. No black bar at 128 px or at full size."
+  },
+  {
+   "id": "fighter:marund:marund-M2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same run as done:2, on my own capture (fw_CW6_r2v1_ult_sheet.jpg and fw_CW6_r2v1_live.json). The white ghost in the later frames is the occlusion silhouette behind the low wall, not the model. content/fighters/marund.json:540-542 has arc 0.55 and anim leap; src/sim/movement.ts:131,216 use it."
+  },
+  {
+   "id": "fighter:rishal:rishal-M3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Lamp cage at the crest root on the Lamplit bust, not floating at the tip (fw_CW6_r2v1_cards_rishal.jpg panel 3), glazing reads amber. Top is hard parts (crown gate 'hard'), visual check clean."
+  },
+  {
+   "id": "fighter:hesmi:hesmi-M4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "content/vfx.json now has element refs on hesmi_a1_shadow, hesmi_ult_shadow, hesmi_ult_shard. kit_hue 64/64 is taken from CW1's r2 verify 2 (17aa0294), not re-run here."
+  },
+  {
+   "id": "fighter:sukri:SUK-M5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "content/vfx.json has element refs on sukri_a1_mote, sukri_a1_toss, sukri_a2_draw, sukri_ult_gather. kit_hue as above, not re-run."
+  },
+  {
+   "id": "handoff:CW1:camera-input",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/probe_bar_clearance.ts: bar clearance PASS, exit 0; Dunsom lantern idle 0 (_harness/_reports/fw_CW6_r2v1_bar.json)."
+  },
+  {
+   "id": "handoff:CW1:polish",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same probe run."
+  },
+  {
+   "id": "handoff:CW1:refix1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Same probe run. art.scale in content: Ilsheta 1.19, Rishal 1.12, Odrum 1.085 (ruling 11)."
+  },
+  {
+   "id": "handoff:CW6:dunsom-ilsheta-rishal-tunlan",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Dunsom base cards show the ramped hat. Chalkline has its own plate and bust; card_qa passes and dE is 17.8 against floor 12. First Bell splash has the lamp out at arm's length, head clear, no headless read (viewed)."
+  },
+  {
+   "id": "handoff:CW6:cards",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Dunsom half done (Highrim and Almanac GLBs and cards current). Card half fails on Tunlan, see done:4.",
+   "fixHint": "See done:4."
+  },
+  {
+   "id": "handoff:CW6:refix1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Crest lamp at the crest root, viewed. Marund idle_lobby hand.L max step 0.084 m by my FK run."
+  },
+  {
+   "id": "handoff:CW3c:refix1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node tools/gen_store.ts --check --report _harness/_reports/fw_CW6_r2v1_de.json: all 16 CW6 paid skins pass: gorgewalk 35.0, chalkline 17.8, long_evening 29.2, tunlan_lamplit 26.5, first_bell 29.3, almanac 33.9. The engineer's 21.5 for Chalkline is stale but the skin still clears 12. The exit code 1 is lisvel_almanac 16.6, CW5's. Game camera per-pixel dE: gorgewalk 9.0, long_evening 10.6, chalkline 9.5, lamplit 12.0, almanac 6.2 (lowest). No numeric game-camera gate exists; viewed sheets read different."
+  },
+  {
+   "id": "lead:domefall-landed",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Confirmed: clip time tracks progress 0 -> 0.588 of 0.667 s over the 0.567 s dash; apex about 45 % of the dash. Short casts cut the clip: a 3 m cast ends at clip t 0.533, before slam_t 0.547 (minor; full range is fine)."
+  },
+  {
+   "id": "dunsom:idle-lobby-pop",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "New to this review, not a regression (same at 46e630fb): dunsom idle_lobby hand.L steps 0.413 and 0.328 m on consecutive 60 Hz frames, clip f18.5-19.0, prop.L 0.451 m (clip_steps --all). This exceeds the wave's own 0.3 m limit and the 0.1 m bar applied to Marund. Non-attack steps also exist on victory: Odrum 0.543, Marund 0.522, Sukri 0.409, Dunsom 0.392 m hand.L. Backlog under ruling 8 (Dunsom >= 7.5) but it is the menu idle.",
+   "fixHint": "dunsom.py idle_lobby: spread the hand.L change around f18-19 over 6+ frames or blend the IK/FK switch; check with clip_steps --clip idle_lobby --nodes hand.L --limit 0.1."
+  },
+  {
+   "id": "fighter:ilsheta:ilsheta-face-seam",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "The claim 'no stepped blocks' is refuted: visible stepped blocks remain on the plate's sides and cheeks of all portraits at 3x and at 512 px (fw_CW6_r2v1_zoom.png panels 1-2).",
+   "fixHint": "Fix with sensitivity:ilsheta-face: smooth the bake at the plate edge."
+  },
+  {
+   "id": "fighter:marund:gorgewalk-face",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "marund_gorgewalk_portrait.png: the brushed white patches and central spike over the dark moustache read as jagged, tooth-like blocks (fw_CW6_r2v1_zoom.png panel 3). Reported by the engineer as well. Not horror in my view, but the weakest face in the wave.",
+   "fixHint": "Reduce the white range of the Gorgewalk face paint so the keel is the only pale form."
+  },
+  {
+   "id": "fighter:deaths:floor",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "clip_floor death: Marund -0.371 m (x_cap_tip, 2738 verts), Tunlan -0.210, Rishal -0.137, Odrum -0.037, Sukri -0.090, Dunsom -0.087, Hesmi -0.030; Ilsheta passes. The engineer listed only Dunsom, Rishal and Tunlan; Marund's is the deepest, and is unchanged since 46e630fb.",
+   "fixHint": "Marund: raise the death end pose so the cap does not sink, or tilt it onto its rim."
+  },
+  {
+   "id": "fighter:dunsom:dunsom-lantern-glued",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "maxDeg 16 across clips (fw_CW6_m_tilt.mjs re-run)."
+  },
+  {
+   "id": "gates:sukri-chip",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "facechip gate exit 0: min 55.0 (sukri-ulkro), floor 55, with no margin (_harness/_reports/fw_CW6_r2v1_facechip.txt)."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Spot-checked lantern swing, Hesmi icon tops, Odrum channel head 7.1 cm, Dunsom value bands not re-run. Per its own package about 21 of 36 polish items were not attempted."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Guard pose and framing hold on the viewed cards; face-seam fails as above. Remainder as the engineer reports, not individually re-measured."
+  },
+  {
+   "id": "handoff:lead:catalog-stale",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "dist-catalog/manifest.json is dated 23:03; dunsom, ilsheta, odrum, rishal and tunlan GLBs are newer (up to 00:20). My live runs used a temporary fresh build, not dist-catalog.",
+   "fixHint": "Lead: run `node tools/gen_store.ts --provisional` and `npm run content` before the next re-score. CW5: lisvel_almanac dE 16.6 still fails `gen_store --check`, against CW5's verify 3 pass."
+  }
+ ],
+ "regressions": [
+  "Ilsheta: f6621d17 replaces the eyeless ring pattern with solid black eye voids, a new sensitivity read on icon and portraits, though the eyes themselves are clearer than before."
+ ]
+}
