@@ -255,7 +255,7 @@ export class Bot extends BotBase implements BotController {
       const margin = dmg / Math.max(1, f.hp + f.shield);
       if (margin > this.killMargin) { this.killMargin = margin; this.killTarget = f; }
     }
-    if (this.killMargin < (rift && this.lanePhase() ? (this.now < 600 ? 0.9 : 0.95) : 1.1)) this.killTarget = null;
+    if (this.killMargin < (rift && this.lanePhase() ? this.diff.riftKillRead ?? 0.9 : 1.1)) this.killTarget = null;
     // lane opponent: the nearest noticed enemy fighter on my lane, close by
     this.laneEnemy = this.nearestEnemyFighter(this.prof.attackRange + 6);
     if (this.laneEnemy && this.lane >= 0 && !this.jungle) {
@@ -282,6 +282,10 @@ export class Bot extends BotBase implements BotController {
       for (const a of this.perc.allyFighters) if (a.alive && a.atkTarget === f.id) return true;
     }
     return false;
+  }
+
+  protected override unanswering(t: Entity): boolean {
+    return this.k.kind === 'rift' && t.id === this.laneFoe && this.now - this.foeSince > 6 && this.now - this.foeHitAt > 6;
   }
 
   /** my lane opponent is dead, or was seen starting a recall in the last 9 s and is not back in sight */
@@ -372,7 +376,10 @@ export class Bot extends BotBase implements BotController {
     // under the Noon Toll nobody can hide: the outnumbered-in-a-crowd retreats (a third party near) are off, only low
     // health still sends a bot away — three survivors used to circle each other until the clock ran out
     const tolled = kind === 'fray' && this.tollRinging();
-    const thr = this.prof.retreatHp + this.diff.retreatBias + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0);
+    // (CW3s r2 refix, CL-1: on a road in the laning phase a skilled tier's read of its own burst holds it in the trade; its caution
+    // bias, right for the mid game, left veteran laners with fewer takedowns than adept ones on every real-seat window)
+    const edgy = this.lanePhase();
+    const thr = this.prof.retreatHp + (edgy ? this.diff.riftRetreatBias ?? this.diff.retreatBias : this.diff.retreatBias) + (lastLife ? 0.15 : 0) + (this.adv < 0.4 && !tolled ? 0.08 : 0) - (tolled ? 0.05 : 0);
     let best: Mode = this.mode, bestS = -1;
     const consider = (m: Mode, s: number): void => {
       if (s <= 0) return;
@@ -385,8 +392,7 @@ export class Bot extends BotBase implements BotController {
     // (CW3s refix 2, CL-1: a RIFT laner in the laning phase plays its lane closer to the edge — it leaves a trade 5 points
     // of health later and turns from a merely worse 2v2 only below 0.36, not 0.42: laning kills come from the
     // trades a laner stays in a moment too long, and the wave's last hits from staying on it)
-    // (until 9:00: past it the first Needles go down early — 8.3 min veteran median, under G4's 9–12 band — when it lasts)
-    const edgy = this.lanePhase() && now < 540;
+    // (for the whole laning phase: the longest quiet stretch started at 8:00-12:00 when this ended at 9:00; the Dawn Seal, up to 8:00 now, keeps the first Needle in G4's 9–12 band)
     if (this.nearE > 0) {
       if (hpF < thr - (edgy ? 0.05 : 0)) retreat = 0.85 + (thr - hpF);
       else if (tolled) retreat = 0;
@@ -409,7 +415,7 @@ export class Bot extends BotBase implements BotController {
         // (a jungler with a camp to take now finishes it first: no shopping trip, and home on low
         // health only once the camp would take more than it has left)
         const camp = this.jungle && kind === 'rift' && this.campAtHand(14);
-        const lowAt = (k.rules.recall ? (lp ? 0.25 : camp ? 0.22 : 0.36) : 0.22) + this.diff.recallBias;
+        const lowAt = (k.rules.recall ? (lp ? 0.25 : camp ? 0.22 : 0.36) : 0.22) + (edgy ? this.diff.riftRecallBias ?? this.diff.recallBias : this.diff.recallBias);
         if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
         // (CW3 CL-1: a laner with a wave of its own to take and no enemy fighter in sight takes it before going home,
         // unless it is nearly out — a recall at every trade's end cost the roads their last hits)
@@ -464,7 +470,7 @@ export class Bot extends BotBase implements BotController {
       // (CW3s refix: 0.3 after 12 s; at 0.15 after 20 s a passive seat took less damage than the bot-played one)
       // (refix 2: 0.3 after 12 s still left the passive seat at 288 vs 321 damage a minute: 0.4 after 8 s)
       // (r2-bots: 0.4 still left the passive seat under the bot-played one against veteran bots, 309 vs 356 a minute: 0.55 after 6 s)
-      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 6 && now - this.foeHitAt > 6 ? 0.55 : 0;
+      const passive = kind === 'rift' && le.id === this.laneFoe && now - this.foeSince > 6 && now - this.foeHitAt > 6 ? this.diff.riftPassivePress ?? 0.55 : 0;
       // (CW3s refix, with fight-time last hits in: the power spikes are trade windows again, a level on the opponent at 2
       // or 3 and my ultimate up while it has none; the trades no longer cost the road its last hits)
       const lvl = kind === 'rift' && this.lanePhase() ? this.spikeEdge(le) : 0;

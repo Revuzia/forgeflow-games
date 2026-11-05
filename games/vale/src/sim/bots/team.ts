@@ -519,7 +519,9 @@ export class TeamBrain {
     // (objectiveSense: a road with a stacked enemy wave deep in our half is a threat too — no waiting at a door then)
     if (sense) for (const l of this.k.lanes) if (this.perc.enemyN[l.index] >= 5 && this.perc.enemyFront[l.index] < l.length * 0.5 && this.perc.ownN[l.index] <= this.perc.enemyN[l.index] - 3) threat = Math.max(threat, 0.5);
     // (objectiveSense: a road under threat comes first — Wicks crashing into an empty base end games, a camp does not)
-    if (sense && threat >= 0.3) return;
+    // (CW3s r2 refix, done:2: not for the laning phase's own short camp: a wave deep in one half is the laning's normal state,
+    // and this read, with the 15 s bar below, left veteran Sunsplinter takes at 3.2-8.3 min after spawn; adept 1.0-2.3)
+    if (sense && threat >= (this.phase === 'early' ? 0.6 : 0.3)) return;
     // (objectiveSense: where the team is — an even-numbers call is for a camp on its way, not one across the map)
     let cx = 0, cy = 0, cn = 0;
     for (const f of this.perc.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
@@ -535,7 +537,7 @@ export class TeamBrain {
       if (sense) {
         if (now < this.campBlock[c.index]) continue;
         const { ttk, hpF } = this.campTtk(w, c);
-        const long = ttk > 15, up = aa >= ae + 1;
+        const long = ttk > (this.phase === 'early' ? 24 : 15), up = aa >= ae + 1;
         const near = cn > 0 && sq(cx - c.x) + sq(cy - c.y) <= 50 * 50;
         if (alive) {
           // a long objective only with a fighter more; none the team cannot take in 40 s; at even numbers a short one

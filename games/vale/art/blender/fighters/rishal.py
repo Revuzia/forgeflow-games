@@ -4057,8 +4057,8 @@ def _death(g, skel) -> anim.Clip:
     # the feet stay planted through the spin (the knees fold under the dropping hips: no straight-legged pivot)
     spin["ik"] = _feet(g, dl=(0.02, -0.02, 0.0), dr=(0.0, 0.04, 0.0), yl=20.0, yr=-60.0, pl=10.0, pr=16.0)
     down = anim.merge(anim.arms_relaxed(), anim.P(hips=(-86, 160, 0), spine=(-4, 0, 0), chest=(-4, 0, 0), neck=(8, 0, 0),
-                                                  head=(10, -16, 0), thigh_L=(30, 0, -18), shin_L=(-60, 0, 0),
-                                                  thigh_R=(10, 0, 12), shin_R=(-12, 0, 0), foot_R=(20, 0, 0),
+                                                  head=(10, -16, 0), thigh_L=(44, 0, -18), shin_L=(-60, 0, 0),   # (round 2: thighs +14: the boots clear the floor)
+                                                  thigh_R=(24, 0, 12), shin_R=(-12, 0, 0), foot_R=(20, 0, 0),
                                                   upper_arm_R=(4, -14, -12), forearm_R=(58, 0, 0),
                                                   upper_arm_L=(-20, 0, 52), forearm_L=(32, 0, 0)))
     # (fix pass 5, review: a stiff spread-eagle, both arms rigid and horizontal): the right arm folded across his

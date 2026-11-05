@@ -26,24 +26,24 @@
   },
   "uv_coverage": 0.62,
   "bake": {
-    "base": 6.4,
-    "rough_metal": 4.23,
-    "normal": 3.3,
-    "ao": 4.92,
+    "base": 3.39,
+    "rough_metal": 2.39,
+    "normal": 1.64,
+    "ao": 2.48,
     "normal_fixed_px": 16229,
-    "projection": 50.88,
-    "pack_save": 51.27,
-    "total": 70.42
+    "projection": 19.02,
+    "pack_save": 19.14,
+    "total": 29.17
   },
   "tris": 18972,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2378404,
+  "glb_bytes_raw": 2378280,
   "optimize": {
     "ok": true,
-    "before": 2378404,
-    "after": 979832
+    "before": 2378280,
+    "after": 979856
   },
-  "glb_bytes": 979832,
+  "glb_bytes": 979856,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -86,23 +86,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_stillwater.png",
-    "seconds": 22.4,
+    "seconds": 7.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.3,
-      "model": 6.63,
-      "lows_bind": 7.95,
-      "uv": 10.97,
-      "bake": 70.43,
-      "export": 0.17,
-      "optimize": 1.2,
-      "load_test": 0.25,
-      "three_qa": 23.2
+      "materials": 0.17,
+      "model": 2.55,
+      "lows_bind": 2.48,
+      "uv": 4.42,
+      "bake": 29.17,
+      "export": 0.08,
+      "optimize": 0.46,
+      "load_test": 0.1,
+      "three_qa": 7.39
     },
-    "total_s": 121.19
+    "total_s": 46.87
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

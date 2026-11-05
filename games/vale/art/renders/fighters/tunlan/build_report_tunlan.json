@@ -47,14 +47,14 @@
   },
   "uv_coverage": 0.624,
   "bake": {
-    "base": 7.03,
-    "rough_metal": 4.2,
-    "normal": 4.79,
-    "ao": 6.2,
+    "base": 4.51,
+    "rough_metal": 4.56,
+    "normal": 2.91,
+    "ao": 2.97,
     "normal_fixed_px": 28942,
-    "projection": 105.73,
-    "pack_save": 106.11,
-    "total": 128.72
+    "projection": 64.21,
+    "pack_save": 64.45,
+    "total": 79.53
   },
   "tris": 21228,
   "mesh_top_m": 2.05,
@@ -159,13 +159,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3031464,
+  "glb_bytes_raw": 3031320,
   "optimize": {
     "ok": true,
-    "before": 3031464,
-    "after": 1196896
+    "before": 3031320,
+    "after": 1197220
   },
-  "glb_bytes": 1196896,
+  "glb_bytes": 1197220,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -209,25 +209,25 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/tunlan/three_tunlan.png",
-    "seconds": 11,
+    "seconds": 11.1,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.35,
-      "model": 7.01,
-      "lows_bind": 9.51,
-      "uv": 22.81,
-      "bake": 129.23,
-      "clips": 0.67,
-      "export": 4.21,
-      "optimize": 1.4,
-      "load_test": 0.3,
-      "three_qa": 11.3,
-      "cache": 0.08
+      "rig": 0.0,
+      "materials": 0.08,
+      "model": 2.03,
+      "lows_bind": 1.44,
+      "uv": 4.18,
+      "bake": 79.84,
+      "clips": 0.42,
+      "export": 2.82,
+      "optimize": 0.92,
+      "load_test": 0.21,
+      "three_qa": 11.37,
+      "cache": 0.1
     },
-    "total_s": 186.96
+    "total_s": 103.45
   },
   "run_ref_speed": 3.35,
   "height_m": 1.86

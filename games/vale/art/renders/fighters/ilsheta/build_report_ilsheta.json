@@ -25,14 +25,14 @@
   },
   "uv_coverage": 0.618,
   "bake": {
-    "base": 9.0,
-    "rough_metal": 10.45,
-    "normal": 7.03,
-    "ao": 6.79,
+    "base": 2.83,
+    "rough_metal": 2.21,
+    "normal": 1.55,
+    "ao": 2.99,
     "normal_fixed_px": 15468,
-    "projection": 39.13,
-    "pack_save": 39.52,
-    "total": 73.21
+    "projection": 14.96,
+    "pack_save": 15.11,
+    "total": 24.79
   },
   "tris": 18272,
   "mesh_top_m": 1.722,
@@ -143,13 +143,13 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 2844344,
+  "glb_bytes_raw": 2844260,
   "optimize": {
     "ok": true,
-    "before": 2844344,
-    "after": 1167328
+    "before": 2844260,
+    "after": 1167256
   },
-  "glb_bytes": 1167328,
+  "glb_bytes": 1167256,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -193,25 +193,25 @@
     ],
     "clips": 17,
     "out": "art/renders/fighters/ilsheta/three_ilsheta.png",
-    "seconds": 19,
+    "seconds": 7.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 1.46,
-      "model": 23.86,
-      "lows_bind": 26.97,
-      "uv": 40.85,
-      "bake": 73.22,
-      "clips": 0.35,
-      "export": 3.94,
-      "optimize": 1.86,
-      "load_test": 0.29,
-      "three_qa": 19.36,
-      "cache": 0.15
+      "rig": 0.0,
+      "materials": 0.1,
+      "model": 2.26,
+      "lows_bind": 2.23,
+      "uv": 5.02,
+      "bake": 24.8,
+      "clips": 0.13,
+      "export": 1.17,
+      "optimize": 0.53,
+      "load_test": 0.11,
+      "three_qa": 7.39,
+      "cache": 0.09
     },
-    "total_s": 192.72
+    "total_s": 43.86
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

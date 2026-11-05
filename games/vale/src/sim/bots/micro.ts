@@ -445,7 +445,8 @@ export abstract class BotBase {
         // one held the lampglass ults back to the late game)
         // (CW3s refix: an ultimate's group heal saves at 10 points more health: its long cooldown is better spent than
         // held, and the lampglass ult still sat unused past 10:00)
-        const lift = s.slot === 'ult' ? 0.25 : 0;
+        // (r2 refix: 35 points: Ilsheta's lamps, which need a second body, still came at a 10.3 min median on real seats)
+        const lift = s.slot === 'ult' ? 0.35 : 0;
         const save = this.k.kind === 'rift' && info.minTargets > 1 && this.alliesIn(e.x, e.y, R, (this.mode === 'teamfight' || this.mode === 'allin' || this.mode === 'trade' ? 0.45 : 0.35) + lift) >= 1 && (threatened || this.mode === 'teamfight' || this.mode === 'allin');
         if (n >= Math.max(1, info.minTargets) || save) { this.cast(s, info, e, e.x, e.y); return true; }
       } else if (!(u & U_OFFENSE) || info.dmg.length === 0) {
@@ -566,12 +567,17 @@ export abstract class BotBase {
     }
   }
 
+  /** `t` is my lane opponent and has not answered a blow; the bot layer knows (see Bot) */
+  protected unanswering(_t: Entity): boolean { return false; }
+
   /** shot patience (CW3s refix, critic bot-micro: the veteran's skillshots hit less often than the adept's): a far
    *  skillshot at a free, moving target that can walk out of it before it lands is held for a better moment — the
    *  target held, slowed into a cast or a swing, or closer. `dd`: the aim distance. */
   private walkable(info: AbilityInfo, t: Entity, dd: number): boolean {
     if (info.delivery !== 'projectile' && info.delivery !== 'area') return false;
     if (!canMove(t) || t.cast || t.atkWindup >= 0 || (t.vx === 0 && t.vy === 0)) return false;
+    // (CW3s r2 refix, critic bot-micro: a farmer that never answers is not reading the shot: no reason to hold it)
+    if (this.unanswering(t)) return false;
     const reach = info.delivery === 'projectile' ? info.projRange : Math.max(info.range, 1);
     if (dd < reach * 0.6) return false;
     const land = info.castTime + (info.delivery === 'projectile' ? dd / Math.max(1, info.projSpeed) : info.delay);

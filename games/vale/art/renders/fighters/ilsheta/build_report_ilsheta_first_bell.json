@@ -27,24 +27,24 @@
   },
   "uv_coverage": 0.627,
   "bake": {
-    "base": 11.19,
-    "rough_metal": 4.48,
-    "normal": 3.71,
-    "ao": 3.37,
+    "base": 3.09,
+    "rough_metal": 2.32,
+    "normal": 1.61,
+    "ao": 2.26,
     "normal_fixed_px": 14237,
-    "projection": 51.21,
-    "pack_save": 51.52,
-    "total": 74.75
+    "projection": 17.67,
+    "pack_save": 17.79,
+    "total": 27.19
   },
   "tris": 19092,
   "mesh_top_m": 1.722,
-  "glb_bytes_raw": 2342100,
+  "glb_bytes_raw": 2341856,
   "optimize": {
     "ok": true,
-    "before": 2342100,
-    "after": 964344
+    "before": 2341856,
+    "after": 964168
   },
-  "glb_bytes": 964344,
+  "glb_bytes": 964168,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -87,23 +87,23 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/ilsheta/three_ilsheta_first_bell.png",
-    "seconds": 68,
+    "seconds": 7.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.02,
-      "materials": 1.28,
-      "model": 23.06,
-      "lows_bind": 20.24,
-      "uv": 17.31,
-      "bake": 74.75,
-      "export": 0.19,
-      "optimize": 1.09,
-      "load_test": 0.28,
-      "three_qa": 68.47
+      "rig": 0.0,
+      "materials": 0.18,
+      "model": 2.62,
+      "lows_bind": 2.4,
+      "uv": 4.78,
+      "bake": 27.19,
+      "export": 0.05,
+      "optimize": 0.46,
+      "load_test": 0.1,
+      "three_qa": 7.39
     },
-    "total_s": 206.91
+    "total_s": 45.24
   },
   "run_ref_speed": 3.35,
   "height_m": 1.47

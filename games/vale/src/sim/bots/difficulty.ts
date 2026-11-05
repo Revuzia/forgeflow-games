@@ -41,6 +41,13 @@ export interface DifficultyProfile {
   readonly riftLastHitMiss?: number;
   readonly riftDodgeChance?: number;
   readonly riftShotPatience?: number;
+  /** RIFT laning phase (CW3s r2 refix, CL-1: a skilled tier's commits): replaces retreatBias and recallBias on a road */
+  readonly riftRetreatBias?: number;
+  readonly riftRecallBias?: number;
+  /** RIFT laning phase: burst over health at which a target counts as a kill (absent: 0.9) */
+  readonly riftKillRead?: number;
+  /** RIFT: trade edge against a lane opponent that has not answered a blow (absent: 0.55) */
+  readonly riftPassivePress?: number;
   /** chance a perceived telegraph / skillshot is dodged */
   readonly dodgeChance: number;
   /** 0..1 (CW3s refix): how much a far skillshot at a free, moving target that could walk out of it is held back
@@ -104,7 +111,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   },
   adept: {
     id: 'adept', reaction: 0.25, reactionJitter: 0.07, aimErrorDeg: 6, leadSkill: 0.75,
-    lastHitSigma: 0.05, lastHitMiss: 0.07, riftLastHitMiss: 0.04, dodgeChance: 0.5, kiteSkill: 0.55, shotPatience: 0,
+    lastHitSigma: 0.05, lastHitMiss: 0.07, riftLastHitMiss: 0.04, riftKillRead: 0.85, riftPassivePress: 0.7, dodgeChance: 0.5, kiteSkill: 0.55, shotPatience: 0,
     intentFollow: 0.85, recallBias: 0, retreatBias: 0, knowsCooldowns: false,
     decisionNoise: 0.06, focusDiscipline: 0.65, abilityEvery: 0.3,
     macroDelay: 2.5, convertsLeads: false, leadGleam: Infinity, readsWaves: false,
@@ -113,7 +120,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyProfile>> = {
   veteran: {
     id: 'veteran', reaction: 0.12, reactionJitter: 0.04, aimErrorDeg: 2.5, leadSkill: 0.95,
     lastHitSigma: 0.03, lastHitMiss: 0.03, riftLastHitMiss: 0.02, dodgeChance: 0.85, kiteSkill: 0.9, shotPatience: 1,
-    intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, knowsCooldowns: true,
+    intentFollow: 1, recallBias: 0.04, retreatBias: 0.03, riftRetreatBias: -0.02, riftRecallBias: 0, riftKillRead: 0.8, riftPassivePress: 0.8, knowsCooldowns: true,
     decisionNoise: 0.03, focusDiscipline: 1, abilityEvery: 0.2,
     macroDelay: 0, convertsLeads: true, leadGleam: 1500, readsWaves: true,
     objectiveLead: 50, objectiveEven: 0.68, contests: true, objectiveSense: true,
