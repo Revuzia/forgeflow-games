@@ -277,6 +277,10 @@ export function decide(x: PCtx, s: number): void {
     if (st.target) { A.posAt(s, x.tick, _p); close = distM(x.p, _p, st.target) < 400; }
     U[C.follow] = night ? 0.2 : close ? 1.6 : 0.95;
     U[C.bandGather] = night ? 0 : 0.5;
+    // (SIMFIX 2, seed 16) a thirsty band whose leader has walked on for water walks after it through the night rather than
+    // sleeping where it stopped: twelve with water for a few hours slept by a dry pond while the leader walked 1.1 km to
+    // water, set out at dawn with none and ten died on the way (the desert walks by night, when it is cool)
+    if (sp.needW[WATER] > 0 && N[nb + WATER] < 0.35 && rest >= 0.25 && leaderGone(x, s, st)) U[C.follow] = Math.max(U[C.follow], U[C.sleep] + 0.05);
   } else if (st) {
     const day = night ? 0.25 : 1;
     const dil = A.traits[s * NT + TRAIT.diligence];
@@ -517,12 +521,23 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     // nothing within reach: lie up in the shade through the heat of the day (asleep, water is lost at half the rate)
     // rather than forage in the sun; a band's leader keeps going, and townsfolk go on with the day's work (a day worker
     // carries the skins: waterHere — lying up in a dried town cost the day trips that kept base villagers watered)
-    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === A.id[s]))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
+    if (c < 0 && w >= 0.12 && !isNight(x, s) && !(st && (!st.band || st.leader === A.id[s] || leaderGone(x, s, st)))) return { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 120, target: -1 };
   }
   if (c < 0) return null;
   // (a road walks faster than the crow flies: what campBeats would drop on the way is not picked)
   if (dm < Infinity && campBeats(x, s, st, c)) return toCamp(x, s, here, m);
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
+}
+
+/** (SIMFIX 2, seed 16) a band member's leader is more than WATER_NEAR off: the band is walking on (bandStep walks it where
+ * the leader is), and one who lies up in the shade here is left behind — a dust-bowl band whose leader walked off to water
+ * 1.5 km away left twelve lying up by a dry pond; they set out hours later at no water and ten died on the way */
+function leaderGone(x: PCtx, s: number, st: Settlement): boolean {
+  const l = x.A.slotOf(st.leader);
+  if (l < 0 || l === s) return false;
+  x.A.posAt(s, x.tick, _cp);
+  x.A.posAt(l, x.tick, _cq);
+  return distM(x.p, _cp, _cq) > WATER_NEAR;
 }
 
 /**
@@ -639,6 +654,9 @@ function planSleep(x: PCtx, s: number, st: Settlement | undefined, night: boolea
   const nocturnal = x.info[A.species[s]].def.nocturnal;
   let dur = night ? ticksUntilSun(x.u, x.p, x.tick, _p, nocturnal ? 'set' : 'rise', 8 * 60) : 150 + Math.floor(hashFloat(A.id[s], x.tick, 0x51ee) * 90);
   dur = Math.max(60, Math.min(14 * 60, dur + Math.floor(hashFloat(A.id[s], x.tick, 0x51ef) * 30)));
+  // (SIMFIX 2, seed 16) the thirsty of a band on the move sleep in short spells: a night's sleep is not woken from, and a
+  // leader who walks on for water in the night is followed (decide utilities: leaderGone) — twelve slept through it
+  if (st && st.band && st.target && x.info[A.species[s]].needW[WATER] > 0 && A.needs[s * NEED_N + WATER] < 0.35) dur = Math.min(dur, 90);
   if (st && !st.band) {
     // (LIVING PACE: at the camp of a trip, or where night fell far from home — perf/pace.ts)
     const camp = paceSleep(x, s, st, night, dur);

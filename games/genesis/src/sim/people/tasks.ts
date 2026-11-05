@@ -284,11 +284,15 @@ export function capsize(x: PCtx, s: number, c: number): boolean {
   if (hashFloat(A.id[s], c, x.tick, 0xb0a7) >= p * Math.min(3, x.p.f.precip[c] / 5)) return false;
   const st = x.ps.settlement(A.settlement[s]);
   // (SIMFIX 0) a townsman in the town's lent boat (fishing.ts fishTask, travel) within a cell of the shore makes land
-  if (!A.mission[s] && st && !st.band) {
-    const g = x.p.grid;
-    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] < 0.4) return false;
+  if (st && !st.band) {
+    if (!A.mission[s]) {
+      const g = x.p.grid;
+      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (x.p.f.water[g.nbr[e]] < 0.4) return false;
+    }
     // (SIMFIX 0b) and a rowing boat on the home water rides out rain: only a storm at the shelter break overturns it (the
     // fisher rows in at the first hard rain: shelter.ts stormBreaks) — sf2 seed 1 drowned 4 town fishers in rain
+    // (SIMFIX 0c) so does a town's errand over the water — a trade caravan on its raft: sf3 seed 1 drowned 3 traders in
+    // rain at storm severity 0.15-0.29 once the towns built rafts (SIMFIX 1). A band's crossing keeps the old odds.
     cellPos(x.p, c, _cap);
     if (stormSeverity(x, _cap, c) < STORM_BREAK) return false;
   }

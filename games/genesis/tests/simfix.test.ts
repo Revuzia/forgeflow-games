@@ -88,6 +88,37 @@ test('SIMFIX0b a town fisher in the lent boat rows in at hard rain and does not 
   p.st.globalWeather = null;
 });
 
+// SIMFIX 0c: with boats in the towns' stores (SIMFIX 1) the 8-seed sf3 run drowned 3 on seed 1 (years 19-22): all three
+// traders of one town crossing open water on its raft in rain short of a storm (precip 5-9, storm severity 0.15-0.29;
+// a capsize() log in a copy of the tree). A townsman's errand over the water overturns only in a storm, as the fisher does.
+test('SIMFIX0c a town trade caravan on its raft does not capsize in rain short of a storm', async () => {
+  const { twoTowns } = await import('./helpers/god.ts');
+  const { makeCtx } = await import('../src/sim/people/ctx.ts');
+  const { TASK } = await import('../src/sim/people/defs.ts');
+  const { capsize } = await import('../src/sim/people/tasks.ts');
+  const w = twoTowns();
+  const sim = w.sim, p = sim.u.planets[0], ps = p.people!;
+  const lune = ps.settlement(w.lune.id)!;
+  const x = makeCtx(sim.u, p), A = x.A;
+  const s = (ps.members.get(lune.id) ?? []).find((q) => A.alive[q])!;
+  const g = p.grid;
+  let open = -1;
+  for (let c = 0; c < g.n && open < 0; c++) {
+    if (p.f.water[c] <= 0.6) continue;
+    let shore = false;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (p.f.water[g.nbr[e]] < 0.4) shore = true;
+    if (!shore) open = c;
+  }
+  assert.ok(open >= 0, 'open water on the planet');
+  p.st.globalWeather = 'rain';
+  p.f.precip[open] = 9;
+  A.task[s] = TASK.trade; A.mission[s] = 31; A.boat[s] = x.c.items.idx('raft'); A.cell[s] = open;
+  let over = 0;
+  for (let i = 0; i < 400 && A.alive[s]; i++) { x.tick += 7; if (capsize(x, s, open)) over++; }
+  assert.equal(over, 0, 'no trader drowns in rain');
+  p.st.globalWeather = null;
+});
+
 // SIMFIX 2: a stone-age band the god sets down (the opening's 'people' power, life.spawn-people) knows hunting and
 // fishing from day 1 — hunter-gatherers do; before, only the two scenario rows carried knowledge ['hunting'] and a
 // fresh sandbox band showed no hunting for years with game beside camp.
