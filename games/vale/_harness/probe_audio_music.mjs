@@ -10,7 +10,7 @@
 //   A3  every mode has a clock the acts can read
 //   O1  the objective layer is off away from a pit (far from all: its own tap at least 30 dB under its level at a pit)
 //   O2  it fades in by proximity (gain >= 0.9 within 6 s at a pit) and out (<= 0.05 within 8 s away); a road beside a pit
-//       only lifts it a little (gain <= 0.3); the output's RMS at a pit stands 0.5-4.5 dB over the far windows on either side
+//       only lifts it a little (gain <= 0.3); within the pit window the bed's sum stands 0.5-4.5 dB over the bed without the layer
 //   O3  it fades out when the objective falls, the ear still at the pit
 //   C1  no clicks at transitions: the sample step and the > 7 kHz peak at each jump (fade start to downbeat + 100 ms), against
 //       the same windows at the natural section ends and the rest of the recording
@@ -95,26 +95,27 @@ try {
     a.listener(() => window.__ear);
     const hps = [0, 1, 2].map(() => { const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000; return f; });
     hps[0].connect(hps[1]); hps[1].connect(hps[2]);
-    const merger = ctx.createChannelMerger(3);
+    const merger = ctx.createChannelMerger(4);
     const mono = (n) => { const sp = ctx.createGain(); sp.channelCount = 1; sp.channelCountMode = 'explicit'; n.connect(sp); return sp; };
     mono(g.out).connect(merger, 0, 0);
     g.out.connect(hps[0]); mono(hps[2]).connect(merger, 0, 1);
     const obj = b.layers.find((l) => l.role === 'objective');
     if (obj) mono(obj.gain).connect(merger, 0, 2);
-    const proc = ctx.createScriptProcessor(4096, 3, 1);
+    mono(b.gain).connect(merger, 0, 3);
+    const proc = ctx.createScriptProcessor(4096, 4, 1);
     const st = window.__music = { rows: [] };
     let last = 0;
     proc.onaudioprocess = (ev) => {
-      const ib = ev.inputBuffer, x = ib.getChannelData(0), h = ib.getChannelData(1), o = ib.getChannelData(2);
-      let ss = 0, step = 0, peak = 0, hf = 0, os = 0;
+      const ib = ev.inputBuffer, x = ib.getChannelData(0), h = ib.getChannelData(1), o = ib.getChannelData(2), bd = ib.getChannelData(3);
+      let ss = 0, step = 0, peak = 0, hf = 0, os = 0, bs = 0;
       for (let i = 0; i < x.length; i++) {
         const v = x[i], d = Math.abs(v - last); last = v;
-        ss += v * v; os += o[i] * o[i];
+        ss += v * v; os += o[i] * o[i]; bs += bd[i] * bd[i];
         if (d > step) step = d;
         if (Math.abs(v) > peak) peak = Math.abs(v);
         if (Math.abs(h[i]) > hf) hf = Math.abs(h[i]);
       }
-      st.rows.push([ev.playbackTime, ss / x.length, step, peak, hf, os / x.length, a.combat ? 1 : 0]);
+      st.rows.push([ev.playbackTime, ss / x.length, step, peak, hf, os / x.length, a.combat ? 1 : 0, bs / x.length, b.gain.gain.value]);
     };
     const z = ctx.createGain(); z.gain.value = 0; merger.connect(proc); proc.connect(z); z.connect(ctx.destination);
     const m = window.__vale.state.match.value;
@@ -126,7 +127,7 @@ try {
   rep.clockS = clockS;
 
   // ── act 0: the jump S2 > S5 live ──
-  const j0 = await waitSection((s) => s.jump && s.act === 0, 200, 'act 0 jump');
+  const j0 = await waitSection((s) => s.jump && s.act === 0, 420, 'act 0 jump');      // the .m4a path plays as composed until its take-over (112 s on)
   rep.jumpAct0 = j0;
   await waitCtx(j0.at + 1);
 
@@ -229,7 +230,11 @@ try {
   const lvl = (win) => ({ outDb: r2(dbP(pow(inW(win), 1))), objDb: r2(dbP(pow(inW(win), 5))), blocks: inW(win).length });
   rep.objective = { far0: lvl(w.far0), pit: lvl(w.pit), far1: lvl(w.far1) };
   const obj = rep.objective;
-  obj.liftDb = r2(obj.pit.outDb - dbP((10 ** (obj.far0.outDb / 10) + 10 ** (obj.far1.outDb / 10)) / 2));
+  // the lift within the pit window itself: the bed's sum with the layer over the bed's sum without it (the bed moves by
+  // more than the layer between windows: a section, the combat layer)
+  const pr = inW(w.pit), bedP = pow(pr, 7), objP = pr.reduce((s, r) => s + r[5] * r[8] * r[8], 0) / Math.max(1, pr.length);
+  obj.bedOverObjDb = r2(dbP(bedP) - dbP(objP));
+  obj.liftDb = r2(dbP(bedP) - dbP(Math.max(1e-12, bedP - objP)));
 
   // the section order: each logged end played its act's next section (MUSIC_ACTS as the build reads it)
   const ACTS = [[0, 1, 4], [0, 1, 2, 4], [1, 2, 3, 4]];

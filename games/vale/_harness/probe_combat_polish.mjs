@@ -278,7 +278,7 @@ try {
       const base = await B((b, a) => b.__white(b.__grab(), a.vbox), { vbox });
       // the frame before the cast, kept to read at the beat's circle (a cross-check on the faded core below) and what is
       // alive in it (a kit's passive, the map's): the faded frame must be down to this
-      const live0 = await B((b) => { b.__g0 = b.__grab(); return b.renderer.vfx.insts.filter((it) => it.active).length; });
+      const live0 = await B((b) => { b.__g0 = b.__grab(); return [...new Set(b.renderer.vfx.insts.filter((it) => it.active).map((it) => it.def.id))]; });
       await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.c, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, c: c.seat, slot: SLOT });
       const rows = [];
       let flatN = 0;
@@ -318,19 +318,20 @@ try {
       if (first) {
         // CW1 r3 refix (done:1): 'faded' means faded. A fixed 179 frames ended a few frames before Hesmi's 5 s shadow zone
         // (0.35 + 0.75 + 5 s = 183 frames), so the slab's shade darkened the base on some runs and not on others (core
-        // x2.1 and x1.89 from the same first beat). Wait until only what the frame before the cast held is alive, then
+        // x2.1 and x1.89 from the same first beat). Wait until no effect of the kit's that the frame before the cast did not hold is alive, then
         // take the median of 5 frames; the report holds every sample, the wait and the pre-cast frame's reading
-        const faded = await B((b, a) => { let n = 0; const alive = () => b.renderer.vfx.insts.filter((it) => it.active); while (alive().length > a.live0 && n < 600) { b.__step(15); n += 15; } return { frames: n, left: [...new Set(alive().map((it) => it.def.id))] }; }, { live0 });
+        const faded = await B((b, a) => { let n = 0; const left = () => [...new Set(b.renderer.vfx.insts.filter((it) => it.active && it.def.id.startsWith(`${a.def}_`) && !a.live0.includes(it.def.id)).map((it) => it.def.id))]; while (left().length && n < 600) { b.__step(15); n += 15; } return { frames: n, left: left() }; }, { live0, def });
         await stage(c.seat);
         baseCore = await B((b, a) => {
           const cx = a.q.ux * 1920, cy = (1 - a.q.uy) * 1080, r = a.q.rr * 1080 * 0.5;
-          const read = (g) => ({ all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1), p90: +b.__circQ(g, cx, cy, r, a.vbox, 0.9).toFixed(1) });
+          const flashOf = () => +(b.renderer.actors.get(a.pv)?.flashState?.k ?? 0).toFixed(3);
+          const read = (g) => ({ flash: flashOf(), all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1), p90: +b.__circQ(g, cx, cy, r, a.vbox, 0.9).toFixed(1) });
           const samples = [];
           for (let i = 0; i < 5; i++) { if (i) b.__step(6); samples.push(read(b.__grab())); }
           const med = (k) => samples.map((x) => x[k]).sort((p, q) => p - q)[2];
           const pre = read(b.__g0); b.__g0 = null;
           return { all: med('all'), ground: med('ground'), p90: med('p90'), samples, pre };
-        }, { q: first.q, vbox });
+        }, { q: first.q, vbox, pv: st.pv });
         baseCore.waited = faded.frames; baseCore.left = faded.left;
       }
       const beats = rows.map((r, i) => ({ f: i + 1, ...r })).filter((r) => r.white);

@@ -98,6 +98,7 @@
 //               into its own next section, which is the whole loop as composed. The act only rises within a match:
 //               by its clock (ACT_CLOCK x the mode's rules.suddenDeathAt, else rules.end.timeLimit) or by the share
 //               of its structures down (ACT_LOST), and a bed that starts mid-match walks there from its head.
+//               The .m4a path's pieces play the loop as composed; the acts begin once the stitched stem has taken over.
 //               The bed's `pieces` ({ at, file }; older content: 'seg_<at>' layers) are the main stem's .m4a pieces,
 //               for the .m4a path only (the .ogg path never fetches one): `at` = where the piece starts on the bed's
 //               timeline (audio/build_music.py cuts them
