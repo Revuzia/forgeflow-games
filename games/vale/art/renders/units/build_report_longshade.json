@@ -6,7 +6,7 @@
     "unweighted": 0,
     "fixed_vertices": 0
   },
-  "tris": 12030,
+  "tris": 12026,
   "parts": {
     "body": 0,
     "mantle": 1,
@@ -16,17 +16,17 @@
     "dial": 5,
     "cuffs": 6
   },
-  "uv_coverage": 0.608,
+  "uv_coverage": 0.591,
   "bake": {
-    "base": 9.32,
-    "rough_metal": 6.5,
-    "normal": 2.42,
-    "ao": 1.83,
-    "normal_fixed_px": 11468,
-    "pack_save": 0.33,
-    "total": 23.77
+    "base": 4.06,
+    "rough_metal": 2.68,
+    "normal": 1.37,
+    "ao": 1.01,
+    "normal_fixed_px": 13098,
+    "pack_save": 0.18,
+    "total": 9.95
   },
-  "bake_holes_filled": 1774,
+  "bake_holes_filled": 1343,
   "clips": {
     "idle": {
       "frames": 90,
@@ -88,46 +88,46 @@
   "mesh_top_m": 3.95,
   "min_z": {
     "idle": [
-      -0.003,
+      0.003,
       [
-        28,
+        38,
         [
-          -0.54,
-          -2.39,
-          -0.0
+          0.28,
+          1.58,
+          0.0
         ]
       ]
     ],
     "run": [
-      -0.217,
+      -0.218,
       [
         14,
         [
           -0.12,
-          0.81,
+          0.8,
           -0.22
         ]
       ]
     ],
     "attack1": [
-      -0.095,
+      -0.094,
       [
         14,
         [
           -0.06,
-          0.77,
+          0.76,
           -0.09
         ]
       ]
     ],
     "cast_a1": [
-      -0.127,
+      -0.082,
       [
         14,
         [
-          0.77,
-          -1.75,
-          -0.13
+          0.91,
+          -1.5,
+          -0.08
         ]
       ]
     ],
@@ -143,7 +143,7 @@
       ]
     ],
     "cast_a3": [
-      -0.261,
+      -0.262,
       [
         54,
         [
@@ -165,22 +165,22 @@
       ]
     ]
   },
-  "glb_bytes_raw": 2318716,
+  "glb_bytes_raw": 2469016,
   "optimize": {
     "ok": true,
-    "before": 2318716,
-    "after": 1018248
+    "before": 2469016,
+    "after": 1092360
   },
-  "glb_bytes": 1018248,
+  "glb_bytes": 1092360,
   "icon": {
     "out": "art/out/units/longshade_icon.png"
   },
   "inspect": [
     "  material longshade_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  material longshade_lamp: maps=[] emissive=0.80,0.49,0.15 base=1,0.617,0.188,1",
-    "  texture longshade_normal: image/webp ? 65.5 KiB",
-    "  texture longshade_orm: image/webp ? 25.6 KiB",
-    "  texture longshade_base: image/webp ? 293.9 KiB",
+    "  texture longshade_normal: image/webp ? 70.0 KiB",
+    "  texture longshade_orm: image/webp ? 27.3 KiB",
+    "  texture longshade_base: image/webp ? 319.7 KiB",
     "  clip attack1      1.000 s (30 f) channels=35 bones=33",
     "  clip cast_a1      1.167 s (35 f) channels=35 bones=33",
     "  clip cast_a2      1.333 s (40 f) channels=36 bones=34",
@@ -190,40 +190,41 @@
     "  clip run          0.800 s (24 f) channels=34 bones=32"
   ],
   "load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] art/out/units/longshade.glb (994 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: longshade_base 1440x1440 294K, longshade_normal 512x512 66K, longshade_orm 256x256 26K",
-      "  skinned meshes: longshade_1(12273v), longshade_2(706v)",
+      "[three] art/out/units/longshade.glb (1067 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: longshade_base 1440x1440 320K, longshade_normal 512x512 70K, longshade_orm 256x256 27K",
+      "  skinned meshes: longshade_1(13753v), longshade_2(706v)",
       "  bones: 37 (root hips plume3L plume3R plume4L plume4R spine chest neck dial neck2 head eyeL eyeR mask plume0L plume0R plume1L plume1R scapulaL upper_armL forearmL handL clawL scapulaR upper_armR forearmR handR clawR plume2L plume2R tail tail2 tail3 tail4 tail5 tail6)",
       "  clips: attack1:1.000s/35tr, cast_a1:1.167s/35tr, cast_a2:1.333s/36tr, cast_a3:2.167s/37tr, death:1.833s/37tr, idle:3.000s/37tr, run:0.800s/34tr",
       "  tracks checked: 251; materials: longshade_body, longshade_lamp; textures: longshade_body.map=1440x1440, longshade_body.normalMap=512x512, longshade_body.roughnessMap=256x256, longshade_body.metalnessMap=256x256, longshade_body.aoMap=256x256",
-      "  tris: 12030; bind-pose bounds (three units, Y up): 4.22 x 3.95 x 8.42; facing (-0.00, 1.00); head bone y 3.08; runRefSpeed 3.2",
+      "  tris: 12026; bind-pose bounds (three units, Y up): 4.51 x 3.94 x 8.08; facing (-0.01, 1.00); head bone y 3.08; runRefSpeed 3.2",
       "  run: 24 f, planted samples 26, max foot-speed error 0.2%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (1)",
+      "  - GLB is 1067 KiB > budget 1024 KiB"
     ]
   },
   "sheet": {
     "ok": true,
     "out": "art/renders/units/longshade.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-2.104,0.003,-5.818],[2.113,3.949,2.606]],\"facing\":[-0.002,1],\"headY\":3.08,\"heightPx1080\":224,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":23.2}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-2.229,0.005,-5.816],[2.284,3.95,2.268]],\"facing\":[-0.009,1],\"headY\":3.08,\"heightPx1080\":224,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/longshade.png\",\"seconds\":11.5}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.01,
-      "sculpt": 140.06,
-      "bind": 1.02,
-      "uv": 17.96,
-      "bake": 27.49,
-      "clips": 0.92,
-      "ground_qa": 0.42,
-      "export": 1.41,
-      "optimize": 1.09,
-      "icon": 2.05,
-      "qa": 24.11
+      "sculpt": 55.58,
+      "bind": 0.18,
+      "uv": 3.71,
+      "bake": 15.97,
+      "clips": 0.4,
+      "ground_qa": 0.21,
+      "export": 0.77,
+      "optimize": 0.65,
+      "icon": 1.26,
+      "qa": 11.87
     },
-    "total_s": 217.11
+    "total_s": 90.83
   }
 }

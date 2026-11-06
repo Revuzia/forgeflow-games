@@ -969,13 +969,13 @@ class Longshade(Monster):
     HEIGHT = 4.2
     BODY_TOP = 3.7
     RUN_SPEED = 3.2
-    TEX = 1440
+    TEX = 1360
     TEX_SIZES = {"orm": 256, "normal": 512}      # the 1024 KiB GLB budget: the mesh grew, the atlas gives way
     VOX_LOW = 0.022
     VOX_HIGH = 0.016
     VOX_PART = {"mask": 0.009, "claws": 0.009, "eyes": 0.006, "mantle": 0.016}
     VOX_HIGH_PART = {"mask": 0.005, "claws": 0.006, "eyes": 0.004, "dial": 0.006, "mantle": 0.009}
-    TRIS = {"body": 7300, "mask": 800, "claws": 640, "eyes": 600, "mantle": 1700}
+    TRIS = {"body": 6900, "mask": 800, "claws": 440, "eyes": 600, "mantle": 2100}
     CLIPS = ("idle", "run", "attack1", "cast_a1", "cast_a2", "cast_a3", "death")
     GLOW = {"eyes": ("longshade_lamp", 0.8, "#FFCE78")}
     UV_WEIGHTS = {"mask": 3.5, "claws": 1.4, "eyes": 0.2, "dial": 2.0, "mantle": 1.1}
@@ -1080,30 +1080,55 @@ class Longshade(Monster):
 
     # ── sculpt ──
     def _plume(self, S, base, d, L, w, t, normal, curl=30.0, segs=6, k0=0.07, tag="wisp", store=True, min_t=None, sway=0.0):
-        """One smoke plume: a flat billow, broad past a third of its length, swaying sideways, its round tip curling off the
-        surface (toward `normal`). Never a spike: the tip closes as a half circle. Records (pts, widths, normal, seed)."""
+        """One smoke plume: a flat billow, broad for two thirds of its length, swaying sideways, curling off the surface (toward
+        `normal`), its end tapering into two torn licks of unequal length. Never a spike. Records (pts, widths, normal, seed, (u0, u1)) per stroke, the paint's coordinates."""
         d = K.nrm(d)
         n_ = K.nrm(np.asarray(normal, dtype=np.float64) - d * (np.asarray(normal, dtype=np.float64) @ d))
         ax = K.nrm(np.cross(d, n_))
         pts = tube_path(base, d, L, ax, curl, segs)
         ss = np.linspace(0, 1, segs + 1)
-        pts = [q + ax * (sway * L * math.sin(math.pi * u * 1.4)) for q, u in zip(pts, ss)]
-        ws = w * (0.66 + 0.34 * np.sin(np.minimum(ss / 0.4, 1.0) * math.pi / 2)) * (1 - 0.42 * sarr(0.45, 1.0, ss))
-        ws = ws * np.sqrt(np.maximum(1 - (np.maximum(ss - 0.72, 0) / 0.28) ** 2, 0.06))
+        pts = np.array([q + ax * (sway * L * math.sin(math.pi * u * 1.4)) for q, u in zip(pts, ss)])
+        ws = w * (0.66 + 0.34 * np.sin(np.minimum(ss / 0.4, 1.0) * math.pi / 2)) * (1 - 0.3 * sarr(0.35, 0.67, ss))
         floor_t = min_t if min_t is not None else self.tip_t
         ts = np.maximum(t * 1.35 * (1 - 0.6 * ss), floor_t)     # thick enough that the blade edge does not alias on the voxel grid
-        for i in range(segs):
+        m = max(2, (segs * 2) // 3)                             # broad for two thirds of its length, then it thins and tears
+        um = float(ss[m])
+        for i in range(m):
             sd = pts[i + 1] - pts[i]
             side = K.nrm(np.cross(sd, n_))
             S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=side),
                   k=k0 if i == 0 else 0.05, tag=tag)
+        seed = self.plume_seed
+        self.plume_seed += 1
         if store:
-            self.plumes.append((np.array(pts), ws, n_, len(self.plumes)))
+            self.plumes.append((pts[:m + 1].copy(), ws[:m + 1].copy(), n_, seed, (0.0, um)))
+        # the tip: one long lick that carries on, thinning and curling sideways, and one short lick torn off its side. Both blend
+        # into the billow (no gap at the root, no fingers) and both close round: a smoke tip, never a spike
+        rng = self.fork_rng
+        hand = -1.0 if rng.uniform() < 0.5 else 1.0
+        tip_w = 0.05 if self.tip_t < 0.04 else 0.06
+        for off, wf, lf, bend in ((-0.26 * hand, 0.74, 1.0, 0.16), (0.56 * hand, 0.42, rng.uniform(0.42, 0.58), 0.34)):
+            fs = np.linspace(0, 1, 4)
+            tp = []
+            for f in fs:
+                at = m + (segs - m) * f * lf
+                q = np.array([np.interp(at, np.arange(segs + 1), pts[:, c_]) for c_ in range(3)])
+                tp.append(q + ax * (ws[m] * off + (np.sign(off) * bend * L * lf * f * f)))
+            tw = np.maximum(ws[m] * wf * (1 - fs) ** 1.1 + tip_w * fs, tip_w)
+            tt = np.maximum(ts[m] * (1 - 0.5 * fs), floor_t)
+            for i in range(3):
+                sd = tp[i + 1] - tp[i]
+                side = K.nrm(np.cross(sd, n_))
+                S.add(sdf.FlatCapsule(tp[i], tp[i + 1], tw[i], tt[i], tw[i + 1], tt[i + 1], side=side), k=0.05 if i == 0 else 0.02, tag=tag)
+            if store:
+                self.plumes.append((np.array(tp), tw, n_, seed, (um, um + (1 - um) * lf)))
 
     def body_sculpt(self, detail):
         J = self.J
         S = GSculpt("body")
         self.plumes = []
+        self.plume_seed = 0
+        self.fork_rng = np.random.RandomState(53)    # the same breaks in the low and the high
         if detail:
             smoke = ((lambda P: -0.03 * (1 - np.abs(NOISE(P, 2.2))) + 0.008 * NOISE.fbm(P * np.array([1.6, 0.35, 1.6]), 5.0, 3)), 0.045)
         else:
@@ -1192,11 +1217,13 @@ class Longshade(Monster):
         S = Sculpt("mantle")
         self.tip_t = 0.03 if detail else 0.05
         self.mantle_plumes = []
+        self.plume_seed = 100
+        self.fork_rng = np.random.RandomState(59)
         for name, base, d, L, w, par, curl in self.mantle_list():
             keep, self.plumes = getattr(self, "plumes", []), []
             sx = 1.0 if base[0] > 0 else -1.0
             self._plume(S, base, d, L, w, 0.085, (sx * 0.25, 0.0, 1.0), curl=curl, segs=7, k0=0.0, tag=name, sway=0.08 * sx)
-            self.mantle_plumes.append(self.plumes[0])
+            self.mantle_plumes.extend(self.plumes)
             self.plumes = keep
         return S
 
@@ -1352,15 +1379,15 @@ class Longshade(Monster):
         self.claws = []
         for sx, tag in ((1, "clawL"), (-1, "clawR")):
             fb = np.array(mirror(J["fball"], sx))
-            for dx, L in ((-0.17, 0.66), (-0.06, 0.86), (0.06, 0.88), (0.17, 0.62)):
+            for dx, L in ((-0.17, 0.36), (-0.06, 0.46), (0.06, 0.48), (0.17, 0.34)):
                 base = fb + np.array([dx * sx, -0.06, 0.0])
                 splay = math.radians(dx * sx * 75)
                 d0 = K.nrm(np.array([math.sin(splay) * 0.98, -math.cos(splay), 0.2]))
                 side = K.nrm(np.cross(d0, (0, 0, 1)))
                 pts = tube_path(base, d0, L, side, -40, 5)
-                # sickle blades: deep (vertical) and thin (sideways)
-                ws = np.linspace(0.07, 0.012 if detail else 0.016, len(pts))
-                ts = np.linspace(0.04, 0.008 if detail else 0.014, len(pts))
+                # short stout hooks: as broad from the game camera as they are deep, blunt at the end
+                ws = np.linspace(0.085, 0.028, len(pts))
+                ts = np.linspace(0.068, 0.024, len(pts))
                 for i in range(len(pts) - 1):
                     S.add(sdf.FlatCapsule(pts[i], pts[i + 1], ws[i], ts[i], ws[i + 1], ts[i + 1], side=np.cross(side, pts[i + 1] - pts[i])),
                           k=0.02 if i == 0 else 0.01, tag=tag)
@@ -1395,7 +1422,7 @@ class Longshade(Monster):
         n = len(V)
         best = np.full(n, 1e9)
         U, X, R = np.zeros(n), np.ones(n) * 9.0, np.zeros(n)
-        for pts, ws, nn, seed in plumes:
+        for pts, ws, nn, seed, (u0, u1) in plumes:
             lo, hi = pts.min(0) - ws.max() - 0.1, pts.max(0) + ws.max() + 0.1
             idx = np.nonzero(np.all((V >= lo) & (V <= hi), axis=1))[0]
             if not len(idx):
@@ -1414,7 +1441,7 @@ class Longshade(Monster):
                 m = dd < best[idx]
                 k = idx[m]
                 best[k] = dd[m]
-                U[k] = (i + t[m]) / segs
+                U[k] = u0 + (u1 - u0) * (i + t[m]) / segs
                 side = K.nrm(np.cross(ab, nn))
                 X[k] = np.abs((P_[m] - q[m]) @ side) / np.maximum(wd[m], 0.03)
                 R[k] = ((seed * 0.618) % 1.0)
@@ -1428,11 +1455,13 @@ class Longshade(Monster):
         U, X, R, best = self._plume_fields(V, plumes)
         col = mix_hex(np.tile(c("plume_root"), (len(V), 1)), c("plume_mid"), sarr(0.1, 0.62, U))
         col = mix_hex(col, c("plume_tip"), sarr(0.62, 1.0, U) * (0.78 + 0.34 * R))
-        col = mix_hex(col, c("rim"), sarr(0.72, 1.0, X) * sarr(0.3, 0.7, U) * 0.8)            # a lit edge round the billow
-        # smoke: long soft streaks drawn along the plume's own length, not a leaf's rib
-        st = NOISE.fbm(np.stack([X * 3.2 + R * 17.0, U * 1.1 + R * 5.0, R * 9.0], 1), 1.0, 3)
-        col = mix_hex(col, c("plume_root"), sarr(0.02, 0.26, st) * 0.55 * (1 - sarr(0.8, 1.0, U)))
-        col = mix_hex(col, c("rim"), sarr(-0.04, -0.26, st) * 0.32 * sarr(0.2, 0.6, U))
+        # smoke, not a leaf: no veins along the length and no outlined edge. Soft curling washes that wander across the stroke,
+        # with a pale light only toward the tips
+        cx = X * 1.5 + 0.55 * np.sin(U * 6.0 + R * 40.0)
+        st = NOISE.fbm(np.stack([cx + R * 17.0, U * 2.6 + R * 5.0, R * 9.0], 1), 1.0, 3)
+        col = mix_hex(col, c("plume_root"), sarr(0.02, 0.26, st) * 0.6 * (1 - sarr(0.75, 1.0, U)))
+        col = mix_hex(col, c("rim"), sarr(-0.04, -0.26, st) * 0.4 * sarr(0.25, 0.7, U))
+        col = mix_hex(col, c("rim"), sarr(0.8, 1.0, X) * sarr(0.7, 0.95, U) * 0.3)
         col = mix_hex(col, c("plume_warm"), sarr(0.78, 1.0, U) * 0.2)
         col = mix_hex(col, c("plume_root"), sarr(-0.1, -0.6, N[:, 2]) * 0.8)                 # undersides drop to ink
         return col, best
@@ -1461,8 +1490,13 @@ class Longshade(Monster):
             col = mix_hex(col, c("hand"), on_arm * near_fa * sarr(0.3, 0.8, fa) * 0.8)
             for f_ in (0.42, 0.72):
                 col = mix_hex(col, c("band"), on_arm * (~near_fa) * sarr(0.05, 0.03, np.abs(ua - f_)) * 0.85)
+            for f_ in (0.14, 0.3, 0.65):                         # the forearm's chalk hour bands, either side of the brass cuffs
+                col = mix_hex(col, c("band"), on_arm * near_fa * sarr(0.046, 0.03, np.abs(fa - f_)) * 0.95)
             hw_ = np.clip(1 - (tags["hand"] - dmin) / 0.02, 0, 1) * (tags["hand"] < 0.04)
             col = mix_hex(col, c("hand"), hw_ * 0.9)
+            fb_ = np.array(J["fball"])                           # a chalked knuckle at each claw's root
+            dk = np.min(np.stack([np.linalg.norm(Vm - (fb_ + np.array([dx_, -0.03, -0.005])), axis=1) for dx_ in (-0.17, -0.06, 0.06, 0.17)]), 0)
+            col = mix_hex(col, c("band"), hw_ * sarr(0.07, 0.045, dk) * sarr(-0.1, 0.4, nz) * 0.9)
             # plumes (their own colour scheme where the wisp tag owns the surface)
             pc, best = self._plume_paint(V, N, self.plumes)
             ww = np.clip(1 - (tags["wisp"] - dmin) / 0.03, 0, 1) * (tags["wisp"] < 0.05)
@@ -1506,7 +1540,7 @@ class Longshade(Monster):
             return col, 0.42 + 0.3 * stone
         if part == "claws":
             fr, _ = self._along(V, self.claws)
-            col = mix_hex(np.tile(c("claw"), (n, 1)), c("claw_tip"), sarr(0.45, 1.0, fr))
+            col = mix_hex(np.tile(c("claw"), (n, 1)), c("claw_tip"), sarr(0.2, 0.8, fr))
             return col, 0.38 + 0.2 * fr
         if part == "eyes":
             face = np.clip(N @ self.MN, 0, 1)
@@ -3353,9 +3387,16 @@ class StrayNumeral(StrayBase):
                 Clip("death", 50, death)]
 
 
+def _tick_top(x, y, h=0.07):
+    """A point on the Tick's head serif, which is cocked 14 degrees toward the front."""
+    th = math.radians(14.0)
+    return (x, -0.02 + y * math.cos(th) - h * math.sin(th), 0.905 + y * math.sin(th) + h * math.cos(th))
+
+
 class StrayTick(StrayBase):
-    """A single tick mark that wandered off the dial: one short chalk stroke with a bracketed serif top and foot,
-    a gold-leaf hour notch under the top serif (CW4: no eye pair). It pogo-hops on its foot serif."""
+    """A single tick mark that wandered off the dial and got up: one short chalk stroke with a serif head cocked forward
+    like a curious animal, two stub feet splayed forward, two short stub arms held out, a large gold-leaf hour mark on its chest
+    (CW4: no eye pair, no face). It pogo-hops on its feet."""
     ID = "stray_tick"
     HEIGHT = 1.0
     BODY_TOP = 1.0
@@ -3375,8 +3416,8 @@ class StrayTick(StrayBase):
     GRIME_Z = 0.15                 # the grit stops at the foot plate: on a 1 m stroke 0.3 dirtied a third of the unit
     EYE_R = 0.018
     W, D = 0.25, 0.25
-    GOLD_STROKES = (((0.12, 0.0, 1.0), (-0.12, 0.0, 1.0)), ((0.12, -0.09, 1.0), (0.12, 0.09, 1.0)),
-                    ((-0.12, -0.09, 1.0), (-0.12, 0.09, 1.0)),
+    GOLD_STROKES = ((_tick_top(0.12, 0.0), _tick_top(-0.12, 0.0)), (_tick_top(0.12, -0.09), _tick_top(0.12, 0.09)),
+                    (_tick_top(-0.12, -0.09), _tick_top(-0.12, 0.09)),
                     ((-0.135, -0.135, 0.62), (0.135, -0.135, 0.62)), ((0.135, -0.135, 0.62), (0.135, 0.135, 0.62)),
                     ((0.135, 0.135, 0.62), (-0.135, 0.135, 0.62)), ((-0.135, 0.135, 0.62), (-0.135, -0.135, 0.62)))
 
@@ -3384,11 +3425,18 @@ class StrayTick(StrayBase):
         W, D = self.W, self.D
         chis = ((lambda P: -0.006 * np.clip(sdf.Noise(29).ridged(P, 9.0, 2) - 0.5, 0, 1) - 0.002 * NOISE(P, 30.0)), 0.008)
         stroke = RoundBox((0, 0, 0.5), (W / 2, D / 2, 0.38), 0.02)
-        # round 3: narrow serifs: the wide top plate hid the stroke at the game camera and left a blank slab of a silhouette
-        foot = RoundBox((0, 0, 0.055), (W / 2 + 0.075, D / 2 + 0.015, 0.055), 0.018)
-        top = RoundBox((0, 0, 0.93), (W / 2 + 0.05, D / 2 + 0.015, 0.07), 0.018)
-        prims = [(stroke.displaced(*chis) if detail else stroke, 0.0), (foot.displaced(*chis) if detail else foot, 0.08),
-                 (top.displaced(*chis) if detail else top, 0.08)]
+        def chisel(pr):
+            return pr.displaced(*chis) if detail else pr
+        # the head serif, narrow (a wide plate hid the stroke at the game camera), cocked forward: posture is the creature read
+        th = math.radians(14.0)
+        ax = np.array([[1.0, 0, 0], [0, math.cos(th), math.sin(th)], [0, -math.sin(th), math.cos(th)]])
+        top = RoundBox((0, -0.02, 0.905), (W / 2 + 0.05, D / 2 + 0.015, 0.07), 0.018, axes=ax)
+        prims = [(chisel(stroke), 0.0), (chisel(top), 0.08),
+                 (chisel(RoundBox((0, 0, 0.05), (0.145, D / 2 - 0.005, 0.05), 0.018)), 0.08)]
+        for sx in (1, -1):
+            # stub feet splayed forward, broad and round; short stub arms held out to the sides
+            prims.append((chisel(RoundCone((sx * 0.075, 0.015, 0.075), (sx * 0.2, -0.15, 0.058), 0.075, 0.058)), 0.05))
+            prims.append((chisel(RoundCone((sx * 0.12, -0.01, 0.55), (sx * 0.27, -0.05, 0.50), 0.062, 0.05)), 0.04))
         return prims
 
     def cuts(self):
@@ -3398,8 +3446,8 @@ class StrayTick(StrayBase):
 
     def piece_box(self, piece):
         d = self.D / 2 + 0.06
-        return {"foot": ((-0.35, -d, -0.02), (0.35, d, 0.45)), "mid": ((-0.25, -d, 0.15), (0.25, d, 0.8)),
-                "top": ((-0.35, -d, 0.5), (0.35, d, 1.05))}[piece]
+        return {"foot": ((-0.35, -0.26, -0.02), (0.35, d, 0.45)), "mid": ((-0.34, -d - 0.02, 0.15), (0.34, d, 0.8)),
+                "top": ((-0.35, -0.22, 0.5), (0.35, d + 0.03, 1.05))}[piece]
 
     def piece_bone(self, piece):
         return {"foot": "foot", "mid": "mid", "top": "head"}[piece]
@@ -3408,16 +3456,16 @@ class StrayTick(StrayBase):
         return []                  # CW4: no drilled eye pair (face read); the hour notch marks its front
 
     def notches(self):
-        return [(np.array([0.0, -self.D / 2 - 0.01, 0.8]), 0.065)]
+        return [(np.array([0.0, -self.D / 2 - 0.01, 0.74]), 0.078)]
 
     def grooves(self):
         # the carver's inline down the stroke, front and back (inked), and across the top serif
         return [(np.array([0.0, y, 0.22]), np.array([0.0, y, 0.7])) for y in (-self.D / 2 - 0.005, self.D / 2 + 0.005)] + \
-               [(np.array([0.12, 0.0, 1.005]), np.array([-0.12, 0.0, 1.005]))]
+               [(np.array(_tick_top(0.12, 0.0, 0.075)), np.array(_tick_top(-0.12, 0.0, 0.075)))]
 
     def chips(self):
         d = self.D / 2
-        return [((0.2, -d, 0.0), 0.04), ((-0.17, d, 0.97), 0.035), ((0.12, -d, 0.45), 0.025)]
+        return [((-0.17, d, 0.92), 0.035), ((0.12, -d, 0.45), 0.025)]
 
     def bones(self):
         return [B("root", (0, 0, 0), (0, -0.3, 0)),

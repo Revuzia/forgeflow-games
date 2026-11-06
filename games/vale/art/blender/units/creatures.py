@@ -236,7 +236,7 @@ class Glasshorn(Creature):
     PAL = {"hide": "#B48D63", "flank": "#C8A57C", "belly": "#E6DAC2", "leg": "#6F5741", "sock": "#3B3029",
            "ruff": "#E2D3B6", "muzzle": "#4F3F33", "nose": "#2A2522", "eye": "#1B1917", "hoof": "#2F2925",
            "ear_in": "#C99C88", "rump": "#EDE4D2", "tick": "#5A4433", "pedicle": "#E8E1D2", "saddle": "#7B5A3E",
-           "dot": "#EFE4CC"}
+           "dot": "#EFE4CC", "coat_hi": "#E0C196", "coat_lo": "#8E6B48"}
 
     def joints(self):
         return dict(
@@ -304,6 +304,7 @@ class Glasshorn(Creature):
             S.add(prim, k=k, tag=tag)
 
         hide = fur(0.0035)
+        neck_ax = sdf.frame(np.array(J["neck2"]) - np.array(J["neck"]))
         # torso: barrel, deep chest, withers, croup
         add(Ellipsoid((0, 0.03, 1.07), (0.225, 0.55, 0.245)), 0.0, d=hide)
         add(Ellipsoid((0, -0.35, 1.03), (0.215, 0.26, 0.285)), 0.10, d=hide)
@@ -311,14 +312,16 @@ class Glasshorn(Creature):
         add(Ellipsoid((0, 0.41, 1.10), (0.205, 0.25, 0.225)), 0.10, d=hide)
         add(Ellipsoid((0, 0.62, 1.10), (0.13, 0.08, 0.13)), 0.07, tag="rump")
         for sx in (1, -1):
-            add(Ellipsoid((sx * 0.125, -0.43, 1.02), (0.085, 0.15, 0.24), axes=sdf.axes_from_rot(sdf.rot_x(-14))), 0.06, d=hide)
-            add(Ellipsoid((sx * 0.115, 0.44, 0.99), (0.10, 0.19, 0.24), axes=sdf.axes_from_rot(sdf.rot_x(10))), 0.06, d=hide)
+            # shaped masses, set off from the barrel by a crisp blend: blade and shoulder, the round haunch and its gaskin, the neck's cord
+            add(Ellipsoid((sx * 0.15, -0.42, 1.04), (0.085, 0.17, 0.25), axes=sdf.axes_from_rot(sdf.rot_x(-14))), 0.03, d=hide)
+            add(Ellipsoid((sx * 0.145, 0.45, 1.01), (0.09, 0.22, 0.25), axes=sdf.axes_from_rot(sdf.rot_x(10))), 0.03, d=hide)
+            add(Ellipsoid((sx * 0.155, 0.46, 0.79), (0.055, 0.12, 0.13)), 0.03, d=hide)
+            add(Ellipsoid((sx * 0.055, -0.66, 1.40), (0.045, 0.06, 0.20), axes=neck_ax), 0.03, d=hide)
         # neck + throat ruff (shaggy, the stag's readable mane)
         add(RoundCone((0, -0.50, 1.19), (0, -0.80, 1.62), 0.155, 0.08), 0.08, d=hide)
         ruffd = None
         if detail:
             ruffd = (lambda P: 0.013 * NOISE.ridged(P * np.array([1.6, 1.6, 0.5]), 18.0, 3) - 0.004), 0.013
-        neck_ax = sdf.frame(np.array(J["neck2"]) - np.array(J["neck"]))
         add(Ellipsoid((0, -0.70, 1.34), (0.12, 0.12, 0.24), axes=neck_ax), 0.05, tag="ruff", d=ruffd)
         add(Ellipsoid((0, -0.63, 1.44), (0.11, 0.09, 0.19), axes=neck_ax), 0.05, tag="ruff", d=ruffd)
         add(RoundCone((0, -0.71, 1.30), (0, -0.67, 1.13), 0.085, 0.025), 0.05, tag="ruff", d=ruffd)   # throat fringe
@@ -359,6 +362,7 @@ class Glasshorn(Creature):
                 f, t = np.array(m(fet)), np.array(m(tip))
                 base = np.array([f[0], (f[1] + t[1]) / 2 + 0.005, 0.03])
                 add(RoundCone(f + np.array([0, -0.004, -0.03]), base, 0.031, 0.043), 0.012, tag="hoof")
+        S.sub(Ellipsoid((0, 0.2, 0.74), (0.3, 0.27, 0.14)), k=0.07)     # the belly tucks up before the haunch: a runner, not a barrel
         S.inter(HalfSpace((0, 0, 0.004), (0, 0, -1), extent=3.0), k=0.004)
         return {"body": S}
 
@@ -398,6 +402,25 @@ class Glasshorn(Creature):
         col = np.tile(c("hide"), (n, 1))
         flank = _smooth_arr(0.6, 0.0, nz)[:, None]
         col = col * (1 - 0.6 * flank) + c("flank") * 0.6 * flank
+
+        def mix_(col_, key, w_):
+            return col_ * (1 - w_[:, None]) + c(key) * w_[:, None]
+        # round 3 refix: painted coat strokes: broad brush marks lying along the body, the hair's direction, two values either side
+        # of the hide, turning downward on the upper legs and down the neck
+        body_w = _smooth_arr(0.68, 0.82, z)
+        st = NOISE.fbm(V * np.array([15.0, 2.4, 11.0]), 1.0, 2)
+        stl = NOISE.fbm(V * np.array([13.0, 13.0, 2.4]), 1.0, 2)
+        neck_w = _smooth_arr(-0.5, -0.62, y)
+        st = st * (1 - neck_w) + NOISE.fbm(V * np.array([13.0, 5.0, 3.0]), 1.0, 2) * neck_w
+        st = st * body_w + stl * (1 - body_w)
+        col = mix_(col, "coat_hi", _smooth_arr(0.04, 0.17, st) * 0.72)
+        col = mix_(col, "coat_lo", _smooth_arr(-0.04, -0.17, st) * 0.62)
+        # the masses: light on the crown of shoulder, haunch and gaskin, a painted shadow where each meets the barrel
+        Vm = np.stack([np.abs(x), y, z], 1)
+        for c0, r0 in (((0.15, -0.42, 1.06), (0.13, 0.2, 0.27)), ((0.145, 0.45, 1.03), (0.13, 0.27, 0.28)), ((0.155, 0.46, 0.79), (0.08, 0.14, 0.15))):
+            dd = np.linalg.norm((Vm - np.array(c0)) / np.array(r0), axis=1)
+            col = mix_(col, "coat_hi", _smooth_arr(0.85, 0.3, dd) * 0.5)
+            col = mix_(col, "saddle", _smooth_arr(0.78, 0.98, dd) * _smooth_arr(1.24, 1.02, dd) * _smooth_arr(0.7, 0.2, nz) * 0.68)
         belly = (_smooth_arr(-0.2, -0.7, nz) * _smooth_arr(1.1, 0.85, z))[:, None]
         col = col * (1 - belly) + c("belly") * belly
         legz = _smooth_arr(0.78, 0.5, z)[:, None]
@@ -449,6 +472,11 @@ class Glasshorn(Creature):
                 key_col = c("hide") * (1 - under[:, None]) + c("rump") * under[:, None]
             else:
                 key_col = c(key)
+                if tag == "ruff":     # long locks falling down the throat
+                    lk = NOISE.fbm(V * np.array([17.0, 17.0, 3.0]), 1.0, 2)
+                    key_col = np.tile(key_col, (n, 1))
+                    a_ = _smooth_arr(0.02, 0.17, lk)[:, None] * 0.75
+                    key_col = key_col * (1 - a_) + c("flank") * a_
             col = col * (1 - w[:, None]) + key_col * w[:, None]
             rough = rough * (1 - w) + r * w
         # eye catch light rim: a lighter lid ring around the dark eye
