@@ -832,6 +832,14 @@ export const SFX: Record<string, Recipe> = {
   // draws back hissing before a wave, a high whistle before a strike from the sky, a low moan of wind before the rest
   warning: (s) => {
     const fam = disasterFamily(s.variant);
+    if (/flood|deluge/.test(s.variant)) {
+      // ARC §10: a river before it floods: steady heavy rain upstream, the swollen water running loud and low, rising
+      s.nz('pink', 0, 0.6, 1.4, 1.6, 0.16, ['lowpass', 3800, 0.7, 2600, 2.2]);
+      s.nz('brown', 0.2, 1.4, 1.2, 1.4, 0.32, ['lowpass', 260, 0.8, 480, 2.4]);
+      s.buf('babble', 0.4, 0.7, 0.22, ['lowpass', 900], 2.4, 0.6);
+      s.wet(0.4);
+      return;
+    }
     if (fam === 'eruption' || fam === 'quake' || fam === 'collapse' || fam === 'rift') {
       rumble(s, 0, 2.6, 0.45, 70);
       s.nz('brown', 0.4, 0.8, 0.6, 1.4, 0.25, ['lowpass', 140]);

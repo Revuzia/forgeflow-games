@@ -507,7 +507,7 @@ export class Toasts {
         const ref = e.ref ? { ...e.ref, planet } : null;
         const kind = String(data.kind ?? 'disaster').replace(/-/g, ' ');
         const c = this.claim(e.tick, (q) => q.kind === 'disaster' || mentions(q.text, kind));
-        this.show({ kind: 'warn', title: `Warning · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : `The ground warns of a ${kind}: the people nearby can see it coming.`, date: dateFrom(c, date), at, select: ref, planet });
+        this.show({ kind: 'warn', title: `Warning · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : warningText(kind), date: dateFrom(c, date), at, select: ref, planet });
         return;
       }
       case 'evacuate': {
@@ -612,6 +612,21 @@ const FORETOLD: Record<string, string> = {
   rain: 'rain will come', food: 'plenty will come', healing: 'the sick will mend', warmth: 'warmth will come', protection: 'they will be kept safe',
   rebuilding: 'their homes will rise again', harm: 'harm will come', sign: 'a sign will be seen',
 };
+/** what the people nearby see before the blow (ARC §10: a flood warns too, by its river) */
+const WARNING_TEXT: Record<string, string> = {
+  flood: 'The river runs high and brown under heavy rain upstream: the people nearby carry what they can to higher ground.',
+  'flash flood': 'The river runs high and brown under heavy rain upstream: the people nearby carry what they can to higher ground.',
+  volcano: 'The mountain grumbles and smokes: the people nearby can see it coming.',
+  supervolcano: 'The ground swells and smokes for leagues: the people nearby can see it coming.',
+  tsunami: 'The sea draws back from the shore: the people nearby can see it coming.',
+  meteor: 'A light grows in the sky: the people nearby can see it coming.',
+  comet: 'A light grows in the sky: the people nearby can see it coming.',
+};
+/** the warning toast's own words when no chronicle line is there to claim */
+export function warningText(kind: string): string {
+  return WARNING_TEXT[kind] ?? `The ground warns of a ${kind}: the people nearby can see it coming.`;
+}
+
 const OMEN_TEXT: Record<string, string> = {
   eclipse: 'the sun go dark', comet: 'a comet cross the sky', flood: 'the waters rise and spare them', rainbow: 'a rainbow over them',
   lightning: 'lightning choose one thing', aurora: 'curtains of light in the sky', 'red-rain': 'red rain fall', 'still-sun': 'the sun stand still',
