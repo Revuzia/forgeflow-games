@@ -319,6 +319,12 @@ export function decide(x: PCtx, s: number): void {
   if (st && !st.band && !mission) landUtilities(x, s, st, U, C, night, child);
   // (LIVING RELATIONSHIP: prayer from faith and hardship, shelter from storms, evacuations, evening worship, pilgrims,
   // prophets — god/relationship.ts through people/hooks.ts)
+  // ARC §10 (r2 #5): an evacuation order stops an errand too (the caravan walks out of the flood's reach, or waits
+  // beyond it, and goes on when the order is lifted)
+  if (mission && godHooks.missionEvacuate) {
+    const t = godHooks.missionEvacuate(x, s, home, away, Math.max(U[C.drink], U[C.eat], U[C.warm], U[C.exhausted]), U[C.flee] > 0, U[C.sleep] >= 1.2 || U[C.exhausted] > 0);
+    if (t) { startTask(x, s, t); return; }
+  }
   if (st && !mission && godHooks.relation) { const t = godHooks.relation(x, s, st, U, C, night); if (t) { startTask(x, s, t); return; } }
   // a disciple carries its god's will (god/disciples.ts) unless a body's need is pressing
   if (A.flags[s] & AgentFlag.disciple && godHooks.disciple && !mission) {

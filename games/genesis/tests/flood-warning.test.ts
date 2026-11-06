@@ -5,7 +5,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
-import { town, must } from './helpers/god.ts';
+import { town, twoTowns, must } from './helpers/god.ts';
+import { makeCtx } from '../src/sim/people/ctx.ts';
+import type { Mission } from '../src/sim/people/state.ts';
+import { ROLE } from '../src/sim/people/defs.ts';
+import { AgentFlag } from '../src/sim/types.ts';
+import { startTask } from '../src/sim/people/tasks.ts';
 import { spawnDisaster, CAST_FLOOD_AFTER, riverFlood, planetTraits } from '../src/sim/god/disasters.ts';
 import { paintWeather } from '../src/sim/fields/weather.ts';
 import type { DisasterState } from '../src/sim/god/state.ts';
@@ -196,4 +201,69 @@ test('a dry world: heavy rain over a town by its water can bring a natural flood
   assert.ok(f, 'a natural flood came in 40 rainy days');
   assert.ok((f!.st.Wn ?? 0) >= 360 && (f!.st.Wn ?? 0) <= 720, 'with its warning');
   assert.equal(run(false), null, 'no rain, no river flood');
+});
+
+test('a caravan in the flood: members on a mission inside the radius are stopped and walked out; one bound for the town waits beyond it (r2 #5)', () => {
+  const { sim, st, lune } = twoTowns();
+  const p = sim.u.planets[0], ps = p.people!, A = ps.agents;
+  const x = makeCtx(sim.u, p);
+  // Aru's caravan for Lune, mustering at home: asleep for the night inside what will be the danger
+  const aruM = (ps.members.get(st.id) ?? []).filter((s) => !A.mission[s] && (sim.u.tick - A.birth[s]) / x.year > 18).slice(0, 4);
+  // (built by hand: Lune lies over water from Aru and these towns have no boats; the route does not matter here)
+  const errand = (from: typeof st, to: typeof st, mem: number[], phase: number): Mission => {
+    const m: Mission = { id: sim.u.ids.alloc('mission'), kind: 'trade', from: from.id, to: to.id, members: [], phase, t0: sim.u.tick, tPhase: sim.u.tick, sea: false, boat: -1, boats: 0, out: [], back: [], strength: 0, siege: 0, note: '', path: [p.cellAt(from.pos), p.cellAt(to.pos)], done: [] };
+    for (const s of mem) { A.mission[s] = m.id; A.role[s] = ROLE.trader; A.flags[s] |= AgentFlag.trader; m.members.push(A.id[s]); }
+    m.members.sort((a, b) => a - b);
+    ps.missions.push(m);
+    return m;
+  };
+  const m1 = errand(st, lune, aruM, 0);
+  for (const s of aruM) startTask(x, s, { kind: TASK.sleep, goal: null, goalCell: A.cell[s], work: 480, target: -1 });
+  // Lune's caravan bound for Aru (outbound)
+  const luneM = (ps.members.get(lune.id) ?? []).filter((s) => !A.mission[s] && (sim.u.tick - A.birth[s]) / x.year > 18).slice(0, 3);
+  const m2 = errand(lune, st, luneM, 1);
+  sim.drainEvents();
+  const d = spawnDisaster(sim.u, p, 'flood', { pos: st.pos, god: -1, cause: 'nature' });
+  assert.ok(typeof d !== 'string', String(d));
+  const Wn = d.st.Wn ?? 0;
+  const R = dangerRadius(sim.u.content.disasters.find('flood')!, d);
+  const pt: [number, number, number] = [0, 0, 0];
+  const inside = (s: number) => { A.posAt(s, sim.u.tick, pt); return distM(p, pt, d.pos) <= R; };
+  sim.step(30);
+  for (const id of m1.members) {
+    const s = A.slotOf(id);
+    if (s < 0) continue;
+    assert.ok(!inside(s) || A.task[s] === TASK.evacuate, `Aru's caravan member ${id} is leaving (task ${A.task[s]})`);
+  }
+  // through the warning: Lune's caravan never walks into the danger; Aru's is never back at its errand inside it
+  for (let t = 30; t < Wn - 1; t += 30) {
+    sim.step(Math.min(30, Wn - 1 - t));
+    for (const id of m2.members) { const s = A.slotOf(id); if (s >= 0) assert.ok(!inside(s), `Lune's caravan member ${id} waits beyond the danger (task ${A.task[s]}, t+${t})`); }
+    for (const id of m1.members) { const s = A.slotOf(id); if (s >= 0 && inside(s)) assert.equal(A.task[s], TASK.evacuate, `Aru's caravan member ${id} inside the danger is leaving (t+${t})`); }
+  }
+  // a tick before the water: most of Aru's caravan is out (the walk to high ground is slow, as for the town)
+  const out = m1.members.filter((id) => { const s = A.slotOf(id); return s < 0 || !inside(s); }).length;
+  assert.ok(out >= Math.ceil(m1.members.length / 2), `${out} of ${m1.members.length} of Aru's caravan out before the water`);
+});
+
+test('the chronicle during the warning tells the rising river, not the flood as if it had struck (r2 #9)', () => {
+  const { sim, st } = town();
+  const p = sim.u.planets[0];
+  const n0 = sim.u.chronicle.length;
+  const d = spawnDisaster(sim.u, p, 'flood', { pos: st.pos, god: -1, cause: 'nature' });
+  assert.ok(typeof d !== 'string', String(d));
+  const Wn = d.st.Wn ?? 0;
+  const during = () => sim.u.chronicle.slice(n0).map((c) => c.text);
+  assert.ok(during().some((t) => /runs high and brown|climbs its banks/.test(t)), 'the rising river is told');
+  assert.ok(!during().some((t) => /^Year \d+\. Flood /.test(t)), `no 'Flood on ...' before the water: ${JSON.stringify(during())}`);
+  assert.ok(!during().some((t) => /fled before|left their homes/.test(t)), 'the leaving is not told as done before the water');
+  sim.step(Wn - 1);
+  assert.ok(!during().some((t) => /^Year \d+\. Flood /.test(t)), 'still none a tick before the water');
+  sim.step(2);
+  assert.equal(during().filter((t) => /^Year \d+\. Flood /.test(t)).length, 1, 'the flood line once, when the water comes');
+  // a god-sent flood without a warning keeps its line at once
+  const { sim: b, st: s2 } = town();
+  const m = b.u.chronicle.length;
+  must(b, { k: 'disaster.spawn', kind: 'flood', pos: s2.pos, warning: 0 });
+  assert.ok(b.u.chronicle.slice(m).some((c) => /^Year \d+\. Flood /.test(c.text)), 'an unwarned flood is told at once');
 });

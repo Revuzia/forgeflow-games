@@ -127,6 +127,20 @@ function evacuate(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, ti
       interrupt(x, s);
     }
   }
+  // ARC §10 (r2 #5): people on a mission (any town's caravan, a war band, a crew) standing in the danger or walking into
+  // it are stopped too: their next decision gives them the order (decide.ts -> godHooks.missionEvacuate)
+  const pt: [number, number, number] = [0, 0, 0], gl: [number, number, number] = [0, 0, 0];
+  const lim = R + 100;
+  for (const st of ps.settlements) {
+    for (const s of x.ps.members.get(st.id) ?? []) {
+      if (!x.A.mission[s] || x.A.flags[s] & AgentFlag.possessed || u.god.isHeld('agent', x.A.id[s])) continue;
+      x.A.posAt(s, u.tick, pt);
+      gl[0] = x.A.gx[s]; gl[1] = x.A.gy[s]; gl[2] = x.A.gz[s];
+      const m = x.ps.mission(x.A.mission[s]);
+      const bound = !!m && (evacuationOf(u, p.id, m.to)?.disaster === d.id || evacuationOf(u, p.id, m.from)?.disaster === d.id);
+      if (bound || distM(p, pt, d.pos) <= lim || distM(p, gl, d.pos) <= lim) interrupt(x, s);
+    }
+  }
 }
 
 /** during the warning: small quakes and smoke (a volcano), the sea drawn back (a tsunami) — events for the client */
@@ -201,6 +215,34 @@ export function warningEnd(u: Universe, p: Planet, d: DisasterState): void {
 export function evacuationOf(u: Universe, planet: number, sid: number): { pos: [number, number, number]; radius: number; until: number; disaster: number } | null {
   const e = u.god.rel?.st[`${planet}:${sid}`]?.evacuate;
   return e && e.until > u.tick ? e : null;
+}
+
+/**
+ * ARC §10 (r2 #5): the order a person ON A MISSION (a caravan, gift bearers, a war band, a ship's crew) must heed, or
+ * null. Missions bypass the settled decision (decide.ts), so without this a caravan slept and traded inside the flood's
+ * radius through the whole warning, and caravans bound for the town walked into it while the river rose. An order counts
+ * when the person stands inside its radius, when either end of the errand (the town it left, the town it is bound for)
+ * is under an order, or when where they are walking lies inside one. They walk out (or wait beyond the radius), then the errand
+ * goes on when the order is lifted.
+ */
+export function missionEvacuation(u: Universe, planet: number, pos: readonly number[], goal: readonly number[] | null, to: number, home: number): { pos: [number, number, number]; radius: number; until: number; disaster: number } | null {
+  const R = u.god.rel;
+  if (!R) return null;
+  const p = u.planets.find((q) => q.id === planet);
+  if (!p) return null;
+  const bound = (to >= 0 ? evacuationOf(u, planet, to) : null) ?? (home >= 0 ? evacuationOf(u, planet, home) : null);
+  let hit: ReturnType<typeof evacuationOf> = null;
+  const pre = `${planet}:`;
+  // (sorted keys: the same order wins on every run)
+  for (const k of Object.keys(R.st).sort()) {
+    if (!k.startsWith(pre)) continue;
+    const e = R.st[k].evacuate;
+    if (!e || e.until <= u.tick) continue;
+    if (distM(p, pos as [number, number, number], e.pos) <= e.radius || (goal && distM(p, goal as [number, number, number], e.pos) <= e.radius)) {
+      if (!hit || e.disaster < hit.disaster) hit = e;
+    }
+  }
+  return hit ?? bound;
 }
 
 /** hourly: orders whose time is up are lifted (the people come home) */

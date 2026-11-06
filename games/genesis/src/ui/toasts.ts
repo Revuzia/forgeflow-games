@@ -44,6 +44,8 @@ export interface ToastSpec {
   tick?: number;
   /** the world the news is about (coordinates in the text are named by its towns) */
   planet?: number;
+  /** its rank when the column is full (default: by kind); a disaster's warning is the headline of its tick (ARC §10) */
+  pri?: number;
 }
 
 export interface ToastAction { label: string; title?: string; run(): void }
@@ -154,7 +156,7 @@ export class Toasts {
   }
 
   /** show one toast now */
-  show(t: ToastSpec): void {
+  show(t: ToastSpec): HTMLElement | null {
     const now = performance.now();
     const planet = t.planet ?? t.at?.planet ?? t.select?.planet;
     let words = this.words ? this.words(t.text, planet) : t.text;
@@ -169,13 +171,13 @@ export class Toasts {
       same.countEl.hidden = false;
       clearTimeout(same.timer);
       same.timer = this.expire(same.box, same.ms, key);
-      return;
+      return same.box;
     }
     const kind = t.kind ?? 'info';
     // a flood of news: more than 6 in 2 s → count the rest into one line (the answer to the player's own act always shows)
     const own = kind === 'god' || kind === 'warn' || kind === 'info';
     this.recent = this.recent.filter((x) => now - x < 2000);
-    if (!own && this.recent.length >= 6) { this.bumpOverflow(); return; }
+    if (!own && this.recent.length >= 6) { this.bumpOverflow(); return null; }
     if (!own) this.recent.push(now);
     const clickable = !!t.at || (!!t.select && !!this.actions.select);
     // a clickable toast is a div with a button's role (it may hold its own action button: buttons do not nest)
@@ -219,7 +221,7 @@ export class Toasts {
       body.appendChild(b);
     }
     box.append(icon, body);
-    box.dataset.pri = String(PRIORITY[kind] ?? 1);
+    box.dataset.pri = String(t.pri ?? PRIORITY[kind] ?? 1);
     const tk = t.tick ?? this.curTick;
     if (tk !== null && tk !== undefined) box.dataset.tick = String(tk);
     this.root.appendChild(box);
@@ -227,6 +229,7 @@ export class Toasts {
     // an action needs time to be taken
     const ms = Math.max(t.ms ?? (kind === 'info' || kind === 'warn' ? 5200 : this.life), this.life > 7800 ? this.life : 0, t.action ? 12000 : 0);
     this.showing.set(key, { box, n: 1, countEl, ms, timer: this.expire(box, ms, key) });
+    return box;
   }
 
   /** fade a toast out after ms */
@@ -262,6 +265,9 @@ export class Toasts {
       (worst ?? this.root.firstElementChild)?.remove();
     }
   }
+
+  /** the warning toast of the latest warning (its tick's evacuations are told on it, not beside it) */
+  private warnHead: { tick: number; planet: number; box: HTMLElement; told: Set<string> } | null = null;
 
   /** the world the camera is on: news from elsewhere names its world */
   private primary = -1;
@@ -443,7 +449,8 @@ export class Toasts {
       case 'disaster': {
         // nature's (or a rival's) disasters announce themselves; the god's own are answered by the command's toast
         const god = typeof data.god === 'number' ? data.god : -1;
-        if (god === 0) return;
+        // (the god's own: its "Flood on Aru." line is the command's story, told by the command's toast and the warning)
+        if (god === 0) { this.claim(e.tick, (q) => q.kind === 'disaster' && mentions(q.text, String(data.kind ?? '').replace(/-/g, ' '))); return; }
         const ref = e.ref ? { ...e.ref, planet } : null;
         const c = this.claim(e.tick, (q) => q.kind === 'disaster');
         this.show({ kind: 'warn', title: `${god > 0 ? 'A rival\'s wrath' : 'Nature'} · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : `${e.text ?? 'A disaster'} has begun${god > 0 ? ', sent by a rival god' : ''}. Click to see it.`, date: dateFrom(c, date), at, select: ref, planet });
@@ -495,7 +502,8 @@ export class Toasts {
       }
       case 'omen': {
         const kind = String(data.kind ?? e.text ?? '');
-        const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        // (the omen's own line is the god's — how they read the sign — never the disaster's "Flood on Aru.")
+        const c = this.claim(e.tick, (q) => q.kind === 'god' && mentions(q.text, where));
         // one sign over several towns: one toast
         const ok = `omen:${planet}:${kind}`;
         if (now - (this.lastRefusal.get(ok) ?? -1e9) < BURST_MS) return;
@@ -507,11 +515,31 @@ export class Toasts {
         const ref = e.ref ? { ...e.ref, planet } : null;
         const kind = String(data.kind ?? 'disaster').replace(/-/g, ' ');
         const c = this.claim(e.tick, (q) => q.kind === 'disaster' || mentions(q.text, kind));
-        this.show({ kind: 'warn', title: `Warning · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : warningText(kind), date: dateFrom(c, date), at, select: ref, planet });
+        // the headline of its tick: at 888 × 500 the column holds two, and the omen, the prayer and the command's own
+        // answer arrive with it — the warning outranks them all (ARC §10)
+        const box = this.show({ kind: 'warn', title: `Warning · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : warningText(kind), date: dateFrom(c, date), at, select: ref, planet, pri: 5 });
+        this.warnHead = box ? { tick: e.tick, planet, box, told: new Set() } : null;
         return;
       }
       case 'evacuate': {
         const c = this.claim(e.tick, (q) => mentions(q.text, where));
+        // leaving before the warning of the same tick: told on the warning's own toast, one line per town
+        const head = this.warnHead;
+        if (head && head.tick === e.tick && head.planet === planet && head.box.isConnected && !head.box.classList.contains('gn-out')) {
+          if (head.told.has(where)) return;
+          head.told.add(where);
+          const tx = head.box.querySelector('.gn-t-text');
+          if (tx) {
+            // (two towns by name; past them, one line for the rest)
+            if (head.told.size <= 3) {
+              const line = el('span', 'gn-t-also');
+              const said = c ? stripYear(this.words ? this.words(c.text, planet) : c.text) : `${where} leaves for higher ground.`;
+              line.textContent = ` ${head.told.size === 3 ? 'Others nearby leave too.' : said}`;
+              tx.insertBefore(line, tx.querySelector('.gn-t-count'));
+            }
+          }
+          return;
+        }
         this.show({ kind: 'warn', title: `Leaving · ${place}`, text: c ? c.text : `${where} leaves its homes for safer ground until the danger passes.`, date: dateFrom(c, date), at, planet });
         return;
       }

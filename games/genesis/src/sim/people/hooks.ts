@@ -37,4 +37,10 @@ export const godHooks: {
   harmScale: (() => { L: number; R: number; B: number } | null) | null;
   /** additive (LIVING RELATIONSHIP, god/regard.ts): a person of settlement sid was killed by the act in progress */
   noteDeath: ((planet: number, sid: number) => void) | null;
-} = { possessed: null, disciple: null, held: null, crew: null, relation: null, worship: null, templeWanted: null, harmScale: null, noteDeath: null };
+  /**
+   * additive (ARC §10 r2 #5, god/relationship.ts): an evacuation order a person on a mission must heed — standing in the
+   * danger, bound for or returning to a town under an order, or walking into one — as the evacuation task (null none).
+   * `pressing` is the strongest bodily need (decide.ts): above 3 the body comes first unless they must flee.
+   */
+  missionEvacuate: ((x: PCtx, s: number, home: Settlement | undefined, away: boolean, pressing: number, flee: boolean, tired: boolean) => TaskSpec | null) | null;
+} = { possessed: null, disciple: null, held: null, crew: null, relation: null, worship: null, templeWanted: null, harmScale: null, noteDeath: null, missionEvacuate: null };

@@ -48,7 +48,7 @@ import { godAct } from './belief.ts';
 import { exile, prophetOf, prophetOfSettlement, prophetTask, prophetsAct, prophetsDaily, prophetsHourly, prophetsQuery, registerProphetCommands } from './prophets.ts';
 import { naturalOmens, omensOfCommand, omensQuery, omensTick, registerOmenCommands } from './omens.ts';
 import { pilgrimageDaily, pilgrimTask, registerSacredCommands, sacredAnimalAct, sacredAnimalOf, sacredHourly, sacredQuery } from './sacred.ts';
-import { evacuationOf, evacuationsHourly } from './precursors.ts';
+import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors.ts';
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
 
@@ -102,6 +102,7 @@ export function registerRelationship(r: CommandRegistry): void {
     try { if (res.ok) afterAct(u, p, cmd, res, a, ctx); } finally { endAct(u, ctx); }
   });
   godHooks.relation = relDecide;
+  godHooks.missionEvacuate = missionEvacuate;
   godHooks.worship = worshipYield;
   godHooks.templeWanted = templeWanted;
   godHooks.harmScale = () => { const w = currentWrath(); return w === null ? null : { L: lethality(w), R: reach(w), B: ruination(w) }; };
@@ -255,6 +256,23 @@ function actsOf(u: Universe, p: Planet, cmd: Command, a: Args, ctx: ActCtx): Act
 }
 
 const _p = [0, 0, 0];
+const _g = [0, 0, 0];
+
+/** godHooks.missionEvacuate (ARC §10 r2 #5): the order a person on an errand must heed, as the evacuation task */
+function missionEvacuate(x: PCtx, s: number, home: Settlement | undefined, away: boolean, pressing: number, flee: boolean, tired: boolean): TaskSpec | null {
+  const A = x.A;
+  // (afloat: the boat carries them on — a caravan by water is not walked to a hill from mid-river)
+  if (A.flags[s] & (AgentFlag.possessed | AgentFlag.boat) || x.u.god.isHeld('agent', A.id[s])) return null;
+  if (!x.u.god.rel || (pressing >= 3 && !flee)) return null;
+  const m = x.ps.mission(A.mission[s]);
+  A.posAt(s, x.tick, _p);
+  _g[0] = A.gx[s]; _g[1] = A.gy[s]; _g[2] = A.gz[s];
+  // an order on either end of the errand holds it (a caravan leaving the town would walk its road out through the water)
+  const e = missionEvacuation(x.u, x.p.id, _p, _g, m ? m.to : -1, m ? m.from : -1);
+  if (!e) return null;
+  // away from home: what they carry is what they have (no store to provision from)
+  return planEvacuate(x, s, away ? undefined : home, e, tired);
+}
 
 // ───────────────────────────── the people's decisions ─────────────────────────────
 

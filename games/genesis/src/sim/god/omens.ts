@@ -57,7 +57,7 @@ interface OmenDef { trusted: string; feared: string; faith: number; fear: number
 export const OMENS: Record<OmenKind, OmenDef> = {
   eclipse: { trusted: 'the god hides its face: hardship comes', feared: 'the god is angry', faith: 0.2, fear: 0.1, trust: 0, sky: true, meaning: ['harm', 'harm'] },
   comet: { trusted: 'a messenger: change is coming', feared: 'a messenger of ruin', faith: 0.2, fear: 0.05, trust: 0, sky: true, meaning: ['sign', 'harm'] },
-  flood: { trusted: 'the waters cleanse them', feared: 'the waters punish them', faith: 0.15, fear: 0.1, trust: 0, sky: false, meaning: [null, null] },
+  flood: { trusted: 'the god washes them clean', feared: 'the god sends the water against them', faith: 0.15, fear: 0.1, trust: 0, sky: false, meaning: [null, null] },
   rainbow: { trusted: 'a promise', feared: 'a reprieve', faith: 0.1, fear: 0, trust: 0.1, sky: false, meaning: ['sign', null] },
   lightning: { trusted: 'a choice: the one spared is chosen', feared: 'judgement', faith: 0.15, fear: 0.1, trust: 0, sky: false, meaning: [null, 'harm'] },
   aurora: { trusted: 'a blessing', feared: 'a warning', faith: 0.15, fear: 0, trust: 0.05, sky: true, meaning: ['sign', 'harm'] },

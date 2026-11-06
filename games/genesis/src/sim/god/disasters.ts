@@ -190,10 +190,18 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
   // the people far and wide see it coming (awe at a distance; fear is per hour of it, near)
   if (def.witness?.wonder) godAct(u, p, pos, effR(d) * 5, { wonder: def.witness.wonder * 0.5 }, Math.max(0, d.god));
   if (!o.quiet) {
-    const by = d.god > 0 ? ` (sent by ${u.god.god(d.god)?.name ?? 'a rival god'})` : d.god === 0 && d.cause === 'god' ? '' : '';
-    u.chronicleAdd(p, 'disaster', `${def.name} ${placeName(p, pos)}${by}.`, def.radius >= 800 || ['meteor', 'comet', 'supervolcano', 'moon-fall', 'eclipse', 'ice-age'].includes(def.id) ? 2 : 1, [{ kind: 'disaster', id, planet: p.id }]);
+    // ARC §10 (r2 #9): a flood still in its warning has not struck — 'Flood on Aru.' waits for the water (warning.flood
+    // has told the rising river meanwhile); the other kinds keep their line at the start
+    if (def.id === 'flood' && d.st.Wn) d.st.Ch = 1;
+    else startLine(u, p, d, def);
   }
   return d;
+}
+
+/** the disaster's own line in the chronicle ('Flood on Aru.') */
+function startLine(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): void {
+  const by = d.god > 0 ? ` (sent by ${u.god.god(d.god)?.name ?? 'a rival god'})` : '';
+  u.chronicleAdd(p, 'disaster', `${def.name} ${placeName(p, d.pos)}${by}.`, def.radius >= 800 || ['meteor', 'comet', 'supervolcano', 'moon-fall', 'eclipse', 'ice-age'].includes(def.id) ? 2 : 1, [{ kind: 'disaster', id: d.id, planet: p.id }]);
 }
 
 // ───────────────────────────── the live controls ─────────────────────────────
@@ -253,7 +261,7 @@ export function disastersStep(u: Universe): void {
     // LIVING §3.7: the warning phase — nothing strikes yet; the people are told to get out
     if (d.st.Wn && d.age <= d.st.Wn) {
       warningTick(u, p, d, def);
-      if (d.age === d.st.Wn) { warningEnd(u, p, d); actOf(u, d, () => def.effectors.forEach((e, i) => { if (e.at === START && !d.fired.includes(i)) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } })); }
+      if (d.age === d.st.Wn) { warningEnd(u, p, d); if (d.st.Ch) { delete d.st.Ch; startLine(u, p, d, def); } actOf(u, d, () => def.effectors.forEach((e, i) => { if (e.at === START && !d.fired.includes(i)) { d.fired.push(i); applyEffector(u, p, d, def, e, i); } })); }
       updateParams(u, p, d, def);
       continue;
     }
