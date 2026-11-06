@@ -303,7 +303,7 @@ const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
 const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
 const SFX_DUCK_DB = 3;       // … and the sfx bus (threats to your fighter excepted) …
 const SFX_DUCK_NEWS_DB = 6;  // … this much under a band 1-3 line (a wipe, takedown news, structures, objectives) …
-const ANN_LIFT_DB = 7;       // … whose line also plays this much over its cue gain: the line wins a teamfight (closing AUD-C7:
+const ANN_LIFT_DB = 8;       // … whose line also plays this much over its cue gain: the line wins a teamfight (closing AUD-C7:
                              // two 7-minute RIFT captures put the sfx short-term p99 at -17.0 / -14.7 LUFS, the lines at +5 dB at -13.3)
 const ANN_LIFT_BANDS = 3;    // bands 1..this are the news lines
 const DEAD_LPF_HZ = 900;     // the music while YOUR fighter is down: low-passed here and DEAD_DB quieter (closing AUD-C4) …
@@ -345,6 +345,10 @@ const CRIT_KIT_GAIN = 0.6;    // a crit: the fighter's own attack_hit under the 
 // impact (kit 'hit'): the damage type / crit is meaning the kit hit does not carry (a true-damage ult, a crit-shot ult)
 const SEMANTIC_HIT_ROLES = ['hitTrue', 'crit'] as const;
 const SEMANTIC_KIT_GAIN = 0.6;
+// an ability landing on a Wick (-6 dB): a line through a wave voices one impact per Wick, and a farming caster's own
+// impacts topped the mix (Lisvel: f_lisvel_hit 21 % of the sfx energy, the integrated 0.4 LU lower with this rule on one
+// seeded match; _harness/probe_audio_runtime.mjs match --fighter lisvel --seed 12)
+const WAVE_HIT_GAIN = 0.5;
 const SHADED_GAIN = 0.55;     // a Ringshade-muffled blow: the hit under the 'hitShaded' thud (see `world`)
 // a T3 wind-up (tokens.vfx.tiers.T3 'crowd control, mobility, zones', enemyWindupAudio mandatory): an ability with a
 // wind-up whose effects, at any depth, control someone else (a StatusKind below, not applied to the caster), displace,
@@ -1631,8 +1635,10 @@ class Engine implements ValeAudioPort {
         const own = this.kit(src, 'hit');
         // a Ringshade-muffled ability blow (its damage, later in this batch, says `shaded`; the 'damage' case plays the thud)
         const hg = dst?.kind === 'structure' && !!this.ev('hitShaded') && this.shadedHits.has(`${e.src}:${e.dst}:${e.ability}`) ? SHADED_GAIN : 1;
-        this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), hg, 0, aw);
-        if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN * hg, 0, aw);
+        // a wave clear is texture, a blow on a fighter is the news (see WAVE_HIT_GAIN)
+        const wg = hg * (dst?.kind === 'minion' ? WAVE_HIT_GAIN : 1);
+        this.cue(own ?? lib ?? this.ev('hitAbility'), at(dst), wg, 0, aw);
+        if (own && lib && lib !== own && SEMANTIC_HIT_ROLES.some((r) => this.ev(r) === lib)) this.cue(lib, at(dst), SEMANTIC_KIT_GAIN * wg, 0, aw);
         break;
       }
       case 'area': {

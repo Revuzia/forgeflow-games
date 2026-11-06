@@ -335,7 +335,11 @@ async function gpuBound() {
     };
     const misses = [];
     if (!leave || leave.t > GPU_LEAVE_S) misses.push(`the scale ${leave ? `left ${base} only at ${leave.t} s` : `never left ${base}`} (> ${GPU_LEAVE_S} s)`);
-    if (!res.machine.idle) res.recovery = `not measured: machine busy (load ${before.load}/${after.load}${before.heavy.length || after.heavy.length ? `; ${[...new Set([...before.heavy, ...after.heavy])].join('; ')}` : ''}); last ${GPU_TAIL_S} s ${tailFps} fps`;
+    // the tail has to be the window's end: rAF that stops under a stalled GPU leaves a timeline that ends early, and its last 8 s are not the bar's
+    const covered = end.t ?? 0;
+    res.covered = covered;
+    if (!res.machine.idle) res.recovery = `not measured: machine busy (load ${before.load}/${after.load}${before.heavy.length || after.heavy.length ? `; ${[...new Set([...before.heavy, ...after.heavy])].join('; ')}` : ''}); last ${GPU_TAIL_S} s ${tailFps} fps, timeline ${covered} of ${GPU_SEC} s`;
+    else if (covered < GPU_SEC * 0.9) { res.recovery = `MISS: the frames stopped at ${covered} s of ${GPU_SEC} s`; misses.push(res.recovery); }
     else { res.recovery = tailFps >= GPU_RECOVER_FPS ? 'pass' : `MISS: last ${GPU_TAIL_S} s ${tailFps} fps < ${GPU_RECOVER_FPS}`; if (tailFps < GPU_RECOVER_FPS) misses.push(res.recovery); }
     res.misses = misses;
     res.pass = misses.length === 0;

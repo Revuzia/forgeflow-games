@@ -265,16 +265,17 @@ def landmark(lid, name, at, size, height, note, flush=False, **extra):
 
 def camp_marks(W):
     """closing env m-4: the per-camp floor mark (landmarks_art2.py camp_mark_*): a low plaque with the camp's sign let into
-    the clearing floor 2.9 m south of the lead unit (toward the camera, clear of the camp's units and of the lip cluster on
-    the north side); the Serenade copy is the mirror. Flush: the sim never sees it."""
+    the clearing floor, clear of the camp's units and of the lip cluster on the north side; the Serenade copy is the mirror. Flush: the sim never sees it."""
     centres = {"glasshorn": ("glasshorn", (61.6, 41.5)), "gloamoths": ("gloamoths", (64.3, 24.9)), "strays_north": ("strays", (46.0, 32.5)),
                "resinback": ("resinback", (64.3, 85.1)), "stilltusks": ("stilltusks", (61.6, 68.5)), "strays_south": ("strays", (46.0, 77.5))}
     out = []
     for side, flip in (("a", 1), ("s", -1)):
         for tag, (model, (x, y)) in centres.items():
-            out.append(landmark(f"camp_mark_{side}_{tag}", f"{model} camp mark", (x if flip > 0 else W - x, y + 2.9), (1.7, 1.7), 0.04,
+            # inside each clearing's lit floor, clear of its units (round 3, env:m-4: directly south fell past the rim or under the grass)
+            off = {"glasshorn": (-1.2, 2.4), "gloamoths": (3.0, 1.6), "strays_north": (3.3, 1.0), "resinback": (2.3, 0.6), "stilltusks": (3.2, 1.4), "strays_south": (2.9, -1.1)}[tag]
+            out.append(landmark(f"camp_mark_{side}_{tag}", f"{model} camp mark", (x + off[0] if flip > 0 else W - x - off[0], y + off[1]), (1.7, 1.7), 0.04,
                                 "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
-                                flush=True, model=f"assets/maps/landmarks/camp_mark_{model}.glb", value=0.72))
+                                flush=True, model=f"assets/maps/landmarks/camp_mark_{model}.glb", value=0.95))
     return out
 
 
@@ -604,7 +605,7 @@ def build_rift():
     camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0, 60.0), ("gloamoth_little", -1.6, 1.0, 60.0), ("gloamoth_little", 1.6, 1.0, 60.0), ("gloamoth_little", 0.0, -1.7, 60.0)], 60, 150)
     # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its
     # broad stride, not its 0.42 m side; the Ticks three-quarter toward it, turned in toward their Numeral
-    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 80.0), ("stray_tick", -1.0, 1.9, 270.0), ("stray_tick", 1.7, -1.1, 270.0)], 60, 150)
+    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 80.0), ("stray_tick", 1.6, 1.5, 270.0), ("stray_tick", 1.7, -1.1, 270.0)], 60, 150)
     camp_pair("resinback", resinback, [("resinback", 0.0, 0.0, 90.0)], 60, 270)
     camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0, 180.0), ("stilltusk_young", -1.6, -1.0, 180.0), ("stilltusk_young", 1.6, -1.0, 180.0)], 60, 150)
     camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 80.0), ("stray_tick", -1.7, -1.1, 270.0), ("stray_tick", 1.7, 1.1, 270.0)], 60, 150)

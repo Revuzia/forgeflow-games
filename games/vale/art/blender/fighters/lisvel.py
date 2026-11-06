@@ -2251,7 +2251,7 @@ def _trim_band(d, w=0.017):
 
 
 # (CW5 r2 refix 2: the shipped base GLB's tabard, tabard_skirt x1.2 and legs x1.3 contrast round each part's median are
-# art/tools/glb_paint_grade.mjs --part-contrast grades on top of this paint: a rebuild loses them, re-apply)
+# art/tools/glb_paint_grade.mjs --part-contrast grades on top of this paint: a rebuild loses them, re-apply with --q 70)
 def paint_tabard(p, n):
     """the steel-blue felt tabard (review item 4: hue 209, sat 19 % in the albedo, under the 40 % ceiling) with the
     concept's grey trims round the armholes, the neck and the shoulder pads' outer edges (review item 6)"""

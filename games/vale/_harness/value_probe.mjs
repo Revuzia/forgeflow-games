@@ -110,6 +110,9 @@ const MON = opt('monsters', '0');
 const MON_PHASES = Math.max(1, Number(opt('monsterPhases', '1')) | 0);
 /** round 3: --monsterYaws 0,30,60 also samples each kind at those facings (degrees, the catalog's convention), 3 phases for the moths, 1 otherwise,
  *  by turning the live actor; silByYaw in the report feeds the camp-facing choice (the facings a camp ships are in the map). */
+/** round 3: --monsterSpawnFacing 1 samples every kind at the facing its camp gives it: a bot fighting a camp turns the kind toward
+ *  itself, so the free-running values change with whoever happens to be there. This is the reproducible silhouette gate. */
+const MON_SPAWN_FACING = opt('monsterSpawnFacing', '0') === '1';
 const MON_YAWS = opt('monsterYaws', '').split(',').filter(Boolean).map(Number);
 const MON_IDS = opt('monsterIds', '').split(',').filter(Boolean);
 /** env E1: the landmark face-detail gate (closing CW4): the gated landmark GLBs, and the bars */
@@ -914,8 +917,10 @@ for (const map of MAPS) for (const tier of TIERS) {
       refs.structureBreakupMedian = med(Object.values(refs.structures).map((e) => e.breakup));
       console.log(`  references: lane hp median ${refs.laneHpMedian}; Art 2.0 structures hp median ${refs.structureHpMedian}, breakup median ${refs.structureBreakupMedian}`);
       const seen = new Set();
+      const campFacing = MON_SPAWN_FACING ? await V(() => { const bb = window.__VALE_BENCH__, m = bb.catalog.maps.find((x) => x.id === bb.host.setup.map), out = {}; for (const c of m.camps ?? []) for (const u of c.units) if (u.facing != null && !(u.unit in out)) out[u.unit] = u.facing; return out; }) : {};
       for (const mo of await V((v) => v.monsterList())) {
         if (seen.has(mo.def) || (MON_IDS.length && !MON_IDS.includes(mo.def))) continue;   // one of each kind
+        if (campFacing[mo.def] != null) await V((v, a) => v.setActorFacing(a.id, a.yaw), { id: mo.actorId, yaw: campFacing[mo.def] });
         const r = await V((v, a) => v.landmarkAt(a, [0, 0]), { id: mo.id, glb: mo.def, at: mo.at, monster: true, actorId: mo.actorId });
         if (r.error || r.monsterError) { console.log(`  monster ${mo.def}: ${r.error ?? r.monsterError}`); continue; }
         seen.add(mo.def);

@@ -1258,7 +1258,7 @@
     },
     {
      "unit": "stray_tick",
-     "at": [45.0, 34.4],
+     "at": [47.6, 34.0],
      "facing": 270.0
     },
     {
@@ -1280,7 +1280,7 @@
     },
     {
      "unit": "stray_tick",
-     "at": [125.0, 34.4],
+     "at": [122.4, 34.0],
      "facing": 270.0
     },
     {
@@ -2108,122 +2108,122 @@
     {
      "id": "camp_mark_a_glasshorn", "model": "assets/maps/landmarks/camp_mark_glasshorn.glb",
      "name": "glasshorn camp mark",
-     "at": [61.6, 44.4],
+     "at": [60.4, 43.9],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_a_gloamoths", "model": "assets/maps/landmarks/camp_mark_gloamoths.glb",
      "name": "gloamoths camp mark",
-     "at": [64.3, 27.8],
+     "at": [67.3, 26.5],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_a_strays_north", "model": "assets/maps/landmarks/camp_mark_strays.glb",
      "name": "strays camp mark",
-     "at": [46.0, 35.4],
+     "at": [49.3, 33.5],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_a_resinback", "model": "assets/maps/landmarks/camp_mark_resinback.glb",
      "name": "resinback camp mark",
-     "at": [64.3, 88.0],
+     "at": [66.6, 85.7],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_a_stilltusks", "model": "assets/maps/landmarks/camp_mark_stilltusks.glb",
      "name": "stilltusks camp mark",
-     "at": [61.6, 71.4],
+     "at": [64.8, 69.9],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_a_strays_south", "model": "assets/maps/landmarks/camp_mark_strays.glb",
      "name": "strays camp mark",
-     "at": [46.0, 80.4],
+     "at": [48.9, 76.4],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_glasshorn", "model": "assets/maps/landmarks/camp_mark_glasshorn.glb",
      "name": "glasshorn camp mark",
-     "at": [108.4, 44.4],
+     "at": [109.6, 43.9],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_gloamoths", "model": "assets/maps/landmarks/camp_mark_gloamoths.glb",
      "name": "gloamoths camp mark",
-     "at": [105.7, 27.8],
+     "at": [102.7, 26.5],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_strays_north", "model": "assets/maps/landmarks/camp_mark_strays.glb",
      "name": "strays camp mark",
-     "at": [124.0, 35.4],
+     "at": [120.7, 33.5],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_resinback", "model": "assets/maps/landmarks/camp_mark_resinback.glb",
      "name": "resinback camp mark",
-     "at": [105.7, 88.0],
+     "at": [103.4, 85.7],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_stilltusks", "model": "assets/maps/landmarks/camp_mark_stilltusks.glb",
      "name": "stilltusks camp mark",
-     "at": [108.4, 71.4],
+     "at": [105.2, 69.9],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     },
     {
      "id": "camp_mark_s_strays_south", "model": "assets/maps/landmarks/camp_mark_strays.glb",
      "name": "strays camp mark",
-     "at": [124.0, 80.4],
+     "at": [121.1, 76.4],
      "size": [1.7, 1.7],
      "height": 0.04,
      "note": "closing env m-4: the camp's floor plaque, its sign cut and inked (art/blender/maps/landmarks_art2.py camp_mark)",
      "flush": true,
-     "value": 0.72
+     "value": 0.95
     }
    ]
   },

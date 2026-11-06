@@ -550,6 +550,9 @@ def paul_rivets():
 
 
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────────────
+# (CW5 round 3) a rebuild loses these art/tools/glb_paint_grade.mjs grades of the base GLB (masks: partmap_mask.py nurrow <part>, on the
+# BUILD's part map, which names hat_under): --q 74 --part-gain belt 0.95, tabard 1.05, sleeves 0.97, forearm_wraps 1.03, trousers 1.05,
+# boots 0.86; re-run part_gamecam --named after a rebuild
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris) in build order."""
     out = []
