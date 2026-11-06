@@ -1,0 +1,33 @@
+{
+ "wave": "CW4",
+ "round": 3,
+ "verify": 3,
+ "date": "2026-11-06",
+ "time": "verified from 14:52 CST",
+ "pass": false,
+ "items": [
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Still open on the one point, a missing gate ruling: _design/reviews/fixwaves/owner_rulings.md was last changed in 207801c92, ends at ruling 23 (score only), and a case-insensitive grep for 'iou', 'camp facing' and 'free-facing' finds nothing, rechecked at 15:03. The engineer's report that no ruling exists is correct. ALL NUMBERS BELOW RE-MEASURED (value_probe, rc 0; art unchanged: last art/out/units commit is 46d3c19a4, no working-tree changes there). CAMP FACING, --t 1000 --seed 23 --monsterPhases 8 --monsterSpawnFacing 1 (_harness/_reports/fw_CW4_r3v3_camp.json): maximum cross-camp median 0.50 (resinback|stilltusk), worst phase 0.56 (gloamoth_little|stray_tick), 33 pairs; passes. SINGLE FREE-FACING READ, same seed and t (_harness/_reports/fw_CW4_r3v3_free.json): resinback|stilltusk 0.59, resinback|stilltusk_young 0.59, longshade|resinback 0.55, sunsplinter|stilltusk 0.54, gloamoth_little|resinback 0.54, sunsplinter|stilltusk_young 0.53; 6 pairs over 0.5, so it does not meet 0.5 as a single read. ALL FACINGS: the engineer's tool and its report reproduce exactly (node _harness/probe_monster_iou_yaw.mjs on fw_CW4_r3rf2_yaw: 1 of 33 medians over 0.5, gloamoth_little|stray_tick 0.505; the six flagged pairs at 0.42-0.44 as claimed; its IoU matches value_probe's formula apart from a slightly different even-count median). An independent sweep confirms it on another seed and time: --t 70 --seed 7 --monsterYaws 0,45,90,135,180,225,270,315 (_harness/_reports/fw_CW4_r3v3_yaw70_iou.json): gloamoth_little|stray_tick 0.508, 1 of 25 over 0.5, resinback|stilltusk 0.42, resinback|stilltusk_young 0.41. Over-0.5 shares are real, not rare: 54 % / 53 % for the moth|tick pair, and combinations reach 0.81 (resinback|stilltusk_young), so free-facing does NOT pass at the 0.5 bar on any reading: not as single reads, and by median one pair is still a hair over. The self-spread claim holds: a kind against itself across facings has medians of 0.24-0.68 (glasshorn 0.24, stray_tick 0.68 at t70), overlapping the cross-camp range, so facing moves this metric about as much as kind does. Limits of the engineer's claim: its 33 pairs omit Glasshorn, which is absent at t1000 seed 23; my t70 sweep adds it (no Glasshorn pair in the top pairs) but has no Sunsplinter or Longshade, so those Glasshorn pairs are unmeasured over facings. A t1000 seed 7 sweep found only Longshade and Resinback (fw_CW4_r3v3_yaw1000_iou.json: longshade|resinback 0.403, max 0.746), so it adds one repeat pair only. BY EYE, free-facing frames (_harness/_shots/value_rift_high_fw_CW4_r3v3_free_mon_{resinback,stilltusk,gloamoth_little,stray_tick}.png): the kinds are not confused: orange resin plates on a pale body against a striped, bristled boar and its young; violet and orange winged moth against a small white and gold block figure. That is why the metric alone should not force silhouette work, but it is my read and not a ruling. Row score not re-scored: art unchanged since verify 2's 7.48, which clears ruling 23's 7.4.",
+   "fixHint": "No art and no further probe work; another refix cannot close this. The lead records one line in owner_rulings.md: the silhouette IoU gate is the cross-camp median at camp facing (recommended; the all-facing and free-facing values stay information, since the metric normalises away size and colour and the kinds read apart by eye), or else free-facing must also meet 0.5, which needs silhouette work on Resinback, the Stilltusk family and at least the moth|tick pair. With the first ruling this item passes on these numbers."
+  },
+  {
+   "id": "critic:monsters (dL* on sunlit floor)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Unchanged backlog, not a regression: t1000 seed 23 Stilltusk dL* 17.4 (dE 25.0), Stray Numeral 17.8 (dE 20.6), against the 20 bar (_harness/_reports/fw_CW4_r3v3_camp.json). Other values match verify 2: Longshade hp 2.78, dL* 26.0; Stray Tick dL* 37.1; Glasshorn hp 3.96, dL* 22.0 (t70 seed 7)."
+  },
+  {
+   "id": "sensitivity (monsters, live frames)",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "By eye on the four free-facing frames named above, and art unchanged since verify 2's pass: no horror read and no blocker. Moths, Resinback, the Stilltusk family and the Stray family show no face or eye pair at game size in these frames. Longshade was not re-viewed this round; ruling 1 and verify 2 cover it."
+  }
+ ],
+ "regressions": [
+  "None. The refix added only _harness/probe_monster_iou_yaw.mjs (read-only over a report, no browser) and changed no art. Tracked files under _harness/_reports were not rewritten (git status clean there)."
+ ],
+ "summary": "Fail, and it stays a decision for the lead, not art. The engineer's evidence is honest and reproduces on another seed and time, and camp-facing passes at 0.50 max median. Free-facing does not meet 0.5 (single reads to 0.59, one all-facing median at 0.505-0.508, combinations to 0.81), and no ruling says which gate applies, so critic:monsters stays partly. A further refix cannot close it. One line in owner_rulings.md naming camp facing as the gate closes the item on these numbers; I recommend that, and I did not write it."
+}
