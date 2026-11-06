@@ -1,0 +1,97 @@
+{
+ "pass": true,
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Measured on the current tree, --lineup shuffle, seeds no engineer used, reports _harness/_reports/fw_W4_soak_fw_CW3s_r3v1{a,b,e}.txt. Seeds 9101-9120: takedowns by 10:00 adept 7.30 / veteran 8.70; games with none 0/20 both; stretch 2.8 / 2.6 min; shadehold takedowns 1.75 / 2.15; slowest fighter's median first ult 8.8 / 8.2 min (ulkro). Seeds 9301-9400 (100 a tier): takedowns 7.54 / 7.80, stretch 2.5 / 2.7, slowest first ult 8.2 / 8.1. Seeds 10101-10120 adept: takedowns 7.05, stretch 2.7. Bot faults 0. Soak exit 0 on a and b. My own recount of the stretch from the games JSON matches the soak (2.82 / 2.58 on a). Variance note: split into 20-seed windows, run b has adept takedowns 6.85-8.10 and stretch 2.14-2.82, veteran takedowns 7.40-8.40 and stretch 2.42-3.07; the one window over 3 is veteran seeds 9381-9400 at 3.07. Pooled medians clear the bar."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Judged on rulings 15 and 21 (binding); the original 50 % / 75 % targets are still not met. Last-hit adept / veteran 45.0 / 45.0 % (r3v1a), 44.9 / 45.1 % (r3v1b), 45.1 / 45.0 % (r3v1quick); floor 42. In lane 68.9 / 67.7 %, 69.9 / 68.2 %; floor 65. Cores before 16:00: 0 in 240 full RIFT games (r3v1a, r3v1b; shortest in b 16.9 min), and the soak gate now reads ruling 21 and prints PASS, which the engineer had not run. Sunsplinter first take median 1.5 / 1.5 min (a), 1.2 / 1.3 min (b); bar 3. probe_sim_rekey 45/0. pacing.ts exit 0. Quick soak exit 0 (r3v1quick). Seed 4309 not re-traced: ruling 21 accepts it as tail."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Fresh mirrored windows: veteran beats novice 34/40 = 85.0 % (seeds 9601-9620, r3v1c) and 73/80 = 91.3 % (seeds 9701-9740, r3v1d); 107/120 = 89.2 % pooled. Duo road level 6 median 7.8 / 7.1 min (r3v1a), 7.3 / 7.5 min (r3v1b); bar 8:00. The first window sits exactly on the bar."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "probe_sim_rekey 45/0 (_harness/_reports/fw_CW3s_r3v1_probe_sim_rekey.txt): rows 54-55 quick RIFT start level 1 vs 3 (67 %) and start Gleam 480 vs 1400 (66 %), line 78 no level-3 start. content/queues.json rift_quick desc says the first hour start and the Seal lifting at 5:00, matching its dawnSeal.until 300. DESIGN_NOTE.md:53 and modes_economy.md section 3 read the same."
+  },
+  {
+   "id": "gameplay:CL-1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "See done:1 and done:2: takedowns by 10:00 7.05-8.70, no game without one in 240, stretch 2.5-2.8 min on the pooled and 20-seed adept windows, no fighter's median first ult after 8.8 min, last-hit above the ruling 15 floor. Closing review read 1.90 / 1.75 takedowns and 6.4 / 6.3 min."
+  },
+  {
+   "id": "critic:bot-micro",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Done under ruling 16. Veteran passive seat vs bot seat, seeds 9801-9820 and 9901-9920 (fw_W4_soak_fw_CW3s_r3v1h9801.txt, h9901): 382 vs 324 and 322 vs 349/min; summed 704 vs 673 = 1.05, bar 0.95. Single window 9901 alone is 0.92, and ruling 16 judges summed windows. Adept, report only: 406 vs 379, 394 vs 388/min. Skillshots at adept targets: veteran 83.5 vs adept 79.3 % (r3v1e). Soak's per-tier micro lines report dodge rate, retreat deaths, focus and recall health. BRIDGE and FRAY re-run: see balance and spot-check items. Those two h runs exit 1 only on gates that cannot read at my --cut 540 (cs at 10:00 NaN, structures > cut); not a finding."
+  },
+  {
+   "id": "balance:real-seat",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Ruling 22 gate as coded (a fighter fails only when its whole Wilson 95 % interval lies outside 40-60 %) passes on 200 fresh decided games, seeds 9301-9400 (r3v1b): rates 37.2-61.1 %. Points outside the band: tunlan 37.2 [28.1-47.3], ilsheta 39.2 [30.9-48.1], vashil 60.2 [51.2-68.5], marund 61.1 [53.0-68.7]. Tunlan and marund were not the engineer's outliers, so the extremes move window to window. Pooling r5d + r3v1a + r3v1b (540 decided games, n252-376 a fighter) every point is inside the band, 40.5 % (ilsheta) to 58.4 % (odrum), and no whole interval is outside. Only a few intervals sit wholly inside 40-60, so this is 'not shown outside', not 'shown inside'; the 45-55 % design target is still missed by about half the roster pooled. BRIDGE sudden death, the engineer's open judgment: 8/40 = 20.0 % on seeds 9601-9620 (r3v1c); pooled with the engineer's 11/40, 5/40, 11/83 that is 35/203 = 17.2 %, bar 25 %. Regression probes all green except probe_kits_A (see regression item)."
+  },
+  {
+   "id": "regression:probe_kits_A",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "node _harness/probe_kits_A.ts exits 1, 522/3 (_harness/_reports/fw_CW3s_r3v1_probe_kits_A.txt): Long Thrust 3530, Vent [109.5,140.5], Held Focus 0.2. _harness/run_probes.ts:66 picks up every probe_*.ts, so npm run probe is red until this lands. Caused by r3-balance's Kemdo numbers, and the failing values match content/fighters/kemdo.json (targetMaxHp 0.035, rank 5 Vent 31, omnivamp 0.2), so the thresholds are stale, not the kit. File is outside this lane and unchanged. Rated minor because no game behaviour is wrong and it is not in the wave's done-list; the integration pass must still apply it.",
+   "fixHint": "Lead / integration, _harness/probe_kits_A.ts: line 686 0.05 to 0.035; line 709 arm0 + 35 to arm0 + 27; line 718 omnivamp >= 0.24 to >= 0.19; comments 674 and 711 to match."
+  },
+  {
+   "id": "regression:dawn-seal-tip",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Still open: content/client.json:71 says 'Until 7:00'; content/modes.json:45 dawnSeal.until is 480 (8:00). The file belongs to CW3c.",
+   "fixHint": "CW3c: change the tip to 'Until 8:00'."
+  },
+  {
+   "id": "spot:veteran-beats-adept",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Soak's enforced difficulty gate, bar 65 %: 24/40 = 60.0 % FAIL on seeds 9601-9620 (r3v1c, exit 1), 58/80 = 72.5 % on 9701-9740 (r3v1d), 33/40 = 82.5 % on 10101-10120 (r3v1e); 115/160 = 71.9 % pooled. Not in this wave's done-list. A 40-game window can land under the bar, so a --full run can go red on variance.",
+   "fixHint": "Judge it on pooled windows as the soak header already says (two seed sets), or widen the tier gap if the lead wants every 40-game window over 65 %."
+  },
+  {
+   "id": "gameplay:CL-2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Stacking: probe_sim_rekey 45/0. First take median adept / veteran 1.5 / 1.5 min (r3v1a), 1.2 / 1.3 min (r3v1b). The earlier veteran 8.3 / 7.9 readings do not reproduce."
+  },
+  {
+   "id": "gameplay:CL-g3",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Same as done:3: 85.0 % and 91.3 % on untuned windows of 40 and 80 games."
+  },
+  {
+   "id": "gameplay:CL-g5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Unchanged, as claimed: src/sim/bots/draft.ts:95 secondaryRole stands.",
+   "fixHint": "Roster growth is long-term work."
+  },
+  {
+   "id": "spot:other-gates",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Typecheck exit 0; content:check OK, 0 warnings. probe_sim_determinism 6/0, buildplan 15/0, fighters 38/0, kit_hooks 22/0, skin_neutral 5/0, probe_kits_B 733/0, probe_items 160/0; every other probe_sim_*.ts exits 0 (kit_diag not run, it is a diagnostic). FRAY adept lull 99/100 (r3v1e), report-only placement 3.31-7.29 on one tier. No Math.random or clock in src/sim. New bot reads are data-driven: no fighter or ability id strings in src/sim. No new images or models in this round, so no sensitivity look was needed. Gate diff since r2v2 only changes bars the rulings set."
+  }
+ ],
+ "regressions": [
+  "npm run probe is red on probe_kits_A (3 stale Kemdo thresholds from r3-balance); handoff to lead / integration, three lines in _harness/probe_kits_A.ts."
+ ],
+ "summary": "CW3s passes: every lane done-criterion and every major holds on fresh seeds, judged on rulings 15, 16, 21 and 22 (the original last-hit 50 % and in-lane 75 % targets are still not met, the rulings lowered them). Three things stay open and none blocks: npm run probe is red until the lead applies the three-line probe_kits_A handoff, the Dawn Seal tip waits on CW3c, and one 40-game veteran-beats-adept window read 60 % against the soak's 65 % (72 % pooled)."
+}
