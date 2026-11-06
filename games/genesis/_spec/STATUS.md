@@ -1,4 +1,4 @@
-# GENESIS — status (2026-11-05: release candidate, ready to publish to forgeflowgames.com)
+# GENESIS — status (2026-11-06: release candidate, ready to publish to forgeflowgames.com)
 
 ## In progress (2026-11-06): ARC — hearts, the tower, defiance, the covenant, the Book of Ages
 The owner asked whether the game shows the people's moods, and asked for them to be able to rebel and fight back
@@ -47,6 +47,11 @@ and move), the god layer (the Touch, sigils, prophets and signs, storms and disa
 survivable by default; per-town fear, trust and loyalty), the three.js WebGL2 world art and VFX, and the owner-approved
 authored score (21 .ogg cues, unchanged). No creature, real animals only.
 
+**Re-measured 2026-11-06 after the #2–#6 fixes** (`_harness/scratch/release/r6/`): `npm run check` green through
+`slot.sh` (19:37–19:49Z): detban clean, tsc clean, **733 / 733** tests pass. Build exit 0: 55 files, 8.6 MB, index 2.97 MB
+(926 kB gzipped). `cdn.mjs` PASS: 0 missing, 0 console errors, 20 / 20 hashed assets immutable, 5 workers 200.
+Deploy dry-run exit 0: 55 files, `index.html` then `game_meta.json` last. The 2026-11-05 figures below are kept for the record.
+
 **Measured on the release tree** (`_harness/scratch/release/r5/`, ledger `_harness/scratch/ledgers/release.md`):
 - `npm run check` **green** through `slot.sh` (08:11–08:31Z, `check.log`): detban 146 sim files clean, tsc clean,
   **716 / 716** tests pass, 0 fail, 0 skipped. The one file changed after it started (`src/client/thumbjpeg.ts`, 08:20Z)
@@ -78,17 +83,21 @@ from the free-form examples; P11 year-end housing and P25 prophet credibility; p
 Cinder's craters, P27 camp water, P28 daughter-village spacing, P30 `slot.sh` dead holders, P32 shrine / pilgrimage
 proof; autosave pictures encoded off the main thread; `package.json` 1.0.0.
 
+**Closed 2026-11-06 (release minor items #2–#6, `_harness/scratch/minor26/`, two verification rounds):** balance:
+median hunting 24.0 kills per 100 people a year (20 asked), under-15 share 0.432 (met), and seed 1's town now hunts
+(hunters wade sea shallows up to 1.5 m, `tests/hunt-wade.test.ts`); P22 boats on screen (`_shots/minor26-boats-e.png`),
+and travellers by water were already built; the s3 snow lock is fixed at the cause in `climate.ts`, with a regression
+test; `LaunchFx.spaceGroup` is now in the scene (space plumes draw); autosave pictures that arrive late are added to
+the slot afterwards (`thumbjpeg.ts`, `tests/ui-thumblate.test.ts`).
+
 **Known minor gaps (shipping with them; `final-reports/release.md` "Remaining minor items"):**
 - Sim speed below the original L1 / L2 floors and 1000x at 0.82 of 0.85 (restated, above); a quiet-machine 1000x figure
   is still to be taken.
-- Balance (release minor #2, re-tuned 2026-11-06, LIVING §13.10): hunting 21.2 kills per 100 people a year (20 asked,
-  met; 12.5 before); under-15 share 0.43 (0.35–0.45 asked, met; 0.465 before; births slow past 1.2 children an adult,
-  sickness weighed by age, child deaths per birth 0.29 -> 0.24). Hunted share of food 0.14 (0.15–0.35 asked, partly met:
-  seeds whose game is fowl, macaque and rabbit stay under 0.13 whatever the kills).
-- P22: fishers take to the water in the sim; boats on screen not yet confirmed by a shot; travellers by water not built.
-- One seed's snow-locked climate step (s3); two fixes tried and backed out.
-- `LaunchFx.spaceGroup` is never added to the scene (space-frame launch puffs / plumes do not draw).
-- On a starved software GPU an autosave can keep its previous picture.
+- Hunted share of food 0.142 (0.15–0.35 asked, partly met: seeds whose game is fowl, macaque and rabbit stay under 0.13).
+- Some fishers stay out 2–3 h after sunset; the inside of a boat's hull looks pale close up.
+- On a very heavy world under SwiftShader (about one frame every 30–40 s), a save can still miss its picture after the
+  120 s late window. The save itself is unaffected.
+- Old towns collect many ruin piles by year 25 (a look and tuning item).
 
 Publishing is in `README.md` "Publishing" and `_harness/scratch/continue/final-reports/release.md` (the credentials and
 the exact commands).
