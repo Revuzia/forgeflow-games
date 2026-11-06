@@ -588,10 +588,18 @@ void main() {
   {
     vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
     float li = dot(inscat, LUM);
-    float cap = 0.5 * dot(skyR, LUM);
+    // (muddy water's body is what one sees: the silt lifts the cap, ARC §10)
+    float cap = 0.5 * dot(skyR, LUM) * (1.0 + 2.0 * silt);
     if (li > cap) under -= inscat * (1.0 - cap / li);
   }
   vec3 col = mix(under, skyR, F) + glint;
+  // ARC §10: a silted river is opaque ochre — even its sky reflection comes back through a skin of mud-brown water
+  // (Fresnel-weighted grey sky alone left it flat grey from the play camera): hue toward tan, luminance kept, a little
+  // darker and less mirror-bright
+  if (silt > 0.0) {
+    float lumC = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(col, lumC * vec3(1.32, 0.96, 0.52) * 0.92, 0.7 * silt);
+  }
 
   // ── foam: surf, crests, white water ──
   float vertThick = max(sceneZ0 - fragZ, 0.0) * cosV;
