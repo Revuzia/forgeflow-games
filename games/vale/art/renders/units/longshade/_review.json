@@ -83,5 +83,21 @@
   "facing": 120,
   "shot": "art/renders/units/longshade/game_camera_r5.png",
   "note": "Ruling 1 read at the game camera: brass gnomon and at least five hour lines on the chalk plate survive at 28.5 m, inside a ring of twelve chalk hour stones. Rebuild budget of the package used (3): forearms and claws left for a later pass."
+ },
+ "round3_refix1": {
+  "date": "2026-11-06",
+  "changes": "Refix 1: plumes are broad billows that taper into two torn licks, with soft washes instead of vein lines; chalk hour bands on the forearms; chalked knuckles; short stout claws (0.34-0.48 m, were 0.62-0.88). 974 KiB, 11829 tris.",
+  "t1000": {
+   "hp": 2.8,
+   "dLstar": 26.1,
+   "dE": 28.4
+  },
+  "t1000s23": {
+   "hp": 2.78,
+   "dLstar": 26.0,
+   "dE": 27.9
+  },
+  "shot": "art/renders/units/longshade/game_camera_rf1.png",
+  "sensitivity": "Crown plumes stay laid back and low, tips close round, plate unchanged (ruling 1). No hood read, no horror read by eye."
  }
 }

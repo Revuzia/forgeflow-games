@@ -2,8 +2,8 @@
  "dimension": "neutral units",
  "role": "CW4 engineer self-score: the verifier should re-score this row by eye; it is not an independent review",
  "date": "2026-11-06",
- "score": 7.5,
- "scoreMethod": "Objective-weighted mean: Longshade and Sunsplinter count double, the map's two objectives: (7.5+7.5)*2 + gloamoth 7.5, little 7.0, glasshorn 7.0, resinback 7.5, stilltusk 7.5, young 7.5, numeral 7.5, tick 7.0 = 90 / 12 = 7.5. Engineer self-score, viewed on the live frames at the game camera; the verifier re-scores by eye.",
+ "score": 7.58,
+ "scoreMethod": "Objective-weighted mean, Longshade and Sunsplinter counted double, starting from round 3 verify 1's own eye scores (88.5 / 12 = 7.375) and changing only the three rebuilt kinds: Longshade 7.5 -> 8.0, Glasshorn 7.0 -> 7.5, Stray Tick 7.0 -> 7.5 = 91.0 / 12. Engineer self-score on the live frames; the verifier re-scores by eye. With Longshade held at 7.5 the row is 90 / 12 = 7.5.",
  "blockers": [],
  "method": "node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 70|370|1000 --monsterPhases 8 --monsterSpawnFacing 1 --tag fw_CW4_r5i_m<t> --report fw_CW4_r5_mon.json (RIFT, 1920x1080, 28.5 m, fog off, seed 7; seed 11 at t=1000). Every kind is sampled at its camp's facing: a bot in a camp otherwise turns the kind toward itself. iouCycle: 8 phases of each kind, 0.2 s apart, every phase against every phase; the gate is the median, the worst phase is recorded. Same-camp pairs (moth family, tusk family, Strays) are not the gate.",
  "reports": "_harness/_reports/fw_CW4_r5_mon.json; shots _harness/_shots/value_rift_high_fw_CW4_r5i_m*_mon_*.png; facing sweep _harness/_reports/fw_CW4_r5y.json, fw_CW4_r5z.json",
@@ -293,7 +293,7 @@
   }
  },
  "openBelowBar": [
-  "Longshade's forearms are still plain dark shafts with four thin needle claws: not a sensitivity problem, the weakest part of the unit. Its three rebuilds in this package are used (fw_CW4_r3_ls, r4b_ls, r4c_ls), so no fourth; the next pass should give the forearm chalk hour bands and shorter, stouter claws.",
+  "Lead ruling needed: every camp-facing cross-camp median is <= 0.50 (seed 23 resinback|stilltusk sits exactly on the bar), but free-facing medians reach 0.60 (resinback|stilltusk, resinback|stilltusk_young), 0.55 sunsplinter|stilltusk_young, 0.54 sunsplinter|stilltusk, 0.53 longshade|resinback, 0.51 sunsplinter|resinback (_harness/_reports/fw_CW4_rf1_free.json, seed 23, t=1000). No ruling says which gate applies. Resinback and Stilltusk were not rebuilt in this refix.",
   "dL* inside the 2 L* tolerance of the 20 bar on sunlit floors: Stilltusk 18.8, Stray Numeral 18.3 / 18.6 (t1000 seed 11, t370), the Stilltusk's was 7-9 before the coat went paler; dE 26+ on both, clear of the floor.",
   "Cross-run only: gloamoth_little against longshade 0.55 and against resinback 0.53 on a single stored wing phase (_harness/_reports/fw_CW4_r5_mon.json, no run holds the little moth and Longshade alive together). In-run, little|resinback median is 0.45.",
   "Glasshorn's flank is smooth (hp 3.43, the lowest band reads as body shape, not surface). Stray Tick stays a small marked post: at 7.0 it is a fine minion, not a showpiece.",
@@ -306,7 +306,7 @@
  "units": [
   {
    "id": "glasshorn",
-   "score": 7.0,
+   "score": 7.5,
    "t70": {
     "px": 1490,
     "hp": 3.43,
@@ -331,11 +331,12 @@
    "t1000s11": null,
    "note": "Dawn-fawn stag, umber saddle, chalk spots, pale glass antlers, clean profile at 210. Flank smooth.",
    "sensitivity": "Clean.",
-   "review": "art/renders/units/glasshorn/_review.json"
+   "review": "art/renders/units/glasshorn/_review.json",
+   "refix1": "Refix 1: painted coat strokes along the hair's direction in two values, shaped shoulder, haunch and gaskin masses with painted shadow, a tucked belly, locks on the ruff. hp 3.96 (was 3.43), dL* 22.0."
   },
   {
    "id": "gloamoth",
-   "score": 7.5,
+   "score": 8.0,
    "t70": {
     "px": 2341,
     "hp": 5.18,
@@ -382,7 +383,7 @@
   },
   {
    "id": "gloamoth_little",
-   "score": 7.0,
+   "score": 7.5,
    "t70": {
     "px": 213,
     "hp": 8.11,
@@ -494,7 +495,7 @@
   },
   {
    "id": "stray_tick",
-   "score": 7.0,
+   "score": 7.5,
    "t70": {
     "px": 655,
     "hp": 5.02,
@@ -555,7 +556,8 @@
    },
    "note": "Small marked post with a gold H on its head: off the floor now by 26-39 L*, even in wall shadow (was 12-20).",
    "sensitivity": "No eye pair.",
-   "review": "art/renders/units/stray_tick/_review.json"
+   "review": "art/renders/units/stray_tick/_review.json",
+   "refix1": "Refix 1: a creature posture with no face: head serif cocked 14 degrees forward, two splayed stub feet, two short stub arms, a larger gold hour mark on the chest. dL* 32.0-37.1."
   },
   {
    "id": "resinback",
@@ -671,7 +673,7 @@
   },
   {
    "id": "stilltusk_young",
-   "score": 7.5,
+   "score": 7.0,
    "t70": {
     "px": 878,
     "hp": 5.39,
@@ -747,7 +749,7 @@
   },
   {
    "id": "longshade",
-   "score": 7.5,
+   "score": 8.0,
    "t70": null,
    "t370": null,
    "t1000": {
@@ -790,7 +792,41 @@
    },
    "note": "The map's main objective at a glance: a stopped dial in the dark. A brass ring of twelve chalk hour stones turns round the neck (one slot per idle loop), the chalk plate with its gnomon and five brass hour lines sits concentric in it at the spawn facing, a mane and layered smoke plumes breathe on their own bones behind it, the ruled shadow-tail lies on the stone. Weakest part: plain forearms and thin claws.",
    "sensitivity": "Two lamp eyes on a dial plate: owlish, not horror; ruling 1 keeps them. A lead look at game_camera_r5.png would close the fixHint's request.",
-   "review": "art/renders/units/longshade/_review.json"
+   "review": "art/renders/units/longshade/_review.json",
+   "refix1": "Refix 1: plumes are broad billows that taper into two torn licks, with soft washes instead of vein lines; chalk hour bands on the forearms; chalked knuckles; short stout claws (0.34-0.48 m, were 0.62-0.88). 974 KiB, 11829 tris."
   }
- ]
+ ],
+ "refix1": {
+  "date": "2026-11-06",
+  "reports": [
+   "_harness/_reports/fw_CW4_rf1_mon.json",
+   "_harness/_reports/fw_CW4_rf1_mon_s23.json",
+   "_harness/_reports/fw_CW4_rf1_free.json"
+  ],
+  "crossCampMaxMedian": {
+   "t70": 0.46,
+   "t370": 0.42,
+   "t1000_s7": 0.46,
+   "t1000_s23": 0.5,
+   "free_s23": 0.6
+  },
+  "worstPhase": {
+   "t70": 0.54,
+   "t370": 0.5,
+   "t1000_s7": 0.48,
+   "t1000_s23": 0.56,
+   "free_s23": 0.66
+  },
+  "longshade": {
+   "hp": [
+    2.78,
+    2.8
+   ],
+   "dLstar": [
+    26.0,
+    26.1
+   ]
+  },
+  "notRemeasured": "Match triangle peak: Longshade dropped 201 tris, the other two are unchanged or -2, so the 465k peak cannot rise; perf_1080 was not rerun."
+ }
 }

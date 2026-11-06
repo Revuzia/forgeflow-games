@@ -47,5 +47,15 @@
   "glb": "8032 tris, 471 KiB"
  },
  "horrorFaceRead": "a natural stag head (dark eyes, muzzle); no horror read",
- "motion": "unchanged (idle, gallop 3.4 m/s, attack1 antler hook, cast_a1, death)"
+ "motion": "unchanged (idle, gallop 3.4 m/s, attack1 antler hook, cast_a1, death)",
+ "round3_refix1": {
+  "date": "2026-11-06",
+  "changes": "Refix 1: painted coat strokes along the hair's direction in two values, shaped shoulder, haunch and gaskin masses with painted shadow, a tucked belly, locks on the ruff. hp 3.96 (was 3.43), dL* 22.0.",
+  "t70": {
+   "hp": 3.96,
+   "dLstar": 22.0,
+   "dE": 27.4
+  },
+  "shot": "art/renders/units/glasshorn/game_camera_rf1.png"
+ }
 }

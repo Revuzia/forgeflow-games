@@ -131,5 +131,23 @@
   },
   "note": "Paler stone, grit only on the foot plate. Forward tick stands half in the wall shadow at (44.3, 33.6): dL* 12 there, 21.4 on the lit one.",
   "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ },
+ "round3_refix1": {
+  "date": "2026-11-06",
+  "changes": "Refix 1: a creature posture with no face: head serif cocked 14 degrees forward, two splayed stub feet, two short stub arms, a larger gold hour mark on the chest. dL* 32.0-37.1.",
+  "t70": {
+   "hp": 4.95,
+   "dLstar": 36.6
+  },
+  "t370": {
+   "hp": 4.74,
+   "dLstar": 32.0
+  },
+  "t1000s23": {
+   "hp": 4.83,
+   "dLstar": 37.1
+  },
+  "shot": "art/renders/units/stray_tick/game_camera_rf1.png",
+  "sensitivity": "No eye pair, no face; the chest mark is one gold lozenge."
  }
 }
