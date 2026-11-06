@@ -258,6 +258,8 @@ function foretoldAt(u: Universe, p: Planet, sid: number, tick: number, day: numb
   for (const ph of R.prophecies) if (ph.planet === p.id && ph.settlement === sid && ph.kind === 'harm' && ph.from <= tick && tick <= ph.until) return true;
   const r = R.st[relKey(p.id, sid)];
   if (!r) return false;
+  // ARC §10.2: a flood whose rising river they were warned of, and fled, came foretold
+  if (r.evacuate?.kind === 'flood' && r.evacuate.until >= tick) return true;
   for (const a of r.acts) if (a.kind.startsWith('omen') && tick - a.tick <= 2 * day && tick >= a.tick) return true;
   for (const t of Object.values(r.omens)) if (tick - t <= 2 * day && tick > t) return true;
   return false;

@@ -1049,6 +1049,13 @@ declined it).
 - Chronicle (events.json, invented wording, no scripture): e.g. `warning.flood` "The river at {settlement} runs high and
   brown; the people carry what they can to the hill." and an all-clear line when they come home.
 - Fishers out in boats row in (the existing rowIn rule) once the warning starts.
+- **Contract as built (sim lane, stint 1):** during the warning the flood's `DisasterView.params` carries `warning: 1`,
+  `rise` (0..1, how far the river has risen toward the flood; for the render lane's banks) and `silt: 1` (the water runs
+  brown); all three are removed when the water comes. The upstream rain is a pinned `rain` weather system held in
+  `d.st.wU`. The water also really climbs in the channel: cells within the flood radius already holding > 0.3 m of
+  river gain `FLOOD_RISE` = 0.4 m in all over the warning (hourly steps; dry ground stays dry). The warning event is `{ t: 'warning', data: { kind: 'flood', id } }`, then `warning.end` the same as the
+  others. The evacuation record gains `kind?: string` (`RelSettlement.evacuate.kind`, the disaster kind). Chronicle ids:
+  `warning.flood` (w2) and the all-clear `flood.home` (w1, told when a flood's order is lifted and the town stands).
 
 ### 10.2 Floods the god sends (`water.flood`, `disaster.spawn flood`)
 - Unchanged in principle: a cast's own `warning` decides (the player's choice, §3.7 of LIVING). Add `flood` to the kinds

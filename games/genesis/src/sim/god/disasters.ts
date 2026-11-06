@@ -66,7 +66,7 @@ import { hurtPeople, hurtHerds, onRoad, shielded, stripPlants, wreckBuildings } 
 import { launch } from './projectiles.ts';
 import { WRATH_DEFAULT, currentWarning, currentWrath, harmScale, lethality, popWrath, pushWrath, wrathLaw } from './wrath.ts';
 import { beginAct, endAct } from './regard.ts';
-import { warningTicks, warningStart, warningTick, warningEnd, seenComing } from './precursors.ts';
+import { warningTicks, warningStart, warningTick, warningEnd, seenComing, naturalFloodWarning } from './precursors.ts';
 import { bearingDir, cellPos3, clamp, frame, herePos, moveBy, nearestSettlement, norm, placeName, r3, tangent } from './util.ts';
 
 // ───────────────────────────── spawning ─────────────────────────────
@@ -162,6 +162,10 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
     // the warning phase (a volcano's rumbling, the sea drawing back, a streak in the sky): effects wait for it
     const warn = warningTicks(u, def.id, w, o.warning ?? currentWarning());
     if (warn > 0) { d.st.Wn = warn; if (d.life > 0) d.life += warn; }
+  } else if (def.id === 'flood' && !o.view && o.warning !== 0) {
+    // ARC §10.1: a natural flood is seen coming — rain upstream, the river rising brown — 6-12 hours ahead
+    const warn = naturalFloodWarning(id);
+    d.st.Wn = warn; if (d.life > 0) d.life += warn;
   }
   u.god.disasters.push(d);
   u.god.disasters.sort((a, b) => a.id - b.id);

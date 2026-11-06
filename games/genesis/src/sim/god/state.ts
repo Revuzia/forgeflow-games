@@ -273,7 +273,7 @@ export interface SettlementRel {
   /** omen kind -> the tick it was last seen here (an omen is an omen only after 10 quiet days) */
   omens: Record<string, number>;
   /** an evacuation in force: walk out to this point until the tick (precursors) */
-  evacuate: { pos: V3; radius: number; until: number; disaster: number } | null;
+  evacuate: { pos: V3; radius: number; until: number; disaster: number; kind?: string } | null;
   /** the sacred animal (animal id, '' none) */
   animal: string;
   /** daily memory of the conditions: tick a condition first held (drought, cold, ...), prayers raised throttle */

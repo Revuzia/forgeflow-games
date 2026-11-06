@@ -6,6 +6,9 @@
 //                the streak is an omen (god/omens.ts)
 //   tsunami      the sea draws back from the shore ≥ 30 minutes before the wave
 //   comet        hangs in the sky for days before it strikes (its own life): the same evacuation
+//   flood        (ARC §10) a natural flood: 6-12 game hours of heavy rain over the catchment upstream and the river
+//                rising and running brown at the banks (`params.rise` 0..1, `params.silt` 1) before the water comes;
+//                a god-sent flood warns only when its cast carries a warning (none at wrath 1 or `warning: 0`)
 // While it lasts the disaster's view carries `params.warning = 1` (render hook H5). Every settlement in reach gets an
 // EVACUATE order: its members walk out to the danger radius + 100 m (high ground for water) and wait there (TASK
 // evacuate, people/shelter.ts), with what food and water they can carry, until the danger has passed — then they come
@@ -16,6 +19,9 @@ import type { Planet } from '../world/planet.ts';
 import type { DisasterDef } from '../content.ts';
 import type { DisasterState } from './state.ts';
 import { hashFloat } from '../core/rng.ts';
+import { paintWeather } from '../fields/weather.ts';
+import { activateCell } from '../fields/hydrology.ts';
+import { offset } from './util.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { interrupt } from '../people/people.ts';
 import { AgentFlag } from '../types.ts';
@@ -46,6 +52,11 @@ export function warningTicks(u: Universe, kind: string, w: number, override?: nu
   }
 }
 
+/** ARC §10.1: a natural flood's warning phase, 6-12 game hours, hashed on the disaster id */
+export function naturalFloodWarning(id: number): number {
+  return 360 + Math.round(360 * hashFloat(id, 0xf10d));
+}
+
 /** how far from a disaster's centre its harm can kill (metres), at the wrath it was sent with */
 export function dangerRadius(def: DisasterDef, d: DisasterState): number {
   const R = d.radius * Math.sqrt(Math.max(0.01, d.scale));
@@ -67,6 +78,7 @@ const WARNED = new Set(['volcano', 'supervolcano', 'meteor', 'tsunami', 'comet']
 
 /** a warned disaster begins: the settlements in reach are told to get out (and the chronicle tells it) */
 export function warningStart(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): void {
+  if (def.id === 'flood') floodRains(u, p, d, def);
   u.emit({ t: 'warning', planet: p.id, pos: [...d.pos], a: d.st.Wn ?? 0, ref: { kind: 'disaster', id: d.id, planet: p.id }, data: { kind: d.kind, id: d.id } });
   evacuate(u, p, d, def, (d.st.Wn ?? 0) + afterTicks(d));
 }
@@ -97,9 +109,9 @@ function evacuate(u: Universe, p: Planet, d: DisasterState, def: DisasterDef, ti
     const dist = distM(p, st.pos, d.pos);
     if (dist > R + st.territory + 100) continue;
     const r = srel(u, p.id, st.id);
-    r.evacuate = { pos: [d.pos[0], d.pos[1], d.pos[2]], radius: Math.round(R + 100), until: u.tick + ticks, disaster: d.id };
+    r.evacuate = { pos: [d.pos[0], d.pos[1], d.pos[2]], radius: Math.round(R + 100), until: u.tick + ticks, disaster: d.id, kind: def.id };
     relStat(u, 'evacuations');
-    const key = def.id === 'tsunami' ? 'warning.tsunami' : def.id === 'meteor' || def.id === 'comet' ? 'warning.meteor' : 'warning.volcano';
+    const key = def.id === 'tsunami' ? 'warning.tsunami' : def.id === 'meteor' || def.id === 'comet' ? 'warning.meteor' : def.id === 'flood' ? 'warning.flood' : 'warning.volcano';
     tell(u, p, key, vars(x, st, -1, { disaster: def.name.toLowerCase() }), st, [settlementRef(x, st)], 1);
     tell(u, p, 'evacuate', vars(x, st, -1, { disaster: def.name.toLowerCase() }), st, [settlementRef(x, st)], 2);
     u.emit({ t: 'evacuate', planet: p.id, pos: [st.pos[0], st.pos[1], st.pos[2]], ref: settlementRef(x, st), data: { settlement: st.id, disaster: d.id, radius: Math.round(R + 100), until: u.tick + ticks } });
@@ -120,12 +132,62 @@ export function warningTick(u: Universe, p: Planet, d: DisasterState, def: Disas
     d.params.plume = Math.round((def.render.plume ?? 1000) * 0.15 * (1 - left / Math.max(1, d.st.Wn ?? 1)));
   } else if (def.id === 'tsunami') {
     d.params.drawback = 1;
+  } else if (def.id === 'flood') {
+    // the river rises and runs brown as the rain upstream comes down (render hook H5: the banks, ARC §10.1)
+    const k = 1 - left / Math.max(1, d.st.Wn ?? 1);
+    d.params.rise = Math.round(Math.max(0, Math.min(1, k)) * 1000) / 1000;
+    d.params.silt = 1;
+    // the rain over the catchment grows heavier toward the flood (rain kind: no lightning, no harm)
+    if (d.age % 60 === 0) { const w = p.weather.find((q) => q.id === d.st.wU); if (w) w.intensity = Math.min(1.6, 1.2 + 0.4 * k); }
+    // and the water itself comes up in the channel: only cells already holding the river (> 0.3 m), FLOOD_RISE m in all
+    // over the warning, so dry ground stays dry until the flood (nobody is harmed before it: ARC §10.3)
+    if (d.age % 60 === 30) riverRise(p, d, FLOOD_RISE / Math.max(1, Math.floor((d.st.Wn ?? 60) / 60)));
   }
+}
+
+/** ARC §10.1: how far the river climbs its banks during a flood's warning (m, in all) */
+export const FLOOD_RISE = 0.4;
+
+function riverRise(p: Planet, d: DisasterState, dh: number): void {
+  const R = d.radius * Math.sqrt(Math.max(0.01, d.scale));
+  const f = p.f;
+  let added = 0;
+  for (const c of p.cellsNear(d.pos, R)) {
+    if (p.s.ocean[c] || f.water[c] <= 0.3) continue;
+    f.water[c] += dh;
+    added += dh * p.cellArea[c];
+    activateCell(p, c);
+  }
+  if (added > 0) { p.hydro.sourced += added; p.bump('water'); }
+}
+
+/**
+ * ARC §10.1: heavy rain over the catchment upstream of a flood — the highest land within 3 radii of it, sampled on 12
+ * bearings — and over the banks between, kept with the disaster (`st.wU`; god/disasters.ts cleanup lifts every `w*`)
+ */
+function floodRains(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): void {
+  if (!p.airy || d.st.wU !== undefined) return;
+  void def;
+  const R = d.radius * Math.sqrt(Math.max(0.01, d.scale));
+  const f = p.f;
+  let best = d.pos as ArrayLike<number>, bh = f.surface[p.cellAt(d.pos)];
+  for (let i = 0; i < 12; i++) {
+    const q = offset(d.pos, R * 3, (i / 12) * Math.PI * 2 + hashFloat(d.id, 0xf10e) * 0.5, p.st.radius);
+    const c = p.cellAt(q);
+    if (p.s.ocean[c]) continue;
+    if (f.surface[c] > bh) { bh = f.surface[c]; best = q; }
+  }
+  // centred halfway up the slope, wide enough to cover the hills and the town's banks both
+  const mid = [(d.pos[0] + best[0]) / 2, (d.pos[1] + best[1]) / 2, (d.pos[2] + best[2]) / 2];
+  const w = paintWeather(u, p, 'rain', mid, R * 2.5, -1, 1.2, true);
+  if (w) d.st.wU = w.id;
 }
 
 /** the warning is over: the blow falls (god/disasters.ts fires the effects) */
 export function warningEnd(u: Universe, p: Planet, d: DisasterState): void {
   delete d.params.drawback;
+  delete d.params.rise;
+  delete d.params.silt;
   u.emit({ t: 'warning.end', planet: p.id, pos: [...d.pos], ref: { kind: 'disaster', id: d.id, planet: p.id }, data: { kind: d.kind, id: d.id } });
 }
 
@@ -142,6 +204,13 @@ export function evacuationsHourly(u: Universe, p: Planet): void {
   for (const [k, r] of Object.entries(R.st)) {
     if (!r.evacuate || !k.startsWith(`${p.id}:`)) continue;
     const gone = !u.god.disasters.some((d) => d.id === r.evacuate!.disaster);
-    if (r.evacuate.until <= u.tick || (gone && r.evacuate.until - u.tick > 120)) r.evacuate = null;
+    if (r.evacuate.until <= u.tick || (gone && r.evacuate.until - u.tick > 120)) {
+      // ARC §10.1: the all-clear when the water falls and they come home
+      if (r.evacuate.kind === 'flood') {
+        const st = p.people?.settlement(Number(k.slice(k.indexOf(':') + 1)));
+        if (st && st.fallen < 0) { const x = makeCtx(u, p); tell(u, p, 'flood.home', vars(x, st, -1, {}), st, [settlementRef(x, st)], 1); }
+      }
+      r.evacuate = null;
+    }
   }
 }

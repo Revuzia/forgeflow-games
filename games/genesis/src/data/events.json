@@ -210,6 +210,8 @@
     {"id": "warning.volcano", "kind": "disaster", "weight": 2, "text": ["The mountain above {settlement} rumbles and smokes.", "The ground under {settlement} trembles and the hill breathes smoke."]},
     {"id": "warning.meteor", "kind": "disaster", "weight": 1, "text": ["A bright streak crosses the sky above {settlement}."]},
     {"id": "warning.tsunami", "kind": "disaster", "weight": 2, "text": ["The sea draws back from the shore by {settlement}."]},
+    {"id": "warning.flood", "kind": "disaster", "weight": 2, "text": ["The river at {settlement} runs high and brown; the people carry what they can to the hill.", "Rain hangs over the hills above {settlement} and the river climbs its banks; they take their stores and go up to high ground."]},
+    {"id": "flood.home", "kind": "disaster", "weight": 1, "text": ["The water fell back from {settlement}, and its people came down from the hill.", "The river at {settlement} went back between its banks, and the people came home to dry their houses."]},
     {"id": "offering", "kind": "god", "weight": 1, "text": ["The people of {settlement} brought a share of their harvest to the shrine."]},
     {"id": "festival.god", "kind": "god", "weight": 1, "text": ["{settlement} kept its feast in the god's name.", "At the feast of {settlement} they poured the first cup for the god."]},
     {"id": "conversion.person", "kind": "god", "weight": 1, "text": ["{agent} of {settlement} turned to {god}."]},
