@@ -36,7 +36,8 @@
 // listener (live = on the GPU). Hard checks (any machine): at every menu after the 2nd, the live render targets and
 // renderer.info geometries and textures are <= their menu_2 values (menu_1 may still be filling caches); macOS only
 // (`footprint`): the GPU process grows <= 5 % from menu_2 to the last menu; the tracked (undisposed) materials and
-// geometries stay flat from menu_2 to the last menu (<= +2: a straggler, not one per cycle).
+// geometries stay flat from menu_2 to the last menu (<= +2: a straggler, not one per cycle). Each match is pumped until its
+// live counts hold (4 polls, 45 s at most; timeline settleMs / settled), so every match_N is the whole match, not a part of it.
 // match peak (perf PERF-m5, part of --prod; --no-match skips it, --match-only runs it alone, --match-scale <k> the sim speed,
 // default 4, --match-min <m> the game minutes, default 30 or the match's end): a whole RIFT match from 0:00 at High, the
 // camera locked on your (autopilot) fighter as the real client plays it, every frame rendered; per second of wall time the
@@ -109,6 +110,7 @@ const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.include
 const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--gpubound-only') && !args.includes('--calibrate-only') && !args.includes('--no-mem');
 const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
 const MEM_GPU_GROWTH = 0.05;
+const MEM_SETTLE_HOLD = 4, MEM_SETTLE_MAX_MS = 45000;
 const MAPS_ONLY = args.includes('--mem-maps-only');
 const MEM_MAPS = opt('mem-maps', 'rift,bridge,fray,rift').split(',').filter(Boolean);
 const MAPS_MEM = (MEM && !args.includes('--no-mem-maps')) || MAPS_ONLY;
@@ -566,7 +568,21 @@ async function memory() {
       await page.evaluate(() => window.__VALE_BENCH__.frames(90, 1 / 30));
       await page.waitForTimeout(1000);
       await page.evaluate(() => window.__VALE_BENCH__.frames(30, 1 / 30));
-      cycles.push(await sample(`match_${c}`));
+      // the match has really landed: a fixed wait on a busy machine sampled match_1 half loaded (173 materials, 1132 MB
+      // against 242 and 1393 at match_2), so menu_2 had not yet seen the whole match and the "growth" from it was the first
+      // full match, not a leak. Same frames, same match: pump until the live counts hold for MEM_SETTLE_HOLD polls.
+      const t0 = Date.now();
+      let prev = '', held = 0;
+      while (held < MEM_SETTLE_HOLD && Date.now() - t0 < MEM_SETTLE_MAX_MS) {
+        const n = await page.evaluate(() => { const b = window.__VALE_BENCH__, s = b.frames(30, 1 / 30), m = window.__memSnap().by; return `${m.material} ${m.geometry} ${m.texture} ${s.textures} ${s.geometries}`; });
+        held = n === prev ? held + 1 : 0;
+        prev = n;
+        await page.waitForTimeout(1000);
+      }
+      const m = await sample(`match_${c}`);
+      m.settleMs = Date.now() - t0;
+      m.settled = held >= MEM_SETTLE_HOLD;
+      cycles.push(m);
     }
     const menus = cycles.filter((x) => x.tag.startsWith('menu_'));
     const base = menus[1], last = menus[menus.length - 1];
