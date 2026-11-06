@@ -370,12 +370,19 @@ async function runMatch() {
     let deadSeen = 0;
     rep.forcedEnemyDeath = null;
     rep.forcedLampOut = null;
+    const earshot = [];
     for (;;) {
       const s = await page.evaluate(() => {
         const a = window.__valeAudio, v = window.__vale;
-        return { ct: a.graph.ctx.currentTime, t: v?.state?.match?.value?.view?.time ?? null, cues: a.log.splice(0), dead: a.musicDead === true };
+        // how much of the match is in earshot of your seat (reported: what a quiet capture was doing)
+        const m = v?.state?.match?.value, W = m?.sim?.world, me = m?.view.players.find((p) => p.player === m.you), mine = me && W?.entity(me.entity);
+        let at = null;
+        if (mine) { at = { x: mine.x, y: mine.y, alive: mine.alive, wicks: 0, foes: 0 };
+          for (const e of W.entities) if (e.alive && (e.kind === 'minion' || (e.kind === 'fighter' && e.team !== mine.team)) && a.place({ x: e.x, y: e.y }, false).att > 0) { if (e.kind === 'minion') at.wicks++; else at.foes++; } }
+        return { ct: a.graph.ctx.currentTime, t: m?.view?.time ?? null, cues: a.log.splice(0), dead: a.musicDead === true, at };
       });
       if (s.dead) deadSeen++;
+      if (s.at && s.t !== null) earshot.push([r2(s.t), r2(s.at.x), r2(s.at.y), s.at.alive ? 1 : 0, s.at.wicks, s.at.foes]);
       // no enemy fighter has fallen by someone else's hand by the last 30 s: force one, so enemyDown is measured
       if (rep.forcedEnemyDeath === null && (s.t ?? 0) >= SECONDS - 30) {
         rep.forcedEnemyDeath = await page.evaluate(async () => {
@@ -426,6 +433,9 @@ async function runMatch() {
     rep.deadPolls = deadSeen;
     rep.enemyDeaths = await page.evaluate(() => window.__deaths);
     const blocks = await page.evaluate((c0) => window.__cap.blocks.filter((r) => r[0] >= c0 - 2), ct0);
+    { const n = Math.max(1, earshot.length), frac = (f) => r2(earshot.filter(f).length / n);
+      let path = 0; for (let i = 1; i < earshot.length; i++) path += Math.hypot(earshot[i][1] - earshot[i - 1][1], earshot[i][2] - earshot[i - 1][2]);
+      rep.earshot = { samples: earshot.length, noneNear: frac((r) => r[4] + r[5] === 0), foeNear: frac((r) => r[5] > 0), dead: frac((r) => !r[3]), pathM: r2(path), track: earshot.filter((_, i) => i % 20 === 0) }; }
     rep.heardG2 = await page.evaluate(() => Object.fromEntries(window.__valeAudio.heard ?? []));
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
