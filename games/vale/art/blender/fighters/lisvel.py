@@ -145,12 +145,13 @@ CARDS = {
     },
     "lisvel_almanac": {
         # (CW5 round 3 refix, finding:almanac-splash-face: from yaw 22 the head, turned 28 deg to her right, showed a pale
-        # oval 30 px wide: the camera comes round to the side she looks to and in to the knees, so nose and mouth read; the head's lamp moves from near-frontal to her upper
-        # right, as on the portrait, or the face plate flattens to a pale oval)
-        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -14.0, "pitch": -4.0, "lens": 58.0, "fill": 0.92, "x": 0.64,
+        # oval 30 px wide: the camera comes round to the side she looks to and in to mid-thigh, the head a three-quarter
+        # 24 deg off camera; the head's lamp and the key leave the near-frontal for her upper right, as on the portrait,
+        # and the floor bounce halves, so the nose keeps its shadow and the mouth its line)
+        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -4.0, "pitch": -4.0, "lens": 58.0, "fill": 0.92, "x": 0.64,
                    "box_top": 2.2, "box_lo": 0.72, "box_w": 0.48,
-                   "key_az": 200.0, "key_el": 30.0, "key_color": "#FFE3B8", "sun": 2.2, "rim_cool": 0.8,
-                   "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.85,
+                   "key_az": 240.0, "key_el": 36.0, "key_color": "#FFE3B8", "sun": 2.2, "rim_cool": 0.8,
+                   "rim_warm": 1.5, "bounce": 0.35, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.85,
                    "focal": [{"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 50.0,
                               "size": 0.3},
                              {"at": "head", "az": 266.0, "el": 48.0, "dist": 0.6, "color": "#FFE3B8", "power": 13.0,
