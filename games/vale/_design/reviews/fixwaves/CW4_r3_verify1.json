@@ -1,0 +1,108 @@
+{
+ "wave": "CW4",
+ "round": 3,
+ "verify": 1,
+ "date": "2026-11-06",
+ "pass": false,
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "node _harness/probe_wick_sweep.mjs --tag r3v1 exits 1 on its detector: greatwickPairs 2, greatwick_serenade ally@90 and enemy@90 (_harness/_reports/fw_CW4_r3v1_wick_sweep.json). No live lane Greatwick is flagged. By eye on _harness/_shots/fw_CW4_r3v1_sweep_greatwick_greatwick_serenade_3x.png and fw_CW4_r3v1_lane_greatwick_0_3x.png: slit bands of 3 or more slits behind mullions, no pair of equal round panes, no face. The flag is the detector's known false positive. Greatwick GLBs are unchanged since Nov 3. Sensitivity read: pass."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --landmarks only (_harness/_reports/fw_CW4_r3v1_lmk.json, /tmp/fw_CW4_r3v1_lmk.log): exit 0, 0 FAIL, 28 landmark rows. Lowest hp 2.76 lampwright_stall_s BRIDGE high, 2.79 fair_stand_nw FRAY high, 2.80 numeral_xi RIFT low (bar 2.75). Lowest breakup 7.0 numeral_vii (bar 6). The margins stay thin. Landmark GLBs are unchanged since Nov 4."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 (_harness/_reports/fw_CW4_r3v1_b5.json, /tmp/fw_CW4_r3v1_b5.log): 0 FAIL on all 6 runs. This item failed last round and now passes: BRIDGE frameP99 136 / 146 (bar <= 180, ruling 14) with env-only 106 / 107 (bar <= 160), and BRIDGE flash 2.52x / 2.42x (was 1.88x on low). Fog lane and jungle 0.537-0.542. Wallmask: RIFT 0/48 minVis 0.772, FRAY 0/24 minVis 0.722 (_harness/_reports/fw_CW4_r3v1_wall_rift.json, _wall_fray.json)."
+  },
+  {
+   "id": "done:4",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Water saturation 0.32 at L* 19.5 (RIFT high) and 0.30 at L* 27.5 (RIFT low), /tmp/fw_CW4_r3v1_b5.log lines 62, 133. Canopy luma p50 51 / 55 (same log, lines 59, 130). shot_structures rift --q high exit 0 (/tmp/fw_CW4_r3v1_rc). art/out/maps/map_rift/minimap.png viewed: XI, II, VII and IIII all present."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "_harness/_reports/fw_CW4_r3v1_wick_sweep.json verdict.hood: per-template top25 56.1-63.7, fighters 81.1, all pass. value_probe wickTop25: RIFT 61.2 / 64, BRIDGE 58.1 / 60.8 (bar <= 65)."
+  },
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "MET on my re-measure: engineer numbers reproduce at camp facing. value_probe --monsters only --monsterPhases 8 --monsterSpawnFacing 1 (_harness/_reports/fw_CW4_r3v1_mon.json; fw_CW4_r3v1_mon_s23.json). Maximum cross-camp median: t70 0.46, t370 0.42, t1000 seed 7 0.47 (only Longshade and Resinback alive), t1000 seed 23 0.50 (resinback|stilltusk), none over the 0.5 bar. Worst phase 0.57 (gloamoth_little|stray_tick, median 0.37). Longshade hp 2.88-2.92, breakup 30.8-55.1, dL* 26.3-26.6. Stray Tick dL* 28.4-39.1. Triangle peaks 465k / 463k / 464k, 0 frames over budget (fw_CW4_r5_match.json). Longshade 996 KiB of 1024. Sensitivity by eye on my live frames (_harness/_shots/value_rift_high_fw_CW4_r3v1_*_mon_*.png): no blocker. NOT MET: (1) My eye re-score of the row is 7.4 by the row's own weighting, under par 7.5: longshade 7.5, sunsplinter 7.5 (each counts double); gloamoth 8.0; gloamoth_little, resinback, stilltusk, stray_numeral 7.5; stilltusk_young, glasshorn, stray_tick 7.0. Sum 88.5 / 12 = 7.375. That is a narrow miss and a judgement call, but the engineer's 7.5 is not confirmed. Longshade is much better (was 6.0) and reads at game size, yet its plumes read as leaves or cabbage petals rather than smoke, and its forearms stay plain with thin claws, as the engineer admits. Glasshorn is a plain soft-textured deer. Stray Tick is a small plain pillar. (2) The 0.5 bar holds only at the shipped camp facing. With monsters free-facing, as they turn in a fight (same probe without --monsterSpawnFacing, seed 23, t=1000, _harness/_reports/fw_CW4_r3v1_free.json): resinback|stilltusk 0.60, resinback|stilltusk_young 0.60, sunsplinter|stilltusk_young 0.55, sunsplinter|stilltusk 0.54, longshade|resinback 0.53, sunsplinter|resinback 0.51. Those kinds are not confused by eye. No ruling in owner_rulings.md accepts a median at spawn facing as the gate; it is the engineer's own reading, disclosed in neutral_units.json.",
+   "fixHint": "One rebuild of Longshade: chalk hour bands on the forearms, shorter and stouter claws, and plume tips that taper and break like smoke. Then Glasshorn: painted coat strokes and shaped muscle masses. Stray Tick: a clearer creature read, such as a stone foot stance or a bigger numeral face. Re-score the row. The lead should record a ruling that the IoU gate is the median at camp facing, or else require free-facing values too."
+  },
+  {
+   "id": "critic:monsters (dL* on sunlit floor)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Seed 23, t=1000: Stilltusk dL* 17.4 and Stray Numeral 17.8 (t370 18.6) against the 20 bar (_harness/_reports/fw_CW4_r3v1_mon_s23.json). The claim says both sit inside the 2 L* tolerance, with lows of 18.8 and 18.3; on this seed they miss it by 2.6 and 2.2. dE stays 25.0 and 20.6, and both read clearly by eye.",
+   "fixHint": "Backlog: one more small value step on the coat and chalk if they are rebuilt anyway."
+  },
+  {
+   "id": "critic:monsters (stilltusk_young)",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "art/renders/units/stilltusk_young/_review.json has a round3 block matching my re-measure: t70 hp 5.39, dL* 25.3, dE 34.4 (_harness/_reports/fw_CW4_r3v1_mon.json)."
+  },
+  {
+   "id": "env:m-2",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Viewed _harness/_shots/fw_CW4_r5_respawn_at0.png and _at1.png: a banner and a lamp stand on the plaza side of the wall in both frames, with the hour lamp at the edge. The banner is cropped by the top of the frame at at0. A prop at (1.0, 49.4) is in content/maps/map_rift.json. Plaza saturation re-measured: RIFT 0.25 / 0.35, BRIDGE 0.30 / 0.36 PASS (fw_CW4_r3v1_b5.json). I did not re-shoot the respawn frames. BRIDGE dressing was not reviewed this round."
+  },
+  {
+   "id": "env:m-4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Improved and mostly true: art/renders/maps/camp_mark_sheet.png exists with 12 plaques, the antler is curved, there are scuffs, and the Strays plaques are visible (also _harness/_shots/value_rift_high_fw_CW4_r3v1_m70_mon_stray_numeral.png). 'Faint' is not met, so 'done' is too strong: each plaque is a flat, hard-edged polygon disc, darker than the floor, that reads like a sticker. The near-black signs and Resinback's flat saturated orange kite are the loudest marks on the camp floor (_harness/_shots/value_rift_high_fw_CW4_r3v1_m70_mon_resinback.png, _glasshorn.png). The engineer's flush-mark hp of 1.28-2.18 is out of the gated set, as they disclosed. No originality or sensitivity problem in the signs.",
+   "fixHint": "Backlog: feather the disc edge into the floor, drop sign contrast to about 8-10 L* under the plaque, and desaturate the Resinback sign to a resin-stained stone tone."
+  },
+  {
+   "id": "critic:monsters (Longshade plate read)",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "My live frames at 28.5 m, _harness/_shots/value_rift_high_fw_CW4_r3v1_m1000_mon_longshade.png and _m1000s23_mon_longshade.png: brass gnomon and at least 5 hour lines read on the chalk plate, inside the ring of 12 hour stones. It reads as a dial, per ruling 1. Sensitivity look done by me on those frames and on art/renders/units/longshade/game_camera_r5.png: two lamp eyes over a gnomon read owlish, not as horror or a hockey mask; lamp eyes are kept by ruling 1, and no tears. The dial read depends on facing 120: art/renders/units/longshade.png shows the plate hidden from behind, so it is lost when Longshade turns away in a fight."
+  },
+  {
+   "id": "handoff:lead:Longshade sensitivity look",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Done by this verifier, see critic:monsters (Longshade plate read). No blocker. The lead may still confirm it."
+  },
+  {
+   "id": "handoff:lead:Longshade forearm rebuild",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "Open, not done: the engineer reports it as a handoff. It is the main cost in the Longshade score under critic:monsters. The forearms are plain dark in _harness/_shots/value_rift_high_fw_CW4_r3v1_m1000_mon_longshade.png.",
+   "fixHint": "Assign it in the next package; this package's 3 Longshade rebuilds are spent."
+  },
+  {
+   "id": "regression:perf_1080",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine: load average 3.4-20 during this verify, two heavy slots held by power-hold processes, and other lanes running. Not run here. CW1's perf_1080 --prod on this tree reports GATE PASS on budgets with 'timing not measured: machine busy' (_harness/_reports/fw_CW1_r3x_perf.log), so frame timing with the new unit art is still unmeasured."
+  },
+  {
+   "id": "regression:typecheck+content+maps",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run typecheck exit 0; content:check OK, 0 warnings; npx tsx _harness/probe_maps.ts 102/102. Commits e80eaf7b0, f477ab3e9 and 8a770eab0 touch only this lane's paths or neutral_units.json, and all are on origin."
+  }
+ ],
+ "regressions": [
+  "No art regression found. Stilltusk and Stray Numeral dL* on a sunlit floor read 17.4 and 17.8 at seed 23, under the 2 L* tolerance.",
+  "Free-facing cross-camp IoU reaches 0.60; the shipped camp facings lower the gated value but do not change this in a fight."
+ ],
+ "summary": "Fail, narrowly. All five done-list criteria pass, including done:3, which passes for the first time: BRIDGE flash is 2.52x / 2.42x and ruling 14 covers frame p99. No sensitivity blocker. The Longshade rebuild is a real gain and its dial reads at game size. critic:monsters stays partly: my eye score of the row is 7.4 against par 7.5, with Longshade's forearms and claws, Glasshorn and Stray Tick the weak points, and the IoU bar holds only at the shipped camp facing using a median the engineer chose (free-facing reaches 0.60). The lead should decide whether to accept the 0.1 miss and that gate. env:m-4 is partly: the plaques are not faint. perf_1080 timing needs an idle machine."
+}
