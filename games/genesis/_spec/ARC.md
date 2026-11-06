@@ -1061,6 +1061,22 @@ declined it).
 - Unchanged in principle: a cast's own `warning` decides (the player's choice, §3.7 of LIVING). Add `flood` to the kinds
   the people can SEE coming when the cast carries a warning, so the rising river shows and the order goes out; at
   wrath 1 or `warning: 0` no warning, as today. A warned flood counts as **foretold** in regard.ts (faith and fear, trust kept).
+- **Contract as built (sim lane r1, findings #3/#7/#13):** `warningTicks(u, 'flood', w)` gives a flood its own warning
+  without a cast override: 360-720 ticks at wrath <= 0.5 (hashed on the wrath), falling linearly from 540 to 0 over wrath
+  0.5..1 (none at wrath 1). `disaster.spawn flood` and every other god-sent flood therefore warn at the default wrath; the
+  omen flood (omens.ts, a sign) passes `warning: 0`. `WARNED` (seenComing) deliberately does NOT list `flood`: a flood with
+  `warning: 0` at a gentle wrath must come unseen, as the player chose. **`water.flood`** (the palette's Water power and the
+  free-text flood) takes the same `warning` param; when its warning is > 0 and a living town lies in reach
+  (`radius x 1.5 + territory + 100` m) it creates a flood `DisasterState` with `st.Cf = 1` (a cast flood: radius = the
+  cast's, intensity `(height/5)^2` so its start water is the cast's height, life `CAST_FLOOD_AFTER` = 360 ticks after the
+  water) — the same warning event, evacuation, rising brown river (`params.warning/rise/silt`) and chronicle as §10.1, then
+  only the cast's water bursts out at the warning's end (no rain, no further water). The command result carries the
+  disaster ref. With no warning (wrath 1, `warning: 0`) or nobody in reach, the water comes at once as before.
+- **Natural floods on a world that is not wet as a whole (r1 #4/#14):** `riverFlood` (disasters.ts) rolls after the other
+  kinds each planet-day on its own hash stream: on a non-`wet` world, on a day when a heavy rain system (rain-type weather,
+  precip >= `rain`'s) covers a town with land water > 0.3 m within `territory + 400` m, `RIVER_FLOOD_DAY` = 0.25 x the
+  `disasters.natural` law brings a natural flood at that water, with the §10.1 warning. Towns with no water by them never
+  flood (most sandbox towns sit in dry hills).
 
 ### 10.3 Acceptance
 - `tests/flood-warning.test.ts` (fails before): a natural flood on a settled river has Wn in [360, 720] ticks, emits a

@@ -32,7 +32,11 @@ import { suggest } from '../content.ts';
 import { registerPeopleCommands, focusHook } from '../people/commands.ts';
 import { pave } from './shaping.ts';
 import { registerGodCommands } from './index.ts';
-import { spawnDisaster } from './disasters.ts';
+import { spawnDisaster, CAST_FLOOD_AFTER } from './disasters.ts';
+import { warningTicks } from './precursors.ts';
+import { currentWarning, currentWrath, wrathLaw } from './wrath.ts';
+import { actor, norm } from './util.ts';
+import { distM } from '../people/world.ts';
 
 export type ParamType = 'number' | 'int' | 'string' | 'boolean' | 'pos' | 'vec3' | 'enum' | 'any';
 
@@ -349,8 +353,20 @@ export function buildRegistry(): CommandRegistry {
     const w = paintWeather(u, p, kind, a.pos!, a.radius as number, a.duration as number, Math.min(1.5, I), false);
     return w ? ok(`Rain gathers ${where(p, a.pos)}.`, [{ kind: 'weather', id: w.id, planet: p.id }]) : fail('No rain kind is defined.');
   }, { desc: 'Make it rain', category: 'Water', params: { pos: pos(), radius: radius(600), duration: { type: 'number', min: 10, max: 1e6, default: 720 }, intensity: { type: 'number', min: 0.1, max: 3, default: 1 } } });
-  r.register('water.flood', ({ p }, a) => {
-    const v = waterImpulse(p, a.pos!, a.radius as number, a.height as number, null, -1);
+  r.register('water.flood', ({ u, p, cmd }, a) => {
+    // ARC §10.2 (r1 #3/#7/#13): where people live in its reach, the god's flood is seen coming like nature's — the cast's
+    // own `warning`, else 6-12 hours at the default wrath (none at wrath 1): the river rises brown, the towns are told to go
+    // up to high ground, and the water of the cast bursts out when the warning ends (a flood disaster marked `Cf`, which
+    // does only that). With no warning, or nobody to warn, the water comes at once, as it always has.
+    const R = a.radius as number, h = a.height as number;
+    const warn = warningTicks(u, 'flood', currentWrath() ?? wrathLaw(u), currentWarning());
+    const pos = norm(a.pos!);
+    const near = warn > 0 && (p.people?.settlements ?? []).some((st) => st.fallen < 0 && !st.band && distM(p, st.pos, pos) <= R * 1.5 + st.territory + 100);
+    if (near) {
+      const d = spawnDisaster(u, p, 'flood', { pos, radius: R, intensity: (h / 5) ** 2, life: CAST_FLOOD_AFTER, god: actor(cmd), cause: 'god', warning: warn, cast: true });
+      if (typeof d !== 'string') return ok(`The river ${where(p, a.pos)} begins to rise and run brown: the flood comes in ${Math.round(warn / 60)} hours.`, [{ kind: 'disaster', id: d.id, planet: p.id }]);
+    }
+    const v = waterImpulse(p, pos, R, h, null, -1);
     return ok(`A flood bursts out ${where(p, a.pos)} (${fmt(v)} m³).`);
   }, { desc: 'Flood a region', category: 'Water', params: { pos: pos(), radius: radius(300), height: { type: 'number', min: 0.1, max: 200, default: 4 } } });
   r.register('water.tsunami', ({ u, p }, a) => {

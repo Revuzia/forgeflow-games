@@ -95,7 +95,15 @@ export interface SpawnOpts {
    * draw), and it does nothing of its own — no warning, no effector, no witness, no toll (`st.Vw`)
    */
   view?: boolean;
+  /**
+   * ARC §10.2 (r1): the water of a `water.flood` cast, held back for its warning: only the start water bursts out when the
+   * warning ends (`st.Cf`), then the flood stands `CAST_FLOOD_AFTER` ticks while the water runs off, doing nothing more
+   */
+  cast?: boolean;
 }
+
+/** how long a cast flood (`water.flood` with a warning) stands after its water bursts out, in ticks */
+export const CAST_FLOOD_AFTER = 360;
 
 const START = 'start';
 
@@ -151,6 +159,7 @@ export function spawnDisaster(u: Universe, p: Planet, kind: string, o: SpawnOpts
   // LIVING §3.7: the god's disaster keeps the wrath it was sent with (nature's has none: its own law alone)
   const godSent = d.god >= 0 && d.cause !== 'nature' && !o.view;
   if (o.view) d.st.Vw = 1;
+  if (o.cast) d.st.Cf = 1;
   if (godSent) {
     const w = currentWrath() ?? wrathLaw(u);
     d.st.Wr = w;
@@ -272,7 +281,7 @@ function stepOne(u: Universe, p: Planet, d: DisasterState, def: DisasterDef): vo
       d.vel = [(t[0] / tl) * vl, (t[1] / tl) * vl, (t[2] / tl) * vl];
     }
     def.effectors.forEach((e, i) => {
-      if (e.at === START || e.at === 'end') return;
+      if (e.at === START || e.at === 'end' || d.st.Cf) return;
       if (typeof e.at === 'number') {
         if (!d.fired.includes(i) && d.life > 0 && d.age >= e.at * d.life) { d.fired.push(i); applyEffector(u, p, d, def, e, i); }
         return;
@@ -1115,6 +1124,40 @@ export function naturalDisasters(u: Universe, p: Planet): void {
     const d = spawnDisaster(u, p, def.id, { pos: at, god: -1, cause: 'nature', quiet: def.radius < 300 && def.id !== 'volcano' });
     if (typeof d !== 'string') u.god.stat('natural');
     return; // one a day per world at most
+  }
+  riverFlood(u, p, k, () => (tr ??= planetTraits(u, p)));
+}
+
+/** ARC §10.1 (r1 #4/#14): the chance a day that heavy rain over a town by its river or lake brings the river over its banks */
+export const RIVER_FLOOD_DAY = 0.25;
+
+/**
+ * a flood need not wait for a wet world: on a world that is not 'wet' as a whole (the dry sandbox worlds never are), a
+ * town by its river or lake (surface water > 0.3 m on land within its reach) under heavy rain (a weather system of rain
+ * at least the strength of 'rain', over the town now) may see its river rise, on `RIVER_FLOOD_DAY` of such days. It is
+ * the same natural flood, with the same warning; the daily roll is its own stream, after the other kinds have rolled, so
+ * no other kind's draws move.
+ */
+export function riverFlood(u: Universe, p: Planet, k: number, traits: () => PlanetTraits): void {
+  const def = u.content.disasters.find('flood');
+  const ps = p.people;
+  if (!def?.natural || def.natural.rate <= 0 || !ps || !p.weather.length) return;
+  const W = u.content.weather.list, rainP = u.content.weather.find('rain')?.precip ?? 6;
+  const heavy = p.weather.filter((w) => { const wd = W[w.kind]; return !!wd && wd.precipType === 'rain' && wd.precip >= rainP; });
+  if (!heavy.length) return;
+  if (hashFloat(u.seed, u.tick, p.id, 0xf1d0) >= RIVER_FLOOD_DAY * k) return;
+  if (traits().wet) return; // a wet world rolls its floods with the others
+  const f = p.f;
+  for (const st of ps.settlements) {
+    if (st.fallen >= 0 || st.band) continue;
+    if (!heavy.some((w) => distM(p, w.pos, st.pos) < w.radius)) continue;
+    if (u.god.disasters.some((d) => d.kind === 'flood' && distM(p, d.pos, st.pos) < d.radius * 2)) continue;
+    let best = -1, bw = 0.3;
+    for (const c of p.cellsNear(st.pos, st.territory + 400)) if (!p.s.ocean[c] && f.water[c] > bw) { bw = f.water[c]; best = c; }
+    if (best < 0) continue;
+    const d = spawnDisaster(u, p, 'flood', { pos: cellPos3(p, best), god: -1, cause: 'nature' });
+    if (typeof d !== 'string') u.god.stat('natural');
+    return;
   }
 }
 

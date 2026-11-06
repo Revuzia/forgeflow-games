@@ -1160,14 +1160,16 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // mesh ends along a sim triangle there is no seam of dry-then-wet pixels to trace it in dashes)
   float wLo = min(-0.36 + m2 * 0.1, -0.04 - uwPx * 1.5);
   // ARC §10: before a flood the river rises and runs brown — its banks wet and mud-stained well above the old line.
-  // The sim's rise is 0.4 m, under a pixel at play distance: the wet, silted band climbs up to ~2.4 m (noise-broken),
-  // so the rise reads at 888x500 as a dark ochre margin along the channel that the day before was dry sand.
+  // The sim's rise is 0.4 m, under a pixel at play distance, so the wet, silted band widens a lot: past a bank cell uw
+  // is not a true height (inland cells sit `inland` >= 4 m under their ground, fieldpack.ts), so the reach is ~8 m of
+  // that proxy (noise-broken) — about the bank cell's triangle — and the rise reads at 888x500 as a dark mud margin
+  // along the channel that the day before was dry sand.
   float siltG = 0.0;
   for (int i = 0; i < 4; i++) {
     vec4 sz = uSilt[i];
     if (sz.w > 0.0) siltG = max(siltG, uSiltK[i] * (1.0 - smoothstep(sz.w * 0.55, sz.w, distance(P, sz.xyz))));
   }
-  wLo = min(wLo, -siltG * (1.6 + 0.8 * m2));
+  wLo = min(wLo, -siltG * (7.0 + 2.0 * m2));
   float shoreWet = smoothstep(wLo, -0.04, uw) * (1.0 - smoothstep(0.1 + uwPx, 0.5 + uwPx * 2.0, uw));
   shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * mix(1.0, 0.6, smoothstep(0.04, 0.4, uwPx));
   // (snow lying on wet ground is white: the darkening follows what the snow leaves uncovered, not its depth alone)
@@ -1176,7 +1178,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
   col *= mix(1.0, 0.55, wet * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
   // (the silt the rising river leaves on its banks: a wet ochre-brown film, not only darker sand)
-  col = mix(col, vec3(0.2, 0.135, 0.07), shoreWet * siltG * 0.65 * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
+  col = mix(col, vec3(0.15, 0.1, 0.055), shoreWet * siltG * 0.75 * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
   // wet soil and litter stay rough (0.35); only bare rock and sand film over glossy
   // (and the film is broken: water stands in the hollows and runs off the crests, so the sheen comes in patches — an
   // even 0.18 over a whole rained-on barren hill read as crumpled foil close up and, glinting the grey sky, as snow

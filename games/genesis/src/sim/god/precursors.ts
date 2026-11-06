@@ -47,6 +47,10 @@ export function warningTicks(u: Universe, kind: string, w: number, override?: nu
       return Math.round(w <= 0.5 ? 12 : lerp(12, 0, (w - 0.5) / 0.5));
     case 'tsunami':
       return Math.round(w < 1 ? 40 : 30);
+    case 'flood':
+      // ARC §10.2 (r1 #3/#7/#13): the river rises brown before the god's flood as before nature's — 6-12 hours at the
+      // default wrath, shortening to none at wrath 1 (total destruction gives no warning, as today)
+      return Math.round(w <= 0.5 ? 360 + 360 * hashFloat(Math.round(w * 1000), 0xf10e) : lerp(540, 0, (w - 0.5) / 0.5));
     default:
       return 0;
   }
@@ -74,6 +78,8 @@ export function dangerRadius(def: DisasterDef, d: DisasterState): number {
 }
 
 /** the kinds whose coming the people can see, and flee */
+// (ARC §10.2, r1: a flood is seen coming through its own warning phase — warningTicks gives it one below wrath 1 — so it
+// stays out of this set: a flood cast with `warning: 0` at a gentle wrath must still come unseen, as the player chose)
 const WARNED = new Set(['volcano', 'supervolcano', 'meteor', 'tsunami', 'comet']);
 
 /** a warned disaster begins: the settlements in reach are told to get out (and the chronicle tells it) */

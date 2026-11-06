@@ -45,7 +45,7 @@ export interface DisasterState {
   /** one-shot effectors already fired (indices) */
   fired: number[];
   /** effector scratch: originals of planet parameters a global effect changed, counters, kills ... (keys starting with a
-   *  lower-case 'w' are the ids of weather systems it keeps; LIVING §3: 'Wr' its wrath, 'Wn' its warning ticks, 'bf' /
+   *  lower-case 'w' are the ids of weather systems it keeps; LIVING §3: 'Wr' its wrath, 'Wn' its warning ticks, ARC §10.2 'Cf' a cast flood, 'bf' /
    *  'bt' / 'killed' its act's witness budget) */
   st: Record<string, number>;
   /** cells a spreading effector still burns / infects (spread frontier, ascending) */

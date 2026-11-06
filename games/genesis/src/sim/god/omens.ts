@@ -309,7 +309,7 @@ function makeOmen(u: Universe, p: Planet, kind: OmenKind, st: Settlement | null,
       // drowned-town consequence: disasters.ts) and the towns it touches are stamped `recent.omenFlood` for a day, so
       // abandonCheck does not count it as their place failing them: settlement.ts)
       const R = 120;
-      const d = spawnDisaster(u, p, 'flood', { pos: omenFloodAt(p, st, at, R), radius: R, intensity: 0.25, life: 240, god, cause: 'god', quiet: true });
+      const d = spawnDisaster(u, p, 'flood', { pos: omenFloodAt(p, st, at, R), radius: R, intensity: 0.25, life: 240, god, cause: 'god', quiet: true, warning: 0 }); // (a sign comes unannounced: ARC §10.2 r1)
       if (typeof d === 'string') return fail(d);
       d.st.Om = 1;
       for (const s of x.ps.settlements) if (s.fallen < 0 && distM(p, s.pos, d.pos) <= s.territory + R * 3) s.recent.omenFlood = u.tick;

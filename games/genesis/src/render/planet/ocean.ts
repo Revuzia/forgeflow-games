@@ -598,7 +598,8 @@ void main() {
   // darker and less mirror-bright
   if (silt > 0.0) {
     float lumC = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(col, lumC * vec3(1.32, 0.96, 0.52) * 0.92, 0.7 * silt);
+    // (a darker, saturated mud brown: at the sky's luminance it read as pale khaki, the same as the sand on its banks)
+    col = mix(col, lumC * vec3(1.5, 0.95, 0.42) * 0.6, 0.8 * silt);
   }
 
   // ── foam: surf, crests, white water ──

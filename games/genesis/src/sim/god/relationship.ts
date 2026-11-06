@@ -81,7 +81,7 @@ export function registerRelationship(r: CommandRegistry): void {
     const sc = r.schema(k);
     if (!h || !sc || 'wrath' in sc.params) continue;
     const params: Record<string, ParamSchema> = { ...sc.params, wrath: { type: 'number', min: 0, max: 1, desc: 'how hard it falls: 0 gentle .. 0.3 survivable (the law) .. 1 total' } };
-    if (k === 'disaster.spawn') params.warning = { type: 'number', min: 0, max: 10000, desc: 'ticks of warning before it strikes (0 none)' };
+    if (k === 'disaster.spawn' || k === 'water.flood') params.warning = { type: 'number', min: 0, max: 10000, desc: 'ticks of warning before it strikes (0 none)' };
     r.register(k, (ctx, a) => {
       pushWrath(wrathOf(ctx.u, a));
       castWarning.push(typeof a.warning === 'number' ? a.warning : undefined);
