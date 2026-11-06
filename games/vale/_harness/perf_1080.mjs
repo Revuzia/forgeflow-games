@@ -37,7 +37,8 @@
 // renderer.info geometries and textures are <= their menu_2 values (menu_1 may still be filling caches); macOS only
 // (`footprint`): the GPU process grows <= 5 % from menu_2 to the last menu; the tracked (undisposed) materials and
 // geometries stay flat from menu_2 to the last menu (<= +2: a straggler, not one per cycle). Each match is pumped until its
-// live counts hold (4 polls, 45 s at most; timeline settleMs / settled), so every match_N is the whole match, not a part of it.
+// live counts hold (4 polls, 45 s at most; timeline settleMs / settled), so every match_N is the whole match, not a part of it. A menu's
+// footprint is read until two reads agree within 1 % (8 at most, timeline reads).
 // match peak (perf PERF-m5, part of --prod; --no-match skips it, --match-only runs it alone, --match-scale <k> the sim speed,
 // default 4, --match-min <m> the game minutes, default 30 or the match's end): a whole RIFT match from 0:00 at High, the
 // camera locked on your (autopilot) fighter as the real client plays it, every frame rendered; per second of wall time the
@@ -110,7 +111,8 @@ const DYN = PROD && !MEM_ONLY && !args.includes('--match-only') && !args.include
 const MEM = (PROD || MEM_ONLY) && !args.includes('--match-only') && !args.includes('--gpubound-only') && !args.includes('--calibrate-only') && !args.includes('--no-mem');
 const MEM_CYCLES = Math.max(2, Number(opt('mem-cycles', 4)));
 const MEM_GPU_GROWTH = 0.05;
-const MEM_SETTLE_HOLD = 4, MEM_SETTLE_MAX_MS = 45000;
+const MEM_INJECT_MB = Number(opt('mem-inject-mb', 0));
+const MEM_SETTLE_HOLD = 4, MEM_SETTLE_MAX_MS = 45000, MEM_READS_MAX = 8;
 const MAPS_ONLY = args.includes('--mem-maps-only');
 const MEM_MAPS = opt('mem-maps', 'rift,bridge,fray,rift').split(',').filter(Boolean);
 const MAPS_MEM = (MEM && !args.includes('--no-mem-maps')) || MAPS_ONLY;
@@ -551,8 +553,18 @@ async function memory() {
       const r = await page.evaluate(() => { const s = window.__VALE_BENCH__.renderer.stats(); return { geometries: s.geometries, textures: s.textures, programs: s.programs, ...window.__memSnap() }; });
       const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
       const gpu = ps.find((x) => x.type === 'GPU');
-      const s = { tag, geometries: r.geometries, textures: r.textures, programs: r.programs, targets: r.by.target, tracked: r.by, gpuProcMb: gpu ? footprintMb(gpu.id) : null, kept: r.kept };
-      console.log(`mem     ${tag.padEnd(7)} targets ${s.targets}  geometries ${s.geometries}  textures ${s.textures}  programs ${s.programs}  materials ${r.by.material}  GPU process ${s.gpuProcMb ?? '-'} MB`);
+      // a menu's footprint is read until it holds (two reads within 1 %, 3 s of idle Home between them): one read can land
+      // while the GPU process is still freeing the match. `reads` keeps every one: a real leak stays up and fails the gate.
+      const reads = gpu ? [footprintMb(gpu.id)] : [];
+      if (gpu && tag.startsWith('menu_')) {
+        while (reads.length < MEM_READS_MAX && (reads.length < 2 || Math.abs(reads.at(-1) - reads.at(-2)) > 0.01 * reads.at(-2))) {
+          await page.evaluate(() => { const b = window.__VALE_BENCH__; for (let i = 0; i < 15; i++) b.renderer.render(1 / 30); });
+          await page.waitForTimeout(3000);
+          reads.push(footprintMb(gpu.id));
+        }
+      }
+      const s = { tag, geometries: r.geometries, textures: r.textures, programs: r.programs, targets: r.by.target, tracked: r.by, gpuProcMb: reads.at(-1) ?? null, reads, kept: r.kept };
+      console.log(`mem     ${tag.padEnd(7)} targets ${s.targets}  geometries ${s.geometries}  textures ${s.textures}  programs ${s.programs}  materials ${r.by.material}  GPU process ${s.gpuProcMb ?? '-'} MB${reads.length > 1 ? ` (reads ${reads.join(' ')})` : ''}`);
       return s;
     };
     const cycles = [];
@@ -563,6 +575,8 @@ async function memory() {
       await page.waitForTimeout(1500);
       cycles.push(await sample(`menu_${c}`));
       if (c > MEM_CYCLES) break;
+      // diagnostic: --mem-inject-mb <n> leaks n MB of GL buffer per cycle, to show the gate still fires
+      if (MEM_INJECT_MB > 0) await page.evaluate((mb) => { const gl = document.querySelector('canvas').getContext('webgl2'), d = new Uint8Array(mb * 1048576).fill(7); (window.__memLeak ??= []).push(gl.createBuffer()); gl.bindBuffer(gl.ARRAY_BUFFER, window.__memLeak.at(-1)); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); gl.bindBuffer(gl.ARRAY_BUFFER, null); }, MEM_INJECT_MB);
       await page.evaluate(() => window.__VALE_BENCH__.rebuild());
       await page.waitForTimeout(5000);                                    // models, textures, landmarks land
       await page.evaluate(() => window.__VALE_BENCH__.frames(90, 1 / 30));
