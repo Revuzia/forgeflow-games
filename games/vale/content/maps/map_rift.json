@@ -1259,12 +1259,12 @@
     {
      "unit": "stray_tick",
      "at": [47.6, 34.0],
-     "facing": 0.0
+     "facing": 165.0
     },
     {
      "unit": "stray_tick",
      "at": [47.7, 31.4],
-     "facing": 0.0
+     "facing": 165.0
     }
    ],
    "firstSpawn": 60,
@@ -1281,12 +1281,12 @@
     {
      "unit": "stray_tick",
      "at": [122.4, 34.0],
-     "facing": 180.0
+     "facing": 15.0
     },
     {
      "unit": "stray_tick",
      "at": [122.3, 31.4],
-     "facing": 180.0
+     "facing": 15.0
     }
    ],
    "firstSpawn": 60,
@@ -1371,12 +1371,12 @@
     {
      "unit": "stray_tick",
      "at": [44.3, 76.4],
-     "facing": 0.0
+     "facing": 165.0
     },
     {
      "unit": "stray_tick",
      "at": [47.7, 78.6],
-     "facing": 0.0
+     "facing": 165.0
     }
    ],
    "firstSpawn": 60,
@@ -1393,12 +1393,12 @@
     {
      "unit": "stray_tick",
      "at": [125.7, 76.4],
-     "facing": 180.0
+     "facing": 15.0
     },
     {
      "unit": "stray_tick",
      "at": [122.3, 78.6],
-     "facing": 180.0
+     "facing": 15.0
     }
    ],
    "firstSpawn": 60,

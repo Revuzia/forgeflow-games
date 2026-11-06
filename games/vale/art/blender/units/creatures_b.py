@@ -3115,7 +3115,8 @@ class StrayNumeral(StrayBase):
             L = np.linalg.norm(top - bot)
             stroke = RoundBox((top + bot) / 2, (w / 2, D / 2, L / 2), 0.03, axes=F)
             prims.append((stroke.displaced(*chis) if detail else stroke, 0.0))
-            serif = RoundBox(foot + np.array([0, 0, 0.075]), (0.2 + w * 0.6, D / 2 + 0.02, 0.075), 0.025)
+            # round 3: 2.4 cm up: the smooth union with the stroke swelled the serif 2.2 cm through the ground (the load test's one failure)
+            serif = RoundBox(foot + np.array([0, 0, 0.099]), (0.2 + w * 0.6, D / 2 + 0.02, 0.075), 0.025)
             prims.append((serif.displaced(*chis) if detail else serif, 0.11))
         # flatten the apex where the strokes cross, the neck block on it
         neck = RoundBox(A + np.array([0, 0, 0.16]), (0.17, D / 2 - 0.02, 0.13), 0.03)
