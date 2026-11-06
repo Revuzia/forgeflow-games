@@ -303,8 +303,8 @@ def build_rift() -> tuple[dict, dict]:
     for b in (16, 32, 48, 64, 80):
         riser(layer, T(b), 3.0, 0.22, 400.0, 3200.0)
     stems, meta = _finish(main, layer, ch, BRIGHT_PCS, hits, V)
-    stems['objective'] = _objective('rift', BRIGHT_PCS)
-    meta['layers'].append('objective')
+    stems['objective_pit'] = _objective('rift', BRIGHT_PCS)
+    meta['layers'].append('objective_pit')
     return stems, meta
 
 

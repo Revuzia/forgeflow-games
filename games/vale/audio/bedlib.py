@@ -75,5 +75,5 @@ def master_bed(stems: dict[str, np.ndarray], spec: BedSpec) -> tuple[dict[str, n
         if k == 'main':
             out[k], info[k] = master_stem(x, spec.main_lufs, -1.5)
         else:
-            out[k], info[k] = master_stem(x, OBJECTIVE_LUFS if k == 'objective' else spec.layer_lufs, -3.0)
+            out[k], info[k] = master_stem(x, OBJECTIVE_LUFS if k.startswith('objective') else spec.layer_lufs, -3.0)
     return out, info
