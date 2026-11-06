@@ -77,7 +77,7 @@
    "id": "3x_perf_realtime_full_match",
    "severity": "major",
    "status": "not_measured",
-   "evidence": "needs idle machine. Not rerun: 25 minutes at load <3 was never available (load 8-400 in my window). Harness half checked by reading: real-time 'not measured' goes to GATE NOT MEASURED, exit 2 (_harness/perf_1080.mjs:804-808), and the engineers' log shows it live (fw_CW1_r3b_rt.log, 1-minute match, load 47). Real-time parts of a run other than that verdict still print GATE PASS with a 'timing not measured' note, as documented in the header."
+   "evidence": "needs idle machine. Not rerun: 25 minutes at load <3 was never available (load 8-400 in my window). Harness half checked by reading: real-time 'not measured' goes to GATE NOT MEASURED, exit 2 (_harness/perf_1080.mjs:807-808), and the engineers' log shows it live (fw_CW1_r3b_rt.log, 1-minute match, load 47). Other timing halves of --prod still print GATE PASS with a 'timing not measured' note, as the header documents, so an exit 0 from --prod does not mean timing passed."
   },
   {
    "id": "6_kit_hue_skins",
@@ -133,9 +133,9 @@
   }
  ],
  "regressions": [
-  "perf_1080 seed 11 rot 5: 517852 triangles for one frame at game 1621.8 s, first reading over 500k since the governor fix (round 2 peak 486k on the sweep). 1 of 2 runs on that seed.",
+  "perf_1080 seed 11 rot 5: 517852 triangles for one frame at game 1621.8 s, over the 500k bar. The earlier sweeps I compared peaked lower: 473k on this seed in round 2 (486k across its three seeds), 466k in the idle gate pass. 1 of 2 runs on that seed.",
   "build_vfx --check reports 2 defs a rebuild would change (marund_ult_domefall, vashil_ult_toll), was 0 in round 2."
  ],
- "machine": "Load 8-400 during the run, 09:00-10:57 CST; on battery for part of it; heavy slots partly held by power-hold sleeps. Only one timing step was attempted at any load, none at idle.",
+ "machine": "Load 8-400 during the run, 09:00-10:57 CST; on battery for part of it; heavy slots partly held by power-hold sleeps. Every timing step read at load; none at idle.",
  "sensitivity": "Viewed Vashil and Hesmi flat-frame shots, the Almanac dust frame and the Sukri Shadeprint ult: VFX and existing fighters only, no new model renders in this lane, nothing of concern."
 }
