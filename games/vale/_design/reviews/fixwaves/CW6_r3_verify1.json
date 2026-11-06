@@ -1,0 +1,148 @@
+{
+ "pass": true,
+ "items": [
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Hesmi's cards and icon did not change since verify 2 (git diff a3854678 HEAD lists only hesmi.glb). That GLB's only clip change is death (_harness/_reports/fw_CW6_r3v1_clip_diff.txt). Icon re-viewed at 120, 48 and 26 px: two eyes in the wrap, reads as alive. Eye span and glints carried from r2 verify 1."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Recall and idle clips are unchanged on every edited GLB: pose diff against a3854678 at 13 samples per clip shows death as the only changed clip on marund, rishal, sukri, dunsom, odrum and hesmi (fw_CW6_r3v1_clip_diff.txt). The live recall and idle head figures from r2 verify 1 therefore still hold; I did not re-run them live. Ilsheta and Tunlan GLBs did not change at all (git diff)."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured x_hat at 2x on tunlan.glb: cast_a1 0.188 m, cast_ult 0.210 m per 60 Hz frame (limit 0.3). The Marund leap and the Sukri attack and Mote Toss clips are byte-equivalent in pose (fw_CW6_r3v1_clip_diff.txt), so their earlier passes hold. Marund and Sukri were not re-run live."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Paint and meshes of these fighters were not touched this round: the base GLBs changed by clip_lift on death only (fw_CW6_r3v1_clip_diff.txt), so the r2 measures hold (Dunsom hat ramp 10.9, Odrum yoke 16.9 %, Marund maul, Hesmi stone/linen, Sukri wraps). The last two remain carried from verify 1, not re-measured. crown_gate: 48 GLBs, 0 FAIL."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Independent cluster list on art/out/fighters/tunlan/splash.png: frame max 251.9 at (1089,265), in the lantern glass, both Rec. 709 and Rec. 601. Next clusters at threshold 190: 198.2 at (1111,261), 195.7, 194.5, 193.5, 193.4, 192.7 on the cuff. This reproduces the engineer's list. Box p90: lantern 236.4 against face 191.9, hand 178.4, cuff 166.0. Crop viewed (_harness/_shots/fw_CW6_r3v1_tun_key.png): the lantern hangs clear of the thumb with a visible hot core and halo; warm spill on the hand and cheek is present but modest. Hound on the cloth still reads. card_qa: 48 cards, 0 misses (_harness/_reports/fw_CW6_r3v1_card_qa.txt). gen_store --check --verbose exit 0: First Bell dE 24.6, floor 18."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "three_load_test exit 0 on all 24 GLBs, bases with --budget-kb 1172 (_harness/_reports/fw_CW6_r3v1_floor_load.txt). All 8 re-scored >= 7.5 with no blocker, see par items. Ruling 8 makes open majors on an item already at par backlog, and none is open here."
+  },
+  {
+   "id": "par:dunsom",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.5. All 6 cards viewed (_harness/_shots/fw_CW6_r3v1_dunsom_cards.png): three distinct stagings, carved amber face, not a skull. Death floor -0.087 -> -0.020 m, no pop (hips step 0.030 m). Backlog: the base splash face is small and pale."
+  },
+  {
+   "id": "par:hesmi",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.6, unchanged. Only the death hold moved (+1.2 cm, -0.030 -> -0.020 m). Icon re-viewed; cards unchanged since verify 2."
+  },
+  {
+   "id": "par:ilsheta",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.5. All 3 portraits and 3 splashes viewed (_harness/_shots/fw_CW6_r3v1_ils_faces.png, fw_CW6_r3v1_ils_splash_ba.png). Calm amber eyes with pupils, First Bell chin gap gone. Stepped plate edges remain (minor, see face-seam). Her GLBs did not change, and speckle dropped to 0.28-0.80."
+  },
+  {
+   "id": "par:marund",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.6 (was 7.5). Gorgewalk's face is clearly better, and the death hold now rests on the floor. Own hold measure: head -0.016, spine 0.029, hips 0.064 m, so the 37 cm lift made neither a sink nor a hover (_harness/_reports/fw_CW6_r3v1_death_rest.txt, frames viewed in fw_CW6_r3_marund_clips.png). Backlog: pale moustache tips, victory hand.L step (not re-measured)."
+  },
+  {
+   "id": "par:odrum",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.5, unchanged. Only the death hold moved (+2 cm, now -0.017 m). Icon re-viewed; cards unchanged."
+  },
+  {
+   "id": "par:rishal",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.5, unchanged. Only the death changed (-0.137 -> -0.003 m, hips step 0.075 m, head step 0.137 m, no pop). Icon re-viewed, accent per ruling 3; cards unchanged."
+  },
+  {
+   "id": "par:sukri",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.5, unchanged. Only the death changed (-0.090 -> -0.015 m, hold thigh.L +0.002 m). Icon re-viewed; cards unchanged."
+  },
+  {
+   "id": "par:tunlan",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "7.6 (was 7.5): the base splash now meets its key and hound brief. The blocky face planes and segmented fingers remain, and show at the new splash yaw; they are backlog at par. Death hold still through the floor, see deaths:floor."
+  },
+  {
+   "id": "sensitivity:new-renders",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Viewed every new card: Tunlan splash; all 3 Ilsheta portraits and splashes; Gorgewalk portrait, splash and three_marund_gorgewalk.png. No horror, hockey-mask or blank-mannequin read: the Ilsheta plates keep brows, nose, mouth line and amber eyes; Gorgewalk's keel reads as a nose ornament, not teeth. crown_gate 0 FAIL. Judgment is mine, no second reviewer."
+  },
+  {
+   "id": "cards:ilsheta-first-bell-chin",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Crop viewed (_harness/_shots/fw_CW6_r3v1_fb_splash.png, from ilsheta_first_bell_splash.png): the black gap and struts under the chin are gone, the plate sits seated in its dark glass collar with only a small rim highlight, and both eyes face the camera with pupils. Eye median RGB about (200,157,118), hue 29 deg, sat 0.38-0.44 against plate sat 0.28: amber but pale and low in value contrast. card_qa speckle 0.40, dE 24.6 (floor 18). I did not measure head pitch at t 0.72; the crop is the evidence."
+  },
+  {
+   "id": "handoff:CW6:cards",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Handoff text (round2_plan.json): finish the card chain and run card_qa. All 48 cards present, 0 misses (fw_CW6_r3v1_card_qa.txt). Dunsom's 6 cards viewed and all post-date his hat paint (00:53-01:00, the 07:21 GLB edit is the death clip only). Tunlan closed by done:4. The earlier 'Dunsom half done' note names no open criterion and I found none."
+  },
+  {
+   "id": "fighter:ilsheta:ilsheta-face-seam",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Engineer's 'partly' confirmed. Removing the brush softened the glass area, but stepped notches remain at the top, sides and lower corners of the plate in all 3 busts (_harness/_shots/fw_CW6_r3v1_ils_faces.png, 3x crop of the 512 px portraits). GLBs unchanged, so the three.js close-view squares remain.",
+   "fixHint": "Model change: rebake the face patch at the plate edge with a feathered mask or a higher-resolution patch, then rebuild the base and 2 skins and re-render busts. Budget a rebuild; it is backlog at par."
+  },
+  {
+   "id": "fighter:marund:gorgewalk-face",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Claim 'done' overstated: the keel is the largest pale form, not the only one. In the 512 px portrait face box, luma > 140 falls from 15582 to 6428 px (a3854678 vs now, -59 %), but outside the keel's 2639 px there remain patches of 943, 888, 778 and 506 px and moustache-end patches of 229, 172 and 161 px (luma up to 234). Viewed: the small pale blocks at both moustache ends still sit beside the keel (_harness/_shots/fw_CW6_r3v1_gorgewalk_before_after.png, fw_CW6_r3v1_gw_por.png, fw_CW6_r3v1_gw_spl.png). Much better, no longer tooth-like as a whole, not horror. card_qa speckle 2.32 (gate 2.5), dE 36.3.",
+   "fixHint": "Extend the _keel_only roll-off in art/blender/fighters/marund.py to the moustache-end and brow patches (or lower SKIN_FACE_K), and check the attachment-side parts outside the mask id. Backlog at par."
+  },
+  {
+   "id": "fighter:deaths:floor",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "clip_floor re-run, limit -0.02: Marund -0.018, Rishal -0.003, Sukri -0.015, Dunsom -0.020, Odrum -0.017, Hesmi -0.020, Ilsheta -0.004 pass; Tunlan FAIL -0.210 at f45, 671 verts (fw_CW6_r3v1_floor_load.txt). Tunlan's hold has hips -0.198 and thighs -0.21 m, the lower body through the floor (fw_CW6_r3v1_death_rest.txt). The stated reason, that lifting works against TUN-c1, does not hold: TUN-c1 asks her to end at rest, which a settled pose would also satisfy. Clip steps show no new pop from the lifts (largest head step 0.137 m). The six lifts live only in the shipped GLBs; the commands are in each _design/fighters/*.md, so a rebuild needs them re-run.",
+   "fixHint": "Tunlan: when her GLB is next rebuilt, settle the death hold to lying or seated with hips above the floor and the hat beside her, not kneeling through it. Fold the clip_lift deltas into each fighter's death source at the next rebuild."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Engineer's 'partly' accepted: 24 of 36 polish items remain backlog with all 8 at par. Spot-checked: Dunsom idle_lobby hand.L 0.032 m (limit 0.1), Tunlan hat steps, Hesmi icon. Lantern swing, Odrum channel head and Dunsom value bands not re-run; those parts are unchanged."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Ilsheta's guard framing holds on the new busts (lamp beside the face). Face-seam still open as above. Others not re-measured by me or the engineer."
+  },
+  {
+   "id": "handoff:lead:catalog-stale",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Now closed: dist-catalog/manifest.json is dated Nov 6 08:09 and no fighter GLB is newer (find -newer, empty). gen_store --check exit 0 (store.json updated by 6e56e485). lisvel_almanac dE 25.5, no FAIL rows. content:check OK, 0 warnings. The engineer's handoff to the lead is therefore already done."
+  }
+ ],
+ "regressions": [],
+ "summary": "PASS. All 6 done criteria, 8 of 8 fighters at par and all round-3 majors hold on independent measurement. Tunlan's lantern is the true frame maximum (251.9, next cluster 198.2), First Bell's chin gap is gone, 24 GLBs load, 48 cards pass QA. Minors stay open as backlog: Gorgewalk's 'done' was overstated (pale moustache tips and brow patches remain, pale area down 59 %); Tunlan's death hold is still 21 cm through the floor; Ilsheta's stepped plate edges need a model change. Done 1-3 rest partly on earlier live measures, carried because the GLB clip diff shows only death changed. No regressions found. No idle-machine gate belongs to this wave."
+}
