@@ -1,0 +1,40 @@
+{
+ "wave": "CW4",
+ "round": 3,
+ "verify": 2,
+ "date": "2026-11-06",
+ "time": "verified from 14:35 CST",
+ "pass": false,
+ "items": [
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "RE-MEASURED, reproduces the engineer: node _harness/value_probe.mjs --maps rift --tiers high --monsters only --monsterPhases 8 --monsterSpawnFacing 1 (_harness/_reports/fw_CW4_r3v2_mon.json, all rc 0). Maximum cross-camp median at camp facing: t70 0.46, t370 0.42, t1000 seed 7 0.46, t1000 seed 23 0.50 (resinback|stilltusk, on the bar, not over). Worst phase 0.56 (gloamoth_little|stray_tick, median 0.38). Longshade hp 2.78-2.80, breakup 33.7-44.9, dL* 26.0-26.1. Glasshorn hp 3.96, dL* 22.0, dE 27.4. Stray Tick dL* 32.0-37.1. Budgets: Longshade 974 KiB of 1024, load test OK; tris from build reports across the rebuild: Longshade 12026 to 11829, Stray Tick 1500 to 1498, Glasshorn 8032 unchanged, so the 465k match peak cannot rise (perf_1080 not rerun). SCORE: my eye re-score is 89.75 / 12 = 7.48, by the row's own weighting: longshade 7.75, sunsplinter 7.5 (each double); gloamoth 8.0; gloamoth_little, resinback, stilltusk, stray_numeral, glasshorn 7.5; stray_tick 7.25; stilltusk_young 7.0. The engineer's 7.58 is not confirmed, and 7.48 is not a clean 7.5, but it is above the 7.4 that ruling 23 (owner_rulings.md, committed) accepts for this row, so the score no longer holds the item open. Longshade (crop pair, r3v1 vs r3v2: _harness/_shots/value_rift_high_fw_CW4_r3v1_m1000_mon_longshade.png, ..._r3v2_m1000_mon_longshade.png): the leaf or cabbage read is gone; plumes now end in torn licks. They read as hard-edged torn flame or thistle more than smoke, and from behind the stacked plumes read as a pine cone (art/renders/units/longshade.png), hence 7.75 and not the engineer's 8.0. Glasshorn (..._r3v2_m70_mon_glasshorn.png): shaped shoulder and haunch, tucked belly, strokes visible at 3x, still a plain deer at game size: 7.5. Stray Tick (art/renders/units/stray_tick.png, ..._r3v2_m1000s23_mon_stray_tick.png): foot, stub arms and cocked head are real on the sheet, but it stays a small block figure at 445-486 px: 7.25, not 7.5. NOT MET: free-facing IoU is unchanged and no ruling covers it (ruling 23 is about the score only): node _harness/value_probe.mjs ... --t 1000 --seed 23 without --monsterSpawnFacing (_harness/_reports/fw_CW4_r3v2_free.json): resinback|stilltusk 0.60, resinback|stilltusk_young 0.60, sunsplinter|stilltusk_young 0.55, sunsplinter|stilltusk 0.54, longshade|resinback 0.53, sunsplinter|resinback 0.51. By eye these kinds are not confused in the free-facing frames (_harness/_shots/value_rift_high_fw_CW4_r3v2_free_mon_resinback.png, _stilltusk.png): orange resin plates on a pale back against a striped bristled boar. No art rebuild is indicated; the open point is one gate decision.",
+   "fixHint": "No rebuild. The lead records one ruling: the IoU gate is the median at camp facing (recommended: the silhouette metric normalises away size and colour, and the free-facing pairs read apart by eye), or free-facing values must also meet 0.5, in which case resinback and the Stilltusk family need silhouette work. With the first ruling this item passes at the scores above."
+  },
+  {
+   "id": "handoff:lead:Longshade forearm rebuild",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "art/blender/units/creatures_b.py:1493 paints chalk bands at forearm fractions 0.14, 0.30, 0.65, with chalked knuckles below it. Crop pair r3v1 vs r3v2 (_harness/_shots/value_rift_high_fw_CW4_r3v1_m1000_mon_longshade.png, _r3v2_m1000_mon_longshade.png): the right forearm's bands read clearly in the live frame where it was plain dark before, and the claws are visibly shorter, paler and thicker than the old thin spikes. Limit as disclosed: at camp facing the ring hides most of the left forearm's bands; both arms show them on art/renders/units/longshade.png."
+  },
+  {
+   "id": "critic:monsters (dL* on sunlit floor)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Unchanged backlog, not a regression: seed 23 t=1000 Stilltusk dL* 17.4 (dE 25.0), Stray Numeral 17.8 (dE 20.6), t370 18.6, against the 20 bar (_harness/_reports/fw_CW4_r3v2_mon.json). Both read clearly by eye."
+  },
+  {
+   "id": "sensitivity (refixed kinds)",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "By eye on the live frames and sheets above: no blocker. Longshade keeps two lamp eyes over the gnomon, permitted by ruling 1, and reads as an owlish dial; the torn plumes around the plate make it a little more aggressive but not horror or a hockey mask. Stray Tick has no face: a gold numeral glyph on top, one gold chest mark, no eye-like pair. Glasshorn is clean."
+  }
+ ],
+ "regressions": [
+  "None found. Longshade hp fell from 2.88-2.92 to 2.78-2.80 and has no gate of its own there; note it is close to the 2.75 landmark floor if that floor is ever applied to monsters.",
+  "Minor claim error: Longshade dropped 197 tris by the build reports (12026 to 11829), not 201. No effect."
+ ],
+ "summary": "Fail on one point, and it is not art. The refix is real and the engineer's measurements reproduce: camp-facing cross-camp median at most 0.50, worst phase 0.56, budgets fine, no sensitivity blocker. The Longshade forearm handoff passes. My row score is 7.48, not the engineer's 7.58; it misses 7.5 narrowly but clears the 7.4 accepted by ruling 23, so the score no longer holds the row open. critic:monsters stays partly because free-facing IoU still reaches 0.60 and no ruling says which gate applies. The fix is a one-line lead ruling; no further rebuild is indicated."
+}
