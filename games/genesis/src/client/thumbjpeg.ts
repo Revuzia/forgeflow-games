@@ -69,8 +69,8 @@ export function encodeOnMain(bmp: ImageBitmap, quality = 0.8): Promise<string | 
 interface Port { post(m: ThumbRequest): void; waiting: Map<number, (url: string | null) => void> }
 let port: Port | null | undefined;
 let nextId = 1;
-/** how long a save waits for the worker's picture */
-export const THUMB_WORKER_MS = 20_000;
+/** how long the worker's picture is waited for at all (the save itself waits THUMB_WAIT_MS; a later one is patched on) */
+export const THUMB_WORKER_MS = 130_000;
 /** counters for the test surface: how many pictures each path encoded */
 export const thumbStats = { worker: 0, main: 0, workerFailed: false };
 
@@ -102,21 +102,33 @@ function workerPort(): Port | null {
 
 /**
  * a save picture's bitmap as a JPEG data URL, encoded in the worker where there is one (the bitmap is transferred and
- * so consumed either way). A worker that fails or answers null leaves the picture out (null) rather than re-encoding
- * on the main thread: the bitmap is gone, and the save keeps its last picture.
+ * so consumed either way). A worker that fails or answers null gives null (the bitmap is gone; it is not re-encoded on
+ * the main thread). The save does not wait on this: thumbOfFrame stops waiting after THUMB_WAIT_MS and a picture that
+ * arrives later is put on its save then; this only gives up on a worker that has not answered within THUMB_WORKER_MS.
  */
 export function encodeThumb(bmp: ImageBitmap, quality = 0.8): Promise<string | null> {
   const p = workerPort();
   if (!p) { thumbStats.main++; return encodeOnMain(bmp, quality); }
   const id = nextId++;
   return new Promise((ok) => {
-    // (a worker that never answers must not hold the save: after 20 s the save goes ahead without a new picture. The
-    // worker's drawImage of the frame's bitmap waits for the GPU — off the main thread now, but under a software GPU
-    // that took 12.8 s (r3/probe3), so the limit is generous; the save's bytes were taken before the picture)
+    // (a worker that never answers is given up on. Its drawImage of the frame's bitmap waits for the GPU — off the main
+    // thread, but under a software GPU that took 12.8 s (r3/probe3) and a cold first picture 31.5 s (minor26
+    // verify-r1-publish) — so the limit covers the whole late window: a slow answer still reaches its save)
     const late = setTimeout(() => { if (p.waiting.delete(id)) ok(null); }, THUMB_WORKER_MS);
     p.waiting.set(id, (url) => { clearTimeout(late); if (url) thumbStats.worker++; ok(url); });
-    try { p.post({ id, bmp, quality }); } catch { p.waiting.delete(id); thumbStats.main++; void encodeOnMain(bmp, quality).then(ok); }
+    try { p.post({ id, bmp, quality }); } catch { p.waiting.delete(id); clearTimeout(late); thumbStats.main++; void encodeOnMain(bmp, quality).then(ok); }
   });
+}
+
+/**
+ * start the picture worker before the first save needs it (a world's start): the worker is spawned and encodes a 1 px
+ * picture, so the first autosave does not pay for a cold worker and its first canvas on a slow GPU.
+ */
+export function warmThumbWorker(): void {
+  try {
+    if (!workerPort() || typeof createImageBitmap === 'undefined' || typeof ImageData === 'undefined') return;
+    void createImageBitmap(new ImageData(1, 1)).then((b) => encodeThumb(b, 0.8), () => null);
+  } catch { /* no warm-up: the first picture starts the worker */ }
 }
 
 /** how long a save waits for its picture before it is written without one (app.ts thumb) */
@@ -126,30 +138,35 @@ export const THUMB_LATE_MS = 120_000;
 
 /**
  * A save's picture from the frame captured for it (`frame`: the bitmap copied from the frame drawn after the save's bytes
- * were taken). On a starved GPU that copy can take longer than a save should wait: the save is then written without a
- * picture (null, never the previous save's picture) and, when the copy does arrive within `lateMs`, `late` gets it so the
- * slot can be given the picture of its own moment (saves.ts patchThumb). A copy that never arrives leaves the slot
- * honestly blank.
+ * were taken), encoded by `encode`. On a starved GPU the copy, or the encode of it (a cold worker, a slow software
+ * drawImage), can take longer than a save should wait: the wait covers both, and past it the save is written without a
+ * picture (null, never the previous save's picture) and, when the picture is ready within `lateMs` of that, `late` gets
+ * it so the slot can be given the picture of its own moment (saves.ts patchThumb). A copy that never arrives, or an
+ * encode that never succeeds, leaves the slot honestly blank.
  */
 export async function thumbOfFrame(
   frame: Promise<ImageBitmap | null>, encode: (b: ImageBitmap) => Promise<string | null>,
   late?: (url: string) => void, waitMs = THUMB_WAIT_MS, lateMs = THUMB_LATE_MS,
 ): Promise<{ url: string | null; late: boolean; failed: boolean }> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let gaveUpAt = 0; // when the save stopped waiting (0: still waiting)
+  const NOFRAME = Symbol('noframe');
   const LATE = Symbol('late');
-  const first = await Promise.race([frame.catch(() => null), new Promise<typeof LATE>((ok) => { timer = setTimeout(() => ok(LATE), waitMs); })]);
+  const job = (async (): Promise<string | null | typeof NOFRAME> => {
+    const b = await frame.catch(() => null);
+    if (!b) return NOFRAME;
+    // a copy after the late window is let go (nothing would take its picture)
+    if (gaveUpAt && (!late || Date.now() - gaveUpAt > lateMs)) { (b as { close?: () => void }).close?.(); return null; }
+    return encode(b).catch(() => null);
+  })();
+  const first = await Promise.race([job, new Promise<typeof LATE>((ok) => { timer = setTimeout(() => ok(LATE), waitMs); })]);
   if (timer !== undefined) clearTimeout(timer);
-  if (first !== LATE) {
-    if (!first) return { url: null, late: false, failed: true };
-    return { url: await encode(first).catch(() => null), late: false, failed: false };
-  }
-  // late: the copy keeps going; its picture is handed on when it comes in time (a bitmap after that is let go)
-  const t0 = Date.now();
-  void frame.catch(() => null).then(async (b) => {
-    if (!b) return;
-    if (!late || Date.now() - t0 > lateMs) { (b as { close?: () => void }).close?.(); return; }
-    const url = await encode(b).catch(() => null);
-    if (url) late(url);
+  if (first === NOFRAME) return { url: null, late: false, failed: true };
+  if (first !== LATE) return { url: first, late: false, failed: false };
+  // late (the copy or the encode): it keeps going; its picture is handed on when it comes in time
+  gaveUpAt = Date.now();
+  void job.then((url) => {
+    if (typeof url === 'string' && url && late && Date.now() - gaveUpAt <= lateMs) late(url);
   });
   return { url: null, late: true, failed: false };
 }

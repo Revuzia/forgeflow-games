@@ -190,11 +190,29 @@ export function onFoot(x: PCtx, st: Settlement, from: ArrayLike<number>, cell: n
   if (here === cell) return true;
   // rivers are forded (the species' swim), the sea and deep water are not: the search shuns them, and a way that still
   // needs them is no way on foot
-  const W = x.p.f.water, O = x.p.s.ocean;
-  opts.extra = (c) => (W[c] > DEEP_M || (O[c] && W[c] > 0.6) ? 40 : 1);
+  // (simfix r1: seed 1's town by the sea never hunted for 17 years — every way to 16 herds on dry land crossed one
+  // 1.4 m sea cell) the sea's shallows are waded, a few cells of them (WADE_CELLS), as a traveller crosses them
+  opts.extra = footCost(x);
   opts.maxExpand = 2500;
   if (!findPath(x.p, here, cell, opts, _route) || !_route.length) return false;
-  for (const c of _route) if (W[c] > DEEP_M || (O[c] && W[c] > 0.6)) return false;
+  return footRoute(x, _route);
+}
+
+/** the A* cost multiplier of a hunt on foot: no way through deep water or the open sea, a wade through the shallows */
+function footCost(x: PCtx): (c: number) => number {
+  const W = x.p.f.water, O = x.p.s.ocean;
+  return (c) => (W[c] > DEEP_M || (O[c] && W[c] > WADE_M) ? 40 : O[c] && W[c] > 0.6 ? 3 : 1);
+}
+
+/** is this route (cells) one a party walks: no deep water nor open sea, and no more than WADE_CELLS of shallows */
+function footRoute(x: PCtx, route: ArrayLike<number>): boolean {
+  const W = x.p.f.water, O = x.p.s.ocean;
+  let wade = 0;
+  for (let i = 0; i < route.length; i++) {
+    const c = route[i];
+    if (W[c] > DEEP_M || (O[c] && W[c] > WADE_M)) return false;
+    if (O[c] && W[c] > 0.6 && ++wade > WADE_CELLS) return false;
+  }
   return true;
 }
 
@@ -497,6 +515,10 @@ export function meatDays(x: PCtx, st: Settlement): number {
 /** (fix r3 #7) water deeper than this (m), or the sea past the shallows, is not crossed on a hunt by a people that does not
  * swim (a river is forded) */
 const DEEP_M = 3;
+/** (simfix r1) the sea's shallows a hunting party wades or swims (m), and how many cells of them (~40 m each) a way may
+ * cross: a channel, a tidal flat — not a strait */
+export const WADE_M = 1.5;
+export const WADE_CELLS = 3;
 
 /** (fix r3 #7) does the straight way from a to b cross the sea or deep water (cells sampled ~0.75 edge apart) */
 const _w = [0, 0, 0];
@@ -504,13 +526,16 @@ export function wetBetween(x: PCtx, a: ArrayLike<number>, b: ArrayLike<number>):
   const d = distM(x.p, a, b);
   const n = Math.min(120, Math.ceil(d / (0.75 * x.p.edgeM)));
   const W = x.p.f.water, O = x.p.s.ocean;
+  let wade = 0;
   for (let i = 1; i < n; i++) {
     const f = i / n;
     _w[0] = a[0] + (b[0] - a[0]) * f; _w[1] = a[1] + (b[1] - a[1]) * f; _w[2] = a[2] + (b[2] - a[2]) * f;
     const l = Math.hypot(_w[0], _w[1], _w[2]) || 1;
     _w[0] /= l; _w[1] /= l; _w[2] /= l;
     const c = x.p.cellAt(_w);
-    if (W[c] > DEEP_M || (O[c] && W[c] > 0.6)) return true;
+    if (W[c] > DEEP_M || (O[c] && W[c] > WADE_M)) return true;
+    // (simfix r1) the shallows are waded, a few cells' worth (samples are ~0.75 edge apart)
+    if (O[c] && W[c] > 0.6 && ++wade > WADE_CELLS / 0.75) return true;
   }
   return false;
 }
@@ -587,9 +612,11 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   // (fix r2 #2) water lies across the straight way: the way round it on foot (A*, as a band's leg goes: decide.ts), as far
   // along it as the daylight allows
   const opts = pathOptsFor(x, A.species[s]);
-  if (opts.swim < 1) opts.swim = 0;
+  // (simfix r1) a people that swims at all wades the shallows on the way round (onFoot's rule; was swim 0: a coastal
+  // party whose only way lay through a 1.4 m channel never set off)
+  if (opts.swim < 1 && !opts.fly) opts.extra = footCost(x);
   opts.maxExpand = 2500;
-  if (findPath(x.p, here, h.cell, opts, _route) && _route.length) {
+  if (findPath(x.p, here, h.cell, opts, _route) && _route.length && (opts.swim >= 1 || opts.fly || footRoute(x, _route))) {
     let c = _route[0];
     for (let i = 1, walked = x.p.edgeM; i < _route.length && walked + x.p.edgeM <= leg; i++, walked += x.p.edgeM) c = _route[i];
     if (c !== here) {

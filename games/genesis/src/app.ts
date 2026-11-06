@@ -47,7 +47,7 @@ import { store } from './ui/dom.ts';
 import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
 import { perfmon } from './render/perfmon.ts';
-import { encodeThumb, cpuCanvas, canvasJpegURL, thumbOfFrame } from './client/thumbjpeg.ts';
+import { encodeThumb, cpuCanvas, canvasJpegURL, thumbOfFrame, warmThumbWorker } from './client/thumbjpeg.ts';
 /** save pictures that came too late for their save (test surface, shot scripts) */
 export const THUMB_STATS = { late: 0, lastLate: false };
 
@@ -458,6 +458,8 @@ export class App implements UiHost {
       await this.sim.start({ ...base, scenario: boot.scenario });
     }
     this.packs = [...boot.packs];
+    // (the save-picture worker is started now, so the first autosave does not wait on a cold worker: release minor #6)
+    warmThumbWorker();
     if (boot.slot) {
       progress(`Returning to ${boot.slot.name}…`, 0.76);
       const r = await this.sim.load(boot.slot.bytes.slice(0));

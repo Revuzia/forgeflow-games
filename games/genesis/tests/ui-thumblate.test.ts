@@ -49,6 +49,42 @@ test('a copy later than the late window is let go (closed), and a failed copy fa
   assert.equal(rej.failed, true);
 });
 
+test('a frame in time but an encode slower than the wait (cold worker, slow software GPU): the save does not wait, the picture comes late', async () => {
+  const lates: string[] = [];
+  const slowEnc = (b: ImageBitmap) => later(120, `data:image/jpeg;base64,${(b as unknown as Bmp).tag}`);
+  const t0 = Date.now();
+  const r = await thumbOfFrame(later(2, new Bmp('enc') as unknown as ImageBitmap), slowEnc, (u) => lates.push(u), 30, 5000);
+  assert.ok(Date.now() - t0 < 110, 'the save does not wait for the slow encode');
+  assert.deepEqual(r, { url: null, late: true, failed: false });
+  await later(150, 0);
+  assert.deepEqual(lates, ['data:image/jpeg;base64,enc'], 'the encoded picture is handed on');
+  // an encode past the late window, or one that gives nothing, hands nothing on
+  const l2: string[] = [];
+  await thumbOfFrame(later(2, new Bmp('x') as unknown as ImageBitmap), (b) => later(100, `u${(b as unknown as Bmp).tag}`), (u) => l2.push(u), 10, 30);
+  await thumbOfFrame(later(2, new Bmp('y') as unknown as ImageBitmap), () => later(40, null), (u) => l2.push(u), 10, 5000);
+  await thumbOfFrame(later(2, new Bmp('z') as unknown as ImageBitmap), () => Promise.reject(new Error('worker')), (u) => l2.push(u), 10, 5000);
+  await later(150, 0);
+  assert.deepEqual(l2, []);
+});
+
+test('end to end: a late encode is patched onto the save it was taken for (SaveStore.setThumb via withLateThumb)', async () => {
+  const slot = { id: 'auto1', tick: 92, date: 777, thumb: null as string | null, name: 'Autosave' };
+  const late = (url: string): void => { const n = withLateThumb(slot, 92, 777, url); if (n) slot.thumb = n.thumb; };
+  const r = await thumbOfFrame(later(1, new Bmp('w') as unknown as ImageBitmap), (b) => later(60, `J${(b as unknown as Bmp).tag}`), late, 20, 5000);
+  slot.thumb = r.url; // the write
+  assert.equal(slot.thumb, null);
+  await later(100, 0);
+  assert.equal(slot.thumb, 'Jw', 'the slot gets its own picture');
+});
+
+test('the worker limit covers the late window, and the worker is warmed when a world starts', () => {
+  const src = readFileSync(new URL('../src/client/thumbjpeg.ts', import.meta.url), 'utf8');
+  const n = (k: string) => Number(src.match(new RegExp(`export const ${k} = ([\\d_]+)`))![1].replace(/_/g, ''));
+  assert.ok(n('THUMB_WORKER_MS') >= n('THUMB_WAIT_MS') + n('THUMB_LATE_MS'));
+  const app = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
+  assert.match(app, /warmThumbWorker\(\);/);
+});
+
 test('the late picture goes on its own save only: not on a newer save in the slot, not over a picture', () => {
   const rec = { id: 'auto1', tick: 5000, date: 111, thumb: null as string | null, name: 'x' };
   assert.deepEqual(withLateThumb(rec, 5000, 111, 'P'), { ...rec, thumb: 'P' });
