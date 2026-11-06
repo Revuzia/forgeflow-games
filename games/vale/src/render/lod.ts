@@ -153,6 +153,9 @@ export const lodSwitch = { shadow: true, outline: false, body: false };
 const shadowLod = new WeakMap<BufferGeometry, BufferAttribute>();
 let swapped: { g: BufferGeometry; index: BufferAttribute | null } | null = null;
 
+/** the index a caster's shadow draws through (undefined = its own): the crowd governor's frame estimate reads it */
+export function shadowLodOf(g: BufferGeometry): BufferAttribute | undefined { return shadowLod.get(g); }
+
 function beforeShadow(_r: WebGLRenderer, _o: Object3D, _c: Camera, _s: Camera, g: BufferGeometry, _m: Material, _grp: Group | null): void {
   const l = lodSwitch.shadow ? shadowLod.get(g) : undefined;
   if (!l) return;

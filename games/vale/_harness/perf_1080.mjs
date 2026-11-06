@@ -620,7 +620,7 @@ async function matchPeak(seed = SEED, rot = 0) {
           cur.frames++;
           cur.tris = Math.max(cur.tris, st.triangles); cur.calls = Math.max(cur.calls, st.calls); cur.programs = Math.max(cur.programs, st.programs);
           // the frames around the peak: triangles and the governor's step, per frame (a profile only sees the frame after)
-          S.ring.push([st.triangles, r.crowdHard ? 1 : 0, st.crowd ?? 0]); if (S.ring.length > 24) S.ring.shift();
+          S.ring.push([st.triangles, r.crowdHard ? 1 : 0, st.crowd ?? 0, r.crowdEstimate ?? 0]); if (S.ring.length > 24) S.ring.shift();
           if (st.triangles > S.peakTris) { S.peakTris = st.triangles; S.peakFrames = S.ring.slice(); S.peakFramesT = +host.view.time.toFixed(1); }
           cur.governed += r.crowdHard ? 1 : 0;
           if (st.triangles > BUDGET_TRIS) cur.framesOver++;
@@ -694,7 +694,7 @@ async function matchPeak(seed = SEED, rot = 0) {
     const after = machine();
     const res = {
       seed, rot, scale: MATCH_SCALE, endT: +S.endT.toFixed(1), ended: S.ended, seconds: secs.length,
-      peakFrames: { t: S.peakFramesT, tris: S.peakTris, frames: S.peakFrames, legend: '[triangles, governor hard, crowd]' }, framesOverBudget: secs.reduce((n, x) => n + (x.framesOver ?? 0), 0),
+      peakFrames: { t: S.peakFramesT, tris: S.peakTris, frames: S.peakFrames, legend: '[triangles, governor hard, crowd, crowd estimate]' }, framesOverBudget: secs.reduce((n, x) => n + (x.framesOver ?? 0), 0),
       peak: { tris: pt.tris, trisAt: pt.t, draws: pc.calls, drawsAt: pc.t, programs: pp.programs, programsAt: pp.t },
       overBudget: { tris: over('tris', BUDGET.tris), draws: over('calls', BUDGET.draws), programs: over('programs', BUDGET.programs) },
       lateProgramsAfter60s: S.progs.filter((x) => x.t > firstT + 60),

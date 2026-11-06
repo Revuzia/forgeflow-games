@@ -14,7 +14,8 @@
 //                      (the review: the struck unit went 22-34 % white on the first beat, its box measure). `boxWhite`
 //                      repeats the review's box measure (body box ±45 px, ground included), `boxWhiteNoVfx` the same
 //                      with the VFX pass off; done (W1 verify combat:F4): boxWhite ≤ 0.35 on every beat frame
-//             core     mean luma inside 0.5 × the lift radius over the same circle after everything faded (the review's
+//             core     mean luma inside 0.5 × the lift radius over the same circle after everything faded (the median of 5
+//                      frames once only what the frame before the cast held is alive; report: baseCore; the review's
 //                      measure) and the same with the victim's box left out (ground only); done: ≥ 2.3 on the first
 //                      beat (r12 M13 2.3-2.5×); ×2.0 where the lifted ground reaches the ≈ 218 clip (owner ruling 10:
 //                      the beat's core at the clip, or its unlifted core × 2.3 past it)
@@ -275,6 +276,9 @@ try {
       const geo = await B((b, a) => ({ c: b.__h(a.pc), v: b.__h(a.pv) }), st);
       const vbox = { x0: geo.v.gx - 45, y0: geo.v.ty - 5, x1: geo.v.gx + 45, y1: geo.v.gy + 5 };
       const base = await B((b, a) => b.__white(b.__grab(), a.vbox), { vbox });
+      // the frame before the cast, kept to read at the beat's circle (a cross-check on the faded core below) and what is
+      // alive in it (a kit's passive, the map's): the faded frame must be down to this
+      const live0 = await B((b) => { b.__g0 = b.__grab(); return b.renderer.vfx.insts.filter((it) => it.active).length; });
       await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.c, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, c: c.seat, slot: SLOT });
       const rows = [];
       let flatN = 0;
@@ -312,8 +316,22 @@ try {
       const first = rows.find((r) => r.ctr);
       let baseCore = null;
       if (first) {
+        // CW1 r3 refix (done:1): 'faded' means faded. A fixed 179 frames ended a few frames before Hesmi's 5 s shadow zone
+        // (0.35 + 0.75 + 5 s = 183 frames), so the slab's shade darkened the base on some runs and not on others (core
+        // x2.1 and x1.89 from the same first beat). Wait until only what the frame before the cast held is alive, then
+        // take the median of 5 frames; the report holds every sample, the wait and the pre-cast frame's reading
+        const faded = await B((b, a) => { let n = 0; const alive = () => b.renderer.vfx.insts.filter((it) => it.active); while (alive().length > a.live0 && n < 600) { b.__step(15); n += 15; } return { frames: n, left: [...new Set(alive().map((it) => it.def.id))] }; }, { live0 });
         await stage(c.seat);
-        baseCore = await B((b, a) => { const g = b.__grab(); const cx = a.q.ux * 1920, cy = (1 - a.q.uy) * 1080, r = a.q.rr * 1080 * 0.5; return { all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1), p90: +b.__circQ(g, cx, cy, r, a.vbox, 0.9).toFixed(1) }; }, { q: first.q, vbox });
+        baseCore = await B((b, a) => {
+          const cx = a.q.ux * 1920, cy = (1 - a.q.uy) * 1080, r = a.q.rr * 1080 * 0.5;
+          const read = (g) => ({ all: +b.__circ(g, cx, cy, r, null).toFixed(1), ground: +b.__circ(g, cx, cy, r, a.vbox).toFixed(1), p90: +b.__circQ(g, cx, cy, r, a.vbox, 0.9).toFixed(1) });
+          const samples = [];
+          for (let i = 0; i < 5; i++) { if (i) b.__step(6); samples.push(read(b.__grab())); }
+          const med = (k) => samples.map((x) => x[k]).sort((p, q) => p - q)[2];
+          const pre = read(b.__g0); b.__g0 = null;
+          return { all: med('all'), ground: med('ground'), p90: med('p90'), samples, pre };
+        }, { q: first.q, vbox });
+        baseCore.waited = faded.frames; baseCore.left = faded.left;
       }
       const beats = rows.map((r, i) => ({ f: i + 1, ...r })).filter((r) => r.white);
       const dC = first ? Math.hypot(first.ctr[0] - geo.c.gx, first.ctr[1] - geo.c.gy) : null, dV = first ? Math.hypot(first.ctr[0] - geo.v.gx, first.ctr[1] - geo.v.gy) : null;
@@ -339,7 +357,7 @@ try {
       console.log(`         ${def} ${SLOT} max lift ${res.maxLift}, detail per frame (lost ${res.detailLost}, min ${res.minDetail}): ${res.beats.filter((r) => r.detail < 0.8).map((r) => `f${r.f} ${r.detail} [noVfx ${r.detailFlash} noFlash ${r.detailLift}] (mean ${r.meanFull}/${r.meanBase})`).join(' · ')}`);
       if (res.detailLost > 2) fail(`${def} ${SLOT}: the struck body stays flat for ${res.detailLost} frames (detail < 0.5; at most 2)`);
       console.log(`         box white per beat (VFX off): ${res.beats.map((r) => `f${r.f} ${r.boxWhite} (${r.boxWhiteNoVfx})`).join(' · ')}`);
-      console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}`);
+      console.log(`ult ${def.padEnd(7)} ctr ${JSON.stringify(res.firstCtr)} caster ${JSON.stringify(res.caster)} victim ${JSON.stringify(res.victim)} (to caster ${res.ctrToCaster}, to victim ${res.ctrToVictim})  body white: lift adds ${res.maxLiftAdds} (lift ${res.maxWhite}, + hit flash ${res.maxWhiteFlash}, full frame ${res.maxWhiteFull}) · box ${res.maxBoxWhite} (box base ${base.white})  core ×${res.firstRatio} ground ×${res.firstRatioGround}, faded core ${baseCore?.all} ground ${baseCore?.ground} (samples ${baseCore?.samples.map((x) => x.all).join(' ')}; before the cast ${baseCore?.pre.all}; waited ${baseCore?.waited} frames, left ${baseCore?.left.join(',') || 'none'})`);
       if (SLOT !== 'ult') { /* a kit slot: only the body's detail is asked */ }
       else if (!first) fail(`${def}: no beat ≥ 1.3`);
       else {
@@ -362,7 +380,7 @@ try {
         res.groundClipped = res.liftP90 !== null && res.baseP90 > 0 && res.liftP90 < res.baseP90 * 2.3 - 3;
         res.clipBound = !!b0 && (b0.core >= CORE_CLIP || (baseCore?.all ?? 0) * 2.3 >= CORE_CLIP || res.groundClipped);
         res.coreTarget = res.clipBound ? 2.0 : 2.3;
-        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
+        if (res.firstRatio !== null && Math.max(res.firstRatio, res.firstRatioGround ?? 0) < res.coreTarget) fail(`${def}: core ×${res.firstRatio} (ground ×${res.firstRatioGround}, luma ${res.firstCore}, faded core ${baseCore?.all} ground ${baseCore?.ground}, lifted ground p90 ${res.liftP90} vs faded ${res.baseP90}) < ${res.coreTarget} on the first beat`);
       }
       await B((b) => { b.__park(); b.__step(40); });
     }

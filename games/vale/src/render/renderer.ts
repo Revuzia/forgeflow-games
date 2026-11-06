@@ -315,6 +315,8 @@ class ValeRenderer implements Renderer {
   private crowdInkCap = CROWD_OUTLINE_MAX;
   /** the governor's second step (crowd.ts) */
   private crowdHard = false;
+  /** what the crowd was expected to draw last frame, under last frame's steps (CrowdLayer.estimate) */
+  private crowdEstimate = 0;
   private readonly crowdHardLatch = new CrowdHardLatch();
   private skipAcc = 0;
   private readonly resources = new Map<string, { color: Color; model: string }>();
@@ -1146,11 +1148,15 @@ class ValeRenderer implements Renderer {
     // moved: a unit the re-cull brought back is drawn this frame)
     this.crowd.begin();
     for (const a of this.actors.values()) if (a.crowdBake && a.model && a.root.visible) this.crowd.push(a);
-    // the triangle governor (perf done:7): a frame over the soft mark holds the crowd's rest ink to its nearest units
-    if (this.sceneTris > CROWD_INK_TRIS_HIGH) this.crowdInkCap = CROWD_OUTLINE_CROWDED;
+    // the triangle governor (perf done:7): a frame over the soft mark holds the crowd's rest ink to its nearest units.
+    // CW1 r3 refix: last frame's count plus the crowd that arrives on THIS frame (a re-cull or a vision change brought 23
+    // units in one frame, 398k -> 518k with no step on, seed 11), so both steps act on the frame it lands
+    const predicted = this.sceneTris + Math.max(0, this.crowd.estimate(this.crowdInkCap, this.crowdHard) - this.crowdEstimate);
+    if (predicted > CROWD_INK_TRIS_HIGH) this.crowdInkCap = CROWD_OUTLINE_CROWDED;
     // (never while the second step runs: its frame is low because it is on, and the two letting go on one frame jumped 140k)
     else if (this.sceneTris < CROWD_INK_TRIS_LOW && !this.crowdHard) this.crowdInkCap = CROWD_OUTLINE_MAX;
-    this.crowdHard = this.crowdHardLatch.update(this.sceneTris, this.crowd.instances);
+    this.crowdHard = this.crowdHardLatch.update(this.sceneTris, this.crowd.pending, predicted);
+    this.crowdEstimate = this.crowd.estimate(this.crowdInkCap, this.crowdHard);
     this.crowd.end(this.rig.focus.x, this.rig.focus.z, this.crowdInkCap, this.crowdHard);
     // structures after the camera moved: the occlusion fade looks for your fighter, the hovered and the targeted unit
     this.structs.update(d, this.time, view, this.rig.camera, [me ? me.entity : -1, this.hover ?? -1, this.target ?? -1], this.actors);

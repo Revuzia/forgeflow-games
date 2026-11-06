@@ -25,7 +25,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { CROWD_VERT_PARS, crowdDepth, flashU, hoverMaterials, INK, inkMaterial, type RimU, VICTIM_FLASH_GLSL } from './ink.ts';
 import { patchWorldMaterial } from './world_material.ts';
-import { composeIndex, dequantUnit, indexView, LOD, lodIndex, prepareShadowLod, shadowLods } from './lod.ts';
+import { composeIndex, dequantUnit, indexView, LOD, lodIndex, prepareShadowLod, shadowLodOf, shadowLods } from './lod.ts';
 
 /** bake rate: one row per 1/60 s, so a 60 Hz display never needs an in-between frame */
 export const BAKE_HZ = 60;
@@ -386,10 +386,12 @@ export class CrowdHardLatch {
   private saving = 0;
   private age = 0;
 
-  /** the last frame's triangles and the crowd units drawn; returns whether this frame runs governed */
-  update(tris: number, crowd: number): boolean {
+  /** the last frame's triangles, the crowd units of this frame and what this frame is expected to draw ungoverned (the
+   *  last frame's plus the crowd that arrived on this one: CrowdLayer.estimate; an estimate over the mark engages the step
+   *  on the very frame the crowd arrives, not the one after); returns whether this frame runs governed */
+  update(tris: number, crowd: number, predicted = tris): boolean {
     if (!this.on) {
-      if (tris > CROWD_HARD_TRIS_HIGH) { this.on = true; this.from = tris; this.crowdAt = Math.max(1, crowd); this.saving = 0; this.age = 0; }
+      if (predicted > CROWD_HARD_TRIS_HIGH) { this.on = true; this.from = predicted; this.crowdAt = Math.max(1, crowd); this.saving = 0; this.age = 0; }
       return this.on;
     }
     this.age++;
@@ -577,6 +579,38 @@ class CrowdSet {
     (a.flashState.k > 0.002 ? this.flashing : this.units).push(a);
   }
 
+  /** units pushed since begin() (buf.count only counts them in end()) */
+  get pending(): number { return this.units.length + this.flashing.length; }
+
+  /** the triangles end() is about to draw for this set under (cap, hard), every pass: the bodies through the LOD they would
+   *  take, the accents whole, the ink for the units that keep it, the flash for the flashing ones, the shadow casters
+   *  through their shadow LOD (read off each mesh's own index once) */
+  estimate(cap: number, hard: boolean): number {
+    const n = this.pending;
+    if (!n) return 0;
+    const c = this.unitCosts();
+    const nf = hard ? Math.min(this.flashing.length, CROWD_FLASH_CROWDED) : this.flashing.length;
+    let t = n * ((hard ? c.bodyHard : c.body) + c.accent) + nf * c.flash;
+    if (!hard) t += Math.min(n - nf, cap) * c.ink + nf * c.ink + n * c.bodyShadow;
+    if (cap >= CROWD_OUTLINE_MAX) t += n * c.accentShadow;
+    return t;
+  }
+
+  private costs: { body: number; bodyHard: number; accent: number; flash: number; ink: number; bodyShadow: number; accentShadow: number } | null = null;
+  private unitCosts(): NonNullable<CrowdSet['costs']> {
+    if (this.costs) return this.costs;
+    const tris = (a: BufferAttribute | null | undefined): number => (a ? a.count / 3 : 0);
+    const c = { body: 0, bodyHard: 0, accent: 0, flash: 0, ink: 0, bodyShadow: 0, accentShadow: 0 };
+    for (const m of this.bodyMeshes) {
+      const g = m.mesh.geometry, own = tris(m.lod ?? g.index);
+      c.body += own; c.bodyHard += m.hard ? tris(m.hard) : own; c.bodyShadow += tris(shadowLodOf(g)) || own;
+    }
+    for (const m of this.accentMeshes) { const own = tris(m.geometry.index); c.accent += own; c.accentShadow += tris(shadowLodOf(m.geometry)) || own; }
+    for (const f of this.flashMeshes) c.flash += tris(f.geometry.index);
+    this.group.traverse((o) => { if (o.name === 'crowd_outline') c.ink += tris((o as Mesh).geometry.index); });
+    return (this.costs = c);
+  }
+
   end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX, hard = false): void {
     // the governor's second step: the flashing units past the nearest few draw as plain units this frame
     if (hard && this.flashing.length > CROWD_FLASH_CROWDED) {
@@ -708,6 +742,12 @@ export class CrowdLayer {
   /** fx, fz: the camera's focus on the ground (the outline LOD ranks by distance from it); cap: the most units of a set
    *  that take the rest ink this frame (the renderer's triangle governor lowers it in a crowded frame) */
   end(fx = 0, fz = 0, cap = CROWD_OUTLINE_MAX, hard = false): void { for (const s of this.sets.values()) s.end(fx, fz, cap, hard); }
+
+  /** the crowd pushed since begin(), before end() (the governor's units: `instances` is still 0 here) */
+  get pending(): number { let n = 0; for (const s of this.sets.values()) n += s.pending; return n; }
+
+  /** what end() is about to draw under (cap, hard): see CrowdSet.estimate */
+  estimate(cap: number, hard: boolean): number { let t = 0; for (const s of this.sets.values()) t += s.estimate(cap, hard); return t; }
 
   /** units drawn this frame (harness) */
   get instances(): number { let n = 0; for (const s of this.sets.values()) n += s.buf.count; return n; }

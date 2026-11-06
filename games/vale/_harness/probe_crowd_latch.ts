@@ -46,5 +46,33 @@ const show = (label: string, r: Run): void => console.log(`${label.padEnd(44)} p
   expect(r.flips === 0 && r.peak < CROWD_HARD_TRIS_HIGH, 'an ordinary frame must not engage the step');
 }
 
+// 4. CW1 r3 refix: seed 11's jump, 29 -> 52 units on ONE frame from 398k: the estimate engages the step on that frame
+{
+  const l = new CrowdHardLatch();
+  let tris = 398030, peak = 0;
+  for (let f = 0; f < 300; f++) {
+    const n = f < 10 ? 29 : 52;
+    // the frame's expected count: the last frame's plus the arrivals at their ungoverned cost
+    const est = tris + (f === 10 ? 23 * 5200 : 0);
+    const on = l.update(tris, n, est);
+    tris = 247000 + n * (on ? 900 : 5200);
+    peak = Math.max(peak, tris);
+    if (f === 10) expect(on, 'the step must engage on the frame the crowd arrives');
+  }
+  console.log(`${'23 units arrive on one frame'.padEnd(44)} peak ${(peak / 1000).toFixed(0)}k`);
+  expect(peak <= BUDGET, `the arrival frame must stay inside the budget (peak ${peak})`);
+}
+// 5. a crowd-scaled release: the latch's crowd is the frame's real unit count, so a saving measured at 60 units keeps the
+//    step on while 60 stand there even when the governed frame reads far under the mark
+{
+  const l = new CrowdHardLatch();
+  l.update(0, 60, 520000);                    // engage from 520k
+  for (let f = 0; f < 6; f++) l.update(360000, 60);   // measures 160k saved
+  for (let f = 0; f < 200; f++) l.update(360000, 60);
+  expect(l.on, 'the step must hold while the frame it would release into (360k + 160k) is over the mark');
+  for (let f = 0; f < 200; f++) l.update(300000, 10);
+  expect(!l.on, 'the step must let go once the crowd has gone');
+}
+
 console.log(fails ? `probe_crowd_latch: ${fails} FAILURE(S)` : 'probe_crowd_latch: PASS');
 process.exit(fails ? 1 : 0);
