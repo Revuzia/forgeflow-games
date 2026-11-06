@@ -277,6 +277,7 @@ try {
       const base = await B((b, a) => b.__white(b.__grab(), a.vbox), { vbox });
       await B((b, a) => { const me = b.__H.view.entity(a.pv); b.__cmd(a.c, { type: 'cast', slot: a.slot, x: me.x, y: me.y, target: a.pv }); }, { ...st, c: c.seat, slot: SLOT });
       const rows = [];
+      let flatN = 0;
       for (let f = 1; f <= 72; f++) {
         rows.push(await B((b, a) => {
           b.__step(1);
@@ -304,6 +305,8 @@ try {
           return out;
         }, { ...st, vbox, feetY: geo.v.gy - 6, every: SLOT !== 'ult' || args.includes('--every') }));
         if (rows[rows.length - 1].white && !rows.slice(0, -1).some((r) => r.white)) await shot(`ult_${def}_beat`);
+        // --every: the frames the eye note asks about: the 1st and 6th flat frame of the body (detail < 0.5)
+        if (args.includes('--every') && rows[rows.length - 1].white?.detail < 0.5 && rows[rows.length - 1].white?.n >= 200) { flatN = (flatN ?? 0) + 1; if (flatN === 1 || flatN === 6) await shot(`ult_${def}_flat${flatN}`); }
       }
       await B((b) => { b.__step(75); });
       const first = rows.find((r) => r.ctr);
