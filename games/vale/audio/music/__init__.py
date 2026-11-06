@@ -17,7 +17,7 @@ import bedlib
 BEDS: dict[str, tuple[str, str]] = {
     'mus_menu':         ('synth.music_menu:build', '60 BPM, stems 64 / 48 / 80 s looped on their own lengths (960 s full repeat), no hook, 1-4 kHz dip'),
     'mus_draft':        ('synth.music_draft:build', '90 BPM, 32 s: bans drone + phase layers picks (harp pulse) / final (drums) + your urgency pulse'),
-    'mus_match_rift':   ('synth.music_match:build_rift', '120 BPM, 160 s + intense layer; bright, driving; motif -> F#5'),
+    'mus_match_rift':   ('synth.music_match:build_rift', '120 BPM, 160 s + intense layer + 32 s objective layer; bright, driving; motif -> F#5'),
     'mus_match_bridge': ('synth.music_match:build_bridge', '120 BPM, 160 s + intense layer; tense, D pedal; motif -> G4'),
     'mus_match_fray':   ('synth.music_match:build_fray', '120 BPM, 160 s + intense layer; festive, Lydian G#; motif -> G#4'),
     'mus_postgame':     ('synth.music_postgame:build', '60 BPM, 80 s; bell chorale, the motif once, ending home on D5'),

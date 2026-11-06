@@ -24,6 +24,11 @@ QA per bed stem (decoded OGG)
   layer    the lift main+layer over main per band (dB): the combat layer should lift sub/low/lowmid and
            leave pres (the UI / ability band) nearly alone
   mode     share of pitch-class energy inside D Dorian + G# (+ F# for the bright beds)
+  joints   a match bed's acts (src/audio/index.ts MUSIC_ACTS, read from there): every jump between sections the acts can
+           make, rendered from the decoded .ogg stems the way the engine makes it (an equal-power cross-fade of
+           SECTION_XF_S ending on the downbeat) and measured like the seam, against every natural section downbeat of the
+           loop. PASS = step <= 1.5 and neither click nor flux above 1.25x the natural downbeats' 90th percentile, and
+           the level across the joint (4 s each side) within JOINT_LEVEL_LU of the natural downbeats' worst.
   m4a      the .m4a decode: sample count equal to the .ogg's, LUFS / true peak, and the same seam test
   pieces   the main stem's .m4a PIECES (the .m4a path decodes a long bed piece by piece and starts on the first, so
            Safari's slow AAC decode never holds the music back; src/audio/index.ts `music`): 16 s first, then
@@ -81,6 +86,8 @@ PIECE_EXACT_DB = -60.0       # QA: a piece's (and a joint's) error below PIECE_S
 PIECE_SPLIT_HZ = 3500.0      # above this AAC's noise substitution (PNS) draws its noise afresh in every decode, so
 PIECE_HF_DB = (1.0, 2.0)     # there the 1/3-octave band energies must match instead: over a piece, within 25 ms of a joint
 BRIGHT = DORIAN_G + (6,)
+ENGINE = os.path.join(GAME, 'src', 'audio', 'index.ts')
+JOINT_LEVEL_LU = 2.0         # QA: a joint's level step may pass the natural section downbeats' worst by this
 
 
 def encode(wav: str, ogg: str, kbps: int) -> None:
@@ -281,6 +288,89 @@ def build_pieces(bid: str, mdef: dict) -> dict | None:
     return r
 
 
+# ── a match bed's acts ───────────────────────────────────────────────────────────────────────────
+def engine_form() -> tuple[list[list[int]], int, float]:
+    """the acts, a section's bars and the cross-fade, from the engine itself: one definition of the form"""
+    import re
+    src = open(ENGINE, encoding='utf-8').read()
+    acts = re.search(r'const MUSIC_ACTS = (\[\[.*?\]\]);', src)
+    bars = re.search(r'const MUSIC_SECTION_BARS = (\d+);', src)
+    xf = re.search(r'const SECTION_XF_S = ([0-9.]+);', src)
+    if not (acts and bars and xf):
+        raise SystemExit('src/audio/index.ts: MUSIC_ACTS / MUSIC_SECTION_BARS / SECTION_XF_S not found')
+    return json.loads(acts.group(1)), int(bars.group(1)), float(xf.group(1))
+
+
+def section_jumps(acts: list[list[int]], sections: int) -> list[tuple[int, int]]:
+    """every (from, to) section pair the acts play that is not the stem's own next section"""
+    out = set()
+    for seq in acts:
+        for a, b in zip(seq, seq[1:] + seq[:1]):
+            if b != (a + 1) % sections:
+                out.add((a, b))
+    return sorted(out)
+
+
+def joint(x: np.ndarray, a: int, b: int, sec: int, xf: int, w: int) -> np.ndarray:
+    """±w samples around the joint from the end of section a into the head of section b, as the engine plays it"""
+    n = x.shape[1]
+    end, head = (a + 1) * sec, b * sec
+    old = np.take(x, np.arange(end - w, end + w), axis=1, mode='wrap')
+    new = np.take(x, np.arange(head - w, head + w), axis=1, mode='wrap')
+    g = np.zeros(2 * w)
+    g[w - xf:w] = (np.arange(xf) + 0.5) / xf
+    g[w:] = 1.0
+    th = g * np.pi / 2
+    return old * np.cos(th) + new * np.sin(th)
+
+
+def joints_qa(stems: dict[str, np.ndarray], bpm: float) -> dict:
+    """the acts' jumps on main and main + combat layer, against the loop's natural section downbeats"""
+    acts, bars, xf_s = engine_form()
+    bar_s = 240.0 / bpm
+    sec = int(round(bars * bar_s * SR))
+    main = stems['main']
+    sections = main.shape[1] // sec
+    xf, w = int(round(xf_s * SR)), 4 * SR
+    def level_step(y: np.ndarray) -> float:
+        return abs(float(L.integrated(y[:, w:])) - float(L.integrated(y[:, :w])))
+    def measure(x: np.ndarray) -> dict:
+        nat = [_boundary(x, s * sec) for s in range(sections)]
+        nat_steps = [level_step(np.take(x, np.arange(s * sec - w, s * sec + w), axis=1, mode='wrap')) for s in range(sections)]
+        nat_a = np.array(nat)
+        rows = []
+        for a, b in section_jumps(acts, sections):
+            y = joint(x, a, b, sec, xf, w)
+            # at the downbeat (the fade's end) and at the fade's start: a click would sit on one of them
+            jd, hd, fd = _boundary(y, w)
+            js, hs, _ = _boundary(y, w - xf)
+            ls = level_step(y)
+            ok = bool(max(jd, js) <= 1.5 and max(hd, hs) <= 1.25 * max(np.percentile(nat_a[:, 1], 90), 1e-9)
+                      and fd <= 1.25 * np.percentile(nat_a[:, 2], 90) and ls <= max(nat_steps) + JOINT_LEVEL_LU)
+            rows.append(dict(jump=f'S{a + 1}>S{b + 1}', step=max(jd, js), hf=max(hd, hs), flux=fd, level_step=ls, ok=ok))
+        return dict(natural=dict(step_max=float(nat_a[:, 0].max()), hf_p90=float(np.percentile(nat_a[:, 1], 90)),
+                                 flux_p90=float(np.percentile(nat_a[:, 2], 90)), level_step_max=float(max(nat_steps))), rows=rows)
+    r = dict(acts=acts, xf_s=xf_s, main=measure(main))
+    if 'intense' in stems:
+        m = min(main.shape[1], stems['intense'].shape[1])
+        r['combat'] = measure(main[:, :m] + stems['intense'][:, :m])
+    r['ok'] = all(q['ok'] for k in ('main', 'combat') if k in r for q in r[k]['rows'])
+    return r
+
+
+def print_joints(r: dict) -> None:
+    print(f"  joints   {'PASS' if r['ok'] else 'CHECK'}: acts {r['acts']}, cross-fade {r['xf_s'] * 1000:.0f} ms")
+    for k in ('main', 'combat'):
+        if k not in r:
+            continue
+        n = r[k]['natural']
+        print(f"           {k:6s} natural section downbeats: step max {n['step_max']:.2f}x  >7k p90 {n['hf_p90']:.1f}x  "
+              f"flux p90 {n['flux_p90']:.1f} dB  level step max {n['level_step_max']:.2f} LU")
+        for q in r[k]['rows']:
+            print(f"             {q['jump']} {'PASS' if q['ok'] else 'CHECK'}: step {q['step']:.2f}x  >7k {q['hf']:.1f}x  flux {q['flux']:.1f} dB  "
+                  f"level step {q['level_step']:.2f} LU")
+
+
 # ── beds ─────────────────────────────────────────────────────────────────────────────────────────
 def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict:
     spec = bedlib.REGISTRY.get(bid)
@@ -294,9 +384,11 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict
     for lid in want_layers:
         if lid not in stems:
             raise SystemExit(f'{bid}: audio.json wants layer {lid!r}, the composition gives {sorted(stems)}')
-        if lid.startswith('stem'):                 # an independent stem: its own length, on the 8 s grid
-            if abs((stems[lid].shape[1] / SR) % 8.0) > 1e-6:
+        if lid.startswith('stem') or lid.startswith('objective'):   # its own length, on the 8 s grid (an objective layer
+            if abs((stems[lid].shape[1] / SR) % 8.0) > 1e-6:        # stays locked to the bed's bars: src/audio/index.ts)
                 raise SystemExit(f'{bid}: stem {lid} is {stems[lid].shape[1] / SR:.3f} s, not a whole number of 8 s phrases')
+            if lid.startswith('objective') and n % stems[lid].shape[1]:
+                raise SystemExit(f'{bid}: objective layer {stems[lid].shape[1] / SR:.3f} s does not divide the main stem')
         elif stems[lid].shape[1] != n:
             raise SystemExit(f'{bid}: layer {lid} is {stems[lid].shape[1]} samples, main is {n}')
     # pre-level every stem 3 dB above its target so bedlib's fixed-threshold glue compressor sees the same
@@ -337,12 +429,14 @@ def build_bed(bid: str, mdef: dict, kbps: int, tmp: str, keep_wav: bool) -> dict
         for k, y in decoded.items():
             if k == 'main':
                 continue
-            m = min(main.shape[1], y.shape[1])
-            both = main[:, :m] + y[:, :m]
+            m = main.shape[1]
+            both = main + np.take(y, np.arange(m), axis=1, mode='wrap')      # a shorter layer loops under the main stem
             bm, bb = rep['stems']['main']['bp'], band_power(both)
             rep['stems'][k]['lift_db'] = {b: 10 * math.log10((bb[b] + 1e-30) / (bm[b] + 1e-30)) for b in bb}
             rep['stems'][k]['sum_lufs'] = L.integrated(both, circular=True)
             rep['stems'][k]['sum_tp'] = L.true_peak(both, circular=True)
+    if 'intense' in decoded and bid.startswith('mus_match'):
+        rep['joints'] = joints_qa(decoded, float(meta['bpm']))
     return rep
 
 
@@ -364,6 +458,8 @@ def print_bed(rep: dict) -> None:
         print(f'           clash {c}')
     if rep.get('pieces'):
         print_pieces(rep['pieces'])
+    if rep.get('joints'):
+        print_joints(rep['joints'])
     for k, r in rep['stems'].items():
         s, ps = r['seam'], r['pre_seam']
         ok_len = r['samples'] == r['render_samples']
@@ -471,6 +567,9 @@ def main() -> None:
     bad = [b['id'] for b in report['beds'] if b.get('pieces') and not b['pieces']['ok']]
     if bad:
         raise SystemExit(f'pieces QA failed: {bad}')
+    bad = [b['id'] for b in report['beds'] if b.get('joints') and not b['joints']['ok']]
+    if bad:
+        raise SystemExit(f'joints QA failed: {bad}')
 
 
 if __name__ == '__main__':

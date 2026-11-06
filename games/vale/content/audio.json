@@ -422,7 +422,7 @@
       {"id": "phase_pick", "file": "assets/audio/music/mus_draft_picks.ogg"}, {"id": "phase_finalize", "file": "assets/audio/music/mus_draft_final.ogg"},
       {"id": "urgency_local", "file": "assets/audio/music/mus_draft_urgency.ogg"}], "pieces": [
       {"at": 0, "file": "assets/audio/music/mus_draft_seg000.m4a"}, {"at": 16, "file": "assets/audio/music/mus_draft_seg016.m4a"}]},
-    "mus_match_rift": {"file": "assets/audio/music/mus_match_rift.ogg", "bpm": 120, "loopStart": 0, "gain": 0.75, "layers": [{"id": "intense", "file": "assets/audio/music/mus_match_rift_intense.ogg"}], "pieces": [
+    "mus_match_rift": {"file": "assets/audio/music/mus_match_rift.ogg", "bpm": 120, "loopStart": 0, "gain": 0.75, "layers": [{"id": "intense", "file": "assets/audio/music/mus_match_rift_intense.ogg"}, {"id": "objective", "file": "assets/audio/music/mus_match_rift_objective.ogg"}], "pieces": [
       {"at": 0, "file": "assets/audio/music/mus_match_rift_seg000.m4a"}, {"at": 16, "file": "assets/audio/music/mus_match_rift_seg016.m4a"}, {"at": 48, "file": "assets/audio/music/mus_match_rift_seg048.m4a"}, {"at": 112, "file": "assets/audio/music/mus_match_rift_seg112.m4a"}]},
     "mus_match_bridge": {"file": "assets/audio/music/mus_match_bridge.ogg", "bpm": 120, "loopStart": 0, "gain": 0.75, "layers": [{"id": "intense", "file": "assets/audio/music/mus_match_bridge_intense.ogg"}], "pieces": [
       {"at": 0, "file": "assets/audio/music/mus_match_bridge_seg000.m4a"}, {"at": 16, "file": "assets/audio/music/mus_match_bridge_seg016.m4a"}, {"at": 48, "file": "assets/audio/music/mus_match_bridge_seg048.m4a"}, {"at": 112, "file": "assets/audio/music/mus_match_bridge_seg112.m4a"}]},

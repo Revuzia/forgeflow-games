@@ -5,6 +5,7 @@ A bed function returns ({'main': stereo, '<layer>': stereo, …}, meta). Every s
 
     main stem   gated integrated LUFS  -23   (bedsLUFS; the runtime gain 0.75-0.8 and the music bus sit on top)
     layer stem  gated integrated LUFS  -25   (additive: main + layer lands near -21 LUFS = the "combat" lift)
+    objective   gated integrated LUFS  -27   (the pit's air on top of a bed: a weight, never a level change)
     true peak   <= -1.5 dBTP on main, <= -3 dBTP on a layer (their sum is caught by the engine's master limiter)
 """
 from __future__ import annotations
@@ -20,6 +21,7 @@ from synth.core import SR, db, stereo
 
 MAIN_LUFS = -23.0
 LAYER_LUFS = -25.0
+OBJECTIVE_LUFS = -27.0
 
 
 @dataclass
@@ -73,5 +75,5 @@ def master_bed(stems: dict[str, np.ndarray], spec: BedSpec) -> tuple[dict[str, n
         if k == 'main':
             out[k], info[k] = master_stem(x, spec.main_lufs, -1.5)
         else:
-            out[k], info[k] = master_stem(x, spec.layer_lufs, -3.0)
+            out[k], info[k] = master_stem(x, OBJECTIVE_LUFS if k == 'objective' else spec.layer_lufs, -3.0)
     return out, info

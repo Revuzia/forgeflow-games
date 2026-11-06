@@ -25,6 +25,24 @@ Form (16-bar sections, the same skeleton for all three maps, each with its own h
           Bm7b5 with an escapement clock; the motif falls to G4.
   FRAY    Noonplate at the noon fair: festive. A tresillo dance harp, bell peals, the Lydian D (D E G# A)
           as home, sunmote FM sparkles; the motif lands on G#4 over E/D.
+
+The match's acts (closing AUD-C4): the five sections are the segments of a horizontal score. No section is a new stem:
+the engine (src/audio/index.ts MUSIC_ACTS, `music` in its header) walks the same two stems in another order as the
+match goes on, so the motif assembles itself across a match and the decoded audio stays what it was.
+
+  early  S1 S2 S5        the fragments of the motif's head only
+  mid    S1 S2 S3 S5     the map's colour joins
+  late   S2 S3 S4 S5     the whole motif, the bare opening gone
+
+Every section ends on a chord that leads into any section's head (each map's S1-S4 end on a suspension or on E/D) and
+every section's last bar in the combat layer is the same fill, so a jump between sections is a bar like any other:
+audio/build_music.py renders every joint the acts can make the way the engine makes it and QAs it against the natural
+downbeats.
+
+  objective  RIFT only (the two epic pits, Longshade and Sunsplinter): 32 s on its own loop, the section's length, so a
+             jump between sections never moves it. A bowed D A fifth, a slow great step, a big escapement, a low bell:
+             only D, A and E, which sit over every chord of the form as a pedal. Faded by the listener's distance from
+             a living pit (the engine's 'objective' role).
 """
 from __future__ import annotations
 
@@ -161,6 +179,43 @@ def _finish(main: Stem, layer: Stem, chords: list[str], allowed, hits=(), V=None
                                                                  'mode_violations': bad, 'clashes': clashes, 'chords': chords}
 
 
+# ── the objective layer ──────────────────────────────────────────────────────────────────────────
+OBJECTIVE_BARS = 16        # 32 s: one section's length, so it never moves against a jump between sections
+
+
+def _objective(name: str, allowed) -> np.ndarray:
+    """The air of a pit: the D A pedal, the great step (half-time), the big clock, a low bell every 8 bars. Below 1 kHz
+    but for the clock's edge; the 1-4 kHz band stays with the UI and the abilities, as in the other stems."""
+    loop = OBJECTIVE_BARS * BAR
+    st = Stem(f'{name}_objective', loop, seed=f'{name}:objective',
+              sends={'drone': (0.3, 0.0), 'drums': (0.22, 0.12), 'esc': (0.2, 0.14), 'bell': (0.5, 0.0), 'breath': (0.4, 0.0)},
+              bus_db={'drone': -2.0, 'drums': 3.0, 'esc': -2.0, 'bell': -3.0, 'breath': -6.0},
+              bus_fx={'drone': [ens(2.6, 0.11, 0.5, f'{name}-objective-ens'), sat_insert(1.4, 0.2, 0.05)],
+                      'drums': [sat_insert(1.5, 0.2, 0.05)]})
+    # the pedal rises and falls over the 16 bars (its LFO fits the loop), overlapped across the wrap
+    st.add(-0.8, 'drone', 'D2', loop + 1.6, 0.26, -0.08, human=False, bus='drone', cutoff=(150.0, 420.0), attack=1.5,
+           release=1.5, sub=0.25, lfo_hz=1 / 16)
+    st.add(-0.8, 'drone', 'A2', loop + 1.6, 0.17, 0.08, human=False, bus='drone', cutoff=(180.0, 520.0), attack=1.5,
+           release=1.5, sub=0.0, lfo_hz=1 / 32)
+    step = dict(stroke='doum', pitch='D2', kick=0.7, vel=0.8, tone_t60=0.8)
+    kit = {'K': step, 'L': dict(step, kick=0.2, vel=0.55, pitch='A2', pan=0.14), 'R': KIT['R']}
+    for b in range(OBJECTIVE_BARS):
+        lanes = {'K': 'X---------------'} if b % 2 == 0 else {'L': '--------x---x---'}
+        if b == OBJECTIVE_BARS - 1:
+            lanes = {'L': '--------x---x---', 'R': '------------.oo.'}
+        drum_grid(st, T(b), BEAT, lanes, kit, rr0=b)
+        esc_grid(st, T(b), BEAT, 'C-------k-------', 0.2, pan=0.25, band_hz=1500.0, q=2.5, res=(620.0, 1300.0))
+    for b, p, v in ((0, 'D3', .30), (8, 'A2', .24), (12, 'E3', .14)):
+        st.add(T(b), 'bell', p, 14.0, v, -0.12 if p == 'D3' else 0.12, bus='bell', decay_scale=1.2)
+    for b, d in ((6, 6.0), (14, 6.0)):
+        gust(st, T(b), d, 0.08, 170.0, 420.0, q=1.4)
+    st.post.append(lambda x, is_loop: fx.speech_dip(x, -4.0, circular=is_loop))
+    bad = mode_report(st, allowed)
+    if bad:
+        raise SystemExit(f'{name} objective: out of the mode: {bad}')
+    return st.render()
+
+
 # ── RIFT ─────────────────────────────────────────────────────────────────────────────────────────
 def build_rift() -> tuple[dict, dict]:
     ch = RIFT
@@ -246,7 +301,10 @@ def build_rift() -> tuple[dict, dict]:
             esc_grid(layer, T(b), BEAT, '--K---K---K---K-', 0.2, pan=0.35, **SMALL_ESC)
     for b in (16, 32, 48, 64, 80):
         riser(layer, T(b), 3.0, 0.22, 400.0, 3200.0)
-    return _finish(main, layer, ch, BRIGHT_PCS, hits, V)
+    stems, meta = _finish(main, layer, ch, BRIGHT_PCS, hits, V)
+    stems['objective'] = _objective('rift', BRIGHT_PCS)
+    meta['layers'].append('objective')
+    return stems, meta
 
 
 # ── BRIDGE ───────────────────────────────────────────────────────────────────────────────────────

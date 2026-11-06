@@ -84,6 +84,20 @@
 //               (AUTO_PHASE_S: the first phase layer from 16 s, the last from 80 s); any other layer is
 //               the combat layer, faded by the match's combat intensity (enter above 0.6, leave below 0.35
 //               after 8 s, quantised to the bar). duck() pulls the bed −8 dB under a moment (the ready check).
+//               'objective…' (closing AUD-C4) loops on its own length, locked to the bed's bars, and fades by the
+//               listener's distance from a living epic objective (WorldView.objectives; full within OBJ_INNER_M,
+//               silent past OBJ_OUTER_M, OBJ_FADE_S time constant, not quantised), and out when the objective falls.
+//   acts        (closing AUD-C4) a match bed (a combat layer, MUSIC_SECTIONS sections of MUSIC_SECTION_BARS on its main
+//               stem) is a horizontal score: MUSIC_ACTS names the sections each act of the match plays, in order. No
+//               section is a file of its own, so an act costs no decoded audio: at a section's end the main stem and
+//               its synced layers carry on into their own next section when the act's order says so, and otherwise a
+//               second source of the SAME buffers takes over at the chosen section, an equal-power cross-fade of
+//               SECTION_XF_S ending on the downbeat (each section's head carries the tail of a suspension, so
+//               the fade passes tails, not onsets; audio/build_music.py renders and QAs every joint). The choice is
+//               made SECTION_LOOKAHEAD_S ahead; a timer too late for that (a background tab) leaves the stem running on
+//               into its own next section, which is the whole loop as composed. The act only rises within a match:
+//               by its clock (ACT_CLOCK x the mode's rules.suddenDeathAt, else rules.end.timeLimit) or by the share
+//               of its structures down (ACT_LOST), and a bed that starts mid-match walks there from its head.
 //               The bed's `pieces` ({ at, file }; older content: 'seg_<at>' layers) are the main stem's .m4a pieces,
 //               for the .m4a path only (the .ogg path never fetches one): `at` = where the piece starts on the bed's
 //               timeline (audio/build_music.py cuts them
@@ -220,7 +234,7 @@ interface CatalogLike {
   teamBuffs?: { id: string; passives?: PassiveLike[] }[];
   maps?: { id: string; art?: { ambient?: AmbientLike } }[];
   /** the Dawn Seal's end (see `world` in the header): rules.dawnSeal of each mode */
-  modes?: { id: string; rules?: { dawnSeal?: { units: string[]; until: number } } }[];
+  modes?: { id: string; rules?: { dawnSeal?: { units: string[]; until: number }; suddenDeathAt?: number; end?: { timeLimit?: number } } }[];
 }
 type PassiveKind = 'fighter' | 'item' | 'boon' | 'team' | 'unit';
 /** what became of a proc: played, held back by its owner's window, the cue's own cooldown or its voices, out of
@@ -238,12 +252,15 @@ interface AudioSettings { master: number; music: number; sfx: number; voice: num
 /** one announcer line waiting for the voice bus (see `announcer` in the header) */
 interface AnnItem { cue: string; band: number; rank: number; key: string; t: number; born: number }
 /** a bed layer (see `music` in the header) */
-type LayerRole = 'combat' | 'stem' | 'phase' | 'urgency';
-interface BedLayer { id: string; role: LayerRole; file: string; gain: GainNode; src: AudioBufferSourceNode | null; buf: AudioBuffer | null }
+type LayerRole = 'combat' | 'stem' | 'phase' | 'urgency' | 'objective';
+interface BedLayer { id: string; role: LayerRole; file: string; gain: GainNode; src: AudioBufferSourceNode | null; srcGain: GainNode | null; buf: AudioBuffer | null }
 /** the playing bed: `t0` = when its main stem started at position 0 (ctx time; null until it decodes), `len` its loop
  *  length; `pieces` = the .m4a path's piece sources until the stitched main stem takes over (see `music`) */
-interface Bed { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; t0: number | null; len: number; gain: GainNode;
-  layers: BedLayer[]; pieces: { src: AudioBufferSourceNode; gain: GainNode }[] }
+interface Bed { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; mainGain: GainNode | null; t0: number | null; len: number; gain: GainNode;
+  layers: BedLayer[]; pieces: { src: AudioBufferSourceNode; gain: GainNode }[];
+  /** the acts (see `acts` in the header): sections play only from this time on (the .m4a path's take-over), the last
+   *  section end decided, a jump scheduled and not reached yet (`t0` = the bed's t0 from `at` on), what was decided */
+  actsFrom: number | null; decided: number; jump: { at: number; t0: number } | null; sections: { at: number; from: number; to: number; jump: boolean; act: number }[] }
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
 interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
@@ -322,6 +339,17 @@ const ANN_PREEMPT = 1;       // bands up to this cut a playing line of a lower b
 const ANN_CUT_S = 0.15;      // … with this fade
 const ANN_TAIL_S = 0.6;      // the next line may start this long before the playing file ends (its ring-out) …
 const ANN_MIN_S = 0.6;       // … but never sooner than this after it started
+// the acts of a match bed (see `acts` in the header; audio/build_music.py reads these three definitions for its joint QA)
+const MUSIC_ACTS = [[0, 1, 4], [0, 1, 2, 4], [1, 2, 3, 4]];
+const MUSIC_SECTION_BARS = 16;
+const SECTION_XF_S = 0.25;
+const MUSIC_SECTIONS = 5;
+const SECTION_LOOKAHEAD_S = 3;
+const ACT_CLOCK = [0.2, 0.4];    // the next act's start, as a share of the mode's clock …
+const ACT_LOST = [0.15, 0.4];    // … or of its structures down, whichever comes first
+const OBJ_INNER_M = 10;          // the objective layer is full within this of a living epic objective …
+const OBJ_OUTER_M = 22;          // … and silent past this: a road beside a pit (19-25 m on RIFT) hardly lifts it
+const OBJ_FADE_S = 1;            // its time constant
 const AUTO_PHASE_S = [16, 80];   // a bed's phases walk themselves (first, last phase layer) until musicPhase() drives them
 const SEG_OVERLAP_S = 0.03;  // a main stem's .m4a piece runs on this far into the next (audio/build_music.py PIECE_OVERLAP_S)
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
@@ -434,6 +462,11 @@ class Engine implements ValeAudioPort {
   private urgent = false;
   /** musicPhase() was called for this bed (else the bed walks its own phases, AUTO_PHASE_S) */
   private phaseDriven = false;
+  /** the match's act and what drives it (see `acts` in the header): structures seen standing at most */
+  private act = 0;
+  private structuresMax = 0;
+  /** the objective layer's level (see `music` in the header) */
+  private objNear = 0;
   /** the draft's last state (draft()), null outside the draft */
   private draftS: DraftMusicState | null = null;
   // the announcer (see `announcer` in the header)
@@ -506,6 +539,8 @@ class Engine implements ValeAudioPort {
   private readonly maps = new Map<string, AmbientLike | undefined>();
   /** mode id → its Dawn Seal (rules.dawnSeal: the sealed units, when the seal ends; see `world` in the header) */
   private readonly seals = new Map<string, { units: string[]; until: number }>();
+  /** mode id → its clock in seconds (see `acts` in the header) */
+  private readonly modeClock = new Map<string, number>();
   /** the Gorge Wind steps already heard (WorldView.gorgeWind; see `world` in the header) */
   private gorgeSeen = 0;
   /** the attached match's ambience emitters (built on attach, voiced once the context runs) */
@@ -574,6 +609,10 @@ class Engine implements ValeAudioPort {
     for (const u of cat.units ?? []) own(u.passive, 'unit');
     for (const m of cat.maps ?? []) this.maps.set(m.id, m.art?.ambient);
     for (const m of cat.modes ?? []) if (m.rules?.dawnSeal) this.seals.set(m.id, m.rules.dawnSeal);
+    for (const m of cat.modes ?? []) {
+      const clock = m.rules?.suddenDeathAt ?? m.rules?.end?.timeLimit;
+      if (clock) this.modeClock.set(m.id, clock);
+    }
     const resume = (): void => { this.ensure(); void this.ctx?.resume(); };
     addEventListener('pointerdown', resume, { capture: true });
     addEventListener('keydown', resume, { capture: true });
@@ -943,11 +982,11 @@ class Engine implements ValeAudioPort {
       g.connect(gain);
       // the first layer with no other role is the combat layer (see `music` in the header)
       const role: LayerRole = l.id.startsWith('stem') ? 'stem' : l.id.startsWith('phase_') ? 'phase' : l.id.startsWith('urgency_') ? 'urgency'
-        : combat ? 'stem' : 'combat';
+        : l.id.startsWith('objective') ? 'objective' : combat ? 'stem' : 'combat';
       if (role === 'combat') combat = true;
-      return { id: l.id, role, file: l.file, gain: g, src: null, buf: null };
+      return { id: l.id, role, file: l.file, gain: g, src: null, srcGain: null, buf: null };
     });
-    const bed: Bed = { id, def, main: null, t0: null, len: 0, gain, layers, pieces: [] };
+    const bed: Bed = { id, def, main: null, mainGain: null, t0: null, len: 0, gain, layers, pieces: [], actsFrom: null, decided: 0, jump: null, sections: [] };
     this.bed = bed;
     // each layer joins when both it and the main stem are in
     const loadLayers = (): void => {
@@ -980,8 +1019,10 @@ class Engine implements ValeAudioPort {
     const s = ctx.createBufferSource();
     s.buffer = main; s.loop = true;
     s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? main.duration;
-    s.connect(bed.gain); s.start(t0);
-    bed.main = s; bed.t0 = t0; bed.len = Math.max(0.001, s.loopEnd - s.loopStart);
+    const g = ctx.createGain();
+    g.connect(bed.gain);
+    s.connect(g); s.start(t0);
+    bed.main = s; bed.mainGain = g; bed.t0 = t0; bed.len = Math.max(0.001, s.loopEnd - s.loopStart); bed.actsFrom = t0;
     bed.gain.gain.setTargetAtTime(def.gain, t0, XFADE_S / 3);
     for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
   }
@@ -1076,7 +1117,7 @@ class Engine implements ValeAudioPort {
         try { p.src.stop(now + 0.15); } catch { /* not started */ }
       }
     }
-    bed.main = s; bed.len = len;
+    bed.main = s; bed.mainGain = g; bed.len = len; bed.actsFrom = Math.max(t, now) + 0.1;
     for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
   }
 
@@ -1111,7 +1152,10 @@ class Engine implements ValeAudioPort {
     if (!ctx || !l.buf || l.src || bed.t0 === null) return;
     const s = ctx.createBufferSource();
     s.buffer = l.buf; s.loop = true;
-    s.connect(l.gain);
+    const sg = ctx.createGain();
+    sg.connect(l.gain);
+    s.connect(sg);
+    l.srcGain = sg;
     const now = ctx.currentTime;
     if (l.role === 'stem') {
       s.loopStart = 0; s.loopEnd = l.buf.duration;
@@ -1121,10 +1165,13 @@ class Engine implements ValeAudioPort {
       const def = bed.def;
       s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? l.buf.duration;
       const bar = (60 / def.bpm) * 4;
-      const at = now + 0.05 <= bed.t0 ? bed.t0 : bed.t0 + Math.ceil((now + 0.05 - bed.t0) / bar) * bar;
-      const p = at - bed.t0;
+      let at = now + 0.05 <= bed.t0 ? bed.t0 : bed.t0 + Math.ceil((now + 0.05 - bed.t0) / bar) * bar;
+      // a jump between sections already scheduled (see `acts` in the header): join on its far side
+      if (bed.jump) at = Math.max(at, bed.jump.at);
+      const p = at - (bed.jump ? bed.jump.t0 : bed.t0);
       const end = s.loopEnd;
-      const pos = p < end ? p : def.loopStart + ((p - end) % bed.len);
+      // a layer shorter than the main stem (an objective layer) runs on its own loop, on the same bars
+      const pos = l.role === 'objective' ? p % l.buf.duration : p < end ? p : def.loopStart + ((p - end) % bed.len);
       s.start(at, Math.min(pos, Math.max(0, l.buf.duration - 0.001)));
     }
     l.src = s;
@@ -1144,11 +1191,96 @@ class Engine implements ValeAudioPort {
     const upTo = this.phase === null ? -1 : phases.indexOf(this.phase);
     for (const l of b.layers) {
       if (l.role === 'stem') continue;
+      if (l.role === 'objective') {
+        l.gain.gain.cancelScheduledValues(t);
+        l.gain.gain.setTargetAtTime(this.objNear, t, OBJ_FADE_S);
+        continue;
+      }
       const on = l.role === 'combat' ? this.combat : l.role === 'urgency' ? this.urgent : phases.indexOf(l.id.slice('phase_'.length)) <= upTo;
       const at = l.role === 'urgency' ? t : nextBar;
       l.gain.gain.cancelScheduledValues(t);
       l.gain.gain.setTargetAtTime(on ? 1 : 0, at, l.role === 'urgency' ? 0.12 : 0.6);
     }
+  }
+
+  // ── the acts of a match bed (see `acts` in the header) ───────────────────────────────────────────
+  /** the match's act: by its clock or its structures down; it only rises */
+  private actNow(view: MatchClient['view']): void {
+    const clock = this.modeClock.get(view.mode) ?? 0;
+    let standing = 0;
+    for (const u of view.entities) if (u.kind === 'structure' && u.alive) standing++;
+    this.structuresMax = Math.max(this.structuresMax, standing);
+    const lost = this.structuresMax > 0 ? 1 - standing / this.structuresMax : 0;
+    const share = clock > 0 ? view.time / clock : 0;
+    for (let a = ACT_CLOCK.length; a > this.act; a--) {
+      if (share >= ACT_CLOCK[a - 1] || lost >= ACT_LOST[a - 1]) { this.act = a; break; }
+    }
+  }
+
+  /** how near your ear is to a living epic objective, 0..1 (smoothstep over the distance) */
+  private objectiveNear(view: MatchClient['view']): number {
+    const ear = this.ear();
+    if (!ear) return 0;
+    let best = Infinity;
+    for (const o of view.objectives ?? []) if (o.alive) best = Math.min(best, Math.hypot(o.at[0] - ear.x, o.at[1] - ear.y));
+    const k = Math.min(1, Math.max(0, (OBJ_OUTER_M - best) / (OBJ_OUTER_M - OBJ_INNER_M)));
+    return k * k * (3 - 2 * k);
+  }
+
+  /** a bed's next section, near its time: nothing to do when the stem's own next one is the act's next, else a jump */
+  private sectionsNow(b: Bed): void {
+    const ctx = this.ctx;
+    if (!ctx || !b.main || !b.mainGain || b.t0 === null || b.actsFrom === null) return;
+    const now = ctx.currentTime;
+    if (b.jump && now >= b.jump.at) { b.t0 = b.jump.t0; b.jump = null; }
+    if (b.jump || now < b.actsFrom) return;
+    const barS = (60 / b.def.bpm) * 4, secS = barS * MUSIC_SECTION_BARS;
+    if (!b.layers.some((l) => l.role === 'combat') || b.def.loopStart !== 0 || Math.abs(b.len - secS * MUSIC_SECTIONS) > 0.01) return;
+    const k = Math.ceil((now + SECTION_XF_S + 0.05 - b.t0) / secS);       // the next section end still in reach
+    const at = b.t0 + k * secS;
+    if (at - now > SECTION_LOOKAHEAD_S || at <= b.decided + 0.01) return;
+    b.decided = at;
+    const from = (k - 1 + MUSIC_SECTIONS * 8) % MUSIC_SECTIONS, natural = (from + 1) % MUSIC_SECTIONS;
+    const to = nextSection(MUSIC_ACTS[this.act] ?? MUSIC_ACTS[0], from);
+    b.sections.push({ at, from, to, jump: to !== natural, act: this.act });
+    if (b.sections.length > 64) b.sections.shift();
+    if (to === natural) return;
+    const pos = to * secS;
+    b.main = this.jumpSource(ctx, b.main, b.mainGain, b.gain, at, pos, b.len, (g) => { b.mainGain = g; });
+    for (const l of b.layers) {
+      // an objective layer has the section's own period, so a jump never moves it; a stem is on no grid
+      if (!l.src || !l.srcGain || l.role === 'objective' || l.role === 'stem') continue;
+      l.src = this.jumpSource(ctx, l.src, l.srcGain, l.gain, at, pos, b.len, (g) => { l.srcGain = g; });
+    }
+    b.jump = { at, t0: at - pos };
+  }
+
+  /** a second source of the same buffer takes over from `old`: the equal-power fade ends on `at`, where the new source
+   *  is at `pos` of its loop (see `acts` in the header) */
+  private jumpSource(ctx: AudioContext, old: AudioBufferSourceNode, oldGain: GainNode, dest: AudioNode, at: number, pos: number, len: number,
+    setGain: (g: GainNode) => void): AudioBufferSourceNode {
+    const start = at - SECTION_XF_S;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    g.connect(dest);
+    const s = ctx.createBufferSource();
+    s.buffer = old.buffer; s.loop = true;
+    s.loopStart = old.loopStart; s.loopEnd = old.loopEnd;
+    s.connect(g);
+    s.start(start, (pos - SECTION_XF_S + len) % len);
+    g.gain.setValueCurveAtTime(XF_CURVES.in, start, SECTION_XF_S);
+    oldGain.gain.setValueCurveAtTime(XF_CURVES.out, start, SECTION_XF_S);
+    old.onended = () => { oldGain.disconnect(); };
+    try { old.stop(at + 0.02); } catch { /* already stopped */ }
+    setGain(g);
+    return s;
+  }
+
+  /** dev / probes: the acts as they run (see `acts` in the header) */
+  get musicActs(): { act: number; objNear: number; objGain: number | null; structuresMax: number; sections: { at: number; from: number; to: number; jump: boolean; act: number }[] } {
+    const b = this.bed;
+    return { act: this.act, objNear: this.objNear, structuresMax: this.structuresMax,
+      objGain: b?.layers.find((l) => l.role === 'objective')?.gain.gain.value ?? null, sections: b ? b.sections.slice() : [] };
   }
 
   private stopBed(): void {
@@ -1285,6 +1417,7 @@ class Engine implements ValeAudioPort {
     this.off = null;
     this.client = client;
     this.intensity = 0; this.fight = 0; this.combat = false; this.calmFor = 0;
+    this.act = 0; this.structuresMax = 0; this.objNear = 0;
     this.lastT = client ? client.view.time : null;
     this.gorgeSeen = client?.view.gorgeWind ?? 0;
     this.procLast.clear();
@@ -1856,6 +1989,8 @@ class Engine implements ValeAudioPort {
     this.syncAmbience();
     const b = this.bed;
     if (!b || !this.ctx) return;
+    if (view) { this.actNow(view); this.objNear = this.objectiveNear(view); } else this.objNear = 0;
+    this.sectionsNow(b);
     // phases nobody drives walk themselves (see `music` in the header)
     const phases = b.layers.filter((l) => l.role === 'phase');
     if (!this.phaseDriven && phases.length && b.t0 !== null) {
@@ -1873,6 +2008,20 @@ class Engine implements ValeAudioPort {
     this.bedRoles();
   }
 }
+
+/** the section after `from` in an act's order; a section the act does not play goes on to the act's next one above it */
+function nextSection(seq: readonly number[], from: number): number {
+  const i = seq.indexOf(from);
+  if (i >= 0) return seq[(i + 1) % seq.length];
+  return seq.find((s) => s > from) ?? seq[0];
+}
+
+/** the equal-power cross-fade of a jump between sections, 33 points */
+const XF_CURVES = (() => {
+  const n = 33, a = new Float32Array(new ArrayBuffer(n * 4)), b = new Float32Array(new ArrayBuffer(n * 4));
+  for (let i = 0; i < n; i++) { const th = (i / (n - 1)) * Math.PI / 2; a[i] = Math.sin(th); b[i] = Math.cos(th); }
+  return { in: a, out: b };
+})();
 
 /** an ability's effects make its wind-up T3 (see `threat` in the header): at any depth, a control status (T3_STATUS)
  *  not applied to the caster, a displacement, a dash / blink or a zone */
