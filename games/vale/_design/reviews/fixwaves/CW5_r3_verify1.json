@@ -1,0 +1,168 @@
+{
+  "wave": "CW5",
+  "round": 3,
+  "verify": 1,
+  "pass": false,
+  "summary": "FAIL, on one regression and one missed card. 7 of 8 at par. The floor gate really does read 0 clips on all 8 base GLBs, but art/tools/clip_floor_fix.py broke Ervet's dash: at the landing the right leg flips from trailing to forward for f15-19, then snaps back 0.995 m in one 30 Hz frame at f20 (was 0.200). The gate cannot see this, because it only measures height. Ervet re-scores 7.4 until that clip is fixed. Separately, lisvel_almanac's splash shows a featureless pale face oval, head turned away, against the engineer's 'face readable' (true of the portrait only). Everything else holds on sheets I re-rendered: named pairs 8.1 or better on all 8, skin deltas, cards 48/0, crown, load 24/24, chains, Vashil steps, Ulkro lumps and recall, Lisvel floor, store gate 32/32. Two fixes remain, neither needing a full rebuild: restore and re-fix Ervet's dash samples, re-render one splash. `npm run content` is still owed before a live match.",
+  "items": [
+    {
+      "id": "done:1",
+      "severity": "blocker",
+      "status": "pass",
+      "evidence": "crown_gate re-run: 48 GLBs, 0 FAIL; vashil and both skins R3 14.2 cm, w5 20.2 cm (_harness/_reports/fw_CW5_r3v1_crown.txt). Vashil's GLB changed only in animation samples this round, so the geometry and the earlier live walk-away capture (fw_CW5_r2v1) carry over; I did not re-shoot it live."
+    },
+    {
+      "id": "done:2",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "card_qa on all 8: 48 cards, 0 gate misses (_harness/_reports/fw_CW5_r3v1_cards.txt). lisvel_almanac splash speckle 1.56, hi p99.9 243, MAD 43.5; portrait MAD 39.9. The per-skin staging holds. The gate does not measure face legibility: see finding:almanac-splash-face."
+    },
+    {
+      "id": "done:3",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Re-measured (_harness/_reports/fw_CW5_r3v1_motion.txt): Ardit tabard_l seg1 26.3 deg, lag 2 f, r 0.98; Burdam cowl_b 10.4 deg, skirt_f 17.1 deg; Kemdo robe_f 24.7 deg, lag 2 f; Lisvel tabard_fl swing 35.1 deg, lag 2 f; Nurrow cape 20.1 / 13.8 deg; Ulkro skirt_f 22.5 deg, tail 7.7 / 14.7 deg. Vashil rod step per 60 Hz frame: Peal 0.265 m at 1.667x, Toll 0.273 m at 1.778x, both <= 0.3; Toll rod y min now +0.062 (was -0.060). Recall hand.L range 0.570 m, with hand positions unchanged by the wrist fix (fw_CW5_r3v1_floorfix_diff.txt). Lisvel dash floor -0.001 m. Live Vashil recall not re-run: clip length unchanged at 6 s."
+    },
+    {
+      "id": "done:4",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "I re-rendered all 24 sheets with three_snapshot, no --sky (fw_CW5_r3v1_snap.log, _harness/_shots/fw_CW5_r3v1_three_*.png), then ran part_gamecam --named on the base sheets. All pairs pass, minimum dE per fighter: Vashil 8.4, Ardit 8.2, Burdam 8.2, Kemdo 8.2, Lisvel 8.5, Nurrow 8.8, Ulkro 8.1 (legs:wraps), Ervet 8.3 (fw_CW5_r3v1_<id>_gamecam.txt). Burdam pauldron L* 46.1 / 65.5 / 74.6, depth 19.4, in band."
+    },
+    {
+      "id": "done:5",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "On my fresh sheets (fw_CW5_r3v1_skin_gamecam.txt): Burdam Almanac 19.3 >= Stillwater 18.2; Kemdo Long Evening 14.7 >= Highrim 10.9. Store: `node tools/gen_store.ts --check` current, dE gate 32/32; Ardit First Bell 27.5, Vashil First Bell 23.5 (fw_CW5_r3c_store_de.json, floors 18)."
+    },
+    {
+      "id": "done:6",
+      "severity": "major",
+      "status": "partly",
+      "evidence": "three_load_test --budget-kb 1172 OK on 24/24 GLBs (fw_CW5_r3v1_load.txt). Ervet recall 6.0 s. lineup_qa re-run on the four fighters with changed GLBs that matter most here (Lisvel, Ulkro, Nurrow, Ervet): silhouetteOk true (art/renders/lineup/fw_CW5_r3v1_lineup.json); the other four took animation-only edits. Score clause not met: Ervet 7.4 (par:ervet).",
+      "fixHint": "Closes when par:ervet is back at 7.5."
+    },
+    {
+      "id": "par:vashil",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, unchanged. Prop floor fix helps (death -0.259 -> -0.016 m) and keeps the steps under the limit. Hand positions unchanged; rod moved up to 28 cm only in death, no new pop (largest added step 0.052 m, fw_CW5_r3v1_floorfix_diff.txt). In-game First Bell stays close to base at per-pixel dE 6.1 (backlog)."
+    },
+    {
+      "id": "par:ardit",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, unchanged. Floor edits are tiny at bone level (0.6 cm in death). Pairs, chains, load hold. Sheet viewed: no new artifact."
+    },
+    {
+      "id": "par:burdam",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, unchanged. Floor edit moved the prop at most about 1 cm at the bones I sampled, no pop (fw_CW5_r3v1_floorfix_diff.txt). Mask reads stern on all three splashes (_harness/_shots/fw_CW5_r3v1_splash_heads_all.png), consistent with the closing review's sensitivity call."
+    },
+    {
+      "id": "par:kemdo",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, unchanged. Only death's robe chain changed. Crown R3 13.9 cm. Recall still a 2 s clip (backlog minor)."
+    },
+    {
+      "id": "par:lisvel",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, held. Figure and base cards hold, and the Almanac figure now plainly differs from base (plum scarf and sleeves, ruled wrap: fw_CW5_r3v1_three_lisvel_almanac.png; per-pixel dE 16.1 vs Gorgewalk 9.6). Death and taunt no longer sink. Base splash shows nose and mouth. The Almanac splash face is a separate open finding, a skin-card defect rather than one that lowers her base score; I did not treat it as a blocker, see finding:almanac-splash-face."
+    },
+    {
+      "id": "par:nurrow",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.6, unchanged. Death now rests on the floor (0 clips below); row viewed, hat falls and lands (_harness/_shots/fw_CW5_r3_nurrow_death_row.png). Crown R3 11.2 cm, pairs min 8.8. Pre-existing: foot.R 0.552 m step at cast_ult f16 relative to hips, not caused by this fix."
+    },
+    {
+      "id": "par:ulkro",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, unchanged or slightly better. Lumps gone, recall 5.5 s, head 37.8 cm, hips 36.7 cm range, floor -0.018 m, 10/10 pairs. Close sheet viewed; hood and face wrap read as before. Dark jagged shards at the forearm wrap are a small paint residue (_harness/_shots/fw_CW5_r3e_ulkro_rear.png, minor)."
+    },
+    {
+      "id": "par:ervet",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "Score 7.4, down from 7.5 because of regression:ervet-dash. Everything else holds: pairs min 8.3, load OK, crown R3 10.9 cm, recall 6 s, floor gate 0 clips.",
+      "fixHint": "Fix regression:ervet-dash; the score returns to 7.5 with no other change."
+    },
+    {
+      "id": "regression:ervet-dash",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "art/out/fighters/ervet/ervet.glb clip dash, compared with the pre-fix blob at e6d0e959a~1. foot.R z: f14 -0.002, f15 +0.709, f19 +0.638, f20 -0.351 (pre-fix about -0.35 throughout). The step at f20 is 0.995 m in one 30 Hz frame, was 0.200; jerk 0.930, was 0.188; foot.R moved up to 113.3 cm from its old path. The right leg flips from trailing to forward for f15-19 and floats about 0.1 m, also drifting up to 17 cm in f2-12. Proof: _harness/_reports/fw_CW5_r3v1_ervet_dash.txt, fw_CW5_r3v1_floorfix_diff.txt, fw_CW5_r3v1_legpop.txt (largest leg step of all 8 fighters), _harness/_shots/fw_CW5_r3v1_ervet_dash_side.png (pre vs now), fw_CW5_r3v1_ervet_dash_row.png. clip_floor passes it, so the gate does not guard this. Not seen live; the numbers and the skeleton plot are the evidence.",
+      "fixHint": "Restore dash's samples from `git show e6d0e959a~1:games/vale/art/out/fighters/ervet/ervet.glb`, then fix leg IK in art/tools/clip_floor_fix.py: keep the knee on the source pose's side (pole from the pre-fix knee) and refuse a solve that moves the ankle more than about 10 cm horizontally. Failing that, lift the 7 cm toe dip at the hips or by the foot's pitch. Add a before/after max-step check to the tool that fails when a leg step grows by more than about 0.1 m, then re-run it across all 6 fighters."
+    },
+    {
+      "id": "finding:almanac-splash-face",
+      "severity": "major",
+      "status": "fail",
+      "evidence": "art/out/fighters/lisvel/lisvel_almanac_splash.png: the head is turned away and the visible face is a smooth pale oval under the band, with no nose, mouth or lids; the left silhouette has no nose (_harness/_shots/fw_CW5_r3v1_lisvel_splash_heads.png, left; _harness/_shots/fw_CW5_r3v1_almanac_head.png). The engineer's 'face readable' holds for the portrait only. The same pose was already in the earlier Almanac splash (fw_CW5_r3v1_almanac_old.png), so this is not new, and earlier verifiers checked the portrait. Severity call: the same read as the base-splash blocker in CW5_r2_verify1. I hold it at major rather than blocker because the head is seen from behind three-quarter and at full card size it reads as a figure looking up at her arrows. Lead may rule otherwise. Also noted, not failed: on Gorgewalk's splash the bow limb covers the lower face.",
+      "fixHint": "Re-render the Almanac splash only. In art/blender/fighters/lisvel.py CARDS, change splash yaw from 22 toward the face side (try negative yaw, as on the base card) or use a clip time where the head faces the camera, until nose and mouth show at 1600 x 900; keep the skin's plate and light. Re-run card_qa on lisvel_almanac."
+    },
+    {
+      "id": "client:CL-1",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Gate met: store check 32/32; lisvel_almanac dE 25.5 against floor 18, and my own 256 px portrait dE76 is 25.5. Game camera per-pixel dE 16.1 (fw_CW5_r3v1_skin_gamecam.txt). The figure changed, not only the plate. The splash face is tracked apart as finding:almanac-splash-face."
+    },
+    {
+      "id": "minor:floor-sweep",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "The gate itself passes: clip_floor reports 0 clips below -0.02 m on all 8 (_harness/_reports/fw_CW5_r3v1_floor.txt). I confirmed Ervet cast_ult -0.016, Vashil death -0.016, Burdam channel -0.019, Nurrow death -0.016. But the method caused regression:ervet-dash, and the fix is GLB-level for six fighters, so a rebuild loses it (comments present in each source).",
+      "fixHint": "See regression:ervet-dash."
+    },
+    {
+      "id": "minor:floor",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Lisvel: death -0.009, taunt -0.013, idle_lobby -0.003, 0 clips below (fw_CW5_r3v1_floor.txt). Death row viewed: falls and lies on the floor (_harness/_shots/fw_CW5_r3_lisvel_death_row.png)."
+    },
+    {
+      "id": "minor:ulkro-seat-lumps",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "No black lumps in fw_CW5_r3e_ulkro_rear.png or my fresh sheet row 3 (fw_CW5_r3v1_three_ulkro.png). legs:wraps 8.1 on the fresh sheet."
+    },
+    {
+      "id": "minor:ulkro-recall-patch",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "art/blender/fighters/ulkro.py:1058 runs clip_lift on recall/hips; fw_CW5_r3_final.log:2 shows dy 0.004. Recall floor -0.018 m re-measured."
+    },
+    {
+      "id": "minor:stored-sheet-render-setup",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Stored sheets of the eight: 24 at backdrop (198,192,181); only three_ervet_great and three_ervet_hilt at (193,191,186), as disclosed. Fresh and stored skin deltas agree to the printed digit (Burdam Almanac 19.3, Lisvel Almanac 16.1). skin_gamecam_delta.py prints the backdrop and warns."
+    },
+    {
+      "id": "minor:stray-tool",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "No art/tools/_tmp* match."
+    },
+    {
+      "id": "minor:stray-tool-file",
+      "severity": "minor",
+      "status": "pass",
+      "evidence": "Same file, gone."
+    },
+    {
+      "id": "handoff:npm-content",
+      "severity": "minor",
+      "status": "not_measured",
+      "evidence": "Engineer's handoff to the lead: `npm run content` before any live match. Not run here (verifier may only edit its verdict). No floor-fixed clip has been seen in a live match, by the engineer or by me.",
+      "fixHint": "Lead runs it after Ervet's dash is fixed, then watches Ervet's dash live."
+    }
+  ],
+  "regressions": [
+    "Ervet dash: art/tools/clip_floor_fix.py's leg IK flipped the right leg forward for f15-19, followed by a 0.995 m single-frame snap at f20 (was 0.200 m). clip_floor passes it. Introduced in e6d0e959a, carried at HEAD."
+  ]
+}
