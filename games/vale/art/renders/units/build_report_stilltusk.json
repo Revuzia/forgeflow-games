@@ -9,15 +9,15 @@
   "tris": 6820,
   "uv_coverage": 0.694,
   "bake": {
-    "base": 2.11,
-    "rough_metal": 1.17,
-    "normal": 1.28,
-    "ao": 1.35,
+    "base": 8.19,
+    "rough_metal": 5.24,
+    "normal": 7.86,
+    "ao": 4.52,
     "normal_fixed_px": 3222,
-    "pack_save": 0.27,
-    "total": 6.43
+    "pack_save": 1.01,
+    "total": 28.67
   },
-  "bake_holes_filled": 2,
+  "bake_holes_filled": 0,
   "clips": {
     "idle": {
       "frames": 90,
@@ -118,13 +118,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 2247548,
+  "glb_bytes_raw": 2255308,
   "optimize": {
     "ok": true,
-    "before": 2247548,
-    "after": 562520
+    "before": 2255308,
+    "after": 564712
   },
-  "glb_bytes": 562520,
+  "glb_bytes": 564712,
   "inspect": [
     "  skin stilltusk_rig: 29 joints: root hips spine chest neck head ear.L ear.R jaw scapula.L upper_arm.L forearm.L hand.L hoof.L scapula.R upper_arm.R forearm.R hand.R hoof.R tail tail2 thigh.L shin.L foot.L toe.L thigh.R shin.R foot.R toe.R",
     "  mesh stilltusk: 6820 tris",
@@ -132,7 +132,7 @@
     "  material stilltusk_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  texture stilltusk_normal: image/webp ? 104.4 KiB",
     "  texture stilltusk_orm: image/webp ? 40.4 KiB",
-    "  texture stilltusk_base: image/webp ? 118.2 KiB",
+    "  texture stilltusk_base: image/webp ? 120.4 KiB",
     "  clip attack1      0.833 s (25 f) channels=26 bones=25",
     "  clip cast_a1      1.167 s (35 f) channels=26 bones=25",
     "  clip death        1.333 s (40 f) channels=26 bones=25",
@@ -142,8 +142,8 @@
   "load_test": {
     "ok": true,
     "log": [
-      "[three] art/out/units/stilltusk.glb (549 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: stilltusk_base 1024x1024 118K, stilltusk_normal 1024x1024 104K, stilltusk_orm 512x512 40K",
+      "[three] art/out/units/stilltusk.glb (551 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: stilltusk_base 1024x1024 120K, stilltusk_normal 1024x1024 104K, stilltusk_orm 512x512 40K",
       "  skinned meshes: stilltusk(5919v)",
       "  bones: 29 (root hips spine chest neck head earL earR jaw scapulaL upper_armL forearmL handL hoofL scapulaR upper_armR forearmR handR hoofR tail tail2 thighL shinL footL toeL thighR shinR footR toeR)",
       "  clips: attack1:0.833s/26tr, cast_a1:1.167s/26tr, death:1.333s/26tr, idle:3.000s/29tr, run:0.800s/26tr",
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/stilltusk.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.327,0.004,-0.917],[0.326,1.4,1.16]],\"facing\":[0.001,1],\"headY\":0.84,\"heightPx1080\":74,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/stilltusk.png\",\"seconds\":17.9}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.327,0.004,-0.917],[0.326,1.4,1.16]],\"facing\":[0.001,1],\"headY\":0.84,\"heightPx1080\":74,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/stilltusk.png\",\"seconds\":34.6}"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.03,
-      "sculpt": 19.81,
-      "bind": 0.31,
-      "uv": 14.77,
-      "bake": 6.87,
-      "clips": 0.53,
-      "ground_qa": 0.24,
-      "export": 0.86,
-      "optimize": 0.63,
-      "qa": 18.83
+      "rig": 0.08,
+      "sculpt": 165.02,
+      "bind": 5.59,
+      "uv": 80.43,
+      "bake": 30.35,
+      "clips": 2.15,
+      "ground_qa": 0.64,
+      "export": 11.42,
+      "optimize": 2.46,
+      "qa": 36.24
     },
-    "total_s": 63.07
+    "total_s": 334.8
   }
 }

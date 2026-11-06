@@ -1029,8 +1029,8 @@ class Stilltusk(Creature):
     # L* p50 19 on a 26 floor, dE 12, hp 0.98): warm ochre back, darker rust flanks with umber hour ticks, a cream
     # belly, an umber mane frosted cream at the tips, dark legs
     # (round 2: hide and flank up about 6 L*: dL* read 14 on its lit home floor, L* p50 47 on 33)
-    PAL = {"hide": "#D49A62", "flank": "#BA7E4E", "belly": "#DEC49C", "leg": "#4A3426", "hoof": "#2A1E17",
-           "mane": "#6A4630", "mane_tip": "#EAD6B2", "snout": "#B08068", "nose": "#3A2C28", "eye": "#120D0B",
+    PAL = {"hide": "#E8B884", "flank": "#D8A472", "belly": "#EAD6B4", "leg": "#5E4432", "hoof": "#2A1E17",
+           "mane": "#7A5238", "mane_tip": "#EAD6B2", "snout": "#B08068", "nose": "#3A2C28", "eye": "#120D0B",
            "ear_in": "#9A6E5A", "tick": "#3E281C", "stripe": "#F0E0C0", "tusk": "#DCCFB5"}
 
     def joints(self):
@@ -1220,7 +1220,7 @@ class Stilltusk(Creature):
             ang = np.arctan2(z - 0.62, np.abs(x))
             ticks = np.clip(1 - np.abs((y + 0.45) / 0.13 % 1.0 - 0.5) / 0.08, 0, 1) ** 2
             ticks *= _smooth_arr(0.2, 0.35, ang) * _smooth_arr(0.75, 0.6, ang) * _smooth_arr(-0.4, -0.25, y) * _smooth_arr(0.5, 0.38, y)
-            col = col * (1 - 0.75 * ticks[:, None]) + c("tick") * 0.75 * ticks[:, None]
+            col = col * (1 - 0.55 * ticks[:, None]) + c("tick") * 0.55 * ticks[:, None]
             # (round 3, r5: cape and chevrons a step lighter, the pale bands a step stronger: on the sunlit Serenade floor the adult stood only 9 L* off)
             # round 3 (critic:monsters): the adult's back reads from above: a dark shoulder cape fading down the spine and
             # hour chevrons across the hide behind it, the bands pointing back along the body, broken by noise at the edges
