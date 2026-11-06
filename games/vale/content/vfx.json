@@ -54437,9 +54437,9 @@
         "at": "ground",
         "delay": 0.75,
         "radius": 1.4,
-        "life": 0.08,
+        "life": 0.14,
         "color": "signature",
-        "intensity": 3.0
+        "intensity": 4.5
       },
       {
         "type": "shockwave",
