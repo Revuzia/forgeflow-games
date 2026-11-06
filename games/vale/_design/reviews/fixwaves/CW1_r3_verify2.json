@@ -3,7 +3,7 @@
  "round": 3,
  "verify": 2,
  "pass": false,
- "summary": "CW1 round 3 verify 2 does not pass, on one clause of done:7. The triangle miss is fixed: 0 frames over 500k in 12 match games (6 on the sweep seeds across 2 sweeps, 3 on fresh seeds), highest peak 467k. done:1 passes: Hesmi x2.14-2.15 in 3 of 3 full runs. But the exact done:7 command printed GATE FAIL in 1 of my 2 sweeps, from the memory step: GPU process +6.8 % against the 5 % gate. Nothing points to a leak (tracked objects flat, 5 other measures -0.6 to +3.3 %), and the menu_2 baseline alone spans about 6.5 % between runs. Whether that gate needs a steadier baseline or a tolerance is for the lead, so I did not wave it through.",
+ "summary": "CW1 round 3 verify 2 does not pass, on one clause of done:7. The triangle miss is fixed: 0 frames over 500k in 9 match games (6 on the sweep seeds across 2 sweeps, 3 on fresh seeds), highest peak 467k. done:1 passes: Hesmi x2.14-2.15 in 3 of 3 full runs. But the exact done:7 command printed GATE FAIL in 1 of my 2 sweeps, from the memory step: GPU process +6.8 % against the 5 % gate. Nothing points to a leak (tracked objects flat, 5 other measures -0.6 to +3.3 %), and the menu_2 baseline alone spans about 6.5 % between runs. Whether that gate needs a steadier baseline or a tolerance is for the lead, so I did not wave it through.",
  "items": [
   {
    "id": "done:1",
