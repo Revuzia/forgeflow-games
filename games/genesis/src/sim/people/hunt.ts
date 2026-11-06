@@ -171,7 +171,9 @@ export function bestGame(x: PCtx, st: Settlement, from: ArrayLike<number>, n: nu
     const a = animalDef(x, h.species);
     const kg = carcassKg(a);
     const take = Math.min(kg * Math.max(1, Math.floor(h.count * 0.2)), n * LOAD_KG);
-    const v = (take * (1 - a.flee * 0.4)) / (d + 300);
+    // (release minor #2) game past a day trip is worth less: a two-hunter party sent after boar 2 km off tracked it for
+    // four days without one try while mouflon grazed 264 m from home
+    const v = (take * (1 - a.flee * 0.4)) / ((d + 300) * (1 + d / DAY_TRIP_M));
     if (v > bv || (v === bv && best && h.id < best.id)) { bv = v; best = h; }
   }
   return best;
@@ -239,7 +241,7 @@ export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.15;
  *     fields sown in turn a town always had one ripe or waiting, and seed 3's folk hunt never came — fix/bud/folkdbg.ts.)
  *   RAID_DAYS: a pack that took the town's beasts is hunted down (hunters and herders) while its trail is this fresh.
  */
-export const HIDES_PER_HEAD = 0.25, FOLK_HUNT_DAYS = 3, RAID_DAYS = 2;
+export const HIDES_PER_HEAD = 0.5, FOLK_HUNT_DAYS = 3, RAID_DAYS = 2;
 /**
  * (fix r1, stint 5) The folk hunt and the hunt for a raiding pack are built but OFF by default (0): on the acceptance
  * re-run (fix/acc/out vs integrate/r6/out, 4 worlds left alone for 45-50 years) a farming town with them bore 30-60 % fewer
@@ -473,7 +475,9 @@ function provision(x: PCtx, st: Settlement, m: number, days: number): void {
 }
 
 /** days of meat a head the store holds before a party is no longer sent out */
-export const MEAT_DAYS = 1;
+/** (release minor #2) the hunters rest while the store holds this many days of meat a head (was 1: towns sat 'sated' 243 of
+ * 288 daylight hours with a day's meat in store) */
+export const MEAT_DAYS = 3;
 
 /** food-days of meat (fresh, dried, cooked) in st's store */
 export function meatDays(x: PCtx, st: Settlement): number {
@@ -541,7 +545,8 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const d = distM(x.p, _p, _q);
   const edge = x.p.edgeM;
   const ang = hashFloat(A.id[s], p.id, 0x4b1) * Math.PI * 2;
-  if (d <= 1.5 * edge) {
+  // (release minor #2: within the encounter's reach, 2.5 edges — at 1.5 the herd's drift kept a party on tracking legs)
+  if (d <= 2.5 * edge) {
     // close: stalk it (a spot downwind of the herd, a few tens of metres off)
     const goal = offsetPoint(_q, 12 + 18 * hashFloat(A.id[s], x.tick, 0x4b2), ang, x.p.st.radius, [0, 0, 0]);
     const c = x.p.cellAt(goal);
@@ -605,7 +610,9 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
  */
 export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): void {
   const A = x.A;
-  if (!st || A.tData2[s] === 1) return;
+  // (release minor #2) a tracking leg that ends within reach of the herd is an encounter too (it was nothing: parties of
+  // two tracked a drifting herd 32-100 hours with 0-6 tries)
+  if (!st) return;
   if (A.tData2[s] === 2) { fetchCache(x, s, st); return; }
   const p = partyOf(x, st, s);
   if (!p || p.kills > 0) return;
@@ -638,7 +645,7 @@ export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): v
   }
   skill /= here.length;
   // each hunter's chance to bring it down; the party's is the chance that one of them does
-  const one = 0.14 * (0.6 + 1.1 * skill) * weapon * (1 - a.flee * 0.45) * (1 - a.danger * 0.3) * libraryEffect(x, st, 'yield.hunt');
+  const one = 0.2 * (0.6 + 1.1 * skill) * weapon * (1 - a.flee * 0.45) * (1 - a.danger * 0.3) * libraryEffect(x, st, 'yield.hunt');
   const pKill = 1 - Math.pow(1 - Math.min(0.9, one), here.length);
   const dice = hashFloat(p.id, h.id, x.tick, 0x4b7);
   // the hunted may fight back (one of them, the boldest in front)
@@ -650,7 +657,8 @@ export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): v
   if (dice >= pKill) return;
   // the kill: butchered where it fell, what they can carry goes home
   const hungry = famine(x, st);
-  const spare = h.count >= 3 ? Math.max(1, Math.floor(h.count * 0.2)) : hungry ? 1 : 0;
+  // (release minor #2: a herd of two may lose one)
+  const spare = h.count >= 3 ? Math.max(1, Math.floor(h.count * 0.2)) : h.count >= 2 || hungry ? 1 : 0;
   if (spare <= 0) return;
   const kg = carcassKg(a);
   const carry = here.filter((m) => A.alive[m]).length * LOAD_KG;

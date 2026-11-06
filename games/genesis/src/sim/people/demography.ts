@@ -50,12 +50,16 @@ export function spaced(x: PCtx, m: number): boolean {
   return last === 0 || (x.tick - last) / x.year >= birthGap(x, m);
 }
 
+/** (release minor #2) mouths(): the children-to-adults ratio past which births slow (was 1.5: towns ran half children;
+ * with 1.2 and frailty by age in life/disease.ts the 8-seed under-15 share fell 0.465 -> 0.43, minor26/balance.md) */
+export const MOUTHS_K = 1.2;
+
 /** the settlement's fertility factor: many children to the adults, fewer births (LIVING §2.8) */
 export function mouths(x: PCtx, st: Settlement): number {
   const A = x.A;
   let kids = st.cohort.n[0], adults = st.cohort.n[1] + st.cohort.n[2];
   for (const m of x.ps.members.get(st.id) ?? []) if (A.flags[m] & AgentFlag.child) kids++; else adults++;
-  const v = 1.5 - kids / Math.max(1, adults);
+  const v = MOUTHS_K - kids / Math.max(1, adults);
   return v < 0.3 ? 0.3 : v > 1 ? 1 : v;
 }
 

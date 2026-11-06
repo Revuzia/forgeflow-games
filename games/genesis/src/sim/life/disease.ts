@@ -75,7 +75,18 @@ export function grave(x: PCtx, s: number): boolean {
   // (the draw is the person's own frailty to this disease — the same each time they catch it — so what a town knows
   // decides who of its frail it saves, case for case)
   // (× the wrath of a plague the god sent: sentLethality, LIVING integration 2026-10-21)
-  return hashFloat(A.id[s], d, 0x9a7e) < caseFatality(x, d) * relief(x, st) * sentLethality(x, st, d);
+  // (× frailty by age: release minor #2, LIVING §13)
+  return hashFloat(A.id[s], d, 0x9a7e) < caseFatality(x, d) * relief(x, st) * sentLethality(x, st, d) * frailty(A.flags[s]);
+}
+
+/**
+ * (release minor #2) a grave case by age: children and the old are frail, grown people in their prime hardy. Before, an
+ * epidemic took every age alike, and the seeds it spared grew 3 %/y with half their people under 15 while plague seeds
+ * barely grew (8 seeds x 25 y: under-15 share 0.465, the owner's band 0.35-0.45; _harness/scratch/minor26/balance.md).
+ */
+export const FRAIL_CHILD = 0.75, FRAIL_ADULT = 0.5, FRAIL_ELDER = 1;
+export function frailty(flags: number): number {
+  return flags & AgentFlag.child ? FRAIL_CHILD : flags & AgentFlag.elder ? FRAIL_ELDER : FRAIL_ADULT;
 }
 
 /** health lost per day by a sick agent (needs.ts): grave cases waste away within the illness, mild ones barely */
