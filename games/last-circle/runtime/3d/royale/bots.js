@@ -5420,6 +5420,11 @@ function edgeGuard(W, b) {
   FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
   if (flightSafe(W, a)) return;
   if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
+  // (W9 R1 fix botpen) the corner rule here too: the flight test looks 16 m down this heading, past a route corner the bot turns at (probe_match
+  // --pencheck setup 3: s18 sprinting west 2.96 m short of the corner (-72.4, -77.6), the lip's steep run starting past the look's 6-sample window -
+  // the flight test held it, every look, never the lip test with its corner rule: 3 stuck episodes, never reached). The corner inside the look's
+  // window, its walk and run-on clear (routeTurnsBefore): walked to the corner, as at a lip.
+  if (EDGE_TURN && routeTurnsBefore(W, b, wx, wz, FLQ[4], false)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
   bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
   inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
   bb.nextPathT = 0;
@@ -5451,14 +5456,34 @@ const EDGE_TURN_STEP = 0.225;     // a 0.2 m step falling more than this is the 
 function routeTurnsBefore(W, b, wx, wz, faceD, elevated) {
   const P = b.bb.path, a = b.actor;
   if (!P || P.length < 2) return false;
-  const p = P[0], q = P[1];
-  if (p.y == null || Math.abs(p.y - a.pos.y) > 0.6) return false;
-  const dx = p.x - a.pos.x, dz = p.z - a.pos.z, d = Math.sqrt(dx * dx + dz * dz);
-  if (d < 0.3 || d > faceD || (dx * wx + dz * wz) < 0.95 * d) return false;
-  const ex = q.x - p.x, ez = q.z - p.z, e = Math.sqrt(ex * ex + ez * ez);
-  if (!(e > 0.3 && (ex * wx + ez * wz) < 0.7071 * e)) return false;
+  // (W9 R1 fix botpen) the corner is the first waypoint where the route TURNS, not only the next one: a grid route lays a waypoint every 1.5 m along
+  // a straight leg, so the corner of the pen's route (-72.4, -77.6) sat behind (-70.9, -77.6) on the same line (pencheck setup 3: held at the first).
+  // Waypoints on this heading (within 18 deg) and on the bot's level are walked through, up to 4 of them.
+  let p = null, q = null, dx = 0, dz = 0, d = 0;
+  for (let i = 0; i + 1 < P.length && i < 4; i++) {
+    const pi = P[i];
+    if (pi.y == null || Math.abs(pi.y - a.pos.y) > 0.6) return false;
+    const ix = pi.x - a.pos.x, iz = pi.z - a.pos.z, id = Math.sqrt(ix * ix + iz * iz);
+    if (id > faceD || (id >= 0.3 && (ix * wx + iz * wz) < 0.95 * id)) return false;
+    const qi = P[i + 1], ex = qi.x - pi.x, ez = qi.z - pi.z, e = Math.sqrt(ex * ex + ez * ez);
+    if (e > 0.3 && (ex * wx + ez * wz) < 0.7071 * e) { p = pi; q = qi; dx = ix; dz = iz; d = id; break; }
+  }
+  if (!p || d < 0.3) return false;
   const wy = W.map.waterY, wyN = wy != null ? +wy : -1e9;
-  let prev = NaN;
+  // (W9 R1 fix botpen) the walk TO the corner: every 0.2 m from the feet to the corner, no step falling more than EDGE_TURN_STEP and no ground more
+  // than 1 m under the feet (no face, no ditch, no flight on the way)
+  const nW = Math.ceil(d / 0.2);
+  let prev = a.pos.y;
+  for (let k = 1; k <= nW; k++) {
+    const f = k / nW, px = a.pos.x + dx * f, pz = a.pos.z + dz * f;
+    let sup;
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }
+    else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
+    if (sup < wyN) sup = wyN;
+    if (prev - sup > EDGE_TURN_STEP || a.pos.y - sup > 1.0) return false;
+    prev = sup;
+  }
+  prev = NaN;
   for (let k = 0; k <= EDGE_TURN_K; k++) {          // the corner, then 0.2 m steps to EDGE_TURN_M + 0.2
     const px = p.x + wx * 0.2 * k, pz = p.z + wz * 0.2 * k;
     let sup;

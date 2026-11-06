@@ -158,6 +158,11 @@ def swimcheck(s, v):
 # terrain 26-27.5 m, face foot >= 7 m lower) and the bot's route ran through the corner (a waypoint within 1.5 m of it). --plant no-pen-fix: FAILS.
 # Measured (fix3, 2026-11-02): lane 3/3 reach in 8-9.5 s, 0 episodes - PASS; --plant no-pen-fix: setups 1 and 3 never reach (2 episodes each, held at the
 # corner), setup 2 reaches in 7.5 s - FAIL. (PER_BOT_DROP off read the same as the lane on setups 1 and 3 and on 6 goal-below-the-face variants: removed.)
+# (W9 R1 fix botpen, 2026-11-06) On the merged world (doors / MAP_GEN 8, 02fa63f7) the SAME terrain (start 26.73, foot 18.38, lip at x -73.7) picks
+# another bot (s18) whose grid route turns at (-72.4, -77.6) / (-72, -77.5), 1.3-1.7 m in from the lip: the old corner rule (corner + 1.6 m <= the
+# look's 0.8 m-sampled face distance) held it for good - setup 1 reach 19 s / 1 episode, setup 2 never (minD 33.2) / 1 episode. A real pen in the
+# game, not a moved setup (296edc14: 3/3, 9.5 / 8 / 9.5 s). Fixed in bots.js routeTurnsBefore (run-on sampled from the corner at 0.2 m,
+# EDGE_TURN_M 1.1): 3/3 reach 11 / 8 / 10 s, 0 episodes; --plant no-pen-fix: reach 19 / never / 28.5 s, 1 episode each - FAIL.
 PEN_MAP, PEN_SEED, PEN_PRE_S, PEN_T = "isla_viva", 5, 20.0, 30.0
 PEN_GOAL, PEN_CORNER, PEN_FACE_FOOT = (-67.0, -44.5), (-71.6, -77.6), (-80.0, -78.0)
 PEN_SETUPS = ((-63.4, -77.6, 17), (-66.0, -79.0, 17), (-63.4, -77.6, 40))
