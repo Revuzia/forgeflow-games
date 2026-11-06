@@ -47,6 +47,8 @@ float animFreq(int a) {
   if (a == 31) return 1.5; if (a == 32) return 0.22; if (a == 33) return 0.3; if (a == 34) return 0.3; if (a == 35) return 1.1;
   // a festival's ring dance (crowds.ts RANIM.ringDance)
   if (a == 36) return 0.85;
+  // ARC §1.4 the heart's poses (crowds.ts HEART_ANIM): looking up in fear, a fist raised, throwing at the sky, cursing
+  if (a == 40) return 0.3; if (a == 41) return 1.7; if (a == 42) return 0.45; if (a == 43) return 0.95;
   return 0.25;
 }
 
@@ -183,6 +185,49 @@ vec3 livingRot(int a, float t, int b, float tool) {
     if (b == 4) r = vec3(-1.85, 0.9, 0.0); if (b == 6) r = vec3(-1.85, -0.9, 0.0);
     if (b == 1) r = vec3(run ? 0.42 : 0.6, run ? 0.08 * s : 0.0, shiver);
     if (b == 2) r = vec3(run ? 0.25 : 0.45, 0.0, 0.0);
+    return r;
+  }
+  if (a == 40) {
+    // looking up in fear: the head tipped back to the sky, the body drawn in and leaning away, one hand at the throat,
+    // the other arm held close; a slow uneasy sway and now and then a glance about
+    float glance = smoothstep(0.7, 0.95, sin(t * 0.37));
+    if (b == 1) r = vec3(-0.1, 0.06 * s, 0.0);
+    if (b == 2) r = vec3(-0.62 + 0.25 * glance, 0.3 * glance * sin(t * 1.3), 0.0);
+    if (b == 3) r = vec3(-0.35, 0.0, 0.12); if (b == 4) r = vec3(-2.1, 0.5, 0.0);
+    if (b == 5) r = vec3(-0.15, 0.0, -0.18); if (b == 6) r = vec3(-0.65, 0.0, 0.0);
+    if (b == 7) r.x = 0.08; if (b == 9) r.x = -0.12; if (b == 8 || b == 10) r.x = 0.12;
+    return r;
+  }
+  if (a == 41) {
+    // a fist raised at the sky and shaken, the head up and thrust forward, the other arm hard at the side, feet apart
+    float shake = sin(t * 2.0) * 0.5 + 0.5;
+    if (b == 5) r = vec3(-2.75 - 0.15 * shake, 0.0, 0.18); if (b == 6) r = vec3(-0.35 - 0.45 * shake, 0.0, 0.0);
+    if (b == 3) r = vec3(0.12, 0.0, 0.22); if (b == 4) r = vec3(-0.55, 0.0, 0.0);
+    if (b == 1) r = vec3(-0.06 + 0.05 * shake, 0.0, 0.05);
+    if (b == 2) r = vec3(-0.45 + 0.08 * shake, 0.0, 0.0);
+    if (b == 7) r = vec3(-0.12, 0.0, 0.1); if (b == 9) r = vec3(0.12, 0.0, -0.1); if (b == 8 || b == 10) r.x = 0.1;
+    return r;
+  }
+  if (a == 42) {
+    // throwing at the sky: the stone or spear drawn back over the shoulder with the body leaning back, then the arm
+    // whipped up and forward with a step into it; the other hand points the aim
+    float th = pow(max(0.0, sin(t)), 8.0);
+    float back = smoothstep(-0.2, 0.9, -cos(t)) * (1.0 - th);
+    if (b == 5) r = vec3(-2.3 - 0.5 * back + 0.25 * th, 0.0, -0.25); if (b == 6) r = vec3(-1.9 * back - 0.15, 0.0, 0.0);
+    if (b == 3) r = vec3(-2.0 + 0.6 * th, 0.0, 0.12); if (b == 4) r = vec3(-0.3, 0.0, 0.0);
+    if (b == 1) r = vec3(-0.22 * back + 0.25 * th, -0.35 * back + 0.2 * th, 0.0);
+    if (b == 2) r = vec3(-0.55 + 0.15 * th, 0.25 * back, 0.0);
+    if (b == 7) r.x = -0.3 - 0.15 * th; if (b == 9) r.x = 0.3; if (b == 8) r.x = 0.2; if (b == 10) r.x = 0.35 + 0.2 * back;
+    return r;
+  }
+  if (a == 43) {
+    // cursing the sky: both fists up by the head and pumped with each shout, the chest thrown forward into it
+    float pump = pow(max(0.0, sin(t)), 2.0);
+    if (b == 3) r = vec3(-2.4 - 0.3 * pump, 0.0, -0.45); if (b == 5) r = vec3(-2.4 - 0.3 * pump, 0.0, 0.45);
+    if (b == 4 || b == 6) r = vec3(-1.25 + 0.75 * pump, 0.0, 0.0);
+    if (b == 1) r = vec3(0.04 + 0.14 * pump, 0.0, 0.0);
+    if (b == 2) r = vec3(-0.5 - 0.15 * pump, 0.0, 0.0);
+    if (b == 7) r.x = -0.08; if (b == 9) r.x = 0.08; if (b == 8 || b == 10) r.x = 0.08 + 0.1 * pump;
     return r;
   }
   if (a == 36) {
@@ -424,6 +469,9 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 30) { off.y = -crouchDrop(1.05); off.x = 0.004 * sin(t * 9.0); }
   else if (a == 31) off.y = 0.05 * abs(s) - 0.05;
   else if (a == 36) { off.y = 0.04 * abs(s) - 0.01; off.x = 0.05 * s; }
+  else if (a == 40) { off.z = -0.02; off.x = 0.01 * sin(t * 0.37); }
+  else if (a == 42) { off.z = 0.06 * pow(max(0.0, s), 8.0) - 0.03; }
+  else if (a == 43) off.y = 0.035 * pow(max(0.0, s), 2.0);
   else off.x = 0.01 * sin(t * 0.37);
 }
 #endif

@@ -2,7 +2,7 @@
 // materials per level, the atmosphere model + LUTs, and the cloud-coverage cube. The Renderer owns one per PlanetView.
 
 import {
-  Group, Matrix3, Matrix4, Quaternion, Vector3, type Camera, type Frustum, type IUniform, type MeshStandardMaterial, type Scene, type ShaderMaterial,
+  Group, Matrix3, Matrix4, Quaternion, Vector3, Vector4, type Camera, type Frustum, type IUniform, type MeshStandardMaterial, type Scene, type ShaderMaterial,
   type Texture, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
@@ -17,6 +17,7 @@ import { makeOceanMaterial } from './ocean.ts';
 import { Vegetation } from '../life/vegetation.ts';
 import { GroundCover } from '../life/groundcover.ts';
 import { LifeLayer } from '../life/life.ts';
+import { makeSiltState, SILT_MAX, updateSilt } from './silt.ts';
 
 export interface PlanetVisualDeps {
   clouds: CloudPass;
@@ -86,6 +87,9 @@ export class PlanetVisual {
   /** camera position in the body frame (m) — updated per frame */
   readonly camBody = new Vector3();
   altitude = 1e9;
+  /** ARC §10: the river running brown before (and during) a flood — the water shader's silt zones */
+  private readonly silt = makeSiltState();
+  private siltTime = -1;
 
   constructor(pv: PlanetView, deps: PlanetVisualDeps) {
     this.id = pv.id;
@@ -107,6 +111,9 @@ export class PlanetVisual {
     // a private copy of the shadow switch: only the primary planet samples the cascades
     u.uShadowOn = { value: 0 };
     const sharedRec = u as Record<string, IUniform>;
+    // (before any material is made: the water materials copy the shared uniforms by reference)
+    sharedRec.uSilt = { value: Array.from({ length: SILT_MAX }, () => new Vector4()) };
+    sharedRec.uSiltK = { value: new Array<number>(SILT_MAX).fill(0) };
     const mats = {
       terrain: (level: number) => this.terrainMat(level, sharedRec, deps),
       water: (level: number) => { this.terrainMat(level, sharedRec, deps); return this.waterMats[level]; },
@@ -207,6 +214,12 @@ export class PlanetVisual {
     u.uSunDirView.value.copy(ctx.sunDirWorld).transformDirection(ctx.camWorldInverse);
     this.atmo.setSun(ctx.sunE.x, ctx.sunE.y, ctx.sunE.z);
     u.uTime.value = ctx.time % 3600;
+    {
+      const dt = this.siltTime < 0 ? 0 : Math.min(1, Math.max(0, ctx.time - this.siltTime));
+      this.siltTime = ctx.time;
+      const su = u as unknown as Record<string, IUniform>;
+      updateSilt(this.silt, pv.disasters, pv.params.radius, dt, su.uSilt.value as Vector4[], su.uSiltK.value as number[]);
+    }
     u.uYearFrac.value = ctx.yearFrac;
     // seasons swing with the axial tilt (full at ~17° and more; none on an upright world)
     u.uSeasonAmp.value = Math.min(1, Math.abs(pv.params.axialTilt ?? 0.41) / 0.3);

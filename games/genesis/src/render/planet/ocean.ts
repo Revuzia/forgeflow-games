@@ -197,6 +197,8 @@ uniform vec3 uMoonDirBody;
 uniform vec3 uNightAmbient;  // the night floor (starlight, airglow; renderer.ts), the terrain's own
 uniform sampler2D uOverlay;  // (UI lane, additive) the map overlay, shared with the terrain (planet uniforms)
 uniform vec3 uOverlayK;
+uniform vec4 uSilt[4];       // ARC §10: silt zones (body-frame centre m, radius m; w = 0 empty) — planet/silt.ts
+uniform float uSiltK[4];
 varying vec3 vBodyPos;
 varying vec3 vViewPos;
 varying float vDepth;
@@ -449,6 +451,16 @@ void main() {
   float riverK = smoothstep(0.15, 0.6, length(vFlow));
   sigmaA += vec3(0.08, 0.16, 0.3) * riverK;
   vec3 sigmaS = vec3(0.018, 0.045, 0.05);
+  // ARC §10: before a flood the river runs high and brown — the rain upstream washes the soil down (planet/silt.ts).
+  // Heavy tan scattering and blue absorption: an opaque, muddy brown within a metre; the sea at a river mouth takes less.
+  float silt = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec4 sz = uSilt[i];
+    if (sz.w > 0.0) silt = max(silt, uSiltK[i] * (1.0 - smoothstep(sz.w * 0.55, sz.w, distance(vBodyPos, sz.xyz))));
+  }
+  silt *= 1.0 - 0.6 * smoothstep(0.3, 0.8, vSalt);
+  sigmaS += vec3(0.62, 0.44, 0.24) * silt;
+  sigmaA += vec3(0.06, 0.16, 0.42) * silt;
   // turbidity: shallow and coastal water carries silt and plankton (the swell stirs the bottom up): more scattering,
   // greener, so the floor fades within a few metres and a quay's foot sinks into murk instead of showing 9 m down.
   // The open, deep sea stays clear and blue.
@@ -464,7 +476,9 @@ void main() {
   // keep their silt)
   // (… but a DEEP lake is a body of water like the sea: halved, its in-scatter left an inland lake seen from a few
   // hundred metres up a black disc, a hole in the land beside a blue sea)
-  inscat *= mix(0.5, 1.0, max(max(smoothstep(0.3, 0.8, vSalt), riverK), smoothstep(2.0, 8.0, vDepth)));
+  inscat *= mix(0.5, 1.0, max(max(max(smoothstep(0.3, 0.8, vSalt), riverK), smoothstep(2.0, 8.0, vDepth)), silt));
+  // (muddy water sends back far more of the light than clear water: its silt, not the water, is what one sees)
+  inscat *= 1.0 + 2.5 * silt;
   vec3 under = refr * Tw + inscat;
 
   // ── reflection ──

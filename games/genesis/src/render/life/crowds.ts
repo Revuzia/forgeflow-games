@@ -114,6 +114,34 @@ function livingAnim(anim: number, moving: boolean, flags2: number, id: number): 
   return anim;
 }
 
+/**
+ * ARC §1.3 / §6.9: the poses of a person's heart (render-only ids beside AnimState; the sim's MoverBlock.heart carries
+ * the HeartSign). Values match ARC §6.2's AnimState additions so a sim that sets them directly draws the same.
+ */
+export const HEART_ANIM = { lookUp: 40, fist: 41, hurl: 42, curse: 43 } as const;
+/** HeartSign (ARC §6.2): none 0, pray 1, fist 2, fear 3, celebrate 4, hurl 5 */
+const HS = { pray: 1, fist: 2, fear: 3, celebrate: 4, hurl: 5 } as const;
+/** of the people raising a fist, the share shouting at the sky with both arms up instead (ARC §3.2's curse knot) */
+const CURSE_SHARE = 0.4;
+
+/**
+ * a heart sign's pose over the sim's animation (ARC §1.4): it applies only to someone standing idle or talking (work
+ * keeps its own animation, and a walker would slide in a standing pose); a defiant act (fist, hurl) is its own task
+ */
+export function heartAnim(anim: number, moving: boolean, sign: number, id: number): number {
+  if (!sign) return anim;
+  if (sign === HS.hurl) return moving ? anim : HEART_ANIM.hurl;
+  if (moving) return anim;
+  const free = anim === AnimState.idle || anim === AnimState.teach || anim === AnimState.walk;
+  switch (sign) {
+    case HS.fist: return free || anim === AnimState.fight ? (hashFloat(id, 0x4e43) < CURSE_SHARE ? HEART_ANIM.curse : HEART_ANIM.fist) : anim;
+    case HS.fear: return free ? HEART_ANIM.lookUp : anim;
+    case HS.celebrate: return free ? AnimState.cheer : anim;
+    case HS.pray: return anim === AnimState.idle ? AnimState.pray : anim;
+  }
+  return anim;
+}
+
 const CLOTH_FALLBACK = [0x8a6a4a, 0xa0784e, 0x6e5236, 0xb8a888, 0x7a2a22, 0x2a4a6a];
 
 export class Crowds {
@@ -197,6 +225,8 @@ export class Crowds {
       return era >= 8 ? HELD.rifle : era >= 1 && hashFloat(id, 7) < 0.6 ? HELD.bow : HELD.spear;
     }
     if ((anim === AnimState.herd || anim === RANIM.herdStill) && (held === HELD.none || held === HELD.basket)) return HELD.crook;
+    // (ARC §3.2) throwing at the sky: a stone, or a spear for some
+    if (anim === HEART_ANIM.hurl) return hashFloat(id, 0x4e42) < 0.3 ? HELD.spear : HELD.stone;
     if (held !== HELD.none) return held;
     switch (anim) {
       case AnimState.chop: return HELD.axe;
@@ -334,7 +364,9 @@ export class Crowds {
         let tr = this.tracks.get(id);
         const i3 = i * 3;
         const f2 = (A.flags2 ? A.flags2[i] : 0) | (this.probeFlags2.size ? this.probeFlags2.get(id) ?? 0 : 0);
-        const simAnim = livingAnim(this.probeAnim.size ? this.probeAnim.get(id) ?? A.anim[i] : A.anim[i], Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M, f2, id);
+        const moving = Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M;
+        const heartB = (A as { heart?: Uint8Array }).heart;
+        const simAnim = heartAnim(livingAnim(this.probeAnim.size ? this.probeAnim.get(id) ?? A.anim[i] : A.anim[i], moving, f2, id), moving, heartB ? heartB[i] : 0, id);
         if (!tr) { tr = { id, anim: simAnim, prev: simAnim, at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
         if (fresh && simAnim !== tr.anim) { tr.prev = tr.anim; tr.anim = simAnim; tr.at = realTime; }
         // motion smoothing: a new snapshot's disagreement with what was drawn becomes a decaying offset
