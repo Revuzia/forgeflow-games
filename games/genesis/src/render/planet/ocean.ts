@@ -459,8 +459,8 @@ void main() {
     if (sz.w > 0.0) silt = max(silt, uSiltK[i] * (1.0 - smoothstep(sz.w * 0.55, sz.w, distance(vBodyPos, sz.xyz))));
   }
   silt *= 1.0 - 0.6 * smoothstep(0.3, 0.8, vSalt);
-  sigmaS += vec3(0.62, 0.44, 0.24) * silt;
-  sigmaA += vec3(0.06, 0.16, 0.42) * silt;
+  sigmaS += vec3(0.7, 0.46, 0.22) * silt;
+  sigmaA += vec3(0.04, 0.2, 0.62) * silt;
   // turbidity: shallow and coastal water carries silt and plankton (the swell stirs the bottom up): more scattering,
   // greener, so the floor fades within a few metres and a quay's foot sinks into murk instead of showing 9 m down.
   // The open, deep sea stays clear and blue.
@@ -478,7 +478,7 @@ void main() {
   // hundred metres up a black disc, a hole in the land beside a blue sea)
   inscat *= mix(0.5, 1.0, max(max(max(smoothstep(0.3, 0.8, vSalt), riverK), smoothstep(2.0, 8.0, vDepth)), silt));
   // (muddy water sends back far more of the light than clear water: its silt, not the water, is what one sees)
-  inscat *= 1.0 + 2.5 * silt;
+  inscat *= 1.0 + 6.0 * silt;
   vec3 under = refr * Tw + inscat;
 
   // ── reflection ──

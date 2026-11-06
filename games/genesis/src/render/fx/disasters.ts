@@ -730,6 +730,8 @@ export class DisasterFx {
         break;
       }
       case 'flood': {
+        // (ARC §10: during the warning the river only rises and browns — planet/silt.ts; no surging front yet)
+        if (P.warning) break;
         this.waterFront(st, ctx, 0.5);
         break;
       }
