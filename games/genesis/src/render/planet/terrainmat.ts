@@ -1161,7 +1161,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float wLo = min(-0.36 + m2 * 0.1, -0.04 - uwPx * 1.5);
   // ARC §10: before a flood the river rises and runs brown — its banks wet and mud-stained well above the old line.
   // The sim's rise is 0.4 m, under a pixel at play distance, so the wet, silted band widens a lot: past a bank cell uw
-  // is not a true height (inland cells sit `inland` >= 4 m under their ground, fieldpack.ts), so the reach is ~8 m of
+  // is not a true height (inland cells sit "inland" >= 4 m under their ground, fieldpack.ts), so the reach is ~8 m of
   // that proxy (noise-broken) — about the bank cell's triangle — and the rise reads at 888x500 as a dark mud margin
   // along the channel that the day before was dry sand.
   float siltG = 0.0;
