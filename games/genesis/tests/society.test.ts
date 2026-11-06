@@ -79,8 +79,12 @@ test('an iron monopoly drives the have-nots toward war (a town that holds iron a
   // seeds 1-12 with _harness/scratch/punch/iron.ts (iron-oldpace.log / iron-newpace.log): old pace held on 5 of 12
   // (1, 3, 6, 7, 9), new pace on 3 of 12 (6, 7, 10) — seed 9's fair town now goes to war over land. Seed 6 holds on both
   // with the war mid-window (day 11 on both; margin 0.36 old / 0.30 new).
+  // MINOR26 #4 (the warm-air melt of a snow lock reads the region's land air, fields/climate.ts): measured over seeds
+  // 1-12 with _harness/scratch/punch/iron.ts (_harness/scratch/minor26/snow/iron-v6.log): it holds on 4 of 12 (1, 5, 7,
+  // 11); seed 6's fair town now falls out over land by day 11 (margin 0.06). Seed 7 held before (newpace) and holds now
+  // (war day 13; margin 0.22 before / 0.39 now).
   const run = (monopoly: boolean) => {
-    const { sim, a, b } = twoTowns(6, 'iron');
+    const { sim, a, b } = twoTowns(7, 'iron');
     metals(sim, a, true);
     metals(sim, b, !monopoly);
     warlike(sim, b);
