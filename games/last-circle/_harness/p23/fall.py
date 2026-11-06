@@ -10,6 +10,7 @@ sim -, application in player.js - lane player.)
     python _harness/p23/fall.py --disk --plant harsh           # K.FALL_DMG_PER_V x 4 - MUST FAIL (10 m drop over the band)
     python _harness/p23/fall.py --disk --plant no-event        # 'fallDamage' never reaches W.events - MUST FAIL
     python _harness/p23/fall.py --disk --plant no-fall-guard --parts lip   # bots.js served with its fall guard off - MUST FAIL (bots-avoid lips)
+    python _harness/p23/fall.py --disk --plant no-turn-reprobe --parts lip # the guard's turned-heading re-probe off - MUST FAIL (bots-avoid lips turned)
     python _harness/p23/fall.py --disk --plant bot-curve-x0.6 --parts bots # the bots' fall curve x0.6 - MUST FAIL (bots-rule)
     python _harness/p23/fall.py --disk --plant calm-guard-off --parts rim  # bots.js served with the calm drop cap off - MUST FAIL (rim)
     python _harness/p23/fall.py --disk --plant no-terminal --parts human   # K.MOVE.terminalV = 1e9 - MUST FAIL (terminal)
@@ -26,6 +27,10 @@ the nearest spot that passes the human's flat-ground rule AND lies out of every 
 (10 m costs 35-40, 15 m = the human's, 22 m kills); then 180 s of play through fastForward: 0 bot deaths from a fall.
 Part LIP (QUICK matches on Isla Viva seeds 77 and 7 (pass 2)): bots-avoid's falsifier - a dry 10 hp bot provoked by an enemy 9 m behind it on a plateau flees
 toward a >= 7 m terrain lip, up to 6 lips x 25 s: 0 die of the fall (--plant no-fall-guard serves bots.js with its C-FALL guard off: MUST FAIL).
+(W9 R1 fix botpen) COUNTED REPEATS: each seed's lip match is played LIP_REPS times (fresh page each) and every run of every repeat is judged -
+0 fall deaths in all of them (the match is not frame-exact from page to page: the kernel runs real frames between the Enter press and the
+freeze, so a repeat explores other bots / timings; a repeat can only ADD a death to the count, never hide one). Then, per lip found, the
+turned-heading probe (LIP_TURN_JS): the guard's verdict on a heading the bot turned to between probes equals a fresh probe's verdict on it.
 Part GLIDE (a STANDARD match, Isla Viva seed 7): the whole drop through fastForward until every actor stands on the ground: 0 fallDamage
 events, 0 hp lost without an attacker at touchdown, for the human and all 49 bots.
 
@@ -34,7 +39,7 @@ Rows: contract (K.FALL_SAFE_V, K.FALL_DMG_PER_V, K.LAND_STAGGER_S numbers) - saf
 = 100 after a 10 m drop, hp loss equal to the shield-0 drop) - event (one 'fallDamage' per damaging landing, none otherwise) - stagger
 (after the 10 m landing with W held: horizontal speed <= 50 % of walk over the first 0.3 s, back to >= 85 % of walk by 0.8 s; after a 1 m
 drop >= 85 % within 0.3 s) - water (0 hp) - (W9 R1B, LC-61) heavy (LMB held through a 14 m landing: first round >= 0.30 s after touchdown; a 10 m
-landing's <= 0.10 s) - terminal (an 80 m drop: max |vy| <= 34.05 m/s, the landing kills) - bots-rule - bots-avoid - bots-avoid lips - rim - glide - errors.
+landing's <= 0.10 s) - terminal (an 80 m drop: max |vy| <= 34.05 m/s, the landing kills) - bots-rule - bots-avoid - bots-avoid lips - bots-avoid lips turned - rim - glide - errors.
 """
 from __future__ import annotations
 
@@ -59,6 +64,8 @@ PLANTS = {
     "no-event": "const em = W.events.emit.bind(W.events); W.events.emit = function (n) { if (n === 'fallDamage') return; return em.apply(null, arguments); }",
     # bots.js served with its C-FALL guard off (part lip; see NO_FALL_GUARD): no page snippet
     "no-fall-guard": "",
+    # (W9 R1 fix botpen) bots.js served with edgeGuard's turned-heading re-probe off (part lip; see NO_TURN_REPROBE): no page snippet
+    "no-turn-reprobe": "",
     # (W9 R1B) bots.js served with the calm drop cap off (part rim; see CALM_GUARD_OFF): no page snippet
     "calm-guard-off": "",
     # R3: the fall curve scaled x0.6 in the bots' page (part bots; registered --parts bots): a 10 m drop costs a bot ~23 hp - bots-rule MUST FAIL
@@ -438,6 +445,10 @@ LIP_MAP, LIP_SEED, LIP_HP, LIP_N, LIP_DROP = "isla_viva", 77, 10, 6, 7
 # off (base 09720db0 + plant: 2 of 4; W9 with far-big seeking on + plant: 1 of 4) - a 4-lip sample is too small for the control to discriminate.
 # The bar is unchanged (0 fall deaths over every judged lip); the sample is up to 2 x LIP_N lips.
 LIP_SEEDS = (LIP_SEED, 7)
+# (W9 R1 fix botpen) the row died 1 run in 2 on the merged head (seed 7, s48 at the 8.18 m lip (-42.4, -18.4): held 1 s, then FLEE turned 50 deg
+# between two probes and the turned heading was never probed - fixed in bots.js edgeTurned). A single pass judged ONE draw of that timing; the
+# row now plays every seed's lip match LIP_REPS times and counts every run: 0 fall deaths in all (the bar is unchanged; more draws, never fewer).
+LIP_REPS = 3
 LIP_FIND_JS = r"""([drop, wantN]) => { const W = window.__LC__.W, M = W.map, wy = M.waterY;
   const free = (x, z, r, h) => { for (const c of M.queryColliders(x, z, r + 1, [])) { if (c.dead) continue; if (c.maxY > h + 0.3 && c.minX < x + r && c.maxX > x - r && c.minZ < z + r && c.maxZ > z - r) return false; } return true; };
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null; const cc = st ? (st.nextCenter || st.center) : { x: 0, z: 0 };
@@ -483,12 +494,54 @@ LIP_RUN_JS = r"""([lip, hp, secs]) => { const W = window.__LC__.W, C = window.__
   return { bot: b.id, threat: e.id, lip: { x: lip.x, z: lip.z, drop: lip.drop }, fall, died, alive: !!(B && B.alive), states, dropped: +(y0 - minY).toFixed(2), pastLipM: +past.toFixed(2), movedM: +moved.toFixed(2), path: path.slice(0, 24) }; }"""
 
 
-def part_lip(s, v, args, seed=LIP_SEED):
-    """one seed's lips (runs appended to v.data['lip']['runs']); lip_verdict judges every seed's runs together"""
+# (W9 R1 fix botpen) THE TURNED HEADING, at the guard itself (bots.js debugNav().edgeGuard: one edgeGuard call with the input the caller set).
+# Per lip found: a fresh bot (10 hp, dry, not calm) stands 1.0 m in from the lip, on the ground, sprinting (7.5 m/s) ALONG the lip (either tangent;
+# a tangent the guard holds at once is skipped). One probe on that heading (due now) - then, at the same instant (the next probe not due), the
+# heading turned toward the lip by 30 / 45 / 60 / 75 / 90 deg, once by the yaw and once by the stick - and the same turned heading probed FRESH
+# (no probe pending). Judged: every turned case the fresh probe holds is held (the guard judges the heading the legs will move on, whenever it
+# turned). SETUP: >= 4 held fresh cases. --plant no-turn-reprobe (edgeTurned -> false): the turned headings go unprobed - MUST FAIL.
+LIP_TURN_JS = r"""async ([lips, hp]) => { const W = window.__LC__.W, M = W.map;
+  let D = null; try { const el = [...document.querySelectorAll('script[type=module]')].find((x) => /ffg_boot3d/.test(x.src)); const V = el ? new URL(el.src).search : '';
+    const base = new URL('runtime/3d/royale/', location.href.replace(/[^/]*$/, '')).href; D = (await import(base + 'bots.js' + V)).debugNav(); } catch (e) { return { error: 'import: ' + String(e).slice(0, 120) }; }
+  if (!D || typeof D.edgeGuard !== 'function') return { error: 'bots.js debugNav().edgeGuard missing' };
+  const used = window.__P23LIPUSED__ || new Set();
+  const pool = W.actors.filter((a) => a.isBot && a.alive && !a.downed && !a.gliding && a.brain && !used.has(a.id));
+  const b = pool[0]; if (!b) return { error: 'no free bot' };
+  const bb = b.brain.bb, I = b.input, out = [];
+  const set = (hx, hz, yaw, mz, mx, sp) => { I.yaw = yaw; I.mz = mz; I.mx = mx; I.sprint = true; I.jump = false; b.vel.set(sp * hx, 0, sp * hz); };
+  const held = () => !(I.mz || I.mx);
+  for (const lip of lips) {
+    const nx = lip.dx, nz = lip.dz, px = lip.x - nx * 1.0, pz = lip.z - nz * 1.0;
+    b.pos.set(px, M.heightAt(px, pz) + 0.02, pz); b.onGround = true; b.gliding = false; b.hp = hp; b.shield = 0; bb.calmDrop = false;
+    for (const sg of [1, -1]) {
+      const tx = -nz * sg, tz = nx * sg, yaw0 = Math.atan2(-tx, -tz);
+      bb.edgeT = 0; bb.edgeBanUntil = -99; bb.edgeWalkUntil = -99; set(tx, tz, yaw0, 1, 0, 7.5); D.edgeGuard(W, b.brain);
+      if (held()) { out.push({ lip: [lip.x, lip.z], sg, skip: 'tangent held' }); continue; }
+      const rx = Math.cos(yaw0), rz = -Math.sin(yaw0), side = rx * nx + rz * nz > 0 ? 1 : -1;
+      for (const deg of [30, 45, 60, 75, 90]) for (const how of ['yaw', 'stick']) {
+        const th = deg * Math.PI / 180, hx = tx * Math.cos(th) + nx * Math.sin(th), hz = tz * Math.cos(th) + nz * Math.sin(th);
+        const tY = how === 'yaw' ? Math.atan2(-hx, -hz) : yaw0, tMz = how === 'yaw' ? 1 : Math.cos(th), tMx = how === 'yaw' ? 0 : side * Math.sin(th);
+        // the probe on the tangent (due), then the turn at the same instant
+        bb.edgeT = 0; bb.edgeBanUntil = -99; set(tx, tz, yaw0, 1, 0, 7.5); D.edgeGuard(W, b.brain);
+        set(tx, tz, tY, tMz, tMx, 7.5); D.edgeGuard(W, b.brain); const turned = held();
+        bb.edgeT = 0; bb.edgeBanUntil = -99; set(tx, tz, tY, tMz, tMx, 7.5); D.edgeGuard(W, b.brain); const fresh = held();
+        out.push({ lip: [lip.x, lip.z], drop: lip.drop, sg, deg, how, fresh, turned });
+      }
+    }
+  }
+  bb.edgeT = 0; bb.edgeBanUntil = -99; I.mz = 0; I.mx = 0; b.vel.set(0, 0, 0);
+  return { bot: b.id, cases: out }; }"""
+NO_TURN_REPROBE = [("function edgeTurned(inp, bb) {", "function edgeTurned(inp, bb) { return false;")]
+
+
+def part_lip(s, v, args, seed=LIP_SEED, rep=0):
+    """one seed's lips, one repeat (runs appended to v.data['lip']['runs']); lip_verdict judges every seed's and repeat's runs together"""
     R0 = v.data.setdefault("lip", {})
-    R = R0.setdefault("seeds", {}).setdefault(str(seed), {})
+    R = R0.setdefault("seeds", {}).setdefault(str(seed) if rep == 0 else "%d.rep%d" % (seed, rep + 1), {})
     if args.plant == "no-fall-guard":
         R["plant"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_FALL_GUARD)
+    if args.plant == "no-turn-reprobe":
+        R["plant"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_TURN_REPROBE)
     s.boot()
     L.dismiss_cards(s)
     R["start"] = s.start_match("quick", seed, LIP_MAP, enter=True, guard=True)
@@ -497,8 +550,11 @@ def part_lip(s, v, args, seed=LIP_SEED):
     s.step_frames(30, 1 / 60)
     found = s.js(LIP_FIND_JS, [LIP_DROP, LIP_N])
     R["found"] = {"n": found["n"], "centre": found["centre"], "lips": found["lips"]}
-    runs = [dict(s.js(LIP_RUN_JS, [lip, LIP_HP, 25]), seed=seed) for lip in found["lips"]]
+    runs = [dict(s.js(LIP_RUN_JS, [lip, LIP_HP, 25]), seed=seed, rep=rep + 1) for lip in found["lips"]]
     R0.setdefault("runs", []).extend(runs)
+    if rep == 0:                      # the turned-heading probe is a pure guard call (no frames): once per seed
+        t = s.js(LIP_TURN_JS, [found["lips"], LIP_HP])
+        R0.setdefault("turn", []).append(dict(t, seed=seed))
 
 
 def lip_verdict(v):
@@ -509,12 +565,30 @@ def lip_verdict(v):
     fled = [r for r in judged if r["states"].get("FLEE", 0) >= 5]
     name = "bots-avoid lips (a dry bot at %d hp fleeing a threat toward a >= %d m terrain lip: 0 die of the fall, up to %d lips per seed, Isla Viva seeds %s)" % (
         LIP_HP, LIP_DROP, LIP_N, " + ".join(str(x) for x in LIP_SEEDS))
-    det = {"fallDeaths": len(walked), "lips": len(judged), "fled": len(fled),
-           "runs": [{k: r.get(k) for k in ("seed", "bot", "lip", "fall", "died", "states", "dropped", "pastLipM", "movedM", "path")} for r in runs]}
+    reps = sorted(set(r.get("rep", 1) for r in runs))
+    det = {"fallDeaths": len(walked), "lips": len(judged), "fled": len(fled), "repeats": len(reps),
+           "perRepeat": [{"rep": k, "judged": sum(1 for r in judged if r.get("rep", 1) == k), "fallDeaths": sum(1 for r in walked if r.get("rep", 1) == k)} for k in reps],
+           "deaths": [{k: r.get(k) for k in ("seed", "rep", "bot", "lip", "fall", "died", "dropped", "pastLipM", "path")} for r in walked],
+           "runs": [{k: r.get(k) for k in ("seed", "rep", "bot", "lip", "fall", "died", "states", "dropped", "pastLipM", "movedM")} for r in runs]}
+    name = name[:-1] + ", %d counted repeats)" % LIP_REPS
     if len(judged) < 2:
         v.cnj(name, "SETUP missed (D16): %d lips judged (want >= 2: the bot moved >= 1.5 m or fell): %s" % (len(judged), det))
     else:
-        v.check(name, not walked, det, "0 fall deaths")
+        v.check(name, not walked, det, "0 fall deaths in every run of every repeat")
+    # (W9 R1 fix botpen) the turned heading (LIP_TURN_JS)
+    T = v.data.get("lip", {}).get("turn", [])
+    cases = [dict(c, seed=t.get("seed")) for t in T for c in (t.get("cases") or []) if "fresh" in c]
+    errs = [t.get("error") for t in T if t.get("error")]
+    hf = [c for c in cases if c["fresh"]]
+    miss = [c for c in hf if not c["turned"]]
+    tname = ("bots-avoid lips turned (a 10 hp bot 1 m in from each >= %d m lip, sprinting along it, turns 30-90 deg toward it between two probes, by the yaw "
+             "and by the stick: every turned heading a fresh probe holds is held at once)" % LIP_DROP)
+    tdet = {"cases": len(cases), "heldFresh": len(hf), "missed": len(miss), "miss": miss[:12], "errors": errs,
+            "skipped": [c for t in T for c in (t.get("cases") or []) if "skip" in c]}
+    if errs or len(hf) < 4:
+        v.cnj(tname, "SETUP missed: %d held fresh cases (want >= 4), errors %s" % (len(hf), errs))
+    else:
+        v.check(tname, not miss, tdet, "0 turned headings let through that a fresh probe holds")
 
 
 # (W9 R1B) part RIM - "bots walk off 6-9 m ledges on Isla Viva Volcano Rim": calm states take only the drops the path planner takes (bots.js
@@ -691,10 +765,13 @@ def main():
                 part_bots(s, v, args)
                 L.errors_row(v, s, "errors [bots]")
         if "lip" in parts:
-            for sd in LIP_SEEDS:
-                with C.Session(args, "p23_fall_lip" if sd == LIP_SEED else "p23_fall_lip%d" % sd) as s:
-                    part_lip(s, v, args, sd)
-                    L.errors_row(v, s, "errors [lip]" if sd == LIP_SEED else "errors [lip seed %d]" % sd)
+            for rp in range(LIP_REPS):            # (W9 R1 fix botpen) counted repeats: every run of every repeat is judged
+                for sd in LIP_SEEDS:
+                    nm = ("p23_fall_lip" if sd == LIP_SEED else "p23_fall_lip%d" % sd) + ("" if rp == 0 else "_r%d" % (rp + 1))
+                    with C.Session(args, nm) as s:
+                        part_lip(s, v, args, sd, rp)
+                        L.errors_row(v, s, ("errors [lip]" if sd == LIP_SEED else "errors [lip seed %d]" % sd) if rp == 0 else
+                                     ("errors [lip rep %d]" % (rp + 1) if sd == LIP_SEED else "errors [lip seed %d rep %d]" % (sd, rp + 1)))
             lip_verdict(v)
         if "rim" in parts:
             with C.Session(args, "p23_fall_rim") as s:

@@ -488,7 +488,7 @@ class Blackboard {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
-      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeYaw = 0; this.edgeMz = 0; this.edgeMx = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
       this.revEngUntil = -99;     // (W9 R1B) the REVIVE -> ENGAGE hold
       this.calmDrop = false; this.rotPress = false; this.calmHoldN = 0; this.calmHold0 = -99; this.calmOffUntil = -99; this.calmBreakT = -99; this.edgeReplan = false; this.calmRpT = -99; this.calmRpX = 0; this.calmRpZ = 0;   // (W9 R1B) walkDrop's calm cap
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
@@ -3373,7 +3373,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, edgeJumps: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3738,6 +3738,8 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
 /** Test hook for the lane probes: the live pathfinder (findPath settles grid misses at once, see findPathSettled; findPathGame is the game's). */
 export function debugNav() {
   return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
+    // (W9 R1 fix botpen) the fall guard itself, for p23_fall's turned-heading row: one edgeGuard call on brain b with the input as the caller set it
+    edgeGuard: (W, b) => { edgeGuard(W, b); },
     // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
     headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b); },
     rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b); },
@@ -5331,7 +5333,17 @@ function edgeGuard(W, b) {
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
   if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
   if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
-  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
+  // (W9 R1 fix botpen) A JUMP IS A FLIGHT TOO. The probes below judge the legs (a walk off, a run's flight from rest); a hop asked this frame - actMove's
+  // obstacle hop (support 0.55-2.2 m up, 1.4 m ahead), the stuck hop, a fight's hop - leaves the ground at jumpV and lands from its apex. p23_fall
+  // lips, isla_viva seed 77, s14 at 10 hp fleeing downhill at a sprint (ground 36.3 m) hopped at a rock: apex 37.8, landed on 30.6 m terrain 4 m
+  // on - 7.2 m, 19 hp, dead. Every frame a jump is asked on the ground: the hop's arc (jumpLandsFrom) against the drop this bot may fall; a hop that
+  // lands lower than that is not made (the legs keep the heading; the probes still judge them).
+  if (inp.jump && a.onGround && !jumpArcSafe(W, a, inp)) { inp.jump = false; nav.st.edgeJumps++; }
+  // (W9 R1 fix botpen) ...unless the heading TURNED since the last probe: the probe is due at once (edgeTurned). p23_fall lips, isla_viva seed 7, s48 at
+  // 10 hp 0.8 m from an 8.2 m lip: held 1 s heading straight over it, then FLEE turned 50 deg (still 0.45 toward the lip) with the next probe
+  // 0.15 s away - the turned heading was never probed, the bot sprinted off at once and was in the air 0.17 s later (6.7 m, 14 hp, dead). Whether
+  // a probe fell inside those 0.17 s was the frame phase of the turn: the row died 1 run in 2.
+  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || (W.t < bb.edgeT && !edgeTurned(inp, bb)))) return;
   const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
   const m = Math.sqrt(wx * wx + wz * wz);         // hyp, inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
@@ -5340,12 +5352,13 @@ function edgeGuard(W, b) {
   // (a held heading holds the jump too, and holds in the air: stub duo 10-26, Isla seed 2, a camper held at a 10 m lip hopped - the state's step
   // hop - and the next airborne frames' air control carried it over the lip it was being held at)
   if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }
-  if (!a.onGround || W.t < bb.edgeT) return;
+  if (!a.onGround || (W.t < bb.edgeT && !edgeTurned(inp, bb))) return;
   // (the probe interval and the look-ahead scale with the speed: at a sprint's ~8 m/s a 0.25 s probe let the bot travel 2 m between looks, and the
   // lip of a face first seen in the 4th sample was already under its feet at the next look - stub duo 10-26, Isla seed 2: s11 fleeing at 20 hp
   // found the face at 0.8 m, too late to stop, and fell 10 m; s43 following at 30 hp crossed a slope break at speed, flew, and met the face airborne)
   const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z);
   bb.edgeT = W.t + (spd > 4 ? 0.15 : 0.25);
+  bb.edgeYaw = inp.yaw; bb.edgeMz = inp.mz; bb.edgeMx = inp.mx;     // the heading this probe judged (edgeTurned)
   const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
@@ -5372,7 +5385,7 @@ function edgeGuard(W, b) {
       // the lip, the next leg along it) was held at the look-ahead's 4.8 m, every look, and never reached the corner (probe_match isla_viva seed 5:
       // s19 held at (-69.6, -78) heading for the corner (-71.6, -77.6) of a route north along a 8.4 m face - 3-4 stuck episodes). It WALKS to the
       // corner (no sprint, the next look 0.25 s on); past the corner the next leg's heading is looked at as any other.
-      if (EDGE_TURN && routeTurnsBefore(b, wx, wz, 0.8 * ((runTop === runTop ? kTop : k) - 1))) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
+      if (EDGE_TURN && routeTurnsBefore(W, b, wx, wz, 0.8 * ((runTop === runTop ? kTop : k) - 1), elevated)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
@@ -5413,19 +5426,49 @@ function edgeGuard(W, b) {
   nav.st.edgeHolds++; nav.st.edgeFlights++;
   if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); }
 }
-/** (W9 R1B) edgeGuard's corner rule: the bot is heading (wx, wz) for its path's next waypoint, on its own level, more than EDGE_TURN_M short of the
- *  face (faceD m ahead), and the route turns there (the next leg leaves this heading by more than 45 deg) - the face is not on the route. */
+/** (W9 R1 fix botpen) The legs' heading moved since edgeGuard's last probe: the yaw by more than EDGE_RETURN_YAW rad, or the move stick by more than
+ *  EDGE_RETURN_STICK (|dmz| + |dmx|) - the probe interval assumed the heading it judged. Plain compares of the input numbers (no heading arithmetic). */
+const EDGE_RETURN_YAW = 0.2, EDGE_RETURN_STICK = 0.25;
+function edgeTurned(inp, bb) {
+  const dy = inp.yaw - bb.edgeYaw, dm = inp.mz - bb.edgeMz, dx = inp.mx - bb.edgeMx;
+  return dy > EDGE_RETURN_YAW || dy < -EDGE_RETURN_YAW || (dm < 0 ? -dm : dm) + (dx < 0 ? -dx : dx) > EDGE_RETURN_STICK;
+}
+/** (W9 R1B) edgeGuard's corner rule: the bot is heading (wx, wz) for its path's next waypoint, on its own level, short of the face (faceD m ahead,
+ *  the look's last level sample), and the route turns there (the next leg leaves this heading by more than 45 deg) - the face is not on the route.
+ *  (W9 R1 fix botpen) The run-on past the corner is measured FROM THE CORNER, not from the look's 0.8 m samples: the old test (corner + EDGE_TURN_M
+ *  <= faceD) read the face 0-0.8 m early depending on where the bot stood when it looked, and a bot held at the first look stands still, so every
+ *  later look read the same: probe_match --pencheck on the doors world (isla_viva seed 5, s18 sprinting due west along z -77.6) was held at
+ *  (-69.5, -77.6), 2.49 m short of the corner (-72, -77.5), the lip at -73.7 sampled at faceD 4.0 < 2.49 + 1.6 - held for good (1 stuck episode,
+ *  never reached). Now: from the corner along the heading, every 0.2 m out to EDGE_TURN_M + 0.2, the ground (the support on a deck) falls no
+ *  more than EDGE_TURN_STEP per step - the lip at least ~EDGE_TURN_M past the corner, wherever the bot stands. */
 const EDGE_TURN = true;           // false = every face in the look-ahead holds the bot, as before W9 (probe_match --pencheck --plant no-pen-fix: MUST FAIL)
-const EDGE_TURN_M = 1.6;          // the corner at least this short of the face: a walk's run-on past a waypoint it consumes 0.55 m early
-function routeTurnsBefore(b, wx, wz, faceD) {
+const EDGE_TURN_M = 1.1;          // the corner at least this short of the face. (fix botpen) Was 1.6 read at 0.8 m resolution (1.6-2.4 m in effect);
+                                  // now exact to 0.2 m: a walk's run-on past the corner is walk x accelT - 0.55 m consumed early = 6 x 0.13 - 0.55 =
+                                  // 0.23 m, so a 1.1 m gap keeps the feet >= 0.85 m off the lip (the grid routes Isla seed 5 north along the top at
+                                  // x -72.4, 1.3 m in from the lip at -73.7: the 1.6 m rule held s18 at its corner for good)
+const EDGE_TURN_K = Math.round((EDGE_TURN_M + 0.2) / 0.2);   // 0.2 m steps from the corner
+const EDGE_TURN_STEP = 0.225;     // a 0.2 m step falling more than this is the face: STEEP_STEP (0.9 m per 0.8 m sample, ~48 deg) per 0.2 m
+function routeTurnsBefore(W, b, wx, wz, faceD, elevated) {
   const P = b.bb.path, a = b.actor;
   if (!P || P.length < 2) return false;
   const p = P[0], q = P[1];
   if (p.y == null || Math.abs(p.y - a.pos.y) > 0.6) return false;
   const dx = p.x - a.pos.x, dz = p.z - a.pos.z, d = Math.sqrt(dx * dx + dz * dz);
-  if (d < 0.3 || d + EDGE_TURN_M > faceD || (dx * wx + dz * wz) < 0.95 * d) return false;
+  if (d < 0.3 || d > faceD || (dx * wx + dz * wz) < 0.95 * d) return false;
   const ex = q.x - p.x, ez = q.z - p.z, e = Math.sqrt(ex * ex + ez * ez);
-  return e > 0.3 && (ex * wx + ez * wz) < 0.7071 * e;
+  if (!(e > 0.3 && (ex * wx + ez * wz) < 0.7071 * e)) return false;
+  const wy = W.map.waterY, wyN = wy != null ? +wy : -1e9;
+  let prev = NaN;
+  for (let k = 0; k <= EDGE_TURN_K; k++) {          // the corner, then 0.2 m steps to EDGE_TURN_M + 0.2
+    const px = p.x + wx * 0.2 * k, pz = p.z + wz * 0.2 * k;
+    let sup;
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }
+    else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
+    if (sup < wyN) sup = wyN;
+    if (k > 0 && prev - sup > EDGE_TURN_STEP) return false;
+    prev = sup;
+  }
+  return true;
 }
 /** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
  *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
@@ -5453,6 +5496,31 @@ function flightSafe(W, a) {
     }
   }
   return true;
+}
+/** (W9 R1 fix botpen) The hop asked this frame, flown: from the feet at jumpV up, along the legs' heading at the bot's speed (at least a walk), under
+ *  gravity, landing on the support under it (a rock or a roof it lands on is support: supportA), 2-tick steps; false = it lands more than the drop
+ *  this bot may fall (walkDrop) under the arc's apex. Terrain and colliders, no rng draw; runs only on a frame a hop is asked. */
+function jumpArcSafe(W, a, inp) {
+  if (!LETHAL_H) return true;
+  const lim = walkDrop(a);
+  if (!(lim < 1e6)) return true;
+  const B = basisOf(inp, _mb1);
+  let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
+  const m = Math.sqrt(wx * wx + wz * wz);
+  if (m < 0.05) return true;                              // a hop on the spot lands where it left
+  wx /= m; wz /= m;
+  const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z), walkV = K.MOVE.walk, u = spd > walkV ? spd : walkV;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), dt = 2 / 30, wy0 = W.map.waterY, wy = wy0 != null ? +wy0 : -1e9;
+  let x = a.pos.x, z = a.pos.z, y = a.pos.y, vy = (K.MOVE && K.MOVE.jumpV) || 7.8, top = y;
+  for (let n = 0; n < 60; n++) {
+    x += wx * u * dt; z += wz * u * dt; y += vy * dt; vy -= g * dt;
+    if (y > top) top = y;
+    if (vy > 0) continue;
+    SPQ[0] = x; SPQ[1] = z; SPQ[2] = y; supportA(W, SPQ, 0);
+    const sup = SPQ[3] < wy ? wy : SPQ[3];
+    if (y <= sup) return !(top - sup > lim);
+  }
+  return false;                                           // still falling after 4 s: no landing it may take
 }
 /** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
  *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
