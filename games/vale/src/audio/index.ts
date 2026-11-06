@@ -358,7 +358,9 @@ const T3_STATUS = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborn
 const T3_OPS = new Set(['displace', 'dash', 'blink', 'zone']);
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
-const AMB_DUCK_DB = 6;       // the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
+const AMB_CALM_LIFT_DB = 2;  // the emitters away from a fight (below AMB_DUCK_FROM): a quiet seat's floor is the world's; a seat that hardly meets
+                             // a fight read 0.3 LU under the mix's band with the world at 0 dB, and a loud one barely gains (closing r3) …
+const AMB_DUCK_DB = 6;       // … the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
 const AMB_DUCK_FROM = 0.2;   // … none below this (a lone poke); the heat counts fighter-vs-fighter damage only
 const AMB_DUCK_FULL = 0.6;
 const FIGHT_HIT = 0.12;      // fight heat per fighter-vs-fighter hit near the listener (or your living fighter) …
@@ -1392,7 +1394,7 @@ class Engine implements ValeAudioPort {
     }
     if (this.ambDuck) {
       const k = Math.max(0, Math.min(1, (this.fight - AMB_DUCK_FROM) / (AMB_DUCK_FULL - AMB_DUCK_FROM)));
-      this.ambDuck.gain.setTargetAtTime(Math.pow(10, -AMB_DUCK_DB * k / 20), t, k > 0 ? 0.4 : 1.5);
+      this.ambDuck.gain.setTargetAtTime(Math.pow(10, (AMB_CALM_LIFT_DB - (AMB_CALM_LIFT_DB + AMB_DUCK_DB) * k) / 20), t, k > 0 ? 0.4 : 1.5);
     }
   }
 

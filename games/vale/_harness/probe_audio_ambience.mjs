@@ -11,7 +11,7 @@
 //   A2  the bed is at full the whole match; at least one positional emitter is heard (> -20 dB) along the way
 //   A3  placement (engine ambPlace): on any point of an emitter's group it plays at full; 40 m clear of every point
 //       it is silent
-//   A4  the combat duck: the bus at 0 dB below fight heat 0.2, -6 dB at 0.6 and above (fight heat counts fighter-vs-
+//   A4  the combat duck: the emitters at +2 dB (the calm lift) below fight heat 0.2, -6 dB at 0.6 and above (fight heat counts fighter-vs-
 //       fighter damage only: the wave-clear intensity, here held at 1, never ducks it)
 //   A5  detach (the match ends): every emitter fades to silence and its source is stopped; nothing is left voiced
 // Also reported (not gated; the real metering is _harness/probe_audio_mix.mjs in Chrome): a loudness MODEL of the
@@ -210,7 +210,7 @@ for (const modeId of ['rift', 'bridge', 'fray']) {
   for (const k of [0, 0.15, 0.4, 0.6, 0.9]) { eng.fight = k; eng.intensity = 1; eng.syncAmbience(); duck[k] = +dB(eng.ambDuck.gain.value).toFixed(2); }
   m.duckDb = duck;
   m.duckedShare = +(ducked / Math.max(1, samples)).toFixed(2);
-  if (Math.abs(duck[0]) > 0.01 || Math.abs(duck[0.15]) > 0.01) failures.push(`A4 ${mode.map}: the bus ducks below combat (${JSON.stringify(duck)})`);
+  if (Math.abs(duck[0] - 2) > 0.05 || Math.abs(duck[0.15] - 2) > 0.05) failures.push(`A4 ${mode.map}: the calm lift is not +2 dB below combat (${JSON.stringify(duck)})`);
   if (Math.abs(duck[0.6] + 6) > 0.05 || Math.abs(duck[0.9] + 6) > 0.05) failures.push(`A4 ${mode.map}: the bus is not -6 dB in a fight (${JSON.stringify(duck)})`);
   // A5: detach
   const srcs = amb.map((e) => e.src).filter(Boolean);
