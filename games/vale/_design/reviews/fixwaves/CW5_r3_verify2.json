@@ -1,0 +1,52 @@
+{
+  "pass": true,
+  "items": [
+    {
+      "id": "regression:ervet-dash",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Re-measured from the shipped GLB against the pre-fix blob e6d0e959a~1 and the flipped blob e6d0e959a. foot.R z f14-20 is -0.342, -0.421, -0.419, -0.416, -0.412, -0.409, -0.407 (pre-fix -0.315 to -0.351), so the leg stays trailing. World max step 0.182 m at f1 (pre-fix 0.200, flipped 0.995). Jerk 0.168 at f15 (pre-fix 0.188, flipped 0.930). Step relative to hips 0.095 -> 0.128 m. Bone lengths hold on every frame (thigh 0.389, shin 0.496). Byte diff against the flipped blob: only dash thigh.R, shin.R and foot.R rotation changed, 214 bytes, JSON identical. The guard works: --check-against exits 0 on the shipped GLB and exits 1 on the flipped one (0.095 -> 0.995 m). The other 7 base GLBs against b4cf39106~1: 0 over 0.1 m, largest +0.086 m on Nurrow death foot.L. Real three.js clip sheet: the dash row shows the leg trailing with no flip. clip_floor: 0 clips below, dash -0.014 m. Reports: _harness/_reports/fw_CW5_r3v2_ervet_dash.txt, fw_CW5_r3v2_gates.txt. Shots: _harness/_shots/fw_CW5_r3v2_ervet_clips.png, fw_CW5_r3v2_ervet_dash_row.png. Not seen in a live match."
+    },
+    {
+      "id": "par:ervet",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Score 7.5, restored. The only cause of the 7.4 is gone, and only the dash samples changed since verify 1, so the r3v1 pairs (min 8.3), crown (R3 10.9 cm) and recall (6 s) carry over without a re-measure: `git diff --stat 8a73ff907 HEAD -- art/out/fighters art/tools` lists only the Almanac splash, and the byte diff above covers ervet.glb. Re-run here: three_load_test --budget-kb 1172 OK and clip_floor 0 below (fw_CW5_r3v2_gates.txt). No blocker open."
+    },
+    {
+      "id": "done:6",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "The score clause now holds: Ervet is back at 7.5 and the other 7 stay at par from r3v1. No fighter GLB byte changed since r3v1 except Ervet's dash. Ervet load OK re-run here. The other 23 GLB load results, the lineup_qa results and recall 6.0 s carry over from fw_CW5_r3v1_load.txt and art/renders/lineup/fw_CW5_r3v1_lineup.json; they were not re-run. Skin GLBs hold 0 clips, so they cannot carry the flip (fw_CW5_r3v2_legstep_all_glbs.txt)."
+    },
+    {
+      "id": "finding:almanac-splash-face",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "art/out/fighters/lisvel/lisvel_almanac_splash.png, 1600 x 900: the head now faces the camera at about three-quarter. At native size the nose shadow is a clear dark mark (luma 93 against 173 on the face, rows 318-321) and the mouth is a curved line (rows 336-337, luma about 180 -> 167 across about 15 px). The finding's featureless oval is gone. The plate is intact, and the head shows no horror or tall-hood read. My card_qa run: 6 cards, 0 gate misses; this splash has highlights p99.9 245, speckle 1.48, MAD 41.8 vs base (_harness/_reports/fw_CW5_r3v2_cards_lisvel.txt). Pixel readings: fw_CW5_r3v2_almanac_face.txt. Shots: _harness/_shots/fw_CW5_r3v2_almanac_face_3x.png, fw_CW5_r3v2_faces_1x_almanac_base.png, fw_CW5_r3v2_almanac_quarter.png. See minor:almanac-mouth-contrast for what remains weak."
+    },
+    {
+      "id": "minor:almanac-mouth-contrast",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "New note, not a gate. The Almanac mouth is faint: 13 luma at native size, weaker than on the base splash and the Almanac portrait. At quarter size (fw_CW5_r3v2_almanac_quarter.png) the face reduces to a nose dot under the visor; the mouth no longer reads. Judged not blank at full card size, which is the size the finding set. This is a judgement call on a major held from verify 1, and the lead may rule otherwise.",
+      "fixHint": "Backlog only. If the card is used small, darken the mouth line on the Almanac face or tilt the key lower. Do not re-render for this at par."
+    },
+    {
+      "id": "minor:floor-fix-rerun-differs",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Running the final clip_floor_fix.py on the pre-fix Ervet blob exits 0 with 0 clips below (_harness/_reports/fw_CW5_r3v2_refix_rerun.txt), but the output is not byte-identical to the shipped ervet.glb (first difference at byte 655165). The shipped file is not a pure output of the final tool. The likely reason is that its other clips came from the earlier tool and only dash was re-solved; I did not characterize the difference. Both versions pass the floor gate, and the shipped one passes the step guard. The floor fix is also still GLB-level, so a rebuild needs a re-run, as verify 1 noted.",
+      "fixHint": "After any Ervet rebuild, re-run clip_floor_fix.py, clip_floor.py and --check-against."
+    },
+    {
+      "id": "handoff:npm-content",
+      "severity": "minor",
+      "status": "not_measured",
+      "evidence": "`npm run content` was not run here, because this verifier may only edit its verdict file. No floor-fixed clip has been seen in a live match by the engineer or by me. Ervet's dash is checked by sampled poses and the three.js clip sheet only.",
+      "fixHint": "Lead runs `npm run content`, then watches Ervet's dash in a live match."
+    }
+  ],
+  "regressions": [],
+  "summary": "PASS. All four failed items are closed and I found no new regression or blocker. Ervet's dash leg stays trailing: world max step 0.182 m, was 0.995 flipped and 0.200 pre-fix. Only the dash leg samples changed, and the new guard catches the flipped blob, so Ervet returns to 7.5 and done:6 closes. The Almanac splash now shows a nose and a mouth at 1600 x 900 and passes card_qa, but the mouth is faint (13 luma) and gone at quarter size; I passed that as a judgement call and logged it as a minor. Most of done:6 and Ervet's pairs, crown and recall carry over from r3v1 because no other GLB bytes changed; they were not re-run. Still open: `npm run content` and a live look at the dash."
+}
