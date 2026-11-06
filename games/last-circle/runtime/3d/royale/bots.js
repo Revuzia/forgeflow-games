@@ -4026,6 +4026,68 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
+/* (Wave 9 fix doorstuck) DOORWAYS WITH LEAVES. An open door leaf stands 1.125 m into the room at each jamb of a leafed door (housegen H.doorLeaves): the
+   doorway is a 2.18 m wide, 1.3 m deep slot, not a 0.24 m gap in a wall. The grid knows (it bakes the leaf slabs and replays every leg through the mover), but
+   a window-planner route (findPathOld: a goal out of the grid's reach) has legs that cross the doorway on the slant - a bot following one, or one that turned
+   on an arc onto it, met the jamb or a leaf, the wall probe dropped the route and the bot slid along the wall, then walked in with no route and was sent
+   back out by the room graph (measured: ashgrid seed 1, yard@p3's back door, a 3.6 s loop for 90 s, 7 stuck episodes). So a window route that crosses a
+   leafed doorway passes through two points on the door's axis: FUNNEL_OUT m out on the plain side, FUNNEL_SWING m in on the swing side (past the leaf tips).
+   Grid routes (.nav) and roof exits (.exit) are left alone. Without leaves (every build before Wave 9) nothing changes. */
+const FUNNEL_OUT = 1.0, FUNNEL_SWING = 1.45, FUNNEL_HW = 1.4;     // m; FUNNEL_HW: a leg meeting the door line this near its centre crosses the doorway
+const LD = { built: -1, grid: new Map() };
+function leafDoorsEnsure(W) {
+  if (LD.built === IND.built) return;
+  LD.built = IND.built; LD.grid.clear();
+  const HS = W.map && W.map.houses;
+  if (!Array.isArray(HS)) return;
+  for (const h of HS) {
+    if (!h || !Array.isArray(h.doorLeaves) || !h.doorLeaves.length || !Array.isArray(h.doors)) continue;
+    const byId = new Map(); for (const d of h.doors) byId.set(d.id, d);
+    const seen = new Set();
+    for (const L of h.doorLeaves) {
+      const d = byId.get(L.door);
+      if (!d || seen.has(d.id) || d.nx == null || !L.hinge) continue;
+      seen.add(d.id);
+      const sw = (L.hinge[0] - d.x) * d.nx + (L.hinge[1] - d.z) * d.nz >= 0 ? 1 : -1;     // the swing side: the hinge (a jamb face) is on it
+      const rec = { x: d.x, y: d.y, z: d.z, nx: d.nx, nz: d.nz, sw };
+      const k = indKey(Math.floor(d.x / IND_CELL), Math.floor(d.z / IND_CELL));
+      let l = LD.grid.get(k); if (!l) { l = []; LD.grid.set(k, l); } l.push(rec);
+    }
+  }
+}
+function doorFunnel(W, p, sx, sy, sz) {
+  if (IND.H === null || !p.length) return;
+  leafDoorsEnsure(W);
+  if (!LD.grid.size) return;
+  let px = sx, py = sy, pz = sz;
+  for (let i = 0; i < p.length && i < 64; i++) {
+    const q = p[i], qy = q.y != null ? q.y : py;
+    const c0 = Math.floor(Math.min(px, q.x) / IND_CELL - 0.1), c1 = Math.floor(Math.max(px, q.x) / IND_CELL + 0.1);
+    const r0 = Math.floor(Math.min(pz, q.z) / IND_CELL - 0.1), r1 = Math.floor(Math.max(pz, q.z) / IND_CELL + 0.1);
+    let hit = null, hs = 0, best = 2;
+    for (let cx = c0; cx <= c1; cx++) for (let cz = r0; cz <= r1; cz++) {
+      const l = LD.grid.get(indKey(cx, cz));
+      if (!l) continue;
+      for (const d of l) {
+        if (Math.abs(py - d.y) > 1.5 && Math.abs(qy - d.y) > 1.5) continue;
+        const sp = (px - d.x) * d.nx + (pz - d.z) * d.nz, sq = (q.x - d.x) * d.nx + (q.z - d.z) * d.nz;
+        if (sp * sq >= 0) continue;
+        const s = sp / (sp - sq), ix = px + (q.x - px) * s, iz = pz + (q.z - pz) * s;
+        if (Math.abs((ix - d.x) * -d.nz + (iz - d.z) * d.nx) > FUNNEL_HW || s >= best) continue;
+        best = s; hit = d; hs = sp > 0 ? 1 : -1;
+      }
+    }
+    if (hit) {
+      const dA = hs === hit.sw ? FUNNEL_SWING : FUNNEL_OUT, dB = -hs === hit.sw ? FUNNEL_SWING : FUNNEL_OUT;
+      const sp = (px - hit.x) * hit.nx + (pz - hit.z) * hit.nz, sq = (q.x - hit.x) * hit.nx + (q.z - hit.z) * hit.nz;
+      const ins = [];
+      if (Math.abs(sp) > dA + 0.2) ins.push({ x: hit.x + hit.nx * hs * dA, z: hit.z + hit.nz * hs * dA, y: hit.y });
+      if (Math.abs(sq) > dB + 0.2) ins.push({ x: hit.x - hit.nx * hs * dB, z: hit.z - hit.nz * hs * dB, y: hit.y });
+      if (ins.length) { p.splice(i, 0, ...ins); nav.st.funnels = (nav.st.funnels || 0) + 1; i += ins.length; }
+    }
+    px = q.x; py = qy; pz = q.z;
+  }
+}
 let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck, 6 calm drop cap: W9)
 function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
@@ -4039,6 +4101,7 @@ function requestPath(W, b, tx, tz, ty, urgent) {
     nav.st.req[reqWhy]++;
   }
   bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
+  if (bb.path && !bb.path.nav && !bb.path.exit) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);   // (Wave 9 fix doorstuck) through a leafed doorway square-on
   bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
   bb.noRouteT = (!bb.path && !navMiss) ? W.t : -99;       // (Wave 7, round 2) a real "no way": a bot on a roof may walk off it (deckExitPath)

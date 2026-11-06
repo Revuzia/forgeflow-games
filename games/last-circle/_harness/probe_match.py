@@ -67,6 +67,10 @@ PLANTS = {
     # (no legs) for 3.6 s of every 25 s of match time - >= 3 s windows inside 0.4 m, ~30 per bot per match. The sweep row MUST FAIL.
     "stall-surge": [("const wyE = W.map.waterY;          // (R1, tierprof kb)",
                      "const wyE = W.map.waterY; if (MOVING_STATES[b.state] && (W.t % 25) < 3.6) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }          // (R1, tierprof kb)")],
+    # (W9 fix doorstuck) the leafed-doorway funnel off (bots.js doorFunnel: a window route crossing a leafed doorway passes two points on the door's axis) -
+    # the sweep MUST FAIL (measured without it, fix1 2026-11-06: ashgrid seed 1 s42 7 episodes - a 3.6 s loop at yard@p3's back door - and isla_viva seed 2 s31 5)
+    "no-door-funnel": [("if (bb.path && !bb.path.nav && !bb.path.exit) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);",
+                        "if (false) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);")],
 }
 GUN_WIDS_EXCLUDED = ("storm", "none", None, "fall", "zone")
 

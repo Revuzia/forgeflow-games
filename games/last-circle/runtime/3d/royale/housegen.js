@@ -3367,6 +3367,39 @@ export function generate(parcel, opts) {
     underM[f] = m;
     return m;
   };
+  // (Wave 9 fix doorstuck) a house item is taken from its STAND point - loot.js standFor: the nearest point of its room's walk - along a clear line from
+  // the body (loot.js pickLos). An OPEN door leaf (a full-height slab standing 1.125 m into the room at its jamb) can stand between the two: a nightstand
+  // against the wall right beside the jamb is reached only from the doorway, and the leaf hides it from there. Bots stood in the doorway beside such a
+  // leaf, never took the item and came back to it (isla_viva seed 3, cliff_temples@p4: 14 stuck episodes of one bot). So a top / chest point needs its
+  // room's nearest walk sample (what standFor hands out, +- half a sample) to see it past every open leaf of its floor (each slab + LEAF_SEE_M).
+  const LEAF_SEE_M = 0.15;
+  const segHitsRect = (ax, az, bx, bz, x0, z0, x1, z1) => {      // the 2-D segment a -> b meets the rect (Liang-Barsky)
+    let t0 = 0, t1 = 1;
+    const dx = bx - ax, dz = bz - az, P = [-dx, dx, -dz, dz], Q = [ax - x0, x1 - ax, az - z0, z1 - az];
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(P[i]) < 1e-12) { if (Q[i] < 0) return false; continue; }
+      const r = Q[i] / P[i];
+      if (P[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+    return true;
+  };
+  const leafHides = (f, au, av, bu, bv) => {
+    for (const bx of leafBoxes) if (bx.fl === f && segHitsRect(au, av, bu, bv, bx.u0 - LEAF_SEE_M, bx.v0 - LEAF_SEE_M, bx.u1 + LEAF_SEE_M, bx.v1 + LEAF_SEE_M)) return true;
+    return false;
+  };
+  const standSees = (R, f, u, v) => {                        // the room's walk sample nearest (u, v) (no limit, like standFor) sees (u, v) past the open leaves
+    if (!leafBoxes.some((bx) => bx.fl === f)) return true;
+    const seenF = wk.seen[f], reg = floors[f].region;
+    let best = -1, bd = Infinity;
+    for (let k = 0; k < NS; k++) {
+      if (!seenF[k] || sCell[k] < 0 || reg[sCell[k]] !== R.ri) continue;
+      const a = k % NU, b = (k - a) / NU, dx = su(a) - u, dz = sv(b) - v, dd = dx * dx + dz * dz;
+      if (dd < bd - 1e-12) { bd = dd; best = k; }
+    }
+    if (best < 0) return true;                               // (no walk of its own: the reach test decides, as before)
+    const a = best % NU, b = (best - a) / NU;
+    return !leafHides(f, su(a), sv(b), u, v);
+  };
   (() => {                                                   // (loot: own function, see above)
   for (const R of roomRecs) {
     const f = R.floor, area = R.cells.length * U * U;
@@ -3387,6 +3420,7 @@ export function generate(parcel, opts) {
       const inset = Math.min(0.3, hd);
       const u = p.u + dir[0] * (hd - inset), v = p.v + dir[1] * (hd - inset);
       if (sampleNear(wk, f, u, v, REACH_XZ - 0.25, true) < 0) continue;
+      if (!standSees(R, f, u, v)) continue;                  // (Wave 9 fix doorstuck) not hidden from its stand point by an open door leaf
       loot.push({ room: R, f, u, v, y: s[f] + p.cat.surface, on: p.cat.id });
       want--;
     }
@@ -3417,7 +3451,7 @@ export function generate(parcel, opts) {
   }
   })();
   for (const p of furn) if (p.slot) {
-    if (sampleNear(wk, p.f, p.u, p.v, REACH_XZ - 0.25, true) >= 0) chests.push({ room: p.room, f: p.f, u: p.u, v: p.v, y: s[p.f] });
+    if (sampleNear(wk, p.f, p.u, p.v, REACH_XZ - 0.25, true) >= 0 && standSees(p.room, p.f, p.u, p.v)) chests.push({ room: p.room, f: p.f, u: p.u, v: p.v, y: s[p.f] });
   }
 
   // ======================================================================== world output
