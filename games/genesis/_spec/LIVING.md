@@ -3018,3 +3018,6 @@ hunt in year 18 in this run (kills 2.0); in m2 (the same src with 15 % / 3 days)
 **Acceptance re-installed:** `minor26/acc/overlay.cjs m3` lays these three rows over the table installed before (kept as
 `_harness/scratch/living/acceptance.postrel.json`); each row keeps its postrel value under `postrelValue` and gets a
 `minor26` field (before / after per seed, how). Tally 43 met / 16 partly / 9 missed / 14 report (was 41 / 15 / 12).
+
+**Gate:** `npm run check` on this src green 2026-11-06 17:43Z (detban, typecheck, 727 tests pass / 0 fail;
+`minor26/diag/gate3.log`).
