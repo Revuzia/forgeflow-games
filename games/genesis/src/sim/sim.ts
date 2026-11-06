@@ -485,6 +485,9 @@ export class Sim {
     h.json(hdr);
     for (const p of this.u.planets) {
       for (const [name, arr] of planetArrays(p)) {
+        // an array added after the 1.5 build that loads as zeros where a save lacks it hashes only once it holds
+        // something, so a world saved by the older build hashes as that build saw it (living-migration)
+        if (HASH_IF_SET.has(name) && arr.every((v) => v === 0)) continue;
         h.str(name);
         h.typed(arr);
       }

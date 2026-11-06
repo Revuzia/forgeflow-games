@@ -139,8 +139,12 @@ interface ClimateScratch {
   regArea: Float64Array;
   regSum: Float64Array;
   regMean: Float64Array;
-  /** the regions' area-weighted mean of tempMean + lapse·altitude (the last days' air, brought to the datum) */
+  /** the regions' land mean of tempMean + lapse·altitude (the last days' air at the datum) less its band's land mean */
   regYear: Float64Array;
+  /** land area of each region; each latitude band's land mean of tempMean + lapse·altitude, and its land area */
+  regLand: Float64Array;
+  bandLand: Float64Array;
+  bandLandArea: Float64Array;
 }
 const scratchByN = new Map<number, ClimateScratch>();
 function scratch(p: Planet): ClimateScratch {
@@ -173,7 +177,7 @@ function scratch(p: Planet): ClimateScratch {
       reg[c] = rowStart[r] + k;
       regArea[reg[c]] += p.grid.area[c];
     }
-    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N), reg, regArea, regSum: new Float64Array(regArea.length), regMean: new Float64Array(regArea.length), regYear: new Float64Array(regArea.length) };
+    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N), reg, regArea, regSum: new Float64Array(regArea.length), regMean: new Float64Array(regArea.length), regYear: new Float64Array(regArea.length), regLand: new Float64Array(regArea.length), bandLand: new Float64Array(BANDS), bandLandArea: new Float64Array(BANDS) };
     scratchByN.set(p.n, s);
   }
   return s;
@@ -735,11 +739,17 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   // the hourly update keeps the means. (Push 3 round 2: the pass's earlier hours are hourly updates of the air too —
   // humidityHours, before this kernel — so transients and fronts move through the field at the 1x pace.)
   // the regions' recent (72 h) air at the datum (REG_GAP: is a snowed cell held below its region's air?)
+  // Read over LAND only and as an anomaly from its latitude's land mean (bandLand): a region spans many degrees of
+  // latitude (on a coarse world, tens), and the cold edge of a polar region, or a continent's winter beside a mild sea,
+  // is no lock — measured on the n=16 birth worlds, where a whole-row region melted the poles a cold folk lived on.
   if (airy && doFreeze) {
-    const rs = sc.regSum, ar = p.grid.area, srf = f.surface, oc = s.ocean, tyY = s.tempMean;
-    rs.fill(0);
-    for (let c = 0; c < N; c++) rs[sc.reg[c]] += (tyY[c] + (oc[c] ? 0 : lapse * Math.max(0, srf[c] - datum))) * ar[c];
-    for (let r = 0; r < rs.length; r++) regYear[r] = sc.regArea[r] > 0 ? rs[r] / sc.regArea[r] : 0;
+    const rs = sc.regSum, ra = sc.regLand, bl = sc.bandLand, ba = sc.bandLandArea, ar = p.grid.area, srf = f.surface, oc = s.ocean, tyY = s.tempMean;
+    bl.fill(0); ba.fill(0);
+    for (let c = 0; c < N; c++) if (!oc[c]) { bl[band[c]] += (tyY[c] + lapse * Math.max(0, srf[c] - datum)) * ar[c]; ba[band[c]] += ar[c]; }
+    for (let b = 0; b < BANDS; b++) bl[b] = ba[b] > 0 ? bl[b] / ba[b] : 0;
+    rs.fill(0); ra.fill(0);
+    for (let c = 0; c < N; c++) if (!oc[c]) { rs[sc.reg[c]] += (tyY[c] + lapse * Math.max(0, srf[c] - datum) - bl[band[c]]) * ar[c]; ra[sc.reg[c]] += ar[c]; }
+    for (let r = 0; r < rs.length; r++) regYear[r] = ra[r] > 0 ? rs[r] / ra[r] : 0;
   }
   let sourced = 0;
   let nChanged = 0;
@@ -991,7 +1001,7 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       if (snow[c] > 0) {
         // the region's air at this cell's altitude (warm-air melt, REG_MELT)
         let regH = 0;
-        if (airy && snow[c] > REG_SNOW && regYear[reg[c]] - lapse * alt - tempMean[c] > REG_GAP) {
+        if (airy && snow[c] > REG_SNOW && regYear[reg[c]] + sc.bandLand[band[c]] - lapse * alt - tempMean[c] > REG_GAP) {
           if (snowLock[c] < lockNeed) snowLock[c] += H;
           else {
             const tr = regMean[reg[c]] - lapse * alt + offset;
