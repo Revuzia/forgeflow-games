@@ -301,7 +301,7 @@
  ],
  "budgets": {
   "glb": "longshade 994 KiB of 1024 (art/renders/units/build_report_longshade.json), load test OK; stray_numeral 398 KiB, load test OK (it failed at -2.2 cm before this package); stilltusk 551 KiB, load test OK",
-  "trianglesPeak": "__PEAK__"
+  "trianglesPeak": "match peak 465k / 463k / 464k on seeds 7, 11, 23, all PASS against 500k, 40 programs, 0 late programs (node _harness/perf_1080.mjs --prod --match-only --match-seeds 7,11,23 --out _harness/_reports/fw_CW4_r5_match.json, /tmp/fw_CW4_r5_match.log); the hard count, valid under load. Timing gates need an idle machine."
  },
  "units": [
   {
