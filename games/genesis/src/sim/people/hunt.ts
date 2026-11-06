@@ -605,8 +605,8 @@ export function huntTask(x: PCtx, s: number, st: Settlement): TaskSpec | null {
 
 /**
  * The end of a hunter's stalk (work.ts, TASK.hunt): the party's encounter with the herd — once per ENCOUNTER_GAP for the
- * whole party, with the hunters within reach of the herd. A tracking leg (data2 1) does nothing (the next decision
- * walks on); a walk back to the kill (data2 2) takes up a load of what was left of it (fetchCache).
+ * whole party, with the hunters within reach of the herd. A tracking leg (data2 1) that ends within that reach is one too
+ * (else the next decision walks on); a walk back to the kill (data2 2) takes up a load of what was left of it (fetchCache).
  */
 export function huntEncounter(x: PCtx, s: number, st: Settlement | undefined): void {
   const A = x.A;
