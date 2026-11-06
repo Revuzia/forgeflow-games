@@ -317,9 +317,10 @@ try {
       let baseCore = null;
       if (first) {
         // CW1 r3 refix (done:1): 'faded' means faded. A fixed 179 frames ended a few frames before Hesmi's 5 s shadow zone
-        // (0.35 + 0.75 + 5 s = 183 frames), so the slab's shade darkened the base on some runs and not on others (core
-        // x2.1 and x1.89 from the same first beat). Wait until no effect of the kit's that the frame before the cast did not hold is alive, then
-        // take the median of 5 frames; the report holds every sample, the wait and the pre-cast frame's reading
+        // (0.35 + 0.75 + 5 s = 183 frames), and one single-frame read took 110 where others took 97-99 (mostly inside the
+        // victim's box: ground 105 vs 102; cause not reproduced). Wait until no effect of the kit's that the frame before the
+        // cast did not hold is alive, then take the median of 5 frames; the report holds every sample, the wait and the
+        // pre-cast frame's reading
         const faded = await B((b, a) => { let n = 0; const left = () => [...new Set(b.renderer.vfx.insts.filter((it) => it.active && it.def.id.startsWith(`${a.def}_`) && !a.live0.includes(it.def.id)).map((it) => it.def.id))]; while (left().length && n < 600) { b.__step(15); n += 15; } return { frames: n, left: left() }; }, { live0, def });
         await stage(c.seat);
         baseCore = await B((b, a) => {
