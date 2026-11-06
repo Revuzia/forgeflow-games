@@ -45,7 +45,7 @@ import { BASE_PACK } from '../data/index.ts';
 import { loadContent, RUNTIME_PACK, type Content, type ContentPack } from './content.ts';
 import { Universe } from './world/universe.ts';
 import { buildScenario } from './world/scenarios.ts';
-import { PUBLISHED_FIELDS, planetArrays, planetFromJson, planetToJson, type Planet, type PlanetJson } from './world/planet.ts';
+import { HASH_IF_SET, PUBLISHED_FIELDS, allZero, planetArrays, planetFromJson, planetToJson, type Planet, type PlanetJson } from './world/planet.ts';
 import { makeStar, starView, type StarState } from './world/star.ts';
 import { buildRegistry, type CommandRegistry } from './god/commands.ts';
 import { parseFreeform } from './god/freeform.ts';
@@ -487,7 +487,7 @@ export class Sim {
       for (const [name, arr] of planetArrays(p)) {
         // an array added after the 1.5 build that loads as zeros where a save lacks it hashes only once it holds
         // something, so a world saved by the older build hashes as that build saw it (living-migration)
-        if (HASH_IF_SET.has(name) && arr.every((v) => v === 0)) continue;
+        if (HASH_IF_SET.has(name) && allZero(arr)) continue;
         h.str(name);
         h.typed(arr);
       }

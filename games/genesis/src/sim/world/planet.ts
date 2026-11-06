@@ -454,6 +454,14 @@ export class Planet {
   }
 }
 
+/** arrays added after the 1.5 build that load as zeros from a save without them: Sim.hash() hashes one only once it
+ * holds something (an all-zero array is the state an older save loads into), so an old save hashes as its build saw it */
+export const HASH_IF_SET: ReadonlySet<string> = new Set(['s.snowLock']);
+export function allZero(a: TypedArray): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== 0) return false;
+  return true;
+}
+
 /** Every saved/hashed typed array of a planet, in a fixed order. */
 export function planetArrays(p: Planet): [string, TypedArray][] {
   const out: [string, TypedArray][] = [];
