@@ -95,11 +95,11 @@
       "desc": "Nurrow lunges up to 4 m toward a point and stops at the first enemy fighter she reaches, dealing {effects.0.onPass.0.then.0.amount} magic damage. Felt soles: a sleeping enemy takes no damage and stays asleep.",
       "maxRank": 5,
       "cooldown": [
-        10,
         9.5,
         9,
         8.5,
-        8
+        8,
+        7.5
       ],
       "cost": 0,
       "costKind": "res",
@@ -392,9 +392,9 @@
               "op": "damage",
               "amount": {
                 "base": [
-                  150,
-                  250,
-                  350
+                  170,
+                  270,
+                  370
                 ],
                 "ap": 0.7,
                 "bonusAd": 0.5

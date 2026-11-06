@@ -18,16 +18,16 @@
     "tally"
   ],
   "base": {
-    "hp": 590,
+    "hp": 600,
     "hpRegen": 1.3,
     "ad": 60,
-    "armor": 26,
+    "armor": 27,
     "resist": 30,
     "attackSpeed": 0.67,
     "moveSpeed": 3.5
   },
   "growth": {
-    "hp": 93,
+    "hp": 95,
     "hpRegen": 0.12,
     "ad": 3.2,
     "armor": 4,

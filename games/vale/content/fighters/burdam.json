@@ -18,7 +18,7 @@
     "pull"
   ],
   "base": {
-    "hp": 650,
+    "hp": 665,
     "hpRegen": 1.7,
     "ad": 64,
     "armor": 34,
@@ -27,7 +27,7 @@
     "moveSpeed": 3.45
   },
   "growth": {
-    "hp": 106,
+    "hp": 109,
     "hpRegen": 0.15,
     "ad": 3.6,
     "armor": 4.6,
@@ -51,7 +51,7 @@
       "id": "burdam_long_memory",
       "name": "Long Memory",
       "icon": "assets/ui/icons/abilities/burdam_long_memory.webp",
-      "desc": "When an enemy fighter damages Burdam, they gain a Grudge stack for 6 s (up to 5; at most one stack per 0.5 s from each enemy). Burdam's basic attacks against a Grudge-bearer heal him for 1.2% of his max Health and give him {triggers.1.effects.1.amount} Tally.",
+      "desc": "When an enemy fighter damages Burdam, they gain a Grudge stack for 6 s (up to 5; at most one stack per 0.5 s from each enemy). Burdam's basic attacks against a Grudge-bearer heal him for 1.5% of his max Health and give him {triggers.1.effects.1.amount} Tally.",
       "triggers": [
         {
           "on": "damageTaken",
@@ -83,7 +83,7 @@
               "op": "heal",
               "amount": {
                 "base": 0,
-                "maxHp": 0.012
+                "maxHp": 0.015
               },
               "to": "self"
             },
@@ -189,11 +189,11 @@
       "desc": "For 3 s Burdam gains {effects.0.statScaling.armor} armor and magic resist and 30% tenacity. When it ends he stamps, dealing {effects.0.onExpire.0.onHit.0.amount} physical damage to enemies within 3 m.",
       "maxRank": 5,
       "cooldown": [
-        14,
         13,
         12,
         11,
-        10
+        10,
+        9
       ],
       "cost": 30,
       "costKind": "res",

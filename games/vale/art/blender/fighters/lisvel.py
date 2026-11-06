@@ -144,13 +144,17 @@ CARDS = {
                   "glow_color": "#C8D4DE"},
     },
     "lisvel_almanac": {
-        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": 22.0, "pitch": -4.0, "lens": 52.0, "fill": 0.88, "x": 0.70,
+        # (CW5 round 3 refix, finding:almanac-splash-face: from yaw 22 the head, turned 28 deg to her right, showed a pale
+        # oval 30 px wide: the camera comes round to the side she looks to and in to the knees, so nose and mouth read; the head's lamp moves from near-frontal to her upper
+        # right, as on the portrait, or the face plate flattens to a pale oval)
+        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -14.0, "pitch": -4.0, "lens": 58.0, "fill": 0.92, "x": 0.64,
+                   "box_top": 2.2, "box_lo": 0.72, "box_w": 0.48,
                    "key_az": 200.0, "key_el": 30.0, "key_color": "#FFE3B8", "sun": 2.2, "rim_cool": 0.8,
                    "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.85,
                    "focal": [{"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 50.0,
                               "size": 0.3},
-                             {"at": "head", "az": 200.0, "el": 15.0, "dist": 0.7, "color": "#FFE6C8", "power": 22.0,
-                              "size": 0.2}]},
+                             {"at": "head", "az": 266.0, "el": 48.0, "dist": 0.6, "color": "#FFE3B8", "power": 13.0,
+                              "size": 0.10}]},
         # (CW5 refix: the reading-lamp bust lit the face flat from the front: a warm key from her upper right)
         "portrait": {"yaw": -16.0, "lens": 62.0, "fill": 0.84, "x": 0.44, "exposure": -1.25, "bust_lo": 0.10, "bust_hi": 0.30,
                      "focal": [{"at": "head", "az": 268.0, "el": 50.0, "dist": 0.6, "color": "#FFE3B8", "power": 15.0,

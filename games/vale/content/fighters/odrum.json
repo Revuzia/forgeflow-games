@@ -70,14 +70,14 @@
               "op": "status",
               "status": "armor_shred",
               "duration": 2.5,
-              "power": 0.2,
+              "power": 0.15,
               "to": "hit"
             },
             {
               "op": "status",
               "status": "resist_shred",
               "duration": 2.5,
-              "power": 0.2,
+              "power": 0.15,
               "to": "hit"
             }
           ]

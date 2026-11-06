@@ -12,13 +12,23 @@ brings its subtree up to the floor. Every correction is feathered over its neigh
     a chain segment x_<name>_<k>                           -> x_<name>_1 ... x_<name>_k, root first
     a rigid extra x_<name> with its own track              -> itself
     foot or toe                                            -> the leg: two-bone IK on thigh and shin lifts the ankle, the
-                                                              foot keeps its world rotation
+                                                              knee stays on the source pose's side, the foot keeps its
+                                                              world rotation. A straight leg, or a shin track with no
+                                                              keys there (thinned), cannot bend: the thigh swings the
+                                                              whole leg up about the hip instead
     the body, in a death                                   -> the hips' track rises (the corpse lies on the floor)
     the body, anywhere else                                -> nothing: that is the source's job (reported, not moved)
 
 Only animation samples are rewritten, in their own bytes of the BIN chunk: no key is added, no texture re-encoded, the
 file size does not change. A rebuild loses it: re-run this after a build, then art/tools/clip_floor.py. A two-handed
 weapon turns at the leading wrist only, so the tool prints the most it turned each bone: look at the clip when that is large.
+
+Guard: a solve that grows a leg's largest 30 Hz step (foot or shin, relative to the hips) by more than MAX_STEP_GROWTH, or
+moves an ankle more than MAX_ANKLE_SHIFT across the floor, is refused: the clip stays as it was and the tool exits 1.
+
+    python3 art/tools/clip_floor_fix.py art/out/fighters/ervet/ervet.glb --check-against <pre-fix copy of the glb>
+
+runs the same step check on a shipped GLB against an earlier copy, every clip, writes nothing, exits 1 on a growth.
 Pure python + numpy (shares chain_motion's GLB reader).
 """
 import argparse
@@ -36,6 +46,9 @@ from chain_motion import CT, NC, Rig, accessor  # noqa: E402
 LIMIT = -0.02       # clip_floor's gate
 HEADROOM = 0.004    # solve to this far above the gate's limit; thinned keys dip between themselves
 ROUNDS = 12
+MAX_STEP_GROWTH = 0.10  # m per 30 Hz frame, foot or shin relative to the hips
+MAX_ANKLE_SHIFT = 0.10  # m, horizontal
+LEG_BONES = ("foot.L", "foot.R", "shin.L", "shin.R")
 
 
 def qmul(a, b):
@@ -244,8 +257,77 @@ def frame_times(dur, fps=30.0):
     return np.array([min(f / fps, dur) for f in range(0, max(1, int(round(dur * fps))) + 1)])
 
 
-def leg_fix(body, ch, side, target):
-    """two-bone IK: the ankle rises until foot and toe clear `target`, the foot keeps its world rotation. False if a track is missing"""
+def copy_channels(ch):
+    return [tuple(c[:3]) + (c[3].copy(),) + tuple(c[4:]) for c in ch]
+
+
+def pose_at_frames(rig, ch, dur, names):
+    """{name: positions per 30 Hz frame}; the bones' world origins"""
+    times = frame_times(dur)
+    ids = {n: rig.name[n] for n in names if n in rig.name}
+    out = {n: np.zeros((len(times), 3)) for n in ids}
+    for i, t in enumerate(times):
+        w = rig.pose(ch, float(t))
+        for n, j in ids.items():
+            out[n][i] = w[j][:3, 3]
+    return out
+
+
+def leg_steps(rig, ch, dur):
+    """{leg bone: (largest 30 Hz step relative to the hips, its frame)}"""
+    p = pose_at_frames(rig, ch, dur, LEG_BONES + ("hips",))
+    out = {}
+    for n in LEG_BONES:
+        if n in p:
+            d = np.linalg.norm(np.diff(p[n] - p["hips"], axis=0), axis=1)
+            k = int(np.argmax(d)) if len(d) else 0
+            out[n] = (float(d[k]) if len(d) else 0.0, k + 1)
+    return out
+
+
+def leg_guard(rig, src, ch, dur):
+    """what is wrong with this solve against its source, or None"""
+    s0, s1 = leg_steps(rig, src, dur), leg_steps(rig, ch, dur)
+    bad = [f"{n} step {s0[n][0]:.3f} -> {s1[n][0]:.3f} m at f{s1[n][1]}" for n in s0 if s1[n][0] - s0[n][0] > MAX_STEP_GROWTH]
+    feet = ("foot.L", "foot.R")
+    p0, p1 = pose_at_frames(rig, src, dur, feet), pose_at_frames(rig, ch, dur, feet)
+    for n in p0:
+        h = np.linalg.norm((p1[n] - p0[n])[:, [0, 2]], axis=1)
+        if h.max() > MAX_ANKLE_SHIFT:
+            bad.append(f"{n} ankle moved {h.max():.3f} m across the floor at f{int(np.argmax(h))}")
+    return "; ".join(bad) or None
+
+
+def swing_spans(rig, src, thigh, shin, foot, shin_keys, times, lift):
+    """per frame, 1 where the leg must swing: each lifted span is solved one way, so no key jumps between the two"""
+    out = np.zeros(len(times))
+    i = 0
+    while i < len(times):
+        if lift[i] <= 0:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(times) and lift[j + 1] > 0:
+            j += 1
+        # the shin's bend moves linearly between its own keys: can that carry this lift? (a long key gap over a hold can)
+        sk = np.r_[shin_keys, times[0], times[-1]]
+        sk = np.unique(sk)
+        swing = float(np.abs(lift - np.interp(times, sk, np.interp(sk, times, lift)))[max(0, i - 3):j + 4].max()) > 0.015
+        for t in times[i:j + 1]:
+            w0 = rig.pose(src, float(t))
+            H0, K0, A0 = w0[thigh][:3, 3], w0[shin][:3, 3], w0[foot][:3, 3]
+            u0 = (A0 - H0) / np.linalg.norm(A0 - H0)
+            swing = swing or float(np.linalg.norm((K0 - H0) - ((K0 - H0) @ u0) * u0)) < 0.02
+        out[i:j + 1] = 1.0 if swing else 0.0
+        i = j + 1
+    return out
+
+
+def leg_fix(body, ch, side, target, src):
+    """the ankle rises until foot and toe clear `target`, the foot keeps its world rotation. False if a track is missing.
+    Two-bone IK with the knee on the side it has in the source pose `src`. Where the knee cannot bend (the source leg is
+    straight: no side to keep; or the shin's keys are too thin to carry the lift's curve, so its bend lands on the wrong
+    frames while the thigh's per-frame keys assume it: that flipped Ervet's dash leg), the thigh alone swings the leg up"""
     rig = body.rig
     thigh, shin, foot = (rig.name[f"{b}.{side}"] for b in ("thigh", "shin", "foot"))
     tr = {b: next((c for c in ch if c[0] == b and c[1] == "rotation"), None) for b in (thigh, shin, foot)}
@@ -263,6 +345,7 @@ def leg_fix(body, ch, side, target):
     lift = feathered(lift)
     if lift.max() <= 0:
         return True
+    swing = swing_spans(rig, src, thigh, shin, foot, tr[shin][2], times, lift)
     new = {}
     for b, c in tr.items():
         out = c[3].copy()
@@ -273,18 +356,31 @@ def leg_fix(body, ch, side, target):
             w = rig.pose(ch, float(t))
             H, K, A = w[thigh][:3, 3], w[shin][:3, 3], w[foot][:3, 3]
             Rp, Rt, Rs, Rf = (rot_only(w[x]) for x in (rig.parent[thigh], thigh, shin, foot))
-            A2 = A + np.array((0.0, d, 0.0))
-            l1, l2 = float(np.linalg.norm(K - H)), float(np.linalg.norm(A - K))
-            D2 = min(float(np.linalg.norm(A2 - H)), (l1 + l2) * 0.999)
-            u = (A2 - H) / np.linalg.norm(A2 - H)
-            v = (K - H) - ((K - H) @ u) * u      # the knee's side of the hip-ankle line
-            vn = float(np.linalg.norm(v))
-            v = v / vn if vn > 1e-6 else np.cross(u, (1.0, 0.0, 0.0))
-            ca = (l1 * l1 + D2 * D2 - l2 * l2) / (2 * l1 * D2)
-            K2 = H + l1 * (ca * u + math.sqrt(max(0.0, 1 - ca * ca)) * v)
-            Rt2 = min_rot(K - H, K2 - H) @ Rt
-            A_mid = K2 + min_rot(K - H, K2 - H) @ (A - K)
-            Rs2 = min_rot(A_mid - K2, A2 - K2) @ min_rot(K - H, K2 - H) @ Rs
+            if float(np.interp(float(t), times, swing)) > 0.5:
+                a = A - H
+                r = float(np.linalg.norm(a))
+                ang = math.acos(max(-1.0, min(1.0, a[1] / r))) - math.acos(max(-1.0, min(0.999, (a[1] + d) / r)))
+                ax = np.cross(a, (0.0, 1.0, 0.0))
+                n = float(np.linalg.norm(ax))
+                R = rot_matrix(ax / n * ang) if n > 1e-6 and ang > 0 else np.eye(3)
+                Rt2, Rs2 = R @ Rt, R @ Rs
+            else:
+                w0 = rig.pose(src, float(t))
+                H0, K0, A0 = w0[thigh][:3, 3], w0[shin][:3, 3], w0[foot][:3, 3]
+                A2 = A + np.array((0.0, d, 0.0))
+                l1, l2 = float(np.linalg.norm(K - H)), float(np.linalg.norm(A - K))
+                D2 = min(float(np.linalg.norm(A2 - H)), (l1 + l2) * 0.999)
+                u = (A2 - H) / np.linalg.norm(A2 - H)
+                u0 = (A0 - H0) / np.linalg.norm(A0 - H0)
+                v = (K0 - H0) - ((K0 - H0) @ u0) * u0    # the knee's side of the hip-ankle line, in the source pose
+                v = v - (v @ u) * u
+                vn = float(np.linalg.norm(v))
+                v = v / vn if vn > 1e-6 else np.cross(u, (1.0, 0.0, 0.0))
+                ca = (l1 * l1 + D2 * D2 - l2 * l2) / (2 * l1 * D2)
+                K2 = H + l1 * (ca * u + math.sqrt(max(0.0, 1 - ca * ca)) * v)
+                Rt2 = min_rot(K - H, K2 - H) @ Rt
+                A_mid = K2 + min_rot(K - H, K2 - H) @ (A - K)
+                Rs2 = min_rot(A_mid - K2, A2 - K2) @ min_rot(K - H, K2 - H) @ Rs
             if b == thigh:
                 q = mat2quat(Rp.T @ Rt2)
             elif b == shin:
@@ -338,23 +434,45 @@ def write_samples(rig, buf, ch_sampler_acc, vals):
         buf[start + i * stride:start + i * stride + dt.itemsize * c] = raw.tobytes()
 
 
+def check_against(rig, old):
+    worst, fails = (0.0, ""), 0
+    for nm in rig.anims:
+        if nm not in old.anims:
+            continue
+        s1, s0 = leg_steps(rig, *rig.clip(nm)), leg_steps(old, *old.clip(nm))
+        for n in s1:
+            g = s1[n][0] - s0[n][0]
+            if g > worst[0]:
+                worst = (g, f"{nm} {n} {s0[n][0]:.3f} -> {s1[n][0]:.3f} m at f{s1[n][1]}")
+            if g > MAX_STEP_GROWTH:
+                fails += 1
+                print(f"  FAIL {nm:12s} {n:7s} step {s0[n][0]:.3f} -> {s1[n][0]:.3f} m at f{s1[n][1]}")
+    print(f"  largest leg-step growth {worst[0]:+.3f} m ({worst[1] or 'none'}); {fails} over {MAX_STEP_GROWTH} m")
+    return 1 if fails else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("glb")
     ap.add_argument("--clips", default="")
     ap.add_argument("--max-deg", type=float, default=45.0)
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--check-against", default="", help="an earlier copy of this GLB: report leg-step growth, write nothing")
     a = ap.parse_args()
     rig = Rig(a.glb)
+    if a.check_against:
+        sys.exit(check_against(rig, Rig(a.check_against)))
     body = Body(rig)
     buf = bytearray(rig.buf)
     max_rad = math.radians(a.max_deg)
     names = [c for c in (a.clips.split(",") if a.clips else rig.anims) if c in rig.anims]
+    refused = 0
     for nm in names:
         ch, dur = rig.clip(nm)
         low0 = lowest_over_frames(body, ch, dur)
         if low0[0] >= LIMIT:
             continue
+        src = copy_channels(ch)
         rot_nodes = {c[0] for c in ch if c[1] == "rotation"}
         turned = {}
         low = low0
@@ -372,7 +490,7 @@ def main():
                     touched.add((b, "rotation"))
             elif dom.startswith(("foot.", "toe.")) and nm != "death":
                 side = dom[-1]
-                if not leg_fix(body, ch, side, target):
+                if not leg_fix(body, ch, side, target, src):
                     break
                 legs.add(side)
                 for x in ("thigh", "shin", "foot"):
@@ -386,6 +504,11 @@ def main():
             if nxt[0] <= low[0] + 1e-4 and nxt[2] == low[2]:
                 target += 0.006     # thinned keys: the dip is between them, ask the keys for more
             low = nxt
+        bad = leg_guard(rig, src, ch, dur)
+        if bad:
+            refused += 1
+            print(f"  {nm:12s} REFUSED, left as it was: {bad}")
+            continue
         sampler = {}
         for c in rig.anims[nm]["channels"]:
             sampler[(c["target"]["node"], c["target"]["path"])] = rig.anims[nm]["samplers"][c["sampler"]]["output"]
@@ -397,7 +520,7 @@ def main():
         tag = "ok" if low[0] >= LIMIT else f"STILL BELOW on {rig.nodes[low[2]].get('name')}"
         print(f"  {nm:12s} {low0[0]:+.3f} m on {rig.nodes[low0[2]].get('name'):12s} -> {low[0]:+.3f} m at f{low[1]} ({tag}) | {', '.join(who) or 'no carrier'}")
     if a.dry:
-        return
+        sys.exit(1 if refused else 0)
     b = open(a.glb, "rb").read()
     jl = struct.unpack_from("<I", b, 12)[0]
     off = 20 + jl
@@ -407,6 +530,7 @@ def main():
         f.write(b[:off + 8])
         f.write(bytes(buf))
         f.write(b[off + 8 + bl:])
+    sys.exit(1 if refused else 0)
 
 
 if __name__ == "__main__":

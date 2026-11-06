@@ -275,14 +275,14 @@ How to read each entry:
 **Hook at 96 px:** the lens is a 40 cm glass disc angled upward, which reads as a bright ellipse from 52°. Its accent ring blooms only during wind-ups.
 **Weapon:** glaive, `two_hand`.
 - **Passive: Cooling Kill.** A takedown vents all her Heat at once. [DSL: trigger `takedown` → `resource −100`]
-- **A1: Long Thrust** (+20 Heat). Thrusts along a 4.5 m line for phys damage. Slowed enemies also take 6% of their max health as true damage. [DSL: `area` rect at self → `damage`; `if targetHasStatus slow` → `damage true {targetMaxHp:0.06}`]
+- **A1: Long Thrust** (+20 Heat). Thrusts along a 4.5 m line for phys damage. Slowed enemies also take 3.5% of their max health as true damage (r3-balance, owner_rulings 22). [DSL: `area` rect at self → `damage`; `if targetHasStatus slow` → `damage true {targetMaxHp:0.06}`]
 - **A2: Heat Shimmer** (+25 Heat). Dashes 5 m and leaves a shimmer for 2 s that slows enemies inside by 25%. [DSL: `zone` rect 5×1.2 at self, then `dash` direction 5]
 - **A3: Vent** (**unique: cooling on demand, castable while overheated**). Releases 50 Heat in a 3 m blast: phys damage and a 1 m knockback, and she takes 20% less damage for 1.5 s. It costs no Heat.
   - [DSL: `costKind:'none'`; `abilities.ts` checks only `costKind:'res'` abilities against the overheat lock, so Vent stays castable while she is overheated. Effects: `resource −50`, `area` → `damage`, `displace` knockback 1; `buff`]
 - **Ultimate: Held Focus** (100 / 85 / 70 s, +30 Heat). Focuses the stopped sun on an enemy fighter within 6 m for 3 s.
   - A 2 m spot follows the target and deals true damage every 0.5 s to them and anyone beside them.
-  - She gains 25% omnivamp for the duration.
-  - [DSL: `zone` follow at target, circle 2, 3 s, interval 0.5 → `damage true`; `buff {omnivamp:0.25}`]
+  - She gains 20% omnivamp for the duration.
+  - [DSL: `zone` follow at target, circle 2, 3 s, interval 0.5 → `damage true`; `buff {omnivamp:0.2}`]
 **Presentation:** `lib_line_cleave` · `lib_zone_glass` · `lib_burst_lumen` · `lib_zone_ember` · ult `kemdo_ult_focus` · `c_swing_heavy`, `c_burst_lumen`.
 **Skins:**
 - *Highrim Glaive* (standard). A wind-scoured sandstone frame `#CDBB9C` and pale wraps `#DCD3C2`.
