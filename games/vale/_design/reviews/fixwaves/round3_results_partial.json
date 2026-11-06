@@ -1,0 +1,124 @@
+{
+ "CW3s:r3-bots": {
+  "items": [
+   {
+    "id": "done:1",
+    "status": "done",
+    "evidence": "Final code, adept, untuned seeds 8501-8520 / 8701-8720 (fw_W4_soak_fw_CW3s_r3e.txt, r3g.txt): stretch 2.7 / 2.8 min (bar 3; was 3.4 / 3.6). Same seeds as before the last tweak, 8101-8120 (r3f): 2.6. Ulkro first ult at adept 7.8 / 7.8 min (bar 10; was 10.6). Takedowns by 10:00 6.60 / 7.45, 0 games with none. Items 2.60 / 2.65, 2.65 on r3f. Veteran on 8101-8120 / 8301-8320 (r3c, r3d): stretch 2.5 / 2.4, Ulkro 8.2 / 8.9, takedowns 7.80 / 7.50. Veteran was not re-run after the last adept-only tweak. Trace: gaps start across 3:00-12:00 (r3t0, soak --trace)."
+   },
+   {
+    "id": "done:2",
+    "status": "done",
+    "evidence": "Judged on the lowered bars of rulings 15 and 21; the old 50 % / 75 % targets are still not met. Last-hit adept 44.2-45.1 % (r3e, r3f, r3g), veteran 45.5 / 44.3 % (r3c, r3d); floor 42. In lane adept 69.4-70.3 %, veteran 69.3 / 67.4 %; floor 65. 0 cores before 16:00 in r3c, r3d and r3g; shortest RIFT game 18.6 min on r3c/r3d. Seed 4309 not re-traced (ruling 21 accepts it as tail). Laning objective first take 1.2 min at both tiers on r3c, adept 1.8 on r3g. probe_sim_rekey 45/0, pacing.ts exit 0, quick soak exit 0 (r3quick)."
+   },
+   {
+    "id": "gameplay:CL-1",
+    "status": "done",
+    "evidence": "Adept stretch 2.7 / 2.8 min and takedowns 6.60 / 7.45 on untuned windows (r3e, r3g); no fighter has a median first ult after 10:00 at adept (r3e, r3g) or veteran (r3c, r3d). Last-hit floor as in done:2. Before the last tweak adept read 5.95 takedowns on 8101-8120 (r3c, a miss); after it the same seeds read 6.50 (r3f). A single window can still land near the 6 bar."
+   },
+   {
+    "id": "critic:bot-micro",
+    "status": "done",
+    "evidence": "Done under ruling 16. Veteran passive seat vs bot seat summed over r3c + r3d: 717 vs 643/min (1.12, bar 0.95). Adept, report only: 366 vs 366/min on final code (r3g). Veteran skillshots beat adept's at adept targets: 80.1 vs 76.5 % (r3c)."
+   },
+   {
+    "id": "gameplay:CL-2",
+    "status": "done",
+    "evidence": "Stacking holds: probe_sim_rekey 45/0. Sunsplinter first take after spawn: 1.2 min at both adept and veteran on r3c, adept 1.8 on r3g; bar 3. Earlier veteran 8.3 / 7.9 readings no longer reproduce."
+   },
+   {
+    "id": "gameplay:CL-g3",
+    "status": "done",
+    "evidence": "Veteran beats novice 36/40 (90 %, r3c) and 35/40 (87.5 %, r3a), bar 85; 71/80 over the two. r3a ran on an intermediate build (before the gank and consumable changes); neither run has the final adept-only tweak, which does not touch this pairing. Veteran beats adept 31/40 (77.5 %) on final code (r3e), 26/40 (65 %, on the floor) on r3c before the tweak."
+   },
+   {
+    "id": "gameplay:CL-g5",
+    "status": "partly",
+    "evidence": "No change this package; draft.ts:95 secondaryRole stands. The item's own hint calls roster growth long-term work."
+   },
+   {
+    "id": "regression:dawn-seal-tip",
+    "status": "not_done",
+    "evidence": "Outside this lane: content/client.json:71 still says 'Until 7:00'; content/modes.json dawnSeal.until is 480. Handed off to CW3c."
+   }
+  ],
+  "commits": [
+   "9abf783f"
+  ],
+  "handoffs": [
+   {
+    "to": "CW3c",
+    "what": "content/client.json:71: change the tip '[rift] Until 7:00 every Outer Needle wears a Dawn Seal...' to 'Until 8:00' (content/modes.json dawnSeal.until is 480)."
+   }
+  ],
+  "notes": "Adept's quiet stretch and Ulkro's late ult are both fixed on untuned windows, and the items gate stays above 2.5 (2.60 / 2.65). Commit 9abf783f is pushed.\n\nChanges:\n- Adept contests an enemy start at a camp, reads a kill at 0.8, and has laning retreat bias -0.04.\n- For every tier, the jungler gank read reaches further up the road from 8:00 and leaves a camp for a target under 60 % health.\n- An ultimate stance or form is spent on any enemy fighter in reach. In practice this only affects Ulkro's Long Run.\n- Bug fixed in economy.ts: bots bought back a consumable they had just sold for room, looping on every full bag. A lampglass bought 38-51 lamps across a two-team game (about 25 each) and set about 9. A 45 s no-refill guard fixes it, which is also what gives items their margin.\n- The soak gains a --trace diagnostic flag; modes_economy.md records the round.\n\nTried and dropped:\n- A flat +0.08 on the trade edge: stretch 3.2 min, takedowns down.\n- A slower lamp cadence: the cadence was not the cost, the buy-back loop was.\n\nCaveats:\n- Medians swing by about 0.4 min between windows, so a future window can still land near a bar.\n- Items margin is thin on some windows: 2.52 on r3d, before the last tweak.\n- Lone deaths to Wicks read 5.2 % at adept on r3d (bar 5) before the last tweak; final code reads 3.1, 3.4 and 2.6 %.\n- BRIDGE (15.5 min) and FRAY passed on r3c, before the adept retreat tweak. That tweak only applies to RIFT laning. The novice mirror and all veteran figures also predate it.\n- The ruling 22 balance band was not re-measured here.\n\nAlso on final code: probe_sim_buildplan 15/0, determinism 6/0, practice 44/0, typecheck clean for my files. Reports are at _harness/_reports/fw_W4_soak_fw_CW3s_r3{a-g,t0-t3,quick}.txt."
+ },
+ "CW6:r3-cards": {
+  "items": [
+   {
+    "id": "done:4",
+    "status": "done",
+    "evidence": "Tunlan's base splash now has the lantern as its real frame maximum, measured on a cluster list rather than a centroid: lantern peak luma 251.9 at (1089,265), next clusters 198.2 (cheek/jaw at 1111,261), 195.7, 194.5 (hand), 193.5, 193.4, 192.7 (cuff at 1018,343). That is 21 % under the lantern (the hint asked about 15 %). Before: cuff 250.6, lantern 249.3, jaw 248.7. Camera yaw 38 clears the lantern from the thumb. A shadowless point light in the glass gives warm spill on the hand and cheek; _lantern_key adds the core, the visible halo and a highlight cap on the rest of the figure. The hung cloth stays. Report _harness/_reports/fw_CW6_r3_tun_clusters.json, shot _harness/_shots/fw_CW6_r3_tun_key.png, art/blender/fighters/tunlan.py. card_qa on the card: speckle 0.95, p99.9 244, mass x 0.711."
+   },
+   {
+    "id": "cards:ilsheta-first-bell-chin",
+    "status": "done",
+    "evidence": "First Bell splash re-staged, card render only, on attack2 t 0.72, yaw 6. Head pitch per clip from the GLB: cast_a3 t 0.5 was +26 deg; this clip's nearby samples are -26 at t 0.6-0.7 and -19 at t 0.8 (t 0.72 not sampled itself). The crop shows no black gap, white line or struts under the chin, the plate seated, and amber eyes with pupils under a neutral key. card_qa speckle 0.40, p99.9 241, MAD 40.0. Store dE 24.6 (floor 18), _harness/_reports/fw_CW6_r3_de.json. Shot _harness/_shots/fw_CW6_r3_fb_splash.png."
+   },
+   {
+    "id": "handoff:CW6:cards",
+    "status": "partly",
+    "evidence": "Tunlan is done (see done:4). Dunsom is not closed by me: the verifier's note only says 'Dunsom half done' with no criterion. I viewed art/out/fighters/dunsom/splash.png and portrait.png and made no card changes (card_qa passes, 48 cards, 0 misses). His splash face is small and pale. Needs the verifier to name what remains."
+   },
+   {
+    "id": "fighter:ilsheta:ilsheta-face-seam",
+    "status": "partly",
+    "evidence": "Card side improved. Removing the 1 px brush from all Ilsheta cards (sub_paint_r 0, sub_median 1) softens the stepped edges in the glass beside the plate; speckle fell to 0.28-0.80 (card_qa). Base and Stillwater busts no longer have a glint across an eye, and Stillwater's splash shows both eyes (new minors from r2v2). Shots _harness/_shots/fw_CW6_r3_ils_portraits.png, /tmp/fw_CW6/ils_faces_np.png. Still open: a coarser step along the plate's lower edge remains at 512 px; it looks like the mesh edge of the face patch rather than paint, though I did not confirm that. The three.js close-view squares from r2v2 are unaddressed, because the GLBs were not changed. A real fix needs a model change."
+   },
+   {
+    "id": "fighter:marund:gorgewalk-face",
+    "status": "done",
+    "evidence": "Marund's Gorgewalk bust: the keel is now the only pale form on the face; the mask's pale paint rolls off into walnut (luma above 0.34 keeps 35 % of its height), done in source (_keel_only in art/blender/fighters/marund.py) with the skin rebuilt once. card_qa speckle 2.32 (gate 2.5), p99.9 243, MAD 62.8; store dE 36.3 (floor 12). Shot _harness/_shots/fw_CW6_r3_gorgewalk_portrait.png."
+   },
+   {
+    "id": "fighter:deaths:floor",
+    "status": "partly",
+    "evidence": "clip_floor death, limit -0.02: Marund -0.371 -> -0.018, Rishal -0.137 -> -0.003, Sukri -0.090 -> -0.015, Dunsom -0.087 -> -0.020, Odrum -0.037 -> -0.017, Hesmi -0.030 -> -0.020, Ilsheta -0.004: all pass (_harness/_reports/fw_CW6_r3_death_floor.txt). Tunlan stays at -0.210 on purpose: lifting her works against TUN-c1's request to end at rest. Marund's cap now rests tipped on its rim (_harness/_shots/fw_CW6_r3_marund_clips.png, death row). three_load_test OK on all six edited GLBs. Fixes are in-place edits to the shipped GLBs: see notes for what a rebuild loses."
+   },
+   {
+    "id": "CW6 polish (spot-check)",
+    "status": "partly",
+    "evidence": "No polish items worked beyond the death floor and Ilsheta card items above. Not re-measured this package: lantern swing, Hesmi icon tops, Odrum channel head, Dunsom value bands. The remaining 24 of 36 polish items stay backlog (all 8 fighters at par per verify 2)."
+   },
+   {
+    "id": "critic:recovered-minors",
+    "status": "partly",
+    "evidence": "Only Ilsheta's guard framing was re-viewed, on the new busts (the lamp sits beside the face, _harness/_shots/fw_CW6_r3_ils_portraits.png). Face-seam is partly done as above; the other recovered minors were not re-measured."
+   },
+   {
+    "id": "handoff:lead:catalog-stale",
+    "status": "partly",
+    "evidence": "npm run content ran after the last card (OK, 1 warning), so dist-catalog is current for these cards. Not done: content/store.json is outside this lane and gen_store --check says it is out of date; see handoffs. The gate itself shows no FAIL lines in the verbose run, including lisvel_almanac (report _harness/_reports/fw_CW6_r3_de.json)."
+   }
+  ],
+  "commits": [
+   "c2460e61 vale CW6 r3-cards: the labelled commit; only the final Ilsheta source and three busts were left for it",
+   "b4cf3910 vale wip sync: 54 files, the most recent sync touching this package's paths (tunlan.py, marund.glb); the earlier syncs 43e7cd3a and 489634ec may hold some of it. I did not check which sync carries which file"
+  ],
+  "handoffs": [
+   {
+    "to": "lead",
+    "what": "Run `node tools/gen_store.ts --provisional` (content/store.json is out of date after these cards, `--check` exits on that) and then `npm run content` again before the next re-score. Portraits changed: all three Ilsheta, marund_gorgewalk. Splashes changed: all three Ilsheta, marund_gorgewalk, Tunlan base. No dE gate failed in the verbose run."
+   },
+   {
+    "to": "lead",
+    "what": "Send to the verifier for independent eyes: the Tunlan lantern read, the First Bell splash, and Ilsheta's cards without the brush. I judged sensitivity myself and saw no horror read; First Bell's eyes are orange-amber with pupils, a little warmer than Stillwater's."
+   },
+   {
+    "to": "CW5",
+    "what": "art/tools/glb_paint_grade.mjs takes `root.listSkins()[0]`, so on a GLB with several skins (marund_gorgewalk: accent and body) its --box mask maps through the wrong skin's dequantization and hits the wrong texels. Use `node.getSkin()` per node. Fixed only in my git-ignored scratch copy (_harness/_reports/fw_CW6_face_grade.mjs); this file is yours. Check any earlier --box grades on multi-skin GLBs."
+   }
+  ],
+  "notes": "The two card fixes are in and measured: Tunlan's lantern is the frame's real maximum, and the First Bell splash no longer has the chin gap. card_qa passes on all 8 fighters (48 cards, 0 misses, _harness/_reports/fw_CW6_r3_card_qa.txt). No file in this lane is left uncommitted except stray previews, and the branch is pushed.\n\n**Rebuild risk**\n- The death lifts on Marund, Rishal, Sukri, Dunsom, Odrum and Hesmi live only in the shipped GLBs, so a base rebuild loses them. The exact clip_lift commands are in each `_design/fighters/<id>.md`.\n- Marund's cap tilt is in source as a follow factor of 0.63 in `follows[\"death\"]`, but the shipped GLB got its tilt from a one-off track edit. That source value has not been through a rebuild, so re-run clip_floor after the next one.\n- Marund's GLB edits were made in place; the only rebuild this package was the Gorgewalk skin, once.\n\n**Changes beyond the brief**\n- Stillwater's splash went from yaw -26 to 2, its bust from -12 to 8, First Bell's bust from 4 to 12, and the base bust from -8 to -3. These clear the r2v2 new minors and keep card MAD above 30.\n- The brush removal also applies to Ilsheta's splashes, because that setting is per card, not per image.\n\n**A slip, since corrected**\n- Early previews run at scale 1.0 overwrote the shipped First Bell and Tunlan splashes with low-sample renders. Final renders replaced both, but a wip sync may have captured the interim versions in history.\n\n**Not measured**\n- No perf, soak or e2e gate ran, as none applies to this package.\n- typecheck and probes were not run because no TypeScript changed; `npm run content` passed.\n- Preview PNGs under `art/renders` are left untracked.\n\n**Reproducing the numbers**\n- The cluster script is at /tmp/fw_CW6/clusters.py (not kept in the repo).\n- The cluster report is at _harness/_reports/fw_CW6_r3_tun_clusters.json."
+ }
+}
