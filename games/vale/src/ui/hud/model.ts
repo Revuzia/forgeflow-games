@@ -428,7 +428,7 @@ export class HudModel {
   private nameOf(p: PlayerId | undefined): string { return p === undefined ? '' : p === this.you ? this.cv.t('killfeed.you', 'You') : this.view.players[p]?.name ?? ''; }
   /** a name in object position ('… took down you'): the player's own reads lower-case */
   private objOf(p: PlayerId | undefined): string { return p !== undefined && p === this.you ? this.cv.t('killfeed.you_obj', 'you') : this.nameOf(p); }
-  /** a banner sub-line whose subject is `who`: the second-person `<key>_you` form when that is the player (closing done:6) */
+  /** a line whose subject is `who` (banner sub-line, kill feed, HUD feed; copy_lint checks the siblings exist): the second-person `<key>_you` form when that is the player (closing done:6) */
   private subOf(key: string, who: PlayerId | undefined, params: Record<string, string | number>): string {
     return who !== undefined && who === this.you && this.has(`${key}_you`) ? this.t(`${key}_you`, params) : this.t(key, params);
   }
@@ -500,7 +500,7 @@ export class HudModel {
         break;
       }
       case 'eliminated': {
-        this.killRow({ kind: 'out', victim: this.who(ev.player), assists: [], text: this.cv.t('killfeed.eliminated', '{victim} is out', { victim: this.nameOf(ev.player) }), mine: ev.player === this.you });
+        this.killRow({ kind: 'out', victim: this.who(ev.player), assists: [], text: this.subOf('killfeed.eliminated', ev.player, { victim: this.nameOf(ev.player) }), mine: ev.player === this.you });
         break;
       }
       case 'status': {
@@ -668,7 +668,7 @@ export class HudModel {
         const voted = (prev?.voted ?? false) || ev.player === this.you;
         const mine = prev?.mine ?? (ev.player === this.you && !prev ? true : undefined);
         this.vote.value = { yes: Number(p.yes) || 0, no: Number(p.no) || 0, needed: Number(p.needed) || 1, by: prev?.by ?? (ev.player ?? -1), at: prev?.at ?? performance.now(), voted, ...(mine !== undefined ? { mine } : {}) };
-        if (!prev) this.say(this.cv.t('hud.surrender.vote', '{name} proposes to surrender.', { name }), 'warn');
+        if (!prev) this.say(this.subOf('hud.surrender.vote', ev.player, { name }), 'warn');
         break;
       }
       case 'surrender_passed': case 'surrender_failed': {

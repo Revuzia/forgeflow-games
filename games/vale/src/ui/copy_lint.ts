@@ -48,6 +48,11 @@ export const STAT_ID_PLAIN_WORDS: readonly string[] = ['kills', 'deaths', 'assis
 /** fields whose string values are never player prose */
 export const SKIP_KEYS: readonly string[] = ['$comment', '$schema', 'id', 'icon', 'file', 'files', 'model', 'portrait', 'splash', 'art', 'vfx', 'sfx', 'hitVfx', 'cue', 'tags', 'mask', 'ref', 'color', 'palette'];
 
+/** the keys whose person placeholder comes from the HUD's name helper (HudModel.nameOf), and the shape of a line that
+ *  breaks when that person is you: a person placeholder, then a third-person singular verb ('takes', 'has', 'is') */
+const SECOND_PERSON_KEY = /^(announce|killfeed|hud)\./;
+const SECOND_PERSON_LINE = /^\{(name|victim|killer)\} (?:[a-z]+s)\b/;
+
 export interface CopyHit { path: string; word: string; use: string; text: string }
 
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -98,11 +103,14 @@ export function lintPlayerCopy(files: Readonly<Record<string, unknown>>, strings
     }
   };
   for (const [k, v] of Object.entries(strings)) if (typeof v === 'string') check(`strings.${k}`, v);
-  // second person (closing done:6): a banner sub-line that opens on {name} reads 'You takes five in a row.' when the
-  // name is the player's own, so every such line carries a `<key>_you` sibling the HUD uses for you
+  // second person (closing done:6): the HUD's name helper fills 'You' for your own seat, so an announce, killfeed or hud
+  // line that opens on a person and a third-person verb reads 'You takes five in a row.' / 'You proposes to surrender.' /
+  // 'You is out'. Every such line carries a `<key>_you` sibling (HudModel.subOf) unless it can never name you: a `.other.`
+  // line is the branch for someone else, and a line that says you / your elsewhere has another subject
   for (const [k, v] of Object.entries(strings)) {
-    if (typeof v !== 'string' || !/^announce\..*\.sub$/.test(k) || !v.startsWith('{name} ')) continue;
-    if (typeof strings[`${k}_you`] !== 'string') hits.push({ path: `strings.${k}`, word: '{name}', use: `a second-person sibling ${k}_you`, text: v });
+    if (typeof v !== 'string' || !SECOND_PERSON_KEY.test(k) || k.endsWith('_you') || k.includes('.other.')) continue;
+    if (!SECOND_PERSON_LINE.test(v) || /\byour?\b/i.test(v)) continue;
+    if (typeof strings[`${k}_you`] !== 'string') hits.push({ path: `strings.${k}`, word: v.slice(0, v.indexOf('}') + 1), use: `a second-person sibling ${k}_you`, text: v });
   }
   for (const [label, json] of Object.entries(files)) for (const p of proseOf(json)) check(`${label}:${p.path}`, p.text);
   return hits;
