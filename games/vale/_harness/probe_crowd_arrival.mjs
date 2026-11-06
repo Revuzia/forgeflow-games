@@ -1,7 +1,7 @@
 // VALE probe — the triangle governor on the frame a crowd arrives (CW1 r3 refix, done:7; src/render/renderer.ts frameMatch,
 // src/render/crowd.ts CrowdLayer.estimate). The verifier's seed 11 drew 398k -> 518k on one frame (29 -> 52 units), the governor
 // a frame late. A real late-match scene is frozen (no pump, so both arms draw the same world); on one frame every crowd unit is
-// pushed twice, an arrival as large as the crowd on screen. Control: the estimate reads 0 (the governor as it was, last frame's
+// pushed K times (4, enough to carry that scene past the budget). Control: the estimate reads 0 (the governor as it was, last frame's
 // count only). Shipped: the estimate. Also reads the estimate against the crowd's measured triangles (the frame with no crowd).
 //   node _harness/probe_crowd_arrival.mjs [--seed 11] [--rot 5] [--tag name]    exit 0 pass, 1 fail, 2 the scene never qualified
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ import { open } from './pw.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
-const BUDGET = 500000;
+const BUDGET = 500000, K = 4;
 mkdirSync(join(HERE, '_reports'), { recursive: true });
 const OUT = join(HERE, '_reports', `fw_CW1_crowd_arrival${opt('tag', '') ? '_' + opt('tag', '') : ''}.json`);
 const { browser, page } = await open(`/_harness/web/render_bench.html?mode=rift&q=high&t=0&seed=${opt('seed', 11)}&rot=${opt('rot', 5)}&dev=1&hud=0&manual=1`, { wait: false, hmr: false });
@@ -39,7 +39,7 @@ try {
   const S = await page.evaluate(() => window.__S);
   if (!S.found) { console.log(`probe_crowd_arrival: NOT MEASURED, no frame qualified (game ${S.t} s, most crowd ${S.best})`); code = 2; }
   else {
-    const res = await page.evaluate(() => {
+    const res = await page.evaluate((K) => {
       const r = window.__VALE_BENCH__.renderer, c = r.crowd, push = c.push.bind(c), est = c.estimate.bind(c);
       let n = 1;
       c.push = (a) => { for (let i = 0; i < n; i++) push(a); };
@@ -48,27 +48,30 @@ try {
       const arm = (name) => {
         const settled = settle();
         const before = frame();
-        n = 2; const arrival = frame(); const next = frame(); n = 1;
+        n = K; const arrival = frame(); const next = frame(); n = 1;
         return { name, settled, before, arrival, next };
       };
+      // first the estimate against what the crowd really draws, ungoverned
+      settle();
+      const withCrowd = frame();
+      n = 0; frame(); const without = frame(); n = 1; frame();
+      const accuracy = { withCrowd, without, crowdTris: withCrowd.tris - without.tris, estimate: withCrowd.estimate, ratio: +(withCrowd.estimate / (withCrowd.tris - without.tris)).toFixed(3) };
+      // the shipped arm before the control: the control's patched estimate leaves the renderer's last estimate at 0
+      const shipped = arm('shipped');
       c.estimate = () => 0;
       const control = arm('control');
       c.estimate = est;
-      const shipped = arm('shipped');
-      // the estimate against what the crowd really draws
-      settle();
-      const withCrowd = frame();
-      n = 0; frame(); const without = frame(); n = 1;
-      return { control, shipped, accuracy: { withCrowd, without, crowdTris: withCrowd.tris - without.tris, estimate: withCrowd.estimate, ratio: +(withCrowd.estimate / (withCrowd.tris - without.tris)).toFixed(3) } };
-    });
+      return { control, shipped, accuracy };
+    }, K);
     const { control, shipped, accuracy } = res;
     console.log(`scene: game ${S.t.toFixed(1)} s, ${S.crowd} units, ${S.tris} triangles`);
     for (const a of [control, shipped]) console.log(`${a.name.padEnd(8)} before ${a.before.tris} (${a.before.crowd} units)  arrival frame ${a.arrival.tris} (${a.arrival.crowd} units, governed ${a.arrival.hard})  next ${a.next.tris} (governed ${a.next.hard})`);
     console.log(`estimate ${accuracy.estimate} vs measured crowd ${accuracy.crowdTris} (x${accuracy.ratio})`);
     const fails = [];
-    if (control.arrival.tris <= shipped.before.tris + 60000) fails.push('the arrival added too little to test');
-    if (!shipped.arrival.hard) fails.push('the governor did not engage on the arrival frame');
+    if (shipped.before.hard) fails.push('the shipped arm started governed');
     if (control.arrival.hard) fails.push('control: the governor engaged on the arrival frame, so the control does not control');
+    if (control.arrival.tris <= BUDGET) fails.push(`control ${control.arrival.tris} stays inside the budget: nothing to govern`);
+    if (!shipped.arrival.hard) fails.push('the governor did not engage on the arrival frame');
     if (shipped.arrival.tris > BUDGET) fails.push(`arrival frame ${shipped.arrival.tris} > ${BUDGET}`);
     if (accuracy.ratio < 0.7 || accuracy.ratio > 1.3) fails.push(`estimate off by x${accuracy.ratio}`);
     writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), scene: S, ...res, fails }, null, 1));
