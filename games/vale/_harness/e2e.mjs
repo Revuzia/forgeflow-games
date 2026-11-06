@@ -44,6 +44,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, open, shot, vale, waitFor } from './pw.mjs';
 
+/** the picture of a step that passed: on a loaded machine page.screenshot can time out, which says nothing about the step, so it never fails the journey */
+const proof = (page, name) => shot(page, name).catch((e) => { console.log(`    (no shot ${name}: ${String(e?.message ?? e).split('\n')[0]})`); return null; });
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const which = args.find((a) => !a.startsWith('--')) ?? 'all';
@@ -89,7 +92,7 @@ async function journey(mode) {
     const t0 = Date.now();
     try {
       const info = await fn();
-      const file = await shot(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}`);
+      const file = await proof(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}`);
       steps.push({ name, ok: true, ms: Date.now() - t0, info: info ?? null, shot: file });
       console.log(`  ✓ ${name} (${Date.now() - t0} ms)${info ? ' ' + JSON.stringify(info) : ''}`);
     } catch (e) {
@@ -294,7 +297,7 @@ async function store() {
     const t0 = Date.now();
     try {
       const info = await fn();
-      const file = await shot(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}`);
+      const file = await proof(page, `${PREFIX}_${mode}_${String(++n).padStart(2, '0')}_${name}`);
       steps.push({ name, ok: true, ms: Date.now() - t0, info: info ?? null, shot: file });
       console.log(`  ✓ ${name} (${Date.now() - t0} ms)${info ? ' ' + JSON.stringify(info) : ''}`);
       return info;
@@ -407,7 +410,7 @@ function stepper(page, tag, steps) {
     const t0 = Date.now();
     try {
       const info = await fn();
-      const file = await shot(page, `${PREFIX}_${tag}_${String(++n).padStart(2, '0')}_${name}`);
+      const file = await proof(page, `${PREFIX}_${tag}_${String(++n).padStart(2, '0')}_${name}`);
       steps.push({ name, ok: true, ms: Date.now() - t0, info: info ?? null, shot: file });
       console.log(`  ✓ ${name} (${Date.now() - t0} ms)${info ? ' ' + JSON.stringify(info) : ''}`);
       return info;

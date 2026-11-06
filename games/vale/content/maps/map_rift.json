@@ -1298,7 +1298,7 @@
     {
      "unit": "resinback",
      "at": [64.3, 85.1],
-     "facing": 210.0
+     "facing": 200.0
     }
    ],
    "firstSpawn": 60,
@@ -1310,7 +1310,7 @@
     {
      "unit": "resinback",
      "at": [105.7, 85.1],
-     "facing": 330.0
+     "facing": 340.0
     }
    ],
    "firstSpawn": 60,
@@ -1322,17 +1322,17 @@
     {
      "unit": "stilltusk",
      "at": [61.6, 68.5],
-     "facing": 330.0
+     "facing": 345.0
     },
     {
      "unit": "stilltusk_young",
      "at": [60.0, 67.5],
-     "facing": 330.0
+     "facing": 345.0
     },
     {
      "unit": "stilltusk_young",
      "at": [63.2, 67.5],
-     "facing": 330.0
+     "facing": 345.0
     }
    ],
    "firstSpawn": 60,
@@ -1344,17 +1344,17 @@
     {
      "unit": "stilltusk",
      "at": [108.4, 68.5],
-     "facing": 210.0
+     "facing": 195.0
     },
     {
      "unit": "stilltusk_young",
      "at": [110.0, 67.5],
-     "facing": 210.0
+     "facing": 195.0
     },
     {
      "unit": "stilltusk_young",
      "at": [106.8, 67.5],
-     "facing": 210.0
+     "facing": 195.0
     }
    ],
    "firstSpawn": 60,
@@ -1410,7 +1410,7 @@
     {
      "unit": "sunsplinter",
      "at": [85.0, 80.0],
-     "facing": 90.0
+     "facing": 270.0
     }
    ],
    "firstSpawn": 360,
@@ -1423,7 +1423,7 @@
     {
      "unit": "longshade",
      "at": [85.0, 31.0],
-     "facing": 105.0
+     "facing": 120.0
     }
    ],
    "firstSpawn": 960,

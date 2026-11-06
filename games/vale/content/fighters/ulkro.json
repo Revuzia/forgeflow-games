@@ -405,7 +405,10 @@
         }
       ],
       "ai": {
-        "use": ["buff", "engage"]
+        "use": [
+          "buff",
+          "engage"
+        ]
       },
       "present": {
         "anim": "cast_ult",
@@ -461,9 +464,9 @@
     "style": "marksman",
     "preferredRange": 5.4,
     "comboOrder": [
-      "a2",
       "a1",
       "a3",
+      "a2",
       "ult"
     ]
   },
