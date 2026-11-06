@@ -1,0 +1,77 @@
+{
+ "pass": false,
+ "items": [
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Client. Re-measured live on the real GPU with the renderer on (fw_CW3c_r3v1_stage_sheet_1280.png, _1920.png; _harness/_reports/fw_CW3c_r3v1_stage.json, 0 console lines): for all 32 skin offers the fighter stands on the plinth and the caption sits clear of the head at both sizes. Held props can pass behind it at 1280 (top of Burdam's cleaver, fw_CW3c_r3v1_stage/1280_sku_burdam_stillwater.png), recorded as a minor below. Collection crops viewed: fw_CW3c_r3v1_stage/1280_collection.png. Gate: `node tools/gen_store.ts --check` exit 0, 32/32, floors still 12/18 (gen_store.ts:45, last changed 11-03). My own CIE76 at 256 px agrees: no paid skin under its floor, lowest rishal_chalkline 17.8 (floor 12). Finalize showcase NOT re-run: draft.tsx and collection.tsx are unchanged since 8e69bb624, before the r2 verify that measured it (sweep_720, fw_CW3c_r2v1_sweep.json)."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured the changed part: a scratch run of lintPlayerCopy gives 0 hits on shipped strings, and deleting hud.surrender.vote_you, killfeed.eliminated_you or announce.multikill.5.sub_you each flags exactly its parent key. a0bf2fc06 touched only strings, copy_lint, model.ts line routing and screens.css, so the other parts stand on CW3c_r2_verify1.json. e2e hud_leak was not re-run here: its last clean result is fw_CW3c_r2v1_e2e_all.json, and it re-runs inside done:7."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. `tsc --noEmit` clean over the whole tree and `npm run content:check` OK, 0 warnings, both re-run here. Not measured: e2e all, overlay_regress, hud_renders --at 100, icon_probe. I queued only `e2e flow` as a first step, and it waited about 28 minutes without getting a heavy slot (/tmp/fw_CW3c_r3v1_flow.log, 0 'got slot' lines), so I stopped it. Two of the 3 slots are held by `sleep 14400 power-hold-1/2`, and other lanes' harnesses took the third. The Mac is on battery: pmset reports 'No adapter attached', 93 % falling to 83 % in about 20 minutes. The engineer's e2e all at load 68-83 FAILED (fw_CW3c_r3_e2e_all.json: flow_readycheck decline_once 15 s locator timeout, rift loading 30 s screenshot timeout, then later journeys failing from the wrong route). Whether that was load is unproven; decline_once has not been run clean since this package's changes. Last full pass: fw_CW3c_r2v1_e2e_all.json, before a0bf2fc06. Note: wip sync d1b42c92d changed _harness/e2e.mjs so a step-proof screenshot timeout no longer fails a journey, so the rift failure mode above can no longer recur as a failure.",
+   "fixHint": "Integration pass, on mains power with the heavy slots free: `node _harness/e2e.mjs all`, `node _harness/overlay_regress.mjs`, `node _harness/hud_renders.mjs --at 100`, `node _harness/icon_probe.mjs`. e2e all needs PASS with 0 console lines. If decline_once still fails when idle, it is a real CW3c bug."
+  },
+  {
+   "id": "client:CL-1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "lisvel_almanac: `gen_store --check` passes with no --provisional, and my own numpy CIE76 gives dE 25.5 with 67.6 % of pixels over 20 (was 16.6 / 29.1 %). content/store.json:22 sells it at 1,500. The change is in the figure as well as the plate, as the last verifier asked: a violet layered collar and sleeves, and warm bow and limbs (fw_CW3c_r3v1_lisvel_portraits.png, _splashes.png, live on fw_CW3c_r3v1_stage_sheet_1920.png). The head wrap is still sand like the base; acceptable since the collar and sleeves read at tile size. Off Featured and New, but the gate does not require those."
+  },
+  {
+   "id": "handoff:CW6:tunlan-splash",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "art/out/fighters/tunlan/splash.png hash ea33e330. Viewed at full size: a clear running-hound shadow on a hung cloth screen, with no dark shape on the sky; no sensitivity issue. Keeps TUN-C3's shadow. Observation only: the screen fills about a third of the frame. card_qa not re-run by me; this was a by-eye fault."
+  },
+  {
+   "id": "hud:you-grammar-feed",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "model.ts:671 and :503 go through subOf (:432), which picks `<key>_you` when who === this.you; strings.en.json:683 and :946 hold the second-person lines. Lint test as under done:6. My regex scan of announce/killfeed/hud lines finds only two without a sibling, both already addressed to you. Code read and lint only, not reproduced in a live match."
+  },
+  {
+   "id": "minor:surrender-copy",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Same fix: hud.surrender.vote_you 'You propose to surrender.' Not driven live."
+  },
+  {
+   "id": "client:shop-featured-hole",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Live: 1920 grid x96-948 y213-556, 4th tile x522-948 y467-556; 1280 grid x64-746 y173-456, 4th tile x405-746 y381-456; no clipped text, 0 console lines (fw_CW3c_r3v1_shop.json). Viewed fw_CW3c_r3v1_shop_1280.png: no hole. The fourth tile's art is short (75 px at 1280), as the engineer said."
+  },
+  {
+   "id": "handoff:CW6:first-bell-desc",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/skins/ilsheta.json:32 still says 'a pale dial-stone mantle ... over a dark hem'; the Shop shows an ochre hood and tan coat (fw_CW3c_r3v1_stage_sheet_1280.png, First Bell Lamp). The engineer honestly reports not_done; the file is outside this lane.",
+   "fixHint": "CW6: rewrite the desc to the re-palette, keeping the ten hour-marks and glass bell only if they are still on the model, then `npm run content`."
+  },
+  {
+   "id": "sensitivity:spot-check",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Viewed all 32 live skin stages at 2 sizes, Burdam base, Almanac and Stillwater portraits (fw_CW3c_r3v1_burdam_portraits.png), Lisvel and Tunlan. No tall, pointed or conical hood, no blocker. My judgement, unmeasured: burdam_almanac reads as a carved gold helm with brow, slits and nose guard, mildly skull-like at 96 px because the scarf hides the mouth the base shows. Not horror.",
+   "fixHint": "CW5, optional: warm the sockets or lower the scarf to show the mouth line; then `node tools/gen_store.ts --check` and `npm run content`."
+  },
+  {
+   "id": "minor:caption-props-1280",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "New, not previously listed. Renderer on, 1280x720: the caption hides the top of Burdam's cleaver on the skin named for it (1280_sku_burdam_stillwater.png); no head is covered. No-renderer fallback (?render=0, boot/main.ts:26): at 1280 the caption covers Ardit's head (fw_CW3c_r3_shop_1280.png, crop fw_CW3c_r3v1_1280_crop.png). That path is a dev and low-end check, not the normal client, so this does not reopen done:5. The engineer measured this shot's Featured block but did not view it.",
+   "fixHint": "CW3c: .stagecard__cap (screens.css:421): in the no-renderer path at 720 p, set the splash's object-position lower or dock the caption at the bottom. In the live scene, frame the showcase lower at 1280 or shorten the caption."
+  }
+ ],
+ "regressions": [],
+ "summary": "Not passed, solely because done:7 could not be measured: needs idle machine. No lane item fails above minor. Passing on my re-measure: client:CL-1 (lisvel_almanac dE 25.5, gate 32/32, sold at 1,500), handoff:CW6:tunlan-splash, done:5, done:6, and the Featured hole. Still open and minor: First Bell desc (CW6), the optional Burdam Almanac look (CW5), and caption overlap at 1280 (mainly the no-renderer fallback). The integration pass must run e2e all, overlay_regress, hud_renders and icon_probe; the engineer's only e2e all this round failed under load, and decline_once is unproven until a clean run. The Mac is on battery (no adapter, 83 %), two heavy slots are held by power-hold sleeps, and my e2e flow got no slot in about 28 minutes."
+}
