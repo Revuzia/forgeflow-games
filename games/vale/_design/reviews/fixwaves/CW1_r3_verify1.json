@@ -1,0 +1,141 @@
+{
+ "wave": "CW1",
+ "round": 3,
+ "verify": 1,
+ "pass": false,
+ "summary": "CW1 round 3 verify 1 FAILS on done:7: perf_1080 --prod printed GATE FAIL, one frame at 518k triangles on seed 11 (bar 500k); the targeted rerun passed at 463k. done:1 is partly: Hesmi read core x1.89 in 1 of 3 runs, apparently baseline noise but not proven. Round 3's own fixes hold: skins team light, calibrate rules, Ultra entry, exit codes, Marund and Burdam a3 flat frames. Four majors still need an idle machine: done:3 with the gpubound tail, calibrate at 1080p, the real-time match, match memory. One small regression: Marund and Vashil's vfx edits are not in tuned.json.",
+ "items": [
+  {
+   "id": "done:0",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Re-measured: node _harness/probe_kit_hue.mjs --live, exit 0, 64/64 (fw_CW1_r3v_hue.json/.log, load 108->41). Lowest sig ilsheta a2 0.539, then hesmi ult 0.57 and hesmi a1 0.588. Highest team light ilsheta a3 0.321 (<=0.35). Kemdo a3 sig 0.993, no-team 0.986. One sweep only; round 2 verify 2 had two clean sweeps."
+  },
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Not stable. First full run, probe_combat_polish ult,hold --ults all, exit 1: 'hesmi: core x1.89 (ground x1.99) < 2' (fw_CW1_r3v_combat.log, load 29). A second full run and a Hesmi-only run exit 0: Hesmi 2.1/2.05 and 2.09/2.02 (fw_W1_combat_polish_fw_CW1_r3v2.json, r3v3.json). The numerator did not move: firstCore 208.4, 207.7, 207.8. The denominator did: implied faded core about 110 in the miss vs about 99 in the passes. That points to a noisy baseline, but what raised it is not proven. Rest of the second run passes: lowest core Nurrow 2.06, Hesmi victim full-frame white 0.056, disc >=0.5x Kemdo 300, Rishal 233, Tunlan 167 ms (no margin on Tunlan). The engineers ran no full ult,hold sweep at q=high after the Marund and Vashil edits.",
+   "fixHint": "Find what brightens Hesmi's faded core sample by about 11 luma in some runs: write the faded core value into the report, then take it as a median over several faded frames. If it is real, add margin on the lit floor ring under the shard (the closing C2 fix). The bar stays >=2.0."
+  },
+  {
+   "id": "done:2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/probe_kit_hue.mjs --skins --live, exit 0, 18/18 (fw_CW1_r3v_hue_skins.json). hesmi_shadeprint a1 0.631, ult 0.525; sukri_shadeprint a1 0.561, ult 0.567, hue 268-271. kemdo_long_evening 0.725/0.797, rishal_lamplit 0.892/0.976. Team light max 0.302. Viewed fw_CW1_r3v_hueskin_sukri_shadeprint_ult.png: violet on the caster, team ring stays orange."
+  },
+  {
+   "id": "done:3",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Load 27-147 with other lanes' heavy slots busy. Functional half passes in fw_CW1_r3v_perf.json: gpubound left scale 2 at 4.1 s (bar 10 s), end scale 1, last 8 s 60 fps, timeline 74.5 of 75 s, reported 'not measured: machine busy'. Ultra 60 fps, p95 16.8, 1 dropped, not measured as timing. Renderer.calibrate exists; probe_calibrate PASS 15/15. src/ui/app.tsx:191 calls it."
+  },
+  {
+   "id": "done:4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "fw_CW1_r3v_perf.json: 4 rebuilds, GPU process 682->695 MB (+1.9 %, gate 5 %), tracked materials 23->23, geometries 20->20. memMaps RIFT, BRIDGE, FRAY, RIFT: Home peak 1369 MB (budget 2500), 300 bitmaps closed, 0 bone textures. KTX2 deferred by ruling 13. probe_ctxloss PASS (fw_CW1_r3v_ctx.log). Not gated: Home climbs across the session, 1230 to 1369 MB, while staying far under budget."
+  },
+  {
+   "id": "done:5",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Three seeds with rotated seats in fw_CW1_r3v_perf.json: 40 programs on each, reached by about 9 s, 0 programs first seen after 1:00. Leftover bone textures 0 at every Home in memMaps. The triangle miss on seed 11 is a different clause and is scored under done:7."
+  },
+  {
+   "id": "done:6",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/probe_bar_clearance.ts, bar clearance PASS, fails [] (fw_CW1_bar_clearance.json, rerun 08:59). Printed rows: Kemdo lens, Tunlan brim and Vashil halo 0 % idle and run. Computed geometry; no live HUD shot taken."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "fail",
+   "evidence": "perf_1080 --prod --match-seeds 7,11,23 printed GATE FAIL, exit 1 (fw_CW1_r3v_perf.log/.json): seed 11 rot 5 'peak triangles 517852 > 500000 at 1621.8 s (1 s over)'. It is one frame: 398030 the frame before, crowd 29->52 and actors 184->223 as units arrive in view, 365162 at the next sample. The governor reacts to the last frame's count, so it cannot catch the first frame. A targeted rerun (--match-only --match-seeds 11 --match-rot 5) passed: 463k, game ended 1754.9 s against 1800 s, so the two runs did not play the same game (fw_CW1_r3v_seed11.log). So 1 fail in 2 on that seed. The triangle count is a hard check at any load, though load 264 and x4 may widen a frame's sim step; not proven either way. The rest passes: overlay_regress High and Low PASS (fw_CW1_r3v_overlay.log); value_probe, 6 map and tier runs with no FAIL line, BRIDGE env p99 and whole-frame p99 inside ruling 14, lowest flash FRAY low 2.03x (fw_CW1_r3v_value.json; exit code not captured, I killed the wrapper shell); typecheck clean; content:check 0 warnings.",
+   "fixHint": "Choose one. (a) Estimate the frame's triangles from the crowd instance count in crowd.end() (src/render/renderer.ts:1149-1154, src/render/crowd.ts) and apply the ink cap or second step on that same frame, so an arriving wave cannot draw one uncapped frame. (b) Ask the lead for a ruling on a tolerance such as a single isolated frame, since the harness has none today. Do not relax the 500k bar here."
+  },
+  {
+   "id": "1b_perf_gpubound_tail",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Ruling 18's 75 s window is in (GPU_SEC default 75, _harness/perf_1080.mjs:127) with the covered-window check. My reading: last 8 s 60 fps, scale left 2 at 4.1 s, timeline 74.5 of 75 s, load 146.9->140.3, heavy slots busy, so 'not measured' (fw_CW1_r3v_perf.json). Run A and B from the last idle pass have not been repeated at idle under the new window."
+  },
+  {
+   "id": "1c_perf_calibrate",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Hard half passes and the fix holds up. probe_calibrate PASS 15/15, including p95 18.1 and 18.2 -> high. perf_1080 --prod --calibrate-only: 1080p 3/3 high (p95 17.4-17.5), 5760x3240 low (p95 27.8), tier medium->medium, load 133->108 (fw_CW1_r3v_calib.log). The same step inside the perf run: 3/3 high, 5760x3240 low. 6 of 6 at 1080p under load, none at idle. The earlier failure was at idle (p95 18.1, medium), and only an idle --calibrate-only run closes the 'high at 1080p when idle' clause."
+  },
+  {
+   "id": "2c_perf_ultra_harness_entry",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "TARGET.ultra exists and --prod defaults to high,low,ultra (_harness/perf_1080.mjs:87,97-102). My --prod run measured it: 60 fps, p95 16.8, 1 dropped, 184k triangles, 136 draws, 39 programs, with a frameTargets field on the row. The timing verdict itself is under done:3."
+  },
+  {
+   "id": "3x_perf_realtime_full_match",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. Not rerun: 25 minutes at load <3 was never available (load 8-400 in my window). Harness half checked by reading: real-time 'not measured' goes to GATE NOT MEASURED, exit 2 (_harness/perf_1080.mjs:804-808), and the engineers' log shows it live (fw_CW1_r3b_rt.log, 1-minute match, load 47). Real-time parts of a run other than that verdict still print GATE PASS with a 'timing not measured' note, as documented in the header."
+  },
+  {
+   "id": "6_kit_hue_skins",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Ruling 19 gate is active: report carries teamMax 0.35 and teamGate [a1,ult] with skins true. Re-measured exit 0, 18/18, min sig 0.525, max team light 0.302 on burdam_almanac ult (fw_CW1_r3v_hue_skins.json). sukri_shadeprint ult 0.222 here; the engineers read up to 0.343 on it, so margin varies by run."
+  },
+  {
+   "id": "ruling20_match_memory",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. I did not run it: load 8-400 in my window, so it could only have returned exit 2 while holding a scarce slot. Probe read: real client journey, bars 3000 MB match, 2500 MB Home, load <3, exit 2 when busy (_harness/probe_match_memory.mjs:1-17). Engineers' busy reading: BRIDGE 2715, RIFT 2849, Home peak 1603 MB (fw_CW1_r3b_mem.json), which would pass. The heavy slots showed 'sleep 14400 power-hold-1/2' holders during my run; both this probe and perf_1080 treat any live holder as busy, so those holds must end before an idle read is possible."
+  },
+  {
+   "id": "value_probe_exit_code",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "_harness/value_probe.mjs:1049-1051 sets exitCode 1 on any FAIL verdict in the run. Code read; no live failing case run by me or the engineers. The verdict regex matches the verdict strings in fw_CW1_r3v_value.json."
+  },
+  {
+   "id": "burdam_almanac-vfxTint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Viewed fw_CW1_r3b_alm_burdam_almanac_ult_f19.png: the dust reads neutral, the ink is not visible, and the red cracks carry the ult. This agrees with the engineers' A/B. a1 0.746, ult 0.623 pass (fw_CW1_r3v_hue_skins.json). Stays an open minor, as the fixHint allowed.",
+   "fixHint": "Only if the skin should show ink: a new layer in the ult, not a tune."
+  },
+  {
+   "id": "combat:beat-readability-eye",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "probe_combat_polish ult --every (fw_CW1_r3v_every.log, load up to 135): Marund 1 flat frame and Nurrow 1 pass; Vashil 7, Lisvel 3, Hesmi 8 miss the at-most-2 bar. Burdam a3 rerun: 1 flat frame, exit 0 (fw_CW1_r3v_burdama3.log). Hesmi's 8 here vs 16-17 in the engineers' runs and Vashil's 7 vs 9 mean this count moves between runs. The other 9 ults are still not read per frame. Stays minor, not gated in the default run.",
+   "fixHint": "Vashil and Lisvel: ease the body tint further. Hesmi: first settle whether lib_shield_up on the victim is the cause."
+  },
+  {
+   "id": "minor:low-first-beat",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not rerun by me. Read fw_W1_combat_polish_fw_CW1_r3b_low.json: --q low now reads real body pixels, with one fail, Kemdo core x1.98. Engineers' other Kemdo reads 2.04 and 'no beat'. Open minor; the Low gate is new and thin at Kemdo.",
+   "fixHint": "Run --q low twice more; if Kemdo stays under 2.0, lift its floor ring on Low."
+  },
+  {
+   "id": "minor:probe-comment",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "_harness/probe_kit_hue.mjs:31-33 now says 'most likely cause ... not proven' and cites the single --swing reading."
+  },
+  {
+   "id": "handoff:r2:content/vfx.json is hand",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Regression. python3 tools/vfx/build_vfx.py --check reads '285 defs, 50 from bespoke/tuned.json, 2 a rebuild would change: marund_ult_domefall, vashil_ult_toll'; round 2 read 0. d44653273 and dae3c7ca4 edited content/vfx.json by hand, and tools/vfx/bespoke/tuned.json was last changed 11-04. A rebuild would silently undo both eased bodies. build_vfx is not in npm scripts or closing_gates.md, so no gate catches this.",
+   "fixHint": "python3 tools/vfx/build_vfx.py --freeze-tuned, confirm --check reads 0, commit tuned.json. Add --check to tools/closing_gates.md."
+  }
+ ],
+ "regressions": [
+  "perf_1080 seed 11 rot 5: 517852 triangles for one frame at game 1621.8 s, first reading over 500k since the governor fix (round 2 peak 486k on the sweep). 1 of 2 runs on that seed.",
+  "build_vfx --check reports 2 defs a rebuild would change (marund_ult_domefall, vashil_ult_toll), was 0 in round 2."
+ ],
+ "machine": "Load 8-400 during the run, 09:00-10:57 CST; on battery for part of it; heavy slots partly held by power-hold sleeps. Only one timing step was attempted at any load, none at idle.",
+ "sensitivity": "Viewed Vashil and Hesmi flat-frame shots, the Almanac dust frame and the Sukri Shadeprint ult: VFX and existing fighters only, no new model renders in this lane, nothing of concern."
+}
