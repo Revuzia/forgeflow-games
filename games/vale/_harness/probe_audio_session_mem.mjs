@@ -146,7 +146,8 @@ async function journey(mode) {
   await click(page.getByRole('button', { name: 'Find match' }));
   await waitFor(page, (v) => v.state.queue.value?.state === 'found' || !!v.state.draft.value, 30000);
   const ready = page.getByRole('button', { name: /^Ready/ });
-  if (await ready.count()) await click(ready);
+  // the autopilot's ready check can pass between the count and the click (a 10 s timeout that broke the journey in the draft, closing r3): the state below decides
+  if (await ready.count()) await click(ready).catch(() => {});
   await waitFor(page, (v) => !!v.state.draft.value || !!v.state.loading.value || !!v.state.match.value, 30000);
   // a fighter locked when it is your pick turn (else the protocol assigns one)
   await waitFor(page, (v) => { const s = v.state.draft.value; const m = s?.seats.find((x) => x.isYou); return !s || (s.phase !== 'pick' && s.phase !== 'ban') || !!m?.locked || (s.turn?.action !== 'ban' && !!s.turn?.players.includes(m?.player)); }, 90000);

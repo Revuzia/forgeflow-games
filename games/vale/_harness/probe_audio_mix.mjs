@@ -129,6 +129,8 @@ try {
     // this probe) took out only half of the ambience's energy at 3 dB and read the 2.1 dB floor lift as about 0.9.
     const toLimiter = masterGain * res.trim;
     st.masterNoAmbience = shortTerm(res.blocks.map((r) => [r[0], Math.max(r[1] - toLimiter * toLimiter * r[3], 1e-20)]), 1);
+    // reported: the same floor with the pre-trim subtraction, what the failing runs read (0.4 / 0.9 dB, closing r2 done:6)
+    st.masterNoAmbienceUntrimmed = shortTerm(res.blocks.map((r) => [r[0], Math.max(r[1] - masterGain * masterGain * r[3], 1e-20)]), 1);
     const sum = Object.fromEntries(Object.entries(st).map(([k, a]) => [k, a.length ? { p10: +pct(a, 0.1).toFixed(1), p50: +pct(a, 0.5).toFixed(1), p90: +pct(a, 0.9).toFixed(1) } : null]));
     const m = {
       you, trimGain: +res.trim.toFixed(3),
@@ -137,6 +139,7 @@ try {
       ambienceCuesLogged: ambLogged.length, ambienceCues: [...new Set(ambLogged)], shortTermLufs: sum,
       musicThroughMasterP50: sum.music ? +(sum.music.p50 + 20 * Math.log10(masterGain)).toFixed(1) : null,
       floorLiftDb: sum.master && sum.masterNoAmbience ? +(sum.master.p10 - sum.masterNoAmbience.p10).toFixed(1) : null,
+      floorLiftUntrimmedDb: sum.master && sum.masterNoAmbienceUntrimmed ? +(sum.master.p10 - sum.masterNoAmbienceUntrimmed.p10).toFixed(1) : null,
       ambienceVsMusicP50Db: sum.ambience && sum.music ? +(sum.ambience.p50 - sum.music.p50).toFixed(1) : null,
     };
     report.maps[map] = m;
