@@ -60,5 +60,28 @@
   },
   "note": "Dusk-violet body with pale billow crests and chalk hour lines across the shadow-tail: dL* +24.5 (was -11.9), hp 1.49 (was 0.66), breakup 12.1 (was 3.8). Weakness by eye: the billows read as smooth bubbles rather than smoke, the limbs are plain.",
   "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ },
+ "round3": {
+  "date": "2026-11-06",
+  "t1000": {
+   "px": 46924,
+   "hp": 2.88,
+   "breakup": 55.1,
+   "dLstarP50": 26.3,
+   "dE76": 28.5,
+   "unitChroma": 15.1,
+   "floorChroma": 11.6,
+   "lstarP10_50_90": [
+    13.7,
+    43.5,
+    81.7
+   ],
+   "floorLstarP50": 17.2
+  },
+  "tris": 12030,
+  "glbKiB": 994,
+  "facing": 120,
+  "shot": "art/renders/units/longshade/game_camera_r5.png",
+  "note": "Ruling 1 read at the game camera: brass gnomon and at least five hour lines on the chalk plate survive at 28.5 m, inside a ring of twelve chalk hour stones. Rebuild budget of the package used (3): forearms and claws left for a later pass."
  }
 }

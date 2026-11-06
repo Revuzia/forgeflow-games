@@ -64,7 +64,8 @@
   },
   "runTag": "fw_CW4_m2_after2_t70",
   "shot": "_harness/_shots/value_rift_high_fw_CW4_m2_after2_t70_mon_stilltusk_young.png",
-  "tris": 3820
+  "tris": 3820,
+  "superseded": "see round3"
  },
  "horrorFaceRead": "a round piglet head; no horror read",
  "verdict": "pass",
@@ -93,5 +94,42 @@
   "t1000": null,
   "note": "Banded juvenile, shares the family outline with Stilltusk (0.56), as a family should.",
   "report": "_harness/_reports/fw_CW4_r3_mon.json"
+ },
+ "round3": {
+  "date": "2026-11-06",
+  "t70": {
+   "px": 878,
+   "hp": 5.39,
+   "breakup": 0,
+   "dLstarP50": 25.3,
+   "dE76": 34.4,
+   "unitChroma": 26.2,
+   "floorChroma": 9.8,
+   "lstarP10_50_90": [
+    28,
+    50.9,
+    83.6
+   ],
+   "floorLstarP50": 25.6
+  },
+  "t1000s11": {
+   "px": 1003,
+   "hp": 5.74,
+   "breakup": 0,
+   "dLstarP50": 21.8,
+   "dE76": 33.1,
+   "unitChroma": 26.3,
+   "floorChroma": 8.7,
+   "lstarP10_50_90": [
+    30.3,
+    53.2,
+    86.2
+   ],
+   "floorLstarP50": 31.4
+  },
+  "facing": "345 (camp), 195 on the Serenade side",
+  "note": "The current numbers: the older after and round2 blocks above are history. Art unchanged since fed01110 except the map facing. Same-camp IoU with the adult 0.8, as a family should.",
+  "report": "_harness/_reports/fw_CW4_r5_mon.json tags fw_CW4_r5i_m70, fw_CW4_r5i_m1000s11",
+  "shot": "_harness/_shots/value_rift_high_fw_CW4_r5i_m70_mon_stilltusk_young.png"
  }
 }
