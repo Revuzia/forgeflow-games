@@ -12,7 +12,7 @@ import { ROLE, TASK } from '../src/sim/people/defs.ts';
 import { distM, cellPos, isLand } from '../src/sim/people/world.ts';
 import { spawnHerd, reindexHerds, herdPos } from '../src/sim/life/herds.ts';
 import { landOf } from '../src/sim/people/ledger.ts';
-import { huntEncounter, onFoot } from '../src/sim/people/hunt.ts';
+import { huntEncounter, onFoot, HUNTERS_BAND, HUNTERS_TOWN, MEAT_DAYS } from '../src/sim/people/hunt.ts';
 import { MOUTHS_K, mouths } from '../src/sim/people/demography.ts';
 import { frailty } from '../src/sim/life/disease.ts';
 import { world, must, people, adultsOf } from './helpers/peoples.ts';
@@ -89,4 +89,12 @@ test('balance: births slow past 1.2 children an adult; the grown are hardier to 
   assert.ok(f >= 0.3 && f <= 1, `the mouths factor ${f}`);
   assert.ok(frailty(0) < frailty(AgentFlag.child) && frailty(AgentFlag.child) <= frailty(AgentFlag.elder), 'adult < child <= elder');
   assert.ok(frailty(AgentFlag.elder) <= 1, 'no age is frailer than the disease itself');
+});
+
+// Before (m2: a farming town's hunters 15 % of its food workers, resting while the store held 3 days of meat a head) a
+// world sent 7-13 parties a year and the 8-seed hunted share of food sat at 0.105; m3 (25 %, 5 days) 0.14 with kills,
+// under-15 share and population held (_harness/scratch/minor26/balance.md).
+test('balance: a farming town keeps a quarter of its food workers hunting, and they rest only on 5 days of meat a head (release minor #2)', () => {
+  assert.ok(HUNTERS_TOWN >= 0.25 && HUNTERS_TOWN <= HUNTERS_BAND, `HUNTERS_TOWN ${HUNTERS_TOWN}`);
+  assert.ok(MEAT_DAYS >= 5, `MEAT_DAYS ${MEAT_DAYS}`);
 });

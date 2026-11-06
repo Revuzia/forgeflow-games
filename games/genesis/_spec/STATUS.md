@@ -81,8 +81,10 @@ proof; autosave pictures encoded off the main thread; `package.json` 1.0.0.
 **Known minor gaps (shipping with them; `final-reports/release.md` "Remaining minor items"):**
 - Sim speed below the original L1 / L2 floors and 1000x at 0.82 of 0.85 (restated, above); a quiet-machine 1000x figure
   is still to be taken.
-- Balance: hunting 14 kills per 100 people a year (20 asked; hunted share 0.09 vs 0.15); the under-15 share ~0.47
-  (0.35–0.45 asked; needs a joint fertility / child-mortality re-tune).
+- Balance (release minor #2, re-tuned 2026-11-06, LIVING §13.10): hunting 21.2 kills per 100 people a year (20 asked,
+  met; 12.5 before); under-15 share 0.43 (0.35–0.45 asked, met; 0.465 before; births slow past 1.2 children an adult,
+  sickness weighed by age, child deaths per birth 0.29 -> 0.24). Hunted share of food 0.14 (0.15–0.35 asked, partly met:
+  seeds whose game is fowl, macaque and rabbit stay under 0.13 whatever the kills).
 - P22: fishers take to the water in the sim; boats on screen not yet confirmed by a shot; travellers by water not built.
 - One seed's snow-locked climate step (s3); two fixes tried and backed out.
 - `LaunchFx.spaceGroup` is never added to the scene (space-frame launch puffs / plumes do not draw).

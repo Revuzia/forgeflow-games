@@ -226,8 +226,9 @@ function itemKg(id: string): number {
 }
 
 /** the share of the food workers who hunt: in a band living off the wild (LIVING §2.1: 15-30 %; round 5: the top of the
- * range, so two parties can be out), and in a farming town (5-15 %) */
-export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.15;
+ * range, so two parties can be out), and in a farming town (release minor #2: 25 %, was 15 % — with MEAT_DAYS 5 the
+ * 8-seed hunted share of food rose 0.105 -> 0.14, minor26/balance.md m2 -> m3) */
+export const HUNTERS_BAND = 0.3, HUNTERS_TOWN = 0.25;
 /**
  * (fix r1 #11, the owner's 'hunting/herding where game exists') A farming village went on hunting: for hides and furs as
  * well as meat, all together in the slack of the farming year, and after the wolves that took its beasts. Before this
@@ -474,10 +475,9 @@ function provision(x: PCtx, st: Settlement, m: number, days: number): void {
   if (left > 0) storeAdd(x, st, f, left);
 }
 
-/** days of meat a head the store holds before a party is no longer sent out */
-/** (release minor #2) the hunters rest while the store holds this many days of meat a head (was 1: towns sat 'sated' 243 of
- * 288 daylight hours with a day's meat in store) */
-export const MEAT_DAYS = 3;
+/** days of meat a head the store holds before a party is no longer sent out (release minor #2: 5, was 1: towns sat
+ * 'sated' 243 of 288 daylight hours with a day's meat in store; at 3 a world still sent only 7-13 parties a year) */
+export const MEAT_DAYS = 5;
 
 /** food-days of meat (fresh, dried, cooked) in st's store */
 export function meatDays(x: PCtx, st: Settlement): number {

@@ -2983,3 +2983,38 @@ hut at the year end (housed in the save hours later).
 - **Medicine test pooled.** `plague.test.ts` 'medicine' pinned one world at a 0.7 bar that sat inside the measured
   spread (with/without deaths on worlds 21-24, before and after the prayer pauses: ratios 0.64-0.71); the pauses moved
   the control town by one death (25 -> 24) and failed the gate. Now worlds 21+22 pooled, bar 0.75 (measured 0.69).
+
+### 13.10 Release minor #2: balance to the owner defaults (2026-11-06; ledger `_harness/scratch/minor26/balance.md`)
+
+**Changed** (each with a test in `tests/balance-minor26.test.ts` that fails on the tree before; m0 = that tree, frozen
+`minor26/T0`):
+- **Demography.** `mouths()` (people/demography.ts): births slow past 1.2 children an adult (was 1.5). A grave case of
+  sickness is weighed by age (`frailty`, life/disease.ts): children and the old are frail, grown people in their prime
+  hardy. Before, an epidemic took every age alike, so the seeds it spared grew 3 %/y with half their people under 15.
+- **Hunting** (people/hunt.ts): hunters rest only while the store holds 5 days of meat a head (`MEAT_DAYS`, was 1) and
+  0.5 hides a head (`HIDES_PER_HEAD`, was 0.25); a farming town keeps 25 % of its food workers hunting (`HUNTERS_TOWN`,
+  was 15 %); game past a day trip is worth less; the stalk begins within 2.5 edges (was 1.5); a tracking leg that ends
+  within reach of the herd is an encounter (parties of two had tracked a drifting herd 32-100 h with 0-6 tries); a try
+  is 0.2; a herd of two can lose one.
+- **Seed-bound test re-measured honestly:** `plague.test.ts` 'medicine' sat exactly on its 0.75 bar with frailty by
+  age (worlds 21-24 measured 13/18, 14/18, 10/17, 11/17); it now pools worlds 21-24 (0.69).
+
+**Measured** (8 seeds x 25 years alone, `minor26/cmp.cjs`; after = m3, frozen `minor26/H8` = the src as shipped):
+
+| median of 8 seeds | before (m0) | after (m3) | asked |
+|---|---|---|---|
+| kills per 100 people a year | 12.5 | 21.2 (2.0-38.0) | >= 20, met |
+| hunted share of food | 0.112 | 0.140 (0.02-0.29) | 0.15-0.35, partly met |
+| under-15 share, years 10-25 | 0.465 | 0.429 (0.41-0.47) | 0.35-0.45, met |
+| child (< 15) deaths per birth | 0.288 | 0.242 | moderate |
+| growth years 5-25, %/y | 1.21 | 1.45 | |
+| births / deaths, pooled | 406 / 207 | 340 / 172 | |
+| hunting injuries a trip, pooled | 0.075 | 0.034 | |
+
+The hunted share misses on the seeds whose game is fowl, mallard, macaque and rabbit (about 1-7 kg of meat a kill:
+seeds 1-3 and 5 at 0.02-0.13), whatever the kills; the boar seeds (7, 1234, 20261008) sit at 0.23-0.29. Seed 1 learned to
+hunt in year 18 in this run (kills 2.0); in m2 (the same src with 15 % / 3 days) it hunted from year 10 (19.5).
+
+**Acceptance re-installed:** `minor26/acc/overlay.cjs m3` lays these three rows over the table installed before (kept as
+`_harness/scratch/living/acceptance.postrel.json`); each row keeps its postrel value under `postrelValue` and gets a
+`minor26` field (before / after per seed, how). Tally 43 met / 16 partly / 9 missed / 14 report (was 41 / 15 / 12).
