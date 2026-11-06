@@ -47,7 +47,9 @@ import { store } from './ui/dom.ts';
 import { wantTitle, hasPlayed, markPlayed } from './ui/title.ts';
 import { humanize, tollOf } from './ui/words.ts';
 import { perfmon } from './render/perfmon.ts';
-import { encodeThumb, cpuCanvas, canvasJpegURL } from './client/thumbjpeg.ts';
+import { encodeThumb, cpuCanvas, canvasJpegURL, thumbOfFrame } from './client/thumbjpeg.ts';
+/** save pictures that came too late for their save (test surface, shot scripts) */
+export const THUMB_STATS = { late: 0, lastLate: false };
 
 export interface AppOptions {
   scenario: string;
@@ -303,7 +305,7 @@ export class App implements UiHost {
       uniformsOf: (id) => (this.renderer.planets.get(id)?.uniforms as unknown as Record<string, IUniform>) ?? null,
       save: () => this.saveBytes(),
       load: (b, packs) => this.loadSave(b, packs),
-      thumb: () => this.thumb(),
+      thumb: (late?: (url: string) => void) => this.thumb(late),
       audioReady: () => !!this.audio,
       dev: this.opts.dev,
       hudFrame: () => this.hudFrame(),
@@ -1822,17 +1824,20 @@ export class App implements UiHost {
   }
 
   /** a small picture of the view for a save slot */
-  private async thumb(): Promise<string | null> {
+  private async thumb(late?: (url: string) => void): Promise<string | null> {
     // A save's picture (256 px wide). Not a PNG of the whole canvas: that was a synchronous read-back and a full-size PNG
     // encode inside a frame (tens of ms at a Retina fullscreen; an autosave comes every few minutes and soon after a
     // god's act) — the frame's bitmap is copied as it is drawn and scaled down asynchronously (macfix smooth).
-    const bmp = await Promise.race([new Promise<Promise<ImageBitmap | null>>((ok) => this.thumbWaiters.push(ok)).then((p) => p), new Promise<'late'>((ok) => setTimeout(() => ok('late'), 8000))]);
-    // (a GPU too busy to copy within 8 s gets no new picture — the save keeps its last one — rather than a full-size
-    // synchronous PNG read-back on top: under a software GPU that fallback stalled a frame for 20 s)
-    if (bmp === 'late') return null;
     // (the bitmap is already 256 px wide; it is transferred to a worker that encodes it on an OffscreenCanvas — a
     // toBlob of a GPU-backed canvas here read it back synchronously and waited for the whole GPU queue: macfix r3)
-    if (bmp) return encodeThumb(bmp, 0.8);
+    // A GPU too busy to copy within THUMB_WAIT_MS: the save is written without a picture (never a full-size synchronous
+    // PNG read-back on top: under a software GPU that fallback stalled a frame for 20 s) and the copy, when it comes, is
+    // handed to `late`, which puts it on that save (saves.ts patchThumb): the slot never shows an earlier save's picture.
+    const frame = new Promise<Promise<ImageBitmap | null>>((ok) => this.thumbWaiters.push(ok)).then((p) => p);
+    const r = await thumbOfFrame(frame, (b) => encodeThumb(b, 0.8), late);
+    THUMB_STATS.lastLate = r.late;
+    if (r.late) THUMB_STATS.late++;
+    if (!r.failed) return r.url;
     const url = await Promise.race([this.capture(), new Promise<string>((ok) => setTimeout(() => ok(''), 8000))]);
     if (!url) return null;
     return new Promise((ok) => {

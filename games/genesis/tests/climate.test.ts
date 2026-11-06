@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import type { Planet } from '../src/sim/world/planet.ts';
+import { homesteadCell } from '../src/client/poi.ts';
 
 function equatorCell(p: Planet): number {
   let eq = 0;
@@ -146,4 +147,50 @@ test('sunlit snow just under freezing melts by the sun it absorbs (no snow-albed
   for (const c of cells) { if (p.f.snow[c] < 0.995) melted++; if (p.f.temperature[c] <= 0) stillCold++; }
   assert.ok(stillCold >= cells.length * 0.5, `the air stays under freezing over the pack (${stillCold}/${cells.length})`);
   assert.ok(melted >= cells.length * 0.8, `and the sun melts it anyway: ${melted} of ${cells.length}`);
+});
+
+test('a snowed-under patch in a mild region melts: the region\'s warm air reaches it (no snow-locked climate step)', () => {
+  // the opening world of seed 3 (barren + air, as src/ui/opening.ts makes it): the lakeshore camp under 1.8 m of snow
+  // sat on its own albedo for good (-17 °C year mean while the ground a km off read ~0 °C) before the warm-air melt
+  const sim = new Sim({ seed: 3, scenario: 'barren' });
+  const u = sim.u, p = u.planets[0], g = p.grid, P = g.pos;
+  const day = p.st.dayHours * 60;
+  const must = (c: object) => { const r = sim.applyNow(c as never); assert.ok(r.ok, r.msg); };
+  must({ k: 'planet.add-air', amount: 1 });
+  sim.step(Math.round(day * 0.3));
+  must({ k: 'weather.global', kind: 'storm' });
+  must({ k: 'water.sea-level', value: -40 });
+  sim.step(day);
+  const here = [...u.sun(p, u.tick).dir];
+  must({ k: 'weather.global', kind: 'none' });
+  must({ k: 'life.plant', species: 'meadow-grass', pos: here, radius: 12000, density: 0.8 });
+  must({ k: 'life.forest', pos: here, radius: 1400 });
+  sim.step(Math.round(day * 0.5));
+  // the homestead the opening picks on seed 3 (src/client/poi.ts homesteadCell over the sunlit morning face)
+  const fields = new Map<string, Float32Array>();
+  for (const [k, v] of Object.entries(p.f)) if (v instanceof Float32Array) fields.set(k, v); else if (v instanceof Float64Array) fields.set(k, Float32Array.from(v));
+  const sun = u.sun(p, u.tick).dir, t0f = fields.get('temperature')!, tm = new Float32Array(t0f.length);
+  for (let c = 0; c < tm.length; c++) {
+    const el = P[c * 3] * sun[0] + P[c * 3 + 1] * sun[1] + P[c * 3 + 2] * sun[2], east = P[c * 3] * sun[2] - P[c * 3 + 2] * sun[0];
+    tm[c] = el > 0.25 && east < 0.15 ? t0f[c] : -99;
+  }
+  fields.set('temperature', tm);
+  const c0 = homesteadCell({ grid: g, params: { radius: p.radius }, fields, settlements: [] } as never).cell;
+  assert.ok(c0 >= 0, 'a homestead on the morning face');
+  let ring = [c0];
+  const patch = new Set(ring);
+  for (let r = 0; r < 4; r++) {
+    const nx: number[] = [];
+    for (const c of ring) for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+      const o = g.nbr[e];
+      if (!patch.has(o) && !p.s.ocean[o] && p.f.water[o] < 0.05) { patch.add(o); nx.push(o); }
+    }
+    ring = nx;
+  }
+  for (const c of patch) p.f.snow[c] = 1.8;
+  sim.step(Math.round(p.st.orbit.period * 0.9));
+  let white = 0;
+  for (const c of patch) if (p.f.snow[c] > 0.05) white++;
+  assert.ok(white <= patch.size * 0.2, `a mild region's snow patch melts within the year: ${white}/${patch.size} cells still white`);
+  assert.ok(p.f.snow[c0] < 0.05, `the patch's centre clears (snow ${p.f.snow[c0].toFixed(2)} m, T ${p.f.temperature[c0].toFixed(1)} °C)`);
 });

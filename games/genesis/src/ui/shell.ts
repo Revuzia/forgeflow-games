@@ -87,7 +87,8 @@ export interface ShellDeps {
   save(): Promise<ArrayBuffer | null>;
   /** open a save here, the packs it needs sent first */
   load(bytes: ArrayBuffer, packs: ContentPack[]): Promise<LoadOutcome>;
-  thumb(): Promise<string | null>;
+  /** a save's picture; `late` gets it when it came too late for the save (app.ts thumb) */
+  thumb(late?: (url: string) => void): Promise<string | null>;
   /** the world now (a loaded save changes it) */
   world(): { scenario: string; seed: number };
   /** the content packs this world has beyond the base, the library they are kept in, and sending one to the world */
@@ -271,7 +272,7 @@ export class Shell {
     this.pad = new Gamepad(world);
     this.settings = new Settings(root, { host, nextPadButton: (s) => this.pad.nextButton(s), audioReady: () => deps.audioReady() });
     this.saves = new Saves(root, {
-      host, library: deps.library, save: () => deps.save(), load: (b, packs) => deps.load(b, packs), thumb: () => deps.thumb(), world: () => deps.world(),
+      host, library: deps.library, save: () => deps.save(), load: (b, packs) => deps.load(b, packs), thumb: (late) => deps.thumb(late), world: () => deps.world(),
       packs: () => deps.packs(), reloadInto: (id) => deps.reloadInto(id), openMods: () => this.openWindow('mods'), openNewWorld: () => this.openWindow('newWorld'),
       loaded: () => { this.opening.end(); this.newWorld.close(); this.title.close('load'); },
       // (the title's world is scenery: never kept as the autosave, nor saved from the title)

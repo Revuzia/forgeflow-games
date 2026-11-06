@@ -118,3 +118,38 @@ export function encodeThumb(bmp: ImageBitmap, quality = 0.8): Promise<string | n
     try { p.post({ id, bmp, quality }); } catch { p.waiting.delete(id); thumbStats.main++; void encodeOnMain(bmp, quality).then(ok); }
   });
 }
+
+/** how long a save waits for its picture before it is written without one (app.ts thumb) */
+export const THUMB_WAIT_MS = 8000;
+/** how long after that a late picture may still arrive and be put on the save it was taken for */
+export const THUMB_LATE_MS = 120_000;
+
+/**
+ * A save's picture from the frame captured for it (`frame`: the bitmap copied from the frame drawn after the save's bytes
+ * were taken). On a starved GPU that copy can take longer than a save should wait: the save is then written without a
+ * picture (null, never the previous save's picture) and, when the copy does arrive within `lateMs`, `late` gets it so the
+ * slot can be given the picture of its own moment (saves.ts patchThumb). A copy that never arrives leaves the slot
+ * honestly blank.
+ */
+export async function thumbOfFrame(
+  frame: Promise<ImageBitmap | null>, encode: (b: ImageBitmap) => Promise<string | null>,
+  late?: (url: string) => void, waitMs = THUMB_WAIT_MS, lateMs = THUMB_LATE_MS,
+): Promise<{ url: string | null; late: boolean; failed: boolean }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const LATE = Symbol('late');
+  const first = await Promise.race([frame.catch(() => null), new Promise<typeof LATE>((ok) => { timer = setTimeout(() => ok(LATE), waitMs); })]);
+  if (timer !== undefined) clearTimeout(timer);
+  if (first !== LATE) {
+    if (!first) return { url: null, late: false, failed: true };
+    return { url: await encode(first).catch(() => null), late: false, failed: false };
+  }
+  // late: the copy keeps going; its picture is handed on when it comes in time (a bitmap after that is let go)
+  const t0 = Date.now();
+  void frame.catch(() => null).then(async (b) => {
+    if (!b) return;
+    if (!late || Date.now() - t0 > lateMs) { (b as { close?: () => void }).close?.(); return; }
+    const url = await encode(b).catch(() => null);
+    if (url) late(url);
+  });
+  return { url: null, late: true, failed: false };
+}

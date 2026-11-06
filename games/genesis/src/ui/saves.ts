@@ -174,6 +174,15 @@ export function tidyDay(s: string): string { return typeof s === 'string' ? s.re
 function storedSize(b: Blob | ArrayBuffer | undefined): number { return !b ? 0 : b instanceof Blob ? b.size : b.byteLength; }
 const STORE = 'saves';
 
+/**
+ * a slot record given the picture that came late for it (app.ts thumb), or null when it is not that save any more (another
+ * save went into the slot since: other tick or date) or it already has a picture
+ */
+export function withLateThumb<T extends { tick: number; date: number; thumb: string | null }>(rec: T, tick: number, date: number, thumb: string): T | null {
+  if (rec.tick !== tick || rec.date !== date || rec.thumb) return null;
+  return { ...rec, thumb };
+}
+
 export class SaveStore {
   private db: Promise<IDBDatabase> | null = null;
 
@@ -222,6 +231,26 @@ export class SaveStore {
     const rec: StoredRecord = { ...r, bytes: new Blob([r.bytes], { type: 'application/octet-stream' }) };
     return this.tx('readwrite', (s) => s.put(rec));
   }
+  /**
+   * a late picture onto the slot it was taken for (one transaction; the bytes stay the Blob they are kept as): only while
+   * the slot still holds that save (`tick`, `date`) and has no picture of its own — a newer save in the slot keeps its own
+   */
+  async setThumb(id: string, tick: number, date: number, thumb: string): Promise<boolean> {
+    const db = await this.open();
+    return new Promise((ok, fail) => {
+      const t = db.transaction(STORE, 'readwrite');
+      const s = t.objectStore(STORE);
+      const req = s.get(id) as IDBRequest<StoredRecord | undefined>;
+      let put = false;
+      req.onsuccess = () => {
+        const next = req.result ? withLateThumb(req.result, tick, date, thumb) : null;
+        if (next) { s.put(next); put = true; }
+      };
+      t.oncomplete = () => ok(put);
+      t.onerror = () => fail(t.error ?? new Error('save store error'));
+      t.onabort = () => fail(t.error ?? new Error('the browser refused to keep it'));
+    });
+  }
   del(id: string): Promise<undefined> { return this.tx('readwrite', (s) => s.delete(id) as IDBRequest<undefined>); }
 }
 
@@ -244,7 +273,8 @@ export interface SavesDeps {
   /** open a save in this simulation, the packs it needs sent first (from `packs`, else the library) */
   load(bytes: ArrayBuffer, packs: ContentPack[]): Promise<LoadOutcome>;
   /** a small picture of the view (data URL) */
-  thumb(): Promise<string | null>;
+  /** a picture of the frame drawn after the bytes were taken; null when it is late, then `late` gets it (app.ts thumb) */
+  thumb(late?: (url: string) => void): Promise<string | null>;
   /** the world now (changes when a save is opened) */
   world(): { scenario: string; seed: number };
   /** the packs this world has beyond the base (JSON) */
@@ -464,18 +494,36 @@ export class Saves {
   /** is a write or a load in hand or waiting (test surface) */
   get pending(): boolean { return this.busy || !!this.autoQueued; }
 
+  /** a picture that came late onto its save (through the queue, after the write that made the slot) */
+  private patchThumb(id: string, tick: number, date: number, url: string): Promise<void> {
+    const job = this.queue.then(async () => {
+      const done = await this.store.setThumb(id, tick, date, url).catch(() => false);
+      if (!done) return;
+      this.lastThumb = url;
+      this.lateThumbs++;
+      if (this.isOpen) void this.refresh();
+    });
+    this.queue = job.catch(() => undefined);
+    return job;
+  }
+  /** pictures put on their saves after the save was written (test surface) */
+  lateThumbs = 0;
+
   private async writeSlot(id: string, name: string, quiet: boolean, auto: boolean): Promise<boolean> {
     try {
       const bytes = await this.deps.save();
       if (!bytes) { if (!quiet) this.host.toast({ text: 'There is no living world to save here.', kind: 'warn' }); return false; }
-      // (a hidden page draws nothing: its picture would wait out the capture's timeout, so the last one, or the slot's own, serves)
-      const thumb = pageHidden() ? this.lastThumb ?? (await this.store.get(id).catch(() => undefined))?.thumb ?? null : await this.deps.thumb().catch(() => null);
-      if (thumb) this.lastThumb = thumb;
       const hdr = readSaveHeader(bytes);
+      const date = Date.now();
+      // (a hidden page draws nothing: its picture would wait out the capture's timeout, so the last one, or the slot's own, serves)
+      // A picture too late for the save (a starved GPU) is put on this save when it comes, never an earlier one's meanwhile.
+      const late = (url: string): void => { void this.patchThumb(id, hdr.tick, date, url); };
+      const thumb = pageHidden() ? this.lastThumb ?? (await this.store.get(id).catch(() => undefined))?.thumb ?? null : await this.deps.thumb(late).catch(() => null);
+      if (thumb) this.lastThumb = thumb;
       const need = new Set(neededPacks(hdr));
       const packJson = this.deps.packs().filter((p) => need.has(p.id));
       const w = this.deps.world();
-      await this.store.put({ id, name, scenario: hdr.scenario || w.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(), ...this.describe(hdr.tick), thumb, size: bytes.byteLength, packs: hdr.packs.filter((p) => need.has(p.id)), packJson, auto, bytes });
+      await this.store.put({ id, name, scenario: hdr.scenario || w.scenario, seed: hdr.seed, tick: hdr.tick, date, ...this.describe(hdr.tick), thumb, size: bytes.byteLength, packs: hdr.packs.filter((p) => need.has(p.id)), packJson, auto, bytes });
       this.last = { ok: true, msg: name };
       if (!quiet) { this.host.toast({ text: `Kept: ${name}.`, kind: 'info' }); this.host.sound('save.kept'); }
       if (this.isOpen) { this.alert('ok', `Kept: ${name}.`); void this.refresh(); }

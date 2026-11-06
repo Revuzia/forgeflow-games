@@ -110,3 +110,32 @@ test("a lander's dust takes the colour of the ground it lifts off", () => {
   assert.ok(tint.x > tint.y * 1.5 && tint.y > tint.z, `rust dust (${tint.toArray().map((v) => v.toFixed(2))})`);
   assert.ok(births(fx).some((p) => p.kind === PUFF.dust), 'dust is raised');
 });
+
+test('launch FX in the space frame hang in the scene (the ship layer\'s space group), so the FX pass draws them', async () => {
+  const { ShipLayer } = await import('../src/render/life/ships.ts');
+  const { Scene } = await import('three');
+  const { FX_LAYER: FX } = await import('../src/render/fx/launch.ts');
+  const ships = new ShipLayer();
+  const scene = new Scene();
+  scene.add(ships.spaceGroup);
+  const fx = ships.fx;
+  // a vacuum engine out in space (planet -1) and a blast there
+  const cam = [1000, 0, 0];
+  const pos = new Vector3(1200, 50, 0);
+  fx.begin(sec(100));
+  fx.engine({ key: 's1:0', planet: -1, pos, dir: new Vector3(0, -1, 0), radius: 0.9, count: 1, thrust: 1, vacuum: true, fuel: 'hydrolox', alt: 1e5, trail: true, since: 0, fromPad: false } as EngineFire);
+  fx.explode(-1, null, pos, 1, true, [1200, 50, 0]);
+  fx.update(() => null, cam, 0, 100, 0.016);
+  let inScene = 0, onFx = 0;
+  const top = (o: { parent: unknown }): unknown => { let p = o as { parent: unknown }; while (p.parent) p = p.parent as { parent: unknown }; return p; };
+  const plumes = (fx as unknown as { plumes: { group: Group }[] }).plumes.filter((s) => s.group.visible);
+  assert.ok(plumes.length >= 1, 'a plume burns in space');
+  for (const s of plumes) if (top(s.group) === scene) inScene++;
+  assert.equal(inScene, plumes.length, 'every space plume reaches the scene');
+  const P = (fx as unknown as { planets: Map<number, { puffs: { group: Group } }> }).planets.get(-1)!;
+  assert.ok(P, 'space puffs made');
+  assert.equal(top(P.puffs.group), scene, 'space puffs reach the scene');
+  P.puffs.group.traverse((o) => { if (o.layers.isEnabled(FX)) onFx++; });
+  assert.ok(onFx >= 1, 'space puffs are on the FX layer');
+  ships.dispose();
+});

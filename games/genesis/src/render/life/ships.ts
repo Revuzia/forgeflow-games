@@ -751,7 +751,9 @@ export class ShipLayer {
     this.overlay.add(this.glints);
     this.avatar = new Avatar(this.fx.depthU, FX_LAYER);
     this.avatar.group.visible = false;
-    this.spaceGroup.add(this.avatar.group, this.fx.warmGroup);
+    // the launch FX's deep-space frame (puffs, plumes and blasts of craft out past the air) hangs here too, so the
+    // FX pass (which renders the scene on FX_LAYER) reaches it: it was never parented, and nothing in space drew
+    this.spaceGroup.add(this.avatar.group, this.fx.warmGroup, this.fx.spaceGroup);
   }
 
   setResolution(w: number, h: number, pixelRatio: number): void {

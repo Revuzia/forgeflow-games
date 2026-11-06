@@ -77,6 +77,6 @@ test('without a worker the fallback canvas is CPU-backed (willReadFrequently) an
 test('app.ts encodes the save picture through thumbjpeg, with no toBlob of its own', () => {
   const src = readFileSync(new URL('../src/app.ts', import.meta.url), 'utf8');
   assert.ok(!/\.toBlob\(/.test(src), 'no toBlob in app.ts');
-  assert.match(src, /encodeThumb\(bmp/);
-  assert.ok(!/document\.createElement\('canvas'\)/.test(src.slice(src.indexOf('private async thumb()'), src.indexOf('waitFrames(n'))), 'thumb() makes no GPU-backed canvas');
+  assert.match(src, /encodeThumb\((bmp|b), 0\.8\)/);
+  assert.ok(!/document\.createElement\('canvas'\)/.test(src.slice(src.indexOf('private async thumb('), src.indexOf('waitFrames(n'))), 'thumb() makes no GPU-backed canvas');
 });

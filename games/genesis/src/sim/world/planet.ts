@@ -108,6 +108,8 @@ export interface PlanetSolverState {
   /** climate steps the year-scale memory has run since it was last reset (a world given air or moved: the memory of
    * its old climate is dropped and re-learned as a growing-window mean, not over years) */
   climMem: Float32Array;
+  /** hours a snowed cell has sat locked below its region's year climate (climate.ts REG_LOCK_YEAR; 0 when not locked) */
+  snowLock: Float32Array;
   /** painted biome pins (-1 none) */
   pinnedBiome: Int8Array;
   /** climate-only precipitation (mm/h) and cloud cover, before weather systems are layered on */
@@ -309,7 +311,7 @@ export class Planet {
       flux: new Float64Array(E), hAct: new Uint8Array(N), hQuiet: new Uint8Array(N), ocean: new Uint8Array(N),
       coast: new Uint8Array(N), seaIce: F(), fAct: new Uint8Array(N), tAct: new Uint8Array(N), lAct: new Uint8Array(N),
       wMask: new Uint8Array(N), wPrecip: F(), wType: new Uint8Array(N), wCloud: F(), wTemp: F(),
-      baseWindX: F(), baseWindY: F(), baseWindZ: F(), tPot: F(), tempMean: F(), lightMean: F(), precipMean: F(), tempYear: F(), lightYear: F(), tHi: F(), tLo: F(), climMem: F().fill(CLIM_MEM_FULL),
+      baseWindX: F(), baseWindY: F(), baseWindZ: F(), tPot: F(), tempMean: F(), lightMean: F(), precipMean: F(), tempYear: F(), lightYear: F(), tHi: F(), tLo: F(), climMem: F().fill(CLIM_MEM_FULL), snowLock: F(),
       pinnedBiome: new Int8Array(N).fill(-1), cPrecip: F(), cCloud: F(), seep: F(),
     };
     this.hydro = { seaNow: st.seaLevel, maskLevel: st.seaLevel, steps: 0, oceanCells: 0, sourced: 0, maskDirty: true };

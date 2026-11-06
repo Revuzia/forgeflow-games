@@ -68,6 +68,25 @@ const TREE_SNOW_MASK = 0.65;
  * never ran, and a lakeshore camp snowed under in one storm stayed white for good (sim-fix-r2 item 2, opening seed 3). */
 const SUN_MELT = 5e-5;
 const SUN_MELT_BELOW = 4;
+/** warm-air melt: snow lying where the air of its region (about REG_CELLS cells around it, read at the cell's own
+ * altitude) is above freezing melts by the region's degree-hours too (m of snow per °C·h; the local degree-hour rate is
+ * 0.004) — the sensible heat the wind brings in over a snow patch. The neighbour mixing (D_NBR) is a diffusion with a
+ * reach of two or three cells, so a patch a few hundred metres wide sat on its own albedo: seed 3's opening lake town,
+ * snowed under by one storm, read -16 °C in winter and -13 °C over the year for good while its daughter village 1 km
+ * off read +14 / +18 (postrel simminor, the snow-locked climate step). */
+const REG_MELT = 0.002;
+/** ... only on a pack this deep (m) whose 72-hour mean temperature sits this far (°C) below its region's (altitude
+ * corrected), for REG_LOCK_YEAR of its year: a lock, not a snowfield in its own weather — the seasonal snow of a cold
+ * region, a glacier, a mountain's cap, a cold night keep their own degree-hour melt alone, and every world without a lock
+ * steps exactly as before. (0.1 m, not 0.3: a trapped patch re-snows each winter with a thinner pack, 0.2-0.3 m, that a
+ * 0.3 m floor never armed on — minor26 world.md.) */
+const REG_GAP = 8;
+const REG_SNOW = 0.1;
+const REG_CELLS = 400;
+/** ... and only once the cell has been such a lock for this share of its world's year (PlanetSolverState.snowLock): a
+ * storm's fresh dump, a cold spell or a world's first weeks keep their own melt alone; a patch still locked after a
+ * season melts by its region's air */
+const REG_LOCK_YEAR = 0.25;
 /** floating ice: thin new ice is dark (nilas), it brightens to 0.5 by this thickness; sea water freezes this much lower */
 const ICE_FULL = 0.6;
 const SALT_FREEZE = 1.9;
@@ -115,6 +134,13 @@ interface ClimateScratch {
   rip: Uint8Array;
   /** cells whose snow / ice changed this pass */
   changed: Int32Array;
+  /** region (lat / lon bins about REG_CELLS cells each) of each cell, and the regions' area and mean tPot */
+  reg: Int32Array;
+  regArea: Float64Array;
+  regSum: Float64Array;
+  regMean: Float64Array;
+  /** the regions' area-weighted mean of tempMean + lapse·altitude (the last days' air, brought to the datum) */
+  regYear: Float64Array;
 }
 const scratchByN = new Map<number, ClimateScratch>();
 function scratch(p: Planet): ClimateScratch {
@@ -129,7 +155,25 @@ function scratch(p: Planet): ClimateScratch {
       band[c] = b;
       bandArea[b] += p.grid.area[c];
     }
-    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N) };
+    // regions: latitude rows of angular height `ang`, each cut into longitude bins about `ang` wide at its centre
+    const ang = Math.sqrt((REG_CELLS * 4 * Math.PI) / Math.max(REG_CELLS, N));
+    const nLat = Math.max(1, Math.ceil(Math.PI / ang));
+    const rowStart = new Int32Array(nLat + 1), rowLon = new Int32Array(nLat);
+    for (let r = 0; r < nLat; r++) {
+      const latC = -Math.PI / 2 + (r + 0.5) * (Math.PI / nLat);
+      rowLon[r] = Math.max(1, Math.round((2 * Math.PI * Math.cos(latC)) / ang));
+      rowStart[r + 1] = rowStart[r] + rowLon[r];
+    }
+    const reg = new Int32Array(N), regArea = new Float64Array(rowStart[nLat]);
+    const pos = p.grid.pos;
+    for (let c = 0; c < N; c++) {
+      const r = Math.max(0, Math.min(nLat - 1, Math.floor(((p.grid.lat[c] + Math.PI / 2) / Math.PI) * nLat)));
+      const lon = Math.atan2(pos[c * 3 + 2], pos[c * 3]) + Math.PI;
+      const k = Math.min(rowLon[r] - 1, Math.floor((lon / (2 * Math.PI)) * rowLon[r]));
+      reg[c] = rowStart[r] + k;
+      regArea[reg[c]] += p.grid.area[c];
+    }
+    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N), reg, regArea, regSum: new Float64Array(regArea.length), regMean: new Float64Array(regArea.length), regYear: new Float64Array(regArea.length) };
     scratchByN.set(p.n, s);
   }
   return s;
@@ -189,7 +233,10 @@ function bandMeans(p: Planet, sc: ClimateScratch): number {
   sum.fill(0);
   const area = p.grid.area;
   const N = p.count;
-  for (let c = 0; c < N; c++) sum[band[c]] += t[c] * area[c];
+  const rsum = sc.regSum, reg = sc.reg;
+  rsum.fill(0);
+  for (let c = 0; c < N; c++) { const ta = t[c] * area[c]; sum[band[c]] += ta; rsum[reg[c]] += ta; }
+  for (let r = 0; r < rsum.length; r++) sc.regMean[r] = sc.regArea[r] > 0 ? rsum[r] / sc.regArea[r] : 0;
   let g = 0, ga = 0;
   for (let b = 0; b < BANDS; b++) {
     sc.bandMean[b] = sc.bandArea[b] > 0 ? sc.bandSum[b] / sc.bandArea[b] : 0;
@@ -657,9 +704,11 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   const evaporation = cfg.evaporation;
   const infiltration = cfg.infiltration;
   const sx = sun.dir[0], sy = sun.dir[1], sz = sun.dir[2], flux = sun.flux;
+  const regMean = sc.regMean, reg = sc.reg, regYear = sc.regYear;
   const pos = p.grid.pos, bandMean = sc.bandMean, band = sc.band, qn = sc.qn, up1 = sc.up1, wn = sc.wn, changed = sc.changed, tn = sc.tn, rip = sc.rip;
   const tPot = s.tPot, tempMean = s.tempMean, lightMean = s.lightMean, precipMean = s.precipMean, tempYear = s.tempYear, lightYear = s.lightYear;
-  const tHi = s.tHi, tLo = s.tLo, climMem = s.climMem;
+  const tHi = s.tHi, tLo = s.tLo, climMem = s.climMem, snowLock = s.snowLock;
+  const lockNeed = REG_LOCK_YEAR * (st.orbit.period / CLIMATE_CADENCE);
   const invYear = CLIMATE_CADENCE / Math.max(CLIMATE_CADENCE, st.orbit.period);
   const water = f.water, area = p.cellArea, temperature = f.temperature, precip = f.precip, precipType = f.precipType;
   const ocean = s.ocean, snow = f.snow, ice = f.ice, seaIce = s.seaIce, q = f.humidity, cloud = f.cloud;
@@ -685,6 +734,13 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   // walked H hours upwind rained what the cells in between should have rained (+77 % on land at 1000x, measured);
   // the hourly update keeps the means. (Push 3 round 2: the pass's earlier hours are hourly updates of the air too —
   // humidityHours, before this kernel — so transients and fronts move through the field at the 1x pace.)
+  // the regions' recent (72 h) air at the datum (REG_GAP: is a snowed cell held below its region's air?)
+  if (airy && doFreeze) {
+    const rs = sc.regSum, ar = p.grid.area, srf = f.surface, oc = s.ocean, tyY = s.tempMean;
+    rs.fill(0);
+    for (let c = 0; c < N; c++) rs[sc.reg[c]] += (tyY[c] + (oc[c] ? 0 : lapse * Math.max(0, srf[c] - datum))) * ar[c];
+    for (let r = 0; r < rs.length; r++) regYear[r] = sc.regArea[r] > 0 ? rs[r] / sc.regArea[r] : 0;
+  }
   let sourced = 0;
   let nChanged = 0;
   let anyChanged = false;
@@ -933,8 +989,17 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       // snow melt (degree-hour) feeds surface water; deep old snow compacts into glacier ice
       // (by the degree-hours of the hours this pass stands for: an hourly pass's own hour exactly as before)
       if (snow[c] > 0) {
-        if (degH > 0 || sunH > 0) {
-          const m = Math.min(snow[c], 0.004 * degH + SUN_MELT * sunH);
+        // the region's air at this cell's altitude (warm-air melt, REG_MELT)
+        let regH = 0;
+        if (airy && snow[c] > REG_SNOW && regYear[reg[c]] - lapse * alt - tempMean[c] > REG_GAP) {
+          if (snowLock[c] < lockNeed) snowLock[c] += H;
+          else {
+            const tr = regMean[reg[c]] - lapse * alt + offset;
+            if (tr > freeze) regH = (tr - freeze) * H;
+          }
+        } else if (snowLock[c] > 0) snowLock[c] = 0;
+        if (degH > 0 || sunH > 0 || regH > 0) {
+          const m = Math.min(snow[c], 0.004 * degH + SUN_MELT * sunH + REG_MELT * regH);
           snow[c] -= m;
           if (airy && T < boil) {
             water[c] += m * 0.25;
@@ -949,7 +1014,7 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
           changedHere = true;
         }
         if (!airy && snow[c] > 0) { snow[c] = Math.max(0, snow[c] - 0.002 * H); changedHere = true; }
-      }
+      } else if (snowLock[c] > 0) snowLock[c] = 0;
       if (ice[c] > 0 && iceH > 0) {
         const m = Math.min(ice[c], 0.0012 * iceH);
         ice[c] -= m;
