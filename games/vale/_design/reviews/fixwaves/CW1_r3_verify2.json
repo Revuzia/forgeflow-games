@@ -1,0 +1,36 @@
+{
+ "wave": "CW1",
+ "round": 3,
+ "verify": 2,
+ "pass": false,
+ "summary": "CW1 round 3 verify 2 does not pass, on one clause of done:7. The triangle miss is fixed: 0 frames over 500k in 12 match games (6 on the sweep seeds across 2 sweeps, 3 on fresh seeds), highest peak 467k. done:1 passes: Hesmi x2.14-2.15 in 3 of 3 full runs. But the exact done:7 command printed GATE FAIL in 1 of my 2 sweeps, from the memory step: GPU process +6.8 % against the 5 % gate. Nothing points to a leak (tracked objects flat, 5 other measures -0.6 to +3.3 %), and the menu_2 baseline alone spans about 6.5 % between runs. Whether that gate needs a steadier baseline or a tolerance is for the lead, so I did not wave it through.",
+ "items": [
+  {
+   "id": "done:1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/probe_combat_polish.mjs ult,hold --ults all, 3 full runs, all exit 0, fails [] (fw_CW1_r3w_combat_a1/a2/a3.log, fw_W1_combat_polish_fw_CW1_r3w_a1/a2/a3.json), load about 28-53. Hesmi core/ground x2.15/2.05, 2.15/2.06, 2.14/2.04, bar 2.0. firstCore 207.0-208.0. Faded core 96.8 and pre-cast 96.8 in all 3, so the new baseline agrees with an independent reading; waited 90 frames, nothing left alive. The earlier 110 read was not reproduced and its cause is still unproven. Lowest of the 16: Dunsom 2.07, Nurrow 2.07, Sukri 2.07. Odrum x2.31-2.32 / ground x2.33-2.34; the probe marked his target 2.0, and he also clears 2.3. Full-frame body white: highest Lisvel 0.325 in a1 (bar 0.35); Hesmi 0.048-0.055. Disc >= 0.5x: Kemdo 267-300, Rishal 233, Tunlan 167 ms (bar 167, no margin, same on every run). All 16 targets read 2.0 (clip-bound under ruling 10), so 2.3 is not the bar being applied to any fighter in these runs."
+  },
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "Exact command `perf_1080 --prod --match-seeds 7,11,23`, 2 sweeps. Sweep 1 GATE FAIL, exit 1 (fw_CW1_r3w_perf.log:24,111, fw_CW1_r3w_perf.json): 'GPU process +6.8 % from menu_2 to menu_5 (> 5 %)', menus 679 -> 714 -> 715 -> 725 MB, targets, textures, tracked materials and geometries flat, load peaking about 130. Sweep 2 GATE PASS, exit 0 (fw_CW1_r3w_perf2.json): 712 -> 708 MB, -0.6 %. --mem-only twice: +1.7 % and +3.3 %, GATE PASS (fw_CW1_r3w_mem1/mem2.log). Earlier sweeps: +1.9 % (r3v), +0.4 % (r3x). menu_2 alone ranged 679-712 MB in these runs, so the baseline's noise is about the size of the gate. The memory miss is not proven to be noise, and the refix is not proven innocent, but it adds no GPU resources I could find in the diff. Triangle clause, the original failure, PASSES: seeds 7/11/23 peaks 465,303 / 453,496 / 451,142 (sweep 1) and 450,164 / 453,584 / 443,902 (sweep 2), 0 frames over. Fresh seeds 3/17/29, --match-only, GATE PASS: 463,523 / 457,814 / 467,409, 0 frames over, biggest sampled jump 277k -> 464k on seed 3 (fw_CW1_r3w_fresh.json). Seed 11 again ended at 1754.9 s, so the 518k game itself was not replayed. Direct test, node _harness/probe_crowd_arrival.mjs --tag r3w, PASS: control 285.0k -> 511.6k ungoverned, shipped 286.2k -> 318.6k governed on the arrival frame, estimate x1.016 (fw_CW1_r3w_arrival.log). probe_crowd_latch PASS. Regression runs the refix skipped now pass: overlay_regress --q high,low PASS, exit 0 (fw_CW1_r3w_overlay.log); value_probe, all maps and both tiers, exit 0 with no FAIL line (fw_CW1_r3w_value.log, fw_CW1_r3w_value.json). typecheck printed no errors; content:check 0 warnings; build_vfx --check 0 changes. Programs 40 on every seed, 0 late. Gap: estimate covers crowd arrivals only, so fighters or monsters arriving on one frame are still seen a frame late; no measured game went over because of this. Timing halves read not measured: machine busy, as before.",
+   "fixHint": "The triangle fix needs no further work. For the memory step, either (a) take the baseline as the median of menu_2 and menu_3 and re-measure, or (b) ask the lead for a ruling on how the 5 % footprint gate treats a single miss when tracked objects are flat. Do not simply widen the 5 % here."
+  },
+  {
+   "id": "regression:kit_hue_after_odrum",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "node _harness/probe_kit_hue.mjs --live, exit 0 (fw_CW1_r3w_hue.log, fw_CW1_r3w_hue.json). Odrum ult sig 0.885, team 0.123, white 0.019, after his landing flash edit."
+  },
+  {
+   "id": "minor:tunlan_disc_margin",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Tunlan's disc >= 0.5x holds exactly 167 ms on the 167 ms bar in all 3 runs. It passes, with no margin at one frame less."
+  }
+ ],
+ "regressions": [],
+ "commands_not_run": "Timing gates on an idle machine (other lanes and a slot hold kept load up); done:3 and the other idle-machine items were outside this verify's scope."
+}
