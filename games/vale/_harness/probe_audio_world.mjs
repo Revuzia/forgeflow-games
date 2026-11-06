@@ -246,7 +246,8 @@ if (!chordsTotal) console.log('W3: the bots never chorded in these runs (Part S 
   const ent = (id, kind, team, x, y, def) => (E[id] = { id, kind, team, x, y, alive: true, visibleMask: 3, statuses: [], def });
   const F0 = catalog.fighters[0].id;
   ent(1, 'fighter', 0, 100, 100, F0); ent(2, 'fighter', 1, 103, 100, F0);
-  ent(9, 'structure', 1, 106, 100, seal?.units?.[0] ?? 'needle_outer');
+  // the structure is the attacker's enemy (fighter 2): the engine voices a blow on your own side as no impact, and a real shaded blow never is one
+  ent(9, 'structure', 0, 106, 100, seal?.units?.[0] ?? 'needle_outer');
   const players = [{ player: 0, team: 0, entity: 1, respawnIn: 0, abilities: [] }, { player: 1, team: 1, entity: 2, respawnIn: 0, abilities: [] }];
   let cb = null;
   const view = { time: 600, mode: 'stub', map: 'none', gorgeWind: 2, players, entities: Object.values(E), entity: (id) => E[id] };

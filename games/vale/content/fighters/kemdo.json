@@ -29,7 +29,7 @@
   "growth": {
     "hp": 100,
     "hpRegen": 0.14,
-    "ad": 3.5,
+    "ad": 3.3,
     "armor": 4.5,
     "resist": 1.8,
     "attackSpeed": 0.025
@@ -134,7 +134,7 @@
                       25,
                       30
                     ],
-                    "targetMaxHp": 0.05
+                    "targetMaxHp": 0.035
                   },
                   "type": "true",
                   "to": "hit",
@@ -313,20 +313,20 @@
           "statScaling": {
             "armor": {
               "base": [
-                20,
-                25,
-                30,
-                35,
-                40
+                15,
+                19,
+                23,
+                27,
+                31
               ]
             },
             "resist": {
               "base": [
-                20,
-                25,
-                30,
-                35,
-                40
+                15,
+                19,
+                23,
+                27,
+                31
               ]
             }
           }
@@ -412,7 +412,7 @@
           "duration": 3,
           "to": "self",
           "stats": {
-            "omnivamp": 0.25
+            "omnivamp": 0.2
           },
           "present": {
             "vfx": "lib_empower"

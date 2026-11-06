@@ -525,10 +525,22 @@ export abstract class BotBase {
       for (const f of this.perc.enemyFighters) if (f.alive && this.dist2(f, e.x, e.y) <= sq(info.reach + f.radius)) stacks += markStacks(f, info.needMark, e);
       if (stacks < (tF < 0.4 ? 1 : 3)) return false;
     }
+    // (CW3s r3-balance: a skilled tier spends the setup first when it can land it: Nurrow's Snuff went out on a waking target
+    // with the Dart ready, so the longer silence and the 70 % cooldown back came on 7 % of her Snuffs)
+    if (info.upgrade && this.diff.leadSkill >= 0.5 && !hasStatus(t, info.upgrade as Parameters<typeof hasStatus>[1])) {
+      for (const si of this.slotOrder.slice(0, 4)) {
+        const o = e.slots[si];
+        if (!o || o === s || !o.ready) continue;
+        const oi = abilityInfo(o.def);
+        if (oi.applies.includes(info.upgrade) && !oi.upgrade && this.offensiveOn(o, oi, t, hpF)) return true;
+      }
+    }
     // (a skilled tier holds a cast its own setup is about to upgrade: Tunlan's Hand went out while the Hound was still
     // running, so the fear never turned into the stun)
     if (info.upgrade && this.diff.leadSkill >= 0.5 && this.now < this.setupUntil && t.id === this.setupTarget && this.setupStatuses.includes(info.upgrade) && !hasStatus(t, info.upgrade as Parameters<typeof hasStatus>[1])) return false;
     const d = Math.sqrt(this.dist2(t, e.x, e.y));
+    // (a lunge that spares this target pays nothing: it is only the way in, never spent at arm's length)
+    if (info.spares && d <= this.prof.attackRange + e.radius + t.radius + 0.5 && hasStatus(t, info.spares as Parameters<typeof hasStatus>[1])) return false;
     const ag = this.pAggro;
     const rank = Math.max(1, s.rank);
     const dmg = info.dmg.length ? estimateDamage(info, e, rank, t) : 0;
@@ -566,6 +578,9 @@ export abstract class BotBase {
           if (info.blockable && this.diff.leadSkill >= 0.5 && !(u & U_EXECUTE) && this.wickInLine(o.x, o.y, dd, info.projWidth * 0.5)) return false;
         } else if (info.delivery === 'dash' || info.delivery === 'blink') {
           if (dd > info.reach + 0.5) return false;
+          // (CW3s r3-balance: a lunge stops short of a target past its length and lands nothing: Nurrow's Felt Step connected on
+          // 31 % of its casts, walking her alone into the fight. An awake target must be in its length; a spared one may be further)
+          if (info.lunge && this.diff.leadSkill >= 0.5 && dd > info.dashDist + t.radius + 0.35 && !(info.spares && hasStatus(t, info.spares as Parameters<typeof hasStatus>[1]))) return false;
           if (dd > info.range && info.range > 0) { o.x = e.x + (dx / dd) * info.range; o.y = e.y + (dy / dd) * info.range; }
         } else if (info.tk === 'point' && info.range > 0 && dd > info.range) {
           if (dd > info.range + info.radius * 0.7) return false;
@@ -1002,6 +1017,11 @@ export abstract class BotBase {
   /** attack a fight target; ranged styles orb-walk away from shorter-ranged targets */
   private fightTarget(f: Entity): void {
     const e = this.e;
+    // (CW3s r3-balance: damage wakes a sleeper: with the payoff ready the bot walks in and spends it, it does not swing first)
+    if (this.prof.sleepPayoff && f.kind === 'fighter' && this.diff.leadSkill >= 0.5 && hasStatus(f, 'sleep')) {
+      const ps = e.slots[SLOT_INDEX[this.prof.sleepPayoff]];
+      if (ps && ps.ready) { this.moveTo(f.x, f.y); return; }
+    }
     // (CW3s r3-balance: a form that pays out on distance run is fought on the move, attacking when the swing is ready:
     // Ulkro stood still through Long Run and it threw about one dart per ult, 2 % of her damage)
     if (this.prof.moveForm && e.form === this.prof.moveForm && f.kind === 'fighter' && inAttackRange(e, f)) {

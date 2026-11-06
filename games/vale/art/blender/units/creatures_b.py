@@ -3092,6 +3092,8 @@ class StrayNumeral(StrayBase):
     FEET = ("footL", "footR")
     CRACK = 1.0
     EYE_R = 0.035
+    # round 3: about 6 L* up on the Base's chalk: on the sunlit (Serenade) camp floor it stood only 16 L* off the stone (bar 20)
+    PAL = dict(StrayBase.PAL, chalk="#BAB1A0", chalk_hi="#D4CDBC", chalk_lo="#978E7E")
     A = np.array([0.0, 0.0, 1.62])                # apex (body pivot)
     # foot contacts. closing CW4 refix (critic:monsters): the feet splay fore and aft as well (the thick stroke's foot
     # forward, the thin one's back), so from the side the figure is still a striding Λ, never a pillar: camps face

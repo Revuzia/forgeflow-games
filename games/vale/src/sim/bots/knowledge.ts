@@ -87,6 +87,10 @@ export interface AbilityInfo {
   readonly upgrade: string | null;
   /** everything the cast does is gated on this mark on the target: without it the cast does nothing */
   readonly needMark: string | null;
+  /** a dash that stops at the first fighter it reaches and pays out there: short of its target it lands nothing */
+  readonly lunge: boolean;
+  /** a status on the target that a dash passes without paying out ("a sleeping enemy takes no damage"): only worth it to close a gap */
+  readonly spares: string | null;
 }
 
 const CC_STATUSES = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborne', 'taunt', 'fear', 'sleep']);
@@ -113,6 +117,15 @@ function readUpgrade(list: readonly EffectT[] | undefined): string | null {
     const sub = eff.op === 'area' || eff.op === 'projectile' ? eff.onHit : null;
     const r = sub ? readUpgrade(sub) : null;
     if (r) return r;
+  }
+  return null;
+}
+
+/** the status a dash's pay-out is gated off by (its pass list is `if not targetHasStatus`), or null */
+function readSpares(list: readonly EffectT[] | undefined): string | null {
+  for (const eff of list ?? []) {
+    if (eff.op !== 'dash') continue;
+    for (const p of eff.onPass ?? []) if (p.op === 'if' && p.cond.kind === 'not' && p.cond.cond.kind === 'targetHasStatus') return p.cond.cond.status;
   }
   return null;
 }
@@ -221,6 +234,7 @@ export function abilityInfo(def: AbilityCoreT): AbilityInfo {
     dashDist: a.dashDist, dashMode: a.dashMode, blinkDist: a.blinkDist, reach, radius, castTime: def.castTime, cc: a.cc,
     dmg: a.dmg, heal: a.heal, shield: a.shield, selfBuff: a.selfBuff, affectsAllies: a.affectsAllies, selfHold: a.selfHold,
     blockable: a.blockable, applies: a.applies, upgrade: readUpgrade(def.effects), needMark: readNeedMark(def.effects),
+    lunge: def.effects.some((x) => x.op === 'dash' && x.stopOnFirstHit === true), spares: readSpares(def.effects),
   };
   infoCache.set(def, r);
   return r;
@@ -364,6 +378,8 @@ export interface FighterProfile {
   readonly squishy: boolean;
   /** a form whose payoff fires on distance run (a `moveDistance` passive gated on it): the bot keeps moving while it lasts */
   readonly moveForm: string | null;
+  /** the basic whose cast pays more on a sleeper, when the kit has one: damage wakes a sleeper, so a swing would throw that away */
+  readonly sleepPayoff: 'a1' | 'a2' | 'a3' | null;
 }
 
 const RETREAT_HP: Readonly<Record<Style, number>> = {
@@ -416,6 +432,7 @@ export function fighterProfile(def: FighterDefT): FighterProfile {
     heals: kitRead.heals || style === 'sustain', holds: kitRead.holds, hardCc: kitRead.hardCc,
     squishy: ranged || style === 'burst' || style === 'artillery' || style === 'marksman',
     moveForm: readMoveForm(def),
+    sleepPayoff: (['a1', 'a2', 'a3'] as const).find((x) => abilityInfo(def.kit[x]).upgrade === 'sleep') ?? null,
   };
 }
 

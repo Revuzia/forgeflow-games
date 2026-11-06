@@ -513,9 +513,9 @@
     "style": "burst",
     "preferredRange": 2,
     "comboOrder": [
-      "a2",
       "a3",
       "a1",
+      "a2",
       "ult"
     ]
   },

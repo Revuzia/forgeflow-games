@@ -1176,7 +1176,7 @@
     {
      "unit": "glasshorn",
      "at": [61.6, 41.5],
-     "facing": 180.0
+     "facing": 210.0
     }
    ],
    "firstSpawn": 60,
@@ -1188,7 +1188,7 @@
     {
      "unit": "glasshorn",
      "at": [108.4, 41.5],
-     "facing": 0.0
+     "facing": 330.0
     }
    ],
    "firstSpawn": 60,
@@ -1200,22 +1200,22 @@
     {
      "unit": "gloamoth",
      "at": [64.3, 24.9],
-     "facing": 60.0
+     "facing": 210.0
     },
     {
      "unit": "gloamoth_little",
      "at": [62.7, 25.9],
-     "facing": 60.0
+     "facing": 210.0
     },
     {
      "unit": "gloamoth_little",
      "at": [65.9, 25.9],
-     "facing": 60.0
+     "facing": 210.0
     },
     {
      "unit": "gloamoth_little",
      "at": [64.3, 23.2],
-     "facing": 60.0
+     "facing": 210.0
     }
    ],
    "firstSpawn": 60,
@@ -1227,22 +1227,22 @@
     {
      "unit": "gloamoth",
      "at": [105.7, 24.9],
-     "facing": 120.0
+     "facing": 330.0
     },
     {
      "unit": "gloamoth_little",
      "at": [107.3, 25.9],
-     "facing": 120.0
+     "facing": 330.0
     },
     {
      "unit": "gloamoth_little",
      "at": [104.1, 25.9],
-     "facing": 120.0
+     "facing": 330.0
     },
     {
      "unit": "gloamoth_little",
      "at": [105.7, 23.2],
-     "facing": 120.0
+     "facing": 330.0
     }
    ],
    "firstSpawn": 60,
@@ -1254,7 +1254,7 @@
     {
      "unit": "stray_numeral",
      "at": [46.0, 32.5],
-     "facing": 80.0
+     "facing": 120.0
     },
     {
      "unit": "stray_tick",
@@ -1276,7 +1276,7 @@
     {
      "unit": "stray_numeral",
      "at": [124.0, 32.5],
-     "facing": 100.0
+     "facing": 60.0
     },
     {
      "unit": "stray_tick",
@@ -1298,7 +1298,7 @@
     {
      "unit": "resinback",
      "at": [64.3, 85.1],
-     "facing": 90.0
+     "facing": 210.0
     }
    ],
    "firstSpawn": 60,
@@ -1310,7 +1310,7 @@
     {
      "unit": "resinback",
      "at": [105.7, 85.1],
-     "facing": 90.0
+     "facing": 330.0
     }
    ],
    "firstSpawn": 60,
@@ -1322,17 +1322,17 @@
     {
      "unit": "stilltusk",
      "at": [61.6, 68.5],
-     "facing": 180.0
+     "facing": 150.0
     },
     {
      "unit": "stilltusk_young",
      "at": [60.0, 67.5],
-     "facing": 180.0
+     "facing": 150.0
     },
     {
      "unit": "stilltusk_young",
      "at": [63.2, 67.5],
-     "facing": 180.0
+     "facing": 150.0
     }
    ],
    "firstSpawn": 60,
@@ -1344,17 +1344,17 @@
     {
      "unit": "stilltusk",
      "at": [108.4, 68.5],
-     "facing": 0.0
+     "facing": 30.0
     },
     {
      "unit": "stilltusk_young",
      "at": [110.0, 67.5],
-     "facing": 0.0
+     "facing": 30.0
     },
     {
      "unit": "stilltusk_young",
      "at": [106.8, 67.5],
-     "facing": 0.0
+     "facing": 30.0
     }
    ],
    "firstSpawn": 60,
@@ -1366,7 +1366,7 @@
     {
      "unit": "stray_numeral",
      "at": [46.0, 77.5],
-     "facing": 80.0
+     "facing": 120.0
     },
     {
      "unit": "stray_tick",
@@ -1388,7 +1388,7 @@
     {
      "unit": "stray_numeral",
      "at": [124.0, 77.5],
-     "facing": 100.0
+     "facing": 60.0
     },
     {
      "unit": "stray_tick",
@@ -1422,7 +1422,7 @@
     {
      "unit": "longshade",
      "at": [85.0, 31.0],
-     "facing": 60.0
+     "facing": 120.0
     }
    ],
    "firstSpawn": 960,

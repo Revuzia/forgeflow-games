@@ -14,7 +14,7 @@
 //   A5  preemption: a wipe (band 1) cuts a playing structure line short; a takedown (band 2) waits for it
 //   A6  one at a time: over the whole script no two voice-bus lines overlap beyond the ring-out allowance
 //   A7  ducking: under a news line (bands 1-3; closing AUD-C7) music and ambience sit −6 dB and sfx −6 dB, and the line
-//       plays +7 dB over its cue gain; under a band 4-5 line sfx only −3 dB at the cue's own gain; a threat to your
+//       plays +8 dB over its cue gain (ANN_LIFT_DB, 8 since closing r3: the bar's margin held on every seat); under a band 4-5 line sfx only −3 dB at the cue's own gain; a threat to your
 //       fighter is not ducked, and the mix is back within 0.5 dB 0.8 s after the line
 //   A8  the bell language: every line class resolves to its own cue (first, 2-5 tolls, shutdown, structure yours /
 //       theirs, Sunsplinter and Longshade yours / theirs, other objectives, wipe yours / theirs)
@@ -257,7 +257,7 @@ report.A7 = { musicDb: +duck('music', mid).toFixed(2), ambienceDb: +duck('ambien
   afterMusicDb: +duck('music', until + 0.8).toFixed(2), afterSfxDb: +duck('sfx', until + 0.8).toFixed(2), threatNotDucked: threatRoute,
   newsLineLiftDb: lineLiftDb === null ? null : +lineLiftDb.toFixed(2) };
 if (Math.abs(report.A7.musicDb + 6) > 0.3 || Math.abs(report.A7.ambienceDb + 6) > 0.3 || Math.abs(report.A7.sfxDb + 6) > 0.3) failures.push(`A7: under a news line music ${report.A7.musicDb} / ambience ${report.A7.ambienceDb} / sfx ${report.A7.sfxDb} dB (want -6 / -6 / -6)`);
-if (lineLiftDb === null || Math.abs(lineLiftDb - 7) > 0.2) failures.push(`A7: the news line plays ${lineLiftDb} dB over its cue gain (want +7)`);
+if (lineLiftDb === null || Math.abs(lineLiftDb - 8) > 0.2) failures.push(`A7: the news line plays ${lineLiftDb} dB over its cue gain (want +8)`);
 if (report.A7.afterMusicDb < -0.5 || report.A7.afterSfxDb < -0.5) failures.push(`A7: 0.8 s after the line the duck is still ${report.A7.afterMusicDb} / ${report.A7.afterSfxDb} dB`);
 if (!threatRoute) failures.push('A7: an enemy hit on you went through the ducked sfx bus');
 // a band-4 line (a team notice): the sfx bus only −3 dB, the line at its cue's own gain
