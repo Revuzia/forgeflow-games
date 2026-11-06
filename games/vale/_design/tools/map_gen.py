@@ -607,10 +607,10 @@ def build_rift():
     # silhouette median <= 0.5 at the game camera, the Longshade's dial and the Numeral's stride still toward it.
     # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its
     # broad stride, not its 0.42 m side; the Ticks three-quarter toward it, turned in toward their Numeral
-    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 120.0), ("stray_tick", 1.6, 1.5, 270.0), ("stray_tick", 1.7, -1.1, 270.0)], 60, 150)
+    camp_pair("strays_north", strays_n, [("stray_numeral", 0.0, 0.0, 105.0), ("stray_tick", 1.6, 1.5, 180.0), ("stray_tick", 1.7, -1.1, 180.0)], 60, 150)
     camp_pair("resinback", resinback, [("resinback", 0.0, 0.0, 210.0)], 60, 270)
-    camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0, 150.0), ("stilltusk_young", -1.6, -1.0, 150.0), ("stilltusk_young", 1.6, -1.0, 150.0)], 60, 150)
-    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 120.0), ("stray_tick", -1.7, -1.1, 270.0), ("stray_tick", 1.7, 1.1, 270.0)], 60, 150)
+    camp_pair("stilltusks", stilltusks, [("stilltusk", 0.0, 0.0, 330.0), ("stilltusk_young", -1.6, -1.0, 330.0), ("stilltusk_young", 1.6, -1.0, 330.0)], 60, 150)
+    camp_pair("strays_south", strays_s, [("stray_numeral", 0.0, 0.0, 105.0), ("stray_tick", -1.7, -1.1, 180.0), ("stray_tick", 1.7, 1.1, 180.0)], 60, 150)
     camp("sunsplinter", ss_pit, [("sunsplinter", 0.0, 0.0)], 360, 270, objective=True)
     camp("longshade", ls_pit, [("longshade", 0.0, 0.0, 120.0)], 960, 360, objective=True)
 

@@ -7,15 +7,15 @@
   },
   "uv_coverage": 0.74,
   "bake": {
-    "base": 8.8,
-    "rough_metal": 6.37,
-    "normal": 1.73,
-    "ao": 1.91,
+    "base": 1.79,
+    "rough_metal": 1.34,
+    "normal": 1.26,
+    "ao": 1.3,
     "normal_fixed_px": 69795,
-    "pack_save": 0.55,
-    "total": 20.2
+    "pack_save": 0.26,
+    "total": 6.09
   },
-  "bake_holes_filled": 2004,
+  "bake_holes_filled": 2013,
   "no_ao_faces": 131457,
   "clips": {
     "idle": {
@@ -117,13 +117,13 @@
       ]
     ]
   },
-  "glb_bytes_raw": 1972100,
+  "glb_bytes_raw": 1980712,
   "optimize": {
     "ok": true,
-    "before": 1972100,
-    "after": 385608
+    "before": 1980712,
+    "after": 390472
   },
-  "glb_bytes": 385608,
+  "glb_bytes": 390472,
   "inspect": [
     "  skin stray_numeral_rig: 13 joints: root hips apex neck head headL headR strut.L footL legL strut.R footR legR",
     "  mesh stray_numeral_stone: 4297 tris",
@@ -131,7 +131,7 @@
     "  material stray_numeral_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  texture stray_numeral_normal: image/webp ? 114.3 KiB",
     "  texture stray_numeral_orm: image/webp ? 23.2 KiB",
-    "  texture stray_numeral_base: image/webp ? 95.5 KiB",
+    "  texture stray_numeral_base: image/webp ? 100.2 KiB",
     "  clip attack1      1.000 s (30 f) channels=5 bones=4",
     "  clip cast_a1      1.500 s (45 f) channels=3 bones=2",
     "  clip death        1.667 s (50 f) channels=14 bones=7",
@@ -141,8 +141,8 @@
   "load_test": {
     "ok": false,
     "log": [
-      "[three] art/out/units/stray_numeral.glb (377 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: stray_numeral_base 1024x1024 95K, stray_numeral_normal 1024x1024 114K, stray_numeral_orm 512x512 23K",
+      "[three] art/out/units/stray_numeral.glb (381 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: stray_numeral_base 1024x1024 100K, stray_numeral_normal 1024x1024 114K, stray_numeral_orm 512x512 23K",
       "  skinned meshes: stray_numeral(3375v)",
       "  bones: 13 (root hips apex neck head headL headR strutL footL legL strutR footR legR)",
       "  clips: attack1:1.000s/5tr, cast_a1:1.500s/3tr, death:1.667s/14tr, idle:3.000s/3tr, run:0.800s/5tr",
@@ -157,22 +157,22 @@
     "ok": true,
     "out": "art/renders/units/stray_numeral.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.85,-0.022,-0.502],[1.018,2.4,0.502]],\"facing\":[-0.044,0.999],\"headY\":2.09,\"heightPx1080\":130,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/stray_numeral.png\",\"seconds\":26.1}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-0.85,-0.022,-0.502],[1.018,2.4,0.502]],\"facing\":[-0.044,0.999],\"headY\":2.09,\"heightPx1080\":130,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"death\",\"idle\",\"run\"],\"size\":[2400,1800],\"clips\":5,\"out\":\"art/renders/units/stray_numeral.png\",\"seconds\":10}"
     ]
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "sculpt": 2833.71,
-      "bind": 0.12,
-      "uv": 37.58,
-      "bake": 33.5,
-      "clips": 0.33,
-      "ground_qa": 0.2,
-      "export": 0.68,
-      "optimize": 0.83,
-      "qa": 26.95
+      "sculpt": 800.7,
+      "bind": 0.08,
+      "uv": 11.02,
+      "bake": 11.04,
+      "clips": 0.1,
+      "ground_qa": 0.09,
+      "export": 0.29,
+      "optimize": 0.47,
+      "qa": 10.46
     },
-    "total_s": 2934.04
+    "total_s": 834.35
   }
 }
