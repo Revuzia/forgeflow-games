@@ -211,3 +211,7 @@ Seed 4309 is one veteran game of 360 where a team's whole chain falls and the co
 ## 22. Bot-played balance band (lead, by delegation, 2026-11-05)
 
 Win rates with bots playing every seat mix kit strength with how well bots pilot a kit. **The gate is 40-60 % at 95 % confidence over at least 200 real-seat games.** A fighter outside it gets a real fix: a pilot fix if the bot misuses the kit, a numbers change if not. The 45-55 % band stays the design target, and human playtest data overrides this bar when it exists.
+
+## 23. The monsters row may close at 7.4 (owner, 2026-11-06)
+
+The CW4 round 3 verifier scored the neutral monsters row 7.4 against the 7.5 par bar. The owner: "i think the 7.4 vs 7.5 is fine". **A 7.4 on the monsters row is accepted and does not open another round on its own.** The Longshade rebuild already running may finish. A score below 7.4 or a new blocker reopens the row. The 7.5 bar stands for every other row and fighter.
