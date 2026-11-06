@@ -602,7 +602,7 @@ def build_rift():
              first, respawn)
 
     camp_pair("glasshorn", glasshorn, [("glasshorn", 0.0, 0.0, 210.0)], 60, 270)
-    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0, 210.0), ("gloamoth_little", -1.6, 1.0, 210.0), ("gloamoth_little", 1.6, 1.0, 210.0), ("gloamoth_little", 0.0, -1.7, 210.0)], 60, 150)
+    camp_pair("gloamoths", gloamoths, [("gloamoth", 0.0, 0.0, 225.0), ("gloamoth_little", -1.6, 1.0, 225.0), ("gloamoth_little", 1.6, 1.0, 225.0), ("gloamoth_little", 0.0, -1.7, 225.0)], 60, 150)
     # round 3 critic:monsters: the camp facings are chosen by fw_CW4_r5y (every kind at 12 facings, the moths over the wing cycle): cross-camp
     # silhouette median <= 0.5 at the game camera, the Longshade's dial and the Numeral's stride still toward it.
     # closing CW4 critic:monsters: the Strays face the gameplay camera (south, +y = 90 deg) so the Numeral shows its

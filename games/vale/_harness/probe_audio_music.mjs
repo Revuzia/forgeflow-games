@@ -10,7 +10,7 @@
 //   A3  every mode has a clock the acts can read
 //   O1  the objective layer is off away from a pit (far from all: its own tap at least 30 dB under its level at a pit)
 //   O2  it fades in by proximity (gain >= 0.9 within 6 s at a pit) and out (<= 0.05 within 8 s away); a road beside a pit
-//       only lifts it a little; its level at a pit sits 2-14 dB under the bed
+//       only lifts it a little (gain <= 0.3); the output's RMS at a pit stands 0.5-4.5 dB over the far windows on either side
 //   O3  it fades out when the objective falls, the ear still at the pit
 //   C1  no clicks at transitions: the sample step and the > 7 kHz peak at each jump (fade start to downbeat + 100 ms), against
 //       the same windows at the natural section ends and the rest of the recording
@@ -229,6 +229,7 @@ try {
   const lvl = (win) => ({ outDb: r2(dbP(pow(inW(win), 1))), objDb: r2(dbP(pow(inW(win), 5))), blocks: inW(win).length });
   rep.objective = { far0: lvl(w.far0), pit: lvl(w.pit), far1: lvl(w.far1) };
   const obj = rep.objective;
+  obj.liftDb = r2(obj.pit.outDb - dbP((10 ** (obj.far0.outDb / 10) + 10 ** (obj.far1.outDb / 10)) / 2));
 
   // the section order: each logged end played its act's next section (MUSIC_ACTS as the build reads it)
   const ACTS = [[0, 1, 4], [0, 1, 2, 4], [1, 2, 3, 4]];
@@ -263,7 +264,7 @@ try {
     O2_fadeIn: rep.fadeIn.ok && rep.fadeIn2.ok,
     O2_fadeOut: rep.fadeOut.ok,
     O2_roadOnlyALittle: rep.roadGain <= 0.3,
-    O2_underTheBed: obj.far0.outDb - obj.pit.objDb >= 2 && obj.far0.outDb - obj.pit.objDb <= 14,
+    O2_aWeightNotALevelChange: rep.objective.liftDb >= 0.5 && rep.objective.liftDb <= 4.5,
     O3_fadesOnFall: !!rep.kill?.found && rep.fadeOnFall.ok,
     C1_noClicks: jumps.length >= 3 && naturals.length >= 2 && jumps.every((j) => j.blocks >= 3 && j.step <= refStep * 1.5 && j.hf <= refHf * 1.5),
     L1_level: jumps.every((j) => j.levelStepDb !== null && j.levelStepDb <= 6),

@@ -27,8 +27,9 @@ QA per bed stem (decoded OGG)
   joints   a match bed's acts (src/audio/index.ts MUSIC_ACTS, read from there): every jump between sections the acts can
            make, rendered from the decoded .ogg stems the way the engine makes it (an equal-power cross-fade of
            SECTION_XF_S ending on the downbeat) and measured like the seam, against every natural section downbeat of the
-           loop. PASS = step <= 1.5 and neither click nor flux above 1.25x the natural downbeats' 90th percentile, and
-           the level across the joint (4 s each side) within JOINT_LEVEL_LU of the natural downbeats' worst.
+           loop. PASS = step <= 1.5, the > 7 kHz peak within JOINT_HF_DB of the two sources' own there, flux under 1.25x the
+           natural downbeats' 90th percentile, and the level across the joint (4 s each side) within JOINT_LEVEL_LU of
+           the natural downbeats' worst.
   m4a      the .m4a decode: sample count equal to the .ogg's, LUFS / true peak, and the same seam test
   pieces   the main stem's .m4a PIECES (the .m4a path decodes a long bed piece by piece and starts on the first, so
            Safari's slow AAC decode never holds the music back; src/audio/index.ts `music`): 16 s first, then
@@ -87,6 +88,7 @@ PIECE_SPLIT_HZ = 3500.0      # above this AAC's noise substitution (PNS) draws i
 PIECE_HF_DB = (1.0, 2.0)     # there the 1/3-octave band energies must match instead: over a piece, within 25 ms of a joint
 BRIGHT = DORIAN_G + (6,)
 ENGINE = os.path.join(GAME, 'src', 'audio', 'index.ts')
+JOINT_HF_DB = 1.0            # QA: a joint's > 7 kHz peak over the two sources' own there (a click adds what neither has)
 JOINT_LEVEL_LU = 2.0         # QA: a joint's level step may pass the natural section downbeats' worst by this
 
 
@@ -335,7 +337,8 @@ def joints_qa(stems: dict[str, np.ndarray], bpm: float) -> dict:
     def level_step(y: np.ndarray) -> float:
         return abs(float(L.integrated(y[:, w:])) - float(L.integrated(y[:, :w])))
     def measure(x: np.ndarray) -> dict:
-        nat = [_boundary(x, s * sec) for s in range(sections)]
+        # the natural section ends measured the way a joint is, on the downbeat and at the fade's start (the eighth before)
+        nat = [_boundary(x, s * sec + d) for s in range(sections) for d in (0, -xf)]
         nat_steps = [level_step(np.take(x, np.arange(s * sec - w, s * sec + w), axis=1, mode='wrap')) for s in range(sections)]
         nat_a = np.array(nat)
         rows = []
@@ -345,10 +348,16 @@ def joints_qa(stems: dict[str, np.ndarray], bpm: float) -> dict:
             jd, hd, fd = _boundary(y, w)
             js, hs, _ = _boundary(y, w - xf)
             ls = level_step(y)
-            ok = bool(max(jd, js) <= 1.5 and max(hd, hs) <= 1.25 * max(np.percentile(nat_a[:, 1], 90), 1e-9)
-                      and fd <= 1.25 * np.percentile(nat_a[:, 2], 90) and ls <= max(nat_steps) + JOINT_LEVEL_LU)
-            rows.append(dict(jump=f'S{a + 1}>S{b + 1}', step=max(jd, js), hf=max(hd, hs), flux=fd, level_step=ls, ok=ok))
-        return dict(natural=dict(step_max=float(nat_a[:, 0].max()), hf_p90=float(np.percentile(nat_a[:, 1], 90)),
+            # a click is > 7 kHz energy neither source has there: the joint's peak over the sources' own, both sides of the fade
+            end, head = (a + 1) * sec, b * sec
+            near = np.arange(-xf - SR // 20, SR // 20)
+            def top(z: np.ndarray) -> float:
+                return 10 * math.log10(float(_hf_env(z).max()) + 1e-20)
+            added = top(y[:, w + near]) - max(top(np.take(x, end + near, axis=1, mode='wrap')), top(np.take(x, head + near, axis=1, mode='wrap')))
+            ok = bool(max(jd, js) <= 1.5 and added <= JOINT_HF_DB and fd <= 1.25 * np.percentile(nat_a[:, 2], 90)
+                      and ls <= max(nat_steps) + JOINT_LEVEL_LU)
+            rows.append(dict(jump=f'S{a + 1}>S{b + 1}', step=max(jd, js), hf_added_db=added, flux=fd, level_step=ls, ok=ok))
+        return dict(natural=dict(step_max=float(nat_a[:, 0].max()),
                                  flux_p90=float(np.percentile(nat_a[:, 2], 90)), level_step_max=float(max(nat_steps))), rows=rows)
     r = dict(acts=acts, xf_s=xf_s, main=measure(main))
     if 'intense' in stems:
@@ -364,10 +373,10 @@ def print_joints(r: dict) -> None:
         if k not in r:
             continue
         n = r[k]['natural']
-        print(f"           {k:6s} natural section downbeats: step max {n['step_max']:.2f}x  >7k p90 {n['hf_p90']:.1f}x  "
+        print(f"           {k:6s} natural section downbeats: step max {n['step_max']:.2f}x  "
               f"flux p90 {n['flux_p90']:.1f} dB  level step max {n['level_step_max']:.2f} LU")
         for q in r[k]['rows']:
-            print(f"             {q['jump']} {'PASS' if q['ok'] else 'CHECK'}: step {q['step']:.2f}x  >7k {q['hf']:.1f}x  flux {q['flux']:.1f} dB  "
+            print(f"             {q['jump']} {'PASS' if q['ok'] else 'CHECK'}: step {q['step']:.2f}x  >7k over the sources' own {q['hf_added_db']:+.1f} dB  flux {q['flux']:.1f} dB  "
                   f"level step {q['level_step']:.2f} LU")
 
 
@@ -525,6 +534,7 @@ def main() -> None:
     ap.add_argument('--json', default='', help='write the QA report to this path')
     ap.add_argument('--no-extra', action='store_true', help='skip stings that are not in audio.json')
     ap.add_argument('--pieces-only', action='store_true', help="write only the beds' .m4a pieces (no stings, no .ogg / .m4a)")
+    ap.add_argument('--joints-only', action='store_true', help="only QA the match beds' section joints from the shipped .ogg stems")
     a = ap.parse_args()
     catalog = json.load(open(CONTENT))
     only = [s for s in a.only.split(',') if s]
@@ -535,6 +545,21 @@ def main() -> None:
     missing = [k for k in stings if k not in music.STINGS]
     if missing:
         raise SystemExit(f'music-bus cues without a composition: {missing}')
+    if a.joints_only:
+        bad = []
+        for bid, mdef in beds.items():
+            if not bid.startswith('mus_match'):
+                continue
+            stems = {'main': io.decode(out_path(mdef['file']))}
+            for l in mdef.get('layers', []):
+                if l['id'] == 'intense':
+                    stems['intense'] = io.decode(out_path(l['file']))
+            r = joints_qa(stems, float(mdef['bpm']))
+            print(f'\n■ {bid}')
+            print_joints(r)
+            if not r['ok']:
+                bad.append(bid)
+        raise SystemExit(f'joints QA failed: {bad}' if bad else 0)
     report = {'beds': [], 'stings': []}
     t_all = time.time()
     with tempfile.TemporaryDirectory() as tmp:

@@ -1200,22 +1200,22 @@
     {
      "unit": "gloamoth",
      "at": [64.3, 24.9],
-     "facing": 210.0
+     "facing": 225.0
     },
     {
      "unit": "gloamoth_little",
      "at": [62.7, 25.9],
-     "facing": 210.0
+     "facing": 225.0
     },
     {
      "unit": "gloamoth_little",
      "at": [65.9, 25.9],
-     "facing": 210.0
+     "facing": 225.0
     },
     {
      "unit": "gloamoth_little",
      "at": [64.3, 23.2],
-     "facing": 210.0
+     "facing": 225.0
     }
    ],
    "firstSpawn": 60,
@@ -1227,22 +1227,22 @@
     {
      "unit": "gloamoth",
      "at": [105.7, 24.9],
-     "facing": 330.0
+     "facing": 315.0
     },
     {
      "unit": "gloamoth_little",
      "at": [107.3, 25.9],
-     "facing": 330.0
+     "facing": 315.0
     },
     {
      "unit": "gloamoth_little",
      "at": [104.1, 25.9],
-     "facing": 330.0
+     "facing": 315.0
     },
     {
      "unit": "gloamoth_little",
      "at": [105.7, 23.2],
-     "facing": 330.0
+     "facing": 315.0
     }
    ],
    "firstSpawn": 60,

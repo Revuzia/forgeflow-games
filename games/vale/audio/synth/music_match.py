@@ -200,12 +200,13 @@ def _objective(name: str, allowed) -> np.ndarray:
     step = dict(stroke='doum', pitch='D2', kick=0.7, vel=0.8, tone_t60=0.8)
     kit = {'K': step, 'L': dict(step, kick=0.2, vel=0.55, pitch='A2', pan=0.14), 'R': KIT['R']}
     for b in range(OBJECTIVE_BARS):
-        lanes = {'K': 'X---------------'} if b % 2 == 0 else {'L': '--------x---x---'}
+        # the step falls on the third beat, so the loop's wrap is a held fifth and a bell's slow bloom, not a kick's edge
+        lanes = {'K': '--------X-------'} if b % 2 == 0 else {'L': '----x-------x---'}
         if b == OBJECTIVE_BARS - 1:
-            lanes = {'L': '--------x---x---', 'R': '------------.oo.'}
+            lanes = {'L': '----x-------x---', 'R': '------------.oo.'}
         drum_grid(st, T(b), BEAT, lanes, kit, rr0=b)
-        esc_grid(st, T(b), BEAT, 'C-------k-------', 0.2, pan=0.25, band_hz=1500.0, q=2.5, res=(620.0, 1300.0))
-    for b, p, v in ((0, 'D3', .30), (8, 'A2', .24), (12, 'E3', .14)):
+        esc_grid(st, T(b), BEAT, '----C-------k---', 0.2, pan=0.25, band_hz=1500.0, q=2.5, res=(620.0, 1300.0))
+    for b, p, v in ((1, 'D3', .30), (9, 'A2', .24), (13, 'E3', .14)):     # off the section's downbeat: the wrap stays a held fifth
         st.add(T(b), 'bell', p, 14.0, v, -0.12 if p == 'D3' else 0.12, bus='bell', decay_scale=1.2)
     for b, d in ((6, 6.0), (14, 6.0)):
         gust(st, T(b), d, 0.08, 170.0, 420.0, q=1.4)
