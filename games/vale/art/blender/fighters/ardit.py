@@ -342,6 +342,8 @@ def fist(name, F, u, out, knuckle_dir, sx):
     return S
 
 
+# (CW5 round 3, minor:floor-sweep) a rebuild loses the floor fixes of the shipped GLB: after a build run
+# art/tools/clip_floor_fix.py on the base GLB, then art/tools/clip_floor.py (props, chains and feet to the floor, no size change)
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris) in build order"""
     out = []

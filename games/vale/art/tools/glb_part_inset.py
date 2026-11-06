@@ -4,7 +4,7 @@ UVs, textures and clips unchanged). For an under-layer the decimated shell above
 minor:ulkro-seat-lumps: the shipped base's simplified skirt let the trousers' seat through). The part map comes from
 art/.cache/fighters/partmap/<id>.npz (partmap_dump.py). Bounds are rest-pose world metres; the rear is -Z (the fighter faces +Z).
 
-    python3 art/tools/glb_part_inset.py ulkro --part legs --y-min 0.86 --y-max 1.12 --rear --by 0.025 [--glb path] [--dry]
+    python3 art/tools/glb_part_inset.py ulkro --part legs --y-min 0.86 --y-max 1.12 --rear --by 0.018 [--glb path] [--dry]
 
 The inset eases in over 3 cm above --y-min. Re-run after a rebuild, then look at the rear of the sheet.
 """

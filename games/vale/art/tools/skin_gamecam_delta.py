@@ -10,8 +10,10 @@ skin's dE >= the standard skin's.
 
 SHEET SETUP (closing CW5 minor:stored-sheet-render-setup, traced): a sheet's light depends on how it was made. A build's three
 QA passes --sky art/out/maps/<first>/sky.hdr (backdrop 193,191,186); a direct three_snapshot run without --sky uses its
-default environment (198,192,181). Numbers compare only between sheets of one setup, so each line prints its sheet's
-backdrop and this tool warns when a skin's differs from its base's (re-render with export.three_qa's --sky).
+default environment (198,192,181). The gate setup is the direct run without --sky (part_gamecam's pairs and the verifiers' fresh
+sheets; every stored roster sheet of the CW5 eight was re-rendered that way on 2026-11-06). Numbers compare only between sheets of
+one setup, so each line prints its sheet's backdrop and this tool warns when a skin's differs from its base's: a rebuild's three QA
+writes a --sky sheet, so re-render the fighter's sheets with `node art/tools/three_snapshot.mjs <glb> <png>` after a build.
 """
 import argparse
 import glob

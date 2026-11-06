@@ -498,8 +498,10 @@ BAND_Z, BAND_H = 1.712, 0.021        # the carved eye band's centre height and h
 BAND_R = (0.090, 0.108)              # its ring radii (x, y) round the head
 
 
+# (CW5 round 3, minor:ulkro-seat-lumps) the simplifier can open the skirt's seat over the trousers again: after a build look at the rear of the sheet;
+# the shipped base took art/tools/glb_part_inset.py ulkro --part legs --y-min 0.84 --y-max 1.12 --rear --by 0.018
 # (CW5 round 3) a rebuild loses these art/tools/glb_paint_grade.mjs grades of the base GLB (masks: partmap_mask.py ulkro <part>):
-# --q 70 --part-gain legs 0.70, wraps 1.27, cowl 0.96, hood 1.02, boots 1.05; re-run part_gamecam --named after a rebuild
+# --q 70 --part-gain legs 0.68, wraps 1.27, cowl 0.96, hood 1.02, boots 1.05; re-run part_gamecam --named after a rebuild
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, uv weight) in build order"""
     out = []

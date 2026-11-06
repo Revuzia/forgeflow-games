@@ -559,6 +559,8 @@ GEM_THICK = 0.046         # the inlays through the 3 cm heel (fix round 2: 3.8 -
                           # the game camera at the low angles, the accent gate with the back-pointing carry)
 
 
+# (CW5 round 3, minor:floor-sweep) a rebuild loses the floor fixes of the shipped GLB: after a build run
+# art/tools/clip_floor_fix.py on the base GLB, then art/tools/clip_floor.py (props, chains and feet to the floor, no size change)
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, space) in build order; space 'world' (rest
     pose, metres, faces -Y) or 'prop' (the cleaver, mapped onto prop.R by model())."""
