@@ -34,10 +34,12 @@ const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
 const PROD_DIR = join(HERE, '_prod', 'client', 'dist');
 
+/** a slot whose owner died holds no load (heavy.py reaps it only when someone next queues), so it does not make the machine busy */
+const pidAlive = (l) => { const m = /pid (\d+)/.exec(l); if (!m) return true; try { process.kill(Number(m[1]), 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
 function heavyOthers() {
   try {
     const s = execFileSync('python3', [join(ROOT, 'art/blender/common/heavy.py'), 'status'], { encoding: 'utf8', timeout: 15000 });
-    return s.split('\n').map((l) => l.trim()).filter((l) => /^slot\d+:/.test(l) && !new RegExp(`pid ${process.pid}\\b`).test(l)).map((l) => l.replace(/ for \d+s/, ''));
+    return s.split('\n').map((l) => l.trim()).filter((l) => /^slot\d+:/.test(l) && !new RegExp(`pid ${process.pid}\\b`).test(l) && pidAlive(l)).map((l) => l.replace(/ for \d+s/, ''));
   } catch (e) { return [`heavy status failed: ${e.message}`]; }
 }
 const machine = () => { const load = +loadavg()[0].toFixed(2), heavy = heavyOthers(); return { load, heavy, idle: load < LOAD_MAX && heavy.length === 0 }; };

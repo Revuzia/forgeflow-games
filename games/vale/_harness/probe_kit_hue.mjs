@@ -48,7 +48,7 @@
 // kit (≤ 0.35, owner ruling 19: a skin must not blur which team an effect belongs to).
 //
 //   node _harness/probe_kit_hue.mjs [--kits a,b,c] [--slots a1,a2,a3,ult] [--teamgate a3,ult] [--out <json>] [--shots <prefix>]
-//                                   [--gate 0.5] [--teammax 0.35] [--live] [--status] [--skins] [--skinslots a1,ult] [--swing]
+//                                   [--gate 0.5] [--teammax 0.35] [--live] [--status] [--skins] [--skinslots a1,ult] [--swing] [--defs <vfx.json>] [--frameshots] [--frameshot-step 9]
 //   --live   content/vfx.json and content/skins/*.json as they stand on disk replace the catalog's in the page (tuning
 //            without a rebuild)
 //   exit 1 when any slot measured is under a gate; exit 2 when none is but a slot could not be measured.
@@ -65,12 +65,14 @@ const SKINS = args.includes('--skins'), SWING = args.includes('--swing');
 const SLOTS = (SKINS ? opt('skinslots', 'a1,ult') : opt('slots', 'a1,a2,a3,ult')).split(',').filter(Boolean);
 const TEAMGATE = new Set((SKINS ? SLOTS.join(',') : opt('teamgate', 'a3,ult')).split(',').filter(Boolean));
 const TEAMMAX = +opt('teammax', 0.35);
+const FRAMESHOT_STEP = Math.max(1, +opt('frameshot-step', 9));   // --frameshots: a shot every N frames of the window
 const WIN = +opt('window', 30);
 const all = readdirSync(join(HERE, '../content/fighters')).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')).sort();
 const kits = (opt('kits', '') || all.join(',')).split(',').filter(Boolean);
 const SPOT = { x: 74, y: 55 };
 const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('$')).map(([k, x]) => [k, strip(x)])) : v);
-const liveDefs = LIVE ? strip(JSON.parse(readFileSync(join(HERE, '../content/vfx.json'), 'utf8'))) : null;
+// --defs <file>: that defs file instead of content/vfx.json (an A/B with one layer changed); implies --live
+const liveDefs = LIVE ? strip(JSON.parse(readFileSync(opt('defs', '') || join(HERE, '../content/vfx.json'), 'utf8'))) : null;
 const skinDir = join(HERE, '../content/skins');
 const liveSkins = LIVE || SKINS ? readdirSync(skinDir).filter((f) => f.endsWith('.json')).flatMap((f) => strip(JSON.parse(readFileSync(join(skinDir, f), 'utf8')))) : null;
 
@@ -262,8 +264,8 @@ for (const bEntries of batches) {
             const m = await B((b, a) => { const c = b.__h(a.pc), w = b.__h(a.pv), o = a.c0; return b.__vfxHue({ x0: Math.min(c.gx, w.gx, o.gx) - 220, y0: Math.min(c.ty, w.ty, o.ty) - 120, x1: Math.max(c.gx, w.gx, o.gx) + 220, y1: Math.max(c.gy, w.gy, o.gy) + 120 }, a.sh); }, { ...st, sh });
             for (const k of ['A', 'n', 'sat', 'sigN', 'harmN', 'whiteN']) integ[k] += m[k];
             integ.samples++; integ.per.push([f - rel, Math.round(m.A), m.sig]);
-            // --frameshots: a shot every 9 frames of the window as well (a skin's vfxTint lives in the dust after the peak)
-            if (SHOTS && variant === 'normal' && args.includes('--frameshots') && (f - rel) % 9 === 1) await page.screenshot({ path: join(HERE, '_shots', `${SHOTS}_${skin || fid}_${slot}_f${f - rel}.png`) });
+            // --frameshots: a shot every --frameshot-step frames (default 9) of the window as well (a skin's vfxTint lives in the dust after the peak)
+            if (SHOTS && variant === 'normal' && args.includes('--frameshots') && (f - rel) % FRAMESHOT_STEP === 1 % FRAMESHOT_STEP) await page.screenshot({ path: join(HERE, '_shots', `${SHOTS}_${skin || fid}_${slot}_f${f - rel}.png`) });
             if (m.n > best.n) {
               Object.assign(best, m, { f });
               if (SHOTS && variant === 'normal') {

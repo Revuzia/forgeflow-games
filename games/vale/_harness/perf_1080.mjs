@@ -127,10 +127,12 @@ const GPU_FIXED = Number(opt('gpu-fixed', 0));
 const GPU_SEC = Number(opt('gpu-sec', 75)), GPU_LEAVE_S = 10, GPU_RECOVER_FPS = 58, GPU_TAIL_S = 8;
 
 // ── machine state ───────────────────────────────────────────────────────────────────────────────
+/** a slot whose owner died holds no load (heavy.py reaps it only when someone next queues), so it does not make the machine busy */
+const pidAlive = (l) => { const m = /pid (\d+)/.exec(l); if (!m) return true; try { process.kill(Number(m[1]), 0); return true; } catch (e) { return e.code !== 'ESRCH'; } };
 function heavyOthers() {
   try {
     const s = execFileSync('python3', [join(ROOT, 'art/blender/common/heavy.py'), 'status'], { encoding: 'utf8', timeout: 15000 });
-    return s.split('\n').map((l) => l.trim()).filter((l) => /^slot\d+:/.test(l) && !new RegExp(`pid ${process.pid}\\b`).test(l)).map((l) => l.replace(/ for \d+s/, ''));
+    return s.split('\n').map((l) => l.trim()).filter((l) => /^slot\d+:/.test(l) && !new RegExp(`pid ${process.pid}\\b`).test(l) && pidAlive(l)).map((l) => l.replace(/ for \d+s/, ''));
   } catch (e) { return [`heavy status failed: ${e.message}`]; }
 }
 function machine() {
