@@ -96,8 +96,11 @@ test('medicine: a town that knows it loses far fewer of its sick', () => {
   // 17/24 17/25 17/25 16/25, ratios 0.64-0.71 — so one death more in the control's unrelated prayer life (24 -> 25) or
   // less (25 -> 24) flipped it: 17 of 72 against 24 of 72 failed the r2 gate. Pooled over 21 and 22 the ratio is 0.69)
   const sum = (a: { sick: number; dead: number }, b: { sick: number; dead: number }) => ({ sick: a.sick + b.sick, dead: a.dead + b.dead });
-  const without = sum(run(21, false), run(22, false));
-  const withMed = sum(run(21, true), run(22, true));
+  // (minor26 #2: four worlds pooled. With an epidemic's grave case frail by age — adults half as often — worlds 21+22 read
+  // 27 of 139 against 36 of 135, a ratio of exactly 0.75; per world 13/18 14/18 10/17 11/17, pooled over 21-24 48/70 =
+  // 0.69, the ratio the r2 note measured)
+  const without = [21, 22, 23, 24].map((w) => run(w, false)).reduce(sum);
+  const withMed = [21, 22, 23, 24].map((w) => run(w, true)).reduce(sum);
   assert.ok(without.dead >= 10, `the plague kills without medicine (${without.dead} of ${without.sick})`);
   assert.ok(withMed.dead < without.dead * 0.75, `medicine: ${withMed.dead} of ${withMed.sick} died, against ${without.dead} of ${without.sick}`);
   // and per case, not only because fewer fell sick

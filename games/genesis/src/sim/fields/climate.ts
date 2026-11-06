@@ -134,11 +134,10 @@ interface ClimateScratch {
   rip: Uint8Array;
   /** cells whose snow / ice changed this pass */
   changed: Int32Array;
-  /** region (lat / lon bins about REG_CELLS cells each) of each cell, and the regions' area and mean tPot */
+  /** region (lat / lon bins about REG_CELLS cells each) of each cell, and their area (sizing); regSum is the land pass's scratch sum */
   reg: Int32Array;
   regArea: Float64Array;
   regSum: Float64Array;
-  regMean: Float64Array;
   /** the regions' land mean of tempMean + lapse·altitude (the last days' air at the datum) less its band's land mean */
   regYear: Float64Array;
   /** land area of each region; each latitude band's land mean of tempMean + lapse·altitude, and its land area */
@@ -177,7 +176,7 @@ function scratch(p: Planet): ClimateScratch {
       reg[c] = rowStart[r] + k;
       regArea[reg[c]] += p.grid.area[c];
     }
-    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N), reg, regArea, regSum: new Float64Array(regArea.length), regMean: new Float64Array(regArea.length), regYear: new Float64Array(regArea.length), regLand: new Float64Array(regArea.length), bandLand: new Float64Array(BANDS), bandLandArea: new Float64Array(BANDS) };
+    s = { band, bandArea, bandSum: new Float64Array(BANDS), bandMean: new Float64Array(BANDS), q2: new Float32Array(N), up: new Int32Array(N), wn: new Float32Array(N), up1: new Int32Array(N), qn: new Float32Array(N), tn: new Float32Array(N), rip: new Uint8Array(N), changed: new Int32Array(N), reg, regArea, regSum: new Float64Array(regArea.length), regYear: new Float64Array(regArea.length), regLand: new Float64Array(regArea.length), bandLand: new Float64Array(BANDS), bandLandArea: new Float64Array(BANDS) };
     scratchByN.set(p.n, s);
   }
   return s;
@@ -237,10 +236,7 @@ function bandMeans(p: Planet, sc: ClimateScratch): number {
   sum.fill(0);
   const area = p.grid.area;
   const N = p.count;
-  const rsum = sc.regSum, reg = sc.reg;
-  rsum.fill(0);
-  for (let c = 0; c < N; c++) { const ta = t[c] * area[c]; sum[band[c]] += ta; rsum[reg[c]] += ta; }
-  for (let r = 0; r < rsum.length; r++) sc.regMean[r] = sc.regArea[r] > 0 ? rsum[r] / sc.regArea[r] : 0;
+  for (let c = 0; c < N; c++) sum[band[c]] += t[c] * area[c];
   let g = 0, ga = 0;
   for (let b = 0; b < BANDS; b++) {
     sc.bandMean[b] = sc.bandArea[b] > 0 ? sc.bandSum[b] / sc.bandArea[b] : 0;
@@ -708,7 +704,7 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   const evaporation = cfg.evaporation;
   const infiltration = cfg.infiltration;
   const sx = sun.dir[0], sy = sun.dir[1], sz = sun.dir[2], flux = sun.flux;
-  const regMean = sc.regMean, reg = sc.reg, regYear = sc.regYear;
+  const reg = sc.reg, regYear = sc.regYear;
   const pos = p.grid.pos, bandMean = sc.bandMean, band = sc.band, qn = sc.qn, up1 = sc.up1, wn = sc.wn, changed = sc.changed, tn = sc.tn, rip = sc.rip;
   const tPot = s.tPot, tempMean = s.tempMean, lightMean = s.lightMean, precipMean = s.precipMean, tempYear = s.tempYear, lightYear = s.lightYear;
   const tHi = s.tHi, tLo = s.tLo, climMem = s.climMem, snowLock = s.snowLock;
@@ -1001,12 +997,12 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       if (snow[c] > 0) {
         // the region's air at this cell's altitude (warm-air melt, REG_MELT)
         let regH = 0;
-        if (airy && snow[c] > REG_SNOW && regYear[reg[c]] + sc.bandLand[band[c]] - lapse * alt - tempMean[c] > REG_GAP) {
+        // tr: the region's recent LAND air at this cell's altitude (the gate's own reference; the region's whole-cell
+        // current air, frozen lakes and sea included, read below freezing beside a mild coast: seed 3's Mubashus)
+        const tr = regYear[reg[c]] + sc.bandLand[band[c]] - lapse * alt;
+        if (airy && snow[c] > REG_SNOW && tr - tempMean[c] > REG_GAP) {
           if (snowLock[c] < lockNeed) snowLock[c] += H;
-          else {
-            const tr = regMean[reg[c]] - lapse * alt + offset;
-            if (tr > freeze) regH = (tr - freeze) * H;
-          }
+          else if (tr > freeze) regH = (tr - freeze) * H;
         } else if (snowLock[c] > 0) snowLock[c] = 0;
         if (degH > 0 || sunH > 0 || regH > 0) {
           const m = Math.min(snow[c], 0.004 * degH + SUN_MELT * sunH + REG_MELT * regH);

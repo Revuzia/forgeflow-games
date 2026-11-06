@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
 import type { Planet } from '../src/sim/world/planet.ts';
 import { homesteadCell } from '../src/client/poi.ts';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 
 function equatorCell(p: Planet): number {
   let eq = 0;
@@ -193,4 +195,24 @@ test('a snowed-under patch in a mild region melts: the region\'s warm air reache
   for (const c of patch) if (p.f.snow[c] > 0.05) white++;
   assert.ok(white <= patch.size * 0.2, `a mild region's snow patch melts within the year: ${white}/${patch.size} cells still white`);
   assert.ok(p.f.snow[c0] < 0.05, `the patch's centre clears (snow ${p.f.snow[c0].toFixed(2)} m, T ${p.f.temperature[c0].toFixed(1)} °C)`);
+});
+
+test('seed 3\'s snowed-in town melts out: the warm-air melt reads the region\'s land air, not its frozen lake', () => {
+  // a save of the 1.5 build before the fix (the opening protocol of seed 3, _harness/scratch/simfix-r2/oprobe.ts) at Y6,
+  // just after a winter storm left 0.67 m on Mubashus by the Lake: that build kept it 3.5 years at -12 °C year mean while
+  // the region's land a km off was mild — its melt air was the whole region's current air, frozen lake included
+  const sim = Sim.load(new Uint8Array(gunzipSync(readFileSync(new URL('./fixtures/snowlock-s3.gnss.gz', import.meta.url)))));
+  const p = sim.u.planets[0];
+  const town = p.people.settlements.find((s) => s.fallen < 0);
+  assert.ok(town, 'the save holds the town');
+  const c = town.cell;
+  assert.ok(p.f.snow[c] > 0.5, `the town starts snowed in (${p.f.snow[c].toFixed(2)} m)`);
+  const year = Math.round(p.st.orbit.period), seen: string[] = [];
+  let clearAt = -1;
+  for (let k = 1; k <= 8 && clearAt < 0; k++) {
+    sim.step(Math.round(year / 10));
+    seen.push(p.f.snow[c].toFixed(2));
+    if (p.f.snow[c] < 0.05) clearAt = k / 10;
+  }
+  assert.ok(clearAt > 0, `the town's snow clears within 0.8 y (snow by tenths of a year: ${seen.join(' ')} m)`);
 });

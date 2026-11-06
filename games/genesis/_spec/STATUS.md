@@ -1,5 +1,20 @@
 # GENESIS — status (2026-11-05: release candidate, ready to publish to forgeflowgames.com)
 
+## In progress (2026-11-06): ARC — hearts, the tower, defiance, the covenant, the Book of Ages
+The owner asked whether the game shows the people's moods, and asked for them to be able to rebel and fight back
+(Genesis-like, "tower of babel"). They also asked whether the game has a purpose beyond destruction. The approved plan
+builds all five parts. **`_spec/ARC.md` is the binding spec**, merged from the three designs in
+`_harness/scratch/arc/` and their reviews. Its parts: (1) visible moods (poses, glyphs on the HUD name chip, a Hearts
+map layer, lines such as "they no longer bow at dusk"); (2) pride and a great tower, rising over years, with four
+answers (confuse their tongues, strike it down, warn through a prophet, let it stand) on a non-modal Decision card;
+(3) open defiance that is futile but visible (curses, stones thrown at the storm drawn render-only, burned shrines,
+idols), with the god's answer classified from its deeds; (4) a covenant after a great destruction, with a real
+scheduled rainbow and vows that can be broken and are remembered; (5) the Book of Ages, a scripture told from named
+ages, epithets and Generations, with no win condition. ARC.md §6 fixes the sim, view, command, event and query
+contracts. §7 covers saves: the version stays 1.5, with a no-op `arc` HeaderStep in migrate15.ts. §8 sets the
+acceptance, §9 the lanes and the build order (stage A = moods + tower, B = defiance, C = covenant + Book). Nothing in
+ARC is built yet; this release-candidate status below is unchanged until ARC's gates pass.
+
 ## Release refresh (2026-11-05): smoothness
 
 What changed for smoothness since the 11-04 release (the "macfix" program; its ledger is
