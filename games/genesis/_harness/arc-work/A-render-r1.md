@@ -53,3 +53,16 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   0.94 / heap 0.8 / crown 0.86 / blocks 0.35-0.95. Test: crown over the centre. render-arc-tower 11/11.
 - Re-shoot queued: r1-render-tower2.json (r1b-tower-rising/struck), chain3 pid 21987 (waits for chain2 pid 19494
   = perf spec, which waits for chain 19004 = tower + flood).
+
+### 19:3xZ-19:4xZ LOOKED AT r1-tower-finished-day, r1-flood-* (first live pass)
+- finished-day (420 m): tower face toward camera in shade, still blue-grey (80,87,100) — BUT this shot ran on the
+  vite started for the tower spec (GENESIS_FROZEN: modules cached at first load) so it may predate the colour fix.
+  Root cause anyway: shaded walls got sky irradiance only. FIX (buildingmat.ts FRAG_AMBIENT, all buildings): the sunlit
+  ground's warm bounce, rho (0.17,0.13,0.085) * 0.7 * E_sun*muS*cloudshadow, lower hemisphere only. Test added.
+- r1-flood-warning/water/god: the lake by the town shows NO brown, even in the flood itself (target 1); god shot is
+  still a white wall. Hypothesis: silt k eases on REAL time (2.5 s) and shots hold frames => k ~ 0 live; the lens
+  clearing is gated on k so it never acts either. FIX silt.ts lateStart: a zone first seen mid-warning starts at
+  target*min(1, rise*4) (flood: progress*10); a warning seen from its start still eases in. Test updated.
+- DIAG hook: renderer.ts sets globalThis.__GENESIS_R__ (read-only probe access to uniforms).
+- Re-shoot with diagnostics queued: _harness/arc-work/specs/r1-render-flood2.json (r1c-flood-before/warning/home/god;
+  returns siltK, zones, lens, camFog, shell, alt), chain4 pid 24191 (after chain3 21987 after chain2 19494 = perf).

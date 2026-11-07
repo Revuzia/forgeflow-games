@@ -173,6 +173,8 @@ export class Renderer {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
+    // (scripted captures and probes: the renderer's uniforms, read-only by convention — e.g. the clouds' uLensClear)
+    (globalThis as { __GENESIS_R__?: unknown }).__GENESIS_R__ = this;
     this.three = new WebGLRenderer({
       canvas, antialias: false, alpha: false, depth: true, stencil: false, logarithmicDepthBuffer: true,
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
