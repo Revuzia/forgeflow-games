@@ -122,3 +122,22 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
 - New spec _harness/arc-work/specs/ui-towercard.json (worker sandbox town; Hearts inspector section, tower inspector
   card via select {kind:'tower'}, tower pick by click). Queued 04:50Z ticket #28 (PID 10498) on port 5313 (5311 busy),
   log _harness/scratch/arc/shots-towercard.log; PNGs _shots/arc-hearts-insp.png, arc-tower-card.png, arc-tower-pick.png.
+- 05:03Z decision rerun: arc-decision-card FAILED again at page.screenshot (600 s) even with G.hold(true) -> the
+  capture stall is the loaded machine (load ~16: render-perf shots + someone's npm run check 1280), not our frames.
+  The run continues (insp, pill). tsc clean; ui-arc-* + audio-arc + ui-meta pass (stint end 05:05Z).
+
+## NEXT (stint 3 starts here)
+1. kill -0 10203 (ui-decision run) / 10498 (ui-towercard, ticket #28, port 5313). LOOK at whatever PNGs landed:
+   _shots/arc-decision-card.png (if it failed again, its fix is also visible in arc-decision-insp.png), arc-decision-
+   insp.png (card must now sit LEFT under the time panel, clear of the inspector; title row + 2x2 answers with full
+   words), arc-decision-pill.png (pill top-centre; Hearts layer fill on the homestead town (fearful violet + proud
+   rim) and its neighbour (defiant crimson)), arc-hearts-insp.png (Hearts section fits), arc-tower-card.png,
+   arc-tower-pick.png (click on the tower axis selects {kind:'tower'}). Rerun failed shots with
+   --only=<name> when load is lower (uptime < 8). Fix what looks wrong.
+2. Gate: slot.sh --status; when no `npm run check` runs on this tree: setsid nohup _harness/slot.sh npm run check >
+   _harness/scratch/arc/check-ui.log 2>&1 &. Known non-UI failures until A-sim finishes tower content: ui-living,
+   ui-fixr3, ui-logic real-sim tests ("content has 30 problems": events.json tower.* placeholders, great-tower work).
+3. When A-sim lands tower.ts/freeform: add freeform example "how do the people of {town} feel?"; T3/T10 shots in the
+   babel scenario (real TowerView); M4 live shot (fearful village, poses, chip legible at orbit + region).
+4. §10: render lane owns "higher" (barely visible in arc-river-warning.png); UI side done (toast headline, warned river
+   in lookdev). Sim lane owns the 25-year natural-flood run.
