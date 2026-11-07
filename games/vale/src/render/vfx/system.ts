@@ -1454,6 +1454,9 @@ export class VfxSystem {
     for (const l of this.lights) { l.age = l.life = 1; l.light.intensity = 0; }
     this.byUid.clear();
     this.distortN = 0;
+    // round 4 MEM-1 refix: the distortion target is sized to the match's render scale (High 1536×864 RGBA16F, 10 MB) and
+    // was kept at Home after every match; it is made again on the next distortion draw
+    this.distortRT?.dispose(); this.distortRT = null;
     screenFx.reset();
   }
 

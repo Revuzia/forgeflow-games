@@ -581,11 +581,11 @@ class ValeRenderer implements Renderer {
     inkShadows(this.terrain.group);
     this.loadTerrainTextures(map, gen);
     void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); shadowLods(this.terrain.group); } });
-    // round 4 MEM-1 refix: a landmark's textures upload as it lands, like a template's (warmTemplate): the decoded
-    // ImageBitmap closes on upload (assets.ts closeAfterUpload), so a landmark the camera has not reached yet no longer
-    // keeps its images decoded for the whole match (RIFT: 22 open bitmaps, 126 MB, numerals, camp marks, the low skirt),
-    // and its first sight no longer pays a 2048² upload in a frame
-    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); this.uploadTextures(o); } });
+    // round 4 MEM-1 refix: a landmark's textures upload soon after it lands, one a frame (queueUploads), not on first
+    // sight: the decoded ImageBitmap closes on upload (assets.ts closeAfterUpload), so a landmark the camera has not
+    // reached yet no longer keeps its images decoded for the whole match (RIFT: 22 open bitmaps, 126 MB: numerals, camp
+    // marks, the low skirt), and the frame that first sees one no longer pays its 2048² upload
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); this.queueUploads(o); } });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;
@@ -659,6 +659,8 @@ class ValeRenderer implements Renderer {
     // frame, so dropping them costs nothing
     this.gl.renderLists.dispose();
     this.sun.releaseMap();                                                 // round 4 MEM-1: lighting.ts
+    this.sky.release(this.scene);                                          // round 4 MEM-1 refix: sky.ts
+    this.uploadQueue.length = 0;
     this.gpuTimer.clear();
     this.envReady = false;
     this.client = null;
@@ -1189,6 +1191,7 @@ class ValeRenderer implements Renderer {
     // fog of war
     this.fog.update(view, this.palette.viewer.team, d);
     this.sun.fit(this.rig.camera);
+    { const t = this.uploadQueue.shift(); if (t) this.gl.initTexture(t); }  // round 4 MEM-1 refix: queueUploads
     this.cullScatter();
     this.feedBrush(d);
     this.feedAmbient(d);
@@ -1295,6 +1298,23 @@ class ValeRenderer implements Renderer {
   }
   /** the match's sky environment is final (setupMatch): template programs can be warmed against it */
   private envReady = false;
+
+  /** round 4 MEM-1 refix: textures to upload, one a frame in the match (frame(): never a burst of 2048² uploads on one
+   *  frame, and the GPU process's upload staging stays one texture deep, not every landmark's at once) */
+  private readonly uploadQueue: import('three').Texture[] = [];
+  private queueUploads(root: import('three').Object3D): void {
+    const seen = new Set(this.uploadQueue);
+    root.traverse((o) => {
+      const m = o as import('three').Mesh;
+      if (!m.isMesh) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        for (const v of Object.values(mat)) {
+          const t = v as import('three').Texture;
+          if (t && t.isTexture && !seen.has(t)) { seen.add(t); this.uploadQueue.push(t); }
+        }
+      }
+    });
+  }
 
   private uploadTextures(root: import('three').Object3D): void {
     const gl = this.gl;

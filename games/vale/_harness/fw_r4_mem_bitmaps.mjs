@@ -63,6 +63,17 @@ try {
   await page.locator('.hud .dbar').first().waitFor({ state: 'visible', timeout: 300000 });
   await page.waitForTimeout(SEC * 1000);
   await inventory('match');
+  // round 4 MEM-1 refix: the sun's shadow target is lighting.ts's own (R8 colour beside three's depth texture): its
+  // format, the framebuffer complete, no GL error; the Home sun's map is released in the match
+  rep.shadow = await page.evaluate(() => {
+    const R = window.__vale.state.renderer, gl = R.gl, ctx = gl.getContext();
+    const m = R.sun.light.shadow.map, mm = R.menu.sun.light.shadow.map;
+    let errs = 0; for (let e = ctx.getError(); e !== 0 && errs < 10; e = ctx.getError()) errs++;
+    let status = null;
+    if (m) { const prev = gl.getRenderTarget(); gl.setRenderTarget(m); status = ctx.checkFramebufferStatus(ctx.FRAMEBUFFER) === ctx.FRAMEBUFFER_COMPLETE ? 'complete' : `incomplete 0x${ctx.checkFramebufferStatus(ctx.FRAMEBUFFER).toString(16)}`; gl.setRenderTarget(prev); }
+    return { map: m ? { w: m.width, h: m.height, colourFormat: m.texture.format, colourName: m.texture.name, depth: m.depthTexture?.type, compare: m.depthTexture?.compareFunction } : null, framebuffer: status, glErrorsBefore: errs, menuSunMap: mm ? `${mm.width}` : null };
+  });
+  console.log(`shadow: ${JSON.stringify(rep.shadow)}`);
   // the restore path: a default-skin template of a fighter whose base images were evicted gets its real images back
   rep.restore = await page.evaluate(async () => {
     const R = window.__vale.state.renderer, A = R.assets;

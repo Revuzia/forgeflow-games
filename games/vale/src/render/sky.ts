@@ -95,6 +95,17 @@ export class Sky {
     scene.backgroundBlurriness = 0;
   }
 
+  /** round 4 MEM-1 refix: the match's environment goes with the match (its PMREM target, 6 MB on RIFT, stayed at Home
+   *  after every match); the next apply() bakes it again. The listener stays: the sky itself lives on */
+  release(scene: Scene): void {
+    if (this.last?.scene === scene) this.last = null;
+    if (this.envRT && scene.environment === this.envRT.texture) scene.environment = null;
+    if (this.background && scene.background === this.background) scene.background = null;
+    this.envRT?.dispose();
+    this.fallback?.dispose();
+    this.envRT = null; this.background = null; this.fallback = null;
+  }
+
   dispose(): void {
     this.renderer.domElement.removeEventListener('webglcontextrestored', this.onRestored, false);
     this.last = null;
