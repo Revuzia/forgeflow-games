@@ -87,6 +87,14 @@ export class Sun {
     W.valeCharMonster.value = C.monsterLight;
   }
 
+  /** round 4 MEM-1: the shadow map's GPU storage goes (its depth texture and the colour target three allocates with it:
+   *  2048² ≈ 32 MB on High, 4096² ≈ 128 MB on Ultra). The match sun calls this on teardown, so Home does not carry the
+   *  match's shadow map; three builds a new one at the size set above on the next shadow pass */
+  releaseMap(): void {
+    this.light.shadow.map?.dispose();
+    this.light.shadow.map = null;
+  }
+
   /** 0 off · 1 1024² hard · 2 2048² PCF · 3 4096² PCF */
   setQuality(renderer: WebGLRenderer, tier: 0 | 1 | 2 | 3): void {
     this.shadowsOn = tier > 0;

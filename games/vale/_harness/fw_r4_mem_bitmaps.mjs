@@ -20,7 +20,7 @@ process.env.VALE_FROZEN = '1';
 const server = await vite.createServer({ configFile: join(ROOT, 'vite.config.ts'), root: ROOT, logLevel: 'error', server: { port: PORT, strictPort: true, host: 'localhost', hmr: false } });
 await server.listen();
 const release = await holdHeavy('fw_r4_mem_bitmaps');
-const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-audio-output'] });
 const rep = { mode: MODE, sec: SEC, reads: [] };
 try {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
@@ -91,8 +91,12 @@ try {
       const t = etypes[E[e + eType]]; if (t === 'weak' || t === 'shortcut') continue;
       const to = E[e + eTo] / NF; (rev[to] ??= []).push([i, t === 'element' || t === 'hidden' ? `[${E[e + eName]}]` : S[E[e + eName]]]);
     }
+    // distance from the GC roots over strong edges (BFS from the synthetic root, node 0): a chain walks to the retainer
+    // one step nearer the roots each time, so a cycle (a texture and its own onUpdate closure) never traps it
+    const dist = new Int32Array(n).fill(-1); dist[0] = 0; const q = new Int32Array(n); let qh = 0, qt = 0; q[qt++] = 0;
+    while (qh < qt) { const i = q[qh++]; for (let e = firstEdge[i]; e < firstEdge[i + 1]; e += EF) { const t = etypes[E[e + eType]]; if (t === 'weak' || t === 'shortcut') continue; const to = E[e + eTo] / NF; if (dist[to] < 0) { dist[to] = dist[i] + 1; q[qt++] = to; } } }
     const label = (i) => `${ntypes[N[i * NF + nType]]}:${S[N[i * NF + nName]]}`.slice(0, 60);
-    const chain = (i) => { const out = []; const seen = new Set([i]); let cur = i; for (let d = 0; d < 14; d++) { const r = (rev[cur] ?? []).find(([p]) => !seen.has(p) && !/^synthetic|\(GC roots\)/.test(label(p))); if (!r) break; out.push(`${r[1]} ← ${label(r[0])}`); seen.add(r[0]); cur = r[0]; } return out; };
+    const chain = (i) => { const out = [`dist ${dist[i]}`]; let cur = i; for (let d = 0; d < 24 && dist[cur] > 1; d++) { const r = (rev[cur] ?? []).find(([p]) => dist[p] >= 0 && dist[p] === dist[cur] - 1); if (!r) break; out.push(`${r[1]} ← ${label(r[0])}`); cur = r[0]; } return out; };
     rep.retainers = {};
     for (const cls of ['ImageBitmap', 'AudioBuffer']) {
       const hits = []; const names = {};

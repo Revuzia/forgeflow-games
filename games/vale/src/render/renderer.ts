@@ -635,6 +635,12 @@ class ValeRenderer implements Renderer {
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
     this.fog.dispose();
     releaseShadowRefs();                                                   // round 4 MEM-1: ink.ts
+    // round 4 MEM-1: three's render lists are kept per scene (a WeakMap on the Scene) and this match scene outlives the
+    // match, so the last match frame's list held every object, material and texture it drew until the next match (a
+    // heap snapshot at Home: fighter maps and their decoded bitmaps, the geometries' arrays). Lists are rebuilt every
+    // frame, so dropping them costs nothing
+    this.gl.renderLists.dispose();
+    this.sun.releaseMap();                                                 // round 4 MEM-1: lighting.ts
     this.gpuTimer.clear();
     this.envReady = false;
     this.client = null;

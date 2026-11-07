@@ -118,12 +118,26 @@ const track = async () => {
   return { ...t, heap: h ? { usedMb: mb(h.usedSize), totalMb: mb(h.totalSize), embedderMb: mb(h.embedderHeapUsedSize), backingMb: mb(h.backingStorageSize) } : null };
 };
 const trackLine = (t) => (t?.gl ? `  [clock ${t.clock?.t ?? '-'} s ${t.clock?.state ?? ''}; GL tex ${t.gl.texN}/${t.gl.texMb} MB buf ${t.gl.bufN}/${t.gl.bufMb} MB rb ${t.gl.rbN}/${t.gl.rbMb} MB prog ${t.gl.programs}; audio ${t.audio.n}/${t.audio.mb} MB; bitmaps ${t.bitmaps.n}/${t.bitmaps.mb} MB; heap ${t.heap?.usedMb} backing ${t.heap?.backingMb}]` : '');
-const procs = async () => {
+/** --track: the footprint's top categories of a process (IOAccelerator = GPU allocations, IOSurface, malloc …), MB */
+function footprintCats(pid) {
+  try {
+    const out = {};
+    for (const l of execFileSync('footprint', ['-p', String(pid)], { encoding: 'utf8', timeout: 30000 }).split('\n')) {
+      const m = /^\s*([\d.]+)\s+(B|KB|MB|GB)\s+\S+\s+\S+\s+\S+\s+\d+\s+(.+)$/.exec(l);
+      if (m) out[m[3].trim()] = Math.round(Number(m[1]) * ({ B: 1 / 1048576, KB: 1 / 1024, MB: 1, GB: 1024 }[m[2]]));
+    }
+    return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]).slice(0, 7));
+  } catch { return null; }
+}
+const procs = async (cats = false) => {
   const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
   const gpu = ps.find((x) => x.type === 'GPU');
-  const rendererMb = ps.filter((x) => x.type === 'renderer').map((x) => footprintMb(x.id) ?? 0).sort((a, b) => b - a)[0] ?? null;
+  const rends = ps.filter((x) => x.type === 'renderer').map((x) => ({ id: x.id, mb: footprintMb(x.id) ?? 0 })).sort((a, b) => b.mb - a.mb);
+  const rendererMb = rends[0]?.mb ?? null;
   const gpuMb = gpu ? footprintMb(gpu.id) : null;
-  return { rendererMb, gpuMb, totalMb: rendererMb !== null && gpuMb !== null ? rendererMb + gpuMb : null };
+  const r = { rendererMb, gpuMb, totalMb: rendererMb !== null && gpuMb !== null ? rendererMb + gpuMb : null };
+  if (cats && TRACK) r.cats = { renderer: rends[0] ? footprintCats(rends[0].id) : null, gpu: gpu ? footprintCats(gpu.id) : null };
+  return r;
 };
 const click = async (locator, timeout = 30000) => {
   await locator.first().waitFor({ state: 'visible', timeout });
@@ -135,9 +149,9 @@ const snap = async (n) => { if (SHOTS) { mkdirSync(join(HERE, '_shots'), { recur
 const home = async (tag) => {
   await cdp.send('HeapProfiler.collectGarbage').catch(() => {});
   await page.waitForTimeout(4000);
-  const f = await procs(); const m = noteMachine(tag); const t = await track();
+  const f = await procs(true); const m = noteMachine(tag); const t = await track();
   report.homes.push({ tag, ...f, load: m.load, track: t });
-  log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})${trackLine(t)}`);
+  log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})${trackLine(t)}${f.cats ? `  cats ${JSON.stringify(f.cats)}` : ''}`);
 };
 
 async function journey(mode) {
