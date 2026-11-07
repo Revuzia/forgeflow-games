@@ -123,7 +123,7 @@ function footprintCats(pid) {
   try {
     const out = {};
     for (const l of execFileSync('footprint', ['-p', String(pid)], { encoding: 'utf8', timeout: 30000 }).split('\n')) {
-      const m = /^\s*([\d.]+)\s+(B|KB|MB|GB)\s+\S+\s+\S+\s+\S+\s+\d+\s+(.+)$/.exec(l);
+      const m = /^\s*([\d.]+)\s+(B|KB|MB|GB)\s+[\d.]+\s+\S+\s+[\d.]+\s+\S+\s+\d+\s+(.+)$/.exec(l);
       if (m) out[m[3].trim()] = Math.round(Number(m[1]) * ({ B: 1 / 1048576, KB: 1 / 1024, MB: 1, GB: 1024 }[m[2]]));
     }
     return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]).slice(0, 7));
@@ -132,9 +132,12 @@ function footprintCats(pid) {
 const procs = async (cats = false) => {
   const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
   const gpu = ps.find((x) => x.type === 'GPU');
-  const rends = ps.filter((x) => x.type === 'renderer').map((x) => ({ id: x.id, mb: footprintMb(x.id) ?? 0 })).sort((a, b) => b.mb - a.mb);
-  const rendererMb = rends[0]?.mb ?? null;
-  const gpuMb = gpu ? footprintMb(gpu.id) : null;
+  // a footprint read that fails (it times out on a loaded machine) is read once more; a renderer still unread makes the
+  // whole reading null rather than the largest of the others (a 51 MB "renderer" at Home was the page's read failing)
+  const read = (id) => footprintMb(id) ?? footprintMb(id);
+  const rends = ps.filter((x) => x.type === 'renderer').map((x) => ({ id: x.id, mb: read(x.id) })).sort((a, b) => (b.mb ?? 0) - (a.mb ?? 0));
+  const rendererMb = rends.some((r) => r.mb === null) ? null : rends[0]?.mb ?? null;
+  const gpuMb = gpu ? read(gpu.id) : null;
   const r = { rendererMb, gpuMb, totalMb: rendererMb !== null && gpuMb !== null ? rendererMb + gpuMb : null };
   if (cats && TRACK) r.cats = { renderer: rends[0] ? footprintCats(rends[0].id) : null, gpu: gpu ? footprintCats(gpu.id) : null };
   return r;
