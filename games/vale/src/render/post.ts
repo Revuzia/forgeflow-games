@@ -41,7 +41,7 @@
 // full-screen quads) before it builds the new set. The overlay and VFX passes are the chain's own and survive both.
 
 import {
-  type Camera, Color, DepthTexture, FloatType, HalfFloatType, Matrix4, NearestFilter, type Scene, type Texture, Uniform, type WebGLRenderer, WebGLRenderTarget,
+  type Camera, Color, HalfFloatType, Matrix4, NearestFilter, type Scene, type Texture, Uniform, type WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import {
   BlendFunction, BloomEffect, CopyPass, Effect, EffectComposer, EffectPass, LookupTexture, LUT3DEffect, Pass, RenderPass, SMAAEffect,
@@ -285,50 +285,6 @@ class VfxPass extends Pass {
   override dispose(): void { this.pre?.dispose(); this.pre = null; liftDepth.uLiftPre.value = null; super.dispose(); }
 }
 
-/** GR-3: the Ultra scene's MSAA samples, 0 = off (see MsaaRenderPass). Only Ultra reads it */
-export const MSAA_ULTRA_SAMPLES: number = 0;
-
-/** GR-3: the world drawn into its own multisampled HDR target and resolved into the composer's input buffer, colour and
- *  depth. The composer's own buffers stay single-sampled, because they are ping-pong: on Ultra the graded image and the
- *  overlay land in the buffer the scene was drawn into, and three invalidates a multisampled colour buffer after
- *  each resolve, so `composer.multisampling` would lose the grade under the overlay (and antialias the overlay on one
- *  tier only). With 0 samples this is the plain RenderPass, and allocates nothing. */
-class MsaaRenderPass extends RenderPass {
-  private samples: number;
-  private rt: WebGLRenderTarget | null = null;
-  constructor(scene: Scene, camera: Camera, samples: number) {
-    super(scene, camera);
-    this.samples = samples;
-  }
-  setSamples(n: number): void {
-    if (n === this.samples) return;
-    this.samples = n;
-    this.rt?.depthTexture?.dispose();
-    this.rt?.dispose();
-    this.rt = null;
-  }
-  override render(renderer: WebGLRenderer, inputBuffer: WebGLRenderTarget, outputBuffer: WebGLRenderTarget, dt?: number, stencilTest?: boolean): void {
-    if (this.samples <= 0) { super.render(renderer, inputBuffer, outputBuffer, dt, stencilTest); return; }
-    const w = inputBuffer.width, h = inputBuffer.height;
-    if (!this.rt) {
-      const depthTexture = new DepthTexture(w, h, FloatType);
-      this.rt = new WebGLRenderTarget(w, h, { type: HalfFloatType, samples: this.samples, depthBuffer: true, stencilBuffer: false, depthTexture });
-      this.rt.texture.generateMipmaps = false;
-    } else if (this.rt.width !== w || this.rt.height !== h) this.rt.setSize(w, h);
-    super.render(renderer, this.rt, outputBuffer, dt, stencilTest);
-    // three resolved the target when the scene's render ended; the composer reads its input buffer from here on
-    renderer.initRenderTarget(inputBuffer);
-    const gl = renderer.getContext() as WebGL2RenderingContext;
-    const P = renderer.properties as unknown as { get(o: object): { __webglFramebuffer?: WebGLFramebuffer } };
-    renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, P.get(this.rt).__webglFramebuffer ?? null);
-    renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, P.get(inputBuffer).__webglFramebuffer ?? null);
-    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT, gl.NEAREST);
-    renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-  }
-  override dispose(): void { this.rt?.depthTexture?.dispose(); this.rt?.dispose(); this.rt = null; super.dispose(); }
-}
-
 export class PostChain {
   readonly composer: EffectComposer;
   private scene: Scene;
@@ -341,7 +297,7 @@ export class PostChain {
   private quality: PostQuality = { ao: 1, bloom: true, aa: 'smaa', tier: 'high' };
   aoPass: N8AOPostPass | null = null;
   /** the passes build() made (re-pointed on a scene switch, disposed on a quality change) */
-  private renderPass: MsaaRenderPass | null = null;
+  private renderPass: RenderPass | null = null;
   private gradePass: EffectPass | null = null;
   private aaPass: EffectPass | null = null;
   private builtOrtho = false;
@@ -351,13 +307,6 @@ export class PostChain {
   private height = 1;
 
   private readonly renderer: WebGLRenderer;
-
-  /** a harness seam (_harness/gfx_msaa_ab.mjs): the scene's sample count on this chain, whatever the switch says */
-  setMsaaSamples(n: number): void {
-    this.msaaOverride = n;
-    if (this.renderPass instanceof MsaaRenderPass) this.renderPass.setSamples(n);
-  }
-  private msaaOverride: number | null = null;
 
   constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera, overlayDraw: OverlayDraw, vfxDraw?: VfxDraw) {
     this.renderer = renderer;
@@ -446,7 +395,7 @@ export class PostChain {
     c.removeAllPasses();
     const q = this.quality;
     this.builtOrtho = (this.camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true;
-    this.renderPass = new MsaaRenderPass(this.scene, this.camera, this.msaaOverride ?? (q.tier === 'ultra' ? MSAA_ULTRA_SAMPLES : 0));
+    this.renderPass = new RenderPass(this.scene, this.camera);
     c.addPass(this.renderPass);
     if (q.ao > 0) {
       const ao = new N8AOPostPass(this.scene, this.camera, this.width, this.height);

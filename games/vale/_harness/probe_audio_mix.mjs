@@ -1,6 +1,7 @@
 // VALE harness — the world under the score: ambience in a real match, metered (final parity AUD-8).
 //
 //   node _harness/probe_audio_mix.mjs [--out <report.json>] [--laning S] [--short S] [--maps rift,bridge,fray] [--fighter id] [--seed N]
+//                                     [--stall S] [--device]
 //   (--fighter pins your seat, autopilot from the match on; --seed fixes the session's rng, so a capture can be repeated)
 //
 // Real Chrome (pw.mjs, fresh profile = DEFAULT settings), the real client at speed 1 with the autopilot playing your
@@ -18,13 +19,17 @@
 //       of the mix is no longer the music alone); the music stem through the master gain is reported too, and the
 //       floor's lift attributed to the ambience (master p10 minus the same master with the ambience bus taken out),
 //       which must be >= 1 dB (the floor is the world's, not just the fight's SFX)
-// Exit 0 = M1, M2 hold. Report → _harness/_reports/fw_W3_mix.json. Needs the dev server and a built catalog
+// Exit 0 = M1, M2 hold; 1 = a gate failed; 2 = a map not measured (its AudioContext clock froze for --stall s,
+// default 20, or the window overran span x 1.5 + 60 s of wall time: with --device, a stalled output device),
+// which is not a pass. Report → _harness/_reports/fw_W3_mix.json. Needs the dev server and a built catalog
 // (npm run content).
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { open, shot, vale, waitFor } from './pw.mjs';
+import { chromium } from 'playwright-core';
+import { holdHeavy } from './heavy_slot.mjs';
+import { BASE, open, shot, vale, waitFor } from './pw.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -79,9 +84,37 @@ function shortTerm(blocks, col) {
   return out;
 }
 
+const STALL_S = Number(arg('--stall', 20));
+const FAKE_SINK = !args.includes('--device');   // --fake-sink: accepted, the default since fw r4
+
+// The sink (fw r4 AUD-1): by default the same harness Chrome as pw.mjs open() (same flags, viewport, heavy slot, silent
+// HMR socket) plus --disable-audio-output, Chrome's timer-driven fake output stream, as probe_audio_runtime and
+// probe_audio_music already run. The client's graph renders at real time and the tap meters it exactly as on a device;
+// only the speakers are left out. On this machine the default output device stalls (11-07: a bare about:blank
+// AudioContext frozen at 0.00533 s with state 'running', afplay of a 1 s file still blocked at 10 s; the fake sink's clock
+// advances 5.01 s in 5.01 s; fw_r4_aud_ctxclock.mjs), which is what hung this probe. --device: the pw.mjs device path
+// (a stalled device then reads not measured, exit 2). The report names the sink.
+async function openFakeSink(path) {
+  const release = await holdHeavy('probe_audio_mix fake-sink');
+  const b = await chromium.launch({ channel: 'chrome', headless: process.env.VALE_HEADED !== '1',
+    args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-audio-output'] });
+  b.on('disconnected', release);
+  const context = await b.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  await context.routeWebSocket(/.*/, () => {});
+  const p = await context.newPage();
+  const lg = [];
+  p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') lg.push(`[${m.type()}] ${m.text()}`); });
+  p.on('pageerror', (e) => lg.push(`[pageerror] ${e.message}`));
+  await p.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(() => !!window.__vale, null, { timeout: 30000 });
+  return { browser: b, page: p, logs: lg };
+}
 const failures = [];
-const report = { probe: 'probe_audio_mix', laningS: LANING_S, shortS: SHORT_S, maps: {} };
-const { browser, page, logs } = await open(`/?dev=1&render=0&autopilot=${FIGHTER ? 'match' : '1'}&autoflow=1${SEED ? `&seed=${SEED}` : ''}`, { hmr: false });
+const notMeasured = [];
+const report ={ probe: 'probe_audio_mix', laningS: LANING_S, shortS: SHORT_S, maps: {} };
+const URL_PATH = `/?dev=1&render=0&autopilot=${FIGHTER ? 'match' : '1'}&autoflow=1${SEED ? `&seed=${SEED}` : ''}`;
+report.sink = FAKE_SINK ? 'fake (--disable-audio-output)' : 'device';
+const { browser, page, logs } = FAKE_SINK ? await openFakeSink(URL_PATH) : await open(URL_PATH, { hmr: false });
 try {
   for (const map of MAPS) {
     if (map !== MAPS[0]) { await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction(() => !!window.__vale, null, { timeout: 60000 }); }
@@ -105,13 +138,32 @@ try {
     const sync = [];
     const startCt = await page.evaluate(() => window.__valeAudio.graph.ctx.currentTime);
     let emitters = null;
+    // the deadline (fw r4 AUD-2): the loop runs on the context's clock, which a stalled output device freezes while
+    // the context still reads 'running' (11-07: frozen at 0.00533 s, a bare AudioContext and afplay stalled too).
+    // Wall time caps it at span x 1.5 + 60 s, and a clock that has not moved for STALL_S of wall time while the match
+    // clock has ends it early: that map is reported not measured (exit 2), never hung on and never read as a pass.
+    const deadline = Date.now() + (span * 1.5 + 60) * 1000;
+    let lastCt = startCt, lastMove = Date.now(), stall = null;
     for (;;) {
       const s = await vale(page, (v) => ({ t: v.state.match.value?.view.time ?? null, ct: window.__valeAudio.graph.ctx.currentTime,
-        amb: window.__valeAudio.ambience }));
+        state: window.__valeAudio.graph.ctx.state, amb: window.__valeAudio.ambience }));
       sync.push([s.ct, s.t]);
       emitters ??= s.amb;
       if (s.t === null || s.ct - startCt >= span) { emitters = s.amb; break; }
+      if (s.ct > lastCt + 0.05) { lastCt = s.ct; lastMove = Date.now(); }
+      if (Date.now() - lastMove > STALL_S * 1000) {
+        stall = `the AudioContext clock froze at ${s.ct.toFixed(5)} s (state '${s.state}') for ${STALL_S} s of wall time while the match ran to ${s.t?.toFixed(1)} s`;
+        break;
+      }
+      if (Date.now() > deadline) { stall = `deadline: the context clock reached ${(s.ct - startCt).toFixed(1)} of ${span} s in ${(span * 1.5 + 60).toFixed(0)} s of wall time`; break; }
       await page.waitForTimeout(2000);
+    }
+    if (stall) {
+      report.maps[map] = { notMeasured: stall, matchTime: [sync[0]?.[1], sync[sync.length - 1]?.[1]], ctx: [startCt, lastCt] };
+      notMeasured.push(`${map}: ${stall}`);
+      log(map, 'NOT MEASURED', stall);
+      await vale(page, (v) => { try { v.state.match.value?.leave(); } catch { /* ended */ } return true; }).catch(() => {});
+      continue;
     }
     const res = await page.evaluate((c0) => {
       const a = window.__valeAudio;
@@ -160,11 +212,15 @@ try {
 } finally {
   report.logs = logs.slice(0, 40);
   report.failures = failures;
-  report.pass = failures.length === 0;
+  report.notMeasured = notMeasured;
+  report.pass = failures.length === 0 && notMeasured.length === 0;
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(report, null, 1));
   await browser.close();
 }
-console.log(failures.length ? `FAIL\n  ${failures.join('\n  ')}` : 'PASS: ambience plays on every map; the laning mix has a floor above the music alone');
+// exit 1 = a gate failed, 2 = a map not measured (the context clock stalled or the deadline passed): not a pass
+if (failures.length) console.log(`FAIL\n  ${failures.join('\n  ')}`);
+if (notMeasured.length) console.log(`NOT MEASURED\n  ${notMeasured.join('\n  ')}`);
+if (!failures.length && !notMeasured.length) console.log('PASS: ambience plays on every map; the laning mix has a floor above the music alone');
 console.log(`report → ${OUT}`);
-process.exit(failures.length ? 1 : 0);
+process.exit(failures.length ? 1 : notMeasured.length ? 2 : 0);

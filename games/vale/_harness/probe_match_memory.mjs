@@ -1,6 +1,10 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track]
+//
+// --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
+// their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
+// Runtime.getHeapUsage: JS heap, array-buffer backing stores); each poll and each Home carries the tally as `track`.
 //
 // A production build of the client itself (vite build of index.html into _harness/_prod/client/dist, gitignored; not the bench),
 // served by `vite preview` on the first free port in 5191-5199, in real Chrome on the GPU. No dev handle exists in that
@@ -30,6 +34,7 @@ const SEC = Number(opt('sec', 300));
 const OUT = resolve(ROOT, opt('out', '_harness/_reports/match_memory.json'));
 const SHOTS = opt('shots', '');
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
+const TRACK = args.includes('--track');
 const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
 const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
@@ -84,6 +89,16 @@ noteMachine('start');
 const { browser, page, logs } = await open('/', { wait: false, hmr: false });
 const bcdp = await browser.newBrowserCDPSession();
 const cdp = await page.context().newCDPSession(page);
+if (TRACK) { await page.context().addInitScript({ path: join(HERE, 'fw_r4_mem_track.js') }); await page.reload(); }
+/** the tally (--track): GL, audio, bitmaps from the page, the V8 heap from CDP */
+const track = async () => {
+  if (!TRACK) return undefined;
+  const t = await page.evaluate(() => window.__memTrack?.() ?? null).catch(() => null);
+  const h = await cdp.send('Runtime.getHeapUsage').catch(() => null);
+  const mb = (b) => (typeof b === 'number' ? +(b / 1048576).toFixed(1) : null);
+  return { ...t, heap: h ? { usedMb: mb(h.usedSize), totalMb: mb(h.totalSize), embedderMb: mb(h.embedderHeapUsedSize), backingMb: mb(h.backingStorageSize) } : null };
+};
+const trackLine = (t) => (t?.gl ? `  [GL tex ${t.gl.texN}/${t.gl.texMb} MB buf ${t.gl.bufN}/${t.gl.bufMb} MB rb ${t.gl.rbN}/${t.gl.rbMb} MB prog ${t.gl.programs}; audio ${t.audio.n}/${t.audio.mb} MB; bitmaps ${t.bitmaps.n}/${t.bitmaps.mb} MB; heap ${t.heap?.usedMb} backing ${t.heap?.backingMb}]` : '');
 const procs = async () => {
   const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
   const gpu = ps.find((x) => x.type === 'GPU');
@@ -101,9 +116,9 @@ const snap = async (n) => { if (SHOTS) { mkdirSync(join(HERE, '_shots'), { recur
 const home = async (tag) => {
   await cdp.send('HeapProfiler.collectGarbage').catch(() => {});
   await page.waitForTimeout(4000);
-  const f = await procs(); const m = noteMachine(tag);
-  report.homes.push({ tag, ...f, load: m.load });
-  log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})`);
+  const f = await procs(); const m = noteMachine(tag); const t = await track();
+  report.homes.push({ tag, ...f, load: m.load, track: t });
+  log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})${trackLine(t)}`);
 };
 
 async function journey(mode) {
@@ -149,7 +164,9 @@ async function journey(mode) {
       lastPoll = Date.now();
       const f = await procs(); const m = noteMachine(`${mode}_poll`);
       rec.polls++; rec.loadMax = Math.max(rec.loadMax, m.load);
-      rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...f, load: m.load });
+      const t = await track();
+      rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...f, load: m.load, track: t });
+      if (TRACK) log(`${mode} ${rec.series.at(-1).s} s: ${f.totalMb} MB (renderer ${f.rendererMb}, GPU ${f.gpuMb}; load ${m.load})${trackLine(t)}`);
       if ((f.totalMb ?? 0) > rec.peak.totalMb) rec.peak = { ...f, atS: rec.series[rec.series.length - 1].s };
     }
     await page.waitForTimeout(3000);
@@ -157,8 +174,16 @@ async function journey(mode) {
   await snap(`${mode}_end`);
   log(`${mode}: peak renderer ${rec.peak.rendererMb} + GPU ${rec.peak.gpuMb} = ${rec.peak.totalMb} MB at ${rec.peak.atS} s; load max ${rec.loadMax}`);
   // out through the in-match menu, as a player leaves
-  await page.keyboard.press('Escape');
-  await click(page.getByRole('button', { name: /Leave match/i }), 15000);
+  // Esc opens the match menu; a key the HUD was still holding (a targeting mode from the QWER input) can take the first
+  // press, so it is pressed again until the menu's Leave match shows (each press only while it does not)
+  const leaveBtn = page.getByRole('button', { name: /Leave match/i }).first();
+  for (let i = 0; i < 8 && !(await leaveBtn.isVisible().catch(() => false)); i++) {
+    await page.mouse.click(960, 540, { button: 'right' }).catch(() => {});
+    await page.keyboard.press('Escape');
+    await leaveBtn.waitFor({ state: 'visible', timeout: 2500 }).catch(() => {});
+  }
+  if (!(await leaveBtn.isVisible().catch(() => false))) await snap(`${mode}_noleave`);
+  await click(leaveBtn, 15000);
   const confirm = page.getByRole('dialog').getByRole('button', { name: /Leave match/i });
   await click(confirm, 15000);
   const nav = page.locator('.nav__item', { hasText: 'Play' }).first();
@@ -194,6 +219,12 @@ try {
     report.presetAfterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('vale.profile.v1')).settings.video.preset);
     log(`preset after reload ${report.presetAfterReload}`);
   }
+  // a player's Home has heard a key or a click: the audio engine makes its context on the first gesture and the menu bed
+  // decodes then. The silent Home (no gesture yet) is kept as home_0_silent; home_0 is Home with its music, the
+  // reading every later Home compares against
+  await home('home_0_silent');
+  await page.keyboard.press('Shift');
+  await page.waitForTimeout(12000);
   await home('home_0');
   for (const m of MODES) await journey(m);
 } catch (e) {
@@ -211,9 +242,13 @@ const misses = [];
 for (const r of report.matches) if (r.peak.totalMb > MATCH_MB) misses.push(`${r.mode} match peak ${r.peak.totalMb} MB > ${MATCH_MB}`);
 for (const h of report.homes) if ((h.totalMb ?? 0) > HOME_MB) misses.push(`${h.tag} ${h.totalMb} MB > ${HOME_MB}`);
 report.misses = misses; report.idle = idle;
+// round 4: what each Home after a match carries over Home with its music (home_0), and each match's margin under the bar
+const h0 = report.homes.find((h) => h.tag === 'home_0')?.totalMb ?? null;
+report.homeOverFirst = Object.fromEntries(report.homes.filter((h) => /_home$/.test(h.tag)).map((h) => [h.tag, h0 !== null && h.totalMb !== null ? h.totalMb - h0 : null]));
+report.matchMargin = Object.fromEntries(report.matches.map((r) => [r.mode, MATCH_MB - r.peak.totalMb]));
 report.verdict = broke ? `journey broke: ${report.errors[0]}` : !idle ? `needs idle machine (load max ${Math.max(...report.machine.samples.map((s) => s.load))}, ${busy.length} of ${report.machine.samples.length} readings busy); ${misses.length ? misses.join(', ') : 'would pass'}` : misses.length ? `MISS: ${misses.join(', ')}` : 'pass';
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));
-console.log(`match memory: ${report.matches.map((r) => `${r.mode} ${r.peak.totalMb} MB`).join(', ')}; homes ${report.homes.map((h) => `${h.tag} ${h.totalMb}`).join(', ')}  → ${OUT}`);
+console.log(`match memory: ${report.matches.map((r) => `${r.mode} ${r.peak.totalMb} MB`).join(', ')}; homes ${report.homes.map((h) => `${h.tag} ${h.totalMb}`).join(', ')}; margin ${JSON.stringify(report.matchMargin)}; Home over home_0 ${JSON.stringify(report.homeOverFirst)}  → ${OUT}`);
 console.log(`GATE ${broke ? 'BROKE' : report.verdict === 'pass' ? 'PASS' : idle ? 'FAIL' : 'NOT MEASURED'}: ${report.verdict}`);
 process.exit(broke ? 3 : report.verdict === 'pass' ? 0 : idle ? 1 : 2);
