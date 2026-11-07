@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--raw-cdp] [--pressure] [--infra] [--infra-match] [--no-audio]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--full-scale] [--track] [--fake-audio] [--raw-cdp] [--pressure] [--infra] [--infra-match] [--no-audio]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -40,7 +40,12 @@ const INFRA = args.includes('--infra');
 const INFRA_MATCH = args.includes('--infra-match');
 // --no-audio (round 4 MEM-1 refix, diagnostic A/B, needs --fake-audio): the client with ?audio=0 (src/boot/main.ts), no audio lane at all
 const NO_AUDIO = args.includes('--no-audio');
-const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
+const PRESET = opt('preset', '');
+// --full-scale (round 5): the player's Settings > Video > Dynamic resolution off, so every match draws at the preset's
+// full render scale. On a loaded machine dynamic resolution drops the scale (RIFT's targets at 1536x864 in one match and
+// 1920x1080 in the next: 50 MB of GL textures apart), which reads as a climb that is only the scale; off, every match is
+// read at its largest targets
+const FULL_SCALE = args.includes('--full-scale');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
 const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
 const PROD_DIR = join(HERE, '_prod', 'client', 'dist');
@@ -329,20 +334,20 @@ let broke = false;
 try {
   await page.locator('.nav__item', { hasText: 'Play' }).first().waitFor({ state: 'visible', timeout: 180000 });
   await page.waitForTimeout(6000);      // the first-run calibration and the Home vale settle
-  if (PRESET) {
-    report.preset = await page.evaluate((preset) => {
+  if (PRESET || FULL_SCALE) {
+    report.preset = await page.evaluate(([preset, full]) => {
       const raw = localStorage.getItem('vale.profile.v1'); if (!raw) return { error: 'no profile stored' };
-      const p = JSON.parse(raw); const L = { ultra: { renderScale: 1, shadows: 3, ao: 2, bloom: true, antialias: 'smaa', particles: 2, scatter: 2, maxDpr: 2 } }[preset];
+      const p = JSON.parse(raw); const L = preset ? { ultra: { renderScale: 1, shadows: 3, ao: 2, bloom: true, antialias: 'smaa', particles: 2, scatter: 2, maxDpr: 2 } }[preset] : {};
       if (!p.settings?.video || !L) return { error: 'no video settings or unknown preset' };
-      p.settings.video = { ...p.settings.video, ...L, preset }; localStorage.setItem('vale.profile.v1', JSON.stringify(p));
+      p.settings.video = { ...p.settings.video, ...L, ...(preset ? { preset } : {}), ...(full ? { dynamicResolution: false } : {}) }; localStorage.setItem('vale.profile.v1', JSON.stringify(p));
       return p.settings.video;
-    }, PRESET);
+    }, [PRESET, FULL_SCALE]);
     log(`preset ${JSON.stringify(report.preset)}`);
     if (report.preset.error) throw new Error(report.preset.error);
     await page.reload();
     await page.locator('.nav__item', { hasText: 'Play' }).first().waitFor({ state: 'visible', timeout: 180000 });
     await page.waitForTimeout(6000);
-    report.presetAfterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('vale.profile.v1')).settings.video.preset);
+    report.presetAfterReload = await page.evaluate(() => { const v = JSON.parse(localStorage.getItem('vale.profile.v1')).settings.video; return `${v.preset}${v.dynamicResolution === false ? ', dynamic resolution off' : ''}`; });
     log(`preset after reload ${report.presetAfterReload}`);
   }
   // a player's Home has heard a key or a click: the audio engine makes its context on the first gesture and the menu bed

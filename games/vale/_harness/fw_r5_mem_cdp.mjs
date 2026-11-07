@@ -134,6 +134,10 @@ export async function openRaw(url, { chrome = process.env.CHROME || '/Applicatio
     proc.once('exit', (c) => { clearTimeout(t); rej(new Error(`chrome exited ${c}`)); });
   });
   proc.stderr.resume();
+  // the browser never outlives the harness: a killed or crashed probe takes its Chrome with it
+  const killChrome = () => { try { if (proc.exitCode === null) proc.kill('SIGKILL'); } catch { /* gone */ } };
+  process.once('exit', killChrome);
+  for (const sig of ['SIGTERM', 'SIGHUP']) process.once(sig, () => { killChrome(); process.exit(143); });
   const ws = new WebSocket(wsUrl);
   await new Promise((res, rej) => { ws.addEventListener('open', res, { once: true }); ws.addEventListener('error', rej, { once: true }); });
   const c = new Conn(ws);
