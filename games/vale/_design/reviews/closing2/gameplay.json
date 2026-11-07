@@ -1,0 +1,182 @@
+{
+  "score": 7.5,
+  "summary": "Adversarial verification of the Gameplay, bots & pacing review (reviewer 7.5). I reproduced it on new seeds with --lineup shuffle: a FRAY soak (seeds 17001-17030, _harness/_reports/fw_W4_soak_closing2_gpverify_fray.txt), a RIFT soak cut at 15:00 (seeds 18001-18050, fw_W4_soak_closing2_gpverify_rift.txt), and a full RIFT soak on the same seeds (fw_W4_soak_closing2_gpverify_riftfull.txt). Then I pooled 240 decided same-tier RIFT games across the reviewer's two soaks and mine. All of this is sim-side, so the load (5-6 at the time) does not matter.\n\nCL-1 (the quiet laning phase) is fixed, and the fix holds on my seeds:\n- takedowns by 10:00 are 6.40 (adept) and 7.84 (veteran);\n- no game had zero takedowns, 0 of 100;\n- first blood median is 2.4-3.3 min;\n- the longest stretch with no death has a median of 2.6-2.7 min;\n- RIFT median length is 23.9-24.9 min, p90 28.9 min;\n- bot faults: 0 in 300 matches.\n\nPacing is confirmed from pacing10.txt: RIFT p90 29.9, BRIDGE median 17.3, FRAY mean 9.2.\n\nGP2-1 is confirmed as a major, with corrections:\n- Burdam is low in all three independent seed sets: 31.7 % (reviewer) and 38.6 % (mine), pooled 34.9 % [27.7-42.7] over 152 seats.\n- Nurrow is pooled at 39.0 %.\n- The high end does not reproduce: Ervet falls to 53.6 % on fresh seeds. The top is now Kemdo at 60.4 % [52.7-67.5].\n- The enforced FRAY placement gate fails again on fresh seeds: Ulkro 3.47 and Nurrow 3.48 against the 3.5 floor.\n- FRAY already has per-fighter weights (content/modes.json:151-161, with Nurrow dealt 1.25 / taken 0.8). The fix is to retune those weights, not to add new ones.\n\nThe Longshade closer is stronger than the reviewer reported: the first taker wins 93 of 95 pooled games.\n\nNo blocker reproduced or was found. One enforced gate fails reproducibly (FRAY placement), and the tier ladder sits exactly on its bar. Both are majors or minors on an item at 7.5, so they go to the backlog under ruling 8. Score held at 7.5: ON PAR, with no margin.",
+  "gapStatus": [
+    {
+      "id": "B3",
+      "status": "closed",
+      "evidence": "Gameplay side only. All 16 fighters were seated in 300 more shuffled matches (my FRAY run and full RIFT run) with bot faults 0. This agrees with the reviewer's 660 matches."
+    },
+    {
+      "id": "M1",
+      "status": "closed",
+      "evidence": "Content side only. I did not re-measure this; the reviewer's castTime and warn lint at tools/build_content.ts:852-857 is accepted."
+    },
+    {
+      "id": "M5",
+      "status": "partly",
+      "evidence": "Timing half: I checked attack.windup in content/fighters/*.json. It is 0.21-0.26 across all 16 fighters (Ulkro and Lisvel 0.21, Burdam 0.26). The presentation half belongs to the combat lens."
+    },
+    {
+      "id": "G1",
+      "status": "closed",
+      "evidence": "Passes against ruling 15's floors (soak a: last-hit 44.6 / 45.5 %, in lane 69.3 / 68.1 %, solo cs at 10:00 50.5 / 53.0). On my RIFT run the shaftlight's cs at 10:00 is 33.6-35.0 (the duo-road gap, see GP2-m2). The original 50 % / 75 % targets are still unmet; that is a lowered bar, by ruling."
+    },
+    {
+      "id": "G2",
+      "status": "closed",
+      "evidence": "Soak a passes: jungler gap 0.84 / 0.94; grovehunter deaths 3.4 / 3.5 against 4.7 / 5.0. My run: grovehunter level at 8:00 is 7.0, within about 1 level of the solo laners (8.0-8.1)."
+    },
+    {
+      "id": "G3",
+      "status": "partly",
+      "evidence": "Not re-run. From the soak gate lines, veteran beats novice:\n- 33/40 (FAIL) in soak a;\n- 35/40 in soak b;\n- pooled 85.0 %, exactly on the bar."
+    },
+    {
+      "id": "G4",
+      "status": "closed",
+      "evidence": "Soak a: median first structure 10.8 / 9.4 min."
+    },
+    {
+      "id": "G5",
+      "status": "closed",
+      "evidence": "Soak a: BRIDGE median 16.4 min, sudden death 15 %, no core fell with its chain standing. pacing10.txt: BRIDGE median 17.3 min."
+    },
+    {
+      "id": "G6",
+      "status": "closed",
+      "evidence": "My FRAY run, seeds 17001-17030: games with no 90 s lull 98/100 at adept and 98/100 at veteran; pacing10 mean length 9.2 min."
+    },
+    {
+      "id": "G7",
+      "status": "closed",
+      "evidence": "Soak a item gates all pass: 2.65 finished items held, 31/31 bought, 3 anti-heal families, 16/16 varied builds."
+    },
+    {
+      "id": "G8",
+      "status": "closed",
+      "evidence": "probe_sim_draft_pace 28/0 and probe_session_draft 58/0 (closing2_gameplay_probes.log)."
+    },
+    {
+      "id": "G9",
+      "status": "open",
+      "evidence": "The FRAY placement gate fails on two independent seed sets:\n- 13001-13020: Ulkro 3.28, Nurrow 3.38;\n- 17001-17030 (mine): Ulkro 3.47, Nurrow 3.48.\nThe floor is 3.5. It passed in an earlier window (fw_W4_soak_fw_CW3s_r5full: best Nurrow 3.62), so I call it open (a reproducible marginal fail), not a proven regression.\n\nRIFT balance on 240 pooled shuffled games passes ruling 22 (no 95 % interval lies wholly outside 40-60). Burdam's interval [27.7-42.7] sits mostly below it."
+    },
+    {
+      "id": "g1",
+      "status": "closed",
+      "evidence": "Reviewer's kill-credit read accepted; not re-measured."
+    },
+    {
+      "id": "g2",
+      "status": "closed",
+      "evidence": "RIFT adept p90 is 29.9 min (pacing10.txt) and 28.9 min on my full run (fw_W4_soak_closing2_gpverify_riftfull.txt). The target is 32 min or less."
+    },
+    {
+      "id": "g3",
+      "status": "closed",
+      "evidence": "probe_sim_practice 44/0 (closing2_gameplay_probes.log). The practice UI in the client was not measured."
+    },
+    {
+      "id": "new:early-fight-volume",
+      "status": "closed",
+      "evidence": "Against VALE's bar this reproduces on my fresh seeds 18001-18050:\n- takedowns by 10:00: 6.40 / 7.84;\n- games with none: 0 of 100;\n- first blood median: 3.3 / 2.4 min;\n- shadehold takedowns before 14:00: 1.94 / 1.88.\nIt is still about 55-65 % of the LoL gauge (GP2-m1)."
+    },
+    {
+      "id": "obs:longshade-closer",
+      "status": "open",
+      "evidence": "Pooled over the 240 decided same-tier RIFT games, the first Longshade taker wins 93 of 95 games (98 %). The reviewer's 21/21 was a subset."
+    }
+  ],
+  "findings": [
+    {
+      "id": "GP2-1",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Balance spread: Burdam and Nurrow low in RIFT; Ulkro and Nurrow over the FRAY placement floor (enforced gate fails)",
+      "what": "Burdam stays low in RIFT on every seed set. Nurrow is weak in RIFT but dominant in FRAY, and Ulkro (41 % in RIFT) is also over the FRAY floor. The enforced FRAY placement gate fails on two independent seed sets. The reviewer's claim that Ervet sits at 59.8 % in the same role does not reproduce: Ervet is 53.6 % on fresh seeds and 57.4 % pooled. The top fighter is now Kemdo.",
+      "evidence": "RIFT win rates, pooled over 240 decided same-tier games on --lineup shuffle, Wilson 95 % intervals (soaks closing2_gameplay_a, closing2_gameplay_b and my closing2_gpverify_riftfull, seeds 18001-18050):\n- burdam 34.9 % [27.7-42.7] n152 (38.6 % on my seeds);\n- nurrow 39.0 % [31.6-46.8] (32.8 % on my seeds);\n- ulkro 41.3 %;\n- kemdo 60.4 % [52.7-67.5].\n\nThe FRAY gate FAILs on my run (`node _harness/probe_sim_bot_soak.ts --suites fray --seeds 30 --seed0 17001 --lineup shuffle --jobs 2 --label closing2_gpverify_fray`): Ulkro 3.47 and Nurrow 3.48 against the 3.5 floor. Soak a read 3.28 / 3.38.\n\nFRAY already carries per-fighter weights at content/modes.json:151-161, and Nurrow's are dealt 1.25 / taken 0.8, so it looks over-corrected.",
+      "fix": "1. FRAY: trim Nurrow's existing FRAY weights toward 1.1 / 0.9 and Ulkro's dealt from 1.08 to 1.0. Do not add a new system.\n2. RIFT: run probe_sim_kit_diag on Burdam and Nurrow's seats. Make a pilot fix if the bot misuses the kit (ruling 22), otherwise a small numbers change.\n3. Re-gate on 200 or more shuffled games, on two seed sets.",
+      "size": "M",
+      "verifierNote": "Reproduced on fresh seeds. Severity major is correct: no ruling-22 interval lies wholly outside the band, but an enforced FRAY gate fails reproducibly, and a 35 % pick is what a LoL-gauge player notices. It is backlog under ruling 8 at a score of 7.5. Corrections: the Ervet high end does not reproduce, and the 'add a FRAY per-fighter scalar' fix already exists in content."
+    },
+    {
+      "id": "GP2-m1",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Laning kill volume is about 55-65 % of the LoL gauge",
+      "what": "Early fights now happen, but takedowns by 10:00 are 6.4-8.4 a game against the gauge's 12.3.",
+      "evidence": "My run fw_W4_soak_closing2_gpverify_rift.txt: 6.40 / 7.84 takedowns by 10:00 (adept / veteran). Soaks a and b: 6.78-8.44. The gauge source is modes_economy.md:54-55 (astro-wen UCLA report, LeagueMath).",
+      "fix": "As the reviewer proposed: raise the early bar stepwise at veteran only, holding the ruling-15 floors.",
+      "size": "M",
+      "verifierNote": "Reproduced."
+    },
+    {
+      "id": "GP2-m2",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Duo-road shaftlight about 3 levels behind the solo laners at 15:00",
+      "what": "The carry reaches level 6 on time but trails the solo laners in level for the rest of the laning phase.",
+      "evidence": "My run (fw_W4_soak_closing2_gpverify_rift.txt):\n- shaftlight level at 15:00: 8.5-8.6;\n- cs at 10:00: 33.6-35.0;\n- level at 8:00: 5.6-5.8, against 8.0-8.1 for shadehold and dialcross.\nSoak b agrees.",
+      "fix": "As the reviewer proposed: a duo XP-share bonus, the lampglass bot ceding last hits, and a 15:00 gap gate. Keep the change clear of the probe_sim_rekey 10 % rule.",
+      "size": "S",
+      "verifierNote": "Reproduced. The gauge statement (about 1-1.5 levels behind) is approximately right for LoL."
+    },
+    {
+      "id": "GP2-m3",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Tier ladder sits exactly on its bar",
+      "what": "Veteran beats novice only just often enough to meet its gate, and single windows go red.",
+      "evidence": "Soak a gate line: FAIL [difficulty] veteran beats novice 33/40 (82.5 %). Soak b: 35/40. Pooled 85.0 %. Not re-run by me.",
+      "fix": "As the reviewer proposed.",
+      "size": "S",
+      "verifierNote": "Read from the gate lines in both soak txt files."
+    },
+    {
+      "id": "GP2-m4",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Longshade is a near-certain closer (93/95)",
+      "what": "The first Longshade taker almost always wins, so the late game has no defender answer.",
+      "evidence": "In 240 pooled decided same-tier RIFT games, the first Longshade taker wins 93 of 95 games (objs unit 'longshade' in the soak JSONs). Ruling 4's re-key table (W4_systems_rekey.md:62) sets its buff numbers but does not require it to be a certain closer.",
+      "fix": "Finish the defender answer (bots group at the nearest standing Needle against the empowered wave). Keep the boss numbers inside the re-key gate.",
+      "size": "M",
+      "verifierNote": "Confirmed, and stronger than reported. Kept at minor: the team that takes it is usually already ahead, and a comeback rate when the team ahead at 15:00 wins about 66 % sits near the gauge."
+    },
+    {
+      "id": "GP2-m5",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Unanswered side-lane Wick stack at 21:00 (single sample)",
+      "what": "In the watched bot match, a side road's waves stacked with no enemy fighter answering them.",
+      "evidence": "_harness/_shots/closing2_gameplay_fight_rift_21m_1.png shows one orange level-13 fighter at its Needle against about 15 blue Wicks, with no enemy fighter present. The 7:00 shot _7m_1.png shows normal laning trades.",
+      "fix": "As the reviewer proposed: the team brain sends a clearer to an overloaded side road.",
+      "size": "S",
+      "verifierNote": "Looked at the shot; it matches. A single sample, so minor is right."
+    },
+    {
+      "id": "GP2-m6",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "FRAY bots re-buy noon_tonic heavily; 2 of 10 seats buy nothing",
+      "what": "In FRAY, one bot seat buys the same tonic over and over and two seats buy nothing.",
+      "evidence": "closing2_gameplay_probes.log:87-88:\n- one breaker buys noon_tonic 9 times;\n- 'plinth=-' and 'slinger=-';\n- 'by 8/10 bots'.",
+      "fix": "As the reviewer proposed.",
+      "size": "S",
+      "verifierNote": "Read in the log."
+    },
+    {
+      "id": "GP2-m7",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Roster depth 3-4 per role",
+      "what": "With so few fighters per role, the same lane matchups keep recurring.",
+      "evidence": "From content/fighters/*.json role fields: dialcross 4, grovehunter 3, lampglass 3, shadehold 3, shaftlight 3.",
+      "fix": "As the reviewer proposed.",
+      "size": "XL",
+      "verifierNote": "Counted it."
+    }
+  ],
+  "missed": []
+}

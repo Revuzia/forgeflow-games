@@ -1,0 +1,79 @@
+{
+  "dimension": "audio",
+  "role": "adversarial verifier",
+  "date": "2026-11-07",
+  "score": 7.5,
+  "summary": "Audio verified at 7.5/10. It is ON PAR under ruling 8: the score is 7.5 and no blocker is open. The reviewer's only major, AUD2-1, is downgraded to minor. Its loudness numbers do not reproduce. A fresh decode of audio/out with BS.1770 momentary max, using catalog gain and the engine multipliers in src/audio/index.ts (attack 0.6, auto damage 0.8, ability hit 1.0), gives these results for all 16 fighters: auto hit -21.1 to -21.7, ability hit -19.3 to -19.7, ult release about 6 dB over the auto hit. So for every fighter the order is auto < ability < ult, with the ability hit 1.5 to 2.4 dB over the auto hit (_harness/_reports/closing_audio_verify_ladder.txt). The reviewer's '7/16 ability hit under own auto' is a measurement error. The reviewer's swing levels are also off (Lisvel swing -26.3 measured, not -23.8). In the Lisvel capture, f_lisvel_hit outweighs f_lisvel_attack_hit 32.5 to 18.4 in heard energy. In the Burdam capture the auto hit leads because a melee tank auto-attacks a lot, not because of its level. What remains true: one shared 'hit' slot per kit (KIT_SLOTS src/audio/index.ts:426), so Q/W/E impacts sound alike, and only the casts differ. Minors AUD2-2 to AUD2-6 reproduced from code, content and the capture reports. Mastering re-checked: 644 cue .ogg files, max sample peak -1.04 dBFS, 0 clipped, 0 missing .m4a siblings (_harness/_reports/closing_audio_verify_peaks.txt). Not re-run: the live Chrome captures. Load was 6.4 to 43, so timing stays not_measured.",
+  "gapStatus": [
+    {"id": "r12-§6 audio sync", "status": "not_measured", "evidence": "The offline onset gate (<= 11.1 ms) and the kit wind-up lag in the reviewer's logs are offline proxies. The runtime A/V sync gate needs load < 3. Load was 6.4 to 43 during this verify, and the reviewer reports 5 to 265. By the machine note, timing is neither a pass nor a fail, so it cannot be 'closed'."},
+    {"id": "M12", "status": "closed", "evidence": "Reviewer's probe_audio_ultid log (closing_audio2_ultid.log): 0 of 66 pairs inside the take spread. Not contradicted. Each fighter has its own f_<id>_ult_release, about 6 dB over that fighter's auto hit (closing_audio_verify_ladder.txt)."},
+    {"id": "M13", "status": "closed", "evidence": "Accepted from closing_audio2_gates.log and closing_audio2_kits.log: as heard, ult chains contain only f_* cues. The projectile case skips c_proj_whoosh under a kitted ult (src/audio/index.ts:2399)."},
+    {"id": "M2", "status": "closed", "evidence": "Accepted from closing_audio2_cc.json / build.py control gate. Not contradicted."},
+    {"id": "M5", "status": "closed", "evidence": "Re-measured (closing_audio_verify_ladder.txt, script closing_audio_verify_ladder.py). As played, the ability hit is 1.5 to 2.4 dB over the same fighter's auto hit for all 16, and the ult release is 5.7 to 6.2 dB over it. So the weight ladder holds, and the reviewer's 7/16 inversion does not reproduce. The shared Q/W/E impact slot remains as a minor (AUD2-1)."},
+    {"id": "M6", "status": "closed", "evidence": "Accepted from closing_audio2_procs.json."},
+    {"id": "M14", "status": "closed", "evidence": "Capture reports: ambience -25.9/-26.0 LUFS against music -28.9/-30.3 (closing_audio2_match_*.json loudness)."},
+    {"id": "m2", "status": "closed", "evidence": "closing_audio2_match_burdam.json gates.enemyDownFires true. Lisvel null (0 enemy deaths in sight)."}
+  ],
+  "findings": [
+    {
+      "id": "AUD2-1", "verdict": "downgraded", "severity": "minor",
+      "title": "Q/W/E share one kit impact cue per fighter (the weight ladder itself holds)",
+      "what": "Each kit has a single 'hit' slot (3 round-robin takes), so the three basic abilities land on the same sound and only the casts differ. The claim that ability impacts are not weighted above autos is refuted. For every fighter, as played, auto hit < ability hit < ult release.",
+      "evidence": "src/audio/index.ts:426 KIT_SLOTS has a single 'hit'. content/audio.json f_lisvel_* has no per-slot hit. My decode (_harness/_reports/closing_audio_verify_ladder.txt) gives per-fighter median momentary max x gain x multiplier as auto hit / ability hit / delta / ult-auto: ardit -21.4/-19.4/+2.0/+6.1, lisvel -21.2/-19.6/+1.6/+5.8, sukri -21.3/-19.3/+2.0/+5.7, and so on (all 16 +1.5..+2.4, ult +5.7..+6.2). The dev server serves dist-catalog/assets/*, which is byte-identical to audio/out (md5 ccb1b821... for f_ardit_hit_1.ogg). Live Lisvel s15 heard energy: f_lisvel_hit 32.5 vs f_lisvel_attack_hit 18.4. Gauge: LoL gives each basic ability its own impact. VALE gives distinct casts but one impact.",
+      "fix": "Optional per-slot impacts f_<id>_a1_hit/a2_hit/a3_hit in each fighter's palette, resolved before the shared 'hit'. Widening the ability-over-auto margin to about 3 dB is a polish item, not a correction.",
+      "size": "L",
+      "verifierNote": "Reviewer's ladder.txt numbers do not match a fresh decode of the same files. Every kit cue is normalised within about 0.5 dB per slot, so 'ability hit under own auto for 7/16' cannot occur. Burdam's auto-hit share comes from how often he auto-attacks, not from its level. Only the shared impact slot is real, and it is a minor."
+    },
+    {
+      "id": "AUD2-2", "verdict": "confirmed", "severity": "minor",
+      "title": "Many lasting fighter zones are silent after the cast",
+      "what": "For a kitted fighter, areaCue plays only an 'area.<vfx>' binding or an f_<id>_* sfx. Most zone vfx are unbound, so lasting zones make no sound.",
+      "evidence": "src/audio/index.ts:1042-1055. content/audio.json events has only 11 area.* bindings. Rishal's a1/a3/ult vfx (rishal_a1_track, rishal_a3_feint, rishal_ult_coil, durations 3-5 s) have no binding and carry library sfx only, which areaCue drops for kitted fighters.",
+      "fix": "As the reviewer proposed: a quiet f_<id>_<slot>_zone loop bound via area.<vfx>, and a gate requiring one for zones of 2 s or longer.",
+      "size": "M",
+      "verifierNote": "Spot-checked Rishal. Did not re-count all 15."
+    },
+    {
+      "id": "AUD2-3", "verdict": "confirmed", "severity": "minor",
+      "title": "Generic c_proj_whoosh under kitted ranged autos and non-ult projectiles",
+      "what": "The projectile case skips the whoosh only for epic units and kitted ults.",
+      "evidence": "src/audio/index.ts:2395-2401. closing_audio2_whoosh.txt: whoosh as played -29.6 LUFS-M. Lisvel capture: c_proj_whoosh 13.1 % of heard energy.",
+      "fix": "Skip c_proj_whoosh when the source fighter has a kit. Keep it for Wicks and towers.",
+      "size": "S",
+      "verifierNote": "Code reproduced. Note that the reviewer's kit-swing levels in that file are off by about 2.5 dB (Lisvel -26.3 measured). The whoosh is still under every swing."
+    },
+    {
+      "id": "AUD2-4", "verdict": "confirmed", "severity": "minor",
+      "title": "Library Wick/lane texture is about half the heard sfx energy in lane",
+      "what": "c_* cues outweigh kit cues in the Lisvel seat.",
+      "evidence": "Recomputed from closing_audio2_match_lisvel.json heardG2: c_* 55.2 %, f_* 35.2 %, top c_hit_phys_light 16.1 %, c_proj_whoosh 13.1 %. Burdam: 43.4 % vs 42.5 %.",
+      "fix": "Wick-density duck or a lower minion damage multiplier (0.45, src/audio/index.ts 'damage' case), plus a kit-share gate.",
+      "size": "S",
+      "verifierNote": "Arithmetic reproduced from the report. The capture was taken under load, so treat it as level evidence only."
+    },
+    {
+      "id": "AUD2-5", "verdict": "confirmed", "severity": "minor",
+      "title": "Music material is short: 160 s per map, 32 s draft, objective layer on RIFT only",
+      "what": "There is one 160 s bed (+ intense stem) per map. The RIFT objective layer is 32 s. Draft is 32 s.",
+      "evidence": "ffprobe audio/out/music: mus_match_{rift,bridge,fray}.ogg 160.0 s, mus_match_rift_objective.ogg 32.0 s, mus_draft.ogg 32.0 s. content/audio.json music layers: rift [intense, objective_pit], bridge/fray [intense].",
+      "fix": "Second section set per map, longer draft bed, objective layers where maps have epics.",
+      "size": "M",
+      "verifierNote": "Reproduced."
+    },
+    {
+      "id": "AUD2-6", "verdict": "confirmed", "severity": "minor",
+      "title": "Quiet-seat master loudness at the tolerance floor",
+      "what": "Burdam s21 master integrated is -19.38 LUFS against a -19.5 floor.",
+      "evidence": "closing_audio2_match_burdam.json loudness.out.I -19.38. Lisvel -17.25.",
+      "fix": "Lift the calm-lane floor by about 1 dB.",
+      "size": "S",
+      "verifierNote": "Read from the report. Not re-captured (load 6-43)."
+    }
+  ],
+  "missed": [],
+  "verifierArtifacts": [
+    "_harness/_reports/closing_audio_verify_ladder.txt",
+    "_harness/_reports/closing_audio_verify_ladder.py",
+    "_harness/_reports/closing_audio_verify_peaks.txt"
+  ]
+}
