@@ -1,7 +1,7 @@
 // ARC §2.5 / §8.2 T10 (UI side): the Decision card's words, timing, pill and slow-down, without a DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DecisionState, towerChoice, numWords } from '../src/ui/decision.ts';
+import { DecisionState, towerChoice, numWords, lookDist } from '../src/ui/decision.ts';
 import type { TowerView } from '../src/sim/types.ts';
 
 const T = (o: Partial<TowerView> = {}): TowerView => ({ id: 4, pos: [1, 0, 0], cell: 9, name: 'the Tower of Kel-Amar', host: 1, league: [1, 2, 3],
@@ -28,6 +28,35 @@ test('warn is disabled with a reason: the sim\'s, or no prophet among the builde
   assert.equal(blocked.options[2].disabled, 'They would not hear a prophet again this year.');
   const none = towerChoice(T({ canAnswer: ['confuse', 'strike', 'let'] }), 0, new Map([[1, { name: 'Kel-Amar' }]]) as never, 1);
   assert.match(none.options[2].disabled!, /No prophet speaks for you among the builders/);
+});
+
+test('warn stays disabled with the sim\'s reason when canAnswer lists it but warnBlocked is set (live sim shape)', () => {
+  for (const why of ['They laughed at your prophet. Give it a year.', 'A prophet is already speaking to the builders.',
+    "No prophet speaks for you among the builders. Call one first ('make Hesh my prophet')."]) {
+    const c = towerChoice(T({ canAnswer: ['confuse', 'strike', 'warn', 'let'], warnBlocked: why }), 0, names as never, 1);
+    assert.equal(c.options[2].disabled, why);
+    assert.doesNotMatch(c.options[2].says, /will go/, 'no promise that the prophet goes while warn is blocked');
+    assert.ok(!c.options[0].disabled && !c.options[1].disabled && !c.options[3].disabled, 'the other answers stay open');
+  }
+  const open = towerChoice(T({ canAnswer: ['confuse', 'strike', 'warn', 'let'] }), 0, names as never, 1);
+  assert.equal(open.options[2].disabled, undefined);
+});
+
+test('"Look at it" steps the card down to its pill, keeps time eased, and frames the whole tower', () => {
+  const s = new DecisionState();
+  assert.equal(s.step(['tower:4'], ['tower:4'], 100, true), 10, 'the card eases time');
+  s.peek();
+  assert.equal(s.open, null, 'the card leaves the screen centre');
+  assert.deepEqual([...s.later], ['tower:4'], 'it waits as a pill');
+  assert.equal(s.step(['tower:4'], ['tower:4'], 10, true), null, 'time stays eased while looking');
+  s.reopen('tower:4');
+  assert.equal(s.open, 'tower:4');
+  assert.equal(s.answered(), 100, 'answering after looking restores the speed');
+  const s2 = new DecisionState();
+  s2.step(['tower:4'], ['tower:4'], 100, true); s2.peek();
+  assert.equal(s2.step([], [], 10, true), 100, 'the choice went while pilled: the speed comes back');
+  assert.equal(lookDist(80), 390);
+  assert.equal(lookDist(2), 180);
 });
 
 test('timing: a card per fresh offer (25 %, then once more at 75 %), a pill after "Decide later", gone when it closes', () => {

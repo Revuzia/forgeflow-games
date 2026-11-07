@@ -51,7 +51,8 @@ export function towerChoice(t: TowerView, planet: number, names: Map<number, Pic
   const base = { planet, tower: t.id };
   const opt = (key: string, id: 'confuse' | 'strike' | 'warn' | 'let', label: string, says: string, why?: string): ChoiceOption => ({
     key, id, label, says, cmd: { k: `tower.${id}`, ...base } as Command,
-    disabled: can.has(id) ? undefined : (why || 'Not now'),
+    // the sim lists 'warn' in canAnswer even while it is blocked (warnBlocked carries the reason, §2.4/§2.5)
+    disabled: !can.has(id) ? (why || 'Not now') : (id === 'warn' && t.warnBlocked) ? t.warnBlocked : undefined,
   });
   return {
     id: `tower:${t.id}`,
@@ -62,7 +63,7 @@ export function towerChoice(t: TowerView, planet: number, names: Map<number, Pic
     options: [
       opt('1', 'confuse', 'Confuse their tongues', 'they will scatter, and speak apart for generations.'),
       opt('2', 'strike', 'Strike it down', 'they will fear you; some will hate you.'),
-      opt('3', 'warn', 'Send a prophet to warn them', prophet && can.has('warn') ? `${prophet} will go. They may listen.` : 'they may listen.',
+      opt('3', 'warn', 'Send a prophet to warn them', prophet && can.has('warn') && !t.warnBlocked ? `${prophet} will go. They may listen.` : 'they may listen.',
         t.warnBlocked || (prophet ? '' : "No prophet speaks for you among the builders. Call one first ('make Hesh my prophet').")),
       opt('4', 'let', 'Let it stand', 'they will be great, and need you less.'),
     ],
@@ -109,6 +110,9 @@ export function towerCard(t: TowerView, planet: number, names: Map<number, Pick<
   return { name: t.name || `The tower at ${host}`, sub: `At ${host}`, rows, towns, options };
 }
 
+/** the orbit distance that fits a tower of height `h` (m) in the 888x500 frame with room around it */
+export function lookDist(h: number): number { return Math.round(3 * Math.max(10, h) + 150); }
+
 /** which choice shows as a card and which as a pill; the speed to ease to and to restore (pure, for tests) */
 export class DecisionState {
   /** the card shown now (a choice id) */
@@ -135,6 +139,8 @@ export class DecisionState {
     }
     for (const id of [...this.seen]) if (!on.has(id)) this.seen.delete(id); // closed: a later reopening is fresh
     for (const id of [...this.later]) if (!on.has(id)) this.later.delete(id);
+    // looked at, then the choice went while it was a pill: the eased speed comes back
+    if (!this.open && this.prevSpeed != null && !this.later.size) { setTo = this.prevSpeed; this.prevSpeed = null; }
     if (this.open && !on.has(this.open) && !(this.forced === this.open && can.has(this.open))) {
       // the choice expired (answered elsewhere, finished): the card goes, and the speed comes back
       this.open = null; this.forced = null;
@@ -150,6 +156,13 @@ export class DecisionState {
     this.open = null; this.forced = null;
     const p = this.prevSpeed; this.prevSpeed = null;
     return p;
+  }
+
+  /** "Look at it": the card steps down to its pill so the tower can be seen, but time stays eased (prevSpeed kept) */
+  peek(): void {
+    if (!this.open) return;
+    this.later.add(this.open);
+    this.open = null; this.forced = null;
   }
 
   /** an answer was sent and taken: the card closes; returns the speed to restore */
@@ -173,7 +186,8 @@ export interface DecisionDeps {
   speed(): number;
   setSpeed(x: number): void;
   slowGreat(): boolean;
-  lookAt(planet: number, pos: ArrayLike<number>): void;
+  /** `dist`/`lift` frame a tall thing standing on `pos` (see Host.lookAt) */
+  lookAt(planet: number, pos: ArrayLike<number>, dist?: number, lift?: number): void;
   toast?(text: string, ok: boolean): void;
 }
 
@@ -238,6 +252,18 @@ export class DecisionCard {
     return o ? this.choose(o) : Promise.resolve(null);
   }
 
+  /** "Look at it": the card steps down to its pill (it sits over the screen centre at 888x500) and the camera frames
+   *  the whole tower, about 3x its height plus 150 m away, aimed at its middle */
+  look(): void {
+    const id = this.state.open;
+    const tw = id ? this.towers.get(id) : undefined;
+    if (!tw) return;
+    this.state.peek();
+    const hgt = Math.max(10, tw.t.height);
+    this.deps.lookAt(tw.planet, tw.t.pos, lookDist(hgt), hgt / 2);
+    this.draw();
+  }
+
   later(): void {
     const sp = this.state.putOff();
     if (sp != null) this.deps.setSpeed(sp);
@@ -291,7 +317,7 @@ export class DecisionCard {
     // with its words in full under its name)
     const tw = this.towers.get(c.id);
     const foot = h('div', { class: 'gn-decision-foot' });
-    if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', on: { click: () => this.deps.lookAt(tw.planet, tw.t.pos) } }));
+    if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', title: 'The card waits as a pill while you look', on: { click: () => this.look() } }));
     foot.append(h('button', { class: 'gn-btn', text: 'Decide later', title: 'Esc', on: { click: () => this.later() } }));
     this.root.append(
       h('div', { class: 'gn-decision-top' }, h('div', { class: 'gn-decision-h', title: c.title }, h('b', { text: c.title })), foot),

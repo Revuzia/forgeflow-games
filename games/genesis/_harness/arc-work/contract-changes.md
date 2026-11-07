@@ -80,3 +80,12 @@
   (b) an "attention" term: while the god has acted on the planet in the last 2 years, the §2.2 roll uses
       clamp((pride - 0.55) / 0.2) and towerChance x 2 (unattended worlds untouched); or
   (c) favour as pride: answered prayers count toward P/L instead of lowering F ("they boast of being chosen").
+
+## Stint r1-1 (A-sim-r1, 2026-11-07 ~19:0xZ) — §2.1 and §2.4 changes (ARC.md edited)
+- §2.4 heed: `clamp(0.1 + cred(0.4 + faith0) - 0.15 pride + 0.3 fear + 0.1 trust + 0.15 refusals, .05, .9)`, world-seeded
+  (`heedDie`). faith0 = faith + since.tDrain (the tower's drain, reset at beginTower); refusals = since.tRefusals. A heeding
+  host, or a league left under two towns, is a heeded ending (sacred place) rather than the plain abandon.
+- §2.1 F = max(1 - faith, chosen): option (c) for attended pacing. since.chosenN / chosenT on the rel (prayers.ts answered()).
+- No view/event/command shape changed. New `since` keys (tDrain, tRefusals, chosenN, chosenT) default absent = 0: old saves fine.
+- All tower.ts rolls now take u.seed (salts kept); strike: regard handles trust/noteHarm within STRIKE_R; scatter site bar 3.4;
+  hardship never abandons a `let` tower; the first Decision card is level-based (>= 25 %) and a refusal reopens it.

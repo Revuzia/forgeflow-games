@@ -37,6 +37,10 @@ import { BUD_APART, searchSite, splitOff } from '../people/settlement.ts';
 
 /** §2.4 confuse: the scattered found their towns at least this far from home */
 const SCATTER_M = 4000;
+/** the least site score a scattered band settles on (the budding path's bar, settlement.ts) */
+const SCATTER_SITE = 3.4;
+/** the strike's act radius (m): who sees the lightning fall */
+const STRIKE_R = 1500;
 import { die } from '../people/lifecycle.ts';
 import { cohortTotal } from '../people/cohorts.ts';
 import { tell } from '../people/story.ts';
@@ -44,7 +48,7 @@ import { agentName, settlementRef, vars } from '../people/util.ts';
 import { distM, isLand, spotInCell, sunElevation } from '../people/world.ts';
 import { stormSeverity } from '../people/shelter.ts';
 import { cellPos3, fail, ok } from './util.ts';
-import { relOf, srel, peekRel, meansNow, moveSettlement } from './regard.ts';
+import { relOf, srel, peekRel, meansNow, moveSettlement, currentAct, relKey, cruelty } from './regard.ts';
 import { godAct } from './belief.ts';
 import { lethality, currentWrath, WRATH_DEFAULT } from './wrath.ts';
 import { hardshipOf } from './prayers.ts';
@@ -306,7 +310,7 @@ export function beginTower(x: PCtx, host: Settlement, league: Settlement[], rebu
     const id = u.ids.alloc('building');
     const at = cellPos3(p, cell);
     const b: Building = {
-      id, type: t, material: mi, style: styleOf(host), pos: [at[0], at[1], at[2]], cell, rot: Math.round(hashFloat(id, 0x70e6) * 6283) / 1000,
+      id, type: t, material: mi, style: styleOf(host), pos: [at[0], at[1], at[2]], cell, rot: Math.round(hashFloat(id, 0x70e6, 0, u.seed) * 6283) / 1000,
       scale: 1, progress: 0, delivered: 0, damage: 0, settlement: host.id, flags: 0, books: [], built: -1, fuel: 0, occupants: 0, household: -1,
     };
     x.ps.addBuilding(b);
@@ -327,12 +331,12 @@ export function beginTower(x: PCtx, host: Settlement, league: Settlement[], rebu
   if (rebuildOf) tw.tiers = tiersOf(tw.height);
   (R.towers ??= []).push(tw);
   trimTowers(u, p.id);
-  for (const s of league) { const r = srel(u, p.id, s.id); delete r.since.towerArm; r.since.tLeague = x.tick + x.day; }
+  for (const s of league) { const r = srel(u, p.id, s.id); delete r.since.towerArm; delete r.since.tDrain; r.since.tLeague = x.tick + x.day; }
   u.emit({ t: rebuildOf ? 'tower.rebuilt' : 'tower.begun', planet: p.id, pos: tw.pos, ref: settlementRef(x, host),
     data: rebuildOf ? { tower: tw.id, of: rebuildOf.id } : { tower: tw.id, league: tw.league.slice() } });
   const others = league.filter((s) => s !== host);
   const g = grown(x, host);
-  const speaker = g.length ? g[Math.floor(hashFloat(tw.id, 0x70e7) * g.length)] : -1;
+  const speaker = g.length ? g[Math.floor(hashFloat(tw.id, 0x70e7, 0, u.seed) * g.length)] : -1;
   tell(u, p, rebuildOf ? 'tower.rebuilt' : 'tower.begun', vars(x, host, speaker, { host: host.name, league: names(league), count: String(league.length),
     other: others[0]?.name ?? host.name, agent: speaker >= 0 ? agentName(x, speaker) : host.name }), host, league.map((s) => settlementRef(x, s)), rebuildOf ? 2 : 3);
   pushArc(u, { planet: p.id, tick: x.tick, kind: 'tower', name: tw.name, towns: tw.league, god: 'none', dead: 0, ref: tw.id });
@@ -431,6 +435,7 @@ function rising(x: PCtx, tw: TowerState): void {
     const r = srel(u, p.id, s.id);
     r.since.tLeague = x.tick + x.day;
     for (const m of x.ps.members.get(s.id) ?? []) { const i = m * GODS; x.A.faith[i] = Math.max(0, x.A.faith[i] - 0.0015); }
+    if ((r.since.tDrain ?? 0) < 1) r.since.tDrain = r3(Math.min(1, (r.since.tDrain ?? 0) + 0.0015));
     const h = histOf(x, s);
     h.grievance = Math.max(0, r3(h.grievance - 0.001));
     if (h.why.tongue) h.why.tongue = Math.max(0, r3(h.why.tongue - 0.001));
@@ -445,30 +450,39 @@ function rising(x: PCtx, tw: TowerState): void {
     if (before < q * tw.goal && tw.height >= q * tw.goal) {
       u.emit({ t: 'tower.tier', planet: p.id, pos: tw.pos, ref: settlementRef(x, host), data: { tower: tw.id, tiers: tw.tiers, height: tw.height } });
       const others = league.filter((s) => s !== host);
-      tell(u, p, 'tower.tier', vars(x, host, -1, { host: host.name, other: others[Math.floor(hashFloat(tw.id, q * 100, 0x70e8) * others.length)]?.name ?? host.name }), host, [settlementRef(x, host)], 1);
+      tell(u, p, 'tower.tier', vars(x, host, -1, { host: host.name, other: others[Math.floor(hashFloat(tw.id, q * 100, 0x70e8, u.seed) * others.length)]?.name ?? host.name }), host, [settlementRef(x, host)], 1);
       omen(x, tw, host, league);
-      if (q === 0.25 && tw.choices === 0 && openToAnswer(tw)) {
-        tw.choiceAt = x.tick; tw.choices = 1;
-        u.emit({ t: 'tower.choice', planet: p.id, pos: tw.pos, data: { tower: tw.id } });
-      } else if (q === 0.75 && tw.choices === 1 && openToAnswer(tw)) {
-        tw.choices = 2;
-        u.emit({ t: 'tower.choice', planet: p.id, pos: tw.pos, data: { tower: tw.id } });
-      }
+      if (q === 0.75 && tw.choices === 1 && openToAnswer(tw)) offerChoice(x, tw, 2);
     }
   }
+  // the first Decision card: once the tower stands at a quarter of its goal and the god may answer (stint r1-1, finding
+  // 1: not only on the exact crossing, so a rebuild from a tall stump, or a tower that passed 25 % while a prophet
+  // was still preaching, is offered too)
+  if (tw.choices === 0 && tw.height >= 0.25 * tw.goal && openToAnswer(tw)) offerChoice(x, tw, 1);
   // the prophet's warning comes to its sixth day
   if (tw.warned && tw.warned.tick >= 0 && x.tick - tw.warned.tick >= TOWER.warnDays * x.day && !tw.warned.heeded.length && !tw.warned.refused.length) heedRoll(x, tw, league);
   if (tw.status !== 'rising') return;
   // hardship in the host: ten hard days, then a 50 % roll gives it up
   const r = srel(u, p.id, host.id);
-  if (hardshipOf(u, p.id, host.id) >= 0.6) {
+  // (stint r1-1, finding 7: a tower the god let stand runs to its goal, §2.4 / T9; hardship no longer gives it up)
+  if (tw.answer !== 'let' && hardshipOf(u, p.id, host.id) >= 0.6) {
     r.since.tHard = (r.since.tHard ?? 0) + 1;
     if (r.since.tHard >= TOWER.hardDays) {
       r.since.tHard = 0;
-      if (hashFloat(tw.id, x.tick, 0x70e2) < 0.5) { abandon(x, tw, host, true); return; }
+      if (hashFloat(tw.id, x.tick, 0x70e2, u.seed) < 0.5) { abandon(x, tw, host, true); return; }
     }
   } else if (r.since.tHard) r.since.tHard = 0;
   if (tw.height >= tw.goal) finish(x, tw, host, league);
+}
+
+/** §2.4 the heed die of town `sid` for tower `tower` (seeded by the world: stint r1-1, finding 3) */
+export function heedDie(u: { seed: number }, tower: number, sid: number): number { return hashFloat(tower, sid, 0x70e5, u.seed); }
+/** §2.4 the yearly rebuild die of a struck tower (seeded by the world) */
+export function rebuildDie(u: { seed: number }, tower: number, year: number): number { return hashFloat(tower, year, 0x70e4, u.seed); }
+
+function offerChoice(x: PCtx, tw: TowerState, n: number): void {
+  tw.choiceAt = x.tick; tw.choices = n;
+  x.u.emit({ t: 'tower.choice', planet: x.p.id, pos: tw.pos, data: { tower: tw.id } });
 }
 
 function openToAnswer(tw: TowerState): boolean {
@@ -494,8 +508,8 @@ function omen(x: PCtx, tw: TowerState, host: Settlement, league: Settlement[]): 
   if (sunElevation(u, x.p, x.tick, tw.pos) > 0.1) fit.push('halo');
   fit.push('starlings');
   const turn = tw.omens === 2 ? 'halo' : tw.omens === 3 ? 'lightning' : 'starlings';
-  const kind = fit.includes(turn) ? turn : fit[Math.floor(hashFloat(tw.id, tw.omens, 0x70f1) * fit.length)];
-  const reader = league[Math.floor(hashFloat(tw.id, tw.omens, 0x70e9) * league.length)] ?? host;
+  const kind = fit.includes(turn) ? turn : fit[Math.floor(hashFloat(tw.id, tw.omens, 0x70f1, u.seed) * fit.length)];
+  const reader = league[Math.floor(hashFloat(tw.id, tw.omens, 0x70e9, u.seed) * league.length)] ?? host;
   const m = srel(u, x.p.id, reader.id).means;
   const reading = OMENS[kind][m[2] >= m[1] ? 0 : 1];
   srel(u, x.p.id, reader.id).omens[`tower.${kind}`] = x.tick;
@@ -524,8 +538,12 @@ function heedRoll(x: PCtx, tw: TowerState, league: Settlement[]): void {
   for (const s of league) {
     const r = srel(u, p.id, s.id);
     const [faith, fear, trust] = r.means;
-    const heed = clamp(cred * (0.4 + faith) - 0.6 * (r.pride ?? 0) + 0.3 * fear + 0.1 * trust, 0.05, 0.9);
-    if (hashFloat(tw.id, s.id, 0x70e5) < heed) {
+    // (stint r1-1, finding 4; ARC §2.4 note) a base 0.1, the faith the town had before the tower drained it, pride at
+    // 0.15 not 0.6, and each warning this town refused before makes the next one likelier to land (+0.15 each): at 0.6
+    // pride the roll sat at its 0.05 floor on every babel seed (pride 0.77, faith 0.12), so a warning never landed
+    const faith0 = Math.min(1, faith + (r.since.tDrain ?? 0));
+    const heed = clamp(0.1 + cred * (0.4 + faith0) - 0.15 * (r.pride ?? 0) + 0.3 * fear + 0.1 * trust + 0.15 * (r.since.tRefusals ?? 0), 0.05, 0.9);
+    if (heedDie(u, tw.id, s.id) < heed) {
       w.heeded.push(s.id);
       r.pride = r3(clamp((r.pride ?? 0) - 0.25));
       memOf(r).patience += 1;
@@ -537,8 +555,9 @@ function heedRoll(x: PCtx, tw: TowerState, league: Settlement[]): void {
       tell(u, p, 'tower.heeded', vars(x, s, -1, { prophet: name }), s, [settlementRef(x, s)], 2);
     } else {
       w.refused.push(s.id);
+      r.since.tRefusals = (r.since.tRefusals ?? 0) + 1;
       r.defiance = r3(clamp((r.defiance ?? 0) + 0.1));
-      if (ph && hashFloat(tw.id, s.id, 0x70e4 ^ 0x5) < (r.pride ?? 0)) ph.silenced = Math.max(ph.silenced, x.tick + 3 * x.day);
+      if (ph && hashFloat(tw.id, s.id, 0x70e4 ^ 0x5, u.seed) < (r.pride ?? 0)) ph.silenced = Math.max(ph.silenced, x.tick + 3 * x.day);
       u.emit({ t: 'tower.refused', planet: p.id, pos: tw.pos, data: { tower: tw.id, settlement: s.id } });
       tell(u, p, 'tower.refused', vars(x, s, -1, { prophet: name, host: x.ps.settlement(tw.host)?.name ?? s.name }), s, [settlementRef(x, s)], 2);
     }
@@ -548,13 +567,17 @@ function heedRoll(x: PCtx, tw: TowerState, league: Settlement[]): void {
   tw.league = tw.league.filter((id) => !w.heeded.includes(id));
   const host = x.ps.settlement(tw.host);
   if (w.heeded.length) pushArc(u, { planet: p.id, tick: x.tick, kind: 'warn', name: `The Warning at ${host?.name ?? ''}`, towns: w.heeded, god: 'patience', dead: 0, ref: tw.id });
-  if (!w.refused.length) {
+  // every town heeded, or so many that no league is left to build (the host went home, or one town stands alone): the
+  // tower is left where the prophet spoke (stint r1-1: a broken league used to fall to the plain abandon path)
+  if (!w.refused.length || (w.heeded.length && (w.heeded.includes(tw.host) || tw.league.length < 2))) {
     tw.status = 'abandoned'; tw.ended = x.tick;
     addSacredPlace(u, p, host ?? null, tw.pos, 'prophet', 'site');
     u.emit({ t: 'tower.abandoned', planet: p.id, pos: tw.pos, data: { tower: tw.id } });
   } else {
     w.disabledUntil = x.tick + x.year;
     if (tw.league.length < 2) abandon(x, tw, host);
+    // §2.4/§2.5: refused, the card reopens (warn disabled for a year)
+    else if (tw.status === 'rising') offerChoice(x, tw, Math.max(tw.choices, 1));
   }
 }
 
@@ -607,7 +630,7 @@ function rebuildRoll(x: PCtx, tw: TowerState): void {
   if (!host || host.fallen >= 0) return;
   const r = peekRel(x.u, x.p.id, host.id);
   if (!r?.since.tRebuild || (r.pride ?? 0) < 0.6) return;
-  if (hashFloat(tw.id, Math.floor(x.tick / x.year), 0x70e4) >= TOWER.rebuildChance) return;
+  if (rebuildDie(x.u, tw.id, Math.floor(x.tick / x.year)) >= TOWER.rebuildChance) return;
   const league = towns(x, tw.league);
   if (league.length < 2) return;
   beginTower(x, host, league, tw);
@@ -680,10 +703,10 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
   // the scattering: 20-35 % of each town's households go out to found towns of their own
   const rings = Math.min(48, Math.ceil((1.6 * SCATTER_M) / Math.sqrt((4 * Math.PI * p.st.radius ** 2) / p.count)));
   for (const st of league) {
-    const share = 0.2 + 0.15 * hashFloat(tw.id, st.id, 0x70e3);
+    const share = 0.2 + 0.15 * hashFloat(tw.id, st.id, 0x70e3, u.seed);
     const hs = st.households.filter((h) => h.members.length > 0).slice().sort((a, b) => a.id - b.id);
     const n = Math.max(1, Math.round(hs.length * share));
-    const leaving = hs.slice().sort((a, b) => hashFloat(a.id, tw.id, 0x70e3) - hashFloat(b.id, tw.id, 0x70e3)).slice(0, n);
+    const leaving = hs.slice().sort((a, b) => hashFloat(a.id, tw.id, 0x70e3, u.seed) - hashFloat(b.id, tw.id, 0x70e3, u.seed)).slice(0, n);
     for (const h of leaving) scattered += h.members.length;
     // (§2.4: the daughters go >= 4 km away where land allows, kept BUD_APART from every live town; else the budding
     // path's own site)
@@ -693,7 +716,9 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
       for (const o of x.ps.settlements) if (o.fallen < 0 && distM(p, P, o.pos) < BUD_APART) return true;
       return false;
     });
-    const child = splitOff(x, st, leaving, 'scatter', far.cell >= 0 && far.score > 0 ? far.cell : -1);
+    // (stint r1-1, finding 2: any site scoring above 0 was taken, and on babel the scattered households froze in their
+    // first winter there; now the budding path's own bar, a site good the whole year round, else the budding search)
+    const child = splitOff(x, st, leaving, 'scatter', far.cell >= 0 && far.score >= SCATTER_SITE ? far.cell : -1);
     if (child) founded++;
   }
   tw.status = 'scattered'; tw.ended = x.tick;
@@ -728,23 +753,32 @@ export function strike(x: PCtx, tw: TowerState, w: number): { dead: number; fell
   }
   onSite.sort((a, b) => A.id[a] - A.id[b]);
   const n = foretold ? 0 : Math.round(lethality(w) * onSite.length * 0.5);
-  const doomed = onSite.slice().sort((a, b) => hashFloat(A.id[a], tw.id, 0x70e4) - hashFloat(A.id[b], tw.id, 0x70e4)).slice(0, n);
+  const doomed = onSite.slice().sort((a, b) => hashFloat(A.id[a], tw.id, 0x70e4, u.seed) - hashFloat(A.id[b], tw.id, 0x70e4, u.seed)).slice(0, n);
   let dead = 0;
   for (const s of doomed) if (A.alive[s]) { die(x, s, DEATH.god); dead++; }
   // a warning refused: they were told and would not hear, so the harm is earned (regard's provoked class: trust -0.05,
   // not the unprovoked -0.20; T8). Stint 6 -- it used to soften only the love.
   if (foretold) for (const st of league) srel(u, p.id, st.id).since.provoked = x.tick;
-  godAct(u, p, tw.pos, 1500, { harm: 0.6 + 0.6 * w }, 0, 'lightning');
+  // the regard path (regard.ts witness) moves trust and notes the harm for everyone the act reaches (stint r1-1, finding 0:
+  // it used to take a second flat 0.2 off every league member and note the harm twice). Only the league beyond the
+  // act's reach still hears of it: the same class the witness would give (provoked -0.05, unprovoked -0.2 x cruelty).
+  const ctx = currentAct();
+  godAct(u, p, tw.pos, STRIKE_R, { harm: 0.6 + 0.6 * w }, 0, 'lightning');
+  const dTrust = foretold ? 0.05 : 0.2 * cruelty(w);
   const standingTiers = Math.max(0, tw.tiers - fell);
   tw.height = r3(Math.min(tw.height, standingTiers * TOWER.tierM));
   tw.status = 'struck'; tw.ended = x.tick;
   answered(x, tw, 'strike');
   for (const st of league) {
     const r = srel(u, p.id, st.id);
-    noteHarm(r, x.tick, x.year);
+    if (!ctx?.seen.has(relKey(p.id, st.id))) noteHarm(r, x.tick, x.year);
     r.pride = r3((r.pride ?? 0) * 0.5);
     memOf(r).wrath += 1;
-    for (const m of x.ps.members.get(st.id) ?? []) { const i = m * GODS; A.love[i] = Math.max(0, A.love[i] - (foretold ? 0.05 : 0.2)); }
+    for (const m of x.ps.members.get(st.id) ?? []) {
+      A.posAt(m, x.tick, P);
+      if (distM(p, P, tw.pos) <= STRIKE_R) continue;
+      const i = m * GODS; A.love[i] = Math.max(0, A.love[i] - dTrust);
+    }
     const [, fear, trust] = r.means;
     if (trust < 0.3 && fear < 0.5) { r.defiance = r3(clamp((r.defiance ?? 0) + 0.2)); r.since.tRebuild = x.tick; }
   }
@@ -801,7 +835,7 @@ export function towerTask(x: PCtx, s: number, st: Settlement, night: boolean, pr
     // relays drawn each quarter-day, so walkers, workers and the thirsty overlap (stint 6: one crew for the whole day
     // walked, worked and went home to drink in step, and the site stood empty in 40 % of work hours, T4)
     const period = Math.floor(x.tick / (x.day / 4));
-    if (hashFloat(A.id[s], period, 0x70eb) >= TOWER.visible / g) continue;
+    if (hashFloat(A.id[s], period, 0x70eb, x.u.seed) >= TOWER.visible / g) continue;
     const b = x.ps.building(tw.building);
     if (!b) continue;
     return { kind: TASK.build, goal: spotInCell(x.p, b.cell, A.id[s], 0x70ec, [0, 0, 0]), goalCell: b.cell, work: TOWER.shift, target: b.id, data2: 0 };

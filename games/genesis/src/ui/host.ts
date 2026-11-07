@@ -119,7 +119,8 @@ export interface UiHost {
   settlementAt(planet: number, dir: ArrayLike<number>): number | null;
   select(ref: InspectRef | null): void;
   selected(): InspectRef | null;
-  lookAt(planet: number, pos: ArrayLike<number>, dist?: number): void;
+  /** `lift` (m): frame the point that far above the ground at screen centre (a tall thing stood on `pos`) */
+  lookAt(planet: number, pos: ArrayLike<number>, dist?: number, lift?: number): void;
   lookAtEntity(ref: EntityRef): void;
   follow(ref: EntityRef | null): void;
   isFollowing(ref: EntityRef): boolean;

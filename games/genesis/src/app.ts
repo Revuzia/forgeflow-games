@@ -1658,7 +1658,7 @@ export class App implements UiHost {
   }
 
   /** fly the orbit camera to a place on a world (a toast, the inspector's "Look") */
-  lookAt(planet: number, pos: ArrayLike<number>, dist?: number): void {
+  lookAt(planet: number, pos: ArrayLike<number>, dist?: number, lift?: number): void {
     const pv = this.sim.view.planet(planet);
     if (!pv) return;
     this.leaveModes(null);
@@ -1669,6 +1669,19 @@ export class App implements UiHost {
     o.focus = [pos[0] / l, pos[1] / l, pos[2] / l];
     o.dist = dist ?? (cur < 700 ? cur : 260);
     o.tiltFixed = o.tiltFixed ?? 55;
+    if (lift && lift > 0) {
+      // the camera aims at the ground under its focus; a tall thing standing on `pos` rises above the centre. Slide the
+      // focus away from the eye by lift * tan(tilt) so the line of sight passes `lift` m up the thing (its middle).
+      const east: [number, number, number] = [0, 0, 0], north: [number, number, number] = [0, 0, 0];
+      tangentBasis(east, north, o.focus);
+      const ch = Math.cos(o.heading), sh = Math.sin(o.heading);
+      const R = pv.params.radius || 1;
+      const ang = (lift * Math.tan(Math.min(80, o.tilt()) * Math.PI / 180)) / R;
+      const f = o.focus;
+      for (let i = 0; i < 3; i++) f[i] += (north[i] * ch + east[i] * sh) * ang;
+      const fl = Math.hypot(f[0], f[1], f[2]) || 1;
+      for (let i = 0; i < 3; i++) f[i] /= fl;
+    }
     this.rig.use(o, 1.4);
   }
 

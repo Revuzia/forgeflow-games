@@ -232,7 +232,7 @@ export class Shell {
       speed: () => host.view.speed,
       setSpeed: (x) => host.setSpeed(x),
       slowGreat: () => host.prefs.value.game.slowGreat !== false,
-      lookAt: (planet, pos) => host.lookAt(planet, [pos[0], pos[1], pos[2]]),
+      lookAt: (planet, pos, dist, lift) => host.lookAt(planet, [pos[0], pos[1], pos[2]], dist, lift),
     });
     this.inspector = new Inspector(root, {
       query: (q, args) => host.query(q, args),

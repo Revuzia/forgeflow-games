@@ -136,8 +136,16 @@ export function prideParts(x: PCtx, st: Settlement, r: SettlementRel, faith: num
     T: r3(clamp((st.era - 1) / 3)),
     U: r3(clamp((k - 1) / 3) * (1 - grievance)),
     L: r3(clamp(yrs / ARC.prideYears)),
-    F: r3(clamp(1 - faith)),
+    F: r3(Math.max(clamp(1 - faith), chosenOf(r, x.tick, x.year))),
   };
+}
+
+/** ARC §2.1 note (stint r1-1, finding 5): "chosen", answered prayers as a boast, 0..1 (three answered recently = 1).
+ *  Pride's F part is the larger of unbelief and this: a favoured town grows proud as an unbelieving one does. */
+export function chosenOf(r: SettlementRel, tick: number, year: number): number {
+  const n = r.since.chosenN ?? 0;
+  if (n <= 0) return 0;
+  return clamp((n * Math.pow(0.5, (tick - (r.since.chosenT ?? tick)) / (3 * Math.max(1, year)))) / 3);
 }
 
 /** fix a (§2.1, §3): a god-0 harm on the town (regard.ts endAct) */

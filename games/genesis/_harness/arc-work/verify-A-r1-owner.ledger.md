@@ -12,3 +12,11 @@ Note: unheld G.frames at surface on SwiftShader ~30 s/frame -> keep frames held 
 3. "Look at it" frames the tower at screen centre, which the 380x186 card covers at 888x500 (app.ts lookAt dist 260; vo-confuse-look r1).
 4. Card title truncated "A tower rises at Ashuk by the L..." at 888x500 AND 1600x900 (vo-confuse-card, vo-let-insp).
 5. Merged warning toast repeats the evacuate sentence twice with x2 (vo-confuse-later).
+6. Live tower site keeps its vegetation: palms on the roof of the rising tower and inside the struck mound
+   (vo-near-rising.png, vo-near-struck.png; tower.ts sim never clears trees, buildings.ts:456 skips great-tower).
+   Live 'stone' tower reads as a flat blue-grey box (stub shots were mudbrick); struck mound reads as a stone ring, no scorch.
+7. §10 live: the god flood at default wrath warns (params warning/rise/silt, toast, omen) but at the town-framing
+   distance (600 m) the view is a white rain wall (vo-flood-god.png); the render lane's lookdev pair shows the silt river as
+   opaque tan that reads as a dry bed (arc-river-warning.png). Natural floods: warning -> evacuate -> flood -> flood.home
+   told in order (vo-flood-* chronicle). My detection of pv.disasters while held missed the warning window (harness issue).
+8. Let: finished at 80 m, 7 tiers, small night fire visible at 420 m (vo-near-finished-night.png) - OK.

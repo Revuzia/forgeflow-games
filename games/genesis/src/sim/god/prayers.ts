@@ -273,6 +273,12 @@ function answered(x: PCtx, st: Settlement, pr: Prayer): void {
   const r = srel(u, x.p.id, st.id);
   r.prayers = r.prayers.filter((q) => q !== pr);
   r.lapses = 0;
+  // ARC §2.1 (stint r1-1, finding 5): an answered prayer is a boast ("the god hears us, not them"): the count of
+  // answered prayers, halving every 3 years, feeds pride's F part (arc.ts chosenOf)
+  const yr = Math.max(1, x.year);
+  const t0 = r.since.chosenT ?? x.tick;
+  r.since.chosenN = Math.round(((r.since.chosenN ?? 0) * Math.pow(0.5, (x.tick - t0) / (3 * yr)) + 1) * 1000) / 1000;
+  r.since.chosenT = x.tick;
   relStat(u, 'prayers.answered');
   moveSettlement(x, st, { faith: 0.1, trust: 0.15, loyalty: 0.05 });
   tell(u, x.p, 'prayer.answered', vars(x, st, -1, { prayer: PRAYER_WORDS[pr.kind] }), st, [settlementRef(x, st)], 2);
