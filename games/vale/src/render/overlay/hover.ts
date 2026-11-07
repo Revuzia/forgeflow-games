@@ -113,5 +113,9 @@ export class HoverOutline {
     this.saved.length = 0;
   }
 
+  /** round 4 MEM-1 refix: the mask target is sized to the match's buffer and is only drawn in a match: it goes at teardown
+   *  and is made again on the next hover */
+  releaseTarget(): void { this.target?.dispose(); this.target = null; }
+
   dispose(): void { this.target?.dispose(); for (const p of Object.values(this.mats)) { p.mask.dispose(); p.rim.dispose(); } }
 }

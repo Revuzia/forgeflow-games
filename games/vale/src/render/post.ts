@@ -282,7 +282,10 @@ class VfxPass extends Pass {
     }
     this.draw(renderer, inputBuffer, this.depth, this.cam());
   }
-  override dispose(): void { this.pre?.dispose(); this.pre = null; liftDepth.uLiftPre.value = null; super.dispose(); }
+  override dispose(): void { this.releaseTargets(); super.dispose(); }
+  /** round 4 MEM-1 refix: the pre-VFX copy is made at the match's buffer size the first time an envelope lifts (1920×1080
+   *  RGBA16F, 16 MB) and stayed at Home after the match; it is made again on the next lift */
+  releaseTargets(): void { this.pre?.dispose(); this.pre = null; liftDepth.uLiftPre.value = null; }
 }
 
 export class PostChain {
@@ -323,6 +326,9 @@ export class PostChain {
 
   /** perf PERF-M1: re-point the built passes (no new targets, materials or programs). Only a change of camera kind
    *  rebuilds: N8AO compiles the projection kind into its programs */
+  /** round 4 MEM-1 refix: what the post chain made at a match's size for the match only (renderer teardown) */
+  releaseMatchTargets(): void { this.vfx?.releaseTargets(); }
+
   setScene(scene: Scene, camera: Camera): void {
     this.scene = scene;
     this.camera = camera;

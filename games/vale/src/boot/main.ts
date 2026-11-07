@@ -4,6 +4,8 @@
 // boot); LEAD owns it.
 //   ?dev=1      dev build switches: window.__vale for the harness, dev time scale in the session.
 //   ?render=0   skip the renderer (the UI draws its own backdrop).
+//   ?audio=0    skip the audio lane (round 4 MEM-1: a memory A/B, probe_match_memory --no-audio, tells what a session's
+//               audio holds from what the rest holds; the client runs silent, the UI's audio port is null as on failure).
 // DEV AUTOPILOT (fast verification; all need ?dev=1):
 //   ?autopilot=1 | draft | match   your seat is drafted and/or played by the bot brains
 //   ?speed=N                        every match runs at time scale N (1–16) once it starts
@@ -25,6 +27,7 @@ try { devBuild = !!import.meta.env?.DEV; } catch { devBuild = false; }
 const dev = devBuild && query.get('dev') === '1';
 /** ?render=0: run the client without the 3D renderer (UI review on software GL, low-end fallback checks) */
 const noRender = query.get('render') === '0';
+const noAudio = query.get('audio') === '0';
 const ap = query.get('autopilot');
 const autopilot = !dev || !ap ? undefined : ap === 'draft' || ap === 'match' ? ap : ap === '1' || ap === 'true' ? true : undefined;
 const speed = dev ? Math.max(1, Math.min(16, Number(query.get('speed')) || 1)) : 1;
@@ -58,7 +61,7 @@ loadCatalog().then(
     if (autopilot !== undefined || speed > 1 || autoflow) console.info(`[vale] dev autopilot: ${JSON.stringify({ autopilot, speed, autoflow })}`);
     let audio: AudioPort | null = null;
     const loadAudio = Object.values(audioLoaders)[0];
-    if (loadAudio) {
+    if (loadAudio && !noAudio) {
       try { audio = (await (await loadAudio()).createAudioEngine?.({ catalog: c.catalog, assetUrl: c.assetUrl, settings: session.profile().settings })) ?? null; }
       catch (e) { console.warn('[vale] audio engine unavailable', e); }
       // dev: the engine itself for the audio probes (_harness/probe_audio_*.mjs meter its output graph)

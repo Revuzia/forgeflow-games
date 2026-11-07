@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure] [--infra] [--no-audio]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -36,6 +36,9 @@ const SHOTS = opt('shots', '');
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 const TRACK = args.includes('--track');
 const PRESSURE = args.includes('--pressure');
+const INFRA = args.includes('--infra');
+// --no-audio (round 4 MEM-1 refix, diagnostic A/B, needs --fake-audio): the client with ?audio=0 (src/boot/main.ts), no audio lane at all
+const NO_AUDIO = args.includes('--no-audio');
 const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
 const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
@@ -91,7 +94,8 @@ noteMachine('start');
 // This Mac's output device can freeze an AudioContext's clock (3fb4383ce): no source then ever ends and every decoded
 // buffer it plays stays alive, which a player's working device never does. The report says which sink it ran on
 const FAKE_AUDIO = args.includes('--fake-audio');
-report.audioSink = FAKE_AUDIO ? 'fake (--disable-audio-output)' : 'device';
+report.audioSink = NO_AUDIO ? 'none (?audio=0)' : FAKE_AUDIO ? 'fake (--disable-audio-output)' : 'device';
+if (NO_AUDIO && !FAKE_AUDIO) throw new Error('--no-audio needs --fake-audio');
 const { browser, page, logs } = FAKE_AUDIO ? await openFakeAudio() : await open('/', { wait: false, hmr: false });
 async function openFakeAudio() {
   const { chromium } = await import('playwright-core');
@@ -104,7 +108,7 @@ async function openFakeAudio() {
   const pg = await ctx.newPage(); const lg = [];
   pg.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') lg.push(`[${m.type()}] ${m.text()}`); });
   pg.on('pageerror', (e) => lg.push(`[pageerror] ${e.message}`));
-  await pg.goto(process.env.VALE_URL + '/', { waitUntil: 'domcontentloaded' });
+  await pg.goto(process.env.VALE_URL + (NO_AUDIO ? '/?audio=0' : '/'), { waitUntil: 'domcontentloaded' });
   return { browser: b, page: pg, logs: lg };
 }
 const bcdp = await browser.newBrowserCDPSession();
@@ -143,6 +147,35 @@ const procs = async (cats = false) => {
   if (cats && TRACK) r.cats = { renderer: rends[0] ? footprintCats(rends[0].id) : null, gpu: gpu ? footprintCats(gpu.id) : null };
   return r;
 };
+/** --infra (round 4 MEM-1 refix, diagnostic): Chrome's own memory-infra dump (CDP Tracing.requestMemoryDump, detailed),
+ *  the largest allocators of the renderer and the GPU process by their own `size` (partition_alloc partitions, malloc,
+ *  v8, blink_gc, gpu, skia, web_cache, discardable …): who in the process holds what the footprint shows */
+async function infraDump() {
+  const events = [];
+  const onData = (e) => { for (const v of e.value ?? []) if (v.ph === 'v') events.push(v); };
+  bcdp.on('Tracing.dataCollected', onData);
+  try {
+    await bcdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { includedCategories: ['disabled-by-default-memory-infra'], excludedCategories: ['*'], memoryDumpConfig: { triggers: [] } } });
+    const r = await bcdp.send('Tracing.requestMemoryDump', { deterministic: true, levelOfDetail: 'detailed' });
+    const done = new Promise((res) => bcdp.once('Tracing.tracingComplete', res));
+    await bcdp.send('Tracing.end');
+    await Promise.race([done, new Promise((res) => setTimeout(res, 20000))]);
+    const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
+    const gpuPid = ps.find((x) => x.type === 'GPU')?.id;
+    const rendPids = new Set(ps.filter((x) => x.type === 'renderer').map((x) => x.id));
+    const top = (pid) => {
+      const ev = events.filter((e) => e.pid === pid && e.args?.dumps?.allocators);
+      if (!ev.length) return null;
+      const al = ev.at(-1).args.dumps.allocators;
+      const mb = (a) => { const v = a?.attrs?.size?.value; return v === undefined ? null : +(parseInt(v, 16) / 1048576).toFixed(1); };
+      const rows = Object.entries(al).map(([k, a]) => [k, mb(a)]).filter(([k, v]) => v !== null && v >= 1 && k.split('/').length <= 3);
+      rows.sort((a, b) => b[1] - a[1]);
+      return Object.fromEntries(rows.slice(0, 28));
+    };
+    const rend = [...rendPids].map((p) => ({ p, t: top(p) })).filter((x) => x.t).sort((a, b) => (b.t?.partition_alloc ?? 0) + (b.t?.v8 ?? 0) - (a.t?.partition_alloc ?? 0) - (a.t?.v8 ?? 0))[0];
+    return { ok: r.success, renderer: rend?.t ?? null, gpu: gpuPid ? top(gpuPid) : null };
+  } catch (e) { return { error: String(e?.message ?? e).slice(0, 200) }; } finally { bcdp.off('Tracing.dataCollected', onData); }
+}
 const click = async (locator, timeout = 30000) => {
   await locator.first().waitFor({ state: 'visible', timeout });
   for (let i = 0; i < 3; i++) {
@@ -156,6 +189,12 @@ const home = async (tag) => {
   const f = await procs(true); const m = noteMachine(tag); const t = await track();
   report.homes.push({ tag, ...f, load: m.load, track: t });
   log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})${trackLine(t)}${f.cats ? `  cats ${JSON.stringify(f.cats)}` : ''}`);
+  if (INFRA) {
+    const d = await infraDump();
+    (report.infra ??= []).push({ tag, ...d });
+    log(`${tag} memory-infra: renderer ${JSON.stringify(d.renderer ?? d.error)}`);
+    log(`${tag} memory-infra: gpu ${JSON.stringify(d.gpu ?? null)}`);
+  }
   // --pressure (round 4 MEM-1 refix, diagnostic only, never the gate's reading): the same Home once more after Chrome is
   // told memory is critical (CDP Memory.simulatePressureNotification, what macOS memory pressure sends a real browser):
   // the allocators' free pages and Blink's caches are handed back, so what still stands is what the page truly holds

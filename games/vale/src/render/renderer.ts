@@ -661,6 +661,8 @@ class ValeRenderer implements Renderer {
     this.sun.releaseMap();                                                 // round 4 MEM-1: lighting.ts
     this.sky.release(this.scene);                                          // round 4 MEM-1 refix: sky.ts
     this.uploadQueue.length = 0;
+    this.post.releaseMatchTargets();                                       // round 4 MEM-1 refix: post.ts
+    this.hoverRim.releaseTarget();                                         // round 4 MEM-1 refix: overlay/hover.ts
     this.gpuTimer.clear();
     this.envReady = false;
     this.client = null;

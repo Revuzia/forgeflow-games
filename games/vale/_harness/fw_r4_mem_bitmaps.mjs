@@ -141,8 +141,13 @@ try {
     while (qh < qt) { const i = q[qh++]; for (let e = firstEdge[i]; e < firstEdge[i + 1]; e += EF) { const t = etypes[E[e + eType]]; if (t === 'weak' || t === 'shortcut') continue; const to = E[e + eTo] / NF; if (dist[to] < 0) { dist[to] = dist[i] + 1; q[qt++] = to; } } }
     const label = (i) => `${ntypes[N[i * NF + nType]]}:${S[N[i * NF + nName]]}`.slice(0, 60);
     const chain = (i) => { const out = [`dist ${dist[i]}`]; let cur = i; for (let d = 0; d < 24 && dist[cur] > 1; d++) { const r = (rev[cur] ?? []).find(([p]) => dist[p] >= 0 && dist[p] === dist[cur] - 1); if (!r) break; out.push(`${r[1]} ← ${label(r[0])}`); cur = r[0]; } return out; };
+    // round 4 MEM-1 refix: every node's self size summed by type:name, the 25 largest (native Blink objects report theirs)
+    const nSelf = m.node_fields.indexOf('self_size'); const bySize = new Map();
+    for (let i = 0; i < n; i++) { const k = `${ntypes[N[i * NF + nType]]}:${S[N[i * NF + nName]].slice(0, 50)}`; const e = bySize.get(k) ?? [0, 0]; e[0] += N[i * NF + nSelf]; e[1]++; bySize.set(k, e); }
+    rep.bySize = [...bySize].sort((a, b) => b[1][0] - a[1][0]).slice(0, 25).map(([k, [b, c]]) => `${(b / 1048576).toFixed(1)} MB ×${c} ${k}`);
+    console.log(`largest by self size:\n   ${rep.bySize.join('\n   ')}`);
     rep.retainers = {};
-    for (const cls of ['ImageBitmap', 'AudioBuffer']) {
+    for (const cls of ['ImageBitmap', 'AudioBuffer', 'Blob', 'WebGLBuffer', 'WebGLTexture', 'WebGLShader', 'HTMLImageElement', 'HTMLCanvasElement', 'ImageData']) {
       const hits = []; const names = {};
       for (let i = 0; i < n; i++) { const nm = S[N[i * NF + nName]]; if (!nm.startsWith(cls) && !nm.startsWith(`blink::${cls}`)) continue; const k = `${ntypes[N[i * NF + nType]]}:${nm.slice(0, 40)}`; names[k] = (names[k] ?? 0) + 1; if ((rev[i] ?? []).some(([p]) => /V8PerContextData|FunctionTemplate/.test(label(p)))) continue; hits.push(i); }
       console.log(`${cls} node names: ${JSON.stringify(names)}`);
