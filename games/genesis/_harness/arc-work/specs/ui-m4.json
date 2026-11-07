@@ -1,0 +1,25 @@
+{
+ "_doc": "ARC §8.1 M4 LIVE (real sim hearts, no stub): sandbox seed 1, natural disasters off, 45 bronze plains-folk settled; the M3 harsh recipe (storm r350 + lightning at wrath 0.3 every 4 days) until query('hearts') says the town is fearful; one more lightning (a god act in the last 2 h -> fearful people look up), then the village at ~120 m with the UI on (HUD name chip with the heart glyph) and the same frame zoomed out to region. Counts per-agent HeartSign from the snapshot. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-m4.json --port=5311 > _harness/scratch/arc/shots-m4.log 2>&1 &",
+ "shots": [
+  { "name": "arc-m4-village", "params": "scenario=sandbox&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); document.getElementById('boot')?.remove(); const t0 = performance.now();",
+      "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 });",
+      "const r0 = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: 45, era: 'bronze', settled: true, wildGame: false });",
+      "const sid = r0.created.find((e) => e.kind === 'settlement').id; window.__sid = sid;",
+      "const pos0 = () => window.__GENESIS_FX__.fx.vis.pv.settlements.find((s) => s.id === sid)?.pos;",
+      "let h = null, days = 0;",
+      "for (days = 0; days < 160; days++) { if (days % 4 === 1) { const p = pos0(); if (p) { await G.cmd({ k: 'miracle.storm', pos: [...p], radius: 350, wrath: 0.3 }); await G.cmd({ k: 'miracle.lightning', pos: [...p], wrath: 0.3 }); } } await G.step(1440); const hs = (await G.query('hearts', { settlement: sid })) ?? []; h = Array.isArray(hs) ? hs[0] : hs; if (h && h.kind === 'fearful' && days % 4 >= 2) break; }",
+      "window.__h = h; const p = pos0(); await G.step(1440 - 0); await G.cmd({ k: 'miracle.lightning', pos: [...p], wrath: 0.3 }); await G.step(20);",
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 120, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(6);",
+      "const A = window.__GENESIS_FX__.fx.vis.pv.agents; const sig = [0, 0, 0, 0, 0, 0]; if (A && A.heart) for (let i = 0; i < A.count; i++) sig[A.heart[i]]++;",
+      "G.hold(true); const chip = [...document.querySelectorAll('.gn-chip, .gn-name-chip, [class*=chip]')].map((e) => e.textContent?.trim()).filter(Boolean).slice(0, 6);",
+      "return { days, secs: Math.round((performance.now() - t0) / 1000), heart: h && { kind: h.kind, proud: h.proud, fearful: h.fearful, devoted: h.devoted, caption: h.caption }, signs: { none: sig[0], pray: sig[1], fist: sig[2], fear: sig[3], celebrate: sig[4], hurl: sig[5] }, crowds: window.__GENESIS_FX__.fx.vis.life.crowds.stats, chip, glyph: !!document.querySelector('.gn-heart-glyph, [class*=heart]') };"
+    ] },
+  { "name": "arc-m4-region", "params": "scenario=sandbox&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__sid }, dist: 2500, tilt: 45, yaw: 30, fov: 50, hour: 10 }); await G.frames(4); G.hold(true);",
+      "return { chip: [...document.querySelectorAll('[class*=chip]')].map((e) => e.textContent?.trim()).filter(Boolean).slice(0, 6) };"
+    ] }
+ ]
+}

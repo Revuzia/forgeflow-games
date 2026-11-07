@@ -212,3 +212,9 @@ UI side of §1, §2 and §10 is built and looked at. Left:
 3. Stage B/C UI (defiance answer, covenant confirm, Book reader) is not in this brief's items (§1, §2, §10).
 4. Whenever UI code changes: focused tests node --test tests/ui-arc-*.test.ts tests/audio-arc.test.ts, then one gate.
 Shot recipe that works on this loaded machine: UI-layout shots run under G.hold('ui') (minutes, not timeouts).
+
+### Stint 4 (2026-11-07, from 08:40Z)
+- Sim lane has real hearts now (arc.ts heartsDaily/heartSigns; M3 harsh fearful 8/8 within 1 y).
+- NEW spec specs/ui-m4.json (M4 LIVE, no stub: sandbox seed 1, M3 harsh recipe in the browser until query('hearts')
+  says fearful, one more lightning, village at 120 m with UI + region 2500 m; returns per-agent HeartSign counts).
+  Launched 08:41Z slot 2 (PID 29021, port 5311), log _harness/scratch/arc/shots-m4.log, PNGs _shots/arc-m4-*.png.

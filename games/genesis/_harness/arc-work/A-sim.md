@@ -144,8 +144,8 @@
   discovery, knowledge-loss, save-continue, living-migration all pass; tsc clean.
 
 ## NEXT (stint 5)
-1. Read scratch/arc/check4.log (full gate with all stint-4 code; started ~08:20Z, ~32 min). Fix any sim failure
-   (ui-thumblate is a UI-lane timing test that failed once under load in check3).
+1. GATE: scratch/arc/check4.log (full npm run check with all stint-4 code, 08:20-08:38Z): 807/807 PASS. Run it once
+   again only after new code.
 2. T2/T4 tuning (all knobs in tower.ts TOWER; any change to a bold §2.2/§2.3 number -> ARC.md + contract-changes.md):
    a. Material: no store ever holds mudbrick/brick/stone-block in the unattended world, so dh is always halved. Proposal:
       for `mudbrick` the league digs its own (have = 1 when the host knows mudbrick and the site is land), or let the
