@@ -66,6 +66,21 @@ export function collectGpu(v: unknown, out: Set<object>, depth = 0): void {
   if (proto === Object.prototype || proto === null) for (const x of Object.values(o)) collectGpu(x, out, depth + 1);
 }
 
+/**
+ * round 4 MEM-1 refix: a landed GLB's parser kept the file's whole binary chunk (GLTFBinaryExtension.body, a copy of the
+ * BIN: the meshopt-compressed geometry and every embedded image's encoded bytes) and its dependency cache ('buffer:0'
+ * resolves to that same body) for as long as the model stays landed: about the size of the GLB again, per model, for the
+ * whole match. Once loadAsync has resolved, every mesh, image and clip is built (geometry views are decoded into their own
+ * buffers, images into ImageBitmaps), and nothing here asks the parser for a dependency again (restoreImages /
+ * restoreModel load the file afresh; only parser.associations is read, and it stays).
+ */
+function dropParserData(gltf: GLTF): void {
+  const p = gltf.parser as unknown as { extensions?: Record<string, { body?: ArrayBuffer | null } | undefined>; cache?: { removeAll?: () => void } };
+  const bin = p.extensions?.KHR_binary_glTF;
+  if (bin) bin.body = null;
+  p.cache?.removeAll?.();
+}
+
 /** dispose every GPU resource in `res` that `inUse` does not hold (three uploads a disposed one again on its next
  *  use, so a stale reference elsewhere still draws) */
 export function disposeGpu(res: Iterable<object>, inUse: Set<object>): number {
@@ -164,6 +179,7 @@ export class Assets {
         });
         if (!renderable) this.failed.add(key);
         if (this.closeBitmaps) this.closeAfterUpload(gltf);
+        dropParserData(gltf);
         return { gltf, renderable, skinned };
       }).catch((err: unknown) => {
         this.failed.add(key);
