@@ -78,6 +78,22 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   FIX: render-tower.json / render-hearts.json shots re-run a guarded setup prelude. All 4 specs parse (AsyncFunction).
 - Tower picking: DONE by the UI lane (app.ts pickTower, host.ts InspectRef 'tower'); nothing for render.
 - tsc clean 04:3xZ.
-- RUNS: perf (render-perf.json) running under the stint-1 chain PID 15154 (log shots-render-perf.log). New chain
-  PID 8115 (waits 15154): river-warning.json, render-tower.json, render-hearts.json -> shots-<spec>.log in
+- RUNS: perf (render-perf.json) running under the stint-1 chain PID 15154 (log shots-render-perf.log; node PID 6921,
+  started 04:27Z, still in the measure script at 05:5xZ: ~430 software-GL frames). New chain
+  PID 8117 (waits 15154): river-warning.json, render-tower.json, render-hearts.json -> shots-<spec>.log in
   _harness/scratch/arc/render/; chain2.log. Each shot takes 15-60 min at load ~16.
+- Gate: queued `npm run check` behind the other agent's suite (PID 1280) via slot.sh: waiter PID 13506 (slot ticket
+  #29) -> _harness/scratch/arc/render/check.log (last line "exit N"). It includes this stint's edits.
+
+## NEXT (stint 3)
+1. kill -0 6921 (perf node) / 15154 / 8117 (chain) / 13506 (gate). After a restart: rerun
+   setsid nohup _harness/arc-work/render-chain.sh 0 render-perf.json river-warning.json render-tower.json render-hearts.json
+   > _harness/scratch/arc/render/chain.log 2>&1 &  and the gate through slot.sh.
+2. check.log: "exit 0" -> gate green (record). A failure in a render*/godgen* test is ours; others' failures: note owner.
+3. shots-render-perf.log: script result {before, after, hurlBefore, hurl, arcs} -> record frame times here
+   (tower+hurl crowd vs none, medium). If it never finishes, cut the spec to 30-frame measures.
+4. LOOK: arc-river-warning.png vs arc-river-before.png — the bank must now show a dark mud band up the grass (siltBank);
+   if it is everywhere on the land (uw proxy too wide) narrow the reach (wLo * 0.5 for siltBank). Record §10.3(c) verdict
+   here AND tell STATE/sim ledger (§10.3c is the render lane's shot).
+5. LOOK: arc-tower-* (7) and arc-pose-* (fear now shows WALKERS with heads back = HEART_WALK 44; fist = 45 / 41 / 43;
+   hurl + pebbles + arcs stats).
