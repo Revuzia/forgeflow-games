@@ -34,6 +34,9 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
   --pencheck (W9 R1B pass 3): ONLY the scripted Volcano Rim pen (isla_viva seed 5, 3 setups; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
   --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
+  --pencheck --plant no-calm-lag (W9 R1 fix mergefix): a calm hold re-plans although the route does not go the held way - MUST FAIL the pen row (setup 3)
+  --cornercheck (W9 R1 fix mergefix): ONLY the scripted Coco Village corner (isla_viva seed 1, 3 setups; a grid corner 0.6 m from a face) - see cornercheck;
+  --plant no-early-turn (EDGE_EARLY off) MUST FAIL it
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
