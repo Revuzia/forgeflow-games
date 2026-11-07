@@ -1,6 +1,6 @@
 # VALE closing gates
 
-The standing gate list for the integration pass and the parity review. Bars come from each harness's own header and from `_design/reviews/fixwaves/owner_rulings.md` (rulings 1-17, 10a). If this page and a ruling disagree, the ruling wins. Nobody relaxes a bar here: report the miss to the lead.
+The standing gate list for the integration pass and the parity review. Bars come from each harness's own header and from `_design/reviews/fixwaves/owner_rulings.md` (rulings 1-24, 10a). If this page and a ruling disagree, the ruling wins. Nobody relaxes a bar here: report the miss to the lead.
 
 ## How to run a pass
 
@@ -14,7 +14,8 @@ cd games/vale
 2. **Record the load.** Run `uptime` before and after every gate, and report the command, both loads, the number, the bar and the report path.
 3. **Keep the machine idle for "load < 3" gates.** Run one at a time, with no parallel agents or background jobs.
    - A timing gate run at load >= 3 is `not_measured`, never a pass.
-   - Use `--wait-idle <min>` where the harness offers it (only `perf_1080` does). For the others, check `uptime` yourself before starting.
+   - Use `--wait-idle <min>` where the harness offers it (`perf_1080` and `probe_match_memory` do). For the others, check `uptime` yourself before starting.
+   - Free the heavy slots first. Any live holder in the heavy queue, even a plain `sleep`, reads as a busy machine to `perf_1080` and `probe_match_memory` and leaves their timing not measured. `heavy.py status` also lists dead owners; those two harnesses filter them out.
    - If the load stays high for over 15 minutes because of something outside the workflow, record the `ps` output and mark the gate `not_measured`.
 4. **Clean up.** Run `zsh tools/reap_orphans.sh` after harness runs, and add `--kill` only for your own leftovers.
 
@@ -36,43 +37,49 @@ The Load column means:
 | Production build | `npm run -s build` | exit 0. Leave `dist/` in place for the next agent | any |
 | Store | `node tools/gen_store.ts`, then `--check` | exit 0: standard dE >= 12, deluxe and legend dE >= 18. See note 1 | any |
 | Secrets | `npm run -s secrets` | exit 0 | any |
+| VFX frozen | `python3 tools/vfx/build_vfx.py --check` | exit 0, prints `0 a rebuild would change`. A hand edit of `content/vfx.json` shows here: freeze it with `--freeze-tuned`, confirm the check, and commit `tools/vfx/bespoke/tuned.json` | any |
 
 ## Client journeys
 
 | Gate | Command | Bar | Load |
 |---|---|---|---|
 | Flow journeys | `node _harness/e2e.mjs flow` | all three journeys ok (dodge, ready check, server down) | < 3 (clean) |
-| Full e2e (CW3c done:7) | `node _harness/e2e.mjs all` | one single sweep passes everything | < 3 (clean) |
-| Overlays | `node _harness/overlay_regress.mjs` | prints `overlay_regress: PASS` | any |
+| Full e2e (CW3c done:7) | `node _harness/e2e.mjs all` | one single sweep passes everything, 0 console lines. If `decline_once` or rift loading still fail on an idle machine, they are real bugs for CW3c | < 3 (clean) |
+| Overlays | `node _harness/overlay_regress.mjs` (default tiers) | prints `overlay_regress: PASS` | any |
+| HUD renders | `node _harness/hud_renders.mjs --at 100` | exit 0: the sky strip's ledger line is on screen and renders at most once per change of its numbers | < 3 (clean) |
 | Icons | `node _harness/icon_probe.mjs` | p50 >= 60 and p95 >= 190 at 38 and 40 px; ground rules hold; 0 missing | any |
 
 ## Performance
 
 | Gate | Command | Bar | Load |
 |---|---|---|---|
-| Production frame budget (r12 B4) | `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30` | see the list below | < 3 (timing half) |
-| Ultra 60 (PERF-C1) | `node _harness/perf_1080.mjs --prod --no-build --q ultra --wait-idle 30` | Ultra 1080p at 60 fps. The default `--prod` run covers High and Low only, so Ultra needs this run | < 3 |
-| Real-time match (b4-realtime) | `node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --wait-idle 30` | >= 99 % of wall-seconds at 58+ frames, no second under 45 | < 3 |
+| Production frame budget (r12 B4) | `node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30` | see the list below. `--prod` covers High, Low and Ultra | < 3 (timing half) |
+| Real-time match (b4-realtime) | `node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 26 --wait-idle 30` | >= 99 % of wall-seconds at 58+ frames, no second under 45. Exit 2 is not a pass | < 3 |
+| First-run calibration, live | `node _harness/perf_1080.mjs --prod --no-build --calibrate-only --wait-idle 30` | every 1080p call (3 by default) returns `high`; a preset comes back and the player's video is restored; 9x the pixels never returns `high` | < 3 (timing half) |
+| Calibration verdict | `node _harness/probe_calibrate.ts` (part of `npm run probe`) | exit 0 | any |
+| Match memory (ruling 20) | `node _harness/probe_match_memory.mjs --wait-idle 30` | renderer + GPU <= 3000 MB in a match on BRIDGE and RIFT, and <= 2500 MB at Home, in the real production client. Exit 1 = a bar missed, 2 = not measured (machine busy), 3 = the journey broke | < 3 |
 | Dynamic resolution on Metal | `node _harness/probe_dynres_metal.ts` | prints PASS. The simulated GPU leaves the scale within 10 s, recovers to >= 58 fps, holds 1.0 at a steady 60 and on CPU-bound frames | any |
 
 `perf_1080 --prod` bars:
 
 - **Hard, at any load:**
-  - High and Low: <= 500k triangles a frame, <= 450 draw calls, <= 40 programs.
+  - High, Low and Ultra: <= 500k triangles a frame, <= 450 draw calls, <= 40 programs.
   - The menu never moves the render scale.
   - The GPU-bound step leaves its base scale within 10 s.
   - Calibrate returns a preset, and never `high` at 9x the pixels.
-  - Memory: the GPU process grows <= 5 % from menu_2 to the last menu, and tracked materials and geometries stay flat (<= +2).
+  - Memory: the GPU process grows <= 5 % from menu_2 to the last menu, and tracked materials and geometries stay flat (<= +2). Each match is pumped until its live counts hold, and each menu footprint is read until two reads agree within 1 %. To see the gate fire, run the diagnostic `--mem-inject-mb <n>`.
   - Renderer + GPU <= 2500 MB at every Home.
   - 0 leftover skeleton bone textures at the last two Homes.
   - Match seeds: 0 programs first seen after the opening minute, on all three seeds.
 - **Load < 3 only:**
-  - Renderer CPU <= 6 ms mean on High and Low.
-  - High: <= 1 % dropped frames, avg >= 59.4 fps, p95 <= 17.2 ms, p99 <= 25 ms.
+  - Renderer CPU <= 6 ms mean on High, Low and Ultra.
+  - High and Ultra: <= 1 % dropped frames, avg >= 59.4 fps, p95 <= 17.2 ms, p99 <= 25 ms.
   - Low: no dropped frames, p95 <= 17.2 ms.
   - Match dynres ends at High's own scale, 1.0.
-  - GPU-bound tail: last 8 s average >= 58 fps.
-  - Calibrate returns `high` at 1080p.
+  - GPU-bound tail: the bench runs 75 s and its last 8 s average >= 58 fps (ruling 18).
+  - Calibrate returns `high` on every 1080p call.
+
+Read the last line of `perf_1080`: `GATE PASS`, `GATE FAIL` (exit 1) or `GATE NOT MEASURED` (exit 2). Exit 2 means a real-time run passed its hard checks but its verdict could not be measured, and that is not a pass. Exit 0 does not prove the timing either: the other timing halves of `--prod` still print `GATE PASS`, with `timing not measured` under the line, so read that note too.
 
 `--prod` builds its own bench into `_harness/_prod/dist`, so it does not touch `dist/`. `--no-build` reuses the last bench build.
 
@@ -109,6 +116,7 @@ The Load column means:
 |---|---|---|---|
 | Crowd accents | `node _harness/probe_crowd_accent.mjs --tag <tag>` | shipped vs full accent pixels within 3 % per def, no empty crop, noise floor under 1 % of full | any |
 | Environment value (r12 B5) | `node _harness/value_probe.mjs --tag <tag> --shots 0 --report <tag>_value.json` | no `FAIL` in the log. See the list below and note 2 | any |
+| Monster silhouettes (ruling 24) | `node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 1000 --seed 23 --monsterPhases 8 --monsterSpawnFacing 1 --tag <tag> --report <tag>_mon.json` | cross-camp median IoU at camp facing <= 0.50. All-facing and free-facing values are information | any |
 
 `value_probe` bars, per map and tier:
 
@@ -125,8 +133,10 @@ The Load column means:
 | Gate | Command | Bar | Load |
 |---|---|---|---|
 | A/V sync | `node _harness/probe_audio_runtime.mjs sync` | see the list below. PASS only when all 3 runs pass | < 3 |
-| Match loudness | `node _harness/probe_audio_runtime.mjs match` | master -18 +/- 1.5 LUFS, announcer peak >= 3 dB over sfx p99, heal chimes <= 6 a minute, enemyDown fires. Run on several seats, because the last verifier's result varied by seat. See note 3 | < 3 (clean) |
-| Dead music | `node _harness/probe_audio_runtime.mjs dead` | the probe's own gates. CW2's verifier found a window bug that makes this flaky | < 3 (clean) |
+| Match loudness | `node _harness/probe_audio_runtime.mjs match` | master -18 +/- 1.5 LUFS, announcer peak >= 3 dB over sfx p99, heal chimes <= 6 a minute, enemyDown fires. Run both seats: `--fighter burdam --seed 21` (quiet) and `--fighter lisvel --seed 15` (loud) | < 3 (clean) |
+| Dead music | `node _harness/probe_audio_runtime.mjs dead` | the probe's own gates | < 3 (clean) |
+| Match music (AUD-C4) | `node _harness/probe_audio_music.mjs`, then again with `--m4a` | 17 gates, exit 0 (1 = a gate fails, 2 = the run failed). About 5 minutes each; needs the dev server and one heavy slot | < 3 (clean) |
+| Ultimates by ear (AUD-C1) | `~/Developer/forgeflow-games/.venv/bin/python3 _harness/probe_audio_ultid.py` | exit 0. Use this one for the shipped sound: `closing_audio_verify_tool_ultid.py` still sums a library cue the engine no longer plays | any |
 | Mix | `node _harness/probe_audio_mix.mjs` | RIFT floor lift (M2) >= 1 dB, and the rest of the probe's own gates | < 3 (clean) |
 
 `probe_audio_runtime sync` bars:
@@ -135,6 +145,8 @@ The Load column means:
 - From the pump: p95 <= one frame + outputLatency + the sfx-bus click's start-to-onset p50.
 - The cue path adds <= 4 ms over a sound on the sfx bus (p50 and p95).
 - The rAF-relative versions of those two gates arm only at pump-late p95 <= 3 ms. Otherwise they report `notMeasured`, so a closing run must arm them.
+
+Offline QA of the match bed's section joints, not a gate: `cd audio && ../../../.venv/bin/python3 build_music.py --only mus_match --joints-only`.
 
 ## Gameplay
 
@@ -151,8 +163,14 @@ Soak bars include:
 - The novice-to-veteran ladder and the no-early-core gate are unchanged.
 - Judge on at least two untuned seed windows. Soak numbers from before commit 9d505252 seated `rotate` even when labelled `shuffle`, so do not compare them with new ones.
 
+## By eye and ear
+
+Metered gates do not cover these. Do them once on the final catalog.
+
+- Run `npm run content`, then watch Ervet's dash in a live match. No floor-fixed clip has yet been seen in a live match.
+- Listen to a real match: the first S2>S5 jump, about 1:04 into the bed; the late act's S5>S2; and walking into Sunsplinter's pit (RIFT, 85,80). The objective layer's weight is `OBJECTIVE_LUFS` in `audio/bedlib.py`.
+
 ## Notes
 
 1. **`gen_store` and `lisvel_almanac`.** Plain `node tools/gen_store.ts` exits 1 and writes nothing while any paid skin is under its floor. `lisvel_almanac` reads dE 16.6 against 18, a known open art item, and is sold at the standard price via `--provisional`. `node tools/gen_store.ts --check --provisional` tells you whether `content/store.json` is otherwise current. Once the art passes, run `node tools/gen_store.ts && npm run content` to restore its 1,500 price and its Featured and New eligibility.
 2. **`value_probe` always exits 0.** It has no failing exit code, so judge it with `grep FAIL` on its log, never by the exit code.
-3. **Announcer margin with 0 lines.** `probe_audio_runtime.mjs` computes `linePeak - p99` even when `linePeak` is null, so the announcer gate can pass with 0 lines. Until that is fixed, check `announcer.lines > 0` in the report.
