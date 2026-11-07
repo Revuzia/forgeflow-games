@@ -124,3 +124,8 @@ rivals.ts:32-41), Book UI, legends.
 - sim lane (A-sim stint 6, 10:4xZ): §8.2 T2 unattended PASS (3/8, median y17.9, <= 2 attempts, none < y10); T4 PASS
   (half <= 4.25 y, >= 2 omens, on-site 95-99 % after TOWER.shift 600); T7 PASS 8/8 (dead 1-4, <= 50 % of on site);
   T8 refusal-strike provoked (test). Open: attended pacing T2 (owner/spec call). Gate check5 808/808; check6 809/809 (11:03Z).
+
+- sim lane (A-sim stint 7, 11:3xZ): gate check7 810/810 on the final tree. T7 50-year form PASS (remains stand 50 y,
+  dead 2 of 6 on site). Attended pacing T2 measured and NOT met as specified (leader pride 0.48-0.59 at y10, roll
+  chance <= 0.075/yr in years 10-14; towerMinYear 10 cuts 7-9): owner/spec decision, options in contract-changes.md
+  stint 7. Everything else of §1, §2, §10 sim side is done and verified.

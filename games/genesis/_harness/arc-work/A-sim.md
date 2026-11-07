@@ -253,3 +253,10 @@
   Numbers + options written to contract-changes.md (stint 7).
 - Full gate on the final tree launched 11:08Z: slot.sh npm run check -> scratch/arc/check7.log (pid file check7.pid).
 - T7 50-year rubble live run launched 11:08Z: slot.sh probe-strike.ts 1 0.6 50 -> scratch/arc/strike50.log.
+- GATE check7.log (final tree, 11:08-11:3xZ): 810/810 PASS (includes the stint-6 refusal-strike test).
+- T7 50-year live (strike50.log, babel seed 1, strike at 0.6 y): on site 6, dead 2 (<= 50 %, <= 10), the remains
+  (great-tower building, status struck) still stand 50 years later -> T7 50-year form PASS.
+
+## NEXT (after stint 7; brief's stint budget used up)
+- The only open sim line of §1/§2/§10 is §8.2 attended pacing T2: an owner/spec decision between options (a)/(b)/(c)
+  in contract-changes.md (stint 7). Re-measure with _harness/arc-work/probe-t2att.sh 1..8 and probe-t2.sh 1..8 after.
