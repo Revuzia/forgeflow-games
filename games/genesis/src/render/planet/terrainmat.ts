@@ -1170,6 +1170,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     if (sz.w > 0.0) siltG = max(siltG, uSiltK[i] * (1.0 - smoothstep(sz.w * 0.55, sz.w, distance(P, sz.xyz))));
   }
   wLo = min(wLo, -siltG * (7.0 + 2.0 * m2));
+  // the risen river lies over the grass too (the shore's wet band below is gated off where the sward is thick, so on a
+  // grassy river the rise showed nothing): a noise-broken band of flattened, silted sward up the same reach
+  float siltBank = siltG > 0.0
+    ? siltG * smoothstep(wLo * (0.75 + 0.25 * snoise(P * 0.09)), -0.04 - uwPx, uw) * (1.0 - smoothstep(0.1 + uwPx, 0.5 + uwPx * 2.0, uw))
+    : 0.0;
   float shoreWet = smoothstep(wLo, -0.04, uw) * (1.0 - smoothstep(0.1 + uwPx, 0.5 + uwPx * 2.0, uw));
   shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * mix(1.0, 0.6, smoothstep(0.04, 0.4, uwPx));
   // (snow lying on wet ground is white: the darkening follows what the snow leaves uncovered, not its depth alone)
@@ -1178,7 +1183,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
   col *= mix(1.0, 0.55, wet * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
   // (the silt the rising river leaves on its banks: a wet ochre-brown film, not only darker sand)
-  col = mix(col, vec3(0.15, 0.1, 0.055), shoreWet * siltG * 0.75 * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
+  col = mix(col, vec3(0.15, 0.1, 0.055), max(shoreWet * siltG * 0.75 * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6), siltBank * 0.72));
+  s.sward *= 1.0 - 0.8 * siltBank;
+  rough = mix(rough, 0.3, siltBank * 0.6);
   // wet soil and litter stay rough (0.35); only bare rock and sand film over glossy
   // (and the film is broken: water stands in the hollows and runs off the crests, so the sheen comes in patches — an
   // even 0.18 over a whole rained-on barren hill read as crumpled foil close up and, glinting the grey sky, as snow

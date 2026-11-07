@@ -49,6 +49,8 @@ float animFreq(int a) {
   if (a == 36) return 0.85;
   // ARC §1.4 the heart's poses (crowds.ts HEART_ANIM): looking up in fear, a fist raised, throwing at the sky, cursing
   if (a == 40) return 0.3; if (a == 41) return 1.7; if (a == 42) return 0.45; if (a == 43) return 0.95;
+  // walking with the sign (crowds.ts HEART_WALK): the walk's cadence
+  if (a == 44) return 0.95; if (a == 45) return 0.95;
   return 0.25;
 }
 
@@ -228,6 +230,23 @@ vec3 livingRot(int a, float t, int b, float tool) {
     if (b == 1) r = vec3(0.04 + 0.14 * pump, 0.0, 0.0);
     if (b == 2) r = vec3(-0.5 - 0.15 * pump, 0.0, 0.0);
     if (b == 7) r.x = -0.08; if (b == 9) r.x = 0.08; if (b == 8 || b == 10) r.x = 0.08 + 0.1 * pump;
+    return r;
+  }
+  if (a == 44 || a == 45) {
+    // walking with the heart's sign: the walk's legs and hips; 44 the head tipped back watching the sky, one hand at the
+    // throat and the other swinging short; 45 a fist raised and shaken at the sky, the other arm swinging
+    r = gaitLegs(b, t, 0.42, 0.72, 0.0);
+    if (b == 1) r = vec3(-0.04, 0.06 * s, 0.0);
+    if (a == 44) {
+      if (b == 2) r = vec3(-0.55, -0.04 * s, 0.0);
+      if (b == 3) r = vec3(-0.35, 0.0, 0.12); if (b == 4) r = vec3(-2.1, 0.5, 0.0);
+      if (b == 5) r = vec3(-0.3 * s, 0.0, -0.07); if (b == 6) r = vec3(-0.35, 0.0, 0.0);
+    } else {
+      float shake = sin(t * 2.0) * 0.5 + 0.5;
+      if (b == 2) r = vec3(-0.4 + 0.06 * shake, -0.04 * s, 0.0);
+      if (b == 5) r = vec3(-2.75 - 0.15 * shake, 0.0, 0.18); if (b == 6) r = vec3(-0.35 - 0.45 * shake, 0.0, 0.0);
+      if (b == 3) r = vec3(0.5 * s, 0.0, 0.07); if (b == 4) r = vec3(-0.36 - 0.3 * max(0.0, -s), 0.0, 0.0);
+    }
     return r;
   }
   if (a == 36) {
@@ -469,6 +488,7 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 30) { off.y = -crouchDrop(1.05); off.x = 0.004 * sin(t * 9.0); }
   else if (a == 31) off.y = 0.05 * abs(s) - 0.05;
   else if (a == 36) { off.y = 0.04 * abs(s) - 0.01; off.x = 0.05 * s; }
+  else if (a == 44 || a == 45) { off.y = 0.022 * cos(2.0 * t) - 0.012; off.x = 0.012 * s; }
   else if (a == 40) { off.z = -0.02; off.x = 0.01 * sin(t * 0.37); }
   else if (a == 42) { off.z = 0.06 * pow(max(0.0, s), 8.0) - 0.03; }
   else if (a == 43) off.y = 0.035 * pow(max(0.0, s), 2.0);

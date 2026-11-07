@@ -62,3 +62,22 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
    in a shot (needs the sim's `idol` building; catalog maps it); covenant Hearts-layer rim is the UI lane's
    (overlays.ts), the rainbow is the existing physical one; live-sim (not stub) look at heart poses once sim towns
    go fearful/defiant.
+
+### Stint 2 (2026-11-07 04:2xZ-)
+- Looked at: arc-tower-rising (medium, 420 m): stepped mudbrick ziggurat, stair on the face, reads as real; scaffold
+  not legible at 420 m (fine). arc-pose-fear / arc-pose-fist: IDENTICAL, no poses visible — the stub put signs on
+  everyone but the people in view walk, and heartAnim returned the walk for movers. Spec §1.4 says a sign applies to
+  someone "idle, walking, socialising". FIX: crowds.ts HEART_WALK { lookUp: 44, fist: 45 } (render-only ids; a walker
+  keeps the walk's legs/cadence with the sign in the upper body; carry/run/work keep theirs); bodymat.ts animFreq,
+  livingRot pose (gaitLegs + head back / fist up), rootPose walk bob. tests/render-hearts 4/4 (updated).
+- Looked at: arc-river-before / arc-river-warning (lookdev river, medium): water turns grey-brown in the warning
+  (browner: YES) but the banks were pixel-identical (diff) — "higher": NO. Cause: terrainmat's shore wet band (which
+  carries the silt mud) is zeroed where vegTotal > 0.45, i.e. on every grassy bank. FIX: terrainmat.ts `siltBank`
+  (same reach as the silt wLo, noise-broken, NOT veg-gated): mud colour, flattened sward, wetter roughness. render-silt 4/4.
+- Tower spec bug: each preset is a new page, so window.__tw/__p were undefined after the first shot (6 of 7 failed).
+  FIX: render-tower.json / render-hearts.json shots re-run a guarded setup prelude. All 4 specs parse (AsyncFunction).
+- Tower picking: DONE by the UI lane (app.ts pickTower, host.ts InspectRef 'tower'); nothing for render.
+- tsc clean 04:3xZ.
+- RUNS: perf (render-perf.json) running under the stint-1 chain PID 15154 (log shots-render-perf.log). New chain
+  PID 8115 (waits 15154): river-warning.json, render-tower.json, render-hearts.json -> shots-<spec>.log in
+  _harness/scratch/arc/render/; chain2.log. Each shot takes 15-60 min at load ~16.

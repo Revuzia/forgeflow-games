@@ -1,37 +1,95 @@
 {
- "_doc": "ARC §1.3/§1.4/§3.4 render: heart poses near (lookUp fear, fist/curse, hurl with pebbles in flight, celebrate) on the §6.7 stub signs over the lookdev village's people. 888x500. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/render-hearts.json --port=5312 > _harness/scratch/arc/render/shots-hearts.log 2>&1 &",
+ "_doc": "ARC \u00a71.3/\u00a71.4/\u00a73.4 render: heart poses near (lookUp fear, fist/curse, hurl with pebbles in flight, celebrate) on the \u00a76.7 stub signs over the lookdev village's people. 888x500. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/render-hearts.json --port=5312 > _harness/scratch/arc/render/shots-hearts.log 2>&1 &",
  "shots": [
-  { "name": "arc-pose-fear", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
-      "const p = G.poi('village'); window.__p = p; G.arc.stub('hearts', { signs: 3 }); await G.frames(8);",
-      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
-      "return { drawn: F.fx.vis.life.crowds.stats };"
-    ] },
-  { "name": "arc-pose-fist", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 2 }); await G.frames(8);",
-      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
-      "return { ok: true };"
-    ] },
-  { "name": "arc-pose-hurl", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 5 }); await G.frames(8);",
-      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 70, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(6);",
-      "for (let i = 0; i < 12; i++) { F.advance(0.35); await G.frames(1); }",
-      "return { hurlers: F.fx.vis.life.crowds.hurlers.length / 5, arcs: F.fx.defiance.stats };"
-    ] },
-  { "name": "arc-pose-hurl-low", "params": "source=lookdev", "size": [888, 500], "quality": "low", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const F = window.__GENESIS_FX__; const p = window.__p; await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 70, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(6);",
-      "for (let i = 0; i < 12; i++) { F.advance(0.35); await G.frames(1); }",
-      "return { arcs: F.fx.defiance.stats };"
-    ] },
-  { "name": "arc-pose-celebrate", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
-    "script": [
-      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 4 }); await G.frames(8);",
-      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
-      "G.arc.stub('hearts', null); return { ok: true };"
-    ] }
+  {
+   "name": "arc-pose-fear",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+    "const p = G.poi('village'); window.__p = p; G.arc.stub('hearts', { signs: 3 }); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
+    "return { drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "arc-pose-fist",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__p) { window.__p = G.poi('village'); }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 2 }); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
+    "return { ok: true };"
+   ]
+  },
+  {
+   "name": "arc-pose-hurl",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__p) { window.__p = G.poi('village'); }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 5 }); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 70, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(6);",
+    "for (let i = 0; i < 12; i++) { F.advance(0.35); await G.frames(1); }",
+    "return { hurlers: F.fx.vis.life.crowds.hurlers.length / 5, arcs: F.fx.defiance.stats };"
+   ]
+  },
+  {
+   "name": "arc-pose-hurl-low",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "low",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__p) { window.__p = G.poi('village'); }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 70, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(6);",
+    "for (let i = 0; i < 12; i++) { F.advance(0.35); await G.frames(1); }",
+    "return { arcs: F.fx.defiance.stats };"
+   ]
+  },
+  {
+   "name": "arc-pose-celebrate",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__p) { window.__p = G.poi('village'); }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('hearts', { signs: 4 }); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 34, tilt: 74, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(10); F.advance(1); await G.frames(4);",
+    "G.arc.stub('hearts', null); return { ok: true };"
+   ]
+  }
  ]
 }

@@ -119,19 +119,22 @@ function livingAnim(anim: number, moving: boolean, flags2: number, id: number): 
  * the HeartSign). Values match ARC §6.2's AnimState additions so a sim that sets them directly draws the same.
  */
 export const HEART_ANIM = { lookUp: AnimState.lookUp, fist: AnimState.fist, hurl: AnimState.hurl, curse: AnimState.curse } as const;
+/** render-only: walking while watching the sky / walking with a fist raised (the walk's gait, the sign's upper body) */
+export const HEART_WALK = { lookUp: 44, fist: 45 } as const;
 /** HeartSign (ARC §6.2): none 0, pray 1, fist 2, fear 3, celebrate 4, hurl 5 */
 const HS = HeartSign;
 /** of the people raising a fist, the share shouting at the sky with both arms up instead (ARC §3.2's curse knot) */
 const CURSE_SHARE = 0.4;
 
 /**
- * a heart sign's pose over the sim's animation (ARC §1.4): it applies only to someone standing idle or talking (work
- * keeps its own animation, and a walker would slide in a standing pose); a defiant act (fist, hurl) is its own task
+ * a heart sign's pose over the sim's animation (ARC §1.4): it applies to someone standing idle or talking, and a walker
+ * keeps the walk's legs with the sign in the upper body (HEART_WALK); work keeps its own animation; a throw is its own task
  */
 export function heartAnim(anim: number, moving: boolean, sign: number, id: number): number {
   if (!sign) return anim;
   if (sign === HS.hurl) return moving ? anim : HEART_ANIM.hurl;
-  if (moving) return anim;
+  // ARC §1.4 "idle, walking, socialising": a walker keeps the walk's legs and carries the sign in the upper body
+  if (moving) return anim !== AnimState.walk ? anim : sign === HS.fear ? HEART_WALK.lookUp : sign === HS.fist ? HEART_WALK.fist : anim;
   const free = anim === AnimState.idle || anim === AnimState.teach || anim === AnimState.walk;
   switch (sign) {
     case HS.fist: return free || anim === AnimState.fight ? (hashFloat(id, 0x4e43) < CURSE_SHARE ? HEART_ANIM.curse : HEART_ANIM.fist) : anim;
