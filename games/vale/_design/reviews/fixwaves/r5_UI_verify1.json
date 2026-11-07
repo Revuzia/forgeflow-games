@@ -1,0 +1,88 @@
+{
+ "lane": "UI",
+ "verifier": "adversarial verify 1",
+ "at": "2026-11-07 09:55 CST",
+ "head": "a22143966 (client code from babbd7e66 + 334c66dac; prod client built from the working tree at about 08:52 into _harness/_prod/fw_r5_uiv1/dist, which also held other lanes' uncommitted edits)",
+ "pass": true,
+ "summary": "The Menu tab holds up in the production client. I ran 8 matches in two pages (vite preview, real Chrome on the GPU): RIFT, BRIDGE and FRAY, High and Ultra, 1280x720 and 1920x1080, one match each at HUD scale 1.25 / minimap 1.3 / minimap left, four on the Mac's device sink and four on Chrome's fake sink. The tab was on screen in 8 of 8. It overlapped nothing in 24 of 24 layouts (HUD, shop open, scoreboard held) and was the top hit-test element every time. The tooltip names Esc in 8 of 8, and a real click opened the menu in 8 of 8, including with the shop open. Each match was then left by mouse alone (tab, Leave match, confirm), 8 of 8. An Escape trace of 95 presses on the fake sink matches ruling 26: aim, then attack-move or wheel, then shop, then menu, and a modal always closes first. My tool reported 3 failures in the fake run (load 129-556). The trace shows all 3 are harness artifacts, not client faults. e2e all PASS 8/8 (load 406 -> 16), with leftAtPress 2.2 s in the ready check. overlay_regress PASS. typecheck is clean. probe was 52/55 at load 332-500. The 3 failures are sim timing probes in files this lane did not touch, and all 3 pass when re-run alone at load 13-14.",
+ "items": [
+  {
+   "id": "UI-2 Menu tab: present, placed clear, tooltip names Esc, click opens, mouse-only leave",
+   "severity": "major",
+   "status": "pass",
+   "command": "node <scratchpad>/vfy_menu.mjs _harness/_reports/fw_r5_ui_vfy1_menu_dev.json fw_r5_ui_vfy1_dev bridge:high:1920x1080,rift:ultra:1280x720,fray:ultra:1920x1080,rift:high:1280x720:big (device sink); again with --fake-audio as fw_r5_ui_vfy1_menu_fake.json, plan fray:high:1280x720,rift:ultra:1920x1080:big,bridge:ultra:1280x720,rift:high:1920x1080. Scratch tool: prod build plus vite preview, one page per run, the map order and preset changed between matches through vale.profile.v1 and a reload; big = hudScale 1.25, minimapScale 1.3, minimap left",
+   "load": "device run 316 -> 362 (per match 501->498, 498->281, 281->287, 287->370); fake run 364 -> 429 (235->129, 129->409, 409->556, 556->419)",
+   "measured": "Tab box: 103x26 at (16,12) at 1920x1080, 90x21 at (13,10) at 1280x720, and 103x26 at 1280x720 with HUD scale 1.25 (0.8 floor x 1.25). These match client_hud.md §4.8. I checked overlaps against the minimap, minimap box, target plate, Dial Bar, sky strip, ledger, ally frames, kill feed, Hour Board, practice tools, shop, scoreboard, announcer, recap, feed, top-right stack, toasts and world pops in 3 states per match (24 layouts): 0 overlaps. elementFromPoint at the tab centre is the tab in all 24. The tooltip reads 'Menu (Esc) / Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.' in 8 of 8. A real mouse click opened the menu in 8 of 8, and also with the shop open in 8 of 8; Esc then closed only the menu and the shop stayed. Resume by click closed it. Space (centre camera) and Enter afterwards did not reopen it (8 of 8). A devicechange event dispatched mid-match did not stop the tab working, and each match was then left with the mouse only: tab, Leave match, confirm, back to Play (8 of 8). 0 console errors. I checked the shots by eye at both sizes (tab zoomed: legible ink plate, chalk glyph, MENU, Esc keycap; tooltip below it, clear of the ally frames).",
+   "report": "_harness/_reports/fw_r5_ui_vfy1_menu_dev.json, .log; _harness/_reports/fw_r5_ui_vfy1_menu_fake.json, .log; shots _harness/_shots/fw_r5_ui_vfy1_{dev,fake}_<n>_<mode>_<preset>_<size>_{hud,shop,shop_menuclick,scoreboard,tip,menu,aim_menuclick}.png"
+  },
+  {
+   "id": "UI-2 ruling 26 Esc order with the tab in place (aim, after cast, attack-move, wheel, shop, aim+shop, aim then tab click)",
+   "severity": "major",
+   "status": "pass",
+   "command": "same runs; a window capture keydown logger, installed before any client script, records every Escape with menu/shop/aim state before the press and at +0, +500 and +2500 ms",
+   "load": "as above",
+   "measured": "Device run, presses to reach the menu (counted with getByRole): plain 1 (4/4); aim held 2 (4/4); after a cast 1 (4/4; the cast cleared the aim); shop 2 (4/4); attack-move 2 (4/4); aim+shop 3 (2/2 where both layers were up, 2 where only the shop was); held ping wheel: Esc 1 closed the wheel with no menu (3/3; FRAY has pings off). Aim held, then a tab click: the menu opens, Esc closes the menu and the aim is still held (FRAY), and the next Esc presses cancel the aim and then open the menu. This is the documented design. Fake run trace, 95 Escape presses: 36 closed a modal, 25 opened the menu with nothing else up, 10 cancelled an aim with no menu, 8 closed the shop with no menu, and 13 cancelled attack-move or the wheel and the next press opened the menu. 0 presses skipped a layer, and 0 opened the menu with a layer up. The tool marked 3 failures in that run, and the trace explains each one. (1) 'menu reopened' (FRAY 1280): src/ui/components/Modal.tsx remounts a closing modal in its exit list, so the Leave button stays in the DOM, aria-hidden, for about 1.2 s at load ~235. Nothing reopened, and there was no Esc in between. (2, 3) BRIDGE 1280 aim+tab and attack-move 'presses 4': the trace shows the client opened the menu on Esc 2 (menu in the DOM at +0 and +500 ms). The tool's 1.5 s role poll missed it at load 409-556, pressed Esc again and closed it.",
+   "report": "_harness/_reports/fw_r5_ui_vfy1_menu_fake.json (matches[].escLog), _harness/_reports/fw_r5_ui_vfy1_menu_dev.json (matches[].checks)"
+  },
+  {
+   "id": "UI-2 client_hud.md §1 (Esc line, portal line), §4.1 budget, §4.8 in-match menu",
+   "severity": "minor",
+   "status": "pass",
+   "command": "git diff b475adc27 HEAD -- _design/sections/client_hud.md; read lines 48-49, 202-205, 259",
+   "load": "n/a",
+   "measured": "The §1 Esc line states the ruling 26 order: a modal first, then aim, attack-move or wheel, then the shop, then the menu; at most 4 presses. That is the order I measured. §4.8 gives the tab's place and size, and the measured boxes match it. The budget arithmetic checks out: 103x26 / 1920x1080 = 0.129%, and the always-on total of 13.92/12.05/13.38% is under 14%. The portal line matches index.html:22.",
+   "report": "_design/sections/client_hud.md"
+  },
+  {
+   "id": "UI-3 leave probe selectors (.lshop, .pwheel, HUD shop not counted as a modal)",
+   "severity": "minor",
+   "status": "pass",
+   "command": "node --check _harness/fw_r4_ui_leave.mjs; the same reads (.hud .lshop, .hud .pwheel, role=dialog outside .hud) inside vfy_menu.mjs st() in the 8 live prod matches",
+   "load": "as above",
+   "measured": "node --check passes. In the live matches, '.hud .lshop' was true exactly while the shop was open (P), false after Esc closed it (8 of 8 matches). '.hud .pwheel' was true while G was held on BRIDGE/RIFT and false after Esc. The in-match menu is a role=dialog in the ModalHost, outside .hud, so it still counts as a modal. Not done: the full fw_r4_ui_leave.mjs --aim run, by the engineer or by me. The checks above use the same selectors.",
+   "report": "_harness/_reports/fw_r5_ui_vfy1_menu_*.json checks.*.before.shop/wheel"
+  },
+  {
+   "id": "UI-4 ready check: harness late, not client; e2e all",
+   "severity": "major",
+   "status": "pass",
+   "command": "node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_vfy1_e2e_all.json --prefix fw_r5_ui_vfy1_e2e (dev server 5190); looked at _harness/_shots/fw_r4_ui_vfy1_e2e_flow_ready_03_remind.png",
+   "load": "406.74 -> 15.68",
+   "measured": "The r4 remind shot already shows the toast 'The ready check ran out', so the window closed while the harness was still busy. The cause holds. e2e all PASS 8/8 (flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak, store). remind read 3.2 s left and pressed Decline with 2.2 s left; decline_once gave notices 1 and closedOnReturn 1; play_after_dodge raised exactly 1 notice. The new toast subscriber counts toasts the client raised, and it still fails on 0 or on 2 or more, so the check is not weaker.",
+   "report": "_harness/_reports/fw_r5_ui_vfy1_e2e_all.json, .log"
+  },
+  {
+   "id": "regressions: typecheck, probe, overlay_regress",
+   "severity": "major",
+   "status": "pass",
+   "command": "npm run -s typecheck; npm run -s probe; then node _harness/probe_sim_core_nav.ts, probe_sim_perf.ts, probe_sim_kit_diag.ts alone; node _harness/overlay_regress.mjs",
+   "load": "probe 106 -> 332 (2552 s); single re-runs at 13-14; overlay_regress 14 -> 44",
+   "measured": "typecheck exit 0. probe 52/55. The 3 failures are all timing under load in sim probes this lane did not touch: core_nav grid A* 3.626 ms against a 3 ms bar, sim_perf p99 10.97 ms against 8, kit_diag killed at its 900 s timeout. Re-run alone at load 13-14: core_nav 46/0, sim_perf 4/0 (p99 1.587 ms), kit_diag exit 0 in 481 s. overlay_regress: PASS. hud_renders was not re-run, because the lane changed nothing in the sky strip or ledger.",
+   "report": "_harness/_reports/fw_r5_ui_vfy1_overlay_regress.log; probe log in the verifier scratchpad (summarised here)"
+  },
+  {
+   "id": "strings for the tab's tooltip",
+   "severity": "minor",
+   "status": "partly",
+   "command": "grep hud.menu.button content/strings.en.json",
+   "load": "n/a",
+   "measured": "0 matches. The tooltip and aria-label come from the cv.t English fallbacks in src/ui/hud/index.tsx MenuButton. Players see correct text, but the keys are not in the string table yet. This is the engineer's open handoff to the strings owner.",
+   "fixHint": "content owner: add hud.menu.button_tip 'Menu (Esc)' and hud.menu.button_sub with the exact fallback text"
+  },
+  {
+   "id": "engineer's own tool runs the dev client",
+   "severity": "minor",
+   "status": "partly",
+   "command": "read _harness/fw_r5_ui_menu.mjs",
+   "load": "n/a",
+   "measured": "fw_r5_ui_menu.mjs opens /?dev=1&autopilot=match, the dev client with the dev handle, and flips the minimap through window.__vale. Its PASS claims are therefore dev-client evidence. I re-measured in the production build above, and the results agree.",
+   "fixHint": "optional: give fw_r5_ui_menu.mjs a prod-build mode like fw_r4_ui_leave.mjs"
+  }
+ ],
+ "regressions": [],
+ "notes": [
+  "Pre-existing, not this lane: Modal.tsx keeps a closing modal mounted, aria-hidden, until its exit animation ends. Its useLayoutEffect runs again on that remount and moves focus to its first button (activeAfterClose 'button.btn'). At load 200+ this lasts about 1 s. A DOM-only check (button text plus offsetParent) sees the menu as open in that window. Role-based checks (getByRole) do not. Harness authors should use role queries or a .modal-layer:not([aria-hidden]) selector.",
+  "Device change was only simulated: a 'devicechange' event on navigator.mediaDevices. Playwright cannot switch the real output device, and the Mac's output is stalled (AUD-1). After the event the tab, the menu and leaving all worked, and there were 0 console errors.",
+  "Frame timings were not measured. Load is recorded with every number."
+ ]
+}
