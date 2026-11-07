@@ -69,3 +69,14 @@
   (god -1, faith +0.1, feared fear +0.05 / trusted trust +0.03, sees_god, an `omen:tower.<kind>` act).
 - §2.4 strike after a refused warning: provoked via since.provoked (regard's class gives trust -0.05).
 - people/buildings.ts: a ruined `wonder` (great-tower) is never cleared for a new building (the rubble never clears).
+
+## Stint 7 (A-sim, 2026-11-07 ~11:10Z) — no contract change; §8.2 attended-pacing TENSION measured
+- Measured (probe-attwhy.ts, 8 seeds x 14 y, gentle god answering every prayer): leader pride at y10 0.48-0.59, at y14
+  0.54-0.69 (4/8 >= 0.62); answered prayers cost up to 0.16 pride through F. With §2.2 (1) towerMinYear 10 and the (4)
+  roll `0.25 x clamp((pride - 0.6) / 0.3)` the yearly chance in years 10-14 is <= 0.075, so "first tower in 7-14 y on
+  >= 3/8 attended" is unreachable as specified; unattended T2 (3/8, median 17.9) is met and would move with any global knob.
+- Owner/spec options (pick one; each is a few lines in tower.ts/arc.ts plus a re-run of probe-t2att.sh and probe-t2.sh):
+  (a) accept that a kind god delays Babel: restate attended pacing as "first tower in years 10-25 on >= 3/8"; or
+  (b) an "attention" term: while the god has acted on the planet in the last 2 years, the §2.2 roll uses
+      clamp((pride - 0.55) / 0.2) and towerChance x 2 (unattended worlds untouched); or
+  (c) favour as pride: answered prayers count toward P/L instead of lowering F ("they boast of being chosen").

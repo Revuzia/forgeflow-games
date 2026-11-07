@@ -123,4 +123,4 @@ rivals.ts:32-41), Book UI, legends.
 
 - sim lane (A-sim stint 6, 10:4xZ): §8.2 T2 unattended PASS (3/8, median y17.9, <= 2 attempts, none < y10); T4 PASS
   (half <= 4.25 y, >= 2 omens, on-site 95-99 % after TOWER.shift 600); T7 PASS 8/8 (dead 1-4, <= 50 % of on site);
-  T8 refusal-strike provoked (test). Open: attended pacing T2 (owner/spec call). Gate check5 808/808; check6 running.
+  T8 refusal-strike provoked (test). Open: attended pacing T2 (owner/spec call). Gate check5 808/808; check6 809/809 (11:03Z).

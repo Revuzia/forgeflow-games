@@ -235,9 +235,21 @@
   living-relationship + determinism + arc-babel 44/44 pass, tsc 0.
 
 ## NEXT (stint 7)
-1. GATE: read scratch/arc/check6.log (`# fail 0`?). It started before the strike/provoked edit (focused tests cover it);
-   if anything fails, fix and run the gate once more.
+1. GATE: check6.log (10:41-11:03Z) 809/809 PASS (it loaded arc-tower before the refusal-strike test was appended; that
+   test + tower.ts edit passed focused: arc-tower 11/11). Run the full gate again only after new code.
 2. Attended pacing T2 is the ONLY open §8.2 sim line: an owner/spec call (contract-changes.md stint 5 TENSION). Do not
    tune blindly. Options are listed there.
 3. Optional: T7's 50-year rubble as a live run (probe-strike.ts <seed> 0.6 50, through slot.sh as a long job); the code
    path is guarded (decay 0; planBuilding never clears a ruined wonder).
+
+### Stint 7 (2026-11-07 ~11:05Z)
+- Attended T2 DIAGNOSED (not tuned; owner/spec call stands): probe _harness/arc-work/probe-attwhy.ts <seed> [14]
+  (+ probe-attwhy.sh, MODE=unattended for the baseline) -> scratch/arc/attwhy-{a,b}.log, 8 seeds x 14 y, gentle god
+  answering every open prayer daily. Leader pride at y10 / y14: s1 .48/.55, s2 .56/.58, s3 .57/.63, s4 .50/.54,
+  s5 .58/.63, s6 .49/.55, s7 .59/.69, s8 .58/.64; every leader is pop 46-56 with ONE kin village (pop 33-39, pride 0);
+  P = 1 everywhere, U = 0.33, L = yrs/15. Answered prayers drive F to 0.01-0.2 on seeds 1, 2, 4, 6 (faith 0.8-0.99),
+  i.e. -0.1 to -0.16 of pride. By y14 4/8 leaders pass 0.62 but the roll factor clamp((pride-0.6)/0.3) is 0.04-0.3,
+  so chance/yr <= 0.075: the 10-14 window (towerMinYear 10 cuts 7-9) cannot yield 3/8 without a pacing change.
+  Numbers + options written to contract-changes.md (stint 7).
+- Full gate on the final tree launched 11:08Z: slot.sh npm run check -> scratch/arc/check7.log (pid file check7.pid).
+- T7 50-year rubble live run launched 11:08Z: slot.sh probe-strike.ts 1 0.6 50 -> scratch/arc/strike50.log.
