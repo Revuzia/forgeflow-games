@@ -1,0 +1,41 @@
+{
+ "_doc": "verify-A-r1-owner: the live tower close (camera on TowerView.pos): rising at the first card (scaffold, builders), the struck mound, the confusion ring, the finished tower's night fire. babel seed 1, 888x500, frames held. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/verify-owner-tower-near.json --port=5351 > _harness/scratch/arc/verify-A-r1-owner/near.log 2>&1 &",
+ "shots": [
+  { "name": "vo-near-rising", "params": "scenario=babel&source=worker&seed=1&b=near1", "size": [888, 500], "quality": "medium", "ui": false, "frames": 2,
+    "script": [
+      "G.hold(true); document.getElementById('boot')?.remove();",
+      "window.__ll = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return { lat: Math.asin(p[1] / l) * 180 / Math.PI, lon: Math.atan2(p[0], p[2]) * 180 / Math.PI }; };",
+      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; const ll = __ll(tw.pos);",
+      "await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 160, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(3);",
+      "return { d, h: tw.height, builders: tw.builders, people: G.agents(80).length, ll };"
+    ] },
+  { "name": "vo-near-struck", "params": "scenario=babel&source=worker&seed=1&b=near1", "size": [888, 500], "quality": "medium", "ui": false, "frames": 2,
+    "script": [
+      "const r = await G.cmd({ k: 'tower.strike', tower: window.__tw.id }); await G.step(1440); const ll = __ll(window.__tw.pos);",
+      "await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 160, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(3);",
+      "return { r: r.msg, t: JSON.stringify(await G.arc.towers()).slice(0, 300) };"
+    ] },
+  { "name": "vo-near-confuse", "params": "scenario=babel&source=worker&seed=1&b=near2", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
+      "window.__ll = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return { lat: Math.asin(p[1] / l) * 180 / Math.PI, lon: Math.atan2(p[0], p[2]) * 180 / Math.PI }; };",
+      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; const ll = __ll(tw.pos);",
+      "await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 2500, tilt: 50, yaw: 30, fov: 50, hour: 10 }); await G.frames(2);",
+      "const r = await G.arc.choose('1'); G.hold(false); await G.frames(3); await G.step(20); await G.frames(3); G.hold('ui');",
+      "return { r: r && r.msg, dec: G.arc.decision() };"
+    ] },
+  { "name": "vo-near-finished-night", "params": "scenario=babel&source=worker&seed=1&b=near3", "size": [888, 500], "quality": "medium", "ui": false, "frames": 2,
+    "script": [
+      "G.hold(true); document.getElementById('boot')?.remove();",
+      "window.__ll = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return { lat: Math.asin(p[1] / l) * 180 / Math.PI, lon: Math.atan2(p[0], p[2]) * 180 / Math.PI }; };",
+      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw;",
+      "await G.cmd({ k: 'tower.let', tower: tw.id }); let ts; for (let i = 0; i < 40; i++) { await G.step(1440*15); ts = await G.arc.towers(); if (ts.some((t) => t.status === 'finished')) break; }",
+      "const ll = __ll(tw.pos); await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 420, tilt: 70, yaw: 30, fov: 50, hour: 22 }); await G.frames(3);",
+      "return { t: JSON.stringify(ts).slice(0, 300) };"
+    ] },
+  { "name": "vo-near-finished-day", "params": "scenario=babel&source=worker&seed=1&b=near3", "size": [888, 500], "quality": "medium", "ui": false, "frames": 2,
+    "script": [
+      "const ll = __ll(window.__tw.pos); await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 420, tilt: 70, yaw: 30, fov: 50, hour: 10 }); await G.frames(3); return {};"
+    ] }
+ ]
+}
