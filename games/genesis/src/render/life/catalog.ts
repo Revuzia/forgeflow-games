@@ -163,6 +163,8 @@ export const BUILDING_KINDS = [
   'hive-mound', 'longhouse', 'barn', 'tenement', 'igloo', 'store-pit', 'oven', 'shrine', 'mine', 'powerplant', 'refinery', 'lab',
   // additive (render lane, phase 4b: ships and space)
   'airship-mast', 'habitat-dome', 'star-gate',
+  // additive (ARC §3.4: the idol a defiant town raises)
+  'idol',
 ] as const;
 export type BuildingKind = (typeof BUILDING_KINDS)[number];
 
@@ -227,6 +229,8 @@ const DEFAULT_BUILDINGS: BuildingLook[] = [
   B('airship-mast', 'airship-mast', 13.6, 13.6, ['steel', 'timber']),
   B('habitat-dome', 'habitat-dome', 15.3, 15.3, ['glass', 'concrete', 'steel']),
   B('star-gate', 'star-gate', 27, 27, ['steel', 'concrete']),
+  // additive (ARC §3.4)
+  B('idol', 'idol', 1.6, 1.6, ['stone', 'wood']),
 ];
 
 function kindFromDef(d: Def): BuildingKind {
@@ -238,6 +242,7 @@ function kindFromDef(d: Def): BuildingKind {
   if (/igloo|snow.?house/.test(all)) return 'igloo';
   if (/pit/.test(all)) return 'store-pit';
   if (/oven|bakery/.test(all)) return 'oven';
+  if (/idol/.test(all)) return 'idol';
   if (/shrine|altar/.test(all)) return 'shrine';
   if (/blast/.test(all)) return 'furnace';
   if (/school|academy|university/.test(all)) return 'library';

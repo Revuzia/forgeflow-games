@@ -3288,6 +3288,46 @@ function skyRing(k: KitBuilder, x: number, y: number, z: number, r: number, fear
  * in a ring of stones with an offering stone and a fire; later a small open pavilion with an altar, offerings and a
  * brazier under a roof crowned with the sky-ring.
  */
+/**
+ * ARC §3.4: the idol a defiant town raises against the god — a carved standing stone (masonry and earthen peoples, or
+ * stone to hand) or a carved wooden post (timber peoples), about 3 m, its bands painted in the culture's colours; a
+ * face cut near the top (deep-set eyes, a mouth), a few offerings at its foot. A real object of their make: no glow.
+ */
+function idol(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
+  const stone = spec.family ? spec.family !== 'timber' : spec.mat.tier >= 2 || spec.mat.wall === SURF.mudbrick;
+  const paint = CLOTH[spec.style % CLOTH.length], paint2 = CLOTH[(spec.style + 3) % CLOTH.length];
+  const H = 2.8 + rng.float() * 0.5;
+  const lod = spec.lod;
+  if (stone) {
+    const col: RGB = mixc([0.36, 0.34, 0.31], spec.mat.wallCol, 0.25);
+    // the stone: tapering, a little irregular, set into a low cairn
+    k.box(-0.42, -0.4, -0.3, 0.42, H * 0.55, 0.3, SURF.rubble, PART.wall, col, { aoLow: 0.7 });
+    k.box(-0.36, H * 0.55, -0.26, 0.36, H, 0.26, SURF.rubble, PART.wall, mulc(col, 1.04), { skip: ['bottom'] });
+    // painted bands and the face (eyes and mouth cut in, darker)
+    k.box(-0.44, H * 0.5, -0.32, 0.44, H * 0.5 + 0.16, 0.32, SURF.plaster, PART.trim, paint, { skip: ['bottom', 'top'] });
+    k.box(-0.38, H * 0.82, -0.28, 0.38, H * 0.82 + 0.1, 0.28, SURF.plaster, PART.trim, paint2, { skip: ['bottom', 'top'] });
+    for (const sx of [-1, 1]) k.box(sx * 0.16 - 0.06, H * 0.7, 0.24, sx * 0.16 + 0.06, H * 0.7 + 0.1, 0.275, SURF.plaster, PART.trim, [0.03, 0.025, 0.02], { skip: ['bottom'] });
+    k.box(-0.12, H * 0.6, 0.24, 0.12, H * 0.6 + 0.06, 0.275, SURF.plaster, PART.trim, [0.04, 0.03, 0.025], { skip: ['bottom'] });
+    if (lod === 0) for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + rng.float() * 0.5, r = 0.6 + rng.float() * 0.25, sz = 0.14 + rng.float() * 0.12;
+      k.box(Math.cos(a) * r - sz, -0.1, Math.sin(a) * r - sz, Math.cos(a) * r + sz, sz * 1.2, Math.sin(a) * r + sz, SURF.rubble, PART.plinth, mulc(col, 0.85 + rng.float() * 0.2), { skip: ['bottom'] });
+    }
+  } else {
+    // the post: a trunk dressed to eight sides, carved in bands, the head a face with a jutting brow
+    const r0 = 0.22;
+    k.cylinder(0, 0, -0.4, H, r0, r0 * 0.88, lod === 0 ? 8 : 6, SURF.logs, PART.wall, WOOD, { top: true });
+    for (const [y, c] of [[H * 0.35, paint], [H * 0.55, paint2], [H * 0.75, paint]] as [number, RGB][]) k.cylinder(0, 0, y, y + 0.14, r0 + 0.03, r0 + 0.02, lod === 0 ? 8 : 6, SURF.planks, PART.trim, c);
+    k.box(-0.24, H * 0.86, 0.12, 0.24, H * 0.86 + 0.08, 0.3, SURF.planks, PART.trim, mulc(WOOD, 0.8), {});
+    for (const sx of [-1, 1]) k.box(sx * 0.09 - 0.04, H * 0.8, 0.19, sx * 0.09 + 0.04, H * 0.8 + 0.06, 0.235, SURF.plaster, PART.trim, [0.03, 0.025, 0.02], { skip: ['bottom'] });
+  }
+  // offerings at its foot: a bowl and a little heap
+  if (lod === 0) {
+    k.lathe(0.55, 0.45, [[0.05, 0], [0.16, 0.08], [0.18, 0.12]], 8, SURF.plaster, PART.prop, [0.4, 0.25, 0.14], 0.8, 1);
+    k.box(-0.65, 0, 0.35, -0.4, 0.14, 0.6, SURF.earth, PART.prop, [0.3, 0.22, 0.1], { skip: ['bottom'] });
+  }
+  return H;
+}
+
 function shrine(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]): number {
   const fear = spec.mood < -0.33, kind = spec.mood > 0.33;
   if (spec.era <= 1 || spec.mat.tier <= 0 || spec.mat.id === 'wood') {
@@ -3510,6 +3550,7 @@ export function buildingMesh(spec: BuildingSpec): BuildingMesh {
     case 'store-pit': h = storePit(k, spec, rng); break;
     case 'oven': h = oven(k, spec, L, rng, em); break;
     case 'shrine': h = shrine(k, spec, L, rng, em); break;
+    case 'idol': h = idol(k, spec, rng); break;
     case 'mine': h = mine(k, spec, rng, em); break;
     case 'powerplant': h = powerplant(k, spec, L, rng, em); break;
     case 'refinery': h = refinery(k, spec, rng, em); break;

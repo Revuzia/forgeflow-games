@@ -50,6 +50,7 @@ import { Rainbow } from './rainbow.ts';
 import { SigilMarks } from './sigilfx.ts';
 import { sigilOfDisaster } from './sigils.ts';
 import { SignsLayer } from '../signs/signs.ts';
+import { DefianceArcs } from '../signs/defiance.ts';
 
 export interface BrushIn {
   planet: number;
@@ -131,6 +132,8 @@ export class GodFx {
   private screen = new ScreenFx();
   private vis: PlanetVisual | null = null;
   private view: WorldView | null = null;
+  /** ARC §3.4 the hurl arcs (render/signs/defiance.ts) */
+  readonly defiance = new DefianceArcs();
   private seen = new WeakSet<SimEvent>();
   private shake = 0;
   private shakeT = 0;
@@ -325,6 +328,8 @@ export class GodFx {
       ticksSinceSnap: Math.max(0, (pv.renderTick ?? pv.paramsTick) - pv.paramsTick),
       personAt: (id) => crowds.positionOf(id), query: simQuery(),
     });
+    // ── ARC §3.4: the hurl arcs (pebbles thrown at the sky from the hurl pose, into the debris pool) ──
+    this.defiance.update(crowds.hurlers, vis.camBody, this.clock, M.debris);
     // ── lightning: ribbons, the light they throw on the ground ──
     M.bolts.update(this.clock, vis.camBody, ctx.ease);
     // (only the brightest live bolt lights the land: each light decal multiplies the scene up to ~4.5x, and a volcano's
@@ -499,6 +504,7 @@ export class GodFx {
         break;
       }
       case 'sacred.place': case 'sacred.animal': case 'omen': case 'prophet.called': case 'prophet.fulfilled': case 'prophet.died':
+      case 'tower.confused': case 'covenant.broken':
         M.signs.onEvent(e, R, this.lastReal);
         break;
       case 'miracle': {

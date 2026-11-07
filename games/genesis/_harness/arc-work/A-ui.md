@@ -47,3 +47,33 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
   at the far left at 888x500, so nothing fits left of it. (UI placement only; no §6 contract change.)
   TODO 6b: tower inspector card (picking a tower -> needs a pick path for TowerView; render lane draws it) with the same
   buttons via decision.openFor(id); "tower.begun" toast "Look at it" (toasts/eventmap via chronicle?).
+- DONE: toasts.ts tower.* toasts (begun/confused/struck/finished/heeded/refused/abandoned/rebuilt/warned; claim the
+  sim's chronicle line, plain fallbacks; click = look at it) and heart toasts (to defiant / devoted only).
+- §10 UI: lookdevgod.ts flood warning now sets params.rise/silt (cleared at the warning's end) so a lookdev shot can
+  show the warned river; spec _harness/arc-work/specs/river-warning.json (before vs warning, 888x500). NOT RUN YET.
+- Shots: _harness/arc-work/specs/ui-hearts.json launched 01:03Z via slot (PID 7012, log
+  _harness/scratch/arc/shots-hearts.log, PNGs in _shots/arc-hearts-*.png); very slow under load (npm check running).
+- Focused tests 01:15Z: ui-living, ui-logic, ui-flood-*, ui-fixr3, ui-defaults, ui-arc-*, audio-arc: 47/47 pass.
+- 01:27Z shot run 7012: arc-hearts-chips FAILED (page.screenshot timeout 600 s: software GL starved while the sim
+  lane's full `npm run check` (slot 2, PID 6382) ran). Remaining shots of the spec were still going. tsc clean.
+- No §6 contract changed this stint (contract-changes.md not needed).
+
+## NEXT (stint 2 starts here)
+1. kill -0 7012; if done, LOOK at _shots/arc-hearts-{layer,orbit,inspector}.png (888x500): chip glyph legible?
+   layer colours/legend? inspector Hearts section fits? If the chips shot failed again, rerun only it when the machine
+   is quieter: node _harness/shots.mjs _harness/arc-work/specs/ui-hearts.json --only=arc-hearts-chips --port=5311 via slot.sh.
+   Consider wait 120 instead of 240 in the spec if the step is the slow part.
+2. Run _harness/arc-work/specs/river-warning.json (§10.3c) through slot.sh; LOOK: river higher+browner than before.
+3. Decision card shot: stub a tower (G.arc.stub('towers', [{ id:1, pos, cell, name, host, league, height:20, goal:80,
+   tiers:2, material:'mudbrick', style:0, status:'rising', builders:9, begun:0, ended:-1, answer:'none', choiceOpen:true,
+   canAnswer:['confuse','strike','warn','let'] }])) at 888x500 with UI, with and without the inspector open; then
+   G.arc.later() -> pill shot. Check it never covers time controls / inspector.
+4. 6b: tower inspector card (InspectRef kind for a tower; data from pv.towers + query('towers') once the sim has it)
+   with buttons -> decision.openFor(id). Needs a pick path: render lane draws the tower (render/life/tower.ts).
+5. freeform help text (ui/help.ts / freeform examples) for the §6.5 phrases; 'open-book' UI intent hook (stage C).
+6. Full gate: `_harness/slot.sh --status` first; when no check runs on this tree: setsid nohup _harness/slot.sh npm run
+   check > _harness/scratch/arc/check-ui.log 2>&1 & ; fix anything of mine; then npm run build.
+7. Once the sim sends SettlementView.heart / TowerView for real: M4 shot (fearful village ~120 m, >=5 lookUp/fist poses,
+   chip legible at orbit + region) and T3/T10 shots in the babel scenario.
+- 01:29Z started the full gate: slot.sh npm run check (wrapper PID 12229), log _harness/scratch/arc/check-ui.log.
+  Next stint: read the log tail; "# fail 0" and exit 0 = gate green for this stint's code.

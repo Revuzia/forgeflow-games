@@ -27,6 +27,7 @@ import { KitBuilder, PART } from '../gen/meshkit.ts';
 import { extractRoads } from './roadnet.ts';
 import { EMIT, HOUSEHOLD_VARIANTS, buildingMesh, marketHallH, rubbleMesh, scaffoldKindFor, scaffoldMesh, yardPropMesh, type BuildingMesh, type Emitter, type YardProp } from '../gen/buildinggen.ts';
 import { BldBatch } from './bldbatch.ts';
+import { towerKey, towerLook, towerMesh, towerYaw, type TowerRec } from './tower.ts';
 
 /** a body-frame emitter of a building (particles / lights) */
 export interface LifeEmitter {
@@ -51,6 +52,14 @@ interface Variant {
   spec: { kind: BuildingKind; matIdx: number; style: number; era: number; mood: number; w: number; d: number; family?: BuildFamily; hv?: number };
 }
 
+/** two building keys that differ only in the style variant (field 2 of Buildings.sync's skey) */
+export function sameButStyle(a: string, b: string): boolean {
+  const x = a.split('|'), y = b.split('|');
+  if (x.length !== y.length || x[2] === y[2]) return false;
+  for (let i = 0; i < x.length; i++) if (i !== 2 && x[i] !== y[i]) return false;
+  return true;
+}
+
 /** a building's front: centre of its door side, outward and sideways axes, width; east / north there */
 export interface Front { x: number; y: number; z: number; fx: number; fy: number; fz: number; sx: number; sy: number; sz: number; w: number; ex: number; ey: number; ez: number; nx: number; ny: number; nz: number }
 
@@ -63,6 +72,10 @@ interface Rec {
   settlement: number;
   kind: BuildingKind;
   variant: Variant;
+  /** ARC §2.6: the look it had before its people's style changed (their tongues confused): drawn until `swapAt` (tick),
+   *  each house turning at its own moment within 2 game days, so the town eases into its new style */
+  from?: Variant;
+  swapAt?: number;
   m: Float32Array; // 16, column-major body-frame matrix
   /** body position of the origin, radial up */
   px: number; py: number; pz: number;
@@ -197,7 +210,12 @@ export class Buildings {
   /** per-cell night light (0..~2), for the terrain's light channel */
   lightField: Float32Array | null = null;
   lightVersion = 0;
-  stats = { buildings: 0, instances: 0, variants: 0, pendingVariants: 0 };
+  stats = { buildings: 0, instances: 0, variants: 0, pendingVariants: 0, towers: 0 };
+  /** ARC §2.6: the towers (render/life/tower.ts), one instance each, by tower id */
+  private towers = new Map<number, TowerRec>();
+  /** the next tick a house eases into its people's new style (Rec.swapAt) */
+  private nextSwap = Infinity;
+  private towerStamp = '';
   private shared: Record<string, IUniform>;
 
   constructor(shared: Record<string, IUniform>) {
@@ -424,7 +442,7 @@ export class Buildings {
       this.rebuildOutputs(pv);
       return;
     }
-    let changed = b.count !== this.recs.length;
+    let changed = false;
     const nl = this.nightLights(pv.settlements);
     const families = this.buildFamilies(pv.settlements, b);
     const water = pv.fields.get('water'), surface = pv.fields.get('surface');
@@ -434,6 +452,8 @@ export class Buildings {
     for (let i = 0; i < b.count; i++) {
       const id = b.id[i];
       const look = buildingAt(b.type[i]);
+      // ARC §2.3 / §6.9: the great tower's record only gives its labour a target; tower.ts draws it from TowerView
+      if (look.id === 'great-tower') continue;
       const mat = materialAt(b.material[i]);
       const st = this.settlementInfo(pv.settlements, b.settlement[i]);
       const style = b.style[i] & 7;
@@ -463,6 +483,12 @@ export class Buildings {
         rec.skey = skey;
         rec.state = state;
         if (old) { rec.ruinAt = old.ruinAt; rec.burnt = old.burnt; }
+        if (old && prev && !groundMoved && old.variant !== variant && sameButStyle(old.skey, skey)) {
+          const tick = pv.paramsTick;
+          rec.from = old.from && tick < (old.swapAt ?? 0) ? old.from : old.variant;
+          rec.swapAt = old.from && tick < (old.swapAt ?? 0) ? old.swapAt : tick + hashFloat(id, 0x57e1) * 2 * Math.max(60, pv.params.dayHours * 60);
+          if (rec.swapAt! < this.nextSwap) this.nextSwap = rec.swapAt!;
+        }
       }
       // a ruin already standing at the first look is old; one that falls while we watch starts fresh
       this.noteRuin(rec, state[2], pv.paramsTick, prev === null);
@@ -470,6 +496,7 @@ export class Buildings {
       nextById.set(id, rec);
     }
     for (const old of this.recs) if ((old.own || old.bank) && nextById.get(old.id) !== old) this.dropOwn(old);
+    if (next.length !== this.recs.length) changed = true;
     this.recs = next;
     this.byId = nextById;
     this.coverRuins();
@@ -984,6 +1011,22 @@ export class Buildings {
         em.push({ x: p[0], y: p[1], z: p[2], ux: r.ux, uy: r.uy, uz: r.uz, kind: EMIT.smoke, size: 0.8, power: 0.5, seed: hashFloat(r.id, 61) });
       }
     }
+    // ARC §2.6: a tower's emitters (the summit fire of a finished one, dust off a rising one), and the dust and smoke of
+    // a struck one's fall for a day after it
+    const dayT = Math.max(60, pv.params.dayHours * 60);
+    for (const t of this.towers.values()) {
+      const m = t.m;
+      const toBody = (p: [number, number, number]): [number, number, number] => [
+        m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+      for (let i = 0; i < t.mesh.emitters.length; i++) {
+        const e = t.mesh.emitters[i], p = toBody(e.p);
+        em.push({ x: p[0], y: p[1], z: p[2], ux: t.ux, uy: t.uy, uz: t.uz, kind: e.kind, size: e.size, power: e.kind === EMIT.smoke ? 0.5 : 1, seed: hashFloat(t.id, i, 0x70f3) });
+      }
+      if (t.status === 'struck' && t.ended >= 0 && pv.paramsTick - t.ended < dayT) {
+        const p = toBody([0, t.mesh.height * 0.6, 0]);
+        em.push({ x: p[0], y: p[1], z: p[2], ux: t.ux, uy: t.uy, uz: t.uz, kind: EMIT.stack, size: 4.5, power: 1, seed: hashFloat(t.id, 0x70f4) });
+      }
+    }
     // publish only what changed: occupancy churn in the live sim must not re-upload textures or respawn particles
     let sameEm = em.length === this.emitters.length && wl.length === this.windowLights.length;
     for (let i = 0; sameEm && i < em.length; i++) {
@@ -1036,11 +1079,74 @@ export class Buildings {
     return any;
   }
 
+  /** ARC §2.6: the towers of PlanetSnap.towers; true when what is drawn changed */
+  private syncTowers(pv: PlanetView): boolean {
+    const list = pv.towers ?? [];
+    const yearTicks = Math.max(60, pv.params.dayHours * 60) * Math.max(1, pv.params.yearDays || 1);
+    const sv = pv.fieldVersion.get('surface') ?? 0;
+    const looks = list.map((t) => towerLook(t, pv.paramsTick, yearTicks));
+    const struckFresh = list.some((t) => t.status === 'struck' && t.ended >= 0 && pv.paramsTick - t.ended < Math.max(60, pv.params.dayHours * 60) * 1.05);
+    const stamp = `${sv}|${looks.map(towerKey).join(',')}|${list.map((t) => `${t.id}:${t.pos.join(':')}:${t.ended}`).join(',')}${struckFresh ? `|${Math.floor(pv.paramsTick / 60)}` : ''}`;
+    if (stamp === this.towerStamp) return false;
+    this.towerStamp = stamp;
+    const next = new Map<number, TowerRec>();
+    const R = pv.params.radius;
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i], look = looks[i], key = towerKey(look);
+      const old = this.towers.get(t.id);
+      let rec: TowerRec;
+      if (old && old.key === key && old.ended === t.ended) { old.status = t.status; next.set(t.id, old); continue; }
+      const mesh = old && old.key === key ? old.mesh : towerMesh(look);
+      const host = pv.settlements.find((s) => s.id === t.host);
+      const l = Math.hypot(t.pos[0], t.pos[1], t.pos[2]) || 1;
+      const ux = t.pos[0] / l, uy = t.pos[1] / l, uz = t.pos[2] / l;
+      const rot = towerYaw(t, host ? [host.pos[0], host.pos[1], host.pos[2]] : null);
+      // frame as Buildings.place (east = Y × p; local +Z the stair, toward the host town)
+      let ex = uz, ez = -ux;
+      const el = Math.hypot(ex, ez) || 1;
+      ex /= el; ez /= el;
+      const nx = uy * ez, ny = uz * ex - ux * ez, nz = -uy * ex;
+      const c = Math.cos(rot), s = Math.sin(rot);
+      const zx = nx * c + ex * s, zy = ny * c, zz = nz * c + ez * s;
+      const xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
+      // the floor: the mean ground under the footprint, never more than 5 m over its lowest corner (the first tier runs
+      // 6 m down into the slope)
+      let lo = Infinity, sum = 0, n = 0;
+      const hb = mesh.hx * 0.8;
+      for (const [a, bb] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]] as [number, number][]) {
+        const qx = ux + (xx * a * hb + zx * bb * hb) / R, qy = uy + (xy * a * hb + zy * bb * hb) / R, qz = uz + (xz * a * hb + zz * bb * hb) / R;
+        const ql = Math.hypot(qx, qy, qz);
+        const g = groundHeight(pv.ground, qx / ql, qy / ql, qz / ql);
+        lo = Math.min(lo, g); sum += g; n++;
+      }
+      const base = Math.min(sum / n, lo + 5);
+      const m = new Float32Array([xx, xy, xz, 0, ux, uy, uz, 0, zx, zy, zz, 0, ux * base, uy * base, uz * base, 1]);
+      rec = { id: t.id, key, mesh, m, px: ux * base, py: uy * base, pz: uz * base, ux, uy, uz, seed: hashFloat(t.id, 0x70f5), status: t.status, ended: t.ended };
+      next.set(t.id, rec);
+    }
+    for (const [id, old] of this.towers) if (!next.has(id) || next.get(id)!.mesh !== old.mesh) { for (const b of this.batches) b.dropGeom(old.mesh.geo); old.mesh.geo.dispose(); }
+    this.towers = next;
+    this.stats.towers = next.size;
+    return true;
+  }
+
+  /** ARC §2.6: where a tower stands (body frame, its floor) — for the camera's "Look at it" and probes */
+  towerPosition(id: number): [number, number, number] | null {
+    const t = this.towers.get(id);
+    return t ? [t.px, t.py, t.pz] : null;
+  }
+
   update(pv: PlanetView, camX: number, camY: number, camZ: number): void {
     this.group.visible = this.enabled;
     if (!this.enabled) return;
     this.sync(pv);
+    if (this.syncTowers(pv)) { this.dirty = true; this.rebuildOutputs(pv); }
     const tick = pv.paramsTick;
+    if (tick >= this.nextSwap) {
+      this.dirty = true;
+      this.nextSwap = Infinity;
+      for (const r of this.recs) if (r.from) { if (tick >= (r.swapAt ?? 0)) r.from = undefined; else if (r.swapAt! < this.nextSwap) this.nextSwap = r.swapAt!; }
+    }
     const dayTicks = Math.max(60, pv.params.dayHours * 60);
     // ruins weather slowly: their state is rewritten every couple of game hours while they do
     if (Math.abs(tick - this.lastWeatherTick) > 120) {
@@ -1070,7 +1176,7 @@ export class Buildings {
     for (const b of this.batches) b.begin();
     let inst = 0;
     for (const r of this.recs) {
-      const v = r.variant;
+      const v = r.from && !r.from.pending && tick < (r.swapAt ?? 0) ? r.from : r.variant;
       if (v.pending || r.covered) continue;
       const dist = Math.hypot(r.px - camX, r.py - camY, r.pz - camZ);
       if (dist > MAX_DIST) continue;
@@ -1146,6 +1252,16 @@ export class Buildings {
         rb.add(rb.geom(rg), _m4, _c.setRGB(1, 1, 1), 1, damage, flags & (BuildingFlag.burning | BuildingFlag.ruined), sw, -1, 1, 1, r.seed, 0, 0, 0);
         if (dist < 400) this.bShadow.add(this.bShadow.geom(rg), _m4, _c, 1, damage, flags & (BuildingFlag.burning | BuildingFlag.ruined), sw, -1, 1, 1, r.seed, 0, 0, 0);
       }
+    }
+    // ARC §2.6: the towers — one mesh each, the same at every preset, seen from the ground to orbit (a speck and its
+    // shadow; no beacon)
+    for (const t of this.towers.values()) {
+      _m4.fromArray(t.m);
+      const tone = 0.95 + 0.1 * t.seed;
+      _c.setRGB(tone, tone, tone);
+      const lm = t.mesh;
+      this.bNear.add(this.bNear.geom(lm.geo), _m4, _c, 1, 0, 0, 0, lm.height, lm.hx, lm.hz, t.seed, 0, 0, 0);
+      this.bShadow.add(this.bShadow.geom(lm.geo), _m4, _c, 1, 0, 0, 0, lm.height, lm.hx, lm.hz, t.seed, 0, 0, 0);
     }
     for (const b of this.batches) b.end();
     let nv = 0;

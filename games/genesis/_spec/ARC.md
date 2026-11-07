@@ -782,7 +782,8 @@ interface SettlementView { /* ... */
   covenant?: { id: number; vow: Vow; status: 'kept'|'broken'; year: number };
 }
 interface TowerView { id: number; pos: V3; cell: number; name: string; host: number; league: number[];
-  height: number; goal: number; tiers: number; material: 'mudbrick'|'brick'|'stone'; style: number /* host styleVariant */;
+  height: number /* what stands */; goal: number; tiers: number /* struck: the count before the fall (render heaps the difference) */;
+  material: 'mudbrick'|'brick'|'stone'; style: number /* host styleVariant */;
   status: TowerState['status']; builders: number; begun: number; ended: number; answer: TowerState['answer'];
   choiceOpen: boolean; canAnswer: ('confuse'|'strike'|'warn'|'let')[]; warnBlocked?: string }
 interface PlanetSnap { /* ... */

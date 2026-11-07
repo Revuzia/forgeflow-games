@@ -1,0 +1,16 @@
+{
+ "_doc": "ARC render frame times before/after: the same lookdev camera (homestead, 420 m) without and with a rising tower + a hurl crowd, perfmon summaries over 90 frames each, at low and high. Run (port 5312) through slot.sh; read the printed script results in the log.",
+ "shots": [
+  { "name": "arc-perf-medium", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+      "const p = G.poi('homestead'); const v = G.poi('village'); const pv = F.fx.vis.pv; let host = pv.settlements[0]?.id ?? -1;",
+      "const tw = { id: 7, pos: p.pos, cell: p.cell, name: 't', host, league: [host], height: 62, goal: 100, tiers: 6, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] };",
+      "const measure = async () => { G.perf(true); await G.frames(90); const s = G.perf(); G.perf(false); return s; };",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(20);",
+      "const before = await measure(); G.arc.stub('towers', [tw]); G.arc.stub('hearts', { signs: 5 }); await G.frames(30); const after = await measure();",
+      "await G.camera({ mode: 'orbit', lat: v.lat, lon: v.lon, dist: 60, tilt: 70, yaw: v.heading, fov: 50, hour: 10 }); await G.frames(20); const hurl = await measure(); G.arc.stub('hearts', null); await G.frames(20); const hurlBefore = await measure();",
+      "return { before, after, hurlBefore, hurl, arcs: F.fx.defiance.stats };"
+    ] }
+ ]
+}

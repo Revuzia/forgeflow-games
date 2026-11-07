@@ -17,7 +17,7 @@
 import type { IUniform, Vector3 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import type { MoverBlock } from '../../sim/types.ts';
-import { AgentFlag, AgentFlag2, AnimState } from '../../sim/types.ts';
+import { AgentFlag, AgentFlag2, AnimState, HeartSign } from '../../sim/types.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
 import { clothTier, eraIndex, heldForItem, HELD, speciesAt } from './catalog.ts';
@@ -118,9 +118,9 @@ function livingAnim(anim: number, moving: boolean, flags2: number, id: number): 
  * ARC §1.3 / §6.9: the poses of a person's heart (render-only ids beside AnimState; the sim's MoverBlock.heart carries
  * the HeartSign). Values match ARC §6.2's AnimState additions so a sim that sets them directly draws the same.
  */
-export const HEART_ANIM = { lookUp: 40, fist: 41, hurl: 42, curse: 43 } as const;
+export const HEART_ANIM = { lookUp: AnimState.lookUp, fist: AnimState.fist, hurl: AnimState.hurl, curse: AnimState.curse } as const;
 /** HeartSign (ARC §6.2): none 0, pray 1, fist 2, fear 3, celebrate 4, hurl 5 */
-const HS = { pray: 1, fist: 2, fear: 3, celebrate: 4, hurl: 5 } as const;
+const HS = HeartSign;
 /** of the people raising a fist, the share shouting at the sky with both arms up instead (ARC §3.2's curse knot) */
 const CURSE_SHARE = 0.4;
 
@@ -163,6 +163,9 @@ export class Crowds {
   private pickN = 0;
   private pickId = new Int32Array(256);
   private pickP = new Float32Array(256 * 4);
+  /** ARC §3.4: people drawn this frame in the hurl pose (render/signs/defiance.ts throws from their hands): id, body-
+   *  frame feet position, height, stride 5 */
+  readonly hurlers: number[] = [];
   private lastReal = -1;
 
   /** the camps out at work sites and on trips (AgentFlag2.camp): bedrolls under the sleepers, a fire per cluster */
@@ -347,6 +350,7 @@ export class Crowds {
     // the cull radius, padded for the extrapolated step and the ground height above the datum
     const cullSq = (LOD_D[LODS - 1] + 260) * (LOD_D[LODS - 1] + 260);
     this.pickN = 0;
+    this.hurlers.length = 0;
     let agents = 0;
     // the walking god's body on this world (its feet's unit vector), for the people to keep clear of
     const avoid = AVATAR_STATE.active && AVATAR_STATE.planet === pv.id;
@@ -365,7 +369,7 @@ export class Crowds {
         const i3 = i * 3;
         const f2 = (A.flags2 ? A.flags2[i] : 0) | (this.probeFlags2.size ? this.probeFlags2.get(id) ?? 0 : 0);
         const moving = Math.hypot(A.vel[i3], A.vel[i3 + 1], A.vel[i3 + 2]) * R > STILL_M;
-        const heartB = (A as { heart?: Uint8Array }).heart;
+        const heartB = A.heart;
         const simAnim = heartAnim(livingAnim(this.probeAnim.size ? this.probeAnim.get(id) ?? A.anim[i] : A.anim[i], moving, f2, id), moving, heartB ? heartB[i] : 0, id);
         if (!tr) { tr = { id, anim: simAnim, prev: simAnim, at: -1e9, gx: 0, gy: 0, gz: 0, ground: 0, sx: -2, sy: 0, sz: 0, ox: 0, oy: 0, oz: 0, hd: A.heading[i] }; this.tracks.set(id, tr); }
         if (fresh && simAnim !== tr.anim) { tr.prev = tr.anim; tr.anim = simAnim; tr.at = realTime; }
@@ -462,6 +466,7 @@ export class Crowds {
           this.bodies.set(b, k, _mat, [anim, prevAnim, blend, A.phase[i] + hashFloat(id, 43)], _a, _b, _c, [style, afloat ? HELD.none : tool, cadence, flags], _lf[q][1]);
         }
         this.addPick(id, ux * r, uy * r, uz * r, scale * (sp.plan === 'hexapod' ? 1.3 : 1.72));
+        if (tr.anim === HEART_ANIM.hurl) this.hurlers.push(id, ux * r, uy * r, uz * r, scale * 1.72);
         agents++;
       }
       // forget tracks of people who are gone (bounded)

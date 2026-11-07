@@ -1,0 +1,50 @@
+{
+ "_doc": "ARC §2.6 render: the tower's stages on the §6.7 stub (lookdev world, 'homestead' POI), the far speck, and the confusion ring (event injected into the FX view). 888x500, quality per shot. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/render-tower.json --port=5312 > _harness/scratch/arc/render/shots-tower.log 2>&1 &",
+ "shots": [
+  { "name": "arc-tower-rising", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+      "const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } }",
+      "window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p;",
+      "G.arc.stub('towers', [__tw({})]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10); F.advance(2); await G.frames(4);",
+      "const B = F.fx.vis.life?.buildings ?? null; return { host, towers: (pv.towers||[]).length, stats: B && B.stats };"
+    ] },
+  { "name": "arc-tower-rising-low", "params": "source=lookdev", "size": [888, 500], "quality": "low", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10);",
+      "return { ok: true };"
+    ] },
+  { "name": "arc-tower-finished-night", "params": "source=lookdev", "size": [888, 500], "quality": "high", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', [__tw({ status: 'finished', height: 80, tiers: 7, answer: 'let', ended: -1 })]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 520, tilt: 66, yaw: p.heading + 25, fov: 50, hour: 21 }); await G.frames(10); F.advance(2); await G.frames(4);",
+      "return { ok: true };"
+    ] },
+  { "name": "arc-tower-struck", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; const t = F.fx.vis.pv.paramsTick; G.arc.stub('towers', [__tw({ status: 'struck', height: 26, tiers: 6, answer: 'strike', ended: t - 30 })]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10); F.advance(3); await G.frames(4);",
+      "return { ok: true };"
+    ] },
+  { "name": "arc-tower-abandoned", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; const pv = F.fx.vis.pv; const yr = pv.params.dayHours * 60 * pv.params.yearDays; G.arc.stub('towers', [__tw({ status: 'abandoned', height: 47, tiers: 4, answer: 'warn', ended: pv.paramsTick - 8 * yr })]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10);",
+      "return { ok: true };"
+    ] },
+  { "name": "arc-tower-far", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', [__tw({ status: 'finished', height: 100, tiers: 9, goal: 100 })]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 3200, tilt: 40, yaw: p.heading + 25, fov: 50, hour: 15 }); await G.frames(12);",
+      "return { ok: true };"
+    ] },
+  { "name": "arc-tower-confuse", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', [__tw({ status: 'scattered', height: 50, tiers: 5, answer: 'confuse', ended: F.fx.vis.pv.paramsTick })]); await G.frames(8);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 9000, tilt: 50, yaw: p.heading + 25, fov: 50, hour: 11 }); await G.frames(6);",
+      "const v = F.fx.view; const e = { t: 'tower.confused', tick: Math.floor(F.fx.vis.pv.paramsTick), planet: F.fx.vis.pv.id, pos: p.pos, data: { tower: 7, towns: [], scattered: 40, founded: 2 } }; v.pendingEvents.push(e); await G.frames(3); F.advance(4); await G.frames(3);",
+      "return { moments: F.fx.m?.signs?.stats?.moments ?? null };"
+    ] }
+ ]
+}

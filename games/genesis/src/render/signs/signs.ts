@@ -100,7 +100,7 @@ export function markedPeople(flags2: ArrayLike<number> | undefined, count: numbe
 }
 
 interface Moment {
-  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled' | 'failed' | 'passing' | 'withdrawn';
+  kind: 'hallowed' | 'omen' | 'strike' | 'called' | 'fulfilled' | 'failed' | 'passing' | 'withdrawn' | 'confuse' | 'broken';
   p: Vector3;
   t0: number;
   dur: number;
@@ -109,6 +109,21 @@ interface Moment {
   size: number;
   /** under a canopy (a grove hallowed): no ring on the floor, which would show only as flecks between the leaves */
   canopy?: boolean;
+  /** ARC §2.6 confuse: the tower it spreads from, found in PlanetView.towers when the event has no place */
+  tower?: number;
+  /** ARC §4.5 broken: the covenant's towns (else PlanetView.covenant's) */
+  towns?: number[];
+}
+
+/** ARC §2.6: the confusion's ring of hue-shifting light spreading 8 km from the tower; ARC §4.5: the broken vow's ring */
+export const CONFUSE_RING_M = 8000;
+const CONFUSE_DUR = 12;
+/** the hue of the confusion's light at an age (s), ring j: it runs round the colour wheel as it spreads */
+export function confuseHue(age: number, j: number): [number, number, number] {
+  const h = (((0.08 + j * 0.33 + age * 0.11) % 1) + 1) % 1;
+  // a soft HSV (s 0.55, v 1): light, never a saturated game-UI colour
+  const f = (n: number): number => { const kk = (n + h * 6) % 6; return 1 - 0.55 * Math.max(0, Math.min(kk, 4 - kk, 1)); };
+  return [f(5), f(3), f(1)];
 }
 
 const _u = new Vector3(), _g = new Vector3(), _h = new Vector3(), _c = new Vector3(), _e = new Vector3(), _n = new Vector3();
@@ -191,6 +206,18 @@ export class SignsLayer {
         // the god turned from them: their thread drawn up off them into the sky, gone grey (the event has no place: it
         // is found where the crowds draw them)
         if (typeof d.agent === 'number') this.moments.push({ kind: 'withdrawn', p: new Vector3(), t0: real, dur: 4.5, col: FAILED_COL, agent: d.agent, size: 3 });
+        break;
+      }
+      case 'tower.confused': {
+        // ARC §2.6: their tongues confused — a ring of light, its hue running round the wheel, spreading 8 km from the
+        // tower (the omen ring's decal); the towns' houses ease into their new style through Buildings' own variants
+        this.moments.push({ kind: 'confuse', p: p ?? new Vector3(), t0: real, dur: CONFUSE_DUR, col: FAVOUR_COL, agent: -1, size: CONFUSE_RING_M, tower: typeof d.tower === 'number' ? d.tower : -1 });
+        break;
+      }
+      case 'covenant.broken': {
+        // ARC §4.5: the broken vow — a cold violet ring through each of the covenant's towns
+        const towns = Array.isArray(d.towns) ? (d.towns as unknown[]).filter((x): x is number => typeof x === 'number') : undefined;
+        this.moments.push({ kind: 'broken', p: p ?? new Vector3(), t0: real, dur: 7, col: ANGER_COL, agent: -1, size: 260, towns });
         break;
       }
       case 'prophet.died': {
@@ -408,6 +435,43 @@ export class SignsLayer {
     }
   }
 
+  /** ARC §2.6: three rings of hue-shifting light running out 8 km from the tower, a column over it for a moment */
+  private confuseRing(f: SignsFrame, m: Moment, age: number, k: number): void {
+    let at: ArrayLike<number> | null = m.p.lengthSq() > 0 ? [m.p.x, m.p.y, m.p.z] : null;
+    if (!at && m.tower !== undefined) { const t = f.pv.towers?.find((x) => x.id === m.tower); if (t) at = t.pos; }
+    if (!at) return;
+    const ul = Math.hypot(at[0], at[1], at[2]) || 1;
+    const up = _u.set(at[0] / ul, at[1] / ul, at[2] / ul);
+    const g = groundPoint(f.pv, [up.x, up.y, up.z], _g);
+    const fade = smooth(0, 0.05, k) * (1 - smooth(0.6, 1, k));
+    for (let j = 0; j < 3; j++) {
+      const kj = Math.max(0, Math.min(1, (k - j * 0.07) / (1 - j * 0.07)));
+      if (kj <= 0) continue;
+      const r = m.size * (0.02 + 0.98 * (1 - Math.pow(1 - kj, 2)));
+      const [cr, cg, cb] = confuseHue(age, j);
+      const rp = decal(DECAL.ripple, [g.x, g.y, g.z], r + m.size * 0.08 + 20);
+      rp.cr = cr; rp.cg = cg; rp.cb = cb; rp.p0 = r; rp.p1 = Math.max(8, 30 + r * 0.02); rp.p2 = 0.42 * (1 - kj) * fade; rp.q0 = Math.max(40, r * 0.12);
+      f.decals.add(rp);
+    }
+    const [cr, cg, cb] = confuseHue(age, 0);
+    this.marks.beams.add(g, up, Math.max(160, Math.min(1400, g.distanceTo(f.camBody) * 0.5)), 2.2, cr, cg, cb, 0.9 * fade * (1 - smooth(0.2, 0.6, k)), f.camBody, m.t0);
+  }
+
+  /** ARC §4.5: a cold violet ring through each town of the broken covenant */
+  private brokenRings(f: SignsFrame, m: Moment, k: number): void {
+    const towns = m.towns ?? f.pv.covenant?.towns ?? [];
+    const fade = smooth(0, 0.08, k) * (1 - smooth(0.55, 1, k));
+    for (const id of towns) {
+      const s = f.pv.settlements.find((x) => x.id === id);
+      if (!s) continue;
+      const g = groundPoint(f.pv, s.pos, _g);
+      const r = m.size * (0.1 + 0.9 * (1 - Math.pow(1 - k, 2)));
+      const rp = decal(DECAL.ripple, [g.x, g.y, g.z], r + m.size * 0.2 + 4);
+      rp.cr = m.col[0]; rp.cg = m.col[1]; rp.cb = m.col[2]; rp.p0 = r; rp.p1 = Math.max(2, m.size * 0.035); rp.p2 = 0.36 * (1 - k) * fade; rp.q0 = Math.max(8, m.size * 0.3);
+      f.decals.add(rp);
+    }
+  }
+
   private stepMoments(f: SignsFrame): void {
     const cam = f.camBody;
     if (this.hold === null) this.moments = this.moments.filter((m) => f.real - m.t0 < m.dur);
@@ -427,6 +491,8 @@ export class SignsLayer {
         this.marks.beams.add(foot, pu, top * (1 - 0.7 * rise), 0.14, m.col[0], m.col[1], m.col[2], 0.9 * (1 - smooth(0.3, 1, k)), cam, m.t0);
         continue;
       }
+      if (m.kind === 'confuse') { this.confuseRing(f, m, age, k); continue; }
+      if (m.kind === 'broken') { this.brokenRings(f, m, k); continue; }
       const up = _u.copy(m.p).normalize();
       const g = groundPoint(f.pv, [up.x, up.y, up.z], _g);
       const [cr, cg, cb] = m.col;

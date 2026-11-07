@@ -17,3 +17,13 @@
 - DONE: debug `pride.set` (arc.ts registerArcCommands, called from registerRelationship); agent detail (people/query.ts) gains `heart`, `heartLine`; tests/scripture_lint.test.ts (3/3; story output to add in stage C).
 - §10 probe: _harness/arc-work/probe-flood.ts (forced natural floods, 8 seeds x 3, warned vs Wn-cut baseline) -> _harness/scratch/arc/flood.log. The 25-year natural-disaster form is still NOT run.
 - full gate launched 01:0xZ: slot.sh npm run check -> _harness/scratch/arc/check1.log (pid in _harness/scratch/arc/check1.pid)
+- §10 forced-flood probe RESULT (flood.log): 24 floods (8 seeds x 3), evacuated (>= half of members beyond danger radius or on TASK.evacuate when the water comes) 24/24 = 100 %; with the warning cut (Wn 0, orders withdrawn) 0-3 of ~30 out. Deaths warned 1 vs unwarned 1 (survivable-wrath floods rarely kill at the default, so deaths are no discriminator here). Caveat: Wn is 535 in every clone (same disaster id). Still TODO for §10.3: the 25-year natural-disaster run (deaths vs a baseline, other disasters unmoved) and the looked-at river shot (render/ui lane, or a sim-lane shot spec on port 5310).
+- GATE: full `npm run check` (slot.sh) 772/773; the one failure (living-migration: old 1.5 save hash changed because emptyRel's new [] / {} defaults were saved) FIXED in state.ts relJson (empty ARC defaults are not written; emptyRel restores them on load). After the fix: tsc clean; focused living-migration, arc-hearts, determinism, save-continue, flood-warning, scripture_lint all pass (36 tests). Full suite not re-run this stint (one per stint rule) -> next stint should run it once.
+
+## NEXT (stint 2)
+1. Run the full gate once via slot.sh (confirm 773+ green).
+2. §2.2-2.4 tower: src/sim/god/tower.ts (towerYearly, league, site, TowerState, labour/tiers, omens, the four answers tower.confuse/strike/warn/let, tower.begin debug, TowerView in relSnapPlanet, query('towers'), events tower.*, chronicle tower.* lines), babel scenario, tests/arc-pride + arc-tower. Read ARC §2.2-2.7, §6.4, §6.5, §8.2.
+3. defiance.set debug (needs §3 defiance; trivial setter like setPride).
+4. Freeform phrases §6.5 for tower + "what do they feel" (hearts query answer).
+5. _harness/probes/arc.ts multi-seed: M1 (100 % towns have heart after day 2), M2 (kind changes <= 1 per 6 days median, nobow <= 1 / 2 y), M3 harsh/kind runs; T-lines.
+6. §10 25-year natural run + river shot.

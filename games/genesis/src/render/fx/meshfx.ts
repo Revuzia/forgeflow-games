@@ -573,7 +573,7 @@ export class Comet {
 const DEBRIS_PARS = /* glsl */ `
 attribute vec4 iO;     // origin (body m), birth time
 attribute vec4 iV;     // velocity (m/s), size (m)
-attribute vec4 iS;     // spin axis, mode (0 ballistic, 1 lift)
+attribute vec4 iS;     // spin axis, mode (0 ballistic, 1 lift, 2 a thrown pebble)
 uniform float uFxTime;
 uniform float uG;
 mat3 rotAxis(vec3 a, float t) {
@@ -589,7 +589,19 @@ const DEBRIS_NORMAL = /* glsl */ `
   vec3 pos0 = iO.xyz;
   vec3 at;
   float spinK = 1.0;
-  if (iS.w < 0.5) {
+  float gone = 1.0;
+  if (iS.w > 1.5) {
+    // a pebble or short spear thrown at the sky from a hand (ARC §3.4): up and back down past the launch height to the
+    // ground about 1.5 m under it, rests a moment, then is gone (a crowd's throwing never litters the town)
+    float vu = dot(iV.xyz, up0);
+    float g = max(uG, 0.1);
+    float tLand = (vu + sqrt(max(0.0, vu * vu + 3.0 * g))) / g;
+    float tt = min(tD, tLand);
+    at = pos0 + iV.xyz * tt - up0 * 0.5 * g * tt * tt;
+    spinK = tD < tLand ? 1.0 : 0.0;
+    gone = 1.0 - smoothstep(tLand + 1.0, tLand + 1.6, tD);
+    tD = tt;
+  } else if (iS.w < 0.5) {
     // ballistic: flight until the ground (the launch height), then it rests
     float vu = dot(iV.xyz, up0);
     float tLand = max(0.01, (2.0 * vu) / max(uG, 0.1));
@@ -601,7 +613,7 @@ const DEBRIS_NORMAL = /* glsl */ `
     // lifted (a gravity slip): rising slowly, tumbling
     at = pos0 + up0 * (tD * 1.2 + sin(tD * 0.7 + iO.w) * 0.6) + iV.xyz * 0.05 * tD;
   }
-  float sz = iV.w * (iS.w < 0.5 ? 1.0 : smoothstep(0.0, 1.0, tD));
+  float sz = iV.w * (iS.w < 0.5 || iS.w > 1.5 ? gone : smoothstep(0.0, 1.0, tD));
   mat3 R = rotAxis(normalize(iS.xyz + 1e-4), tD * 4.0 * spinK + iO.w * 7.0);
   vec3 objectNormal = R * normal;
 `;
@@ -670,6 +682,20 @@ export class Debris {
     }
     for (const name of ['iO', 'iV', 'iS']) (this.mesh.geometry.getAttribute(name) as InstancedBufferAttribute).needsUpdate = true;
     this.used = Math.min(this.n, this.used + k);
+    this.mesh.count = this.used;
+  }
+
+  /**
+   * ARC §3.4: one pebble (or short spear) thrown from p (body m) with velocity v (m/s), size sz (m), at FX time t; it
+   * falls back past p to the ground ~1.5 m under it and is gone a moment later (mode 2 of the shader)
+   */
+  toss(p: Vector3, v: Vector3, sz: number, t: number, spin: number): void {
+    const i = this.head; this.head = (this.head + 1) % this.n;
+    this.o[i * 4] = p.x; this.o[i * 4 + 1] = p.y; this.o[i * 4 + 2] = p.z; this.o[i * 4 + 3] = t;
+    this.v[i * 4] = v.x; this.v[i * 4 + 1] = v.y; this.v[i * 4 + 2] = v.z; this.v[i * 4 + 3] = sz;
+    this.s[i * 4] = Math.sin(spin * 12.9); this.s[i * 4 + 1] = Math.cos(spin * 7.3); this.s[i * 4 + 2] = Math.sin(spin * 3.1 + 1); this.s[i * 4 + 3] = 2;
+    for (const name of ['iO', 'iV', 'iS']) (this.mesh.geometry.getAttribute(name) as InstancedBufferAttribute).needsUpdate = true;
+    this.used = Math.min(this.n, this.used + 1);
     this.mesh.count = this.used;
   }
 
