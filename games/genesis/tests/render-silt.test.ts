@@ -29,6 +29,11 @@ test('zones ease in, sit at the flood, and clear slowly after it ends', () => {
   assert.ok(s.k[0] > 0.9, `eased in (${s.k[0]})`);
   assert.deepEqual([s.out[0].x, s.out[0].y, s.out[0].z], [0, 0, 3000]);
   assert.ok(s.out[0].w >= 500, 'covers the flood\'s reach');
+  // (owner #10, live r1i: a natural flood of 380 m; the town's own water ~500 m off its centre must be in the full-brown
+  // core, which the shaders hold to 0.55 w)
+  const nat = makeSiltState(), sn = slots();
+  updateSilt(nat, [{ ...flood({ warning: 1, rise: 0.33, silt: 1 }, 4), radius: 380 }], 3000, 0, sn.out, sn.k);
+  assert.ok(sn.out[0].w * 0.55 >= 500, `the town's water inside the full-brown core (w ${sn.out[0].w})`);
   assert.equal(s.out[1].w, 0, 'empty slots are marked');
   updateSilt(st, [], 3000, 2, s.out, s.k);
   assert.ok(s.k[0] > 0.5, 'the silt settles slowly');

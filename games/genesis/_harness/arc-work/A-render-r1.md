@@ -136,3 +136,9 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 - chain10 (31838) killed before it started; chain11 pid 1215: flood5 (r1i-flood-*) then tower5 (r1h-tower-*), after 31406.
   NOTE r1-check2 (gate) started BEFORE the weatherfx edit: next gate must re-run (or trust focused tests + tsc).
 - GATE r1-check2: 823/823 pass, typecheck + detban clean (ran on the clouds fix; weatherfx/godfx edit came during it: focused tests + tsc clean). r1g-flood-god LOOKED AT: same blue-grey veil as warning (pre-weatherfx-fix vite).
+- 21:5xZ LOOKED AT r1i-flood-warning (weatherfx fix live): the TOWN, its lake, the hills and the rain now READ from the
+  600 m view (was a white wall). But the water is still blue: silt zone centre ~520 m from the town, w 608 -> the
+  shaders' full-brown core (0.55 w = 334 m) misses the town's lake. FIX silt.ts: r = max(600, radius*2.4) (912 for a
+  380 m flood). Test added (render-silt 6/6).
+- flood6 (r1j-flood-*, + r1j-flood-warning-near at 400 m, no UI) chain12 pid 2665 after chain11 1215 (flood5 -> tower5).
+- 22:0xZ LOOKED AT r1i-flood-god: town, lake, a prayer ring and the rain read from 600 m (was a white wall); the town's lake pale olive-tan (old 1.6x zone), far lake blue. #10 visibility MET; colour pending flood6.

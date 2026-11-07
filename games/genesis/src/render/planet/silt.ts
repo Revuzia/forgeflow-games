@@ -47,8 +47,10 @@ export function updateSilt(st: SiltState, disasters: readonly DisasterView[], pl
     if (t <= 0 && !st.zones.has(d.id)) continue;
     seen.add(d.id);
     let z = st.zones.get(d.id);
-    // (wider than the flood: the river runs brown along its reach, not only in the town's circle)
-    const r = Math.max(400, d.radius * 1.6);
+    // (wider than the flood: the river runs brown along its reach, not only in the town's circle; the water is at full
+    // brown within 0.55 r. At 1.6x a natural flood's 380 m the town's own lake ~500 m off its centre stayed blue in
+    // the live warning (r1i): 2.4x puts it inside the full-brown core)
+    const r = Math.max(600, d.radius * 2.4);
     // a zone first seen mid-way (a save loaded, the planet just came into view, frames held while the sim ran on: a
     // shot) starts where the river already is; only a warning seen from its start eases in from clear water
     if (!z) { z = { k: t * lateStart(d), x: 0, y: 0, z: 0, r }; st.zones.set(d.id, z); }
