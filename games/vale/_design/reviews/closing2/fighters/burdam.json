@@ -1,0 +1,185 @@
+{
+ "fighter": "burdam",
+ "score": 7.0,
+ "summary": "Verified 7.0/10, not on par (below 7.5; no blocker). The fixes the reviewer lists hold: the coat swings on baked chains in the run row (closing_burdam_r2_run_row.png), the straps are darker than the coat, the Almanac re-theme is clear, and each skin has its own splash. The GLB history checks out: burdam.glb last really changed in 874f3f6d1, and 89112e613 reverted GF-1. M1 (splash staging) and M2 (pauldron plaster) are confirmed. I measured the pauldron and the cowl at the game camera at the same value (pauldron L* 60/80 p50/p90, cowl 51/71). M3 is downgraded to minor. The blade reads as a large pale diagonal bar in both match frames and in the run row, so the LoL gauge (the weapon reads in idle and run) is met. Only the brief's 55-degree over-the-shoulder pose is missing. The lineup gradient it cites (fw_CW5_r2r_lineup.json, Nov 4 22:39) predates the burdam-M2 refix 9ab5f9889 (Nov 4 23:44), so it is stale for this GLB. I found one major the reviewer missed. The base splash paints the coat as warm tan (L* 58, b* 36), but in game the coat is dark brown (L* 23, b* 13): the card misstates the model the player gets. The card surface now carries two majors, and with the pauldron that is three. That holds the score below the bar. Sensitivity is clean. There is no hood. The base and Almanac masks have a brow, keel and frown; Stillwater has a bald skin-tone dome with eye wells and a mouth line. None reads as horror, a hockey mask or a mannequin. The skull watch on Almanac stays a minor. Frame timing is not_measured (load 93 at 14:28), and I ran no harness or Blender.",
+ "gapStatus": [
+  {
+   "id": "r12-B3 (Burdam final art)",
+   "status": "partly",
+   "evidence": "Model, chains and skins are delivered (three_burdam*.png, run_row). The splash cards are still a render on a plate, and the base card's coat value does not match the game model (_harness/_reports/closing_burdam_ver2_values.txt)."
+  },
+  {
+   "id": "closing-1 burdam-M5 secondary motion",
+   "status": "closed",
+   "evidence": "_harness/_shots/closing_burdam_r2_run_row.png: the coat hem trails the stride across all 8 frames."
+  },
+  {
+   "id": "closing-1 burdam-M4 deluxe skin delta",
+   "status": "closed",
+   "evidence": "art/out/fighters/burdam/burdam_almanac_splash.png: plum coat, ink cowl, ruled pauldrons and board; coat L* 56 b* 24 vs base 58/36."
+  },
+  {
+   "id": "closing-1 burdam-M3 splash",
+   "status": "partly",
+   "evidence": "Each skin now has its own pose, but the staging is still neutral and flat-lit (M1 below)."
+  },
+  {
+   "id": "closing-1 burdam-M2 materials",
+   "status": "partly",
+   "evidence": "The straps are fixed. The pauldron still sits in the cowl's value family at the game camera (L* 60/80 vs 51/71)."
+  },
+  {
+   "id": "frame timing",
+   "status": "not_measured",
+   "evidence": "uptime load 93.3 at 14:28; reviewer saw 8.4 and 154."
+  }
+ ],
+ "findings": [
+  {
+   "id": "burdam-c2-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Splash cards: a neutral stand-and-lean render on a painted plate, flat-lit, with a loud azure column",
+   "what": "Confirmed by eye on all three cards. Base and Almanac use the same planted-blade lean. The figure takes no fire-side rim light. On the base card the figure reads hazy and low-contrast against the plate (figure box L* p10/p90 30/69). The five azure diamonds are the most saturated element.",
+   "evidence": "art/out/fighters/burdam/splash.png, burdam_almanac_splash.png, burdam_stillwater_splash.png; _harness/_reports/closing_burdam_r2_cards.txt",
+   "gauge": "LoL splash = a bespoke painted action moment, focal-lit and integrated with its scene; VALE = a static render with a plate behind it.",
+   "fix": "As the reviewer proposes: a kit-beat pose per skin, a warm rim light from the plate's fire side, a brush pass over the figure, and accent tiles at 0.55 scale on the cards only.",
+   "size": "L",
+   "verifierNote": "I could not refute it. The cards pass the speckle gate, but the staging and lighting still fall short of the gauge."
+  },
+  {
+   "id": "burdam-c2v-M4",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The base splash paints the coat warm tan; in game the coat is dark brown",
+   "what": "Missed by the reviewer. On the base card the coat skirt measures L* p50 58 with a* 20 / b* 36, a cream-tan. In the match frame the same coat is L* 23, a* 6 / b* 13, a dark brown. That is a 35 L* gap, far beyond what the plate's fire light can explain, since the cowl and coat merge into one tan mass on the card. The portrait shows the same cream torso. A player who picks Burdam from the card gets a much darker fighter.",
+   "evidence": "_harness/_reports/closing_burdam_ver2_values.txt (boxes listed); art/out/fighters/burdam/splash.png vs _harness/_shots/closing_burdam_r2_gfx_zoom.png",
+   "gauge": "LoL splash and loading art keep the in-game model's colour identity: the same value structure (dark coat, light mask), with lighting drama on top.",
+   "fix": "Grade the base card figure so the coat keeps its dark-brown value under the cowl (target L* 30-38 under the key light) and keep the cream for the mask and cowl only. Gate it in card_qa as a figure-region value delta against a game-camera reference.",
+   "size": "M",
+   "verifierNote": "Measured on the shipped card and on the reviewer's post-revert game crop. The sheet render (run row) also shows a mid-brown coat, so the card is the outlier."
+  },
+  {
+   "id": "burdam-c2-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "The pauldrons read as pale plaster, in the cowl's value family, at the game camera",
+   "what": "Reproduced. The left pauldron measures L* p50/p90 60/80 at a* 1.7 / b* 10, and the cowl 51/71 at b* 16: no hue or material step between them. In the zoom crop it is a grey-white slab.",
+   "evidence": "_harness/_reports/closing_burdam_ver2_values.txt; _harness/_shots/closing_burdam_r2_gfx_zoom.png",
+   "gauge": "LoL armour plate reads as a different material from the cloth next to it at gameplay scale.",
+   "fix": "As the reviewer proposes: shift the pauldron to a rust-grey (L* about 55, a* 5-7, b* 14-18), chalk only the convex top edge, and check by eye at the game camera.",
+   "size": "M",
+   "verifierNote": "Kept as major. The shape reads well, but the material promise in brief \u00a74 is not visible."
+  },
+  {
+   "id": "burdam-c2-M3",
+   "verdict": "downgraded",
+   "severity": "minor",
+   "title": "The idle blade is not at the brief's 55 degrees over the right shoulder (brief drift); lineup gradient unverified",
+   "what": "The blade does not sit over the right shoulder at 55 degrees. But the reviewer's claim that it 'hides behind the body in idle and run' is refuted: the blade is the largest pale diagonal in the match zoom and the GFX zoom, and it rises up-left in all 8 run frames. The value-gradient evidence (fw_CW5_r2r_lineup.json, mtime Nov 4 22:39) predates the burdam-M2 refix 9ab5f9889 (Nov 4 23:44) and the 874f3f6d1 GLB change, so it is stale.",
+   "evidence": "_harness/_shots/closing_burdam_r2_match_zoom.png, closing_burdam_r2_gfx_zoom.png, closing_burdam_r2_run_row.png; git log -- art/out/fighters/burdam/burdam.glb",
+   "gauge": "LoL gauge: the weapon silhouette reads in idle and run from the gameplay camera. VALE meets it; only the brief-specific angle is missed.",
+   "fix": "Either re-key the carry to about 45 degrees or update brief \u00a71/\u00a78. Re-run the lineup QA on the current GLB before claiming the gradient fails.",
+   "size": "S",
+   "verifierNote": "Downgraded: the gauge read is met and the metric evidence is stale."
+  },
+  {
+   "id": "burdam-c2-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Channel pose: the fist sits over the mask's mouth and the forearm crosses the pauldron",
+   "what": "Visible in the crop. The face is half hidden during the channel.",
+   "evidence": "_harness/_shots/closing_burdam_r2_channel_head.png",
+   "gauge": "LoL channels keep the face and weapon readable.",
+   "fix": "As the reviewer proposes.",
+   "size": "S",
+   "verifierNote": "Kept."
+  },
+  {
+   "id": "burdam-c2-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The Almanac splash mask edges toward skull-like (watch item)",
+   "what": "Dark eye wells and no mouth, but the brow ridge and keel read as a helm, not a death's head. In the channel crop the base mask's eye wells also read deep. Watch item, not a blocker.",
+   "evidence": "_harness/_shots/closing_burdam_r2_alm_head.png, closing_burdam_r2_channel_head.png",
+   "gauge": "LoL masked champions keep an expression line.",
+   "fix": "As the reviewer proposes.",
+   "size": "S",
+   "verifierNote": "Kept as a minor."
+  },
+  {
+   "id": "burdam-c2-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The head reads as a cream egg from the gameplay camera",
+   "what": "From the high camera the dome shows only two small dark marks.",
+   "evidence": "_harness/_shots/closing_burdam_r2_gfx_zoom.png",
+   "gauge": "LoL heads carry an identifying top shape.",
+   "fix": "A low rounded ridge, never pointed (ruling 7).",
+   "size": "S",
+   "verifierNote": "Kept."
+  },
+  {
+   "id": "burdam-c2-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "The brief still puts the stack on the right shoulder and the idle at 55 degrees",
+   "what": "Documentation drift.",
+   "evidence": "_design/fighters/burdam.md:29 (right pauldron three-tier stack) and :109 (blade angle 55 degrees)",
+   "gauge": "n/a",
+   "fix": "Edit the doc.",
+   "size": "S",
+   "verifierNote": "Read the lines myself."
+  }
+ ],
+ "leftovers": [
+  {
+   "item": "Right pauldron reads as a roll/bolster",
+   "status": "fixed",
+   "verifier": "agree"
+  },
+  {
+   "item": "cast_ult blade-through-coat f3-f4",
+   "status": "fixed",
+   "verifier": "agree on the crop; the Blender audit was not re-run (load 93)"
+  },
+  {
+   "item": "Chest harness straps in the coat value family",
+   "status": "fixed",
+   "verifier": "agree (run row and portrait)"
+  },
+  {
+   "item": "Splash/portrait azure accent tiles too large",
+   "status": "still_open",
+   "verifier": "agree"
+  },
+  {
+   "item": "Almanac board face above L* 86",
+   "status": "fixed",
+   "verifier": "agree by eye; the board is not blown out"
+  },
+  {
+   "item": "Brief puts the three-tier stack on the right shoulder",
+   "status": "still_open",
+   "verifier": "agree"
+  },
+  {
+   "item": "three QA accent top-half share 73.3%",
+   "status": "still_open",
+   "verifier": "cited lineup is stale (predates 9ab5f9889); status is unverified rather than confirmed open"
+  },
+  {
+   "item": "Idle carry upright stub; brief \u00a78 stale",
+   "status": "still_open",
+   "verifier": "the brief drift stands; the gauge read is met (see M3 downgrade)"
+  },
+  {
+   "item": "RIFT High top-25 margin 0.8 L*",
+   "status": "fixed",
+   "verifier": "closing_env_value_probe.json is from Oct 29 (first closing round); not re-measured this round"
+  }
+ ],
+ "missed": [
+  "Major, not a blocker: the base splash coat is L* 58 tan while the in-game coat is L* 23 dark brown (burdam-c2v-M4). No sensitivity problems found."
+ ]
+}
