@@ -95,9 +95,11 @@ try {
     const chain = (i) => { const out = []; const seen = new Set([i]); let cur = i; for (let d = 0; d < 14; d++) { const r = (rev[cur] ?? []).find(([p]) => !seen.has(p) && !/^synthetic|\(GC roots\)/.test(label(p))); if (!r) break; out.push(`${r[1]} ← ${label(r[0])}`); seen.add(r[0]); cur = r[0]; } return out; };
     rep.retainers = {};
     for (const cls of ['ImageBitmap', 'AudioBuffer']) {
-      const hits = []; for (let i = 0; i < n; i++) if (ntypes[N[i * NF + nType]] === 'object' && S[N[i * NF + nName]] === cls) hits.push(i);
-      rep.retainers[cls] = { n: hits.length, chains: hits.slice(0, 12).map(chain) };
-      console.log(`${cls}: ${hits.length} in the heap`); for (const c of rep.retainers[cls].chains.slice(0, 6)) console.log(`   ${c.join('  ')}`.slice(0, 900));
+      const hits = []; const names = {};
+      for (let i = 0; i < n; i++) { const nm = S[N[i * NF + nName]]; if (!nm.startsWith(cls) && !nm.startsWith(`blink::${cls}`)) continue; const k = `${ntypes[N[i * NF + nType]]}:${nm.slice(0, 40)}`; names[k] = (names[k] ?? 0) + 1; if ((rev[i] ?? []).some(([p]) => /V8PerContextData|FunctionTemplate/.test(label(p)))) continue; hits.push(i); }
+      console.log(`${cls} node names: ${JSON.stringify(names)}`);
+      rep.retainers[cls] = { n: hits.length, names, chains: hits.slice(0, 40).map(chain) };
+      console.log(`${cls}: ${hits.length} in the heap`); for (const c of rep.retainers[cls].chains.slice(0, 10)) console.log(`   ${c.join('  ')}`.slice(0, 900));
     }
   }
   rep.logs = logs.slice(0, 10);
