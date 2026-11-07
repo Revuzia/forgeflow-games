@@ -167,3 +167,19 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
 - PERF medium (CPU work/frame, 12 frames, load ~9, lookdev 420 m): before 38.7 ms (p95 63.5), rising tower 34.9 (p95 56.3), struck 31.0 (p95 56.3); slots actors 0.57/0.65/0.66, scene 3.27/2.65/2.48, shadows 3.65/3.65/3.33. The tower costs nothing measurable (noise > effect).
 - PERF high: before 33.9 ms (p95 59.6), rising tower 33.9 (p95 57.3), struck 30.6; shadows 4.22 -> 4.95 / 4.82 (+0.6-0.7 ms: the tower in the shadow pass, as §2.6 asks), actors 0.93/0.80/0.68. No regression beyond noise.
 - PERF low: before 14.7 ms (p95 28.4), rising 15.1 (p95 28.4), struck 16.3 (p95 28.9); no shadow pass at low. All three presets: no change of any preset's settings; tower cost within noise. Perf item DONE.
+- LOOKED AT arc-tower-confuse3-near (hold 1.2 s, 1.4 km, fresh vite): a ring of light round the tower across the land +
+  the column. Pixel diff vs confuse3-later (same view, rings gone past the horizon at 4.5 s): added colour mean
+  (26,38,69) = the cyan ring j=1 (confuseHue(1.2,1) = 0.30,0.82,1.00, r ~650 m); ring 0 (yellow-green, r 1.65 km) lies at
+  the far side on green land, low contrast. Rings carry different hues and run round the wheel with age (unit-tested).
+  At 4.5 s on the 3 km lookdev planet the rings (r 4.8 km) are already past the horizon: on game-size planets they stay
+  in view longer. Confusion ring item DONE.
+
+## STATUS after stint 3b (15:2xZ) — every item of the brief is done and verified
+- §1 hearts poses: fear (walkers' heads back) legible at 888x500; fist modest but present; live-sim M4 by the UI lane
+  (17 fear-signed people in frame). §2.6 tower: all stages LOOKED AT (rising, rising-low, finished night fire, struck
+  v2 rubble, abandoned crumbled, far speck, confusion ring); style ease in code+tests. §10.3(c) MET (stint 3).
+  Perf before/after at low/medium/high recorded above (tower within noise; +0.7 ms shadow pass at high). Gate 810/810.
+- Stage B leftovers (NOT this brief): hurl arcs need the sim's TASK.defy (stub signs=5 on walkers keeps the walk; hurl
+  only for standing people by design); idol mesh not seen in a shot (needs the sim's idol building); covenant 'broken'
+  ring not shot.
+## NEXT (stint 4, only if the orchestrator asks): stage B shots once the sim lands TASK.defy / idol / covenant.

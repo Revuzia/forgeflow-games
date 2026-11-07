@@ -129,3 +129,8 @@ rivals.ts:32-41), Book UI, legends.
   dead 2 of 6 on site). Attended pacing T2 measured and NOT met as specified (leader pride 0.48-0.59 at y10, roll
   chance <= 0.075/yr in years 10-14; towerMinYear 10 cuts 7-9): owner/spec decision, options in contract-changes.md
   stint 7. Everything else of §1, §2, §10 sim side is done and verified.
+
+- render lane (A-render stint 3b, 15:2xZ): §1/§2/§10 render side DONE and LOOKED AT: all tower stages + confusion ring
+  (_shots/arc-tower-*.png incl. struck2, confuse3-near), struck mound v2, confuseHue s 0.7. Perf (CPU work/frame,
+  before -> rising tower): low 14.7 -> 15.1 ms, medium 38.7 -> 34.9, high 33.9 -> 33.9 (shadows +0.7 ms); no preset
+  lowered. Gate check3 810/810 (13:58Z). Hurl arcs / idol / covenant ring wait for stage B sim.
