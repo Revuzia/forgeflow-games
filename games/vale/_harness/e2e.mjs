@@ -457,6 +457,13 @@ async function flowJourneys() {
     } else { delete document.hidden; delete document.visibilityState; }
     document.dispatchEvent(new Event('visibilitychange'));
   }, on);
+  // every toast the client raised since the last call, whether or not it is still on screen: a toast lives 4.2 s, and
+  // under heavy load a step's screenshot plus its settle wait can outlast it (r5 flow_dodge play_after_dodge read [] at
+  // load ~190 while the leave_draft shot shows the notice). The count of notices is what the steps assert
+  const toastLog = () => vale(page, (v) => {
+    if (!window.__toastRec) { window.__toastRec = { seen: new Set(), texts: [] }; v.state.toasts.subscribe((l) => { for (const t of l) if (!window.__toastRec.seen.has(t.id)) { window.__toastRec.seen.add(t.id); window.__toastRec.texts.push(t.text); } }); }
+    const out = window.__toastRec.texts.slice(); window.__toastRec.texts.length = 0; return out;
+  });
   const favicon = () => page.evaluate(() => ({ state: window.__vale.state.readyAlert?.icon ?? null, href: (document.querySelector('link[rel~="icon"]')?.getAttribute('href') ?? '').slice(0, 22) }));
   let ok = true;
 
@@ -493,6 +500,7 @@ async function flowJourneys() {
       return { route: await route(), favicon: await favicon() };
     });
     await step('leave_draft', async () => {
+      await toastLog();   // start recording (drops anything raised before the leave)
       await page.keyboard.press('Escape');
       await click(page.locator('.modal').getByRole('button', { name: 'Leave draft' }));
       await waitFor(page, (v) => v.router.route.value.screen === 'play', 10000);
@@ -501,10 +509,11 @@ async function flowJourneys() {
     await step('play_after_dodge', async () => {
       await page.waitForTimeout(2000);
       const c = await chromeOf(page);
-      const notices = c.toasts.filter((t) => /left the draft/i.test(t)).length;
+      const raised = await toastLog();
+      const notices = raised.filter((t) => /left the draft/i.test(t)).length;
       expect(c.route === 'play' && fullClient(c), 'Play after Leave draft is not the full client', c);
-      expect(notices === 1, 'Leave draft did not leave exactly one notice', c.toasts);
-      return { ...c, notices };
+      expect(notices === 1, 'Leave draft did not leave exactly one notice', { raised, onScreen: c.toasts });
+      return { ...c, notices, raised };
     });
     await step('home_after_dodge', async () => {
       await click(page.locator('.nav__item', { hasText: 'Home' }));
@@ -585,6 +594,7 @@ async function flowJourneys() {
       await hide(false);
       await page.waitForTimeout(250);
       const closedOnReturn = await page.evaluate(() => window.__notes.closed);
+      await toastLog();   // start recording before the press
       const btn = page.getByRole('button', { name: 'Decline' });
       const atPress = await vale(page, (v) => ({ state: v.state.queue.value?.state ?? null, left: v.state.queue.value?.readyTimer ?? null,
         decline: [...document.querySelectorAll('.readycheck button')].some((b) => b.textContent.trim() === 'Decline' && b.getBoundingClientRect().width > 0) }));
@@ -601,10 +611,11 @@ async function flowJourneys() {
       const { closedOnReturn } = declined;
       await page.waitForTimeout(1500);
       const c = await chromeOf(page);
-      const notices = c.toasts.filter((t) => /declined/i.test(t)).length;
+      const raised = await toastLog();
+      const notices = raised.filter((t) => /declined/i.test(t)).length;
       const fav = await favicon();
       expect(closedOnReturn >= 1, 'the notification stayed up after returning to the page', { closedOnReturn });
-      expect(notices === 1, 'Decline did not leave exactly one notice', c.toasts);
+      expect(notices === 1, 'Decline did not leave exactly one notice', { raised, onScreen: c.toasts });
       expect(fav.state === 'plain', 'the favicon badge outlived the ready check', fav);
       expect(c.route === 'play' && fullClient(c), 'Play after Decline is not the full client', c);
       return { notices, toasts: c.toasts, favicon: fav, closedOnReturn, leftAtPress: declined.leftAtPress, nav: c.nav, wallet: c.wallet };
