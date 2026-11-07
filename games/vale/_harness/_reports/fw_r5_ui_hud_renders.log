@@ -1,0 +1,73 @@
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 18s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 568s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 142s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 79s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 629s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 203s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 141s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 691s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 265s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 201s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 751s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 325s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 264s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 814s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 388s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 324s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 874s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 448s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 384s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 934s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 508s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 446s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 996s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 570s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: waiting (all 3 slots busy) — slot0: pid 47951 for 507s run:node _harness/e2e.mjs all --out _harness/_reports/fw_r5_ui_e2e_all1.json --prefix fw_; slot1: pid 42018 for 1057s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --; slot2: pid 46346 for 631s run:node _harness/probe_match_memory.mjs --no-build --modes rift,bridge,rift --sec 300 --
+[heavy] run:node _harness/hud_renders.mjs --at 100: got slot1 after 514s
+{
+ "ticks": 180,
+ "simSeconds": 6,
+ "wallMs": 6001,
+ "ledger": {
+  "renders": 0,
+  "changes": 0,
+  "text": "T/F/A1/0/0·Wicks5",
+  "box": {
+   "x": 1116,
+   "y": 72,
+   "w": 184,
+   "h": 20
+  },
+  "font": "13px \"Atkinson Hyperlegible Mono\""
+ },
+ "counts": [
+  [
+   "AssetImg",
+   4
+  ],
+  [
+   "Portrait",
+   2
+  ],
+  [
+   "AnnounceFace",
+   2
+  ],
+  [
+   "Announcer",
+   2
+  ],
+  [
+   "Feed",
+   2
+  ],
+  [
+   "AbilityGlyph",
+   2
+  ],
+  [
+   "ChipView",
+   2
+  ],
+  [
+   "x",
+   1
+  ],
+  [
+   "StatusRow",
+   1
+  ],
+  [
+   "KillFeed",
+   1
+  ],
+  [
+   "AbilitySlot",
+   1
+  ]
+ ]
+}

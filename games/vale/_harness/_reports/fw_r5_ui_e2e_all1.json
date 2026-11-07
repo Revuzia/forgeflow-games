@@ -1,0 +1,938 @@
+{
+  "started": "2026-11-07T14:18:03.009Z",
+  "speed": 16,
+  "journeys": [
+    {
+      "mode": "flow_dodge",
+      "ok": false,
+      "steps": [
+        {
+          "name": "home",
+          "ok": true,
+          "ms": 6020,
+          "info": {
+            "route": "home",
+            "draft": false,
+            "nav": 6,
+            "wallet": true,
+            "me": true,
+            "flowBar": false,
+            "toasts": []
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_01_home.png"
+        },
+        {
+          "name": "play",
+          "ok": true,
+          "ms": 7251,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_02_play.png"
+        },
+        {
+          "name": "find_match",
+          "ok": true,
+          "ms": 8897,
+          "info": {
+            "queue": "found",
+            "asked": 1,
+            "favicon": {
+              "state": "lit",
+              "href": "data:image/png;base64,"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_03_find_match.png"
+        },
+        {
+          "name": "ready",
+          "ok": true,
+          "ms": 3145,
+          "info": {
+            "route": "draft",
+            "favicon": {
+              "state": "plain",
+              "href": "data:image/png;base64,"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_04_ready.png"
+        },
+        {
+          "name": "leave_draft",
+          "ok": true,
+          "ms": 4159,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_05_leave_draft.png"
+        },
+        {
+          "name": "play_after_dodge",
+          "ok": false,
+          "ms": 3577,
+          "error": "Leave draft did not leave exactly one notice: []",
+          "controls": [
+            "RIFT. Hourfall · 5v5 · about 25 min",
+            "BRIDGE. Needlespan · 5v5 · about 19 min",
+            "FRAY. Noonplate · 10 fighters · about 10",
+            "The uncarved hour. A new mode will be cu [disabled]",
+            "Quick. Choose your role and fighter befo",
+            "Draft. Pick your roles, ban one fighter ",
+            "Ranked. Draft with one ban per team whil",
+            "Lantern Drill. Your team against five bo",
+            "Custom game",
+            "Practice",
+            "Shadehold",
+            "Grovehunter",
+            "Dialcross",
+            "Shaftlight",
+            "Lampglass",
+            "Fill",
+            "Shadehold",
+            "Grovehunter",
+            "Dialcross",
+            "Shaftlight",
+            "Lampglass",
+            "Fill",
+            "Remove bot [disabled]",
+            "Add a bot",
+            "Find match",
+            "Back",
+            "Home",
+            "Play",
+            "Collection",
+            "Shop",
+            "Profile",
+            "Settings",
+            "Player 8315, Level 1",
+            "Fullscreen (F)",
+            "Mute (M)",
+            "Pause / Menu",
+            "Report a bug"
+          ],
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_dodge_06_play_after_dodge_FAIL.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "flow_readycheck",
+      "ok": true,
+      "steps": [
+        {
+          "name": "lockout_clear",
+          "ok": true,
+          "ms": 1013,
+          "info": {
+            "lockoutLeft": 0
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_ready_01_lockout_clear.png"
+        },
+        {
+          "name": "queue_hidden",
+          "ok": true,
+          "ms": 8451,
+          "info": {
+            "notification": {
+              "title": "Match found",
+              "body": "RIFT · Lantern Drill. Come back and press Ready within 10 s.",
+              "tag": "vale-ready",
+              "renotify": false,
+              "silent": true,
+              "t": 44102
+            },
+            "favicon": {
+              "state": "lit",
+              "href": "data:image/png;base64,"
+            },
+            "title": "VALE",
+            "popCue": true,
+            "buttonsAtFound": [
+              "Decline",
+              "Ready"
+            ]
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_ready_02_queue_hidden.png"
+        },
+        {
+          "name": "remind",
+          "ok": true,
+          "ms": 8184,
+          "info": {
+            "readyTimer": 3.2,
+            "leftAtPress": 3,
+            "cues": [
+              "ui_queue_remind"
+            ],
+            "notifications": 2,
+            "renotify": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_ready_03_remind.png"
+        },
+        {
+          "name": "decline_once",
+          "ok": true,
+          "ms": 2995,
+          "info": {
+            "notices": 1,
+            "toasts": [
+              "The match was declined. You can queue again in 10 s."
+            ],
+            "favicon": {
+              "state": "plain",
+              "href": "data:image/png;base64,"
+            },
+            "closedOnReturn": 1,
+            "leftAtPress": 3,
+            "nav": 6,
+            "wallet": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_ready_04_decline_once.png"
+        },
+        {
+          "name": "lockout_after",
+          "ok": true,
+          "ms": 9620,
+          "info": {
+            "lockoutLeft": 0
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_ready_05_lockout_after.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "flow_netdown",
+      "ok": true,
+      "steps": [
+        {
+          "name": "sample_24s",
+          "ok": true,
+          "ms": 25749,
+          "info": {
+            "samples": 42,
+            "offlineFrom4s": "37/37",
+            "connectingFrom4s": 0,
+            "last": {
+              "s": 23.6,
+              "text": "Offline · vs bots",
+              "retry": true
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_netdown_01_sample_24s.png"
+        },
+        {
+          "name": "try_again",
+          "ok": true,
+          "ms": 5074,
+          "info": {
+            "during": {
+              "text": "Connecting…",
+              "retry": false
+            },
+            "after": {
+              "text": "Offline · vs bots",
+              "retry": true
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_flow_netdown_02_try_again.png"
+        }
+      ]
+    },
+    {
+      "mode": "rift",
+      "ok": true,
+      "steps": [
+        {
+          "name": "home",
+          "ok": true,
+          "ms": 6279,
+          "info": {
+            "route": "home",
+            "purseStart": 300
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_01_home.png"
+        },
+        {
+          "name": "play",
+          "ok": true,
+          "ms": 6909,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_02_play.png"
+        },
+        {
+          "name": "find_match",
+          "ok": true,
+          "ms": 6392,
+          "info": {
+            "queue": "found"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_03_find_match.png"
+        },
+        {
+          "name": "ready",
+          "ok": true,
+          "ms": 2452,
+          "info": {
+            "route": "draft"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_04_ready.png"
+        },
+        {
+          "name": "pick",
+          "ok": true,
+          "ms": 34418,
+          "info": {
+            "before": {
+              "phase": "pick",
+              "turn": "pick",
+              "myTurn": true,
+              "hover": null,
+              "locked": null
+            },
+            "after": {
+              "phase": "pick",
+              "turn": "pick",
+              "myTurn": false,
+              "hover": null,
+              "locked": "ardit"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_05_pick.png"
+        },
+        {
+          "name": "loading",
+          "ok": true,
+          "ms": 21550,
+          "info": {
+            "route": "match"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_06_loading.png"
+        },
+        {
+          "name": "match_input",
+          "ok": true,
+          "ms": 9935,
+          "info": {
+            "shopOpen": true,
+            "shopTags": [
+              "All items",
+              "Attack",
+              "Critical",
+              "On hit",
+              "Magic",
+              "Haste",
+              "Defense",
+              "Sustain",
+              "Speed",
+              "Support",
+              "Vision",
+              "Utility",
+              "Dialwood"
+            ],
+            "scoreboard": true,
+            "hud": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_07_match_input.png"
+        },
+        {
+          "name": "match_live",
+          "ok": true,
+          "ms": 6755,
+          "info": {
+            "t": 649,
+            "scale": 16,
+            "kda": "2/4/0",
+            "gold": 485,
+            "level": 8,
+            "cues": 9,
+            "audioFetches": {
+              "ogg": 361,
+              "m4a": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_08_match_live.png"
+        },
+        {
+          "name": "match_end",
+          "ok": true,
+          "ms": 49443,
+          "info": {
+            "banner": "Defeat"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_09_match_end.png"
+        },
+        {
+          "name": "postgame",
+          "ok": true,
+          "ms": 6744,
+          "info": {
+            "reason": "core",
+            "won": false,
+            "placement": 2,
+            "duration": 1434,
+            "grants": {
+              "candles": 129
+            },
+            "earned": 129,
+            "xp": 180,
+            "nod": {
+              "recorded": 0,
+              "text": "You lit a lantern for gullwing_83."
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_10_postgame.png"
+        },
+        {
+          "name": "postgame_scoreboard",
+          "ok": true,
+          "ms": 13572,
+          "info": {
+            "1280": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 49,
+              "itemsImg": 49,
+              "letters": 0
+            },
+            "1920": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 49,
+              "itemsImg": 49,
+              "letters": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_11_postgame_scoreboard.png"
+        },
+        {
+          "name": "home_again",
+          "ok": true,
+          "ms": 2867,
+          "info": {
+            "route": "home",
+            "wallet": {
+              "candles": 429
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_12_home_again.png"
+        },
+        {
+          "name": "history_reopen",
+          "ok": true,
+          "ms": 4745,
+          "info": {
+            "rows": 1,
+            "matchId": "match-mw6hr3ax-i-16011m",
+            "from": "history",
+            "back": "home"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_rift_13_history_reopen.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "bridge",
+      "ok": true,
+      "steps": [
+        {
+          "name": "home",
+          "ok": true,
+          "ms": 3120,
+          "info": {
+            "route": "home",
+            "purseStart": 300
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_01_home.png"
+        },
+        {
+          "name": "play",
+          "ok": true,
+          "ms": 2687,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_02_play.png"
+        },
+        {
+          "name": "find_match",
+          "ok": true,
+          "ms": 5927,
+          "info": {
+            "queue": "found"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_03_find_match.png"
+        },
+        {
+          "name": "ready",
+          "ok": true,
+          "ms": 6573,
+          "info": {
+            "route": "draft"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_04_ready.png"
+        },
+        {
+          "name": "pick",
+          "ok": true,
+          "ms": 38427,
+          "info": {
+            "before": {
+              "phase": "bench",
+              "turn": "free",
+              "myTurn": true,
+              "hover": null,
+              "locked": "rishal"
+            },
+            "after": {
+              "phase": "bench",
+              "turn": "free",
+              "myTurn": true,
+              "hover": null,
+              "locked": "rishal"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_05_pick.png"
+        },
+        {
+          "name": "loading",
+          "ok": true,
+          "ms": 22601,
+          "info": {
+            "route": "match"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_06_loading.png"
+        },
+        {
+          "name": "match_input",
+          "ok": true,
+          "ms": 10126,
+          "info": {
+            "shopOpen": true,
+            "shopTags": [
+              "All items",
+              "Attack",
+              "Critical",
+              "On hit",
+              "Magic",
+              "Haste",
+              "Defense",
+              "Sustain",
+              "Speed",
+              "Support",
+              "Vision",
+              "Utility"
+            ],
+            "scoreboard": true,
+            "hud": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_07_match_input.png"
+        },
+        {
+          "name": "match_live",
+          "ok": true,
+          "ms": 2476,
+          "info": {
+            "t": 290,
+            "scale": 16,
+            "kda": "4/3/6",
+            "gold": 779,
+            "level": 8,
+            "cues": 13,
+            "audioFetches": {
+              "ogg": 742,
+              "m4a": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_08_match_live.png"
+        },
+        {
+          "name": "match_end",
+          "ok": true,
+          "ms": 74234,
+          "info": {
+            "banner": "Defeat"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_09_match_end.png"
+        },
+        {
+          "name": "postgame",
+          "ok": true,
+          "ms": 7195,
+          "info": {
+            "reason": "core",
+            "won": false,
+            "placement": 2,
+            "duration": 1455,
+            "grants": {
+              "candles": 156
+            },
+            "earned": 156,
+            "xp": 160,
+            "nod": {
+              "recorded": 5,
+              "text": "You lit a lantern for dax_shadeline."
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_10_postgame.png"
+        },
+        {
+          "name": "postgame_scoreboard",
+          "ok": true,
+          "ms": 11213,
+          "info": {
+            "1280": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 51,
+              "itemsImg": 51,
+              "letters": 0
+            },
+            "1920": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 51,
+              "itemsImg": 51,
+              "letters": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_11_postgame_scoreboard.png"
+        },
+        {
+          "name": "home_again",
+          "ok": true,
+          "ms": 5719,
+          "info": {
+            "route": "home",
+            "wallet": {
+              "candles": 585
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_12_home_again.png"
+        },
+        {
+          "name": "history_reopen",
+          "ok": true,
+          "ms": 5040,
+          "info": {
+            "rows": 2,
+            "matchId": "match-mw6hv2rz-k-17ymla",
+            "from": "history",
+            "back": "home"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_bridge_13_history_reopen.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "fray",
+      "ok": true,
+      "steps": [
+        {
+          "name": "home",
+          "ok": true,
+          "ms": 5291,
+          "info": {
+            "route": "home",
+            "purseStart": 300
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_01_home.png"
+        },
+        {
+          "name": "play",
+          "ok": true,
+          "ms": 2918,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_02_play.png"
+        },
+        {
+          "name": "find_match",
+          "ok": true,
+          "ms": 4062,
+          "info": {
+            "queue": "found"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_03_find_match.png"
+        },
+        {
+          "name": "ready",
+          "ok": true,
+          "ms": 4445,
+          "info": {
+            "route": "draft"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_04_ready.png"
+        },
+        {
+          "name": "pick",
+          "ok": true,
+          "ms": 30817,
+          "info": {
+            "before": {
+              "phase": "pick",
+              "turn": "pick",
+              "myTurn": true,
+              "hover": null,
+              "locked": null
+            },
+            "after": {
+              "phase": "pick",
+              "turn": "pick",
+              "myTurn": false,
+              "hover": null,
+              "locked": "ardit"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_05_pick.png"
+        },
+        {
+          "name": "loading",
+          "ok": true,
+          "ms": 3391,
+          "info": {
+            "route": "match"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_06_loading.png"
+        },
+        {
+          "name": "match_input",
+          "ok": true,
+          "ms": 7222,
+          "info": {
+            "shopOpen": true,
+            "shopTags": [
+              "All items",
+              "Attack",
+              "Critical",
+              "Magic",
+              "Haste",
+              "Defense",
+              "Sustain",
+              "Speed"
+            ],
+            "scoreboard": true,
+            "hud": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_07_match_input.png"
+        },
+        {
+          "name": "match_live",
+          "ok": true,
+          "ms": 6599,
+          "info": {
+            "t": 188,
+            "scale": 16,
+            "kda": "2/1/1",
+            "gold": 181,
+            "level": 7,
+            "cues": 16,
+            "audioFetches": {
+              "ogg": 1122,
+              "m4a": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_08_match_live.png"
+        },
+        {
+          "name": "match_end",
+          "ok": true,
+          "ms": 15406,
+          "info": {
+            "banner": "7th of 10"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_09_match_end.png"
+        },
+        {
+          "name": "postgame",
+          "ok": true,
+          "ms": 7957,
+          "info": {
+            "reason": "score",
+            "won": false,
+            "placement": 7,
+            "duration": 433,
+            "grants": {
+              "candles": 65
+            },
+            "earned": 65,
+            "xp": 110
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_10_postgame.png"
+        },
+        {
+          "name": "postgame_scoreboard",
+          "ok": true,
+          "ms": 9827,
+          "info": {
+            "1280": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 34,
+              "itemsImg": 34,
+              "letters": 0
+            },
+            "1920": {
+              "rows": 10,
+              "worstDx": 0,
+              "tdDisplay": [
+                "table-cell"
+              ],
+              "wrapped": [],
+              "itemsFull": 34,
+              "itemsImg": 34,
+              "letters": 0
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_11_postgame_scoreboard.png"
+        },
+        {
+          "name": "home_again",
+          "ok": true,
+          "ms": 15432,
+          "info": {
+            "route": "home",
+            "wallet": {
+              "candles": 650
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_12_home_again.png"
+        },
+        {
+          "name": "history_reopen",
+          "ok": true,
+          "ms": 7931,
+          "info": {
+            "rows": 3,
+            "matchId": "match-mw6hytdd-m-7i1wll",
+            "from": "history",
+            "back": "home"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_fray_13_history_reopen.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "hud_leak",
+      "ok": true,
+      "steps": [
+        {
+          "name": "no_hud_roots_after_matches",
+          "ok": true,
+          "ms": 2324,
+          "info": {
+            "matches": 3,
+            "detached": 0,
+            "attached": 0,
+            "elements": 354
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "mode": "store",
+      "ok": true,
+      "steps": [
+        {
+          "name": "shop",
+          "ok": true,
+          "ms": 3676,
+          "info": {
+            "route": "shop",
+            "currency": "candles",
+            "start": 300,
+            "matches": 3,
+            "granted": 350,
+            "wallet": 650
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_store_01_shop.png"
+        },
+        {
+          "name": "select",
+          "ok": true,
+          "ms": 1172,
+          "info": {
+            "sku": "sku_ardit_chalkline",
+            "skin": "Chalkline Pavise",
+            "price": 600,
+            "bal": 650,
+            "short": 0,
+            "cur": "Candles"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_store_02_select.png"
+        },
+        {
+          "name": "buy_skin",
+          "ok": true,
+          "ms": 934,
+          "info": {
+            "sku": "sku_ardit_chalkline",
+            "skin": "Chalkline Pavise",
+            "price": 600,
+            "toppedUp": 0,
+            "wallet": 50
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_store_03_buy_skin.png"
+        },
+        {
+          "name": "equip",
+          "ok": true,
+          "ms": 712,
+          "info": {
+            "ardit": "ardit_chalkline",
+            "burdam": "burdam_base",
+            "dunsom": "dunsom_base",
+            "ervet": "ervet_base",
+            "hesmi": "hesmi_base",
+            "ilsheta": "ilsheta_base",
+            "kemdo": "kemdo_base",
+            "lisvel": "lisvel_base",
+            "marund": "marund_base",
+            "nurrow": "nurrow_base",
+            "odrum": "odrum_base",
+            "rishal": "rishal_base",
+            "sukri": "sukri_base",
+            "tunlan": "tunlan_base",
+            "ulkro": "ulkro_base",
+            "vashil": "vashil_base"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2e1_store_04_equip.png"
+        }
+      ],
+      "purse": {
+        "start": 300,
+        "granted": 350,
+        "matches": 3
+      },
+      "consoleErrors": []
+    }
+  ],
+  "finished": "2026-11-07T14:28:36.618Z"
+}

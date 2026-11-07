@@ -1,0 +1,24 @@
+B2 low {"tier":"low","empty":0,"area":14049,"aim":53319,"sweep":1,"side":2}
+CONE low enemy_7m_50 total 86304 axis50=70/70 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE low aim_5m_70 total 95871 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE low aim_3.5m_140 total 78282 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE low aim_9m_50 total 219832 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+B2 medium {"tier":"medium","empty":0,"area":13363,"aim":53683,"sweep":1,"side":2}
+CONE medium enemy_7m_50 total 75588 axis50=70/70 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE medium aim_5m_70 total 95871 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE medium aim_3.5m_140 total 78282 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE medium aim_9m_50 total 219832 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+B2 high {"tier":"high","empty":0,"area":12053,"aim":40620,"sweep":1,"side":2}
+CONE high enemy_7m_50 total 64760 axis50=70/70 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE high aim_5m_70 total 95871 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE high aim_3.5m_140 total 78282 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE high aim_9m_50 total 219833 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+B2 ultra {"tier":"ultra","empty":0,"area":8780,"aim":36348,"sweep":1,"side":2}
+CONE ultra enemy_7m_50 total 77805 axis50=70/70 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE ultra aim_5m_70 total 95871 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE ultra aim_3.5m_140 total 78282 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+CONE ultra aim_9m_50 total 219833 axis50=31/31 side+90=0/0 side-90=0/0 behind0.4=0/0 outEdge=0/0 outEdge-=0/0
+B1 [{"kind":"fighter","id":6,"def":"kemdo","crowd":false,"before":2726,"afterFirst":2726,"after":2726,"subBefore":43,"subAfter":43,"width":2.5,"restWidth":1,"rim":{"silhouette":6167,"interior":0,"interiorAA":6,"outside":2298,"interiorShare":0},"err":null},{"kind":"minion","id":57,"def":"glimwick","crowd":true,"before":2726,"afterFirst":2726,"after":2726,"subBefore":2,"subAfter":2,"width":2.5,"restWidth":1,"rim":{"silhouette":2214,"interior":0,"interiorAA":0,"outside":552,"interiorShare":0},"err":null},{"kind":"monster","id":195,"def":"gloamoth","crowd":false,"before":2732,"afterFirst":2732,"after":2732,"subBefore":24,"subAfter":24,"width":2.5,"restWidth":1,"rim":{"silhouette":5156,"interior":0,"interiorAA":0,"outside":1423,"interiorShare":0},"err":null}]
+M10 {"units":18,"missing":[],"culled":63,"drawn":19,"offscreenDrawn":[],"offscreenInfo":[],"focus":{"x":85.35621527374454,"z":11.722092880607171},"crowdUnits":16,"crowdInstances":17,"crowdSets":5}
+M6 [{"kind":"fighter","victim":"kemdo","crowd":false,"rows":[{"dtype":"physical","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"magic","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"true","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"physical","crit":true,"peak":0.585,"at83":0.178,"at167":0}],"hit":{"flash":0.461,"squash":0.0434},"back":{"flash":0,"squash":0}},{"kind":"minion","victim":"glimwick","crowd":true,"rows":[{"dtype":"physical","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"magic","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"true","crit":false,"peak":0.45,"at83":0.137,"at167":0},{"dtype":"physical","crit":true,"peak":0.585,"at83":0.178,"at167":0}],"hit":{"flash":0.461,"squash":0.0434},"back":{"flash":0,"squash":0}}]
+overlay_regress: PASS

@@ -1,0 +1,254 @@
+{
+  "started": "2026-11-07T14:29:11.363Z",
+  "speed": 16,
+  "journeys": [
+    {
+      "mode": "flow_dodge",
+      "ok": true,
+      "steps": [
+        {
+          "name": "home",
+          "ok": true,
+          "ms": 1689,
+          "info": {
+            "route": "home",
+            "draft": false,
+            "nav": 6,
+            "wallet": true,
+            "me": true,
+            "flowBar": false,
+            "toasts": []
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_01_home.png"
+        },
+        {
+          "name": "play",
+          "ok": true,
+          "ms": 2562,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_02_play.png"
+        },
+        {
+          "name": "find_match",
+          "ok": true,
+          "ms": 3113,
+          "info": {
+            "queue": "found",
+            "asked": 1,
+            "favicon": {
+              "state": "lit",
+              "href": "data:image/png;base64,"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_03_find_match.png"
+        },
+        {
+          "name": "ready",
+          "ok": true,
+          "ms": 6732,
+          "info": {
+            "route": "draft",
+            "favicon": {
+              "state": "plain",
+              "href": "data:image/png;base64,"
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_04_ready.png"
+        },
+        {
+          "name": "leave_draft",
+          "ok": true,
+          "ms": 4125,
+          "info": {
+            "route": "play"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_05_leave_draft.png"
+        },
+        {
+          "name": "play_after_dodge",
+          "ok": true,
+          "ms": 4880,
+          "info": {
+            "route": "play",
+            "draft": false,
+            "nav": 6,
+            "wallet": true,
+            "me": true,
+            "flowBar": false,
+            "toasts": [],
+            "notices": 1,
+            "raised": [
+              "You left the draft. You can queue again in 5 s."
+            ]
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_06_play_after_dodge.png"
+        },
+        {
+          "name": "home_after_dodge",
+          "ok": true,
+          "ms": 2997,
+          "info": {
+            "route": "home",
+            "draft": false,
+            "nav": 6,
+            "wallet": true,
+            "me": true,
+            "flowBar": false,
+            "toasts": []
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_07_home_after_dodge.png"
+        },
+        {
+          "name": "pause_menu",
+          "ok": true,
+          "ms": 2682,
+          "info": {
+            "opened": "settings",
+            "closed": "home"
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_08_pause_menu.png"
+        },
+        {
+          "name": "settings_profile",
+          "ok": true,
+          "ms": 3860,
+          "info": {
+            "settings": "settings",
+            "profile": "profile",
+            "nav": 6,
+            "wallet": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_dodge_09_settings_profile.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "flow_readycheck",
+      "ok": true,
+      "steps": [
+        {
+          "name": "lockout_clear",
+          "ok": true,
+          "ms": 680,
+          "info": {
+            "lockoutLeft": 0
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_ready_01_lockout_clear.png"
+        },
+        {
+          "name": "queue_hidden",
+          "ok": true,
+          "ms": 5425,
+          "info": {
+            "notification": {
+              "title": "Match found",
+              "body": "RIFT · Lantern Drill. Come back and press Ready within 10 s.",
+              "tag": "vale-ready",
+              "renotify": false,
+              "silent": true,
+              "t": 38181
+            },
+            "favicon": {
+              "state": "lit",
+              "href": "data:image/png;base64,"
+            },
+            "title": "VALE",
+            "popCue": true,
+            "buttonsAtFound": [
+              "Decline",
+              "Ready"
+            ]
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_ready_02_queue_hidden.png"
+        },
+        {
+          "name": "remind",
+          "ok": true,
+          "ms": 7773,
+          "info": {
+            "readyTimer": 3.5,
+            "leftAtPress": 3,
+            "cues": [
+              "ui_queue_remind"
+            ],
+            "notifications": 2,
+            "renotify": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_ready_03_remind.png"
+        },
+        {
+          "name": "decline_once",
+          "ok": true,
+          "ms": 3184,
+          "info": {
+            "notices": 1,
+            "toasts": [
+              "The match was declined. You can queue again in 10 s."
+            ],
+            "favicon": {
+              "state": "plain",
+              "href": "data:image/png;base64,"
+            },
+            "closedOnReturn": 1,
+            "leftAtPress": 3,
+            "nav": 6,
+            "wallet": true
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_ready_04_decline_once.png"
+        },
+        {
+          "name": "lockout_after",
+          "ok": true,
+          "ms": 6908,
+          "info": {
+            "lockoutLeft": 0
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_ready_05_lockout_after.png"
+        }
+      ],
+      "consoleErrors": []
+    },
+    {
+      "mode": "flow_netdown",
+      "ok": true,
+      "steps": [
+        {
+          "name": "sample_24s",
+          "ok": true,
+          "ms": 24681,
+          "info": {
+            "samples": 47,
+            "offlineFrom4s": "39/39",
+            "connectingFrom4s": 0,
+            "last": {
+              "s": 23.6,
+              "text": "Offline · vs bots",
+              "retry": true
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_netdown_01_sample_24s.png"
+        },
+        {
+          "name": "try_again",
+          "ok": true,
+          "ms": 3583,
+          "info": {
+            "during": {
+              "text": "Connecting…",
+              "retry": false
+            },
+            "after": {
+              "text": "Offline · vs bots",
+              "retry": true
+            }
+          },
+          "shot": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_e2ef_flow_netdown_02_try_again.png"
+        }
+      ]
+    }
+  ],
+  "finished": "2026-11-07T14:30:38.180Z"
+}

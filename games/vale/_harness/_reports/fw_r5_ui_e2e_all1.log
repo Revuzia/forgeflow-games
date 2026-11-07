@@ -1,0 +1,73 @@
+
+FLOW · DODGE
+  ✓ home (6020 ms) {"route":"home","draft":false,"nav":6,"wallet":true,"me":true,"flowBar":false,"toasts":[]}
+  ✓ play (7251 ms) {"route":"play"}
+  ✓ find_match (8897 ms) {"queue":"found","asked":1,"favicon":{"state":"lit","href":"data:image/png;base64,"}}
+  ✓ ready (3145 ms) {"route":"draft","favicon":{"state":"plain","href":"data:image/png;base64,"}}
+  ✓ leave_draft (4159 ms) {"route":"play"}
+  ✗ play_after_dodge: Leave draft did not leave exactly one notice: []
+
+FLOW · READY CHECK (hidden tab)
+  ✓ lockout_clear (1013 ms) {"lockoutLeft":0}
+  ✓ queue_hidden (8452 ms) {"notification":{"title":"Match found","body":"RIFT · Lantern Drill. Come back and press Ready within 10 s.","tag":"vale-ready","renotify":false,"silent":true,"t":44102},"favicon":{"state":"lit","href":"data:image/png;base64,"},"title":"VALE","popCue":true,"buttonsAtFound":["Decline","Ready"]}
+  ✓ remind (8184 ms) {"readyTimer":3.2,"leftAtPress":3,"cues":["ui_queue_remind"],"notifications":2,"renotify":true}
+  ✓ decline_once (2995 ms) {"notices":1,"toasts":["The match was declined. You can queue again in 10 s."],"favicon":{"state":"plain","href":"data:image/png;base64,"},"closedOnReturn":1,"leftAtPress":3,"nav":6,"wallet":true}
+  ✓ lockout_after (9620 ms) {"lockoutLeft":0}
+
+FLOW · SERVER DOWN
+  ✓ sample_24s (25749 ms) {"samples":42,"offlineFrom4s":"37/37","connectingFrom4s":0,"last":{"s":23.6,"text":"Offline · vs bots","retry":true}}
+  ✓ try_again (5074 ms) {"during":{"text":"Connecting…","retry":false},"after":{"text":"Offline · vs bots","retry":true}}
+
+RIFT
+  ✓ home (6279 ms) {"route":"home","purseStart":300}
+  ✓ play (6909 ms) {"route":"play"}
+  ✓ find_match (6392 ms) {"queue":"found"}
+  ✓ ready (2452 ms) {"route":"draft"}
+  ✓ pick (34418 ms) {"before":{"phase":"pick","turn":"pick","myTurn":true,"hover":null,"locked":null},"after":{"phase":"pick","turn":"pick","myTurn":false,"hover":null,"locked":"ardit"}}
+  ✓ loading (21551 ms) {"route":"match"}
+  ✓ match_input (9935 ms) {"shopOpen":true,"shopTags":["All items","Attack","Critical","On hit","Magic","Haste","Defense","Sustain","Speed","Support","Vision","Utility","Dialwood"],"scoreboard":true,"hud":true}
+  ✓ match_live (6755 ms) {"t":649,"scale":16,"kda":"2/4/0","gold":485,"level":8,"cues":9,"audioFetches":{"ogg":361,"m4a":0}}
+  ✓ match_end (49443 ms) {"banner":"Defeat"}
+  ✓ postgame (6744 ms) {"reason":"core","won":false,"placement":2,"duration":1434,"grants":{"candles":129},"earned":129,"xp":180,"nod":{"recorded":0,"text":"You lit a lantern for gullwing_83."}}
+  ✓ postgame_scoreboard (13572 ms) {"1280":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":49,"itemsImg":49,"letters":0},"1920":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":49,"itemsImg":49,"letters":0}}
+  ✓ home_again (2867 ms) {"route":"home","wallet":{"candles":429}}
+  ✓ history_reopen (4745 ms) {"rows":1,"matchId":"match-mw6hr3ax-i-16011m","from":"history","back":"home"}
+
+BRIDGE
+  ✓ home (3120 ms) {"route":"home","purseStart":300}
+  ✓ play (2687 ms) {"route":"play"}
+  ✓ find_match (5927 ms) {"queue":"found"}
+  ✓ ready (6573 ms) {"route":"draft"}
+  ✓ pick (38427 ms) {"before":{"phase":"bench","turn":"free","myTurn":true,"hover":null,"locked":"rishal"},"after":{"phase":"bench","turn":"free","myTurn":true,"hover":null,"locked":"rishal"}}
+  ✓ loading (22601 ms) {"route":"match"}
+  ✓ match_input (10126 ms) {"shopOpen":true,"shopTags":["All items","Attack","Critical","On hit","Magic","Haste","Defense","Sustain","Speed","Support","Vision","Utility"],"scoreboard":true,"hud":true}
+  ✓ match_live (2476 ms) {"t":290,"scale":16,"kda":"4/3/6","gold":779,"level":8,"cues":13,"audioFetches":{"ogg":742,"m4a":0}}
+  ✓ match_end (74234 ms) {"banner":"Defeat"}
+  ✓ postgame (7197 ms) {"reason":"core","won":false,"placement":2,"duration":1455,"grants":{"candles":156},"earned":156,"xp":160,"nod":{"recorded":5,"text":"You lit a lantern for dax_shadeline."}}
+  ✓ postgame_scoreboard (11213 ms) {"1280":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":51,"itemsImg":51,"letters":0},"1920":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":51,"itemsImg":51,"letters":0}}
+  ✓ home_again (5719 ms) {"route":"home","wallet":{"candles":585}}
+  ✓ history_reopen (5040 ms) {"rows":2,"matchId":"match-mw6hv2rz-k-17ymla","from":"history","back":"home"}
+
+FRAY
+  ✓ home (5291 ms) {"route":"home","purseStart":300}
+  ✓ play (2918 ms) {"route":"play"}
+  ✓ find_match (4062 ms) {"queue":"found"}
+  ✓ ready (4445 ms) {"route":"draft"}
+  ✓ pick (30817 ms) {"before":{"phase":"pick","turn":"pick","myTurn":true,"hover":null,"locked":null},"after":{"phase":"pick","turn":"pick","myTurn":false,"hover":null,"locked":"ardit"}}
+  ✓ loading (3391 ms) {"route":"match"}
+  ✓ match_input (7223 ms) {"shopOpen":true,"shopTags":["All items","Attack","Critical","Magic","Haste","Defense","Sustain","Speed"],"scoreboard":true,"hud":true}
+  ✓ match_live (6599 ms) {"t":188,"scale":16,"kda":"2/1/1","gold":181,"level":7,"cues":16,"audioFetches":{"ogg":1122,"m4a":0}}
+  ✓ match_end (15406 ms) {"banner":"7th of 10"}
+  ✓ postgame (7957 ms) {"reason":"score","won":false,"placement":7,"duration":433,"grants":{"candles":65},"earned":65,"xp":110}
+  ✓ postgame_scoreboard (9827 ms) {"1280":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":34,"itemsImg":34,"letters":0},"1920":{"rows":10,"worstDx":0,"tdDisplay":["table-cell"],"wrapped":[],"itemsFull":34,"itemsImg":34,"letters":0}}
+  ✓ home_again (15432 ms) {"route":"home","wallet":{"candles":650}}
+  ✓ history_reopen (7931 ms) {"rows":3,"matchId":"match-mw6hytdd-m-7i1wll","from":"history","back":"home"}
+  ✓ hud_leak (2323 ms) {"matches":3,"detached":0,"attached":0,"elements":354}
+
+STORE
+  ✓ shop (3676 ms) {"route":"shop","currency":"candles","start":300,"matches":3,"granted":350,"wallet":650}
+  ✓ select (1172 ms) {"sku":"sku_ardit_chalkline","skin":"Chalkline Pavise","price":600,"bal":650,"short":0,"cur":"Candles"}
+  ✓ buy_skin (934 ms) {"sku":"sku_ardit_chalkline","skin":"Chalkline Pavise","price":600,"toppedUp":0,"wallet":50}
+  ✓ equip (712 ms) {"ardit":"ardit_chalkline","burdam":"burdam_base","dunsom":"dunsom_base","ervet":"ervet_base","hesmi":"hesmi_base","ilsheta":"ilsheta_base","kemdo":"kemdo_base","lisvel":"lisvel_base","marund":"marund_base","nurrow":"nurrow_base","odrum":"odrum_base","rishal":"rishal_base","sukri":"sukri_base","tunlan":"tunlan_base","ulkro":"ulkro_base","vashil":"vashil_base"}
+
+FAIL  (flow_dodge:FAIL flow_readycheck:ok flow_netdown:ok rift:ok bridge:ok fray:ok hud_leak:ok store:ok)  report: _harness/_reports/fw_r5_ui_e2e_all1.json
