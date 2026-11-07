@@ -73,6 +73,9 @@ test('the god\'s eye clears the deck over a warned river from the town view, not
   const at = (alt: number, off = 0): number[] => { const a = off / R; return [Math.sin(a) * (R + alt), 0, Math.cos(a) * (R + alt)]; };
   const town = siltLensClear(at(520), 520, zones, k);
   assert.ok(town.k > 0.8 && town.r >= 520 && town.r <= 700, JSON.stringify(town));
+  const z2 = zones.map((v) => v.clone()); z2[0].w = 608;
+  const off = siltLensClear(at(382, 980), 382, z2, k);
+  assert.ok(off.k > 0.5, `the live town view: camera ground point ~1 km off the zone centre (${JSON.stringify(off)})`);
   assert.equal(siltLensClear(at(520, 6000), 520, zones, k).k, 0, 'far from the warned river: the weather as it is');
   assert.equal(siltLensClear(at(3000), 3000, zones, k).k, 0, 'a regional view keeps the deck');
   k[0] = 0;

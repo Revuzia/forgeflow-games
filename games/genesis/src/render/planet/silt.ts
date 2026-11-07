@@ -87,7 +87,9 @@ export function siltLensClear(cam: ArrayLike<number>, altitude: number, zones: r
     // the ground point under the camera, against the zone's centre (great-circle chord, m)
     const g = zl / cl;
     const d = Math.hypot(cam[0] * g - z.x, cam[1] * g - z.y, cam[2] * g - z.z);
-    const near = 1 - Math.min(1, Math.max(0, (d - z.w * 0.8) / (z.w * 0.7)));
+    // (the camera stands off from what it looks at: from the town view, 400-900 m out at ~40 deg, its ground point
+    // lies up to ~1.5 altitudes from the river it frames)
+    const near = 1 - Math.min(1, Math.max(0, (d - z.w - 1.5 * altitude) / (z.w * 0.7 + 300)));
     best = Math.max(best, Math.min(1, zk * 1.5) * near);
   }
   // fades out as the camera climbs toward a regional view (the deck is the weather there, not a veil over the town)

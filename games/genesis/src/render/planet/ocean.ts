@@ -607,10 +607,12 @@ void main() {
     float along = dot(sp, fd);
     vec3 across = sp - fd * along;
     float streak = snoise(across * 0.11 + fd * along * 0.012) * 0.6 + snoise(sp * 0.035 + 7.0) * 0.4;
-    vec3 mud = lu * vec3(1.45, 0.98, 0.5) * (0.78 + 0.22 * streak);
+    // (silt-laden water is BRIGHT: the suspended mud sends back the daylight as a ~0.3 albedo would — a deep lake's
+    // dark body browned at its own luminance stayed a dark hole under an overcast)
+    float ls = dot(skyR, LUMs);
+    vec3 mud = max(lu, 0.32 * ls) * vec3(1.45, 0.98, 0.5) * (0.78 + 0.22 * streak);
     under = mix(under, mud, 0.72 * silt);
     // the mirrored sky through a skin of muddy water: a little warmer, a little less of it
-    float ls = dot(skyR, LUMs);
     skyR = mix(skyR, ls * vec3(1.12, 1.0, 0.84), 0.4 * silt) * (1.0 - 0.15 * silt);
   }
   vec3 col = mix(under, skyR, F) + glint;

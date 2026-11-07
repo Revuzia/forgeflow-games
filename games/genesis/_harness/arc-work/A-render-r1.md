@@ -66,3 +66,27 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 - DIAG hook: renderer.ts sets globalThis.__GENESIS_R__ (read-only probe access to uniforms).
 - Re-shoot with diagnostics queued: _harness/arc-work/specs/r1-render-flood2.json (r1c-flood-before/warning/home/god;
   returns siltK, zones, lens, camFog, shell, alt), chain4 pid 24191 (after chain3 21987 after chain2 19494 = perf).
+
+### PERF (r1-render-perf.json, lookdev 420 m, 12 frames, load ~5, software GL 48 s/frame)
+- medium, CPU work/frame: no tower 29.1 ms (p95 58.7) -> r1 coursed rising tower 22.8 (p95 46.2) -> struck heap 19.9;
+  shadows 5.08/4.13/3.40, scene 6.47/3.89/3.04, actors 2.47/1.75/1.33: the tower and site clearing cost nothing
+  measurable (noise > effect; numbers fall over the run). No preset touched.
+- low/high KILLED at 20:11Z (27 min per shot at 48 s/frame) to free the slot for the visual re-shoots; re-run
+  r1-render-perf.json --only=r1-perf-low,r1-perf-high at the end if the slot allows.
+
+### 20:1xZ LOOKED AT r1b-tower-rising / r1b-tower-struck (fresh vite: sandstone + bounce + closed heap)
+- rising: shaded face now WARM (89,76,71) (was 57,71,96 owner shot / 71,75,83 first pass), terrace (211,185,161)
+  sandstone; no trees on/through it. Courses not resolvable at 160 m/888 px on the shaded face (the buttress rhythm
+  is). Clearing + colour: MET.
+- struck (all tiers fell): no trees; closed heap now, but a smooth pale barrow (crown lathe smooth, sunlit) — not yet
+  "a fallen tower". FIX: when no tier stands, a broken stump of the first tier's walls (12 blocks per side, 2-8 m,
+  gaps, sooted) + 60 tilted blocks strewn over the crown; ring blocks 44 -> 70. 12/12 tests.
+- Re-shoot r1-render-tower3.json (r1d-tower-rising/struck), chain5 pid 26134 (after chain4 24191 = flood2).
+
+### 20:3xZ r1c-flood-warning DIAG + LOOKED AT
+- diag: siltK 0.632 (lateStart works), zone centre ~520 m from the town, w 608; camera alt 382 INSIDE the cloud shell
+  (180-420 m on this 3 km sandbox world) -> camFog 1 = the white veil; lens [0,0]: the gate measured the camera's
+  ground point (~980 m off the zone) against w*0.8..w*1.5 -> 0. FIX: reach = w + 1.5*alt (+ w*0.7+300 fade). Test.
+- Lake under the veil (122,130,140): no brown visible: mud took the dark deep body's own luminance. FIX: mud luminance
+  floor 0.32 * sky luminance (silt water is bright). 
+- Re-shoot r1-render-flood3.json (r1e-*), chain6 pid after chain5 26134.

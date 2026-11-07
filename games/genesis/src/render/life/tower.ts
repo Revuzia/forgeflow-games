@@ -273,7 +273,31 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.12) * Math.min(1, Math.max(0.3, 1 - y / (H * 1.6))));
     // its crown (not jittered: the apex stays closed)
     k.lathe(0, 0, [[b0 * 0.75, H * 0.8], [b0 * 0.35, H * 1.05], [0.01, H * 1.12]], 24, SURF.rubble, PART.wall, mixc(col, SOOT, 0.86), 0.8, 1);
-    for (let j = 0; j < 44; j++) {
+    // every tier down: a broken stump of the first tier's walls stands out of the heap (ragged courses 2-8 m high,
+    // sooted), and the crown is strewn with the fallen masonry too: a fallen tower, not a smooth barrow
+    if (n === 0) {
+      const sb = b0 * 0.8, nb = 12;
+      for (let q = 0; q < 4; q++) {
+        k.push(0, 0, 0, (q * Math.PI) / 2);
+        for (let j = 0; j < nb; j++) {
+          if (rnd(q * 17 + j, 21) < 0.22) continue;
+          const x0 = -sb + (2 * sb * j) / nb, x1 = x0 + ((2 * sb) / nb) * (0.75 + 0.2 * rnd(j, q + 22));
+          const hgt = H * 0.6 + (2 + 6 * rnd(q * 17 + j, 23)) * (0.5 + 0.5 * Math.abs(Math.sin(j * 0.9 + q)));
+          k.box(x0, 0, sb - 3.5, x1, hgt, sb, surf, PART.wall, mixc(col, SOOT, 0.35 + 0.5 * rnd(j, q + 24)), { skip: ['bottom'], aoLow: 0.7 });
+        }
+        k.pop();
+      }
+      for (let j = 0; j < 60; j++) {
+        const a = rnd(j, 31) * Math.PI * 2, rr = b0 * 0.85 * Math.sqrt(rnd(j, 32));
+        const sz = 1.2 + rnd(j, 33) * 2.6;
+        const yy = H * (1.12 - 0.3 * (rr / b0)) * (0.85 + 0.2 * rnd(j, 34));
+        const dir = rnd(j, 35) * Math.PI * 2, tip = (0.15 + 0.7 * rnd(j, 36)) * (rnd(j, 37) < 0.5 ? -1 : 1), long = sz * (rnd(j, 38) < 0.3 ? 2.4 : 1.2);
+        const hx = Math.cos(dir) * Math.cos(tip) * long * 0.5, hy = Math.sin(tip) * long * 0.5, hz = Math.sin(dir) * Math.cos(tip) * long * 0.5;
+        const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+        k.beam([x - hx, yy - hy, z - hz], [x + hx, yy + hy, z + hz], sz * (0.8 + 0.5 * rnd(j, 39)), sz * (0.45 + 0.4 * rnd(j, 40)), surf, PART.wall, mixc(col, SOOT, 0.3 + 0.65 * rnd(j, 41)), 0.75);
+      }
+    }
+    for (let j = 0; j < 70; j++) {
       const a = rnd(j, 11) * Math.PI * 2, rr = b0 + (R * 1.15 - b0) * (0.1 + 0.85 * rnd(j, 12));
       const sz = 1.4 + rnd(j, 13) * 3.2;
       const yy = Math.max(0.3, H * (0.35 + 0.55 * (1 - Math.abs((rr - (R + b0) * 0.5) / (R - b0 + 1e-3))))) + lobes(a, 0, 0.6);
