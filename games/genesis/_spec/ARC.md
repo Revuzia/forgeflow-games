@@ -305,14 +305,17 @@ silence on a standing tower. Every answer pushes an `ArcEvent` (§6.1) and the m
 Every `tower.*` command fails cleanly when there is no tower to answer: "Nobody is building a tower on this world."
 
 ### 2.5 The Decision card (ui/decision.ts, new; reused by §4) — the one canonical placement and timing
-- **Placement:** top-centre, 380 px wide, at most 170 px tall, under the HUD's top row. It never covers the time
-  controls, the selection or the inspector. It is **not modal**: the world keeps running and stays clickable.
+- **Placement:** top-centre, 380 px wide, at most 186 px tall (was 170: the four answers need two lines of words
+  each at 888x500), under the HUD's top row. It never covers the time controls, the selection or the inspector: with
+  the inspector open it sits left, under the time panel; when the news column (bottom-left toasts) would meet it, it
+  steps right of the news if it fits, else the news column yields its top to it (the newest news stays). It is **not modal**: the world keeps running and stays clickable.
 - **Timing (canonical):** first offered when the tower reaches **25 % of `goal`** (event `tower.choice`; at 100x this is
   about 4-7 real minutes after `tower.begun`). Offered again **once at 75 %** if it is still unanswered. No card appears
   at `tower.begun` (only a toast with "Look at it", because there is nothing to see yet).
 - **"Slow down for great moments"** (settings, default on): when a Decision card opens with the sim faster than 30x,
   the speed eases to 10x. The previous speed is restored on answer or "Decide later".
-- **"Decide later"** or Esc collapses the card to a **HUD pill** left of the time controls ("The tower at Kel-Amar" /
+- **"Decide later"** or Esc collapses the card to a **HUD pill** (top-centre under the HUD's top row, where the card
+  was: at 888x500 the time panel is at the far left, so nothing fits left of it) ("The tower at Kel-Amar" /
   "A vow to Aru?"). The pill reopens the card and lasts until the choice expires (tower finished; offer closed).
 - **Keys 1-4** choose while the card has focus. Each button sends its command. The result toast echoes the outcome.
 - **Content** (the tower):

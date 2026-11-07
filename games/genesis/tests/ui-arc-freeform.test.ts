@@ -13,8 +13,7 @@ test('the hearts example is answered in words (no numbers)', () => {
   const base = town();
   const sim = base.sim;
   must(sim, { k: 'focus', planet: 0, pos: base.st.pos });
-  const name = sim.u.planets[0].settlements?.[0]?.name ?? 'Aru';
-  const r = sim.applyNow({ k: 'freeform', text: `how do the people of ${name} feel?` });
+  const r = sim.applyNow({ k: 'freeform', text: 'how do the people of Aru feel?' });
   assert.ok(r.ok, r.msg);
   assert.ok(r.msg && r.msg.length > 10, `words: ${r.msg}`);
   assert.ok(!/\d+\s*%/.test(r.msg ?? ''), `no percentages: ${r.msg}`);

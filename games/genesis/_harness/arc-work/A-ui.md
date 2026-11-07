@@ -159,3 +159,40 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
 - NEW spec _harness/arc-work/specs/ui-babel.json (T10 live: babel seed 1, step until choiceOpen, card / pill / tower
   inspector, all hold('ui')). Chained via _harness/arc-work/run-ui-babel.sh <pid> (waits for 24290, then slot.sh on
   5311): waiter PID 25055, log scratch/arc/shots-babel.log.
+- 07:15Z ui-decision 3/3 in minutes (card 152 s incl. boot, insp 2 s) -> hold('ui') WORKS. LOOKED:
+  arc-decision-card: card under the time panel, title row + meta + why fine; DEFECT answers clipped top and bottom
+  (gn-btn centres content + 6 px gap in a 40 px box) and "Send a prophet to war..." cut. FIX: .gn-decision-opt
+  justify flex-start, gap 1, 48 px, letter-spacing 0; label 10.5 px/14 px; card max-height 186 (decision.ts comment).
+  arc-decision-insp: card moved LEFT under the time panel, clear of the inspector -> OK. arc-decision-pill: pill at
+  top-centre reads like a world label -> pill now has the proud-tower icon + "DECIDE" tag (decision.ts, styles.css).
+  Hearts legend OK. NO Hearts fill visible on lookdev (lookdev towns have no territory) -> verify on worker.
+- NEW spec ui-babel2.json (live babel: hearts inspector with fixed grid, card2 with the answer fixes + scroll metrics,
+  Hearts layer fill over the 4-town cluster with 4 stubbed hearts). Chained after ui-babel via run-ui-babel2.sh
+  (waiter PID 26770, log scratch/arc/shots-babel2.log).
+- 07:16Z ui-babel 3/3 (LIVE sim, real TowerView): babel seed 1 tower begun day 0.5, first choiceOpen after 14.5 days
+  (~1.2 y <= 2 y, T3 timing) -> Decision card opened by itself on the real tower (old CSS: answers clipped, fixed
+  since); pill "The tower at Ashuk by the Lake" at top-centre; tower inspector card (select {kind:'tower'}) LOOKED:
+  rows Status/Height "21 m of about 80"/Tiers/Built of/Years/Builders/Your answer, towns of one speech with pride words.
+  §10 LIVE BONUS: the river's flood warning toast appeared in this run ("Rain hangs over the hills above Ashuk by the
+  Lake and the river climbs its banks; they take their stores and go up to high ground. The people of Ashuk by the Lake
+  go out ahead of the flood...") as the headline -> §10 UI verified live at 888x500.
+  DEFECT: the centred card overlapped that toast column (bottom-left). FIX decision.ts layout(): when the news column
+  meets the card, the card steps right of it (left = toasts.right+10, below .gn-faith) if it fits, else (inspector on
+  the right) the column yields its top (max-height, .gn-toasts-yield clips the oldest). Cleared when the card closes.
+  NOT YET SHOT (needs a run with a toast up: ui-babel3.json).
+- 07:27Z ui-babel2 3/3 LOOKED: arc-babel-hearts-insp: share words in full ("about half", "hardly any") -> FIXED OK.
+  arc-babel-card2: answers in full on two lines, card 380x186 (scrollHeight 184) -> OK; prophet label 1 px short
+  ("warn th...") -> opt padding 3px 4px 3px 5px. arc-babel-layer (live territory, stubbed hearts): violet fill with the
+  white proud rim on Shenyaar, orbit marks heart+tower and a crimson fist mark on the defiant town; pill now shows the
+  tower icon + DECIDE -> M5 visual OK at orbit (closer view not shot; the camera was at whole-planet distance).
+- Sim lane's gate check3.log (07:02Z): 802/803, the 1 fail = tests/ui-thumblate.test.ts:38 (timer race under load:
+  copy at 80 ms vs 20 ms late window). De-flaked (copy at 400 ms, wait 450). 3/3 runs pass alone.
+- 07:30Z full gate queued: slot.sh npm run check (PID 28145) -> scratch/arc/check-ui3.log (~32 min once it has a slot).
+- ui-babel3.json (card placement with the news column up; card alone + with tower inspector) running in slot 2
+  (PID 27580) -> scratch/arc/shots-babel3.log, PNGs _shots/arc-babel3-{card,insp}.png.
+- 07:40Z ui-babel3 2/2 LOOKED: arc-babel3-card: with the flood warning + a nature toast up, the card stepped right
+  (394,182 380x186: right of the news, below the worship panel), nothing covered -> OK (card mid fade-in in the shot:
+  hold('ui') frames are instant, the 0.28 s gnInspIn was not finished; not a defect). arc-babel3-insp: card LEFT under
+  the time panel, inspector right, news column yielded to 72 px -> but a half-cut toast showed under the card edge.
+  FIX: yieldToasts hides (visibility) any toast whose top is above the column's clipped top; restored on close.
+  Rerun queued: slot.sh ui-babel3.json -> scratch/arc/shots-babel3b.log (waits behind the gate).

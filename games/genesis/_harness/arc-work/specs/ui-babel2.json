@@ -1,0 +1,32 @@
+{
+ "_doc": "ARC §1.4/§2.5 on a live worker world (babel seed 1, 4 towns with territory): Hearts inspector section (share words in full), Decision card (answers in full, 48 px answers), and the Hearts layer fill over the cluster (stubbed hearts: fearful+proud, defiant, devoted, restless). Inspector/card under G.hold('ui'); the layer shot renders 3 real frames. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-babel2.json --port=5311 > _harness/scratch/arc/shots-babel2.log 2>&1 &",
+ "shots": [
+  { "name": "arc-babel-hearts-insp", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); document.getElementById('boot')?.remove(); await G.step(1440); await G.frames(3);",
+      "const pv = window.__GENESIS_FX__.fx.vis.pv; const towns = pv.settlements.filter((s) => !(s.flags & 2)); window.__towns = towns.map((s) => ({ id: s.id, pos: s.pos, name: s.name }));",
+      "const H = (kind, o) => Object.assign({ kind, proud: false, devoted: 0.1, fearful: 0.1, restless: 0.1, defiant: 0, pride: 0.3, defiance: 0.1, dusk: 0.3, duskYearAgo: 0.6, caption: '', line: '', remember: [], answered: '' }, o);",
+      "const kinds = [H('fearful', { fearful: 0.52, devoted: 0.2, proud: true, pride: 0.68, defiance: 0.22, caption: 'They watch the sky', line: 'In this town they watch the sky and speak quietly.', remember: ['the storm that took the harvest', 'the rain after the stones'] }), H('defiant', { defiant: 0.45, defiance: 0.6, caption: 'They raise their fists' }), H('devoted', { devoted: 0.7, caption: 'They bow at dusk' }), H('restless', { restless: 0.5, proud: true, pride: 0.7, caption: 'They murmur' })];",
+      "G.arc.stub('hearts', towns.slice(0, 4).map((s, i) => ({ settlement: s.id, heart: kinds[i] })));",
+      "G.select({ kind: 'settlement', id: towns[0].id }); await G.frames(30); const sec = document.querySelector('.gn-insp-hearts'); sec?.scrollIntoView(); await G.frames(3);",
+      "return { towns: window.__towns.map((t) => t.name), hearts: sec?.textContent?.slice(0, 300) ?? null };"
+    ] },
+  { "name": "arc-babel-card2", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); G.select(null); const t = window.__towns;",
+      "G.arc.stub('towers', [{ id: 9, pos: t[0].pos, cell: 0, name: 'the Tower of Taam', host: t[0].id, league: t.slice(0, 4).map((s) => s.id), height: 21, goal: 80, tiers: 2, material: 'mudbrick', style: 0, status: 'rising', builders: 14, begun: 0, ended: -1, answer: 'none', choiceOpen: true, canAnswer: ['confuse', 'strike', 'warn', 'let'] }]);",
+      "await G.frames(8); const r = document.querySelector('.gn-decision')?.getBoundingClientRect();",
+      "const opts = [...document.querySelectorAll('.gn-decision-opt')].map((b) => ({ sh: b.scrollHeight, ch: b.clientHeight, lw: b.querySelector('.gn-decision-l')?.scrollWidth, lc: b.querySelector('.gn-decision-l')?.clientWidth }));",
+      "return { card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, sh: document.querySelector('.gn-decision')?.scrollHeight, opts };"
+    ] },
+  { "name": "arc-babel-layer", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 1,
+    "script": [
+      "G.arc.later(); G.ui_.overlay('hearts'); const t = window.__towns; const c = [0, 0, 0]; for (const s of t) for (let k = 0; k < 3; k++) c[k] += s.pos[k] / t.length; const L = Math.hypot(...c);",
+      "const p = G.poi('homestead'); const u = p.pos; const cands = [(v) => [Math.asin(v[1]) * 180 / Math.PI, Math.atan2(v[0], v[2]) * 180 / Math.PI], (v) => [Math.asin(v[1]) * 180 / Math.PI, Math.atan2(v[2], v[0]) * 180 / Math.PI], (v) => [Math.asin(v[1]) * 180 / Math.PI, Math.atan2(-v[2], v[0]) * 180 / Math.PI], (v) => [Math.asin(v[2]) * 180 / Math.PI, Math.atan2(v[1], v[0]) * 180 / Math.PI]];",
+      "let best = cands[0], be = 1e9; for (const f of cands) { const [la, lo] = f(u.map((x) => x / Math.hypot(...u))); const e = Math.abs(la - p.lat) + Math.abs(((lo - p.lon + 540) % 360) - 180); if (e < be) { be = e; best = f; } }",
+      "const [lat, lon] = best(c.map((x) => x / L));",
+      "G.hold(false); await G.camera({ mode: 'orbit', lat, lon, dist: 14000, tilt: 35, yaw: 20, fov: 50, hour: 11 }); await G.frames(2); G.hold(true);",
+      "return { lat, lon, fitErr: be, legend: document.querySelector('.gn-legend')?.textContent?.slice(0, 80) };"
+    ] }
+ ]
+}

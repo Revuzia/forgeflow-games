@@ -1,5 +1,5 @@
 // GENESIS — ARC §2.5: the Decision card. The one canonical placement and timing for the arc's great choices (the
-// tower now; the covenant's vow in §4 reuses it). Top-centre, 380 px wide, at most 170 px tall, under the HUD's top
+// tower now; the covenant's vow in §4 reuses it). Top-centre, 380 px wide, at most 186 px tall, under the HUD's top
 // row; never over the time controls, the selection or the inspector (with the inspector open it sits under the time
 // panel instead). Not modal: the world keeps running and stays clickable.
 //
@@ -14,6 +14,7 @@
 
 import type { Command, CommandResult, EntityRef, SettlementView, TowerView } from '../sim/types.ts';
 import { h, clear } from './dom.ts';
+import { icon } from './icons.ts';
 
 const NUM = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
 /** numbers in words up to twelve, digits above (ARC §0.3 rule 8) */
@@ -217,8 +218,9 @@ export class DecisionCard {
     const sp = this.state.step(offered, answerable, this.deps.speed(), this.deps.slowGreat());
     if (sp != null) this.deps.setSpeed(sp);
     this.draw();
-    // the inspector opens and closes under an unchanged card: keep clear of it every frame
+    // the inspector opens and closes under an unchanged card, and news comes and goes: keep clear every frame
     if (!this.root.hidden) this.layout();
+    else this.yieldToasts(null);
   }
 
   /** the tower's inspector card: open its choice now (while it can be answered) */
@@ -278,13 +280,14 @@ export class DecisionCard {
     clear(this.pills);
     for (const p of pills) {
       const pc = this.choices.get(p)!;
-      this.pills.append(h('button', { class: 'gn-btn gn-decision-pill', title: 'Reopen the choice', text: pc.pill, on: { click: () => { this.state.reopen(p); this.draw(true); } } }));
+      this.pills.append(h('button', { class: 'gn-btn gn-decision-pill', title: 'A choice waits: reopen it', on: { click: () => { this.state.reopen(p); this.draw(true); } } },
+        h('span', { class: 'gn-decision-pill-i', html: icon('heart-proud') }), h('span', { text: pc.pill }), h('span', { class: 'gn-decision-pill-k', text: 'decide' })));
     }
     clear(this.root);
     if (!c) { this.root.hidden = true; return; }
     this.root.hidden = false;
     this.root.dataset.choice = c.id;
-    // (380 x 170 px: the title shares its row with Look at it / Decide later; the four answers sit two by two, each
+    // (380 x 186 px: the title shares its row with Look at it / Decide later; the four answers sit two by two, each
     // with its words in full under its name)
     const tw = this.towers.get(c.id);
     const foot = h('div', { class: 'gn-decision-foot' });
@@ -313,11 +316,62 @@ export class DecisionCard {
   }
 
   /** top-centre under the top row; under the time panel when the inspector would be covered */
+  /** the card's own top (from the stylesheet) while it steps right */
+  private baseTop = 0;
+
   private layout(): void {
-    const insp = document.querySelector<HTMLElement>('.gn-insp:not([hidden])');
-    const ir = insp && insp.offsetParent ? insp.getBoundingClientRect() : null;
-    const w = 380, cx = window.innerWidth / 2;
-    const left = !!ir && ir.width > 0 && cx + w / 2 > ir.left - 8;
+    const vis = (q: string): DOMRect | null => {
+      const e = document.querySelector<HTMLElement>(q);
+      const r = e && e.offsetParent ? e.getBoundingClientRect() : null;
+      return r && r.width > 0 && r.height > 0 ? r : null;
+    };
+    const ir = vis('.gn-insp:not([hidden])');
+    const W = window.innerWidth, cr = this.root.getBoundingClientRect();
+    const w = cr.width || 380, ch = cr.height || 186;
+    const left = !!ir && W / 2 + w / 2 > ir.left - 8;
     if (left !== this.root.classList.contains('gn-decision-left')) this.root.classList.toggle('gn-decision-left', left);
+    // the news column (bottom-left) and a centred card meet on a small screen: the card steps right of the news when
+    // it fits there (below the worship panel); where it cannot (the inspector holds the right), the news column yields
+    // its top to the card (the newest news stays, at the bottom)
+    const tr = vis('.gn-toasts');
+    let shift: number | null = null, yieldTo: number | null = null;
+    if (tr) {
+      const top = cr.height ? cr.top : 0, bottom = top + ch;
+      const cl = left ? cr.left : W / 2 - w / 2;
+      if (tr.right > cl - 4 && tr.top < bottom + 6) {
+        const x = Math.ceil(tr.right + 10);
+        if (!left && x + w <= W - 12) shift = x;
+        else yieldTo = Math.max(0, Math.floor(tr.bottom - bottom - 8));
+      }
+    }
+    if (shift != null) {
+      const fr = vis('.gn-faith');
+      if (!this.root.style.top) this.baseTop = cr.top;
+      const top = fr && fr.left < shift + w ? Math.max(this.baseTop, fr.bottom + 8) : null;
+      this.root.style.left = `${shift}px`;
+      this.root.style.transform = 'scale(var(--gn-ui-scale))';
+      this.root.style.transformOrigin = 'top left';
+      this.root.style.top = top != null && top > this.baseTop + 0.5 ? `${Math.round(top)}px` : '';
+    } else if (this.root.style.left) {
+      this.root.style.left = this.root.style.transform = this.root.style.transformOrigin = this.root.style.top = '';
+    }
+    this.yieldToasts(yieldTo);
+  }
+
+  /** the news column gives up its top to the card (null: all of it back) */
+  private yieldToasts(px: number | null): void {
+    const t = document.querySelector<HTMLElement>('.gn-toasts');
+    if (!t) return;
+    const v = px == null ? '' : `${px}px`;
+    if (t.style.maxHeight !== v) {
+      t.style.maxHeight = v;
+      t.classList.toggle('gn-toasts-yield', px != null);
+    }
+    // a piece of news cut by the card's edge is hidden whole (it is in the chronicle, and back when the card closes)
+    const edge = px == null ? -Infinity : t.getBoundingClientRect().top - 1;
+    for (const c of Array.from(t.children) as HTMLElement[]) {
+      const cut = px != null && c.getBoundingClientRect().top < edge;
+      if (cut !== (c.style.visibility === 'hidden')) c.style.visibility = cut ? 'hidden' : '';
+    }
   }
 }

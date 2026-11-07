@@ -1,0 +1,39 @@
+{
+ "_doc": "ARC \u00a72.5 card placement with the news column up (live babel seed 1: the flood warning toast arrives while stepping to the first tower.choice): card alone (steps right of the news), then with the tower inspector open (news yields its top). hold('ui'). Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-babel3.json --port=5311 > _harness/scratch/arc/shots-babel3.log 2>&1 &",
+ "shots": [
+  {
+   "name": "arc-babel3-card",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove(); const t0 = performance.now(); let tw = null, days = 0, begunDay = -1;",
+    "for (days = 0; days < 40; days++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; if (ts.length && begunDay < 0) begunDay = days / 2; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; }",
+    "window.__tw = tw; await G.frames(4);",
+    "const r = document.querySelector('.gn-decision')?.getBoundingClientRect();",
+    "const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; }; return { halfDays: days, card: R('.gn-decision'), toasts: R('.gn-toasts'), faith: R('.gn-faith'), n: document.querySelectorAll('.gn-toast').length };"
+   ]
+  },
+  {
+   "name": "arc-babel3-insp",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); if (window.__tw) G.select({ kind: 'tower', id: window.__tw.id }); await G.frames(20);",
+    "const q = document.querySelector('.gn-insp')?.getBoundingClientRect();",
+    "const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; }; G.arc.decision(); return { card: R('.gn-decision'), cls: document.querySelector('.gn-decision')?.className, toasts: R('.gn-toasts'), insp: R('.gn-insp'), yieldH: document.querySelector('.gn-toasts')?.style.maxHeight };"
+   ]
+  }
+ ]
+}

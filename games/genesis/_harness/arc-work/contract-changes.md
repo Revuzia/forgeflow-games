@@ -27,3 +27,8 @@
   with kept-home < half the ema. The old absolute case (0.45 -> 0.25) still sets it.
 - 2026-11-07 sim (A-sim stint 3), §6.8 `babel`: a scenario PeopleEntry gains `cluster: { towns, km }`, `pride`,
   `prideYears`, `towerArm` (scenarios.ts clusterPeople); `count` is per town in a cluster. Player-facing name "One speech".
+- 2026-11-07 UI (A-ui stint 3), §2.5 Decision card placement: at most **186 px** tall (was 170; the four answers need
+  their words on two lines at 888x500, measured in arc-babel-card2: scrollHeight 184). The pill sits top-centre where
+  the card was (nothing fits left of the far-left time panel). New: when the bottom-left news column would meet the
+  card, the card steps right of it (below the worship panel) if it fits, else the news column yields its top.
+  No §6 data contract changed. Test surface (§6.7 neighbour): `G.hold('ui')` added for UI-layout shots.

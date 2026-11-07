@@ -122,3 +122,18 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   risen brown river covers its pale shallows). render-silt 4/4 (assert added), tsc clean.
 - NOTE: shots.mjs's vite runs GENESIS_FROZEN (no file watching): a run that REUSES a vite already up on the port serves
   stale src. River re-run therefore on port 5313 (fresh vite): shots-river-warning2.log.
+- arc-tower-rising.png (06:51Z, fresh run) LOOKED AT: stepped pale mudbrick ziggurat with a stair, at 420 m; reads as
+  built. Stub site sits at the river's edge (stub placement, not render). Other 6 tower shots still running (slot 1,
+  shots-render-tower.log; ~19 min/shot at load 15). Then render-hearts, render-perf follow in the chain (chain.pid).
+  CAUTION: the chain's tower/hearts/perf runs reuse the port-5312 vite started 06:32Z -> they serve terrainmat WITHOUT
+  the shallows fix (irrelevant to towers/poses/perf numbers).
+
+## NEXT (stint 4)
+1. LOOK: _shots/arc-river-warning.png (port-5313 re-run, log shots-river-warning2.log) vs arc-river-before.png:
+   crop (320,180)-(560,300) side by side (python PIL, see stint-3 cmp.png). Expect the pale shallows margin to be mud-
+   brown in the warning. YES -> record §10.3(c) MET here and in STATE.md/A-sim.md note. NO -> next lever: widen siltBank's
+   dry reach only where uw > -3 (debug view showed the bank drops past -3 m in a few px).
+2. Chain (pid file _harness/scratch/arc/render/chain.pid): LOOK at arc-tower-* (7) and arc-pose-* ; perf numbers from
+   shots-render-perf.log -> record.
+3. Gate: green at 06:2xZ (798/798). New since: tests/render-arc-live.test.ts (1/1), render-silt assert, terrainmat
+   shallows fix: tsc clean, focused green. Run the gate once more at the end of stint 4 if code changes.

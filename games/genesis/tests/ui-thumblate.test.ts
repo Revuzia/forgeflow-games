@@ -38,9 +38,10 @@ test('a frame copy slower than the wait: no picture now (not an earlier one), th
 test('a copy later than the late window is let go (closed), and a failed copy falls back', async () => {
   const lates: string[] = [];
   const b = new Bmp('stale');
-  const r = await thumbOfFrame(later(80, b as unknown as ImageBitmap), enc, (u) => lates.push(u), 10, 20);
+  // (a wide gap between the late window (20 ms) and the copy (400 ms): a loaded machine runs timers late)
+  const r = await thumbOfFrame(later(400, b as unknown as ImageBitmap), enc, (u) => lates.push(u), 10, 20);
   assert.equal(r.late, true);
-  await later(120, 0);
+  await later(450, 0);
   assert.equal(lates.length, 0);
   assert.equal(b.closed, true, 'the bitmap is released');
   const f = await thumbOfFrame(Promise.resolve(null), enc, undefined, 50);
