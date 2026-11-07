@@ -1,0 +1,97 @@
+{
+ "lane": "UI",
+ "verifier": "adversarial verify 1",
+ "at": "2026-11-07 04:45 CST",
+ "head": "1527c5aa4 (no client change in this lane; prod client built from the working tree at 04:00, which held other lanes' uncommitted src/render edits)",
+ "pass": true,
+ "summary": "The cause holds in the production client. A targeted ability held in aim takes the first Esc: src/input/controller.ts:250 cancels the aim and calls stopImmediatePropagation. The second Esc opens the menu every time. I re-ran it on a new map order (RIFT, BRIDGE, FRAY), three matches in a row, then in five more matches at High and Ultra. 0 cases never reached the menu. Every extra Esc was a visible cancel layer (aim, attack-move, shop, shop search text). One claim is false: 'the HUD's menu button is always there as a mouse path'. The real HUD has no Menu button, and index.html:22 hides the portal Pause / Menu bar in a match. In a match, Esc is the only way to reach Leave match. typecheck passes and probe is 55 of 55. e2e all failed once (flow_readycheck decline_once, at load 181-442). The flow re-run passed 3 of 3. Audio after a match restart was not measured: this Mac's output clock is frozen (AUD-1).",
+ "items": [
+  {
+   "id": "UI-1 cause: held aim eats Esc 1, Esc 2 opens the menu",
+   "severity": "major",
+   "status": "pass",
+   "command": "node _harness/fw_r4_ui_leave.mjs --modes rift,bridge,fray --aim --sec 150 --out _harness/_reports/fw_r4_ui_vfy1_aim3.json --shots fw_r4_ui_vfy1_aim3",
+   "load": "46.39 -> 28.28",
+   "measured": "Production build, vite preview, real Chrome on the GPU, 3 matches in one page in the order RIFT, BRIDGE, FRAY. 47 trials. 21 of 21 trials with a held aim (cursor cur-aim, modals 0) gave no menu on Esc 1 and a menu on Esc 2. 26 of 26 unaimed trials gave a menu on Esc 1. 0 trials never reached the menu, and 47 of 47 menus closed again with Esc. All 3 final leaves (no aim held) opened the menu on Esc 1. The engineer's shots fw_r4_ui_leave_aim1_rift_before_esc.png and _esc1_timeout.png were checked by eye: the dashed range ring is there before Esc 1 and gone after, with no menu. Caveat: with the probe's exact inputs and no forced aim, the original 2-of-6 timeout never came back (engineer 0 of 6 leaves, mine 0 of 8). The engineer's run1 RIFT did see an aim in 2 of 17 polls, so the probe can reach that state, but the cause of the original fw_final_* failures is a strong inference, not a replay. No shots exist from those runs.",
+   "report": "_harness/_reports/fw_r4_ui_vfy1_aim3.json, .log; shots _harness/_shots/fw_r4_ui_vfy1_aim3_*"
+  },
+  {
+   "id": "UI-1 break attempts: shop, search, cast, attack-move, layered states, hammered Esc, keyboard focus, High and Ultra, 3 matches in a row",
+   "severity": "major",
+   "status": "pass",
+   "command": "node <scratch>/vfy_esc_cases.mjs _harness/_reports/fw_r4_ui_vfy1_cases.json fw_r4_ui_vfy1_cases bridge,rift,fray high,ultra,ultra 45; again as fw_r4_ui_vfy1_cases2 with bridge,rift high,high 25 (scratch tool, same prod dist, Ultra set in vale.profile.v1 as probe_match_memory --preset ultra does, then a reload; the report records video preset ultra, shadows 3, ao 2)",
+   "load": "21.94 -> 228.83 (run 1); 163.55 -> 367.65 (run 2)",
+   "measured": "5 matches (BRIDGE High, RIFT Ultra, FRAY Ultra, BRIDGE High, RIFT High). Esc presses needed to reach the menu, per case: plain 1 (5 of 5). Aim held 2 (5 of 5). After a cast, 1 in 4 of 5. In the 5th (RIFT High) the click did not cast, the aim stayed on screen (cur-aim) and the count was 2. Shop open 2 (5 of 5: Esc 1 closes the shop with no menu). Shop with text in the search box 3 (5 of 5: clear, close, menu). Attack-move armed 2 (5 of 5). Aim, then the shop opened over it 3 (5 of 5). Keyboard focus on a HUD button with no aim 1 (2 of 2). Two quick Esc presses during an aim open the menu (5 of 5). Each menu closed again with Esc. Leave match reached and confirmed 5 of 5, and the next match started each time. 0 console errors. Every extra press removed one visible layer, the usual MOBA cancel-first order. 0 cases needed more than 3 presses.",
+   "report": "_harness/_reports/fw_r4_ui_vfy1_cases.json, .log; _harness/_reports/fw_r4_ui_vfy1_cases2.json, .log"
+  },
+  {
+   "id": "UI-1 claim: 'the HUD's menu button is also always there as a mouse path'",
+   "severity": "minor",
+   "status": "fail",
+   "command": "fw_r4_ui_vfy1_cases / cases2 step aimMenuBtn: count of '.hud button' with text Menu, and getByRole('button', {name: /Pause \\/ Menu/}) visible; read src/ui/screens/match.tsx:71-88, index.html:21-22",
+   "load": "as above",
+   "measured": "In the real HUD there is no Menu button: 0 in 5 of 5 matches (hudMenuBtn 0). The only in-match Menu button is in HostStatus, which renders only when no HUD module exists (match.tsx:71). The portal bar's 'Pause / Menu' is not visible in 5 of 5 matches, because index.html:22 sets body:has(.app.is-match) #__ff_controls__ { display: none }. In a match, the keyboard is the only way to reach Leave match. That still works in every case measured, so the verdict on the lane's change stands. But this part of the evidence is wrong, and the brief asks that a player can always reach Leave match.",
+   "fixHint": "Correct the claim in the lane record. If a mouse path is wanted (accessibility), the lead decides: a small HUD Menu button, or let the portal bar's Pause / Menu stay in a match."
+  },
+  {
+   "id": "Esc cancel-first order recorded as design",
+   "severity": "minor",
+   "status": "partly",
+   "command": "grep -n Esc _design/sections/client_hud.md; grep -n -i esc _design/reviews/fixwaves/owner_rulings.md",
+   "load": "n/a",
+   "measured": "client_hud.md:49 and :258 say Esc in a match opens the in-match menu. They do not mention the cancel layers (aim, attack-move, ping wheel, shop, shop search). owner_rulings.md has no Esc ruling yet. The engineer gave this to the lead as a handoff. Practice teleport (client_hud.md:182, 'Esc cancels') follows the same precedent. The behaviour is the industry norm, but it is not on record.",
+   "fixHint": "Lead: record the ruling and add one line to client_hud.md:49."
+  },
+  {
+   "id": "UI-1 e2e all once",
+   "severity": "minor",
+   "status": "partly",
+   "command": "node _harness/e2e.mjs all --out _harness/_reports/fw_r4_ui_vfy1_e2e_all.json --prefix fw_r4_ui_vfy1_e2e (dev server 5190, not started by me); then node _harness/e2e.mjs flow --out _harness/_reports/fw_r4_ui_vfy1_e2e_flow.json --prefix fw_r4_ui_vfy1_e2eflow",
+   "load": "all: 181.35 at start, 1-min 302.85 / 5-min 442.12 at end; flow: about 203 -> 115.57",
+   "measured": "The engineer's report _harness/_reports/fw_r4_ui_e2e_all.json exists: PASS, 8 of 8 journeys, 0 console errors. My all-run: FAIL, exit 1, 7 of 8. flow_readycheck decline_once timed out waiting 15 s for the Decline button, after remind left only 1.7 s on the ready timer. rift, bridge, fray, hud_leak and store were ok. The flow-only re-run passed 3 of 3, and decline_once was ok (readyTimer 3.2). I read this as a timing flake at load 300-440 on a 10 s ready window, not a function break. This lane made no client change. Function passes on the re-run. The load<3 clause is not met, so timing is not measured.",
+   "report": "_harness/_reports/fw_r4_ui_vfy1_e2e_all.json, .log; _harness/_reports/fw_r4_ui_vfy1_e2e_flow.json, .log; shot _harness/_shots/fw_r4_ui_vfy1_e2e_flow_ready_04_decline_once_FAIL.png"
+  },
+  {
+   "id": "typecheck",
+   "severity": "blocker",
+   "status": "pass",
+   "command": "npm run -s typecheck",
+   "load": "about 46",
+   "measured": "exit 0, no output (17.6 s)"
+  },
+  {
+   "id": "probe",
+   "severity": "blocker",
+   "status": "pass",
+   "command": "npm run -s probe",
+   "load": "193.84 -> 15.76",
+   "measured": "55 passed, 0 skipped, 0 failed (55 probes, 627.5 s), EXIT 0",
+   "report": "scratch log only (no tracked report rewritten; git status shows no tracked _harness/_reports change)"
+  },
+  {
+   "id": "audio after a match restart",
+   "severity": "minor",
+   "status": "not_measured",
+   "command": "vfy_esc_cases: an init script wraps AudioContext; at each match start and end, and at Home, reads the state and the currentTime advance over 2 s",
+   "load": "as the case runs",
+   "measured": "1 AudioContext across all 5 matches (none leaked by a restart), state 'running' at every reading, but currentTime 0.01 with 0.00 s advance in 2 s at every reading, Home included. This is the frozen output-device clock of this Mac (AUD-1, 3fb4383ce), not a UI effect, because the harness Chrome uses the real sink. Whether audio plays after a restart cannot be read here. The fake-sink probes (probe_audio_runtime / probe_audio_music) are the place for that.",
+   "report": "_harness/_reports/fw_r4_ui_vfy1_cases.json, cases2.json (audioStart, audioEnd, audioHome)"
+  },
+  {
+   "id": "harness accuracy of fw_r4_ui_leave.mjs state read",
+   "severity": "minor",
+   "status": "partly",
+   "command": "read _harness/fw_r4_ui_leave.mjs uiState against src/ui/hud/shop.tsx:124 and src/ui/hud/world.tsx:215",
+   "load": "n/a",
+   "measured": "uiState.shopOpen looks for '.hud .shop' and similar selectors, but the shop is section.lshop, so the selector can never match. uiState.wheel looks for '.wheel' and '[class*=pingwheel]', but the ping wheel is .pwheel. So 'shop closed, no ping wheel' was not shown by those fields. The shop is role=dialog aria-label 'Lampwright', so the recorded 'modals 0' does show that the shop was closed. My cases run read .lshop directly. The conclusion stands. The two fields are dead.",
+   "fixHint": "Owner of fw_r4_ui_leave.mjs: use '.lshop' and '.pwheel'."
+  }
+ ],
+ "regressions": [],
+ "handoffs": [
+  "lead: there is no mouse path to the in-match menu (no HUD Menu button, and index.html:22 hides the portal Pause / Menu bar in a match). Decide whether that is wanted. Also record the Esc cancel-first ruling.",
+  "UI engineer: correct the 'HUD menu button' sentence in the lane record. Fix the dead shopOpen and wheel selectors in fw_r4_ui_leave.mjs.",
+  "memory engineer: the right click plus repeated Esc in probe_match_memory's leave step matches what a player does (layers need at most 3 presses in every case measured)."
+ ],
+ "notes": "Nothing fixed, as the brief asks. My runs: fw_r4_ui_leave (1 run, 3 matches), the scratch Esc-case tool (2 runs, 5 matches), e2e all, e2e flow, typecheck, probe. The scratch tool is at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vfy_esc_cases.mjs and is not committed. It only reads and drives the prod dist, which fw_r4_ui_leave built into _harness/_prod/fw_r4_ui/dist. All runs went through the heavy-slot queue and waited for a free slot. Load ran from 15 to 442 because of other processes, so no frame timing is reported. All my processes have ended. reap_orphans shows only other lanes' probe_match_memory and run_probes. No tracked _harness/_reports file was rewritten."
+}
