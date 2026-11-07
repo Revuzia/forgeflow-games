@@ -1,0 +1,370 @@
+[
+ {
+  "lane": "AUD",
+  "work": {
+   "items": [
+    {
+     "id": "AUD-3",
+     "status": "done",
+     "evidence": "Fixed in src/audio/index.ts (new `release` section, commit ec462fb76). Any source the engine stops (a bed, a voice, an ambience emitter, a jump's old source, a .m4a piece) now goes through retire(). Once its fade is due, it is disconnected along with its gain/filter/panner nodes and its buffer is set to null. Whichever comes first triggers this: onended; the wall clock reaching the stop while the context clock has also reached it; the context clock not moving between two looks; or, at once, a clock watch saying the clock is stalled. The watch runs every 250 ms: over at least 1 s, a context clock that moves less than 25% of wall time counts as stalled, and so does any state other than 'running'. While stalled, no one-shot starts and every pending fade and stale one-shot is freed. One-shots are also freed at their natural end by wall clock. stopBed and evictCues drop the evicted files from every cache: the buffers map, l.buf, the stream windows. Recovery: ctx.onstatechange and navigator.mediaDevices 'devicechange' look at the clock again (and resume a context the platform suspended or interrupted). When the clock comes back, only the bed the screen wants plays, and a retired bed has no buffer left to sound. A 'closed' context is dropped and rebuilt on the next gesture. Evidence: (1) node _harness/fw_r5_aud_release.mjs (report _harness/_reports/fw_r5_aud_release.json). Device sink, clock stuck at 0.01 s: menu 79 -> RIFT bed 137.6 -> menu 79 MB before AUD-4; after AUD-4, 45.2 -> 68.2 -> 45.2. The only live long sources left are the menu bed's (R1 and R2 PASS, load 42-364). Fake sink, same R1/R2. S1: the context is suspended mid-bed, the bed changed twice, then resumed, and exactly one bed plays: the draft (4 sources, 0 foreign), stalled=false. (2) probe_match_memory --track, run through _harness/fw_r5_aud_memrun.mjs (my own prod build at _harness/_prod/aud_r5). Device sink, audio at every Home is 45.2 MB: BRIDGE->RIFT gives home_0, bridge_home, rift_home = 45.2/45.2/45.2 (fw_r5_aud_mem_dev_br.json), and RIFT->BRIDGE->RIFT gives 45.2 x4 (fw_r5_aud_mem_dev_rbr.json). Round 4 had 385 / 674 / 922. Fake sink is the same, 45.2 at every Home (fw_r5_aud_mem_fake_br.json, fw_r5_aud_mem_fake_rbr.json). Load 108-553 throughout."
+    },
+    {
+     "id": "AUD-4",
+     "status": "done",
+     "evidence": "Long beds now stream (commits 7336977be, 813f1bbbe). A match bed's main stem and combat layer are kept compressed (2.3-2.7 MB each) and play by section windows (32 s + 0.3 s handles). The windows are decoded with WebCodecs AudioDecoder by the new src/audio/opus_stream.ts: an Ogg demux, packets placed by their TOC lengths, a 0.32 s pre-roll, and a frame count that must land exactly on the last packet's end. The next section is still chosen 3 s ahead from MUSIC_ACTS. A jump is the same equal-power 0.25 s fade over the same samples; a natural joint is a 30 ms linear fade over identical samples. The act's next window is decoded ahead. The menu and post-game loops stream too, one chain per stem of 16 s windows. The draft and the objective layer stay whole. Anything that cannot stream (.m4a/Safari, a context not at 48 kHz, no Opus AudioDecoder, a parse or decode failure) decodes whole as before. A window's buffers are reused once nothing holds them (2 pooled per stem), so a section change leaves no garbage. Evidence: node _harness/fw_r5_aud_stream.mjs (fw_r5_aud_stream.json): all 10 long stems (3 maps x main+intense at 32 s, menu x3 and postgame at 16 s) have the same length as decodeAudioData (7,680,000 / 3,072,000 / ...). Every window is bit-exact or has a peak error <= -113.8 dBFS. Decode takes 35-301 ms per window, load 14-127. probe_audio_music on the fake sink: 17/17 gates in fw_r5_aud_music2 and fw_r5_aud_music3 (with the pool). The bed holds 59.5 MB (objective 11.7 + windows 47.8) against 135 whole, at most 3 windows, 0 late. Clicks over the reference are -8.8 to -18.9 dB, peak -12.4 dBFS. The .m4a whole path is also 17/17 (fw_r5_aud_music_m4a.json). Measured, both sinks, probe_match_memory --track through fw_r5_aud_memrun: Home audio 79-80 -> 45.2 MB (fake) and 385-922 -> 45.2 (device). In-match audio: BRIDGE->RIFT 155.1/208.6->161.7 (device), 203.1->185.2/200.5-225.7->158.6 (fake, before the pool). RIFT->BRIDGE->RIFT 210.7->163.9 / 203.5->156.6 / 154.9 (device) and 209.6->168.7 / 154.4-182.4 / 171-174.9 (fake). Round 4 fake RIFT was 220-246. Match totals (not a valid ruling-20 reading at load 108-553): device RIFT 2570-2702, third RIFT 2690; fake third RIFT 2863 (round 4: 2953). Re-runs afterwards: probe_audio_mix (fake sink) PASS: emitters play on all 3 maps, RIFT floor lift 3.0 dB (master p10 -22.7 vs -25.7 without ambience, bar 1 dB), fw_r5_aud_mix.json. probe_audio_runtime sync PASS 3/3 runs, 50/50 hits start in their call, p95 from the pump 32-33 ms (budget 42.7-59.3), rAF-side halves not measured (machine busy), fw_r5_aud_sync.json."
+    }
+   ],
+   "commits": [
+    "ec462fb76 vale r5: AUD-3 a stalled or switched output never pins decoded audio",
+    "7336977be vale r5: AUD-4 long beds stream by windows",
+    "813f1bbbe vale r5: AUD-4 streamed windows reuse their memory",
+    "bdcd1b904 vale r5: fw_r5_aud_memrun writes its probe copy under the gitignored _harness/_reports"
+   ],
+   "handoffs": [
+    {
+     "to": "MEM lane",
+     "what": "probe_match_memory's in-match polls do not force a GC, so the first RIFT/BRIDGE reading after a draft includes about 47 MB of the draft bed (mus_draft x4, 11.7 MB each). It is unreachable but uncollected for up to ~100 s, seen in fw_r5_aud_mem_dev_br.json at rift 5-88 s, gone at 120 s. It is not a pin. If the 1 s start transient matters for ruling 20, a forced GC before the first match poll (or reading the transient with that in mind) separates it."
+    },
+    {
+     "to": "MEM lane",
+     "what": "The ruling 27 Home gate still fails on both sinks: Home is +408 to +631 MB over home_0 (fw_r5_aud_mem_{dev,fake}_{br,rbr}.json). Audio is flat at 45.2 MB at every Home, so the gap is not audio."
+    },
+    {
+     "to": "MEM / UI lane",
+     "what": "First attempt of probe_match_memory --modes rift,bridge,rift on the device sink broke with 'rift: no HUD after 240 s' at load 313-394 (no shots). The re-run with --shots fw_r5_aud_memC and the same build completed the whole journey. Most likely load; flagged in case it recurs."
+    },
+    {
+     "to": "verifier",
+     "what": "probe_audio_music's M1 gate now reads a streamed bed: the objective layer is the one whole file, main and combat are 2 streamed stems, at most 3 windows ever held, and the bed budget is unchanged at <= 135 MB (now 59.5). The --m4a run still checks the 3 whole files. To reproduce the memory numbers without touching the shared _harness/_prod/client/dist: node _harness/fw_r5_aud_memrun.mjs --dist aud_r5 [--build] -- --modes ... --track [--fake-audio]."
+    }
+   ],
+   "notes": "2026-11-07 09:56 CST. Both items are done; every run is on real Chrome. Load was 14-553 throughout (other lanes plus the iOS Simulators), so no frame timing or memory total here counts as a ruling-20 reading. Audio MB, function and correctness are valid. Only my paths were edited: src/audio/index.ts, the new src/audio/opus_stream.ts, _harness/pw.mjs (additive fakeAudio option), _harness/probe_audio_music.mjs (M1 reads streamed beds), and the new _harness/fw_r5_aud_release.mjs, fw_r5_aud_stream.mjs and fw_r5_aud_memrun.mjs. No content or build changes were needed: streaming decodes the shipped .ogg files themselves, so nothing is lost in a re-encode. Reports and logs are in _harness/_reports/fw_r5_aud_* (gitignored, kept locally): release, stream, music1/2/3, music_m4a, mix, sync, mem_{dev,fake}_{br,rbr}. The wip sync briefly committed two transient generated probe copies (_harness/fw_r5_aud_pmm_*.gen.mjs) and committed their deletion in e3ad3a4fc. memrun now writes them under the gitignored _reports so this cannot happen again. All my background runs have finished and none of my processes are left; the only harness processes still running belong to other lanes. My prod build stays at _harness/_prod/aud_r5 (gitignored) for reproduction."
+  },
+  "v1": {
+   "pass": true,
+   "items": [
+    {
+     "id": "AUD-3",
+     "severity": "blocker",
+     "status": "pass",
+     "evidence": "Device sink, High, BRIDGE,RIFT,RIFT,BRIDGE: run with fw_r5_aud_memrun --dist audv1 --build (my own build of HEAD bdcd1b904), report _harness/_reports/fw_r5_audv1_mem_dev.json. The context clock stayed at 0.01 s 'running' the whole time. Audio at home_0 and every match Home was 45.2 MB (load 164-408); round 4 was 385/674/922. In a match: 150-205.6 MB. fw_r5_aud_release (my rerun, report fw_r5_audv1_release.json) PASS: device 45.2/68.2/45.2 MB, fake 45.2/85.9/45.2 MB, fake sink 0 false stalls, S1 holds. My break test on the fake sink: devicechange mid-bed, suspend then resume, suspend with the bed changed twice then resume, and devicechange while suspended. None double-played a bed (0 foreign long sources). The engine resumed the context by itself. Load 335-519."
+    },
+    {
+     "id": "AUD-3-gap",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "A stall or suspend in the 3 s look-ahead (after the next window is scheduled) makes setStalled(true) free the PLAYING section's sources. segment() had already retired them as 'stop' with the stop set at T+0.02. On resume the music bus read -180 dBFS at ctx 31.97 s and came back at about 33.1 s: about 1.7 s of silence, bounded at about 3.3 s. retire()'s check also frees 'piece'-kind sources on a stall, against its own comment.",
+     "fixHint": "On a stall, free a 'stop' source only once its stop is due, or keep it until the clock reaches its stop. Exempt 'piece' sources in the check."
+    },
+    {
+     "id": "AUD-4",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Fake sink, Ultra, RIFT,RIFT,BRIDGE,RIFT, report fw_r5_audv1_mem_fake.json: audio 45.2 MB at every Home (round 4: 79-80). In a match: 149.7-219.3 MB, and the first polls include the draft-bed transient (round 4 RIFT: 220-246). probe_audio_music 17/17 (fw_r5_audv1_music.json): heldMb 47.8, maxHeld 3, late 0, act jumps intact. Match totals were 2459-2862 MB, but 54 of 54 readings were busy (load 155-595), so they are not ruling-20 readings."
+    },
+    {
+     "id": "AUD-4-accounting",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "heldMb, decoded() and M1_budget leave out the STREAM_POOL buffers (up to about 25 MB on a match bed). The true figure is about 85 MB, still under the 135 MB bar. __memTrack does count them.",
+     "fixHint": "Count pooled buffers in heldMb and decoded()."
+    },
+    {
+     "id": "reruns",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "probe_audio_mix (fake sink) PASS, RIFT floorLiftDb 2.9 (fw_r5_audv1_mix.json). probe_audio_runtime sync PASS 3/3: 50/50 in call, p95 from the pump 31.86-32.1 ms against budgets of 42.7-59.3 ms (fw_r5_audv1_sync.json)."
+    },
+    {
+     "id": "regressions",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "typecheck clean. npm run -s probe: 52 of 55 at load 290-590. The 3 failures are probe_online (rift_coop timeout), probe_sim_bot_soak (over the 900 s timeout) and probe_sim_core_nav (an A* timing gate), all in files this lane did not touch. core_nav re-run alone at load 48: 46/46."
+    },
+    {
+     "id": "ui",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "The lane added no UI, so there was nothing new to view at 1280x720 or 1920x1080. Esc after casting then Leave match worked in 8 of 8 prod journeys. Esc with the shop open was not exercised (UI verify 1 covers it)."
+    }
+   ],
+   "regressions": [],
+   "summary": "PASS. Verdict at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r5_AUD_verify1.json, pushed in commit 1d02b82b4. I ran 8 production matches on my own build of HEAD, in orders the engineer did not use: on the device sink at High (BRIDGE, RIFT, RIFT, BRIDGE) and on the fake sink at Ultra (RIFT, RIFT, BRIDGE, RIFT). Audio read 45.2 MB at every Home on both sinks; round 4 read 385-922 on the device sink and 79-80 on the fake sink. In a match audio was 150-219 MB. The release, music (17/17), mix and sync (3/3) probes all pass, and typecheck is clean. probe was 52 of 55; the 3 failures are sim/online timing probes in files this lane did not touch. One minor defect, found with my own break script: if the clock stalls or suspends in the 3 s before a section downbeat, the stall frees the section that is playing, so music is silent for about 1.7-3.3 s after resume. No bed ever double-played. Load was 155-595, so no memory total here is a ruling-20 reading. Audio MB, function and correctness are valid. My scratch script is /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/aud_break.mjs and its fake-sink result is break_fake.json in the same folder."
+  },
+  "fix": null,
+  "v2": null
+ },
+ {
+  "lane": "MEM",
+  "work": {
+   "items": [
+    {
+     "id": "MEM-3",
+     "status": "partly",
+     "evidence": "Biggest cause found: the harness, not the client. Playwright sends Network.enable to every page with no buffer limits, so Chrome keeps a copy of every response body inside the renderer. The renderer's buffer partition at Home after one RIFT was 113.5 MB under Playwright (fw_r4_mem_r1_infra) and 7-28 MB without it (fw_r5_mem_infra_high). Renderer PartitionAlloc (footprint Tag 14) at Home after RIFT/BRIDGE/RIFT was 172/291/353 MB under Playwright (fw_r4_memv2_high_fake3) and 79/120/146 MB on the new raw-CDP driver (fw_r5_mem_raw_high3b). New tool _harness/fw_r5_mem_cdp.mjs drives the same Chrome with the same switches over CDP without the Network domain (probe --raw-cdp). A second source of false climb: dynamic resolution. One run drew RIFT's targets at 1536x864 and the next at 1920x1080, about 50 MB of GL textures apart. probe --full-scale turns it off so every match is read at its largest targets. Gate runs, all raw CDP, full-scale, fake sink, --track; load 90-597 so every verdict is NOT MEASURED (busy), memory numbers are raw readings. High RIFT/BRIDGE/RIFT: 2645/2719/2734 MB, climb +89 (fw_r5_mem_g2_ultra3.json; a High run despite the name, the preset flag did not split in zsh). Second High run: 2484/2625/2723, climb +239, FAIL (fw_r5_mem_g5_high3.json). Ultra RIFT/BRIDGE/RIFT: 2527/2628/2806, climb +279, FAIL (fw_r5_mem_g6_ultra3.json). Required order BRIDGE then RIFT: High 2584/2731 (fw_r5_mem_g6_high2.json), Ultra 2501/2768 (fw_r5_mem_g6_ultra2.json). Every match is under 3000 MB. Homes are 1183-1413 MB, all under 2500. The live set at every Home is +12 to +42 MB over first Home (gate is 150). Still open: the third RIFT's live objects match the first RIFT's within about 30 MB (GL textures 1117 vs 1121, audio, heap, backing), yet footprint is about 215 MB higher at the median. Of that, renderer Tag 14 goes from 136 to 266 MB in the match and the GPU process is +94 MB. GPU 'Owned physical footprint (unmapped)' at Home grows 69 -> 109 -> 131 MB. memory-infra shows renderer gpu/transfer and shared_memory going 25->60 and 30->67 MB in the second match. This is Chrome/ANGLE keeping memory after the page frees it; nothing the page holds explains it. The ruling 27 climb clause therefore fails 2 of 3 three-match runs (+239, +279)."
+    },
+    {
+     "id": "MEM-4",
+     "status": "done",
+     "evidence": "Code in src/render/renderer.ts and src/render/assets.ts (in at wip sync be71998ae, recorded in 6c74dbbf6). The map's landmarks, terrain props and tiling textures now load behind the loading screen (new mapExtras, called from preload). Landmark textures upload as each landmark lands, so its decoded bitmaps close then. Before, they loaded on the match's first frame: High RIFT at 0 s held 6 open bitmaps (48.8 MB), JS heap 98 vs 73 MB and backing 151 vs 113 MB (fw_r5_mem_raw_high3b). GLB fetch/parse/decode now runs at most 4 at a time (Assets.gate), so each file lands, uploads and frees in turn instead of every file of the match decoding at once. After the change, first-20-s peak minus the steady max is -74 to -303 MB in 10 of 11 matches. The one exception is Ultra's third RIFT at +11 MB (its peak 2806 at 3 s, steady max 2795), still under the ~100 MB target. The probe now also reads the footprint through queue, draft and loading. Pre-HUD peaks are 1728-2528 MB, below each match's peak. Before the change, start transients were +107 to +140 MB (fw_r5_mem_smoke, fw_r5_mem_raw_ultra3). Remaining mid-match spikes are audio (see handoff). Typecheck clean (npx tsc --noEmit, exit 0)."
+    },
+    {
+     "id": "TABLE",
+     "status": "done",
+     "evidence": "All raw CDP, full-scale, fake sink. Load at each reading is in the JSON. High RIFT/BRIDGE/RIFT, fw_r5_mem_g5_high3: peaks 2484/2625/2723, pre-HUD 1996/2351/2448, Homes 887 (first) / 1183 / 1283 / 1283, live set over first Home +11.9/+11.4/+15.7 MB, load 26-466. Same journey, fw_r5_mem_g2_ultra3 (ran High): 2645/2719/2734, Homes 886/1231/1308; the third Home is missing because the journey broke on leaving, a driver bug since fixed. Ultra RIFT/BRIDGE/RIFT, fw_r5_mem_g6_ultra3: 2527/2628/2806, pre-HUD 2263/2278/2509, Homes 1028/1265/1413/1363, live +19.5/+20.8/+26.0, load 5.5-582. High BRIDGE/RIFT, fw_r5_mem_g6_high2: 2584/2731, Homes 929/1331/1316, live +17.8/+26.3. Ultra BRIDGE/RIFT, fw_r5_mem_g6_ultra2: 2501/2768, Homes 1005/1338/1388, live -11.3/-2.9. Every report has an r27 block with per-match peak, steady max, start transient and climb, and per-Home live set. Earlier runs on the dynamic-resolution build are kept for comparison: fw_r5_mem_raw_high3b (2449/2550/2663) and fw_r5_mem_raw_ultra3 (a High run despite the name: 2570/2584/2547, climb -23)."
+    }
+   ],
+   "commits": [
+    "6c74dbbf6 vale r5: MEM-3/MEM-4 result (records code that went in with wip syncs be71998ae, 989df09fe, 77648b5ce: _harness/fw_r5_mem_cdp.mjs, _harness/probe_match_memory.mjs, src/render/assets.ts, src/render/renderer.ts)"
+   ],
+   "handoffs": [
+    {
+     "to": "audio engineer",
+     "what": "Fake sink, raw CDP, prod build from 09:30 that includes AUD-3. In the match, decoded audio climbs in steps of about 24 MB of AudioBuffers plus about 49 MB of array-buffer backing per step, up to 3 steps (audio 170/194/218/231 MB, backing 174/223/272/327 MB), then drops. This is the main cause of mid-match peaks (BRIDGE 2719 at 246 s had audio +76 and backing +145 over its floor; fw_r5_mem_g2_ultra3.log). Also, the 4 draft beds (mus_draft*.ogg, 4 x 11.7 MB) stay alive for about 100 s into the match until a GC (fw_r5_mem_raw_high3b, third RIFT 2 s to 102 s), and the menu/draft beds were +46 MB at a match's first second. Please drop references to them when match music starts. Home audio is 45.2 MB in every run."
+    },
+    {
+     "to": "harness owners and memory verifier",
+     "what": "For memory gates use probe_match_memory --raw-cdp --full-scale --fake-audio --track. Playwright's Network.enable keeps response bodies in the renderer: about 90-200 MB more at Home after one to three matches. Dynamic resolution changes render-target size from match to match. In zsh, pass --preset and ultra as two words (an unquoted $VAR holding '--preset ultra' arrives as one argument and silently runs High)."
+    },
+    {
+     "to": "lead (ruling 27)",
+     "what": "The live object set passes in every run (+12 to +42 MB over first Home), and so do the match bar (max 2806) and the Home bar (max 1413). The per-map climb clause fails 2 of 3 three-match runs (+239 High, +279 Ultra; +89 in another High run). In those matches the live objects (GL textures, buffers, audio, JS heap) are within 30 MB of the first match. The extra is renderer PartitionAlloc (+130 MB in match) and GPU-process ANGLE/owned-unmapped memory (+94 MB) that Chrome and the driver keep after the page frees it, the same kind ruling 27 already excuses at Home. I did not relax the bar. Decide whether the climb clause should read live objects, or ask for an idle-machine rerun (all readings here are at load 90-597)."
+    }
+   ],
+   "notes": "MEM-3 is only partly done: the ruling 27 climb clause still fails 2 of 3 three-match runs (+239 High, +279 Ultra; +89 in one other High run). All readings were at load 90-597, so every probe verdict is NOT MEASURED; the memory numbers are raw footprint readings. The remaining climb is Chrome renderer allocator memory and GPU-process ANGLE memory; the page's own objects are within 30 MB of the first match. I found no client-side lever for it. MEM-4 is done: no match's first 20 s peaks more than 11 MB over its steady state. My code went in with wip syncs; commit 6c74dbbf6 records it and is pushed. Files: /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/fw_r5_mem_cdp.mjs (new raw-CDP driver), /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/probe_match_memory.mjs (--raw-cdp, --full-scale, pre-HUD reads, in-match footprint categories, r27 summary, 420 s HUD wait), /Users/sitskovich/Developer/forgeflow-games/games/vale/src/render/renderer.ts (mapExtras), /Users/sitskovich/Developer/forgeflow-games/games/vale/src/render/assets.ts (four-slot GLB gate). Reports are in /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_r5_mem_*.json and .log, which are gitignored. Shots are in _harness/_shots/fw_r5_mem_*. Two report names are wrong: fw_r5_mem_raw_ultra3 and fw_r5_mem_g2_ultra3 are High runs, because the preset flag reached the probe as one word in zsh. Early raw-driver runs broke on leaving: role queries matched hidden nodes and clicks landed while the menu was still sliding in. Both are fixed and the g5/g6 runs completed their journeys. No Chrome of mine is left running (reap_orphans shows none). I did not touch src/sim, src/audio or src/ui."
+  },
+  "v1": {
+   "pass": false,
+   "items": [
+    {
+     "id": "MEM-3",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "I re-measured in the production client at HEAD 6c74dbbf6 (clean tree) with probe_match_memory --raw-cdp --full-scale --fake-audio --track. Load was 1.9-7.7, so these are raw readings, not idle ones. High RIFT/BRIDGE/RIFT/RIFT peaked at 2365/2519/2630/2635 MB, a climb of +265 (fw_r5_memv1_high4.json). Ultra RIFT/BRIDGE/RIFT peaked at 2596/2596/2755, a climb of +159 (fw_r5_memv1_ultra3.json). Both fail the 150 MB limit. The engineer said live objects in the third RIFT stay within about 30 MB of the first. That is false in my High run: median GL textures were 1047.6 MB in the first RIFT and 1116.6 in the third, with 1134 vs 1047.6 at the end. The third RIFT had 3 more 2048x2048 compressed textures (+64 MB, possibly a different fighter roster) and a sixth 1920x1080 RGBA16F target (+15.8 MB) that appears after BRIDGE and stays. So retention alone is not shown to explain the climb.",
+     "fixHint": "Find the owner of the extra 1080p RGBA16F target that survives BRIDGE. Pin or log the roster per match. Re-read idle with the same flags. Do not ask for a ruling 27 excuse until live objects are shown equal."
+    },
+    {
+     "id": "MEM-4",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "Start transient, defined as the first 20 s max minus the steady max: High +51/+113/+12/+38, Ultra +106/+34/+140. Three of 7 matches are over the target of about 100 MB, and every match peaks at 1-2 s. At 1 s, audio is +45 MB (draft beds still alive) and array-buffer backing is +52-58 MB. The engineer's -74..-303 came from runs at load 90-597, where the steady max is inflated. The code itself checks out: no open bitmaps at any poll, pre-HUD peaks 1879-2412 are below every match peak, and the GLB gate is correct.",
+     "fixHint": "Drop the menu/draft beds and their buffers by the match's first frame (coordinate with audio), then re-read idle."
+    },
+    {
+     "id": "TABLE",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The engineer's table was taken at load 5.5-597 and two of its reports are High runs mislabelled as Ultra. My table: High homes 786/890/1111/1243/1266/1263, live set over first Home +8.6..+16.6 MB. Ultra homes 863/961/1197/1286/1297, live set +9.1..+16.3 MB."
+    },
+    {
+     "id": "R20_BARS",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "Every match was <= 3000 MB (max 2755). Every Home was <= 2500 MB (max 1297). The live-set clause passes (max +16.6 MB). Load 1.9-7.7, so the probe verdict reads 'needs idle machine ... would pass'."
+    },
+    {
+     "id": "REGRESSION",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "npm run -s typecheck exited 0. npm run -s probe: 55/55 PASS at load 3.4-3.6 (_harness/_reports/fw_r5_memv1_probe.log). All 7 matches loaded and left through Esc -> Leave with no errors. The 1920x1080 HUD shot looks intact. The lane adds no new UI."
+    },
+    {
+     "id": "NOT_MEASURED",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "Not measured: an idle reading (load < 3), the device sink (stalled on this Mac), Esc with the shop open or after casting, a mid-match device change, and 1280x720 (the lane adds no UI)."
+    }
+   ],
+   "regressions": [],
+   "summary": "Verdict: FAIL, committed in 4717d3084 (/Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r5_MEM_verify1.json) and pushed. Ruling 27's same-map climb fails on both presets at load 1.9-7.7: High RIFT 2365 -> 2630/2635 (+265) and Ultra RIFT 2596 -> 2755 (+159). The engineer said the climb was only Chrome/driver retention, but the third RIFT held +69..86 MB more live GL textures than the first, including an extra 1080p RGBA16F target that persists after BRIDGE. MEM-4 is not done: 3 of 7 matches start more than about 100 MB over their steady max (+113/+106/+140), and every peak is at 1-2 s, driven by the draft beds' audio and their array-buffer backing. The match bar holds (<= 2755 MB), as do the Home bar (<= 1297 MB) and the live set (<= +17 MB). Typecheck exits 0 and the probe passes 55/55. Reports are in _harness/_reports/fw_r5_memv1_{high4,ultra3}.json/.log and fw_r5_memv1_probe.log. Shots went to _harness/_shots/_harness/_shots/fw_r5_memv1_* because I gave the wrong --shots path."
+  },
+  "fix": {
+   "items": [
+    {
+     "id": "MEM-3",
+     "status": "partly",
+     "evidence": "Owner of the sixth 1920x1080 RGBA16F target: VfxPass.pre in src/render/post.ts:266. It is the pre-VFX copy, created at the first lifting envelope of a match and released on leave (releaseMatchTargets). It does not survive BRIDGE. In the verifier's own reports it first appears at BRIDGE 202 s and RIFT 301/270 s, every match starts with 5, and every Home holds 5 (GL 293.1 MB). The probe now reports this as r27 live.liftCopyAtS: fw_r5_mem_rf_high4 BRIDGE 190 s, fw_r5_mem_rf_ultra3 RIFT 227 s / BRIDGE 155 s, absent in the other matches. The roster is logged per match (rec.lineup, r27 lineup, read off the loading screen). Pinning it is not possible: the seed is dev-only, and the draft rng advances from match to match. Instead, r27.overFirst splits each same-map climb into live objects by kind, a texture-class delta, and the residue.\n\nRe-measured with the verifier's method: heavy.py run -- node _harness/probe_match_memory.mjs --raw-cdp --full-scale --fake-audio --track. Load 2.6-12.3, so NOT idle.\n- High RIFT/BRIDGE/RIFT/RIFT (_harness/_reports/fw_r5_mem_rf_high4.json, load max 5.7/8.09/5.98/5.68): peaks 2550/2553/2794/2646 MB, all at 1 s. Peak climb +244: FAIL. Steady medians 2383/2374/2454/2443, so the steady climb is only +71 and +60. Live objects account for +52.8 of the first (texDelta: 2048x2048 SRGB8_A8 +2 = +42.6 MB, from the roster) and -1.6 of the second. Residue +18.2 and +61.6.\n- Ultra RIFT/BRIDGE/RIFT (fw_r5_mem_rf_ultra3.json, load max 10.9/9.7/12.3): peaks 2668/2629/2780, climb +112. Steady climb +44 (live +24.3, residue +19.7).\n\nOn the steady state, then, live objects are explained by the roster and the rest is under about 62 MB. The peak climb that still fails on High is the start transient at 1 s (see MEM-4). Typecheck exits 0.",
+     "id_note": ""
+    },
+    {
+     "id": "MEM-4",
+     "status": "not_done",
+     "evidence": "I changed no code for this. Start transient (first 20 s max minus steady max): High +124/+120/+221/+159, Ultra -175/+40/+156. Load 5.7-12.3, not idle.\n\nWhat holds it, from in-match memory-infra (_harness/_reports/fw_r5_mem_rf_diag.json/.log, High RIFT/BRIDGE/RIFT, --infra-match, load max 5.04):\n- Audio: the draft bed is still decoded at the match's first second (mus_draft, mus_draft_picks, mus_draft_final, mus_draft_urgency.ogg, 4 x 11.7 = 46.8 MB). Renderer partition_alloc array_buffer reads 352.5 MB at 1 s and 305.5 MB at 11 s in the third RIFT.\n- UI raster for the loading-to-HUD change: renderer cc 120-138 MB at 1 s, 47-58 MB by 11-14 s (cc/image_memory 33-41 MB). GPU iosurface 270-296 vs 211-214 MB, skia/dawn 79-83 vs 51-54 MB.\n- The renderer's own share holds flat over the transient: webgl 84-86 MB at 1 s and 11 s, GL textures equal at 1 s and 13 s in every match of fw_r5_mem_rf_high4.\n\nBoth causes are in src/audio and src/ui, which I do not own; handed off below."
+    },
+    {
+     "id": "TABLE",
+     "status": "done",
+     "evidence": "Load 2.6-12.3, not idle. Raw CDP, full-scale, fake sink.\n- High (fw_r5_mem_rf_high4): peaks 2550/2553/2794/2646. Pre-HUD peak 2099 RIFT, 2312 BRIDGE. Homes 784 silent / 885 / 1144 / 1224 / 1240 / 1248. Live set over first Home +9.2/+11.0/+14.8/+16.4 MB.\n- Ultra (fw_r5_mem_rf_ultra3, preset ultra confirmed in the report): peaks 2668/2629/2780. Homes 852 silent / 967 / 1207 / 1277 / 1312. Live set +9.7/+11.8/+17.1.\n- All matches are under 3000 MB (max 2794) and all Homes under 2500 MB (max 1312).\n- Each match row now carries its lineup and its steady live set by kind."
+    },
+    {
+     "id": "NOT_MEASURED",
+     "status": "not_done",
+     "evidence": "Still not measured:\n- An idle reading: load stayed above 3 for the whole run (min 2.6, max 12.3).\n- The device sink: this Mac's output device is stalled.\n- Esc with the shop open or after casting, and a mid-match device change: the lane changed no input or UI code.\n- 1280x720: the lane adds no UI."
+    }
+   ],
+   "commits": [
+    "1951f7cde (wip sync: _harness/probe_match_memory.mjs refix code: lineup, r27 live/overFirst/texDelta/liftCopyAtS, --infra-match every sixth poll)",
+    "52680f50f vale r5: MEM-3/MEM-4 refix result"
+   ],
+   "handoffs": [
+    {
+     "to": "audio engineer",
+     "what": "MEM-4 start transient. At a match's first second the draft bed is still decoded whole: mus_draft.ogg plus its picks, final and urgency layers, 4 x 11.7 = 46.8 MB, along with its array-buffer backing (renderer array_buffer partition about 47 MB higher at 1 s than at 11 s). This shows in every match of _harness/_reports/fw_r5_mem_rf_high4.json and fw_r5_mem_rf_ultra3.json (track.audio.largest at s=1). In the verifier's High third RIFT it stayed about 50 s (audio 204 MB for 4 polls). Please drop the draft bed's buffers when the match attaches or at the first match frame, with no wait for the crossfade, and re-read with probe_match_memory --raw-cdp --full-scale --fake-audio --track."
+    },
+    {
+     "to": "UI engineer",
+     "what": "MEM-4 start transient, UI raster share. At the loading-to-HUD change, renderer cc reads 120-138 MB at 1 s and 47-58 MB by 11 s (cc/image_memory 33-41 MB: the loading screen's 10 splash portraits). On the GPU side, iosurface reads 270-296 vs 211 MB and skia/dawn 79-83 vs 51 MB (_harness/_reports/fw_r5_mem_rf_diag.json, infra per match). Please unmount the loading screen's splash images, or use smaller crops, before the match's first frame so their decoded images and tiles are gone by then."
+    },
+    {
+     "to": "lead (ruling 27)",
+     "what": "Climb split, roster logged per match. Steady climb on the same map is High +71/+60 (live +52.8/-1.6, from roster textures; residue +18/+62) and Ultra +44 (live +24, residue +20). The peak climb (High +244 FAIL, Ultra +112) comes from the 1 s start transient, which belongs to audio and UI. The renderer's GL and webgl memory is flat across that second. Load 2.6-12.3, so no idle reading yet."
+    }
+   ],
+   "notes": "I changed no src/render code. The extra 1080p RGBA16F target belongs to VfxPass.pre and is a legitimate per-match copy that is freed on leave; the verifier's reading that it survives BRIDGE is contradicted by its own Home texture classes. The probe edits are in /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/probe_match_memory.mjs (the wip sync committed them as 1951f7cde before my commit). New reports: _harness/_reports/fw_r5_mem_rf_high4.{json,log}, fw_r5_mem_rf_ultra3.{json,log}, fw_r5_mem_rf_diag.{json,log}. Shots: _harness/_shots/fw_r5_mem_rf_*. Typecheck 0. No orphans; all 3 heavy slots are free."
+  },
+  "v2": {
+   "pass": false,
+   "items": [
+    {
+     "id": "MEM-3",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "No client code changed since verify 1: git diff 4717d3084..HEAD touches only _harness/probe_match_memory.mjs. Re-measured on the prod build with --raw-cdp --full-scale --fake-audio --track. High RIFT/BRIDGE/RIFT/RIFT peaked at 2454/2565/2712/2646 MB (_harness/_reports/fw_r5_memv2_high4.json). The third match's RIFT is +258 over the first RIFT, at 260 s with start transient -146, so this is a steady-state climb, not the 1 s transient the engineer named. overFirst: live objects +10.2 MB, residue +240.8 (renderer +120, GPU +129). The fourth match's RIFT: residue +269.6. Ultra BRIDGE/RIFT/BRIDGE/RIFT peaked at 2586/2885/2550/2664 (fw_r5_memv2_ultra4.json): climbs -36 and -221, so Ultra passes. The VfxPass.pre attribution checks out: every Home holds GL tex 55/293.1 (High) or 55/353.1 (Ultra). Load 2.9-341.85, so NOT MEASURED.",
+     "fixHint": "Find a client lever for the renderer/GPU residue after the second match (for example a fresh context per match, or releasing program and texture caches on leave), or get a lead ruling on whether the climb clause reads live objects. Then re-read High RIFT/BRIDGE/RIFT/RIFT at load < 3."
+    },
+    {
+     "id": "MEM-4",
+     "severity": "major",
+     "status": "partly",
+     "evidence": "No code change. Start transients in my runs: High +30/+7/-146/-98, Ultra -178/-66/-115/-17. Those are within about 100 MB, but at load 11-341, where the steady max is inflated. At low load, verify 1 read +106..+140 and the engineer read +120..+221. Two High peaks are still at 1 s. The handed-off causes (draft beds in src/audio, loading raster in src/ui) are not fixed.",
+     "fixHint": "Release the mus_draft* beds at the match's first frame and drop the loading screen's raster before the HUD shows, then re-read at idle."
+    },
+    {
+     "id": "TABLE",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "Both journeys, both presets. High Homes 770s/877/1136/1267/1282/1277, live over first Home +9.0..+18.0. Ultra Homes 886s/995/1333/1354/1354/1319, live +8.4..+19.0. The lineup read is null for Ultra matches 1-2. No table yet at load < 3.",
+     "fixHint": "Make the lineup read reliable and produce the table on an idle machine."
+    },
+    {
+     "id": "BARS",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "Every match <= 3000 MB (max 2885, Ultra RIFT). Every Home <= 2500 MB (max 1354). Live set at Home <= +19 MB, gate 150."
+    },
+    {
+     "id": "REGRESSION",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "npm run -s typecheck exit 0. npm run -s probe 55/55 PASS (407.5 s). No new UI. Tracked _harness/_reports files unchanged. No Chrome left running."
+    },
+    {
+     "id": "NOT_COVERED",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "Not tested: the device audio sink (the Mac's output is stalled), Esc after casting or with the shop open, and a device change mid-match. The memory probe does not drive these, and the client is unchanged since verify 1."
+    }
+   ],
+   "regressions": [],
+   "summary": "MEM verify 2 fails. The refix changed only the probe; the client is the same one verify 1 failed. On High RIFT/BRIDGE/RIFT/RIFT, the third match's RIFT peaks at 2712 MB, +258 over the first RIFT's 2454. That breaks ruling 27's 150 MB climb clause. The peak is at 260 s, steady state, not the start transient the engineer named. Live objects are +10 MB; the residue is +241 MB (renderer +120, GPU +129). Ultra BRIDGE/RIFT/BRIDGE/RIFT passes the climb (-36/-221). The memory bars hold: match max 2885 MB, Home max 1354 MB, Home live set within +19 MB of first Home. Load was 2.9-342, so the probe verdict is NOT MEASURED. typecheck 0, probe 55/55. Verdict: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r5_MEM_verify2.json (commit 4e7730037, pushed). Reports: /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_r5_memv2_high4.json and /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_r5_memv2_ultra4.json, each with a .log."
+  }
+ },
+ {
+  "lane": "UI",
+  "work": {
+   "items": [
+    {
+     "id": "UI-2",
+     "status": "done",
+     "evidence": "The HUD now has a Menu tab (`.hmenu`, `data-hud=\"menu\"`) at the top left: three chalk strokes, the word MENU and a quiet Esc keycap. It sits on an ink plate in the same style as the kill-feed rows. It measures 103x26 at 1920x1080 and 90x21 at 1280x720. Its tooltip reads 'Menu (Esc)' with the sub-line 'Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.' Code: src/ui/hud/index.tsx (MenuButton; Hud takes an optional onMenu), src/ui/screens/match.tsx (passes openMenu to the Hud) and src/ui/styles/hud.css (.hmenu). client_hud.md is updated in three places. \u00a71, the Esc line (was :49): the ruling 26 order, one layer per press, at most 4 presses. \u00a71, the portal line (:48): the portal bar is hidden in a match and the Menu tab is the mouse path. \u00a74.8, the in-match menu (was :258): the Esc order plus where the tab sits and what it must never cover. The \u00a74.1 budget gains the tab at 0.13%: always-on 13.92% / 12.05% / 13.38%, still under 14%. New tool _harness/fw_r5_ui_menu.mjs checks the tab in a live match. Run 1 was RIFT at 1280x720 and 1920x1080: PASS 2/2, load 1.94->5.37, report _harness/_reports/fw_r5_ui_menu.json. Run 2 was BRIDGE and FRAY at both sizes: PASS 4/4, load 42->213, report _harness/_reports/fw_r5_ui_menu_bridge_fray.json. In all 6 runs: 0 overlaps with the minimap, Dial Bar, sky strip, ledger, ally frames, shop (opened with P), scoreboard (Tab held) or announcer, and none with the minimap swapped left. The tooltip names Esc; a real mouse click opens the menu and Esc closes it; with the shop open, Esc 1 closes the shop with no menu and Esc 2 opens the menu. Shots: _harness/_shots/fw_r5_ui_menu_{rift,bridge,fray}_{1280x720,1920x1080}_{hud,tip,menu,shop,scoreboard,mapleft}.png. Typecheck is clean."
+    },
+    {
+     "id": "UI-3",
+     "status": "done",
+     "evidence": "In _harness/fw_r4_ui_leave.mjs, uiState now reads shopOpen from `.hud .lshop` (the real shop panel) and wheel from `.hud .pwheel` (the real ping wheel). The modals list now leaves out role=dialog elements inside `.hud`, because the shop panel is itself a role=dialog section and was counted as a modal. A new menuButton field is added, and the trial summary records shop and wheel. node --check passes. The full leave probe was not re-run this round."
+    },
+    {
+     "id": "UI-4",
+     "status": "done",
+     "evidence": "The harness was late, not the client. In the r4 failure, the remind step's own screenshot (_harness/_shots/fw_r4_ui_vfy1_e2e_flow_ready_03_remind.png) already shows 'The ready check ran out', so the 10 s window ran out while the harness was doing its own reads and that screenshot. The Decline button was never late: queue_hidden now asserts it is on screen 0.4 s after the check is found (buttonsAtFound [Decline, Ready]). Fix in _harness/e2e.mjs: the remind step reads everything in one page call, then returns to the page and presses Decline before any screenshot. It records leftAtPress, and if the check closed before the press it fails with 'harness late' instead of a 15 s wait. My first `all` run surfaced the same kind of problem in flow_dodge play_after_dodge: it read [] because the 4.2 s toast had expired, while the leave_draft shot shows the notice. Both notice checks now count the toasts the client raised (a subscriber on state.toasts), not the ones still on screen. Results: e2e flow PASS 3/3 at load 105->41 (leftAtPress 3 s). e2e all PASS 8/8 twice: _harness/_reports/fw_r5_ui_e2e_all2.json at load 37->79 and fw_r5_ui_e2e_all3.json at load 79->188, 0 console lines. The run before the toast fix, fw_r5_ui_e2e_all1.json at load 164->187, scored 7/8 (only flow_dodge failed, as above); flow_readycheck already passed there. overlay_regress: PASS at load 97->65 (_harness/_reports/fw_r5_ui_overlay_regress.log). hud_renders --at 100: exit 0, ledger line on screen, 0 renders and 0 changes, load 200->196 (_harness/_reports/fw_r5_ui_hud_renders.log). Frame timings are not reported (load far above 3)."
+    }
+   ],
+   "commits": [
+    "babbd7e66 (wip sync swept in my src/ui/hud/index.tsx, screens/match.tsx, styles/hud.css, client_hud.md, fw_r4_ui_leave.mjs edits)",
+    "334c66dac vale r5: UI-2 Menu tab, UI-3 leave-probe selectors, UI-4 ready-check harness timing + fw_r5_ui_menu tool and report",
+    "d94a966c1 vale r5: UI-4 e2e counts the notices the client raised",
+    "a22143966 vale r5: UI gate runs (e2e all x2, flow, overlay_regress, hud_renders, menu bridge+fray)"
+   ],
+   "handoffs": [
+    {
+     "to": "strings / content owner (content/strings.en.json)",
+     "what": "Add \"hud.menu.button_tip\": \"Menu (Esc)\" and \"hud.menu.button_sub\": \"Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.\" The client uses these exact texts as cv.t fallbacks in src/ui/hud/index.tsx MenuButton, so nothing breaks today; adding them keeps strings complete for localisation."
+    },
+    {
+     "to": "verifier",
+     "what": "Re-run _harness/fw_r4_ui_leave.mjs --aim with the fixed selectors if a live check of shop and wheel state is wanted. I did not re-run it this round; only the selectors were changed."
+    }
+   ],
+   "notes": "The wip sync (babbd7e66) committed my code edits about 2 minutes after I made them; my commit 334c66dac says so in its message. The machine was heavily loaded the whole time (load 37-213, mostly other lanes' memory probes), so the load is recorded with every result and no frame timings are given. I used the existing dev server on 5190 (vite started from this checkout) and started no server of my own. All my harness processes have exited; the heavy slots shown at the end belong to other lanes. Tracked reports under _harness/_reports were not touched; mine are fw_r5_ui_* and were force-added because the directory is gitignored. Design note: clicking the Menu tab while an aim is held opens the menu and keeps the aim. The modal blocks input until it closes. This is documented in client_hud.md \u00a74.8."
+  },
+  "v1": {
+   "pass": true,
+   "items": [
+    {
+     "id": "UI-2 Menu tab placement, tooltip, click, mouse-only leave (prod client)",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Scratch tool vfy_menu.mjs ran on a production build with vite preview and real Chrome on the GPU. 8 matches: RIFT, BRIDGE and FRAY; High and Ultra; 1280x720 and 1920x1080; one match at HUD scale 1.25 with minimap 1.3 on the left; device sink and fake sink. The tab was 103x26 at (16,12) at 1920x1080 and 90x21 at 1280x720. 0 overlaps in 24 layouts (HUD, shop open, scoreboard held), and the tab was the top hit-test element in all 24. The tooltip names Esc in 8 of 8. A click opened the menu in 8 of 8, and also with the shop open in 8 of 8. Space and Enter after Resume did not reopen it. All 8 matches were left by mouse only. 0 console errors. Load 316->362 (device sink) and 364->429 (fake sink). Reports: _harness/_reports/fw_r5_ui_vfy1_menu_{dev,fake}.json. Shots: _harness/_shots/fw_r5_ui_vfy1_*."
+    },
+    {
+     "id": "UI-2 ruling 26 Esc order",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Presses needed to reach the menu: plain 1, aim 2, after a cast 1, shop 2, attack-move 2, aim+shop 3; a held ping wheel closes with no menu. A keydown trace of 95 Escape presses showed 0 skipped layers and 0 menus opened while a layer was up. The tool flagged 3 failures in the fake run (load 409-556); the trace shows all 3 are harness artifacts. One is the closing modal's exit animation, which leaves an aria-hidden copy in the DOM. The other two are a 1.5 s poll that missed a menu the client had opened on Esc 2."
+    },
+    {
+     "id": "UI-2 client_hud.md updates",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "\u00a71 states the Esc order as measured. \u00a74.8 gives the tab's place and size, and they match the measured boxes. The budget arithmetic is right: 0.129% for the tab, 13.92% always-on, under 14%."
+    },
+    {
+     "id": "UI-3 leave-probe selectors",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "node --check passes. In the live prod matches, .hud .lshop and .hud .pwheel were true exactly while the shop or the wheel was open, and the menu dialog sits outside .hud. The full fw_r4_ui_leave --aim run was not done by anyone."
+    },
+    {
+     "id": "UI-4 ready check timing and e2e all",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "The r4 remind shot already shows 'The ready check ran out', which confirms the harness was late. node _harness/e2e.mjs all: PASS 8/8, Decline pressed with 2.2 s left (leftAtPress), load 406->16. Report: _harness/_reports/fw_r5_ui_vfy1_e2e_all.json."
+    },
+    {
+     "id": "Regressions: typecheck, probe, overlay_regress",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "typecheck exit 0. probe 52/55 at load 106->332. The 3 failures are sim timing probes in code this lane did not touch, and all pass when re-run alone at load 13-14: core_nav 46/0, sim_perf 4/0 (p99 1.587 ms), kit_diag exit 0 in 481 s. overlay_regress PASS at load 14->44 (_harness/_reports/fw_r5_ui_vfy1_overlay_regress.log)."
+    },
+    {
+     "id": "Tooltip strings missing from strings.en.json",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "grep finds 0 hud.menu.button keys in content/strings.en.json. The client shows the right text through cv.t fallbacks; adding the keys is an open handoff to the strings owner.",
+     "fixHint": "Content owner: add hud.menu.button_tip and hud.menu.button_sub with the fallback texts."
+    },
+    {
+     "id": "The engineer's fw_r5_ui_menu.mjs runs the dev client",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The tool opens /?dev=1&autopilot=match and uses window.__vale, so its results are dev-client evidence. My production-build re-measure agrees with them.",
+     "fixHint": "Optional: add a prod-build mode like the one in fw_r4_ui_leave.mjs."
+    }
+   ],
+   "regressions": [],
+   "summary": "Verdict: pass. I re-measured UI-2, UI-3 and UI-4 in the production client: 8 matches across RIFT, BRIDGE and FRAY, High and Ultra, 1280x720 and 1920x1080, HUD scale 1.25 with the minimap on the left, and both audio sinks. The Menu tab never covered anything. Its tooltip names Esc, a click always opened the menu, and every match could be left by mouse alone. An Escape trace of 95 presses follows ruling 26. My tool flagged 3 failures in the fake-sink run, and the trace shows all 3 were harness artifacts. e2e all passed 8/8, overlay_regress passed and typecheck is clean. probe was 52/55 under heavy load; the 3 failures are sim timing probes in code this lane did not touch, and they pass when re-run alone at low load. Two minor items are open: the tooltip strings are not yet in strings.en.json (handoff to the strings owner), and the engineer's own tool runs the dev client. The verdict is in _design/reviews/fixwaves/r5_UI_verify1.json, committed as 8ea107c8a and pushed."
+  },
+  "fix": null,
+  "v2": null
+ }
+]
