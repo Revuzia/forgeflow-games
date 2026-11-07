@@ -196,3 +196,19 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
   the time panel, inspector right, news column yielded to 72 px -> but a half-cut toast showed under the card edge.
   FIX: yieldToasts hides (visibility) any toast whose top is above the column's clipped top; restored on close.
   Rerun queued: slot.sh ui-babel3.json -> scratch/arc/shots-babel3b.log (waits behind the gate).
+- 07:58Z ui-babel3 rerun LOOKED arc-babel3-insp.png: card left, inspector right, the half-cut toast is hidden whole
+  (only "+4 more" shows below the card), "Send a prophet to warn them" in full -> OK.
+- ARC.md §2.5 placement text updated (186 px; pill top-centre; news-column rule) + contract-changes.md entry.
+- GATE (stint 3 code): slot.sh npm run check -> scratch/arc/check-ui3.log: 805/805 pass, fail 0 -> GREEN.
+  npm run build exit 0.
+
+## NEXT (stint 4 starts here)
+UI side of §1, §2 and §10 is built and looked at. Left:
+1. M4 live (with render lane): a fearful village (real sim heart, not stub) at ~120 m with >= 5 lookUp/fist poses;
+   the HUD chip glyph at orbit + region is already seen (arc-hearts-orbit, arc-hearts-layer, arc-babel-layer).
+   Render lane owns the pose shot (render-hearts.json); UI only confirms the chip on the same frame.
+2. Optional: a closer Hearts-layer shot on live territory (arc-babel-layer was at whole-planet distance; the violet
+   fill + white proud rim showed on one town). Spec ui-babel2.json shot 3: lower dist (e.g. 4000) and frames 3.
+3. Stage B/C UI (defiance answer, covenant confirm, Book reader) is not in this brief's items (§1, §2, §10).
+4. Whenever UI code changes: focused tests node --test tests/ui-arc-*.test.ts tests/audio-arc.test.ts, then one gate.
+Shot recipe that works on this loaded machine: UI-layout shots run under G.hold('ui') (minutes, not timeouts).

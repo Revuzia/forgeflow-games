@@ -39,6 +39,7 @@ import { dayTicks, GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
 import { speciesInfo } from '../people/ctx.ts';
 import { currentWrath, wrathLaw, WRATH_DEFAULT } from './wrath.ts';
 import { noteHarm } from './arc.ts';
+import { towerStands } from './tower.ts';
 
 // ───────────────────────────── the universe a planet belongs to ─────────────────────────────
 
@@ -464,6 +465,8 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
   const ek = 1 - (seen ? 0.01 : 0.045) * dk;
   const tk = 1 - 0.005 * dk;
   const rally = weathered(x, r, members.length);
+  // §2.4 let: while the tower stands over a proud league town, its loyalty to the god aims lower
+  const lk = towerStands(x.u, x.p.id, st.id) ? 0.8 : 1;
   const m = [0, 0, 0, 0];
   for (const s of members) {
     freshen(A, s, r.means);
@@ -477,7 +480,7 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
       A.faith[i] = A.faith[i] * fk;
       A.fear[i] = A.fear[i] * ek;
       A.love[i] = A.love[i] * tk;
-      const target = A.faith[i] * clamp01(A.love[i] + 0.5 * A.fear[i]);
+      const target = A.faith[i] * clamp01(A.love[i] + 0.5 * A.fear[i]) * (g === 0 ? lk : 1);
       A.loyalty[i] = A.loyalty[i] + (target - A.loyalty[i]) * 0.05;
     }
     const i0 = s * GODS;

@@ -81,6 +81,17 @@ const MAT = { mudbrick: 'mudbrick', brick: 'brick', stone: 'stone' } as const;
 
 // ───────────────────────────── lookups ─────────────────────────────
 
+/** §2.4 let / silence: this town is in the league of a tower the god let stand, and still proud (pride >= 0.6) */
+export function towerStands(u: Universe, planet: number, sid: number): boolean {
+  const T = u.god.rel?.towers;
+  if (!T?.length) return false;
+  for (const tw of T) {
+    if (tw.planet !== planet || tw.status !== 'finished' || (tw.answer !== 'let' && tw.answer !== 'none')) continue;
+    if (tw.league.includes(sid) && (peekRel(u, planet, sid)?.pride ?? 0) >= 0.6) return true;
+  }
+  return false;
+}
+
 export function towersOf(u: Universe, planet: number): TowerState[] {
   return (u.god.rel?.towers ?? []).filter((t) => t.planet === planet);
 }
@@ -360,13 +371,16 @@ function rising(x: PCtx, tw: TowerState): void {
   let got = 0;
   if (mi >= 0) {
     const items = materialItems(x, mi);
-    for (const s of league) {
-      const want = Math.max(2, Math.round(0.06 * grown(x, s).length));
-      let n = want;
+    // §2.3: every builder-day takes one unit from the host store, and the league's tribute fills it: one pool, the
+    // host's store first, then the league's, nearest first (a village with no clay of its own still has builders fed)
+    let need = B;
+    for (const s of [host, ...league.filter((q) => q !== host)]) {
+      if (need <= 0) break;
+      let n = need;
       for (const [it, q] of items) n = Math.min(n, Math.floor(storeHas(s, it) / q));
       if (n <= 0) continue;
       for (const [it, q] of items) storeTake(s, it, n * q);
-      got += n;
+      got += n; need -= n;
     }
   }
   const have = B > 0 ? 0.5 + 0.5 * Math.min(1, got / B) : 0.5;

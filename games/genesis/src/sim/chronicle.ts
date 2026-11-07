@@ -16,6 +16,7 @@ import { cohortTotal } from './people/cohorts.ts';
 import { foodDays } from './people/store.ts';
 import { NS, SKILL } from './people/defs.ts';
 import { sunElevation } from './people/world.ts';
+import { towerStands } from './god/tower.ts';
 
 export const CHRONICLE_CADENCE = 60;
 export const CHRONICLE_OFFSET = 45;
@@ -217,7 +218,8 @@ export function agesDaily(x: PCtx, st: Settlement): void {
   q /= h.length;
   const lost = st.stats.lost - (st.recent.lostSeen ?? st.stats.lost);
   st.recent.lostSeen = st.stats.lost;
-  const golden = k1 - k0 >= Math.max(3, k0 * 0.12) && p1 >= p0 && q >= 4;
+  // §2.4 let: a league whose tower stands takes its golden age at q - 0.5 (the bar 4 becomes 3.5)
+  const golden = k1 - k0 >= Math.max(3, k0 * 0.12) && p1 >= p0 && q >= (towerStands(x.u, x.p.id, st.id) ? 3.5 : 4);
   // (knowledge judged by its trend over the window: one elder's death taking two ideas on one day declared a dark age
   // that ended the next — sixteen of them in thirty years)
   void lost;

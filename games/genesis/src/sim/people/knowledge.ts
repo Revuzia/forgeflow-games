@@ -11,6 +11,7 @@ import { hashFloat } from '../core/rng.ts';
 import { AgentFlag } from '../types.ts';
 import { ERAS } from '../content.ts';
 import { hasPrereqs } from '../recipes/recipes.ts';
+import { towerStands } from '../god/tower.ts';
 import { accidentChance, experimentCandidates, experimentChance, reverseChance } from '../recipes/discovery.ts';
 import { MEMK, NS, NT, SKILL, TRAIT } from './defs.ts';
 import { CURIO } from './needs.ts';
@@ -384,7 +385,7 @@ export function resolveExperiment(x: PCtx, s: number, k: number, triggered: bool
   if (!r || A.knows(s, k)) return false;
   const st = x.ps.settlement(A.settlement[s]);
   // each discovery of one's own makes the next harder to come by (the easy ideas within one mind's reach go first)
-  const p = experimentChance(r, A.traits[s * NT + TRAIT.curiosity], A.skills[s * NS + r.skill], triggered, learnBoost(x, st)) / (1 + 0.6 * A.found[s]);
+  const p = experimentChance(r, A.traits[s * NT + TRAIT.curiosity], A.skills[s * NS + r.skill], triggered, learnBoost(x, st)) / (1 + 0.6 * A.found[s]) * (st && towerStands(x.u, x.p.id, st.id) ? 1.05 : 1); // §2.4 let: discovery +5 %
   A.skills[s * NS + r.skill] = Math.min(1, A.skills[s * NS + r.skill] + 0.01);
   if (hashFloat(A.id[s], k, x.tick, 0xe4a2) >= p) return false;
   const got = learn(x, s, k, 'experiment');

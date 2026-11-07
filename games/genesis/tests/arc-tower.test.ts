@@ -173,3 +173,44 @@ test('§2.4 warn: the prophet speaks five days, each town rolls to heed; the sam
   };
   assert.equal(run(), run(), 'the heed roll reproduces');
 });
+
+test('§2.4 let, standing: towerStands only for a proud league town of a finished let tower; a new prophet there starts lower', async () => {
+  const { towerStands } = await import('../src/sim/god/tower.ts');
+  const { srel } = await import('../src/sim/god/regard.ts');
+  const L = league();
+  begin(L);
+  must(L.sim, { k: 'tower.let' } as never);
+  const u = L.sim.u, pid = u.planets[0].id;
+  const tw = towerOf(L.sim);
+  assert.equal(towerStands(u, pid, L.host.id), false, 'still rising');
+  tw.status = 'finished'; tw.height = tw.goal;
+  srel(u, pid, L.host.id).pride = 0.7;
+  srel(u, pid, L.kin.id).pride = 0.3;
+  assert.equal(towerStands(u, pid, L.host.id), true, 'proud host of a standing tower');
+  assert.equal(towerStands(u, pid, L.kin.id), false, 'a humble league town is not counted');
+  const x = makeCtx(u, u.planets[0]);
+  const s = (x.ps.members.get(L.host.id) ?? []).find((m) => !(x.A.flags[m] & 1))!;
+  const r = L.sim.applyNow({ k: 'prophet.call', agent: x.A.id[s] } as never);
+  if (r.ok) {
+    const ph = u.god.rel!.prophets.find((q) => q.agent === x.A.id[s])!;
+    assert.ok(ph.credibility <= 0.35 + 1e-9, `credibility ${ph.credibility} lowered by the standing tower`);
+  }
+});
+
+test('§2.2 (3) league: a kin village under the pride floor follows a proud leader (stint-4 contract change)', async () => {
+  const { towerWhyNot, TOWER } = await import('../src/sim/god/tower.ts');
+  const { srel } = await import('../src/sim/god/regard.ts');
+  const L = league();
+  const u = L.sim.u, p = u.planets[0];
+  srel(u, p.id, L.host.id).pride = 0.9;
+  srel(u, p.id, L.kin.id).pride = 0;
+  // one speech (two spawned peoples of the same species need not share a tongue)
+  L.kin.langSeed = L.host.langSeed; L.kin.language = L.host.language; L.kin.langLine = [...L.host.langLine];
+  assert.ok(langDistance(L.host, L.kin) <= 0.45);
+  const pop = (L.sim.u.planets[0].people!.members.get(L.kin.id) ?? []).length;
+  const w = towerWhyNot(u, p).find((t) => t.id === L.host.id)!;
+  if (pop < 40) assert.equal(w.league, 2, 'the small kin village joins');
+  else assert.equal(w.league, 1, 'a town of 40 or more needs its own pride');
+  srel(u, p.id, L.host.id).pride = TOWER.leaderPride - 0.1;
+  assert.equal(towerWhyNot(u, p).find((t) => t.id === L.host.id)!.league, 1, 'nobody follows a humble leader');
+});

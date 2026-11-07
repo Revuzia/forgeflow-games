@@ -51,6 +51,7 @@ import { fail, ok } from './util.ts';
 import { meansNow, moveSettlement, relOf, relStat, rise, riseTrust, srel } from './regard.ts';
 import { actReaches, PRAYER_WORDS, SEASON_DAYS } from './prayers.ts';
 import { addSacredPlace, foundShrine, PILGRIM_REACH, sacredNear } from './sacred.ts';
+import { towerStands } from './tower.ts';
 
 /** prophets a world may have at once */
 export const MAX_PROPHETS = 6;
@@ -121,6 +122,8 @@ export function makeProphet(x: PCtx, s: number, how: 'called' | 'risen', credibi
     return `${st.name} already has a prophet: ${os >= 0 ? agentName(x, os) : 'another'}. One voice to a town — abandon them first.`;
   }
   if (R.prophets.filter((q) => q.planet === x.p.id).length >= MAX_PROPHETS) return `There are already ${MAX_PROPHETS} prophets on ${x.p.name}.`;
+  // §2.4 let: later prophets in a league whose tower stands start with credibility -0.1
+  if (towerStands(u, x.p.id, st.id)) credibility = Math.max(0.05, credibility - 0.1);
   const ph: ProphetState = {
     agent: id, planet: x.p.id, settlement: st.id, credibility: r3(credibility), since: x.tick, how, confirmed: how === 'called',
     fulfilled: 0, failed: 0, silenced: 0, persecution: 0, persecutedAt: -1, abandoned: false, journey: null, shrine: -1, readAt: -1,

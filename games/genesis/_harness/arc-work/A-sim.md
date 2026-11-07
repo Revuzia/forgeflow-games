@@ -114,3 +114,24 @@
   life-driven kinds (blight, infestation, stampede) differ by 0-2 from world chaos. Non-flood deaths live 7 vs cut 19
   (seed 1 stampede 0 vs 11; seed 4 sinkhole 7 vs 8). Flood deaths 0 vs 0 (survivable default; forced probe 1 vs 1).
   Verdict: MET (no systematic move; the warning only changes floods). §10 sim side DONE.
+- tdiag1 (seed 1, old rule): leader 1 pride 0.62 at y19, pop 53-56 < 60 at y20-24, then qualifies from y25 but league
+  needs a kin town of pride >= 0.5: its daughters (2,3,4) are < 40 people -> pride 0. tdiag5: leader peaks 0.64 at y14
+  at pop 54, then the town shrinks under 40 and its pride collapses (the §2.1 pop floor).
+- CHANGE (contract, ARC §2.2 (3) edited + contract-changes.md): kin villages < ARC.pridePop of one speech follow a
+  qualifying leader into the league (tower.ts leagueOf). Test added (arc-tower "league: a kin village...").
+- DONE tower gap "let side effects" (§2.4 let): tower.ts `towerStands(u, planet, sid)` (finished let/none tower, town in
+  league, pride >= 0.6) used by regard.ts relDaily (god-0 loyalty target x0.8), prophets.ts makeProphet (credibility
+  -0.1, min 0.05), chronicle.ts golden age bar q >= 3.5 instead of 4, people/knowledge.ts experiment chance x1.05.
+  NOT built: rival-conversion threshold -0.05 (no single threshold found in rivals.ts; left as a gap). Test added
+  (arc-tower "let, standing"). arc-tower 8/8, determinism + living-relationship pass, tsc clean.
+- _harness/probes/arc.ts gains mode `attended <seed> [20]` (answers every open prayer daily); launcher
+  _harness/arc-work/probe-t2att.sh -> scratch/arc/t2att.log. T2 rerun with the league change: probe-t2.sh 1-4 ->
+  t2c.log, 5-8 -> t2d.log (queued 07:50Z).
+- T2 rerun (league change only, t2c-oldpool/t2d-oldpool, seeds 1,5,6,7 done): seed 1 tower begun y34.9 (league 4, one
+  speech 0.00 at 2 y, 2 omens, on-site 97 %), but 50 % only after 9.25 y, then abandoned at 52 % -> T4 FAIL (slow: the
+  villages' stores have no material, each town paid only its own share, so the rate halved). Seeds 5, 6, 7: none.
+- CHANGE (within §2.3's wording "each builder-day takes 1 unit from the host store; league towns send tribute"): tower
+  material is one pool -- host store first, then the league's -- for all B units (tower.ts rising). Tests pass.
+- T2 rerun #2 (pooled): probe-t2.sh 1-4 -> scratch/arc/t2e.log, 5-8 -> t2f.log (08:04Z); attended t2att.log running.
+  Full gate queued: slot.sh npm run check -> scratch/arc/check4.log (pid 19437 in check4.pid).
+- NOTE: render lane's slot.sh shots render-tower.json (pid 17881, port 5312) has held slot 1 since 06:32Z (> 1.5 h).
