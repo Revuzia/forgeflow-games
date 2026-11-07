@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure] [--infra] [--no-audio]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure] [--infra] [--infra-match] [--no-audio]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -37,6 +37,7 @@ const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 const TRACK = args.includes('--track');
 const PRESSURE = args.includes('--pressure');
 const INFRA = args.includes('--infra');
+const INFRA_MATCH = args.includes('--infra-match');
 // --no-audio (round 4 MEM-1 refix, diagnostic A/B, needs --fake-audio): the client with ?audio=0 (src/boot/main.ts), no audio lane at all
 const NO_AUDIO = args.includes('--no-audio');
 const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
@@ -256,6 +257,13 @@ async function journey(mode) {
       const t = await track();
       rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...f, load: m.load, track: t });
       if (TRACK) log(`${mode} ${rec.series.at(-1).s} s: ${f.totalMb} MB (renderer ${f.rendererMb}, GPU ${f.gpuMb}; load ${m.load})${trackLine(t)}`);
+      // --infra-match (diagnostic): Chrome's memory-infra at the match's first three polls: what the start transient is
+      if (INFRA_MATCH && rec.polls <= 3) {
+        const d = await infraDump();
+        (rec.infra ??= []).push({ s: rec.series.at(-1).s, ...d });
+        log(`${mode} ${rec.series.at(-1).s} s memory-infra: renderer ${JSON.stringify(d.renderer ?? d.error)}`);
+        log(`${mode} ${rec.series.at(-1).s} s memory-infra: gpu ${JSON.stringify(d.gpu ?? null)}`);
+      }
       if ((f.totalMb ?? 0) > rec.peak.totalMb) rec.peak = { ...f, atS: rec.series[rec.series.length - 1].s };
     }
     await page.waitForTimeout(3000);
