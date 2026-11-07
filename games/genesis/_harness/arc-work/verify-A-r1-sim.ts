@@ -75,7 +75,9 @@ function daily(): void {
     if (d.kind !== 'flood' || !natural) continue;
     const R = dangerRadius(sim.u.content.disasters.find('flood')!, d);
     const reach = standing().filter((st) => distM(p, st.pos, d.pos) <= R + st.territory + 100).map((st) => st.id);
-    floods.set(d.id, { spawn: sim.u.tick, Wn: d.st.Wn ?? 0, reach, evac: new Set(), outShare: [], dead: 0, ended: false, cause: d.cause });
+    const ev = new Set<number>();
+    for (const sid of reach) if (srel(sim.u, p.id, sid).evacuate?.disaster === d.id) ev.add(sid);
+    floods.set(d.id, { spawn: sim.u.tick, Wn: d.st.Wn ?? 0, reach, evac: ev, outShare: [], dead: 0, ended: false, cause: d.cause });
     if (flavour === 'cut') {
       d.st.Wn = 0;
       for (const st of ps.settlements) { const r = srel(sim.u, p.id, st.id); if (r.evacuate?.disaster === d.id) r.evacuate = null; }
