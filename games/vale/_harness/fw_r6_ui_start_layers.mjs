@@ -5,7 +5,7 @@
 // Real clicks through Home → Play → the mode → Find match → Ready → a fighter locked → loading → the match (dev server,
 // Chrome's fake audio sink). At the loading screen and at 0.5, 1, 2, 4, 8 and 14 s after the HUD shows it reads the
 // compositor's layers (CDP LayerTree: count, drawn area in MB at 4 bytes a pixel, the largest with their compositing
-// reasons and the screen they belong to) and the renderer's memory-infra (cc tile and image memory). Exit 0 = read,
+// reasons and the screen they belong to; also at Home and the draft) and the renderer's memory-infra (cc tile and image memory). Exit 0 = read,
 // 3 = the journey broke. Holds one heavy slot (pw.mjs).
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -79,14 +79,15 @@ try {
   };
   let hudAt = null;
   const click = async (loc) => { await loc.first().waitFor({ state: 'visible', timeout: 30000 }); await loc.first().click({ timeout: 10000 }); };
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(4000);
+  await read('home');
   await click(page.locator('.nav__item', { hasText: 'Play' }));
   await page.waitForTimeout(500);
   await click(page.locator('.station', { hasText: MODE.toUpperCase() }));
   await page.waitForTimeout(500);
   if (QUEUE_CARD[MODE]) await click(page.locator('.qcard', { hasText: QUEUE_CARD[MODE] }));
   await click(page.getByRole('button', { name: 'Find match' }));
-  let sawLoading = false;
+  let sawLoading = false, sawDraft = false;
   const until = Date.now() + 300000;
   while (!(await page.locator('.hud').first().isVisible().catch(() => false))) {
     if (Date.now() > until) throw new Error('no HUD after 300 s');
@@ -97,8 +98,9 @@ try {
     if (await card.isVisible().catch(() => false) && await lock.isVisible().catch(() => false)) {
       await card.click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(250); await lock.click({ timeout: 3000 }).catch(() => {});
     }
+    if (!sawDraft && await page.locator('.scr--draft:not(.is-leaving) .fcard').first().isVisible().catch(() => false)) { sawDraft = true; await page.waitForTimeout(1500); await read('draft'); }
     if (!sawLoading && await page.locator('.scr--loading .pcard').first().isVisible().catch(() => false)) {
-      sawLoading = true; await page.waitForTimeout(1500); await read('loading');
+      sawLoading = true; await page.waitForTimeout(1500); await read('loading'); await page.waitForTimeout(1000); await read('loading +1 s');
     }
     await page.waitForTimeout(150);
   }
