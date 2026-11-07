@@ -1,0 +1,330 @@
+{
+ "probe": "probe_audio_music",
+ "queue": "rift_coop",
+ "format": "default",
+ "at": "2026-11-07T09:25:38.618Z",
+ "err": null,
+ "gates": {
+  "A1_clockRaisesAct": true,
+  "A1_structuresRaiseAct": true,
+  "A1_neverFalls": true,
+  "A2_orderFollowsAct": true,
+  "A2_jumps": true,
+  "A3_clocks": true,
+  "O1_offAway": true,
+  "O2_fadeIn": true,
+  "O2_fadeOut": true,
+  "O2_roadOnlyALittle": true,
+  "O2_aWeightNotALevelChange": true,
+  "O3_fadesOnFall": true,
+  "C1_noClicks": true,
+  "L1_level": true,
+  "L1_peak": true,
+  "M1_files": true,
+  "M1_budget": true
+ },
+ "pass": true,
+ "setup": {
+  "bed": "mus_match_rift",
+  "mode": "rift",
+  "fmt": "ogg",
+  "rate": 48000,
+  "layers": [
+   [
+    "intense",
+    "combat"
+   ],
+   [
+    "objective_pit",
+    "objective"
+   ]
+  ],
+  "objectives": [
+   {
+    "id": "sunsplinter",
+    "at": [
+     85,
+     80
+    ],
+    "alive": false
+   },
+   {
+    "id": "longshade",
+    "at": [
+     85,
+     31
+    ],
+    "alive": false
+   }
+  ],
+  "modeClock": [
+   [
+    "rift",
+    2400
+   ],
+   [
+    "bridge",
+    1260
+   ],
+   [
+    "fray",
+    660
+   ]
+  ],
+  "bufferFiles": 3
+ },
+ "clockS": 2400,
+ "jumpAct0": {
+  "at": 117.77799999999999,
+  "from": 1,
+  "to": 4,
+  "jump": true,
+  "act": 0
+ },
+ "actRiseClock": {
+  "before": 0,
+  "act": 1,
+  "atMatchS": 484.77,
+  "structuresMax": 24
+ },
+ "objectivesAlive": [
+  {
+   "id": "sunsplinter",
+   "unit": "sunsplinter",
+   "at": [
+    85,
+    80
+   ]
+  }
+ ],
+ "fadeIn": {
+  "ok": true,
+  "gain": 0.9,
+  "seconds": 2.49
+ },
+ "roadGain": 0.21,
+ "fadeOut": {
+  "ok": true,
+  "gain": 0.05,
+  "seconds": 1.61
+ },
+ "fadeIn2": {
+  "ok": true,
+  "gain": 0.91,
+  "seconds": 2.4
+ },
+ "kill": {
+  "found": true
+ },
+ "fadeOnFall": {
+  "ok": true,
+  "gain": 0.05,
+  "seconds": 3.08
+ },
+ "jumpAct1": {
+  "at": 245.778,
+  "from": 2,
+  "to": 4,
+  "jump": true,
+  "act": 1
+ },
+ "actRiseStructures": {
+  "before": 1,
+  "killed": 12,
+  "standingSeen": 24,
+  "timeAt": 589.3666666666667,
+  "after": 2
+ },
+ "jumpAct2": {
+  "at": 277.778,
+  "from": 4,
+  "to": 1,
+  "jump": true,
+  "act": 2
+ },
+ "sections": [
+  {
+   "at": 85.77799999999999,
+   "from": 0,
+   "to": 1,
+   "jump": false,
+   "act": 0
+  },
+  {
+   "at": 117.77799999999999,
+   "from": 1,
+   "to": 4,
+   "jump": true,
+   "act": 0
+  },
+  {
+   "at": 149.778,
+   "from": 4,
+   "to": 0,
+   "jump": false,
+   "act": 1
+  },
+  {
+   "at": 181.778,
+   "from": 0,
+   "to": 1,
+   "jump": false,
+   "act": 1
+  },
+  {
+   "at": 213.778,
+   "from": 1,
+   "to": 2,
+   "jump": false,
+   "act": 1
+  },
+  {
+   "at": 245.778,
+   "from": 2,
+   "to": 4,
+   "jump": true,
+   "act": 1
+  },
+  {
+   "at": 277.778,
+   "from": 4,
+   "to": 1,
+   "jump": true,
+   "act": 2
+  }
+ ],
+ "finalAct": 2,
+ "blocks": 2696,
+ "windows": [
+  {
+   "at": 85.78,
+   "jump": "S1>S2",
+   "isJump": false,
+   "act": 0,
+   "blocks": 5,
+   "step": 0.00903,
+   "hf": 0.00677,
+   "levelStepDb": 0.67
+  },
+  {
+   "at": 117.78,
+   "jump": "S2>S5",
+   "isJump": true,
+   "act": 0,
+   "blocks": 5,
+   "step": 0.01274,
+   "hf": 0.01359,
+   "levelStepDb": 2.1
+  },
+  {
+   "at": 149.78,
+   "jump": "S5>S1",
+   "isJump": false,
+   "act": 1,
+   "blocks": 5,
+   "step": 0.00954,
+   "hf": 0.0019,
+   "levelStepDb": 0.92
+  },
+  {
+   "at": 181.78,
+   "jump": "S1>S2",
+   "isJump": false,
+   "act": 1,
+   "blocks": 5,
+   "step": 0.00903,
+   "hf": 0.00677,
+   "levelStepDb": 0.22
+  },
+  {
+   "at": 213.78,
+   "jump": "S2>S3",
+   "isJump": false,
+   "act": 1,
+   "blocks": 5,
+   "step": 0.01274,
+   "hf": 0.01359,
+   "levelStepDb": 0.76
+  },
+  {
+   "at": 245.78,
+   "jump": "S3>S5",
+   "isJump": true,
+   "act": 1,
+   "blocks": 5,
+   "step": 0.01392,
+   "hf": 0.01312,
+   "levelStepDb": 0.28
+  },
+  {
+   "at": 277.78,
+   "jump": "S5>S2",
+   "isJump": true,
+   "act": 2,
+   "blocks": 5,
+   "step": 0.00954,
+   "hf": 0.0019,
+   "levelStepDb": 1.18
+  }
+ ],
+ "clicks": {
+  "refStep": 0.0378,
+  "refHf": 0.03349,
+  "stepP50": 0.00594,
+  "stepP99": 0.0378,
+  "hfP99": 0.03349,
+  "overStepDb": [
+   -9.45,
+   -8.68,
+   -11.95
+  ],
+  "overHfDb": [
+   -7.83,
+   -8.14,
+   -24.91
+  ]
+ },
+ "peakDb": -12.78,
+ "objective": {
+  "far0": {
+   "outDb": -32.76,
+   "objDb": -200,
+   "blocks": 38
+  },
+  "pit": {
+   "outDb": -29.34,
+   "objDb": -28.94,
+   "blocks": 47
+  },
+  "far1": {
+   "outDb": -31.29,
+   "objDb": -83.98,
+   "blocks": 35
+  },
+  "bedOverObjDb": 4.32,
+  "liftDb": 2
+ },
+ "orderBad": [],
+ "sectionsEvery32s": true,
+ "memory": {
+  "files": [
+   [
+    "a647aa126875-mus_match_rift.ogg",
+    58.6,
+    160
+   ],
+   [
+    "00cf51edfdf0-mus_match_rift_intense.ogg",
+    58.6,
+    160
+   ],
+   [
+    "e84f548f01b7-mus_match_rift_objective.ogg",
+    11.7,
+    32
+   ]
+  ],
+  "decodedMb": 227.4
+ },
+ "logs": []
+}

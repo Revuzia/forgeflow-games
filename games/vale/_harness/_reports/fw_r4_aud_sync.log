@@ -1,0 +1,290 @@
+# sync 03:09:44 load { 42.08 37.68 37.01 }
+[0s] sync run 1/3
+[66s] match
+[77s] injecting 50 hits {"sampleRate":48000,"baseLatency":0.005333333333333333,"outputLatency":0.016,"you":4}
+[193s] sync run 2/3
+[heavy] probe_audio_runtime sync: waiting (all 3 slots busy) — slot0: pid 21834 node:pw /; slot1: pid 25449 node:gfx ultra 1600x900@1; slot2: pid 25816 node:fw_r4_mem_bitmaps
+[heavy] probe_audio_runtime sync: got slot1 after 14s
+[280s] match
+[288s] injecting 50 hits {"sampleRate":48000,"baseLatency":0.005333333333333333,"outputLatency":0.016,"you":3}
+[385s] sync run 3/3
+[445s] match
+[451s] injecting 50 hits {"sampleRate":48000,"baseLatency":0.005333333333333333,"outputLatency":0.016,"you":3}
+{
+ "probe": "probe_audio_runtime",
+ "mode": "sync",
+ "runs": 3,
+ "pass": true,
+ "err": null,
+ "summary": [
+  {
+   "pass": true,
+   "err": null,
+   "offsetFromPumpMs": {
+    "p50": 30.23,
+    "p95": 32.06
+   },
+   "offsetMs": {
+    "p50": 32.17,
+    "p95": 35.2,
+    "max": 44.8,
+    "min": 28.7
+   },
+   "engineOverSfxBusMs": {
+    "p50": 1.52,
+    "p95": -3.25
+   },
+   "budgetMs": 42.72,
+   "pumpLateMs": {
+    "p50": 2.1,
+    "p95": 8.3,
+    "max": 16.4
+   },
+   "inCall": {
+    "started": 50,
+    "of": 50,
+    "clockTicked": 4
+   },
+   "preRoll": {
+    "rows": 3,
+    "hits": 0,
+    "refs": 3,
+    "schedMin": -50,
+    "cleanHitOffsetMs": {
+     "min": 28.7,
+     "p50": 32.17,
+     "max": 44.8
+    }
+   },
+   "gates": {
+    "measured": true,
+    "platformMeasured": true,
+    "startsInCall": true,
+    "p95FromPumpWithinFramePlusOutputPlusChain": true,
+    "engineOverSfxBusFromPump": true,
+    "p95WithinFramePlusOutputPlusHop": null,
+    "engineOverSfxBus": null
+   }
+  },
+  {
+   "pass": true,
+   "err": null,
+   "offsetFromPumpMs": {
+    "p50": 29.4,
+    "p95": 32.24
+   },
+   "offsetMs": {
+    "p50": 30.99,
+    "p95": 47.36,
+    "max": 48.26,
+    "min": -31.77
+   },
+   "engineOverSfxBusMs": {
+    "p50": -0.66,
+    "p95": 3.41
+   },
+   "budgetMs": 42.72,
+   "pumpLateMs": {
+    "p50": 2.2,
+    "p95": 16.6,
+    "max": 17.9
+   },
+   "inCall": {
+    "started": 50,
+    "of": 50,
+    "clockTicked": 3
+   },
+   "preRoll": {
+    "rows": 12,
+    "hits": 2,
+    "refs": 10,
+    "schedMin": -50,
+    "cleanHitOffsetMs": {
+     "min": 27.86,
+     "p50": 31.13,
+     "max": 48.26
+    }
+   },
+   "gates": {
+    "measured": true,
+    "platformMeasured": true,
+    "startsInCall": true,
+    "p95FromPumpWithinFramePlusOutputPlusChain": true,
+    "engineOverSfxBusFromPump": true,
+    "p95WithinFramePlusOutputPlusHop": null,
+    "engineOverSfxBus": null
+   }
+  },
+  {
+   "pass": true,
+   "err": null,
+   "offsetFromPumpMs": {
+    "p50": 29.68,
+    "p95": 32
+   },
+   "offsetMs": {
+    "p50": 31.38,
+    "p95": 39.92,
+    "max": 44.7,
+    "min": -22.26
+   },
+   "engineOverSfxBusMs": {
+    "p50": 1.33,
+    "p95": 7.57
+   },
+   "budgetMs": 42.72,
+   "pumpLateMs": {
+    "p50": 1.6,
+    "p95": 5.2,
+    "max": 13.9
+   },
+   "inCall": {
+    "started": 50,
+    "of": 50,
+    "clockTicked": 4
+   },
+   "preRoll": {
+    "rows": 5,
+    "hits": 1,
+    "refs": 4,
+    "schedMin": -50,
+    "cleanHitOffsetMs": {
+     "min": 27.62,
+     "p50": 31.38,
+     "max": 44.7
+    }
+   },
+   "gates": {
+    "measured": true,
+    "platformMeasured": true,
+    "startsInCall": true,
+    "p95FromPumpWithinFramePlusOutputPlusChain": true,
+    "engineOverSfxBusFromPump": true,
+    "p95WithinFramePlusOutputPlusHop": null,
+    "engineOverSfxBus": null
+   }
+  }
+ ],
+ "notMeasured": [
+  "p95WithinFramePlusOutputPlusHop",
+  "engineOverSfxBus"
+ ],
+ "detail": [
+  {
+   "probe": "probe_audio_runtime",
+   "mode": "sync",
+   "hits": 50,
+   "err": null,
+   "setup": {
+    "sampleRate": 48000,
+    "baseLatency": 0.005333333333333333,
+    "outputLatency": 0.016,
+    "you": 4
+   },
+   "preRoll": {
+    "rows": 3,
+    "hits": 0,
+    "refs": 3,
+    "schedMin": -50,
+    "cleanHitOffsetMs": {
+     "min": 28.7,
+     "p50": 32.17,
+     "max": 44.8
+    }
+   },
+   "excluded": 0,
+   "frameMs": 16.7,
+   "outputLatencyMs": 16,
+   "baseLatencyMs": 5.33,
+   "detected": 50,
+   "clock": "getOutputTimestamp",
+   "offsetMs": {
+    "p50": 32.17,
+    "p95": 35.2,
+    "max": 44.8,
+    "min": 28.7
+   },
+   "offsetFromPumpMs": {
+    "p50": 30.23,
+    "p95": 32.06
+   },
+   "audioAfterPictureMs": {
+    "p50": 15.47,
+    "p95": 18.5,
+    "note": "picture presented at the next vsync after its rAF (headless: not measurable, assumed one frame)"
+   },
+   "offsetAltMs": {
+    "p50": 34.62,
+    "p95": 40.4
+   },
+   "schedMs": {
+    "p50": 11.17,
+    "p95": 16.27
+   },
+   "platform": {
+    "detected": 20,
+    "offsetMs": {
+     "p50": 21.85,
+     "p95": 24.95
+    },
+    "startHopMs": {
+     "p50": 0.02,
+     "p95": 0.02
+    },
+    "note": "a raw AudioBufferSource.start() into the output from the impact frame: the platform floor (start to onset ~0 ms; the offset is outputLatency plus the frame phase)"
+   },
+   "engineOverPlatformMs": {
+    "p50": 10.32,
+    "p95": 13.35
+   },
+   "chain": {
+    "out": {
+     "n": 20,
+     "startToOnsetMs": {
+      "p50": 0.02,
+      "p95": 0.02
+     },
+     "offsetMs": {
+      "p50": 21.85,
+      "p95": 24.95
+     }
+    },
+    "master": {
+     "n": 20,
+     "startToOnsetMs": {
+      "p50": 10.02,
+      "p95": 10.02
+     },
+     "offsetMs": {
+      "p50": 31.15,
+      "p95": 36.85
+     }
+    },
+    "sfx": {
+     "n": 20,
+     "startToOnsetMs": {
+      "p50": 10.02,
+      "p95": 10.02
+     },
+     "offsetMs": {
+      "p50": 30.65,
+      "p95": 38.45
+     }
+    }
+   },
+   "engineOverSfxBusMs": {
+    "p50": 1.52,
+    "p95": -3.25
+   },
+   "sfxBusFromPumpMs": {
+    "p50": 28.15,
+    "p95": 30.15
+   },
+   "engineOverSfxBusFromPumpMs": {
+    "p50": 2.08,
+    "p95": 1.91
+   },
+   "pumpLateMs": {
+    "p50
+PASS → _harness/_reports/fw_r4_aud_sync.json
+# exit 0 03:18:50 load { 202.14 192.36 127.11 }

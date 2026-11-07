@@ -1,0 +1,20 @@
+# music 03:18:50 load { 202.14 192.36 127.11 }
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28066 node:fw_r4_mem_bitmaps; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28066 node:fw_r4_mem_bitmaps; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28295 node:pw /; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28295 node:pw /; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28295 node:pw /; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28295 node:pw /; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: waiting (all 3 slots busy) — slot0: pid 27734 node:pw /; slot1: pid 28295 node:pw /; slot2: pid 25449 node:gfx high 1600x900@1
+[heavy] probe_audio_music: got slot2 after 397s
+[473s] bed mus_match_rift format ogg layers [["intense","combat"],["objective_pit","objective"]]
+[532s] act 0 jump: section 2 > 5 at ctx 117.8, act 0
+[562s] act rise by clock {"before":0,"act":1,"atMatchS":484.77,"structuresMax":24}
+[660s] act 1 jump: section 3 > 5 at ctx 245.8, act 1
+[665s] act rise by structures {"before":1,"killed":12,"standingSeen":24,"timeAt":589.3666666666667,"after":2}
+[692s] act 2 jump: section 5 > 2 at ctx 277.8, act 2
+[736s] gates {"A1_clockRaisesAct":true,"A1_structuresRaiseAct":true,"A1_neverFalls":true,"A2_orderFollowsAct":true,"A2_jumps":true,"A3_clocks":true,"O1_offAway":true,"O2_fadeIn":true,"O2_fadeOut":true,"O2_roadOnlyALittle":true,"O2_aWeightNotALevelChange":true,"O3_fadesOnFall":true,"C1_noClicks":true,"L1_level":true,"L1_peak":true,"M1_files":true,"M1_budget":true}
+[736s] objective {"far0":{"outDb":-32.76,"objDb":-200,"blocks":38},"pit":{"outDb":-29.34,"objDb":-28.94,"blocks":47},"far1":{"outDb":-31.29,"objDb":-83.98,"blocks":35},"bedOverObjDb":4.32,"liftDb":2} road gain 0.21
+[736s] clicks {"refStep":0.0378,"refHf":0.03349,"stepP50":0.00594,"stepP99":0.0378,"hfP99":0.03349,"overStepDb":[-9.45,-8.68,-11.95],"overHfDb":[-7.83,-8.14,-24.91]} peak -12.78
+[736s] PASS → _harness/_reports/fw_r4_aud_music.json
+# exit 0 03:31:07 load { 299.07 224.46 169.21 }
