@@ -6,6 +6,9 @@
 //
 //   node _harness/fw_r6_aud_detach.mjs [--out _harness/_reports/fw_r6_aud_detach.json]
 // Exit 0 = the detach arm frees >= 90 % of the decoded bytes before a GC, 1 = it does not, 2 = the run failed.
+// Round 6 result (Chrome 156, 46.9 MB decoded): exit 1. The detach works (channel data reads 0 frames, a fresh buffer
+// still plays) but frees 6 MB of footprint against 64 MB after the GC (played) and 1 MB (never played), so a let-go
+// bed's memory waits for the collector whatever the page does; src/audio `reuse` decodes the next bed into it instead.
 
 import { mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
