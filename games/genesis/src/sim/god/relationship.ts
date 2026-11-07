@@ -284,8 +284,10 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
   const pressing = Math.max(U[C.drink], U[C.eat], U[C.warm], U[C.exhausted]);
   // an evacuation in force: out past the danger (that is the flight from it too), and wait there — and sleep there:
   // fleeing ash or going home to bed brought them back under the eruption (8 of 30 dead in a volcano's second day)
+  // (r2 #5: weariness does not hold them under the danger — planEvacuate walks the tired out and lets them sleep beyond
+  // it; seed 6's second flood found nine of a town asleep at home 487 m inside a 670 m order, rest 0.05)
   const e = evacuationOf(u, x.p.id, st.id);
-  if (e && (pressing < 3 || U[C.flee] > 0)) {
+  if (e && (Math.max(U[C.drink], U[C.eat], U[C.warm]) < 3 || U[C.flee] > 0)) {
     const t = planEvacuate(x, s, st, e, U[C.sleep] >= 1.2 || U[C.exhausted] > 0);
     if (t) return t;
   }
