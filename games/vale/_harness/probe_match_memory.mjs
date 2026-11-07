@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra]
 //
 // A production build of the client itself (vite build of index.html into _harness/_prod/client/dist, gitignored; not the bench),
 // served by `vite preview` on the first free port in 5191-5199, in real Chrome on the GPU. No dev handle exists in that
@@ -30,6 +30,7 @@ const SEC = Number(opt('sec', 300));
 const OUT = resolve(ROOT, opt('out', '_harness/_reports/match_memory.json'));
 const SHOTS = opt('shots', '');
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
+const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
 const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
 const PROD_DIR = join(HERE, '_prod', 'client', 'dist');
@@ -177,6 +178,22 @@ let broke = false;
 try {
   await page.locator('.nav__item', { hasText: 'Play' }).first().waitFor({ state: 'visible', timeout: 180000 });
   await page.waitForTimeout(6000);      // the first-run calibration and the Home vale settle
+  if (PRESET) {
+    report.preset = await page.evaluate((preset) => {
+      const raw = localStorage.getItem('vale.profile.v1'); if (!raw) return { error: 'no profile stored' };
+      const p = JSON.parse(raw); const L = { ultra: { renderScale: 1, shadows: 3, ao: 2, bloom: true, antialias: 'smaa', particles: 2, scatter: 2, maxDpr: 2 } }[preset];
+      if (!p.settings?.video || !L) return { error: 'no video settings or unknown preset' };
+      p.settings.video = { ...p.settings.video, ...L, preset }; localStorage.setItem('vale.profile.v1', JSON.stringify(p));
+      return p.settings.video;
+    }, PRESET);
+    log(`preset ${JSON.stringify(report.preset)}`);
+    if (report.preset.error) throw new Error(report.preset.error);
+    await page.reload();
+    await page.locator('.nav__item', { hasText: 'Play' }).first().waitFor({ state: 'visible', timeout: 180000 });
+    await page.waitForTimeout(6000);
+    report.presetAfterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('vale.profile.v1')).settings.video.preset);
+    log(`preset after reload ${report.presetAfterReload}`);
+  }
   await home('home_0');
   for (const m of MODES) await journey(m);
 } catch (e) {

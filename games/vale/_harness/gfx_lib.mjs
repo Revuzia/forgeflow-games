@@ -73,7 +73,7 @@ export async function abCost(page, setA, setB, { rounds = 6, n = 24, skip = 6 } 
  *  a frame along x. Reports over the whole frame and over an edge mask (dilated gradient of the first frame: thin geometry
  *  and silhouettes): mafd, the mean absolute frame difference; flick, |f[t-1] - 2 f[t] + f[t+1]|, which a steady slide
  *  keeps low and a popping edge does not; pop, % of masked pixels whose frame difference is over 24 of 255 */
-export const panMetric = (page, x, y, { step = 0.012, n = 40, dz = 0 } = {}) => B(page, (b, a) => {
+export const panMetric = (page, x, y, { step = 0.012, n = 40, dz = 0, maskKey = null } = {}) => B(page, (b, a) => {
   const R = b.renderer, gl = R.gl.getContext();
   const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
   const frame = (i) => {
@@ -85,8 +85,13 @@ export const panMetric = (page, x, y, { step = 0.012, n = 40, dz = 0 } = {}) => 
     return l;
   };
   let f0 = frame(0), f1 = frame(1);
-  const mask = new Uint8Array(W * H);
-  for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+  // maskKey: one edge mask for every variant of a spot (the first caller's). A mask rebuilt per variant is biased: an
+  // antialiased frame has lower gradients, so its mask drops the very edges that were worst
+  window.__panMasks ??= {};
+  const kept = a.maskKey ? window.__panMasks[a.maskKey] : null;
+  const mask = kept ?? new Uint8Array(W * H);
+  if (a.maskKey) window.__panMasks[a.maskKey] = mask;
+  if (!kept) for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
     const i = y * W + x, g = Math.abs(f0[i + 1] - f0[i - 1]) + Math.abs(f0[i + W] - f0[i - W]);
     if (g > 40) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) mask[i + dy * W + dx] = 1;
   }
@@ -101,7 +106,7 @@ export const panMetric = (page, x, y, { step = 0.012, n = 40, dz = 0 } = {}) => 
     f0 = f1; f1 = f2;
   }
   return { W, H, edgePct: +(100 * nEdge / nAll).toFixed(1), mafd: +(mafd / nAll).toFixed(3), mafdEdge: +(mafdE / nEdge).toFixed(3), flick: +(flick / nAll).toFixed(3), flickEdge: +(flickE / nEdge).toFixed(3), popPct: +(100 * pop / nEdge).toFixed(3) };
-}, { x, y, step, n, dz });
+}, { x, y, step, n, dz, maskKey });
 
 /** physical footprint (MB, macOS `footprint`) of the GPU process and the largest renderer of this browser */
 export async function footprint(browser, page) {
