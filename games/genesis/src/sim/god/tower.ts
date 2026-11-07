@@ -44,6 +44,7 @@ import { relOf, srel, peekRel } from './regard.ts';
 import { godAct } from './belief.ts';
 import { lethality, currentWrath, WRATH_DEFAULT } from './wrath.ts';
 import { hardshipOf } from './prayers.ts';
+import { ARC } from './arc.ts';
 import { prophetOf, prophetOfSettlement } from './prophets.ts';
 import { addSacredPlace } from './sacred.ts';
 import { emptyMemory, noteHarm } from './arc.ts';
@@ -167,6 +168,31 @@ function leaderOk(x: PCtx, st: Settlement, r: SettlementRel | undefined): boolea
   return true;
 }
 
+/** probe/debug: why each town is not a tower leader this year (first failing condition of §2.2 (2)/(3)); no state */
+export function towerWhyNot(u: Universe, p: Planet): { id: number; pride: number; why: string; league: number }[] {
+  if (!p.people) return [];
+  const x = makeCtx(u, p);
+  const out: { id: number; pride: number; why: string; league: number }[] = [];
+  for (const st of x.ps.settlements) {
+    if (st.band || st.fallen >= 0) continue;
+    const r = peekRel(u, p.id, st.id);
+    const pr = r?.pride ?? 0;
+    let why = 'ok';
+    if (!r) why = 'norel';
+    else if (pr < TOWER.leaderPride + 0.05 * Math.min(1, r.memory?.humbled ?? 0)) why = 'pride';
+    else if (popOf(x, st) < TOWER.leaderPop) why = `pop${popOf(x, st)}`;
+    else if (st.era < 2) why = 'era';
+    else if (!knowsAny(x, st, ['masonry', 'bricks', 'mudbrick'])) why = 'brick';
+    else if (atWar(x, st)) why = 'war';
+    else if (st.hist && st.hist.famine >= 0) why = 'famine';
+    else if (r.lastHarm !== undefined && r.lastHarm >= 0 && x.tick - r.lastHarm < TOWER.harmYears * x.year) why = 'harm';
+    const lg = leagueOf(x, st, true).length;
+    if (why === 'ok' && lg < 2) why = `league(kin${leagueOf(x, st, false).length})`;
+    out.push({ id: st.id, pride: r3(pr), why, league: lg });
+  }
+  return out;
+}
+
 /** the builders' league (3): the leader and up to 5 kin towns of one speech within 12 km, nearest first */
 function leagueOf(x: PCtx, host: Settlement, needPride: boolean): Settlement[] {
   const cand: [number, Settlement][] = [];
@@ -176,7 +202,10 @@ function leagueOf(x: PCtx, host: Settlement, needPride: boolean): Settlement[] {
     if (d > TOWER.leagueRadius) continue;
     if (needPride) {
       if (langDistance(o, host) > TOWER.leagueLang) continue;
-      if ((peekRel(x.u, x.p.id, o.id)?.pride ?? 0) < TOWER.leaguePride) continue;
+      // a village too small to have a pride of its own (ARC.pridePop, §2.1) follows a proud kin city of one speech
+      // (contract change, stint 4: see _harness/arc-work/contract-changes.md)
+      const follows = popOf(x, o) < ARC.pridePop && (peekRel(x.u, x.p.id, host.id)?.pride ?? 0) >= TOWER.leaderPride;
+      if (!follows && (peekRel(x.u, x.p.id, o.id)?.pride ?? 0) < TOWER.leaguePride) continue;
     }
     cand.push([d, o]);
   }

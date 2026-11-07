@@ -2,6 +2,8 @@
 //   node _harness/probes/arc.ts unattended <seed> [years=60]   T2 (towers begun, first year, attempts) + T4 (>= 50 % in
 //        <= 6 y, omens per tower reaching 75 %, a builder on site in sampled work hours) + M1/M2 on the side.
 //        Sandbox (n=20), natural disasters on, 60 plains folk at the bronze age, no god acts.
+//   node _harness/probes/arc.ts attended <seed> [years=20]     T2 attended pacing: as unattended, plus a gentle god that
+//        answers every open prayer once a day (prayer.answer); wants the first tower in years 7-14 on >= 3/8.
 //   node _harness/probes/arc.ts babel <seed> [years=2.2]       T3 (begun <= 30 d, first tower.choice <= 2 y) and T5.
 // One JSON line per run, prefixed RESULT.
 import { Sim } from '../../src/sim/sim.ts';
@@ -24,7 +26,9 @@ if (mode !== 'babel') {
 const p = sim.u.planets[0], ps = p.people!, A = ps.agents;
 const day = Math.max(60, Math.round(p.st.dayHours * 60));
 const year = Math.max(day, Math.round(p.st.orbit.period));
-const years = Number(yearsS ?? (mode === 'babel' ? 2.2 : 60));
+const years = Number(yearsS ?? (mode === 'babel' ? 2.2 : mode === 'attended' ? 20 : 60));
+let answered = 0;
+const srelP = (await import('../../src/sim/god/regard.ts')).peekRel;
 const start = sim.u.tick, end = start + Math.round(years * year);
 
 interface TW { id: number; begun: number; half: number; q75: number; omens: number; status: string; frac: number; samples: number; onSite: number; league: number; lang2y: number }
@@ -72,6 +76,10 @@ while (sim.u.tick < end) {
     }
   }
   if ((sim.u.tick - start) % day < day / 4) {
+    if (mode === 'attended') for (const st of ps.settlements) {
+      if (st.fallen >= 0 || !srelP(sim.u, p.id, st.id)?.prayers.length) continue;
+      if (sim.applyNow({ k: 'prayer.answer', settlement: st.id } as never).ok) answered++;
+    }
     for (const st of ps.settlements) {
       if (st.fallen >= 0 || st.band) continue;
       townDays++;
@@ -88,7 +96,7 @@ const towns = ps.settlements.filter((s) => s.fallen < 0 && !s.band);
 const prides = towns.map((s) => Math.round((peekRel(sim.u, p.id, s.id)?.pride ?? 0) * 100) / 100);
 console.log('RESULT ' + JSON.stringify({
   mode, seed, years, secs: Math.round((Date.now() - t0ms) / 1000), towns: towns.length, prides,
-  towers: list.length, firstYear: list.length ? Math.round(list[0].begun * 10) / 10 : null,
+  towers: list.length, answered, firstYear: list.length ? Math.round(list[0].begun * 10) / 10 : null,
   choiceYear: choice >= 0 ? Math.round(((choice - start) / year) * 100) / 100 : null,
   detail: list.map((w) => ({ ...w, begun: Math.round(w.begun * 10) / 10, frac: Math.round(w.frac * 100) / 100, onSitePct: w.samples ? Math.round((100 * w.onSite) / w.samples) : null })),
   events: evCount, heartChangesPerTownDay: townDays ? Math.round((heartChanges / townDays) * 1000) / 1000 : 0, noHeart,

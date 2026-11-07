@@ -113,3 +113,5 @@ rivals.ts:32-41), Book UI, legends.
    spec, run both through slot.sh, record numbers and the looked-at verdict here.
 2. Stage A proper, sim first: §6.1/§6.2 state and views (types.ts, state.ts, migrate15 `arc` HeaderStep), then hearts,
    dusk, pride, tower; UI and render can build on `__GENESIS__.arc.stub` once the UI lane adds it.
+
+- render lane (A-render stint 3, 07:4xZ): §10.3(c) screenshot LOOKED AT and MET (river higher + browner during the warning; _shots/arc-river-before.png vs arc-river-warning.png; terrainmat shallows silt fix). Gate 798/798 green at 06:2xZ.

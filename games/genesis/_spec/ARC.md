@@ -246,7 +246,10 @@ Every condition must hold:
    `mudbrick`, `bricks` or `masonry`, not at war, no famine (`hist.famine < 0`), and no god-0 harm on it in the last
    **2 years** (`lastHarm`).
 3. A **builders' league**: ≥ 2 towns (the leader included) of its species within 12 km, each with pride ≥ **0.50** and
-   `langDistance ≤ 0.45` to the leader ("one speech"). At most 6 towns join, nearest first.
+   `langDistance ≤ 0.45` to the leader ("one speech"). A kin village below the pride floor (population < 40, whose
+   pride target is 0 by §2.1) joins without the pride test when the leader qualifies: the villages follow the city
+   (stint-4 change, measured: unattended daughters stay under 40, so no league ever formed). At most 6 towns join,
+   nearest first.
 4. The roll `hashFloat(planet.id, year, 0x70e1) < ARC.towerChance × clamp((pride_leader − 0.6) / 0.3)`, with
    **`ARC.towerChance = 0.15`** as the starting value. The probe (§8.2) tunes it within 0.06-0.30 to hit the frequency
    targets.

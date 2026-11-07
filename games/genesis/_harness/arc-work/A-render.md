@@ -128,11 +128,13 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   CAUTION: the chain's tower/hearts/perf runs reuse the port-5312 vite started 06:32Z -> they serve terrainmat WITHOUT
   the shallows fix (irrelevant to towers/poses/perf numbers).
 
+- §10.3(c) LOOKED AT 07:4xZ (fresh-vite re-run, port 5313): arc-river-warning.png vs arc-river-before.png, crop
+  _harness/scratch/arc/render/cmp2.png. Before: blue river with a broad pale sand margin. Warning: the river runs an
+  opaque silty khaki-brown and fills to the grass (the pale margin is gone under the brown film) -> HIGHER and BROWNER:
+  MET. (A few small brown silt specks on the dry grass near the bank: acceptable, noise-broken siltBank.)
+
 ## NEXT (stint 4)
-1. LOOK: _shots/arc-river-warning.png (port-5313 re-run, log shots-river-warning2.log) vs arc-river-before.png:
-   crop (320,180)-(560,300) side by side (python PIL, see stint-3 cmp.png). Expect the pale shallows margin to be mud-
-   brown in the warning. YES -> record §10.3(c) MET here and in STATE.md/A-sim.md note. NO -> next lever: widen siltBank's
-   dry reach only where uw > -3 (debug view showed the bank drops past -3 m in a few px).
+1. (§10.3c DONE stint 3.) Optional: shot at low/high presets of the same pair to confirm the shallows fix holds there.
 2. Chain (pid file _harness/scratch/arc/render/chain.pid): LOOK at arc-tower-* (7) and arc-pose-* ; perf numbers from
    shots-render-perf.log -> record.
 3. Gate: green at 06:2xZ (798/798). New since: tests/render-arc-live.test.ts (1/1), render-silt assert, terrainmat

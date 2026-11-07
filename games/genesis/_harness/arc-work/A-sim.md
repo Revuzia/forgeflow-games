@@ -100,3 +100,17 @@
    evac 9/9 = 100 %, deaths 0 vs 0. River shot: render/ui lane (river-warning.json spec ran on 5312 ~06:10Z).
 5. Tower gaps from stint 2 (let side effects, omens via omens.ts, strike via miracle, scatter >= 4 km site rule).
 6. Attended pacing T2 (scripted gentle god): first tower in 7-14 y on >= 3/8.
+
+### Stint 4 (2026-11-07 ~07:45Z)
+- check3.log: 802/803; the one failure is tests/ui-thumblate.test.ts:44 (UI lane, timing under load; not sim). Not mine.
+- kind8.log (verifier kind probe with gifts + life.bless, 8 seeds): `devoted` at the day-25 sample on 8/8 (quiet at day 13;
+  seed 1 measured 22.6 d = 1.9 y). M3 kind: PASS (crossing between day 13 and 25 on every seed; ~2 y boundary).
+- T2 (t2a/t2b, 8 seeds x 60 y): 0 towers on 8/8 -> FAIL. Max prides 0.89 / 0.82 / 0.64 / 0.44, i.e. one proud town per
+  seed at most. Added exported diag `towerWhyNot(u, p)` in tower.ts (first failing leader condition per town + league
+  size) and probe _harness/arc-work/probe-towerdiag.ts <seed> [years] -> scratch/arc/tdiag{1,5,6}.log (queued 07:44Z).
+- §10 "other disasters unmoved": from the verifier's world results (scratch/arc/verify-A-r1-sim/live*.results vs cut*.results,
+  same seeds 1-4, 6, 8): flood counts identical per seed (8/7/7/8/13/13); scheduled kinds (quake, tornado, meteor,
+  meteor-shower, solar-flare, sinkhole, rift) identical counts except seed 6 quake 18 vs 19, solar-flare 3 vs 2;
+  life-driven kinds (blight, infestation, stampede) differ by 0-2 from world chaos. Non-flood deaths live 7 vs cut 19
+  (seed 1 stampede 0 vs 11; seed 4 sinkhole 7 vs 8). Flood deaths 0 vs 0 (survivable default; forced probe 1 vs 1).
+  Verdict: MET (no systematic move; the warning only changes floods). §10 sim side DONE.

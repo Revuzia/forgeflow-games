@@ -32,3 +32,10 @@
   the card was (nothing fits left of the far-left time panel). New: when the bottom-left news column would meet the
   card, the card steps right of it (below the worship panel) if it fits, else the news column yields its top.
   No §6 data contract changed. Test surface (§6.7 neighbour): `G.hold('ui')` added for UI-layout shots.
+
+## Stint 4 (A-sim, 2026-11-07 ~07:50Z) — §2.2 (3) league pride test
+- Measured (8 seeds x 60 y unattended, _harness/probes/arc.ts; diag _harness/arc-work/probe-towerdiag.ts): 0 towers on 8/8.
+  The leader qualifies on ~3/8 seeds (pride 0.64-0.9, pop >= 60 by ~y25), but its daughter villages stay under the §2.1
+  pride floor (pop < 40 -> target 0), so the league (>= 2 towns each pride >= 0.5) never forms.
+- Change: a kin village of one speech with population < ARC.pridePop (40) joins the league without the pride test when
+  the leader qualifies ("the villages follow the city"). tower.ts leagueOf. ARC.md §2.2 (3) edited.
