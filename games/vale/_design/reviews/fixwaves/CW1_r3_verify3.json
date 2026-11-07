@@ -1,0 +1,47 @@
+{
+  "wave": "CW1",
+  "round": 3,
+  "verify": 3,
+  "pass": true,
+  "items": [
+    {
+      "id": "done:7",
+      "severity": "major",
+      "status": "pass",
+      "evidence": "Re-measured on a fresh production build. Full sweep `perf_1080 --prod --match-seeds 7,11,23`: GATE PASS, exit 0 (fw_CW1_r3y_perf1.log/.json). Memory step +0.3 %, menus 730, 728, 729, 732 MB, tracked materials 23->23, tracked geometries 29->29, every match settled at 248-249 materials in 11-17 s. `--prod --no-build --mem-only` 3 times: +0.0 %, -0.9 %, +0.0 %, all PASS, exit 0, every match settled (fw_CW1_r3y_mem1, mem2, mem3 .log/.json). menu_2 read 730-740 MB across the 4 runs, against 679-712 MB before, and the 5 % gate and menu_2 baseline are unchanged (perf_1080.mjs:113, :602, :609). The first read at menu_5 was within 1 % of the kept read in all 4 runs, so the two-read rule did not decide any of them; the 784 MB outlier the engineer saw did not recur. Control: `--mem-only --mem-inject-mb 16` gives +5.1 %, GATE FAIL, exit 1 (fw_CW1_r3y_inject.log; engineer read +5.6 %). Triangle gate: seeds 7/11/23 peak 465k / 454k / 444k, 0 frames over 500k, 0 programs first seen after 1:00 (fw_CW1_r3y_perf1.log:60,92,116). Seed 11 ended at 1754.9 s again, so the old 518k game was still not replayed; src/render is unchanged since verify 2 (git diff c70e23634 HEAD empty for it), so the probe_crowd_arrival PASS from that round stands. overlay_regress --q high,low PASS, exit 0 (fw_CW1_r3y_overlay2.log, overlay5.log); value_probe exit 0 with no FAIL line (fw_CW1_r3y_value.log); typecheck no errors; content:check 0 warnings. Home memory: peak 1442 MB against the 2500 MB budget."
+    },
+    {
+      "id": "done:7:timing",
+      "severity": "minor",
+      "status": "not_measured",
+      "evidence": "The timing halves still read 'not measured: machine busy': load 4.3-5.3 and heavy slot 2 held by pid 59283 `sleep 7200 power-hold-4` (fw_CW1_r3y_perf1.log:4,6,8,10,13). Raw numbers under that load: High 60.1, Low 60.1, Ultra 60 fps, 0 dropped frames. The holder is not this lane's, so it was left alone.",
+      "fixHint": "Measure at the integration pass on an idle machine, once the power-hold slot is released."
+    },
+    {
+      "id": "done:4:gpubound_under_load",
+      "severity": "minor",
+      "status": "not_measured",
+      "evidence": "Not in this round's scope, noted because it sits under the 58 fps line: gpubound's last 8 s read 57.8 fps with the scale at 0.9 on a busy machine, and the step prints PASS only because its recovery check is 'not measured' (fw_CW1_r3y_perf1.log:9-10). Earlier busy-machine run: 58.1 fps (fw_CW1_r3x_perf5.log). Load may explain it; this run does not prove that.",
+      "fixHint": "Read this number at the idle integration pass; it is a real miss only if it stays under 58 there."
+    },
+    {
+      "id": "new:overlay_default_tiers_m10",
+      "severity": "minor",
+      "status": "fail",
+      "evidence": "`overlay_regress` with its default tiers (low,medium,high,ultra) and t 75 fails 3 of 3 runs, exit 1: 'CPU: 1 actor(s) far off screen still drawn: shieldwick', units 18, drawn 20, crowdInstances 18 against crowdUnits 16 (fw_CW1_r3y_overlay.log:23, overlay3.log, overlay4.log). It does not reach the criterion, which names High and Low: --q high,low, low,high, high, ultra, medium and low,medium all pass, and so do the default tiers at --t 80 and --t 90 (fw_CW1_r3y_overlay2, overlay_lowhigh, overlay_high, overlay_ultra, da, db, dc, dd .log). So it depends on the game moment and is one actor at one sampled moment. Not caused by this refix, which changed only _harness/perf_1080.mjs. Whether fa11508aa's crowd change or a sim change in another lane exposed it was not determined; no earlier log in _harness/_reports records this failure, and those logs do not show whether any used the default tier list.",
+      "fixHint": "Backlog: check that shieldwick at the default sequence's M10 frame (a leaving or just-arrived crowd unit is one candidate, unconfirmed). Do not loosen the check."
+    },
+    {
+      "id": "new:mem_gate_sensitivity",
+      "severity": "minor",
+      "status": "partly",
+      "evidence": "Two limits of the gate as now written, neither changes today's result. A match that never settles sets settled:false in the timeline without adding a miss, and the same goes for menu reads that never agree within the 8 allowed (perf_1080.mjs:~590-610); all runs here settled. The gate only just catches the control: 16 MB per cycle over 3 cycles is 48 MB injected, 39 MB seen, +5.1 %, so a leak much under about 16 MB per cycle would pass.",
+      "fixHint": "Optional: make settled:false a gate miss. Keep 5 %."
+    }
+  ],
+  "regressions": [],
+  "summary": "done:7 passes. The memory step passed in all 4 of my runs (+0.3 %, +0.0 %, -0.9 %, +0.0 %) with the 5 % gate unchanged and tracked objects flat, and the injected 16 MB leak still fails it at +5.1 %. The triangle gate holds at peak 465k with 0 frames over 500k, and High/Low overlay, value_probe, typecheck and content:check are clean. Still open: the timing halves are not measured (busy machine, slot 2 held by a power-hold), so they need the idle integration pass, including gpubound's 57.8 fps read. New minor, not caused by this refix: overlay_regress with its default 4-tier run fails 3 of 3 on one off-screen shieldwick at t 75, outside the High/Low criterion.",
+  "commands_not_run": [
+    "probe_crowd_arrival (src/render unchanged since verify 2)"
+  ]
+}
