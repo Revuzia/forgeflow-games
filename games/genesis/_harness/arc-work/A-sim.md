@@ -170,3 +170,33 @@
   via towerStands).
 - test added: arc-tower "empty stores: builders who know mudbrick mould their own" (arc-tower 9/9, arc-babel pass, tsc 0).
 - LIVE T2 re-run launched 09:35Z: probe-t2.sh 1-4 -> scratch/arc/t2g.log, 5-8 -> t2h.log (~13 min each).
+- LIVE T2 (t2g/t2h, seeded roll, leaderPop 50, chance 0.25, mould rule): towers on 3/8 (seeds 1 y24.9, 3 y17.9, 5 y14.9),
+  median 17.9, 1 attempt each, none < y10 -> T2 unattended PASS (matches the offline prediction exactly).
+  T4: seed 1 half 5.75 y, 3 omens, finished, on-site 93 % PASS; seed 3 (league of 2) half 8.08 y FAIL, 3 omens, on 92 %;
+  seed 5 abandoned (hardship) at 23 %, on-site 17 %.
+- CHANGE: TOWER.crew = 4 (least builders per league town, was 2; ARC §2.3 edited) -> re-run tower seeds: probe-t2.sh 3 1
+  -> scratch/arc/t2i.log, probe-t2.sh 5 -> t2j.log (10:0xZ).
+- PROBE FIX: _harness/probes/arc.ts on-site sampling used the planet clock hour (night at a far-side site): now samples
+  when sunElevation at the tower > 0.35. (t2i seed 3 / t2j started on the old probe file.)
+- DONE gap: scatter >= 4 km (tower.ts confuse: searchSite with rings sized to 1.6 x 4 km / cell spacing, skip < 4 km of
+  home or < BUD_APART of any live town, score > 0; else the budding path's own site). arc-tower T6 asserts it.
+- Tower-seed re-run with crew 4 (t2i/t2j): seed 3 half 4.25 y, 3 omens, finished (on-site 95 %, OLD probe); seed 1 half
+  2.83 y, 3 omens, finished, on-site 55 % (NEW daylight probe); seed 5 abandoned (hardship) at 42 %, 1 omen, on 17 %.
+  => T2 unattended PASS; T4 half/omens PASS on every attempt not abandoned; T4 on-site (>= 80 %) FAIL under the
+  corrected daylight sampling (55 %; babel seed 1 1.2 y: 69 % -> 77 % after TOWER.shift 120 -> 360).
+- CHANGE: TOWER.shift = 360 (visible builder's TaskSpec work at the tower, was 120).
+- Focused after all stint-5 code: arc-tower 9/9, arc-babel, arc-hearts, arc-freeform, determinism, living-migration,
+  save-continue = 37 pass; tsc 0. Full gate launched 09:57Z: slot.sh npm run check -> scratch/arc/check5.log (pid in
+  check5.pid).
+
+## NEXT (stint 6)
+1. GATE: read scratch/arc/check5.log (`# fail 0`?); fix failures (a seed-bound test may move: the tower roll now uses
+   u.seed, leaderPop 50, chance 0.25, crew 4, mould rule, shift 360, scatter site). If the run died, run it once.
+2. T4 on-site: under daylight sampling a builder is at the tower in only ~55-77 % of work hours. Diagnose with a probe
+   (at sampled moments: host members' tasks, `pressing`, isNight, how many decide per quarter-day; towerTask returns
+   null for everyone when the hash misses -- the `return null` on the hash miss (tower.ts towerTask) also stops the loop
+   over other towers). Likely fixes: keep a standing crew (the same ~12 ids for a whole day, hashed on the day, not each
+   decision), or let a builder re-pick the tower when its shift ends. Then re-run probe-t2.sh 1 3 5 + babel 1-4.
+3. Attended pacing T2: tension recorded in contract-changes.md (stint 5) -- owner/spec call; do not tune blindly.
+4. Remaining small tower gaps: omens through omens.ts (would double the chronicle line: readOmen tells its own `omen`
+   line; needs `starlings`/`halo` kinds appended to OMEN_KINDS), strike through a miracle dispatch.

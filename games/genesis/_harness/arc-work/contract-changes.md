@@ -52,3 +52,10 @@
   store ever held mudbrick/brick/stone-block, so dh was always halved and T4 (>= 50 % in <= 6 y) failed (9.25 y).
 - §2.4 let: the rival-conversion threshold is the disciples' conversion bar (faith > 0.5, god/disciples.ts); for a
   rival god in a town under a standing tower it is 0.45.
+- §2.3 crew: `B = Σ max(4, round(0.06 × grown))` (least crew 2 -> 4): unattended towns of ~50 sent 2 builders each, so a
+  league of two needed 8.1 y for half its goal (T4 wants <= 6). Sanity line now B ≈ 12, ~6 y for 80 m.
+- §8.2 TENSION (open, needs an owner/spec call, NOT tuned): attended pacing wants the first tower in years 7-14 on >= 3/8,
+  but (a) §2.2 (1) forbids any tower before world year 10, leaving a 4-year window, and (b) a gentle god who answers
+  prayers raises faith, and F = 1 − faith is 20 % of pride, so attended leaders sit at 0.15-0.66 by y20 (stint-4
+  t2att: 0/8). Options: count the window from year 10 (10-20 y), or give a favoured, prosperous town a pride source
+  (e.g. answered prayers raising P), or accept that a kind god delays Babel (which reads true to the arc).

@@ -74,6 +74,9 @@ export const TOWER = {
   maxTiers: 10,
   rate: 0.12,
   visible: 12,
+  /** a visible builder's shift at the tower (TaskSpec work; 120 -> 360 in stint 5: with 120 the site stood empty in
+   *  ~45 % of local work hours, T4) */
+  shift: 360,
   /** one speech: every 2 years */
   speechYears: 2,
   hardDays: 10,
@@ -773,7 +776,7 @@ export function towerTask(x: PCtx, s: number, st: Settlement, night: boolean, pr
     if (hashFloat(A.id[s], period, 0x70eb) >= TOWER.visible / g) return null;
     const b = x.ps.building(tw.building);
     if (!b) return null;
-    return { kind: TASK.build, goal: spotInCell(x.p, b.cell, A.id[s], 0x70ec, [0, 0, 0]), goalCell: b.cell, work: 120, target: b.id, data2: 0 };
+    return { kind: TASK.build, goal: spotInCell(x.p, b.cell, A.id[s], 0x70ec, [0, 0, 0]), goalCell: b.cell, work: TOWER.shift, target: b.id, data2: 0 };
   }
   return null;
 }
