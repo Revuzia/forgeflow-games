@@ -166,3 +166,4 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
 - GATE GREEN 13:58Z: check3.log npm run check 810/810, exit 0 (includes mound + confuseHue s 0.7 + test).
 - PERF medium (CPU work/frame, 12 frames, load ~9, lookdev 420 m): before 38.7 ms (p95 63.5), rising tower 34.9 (p95 56.3), struck 31.0 (p95 56.3); slots actors 0.57/0.65/0.66, scene 3.27/2.65/2.48, shadows 3.65/3.65/3.33. The tower costs nothing measurable (noise > effect).
 - PERF high: before 33.9 ms (p95 59.6), rising tower 33.9 (p95 57.3), struck 30.6; shadows 4.22 -> 4.95 / 4.82 (+0.6-0.7 ms: the tower in the shadow pass, as §2.6 asks), actors 0.93/0.80/0.68. No regression beyond noise.
+- PERF low: before 14.7 ms (p95 28.4), rising 15.1 (p95 28.4), struck 16.3 (p95 28.9); no shadow pass at low. All three presets: no change of any preset's settings; tower cost within noise. Perf item DONE.
