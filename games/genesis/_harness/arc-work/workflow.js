@@ -77,7 +77,8 @@ async function stints(prompt, opts, max) {
     if (!r) { log(`${o.label} died twice (usage limit?) - ledger keeps progress`); return null }
     out.push(r)
     log(`${opts.label} stint ${i}: ${r.finished.length} finished, ${r.remaining.length} remaining${r.done ? ' - DONE' : r.waitingOn ? ' - waiting on: ' + r.waitingOn : ''}`)
-    if (r.done || r.unattended) break
+    if (r.done) break
+    if (r.unattended && !r.waitingOn) continue
     if (r.waitingOn) {
       for (let k = 0; k < 4; k++) {
         const w = await waitFor(r.waitingOn, `${opts.label}-wait${i}.${k}`, opts.phase)
