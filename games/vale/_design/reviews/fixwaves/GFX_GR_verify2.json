@@ -1,0 +1,31 @@
+{
+ "pass": true,
+ "experiments": [
+  {
+   "id": "GR-1",
+   "verdict": "correctly_rejected",
+   "visibleGain": "slight",
+   "evidence": "Revert confirmed. `git diff 84f04a72a~1` prints nothing for quality.ts, assets.ts and renderer.ts; no modelAnisotropy or setModelAnisotropy in src. Own runs at zoom 28.5, new seeds and moments, on real teamfights of 6-7 fighters: rift High seed 131 t933, bridge High seed 173 t565, rift Ultra seed 229 t1017 (_harness/_shots/gfx_verify_GRv2/v1.mjs, report_*.json, diff.json, sbs_*.png). Live GL read on the reverted tree: every uploaded GLB texture at 1 (gl1 101 / 68 / 97, pending1 20 / 7 / 24), switch absent. I then forced the samplers to 8 in the page only, to see what the revert gave up. Off vs a second off capture differs by 0 pixels in all 9 frames, so the delta is the filter. Pixels changing by more than 4: 0.35-0.64 % on fight frames, 0.09-0.35 % on structure frames; Laplacian sharpness +0.8 to +3.3 %; mean RGB shift at most 0.012 of 255. Looked at actual-size crops: rift High teamfight with telegraphs, Ultra teamfight and bridge fight are indistinguishable to me; the bridge tower and its minions are very slightly firmer only side by side. Telegraphs, bars and team colours read the same. Pan shimmer is lower on the reverted tree: flickEdge 11.703 vs 11.803 rift High, 16.886 vs 17.081 bridge High, 13.059 vs 13.200 rift Ultra (+0.9 to +1.2 % with the filter on), popPct 7.536 vs 7.610, 13.348 vs 13.450, 9.068 vs 9.145; repeat pans identical. Triangles, draws, programs and textures identical A/B in every frame (rift High fight 303173/210/39/183, bridge 349641/213/38/150, Ultra 357602/223/39/175). No timing verdict: load 65-170 during these runs, not_measured. Footprint read on the reverted tree in the dev bench only: 1870-2032 MB rift, 1666-1714 MB bridge; memory A/B was not read and the engineer's claim of no measured memory is accurate. The engineer's unexplained texture drop (170 to 169, 146 to 145 on High) likely has an ordinary cause: 84f04a72a..HEAD also removes the GF-2 detail texture from world_material.ts (makeDetailTexture, FIGHTER_DETAIL, 48 lines, GF-2 commit 1c1701750). I did not prove this, and his Ultra count did not drop; one fewer texture carries no budget risk. Sheet _design/reviews/gfx/GR_1_anisotropy_ab.png exists, 1600 px, labelled, looked at. Claims hold."
+  },
+  {
+   "id": "GR-2",
+   "verdict": "correctly_rejected",
+   "visibleGain": "slight",
+   "evidence": "PRESETS.high.maxDpr is still 1 (quality.ts:74); the commit cbb342726 adds only the sheet. Own run at 1512x982, DSF 2, the size verify 1 did not read, rift High seed 197 teamfight with telegraphs (_harness/_shots/gfx_verify_GRv2/v2.mjs, report_dpr_1512.json, dpr_1512_*.png, sbs_dpr.png). Buffers 1512x982, 1890x1227, 2268x1473. Triangles, draws, programs identical (337235/204/39). Footprint GPU + renderer: 1741 MB at DPR 1, 1835 at 1.25, 1904 at 1.5, 1741 on return to 1, so +94 and +163 MB, repeating exactly. Recent match readings reach 2983 MB against the 3.0 GB bar of ruling 20, so +94 MB can break it on a peak match. Synced frame blocks 45-47 / 64-89 / 73-80 / 42-45 ms at load 72-103: not_measured evidence, but the direction is plain and no step has an idle 60 fps reading. By eye in device pixels: at 1.25 foliage, walls and telegraph edges are a little less soft, and I see it only side by side; a 1080p DPR 1 player gets nothing. Ultra already offers maxDpr 2 for a HiDPI player who wants it. Bars and outlines keep their size in the crops. Sheet _design/reviews/gfx/GR_2_dpr_ab.png exists, labelled, looked at; it is built from the verify 1 captures as stated."
+  },
+  {
+   "id": "GR-3",
+   "verdict": "revert",
+   "visibleGain": "none",
+   "evidence": "Not run, no switch, no frames, nothing in src: nothing is kept and no change is due. revert here means no credit, as in verify 1, not that MSAA was shown to be bad. quality.ts:102 still says MSAA is not offered on the HalfFloat chain, and that remains neither confirmed nor refuted. _harness/gfx_msaa_ab.mjs is tracked and still untested."
+  },
+  {
+   "id": "GR-4",
+   "verdict": "revert",
+   "visibleGain": "none",
+   "evidence": "Not started; nothing in the tree. No credit and no change, same meaning as GR-3."
+  }
+ ],
+ "regressions": [],
+ "summary": "Pass: the lane keeps no experiment, the GR-1 revert is clean, and both verify 1 regressions are closed (the code is gone from the branch and the stale citation with it; tracked sheets exist for GR-1 and GR-2). GR-1 at 8 still gives only a slight, side-by-side gain with slightly more shimmer. GR-2 at 1.25 gives a slight HiDPI-only gain for +94 MB at 1512x982 against a tight memory bar. GR-3 and GR-4 were never run, so this lane produced no MSAA evidence. Gates on the current tree: tsc clean; npm run probe 55 passed, 0 skipped, 0 failed; value_probe on rift, bridge and fray at high and low printed 88 PASS lines and no FAIL (copy at _harness/_shots/gfx_verify_GRv2/value_probe.json, which is an untracked capture). Tracked report restored. Not measured: every timing here (load 65-170, then 72-103), production match memory, and no perf_1080 was run, since nothing kept changes render state compared with before GR-1. No new art, so no new sensitivity question. Minor: _harness/gfx_gr1_revert_check.mjs still calls setModelAnisotropy behind ?., harmless, and _harness/gfx_aniso_ab.mjs and gfx_tex_census.mjs mention anisotropy without calling the switch. The verdict file is at _design/reviews/fixwaves/GFX_GR_verify2.json as the task's last instruction says, not _design/reviews/gfx/GR_verify2.json from its ownership line."
+}
