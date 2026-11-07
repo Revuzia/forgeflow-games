@@ -1,0 +1,103 @@
+{
+ "wave": "CW2",
+ "pass": true,
+ "open": [
+  {
+   "id": "note:match-footprint",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not a gate. Probe prints 'not polled' at polls 0. Peaks: RIFT 247.5 MB audio, 2897 MB renderer + GPU; BRIDGE 234.8, 2983; FRAY 230.3, 2555 (fw_CW2_r3v1_session.log). Dev server at about 16x only, never --prod at speed 1.",
+   "fixHint": "If a match budget is wanted, read it on perf_1080 --prod."
+  },
+  {
+   "id": "note:loudness-margin",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Burdam s21 reads -19.40 LUFS, 0.10 LU inside the -19.5 floor, and repeats the engineer's -19.41. BRIDGE floor lift 0.4 dB here against the engineer's 3.4; M2 gates RIFT only.",
+   "fixHint": "Backlog. After any change to the calm floor, re-run the Burdam s21 seat first."
+  },
+  {
+   "id": "note:by-ear",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "Every result is metered; no person has heard the acts or the objective layer.",
+   "fixHint": "Owner or lead: listen once in a real match, at the S2>S5 jump about 1:04 into the bed, the late act's S5>S2, and at Sunsplinter's pit. Layer weight is OBJECTIVE_LUFS in audio/bedlib.py."
+  },
+  {
+   "id": "handoff:closing_gates",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "tools/closing_gates.md still has the stale warnings at line 129 and note 3 (line 158), and no probe_audio_music row. Out of this lane; lead's handoff, not claimed done.",
+   "fixHint": "Lead: drop both warnings; on line 128 name seats --fighter burdam --seed 21 and --fighter lisvel --seed 15; add a row for node _harness/probe_audio_music.mjs (and --m4a), about 5 minutes, 17 gates; list build_music.py --only mus_match --joints-only as offline QA."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-mix-runtime",
+   "to": "lead / integration",
+   "what": "tools/closing_gates.md is out of my lane and now stale: line 129 (dead probe 'window bug ... flaky') and line 158 item 3 (announcer margin with 0 lines) are both fixed; remove those warnings. Line 128 can name the seat table: run match with --fighter burdam --seed 21 as the quiet seat and --fighter lisvel --seed 15 as the loud one."
+  },
+  {
+   "from": "r3-mix-runtime",
+   "to": "lead / integration",
+   "what": "On an idle machine, re-run probe_audio_runtime sync once on this HEAD to re-arm the rAF gates; today's run was under load (load average 34-62) and left them null."
+  },
+  {
+   "from": "r3-mix-runtime",
+   "to": "lead",
+   "what": "The closing tool _harness/_reports/closing_audio_verify_tool_ultid.py still sums c_ult_release into its 'as heard' figures (1 of 66 pairs inside the take spread, first-300 ms median 6.09 dB), though the engine plays 0 library cues under an ultimate. For the shipped sound, use _harness/probe_audio_ultid.py, which passes. Its 'own' line agrees: first-300 ms median 19.92 dB, 0 pairs inside."
+  },
+  {
+   "from": "r3-music-phases",
+   "to": "lead / integration",
+   "what": "tools/closing_gates.md (out of my lane): add a gate row for the match music: `node _harness/probe_audio_music.mjs` (and `--m4a`), about 5 minutes, needs the dev server and one heavy slot, 17 gates. Also list `cd audio && ../../../.venv/bin/python3 build_music.py --only mus_match --joints-only` as the offline joint QA."
+  },
+  {
+   "from": "r3-music-phases",
+   "to": "lead / owner",
+   "what": "Listen once in a real match, since all of this is metered and no one has heard it: the first jump S2>S5 at about 1:04 of the bed, the late act's S5>S2, and walking into Sunsplinter's pit (RIFT, 85,80). If the objective layer's weight needs changing, adjust OBJECTIVE_LUFS in audio/bedlib.py."
+  },
+  {
+   "from": "r3-music-phases",
+   "to": "contracts owner (optional, not blocking)",
+   "what": "src/contracts/catalog.ts MusicDef is strict, so the act table cannot sit in content/audio.json today. It lives in src/audio/index.ts as MUSIC_ACTS, ACT_CLOCK and ACT_LOST: section numbers and shares, no content ids. To make it content-driven, add an optional `form` field to MusicDef and I would read it from there."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-mix-runtime",
+   "items": [
+    "done:6=done",
+    "done:5=done",
+    "critic:audio-runtime=done",
+    "audio:AUD-C4=partly",
+    "probe:session_mem-S2=done",
+    "probe:runtime-gates=done",
+    "note:match-footprint=partly"
+   ],
+   "commits": [
+    "d2d7f8524 match capture reports what is in earshot of the seat; reason for the +8 dB news line",
+    "b7021734d the world +2 dB away from a fight (still -6 under one)",
+    "44ee4d714 probe_audio_mix reports the pre-trim floor; session_mem Ready race",
+    "874f3f6d wip sync that carried my W6 and A7 probe fixture edits",
+    "Earlier attempt, kept: wip syncs 489634ec, 43e7cd3a, a925faac, 6e56e485 (own-side touches are no impact, WAVE_HIT_GAIN 0.5, ANN_LIFT_DB 8, --fighter/--seed, lamp proof, dead flag selection, trim in M2)"
+   ],
+   "notes": "Finished 2026-11-06 10:24 CST. 30 ms note: not anticipation and not a real early offset. The -28 to -32 ms 'minimum' comes from 1-2 hit rows plus 3-4 bare reference clicks per run, all with schedMs about -50. The onset search opens 50 ms before the inject, so those rows caught another sound already ringing at the window's opening; -50 plus the platform's +20 gives about -30. Clean hits trail the impact frame in fw_integ_vfy_audio_sync.json by +27.96 to +34.92 ms (48-49 of 50 per run), about 20 ms of that platform output. Nothing starts early; audio is about 31 ms after the picture, inside the "
+  },
+  {
+   "key": "r3-music-phases",
+   "items": [
+    "audio:AUD-C4=done"
+   ],
+   "commits": [
+    "df7f38982 (wip sync: engine, build, probe first version)",
+    "0741455ec (wip sync: objective layer, build QA)",
+    "411a8c4b2 vale CW2: match music acts and objective layer (AUD-C4)",
+    "e293bfe7c (wip sync: probe_audio_music lift gate, engine header)",
+    "ffc93310a vale CW2: the objective layer's content id is objective_pit"
+   ],
+   "notes": "AUD-C4 is done and all gates pass; the score has only been metered, not heard. The live acts run was RIFT only.\n\n- **Thin loudness margin:** Burdam seed 21 moved from -19.13 to -19.41 LUFS, still inside the -19.5 floor. The 7-minute capture stays in the early act, which has no S3 or S4 and whose main stem is 0.67 LU quieter than the full loop. If this seat later reads below -19.5, the early act is the first thing to check.\n- **.m4a path:** its pieces play the loop as composed, so the acts only begin after the stitched stem takes over, 112 s into the bed. A browser on that path can hear the S4 "
+  }
+ ],
+ "summary": "PASS for CW2 round 3 verify 1, re-measured on HEAD ffc93310a. All 6 done-criteria and both major findings hold, with no regressions. The rAF sync gates armed and passed, so critic:audio-runtime needs no idle re-run. AUD-C4 passes live, 17 of 17 on .ogg and .m4a. Open minors only: Burdam s21 is 0.10 LU inside the loudness floor, footprint never read on --prod, nothing heard by ear, tools/closing_gates.md stale (lead's file). Two thin spots: lamp out was heard only on a forced ward kill, and my zero-line run timed out on a heavy-slot wait, so that item rests on the engineer's report plus my code read. Verdict committed and pushed as a41828e92: _design/reviews/fixwaves/CW2_r3_verify1.json."
+}

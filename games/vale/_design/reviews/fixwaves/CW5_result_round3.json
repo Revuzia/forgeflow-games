@@ -1,0 +1,93 @@
+{
+ "wave": "CW5",
+ "pass": true,
+ "open": [
+  {
+   "id": "minor:floor-sweep",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "clip_floor: 0 clips below -0.02 m on all 8 (fw_CW5_r3v1_floor.txt). But the method caused regression:ervet-dash, and the fix is GLB-level for six fighters, so a rebuild loses it (comments present in each source).",
+   "fixHint": "See regression:ervet-dash."
+  },
+  {
+   "id": "handoff:npm-content",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "`npm run content` not run here because this verifier may only edit its verdict file. No floor-fixed clip has been seen in a live match by the engineer or by me.",
+   "fixHint": "Lead runs `npm run content`, then watches Ervet's dash in a live match."
+  },
+  {
+   "id": "minor:almanac-mouth-contrast",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Almanac mouth is 13 luma at native size, weaker than on the base splash and the Almanac portrait. At quarter size the face reduces to a nose dot under the visor (_harness/_shots/fw_CW5_r3v2_almanac_quarter.png). Judged not blank at full card size, the size the finding set; the lead may rule otherwise.",
+   "fixHint": "Backlog only. If the card is used small, darken the mouth line on the Almanac face or tilt the key lower."
+  },
+  {
+   "id": "minor:floor-fix-rerun-differs",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Final clip_floor_fix.py on the pre-fix Ervet blob exits 0 with 0 clips below (fw_CW5_r3v2_refix_rerun.txt), but the output differs from the shipped ervet.glb (first difference at byte 655165). Likely the other clips came from the earlier tool and only dash was re-solved; I did not characterize the difference. Both pass the floor gate and the shipped one passes the step guard.",
+   "fixHint": "After any Ervet rebuild, re-run clip_floor_fix.py, clip_floor.py and --check-against."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-almanac",
+   "to": "lead / integration",
+   "what": "Run `npm run content` once before any live match: dist-catalog needs the new GLBs of all 8 CW5 fighters and lisvel_almanac's cards. I did not run it or a live match; the load average was about 142."
+  },
+  {
+   "from": "r3-almanac",
+   "to": "CW5 verifier",
+   "what": "Re-score Lisvel, Ulkro and Nurrow, and look at the floor-fixed clips (_harness/_shots/fw_CW5_r3e_floor_rows.png). Use sheets rendered without --sky, as stored now. After any rebuild of Vashil, Ardit, Burdam, Kemdo, Nurrow or Ervet, re-run art/tools/clip_floor_fix.py and then clip_floor.py; the Ulkro inset and legs gain are recorded in ulkro.py."
+  },
+  {
+   "from": "r3refix1",
+   "to": "lead / integration",
+   "what": "Run `npm run content` before any live match: dist-catalog needs the new ervet.glb and lisvel_almanac_splash.png. I did not run it or a live match."
+  },
+  {
+   "from": "r3refix1",
+   "to": "CW5 verifier",
+   "what": "Re-score Ervet (par:ervet, done:6) and look at the Almanac splash at full size. If the faint mouth line is not enough, the remaining fix is a face paint change on the Almanac skin, not staging."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-almanac",
+   "items": [
+    "client:CL-1=done",
+    "minor:floor-sweep=done",
+    "minor:floor=done",
+    "minor:ulkro-seat-lumps=done",
+    "minor:ulkro-recall-patch=done",
+    "minor:stored-sheet-render-setup=done",
+    "minor:stray-tool=done",
+    "minor:stray-tool-file=done"
+   ],
+   "commits": [
+    "ea7249c16 vale CW5 r3-almanac (final commit, pushed; origin at ea7249c16)",
+    "e6d0e959a vale wip sync (carried clip_floor_fix.py, glb_part_inset.py and the floor-fixed GLBs)",
+    "6e56e485 vale wip sync (carried ulkro.glb, Lisvel/Nurrow/Ulkro source notes)",
+    "b4cf3910, a925faac, 43e7cd3a, 489634ec vale wip syncs (the earlier attempt's Lisvel, Nurrow and Ulkro source and art work)"
+   ],
+   "notes": "All 8 items are done, but nobody has verified the scores and nothing was checked in a live match. My own read is Lisvel 7.5 or better, Ulkro and Nurrow still at par, others unchanged because only their motion moved. Budget: the earlier attempt spent Lisvel 4 Blender rebuilds (one over the limit of 3), Nurrow 3 and Ulkro 3 per the fw_CW5_r3a-d logs; I did no rebuilds, which is why the remaining fixes are in-place GLB edits. Floor fixes for six fighters and Ulkro's inset and legs gain are GLB-level, so a rebuild loses them; only comments in the sources record that. Minor observation, no gate: on"
+  },
+  {
+   "key": "r3refix1",
+   "items": [
+    "regression:ervet-dash=done",
+    "par:ervet=done",
+    "done:6=done",
+    "finding:almanac-splash-face=done"
+   ],
+   "commits": [
+    "8a73ff907 (wip sync swept in art/tools/clip_floor_fix.py and art/out/fighters/ervet/ervet.glb before my own commit)",
+    "788a0fbb1 vale CW5 r3 refix 1 (finding:almanac-splash-face)"
+   ],
+   "notes": "All four items are fixed and pushed, but the two score items still need the verifier's re-score, and nothing was checked in the live client. No Blender rebuild was needed: Ervet's dash was patched in place in the GLB, and the card took 2 full renders plus 2 half-scale previews.\n\n- **Ervet's other clips:** they keep the samples solved by the old tool. The check shows no leg-step growth over 0.1 m; the largest growth on Ervet is the new dash, +0.032 m. They were not re-solved because they pass.\n- **Rebuilds:** after any rebuild, re-run art/tools/clip_floor_fix.py, then art/tools/clip_floor.py. T"
+  }
+ ],
+ "summary": "PASS: all four failed items close, with no new regression or blocker. Verdict is in _design/reviews/fixwaves/CW5_r3_verify2.json, commit 13143a925, pushed. Ervet's dash leg stays trailing (world max step 0.182 m, was 0.995 flipped and 0.200 pre-fix), only the dash leg samples changed, and the new guard catches the flipped blob, so Ervet returns to 7.5 and done:6 closes. The Almanac splash shows a nose and mouth at 1600 x 900 and passes card_qa, but the mouth is faint (13 luma) and gone at quarter size; I passed that as a judgement call and logged it as a minor. Most of done:6 and Ervet's pairs, crown and recall carry over from r3v1 because no other GLB bytes changed; they were not re-run. Still open: `npm run content` and a live look at the dash, neither done here."
+}

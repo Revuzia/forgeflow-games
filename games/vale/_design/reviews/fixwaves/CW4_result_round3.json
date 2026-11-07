@@ -1,0 +1,106 @@
+{
+ "wave": "CW4",
+ "pass": false,
+ "open": [
+  {
+   "id": "critic:monsters",
+   "severity": "major",
+   "status": "partly",
+   "evidence": "No gate ruling exists: owner_rulings.md ends at ruling 23 (score only), and grep for iou, camp facing and free-facing finds nothing (rechecked 15:03). Re-measured, art unchanged since 46d3c19a4. Camp facing passes: _harness/_reports/fw_CW4_r3v3_camp.json (t1000, seed 23) has max cross-camp median 0.50 (resinback|stilltusk), worst phase 0.56, 33 pairs. Single free-facing read does not meet 0.5: fw_CW4_r3v3_free.json has resinback|stilltusk 0.59, resinback|stilltusk_young 0.59, longshade|resinback 0.55, sunsplinter|stilltusk 0.54, gloamoth_little|resinback 0.54, sunsplinter|stilltusk_young 0.53. All-facing: the engineer's report and tool reproduce (1 of 33 medians over 0.5, gloamoth_little|stray_tick 0.505; flagged pairs 0.42-0.44). An independent sweep at t70 seed 7 (fw_CW4_r3v3_yaw70_iou.json) gives the same pair 0.508, 1 of 25 over 0.5. Facing combinations reach 0.81. Self medians across facings of 0.24-0.68 overlap the cross-camp range, which supports the engineer's spread claim. Coverage limit: the engineer's 33 pairs omit Glasshorn (absent at t1000 seed 23). The t70 sweep adds it but has no Sunsplinter or Longshade, so those Glasshorn pairs are unmeasured over facings. A t1000 seed 7 sweep found only 2 kinds. By eye the kinds are not confused in the free-facing frames (_harness/_shots/value_rift_high_fw_CW4_r3v3_free_mon_{resinback,stilltusk,gloamoth_little,stray_tick}.png). Row score not re-scored: art unchanged since verify 2's 7.48, which clears ruling 23's 7.4.",
+   "fixHint": "No art or probe work; another refix cannot close this. The lead records one line in owner_rulings.md: the silhouette IoU gate is the cross-camp median at camp facing (recommended), with all-facing and free-facing values as information. The alternative is that free-facing must also meet 0.5, which needs silhouette work on Resinback, the Stilltusk family and the moth|tick pair. With the first ruling this item passes on these numbers."
+  },
+  {
+   "id": "critic:monsters (dL* on sunlit floor)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Unchanged backlog, not a regression: t1000 seed 23 Stilltusk dL* 17.4 (dE 25.0), Stray Numeral 17.8 (dE 20.6), against the 20 bar (_harness/_reports/fw_CW4_r3v3_camp.json)."
+  },
+  {
+   "id": "env:m-4",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "art/renders/maps/camp_mark_sheet.png has 12 plaques with a curved antler, scuffs and visible Strays plaques. 'Faint' is not met: hard-edged polygon discs read like stickers, and the near-black signs and flat orange Resinback kite are the loudest marks on the camp floor (value_rift_high_fw_CW4_r3v1_m70_mon_resinback.png, _glasshorn.png).",
+   "fixHint": "Backlog: feather the disc edge into the floor, drop sign contrast to about 8-10 L* under the plaque, desaturate the Resinback sign to a resin-stained stone tone."
+  },
+  {
+   "id": "regression:perf_1080",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine: load average 3.4-20 during this verify, with two heavy slots held by power-hold processes and other lanes running. Not run here. CW1's perf_1080 --prod reports GATE PASS on budgets but 'timing not measured: machine busy' (_harness/_reports/fw_CW1_r3x_perf.log)."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-monsters",
+   "to": "lead",
+   "what": "A sensitivity look at the Longshade front view (art/renders/units/longshade/game_camera_r5.png) would close the verifier's fixHint on the plate. If a later package allows it, give Longshade one more rebuild: chalk hour bands on the forearms and shorter, stouter claws. This package's 3 rebuilds of that model are spent."
+  },
+  {
+   "from": "r3refix1",
+   "to": "lead",
+   "what": "Record a ruling on the silhouette IoU gate: median at camp facing, or free-facing too. At camp facing every cross-camp median is <= 0.50. Free-facing reaches 0.60 (resinback|stilltusk, resinback|stilltusk_young), 0.55 (sunsplinter|stilltusk_young), 0.54 (sunsplinter|stilltusk), 0.53 (longshade|resinback) and 0.51 (sunsplinter|resinback), in _harness/_reports/fw_CW4_rf1_free.json. These kinds are not confused by eye. If free-facing is required, Resinback and Stilltusk need silhouette rebuilds in a new package."
+  },
+  {
+   "from": "r3refix1",
+   "to": "lead",
+   "what": "The verifier should re-score the neutral row by eye. My 7.58 is a self-score: it keeps verify 1's scores for the other kinds and raises Longshade to 8.0, Glasshorn to 7.5 and Stray Tick to 7.5. Please also take a sensitivity look at Longshade's new licks; I read no hood or horror, since the crown plumes stay low and laid back and the tips close round."
+  },
+  {
+   "from": "r3refix1",
+   "to": "lead",
+   "what": "Run perf_1080 --prod match on an idle machine if you want a fresh triangle peak. I did not rerun it. Longshade dropped 201 tris and Stray Tick 2, Glasshorn is unchanged, so the 465k peak should not rise."
+  },
+  {
+   "from": "r3refix2",
+   "to": "lead",
+   "what": "Record one ruling in _design/reviews/fixwaves/owner_rulings.md to close critic:monsters. Recommended, matching the verifier's fixHint and the method already in _design/reviews/closing/neutral_units.json: 'The cross-camp silhouette IoU gate for neutral monsters is the median over 8 idle phases at camp facing (value_probe --monsterSpawnFacing 1 --monsterPhases 8), bar <= 0.50. Same-camp pairs are not gated. Free-facing and worst-phase values are recorded, not gated, because a bot in a camp turns the kind toward itself and facing moves the metric about as much as kind does.' That reading is met today: camp-facing maximum median 0.50 (fw_CW4_r3v2_mon.json). If you require free-facing to meet 0.5 instead, Resinback and the Stilltusk family need silhouette rebuilds in a new package. An all-facings median gate would also need a decision on gloamoth_little|stray_tick at 0.505."
+  },
+  {
+   "from": "r3refix2",
+   "to": "lead",
+   "what": "After the ruling, the item can pass without another engineer package or rebuild. The verifier's row score of 7.48 clears ruling 23's 7.4. Its 2 minor notes stand: Longshade hp 2.78-2.80 is near the 2.75 landmark floor if that floor is ever applied to monsters, and perf_1080 was not rerun (tris fell, so the 465k peak cannot rise)."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-monsters",
+   "items": [
+    "critic:monsters=done",
+    "critic:monsters (stilltusk_young)=done",
+    "env:m-2=done",
+    "env:m-4=done",
+    "critic:monsters (Longshade plate read)=done"
+   ],
+   "commits": [
+    "8a770eab0",
+    "e80eaf7b0",
+    "f477ab3e9"
+   ],
+   "notes": "The neutral row's 7.5 is my own self-score and still needs the verifier's by-eye re-score.\n\n- **Gate method:** the IoU gate is now reproducible. value_probe's --monsterSpawnFacing samples each kind at its camp's facing, because a bot in a camp otherwise turns the kind toward itself. It holds at spawn poses only; once engaged, a kind turns toward whoever fights it.\n- **Facings (Aubade side, Serenade is the mirror):** glasshorn 210, moths 225, numeral 120, ticks 0, resinback 210, stilltusks 345, sunsplinter 270, longshade 120.\n- **Trade-off:** numeral 120 keeps IoU under the gate but shows the \u039b"
+  },
+  {
+   "key": "r3refix1",
+   "items": [
+    "critic:monsters=partly",
+    "handoff:lead:Longshade forearm rebuild=done"
+   ],
+   "commits": [
+    "46d3c19a4 vale CW4 refix 1 (critic:monsters): reviews, shots, Glasshorn icon, neutral row",
+    "729ff83bf vale wip sync (carried art/blender/units edits; the sync job, not this lane, made this commit)",
+    "0ff8d1ec4 vale wip sync (art/out and art/renders; the sync job, not this lane, made this commit)"
+   ],
+   "notes": "The forearm item is done, and critic:monsters stays partly because free-facing IoU needs a lead ruling and my row score is unconfirmed.\n\nBudget:\n- Blender: 2 batches of Longshade + Stray Tick and 1 of Glasshorn, plus one icon-only Glasshorn render. That is within 3 rebuilds. The first Longshade build was rejected: its plume tips read as fingers or an anemone, and the GLB was 1067 KiB, over budget.\n- Sweeps: I went over the 3-sweep budget by mistake. An unquoted zsh variable dropped the flags, so 4 value_probe runs became full environment sweeps, and I discarded their results. Then 4 runs hit m"
+  },
+  {
+   "key": "r3refix2",
+   "items": [
+    "critic:monsters=partly"
+   ],
+   "commits": [
+    "2741bf473 vale CW4 refix 2 (critic:monsters): probe_monster_iou_yaw reads cross-camp silhouette IoU over 8 facings from a value_probe report, as evidence for the lead's IoU gate ruling (pushed)"
+   ],
+   "notes": "critic:monsters stays partly because it needs the lead's one-line IoU ruling, and I did not write that ruling or mark the item done myself. I added and pushed a small reader probe, and its output gives the lead per-facing numbers. No art, map or content changed. The tracked value_probe.json is untouched and no helper processes remain."
+  }
+ ],
+ "summary": "Fail on one point, which is a decision for the lead and not art. The engineer's evidence reproduces on a second seed and time. Camp-facing passes at a 0.50 max median. Free-facing does not meet 0.5 (single reads to 0.59, one all-facing median at 0.505-0.508, combinations to 0.81), and no ruling says which gate applies, so critic:monsters stays partly. A further refix cannot close it; one line in owner_rulings.md naming camp facing as the gate closes it on these numbers. No regressions: the refix added only a read-only probe. Verdict is at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/CW4_r3_verify3.json, committed as e7d5c3e87 and pushed."
+}

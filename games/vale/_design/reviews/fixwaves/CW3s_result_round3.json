@@ -1,0 +1,78 @@
+{
+ "wave": "CW3s",
+ "pass": true,
+ "open": [
+  {
+   "id": "regression:probe_kits_A",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "node _harness/probe_kits_A.ts exits 1, 522/3 (fw_CW3s_r3v1_probe_kits_A.txt). _harness/run_probes.ts:66 includes every probe_*.ts, so npm run probe is red until this lands. Failing values match content/fighters/kemdo.json (0.035, rank 5 Vent 31, omnivamp 0.2), so the thresholds are stale, not the kit. File is outside this lane. Minor because no game behaviour is wrong and it is not in the done-list.",
+   "fixHint": "Lead / integration, _harness/probe_kits_A.ts: line 686 0.05 to 0.035; line 709 arm0 + 35 to arm0 + 27; line 718 omnivamp >= 0.24 to >= 0.19; comments 674 and 711 to match."
+  },
+  {
+   "id": "regression:dawn-seal-tip",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/client.json:71 still says 'Until 7:00'; content/modes.json:45 dawnSeal.until is 480.",
+   "fixHint": "CW3c: change the tip to 'Until 8:00'."
+  },
+  {
+   "id": "spot:veteran-beats-adept",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Soak's enforced gate, bar 65 %: 24/40 = 60.0 % FAIL on seeds 9601-9620 (r3v1c, exit 1), 58/80 = 72.5 % (r3v1d), 33/40 = 82.5 % (r3v1e); 115/160 = 71.9 % pooled. Not in this wave's done-list. A --full run can go red on variance.",
+   "fixHint": "Judge on pooled windows as the soak header says (two seed sets), or widen the tier gap if every 40-game window must clear 65 %."
+  },
+  {
+   "id": "gameplay:CL-g5",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Unchanged, as claimed: src/sim/bots/draft.ts:95 secondaryRole stands.",
+   "fixHint": "Roster growth is long-term work."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-bots",
+   "to": "CW3c",
+   "what": "content/client.json:71: change the tip '[rift] Until 7:00 every Outer Needle wears a Dawn Seal...' to 'Until 8:00' (content/modes.json dawnSeal.until is 480)."
+  },
+  {
+   "from": "r3-balance",
+   "to": "lead / integration (no lane owns _harness/probe_kits_A.ts)",
+   "what": "Update three stale Kemdo thresholds in `_harness/probe_kits_A.ts`, which fail `probe_kits_A` (522/3) and so probably `npm run probe` too. Line 686: `foe.maxHp * 0.05 - 1` becomes `foe.maxHp * 0.035 - 1` (comment line 674 to 3.5 %). Line 709: `arm0 + 35` becomes `arm0 + 27` (rank 5 Vent now gives 31, per the failing test's reading). Line 718: `omnivamp >= 0.24` becomes `>= 0.19` (comment line 711 to +20 %)."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-bots",
+   "items": [
+    "done:1=done",
+    "done:2=done",
+    "gameplay:CL-1=done",
+    "critic:bot-micro=done",
+    "gameplay:CL-2=done",
+    "gameplay:CL-g3=done",
+    "gameplay:CL-g5=partly",
+    "regression:dawn-seal-tip=not_done"
+   ],
+   "commits": [
+    "9abf783f"
+   ],
+   "notes": "Adept's quiet stretch and Ulkro's late ult are both fixed on untuned windows, and the items gate stays above 2.5 (2.60 / 2.65). Commit 9abf783f is pushed.\n\nChanges:\n- Adept contests an enemy start at a camp, reads a kill at 0.8, and has laning retreat bias -0.04.\n- For every tier, the jungler gank read reaches further up the road from 8:00 and leaves a camp for a target under 60 % health.\n- An ultimate stance or form is spent on any enemy fighter in reach. In practice this only affects Ulkro's Long Run.\n- Bug fixed in economy.ts: bots bought back a consumable they had just sold for room, loopi"
+  },
+  {
+   "key": "r3-balance",
+   "items": [
+    "balance:real-seat=done"
+   ],
+   "commits": [
+    "874f3f6d1 (wip sync: bot pilot rules in src/sim/bots/knowledge.ts and micro.ts, first Kemdo, Dunsom and Nurrow content, probe_sim_kit_diag.ts)",
+    "8a73ff907 (wip sync: final Burdam, Odrum, Ulkro, Nurrow, Kemdo and Dunsom numbers, ROSTER.md)",
+    "df7f38982 (wip sync: early-core gate per ruling 21 in probe_sim_bot_soak.ts, modes_economy.md read)"
+   ],
+   "notes": "No dedicated 'vale CW3s' commit exists: the automatic wip sync (tools/wip_sync.sh) committed and pushed my files before my commit ran, so the hashes above are wip syncs. Working tree is clean for my paths and everything is on origin.\n\nFinal content changes:\n- Kemdo: Long Thrust base 58-162, slow rider 3.5 % max health, Vent 15-31 armor and resist, Held Focus Drain 20 %, AD growth 3.3.\n- Nurrow: comboOrder a3, a1, a2, ult; Felt Step 9.5-7.5 s; Lull the Rest base 170-370.\n- Dunsom: Draw In base 60-196, ap 0.55.\n- Odrum: crack 15 %.\n- Ulkro: comboOrder a1, a3, a2, ult; 600 hp, growth 95, 27 armor"
+  }
+ ],
+ "summary": "CW3s passes round 3 verify 1. Every lane done-criterion and major holds on fresh seeds, judged on rulings 15, 16, 21 and 22; the original last-hit 50 % and in-lane 75 % targets are still not met, the rulings lowered them. Open, none blocking: npm run probe is red until the lead applies the three-line probe_kits_A handoff, the Dawn Seal tip waits on CW3c, and one 40-game veteran-beats-adept window read 60 % against the soak's 65 % (71.9 % pooled). Verdict committed and pushed in b6605a7cd: _design/reviews/fixwaves/CW3s_r3_verify1.json."
+}

@@ -1,0 +1,78 @@
+{
+ "wave": "CW6",
+ "pass": true,
+ "open": [
+  {
+   "id": "fighter:ilsheta:ilsheta-face-seam",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Stepped notches remain at the plate's top, sides and lower corners in all 3 busts (_harness/_shots/fw_CW6_r3v1_ils_faces.png). GLBs unchanged, so the three.js close-view squares remain.",
+   "fixHint": "Rebake the face patch with a feathered mask or higher-resolution patch at the plate edge, then rebuild the base and 2 skins and re-render busts. Backlog at par."
+  },
+  {
+   "id": "fighter:marund:gorgewalk-face",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Claim 'done' overstated. Face-box luma > 140 fell 15582 -> 6428 px (-59 %), but outside the keel's 2639 px patches of 943, 888, 778 and 506 px and moustache-end patches of 229, 172 and 161 px remain (_harness/_shots/fw_CW6_r3v1_gorgewalk_before_after.png). Much better, not horror. Speckle 2.32, dE 36.3.",
+   "fixHint": "Extend the _keel_only roll-off in art/blender/fighters/marund.py to the moustache-end and brow patches, or lower SKIN_FACE_K; check parts outside the mask id. Backlog at par."
+  },
+  {
+   "id": "fighter:deaths:floor",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "7 of 8 pass at limit -0.02. Tunlan FAIL -0.210 m at f45, 671 verts; hips -0.198, thighs -0.21 m in the hold. The TUN-c1 reason does not hold: it asks her to end at rest, which a settled pose also satisfies. The six lifts live only in shipped GLBs, with commands in each _design/fighters/*.md.",
+   "fixHint": "At Tunlan's next rebuild, settle the death hold lying or seated with hips above the floor. Fold the clip_lift deltas into each fighter's death source at the next rebuild."
+  },
+  {
+   "id": "CW6 polish (spot-check)",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "24 of 36 polish items remain backlog with all 8 at par. Spot-checked Dunsom idle_lobby hand.L 0.032 m, Tunlan hat steps, Hesmi icon. Lantern swing, Odrum channel head, Dunsom value bands not re-run; those parts are unchanged."
+  },
+  {
+   "id": "critic:recovered-minors",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Ilsheta's guard framing holds on the new busts; face-seam still open. Others not re-measured by me or the engineer."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-cards",
+   "to": "lead",
+   "what": "Run `node tools/gen_store.ts --provisional` (content/store.json is out of date after these cards, `--check` exits on that) and then `npm run content` again before the next re-score. Portraits changed: all three Ilsheta, marund_gorgewalk. Splashes changed: all three Ilsheta, marund_gorgewalk, Tunlan base. No dE gate failed in the verbose run."
+  },
+  {
+   "from": "r3-cards",
+   "to": "lead",
+   "what": "Send to the verifier for independent eyes: the Tunlan lantern read, the First Bell splash, and Ilsheta's cards without the brush. I judged sensitivity myself and saw no horror read; First Bell's eyes are orange-amber with pupils, a little warmer than Stillwater's."
+  },
+  {
+   "from": "r3-cards",
+   "to": "CW5",
+   "what": "art/tools/glb_paint_grade.mjs takes `root.listSkins()[0]`, so on a GLB with several skins (marund_gorgewalk: accent and body) its --box mask maps through the wrong skin's dequantization and hits the wrong texels. Use `node.getSkin()` per node. Fixed only in my git-ignored scratch copy (_harness/_reports/fw_CW6_face_grade.mjs); this file is yours. Check any earlier --box grades on multi-skin GLBs."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-cards",
+   "items": [
+    "done:4=done",
+    "cards:ilsheta-first-bell-chin=done",
+    "handoff:CW6:cards=partly",
+    "fighter:ilsheta:ilsheta-face-seam=partly",
+    "fighter:marund:gorgewalk-face=done",
+    "fighter:deaths:floor=partly",
+    "CW6 polish (spot-check)=partly",
+    "critic:recovered-minors=partly",
+    "handoff:lead:catalog-stale=partly"
+   ],
+   "commits": [
+    "c2460e61 vale CW6 r3-cards: the labelled commit; only the final Ilsheta source and three busts were left for it",
+    "b4cf3910 vale wip sync: 54 files, the most recent sync touching this package's paths (tunlan.py, marund.glb); the earlier syncs 43e7cd3a and 489634ec may hold some of it. I did not check which sync carries which file"
+   ],
+   "notes": "The two card fixes are in and measured: Tunlan's lantern is the frame's real maximum, and the First Bell splash no longer has the chin gap. card_qa passes on all 8 fighters (48 cards, 0 misses, _harness/_reports/fw_CW6_r3_card_qa.txt). No file in this lane is left uncommitted except stray previews, and the branch is pushed.\n\n**Rebuild risk**\n- The death lifts on Marund, Rishal, Sukri, Dunsom, Odrum and Hesmi live only in the shipped GLBs, so a base rebuild loses them. The exact clip_lift commands are in each `_design/fighters/<id>.md`.\n- Marund's cap tilt is in source as a follow factor of 0.6"
+  }
+ ],
+ "summary": "PASS. Verdict committed and pushed as 38bc69b6: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/CW6_r3_verify1.json. All 6 done criteria, 8 of 8 fighters at par and all round-3 majors hold on independent measurement: Tunlan's lantern is the true frame maximum (251.9, next cluster 198.2), First Bell's chin gap is gone, 24 GLBs load and 48 cards pass QA. Minors stay open as backlog. Gorgewalk's 'done' was overstated: pale moustache tips and brow patches remain, with pale area down 59 %. Tunlan's death hold is still 21 cm through the floor, and the TUN-c1 reason given for leaving it does not hold. Ilsheta's stepped plate edges need a model change. Done 1-3 rest partly on earlier live measures and carried values, because the GLB clip diff shows only death changed; these were not re-run live. Sensitivity calls are my own judgment with no second reviewer. No regressions found, and no idle-machine gate belongs to this wave."
+}

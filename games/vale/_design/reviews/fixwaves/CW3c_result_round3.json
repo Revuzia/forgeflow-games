@@ -1,0 +1,72 @@
+{
+ "wave": "CW3c",
+ "pass": false,
+ "open": [
+  {
+   "id": "done:7",
+   "severity": "major",
+   "status": "not_measured",
+   "evidence": "needs idle machine. tsc clean and content:check 0 warnings, both re-run here. e2e all, overlay_regress, hud_renders and icon_probe not measured: my `e2e flow` got no heavy slot in about 28 minutes (/tmp/fw_CW3c_r3v1_flow.log). Two slots are held by power-hold sleeps and the Mac is on battery ('No adapter attached', 83 %). The engineer's e2e all at load 68-83 FAILED (fw_CW3c_r3_e2e_all.json); whether that was load is unproven.",
+   "fixHint": "Integration pass on mains power with slots free: `node _harness/e2e.mjs all`, `node _harness/overlay_regress.mjs`, `node _harness/hud_renders.mjs --at 100`, `node _harness/icon_probe.mjs`. If decline_once still fails when idle, it is a real CW3c bug."
+  },
+  {
+   "id": "handoff:CW6:first-bell-desc",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "content/skins/ilsheta.json:32 still says 'a pale dial-stone mantle ... over a dark hem'; the Shop shows an ochre hood and tan coat (fw_CW3c_r3v1_stage_sheet_1280.png).",
+   "fixHint": "CW6: rewrite the desc to the re-palette, keeping the hour-marks and glass bell only if still on the model, then `npm run content`."
+  },
+  {
+   "id": "sensitivity:spot-check",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Viewed all 32 live skin stages plus Burdam, Lisvel and Tunlan art. No tall, pointed or conical hood, no blocker. burdam_almanac reads as a carved gold helm, mildly skull-like at 96 px because the scarf hides the mouth (fw_CW3c_r3v1_burdam_portraits.png); my judgement, unmeasured.",
+   "fixHint": "CW5, optional: warm the sockets or lower the scarf to show the mouth line, then `node tools/gen_store.ts --check` and `npm run content`."
+  },
+  {
+   "id": "minor:caption-props-1280",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "New. Renderer on at 1280x720: the caption hides the top of Burdam's cleaver (fw_CW3c_r3v1_stage/1280_sku_burdam_stillwater.png); no head covered. In the ?render=0 fallback at 1280 it covers Ardit's head (fw_CW3c_r3v1_1280_crop.png). That path is a dev and low-end check, so done:5 stays open-free.",
+   "fixHint": "CW3c: .stagecard__cap (screens.css:421): in the no-renderer path at 720 p, lower the splash's object-position or dock the caption at the bottom; in the live scene, frame the showcase lower at 1280 or shorten the caption."
+  }
+ ],
+ "handoffs": [
+  {
+   "from": "r3-client",
+   "to": "CW6",
+   "what": "content/skins/ilsheta.json:32 (ilsheta_first_bell desc): rewrite to match the re-palette the Shop shows (an ochre hood and scarf on a tan coat). It still says 'a pale dial-stone mantle ... over a dark hem'. Keep the ten hour-marks and the glass bell only if they are still on the model."
+  },
+  {
+   "from": "r3-client",
+   "to": "CW5",
+   "what": "Optional, not a blocker: burdam_almanac's gold dome helm has dark eye slits that read somewhat skull-like at 96 px (_harness/_shots/fw_CW3c_r3_burdam_almanac_tile.png). If you judge it needed, warm the sockets or add a brow, then run `node tools/gen_store.ts --check` and `npm run content`."
+  },
+  {
+   "from": "r3-client",
+   "to": "integration pass",
+   "what": "On an idle machine, run `node _harness/e2e.mjs all` and `node _harness/overlay_regress.mjs` to close done:7. e2e all needs PASS with 0 console lines. If decline_once or rift loading still fail when idle, they are real bugs and come back to CW3c."
+  }
+ ],
+ "packages": [
+  {
+   "key": "r3-client",
+   "items": [
+    "client:CL-1=done",
+    "hud:you-grammar-feed=done",
+    "minor:surrender-copy=done",
+    "client:shop-featured-hole=done",
+    "handoff:CW6:tunlan-splash=done",
+    "handoff:CW6:first-bell-desc=not_done",
+    "sensitivity:spot-check=partly",
+    "done:7=partly"
+   ],
+   "commits": [
+    "a0bf2fc06",
+    "d1b42c92d (wip sync that swept in my _harness/e2e.mjs change: a passed step is no longer failed by its screenshot timing out; its message does not describe this change)"
+   ],
+   "notes": "Status: 5 of the 8 items are done. done:7 still needs a clean `e2e all` on an idle machine, the First Bell description is CW6's to fix, and the Burdam check is a judgement call for CW5.\n\n**e2e all:** the one sweep failed at load 68-83. I did not run a second, because load had climbed to 374 after a 10-minute wait. The load explanation for the failures is likely but unproven.\n\n**Commit attribution:** a wip sync (d1b42c92d) committed my `_harness/e2e.mjs` change before my own commit ran, so there is no separate 'vale CW3c' commit for it. The change is pushed.\n\n**e2e behaviour change:** a step's "
+  }
+ ],
+ "summary": "Not passed, solely because done:7 could not be measured (needs idle machine). No lane item fails above minor. Passing on re-measure: client:CL-1 (lisvel_almanac dE 25.5, gate 32/32, sold at 1,500), the Tunlan splash, done:5, done:6 and the Featured hole. Still open and minor: First Bell desc (CW6), the optional Burdam Almanac look (CW5), caption overlap at 1280 (mainly the no-renderer fallback). The integration pass must run e2e all, overlay_regress, hud_renders and icon_probe; the engineer's only e2e all this round failed under load, and decline_once is unproven until a clean run. The Mac is on battery (no adapter, 83 %), two heavy slots are held by power-hold sleeps, and my e2e flow got no slot in about 28 minutes, so I stopped it. Verdict: _design/reviews/fixwaves/CW3c_r3_verify1.json, commit 414711d74, pushed."
+}
