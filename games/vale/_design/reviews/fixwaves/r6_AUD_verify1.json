@@ -1,0 +1,43 @@
+{
+ "lane": "AUD",
+ "verifier": "adversarial verify 1",
+ "at": "2026-11-07 14:22 CST",
+ "head": "ffe3796e7 (src/audio clean against HEAD; the AUD code is in f0eb3ef00 + 3c6aebffd, described by 97dd47bd5). Own production build of the committed tree in _harness/_prod/audv1r6/dist via fw_r5_aud_memrun --build",
+ "pass": true,
+ "summary": "AUD-5, AUD-6 and AUD-7 hold up when I re-measure them. AUD-5: the engineer's break script passes in my run, and so does my own break script with 4 more stalls: one during the draft -> RIFT hand-over fade, one 0.34 s before a downbeat, two stalls in one look-ahead, and a fast flip draft -> RIFT -> menu -> RIFT. Music came back at once with no silent block, at most 5 long sources played, 3 after the downbeat, no foreign source, and no two live sources ever shared a buffer. That last check matters because reused buffers must never be decoded into while something still plays them. Nothing was left waiting on release. AUD-6: probe_audio_music passes 17/17, budget 83.5 MB = objective 11.9 + held 71.6 (windows 47.8 + pool 23.9). AUD-7: in the production client (raw CDP, full scale, fake sink, --track, my own order BRIDGE/RIFT/BRIDGE), match audio at the 1 s poll read 156.3 / 138.2 / 154.9 MB. Steady state was 151-160 MB, and every Home was 45.2 MB. Round 5 first polls read 196.5-219.3. The re-runs pass: probe_audio_mix, fw_r5_aud_release (device and fake sinks), and the node audio probes. typecheck exit 0, npm run -s probe 55/55. Load during the memory run was 2.5-5.2: the probe still reports GATE NOT MEASURED (needs idle machine, would pass), so the totals are not ruling-20 readings. Audio MB and function are valid.",
+ "load": "1-min load 3.2-8.6 across all runs (memory run 2.52-5.19; stall script 8.59->6.77; break script 3.78->5.95; probe suite 3.56->3.89)",
+ "items": [
+  {
+   "id": "AUD-5",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Engineer's script: node _harness/fw_r6_aud_stall.mjs --out _harness/_reports/fw_r6_audv1_stall.json, exit 0, PASS. G1: suspended at ctx 34.53 with T 37.41 (2.9 s look-ahead), resumed 3 s later. Long sources 5/5/5 (before/suspended/resumed), first sound 0.043 s after resume, 0 blocks under -60 dBFS, min -40.3 dBFS, max 5, 3 past the downbeat, foreign 0, dying 0. G2 (bed -> menu during the stall): foreign 0, dying 0, bed mus_menu. My own break script (scratchpad aud_break.mjs, dev client, fake sink) -> _harness/_reports/fw_r6_audv1_break.json, 0 page errors. K3: suspended 0.34 s before the downbeat (ctx 42.85, T 43.19, inside the overlap), resumed after 3 s: 0 silent blocks, min -39.7 dBFS, max 5 long, 3 past the downbeat, shared-buffer live sources 0, foreign 0, dying 0. K4: two stalls in one look-ahead (1.2 s + 1.5 s, 2.5 s before T): 0 silent, max 5, past downbeat 3, dying 0, stalls 4 / recovered 4. K1: suspended 0.2 s into the draft -> RIFT hand-over, resumed 3 s later: handed 4, reused 4, 2 silent blocks (about 80 ms) then music, max 3 long, shared 0, foreign 0, dying 0. Device sink (the clock really stalls here): node _harness/fw_r5_aud_release.mjs --sinks device,fake --out _harness/_reports/fw_r6_audv1_release.json PASS. Device: menu0/match/menu1 45.2/68.4/45.2 MB, dying 0, clock 0.005 s, retired 11 all freed by 'stall'. Fake: 45.2/86.2/45.2, retired 81 with stall 0 (no false stall), S1 true. Code read: 'hand' entries are freed on a stall only when at <= ctx.currentTime. stopBed turns its own hand-overs into stops and frees them on a standing clock. A re-retire cancels the old entry and keeps its then callback. retire()'s check re-arms piece and hand entries every 500 ms. No double free and no lost unhold found."
+  },
+  {
+   "id": "AUD-6",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "node _harness/probe_audio_music.mjs --out _harness/_reports/fw_r6_audv1_music.json: exit 0, 17/17 gates (A1-A3, O1-O3, C1, L1, M1_files, M1_budget). memory.stream: heldMb 71.6 = windowMb 47.8 + pooledMb 23.9, maxHeldMb 71.6, maxHeld 3, late 0, decoded 10; budgetMb 83.5 (files 11.9 + 71.6) against 135. decoded() 183.6 MB now includes the pool. Code read: streamBuffers() is the union of holds, cached windows, pool and the busy decode targets, so each buffer counts once. maxHeldMb is sampled in hold() on a fresh buffer, which is the only point where that union can grow. The probe change (max(heldMb, maxHeldMb)) is tighter, not looser."
+  },
+  {
+   "id": "AUD-7",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/fw_r5_aud_memrun.mjs --dist audv1r6 --build -- --modes bridge,rift,bridge --sec 90 --raw-cdp --full-scale --fake-audio --track --out _harness/_reports/fw_r6_audv1_mem.json (log fw_r6_audv1_mem.log). Match audio at the first (1 s) poll: BRIDGE 156.3 MB, RIFT 138.2, BRIDGE 154.9. Steady: BRIDGE 157.5-160.0, RIFT 151.3-153.8, BRIDGE 156.1-158.0. The draft bed is gone by the first second (round 5 first polls 196.5-219.3). Homes: home_0 45.2, bridge_home 45.2, rift_home 45.2, bridge_home 45.2. Totals (not ruling-20 readings: exit 2 'GATE NOT MEASURED: needs idle machine (load max 5.19, 25 of 31 readings busy); would pass'): BRIDGE 2311 at 1 s (steady max 2236, +75), RIFT 2538 at 77 s, BRIDGE 2601 at 1 s. The remaining start transient sits in heap/backing (heap 127-141 MB at 1 s vs 73-90 steady), not in audio, which matches the engineer's MEM handoff. Hand-over in the break test: fw_r6_audv1_stall G3 handed 4, reused 4, 1 new window-shaped buffer, audio 68.4 MB at 1 s and at 3 s (86.9 before), match bed in 1.48 s after the switch (gate 2.5 s; the engineer measured 0.73-0.94 s at lower load)."
+  },
+  {
+   "id": "reruns",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run -s typecheck exit 0. npm run -s probe: 55 passed, 0 failed (161 s, load 3.6-3.9) -> _harness/_reports/fw_r6_audv1_probe.log. probe_audio_mix (fake sink) exit 0, failures [] -> fw_r6_audv1_mix.json. Emitters play 6/6, 5/5, 5/5. floorLiftDb rift 3.3 (gate >= 1), bridge 0.1, fray 2.4. Bridge/fray are not gated, and bridge read 0.1 in r5 verify too. probe_audio_announcer, probe_audio_pieces, probe_audio_procs and probe_audio_epic all exit 0 (fw_r6_audv1_{announcer,pieces,procs,epic}.json). The announcer probe edit (the tally records ref0/dur0 at start) is a correct adaptation to the release nulling buffers and loosens no gate."
+  },
+  {
+   "id": "obs-draft-to-match-gap",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Not a defect, but a design call that has not been recorded. Going from the draft into a match on a streaming platform, the draft bed now fades out over HAND_FADE_S 0.6 s and the match bed starts only after the hand-over. That is a fade-out then a start, where before it was a 1.8 s crossfade. The match bed came in 1.48 s after the switch in my run (fw_r6_audv1_stall G3, load about 8). Interrupted hand-overs work correctly: in K2 (draft -> RIFT -> menu after 0.3 s -> RIFT) setBed's dropSpare cancels the offer (handed 0, reused 0), the beds play correctly afterwards (tail 0 silent, 3 long, 0 foreign, dying 0), and that case simply falls back to the collector (audio 86.6 MB, no GC). The engineer asked for this to be recorded in owner_rulings.md, which is outside both lanes' paths; the orchestrator still has to do that."
+  }
+ ],
+ "regressions": [],
+ "reports": ["_harness/_reports/fw_r6_audv1_stall.json", "_harness/_reports/fw_r6_audv1_break.json", "_harness/_reports/fw_r6_audv1_music.json", "_harness/_reports/fw_r6_audv1_mix.json", "_harness/_reports/fw_r6_audv1_mem.json", "_harness/_reports/fw_r6_audv1_mem.log", "_harness/_reports/fw_r6_audv1_release.json", "_harness/_reports/fw_r6_audv1_probe.log", "_harness/_reports/fw_r6_audv1_announcer.json"]
+}
