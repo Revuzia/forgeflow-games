@@ -36,6 +36,7 @@ from glb_image_swap import image_bytes, image_index, read_glb, swap_images, veri
 
 ROUGH_CURVE = "0:0,0.25:0.25,0.5:0.35,0.6:0.37,0.74:0.41,0.8:0.47,0.87:0.86,0.95:0.95,1:1"
 GRADE_STAMP = "gf1-1"
+GLB_BUDGET = 1172 * 1024
 
 
 def uv_mask(js, b, size: int, material_image_suffix="_base") -> np.ndarray:
@@ -155,7 +156,10 @@ def main():
                 print(f"{g}: already graded ({st}), skipped")
                 continue
             tmp = g + ".grade.tmp"
-            regrade(g, tmp, parse_curve(ROUGH_CURVE), None, None, True, True, A.q, None, stamp=GRADE_STAMP)
+            q = A.q
+            limit = os.path.getsize(g) if os.path.getsize(g) > GLB_BUDGET else GLB_BUDGET
+            while regrade(g, tmp, parse_curve(ROUGH_CURVE), None, None, True, True, q, None, stamp=GRADE_STAMP) > limit and q > 50:
+                q -= 6                       # a base fighter stays inside the build budget (export.py, 1172 KiB)
             os.replace(tmp, g)
         sys.exit(1 if bad else 0)
     A.glb = A.glb[0]
