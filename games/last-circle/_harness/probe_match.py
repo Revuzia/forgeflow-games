@@ -34,6 +34,9 @@ GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   --plant swim-exempt (needs --disk / --rev): bots.js served with swimmers exempt from the loop breaker again - MUST FAIL the scripted swim-trap row
   --pencheck (W9 R1B pass 3): ONLY the scripted Volcano Rim pen (isla_viva seed 5, 3 setups; no match runs) - see PENCHECK_JS; --plant no-pen-fix (EDGE_TURN off) MUST FAIL it
   --sweep --plant stall-surge: every moving bot held 3.6 s of every 25 s - MUST FAIL the sweep's worst <= 4 row (its measure control)
+  --pencheck --plant no-calm-lag (W9 R1 fix mergefix): a calm hold re-plans although the route does not go the held way - MUST FAIL the pen row (setup 3)
+  --cornercheck (W9 R1 fix mergefix): ONLY the scripted Coco Village corner (isla_viva seed 1, 3 setups; a grid corner 0.6 m from a face) - see cornercheck;
+  --plant no-early-turn (EDGE_EARLY off) MUST FAIL it
 INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
@@ -69,6 +72,11 @@ PLANTS = {
                      "const wyE = W.map.waterY; if (MOVING_STATES[b.state] && (W.t % 25) < 3.6) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }          // (R1, tierprof kb)")],
     # (W9 fix doorstuck) the leafed-doorway funnel off (bots.js doorFunnel: a window route crossing a leafed doorway passes two points on the door's axis) -
     # the sweep MUST FAIL (measured without it, fix1 2026-11-06: ashgrid seed 1 s42 7 episodes - a 3.6 s loop at yard@p3's back door - and isla_viva seed 2 s31 5)
+    # (W9 fix mergefix) a calm hold re-plans even when the bot's route does not go the held way (bots.js calmHeld CALM_ROUTE_ONLY) - --pencheck MUST FAIL
+    # (measured without it on the merged doors + botpen build: setup 3, s18 at 40 hp, re-planned down the face, the goal parked, never reached)
+    "no-calm-lag": [("const CALM_ROUTE_ONLY = true;", "const CALM_ROUTE_ONLY = false;")],
+    # (W9 fix mergefix) edgeGuard's early turn off (bots.js EDGE_EARLY: a grid corner nearer the lip than EDGE_TURN_M turns back along the heading)
+    "no-early-turn": [("const EDGE_EARLY = true;", "const EDGE_EARLY = false;")],
     "no-door-funnel": [("if (bb.path && !bb.path.nav && !bb.path.exit) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);",
                         "if (false) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);")],
 }
@@ -187,17 +195,20 @@ PENCHECK_JS = r"""async ([sx, sz, hp, gx, gz, cx, cz, fx, fz, T]) => {
   { const bb = b.brain.bb; bb.target = null; bb.targetPos = null; bb.path = null; bb.pathGoal = null; bb.moveTo = null; bb.lootId = null; bb.shieldScanT = 0; bb.escUntil = -99; bb.trapLastT = -99; bb.nextPathT = 0; b.brain.nextThink = 0; }
   W.netSpawnItem({ id: 'p23pen', data: { kind: 'consumable', id: 'big_shield', count: 1 }, x: gx, y: M.heightAt(gx, gz) + 0.15, z: gz });
   const prev = W._tickHook;
-  W._tickHook = (w) => { if (prev) prev(w); fence(); };
+  // (fix mergefix) the route's corner is looked for on EVERY tick (was: the 0.5 s samples): an early turn (bots.js EDGE_EARLY) moves it <= 1.2 m and it
+  // can be taken inside one sample (the scripted corner: reached in 1-2 s)
+  let cornerD = 1e9;
+  W._tickHook = (w) => { if (prev) prev(w); fence(); const P = b.brain && b.brain.bb.path; if (P) for (let k = 0; k < P.length && k < 4; k++) cornerD = Math.min(cornerD, Math.hypot(P[k].x - cx, P[k].z - cz)); };
   const MOV = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1 };
   const t0 = W.t, ring = [], eps = [], states = {}, track = [];
-  let open = false, reachT = null, cornerD = 1e9, minD = 1e9;
+  let open = false, reachT = null, minD = 1e9;
   for (let i = 0; i < T * 2 && reachT == null; i++) {
     C.fastForward(0.5, 1 / 30);
     if (!b.alive) break;
     const bb = b.brain.bb, st = b.brain.state, d = Math.hypot(b.pos.x - gx, b.pos.z - gz);
     states[st] = (states[st] || 0) + 1; if (d < minD) minD = d;
     if (bb.path) for (let k = 0; k < bb.path.length && k < 4; k++) cornerD = Math.min(cornerD, Math.hypot(bb.path[k].x - cx, bb.path[k].z - cz));
-    track.push([+(W.t - t0).toFixed(1), +b.pos.x.toFixed(1), +b.pos.y.toFixed(1), +b.pos.z.toFixed(1), st]);
+    track.push([+(W.t - t0).toFixed(1), +b.pos.x.toFixed(1), +b.pos.y.toFixed(1), +b.pos.z.toFixed(1), st, bb.lootId || null]);      // (fix mergefix) + the loot goal: a parked goal reads as null
     if (d < 2.5) { reachT = +(W.t - t0).toFixed(1); break; }
     const mv = !!MOV[st] && !bb.chestId && !b.healing && !b.emoting;
     ring.push({ x: b.pos.x, z: b.pos.z, mv }); if (ring.length > 7) ring.shift();
@@ -235,6 +246,41 @@ def pencheck(s, v):
     v.check(name, ok, [{k: r.get(k) for k in ("start", "hp", "bot", "reachT", "episodes", "eps", "cornerD", "minD", "end")} for r in out],
             "reach <= %.0f s and 0 stuck episodes, every setup" % PEN_T)
 
+
+
+# (W9 R1 fix mergefix) --cornercheck: edgeGuard's EARLY TURN on a SCRIPTED corner (the natural case: isla_viva seed 1, s21 on Coco Village's terrace
+# top (terrain 49.56), its grid route's corner (-3.8, 1.7) 0.6 m from the terrace's south face - held at every look, 2 of its 5 stuck episodes on the
+# merged build). Same driver as --pencheck (PENCHECK_JS: one quick match per setup, the free bot nearest the start put there after the landings with
+# that hp, an AR, no shield item, every other actor > 260 m away, a big shield at the goal - its own shield scan sends it there in LOOT). Judged per
+# setup: it REACHES the goal in CORNER_T s with 0 stuck episodes on the way. SETUP (else could-not-judge): the terrace is where it was (start terrain
+# 49-50 m, the face foot >= 4 m lower) and the route used the corner (a waypoint within 1.5 m of it). --plant no-early-turn MUST FAIL it.
+CORNER_MAP, CORNER_SEED, CORNER_T = "isla_viva", 1, 30.0
+CORNER_GOAL, CORNER_C, CORNER_FOOT = (-0.7, -1.9), (-3.81, 1.71), (-3.81, -1.3)
+CORNER_SETUPS = ((-3.4, 4.7, 100), (-3.3, 5.0, 40), (-4.9, 9.4, 100))
+
+
+def cornercheck(s, v):
+    out = []
+    for (sx, sz, hp) in CORNER_SETUPS:
+        st = s.start_match("quick", CORNER_SEED, CORNER_MAP, enter=True)
+        s.freeze_loop()
+        s.page.evaluate("(t) => window.__LC__.fastForward(t, 1 / 30)", PEN_PRE_S)
+        r = s.page.evaluate(PENCHECK_JS, [sx, sz, hp, CORNER_GOAL[0], CORNER_GOAL[1], CORNER_C[0], CORNER_C[1], CORNER_FOOT[0], CORNER_FOOT[1], CORNER_T])
+        r["start"], r["load"] = [sx, sz], st
+        out.append(r)
+        print("  cornercheck start (%.1f, %.1f) hp %d: bot %s reach %s s, %s stuck episodes, corner %s m, geo %s" % (
+            sx, sz, hp, r.get("bot"), r.get("reachT"), r.get("episodes"), r.get("cornerD"), r.get("geo")), flush=True)
+    v.data["cornercheck"] = out
+    name = ("corner scripted (Coco Village terrace, %s seed %d: a calm bot on the terrace top, its grid route's corner 0.6 m from the south face, %d setups): "
+            "every setup reaches the goal in %.0f s with 0 stuck episodes on the way" % (CORNER_MAP, CORNER_SEED, len(CORNER_SETUPS), CORNER_T))
+    bad = [r for r in out if r.get("error") or not (49.0 <= r["geo"]["start"] <= 50.0 and r["geo"]["start"] - r["geo"]["foot"] >= 4.0) or r.get("cornerD", 1e9) > 1.5]
+    if bad:
+        v.cnj(name, "SETUP missed in %d of %d setups (geometry moved, no bot, or the route did not use the corner): %s" % (
+            len(bad), len(out), [{k: r.get(k) for k in ("start", "error", "geo", "cornerD")} for r in bad]))
+        return
+    ok = all(r["reachT"] is not None and r["reachT"] <= CORNER_T and r["episodes"] == 0 for r in out)
+    v.check(name, ok, [{k: r.get(k) for k in ("start", "hp", "bot", "reachT", "episodes", "eps", "cornerD", "minD", "end")} for r in out],
+            "reach <= %.0f s and 0 stuck episodes, every setup" % CORNER_T)
 
 def pct(a, b):
     return round(100.0 * a / b, 1) if b else None
@@ -278,6 +324,7 @@ def main():
     ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     ap.add_argument("--swimcheck", action="store_true", help="W9 R1B: the scripted swimmer trap (see SWIMCHECK_JS); --plant swim-exempt must FAIL it")
     ap.add_argument("--pencheck", action="store_true", help="W9 R1B pass 3: ONLY the scripted Volcano Rim pen (no match runs; see PENCHECK_JS); --plant no-pen-fix must FAIL it")
+    ap.add_argument("--cornercheck", action="store_true", help="W9 R1 fix mergefix: ONLY the scripted Coco Village corner (no match runs; see cornercheck); --plant no-early-turn must FAIL it")
     ap.add_argument("--sweep", action="store_true", help="W9 R1B: the episode sweep (3 maps x seeds 1-6, --no-paths, --small-run); adds the worst <= %d row" % SWEEP_WORST_MAX)
     ap.add_argument("--plant", default=None, choices=sorted(PLANTS), help="a planted fault served into bots.js (this gate must then FAIL); needs --disk / --rev")
     args = ap.parse_args()
@@ -301,8 +348,11 @@ def main():
                 v.data["plant"] = {"name": args.plant, "edits": p23lib.serve_patched(s, "runtime/3d/royale/bots.js", PLANTS[args.plant])}
             s.boot()
             s.freeze_loop()
-            if args.pencheck:                      # (W9 R1B pass 3) its own row: the scripted pen alone (no match runs, no paths)
-                pencheck(s, v)
+            if args.pencheck or args.cornercheck:  # (W9 R1B pass 3) its own row: the scripted pen alone (no match runs, no paths); (fix mergefix) the corner
+                if args.pencheck:
+                    pencheck(s, v)
+                if args.cornercheck:
+                    cornercheck(s, v)
                 d = s.diagnostics()
                 v.check("no page errors / window errors during the runs", not (d["pageErrors"] or d["windowErrors"]),
                         {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
