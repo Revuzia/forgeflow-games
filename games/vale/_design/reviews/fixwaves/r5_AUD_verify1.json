@@ -1,0 +1,69 @@
+{
+ "lane": "AUD",
+ "verifier": "adversarial verify 1",
+ "at": "2026-11-07 10:44 CST",
+ "head": "bdcd1b904 (src/audio clean against HEAD; own prod build of the committed tree into _harness/_prod/audv1/dist via fw_r5_aud_memrun --build)",
+ "pass": true,
+ "summary": "AUD-3 and AUD-4 hold up when I re-measure them in the production client. I ran 8 matches through probe_match_memory --track, in orders the engineer did not use. Device sink, High: BRIDGE, RIFT, RIFT, BRIDGE. Fake sink, Ultra: RIFT, RIFT, BRIDGE, RIFT. Audio read 45.2 MB at home_0 and at every one of the 8 match Homes on both sinks; round 4 had 385/674/922 on the device sink. In a match, audio was 150-205.6 MB on the device sink and 149.7-219.3 MB on the fake sink. All 8 journeys completed with real Esc -> Leave after casting. The re-runs pass: fw_r5_aud_release (device and fake, R1 R2 S1), probe_audio_music 17/17 (fake sink; bed windows 47.8 MB, at most 3 held, 0 late), probe_audio_mix (fake sink, RIFT floor lift 2.9 dB), and probe_audio_runtime sync 3/3 (50/50 in call, p95 from the pump 31.9-32.1 ms). typecheck is clean. probe was 52/55 under load 300-590. The 3 failures are sim/online timing probes in files this lane did not touch, and core_nav passes 46/46 when run alone at load 48. I also tried to break it with my own script on the dev client (fake sink): a synthetic devicechange mid-bed, a suspend/resume, a suspend with the bed changed twice, and a devicechange while suspended. None of them double-played a bed (0 foreign long sources, at most 5 = cur+next), and the engine resumed the suspended context on its own. One defect remains (minor): if the context stalls or suspends in the 3 s before a section downbeat (the next window already scheduled), the stall frees the playing section's sources at once. On resume, music is silent until the downbeat: about 1.7 s measured, up to about 3.3 s. No memory total here is a ruling-20 reading (load 155-595, 54/54 readings busy). Audio MB, function and correctness are valid.",
+ "load": "1-min load 155-595 during the memory runs, 48-518 elsewhere; recorded with every number below",
+ "items": [
+  {
+   "id": "AUD-3",
+   "severity": "blocker",
+   "status": "pass",
+   "evidence": "Commands: node _harness/fw_r5_aud_memrun.mjs --dist audv1 --build -- --modes bridge,rift,rift,bridge --sec 180 --track --shots fw_r5_audv1_dev (device sink, High) -> _harness/_reports/fw_r5_audv1_mem_dev.json. Context clock 0.01 s 'running' throughout, i.e. the stalled device reproduced. Audio at Home: home_0 45.2 (load 164), bridge_home 45.2 (408), rift_home 45.2 (216), rift_home 45.2 (376), bridge_home 45.2 (217). Round 4 was 385/674/922, and the four matches add 0 MB. In match: BRIDGE 203.5 -> 156.6, RIFT 205.6 -> 158.7, RIFT 196.8 -> 150, BRIDGE 156.6 (load 158-595). Fake sink: _harness/_reports/fw_r5_audv1_mem_fake.json, every Home 45.2 (see AUD-4). node _harness/fw_r5_aud_release.mjs --out _harness/_reports/fw_r5_audv1_release.json: PASS. Device: menu0 45.2 -> RIFT bed 68.2 -> menu1 45.2 MB, live long sources = menu's 3, retired 11 all freed by 'stall', load 454->415. Fake: 45.2/85.9/45.2, retired 81 (ended 64, due 17, stall 0, stalls 0: no false stall on a running clock). S1: suspend, change twice, resume leaves the draft bed, 55.6 MB, 4 sources. Recovery break test (my scratch script, dev client, fake sink, load 335-519): devicechange mid-bed keeps stalled=false and 3 long sources, 0 foreign, and a UI cue still plays (log +1). Suspend + bed changed twice + resume gives one RIFT bed, cur 0, 3 long sources, 0 foreign. A devicechange while suspended: the engine resumes the context itself (state running, stalled false, 1 s later). No double play in any case."
+  },
+  {
+   "id": "AUD-3-gap",
+   "severity": "minor",
+   "status": "fail",
+   "evidence": "Same scratch run. I suspended at ctx 30.39 s, after chainNow had scheduled section 1 (next=1, 5 long sources), and resumed 3 s later. At the suspend, setStalled(true) kills every 'stop'-kind dying entry. That includes the playing section's main and combat sources, which segment() had retired 3 s early with stop at T+0.02. Long sources fell 5 -> 3 at the suspend. After resume the music bus read -180 dBFS (silence) at ctx 31.97 and -33.9 dBFS once section 1 began at about ctx 33.1: about 1.7 s of no music. The bound is SECTION_LOOKAHEAD_S + handle, about 3.3 s. The same path applies to a whole-bed jump's old source (the .m4a/Safari path), and retire()'s 'clock stood still' check frees 'piece'-kind sources too, which the comment says are kept through a stall. Players hear it as music dropping for up to about 3 s after a Bluetooth reconnect or output switch that happens in the last 3 s of a 32 s section. No memory cost.",
+   "fixHint": "Free a retired 'stop' source on a stall only once its stop time has been reached, or keep it until its own stop is due by the context clock once the clock is back. For example, skip dying entries whose stop time is later than ctx.currentTime + the fade, as long as the next segment that would replace them has not started. Also apply the 'piece' exemption in retire()'s check."
+  },
+  {
+   "id": "AUD-4",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "node _harness/fw_r5_aud_memrun.mjs --dist audv1 -- --modes rift,rift,bridge,rift --sec 180 --track --fake-audio --preset ultra --shots fw_r5_audv1_fake -> _harness/_reports/fw_r5_audv1_mem_fake.json (preset ultra applied). Audio at Home: home_0 45.2 (load 167), rift_home 45.2 (495), rift_home 45.2 (408), bridge_home 45.2 (288), rift_home 45.2 (388). Round 4 fake was 79-80, so the streamed menu saves 34 MB and nothing accumulates. In match: RIFT 196.5 -> 149.7..156.8, RIFT 211 -> 164.4..168.1, BRIDGE 157.2..161.3, RIFT 219.3 -> 172.7..178.6 (round 4 fake RIFT 220-246). The first 1-2 polls carry the draft bed transient (the engineer's MEM handoff). Every Home is back to 45.2, so the small in-match creep (+7 MB per match, cue decodes) is not a pin. node _harness/probe_audio_music.mjs --out _harness/_reports/fw_r5_audv1_music.json (fake sink): 17/17 gates, including A2 act jumps, C1 no clicks, L1 level, M1_files/M1_budget. Streamed bed heldMb 47.8, windows [1,2], maxHeld 3, late 0, decode 248-729 ms per window under load. Act and section jumps (CW2 MUSIC_ACTS) are intact. Match totals (not ruling-20 readings, 54/54 busy): device BRIDGE 2459, RIFT 2806, RIFT 2717, BRIDGE 2738. Fake Ultra RIFT 2508, RIFT 2652, BRIDGE 2862, RIFT 2756. I did not re-run fw_r5_aud_stream or the --m4a music run; the engineer's reports stand for those."
+  },
+  {
+   "id": "AUD-4-accounting",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "Code read: musicStream.heldMb, decoded() and probe_audio_music's M1_budget count only windows in the cache. The STREAM_POOL buffers (up to 2 per stem, 6.2 MB each, so about 25 MB on a match bed) are not counted. The real held figure is up to about 85 MB against the 135 bar, so the gate still holds. __memTrack (fw_r4_mem_track) counts them, and the Home and match MB above include them.",
+   "fixHint": "Add pooled buffers to heldMb and decoded() so M1_budget reads what is really held."
+  },
+  {
+   "id": "reruns",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "probe_audio_mix (fake sink) PASS, fw_r5_audv1_mix.json: emitters play on all 3 maps, RIFT floorLiftDb 2.9 (bar 1 dB), failures []. probe_audio_runtime sync PASS 3/3, fw_r5_audv1_sync.json: 50/50 started in call each run, p95 from the pump 32.1/32.04/31.86 ms (budgets 59.32/59.32/42.72). The rAF-side halves were not measured (machine busy). fw_r5_aud_release PASS, as under AUD-3."
+  },
+  {
+   "id": "regressions",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "npm run -s typecheck: clean (exit 0). npm run -s probe: 52 passed, 3 failed, 0 skipped of 55 (2483 s, load 290-590). Failures: probe_online (rift_coop: no postgame within 240 s; the node sim server timed out under load), probe_sim_bot_soak (906.6 s, over the 900 s per-probe timeout), and probe_sim_core_nav ('grid A*: cross-wall search cost' 3.299 ms/search, a timing gate). The lane's diff touches only src/audio (index.ts, opus_stream.ts) and harness files; src/sim is untouched. probe_sim_core_nav re-run alone at load 48: 46/46 PASS. I did not re-run online or bot_soak alone; the machine stayed busy."
+  },
+  {
+   "id": "ui",
+   "severity": "minor",
+   "status": "not_measured",
+   "evidence": "The lane added no UI (its diff is src/audio and _harness only), so there is no new UI to view at 1280x720 / 1920x1080. Esc after casting was exercised in all 8 prod journeys (the probe casts ability keys every few seconds, then Esc -> Leave match), 8/8 completed. Esc with the shop open was not exercised in this verify; UI verify 1 covers it."
+  }
+ ],
+ "regressions": [],
+ "handoffs": [
+  { "to": "AUD lane", "what": "AUD-3-gap: a stall or suspend in the 3 s look-ahead frees the playing section, giving a 1.7-3.3 s music gap on resume. Fix hint in the item." },
+  { "to": "MEM lane", "what": "The ruling 27 Home gate is still far off and not audio (audio is 45.2 at every Home): device Home over home_0 +608 (bridge_home) / +596 (rift_home), fake Ultra +510 / +530 (fw_r5_audv1_mem_{dev,fake}.json, load 155-595)." }
+ ],
+ "reports": [
+  "_harness/_reports/fw_r5_audv1_mem_dev.json",
+  "_harness/_reports/fw_r5_audv1_mem_fake.json",
+  "_harness/_reports/fw_r5_audv1_release.json",
+  "_harness/_reports/fw_r5_audv1_music.json",
+  "_harness/_reports/fw_r5_audv1_mix.json",
+  "_harness/_reports/fw_r5_audv1_sync.json",
+  "_harness/_shots/fw_r5_audv1_dev*, fw_r5_audv1_fake*"
+ ]
+}
