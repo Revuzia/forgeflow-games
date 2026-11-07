@@ -279,7 +279,8 @@ export interface SettlementRel {
   /** daily memory of the conditions: tick a condition first held (drought, cold, ...), prayers raised throttle */
   since: Record<string, number>;
   /** this evening's worship: the tick its window opened and who has gone (agent ids) — once an evening each */
-  vespers?: { t: number; went: number[] };
+  /** went: the members who came to the evening worship; away (ARC §1.2): those it drew whose heart kept them home */
+  vespers?: { t: number; went: number[]; away?: number[] };
   /** (fix r4 #14) this morning's devotion: the tick its window opened and who has prayed (agent ids) — once a morning each */
   matins?: { t: number; went: number[] };
   // ---- ARC §6.1 (all optional; created on first touch by god/arc.ts) ----

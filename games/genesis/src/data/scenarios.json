@@ -67,6 +67,17 @@
       ],
       "peoples": [
         { "phase": 2, "species": "plains-folk", "planet": 0, "count": 80, "era": "bronze", "settlements": ["town", "city"] }
+      ] },
+    { "id": "babel", "name": "One speech", "description": "Four proud towns of one people and one tongue in the bronze age, close enough to see each other's smoke.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 90, "era": "bronze", "settlements": ["town"],
+          "cluster": { "towns": 4, "km": 10 }, "knowledge": ["mudbrick"], "store": { "mudbrick": 60 },
+          "pride": 0.7, "prideYears": 20, "towerArm": true }
       ] }
   ]
 }

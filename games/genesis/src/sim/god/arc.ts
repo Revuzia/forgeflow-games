@@ -37,6 +37,16 @@ export const ARC = {
   /** dusk: `low` set when the ema falls below this from above duskHigh, cleared above duskHigh */
   duskLow: 0.25,
   duskHigh: 0.45,
+  /** dusk flags relative to the town's own peak (contract-changes.md): armed once the peak reached duskArm; high and low
+   * are these fractions of it (never above duskHigh / duskLow); the peak's half-life toward the ema in years */
+  duskArm: 0.18,
+  duskHiFrac: 0.85,
+  duskLoFrac: 0.6,
+  duskPeakYears: 2,
+  /** the shrine stands empty also when the share kept home by their hearts (ema) reaches this and passes those who came */
+  duskAway: 0.1,
+  /** of those the evening draws, the share each heart lets go (relationship.ts vespers; the rest stay home) */
+  duskKeep: { devoted: 1, quiet: 1, restless: 0.6, fearful: 0.3, defiant: 0 } as Record<HeartKind, number>,
   /** dusk ema divisor (days) */
   duskEma: 12,
   /** pride flag (§1.2) */
@@ -74,6 +84,9 @@ export function emptyMemory(): Memory {
 
 const clamp = (v: number, lo = 0, hi = 1): number => (v < lo ? lo : v > hi ? hi : v);
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
+
+/** §1.2: of those the evening worship draws, the share a heart lets go (the rest stay home: `vespers.away`) */
+export function duskKeep(h: HeartKind): number { return ARC.duskKeep[h] ?? 1; }
 
 /** §1.1: the heart of one grown member toward god 0 (the first rule that holds wins) */
 export function personHeart(A: PCtx['A'], s: number, defiance: number, pride: number): HeartKind {
@@ -160,12 +173,13 @@ function arcInit(x: PCtx, st: Settlement, r: SettlementRel): boolean {
 }
 
 /** the members pass of §1.2 / §2.1: shares, means and dusk */
-interface Pass { n: number; devoted: number; fearful: number; restless: number; defiant: number; faith: number; fear: number; trust: number; went: number }
+interface Pass { n: number; devoted: number; fearful: number; restless: number; defiant: number; faith: number; fear: number; trust: number; went: number; away: number }
 
 function membersPass(x: PCtx, st: Settlement, r: SettlementRel, defiance: number, pride: number): Pass {
   const A = x.A;
-  const o: Pass = { n: 0, devoted: 0, fearful: 0, restless: 0, defiant: 0, faith: 0, fear: 0, trust: 0, went: 0 };
+  const o: Pass = { n: 0, devoted: 0, fearful: 0, restless: 0, defiant: 0, faith: 0, fear: 0, trust: 0, went: 0, away: 0 };
   const went = r.vespers && x.tick - r.vespers.t <= x.day ? new Set(r.vespers.went) : null;
+  const away = r.vespers?.away?.length && x.tick - r.vespers.t <= x.day ? new Set(r.vespers.away) : null;
   for (const s of x.ps.members.get(st.id) ?? []) {
     const i = s * GODS;
     o.faith += A.faith[i]; o.fear += A.fear[i]; o.trust += A.love[i];
@@ -174,6 +188,7 @@ function membersPass(x: PCtx, st: Settlement, r: SettlementRel, defiance: number
     const h = personHeart(A, s, defiance, pride);
     if (h !== 'quiet') o[h]++;
     if (went && went.has(A.id[s])) o.went++;
+    if (away && away.has(A.id[s])) o.away++;
   }
   const m = Math.max(1, (x.ps.members.get(st.id) ?? []).length);
   o.faith /= m; o.fear /= m; o.trust /= m;
@@ -245,10 +260,23 @@ export function heartsDaily(x: PCtx, st: Settlement): void {
   if (x.tick - r.since.duskY >= x.year) { d.yearAgo = d.ema; r.since.duskY = x.tick; }
   d.today = today;
   if (!first) d.ema = r3(d.ema + (today - d.ema) / ARC.duskEma);
-  if (d.ema > ARC.duskHigh) {
+  // the town's own peak (since.duskPk): vespers attendance tops out near 0.25-0.45 even in a faithful town, so the
+  // flags are relative to it (contract-changes.md, §1.2): high = min(duskHigh, duskHiFrac x peak), low = min(duskLow,
+  // duskLoFrac x peak), armed only once the peak reached duskArm. The peak falls back toward the ema with a half-life of
+  // duskPeakYears, and not at all while the shrine stands empty (so the low flag is not cleared by a sinking peak).
+  let pk = r.since.duskPk ?? d.ema;
+  if (!d.low && pk > d.ema) pk -= (pk - d.ema) * (1 - Math.pow(0.5, x.day / (ARC.duskPeakYears * x.year)));
+  pk = r3(Math.max(pk, d.ema));
+  r.since.duskPk = pk;
+  const hi = Math.min(ARC.duskHigh, ARC.duskHiFrac * pk), lo = Math.min(ARC.duskLow, ARC.duskLoFrac * pk);
+  // those the evening drew whose heart kept them home (relationship.ts vespers `away`), as an ema like the dusk's own
+  const aw = r3((r.since.duskAw ?? 0) + (r3(pass.away / n) - (r.since.duskAw ?? 0)) / ARC.duskEma);
+  r.since.duskAw = aw;
+  const shunned = aw >= ARC.duskAway && aw > d.ema;
+  if (pk >= ARC.duskArm && d.ema >= hi && aw < d.ema * 0.5) {
     if (d.low) { d.low = false; tellOnce(x, st, r, 'heart.bowagain', 1); }
     r.since.duskHi = 1;
-  } else if (d.ema < ARC.duskLow && r.since.duskHi && !d.low) {
+  } else if (!d.low && ((d.ema < lo && r.since.duskHi) || shunned)) {
     d.low = true; delete r.since.duskHi;
     tellOnce(x, st, r, 'heart.nobow', 1);
   }
@@ -293,6 +321,31 @@ export function caption(kind: HeartKind): string { return S.caption[kind] ?? '';
 
 function lineOf(kind: HeartKind, name: string): string {
   return (S.line[kind] ?? '').replace('{settlement}', name);
+}
+
+/** §6.5 "what do they feel": the hearts of one town (or every town of the planet) in the voice, from the views:
+ * "In Aru most watch the sky (about half); some raise their fists." */
+export function heartWords(u: Universe, planet: number, sid?: number): string {
+  const p = u.planets.find((q) => q.id === planet);
+  const ps = p?.people;
+  if (!ps) return 'There are no people here.';
+  const verb: Record<string, string> = { devoted: 'bow at dusk', fearful: 'watch the sky', restless: 'murmur against you', defiant: 'raise their fists' };
+  const out: string[] = [];
+  for (const st of ps.settlements) {
+    if (st.fallen >= 0 || st.band || (sid !== undefined && st.id !== sid)) continue;
+    const h = peekRel(u, planet, st.id)?.hearts;
+    if (!h) continue;
+    const shares = (['devoted', 'fearful', 'restless', 'defiant'] as const).map((k) => [k, h[k]] as const).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    const [k0, v0] = shares[0];
+    let line = h.kind === 'quiet' || v0 < 0.15 ? `In ${st.name} they go about their days` : `In ${st.name} ${shareWords(v0)} ${verb[k0]}`;
+    const more = shares.slice(1).filter(([, v]) => v >= 0.15).map(([k, v]) => `${shareWords(v)} ${verb[k]}`);
+    if (more.length) line += `; ${more.join(', ')}`;
+    const r = peekRel(u, planet, st.id);
+    if (r && (r.pride ?? 0) >= 0.6) line += '. They are proud';
+    out.push(`${line}.`);
+    if (out.length >= 4) break;
+  }
+  return out.length ? out.join(' ') : sid !== undefined ? 'Nobody lives there now.' : 'Nobody here has a heart to read yet.';
 }
 
 /** the inspector's one-line caption of a person (§1.4) */

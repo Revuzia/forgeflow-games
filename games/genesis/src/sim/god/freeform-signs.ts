@@ -28,6 +28,8 @@ import { prophetOf } from './prophets.ts';
 import { wrathWords, WRATHFUL } from './wrath.ts';
 import { bearingDir, moveBy } from './util.ts';
 import { DISCIPLE_MODES } from './disciples.ts';
+import { currentTower, towerWords } from './tower.ts';
+import { heartWords } from './arc.ts';
 
 interface LiveName { name: string; kind: string; id: number; planet: number; pos?: V3 }
 
@@ -183,6 +185,7 @@ export function intentSigns(c: SignClause): boolean {
     return c.ask(words.length ? `${words.join('; ')}. ("answer the prayers of ${mine[0].name}")` : `${st ? st.name : 'Nobody'} prays for nothing now.`);
   }
   if (!p) return false;
+  if (arcIntents(c, p)) return true;
   // (fix r3 #14) ── "grant Aru's prayer", "answer the prayers of Lune", "hear Aru's plea": prayer.answer (was a law) ──
   // (fix r4 #2) only when no act is named: "answer Aru's prayers with a flood", "send rain to answer Aru's prayer" are that
   //    act (a wrathful answer stays wrathful); "hear Aru's prayers and send a plague" is the plague alone
@@ -383,6 +386,38 @@ export function intentSigns(c: SignClause): boolean {
     return true;
   }
   return false;
+}
+
+// ── ARC §6.5: the tower's four answers and the questions of hearts and towers ──
+const T_CONFUSE = /\b(confuse|confound|break|scatter|mix|muddle)\s+(their|the|its)\s+(tongues?|speech|languages?|words)\b|\bscatter the builders\b|\bspeak (in )?(different|many|other) (languages|tongues)\b|\bgive them (many|different) tongues\b|\bnot understand (each other|one another)\b/;
+const T_STRIKE = /\b(strike|throw|topple|destroy|break|bring|knock|tear|smash|ruin|cast)\s+(down\s+)?(the|their|that|this)\s+(great\s+)?tower\b|\b(bring|throw|knock|tear|strike|cast|pull)\s+(the|their|that)\s+(great\s+)?tower\s+down\b/;
+const T_WARN = /\bwarn the builders\b|\btell them to stop building\b|\bwarn\b[^,.;]*\babout the tower\b|\bwarn\b[^,.;]*\b(builders|tower)\b/;
+const T_WARN_SEND = /\bsend (a|my|the|your) prophet to\b/;
+const T_LET = /\blet the tower stand\b|\blet (the|their) tower (be|rise)\b|\blet them reach the sky\b/;
+const T_LET_SOFT = /\blet them build\b|\bleave them be\b/;
+const T_ASK = /\bwhat are they building\b|\bwhy are they building\b|\bwhat is (that|the) tower\b|\bwhy are they proud\b/;
+const H_ASK = /\bwhat do (they|the people|people) feel\b|\bare they (angry|afraid|happy)\b|\bdo they want to rebel\b|\bhow do (the people of [a-z' -]+|they|people|[a-z]+) feel\b|\bwhy are they angry\b|\bwhat do (they|the people) think of me\b/;
+const T_NEG = /\b(don't|do not|never|not|no)\b/;
+
+function arcIntents(c: SignClause, p: Planet): boolean {
+  const { cx, full: f, mods } = c;
+  const u = cx.u;
+  const named = p.people?.settlements.find((s) => s.fallen < 0 && !s.band && wordAt(f, s.name.toLowerCase()) >= 0);
+  const sid = mods.place?.settlement ?? named?.id;
+  if (H_ASK.test(f)) { cx.answered = true; return c.ask(heartWords(u, p.id, sid)); }
+  if (T_ASK.test(f)) { cx.answered = true; return c.ask(currentTower(u, p.id) || !/\bproud\b/.test(f) ? towerWords(u, p.id) : heartWords(u, p.id, sid)); }
+  const rising = currentTower(u, p.id)?.status === 'rising';
+  const act = T_CONFUSE.test(f) ? 'confuse' : T_STRIKE.test(f) ? 'strike' : T_LET.test(f) || (rising && T_LET_SOFT.test(f)) ? 'let'
+    : T_WARN.test(f) || (rising && T_WARN_SEND.test(f)) ? 'warn' : null;
+  if (!act) return false;
+  // a negation never does the act it negates ("do not strike the tower", "don't confuse their tongues")
+  const at = f.search(act === 'confuse' ? T_CONFUSE : act === 'strike' ? T_STRIKE : act === 'let' ? (T_LET.test(f) ? T_LET : T_LET_SOFT) : T_WARN.test(f) ? T_WARN : T_WARN_SEND);
+  if (T_NEG.test(f.slice(0, Math.max(0, at)))) return c.ask('Then answer the tower another way: confuse their tongues, strike it down, warn the builders, or let it stand.');
+  if (act === 'warn') {
+    const person = live(c, f, ['agent']);
+    c.add(person ? { k: 'tower.warn', agent: person.id } : { k: 'tower.warn' }, 'warn the builders');
+  } else c.add({ k: `tower.${act}` }, act === 'confuse' ? 'confuse their tongues' : act === 'strike' ? 'strike down the tower' : 'let the tower stand');
+  return true;
 }
 
 /**

@@ -51,7 +51,7 @@ import { pilgrimageDaily, pilgrimTask, registerSacredCommands, sacredAnimalAct, 
 import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors.ts';
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
-import { heartsDaily, heartSigns, heartsQuery, heartView, registerArcCommands } from './arc.ts';
+import { duskKeep, heartsDaily, heartSigns, heartsQuery, heartView, personHeart, registerArcCommands } from './arc.ts';
 import { leagueDamp, registerTowerCommands, towerDaily, towerTask, towerViews, towersQuery } from './tower.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
@@ -347,10 +347,15 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
       if (!r.vespers || x.tick - r.vespers.t > x.day / 2) r.vespers = { t: x.tick, went: [] };
       const ev = r.vespers;
       const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * piety * faith) * (league ? 0.8 : 1);
-      if (!ev.went.includes(A.id[s]) && hashFloat(A.id[s], ev.t, 0xe7e5) < attend) {
+      if (!ev.went.includes(A.id[s]) && !ev.away?.includes(A.id[s]) && hashFloat(A.id[s], ev.t, 0xe7e5) < attend) {
+        // ARC §1.2: a frightened, defiant or restless heart keeps some of those it draws at home (the shrine empties)
+        if (!(A.flags[s] & AgentFlag.child) && hashFloat(A.id[s], ev.t, 0xa7d5) >= duskKeep(personHeart(A, s, r.defiance ?? 0, r.pride ?? 0))) {
+          (ev.away ??= []).push(A.id[s]);
+        } else {
         ev.went.push(A.id[s]);
         const place = worshipPlace(x, st);
         return { kind: TASK.worship, goal: spotInCell(x.p, place.cell, A.id[s], 0xe7e6, [0, 0, 0]), goalCell: place.cell, work: 30 + Math.round(30 * hashFloat(A.id[s], ev.t, 0xe7e7)), target: place.id };
+        }
       }
     }
   }
@@ -545,7 +550,7 @@ function duskBell(x: PCtx, st: Settlement): void {
   const ev = r.vespers;
   for (const s of x.ps.members.get(st.id) ?? []) {
     if (!DUSK_STOP.has(A.task[s]) || A.flags[s] & AgentFlag.child || A.mission[s] || A.camp[s] >= 0) continue;
-    if (ev.went.includes(A.id[s])) continue;
+    if (ev.went.includes(A.id[s]) || ev.away?.includes(A.id[s])) continue;
     const i = s * GODS;
     const faith = A.faith[i];
     const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * A.traits[s * NT + TRAIT.piety] * faith);

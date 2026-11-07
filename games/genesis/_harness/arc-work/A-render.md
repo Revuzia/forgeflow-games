@@ -97,3 +97,9 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
    here AND tell STATE/sim ledger (§10.3c is the render lane's shot).
 5. LOOK: arc-tower-* (7) and arc-pose-* (fear now shows WALKERS with heads back = HEART_WALK 44; fist = 45 / 41 / 43;
    hurl + pebbles + arcs stats).
+
+### Stint 3 (2026-11-07 06:00Z-) — container restarted ~05:59Z (all stint-2 PIDs gone)
+- stint-2 gate check.log was cut by the restart at test 518 (518 ok, 0 not ok).
+- 06:00Z gate relaunched: bash -c 'slot.sh npm run check; echo exit $?' -> _harness/scratch/arc/render/check.log (pid file check.pid).
+- 06:10Z chain relaunched (pid file chain.pid): river-warning, render-tower, render-hearts, render-perf (perf spec cut
+  to 30-frame measures; 90 never finished at load 12+). Logs shots-<spec>.log.

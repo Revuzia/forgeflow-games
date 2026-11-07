@@ -59,3 +59,6 @@
 5. defiance.set debug; _harness/probes/arc.ts multi-seed T2 (unattended 8 seeds x 60 y: towers on 2-5/8, none < y10,
    median first 15-35, <= 2 attempts) -> tune TOWER.towerChance; T4 (>= 50 % goal in <= 6 y, >= 2 omens, builder on site).
 6. §10: "other disasters unmoved" comparison; river shot was being run by another lane (slot 1, port 5312, 03:58Z).
+
+### Stint 3 (2026-11-07 ~06:00Z)
+- stint-2 full gate check2.log: 798/798 PASS.

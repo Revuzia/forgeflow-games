@@ -31,6 +31,8 @@ import { planBuilding, canBuild } from '../people/buildings.ts';
 import { hashFloat } from '../core/rng.ts';
 import { NS } from '../people/defs.ts';
 import { AgentFlag } from '../types.ts';
+import { cellPos, distM } from '../people/world.ts';
+import { srel } from '../god/regard.ts';
 
 /** a scenario's people entry (scenarios.json "peoples") */
 interface PeopleEntry {
@@ -48,6 +50,15 @@ interface PeopleEntry {
   store?: Record<string, number>;
   /** (phase 4) buildings standing there besides what its era raises (building ids) */
   buildings?: string[];
+  /** (ARC §6.8) `towns` settlements of this people at the scenario's era (sizes from `settlements`, else 'town'), each
+   * of `count` people, the first at the best site and the rest within `km` of each other, all sharing the first one's
+   * tongue (one language line); `knowledge` / `store` / `buildings` go to every one of them */
+  cluster?: { towns: number; km: number };
+  /** (ARC §6.8) each town's pride preset (its `since.arc0` set `prideYears` years back so the hearts do not refill it) */
+  pride?: number;
+  prideYears?: number;
+  /** (ARC §6.8) arm each town for the tower trigger (tower.ts towerDaily skips world age, gap and the roll) */
+  towerArm?: boolean;
 }
 
 const DEG = Math.PI / 180;
@@ -130,6 +141,7 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     // "planet" counts the scenario's own planets (moons are not counted)
     const p = u.planet(topIds[raw.planet] ?? -1);
     if (!p || !raw.species) continue;
+    if (raw.cluster) { clusterPeople(u, p, raw); progress('peoples'); continue; }
     const sizes = raw.settlements && raw.settlements.length ? raw.settlements : [null];
     const era = Math.max(0, ERAS.indexOf((raw.era ?? 'stone') as (typeof ERAS)[number]));
     const weight = (sz: string | null) => (sz === 'city' ? 2 : sz === 'town' ? 1.2 : 1);
@@ -196,6 +208,54 @@ function scenarioSite(u: Universe, p: Planet, species: string): number {
   if (t.cold >= tMin && t.hot <= tMax) return best;
   // (a livable site a little poorer in water or game is a better home than one whose winter kills)
   return good >= 0 && gs >= Math.min(bs * 0.6, bs - 2.5) ? good : best;
+}
+
+/**
+ * ARC §6.8 (`babel`): a cluster of towns of one people and one speech. The first at the scenario site; each next one on
+ * the best-scoring dry cell 2.5 km or more from every town already set and within km/2 of the first (so every pair is
+ * within km); each takes the first's tongue (langSeed, language and langLine: langDistance 0). Pride, arc0 and the tower
+ * arm are written on the god layer's settlement records.
+ */
+function clusterPeople(u: Universe, p: Planet, raw: PeopleEntry): void {
+  const x = makeCtx(u, p);
+  const sp = x.c.species.idx(raw.species);
+  const n = Math.max(1, Math.min(8, Math.round(raw.cluster!.towns)));
+  const half = Math.max(3000, (raw.cluster!.km * 1000) / 2);
+  const era = ERAS[Math.max(0, ERAS.indexOf((raw.era ?? 'stone') as (typeof ERAS)[number]))];
+  const made: Settlement[] = [];
+  for (let i = 0; i < n; i++) {
+    let cell = -1;
+    if (!made.length) cell = scenarioSite(u, p, raw.species);
+    else {
+      const first = made[0].pos;
+      let bs = -Infinity;
+      const tmp = [0, 0, 0];
+      for (let c = 0; c < p.count; c++) {
+        if (p.f.water[c] > 0.05) continue;
+        cellPos(p, c, tmp);
+        if (distM(p, tmp, first) > half) continue;
+        if (made.some((s) => distM(p, tmp, s.pos) < 2500)) continue;
+        const v = (sp >= 0 ? siteScore(x, sp, c) : 0) + hashFloat(c, i, 0xba1e) * 0.6;
+        if (v > bs) { bs = v; cell = c; }
+      }
+    }
+    const sz = raw.settlements?.[i] ?? raw.settlements?.[0] ?? 'town';
+    const st = spawnPeople(u, p, { species: raw.species, count: Math.max(4, Math.round(raw.count)), era, settled: true, size: sz, ...(cell >= 0 ? { cell } : {}) });
+    if (!st) continue;
+    if (made.length) {
+      const root = made[0];
+      st.langSeed = root.langSeed; st.language = root.language;
+      st.langLine = (root.langLine.length ? root.langLine : [root.langSeed]).slice();
+    }
+    made.push(st);
+    if (raw.knowledge?.length || raw.store || raw.buildings?.length) advance(u, p, st, raw);
+  }
+  for (const st of made) {
+    if (raw.pride === undefined && !raw.towerArm) continue;
+    const r = srel(u, p.id, st.id);
+    if (raw.pride !== undefined) { r.pride = Math.round(raw.pride * 1000) / 1000; r.since.arc0 = -Math.round((raw.prideYears ?? 20) * x.year); }
+    if (raw.towerArm) r.since.towerArm = 1;
+  }
 }
 
 /**
