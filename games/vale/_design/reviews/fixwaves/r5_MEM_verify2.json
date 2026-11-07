@@ -1,0 +1,63 @@
+{
+  "lane": "MEM",
+  "verifier": "verify 2 (adversarial)",
+  "at": "2026-11-07T13:12:00-06:00",
+  "head": "52680f50f",
+  "pass": false,
+  "summary": "FAIL. The refix changed no client code: git diff 4717d3084..HEAD touches only _harness/probe_match_memory.mjs, so the client is the same one verify 1 failed. I re-measured it in the production client (vite build of HEAD) with heavy.py run -- node _harness/probe_match_memory.mjs --raw-cdp --full-scale --fake-audio --track. High RIFT/BRIDGE/RIFT/RIFT peaked at 2454/2565/2712/2646 MB. The third match's RIFT is +258 over the first RIFT, which fails ruling 27's 150 MB climb clause. Its peak came at 260 s, not in the start transient (start transient -146). Live objects were only +10.2 MB over the first RIFT. The residue was +240.8 MB: renderer +120, GPU +129. Ultra in a different order, BRIDGE/RIFT/BRIDGE/RIFT, peaked at 2586/2885/2550/2664: BRIDGE -36, RIFT -221, so it passes on Ultra. Every match is <= 3000 MB (max 2885, Ultra RIFT, margin 115). Every Home is <= 2500 MB (max 1354). The Home live set stays within +19 MB of first Home. Load was 2.9-341.85 because other lanes were running heavy jobs, so the probe verdict is NOT MEASURED (busy) and the numbers are raw readings. typecheck exit 0, probe 55/55 PASS.",
+  "load": "High run 2.86-341.85 (112 of 112 readings busy), Ultra run 5.62-341.85 (115 of 115 busy); probe suite ran during the High run's first match",
+  "items": [
+    {
+      "id": "MEM-3",
+      "claimed": "partly",
+      "status": "fail",
+      "severity": "blocker",
+      "evidence": "Report _harness/_reports/fw_r5_memv2_high4.json (.log), preset 'high, dynamic resolution off'. Peaks and load max: RIFT 2454 at 1 s (18.44), BRIDGE 2565 at 1 s (115.46), RIFT 2712 at 260 s (60.22), RIFT 2646 at 193 s (341.85). Climb +258 then -66. The third match's RIFT fails against 150. r27.overFirst for that RIFT: steady total +251, live +10.2 (tex +3.1, buffers +7.2, heap +11.5, backing +5.7, audio -17.3; texDelta only '512x512 RGBA8 +3 (+4 MB)'), residue +240.8 (renderer +120, GPU +129). The fourth RIFT: steady +241, live -28.6, residue +269.6. Each match had a different lineup (logged), but the live delta is tiny, so roster variance does not explain this climb. The engineer said the High climb that still fails 'is the start transient at 1 s'. That does not hold here: the over-bar peak is steady state, mid-match. Ultra (_harness/_reports/fw_r5_memv2_ultra4.json, preset 'ultra, dynamic resolution off'), order BRIDGE/RIFT/BRIDGE/RIFT: 2586 at 283 s (115.46) / 2885 at 288 s (71.67) / 2550 (341.85) / 2664 (11.61). Climbs -36 and -221, pass. The second Ultra RIFT's live tex was 1226 MB against 1130 for the fourth: -96 MB, 4 fewer 2048 maps. VfxPass.pre attribution checked in src/render/post.ts:259-288. The copy is made lazily on the first lift and freed by releaseMatchTargets (renderer.ts:664). Every Home holds GL tex 55/293.1 MB (High) and 55/353.1 MB (Ultra), so it does not survive leave. That part of the refix is correct. Taken together across verify 1, the engineer's reruns and this run: the residue (renderer PartitionAlloc and GPU process, live objects equal) makes the third or later same-map match on High climb 240-270 MB in 3 of 3 High runs. No client change was made. Ruling 27 excuses only Home retention, not match climb. Load here was very high, which may inflate the residue, but it was also high in the first RIFT (18.44).",
+      "fixHint": "Either find a client lever for the renderer/GPU residue after the second match, such as WEBGL_lose_context on leave and a fresh context per match, a periodic renderer.dispose of program/texture caches, or a smaller IOSurface swapchain churn, or get the lead to rule on whether the climb clause reads live objects. Then re-read High RIFT/BRIDGE/RIFT/RIFT on an idle machine (load < 3). The bar is not to be relaxed by the lane."
+    },
+    {
+      "id": "MEM-4",
+      "claimed": "not_done",
+      "status": "partly",
+      "severity": "major",
+      "evidence": "No code change for MEM-4 since verify 1. Start transients in my runs (first 20 s max minus steady max): High RIFT +30, BRIDGE +7, RIFT -146, RIFT -98. Ultra -178/-66/-115/-17. All are within the about-100 MB target. At load 11-341 the steady max is inflated, though, and verify 1 at load 1.9-7.7 read +106/+113/+140, and the engineer's refix read +120..+221 at load 5.7-12.3. Two High peaks are still at 1 s (RIFT 2454, BRIDGE 2565). The draft-bed (audio) and loading-to-HUD raster (UI) causes were handed off and are not fixed in src/audio or src/ui, so the transient is not shown cut. It is not a pass at idle.",
+      "fixHint": "Audio: release the four mus_draft* beds (46.8 MB decoded) at the match's first frame. UI: drop the loading screen's layers and raster before the HUD shows. Then re-read the transient at load < 3 on High and Ultra, both maps."
+    },
+    {
+      "id": "TABLE",
+      "claimed": "done",
+      "status": "partly",
+      "severity": "minor",
+      "evidence": "The engineer's tables (fw_r5_mem_rf_high4, fw_r5_mem_rf_ultra3) exist and match the commit text. My table follows. High: Homes 770 silent / 877 / 1136 / 1267 / 1282 / 1277, live over first Home +9.0/+11.3/+15.5/+18.0. Pre-HUD peaks 2014/2286/2415/2380. Ultra: Homes 886 silent / 995 / 1333 / 1354 / 1354 / 1319, live +8.4/+13.2/+14.2/+19.0. Pre-HUD peaks 2218/2526/2377/2393. The probe's lineup read is null for the first two Ultra matches (fw_r5_memv2_ultra4 r27 matches 1-2), so attribution by roster is incomplete there. No table yet is at load < 3, which the gate needs.",
+      "fixHint": "Make the lineup read reliable (it is null in 2 of 4 Ultra matches) and produce the table on an idle machine."
+    },
+    {
+      "id": "BARS",
+      "claimed": "n/a",
+      "status": "pass",
+      "severity": "minor",
+      "evidence": "Ruling 20: every match <= 3000 MB (max 2885, Ultra second match RIFT, margin 115) and every Home <= 2500 MB (max 1354). Ruling 27's live-set clause: every Home is <= +19.0 MB over first Home (gate 150). No bitmaps open at any Home (0/0 MB)."
+    },
+    {
+      "id": "REGRESSION",
+      "claimed": "n/a",
+      "status": "pass",
+      "severity": "minor",
+      "evidence": "npm run -s typecheck exit 0. npm run -s probe: 55 passed, 0 failed (407.5 s). No client source changed since verify 1, so no new UI to look at at 1280x720 or 1920x1080. Tracked _harness/_reports files are unchanged (git status clean for _harness and src). No harness Chrome left running."
+    },
+    {
+      "id": "NOT_COVERED",
+      "claimed": "n/a",
+      "status": "not_measured",
+      "severity": "minor",
+      "evidence": "Not measured by me: the device audio sink (this Mac's output is stalled by the simulators' coreaudiod devices, round 4 fact), Esc after casting or with the shop open, and a device change mid-match. The memory probe does not drive these, and no client code changed that would affect them since verify 1."
+    }
+  ],
+  "regressions": [],
+  "commands": [
+    "heavy.py run -- node _harness/probe_match_memory.mjs --raw-cdp --full-scale --fake-audio --track --modes rift,bridge,rift,rift --out _harness/_reports/fw_r5_memv2_high4.json --shots _harness/_shots/fw_r5_memv2_high4",
+    "heavy.py run -- node _harness/probe_match_memory.mjs --no-build --raw-cdp --full-scale --fake-audio --track --preset ultra --modes bridge,rift,bridge,rift --out _harness/_reports/fw_r5_memv2_ultra4.json --shots _harness/_shots/fw_r5_memv2_ultra4",
+    "npm run -s typecheck",
+    "npm run -s probe"
+  ]
+}
