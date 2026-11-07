@@ -164,10 +164,18 @@ function calmHeld(W, b, drop) {
   const P = bb.path;
   if (CALM_ROUTE_ONLY && P && P.length && P[0]) {
     const px = P[0].x - a.pos.x, pz = P[0].z - a.pos.z, pd = Math.sqrt(px * px + pz * pz);
-    if (pd > 0.5 && px * bb.edgeBanX + pz * bb.edgeBanZ < 0.7071 * pd) { nav.st.calmLag++; return; }
+    if (pd > 0.5 && px * bb.edgeBanX + pz * bb.edgeBanZ < 0.7071 * pd) {
+      // (W9 R1 fix2 mergefix) ...for CALM_LAG_S only: a yaw lag lasts a few frames, so a bot still held off its route's heading CALM_LAG_S after the
+      // first such hold here (within CALM_RP_M, inside CALM_HOLD_WIN_S) re-plans as any other hold - and its failed re-plans reach the trap breaker.
+      const lx = a.pos.x - bb.calmLagX, lz = a.pos.z - bb.calmLagZ;
+      if (!(W.t - bb.calmLagT0 <= CALM_HOLD_WIN_S) || lx * lx + lz * lz > CALM_RP_M * CALM_RP_M) { bb.calmLagT0 = W.t; bb.calmLagX = a.pos.x; bb.calmLagZ = a.pos.z; }
+      if (W.t - bb.calmLagT0 < CALM_LAG_S) { nav.st.calmLag++; return; }
+      nav.st.calmLagOut++;
+    }
   }
   bb.edgeReplan = true;
 }
+const CALM_LAG_S = 1.5;           // (W9 R1 fix2 mergefix) the longest a calm hold off the route's heading is put down to yaw lag
 const CALM_ROUTE_ONLY = true;     // (W9 R1 fix mergefix) false = every calm hold re-plans, as before (probe_match --pencheck --plant no-calm-lag)
 const CALM_RP_S = 3, CALM_RP_M = 2;   // (W9 R1B) a calm hold this soon after, and this near to, the last calm re-plan's route = that route failed
 /** (W9 R1B) ...and that re-plan found no route (or its route led straight back: calmHeld). CALM_HOLD_N of them inside CALM_HOLD_WIN_S: the trap
@@ -3384,7 +3392,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, edgeEarly: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, calmLag: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, edgeJumps: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, edgeEarly: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, calmLag: 0, calmLagOut: 0, edgeEarlyMemo: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, edgeJumps: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -5564,6 +5572,10 @@ function routeTurnsBefore(W, b, wx, wz, faceD, elevated) {
   // up to EDGE_EARLY_M, never behind the bot or the waypoint before it), and only where the grid's own walk (navgrid walkSegment, the mover replayed)
   // certifies the cut leg from there to the next waypoint. The new waypoint is a corner by mark (edgeTurn): the cut leg turns less than 45 deg.
   if (!EDGE_EARLY || !P.nav || !nav.ready || !nav.G || !nav.world || elevated) return false;
+  // (W9 R1 fix2 mergefix) a failed search is remembered on the waypoint: the same heading (within ~1.8 deg) from no farther away has a subset of
+  // the same candidates on the same static ground and grid, so a bot held at a lip does not repeat up to 6 run-on scans + 6 walkSegment replays
+  // on every edgeGuard probe (a new route = new waypoint objects = a fresh search).
+  if (p.eeNoD != null && d <= p.eeNoD + 1e-6 && wx * p.eeNoWx + wz * p.eeNoWz >= 0.9995) { nav.st.edgeEarlyMemo++; return false; }
   const back = pi0 > 0 ? Math.hypot(p.x - P[pi0 - 1].x, p.z - P[pi0 - 1].z) - 0.3 : d - 0.3;
   for (let s = 0.2; s <= EDGE_EARLY_M + 1e-6 && s <= back && s <= d - 0.3; s += 0.2) {
     const cx = p.x - wx * s, cz = p.z - wz * s;
@@ -5575,6 +5587,7 @@ function routeTurnsBefore(W, b, wx, wz, faceD, elevated) {
     nav.st.edgeEarly++;
     return true;
   }
+  p.eeNoD = d; p.eeNoWx = wx; p.eeNoWz = wz;
   return false;
 }
 const EDGE_TURN_COS = 0.95;       // (W9 R1 fix mergefix) a waypoint where the route turns by more than 18 deg is a corner (was 45 deg: the Coco Village terrace
