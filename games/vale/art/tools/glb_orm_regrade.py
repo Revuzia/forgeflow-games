@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""VALE art (lane GF, GF-1): re-grade a shipped fighter GLB's ORM in place; mesh, skin and clips stay byte-identical
-(glb_image_swap.py), so post-build GLB edits survive and no Blender is needed.
+"""VALE art (lane GF, GF-1 experiment tool, NOT part of any build): re-grade a fighter GLB's ORM into a new file; mesh, skin and
+clips stay byte-identical (glb_image_swap.py), so post-build GLB edits survive and no Blender is needed.
 
     python3 art/tools/glb_orm_regrade.py in.glb --out out.glb [--curve 0.5:0.34,0.74:0.46,...] [--part coat:0.6 --sid burdam]
         [--dilate] [--zero-metal] [--q 82] [--size N]
@@ -12,13 +12,13 @@
                camera (specks of false gloss). A filled gutter also encodes smaller.
 --zero-metal   B = 0 (the bible's metal 0; lossy chroma bleed leaves a residue up to 0.39 under metallicFactor 1)
 --size N       resize the ORM (data resampled before dilate and grade)
---grade        the shipped grade (ROUGH_CURVE + --dilate + --zero-metal) in place, stamped asset.extras.vale_orm_grade; a stamped
-               GLB is refused (the curve must not apply twice). --check: list GLBs without the stamp (exit 1): a rebuild drops it
 Prints sizes; the output is verified byte-identical outside the images.
 
-THE SWITCH (GF-1): ROUGH_CURVE is the whole look. Identity below 0.25 (glass keeps 0.12-0.2), the sheen classes (lacquer 0.5,
-wood, stone, waxed leather up to 0.8) spread to 0.35-0.47 (STYLE_BIBLE band floor 0.35), matte cloth from 0.87 up unchanged, so a
-part's material class reads against its neighbour's. Revert: the commit's GLBs, or git history of the ORM."""
+GF-1 WAS REJECTED AND REVERTED (_design/reviews/fixwaves/GFX_GF_verify1.json): no fighter GLB carries a grade, nothing has to be
+re-applied after a rebuild. Curve tried on all 48 GLBs, ac10d5386: 0:0,0.25:0.25,0.5:0.35,0.6:0.37,0.74:0.41,0.8:0.47,0.87:0.86,
+0.95:0.95,1:1 with --dilate --zero-metal. 0.014-0.048 % of a teamfight frame changed at 28.5 m and 31 m, not visible; on the
+Collection stage it put brown streaks on Vashil's robes (cloth in the sheen classes) and a second lossy encode moved AO and
+brought metal back. A Collection-only polish would have to exempt cloth through the part map and re-judge Vashil and Marund."""
 from __future__ import annotations
 
 import argparse
@@ -32,11 +32,6 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from chain_motion import accessor  # noqa: E402
 from glb_image_swap import image_bytes, image_index, read_glb, swap_images, verify_same_geometry, write_glb  # noqa: E402
-
-
-ROUGH_CURVE = "0:0,0.25:0.25,0.5:0.35,0.6:0.37,0.74:0.41,0.8:0.47,0.87:0.86,0.95:0.95,1:1"
-GRADE_STAMP = "gf1-1"
-GLB_BUDGET = 1172 * 1024
 
 
 def uv_mask(js, b, size: int, material_image_suffix="_base") -> np.ndarray:
@@ -86,7 +81,7 @@ def parse_curve(s: str):
     return np.array([p[0] for p in pts]), np.array([p[1] for p in pts])
 
 
-def regrade(path: str, out: str, curve=None, parts=None, sid=None, dilate=False, zero_metal=False, q=82, size=None, method=6, stamp=None):
+def regrade(path: str, out: str, curve=None, parts=None, sid=None, dilate=False, zero_metal=False, q=82, size=None, method=6):
     js, b = read_glb(path)
     i = image_index(js, "_orm")
     src = Image.open(io.BytesIO(image_bytes(js, b, i))).convert("RGB")
@@ -118,8 +113,6 @@ def regrade(path: str, out: str, curve=None, parts=None, sid=None, dilate=False,
     buf = io.BytesIO()
     Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype("uint8")).save(buf, "WEBP", quality=q, method=method)
     js2, b2 = swap_images(js, b, {i: buf.getvalue()})
-    if stamp:
-        js2.setdefault("asset", {}).setdefault("extras", {})["vale_orm_grade"] = stamp
     total = write_glb(out, js2, b2)
     if not verify_same_geometry(path, out):
         raise SystemExit(f"{out}: non-image bytes changed")
@@ -130,10 +123,8 @@ def regrade(path: str, out: str, curve=None, parts=None, sid=None, dilate=False,
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("glb", nargs="+")
+    ap.add_argument("glb")
     ap.add_argument("--out")
-    ap.add_argument("--grade", action="store_true")
-    ap.add_argument("--check", action="store_true")
     ap.add_argument("--curve")
     ap.add_argument("--part")
     ap.add_argument("--sid")
@@ -142,27 +133,6 @@ def main():
     ap.add_argument("--q", type=int, default=86)
     ap.add_argument("--size", type=int)
     A = ap.parse_args()
-    if A.check or A.grade:
-        bad = 0
-        for g in A.glb:
-            js, _ = read_glb(g)
-            st = (js.get("asset", {}).get("extras") or {}).get("vale_orm_grade")
-            if A.check:
-                if st != GRADE_STAMP:
-                    bad += 1
-                    print(f"{g}: no ORM grade (a rebuild drops it: glb_orm_regrade.py --grade)")
-                continue
-            if st:
-                print(f"{g}: already graded ({st}), skipped")
-                continue
-            tmp = g + ".grade.tmp"
-            q = A.q
-            limit = os.path.getsize(g) if os.path.getsize(g) > GLB_BUDGET else GLB_BUDGET
-            while regrade(g, tmp, parse_curve(ROUGH_CURVE), None, None, True, True, q, None, stamp=GRADE_STAMP) > limit and q > 50:
-                q -= 6                       # a base fighter stays inside the build budget (export.py, 1172 KiB)
-            os.replace(tmp, g)
-        sys.exit(1 if bad else 0)
-    A.glb = A.glb[0]
     parts = {k: float(v) for k, v in (p.split(":") for p in A.part.split(","))} if A.part else None
     regrade(A.glb, A.out, parse_curve(A.curve) if A.curve else None, parts, A.sid, A.dilate, A.zero_metal, A.q, A.size)
 
