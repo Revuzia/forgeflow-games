@@ -702,6 +702,7 @@ uniform int uLightSteps;
 uniform float uFrame;
 uniform float uCloudBright;
 uniform float uNearR;     // the near zone (m) where cloud at the lens dissolves into fog
+uniform vec2 uLensClear;  // ARC §10 (planet/silt.ts siltLensClear): x reach (m) along the ray, y strength 0..1
 uniform float uCamFog;    // 0..1: the camera is inside the shell (in-cloud fog from the local density)
 uniform float uInsideAir; // 0 seen from space .. 1 from inside the air (art-directed low-sun reddening)
 uniform float uCamMuS;    // sine of the sun's elevation at the camera
@@ -937,7 +938,7 @@ void main() {
     float hn;
     cl_fp = 0.5;
     float c = cloudDetailed(o, hf, wx.x, wx.y, wx.z, wx.w, 0.0, hn);
-    float dens = densityOf(c, wx.y) * uCamFog;
+    float dens = densityOf(c, wx.y) * uCamFog * (1.0 - 0.9 * uLensClear.y);
     if (dens > 1e-5) {
       vec3 up = o / r0;
       ambTop = skyIrradiance(up, up, sun) / PI;
@@ -1014,6 +1015,8 @@ void main() {
       float c = cloudDetailed(p, hf, wx.x, wx.y, wx.z, wx.w, nearK, hn);
       // the near zone dissolves (the in-cloud fog above stands in for it)
       float dens = densityOf(c, wx.y) * (uCamFog > 0.0 ? smoothstep(uNearR * 0.25, uNearR, tm) : smoothstep(2.0, 12.0, tm)) * limbDim;
+      // ARC §10: over a warned river the cloud between the god's eye and the ground thins (the deck beyond stays)
+      if (uLensClear.y > 0.0) dens *= 1.0 - 0.9 * uLensClear.y * (1.0 - smoothstep(uLensClear.x * 0.7, uLensClear.x, tm));
       nSamp += 1.0;
       if (dens <= 1e-5) {
         empty++;
@@ -1345,6 +1348,8 @@ export interface CloudInputs {
    * and reach r (m) of up to four flashes lighting the cloud from within
    */
   flashes?: readonly { x: number; y: number; z: number; w: number; r: number }[];
+  /** (additive, ARC §10: planet/silt.ts siltLensClear) thin the cloud within r m of the lens by k over a warned river */
+  lensClear?: { r: number; k: number };
 }
 
 /**
@@ -1458,7 +1463,7 @@ export class CloudPass {
       uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() },
       uWorldToBody: { value: new Matrix3() }, uFar: { value: 2e7 }, uPlanetPos: { value: new Vector3() },
       uSunDir: { value: new Vector3(1, 0, 0) }, uShell: { value: new Vector2(3180, 3420) }, uSteps: { value: 48 },
-      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.9 }, uNearR: { value: 35 }, uCamFog: { value: 0 },
+      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.9 }, uNearR: { value: 35 }, uLensClear: { value: new Vector2(0, 0) }, uCamFog: { value: 0 },
       uInsideAir: { value: 1 }, uCamMuS: { value: 1 }, uFullRes: { value: new Vector2(4, 4) }, uOffset: { value: new Vector2() }, uK: { value: 2 },
       uPixelAngle: { value: 0.001 }, uNearDetail: { value: 1 }, uCirrus: { value: 0.4 }, uCirrusR: { value: 3528 },
       uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonE: { value: new Vector3() }, uDebugView: { value: 0 }, uAurora: { value: new Vector4() },
@@ -1633,6 +1638,7 @@ export class CloudPass {
     const edge = 20;
     u.uCamFog.value = Math.min(1, Math.max(0, (r0 - i.innerR + edge) / edge)) * Math.min(1, Math.max(0, (i.outerR + edge - r0) / edge));
     u.uNearR.value = 35;
+    (u.uLensClear.value as Vector2).set(i.lensClear?.r ?? 0, i.lensClear?.k ?? 0);
     // the air's thickness from the shell (which spans 30–70 % of it): inside the air below ~1 thickness, space above 2
     const hi = i.outerR - i.radius;
     const thickAir = hi / 0.7;

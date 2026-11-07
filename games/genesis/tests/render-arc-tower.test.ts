@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { TOWER_SETBACK, TOWER_TIER_M, towerKey, towerLook, towerMesh, towerShape, towerYaw } from '../src/render/life/tower.ts';
+import { TOWER_SETBACK, TOWER_TIER_M, towerBaseHalf, towerClearR, towerClearings, towerKey, towerLook, towerMesh, towerShape, towerYaw } from '../src/render/life/tower.ts';
 import type { TowerView } from '../src/sim/types.ts';
 
 function view(o: Partial<TowerView> = {}): TowerView {
@@ -85,4 +85,66 @@ test('the confusion ring: 8 km, its light running round the colour wheel, soft (
   const a = confuseHue(0, 0), b = confuseHue(3, 0), c = confuseHue(0, 1);
   assert.notDeepEqual(a, b); assert.notDeepEqual(a, c);
   for (const col of [a, b, c]) { for (const x of col) assert.ok(x >= 0.29 && x <= 1); assert.ok(Math.max(...col) - Math.min(...col) >= 0.6); };
+});
+
+test('the site is cleared: no tree, shrub or ground cover on the base, the stair foot, the piles or the struck mound (owner #9)', () => {
+  for (const goal of [24, 80, 120]) {
+    const b0 = towerBaseHalf(goal);
+    const struck = towerShape(towerLook(view({ goal, status: 'struck', height: 12, tiers: 6, ended: 0 }), 0, YEAR));
+    const r = towerClearR(goal);
+    assert.ok(r >= Math.SQRT2 * b0 + 4, 'past the base square\'s corners');
+    assert.ok(r >= b0 + TOWER_TIER_M * 1.4, 'past the stair\'s foot');
+    assert.ok(r >= struck.moundR * (1.18 + 0.1 * 1.03), 'past the struck mound\'s outer skirt (with its lobes)');
+  }
+  const c = towerClearings([view({ pos: [0, 3000, 0] }), view({ id: 4, pos: [3000, 0, 0] })]);
+  assert.equal(c.at.length, 8);
+  assert.deepEqual(c.at.slice(0, 3), [0, 1, 0]);
+  // the signature changes when a tower is added, not when one rises or falls (no re-scatter of the forest)
+  assert.equal(towerClearings([view({ height: 10 })]).sig, towerClearings([view({ height: 60, status: 'struck' })]).sig);
+  assert.notEqual(towerClearings([view()]).sig, towerClearings([view(), view({ id: 9 })]).sig);
+  const veg = readFileSync(new URL('../src/render/life/vegetation.ts', import.meta.url), 'utf8');
+  assert.match(veg, /towerClearings\(pv\.towers\)/, 'trees and shrubs');
+  const gc = readFileSync(new URL('../src/render/life/groundcover.ts', import.meta.url), 'utf8');
+  assert.match(gc, /towerClearings\(pv\.towers\)/, 'ground cover');
+  assert.match(gc, /inTowerSite\(dx, dy, dz, R\)/);
+});
+
+/** mean vertex colour of a mesh */
+function meanCol(geo: { getAttribute(n: string): { array: ArrayLike<number>; count: number } }): [number, number, number] {
+  const a = geo.getAttribute('color'), m: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < a.count; i++) for (let j = 0; j < 3; j++) m[j] += a.array[i * 3 + j] / a.count;
+  return m;
+}
+
+test('a stone tower is warm stone in courses at every style, never blue-grey (owner #9)', () => {
+  for (let style = 0; style < 8; style++) {
+    const m = towerMesh(towerLook(view({ material: 'stone', style, status: 'finished', height: 60, goal: 60, tiers: 5 }), 0, YEAR));
+    const c = meanCol(m.geo as never);
+    assert.ok(c[0] > c[1] && c[1] > c[2], `style ${style}: warm (r > g > b): ${c.map((x) => x.toFixed(3))}`);
+    assert.ok(c[0] - c[2] > 0.08, `style ${style}: not a grey: ${c.map((x) => x.toFixed(3))}`);
+  }
+  // coursed faces: many distinct shades on the walls, not one flat colour per tier
+  const m = towerMesh(towerLook(view({ material: 'stone', style: 2, status: 'rising', height: 40 }), 0, YEAR));
+  const a = (m.geo as never as { getAttribute(n: string): { array: ArrayLike<number>; count: number } }).getAttribute('color');
+  const shades = new Set<number>();
+  for (let i = 0; i < a.count; i++) shades.add(Math.round(a.array[i * 3] * 400));
+  assert.ok(shades.size >= 20, `courses: ${shades.size} shades`);
+});
+
+test('the struck mound is a ragged, scorched heap of thrown blocks, not a neat ring (owner #9)', () => {
+  const l = towerLook(view({ status: 'struck', height: 24, tiers: 6, ended: 0 }), 0, YEAR);
+  const m = towerMesh(l);
+  const geo = m.geo as never as { getAttribute(n: string): { array: ArrayLike<number>; count: number } };
+  const p = geo.getAttribute('position'), col = geo.getAttribute('color');
+  const s = towerShape(l), b0 = towerBaseHalf(l.goal);
+  // the ground-level ring of the heap (y < 0.5, beyond the base): its radius varies by >= 15 % round the circle
+  let rmin = 1e9, rmax = 0, dark = 0, n = 0;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.array[i * 3], y = p.array[i * 3 + 1], z = p.array[i * 3 + 2];
+    const r = Math.hypot(x, z);
+    if (y < -1.4 && r > b0 * 1.2) { rmin = Math.min(rmin, r); rmax = Math.max(rmax, r); }
+    if (r > b0 * 1.05 && y > -0.5) { n++; if (col.array[i * 3] + col.array[i * 3 + 1] + col.array[i * 3 + 2] < 0.56) dark++; }
+  }
+  assert.ok(rmax / rmin > 1.3, `ragged outline ${rmin.toFixed(1)}..${rmax.toFixed(1)} (moundR ${s.moundR.toFixed(1)})`);
+  assert.ok(dark / n > 0.3, `scorched: ${(100 * dark / n).toFixed(0)} % dark`);
 });

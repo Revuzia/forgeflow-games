@@ -28,6 +28,7 @@ import {
 import type { PlanetView } from '../../client/worldview.ts';
 import type { BuildingBlock } from '../../sim/types.ts';
 import { buildingAt } from './catalog.ts';
+import { towerClearings } from './tower.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hash32, hashFloat } from '../../sim/core/rng.ts';
 import { SHRUB_KINDS, TREE_KINDS, treeGeometry, type TreeKind } from '../gen/treegen.ts';
@@ -559,6 +560,8 @@ export class Vegetation {
   private clearings = new Map<number, number[]>();
   private clearBlock: BuildingBlock | null = null;
   private clearSig = '';
+  /** ARC §2.6: the towers' clearings signature (their sites are felled like a building's plot) */
+  private towerSig = '';
   private lastCam = new Vector3(1e9, 0, 0);
   private lastFrame = -1e9;
   private material: MeshStandardMaterial;
@@ -740,8 +743,10 @@ export class Vegetation {
    */
   private syncClearings(pv: PlanetView): void {
     const b = pv.buildings ?? null;
-    if (b === this.clearBlock) return;
+    const tc = towerClearings(pv.towers);
+    if (b === this.clearBlock && tc.sig === this.towerSig) return;
     this.clearBlock = b;
+    this.towerSig = tc.sig;
     let h = 0;
     const n = b ? b.count : 0;
     if (b) {
@@ -752,7 +757,7 @@ export class Vegetation {
         h = (Math.imul(h, 31) + Math.round((b.scale[i] || 1) * 20)) | 0;
       }
     }
-    const sig = `${pv.id}|${n}|${h}`;
+    const sig = `${pv.id}|${n}|${h}|${tc.sig}`;
     if (sig === this.clearSig) return;
     this.clearSig = sig;
     const g = pv.grid, R = pv.params.radius;
@@ -772,6 +777,18 @@ export class Vegetation {
           if (!a) next.set(c, (a = []));
           a.push(ux, uy, uz, clear);
         }
+      }
+    }
+    // the towers' sites: the whole base, the stair's foot, the piles and the struck mound (a tree never stands on a
+    // terrace or grows out of the rubble)
+    for (let k = 0; k < tc.at.length; k += 4) {
+      const ux = tc.at[k], uy = tc.at[k + 1], uz = tc.at[k + 2], clear = tc.at[k + 3];
+      const c0 = g.nearestCell(ux, uy, uz);
+      const reach = clear + Math.sqrt(g.area[c0]) * R * 0.75;
+      for (const c of g.cellsWithin(ux, uy, uz, reach / R, _cells)) {
+        let a = next.get(c);
+        if (!a) next.set(c, (a = []));
+        a.push(ux, uy, uz, clear + SHRUB_CLOSER);
       }
     }
     let changed = false;

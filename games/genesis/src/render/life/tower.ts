@@ -59,12 +59,14 @@ export interface TowerShape {
 const BASE: Record<TowerView['material'], { surf: number; col: RGB }> = {
   mudbrick: { surf: SURF.mudbrick, col: [0.48, 0.33, 0.2] },
   brick: { surf: SURF.brick, col: [0.4, 0.15, 0.08] },
-  stone: { surf: SURF.ashlar, col: [0.4, 0.37, 0.33] },
+  // warm dressed limestone (was a cold neutral grey that read blue-grey under the sky)
+  stone: { surf: SURF.ashlar, col: [0.56, 0.47, 0.35] },
 };
 /** the culture's style variant (TowerView.style = the host's styleVariant): a small, stable shift of the brick's hue */
 const STYLE_TINT: RGB[] = [
-  [1, 1, 1], [1.06, 0.98, 0.9], [0.94, 0.97, 1.04], [1.08, 1.0, 0.86],
-  [0.96, 0.92, 0.9], [1.02, 1.04, 0.96], [0.9, 0.9, 0.92], [1.1, 0.96, 0.92],
+// (warm or neutral shifts only: a cool tint turned stone blue-grey)
+  [1, 1, 1], [1.06, 0.98, 0.9], [0.98, 0.97, 0.93], [1.08, 1.0, 0.86],
+  [0.96, 0.92, 0.9], [1.02, 1.04, 0.96], [0.93, 0.9, 0.86], [1.1, 0.96, 0.92],
 ];
 const TIMBER: RGB = [0.24, 0.16, 0.09];
 const SOOT: RGB = [0.06, 0.055, 0.05];
@@ -72,6 +74,27 @@ const AGED: RGB = [0.22, 0.2, 0.17];
 
 /** the base half width (m) of a tower whose goal is `goal` metres: its footprint does not change as it rises */
 export function towerBaseHalf(goal: number): number { return Math.max(22, Math.min(56, goal * 0.42)); }
+
+/**
+ * The ground a tower's site keeps clear of trees, shrubs and ground cover (m from its centre): the base square's corners,
+ * the stair's foot, the brick piles and the widest struck mound's charred skirt, with a trodden margin. It depends on the goal only, so
+ * the site is felled once when the tower is begun and never re-scattered as it rises, falls or weathers.
+ */
+export function towerClearR(goal: number): number { return towerBaseHalf(Math.max(TOWER_TIER_M, goal)) * 2.0 + 6; }
+
+/** the clearings of PlanetSnap.towers: [ux, uy, uz, radius m, ...] (unit direction) and a signature that changes only
+ *  when a tower is added, removed or moved */
+export function towerClearings(list: readonly TowerView[] | undefined): { sig: string; at: number[] } {
+  const at: number[] = [];
+  let sig = '';
+  for (const t of list ?? []) {
+    const l = Math.hypot(t.pos[0], t.pos[1], t.pos[2]) || 1;
+    const r = towerClearR(t.goal);
+    at.push(t.pos[0] / l, t.pos[1] / l, t.pos[2] / l, r);
+    sig += `${t.id}:${Math.round(r)}:${Math.round(t.pos[0] * 10)},${Math.round(t.pos[2] * 10)};`;
+  }
+  return { sig, at };
+}
 
 /** the TowerLook of a view at a tick (yearTicks: ticks per game year) */
 export function towerLook(t: TowerView, tick: number, yearTicks: number): TowerLook {
@@ -128,6 +151,7 @@ export function towerMesh(l: TowerLook): BuildingMesh {
   const em: Emitter[] = [];
   const n = s.halves.length;
   const rnd = (i: number, j = 0): number => hashFloat(l.id, i, j, 0x70f1);
+  const uv0 = k.vertexCount;
   let y = 0;
   for (let i = 0; i < n; i++) {
     const b = s.halves[i], rise = s.rises[i];
@@ -136,11 +160,12 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     const y0 = i === 0 ? -6 : y, y1 = y + rise;
     let c = mulc(col, 1 - 0.03 * (i % 2));
     if (s.scorched && isTop) c = mixc(c, SOOT, 0.7);
-    else if (s.scorched && i === n - 2) c = mixc(c, SOOT, 0.3);
+    else if (s.scorched && i === n - 2) c = mixc(c, SOOT, 0.4);
+    else if (s.scorched) c = mixc(c, SOOT, 0.18);
     if (s.crumbled && isTop && rise >= 3) {
       // the crumbled top: the lower part whole, the rest a broken crown of uneven blocks
       const keep = rise * 0.45;
-      frustum(k, b, b - (b - t) * 0.45, y0, y + keep, surf, PART.wall, c, mulc(c, 0.85));
+      frustum(k, b, b - (b - t) * 0.45, y0, y + keep, surf, PART.wall, c, mulc(c, 0.85), l.id * 13 + i);
       const nb = 10;
       for (let q = 0; q < 4; q++) {
         k.push(0, 0, 0, (q * Math.PI) / 2);
@@ -152,7 +177,7 @@ export function towerMesh(l: TowerLook): BuildingMesh {
         k.pop();
       }
     } else {
-      frustum(k, b, t, y0, y1, surf, PART.wall, c, mulc(c, 0.86));
+      frustum(k, b, t, y0, y1, surf, PART.wall, c, mulc(c, 0.86), l.id * 13 + i);
       // a coping course round the terrace edge
       for (let q = 0; q < 4; q++) {
         k.push(0, 0, 0, (q * Math.PI) / 2);
@@ -182,6 +207,9 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     }
     y = y1;
   }
+  // the tiers' masonry at its monumental scale: the surface's blocks / bricks ×2.2, so the coursing still reads at
+  // 150-400 m instead of fading to a flat wall
+  k.scaleUv(1 / 2.2, uv0);
   const top = y;
   const tb = n ? s.halves[n - 1] * 0.965 : towerBaseHalf(l.goal);
   if (s.scaffold && n) {
@@ -229,18 +257,30 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     em.push({ p: [0, top + 1.8, 0], kind: EMIT.brazier, size: Math.max(1.5, tb * 0.25) });
   }
   if (s.moundR > 0) {
-    // the fallen tiers: a ragged rubble ring round the base, scorched on top; broken blocks thrown on it
+    // the fallen tiers: a ragged, scorched rubble heap round the base (never a neat ring): an outer skirt of charred
+    // spill and ash, the heap itself with lobes where whole faces came down, and broken blocks and slabs of the
+    // tower's own masonry thrown and tilted on it
     const b0 = towerBaseHalf(l.goal), R = s.moundR, H = s.moundH;
-    const from = k.vertexCount;
-    k.lathe(0, 0, [[R, -1], [R * 0.92, H * 0.35], [(R + b0) * 0.5, H], [b0 * 0.98, H * 0.8]], 28, SURF.rubble, PART.wall, mixc(col, SOOT, 0.45), 0.7, 1);
-    k.jitterRadial(from, 0, 0, (a) => 1 + 0.08 * Math.sin(3 * a + l.id) + 0.05 * Math.sin(7 * a + 2 * l.id));
-    for (let j = 0; j < 36; j++) {
-      const a = rnd(j, 11) * Math.PI * 2, rr = b0 + (R - b0) * (0.2 + 0.7 * rnd(j, 12));
-      const sz = 1.6 + rnd(j, 13) * 2.8;
-      const yy = H * (0.4 + 0.5 * (1 - Math.abs((rr - (R + b0) * 0.5) / (R - b0 + 1e-3))));
-      k.push(Math.cos(a) * rr, yy, Math.sin(a) * rr, rnd(j, 14) * Math.PI);
-      k.box(-sz, -sz * 0.4, -sz * 0.6, sz, sz * 0.5, sz * 0.6, surf, PART.wall, mixc(col, SOOT, 0.2 + 0.5 * rnd(j, 15)), { skip: ['bottom'], aoLow: 0.7 });
-      k.pop();
+    const ph = l.id * 1.7;
+    const lobes = (a: number, y: number, amp: number): number =>
+      amp * (0.55 * Math.sin(2 * a + ph) + 0.3 * Math.sin(5 * a + 2.3 * ph) + 0.18 * Math.sin(11 * a + y * 0.4 + ph));
+    let from = k.vertexCount;
+    k.lathe(0, 0, [[R * 1.18, -1.6], [R * 1.1, 0.25], [R * 1.02, H * 0.3]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.82), 0.7, 0.9);
+    k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.1));
+    from = k.vertexCount;
+    k.lathe(0, 0, [[R * 1.04, -1], [R * 0.9, H * 0.4], [(R + b0) * 0.5, H], [b0 * 0.98, H * 0.8]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.55), 0.7, 1);
+    k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.12) * Math.min(1, Math.max(0.3, 1 - y / (H * 1.6))));
+    for (let j = 0; j < 44; j++) {
+      const a = rnd(j, 11) * Math.PI * 2, rr = b0 + (R * 1.15 - b0) * (0.1 + 0.85 * rnd(j, 12));
+      const sz = 1.4 + rnd(j, 13) * 3.2;
+      const yy = Math.max(0.3, H * (0.35 + 0.55 * (1 - Math.abs((rr - (R + b0) * 0.5) / (R - b0 + 1e-3))))) + lobes(a, 0, 0.6);
+      const x = Math.cos(a) * (rr + lobes(a, 0, R * 0.1)), z = Math.sin(a) * (rr + lobes(a, 0, R * 0.1));
+      // a block's long axis in a hashed direction, tipped 10-50 degrees: thrown down, not laid
+      const dir = rnd(j, 14) * Math.PI * 2, tip = (0.18 + 0.7 * rnd(j, 16)) * (rnd(j, 17) < 0.5 ? -1 : 1);
+      const long = rnd(j, 18) < 0.25 ? sz * 2.6 : sz * 1.2;
+      const hx = Math.cos(dir) * Math.cos(tip) * long * 0.5, hy = Math.sin(tip) * long * 0.5, hz = Math.sin(dir) * Math.cos(tip) * long * 0.5;
+      const bc = mixc(col, SOOT, 0.15 + 0.65 * rnd(j, 15));
+      k.beam([x - hx, yy - hy, z - hz], [x + hx, yy + hy, z + hz], sz * (0.8 + 0.5 * rnd(j, 19)), sz * (0.45 + 0.4 * rnd(j, 20)), surf, PART.wall, bc, 0.75);
     }
   }
   const b0 = Math.max(towerBaseHalf(l.goal), s.moundR);
@@ -251,11 +291,24 @@ export function towerMesh(l: TowerLook): BuildingMesh {
 /** the stair's half width (m) */
 function stairHalf(goal: number): number { return Math.max(2.2, towerBaseHalf(goal) * 0.07); }
 
-/** a battered tier: four sloping faces from half width b at y0 to t at y1, and its terrace */
-function frustum(k: KitBuilder, b: number, t: number, y0: number, y1: number, surf: number, part: number, col: RGB, topCol: RGB): void {
+/**
+ * A battered tier: four sloping faces from half width b at y0 to t at y1, and its terrace. The faces are laid in
+ * courses ~1.6 m high, each a hashed shade of the brick (every fifth a darker bond course), so the masonry reads as
+ * coursed work from a distance, not one flat face.
+ */
+function frustum(k: KitBuilder, b: number, t: number, y0: number, y1: number, surf: number, part: number, col: RGB, topCol: RGB, seed = 0): void {
+  const rows = Math.max(1, Math.round((y1 - y0) / 1.6));
   for (let q = 0; q < 4; q++) {
     k.push(0, 0, 0, (q * Math.PI) / 2);
-    k.quad([-b, y0, b], [b, y0, b], [t, y1, t], [-t, y1, t], surf, part, col, [0.62, 0.62, 0.95, 0.95]);
+    for (let r = 0; r < rows; r++) {
+      const fa = r / rows, fb = (r + 1) / rows;
+      const ya = y0 + (y1 - y0) * fa, yb = y0 + (y1 - y0) * fb;
+      const ha = b + (t - b) * fa, hb = b + (t - b) * fb;
+      let tone = 0.93 + 0.13 * hashFloat(seed, r, q, 0x70f3);
+      if ((r + seed) % 5 === 4) tone *= 0.86;
+      const aa = 0.62 + 0.33 * fa, ab = 0.62 + 0.33 * fb;
+      k.quad([-ha, ya, ha], [ha, ya, ha], [hb, yb, hb], [-hb, yb, hb], surf, part, mulc(col, tone), [aa, aa, ab, ab]);
+    }
     k.pop();
   }
   k.quad([-t, y1, t], [t, y1, t], [t, y1, -t], [-t, y1, -t], surf, part, topCol, 0.9);

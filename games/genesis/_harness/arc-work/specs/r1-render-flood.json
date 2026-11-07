@@ -1,0 +1,94 @@
+{
+ "_doc": "A-render-r1 #10: the live natural flood warning and the live god flood at the default wrath, town view 600 m (silt keeps the water look; the deck over the warned river thins). Same script as verify-owner-flood.json.",
+ "shots": [
+  {
+   "name": "r1-flood-before",
+   "params": "scenario=sandbox&source=worker&seed=1&b=flood",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove(); const p = G.poi('river'); window.__riv = p;",
+    "const r0 = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: 60, era: 'bronze', settled: true, wildGame: false, pos: p.pos });",
+    "const sid = r0.created?.find((e) => e.kind === 'settlement')?.id; window.__sid = sid; await G.step(1440*3);",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(8); G.hold('ui');",
+    "return { poi: p && [p.lat, p.lon], r0: JSON.stringify(r0).slice(0, 300) };"
+   ]
+  },
+  {
+   "name": "r1-flood-warning",
+   "params": "scenario=sandbox&source=worker&seed=1&b=flood",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 25,
+   "script": [
+    "const sid = window.__sid; const pv = () => window.__GENESIS_FX__.fx.vis.pv; const pos = () => pv().settlements.find((s) => s.id === sid)?.pos;",
+    "await G.cmd({ k: 'set', path: 'disasters.natural', value: 4 }); let d = null, days = 0, hours = 0;",
+    "for (days = 0; days < 40 && !d; days++) { if (days % 2 === 0) await G.cmd({ k: 'water.rain', pos: [...pos()], radius: 2500, duration: 2880, intensity: 3 }); for (let h = 0; h < 24 && !d; h++) { await G.step(60); d = pv().disasters.find((x) => x.kind === 'flood' && x.params && x.params.warning); } }",
+    "window.__d = d; if (d) await G.step(120);",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+    "const all = pv().disasters.map((x) => ({ k: x.kind, id: x.id, p: x.params })); const ev = await G.query('settlement', { id: sid });",
+    "return { days, flood: d && { id: d.id, params: d.params, god: d.god, cause: d.cause }, all, toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), evac: JSON.stringify(ev).match(/evac[^,]*,[^,]*/g) };"
+   ]
+  },
+  {
+   "name": "r1-flood-water",
+   "params": "scenario=sandbox&source=worker&seed=1&b=flood",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 25,
+   "script": [
+    "const pv = () => window.__GENESIS_FX__.fx.vis.pv; let k = 0; for (k = 0; k < 16; k++) { await G.step(60); const d = pv().disasters.find((x) => x.kind === 'flood'); if (d && !(d.params && d.params.warning)) break; } await G.step(60);",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__sid }, dist: 900, tilt: 58, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+    "return { k, all: pv().disasters.map((x) => ({ k: x.kind, p: x.params })), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "r1-flood-home",
+   "params": "scenario=sandbox&source=worker&seed=1&b=flood",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 }); await G.step(1440*4); G.hold(false); await G.frames(10); G.hold('ui');",
+    "return { all: window.__GENESIS_FX__.fx.vis.pv.disasters.map((x) => x.kind), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "r1-flood-god",
+   "params": "scenario=sandbox&source=worker&seed=1&b=flood",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 15,
+   "script": [
+    "const st = window.__GENESIS_FX__.fx.vis.pv.settlements.find((s) => s.id === window.__sid); const r = await G.freeform('flood ' + st.name); await G.step(90);",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+    "return { r: JSON.stringify(r).slice(0, 400), all: window.__GENESIS_FX__.fx.vis.pv.disasters.map((x) => ({ k: x.kind, p: x.params })), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  }
+ ]
+}

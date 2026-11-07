@@ -59,3 +59,30 @@ export function updateSilt(st: SiltState, disasters: readonly DisasterView[], pl
     if (z) { out[i].set(z.x, z.y, z.z, z.r); k[i] = Math.min(1, z.k); } else { out[i].set(0, 0, 0, 0); k[i] = 0; }
   }
 }
+
+/**
+ * ARC §10: the god's eye over a warned river. While a flood's silt zone is active and the camera looks down on it from
+ * the usual town view (a few hundred metres to ~1.5 km up), the cloud between the lens and the ground is thinned, so
+ * the river rising brown and the people walking uphill can be seen; the rain, the overcast light and the clouds
+ * further off (upstream, where the rain hangs) stay. Returns the clearing's reach (m along the view ray) and strength
+ * 0..1 (k = 0: no clearing). `cam` is the camera in the body frame (m), `altitude` its height over the datum.
+ */
+export function siltLensClear(cam: ArrayLike<number>, altitude: number, zones: readonly Vector4[], k: readonly number[]): { r: number; k: number } {
+  const cl = Math.hypot(cam[0], cam[1], cam[2]);
+  if (!(cl > 0) || altitude <= 0 || altitude > 2500) return { r: 0, k: 0 };
+  let best = 0;
+  for (let i = 0; i < zones.length; i++) {
+    const z = zones[i], zk = k[i] ?? 0;
+    if (!(z.w > 0) || zk <= 0) continue;
+    const zl = Math.hypot(z.x, z.y, z.z) || 1;
+    // the ground point under the camera, against the zone's centre (great-circle chord, m)
+    const g = zl / cl;
+    const d = Math.hypot(cam[0] * g - z.x, cam[1] * g - z.y, cam[2] * g - z.z);
+    const near = 1 - Math.min(1, Math.max(0, (d - z.w * 0.8) / (z.w * 0.7)));
+    best = Math.max(best, Math.min(1, zk * 1.5) * near);
+  }
+  // fades out as the camera climbs toward a regional view (the deck is the weather there, not a veil over the town)
+  const hk = 1 - Math.min(1, Math.max(0, (altitude - 1800) / 700));
+  const kk = best * hk;
+  return kk > 0.005 ? { r: Math.min(1700, Math.max(250, altitude * 1.15)), k: kk } : { r: 0, k: 0 };
+}

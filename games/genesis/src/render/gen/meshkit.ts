@@ -356,6 +356,12 @@ export class KitBuilder {
     for (let i = from; i < this.pos.length / 3; i++) if (this.kit[i * 4 + 1] === part) { this.uv[i * 2] = u; this.uv[i * 2 + 1] = v; }
   }
 
+  /** scale the uv of every vertex emitted since `from` (monumental work: blocks and courses at the scale they are
+   *  laid, legible from a distance; ARC §2.6 towers) */
+  scaleUv(k: number, from = 0): void {
+    for (let i = from * 2; i < this.uv.length; i++) this.uv[i] *= k;
+  }
+
   /** append another builder's geometry (already in final local coordinates) */
   merge(o: KitBuilder): void {
     const base = this.pos.length / 3;

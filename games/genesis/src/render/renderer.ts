@@ -8,6 +8,7 @@
 // ambient of every other material) and the exposure meters down to moonlit ground.
 // It reads the WorldView and a CameraPose; it never writes the world.
 
+import { siltLensClear } from './planet/silt.ts';
 import {
   Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform,
 } from 'three';
@@ -538,6 +539,9 @@ export class Renderer {
           nightAmb: vis === primaryVis ? this.nightFloor : undefined,
           // (additive, the god layer) lightning lighting the deck from inside
           flashes: vis === primaryVis ? this.godfx.cloudFlashes : undefined,
+          // (additive, ARC §10) the warned river seen through the deck from the town view
+          lensClear: vis.uniforms.uSilt ? siltLensClear([vis.camBody.x, vis.camBody.y, vis.camBody.z], vis.camBody.length() - pv.params.radius,
+            vis.uniforms.uSilt.value as Vector4[], vis.uniforms.uSiltK.value as number[]) : undefined,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;

@@ -32,6 +32,7 @@ import type { BufferGeometry } from 'three';
 import { leafClusterTexture } from '../gen/leaftex.ts';
 import { makeVegMaterial, PLANT_PROBE, PLANT_REGISTRY_LISTENERS, whiteColors } from './vegetation.ts';
 import type { Vector3 } from 'three';
+import { towerClearings } from './tower.ts';
 
 /** floats per cached item: dir xyz, ground radius, yaw, scale, kind, variant, tint r g b (crops: phase, height, -) */
 const REC = 11;
@@ -158,6 +159,9 @@ export class GroundCover {
   /** cached cells whose signature changed: still drawn, rebuilt within the per-frame budget */
   private stale = new Set<number>();
   private stamp = '';
+  /** ARC §2.6: the towers' sites (unit dir + radius m), kept bare like a trodden building site */
+  private towerAt: number[] = [];
+  private towerSig = '';
   private lastCam: [number, number, number] = [1e9, 0, 0];
   private lastFrame = -1e9;
   /** cells left unbuilt by the per-frame budget: keep updating until they are in */
@@ -249,6 +253,16 @@ export class GroundCover {
     return sig;
   }
 
+  /** inside a tower's site (unit direction; R the planet radius m) */
+  private inTowerSite(dx: number, dy: number, dz: number, R: number): boolean {
+    const at = this.towerAt;
+    for (let k = 0; k < at.length; k += 4) {
+      const ddx = dx - at[k], ddy = dy - at[k + 1], ddz = dz - at[k + 2], r = at[k + 3];
+      if ((ddx * ddx + ddy * ddy + ddz * ddz) * R * R < r * r) return true;
+    }
+    return false;
+  }
+
   /** build the ground cover of one cell (deterministic: the same fields give the same scatter) */
   private cellItems(pv: PlanetView, c: number): Float32Array {
     const g = pv.grid;
@@ -284,6 +298,7 @@ export class GroundCover {
         // the cell that dominates this point's sim triangle owns it (a partition of the sphere)
         const owner = h.wa >= h.wb && h.wa >= h.wc ? h.a : h.wb >= h.wc ? h.b : h.c;
         if (owner !== c) continue;
+        if (this.inTowerSite(dx, dy, dz, R)) continue;
         const at = (f: Float32Array | undefined) => (f ? f[h.a] * h.wa + f[h.b] * h.wb + f[h.c] * h.wc : 0);
         const wat = at(water);
         const r1 = hashFloat(c, k, 5), r2 = hashFloat(c, k, 6), r3 = hashFloat(c, k, 14);
@@ -424,6 +439,25 @@ export class GroundCover {
       this.stamp = stamp;
       for (const [c, e] of this.cache) if (!this.stale.has(c) && this.signature(pv, c) !== e.sig) this.stale.add(c);
       if (this.stale.size) this.pending = true;
+    }
+    {
+      const tc = towerClearings(pv.towers);
+      if (tc.sig !== this.towerSig) {
+        const R0 = pv.params.radius, P = pv.grid.pos, old = this.towerAt;
+        const touches = (c: number, at: number[]): boolean => {
+          const reach = Math.sqrt(pv.grid.area[c]) * R0;
+          for (let k = 0; k < at.length; k += 4) {
+            const d = Math.hypot(P[c * 3] - at[k], P[c * 3 + 1] - at[k + 1], P[c * 3 + 2] - at[k + 2]) * R0;
+            if (d < at[k + 3] + reach) return true;
+          }
+          return false;
+        };
+        this.towerSig = tc.sig;
+        this.towerAt = tc.at;
+        for (const c of this.cache.keys()) if (touches(c, old) || touches(c, tc.at)) this.cache.delete(c);
+        this.pending = true;
+        this.lastFrame = -1e9;
+      }
     }
     const R = pv.params.radius;
     const rc = camBody.length();

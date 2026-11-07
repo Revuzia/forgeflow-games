@@ -592,15 +592,28 @@ void main() {
     float cap = 0.5 * dot(skyR, LUM) * (1.0 + 2.0 * silt);
     if (li > cap) under -= inscat * (1.0 - cap / li);
   }
-  vec3 col = mix(under, skyR, F) + glint;
-  // ARC §10: a silted river is opaque ochre — even its sky reflection comes back through a skin of mud-brown water
-  // (Fresnel-weighted grey sky alone left it flat grey from the play camera): hue toward tan, luminance kept, a little
-  // darker and less mirror-bright
+  // ARC §10: a silted river is a swollen BROWN RIVER, still water: its body turns mud-brown (~70 %) with streaks of
+  // silt drawn out along the current, while the ripples' Fresnel sky, the specular glints and the foam stay on top.
+  // (The earlier pass recoloured the final colour, glints and sky included, to an opaque matte tan: it read as a dry
+  // sandy bed, lower, not a river in spate.)
   if (silt > 0.0) {
-    float lumC = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    // (a darker, saturated mud brown: at the sky's luminance it read as pale khaki, the same as the sand on its banks)
-    col = mix(col, lumC * vec3(1.5, 0.95, 0.42) * 0.6, 0.8 * silt);
+    vec3 LUMs = vec3(0.2126, 0.7152, 0.0722);
+    float lu = dot(under, LUMs);
+    // streaks along the flow, drifting downstream (a slack water lake gets slow blotches)
+    vec3 fl = vFlow * uTime * 0.6;
+    float fs = length(vFlow);
+    vec3 fd = fs > 0.05 ? vFlow / fs : vec3(0.0);
+    vec3 sp = P - fl;
+    float along = dot(sp, fd);
+    vec3 across = sp - fd * along;
+    float streak = snoise(across * 0.11 + fd * along * 0.012) * 0.6 + snoise(sp * 0.035 + 7.0) * 0.4;
+    vec3 mud = lu * vec3(1.45, 0.98, 0.5) * (0.78 + 0.22 * streak);
+    under = mix(under, mud, 0.72 * silt);
+    // the mirrored sky through a skin of muddy water: a little warmer, a little less of it
+    float ls = dot(skyR, LUMs);
+    skyR = mix(skyR, ls * vec3(1.12, 1.0, 0.84), 0.4 * silt) * (1.0 - 0.15 * silt);
   }
+  vec3 col = mix(under, skyR, F) + glint;
 
   // ── foam: surf, crests, white water ──
   float vertThick = max(sceneZ0 - fragZ, 0.0) * cosV;

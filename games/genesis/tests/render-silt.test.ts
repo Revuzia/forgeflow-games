@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Vector4 } from 'three';
-import { makeSiltState, SILT_MAX, siltTarget, updateSilt } from '../src/render/planet/silt.ts';
+import { makeSiltState, SILT_MAX, siltLensClear, siltTarget, updateSilt } from '../src/render/planet/silt.ts';
 import type { DisasterView } from '../src/sim/types.ts';
 
 const flood = (params: Record<string, number>, id = 7): DisasterView => ({ id, kind: 'flood', planet: 0, pos: [0, 0, 1], radius: 500, intensity: 1, progress: 0, frozen: false, params });
@@ -50,4 +50,30 @@ test('the banks read the same zones: the rising river wets and silts them above 
   assert.match(src, /floorC = mix\(floorC, [^;]*siltG/, 'the risen river covers its pale shallows');
   const oc = readFileSync(new URL('../src/render/planet/ocean.ts', import.meta.url), 'utf8');
   assert.match(oc, /cap = .*\(1\.0 \+ 2\.0 \* silt\)/, 'the in-scatter cap lifts for muddy water');
+});
+
+test('a silted river stays WATER: the body browns ~70 % but the sky reflection, glints and ripples stay on top (owner #10)', () => {
+  const oc = readFileSync(new URL('../src/render/planet/ocean.ts', import.meta.url), 'utf8');
+  const i = oc.indexOf('under = mix(under, mud, 0.72 * silt)');
+  const j = oc.indexOf('vec3 col = mix(under, skyR, F) + glint;');
+  assert.ok(i > 0 && j > i, 'the mud goes into the body before the Fresnel sky and the glints are added');
+  assert.doesNotMatch(oc, /col = mix\(col, lumC/, 'no matte recolour of the final colour (it killed the sheen)');
+  assert.match(oc.slice(i - 900, i), /vFlow/, 'silt streaks drawn out along the current');
+});
+
+test('the god\'s eye clears the deck over a warned river from the town view, not elsewhere or from high up (owner #10)', () => {
+  const R = 300000;
+  const zones = Array.from({ length: SILT_MAX }, () => new Vector4());
+  const k = new Array<number>(SILT_MAX).fill(0);
+  zones[0].set(0, 0, R, 1200); k[0] = 0.8;
+  const at = (alt: number, off = 0): number[] => { const a = off / R; return [Math.sin(a) * (R + alt), 0, Math.cos(a) * (R + alt)]; };
+  const town = siltLensClear(at(520), 520, zones, k);
+  assert.ok(town.k > 0.8 && town.r >= 520 && town.r <= 700, JSON.stringify(town));
+  assert.equal(siltLensClear(at(520, 6000), 520, zones, k).k, 0, 'far from the warned river: the weather as it is');
+  assert.equal(siltLensClear(at(3000), 3000, zones, k).k, 0, 'a regional view keeps the deck');
+  k[0] = 0;
+  assert.equal(siltLensClear(at(520), 520, zones, k).k, 0, 'no warning: no clearing');
+  const cl = readFileSync(new URL('../src/render/sky/clouds.ts', import.meta.url), 'utf8');
+  assert.match(cl, /uniform vec2 uLensClear/);
+  assert.match(cl, /dens \*= 1\.0 - 0\.9 \* uLensClear\.y/);
 });
