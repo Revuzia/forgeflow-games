@@ -11,6 +11,7 @@ import { peekRel } from '../../src/sim/god/regard.ts';
 import { distM } from '../../src/sim/people/world.ts';
 import { langDistance } from '../../src/sim/people/culture.ts';
 import { TASK } from '../../src/sim/people/defs.ts';
+import { sunElevation } from '../../src/sim/people/world.ts';
 import type { TowerState } from '../../src/sim/god/state.ts';
 
 const [mode = 'unattended', seedS = '1', yearsS] = process.argv.slice(2);
@@ -61,9 +62,9 @@ while (sim.u.tick < end) {
       let m = 0; for (const a of lg) for (const b of lg) if (a.id < b.id) m = Math.max(m, langDistance(a, b));
       w.lang2y = m;
     }
-    // a work hour (local mid-morning to mid-afternoon at the site): a real builder within 150 m on TASK.build
-    const hr = ((sim.u.tick % day) / day) * 24;
-    if (tw.status === 'rising' && hr > 9 && hr < 16) {
+    // a work hour (the sun well up at the site: local mid-morning to mid-afternoon; stint 5 -- the old test used the
+    // planet clock, which is night at a site on the far side): a real builder within 150 m on TASK.build
+    if (tw.status === 'rising' && sunElevation(sim.u, p, sim.u.tick, tw.pos) > 0.35) {
       w.samples++;
       let on = false;
       const P = [0, 0, 0];

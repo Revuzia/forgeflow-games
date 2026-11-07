@@ -4,8 +4,12 @@
 // (then the 20-year gap). The world after a begun tower is not modelled (first attempt exact, later ones estimates).
 // Usage: node _harness/arc-work/tcand-eval.mjs <log>...
 import { readFileSync } from 'node:fs';
+import { hashFloat } from '../../src/sim/core/rng.ts';
 const rows = [];
 for (const f of process.argv.slice(2)) for (const l of readFileSync(f, 'utf8').split('\n')) if (l.startsWith('C ')) { try { rows.push(JSON.parse(l.slice(2))); } catch { /* a line still being written */ } }
+// the planet id (the logged roll is hashFloat(pid, y, 0x70e1)); the live roll adds the world seed (stint 5)
+const r0 = rows[0]; let pid = 0; while (pid < 100000 && Math.abs(hashFloat(pid, r0.y, 0x70e1) - r0.roll) > 1e-12) pid++;
+for (const r of rows) r.roll = process.env.OLDROLL ? r.roll : hashFloat(pid, r.y, 0x70e1, r.seed);
 const seeds = [...new Set(rows.map((r) => r.seed))].sort((a, b) => a - b);
 const clamp = (v) => Math.max(0, Math.min(1, v));
 function run(c, lp, pop, base) {

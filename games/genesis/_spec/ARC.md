@@ -242,7 +242,8 @@ Every condition must hold:
 1. World age ≥ **10 years** *(ARC `towerMinYear`)*, counted from the planet's first settlement. No tower on the planet is
    `rising`, and ≥ **20 years** *(ARC)* have passed since the last tower on this planet ended (a finished or standing
    tower counts as ended at its finish).
-2. A **leader** town: not a band, pride ≥ **0.62** (+ humbled bias, §0.4), population ≥ **60**, era ≥ clay, knows
+2. A **leader** town: not a band, pride ≥ **0.62** (+ humbled bias, §0.4), population ≥ **50** (was 60; stint-5 probe: the
+   proud towns of unattended worlds peak at 47-56 people), era ≥ clay, knows
    `mudbrick`, `bricks` or `masonry`, not at war, no famine (`hist.famine < 0`), and no god-0 harm on it in the last
    **2 years** (`lastHarm`).
 3. A **builders' league**: ≥ 2 towns (the leader included) of its species within 12 km, each with pride ≥ **0.50** and
@@ -250,9 +251,9 @@ Every condition must hold:
    pride target is 0 by §2.1) joins without the pride test when the leader qualifies: the villages follow the city
    (stint-4 change, measured: unattended daughters stay under 40, so no league ever formed). At most 6 towns join,
    nearest first.
-4. The roll `hashFloat(planet.id, year, 0x70e1) < ARC.towerChance × clamp((pride_leader − 0.6) / 0.3)`, with
-   **`ARC.towerChance = 0.15`** as the starting value. The probe (§8.2) tunes it within 0.06-0.30 to hit the frequency
-   targets.
+4. The roll `hashFloat(planet.id, year, 0x70e1, worldSeed) < ARC.towerChance × clamp((pride_leader − 0.6) / 0.3)`, with
+   **`ARC.towerChance = 0.25`** (probe-tuned in stint 5 within 0.06-0.30; the world seed was added because every
+   sandbox world's first planet has the same id, so all seeds rolled the same years).
 
 The `tower.begin { settlement }` debug command (§6.4) skips 1, 3 and 4 (it still needs ≥ 1 town and a site) and forms
 the league from towns within 12 km.
@@ -272,10 +273,12 @@ materials `["mudbrick","bricks","stone"]`, recipe `mudbrick`, cost 0 (the tower 
 the BuildingBlock renderer must skip `great-tower`**), era clay. Placing it at `tower.begun` goes through the building
 store directly at the chosen cell (not the placer), and `TowerState.building` holds its id.
 
-Daily (`towerDaily`): builders `B = Σ over league towns of max(2, round(0.06 × grown_t))`. Each builder-day takes 1 unit
+Daily (`towerDaily`): builders `B = Σ over league towns of max(4, round(0.06 × grown_t))` (the least crew was 2 until
+stint 5: unattended towns of ~50 sent 2 each and a league of two took 8 years to reach half its goal, T4). Each builder-day takes 1 unit
 of the tower's material from the host store. League towns send tribute to the host store at the same rate (store
-transfers, no haul agents). Without material the rate halves. Growth is `dh = 0.12 × B × (have ? 1 : 0.5) / (1 + height
-/ goal)` m/day: 3 towns of ~80 (B ≈ 9) raise an 80 m tower in about 8 years, and 6 towns in about 4. **Visible
+transfers, no haul agents). Without material the rate halves, except that builders who know `mudbrick` mould what the stores lack at the tower's
+foot (stint-5 change: no unattended store ever held tower material, so every tower rose at half rate and missed T4). Growth is `dh = 0.12 × B × (have ? 1 : 0.5) / (1 + height
+/ goal)` m/day: 3 towns of ~80 (B ≈ 12) raise an 80 m tower in about 6 years, and 6 towns in about 3. **Visible
 builders:** up to **12** host members per work period get `TASK.build` with `tTarget = TowerState.building` (a relDecide
 hook, the same TaskSpec path relDecide uses for worship, relationship.ts:262). The rest of `B` is counted, not walked.
 

@@ -39,3 +39,16 @@
   pride floor (pop < 40 -> target 0), so the league (>= 2 towns each pride >= 0.5) never forms.
 - Change: a kin village of one speech with population < ARC.pridePop (40) joins the league without the pride test when
   the leader qualifies ("the villages follow the city"). tower.ts leagueOf. ARC.md §2.2 (3) edited.
+
+## Stint 5 (A-sim, 2026-11-07 ~09:40Z) — §2.2 (2)/(4), §2.3 material
+- Measured: _harness/arc-work/probe-tcand.ts (8 seeds x 60 y, trigger off, every town's raw §2.2 inputs on each check
+  day) + offline _harness/arc-work/tcand-eval.mjs over (towerChance, leaderPride, leaderPop, roll base).
+- §2.2 (4) roll gains the world seed: `hashFloat(planet.id, year, 0x70e1, u.seed)`. Every sandbox world's first planet
+  has the same id, so all 8 seeds rolled low in the same years (all first attempts at y13.8 in one grid cell).
+- §2.2 (2) leader population 60 -> 50 (proud unattended towns peak at 47-56 people before they split); §2.2 (4)
+  towerChance 0.15 -> 0.25 (inside the sanctioned 0.06-0.30). Offline: 3/8 seeds begin, first years 14.8 / 17.8 / 24.8,
+  median 17.8, <= 1 attempt per seed (T2 targets 2-5/8, median 15-35, <= 2). Live re-run: scratch/arc/t2g.log, t2h.log.
+- §2.3 material: what the stores lack, builders who know mudbrick mould at the tower's foot (have = 1). No unattended
+  store ever held mudbrick/brick/stone-block, so dh was always halved and T4 (>= 50 % in <= 6 y) failed (9.25 y).
+- §2.4 let: the rival-conversion threshold is the disciples' conversion bar (faith > 0.5, god/disciples.ts); for a
+  rival god in a town under a standing tower it is 0.45.

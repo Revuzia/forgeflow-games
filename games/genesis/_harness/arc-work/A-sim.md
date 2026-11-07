@@ -157,3 +157,16 @@
       prosperous town (e.g. P/U weight) -- note it as a §8.2 tension in contract-changes.md before tuning.
 3. Rival-conversion threshold -0.05 under a standing tower (§2.4 let) still not built (find the conversion rule in
    god/rivals.ts / belief.ts). Other stint-2 tower gaps: omens via omens.ts, strike via a miracle, scatter >= 4 km.
+
+### Stint 5 (2026-11-07 ~09:20Z)
+- NEW tower.ts `towerCandidates(u, p)` (probe export: each town's raw §2.2 inputs) + probe _harness/arc-work/probe-tcand.ts
+  (trigger off; one `C` line per check day) launched by probe-tcand.sh -> scratch/arc/tc-a.log, tc-b.log (8 seeds x 60 y,
+  DONE). Offline evaluator _harness/arc-work/tcand-eval.mjs (GRID env JSON; recomputes the roll with the world seed).
+- FOUND: the yearly roll hashFloat(planet.id, year, 0x70e1) was the same on every seed (same planet id) -> world seed added.
+- CHANGES (ARC §2.2/§2.3 edited, contract-changes.md stint 5): roll + u.seed; TOWER.leaderPop 60 -> 50; towerChance
+  0.15 -> 0.25; TOWER.rollBase (0.6, unchanged, named); rising(): builders who know mudbrick mould what stores lack
+  (have = 1). Offline prediction: 3/8 begun (y14.8, 17.8, 24.8), median 17.8, max 1 attempt.
+- DONE gap: rival-conversion threshold under a standing tower (disciples.ts conversion bar 0.5 -> 0.45 for rival gods,
+  via towerStands).
+- test added: arc-tower "empty stores: builders who know mudbrick mould their own" (arc-tower 9/9, arc-babel pass, tsc 0).
+- LIVE T2 re-run launched 09:35Z: probe-t2.sh 1-4 -> scratch/arc/t2g.log, 5-8 -> t2h.log (~13 min each).

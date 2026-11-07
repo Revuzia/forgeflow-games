@@ -107,6 +107,15 @@ test('§2.4 confuse: two drifts per town, root kept, distance >= 0.72, scattered
   assert.deepEqual([L.host.langLine[0], L.kin.langLine[0]], line0, 'langLine[0] untouched');
   assert.notEqual(L.host.langSeed, seeds[0]); assert.notEqual(L.kin.langSeed, seeds[1]);
   assert.ok(L.sim.u.planets[0].people.agents.count >= alive0, 'no deaths');
+  // the scattered go out >= 4 km from home where land allows (their daughter towns' targets)
+  const ps = L.sim.u.planets[0].people;
+  const kids = ps.settlements.filter((s) => s.target && (s.parent === L.host.id || s.parent === L.kin.id));
+  const p0 = L.sim.u.planets[0];
+  assert.ok(kids.length >= 1, 'a daughter town of the scattering');
+  for (const k of kids) {
+    const from = k.parent === L.host.id ? L.host : L.kin;
+    assert.ok(distM(p0, k.target!, from.pos) >= 4000 || distM(p0, k.target!, from.pos) < 1, `daughter target ${distM(p0, k.target!, from.pos)} m`);
+  }
   const again = L.sim.applyNow({ k: 'tower.confuse' } as never);
   assert.equal(again.ok, false, 'a scattered tower cannot be answered again');
 });

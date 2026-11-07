@@ -33,7 +33,10 @@ import { styleOf } from '../people/buildings.ts';
 import { materialItems } from '../people/buildings.ts';
 import { storeHas, storeTake } from '../people/store.ts';
 import { histOf } from '../people/politics.ts';
-import { splitOff } from '../people/settlement.ts';
+import { BUD_APART, searchSite, splitOff } from '../people/settlement.ts';
+
+/** §2.4 confuse: the scattered found their towns at least this far from home */
+const SCATTER_M = 4000;
 import { die } from '../people/lifecycle.ts';
 import { cohortTotal } from '../people/cohorts.ts';
 import { tell } from '../people/story.ts';
@@ -54,14 +57,19 @@ export const TOWER = {
   minYear: 10,
   gapYears: 20,
   leaderPride: 0.62,
-  leaderPop: 60,
+  leaderPop: 50,
   leaguePride: 0.5,
   leagueRadius: 12000,
   leagueLang: 0.45,
   leagueMax: 6,
   harmYears: 2,
   /** the yearly roll (probe-tuned within 0.06-0.30, §8.2) */
-  towerChance: 0.15,
+  towerChance: 0.25,
+  /** the roll's pride base: chance x clamp((pride - rollBase) / 0.3) */
+  rollBase: 0.6,
+  /** the least crew a league town sends (2 -> 4 in stint 5: unattended towns of ~50 sent 2 each, and a league of two
+   *  needed 8 years for half its goal, T4) */
+  crew: 4,
   tierM: 12,
   maxTiers: 10,
   rate: 0.12,
@@ -354,7 +362,8 @@ function yearlyCheck(x: PCtx, armed: boolean): void {
   if (!armed) {
     const year = Math.floor(x.tick / x.year);
     const pr = peekRel(u, p.id, host.id)?.pride ?? 0;
-    if (hashFloat(p.id, year, 0x70e1) >= TOWER.towerChance * clamp((pr - 0.6) / 0.3)) return;
+    // (the world seed decorrelates worlds whose first planet shares its id: stint-5 change, contract-changes.md)
+    if (hashFloat(p.id, year, 0x70e1, u.seed) >= TOWER.towerChance * clamp((pr - TOWER.rollBase) / 0.3)) return;
   }
   beginTower(x, host, league);
 }
@@ -384,7 +393,7 @@ function rising(x: PCtx, tw: TowerState): void {
   tw.league = league.map((s) => s.id).sort((a, b) => a - b);
   // labour
   let B = 0;
-  for (const s of league) B += Math.max(2, Math.round(0.06 * grown(x, s).length));
+  for (const s of league) B += Math.max(TOWER.crew, Math.round(0.06 * grown(x, s).length));
   tw.builders = B;
   // (the building path never finishes it: work is the content cap 1e7, and what the walkers add is put back)
   const bld = x.ps.building(tw.building);
@@ -643,13 +652,22 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
     }
   }
   // the scattering: 20-35 % of each town's households go out to found towns of their own
+  const rings = Math.min(48, Math.ceil((1.6 * SCATTER_M) / Math.sqrt((4 * Math.PI * p.st.radius ** 2) / p.count)));
   for (const st of league) {
     const share = 0.2 + 0.15 * hashFloat(tw.id, st.id, 0x70e3);
     const hs = st.households.filter((h) => h.members.length > 0).slice().sort((a, b) => a.id - b.id);
     const n = Math.max(1, Math.round(hs.length * share));
     const leaving = hs.slice().sort((a, b) => hashFloat(a.id, tw.id, 0x70e3) - hashFloat(b.id, tw.id, 0x70e3)).slice(0, n);
     for (const h of leaving) scattered += h.members.length;
-    const child = splitOff(x, st, leaving, 'scatter');
+    // (§2.4: the daughters go >= 4 km away where land allows, kept BUD_APART from every live town; else the budding
+    // path's own site)
+    const far = searchSite(x, st.species, st.cell, rings, st.id, (c) => {
+      const P = cellPos3(p, c);
+      if (distM(p, P, st.pos) < SCATTER_M) return true;
+      for (const o of x.ps.settlements) if (o.fallen < 0 && distM(p, P, o.pos) < BUD_APART) return true;
+      return false;
+    });
+    const child = splitOff(x, st, leaving, 'scatter', far.cell >= 0 && far.score > 0 ? far.cell : -1);
     if (child) founded++;
   }
   tw.status = 'scattered'; tw.ended = x.tick;
