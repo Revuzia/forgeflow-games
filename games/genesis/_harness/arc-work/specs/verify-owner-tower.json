@@ -1,91 +1,220 @@
 {
- "_doc": "verify-A-r1-owner: play the babel scenario live as the owner: region view without clicking (hearts chips, proud mark), the first Decision card, 'Look at it', then each of the four answers on its own page (b=confuse/strike/warn/let) and what follows a few days on. 888x500 UI on. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/verify-owner-tower.json --port=5351 > _harness/scratch/arc/verify-A-r1-owner/tower.log 2>&1 &",
+ "_doc": "verify-A-r1-owner: play the babel scenario live as the owner: region view without clicking (hearts chips, proud mark), the first Decision card, 'Look at it', then each of the four answers on its own page (b=confuse/strike/warn/let) and what follows a few days on. 888x500 UI on. r2: frames held (SwiftShader at surface is ~30 s/frame unheld). Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/verify-owner-tower.json --port=5351 > _harness/scratch/arc/verify-A-r1-owner/tower.log 2>&1 &",
  "shots": [
-  { "name": "vo-confuse-region", "params": "scenario=babel&source=worker&seed=1&b=confuse", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 40,
-    "script": [
-      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
-      "window.__toChoice = async () => { let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; return d; };",
-      "await G.step(1440*3); const pv = window.__GENESIS_FX__.fx.vis.pv; const s0 = pv.settlements[0];",
-      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: s0.id }, dist: 9000, tilt: 45, yaw: 20, fov: 50, hour: 11 }); await G.frames(6); G.hold('ui');",
-      "const chips = [...document.querySelectorAll('.gn-chip, .gn-name, [class*=chip]')].slice(0,8).map((e) => ({ c: e.className, t: e.textContent, title: e.querySelector('[title]')?.getAttribute('title') }));",
-      "const hs = await G.arc.hearts(); return { hearts: JSON.stringify(hs).slice(0, 900), chips };"
-    ] },
-  { "name": "vo-confuse-card", "params": "scenario=babel&source=worker&seed=1&b=confuse", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "const d = await window.__toChoice(); await G.frames(4); const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; };",
-      "return { halfDays: d, tw: window.__tw && { name: window.__tw.name, h: window.__tw.height, goal: window.__tw.goal, league: window.__tw.league, builders: window.__tw.builders }, dec: G.arc.decision(), card: R('.gn-decision'), text: document.querySelector('.gn-decision')?.innerText, toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
-    ] },
-  { "name": "vo-confuse-look", "params": "scenario=babel&source=worker&seed=1&b=confuse", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "G.hold(false); const b = [...document.querySelectorAll('.gn-decision button')].find((x) => x.textContent.includes('Look')); b?.click(); await G.frames(30); await new Promise((r) => setTimeout(r, 3000)); await G.frames(10); G.hold('ui');",
-      "return { clicked: !!b, people: G.agents(60).length, dec: G.arc.decision().open };"
-    ] },
-  { "name": "vo-confuse-after", "params": "scenario=babel&source=worker&seed=1&b=confuse", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "const r = await G.arc.choose('1'); G.hold(false); await G.frames(20); await G.step(60); await G.frames(20); G.hold('ui');",
-      "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), dec: G.arc.decision() };"
-    ] },
-  { "name": "vo-confuse-later", "params": "scenario=babel&source=worker&seed=1&b=confuse", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "await G.step(1440*20); const pv = window.__GENESIS_FX__.fx.vis.pv; const host = window.__tw?.host ?? pv.settlements[0].id;",
-      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: host }, dist: 3000, tilt: 50, yaw: 20, fov: 50, hour: 11 }); await G.frames(8); G.hold('ui');",
-      "const ts = await G.arc.towers(); return { towers: JSON.stringify(ts).slice(0, 600), nset: pv.settlements.length, hearts: JSON.stringify(await G.arc.hearts()).slice(0,600) };"
-    ] },
-
-  { "name": "vo-strike-card", "params": "scenario=babel&source=worker&seed=1&b=strike", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
-      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw;",
-      "G.hold(false); const b = [...document.querySelectorAll('.gn-decision button')].find((x) => x.textContent.includes('Look')); b?.click(); await G.frames(30); await new Promise((r) => setTimeout(r, 3000)); await G.frames(6); G.hold('ui');",
-      "return { d, people: G.agents(60).length };"
-    ] },
-  { "name": "vo-strike-after", "params": "scenario=babel&source=worker&seed=1&b=strike", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "const r = await G.arc.choose('2'); G.hold(false); await G.frames(10); await G.step(30); await G.frames(30); await new Promise((r) => setTimeout(r, 2000)); await G.frames(10); G.hold('ui');",
-      "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), towers: JSON.stringify(await G.arc.towers()).slice(0,500) };"
-    ] },
-  { "name": "vo-strike-later", "params": "scenario=babel&source=worker&seed=1&b=strike", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "await G.step(1440*6); G.hold(false); await G.frames(20); G.hold('ui');",
-      "return { hearts: JSON.stringify(await G.arc.hearts()).slice(0,700), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
-    ] },
-
-  { "name": "vo-warn-card", "params": "scenario=babel&source=worker&seed=1&b=warn", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
-      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; await G.frames(4);",
-      "const dec1 = G.arc.decision(); const txt1 = document.querySelector('.gn-decision')?.innerText;",
-      "const pv = window.__GENESIS_FX__.fx.vis.pv; const A = pv.agents; let pick = null; for (let i = 0; i < A.count && !pick; i++) { const bio = await G.query('agent', { id: A.id[i] }); if (bio && bio.age >= 25 && bio.settlement && tw.league.includes(bio.settlement.id)) pick = bio; }",
-      "const ff = pick ? await G.freeform('make ' + pick.name + ' my prophet') : null; await G.step(10); await G.frames(6);",
-      "return { d, pick: pick && { name: pick.name, st: pick.settlement.id, age: pick.age }, ff: JSON.stringify(ff).slice(0, 300), dec1, txt1, dec2: G.arc.decision(), txt2: document.querySelector('.gn-decision')?.innerText };"
-    ] },
-  { "name": "vo-warn-after", "params": "scenario=babel&source=worker&seed=1&b=warn", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "if (!G.arc.decision().open) { const p = document.querySelector('.gn-decision-pill'); p?.click(); await G.frames(4); }",
-      "const r = await G.arc.choose('3'); await G.step(1440*2); G.hold(false); const b = [...document.querySelectorAll('.gn-btn')].find((x) => x.textContent.includes('Look')); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__tw.host }, dist: 900, tilt: 55, yaw: 20, fov: 50, hour: 11 }); await G.frames(20); G.hold('ui');",
-      "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
-    ] },
-  { "name": "vo-warn-day6", "params": "scenario=babel&source=worker&seed=1&b=warn", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "await G.step(1440*5); G.hold(false); await G.frames(20); G.hold('ui');",
-      "return { towers: JSON.stringify(await G.arc.towers()).slice(0,700), dec: G.arc.decision(), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
-    ] },
-
-  { "name": "vo-let-card-full", "params": "scenario=babel&source=worker&seed=1&b=let", "size": [1600, 900], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
-      "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; await G.frames(4);",
-      "const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; }; return { d, card: R('.gn-decision') };"
-    ] },
-  { "name": "vo-let-insp", "params": "scenario=babel&source=worker&seed=1&b=let", "size": [1600, 900], "quality": "medium", "ui": true, "frames": 2,
-    "script": [
-      "G.select({ kind: 'settlement', id: window.__tw.host }); await G.frames(20); return { insp: document.querySelector('.gn-insp')?.innerText?.slice(0, 1500) };"
-    ] },
-  { "name": "vo-let-after", "params": "scenario=babel&source=worker&seed=1&b=let", "size": [1600, 900], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
-    "script": [
-      "G.select(null); const r = await G.arc.choose('4'); let ts; for (let i = 0; i < 40; i++) { await G.step(1440*15); ts = await G.arc.towers(); if (ts.some((t) => t.status === 'finished')) break; }",
-      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__tw.host }, dist: 1200, tilt: 60, yaw: 20, fov: 50, hour: 21.5 }); await G.frames(20); G.hold('ui');",
-      "return { r: JSON.stringify(r).slice(0,300), towers: JSON.stringify(ts).slice(0,600), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
-    ] }
+  {
+   "name": "vo-confuse-card",
+   "params": "scenario=babel&source=worker&seed=1&b=confuse",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
+    "window.__toChoice = async () => { let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; return d; };",
+    "const d = await window.__toChoice(); await G.frames(3); const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; };",
+    "return { halfDays: d, tw: window.__tw && { name: window.__tw.name, h: window.__tw.height, goal: window.__tw.goal, league: window.__tw.league, builders: window.__tw.builders }, dec: G.arc.decision(), card: R('.gn-decision'), text: document.querySelector('.gn-decision')?.innerText, toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "vo-confuse-look",
+   "params": "scenario=babel&source=worker&seed=1&b=confuse",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold(false); const b = [...document.querySelectorAll('.gn-decision button')].find((x) => x.textContent.includes('Look')); b?.click(); await G.frames(3); await G.frames(3); G.hold('ui');",
+    "window.__lk = { clicked: !!b, people: G.agents(60).length, dec: G.arc.decision().open };",
+    "G.arc.later(); await G.frames(2); return { pill: G.arc.decision().pills };"
+   ]
+  },
+  {
+   "name": "vo-confuse-after",
+   "params": "scenario=babel&source=worker&seed=1&b=confuse",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "const pill = document.querySelector('.gn-decision-pill'); pill?.click(); await G.frames(1);",
+    "const r = await G.arc.choose('1'); G.hold(false); await G.frames(3); await G.step(60); await G.frames(3); G.hold('ui');",
+    "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), dec: G.arc.decision() };"
+   ]
+  },
+  {
+   "name": "vo-confuse-later",
+   "params": "scenario=babel&source=worker&seed=1&b=confuse",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "await G.step(1440*20); const pv = window.__GENESIS_FX__.fx.vis.pv; const host = window.__tw?.host ?? pv.settlements[0].id;",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: host }, dist: 3000, tilt: 50, yaw: 20, fov: 50, hour: 11 }); await G.frames(3); G.hold('ui');",
+    "const ts = await G.arc.towers(); return { towers: JSON.stringify(ts).slice(0, 600), nset: pv.settlements.length, hearts: JSON.stringify(await G.arc.hearts()).slice(0,600) };"
+   ]
+  },
+  {
+   "name": "vo-strike-card",
+   "params": "scenario=babel&source=worker&seed=1&b=strike",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
+    "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw;",
+    "G.hold(false); const b = [...document.querySelectorAll('.gn-decision button')].find((x) => x.textContent.includes('Look')); b?.click(); await G.frames(3); await G.frames(3); G.hold('ui');",
+    "return { d, people: G.agents(60).length };"
+   ]
+  },
+  {
+   "name": "vo-strike-after",
+   "params": "scenario=babel&source=worker&seed=1&b=strike",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "const r = await G.arc.choose('2'); G.hold(false); await G.frames(3); await G.step(30); await G.frames(3); await G.frames(3); G.hold('ui');",
+    "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), towers: JSON.stringify(await G.arc.towers()).slice(0,500) };"
+   ]
+  },
+  {
+   "name": "vo-strike-later",
+   "params": "scenario=babel&source=worker&seed=1&b=strike",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "await G.step(1440*6); G.hold(false); await G.frames(3); G.hold('ui');",
+    "return { hearts: JSON.stringify(await G.arc.hearts()).slice(0,700), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "vo-warn-card",
+   "params": "scenario=babel&source=worker&seed=1&b=warn",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
+    "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; await G.frames(3);",
+    "const dec1 = G.arc.decision(); const txt1 = document.querySelector('.gn-decision')?.innerText;",
+    "const pv = window.__GENESIS_FX__.fx.vis.pv; const A = pv.agents; let pick = null; for (let i = 0; i < A.count && !pick; i++) { const bio = await G.query('agent', { id: A.id[i] }); if (bio && bio.age >= 25 && bio.settlement && tw.league.includes(bio.settlement.id)) pick = bio; }",
+    "const ff = pick ? await G.freeform('make ' + pick.name + ' my prophet') : null; await G.step(10); await G.frames(3);",
+    "return { d, pick: pick && { name: pick.name, st: pick.settlement.id, age: pick.age }, ff: JSON.stringify(ff).slice(0, 300), dec1, txt1, dec2: G.arc.decision(), txt2: document.querySelector('.gn-decision')?.innerText };"
+   ]
+  },
+  {
+   "name": "vo-warn-after",
+   "params": "scenario=babel&source=worker&seed=1&b=warn",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "if (!G.arc.decision().open) { const p = document.querySelector('.gn-decision-pill'); p?.click(); await G.frames(3); }",
+    "const r = await G.arc.choose('3'); await G.step(1440*2); G.hold(false); const b = [...document.querySelectorAll('.gn-btn')].find((x) => x.textContent.includes('Look')); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__tw.host }, dist: 900, tilt: 55, yaw: 20, fov: 50, hour: 11 }); await G.frames(3); G.hold('ui');",
+    "return { r: JSON.stringify(r).slice(0,400), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "vo-warn-day6",
+   "params": "scenario=babel&source=worker&seed=1&b=warn",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "await G.step(1440*5); G.hold(false); await G.frames(3); G.hold('ui');",
+    "return { towers: JSON.stringify(await G.arc.towers()).slice(0,700), dec: G.arc.decision(), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  },
+  {
+   "name": "vo-let-card-full",
+   "params": "scenario=babel&source=worker&seed=1&b=let",
+   "size": [
+    1600,
+    900
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove();",
+    "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; await G.frames(3);",
+    "const R = (q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.left, r.top, r.width, r.height].map(Math.round) : null; }; return { d, card: R('.gn-decision') };"
+   ]
+  },
+  {
+   "name": "vo-let-insp",
+   "params": "scenario=babel&source=worker&seed=1&b=let",
+   "size": [
+    1600,
+    900
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.select({ kind: 'settlement', id: window.__tw.host }); await G.frames(3); return { insp: document.querySelector('.gn-insp')?.innerText?.slice(0, 1500) };"
+   ]
+  },
+  {
+   "name": "vo-let-after",
+   "params": "scenario=babel&source=worker&seed=1&b=let",
+   "size": [
+    1600,
+    900
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "chronicle": 30,
+   "script": [
+    "G.select(null); const r = await G.arc.choose('4'); let ts; for (let i = 0; i < 40; i++) { await G.step(1440*15); ts = await G.arc.towers(); if (ts.some((t) => t.status === 'finished')) break; }",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__tw.host }, dist: 1200, tilt: 60, yaw: 20, fov: 50, hour: 21.5 }); await G.frames(3); G.hold('ui');",
+    "return { r: JSON.stringify(r).slice(0,300), towers: JSON.stringify(ts).slice(0,600), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+   ]
+  }
  ]
 }
