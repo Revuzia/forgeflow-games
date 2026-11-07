@@ -10,7 +10,8 @@ chips), one baked base-colour atlas with AO multiplied in (the joints between st
                stone hour-lugs, the quarters long), iron cramps across the joints on its top flat, and a broken
                south end: a weathered rim round a paler raw fracture, spalled corners, chips in the water.
   snap_stub    BRIDGE, the Snap (78, 15.8) and (78, 28.2, rot 180), walls of 2.6 x 4.2 m, <= 2.4 m: a short drum of
-               the snapped shaft in the same stone, one hour-band, a raw break toward the Snap's middle and a dressed
+               the snapped shaft in the same stone, one hour-band, a flat-ish sheared break toward the Snap's middle
+               (a few separate cleaved plates, the skin torn just behind them, loose shards at the foot) and a dressed
                end carved with the dial (a ring, twelve hour-lugs, an iron socket) on the other.
   dawn_arch    BRIDGE, Aubade's end (-4, 22), 3 x 24 m: a pointed arch of stacked chalk on coursed piers: a four-centred
                ring of seventeen voussoirs with a keystone and a dawnglass shard, chalk hood mouldings, blued-steel
@@ -75,6 +76,7 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 import numpy as np
 
@@ -300,6 +302,119 @@ def shaft_drum(B, rng):
         chunk(B, "needle" if c[0] < 0.7 else "raw", c, h, rng)
 
 
+# The Snap's break, cut by hand (no fan, no centre): one flat-ish shear across the shaft, long on the west and low down,
+# short on the east and up top, tilted to the sky so the camera sees it. y = SNAP_Y + SNAP_GX x + SNAP_GW w, w = height
+# above the axis. The core is a few separate cleaved plates on that plane: Voronoi cells (seed x, seed w, offset from the
+# shear, own dy/dx, own dy/dw), two standing proud to the west, none at the centre.
+SNAP_Y, SNAP_GX, SNAP_GW = -1.2, 0.3, 0.35
+SNAP_PLATES = (
+    (-0.78, 0.48, -0.2, 0.15, 0.1),
+    (-0.62, -0.42, -0.28, -0.1, -0.15),
+    (0.0, 0.62, 0.16, -0.2, 0.25),
+    (0.02, -0.18, 0.02, 0.12, -0.12),
+    (0.72, 0.28, -0.1, 0.25, 0.1),
+    (0.55, -0.72, 0.2, -0.1, 0.2),
+)
+# Where the skin of the octagon tore: side by side round the perimeter from the east face, (t along the side, how far the
+# skin stops behind the plate it meets). The skin ends at the plates, so the end is one solid stone, not a shell; the
+# deep ones are spalls, off the corners and unevenly spaced.
+SNAP_EDGE = (
+    ((0.0, 0.03), (0.4, 0.22), (0.7, 0.05)),                       # east face
+    ((0.0, 0.05), (0.35, 0.03), (0.6, 0.3)),                       # upper east
+    ((0.0, 0.06), (0.3, 0.42), (0.45, 0.08), (0.72, 0.28)),        # the top flat (the camera's side)
+    ((0.0, 0.05), (0.4, 0.18), (0.7, 0.03)),                       # upper west
+    ((0.0, 0.04), (0.5, 0.2)),                                     # west face
+    ((0.0, 0.06), (0.5, 0.03)),                                    # lower west
+    ((0.0, 0.05),),                                                # underneath
+    ((0.0, 0.04), (0.5, 0.25)),                                    # lower east
+)
+
+
+def _clip_half(poly, n, d):
+    """Convex clip: keep the side of poly where dot(p, n) <= d."""
+    out = []
+    for i, p in enumerate(poly):
+        q = poly[(i + 1) % len(poly)]
+        dp, dq = p[0] * n[0] + p[1] * n[1] - d, q[0] * n[0] + q[1] * n[1] - d
+        if dp <= 0:
+            out.append(p)
+        if dp * dq < 0:
+            t = dp / (dp - dq)
+            out.append((p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t))
+    return out
+
+
+def _shard(B, mat, poly, y_back, front, zc):
+    """A closed stone of outline poly (x, w): flat back at y_back, its front cut by the plane y = front(x, w). No chamfer:
+    a cleaved edge is sharp, and a chamfer here shades the plate into a cobble."""
+    bm = bmesh.new()
+    a = [bm.verts.new((x, y_back, zc + w)) for x, w in poly]
+    b = [bm.verts.new((x, front(x, w), zc + w)) for x, w in poly]
+    bm.faces.new(a)
+    bm.faces.new(b[::-1])
+    for i in range(len(poly)):
+        j = (i + 1) % len(poly)
+        bm.faces.new((a[i], a[j], b[j], b[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    B.add(mat, K._bm_arrays(bm))
+
+
+def sheared_break(B, r, y_in, zc):
+    """The Snap's break: SNAP_PLATES on the shear, the octagon's skin from the joint at y_in torn along SNAP_EDGE just
+    behind them. Planar and hard-edged throughout; the cracks between the plates are the ink."""
+    def front(i, x, w):
+        sx, sw, off, gx, gw = SNAP_PLATES[i]
+        return SNAP_Y + SNAP_GX * sx + SNAP_GW * sw + off + (SNAP_GX + gx) * (x - sx) + (SNAP_GW + gw) * (w - sw)
+
+    def nearest(x, w):
+        return min(range(len(SNAP_PLATES)), key=lambda i: math.hypot(x - SNAP_PLATES[i][0], w - SNAP_PLATES[i][1]))
+
+    corners = [(r * math.cos(k * PI / 4 - PI / 8), r * math.sin(k * PI / 4 - PI / 8)) for k in range(8)]
+    pts, ys = [], []
+    for k, side in enumerate(SNAP_EDGE):
+        p0, p1 = corners[k], corners[(k + 1) % 8]
+        for t, back in side:
+            x, w = p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t
+            pts.append((x, w))
+            ys.append(front(nearest(x, w), x, w) + back)
+    N = len(pts)
+    c, wall = 0.07, 0.86
+    ring = lambda sc, yy: [(x * sc, yy[i], zc + w * sc) for i, (x, w) in enumerate(pts)]
+    rings = [ring((r - c) / r, [y_in] * N), ring(1.0, [y_in - c] * N), ring(1.0, ys),
+             ring(wall, [y + 0.05 for y in ys]), ring(wall, [y_in - 0.12] * N)]
+    verts, faces = [], []
+    for R in rings:
+        verts.extend(R)
+    for q in range(len(rings) - 1):
+        for j in range(N):
+            j1 = (j + 1) % N
+            faces.append((q * N + j, q * N + j1, (q + 1) * N + j1, (q + 1) * N + j))
+    faces.append(tuple(range(N)))
+    faces.append(tuple(4 * N + j for j in range(N - 1, -1, -1)))
+    B.add("needle", (verts, faces))
+    # the plates: their outlines stop a hair inside the skin
+    octa = [(p[0] * 0.985, p[1] * 0.985) for p in corners]
+    gap = 0.025
+    for i, (sx, sw, *_a) in enumerate(SNAP_PLATES):
+        poly = octa
+        for j, (ox, ow, *_b) in enumerate(SNAP_PLATES):
+            if i != j:
+                nx, nw = ox - sx, ow - sw
+                L = math.hypot(nx, nw)
+                nx, nw = nx / L, nw / L
+                poly = _clip_half(poly, (nx, nw), (sx + ox) / 2 * nx + (sw + ow) / 2 * nw - gap)
+        _shard(B, "raw", poly, y_in - 0.2, lambda x, w, i=i: front(i, x, w), zc)
+    # broken off: shards fallen at the short east end of the break, angular, of unequal size, none of them paired
+    for mat, poly, depth, c3, axis, ang in (
+        ("needle", [(-0.42, -0.22), (0.3, -0.28), (0.46, 0.14), (-0.06, 0.3), (-0.34, 0.16)], 0.24, (0.8, -1.55, 0.2), (0.55, 0.3, 0.1), 0.42),
+        ("raw", [(-0.26, -0.12), (0.24, -0.17), (0.1, 0.2), (-0.16, 0.17)], 0.18, (0.02, -1.84, 0.09), (0.2, 1.0, 0.3), 0.3),
+        ("needle", [(-0.13, -0.07), (0.15, -0.09), (0.05, 0.12)], 0.1, (0.52, -1.95, 0.06), (0.3, 1.0, 0.1), 0.35),
+        ("raw", [(-0.14, -0.08), (0.13, -0.1), (0.02, 0.13)], 0.12, (1.12, -1.08, 0.07), (1.0, 0.4, 0.2), 0.6),
+    ):
+        v, f = K.prism(poly, origin=(0, 0, 0), u=(1, 0, 0), v=(0, 1, 0), depth=depth, chamfer=0.014)
+        B.add(mat, (K.move(K.rot(v, axis, ang), c3), f))
+
+
 def snap_stub(B, rng):
     """BRIDGE's Snap stub: footprint 2.6 x 4.2 m, <= 2.4 m; the break faces -Y (the Snap's middle), the dressed end +Y."""
     r, zc = 1.2, 1.12
@@ -308,7 +423,7 @@ def snap_stub(B, rng):
     drum(B, "needle", r, 1.3, yE, zc, c=0.09)
     drum(B, "needle", r, 0.62, 1.3, zc)
     hour_band(B, r, 0.28, 0.62, zc)
-    broken_drum(B, r, 0.28, -1.86, zc, rng, jag=0.5)
+    sheared_break(B, r, 0.28, zc)
     # the dressed end, carved with the dial: a raised ring, twelve hour-lugs, an iron socket
     v, f = ST.ring(0.5, 0.66, yE - 0.02, yE + 0.05, 0.012, 32)
     B.add("needle", (lay(v, zc), f))

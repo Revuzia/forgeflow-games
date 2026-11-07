@@ -25,24 +25,24 @@
   },
   "snap_stub": {
     "id": "snap_stub",
-    "tris": 2046,
+    "tris": 2043,
     "size_m": [
-      2.22,
-      4.17
+      2.37,
+      4.15
     ],
     "height": 2.26,
     "x": [
       -1.11,
-      1.11
+      1.26
     ],
     "y": [
-      -2.06,
+      -2.04,
       2.11
     ],
-    "kb_raw": 326,
-    "kb": 148,
+    "kb_raw": 332,
+    "kb": 155,
     "texture": 1024,
-    "buried_faces_dropped": 154,
+    "buried_faces_dropped": 151,
     "nodes": [
       "body"
     ]
