@@ -512,6 +512,10 @@ button.gn-past-h:hover, button.gn-past-h:focus-visible { color: var(--gn-gold-hi
 .gn-insp-heart { font-style: italic; color: var(--gn-ivory); }
 .gn-insp-heart.gn-heart-defiant { color: #ff8a90; } .gn-insp-heart.gn-heart-fearful { color: #c9b8ff; }
 .gn-insp-heart.gn-heart-devoted { color: #f6d98a; } .gn-insp-heart.gn-heart-restless { color: #e8b878; }
+/* hearts share grid: the share words ("about half", "hardly any") in full in a 2-column grid */
+.gn-insp-hearts .gn-insp-grid { column-gap: 10px; }
+.gn-insp-hearts .gn-insp-grid .gn-insp-bar-row { grid-template-columns: 58px minmax(18px, 1fr) max-content; gap: 6px; }
+.gn-insp-hearts .gn-insp-grid .gn-insp-bar-v { font-size: 10.5px; max-width: none; overflow: visible; }
 .gn-insp-fill.gn-skill { background: linear-gradient(90deg, #8a7448, #e9cf96); }
 .gn-insp-kv { display: flex; gap: 12px; justify-content: space-between; font-size: 13px; line-height: 1.45; padding: 1px 0; }
 .gn-insp-k { color: var(--gn-ivory-dim); flex: none; font-size: 13px; }

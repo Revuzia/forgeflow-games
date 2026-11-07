@@ -1,5 +1,5 @@
 {
- "_doc": "ARC \u00a72.5 Decision card + \u00a71.4 Hearts layer/inspector on the \u00a76.7 stub, lookdev world ('homestead' POI town), 888x500 with UI. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-decision.json --port=5311 > _harness/scratch/arc/shots-decision.log 2>&1 & Each script ends with G.hold(true) so page.screenshot composites the last frame instead of waiting minutes for a new one.",
+ "_doc": "ARC \u00a72.5 Decision card + \u00a71.4 Hearts layer/inspector on the \u00a76.7 stub, lookdev world ('homestead' POI town), 888x500 with UI. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-decision.json --port=5311 > _harness/scratch/arc/shots-decision.log 2>&1 & Each script ends with G.hold(true) so page.screenshot composites the last frame instead of waiting minutes for a new one. Stint 3: card/insp shots run under G.hold('ui') (UI and camera update, the world is not redrawn: the canvas keeps the boot picture), so the capture never waits on software GL; the pill shot needs the Hearts layer drawn, so it renders 4 real frames.",
  "shots": [
   {
    "name": "arc-decision-card",
@@ -12,7 +12,7 @@
    "ui": true,
    "frames": 1,
    "script": [
-    "G.hold(false); document.getElementById('boot')?.remove(); const F = window.__GENESIS_FX__;",
+    "G.hold('ui'); document.getElementById('boot')?.remove(); const F = window.__GENESIS_FX__;",
     "const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9, near = -1, bn = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bn = bd; near = host; bd = d; host = s.id; } else if (d < bn) { bn = d; near = s.id; } }",
     "window.__host = host; window.__near = near; window.__p = p;",
     "G.arc.stub('towers', [{ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: near >= 0 ? [host, near] : [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: true, canAnswer: ['confuse', 'strike', 'warn', 'let'] }]);",
@@ -20,7 +20,7 @@
     "G.arc.stub('hearts', [{ settlement: host, heart: H('fearful', { fearful: 0.52, proud: true, pride: 0.68, caption: 'They watch the sky', line: 'In this town they watch the sky and speak quietly.', remember: ['the storm that took the harvest'] }) }].concat(near >= 0 ? [{ settlement: near, heart: H('defiant', { defiant: 0.41, defiance: 0.55, caption: 'They raise their fists' }), defiant: { kind: 'curse', tick: 1 } }] : []));",
     "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 600, tilt: 60, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(12);",
     "const r = document.querySelector('.gn-decision')?.getBoundingClientRect();",
-    "const __r = { host, near, decision: G.arc.decision(), card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, chips: document.querySelectorAll('.gn-slabel-heart').length }; G.hold(true); return __r;"
+    "const __r = { host, near, decision: G.arc.decision(), card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, chips: document.querySelectorAll('.gn-slabel-heart').length }; return __r;"
    ]
   },
   {
@@ -34,9 +34,9 @@
    "ui": true,
    "frames": 1,
    "script": [
-    "G.hold(false); G.select({ kind: 'settlement', id: window.__host }); await G.frames(12);",
+    "G.hold('ui'); G.select({ kind: 'settlement', id: window.__host }); await G.frames(12);",
     "const r = document.querySelector('.gn-decision')?.getBoundingClientRect(); const q = document.querySelector('.gn-insp')?.getBoundingClientRect();",
-    "const __r = { card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, insp: q ? [q.left, q.top, q.width, q.height].map(Math.round) : null, cls: document.querySelector('.gn-decision')?.className }; G.hold(true); return __r;"
+    "const __r = { card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, insp: q ? [q.left, q.top, q.width, q.height].map(Math.round) : null, cls: document.querySelector('.gn-decision')?.className }; return __r;"
    ]
   },
   {
@@ -50,7 +50,7 @@
    "ui": true,
    "frames": 1,
    "script": [
-    "G.hold(false); G.select(null); G.arc.later(); G.ui_.overlay('hearts'); await G.camera({ mode: 'orbit', lat: __p.lat, lon: __p.lon, dist: 2400, tilt: 35, yaw: __p.heading + 25, fov: 50, hour: 11 }); await G.frames(20);",
+    "G.hold(false); G.select(null); G.arc.later(); G.ui_.overlay('hearts'); await G.camera({ mode: 'orbit', lat: __p.lat, lon: __p.lon, dist: 2400, tilt: 35, yaw: __p.heading + 25, fov: 50, hour: 11 }); await G.frames(4);",
     "const r = document.querySelector('.gn-decision-pill')?.getBoundingClientRect();",
     "const __r = { pill: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, decision: G.arc.decision(), legend: document.querySelector('.gn-legend')?.textContent?.slice(0, 120) }; G.hold(true); return __r;"
    ]

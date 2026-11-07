@@ -1,0 +1,25 @@
+{
+ "_doc": "ARC §8.2 T10 live: the babel scenario (real sim TowerView), step until the first tower.choice opens, the Decision card at 888x500; then Decide later -> pill; then the tower inspector card. Card/pill/inspector shots under G.hold('ui') (the canvas keeps the boot picture). Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-babel.json --port=5311 > _harness/scratch/arc/shots-babel.log 2>&1 &",
+ "shots": [
+  { "name": "arc-babel-card", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); document.getElementById('boot')?.remove(); const t0 = performance.now(); let tw = null, days = 0, begunDay = -1;",
+      "for (days = 0; days < 40; days++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; if (ts.length && begunDay < 0) begunDay = days / 2; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; }",
+      "window.__tw = tw; await G.frames(4);",
+      "const r = document.querySelector('.gn-decision')?.getBoundingClientRect();",
+      "return { halfDays: days, begunDay, secs: Math.round((performance.now() - t0) / 1000), tower: tw && { id: tw.id, name: tw.name, h: tw.height, goal: tw.goal, status: tw.status, canAnswer: tw.canAnswer, league: tw.league }, decision: G.arc.decision(), card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, text: document.querySelector('.gn-decision')?.textContent?.slice(0, 300) };"
+    ] },
+  { "name": "arc-babel-pill", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); G.arc.later(); await G.frames(4);",
+      "const r = document.querySelector('.gn-decision-pill')?.getBoundingClientRect();",
+      "return { pill: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, decision: G.arc.decision(), speed: G.state().speed };"
+    ] },
+  { "name": "arc-babel-towercard", "params": "scenario=babel&source=worker&seed=1", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); if (window.__tw) G.select({ kind: 'tower', id: window.__tw.id }); await G.frames(20);",
+      "const q = document.querySelector('.gn-insp')?.getBoundingClientRect();",
+      "return { sel: G.state().selected, insp: q ? [q.left, q.top, q.width, q.height].map(Math.round) : null, text: document.querySelector('.gn-insp')?.textContent?.slice(0, 500) };"
+    ] }
+ ]
+}

@@ -1204,6 +1204,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float d = smoothstep(0.0, 6.0, uw);
     float inW = smoothstep(0.0, 0.25, uw);
     vec3 floorC = mix(uSandCol * 0.5, vec3(0.09, 0.085, 0.065), smoothstep(1.0, 12.0, uw)) * (0.85 + 0.25 * m1);
+    // ARC §10: the risen, silt-laden river lies over its pale shallows — the sand margin that read as the river's edge
+    // the day before goes under a brown film (seen through the water: the shallows ARE the visible bank at play
+    // distance, so this is where "higher" shows; the dry-land siltBank band above is only a few pixels wide)
+    floorC = mix(floorC, vec3(0.11, 0.08, 0.05) * (0.85 + 0.25 * m1), siltG * 0.9);
     col = mix(col, floorC, max(d, 0.6) * (1.0 - steep * 0.5) * inW);
     rough = mix(rough, 0.35, 0.7 * inW);
     s.sward *= 1.0 - inW;

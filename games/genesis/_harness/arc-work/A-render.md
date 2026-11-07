@@ -115,3 +115,10 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   terrain materials DO get uSilt [-2452,620,1614 r1440] k 0.74 (lookdev planet radius ~3 km). So siltG > 0 on the
   terrain; the bank colour terms must be producing nothing -> v2 of the probe dumps the compiled fragment source around
   siltBank (is it the code we think?).
+- Probe v3 (arc-probe-siltdbg.png, terrain albedo -> R siltG, G -uw/12, B siltBank): siltG high over the view; siltBank
+  high on a band AT the waterline (uw ~ 0), only a thin orange fringe up the dry bank (bank uw drops past -3 m within a
+  few px). The pale margin seen in the real shots is the SHALLOW FLOOR (uw 0..1, floorC = uSandCol*0.5) seen through
+  the water: the underwater block overwrote the silt there. FIX terrainmat.ts: floorC mixed to mud by siltG*0.9 (the
+  risen brown river covers its pale shallows). render-silt 4/4 (assert added), tsc clean.
+- NOTE: shots.mjs's vite runs GENESIS_FROZEN (no file watching): a run that REUSES a vite already up on the port serves
+  stale src. River re-run therefore on port 5313 (fresh vite): shots-river-warning2.log.

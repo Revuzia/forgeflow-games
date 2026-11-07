@@ -35,6 +35,7 @@ const EXAMPLES = [
   'a tornado heading for {town}',
   'invent soap',
   'how many people live in {town}?',
+  'how do the people of {town} feel?',
   'clear the skies everywhere',
   'turn the star red',
 ];
@@ -374,7 +375,10 @@ export class Freeform {
     }
     this.examples.append(h('div', { class: 'gn-ff-ex-h', text: 'For example' }));
     const wrap = h('div', { class: 'gn-ff-ex-wrap' });
-    for (const ex of EXAMPLES) wrap.append(this.exampleChip(ex.replace('{town}', t1).replace('{town2}', t2), false));
+    // (a great tower rising: its answers in words come first — ARC §6.5)
+    const rising = this.host.view.planets.some((pv) => (pv.towers ?? []).some((t) => t.status === 'rising' && t.choiceOpen));
+    const ex = rising ? ['confuse their tongues', 'warn the builders', 'let the tower stand', ...EXAMPLES] : EXAMPLES;
+    for (const e of ex) wrap.append(this.exampleChip(e.replace('{town}', t1).replace('{town2}', t2), false));
     this.examples.append(wrap);
   }
 

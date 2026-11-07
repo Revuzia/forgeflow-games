@@ -46,6 +46,8 @@ test('the banks read the same zones: the rising river wets and silts them above 
   assert.match(src, new RegExp(`uniform vec4 uSilt\\[${SILT_MAX}\\]`));
   assert.match(src, new RegExp(`uniform float uSiltK\\[${SILT_MAX}\\]`));
   assert.match(src, /wLo = min\(wLo, -siltG/, 'the wet band climbs with the silt');
+  // (looked at, stint 3: the pale shallows ARE the bank seen at play distance; they go under a brown film)
+  assert.match(src, /floorC = mix\(floorC, [^;]*siltG/, 'the risen river covers its pale shallows');
   const oc = readFileSync(new URL('../src/render/planet/ocean.ts', import.meta.url), 'utf8');
   assert.match(oc, /cap = .*\(1\.0 \+ 2\.0 \* silt\)/, 'the in-scatter cap lifts for muddy water');
 });

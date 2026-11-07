@@ -141,3 +141,21 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
    babel scenario (real TowerView); M4 live shot (fearful village, poses, chip legible at orbit + region).
 4. §10: render lane owns "higher" (barely visible in arc-river-warning.png); UI side done (toast headline, warned river
    in lookdev). Sim lane owns the 25-year natural-flood run.
+
+### Stint 3 (2026-11-07, from 07:02Z)
+- Stint-2 runs: 10203 (decision) 0/3 (all page.screenshot timeouts); 10498 (towercard) produced arc-hearts-insp.png
+  (3536 s, 748 s/frame!) then was gone. LOOKED at arc-hearts-insp.png: Hearts section reads well (caption, line, bars,
+  Pride/Defiance, dusk line below the fold = inspector scrolls); DEFECT share words cut ("about …", "hardly…") in the
+  2-col grid. FIX styles.css `.gn-insp-hearts .gn-insp-grid` (58 px label, 10.5 px value, no max-width). NOT re-shot.
+- Root cause of the capture timeouts: hold(true) still renders every frame a frames() waiter asks for (and the harness
+  waits spec.frames after the script) -> each is a minutes-long software-GL frame and the capture queues behind it.
+  NEW test-surface mode G.hold('ui') (app.ts `held: boolean | 'ui'`): the frame loop runs (UI, camera, waiters) but
+  renderer.render is skipped unless a capture/thumb waiter is pending; the canvas keeps its last picture. Use it in
+  every UI-layout shot. ui-decision.json card/insp now use hold('ui'); pill renders 4 real frames (Hearts layer).
+- Freeform: EXAMPLES + 'how do the people of {town} feel?'; while a tower is rising with choiceOpen the box offers
+  'confuse their tongues', 'warn the builders', 'let the tower stand' first. tests/ui-arc-freeform.test.ts 2/2
+  (sim answers the hearts question in words; chips match T_CONFUSE/T_WARN/T_LET). ui-freeform-examples 2/2.
+- 07:04Z ui-decision.json relaunched (slot PID 24290, port 5311, log scratch/arc/shots-decision3.log).
+- NEW spec _harness/arc-work/specs/ui-babel.json (T10 live: babel seed 1, step until choiceOpen, card / pill / tower
+  inspector, all hold('ui')). Chained via _harness/arc-work/run-ui-babel.sh <pid> (waits for 24290, then slot.sh on
+  5311): waiter PID 25055, log scratch/arc/shots-babel.log.

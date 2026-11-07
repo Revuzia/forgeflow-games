@@ -385,7 +385,7 @@ export class App implements UiHost {
       if (document.hidden && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
       // (test surface `hold`) a shot of the page with its UI: the last frame stays on the canvas while the capture
       // composites (a software-rendered frame can take minutes on a loaded machine); waiters still get their frames
-      if (this.held && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
+      if (this.held === true && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
       this.frame(t);
     };
     this.raf = requestAnimationFrame(loop);
@@ -754,7 +754,7 @@ export class App implements UiHost {
       // title: its world is a backdrop (punch P17)
       if (this.titleOn) this.renderer.godfx.setInput(null, 'none', false);
       else this.renderer.godfx.setInput(this.hover, this.ui.hand.cursor, this.ui.hand.isAiming);
-      this.renderer.render(view, pose, dt, (now - this.startAt) / 1000);
+      if (this.held !== 'ui' || this.captureWaiters.length || this.thumbWaiters.length) this.renderer.render(view, pose, dt, (now - this.startAt) / 1000);
       if (this.thumbWaiters.length) {
         // (the drawing buffer is copied now, in the frame that drew it; the scaling happens off this frame)
         const W = this.canvas.width, H = this.canvas.height;
@@ -1184,8 +1184,9 @@ export class App implements UiHost {
   }
 
   /** a press that began on a mark over the world (a prophet's): it is about that one */
-  /** test surface: draw no new frames (the last one stays) until released or a frame is waited for */
-  held = false;
+  /** test surface: draw no new frames (the last one stays) until released or a frame is waited for; 'ui': the UI
+   *  and camera still update every frame but the world is not drawn (the last picture stays) — UI layout shots */
+  held: boolean | 'ui' = false;
   private forcedEntity: EntityRef | null = null;
 
   entityAt(x: number, y: number): EntityRef | null {
