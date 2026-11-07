@@ -303,8 +303,11 @@ interface Stream { stems: StreamStem[]; secS: number; n: number; acts: boolean; 
   /** window buffers no window or source holds any more, per stem, decoded into again (a window's memory is reused, not
    *  left to the collector: STREAM_POOL per stem), and what holds each buffer now (windows cached + sources playing it) */
   pool: AudioBuffer[][]; holds: Map<AudioBuffer, number>;
-  /** dev / probes: windows decoded, their decode times (ms), the most windows held at once */
-  stats: { decoded: number; ms: number[]; maxHeld: number; late: number } }
+  /** pool buffers a window is being decoded into (neither pooled nor held until it settles) */
+  busy: Set<AudioBuffer>;
+  /** dev / probes: windows decoded, their decode times (ms), the most windows held at once, the most MB the chain ever
+   *  held at once (windows + buffers sources play + pool: streamBuffers) */
+  stats: { decoded: number; ms: number[]; maxHeld: number; late: number; maxHeldMb: number } }
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
 interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
@@ -466,8 +469,17 @@ interface Voice { src: AudioBufferSourceNode | null; gain: GainNode | null; cue:
   started: number; dead?: boolean; nodes?: AudioNode[] }
 /** what a retired source is waiting for (see `release` in the header): 'stop' a fade-out asked for (freed at once when
  *  the clock stalls), 'voice' a one-shot's natural end (a stale one-shot is freed on a stall too), 'piece' a bed piece's
- *  natural end (kept through a stall: it plays on when the clock comes back) */
-type RetireKind = 'stop' | 'voice' | 'piece';
+ *  natural end (kept through a stall: it plays on when the clock comes back), 'hand' a bed source playing on until its
+ *  successor, already scheduled, takes over at `at` (a section's window, a whole bed's jump: round 6 AUD-5). A hand-over
+ *  is the music still sounding, so a stall keeps it unless its time has come; once its bed stops it is a 'stop' */
+type RetireKind = 'stop' | 'voice' | 'piece' | 'hand';
+/** a retired source not freed yet (see `retire`): `owner` the bed a hand-over belongs to */
+interface Dying { kind: RetireKind; at: number; src: AudioBufferSourceNode | null; owner: Bed | null;
+  free(how: 'ended' | 'due' | 'stall'): void;
+  /** taken over by a later retire() of the same source: forgets this entry without freeing, returns its `then` */
+  cancel(): (() => void) | undefined }
+/** a hand-over or a piece the clock has not reached yet is looked at again this often while the clock stands (ms) */
+const HELD_RECHECK_MS = 500;
 
 class Engine implements ValeAudioPort {
   readonly log: string[] = [];
@@ -613,8 +625,8 @@ class Engine implements ValeAudioPort {
   /** the platform can stream a bed (OpusStem.supported, asked once the context exists; see `stream` in the header) */
   private canStream: boolean | null = null;
   private streamCheck: Promise<void> | null = null;
-  /** retired sources not freed yet: their free() and what they wait for */
-  private readonly dying = new Map<() => void, RetireKind>();
+  /** retired sources not freed yet (see `retire`) */
+  private readonly dying = new Set<Dying>();
   /** dev / probes: what the release did (freed by kind and by how: ended, due by wall clock, a stall) */
   readonly releaseStats = { retired: 0, ended: 0, due: 0, stall: 0, recovered: 0, stalls: 0 };
 
@@ -766,40 +778,56 @@ class Engine implements ValeAudioPort {
   }
 
   // ── release (see `release` in the header) ──────────────────────────────────────────────────────
-  /** a source leaves: stopped at `at` (ctx time) when `kind` is 'stop', else it ends there on its own. Once that is due
-   *  it is disconnected with `nodes` and drops its buffer, by whichever comes first: its onended, the wall clock reaching
-   *  `at` while the context clock does too, the context clock standing still, or (a stop) a stall */
+  /** a source leaves: stopped at `at` (ctx time) when `kind` is 'stop' or 'hand', else it ends there on its own. Once
+   *  that is due it is disconnected with `nodes` and drops its buffer, by whichever comes first: its onended, the wall
+   *  clock reaching `at` while the context clock does too, the context clock standing still, or (a stop) a stall. A
+   *  piece or a hand-over the clock has not reached is kept while the clock stands: it sounds on when the clock is
+   *  back (round 6 AUD-5). A source retired again (a bed piece its bed's stop fades sooner) is the later retirement's,
+   *  the earlier one's `then` included */
   private retire(src: AudioBufferSourceNode | null, nodes: readonly (AudioNode | null | undefined)[], at: number, kind: RetireKind, then?: () => void): void {
     const ctx = this.ctx;
+    if (src) for (const d of [...this.dying]) if (d.src === src) {
+      const t0 = d.cancel();
+      if (t0) { const t1 = then; then = () => { t0(); t1?.(); }; }
+    }
     let done = false;
-    const free = (how: 'ended' | 'due' | 'stall'): void => {
-      if (done) return;
-      done = true;
-      this.dying.delete(kill);
-      this.releaseStats[how]++;
-      if (src) {
-        src.onended = null;
-        try { src.stop(); } catch { /* never started, or already stopped */ }
-        try { src.disconnect(); } catch { /* not connected */ }
-        try { src.buffer = null; } catch { /* the platform keeps it: the node is unreachable once ended */ }
-      }
-      for (const n of nodes) if (n) try { n.disconnect(); } catch { /* not connected */ }
-      then?.();
+    const d: Dying = {
+      kind, at, src, owner: kind === 'hand' ? this.bed : null,
+      free: (how) => {
+        if (done) return;
+        done = true;
+        this.dying.delete(d);
+        this.releaseStats[how]++;
+        if (src) {
+          src.onended = null;
+          try { src.stop(); } catch { /* never started, or already stopped */ }
+          try { src.disconnect(); } catch { /* not connected */ }
+          try { src.buffer = null; } catch { /* the platform keeps it: the node is unreachable once ended */ }
+        }
+        for (const n of nodes) if (n) try { n.disconnect(); } catch { /* not connected */ }
+        then?.();
+      },
+      cancel: () => { if (done) return undefined; done = true; this.dying.delete(d); if (src) src.onended = null; return then; },
     };
-    const kill = (): void => free('stall');
     this.releaseStats.retired++;
-    if (src && kind === 'stop') try { src.stop(at); } catch { /* never started */ }
-    if (!src || !ctx || ctx.state === 'closed' || (kind === 'stop' && (this.stalled || ctx.state !== 'running'))) { free('stall'); return; }
-    this.dying.set(kill, kind);
-    src.onended = () => free('ended');
+    if (src && (kind === 'stop' || kind === 'hand')) try { src.stop(at); } catch { /* never started */ }
+    const standing = !!ctx && (this.stalled || ctx.state !== 'running');
+    if (!src || !ctx || ctx.state === 'closed' || (standing && (kind === 'stop' || (kind === 'hand' && at <= ctx.currentTime)))) { d.free('stall'); return; }
+    this.dying.add(d);
+    src.onended = () => d.free('ended');
     let last = ctx.currentTime;
     const check = (): void => {
       if (done) return;
       const now = ctx.currentTime;
-      if (now >= at || this.ctx !== ctx || ctx.state !== 'running') { free('due'); return; }
-      if (now - last < 0.01) { free('stall'); return; }          // the clock stood still since the last look
+      if (now >= d.at || this.ctx !== ctx) { d.free('due'); return; }
+      const still = ctx.state !== 'running' || now - last < 0.01;          // the clock stood still since the last look
       last = now;
-      setTimeout(check, Math.max(50, (at - now + RETIRE_SLACK_S) * 1000));
+      if (still) {
+        if (d.kind !== 'piece' && d.kind !== 'hand') { d.free(ctx.state !== 'running' ? 'due' : 'stall'); return; }
+        setTimeout(check, HELD_RECHECK_MS);          // it sounds on when the clock is back
+        return;
+      }
+      setTimeout(check, Math.max(50, (d.at - now + RETIRE_SLACK_S) * 1000));
     };
     setTimeout(check, Math.max(50, (at - ctx.currentTime + RETIRE_SLACK_S) * 1000));
   }
@@ -836,8 +864,10 @@ class Engine implements ValeAudioPort {
     this.stalled = on;
     if (on) {
       this.releaseStats.stalls++;
-      // every fade waiting on the clock is freed now, and every one-shot (stale by the time the clock is back)
-      for (const [kill, kind] of [...this.dying]) if (kind !== 'piece') kill();
+      // every fade waiting on the clock is freed now, and every one-shot (stale by the time the clock is back); a piece
+      // and a hand-over still to come are the music itself and play on when the clock is back (round 6 AUD-5)
+      const now = this.ctx?.currentTime ?? Infinity;
+      for (const d of [...this.dying]) if (d.kind === 'stop' || d.kind === 'voice' || (d.kind === 'hand' && d.at <= now)) d.free('stall');
       for (const v of [...this.voices]) if (!v.src && v.pooled) v.dead = true;
       return;
     }
@@ -849,7 +879,7 @@ class Engine implements ValeAudioPort {
   /** the platform closed the context (it never runs again): everything on it is let go, and the next gesture or cue
    *  builds a new one (decoded buffers are not tied to a context and stay cached) */
   private dropContext(): void {
-    for (const kill of [...this.dying.keys()]) kill();
+    for (const d of [...this.dying]) d.free('stall');
     this.voices.length = 0;
     this.bed = null;
     const map = this.client?.setup?.map ?? null;
@@ -1252,8 +1282,8 @@ class Engine implements ValeAudioPort {
         stems.push({ file: x.file, stem, dest, layer: x.layer });
       }
       chains.push({ stems, secS: c.secS, n, acts: c.acts, main: c.stems.some((x) => !x.layer), win: new Map(), cur: null, next: null, stopped: false,
-        pool: stems.map(() => []), holds: new Map(),
-        stats: { decoded: 0, ms: [], maxHeld: 0, late: 0 } });
+        pool: stems.map(() => []), holds: new Map(), busy: new Set(),
+        stats: { decoded: 0, ms: [], maxHeld: 0, late: 0, maxHeldMb: 0 } });
     }
     bed.streams = chains;
     const started = await Promise.all(chains.map(async (c) => {
@@ -1301,12 +1331,14 @@ class Engine implements ValeAudioPort {
     const a = Math.round((k * st.secS - STREAM_HANDLE_S) * STREAM_SR), b = Math.round(((k + 1) * st.secS + STREAM_HANDLE_S) * STREAM_SR);
     const t = performance.now();
     const into = st.stems.map((_, i) => st.pool[i].pop() ?? null);
+    for (const b of into) if (b) st.busy.add(b);
     const p = Promise.all(st.stems.map((x, i) => x.stem.window(ctx, a, b, into[i]).catch(() => null)));
     const nw: Win = { p, v: null };
     w = nw;
     st.win.set(k, nw);
     st.stats.maxHeld = Math.max(st.stats.maxHeld, st.win.size);
     void p.then((v) => {
+      for (const b of into) if (b) st.busy.delete(b);
       st.stats.decoded++;
       if (st.stats.ms.length < 64) st.stats.ms.push(Math.round(performance.now() - t));
       v.forEach((x, i) => { if (!x && into[i]) this.unhold(st, into[i]!, i, true); });     // a failed decode hands its buffer back
@@ -1319,7 +1351,11 @@ class Engine implements ValeAudioPort {
   }
 
   /** a window buffer is held once more (by the window cache, or a source playing it) */
-  private hold(st: Stream, buf: AudioBuffer): void { st.holds.set(buf, (st.holds.get(buf) ?? 0) + 1); }
+  private hold(st: Stream, buf: AudioBuffer): void {
+    const fresh = !st.holds.has(buf);
+    st.holds.set(buf, (st.holds.get(buf) ?? 0) + 1);
+    if (fresh) { let n = 0; for (const b of streamBuffers(st)) n += pcmBytes(b); st.stats.maxHeldMb = Math.max(st.stats.maxHeldMb, +(n / 1048576).toFixed(1)); }
+  }
 
   /** a holder lets go; with no holder left the buffer goes back to the stem's pool (`fresh`: it was never held) */
   private unhold(st: Stream, buf: AudioBuffer, i: number, fresh = false): void {
@@ -1379,7 +1415,7 @@ class Engine implements ValeAudioPort {
     if (prev) for (const o of prev.srcs) {
       if (!seg.srcs.some((x) => x.st === o.st)) { try { o.g.gain.setTargetAtTime(0, at, 0.02); } catch { /* */ } }
       const ob = o.src.buffer, oi = st.stems.indexOf(o.st);
-      this.retire(o.src, [o.g], (late ? at + 0.05 : T) + 0.02, 'stop', () => { if (ob) this.unhold(st, ob, oi); });
+      this.retire(o.src, [o.g], (late ? at + 0.05 : T) + 0.02, 'hand', () => { if (ob) this.unhold(st, ob, oi); });
     }
     if (late && prev) st.stats.late++;
     return seg;
@@ -1704,23 +1740,32 @@ class Engine implements ValeAudioPort {
     s.start(start, (pos - SECTION_XF_S + len) % len);
     g.gain.setValueCurveAtTime(XF_CURVES.in, start, SECTION_XF_S);
     oldGain.gain.setValueCurveAtTime(XF_CURVES.out, start, SECTION_XF_S);
-    this.retire(old, [oldGain], at + 0.02, 'stop');
+    this.retire(old, [oldGain], at + 0.02, 'hand');
     setGain(g);
     return s;
   }
 
   /** dev / probes: a streamed bed's state (see `stream` in the header): null when the bed decodes whole. `windows` and
    *  `stats` are the first chain's (a match bed has one), `chains` each chain's */
-  get musicStream(): { stems: { file: string; kb: number; seconds: number }[]; windows: number[]; heldMb: number; cur: number | null; next: number | null;
+  get musicStream(): { stems: { file: string; kb: number; seconds: number }[]; windows: number[]; heldMb: number; windowMb: number; pooledMb: number; maxHeldMb: number;
+    cur: number | null; next: number | null;
     stats: Stream['stats']; chains: { n: number; secS: number; acts: boolean; windows: number[]; cur: number | null; next: number | null; maxHeld: number; decoded: number; late: number;
       pooled: number; buffers: number }[] } | null {
     const cs = this.bed?.streams ?? [];
     if (!cs.length) return null;
-    let bytes = 0;
-    for (const c of cs) for (const w of c.win.values()) for (const b of w.v ?? []) if (b) bytes += b.length * b.numberOfChannels * 4;
+    // round 6 AUD-6: everything the chains hold, each buffer once: the cached windows, the buffers sources still play
+    // (a hand-over's window already dropped from the cache) and the pool kept for the next decode
+    const mb = (bs: Iterable<AudioBuffer>): number => { let n = 0; for (const b of bs) n += pcmBytes(b); return +(n / 1048576).toFixed(1); };
+    const all = new Set<AudioBuffer>(), wins = new Set<AudioBuffer>(), pooled = new Set<AudioBuffer>();
+    for (const c of cs) {
+      for (const w of c.win.values()) for (const b of w.v ?? []) if (b) wins.add(b);
+      for (const p of c.pool) for (const b of p) pooled.add(b);
+      for (const b of streamBuffers(c)) all.add(b);
+    }
     const c0 = cs[0];
     return { stems: cs.flatMap((c) => c.stems.map((x) => ({ file: x.file, kb: Math.round(x.stem.bytes / 1024), seconds: x.stem.duration }))), windows: [...c0.win.keys()],
-      heldMb: +(bytes / 1048576).toFixed(1), cur: c0.cur?.k ?? null, next: c0.next?.k ?? null, stats: { ...c0.stats, ms: c0.stats.ms.slice() },
+      heldMb: mb(all), windowMb: mb(wins), pooledMb: mb(pooled), maxHeldMb: Math.max(...cs.map((c) => c.stats.maxHeldMb)),
+      cur: c0.cur?.k ?? null, next: c0.next?.k ?? null, stats: { ...c0.stats, ms: c0.stats.ms.slice() },
       chains: cs.map((c) => ({ n: c.n, secS: c.secS, acts: c.acts, windows: [...c.win.keys()], cur: c.cur?.k ?? null, next: c.next?.k ?? null, maxHeld: c.stats.maxHeld,
         decoded: c.stats.decoded, late: c.stats.late, pooled: c.pool.reduce((t, x) => t + x.length, 0), buffers: c.holds.size })) };
   }
@@ -1764,12 +1809,15 @@ class Engine implements ValeAudioPort {
       c.stopped = true;
       for (const seg of [c.cur, c.next]) for (const x of seg?.srcs ?? []) if (!srcs.some(([q]) => q === x.src)) srcs.push([x.src, x.g]);
       for (const x of c.stems) if (!x.layer) shared.push(x.dest);
-      c.win.clear(); c.cur = null; c.next = null; c.pool = []; c.holds.clear();
+      c.win.clear(); c.cur = null; c.next = null; c.pool = []; c.holds.clear(); c.busy.clear();
     }
     let left = srcs.length;
     const last = (): void => { if (--left <= 0) for (const n of shared) try { n.disconnect(); } catch { /* gone */ } };
     if (!left) { left = 1; last(); }
     for (const [s, g] of srcs) this.retire(s, [g], t + XFADE_S * 1.5, 'stop', last);
+    // its hand-overs still to come leave with it: no successor will take over (freed now on a standing clock)
+    const standing = this.stalled || this.ctx.state !== 'running';
+    for (const d of [...this.dying]) if (d.owner === b) { d.kind = 'stop'; d.owner = null; d.at = Math.min(d.at, t + XFADE_S * 1.5); if (standing) d.free('stall'); }
     // free its decoded files (see `memory` in the header): its sources keep theirs through the fade, then let go
     const keep = new Set(this.bedFiles(this.wantBed));
     for (const f of this.bedFiles(b.id)) if (!keep.has(f)) this.buffers.delete(f);
@@ -2056,8 +2104,9 @@ class Engine implements ValeAudioPort {
       const b = await Promise.race([p, new Promise<null>((r) => { setTimeout(r, 50, null); })]);
       if (b?.length) { files++; bytes += b.length * b.numberOfChannels * 4; }
     }
-    // a streamed bed's windows (see `stream` in the header)
-    for (const c of this.bed?.streams ?? []) for (const w of c.win.values()) for (const b of w.v ?? []) if (b) { files++; bytes += b.length * b.numberOfChannels * 4; }
+    // a streamed bed's buffers (see `stream` in the header): its windows, the buffers its sources play, its pool
+    // (round 6 AUD-6: the pool is memory the bed holds too)
+    for (const c of this.bed?.streams ?? []) for (const b of streamBuffers(c)) { files++; bytes += pcmBytes(b); }
     return { files, bytes };
   }
 
@@ -2493,6 +2542,18 @@ class Engine implements ValeAudioPort {
     }
     this.bedRoles();
   }
+}
+
+/** an AudioBuffer's PCM bytes (32-bit float per sample per channel) */
+function pcmBytes(b: AudioBuffer): number { return b.length * b.numberOfChannels * 4; }
+
+/** every buffer a chain holds (see `stream` in the header), each once: windows cached, buffers its sources play, its pool */
+function streamBuffers(c: Stream): Set<AudioBuffer> {
+  const out = new Set<AudioBuffer>(c.holds.keys());
+  for (const w of c.win.values()) for (const b of w.v ?? []) if (b) out.add(b);
+  for (const p of c.pool) for (const b of p) out.add(b);
+  for (const b of c.busy) out.add(b);
+  return out;
 }
 
 /** the section after `from` in an act's order; a section the act does not play goes on to the act's next one above it */

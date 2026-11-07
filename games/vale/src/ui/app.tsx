@@ -401,9 +401,11 @@ function ScreenHost(): JSX.Element {
       // same screen, new params without a transition (tabs): update in place
       if (top && top.route.screen === route.screen && router.transition.value === 'none') return cur.map((l) => (l === top ? { ...l, route } : l));
       const t = router.transition.value;
-      // into a match the outgoing screen (loading) cuts away at once: the HUD never lands on its cards
-      const out = SCREENS[route.screen]?.chrome === 'match' ? 'none' : t;
-      return [...cur.filter((l) => !l.leaving).map((l) => ({ ...l, leaving: true, transition: out })), { route, leaving: false, transition: t }];
+      // into a match the outgoing screen (loading) cuts away at once: the HUD never lands on its cards. r6 UI-6: it is
+      // dropped in this same commit (not one painted frame later, as a leaving 'none' frame would be), so the match's
+      // first frame never rasters the loading cards and its masked splashes next to the HUD (the start transient)
+      if (SCREENS[route.screen]?.chrome === 'match') return [{ route, leaving: false, transition: t }];
+      return [...cur.filter((l) => !l.leaving).map((l) => ({ ...l, leaving: true, transition: t })), { route, leaving: false, transition: t }];
     });
   }, [route]);
   return (

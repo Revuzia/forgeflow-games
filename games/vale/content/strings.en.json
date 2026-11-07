@@ -677,6 +677,8 @@
   "hud.menu.leave": "Leave match",
   "hud.menu.leave_confirm": "Leave the match? It counts as a loss and earns no rewards.",
   "hud.menu.leave_confirm_practice": "Leave practice? Nothing is lost.",
+  "hud.menu.button_tip": "Menu (Esc)",
+  "hud.menu.button_sub": "Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.",
   "hud.surrender.title": "Surrender",
   "hud.surrender.opens": "Surrender opens at {t}.",
   "hud.surrender.vote": "{name} proposes to surrender.",

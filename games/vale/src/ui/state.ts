@@ -257,7 +257,9 @@ export class AppState {
       case 'match':
         this.match.value = e.client;
         this.renderer?.setScene?.(e.client);
-        r.reset('match', {}, 'fade');
+        // r6 UI-6: a cut, not a fade: a fading screen is its own full-viewport composited layer, so the HUD would raster
+        // twice (into the fade layer, then into the page once it ends) in the match's first second
+        r.reset('match', {}, 'none');
         break;
       case 'postgame': {
         // the match-end sting plays over the end banner; the last frame holds before the wipe

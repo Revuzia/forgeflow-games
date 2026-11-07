@@ -6,7 +6,7 @@
 // match. Then Session.matchReady() starts the clock. The shadow-line wipe starts and ends the screen.
 
 import type { CSSProperties, JSX } from 'preact';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { SeatSetup } from '../../contracts/sim.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { Button } from '../components/Button.tsx';
@@ -42,6 +42,13 @@ export function LoadingScreen(): JSX.Element {
   const started = useRef(performance.now());
   const readied = useRef(false);
   useEsc(() => true);   // the match flow owns the screen
+  // r6 UI-6: the loading cards' splashes are let go the moment the screen leaves (the match's first frame): an <img>
+  // that still holds its src keeps its decoded plate referenced until the element is collected, which the start
+  // transient reads as raster that outlives the screen
+  // (the last element seen, kept past unmount: Preact clears a ref before the cleanups run)
+  const root = useRef<HTMLDivElement | null>(null);
+  const keepRoot = (e: HTMLDivElement | null): void => { if (e) root.current = e; };
+  useLayoutEffect(() => () => { for (const i of root.current?.querySelectorAll('img') ?? []) i.removeAttribute('src'); }, []);
 
   useEffect(() => {
     if (tips.length < 2) return;
@@ -79,7 +86,7 @@ export function LoadingScreen(): JSX.Element {
   const myTeam = you?.team ?? 0;
   const ordered = ffa ? [setup.seats] : [setup.seats.filter((s) => s.team === myTeam), ...teams.filter((t) => t !== myTeam).map((t) => setup.seats.filter((s) => s.team === t))];
   return (
-    <div class="loading" role="status" aria-busy={!ready}>
+    <div ref={keepRoot} class="loading" role="status" aria-busy={!ready}>
       <header class="loading__head stg">
         <span class="t-label muted">{mode?.name}{queue ? ` · ${queue.name}` : ''}</span>
         <h1 class="t-display-l">{map?.name ?? mode?.name}</h1>
