@@ -59,3 +59,13 @@
   prayers raises faith, and F = 1 − faith is 20 % of pride, so attended leaders sit at 0.15-0.66 by y20 (stint-4
   t2att: 0/8). Options: count the window from year 10 (10-20 y), or give a favoured, prosperous town a pride source
   (e.g. answered prayers raising P), or accept that a kind god delays Babel (which reads true to the arc).
+
+## Stint 6 (A-sim, 2026-11-07 ~10:40Z) — no §6 contract change
+- Tunables only (not bold spec numbers): TOWER.shift 360 -> 600 (visible builders' shift; the walk out is ~750 ticks).
+  The towerTask hash miss continues to the next tower instead of returning null.
+- §2.3 omens: now picked by fit as the spec words it (lightning needs a storm, halo daylight, starlings always). They do
+  NOT go through omens.ts readOmen (that would add `starlings`/`halo` to OMEN_KINDS, i.e. to `god.omen`'s enum and the
+  UI omen tables, and tell a second chronicle line); the league reads them with the same kind of effects instead
+  (god -1, faith +0.1, feared fear +0.05 / trusted trust +0.03, sees_god, an `omen:tower.<kind>` act).
+- §2.4 strike after a refused warning: provoked via since.provoked (regard's class gives trust -0.05).
+- people/buildings.ts: a ruined `wonder` (great-tower) is never cleared for a new building (the rubble never clears).

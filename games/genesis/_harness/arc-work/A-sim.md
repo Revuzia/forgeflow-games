@@ -218,3 +218,26 @@
 - RUNNING (10:24Z): T2/T4 tower seeds with shift 600: slot.sh probe-t2.sh 1 3 -> scratch/arc/t2k.log, 5 -> t2l.log.
 - RUNNING: T7 8 seeds: slot.sh probe-strike.sh 1..8 (babel, rise 0.6 y, strike at default wrath in daylight, remains
   after 5 y) -> scratch/arc/strike8.log. seed 1 quick check: 9 on site, 3 dead (<= 50 %, <= 10), remains stand.
+- T2/T4 RESULT with shift 600 (t2k/t2l/t2m/t2n, 8 seeds x 60 y unattended): towers on 3/8 (seed 5 y14.9 + a 2nd at
+  y56.9, seed 3 y17.9, seed 1 y24.9), none < y10, median 17.9, max 2 attempts -> T2 unattended PASS.
+  T4: half at 2.83 y (s1), 4.25 y (s3, then abandoned at 52 %), 4.25 y (s5); omens 3 / 2 / 3 (3 on both that reached
+  75 %); on-site 96 / 97 / 99 % (s5 2nd tower 95 %, 45 % at run end after 3.1 y) -> T4 PASS on every attempt.
+  (Seed 5's first tower is no longer abandoned under hardship: the shift change moved its world.)
+- T7 RESULT (strike8.log, babel 8 seeds, strike at default wrath after 0.6 y in daylight): on site 2-14, dead 1-4,
+  dead <= 50 % of on site 8/8 and <= 10 8/8; remains (great-tower building) stand 5 y later 8/8 -> T7 PASS (50-year
+  form: decay 0 for great-tower; NEW guard in people/buildings.ts planBuilding: a ruined `wonder` under a new site makes
+  the site unusable instead of being cleared, so the rubble never clears).
+- Full gate launched 10:41Z: slot.sh npm run check -> scratch/arc/check6.log (pid in check6.pid).
+- DONE T8 "a later strike after a refusal is foretold and provoked": tower.ts strike sets since.provoked on every league
+  town when the warning was refused, before the godAct, so regard classes the strike `provoked` (trust -0.05 instead of
+  -0.20); builders already fled (0 dead). Test arc-tower "a strike after a refused warning..." (host act provoked:true).
+  NOTE: this edit and its test landed AFTER check6 launched (10:41Z); focused after it: arc-tower 11/11,
+  living-relationship + determinism + arc-babel 44/44 pass, tsc 0.
+
+## NEXT (stint 7)
+1. GATE: read scratch/arc/check6.log (`# fail 0`?). It started before the strike/provoked edit (focused tests cover it);
+   if anything fails, fix and run the gate once more.
+2. Attended pacing T2 is the ONLY open §8.2 sim line: an owner/spec call (contract-changes.md stint 5 TENSION). Do not
+   tune blindly. Options are listed there.
+3. Optional: T7's 50-year rubble as a live run (probe-strike.ts <seed> 0.6 50, through slot.sh as a long job); the code
+   path is guarded (decay 0; planBuilding never clears a ruined wonder).

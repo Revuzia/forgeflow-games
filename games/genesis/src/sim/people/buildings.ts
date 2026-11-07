@@ -450,7 +450,10 @@ export function planBuilding(x: PCtx, st: Settlement, t: number, complete = fals
     for (const bid of x.ps.bByCell.get(c)) {
       const o = x.ps.building(bid);
       if (!o || !(o.flags & BuildingFlag.ruined) || gone.includes(o)) continue;
-      if (distM(x.p, site.pos, o.pos) < x.c.buildings.list[o.type].footprint * 0.7 + def.footprint * 0.7) gone.push(o);
+      if (distM(x.p, site.pos, o.pos) >= x.c.buildings.list[o.type].footprint * 0.7 + def.footprint * 0.7) continue;
+      // (ARC §2.4: the rubble of a struck tower never clears -- a landmark, not a building plot)
+      if (x.c.buildings.list[o.type].function === 'wonder') return null;
+      gone.push(o);
     }
   }
   for (const o of gone) removeBuilding(x, o);

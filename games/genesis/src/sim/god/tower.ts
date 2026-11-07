@@ -731,6 +731,9 @@ export function strike(x: PCtx, tw: TowerState, w: number): { dead: number; fell
   const doomed = onSite.slice().sort((a, b) => hashFloat(A.id[a], tw.id, 0x70e4) - hashFloat(A.id[b], tw.id, 0x70e4)).slice(0, n);
   let dead = 0;
   for (const s of doomed) if (A.alive[s]) { die(x, s, DEATH.god); dead++; }
+  // a warning refused: they were told and would not hear, so the harm is earned (regard's provoked class: trust -0.05,
+  // not the unprovoked -0.20; T8). Stint 6 -- it used to soften only the love.
+  if (foretold) for (const st of league) srel(u, p.id, st.id).since.provoked = x.tick;
   godAct(u, p, tw.pos, 1500, { harm: 0.6 + 0.6 * w }, 0, 'lightning');
   const standingTiers = Math.max(0, tw.tiers - fell);
   tw.height = r3(Math.min(tw.height, standingTiers * TOWER.tierM));

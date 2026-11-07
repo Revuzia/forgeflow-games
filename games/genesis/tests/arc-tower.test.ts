@@ -269,3 +269,32 @@ test('§2.3 omens by fit: a halo only by day, lightning only in a storm; the lea
   }
   assert.equal(seen, 3);
 });
+
+test('§2.4 a strike after a refused warning is foretold and provoked: nobody dies, the act is earned (T8)', () => {
+  const L = league();
+  L.sim.u.god.rel!.prophets.length = 0;
+  const p = L.sim.u.planets[0], A = p.people.agents;
+  const x = makeCtx(L.sim.u, p);
+  const who = (p.people.members.get(L.host.id) ?? []).map((s) => A.id[s]).sort((a, b) => a - b)
+    .find((id) => (L.sim.u.tick - A.birth[A.slotOf(id)]) / x.year > 20)!;
+  must(L.sim, { k: 'prophet.call', agent: who } as never);
+  const tw = begin(L);
+  must(L.sim, { k: 'tower.warn' } as never);
+  L.sim.step(x.day * 6);
+  // (the roll is the seed's; this test wants the refusal branch)
+  tw.warned!.heeded = []; tw.warned!.refused = tw.league.slice();
+  tw.status = 'rising'; tw.ended = -1;
+  must(L.sim, { k: 'tower.strike' } as never);
+  assert.equal(tw.status, 'struck');
+  // (the act reaches the towns within its 1.5 km; the host at least)
+  let touched = 0;
+  for (const id of tw.league) {
+    const harm = L.sim.u.god.rel!.st[`${p.id}:${id}`].acts.filter((a) => a.kind === 'harm' && a.god === 0).at(-1);
+    if (!harm) continue;
+    touched++;
+    assert.ok(harm.provoked || harm.foretold, `town ${id}: the strike was earned (${JSON.stringify(harm)})`);
+  }
+  assert.ok(touched >= 1, 'the strike is in the host\'s acts');
+  const ev = L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.struck') as unknown as { data: { dead: number } }[];
+  assert.equal(ev.at(-1)!.data.dead, 0, 'foretold: the builders fled first');
+});

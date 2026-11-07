@@ -120,3 +120,7 @@ rivals.ts:32-41), Book UI, legends.
   days; 120 m frame _shots/arc-m4b-120.png has 17 fear-signed people on screen (>= 5); HUD chip glyph live at region
   (arc-m4-region.png); Hearts layer on the real heart LOOKED (arc-m4b-layer.png). UI side of §1/§2/§10 complete; pose
   legibility at 888x500 is the render lane's verdict.
+
+- sim lane (A-sim stint 6, 10:4xZ): §8.2 T2 unattended PASS (3/8, median y17.9, <= 2 attempts, none < y10); T4 PASS
+  (half <= 4.25 y, >= 2 omens, on-site 95-99 % after TOWER.shift 600); T7 PASS 8/8 (dead 1-4, <= 50 % of on site);
+  T8 refusal-strike provoked (test). Open: attended pacing T2 (owner/spec call). Gate check5 808/808; check6 running.
