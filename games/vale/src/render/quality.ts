@@ -66,7 +66,14 @@ export interface ResolvedQuality {
   particleDensity: number;
   /** pooled point lights for `flash` layers (fixed per tier: changing it recompiles materials) */
   flashLights: number;
+  /** max anisotropy of the GLB's mipmapped textures (Assets.setModelAnisotropy; a sampler state: no memory, no program) */
+  modelAnisotropy: number;
 }
+
+/** GR-1: GLTFLoader leaves every GLB texture at anisotropy 1; three's default is the whole of what fighters, structures
+ *  and props sampled. 1 turns this off. 8 and 16 give the same frame at the game's 52 degree pitch (0.002 % of pixels), so
+ *  8 (the tiling textures' cap, assets.ts) stands. _design/reviews/gfx/GR-1_anisotropy_ab.png */
+const MODEL_ANISOTROPY: Readonly<Record<Tier, number>> = { low: 1, medium: 8, high: 8, ultra: 8 };
 
 export const PRESETS: Readonly<Record<Tier, Omit<Video, 'preset' | 'fpsCap' | 'fullscreen' | 'ambientEffects'>>> = {
   low: { renderScale: 0.75, shadows: 1, ao: 0, bloom: false, antialias: 'off', particles: 0, scatter: 0, maxDpr: 1 },
@@ -106,6 +113,7 @@ export function resolveQuality(v: Video): ResolvedQuality {
     particleBudget: tier === 'ultra' ? 2500 : tier === 'high' ? 2000 : tier === 'medium' ? 900 : 450,
     particleDensity: particles === 2 ? 1 : particles === 1 ? 0.6 : 0.35,
     flashLights: tier === 'low' ? 0 : tier === 'medium' ? 2 : 4,
+    modelAnisotropy: MODEL_ANISOTROPY[tier],
   };
 }
 

@@ -39,7 +39,7 @@
 // Overlay materials (bars, rings, telegraphs) and VFX are NOT patched: they draw after the grade.
 
 import {
-  ClampToEdgeWrapping, Color, DataTexture, DataUtils, HalfFloatType, LinearFilter, type Material, NoBlending, NormalBlending, RGBAFormat,
+  ClampToEdgeWrapping, Color, DataTexture, DataUtils, HalfFloatType, LinearFilter, LinearMipmapLinearFilter, type Material, NoBlending, NormalBlending, RepeatWrapping, RGBAFormat,
   ShaderChunk, Texture, Vector2, Vector3, Vector4, type WebGLProgramParametersWithUniforms,
 } from 'three';
 
@@ -247,6 +247,46 @@ const VERT_MAIN = /* glsl */`
 }
 `;
 
+// GF-2 prototype: a shared tiling detail normal on fighters (RG cloth weave, BA leather grain), chosen by the roughness
+// class and flattened by its own mips at game size. Switch: FIGHTER_DETAIL (false = no code, no texture).
+const FIGHTER_DETAIL = true;
+function makeDetailTexture(): DataTexture {
+  const N = 256, h = new Float32Array(N * N), g = new Float32Array(N * N), d = new Uint8Array(N * N * 4);
+  const P = 8, seeds: [number, number][] = [];
+  let r = 12345; const rnd = (): number => { r = (r * 1664525 + 1013904223) >>> 0; return r / 4294967296; };
+  for (let i = 0; i < 90; i++) seeds.push([rnd() * N, rnd() * N]);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = (x / N) * P, v = (y / N) * P, cu = Math.floor(u), cv = Math.floor(v), over = (cu + cv) % 2 === 0;
+    const a = Math.sin((u - cu) * Math.PI), b = Math.sin((v - cv) * Math.PI);
+    h[y * N + x] = over ? a * (0.65 + 0.35 * b) : b * (0.65 + 0.35 * a) * 0.8;
+    let f1 = 1e9, f2 = 1e9;
+    for (const s of seeds) {
+      const dx = Math.abs(x - s[0]), dy = Math.abs(y - s[1]), wx = Math.min(dx, N - dx), wy = Math.min(dy, N - dy), q = wx * wx + wy * wy;
+      if (q < f1) { f2 = f1; f1 = q; } else if (q < f2) f2 = q;
+    }
+    g[y * N + x] = Math.min(1, (Math.sqrt(f2) - Math.sqrt(f1)) / 6);
+  }
+  const at = (m: Float32Array, x: number, y: number): number => m[((y + N) % N) * N + ((x + N) % N)];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const o = (y * N + x) * 4;
+    d[o] = 127.5 + 127.5 * Math.max(-1, Math.min(1, (at(h, x - 1, y) - at(h, x + 1, y)) * 3));
+    d[o + 1] = 127.5 + 127.5 * Math.max(-1, Math.min(1, (at(h, x, y - 1) - at(h, x, y + 1)) * 3));
+    d[o + 2] = 127.5 + 127.5 * Math.max(-1, Math.min(1, (at(g, x - 1, y) - at(g, x + 1, y)) * 3));
+    d[o + 3] = 127.5 + 127.5 * Math.max(-1, Math.min(1, (at(g, x, y - 1) - at(g, x, y + 1)) * 3));
+  }
+  const t = new DataTexture(d, N, N, RGBAFormat);
+  t.wrapS = t.wrapT = RepeatWrapping; t.magFilter = LinearFilter; t.minFilter = LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+const detailU = FIGHTER_DETAIL ? { valeDetailTex: { value: makeDetailTexture() }, valeDetail: { value: new Vector2(0, 60) } } : null;
+if (detailU) (globalThis as unknown as { __valeDetailU: unknown }).__valeDetailU = detailU;
+const DETAIL_MAPS = ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', `mapN.xy *= normalScale;
+  if ( valeCharMode > 1.5 && valeDetail.x > 0.0 ) {
+    vec4 valeD = texture2D( valeDetailTex, vNormalMapUv * valeDetail.y ) * 2.0 - 1.0;
+    mapN.xy += valeDetail.x * mix( valeD.ba, valeD.rg, smoothstep( 0.55, 0.8, roughnessFactor ) );
+  }`);
+
 const CHAR_PARS = /* glsl */`
 uniform float valeCharMode;
 uniform vec3 valeKeyDir;
@@ -365,6 +405,12 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
         .replace('#include <common>', `#include <common>\n${CHAR_PARS}`)
         .replace('#include <lights_fragment_begin>', CHAR_LIGHTS_BEGIN)
         .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
+      if (detailU) {
+        Object.assign(shader.uniforms, detailU);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform sampler2D valeDetailTex;\nuniform vec2 valeDetail;')
+          .replace('#include <normal_fragment_maps>', DETAIL_MAPS);
+      }
     }
   };
   const prevKey = material.customProgramCacheKey;

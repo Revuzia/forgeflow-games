@@ -3,7 +3,7 @@
 // by the caller.
 //
 // Cost budget (1080p60 on High): one flag layout per ground pixel at most (Voronoi on the roads, closed-form
-// rings / courses elsewhere; skipped deep in the Dialwood), ≤ 11 texture fetches, four value-noise calls plus
+// rings / courses elsewhere; skipped deep in the Dialwood), ≤ 14 texture fetches, four value-noise calls plus
 // one 4-octave fbm. No loops over polygons: every map shape arrives as a baked distance field (the camp-room
 // lookup is a ≤ 16-point nearest search, only on room stone).
 
@@ -151,7 +151,9 @@ uniform vec4 uRooms[ 16 ]; uniform int uRoomN;
 uniform vec4 uShaftAx;
 uniform vec3 uTempW, uTempE; uniform float uTempK; uniform float uWaterT;
 uniform vec3 uSeatCol[ 10 ];
+uniform float uGeStone; uniform sampler2D uGeTile;   // GE-1: the dressed-stone micro layer (0 off; terrain.ts GE_STONE_MICRO, Low always 0)
 float gHeight; float gRough; vec3 gEmit; float gSheen;
+float geK; float geA; float geS;   // GE-1: how much dressed stone this pixel is, the flag's tool-mark angle, the flag's seed
 // env F1: the spawn dais's drawn step (m): its height and the riser's width on the ground
 #define DAIS_H 0.14
 #define DAIS_RW 0.22
@@ -186,6 +188,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   float chip = ( valeNoise( p * 9.0 ) - 0.5 ) * 0.045 + gh * 0.1;
   vec3 col = uJungle; float h = 0.0; float rough = 0.95; vec3 emit = vec3( 0.0 );
   gSheen = 0.0;
+  geK = 0.0; geA = 0.0; geS = 0.0;
   float brush = 1.0 - smoothstep( -0.25, 0.2, thickD );
 #ifdef VALE_STYLE_DIAL
   // ── the Dialwood floor: moss and fan-leaf litter over old dial-stone, broad hue and value drifts ──
@@ -373,6 +376,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
       h = mix( h, ( tM.a - 0.6 ) * 0.045 * turfK + peb * 0.006, coverA );
       rough = mix( rough, 0.92, coverA );
     }
+    // GE-1: the road's and the rooms' own stone (never the joints, the carved band, the turf; polished down on the walked track)
+    geK = max( road * ( 1.0 - jw ) * ( 1.0 - bandW ) * ( 1.0 - 0.45 * trackP ) * ( 1.0 - dustP * 0.4 ), max( vergeW * 0.55 * ( 1.0 - creep ), roomW * 0.7 ) ) * ( 1.0 - coverA );
+    geA = fA * 3.14159; geS = fC;
   }
   // Fallen Shaft floor: pale cool fragments of the shaft lying along its fall, under the water film; a wet bank
   if ( shaftSD < 1.0 ) {
@@ -403,6 +409,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     emit += uShaftFloor * caust * 0.09 * shw;
     sfc *= 1.0 + caust * 0.35;
     col = mix( col, sfc, shw ); h = mix( h, hs * mix( 0.5, 0.3, depthK ), shw ); rough = mix( rough, 0.6, shw );
+    geK *= 1.0 - shw;
     col *= 1.0 - 0.3 * ( 1.0 - smoothstep( 0.0, 0.7, shaftSD ) ) * ( 1.0 - shw );
   }
 #endif
@@ -442,6 +449,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   float mossF = ( 1.0 - smoothstep( 0.44, 0.5, keepL ) ) * offLane;
   col = mix( col, uMoss * mossN * 0.78, mossF ); h = mix( h, ( tM.a - 0.6 ) * 0.05, mossF );
   col = mix( col, uThicketFloor * mossN, brush * 0.9 );
+  // GE-1: the deck's needle stone, tooled across the course (each course stone a little off square)
+  geK = ( 1.0 - jw ) * ( 1.0 - 0.45 * trackP ) * ( 1.0 - max( mossF, brush ) );
+  geA = 1.5708 + ( fA - 0.5 ) * 0.7; geS = fB;
   // the Snap: fine crazing (grooves) and the lit fracture
   float cz = 1.0 - smoothstep( -aa, aa, inl.g );
   float czL = ( 1.0 - smoothstep( -aa, aa, inl.g - 0.02 ) ) - cz;
@@ -465,6 +475,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   col = mix( col, uInscription * 1.02 * mix( vec3( 1.0 ), grainN, 0.4 ), dcS * 0.7 );
   // the fracture: dark broken lips, a lit seam deep inside. Its core is capped at ~luma 160 (L* 65, r12 B5): the
   // fracture reads by contrast against its dark lips, never as a near-white line where telegraphs and skill shots draw
+  geK *= ( 1.0 - bandS ) * ( 1.0 - cz ) * ( 1.0 - litE ) * ( 1.0 - lit );
   col = mix( col, col * 0.45, litE );
   col = mix( col, uLitC * 0.24, lit );
   col = mix( col, col * 1.1, litGlow * ( 1.0 - lit - litE ) );
@@ -525,6 +536,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
   col *= 1.0 + 0.1 * cgL;
   h -= cg * 0.012;
   gSheen *= 1.0 - cg;
+  // GE-1: the plate's honed slabs carry a lighter dressing (never the inlays, the grooves, the brush)
+  geK = 0.7 * ( 1.0 - jw ) * ( 1.0 - max( max( ch, md ), max( cg, brush ) ) );
+  geA = valeHash12( pf.zw + 3.3 ) * 3.14159; geS = sv;
   // each hour-mark's groove, lit in its seat colour (fixed per seat, identical for every viewer; below bloom)
   float sg = 1.0 - smoothstep( -aa, aa, inl.b );
   if ( sg > 0.0 ) {
@@ -534,6 +548,7 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     vec3 sc = uSeatCol[ 0 ];
     for ( int k = 1; k < 10; k ++ ) if ( k == si ) sc = uSeatCol[ k ];
     col = mix( col, sc * 0.35, sg );
+    geK *= 1.0 - sg;
     emit += sc * 0.32 * sg;
     h -= sg * 0.006;
   }
@@ -620,6 +635,9 @@ export const GROUND_MAIN_GLSL = /* glsl */`
     pH = mix( pH, 0.012 + smoothstep( 0.0, 0.06, ke ) * 0.02, kerb );
     col = mix( col, pc, pw );
     h = mix( h, pH, pw );
+    // GE-1: the plaza's flags (the honed disc, its inlays, the step and the kerb's joints stay clean)
+    geK = mix( geK, 0.65 * ( 1.0 - pj ) * ( 1.0 - inner * 0.5 ) * ( 1.0 - max( iw, max( riser, foot ) ) ) * ( 1.0 - hhG ) * ( 1.0 - hhC ), pw );
+    if ( pw > 0.5 ) { geA = pf.x * 3.14159; geS = fract( pf.x * 7.3 ); }
     rough = mix( rough, mix( mix( 0.64, 0.5, iw ), 0.72, kerb ), pw );
   }
   // ── the Seat: the needle's base-stone, flush; rim step, socket scar, twelve hour-ticks ──
@@ -646,7 +664,29 @@ export const GROUND_MAIN_GLSL = /* glsl */`
       sc *= 1.0 - 0.4 * stepL; sc *= 1.0 + 0.1 * lip;
       float sw = 1.0 - smoothstep( uSeat.z - aa, uSeat.z + aa, sd );
       col = mix( col, sc, sw ); h = mix( h, shh * 0.6 - tk * 0.005 - stepL * 0.02 + lip * 0.006, sw ); rough = mix( rough, 0.55, sw );
+      geK = mix( geK, 0.65 * ( 1.0 - sj ) * ( 1.0 - sock ) * ( 1.0 - tk ) * ( 1.0 - stepL ), sw );
+      if ( sw > 0.5 ) { geA = sf.x * 3.14159; geS = fract( sf.x * 7.3 ); }
     }
+  }
+  // GE-1: dressed stone at the scale the game camera actually shows (3-12 px): the mason's tool marks, running one way
+  // on each flag and coming and going across it, fine pits, and rubbed chalk flecks. Centred on 1, so the band's value
+  // holds (B5); it fades before it would alias (a zoomed-out or Low view). Off (0) costs one branch
+  if ( uGeStone > 0.0 && geK > 0.004 && inMap ) {
+    float fpK = uGeStone * geK * ( 1.0 - smoothstep( 0.024, 0.042, aa ) );
+    vec2 gd = vec2( cos( geA ), sin( geA ) );
+    vec2 gq = vec2( dot( p, gd ), dot( p, vec2( -gd.y, gd.x ) ) );
+    // (three fetches of a small tile of value noise, no noise calls: the layer has to pay for itself on the most-covered
+    // surface. The grain painting is too soft to carry this scale. Tile: terrain.ts geStoneTile, 32 cells across)
+    // the pits and flecks rotated off the map axes and warped by the grit, so the noise's lattice never shows as rows of dots
+    float gGrit = texture( uGeTile, ( p * 26.0 + 3.7 ) / 32.0 ).g - 0.5;
+    float gStroke = texture( uGeTile, vec2( gq.x * 0.7 + geS * 61.0, gq.y * 12.0 + geS * 17.0 + gGrit * 1.6 ) / 32.0 ).r - 0.5;
+    float gPatch = smoothstep( 0.34, 0.68, nMid + ( geS - 0.5 ) * 0.4 );
+    vec2 gR = vec2( 0.8 * p.x - 0.6 * p.y, 0.6 * p.x + 0.8 * p.y ) * 13.0 + 7.3 + gGrit * 2.6;
+    vec4 gF = texture( uGeTile, gR / 32.0 );
+    float gPit = smoothstep( 0.76, 0.9, gF.g );
+    float gFleck = smoothstep( 0.8, 0.9, gF.b );
+    col *= 1.0 + fpK * ( gStroke * gPatch * 0.18 + gGrit * 0.16 - gPit * 0.17 + gFleck * 0.1 + 0.018 );
+    h += fpK * ( gStroke * gPatch * 0.005 - gPit * 0.002 );
   }
   // wall-foot occlusion (never on the gorge's own edges: the splat's wall field skips chasms)
   col *= mix( 0.5, 1.0, smoothstep( 0.0, 1.9, wallD + ( n2 - 0.5 ) * 0.35 ) );

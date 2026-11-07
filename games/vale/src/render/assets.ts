@@ -96,6 +96,8 @@ export class Assets {
   private readonly landedTextures = new Map<string, Texture | null>();
   /** keys asked for since mark() (always kept by release()) */
   private readonly touched = new Set<string>();
+  /** GR-1: the max anisotropy every GLB texture samples with (the tier's, quality.ts) */
+  private modelAnisotropy = 1;
   /** perf PERF-C2: close a GLB's ImageBitmaps once uploaded (see the header) */
   closeBitmaps = true;
   /** bitmaps closed so far (perf_1080's memory step reads it) */
@@ -151,6 +153,7 @@ export class Assets {
           if (m.isSkinnedMesh) skinned = true;
         });
         if (!renderable) this.failed.add(key);
+        this.anisotropyOf(gltf, this.modelAnisotropy);
         if (this.closeBitmaps) this.closeAfterUpload(gltf);
         return { gltf, renderable, skinned };
       }).catch((err: unknown) => {
@@ -161,6 +164,32 @@ export class Assets {
       this.models.set(key, p);
     }
     return p;
+  }
+
+  /** GR-1: a tier change: the sampler state of every landed GLB texture, in place. three only sets it at upload, and an
+   *  uploaded GLB's bitmap is closed (closeAfterUpload), so a re-upload is not on offer */
+  setModelAnisotropy(n: number): void {
+    if (n === this.modelAnisotropy) return;
+    this.modelAnisotropy = n;
+    for (const l of this.landedModels.values()) if (l.m) this.anisotropyOf(l.m.gltf, n);
+  }
+
+  private anisotropyOf(gltf: GLTF, n: number): void {
+    const res = new Set<object>();
+    collectGpu(gltf.scene, res);
+    const r = this.renderer, gl = r.getContext() as WebGL2RenderingContext;
+    const ext = gl.getExtension('EXT_texture_filter_anisotropic');
+    for (const o of res) {
+      const t = o as Texture;
+      if (!t.isTexture || t.minFilter !== LinearMipmapLinearFilter) continue;
+      t.anisotropy = Math.min(n, r.capabilities.getMaxAnisotropy());
+      const p = (r.properties as unknown as { get(o: object): { __webglTexture?: WebGLTexture; __currentAnisotropy?: number } }).get(t);
+      if (ext && p.__webglTexture) {
+        r.state.bindTexture(gl.TEXTURE_2D, p.__webglTexture);
+        gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, t.anisotropy);
+        p.__currentAnisotropy = t.anisotropy;
+      }
+    }
   }
 
   /** the GLB's textures whose Source feeds exactly one texture: close the bitmap once three has uploaded it */

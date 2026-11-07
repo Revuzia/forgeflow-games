@@ -64,8 +64,8 @@
 
 import {
   BufferAttribute, BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, IcosahedronGeometry,
-  InstancedMesh, LinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
-  RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, SRGBColorSpace, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
+  InstancedMesh, LinearFilter, LinearMipmapLinearFilter, type Material, Matrix4, Mesh, Raycaster, MeshBasicMaterial, MeshStandardMaterial, type Object3D, PlaneGeometry, Quaternion,
+  RepeatWrapping, RGBAFormat, Shape, ShapeGeometry, ShapeUtils, Sphere, SRGBColorSpace, UnsignedByteType, type Texture, Vector2, Vector3, Vector4,
   type Frustum, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -413,6 +413,31 @@ export async function loadTerrainProps(map: MapDefT, load: (ref: string) => Prom
     if (geos.length) { out[role] = geos; any = true; }
   }
   return any ? out : null;
+}
+
+/** GE-1: the switch of the ground's dressed-stone micro layer (terrain_glsl.ts): tool marks, pits and chalk flecks on the
+ *  paved stone at 3-12 px. 1 on, 0 off (one branch, no program). Low never draws it (setScatter), so Low gets no heavier. */
+export const GE_STONE_MICRO: number = 1;
+/** GE-1: a tile of tileable value noise for the micro layer, 8 texels a cell: R and G 32 cells across, B 48 cells (its
+ *  flecks finer). 256 x 256 RGBA with mips, about 350 KB of GPU memory, deterministic */
+function geStoneTile(): DataTexture {
+  const N = 256, out = new Uint8Array(N * N * 4), rnd = mulberry(7741);
+  const lattice = (c: number): Float32Array => Float32Array.from({ length: c * c }, () => rnd());
+  const channel = (ch: number, c: number): void => {
+    const L = lattice(c);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const fx = (x * c) / N, fy = (y * c) / N, ix = Math.floor(fx), iy = Math.floor(fy);
+      const ux = (fx - ix) * (fx - ix) * (3 - 2 * (fx - ix)), uy = (fy - iy) * (fy - iy) * (3 - 2 * (fy - iy));
+      const a = L[iy * c + ix], b = L[iy * c + ((ix + 1) % c)], d = L[((iy + 1) % c) * c + ix], e = L[((iy + 1) % c) * c + ((ix + 1) % c)];
+      out[(y * N + x) * 4 + ch] = Math.round(255 * (a + (b - a) * ux + (d - a + (a - b + e - d) * ux) * uy));
+    }
+  };
+  channel(0, 32); channel(1, 32); channel(2, 48);
+  for (let i = 3; i < out.length; i += 4) out[i] = 255;
+  const t = new DataTexture(out, N, N, RGBAFormat, UnsignedByteType);
+  t.wrapS = t.wrapT = RepeatWrapping; t.magFilter = LinearFilter; t.minFilter = LinearMipmapLinearFilter; t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
 }
 
 /** r12 B4.4: the share of Needlegrass blades the Low tier keeps in every thicket (deterministic, spread evenly) */
@@ -990,6 +1015,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     return new Vector4(cx, cy, Math.cos(a), Math.sin(a));
   };
   const roomU = Array.from({ length: 16 }, (_, k) => (rooms[k] ? new Vector4(rooms[k].x, rooms[k].y, rooms[k].r, 0) : new Vector4()));
+  const geTile = geStoneTile();
+  disposables.push(geTile);
   const gu = {
     ...shared, ...inlayU, ...quadU,
     uSplat: { value: splatTex }, uSplat2: { value: splat2Tex },
@@ -1009,7 +1036,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     uPlaza0: { value: p0 ? new Vector4(p0.x, p0.y, p0.r, p0.side) : new Vector4() }, uPlaza1: { value: p1 ? new Vector4(p1.x, p1.y, p1.r, p1.side) : new Vector4() },
     uFount0: { value: p0 ? new Vector4(p0.fx, p0.fy, p0.fr, 0) : new Vector4() }, uFount1: { value: p1 ? new Vector4(p1.fx, p1.fy, p1.fr, 0) : new Vector4() },
     uSeat: { value: seatV }, uPlate: { value: new Vector3(plateAt[0], plateAt[1], plateR) },
-    uWaterT: worldUniforms.valeTime,
+    uWaterT: worldUniforms.valeTime, uGeStone: { value: GE_STONE_MICRO }, uGeTile: { value: geTile },
     uSeatCol: { value: Array.from({ length: 10 }, (_, k) => lin(FRAY_SEATS[k % FRAY_SEATS.length].color)) },
   };
   const styleDef = surface === 'span' ? 'VALE_STYLE_SPAN' : surface === 'plate' ? 'VALE_STYLE_PLATE' : 'VALE_STYLE_DIAL';
@@ -1025,7 +1052,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += gEmit;\n${GROUND_SHEEN_GLSL}`)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = valeBump( -vViewPosition, normal, gHeight, 1.0 );');
   };
-  groundMat.customProgramCacheKey = () => `vale_ground_v9_${surface}${gorge ? '_g' : ''}`;
+  groundMat.customProgramCacheKey = () => `vale_ground_v10_${surface}${gorge ? '_g' : ''}`;
   patchWorldMaterial(groundMat);
   const ground = new Mesh(groundGeo, groundMat);
   ground.receiveShadow = true;
@@ -1845,6 +1872,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   /** a prop's instance value (propValue): none at 1, so an unscaled map keeps its programs */
   const pvC = (k: number): Color | undefined => (k === 1 ? undefined : new Color(k, k, k));
   const setScatter = (level: 0 | 1 | 2, ao?: boolean): void => {
+    gu.uGeStone.value = level === 0 ? 0 : GE_STONE_MICRO;
     scatterLevel = level;
     if (ao !== undefined) grassAO.value = ao ? 1 : 0;
     setGrass(level === 0 ? GRASS_KEEP_LOW : 1);
