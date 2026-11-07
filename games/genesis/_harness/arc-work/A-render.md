@@ -43,3 +43,22 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   shots-hearts.log, spec render-hearts.json); chain PID 15127 (_harness/arc-work/render-chain.sh: waits 14694, then
   river-warning.json, render-perf.json -> shots-river-warning.log, shots-render-perf.log). All in
   _harness/scratch/arc/render/. PNGs in _shots/arc-*.png. After a restart: rerun render-chain.sh 0 <specs>.
+- 01:5xZ focused: render-arc-tower 8, render-arc-defiance 4, render-hearts 4, render-silt 4, render 5 files (31),
+  shipgen 4: all pass; tsc clean. Full gate NOT run this stint (someone's `npm run check` held slot 2 from 01:27Z on
+  this tree; one-suite rule). Shots extremely slow (load ~14; the first tower shot >20 min, nothing captured yet).
+
+## NEXT (stint 2)
+1. Check runs: kill -0 13088 / 14694 / 15127. If gone and PNGs missing (_shots/arc-tower-*.png, arc-pose-*.png,
+   arc-river-*.png) rerun: setsid nohup _harness/arc-work/render-chain.sh 0 render-tower.json render-hearts.json
+   river-warning.json render-perf.json > _harness/scratch/arc/render/chain.log 2>&1 &
+2. LOOK at every PNG (Read the file): tower rising (scaffold, partial tier, piles, stair facing the village), low preset
+   same geometry, finished at night (summit fire), struck (scorched, rubble ring), abandoned (crumbled, weathered),
+   far speck + shadow, confusion ring (hue rings at 9 km view). Poses: fear lookUp, fist/curse, hurl + pebbles in
+   flight (report arcs stats), celebrate. River: warning vs before (§10.3c). Fix what looks wrong.
+3. Perf: shots-render-perf.log prints perfmon before/after (tower) and hurlBefore/hurl; record numbers here.
+4. Full gate once via slot.sh (slot.sh --status first): npm run check -> _harness/scratch/arc/render/check.log.
+5. Remaining render items: tower picking for the UI's tower inspector card (Buildings.pick/positionOf for towers; UI
+   lane needs a pick path — coordinate via contract-changes if a new pick kind 'tower' is wanted); idol not yet seen
+   in a shot (needs the sim's `idol` building; catalog maps it); covenant Hearts-layer rim is the UI lane's
+   (overlays.ts), the rainbow is the existing physical one; live-sim (not stub) look at heart poses once sim towns
+   go fearful/defiant.
