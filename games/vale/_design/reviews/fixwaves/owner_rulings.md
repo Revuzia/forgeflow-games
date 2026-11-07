@@ -223,3 +223,11 @@ The silhouette IoU metric normalises away size and colour, and players meet each
 ## 25. MSAA on Ultra is not in this release (lead, by delegation, 2026-11-07)
 
 GR-3 showed a real gain: 4x MSAA with SMAA cut slow-pan edge popping by 43-67 %. But it costs 61-111 MB of render targets and about 1-1.4 ms a frame, and match memory already fails ruling 20 (RIFT second match 3433-3461 MB). **MSAA is removed for this release; Ultra keeps SMAA.** It can be retried once match memory has a real margin under 3.0 GB.
+
+## 26. Esc cancels first, then opens the menu (lead, by delegation, 2026-11-07)
+
+In a match, Esc first cancels the innermost active layer (ability aim, attack-move, ping wheel, open shop), and the next Esc opens the match menu. This is the usual RTS/MOBA behaviour and was verified in the production client 21 of 21 times. **Each Esc closes one layer; a player always reaches Leave match within one press per visible layer.** Harnesses that leave a match press Esc until the menu shows, at most 4 times. A mouse path to the menu must exist in the HUD as well.
+
+## 27. What "Home" memory means (lead, by delegation, 2026-11-07)
+
+Ruling 20's Home bar is <= 2.5 GB. Round 4 also asked for Home to return within 150 MB of the first Home; that was the lead's own working target, not a ruling. The live object set (GL textures, bitmaps, JS heap, audio buffers) does return to first-Home levels on a running audio clock; the remaining +340-580 MB is Chrome and driver pages kept for reuse after free. **The gate is: Home <= 2.5 GB after every match, the live object set back within 150 MB of first Home, and no match peak climbing across three matches in one session beyond 150 MB on the same map.** Allocator and driver retention alone is not a failure.

@@ -1,0 +1,385 @@
+[
+ {
+  "lane": "MEM",
+  "work": {
+   "items": [
+    {
+     "id": "MSAA-1",
+     "status": "done",
+     "evidence": "The GR-3 path is gone from src/render/post.ts: no MsaaRenderPass, MSAA_ULTRA_SAMPLES or setMsaaSamples. The file is byte-identical to 20aaa35ba^ (it went in with wip sync 581f8e417); ruling 25 matches. Proof: node _harness/fw_r4_mem_msaa_px.mjs builds the prod render bench three ways (post.ts from 20aaa35ba, from 20aaa35ba^, and the current tree) and compares raw canvas buffers at 1600x900, seed 7, t 300. Structure spot: 0 of 1,440,000 px differ on High and on Ultra in every pair (now vs pre, now vs gr3, pre vs pre2). Fight spot: limited by page noise, because the same code in two pages differs by 60,798 px (High) and 67,736 px (Ultra), and now vs pre is 55,877 and 65,261, inside that noise. Load during the run was 67-330. Report _harness/_reports/fw_r4_mem_msaa_px.json, frames _harness/_shots/fw_r4_msaa_px/. _harness/gfx_msaa_ab.mjs is kept as a file but can no longer run (see handoff)."
+    },
+    {
+     "id": "MEM-1",
+     "status": "done",
+     "evidence": "Counted below three.js with new tools: _harness/fw_r4_mem_track.js tracks GL textures, buffers and renderbuffers by bytes, live AudioBuffers by file name, and ImageBitmaps; probe_match_memory.mjs --track uses it; fw_r4_mem_bitmaps.mjs --retainers takes V8 heap snapshots and follows retainer chains back to the GC roots. What a match kept after leaving: (a) three's render list for the match scene (a WeakMap keyed on a scene that outlives the match) held the last frame's objects, materials, textures, decoded bitmaps and geometry arrays; (b) the shared ink depth materials held the last shadow caster's map, alphaMap and displacementMap; (c) the match sun's shadow map (2048 on High, 4096 on Ultra) stayed allocated. Fixed: teardown now calls gl.renderLists.dispose(), ink.ts releaseShadowRefs() and lighting.ts Sun.releaseMap(). Also, a fighter base model loaded only for its animation clips (the seat wears a skin) now closes its never-uploaded images after preload, through Assets.evictUnused, and they are restored from the GLB before any model() call that may draw it. Results (dev BRIDGE journey, fake audio sink): open bitmaps in the match went from 17 (115 MB) to 4 (40 MB), with 21 closed; at Home after the match from 4 (40 MB) to 0. Restore check: nurrow's default-skin template got its real images back, 0 GL errors. Prod journey with all fixes (fw_r4_mem_final_high.json): at Home after RIFT, bitmaps 0, GL textures 325 MB vs 305 at first Home, heap 29 vs 14 MB, array-buffer backing 34 vs 24 MB, audio 80 vs 79 MB. GL buffer count still grows (41 at first Home, 453 after BRIDGE, 675 after RIFT) but holds under 10 MB; not fixed."
+    },
+    {
+     "id": "MEM-2",
+     "status": "partly",
+     "evidence": "Cause found by A/B on the same build, not by bisecting commits. This Mac's output audio device freezes the AudioContext clock: the tracker read currentTime 0.01 s for the whole device-sink run. With the clock frozen, no AudioBufferSourceNode ever ends; the heap snapshot shows decoded beds held by 'Pending activities', and they pile up across the session: mus_menu x3, mus_postgame x2, mus_match_bridge plus intense still alive in the RIFT match. Audio in the RIFT second match: 631-672 MB on the device sink vs 224-246 MB on Chrome's fake sink (--disable-audio-output, where the clock runs); at Home after RIFT: 657-672 MB vs 80 MB. Totals before the renderer fixes, same session: device sink RIFT second match 3225 MB, Home 2261; fake sink 2779 MB, Home 1703. The renderer-side share of the carry-over (render lists, bitmaps, shadow maps) is fixed under MEM-1. Not done: a git bisect from 11-06 08:58. My reading, not shown: the device freeze makes the CW2 music acts' long beds (2x58 MB per map) look like code growth. Reports: _harness/_reports/fw_r4_mem_diag1/2/3_fake.json, fw_r4_mem_high.json, fw_r4_mem_bitmaps_ret2.log."
+    },
+    {
+     "id": "MEASURE",
+     "status": "partly",
+     "evidence": "All runs are with all fixes, 300 s per match, BRIDGE then RIFT in the same session. Load was 250-1005 throughout, so every probe verdict is NOT MEASURED; the numbers are raw. (1) High, fake sink (fw_r4_mem_final_high.json): BRIDGE peak 2558 MB (margin 442), RIFT second-match peak 2797 MB (margin 203). Homes: first Home 917 (with the menu music in); after BRIDGE the reading is invalid (the footprint read failed, probe now fixed); after RIFT 1550, which is +633 over first Home and fails the 150 MB Home bar. (2) Ultra, fake sink (fw_r4_mem_final_ultra.json): BRIDGE 2846 MB (margin 154), RIFT 2939 MB (margin 61, under 3000 but short of the 150 margin). Homes 1057, then 1504 and 1609 (+447 / +552). (3) High, device sink, same code (fw_r4_mem_final_high_device.json): BRIDGE 2788, RIFT 3239 (over the bar, audio 672 MB on the frozen clock), Homes 893, then 1674 and 2076. (4) Breakdown run, fake sink, BRIDGE 60 s (fw_r4_mem_cats.json): Home went from 870 to 1325 MB. Renderer process: footprint 'App-Specific Tag 16' 115 to 232 and 'Tag 14' 64 to 183, while live JS heap, backing stores, audio, bitmaps and GL textures are all back near first-Home levels. GPU process: IOAccelerator 295 to 361 and unmapped owned 14 to 102. This looks like allocator and driver pages kept after free, not live objects; not fixed. Before the fixes, same session, device sink: High 2683 / 3225 with Homes 1767 / 2261; Ultra 2885 / 3440 with Homes 1914 / 2492. Bar status: High clears both matches with 150 MB margin on the fake sink; Ultra RIFT does not (61); the Home-within-150 bar fails on every run; on the device sink RIFT is over 3000 because of the audio clock. The leave journey completed in all 7 prod runs after the probe's Esc retry."
+    }
+   ],
+   "commits": [
+    "886f20142 vale r4: MEM-1 back out the unproven shared-source bitmap close the wip sync 581f8e417 swept in",
+    "604ac2c83 vale r4: MSAA-1 proof and MEM-1 tools (post.ts MSAA removal itself landed in wip sync 581f8e417; tools in 581f8e417 / 33aba6c4c)",
+    "0549a3e4a vale r4: MEM-1 a match frees what it owns on leave, and a skinned seat's base images are not kept decoded (render lists, ink depth refs, sun shadow map, Assets.evictUnused; ink.ts/lighting.ts/teardown lines landed via wip sync 1527c5aa4 and later)",
+    "41508d424 vale r4: probe_match_memory --track footprint categories parse and failed-read handling",
+    "wip syncs that carried my files: 581f8e417, 33aba6c4c, 1527c5aa4, dc8104bad"
+   ],
+   "handoffs": [
+    {
+     "to": "audio engineer (src/audio/index.ts)",
+     "what": "Make sure a stuck output device cannot pin decoded audio. On this Mac's device sink the AudioContext clock sits at 0.01 s; the tracker reads it as running, and the client never suspends or closes it. Scheduled stop() calls never fire, so every looping bed source stays a pending activity and keeps its buffer: 657-672 MB of AudioBuffers at Home after two matches (mus_menu x3, mus_postgame x2, mus_match_<map> plus _intense). That alone puts RIFT as the second match at 3225-3239 MB on the device sink, against 2779-2797 MB on the fake sink. Suggested fix: in stopBed and evictCues, once the fade is due (or at once when currentTime has not moved), disconnect the bed's gain and its source and gain nodes so they stop holding buffers. Evidence: _harness/_reports/fw_r4_mem_bitmaps_ret*.log (retainer chains), fw_r4_mem_final_high_device.json vs fw_r4_mem_final_high.json, and the clock reading in fw_r4_mem_track.js."
+    },
+    {
+     "to": "lead / verify",
+     "what": "(1) Probe sink: probe_match_memory.mjs now has --fake-audio. I recommend the ruling-20 gate use the fake sink until this Mac's output device is fixed (or record both); report.audioSink says which one a run used. (2) The Home-within-150 MB bar fails: +447 to +633 MB, mostly allocator and driver retention (renderer footprint app-specific tags 14 and 16 up about 236 MB; GPU IOAccelerator +66 and unmapped +88), while the live object set returns to first-Home levels. This needs a ruling, or a deeper Chrome-side investigation; I did not relax the bar. (3) Ultra RIFT second match is 2939 MB, margin 61, short of 150. The remaining in-match levers are GL textures (2048\u00b2 sRGB fighter, skin and prop maps: about 360-450 MB) and the in-match audio beds (2x58 MB decoded): both are art/graphics or audio decisions. (4) Every number here is at load 250-1005; an idle re-run is still needed."
+    },
+    {
+     "to": "graphics lane (_harness/gfx_msaa_ab.mjs, not mine)",
+     "what": "The tool is kept, but PostChain.setMsaaSamples is gone with GR-3 (ruling 25), so its __set step will throw. If GR-3 is retried, the seam has to come back with it."
+    }
+   ],
+   "notes": "The machine was overloaded for the whole session (load averages 50-1005, mostly not from my processes), so every probe verdict reads NOT MEASURED. The memory figures come from footprint and are raw. Leave journey: after the probe's Esc retry (it presses Esc until Leave match shows), 7 of 7 prod journeys completed. The wip-sync script committed several of my edits before my own commits: the post.ts revert, ink.ts, lighting.ts, the teardown lines and the probe changes; each of my commit messages says which. My unproven shared-source bitmap change also got swept in, and I backed it out in 886f20142. Tracked _harness/_reports files are clean (git status shows no changes), and reap_orphans shows none of my processes left.\n\nMain files changed: /Users/sitskovich/Developer/forgeflow-games/games/vale/src/render/post.ts, renderer.ts, assets.ts, actors.ts, ink.ts, lighting.ts.\n\nTools: /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/fw_r4_mem_track.js, fw_r4_mem_msaa_px.mjs, fw_r4_mem_bitmaps.mjs, probe_match_memory.mjs.\n\nReports: _harness/_reports/fw_r4_mem_final_high.json, fw_r4_mem_final_ultra.json, fw_r4_mem_final_high_device.json, fw_r4_mem_cats.json, fw_r4_mem_msaa_px.json, fw_r4_mem_bitmaps.json, plus their .log files. Shots: _harness/_shots/fw_r4_msaa_px/ and fw_r4_mem_bitmaps_*.png."
+  },
+  "v1": {
+   "pass": false,
+   "items": [
+    {
+     "id": "MSAA-1",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Ran git show 20aaa35ba^:games/vale/src/render/post.ts | diff -q - src/render/post.ts: no difference, so post.ts is byte-identical to the chain before GR-3. grep finds no MsaaRenderPass, MSAA_ULTRA_SAMPLES or setMsaaSamples left in src. MSAA_ULTRA_SAMPLES was 0 in the GR-3 build, so every tier already used the plain RenderPass. I did not re-run the pixel tool; the engineer's _harness/_reports/fw_r4_mem_msaa_px.json shows the structure spot at 0 of 1,440,000 px differing, and the fight spot inside page noise. _harness/gfx_msaa_ab.mjs is kept but its __set step calls the removed setMsaaSamples, so it can no longer run.",
+     "fixHint": "Graphics lane: drop the __set step from gfx_msaa_ab.mjs, or restore the seam if GR-3 comes back."
+    },
+    {
+     "id": "MEM-1",
+     "severity": "blocker",
+     "status": "partly",
+     "evidence": "probe_match_memory --track in the prod build. At Home after every match, GL textures are 60 at 325.1 MB (421.1 on Ultra), against 51 at 305.1 at first Home. Bitmaps are 0 after a forced GC, and the JS heap is 27-31 MB. So the render-list, shadow-ref and shadow-map fixes hold. Three things are still kept or open. (1) In RIFT, 19-22 bitmaps (121-126 MB) stay open for the whole match in every run, in mine and in the engineer's; the base-image eviction only works on BRIDGE. (2) The GL buffer count grows 41 -> 455 -> 657 -> 853 across matches (under 14 MB). (3) The renderer footprint at Home does not come back: on the fake sink 238 -> 462 / 663 / 660 MB. Reports: _harness/_reports/fw_r4_memv1_high_device3.json, fw_r4_memv1_high_fake3.json, fw_r4_memv1_ultra_fake.json. Load 15-717.",
+     "fixHint": "Find which models keep the open RIFT bitmaps (2048x2048 compressed textures, 17-21 of them); look into the Home footprint retention."
+    },
+    {
+     "id": "MEM-2",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "No bisect from 11-06 08:58 was run and no fix landed. The device-sink cause reproduces in my scratch prod journey (_harness/_reports/fw_r4_memv1_break_device.json, load 49-707). The audio clock sits at 0.01 s while reading running. Live AudioBuffers go 79 MB at first Home, 342.5 MB in BRIDGE, 643.3 in RIFT, then 921.9 MB in the third match, where RIFT's 58.6 MB beds are still alive inside a BRIDGE match. Home after three matches holds 1021.5 MB. On the device sink, Home reaches 2432 MB after three matches, 68 MB under the 2500 bar.",
+     "fixHint": "Audio lane: on leave, disconnect and release bed sources and their buffers without relying on a scheduled stop(); then run the bisect."
+    },
+    {
+     "id": "MEASURE",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "Load was above 3 on every run, so every probe verdict reads NOT MEASURED; the memory numbers are raw. Ultra, fake sink, BRIDGE then RIFT (fw_r4_memv1_ultra_fake.json, load 584-670): 2751 / 3005 MB, so RIFT is over the 3000 bar; Homes +392 / +564 over first Home. High, fake sink, RIFT, BRIDGE, RIFT (fw_r4_memv1_high_fake3.json, load 78-717): 2707 / 2862 / 2978 MB, margins 293 / 138 / 22; Homes +408 / +660 / +634. High, device sink, BRIDGE, RIFT, BRIDGE (fw_r4_memv1_high_device3.json, load 15-670): 2850 / 3301 / 3590 MB; Homes +796 / +1155 / +1508. The Home-within-150 MB bar fails on every run.",
+     "fixHint": "Cut in-match memory on Ultra and for the third match, fix the audio pinning, and get a ruling or a Chrome-side fix for the Home retention; re-run on an idle machine."
+    },
+    {
+     "id": "BREAK-LEAVE",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "Scratch prod journey (fw_r4_memv1_break_device.json). Esc with the shop open: 2 presses, the first closes the shop, then the Leave menu shows. Esc 100 ms after a cast in RIFT: 1 press. Third match, Esc 80 ms after a cast: 1 press. All three leaves reached Home with 0 console errors. fw_r4_ui_leave.mjs --trials --aim (fw_r4_memv1_leave_aim.json): 6 trials, 0 never reached the menu; in 3 the first Esc cancelled an aim, as designed."
+    },
+    {
+     "id": "REGRESS",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "npm run -s typecheck exits 0. npm run -s probe: 54 passed, 1 failed. The failure is probe_sim_kit_diag.ts, killed at its 900 s timeout at load 300-700; the lane did not touch src/sim, so load is the likely cause, but it was not re-run on an idle machine. Not measured: a visual check that a base model whose images were evicted and then restored draws correctly in prod."
+    }
+   ],
+   "regressions": [
+    "Ultra BRIDGE then RIFT (required order, fake sink): RIFT 3005 MB, over the 3000 bar (the engineer read 2939)",
+    "Three matches in one session run out of margin: fake sink third RIFT 2978 MB (margin 22); device sink BRIDGE 3590 MB and Home 2432 MB, 68 MB under the 2500 bar"
+   ],
+   "summary": "FAIL. The verdict is in /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r4_MEM_verify1.json, committed as d642a07f6 and pushed.\n\nMSAA-1 holds: post.ts is byte-identical to the chain before GR-3.\n\nMEM-1's fixes work for the objects counted: at Home, GL textures go back to 325 MB and bitmaps to 0. But the renderer footprint does not come back, and in RIFT 121-126 MB of bitmaps stay open for the whole match.\n\nMEM-2 has no bisect and no fix. On the device sink, music beds pile up across matches: 922 MB of audio in the third match, 1021 MB at Home.\n\nMeasured bar, all in the prod client, all NOT MEASURED because load was 15-717:\n- Ultra, BRIDGE then RIFT: RIFT 3005 MB, over 3000.\n- High, fake sink, three matches: margins 138 and 22, both short of 150.\n- High, device sink, three matches: 3301 and 3590 MB, Home 2432.\n- The Home-within-150 MB bar fails on every run, by +392 to +1508 MB.\n\nLeave journeys never broke, including Esc with the shop open and Esc right after a cast. Typecheck passes. The probe suite passed 54 of 55; probe_sim_kit_diag timed out under load.\n\nReports are in _harness/_reports: fw_r4_memv1_high_device3, fw_r4_memv1_ultra_fake, fw_r4_memv1_high_fake3, fw_r4_memv1_break_device and fw_r4_memv1_leave_aim (.json/.log). None of my processes are left running."
+  },
+  "fix": {
+   "items": [
+    {
+     "id": "MEM-1",
+     "status": "partly",
+     "evidence": "Three of the four MEM-1 points are fixed; Home retention is still open. (1) The RIFT open bitmaps were landmarks the camera had not reached yet: numerals XI/II/VII/IIII, the lamp dome, the low skirt, camp marks and camp lips. They now upload one per frame after they land and then close (renderer.ts queueUploads). fw_r4_mem_bitmaps --mode rift: 22 bitmaps / 126.3 MB before (fw_r4_mem_bitmaps_rift.log), 0 now (fw_r4_mem_r1_bitmaps_rift.log, fw_r4_mem_r2_bitmaps_rift.log). The prod journeys read bitmaps 0/0 MB in every match. (2) Most of the GL buffer growth was the tracker itself: fw_r4_mem_track.js held every WebGL object strongly. It now holds them weakly. Real buffers at Home are 240-350 (2.2-3.2 MB). fw_r4_mem_bufs (dev, rift/bridge/rift) reads 164 -> 285 -> 298 buffers; the only geometries never disposed are the 22 persistent VFX shape pools, created on first use, plus one 2 KB mesh, and the count levels off. (3) Home GL textures are back to the first-Home level: 293.1 MB on High and 353.1 on Ultra (the verifier read 325.1 / 421.1). The match sky PMREM, the VFX distortion target, the pre-VFX copy (post.ts) and the hover mask are now released at teardown, and the shadow colour target is R8. Also new: a landed GLB's parser no longer keeps the BIN chunk and its dependency cache (assets.ts dropParserData). In-match JS backing went from 168-209 MB to 118 MB, and RIFT renderer from about 920-1076 to 672-727 MB. Still open: Home footprint. fw_r4_mem_r3_high_fake3.json reads 873 at first Home and 1213 / 1378 / 1423 after each match. Chrome's memory-infra (fw_r4_mem_r1_infra.json, fw_r4_mem_r1_noaudio.json) puts this inside Chrome, not in anything the page holds: Blink's buffer partition 16 -> 78 -> 145 MB with ?audio=0; ANGLE/Metal 555 -> 603-614 MB; a second 16 MB transfer buffer. A critical pressure notification frees only 20-27 MB (fw_r4_mem_r1_pressure.json). 36-46 MB of the renderer part is Playwright's Network-agent copies of the downloads (fw_r4_mem_netbuf.json: 45.7 MB of response bodies still held at Home after RIFT). Load 2.7-12 on these runs."
+    },
+    {
+     "id": "MEM-2",
+     "status": "not_done",
+     "evidence": "This is the audio lane (src/audio/index.ts); I do not own it, so it is handed off. I re-measured on the device sink: fw_r4_mem_r2_high_device3.json, BRIDGE/RIFT/BRIDGE 2744 / 3192 / 3572 MB, load 4-193. The clock stays at 0.01 s while reading running. Live AudioBuffers at Home after each match: 380.5 -> 670.6 -> 950.9 MB, and Home reaches 2308 MB. On the fake sink, draft music (4 x 11.7 MB) is still alive at match start: audio 266 MB at 1 s, 220 MB at 14 s. The RIFT music beds are 58.6 MB each as decoded float32. No bisect was run."
+    },
+    {
+     "id": "MEASURE",
+     "status": "partly",
+     "evidence": "All runs read NOT MEASURED because load stayed above 3 (load max 5-12; the resting load was about 2.7-3.9). These are prod, verifier's method, after every fix. High, fake sink, RIFT/BRIDGE/RIFT (fw_r4_mem_r3_high_fake3.json, load 2.7-6): peaks 2570 / 2655 / 2902 MB, margins 430 / 345 / 98; steady max from 12 s on 2444 / 2577 / 2699. Verifier: 2707 / 2862 / 2978. Ultra, fake sink, BRIDGE then RIFT (fw_r4_mem_r3_ultra_fake.json, load 3-12): 2568 / 2872 MB, RIFT steady 2662. Verifier: 2751 / 3005. So Ultra RIFT is now under 3000. Every peak is a start transient in the first second after the HUD shows: renderer +40-180 and GPU +50-176 MB, gone by 14 s. It also shows with ?audio=0. memory-infra puts it in ArrayBuffer garbage, the draft music and the GPU process's upload memory. Earlier runs on a busier machine took their first sample later and missed it. Home-within-150 still fails: +340 / +505 / +550 on High, +425 / +443 on Ultra. That needs a ruling, because the retention is Chrome-internal as shown under MEM-1. Device sink: see MEM-2."
+    },
+    {
+     "id": "REGRESS",
+     "status": "done",
+     "evidence": "npm run -s typecheck exit 0 (_harness/_reports/fw_r4_mem_r2_typecheck.log). npm run -s probe: 55 passed, 0 failed, 431.5 s (fw_r4_mem_r2_probe.log); probe_sim_kit_diag alone: PASS 154.7 s (load 15). The restore check was done in a dev build, not prod: the prod build has no handle to reach the evicted-and-restored textures directly. Each restored texture was drawn on a 256x256 quad next to the same glTF texture from a fresh, never-evicted load, and the pixels were compared. ardit and ilsheta, base / orm / normal: meanAbsDiff 0, maxDiff 0, means 95.7-190.8 (not the 128 grey stand-in), 0 GL errors (fw_r4_mem_r1_bitmaps_rift.log, fw_r4_mem_r2_bitmaps_rift.log). New shadow target: R8 colour (format 1028), framebuffer complete, LessEqual compare, 0 GL errors, Home sun map null in the match. Shadows draw in _harness/_shots/fw_r4_mem_bitmaps_match.png."
+    }
+   ],
+   "commits": [
+    "d9f3a25f4 (wip sync carrying tracker / bufs / renderer changes)",
+    "8217b3d16 (wip sync)",
+    "83f02e5d2 (wip sync: boot ?audio=0, netbuf tool, render releases)",
+    "44e285d8d (wip sync: probe --infra-match)",
+    "a5f4e6caa (wip sync: assets.ts dropParserData)",
+    "1e360c17e vale r4: MEM-1 refix (lane record, empty commit describing the above)"
+   ],
+   "handoffs": [
+    {
+     "to": "audio engineer (src/audio/index.ts)",
+     "what": "MEM-2. When a match is left, disconnect every music, bed, ambient and emitter source right away, drop its gain chain and drop the buffers from the engine's caches. Do not wait for a scheduled stop()/onended: on this Mac's output device the clock is frozen at 0.01 s, so onended never fires. Device sink, fw_r4_mem_r2_high_device3.json: live AudioBuffers at Home 380.5 -> 670.6 -> 950.9 MB, Home 2308 MB. Also: (a) release the draft music (mus_draft*.ogg, 4 x 11.7 MB) once the match starts; it is still alive at the HUD (audio 266 MB at 1 s, 220 MB at 14 s) and is part of the start transient that sets every peak; (b) the 160 s match beds are 58.6 MB each as decoded float32. Streaming them through a MediaElementAudioSourceNode, or decoding at a lower rate or in mono, would cut about 100+ MB in every match. Then run the bisect from 11-06 08:58."
+    },
+    {
+     "to": "lead (owner_rulings.md)",
+     "what": "A ruling is needed on the Home-within-150 MB bar. After the fixes, Home is +340-550 MB over first Home, and the page holds none of it. Chrome memory-infra: Blink buffer partition +62-67 MB per match even with ?audio=0; ANGLE/Metal +50-60 MB; a second 16 MB command-buffer transfer buffer. A critical pressure notification frees 20-27 MB. 36-46 MB of the renderer part is the harness's own Playwright Network-agent copies of the downloads (fw_r4_mem_netbuf.json). Probe readings on the gate machine now take the first in-match sample about 1 s after the HUD shows, which catches the start transient (+100-300 MB, gone by 14 s). Please rule whether the per-match peak is read from 10 s on, or whether the transient counts. I have not relaxed any bar; the numbers are reported as measured."
+    }
+   ],
+   "notes": "The code went in with the 20-minute wip syncs (d9f3a25f4 through a5f4e6caa). The commit I made myself, 1e360c17e, is an empty commit that records the result, because the reports are gitignored. Files I changed: src/render/{renderer.ts, lighting.ts, sky.ts, assets.ts, post.ts, overlay/hover.ts, vfx/system.ts}, src/boot/main.ts (adds ?audio=0, a diagnostic switch), _harness/probe_match_memory.mjs (adds --pressure, --infra, --infra-match and --no-audio; all diagnostic, none of them in a gate run), _harness/fw_r4_mem_track.js (now holds WebGL objects weakly), and the new tools _harness/fw_r4_mem_bufs.mjs and _harness/fw_r4_mem_netbuf.mjs; _harness/fw_r4_mem_bitmaps.mjs also gained the restore pixel check, the shadow check and the heap breakdown. One trade-off: landmark textures now cost about 140 MB on the GPU, against the 121 MB of bitmaps they used to hold open. That is what they would cost anyway once a real match has seen every landmark, and the frame that first sees one no longer pays its 2048\u00b2 upload. In the run below the busy-load verdict, Ultra RIFT and the third High match are both under 3000, but their margin depends on the start transient (handed to the lead for a ruling). Load was busy throughout, about 3-12 and spiking to 193 from others' work during the device-sink run, so no verdict is MEASURED. All helpers I started have exited; reap_orphans reports all 3 slots free. The vite process on port 5190 is not mine."
+  },
+  "v2": {
+   "pass": false,
+   "items": [
+    {
+     "id": "MSAA-1",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "post.ts still has no MsaaRenderPass, MSAA_ULTRA_SAMPLES or setMsaaSamples. Its only change since d642a07f6 is a release path that runs at teardown. In the bench pixel A/B (scratch shadow_px.mjs, _harness/_reports/fw_r4_memv2_shadow_px.json), the structure spot reads 0 of 1,440,000 px differing on High and on Ultra. gfx_msaa_ab.mjs is still in the tree."
+    },
+    {
+     "id": "MEM-1",
+     "severity": "blocker",
+     "status": "partly",
+     "evidence": "Prod, probe_match_memory --track, 4 runs. Bitmaps read 0/0 MB in every match poll on BRIDGE and RIFT (verify 1 read 19-22 / 121-126 MB on RIFT). At every Home, GL textures are back to first-Home levels: 55 / 293.1 MB on High, 353.1 on Ultra. GL buffers at Home are 245-335 (2-3 MB). R8 shadow target, lighting.ts from d642a07f6 against the tree: 0 px differ in the structure spot on High and Ultra; the fight spot sits inside page noise (59,931 against a noise floor of 59,937; fw_r4_memv2_shadow_px.json, load 460->5). Home footprint does not come back: renderer App-Specific Tag 14 goes from 66 to 289-353 MB."
+    },
+    {
+     "id": "MEM-2",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "No bisect and no fix. src/audio has no change since e293bfe7c, and stopBed still never disconnects. On the device sink the clock stays at 0.01 s. At Home, audio is 385 MB after BRIDGE and 674 MB after RIFT (fw_r4_memv2_high_device.json). In the third match of the break journey it is 922 MB (fw_r4_memv2_break_device.json). On the fake sink it is 79-80 MB at every Home."
+    },
+    {
+     "id": "MEASURE",
+     "severity": "blocker",
+     "status": "fail",
+     "evidence": "(A) High, fake sink, BRIDGE then RIFT, load 3-534 (fw_r4_memv2_high_fake.json): 2448 / 2824 MB, margins 552 / 176. Homes 881 -> 1319 / 1423 (+438 / +542). (B) Ultra, fake sink, load 220-534 (fw_r4_memv2_ultra_fake.json): 2628 / 2770 MB, margins 372 / 230. Homes +413 / +446. (C) High, fake sink, RIFT, BRIDGE, RIFT (fw_r4_memv2_high_fake3.json): 2578 / 2831 / 2953 MB. The third match was read at load 2.3-6.7 and peaked 1 s into the match (steady max 2807), so its margin is 47, short of 150. Homes +343 / +500 / +583. (D) High, device sink (fw_r4_memv2_high_device.json): 2549 / 3123 MB, so RIFT is over the bar. Homes +760 / +1146. The Home-within-150 clause fails in every run. Every probe verdict reads NOT MEASURED because load was over 3.",
+     "fixHint": "Cut the in-match spike in the first 1-2 s (the steady level is about 150 MB lower). Get the audio lane to disconnect beds on a frozen clock. Ask the lead for a ruling on Chrome/driver Home retention."
+    },
+    {
+     "id": "BREAK-LEAVE",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "Prod scratch journey on the device sink (fw_r4_memv2_break_device.json, load 54-458). Esc with the shop open: 2 presses. Esc 100 ms after a Q cast: 1 press. Esc 80 ms after an E cast in a third match after a restart: 1 press. All three leaves reached Home with 0 console or page errors. All 9 probe matches completed."
+    },
+    {
+     "id": "REGRESS",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "typecheck exit 0. npm run -s probe at load 300-500: 53 of 55 passed. probe_sim_kit_diag timed out and probe_sim_perf read p99 8.753 ms. Re-run alone at load 4.8, sim_perf passes 4 of 4, and kit_diag completed its run with a full report. src/sim has no diff since d642a07f6. Tracked reports are clean and no orphan processes are left."
+    }
+   ],
+   "regressions": [],
+   "summary": "FAIL. The verdict is in _design/reviews/fixwaves/r4_MEM_verify2.json, commit 8c2d2abfe, pushed. The refix clears the required BRIDGE then RIFT order on the fake sink: High 2448 / 2824 MB and Ultra 2628 / 2770 MB. Ultra was 3005 in verify 1. In a match, open bitmaps are now 0, Home GL textures return to the first-Home level, and the R8 shadow change draws the same pixels. Three things still miss the bar. (1) The third match in one session (RIFT, BRIDGE, RIFT) peaks at 2953 MB, margin 47, read at load 2.3-6.7. (2) Home within 150 MB of first Home fails on every run: +343 to +583 MB on the fake sink and +1146 on the device sink. (3) On the device sink, RIFT reads 3123 MB, over the bar, with 674 MB of decoded audio still held at Home. That fix belongs to the audio lane and has not landed. MEM-2 has no bisect and no fix. Reports are _harness/_reports/fw_r4_memv2_*.json, with shots in _harness/_shots/fw_r4_memv2_shadow_px/."
+  }
+ },
+ {
+  "lane": "AUD",
+  "work": {
+   "items": [
+    {
+     "id": "AUD-1",
+     "status": "done",
+     "evidence": "This is a probe and machine artefact, not a client bug. The macOS output device has stalled for every program on the machine, so there is nothing to fix in src/audio. What I ran: node _harness/fw_r4_aud_ctxclock.mjs (a new tool), twice, at load 2.5 to 4.5. (1) A bare about:blank page with a plain AudioContext and an oscillator, no client code at all: currentTime stays at 0.00533 s, state 'running', clock 0.005 s over 5.02 s of wall time. (2) The real client, measured at the menu, at match start and for 40 s inside a RIFT match: frozen the same way. The spy saw created 1, resume 1, suspend 0, close 0, setSinkId 0, and graph.ctx was the same object throughout. (3) Trying to recover from the page fails: suspend then resume stays frozen, and close plus a new AudioContext stays frozen. (4) The same bare page on Chrome's fake sink (--disable-audio-output) advances 5.013 s in 5.01 s. (5) Outside Chrome, timeout 10 afplay of a 1 s silent wav was still blocked at 10 s (exit 124). pmset shows coreaudiod has held BuiltInSpeakerDevice for the iOS Simulator audio devices for about 9h40m, which began after the 11-06 12:49 pass. That is a correlation only, not a proven cause. I checked the verifier's claim: the last src/audio commits are e293bfe7c (11-06 11:38) and ffc93310a (12:18), both before the 12:49 pass, and the tree under src/audio is clean. probe_audio_runtime and probe_audio_music already ran on the fake sink, so they were unaffected. probe_audio_mix was the only audio probe still using the pw.mjs device path, so I switched it to the fake sink by default (same flags, viewport, heavy slot and silent HMR socket, plus --disable-audio-output); --device keeps the old path. Then: node _harness/probe_audio_mix.mjs exit 0 PASS, load 221 at start and 53 at end. RIFT: floor lift M2 2.7 dB (bar >= 1), untrimmed 1.1 dB, master short-term p10 -23.9 above music p50 -30.7, 6 of 6 emitters playing, 180.5 s captured over match time 30.2 to 210.6. BRIDGE: lift 1.9 dB, 5 of 5 emitters. FRAY: lift 2.7 dB, 5 of 5 emitters. M1 holds on all three maps. Reports: _harness/_reports/fw_r4_aud_ctxclock.json and .log, fw_r4_aud_ctxclock_2.json and .log, fw_r4_aud_mix_fake.json and .log."
+    },
+    {
+     "id": "AUD-2",
+     "status": "done",
+     "evidence": "The sampling loop in probe_audio_mix now has a wall deadline of span x 1.5 + 60 s. It also stops early if the context clock has not moved for --stall seconds (default 20) while the match keeps running. In either case that map is reported as notMeasured, with match time and ctx range, and the probe exits 2 (exit 1 = a gate failed, 0 = pass). Proof: node _harness/probe_audio_mix.mjs on the --device path (the run started before the default switched to the fake sink), load 160 at start and 221 at end. It returned in 416 s with exit 2: rift, bridge and fray each NOT MEASURED, 'AudioContext clock froze at 0.00533 s (state running) for 20 s of wall time while the match ran to 50.1/50.4/51.9 s'. Before this change it hung 3 of 3. Report: _harness/_reports/fw_r4_aud_mix_device.json and .log."
+    },
+    {
+     "id": "probe_audio_runtime sync",
+     "status": "partly",
+     "evidence": "node _harness/probe_audio_runtime.mjs sync --out _harness/_reports/fw_r4_aud_sync.json: exit 0, PASS 3 of 3 runs, load 42 at start and 202 at end. Hits start in their event's call 50 of 50 in every run. The gates measured from the pump pass: offset p95 32.06 / 32.24 / 32.0 ms against a budget of 42.72 ms, and the cue path adds p50 1.52 / -0.66 ms over the sfx bus. The rAF-timestamp halves (p95WithinFramePlusOutputPlusHop, engineOverSfxBus) are not measured because the main thread was busy; they need an idle machine. Log: _harness/_reports/fw_r4_aud_sync.log."
+    },
+    {
+     "id": "probe_audio_music",
+     "status": "done",
+     "evidence": "node _harness/probe_audio_music.mjs --out _harness/_reports/fw_r4_aud_music.json: exit 0, PASS on all 17 gates (A1, A2, A3, O1, O2, O3, C1, L1, M1), load 202 at start and 299 at end. The act rose by the clock at match 484.8 s and by structures down (12 killed). Three live jumps played: act 0 S2>S5, act 1 S3>S5, act 2 S5>S2. Objective layer: lift 2.0 dB at a pit, bed over the layer 4.32 dB, road gain 0.21. Clicks: over-step -9.45 / -8.68 / -11.95 dB. Peak -12.78 dBFS. Log: _harness/_reports/fw_r4_aud_music.log."
+    }
+   ],
+   "commits": [
+    "581f8e417 (wip sync, not mine: it swept in the final probe_audio_mix.mjs and the new fw_r4_aud_ctxclock.mjs; git diff HEAD on both was empty afterwards)",
+    "3fb4383ce vale r4: audio_mix never hangs and meters on Chrome's fake sink (AUD-1, AUD-2) plus ctxclock and mix reports",
+    "374b1aee6 vale r4: audio sync and music re-run on the fake sink (reports)"
+   ],
+   "handoffs": [
+    {
+     "to": "lead / owner",
+     "what": "This Mac's default audio output (MacBook Air Speakers through coreaudiod) is stalled for every program: Chrome's AudioContext stays at 0.00533 s and afplay of a 1 s file blocks past 10 s. pmset shows coreaudiod holding BuiltInSpeakerDevice for the booted iOS Simulators' audio devices for about 9h40m. I left the simulators and coreaudiod alone as instructed. Until it recovers (for example after the owner shuts down the simulators or restarts coreaudiod), any test that needs the real speakers, including listening by ear on this machine, will be silent. The harness audio probes all meter on Chrome's fake sink now, so they are not affected."
+    },
+    {
+     "to": "closing gates owner (tools/closing_gates.md, not mine)",
+     "what": "Mix row (line 140): probe_audio_mix now exits 0 = pass, 1 = a gate failed, 2 = not measured (frozen context clock or deadline). Exit 2 is not a pass. Its default sink is now --disable-audio-output, like probe_audio_runtime and probe_audio_music; --device keeps the old pw.mjs device path. Please add the exit-2 clause to that row and update the audio_mix entry in final_idle_verify with the new result: RIFT floor lift 2.7 dB, PASS (_harness/_reports/fw_r4_aud_mix_fake.json)."
+    },
+    {
+     "to": "pw.mjs owner (optional)",
+     "what": "probe_audio_runtime, probe_audio_music and now probe_audio_mix each carry their own copy of pw.mjs open() just to add --disable-audio-output. An opt-in such as open(path, { fakeAudio: true }) in _harness/pw.mjs would let all three share one launcher."
+    }
+   ],
+   "notes": "The machine was heavily loaded for all runs (vm.loadavg 42 to 299, from booted iOS Simulator processes and the other lanes), so no timing number here counts. Memory, function and levels do. The probes put the client's audio graph on Chrome's fake sink: the same graph, rendered in real time and measured the same way, only without speakers. Nothing changed under src/audio, audio/ or content/audio.json, because the cause is not in the client. The verifier's claim of no src/audio commit since the 11-06 12:49 pass checks out. All runs I started have finished; no helpers of mine are still running, and the orphans tools/reap_orphans.sh lists belong to the other lanes. No tracked report under _harness/_reports was rewritten."
+  },
+  "v1": {
+   "pass": true,
+   "items": [
+    {
+     "id": "AUD-1",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Reproduced the root cause. timeout 10 afplay of a 1 s silent wav returned exit 124 (blocked) at load 139. node _harness/fw_r4_aud_ctxclock.mjs --match 20 (load 120-420): a bare about:blank AudioContext moved 0.005 s in 5.57 s of wall time with state running; suspend/resume moved 0 s in 4.06 s; close plus a new context moved 0 s in 4.77 s. The fake sink advanced 4.208 s in 5.18 s. The real client stayed frozen at the menu (7.15 s), at match start (5.22 s) and over 19.31 s of a RIFT match, on one context: created 1, resume 1, suspend/close/setSinkId 0. pmset shows coreaudiod holding BuiltInSpeakerDevice for the iOS Simulator audio devices. src/audio has no commit after e293bfe7c/ffc93310a and the tree under it is clean. So this is the machine's output device, not a client bug. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/ctxclock.json"
+    },
+    {
+     "id": "AUD-2",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Diff reviewed. The sampling loop has a wall deadline of span x 1.5 + 60 s and a 20 s frozen-clock stop. A stopped map is reported notMeasured, pass is false and the exit code is 2; all other waits were already bounded. My run, node _harness/probe_audio_mix.mjs --maps fray,bridge,rift, exited 0 PASS in 540 s (load 422 to 111). RIFT, run last after two reloads: M2 floor lift 3.7 dB (bar 1), master st p10 -21.0 over music p50 -29.0, 6 of 6 emitters, 182 s. Bridge 0.6 dB with 5/5 emitters, fray 2.2 dB with 5/5; M1 holds on all three. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/mix.json",
+     "fixHint": "closing_gates owner: add the exit 2 = not measured clause to the Mix row"
+    },
+    {
+     "id": "break-test",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Scratch tool aud_break.mjs: 4 matches in a row in one page with real rendering (fray High, bridge Ultra, rift High, rift Ultra restart). In each: Q/W/E/R then Esc, shop then Esc, the menu, then leave. At all 21 checkpoints: one context, state running, clock rate 0.999-1.001, master RMS -11.9 to -27.5 dBFS in a match, all emitters playing (5/5/6/6), bus gains unchanged, 0 page errors. Load 102-180. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/break.json"
+    },
+    {
+     "id": "probe_audio_music",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "exit 0, all 17 gates pass (load 20-62). Act rises by clock at 482.6 s and by structures (12 killed). Three jumps. Objective lift 2.27 dB, bed over layer 3.91 dB. overStepDb 0/-6.22/-13.27, inside C1. Peak -12.34 dBFS. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/music.json"
+    },
+    {
+     "id": "probe_audio_runtime sync",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "exit 1, 2 of 3 runs pass at load 62-691. Runs 1 and 2: 50/50 hits start in call, pump p95 32.0/31.82 ms vs budget 42.72. Run 3: pump p95 32.18 ms, but hits 2-21 played no cue (startsInCall 30/50, measured 29/50). This contradicts the engineer's 50 of 50 in every run. Not a regression from this lane: no change on the sync path. The rAF halves were not measured. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/sync.json",
+     "fixHint": "Re-run at load < 3. If hits are again silent, look on the client side for a cue throttle or an unfinished combat-set prewarm under load."
+    },
+    {
+     "id": "typecheck",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "npm run -s typecheck exit 0"
+    },
+    {
+     "id": "probe",
+     "severity": "minor",
+     "status": "pass",
+     "evidence": "npm run -s probe: 55 passed, 0 failed (957 s, load 100-400). Log: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/probe2.log"
+    }
+   ],
+   "regressions": [],
+   "summary": "Verdict pass, written to /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r4_AUD_verify1.json, committed as 1e07fef09 and pushed. I reproduced the frozen AudioContext clock: it is this Mac's stalled output device, since a bare page and afplay freeze too and the fake sink advances. The client uses one context and never suspends or closes it. AUD-2 holds: probe_audio_mix ran to completion with the maps in a new order, exit 0, RIFT M2 3.7 dB. probe_audio_music passes all 17 gates. The break test (4 matches in a row on High and Ultra, with Esc, shop and restart) kept one running context, no silence and all emitters playing. typecheck passes and probe passes 55/55. Open minor: probe_audio_runtime sync passed only 2 of 3 runs at load up to 691. In run 3, hits 2-21 played no cue, which contradicts the engineer's 50/50 in every run. It is not caused by this lane and needs an idle re-run. Every number here was recorded at load 20-691, so no timing counts."
+  },
+  "fix": null,
+  "v2": null
+ },
+ {
+  "lane": "UI",
+  "work": {
+   "items": [
+    {
+     "id": "UI-1 reproduce and find the cause of the Esc / Leave match timeout",
+     "status": "done",
+     "evidence": "Reproduced in the production client: vite build into _harness/_prod/fw_r4_ui/dist, served by vite preview, real Chrome on the GPU, no dev handle. Used the same inputs as the probe: minimap right click, the skill-point click, the mouse to the middle, then Q W E R every 3 s. Tool: _harness/fw_r4_ui_leave.mjs.\n\nCAUSE: a targeted ability was being aimed when Esc was pressed. With quickCast off (the default), Q, W, E or R on a learned, ready ability enters aiming. src/input/controller.ts:250 takes Esc in the window capture phase: it cancels the aim and calls stopImmediatePropagation. So the first Esc only cancels the aim and the match menu does not open. The probe pressed Esc once and then waited 15 s.\n\nWHY IT HAPPENED IN ONLY SOME RUNS: the probe's .aslot__lvl click (timeout 1000 ms) usually fails because the '+' button bobs (hud.css animation), so skill points mostly go unspent. In fp1 at 5:10 the player is level 4 with 3 points unspent, and most key presses are refused with no aim.\n\nRUNS (load 2.6 at the first start, 64 to 479 for the rest, all from other processes):\n- 3 runs with no forced aim (run1, trials1, fp1; fp1 also had the probe's footprint polls): 6 of 6 leaves opened the menu on the first Esc.\n- Within those runs, 117 of 117 trials opened the menu on the first Esc, and 0 of those trials had an aim.\n- Forced-aim run (--aim --footprint --sec 200; Ctrl+Q/E/R learn the abilities, then a key puts one in aim): 13 of 13 aimed trials gave no menu on Esc 1, the aim was cleared (aimAfter1 = 0), and Esc 2 opened the menu every time. 6 of 6 unaimed trials opened it on Esc 1. 19 of 19 menus closed again with Esc.\n- The final RIFT leave of that run showed the exact probe symptom. Before Esc, 'Bear Down' (Q) was being aimed (cur-aim). Esc 1: no menu for 15 s, the range ring gone. Esc 2: menu.\n\nSHOTS:\n- _harness/_shots/fw_r4_ui_leave_aim1_rift_before_esc.png\n- _harness/_shots/fw_r4_ui_leave_aim1_rift_esc1_timeout.png\n\nREPORTS (each holds a per-press Escape log, with consumed=true on Esc 1 in the aim cases):\n- _harness/_reports/fw_r4_ui_leave_run1.json\n- _harness/_reports/fw_r4_ui_leave_trials1.json\n- _harness/_reports/fw_r4_ui_leave_fp1.json\n- _harness/_reports/fw_r4_ui_leave_aim1.json\n\nThe other suspects were ruled out by the DOM state recorded at every press: 0 modals, shop closed, no ping wheel, focus on body. No dismissable modal or shop took the press.\n\nVERDICT: no client change. Esc cancels targeting first and a second Esc opens the menu, which is the usual RTS/MOBA behaviour; it was reliable in 14 of 14 cases (13 trials and the final leave). The HUD's menu button is also always there as a mouse path."
+    },
+    {
+     "id": "UI-1 e2e all once",
+     "status": "done",
+     "evidence": "Command: node _harness/e2e.mjs all --out _harness/_reports/fw_r4_ui_e2e_all.json --prefix fw_r4_ui_e2e, against the standing dev server on 5190. Result: PASS, exit 0. Journeys ok: flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak (3 matches, 0 detached), store (Chalkline Pavise bought for 600, wallet 737 -> 137). 0 console errors or warnings in the report. Load was 276 at the start and 97 at the end (other processes), so the load<3 clause is not met: function passes, timing not measured. Log: _harness/_reports/fw_r4_ui_e2e_all.log"
+    }
+   ],
+   "commits": [
+    "1527c5aa4 (wip sync swept in the final _harness/fw_r4_ui_leave.mjs with --trials, --aim and --footprint; earlier versions in 581f8e417 and 33aba6c4c). HEAD matches the working file and the branch is level with origin, so no further commit was needed. Reports and shots stay untracked under _harness/_reports and _harness/_shots, as with the fw_final_* evidence."
+   ],
+   "handoffs": [
+    {
+     "to": "memory engineer (probe_match_memory.mjs)",
+     "what": "The leave timeout is a held targeting aim, not a client bug. Esc 1 cancels the aim (controller.ts:250, stopImmediatePropagation) and Esc 2 opens the menu; this was reliable in 14 of 14 cases. Evidence: _harness/_reports/fw_r4_ui_leave_aim1.json and shots _harness/_shots/fw_r4_ui_leave_aim1_rift_before_esc.png and _rift_esc1_timeout.png. Your current leave step (probe_match_memory.mjs:196-205: right click at 960,540, then Esc, up to 8 tries with a 2.5 s wait each) matches what a player does. The right click also cancels the aim (controller rightDown -> cancelAim), so it is correct. Please keep it and keep the _noleave shot. Also note: the probe's '.hud .aslot__lvl' click with timeout 1000 mostly fails because the '+' button bobs (animation), so skill points go unspent and most QWER presses are refused (fp1 RIFT at 5:10: level 4 with 3 points unspent). If the probe should exercise every kit's effects as its header says, level up with Control+KeyQ/E/R (never Control+W), or use click({ force: true }) on .aslot__lvl."
+    },
+    {
+     "to": "lead (owner_rulings.md, not my file)",
+     "what": "Please record this as a ruling if wanted: in a match, Esc first cancels targeting (aim, attack-move, ping wheel) or closes the shop, and a second Esc opens the menu. This is the usual RTS/MOBA behaviour. It was verified in the production client 13 of 13 times, plus the final leave (fw_r4_ui_leave_aim1.json). match_leave_journey in final_idle_verify.json can be re-run with the updated probe."
+    }
+   ],
+   "notes": "I changed no client code: the only path where the first Esc does not open the menu is cancelling an aim, and the second Esc then works every time. The machine's load came from other processes: 2.6 at my first start, then 64 to 479. No frame timings are reported, only function. I did not edit probe_match_memory.mjs; the memory engineer had already changed its leave step to right click plus repeated Esc, which agrees with this finding. My runs are all finished, I started no servers (e2e used the standing dev server, pid 5243, which I did not start), and no tracked _harness/_reports files were rewritten. Leftover processes I saw belong to others (run_probes.ts 47431 and its Chrome, under the AUD heavy slot) and were left alone. Local time at finish: Sat Nov 7 03:57 CST 2026."
+  },
+  "v1": {
+   "pass": true,
+   "items": [
+    {
+     "id": "UI-1 cause: held aim eats Esc 1, Esc 2 opens the menu",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "Command: node _harness/fw_r4_ui_leave.mjs --modes rift,bridge,fray --aim --sec 150 (load 46.39 -> 28.28). This ran the prod build in real Chrome on the GPU, 3 matches in one page in the new order RIFT, BRIDGE, FRAY. With a held aim, 21 of 21 trials showed no menu on Esc 1 (the aim was cancelled) and the menu on Esc 2. Without an aim, 26 of 26 trials showed the menu on Esc 1. No trial failed to reach the menu, and 47 of 47 menus closed again. All 3 final leaves opened the menu on Esc 1. The cause is in src/input/controller.ts:250, which calls stopImmediatePropagation on an aim cancel. Caveat: with the probe's exact inputs and no forced aim, the original timeout never came back (0 of 8 of my leaves, 0 of 6 of the engineer's). So the attribution of the fw_final failures is a strong inference, not a replay. Report: _harness/_reports/fw_r4_ui_vfy1_aim3.json"
+    },
+    {
+     "id": "UI-1 break attempts (shop, search, cast, attack-move, layered states, hammered Esc, focus, High and Ultra, 3 matches in a row)",
+     "severity": "major",
+     "status": "pass",
+     "evidence": "A scratch driver ran on the same prod dist for 5 matches: BRIDGE High, RIFT Ultra, FRAY Ultra, BRIDGE High, RIFT High (loads 21.94 -> 228.83 and 163.55 -> 367.65). Esc presses needed to reach the menu:\n- plain: 1 (5 of 5)\n- aim held: 2 (5 of 5)\n- after a cast: 1 in 4 of 5; in the fifth the click did not cast, the aim stayed visible, and it took 2\n- shop open: 2 (5 of 5)\n- shop with search text: 3 (5 of 5)\n- attack-move: 2 (5 of 5)\n- aim plus shop: 3 (5 of 5)\n- focus on a HUD button: 1 (2 of 2)\n- double Esc during an aim: menu 5 of 5\nLeave was confirmed 5 of 5, with 0 console errors. Reports: _harness/_reports/fw_r4_ui_vfy1_cases.json and fw_r4_ui_vfy1_cases2.json"
+    },
+    {
+     "id": "Claim: the HUD's menu button is always there as a mouse path",
+     "severity": "minor",
+     "status": "fail",
+     "evidence": "The claim is false. There was no HUD Menu button in 5 of 5 matches ('.hud button' with text Menu counted 0). The only Menu button is in HostStatus, which renders only when there is no HUD (src/ui/screens/match.tsx:71). The portal's 'Pause / Menu' was not visible in 5 of 5, because index.html:22 hides #__ff_controls__ during a match. In a match, Esc is the only way to reach Leave match. Reports: fw_r4_ui_vfy1_cases*.json, aimMenuBtn",
+     "fixHint": "Correct the lane record. The lead should decide on a mouse path: a HUD Menu button, or showing the portal Pause / Menu during a match."
+    },
+    {
+     "id": "Esc cancel-first order on record",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "_design/sections/client_hud.md:49 and :258 say only that Esc in a match opens the menu. owner_rulings.md has no Esc ruling. It is still a pending handoff to the lead.",
+     "fixHint": "Lead: record the ruling and add a line to client_hud.md:49."
+    },
+    {
+     "id": "UI-1 e2e all once",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "The engineer's _harness/_reports/fw_r4_ui_e2e_all.json is PASS 8 of 8. My run of node _harness/e2e.mjs all --out _harness/_reports/fw_r4_ui_vfy1_e2e_all.json failed with exit 1, 7 of 8 passing: flow_readycheck decline_once timed out after 15 s waiting for Decline, with 1.7 s left on the ready timer. Load was 181 at the start and 302/442 at the end. A re-run of node _harness/e2e.mjs flow passed 3 of 3, with decline_once ok (load about 203 -> 115). Function passes; this looks like a timing flake under load. Timing itself was not measured (load is not under 3)."
+    },
+    {
+     "id": "typecheck",
+     "severity": "blocker",
+     "status": "pass",
+     "evidence": "npm run -s typecheck: exit 0, no output (load about 46)."
+    },
+    {
+     "id": "probe",
+     "severity": "blocker",
+     "status": "pass",
+     "evidence": "npm run -s probe: 55 passed, 0 failed, 627.5 s, exit 0 (load 193.84 -> 15.76)."
+    },
+    {
+     "id": "audio after a match restart",
+     "severity": "minor",
+     "status": "not_measured",
+     "evidence": "There was 1 AudioContext across all 5 matches, so none leaked, and its state was 'running' at every reading. But currentTime stayed at 0.01 with 0.00 s advance in 2 s at every reading, Home included. That is this Mac's frozen output clock (AUD-1), not the UI. Reports: fw_r4_ui_vfy1_cases*.json, audioStart, audioEnd and audioHome."
+    },
+    {
+     "id": "fw_r4_ui_leave.mjs state selectors",
+     "severity": "minor",
+     "status": "partly",
+     "evidence": "In fw_r4_ui_leave.mjs, uiState.shopOpen ('.hud .shop') and uiState.wheel ('.wheel') never match: the real classes are .lshop (shop.tsx:124) and .pwheel (world.tsx:215). The 'shop closed' conclusion still holds, because the shop is role=dialog and 'modals 0' was recorded.",
+     "fixHint": "Use .lshop and .pwheel."
+    }
+   ],
+   "regressions": [],
+   "summary": "PASS with minor findings. Verdict at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/r4_UI_verify1.json, committed and pushed in 08e8fe18b.\n\nThe cause is confirmed in the prod client. A held targeting aim takes Esc 1 (controller.ts:250), and Esc 2 opens the menu: 21 of 21 aimed trials on RIFT, BRIDGE, FRAY. In 5 more matches on High and Ultra, every break case reached the menu within 3 presses, one press per visible cancel layer, and 0 cases failed. The original fw_final timeouts were not replayed with the probe's exact inputs: 0 of 8 leaves without a forced aim. So the cause of those runs is a strong inference.\n\nMinor findings:\n- The engineer's claim of a HUD Menu button as a mouse path is false. The HUD has no such button, and index.html:22 hides the portal Pause / Menu bar in a match, so Esc is the only way to Leave match.\n- The cancel-first Esc order is not recorded in owner_rulings.md or client_hud.md.\n- e2e all failed once (7 of 8: flow_readycheck decline_once, load 181-442); the flow re-run passed 3 of 3.\n- typecheck passes; probe is 55 of 55.\n- Audio after a match restart is not measured: this Mac's output clock is frozen (AUD-1).\n\nLoad ran from 15 to 442 because of other processes, so no frame timings are reported. All my processes have ended, and no tracked report was rewritten."
+  },
+  "fix": null,
+  "v2": null
+ }
+]
