@@ -74,6 +74,8 @@ const FIND = `(steps) => {
       for (const e of els) {
         if (s.hasText && !norm(e.textContent).toLowerCase().includes(s.hasText.toLowerCase())) continue;
         if (s.name && !new RegExp(s.name.src, s.name.flags).test(name(e))) continue;
+        // a role query skips what the accessibility tree hides, as Playwright's getByRole does by default
+        if (s.role && (!e.getClientRects().length || getComputedStyle(e).visibility === 'hidden' || e.closest('[aria-hidden="true"], [inert]'))) continue;
         if (!out.includes(e)) out.push(e);
       }
     }
