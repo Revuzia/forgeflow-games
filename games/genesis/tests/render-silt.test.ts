@@ -82,5 +82,5 @@ test('the god\'s eye clears the deck over a warned river from the town view, not
   assert.equal(siltLensClear(at(520), 520, zones, k).k, 0, 'no warning: no clearing');
   const cl = readFileSync(new URL('../src/render/sky/clouds.ts', import.meta.url), 'utf8');
   assert.match(cl, /uniform vec2 uLensClear/);
-  assert.match(cl, /dens \*= 1\.0 - 0\.95 \* uLensClear\.y/);
+  assert.match(cl, /dens \*= 1\.0 - uLensClear\.y \*/);
 });

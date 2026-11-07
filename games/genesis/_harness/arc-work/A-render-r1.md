@@ -115,3 +115,17 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 3. LOOK at _shots/r1f-tower-struck.png (stump visible) — then #9 DONE.
 4. Run the gate once (slot.sh npm run check) — expect 823/823.
 5. Optional perf low/high: r1-render-perf.json --only=r1-perf-low,r1-perf-high (27 min/shot at current speed).
+
+## Stint 2 (2026-11-07 21:16Z-) — fresh context
+- Chains 26662/29787 had finished. LOOKED AT:
+  - r1f-tower-struck: dark scorched lobed heap, broken stump blocks standing, ~130 tilted blocks strewn, NO trees in
+    it -> reads as a fallen tower, not a henge. r1f-tower-rising: no trees on/through, warm sandstone terrace, ramp
+    side, coursed tiers. #9 VISUALLY MET (clearing, colour, mound). 
+  - r1e-flood-warning / r1e-flood-god: STILL a white wall although diag lens=[841,1] (the gate works now).
+    Cause: dense-deck extinction is uCloudScale.z = 0.16/m (x1.6 storm): 5 % of it over ~300 m of deck under the
+    380 m eye = OD ~4. FIX clouds.ts: lens clears outright (dens *= 1 - k*(...), in-cloud fog *(1-k)). test
+    render-silt updated (6/6).
+- Re-shoot r1-render-flood4.json (r1g-flood-*), chain9 pid 31406 (shots pid 31409), log
+  _harness/scratch/arc/render/shots-r1-render-flood4.log.
+- GATE r1-check2 launched 21:18Z (slot.sh npm run check, pid 31579) -> _harness/scratch/arc/render/r1-check2.log.
+- tower5 (r1h-tower-finished-night/day/near) chained after 31406: pid 31838

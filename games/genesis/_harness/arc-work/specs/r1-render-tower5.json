@@ -1,0 +1,52 @@
+{
+ "_doc": "A-render-r1 #9 stint 2: the finished tower on the fresh build (sandstone + ground bounce), far and near.",
+ "shots": [
+  {
+   "name": "r1h-tower-finished-night",
+   "params": "scenario=babel&source=worker&seed=1&b=near5",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "G.hold(true); document.getElementById('boot')?.remove();",
+    "window.__ll = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return { lat: Math.asin(p[1] / l) * 180 / Math.PI, lon: Math.atan2(p[0], p[2]) * 180 / Math.PI }; };",
+    "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw;",
+    "await G.cmd({ k: 'tower.let', tower: tw.id }); let ts; for (let i = 0; i < 40; i++) { await G.step(1440*15); ts = await G.arc.towers(); if (ts.some((t) => t.status === 'finished')) break; }",
+    "const ll = __ll(tw.pos); await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 420, tilt: 70, yaw: 30, fov: 50, hour: 22 }); await G.frames(3);",
+    "return { t: JSON.stringify(ts).slice(0, 300) };"
+   ]
+  },
+  {
+   "name": "r1h-tower-finished-day",
+   "params": "scenario=babel&source=worker&seed=1&b=near5",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "const ll = __ll(window.__tw.pos); await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 420, tilt: 70, yaw: 30, fov: 50, hour: 10 }); await G.frames(3); return {};"
+   ]
+  },
+  {
+   "name": "r1h-tower-finished-near",
+   "params": "scenario=babel&source=worker&seed=1&b=near5",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "const ll = __ll(window.__tw.pos); await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 200, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(3); return {};"
+   ]
+  }
+ ]
+}

@@ -71,7 +71,7 @@ export function updateSilt(st: SiltState, disasters: readonly DisasterView[], pl
 
 /**
  * ARC §10: the god's eye over a warned river. While a flood's silt zone is active and the camera looks down on it from
- * the usual town view (a few hundred metres to ~1.5 km up), the cloud between the lens and the ground is thinned (to 5 %), so
+ * the usual town view (a few hundred metres to ~1.5 km up), the cloud between the lens and the ground is cleared (a dense deck at even 5 % is still opaque over 300 m), so
  * the river rising brown and the people walking uphill can be seen; the rain, the overcast light and the clouds
  * further off (upstream, where the rain hangs) stay. Returns the clearing's reach (m along the view ray) and strength
  * 0..1 (k = 0: no clearing). `cam` is the camera in the body frame (m), `altitude` its height over the datum.
