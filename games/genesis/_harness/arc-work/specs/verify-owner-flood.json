@@ -1,0 +1,45 @@
+{
+ "_doc": "verify-A-r1-owner §10: a town on the sandbox river; the owner makes it rain heavily over the hills for days (natural law raised) until the river floods on its own (riverFlood, cause nature). Shots: the river the day before, during the warning (UI on: toast, rain, river high+brown, people going up), when the water comes, and the all-clear. Then a god flood (water.flood free text) at the default wrath: warned. 888x500. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/verify-owner-flood.json --port=5351 > _harness/scratch/arc/verify-A-r1-owner/flood.log 2>&1 &",
+ "shots": [
+  { "name": "vo-flood-before", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove(); const p = G.poi('river'); window.__riv = p;",
+      "const r0 = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: 60, era: 'bronze', settled: true, wildGame: false, pos: p.pos });",
+      "const sid = r0.created?.find((e) => e.kind === 'settlement')?.id; window.__sid = sid; await G.step(1440*3);",
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(8); G.hold('ui');",
+      "return { poi: p && [p.lat, p.lon], r0: JSON.stringify(r0).slice(0, 300) };"
+    ] },
+  { "name": "vo-flood-warning", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 25,
+    "script": [
+      "const sid = window.__sid; const pv = () => window.__GENESIS_FX__.fx.vis.pv; const pos = () => pv().settlements.find((s) => s.id === sid)?.pos;",
+      "await G.cmd({ k: 'set', path: 'disasters.natural', value: 4 }); let d = null, days = 0, hours = 0;",
+      "for (days = 0; days < 40 && !d; days++) { if (days % 2 === 0) await G.cmd({ k: 'water.rain', pos: [...pos()], radius: 2500, duration: 2880, intensity: 3 }); for (let h = 0; h < 24 && !d; h++) { await G.step(60); d = pv().disasters.find((x) => x.kind === 'flood' && x.params && x.params.warning); } }",
+      "window.__d = d; if (d) await G.step(120);",
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+      "const all = pv().disasters.map((x) => ({ k: x.kind, id: x.id, p: x.params })); const ev = await G.query('settlement', { id: sid });",
+      "return { days, flood: d && { id: d.id, params: d.params, god: d.god, cause: d.cause }, all, toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6), evac: JSON.stringify(ev).match(/evac[^,]*,[^,]*/g) };"
+    ] },
+  { "name": "vo-flood-warning-near", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2,
+    "script": [
+      "G.hold(false); const ag = G.agents(200); const tgt = ag.length ? { kind: 'agent', id: ag[0].id } : { kind: 'settlement', id: window.__sid }; await G.camera({ mode: 'orbit', target: tgt, dist: 90, tilt: 62, yaw: 40, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+      "return { onScreen: G.agents(60).length };"
+    ] },
+  { "name": "vo-flood-water", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 25,
+    "script": [
+      "const pv = () => window.__GENESIS_FX__.fx.vis.pv; let k = 0; for (k = 0; k < 16; k++) { await G.step(60); const d = pv().disasters.find((x) => x.kind === 'flood'); if (d && !(d.params && d.params.warning)) break; } await G.step(60);",
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__sid }, dist: 900, tilt: 58, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+      "return { k, all: pv().disasters.map((x) => ({ k: x.kind, p: x.params })), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+    ] },
+  { "name": "vo-flood-home", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 30,
+    "script": [
+      "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 }); await G.step(1440*4); G.hold(false); await G.frames(10); G.hold('ui');",
+      "return { all: window.__GENESIS_FX__.fx.vis.pv.disasters.map((x) => x.kind), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+    ] },
+  { "name": "vo-flood-god", "params": "scenario=sandbox&source=worker&seed=1&b=flood", "size": [888, 500], "quality": "medium", "ui": true, "frames": 2, "chronicle": 15,
+    "script": [
+      "const st = window.__GENESIS_FX__.fx.vis.pv.settlements.find((s) => s.id === window.__sid); const r = await G.freeform('flood ' + st.name); await G.step(90);",
+      "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: window.__sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(10); G.hold('ui');",
+      "return { r: JSON.stringify(r).slice(0, 400), all: window.__GENESIS_FX__.fx.vis.pv.disasters.map((x) => ({ k: x.kind, p: x.params })), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.innerText).slice(0,6) };"
+    ] }
+ ]
+}

@@ -19,12 +19,13 @@ const year = Math.max(day, Math.round(p.st.orbit.period));
 const tw = (): TowerState | undefined => sim.u.god.rel?.towers?.at(-1);
 const ev: Record<string, number> = {};
 const deaths: Record<string, number> = {};
+const deathsAt: Record<string, number> = {};
 const lines: string[] = [];
 let choiceAt = -1;
 function drain() {
   for (const e of sim.drainEvents() as unknown as { t: string; a?: number; text?: string; data?: Record<string, unknown> }[]) {
     if (e.t.startsWith('tower') || e.t.startsWith('heart') || e.t === 'found' || e.t === 'settlement.founded') ev[e.t] = (ev[e.t] ?? 0) + 1;
-    if (e.t === 'death') deaths[String(e.data?.cause)] = (deaths[String(e.data?.cause)] ?? 0) + 1;
+    if (e.t === 'death') { deaths[String(e.data?.cause)] = (deaths[String(e.data?.cause)] ?? 0) + 1; if (e.data?.cause === 'cold' || e.data?.cause === 'war') { const st = ps.settlement(Number(e.data?.settlement)); const k = `${e.data?.cause}@${e.data?.settlement}:${st ? Math.round((sim.u.tick - st.founded) / day) : '?'}d:${A.task ? '' : ''}`; deathsAt[k] = (deathsAt[k] ?? 0) + 1; } }
     if (e.t === 'tower.choice' && choiceAt < 0) choiceAt = sim.u.tick;
     if (e.t === 'chronicle' || e.t === 'tell') { const s = String((e as { text?: string }).text ?? ''); if (/tower|tongue|understand|builders/i.test(s)) lines.push(s); }
   }
@@ -137,6 +138,6 @@ if (answer === 'warn') {
   out.lateStatus = t.status;
   out.lateLang = pairs(league0);
 }
-out.events = ev; out.deathsTotal = deaths; out.lines = lines.slice(0, 12); out.secs = Math.round((Date.now() - t0ms) / 1000);
+out.deathsAt = deathsAt; out.events = ev; out.deathsTotal = deaths; out.lines = lines.slice(0, 12); out.secs = Math.round((Date.now() - t0ms) / 1000);
 out.arcEvents = (sim.u.god.rel as unknown as { arcEvents?: { kind: string; name: string }[] })?.arcEvents?.map((e) => `${e.kind}:${e.name}`);
 console.log('RESULT ' + JSON.stringify(out));
