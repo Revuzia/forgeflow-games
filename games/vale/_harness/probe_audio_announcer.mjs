@@ -90,6 +90,7 @@ class FakeCtx {
     n.playbackRate = new Param(1);
     n.start = (when = this.currentTime, offset = 0) => {
       n.when = Math.max(when, this.currentTime); n.offset = offset;
+      n.ref0 = n.buffer?.ref; n.dur0 = n.buffer?.duration;   // the file it started with: the engine's release drops a retired source's buffer (round 5 AUD-3)
       n.endAt = n.when + (n.loop ? 1e9 : (n.buffer?.duration ?? 1));
       this.started.push(n); this.live.push(n);
     };
@@ -165,8 +166,8 @@ let simT = 60;
 const batch = async (evs) => { simT += 1 / 30; stub.view.time = simT; batchCb(evs.map((e) => ({ t: simT, ...e }))); await flush(); };
 /** let `s` seconds pass (the announcer's own timer is driven by hand) */
 const wait = async (s) => { for (let k = 0; k < Math.round(s / 0.05); k++) { ctx.advance(0.05); eng.pumpAnn(); await flush(); } };
-const voiceStarts = () => ctx.started.filter((n) => n.buffer && audio.cues[cueOf(n)]?.bus === 'voice');
-const cueOf = (n) => Object.entries(audio.cues).find(([, c]) => c.files.includes(n.buffer.ref))?.[0];
+const voiceStarts = () => ctx.started.filter((n) => n.ref0 && audio.cues[cueOf(n)]?.bus === 'voice');
+const cueOf = (n) => Object.entries(audio.cues).find(([, c]) => c.files.includes(n.ref0))?.[0];
 const failures = [];
 const report = { probe: 'probe_audio_announcer', catalog: ver };
 const cueFor = (role) => audio.events[role];
@@ -273,7 +274,7 @@ if (report.A7.minorLiftDb === null || Math.abs(report.A7.minorLiftDb) > 0.2) fai
 await wait(4);
 
 // A6 — one at a time over everything spoken so far
-const vs = voiceStarts().map((n) => ({ cue: cueOf(n), at: n.when, end: Math.min(n.when + n.buffer.duration, n.stopAt ?? Infinity) })).sort((a, b) => a.at - b.at);
+const vs = voiceStarts().map((n) => ({ cue: cueOf(n), at: n.when, end: Math.min(n.when + n.dur0, n.stopAt ?? Infinity) })).sort((a, b) => a.at - b.at);
 let worst = 0;
 for (let i = 1; i < vs.length; i++) worst = Math.max(worst, Math.max(...vs.slice(0, i).map((p) => p.end)) - vs[i].at);
 report.A6 = { lines: vs.length, worstOverlapS: +worst.toFixed(3) };
@@ -428,12 +429,12 @@ DELAY[bdef.layers[0].file] = new Promise((r) => { release = r; });
 eng.attach(null);
 eng.music(bedId);
 await flush();
-const tMain = ctx.started.find((n) => n.buffer?.ref === bdef.file && !n.c1seen);
+const tMain = ctx.started.find((n) => n.ref0 === bdef.file && !n.c1seen);
 const mainStarted = !!tMain;
 if (tMain) tMain.c1seen = true;
 ctx.advance(7.3);
 release(); await flush();
-const lay = ctx.started.find((n) => n.buffer?.ref === bdef.layers[0].file);
+const lay = ctx.started.find((n) => n.ref0 === bdef.layers[0].file);
 const bar = (60 / bdef.bpm) * 4;
 const posMain = lay && tMain ? ((lay.when - tMain.when) % (DUR[bdef.file])) : null;
 report.C1 = { bed: bedId, mainStartedBeforeLayer: mainStarted, layerAt: lay ? +(lay.when - tMain.when).toFixed(3) : null,

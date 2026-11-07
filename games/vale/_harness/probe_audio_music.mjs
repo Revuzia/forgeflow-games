@@ -18,7 +18,8 @@
 //   M1  memory: a jump adds no decoded file; the bed's decoded files are the main stem, the combat layer, the objective
 //       layer; the objective layer <= 16 MB and the bed <= 135 MB. A streamed bed (round 5 AUD-4, src/audio/index.ts
 //       `stream`): the objective layer is the one whole file, the main stem and combat layer are its two streamed stems,
-//       and at most 3 section windows were ever held at once; the bed (whole files + windows held) <= 135 MB
+//       and at most 3 section windows were ever held at once; the bed (whole files + the most the chains ever held at once:
+//       windows, buffers sources still play and the pool, round 6 AUD-6) <= 135 MB
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run failed. Report → _harness/_reports/fw_CW2_music.json. Needs the dev server.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -258,7 +259,10 @@ try {
   });
   // round 5 AUD-4: a streamed bed holds its main stem and combat layer as section windows (src/audio/index.ts `stream`)
   const strm = rep.memory.stream;
-  const mb = rep.memory.files.reduce((s, r) => s + r[1], 0) + (strm?.heldMb ?? 0);
+  // round 6 AUD-6: heldMb is every buffer the chains hold (windows, buffers sources still play, the pool); the budget
+  // reads the most they ever held at once (maxHeldMb), or now if more
+  const mb = rep.memory.files.reduce((s, r) => s + r[1], 0) + Math.max(strm?.heldMb ?? 0, strm?.maxHeldMb ?? 0);
+  rep.memory.budgetMb = +mb.toFixed(1);
   const objFile = rep.memory.files.find((r) => /objective/.test(r[0]));
 
   const riseT = rep.actRiseClock.atMatchS;

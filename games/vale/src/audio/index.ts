@@ -216,7 +216,8 @@
 //               are held, three windows for a moment when the act changes its choice: 2 x 12.5 MB a window. A window's
 //               buffers are decoded into again once no source plays them and no window holds them (STREAM_POOL per stem),
 //               so a section change leaves no 25 MB of garbage waiting for the collector (a match's polls read 0-2 windows
-//               of it, 156-226 MB, before the pool). Only an .ogg
+//               of it, 156-226 MB, before the pool). The bed's held memory (musicStream.heldMb, decoded()) is every
+//               buffer once: windows cached, buffers sources still play, the pool (round 6 AUD-6). Only an .ogg
 //               session on a 48 kHz context with an Opus AudioDecoder streams; anything else (and a stem that fails to
 //               parse or decode) decodes the bed whole, as before. The objective layer (one section long) is whole.
 //               A bed of independent loops (a main stem and 'stem…' layers only: the menu, the post-game) streams the same
@@ -229,7 +230,17 @@
 //               bed is 12-61 MB). The engine watches the clock (CLOCK_*): while it stands still (or the context is not
 //               running) a stop frees at once and no new one-shot starts; a one-shot is also freed at its natural end by wall
 //               clock. When the clock moves again (statechange, devicechange, the watch) the bed the screen wants is the one
-//               playing, once: a retired bed's sources have no buffer left to sound
+//               playing, once: a retired bed's sources have no buffer left to sound. A source still sounding until a
+//               successor already scheduled takes over (a section window's hand-over, a whole bed's jump: 'hand') and a
+//               bed piece are the music itself, so a stall keeps them until their own time comes, and the music goes
+//               on at once when the clock is back (round 6 AUD-5; their bed stopping makes them plain stops)
+//   reuse       (round 6 AUD-7) where beds stream, a bed decoded whole (the draft, the objective layer) decodes through
+//               OpusStem into a buffer of its loop plus a STREAM_HANDLE_S handle each side (the loop's own head again,
+//               never played: the loop ends at the file's length). That is the shape of a section window of the same
+//               length, so when such a bed stops for a bed that streams windows of that shape (the draft for a match
+//               bed) it fades out over HAND_FADE_S and hands its buffers over: the match bed's first windows decode
+//               into them (waiting HAND_WAIT_S at most) instead of the collector freeing 47 MB up to 100 s later. What
+//               is not taken is let go at once
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -396,6 +407,9 @@ const STREAM_SR = 48000;          // a streamed bed decodes at Opus's own rate: 
 const STREAM_HANDLE_S = 0.3;      // a section window runs on this far either side of its section (>= SECTION_XF_S + margin)
 const STREAM_POOL = 2;            // window buffers kept per stem for the next decode (see Stream.pool)
 const LOOP_WINDOW_S = 16;         // a bed of independent loops (the menu, the post-game) streams by windows of this (s)
+const HAND_FADE_S = 0.6;          // a whole bed handing its buffers to the next bed's windows fades out over this (see `reuse`)
+const HAND_WAIT_S = 1.5;          // … and the next bed's first window waits at most this long for them
+const SPARE_S = 6;                // buffers handed over and not taken are let go after this (s)
 const ACT_CLOCK = [0.2, 0.4];    // the next act's start, as a share of the mode's clock …
 const ACT_LOST = [0.15, 0.4];    // … or of its structures down, whichever comes first
 const OBJ_INNER_M = 10;          // the objective layer is full within this of a living epic objective …
@@ -628,7 +642,14 @@ class Engine implements ValeAudioPort {
   /** retired sources not freed yet (see `retire`) */
   private readonly dying = new Set<Dying>();
   /** dev / probes: what the release did (freed by kind and by how: ended, due by wall clock, a stall) */
-  readonly releaseStats = { retired: 0, ended: 0, due: 0, stall: 0, recovered: 0, stalls: 0 };
+  readonly releaseStats = { retired: 0, ended: 0, due: 0, stall: 0, recovered: 0, stalls: 0, handed: 0, reused: 0 };
+  /** reuse (see `reuse` in the header): a whole bed buffer's own length (s) where it runs on past it (bedBuffer); the
+   *  buffers a stopped bed handed over, waiting for the next bed's windows; the hand-over the next bed's first windows
+   *  wait for */
+  private readonly bodyS = new WeakMap<AudioBuffer, number>();
+  private spare: AudioBuffer[] = [];
+  private spareTimer: ReturnType<typeof setTimeout> | undefined;
+  private handing: Promise<void> | null = null;
 
   constructor(cat: CatalogLike, url: (ref: string) => string, settings: AudioSettings) {
     this.cues = cat.audio.cues;
@@ -880,6 +901,7 @@ class Engine implements ValeAudioPort {
    *  builds a new one (decoded buffers are not tied to a context and stay cached) */
   private dropContext(): void {
     for (const d of [...this.dying]) d.free('stall');
+    this.dropSpare();
     this.voices.length = 0;
     this.bed = null;
     const map = this.client?.setup?.map ?? null;
@@ -1056,6 +1078,7 @@ class Engine implements ValeAudioPort {
     const d = this.draftS;                                  // the draft's state outlives a bed change (see draft())
     this.phase = d ? d.phase : null; this.urgent = !!d?.urgent; this.phaseDriven = !!d;
     if (!this.ctx) return;
+    this.dropSpare();
     this.stopBed();
     if (id) this.startBed(id);
   }
@@ -1189,9 +1212,7 @@ class Engine implements ValeAudioPort {
       const g = ctx.createGain();
       g.gain.value = 0;
       g.connect(gain);
-      // the first layer with no other role is the combat layer (see `music` in the header)
-      const role: LayerRole = l.id.startsWith('stem') ? 'stem' : l.id.startsWith('phase_') ? 'phase' : l.id.startsWith('urgency_') ? 'urgency'
-        : l.id.startsWith('objective') ? 'objective' : combat ? 'stem' : 'combat';
+      const role = layerRole(l.id, combat);
       if (role === 'combat') combat = true;
       return { id: l.id, role, file: l.file, gain: g, src: null, srcGain: null, buf: null };
     });
@@ -1201,7 +1222,7 @@ class Engine implements ValeAudioPort {
     const loadLayers = (): void => {
       for (const l of layers) {
         if (bed.streams.some((c) => c.stems.some((st) => st.layer === l))) continue;
-        void this.buffer(l.file).then((buf) => {
+        void this.bedBuffer(l.file).then((buf) => {
           if (this.bed !== bed || !buf || !this.ctx) return;
           l.buf = buf;
           if (bed.t0 !== null) this.startLayer(bed, l);
@@ -1228,7 +1249,7 @@ class Engine implements ValeAudioPort {
     }
     const whole = (): void => {
       // the main stem starts as soon as it decodes
-      void this.buffer(def.file).then((main) => {
+      void this.bedBuffer(def.file).then((main) => {
         if (this.bed === bed && main) this.loopMain(bed, main);
       });
       loadLayers();
@@ -1246,7 +1267,7 @@ class Engine implements ValeAudioPort {
   /** the chains a bed streams as, or null (it decodes whole): a match bed's main stem and combat layer on the section
    *  grid (the acts); a bed of independent loops (a main stem and 'stem…' layers only: the menu, the post-game) one chain
    *  per stem of LOOP_WINDOW_S windows. Lengths are checked once the files are parsed */
-  private streamPlan(def: MusicDefT, layers: BedLayer[]): { acts: boolean; secS: number; stems: { file: string; layer: BedLayer | null }[] }[] | null {
+  private streamPlan<L extends { role: LayerRole; file: string }>(def: MusicDefT, layers: readonly L[]): { acts: boolean; secS: number; stems: { file: string; layer: L | null }[] }[] | null {
     if (def.loopStart !== 0 || def.loopEnd !== undefined) return null;
     const combatL = layers.find((l) => l.role === 'combat');
     if (combatL) {
@@ -1261,7 +1282,7 @@ class Engine implements ValeAudioPort {
   /** fetch every streamed stem compressed, then each chain decodes its window 0 and starts on it (the main stem's
    *  chain starts the bed). false (the bed then decodes whole) when a file is no stem this can stream (or not of the
    *  plan's length) or the main chain's first window fails; a layer chain that fails decodes that layer whole */
-  private async streamBed(bed: Bed, plan: NonNullable<ReturnType<Engine['streamPlan']>>): Promise<boolean> {
+  private async streamBed(bed: Bed, plan: { acts: boolean; secS: number; stems: { file: string; layer: BedLayer | null }[] }[]): Promise<boolean> {
     const ctx = this.ctx;
     if (!ctx) return false;
     const files = plan.flatMap((c) => c.stems.map((x) => x.file));
@@ -1286,6 +1307,12 @@ class Engine implements ValeAudioPort {
         stats: { decoded: 0, ms: [], maxHeld: 0, late: 0, maxHeldMb: 0 } });
     }
     bed.streams = chains;
+    // the bed before hands its buffers over (see `reuse` in the header): the first windows decode into them
+    const hand = this.handing;
+    if (hand) {
+      await Promise.race([hand, new Promise<void>((r) => { setTimeout(r, HAND_WAIT_S * 1000); })]);
+      if (this.bed !== bed || this.ctx !== ctx) return true;
+    }
     const started = await Promise.all(chains.map(async (c) => {
       const w0 = await this.window(c, 0).p;
       if (this.bed !== bed || c.stopped) return true;
@@ -1303,13 +1330,14 @@ class Engine implements ValeAudioPort {
       return true;
     }));
     if (this.bed !== bed) return true;
+    if (hand && this.handing === hand) this.dropSpare();     // what the first windows did not take goes to the collector
     chains.forEach((c, i) => {
       if (started[i] || c.main) return;
       // a layer chain that could not start: that layer decodes whole (see `music`)
       bed.streams = bed.streams.filter((x) => x !== c);
       for (const x of c.stems) if (x.layer) {
         const l = x.layer;
-        void this.buffer(l.file).then((buf) => { if (this.bed === bed && buf) { l.buf = buf; if (bed.t0 !== null) this.startLayer(bed, l); } });
+        void this.bedBuffer(l.file).then((buf) => { if (this.bed === bed && buf) { l.buf = buf; if (bed.t0 !== null) this.startLayer(bed, l); } });
       }
     });
     const mainOk = chains.every((c, i) => !c.main || started[i]);
@@ -1330,7 +1358,7 @@ class Engine implements ValeAudioPort {
     const ctx = this.ctx!;
     const a = Math.round((k * st.secS - STREAM_HANDLE_S) * STREAM_SR), b = Math.round(((k + 1) * st.secS + STREAM_HANDLE_S) * STREAM_SR);
     const t = performance.now();
-    const into = st.stems.map((_, i) => st.pool[i].pop() ?? null);
+    const into = st.stems.map((x, i) => st.pool[i].pop() ?? this.takeSpare(b - a, x.stem.channels));
     for (const b of into) if (b) st.busy.add(b);
     const p = Promise.all(st.stems.map((x, i) => x.stem.window(ctx, a, b, into[i]).catch(() => null)));
     const nw: Win = { p, v: null };
@@ -1485,7 +1513,7 @@ class Engine implements ValeAudioPort {
     const t0 = ctx.currentTime + 0.05;
     const s = ctx.createBufferSource();
     s.buffer = main; s.loop = true;
-    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? main.duration;
+    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? this.body(main);
     const g = ctx.createGain();
     g.connect(bed.gain);
     s.connect(g); s.start(t0);
@@ -1571,7 +1599,7 @@ class Engine implements ValeAudioPort {
     g.connect(bed.gain);
     const s = ctx.createBufferSource();
     s.buffer = buf; s.loop = true;
-    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? buf.duration;
+    s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? this.body(buf);
     s.connect(g);
     const end = s.loopEnd, len = Math.max(0.001, end - s.loopStart);
     const wrap = (p: number): number => (p < end ? p : def.loopStart + ((p - end) % len));
@@ -1628,12 +1656,12 @@ class Engine implements ValeAudioPort {
     l.srcGain = sg;
     const now = ctx.currentTime;
     if (l.role === 'stem') {
-      s.loopStart = 0; s.loopEnd = l.buf.duration;
+      s.loopStart = 0; s.loopEnd = this.body(l.buf);
       s.start(now + 0.05);
       l.gain.gain.setTargetAtTime(1, now + 0.05, XFADE_S / 3);
     } else {
       const def = bed.def;
-      s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? l.buf.duration;
+      s.loopStart = def.loopStart; s.loopEnd = def.loopEnd ?? this.body(l.buf);
       const bar = (60 / def.bpm) * 4;
       let at = now + 0.05 <= bed.t0 ? bed.t0 : bed.t0 + Math.ceil((now + 0.05 - bed.t0) / bar) * bar;
       // a jump between sections already scheduled (see `acts` in the header): join on its far side
@@ -1641,8 +1669,8 @@ class Engine implements ValeAudioPort {
       const p = at - (bed.jump ? bed.jump.t0 : bed.t0);
       const end = s.loopEnd;
       // a layer shorter than the main stem (an objective layer) runs on its own loop, on the same bars
-      const pos = l.role === 'objective' ? p % l.buf.duration : p < end ? p : def.loopStart + ((p - end) % bed.len);
-      s.start(at, Math.min(pos, Math.max(0, l.buf.duration - 0.001)));
+      const pos = l.role === 'objective' ? p % this.body(l.buf) : p < end ? p : def.loopStart + ((p - end) % bed.len);
+      s.start(at, Math.min(pos, Math.max(0, this.body(l.buf) - 0.001)));
     }
     l.src = s;
     this.bedRoles();
@@ -1796,7 +1824,23 @@ class Engine implements ValeAudioPort {
     if (!b || !this.ctx) return;
     this.bed = null;
     const t = this.ctx.currentTime;
-    b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
+    // a whole bed whose buffers have the shape of the next bed's windows hands them over (see `reuse` in the header):
+    // a quicker fade, then the next bed's first windows decode into them
+    const keepFiles = new Set(this.bedFiles(this.wantBed));
+    const frames = this.streamFrames(this.wantBed);
+    const handed: AudioBuffer[] = [];
+    if (frames.size && !b.streams.length) {
+      const whole: [string, AudioBuffer | null | undefined][] = [[b.def.file, b.main?.buffer], ...b.layers.map((l): [string, AudioBuffer | null] => [l.file, l.buf])];
+      for (const [f, buf] of whole) if (buf && !keepFiles.has(f) && this.bodyS.has(buf) && frames.has(buf.length) && !handed.includes(buf)) handed.push(buf);
+    }
+    const fadeS = handed.length ? HAND_FADE_S : XFADE_S * 1.5;
+    let handDone = (): void => {};
+    if (handed.length) {
+      const h = new Promise<void>((r) => { handDone = r; });
+      this.handing = h;
+      handDone = ((r) => () => { if (this.handing !== h) return; this.offerSpare(handed); r(); })(handDone);
+    }
+    b.gain.gain.setTargetAtTime(0, t, fadeS / 4.5);
     // its sources fade out and leave the graph when the fade is due, by the wall clock too (see `release` in the header);
     // the bed's own gains go with the last of them
     const srcs: [AudioBufferSourceNode, GainNode | null][] = [];
@@ -1812,18 +1856,81 @@ class Engine implements ValeAudioPort {
       c.win.clear(); c.cur = null; c.next = null; c.pool = []; c.holds.clear(); c.busy.clear();
     }
     let left = srcs.length;
-    const last = (): void => { if (--left <= 0) for (const n of shared) try { n.disconnect(); } catch { /* gone */ } };
+    const last = (): void => { if (--left <= 0) { for (const n of shared) try { n.disconnect(); } catch { /* gone */ } handDone(); } };
     if (!left) { left = 1; last(); }
-    for (const [s, g] of srcs) this.retire(s, [g], t + XFADE_S * 1.5, 'stop', last);
+    for (const [s, g] of srcs) this.retire(s, [g], t + fadeS, 'stop', last);
     // its hand-overs still to come leave with it: no successor will take over (freed now on a standing clock)
     const standing = this.stalled || this.ctx.state !== 'running';
-    for (const d of [...this.dying]) if (d.owner === b) { d.kind = 'stop'; d.owner = null; d.at = Math.min(d.at, t + XFADE_S * 1.5); if (standing) d.free('stall'); }
+    for (const d of [...this.dying]) if (d.owner === b) { d.kind = 'stop'; d.owner = null; d.at = Math.min(d.at, t + fadeS); if (standing) d.free('stall'); }
     // free its decoded files (see `memory` in the header): its sources keep theirs through the fade, then let go
-    const keep = new Set(this.bedFiles(this.wantBed));
-    for (const f of this.bedFiles(b.id)) if (!keep.has(f)) this.buffers.delete(f);
+    for (const f of this.bedFiles(b.id)) if (!keepFiles.has(f)) this.buffers.delete(f);
     for (const l of b.layers) { l.buf = null; l.src = null; l.srcGain = null; }
     b.main = null; b.mainGain = null; b.pieces = [];
   }
+
+  // ── reuse (see `reuse` in the header) ──────────────────────────────────────────────────────────────
+  /** a bed file decoded whole: where beds stream, through OpusStem into a buffer of its loop plus 2 x STREAM_HANDLE_S
+   *  (the loop's head again after its end, never played: the loop ends at the file's own length, `body`), the shape
+   *  of a section window of the same length; anywhere else, or when that fails, as any file */
+  private bedBuffer(ref: string): Promise<AudioBuffer | null> {
+    const have = this.buffers.get(ref);
+    const ctx = this.ctx;
+    if (have || !ctx || !this.canStream || this.fmt !== 'ogg' || ctx.sampleRate !== STREAM_SR) return this.buffer(ref);
+    const p = (async (): Promise<AudioBuffer | null> => {
+      const raw = await this.bytes(ref);
+      if (!raw) return null;
+      const stem = OpusStem.parse(raw);
+      if (stem) {
+        const n = stem.length + 2 * Math.round(STREAM_HANDLE_S * STREAM_SR);
+        const buf = await stem.window(ctx, 0, n, this.takeSpare(n, stem.channels)).catch(() => null);
+        if (buf) { this.bodyS.set(buf, stem.length / STREAM_SR); return buf; }
+      }
+      return (await this.decodeBytes(ctx, raw)) ?? null;
+    })().catch(() => null);
+    this.buffers.set(ref, p);
+    void p.then((b) => { this.settled.set(p, b); });
+    return p;
+  }
+
+  /** a bed buffer's own length (s): a whole bed decoded by bedBuffer runs on past it */
+  private body(buf: AudioBuffer): number { return this.bodyS.get(buf) ?? buf.duration; }
+
+  /** the window lengths (frames) bed `id` would stream by on this platform, none when it decodes whole */
+  private streamFrames(id: string | null): Set<number> {
+    const out = new Set<number>();
+    const def = id ? this.beds[id] : undefined;
+    const ctx = this.ctx;
+    if (!def || !ctx || !this.canStream || this.fmt !== 'ogg' || ctx.sampleRate !== STREAM_SR) return out;
+    let combat = false;
+    const layers = def.layers.filter((l) => !l.id.startsWith('seg_')).map((l) => {
+      const role = layerRole(l.id, combat);
+      if (role === 'combat') combat = true;
+      return { role, file: l.file };
+    });
+    for (const c of this.streamPlan(def, layers) ?? []) {
+      out.add(Math.round((c.secS + STREAM_HANDLE_S) * STREAM_SR) - Math.round(-STREAM_HANDLE_S * STREAM_SR));
+    }
+    return out;
+  }
+
+  /** a stopped bed's buffers wait for the next bed's windows, SPARE_S at most */
+  private offerSpare(bufs: AudioBuffer[]): void {
+    this.spare.push(...bufs);
+    this.releaseStats.handed += bufs.length;
+    clearTimeout(this.spareTimer);
+    this.spareTimer = setTimeout(() => { this.spare = []; }, SPARE_S * 1000);
+  }
+
+  /** a handed-over buffer of this shape, if one waits */
+  private takeSpare(n: number, ch: number): AudioBuffer | null {
+    const i = this.spare.findIndex((b) => b.length === n && b.numberOfChannels === ch && b.sampleRate === STREAM_SR);
+    if (i < 0) return null;
+    this.releaseStats.reused++;
+    return this.spare.splice(i, 1)[0];
+  }
+
+  /** nothing waits to be handed over any more */
+  private dropSpare(): void { this.spare = []; clearTimeout(this.spareTimer); this.handing = null; }
 
   /** every file of a bed: the main stem, its layers, its .m4a pieces */
   private bedFiles(id: string | null): string[] {
@@ -2542,6 +2649,13 @@ class Engine implements ValeAudioPort {
     }
     this.bedRoles();
   }
+}
+
+/** a bed layer's role by its id (see `music` in the header): the first layer with no other role is the combat layer
+ *  (`combat`: one came already) */
+function layerRole(id: string, combat: boolean): LayerRole {
+  return id.startsWith('stem') ? 'stem' : id.startsWith('phase_') ? 'phase' : id.startsWith('urgency_') ? 'urgency'
+    : id.startsWith('objective') ? 'objective' : combat ? 'stem' : 'combat';
 }
 
 /** an AudioBuffer's PCM bytes (32-bit float per sample per channel) */
