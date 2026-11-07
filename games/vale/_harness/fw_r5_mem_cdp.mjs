@@ -118,7 +118,13 @@ class Locator {
     const until = Date.now() + (o.timeout ?? 30000);
     for (;;) {
       const b = await this.probe(true).catch(() => null);
-      if (b?.visible && b.hit && b.enabled) { await this.page.mouse.click(b.x, b.y, { button: o.button ?? 'left' }); return; }
+      // stable, as Playwright's actionability check asks: a modal still sliding in moves its buttons between the read and
+      // the press (a menu's Leave match read mid-entrance put the press on Settings), so the box must hold for 150 ms
+      if (b?.visible && b.hit && b.enabled) {
+        await new Promise((r) => setTimeout(r, 150));
+        const c = await this.probe(false).catch(() => null);
+        if (c?.visible && c.hit && c.enabled && Math.abs(c.x - b.x) < 0.5 && Math.abs(c.y - b.y) < 0.5 && Math.abs(c.width - b.width) < 0.5) { await this.page.mouse.click(c.x, c.y, { button: o.button ?? 'left' }); return; }
+      }
       if (Date.now() > until) throw new Error(`click ${JSON.stringify(this.steps)}: ${b ? JSON.stringify(b) : 'no element'}`);
       await new Promise((r) => setTimeout(r, 100));
     }
