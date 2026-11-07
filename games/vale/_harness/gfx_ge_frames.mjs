@@ -13,7 +13,7 @@
 // --gpu 1: the switch's GPU cost, A and B alternating 8 times in the same page (timer query, p25 of 60 frames each, so another lane's load spike does not set it; ms per frame), with
 // the load average beside it. Out: _harness/_shots/gfx_ge/<tag>/, report: _harness/_reports/gfx_ge_<tag>.json
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,10 +72,10 @@ function install() {
       for (const m of mats()) { const u = R.gl.properties.get(m)?.uniforms?.[name]; if (u) { u.value = v; n++; } }
       return n;
     },
-    at: (x, y) => { b.focus(x, y); b.zoom(28.5); R.director.telegraphs.length = 0; b.clearAim(); for (let i = 0; i < 14; i++) R.render(1 / 60); return stats(grab()); },
+    at: (x, y) => { b.focus(x, y); b.zoom(28.5); R.director.telegraphs.length = 0; b.clearAim(); for (let i = 0; i < 90; i++) R.render(1 / 60); return stats(grab()); },   // 90: the camera has settled, A and B frame the same pixels
     tele: (x, y) => {
       b.focus(x, y); b.zoom(28.5); R.director.telegraphs.length = 0; b.clearAim();
-      for (let i = 0; i < 14; i++) R.render(1 / 60);
+      for (let i = 0; i < 40; i++) R.render(1 / 60);
       const off = grab(), H = hpField(off);
       b.telegraphTest(x, y);
       for (let i = 0; i < 18; i++) R.render(1 / 60);
@@ -120,6 +120,22 @@ for (const map of MAPS) {
     });
     const want = ONLY ? Object.entries(spots).filter(([k]) => ONLY.split(',').includes(k)) : Object.entries(spots);
     const G = (f, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__GE__, x), [f.toString(), a]);
+    // prototype: hand the ground a baked map from disk (no content build), stored as the shipped asset is (sRGB, v = map y)
+    const CONTACT = opt(`contact-${map}`, '');
+    if (CONTACT) {
+      const url = `data:image/png;base64,${readFileSync(CONTACT).toString('base64')}`;
+      await page.evaluate(async ([u]) => {
+        const G = window.__GE__, R = window.__VALE_BENCH__.renderer;
+        const im = await createImageBitmap(await (await fetch(u)).blob(), { imageOrientation: 'flipY' });
+        const c = new OffscreenCanvas(im.width, im.height), x = c.getContext('2d'); x.drawImage(im, 0, 0);
+        const px = x.getImageData(0, 0, im.width, im.height).data;
+        let ground; R.scene.traverse((o) => { if (o.name === 'vale_ground') ground = o; });
+        const U = R.gl.properties.get(ground.material).uniforms, DT = U.uGeTile.value.constructor;
+        const t = new DT(new Uint8Array(px.buffer.slice(0)), im.width, im.height);
+        t.colorSpace = 'srgb'; t.magFilter = t.minFilter = 1006; t.generateMipmaps = false; t.needsUpdate = true;
+        U.uTexContact.value = t;
+      }, [url]);
+    }
     const out = (report.maps[map] = { spots: Object.fromEntries(want), frames: {} });
     for (const [k, xy] of want) {
       const row = (out.frames[k] = {});
