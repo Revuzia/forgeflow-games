@@ -89,6 +89,8 @@ function events(): void {
     if (e.t === 'heart') {
       heartEvents[String(data.to)] = (heartEvents[String(data.to)] ?? 0) + 1;
       const t = towns.get(Number(data.settlement)); if (t) t.changes++;
+    } else if (e.t === 'heart.proud') {
+      heartEvents[`proud:${data.proud}`] = (heartEvents[`proud:${data.proud}`] ?? 0) + 1;
     } else if (e.t === 'evacuate') {
       const f = floods.get(Number(data.disaster)); if (f) f.evac.add(Number(data.settlement));
     } else if (e.t === 'warning.end' && data.kind === 'flood') {
