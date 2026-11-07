@@ -1,0 +1,61 @@
+{
+ "lane": "MEM",
+ "verify": 2,
+ "at": "2026-11-07T07:59-06:00",
+ "verifier": "adversarial verifier, round 4 lane MEM, verdict 2",
+ "pass": false,
+ "summary": "FAIL. The refix makes real progress. Ultra in the required order now clears with margin: BRIDGE 2628 and RIFT 2770 MB, against 3005 in verify 1. The High required order clears too: 2448 / 2824. In a match, bitmaps are 0 on both maps, GL textures at every Home are back to the first-Home 293.1 MB, and the R8 shadow target draws the same pixels. Three things still fail the lane's bar. (1) A third match in one session: High, fake sink, RIFT -> BRIDGE -> RIFT, the third match peaks at 2953 MB (margin 47, short of 150), read at load 2.3-6.7, so close to idle. (2) Home-within-150 fails on every run: +413 to +583 MB on the fake sink, +1146 on the device sink. (3) On the device sink, RIFT as the second match reads 3123 MB, over 3000, with 674 MB of AudioBuffers pinned at Home; that audio-lane handoff is still unfixed. MEM-2 has no bisect and no fix in this lane. Every probe verdict reads NOT MEASURED (load over 3); the memory numbers are valid raw readings.",
+ "items": [
+  {
+   "id": "MSAA-1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Unchanged since verify 1: src/render/post.ts has no MsaaRenderPass, MSAA_ULTRA_SAMPLES or setMsaaSamples. The only post.ts change since d642a07f6 is VfxPass.releaseTargets / PostChain.releaseMatchTargets, a teardown-only path. The structure-spot pixel A/B below (bench, which runs the current post.ts) reads 0 px differ on High and Ultra. _harness/gfx_msaa_ab.mjs is still in the tree."
+  },
+  {
+   "id": "MEM-1",
+   "severity": "blocker",
+   "status": "partly",
+   "evidence": "Code read: git diff d642a07f6 HEAD -- src. It adds queueUploads (one initTexture a frame for landmarks), dropParserData (KHR_binary_glTF body = null, cache.removeAll), menu.sun.releaseMap at match start, an R8 shadow colour target (lighting.ts ensureMap), and teardown releases for sky PMREM, post pre-VFX, hover mask and the VFX distortRT. Re-measured in prod with probe_match_memory --track (4 runs). What holds: in a match, bitmaps are 0/0 MB on BRIDGE and RIFT in every poll of every run (verify 1 read 19-22 / 121-126 MB on RIFT). At every Home, GL textures are 55 / 293.1 MB on High and 55 / 353.1 on Ultra, equal to first Home. Heap is 27-30 MB and backing 27-32 MB against 14 / 24. GL buffers at Home are 245-335 (2.2-3.4 MB), down from 455-853 in verify 1. Break journey (scratch, prod, device sink, _harness/_reports/fw_r4_memv2_break_device.json): Home GL textures 293.1 MB after BRIDGE, after RIFT and after a third BRIDGE. Shadow regression check: a scratch copy of fw_r4_mem_msaa_px serves lighting.ts from d642a07f6 against the tree. Structure spot: 0 of 1,440,000 px differ on High and on Ultra. Fight spot: 59,931 / 59,702 px differ, against same-code noise of 59,937 / 62,946. Report _harness/_reports/fw_r4_memv2_shadow_px.json, frames _harness/_shots/fw_r4_memv2_shadow_px/, load 460 -> 5. Still open: Home footprint does not come back (see MEASURE). Renderer App-Specific Tag 14 grows from 66 at first Home to 289-353 MB after the second or third match. The page-side objects are back to first-Home levels, so the lane's 'a match frees what it owns' holds in object terms but not in footprint terms, which is what ruling 20 reads. Not checked: Home shadows drawn after a match from the new ensureMap path (the probe takes no Home screenshot)."
+  },
+  {
+   "id": "MEM-2",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "No bisect from 11-06 08:58 and no code fix in this lane. git log -- src/audio shows nothing since e293bfe7c (11-06 11:38), and stopBed (src/audio/index.ts:1287) still only schedules stop() and never disconnects. On this Mac's output device the clock still sits at 0.01 s 'running' (fw_r4_memv2_high_device.log, every poll). Live AudioBuffers at Home: 157 / 385.4 MB after BRIDGE and 183 / 674.3 MB after RIFT. In the break journey's third match (BRIDGE restart), audio is 504 buffers / 922.2 MB, and both maps' 58.6 MB beds plus mus_menu x3 and mus_postgame x2 are still alive (fw_r4_memv2_break_device.json 'bridge restart audio'). On the fake sink, audio at Home is 37 / 79.4-80.1 MB every time. The cause is identified (a frozen device clock pins scheduled-stop beds), but the client is still unbounded on the device the owner plays on."
+  },
+  {
+   "id": "MEASURE",
+   "severity": "blocker",
+   "status": "fail",
+   "evidence": "Prod build, real Chrome on the GPU, --track, 300 s per match, probe_match_memory.mjs. Every verdict is NOT MEASURED (load over 3); the peaks are raw footprint. (A) High, fake sink, BRIDGE -> RIFT (fw_r4_memv2_high_fake.json, load 3.3-534): peaks 2448 / 2824 MB (margins 552 / 176). Homes 881 (home_0), 1319, 1423 (+438 / +542). (B) Ultra, fake sink, BRIDGE -> RIFT (fw_r4_memv2_ultra_fake.json, load 220-534): 2628 / 2770 MB (margins 372 / 230). Homes 1012, 1425, 1458 (+413 / +446). (C) High, fake sink, RIFT -> BRIDGE -> RIFT (fw_r4_memv2_high_fake3.json): 2578 MB (load 8-180), 2831 MB (load 4.7-13.3, peak at 2 s, steady max 2724), and the third match 2953 MB (load 2.3-6.7, peak at 1 s, steady max 2807, median 2739). Margins are 422 / 169 / 47: the third match misses the 150 margin. Homes 878, 1221, 1378, 1461 (+343 / +500 / +583). (D) High, device sink, BRIDGE -> RIFT (fw_r4_memv2_high_device.json, load 220-534): 2549 / 3123 MB, so RIFT is over 3000 (steady median 3062). Homes 867, 1627, 2013 (+760 / +1146). The lane's bar is both matches under 3000 with 150 MB margin and Home back within 150 MB of first Home. The required order passes on High and Ultra (fake sink). The bar fails on the third match (47), on the device sink (3123), and on the Home-within-150 clause in every run (+343 to +1146). The probe's own 'would pass' checks only the Home <= 2500 bar, not the within-150 clause."
+  },
+  {
+   "id": "BREAK-LEAVE",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "Scratch journey in prod, device sink, three matches (fw_r4_memv2_break_device.json, load 54-458). BRIDGE with the shop open (shopOpenBefore true): 2 Esc presses, the shop closes, then Leave match shows. RIFT with Esc 100 ms after a Q cast: 1 press. BRIDGE restart with Esc 80 ms after an E cast: 1 press. All three reach Home; the log holds no console or page error and the journey printed DONE. The probe journeys completed in all 4 runs (9 matches). Audio after a restart: one context, clock 0.01 s on both reads (frozen device, see MEM-2)."
+  },
+  {
+   "id": "REGRESS",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "npm run -s typecheck: exit 0. npm run -s probe at load 300-500: 53 passed, 2 failed. probe_sim_kit_diag.ts hit its 900 s timeout, and probe_sim_perf.ts read p99 tick 8.753 against 8 ms. Re-run alone at load 4.8: probe_sim_perf 4 passed, 0 failed. probe_sim_kit_diag finished its run with a full report (scratch log). git diff d642a07f6 HEAD -- src/sim is empty, so both failures were load. Shadow pixels: 0 px differ in the structure spot on High and Ultra (see MEM-1). Tracked _harness/_reports files are unchanged (git status shows no tracked edits). reap_orphans finds nothing of mine."
+  }
+ ],
+ "regressions": [],
+ "handoffs": [
+  "audio lane (src/audio/index.ts): on a frozen device clock, stopBed and evictCues must disconnect the bed's sources and gains, not only schedule stop(). Device sink: Home after BRIDGE -> RIFT 2013 MB with 674 MB of AudioBuffers; third match 922 MB of audio (fw_r4_memv2_high_device.json, fw_r4_memv2_break_device.json)",
+  "lead: the Home-within-150 clause fails by +343 to +583 MB even on the fake sink, while every page-side object returns to first-Home levels (renderer App-Specific Tag 14: 66 -> 289-353 MB; GPU IOAccelerator / unmapped graphics). This needs a ruling or a Chrome-side investigation; the bar was not relaxed",
+  "MEM engineer: the third match in a session peaks at 2953 MB from a 1-2 s start transient (steady 2807). The start spike (in the match at 1-2 s on BRIDGE and RIFT) is the lever to get back the 150 MB margin"
+ ],
+ "commands": [
+  "node _harness/probe_match_memory.mjs --modes bridge,rift --sec 300 --track --fake-audio --out _harness/_reports/fw_r4_memv2_high_fake.json",
+  "node _harness/probe_match_memory.mjs --no-build --sec 300 --track --preset ultra --fake-audio --modes bridge,rift --out _harness/_reports/fw_r4_memv2_ultra_fake.json",
+  "node _harness/probe_match_memory.mjs --no-build --sec 300 --track --fake-audio --modes rift,bridge,rift --out _harness/_reports/fw_r4_memv2_high_fake3.json",
+  "node _harness/probe_match_memory.mjs --no-build --sec 300 --track --modes bridge,rift --out _harness/_reports/fw_r4_memv2_high_device.json",
+  "scratch break_leave2.mjs (prod, device sink) -> _harness/_reports/fw_r4_memv2_break_device.json",
+  "scratch shadow_px.mjs (fw_r4_mem_msaa_px with lighting.ts from d642a07f6) -> _harness/_reports/fw_r4_memv2_shadow_px.json",
+  "npm run -s typecheck; npm run -s probe; node _harness/probe_sim_perf.ts"
+ ]
+}
