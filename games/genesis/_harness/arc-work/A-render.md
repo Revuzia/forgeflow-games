@@ -139,3 +139,20 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
    shots-render-perf.log -> record.
 3. Gate: green at 06:2xZ (798/798). New since: tests/render-arc-live.test.ts (1/1), render-silt assert, terrainmat
    shallows fix: tsc clean, focused green. Run the gate once more at the end of stint 4 if code changes.
+
+### Stint 3b (2026-11-07 13:15Z-) — fresh context; machine idle (load 0.8)
+- Chain of stint 3 finished (all PIDs dead). LOOKED AT: arc-tower-finished-night (summit fire visible as a small glow on
+  the top of a pale ziggurat at dusk: OK), arc-tower-struck (crop crop-tw.png: top tier darker/sooty, a pale smooth mound
+  disc round the base — read as a plinth more than rubble), arc-tower-abandoned (crumbled crown: OK), arc-tower-far
+  (orbit: a speck by the river, no beacon: OK), arc-tower-confuse: NOTHING (moments 0): signs moments run on REAL time
+  (12 s) and software GL frames take ~30 s, so it expired before capture; the 9 km camera on the 3 km lookdev planet
+  showed the whole globe. Poses (poses3.png): fear walkers show heads tipped back (faces up to an over-the-shoulder
+  camera): legible; fist walkers: raised arm visible on a few, modest at 888x500; celebrate: walkers unchanged (cheer only
+  when free, by spec). Hurl: hurlers 0 — stub signs=5 on WALKING people keep their walk (heartAnim: a throw is its own
+  task, TASK.defy, sim stage B); nothing to fix in render until the sim's defy task exists.
+- Perf (render-perf.json, medium, 30 frames): work.mean 26.7 ms/frame before (planets 13.6, shadows 3.3); the "after"
+  was cut by shots.mjs's 400-char print. Interval 25 s/frame = software GL under load; meaningless as fps.
+- FIX tower.ts struck mound: soot 0.35 -> 0.45, broken blocks 18 -> 36, size 1.6-4.4 m. render-arc-tower + live 9/9.
+- NEW spec _harness/arc-work/specs/render-arc3.json: struck2, confuse2 (signs.hold 2.2, 5.2 km) + confuse2-near
+  (hold 1.2, 1.4 km), perf2 low/medium/high (CPU work before/after/struck, 12 frames; full numbers as "[warning] PERF {...}"
+  lines in the log). Launched 13:2xZ: chain pid file chain3.pid (19166) -> shots-render-arc3.log.

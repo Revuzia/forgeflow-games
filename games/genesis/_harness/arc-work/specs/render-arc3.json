@@ -1,0 +1,124 @@
+{
+ "_doc": "A-render stint 3b: struck mound v2, confuse ring held (signs.hold; real-time moments expire in software GL), CPU work per frame before/after a tower at low/medium/high. PERF lines in the log carry full numbers.",
+ "shots": [
+  {
+   "name": "arc-tower-struck2",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; const t = F.fx.vis.pv.paramsTick; G.arc.stub('towers', [__tw({ status: 'struck', height: 26, tiers: 6, answer: 'strike', ended: t - 30 })]); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10); F.advance(3); await G.frames(4);",
+    "return { ok: true };"
+   ]
+  },
+  {
+   "name": "arc-tower-confuse2",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', [__tw({ status: 'scattered', height: 50, tiers: 5, answer: 'confuse', ended: F.fx.vis.pv.paramsTick })]); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 5200, tilt: 40, yaw: p.heading + 25, fov: 50, hour: 11 }); await G.frames(6);",
+    "F.fx.m.signs.hold = 2.2; const e = { t: 'tower.confused', tick: Math.floor(F.fx.vis.pv.paramsTick), planet: F.fx.vis.pv.id, pos: p.pos, data: { tower: 7, towns: [], scattered: 40, founded: 2 } }; F.fx.view.pendingEvents.push(e); await G.frames(3);",
+    "return { moments: F.fx.m.signs.stats.moments };"
+   ]
+  },
+  {
+   "name": "arc-tower-confuse2-near",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', [__tw({ status: 'scattered', height: 50, tiers: 5, answer: 'confuse', ended: F.fx.vis.pv.paramsTick })]); await G.frames(8);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 1400, tilt: 62, yaw: p.heading + 25, fov: 50, hour: 11 }); await G.frames(6);",
+    "F.fx.m.signs.hold = 1.2; const e = { t: 'tower.confused', tick: Math.floor(F.fx.vis.pv.paramsTick), planet: F.fx.vis.pv.id, pos: p.pos, data: { tower: 7, towns: [], scattered: 40, founded: 2 } }; F.fx.view.pendingEvents.push(e); await G.frames(3);",
+    "return { moments: F.fx.m.signs.stats.moments };"
+   ]
+  },
+  {
+   "name": "arc-perf2-medium",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', null);",
+    "const m = async () => { G.perf(true); await G.frames(12); const s = G.perf(); G.perf(false); const sl = s.slots || {}; return { work: s.work, planets: sl.planets, actors: sl.actors, godfx: sl.godfx, shadows: sl.shadows, scene: sl.scene, post: sl.post }; };",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10);",
+    "const before = await m(); G.arc.stub('towers', [__tw({ status: 'rising', height: 62, goal: 100, tiers: 6 })]); await G.frames(10); const after = await m();",
+    "G.arc.stub('towers', [__tw({ status: 'struck', height: 26, tiers: 6, answer: 'strike', ended: F.fx.vis.pv.paramsTick - 30 })]); await G.frames(10); const struck = await m();",
+    "const r = { before, after, struck }; console.warn('PERF ' + JSON.stringify(r)); return { b: before.work.mean, a: after.work.mean, s: struck.work.mean };"
+   ]
+  },
+  {
+   "name": "arc-perf2-high",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "high",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', null);",
+    "const m = async () => { G.perf(true); await G.frames(12); const s = G.perf(); G.perf(false); const sl = s.slots || {}; return { work: s.work, planets: sl.planets, actors: sl.actors, godfx: sl.godfx, shadows: sl.shadows, scene: sl.scene, post: sl.post }; };",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10);",
+    "const before = await m(); G.arc.stub('towers', [__tw({ status: 'rising', height: 62, goal: 100, tiers: 6 })]); await G.frames(10); const after = await m();",
+    "G.arc.stub('towers', [__tw({ status: 'struck', height: 26, tiers: 6, answer: 'strike', ended: F.fx.vis.pv.paramsTick - 30 })]); await G.frames(10); const struck = await m();",
+    "const r = { before, after, struck }; console.warn('PERF ' + JSON.stringify(r)); return { b: before.work.mean, a: after.work.mean, s: struck.work.mean };"
+   ]
+  },
+  {
+   "name": "arc-perf2-low",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "low",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); window.__GENESIS_FX__.fx.hand.force = false;",
+    "if (!window.__tw) { const F = window.__GENESIS_FX__; const p = G.poi('homestead'); const pv = F.fx.vis.pv; let host = -1, bd = 1e9; for (const s of pv.settlements) { const d = Math.hypot(s.pos[0]-p.pos[0], s.pos[1]-p.pos[1], s.pos[2]-p.pos[2]); if (d < bd) { bd = d; host = s.id; } } window.__tw = (o) => Object.assign({ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: [] }, o); window.__p = p; }",
+    "const F = window.__GENESIS_FX__; const p = window.__p; G.arc.stub('towers', null);",
+    "const m = async () => { G.perf(true); await G.frames(12); const s = G.perf(); G.perf(false); const sl = s.slots || {}; return { work: s.work, planets: sl.planets, actors: sl.actors, godfx: sl.godfx, shadows: sl.shadows, scene: sl.scene, post: sl.post }; };",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(10);",
+    "const before = await m(); G.arc.stub('towers', [__tw({ status: 'rising', height: 62, goal: 100, tiers: 6 })]); await G.frames(10); const after = await m();",
+    "G.arc.stub('towers', [__tw({ status: 'struck', height: 26, tiers: 6, answer: 'strike', ended: F.fx.vis.pv.paramsTick - 30 })]); await G.frames(10); const struck = await m();",
+    "const r = { before, after, struck }; console.warn('PERF ' + JSON.stringify(r)); return { b: before.work.mean, a: after.work.mean, s: struck.work.mean };"
+   ]
+  }
+ ]
+}

@@ -232,11 +232,11 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     // the fallen tiers: a ragged rubble ring round the base, scorched on top; broken blocks thrown on it
     const b0 = towerBaseHalf(l.goal), R = s.moundR, H = s.moundH;
     const from = k.vertexCount;
-    k.lathe(0, 0, [[R, -1], [R * 0.92, H * 0.35], [(R + b0) * 0.5, H], [b0 * 0.98, H * 0.8]], 28, SURF.rubble, PART.wall, mixc(col, SOOT, 0.35), 0.7, 1);
+    k.lathe(0, 0, [[R, -1], [R * 0.92, H * 0.35], [(R + b0) * 0.5, H], [b0 * 0.98, H * 0.8]], 28, SURF.rubble, PART.wall, mixc(col, SOOT, 0.45), 0.7, 1);
     k.jitterRadial(from, 0, 0, (a) => 1 + 0.08 * Math.sin(3 * a + l.id) + 0.05 * Math.sin(7 * a + 2 * l.id));
-    for (let j = 0; j < 18; j++) {
+    for (let j = 0; j < 36; j++) {
       const a = rnd(j, 11) * Math.PI * 2, rr = b0 + (R - b0) * (0.2 + 0.7 * rnd(j, 12));
-      const sz = 1.2 + rnd(j, 13) * 2.4;
+      const sz = 1.6 + rnd(j, 13) * 2.8;
       const yy = H * (0.4 + 0.5 * (1 - Math.abs((rr - (R + b0) * 0.5) / (R - b0 + 1e-3))));
       k.push(Math.cos(a) * rr, yy, Math.sin(a) * rr, rnd(j, 14) * Math.PI);
       k.box(-sz, -sz * 0.4, -sz * 0.6, sz, sz * 0.5, sz * 0.6, surf, PART.wall, mixc(col, SOOT, 0.2 + 0.5 * rnd(j, 15)), { skip: ['bottom'], aoLow: 0.7 });
