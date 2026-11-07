@@ -238,7 +238,7 @@ async function journey(mode) {
   await click(page.getByRole('button', { name: 'Find match' }));
   // ready check, draft, loading, the HUD: whichever each comes up, by what is on the screen
   const hud = page.locator('.hud .dbar').first();
-  const until = Date.now() + 240000;
+  const until = Date.now() + 420000;   // round 5: a draft and loading at load 300-500 (other lanes' harnesses) took over 240 s
   let lockTries = 0;
   // round 5 MEM-4: the footprint is read through the queue, draft and loading screen too (every ~3 s): a load that decodes
   // everything at once peaks there, before the HUD, and that peak is the match's memory as much as any in-match poll
@@ -253,7 +253,7 @@ async function journey(mode) {
       pre.series.push({ s: Math.round((Date.now() - preT0) / 1000), screen, ...f, load: +loadavg()[0].toFixed(2), track: t });
       if ((f.totalMb ?? 0) > pre.peak.totalMb) pre.peak = { ...f, atS: pre.series.at(-1).s, screen };
     }
-    if (Date.now() > until) throw new Error(`${mode}: no HUD after 240 s`);
+    if (Date.now() > until) throw new Error(`${mode}: no HUD after 420 s`);
     const ready = page.getByRole('button', { name: /^Ready/ }).first();
     if (await ready.isVisible().catch(() => false)) await ready.click({ timeout: 3000 }).catch(() => {});
     const card = page.locator('.scr--draft:not(.is-leaving) .fcard:not(.is-taken):not(.is-locked):not(.is-banned):not([aria-disabled="true"])').first();
