@@ -383,6 +383,9 @@ export class App implements UiHost {
       this.raf = requestAnimationFrame(loop);
       // a hidden tab renders nothing (the sim keeps its own pace in the worker)
       if (document.hidden && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
+      // (test surface `hold`) a shot of the page with its UI: the last frame stays on the canvas while the capture
+      // composites (a software-rendered frame can take minutes on a loaded machine); waiters still get their frames
+      if (this.held && !this.frameWaiters.length && !this.captureWaiters.length && !this.thumbWaiters.length) { this.last = t; perfmon.skip(); return; }
       this.frame(t);
     };
     this.raf = requestAnimationFrame(loop);
@@ -933,6 +936,28 @@ export class App implements UiHost {
     return best;
   }
 
+  /**
+   * ARC §2.5: a great tower under a screen point. The tower is drawn by render/life/tower.ts from PlanetSnap.towers;
+   * it is picked by its projected axis (base to top), with a grace of its projected half-width, so it wins over the
+   * builders standing in front of it.
+   */
+  pickTower(x: number, y: number): InspectRef | null {
+    const pv = this.sim.view.planet(this.renderer.primaryId);
+    if (!pv?.towers?.length || this.rig.mode === 'system') return null;
+    let best: InspectRef | null = null, bd = Infinity;
+    for (const t of pv.towers) {
+      const a = this.screenOf(pv.id, t.pos, 0), b = this.screenOf(pv.id, t.pos, Math.max(12, t.height));
+      if (!a || !b) continue;
+      const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy;
+      const k = L2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * vx + (y - a[1]) * vy) / L2)) : 0;
+      const d = Math.hypot(x - (a[0] + k * vx), y - (a[1] + k * vy));
+      // the base is wider than the axis: about a third of the drawn height, at least 10 px
+      const grace = Math.max(10, Math.sqrt(L2) * 0.35 * (1 - 0.5 * k));
+      if (d < grace && d < bd) { bd = d; best = { kind: 'tower', id: t.id, planet: pv.id }; }
+    }
+    return best;
+  }
+
   /** a left click at a screen point (test surface) */
   clickAt(x: number, y: number): void { this.onClick(x, y); }
 
@@ -975,6 +1000,8 @@ export class App implements UiHost {
         return;
       }
     }
+    const tower = this.pickTower(x, y);
+    if (tower) { this.select(tower); return; }
     const near = this.pickNear(x, y);
     const ent = this.pickEntity(x, y);
     if (near && !ent) { this.select(near); return; }
@@ -1157,6 +1184,8 @@ export class App implements UiHost {
   }
 
   /** a press that began on a mark over the world (a prophet's): it is about that one */
+  /** test surface: draw no new frames (the last one stays) until released or a frame is waited for */
+  held = false;
   private forcedEntity: EntityRef | null = null;
 
   entityAt(x: number, y: number): EntityRef | null {
@@ -1577,6 +1606,11 @@ export class App implements UiHost {
     let u: ArrayLike<number> | null = null;
     let lift = 0;
     const v = this.sim.view;
+    if (ref.kind === 'tower') {
+      // ARC §2.5: the tower's top (the selection marker sits over it; Look frames it)
+      const t = pv.towers?.find((q) => q.id === ref.id);
+      if (t) { u = t.pos; lift = Math.max(12, t.height) + 4; }
+    }
     if (ref.kind === 'settlement') {
       const s = pv.settlements.find((q) => q.id === ref.id);
       if (s) u = s.pos;
@@ -1642,7 +1676,7 @@ export class App implements UiHost {
     const pv = this.sim.view.planet(ref.planet ?? this.renderer.primaryId);
     const b = pv ? this.entityBodyPos(pv, ref) : null;
     if (!pv || !b) return;
-    const d = ref.kind === 'settlement' ? 240 : ref.kind === 'building' ? 70 : ref.kind === 'disaster' || ref.kind === 'weather' ? 900 : 28;
+    const d = ref.kind === 'settlement' ? 240 : (ref.kind as string) === 'tower' ? 260 : ref.kind === 'building' ? 70 : ref.kind === 'disaster' || ref.kind === 'weather' ? 900 : 28;
     this.lookAt(pv.id, b, d);
     this.frameBesideInspector(pv, d);
   }

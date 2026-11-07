@@ -76,6 +76,8 @@ export function livingRows(hint: Hint): [string, string][] {
     ['wrath', 'how hard your harm falls: survivable by default (The god) · say “a gentle storm” or “a huge meteor” for one act'],
     ['holy things', 'hallow a spring, a grove or a peak · a town\'s sacred animal on its card · the Signs ring of the radial has them all'],
     ['invent', 'a material or a plant from Ideas / Life (a form: name, kind, traits, uses) · Seed a vein lays ore in the ground'],
+    ['hearts', 'what a town feels shows by its name (they bow at dusk · watch the sky · murmur · raise their fists; a tower when they boast) · the Hearts layer shows every town · say “how do the people of Aru feel?”'],
+    ['a great tower', 'proud towns of one speech may raise a tower to the sky: when it rises, a card asks your answer (confuse their tongues, strike it down, send a prophet to warn them, or let it stand) · Decide later keeps it as a pill · click the tower for its card · or say “confuse their tongues”'],
   ];
 }
 

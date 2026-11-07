@@ -253,6 +253,23 @@
     {"id": "heart.defiant", "kind": "god", "weight": 2, "text": ["In {settlement} they raise their fists at the sky."]},
     {"id": "heart.devoted", "kind": "god", "weight": 1, "text": ["{settlement} has turned its face to the god again."]},
     {"id": "heart.proud", "kind": "god", "weight": 1, "text": ["In {settlement} they say they need no god.", "{settlement} boasts of its walls and its granaries."]},
-    {"id": "heart.cowed", "kind": "god", "weight": 2, "text": ["{settlement} put down its stones."]}
+    {"id": "heart.cowed", "kind": "god", "weight": 2, "text": ["{settlement} put down its stones."]},
+    {"id": "tower.begun", "kind": "god", "weight": 3, "text": ["The towns of {league} came together at {host} and began a tower. 'Let it reach the sky,' they said, 'and let our name last.'", "At {host} the people of {count} towns laid the first course of a tower, to be seen from everywhere.", "'We will build so high the god will have to look at us,' said {agent} of {host}, and the towns began."]},
+    {"id": "tower.tier", "kind": "god", "weight": 1, "text": ["The tower of {host} rose past the height of the tallest tree.", "The tower of {host} could be seen from {other}.", "At evening the tower's shadow covered all of {host}."]},
+    {"id": "tower.omen.starlings", "kind": "god", "weight": 1, "text": ["Birds circled the tower of {host} and would not land. In {settlement} they called it {reading}."]},
+    {"id": "tower.omen.halo", "kind": "god", "weight": 1, "text": ["A ring of light stood round the sun above the tower of {host}. In {settlement} they called it {reading}."]},
+    {"id": "tower.omen.lightning", "kind": "god", "weight": 1, "text": ["Lightning ran down the scaffold of the tower of {host} and burned nothing. In {settlement} they called it {reading}."]},
+    {"id": "tower.warned", "kind": "god", "weight": 2, "text": ["{prophet} stood at the foot of the tower and told the builders to go home."]},
+    {"id": "tower.heeded", "kind": "god", "weight": 2, "text": ["{prophet} spoke for five days. On the sixth the builders of {settlement} went home."]},
+    {"id": "tower.refused", "kind": "god", "weight": 2, "text": ["They laughed at {prophet} at {host}, and the work went on."]},
+    {"id": "tower.confused", "kind": "god", "weight": 3, "text": ["At {host} the builders could not understand each other. They put down their tools and went home, each to its own tongue.", "Overnight the speech of {league} came apart. The tower stood, and no one climbed it."]},
+    {"id": "tower.apart", "kind": "god", "weight": 2, "text": ["{a} and {b} no longer understand each other."]},
+    {"id": "tower.struck", "kind": "god", "weight": 3, "text": ["Fire came down on the tower of {host}. The builders fled before it fell."]},
+    {"id": "tower.struck.dead", "kind": "god", "weight": 3, "text": ["The tower of {host} fell, and {dead} died beneath it."]},
+    {"id": "tower.swore", "kind": "god", "weight": 2, "text": ["At {host} they swore they would build again."]},
+    {"id": "tower.rebuilt", "kind": "god", "weight": 2, "text": ["They built again at {host}, on the stones of the first."]},
+    {"id": "tower.finished", "kind": "god", "weight": 3, "text": ["The tower of {host} was finished. Its fire burned every night, and the god let it stand."]},
+    {"id": "tower.finished.silent", "kind": "god", "weight": 3, "text": ["The tower of {host} was finished. The god did not answer."]},
+    {"id": "tower.abandoned", "kind": "god", "weight": 2, "text": ["Hunger came to {host}, and the tower was left unfinished."]}
   ]
 }

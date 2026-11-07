@@ -59,7 +59,7 @@ import { Credits } from './credits.ts';
 import { GodPanel, SignPicker, type GodRow, type SacredPlaceRow } from './living.ts';
 import { Invent } from './invent.ts';
 import { humanize } from './words.ts';
-import { DecisionCard } from './decision.ts';
+import { DecisionCard, towerCard } from './decision.ts';
 
 export interface ShellDeps {
   host: UiHost;
@@ -253,6 +253,16 @@ export class Shell {
       planetName: (id) => host.view.planet(id)?.name ?? 'the world',
       dayHours: (id) => host.view.planet(id)?.params.dayHours ?? 24,
       hint: (id) => host.keybinds.hint(id),
+      tower: (planet, id) => {
+        const pv = host.view.planet(planet);
+        const t = pv?.towers?.find((x) => x.id === id);
+        if (!pv || !t) return null;
+        const yearOf = (tick: number) => host.view.calendar(pv, tick).year;
+        const years = (t.ended >= 0 ? yearOf(t.ended) : yearOf(host.view.renderTick)) - yearOf(t.begun) + 1;
+        return { card: towerCard(t, pv.id, new Map(pv.settlements.map((s) => [s.id, s])), years), pos: [t.pos[0], t.pos[1], t.pos[2]] };
+      },
+      answerTower: (id, key) => this.decision.chooseFor(id, key),
+      lookAtPos: (planet, pos) => host.lookAt(planet, pos),
     });
     this.palette = new Palette(root, world, host, {
       arm: (p) => this.arm(p),

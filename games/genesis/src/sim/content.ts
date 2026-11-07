@@ -1309,6 +1309,8 @@ export const TEMPLATE_VARS = [
   'dayWord',
   // LIVING HISTORY (people/eras.ts): a settlement's era label ("the copper age", "potters")
   'label',
+  // ARC §2.7 (god/tower.ts): the tower's host and league, its prophet, an omen's reading, a pair of towns, the dead
+  'host', 'league', 'prophet', 'reading', 'a', 'b', 'dead',
 ] as const;
 
 function checkEventTemplate(x: EventTemplateDef, w: string, p: string[]): void {

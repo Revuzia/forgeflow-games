@@ -20,10 +20,42 @@
 - §10 forced-flood probe RESULT (flood.log): 24 floods (8 seeds x 3), evacuated (>= half of members beyond danger radius or on TASK.evacuate when the water comes) 24/24 = 100 %; with the warning cut (Wn 0, orders withdrawn) 0-3 of ~30 out. Deaths warned 1 vs unwarned 1 (survivable-wrath floods rarely kill at the default, so deaths are no discriminator here). Caveat: Wn is 535 in every clone (same disaster id). Still TODO for §10.3: the 25-year natural-disaster run (deaths vs a baseline, other disasters unmoved) and the looked-at river shot (render/ui lane, or a sim-lane shot spec on port 5310).
 - GATE: full `npm run check` (slot.sh) 772/773; the one failure (living-migration: old 1.5 save hash changed because emptyRel's new [] / {} defaults were saved) FIXED in state.ts relJson (empty ARC defaults are not written; emptyRel restores them on load). After the fix: tsc clean; focused living-migration, arc-hearts, determinism, save-continue, flood-warning, scripture_lint all pass (36 tests). Full suite not re-run this stint (one per stint rule) -> next stint should run it once.
 
-## NEXT (stint 2)
-1. Run the full gate once via slot.sh (confirm 773+ green).
-2. §2.2-2.4 tower: src/sim/god/tower.ts (towerYearly, league, site, TowerState, labour/tiers, omens, the four answers tower.confuse/strike/warn/let, tower.begin debug, TowerView in relSnapPlanet, query('towers'), events tower.*, chronicle tower.* lines), babel scenario, tests/arc-pride + arc-tower. Read ARC §2.2-2.7, §6.4, §6.5, §8.2.
-3. defiance.set debug (needs §3 defiance; trivial setter like setPride).
-4. Freeform phrases §6.5 for tower + "what do they feel" (hearts query answer).
-5. _harness/probes/arc.ts multi-seed: M1 (100 % towns have heart after day 2), M2 (kind changes <= 1 per 6 days median, nobow <= 1 / 2 y), M3 harsh/kind runs; T-lines.
-6. §10 25-year natural run + river shot.
+### Stint 2 (2026-11-07 ~04:0xZ)
+- Read verifier ledger verify-A-r1-sim.ledger.md: M1/M2 PASS; M3 harsh heart.nobow FAIL (dusk ema max 0.24-0.32, never above
+  duskHigh 0.45, so dusk.low never arms) -> still OPEN (fix idea: arm from the town's own peak, e.g. low when ema < 0.55 x
+  its 1-year peak after a peak >= 0.2, or rescale duskLow/duskHigh to vespers reality; needs a §1.2 contract note).
+- DONE §2.2-2.4 tower core: NEW src/sim/god/tower.ts (TOWER tunables; towerDaily = yearly trigger on year-day
+  hash32(planet)%yd + daily while a town has rel.since.towerArm (scenario hook, skips world age, gap and roll); leaderOk /
+  leagueOf / siteOf / beginTower (great-tower Building via ps.addBuilding, name "the Tower of {placeRoot}", goal by era);
+  rising(): builders B, material from each league store, growth dh, faith -0.0015/d, grievance/why.tongue -0.001/d,
+  since.tLeague (pride +0.002/d clamp target+0.15 in arc.ts heartsDaily; prayer x0.7 and vespers x0.8 in relDecide),
+  one speech every 2 y, tier/omen/choice at 25/50/75 %, warn heed roll on day 5 (0x70e5; sacred place if all heed;
+  disabledUntil +1 y if refused), hardship abandon (0x70e2), finish / silence (godActs.silence); standing() faith drift
+  for let/silence (cap 0.25); rebuild roll after a strike (0x70e4, since.tRebuild); answers confuse/strike/warn/let with
+  ArcEvents + memEvents + memory; towerTask (relDecide hook: ~12 visible host builders per quarter-day on TASK.build at
+  the great-tower; the warning prophet preaches at the site); towerView/towerViews -> PlanetSnap.towers; towersQuery
+  -> query('towers'); towerWords (for freeform "what are they building"); commands tower.confuse/strike/warn/let/begin.
+  Wiring: relationship.ts (registerTowerCommands, towerDaily after the hearts loop, towerTask + leagueDamp in relDecide,
+  snap.towers, REL_QUERIES 'towers'); wrath.ts WRATHFUL += 'tower.strike'; buildings.json great-tower appended;
+  events.json 17 tower.* lines; content.ts TEMPLATE_VARS += host league prophet reading a b dead. Contract notes in
+  contract-changes.md. tests/arc-tower.test.ts 6/6 (no-tower refusals, begin/rise/view/query, confuse T6 core,
+  strike T7 core, let + save/load + determinism, warn heed reproduces T8). tsc clean. Focused: audio-arc, audio,
+  content, living-content, scripture_lint, arc-hearts (75 pass); determinism, living-migration, save-continue,
+  flood-warning (27 pass).
+  gaps (tower): let's side effects beyond faith drift/grievance (loyalty x0.8, rival threshold, discovery +5 %, golden
+  q-0.5, later prophets cred -0.1) NOT built; omens are emitted + told but not routed through omens.ts; strike does not
+  dispatch a miracle (godAct harm + direct deaths; render shows the fall from status); scattered daughters go through
+  splitOff('scatter') with no >= 4 km site rule; the pride>=0.5 / langDistance check of the league is not re-applied
+  daily; polity opinions -0.25 only when a relation already exists.
+- Full gate launched at end of stint 2: slot.sh npm run check -> _harness/scratch/arc/check2.log (pid in check2.pid).
+
+## NEXT (stint 3)
+1. Check the stint-2 full gate log _harness/scratch/arc/check2.log (pid file check2.pid); fix any failure.
+2. `babel` scenario (§6.8): needs a PeopleEntry option in src/sim/world/scenarios.ts (towns clustered within 10 km, one
+   language line, pride 0.7, since.arc0 20 y back, since.towerArm = 1 on each town) + src/data/scenarios.json entry;
+   test: begun <= 30 days, first tower.choice <= 2 years (T3), one speech <= 0.18 after 2 y (T5).
+3. M3 dusk nobow fix (see stint 2 note).
+4. Freeform §6.5 tower phrases + "what do they feel"/"what are they building" answers (freeform-signs.ts intentSigns).
+5. defiance.set debug; _harness/probes/arc.ts multi-seed T2 (unattended 8 seeds x 60 y: towers on 2-5/8, none < y10,
+   median first 15-35, <= 2 attempts) -> tune TOWER.towerChance; T4 (>= 50 % goal in <= 6 y, >= 2 omens, builder on site).
+6. §10: "other disasters unmoved" comparison; river shot was being run by another lane (slot 1, port 5312, 03:58Z).

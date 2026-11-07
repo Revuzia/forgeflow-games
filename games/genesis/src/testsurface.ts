@@ -9,6 +9,7 @@
 //   quality(name), ui(visible)
 //   shot(name)                 canvas → POST /__shot/<name> (vite dev server writes _shots/<name>.png) → path
 //   frames(n)                  resolves after n rendered frames (let streaming / exposure settle)
+//   hold(on)                   draw no new frames until hold(false) or a frames() wait (UI screenshots on a slow GL)
 //   exposure(ev)               exposure compensation in stops (photo)
 //   query(q, args)             sim.query (inspector data: 'agent', 'settlement', 'building', 'herds', 'cell', ...)
 //   poi(name)                  a point of interest on the primary world: { lat, lon, heading, cell, pos, planet }
@@ -100,6 +101,8 @@ export interface GenesisTestSurface {
   ui(visible: boolean): void;
   shot(name: string): Promise<string>;
   frames(n: number): Promise<void>;
+  /** hold(true): no new frames are drawn (the last stays on the canvas) unless one is waited for — for UI screenshots on a slow software renderer; hold(false) resumes */
+  hold(on: boolean): void;
   exposure(ev: number): void;
   query(q: string, args?: Record<string, unknown>): Promise<unknown>;
   poi(name: string, planet?: number): { lat: number; lon: number; heading: number; cell: number; pos: UnitVec; planet: number } | null;
@@ -233,6 +236,7 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
       return j.path ?? name;
     },
     frames: (n) => need().waitFrames(n),
+    hold: (on) => { need().held = !!on; },
     exposure: (ev) => { need().renderer.settings.exposureBias = ev; },
     query: (q, args) => need().sim.query(q, args ?? {}),
     arc: {

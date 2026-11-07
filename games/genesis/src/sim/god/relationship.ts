@@ -52,6 +52,7 @@ import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
 import { heartsDaily, heartSigns, heartsQuery, heartView, registerArcCommands } from './arc.ts';
+import { leagueDamp, registerTowerCommands, towerDaily, towerTask, towerViews, towersQuery } from './tower.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
 const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale', 'god.seen']);
@@ -65,6 +66,7 @@ export function registerRelationship(r: CommandRegistry): void {
   registerOmenCommands(r);
   registerSacredCommands(r);
   registerArcCommands(r);
+  registerTowerCommands(r);
   r.register('prayer.answer', ({ u, p, cmd }, a) => {
     if (!p.people) return fail('There is nobody here praying.');
     const st = typeof a.settlement === 'number' ? p.people.settlement(a.settlement) : undefined;
@@ -319,6 +321,16 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
   // play or chores yet, spent 17 % of their day at prayer — integration, 2026-10-14)
   const babe = (x.tick - A.birth[s]) / x.year < PRAY_AGE;
   if (babe) U[C.pray] = 0;
+  // a rising tower (ARC §2.3): the builders pray less and come less at dusk, and ~12 of the host's walk to the work
+  const league = leagueDamp(u, x.p.id, st.id, x.tick);
+  if (league) {
+    U[C.pray] *= 0.7;
+    const t = towerTask(x, s, st, night, pressing);
+    if (t) return t;
+  } else if (u.god.rel?.towers?.length && u.god.rel.towers.some((q) => q.warned && q.status === 'rising')) {
+    const t = towerTask(x, s, st, night, pressing);
+    if (t) return t;
+  }
   // a prophet's own work: preaching by day, at home or in the town they carry the faith to
   if (u.god.rel?.prophets.length) {
     const t = prophetTask(x, s, st, night, pressing, U[C.drink] >= 1.2 && U[C.drink] >= pressing);
@@ -334,7 +346,7 @@ function relDecide(x: PCtx, s: number, st: Settlement, U: Float64Array, C: Reado
       const r = srel(u, x.p.id, st.id);
       if (!r.vespers || x.tick - r.vespers.t > x.day / 2) r.vespers = { t: x.tick, went: [] };
       const ev = r.vespers;
-      const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * piety * faith);
+      const attend = Math.min(1, 0.5 * faith + 0.3 * A.loyalty[i] + 0.15 * piety * faith) * (league ? 0.8 : 1);
       if (!ev.went.includes(A.id[s]) && hashFloat(A.id[s], ev.t, 0xe7e5) < attend) {
         ev.went.push(A.id[s]);
         const place = worshipPlace(x, st);
@@ -559,6 +571,7 @@ export function relationshipDaily(u: Universe, p: Planet): void {
     conversions(x, st);
     heartsDaily(x, st);
   }
+  towerDaily(u, p);
 }
 
 /** fear > trust + 0.4 and loyalty < 0.3: the Called and the prophet are cast out (killed where fear > 0.85) */
@@ -687,6 +700,8 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     const heart = heartView(r, st);
     if (heart) v.heart = heart;
   }
+  const towers = towerViews(u, p);
+  if (towers) snap.towers = towers;
   const b = snap.agents;
   if (!b || !b.count) return;
   const f2 = b.flags2 ?? (b.flags2 = new Uint8Array(b.count));
@@ -709,7 +724,7 @@ export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -748,6 +763,7 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'sacred': return sacredQuery(u);
     case 'omens': return omensQuery(u);
     case 'hearts': return heartsQuery(u, args);
+    case 'towers': return towersQuery(u, args);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

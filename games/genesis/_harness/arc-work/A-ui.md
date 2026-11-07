@@ -77,3 +77,31 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
    chip legible at orbit + region) and T3/T10 shots in the babel scenario.
 - 01:29Z started the full gate: slot.sh npm run check (wrapper PID 12229), log _harness/scratch/arc/check-ui.log.
   Next stint: read the log tail; "# fail 0" and exit 0 = gate green for this stint's code.
+
+### Stint 2 (2026-11-07, from 04:00Z)
+- Stint-1 gate (wrapper 12229) finished: check-ui.log 778/778 pass, fail 0 -> GREEN.
+- LOOKED at _shots/arc-hearts-layer.png: legend (5 swatches + "Unshaded..." note) legible, fits under the time panel;
+  chip "Band of Isobar" shows heart glyph + proud tower mark. No fill visible: that town was a wandering band (no
+  territory) -> correct, needs a settled town (done on lookdev in ui-decision.json). arc-hearts-orbit.png: orbit mark
+  (heart+tower) legible over the land. chips + inspector shots FAILED (screenshot timeout under load 14).
+- New spec _harness/arc-work/specs/ui-decision.json (lookdev, homestead town + neighbour stubbed; card, card+inspector,
+  hearts inspector section, pill + Hearts layer). Launched 04:01Z via slot (PID 28296, port 5311, log
+  _harness/scratch/arc/shots-decision.log, PNGs _shots/arc-decision-*.png, arc-hearts-insp.png).
+- DONE 6b (code + unit): tower inspector card. host.ts InspectRef gains { kind:'tower' }; decision.ts towerCard (pure)
+  + DecisionCard.chooseFor(towerId,key); inspector.ts tower card (rows, towns of one speech with pride words as links,
+  the answer buttons while canAnswer, Look at it); shell.ts deps tower/answerTower/lookAtPos; app.ts pickTower
+  (projected axis, wins over builders in front) in onClick, entityBodyPos 'tower' (marker + Look key, 260 m).
+  tests/ui-arc-towercard.test.ts 2/2 (+ decision 5/5). tsc clean. NOT YET LOOKED AT in a shot.
+- 04:16Z decision shot 1 FAILED again (page.screenshot 600 s timeout: the screenshot waits for a fresh software-GL
+  frame). FIX: test surface G.hold(on) (app.ts `held`: the rAF loop draws nothing new while held unless a frames()/
+  capture waiter is pending; the last frame stays on the canvas). ui-decision.json scripts start G.hold(false) and end
+  G.hold(true). Use the same pattern in every UI (non-canvasOnly) shot spec. Relaunched 04:17Z (slot ticket #25,
+  log _harness/scratch/arc/shots-decision.log).
+- DONE help text: controlstext.ts livingRows gains 'hearts' and 'a great tower' rows (help window + CONTROLS.md,
+  regenerated with node _harness/gen-controls.ts; ui-meta 4/4).
+- Item 7 chronicle: no change needed (kind chips are generic; tower.*/heart.* lines are kind god and show).
+- NOTE 04:10Z: ui-living / ui-fixr3 / ui-logic real-sim tests fail with "content has 30 problems" (events.json tower.*
+  ask for {host}/{league}/{reading} the chronicle cannot fill; buildings great-tower work 1e9 out of range) = the sim
+  lane's in-progress tower content, not UI code. Re-run them once A-sim lands tower.ts.
+- freeform EXAMPLES: not yet extended (sim freeform-signs has no arc phrases yet; add "how do the people of {town}
+  feel?" once it answers).

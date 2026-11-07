@@ -88,8 +88,10 @@ export interface CameraHost {
   stick(x: number, y: number): void;
 }
 
-/** what the inspector can show (EntityRef kinds + a species of a planet) */
-export type InspectRef = EntityRef | { kind: 'species'; id: number; planet?: number; key?: string };
+/** what the inspector can show (EntityRef kinds + a species of a planet + a tower) */
+export type InspectRef = EntityRef | { kind: 'species'; id: number; planet?: number; key?: string }
+  // ARC §2.5: a great tower (TowerView.id), picked by its projected position (app.ts pickTower)
+  | { kind: 'tower'; id: number; planet?: number };
 
 export interface UiHost {
   readonly view: WorldView;

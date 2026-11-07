@@ -208,6 +208,8 @@ export function heartsDaily(x: PCtx, st: Settlement): void {
   }
   r.prideWhy = why;
   r.pride = r3(first || r.pride === undefined ? target : clamp(r.pride + (target - r.pride) * ARC.prideRate));
+  // a rising tower's builders (§2.3): +0.002 a day, never above target + 0.15 (tower.ts sets since.tLeague daily)
+  if (r.since.tLeague !== undefined && r.since.tLeague >= x.tick && r.pride < target + 0.15) r.pride = r3(Math.min(clamp(r.pride + 0.002), target + 0.15));
   // hearts
   const n = Math.max(1, pass.n);
   const sh = { devoted: r3(pass.devoted / n), fearful: r3(pass.fearful / n), restless: r3(pass.restless / n), defiant: r3(pass.defiant / n) };

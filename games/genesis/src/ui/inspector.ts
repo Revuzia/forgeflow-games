@@ -26,6 +26,7 @@ import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
 import { masteryWords } from './words.ts';
 import { HEART_KINDS, HEART_LABEL, captionOf, shareOf, shareWords, personHeartLine, prideWhyWords, type TownHeart } from './hearts.ts';
+import type { TowerCard } from './decision.ts';
 import { slider, toggle } from './panel.ts';
 import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, pastYears, FOOD_ORDER, FOOD_WORDS, type ProphetRow, type PastYear } from './living.ts';
 import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
@@ -59,6 +60,10 @@ export interface InspectorDeps {
   dayHours(planet: number): number;
   /** an action's key as people read it (titles follow rebinding) */
   hint?(id: string): string;
+  /** ARC §2.5: a tower's view and its inspector card (decision.ts towerCard); answer it by option key; look at a place */
+  tower?(planet: number, id: number): { card: TowerCard; pos: [number, number, number] } | null;
+  answerTower?(id: number, key: string): Promise<CommandResult | null>;
+  lookAtPos?(planet: number, pos: [number, number, number]): void;
 }
 
 type Rec = Record<string, unknown>;
@@ -84,7 +89,7 @@ const TRAIT_WORDS: Record<string, [string, string]> = {
 };
 const KIND_LABEL: Record<string, string> = {
   agent: 'Person', animal: 'Herd', building: 'Building', settlement: 'Settlement', cell: 'Place', species: 'A people', disaster: 'Disaster',
-  weather: 'Weather', ship: 'Ship', planet: 'World',
+  weather: 'Weather', ship: 'Ship', planet: 'World', tower: 'A great tower',
 };
 /** which power-entity kinds a selection kind answers to (a herd is picked as an animal) */
 const POWER_KIND: Record<string, string> = { agent: 'agent', settlement: 'settlement', disaster: 'disaster', ship: 'ship', planet: 'planet', animal: 'animal', building: 'building' };
@@ -176,7 +181,7 @@ export class Inspector {
   /** the selection as an entity the camera can look at / follow (a species or a cell cannot be followed) */
   private entity(): EntityRef | null {
     const r = this.ref;
-    if (!r || r.kind === 'species') return null;
+    if (!r || r.kind === 'species' || r.kind === 'tower') return null;
     return r as EntityRef;
   }
 
@@ -197,7 +202,7 @@ export class Inspector {
     this.body.append(el('div', 'gn-insp-wait', 'Asking the world…'));
     const followable = ref.kind === 'agent' || ref.kind === 'animal' || ref.kind === 'disaster' || ref.kind === 'ship' || ref.kind === 'weather';
     this.followBtn.hidden = !followable;
-    this.lookBtn.hidden = ref.kind === 'species';
+    this.lookBtn.hidden = ref.kind === 'species' || ref.kind === 'tower';
     this.cineBtn.hidden = !this.deps.dolly || ref.kind !== 'settlement';
     this.walkBtn.hidden = !this.deps.walk || !['settlement', 'agent', 'building', 'cell', 'animal'].includes(ref.kind);
     this.syncFollow();
@@ -267,6 +272,7 @@ export class Inspector {
         return d ? { ...d, live } : live;
       }
       case 'weather': return this.deps.live(ref);
+      case 'tower': { const tw = this.deps.tower?.(planet ?? 0, ref.id); return tw ? { ...tw } : null; }
       case 'settlement': {
         const d = obj(await q('settlement', { id: ref.id, planet }));
         return d ? { ...d, view: this.deps.live(ref) } : null;
@@ -311,10 +317,11 @@ export class Inspector {
       case 'weather': this.weather(ref as EntityRef, d); break;
       case 'ship': this.ship(ref as EntityRef, d); break;
       case 'planet': this.planet(ref as EntityRef, d); break;
+      case 'tower': this.tower(ref, d); break;
       default: this.head.append(el('div', 'gn-insp-name', cap(ref.kind)));
     }
     // a disaster's card has its own controls (cancel, scale, move, freeze): the powers row would repeat them
-    if (ref.kind !== 'planet' && ref.kind !== 'disaster' && !this.gone) this.powerRow(ref);
+    if (ref.kind !== 'planet' && ref.kind !== 'disaster' && ref.kind !== 'tower' && !this.gone) this.powerRow(ref);
     if (ref.kind === 'planet' && this.lawFocus) {
       const row = this.body.querySelector(`[data-law="${CSS.escape(this.lawFocus)}"]`);
       if (row) { row.scrollIntoView({ block: 'center' }); row.classList.add('gn-flash'); this.lawFocus = null; return; }
@@ -322,6 +329,41 @@ export class Inspector {
     this.body.scrollTop = scroll;
     if (fi >= 0) focusables()[fi]?.focus({ preventScroll: true });
     this.syncFollow();
+  }
+
+  /** ARC §2.5: the tower's card; the Decision card's buttons while it can be answered */
+  private tower(ref: InspectRef, d: Rec): void {
+    const card = d.card as TowerCard, pos = d.pos as [number, number, number];
+    this.header('A great tower', card.name, card.sub);
+    const sec = this.section('The work');
+    sec.classList.add('gn-insp-tower');
+    for (const [k, v] of card.rows) this.kv(sec, k, v);
+    if (card.towns.length) {
+      const t = this.section(card.towns.length > 1 ? 'The towns of one speech' : 'The town');
+      for (const w of card.towns) {
+        const line = el('div', 'gn-insp-line');
+        line.append(this.link(w.name, { kind: 'settlement', id: w.id, planet: ref.planet }), document.createTextNode(`: ${w.pride}`));
+        t.append(line);
+      }
+    }
+    const foot = el('div', 'gn-decision-opts gn-insp-tower-opts');
+    for (const o of card.options) {
+      const b = el('button', 'gn-btn gn-decision-opt');
+      b.type = 'button';
+      b.disabled = !!o.disabled;
+      b.title = o.disabled ?? `${o.label}: ${o.says}`;
+      b.dataset.opt = o.id;
+      b.append(el('b', '', o.label), el('span', 'gn-decision-says', `: ${o.disabled && o.id === 'warn' ? o.disabled : o.says}`));
+      b.addEventListener('click', () => void this.deps.answerTower?.(ref.id, o.key).then(() => { this.lastAsk = -1e9; }));
+      foot.append(b);
+    }
+    if (card.options.length) this.body.append(foot);
+    if (pos && this.deps.lookAtPos) {
+      const look = el('button', 'gn-btn', 'Look at it');
+      look.type = 'button';
+      look.addEventListener('click', () => this.deps.lookAtPos?.(ref.planet ?? 0, pos));
+      this.body.append(look);
+    }
   }
 
   private header(kind: string, name: string, sub: string): void {

@@ -69,6 +69,45 @@ export function towerChoice(t: TowerView, planet: number, names: Map<number, Pic
   };
 }
 
+const STATUS_WORDS: Record<TowerView['status'], string> = {
+  rising: 'Rising', finished: 'Finished: it stands', scattered: 'Left unfinished: the builders scattered', struck: 'Struck down',
+  abandoned: 'Abandoned: the builders listened',
+};
+const ANSWER_WORDS: Record<TowerView['answer'], string> = {
+  none: 'None yet', confuse: 'You confused their tongues', strike: 'You struck it down', warn: 'You sent a prophet to warn them',
+  let: 'You let it stand',
+};
+const prideWord = (p: number | undefined): string =>
+  p == null ? 'unknown' : p >= 0.8 ? 'very proud' : p >= 0.6 ? 'proud' : p >= 0.4 ? 'sure of themselves' : p >= 0.2 ? 'modest' : 'humble';
+
+export interface TowerCard {
+  name: string;
+  sub: string;
+  rows: [string, string][];
+  towns: { id: number; name: string; pride: string }[];
+  /** the Decision card's buttons while it can still be answered (empty otherwise) */
+  options: ChoiceOption[];
+}
+
+/** the tower's inspector card (§2.5 last bullet; pure): name, height and goal, tiers, builders, league towns with their
+ *  pride in words, years building, material, the answer so far, and the same buttons while it can be answered */
+export function towerCard(t: TowerView, planet: number, names: Map<number, Pick<SettlementView, 'name' | 'prophet' | 'heart'>>, years: number): TowerCard {
+  const host = names.get(t.host)?.name ?? 'their town';
+  const goal = Math.max(10, Math.round(t.goal / 10) * 10);
+  const rows: [string, string][] = [
+    ['Status', STATUS_WORDS[t.status] ?? t.status],
+    ['Height', t.status === 'rising' ? `${Math.round(t.height)} m of about ${goal}` : `${Math.round(t.height)} m`],
+    ['Tiers', numWords(t.tiers)],
+    ['Built of', t.material === 'mudbrick' ? 'mud brick' : t.material],
+    [t.status === 'rising' ? 'Years building' : 'Years of work', numWords(Math.max(1, years))],
+  ];
+  if (t.status === 'rising') rows.push(['Builders today', t.builders > 0 ? numWords(t.builders) : 'nobody']);
+  rows.push(['Your answer', ANSWER_WORDS[t.answer] ?? t.answer]);
+  const towns = t.league.map((id) => ({ id, name: names.get(id)?.name ?? 'a town', pride: prideWord(names.get(id)?.heart?.pride) }));
+  const options = t.canAnswer.length ? towerChoice(t, planet, names, years).options.filter((o) => t.canAnswer.includes(o.id as TowerView['canAnswer'][number]) || (o.id === 'warn' && !!t.warnBlocked && t.status === 'rising')) : [];
+  return { name: t.name || `The tower at ${host}`, sub: `At ${host}`, rows, towns, options };
+}
+
 /** which choice shows as a card and which as a pill; the speed to ease to and to restore (pure, for tests) */
 export class DecisionState {
   /** the card shown now (a choice id) */
@@ -187,6 +226,12 @@ export class DecisionCard {
     this.state.reopen(id, true);
     this.draw(true);
     return true;
+  }
+
+  /** the tower's inspector card: answer a tower by its option key ('1'..'4') without opening the card */
+  chooseFor(towerId: number, key: string): Promise<CommandResult | null> {
+    const o = this.choices.get(`tower:${towerId}`)?.options.find((x) => x.key === key);
+    return o ? this.choose(o) : Promise.resolve(null);
   }
 
   later(): void {
