@@ -219,3 +219,7 @@ The CW4 round 3 verifier scored the neutral monsters row 7.4 against the 7.5 par
 ## 24. Monster silhouette overlap is measured at camp facing (lead, by delegation, 2026-11-06)
 
 The silhouette IoU metric normalises away size and colour, and players meet each camp at its fixed spot and spawn facing, so spinning two monsters to their worst shared angle tests a view that says little about telling camps apart. **The gate is the cross-camp median IoU at camp facing, <= 0.50 (33 pairs).** CW4 round 3 verify 3 re-measured a maximum of 0.50 on a second seed and time. All-facing and free-facing values stay in the report as information: all-facing median 0.505-0.508, single free-facing reads up to 0.59. This closes critic:monsters' open IoU point on those numbers; the closing parity review still scores how the row looks by eye.
+
+## 25. MSAA on Ultra is not in this release (lead, by delegation, 2026-11-07)
+
+GR-3 showed a real gain: 4x MSAA with SMAA cut slow-pan edge popping by 43-67 %. But it costs 61-111 MB of render targets and about 1-1.4 ms a frame, and match memory already fails ruling 20 (RIFT second match 3433-3461 MB). **MSAA is removed for this release; Ultra keeps SMAA.** It can be retried once match memory has a real margin under 3.0 GB.

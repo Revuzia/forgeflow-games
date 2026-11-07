@@ -1,0 +1,843 @@
+{
+ "snap": {
+  "gates": [
+   {
+    "id": "snap-stub",
+    "status": "pass",
+    "severity": "major",
+    "measured": "Own look at the BRIDGE centre frame (High, 1080p, 28.5 m, seed 7, t 75): the north stub, whose break faces the camera, now shows six separate angular plates split by dark cracks, a torn skin edge and four loose shards at the foot; no fan or pucker remains. The south twin shows a jagged end from behind. Geometry: 2043 tris (was 2046), height 2.26 m, x -1.11..1.26, y -2.04..2.11. Same material set (needle, raw, band), one body node. content/ and walls untouched, so collision is unchanged. 2 rebuilds used. Judged read is mine, not a metric.",
+    "bar": "Plainly reads as broken stone at the real game camera; footprint 2.6 x 4.2 m; height <= 2.4 m; tris <= the old 2046; same collision and materials; at most 2 rebuilds",
+    "command": "heavy.py run -- Blender -b --factory-startup --python-exit-code 1 --python art/blender/maps/landmarks_art2.py -- --only snap_stub --preview; npm run content; node _harness/gfx_ge_frames.mjs --tag snap_r2 --maps bridge --q high --t 75 --seed 7 --spots centre",
+    "load": "20:27 load 4.77 3.58 5.11 before the capture; 20:28 load 3.80 3.62 4.98 after. Not a timing gate: no frame time is claimed.",
+    "report": "_design/reviews/gfx/GE_snap_stub_ab.png; frames in _harness/_shots/gfx_ge/snap_before and snap_r2; _harness/_reports/gfx_ge_snap_r2.json; art/renders/maps/build_report_landmarks_art2.json",
+    "fixHint": "Only if the lead wants the faint hood/mask read gone: break the symmetry of the third plate in SNAP_PLATES and of the top-flat tear in SNAP_EDGE. That would be a third rebuild, which needs the lead's allowance."
+   },
+   {
+    "id": "probe-maps",
+    "status": "pass",
+    "severity": "minor",
+    "measured": "102/102 checks passed, exit 0",
+    "bar": "All checks pass",
+    "command": "node _harness/probe_maps.ts",
+    "load": "20:28 load 3.80 before; 20:28 load 3.17 after. Not timed."
+   },
+   {
+    "id": "content-build",
+    "status": "pass",
+    "severity": "minor",
+    "measured": "npm run content exit 0, OK with 1 warning: catalog changed but version 2026.10.1 did not (bump content/version.json before publishing)",
+    "bar": "Exit 0",
+    "command": "npm run content",
+    "load": "Not timed"
+   }
+  ],
+  "notes": "The Snap stub no longer reads as a tied-off sack; at the game camera it reads as a cleaved stone shaft end. Commit 4242d0d30 is pushed.\n\nWhat changed: a new helper, sheared_break, in art/blender/maps/landmarks_art2.py replaces the broken_drum call for snap_stub only. broken_drum and shaft_drum are untouched, and only snap_stub.glb changed under art/out.\n\nDesign:\n- A flat-ish shear, long on the west and low down, tilted to the sky.\n- Six Voronoi plates in raw stone, with no vertex fan. The plates are unchamfered, because chamfers shaded them into cobbles.\n- The skin ends just behind the plates, so the end reads as one solid stone.\n- Four unequal loose shards sit at the short east foot.\n\nRebuild 1 was rejected: its deep sawtooth over cobbles read as a toothed maw. Rebuild 2 is the one shipped, and it used up the allowance of 2.\n\nWeak points I saw when looking at it:\n1. Faint hood or mask read at 2x on the north stub. The arched tear above a flat central plate, with a lower plate like a nose, can suggest a hood or mask if you look for it. At 1:1 in play I read it as faceted rock. It lies on its side and is seen from above, so I did not treat it as a sensitivity blocker, but owner_rulings.md was not checked for it and the lead should look at the A/B.\n2. The north stub's end silhouette is still fairly blunt. The jagged read comes from the cracks, the tear and the shards more than from the outline. The south twin's outline is properly jagged.\n3. Raw plates and needle skin are nearly the same value at the game camera, because the existing materials were kept. The read depends on cracks and facets, not on colour contrast.\n4. Scatter props are not part of this asset. src/render/terrain.ts raycasts needle fragments onto upward-facing stub faces, so changing the mesh moved them, deterministically. On the north stub a needle_drum now sits half-sunk on a plate ledge and reads a little like a round socket. A slab prop also sits on the south twin. I left src alone.\n\nNot done:\n- Low quality was not captured; only High at 1080p was.\n- No timing gate was run, and triangles dropped by 3.\n- GE_audit.md still says the stubs were not rebuilt; it is left as the record of that pass.\n\nFile paths:\n- /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/gfx/GE_snap_stub_ab.png\n- /Users/sitskovich/Developer/forgeflow-games/games/vale/art/blender/maps/landmarks_art2.py\n- /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/maps/landmarks/snap_stub.glb\n- /Users/sitskovich/Developer/forgeflow-games/games/vale/art/renders/maps/landmarks_art2_snap_stub.png",
+  "commits": [
+   "4242d0d30e1d831610d0b35584697569b9f8bc3a"
+  ]
+ },
+ "msaa": {
+  "gates": [
+   {
+    "id": "GR-3",
+    "status": "not_measured",
+    "severity": "minor",
+    "measured": "INCOMPLETE, no keep or reject verdict. Switch MSAA_ULTRA_SAMPLES = 0 in src/render/post.ts, so Ultra ships unchanged. All readings are Ultra 1920x1080, zoom 31, three spots (fight, struct, struct2), comparing MSAA + SMAA against shipped SMAA.\nShimmer, 0.004 m/frame pan on one shared edge mask (load 4.5-5.9, not a timing gate; static floor flickEdge 0): flickEdge 2x -6.2/-3.0/-13.1 %, 4x -18.7/-14.9/-27.1 %; popPct 2x -22/-28/-53 %, 4x -43/-50/-67 %. At 0.012 m/frame, 4x flickEdge -13/-11/-19 %.\nFrame cost, synced ms, 8 rounds (fight/struct/struct2): smaa 12.2/11.2/11.5, 2x 12.9/12.2/12.1, 4x 13.6/11.7/12.4. Load was 3.53-4.52, so this reading does NOT count (bar is load < 3). perf_1080 --prod was not run with the switch on.\nCounts: 233.6k triangles, 175 draws, 39 programs in every SMAA variant, within budget; the same counts for off vs 2x vs 4x.\nMemory, bench page footprint (one read each, not a full match, load about 4): 1980 MB smaa, 2041 MB 2x (+61), 2091 MB 4x (+111). Added to the recent 2983 MB reading (from the client's High default) that would be 3044 / 3094 MB against the 3000 MB bar, an estimate only: no match-long Ultra reading has completed, with or without MSAA.\nOverlay, coverage changed vs shipped Ultra (xor / strong xor pixels, fight of about 98.9k covered; struct and struct2 smaller): 4x+SMAA 965/134, 9 strong on struct, 7 on struct2. Control, shipped High post tier: 1087/149. So the shift is no larger than the existing High-vs-Ultra difference, but it is not zero. Replacing SMAA with a copy is worse (m4 1410/300), which points to keeping SMAA. Depth-test flips were not isolated from SMAA's edge changes: the off vs m4 comparison was not run.\nSMAA + composer.multisampling = 4 rendered a normal frame with overlays on this machine (xor 1064/142), so I did not reproduce the breakage I expected on that path.",
+    "bar": "Plainly better at the game camera, within 500k triangles, 450 draws, 40 programs, Ultra 60 fps at 1080p, match memory 3000 MB, overlays identical on every tier. Timing valid only at load < 3.",
+    "command": "node _harness/gfx_msaa_ab.mjs --naive 1; --mode overlay --variants smaa,m2s,m4s,m2,m4; --mode cost --variants smaa,m2s,m4s; node _harness/probe_match_memory.mjs --preset ultra --wait-idle 15 --out _harness/_reports/gfx_GR3_mem_ultra_base.json (unfinished)",
+    "load": "All run: 2.85 to 3.14. Cost run: 3.53 to 4.21 (peak 4.52), 1-minute load read at harness start and end. Pan and footprint run: 5.87 to 4.24. Overlay run: 2.72 to 3.14. Load before the wrapper started the cost run was 2.81; 20:37 start. Background load comes largely from iOS Simulator processes (diagnosticd, backboardd), left alone as instructed.",
+    "report": "_harness/_reports/gfx_GR3_ultra_1920x1.json, gfx_GR3_ultra_1920x1_overlay.json, gfx_GR3_ultra_1920x1_cost.json, gfx_GR3_mem_ultra_base.log; frames in _harness/_shots/gfx_GR3/",
+    "fixHint": "Remaining: finish the baseline Ultra match memory run, run it again with the switch at 4, rerun cost at load < 3, run off vs m4 for depth flips, save _design/reviews/gfx/GR_3_msaa_ab.png, decide, commit. On current numbers memory is the likely blocker; keeping MSAA would need a real Ultra reading under 3000 MB. Fix the MsaaRenderPass comment first: it says composer.multisampling would lose the grade under the overlay, which the run on this machine did not show. The risk rests on three invalidating the colour buffer after resolve (undefined by spec), so it should be worded as a risk, not a result."
+   },
+   {
+    "id": "orphans",
+    "status": "not_measured",
+    "severity": "minor",
+    "measured": "Nothing pruned. Code read only: tools/package_deploy.ts stages manifest.json, the catalogs it lists and the assets they refer to, leaving other files in dist-catalog/assets behind, so by its code it should not ship unreferenced GLBs. tools/r2_upload.sh uploads the packaged deploy dir, not dist-catalog. tools/build_content.ts deletes unreferenced assets only with --prune, so a plain npm run content leaves orphans in place. dist-catalog is gitignored; assets holds 2361 files, 428 MB. I did not confirm the 48 files / 51.3 MB count or run a package and inspect its output.",
+    "bar": "Orphans confirmed unable to ship, and pruned if safe.",
+    "command": "Not run. Intended: npm run content -- --prune, after confirming the unreferenced list.",
+    "load": "n/a, not run",
+    "report": "none",
+    "fixHint": "List files in dist-catalog/assets that referencedAssets() does not return, confirm they are the 48 graded GLBs and not other files, then prune. --prune removes every unreferenced file plus unlisted schema catalogs, so check that list first. Do this outside any timing window."
+   }
+  ],
+  "commits": [],
+  "notes": "THE WORK IS NOT FINISHED. I was required to return before the steps completed, so both gates are not_measured, not pass or fail. Treat GR-3 as open, not rejected.\n\nNothing is committed or pushed. Uncommitted edits in the working tree:\n- src/render/post.ts: new MsaaRenderPass, switch MSAA_ULTRA_SAMPLES = 0, seam setMsaaSamples. With 0 samples it behaves as the plain RenderPass and allocates nothing, but no regression run confirmed this after the edit. I only filtered tsc output for post.ts errors, and the command printed none.\n- _harness/gfx_lib.mjs: panMetric gained maskKey (a shared edge mask, because per-variant masks bias the metric).\n- _harness/gfx_msaa_ab.mjs: rewritten, with --mode cost and --mode overlay.\n- _harness/probe_match_memory.mjs: new --preset ultra.\n\nNot done:\n- src/render/quality.ts:102 comment still says MSAA is not offered, and I did not change it.\n- The required A/B image _design/reviews/gfx/GR_3_msaa_ab.png does not exist yet.\n- value_probe and perf_1080 were not run.\n\nStill running when I returned: a background probe_match_memory run (baseline Ultra, switch 0, writing _harness/_reports/gfx_GR3_mem_ultra_base.json) and a bounded poll on its log. It holds a heavy slot and loads the machine, so any timing gate started before it exits is invalid. If it dies with this agent, run zsh tools/reap_orphans.sh to check for leftovers.\n\nEarly read, not a verdict: 4x + SMAA gives a real reduction in slow-pan edge popping (-43 to -67 %) at about 1-1.4 ms, on a reading taken above the load bar. Static frames differ only subtly at 1:1. Memory is the likely deciding factor: +111 MB in the bench against 2983 MB recent readings and a 3000 MB bar. The lead should not take a verdict from this until the Ultra match reading exists."
+ },
+ "msaaJudge": null,
+ "msaaUndo": null,
+ "rebuild": {
+  "gates": [
+   {
+    "id": "catalog",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run content",
+    "load": "2.92 before, 2.92 after",
+    "measured": "exit 0, 0 warnings; 1824 assets, 241.72 MB; catalog sha256 231dabea6c64 unchanged",
+    "bar": "exit 0, 0 warnings",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/content.log"
+   },
+   {
+    "id": "typecheck",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s typecheck",
+    "load": "2.92 before, 3.01 after (any-load gate)",
+    "measured": "exit 0",
+    "bar": "exit 0",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/typecheck.log"
+   },
+   {
+    "id": "content_check",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s content:check (no allow-missing flag)",
+    "load": "3.01 before, 3.01 after (any-load gate)",
+    "measured": "exit 0, 0 warnings, nothing written",
+    "bar": "exit 0, 0 warnings, every referenced asset exists",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/content_check.log"
+   },
+   {
+    "id": "probe",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s probe",
+    "load": "3.09 before, 3.96 after (any-load gate)",
+    "measured": "55 passed, 0 skipped, 0 failed in 161.0 s",
+    "bar": "0 failed, 0 skipped",
+    "report": "_harness/_reports/probes.json"
+   },
+   {
+    "id": "build",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s build",
+    "load": "3.96 before, 3.96 after (any-load gate)",
+    "measured": "exit 0; dist/ is 5.2 MB and left in place, built at 20:56 from the current source. Commit a33d403ef afterwards is empty, so dist still matches HEAD. Only build notes: config.js and game_controls.js are non-module scripts that are not bundled",
+    "bar": "exit 0, dist/ left in place",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/build.log"
+   },
+   {
+    "id": "store",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node tools/gen_store.ts --check (first run), then node tools/gen_store.ts, then --check again",
+    "load": "3.96 before, 3.96 after the first check; 3.53 before the generator (any-load gate)",
+    "measured": "--check exit 0 on the first run: store.json current, 32 offers, 8 shelves, dE gate 32/32. The plain generator's exit code was masked by a pipe in my command; it printed 32/32 pass and wrote store.json, which per closing_gates note 1 it does only when no skin is under its floor, and the tracked file shows no diff. The second --check also printed current, but its exit code was masked too",
+    "bar": "exit 0: standard dE >= 12, deluxe and legend dE >= 18",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/store_check.log"
+   },
+   {
+    "id": "secrets",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s secrets",
+    "load": "3.96 before, 4.46 after (any-load gate)",
+    "measured": "exit 0, PASS: 13 rules, tracked files, 900 candidate files",
+    "bar": "exit 0",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/secrets.log"
+   },
+   {
+    "id": "vfx_frozen",
+    "status": "pass",
+    "severity": "major",
+    "command": "python3 tools/vfx/build_vfx.py --check",
+    "load": "4.46 before, 4.46 after (any-load gate)",
+    "measured": "exit 0; 285 defs, 51 from bespoke/tuned.json, 0 a rebuild would change",
+    "bar": "exit 0, prints 0 a rebuild would change",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/vfx.log"
+   },
+   {
+    "id": "e2e_flow",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node _harness/e2e.mjs flow",
+    "load": "2.76 before, 2.94 after",
+    "measured": "PASS in 72 s: flow_dodge ok, flow_readycheck ok, flow_netdown ok",
+    "bar": "all three journeys ok, load < 3 (clean)",
+    "report": "_harness/_reports/e2e.json (later overwritten by the e2e all run); log at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/e2e_flow.log"
+   },
+   {
+    "id": "e2e_all",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node _harness/e2e.mjs all",
+    "load": "2.70 at start; 3.27 at end, with 5-min average 4.55 and 15-min 4.20. Load rose above 3 during the run while the sweep's own Chrome was running; I did not sample a peak. An earlier sweep that started at 3.11 is discarded as evidence (it also passed, 437 s)",
+    "measured": "PASS in 423 s, one sweep, 60 steps ok: flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak and store all ok, including decline_once. No console, error or warning lines in the log, and 0 console entries under the key names I checked in e2e.json",
+    "bar": "one single sweep passes everything, 0 console lines, load < 3 (clean)",
+    "report": "_harness/_reports/e2e.json; log at /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/e2e_all2.log"
+   },
+   {
+    "id": "overlays",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/overlay_regress.mjs",
+    "load": "2.95 before, 3.65 after (any-load gate)",
+    "measured": "exit 0, prints overlay_regress: PASS, 25 s",
+    "bar": "prints overlay_regress: PASS",
+    "report": "_harness/_reports/overlay_regress.json"
+   },
+   {
+    "id": "hud_renders",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/hud_renders.mjs --at 100",
+    "load": "2.98 before, 3.19 after",
+    "measured": "exit 0, 93 s; ledger on screen at x 1116, y 72, 184 x 20 px; 0 renders over 0 changes in 180 ticks. The numbers did not change in the window, so the once-per-change bar was exercised only at zero changes",
+    "bar": "exit 0: ledger line on screen, at most one render per change of its numbers, load < 3 (clean)",
+    "report": "stdout only; /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/hud.log"
+   },
+   {
+    "id": "icons",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/icon_probe.mjs",
+    "load": "3.65 before, 3.65 after (any-load gate)",
+    "measured": "items 40 px: p50 min 66, p95 min 192; abilities 38 px: p50 min 66, p95 min 190; abilities 40 px: p50 min 65, p95 min 193; 0 missing. 190 is exactly on the p95 bar. Ground rules were read only from the harness's OK verdict",
+    "bar": "p50 >= 60 and p95 >= 190 at 38 and 40 px, ground rules hold, 0 missing",
+    "report": "_harness/_reports/fw_W2_icon_probe.json"
+   },
+   {
+    "id": "leftovers",
+    "status": "pass",
+    "severity": "major",
+    "command": "git status --short; zsh tools/reap_orphans.sh; python3 art/blender/common/heavy.py status",
+    "load": "3.27 at the final check (not load sensitive)",
+    "measured": "Tracked files clean and branch level with origin at a33d403ef. 228 untracked files (112 MB), all PNG or JSON under art/renders: scratch renders that tools/wip_sync.sh leaves out by design, left alone. One real leftover: GR-3 MSAA work from after the 20:21 graphics result, already committed by wip sync 20aaa35ba; note recorded in empty commit a33d403ef, pushed. No orphans at the end, all 3 heavy slots free",
+    "bar": "no uncommitted harness or source leftovers; real leftovers committed with a note",
+    "report": "commit a33d403ef",
+    "fixHint": "GR-3 in src/render/post.ts has had no verify pass. GFX_result.json still says GR-3 not_done. A later graphics review should accept or remove it."
+   }
+  ],
+  "commits": [
+   "a33d403ef vale integ: note on the GR-3 leftover swept in by wip sync 20aaa35ba (empty commit, pushed; no integration fixes were needed)"
+  ],
+  "notes": "All 13 gates in Build and integrity, Client journeys and the leftovers check pass, with the e2e_all and hud_renders load caveats below. No gate failed and no source fix was needed. dist/ is in place, and HEAD is a33d403ef, pushed.\n\n1. The graphics pass had not fully ended when I started. A detached process, node _harness/probe_match_memory.mjs --preset ultra (pid 37922, ppid 1, report gfx_GR3_mem_ultra_base.json), was running and holding a heavy slot, and new GR-3 work had landed at 20:42. I did not start it, so I did not kill it. I waited about 10 minutes until it exited by itself at 20:53 and started the gates after that. Nothing new from it appeared during my run.\n\n2. That probe's result needs a look. Its verdict was NOT MEASURED (load max 5.38, 47 of 54 readings busy), so it closes nothing and I am not reporting it as a gate. It read 3533 MB in the rift match against the 3000 MB bar (ruling 20), 2973 MB in bridge, and 2479 MB at Home after rift against the 2500 MB bar, all on the Ultra preset with SMAA. It peaked 2 s into the rift match. The default preset is High, which this run did not read. The Performance section should re-measure this idle, including --preset ultra. Report: _harness/_reports/gfx_GR3_mem_ultra_base.json (gitignored).\n\n3. Production source changed after the graphics verify. Wip sync 20aaa35ba committed MsaaRenderPass, MSAA_ULTRA_SAMPLES = 0 and PostChain.setMsaaSamples in src/render/post.ts, and --preset in probe_match_memory.mjs. Every tier now builds through MsaaRenderPass. By code reading, 0 samples takes the plain RenderPass path and allocates nothing, but no pixel A/B or verify pass has confirmed that. GFX_verify 2's zero-pixel result predates this change. I made no source change and did not resolve it.\n\n4. Load: the machine's baseline here sits around 3, and the top CPU users were the owner's booted iOS Simulators, diagnosticd, coreaudiod and mds_stores, which I left alone. Each clean gate started below 3 except where noted. e2e_all and hud_renders ended above 3 while their own Chrome was running (e2e_all 3.27 with a 5-min average of 4.55; hud_renders 3.19). I marked them pass because they are not frame timings and they passed rather than failing falsely. The lead can downgrade them if the clean bar means the whole run must stay below 3. Timing gates will struggle to hold load < 3 on this baseline.\n\n5. hud_renders saw no number changes in its window, so it shows the ledger does not over-render when idle, but not the render count per change."
+ },
+ "gates": [
+  {
+   "id": "perf_prod",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30",
+   "load": "2.40 3.75 3.93 at start 21:18:47; 3.28 at 21:19:02 while running; no after reading",
+   "measured": "No number. Still running 15 s in when I was forced to return; the log only shows the bench build and vite preview on port 5191. Covers High, Low and Ultra timing, gpubound tail, calibrate, memory and triangles peak, none read yet",
+   "bar": "GATE PASS with no 'timing not measured' note; <=500k tris, <=450 draws, <=40 programs; renderer CPU <=6 ms; High and Ultra <=1% dropped, avg >=59.4, p95 <=17.2, p99 <=25; Low no drops, p95 <=17.2; gpubound last 8 s of 75 s >=58 (ruling 18)",
+   "report": "_harness/_reports/fw_final_idle_perf_prod.log"
+  },
+  {
+   "id": "perf_realtime",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 26 --wait-idle 30",
+   "load": "not started",
+   "measured": "Queued in the driver, not run",
+   "bar": ">=99% of wall-seconds at 58+ frames, no second under 45; exit 2 is not a pass",
+   "report": "_harness/_reports/fw_final_idle_perf_realtime.log"
+  },
+  {
+   "id": "perf_calibrate",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/perf_1080.mjs --prod --no-build --calibrate-only --wait-idle 30",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "every 1080p call returns high; video restored; 9x pixels never high",
+   "report": "_harness/_reports/fw_final_idle_perf_calibrate.log"
+  },
+  {
+   "id": "match_memory",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/probe_match_memory.mjs --wait-idle 30",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "renderer + GPU <=3000 MB in match on BRIDGE and RIFT, <=2500 MB at Home (ruling 20)",
+   "report": "_harness/_reports/fw_final_idle_match_memory.log"
+  },
+  {
+   "id": "e2e_all",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/e2e.mjs all --out _harness/_reports/fw_final_idle_e2e_all.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "one sweep passes everything, 0 console lines, load <3",
+   "report": "_harness/_reports/fw_final_idle_e2e_all.json"
+  },
+  {
+   "id": "e2e_flow",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/e2e.mjs flow --out _harness/_reports/fw_final_idle_e2e_flow.json",
+   "load": "not started",
+   "measured": "Queued, not re-run in this pass. The rebuild step reported its own pass",
+   "bar": "dodge, ready check and server down all ok, load <3",
+   "report": "_harness/_reports/fw_final_idle_e2e_flow.json"
+  },
+  {
+   "id": "overlay",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/overlay_regress.mjs",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "prints overlay_regress: PASS",
+   "report": "_harness/_reports/fw_final_idle_overlay.log"
+  },
+  {
+   "id": "hud_renders",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/hud_renders.mjs --at 100",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "exit 0; ledger line on screen, renders at most once per change",
+   "report": "_harness/_reports/fw_final_idle_hud_renders.log"
+  },
+  {
+   "id": "icons",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/icon_probe.mjs --out _harness/_reports/fw_final_idle_icons.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "p50 >=60 and p95 >=190 at 38 and 40 px; ground rules hold; 0 missing",
+   "report": "_harness/_reports/fw_final_idle_icons.json"
+  },
+  {
+   "id": "input_latency",
+   "status": "not_measured",
+   "severity": "blocker",
+   "command": "node _harness/probe_input_latency.mjs --tag fw_final_idle_1 --only input, then --tag fw_final_idle_2 --only input",
+   "load": "not started",
+   "measured": "Queued, not run. Tags differ from the 'idle' tag in closing_gates.md so the two runs do not overwrite each other",
+   "bar": "marker p95 <=2 frames, motion p95 <=67 ms + 1 frame, 0 orders with no marker or motion, 0 attacks sent or drawn as a move, 0 attacks with no marker, both runs",
+   "report": "_harness/_reports/fw_CW1_input_latency_fw_final_idle_1.json, _2.json"
+  },
+  {
+   "id": "camera_live",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_input_latency.mjs --tag fw_final_idle_cam --only camera",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "prints input/camera PASS",
+   "report": "_harness/_reports/fw_final_idle_camera_live.log"
+  },
+  {
+   "id": "kit_hue",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_kit_hue.mjs --live",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "64/64 slots signature share >=0.5, team light <=0.35 on a3 and ult",
+   "report": "_harness/_reports/fw_final_idle_kit_hue.log"
+  },
+  {
+   "id": "skin_hue",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_kit_hue.mjs --skins --live",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "each skin's a1 and ult signature share >=0.5",
+   "report": "_harness/_reports/fw_final_idle_skin_hue.log"
+  },
+  {
+   "id": "combat_polish",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_combat_polish.mjs ult,hold --ults all",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "ult all 16: first-beat core >=x2.0 (rulings 10, 10a), lift adds <=0.10 white, boxWhite <=0.35, centre nearer victim or centroid; hold discMs >=167",
+   "report": "_harness/_reports/fw_final_idle_combat_polish.log"
+  },
+  {
+   "id": "audio_sync",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_audio_runtime.mjs sync --out _harness/_reports/fw_final_idle_audio_sync.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "all 3 runs pass with rAF gates armed (pump-late p95 <=3 ms)",
+   "report": "_harness/_reports/fw_final_idle_audio_sync.json"
+  },
+  {
+   "id": "audio_match",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_audio_runtime.mjs match --fighter burdam --seed 21, then --fighter lisvel --seed 15",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "master -18 +/- 1.5 LUFS, announcer peak >=3 dB over sfx p99, heal chimes <=6 a minute, enemyDown fires, both seats",
+   "report": "_harness/_reports/fw_final_idle_audio_match_quiet.json, fw_final_idle_audio_match_loud.json"
+  },
+  {
+   "id": "audio_dead",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_audio_runtime.mjs dead --out _harness/_reports/fw_final_idle_audio_dead.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "the probe's own gates",
+   "report": "_harness/_reports/fw_final_idle_audio_dead.json"
+  },
+  {
+   "id": "audio_music",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_audio_music.mjs, then --m4a",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "17 gates, exit 0, both runs",
+   "report": "_harness/_reports/fw_final_idle_audio_music.json, fw_final_idle_audio_music_m4a.json"
+  },
+  {
+   "id": "audio_mix",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_audio_mix.mjs --out _harness/_reports/fw_final_idle_audio_mix.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "RIFT floor lift M2 >=1 dB and the probe's own gates",
+   "report": "_harness/_reports/fw_final_idle_audio_mix.json"
+  },
+  {
+   "id": "audio_ultid",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "~/Developer/forgeflow-games/.venv/bin/python3 _harness/probe_audio_ultid.py",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "exit 0",
+   "report": "_harness/_reports/fw_final_idle_audio_ultid.log"
+  },
+  {
+   "id": "ge1_cost",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/gfx_ge_frames.mjs --tag fw_final_idle_ge1_high --uniform uGeStone --a 0 --b 1 --gpu 1 --q high, then --tag fw_final_idle_ge1_ultra --q ultra",
+   "load": "not started",
+   "measured": "Queued, not run. No ms reading exists yet",
+   "bar": "report ms; no numeric bar given",
+   "report": "_harness/_reports/gfx_ge_fw_final_idle_ge1_high.json, gfx_ge_fw_final_idle_ge1_ultra.json"
+  },
+  {
+   "id": "dynres_metal",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_dynres_metal.ts",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "prints PASS",
+   "report": "_harness/_reports/fw_final_idle_dynres_metal.log"
+  },
+  {
+   "id": "camera_geometry",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_camera.ts; node _harness/probe_camera_edge.ts; node _harness/probe_camera_lock.ts",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "median planted-foot speed <=10% of moveSpeed; camera_lock exit 0; camera_edge's own output",
+   "report": "_harness/_reports/fw_final_idle_camera_geo.log, fw_final_idle_camera_edge.json, fw_final_idle_camera_lock.log"
+  },
+  {
+   "id": "bar_clearance",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_bar_clearance.ts",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "named parts half-covered in <=10% of idle and run cases",
+   "report": "_harness/_reports/fw_final_idle_bar_clearance.log"
+  },
+  {
+   "id": "camjump",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_camjump.mjs",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "0 bodies dropped on the first frame after a jump",
+   "report": "_harness/_reports/fw_final_idle_camjump.log"
+  },
+  {
+   "id": "crowd_accent",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/probe_crowd_accent.mjs --tag fw_final_idle",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "shipped vs full within 3% per def, no empty crop, noise floor under 1% of full",
+   "report": "_harness/_reports/fw_final_idle_crowd_accent.json"
+  },
+  {
+   "id": "value",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 --tag fw_final_idle --shots 0 --report fw_final_idle_value.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "no FAIL in the log; exit code means nothing",
+   "report": "_harness/_reports/fw_final_idle_value.json"
+  },
+  {
+   "id": "monster_iou",
+   "status": "not_measured",
+   "severity": "major",
+   "command": "node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 1000 --seed 23 --monsterPhases 8 --monsterSpawnFacing 1 --tag fw_final_idle_mon --report fw_final_idle_mon.json",
+   "load": "not started",
+   "measured": "Queued, not run",
+   "bar": "cross-camp median IoU at camp facing <=0.50 (ruling 24)",
+   "report": "_harness/_reports/fw_final_idle_mon.json"
+  }
+ ],
+ "fixes": [],
+ "verify": {
+  "gates": [
+   {
+    "id": "match_memory",
+    "status": "fail",
+    "severity": "blocker",
+    "command": "node _harness/probe_match_memory.mjs --wait-idle 30 (3 runs); same with --modes rift --no-build (1 diagnostic run)",
+    "load": "run 1 22:29 2.94->3.20; run 2 00:21 2.90->2.85, load max 5.58, 49 of 55 readings busy; run 3 02:05 2.63->2.74; rift-only 2.99 at the end, load max 5.78. No run had a clean load<3 window, so the probe itself says NOT MEASURED or BROKE, never PASS",
+    "measured": "RIFT as the second match of the session, the required order: 3461 MB and 3433 MB peak (renderer 1694 / 1786), and it stays over the bar for the whole 300 s: 3140-3244 MB in run 2, 3093-3160 MB at the start of run 3. BRIDGE 2830, 2675, 2815 MB. RIFT alone in a fresh session 2792 MB. Home after BRIDGE 1749-1770 MB against 797-818 at first Home; Home after RIFT 2214 MB (under the 2500 bar, renderer 1319 against 126). On 11-06 08:58 the same order read RIFT 2849 MB, so this has grown about 600 MB. Marked fail, not not_measured: load does not explain a 5-minute plateau about 90-245 MB over and a 670 MB gap to the fresh-session number, and the bar was not relaxed. A load<3 reading is still missing. Run 1 and run 3 also broke at the leave step, see match_leave_journey",
+    "bar": "renderer + GPU <=3000 MB in match on BRIDGE and RIFT, <=2500 MB at Home, real prod client, load <3 (ruling 20)",
+    "report": "_harness/_reports/fw_final_vfy_match_memory.json, fw_final_vfy_match_memory2.json, fw_final_vfy_match_memory_rift.json, fw_final_idle_match_memory.log",
+    "fixHint": "Renderer memory left over after leaving a match (Home renderer 126 -> 824 after BRIDGE) carries into the next one. perf_1080 memmaps does not see it (match_4_rift 2242 MB). Find what the client keeps after leave, and what grew since 11-06 08:58."
+   },
+   {
+    "id": "match_leave_journey",
+    "status": "fail",
+    "severity": "major",
+    "command": "node _harness/probe_match_memory.mjs --wait-idle 30",
+    "load": "same runs as match_memory",
+    "measured": "2 of 3 runs: after 5 minutes in a match, Escape followed by waiting for the Leave match button timed out at 15 s (run 1 after BRIDGE, run 3 after RIFT). Run 2 got through. Cause not established: it may be the HUD claiming Esc (src/ui/screens/match.tsx), a probe race, or a real player-facing failure to reach the menu",
+    "bar": "journey completes, exit not 3",
+    "report": "_harness/_reports/fw_final_idle_match_memory.log, fw_final_vfy_match_memory2.log",
+    "fixHint": "Take a shot at the timeout and check what holds Esc after the probe's QWER and mouse input."
+   },
+   {
+    "id": "perf_realtime",
+    "status": "not_measured",
+    "severity": "blocker",
+    "command": "node _harness/perf_1080.mjs --prod --no-build --match-only --match-scale 1 --match-min 26 --wait-idle 30 (3 runs)",
+    "load": "run windows 3.29/5.62/2.55, 2.71/4.78/3.55, 2.55/5.19/4.19; all busy, exit 2 each time",
+    "measured": "92.1 %, 96.9 %, 95.6 % of wall-seconds at 58+; worst second 22, 37, 20 frames. All miss the bar, but none is valid at this load. Most worst seconds are tagged machine with pump 1-3 ms and render 7-12 ms; these are tagged render: 408.5 s 25f (render 12.3 ms), 541.6 s 40f (17.8 ms), 1151.7 s 28f (20.8 ms). Not a pass and not shown to be a clean fail",
+    "bar": ">=99% of wall-seconds at 58+ frames, no second under 45; exit 2 is not a pass",
+    "report": "_harness/_reports/fw_final_idle_perf_realtime.log, fw_final_vfy_perf_realtime.log, fw_final_vfy_perf_realtime2.log",
+    "fixHint": "Needs a window with the booted simulators' load absent. I did not touch them."
+   },
+   {
+    "id": "perf_gpubound_tail",
+    "status": "not_measured",
+    "severity": "blocker",
+    "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30; then --prod --no-build --gpubound-only --wait-idle 30 (3 runs)",
+    "load": "2.71->3.12, 2.57->3.06, 3.46->3.71, 3.39->3.52; all busy, so each exit-0 GATE PASS carries 'timing not measured'",
+    "measured": "Last 8 s of 75 s: 58.5, 56.6, 57.5, 60 fps. Two of the four are under 58. Scale left base at 1.0-1.1 s. The spread straddles the bar and last round's idle verifier also saw misses, so do not assume it clears at idle",
+    "bar": "gpubound last 8 s of 75 s >=58 at load <3; scale leaves base within 10 s (ruling 18)",
+    "report": "_harness/_reports/fw_final_idle_perf_prod.log, fw_final_vfy_perf_gpubound.log, fw_final_vfy_perf_gpubound2.log, fw_final_vfy_perf_gpubound3.log"
+   },
+   {
+    "id": "perf_prod_tiers",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30",
+    "load": "run start 2.40, end 4.38. Valid windows: High 2.69->2.27 (after 6 busy tries), Low 2.59->2.41 (after 1 busy try), Ultra 2.81->2.46, dynres 2.73->2.94",
+    "measured": "High 60.1 fps, avg 16.65, p95 16.7, p99 16.8, 0 dropped, cpu 2.13 ms, 156 draws, 39 programs, 233k tris. Low 60.1, p95 16.8, 0 dropped, cpu 3.29 ms, 120 draws, 27 programs, 154k. Ultra 60.1, p95 16.8, p99 16.8, 0 dropped, cpu 2.35 ms. Match peaks seeds 7/11/23: 454k/452k/458k tris, 253/282/259 draws, 40 programs. Memory rebuilds 735->736 MB, Home peak 1417 MB. The command's overall line is GATE PASS with a 'timing not measured' note for gpubound, which is the gate above. Observation: memmaps match_4_rift shows 41 programs against 40; the harness does not gate that row",
+    "bar": "<=500k tris, <=450 draws, <=40 programs; renderer CPU <=6 ms; High and Ultra <=1% dropped, avg >=59.4, p95 <=17.2, p99 <=25; Low no drops, p95 <=17.2",
+    "report": "_harness/_reports/fw_final_idle_perf_prod.log"
+   },
+   {
+    "id": "perf_calibrate",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node _harness/perf_1080.mjs --prod --no-build --calibrate-only --wait-idle 30",
+    "load": "2.46->2.49 (valid). The earlier run read 3.43->3.63 and is discarded; the harness printed GATE PASS with no note on that busy run",
+    "measured": "1080p x3: high, high, high at p95 17.9, 17.6, 18.0 ms; tier medium->medium; 5760x3240 medium (p95 24.4), never high. p95 touches the 18 ms value last round's verifier named as the threshold, so margin is thin. Busy-load readings up to p95 18.6 still returned high",
+    "bar": "every 1080p call returns high; video restored; 9x pixels never high",
+    "report": "_harness/_reports/fw_final_vfy_perf_calibrate.log"
+   },
+   {
+    "id": "e2e_all",
+    "status": "not_measured",
+    "severity": "blocker",
+    "command": "node _harness/e2e.mjs all --out ... (2 runs)",
+    "load": "2.61->4.52 and 2.40->3.37; the end reading misses the load bar both times",
+    "measured": "Both sweeps PASS: flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak, store all ok, 0 console errors in all 8 journeys. Function is good on both; the load clause of the bar is not met",
+    "bar": "one sweep passes everything, 0 console lines, load <3",
+    "report": "_harness/_reports/fw_final_idle_e2e_all.json, fw_final_vfy_e2e_all.json"
+   },
+   {
+    "id": "e2e_flow",
+    "status": "not_measured",
+    "severity": "blocker",
+    "command": "node _harness/e2e.mjs flow --out _harness/_reports/fw_final_idle_e2e_flow.json",
+    "load": "2.49->3.53",
+    "measured": "PASS: dodge, ready check and server down ok, 0 console errors. Load clause not met at the end reading. The same three journeys also passed inside both e2e_all runs",
+    "bar": "dodge, ready check and server down all ok, load <3",
+    "report": "_harness/_reports/fw_final_idle_e2e_flow.json"
+   },
+   {
+    "id": "input_latency",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "node _harness/probe_input_latency.mjs --tag fw_final_vfy --only input",
+    "load": "2.49->2.77 (valid). The two earlier runs read 2.51->3.86 and 2.98->3.74 and do not count; their numbers were similar: marker p95 19.2, 19.3 ms, motion p95 29, 30 ms",
+    "measured": "n=50: marker p95 19.6 ms (2 frames = 33.4 ms), motion p95 31.4 ms (bar 83.7), 0 with no marker or motion, attackAsMove 0, attackMarkMissing 0; marker frames 39 at 1, 11 at 2. Prints input/camera PASS. Only one valid run; the claim's bar says both runs, the brief asked for one",
+    "bar": "marker p95 <=2 frames, motion p95 <=67 ms + 1 frame, 0 orders with no marker or motion, 0 attacks sent or drawn as a move, 0 attacks with no marker",
+    "report": "_harness/_reports/fw_CW1_input_latency_fw_final_vfy.json, fw_final_vfy_input_lat.log"
+   },
+   {
+    "id": "audio_mix",
+    "status": "fail",
+    "severity": "major",
+    "command": "node _harness/probe_audio_mix.mjs --out ... (driver with a 1200 s limit; my rerun, ended by me at 20 min; a scratch copy with --maps rift --laning 40 and one added log line, ended at 200 s)",
+    "load": "2.67->3.55; 2.63->2.86; about 3",
+    "measured": "No number: the probe never finishes RIFT, 3 of 3. RIFT took about 216 s from match start on the last good log. The scratch copy shows why: AudioContext state 'running', page visible and focused, match time advancing, but ctx.currentTime frozen at 0.00533 s for every 2 s poll, so the loop on ct - startCt never exits. The same harness passed at 11-06 12:49 (floor lift 3.2 dB). Other audio probes in this sweep ran normally. git log shows no commit under src/audio or to src/ui/app.tsx since then. Not established whether this is the probe's ScriptProcessor tap, Chrome or the client. RIFT floor lift M2 is not read",
+    "bar": "RIFT floor lift M2 >=1 dB and the probe's own gates",
+    "report": "_harness/_reports/fw_final_idle_audio_mix.log, fw_final_vfy_audio_mix.log",
+    "fixHint": "The sampling loop has no deadline, so add one. Then find why the context clock stops with only this probe's tap attached."
+   },
+   {
+    "id": "audio_sync",
+    "status": "not_measured",
+    "severity": "major",
+    "command": "node _harness/probe_audio_runtime.mjs sync --out ... (2 runs)",
+    "load": "2.50->3.16 and 2.77->3.15; both end over 3",
+    "measured": "All 3 runs pass both times, 0 notMeasured. pump-late p95 3.0, 2.8, 2.9 and 2.6, 2.7, 2.9 ms; offset p95 about 33-34 ms against budget 42.72. Max pump-late 37.7 ms once. Inside the bar but at the load limit",
+    "bar": "all 3 runs pass with rAF gates armed (pump-late p95 <=3 ms)",
+    "report": "_harness/_reports/fw_final_idle_audio_sync.json, fw_final_vfy_audio_sync.json"
+   },
+   {
+    "id": "audio_match",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_audio_runtime.mjs match --fighter burdam --seed 21; --fighter lisvel --seed 15; added --fighter lisvel --seed 16",
+    "load": "2.72->3.01; 2.67->4.08; 2.86->2.57. Not a frame-timing gate",
+    "measured": "Master I -19.39 (burdam, 0.11 from the low edge), -17.31, -16.85 LUFS. Announcer peak over sfx p99 5.99, 5.59, 3.78 dB. Heal gate true. enemyDown fires for burdam (3). At the named lisvel seed 15 it is NOT measured: enemyNotYoursInSight 0, gate null, despite exit 0 and PASS. Seed 16, a seed I chose for this, measured it for lisvel: 2 in sight, 2 fired, all gates true",
+    "bar": "master -18 +/- 1.5 LUFS, announcer peak >=3 dB over sfx p99, heal chimes <=6 a minute, enemyDown fires, both seats",
+    "report": "_harness/_reports/fw_final_idle_audio_match_quiet.json, fw_final_idle_audio_match_loud.json, fw_final_vfy_audio_match_loud2.json"
+   },
+   {
+    "id": "audio_dead",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_audio_runtime.mjs dead --out ...",
+    "load": "2.73->5.04",
+    "measured": "7 of 7 probe gates true",
+    "bar": "the probe's own gates",
+    "report": "_harness/_reports/fw_final_idle_audio_dead.json"
+   },
+   {
+    "id": "audio_music",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_audio_music.mjs; --m4a",
+    "load": "2.82->3.09; 2.87->4.07",
+    "measured": "17 of 17 gates, exit 0, ogg and m4a. Clicks gate is close on m4a: overStepDb -0.93, overHfDb -1.31",
+    "bar": "17 gates, exit 0, both runs",
+    "report": "_harness/_reports/fw_final_idle_audio_music.json, fw_final_idle_audio_music_m4a.json"
+   },
+   {
+    "id": "audio_ultid",
+    "status": "pass",
+    "severity": "major",
+    "command": "~/Developer/forgeflow-games/.venv/bin/python3 _harness/probe_audio_ultid.py",
+    "load": "3.55->3.43; offline",
+    "measured": "exit 0; 0 library cues under any ult; 66 review pairs outside the take-to-take spread",
+    "bar": "exit 0",
+    "report": "_harness/_reports/fw_final_idle_audio_ultid.log"
+   },
+   {
+    "id": "overlay",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/overlay_regress.mjs",
+    "load": "2.98->2.98",
+    "measured": "prints overlay_regress: PASS",
+    "bar": "prints overlay_regress: PASS",
+    "report": "_harness/_reports/fw_final_idle_overlay.log"
+   },
+   {
+    "id": "hud_renders",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/hud_renders.mjs --at 100",
+    "load": "2.98->3.45",
+    "measured": "exit 0; ledger on screen at 1116,72, 184x20; renders 0, changes 0. Weak reading: nothing changed in the 6 s window, so once-per-change was not exercised",
+    "bar": "exit 0; ledger line on screen, renders at most once per change",
+    "report": "_harness/_reports/fw_final_idle_hud_renders.log"
+   },
+   {
+    "id": "icons",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/icon_probe.mjs --out ...",
+    "load": "3.65->3.65; not timing",
+    "measured": "items 38/40 px p50 min 66/66, p95 min 192/192; abilities p50 min 66/65, p95 min 190/193; 0 failures, 0 missing. Abilities at 38 px sit exactly on the p95 bar",
+    "bar": "p50 >=60 and p95 >=190 at 38 and 40 px; ground rules hold; 0 missing",
+    "report": "_harness/_reports/fw_final_idle_icons.json"
+   },
+   {
+    "id": "camera_live",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_input_latency.mjs --tag fw_final_vfy --only input (also prints the camera section)",
+    "load": "2.49->2.77; the dedicated --only camera run read 2.16->3.82",
+    "measured": "input/camera PASS in both",
+    "bar": "prints input/camera PASS",
+    "report": "_harness/_reports/fw_final_vfy_input_lat.log, fw_final_idle_camera_live.log"
+   },
+   {
+    "id": "kit_hue",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_kit_hue.mjs --live",
+    "load": "2.99->3.08; not timing",
+    "measured": "64/64 slots measured and passed, min signature 0.533, max team light 0.292, 0 not measured, 1 retried (ervet.a3)",
+    "bar": "64/64 slots signature share >=0.5, team light <=0.35 on a3 and ult",
+    "report": "_harness/_reports/fw_final_idle_kit_hue.log"
+   },
+   {
+    "id": "skin_hue",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_kit_hue.mjs --skins --live",
+    "load": "2.92->3.23; not timing",
+    "measured": "18/18 passed, min signature 0.519, max team light 0.294",
+    "bar": "each skin's a1 and ult signature share >=0.5; team light <=0.35 (ruling 19)",
+    "report": "_harness/_reports/fw_final_idle_skin_hue.log"
+   },
+   {
+    "id": "combat_polish",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_combat_polish.mjs ult,hold --ults all",
+    "load": "2.86->3.66; frames stepped, not wall timing",
+    "measured": "16 ults: first-beat core min x2.06, lift adds max 0.036, box white max 0.32. Hold discMs min 167 (tunlan), exactly on the bar. The probe prints the centre clause but does not gate it, so I read it: 11 ults centre on or near the victim, ardit is a tie with caster on victim, and burdam, ilsheta, sukri, ulkro centre on the caster (19 px vs 342). Their kit text makes all four caster-centred (targeting self or within N m of the caster), so the shape's centroid is the caster and the clause holds",
+    "bar": "ult all 16: first-beat core >=x2.0, lift adds <=0.10 white, boxWhite <=0.35, centre nearer victim or centroid; hold discMs >=167",
+    "report": "_harness/_reports/fw_final_idle_combat_polish.log"
+   },
+   {
+    "id": "ge1_cost",
+    "status": "not_measured",
+    "severity": "major",
+    "command": "node _harness/gfx_ge_frames.mjs --tag fw_final_idle_ge1_high --uniform uGeStone --a 0 --b 1 --gpu 1 --q high; same with _ultra --q ultra",
+    "load": "readings 2.75-3.82, mostly over 3",
+    "measured": "GPU ms p25, mean of 4 a vs 4 b blocks. High: RIFT 41.1 vs 42.0, BRIDGE 31.4 vs 31.4, FRAY bimodal 18-50 in both arms, unusable. Ultra: RIFT 47.2 vs 46.6, BRIDGE 39.6 vs 39.5, FRAY 54.1 vs 53.9. No cost above the noise, about +/-1 ms; a real cost under that cannot be excluded",
+    "bar": "report ms; no numeric bar given",
+    "report": "_harness/_reports/gfx_ge_fw_final_idle_ge1_high.json, gfx_ge_fw_final_idle_ge1_ultra.json"
+   },
+   {
+    "id": "dynres_metal",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_dynres_metal.ts",
+    "load": "3.76->3.76; a model run, no GPU timing",
+    "measured": "prints PASS; left 1.0 at 2.0 s, end 1.30, last 8 s 60.1 fps; one slow window in four held 1.00; timer untrusted. This is a simulated cost trace, so it says nothing about the live gpubound tail",
+    "bar": "prints PASS",
+    "report": "_harness/_reports/fw_final_idle_dynres_metal.log"
+   },
+   {
+    "id": "camera_geometry",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_camera.ts; node _harness/probe_camera_edge.ts; node _harness/probe_camera_lock.ts",
+    "load": "3.76->3.76; offline",
+    "measured": "Planted-foot slip median 6.5 % of speed, max 9.1 %, 16 fighters, 0 fails, 0 warns. camera_lock 17 passed, 0 failed. camera_edge exit 0: edge 0.5->0.31, corner 0.75->0.526 on all three maps",
+    "bar": "median planted-foot speed <=10% of moveSpeed; camera_lock exit 0; camera_edge's own output",
+    "report": "_harness/_reports/fw_CW1_camera.json, fw_final_idle_camera_edge.json, fw_final_idle_camera_lock.log"
+   },
+   {
+    "id": "bar_clearance",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_bar_clearance.ts",
+    "load": "3.76->3.86; offline",
+    "measured": "bar clearance PASS, 0 fails; named parts mostly 0 % half-covered, one case 7 % on run, none over 10 %",
+    "bar": "named parts half-covered in <=10% of idle and run cases",
+    "report": "_harness/_reports/fw_CW1_bar_clearance.json, fw_final_idle_bar_clearance.log"
+   },
+   {
+    "id": "camjump",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_camjump.mjs",
+    "load": "3.86->5.07; counts, not timing",
+    "measured": "12 jumps, 104 bodies in view on the first frame, 0 not drawn. Control with re-cull off: 108 of 108 not drawn, so the probe can fail",
+    "bar": "0 bodies dropped on the first frame after a jump",
+    "report": "_harness/_reports/fw_CW1_camjump.json, fw_final_idle_camjump.log"
+   },
+   {
+    "id": "crowd_accent",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/probe_crowd_accent.mjs --tag fw_final_idle",
+    "load": "5.07->5.19; pixel counts, not timing",
+    "measured": "PASS. Tail shown: shieldwick 1.016, greatwick 1.001, glimwick 0.983 of full, floor 0, no fail lines. accentLod control 0.273-0.874, so the probe can tell the difference",
+    "bar": "shipped vs full within 3% per def, no empty crop, noise floor under 1% of full",
+    "report": "_harness/_reports/fw_final_idle_crowd_accent.json"
+   },
+   {
+    "id": "value",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 --tag fw_final_idle --shots 0 --report fw_final_idle_value.json",
+    "load": "5.19->5.44; pixel values, not timing",
+    "measured": "104 PASS lines, 0 FAIL, all 6 map and tier runs present",
+    "bar": "no FAIL in the log; exit code means nothing",
+    "report": "_harness/_reports/fw_final_idle_value.json, fw_final_idle_value.log"
+   },
+   {
+    "id": "monster_iou",
+    "status": "pass",
+    "severity": "major",
+    "command": "node _harness/value_probe.mjs --maps rift --tiers high --monsters only --t 1000 --seed 23 --monsterPhases 8 --monsterSpawnFacing 1 --tag fw_final_idle_mon --report fw_final_idle_mon.json",
+    "load": "5.44->3.65; not timing",
+    "measured": "I computed this from the report: cross-camp median 0.40 over 33 pairs, leaving out gloamoth|gloamoth_little 0.80, stilltusk|stilltusk_young 0.75, stray_numeral|stray_tick 0.61 as same-camp pairs. Max cross-camp 0.53. Single-pair values above 0.50 are information under ruling 24",
+    "bar": "cross-camp median IoU at camp facing <=0.50 (ruling 24)",
+    "report": "_harness/_reports/fw_final_idle_mon.json"
+   },
+   {
+    "id": "typecheck",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s typecheck",
+    "load": "3.29->3.29",
+    "measured": "exit 0",
+    "bar": "exit 0",
+    "report": "_harness/_reports/fw_final_vfy_typecheck.log"
+   },
+   {
+    "id": "content_check",
+    "status": "pass",
+    "severity": "blocker",
+    "command": "npm run -s content:check",
+    "load": "3.29->3.29",
+    "measured": "exit 0, 'OK (check only, nothing written): 0 warnings'; no allow-missing flag",
+    "bar": "exit 0, no allow-missing flag",
+    "report": "_harness/_reports/fw_final_vfy_content.log"
+   },
+   {
+    "id": "snap_stub_look",
+    "status": "pass",
+    "severity": "major",
+    "command": "fresh frame: BRIDGE, High, seed 7, t 75, zoom 28.5, focus 78,22, 1920x1080, 0 console errors",
+    "load": "2.7, not timing",
+    "measured": "Looked at it by eye. North stub reads as cleaved stone plates with loose shards at the foot; the old vertex fan is gone. South twin reads as a broken top. No face, hood or mask read. The round socket on the north stub's left is the one detail to watch from another angle. This is my eye on one frame, not a scored parity review",
+    "bar": "BRIDGE Snap stub reads as a stone break at the game camera; no sensitivity read",
+    "report": "/private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/idle/snap_crop.png; _design/reviews/gfx/GE_snap_stub_ab.png"
+   }
+  ],
+  "notes": "VERDICT: NOT CLEAN. 2 fails carry the weight: match_memory (blocker, RIFT as second match 3433-3461 MB against 3000, a plateau over the bar for the full 5 minutes) and audio_mix (major, probe hangs 3 of 3, context clock frozen). match_leave_journey is also a fail (2 of 3 runs). Blockers not measured: perf_realtime (92.1, 96.9, 95.6 %, all under 99, all busy), perf_gpubound_tail (58.5, 56.6, 57.5, 60 fps, all busy), e2e_all and e2e_flow (function passes, load clause missed). Also not measured: audio_sync, ge1_cost. Load: across the 5.5 hours the machine read about 2.2-3.8 even between runs, and a Chrome run pushes it over 3 (peaks 4-5.8). Top CPU at rest: booted iOS Simulator runtime processes (pids 26344, 26305, about 12-25 % each, left alone as instructed), diagnosticd, coreaudiod, sysmond, and at times TGOnDeviceInferenceProviderService, runningboardd and proactiveeventtrackerd. Timing gates that need a clean load<3 window are not reachable until that eases. How this was measured, which departs from the brief: the previous step's queue driver was still running when I started (pid 48158, orphaned, already running perf_prod). I did not kill a process I had not started and running alongside it would have spoiled both, so I let it finish (21:18-00:18) and read its raw logs, ignoring the claims. Names fw_final_idle_* are its output. Names fw_final_vfy_* are my own later runs of match memory, gpubound, calibrate, input latency, audio sync, e2e all, realtime, audio mix and lisvel seed 16. Gates with only fw_final_idle_* evidence were run once, by that driver, under the exact commands, not repeated by me. Things I ended or added: I ended my own stuck audio_mix rerun at 20 min, and my scratch diagnostic at 200 s. The driver's first audio_mix was killed by its own 1200 s limit. The diagnostic was a scratchpad copy of the probe with one log line; nothing under _harness was edited. Harness gap: perf_1080 --calibrate-only prints GATE PASS with no note at load 3.43->3.63. perf_1080 prints PASS inside a busy gpubound row. Tracked reports rewritten by runs were restored by the driver, with copies in _harness/_reports/fw_final_idle_snap and fw_final_vfy_snap. HEAD a33d403ef throughout; no src or content commits during the runs. Verdict file: _design/reviews/fixwaves/final_idle_verify.json, committed and pushed as 8df33fcfc (its own commits field is empty because the hash did not exist when it was written).",
+  "commits": [
+   "8df33fcfc"
+  ]
+ }
+}
