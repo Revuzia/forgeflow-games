@@ -172,5 +172,5 @@ Metered gates do not cover these. Do them once on the final catalog.
 
 ## Notes
 
-1. **`gen_store` and `lisvel_almanac`.** Plain `node tools/gen_store.ts` exits 1 and writes nothing while any paid skin is under its floor. `lisvel_almanac` reads dE 16.6 against 18, a known open art item, and is sold at the standard price via `--provisional`. `node tools/gen_store.ts --check --provisional` tells you whether `content/store.json` is otherwise current. Once the art passes, run `node tools/gen_store.ts && npm run content` to restore its 1,500 price and its Featured and New eligibility.
+1. **`gen_store` floors.** Plain `node tools/gen_store.ts` exits 1 and writes nothing while any paid skin is under its floor. Today all 32 pass, with no provisional skin (`lisvel_almanac` dE 25.5, 1,500 price). `--provisional` writes anyway and sells a skin under its floor at the standard price. `node tools/gen_store.ts --check --provisional` tells you whether `content/store.json` is otherwise current. Once the art passes, run `node tools/gen_store.ts && npm run content` to restore the skin's price and its Featured and New eligibility.
 2. **`value_probe` always exits 0.** It has no failing exit code, so judge it with `grep FAIL` on its log, never by the exit code.
