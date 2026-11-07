@@ -1,0 +1,301 @@
+{
+ "probe": "probe_audio_mix",
+ "laningS": 180,
+ "shortS": 60,
+ "maps": {
+  "rift": {
+   "you": {
+    "fighter": "nurrow",
+    "team": 0
+   },
+   "trimGain": 1.413,
+   "seconds": 180.5,
+   "matchTime": [
+    30.2,
+    210.6
+   ],
+   "emitters": [
+    {
+     "cue": "amb_rift_air",
+     "role": "ambient.map_rift.bed",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_rift_canopy",
+     "role": "ambient.map_rift.amb_rift_canopy_motes",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_rift_water",
+     "role": "ambient.map_rift.amb_rift_shallows_glint",
+     "playing": true,
+     "att": 0
+    },
+    {
+     "cue": "amb_rift_insects",
+     "role": "ambient.map_rift.amb_rift_shallows_insects",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_lamp_flame",
+     "role": "ambient.map_rift.amb_rift_resin_flame",
+     "playing": true,
+     "att": 0.21
+    },
+    {
+     "cue": "amb_wren",
+     "role": "ambient.map_rift.dialwren",
+     "playing": true,
+     "att": 1
+    }
+   ],
+   "ambienceCuesLogged": 6,
+   "ambienceCues": [
+    "amb_rift_insects",
+    "amb_wren",
+    "amb_lamp_flame",
+    "amb_rift_water",
+    "amb_rift_canopy",
+    "amb_rift_air"
+   ],
+   "shortTermLufs": {
+    "master": {
+     "p10": -23.9,
+     "p50": -20.1,
+     "p90": -17.1
+    },
+    "music": {
+     "p10": -32.2,
+     "p50": -30.7,
+     "p90": -29.6
+    },
+    "ambience": {
+     "p10": -30.2,
+     "p50": -26.5,
+     "p90": -23.2
+    },
+    "sfx": {
+     "p10": -200.7,
+     "p50": -27.6,
+     "p90": -23.3
+    },
+    "masterNoAmbience": {
+     "p10": -26.6,
+     "p50": -22,
+     "p90": -18.3
+    },
+    "masterNoAmbienceUntrimmed": {
+     "p10": -25,
+     "p50": -21.1,
+     "p90": -17.7
+    }
+   },
+   "musicThroughMasterP50": -32.6,
+   "floorLiftDb": 2.7,
+   "floorLiftUntrimmedDb": 1.1,
+   "ambienceVsMusicP50Db": 4.2
+  },
+  "bridge": {
+   "you": {
+    "fighter": "sukri",
+    "team": 0
+   },
+   "trimGain": 1.413,
+   "seconds": 60.4,
+   "matchTime": [
+    30.1,
+    90.6
+   ],
+   "emitters": [
+    {
+     "cue": "amb_bridge_air",
+     "role": "ambient.map_bridge.bed",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_bridge_updraft",
+     "role": "ambient.map_bridge.amb_bridge_updraft",
+     "playing": true,
+     "att": 0.81
+    },
+    {
+     "cue": "amb_bridge_creak",
+     "role": "ambient.map_bridge.amb_bridge_chalk_dust",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_lamp_flame",
+     "role": "ambient.map_bridge.amb_bridge_resin_flame",
+     "playing": true,
+     "att": 0
+    },
+    {
+     "cue": "amb_wren",
+     "role": "ambient.map_bridge.dialwren",
+     "playing": true,
+     "att": 0.68
+    }
+   ],
+   "ambienceCuesLogged": 5,
+   "ambienceCues": [
+    "amb_wren",
+    "amb_lamp_flame",
+    "amb_bridge_updraft",
+    "amb_bridge_creak",
+    "amb_bridge_air"
+   ],
+   "shortTermLufs": {
+    "master": {
+     "p10": -20.4,
+     "p50": -14.9,
+     "p90": -12.8
+    },
+    "music": {
+     "p10": -29.7,
+     "p50": -28.3,
+     "p90": -27.1
+    },
+    "ambience": {
+     "p10": -38.4,
+     "p50": -33.4,
+     "p90": -26
+    },
+    "sfx": {
+     "p10": -30,
+     "p50": -21.1,
+     "p90": -17
+    },
+    "masterNoAmbience": {
+     "p10": -22.3,
+     "p50": -15,
+     "p90": -12.9
+    },
+    "masterNoAmbienceUntrimmed": {
+     "p10": -21.2,
+     "p50": -14.9,
+     "p90": -12.9
+    }
+   },
+   "musicThroughMasterP50": -30.2,
+   "floorLiftDb": 1.9,
+   "floorLiftUntrimmedDb": 0.8,
+   "ambienceVsMusicP50Db": -5.1
+  },
+  "fray": {
+   "you": {
+    "fighter": "ardit",
+    "team": 2
+   },
+   "trimGain": 1.413,
+   "seconds": 60.5,
+   "matchTime": [
+    30.2,
+    90.7
+   ],
+   "emitters": [
+    {
+     "cue": "amb_fray_murmur",
+     "role": "ambient.map_fray.bed",
+     "playing": true,
+     "att": 1
+    },
+    {
+     "cue": "amb_fray_bunting",
+     "role": "ambient.map_fray.bunting",
+     "playing": true,
+     "att": 0.88
+    },
+    {
+     "cue": "amb_fray_lantern",
+     "role": "ambient.map_fray.amb_fray_lantern_glow",
+     "playing": true,
+     "att": 0.87
+    },
+    {
+     "cue": "amb_lamp_flame",
+     "role": "ambient.map_fray.amb_fray_lamp_flame",
+     "playing": true,
+     "att": 0.69
+    },
+    {
+     "cue": "amb_wren",
+     "role": "ambient.map_fray.dialwren",
+     "playing": true,
+     "att": 1
+    }
+   ],
+   "ambienceCuesLogged": 5,
+   "ambienceCues": [
+    "amb_fray_bunting",
+    "amb_wren",
+    "amb_lamp_flame",
+    "amb_fray_murmur",
+    "amb_fray_lantern"
+   ],
+   "shortTermLufs": {
+    "master": {
+     "p10": -22.3,
+     "p50": -20.1,
+     "p90": -16.7
+    },
+    "music": {
+     "p10": -30,
+     "p50": -28.3,
+     "p90": -27.3
+    },
+    "ambience": {
+     "p10": -35,
+     "p50": -27.7,
+     "p90": -24.7
+    },
+    "sfx": {
+     "p10": -200.7,
+     "p50": -32.9,
+     "p90": -23.8
+    },
+    "masterNoAmbience": {
+     "p10": -25,
+     "p50": -21.1,
+     "p90": -17.1
+    },
+    "masterNoAmbienceUntrimmed": {
+     "p10": -23.2,
+     "p50": -20.8,
+     "p90": -16.9
+    }
+   },
+   "musicThroughMasterP50": -30.2,
+   "floorLiftDb": 2.7,
+   "floorLiftUntrimmedDb": 0.9,
+   "ambienceVsMusicP50Db": 0.6
+  }
+ },
+ "sink": "fake (--disable-audio-output)",
+ "settings": {
+  "master": 0.8,
+  "music": 0.6,
+  "sfx": 0.8,
+  "voice": 0.9,
+  "ui": 0.7,
+  "ambience": 0.6,
+  "muteInBackground": true,
+  "mono": false,
+  "softenLoud": false
+ },
+ "logs": [
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check",
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check",
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check"
+ ],
+ "failures": [],
+ "notMeasured": [],
+ "pass": true
+}

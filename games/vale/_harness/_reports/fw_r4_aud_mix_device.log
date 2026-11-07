@@ -1,0 +1,20 @@
+# device 02:53:42 load { 159.65 56.82 23.89 }
+[heavy] pw /?dev=1&render=0&autopilot=1&autoflow=1: waiting (all 3 slots busy) — slot0: pid 16717 node:gfx high 1600x900@1; slot1: pid 15735 node:pw /; slot2: pid 16008 node:pw /
+[heavy] pw /?dev=1&render=0&autopilot=1&autoflow=1: waiting (all 3 slots busy) — slot0: pid 16717 node:gfx high 1600x900@1; slot1: pid 15735 node:pw /; slot2: pid 16008 node:pw /
+[heavy] pw /?dev=1&render=0&autopilot=1&autoflow=1: waiting (all 3 slots busy) — slot0: pid 16717 node:gfx high 1600x900@1; slot1: pid 15735 node:pw /; slot2: pid 16008 node:pw /
+[heavy] pw /?dev=1&render=0&autopilot=1&autoflow=1: got slot2 after 158s
+[162s] rift queued rift_coop
+[182s] rift match {"fighter":"lisvel","team":0}
+[237s] rift NOT MEASURED the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.1 s
+[240s] bridge queued bridge_standard
+[281s] bridge match {"fighter":"marund","team":0}
+[334s] bridge NOT MEASURED the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.4 s
+[338s] fray queued fray_standard
+[367s] fray match {"fighter":"odrum","team":3}
+[416s] fray NOT MEASURED the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 51.9 s
+NOT MEASURED
+  rift: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.1 s
+  bridge: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.4 s
+  fray: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 51.9 s
+report → _harness/_reports/fw_r4_aud_mix_device.json
+# exit 2 03:01:02 load { 221.12 96.98 48.94 }

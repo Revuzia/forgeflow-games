@@ -1,0 +1,495 @@
+{
+ "probe": "fw_r4_aud_ctxclock",
+ "at": "2026-11-07T08:50:50.261Z",
+ "steps": {
+  "bare": {
+   "verdict": "frozen",
+   "wallS": 5.02,
+   "clockS": 0.005,
+   "ctFirst": 0,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {},
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 0.1897999999821186,
+     "state": "running",
+     "ct": 0,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    },
+    {
+     "wall": 5.2085,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    }
+   ]
+  },
+  "menu": {
+   "verdict": "frozen",
+   "wallS": 7.02,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 2.2764000000059603,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 7.292200000017881,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 9.297800000011922,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  },
+  "matchStart": {
+   "verdict": "frozen",
+   "wallS": 5.05,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 29.62630000001192,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": -4.866666666666666,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 34.67930000001192,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 0.20000000000000018,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  },
+  "match": {
+   "verdict": "frozen",
+   "wallS": 10.06,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 64.73,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 30.233333333333334,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 70.07059999999404,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 35.6,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 74.79120000001788,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 40.3,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  }
+ },
+ "info": {
+  "kickResume": {
+   "verdict": "frozen",
+   "wallS": 4.01,
+   "clockS": 0,
+   "ctFirst": 0.010666666666666666,
+   "ctLast": 0.010666666666666666,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {},
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0.005333333333333333,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 6.235899999976158,
+     "state": "running",
+     "ct": 0.010666666666666666,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0.005333333333333333,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    },
+    {
+     "wall": 10.250299999982118,
+     "state": "running",
+     "ct": 0.010666666666666666,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0.005333333333333333,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    }
+   ]
+  },
+  "kickNewContext": {
+   "verdict": "frozen",
+   "wallS": 4.02,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": false,
+   "spyLast": {},
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 11.28,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": false,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    },
+    {
+     "wall": 15.297299999982119,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": false,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    }
+   ]
+  },
+  "bareFakeSink": {
+   "verdict": "advancing",
+   "wallS": 5.01,
+   "clockS": 5.013,
+   "ctFirst": 0.010666666666666666,
+   "ctLast": 5.024,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {},
+   "outLat": 0.016,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 5.0026676666666665,
+    "pt": 5186.300000011921
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 0.17390000000596045,
+     "state": "running",
+     "ct": 0.010666666666666666,
+     "base": 0.005333333333333333,
+     "outLat": 0.016,
+     "ts": {
+      "ct": 0,
+      "pt": 172.7000000178814
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    },
+    {
+     "wall": 5.1885999999940395,
+     "state": "running",
+     "ct": 5.024,
+     "base": 0.005333333333333333,
+     "outLat": 0.016,
+     "ts": {
+      "ct": 5.0026676666666665,
+      "pt": 5186.300000011921
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    }
+   ]
+  }
+ },
+ "logs": [
+  "[warning] [vale] session: accept: no ready check"
+ ],
+ "pass": false
+}

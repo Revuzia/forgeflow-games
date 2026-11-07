@@ -1,0 +1,460 @@
+{
+ "probe": "fw_r4_aud_ctxclock",
+ "at": "2026-11-07T08:48:47.929Z",
+ "steps": {
+  "bare": {
+   "verdict": "frozen",
+   "wallS": 5.02,
+   "clockS": 0.005,
+   "ctFirst": 0,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {},
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 0.28020000001788137,
+     "state": "running",
+     "ct": 0,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    },
+    {
+     "wall": 5.3042000000178815,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {}
+    }
+   ]
+  },
+  "menu": {
+   "verdict": "frozen",
+   "wallS": 7.03,
+   "clockS": 0.005,
+   "ctFirst": 0,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 2.241699999988079,
+     "state": "running",
+     "ct": 0,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 7.265,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 9.27530000001192,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": null,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  },
+  "matchStart": {
+   "verdict": "frozen",
+   "wallS": 5.02,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 31.347,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": -4.733333333333333,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 36.36459999999404,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 0.2666666666666666,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  },
+  "match": {
+   "verdict": "frozen",
+   "wallS": 39.14,
+   "clockS": 0,
+   "ctFirst": 0.005333333333333333,
+   "ctLast": 0.005333333333333333,
+   "states": [
+    "running"
+   ],
+   "sameCtx": true,
+   "spyLast": {
+    "suspend": 0,
+    "close": 0,
+    "resume": 1,
+    "setSinkId": 0,
+    "created": 1
+   },
+   "outLat": 0,
+   "base": 0.005333333333333333,
+   "ts": {
+    "ct": 0,
+    "pt": 0
+   },
+   "vis": [
+    "visible"
+   ],
+   "sample": [
+    {
+     "wall": 66.32840000000596,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 30.233333333333334,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 71.349,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 35.233333333333334,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 76.36830000001193,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 40.266666666666666,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 81.38580000001193,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 45.266666666666666,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 86.40290000000596,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 50.3,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 91.42090000000596,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 55.3,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 96.43809999999404,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 60.33333333333333,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 101.45290000000595,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 65.33333333333333,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    },
+    {
+     "wall": 105.46559999999404,
+     "state": "running",
+     "ct": 0.005333333333333333,
+     "base": 0.005333333333333333,
+     "outLat": 0,
+     "ts": {
+      "ct": 0,
+      "pt": 0
+     },
+     "same": true,
+     "t": 69.36666666666666,
+     "vis": "visible",
+     "focus": true,
+     "spy": {
+      "suspend": 0,
+      "close": 0,
+      "resume": 1,
+      "setSinkId": 0,
+      "created": 1
+     }
+    }
+   ]
+  }
+ },
+ "logs": [
+  "[warning] [vale] session: accept: no ready check"
+ ],
+ "pass": false
+}

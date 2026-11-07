@@ -1,0 +1,8 @@
+[8s] bare {"verdict":"frozen","wallS":5.02,"clockS":0.005,"ctFirst":0,"ctLast":0.005333333333333333,"states":["running"],"sameCtx":true,"spyLast":{},"outLat":0,"base":0.005333333333333333,"ts":{"ct":0,"pt":0},"vis":["visible"]}
+[19s] menu {"verdict":"frozen","wallS":7.03,"clockS":0.005,"ctFirst":0,"ctLast":0.005333333333333333,"states":["running"],"sameCtx":true,"spyLast":{"suspend":0,"close":0,"resume":1,"setSinkId":0,"created":1},"outLat":0,"base":0.005333333333333333,"ts":{"ct":0,"pt":0},"vis":["visible"]}
+[19s] queued rift_coop
+[46s] matchStart {"verdict":"frozen","wallS":5.02,"clockS":0,"ctFirst":0.005333333333333333,"ctLast":0.005333333333333333,"states":["running"],"sameCtx":true,"spyLast":{"suspend":0,"close":0,"resume":1,"setSinkId":0,"created":1},"outLat":0,"base":0.005333333333333333,"ts":{"ct":0,"pt":0},"vis":["visible"]}
+[115s] match {"verdict":"frozen","wallS":39.14,"clockS":0,"ctFirst":0.005333333333333333,"ctLast":0.005333333333333333,"states":["running"],"sameCtx":true,"spyLast":{"suspend":0,"close":0,"resume":1,"setSinkId":0,"created":1},"outLat":0,"base":0.005333333333333333,"ts":{"ct":0,"pt":0},"vis":["visible"]}
+FAIL  bare=frozen menu=frozen matchStart=frozen match=frozen
+report → /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_reports/fw_r4_aud_ctxclock.json
+exit 1

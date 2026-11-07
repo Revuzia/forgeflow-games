@@ -1,0 +1,15 @@
+# fake 03:01:02 load { 221.12 96.98 48.94 }
+[heavy] probe_audio_mix fake-sink: waiting (all 3 slots busy) — slot0: pid 19412 node:pw /; slot1: pid 15735 node:pw /; slot2: pid 20144 node:gfx high 1600x900@1
+[heavy] probe_audio_mix fake-sink: got slot1 after 7s
+[13s] rift queued rift_coop
+[34s] rift match {"fighter":"nurrow","team":0}
+[248s] rift {"emitters":6,"playing":6,"logged":6,"st":{"master":{"p10":-23.9,"p50":-20.1,"p90":-17.1},"music":{"p10":-32.2,"p50":-30.7,"p90":-29.6},"ambience":{"p10":-30.2,"p50":-26.5,"p90":-23.2},"sfx":{"p10":-200.7,"p50":-27.6,"p90":-23.3},"masterNoAmbience":{"p10":-26.6,"p50":-22,"p90":-18.3},"masterNoAmbienceUntrimmed":{"p10":-25,"p50":-21.1,"p90":-17.7}}}
+[250s] bridge queued bridge_standard
+[286s] bridge match {"fighter":"sukri","team":0}
+[382s] bridge {"emitters":5,"playing":5,"logged":5,"st":{"master":{"p10":-20.4,"p50":-14.9,"p90":-12.8},"music":{"p10":-29.7,"p50":-28.3,"p90":-27.1},"ambience":{"p10":-38.4,"p50":-33.4,"p90":-26},"sfx":{"p10":-30,"p50":-21.1,"p90":-17},"masterNoAmbience":{"p10":-22.3,"p50":-15,"p90":-12.9},"masterNoAmbienceUntrimmed":{"p10":-21.2,"p50":-14.9,"p90":-12.9}}}
+[384s] fray queued fray_standard
+[408s] fray match {"fighter":"ardit","team":2}
+[500s] fray {"emitters":5,"playing":5,"logged":5,"st":{"master":{"p10":-22.3,"p50":-20.1,"p90":-16.7},"music":{"p10":-30,"p50":-28.3,"p90":-27.3},"ambience":{"p10":-35,"p50":-27.7,"p90":-24.7},"sfx":{"p10":-200.7,"p50":-32.9,"p90":-23.8},"masterNoAmbience":{"p10":-25,"p50":-21.1,"p90":-17.1},"masterNoAmbienceUntrimmed":{"p10":-23.2,"p50":-20.8,"p90":-16.9}}}
+PASS: ambience plays on every map; the laning mix has a floor above the music alone
+report → _harness/_reports/fw_r4_aud_mix_fake.json
+# exit 0 03:09:28 load { 53.12 39.45 37.61 }

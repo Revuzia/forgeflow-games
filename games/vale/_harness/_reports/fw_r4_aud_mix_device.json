@@ -1,0 +1,67 @@
+{
+ "probe": "probe_audio_mix",
+ "laningS": 180,
+ "shortS": 60,
+ "maps": {
+  "rift": {
+   "notMeasured": "the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.1 s",
+   "matchTime": [
+    30,
+    50.1
+   ],
+   "ctx": [
+    0.005333333333333333,
+    0.005333333333333333
+   ]
+  },
+  "bridge": {
+   "notMeasured": "the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.4 s",
+   "matchTime": [
+    30.6,
+    50.36666666666667
+   ],
+   "ctx": [
+    0.005333333333333333,
+    0.005333333333333333
+   ]
+  },
+  "fray": {
+   "notMeasured": "the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 51.9 s",
+   "matchTime": [
+    30.266666666666666,
+    51.93333333333333
+   ],
+   "ctx": [
+    0.005333333333333333,
+    0.005333333333333333
+   ]
+  }
+ },
+ "sink": "device",
+ "settings": {
+  "master": 0.8,
+  "music": 0.6,
+  "sfx": 0.8,
+  "voice": 0.9,
+  "ui": 0.7,
+  "ambience": 0.6,
+  "muteInBackground": true,
+  "mono": false,
+  "softenLoud": false
+ },
+ "logs": [
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check",
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check",
+  "[warning] The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+  "[warning] [vale] session: accept: no ready check"
+ ],
+ "failures": [],
+ "notMeasured": [
+  "rift: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.1 s",
+  "bridge: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 50.4 s",
+  "fray: the AudioContext clock froze at 0.00533 s (state 'running') for 20 s of wall time while the match ran to 51.9 s"
+ ],
+ "pass": false
+}
