@@ -24,7 +24,10 @@ export async function open(path = '/?dev=1', o = {}) {
   const browser = await chromium.launch({
     channel: 'chrome',
     headless: process.env.VALE_HEADED !== '1',
-    args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
+    // o.fakeAudio (round 5): Chrome's fake output device (--disable-audio-output), whose clock runs when the Mac's own
+    // output is stalled
+    args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+      ...(o.fakeAudio ? ['--disable-audio-output'] : [])],
   });
   browser.on('disconnected', release);
   const context = await browser.newContext({ viewport: { width: o.width ?? 1920, height: o.height ?? 1080 }, deviceScaleFactor: 1 });

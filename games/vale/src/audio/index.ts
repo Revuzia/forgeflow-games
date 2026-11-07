@@ -204,6 +204,14 @@
 //               own sounds 'area.<its vfx>' (a passive's area: Vashil's chord); a blow the Ringshade muffled (the
 //               damage event's `shaded`, on a structure: too few of the striker's Wicks guard it) plays 'hitShaded'
 //               with the hit under it at SHADED_GAIN, an ability's kit 'hit' too (the same tick's shaded damage)
+//   release     (round 5 AUD-3) a source the engine stops (a bed, a voice, an emitter, a jump's old source) lets go of its
+//               buffer and leaves the graph once its fade is due by WALL clock: a stalled or switched output device (Bluetooth
+//               headphones gone, a sleeping device, a held coreaudiod) freezes the context clock, so a stop scheduled on it is
+//               never reached and the source would stay a pending activity holding its decoded file for the session (a
+//               bed is 12-61 MB). The engine watches the clock (CLOCK_*): while it stands still (or the context is not
+//               running) a stop frees at once and no new one-shot starts; a one-shot is also freed at its natural end by wall
+//               clock. When the clock moves again (statechange, devicechange, the watch) the bed the screen wants is the one
+//               playing, once: a retired bed's sources have no buffer left to sound
 // The context starts suspended (browser autoplay rules) and resumes on the first pointer/key gesture.
 
 import type { MatchClient } from '../contracts/session.ts';
@@ -405,12 +413,22 @@ const ALERT_EVENT_ROLES = ['countdown', 'matchStart'];
 /** the alert path's lowest gain (linear, −8 dB): the queue pop (−14 LUFS momentary, about −3 dBFS sample peak as
  *  shipped) then still peaks above −12 dBFS at the output whatever the UI slider says */
 const ALERT_FLOOR = 0.4;
+/** the clock watch (see `release` in the header): over at least CLOCK_WINDOW_S of wall time, a context clock that moved
+ *  less than CLOCK_MIN_RATE of it is stalled */
+const CLOCK_WINDOW_S = 1;
+const CLOCK_MIN_RATE = 0.25;
+/** a retired source's wall-clock check comes this long after its stop is due (s) */
+const RETIRE_SLACK_S = 0.05;
 
 /** a one-shot, from the moment it is admitted (its slot is held while its file decodes: `src` null until it starts;
  *  `dead` when it was freed before starting); `rank` = priority + log10(audibility) (see `priority`); `pooled` false
  *  for the gate cues */
 interface Voice { src: AudioBufferSourceNode | null; gain: GainNode | null; cue: string; bus: Bus; priority: number; rank: number; pooled: boolean;
-  started: number; dead?: boolean }
+  started: number; dead?: boolean; nodes?: AudioNode[] }
+/** what a retired source is waiting for (see `release` in the header): 'stop' a fade-out asked for (freed at once when
+ *  the clock stalls), 'voice' a one-shot's natural end (a stale one-shot is freed on a stall too), 'piece' a bed piece's
+ *  natural end (kept through a stall: it plays on when the clock comes back) */
+type RetireKind = 'stop' | 'voice' | 'piece';
 
 class Engine implements ValeAudioPort {
   readonly log: string[] = [];
@@ -549,6 +567,14 @@ class Engine implements ValeAudioPort {
   /** the attached match's map while its emitters wait for the context */
   private ambMap: string | null = null;
   private ambDuck: GainNode | null = null;
+  /** the clock watch (see `release` in the header): the last baseline (wall s, ctx s) and whether the clock stands */
+  private clockWall = 0;
+  private clockCtx = 0;
+  private stalled = false;
+  /** retired sources not freed yet: their free() and what they wait for */
+  private readonly dying = new Map<() => void, RetireKind>();
+  /** dev / probes: what the release did (freed by kind and by how: ended, due by wall clock, a stall) */
+  readonly releaseStats = { retired: 0, ended: 0, due: 0, stall: 0, recovered: 0, stalls: 0 };
 
   constructor(cat: CatalogLike, url: (ref: string) => string, settings: AudioSettings) {
     this.cues = cat.audio.cues;
@@ -690,7 +716,110 @@ class Engine implements ValeAudioPort {
     if (this.draftS) this.draftCalls(true);
     if (this.wantBed) this.startBed(this.wantBed);
     if (this.tick === null) this.tick = window.setInterval(() => this.update(0.25), 250);
+    // the output device going away or coming back (see `release` in the header)
+    ctx.onstatechange = () => { if (this.ctx === ctx) this.clockEvent(); };
+    try { navigator.mediaDevices?.addEventListener?.('devicechange', () => { if (this.ctx === ctx) this.clockEvent(true); }); } catch { /* no media devices */ }
     return ctx;
+  }
+
+  // ── release (see `release` in the header) ──────────────────────────────────────────────────────
+  /** a source leaves: stopped at `at` (ctx time) when `kind` is 'stop', else it ends there on its own. Once that is due
+   *  it is disconnected with `nodes` and drops its buffer, by whichever comes first: its onended, the wall clock reaching
+   *  `at` while the context clock does too, the context clock standing still, or (a stop) a stall */
+  private retire(src: AudioBufferSourceNode | null, nodes: readonly (AudioNode | null | undefined)[], at: number, kind: RetireKind, then?: () => void): void {
+    const ctx = this.ctx;
+    let done = false;
+    const free = (how: 'ended' | 'due' | 'stall'): void => {
+      if (done) return;
+      done = true;
+      this.dying.delete(kill);
+      this.releaseStats[how]++;
+      if (src) {
+        src.onended = null;
+        try { src.stop(); } catch { /* never started, or already stopped */ }
+        try { src.disconnect(); } catch { /* not connected */ }
+        try { src.buffer = null; } catch { /* the platform keeps it: the node is unreachable once ended */ }
+      }
+      for (const n of nodes) if (n) try { n.disconnect(); } catch { /* not connected */ }
+      then?.();
+    };
+    const kill = (): void => free('stall');
+    this.releaseStats.retired++;
+    if (src && kind === 'stop') try { src.stop(at); } catch { /* never started */ }
+    if (!src || !ctx || ctx.state === 'closed' || (kind === 'stop' && (this.stalled || ctx.state !== 'running'))) { free('stall'); return; }
+    this.dying.set(kill, kind);
+    src.onended = () => free('ended');
+    let last = ctx.currentTime;
+    const check = (): void => {
+      if (done) return;
+      const now = ctx.currentTime;
+      if (now >= at || this.ctx !== ctx || ctx.state !== 'running') { free('due'); return; }
+      if (now - last < 0.01) { free('stall'); return; }          // the clock stood still since the last look
+      last = now;
+      setTimeout(check, Math.max(50, (at - now + RETIRE_SLACK_S) * 1000));
+    };
+    setTimeout(check, Math.max(50, (at - ctx.currentTime + RETIRE_SLACK_S) * 1000));
+  }
+
+  /** the clock watch, every update (see `release` in the header) */
+  private watchClock(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const w = performance.now() / 1000, c = ctx.currentTime;
+    if (ctx.state !== 'running') { this.setStalled(true); this.clockWall = w; this.clockCtx = c; return; }
+    if (!this.clockWall) { this.clockWall = w; this.clockCtx = c; return; }
+    const dw = w - this.clockWall;
+    if (dw < CLOCK_WINDOW_S) return;
+    this.setStalled(c - this.clockCtx < dw * CLOCK_MIN_RATE);
+    this.clockWall = w; this.clockCtx = c;
+  }
+
+  /** the context's state changed or an output device came or went: look at the clock afresh (a device change: the next
+   *  window decides), and ask a context the platform suspended to run again */
+  private clockEvent(device = false): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (ctx.state === 'closed') { this.dropContext(); return; }
+    if (ctx.state !== 'running') {
+      this.setStalled(true);
+      if (device || (ctx.state as string) === 'interrupted') void ctx.resume().catch(() => {});
+    }
+    this.clockWall = 0;
+    if (ctx.state === 'running' && !device) this.setStalled(false);
+  }
+
+  private setStalled(on: boolean): void {
+    if (on === this.stalled) return;
+    this.stalled = on;
+    if (on) {
+      this.releaseStats.stalls++;
+      // every fade waiting on the clock is freed now, and every one-shot (stale by the time the clock is back)
+      for (const [kill, kind] of [...this.dying]) if (kind !== 'piece') kill();
+      for (const v of [...this.voices]) if (!v.src && v.pooled) v.dead = true;
+      return;
+    }
+    this.releaseStats.recovered++;
+    // back: exactly the bed the screen wants (a retired bed has no buffers left to sound)
+    if ((this.bed?.id ?? null) !== this.wantBed) { this.stopBed(); if (this.wantBed) this.startBed(this.wantBed); }
+  }
+
+  /** the platform closed the context (it never runs again): everything on it is let go, and the next gesture or cue
+   *  builds a new one (decoded buffers are not tied to a context and stay cached) */
+  private dropContext(): void {
+    for (const kill of [...this.dying.keys()]) kill();
+    this.voices.length = 0;
+    this.bed = null;
+    const map = this.client?.setup?.map ?? null;
+    this.amb = []; this.pits.clear(); this.ambMap = map;
+    this.annNow = null;
+    this.ctx = null;
+    this.stalled = false; this.clockWall = 0; this.softOn = false;
+    this.bus.clear(); this.vduck.clear(); this.alertBus.clear();
+  }
+
+  /** dev / probes: the clock watch and what the release holds */
+  get releaseState(): { stalled: boolean; dying: number; stats: Engine['releaseStats']; clock: number | null; state: string | null } {
+    return { stalled: this.stalled, dying: this.dying.size, stats: { ...this.releaseStats }, clock: this.ctx?.currentTime ?? null, state: this.ctx?.state ?? null };
   }
 
   private applyVolumes(): void {
@@ -880,7 +1009,7 @@ class Engine implements ValeAudioPort {
     const c = this.cues[cueId];
     if (!c) return 'none';
     const ctx = this.ensure();
-    if (!ctx || ctx.state !== 'running') return 'off';
+    if (!ctx || ctx.state !== 'running' || this.stalled) return 'off';      // a stalled clock: nothing would sound (see `release`)
     const now = ctx.currentTime;
     if (c.cooldown > 0 && now - (this.lastPlay.get(cueId) ?? -1e9) < c.cooldown) return 'cooldown';
     let pan = 0, att = 1, lpf = 0;
@@ -913,23 +1042,28 @@ class Engine implements ValeAudioPort {
       const g = this.ctx.createGain();
       g.gain.value = c.gain * att * gainMul;
       let node: AudioNode = src;
+      const nodes: AudioNode[] = [g];
       if (lpf > 0) {
         const f = this.ctx.createBiquadFilter();
         f.type = 'lowpass'; f.frequency.value = lpf; f.Q.value = 0.7071;
-        node.connect(f); node = f;
+        node.connect(f); node = f; nodes.push(f);
       }
-      if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
+      if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; nodes.push(p); }
       node.connect(g).connect(into);
-      v.src = src; v.gain = g; v.started = this.ctx.currentTime;
-      src.onended = drop;
+      v.src = src; v.gain = g; v.started = this.ctx.currentTime; v.nodes = nodes;
       // a one-shot of the cue build skips most of its silent codec lead (see LEAD_SKIP_S); loops and the music bus's
       // stings (their own build) start at 0
+      let skip = 0;
       if (!c.loop && c.bus !== 'music' && buf.duration > LEAD_SKIP_S * 4) {
         const t = this.ctx.currentTime;
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(c.gain * att * gainMul, t + LEAD_RAMP_S);
         src.start(0, LEAD_SKIP_S);
+        skip = LEAD_SKIP_S;
       } else src.start();
+      // a one-shot leaves the graph at its end, by the wall clock too (see `release` in the header)
+      if (!c.loop) this.retire(src, nodes, v.started + (buf.duration - skip) / Math.max(0.01, src.playbackRate.value), 'voice', drop);
+      else src.onended = drop;
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
       this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + (c.gain * att * gainMul) ** 2);
@@ -961,7 +1095,8 @@ class Engine implements ValeAudioPort {
     if (!v.src || !v.gain) { v.dead = true; return; }        // still decoding: it never starts
     const t = this.ctx.currentTime + after;
     v.gain.gain.setTargetAtTime(0, t, fade / 3);
-    try { v.src.stop(t + fade + 0.02); } catch { /* already stopped */ }
+    const drop = (): void => { const i = this.voices.indexOf(v); if (i >= 0) this.voices.splice(i, 1); };
+    this.retire(v.src, v.nodes ?? [v.gain], t + fade + 0.02, 'stop', drop);
   }
 
   // ── music beds ────────────────────────────────────────────────────────────────────────────────
@@ -1069,6 +1204,8 @@ class Engine implements ValeAudioPort {
       bed.gain.gain.setTargetAtTime(bed.def.gain, bed.t0, XFADE_S / 3);
     } else this.joinAt(g, s, bed.t0 + at, 0, prev);
     bed.pieces.push({ src: s, gain: g });
+    // a piece plays once: it leaves the graph at its end (see `release` in the header)
+    this.retire(s, [g], Math.max(bed.t0 + at, now + 0.05) + buf.duration, 'piece');
     return g;
   }
 
@@ -1115,8 +1252,9 @@ class Engine implements ValeAudioPort {
       for (const p of bed.pieces) {
         p.gain.gain.cancelScheduledValues(now);
         p.gain.gain.setTargetAtTime(0, now + 0.05, 0.01);
-        try { p.src.stop(now + 0.15); } catch { /* not started */ }
+        this.retire(p.src, [p.gain], now + 0.15, 'stop');
       }
+      bed.pieces = [];
     }
     bed.main = s; bed.mainGain = g; bed.len = len; bed.actsFrom = Math.max(t, now) + 0.1;
     for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
@@ -1271,8 +1409,7 @@ class Engine implements ValeAudioPort {
     s.start(start, (pos - SECTION_XF_S + len) % len);
     g.gain.setValueCurveAtTime(XF_CURVES.in, start, SECTION_XF_S);
     oldGain.gain.setValueCurveAtTime(XF_CURVES.out, start, SECTION_XF_S);
-    old.onended = () => { oldGain.disconnect(); };
-    try { old.stop(at + 0.02); } catch { /* already stopped */ }
+    this.retire(old, [oldGain], at + 0.02, 'stop');
     setGain(g);
     return s;
   }
@@ -1290,11 +1427,22 @@ class Engine implements ValeAudioPort {
     this.bed = null;
     const t = this.ctx.currentTime;
     b.gain.gain.setTargetAtTime(0, t, XFADE_S / 3);
-    for (const s of [b.main, ...b.pieces.map((p) => p.src), ...b.layers.map((l) => l.src)]) if (s) try { s.stop(t + XFADE_S * 1.5); } catch { /* not started */ }
+    // its sources fade out and leave the graph when the fade is due, by the wall clock too (see `release` in the header);
+    // the bed's own gains go with the last of them
+    const srcs: [AudioBufferSourceNode, GainNode | null][] = [];
+    if (b.main) srcs.push([b.main, b.mainGain]);
+    for (const p of b.pieces) srcs.push([p.src, p.gain]);
+    for (const l of b.layers) if (l.src) srcs.push([l.src, l.srcGain]);
+    const shared: AudioNode[] = [b.gain, ...b.layers.map((l) => l.gain)];
+    let left = srcs.length;
+    const last = (): void => { if (--left <= 0) for (const n of shared) try { n.disconnect(); } catch { /* gone */ } };
+    if (!left) { left = 1; last(); }
+    for (const [s, g] of srcs) this.retire(s, [g], t + XFADE_S * 1.5, 'stop', last);
     // free its decoded files (see `memory` in the header): its sources keep theirs through the fade, then let go
     const keep = new Set(this.bedFiles(this.wantBed));
     for (const f of this.bedFiles(b.id)) if (!keep.has(f)) this.buffers.delete(f);
-    for (const l of b.layers) l.buf = null;
+    for (const l of b.layers) { l.buf = null; l.src = null; l.srcGain = null; }
+    b.main = null; b.mainGain = null; b.pieces = [];
   }
 
   /** every file of a bed: the main stem, its layers, its .m4a pieces */
@@ -1493,8 +1641,10 @@ class Engine implements ValeAudioPort {
   private fadeEmitter(ctx: AudioContext, em: Emitter): void {
     em.gain.gain.cancelScheduledValues(ctx.currentTime);
     em.gain.gain.setTargetAtTime(0, ctx.currentTime, AMB_FADE_S / 3);
-    if (em.src) try { em.src.stop(ctx.currentTime + AMB_FADE_S * 1.5); } catch { /* not started */ }
-    em.started = true;                     // a load still in flight sees it gone (not in amb / pits) and never starts
+    // the loop leaves the graph once its fade is due, by the wall clock too (see `release` in the header)
+    this.retire(em.src, [em.lpf, em.pan, em.gain], ctx.currentTime + AMB_FADE_S * 1.5, 'stop');
+    em.src = null;
+    em.started = true;                    // a load still in flight sees it gone (not in amb / pits) and never starts
   }
 
   /** start loops not yet started, place every emitter around the listener, duck the bus under a fight. The
@@ -1961,6 +2111,7 @@ class Engine implements ValeAudioPort {
 
   /** combat intensity → the bed's combat layer (bar-quantised enter/leave, tokens.audio.beds.match) */
   private update(dt: number): void {
+    this.watchClock();
     const view = this.client?.view;
     if (view && this.lastT !== null) {
       const t0 = this.lastT, t1 = view.time;
