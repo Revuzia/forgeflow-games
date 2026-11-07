@@ -83,4 +83,11 @@ test('the god\'s eye clears the deck over a warned river from the town view, not
   const cl = readFileSync(new URL('../src/render/sky/clouds.ts', import.meta.url), 'utf8');
   assert.match(cl, /uniform vec2 uLensClear/);
   assert.match(cl, /dens \*= 1\.0 - uLensClear\.y \*/);
+  // (the screen haze too: the live warning shot stayed a blue-grey wall with the deck cleared — the rain painted at
+  // intensity 3 laid 3x its fog)
+  const wf = readFileSync(new URL('../src/render/fx/weatherfx.ts', import.meta.url), 'utf8');
+  assert.match(wf, /fog = Math\.max\(fog, d\.fog \* Math\.min\(1, w\)\)/, 'a system\'s fog is capped at its intensity-1 strength');
+  assert.match(wf, /\* \(1 - 0\.85 \* \(ctx\.lensClear \?\? 0\)\)/, 'the murk clears under the lens');
+  const gf = readFileSync(new URL('../src/render/fx/godfx.ts', import.meta.url), 'utf8');
+  assert.match(gf, /ctx\.lensClear = vis\.uniforms\.uSilt \? siltLensClear\(/);
 });

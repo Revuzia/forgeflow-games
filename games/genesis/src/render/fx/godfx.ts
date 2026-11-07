@@ -47,6 +47,7 @@ import { ThrowFx } from './throwfx.ts';
 import { ScreenFx, newScreenState } from './screenfx.ts';
 import { swapPropDepth } from './propmat.ts';
 import { Rainbow } from './rainbow.ts';
+import { siltLensClear } from '../planet/silt.ts';
 import { SigilMarks } from './sigilfx.ts';
 import { sigilOfDisaster } from './sigils.ts';
 import { SignsLayer } from '../signs/signs.ts';
@@ -280,6 +281,8 @@ export class GodFx {
     ctx.ease = Math.max(ctx.dt, Math.min(0.1, Math.max(0, dt)));
     ctx.cloudBase = vis.hasClouds ? vis.cloudInner : pv.params.radius + 260;
     ctx.cloudTop = vis.hasClouds ? vis.cloudOuter : pv.params.radius + 420;
+    ctx.lensClear = vis.uniforms.uSilt ? siltLensClear([vis.camBody.x, vis.camBody.y, vis.camBody.z], vis.camBody.length() - pv.params.radius,
+      vis.uniforms.uSilt.value as Vector4[], vis.uniforms.uSiltK.value as number[]).k : 0;
     this.cloudStorms.length = 0;
     // (bolts per real second: refill the bucket)
     this.boltTokens = Math.min(4, this.boltTokens + Math.max(0, Math.min(0.1, dt)) * 2.5);

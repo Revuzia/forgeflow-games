@@ -129,3 +129,10 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   _harness/scratch/arc/render/shots-r1-render-flood4.log.
 - GATE r1-check2 launched 21:18Z (slot.sh npm run check, pid 31579) -> _harness/scratch/arc/render/r1-check2.log.
 - tower5 (r1h-tower-finished-night/day/near) chained after 31406: pid 31838
+- 21:3xZ LOOKED AT r1g-flood-warning: still a blue-grey veil (deck cleared; lens [841,1]). Cause #2: weatherfx screen
+  fog: fog = d.fog * w with the god's painted rain at intensity 3 (snow 0.2*3=0.6, gust x2) -> OD ~3 over the town
+  view. FIX: fog capped at d.fog*min(1,w); FxCtx.lensClear (godfx from siltLensClear) and wantFog *= 1-0.85*k.
+  tests render-silt 6/6 (source asserts), render-rain 2/2, tsc clean.
+- chain10 (31838) killed before it started; chain11 pid 1215: flood5 (r1i-flood-*) then tower5 (r1h-tower-*), after 31406.
+  NOTE r1-check2 (gate) started BEFORE the weatherfx edit: next gate must re-run (or trust focused tests + tsc).
+- GATE r1-check2: 823/823 pass, typecheck + detban clean (ran on the clouds fix; weatherfx/godfx edit came during it: focused tests + tsc clean). r1g-flood-god LOOKED AT: same blue-grey veil as warning (pre-weatherfx-fix vite).

@@ -92,6 +92,9 @@ export interface FxCtx {
   camFwd?: Vector3;
   /** the radius (body m, from the planet's centre) of the cloud deck's base — a funnel or a bolt reaches up to it */
   cloudBase?: number;
+  /** ARC §10 (planet/silt.ts siltLensClear k, 0..1): the god's eye over a warned river — the deck and the rain's murk
+   *  between the lens and the town are cleared so the river rising brown can be seen */
+  lensClear?: number;
   /** the radius of the cloud deck's top (a bolt starts a third of the way up into the deck) */
   cloudTop?: number;
   /** a lightning strike over a unit vector, as GodFx draws it: the cloud lit from inside, a bolt when near and not too

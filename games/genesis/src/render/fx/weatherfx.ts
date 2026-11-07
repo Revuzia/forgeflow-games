@@ -88,7 +88,9 @@ export class WeatherFx {
     const consider = (kind: string, w: number) => {
       const d = DEFS.get(kind);
       if (!d || w <= 0) return;
-      fog = Math.max(fog, d.fog * w);
+      // (a system's fog is its strength at intensity 1: the god's rain painted at intensity 3 laid 3x a snowfall's murk —
+      // OD ~3 over the town view, the white wall of the first live flood warning)
+      fog = Math.max(fog, d.fog * Math.min(1, w));
       light = Math.max(light, d.lightning * w);
       gust = Math.max(gust, d.wind * w);
       if (d.tint) { tint.x += d.tint[0] * w; tint.y += d.tint[1] * w; tint.z += d.tint[2] * w; tintW += w; }
@@ -222,7 +224,9 @@ export class WeatherFx {
     // along ~140 m of ground air — veiled the first rain's hill from 400 m at 50-80 % in a pale blue-grey, the bare
     // rock read as frost (punch P06))
     const rainK = type === 2 && precip > 6 ? 0.5 * (1 - 0.75 * smooth(40, 300, alt)) : 0;
-    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, rainK, hazeK) * low;
+    // (ARC §10: over a warned river the god's eye sees through the rain's murk to the river and the walk uphill; the
+    // falling rain and the grey light stay)
+    const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, rainK, hazeK) * low * (1 - 0.85 * (ctx.lensClear ?? 0));
     this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.ease * 0.8 + 0.02);
     if (this.fogK > 0.005) {
       const sunEl = u.dot(ctx.sunDirBody);
