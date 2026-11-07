@@ -203,7 +203,7 @@
 .tplate__status { margin-top: calc(4 * var(--px)); }
 
 /* ── top left: the Menu tab (ruling 26: the mouse path to the in-match menu). Ink plate, chalk strokes, the Esc keycap
-   quiet beside the word; 26 px tall at 1080p (0.10% of the screen), clear of the sky strip, the ally frames, the
+   quiet beside the word; 26 px tall at 1080p (103 x 26, 0.13% of the screen), clear of the sky strip, the ally frames, the
    practice tools (top 84), the shop (top 80) and the scoreboard (top 96) at every HUD scale ──────────────────────── */
 .hmenu { position: absolute; left: var(--edge); top: calc(12 * var(--px)); display: inline-flex; align-items: center; gap: calc(6 * var(--px));
   height: calc(26 * var(--px)); padding: 0 calc(7 * var(--px)) 0 calc(8 * var(--px)); border-radius: 3px; color: var(--text-2);

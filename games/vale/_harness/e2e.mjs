@@ -561,27 +561,44 @@ async function flowJourneys() {
       const notes = await page.evaluate(() => window.__notes);
       const fav = await favicon();
       const cues = await vale(page, (v, i) => v.audioLog.slice(i).map((x) => x.id), cues0);
+      // UI-4: the client is not late: Decline and Ready are on screen (in layout) as soon as the check is found
+      const buttonsAtFound = await page.evaluate(() => [...document.querySelectorAll('.readycheck button')].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.textContent.trim()));
+      expect(buttonsAtFound.includes('Decline'), 'Decline was not on screen 0.4 s after the check was found', buttonsAtFound);
       expect(notes.shown.length === 1 && /match found/i.test(notes.shown[0].title), 'no notification on the hidden-tab queue pop', notes);
       expect(fav.state === 'lit' && fav.href.startsWith('data:image/png'), 'the favicon is not badged', fav);
       expect(notes.asked === 1, 'permission was asked again', notes);
-      return { notification: notes.shown[0], favicon: fav, title: await page.title(), popCue: cues.includes('ui_queue_pop') };
+      return { notification: notes.shown[0], favicon: fav, title: await page.title(), popCue: cues.includes('ui_queue_pop'), buttonsAtFound };
     });
+    // UI-4: the ready window is 10 s of wall clock and the remind comes at 4 s. Under heavy load the harness used to
+    // spend the last seconds on its own reads and the remind step's screenshot, and the check ran out before it pressed
+    // Decline (r4 UI verify 1: 1.7 s left at the read, the shot already showed 'ran out'). The client was not late
+    // (queue_hidden asserts Decline is on screen at found). So the remind is read in ONE page call, and the return to the
+    // page and the Decline press happen inside the same step, before any screenshot; what is left on the timer at the
+    // press is recorded, and a check that ran out before the press says so instead of waiting 15 s for a gone button.
+    let declined = null;
     await step2('remind', async () => {
       const cues0 = await vale(page, (v) => v.audioLog.length);
       await waitFor(page, (v) => v.state.queue.value?.state === 'found' && (v.state.queue.value.readyTimer ?? 99) <= 3.6, 12000);
-      await page.waitForTimeout(300);
-      const cues = await vale(page, (v, i) => v.audioLog.slice(i).map((x) => x.id), cues0);
-      const notes = await page.evaluate(() => window.__notes);
-      const left = await vale(page, (v) => v.state.queue.value?.readyTimer ?? null);
-      expect(cues.includes('ui_queue_remind'), 'ui_queue_remind did not play with <= 4 s left', cues);
-      expect(notes.shown.length === 2 && notes.shown[1].renotify, 'the notification was not raised again', notes);
-      return { readyTimer: left, cues: cues.filter((c) => /queue/.test(c)), notifications: notes.shown.length, renotify: notes.shown[1].renotify };
-    });
-    await step2('decline_once', async () => {
+      const r = await page.evaluate((i) => ({ cues: window.__vale.audioLog.slice(i).map((x) => x.id), notes: structuredClone(window.__notes),
+        left: window.__vale.state.queue.value?.readyTimer ?? null }), cues0);
+      // back on the page, then Decline at once (no shot in between)
       await hide(false);
       await page.waitForTimeout(250);
       const closedOnReturn = await page.evaluate(() => window.__notes.closed);
-      await click(page.getByRole('button', { name: 'Decline' }));
+      const btn = page.getByRole('button', { name: 'Decline' });
+      const atPress = await vale(page, (v) => ({ state: v.state.queue.value?.state ?? null, left: v.state.queue.value?.readyTimer ?? null,
+        decline: [...document.querySelectorAll('.readycheck button')].some((b) => b.textContent.trim() === 'Decline' && b.getBoundingClientRect().width > 0) }));
+      if (atPress.state === 'found') expect(atPress.decline, 'the check is still open but Decline is not on screen (client)', atPress);
+      else expect(false, `harness late: the ready check closed (${atPress.state}) before the press; ${r.left} s were left at the remind read`, atPress);
+      await btn.click({ timeout: 5000 });
+      declined = { closedOnReturn, leftAtPress: atPress.left };
+      expect(r.cues.includes('ui_queue_remind'), 'ui_queue_remind did not play with <= 4 s left', r.cues);
+      expect(r.notes.shown.length === 2 && r.notes.shown[1].renotify, 'the notification was not raised again', r.notes);
+      return { readyTimer: r.left, leftAtPress: atPress.left, cues: r.cues.filter((c) => /queue/.test(c)), notifications: r.notes.shown.length, renotify: r.notes.shown[1].renotify };
+    });
+    await step2('decline_once', async () => {
+      expect(!!declined, 'Decline was not pressed', declined);
+      const { closedOnReturn } = declined;
       await page.waitForTimeout(1500);
       const c = await chromeOf(page);
       const notices = c.toasts.filter((t) => /declined/i.test(t)).length;
@@ -590,7 +607,7 @@ async function flowJourneys() {
       expect(notices === 1, 'Decline did not leave exactly one notice', c.toasts);
       expect(fav.state === 'plain', 'the favicon badge outlived the ready check', fav);
       expect(c.route === 'play' && fullClient(c), 'Play after Decline is not the full client', c);
-      return { notices, toasts: c.toasts, favicon: fav, closedOnReturn, nav: c.nav, wallet: c.wallet };
+      return { notices, toasts: c.toasts, favicon: fav, closedOnReturn, leftAtPress: declined.leftAtPress, nav: c.nav, wallet: c.wallet };
     });
     await step2('lockout_after', async () => { await lockoutClear(); return { lockoutLeft: 0 }; });
   } catch { ok2 = false; }

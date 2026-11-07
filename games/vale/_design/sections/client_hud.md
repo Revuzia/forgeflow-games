@@ -199,12 +199,12 @@ Mapped to the bible's HUD density table (1080p; scale with `access.hudScale`). S
 | Ledger line | under the sky strip, right end | about 200 x 20 (FRAY 110 x 20) | 0.19% (FRAY 0.11%) | yes | yes | yes |
 | Ally frames | left edge | 4 x 168 x 52 | 1.69% | yes | yes | no |
 | Hour Board | top right | 220 x 236 | 2.50% | no | no | yes |
-| Menu tab | top left | about 80 x 26 | 0.10% | yes | yes | yes |
-| **Always-on total** | | | | **13.89%** | **12.02%** | **13.35%** |
+| Menu tab | top left | 103 x 26 | 0.13% | yes | yes | yes |
+| **Always-on total** | | | | **13.92%** | **12.05%** | **13.38%** |
 | Kill feed (3 rows) | top right (FRAY: under the Hour Board) | contextual | 1.46% | peak | peak | peak |
 | Announcer | under the strip | about 480 x 75 | 1.73% | peak | peak | peak |
 | Feed (chat region) | bottom left | about 360 x 154 | 2.67% | peak | peak | peak |
-| **Peak total** | | | | 19.75% | 17.88% | 19.21% |
+| **Peak total** | | | | 19.78% | 17.91% | 19.24% |
 
 The always-on total stays at or under 14%, the peak under 20%. The centre 40% x 50% of the screen holds no HUD.
 
@@ -256,7 +256,7 @@ The budget is the shipped kit's (hud HUD-8, 2026-10-28). Sizes are the frame box
 - **Down:** the Dial Bar dims to 60%, a respawn ring with `hud.dead.respawn` replaces the portrait ring, the death recap (§7) opens, and shopping is allowed where the mode allows it (`hud.dead.shop`, BRIDGE and FRAY rules). Allies' frames keep updating.
 - **Shop** (RIFT at base, BRIDGE at base or while down, FRAY at a Lampwright cart): a panel left of centre with search, suggested items, the component tree and buy / sell / undo (`hud.shopui.*`); refusals show as a feed line and `ui_error`. The tile list's last row fades out over 24 px and scrolls clear of the fade, never cut through its prices (HUD-11).
 - **Surrender vote** (RIFT 12:00, BRIDGE 8:00; 4 of 5): a plate under the announcer with the tally (`hud.surrender.tally`), Yes and No keys; result lines `surrender_passed` / `surrender_failed`.
-- **In-match menu** (the Menu tab or Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing). Esc follows ruling 26: it first cancels the innermost active layer (ability aim, attack-move, the ping wheel, then the open shop), one layer per press, and the next Esc opens the menu; Esc inside the menu closes it (Resume). The **Menu tab** (`.hmenu`, `data-hud="menu"`) is the mouse path: a 26 px ink tab at the top-left corner (left 16, top 12 at 1080p, × the HUD scale) with three chalk strokes, the word Menu and a quiet `Esc` keycap; its tooltip (`hud.menu.button_tip`, `hud.menu.button_sub`) names Esc and says Esc closes aiming, the wheel or the shop first. It never covers the minimap (bottom corners), the shop (top 80), the scoreboard (top 96), the practice tools (top 84), the sky strip (centre) or the Dial Bar, at 1280x720 and 1920x1080 (`_harness/fw_r5_ui_menu.mjs`). A click opens the menu with any aim still held; the modal blocks input until it closes.
+- **In-match menu** (the Menu tab or Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing). Esc follows ruling 26: it first cancels the innermost active layer (ability aim, attack-move, the ping wheel, then the open shop), one layer per press, and the next Esc opens the menu; Esc inside the menu closes it (Resume). The **Menu tab** (`.hmenu`, `data-hud="menu"`) is the mouse path: a 26 px ink tab at the top-left corner (left 16, top 12 at 1080p, × the HUD scale) with three chalk strokes, the word Menu and a quiet `Esc` keycap (measured 103 x 26 at 1920x1080, 90 x 21 at 1280x720); its tooltip (`hud.menu.button_tip`, `hud.menu.button_sub`) names Esc and says Esc closes aiming, the wheel or the shop first. It never covers the minimap (bottom corners), the shop (top 80), the scoreboard (top 96), the practice tools (top 84), the sky strip (centre) or the Dial Bar, at 1280x720 and 1920x1080 (`_harness/fw_r5_ui_menu.mjs`). A click opens the menu with any aim still held; the modal blocks input until it closes.
 
 ### 4.9 Layout originality audit (critic ui-layout-originality, 2026-11-03)
 

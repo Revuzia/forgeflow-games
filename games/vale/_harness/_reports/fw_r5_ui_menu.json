@@ -1,0 +1,228 @@
+{
+ "probe": "fw_r5_ui_menu",
+ "at": "2026-11-07T14:06:23.091Z",
+ "build": "dev client",
+ "loadStart": 1.94,
+ "runs": [
+  {
+   "mode": "rift",
+   "size": "1280x720",
+   "checks": {
+    "esc": {
+     "esc1": {
+      "shop": 0,
+      "menu": false
+     },
+     "esc2Menu": true
+    },
+    "place": {
+     "hud": {
+      "menu": {
+       "x": 13,
+       "y": 10,
+       "w": 90,
+       "h": 21
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies"
+      ],
+      "overlaps": []
+     },
+     "shop": {
+      "menu": {
+       "x": 13,
+       "y": 10,
+       "w": 90,
+       "h": 21
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "shop"
+      ],
+      "overlaps": []
+     },
+     "scoreboard": {
+      "menu": {
+       "x": 13,
+       "y": 10,
+       "w": 90,
+       "h": 21
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "scoreboard",
+       "announcer"
+      ],
+      "overlaps": []
+     },
+     "mapLeft": {
+      "menu": {
+       "x": 13,
+       "y": 10,
+       "w": 90,
+       "h": 21
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "announcer"
+      ],
+      "overlaps": []
+     }
+    },
+    "tooltip": "Menu (Esc)Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.",
+    "click": {
+     "opened": true,
+     "box": {
+      "x": 12.796875,
+      "y": 9.59375,
+      "width": 90.03125,
+      "height": 20.796875
+     },
+     "closedByEsc": true
+    }
+   },
+   "fails": [],
+   "shotHud": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_hud.png",
+   "shotShop": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_shop.png",
+   "shotBoard": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_scoreboard.png",
+   "shotMapLeft": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_mapleft.png",
+   "shotTip": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_tip.png",
+   "shotMenu": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1280x720_menu.png",
+   "console": []
+  },
+  {
+   "mode": "rift",
+   "size": "1920x1080",
+   "checks": {
+    "esc": {
+     "esc1": {
+      "shop": 0,
+      "menu": false
+     },
+     "esc2Menu": true
+    },
+    "place": {
+     "hud": {
+      "menu": {
+       "x": 16,
+       "y": 12,
+       "w": 103,
+       "h": 26
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies"
+      ],
+      "overlaps": []
+     },
+     "shop": {
+      "menu": {
+       "x": 16,
+       "y": 12,
+       "w": 103,
+       "h": 26
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "shop",
+       "announcer"
+      ],
+      "overlaps": []
+     },
+     "scoreboard": {
+      "menu": {
+       "x": 16,
+       "y": 12,
+       "w": 103,
+       "h": 26
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "scoreboard",
+       "announcer"
+      ],
+      "overlaps": []
+     },
+     "mapLeft": {
+      "menu": {
+       "x": 16,
+       "y": 12,
+       "w": 103,
+       "h": 26
+      },
+      "seen": [
+       "minimap",
+       "mapbox",
+       "dialbar",
+       "sky",
+       "ledger",
+       "allies",
+       "announcer"
+      ],
+      "overlaps": []
+     }
+    },
+    "tooltip": "Menu (Esc)Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.",
+    "click": {
+     "opened": true,
+     "box": {
+      "x": 16,
+      "y": 12,
+      "width": 102.734375,
+      "height": 26
+     },
+     "closedByEsc": true
+    }
+   },
+   "fails": [],
+   "shotHud": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_hud.png",
+   "shotShop": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_shop.png",
+   "shotBoard": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_scoreboard.png",
+   "shotMapLeft": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_mapleft.png",
+   "shotTip": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_tip.png",
+   "shotMenu": "/Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/fw_r5_ui_menu_rift_1920x1080_menu.png",
+   "console": []
+  }
+ ],
+ "errors": [],
+ "loadEnd": 5.37,
+ "summary": {
+  "runs": 2,
+  "ok": 2,
+  "broke": 0
+ }
+}
