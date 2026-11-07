@@ -14,6 +14,7 @@
 // --trials: also the leave press after every input round from 30 s in (about 70 per match): Esc, the menu within 3 s or
 // a shot, the state and a second Esc; the menu is closed again with Esc before play goes on.
 // Exit 0 = every Esc path (and trial) reached the menu within 2 presses; 1 = one never reached it in 2; 3 = broke.
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { loadavg } from 'node:os';
@@ -31,6 +32,13 @@ const SHOTS = opt('shots', 'fw_r4_ui_leave');
 const QUEUE_CARD = { rift: 'Lantern Drill' };
 const PROD_DIR = join(HERE, '_prod', 'fw_r4_ui', 'dist');
 const TRIALS = args.includes('--trials');
+const FOOTPRINT = args.includes('--footprint');   // the memory probe's 10 s polls too (CDP process list + macOS footprint on the renderer and GPU), its exact timing
+function footprintMb(pid) {
+  try {
+    const m = /Footprint:\s+([\d.]+)\s+(MB|GB|KB)/.exec(execFileSync('footprint', ['-p', String(pid)], { encoding: 'utf8', timeout: 30000 }));
+    return m ? Math.round(Number(m[1]) * (m[2] === 'GB' ? 1024 : m[2] === 'KB' ? 1 / 1024 : 1)) : null;
+  } catch { return null; }
+}
 
 async function freePort() {
   for (let p = 5181; p <= 5189; p++) {
@@ -67,6 +75,13 @@ await context.addInitScript(() => {
   }, { capture: true });
 });
 await page.reload();
+const bcdp = FOOTPRINT ? await browser.newBrowserCDPSession() : null;
+const procs = async () => {
+  const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
+  const gpu = ps.find((x) => x.type === 'GPU');
+  const rendererMb = ps.filter((x) => x.type === 'renderer').map((x) => footprintMb(x.id) ?? 0).sort((a, b) => b - a)[0] ?? null;
+  return { rendererMb, gpuMb: gpu ? footprintMb(gpu.id) : null, load: +loadavg()[0].toFixed(2) };
+};
 
 const click = async (locator, timeout = 30000) => {
   await locator.first().waitFor({ state: 'visible', timeout });
@@ -122,7 +137,8 @@ async function journey(mode) {
   const rec = { mode, sec: SEC, aimSeenDuringPlay: 0, polls: 0, trials: [], trialShots: 0 };
   report.matches.push(rec);
   const end = Date.now() + SEC * 1000;
-  let k = 0;
+  let k = 0, lastPoll = 0;
+  rec.series = [];
   while (Date.now() < end) {
     const mm = await page.locator('.hud .mmap').first().boundingBox().catch(() => null);
     if (mm) await page.mouse.click(mm.x + mm.width * (0.5 + (k % 8) * 0.01), mm.y + mm.height * 0.5, { button: 'right' }).catch(() => {});
@@ -131,6 +147,7 @@ async function journey(mode) {
     await page.mouse.move(960 + (k % 5) * 40, 480).catch(() => {});
     await page.keyboard.press(['KeyQ', 'KeyW', 'KeyE', 'KeyR'][k % 4]).catch(() => {});
     k++;
+    if (FOOTPRINT && Date.now() - lastPoll >= 10000) { lastPoll = Date.now(); rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...(await procs()) }); }
     if (k % 4 === 0) { rec.polls++; if ((await page.locator('.aslot.is-aiming').count().catch(() => 0)) > 0) rec.aimSeenDuringPlay++; }
     await page.waitForTimeout(3000);
     // --trials: after every input round from 30 s on, the leave press itself (Esc, the menu within 3 s?), the menu

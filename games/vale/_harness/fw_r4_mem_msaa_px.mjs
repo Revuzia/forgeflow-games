@@ -41,7 +41,11 @@ for (const name of Object.keys(SRC)) {
   frames[name] = {};
   try {
     for (const q of TIERS) {
-      const { browser, page, logs } = await openBench({ q, t: T, seed: SEED, w: 1600, h: 900, dsf: 1 });
+      // a bench that does not come up inside openBench's 300 s on a loaded machine is opened again (twice at most)
+      let opened = null;
+      for (let k = 0; k < 3 && !opened; k++) { try { opened = await openBench({ q, t: T, seed: SEED, w: 1600, h: 900, dsf: 1 }); } catch (e) { console.log(`${name} ${q}: bench open ${k + 1} failed (${String(e.message).slice(0, 80)}; load ${load()})`); } }
+      if (!opened) throw new Error(`${name} ${q}: bench never opened`);
+      const { browser, page, logs } = opened;
       try {
         const spots = await B(page, (b) => { const f = b.fight(); const st = b.host.view.entities.filter((e) => e.kind === 'structure'); const s = st[Math.floor(st.length / 3)]; return { fight: [f.x, f.y], struct: [s.x, s.y] }; });
         frames[name][q] = {};
