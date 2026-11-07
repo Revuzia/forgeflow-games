@@ -330,21 +330,25 @@ export function heartWords(u: Universe, planet: number, sid?: number): string {
   const ps = p?.people;
   if (!ps) return 'There are no people here.';
   const verb: Record<string, string> = { devoted: 'bow at dusk', fearful: 'watch the sky', restless: 'murmur against you', defiant: 'raise their fists' };
-  const out: string[] = [];
+  // towns that feel alike are named together ("In Aru, Tesh and Vorn most murmur against you.")
+  const groups = new Map<string, string[]>();
   for (const st of ps.settlements) {
     if (st.fallen >= 0 || st.band || (sid !== undefined && st.id !== sid)) continue;
     const h = peekRel(u, planet, st.id)?.hearts;
     if (!h) continue;
     const shares = (['devoted', 'fearful', 'restless', 'defiant'] as const).map((k) => [k, h[k]] as const).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
     const [k0, v0] = shares[0];
-    let line = h.kind === 'quiet' || v0 < 0.15 ? `In ${st.name} they go about their days` : `In ${st.name} ${shareWords(v0)} ${verb[k0]}`;
+    let line = h.kind === 'quiet' || v0 < 0.15 ? 'they go about their days' : `${shareWords(v0)} ${verb[k0]}`;
     const more = shares.slice(1).filter(([, v]) => v >= 0.15).map(([k, v]) => `${shareWords(v)} ${verb[k]}`);
     if (more.length) line += `; ${more.join(', ')}`;
     const r = peekRel(u, planet, st.id);
     if (r && (r.pride ?? 0) >= 0.6) line += '. They are proud';
-    out.push(`${line}.`);
-    if (out.length >= 4) break;
+    const g = groups.get(line) ?? [];
+    g.push(st.name);
+    groups.set(line, g);
   }
+  const and = (n: string[]) => (n.length > 4 ? `${n.slice(0, 4).join(', ')} and ${n.length - 4} more towns` : n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]);
+  const out = [...groups.entries()].slice(0, 4).map(([line, names]) => `In ${and(names)} ${line}.`);
   return out.length ? out.join(' ') : sid !== undefined ? 'Nobody lives there now.' : 'Nobody here has a heart to read yet.';
 }
 

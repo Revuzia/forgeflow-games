@@ -62,3 +62,41 @@
 
 ### Stint 3 (2026-11-07 ~06:00Z)
 - stint-2 full gate check2.log: 798/798 PASS.
+- DONE babel (§6.8): scenarios.ts PeopleEntry `cluster`/`pride`/`prideYears`/`towerArm` + clusterPeople(); scenarios.json
+  `babel` ("One speech", plains-folk bronze, 4 x 90, mudbrick + 60 mudbrick in store). tests/arc-babel.test.ts (pass).
+  Probe _harness/arc-work/probe-babel.sh (4 seeds, log scratch/arc/babel2.log): 4/4 four towns, max pair 5.4-8.1 km,
+  langDistance 0; begun day 0.75; first tower.choice year 1.15; league langDistance 0 at 2.2 y; height 40-42 % at 2.2 y.
+  T3 (sim part) and T5 PASS. (T3 shots = render lane.)
+- DONE freeform §6.5 tower + hearts phrases: freeform-signs.ts arcIntents (first in intentSigns after `if (!p)`):
+  confuse/strike/warn/let phrase sets, negation refuses with a hint, soft phrases ("let them build", "leave them be",
+  "send a prophet to") only while a tower rises; "what are they building"/"why are they proud" -> towerWords;
+  "what do they feel"/"are they angry"/"how do the people of X feel" -> arc.ts heartWords (words, no numbers).
+  tests/arc-freeform.test.ts 3/3. (covenant/defiance/story phrases are stage B/C.)
+- M3 dusk nobow fix (see contract-changes.md stint 3): peak-relative flags + hearts keep people home (vespers.away) +
+  shunned rule. probe _harness/arc-work/probe-dusk.ts: harsh seed 1 nobow day ~12, calm seed 1 none.
+  8-seed harsh+kind via probe-m3.sh -> scratch/arc/m3b.log (launched ~06:25Z).
+- M3 RESULT (scratch/arc/m3b.log, 8 seeds, verifier probe): harsh fearful within 1 y 8/8, heart.nobow 8/8 (once each,
+  low ~20 days) PASS; M2 0.17 changes / 6 days. Calm seed: no nobow. Kind (gifts only, no bless): devoted 0/8 in 2 y --
+  the verifier's kind run with life.bless (verify-A-r1-kind.ts) takes devoted at ~day 22.6 (= 1.9 y) on seed 1 (loyalty
+  >= 0.35 is the slow gate); 8-seed form queued -> scratch/arc/kind8.log. Not yet judged.
+- heartWords groups towns that feel alike ("In Ku, Gaheis, Kith and Saabar nearly all murmur against you. They are proud.").
+- NEW _harness/probes/arc.ts (§8 probe): modes `unattended <seed> [60]` (T2, T4, M2) and `babel <seed> [2.2]` (T3/T5).
+  babel seed 1: on-site builder 80 % of sampled work hours, 1 omen by 28 %.
+  T2 runs LAUNCHED ~06:13Z via _harness/arc-work/probe-t2.sh: seeds 1-4 -> scratch/arc/t2a.log, 5-8 -> t2b.log
+  (one RESULT line per seed; ~?? min each).
+- Focused tests green after all stint-3 code: arc-babel, arc-freeform, arc-hearts, arc-tower, living-relationship,
+  living-integration, content, scenarios, determinism, living-migration (all pass). tsc clean.
+- Full gate QUEUED: waiter (pid in scratch/arc/check3.pid) waits for another lane's `npm run check` (pid 1137, same tree)
+  then runs slot.sh npm run check -> scratch/arc/check3.log.
+
+## NEXT (stint 4)
+1. Read scratch/arc/check3.log (`# fail 0`?); fix failures. If the waiter died (restart), run slot.sh npm run check once.
+2. Read t2a.log / t2b.log: T2 wants towers on 2-5/8 seeds, none before y10, median first 15-35, <= 2 attempts per seed;
+   T4: >= 50 % in <= 6 y (detail.half), >= 2 omens per tower reaching 75 % (detail.omens), onSitePct >= 80.
+   Tune TOWER.towerChance (0.06-0.30) / leaderPride if off; re-run.
+3. kind8.log: devoted within 2 y on >= 6/8 (with bless). If short, consider the devoted loyalty gate (contract §1.1).
+4. §10: "other disasters unmoved" -- compare non-flood natural disasters (kind, start, deaths) live vs cut per seed
+   (verify-A-r1-sim.ts world mode lacks these fields; extend in a copy in arc-work). Floods: verifier already measured
+   evac 9/9 = 100 %, deaths 0 vs 0. River shot: render/ui lane (river-warning.json spec ran on 5312 ~06:10Z).
+5. Tower gaps from stint 2 (let side effects, omens via omens.ts, strike via miracle, scatter >= 4 km site rule).
+6. Attended pacing T2 (scripted gentle god): first tower in 7-14 y on >= 3/8.

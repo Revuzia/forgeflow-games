@@ -17,3 +17,13 @@
   reading, a, b, dead (content.ts TEMPLATE_VARS). `tower.omen` is three ids `tower.omen.starlings|halo|lightning`;
   `tower.struck` with dead is `tower.struck.dead`; "They swore they would build again" is its own line `tower.swore`;
   the silent finish is `tower.finished.silent`. The `tower.struck` event's `tiers` is the number of tiers that fell.
+- 2026-11-07 sim (A-sim stint 3), §1.2 dusk flags: vespers attendance tops out near 0.25-0.45 even in a faithful town
+  (verifier M3: ema max 0.24-0.32), so the absolute 0.25/0.45 band never armed. Now: the town's own peak
+  (`since.duskPk`, half-life 2 y toward the ema, frozen while low) arms the flag once it reaches `ARC.duskArm` 0.18;
+  high = min(0.45, 0.85 x peak), low = min(0.25, 0.6 x peak). And hearts keep people home: of those the evening draws,
+  `ARC.duskKeep` lets go devoted/quiet 1, restless 0.6, fearful 0.3, defiant 0 (relationship.ts vespers; the rest are
+  recorded in the new optional `vespers.away`). `dusk.low` is also set when the kept-home ema (`since.duskAw`) is
+  >= `ARC.duskAway` 0.1 and above the dusk ema (the shrine empties because of their hearts); cleared at ema >= high
+  with kept-home < half the ema. The old absolute case (0.45 -> 0.25) still sets it.
+- 2026-11-07 sim (A-sim stint 3), §6.8 `babel`: a scenario PeopleEntry gains `cluster: { towns, km }`, `pride`,
+  `prideYears`, `towerArm` (scenarios.ts clusterPeople); `count` is per town in a cluster. Player-facing name "One speech".

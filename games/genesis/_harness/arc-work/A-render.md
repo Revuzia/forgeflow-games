@@ -103,3 +103,9 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
 - 06:00Z gate relaunched: bash -c 'slot.sh npm run check; echo exit $?' -> _harness/scratch/arc/render/check.log (pid file check.pid).
 - 06:10Z chain relaunched (pid file chain.pid): river-warning, render-tower, render-hearts, render-perf (perf spec cut
   to 30-frame measures; 90 never finished at load 12+). Logs shots-<spec>.log.
+- GATE GREEN 06:2xZ: npm run check (detban, tsc, suite) 798 ok / 0 not ok, "exit 0" (check.log). Includes all stint-1/2
+  render edits (HEART_WALK, siltBank, tower, defiance, idol, style ease).
+- NEW tests/render-arc-live.test.ts 1/1 (LIVE sim, not a stub): tower.begin -> PlanetSnap.towers -> rising look
+  (scaffold, piles); the BuildingBlock carries the great-tower record (catalog id from the base pack) that buildings.ts
+  skips; tower.strike -> struck look, scorched, rubble mound. (Created after the gate started: not in its 798.)
+- arc-river-before.png (06:19Z, medium, 199 ms/frame software GL) LOOKED AT: green hills, river with pale sand banks.
