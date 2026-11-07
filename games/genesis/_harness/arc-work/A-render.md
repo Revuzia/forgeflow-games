@@ -156,3 +156,10 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
 - NEW spec _harness/arc-work/specs/render-arc3.json: struck2, confuse2 (signs.hold 2.2, 5.2 km) + confuse2-near
   (hold 1.2, 1.4 km), perf2 low/medium/high (CPU work before/after/struck, 12 frames; full numbers as "[warning] PERF {...}"
   lines in the log). Launched 13:2xZ: chain pid file chain3.pid (19166) -> shots-render-arc3.log.
+- LOOKED AT arc-tower-struck2: 36 sooty blocks thrown on the mound now read as rubble (the lathe apron stays pale in
+  full sun; accepted). arc-tower-confuse2 (5.2 km, globe view): ring not visible at orbit (decal fades out there; fine:
+  it is a region-scale effect). arc-tower-confuse2-near (1.4 km): a broad ring of light across the land round the tower
+  and a thin column over it: VISIBLE, but washed near-white (hue not legible). FIX signs.ts confuseHue s 0.55 -> 0.7
+  (test: channel spread >= 0.6). Re-shot queued: render-arc3b.json (confuse3-near hold 1.2, confuse3-later hold 4.5),
+  chain3b.pid (waits chain3) -> shots-render-arc3b.log (fresh vite on 5312 after chain3 ends).
+- Gate launched 13:4xZ via slot: check3.pid -> _harness/scratch/arc/render/check3.log ("exit N" last line).

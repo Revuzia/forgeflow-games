@@ -84,5 +84,5 @@ test('the confusion ring: 8 km, its light running round the colour wheel, soft (
   assert.equal(CONFUSE_RING_M, 8000);
   const a = confuseHue(0, 0), b = confuseHue(3, 0), c = confuseHue(0, 1);
   assert.notDeepEqual(a, b); assert.notDeepEqual(a, c);
-  for (const col of [a, b, c]) for (const x of col) assert.ok(x >= 0.44 && x <= 1);
+  for (const col of [a, b, c]) { for (const x of col) assert.ok(x >= 0.29 && x <= 1); assert.ok(Math.max(...col) - Math.min(...col) >= 0.6); };
 });

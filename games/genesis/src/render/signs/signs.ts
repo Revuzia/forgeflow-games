@@ -121,8 +121,9 @@ const CONFUSE_DUR = 12;
 /** the hue of the confusion's light at an age (s), ring j: it runs round the colour wheel as it spreads */
 export function confuseHue(age: number, j: number): [number, number, number] {
   const h = (((0.08 + j * 0.33 + age * 0.11) % 1) + 1) % 1;
-  // a soft HSV (s 0.55, v 1): light, never a saturated game-UI colour
-  const f = (n: number): number => { const kk = (n + h * 6) % 6; return 1 - 0.55 * Math.max(0, Math.min(kk, 4 - kk, 1)); };
+  // a light HSV (s 0.7, v 1): the hue must read through the additive ring (s 0.55 washed to white in the stint-3 shot),
+  // never a fully saturated game-UI colour
+  const f = (n: number): number => { const kk = (n + h * 6) % 6; return 1 - 0.7 * Math.max(0, Math.min(kk, 4 - kk, 1)); };
   return [f(5), f(3), f(1)];
 }
 
