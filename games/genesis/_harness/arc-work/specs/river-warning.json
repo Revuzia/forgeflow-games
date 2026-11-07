@@ -1,0 +1,19 @@
+{
+ "_doc": "ARC §10.3: a river the day before vs during a flood's warning (DisasterView.params warning/rise/silt: higher and browner at the banks). Lookdev world, the 'river' POI, same camera. 888x500. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/river-warning.json --port=5311 > _harness/scratch/arc/shots-river.log 2>&1 &",
+ "shots": [
+  { "name": "arc-river-before", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+      "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('river'); window.__riv = p;",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 380, tilt: 62, yaw: p.heading, fov: 50, hour: 11 }); await G.frames(4); F.advance(2); await G.frames(2);",
+      "return { poi: p && { lat: p.lat, lon: p.lon } };"
+    ] },
+  { "name": "arc-river-warning", "params": "source=lookdev", "size": [888, 500], "quality": "medium", "canvasOnly": true, "frames": 1,
+    "script": [
+      "const F = window.__GENESIS_FX__; const p = window.__riv || G.poi('river');",
+      "await G.cmd({ k: 'lookdev.disaster', kind: 'flood', pos: p.pos, radius: 900, warning: -1, params: { rise: 0.85 } }); await G.step(1);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 380, tilt: 62, yaw: p.heading, fov: 50, hour: 11 }); await G.frames(4); F.advance(6); await G.step(30); await G.frames(1); F.advance(2); await G.frames(2);",
+      "const d = F.fx.vis.pv.disasters[0]; return { kind: d && d.kind, params: d && d.params };"
+    ] }
+ ]
+}
