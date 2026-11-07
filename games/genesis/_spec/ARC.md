@@ -1057,6 +1057,14 @@ declined it).
   others. The evacuation record gains `kind?: string` (`RelSettlement.evacuate.kind`, the disaster kind). Chronicle ids:
   `warning.flood` (w2) and the all-clear `flood.home` (w1, told when a flood's order is lifted and the town stands).
 
+- **Contract as built (sim lane r2, findings #5/#9):** an evacuation order now also holds people on a mission (caravans,
+  gift bearers, war bands, crews; not those afloat): standing in its radius, walking into it, or with either end of
+  their errand under an order, they are interrupted and get the evacuation (`godHooks.missionEvacuate`, people/hooks.ts;
+  `missionEvacuation`, god/precursors.ts); the errand goes on when the order lifts. Weariness no longer holds anyone
+  under an order (the tired walk out and sleep beyond it). A warned flood's own 'Flood on X.' chronicle line waits for
+  the water (`d.st.Ch`); the `evacuate` line is told as happening ("X leaves its homes before the flood comes."); the
+  flood omen readings name the god ("the god washes them clean" / "the god sends the water against them").
+
 ### 10.2 Floods the god sends (`water.flood`, `disaster.spawn flood`)
 - Unchanged in principle: a cast's own `warning` decides (the player's choice, §3.7 of LIVING). Add `flood` to the kinds
   the people can SEE coming when the cast carries a warning, so the rising river shows and the order goes out; at
