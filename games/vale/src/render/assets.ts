@@ -176,18 +176,12 @@ export class Assets {
     }
     for (const [src, l] of bySource) {
       const img = (src as { data?: unknown }).data as { close?: () => void } | undefined;
-      if (typeof ImageBitmap === 'undefined' || !(img instanceof ImageBitmap)) continue;
-      // round 4 MEM-1: a Source several of the GLB's textures share (a texCoord or transform clone, an occlusion map on
-      // the ORM image) closes once every one of them has uploaded (each draws from its own GL copy from then on)
-      const waiting = new Set<Texture>(l);
-      for (const t of l) {
-        t.onUpdate = () => {
-          waiting.delete(t);
-          if (waiting.size) return;
-          const cur = t.source.data as { close?: () => void } | null;
-          if (cur instanceof ImageBitmap) { cur.close(); this.closedBitmaps++; (t.source as { closed?: boolean }).closed = true; }
-        };
-      }
+      if (l.length !== 1 || typeof ImageBitmap === 'undefined' || !(img instanceof ImageBitmap)) continue;
+      const t = l[0];
+      t.onUpdate = () => {
+        const cur = t.source.data as { close?: () => void } | null;
+        if (cur instanceof ImageBitmap) { cur.close(); this.closedBitmaps++; (t.source as { closed?: boolean }).closed = true; }
+      };
     }
   }
 
