@@ -492,6 +492,8 @@ export class ModelLibrary {
       const base = await this.assets.model(def.art.model);
       const skin = skinRef && skinRef !== def.art.model ? await this.assets.model(skinRef) : null;
       const body: LoadedModel | null = skin?.renderable ? skin : base?.renderable ? base : null;
+      // round 4 MEM-1: a skinned seat's template reads only the base model's clips; its images can go (Assets.evictUnused)
+      if (body && base && body !== base) this.assets.markClipOnly(def.art.model);
       if (body) {
         const clips = new Map<string, AnimationClip>();
         for (const c of base?.gltf.animations ?? []) clips.set(c.name, c);
@@ -575,6 +577,11 @@ export class ModelLibrary {
     }
     return n;
   }
+
+  /** round 4 MEM-1: every GPU resource the landed templates hold (scene, hull, body LOD, crowd bake) into `out` */
+  collectInUse(out: Set<object>): void { for (const t of this.landed.values()) if (t) collectGpu(t, out); }
+  /** templates asked for that have not landed yet */
+  get pending(): number { return this.templates.size - this.landed.size; }
 
   /** every template built so far, warmed again (the match's lighting and environment are part of a program's key) */
   warmAll(): void { for (const b of this.built) this.warm(b, true); }

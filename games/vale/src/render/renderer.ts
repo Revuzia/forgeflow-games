@@ -605,6 +605,17 @@ class ValeRenderer implements Renderer {
     this.lastTick = -1;
   }
 
+  /** round 4 MEM-1: the base models whose seats wear a skin (only their clips are read) close their images, unless a
+   *  scene or a landed template draws them (assets.ts evictUnused) */
+  private evictUnusedImages(): void {
+    if (this.lib.pending > 0) return;                                      // a template still building may draw a base body
+    const inUse = new Set<object>();
+    collectGpu(this.menu.scene, inUse);
+    collectGpu(this.scene, inUse);
+    this.lib.collectInUse(inUse);
+    this.assets.evictUnused(inUse);
+  }
+
   /** perf PERF-C2: what the last match loaded and Home does not draw leaves the caches and the GPU (assets.ts) */
   lastRelease: { templates: number; models: number; textures: number; skies: number; disposed: number } | null = null;
   private releaseMatchContent(): void {
@@ -1395,7 +1406,7 @@ class ValeRenderer implements Renderer {
     // per-team unit models (art.teamModels): every side on the field, none in FFA modes
     const teams = isFfaMode(mode) ? null : [...setup.seats.map((s) => s.team), ...(map?.structures.map((s) => s.team) ?? [])];
     const refs = this.lib.refsFor(setup.seats.map((s) => ({ fighter: s.fighter, skin: s.skin })), units, teams);
-    const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r));
+    const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r, true));        // warm only (round 4 MEM-1)
     jobs.push(lodReady);                                                   // perf PERF-m5: the simplifier's WASM
     if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); for (const r of AmbientLayer.refs(map)) jobs.push(this.assets.model(r)); }
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
@@ -1404,6 +1415,7 @@ class ValeRenderer implements Renderer {
     let done = 0;
     onProgress?.(0);
     await Promise.all(jobs.map((j) => j.then(() => { done++; onProgress?.(done / jobs.length); })));
+    this.evictUnusedImages();
     // the VFX programs (every mesh shape, ribbons, decals, distortion) compile here, not on the first ultimate
     this.asIfComposer(() => this.vfx.prewarm(this.gl, this.rig.camera));
     onProgress?.(1);

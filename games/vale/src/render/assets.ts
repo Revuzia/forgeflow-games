@@ -128,9 +128,10 @@ export class Assets {
     return p.finally(() => { this.done++; this.onProgress?.(this.done, this.pending); });
   }
 
-  model(ref: string | undefined | null): Promise<LoadedModel | null> {
+  /** `warmOnly`: the caller only warms the cache (Renderer.preload), so an evicted model is not restored for it */
+  model(ref: string | undefined | null, warmOnly = false): Promise<LoadedModel | null> {
     if (!ref || !built(ref)) return Promise.resolve(null);
-    return this.loadModel(ref, this.url(ref));
+    return this.loadModel(ref, this.url(ref), warmOnly);
   }
 
   /** a model by absolute URL (dev-only stand-ins that are not catalog assets) */
@@ -139,9 +140,20 @@ export class Assets {
   /** true when a model ref is known to have failed or to be empty */
   missing(ref: string): boolean { return this.failed.has(ref); }
 
-  private loadModel(key: string, url: string): Promise<LoadedModel | null> {
+  private loadModel(key: string, url: string, warmOnly = false): Promise<LoadedModel | null> {
     this.touched.add(key);
     let p = this.models.get(key);
+    // round 4 MEM-1: an evicted model's images come back before anyone who may draw it gets it (see evictUnused)
+    const ev = this.landedModels.get(key);
+    if (p && ev?.m && !warmOnly && this.evicted.has(key)) {
+      this.evicted.delete(key);
+      const m = ev.m;
+      p = this.track(this.restoreModel(ev.url, m).then(() => m));
+      this.models.set(key, p);
+      // the closed bitmaps of a restored model close again once uploaded
+      if (this.closeBitmaps) void p.then((x) => { if (x) this.closeAfterUpload(x.gltf); });
+      return p;
+    }
     if (!p) {
       p = this.track(this.gltfLoader.loadAsync(url).then((gltf) => {
         let renderable = false, skinned = false;
@@ -238,6 +250,77 @@ export class Assets {
     return (await Promise.all(jobs)).reduce((s, x) => s + x, 0);
   }
 
+  /**
+   * round 4 MEM-1: a skinned seat's template reads only the clips of its fighter's base model (ModelLibrary.fighterTemplate
+   * marks it), so the base model's own images are decoded for nothing: a 2048² base map, the normal and ORM maps, about
+   * 18 MB of ImageBitmap per fighter for the whole match (the open bitmaps in a match were such textures, never uploaded).
+   * evictUnused() closes them when nothing in `inUse` draws that model (no default-skin template, no menu showcase) and
+   * none of them was ever uploaded; each closed source holds a 1×1 stand-in (as contextLost() does). The model is marked,
+   * and the next model() asking for it fetches and decodes its images again first (restoreModel), so whatever draws it
+   * later draws the real images. Returns the bitmaps closed.
+   */
+  markClipOnly(ref: string): void { this.clipOnly.add(ref); }
+  private readonly clipOnly = new Set<string>();
+  private readonly evicted = new Set<string>();
+  evictedBitmaps = 0;
+  evictUnused(inUse: Set<object>): number {
+    if (typeof ImageBitmap === 'undefined' || typeof ImageData === 'undefined') return 0;
+    if (this.done < this.pending) return 0;                                 // a model still landing may be about to draw one
+    const P = this.renderer.properties as unknown as { get(o: object): { __webglTexture?: unknown } };
+    let n = 0;
+    for (const key of this.clipOnly) {
+      const e = this.landedModels.get(key);
+      if (!e?.m || this.evicted.has(key)) continue;
+      const res = new Set<object>();
+      collectGpu(e.m.gltf.scene, res);
+      let drawn = false;
+      for (const x of res) if (inUse.has(x) || ((x as Texture).isTexture && P.get(x).__webglTexture !== undefined)) { drawn = true; break; }
+      if (drawn) continue;
+      let k = 0;
+      for (const x of res) {
+        const t = x as Texture;
+        const img = t.isTexture ? (t.source.data as unknown) : null;
+        if (!(img instanceof ImageBitmap) || img.width === 0) continue;
+        img.close();
+        t.source.data = new ImageData(new Uint8ClampedArray([128, 128, 128, 255]), 1, 1);
+        (t.source as { closed?: boolean }).closed = true;
+        k++;
+      }
+      if (k) { this.evicted.add(key); n += k; }
+    }
+    this.evictedBitmaps += n;
+    return n;
+  }
+
+  /** an evicted model's images, fetched and decoded again (restoreImages for one model) */
+  private restoreModel(url: string, m: LoadedModel): Promise<number> {
+    const res = new Set<object>();
+    collectGpu(m.gltf.scene, res);
+    const closed = [...res].filter((t) => (t as Texture).isTexture && ((t as Texture).source as { closed?: boolean }).closed) as Texture[];
+    if (!closed.length) return Promise.resolve(0);
+    return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url).then((fresh) => {
+      const byIndex = new Map<number, Texture>();
+      const fr = new Set<object>();
+      collectGpu(fresh.scene, fr);
+      for (const t of fr) {
+        const a = (fresh.parser.associations.get(t as Texture) as { textures?: number } | undefined)?.textures;
+        if ((t as Texture).isTexture && a !== undefined) byIndex.set(a, t as Texture);
+      }
+      let n = 0;
+      for (const t of closed) {
+        const a = (m.gltf.parser.associations.get(t) as { textures?: number } | undefined)?.textures;
+        const f = a === undefined ? undefined : byIndex.get(a);
+        if (!f) continue;
+        t.source.data = f.source.data;
+        (t.source as { closed?: boolean }).closed = false;
+        t.dispose();
+        t.needsUpdate = true;
+        n++;
+      }
+      return n;
+    }).catch(() => 0);
+  }
+
   /** start a release scope: whatever is asked for from now on is kept by the next release() */
   mark(): void { this.touched.clear(); }
 
@@ -256,7 +339,7 @@ export class Assets {
       for (const x of res) if (inUse.has(x)) { used = true; break; }
       if (used) continue;
       r.disposed += disposeGpu(res, inUse);
-      this.landedModels.delete(key); this.models.delete(key);
+      this.landedModels.delete(key); this.models.delete(key); this.evicted.delete(key); this.clipOnly.delete(key);
       r.models++;
     }
     for (const [key, t] of [...this.landedTextures]) {

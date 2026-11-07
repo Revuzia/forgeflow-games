@@ -50,7 +50,9 @@ try {
       return { mode: R.mode, reachable: list.length, list, track: window.__memTrack() };
     });
     rep.reads.push({ tag, ...r });
-    console.log(`${tag}: renderer mode ${r.mode}; live bitmaps ${r.track.bitmaps.n} (${r.track.bitmaps.mb} MB) ${JSON.stringify(r.track.bitmaps.sizes)}; reachable from the renderer ${r.reachable}`);
+    await page.screenshot({ path: join(HERE, '_shots', `fw_r4_mem_bitmaps_${tag}.png`) }).catch(() => {});
+    r.evicted = await page.evaluate(() => window.__vale.state.renderer.assets.evictedBitmaps ?? null);
+    console.log(`${tag}: renderer mode ${r.mode}; evicted so far ${r.evicted}; live bitmaps ${r.track.bitmaps.n} (${r.track.bitmaps.mb} MB) ${JSON.stringify(r.track.bitmaps.sizes)}; reachable from the renderer ${r.reachable}`);
     for (const l of r.list) console.log(`   ${l.wh} textures ${l.textures} on GPU ${l.uploaded} ${l.hook.join(',')}  ${l.who.join(' | ')}`);
   };
   await inventory('home_0');
@@ -61,6 +63,22 @@ try {
   await page.locator('.hud .dbar').first().waitFor({ state: 'visible', timeout: 300000 });
   await page.waitForTimeout(SEC * 1000);
   await inventory('match');
+  // the restore path: a default-skin template of a fighter whose base images were evicted gets its real images back
+  rep.restore = await page.evaluate(async () => {
+    const R = window.__vale.state.renderer, A = R.assets;
+    const key = [...(A.evicted ?? [])][0];
+    if (!key) return { skipped: 'nothing evicted' };
+    const f = R.catalog.fighters.find((x) => x.art.model === key);
+    if (!f) return { skipped: `no fighter for ${key}` };
+    const t = await R.lib.fighterTemplate(f.id, undefined);
+    const tex = new Set(); t?.scene.traverse((o) => { for (const m of [o.material].flat()) if (m) for (const v of Object.values(m)) if (v?.isTexture) tex.add(v); });
+    const gl = R.gl; let glErr = 0;
+    for (const x of tex) gl.initTexture(x);
+    const ctx = gl.getContext(); for (let e = ctx.getError(); e !== 0 && glErr < 10; e = ctx.getError()) glErr++;
+    const out = [...tex].map((x) => { const d = x.source.data; return `${x.name}: ${d?.constructor?.name} ${d?.width}x${d?.height} closed ${!!x.source.closed}`; });
+    return { fighter: f.id, model: key, stillEvicted: A.evicted.has(key), textures: out, glErrors: glErr };
+  });
+  console.log(`restore: ${JSON.stringify(rep.restore)}`);
   const leave = page.getByRole('button', { name: /Leave match/i }).first();
   for (let i = 0; i < 8 && !(await leave.isVisible().catch(() => false)); i++) { await page.keyboard.press('Escape'); await leave.waitFor({ state: 'visible', timeout: 2500 }).catch(() => {}); }
   await leave.click();
