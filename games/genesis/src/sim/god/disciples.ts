@@ -25,6 +25,7 @@ import { AgentFlag } from '../types.ts';
 import { GODS, MEMK, ROLE, TASK } from '../people/defs.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { godHooks } from '../people/hooks.ts';
+import { towerStands } from './tower.ts';
 import { interrupt } from '../people/people.ts';
 import { tell } from '../people/story.ts';
 import { agentName, agentRef, settlementRef, vars } from '../people/util.ts';
@@ -109,7 +110,9 @@ export function disciplesHourly(u: Universe, p: Planet): void {
       A.love[i + g] = Math.min(1, Math.round(rise(A.love[i + g], 0.006 * k0) * 1e4) / 1e4);
       A.loyalty[i + g] = Math.min(1, Math.round((A.loyalty[i + g] + 0.006 * k0) * 1e4) / 1e4);
       for (let k = 0; k < GODS; k++) if (k !== g) { A.love[i + k] = Math.round(A.love[i + k] * 0.99 * 1e4) / 1e4; A.loyalty[i + k] = Math.round(A.loyalty[i + k] * 0.99 * 1e4) / 1e4; }
-      if (A.faith[i + g] > 0.5 && hashed(A.id[o], u.tick) < 0.02) A.remember(o, MEMK.converted, u.tick, g);
+      // (ARC §2.4 let: under a tower the god let stand, a rival's word takes 0.05 sooner)
+      const bar = g !== 0 && towerStands(u, p.id, A.settlement[o]) ? 0.45 : 0.5;
+      if (A.faith[i + g] > bar && hashed(A.id[o], u.tick) < 0.02) A.remember(o, MEMK.converted, u.tick, g);
       heard++;
     }
     d.converted += heard;

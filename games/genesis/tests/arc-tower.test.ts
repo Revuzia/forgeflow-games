@@ -214,3 +214,18 @@ test('§2.2 (3) league: a kin village under the pride floor follows a proud lead
   srel(u, p.id, L.host.id).pride = TOWER.leaderPride - 0.1;
   assert.equal(towerWhyNot(u, p).find((t) => t.id === L.host.id)!.league, 1, 'nobody follows a humble leader');
 });
+
+test('§2.3 empty stores: builders who know mudbrick mould their own, so the tower rises at the full rate (T4)', async () => {
+  const { storeHas, storeTake } = await import('../src/sim/people/store.ts');
+  const L = league();
+  const tw0 = begin(L);
+  const p = L.sim.u.planets[0];
+  const x = makeCtx(L.sim.u, p);
+  const mud = x.c.items.idx('mudbrick'), brick = x.c.items.idx('brick'), block = x.c.items.idx('stone-block');
+  for (const s of [L.host, L.kin]) for (const it of [mud, brick, block]) if (it >= 0) storeTake(s, it, storeHas(s, it));
+  const h0 = tw0.height;
+  L.sim.step(x.day);
+  const tw = towerOf(L.sim);
+  const full = (0.12 * tw.builders) / (1 + h0 / tw.goal);
+  assert.ok(tw.height - h0 > 0.75 * full, `dh ${tw.height - h0} vs full ${full}`);
+});

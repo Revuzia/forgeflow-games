@@ -225,3 +225,18 @@ Shot recipe that works on this loaded machine: UI-layout shots run under G.hold(
   (fear-signed folk sheltering indoors after the storm) -> M4 frame NOT made yet.
 - 08:57Z ui-m4b.json (calm day + one lightning, camera on the densest outdoor fear/fist knot at 120 m and 45 m, then
   Hearts layer on the live heart at 1500 m): slot 2 PID 30212, port 5311, log scratch/arc/shots-m4b.log.
+- 09:2xZ ui-m4b 3/3 (LIVE, no stub) LOOKED:
+  arc-m4b-120.png: camera on the outdoor fear knot at 120 m; 33 people on screen, 17 with HeartSign fear (all signs:
+  27 fear, 9 pray, 12 none); people a few px tall at 120 m, the HUD chip ("...by the Sea" + violet eye) sits half under
+  the time panel at this framing (world label, not a defect). M4 data path: >= 5 fear-signed on screen -> MET (count).
+  arc-m4b-45.png (+ crop scratch/arc/m4b-crop.png): 16 on screen, 8 fear-signed, figures readable, some arms raised;
+  pose legibility verdict belongs to the render lane (arc-pose-fear/fist on stubs were theirs).
+  arc-m4b-layer.png (1500 m, Hearts layer on the REAL heart): violet "They watch the sky" fill over Shenyaar's
+  territory, chip with the fearful-eye glyph, legend 5 swatches + note in the layer panel -> M5/§1.4 live: OK.
+- No UI code changed in stint 4 (shots only); last gate including all UI code: A-sim check4.log 807/807 (08:38Z).
+  Focused ui-arc-* + audio-arc 19/19 at 08:45Z.
+
+## NEXT (stint 5, if any)
+UI side of §1, §2, §10 is built, ported to live src, looked at live, gate green. Nothing open in the UI lane except:
+- If the render lane wants a bigger-pose M4 frame: spec specs/ui-m4b.json (live recipe) can be reused at dist 30-60.
+- Rerun focused tests / one gate only if UI code changes (e.g. after sim/render contract changes).

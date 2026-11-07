@@ -115,3 +115,8 @@ rivals.ts:32-41), Book UI, legends.
    dusk, pride, tower; UI and render can build on `__GENESIS__.arc.stub` once the UI lane adds it.
 
 - render lane (A-render stint 3, 07:4xZ): §10.3(c) screenshot LOOKED AT and MET (river higher + browner during the warning; _shots/arc-river-before.png vs arc-river-warning.png; terrainmat shallows silt fix). Gate 798/798 green at 06:2xZ.
+
+- UI lane (A-ui stint 4, 09:2xZ): M4 LIVE (no stub) via _harness/arc-work/specs/ui-m4b.json: harsh recipe -> fearful in 7
+  days; 120 m frame _shots/arc-m4b-120.png has 17 fear-signed people on screen (>= 5); HUD chip glyph live at region
+  (arc-m4-region.png); Hearts layer on the real heart LOOKED (arc-m4b-layer.png). UI side of §1/§2/§10 complete; pose
+  legibility at 888x500 is the render lane's verdict.

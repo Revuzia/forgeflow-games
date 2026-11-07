@@ -204,6 +204,28 @@ export function towerWhyNot(u: Universe, p: Planet): { id: number; pride: number
   return out;
 }
 
+/** probe: every live town's raw §2.2 (2)/(3) inputs, for offline tuning of the trigger (no state) */
+export function towerCandidates(u: Universe, p: Planet): { id: number; pride: number; pop: number; era: number; brick: boolean; war: boolean; famine: boolean; harm: boolean; kin: number; age: number }[] {
+  if (!p.people) return [];
+  const x = makeCtx(u, p);
+  const age = r3(worldAgeYears(x));
+  const out: { id: number; pride: number; pop: number; era: number; brick: boolean; war: boolean; famine: boolean; harm: boolean; kin: number; age: number }[] = [];
+  for (const st of x.ps.settlements) {
+    if (st.band || st.fallen >= 0) continue;
+    const r = peekRel(u, p.id, st.id);
+    let kin = 1;
+    for (const o of x.ps.settlements) {
+      if (o === st || o.fallen >= 0 || o.band || o.species !== st.species) continue;
+      if (distM(x.p, o.pos, st.pos) > TOWER.leagueRadius || langDistance(o, st) > TOWER.leagueLang) continue;
+      if (popOf(x, o) < ARC.pridePop || (peekRel(u, p.id, o.id)?.pride ?? 0) >= TOWER.leaguePride) kin++;
+    }
+    out.push({ id: st.id, pride: r3(r?.pride ?? 0), pop: popOf(x, st), era: st.era, brick: !!knowsAny(x, st, ['masonry', 'bricks', 'mudbrick']),
+      war: atWar(x, st), famine: !!(st.hist && st.hist.famine >= 0),
+      harm: !!(r && r.lastHarm !== undefined && r.lastHarm >= 0 && x.tick - r.lastHarm < TOWER.harmYears * x.year), kin, age });
+  }
+  return out;
+}
+
 /** the builders' league (3): the leader and up to 5 kin towns of one speech within 12 km, nearest first */
 function leagueOf(x: PCtx, host: Settlement, needPride: boolean): Settlement[] {
   const cand: [number, Settlement][] = [];
@@ -383,6 +405,9 @@ function rising(x: PCtx, tw: TowerState): void {
       got += n; need -= n;
     }
   }
+  // what the stores lack, builders who know mudbrick mould at the tower's foot from the ground they stand on (stint-5
+  // change, §2.3: no unattended store ever held tower material, so every tower rose at half rate; contract-changes.md)
+  if (got < B && knowsAny(x, host, ['mudbrick'])) got = B;
   const have = B > 0 ? 0.5 + 0.5 * Math.min(1, got / B) : 0.5;
   const before = tw.height;
   tw.height = r3(Math.min(tw.goal, tw.height + (TOWER.rate * B * have) / (1 + tw.height / tw.goal)));
