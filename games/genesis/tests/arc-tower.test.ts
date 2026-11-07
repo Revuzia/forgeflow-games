@@ -238,3 +238,34 @@ test('§2.3 empty stores: builders who know mudbrick mould their own, so the tow
   const full = (0.12 * tw.builders) / (1 + h0 / tw.goal);
   assert.ok(tw.height - h0 > 0.75 * full, `dh ${tw.height - h0} vs full ${full}`);
 });
+
+test('§2.3 omens by fit: a halo only by day, lightning only in a storm; the league reads it (god -1) and one line is told', async () => {
+  const { sunElevation } = await import('../src/sim/people/world.ts');
+  const { stormSeverity } = await import('../src/sim/people/shelter.ts');
+  const L = league();
+  const p = L.sim.u.planets[0];
+  const x = makeCtx(L.sim.u, p);
+  let seen = 0;
+  for (let k = 0; k < 3; k++) {
+    const tw = begin(L);
+    tw.height = Math.max(tw.height, 0.25 * tw.goal - 1e-6);
+    L.sim.drainEvents();
+    const sun = sunElevation(L.sim.u, p, L.sim.u.tick, tw.pos);
+    const storm = stormSeverity(x, tw.pos, tw.cell);
+    L.sim.step(x.day);
+    const om = L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.omen') as unknown as { data: { kind: string } }[];
+    assert.equal(om.length, 1, 'one omen at 25 %');
+    const kind = om[0].data.kind;
+    assert.ok(['starlings', 'halo', 'lightning'].includes(kind), kind);
+    if (kind === 'lightning') assert.ok(storm > 0.15 || stormSeverity(x, tw.pos, tw.cell) > 0.15, 'lightning needs a storm');
+    if (kind === 'halo') assert.ok(sun > -0.5, 'a halo by day');
+    for (const id of [L.host.id, L.kin.id]) {
+      const acts = L.sim.u.god.rel!.st[`${p.id}:${id}`].acts;
+      assert.ok(acts.some((a) => a.kind === `omen:tower.${kind}` && a.god === -1), `town ${id} read the ${kind}`);
+    }
+    seen++;
+    must(L.sim, { k: 'tower.confuse' } as never);
+    L.sim.step(x.day);
+  }
+  assert.equal(seen, 3);
+});

@@ -200,3 +200,21 @@
 3. Attended pacing T2: tension recorded in contract-changes.md (stint 5) -- owner/spec call; do not tune blindly.
 4. Remaining small tower gaps: omens through omens.ts (would double the chronicle line: readOmen tells its own `omen`
    line; needs `starlings`/`halo` kinds appended to OMEN_KINDS), strike through a miracle dispatch.
+
+### Stint 6 (2026-11-07 ~10:10Z)
+- check5.log (stint-5 code): 808/808 PASS.
+- T4 on-site DIAGNOSED: probe _harness/arc-work/probe-onsite.ts <seed> [years] (babel; hourly daylight samples at the tower;
+  env SHIFT=n overrides TOWER.shift, PERIOD=d tests a day crew) + probe-walk.ts (per builder task: walk vs work ticks).
+  The host lies 1-1.5 km from the site; the walk out takes ~750 ticks (2 m/tick) vs a 360-tick shift, then builders go
+  home to drink. A day-long standing crew (tried) made it WORSE (60 %: the whole crew walks/works/drinks in step).
+  FIX: quarter-day relays kept; the hash miss now `continue`s (was `return null`, which also skipped other towers);
+  TOWER.shift 360 -> 600. Babel 2 y on-site: seed 1 83 -> 99 %, seed 2 86 -> 97 %, seed 3 97 %.
+- DONE tower gap "omens via omens.ts" (in spirit, no new OMEN_KINDS: adding kinds would leak into god.omen's enum and
+  the UI's omen tables): tower omens are picked by fit (lightning only in a storm, stormSeverity > 0.15; a halo only
+  with sunElevation > 0.1; starlings always; the turn's kind when it fits, else hash 0x70f1 among fitting), and every
+  league town reads it like a natural omen (god -1: faith +0.1, feared -> fear +0.05 / trusted -> trust +0.03,
+  godSeen, sees_god, an `omen:tower.<kind>` act). One chronicle line (the tower's own). Test arc-tower "omens by fit".
+- Strike via a miracle dispatch: NOT done, by design -- godAct(harm) + direct deaths; render draws the fall from status.
+- RUNNING (10:24Z): T2/T4 tower seeds with shift 600: slot.sh probe-t2.sh 1 3 -> scratch/arc/t2k.log, 5 -> t2l.log.
+- RUNNING: T7 8 seeds: slot.sh probe-strike.sh 1..8 (babel, rise 0.6 y, strike at default wrath in daylight, remains
+  after 5 y) -> scratch/arc/strike8.log. seed 1 quick check: 9 on site, 3 dead (<= 50 %, <= 10), remains stand.

@@ -41,9 +41,10 @@ import { die } from '../people/lifecycle.ts';
 import { cohortTotal } from '../people/cohorts.ts';
 import { tell } from '../people/story.ts';
 import { agentName, settlementRef, vars } from '../people/util.ts';
-import { distM, isLand, spotInCell } from '../people/world.ts';
+import { distM, isLand, spotInCell, sunElevation } from '../people/world.ts';
+import { stormSeverity } from '../people/shelter.ts';
 import { cellPos3, fail, ok } from './util.ts';
-import { relOf, srel, peekRel } from './regard.ts';
+import { relOf, srel, peekRel, meansNow, moveSettlement } from './regard.ts';
 import { godAct } from './belief.ts';
 import { lethality, currentWrath, WRATH_DEFAULT } from './wrath.ts';
 import { hardshipOf } from './prayers.ts';
@@ -75,8 +76,9 @@ export const TOWER = {
   rate: 0.12,
   visible: 12,
   /** a visible builder's shift at the tower (TaskSpec work; 120 -> 360 in stint 5: with 120 the site stood empty in
-   *  ~45 % of local work hours, T4) */
-  shift: 360,
+   *  ~45 % of local work hours, T4; 360 -> 600 in stint 6: the walk out from a host 1-1.5 km away took ~750 ticks,
+   *  twice the shift, and babel seed 1 had a builder on site in 83 % of daylight hours; 600 -> 99 %) */
+  shift: 600,
   /** one speech: every 2 years */
   speechYears: 2,
   hardDays: 10,
@@ -484,11 +486,32 @@ function omen(x: PCtx, tw: TowerState, host: Settlement, league: Settlement[]): 
   if (tw.omens >= 3) return;
   tw.omens++;
   const u = x.u;
-  const kind = tw.omens === 2 ? 'halo' : tw.omens === 3 ? 'lightning' : 'starlings';
+  // picked by fit (§2.3; stint 6 -- it used to be starlings / halo / lightning by turn): lightning on the scaffold only
+  // in a storm, a halo only by day, the starlings always; the turn's own kind (starlings, halo, lightning) when it fits
+  const fit: string[] = [];
+  const cell = x.ps.building(tw.building)?.cell ?? tw.cell;
+  if (stormSeverity(x, tw.pos, cell) > 0.15) fit.push('lightning');
+  if (sunElevation(u, x.p, x.tick, tw.pos) > 0.1) fit.push('halo');
+  fit.push('starlings');
+  const turn = tw.omens === 2 ? 'halo' : tw.omens === 3 ? 'lightning' : 'starlings';
+  const kind = fit.includes(turn) ? turn : fit[Math.floor(hashFloat(tw.id, tw.omens, 0x70f1) * fit.length)];
   const reader = league[Math.floor(hashFloat(tw.id, tw.omens, 0x70e9) * league.length)] ?? host;
   const m = srel(u, x.p.id, reader.id).means;
   const reading = OMENS[kind][m[2] >= m[1] ? 0 : 1];
   srel(u, x.p.id, reader.id).omens[`tower.${kind}`] = x.tick;
+  // the league reads it as the omens.ts path reads a natural omen (god -1): a little faith, the feared reading a little
+  // fear, the town has seen a sign, and the act is remembered (one chronicle line only: the tower's own, below)
+  for (const s of league) {
+    if (s.fallen >= 0) continue;
+    const mm = meansNow(x, s);
+    const trusted = mm.trust >= mm.fear;
+    moveSettlement(x, s, { faith: 0.1, fear: trusted ? 0 : 0.05, trust: trusted ? 0.03 : 0 });
+    s.recent.godSeen = x.tick;
+    for (const a of x.ps.members.get(s.id) ?? []) x.A.flags[a] |= AgentFlag.sees_god;
+    const r = srel(u, x.p.id, s.id);
+    r.acts.push({ kind: `omen:tower.${kind}`, tick: x.tick, god: -1, dead: 0, foretold: false, provoked: false, key: `omen:tower.${kind}:${x.tick}` });
+    if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);
+  }
   u.emit({ t: 'tower.omen', planet: x.p.id, pos: tw.pos, data: { tower: tw.id, kind, settlement: reader.id, reading } });
   tell(u, x.p, `tower.omen.${kind}`, vars(x, reader, -1, { host: host.name, reading }), reader, [settlementRef(x, reader)], 1);
 }
@@ -772,10 +795,12 @@ export function towerTask(x: PCtx, s: number, st: Settlement, night: boolean, pr
     }
     if (tw.host !== st.id || A.flags[s] & AgentFlag.child || A.task[s] === TASK.build) continue;
     const g = Math.max(1, grown(x, st).length);
+    // relays drawn each quarter-day, so walkers, workers and the thirsty overlap (stint 6: one crew for the whole day
+    // walked, worked and went home to drink in step, and the site stood empty in 40 % of work hours, T4)
     const period = Math.floor(x.tick / (x.day / 4));
-    if (hashFloat(A.id[s], period, 0x70eb) >= TOWER.visible / g) return null;
+    if (hashFloat(A.id[s], period, 0x70eb) >= TOWER.visible / g) continue;
     const b = x.ps.building(tw.building);
-    if (!b) return null;
+    if (!b) continue;
     return { kind: TASK.build, goal: spotInCell(x.p, b.cell, A.id[s], 0x70ec, [0, 0, 0]), goalCell: b.cell, work: TOWER.shift, target: b.id, data2: 0 };
   }
   return null;
