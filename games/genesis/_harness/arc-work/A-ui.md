@@ -218,3 +218,10 @@ Shot recipe that works on this loaded machine: UI-layout shots run under G.hold(
 - NEW spec specs/ui-m4.json (M4 LIVE, no stub: sandbox seed 1, M3 harsh recipe in the browser until query('hearts')
   says fearful, one more lightning, village at 120 m with UI + region 2500 m; returns per-agent HeartSign counts).
   Launched 08:41Z slot 2 (PID 29021, port 5311), log _harness/scratch/arc/shots-m4.log, PNGs _shots/arc-m4-*.png.
+- 08:56Z ui-m4 2/2 (LIVE): harsh recipe -> fearful after 7 days (fearful share 1.0, caption "They watch the sky");
+  per-agent signs fear 35 / none 15 of 50 -> sim sends MoverBlock.heart for real. LOOKED arc-m4-region.png (2500 m):
+  HUD chip "Shenyaar by the Sea" + violet fearful-eye glyph legible, live (no stub) -> chip at region: OK.
+  arc-m4-village.png (120 m on the settlement pos): village top-left under the time panel, hazy, no people readable
+  (fear-signed folk sheltering indoors after the storm) -> M4 frame NOT made yet.
+- 08:57Z ui-m4b.json (calm day + one lightning, camera on the densest outdoor fear/fist knot at 120 m and 45 m, then
+  Hearts layer on the live heart at 1500 m): slot 2 PID 30212, port 5311, log scratch/arc/shots-m4b.log.
