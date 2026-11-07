@@ -135,3 +135,25 @@
 - T2 rerun #2 (pooled): probe-t2.sh 1-4 -> scratch/arc/t2e.log, 5-8 -> t2f.log (08:04Z); attended t2att.log running.
   Full gate queued: slot.sh npm run check -> scratch/arc/check4.log (pid 19437 in check4.pid).
 - NOTE: render lane's slot.sh shots render-tower.json (pid 17881, port 5312) has held slot 1 since 06:32Z (> 1.5 h).
+- T2 rerun #2 RESULT (pooled material + follow rule; t2e/t2f): towers on 1/8 (seed 1 only, y34.9; half at 9.25 y,
+  abandoned at 52 %, 2 omens, on-site 97 %, league 4, one speech 0.00) -> T2 FAIL (needs 2-5/8), T4 FAIL (half > 6 y).
+  Pooling did not change seed 1: the stores hold NO tower material at all (have = 0.5 throughout).
+  Attended (t2att, gentle god answering 56-222 prayers in 20 y): 0/8 towers; leader prides 0.15-0.66 (faith lowers the
+  F term) -> attended T2 FAIL.
+- Focused after all stint-4 code: arc-tower 8/8 (2 new), arc-babel, arc-hearts, determinism, living-relationship,
+  discovery, knowledge-loss, save-continue, living-migration all pass; tsc clean.
+
+## NEXT (stint 5)
+1. Read scratch/arc/check4.log (full gate with all stint-4 code; started ~08:20Z, ~32 min). Fix any sim failure
+   (ui-thumblate is a UI-lane timing test that failed once under load in check3).
+2. T2/T4 tuning (all knobs in tower.ts TOWER; any change to a bold §2.2/§2.3 number -> ARC.md + contract-changes.md):
+   a. Material: no store ever holds mudbrick/brick/stone-block in the unattended world, so dh is always halved. Proposal:
+      for `mudbrick` the league digs its own (have = 1 when the host knows mudbrick and the site is land), or let the
+      tower's material units be bought from the store's raw clay/stone items; then half at ~3.8 y with B 9 (T4 PASS math).
+   b. Leaders: seeds 5 and 6 reach pride 0.64 at pop 54 (< leaderPop 60) and then shrink. Try leaderPop 50 (seed 5 y14
+      would then qualify; chance gate keeps "none before y10"). Re-run probe-t2.sh 1-8 (2 x ~13 min through slot.sh).
+   c. Attended: a gentle god raises faith, which lowers pride (F = 1 - faith): 0/8 by y20. The spec's attended window
+      (7-14 y) also sits under towerMinYear 10. Needs an owner/spec decision or an extra pride source for a favoured,
+      prosperous town (e.g. P/U weight) -- note it as a §8.2 tension in contract-changes.md before tuning.
+3. Rival-conversion threshold -0.05 under a standing tower (§2.4 let) still not built (find the conversion rule in
+   god/rivals.ts / belief.ts). Other stint-2 tower gaps: omens via omens.ts, strike via a miracle, scatter >= 4 km.
