@@ -109,3 +109,9 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   (scaffold, piles); the BuildingBlock carries the great-tower record (catalog id from the base pack) that buildings.ts
   skips; tower.strike -> struck look, scorched, rubble mound. (Created after the gate started: not in its 798.)
 - arc-river-before.png (06:19Z, medium, 199 ms/frame software GL) LOOKED AT: green hills, river with pale sand banks.
+- arc-river-warning.png (06:31Z) LOOKED AT vs before: water grey-brown (browner: YES). Banks STILL pixel-identical
+  (diff: only water, ocean and wind-moved foreground trees change) -> the stint-2 siltBank shows nothing. §10.3(c) NOT MET yet.
+- Probe _harness/arc-work/specs/probe-silt.json (reads the uniforms the compiled programs use, via scene.onAfterRender):
+  terrain materials DO get uSilt [-2452,620,1614 r1440] k 0.74 (lookdev planet radius ~3 km). So siltG > 0 on the
+  terrain; the bank colour terms must be producing nothing -> v2 of the probe dumps the compiled fragment source around
+  siltBank (is it the code we think?).

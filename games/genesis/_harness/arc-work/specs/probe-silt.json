@@ -1,0 +1,26 @@
+{
+ "_doc": "A-render stint 3: why the terrain banks ignore the silt zones (ARC \u00a710). Reads the uniforms the compiled terrain and water programs actually use during a flood warning at the river POI. Run via slot.sh on port 5312; read the script result in the log.",
+ "shots": [
+  {
+   "name": "arc-probe-siltdbg",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false;",
+    "let root = F.fx.group; while (root.parent) root = root.parent; root.onAfterRender = (r) => { window.__R = r; };",
+    "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.weather.clear' }); const p = G.poi('river');",
+    "await G.cmd({ k: 'lookdev.disaster', kind: 'flood', pos: p.pos, radius: 900, warning: -1, params: { rise: 0.85 } }); await G.step(1);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 380, tilt: 62, yaw: p.heading, fov: 50, hour: 11 }); await G.frames(3); F.advance(6); await G.frames(3);",
+    "const mats = new Set(); root.traverse((o) => { const m = o.material; if (m && !Array.isArray(m) && m.isMeshStandardMaterial && m.userData && m.userData.level !== undefined) mats.add(m); });",
+    "for (const m of mats) { const ob = m.onBeforeCompile; m.onBeforeCompile = (sh, r) => { ob(sh, r); sh.fragmentShader = sh.fragmentShader.replace('s.albedo = col;', 's.albedo = vec3(siltG, clamp(-uw / 12.0, 0.0, 1.0), siltBank);').replace('if ((uDebug > 1.5 && uDebug < 2.5)', 'if (true || (uDebug > 1.5 && uDebug < 2.5)'); }; m.customProgramCacheKey = () => 'probe-silt-dbg'; m.needsUpdate = true; }",
+    "await G.frames(3); return { mats: mats.size };"
+   ]
+  }
+ ]
+}
