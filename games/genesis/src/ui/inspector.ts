@@ -353,7 +353,9 @@ export class Inspector {
       b.disabled = !!o.disabled;
       b.title = o.disabled ?? `${o.label}: ${o.says}`;
       b.dataset.opt = o.id;
-      b.append(el('b', '', o.label), el('span', 'gn-decision-says', `: ${o.disabled && o.id === 'warn' ? o.disabled : o.says}`));
+      const l = el('span', 'gn-decision-l');
+      l.append(el('b', '', o.label));
+      b.append(l, el('span', 'gn-decision-says', o.disabled && o.id === 'warn' ? o.disabled : o.says));
       b.addEventListener('click', () => void this.deps.answerTower?.(ref.id, o.key).then(() => { this.lastAsk = -1e9; }));
       foot.append(b);
     }

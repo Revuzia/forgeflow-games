@@ -1,0 +1,33 @@
+{
+ "_doc": "ARC §1.4 settlement inspector Hearts section + §2.5 tower inspector card, live worker sim (sandbox, a settled town) with stubbed hearts/tower views, 888x500 with UI. Scripts end with G.hold(true) (UI screenshot on a slow software GL). Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-towercard.json --port=5311 > _harness/scratch/arc/shots-towercard.log 2>&1 &",
+ "shots": [
+  { "name": "arc-hearts-insp", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true, "frames": 1,
+    "commands": [
+      { "k": "life.spawn-people", "species": "plains-folk", "count": 40, "pos": "$poi:homestead", "as": "plains" },
+      { "k": "idea.teach", "knowledge": "fire-keeping", "settlement": "$plains" },
+      { "k": "idea.teach", "knowledge": "fire-making", "settlement": "$plains" }
+    ],
+    "wait": 5760,
+    "script": [
+      "G.hold(false); const host = vars.plains; const p = G.poi('homestead'); window.__p = p; window.__host = host;",
+      "const H = (kind, o) => Object.assign({ kind, proud: false, devoted: 0.1, fearful: 0.1, restless: 0.1, defiant: 0, pride: 0.3, defiance: 0.1, dusk: 0.3, duskYearAgo: 0.6, caption: '', line: '', remember: [], answered: '' }, o);",
+      "G.arc.stub('hearts', [{ settlement: host, heart: H('fearful', { fearful: 0.52, devoted: 0.2, proud: true, pride: 0.68, defiance: 0.22, caption: 'They watch the sky', line: 'In this town they watch the sky and speak quietly.', remember: ['the storm that took the harvest', 'the rain after the stones'] }) }]);",
+      "G.arc.stub('towers', [{ id: 7, pos: p.pos, cell: p.cell, name: 'the Tower of Kel-Amar', host, league: [host], height: 38, goal: 80, tiers: 4, material: 'mudbrick', style: 2, status: 'rising', builders: 9, begun: 0, ended: -1, answer: 'none', choiceOpen: false, canAnswer: ['confuse', 'strike', 'warn', 'let'] }]);",
+      "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 320, tilt: 55, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.step(2); await G.frames(6);",
+      "G.select({ kind: 'settlement', id: host }); await G.frames(30); const s = document.querySelector('.gn-insp-hearts'); if (s) s.scrollIntoView(); await G.frames(4);",
+      "const __r = { host, hearts: s?.textContent?.slice(0, 400) ?? null, chips: document.querySelectorAll('.gn-slabel-heart').length, towers: (await G.arc.towers()) }; G.hold(true); return __r;"
+    ] },
+  { "name": "arc-tower-card", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true, "frames": 1,
+    "script": [
+      "G.hold(false); G.select({ kind: 'tower', id: 7 }); await G.frames(20);",
+      "const q = document.querySelector('.gn-insp')?.getBoundingClientRect();",
+      "const __r = { text: document.querySelector('.gn-insp')?.textContent?.slice(0, 500), insp: q ? [q.left, q.top, q.width, q.height].map(Math.round) : null, sel: G.state().selected }; G.hold(true); return __r;"
+    ] },
+  { "name": "arc-tower-pick", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true, "frames": 1,
+    "script": [
+      "G.hold(false); G.select(null); await G.camera({ mode: 'orbit', lat: __p.lat, lon: __p.lon, dist: 420, tilt: 60, yaw: __p.heading + 25, fov: 50, hour: 10 }); await G.frames(8);",
+      "const w = window.innerWidth, h = window.innerHeight; G.click(w / 2, h / 2 - 20); await G.frames(10);",
+      "const __r = { sel: G.state().selected }; G.hold(true); return __r;"
+    ] }
+ ]
+}

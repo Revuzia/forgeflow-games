@@ -217,6 +217,8 @@ export class DecisionCard {
     const sp = this.state.step(offered, answerable, this.deps.speed(), this.deps.slowGreat());
     if (sp != null) this.deps.setSpeed(sp);
     this.draw();
+    // the inspector opens and closes under an unchanged card: keep clear of it every frame
+    if (!this.root.hidden) this.layout();
   }
 
   /** the tower's inspector card: open its choice now (while it can be answered) */
@@ -282,25 +284,28 @@ export class DecisionCard {
     if (!c) { this.root.hidden = true; return; }
     this.root.hidden = false;
     this.root.dataset.choice = c.id;
+    // (380 x 170 px: the title shares its row with Look at it / Decide later; the four answers sit two by two, each
+    // with its words in full under its name)
+    const tw = this.towers.get(c.id);
+    const foot = h('div', { class: 'gn-decision-foot' });
+    if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', on: { click: () => this.deps.lookAt(tw.planet, tw.t.pos) } }));
+    foot.append(h('button', { class: 'gn-btn', text: 'Decide later', title: 'Esc', on: { click: () => this.later() } }));
     this.root.append(
-      h('div', { class: 'gn-decision-h' }, h('b', { text: c.title }), h('span', { class: 'gn-decision-meta', text: ` · ${c.meta}` })),
+      h('div', { class: 'gn-decision-top' }, h('div', { class: 'gn-decision-h', title: c.title }, h('b', { text: c.title })), foot),
+      h('div', { class: 'gn-decision-meta', text: c.meta }),
       h('div', { class: 'gn-decision-why', text: c.why }),
     );
     const list = h('div', { class: 'gn-decision-opts' });
     for (const o of c.options) {
       const b = h('button', { class: 'gn-btn gn-decision-opt', title: o.disabled ?? `${o.label}: ${o.says}`, data: { opt: o.id } });
       b.disabled = !!o.disabled || this.busy;
-      b.append(h('span', { class: 'gn-decision-k', text: o.key }), h('b', { text: o.label }), h('span', { class: 'gn-decision-says', text: `: ${o.disabled && o.id === 'warn' ? o.disabled : o.says}` }));
+      b.append(h('span', { class: 'gn-decision-l' }, h('span', { class: 'gn-decision-k', text: o.key }), h('b', { text: o.label })),
+        h('span', { class: 'gn-decision-says', text: o.disabled && o.id === 'warn' ? o.disabled : o.says }));
       b.addEventListener('click', () => void this.choose(o));
       list.append(b);
     }
     this.root.append(list);
     if (this.note) this.root.append(h('div', { class: 'gn-decision-note', text: this.note }));
-    const tw = this.towers.get(c.id);
-    const foot = h('div', { class: 'gn-decision-foot' });
-    if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', on: { click: () => this.deps.lookAt(tw.planet, tw.t.pos) } }));
-    foot.append(h('button', { class: 'gn-btn', text: 'Decide later', title: 'Esc', on: { click: () => this.later() } }));
-    this.root.append(foot);
     this.layout();
     // focus for keys 1-4, unless the player is typing somewhere
     const ae = document.activeElement as HTMLElement | null;
@@ -312,6 +317,7 @@ export class DecisionCard {
     const insp = document.querySelector<HTMLElement>('.gn-insp:not([hidden])');
     const ir = insp && insp.offsetParent ? insp.getBoundingClientRect() : null;
     const w = 380, cx = window.innerWidth / 2;
-    this.root.classList.toggle('gn-decision-left', !!ir && ir.width > 0 && cx + w / 2 > ir.left - 8);
+    const left = !!ir && ir.width > 0 && cx + w / 2 > ir.left - 8;
+    if (left !== this.root.classList.contains('gn-decision-left')) this.root.classList.toggle('gn-decision-left', left);
   }
 }

@@ -40,21 +40,6 @@
    ]
   },
   {
-   "name": "arc-hearts-insp",
-   "params": "source=lookdev",
-   "size": [
-    888,
-    500
-   ],
-   "quality": "medium",
-   "ui": true,
-   "frames": 1,
-   "script": [
-    "G.hold(false); G.arc.later(); await G.frames(4); const s = document.querySelector('.gn-insp-hearts'); if (s) s.scrollIntoView(); await G.frames(6);",
-    "const __r = { hearts: s?.textContent?.slice(0, 300) ?? null, decision: G.arc.decision() }; G.hold(true); return __r;"
-   ]
-  },
-  {
    "name": "arc-decision-pill",
    "params": "source=lookdev",
    "size": [
@@ -65,7 +50,7 @@
    "ui": true,
    "frames": 1,
    "script": [
-    "G.hold(false); G.select(null); G.ui_.overlay('hearts'); await G.camera({ mode: 'orbit', lat: __p.lat, lon: __p.lon, dist: 2400, tilt: 35, yaw: __p.heading + 25, fov: 50, hour: 11 }); await G.frames(20);",
+    "G.hold(false); G.select(null); G.arc.later(); G.ui_.overlay('hearts'); await G.camera({ mode: 'orbit', lat: __p.lat, lon: __p.lon, dist: 2400, tilt: 35, yaw: __p.heading + 25, fov: 50, hour: 11 }); await G.frames(20);",
     "const r = document.querySelector('.gn-decision-pill')?.getBoundingClientRect();",
     "const __r = { pill: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null, decision: G.arc.decision(), legend: document.querySelector('.gn-legend')?.textContent?.slice(0, 120) }; G.hold(true); return __r;"
    ]

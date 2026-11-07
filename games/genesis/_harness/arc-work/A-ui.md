@@ -105,3 +105,20 @@ UI builds ahead on `__GENESIS__.arc.stub` (§6.7) with local mirror types in src
   lane's in-progress tower content, not UI code. Re-run them once A-sim lands tower.ts.
 - freeform EXAMPLES: not yet extended (sim freeform-signs has no arc phrases yet; add "how do the people of {town}
   feel?" once it answers).
+- 04:39Z LOOKED at _shots/arc-decision-card.png (lookdev, 888x500): card at [254,168,380,170] under the time panel,
+  not over time controls/planet bar. DEFECTS: title row clipped by the flex column (overflow:hidden header shrank to 0)
+  and every answer's words cut by an ellipsis ("they will scatter, and spe..."). FIX (decision.ts draw + styles.css):
+  children flex-shrink 0; title shares its row with Look at it / Decide later; meta on its own 10.5 px line; the four
+  answers 2x2, label line + words in full on up to two lines (line-clamp, full text in title); budget 15+18+14+28+83+12
+  = 170 px. Inspector tower buttons use one column. NOT YET RE-SHOT.
+- LOOKED at the render lane's §10.3c pair _shots/arc-river-before.png / arc-river-warning.png (+ their crop
+  _harness/scratch/arc/render/river-crop.png): during the warning the river is clearly browner/grey with silt; "higher"
+  is barely visible (sand margins near identical at this distance). Render lane owns the verdict/fix (A-render.md).
+- 04:49Z LOOKED at _shots/arc-decision-insp.png: the card stayed centred OVER the inspector (layout() ran only on a
+  redraw). FIX: DecisionCard.update calls layout() every frame while open (toggles gn-decision-left only on change).
+  Also: lookdev inspector has no story ("fabricated for the look") -> the Hearts inspector section needs source=worker.
+- 04:50Z relaunched ui-decision.json (card, card+inspector, pill+Hearts layer) PID 10203 slot 2, port 5311, log
+  _harness/scratch/arc/shots-decision.log.
+- New spec _harness/arc-work/specs/ui-towercard.json (worker sandbox town; Hearts inspector section, tower inspector
+  card via select {kind:'tower'}, tower pick by click). Queued 04:50Z ticket #28 (PID 10498) on port 5313 (5311 busy),
+  log _harness/scratch/arc/shots-towercard.log; PNGs _shots/arc-hearts-insp.png, arc-tower-card.png, arc-tower-pick.png.
