@@ -463,7 +463,6 @@ class ValeRenderer implements Renderer {
     this.sun.setQuality(this.gl, this.q.shadows);
     this.menu.sun.setQuality(this.gl, this.q.shadows);
     this.post.setQuality({ ao: this.q.ao, bloom: this.q.bloom, aa: this.q.aa, tier: this.q.tier });
-    this.assets.setModelAnisotropy(this.q.modelAnisotropy);
     this.vfx.budget = this.q.particleBudget;
     this.vfx.density = this.q.particleDensity;
     this.vfx.setLightCount(this.q.flashLights);
