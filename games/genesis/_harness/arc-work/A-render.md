@@ -36,3 +36,10 @@ Owns src/render/**, tests/render*, tests/godgen*. Shots port 5312. Bulky output:
   Idol: catalog kind 'idol' (+ /idol/ id mapping, DEFAULT_BUILDINGS entry appended), buildinggen idol(): standing stone
   (stone/earth peoples) or carved wooden post (timber), ~3 m, painted bands CLOTH[style], face, offerings.
   tests/render-arc-defiance.test.ts 4/4. NOT LOOKED AT in a shot yet (needs heart==5 stub agents + idol building).
+- Style ease (§2.6 "towns' building tint easing to their new style over 2 game days"): buildings.ts Rec.from/swapAt —
+  a building whose skey changes ONLY in style keeps drawing its old variant until a hashed moment within 2 game days
+  (sameButStyle exported, tested). tests/render-arc-tower 8/8 (incl. sameButStyle, confuseHue).
+- RUNS (01:37Z): tower shots PID 13088 (log shots-tower.log); hearts poses queued as PID 14694 (waits 13088, log
+  shots-hearts.log, spec render-hearts.json); chain PID 15127 (_harness/arc-work/render-chain.sh: waits 14694, then
+  river-warning.json, render-perf.json -> shots-river-warning.log, shots-render-perf.log). All in
+  _harness/scratch/arc/render/. PNGs in _shots/arc-*.png. After a restart: rerun render-chain.sh 0 <specs>.
