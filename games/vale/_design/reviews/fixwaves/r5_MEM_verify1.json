@@ -1,0 +1,72 @@
+{
+  "lane": "MEM",
+  "verifier": "verify 1 (adversarial)",
+  "at": "2026-11-07T11:40:00-06:00",
+  "head": "6c74dbbf6",
+  "pass": false,
+  "summary": "FAIL. I re-measured in the production client (vite build of HEAD 6c74dbbf6, clean tree) using the engineer's recommended mode: --raw-cdp --full-scale --fake-audio --track. Load was 1.9-7.7, much quieter than the engineer's 90-597 but still above 3, so the probe verdict is NOT MEASURED. The memory numbers are raw readings. Ruling 27's climb clause fails on both presets. High RIFT/BRIDGE/RIFT/RIFT peaks 2365/2519/2630/2635 MB: the second RIFT is +265 over the first. Ultra RIFT/BRIDGE/RIFT peaks 2596/2596/2755: +159. MEM-4's start transient target (about 100 MB) is missed in 3 of 7 matches: High BRIDGE +113, Ultra RIFT +106, Ultra third RIFT +140. The engineer reported -74..-303 in 10 of 11 matches. Every match is <= 3000 MB, every Home is <= 2500 MB, and the live set at Home is within +17 MB of first Home. Those clauses hold. The claim that the third RIFT's live objects match the first within about 30 MB does not hold in my High run: GL textures were 1047.6 MB median in the first RIFT and 1116.6 in the third. That includes 3 more 2048x2048 compressed textures and one more 1920x1080 RGBA16F target, held from the first second. Part of this may be roster variance. The climb is not shown to be allocator or driver retention alone. Typecheck exits 0. probe 55/55 PASS.",
+  "load": "my memory runs 1.86-7.66 (109 + 84 readings, all over the 3.0 idle bar); probe suite 3.4-3.6",
+  "items": [
+    {
+      "id": "MEM-3",
+      "claimed": "partly",
+      "status": "fail",
+      "severity": "blocker",
+      "evidence": "Command: heavy.py run -- node _harness/probe_match_memory.mjs --raw-cdp --full-scale --fake-audio --track --modes rift,bridge,rift,rift (High), then --no-build --preset ultra ... --modes rift,bridge,rift. Reports: _harness/_reports/fw_r5_memv1_high4.json and fw_r5_memv1_ultra3.json (.log). High peaks: RIFT 2365 (load max 7.08), BRIDGE 2519 (5.2), RIFT 2630 (3.93), RIFT 2635 (6.71). Climb +265, then +5 over the third match's peak, so +270 over the first RIFT: FAIL against 150. Steady-state medians (polls after 20 s) for the four High matches: totals 2273/2338/2485/2556, GPU 1631/1628/1749/1780, GL textures 1047.6/985.7/1116.6/1117.1 MB, audio 155.8/160.8/161.4/169.9, backing 174.5/175.1/186.3/179.4. Ultra peaks: RIFT 2596 (4.91), BRIDGE 2596 (7.66), RIFT 2755 (6.1). Climb +159: FAIL. Ultra steady medians: total 2430/2476/2562, GL textures 1152/1141/1177. The engineer's claim of 'live objects within about 30 MB, extra is Chrome/ANGLE retention' does not hold in my High run. The third RIFT held +69 MB of GL textures at the median and +86 MB at the end (226 textures/1134 MB vs 217/1047.6). The extra was 2048x2048 compressed x23 vs x20 (+64 MB), 1920x1080 RGBA16F x6 vs x5 (+15.8 MB; BRIDGE also had 6) and 512x512 RGBA8 x38 vs x33. It was present from 1 s (1103 vs 1032 MB). The extra 2048 maps may be a different drafted fighter: the engineer's own first RIFTs held 1121 MB, so roster variance can explain part of it. The sixth RGBA16F 1080p target appears after BRIDGE and stays into every later RIFT. Footprint categories at about 76 s: renderer Tag 14 129 -> 236 -> 258 MB, GPU IOAccelerator 1102 -> 1186, GPU owned-unmapped 66 -> 125. So retention is part of the climb, but not all of it. The harness finding (Playwright's Network.enable keeps response bodies) and --full-scale are useful and stand. The clause the lane was asked to fix still fails on both presets, and its residue is not shown to be retention alone, which is the only thing ruling 27 excuses.",
+      "fixHint": "Explain or free the extra 1920x1080 RGBA16F target that survives BRIDGE into RIFT (find its owner in post/renderer teardown). Pin the roster (same fighters and skins in every match, or log the lineup per match) so the GL texture delta between same-map matches is attributable. Then re-read the climb on an idle machine (load < 3) with the same flags. If the remainder is only renderer PartitionAlloc and GPU-process retention with live objects equal, take it to the lead for a ruling 27 reading. Do not count it as a pass."
+    },
+    {
+      "id": "MEM-4",
+      "claimed": "done",
+      "status": "partly",
+      "severity": "major",
+      "evidence": "Same reports, r27 block (start transient = max of the first 20 s minus the steady max after 20 s). High: RIFT +51, BRIDGE +113 (2519 at 1 s vs 2406), third RIFT +12, fourth RIFT +38. Ultra: RIFT +106 (2596 at 1 s vs 2490), BRIDGE +34, third RIFT +140 (2755 at 1 s vs 2615). Every peak in all 7 matches is at 1-2 s, so the match's first second is still each match's peak. 3 of 7 exceed the about-100 MB target. The engineer's -74..-303 came from runs at load 90-597, where the steady max is inflated. At 1 s the live set carries audio +45 MB (Ultra RIFT 208.1 vs 162.5 at 26 s; High RIFT 197.8 vs 152.1) and array-buffer backing +52-58 MB (230-236 vs 177-178). That matches the engineer's handoff that the draft beds stay alive into the match. That handoff went to audio, but the brief made the start transient this lane's deliverable. The mapExtras/gate code itself is sound: no bitmaps were open at any poll (0/0 MB), pre-HUD peaks were 1879-2412, below every match peak, and the GLB gate can neither overshoot nor deadlock (loadAsync only, the slot is handed over in finally).",
+      "fixHint": "Make sure the menu and draft beds and their array buffers are dropped before or at the match's first frame (coordinate with audio). Re-read on an idle machine: the first 20 s should stay within about 100 MB of the steady max on High and Ultra, both maps."
+    },
+    {
+      "id": "TABLE",
+      "claimed": "done",
+      "status": "partly",
+      "severity": "minor",
+      "evidence": "The engineer's table is all at load 5.5-597 and includes two mislabelled reports (fw_r5_mem_raw_ultra3, fw_r5_mem_g2_ultra3 are High). It has one valid three-match Ultra run and two valid three-match High runs, one of them missing its third Home. My table at load 1.9-7.7, raw CDP, full-scale, fake sink. High (fw_r5_memv1_high4): peaks 2365/2519/2630/2635. Pre-HUD 1879/2197/2365/2334. Homes 786 silent / 890 first / 1111 / 1243 / 1266 / 1263. Live set over first Home +8.6/+10.0/+14.7/+16.6 MB. Ultra (fw_r5_memv1_ultra3): peaks 2596/2596/2755. Pre-HUD 2140/2412/2357. Homes 863 silent / 961 first / 1197 / 1286 / 1297. Live +9.1/+11.2/+16.3. All matches <= 3000 (max 2755, margin 245). All Homes <= 2500 (max 1297). Live-set clause PASS."
+    },
+    {
+      "id": "R20_BARS",
+      "status": "pass",
+      "severity": "minor",
+      "evidence": "Match <= 3000 MB in all 7 matches (max 2755 Ultra third RIFT), Home <= 2500 in all 11 Home reads (max 1297). Load 1.9-7.7, so not an idle-machine reading; the probe's verdict line is 'needs idle machine ... would pass'."
+    },
+    {
+      "id": "JOURNEY_AND_REGRESSION",
+      "status": "pass",
+      "severity": "minor",
+      "evidence": "All 7 matches loaded and were left over the real Esc -> Leave match path. Errors arrays in both reports are empty. npm run -s typecheck exits 0. npm run -s probe: 55 passed, 0 skipped, 0 failed (175.9 s, load 3.4-3.6; _harness/_reports/fw_r5_memv1_probe.log). The rift_start shot at 1920x1080 (_harness/_shots/_harness/_shots/fw_r5_memv1_high4_rift_start.png; the misplaced folder is my --shots path error) shows the HUD, Menu tab, minimap and ability bar intact. MEM adds no new UI."
+    },
+    {
+      "id": "NOT_MEASURED",
+      "status": "not_measured",
+      "severity": "minor",
+      "evidence": "Not covered by this lane verify. Idle-machine reading: load never held below 3 during a run. Device sink: this Mac's output is stalled (round 4), so device readings are not representative. Esc after casting and with the shop open, and a mid-match device change: the memory journey uses plain Esc to leave. MEM did not change input, UI or audio code, and the UI and AUD verifiers covered those paths at 1d02b82b4/8ea107c8a. 1280x720 was not viewed because the lane adds no UI."
+    }
+  ],
+  "regressions": [],
+  "handoffs": [
+    {
+      "to": "MEM engineer",
+      "what": "Climb still fails at near-idle load: High +265 and Ultra +159. The third RIFT holds +69..86 MB more GL textures than the first, including a sixth 1920x1080 RGBA16F target that appears after BRIDGE. Find that target's owner. Pin or log the roster so a texture delta between same-map matches can be attributed. Start transient: 3 of 7 matches are over about 100 MB, every peak is at 1-2 s, and the draft beds (+45 MB audio, +55 MB backing) are still alive at 1 s."
+    },
+    {
+      "to": "lead (ruling 27)",
+      "what": "The engineer's case that the climb is retention alone is not shown: live GL textures differ by about 70 MB between the first and third RIFT in my High run. Do not decide the clause on live objects until a roster-pinned idle rerun exists."
+    }
+  ],
+  "reports": [
+    "_harness/_reports/fw_r5_memv1_high4.json",
+    "_harness/_reports/fw_r5_memv1_high4.log",
+    "_harness/_reports/fw_r5_memv1_ultra3.json",
+    "_harness/_reports/fw_r5_memv1_ultra3.log",
+    "_harness/_reports/fw_r5_memv1_probe.log",
+    "_harness/_shots/_harness/_shots/fw_r5_memv1_high4_{rift,bridge}_{start,end}.png",
+    "_harness/_shots/_harness/_shots/fw_r5_memv1_ultra3_{rift,bridge}_{start,end}.png"
+  ]
+}
