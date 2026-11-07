@@ -24,6 +24,7 @@ import { Panel, slider } from './panel.ts';
 import { h, clear, cap, fmtNum, fmtTicks } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, wrathMeans, WRATH_DEFAULT } from './powers.ts';
+import { heartGlyph } from './hearts.ts';
 
 // ───────────────────────────── words ─────────────────────────────
 
@@ -666,6 +667,7 @@ export interface MarksFrame {
 export class PrayerMarks {
   readonly root: HTMLDivElement;
   private els = new Map<string, HTMLDivElement>();
+  private hearts = new Map<string, HTMLDivElement>();
 
   constructor(parent: HTMLElement) {
     this.root = h('div', { class: 'gn-markers gn-lmarks' });
@@ -680,7 +682,8 @@ export class PrayerMarks {
       const rel = [f.cam[0] - pv.center[0], f.cam[1] - pv.center[1], f.cam[2] - pv.center[2]];
       const eye = Math.hypot(rel[0], rel[1], rel[2]);
       for (const s of pv.settlements) {
-        if (s.flags & 2 || !s.prayers?.length) continue;
+        const hg = s.flags & 2 ? null : heartGlyph(s);
+        if (s.flags & 2 || (!s.prayers?.length && !hg)) continue;
         const g = f.groundRadius(pv.id, s.pos) + 30;
         const w = qRotate(pv.quat, [s.pos[0] * g, s.pos[1] * g, s.pos[2] * g]);
         const sys = [pv.center[0] + w[0], pv.center[1] + w[1], pv.center[2] + w[2]];
@@ -690,6 +693,26 @@ export class PrayerMarks {
         const p = f.project(sys, f.v2);
         if (!p || p.x < -20 || p.y < -20 || p.x > window.innerWidth + 20 || p.y > window.innerHeight + 20) continue;
         const key = `${pv.id}:${s.id}`;
+        // ARC §1.4: from orbit the town's heart shows beside (or instead of) its lamp, the same glyph as on its name
+        if (hg) {
+          seen.add(`h${key}`);
+          let he = this.hearts.get(key);
+          if (!he) {
+            he = h('div', { class: 'gn-lmark gn-lmark-heart', data: { kind: 'settlement', id: String(s.id), planet: String(pv.id) } });
+            this.hearts.set(key, he);
+            this.root.append(he);
+          }
+          const sig = `${hg.icon}|${hg.proud}`;
+          if (he.dataset.sig !== sig) {
+            he.dataset.sig = sig;
+            he.innerHTML = '';
+            if (hg.icon) he.append(h('span', { class: `gn-slabel-sign gn-${hg.icon}`, html: icon(hg.icon) }));
+            if (hg.proud) he.append(h('span', { class: 'gn-slabel-sign gn-slabel-proud', html: icon('heart-proud') }));
+          }
+          he.title = `${hg.title} — click to see it`;
+          he.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(${s.prayers?.length ? '6px' : '-50%'}, -100%)`;
+        }
+        if (!s.prayers?.length) continue;
         seen.add(key);
         let el = this.els.get(key);
         if (!el) {
@@ -704,10 +727,13 @@ export class PrayerMarks {
       }
     }
     for (const [k, el] of this.els) if (!seen.has(k)) { el.remove(); this.els.delete(k); }
+    for (const [k, el] of this.hearts) if (!seen.has(`h${k}`)) { el.remove(); this.hearts.delete(k); }
   }
 
   /** test surface: the towns marked now */
   marked(): string[] { return [...this.els.keys()]; }
+  /** test surface: the towns whose heart is marked from orbit now */
+  markedHearts(): string[] { return [...this.hearts.keys()]; }
 }
 
 /** a settlement view's prophet and sacred marks for its label (the name's own small signs) */

@@ -51,6 +51,7 @@ import { pilgrimageDaily, pilgrimTask, registerSacredCommands, sacredAnimalAct, 
 import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors.ts';
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
+import { heartsDaily, heartSigns, heartsQuery, heartView, registerArcCommands } from './arc.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
 const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale', 'god.seen']);
@@ -63,6 +64,7 @@ export function registerRelationship(r: CommandRegistry): void {
   registerProphetCommands(r);
   registerOmenCommands(r);
   registerSacredCommands(r);
+  registerArcCommands(r);
   r.register('prayer.answer', ({ u, p, cmd }, a) => {
     if (!p.people) return fail('There is nobody here praying.');
     const st = typeof a.settlement === 'number' ? p.people.settlement(a.settlement) : undefined;
@@ -555,6 +557,7 @@ export function relationshipDaily(u: Universe, p: Planet): void {
     fearMigration(x, st);
     offerings(x, st);
     conversions(x, st);
+    heartsDaily(x, st);
   }
 }
 
@@ -681,6 +684,8 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     const places = (R?.places ?? []).filter((q) => q.planet === p.id && q.settlement === st.id).length;
     const animal = sacredAnimalOf(st);
     if (places || animal) v.sacred = { places, ...(animal ? { animal } : {}) };
+    const heart = heartView(r, st);
+    if (heart) v.heart = heart;
   }
   const b = snap.agents;
   if (!b || !b.count) return;
@@ -697,13 +702,14 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     if (A.flags[s] & AgentFlag.disciple) f |= AgentFlag2.called;
     f2[k] = f;
   }
+  heartSigns(u, p, b);
 }
 
 export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -741,6 +747,7 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'prophets': return prophetsQuery(u);
     case 'sacred': return sacredQuery(u);
     case 'omens': return omensQuery(u);
+    case 'hearts': return heartsQuery(u, args);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

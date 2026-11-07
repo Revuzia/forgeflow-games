@@ -271,8 +271,51 @@ export function cueFor(e: SimEvent): CueSpec | null {
     case 'evacuate': return spec('evacuate', 'news', { gain: 0.65, gap: 5, pri: 6 });
     case 'shelter': return spec('shelter', 'news', { gain: 0.55, gap: 6, pri: 4 });
   }
-  return null;
+  const arc = ARC_CUES[e.t];
+  return arc ? arc(e) : null;
 }
+
+/** ARC §6.3 age kinds heard as dark (§5.5); the rest are golden */
+const DARK_AGES = /flood|fire|ruin|fall|brokenvow|dread|defiance|silence|dark/;
+
+/**
+ * ARC §6.3: every arc event, with its cue or an explicit `null` (silent: frequent, or another event carries the sound).
+ * New SFX cues only: none of these is an authored stinger (authored.ts stingerFor never names them).
+ */
+export const ARC_CUES: Record<string, ((e: SimEvent) => CueSpec | null) | null> = {
+  heart: (e) => {
+    const to = str((e.data ?? {}).to);
+    return to === 'defiant' ? spec('crowd.jeer', 'news', { gain: 0.45, gap: 6, variant: to })
+      : to === 'devoted' ? spec('crowd.hymn', 'news', { gain: 0.4, gap: 6, variant: to })
+      : null; // the other kinds are frequent and silent
+  },
+  'heart.proud': null,
+  'tower.begun': () => spec('toil.drums', 'news', { gain: 0.5, gap: 30, pri: 6 }),
+  'tower.tier': () => spec('toil.chant', 'news', { gain: 0.4, gap: 30 }),
+  'tower.omen': null, // the omen event's own cue plays
+  'tower.choice': () => spec('ui.great', 'news', { gain: 0.7, gap: 10, pri: 8 }),
+  'tower.warned': null, // the prophet's existing cues play
+  'tower.heeded': null,
+  'tower.refused': null,
+  'tower.confused': () => spec('babel.babble', 'god', { gain: 0.8, gap: 10, pri: 9 }),
+  'tower.struck': () => spec('masonry.collapse', 'world', { gain: 0.9, gap: 4, reach: 2500, travel: true, pri: 8 }),
+  'tower.finished': () => spec('crowd.cheer', 'news', { gain: 0.6, gap: 10, pri: 6 }),
+  'tower.abandoned': null,
+  'tower.rebuilt': () => spec('toil.drums', 'news', { gain: 0.45, gap: 30 }),
+  defy: (e) => spec('crowd.shout', 'news', { gain: 0.5, gap: 8, variant: str((e.data ?? {}).kind) }),
+  'defy.answered': null,
+  'covenant.offered': null,
+  'covenant.bow': () => spec('covenant.chime', 'god', { gain: 0.7, gap: 10, pri: 8 }),
+  'covenant.made': null, // the bow carries it
+  'covenant.kept': () => spec('ui.great', 'news', { gain: 0.6, gap: 10, pri: 7 }),
+  'covenant.refused': () => spec('ui.deny', 'ui', { gain: 0.6, gap: 1 }),
+  'covenant.broken': () => spec('covenant.chime.broken', 'news', { gain: 0.7, gap: 10, pri: 8 }),
+  'chronicle.age': (e) => {
+    const k = str((e.data ?? {}).kind);
+    return spec(DARK_AGES.test(k) ? 'age.dark' : 'age.golden', 'news', { gain: 0.7, gap: 30, variant: k, key: 'chronicle.age' });
+  },
+  'legend.retold': null,
+};
 
 // ───────────────────────────── throttling ─────────────────────────────
 

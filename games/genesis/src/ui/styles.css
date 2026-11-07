@@ -202,12 +202,25 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-slabel-pray { color: #ffe3a0; animation: gnLamp 2.4s ease-in-out infinite; margin-right: 5px; }
 .gn-slabel-prophet { color: #ffd98a; }
 .gn-slabel-sacred { color: #cfe7a0; }
+/* ARC §1.4: the town's heart after its name (11 px at 888x500), a stepped tower when it is proud; a new defiant act pulses */
+.gn-slabel-heart { display: inline-block; margin-left: 3px; white-space: nowrap; }
+.gn-slabel-heart .gn-slabel-sign { width: 11px; height: 11px; margin: 0 1px; }
+.gn-heart-devoted { color: #f6cf6a; }
+.gn-heart-fearful { color: #b9a4ff; }
+.gn-heart-restless { color: #e0a85a; }
+.gn-heart-defiant { color: #ff5a64; }
+.gn-slabel-proud { color: #fffbe8; }
+.gn-slabel-hk.gn-pulse { animation: gnFist 1.1s ease-in-out infinite; }
+@keyframes gnFist { 50% { transform: scale(1.35); filter: drop-shadow(0 0 5px rgba(255, 80, 90, .95)) drop-shadow(0 1px 2px #000); } }
+@media (prefers-reduced-motion: reduce) { .gn-slabel-hk.gn-pulse { animation: none; filter: drop-shadow(0 0 4px rgba(255, 80, 90, .95)); } }
 @keyframes gnLamp { 50% { filter: drop-shadow(0 0 5px rgba(255, 220, 150, .9)) drop-shadow(0 1px 2px #000); } }
 /* a praying town seen from high up: a small lamp (a click selects it) */
 .gn-lmarks { pointer-events: none; }
 .gn-lmark { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform; }
 .gn-lmark-prayer { --u: .5; width: calc(15px + 7px * var(--u)); height: calc(15px + 7px * var(--u)); padding: 3px; border-radius: 50%; color: #ffe7b0; background: radial-gradient(circle, rgba(255, 214, 140, calc(.18 + .25 * var(--u))), rgba(255, 214, 140, 0) 70%); filter: drop-shadow(0 0 4px rgba(255, 210, 140, .8)) drop-shadow(0 1px 2px #000); animation: gnLamp 2.4s ease-in-out infinite; }
 .gn-lmark-prayer:hover { color: #fff; }
+.gn-lmark-heart { padding: 2px; white-space: nowrap; filter: drop-shadow(0 1px 2px #000); }
+.gn-lmark-heart .gn-slabel-sign { width: 12px; height: 12px; margin: 0 1px; }
 .gn-world-layer.gn-busy .gn-lmark { pointer-events: none; }
 .gn-world-layer.gn-hush .gn-lmarks, .gn-world-layer.gn-titled .gn-lmarks { opacity: 0; }
 
@@ -492,6 +505,13 @@ button.gn-past-h:hover, button.gn-past-h:focus-visible { color: var(--gn-gold-hi
 .gn-insp-fill.gn-mood { background: linear-gradient(90deg, #4f6fa5, var(--gn-blue)); }
 .gn-insp-fill.gn-love { background: linear-gradient(90deg, #8d74c9, #d6c6ff); }
 .gn-insp-fill.gn-fear { background: linear-gradient(90deg, #7a3a36, var(--gn-bad)); }
+.gn-insp-fill.gn-pride { background: linear-gradient(90deg, #6d6450, #fff2c8); }
+.gn-insp-fill.gn-defy { background: linear-gradient(90deg, #5e1f26, #ff5a64); }
+.gn-insp-fill.gn-heart-devoted { background: #f2c452; } .gn-insp-fill.gn-heart-fearful { background: #8c6fe6; }
+.gn-insp-fill.gn-heart-restless { background: #c4842e; } .gn-insp-fill.gn-heart-defiant { background: #cc2234; }
+.gn-insp-heart { font-style: italic; color: var(--gn-ivory); }
+.gn-insp-heart.gn-heart-defiant { color: #ff8a90; } .gn-insp-heart.gn-heart-fearful { color: #c9b8ff; }
+.gn-insp-heart.gn-heart-devoted { color: #f6d98a; } .gn-insp-heart.gn-heart-restless { color: #e8b878; }
 .gn-insp-fill.gn-skill { background: linear-gradient(90deg, #8a7448, #e9cf96); }
 .gn-insp-kv { display: flex; gap: 12px; justify-content: space-between; font-size: 13px; line-height: 1.45; padding: 1px 0; }
 .gn-insp-k { color: var(--gn-ivory-dim); flex: none; font-size: 13px; }
@@ -1268,3 +1288,25 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
   .gn-inv-form { gap: 6px; }
   .gn-inv-foot { margin-top: 8px; padding-top: 7px; }
 }
+
+/* ARC §2.5: the Decision card — top-centre under the top row (under the time panel when the inspector is open), 380 px,
+   at most 170 px tall, not modal; "Decide later" leaves a pill in its place */
+.gn-decision { position: absolute; top: calc(var(--gn-time-b, 120px) + 8px); left: 50%; width: 380px; max-height: 170px; box-sizing: border-box;
+  padding: 8px 10px 7px; transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: top center; overflow: hidden; outline: none;
+  display: flex; flex-direction: column; gap: 3px; font: 500 12px/1.3 var(--gn-sans); color: var(--gn-ivory); animation: gnInspIn .28s ease both; z-index: 6; }
+.gn-decision[hidden] { display: none; }
+.gn-decision.gn-decision-left { left: 18px; transform: scale(var(--gn-ui-scale)); transform-origin: top left; }
+.gn-decision:focus-visible { box-shadow: 0 0 0 1px var(--gn-line-gold); }
+.gn-decision-h { font-family: var(--gn-serif); font-size: 14px; color: var(--gn-gold-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-decision-meta { font: 500 11px var(--gn-sans); color: var(--gn-ivory); opacity: .8; }
+.gn-decision-why { font-style: italic; opacity: .88; font-size: 11.5px; }
+.gn-decision-opts { display: flex; flex-direction: column; gap: 2px; }
+.gn-decision-opt { display: block; width: 100%; text-align: left; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-decision-opt:disabled { opacity: .5; }
+.gn-decision-k { display: inline-block; width: 14px; margin-right: 4px; text-align: center; border: 1px solid var(--gn-line-gold); border-radius: 3px; font-size: 10px; line-height: 13px; color: var(--gn-gold-hi); }
+.gn-decision-says { opacity: .82; font-weight: 400; }
+.gn-decision-note { color: #ffb4a8; font-size: 11px; }
+.gn-decision-foot { display: flex; gap: 6px; justify-content: flex-end; }
+.gn-decision-foot .gn-btn { padding: 1px 8px; font-size: 11px; }
+.gn-decision-pills { position: absolute; top: calc(var(--gn-time-b, 120px) + 8px); left: 50%; transform: translateX(-50%) scale(var(--gn-ui-scale)); transform-origin: top center; display: flex; gap: 6px; z-index: 5; }
+.gn-decision-pill { padding: 3px 10px; border-radius: 12px; font: 600 11.5px var(--gn-serif); color: var(--gn-gold-hi); background: rgba(12, 15, 25, .82); border: 1px solid var(--gn-line-gold); animation: gnLamp 2.4s ease-in-out infinite; }

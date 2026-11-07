@@ -59,6 +59,7 @@ import { Credits } from './credits.ts';
 import { GodPanel, SignPicker, type GodRow, type SacredPlaceRow } from './living.ts';
 import { Invent } from './invent.ts';
 import { humanize } from './words.ts';
+import { DecisionCard } from './decision.ts';
 
 export interface ShellDeps {
   host: UiHost;
@@ -137,6 +138,8 @@ const PHOTO_OK = new Set(['tool.cancel', 'ui.help', 'cam.photo', 'time.pause', .
 export class Shell {
   readonly hud: Hud;
   readonly inspector: Inspector;
+  /** ARC §2.5: the great choices (the tower; later the covenant) */
+  readonly decision: DecisionCard;
   readonly palette: Palette;
   readonly radial: Radial;
   readonly freeform: Freeform;
@@ -224,6 +227,13 @@ export class Shell {
       return humanize(host.view, p, text, { dayHours: host.view.planet(p)?.params.dayHours });
     };
     this.tools = new Tools(root, world, { host, setBrush: (b) => deps.setBrush(b) });
+    this.decision = new DecisionCard(root, {
+      cmd: (c) => host.cmd(c),
+      speed: () => host.view.speed,
+      setSpeed: (x) => host.setSpeed(x),
+      slowGreat: () => host.prefs.value.game.slowGreat !== false,
+      lookAt: (planet, pos) => host.lookAt(planet, [pos[0], pos[1], pos[2]]),
+    });
     this.inspector = new Inspector(root, {
       query: (q, args) => host.query(q, args),
       cmd: (c) => host.cmd(c),
@@ -1195,6 +1205,8 @@ export class Shell {
     }
     void dt;
     const f = this.deps.hudFrame();
+    const dpv = host.view.planet(host.primary());
+    if (dpv) this.decision.update(dpv.id, dpv.towers, dpv.settlements, (t) => host.view.calendar(dpv, t).year, host.view.renderTick);
     this.hud.update({
       ...f,
       labels: host.prefs.value.ui.labels,

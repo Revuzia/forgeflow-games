@@ -10,6 +10,7 @@ import { ERAS, NEEDS, SKILLS, TRAITS } from '../content.ts';
 import { makeCtx, type PCtx } from './ctx.ts';
 import { DEATH_NAMES, INV, MEM, MEMK, NN, NS, NT, ROLE_NAMES, TASK_VERBS } from './defs.ts';
 import { agentName } from './util.ts';
+import { agentHeart, personLine } from '../god/arc.ts';
 import { personalName } from './names.ts';
 import { cohortTotal } from './cohorts.ts';
 import { foodDays } from './store.ts';
@@ -177,6 +178,8 @@ function agentBio(x: PCtx, id: number): unknown {
     master: Object.entries(skills).filter(([, v]) => v >= 0.7).map(([k]) => k),
     memories,
     faith: { love: round2(A.love[s * 4]), fear: round2(A.fear[s * 4]) },
+    // ARC §1.4, §6.6: the person's heart toward the god, and the inspector's one-line caption of it
+    heart: agentHeart(x.u, x.p, s), heartLine: personLine(agentHeart(x.u, x.p, s), agentName(x, s)),
     sick: A.disease[s] >= 0 ? x.c.diseases.list[A.disease[s]]?.name ?? 'sick' : null,
     inventory, wearing: A.gear[s] >= 0 ? x.c.items.list[A.gear[s]].name : null, tool: A.tool[s] >= 0 ? x.c.items.list[A.tool[s]].name : null,
     flags: A.flags[s], pos, cell: A.cell[s],

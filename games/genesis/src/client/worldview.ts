@@ -48,6 +48,12 @@ export interface PlanetView {
   settlements: SettlementView[];
   weather: WeatherView[];
   disasters: DisasterView[];
+  /** ARC §6.2 (additive; absent until the sim or the §6.7 stub sends them) */
+  towers?: PlanetSnap['towers'];
+  covenant?: PlanetSnap['covenant'];
+  covenantOffer?: PlanetSnap['covenantOffer'];
+  age?: PlanetSnap['age'];
+  epithet?: string;
   /** additive (god layer): things in flight now (PlanetSnap.projectiles; empty when the snapshot carries none) */
   projectiles: ProjectileView[];
   population: number[];
@@ -261,6 +267,12 @@ export class WorldView {
     // things in flight are sent only while something flies: absent means none
     pv.projectiles = ps.projectiles ?? [];
     if (ps.population) pv.population = ps.population;
+    // ARC §6.2: slow views, kept until the sim sends them again (null = none now)
+    if (ps.towers !== undefined) pv.towers = ps.towers;
+    if (ps.covenant !== undefined) pv.covenant = ps.covenant;
+    if (ps.covenantOffer !== undefined) pv.covenantOffer = ps.covenantOffer;
+    if (ps.age !== undefined) pv.age = ps.age;
+    if (ps.epithet !== undefined) pv.epithet = ps.epithet;
   }
 
   private groundLayers(pv: PlanetView): void {

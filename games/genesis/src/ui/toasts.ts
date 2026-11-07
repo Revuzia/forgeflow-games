@@ -543,6 +543,33 @@ export class Toasts {
         this.show({ kind: 'warn', title: `Leaving · ${place}`, text: c ? c.text : `${where} leaves its homes for safer ground until the danger passes.`, date: dateFrom(c, date), at, planet });
         return;
       }
+      // ARC §2: the tower's news (the card carries the choice itself; these say what happened). The text is the sim's
+      // chronicle line when one came with it; the fallbacks are short and plain.
+      case 'tower.begun': case 'tower.confused': case 'tower.struck': case 'tower.finished': case 'tower.heeded':
+      case 'tower.refused': case 'tower.abandoned': case 'tower.rebuilt': case 'tower.warned': {
+        const tw = view.planet(planet)?.towers?.find((t) => t.id === data.tower);
+        const host = tw ? this.settlementName(view, planet, tw.host) : where;
+        const c = this.claim(e.tick, (q) => q.kind === 'god' && (mentions(q.text, host) || /tower/i.test(q.text)));
+        const fb: Record<string, string> = {
+          'tower.begun': `The towns came together at ${host} and began a tower.`, 'tower.confused': `At ${host} the builders could not understand each other.`,
+          'tower.struck': `The tower of ${host} fell.`, 'tower.finished': `The tower of ${host} was finished.`,
+          'tower.heeded': `The builders of ${where} went home.`, 'tower.refused': `They laughed at your prophet at ${host}, and the work went on.`,
+          'tower.abandoned': `The tower of ${host} was left unfinished.`, 'tower.rebuilt': `They built again at ${host}.`,
+          'tower.warned': `Your prophet stood at the foot of the tower of ${host}.`,
+        };
+        const pos = at ?? (tw ? { planet, pos: tw.pos } : null);
+        // "Look at it": a click on the toast flies there (nothing to choose yet at the first course)
+        this.show({ kind: 'god', title: `The tower · ${tw ? this.where(view, planet, tw.host) : place}`, text: c ? c.text : fb[e.t], date: dateFrom(c, date), at: pos, planet, pri: e.t === 'tower.begun' || e.t === 'tower.struck' || e.t === 'tower.confused' ? 4 : undefined });
+        return;
+      }
+      // ARC §1.5: a town turning against the god, or back to it, is news; the other turns stay in the chronicle
+      case 'heart': {
+        const to = String(data.to ?? '');
+        if (to !== 'defiant' && to !== 'devoted') return;
+        const c = this.claim(e.tick, (q) => q.kind === 'god' && mentions(q.text, where));
+        this.show({ kind: 'god', title: `Hearts · ${place}`, text: c ? c.text : to === 'defiant' ? `In ${where} they raise their fists at the sky.` : `${where} has turned its face to the god again.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
       case 'sacred.place': case 'sacred.animal': {
         const c = this.claim(e.tick, (q) => mentions(q.text, where));
         const text = e.t === 'sacred.animal'

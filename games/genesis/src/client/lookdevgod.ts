@@ -189,6 +189,8 @@ export class LookdevGod {
           d.warnUntil = c.warning < 0 ? Infinity : tick + c.warning;
           view.params.warning = 1;
           if (kind === 'tsunami') view.params.drawback = 1;
+          // ARC §10: a flood's river rises and runs brown before the water comes (render reads rise / silt)
+          if (kind === 'flood') { view.params.rise = typeof render.rise === 'number' ? render.rise : 0.8; view.params.silt = 1; }
           if (kind === 'volcano' || kind === 'supervolcano') view.params.plume = Math.round((render.plume ?? 1000) * 0.1);
         }
         // a falling body comes in at a slant from a hashed bearing
@@ -352,7 +354,7 @@ export class LookdevGod {
         return;
       }
       // over: the blow falls, its life counted from now
-      delete v.params.warning; delete v.params.drawback;
+      delete v.params.warning; delete v.params.drawback; delete v.params.rise; delete v.params.silt;
       d.t0 = tick; d.warnUntil = undefined; d.lastFx = -1e9;
       this.events.push({ t: 'warning.end', tick, planet: lp.snap.id, pos: [...v.pos], ref: { kind: 'disaster', id: v.id, planet: lp.snap.id }, data: { kind: v.kind, id: v.id } });
       this.onStart(d, lp, tick);

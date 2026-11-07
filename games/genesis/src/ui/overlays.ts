@@ -16,6 +16,7 @@ import type { FieldName } from '../sim/types.ts';
 import type { PlanetView } from '../client/worldview.ts';
 import type { UiHost } from './host.ts';
 import type { CvdPalette } from './prefs.ts';
+import { HEART_CAPTION, HEART_COLORS, HEART_KINDS, heartAlpha, heartCss, heartHover } from './hearts.ts';
 import { OverlayMap, applyOverlay } from '../render/planet/overlaytex.ts';
 import { BASE_PACK } from '../data/index.ts';
 import { h, clear, fmtNum, fmtDist } from './dom.ts';
@@ -42,6 +43,7 @@ export const OVERLAYS: OverlayDef[] = [
   { id: 'moisture', label: 'Moisture', icon: 'water', fields: ['moisture', 'water'] },
   { id: 'biome', label: 'Biomes', icon: 'biome', fields: ['biome'] },
   { id: 'belief', label: 'Belief', icon: 'worship', fields: ['territory'], live: true },
+  { id: 'hearts', label: 'Hearts', icon: 'heart', fields: ['territory'], live: true },
   { id: 'territory', label: 'Territory', icon: 'sign', fields: ['territory'], live: true },
   { id: 'era', label: 'Knowledge (era)', icon: 'book', fields: ['territory'], live: true },
   { id: 'ore', label: 'Ore', icon: 'rock', fields: ['ore', 'oreType'] },
@@ -298,6 +300,7 @@ export class Overlays {
       case 'belief': return st ? `${st.name} · ${Math.round(st.belief * 100)} % believe, ${st.alignment > 0.25 ? 'loved' : st.alignment < -0.25 ? 'feared' : 'loved and feared'}` : 'nobody lives here';
       case 'trade': return st ? `${st.name}${st.trade?.length ? ` · trades with ${st.trade.length}` : ''}${st.war?.length ? ` · at war with ${st.war.length}` : ''}${!st.trade?.length && !st.war?.length ? ' · keeps to itself' : ''}` : "nobody's land";
       case 'population': return st ? `${st.name} · ${st.population} souls` : 'empty land';
+      case 'hearts': return st ? heartHover(st) : 'nobody lives here';
     }
     return '';
   }
@@ -346,6 +349,7 @@ export class Overlays {
         break;
       }
       case 'territory': case 'belief': case 'era': case 'trade': this.territorial(def.id, pv, put, pal); break;
+      case 'hearts': this.hearts(pv, put); break;
       case 'population': this.population(pv, put, pal); break;
     }
     return out;
@@ -384,6 +388,26 @@ export class Overlays {
         a = edge ? 0.9 : wr || tr ? 0.5 : 0.25;
       }
       put(c, rgb, a);
+    }
+  }
+
+  /** ARC §1.4: each town's land in its heart's colour, alpha 0.35 + 0.5 × share; quiet unshaded; proud a bright rim */
+  private hearts(pv: PlanetView, put: (c: number, rgb: RGB, a: number) => void): void {
+    const terr = pv.fields.get('territory');
+    if (!terr) return;
+    const col = HEART_COLORS[this.deps.palette()] ?? HEART_COLORS.standard;
+    const byId = new Map(pv.settlements.map((s) => [s.id, s]));
+    const g = pv.grid;
+    for (let c = 0; c < g.count; c++) {
+      const sid = Math.round(terr[c]);
+      if (sid < 0) continue;
+      const s = byId.get(sid);
+      const ht = s && !(s.flags & 2) ? s.heart : undefined;
+      if (!ht || (ht.kind === 'quiet' && !ht.proud)) continue;
+      let edge = false;
+      for (let k = g.nbrStart[c]; k < g.nbrStart[c + 1]; k++) if (Math.round(terr[g.nbr[k]]) !== sid) { edge = true; break; }
+      if (edge && ht.proud) put(c, col.proud, 0.95);
+      else if (ht.kind !== 'quiet') put(c, col[ht.kind], edge ? Math.min(0.95, heartAlpha(ht) + 0.15) : heartAlpha(ht));
     }
   }
 
@@ -451,7 +475,7 @@ export class Overlays {
   private renderLegend(pv: PlanetView | null): void {
     const def = OVERLAYS.find((o) => o.id === this.mode);
     if (!def) return;
-    const key = `${def.id}|${this.deps.palette()}|${pv?.id ?? -1}|${def.id === 'ore' || def.id === 'territory' || def.id === 'era' ? pv?.settlements.length ?? 0 : ''}|${def.id === 'ore' ? oresVersion : ''}`;
+    const key = `${def.id}|${this.deps.palette()}|${pv?.id ?? -1}|${def.id === 'ore' || def.id === 'territory' || def.id === 'era' ? pv?.settlements.length ?? 0 : ''}|${def.id === 'ore' ? oresVersion : ''}|${def.id === 'hearts' ? (pv?.settlements ?? []).some((s) => s.heart) : ''}`;
     if (key === this.legendKey) return;
     this.legendKey = key;
     clear(this.legend);
@@ -508,6 +532,13 @@ export class Overlays {
         return { kind: 'cats', items, note: items.length ? undefined : 'No one has claimed land here yet.' };
       }
       case 'trade': return { kind: 'cats', items: [{ label: 'trade route', color: pal.trade }, { label: 'war', color: pal.war }], note: tradeNote(pv) };
+      case 'hearts': {
+        const col = HEART_COLORS[this.deps.palette()] ?? HEART_COLORS.standard;
+        const items = HEART_KINDS.map((k) => ({ label: HEART_CAPTION[k], color: heartCss(col[k]) }));
+        items.push({ label: `${HEART_CAPTION.proud} (the rim)`, color: heartCss(col.proud) });
+        const none = !(pv?.settlements ?? []).some((s) => s.heart);
+        return { kind: 'cats', items, note: none ? 'No town has shown its heart yet.' : 'Unshaded: they go about their days. Deeper: more of them feel it.' };
+      }
     }
     return { kind: 'cats', items: [] };
   }

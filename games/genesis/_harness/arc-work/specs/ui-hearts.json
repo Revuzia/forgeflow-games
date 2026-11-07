@@ -1,0 +1,29 @@
+{
+ "_doc": "ARC §1.4 UI on the §6.7 stub: chip glyphs (region view), the Hearts layer, the settlement inspector's Hearts section. 888x500 with UI. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-hearts.json --port=5311 > _harness/scratch/arc/shots-hearts.log 2>&1 &",
+ "shots": [
+  { "name": "arc-hearts-chips", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true,
+    "commands": [
+      { "k": "life.spawn-people", "species": "plains-folk", "count": 40, "pos": "$poi:homestead", "as": "plains" },
+      { "k": "life.spawn-people", "species": "coastal-folk", "count": 30, "pos": "$poi:homestead-coast", "as": "second" }
+    ],
+    "wait": 240,
+    "camera": { "mode": "orbit", "target": { "kind": "settlement", "id": "$plains" }, "dist": 420, "tilt": 55, "yaw": 30, "hour": 10 },
+    "script": [
+      "const H = (kind, o) => Object.assign({ kind, proud: false, devoted: 0.1, fearful: 0.1, restless: 0.1, defiant: 0, pride: 0.3, defiance: 0.1, dusk: 0.3, duskYearAgo: 0.6, caption: '', line: '', remember: [], answered: '' }, o);",
+      "const ids = [vars.plains, vars.second].filter((x) => x != null);",
+      "G.arc.stub('hearts', [{ settlement: ids[0], heart: H('fearful', { fearful: 0.52, proud: true, pride: 0.68, caption: 'They watch the sky', line: 'In this town they watch the sky and speak quietly.', remember: ['the storm that took the harvest'] }) }, { settlement: ids[1], heart: H('defiant', { defiant: 0.41, defiance: 0.55, caption: 'They raise their fists' }), defiant: { kind: 'curse', tick: 1 } }]);",
+      "await G.step(2); await G.frames(8);",
+      "return { ids, st: G.ui_.state().overlay ?? null, chips: document.querySelectorAll('.gn-slabel-heart').length };"
+    ] },
+  { "name": "arc-hearts-layer", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true,
+    "camera": { "mode": "orbit", "target": { "kind": "settlement", "id": "$plains" }, "dist": 2600, "tilt": 30, "yaw": 30, "hour": 11 },
+    "script": [ "G.ui_.overlay('hearts'); await G.frames(30); return { legend: document.querySelector('.gn-legend')?.textContent?.slice(0, 200) };" ] },
+  { "name": "arc-hearts-orbit", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true,
+    "camera": { "mode": "orbit", "target": { "kind": "settlement", "id": "$plains" }, "dist": 14000, "tilt": 10, "yaw": 30, "hour": 11 },
+    "script": [ "G.ui_.overlay(null); await G.frames(10); return { marks: document.querySelectorAll('.gn-lmark-heart').length };" ] },
+  { "name": "arc-hearts-inspector", "params": "scenario=sandbox&source=worker&seed=20260", "size": [888, 500], "quality": "medium", "ui": true,
+    "camera": { "mode": "orbit", "target": { "kind": "settlement", "id": "$plains" }, "dist": 300, "tilt": 55, "yaw": 30, "hour": 10 },
+    "select": "settlement:$plains",
+    "script": [ "await G.frames(20); const s = document.querySelector('.gn-insp-hearts'); if (s) s.scrollIntoView(); await G.frames(4); return { hearts: s?.textContent?.slice(0, 300) ?? null };" ] }
+ ]
+}

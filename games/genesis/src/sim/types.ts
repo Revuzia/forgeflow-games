@@ -245,6 +245,8 @@ export interface MoverBlock {
    * animal blocks and from older sims
    */
   flags2?: Uint8Array;
+  /** additive (ARC §1.3, §6.2): HeartSign per agent, `count` long; agents only */
+  heart?: Uint8Array;
 }
 
 /** animation states shared by agents, animals and creatures */
@@ -257,7 +259,23 @@ export const AnimState = {
   play: 26, hunt: 27, herd: 28, carryGame: 29,
   // additive (LIVING RELATIONSHIP): hunched against a storm in shelter, or hurrying to it (people/shelter.ts)
   shelter: 30,
+  // additive (ARC §6.2): the people's signs toward the sky (31-36 are RANIM, render/life/crowds.ts)
+  lookUp: 40, fist: 41, hurl: 42, curse: 43,
 } as const;
+
+/** ARC §1.3: the per-agent sign (MoverBlock.heart) */
+export const HeartSign = { none: 0, pray: 1, fist: 2, fear: 3, celebrate: 4, hurl: 5 } as const;
+export type HeartSignId = (typeof HeartSign)[keyof typeof HeartSign];
+export type HeartKind = 'devoted' | 'fearful' | 'restless' | 'defiant' | 'quiet';
+export type DefyKind = 'curse' | 'hurl' | 'burn' | 'idol';
+export type Vow = 'no-flood' | 'spare-the-many' | 'gentle' | 'warn-first';
+export type TowerStatus = 'rising' | 'finished' | 'scattered' | 'struck' | 'abandoned';
+
+/** ARC §6.2: a tower in the snapshot */
+export interface TowerView { id: number; pos: [number, number, number]; cell: number; name: string; host: number; league: number[];
+  height: number; goal: number; tiers: number; material: 'mudbrick' | 'brick' | 'stone'; style: number;
+  status: TowerStatus; builders: number; begun: number; ended: number; answer: 'none' | 'confuse' | 'strike' | 'warn' | 'let';
+  choiceOpen: boolean; canAnswer: ('confuse' | 'strike' | 'warn' | 'let')[]; warnBlocked?: string }
 export type AnimStateId = (typeof AnimState)[keyof typeof AnimState];
 
 export const AgentFlag = {
@@ -376,6 +394,13 @@ export interface SettlementView {
   eraLabel?: string;
   /** a daughter town's grievance against its capital, 0..1 (secession above 0.6; absent for a capital or a town alone) */
   grievance?: number;
+  // ── additive (ARC §6.2) ──
+  heart?: { kind: HeartKind; proud: boolean; devoted: number; fearful: number; restless: number; defiant: number;
+            pride: number; defiance: number; dusk: number; duskYearAgo: number; caption: string; line: string;
+            theyCall?: string; remember: string[]; answered: string };
+  /** latest defiant act, <= 2 days old */
+  defiant?: { kind: DefyKind; tick: number };
+  covenant?: { id: number; vow: Vow; status: 'kept' | 'broken'; year: number };
 }
 
 /** SettlementView.flags bits */
@@ -526,6 +551,12 @@ export interface PlanetSnap {
    * `grad: true`), so the main thread need not refit it on every surface update.
    */
   grad?: Float32Array;
+  // ── additive (ARC §6.2) ──
+  towers?: TowerView[];
+  covenant?: { id: number; vow: Vow; status: 'kept' | 'broken'; years: number; towns: number[] } | null;
+  covenantOffer?: { id: number; name: string; dead: number; towns: number[]; household?: string; until: number } | null;
+  age?: { id: number; name: string; kind: string; since: number } | null;
+  epithet?: string;
 }
 
 export interface StarView {

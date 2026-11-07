@@ -22,6 +22,8 @@
 //   toastLife(ms)              how long toasts stay (a software-rendered capture takes seconds per frame)
 //   programs()                 names of the GPU programs linked so far (shader warm-up coverage)
 //   perf(on?)                  the frame monitor (render/perfmon.ts): on=true starts measuring, the summary of the last 240 frames
+//   arc                        ARC §6.7: hearts() / towers() / story(planet?) (sim queries); stub(kind, data) puts
+//                              hearts / towers / covenant / age views into every later snapshot (client/arcstub.ts)
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
 //                              points, [x, y], size) / overlay(mode) / state() / pref(path, value) — panels include
@@ -44,6 +46,7 @@ import type { InspectRef } from './ui/host.ts';
 import { isQualityName } from './render/quality.ts';
 import { perfmon, type PerfSummary } from './render/perfmon.ts';
 import { SHAPES, type Pt } from './ui/unistroke.ts';
+import { arcStub, type ArcStubKind } from './client/arcstub.ts';
 
 export interface UiSurface {
   open(panel: string, arg?: unknown): Promise<void>;
@@ -110,6 +113,15 @@ export interface GenesisTestSurface {
   perf(on?: boolean): PerfSummary;
   /** the GPU programs linked so far, by name (material type or name) — which effects link a shader during play */
   programs(detail?: boolean | 'keys'): string[];
+  /** ARC §6.7: the arc's queries, and a stub that puts arc views into the next snapshots before the sim sends them */
+  arc: {
+    hearts(): Promise<unknown>; towers(): Promise<unknown>; story(planet?: number): Promise<unknown>;
+    stub(kind: ArcStubKind, data: unknown): void;
+    /** the Decision card (§2.5): what is open, the pills, the options; choose by key ('1'..'4'); put it off */
+    decision(): { open: string | null; pills: string[]; options: { key: string; label: string; disabled: string | null }[] };
+    choose(key: string): Promise<CommandResult | null>;
+    later(): void;
+  };
   ui_: UiSurface;
   cam_: CamSurface;
   worlds_: WorldsSurface;
@@ -223,6 +235,15 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     frames: (n) => need().waitFrames(n),
     exposure: (ev) => { need().renderer.settings.exposureBias = ev; },
     query: (q, args) => need().sim.query(q, args ?? {}),
+    arc: {
+      hearts: () => need().sim.query('hearts', {}),
+      towers: () => need().sim.query('towers', {}),
+      story: (planet) => need().sim.query('story', planet == null ? {} : { planet }),
+      stub: (kind, data) => { arcStub(kind, data); need().sim.requestFull(); },
+      decision: () => need().ui.decision.info(),
+      choose: (key) => need().ui.decision.chooseKey(key),
+      later: () => need().ui.decision.later(),
+    },
     poi: (name, planet) => need().poi(name, planet),
     select: (ref) => need().select(ref),
     follow: (ref) => need().follow(ref),

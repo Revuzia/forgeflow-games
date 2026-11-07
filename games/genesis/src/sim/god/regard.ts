@@ -35,9 +35,10 @@ import type { ActRecord, RelState, SettlementRel } from './state.ts';
 import type { TypedArray } from '../core/hash.ts';
 import { emptyRel } from './state.ts';
 import { AgentFlag } from '../types.ts';
-import { GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
+import { dayTicks, GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
 import { speciesInfo } from '../people/ctx.ts';
 import { currentWrath, wrathLaw, WRATH_DEFAULT } from './wrath.ts';
+import { noteHarm } from './arc.ts';
 
 // ───────────────────────────── the universe a planet belongs to ─────────────────────────────
 
@@ -209,6 +210,7 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
     const r = srel(u, pl, sid);
     const dead = ctx.dead[k] ?? 0;
     const kind = ctx.killed || dead > 0 ? 'harm' : seen?.kind ?? 'harm';
+    if (kind === 'harm' && ctx.god === 0 && !ctx.natural) noteHarm(r, u.tick, yearOf(u, pl));
     if (delayed && kind === 'harm' && !r.acts.some((q) => q.key === ctx.key && q.kind === 'harm')) (harmed ??= []).push([pl, sid]);
     const last = r.acts.length ? r.acts[r.acts.length - 1] : null;
     if (last && last.key === ctx.key) {
@@ -225,6 +227,13 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
     if (r.acts.length > 12) r.acts.splice(0, r.acts.length - 12);
   }
   if (harmed) for (const [pl, sid] of harmed) actHooks.harm!(u, pl, sid, ctx.god);
+}
+
+/** ticks per year on a planet (people/ctx.ts makeCtx's `year`) */
+function yearOf(u: Universe, pl: number): number {
+  const p = u.planets.find((q) => q.id === pl);
+  const day = p ? dayTicks(p.st.dayHours) : 1440;
+  return p ? Math.max(day, Math.round(p.st.orbit.period)) : 525600;
 }
 
 /** a person was killed by the act in progress (god/harm.ts) */

@@ -245,6 +245,14 @@
     {"id": "grievance.neglect", "kind": "polity", "weight": 1, "text": ["{settlement} buried its dead alone: no help came from {other}.", "When disaster struck {settlement}, {other} kept its granaries shut, and {settlement} did not forget it."]},
     {"id": "secession.neglect", "kind": "polity", "weight": 2, "text": ["{other} left {settlement} alone in its hard times; {settlement} will stand alone now: {polity}.", "Forsaken by {other} in its hour of need, {settlement} broke away: {polity}."]},
     {"id": "secession.refused", "kind": "polity", "weight": 2, "text": ["{other} would not let {settlement} go, and sent its warriors.", "The chief of {other} called the parting of {settlement} a rebellion: war."]},
-    {"id": "gift.kin.relief", "kind": "gift", "weight": 1, "text": ["After the disaster {settlement} sent {item} to {other}.", "{settlement} did not forget its kin: bearers carried {item} to stricken {other}."]}
+    {"id": "gift.kin.relief", "kind": "gift", "weight": 1, "text": ["After the disaster {settlement} sent {item} to {other}.", "{settlement} did not forget its kin: bearers carried {item} to stricken {other}."]},
+    {"id": "heart.nobow", "kind": "god", "weight": 1, "text": ["In {settlement} they no longer bow at dusk.", "The shrine of {settlement} stands empty at evening."]},
+    {"id": "heart.bowagain", "kind": "god", "weight": 1, "text": ["At dusk in {settlement} they bow again."]},
+    {"id": "heart.fearful", "kind": "god", "weight": 1, "text": ["In {settlement} they watch the sky and speak quietly.", "{settlement} goes about its work with one eye on the clouds."]},
+    {"id": "heart.restless", "kind": "god", "weight": 1, "text": ["In {settlement} they murmur against the god.", "There is grumbling in {settlement}: what has the god done for us?"]},
+    {"id": "heart.defiant", "kind": "god", "weight": 2, "text": ["In {settlement} they raise their fists at the sky."]},
+    {"id": "heart.devoted", "kind": "god", "weight": 1, "text": ["{settlement} has turned its face to the god again."]},
+    {"id": "heart.proud", "kind": "god", "weight": 1, "text": ["In {settlement} they say they need no god.", "{settlement} boasts of its walls and its granaries."]},
+    {"id": "heart.cowed", "kind": "god", "weight": 2, "text": ["{settlement} put down its stones."]}
   ]
 }

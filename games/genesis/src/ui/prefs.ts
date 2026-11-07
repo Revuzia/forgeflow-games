@@ -39,7 +39,8 @@ export interface Prefs {
   };
   /** pauseHidden: stop time while the page is hidden — 'auto' (on inside the site's frame), 'on', 'off' */
   /** autosaveChosen: the player picked the cadence (an old default, 10 minutes, kept without being chosen moves to the new one) */
-  game: { autosaveMinutes: number; autosaveChosen: boolean; edgePan: boolean; pauseHidden: 'auto' | 'on' | 'off' };
+  /** slowGreat (ARC §2.5): a Decision card opening above 30x eases the speed to 10x until it is answered or put off */
+  game: { autosaveMinutes: number; autosaveChosen: boolean; edgePan: boolean; pauseHidden: 'auto' | 'on' | 'off'; slowGreat: boolean };
   pad: { enabled: boolean; deadzone: number; cursorSpeed: number; invertY: boolean; lookSpeed: number };
 }
 
@@ -48,7 +49,7 @@ export const DEFAULT_PREFS: Prefs = {
   gfx: { renderScale: 1, shadows: true, ssao: true, godRays: true, bloom: 1, flare: true, fxaa: true, grain: true, vignette: true, vegetation: 1, grass: true, orbits: true, exposure: 0 },
   audio: { master: 0.8, music: 0.6, sfx: 0.8, ambience: 0.7, muted: false },
   ui: { autoScale: true, scale: 1, palette: 'standard', reduceMotion: false, hints: true, toastSeconds: 8, ticker: true, labels: true, showFps: false },
-  game: { autosaveMinutes: 2, autosaveChosen: false, edgePan: true, pauseHidden: 'auto' },
+  game: { autosaveMinutes: 2, autosaveChosen: false, edgePan: true, pauseHidden: 'auto', slowGreat: true },
   pad: { enabled: true, deadzone: 0.18, cursorSpeed: 900, invertY: false, lookSpeed: 1 },
 };
 

@@ -11,7 +11,7 @@
 // Plain JSON objects only: the whole state is saved in the save header, hashed (determinism tests), restored by
 // rewind, and walked in array order (ids ascending) so iteration never depends on timing.
 
-import type { EntityRef, UnitVec } from '../types.ts';
+import type { EntityRef, UnitVec, HeartKind, DefyKind, Vow } from '../types.ts';
 import type { Building } from '../people/state.ts';
 import type { ItemDef, RecipeDef, WeatherDef, SpeciesDef, OreDef, MaterialDef, PlantDef } from '../content.ts';
 import type { RngState } from '../core/rng.ts';
@@ -282,7 +282,67 @@ export interface SettlementRel {
   vespers?: { t: number; went: number[] };
   /** (fix r4 #14) this morning's devotion: the tick its window opened and who has prayed (agent ids) — once a morning each */
   matins?: { t: number; went: number[] };
+  // ---- ARC §6.1 (all optional; created on first touch by god/arc.ts) ----
+  pride?: number;
+  prideWhy?: { P: number; T: number; U: number; L: number; F: number };
+  defiance?: number;
+  /** tick of the last defiant act per kind */
+  defied?: Partial<Record<DefyKind, number>>;
+  /** an open defiant act awaiting the god's answer (10 days) */
+  answer?: { tick: number; kind: DefyKind } | null;
+  hearts?: { devoted: number; fearful: number; restless: number; defiant: number; kind: HeartKind; proud: boolean;
+             since: number; pending?: { kind: HeartKind; from: number } };
+  memory?: Memory;
+  /** ArcEvent ids that raised this town's memory (sorted; for landmarks/legends) */
+  memEvents?: number[];
+  dusk?: { ema: number; today: number; low: boolean; yearAgo: number };
+  /** chronicle throttle: line id -> tick last told */
+  told?: Record<string, number>;
+  /** (fix a) tick of the last god-0 harm on it (-1 / absent: never) */
+  lastHarm?: number;
+  /** (fix a) decaying harm tally (halves yearly) */
+  harmLoad?: number;
+  /** building id of its standing idol */
+  idol?: number;
+  /** stage C3 */
+  legends?: Legend[];
 }
+
+// ---- ARC §6.1 types ----
+export type { HeartKind, DefyKind, Vow } from '../types.ts';
+export interface Memory { wrath: number; patience: number; mercy: number; sign: number; humbled: number;
+  betrayed: number; kept: number; proud: number;
+  /** ArcEvent id -> peak tally (legends) */
+  peak?: Record<string, number>;
+  /** ArcEvent ids already refreshed by a legend here, sorted */
+  refreshed?: number[] }
+export interface TowerState {
+  id: number; planet: number; host: number; league: number[];
+  name: string; cell: number; pos: V3; building: number;
+  material: 'mudbrick' | 'brick' | 'stone';
+  begun: number; ended: number;
+  height: number; goal: number; tiers: number; builders: number;
+  status: 'rising' | 'finished' | 'scattered' | 'struck' | 'abandoned';
+  answer: 'none' | 'confuse' | 'strike' | 'warn' | 'let'; answeredAt: number;
+  choiceAt: number;
+  choices: number;
+  warned?: { agent: number; tick: number; heeded: number[]; refused: number[]; disabledUntil: number };
+  omens: number;
+  rebuildOf?: number; converged: number;
+}
+export interface CovenantOffer { id: number; planet: number; act: string; kind: 'flood' | 'fire' | 'ruin'; name: string;
+  settlements: number[]; dead: number; household?: { id: number; name: string; count: number };
+  opens: number; until: number; natural: boolean }
+export interface Covenant { id: number; planet: number; made: number; vow: Vow; after: string;
+  settlements: number[]; household?: { id: number; name: string }; status: 'kept' | 'broken'; broken: number;
+  breakAct?: string; signAt: number; told: number; halved: boolean }
+export interface AgeRecord { id: number; planet: number; kind: string; name: string; place?: number;
+  begun: number; ended: number; event?: number; closing?: string; n: number }
+export interface ArcEvent { id: number; planet: number; tick: number;
+  kind: 'great' | 'tower' | 'confuse' | 'strike' | 'warn' | 'let' | 'defiance' | 'answer' | 'covenant' | 'kept' | 'broken' |
+        'firstwrong' | 'wandering' | 'silence' | 'othergods';
+  name: string; towns: number[]; god: 'wrath' | 'mercy' | 'patience' | 'sign' | 'promise' | 'broken' | 'none'; dead: number; ref?: number }
+export interface Legend { id: number; event: number; town: number; gen: number; text: string; told: number }
 
 export interface RelState {
   st: Record<string, SettlementRel>;
@@ -295,10 +355,49 @@ export interface RelState {
   next: number;
   /** tallies (worship by source, prayers answered ...) for probes and the inspector */
   stats: Record<string, number>;
+  // ---- ARC §6.1 ----
+  /** ended ones kept, at most 8 per planet (oldest ended dropped) */
+  towers?: TowerState[];
+  covenants?: Covenant[];
+  offers?: CovenantOffer[];
+  ages?: AgeRecord[];
+  /** planet id -> rows [year, regard, faith, fear, trust, loyalty, pride, defiance, pop] */
+  annals?: Record<string, number[][]>;
+  /** planet id -> tallies (§5.1) */
+  godActs?: Record<string, Record<string, number>>;
+  /** push (tick) order */
+  arcEvents?: ArcEvent[];
 }
 
 export function emptyRel(): RelState {
-  return { st: {}, prophets: [], prophecies: [], places: [], omens: [], next: 1, stats: {} };
+  return { st: {}, prophets: [], prophecies: [], places: [], omens: [], next: 1, stats: {},
+    towers: [], covenants: [], offers: [], ages: [], annals: {}, godActs: {}, arcEvents: [] };
+}
+
+/** ARC §6.1: the saved form of rel — keys of annals, godActs, defied, told and memory.peak sorted */
+function relJson(rel: RelState): RelState {
+  const st: Record<string, SettlementRel> = {};
+  for (const k of Object.keys(rel.st).sort()) {
+    const r = rel.st[k];
+    if (!r.defied && !r.told && !r.memory?.peak) { st[k] = r; continue; }
+    const o: SettlementRel = { ...r };
+    if (r.defied) o.defied = sortKeys(r.defied as Record<string, number>);
+    if (r.told) o.told = sortKeys(r.told);
+    if (r.memory?.peak) o.memory = { ...r.memory, peak: sortKeys(r.memory.peak) };
+    st[k] = o;
+  }
+  const out: RelState = { ...rel, st, stats: sortKeys(rel.stats) };
+  if (rel.annals) out.annals = sortKeys(rel.annals);
+  if (rel.godActs) {
+    const ga: Record<string, Record<string, number>> = {};
+    for (const k of Object.keys(rel.godActs).sort()) ga[k] = sortKeys(rel.godActs[k]);
+    out.godActs = ga;
+  }
+  // empty ARC defaults are not saved (emptyRel() restores them on load), so an untouched old world hashes as it did
+  const o = out as unknown as Record<string, unknown>;
+  for (const k of ['towers', 'covenants', 'offers', 'ages', 'arcEvents']) if (Array.isArray(o[k]) && !(o[k] as unknown[]).length) delete o[k];
+  for (const k of ['annals', 'godActs']) if (o[k] && !Object.keys(o[k] as object).length) delete o[k];
+  return out;
 }
 
 /** content made at runtime (freeform inventions, species laws): rebuilt into the content as the 'runtime' pack */
@@ -420,7 +519,7 @@ export class GodState {
       shields: this.shields, disciples: this.disciples, possession: this.possession, cooldowns: sortKeys(this.cooldowns),
       runtime: this.runtime, laws: sortKeys(this.laws), settlementLaws: sortKeys(this.settlementLaws), lastGod: sortKeys(this.lastGod),
       rng: this.rng.save().map((x) => x >>> 0), speedRequest: this.speedRequest, stats: sortKeys(this.stats),
-      winds: this.winds, windsOn: sortKeys(this.windsOn), rel: { ...this.rel, st: sortKeys(this.rel.st), stats: sortKeys(this.rel.stats) },
+      winds: this.winds, windsOn: sortKeys(this.windsOn), rel: relJson(this.rel),
     })) as GodJson;
   }
 

@@ -59,4 +59,12 @@ const content: HeaderStep = () => {};
 const history: HeaderStep = () => {};
 
 /** the 1.4 → 1.5 steps, in order (append yours) */
-export const LIVING_MIGRATIONS: HeaderStep[] = [pace, relationship, land, content, history];
+/**
+ * ARC (ARC.md §7): nothing in the header changes and the version stays 1.5. The new god-layer state defaults to
+ * `towers, covenants, offers, ages, arcEvents` = [] and `annals, godActs` = {} (set in `emptyRel()` and loaded through the
+ * `{ ...emptyRel(), ...copy(j.rel) }` spread, god/state.ts). Per-town state (memory, pride, hearts, dusk, lastHarm,
+ * harmLoad, `since.arc0`) is filled lazily by god/arc.ts on the first ARC daily of each town.
+ */
+const arc: HeaderStep = () => {};
+
+export const LIVING_MIGRATIONS: HeaderStep[] = [pace, relationship, land, content, history, arc];

@@ -1,0 +1,43 @@
+{
+  "_doc": "ARC §0.3, §1.4, §5: the sacred text of the arc (captions, mood lines, memory phrases; later the Book). Voice rules ARC §0.3; checked by tests/scripture_lint.test.ts.",
+  "caption": {
+    "devoted": "They bow at dusk",
+    "fearful": "They watch the sky",
+    "restless": "They murmur",
+    "defiant": "They raise their fists",
+    "proud": "They boast",
+    "quiet": "They go about their days"
+  },
+  "line": {
+    "devoted": "In {settlement} they bow at dusk and bring the first of the harvest.",
+    "fearful": "In {settlement} they watch the sky and speak quietly.",
+    "restless": "In {settlement} they murmur against the god.",
+    "defiant": "In {settlement} they raise their fists at the sky.",
+    "quiet": ""
+  },
+  "person": {
+    "devoted": "{name} loves the god",
+    "fearful": "{name} is afraid of the sky",
+    "restless": "{name} murmurs against the god",
+    "defiant": "{name} raises a fist at the sky",
+    "quiet": "{name} goes about the day"
+  },
+  "share": ["a few", "some", "about a third", "about half", "most", "nearly all"],
+  "prideWhy": {
+    "P": "rich",
+    "T": "skilled",
+    "U": "many kin towns",
+    "L": "long unpunished",
+    "F": "little faith"
+  },
+  "remember": {
+    "wrath": "the anger of the sky",
+    "patience": "the long quiet of the god",
+    "mercy": "the mercy after the wrong",
+    "sign": "the signs in the sky",
+    "humbled": "the fallen tower",
+    "betrayed": "the broken promise",
+    "kept": "the kept promise",
+    "proud": "the tower that stood"
+  }
+}

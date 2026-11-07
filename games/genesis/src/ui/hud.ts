@@ -41,6 +41,7 @@ import { stripYear } from './words.ts';
 import { h, fmtNum, cap } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, WRATH_DEFAULT } from './powers.ts';
+import { heartGlyph } from './hearts.ts';
 import { PrayerMarks, labelSigns, regardOf, regardValue, bandOf, meterRow, openPrayers, godTitle, METERS, PRAYER_WORDS, type GodRow } from './living.ts';
 
 export interface HudActions {
@@ -168,7 +169,7 @@ export class Hud {
   private markers: HTMLDivElement;
   private markerEls = new Map<number, HTMLDivElement>();
   private labels: HTMLDivElement;
-  private labelEls = new Map<string, { el: HTMLDivElement; text: string }>();
+  private labelEls = new Map<string, { el: HTMLDivElement; text: string; defiant?: number; pulseUntil?: number }>();
   readonly toasts: Toasts;
   readonly dock: HTMLDivElement;
   private dockBtns = new Map<string, HTMLButtonElement>();
@@ -259,7 +260,7 @@ export class Hud {
     this.root.appendChild(time);
     // the world switcher on the right never reaches over the time panel (the site's 888-px frame, seven worlds): it
     // wraps within what the panel leaves (styles.css .gn-worlds reads --gn-time-r)
-    const timeEdge = () => { const r = time.getBoundingClientRect(); if (r.width > 0) this.root.style.setProperty('--gn-time-r', `${Math.ceil(r.right)}px`); };
+    const timeEdge = () => { const r = time.getBoundingClientRect(); if (r.width > 0) { this.root.style.setProperty('--gn-time-r', `${Math.ceil(r.right)}px`); this.root.style.setProperty('--gn-time-b', `${Math.ceil(r.bottom)}px`); } };
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(timeEdge).observe(time);
     addEventListener('resize', timeEdge);
     // ── top right: worlds strip + worship / belief ──
@@ -593,6 +594,7 @@ export class Hud {
     const seen = new Set<string>();
     const ko = this.keepOut;
     const alt = f.altitude;
+    const now = performance.now();
     if (pv && f.labels !== false && !f.systemView && alt > 70 && alt < 9000 && pv.settlements.length) {
       const R = pv.params.radius;
       const cam = f.pose.pos;
@@ -636,7 +638,11 @@ export class Hud {
         }
         const sub = `${s.population} · ${s.flags & 1 ? 'wandering' : s.eraLabel ?? `${s.era} age`}${s.besieged ? ' · besieged' : s.war?.length ? ' · at war' : ''}`;
         const sg = labelSigns(s);
-        const text = `${s.name}|${sub}|${sg.prayer.toFixed(1)}|${sg.prophet}|${sg.sacred}`;
+        const hg = heartGlyph(s);
+        // ARC §1.4: a new defiant act makes the fist pulse for 10 s of real time
+        if (hg && hg.defiantTick >= 0 && hg.defiantTick !== rec.defiant) { rec.defiant = hg.defiantTick; rec.pulseUntil = now + 10000; }
+        const pulse = !!hg && hg.icon === 'heart-defiant' && (rec.pulseUntil ?? 0) > now;
+        const text = `${s.name}|${sub}|${sg.prayer.toFixed(1)}|${sg.prophet}|${sg.sacred}|${hg ? `${hg.icon}|${hg.proud}|${hg.title}|${pulse}` : ''}`;
         if (rec.text !== text) {
           rec.text = text;
           const nm = rec.el.firstElementChild as HTMLElement;
@@ -644,6 +650,13 @@ export class Hud {
           // its small signs: a lamp while it prays (brighter the more pressing), a star where its prophet lives, a leaf
           // where it keeps something holy
           if (sg.prayer >= 0) nm.prepend(h('span', { class: 'gn-slabel-sign gn-slabel-pray', html: icon('prayer'), style: `opacity:${(0.6 + 0.4 * sg.prayer).toFixed(2)}`, title: `${s.name} prays for ${(s.prayers ?? []).map((q) => PRAYER_WORDS[q.kind] ?? q.kind).join(' and ')}` }));
+          // the town's heart (ARC §1.4): its glyph, then a small stepped tower when it is proud; the caption is the tooltip
+          if (hg) {
+            const hs = h('span', { class: 'gn-slabel-heart', title: hg.title, data: { heart: hg.icon ?? 'proud' } });
+            if (hg.icon) hs.append(h('span', { class: `gn-slabel-sign gn-slabel-hk gn-${hg.icon}${pulse ? ' gn-pulse' : ''}`, html: icon(hg.icon) }));
+            if (hg.proud) hs.append(h('span', { class: 'gn-slabel-sign gn-slabel-proud', html: icon('heart-proud') }));
+            nm.append(hs);
+          }
           if (sg.prophet) nm.append(h('span', { class: 'gn-slabel-sign gn-slabel-prophet', html: icon('prophet'), title: `${s.prophet!.name}, your prophet, lives here` }));
           if (sg.sacred) nm.append(h('span', { class: 'gn-slabel-sign gn-slabel-sacred', html: icon('sacred'), title: s.sacred?.animal ? `They revere the ${s.sacred.animal.replace(/-/g, ' ')}` : 'They keep a holy place' }));
           (rec.el.lastElementChild as HTMLElement).textContent = sub;

@@ -168,7 +168,8 @@ export class Settings {
       field('Cursor speed', slider({ min: 300, max: 2400, step: 50, value: pad.cursorSpeed, fmt: (x) => `${fmtNum(x)} px/s`, on: set('pad.cursorSpeed') })),
       field('Camera speed', slider({ min: 0.3, max: 3, step: 0.05, value: pad.lookSpeed, fmt: (x) => `${x.toFixed(2)}×`, on: set('pad.lookSpeed') })),
       field('Invert camera tilt', toggle(pad.invertY, set('pad.invertY'), 'Invert camera tilt')),
-      field('Edge pan', toggle(this.host.prefs.value.game.edgePan, set('game.edgePan'), 'Edge pan'), 'the camera pans when the cursor reaches the edge'));
+      field('Edge pan', toggle(this.host.prefs.value.game.edgePan, set('game.edgePan'), 'Edge pan'), 'the camera pans when the cursor reaches the edge'),
+      field('Slow down for great moments', toggle(this.host.prefs.value.game.slowGreat !== false, set('game.slowGreat'), 'Slow down for great moments'), 'when a great choice comes, time eases to 10x until you answer'));
   }
 
   private bindRow(a: ActionDef): HTMLDivElement {

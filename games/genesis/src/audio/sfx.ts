@@ -868,6 +868,83 @@ export const SFX: Record<string, Recipe> = {
     s.buf('murmur2', 0, 1.2, 0.16, ['bandpass', 900, 0.8], 1.4);
     s.wet(0.3);
   },
+  // ── ARC (hearts, the tower, defiance, the covenant): the people's own sounds; new cues only, no stinger ──
+  // a town turns against the god: a crowd's jeer, rough voices low and falling, a few shouts above
+  'crowd.jeer': (s) => {
+    s.buf('murmur2', 0, 0.8, 0.26, ['bandpass', 650, 0.9], 1.8);
+    for (let i = 0; i < 4; i++) s.reed(0.15 + i * 0.22 + s.r() * 0.08, s.rr(170, 230), s.rr(120, 150), 0.35, 0.03, 0.15, 0.25, 0.05, ['bandpass', 900, 1.2]);
+    s.wet(0.35);
+  },
+  // a town turns its face to the god again: an evening hymn, the fifth and the octave on D, soft
+  'crowd.hymn': (s) => {
+    s.choir(0, 146.8, 2.8, 0.045, [500, 900]);
+    s.choir(0.25, 220, 2.6, 0.04, [500, 900]);
+    s.choir(0.5, 293.7, 2.3, 0.032, [650, 1050]);
+    s.wet(0.65);
+  },
+  // the towns begin a tower: work drums, steady and heavy, a call answered
+  'toil.drums': (s) => {
+    for (let i = 0; i < 8; i++) thud(s, i * 0.42, i % 2 ? 0.16 : 0.24, i % 4 === 0 ? 1.4 : 1);
+    s.horn(0.9, 146.8, 0.6, 0.06, 0.4);
+    s.wet(0.4);
+  },
+  // a tier laid: a work chant, the leader's call and the crowd's answer, mallets on brick
+  'toil.chant': (s) => {
+    s.choir(0, 196, 0.6, 0.05, [600, 1000]);
+    s.choir(0.7, 146.8, 0.9, 0.05, [450, 850]);
+    s.choir(0.72, 220, 0.9, 0.035, [450, 850]);
+    for (let i = 0; i < 4; i++) s.bell('wood', 0.7 + i * 0.25, s.rr(180, 240), 0.12);
+    s.wet(0.45);
+  },
+  // a great moment asks the god for a choice: one soft gong, low and long
+  'ui.great': (s) => {
+    s.bell('toll', 0, 73.4, 0.24, ['lowpass', 900], 5);
+    s.tn('sine', 0, 110, 110, 0, 0.4, 1.6, 3, 0.05);
+    shimmer(s, 0.3, 2.4, 0.015);
+    s.wet(0.7);
+  },
+  // the tongues confused: 6-10 voices that start together and scatter apart in pitch and vowel over four seconds
+  'babel.babble': (s) => {
+    const n = 6 + Math.floor(s.r() * 5);
+    const vowels: [number, number][] = [[700, 1150], [400, 2000], [300, 870], [500, 1700], [600, 1000], [350, 2300]];
+    for (let i = 0; i < n; i++) {
+      const at = (i / n) * 0.4 + s.r() * 0.15;
+      const spread = 1 + (i / n) * 3.2; // later grains wander further from the shared note
+      const hz = 196 * Math.pow(2, (s.rr(-1, 1) * spread) / 12);
+      s.choir(at, hz, s.rr(0.5, 0.9), 0.045, vowels[i % vowels.length]);
+      s.choir(at + 1.2 + s.r() * 0.6, hz * Math.pow(2, s.rr(-5, 5) / 12), s.rr(0.4, 0.8), 0.035, vowels[(i + 3) % vowels.length]);
+      s.choir(at + 2.6 + s.r() * 0.8, hz * Math.pow(2, s.rr(-9, 9) / 12), s.rr(0.3, 0.7), 0.025, vowels[(i + 1) % vowels.length]);
+    }
+    s.wet(0.6);
+  },
+  // the tower falls: brick and stone giving way, a long grinding slide, the heavy landings
+  'masonry.collapse': (s) => {
+    rumble(s, 0, 3.2, 0.6, 80);
+    s.buf('hail', 0.2, 0.45, 0.4, ['lowpass', 1200], 2.6);
+    for (let i = 0; i < 5; i++) thud(s, 0.6 + i * 0.45 + s.r() * 0.2, 0.5 - i * 0.06, 0.8);
+    s.wet(0.45);
+  },
+  // a crowd cheering: the tower finished, a festival
+  'crowd.cheer': (s) => {
+    s.buf('murmur2', 0, 1.3, 0.28, ['bandpass', 1300, 0.7], 2.2);
+    s.nz('pink', 0.05, 0.3, 1.2, 1.2, 0.08, ['bandpass', 2200, 0.8]);
+    for (let i = 0; i < 3; i++) s.reed(0.2 + i * 0.3, s.rr(300, 380), s.rr(420, 520), 0.25, 0.03, 0.2, 0.3, 0.04, ['bandpass', 1500, 1]);
+    s.wet(0.35);
+  },
+  // an act of defiance: a crowd shouting at the sky
+  'crowd.shout': (s) => {
+    s.buf('murmur2', 0, 1, 0.24, ['bandpass', 900, 0.8], 1.2);
+    for (let i = 0; i < 3; i++) s.reed(0.1 + i * 0.18, s.rr(220, 300), s.rr(180, 240), 0.2, 0.02, 0.2, 0.2, 0.05, ['bandpass', 1100, 1.2]);
+    s.wet(0.3);
+  },
+  // an idol set up: stone knocked on stone
+  'stone.knock': (s) => { for (let i = 0; i < 3; i++) s.bell('wood', i * 0.3, s.rr(90, 120), 0.18, ['lowpass', 1200]); thud(s, 0.95, 0.12, 1.2); s.wet(0.4); },
+  // the covenant's sign: a slow rising cluster of bells (D, A, D, F#, A)
+  'covenant.chime': (s) => { s.arp('chime', 0, [62, 69, 74, 78, 81], 0.42, 0.13); s.pad(0.4, [50, 57, 62, 66], 1, 1.6, 2.6, 0.08); s.wet(0.75); },
+  // the covenant broken: the same cluster detuned and cut short
+  'covenant.chime.broken': (s) => { s.arp('chime', 0, [62, 68, 73, 77], 0.3, 0.12, ['lowpass', 2400]); s.nz('brown', 1.1, 0.02, 0.1, 0.6, 0.1, ['lowpass', 400]); s.wet(0.5); },
+  // a command refused (a broken vow not chosen): a low closed knock
+  'ui.deny': (s) => { s.bell('wood', 0, 110, 0.2, ['lowpass', 800]); s.bell('wood', 0.12, 98, 0.16, ['lowpass', 700]); },
 
   // ── the god's other acts ──
   shape: (s) => {

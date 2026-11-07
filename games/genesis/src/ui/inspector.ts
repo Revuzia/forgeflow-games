@@ -25,6 +25,7 @@ import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
 import { icon } from './icons.ts';
 import { masteryWords } from './words.ts';
+import { HEART_KINDS, HEART_LABEL, captionOf, shareOf, shareWords, personHeartLine, prideWhyWords, type TownHeart } from './hearts.ts';
 import { slider, toggle } from './panel.ts';
 import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, pastYears, FOOD_ORDER, FOOD_WORDS, type ProphetRow, type PastYear } from './living.ts';
 import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
@@ -446,6 +447,9 @@ export class Inspector {
       this.body.append(spl);
     }
     // the dead have no health, mood or needs left to show: their card is a biography
+    // ARC §1.4: the person's heart toward the god, in words, above the bars
+    const hl = this.gone ? '' : personHeartLine(str(d.name).split(' ')[0], d.heart);
+    if (hl) this.body.append(h('div', { class: `gn-insp-line gn-insp-heart gn-heart-${str(d.heart)}`, text: hl }));
     if (!this.gone) {
       const vit = this.section('Body and mind');
       this.bar(vit, 'Health', num(d.health), 'gn-health');
@@ -645,6 +649,9 @@ export class Inspector {
     if (d.crop) this.kv(sec, 'Fields of', `${str(d.crop).toLowerCase()}${num(d.fields) ? ` (${num(d.fields)})` : ''}`);
     const roles = Object.entries((d.roles ?? {}) as Record<string, number>).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`);
     if (roles.length) this.chips(sec, roles, 10, 'gn-chip-role');
+    // (the mirror's view first: it is the freshest, and carries the §6.7 stub before the sim sends hearts)
+    const heartNow = (this.deps.live(ref)?.heart ?? view?.heart) as TownHeart | undefined;
+    if (!d.fallen && heartNow) this.settlementHearts(heartNow, num(view?.population, pop), (d.prideWhy ?? null) as Parameters<typeof prideWhyWords>[0]);
     if (!d.fallen) this.settlementGod(ref, d, view);
     else if (typeof d.belief === 'number') {
       const g = this.section('Toward the god');
@@ -697,6 +704,28 @@ export class Inspector {
       const s = this.section('Their tongue');
       s.append(el('div', 'gn-insp-lang', (lang.sample as string[]).join(' · ')));
     }
+  }
+
+  /** ARC §1.4: the town's heart in words, the share bars, pride and defiance, dusk at the shrine, what they remember */
+  private settlementHearts(ht: TownHeart, pop: number, why: Parameters<typeof prideWhyWords>[0]): void {
+    const sec = this.section('Hearts');
+    sec.classList.add('gn-insp-hearts');
+    const cap0 = captionOf(ht);
+    sec.append(el('div', `gn-insp-line gn-insp-heart gn-heart-${ht.kind}`, ht.kind === 'quiet' ? cap0 : `${cap0}: ${shareWords(shareOf(ht))}`));
+    if (ht.line) sec.append(el('div', 'gn-insp-line gn-insp-heart-line', ht.line));
+    const grid = el('div', 'gn-insp-grid');
+    for (const k of HEART_KINDS) this.bar(grid, HEART_LABEL[k], ht[k], `gn-heart-${k}`, shareWords(ht[k]));
+    sec.append(grid);
+    this.bar(sec, 'Pride', ht.pride, 'gn-pride', ht.proud ? 'proud' : shareWords(ht.pride));
+    const pw = prideWhyWords(why);
+    if (pw) (sec.lastElementChild as HTMLElement).title = pw;
+    this.bar(sec, 'Defiance', ht.defiance, 'gn-defy', shareWords(ht.defiance));
+    const of = Math.max(0, Math.round(pop));
+    const came = (x: number) => Math.max(0, Math.min(of, Math.round(x * of)));
+    sec.append(el('div', 'gn-insp-line', `At dusk: ${came(ht.dusk)} of ${of} at the shrine (a year ago, ${came(ht.duskYearAgo)})`));
+    if (ht.theyCall) sec.append(h('div', { class: 'gn-insp-line', html: `They call the god <i>${ht.theyCall.replace(/[<>&"]/g, '')}</i>` }));
+    if (ht.remember?.length) sec.append(el('div', 'gn-insp-line', `They remember: ${ht.remember.slice(0, 3).join(' · ')}`));
+    if (ht.answered) sec.append(el('div', 'gn-insp-line', `What the god answered: ${ht.answered}`));
   }
 
   /** how a settlement holds the god, what it prays for, its prophet, what it keeps holy — and a sign to send it */

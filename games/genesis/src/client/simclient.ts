@@ -16,6 +16,7 @@
 
 import type { Command, CommandResult, FromWorker, Snapshot, ToWorker } from '../sim/types.ts';
 import { WorldView } from './worldview.ts';
+import { applyArcStub } from './arcstub.ts';
 import { perfmon } from '../render/perfmon.ts';
 
 export type SnapshotSink = (snap: Snapshot) => void;
@@ -277,6 +278,7 @@ export class SimClient {
   }
 
   private receive(s: Snapshot): void {
+    applyArcStub(s); // ARC §6.7 (no-op unless a stub is set)
     const now = performance.now();
     this.got++;
     // a reply to a request sent before the last setSpeed still carries the old speed (the worker answers in order):
