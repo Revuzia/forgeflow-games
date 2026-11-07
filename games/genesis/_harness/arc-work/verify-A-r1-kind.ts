@@ -22,7 +22,7 @@ function means(tag: string) {
   }
   const r = srel(sim.u, p.id, sid);
   console.log(tag, 'n', n, 'faith', (fa / n).toFixed(2), 'love', (lo / n).toFixed(2), 'fear', (fe / n).toFixed(2), 'loyalty', (ly / n).toFixed(2), 'mood', (mo / n).toFixed(2),
-    'faith>=.5', c1, 'love>=fear', c2, 'loyal>=.35', c3, 'devotedRule', dv, 'kind', r.hearts?.kind, JSON.stringify(r.hearts ?? {}), 'prayers', r.prayers.length);
+    'faith>=.5', c1, 'love>=fear', c2, 'loyal>=.35', c3, 'devotedRule', dv, 'kind', r.hearts?.kind, JSON.stringify(r.hearts ?? {}), 'prayers', r.prayers.length, 'dusk', JSON.stringify(r.dusk), 'pride', r.pride);
 }
 sim.step(day);
 means('day1');
