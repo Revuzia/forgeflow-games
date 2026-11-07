@@ -671,7 +671,7 @@ section('hesmi', () => {
 
 // ── 8. Kemdo (Breaker, res_heat) ───────────────────────────────────────────────────────────────────
 section('kemdo', () => {
-  { // A1 Long Thrust: 4.5 m line, phys damage; slowed enemies also take 5% max hp as true damage (+20 Heat)
+  { // A1 Long Thrust: 4.5 m line, phys damage; slowed enemies also take 3.5% max hp as true damage (+20 Heat)
     const a = arena('kemdo', { foes: [3.5, 3.5], foeDy: [0, 3] });
     const [foe, off] = a.foes;
     const { res, evs } = cast(a, 'a1', { x: 20, y: Y }, 0.7);
@@ -683,7 +683,7 @@ section('kemdo', () => {
     a.me.slots[SLOT_INDEX.a1]!.cooldown = 0; a.me.res = 0;
     const two = cast(a, 'a1', { x: 20, y: Y }, 0.7);
     const tr = dmgOn(two.evs, 'kemdo_long_thrust', foe, 'true');
-    check('Long Thrust: a slowed enemy also takes max-hp true damage', tr.length === 1 && tr[0].amount >= foe.maxHp * 0.05 - 1, tr[0]?.amount);
+    check('Long Thrust: a slowed enemy also takes max-hp true damage', tr.length === 1 && tr[0].amount >= foe.maxHp * 0.035 - 1, tr[0]?.amount);
   }
   { // A2 Heat Shimmer: dash 5 m, leaving a shimmer for 2 s that slows enemies inside by 25% (+25 Heat)
     const a = arena('kemdo', { foes: [3] });
@@ -706,16 +706,16 @@ section('kemdo', () => {
     check('Vent: casts while overheated', res === 'ok', res);
     check('Vent: releases 50 Heat', a.me.res <= 50.5 && a.me.res >= 25, a.me.res);
     check('Vent: phys damage and a 1 m knockback', dmgOn(evs, 'kemdo_vent', foe, 'phys').length === 1 && foe.x > x0 + 0.5, [x0, foe.x]);
-    check('Vent: armor and resist up for 1.5 s', hasBuff(a.me, 'kemdo_vented') && a.me.stats.armor >= arm0 + 35, [arm0, a.me.stats.armor]);
+    check('Vent: armor and resist up for 1.5 s', hasBuff(a.me, 'kemdo_vented') && a.me.stats.armor >= arm0 + 27, [arm0, a.me.stats.armor]);
   }
-  { // Ultimate Held Focus: a 2 m spot follows an enemy fighter within 6 m for 3 s: true damage every 0.5 s to them and anyone beside them; +25% omnivamp
+  { // Ultimate Held Focus: a 2 m spot follows an enemy fighter within 6 m for 3 s: true damage every 0.5 s to them and anyone beside them; +20% omnivamp
     const a = arena('kemdo', { foes: [5, 6.2], foeDy: [0, 0.8] });
     const [foe, beside] = a.foes;
     a.me.hp = a.me.maxHp * 0.5;
     const { res, evs } = cast(a, 'ult', { target: foe }, 0.35);
     check('Held Focus: casts on an enemy fighter 5 m away', res === 'ok', res);
     check('Held Focus: +30 Heat', a.me.res >= 29, a.me.res);
-    check('Held Focus: omnivamp buff on her', hasBuff(a.me, 'kemdo_focus_drink') && a.me.stats.omnivamp >= 0.24, a.me.stats.omnivamp);
+    check('Held Focus: omnivamp buff on her', hasBuff(a.me, 'kemdo_focus_drink') && a.me.stats.omnivamp >= 0.19, a.me.stats.omnivamp);
     check('Held Focus: a follow zone on the target', a.w.entities.some((e) => e.kind === 'zone' && e.def === 'kemdo_focus'));
     issueMove(a.w, foe, foe.x + 9, foe.y + 5, false); // the target runs; the spot goes with them
     const rest = step(a, 3.4);
