@@ -1,0 +1,37 @@
+{
+  "pass": false,
+  "experiments": [
+    {
+      "id": "GR-1",
+      "verdict": "revert",
+      "visibleGain": "slight",
+      "evidence": "Own same-page A/B through the real switch (Assets.setModelAnisotropy 1 vs 8) at zoom 28.5, new seeds and moments: rift High seed 41 t929, bridge High seed 53 t505, rift Ultra seed 67 t873, fray High seed 29 t317 (fight frame only: my script stopped at fray, which has no structures). Frames in _harness/_shots/gfx_verify_GR1, reports report_{rift_high,bridge_high,rift_ultra}.json. Pixels changing by more than 4: 0.19-0.43 % on fight frames, 0.00-0.15 % on structure frames. Laplacian sharpness +0.2 to +2.0 %. Off vs a second off capture differs by 0, so the deltas are the filter. Looked at full frames and actual-size crops (sbs_*.png in the same folder): rift High fight is indistinguishable to me; in the Ultra and bridge crops a coat and the tower are very slightly more defined when A and B sit side by side, and I would not notice it in play. Cost is not shown to be zero: synced frame median delta on minus off +0.6 ms rift High, +0.35 ms bridge High, +2.35 ms rift Ultra, positive in 15 of 18 blocks with the off side always first, but at load 23-53 and blocks up to 40 ms, so this is not_measured evidence, not a pass or a fail. Shimmer rises: flickEdge +0.22 %, +1.19 %, +0.29 %; pop +0.04 %, +0.86 %, +0.10 % (repeat runs identical). Triangles, draws, programs and texture counts identical A/B in every frame (rift 230547/111/39, bridge 330345/215/38, Ultra 291823/168/39). Memory A/B not read by anyone. Mean RGB shift at most 0.009 of 255, no hue or team-colour shift; telegraphs and bars read the same A/B. No new art, so no new sensitivity question. Engineer's numbers hold up except that his +0.1 ms is lower than my readings. By the rule of the pass (default to revert when the gain is slight and there is any cost) it goes. Also: _design/reviews/gfx/GR-1_anisotropy_ab.png does not exist although quality.ts:75 cites it, and the code reaches into three's private __webglTexture and __currentAnisotropy (assets.ts:186-190) for a gain nobody sees in play.",
+      "fixHint": "Remove the GR-1 hunks: quality.ts modelAnisotropy and MODEL_ANISOTROPY, assets.ts modelAnisotropy, setModelAnisotropy and anisotropyOf, renderer.ts:466 call. Leave the other lanes' hunks in those paths alone. Setting the constant to 1 alone would leave a dead code path and a comment citing a missing file."
+    },
+    {
+      "id": "GR-2",
+      "verdict": "correctly_rejected",
+      "visibleGain": "slight",
+      "evidence": "The engineer reached no verdict; the shipped state he left (PRESETS.high.maxDpr 1, quality.ts:81, settings.ts:44) is the right one, so I rule it rejected for now. Own run at 1440x900 with deviceScaleFactor 2 on rift High, seed 41, teamfight with telegraphs, the size he did not measure: _harness/_shots/gfx_verify_GR2/report_1440.json, 1440_dpr*.png, sbs_1_1.25.png, sbs_1_1.5.png. Buffers 1440x900, 1800x1125, 2160x1350. Triangles, draws, programs identical (229852/111/39). Footprint GPU + renderer: 1742 MB at DPR 1, 1819 at 1.25, 1906 at 1.5, 1768 on return to 1. So 1.25 costs about 50-77 MB and 1.5 about 140-164 MB at this size, more on 1512x982 and larger; with match readings up to 2983 MB under the 3.0 GB bar of ruling 20, either can break it on a peak match. Synced frame blocks: 10 / 10.7 / 12 ms at DPR 1, 10.5 / 11.7 / 14 at 1.25, 14.7 / 17.9 / 19.4 at 1.5, 9.2 / 8.9 / 8.9 back at 1, load 22-25: not_measured evidence, though the 1.5 step is large enough to read. By eye, in device-pixel crops: 1.25 makes telegraph lines, the sword and bar edges a little crisper, 1.5 slightly more, and I can see 1 vs 1.25 only side by side; a player on a 1080p display (DPR 1) gets nothing. Bars and outlines stay the same size in the crops. No step has been shown to hold 60 fps on an idle machine. No HUD capture, no calibrate test, no large HiDPI display (for example 2560x1440 logical) test exists.",
+      "fixHint": "If reopened: only 1.25, only with an idle 60 fps reading and a --prod match memory reading under 3.0 GB at 1512x982 at DPR 2, and change settings.ts VIDEO_LADDER too (it is what players get)."
+    },
+    {
+      "id": "GR-3",
+      "verdict": "revert",
+      "visibleGain": "none",
+      "evidence": "Not run, no switch built, no numbers, nothing to judge or to keep. The schema has no not_done verdict: revert here means no credit and no change in the tree, not that MSAA was shown to be bad. _harness/gfx_msaa_ab.mjs is untested and untracked.",
+      "fixHint": "Run it in the next GR round or drop it. Check that MSAA on the buffer the overlay pass draws into leaves overlays identical on every tier, and N8AO depth."
+    },
+    {
+      "id": "GR-4",
+      "verdict": "revert",
+      "visibleGain": "none",
+      "evidence": "Not started; nothing in the tree. Same meaning as GR-3: no credit, no change."
+    }
+  ],
+  "regressions": [
+    "GR-1 is ON in the shared working tree and uncommitted, with the verdict revert; a vale wip sync commit could pick it up (git log shows such commits taking src/render). Pan shimmer flickEdge +0.22 to +1.19 % while it is on.",
+    "src/render/quality.ts:75 cites _design/reviews/gfx/GR-1_anisotropy_ab.png, which does not exist; no tracked side-by-side exists for any GR experiment."
+  ],
+  "summary": "Fail as delivered. GR-1 is a real finding with a slight gain, so revert it: nothing a player sees at the game camera, a small shimmer rise, and a cost not shown to be zero. GR-2 stays at DPR 1: a slight HiDPI-only gain, about 50-164 MB against a tight match memory bar, and no idle 60 fps reading. GR-3 and GR-4 were never run. All timing here was at load 22-53, so it is not_measured evidence. Typecheck printed no errors with the GR-1 edits in the tree; probes and value_probe were not run (GR-1 mean RGB shift at most 0.009 of 255 at frame level). Fray was checked on one fight frame only. The verdict file is at _design/reviews/fixwaves/GFX_GR_verify1.json as the task's last instruction says, not _design/reviews/gfx/GR_verify1.json from its ownership line."
+}
