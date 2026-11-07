@@ -28,6 +28,7 @@
  *                   the CLOSED slabs cover the opening (every gap <= 1 cm: sides, middle, under the lintel), each OPEN slab stands inside the room it swings into,
  *                   the swing quarter discs are free of furniture, loot points, chests, stairs (ramp, approach, hole, exit) and every other leaf's discs; the slab
  *                   colliders come last in collidersOf, closed (dslab 1) then open (dslab 2) per leaf, the start state all-open (closed dead, open alive)
+ *   leafsee (Wave 9 fix doorstuck)  every loot point / chest is seen from its stand point (loot.js standFor) past every open leaf slab of its floor
  *   maps (Wave 9, a CHILD process: its CPU is not this process's)  the same leaf rows on every house of 3 maps x 5 seeds built by maps.js (world_env), the map's
  *                   door API (map.doors, setDoor: closed / open slabs, "cool", "blocked" + doorBlocked, the pending open slab, doorChanged, doorNear, doorAt,
  *                   doorStates / applyDoorStates) and contract C3: addDynamicCollider is returned by queryColliders / queryCollidersY / hasCollidersNear at its
@@ -147,6 +148,7 @@ function checkHouse(H, HGmod, MAN) {
   const allCols = HGmod.collidersOf(H), cols = allCols.filter((c) => !c.dead);     // (Wave 9: the door leaves' slabs of the other state are dead - every row judges the live set)
   const boxes = cols.filter((c) => c.kind === "box"), ramps = cols.filter((c) => c.kind === "ramp");
   checkLeaves(H, HGmod, allCols, E);
+  checkLeafSee(H, E);
   // a 2 m grid over the colliders (box colliders only): near(x0, z0, x1, z1) -> every box whose footprint may meet that rectangle (each once)
   const GI = new Map(), GS = 2;
   boxes.forEach((c, i) => { for (let gx = Math.floor(c.minX / GS); gx <= Math.floor(c.maxX / GS); gx++) for (let gz = Math.floor(c.minZ / GS); gz <= Math.floor(c.maxZ / GS); gz++) { const k = gx * 65536 + gz; let l = GI.get(k); if (!l) { l = []; GI.set(k, l); } l.push(i); } });
@@ -659,6 +661,35 @@ function deepSame(a, b) {
   for (let i = 0; i < ka.length; i++) { if (ka[i] !== kb[i] || !deepSame(a[ka[i]], b[kb[i]])) return false; }
   return true;
 }
+/** (Wave 9 fix doorstuck) every loot point and chest of a house is SEEN from its stand point - loot.js standFor: the nearest point of its room's walk rects -
+ *  past every OPEN door leaf slab of its floor (a 2-D segment against the slab footprint + 2 cm; the slab is full height, the pickup line 1.5 m -> the item).
+ *  A nightstand beside a jamb, reached only from the doorway with the open leaf between: bots stood there and never took it (isla_viva seed 3). */
+function segHitsBox(ax, az, bx, bz, x0, z0, x1, z1) {
+  let t0 = 0, t1 = 1;
+  const dx = bx - ax, dz = bz - az, P = [-dx, dx, -dz, dz], Q = [ax - x0, x1 - ax, az - z0, z1 - az];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(P[i]) < 1e-12) { if (Q[i] < 0) return false; continue; }
+    const r = Q[i] / P[i];
+    if (P[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return true;
+}
+function checkLeafSee(H, E) {
+  const Ls = H.doorLeaves || [];
+  if (!Ls.length) return;
+  const roomById = new Map((H.rooms || []).map((r) => [r.id, r]));
+  for (const q of (H.loot || []).concat(H.chests || [])) {
+    const R = roomById.get(q.room);
+    if (!R || !R.walk || !R.walk.length) continue;
+    let best = Infinity, sx = q.x, sz = q.z;
+    for (const r of R.walk) { const px = Math.min(r[2], Math.max(r[0], q.x)), pz = Math.min(r[3], Math.max(r[1], q.z)), d = (px - q.x) * (px - q.x) + (pz - q.z) * (pz - q.z); if (d < best) { best = d; sx = px; sz = pz; } }
+    for (const L of Ls) {
+      if (L.floor !== q.floor) continue;
+      const O = L.open, m = 0.02;
+      if (segHitsBox(sx, sz, q.x, q.z, O.min[0] - m, O.min[2] - m, O.max[0] + m, O.max[2] + m)) { E("leafsee", q.id + " (on " + (q.on || "chest") + ") hidden from its stand point (" + sx.toFixed(2) + ", " + sz.toFixed(2) + ") by the open leaf of " + L.door); return; }
+    }
+  }
+}
 /** (Wave 9, LC-91: design W2 row (a), contract C1) the door leaves of ONE house, from the house data and its colliders only (world frame).
  *  allCols: the house's colliders in collidersOf order (the leaf slabs last); startOpen(kind) the start state (default all open, C1's fallback). */
 function checkLeaves(H, HGmod, allCols, E, startOpen) {
@@ -833,7 +864,7 @@ async function mapsChild(plant) {
       out.houses++; out.leaves += (H.doorLeaves || []).length;
       for (const d of H.doors) { if (d.kind === "interior") { pm.int++; if (d.leaves) pm.intL++; } else { pm.ext++; if (d.leaves) pm.extL++; } if (d.leaves) nd++; }
       const errs = [];
-      checkLeaves(H, HGmod, M.colliders.slice(H.cols[0], H.cols[0] + H.cols[2]), (c, m) => errs.push(m));
+      checkLeaves(H, HGmod, M.colliders.slice(H.cols[0], H.cols[0] + H.cols[2]), (c, m) => errs.push(m)); checkLeafSee(H, (c, m) => errs.push(m));
       if (H.leafCols && (H.leafCols[0] + H.leafCols[1] !== H.cols[0] + H.cols[2] || H.leafCols[1] !== 2 * (H.doorLeaves || []).length)) errs.push(H.id + ": leafCols " + H.leafCols + " vs cols " + H.cols);
       for (const e of errs) out.leafErr.push(tag + " " + e);
     }
@@ -1222,7 +1253,8 @@ else if (require.main === module) (async () => {
   row("loot", "floor loot points on free floor (never inside / under a piece's collider)");
   row("staircase", "no furniture staircase: no low clutter (lowest top 0.2-0.55 m) within 0.9 m of a piece one step up");
   row("leaves", "door leaves (W2 row a): two per leafed door, closed slabs cover the opening (gaps <= 1 cm), open slabs inside the swing room, swing discs free of furniture / loot / chests / stairs / other leaves, slab colliders last (closed dead, open alive)");
-  const other = [...byCode.keys()].filter((k) => !["determinism", "floors", "reach", "nav", "furniture", "doors", "windows", "vis-col", "stairs", "budget", "roof", "loot", "staircase", "leaves"].includes(k));
+  row("leafsee", "loot / chests seen past the open door leaves: the line from each point's stand point (loot.js standFor: nearest point of its room's walk) to it meets no open leaf slab (+ 2 cm)");
+  const other = [...byCode.keys()].filter((k) => !["determinism", "floors", "reach", "nav", "furniture", "doors", "windows", "vis-col", "stairs", "budget", "roof", "loot", "staircase", "leaves", "leafsee"].includes(k));
   ok(other.length === 0, "no other checker errors", other.join(", "));
   // cross-thread + fresh process determinism
   let xt = 0;
@@ -1314,6 +1346,8 @@ else if (require.main === module) (async () => {
     ["loot", "a floor loot point moved under a piece", (H) => { const l = H.loot.find((q) => q.on === "floor"), p = H.furniture.find((q) => !q.deco && q.floor === l.floor && q.room === l.room) || H.furniture.find((q) => !q.deco && q.floor === l.floor); l.x = (p.min[0] + p.max[0]) / 2; l.z = (p.min[2] + p.max[2]) / 2; }],
     ["nav", "a room's walkable rectangle moved 3 m out of the house", (H) => { const q = H.rooms[0].walk[0]; q[0] += 30; q[2] += 30; }],
     ["vis-col", "a window frame skin moved 5 cm off its wall", (H) => { const b = H.boxes.find((q) => q.p === "skin"); const ax = b.max[0] - b.min[0] <= 0.016 ? 0 : 2; b.min[ax] += 0.05; b.max[ax] += 0.05; }],
+    ["leafsee", "a loot point put behind an open door leaf, its room's walk only on the doorway side", (H) => { const L = H.doorLeaves[0], O = L.open, l = H.loot.find((q) => q.floor === L.floor) || H.loot[0], R = H.rooms.find((r) => r.id === l.room);
+      const cx = (O.min[0] + O.max[0]) / 2, cz = (O.min[2] + O.max[2]) / 2; l.floor = L.floor; l.x = cx - L.tdir[0] * 0.4; l.z = cz - L.tdir[1] * 0.4; const wx = cx + L.tdir[0] * 0.4, wz = cz + L.tdir[1] * 0.4; R.walk = [[wx - 0.1, wz - 0.1, wx + 0.1, wz + 0.1]]; }],
     ["leaves", "a closed door leaf 5 cm short (a gap in the shut door)", (H) => { const L = H.doorLeaves[0], ax = H.doors.find((d) => d.id === L.door).axis === "x" ? 0 : 2; if (L.tdir[ax ? 1 : 0] > 0) L.closed.max[ax] -= 0.05; else L.closed.min[ax] += 0.05; }],
     ["leaves", "an open door leaf pushed 1.3 m out of the room it swings into", (H) => { const L = H.doorLeaves[0]; for (const k of [0, 2]) { const s = L.n[k ? 1 : 0] * -1.3; L.open.min[k] += s; L.open.max[k] += s; } }],
     ["leaves", "a floor loot point moved into a door leaf's swing", (H) => { const L = H.doorLeaves[0], l = H.loot.find((q) => q.floor === L.floor) || H.loot[0]; l.floor = L.floor; l.x = L.hinge[0] + 0.5 * (L.tdir[0] + L.n[0]); l.z = L.hinge[1] + 0.5 * (L.tdir[1] + L.n[1]); }],

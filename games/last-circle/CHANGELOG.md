@@ -40,13 +40,20 @@ Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R
   the same replayed query stream (x1.25 kept); framecheck draws drop frame 1 from the live build's landing zone (x1.25 kept).
 - `MAP_GEN_TARGET` 8; housegen_demo_looks is counted now (`LOOKS_INFO = False`).
 
-**Fix round (lanes hudfeel, camwall)**
+**Fix round (lanes hudfeel, camwall, botpen, doorstuck)**
 - W9 R1 fix (hudfeel): loot pills are clamped 4 px inside the viewport, so they are never clipped by the screen edge, and they are hidden while the local player is dead or spectating. Fixes hud_checks pixel7 915x412 death 'CHEST' clipped 21 px past the edge.
 - W9 R1 fix (hudfeel): hud_checks gains an EDGES row (loot anchor at NDC x +/-0.99 -> 0 pills clipped) with the falsifier --only edges --plant pill-unclamped (must FAIL). hud_checks is now 118 rows.
 - W9 R1 fix (hudfeel): feelcheck places its pinned targets on the round's own line of fire (eye to body, K.segmentColliders + terrain, in front of the muzzle) and turns the subject on the spot to a clear 4-14 m facing. MAP_GEN 8 lands the ashgrid 4242 subject 0.53 m from a wall, which had left every pinned row could-not-judge.
 - W9 R1 fix (camwall): loot.js settle(): a floorless swap / death drop asked the map 322 times in one frame (player_camwall isla_viva maxInOneFrame 388 > 150 on 8eaae688); settle now queries the colliders once over its whole reach and runs the same box tests on that list - 3 calls per settle, same settled spots (6000 settles x 3 maps, diff 0), seeded worlds unchanged.
 - W9 R1 fix (camwall): player_camwall: new deterministic row, a floorless drop settles in <= 4 queryColliders calls (by caller settle) and keeps its x/z, on all 3 maps; plant settle-requery must FAIL it.
 - gate.py registers both new plants: hud_checks-plant-pill-unclamped and player_camwall-plant-settle-requery.
+- (W9 R1 fix botpen) Bots no longer get penned at a route corner near a cliff: edgeGuard's corner rule measures the run-on past the corner from the corner itself (0.2 m samples, 1.1 m), finds the corner past collinear grid waypoints, checks the walk to it, and applies to the flight test too (probe_match --pencheck 3/3 reach 11.5/8/10 s, 0 stuck episodes on the doors world).
+- (W9 R1 fix botpen) A wounded bot that turns between two fall-guard probes is re-probed at once (heading change > 0.2 rad yaw or 0.25 stick), and a hop is only made when its arc lands within the drop the bot may fall (p23_fall lips: 0 deaths over 27 judged lips x 5 runs; was 1 death in 2 runs).
+- (W9 R1 fix botpen) p23_fall: the bots-avoid lips row counts 3 repeats per seed (every run judged, bar 0 deaths unchanged) and a new deterministic row 'bots-avoid lips turned' with its plant no-turn-reprobe (MUST FAIL).
+- W9 R1 fix (doorstuck): house loot and chests are no longer placed where an open door leaf hides them from their stand point. Before, a bot stood in the doorway beside the leaf and never got the item (isla_viva seed 3, 14 stuck episodes).
+- W9 R1 fix (doorstuck): bots now go through a leafed doorway straight on. A window-planner route that crosses one passes two points on the door's axis (ashgrid seed 1 had a 3.6 s in/out loop at a back door, 7 episodes). probe_match_sweep is back to PASS 13/0, worst 3, the same as live.
+- W9 R1 fix (doorstuck): new housegen selftest row leafsee with its negative control; new probe_match plant no-door-funnel (the sweep must FAIL with it).
+- gate.py registers the fix-round-2 plants: p23_fall-plant-no-turn-reprobe and probe_match-plant-no-door-funnel.
 
 **Known gaps**
 - OD-16 bot shield economy: the median late-match bot shield is about 11-15 against a target of 75. Accepted by the owner on 2026-11-02;
