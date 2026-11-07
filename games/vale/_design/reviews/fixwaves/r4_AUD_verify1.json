@@ -1,0 +1,62 @@
+{
+ "lane": "AUD",
+ "verify": 1,
+ "at": "2026-11-07T04:45-06:00",
+ "verifier": "adversarial verifier, round 4 lane AUD",
+ "pass": true,
+ "summary": "The lane's two fixes hold under my own runs. AUD-1: the frozen AudioContext clock is this Mac's output device, not the client. I reproduced it: afplay of a 1 s silent wav was still blocked at the 10 s timeout (exit 124); a bare about:blank AudioContext stayed at 0.00533 s, state running; suspend/resume and close plus a new context did not help; the real client stayed frozen at the menu, at match start and over 19.3 s of a RIFT match. On Chrome's fake sink the bare clock advanced 4.21 s in 5.18 s at load 120-420. The client created 1 context, called resume, and never called suspend, close or setSinkId. AUD-2: the sampling loop now has a wall deadline and a stall stop. probe_audio_mix ran to completion with the maps in a new order (fray, bridge, rift): exit 0, PASS, RIFT floor lift M2 3.7 dB (bar 1). probe_audio_music: exit 0, all 17 gates. Break test, 4 matches in a row in one page with real rendering (fray High, bridge Ultra, rift High, then a rift Ultra restart), casting Q/W/E/R then Esc, shop then Esc, the menu, leaving: 1 AudioContext throughout, clock rate 0.999-1.001 at every step, master never silent, every ambient emitter playing in every match, 0 page errors. typecheck exit 0; npm run -s probe 55 of 55 PASS. One open point, not a regression from this lane: probe_audio_runtime sync passed 2 of 3 runs. In run 3, hits 2-21 of 50 played no cue (startsInCall 30/50, measured 29/50) at load 400-690. The gate needs an idle machine and nothing this lane changed is on that path, but this does not confirm the engineer's 50 of 50 in every run.",
+ "load": "1-min loadavg 102-691 over my runs (iOS Simulators and the other lanes); no timing number here is valid, function, levels and memory are",
+ "items": [
+  {
+   "id": "AUD-1",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Reproduced. afplay: `timeout 10 afplay s.wav` exit 124 in 10 s (load 139). `node _harness/fw_r4_aud_ctxclock.mjs --match 20 --out <scratch>/ctxclock.json` (load 120 -> 420, exit 1 = frozen as expected). bare: clock 0.005 s over 5.57 s of wall time, state running, outputLatency 0. kickResume: 0 s over 4.06 s. kickNewContext: 0 s over 4.77 s. bareFakeSink: 4.208 s over 5.18 s, advancing. client menu: 0.005 over 7.15 s. matchStart: 0 over 5.22 s. match (RIFT): 0 over 19.31 s, sameCtx true, spy created 1 / resume 1 / suspend 0 / close 0 / setSinkId 0. pmset -g assertions: coreaudiod holds audio-out BuiltInSpeakerDevice for the iOS Simulator audio devices (about 10h35m) and for other lanes' harness Chrome helpers. The same frozen clock in a page with no client code, and in afplay, means a player's silence on this machine is not a client bug. git log since 11-06: last src/audio commits are e293bfe7c and ffc93310a, git diff HEAD -- src/audio is empty. The brief's claim of no src/audio commit since the 12:49 pass checks out. The fix at the source is correctly scoped to the harness. Fake sink by default, --device keeps the device path. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/ctxclock.json, run.log (not committed: outside my ownership).",
+   "fixHint": "none for the lane. Owner: a stalled macOS output device makes any test by ear on this Mac silent until coreaudiod recovers."
+  },
+  {
+   "id": "AUD-2",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Read the diff df0555dd2..HEAD of _harness/probe_audio_mix.mjs. The loop has deadline = span x 1.5 + 60 s and a stall stop when ct has not moved more than 0.05 s for --stall (20) s. The map is reported notMeasured with matchTime and ctx, and report.pass is false. Exit codes: 2 = not measured, 1 = a gate failed, 0 = pass. Every other wait in the probe was already bounded: waitFor 600 s / 300 s, waitForFunction 20-60 s. The device-path proof is in _harness/_reports/fw_r4_aud_mix_device.json: 3 of 3 maps not measured, exit 2 in 416 s. My device-path ctxclock run above shows the same frozen clock the stall stop keys on. My own run: `node _harness/probe_audio_mix.mjs --maps fray,bridge,rift --out <scratch>/mix.json`, load 422 -> 111, exit 0 PASS in 540 s, sink fake. RIFT (last, after two reloads): floor lift M2 3.7 dB (bar >= 1), untrimmed 1.4, master st p10 -21.0 over music p50 -29.0, 6 of 6 emitters playing, 182 s over match time 30.8-212.2. BRIDGE: lift 0.6 dB, 5 of 5 emitters. FRAY: lift 2.2 dB, 5 of 5. M1 holds on all three. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/mix.json.",
+   "fixHint": "closing_gates owner: add the exit-2 = not measured, not a pass clause to the Mix row, per the engineer's handoff"
+  },
+  {
+   "id": "break-test",
+   "severity": "major",
+   "status": "pass",
+   "evidence": "Scratch tool aud_break.mjs. One fake-sink Chrome page with real rendering, the dev client (it needs the __valeAudio handle), autopilot. 4 matches in a row: fray High, bridge Ultra, rift High, rift Ultra as a restart after leaving. In each: real Q/W/E/R presses, Esc, P (shop), Q, Esc, Esc (menu), Esc, leave, menu. 21 probe points; at every one: ctx state running, the same ctx object, spy created 1 / suspend 0 / close 0. Clock rate 0.999-1.001. Master analyser RMS peak in a match -11.9 to -27.5 dBFS, at the menu after a leave -29.9 to -30.8 dBFS. Ambient emitters playing 5/5 fray, 5/5 bridge, 6/6 rift both times, 0 at the menu. Bus gains unchanged: music 0.6, sfx 0.8, ambience 0.6, master 0.8. 0 page errors. Exit 0, load 102 -> 180. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/break.json."
+  },
+  {
+   "id": "probe_audio_music",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "`node _harness/probe_audio_music.mjs --out <scratch>/music.json`, exit 0, PASS on all gates, load 20 -> 62. The act rose by the clock at match 482.6 s and by structures (12 killed, at 583.4 s). Three jumps: act 0 S2>S5, act 1 S3>S5, act 2 S5>S2. Objective: lift 2.27 dB, bed over the layer 3.91 dB, road gain 0.21. Clicks: overStepDb 0 / -6.22 / -13.27, inside the C1 bar of step <= 1.5 x the reference. Peak -12.34 dBFS. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/music.json."
+  },
+  {
+   "id": "probe_audio_runtime sync",
+   "severity": "minor",
+   "status": "partly",
+   "evidence": "`node _harness/probe_audio_runtime.mjs sync --out <scratch>/sync.json`, exit 1 FAIL, 2 of 3 runs pass, load 62 -> 691 -> 414. Runs 1 and 2: 50 of 50 started in their call, from the pump p95 32.0 / 31.82 ms against a budget of 42.72. Run 3: from the pump p95 32.18 ms, but startsInCall 30/50 and measured false (29 detected). Hits 2-21 played no cue at all; hits 1 and 22-50 played f_ardit_attack_hit. The rAF-side halves were not measured in any run (main thread busy). This contradicts the engineer's 50 of 50 in every run, so the row is not a pass on this machine. Nothing this lane changed is on the sync path: probe_audio_runtime.mjs and src/audio have no commit since e293bfe7c. Report: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/sync.json, run2.log.",
+   "fixHint": "Re-run sync at load < 3 per the gate. If any hit again plays no cue, investigate on the client side: 20 consecutive silent hits right after the first one look like a cue throttle or a combat-set prewarm not finished under load, not a timing jitter."
+  },
+  {
+   "id": "typecheck",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "npm run -s typecheck exit 0 (load about 290)"
+  },
+  {
+   "id": "probe",
+   "severity": "minor",
+   "status": "pass",
+   "evidence": "npm run -s probe: 55 passed, 0 skipped, 0 failed (957.4 s, load 100-400). The first attempt was cut by my own 1200 s timeout at load about 420, not by a failure. Log: /private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/probe2.log"
+  }
+ ],
+ "regressions": [],
+ "notes": [
+  "No tracked file under _harness/_reports was rewritten by my runs. Every output went to my scratchpad.",
+  "Not audio, outside the lane: in the break test the shop (.hud .lshop) did not open on P in match 1. In match 4 it stayed open after Esc, when Q had been pressed with the shop open (Esc probably cancelled the aim first). Only for the UI lane to check; audio was unaffected.",
+  "Nothing in the client detects a frozen output clock. On a stalled device the player hears nothing and gets no hint. That is the same for any web page and not a bar here."
+ ]
+}
