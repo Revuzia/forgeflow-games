@@ -518,6 +518,9 @@ class ValeRenderer implements Renderer {
     const gen = ++this.matchGen;
     this.client = client;
     this.mode = 'match';
+    // round 4 MEM-1 refix: the Home sun's shadow map is not drawn in a match (Ultra: a 4096² depth texture and its colour
+    // target, 80 MB; High 20 MB); it is made again on the first Home frame after the match (lighting.ts ensureMap)
+    this.menu.sun.releaseMap();
     lodSwitch.outline = true;                                              // perf PERF-m5: lod.ts
     lodSwitch.body = this.opts.bodyLod !== false;
     // perf PERF-M2: every match starts at the player's own render scale (nothing a menu or the last match did carries over)
@@ -578,7 +581,11 @@ class ValeRenderer implements Renderer {
     inkShadows(this.terrain.group);
     this.loadTerrainTextures(map, gen);
     void loadTerrainProps(map, (r) => this.assets.model(r)).catch(() => null).then((p) => { if (gen === this.matchGen && this.terrain) { this.terrain.setProps(p ?? {}); inkShadows(this.terrain.group); shadowLods(this.terrain.group); } });
-    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); } });
+    // round 4 MEM-1 refix: a landmark's textures upload as it lands, like a template's (warmTemplate): the decoded
+    // ImageBitmap closes on upload (assets.ts closeAfterUpload), so a landmark the camera has not reached yet no longer
+    // keeps its images decoded for the whole match (RIFT: 22 open bitmaps, 126 MB, numerals, camp marks, the low skirt),
+    // and its first sight no longer pays a 2048² upload in a frame
+    void loadTerrainLandmarks(map, (r) => this.assets.model(r), this.terrain.groundAt).then((ls) => { if (gen === this.matchGen && this.terrain) for (const o of ls) { inkShadows(o); shadowLods(o); this.terrain.group.add(o); this.uploadTextures(o); } });
     this.assets.model(map.art.scene).then((m) => {
       if (gen !== this.matchGen || !m?.renderable) return;
       const root = m.gltf.scene;

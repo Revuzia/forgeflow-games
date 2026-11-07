@@ -10,8 +10,9 @@
 // Characters also carry their own light (CHAR_LIGHT below, world_material.ts): no light object, no shadow map.
 
 import {
-  BasicShadowMap, Color, DirectionalLight, Matrix4, Object3D, PCFShadowMap, type PerspectiveCamera,
-  Vector3, type WebGLRenderer,
+  BasicShadowMap, Color, DepthFormat, DepthTexture, DirectionalLight, GreaterEqualCompare, LessEqualCompare, LinearFilter,
+  Matrix4, NearestFilter, Object3D, PCFShadowMap, type PerspectiveCamera, RedFormat, UnsignedByteType, UnsignedIntType,
+  Vector3, WebGLRenderTarget, type WebGLRenderer,
 } from 'three';
 import { worldUniforms } from './world_material.ts';
 
@@ -95,8 +96,42 @@ export class Sun {
     this.light.shadow.map = null;
   }
 
+  /**
+   * round 4 MEM-1 refix: the shadow target, made here before three's shadow pass would make its own. three r186 builds a
+   * PCF / basic directional shadow map as a render target with an RGBA8 colour texture the size of the map beside the
+   * depth texture, and only the depth texture is ever sampled (WebGLLights: depthTexture first; the depth pass writes no
+   * colour anyone reads). WebGL 2 wants every attachment the same size, so the colour stays, but one channel: R8, a
+   * quarter of the bytes (4096²: 64 → 16 MB on Ultra; 2048²: 16 → 4 MB on High). The depth texture is three's own, set
+   * up as its branch does (unsigned-int depth, compare for PCF, linear; none and nearest for basic). A shadow-type change
+   * at runtime (tier 1 ↔ 2) lets three rebuild its own RGBA one once; releaseMap() or a size change brings this one back.
+   */
+  private ensureMap(): void {
+    const s = this.light.shadow;
+    if (!this.shadowsOn || s.map || !this.gl) return;
+    const n = this.mapSize;
+    const rt = new WebGLRenderTarget(n, n, { format: RedFormat, type: UnsignedByteType, generateMipmaps: false, depthBuffer: true });
+    rt.texture.name = `${this.light.name}.shadowColour`;
+    const d = new DepthTexture(n, n, UnsignedIntType);
+    d.name = `${this.light.name}.shadowMap`;
+    d.format = DepthFormat;
+    if (this.pcf) {
+      d.compareFunction = this.gl.state.buffers.depth.getReversed() ? GreaterEqualCompare : LessEqualCompare;
+      d.minFilter = LinearFilter; d.magFilter = LinearFilter;
+    } else {
+      d.compareFunction = null;
+      d.minFilter = NearestFilter; d.magFilter = NearestFilter;
+    }
+    rt.depthTexture = d;
+    s.map = rt;
+    s.camera.updateProjectionMatrix();
+  }
+  private gl: WebGLRenderer | null = null;
+  private pcf = true;
+
   /** 0 off · 1 1024² hard · 2 2048² PCF · 3 4096² PCF */
   setQuality(renderer: WebGLRenderer, tier: 0 | 1 | 2 | 3): void {
+    this.gl = renderer;
+    this.pcf = tier !== 1;
     this.shadowsOn = tier > 0;
     renderer.shadowMap.enabled = this.shadowsOn;
     renderer.shadowMap.type = tier === 1 ? BasicShadowMap : PCFShadowMap;
@@ -114,6 +149,7 @@ export class Sun {
 
   /** fit the shadow frustum to what the camera sees (call after the camera moved) */
   fit(camera: PerspectiveCamera): void {
+    this.ensureMap();
     const cam = camera.position;
     for (let i = 0; i < 4; i++) {
       const [nx, ny] = this.ndc[i];

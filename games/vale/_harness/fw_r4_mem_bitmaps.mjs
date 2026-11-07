@@ -76,7 +76,22 @@ try {
     for (const x of tex) gl.initTexture(x);
     const ctx = gl.getContext(); for (let e = ctx.getError(); e !== 0 && glErr < 10; e = ctx.getError()) glErr++;
     const out = [...tex].map((x) => { const d = x.source.data; return `${x.name}: ${d?.constructor?.name} ${d?.width}x${d?.height} closed ${!!x.source.closed}`; });
-    return { fighter: f.id, model: key, stillEvicted: A.evicted.has(key), textures: out, glErrors: glErr };
+    // round 4 MEM-1 refix (REGRESS): the restored images DRAW right: each restored texture and the same glTF texture from
+    // a fresh, never-evicted load of the GLB are drawn on a 256² quad (MeshBasicMaterial, no light) and read back; equal
+    // pixels mean the restore gave the GPU the real image, not the 1×1 stand-in (mean 128 grey)
+    const url = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\.vite\/deps\/three\.js/.test(n));
+    const T = await import(url);
+    const L = new A.gltfLoader.constructor(); L.setMeshoptDecoder(A.gltfLoader.meshoptDecoder);
+    const fresh = await L.loadAsync(A.resolve(key));
+    const byIdx = new Map(); fresh.scene.traverse((o) => { for (const m of [o.material].flat()) if (m) for (const v of Object.values(m)) if (v?.isTexture) { const a = fresh.parser.associations.get(v)?.textures; if (a !== undefined) byIdx.set(a, v); } });
+    const base = await A.model(key);
+    const rt = new T.WebGLRenderTarget(256, 256); const cam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 2); cam.position.z = 1;
+    const draw = (tex) => { const sc = new T.Scene(); const q = new T.Mesh(new T.PlaneGeometry(2, 2), new T.MeshBasicMaterial({ map: tex })); sc.add(q); gl.setRenderTarget(rt); gl.render(sc, cam); const px = new Uint8Array(256 * 256 * 4); gl.readRenderTargetPixels(rt, 0, 0, 256, 256, px); gl.setRenderTarget(null); q.geometry.dispose(); q.material.dispose(); return px; };
+    const draws = [];
+    base?.gltf.scene.traverse((o) => { for (const m of [o.material].flat()) if (m) for (const v of Object.values(m)) if (v?.isTexture) { const a = base.gltf.parser.associations.get(v)?.textures; const fv = a === undefined ? null : byIdx.get(a); if (fv && !draws.some((d) => d.t === v)) draws.push({ t: v, f: fv }); } });
+    const pixels = draws.map(({ t, f }) => { const p = draw(t), q = draw(f); let d = 0, mean = 0, maxd = 0; for (let i = 0; i < p.length; i++) { const x = Math.abs(p[i] - q[i]); d += x; if (x > maxd) maxd = x; mean += p[i]; } return { name: t.name, meanAbsDiff: +(d / p.length).toFixed(3), maxDiff: maxd, mean: +(mean / p.length).toFixed(1), closedAfter: !!t.source.closed }; });
+    rt.dispose();
+    return { fighter: f.id, model: key, stillEvicted: A.evicted.has(key), textures: out, glErrors: glErr, pixels };
   });
   console.log(`restore: ${JSON.stringify(rep.restore)}`);
   const leave = page.getByRole('button', { name: /Leave match/i }).first();

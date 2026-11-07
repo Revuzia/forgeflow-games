@@ -8,7 +8,21 @@
 (() => {
   if (window.__memTrack) return;
   const G = WebGL2RenderingContext.prototype;
-  const tex = new Map(), buf = new Map(), rb = new Map(); let programs = 0;
+  // round 4 MEM-1 refix: held WEAKLY. A WebGL object whose wrapper the page drops (a geometry attribute replaced, a
+  // texture GC'd undisposed) is deleted by Chrome when the wrapper is collected; a strong map here kept every one of
+  // them alive (and its GPU storage), so the tally counted, and pinned, what the client had already let go
+  const weakMap = () => {
+    const data = new WeakMap(), refs = new Set();
+    return {
+      set(k, v) { if (!data.has(k)) refs.add(new WeakRef(k)); data.set(k, v); },
+      get: (k) => data.get(k), has: (k) => data.has(k),
+      delete(k) { data.delete(k); },
+      *[Symbol.iterator]() { for (const r of refs) { const k = r.deref(); if (k === undefined || !data.has(k)) { refs.delete(r); continue; } yield [k, data.get(k)]; } },
+      values() { return [...this].map((e) => e[1]); },
+      get size() { return [...this].length; },
+    };
+  };
+  const tex = weakMap(), buf = weakMap(), rb = weakMap(); let programs = 0;
   /** per context: the active unit and what is bound */
   const st = new WeakMap();
   const S = (gl) => { let s = st.get(gl); if (!s) { s = { unit: 0, tex: new Map(), buf: new Map(), rb: null }; st.set(gl, s); } return s; };

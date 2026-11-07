@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -35,6 +35,7 @@ const OUT = resolve(ROOT, opt('out', '_harness/_reports/match_memory.json'));
 const SHOTS = opt('shots', '');
 const WAIT_IDLE_S = Number(opt('wait-idle', 0)) * 60;
 const TRACK = args.includes('--track');
+const PRESSURE = args.includes('--pressure');
 const PRESET = opt('preset', '');   // the player's own choice in the profile, set once at Home and the page reloaded (default: what the client starts on, High)
 const MATCH_MB = 3000, HOME_MB = 2500, LOAD_MAX = 3;
 const QUEUE_CARD = { rift: 'Lantern Drill' };
@@ -65,7 +66,7 @@ async function freePort() {
 const t0 = Date.now();
 const log = (s) => console.log(`${((Date.now() - t0) / 1000).toFixed(0).padStart(5)} s  ${s}`);
 
-const report = { probe: 'probe_match_memory', at: new Date().toISOString(), build: 'prod client', sec: SEC, bars: { matchMb: MATCH_MB, homeMb: HOME_MB, loadBelow: LOAD_MAX }, matches: [], homes: [], machine: { samples: [] }, errors: [] };
+const report = { probe: 'probe_match_memory', at: new Date().toISOString(), build: 'prod client', sec: SEC, bars: { matchMb: MATCH_MB, homeMb: HOME_MB, loadBelow: LOAD_MAX }, matches: [], homes: [], homesAfterPressure: [], machine: { samples: [] }, errors: [] };
 const vite = await import('vite');
 const configFile = join(ROOT, 'vite.config.ts');
 if (!args.includes('--no-build')) {
@@ -155,6 +156,19 @@ const home = async (tag) => {
   const f = await procs(true); const m = noteMachine(tag); const t = await track();
   report.homes.push({ tag, ...f, load: m.load, track: t });
   log(`${tag}: renderer ${f.rendererMb} + GPU ${f.gpuMb} = ${f.totalMb} MB (load ${m.load})${trackLine(t)}${f.cats ? `  cats ${JSON.stringify(f.cats)}` : ''}`);
+  // --pressure (round 4 MEM-1 refix, diagnostic only, never the gate's reading): the same Home once more after Chrome is
+  // told memory is critical (CDP Memory.simulatePressureNotification, what macOS memory pressure sends a real browser):
+  // the allocators' free pages and Blink's caches are handed back, so what still stands is what the page truly holds
+  if (PRESSURE) {
+    await cdp.send('Memory.simulatePressureNotification', { level: 'critical' }).catch((e) => log(`pressure: ${e.message}`));
+    await bcdp.send('Memory.simulatePressureNotification', { level: 'critical' }).catch(() => {});
+    await page.waitForTimeout(6000);
+    await cdp.send('HeapProfiler.collectGarbage').catch(() => {});
+    await page.waitForTimeout(4000);
+    const g = await procs(true); const mm = noteMachine(`${tag}_pressure`); const tt = await track();
+    report.homesAfterPressure.push({ tag, ...g, load: mm.load, track: tt });
+    log(`${tag} after pressure: renderer ${g.rendererMb} + GPU ${g.gpuMb} = ${g.totalMb} MB (load ${mm.load})${trackLine(tt)}${g.cats ? `  cats ${JSON.stringify(g.cats)}` : ''}`);
+  }
 };
 
 async function journey(mode) {
@@ -281,6 +295,7 @@ report.misses = misses; report.idle = idle;
 // round 4: what each Home after a match carries over Home with its music (home_0), and each match's margin under the bar
 const h0 = report.homes.find((h) => h.tag === 'home_0')?.totalMb ?? null;
 report.homeOverFirst = Object.fromEntries(report.homes.filter((h) => /_home$/.test(h.tag)).map((h) => [h.tag, h0 !== null && h.totalMb !== null ? h.totalMb - h0 : null]));
+if (PRESSURE) { const p0 = report.homesAfterPressure.find((h) => h.tag === 'home_0')?.totalMb ?? null; report.homeOverFirstAfterPressure = Object.fromEntries(report.homesAfterPressure.filter((h) => /_home$/.test(h.tag)).map((h) => [h.tag, p0 !== null && h.totalMb !== null ? h.totalMb - p0 : null])); }
 report.matchMargin = Object.fromEntries(report.matches.map((r) => [r.mode, MATCH_MB - r.peak.totalMb]));
 report.verdict = broke ? `journey broke: ${report.errors[0]}` : !idle ? `needs idle machine (load max ${Math.max(...report.machine.samples.map((s) => s.load))}, ${busy.length} of ${report.machine.samples.length} readings busy); ${misses.length ? misses.join(', ') : 'would pass'}` : misses.length ? `MISS: ${misses.join(', ')}` : 'pass';
 mkdirSync(dirname(OUT), { recursive: true });
