@@ -631,6 +631,17 @@ const FRAG_AMBIENT = /* glsl */ `
     // ambient occlusion: the kit's baked AO, darker low on the walls and inside openings
     float ao = min(1.0, vKit.w * bAoK) * mix(0.65, 1.0, smoothstep(-0.3, 1.2, vLocal.y));
     iblIrradiance += (skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient) * ao;
+    // (owner #9) the sunlit ground's bounce: a wall in shade under a clear sky is lit by the warm earth in front of it
+    // as well as the blue sky above (sky alone turned every shaded face of a stone or brick wall blue-grey; a tall
+    // face, a tower's, most). A lambertian ground of a dry earth's albedo under the sun, seen by the lower half of the
+    // wall's hemisphere; ~0.7 of it lit (the wall's own shadow lies on the near part)
+    {
+      float muSg = dot(upB, uSunDirBody);
+      if (muSg > 0.0) {
+        vec3 eG = uSunE * sunTransmittance(length(vBodyPos), muSg) * muSg * bCloudShadow(vBodyPos, uSunDirBody);
+        iblIrradiance += eG * vec3(0.17, 0.13, 0.085) * 0.7 * (0.5 - 0.5 * dot(nB, upB)) * ao;
+      }
+    }
     vec3 rB = reflect(-vB, nB);
     float horizonK = smoothstep(-0.05, 0.3, dot(rB, upB));
     rB = normalize(rB + upB * max(0.0, -dot(rB, upB)) * 1.05);

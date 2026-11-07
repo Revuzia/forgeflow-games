@@ -19,8 +19,12 @@ test('a warned flood browns its river, deepening as it rises; other kinds never 
 
 test('zones ease in, sit at the flood, and clear slowly after it ends', () => {
   const st = makeSiltState(), s = slots();
-  updateSilt(st, [flood({ warning: 1, rise: 1, silt: 1 })], 3000, 0, s.out, s.k);
-  assert.equal(s.k[0], 0, 'no jump on the first frame');
+  updateSilt(st, [flood({ warning: 1, rise: 0, silt: 1 })], 3000, 0, s.out, s.k);
+  assert.equal(s.k[0], 0, 'no jump on the first frame of a warning seen from its start');
+  // (arriving late — a load, a held shot — the river is already as brown as its rise says)
+  const late = makeSiltState(), sl = slots();
+  updateSilt(late, [flood({ warning: 1, rise: 0.33, silt: 1 }, 9)], 3000, 0, sl.out, sl.k);
+  assert.ok(Math.abs(sl.k[0] - siltTarget(flood({ warning: 1, rise: 0.33, silt: 1 }))) < 1e-6, `late start ${sl.k[0]}`);
   for (let i = 0; i < 60; i++) updateSilt(st, [flood({ warning: 1, rise: 1, silt: 1 })], 3000, 0.25, s.out, s.k);
   assert.ok(s.k[0] > 0.9, `eased in (${s.k[0]})`);
   assert.deepEqual([s.out[0].x, s.out[0].y, s.out[0].z], [0, 0, 3000]);

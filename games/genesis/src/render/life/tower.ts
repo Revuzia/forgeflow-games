@@ -59,8 +59,8 @@ export interface TowerShape {
 const BASE: Record<TowerView['material'], { surf: number; col: RGB }> = {
   mudbrick: { surf: SURF.mudbrick, col: [0.48, 0.33, 0.2] },
   brick: { surf: SURF.brick, col: [0.4, 0.15, 0.08] },
-  // warm dressed limestone (was a cold neutral grey that read blue-grey under the sky)
-  stone: { surf: SURF.ashlar, col: [0.56, 0.47, 0.35] },
+  // warm dressed sandstone (was a cold neutral grey that read blue-grey under the sky; colours are LINEAR albedo)
+  stone: { surf: SURF.ashlar, col: [0.55, 0.4, 0.25] },
 };
 /** the culture's style variant (TowerView.style = the host's styleVariant): a small, stable shift of the brick's hue */
 const STYLE_TINT: RGB[] = [
@@ -265,11 +265,14 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     const lobes = (a: number, y: number, amp: number): number =>
       amp * (0.55 * Math.sin(2 * a + ph) + 0.3 * Math.sin(5 * a + 2.3 * ph) + 0.18 * Math.sin(11 * a + y * 0.4 + ph));
     let from = k.vertexCount;
-    k.lathe(0, 0, [[R * 1.18, -1.6], [R * 1.1, 0.25], [R * 1.02, H * 0.3]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.82), 0.7, 0.9);
+    k.lathe(0, 0, [[R * 1.18, -1.6], [R * 1.1, 0.25], [R * 1.02, H * 0.3]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.94), 0.7, 0.9);
     k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.1));
     from = k.vertexCount;
-    k.lathe(0, 0, [[R * 1.04, -1], [R * 0.9, H * 0.4], [(R + b0) * 0.5, H], [b0 * 0.98, H * 0.8]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.55), 0.7, 1);
+    // (closed over the middle by its crown: with every tier down it is one heap, never a ring round an empty floor)
+    k.lathe(0, 0, [[R * 1.04, -1], [R * 0.9, H * 0.4], [(R + b0) * 0.5, H], [b0 * 0.6, H * 0.85]], 40, SURF.rubble, PART.wall, mixc(col, SOOT, 0.8), 0.7, 1);
     k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.12) * Math.min(1, Math.max(0.3, 1 - y / (H * 1.6))));
+    // its crown (not jittered: the apex stays closed)
+    k.lathe(0, 0, [[b0 * 0.75, H * 0.8], [b0 * 0.35, H * 1.05], [0.01, H * 1.12]], 24, SURF.rubble, PART.wall, mixc(col, SOOT, 0.86), 0.8, 1);
     for (let j = 0; j < 44; j++) {
       const a = rnd(j, 11) * Math.PI * 2, rr = b0 + (R * 1.15 - b0) * (0.1 + 0.85 * rnd(j, 12));
       const sz = 1.4 + rnd(j, 13) * 3.2;
@@ -279,7 +282,7 @@ export function towerMesh(l: TowerLook): BuildingMesh {
       const dir = rnd(j, 14) * Math.PI * 2, tip = (0.18 + 0.7 * rnd(j, 16)) * (rnd(j, 17) < 0.5 ? -1 : 1);
       const long = rnd(j, 18) < 0.25 ? sz * 2.6 : sz * 1.2;
       const hx = Math.cos(dir) * Math.cos(tip) * long * 0.5, hy = Math.sin(tip) * long * 0.5, hz = Math.sin(dir) * Math.cos(tip) * long * 0.5;
-      const bc = mixc(col, SOOT, 0.15 + 0.65 * rnd(j, 15));
+      const bc = mixc(col, SOOT, 0.35 + 0.6 * rnd(j, 15));
       k.beam([x - hx, yy - hy, z - hz], [x + hx, yy + hy, z + hz], sz * (0.8 + 0.5 * rnd(j, 19)), sz * (0.45 + 0.4 * rnd(j, 20)), surf, PART.wall, bc, 0.75);
     }
   }

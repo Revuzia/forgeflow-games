@@ -28,6 +28,13 @@ export function siltTarget(d: DisasterView): number {
   return 1;
 }
 
+/** how far into its brown a flood already is when its zone is first seen (0: at the warning's very start) */
+function lateStart(d: DisasterView): number {
+  const P = d.params ?? {};
+  if (P.warning) return Math.min(1, Math.max(0, (P.rise ?? 0) * 4));
+  return Math.min(1, Math.max(0, (d.progress ?? 0) * 10));
+}
+
 /**
  * ease each flood's zone toward its target (`dt` real seconds) and write the strongest SILT_MAX into `out`
  * (xyz = body-frame centre in m, w = radius in m; w = 0 marks an empty slot) and their strengths into `k`
@@ -42,7 +49,9 @@ export function updateSilt(st: SiltState, disasters: readonly DisasterView[], pl
     let z = st.zones.get(d.id);
     // (wider than the flood: the river runs brown along its reach, not only in the town's circle)
     const r = Math.max(400, d.radius * 1.6);
-    if (!z) { z = { k: 0, x: 0, y: 0, z: 0, r }; st.zones.set(d.id, z); }
+    // a zone first seen mid-way (a save loaded, the planet just came into view, frames held while the sim ran on: a
+    // shot) starts where the river already is; only a warning seen from its start eases in from clear water
+    if (!z) { z = { k: t * lateStart(d), x: 0, y: 0, z: 0, r }; st.zones.set(d.id, z); }
     z.x = d.pos[0] * planetRadius; z.y = d.pos[1] * planetRadius; z.z = d.pos[2] * planetRadius; z.r = r;
     z.k += (t - z.k) * rate;
   }

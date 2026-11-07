@@ -42,3 +42,14 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 2. Perf before/after (medium): towers add ~0 measured before; the courses add tris (~4x tier faces) and the cloud
    clearing is one extra mul per sample; measure via a perf spec if time (render-arc3.json perf2 pattern).
 3. Gate: npm run check through slot.sh once after the shots are judged (fix-ups included).
+
+### 19:1xZ LOOKED AT r1-tower-rising / r1-tower-struck (first live pass)
+- rising: NO trees on the roof, faces or footprint any more (vs vo-near-rising: palm on the roof, palms on the faces):
+  clearing MET. Terrace top now warm (210,192,174); the shaded front face still reads blue-grey (71,75,83): colours are
+  LINEAR albedo, so [0.56,0.47,0.35] displays as pale limestone and shade under blue sky greys it.
+- struck (height 0: both tiers fell): no trees inside; the heap was a RING round an empty floor (lathe stopped at
+  b0*0.98) and its soot mix 0.55 is mid grey-brown in linear -> pale lavender-grey top (169,153,142).
+- FIX: stone -> [0.55,0.40,0.25] (sandstone, more saturated); heap closed by an unjittered crown lathe; soot skirt
+  0.94 / heap 0.8 / crown 0.86 / blocks 0.35-0.95. Test: crown over the centre. render-arc-tower 11/11.
+- Re-shoot queued: r1-render-tower2.json (r1b-tower-rising/struck), chain3 pid 21987 (waits for chain2 pid 19494
+  = perf spec, which waits for chain 19004 = tower + flood).

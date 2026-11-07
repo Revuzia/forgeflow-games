@@ -147,4 +147,17 @@ test('the struck mound is a ragged, scorched heap of thrown blocks, not a neat r
   }
   assert.ok(rmax / rmin > 1.3, `ragged outline ${rmin.toFixed(1)}..${rmax.toFixed(1)} (moundR ${s.moundR.toFixed(1)})`);
   assert.ok(dark / n > 0.3, `scorched: ${(100 * dark / n).toFixed(0)} % dark`);
+  // every tier down: one heap closed over the middle (it read as a ring round an empty floor, a henge)
+  const flat = towerMesh(towerLook(view({ status: 'struck', height: 0, tiers: 2, ended: 0 }), 0, YEAR));
+  const fp = (flat.geo as never as { getAttribute(n: string): { array: ArrayLike<number>; count: number } }).getAttribute('position');
+  let centre = 0;
+  for (let i = 0; i < fp.count; i++) if (Math.hypot(fp.array[i * 3], fp.array[i * 3 + 2]) < 2 && fp.array[i * 3 + 1] > 3) centre++;
+  assert.ok(centre > 0, 'a crown over the centre');
+});
+
+test('shaded walls take the sunlit ground\'s warm bounce, not the blue sky alone (owner #9: the tower read blue-grey)', () => {
+  const src = readFileSync(new URL('../src/render/life/buildingmat.ts', import.meta.url), 'utf8');
+  const amb = src.slice(src.indexOf('const FRAG_AMBIENT'));
+  assert.match(amb, /iblIrradiance \+= eG \* vec3\(0\.17, 0\.13, 0\.085\)/);
+  assert.match(amb, /0\.5 - 0\.5 \* dot\(nB, upB\)/, 'from the lower hemisphere only');
 });
