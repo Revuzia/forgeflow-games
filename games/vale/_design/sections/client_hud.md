@@ -45,8 +45,8 @@ Rules of the flow:
 - Leaving a matchmade draft is a dodge. A confirm modal says so first (`draft.leave.*`), then the toast and lockout come from `queue.dodged` + `queue.lockout`.
 - Any queue error or decline returns to `play` with ONE toast (`queue.timeout`, `queue.declined`, `queue.cancelled`): a decline arrives as `declined` then `idle`, and the second is not toasted again.
 - When the flow ends (decline, timeout, cancel, dodge) the draft state is cleared and the client is whole again: the top bar's chrome follows the route (a `flow` screen, or a screen opened over a live `match`), never leftover draft or match state. e2e `flow` (dodge) asserts 6 nav items, the wallet and the profile chip on Play and Home after Leave draft.
-- The portal bar's Pause / Menu (`window.__PAUSE__.toggle`): in a match it opens the in-match menu; on menu screens it opens Settings over the current screen and a second press goes back; the ready check, draft and loading ignore it.
-- Esc goes Back everywhere except the ready check (no accidental decline), the match (opens the in-match menu) and rebinding (cancels the rebind).
+- The portal bar's Pause / Menu (`window.__PAUSE__.toggle`): on menu screens it opens Settings over the current screen and a second press goes back; the ready check, draft and loading ignore it. In a match the portal bar is hidden (`index.html`, it would sit on the minimap corner); the HUD's own **Menu** tab (top left, §4.8) is the mouse path to the in-match menu, and `__PAUSE__.toggle` still opens the same menu.
+- Esc goes Back everywhere except the ready check (no accidental decline), the match and rebinding (cancels the rebind). In a match (owner ruling 26) each Esc closes one layer, innermost first: an open modal (the menu itself, a confirm), then ability aim, attack-move or the ping wheel, then the open shop; the next Esc opens the in-match menu. A player always reaches Leave match within one press per visible layer (at most 4); harnesses that leave a match press Esc until the menu shows, at most 4 times.
 
 ---
 
@@ -199,11 +199,12 @@ Mapped to the bible's HUD density table (1080p; scale with `access.hudScale`). S
 | Ledger line | under the sky strip, right end | about 200 x 20 (FRAY 110 x 20) | 0.19% (FRAY 0.11%) | yes | yes | yes |
 | Ally frames | left edge | 4 x 168 x 52 | 1.69% | yes | yes | no |
 | Hour Board | top right | 220 x 236 | 2.50% | no | no | yes |
-| **Always-on total** | | | | **13.79%** | **11.92%** | **13.25%** |
+| Menu tab | top left | about 80 x 26 | 0.10% | yes | yes | yes |
+| **Always-on total** | | | | **13.89%** | **12.02%** | **13.35%** |
 | Kill feed (3 rows) | top right (FRAY: under the Hour Board) | contextual | 1.46% | peak | peak | peak |
 | Announcer | under the strip | about 480 x 75 | 1.73% | peak | peak | peak |
 | Feed (chat region) | bottom left | about 360 x 154 | 2.67% | peak | peak | peak |
-| **Peak total** | | | | 19.65% | 17.78% | 19.11% |
+| **Peak total** | | | | 19.75% | 17.88% | 19.21% |
 
 The always-on total stays at or under 14%, the peak under 20%. The centre 40% x 50% of the screen holds no HUD.
 
@@ -255,7 +256,7 @@ The budget is the shipped kit's (hud HUD-8, 2026-10-28). Sizes are the frame box
 - **Down:** the Dial Bar dims to 60%, a respawn ring with `hud.dead.respawn` replaces the portrait ring, the death recap (§7) opens, and shopping is allowed where the mode allows it (`hud.dead.shop`, BRIDGE and FRAY rules). Allies' frames keep updating.
 - **Shop** (RIFT at base, BRIDGE at base or while down, FRAY at a Lampwright cart): a panel left of centre with search, suggested items, the component tree and buy / sell / undo (`hud.shopui.*`); refusals show as a feed line and `ui_error`. The tile list's last row fades out over 24 px and scrolls clear of the fade, never cut through its prices (HUD-11).
 - **Surrender vote** (RIFT 12:00, BRIDGE 8:00; 4 of 5): a plate under the announcer with the tally (`hud.surrender.tally`), Yes and No keys; result lines `surrender_passed` / `surrender_failed`.
-- **In-match menu** (Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing).
+- **In-match menu** (the Menu tab or Esc): Resume, Settings, Leave match (`hud.menu.leave_confirm` states that leaving counts as a loss and earns nothing). Esc follows ruling 26: it first cancels the innermost active layer (ability aim, attack-move, the ping wheel, then the open shop), one layer per press, and the next Esc opens the menu; Esc inside the menu closes it (Resume). The **Menu tab** (`.hmenu`, `data-hud="menu"`) is the mouse path: a 26 px ink tab at the top-left corner (left 16, top 12 at 1080p, × the HUD scale) with three chalk strokes, the word Menu and a quiet `Esc` keycap; its tooltip (`hud.menu.button_tip`, `hud.menu.button_sub`) names Esc and says Esc closes aiming, the wheel or the shop first. It never covers the minimap (bottom corners), the shop (top 80), the scoreboard (top 96), the practice tools (top 84), the sky strip (centre) or the Dial Bar, at 1280x720 and 1920x1080 (`_harness/fw_r5_ui_menu.mjs`). A click opens the menu with any aim still held; the modal blocks input until it closes.
 
 ### 4.9 Layout originality audit (critic ui-layout-originality, 2026-11-03)
 

@@ -202,6 +202,21 @@
 .tplate__res i { position: absolute; left: 0; top: 0; bottom: 0; display: block; background: var(--res); }
 .tplate__status { margin-top: calc(4 * var(--px)); }
 
+/* ── top left: the Menu tab (ruling 26: the mouse path to the in-match menu). Ink plate, chalk strokes, the Esc keycap
+   quiet beside the word; 26 px tall at 1080p (0.10% of the screen), clear of the sky strip, the ally frames, the
+   practice tools (top 84), the shop (top 80) and the scoreboard (top 96) at every HUD scale ──────────────────────── */
+.hmenu { position: absolute; left: var(--edge); top: calc(12 * var(--px)); display: inline-flex; align-items: center; gap: calc(6 * var(--px));
+  height: calc(26 * var(--px)); padding: 0 calc(7 * var(--px)) 0 calc(8 * var(--px)); border-radius: 3px; color: var(--text-2);
+  background: linear-gradient(90deg, rgba(14, 17, 22, 0.94), rgba(22, 26, 33, 0.9)); box-shadow: inset 0 1px 0 rgba(237, 230, 214, 0.08), inset 0 0 0 1px var(--line-1), 0 2px 8px rgba(0, 0, 0, 0.4);
+  font-family: var(--font-heading); font-weight: 600; font-stretch: 90%; letter-spacing: 0.06em; text-transform: uppercase; font-size: max(11px, calc(12 * var(--px))); white-space: nowrap; cursor: pointer; }
+.hmenu:hover, .hmenu:focus-visible { color: var(--text-1); background: var(--ink-3); }
+.hmenu:focus-visible { box-shadow: var(--ring); }
+.hmenu:active { transform: translateY(1px); }
+.hmenu__glyph { width: calc(14 * var(--px)); height: calc(14 * var(--px)); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; flex: none; }
+.hmenu__glyph circle { fill: var(--chalk); stroke: none; }
+.hmenu__key { font-family: var(--font-numeric); font-size: max(10px, calc(10 * var(--px))); letter-spacing: 0.02em; text-transform: none; color: var(--text-3);
+  padding: 0 calc(4 * var(--px)); line-height: calc(15 * var(--px)); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line-1); }
+
 /* ── left edge: ally frames ───────────────────────────────────────────────────────────────────── */
 .allies { position: absolute; left: var(--edge); top: 50%; transform: translateY(-62%); display: flex; flex-direction: column; gap: calc(8 * var(--px)); }
 .afr { display: flex; align-items: center; gap: calc(7 * var(--px)); width: calc(168 * var(--px)); height: calc(52 * var(--px)); padding: 0 calc(8 * var(--px)) 0 calc(6 * var(--px)); text-align: left; }

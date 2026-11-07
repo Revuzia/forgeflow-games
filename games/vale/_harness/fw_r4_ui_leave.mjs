@@ -99,9 +99,11 @@ const uiState = () => page.evaluate(() => {
   return {
     aimingSlot: [...document.querySelectorAll('.aslot.is-aiming')].map((e) => e.getAttribute('aria-label') ?? e.className).slice(0, 2),
     cursor: surf ? [...surf.classList].find((c) => c.startsWith('cur-')) ?? null : null,
-    modals: [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')].map((d) => (d.getAttribute('aria-label') ?? d.querySelector('h1,h2,h3')?.textContent ?? d.className).slice(0, 60)),
-    shopOpen: !!document.querySelector('.hud .shop:not([hidden]), .hud [class*="shop--open"], .hud .shop.is-open'),
-    wheel: !!document.querySelector('.hud .wheel, .hud [class*="pingwheel"]'),
+    // the HUD's shop panel is itself a role=dialog section (.lshop, src/ui/hud/shop.tsx): it is the shop, not a modal
+    modals: [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')].filter((d) => !d.closest('.hud')).map((d) => (d.getAttribute('aria-label') ?? d.querySelector('h1,h2,h3')?.textContent ?? d.className).slice(0, 60)),
+    shopOpen: !!document.querySelector('.hud .lshop'),   // rendered only while open
+    wheel: !!document.querySelector('.hud .pwheel'),     // the ping wheel (src/ui/hud/world.tsx), rendered only while held
+    menuButton: !!document.querySelector('.hud .hmenu'), // the HUD's Menu tab (ruling 26 mouse path)
     leaveVisible: [...document.querySelectorAll('button')].some((b) => /Leave match/i.test(b.textContent ?? '') && b.offsetParent !== null),
     active: ae ? `${ae.tagName.toLowerCase()}${ae.className ? '.' + String(ae.className).split(' ')[0] : ''}` : null,
     hasFocus: document.hasFocus(),
@@ -182,7 +184,7 @@ async function journey(mode) {
         await page.keyboard.press('Escape');
         tr.menuClosed = await leaveBtn().first().waitFor({ state: 'hidden', timeout: 3000 }).then(() => true, () => false);
       }
-      tr.before = { aim: tr.before.aimingSlot.length, cursor: tr.before.cursor, modals: tr.before.modals, active: tr.before.active, focus: tr.before.hasFocus, ending: tr.before.ending };
+      tr.before = { aim: tr.before.aimingSlot.length, cursor: tr.before.cursor, shop: tr.before.shopOpen, wheel: tr.before.wheel, modals: tr.before.modals, active: tr.before.active, focus: tr.before.hasFocus, ending: tr.before.ending };
       rec.trials.push(tr);
       if (tr.esc1 === false) log(`${mode} trial ${tr.s} s key ${tr.key}: Esc#1 no menu (aim ${tr.before.aim}, cursor ${tr.before.cursor}, modals ${tr.before.modals.length}); Esc#2 ${tr.esc2}`);
     }

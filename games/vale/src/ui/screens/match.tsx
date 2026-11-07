@@ -1,7 +1,7 @@
 // VALE UI — Match host (client_hud §4). The renderer draws the match scene (state.ts hands it the
 // MatchClient on the 'match' event); this screen mounts the HUD over it. The HUD lives in
 // src/ui/hud/index.tsx (another engineer's module): it is loaded when present and must export
-// `Hud(props: { client: MatchClient })`; until then the host shows only a quiet status line.
+// `Hud(props: { client: MatchClient; onMenu?: () => void })` (onMenu: the HUD's Menu button, ruling 26); until then the host shows only a quiet status line.
 // Esc opens the in-match menu (Resume · Settings · Leave match) unless the HUD claims Esc first
 // (useEsc in the HUD wins: newest claim answers first).
 
@@ -13,12 +13,13 @@ import { Button } from '../components/Button.tsx';
 import { confirmDialog } from '../components/Modal.tsx';
 import { fmtClock } from '../format.ts';
 
-type HudModule = { Hud?: ComponentType<{ client: MatchClient }>; default?: ComponentType<{ client: MatchClient }> };
+type HudProps = { client: MatchClient; onMenu?: () => void };
+type HudModule = { Hud?: ComponentType<HudProps>; default?: ComponentType<HudProps> };
 const HUD_LOADERS = import.meta.glob<HudModule>('../hud/index.tsx');
-let hudCache: ComponentType<{ client: MatchClient }> | null | undefined;
+let hudCache: ComponentType<HudProps> | null | undefined;
 
-function useHud(): ComponentType<{ client: MatchClient }> | null {
-  const [hud, setHud] = useState<ComponentType<{ client: MatchClient }> | null>(() => hudCache ?? null);   // a function argument is a lazy initializer: wrap the component
+function useHud(): ComponentType<HudProps> | null {
+  const [hud, setHud] = useState<ComponentType<HudProps> | null>(() => hudCache ?? null);   // a function argument is a lazy initializer: wrap the component
   useEffect(() => {
     if (hudCache !== undefined) return;
     const load = Object.values(HUD_LOADERS)[0];
@@ -68,7 +69,7 @@ export function MatchScreen(): JSX.Element {
   if (!client) return <div class="matchhost" />;
   return (
     <div class="matchhost">
-      {Hud ? <Hud client={client} /> : <HostStatus client={client} onMenu={openMenu} />}
+      {Hud ? <Hud client={client} onMenu={openMenu} /> : <HostStatus client={client} onMenu={openMenu} />}
     </div>
   );
 }

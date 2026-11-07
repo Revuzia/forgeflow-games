@@ -22,6 +22,7 @@ import type { MatchClient } from '../../contracts/session.ts';
 import { AbilityIndex, InputController, type Action, type DenyReason, type InputRenderer } from '../../input/index.ts';
 import { useApp, useEsc } from '../app_ctx.ts';
 import { keyShort } from '../keys.ts';
+import { TipText, useTip } from '../components/Tooltip.tsx';
 import { HudContext, type HudCtx } from './ctx.ts';
 import { DialBar } from './dialbar.tsx';
 import { Minimap, minimapScale } from './minimap.tsx';
@@ -46,7 +47,7 @@ const HINTS: { key: string; params: Action[] }[] = [
 ];
 const HINT_GAP_MS = 7000;
 
-export function Hud(p: { client: MatchClient }): JSX.Element {
+export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Element {
   const app = useApp();
   const { cv, state, overlay, sound, session } = app;
   const client = p.client;
@@ -158,6 +159,7 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
       <WorldLayer marks={marks} />
       <div class={`hud hud--${model.ffa ? 'ffa' : 'team'} hud--map-${side} hud--mode-${mode?.id ?? 'x'}`} style={{ '--hk': state.settings.value.access.hudScale || 1 } as CSSProperties}>
         <ScreenEdge />
+        {p.onMenu ? <MenuButton onMenu={p.onMenu} /> : null}
         <div class="hud__top">
           <SkyStrip />
           <Announcer />
@@ -192,6 +194,22 @@ export function Hud(p: { client: MatchClient }): JSX.Element {
 }
 
 let markSeq = 1;
+
+/** the mouse path to the in-match menu (ruling 26): a small ink tab in the top-left corner, clear of the sky strip,
+ *  the ally frames, the practice tools, the shop and the scoreboard at every size. Esc reaches the same menu once
+ *  aiming, attack-move, the ping wheel and the shop are closed; the tooltip says so. */
+function MenuButton(p: { onMenu: () => void }): JSX.Element {
+  const { cv } = useApp();
+  const tip = useTip(() => <TipText text={cv.t('hud.menu.button_tip', 'Menu (Esc)')} sub={cv.t('hud.menu.button_sub', 'Resume, Settings, Leave match. Esc closes aiming, the ping wheel or the shop first.')} />, { place: 'below' });
+  return (
+    <button type="button" class="hmenu" data-hud="menu" aria-label={cv.t('hud.menu.button_tip', 'Menu (Esc)')} aria-keyshortcuts="Escape" {...tip}
+      onClick={(e) => { (e.currentTarget as HTMLElement).blur(); p.onMenu(); }}>
+      <svg class="hmenu__glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h9M2 12h12" /><circle cx="13.5" cy="8" r="1.2" /></svg>
+      <span class="hmenu__label">{cv.t('hud.menu.title', 'Menu')}</span>
+      <span class="hmenu__key">{keyShort('Escape')}</span>
+    </button>
+  );
+}
 
 /** the renderer seam the input controller gets: the real renderer, plus target selection for the HUD's
  *  target plate (a left click on a unit selects it) */
