@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--pressure] [--infra] [--infra-match] [--no-audio]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio] [--raw-cdp] [--pressure] [--infra] [--infra-match] [--no-audio]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -97,7 +97,22 @@ noteMachine('start');
 const FAKE_AUDIO = args.includes('--fake-audio');
 report.audioSink = NO_AUDIO ? 'none (?audio=0)' : FAKE_AUDIO ? 'fake (--disable-audio-output)' : 'device';
 if (NO_AUDIO && !FAKE_AUDIO) throw new Error('--no-audio needs --fake-audio');
-const { browser, page, logs } = FAKE_AUDIO ? await openFakeAudio() : await open('/', { wait: false, hmr: false });
+// --raw-cdp (round 5 MEM-3, implies the fake sink): the same Chrome driven over raw CDP with no DevTools Network domain
+// (fw_r5_mem_cdp.mjs): Playwright's Network.enable makes the renderer keep a copy of every response body the page
+// fetched, a buffer that fills with every match a session loads; no player's browser has it
+const RAW_CDP = args.includes('--raw-cdp');
+if (RAW_CDP) report.driver = 'raw CDP (no Network domain)';
+else report.driver = 'playwright';
+const { browser, page, logs } = RAW_CDP ? await openRawCdp() : FAKE_AUDIO ? await openFakeAudio() : await open('/', { wait: false, hmr: false });
+async function openRawCdp() {
+  if (!FAKE_AUDIO) throw new Error('--raw-cdp needs --fake-audio');
+  const { openRaw } = await import('./fw_r5_mem_cdp.mjs');
+  const { holdHeavy } = await import('./heavy_slot.mjs');
+  const rel = await holdHeavy('probe_match_memory raw-cdp');
+  const r = await openRaw(process.env.VALE_URL + (NO_AUDIO ? '/?audio=0' : '/'), { args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-audio-output'] });
+  r.browser.on('disconnected', rel);
+  return r;
+}
 async function openFakeAudio() {
   const { chromium } = await import('playwright-core');
   const { holdHeavy } = await import('./heavy_slot.mjs');
@@ -220,7 +235,19 @@ async function journey(mode) {
   const hud = page.locator('.hud .dbar').first();
   const until = Date.now() + 240000;
   let lockTries = 0;
+  // round 5 MEM-4: the footprint is read through the queue, draft and loading screen too (every ~3 s): a load that decodes
+  // everything at once peaks there, before the HUD, and that peak is the match's memory as much as any in-match poll
+  const pre = { peak: { totalMb: 0 }, series: [] };
+  let lastPre = 0;
+  const preT0 = Date.now();
   while (!(await hud.isVisible().catch(() => false))) {
+    if (Date.now() - lastPre >= 3000) {
+      lastPre = Date.now();
+      const f = await procs(); const t = await track();
+      const screen = await page.evaluate(() => [...document.querySelectorAll('.scr')].map((e) => e.className.replace(/\bscr\b\s*/, '').split(' ')[0]).join(',')).catch(() => '');
+      pre.series.push({ s: Math.round((Date.now() - preT0) / 1000), screen, ...f, load: +loadavg()[0].toFixed(2), track: t });
+      if ((f.totalMb ?? 0) > pre.peak.totalMb) pre.peak = { ...f, atS: pre.series.at(-1).s, screen };
+    }
     if (Date.now() > until) throw new Error(`${mode}: no HUD after 240 s`);
     const ready = page.getByRole('button', { name: /^Ready/ }).first();
     if (await ready.isVisible().catch(() => false)) await ready.click({ timeout: 3000 }).catch(() => {});
@@ -236,7 +263,8 @@ async function journey(mode) {
   }
   log(`${mode}: in the match`);
   await snap(`${mode}_start`);
-  const rec = { mode, sec: SEC, peak: { totalMb: 0 }, series: [], loadMax: 0, polls: 0 };
+  log(`${mode}: before the HUD (queue, draft, loading) peak ${pre.peak.totalMb} MB at ${pre.peak.atS} s on ${pre.peak.screen}; ${pre.series.length} reads`);
+  const rec = { mode, sec: SEC, peak: { totalMb: 0 }, series: [], loadMax: 0, polls: 0, preHud: pre };
   report.matches.push(rec);
   const end = Date.now() + SEC * 1000;
   let lastPoll = 0, k = 0;
@@ -252,11 +280,12 @@ async function journey(mode) {
     k++;
     if (Date.now() - lastPoll >= 10000) {
       lastPoll = Date.now();
-      const f = await procs(); const m = noteMachine(`${mode}_poll`);
+      // round 5 MEM-4: the footprint categories at the first three polls and every sixth after (--track): the start transient by kind
+      const f = await procs(rec.polls < 3 || rec.polls % 6 === 0); const m = noteMachine(`${mode}_poll`);
       rec.polls++; rec.loadMax = Math.max(rec.loadMax, m.load);
       const t = await track();
       rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...f, load: m.load, track: t });
-      if (TRACK) log(`${mode} ${rec.series.at(-1).s} s: ${f.totalMb} MB (renderer ${f.rendererMb}, GPU ${f.gpuMb}; load ${m.load})${trackLine(t)}`);
+      if (TRACK) log(`${mode} ${rec.series.at(-1).s} s: ${f.totalMb} MB (renderer ${f.rendererMb}, GPU ${f.gpuMb}; load ${m.load})${trackLine(t)}${f.cats ? `  cats ${JSON.stringify(f.cats)}` : ''}`);
       // --infra-match (diagnostic): Chrome's memory-infra at the match's first three polls: what the start transient is
       if (INFRA_MATCH && rec.polls <= 3) {
         const d = await infraDump();
@@ -337,6 +366,7 @@ const idle = report.machine.samples.every((s) => s.idle);
 const busy = report.machine.samples.filter((s) => !s.idle);
 const misses = [];
 for (const r of report.matches) if (r.peak.totalMb > MATCH_MB) misses.push(`${r.mode} match peak ${r.peak.totalMb} MB > ${MATCH_MB}`);
+for (const r of report.matches) if ((r.preHud?.peak.totalMb ?? 0) > MATCH_MB) misses.push(`${r.mode} loading peak ${r.preHud.peak.totalMb} MB > ${MATCH_MB}`);
 for (const h of report.homes) if ((h.totalMb ?? 0) > HOME_MB) misses.push(`${h.tag} ${h.totalMb} MB > ${HOME_MB}`);
 report.misses = misses; report.idle = idle;
 // round 4: what each Home after a match carries over Home with its music (home_0), and each match's margin under the bar
@@ -344,6 +374,22 @@ const h0 = report.homes.find((h) => h.tag === 'home_0')?.totalMb ?? null;
 report.homeOverFirst = Object.fromEntries(report.homes.filter((h) => /_home$/.test(h.tag)).map((h) => [h.tag, h0 !== null && h.totalMb !== null ? h.totalMb - h0 : null]));
 if (PRESSURE) { const p0 = report.homesAfterPressure.find((h) => h.tag === 'home_0')?.totalMb ?? null; report.homeOverFirstAfterPressure = Object.fromEntries(report.homesAfterPressure.filter((h) => /_home$/.test(h.tag)).map((h) => [h.tag, p0 !== null && h.totalMb !== null ? h.totalMb - p0 : null])); }
 report.matchMargin = Object.fromEntries(report.matches.map((r) => [r.mode, MATCH_MB - r.peak.totalMb]));
+// round 5 (ruling 27): per match in order, its peak, its steady max (polls after the first 20 s), the start transient
+// (the first 20 s over the steady max) and the climb over the same map's earlier peak; per Home, the live object set
+// (GL textures + buffers + renderbuffers + audio + bitmaps + JS heap used + array-buffer backing, --track) over home_0's
+const liveMb = (t) => (t?.gl ? +(t.gl.texMb + t.gl.bufMb + t.gl.rbMb + t.audio.mb + t.bitmaps.mb + (t.heap?.usedMb ?? 0) + (t.heap?.backingMb ?? 0)).toFixed(1) : null);
+report.r27 = { matches: [], homes: [] };
+report.matches.forEach((r, i) => {
+  const steady = r.series.filter((x) => x.s > 20 && x.totalMb !== null).map((x) => x.totalMb);
+  const start = r.series.filter((x) => x.s <= 20 && x.totalMb !== null).map((x) => x.totalMb);
+  const steadyMax = steady.length ? Math.max(...steady) : null;
+  const earlier = report.matches.slice(0, i).filter((q) => q.mode === r.mode).map((q) => q.peak.totalMb);
+  report.r27.matches.push({ n: i + 1, mode: r.mode, preHudPeakMb: r.preHud?.peak.totalMb ?? null, preHudScreen: r.preHud?.peak.screen ?? null, peakMb: r.peak.totalMb, atS: r.peak.atS, steadyMaxMb: steadyMax, startTransientMb: steadyMax !== null && start.length ? Math.max(...start) - steadyMax : null, climbMb: earlier.length ? r.peak.totalMb - Math.max(...earlier) : null, loadMax: r.loadMax });
+});
+const live0 = liveMb(report.homes.find((h) => h.tag === 'home_0')?.track);
+report.r27.homes = report.homes.map((h) => ({ tag: h.tag, totalMb: h.totalMb, liveMb: liveMb(h.track), liveOverFirstMb: live0 !== null && liveMb(h.track) !== null ? +(liveMb(h.track) - live0).toFixed(1) : null, load: h.load }));
+report.r27.pass = report.r27.matches.every((m) => m.peakMb <= MATCH_MB && (m.preHudPeakMb ?? 0) <= MATCH_MB && (m.climbMb === null || m.climbMb <= 150)) && report.r27.homes.every((h) => (h.totalMb ?? 0) <= HOME_MB && (h.liveOverFirstMb === null || h.liveOverFirstMb <= 150));
+console.log(`ruling 27: ${JSON.stringify(report.r27)}`);
 report.verdict = broke ? `journey broke: ${report.errors[0]}` : !idle ? `needs idle machine (load max ${Math.max(...report.machine.samples.map((s) => s.load))}, ${busy.length} of ${report.machine.samples.length} readings busy); ${misses.length ? misses.join(', ') : 'would pass'}` : misses.length ? `MISS: ${misses.join(', ')}` : 'pass';
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(report, null, 1));

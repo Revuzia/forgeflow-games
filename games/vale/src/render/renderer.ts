@@ -1418,6 +1418,18 @@ class ValeRenderer implements Renderer {
     this.menu.setShowcase(view.fighter ? this.lib : null, view.fighter ?? null, view.skin ?? null);
   }
 
+  /** round 5 MEM-4: the map's terrain landmarks (uploaded on landing), terrain props and tiling textures (preload) */
+  private mapExtras(map: MapDefT): Promise<unknown>[] {
+    const tr = (map.art.terrain ?? {}) as { landmarks?: unknown; props?: Record<string, unknown>; textures?: Record<string, unknown> };
+    const jobs: Promise<unknown>[] = [];
+    const refs = new Set<string>();
+    if (Array.isArray(tr.landmarks)) for (const l of tr.landmarks) { const r = (l as { model?: unknown } | null)?.model; if (typeof r === 'string') refs.add(r); }
+    for (const r of refs) jobs.push(this.assets.model(r).then((m) => { if (m?.renderable) this.uploadTextures(m.gltf.scene); }));
+    for (const v of Object.values(tr.props ?? {})) if (Array.isArray(v)) for (const r of v) if (typeof r === 'string') jobs.push(this.assets.model(r));
+    for (const role of TERRAIN_TEX_ROLES) { const r = tr.textures?.[role]; if (typeof r === 'string') jobs.push(this.assets.texture(r).then((t) => { if (t) this.gl.initTexture(t); })); }
+    return jobs;
+  }
+
   async preload(setup: MatchSetup, onProgress?: (p: number) => void): Promise<void> {
     const map = this.catalog.maps.find((m) => m.id === setup.map);
     const units = new Set<string>();
@@ -1438,6 +1450,11 @@ class ValeRenderer implements Renderer {
     const jobs: Promise<unknown>[] = refs.map((r) => this.assets.model(r, true));        // warm only (round 4 MEM-1)
     jobs.push(lodReady);                                                   // perf PERF-m5: the simplifier's WASM
     if (map) { jobs.push(this.assets.hdr(map.art.sky), this.assets.lut(map.art.lut), this.assets.model(map.art.scene)); for (const r of AmbientLayer.refs(map)) jobs.push(this.assets.model(r)); }
+    // round 5 MEM-4: the map's landmarks, terrain props and tiling textures land here too, behind the loading screen, and
+    // a landmark's textures upload as soon as it lands (its decoded bitmap closes on upload, assets.ts closeAfterUpload).
+    // They used to load on the match's first frame: RIFT's first poll held 6 open bitmaps (48.8 MB) and their files'
+    // parse garbage (JS heap +25, array-buffer backing +38 MB) on top of the steady match
+    if (map) jobs.push(...this.mapExtras(map));
     for (const s of setup.seats) jobs.push(this.lib.fighterTemplate(s.fighter, s.skin));
     // unit templates too (per side): their textures upload and their programs compile behind the loading screen
     for (const u of units) for (const t of teams ? [...new Set(teams)] : [null]) jobs.push(this.lib.unitTemplate(u, t));

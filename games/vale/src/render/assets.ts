@@ -137,6 +137,23 @@ export class Assets {
 
   resolve(ref: string): string { return this.url(ref); }
 
+  /**
+   * round 5 MEM-4: at most LOAD_SLOTS GLBs are fetched, parsed and decoded at once. A loading screen asked for every
+   * model of the match together (Promise.all), so every file's bytes, its parse garbage and every decoded image were
+   * alive at the same moment before the first one could upload and close; in slots, each lands, uploads and frees in
+   * turn and the peak is a few files deep. A slot frees when its load settles (the model is then built, so the next
+   * file starts while this one uploads)
+   */
+  private static readonly LOAD_SLOTS = 4;
+  private inFlight = 0;
+  private readonly slotQueue: (() => void)[] = [];
+  private gate<T>(job: () => Promise<T>): Promise<T> {
+    // a settled load hands its slot straight to the next queued one (the count never overshoots)
+    const run = (): Promise<T> => job().finally(() => { const next = this.slotQueue.shift(); if (next) next(); else this.inFlight--; });
+    if (this.inFlight < Assets.LOAD_SLOTS) { this.inFlight++; return run(); }
+    return new Promise<void>((res) => this.slotQueue.push(res)).then(run);
+  }
+
   private track<T>(p: Promise<T>): Promise<T> {
     this.pending++;
     this.onProgress?.(this.done, this.pending);
@@ -170,7 +187,7 @@ export class Assets {
       return p;
     }
     if (!p) {
-      p = this.track(this.gltfLoader.loadAsync(url).then((gltf) => {
+      p = this.track(this.gate(() => this.gltfLoader.loadAsync(url)).then((gltf) => {
         let renderable = false, skinned = false;
         gltf.scene.traverse((o: Object3D) => {
           const m = o as Object3D & { isMesh?: boolean; isSkinnedMesh?: boolean };
