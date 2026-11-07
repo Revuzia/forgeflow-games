@@ -1,0 +1,472 @@
+{
+ "cleanup": {
+  "items": [
+   {
+    "id": "cleanup:1",
+    "status": "done",
+    "evidence": "_harness/probe_kits_A.ts now reads 525 passed, 0 failed (was 522/3). I checked all three numbers against content/fighters/kemdo.json. Long Thrust: targetMaxHp 0.035 at line 137, reading 3530 = base 30 + 3.5 % of 100000. Vent: armor base [15,19,23,27,31], reading 109.5 -> 140.5 = +31 at rank 5. Held Focus: omnivamp 0.2 at line 415. No kit bug: the old bars match the values before the balance pass in git log -p (0.05, 40 at rank 5, 0.25). The +27 bar is the rank 4 value, the same margin the old +35 had against 40, so it passes but would not catch a rank 4 reading. Comments updated. Commit 5331fd1cf."
+   },
+   {
+    "id": "cleanup:2",
+    "status": "done",
+    "evidence": "content/client.json:71 now says 'Until 8:00'; content/modes.json dawnSeal.until is 480. Commit 272a03c13. The queues.json line saying the seal lifts at 5:00 is a different mode and was left alone."
+   },
+   {
+    "id": "cleanup:3",
+    "status": "done",
+    "evidence": "content/skins/ilsheta.json first-bell desc now reads: 'The honor of the year's first bell: an ochre hood and scarf on a tan coat, ten pale hour-marks at the dark hem, and a small glass bell inside the lamp.' I looked at art/renders/fighters/ilsheta/three_ilsheta_first_bell.png, art/out/fighters/ilsheta/ilsheta_first_bell_splash.png and _harness/_shots/fw_CW3c_r3v1_stage_sheet_1280.png. Hood, scarf, coat and hem ticks show in those views; the ticks were not counted one by one, and the source builds ten (art/blender/fighters/ilsheta.py, range(10)). The bell shows only as a small pale form at the top of the lamp, and the build report lists tris_glass_bell, so I kept it in the text. Commit 303aae0ed."
+   },
+   {
+    "id": "cleanup:4",
+    "status": "done",
+    "evidence": "python3 tools/vfx/build_vfx.py --check exits 0: 'vfx.json: 285 defs, 51 from bespoke/tuned.json, 0 a rebuild would change'. Re-run after npm run content, still exit 0. Added as the 'VFX frozen' row under Build and integrity in tools/closing_gates.md."
+   },
+   {
+    "id": "cleanup:5",
+    "status": "done",
+    "evidence": "tools/closing_gates.md, commits f8dddbd2a and 2ae896583. Removed: the Ultra row, the dead-music flaky warning, note 3. Added: bench 75 s under ruling 18; perf_1080 exit 2 = GATE NOT MEASURED, plus a warning that exit 0 can still carry 'timing not measured'; rows for probe_calibrate.ts, --calibrate-only, probe_match_memory.mjs with its exit codes, probe_audio_music.mjs, probe_audio_ultid.py, hud_renders and ruling 24 monster IoU; the Memory-line wording with --mem-inject-mb; the clean build_vfx --check; the seat table (burdam 21, lisvel 15); --match-min 26; the offline joint QA command; a by-eye-and-ear section for Ervet's dash and the music. Also updated: rulings 1-24, Ultra added to the High and Low bars, --wait-idle now names probe_match_memory, a heavy-slot note, and note 1 (stale: lisvel_almanac now reads dE 25.5 and sells at 1,500). grep for charger, power, mains, battery and adapter finds nothing in the file."
+   },
+   {
+    "id": "cleanup:6",
+    "status": "done",
+    "evidence": "Cause: a small render bug at src/render/renderer.ts:875, 'a.culled = lod === 2 && a.leaving < 0', which exempted bodies in their 0.6 s leave from culling. Diagnostic run _harness/_reports/gfx_ovr1.log reproduced the failure and showed shieldwick id 67, alive false, state dead, leaving 0.0167, 87.5 m from the focus: it died on that exact frame. That is why the fail depended on the game moment. Off screen its clip is held anyway, so the draw bought nothing. Fix: 'a.culled = lod === 2'; update() still ticks the leave and recullActors restores it if the camera arrives. The check is unchanged; the report gained offscreenInfo. After the fix, default tiers at t 75 pass in 2 of 2 runs, gfx_ovr2.log and gfx_ovr3.log: offscreenDrawn [] in gfx_ovr2's M10 row, drawn 20 -> 19, overlay_regress: PASS, exit 0. The change only removes draws, so no tier gets heavier. perf_1080 was not re-run. Commit 953a6b8ea."
+   },
+   {
+    "id": "cleanup:7",
+    "status": "done",
+    "evidence": "gen_store: --check and --check --provisional both exit 0, 'store.json is current (32 offers, 8 shelves; dE gate 32/32 pass)', so no regeneration was needed. npm run content: the first run exit 0 with 1 warning, 'catalog changed but version 2026.10.1 did not' (gfx_content.log); a second run on the unchanged catalog read 0 warnings. npm run -s typecheck: exit 0. npm run -s content:check: exit 0, 0 warnings. npm run -s probe: 55 passed, 0 skipped, 0 failed (55 probes, _harness/_reports/gfx_probe.log)."
+   }
+  ],
+  "commits": [
+   "5331fd1cf",
+   "272a03c13",
+   "303aae0ed",
+   "f8dddbd2a",
+   "953a6b8ea",
+   "2ae896583"
+  ],
+  "handoffs": [
+   {
+    "to": "content owner / lead before any publish",
+    "what": "Bump content/version.json before publishing. npm run content warned that the catalog changed while version 2026.10.1 did not, because the CDN caches on that path. The second run reads 0 warnings because the catalog is now unchanged. I did not edit the file: it is outside this list."
+   },
+   {
+    "to": "CW6 / design docs",
+    "what": "_design/fighters/ilsheta.md:159 and :161 still quote the old First Bell text (pale dial-stone mantle over a dark hem). That file was outside this package; copy the new description from content/skins/ilsheta.json."
+   },
+   {
+    "to": "integration pass (idle)",
+    "what": "Re-confirm the cleanup:6 cull change in perf_1080 --prod with the other idle gates. It only removes draws. Overlay runs here were at load about 2-5 and are not timing evidence."
+   }
+  ],
+  "notes": "All seven cleanup items are done and pushed (branch tip 2ae896583); probes read 55 passed, 0 skipped, 0 failed, and no real kit bug turned up. Load during the runs was 2.1 to 5.3. Every other open minor and major from round 3 is untouched. No art changed, no asset was rebuilt, and perf_1080 was not run. tools/closing_gates.md now lists the idle gates, but none of them were run here."
+ },
+ "lanes": [
+  {
+   "lane": "GR",
+   "work": {
+    "items": [
+     {
+      "id": "GR-1",
+      "status": "partly",
+      "evidence": "Real find confirmed: GLTFLoader textures never get an anisotropy. _harness/_reports/gfx_GR1_census.json at High shows all 25 mipmapped textures in the match scene that were readable at GL anisotropy 1 (max 16). Tiling textures already sit at 8 (src/render/assets.ts). 8 and 16 give the same frame at the game's 52 degree pitch (0.001-0.002 % of pixels differ by more than 2), so 16 does not show and the cap stays 8. Live GL read after the switch: 251 textures at 8, 24 not yet uploaded and pending 8 (_harness/gfx_aniso_final.mjs, _harness/_reports/gfx_GR1_final_high.json). Visible gain is small: 0.2-0.36 % of frame pixels change by more than 4, frame sharpness +1.2 to +1.4 % (Laplacian variance), mean luma unchanged to 0.01. Per fighter at zoom 28.5, box sharpness is +1.1 to +3.5 % on 6 of 9 and 0 on 3 (kemdo, rishal, dunsom); shots in _harness/_shots/gfx_GR1c. I can see it at 2x on Odrum's sword and coat and slightly on Hesmi's cloth, and barely at 1:1. The Home frame shows no change (max delta 0), so it adds nothing there. Pan shimmer rises slightly, edge flick 9.085 to 9.169 and 5.566 to 5.658 (+1 to +2 %). VERDICT NOT REACHED: by the pass's rule this is not plainly better at the game camera and leans towards rejected. I had meant to decide after checking it at HiDPI, and that check was not run. NOT FINISHED: the tracked side-by-side _design/reviews/gfx/GR-1_anisotropy_ab.png does not exist, although the comment in src/render/quality.ts cites it. Nothing is committed. Typecheck passed before a later one-line simplification in assets.ts and was not re-run; probes were not run.",
+      "cost": "Synced frame cost (render(0) + 1x1 readPixels, same page, alternating blocks): +0.1 ms at the fight (11.1 vs 11.1 ms medians), -0.3 ms at the structure, but that structure run was too noisy to read (blocks 10-31 ms). Load 5.3-5.8. Earlier run, 1 vs 16 at 5 spots: 0 to +0.2 ms, load 4.4-5.3. Triangles, draws and programs identical A/B (264887 / 193 / 39 at the fight). Memory delta was not measured; a sampler state should add none, which is an expectation and not a reading.",
+      "switch": "MODEL_ANISOTROPY in src/render/quality.ts (low 1, medium, high and ultra 8); set all to 1 to turn it off. Applied by Assets.setModelAnisotropy in src/render/assets.ts, called from one line in Renderer.setQuality. That line is arguably outside my renderer.ts scope of pixel ratio, composer and shadow setup. This uncommitted edit is live in the shared working tree and currently ON."
+     },
+     {
+      "id": "GR-2",
+      "status": "partly",
+      "evidence": "No code changed: PRESETS.high.maxDpr is still 1. Measured at 1512x982 logical, deviceScaleFactor 2 only; 1440x900 was NOT measured. Same-page synced cost at DPR 1 / 1.25 / 1.5 / 2 under load 17-21 (_harness/gfx_dpr_alt.mjs, _harness/_reports/gfx_GR2_alt_high_1512x982.json): fight medians 15.6 / 19.3 / 39.7 / 45.9 ms, best blocks 9.8 / 16.7 / 24.3 / 42 ms; structure best blocks 14.2 / 16.2 / 21.9 / 51.2 ms; centre best blocks 14.7 / 19.4 / 26.2 / 43 ms. Live with dynamic resolution on (_harness/gfx_dpr.mjs): DPR 1 held 58.7 fps, scale at or above 0.95, load 7-8; DPR 1.5 gave 54.3 fps, p95 33.3 ms, 8 % of frames over 25 ms, scale falling to the 0.8 floor, bound gpu, load 8 rising to 24. That load makes the 1.5 reading no fair verdict. A repeat DPR 1 run read 58.3 fps at scale 0.9 under load 9.5 rising to 33. The repeat sweep's later steps were not read, and it was still running when this report was forced, so _harness/_reports/gfx_GR2_high_1512x982.json may be partial; the first sweep's DPR 1 and 1.5 file was overwritten, so those two lines exist only in this report. Look: Retina-view shots in _harness/_shots/gfx_GR2s; I compared the fight crop at 1 vs 1.25 and 1 vs 1.5 by eye. 1.5 is visibly crisper on grass and silhouettes, 1.25 moderately. No DPR 2 crop was viewed. Health bars looked the same size in those crops. Outlines are set in CSS pixels by code (renderer.ts sets uOutlineRes from CSS size), and DOM text and HUD do not go through the canvas buffer, by code reading only; no HUD capture was taken. The pan metric is not comparable across DPR (same world step, different pixels per frame), so disregard _harness/_reports/gfx_GR2_pan_high_1512.json as evidence. Reasoning, not measured: 1.25 x the 0.8 dynamic-resolution floor equals the old High buffer, which makes 1.25 the likely candidate. No step has been shown to hold 60 fps, and none was selected. Calibrate, the DPR 1 no-change requirement and large HiDPI displays were examined only by reading code, not tested. No tracked side-by-side exists.",
+      "cost": "Buffer at 1512x982: DPR 1 1.48 MP, 1.25 2.32 MP (1890x1227), 1.5 3.34 MP (2268x1473), 2 5.94 MP (3024x1964). Draws and programs in the frozen frame were the same at DPR 1 and 1.5 (166 / 39), triangles 230k. Only a bench footprint at DPR 1 was read: GPU 1085 + renderer 696 = 1781 MB. Memory at higher DPR was not read and the 3.0 GB match bar was not checked.",
+      "switch": "Proposed only, not applied: PRESETS.high.maxDpr in src/render/quality.ts."
+     },
+     {
+      "id": "GR-3",
+      "status": "not_done",
+      "evidence": "Not run; no numbers exist. Only the tool was written, untested: _harness/gfx_msaa_ab.mjs (variants: SMAA as shipped, 2x and 4x with SMAA, 2x and 4x with a copy pass instead). From reading code only: EffectComposer's multisampling sets both HDR buffers, while the tool samples only the input buffer, the one geometry draws into. MSAA on the overlay's buffer may also bear on the identical-overlay rule, since the overlay pass draws into that same buffer. N8AO depth, the overlay depth test and shimmer are all untested. The MSAA comment in quality.ts is neither confirmed nor refuted.",
+      "switch": "None built."
+     },
+     {
+      "id": "GR-4",
+      "status": "not_done",
+      "evidence": "Not started. It was conditional on time remaining."
+     }
+    ],
+    "commits": [],
+    "handoffs": [
+     {
+      "to": "workflow orchestrator / next GR run",
+      "what": "The package is unfinished and nothing is committed or pushed. Uncommitted in the shared tree: GR-1 edits in src/render/quality.ts, src/render/assets.ts and src/render/renderer.ts (switch ON), plus untracked _harness/gfx_lib.mjs, gfx_compare.py, gfx_tex_census.mjs, gfx_aniso_ab.mjs, gfx_aniso_final.mjs, gfx_aniso_fighters.mjs, gfx_aniso_menu.mjs, gfx_dpr.mjs, gfx_dpr_alt.mjs, gfx_dpr_shots.mjs, gfx_msaa_ab.mjs. Do not assume other lanes' typecheck or probe results cover these edits. Remaining: decide GR-1 (keep, or set MODEL_ANISOTROPY to 1 and remove the code) and make its side-by-side; re-run typecheck; finish GR-2 including 1440x900; run GR-3; GR-4 if time remains. A background sweep (gfx_dpr.mjs) and its waiter may have been cut off with this report; check for leftover harness Chrome processes."
+     },
+     {
+      "to": "owner of src/session/settings.ts",
+      "what": "Only if GR-2 keeps a higher High cap: VIDEO_LADDER.high.maxDpr is a second copy of the ladder, and it is what the real client's defaults and applyPreset use. Changing PRESETS in quality.ts alone would not reach players, and saved settings keep maxDpr 1. No change is needed yet."
+     }
+    ],
+    "notes": "This report was forced before the package finished: no experiment reached a final verdict, nothing was committed, and no tracked _ab.png was produced. Load was high for much of the run (about 4 to 33), partly from Metal shader compilation when my own harness opened fresh pages, so GR-2 timings are relative only and need the idle gates. perf_1080 was not run, and no probes were run. The one solid finding is that GLB textures sampled at anisotropy 1, but fixing it gives only a small visible gain at the game camera, so it may still end up rejected. Tracked harness outputs (value_probe.json, perf_1080.json, ambient.json, shot_lane.json) were not rewritten by my tools."
+   },
+   "fix": {
+    "items": [
+     {
+      "id": "GR-1",
+      "status": "done",
+      "evidence": "Reverted and pushed as 9d50df609. `git diff 84f04a72a~1` printed nothing for quality.ts, assets.ts and renderer.ts just before the commit, so all three match their pre-GR-1 state, and `grep modelAnisotropy` over src finds 0 hits. Frames back to before: _harness/gfx_gr1_revert_check.mjs ran on the old tree with the switch forced to 1 (load 5.7-9.4), then on the reverted tree twice (load 9.8-31.6 and 13.7-17.5). _harness/gfx_gr1_revert_diff.py, with results in _harness/_shots/gfx_GR1_revert/diff.json: structure frames on rift High seed 41, bridge High seed 53 and rift Ultra seed 67 show 0 changed pixels, max delta 0. Fight frames do not match exactly, but the old-vs-new delta equals the page-to-page noise of an unchanged tree: rift High 0.52 % vs 0.54 % (pixels over 4), bridge High 1.36 % vs 1.46 %, rift Ultra 0.022 % vs 0.055 %. The old tree against itself reads 0.49 % on rift High. So fight frames are consistent with before but not shown identical. Against the switch at 8, the reverted structure frames differ by 0.09-0.23 % over 4, so the check does detect the filter. Live GL read: GLB textures that had uploaded when the bench was ready were at 8 before and are at 1 now (rift High 97 gl8 -> 97 gl1, bridge 67 -> 67, Ultra 98 -> 98), none above 1 at end of run. Triangles match within page noise, programs unchanged (39/37/39), no console errors. Sheet: _design/reviews/gfx/GR_1_anisotropy_ab.png, 1600 px, labelled, looked at. typecheck clean; npm run probe 55 passed, 0 skipped, 0 failed. Removed three tools that called the deleted switch: gfx_aniso_final, gfx_aniso_menu, gfx_aniso_fighters. One thing unexplained: info.memory.textures on High went 170 -> 169 (rift) and 146 -> 145 (bridge), stable across pages, Ultra unchanged at 163/164. I found no cause in the removed code; terrain.ts and terrain_glsl.ts changed during the after runs, which may or may not be related. It is one fewer texture, so no budget risk. Memory after the revert not measured.",
+      "cost": "Revert removes the code; memory not read A/B, timing not re-measured because the old tree's reading was not_measured evidence at load 22-53."
+     },
+     {
+      "id": "GR-2",
+      "status": "rejected",
+      "evidence": "No code change: this stays at the judge's correctly_rejected ruling, with PRESETS.high.maxDpr 1 (quality.ts). Added the missing tracked sheet in cbb342726: _design/reviews/gfx/GR_2_dpr_ab.png, DPR 1 vs 1.25, built from the verifier's _harness/_shots/gfx_verify_GR2/1440_dpr1.png and 1440_dpr1.25.png, looked at. The gain is slightly crisper telegraph lines and sword edges, only on HiDPI displays.",
+      "cost": "From the verify report: 50-77 MB at 1.25 and 140-164 MB at 1.5, at 1440x900 DSF 2.",
+      "switch": "PRESETS.high.maxDpr; settings.ts VIDEO_LADDER if ever reopened"
+     },
+     {
+      "id": "GR-3",
+      "status": "not_done",
+      "evidence": "Verdict revert means no credit and no change: never run, and nothing to turn off. The three files I reverted match their pre-GR-1 state, and PRESETS were not changed. _harness/gfx_msaa_ab.mjs stays as an untested tool, left alone because fixing it is out of this refix's scope."
+     },
+     {
+      "id": "GR-4",
+      "status": "not_done",
+      "evidence": "Verdict revert means no credit and no change: never started, nothing to turn off."
+     },
+     {
+      "id": "regression-gr1-in-tree",
+      "status": "done",
+      "evidence": "The judge saw GR-1 as uncommitted, but wip sync 84f04a72a had already committed it (assets.ts +29, quality.ts +8, renderer.ts +1), so it was on the branch. 9d50df609 removes it from the branch and the tree. Removing it should also remove the shimmer rise the judge measured; I did not re-run the pan metric, but structure frames are byte-identical to the switch at 1."
+     },
+     {
+      "id": "regression-missing-sheet",
+      "status": "done",
+      "evidence": "The quality.ts comment citing the missing GR-1_anisotropy_ab.png is gone with the hunk. Tracked sheets now exist for the two experiments that have data: _design/reviews/gfx/GR_1_anisotropy_ab.png (9d50df609) and GR_2_dpr_ab.png (cbb342726). They use the GR_ prefix from this lane's ownership list. GR-3 and GR-4 have no sheet because they were never run."
+     }
+    ],
+    "commits": [
+     "9d50df609",
+     "cbb342726"
+    ],
+    "handoffs": [],
+    "notes": "The refix is done and pushed: GR-1 is gone from the branch and the tree, and both regressions are fixed. GR-2 stays at DPR 1, and GR-3 and GR-4 were never run, so this pass keeps no GR experiment.\n\n- **Frames:** structure frames are byte-identical to the switch at 1. Fight frames differ between pages even on an unchanged tree, so those are shown to be within that noise, not identical.\n- **Not re-measured:** fps and memory. Load was 5.7-31.6 during the captures, and the verifier's GR-1 timing was already not_measured evidence.\n- **Unexplained:** the High texture count dropped by one (170 to 169 on rift, 146 to 145 on bridge). See the GR-1 item.\n- **Other lanes:** commits landed from GE and GF during this run; the ORM re-grade of the fighter GLBs (ac10d5386) is one of them. The two GR commits contain only GR paths. The GF re-grade landed after the frame captures, so these comparisons are from before it.\n- **_harness/_reports:** no tracked report was left modified.\n\nEvidence is in /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/gfx_GR1_revert/, mainly diff.json and the per-run JSON files."
+   },
+   "verdicts": [
+    {
+     "pass": false,
+     "experiments": [
+      {
+       "id": "GR-1",
+       "verdict": "revert",
+       "visibleGain": "slight",
+       "evidence": "Own same-page A/B through the real switch (Assets.setModelAnisotropy 1 vs 8) at zoom 28.5, new seeds and moments: rift High seed 41 t929, bridge High seed 53 t505, rift Ultra seed 67 t873, fray High seed 29 t317 (fight frame only: my script stopped at fray, which has no structures). Frames in _harness/_shots/gfx_verify_GR1, reports report_{rift_high,bridge_high,rift_ultra}.json. Pixels changing by more than 4: 0.19-0.43 % on fight frames, 0.00-0.15 % on structure frames. Laplacian sharpness +0.2 to +2.0 %. Off vs a second off capture differs by 0, so the deltas are the filter. Looked at full frames and actual-size crops (sbs_*.png in the same folder): rift High fight is indistinguishable to me; in the Ultra and bridge crops a coat and the tower are very slightly more defined when A and B sit side by side, and I would not notice it in play. Cost is not shown to be zero: synced frame median delta on minus off +0.6 ms rift High, +0.35 ms bridge High, +2.35 ms rift Ultra, positive in 15 of 18 blocks with the off side always first, but at load 23-53 and blocks up to 40 ms, so this is not_measured evidence, not a pass or a fail. Shimmer rises: flickEdge +0.22 %, +1.19 %, +0.29 %; pop +0.04 %, +0.86 %, +0.10 % (repeat runs identical). Triangles, draws, programs and texture counts identical A/B in every frame (rift 230547/111/39, bridge 330345/215/38, Ultra 291823/168/39). Memory A/B not read by anyone. Mean RGB shift at most 0.009 of 255, no hue or team-colour shift; telegraphs and bars read the same A/B. No new art, so no new sensitivity question. Engineer's numbers hold up except that his +0.1 ms is lower than my readings. By the rule of the pass (default to revert when the gain is slight and there is any cost) it goes. Also: _design/reviews/gfx/GR-1_anisotropy_ab.png does not exist although quality.ts:75 cites it, and the code reaches into three's private __webglTexture and __currentAnisotropy (assets.ts:186-190) for a gain nobody sees in play.",
+       "fixHint": "Remove the GR-1 hunks: quality.ts modelAnisotropy and MODEL_ANISOTROPY, assets.ts modelAnisotropy, setModelAnisotropy and anisotropyOf, renderer.ts:466 call. Leave the other lanes' hunks in those paths alone. Setting the constant to 1 alone would leave a dead code path and a comment citing a missing file."
+      },
+      {
+       "id": "GR-2",
+       "verdict": "correctly_rejected",
+       "visibleGain": "slight",
+       "evidence": "The engineer reached no verdict; the shipped state he left (PRESETS.high.maxDpr 1, quality.ts:81, settings.ts:44) is the right one, so I rule it rejected for now. Own run at 1440x900 with deviceScaleFactor 2 on rift High, seed 41, teamfight with telegraphs, the size he did not measure: _harness/_shots/gfx_verify_GR2/report_1440.json, 1440_dpr*.png, sbs_1_1.25.png, sbs_1_1.5.png. Buffers 1440x900, 1800x1125, 2160x1350. Triangles, draws, programs identical (229852/111/39). Footprint GPU + renderer: 1742 MB at DPR 1, 1819 at 1.25, 1906 at 1.5, 1768 on return to 1. So 1.25 costs about 50-77 MB and 1.5 about 140-164 MB at this size, more on 1512x982 and larger; with match readings up to 2983 MB under the 3.0 GB bar of ruling 20, either can break it on a peak match. Synced frame blocks: 10 / 10.7 / 12 ms at DPR 1, 10.5 / 11.7 / 14 at 1.25, 14.7 / 17.9 / 19.4 at 1.5, 9.2 / 8.9 / 8.9 back at 1, load 22-25: not_measured evidence, though the 1.5 step is large enough to read. By eye, in device-pixel crops: 1.25 makes telegraph lines, the sword and bar edges a little crisper, 1.5 slightly more, and I can see 1 vs 1.25 only side by side; a player on a 1080p display (DPR 1) gets nothing. Bars and outlines stay the same size in the crops. No step has been shown to hold 60 fps on an idle machine. No HUD capture, no calibrate test, no large HiDPI display (for example 2560x1440 logical) test exists.",
+       "fixHint": "If reopened: only 1.25, only with an idle 60 fps reading and a --prod match memory reading under 3.0 GB at 1512x982 at DPR 2, and change settings.ts VIDEO_LADDER too (it is what players get)."
+      },
+      {
+       "id": "GR-3",
+       "verdict": "revert",
+       "visibleGain": "none",
+       "evidence": "Not run, no switch built, no numbers, nothing to judge or to keep. The schema has no not_done verdict: revert here means no credit and no change in the tree, not that MSAA was shown to be bad. _harness/gfx_msaa_ab.mjs is untested and untracked.",
+       "fixHint": "Run it in the next GR round or drop it. Check that MSAA on the buffer the overlay pass draws into leaves overlays identical on every tier, and N8AO depth."
+      },
+      {
+       "id": "GR-4",
+       "verdict": "revert",
+       "visibleGain": "none",
+       "evidence": "Not started; nothing in the tree. Same meaning as GR-3: no credit, no change."
+      }
+     ],
+     "regressions": [
+      "GR-1 is ON in the shared working tree and uncommitted, with the verdict revert; a vale wip sync commit could pick it up (git log shows such commits taking src/render). Pan shimmer flickEdge +0.22 to +1.19 % while it is on.",
+      "src/render/quality.ts:75 cites _design/reviews/gfx/GR-1_anisotropy_ab.png, which does not exist; no tracked side-by-side exists for any GR experiment."
+     ],
+     "summary": "Fail as delivered. GR-1 is a real finding with a slight gain, so revert it: nothing a player sees at the game camera, a small shimmer rise, and a cost not shown to be zero. GR-2 stays at DPR 1: a slight HiDPI-only gain, about 50-164 MB against a tight match memory bar, and no idle 60 fps reading. GR-3 and GR-4 were never run. All timing here was at load 22-53, so it is not_measured evidence. Typecheck printed no errors with the GR-1 edits in the tree; probes and value_probe were not run (GR-1 mean RGB shift at most 0.009 of 255 at frame level). Fray was checked on one fight frame only. The verdict is committed and pushed as 78ced0b54 at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/GFX_GR_verify1.json as the task's last instruction says, not _design/reviews/gfx/GR_verify1.json from its ownership line. Captures are in /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/gfx_verify_GR1 and /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/gfx_verify_GR2."
+    },
+    {
+     "pass": true,
+     "experiments": [
+      {
+       "id": "GR-1",
+       "verdict": "correctly_rejected",
+       "visibleGain": "slight",
+       "evidence": "Revert confirmed: `git diff 84f04a72a~1` is empty for quality.ts, assets.ts and renderer.ts, no switch in src, and live GL reads every uploaded GLB texture at 1 (101/68/97). Own teamfight runs at zoom 28.5: rift High seed 131, bridge High seed 173, rift Ultra seed 229 (_harness/_shots/gfx_verify_GRv2/report_*.json, diff.json, sbs_*.png). Forcing 8 in the page only: 0.09-0.64 % of pixels change by more than 4, sharpness +0.8 to +3.3 %, off vs off2 differs by 0. Indistinguishable at actual size in the fights; the bridge tower is slightly firmer only side by side. Pan flickEdge is lower on the reverted tree: 11.703 vs 11.803, 16.886 vs 17.081, 13.059 vs 13.200. Triangles, draws, programs and textures identical A/B. Timing not_measured (load 65-170); memory A/B not read. The 170 to 169 texture drop likely comes from the GF-2 detail texture removed from world_material.ts in the same range; not proven, and Ultra did not drop."
+      },
+      {
+       "id": "GR-2",
+       "verdict": "correctly_rejected",
+       "visibleGain": "slight",
+       "evidence": "maxDpr is still 1 (quality.ts:74). Own run at 1512x982 DSF 2, rift High seed 197, teamfight with telegraphs (_harness/_shots/gfx_verify_GRv2/report_dpr_1512.json, sbs_dpr.png). Footprint 1741 / 1835 / 1904 / 1741 MB at DPR 1 / 1.25 / 1.5 / 1, so +94 and +163 MB against recent match readings up to 2983 MB and the 3.0 GB bar. Triangles, draws and programs identical (337235/204/39). Frame blocks 45-47 / 64-89 / 73-80 / 42-45 ms at load 72-103: not_measured evidence. By eye, 1.25 is a little less soft on foliage and telegraph edges, only side by side and only on HiDPI. Ultra already offers maxDpr 2."
+      },
+      {
+       "id": "GR-3",
+       "verdict": "revert",
+       "visibleGain": "none",
+       "evidence": "Never run: no switch, no frames, nothing in src. Revert means no credit and no change, not that MSAA was shown to be bad. quality.ts:102 on MSAA is neither confirmed nor refuted, and _harness/gfx_msaa_ab.mjs is still untested."
+      },
+      {
+       "id": "GR-4",
+       "verdict": "revert",
+       "visibleGain": "none",
+       "evidence": "Never started and nothing in the tree. No credit and no change."
+      }
+     ],
+     "regressions": [],
+     "summary": "Pass: the lane keeps no experiment, the GR-1 revert is clean, and both verify 1 regressions are closed. Verdict committed and pushed as 2d84f91ec at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/GFX_GR_verify2.json, the path in the task's last instruction, not the _design/reviews/gfx/GR_verify2.json named in its ownership line. Gates on the current tree: tsc --noEmit clean; npm run probe 55 passed, 0 skipped, 0 failed; value_probe on rift, bridge and fray at high and low printed 88 PASS and no FAIL, tracked report restored. Not measured: all timing (load 65-170), production match memory and GR-1 memory A/B; no perf_1080 was run. GR-3 and GR-4 were never run, so the lane has no MSAA evidence. No new art, so no new sensitivity question. Captures are in /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/gfx_verify_GRv2/."
+    }
+   ]
+  },
+  {
+   "lane": "GF",
+   "work": {
+    "items": [
+     {
+      "id": "GF-1",
+      "status": "kept",
+      "evidence": "The shipped ORM had a narrow roughness range: on Burdam, cloth 0.90, leather 0.78, stone plates 0.74, and only the mask and tally at 0.5. Island gutters sat near roughness 0, and lossy chroma left metal residue up to 0.39. The kept curve spreads the sheen classes to 0.35-0.47, leaves matte cloth from 0.87 up unchanged, and leaves glass below 0.25 unchanged. It also fills the gutters and sets metal to 0. Same-page, same-pose A/B at 28.5 m on High: Burdam 667 and 533 px changed by more than 8 (333 and 193 in the fighter crop), Sukri 267 and 9. Ultra on Burdam: 669 and 535 px. Collection stage: 5050 px on Burdam, 3969 on Sukri. Side-by-side: _design/reviews/gfx/GF_1_orm_regrade_ab.png. Reports: _harness/_reports/gfx_gf3_{burdam,sukri}_high.json and gfx_gf3u_burdam_ultra.json. To my eye the Collection gain is clear: leather, plates and masks stop reading as one clay. At the game camera it is real but modest, mostly on dark leather and lacquer. Burdam's coat is cloth and stays matte, so that part of the clay complaint is unchanged; the stronger test with cloth at about 0.6 (g1b) was not clearly better. Rollout covers all 48 GLBs (16 bases, 32 skins). Gates: three_load_test 48 of 48 with bases under 1172 KiB; verify_same_geometry 48 of 48 (mesh and clips byte-identical); crown_gate 0 fails; clip_floor rc 0 on Vashil, Ardit, Burdam, Kemdo, Nurrow and Ervet (the other 10 were not run; bytes are identical); gen_store --check current; probe_kit_hue 64 of 64 slots pass, minSig 0.534, max team light 0.316 (_harness/_reports/gfx_GF_kit_hue.json). lineup_qa before and after (_harness/_reports/gfx_GF_{before,after}.json, 2 facings, 8 samples): largest change 2.6 L*. One new band exit: Nurrow facing 90 bottom band goes from 33.7 to 36.0 against the 35 ceiling; bands that were already outside stay outside. npm run content is done, and the client's catalog Burdam differs from the pre-grade GLB by the same 667 px. I inspected all 16 bases at stage and game camera with no regression or sensitivity change. The 32 skins were load-tested but not inspected by eye. perf_1080 and value_probe were not run.",
+      "cost": "Triangles 164933, draws 101 and programs 39 are identical in the same-page run. No new shader, and ORM dimensions are unchanged, so texture memory should not change by construction (not measured); fps not measured, left for the idle gates. File size: ORM mostly smaller (Sukri 88 to 64 KB), largest base 1170 KiB, Lisvel 1162 to 1170 and Ulkro 1162 to 1170. Load was 10-36 during captures, so no absolute timing is claimed.",
+      "switch": "ROUGH_CURVE and GRADE_STAMP in art/tools/glb_orm_regrade.py. Revert with git revert ac10d5386. Each graded GLB carries asset.extras.vale_orm_grade, and a stamped GLB is refused so the curve cannot apply twice."
+     },
+     {
+      "id": "GF-2",
+      "status": "rejected",
+      "evidence": "Prototype: a shared 256 px tiling detail normal (cloth weave, leather grain) folded into the fighter program, chosen by roughness class. At the game camera it does nothing useful: Burdam at strength 1.0 changed 93 and 46 px against no detail (crop 81 and 41). At strength 0.25 on Ultra, 25 and 14 px, max 24. At the stage, strength 0.5 and up reads as a mechanical grid on Sukri's hood and belly, puts weave on a stone piece on Burdam, and pebbles Sukri's wood mask, which is a sensitivity risk because roughness cannot separate a mask from leather. Strength 0.25 is close to invisible at 1:1, and at tile 120 almost nothing changes. Not plainly better at any setting tried. Collection at Ultra was not run. Sheet: _design/reviews/gfx/GF_2_detail_ab.png (the top row's 0.25 column is on the final curve, the others on the earlier g1c curve). Patch: _design/reviews/gfx/GF_2_detail_prototype.patch.",
+      "cost": "Programs stayed 39. Texture about 350 KB with mips (computed), plus one more sampler and fetch per fighter fragment. Fps not measured since rejected.",
+      "switch": "The code is removed from src/render/world_material.ts in 1c1701750. The wip sync had swept the prototype in at strength 0 (84f04a72a), so it was live in the tree for about 10 minutes with no visible effect."
+     },
+     {
+      "id": "GF-3",
+      "status": "rejected",
+      "evidence": "Re-baked 1024 normal and ORM from the cached .blend's own high-poly sources (art/tools/rebake_data_maps.py, under 40 s each). UVs agree: correlation with the shipped normal is 0.93 on both. Roughness was kept from the shipped ORM. At the game camera it adds 121 and 89 px on Burdam and 158 and 37 on Sukri over the same roughness curve. Why: at about 350 texels per metre on the atlas, a 512 map is about 11.5 mm per texel and the game camera about 12 mm per pixel, so 512 is already about 1:1 in play. At the stage it gives slightly crisper fold edges, visible only when zoomed 2x next to the 512. That is not a clear gain, so the 1500 KB allowance was not used. Sheet: _design/reviews/gfx/GF_3_datamaps_ab.png.",
+      "cost": "GLB +113 KB on Burdam (1246 KB) and +121 KB on Sukri (1276 KB). GPU memory +8.4 MB per fighter, or +84 MB for 10 fighters (computed from dimensions, not measured), against recent match readings of 2715-2983 MB and a 3000 MB limit.",
+      "switch": "Nothing shipped. Prototype tools only: art/tools/rebake_data_maps.py and art/tools/glb_data_maps_swap.py."
+     }
+    ],
+    "commits": [
+     "1c1701750 vale gfx: GF-2 detail normals rejected and removed; GF-3 rejected (A/B sheets)",
+     "ac10d5386 vale gfx: GF-1 ORM re-grade on all 48 fighter GLBs, with tools and harness"
+    ],
+    "handoffs": [
+     {
+      "to": "lead / closing gates (tools/closing_gates.md, not my file)",
+      "what": "Add a row: python3 art/tools/glb_orm_regrade.py art/out/fighters/*/*.glb --check. A full fighter rebuild drops the grade. After any rebuild run --grade on that GLB, alongside the existing clip_floor_fix step."
+     },
+     {
+      "to": "art pipeline owner",
+      "what": "art/blender/common/pipeline.py does not apply the grade at build time. I left it that way to keep old defaults. Run the grade as a post-build step until someone folds it in."
+     },
+     {
+      "to": "final idle gates",
+      "what": "Re-measure fps and match memory for GF-1. No shader or texture-size change is expected to move them, but neither was measured here."
+     },
+     {
+      "to": "verifier",
+      "what": "Look at the 32 skins (not inspected by eye) and decide whether Nurrow facing 90 bottom band at 36.0 against the 35 ceiling (was 33.7) matters. This is a Cycles lineup reading, not an in-game one."
+     },
+     {
+      "to": "lead",
+      "what": "src/render/camera.ts:3 says the default camera distance is 31 m (zoom 24.5-36), not 28.5 m. These captures used 28.5 m as the package asked, and lineup_qa and part_gamecam also use 28.5, so at the real default fighters are slightly smaller and the game-camera gain slightly smaller."
+     }
+    ],
+    "notes": "Status at 19:31, load 33 (other lanes active). Answer to the question: fighters do look richer, and the cheapest way is GF-1, an ORM-only re-grade with no new art, program or texture memory. The gain is clear in Collection and modest at the game camera. GF-2 and GF-3 add almost nothing in play, so both were rejected with numbers. Rollout finished on all 48 GLBs with no rebuild, and the grade is byte-safe for clip_floor_fix and glb_paint_grade edits. Six base fighters ship a 256 ORM (Ervet, Kemdo, Lisvel, Nurrow, Ulkro, Vashil); I did not change that. Comparison tool: _harness/gfx_fighter_ab.mjs swaps textures live in one page at the same pose, so other lanes' edits cannot enter an A/B. My first cross-run A/B was contaminated that way and was discarded. _harness/_reports is gitignored, so the gates summary (_harness/_reports/gfx_GF_gates.txt) and the other reports are local only; the tracked evidence is the three sheets. Prototype GLBs and the pre-grade GLB copies are in /tmp/gf. art/.cache/fighters/partmap/sukri.npz was newly generated (ignored path)."
+   },
+   "fix": {
+    "items": [
+     {
+      "id": "GF-1",
+      "status": "done",
+      "evidence": "Reverted in 89112e613: `git diff ac10d5386^ HEAD -- art/out/fighters` is empty and 0 of 48 GLBs carry the vale_orm_grade stamp. After `npm run content`, all 48 are byte-identical in dist-catalog, and for Vashil, the fighter checked, the catalog references the pre-grade hash and not the graded one. Same-page frames at High, 28.5 m, seed 19, t 380 (_harness/gfx_fighter_ab.mjs, tag gf1rv): restored vs ac10d5386^ bytes differ by 0 pixels on Vashil game0, game1, Collection and Burdam game0. The graded control still differs: >8 by 84, 30, 7210 and 278 px, so the capture can see the grade. Numbers: _harness/_reports/gfx_gf1rv_frames.json (gitignored). Shots: _harness/_shots/gfx_gf1rv_*. Sheet: _design/reviews/gfx/GF_1_revert_ab.png, looked at by eye. The frame check covered 2 of the 48 GLBs; the other 46 rest on byte identity. Load 4.5-4.9.",
+      "cost": "Triangles, draws and programs are equal across restored, pre and graded in every frame (226941/181/39 Vashil game0, 207461/162/39 Burdam game0). Texture memory is the pre-grade state by byte identity; not measured as an A/B. Fps not measured; there is no runtime change to measure.",
+      "switch": "The GLB bytes (git history). Tool art/tools/glb_orm_regrade.py loses --grade, --check, the stamp and GLB_BUDGET, so no rebuild has anything to re-apply. Its --curve, --dilate and --zero-metal remain for one-off use, and its helpers stay because glb_data_maps_swap.py imports them."
+     },
+     {
+      "id": "GF-2",
+      "status": "rejected",
+      "evidence": "Judge ruled correctly_rejected; no change. No valeDetail in src/render per the verdict; sheet _design/reviews/gfx/GF_2_detail_ab.png."
+     },
+     {
+      "id": "GF-3",
+      "status": "rejected",
+      "evidence": "Judge ruled correctly_rejected; no change. All 48 ORMs remain at 512 or smaller because the GLBs are back to ac10d5386^. Sheet _design/reviews/gfx/GF_3_datamaps_ab.png."
+     },
+     {
+      "id": "regression:vashil-robe-streaks",
+      "status": "done",
+      "evidence": "Removed by the revert: Vashil Collection frame 0 px against ac10d5386^ bytes, graded control 7210 px >8. Only the base vashil.glb was re-framed; vashil_first_bell and vashil_chalkline are byte-identical to ac10d5386^."
+     },
+     {
+      "id": "regression:metal-claim-and-lossy-encode",
+      "status": "done",
+      "evidence": "The second-generation encode (metal residue, AO movement inside islands, Lisvel and Nurrow high-frequency roughness) is gone: all 48 ORMs are the pre-grade bytes. The false 'sets metal to 0' claim no longer describes anything shipped, and the tool docstring now records that the second encode brought metal back."
+     },
+     {
+      "id": "regression:nurrow-facing-90",
+      "status": "done",
+      "evidence": "nurrow.glb is byte-identical to ac10d5386^, so the graded asset behind the 36.0 reading is gone. The Cycles reading was not re-run."
+     }
+    ],
+    "commits": [
+     "89112e613",
+     "8668fb29a"
+    ],
+    "handoffs": [
+     {
+      "to": "lead",
+      "what": "Drop the GF-1 handoffs. There is no glb_orm_regrade.py --grade post-build step and no --check closing gate any more; git grep found neither mentioned in tracked text, including tools/closing_gates.md. If a handoff in your own notes still lists them, remove it."
+     },
+     {
+      "to": "lead",
+      "what": "dist-catalog/assets still holds the 48 graded GLBs as orphan files under their old hashes (gitignored). The catalog no longer references the graded Vashil GLB. I left them in place; any pruning belongs to whoever owns the build output."
+     }
+    ],
+    "notes": "GF-1 is reverted and pushed (branch tip 8668fb29a). All 48 fighter GLBs are byte-identical to ac10d5386^, and same-page frames show 0 pixels changed from before on the 4 frames checked (Vashil game0, game1, Collection; Burdam game0).\n\nI restored the fighter GLBs with a path-scoped checkout of ac10d5386^ rather than `git revert`, so the other lanes' working tree could not be touched.\n\nTwo differences from a plain revert:\n- GF_1_orm_regrade_ab.png stays as the record of the rejected experiment.\n- The tool also loses its --grade and --check modes, not just the budget hunk, so nothing can read as a required step after a rebuild.\n\nNot run: value_probe, perf_1080 and no fighter rebuilds, because the assets are back to known bytes. The verifier's value_probe result on the graded tree is not a reading of this restored tree, and fps and match memory were not measured. Teamfight frames were not recaptured because the comparison harness only compares one fighter at a time.\n\nGF-2 and GF-3 were not touched."
+   },
+   "verdicts": [
+    {
+     "pass": false,
+     "experiments": [
+      {
+       "id": "GF-1",
+       "verdict": "revert",
+       "visibleGain": "slight",
+       "evidence": "Own same-page A/B of shipped GLBs against ORM bytes from ac10d5386^, every fighter on the field, new seeds and moments: _harness/_shots/gfx_verify_GF/{rift_high_s83,rift_ultra_s97,bridge_high_s61,fray_high_s37,rift_low_s83}, plus solo frames _harness/_shots/gfx_verify_solo_*. In teamfights at 28.5 m and 31 m, actual size, I could not tell before from after. Pixels changed by more than 8: 293-992 of 2.07M per frame (0.014-0.048 %), 84-278 on solo frames. Low: fighter pixels unchanged. Collection, all 48 GLBs including the 32 skins (_harness/_shots/gfx_verify_GF/stage): mixed. Hesmi, Ardit and Nurrow's hat separate better; Vashil's robes pick up brown streaks (vashil_chalkline 16234 px >8, 3705 >24), and Marund and Nurrow cloth reads grimier. 'Matte cloth unchanged' fails where cloth sits in the sheen classes: Vashil roughness median 0.651 to 0.384. No budget break: triangles, draws and programs identical in every A/B; ORM dimensions identical on 48 of 48, so texture memory is unchanged by construction but not measured as an A/B. Timing at load 11-29 is not_measured. value_probe on the graded tree, rift and bridge High: 30 PASS, 0 FAIL. Shimmer: no clear change (pan flick +0.02 to +0.08 of about 10). Telegraphs, team hue and sensitivity: no regression seen. Runtime cost is none, but every rebuild silently drops the grade, and the Vashil robes get worse.",
+       "fixHint": "git revert ac10d5386 (no later commit touches art/out/fighters), npm run content, and drop the closing-gate and post-build handoffs. If a Collection-only polish is wanted later, exempt cloth through the part map and re-judge Vashil and Marund first."
+      },
+      {
+       "id": "GF-2",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "Not re-run: nothing in the tree (no valeDetail in src/render). The engineer's sheet _design/reviews/gfx/GF_2_detail_ab.png shows a grid on Sukri's belly and pebbling on her mask at 0.5 on the stage, and nothing usable at the game camera. The mask risk alone is enough. His cost figures were not reproduced."
+      },
+      {
+       "id": "GF-3",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "Own same-page frame with /tmp/gf/burdam_g3.glb, seed 19, t 380, High, 28.5 m: _harness/_shots/gfx_verify_solo_burdam_high_{pre,base,g3}_game0.png. The 1024 maps differ from the shipped 512 by 102 px >8 and 20 px >24, invisible at actual size. Nothing shipped: all 48 ORMs are 512 or smaller. The stated +8.4 MB per fighter is computed and was not re-measured."
+      }
+     ],
+     "regressions": [
+      "Collection stage: brown streaks on Vashil's robe from the roughness curve, worst on vashil_first_bell and vashil_chalkline (_harness/_shots/gfx_verify_GF/stage/vashil_first_bell_{pre,post}.png). A lossless grade shows the same streaks by eye, so the curve causes them, not the encoder.",
+      "Claim wrong, 'sets metal to 0': the lossy re-encode brings it back. Decoded B on the 16 bases has max 0.17-0.34 and p99 0.04-0.18, reduced from max 0.23-0.55 but not zero. Nurrow's p99 did not drop (0.122 both) and its max rose (0.227 to 0.282).",
+      "Second-generation lossy encode moves AO inside islands: mean absolute 0.011-0.042, p99 up to 0.153 on 256 px ORMs (Ulkro, Ervet, Kemdo). High-frequency roughness rises on Lisvel (0.025 to 0.045) and Nurrow (0.035 to 0.039).",
+      "Nurrow facing 90 bottom band at 36.0 against the 35 ceiling is the engineer's Cycles reading, not re-run here; a revert removes it."
+     ],
+     "summary": "Fail: revert GF-1; GF-2 and GF-3 are correctly rejected. At the game camera in teamfights on rift, bridge and fray, High and Ultra, 28.5 m and 31 m, GF-1 changes 0.014-0.048 % of the frame and I could not see it. Low is unaffected. In Collection the result is mixed: some fighters separate better, while Vashil's robes get streakier. Triangles, draws and programs are identical and value_probe passes, so no budget breaks, but every rebuild silently drops the grade. Not measured: timing (load 11-29) and match memory as an A/B. Nothing was fixed; the revert is the lead's. The task named two paths for the verdict; I wrote the one its last instruction gave and earlier verdicts use, not _design/reviews/gfx/GF_verify1.json. Verdict: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/GFX_GF_verify1.json, commit 1be3f4195, pushed."
+    },
+    {
+     "pass": true,
+     "experiments": [
+      {
+       "id": "GF-1",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "Revert confirmed, wider than the engineer checked. All 48 art/out/fighters GLBs are cmp-identical to ac10d5386^ and 0 carry vale_orm_grade. All 48 catalog-referenced assets in dist-catalog/assets are byte-identical to art/out, and none of the 48 graded hashes is referenced by the catalog (the engineer checked Vashil only). Own same-page frames at new seeds, ORM bytes swapped live on all 10 fighters on the field: rift High s311 t1185, rift Ultra s397 t877, bridge High s277 t721, fray High s359 t309 (the fight had thinned to about 2 fighters in frame), rift Low s311 t1185, each at fight, with telegraphs and at 31 m, plus 5 Collection stages. Numbers in _harness/_shots/gfx_verify_GFv2/diff.json. Now vs pre-grade: 0 px >8 in 14 of 15 game frames and all 5 stages; the exception (bridge z31, 1 px) equals the same-variant control, so it is page noise. Control that the capture sees the grade: now vs graded 129-1863 px >8 (0.006-0.090 %) in play, 7263-19087 on stages. At actual size in play I cannot tell graded from reverted (look_rift, look_bridge, look_fray.png). On stage the revert is plainly better: brown streaks on vashil_first_bell and vashil_chalkline are in the graded column and gone now (look_vfb, look_vcl.png). Motion: pan flickEdge equal or very slightly lower on the reverted tree (rift High 23.444 vs 23.457, Low 22.297 vs 22.306); consecutive real sim frames show no pattern. Telegraphs, team rings and hue match pre-grade by the 0 px result on tele frames at High, Ultra and Low. Triangles, draws and programs equal across variants in every frame. perf_1080 --prod count gate PASS: peak 454k triangles, 253 draws, 40 programs (_harness/_reports/gfx_verify_GFv2_perf.json). value_probe on 3 maps, High and Low: 88 PASS, 0 FAIL (_harness/_reports/gfx_verify_GFv2_value.json). memMaps peak 2242 MB match, 1473 MB Home, one run under load; the 2715-2983 MB harness was not reproduced, so this does not replace the ruling 20 gate. Timing not_measured: load 4.1-6.6 during captures, 5-8.5 during perf. typecheck and content:check clean. No sensitivity change on the renders I looked at.",
+       "fixHint": "Nothing to fix in GF. dist-catalog/assets holds 48 orphan graded GLBs (51.3 MB, gitignored, unreferenced): whoever owns build output should make sure they are pruned before any package is made."
+      },
+      {
+       "id": "GF-2",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "No change since verdict 1. src has no valeDetail; the only hit outside _design and reports is a guarded, inert hook at _harness/gfx_fighter_ab.mjs:62. Programs in play are 39 rift High and Ultra, 38 bridge, 30 fray, 27 Low, so no leftover variant. Prototype not re-run; its cost figures remain the engineer's."
+      },
+      {
+       "id": "GF-3",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "No change since verdict 1. Nothing shipped: ORM dimensions read from the GLBs are 512 on 30 and 256 on 18, none above 512. Verdict 1's frame found 102 px >8 for 1024 maps, invisible at actual size, and match memory is tight. Not re-run; +8.4 MB per fighter remains the engineer's computed figure."
+      }
+     ],
+     "regressions": [],
+     "summary": "Pass: nothing is kept in GF. The GF-1 revert is clean, and GF-2 and GF-3 stay rejected. Verdict committed and pushed as 14e25744f: /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/GFX_GF_verify2.json.\n\nAll 48 fighter GLBs and their catalog assets match ac10d5386^ byte for byte. New frames on rift, bridge and fray at High, Ultra and Low show 0 px >8 against pre-grade bytes beyond page noise. In play the grade's removal cannot be seen; on the stage the Vashil robe streaks are gone, including on first_bell and chalkline, which the engineer had not framed. perf_1080 --prod count gate passes (454k triangles, 253 draws, 40 programs) and value_probe gives 88 PASS, 0 FAIL.\n\nLimits:\n- All timing is not_measured (load 4-8.5).\n- Memory read 2242 MB match and 1473 MB Home in memMaps, one run under load, and is not the 3.0 GB gate.\n- Of 48 GLBs, 10 were on the field and 5 stages were framed; the rest rest on byte identity.\n- The fray frame had thinned to about 2 fighters by capture.\n\nCorrection to verdict 1: the grade did change Low fighter pixels (761-950 px >8), so its 'Low unaffected' was wrong. This no longer matters after the revert.\n\nNot GF, for the lead:\n1. A tall dark tapered shape with a violet glowing tip, about 240 px high, appears on all variants in _harness/_shots/gfx_verify_GFv2/rift_high_s311_tele_now.png at about (1020,800) and (1350,660). Source not identified; it looks like an effect, not a hood, and I make no ruling 7 finding, but someone should look at it against ruling 7.\n2. memMaps reads 41 programs on the fourth sequential match, above the 40 budget. The single-match gate reads 40, earlier memMaps runs reached 42 on bridge, and same-page counts show GF adds none.\n\nPath conflict in the brief: it names both _design/reviews/gfx/GF_verify2.json and _design/reviews/fixwaves/GFX_GF_verify2.json. I wrote only the fixwaves file, as its closing instruction says and as earlier verdicts do."
+    }
+   ]
+  },
+  {
+   "lane": "GE",
+   "work": {
+    "items": [
+     {
+      "id": "GE-audit",
+      "status": "done",
+      "evidence": "_design/reviews/gfx/GE_audit.md, per map at 28.5 m, 1080p, High, from _harness/gfx_ge_frames.mjs --tag base. Landmarks, skirts and structures already have baked AO in their atlases, and props have it in vertex colour. Walls have painted occlusion plus a lit lip (edge p50 58-76 vs wall face 19-33). The gap is inside a flag: nothing between 3 and 12 px, lowest high-pass on BRIDGE's deck (4.85) and FRAY's plate (4.15). The ground has no contact from landmarks or boulders, only a wall-foot ramp."
+     },
+     {
+      "id": "GE-1 ground micro-detail",
+      "status": "kept",
+      "evidence": "Rolled out on RIFT, BRIDGE and FRAY. Sheet: _design/reviews/gfx/GE1_ground_micro_ab.png, numbers in GE_results.md. Tool marks, pits, grit and chalk flecks on paved stone; clearly less airbrushed at the game camera. Lane-spot high-pass 7.60 to 7.70 (RIFT), 4.85 to 5.11 (BRIDGE), 6.57 to 6.79 (FRAY). Under telegraph footprints: high-pass 11.6 to 11.7, 10.3 to 10.3, 7.9 to 8.0; telegraph delta / ground high-pass 3.22 to 3.17, 3.56 to 3.53, 5.49 to 5.44. value_probe --tag gfx_ge_final --flash 0 on three maps, High and Low: 82 PASS, 0 FAIL; lane p50 89/90, 91/90, 87/87.",
+      "cost": "No new program; 3 texture fetches, no noise calls; about 350 KB GPU memory (estimate from the 256 x 256 RGBA tile with mips); triangles and draws unchanged. GPU A/B not resolved: p25 per window 17-48 ms under load 11-20, with B sometimes below A, so it needs the idle gate. Low skips the layer behind one branch. perf_1080 --prod --match-seeds 7: GATE PASS, 452k triangles, 253 draws, 40 programs; every timing half not measured (machine busy).",
+      "switch": "GE_STONE_MICRO in src/render/terrain.ts (1 on, 0 off); uniform uGeStone; setScatter forces 0 on Low"
+     },
+     {
+      "id": "GE-2 baked ground contact",
+      "status": "rejected",
+      "evidence": "Sheet: _design/reviews/gfx/GE2_ground_contact_ab.png. Cycles AO baked from the world dumped out of the client (238,758 triangles, 7 s, 0.25 m a texel), RIFT only, and it could only deepen the wall-foot ramp. 4-11 % of pixels went darker by more than 2 levels, but the only readable change at the game camera is a slightly darker road edge; boulders and landmarks do not visibly gain. RIFT High walkable spread is already 42 of 45. Not plainly better. No value_probe or perf run with it on.",
+      "cost": "If kept: 1 more fetch and sampler, about 1.6 MB per map (estimate), one content build per map. Now 0: code removed.",
+      "switch": "None left in code; tools kept at art/blender/maps/ground_contact.py and _harness/gfx_ge_dump_static.mjs"
+     },
+     {
+      "id": "GE-3 wall and landmark edge light",
+      "status": "rejected",
+      "evidence": "Sheet: _design/reviews/gfx/GE3_wall_lift_ab.png. The audit only weakly called for it (RIFT wall face 33 vs Dialwood floor 37). Lifting the upper wall face by up to +50 % thinned the contrast with the lit lip and washed RIFT's walls, and FRAY's rim did not change. Frame high-pass moved under 0.1. No value_probe run with it on; rejected on the frames.",
+      "cost": "Tested in the existing wall program. Now 0: code removed.",
+      "switch": "None left in code"
+     }
+    ],
+    "commits": [
+     "632e8632e",
+     "7cad50f8a",
+     "850abac73",
+     "84f04a72a (another session's wip sync; it carries the GE-1 shader code)"
+    ],
+    "handoffs": [
+     {
+      "to": "final idle gates",
+      "what": "Re-measure GE-1's GPU cost on an idle machine. Set GE_STONE_MICRO to 0 and 1 and compare, or run _harness/gfx_ge_frames.mjs --uniform uGeStone --gpu 1. Load here ran 11-20 during the GPU A/B and up to about 70 during perf_1080, so no timing here is an idle figure."
+     },
+     {
+      "to": "owner / next map art pass",
+      "what": "BRIDGE's Snap stub (snap_stub.glb, art/blender/maps/landmarks_art2.py:303) reads as a puckered, tied-off sack at the game camera, at the centre of the map. The raw break fans to one point. Not rebuilt in this pass, because map art rebuilds had to be earned by a prototype; shaft_drum uses the same broken_drum helper."
+     }
+    ],
+    "notes": "GE-1 is kept on all three maps. GE-2 and GE-3 are rejected and their code removed. Results: _design/reviews/gfx/GE_results.md, audit: GE_audit.md, tools: _harness/gfx_ge_frames.mjs and _harness/gfx_ab.py. Rollout needed no art rebuild, because only GE-1 won and it lives in the shader.\n\nThe GE-1 shader code reached the branch through wip sync 84f04a72a from another session rather than my own commit. HEAD now matches my working tree for those files and the branch is pushed at 850abac73.\n\n_harness/_reports is gitignored, so the gfx_ge_* JSON reports are local only. The key numbers are in the tracked GE_results.md.\n\nThe memmaps row match_4_rift reads 41 programs. The five earlier fw_CW1_r3*_perf* reports read the same, so it predates this pass. The match peak gate itself reads 40.\n\nshot_lane and value_probe settle the camera for only 14 frames, which left a same-page A/B about 40 px off; gfx_ge_frames.mjs settles for 90. The single-frame gates are unaffected.\n\nTracked reports value_probe.json and perf_1080.json are not modified."
+   },
+   "fix": null,
+   "verdicts": [
+    {
+     "pass": true,
+     "experiments": [
+      {
+       "id": "GE-1 ground micro-detail",
+       "verdict": "keep",
+       "visibleGain": "clear",
+       "evidence": "Own same-page A/B through uGeStone at zoom 28.5, 1080p, on real fights with VFX, overlays and fog on, at new seeds and moments: rift High and Ultra seed 83 t645, bridge High seed 59 t414 and seed 71 t526, fray High seed 37 t278 (_harness/_shots/gfx_verify_GE: report_*.json, *_fight_a/b.png, *_tele_a/b.png, sbs_*.png, scripts). A against a second A differs by 0 (max 1 on fray). By eye at actual size, before is airbrushed and after reads as worked stone: plain on BRIDGE and FRAY, smaller on RIFT. Pixels changing by more than 2: 5.96 % rift, 8.86-11.43 % bridge, 12.10 % fray. Hue: stone r/g and b/g move at most 0.0004. Telegraph delta over ground high-pass: 2.00 to 1.99, 2.74 to 2.71, 2.90 to 2.88. Shimmer: sub-pixel creep pops flat (2.834 to 2.849 %, 1.085 to 1.092 %, 2.853 to 2.860 %); 5 m/s pan residual up 1.65 to 1.75, 0.71 to 0.91, 1.14 to 1.26, read as added detail, not flicker, though stills and numbers cannot fully settle motion. Grit tile repeat measurable on RIFT (autocorrelation 0.14 at 104-105 px, the 1.23 m period), not visible. uGeStone reads 0 on Low and 1 on High and Ultra, including across live tier switches. Triangles, draws, programs, textures and geometries identical A/B in every frame. Ground samplers 14 of 16 on RIFT. Own value_probe seed 83 t 200 --flash 0: 82 PASS, 0 FAIL (_harness/_reports/gfx_verify_ge_value.json). No perf_1080 run by me; peak figures are from his report (452k triangles, 253 draws, 40 programs, 1967 MB). Memory A/B not read; 350 KB is an estimate that matches the tile size. GPU paired A/B, 150 pairs: +0.51, +0.63, +1.06 ms median, interquartile range about -17 to +19 ms, load 7-8: not_measured evidence, and no 60 fps result exists for it on any tier. Ground grain only, no sensitivity question.",
+       "fixHint": "Nothing required. If the idle gate shows the cost is real or a player sees crawl in motion, set GE_STONE_MICRO to 0 (src/render/terrain.ts:420). If the 1.23 m grit repeat ever shows, rotate its coordinates as the pit and fleck fetch already is."
+      },
+      {
+       "id": "GE-2 baked ground contact",
+       "verdict": "correctly_rejected",
+       "visibleGain": "slight",
+       "evidence": "No uTexContact in src (grep). Not re-run; judged from _design/reviews/gfx/GE2_ground_contact_ab.png and GE_results.md. At most a slightly darker road edge. Evidence is limited: RIFT only, no value_probe or perf, and the sheet's rows are not pixel-aligned. Nothing there earns about 1.6 MB a map and another sampler when RIFT has 2 left."
+      },
+      {
+       "id": "GE-3 wall and landmark edge light",
+       "verdict": "correctly_rejected",
+       "visibleGain": "none",
+       "evidence": "Grep over src finds no wall-lift switch under the names I tried (uGeWall, uWallLift, uGeLift, uWallEdge, GE_WALL); the engineer's own name is not recorded, so removal rests partly on GE_results.md. Not re-run. On _design/reviews/gfx/GE3_wall_lift_ab.png RIFT's walls look slightly washed and FRAY's rim does not change. Row 1 is not pixel-aligned and no value_probe was run, but a change that thins the wall lip for no gain needs neither."
+      }
+     ],
+     "regressions": [
+      "Not blocking: with GE-1 on, the 5 m/s pan residual rises 6-27 % and pops rise 1.1-3.1 points; sub-pixel creep is flat. Read as added detail, not aliasing. Best confirmed by eye in live play."
+     ],
+     "summary": "Pass, with the frame-time half left to the idle gates. GE-1 stays on all three maps: on my own fight frames the stone is plainly less airbrushed, clearest on BRIDGE and FRAY and smaller on RIFT, with no telegraph, fighter, hue, tier or budget harm found, and 82 PASS, 0 FAIL on my own value_probe. Its GPU cost is unresolved (+0.5 to +1.1 ms median at load 7-8, with a far wider spread), so no timing here counts as a pass and 60 fps with it on is unproven. I ran no perf_1080; peak triangles, memory and match programs come from the engineer's report. GE-2 and GE-3 are correctly rejected, judged from his sheets and the code, not re-run. Also found: memmaps row match_4_rift reads 41 programs, over the 40 bar; it reads 41 in three earlier fw_CW1 reports too, so GE did not cause it, but it needs an owner. The BRIDGE Snap stub does read as puckered at the game camera, as he hands off. Verdict committed and pushed as ae5bb7e0f at /Users/sitskovich/Developer/forgeflow-games/games/vale/_design/reviews/fixwaves/GFX_GE_verify1.json, following the task's last instruction rather than the _design/reviews/gfx/GE_verify1.json in its ownership line. Captures and scripts: /Users/sitskovich/Developer/forgeflow-games/games/vale/_harness/_shots/gfx_verify_GE."
+    }
+   ]
+  }
+ ],
+ "kept": [
+  "GE:GE-1 ground micro-detail"
+ ]
+}
