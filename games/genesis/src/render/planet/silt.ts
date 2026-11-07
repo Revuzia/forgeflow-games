@@ -71,7 +71,7 @@ export function updateSilt(st: SiltState, disasters: readonly DisasterView[], pl
 
 /**
  * ARC §10: the god's eye over a warned river. While a flood's silt zone is active and the camera looks down on it from
- * the usual town view (a few hundred metres to ~1.5 km up), the cloud between the lens and the ground is thinned, so
+ * the usual town view (a few hundred metres to ~1.5 km up), the cloud between the lens and the ground is thinned (to 5 %), so
  * the river rising brown and the people walking uphill can be seen; the rain, the overcast light and the clouds
  * further off (upstream, where the rain hangs) stay. Returns the clearing's reach (m along the view ray) and strength
  * 0..1 (k = 0: no clearing). `cam` is the camera in the body frame (m), `altitude` its height over the datum.
@@ -90,10 +90,12 @@ export function siltLensClear(cam: ArrayLike<number>, altitude: number, zones: r
     // (the camera stands off from what it looks at: from the town view, 400-900 m out at ~40 deg, its ground point
     // lies up to ~1.5 altitudes from the river it frames)
     const near = 1 - Math.min(1, Math.max(0, (d - z.w - 1.5 * altitude) / (z.w * 0.7 + 300)));
-    best = Math.max(best, Math.min(1, zk * 1.5) * near);
+    best = Math.max(best, Math.min(1, zk * 3) * near);
   }
   // fades out as the camera climbs toward a regional view (the deck is the weather there, not a veil over the town)
   const hk = 1 - Math.min(1, Math.max(0, (altitude - 1800) / 700));
   const kk = best * hk;
-  return kk > 0.005 ? { r: Math.min(1700, Math.max(250, altitude * 1.15)), k: kk } : { r: 0, k: 0 };
+  // (reach: past the town the camera frames — at ~40 deg down its slant range is ~1.6 altitudes; inside a low deck
+  // the cloud between lens and town is all of it)
+  return kk > 0.005 ? { r: Math.min(2000, Math.max(250, altitude * 2.2)), k: kk } : { r: 0, k: 0 };
 }

@@ -256,6 +256,8 @@ export class GroundCover {
   /** inside a tower's site (unit direction; R the planet radius m) */
   private inTowerSite(dx: number, dy: number, dz: number, R: number): boolean {
     const at = this.towerAt;
+    // (tests call cellItems on the prototype: no sites there)
+    if (!at) return false;
     for (let k = 0; k < at.length; k += 4) {
       const ddx = dx - at[k], ddy = dy - at[k + 1], ddz = dz - at[k + 2], r = at[k + 3];
       if ((ddx * ddx + ddy * ddy + ddz * ddz) * R * R < r * r) return true;

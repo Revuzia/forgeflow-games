@@ -90,3 +90,11 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 - Lake under the veil (122,130,140): no brown visible: mud took the dark deep body's own luminance. FIX: mud luminance
   floor 0.32 * sky luminance (silt water is bright). 
 - Re-shoot r1-render-flood3.json (r1e-*), chain6 pid after chain5 26134.
+
+### 20:5xZ r1c-flood-god DIAG + LOOKED AT (old gate code still had lens on here)
+- god flood, warned: siltK 0.46/0.46 (two zones), lens [440 m, 0.684], camera alt 382 inside the 180-420 m deck: still a
+  white wall. The clearing reached only 1.15*alt (the town is ~600 m slant) at 62 % strength. FIX: reach 2.2*alt
+  (250..2000), k = min(1, siltK*3)*near, thinning 0.95 (march + in-cloud fog). Test updated. flood3 (queued, fresh vite
+  after tower3) carries it.
+- GATE r1-check1 (20:3xZ, slot): render-wildplants failed (groundcover inTowerSite on the PROTOTYPE in a test: towerAt
+  undefined) -> guarded; the file passes 3/3. Full check result: _harness/scratch/arc/render/r1-check1.log ("exit N").

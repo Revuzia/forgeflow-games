@@ -938,7 +938,7 @@ void main() {
     float hn;
     cl_fp = 0.5;
     float c = cloudDetailed(o, hf, wx.x, wx.y, wx.z, wx.w, 0.0, hn);
-    float dens = densityOf(c, wx.y) * uCamFog * (1.0 - 0.9 * uLensClear.y);
+    float dens = densityOf(c, wx.y) * uCamFog * (1.0 - 0.95 * uLensClear.y);
     if (dens > 1e-5) {
       vec3 up = o / r0;
       ambTop = skyIrradiance(up, up, sun) / PI;
@@ -1016,7 +1016,7 @@ void main() {
       // the near zone dissolves (the in-cloud fog above stands in for it)
       float dens = densityOf(c, wx.y) * (uCamFog > 0.0 ? smoothstep(uNearR * 0.25, uNearR, tm) : smoothstep(2.0, 12.0, tm)) * limbDim;
       // ARC §10: over a warned river the cloud between the god's eye and the ground thins (the deck beyond stays)
-      if (uLensClear.y > 0.0) dens *= 1.0 - 0.9 * uLensClear.y * (1.0 - smoothstep(uLensClear.x * 0.7, uLensClear.x, tm));
+      if (uLensClear.y > 0.0) dens *= 1.0 - 0.95 * uLensClear.y * (1.0 - smoothstep(uLensClear.x * 0.75, uLensClear.x, tm));
       nSamp += 1.0;
       if (dens <= 1e-5) {
         empty++;

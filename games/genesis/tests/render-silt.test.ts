@@ -72,7 +72,7 @@ test('the god\'s eye clears the deck over a warned river from the town view, not
   zones[0].set(0, 0, R, 1200); k[0] = 0.8;
   const at = (alt: number, off = 0): number[] => { const a = off / R; return [Math.sin(a) * (R + alt), 0, Math.cos(a) * (R + alt)]; };
   const town = siltLensClear(at(520), 520, zones, k);
-  assert.ok(town.k > 0.8 && town.r >= 520 && town.r <= 700, JSON.stringify(town));
+  assert.ok(town.k > 0.95 && town.r >= 1.8 * 520 && town.r <= 2000, JSON.stringify(town));
   const z2 = zones.map((v) => v.clone()); z2[0].w = 608;
   const off = siltLensClear(at(382, 980), 382, z2, k);
   assert.ok(off.k > 0.5, `the live town view: camera ground point ~1 km off the zone centre (${JSON.stringify(off)})`);
@@ -82,5 +82,5 @@ test('the god\'s eye clears the deck over a warned river from the town view, not
   assert.equal(siltLensClear(at(520), 520, zones, k).k, 0, 'no warning: no clearing');
   const cl = readFileSync(new URL('../src/render/sky/clouds.ts', import.meta.url), 'utf8');
   assert.match(cl, /uniform vec2 uLensClear/);
-  assert.match(cl, /dens \*= 1\.0 - 0\.9 \* uLensClear\.y/);
+  assert.match(cl, /dens \*= 1\.0 - 0\.95 \* uLensClear\.y/);
 });
