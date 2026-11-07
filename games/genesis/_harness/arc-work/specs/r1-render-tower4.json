@@ -1,0 +1,39 @@
+{
+ "_doc": "A-render-r1 re-shoot 4: taller broken stump over the struck heap.",
+ "shots": [
+  {
+   "name": "r1f-tower-rising",
+   "params": "scenario=babel&source=worker&seed=1&b=near1f",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "G.hold(true); document.getElementById('boot')?.remove();",
+    "window.__ll = (p) => { const l = Math.hypot(p[0], p[1], p[2]); return { lat: Math.asin(p[1] / l) * 180 / Math.PI, lon: Math.atan2(p[0], p[2]) * 180 / Math.PI }; };",
+    "let tw = null, d = 0; for (d = 0; d < 60; d++) { await G.step(720); const ts = (await G.arc.towers()) ?? []; tw = ts.find((t) => t.choiceOpen) ?? null; if (tw) break; } window.__tw = tw; const ll = __ll(tw.pos);",
+    "await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 160, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(3);",
+    "return { d, h: tw.height, builders: tw.builders, people: G.agents(80).length, ll };"
+   ]
+  },
+  {
+   "name": "r1f-tower-struck",
+   "params": "scenario=babel&source=worker&seed=1&b=near1f",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "const r = await G.cmd({ k: 'tower.strike', tower: window.__tw.id }); await G.step(1440); const ll = __ll(window.__tw.pos);",
+    "await G.camera({ mode: 'orbit', lat: ll.lat, lon: ll.lon, dist: 160, tilt: 62, yaw: 30, fov: 50, hour: 10 }); await G.frames(3);",
+    "return { r: r.msg, t: JSON.stringify(await G.arc.towers()).slice(0, 300) };"
+   ]
+  }
+ ]
+}

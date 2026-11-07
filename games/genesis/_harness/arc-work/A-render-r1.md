@@ -98,3 +98,20 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   after tower3) carries it.
 - GATE r1-check1 (20:3xZ, slot): render-wildplants failed (groundcover inTowerSite on the PROTOTYPE in a test: towerAt
   undefined) -> guarded; the file passes 3/3. Full check result: _harness/scratch/arc/render/r1-check1.log ("exit N").
+
+### 21:0xZ gate + r1d LOOKED AT
+- GATE r1-check1: 823 tests, 822 pass, 1 fail (render-wildplants, the prototype guard, FIXED after: focused 3/3).
+  Full gate NOT re-run this stint (one full check per stint): next stint runs it first.
+- r1d-tower-struck: the heap now reads as RUBBLE — dark scorched mound, 60 tilted blocks strewn over the crown, 70
+  round it, lobed outline, no trees. Stump walls barely above the crown -> raised to H*0.9 + 1.2..11 m (tests 12/12).
+  Re-shoot r1-render-tower4.json (r1f-*), chain7 pid 29787 (after chain6 26662 = flood3).
+
+## NEXT (stint 2)
+1. kill -0 26662 (flood3) / 29787 (tower4); if dead and shots missing, relaunch: setsid nohup
+   _harness/arc-work/render-chain.sh 0 r1-render-flood3.json r1-render-tower4.json > _harness/scratch/arc/render/r1-chain8.log 2>&1 &
+2. LOOK at _shots/r1e-flood-warning.png and r1e-flood-god.png: river/lake visible from the 600 m town view through
+   the thinned deck (diag "lens" should be ~[840, 1]); water brown but with sheen/streaks. If still a wall: print
+   diag; consider also thinning weatherfx rain haze / uOvercast under the lens (render/fx/weatherfx.ts).
+3. LOOK at _shots/r1f-tower-struck.png (stump visible) — then #9 DONE.
+4. Run the gate once (slot.sh npm run check) — expect 823/823.
+5. Optional perf low/high: r1-render-perf.json --only=r1-perf-low,r1-perf-high (27 min/shot at current speed).

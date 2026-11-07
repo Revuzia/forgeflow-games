@@ -273,7 +273,7 @@ export function towerMesh(l: TowerLook): BuildingMesh {
     k.jitterRadial(from, 0, 0, (a, y) => lobes(a, y, R * 0.12) * Math.min(1, Math.max(0.3, 1 - y / (H * 1.6))));
     // its crown (not jittered: the apex stays closed)
     k.lathe(0, 0, [[b0 * 0.75, H * 0.8], [b0 * 0.35, H * 1.05], [0.01, H * 1.12]], 24, SURF.rubble, PART.wall, mixc(col, SOOT, 0.86), 0.8, 1);
-    // every tier down: a broken stump of the first tier's walls stands out of the heap (ragged courses 2-8 m high,
+    // every tier down: a broken stump of the first tier's walls stands out of the heap (ragged courses 1-11 m over it,
     // sooted), and the crown is strewn with the fallen masonry too: a fallen tower, not a smooth barrow
     if (n === 0) {
       const sb = b0 * 0.8, nb = 12;
@@ -282,7 +282,7 @@ export function towerMesh(l: TowerLook): BuildingMesh {
         for (let j = 0; j < nb; j++) {
           if (rnd(q * 17 + j, 21) < 0.22) continue;
           const x0 = -sb + (2 * sb * j) / nb, x1 = x0 + ((2 * sb) / nb) * (0.75 + 0.2 * rnd(j, q + 22));
-          const hgt = H * 0.6 + (2 + 6 * rnd(q * 17 + j, 23)) * (0.5 + 0.5 * Math.abs(Math.sin(j * 0.9 + q)));
+          const hgt = H * 0.9 + (3 + 8 * rnd(q * 17 + j, 23)) * (0.4 + 0.6 * Math.abs(Math.sin(j * 0.9 + q)));
           k.box(x0, 0, sb - 3.5, x1, hgt, sb, surf, PART.wall, mixc(col, SOOT, 0.35 + 0.5 * rnd(j, q + 24)), { skip: ['bottom'], aoLow: 0.7 });
         }
         k.pop();
