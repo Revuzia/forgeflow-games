@@ -872,7 +872,8 @@ class ValeRenderer implements Renderer {
       // ground offset, covering the whole shadow) must miss the frustum for the actor to be culled
       // (recheck: the second pass after the camera moved, with the time this frame held; recullActors)
       const lod = recheck ? 0 : this.actorLod(a);
-      a.culled = lod === 2 && a.leaving < 0;
+      // (a body in its 0.6 s leave is culled too: off screen its clip is held anyway, and update() below still ticks the leave)
+      a.culled = lod === 2;
       a.root.visible = !a.culled;
       if (a.culled) this.culledVis.push(a);
       a.update(dt, alpha, lod);

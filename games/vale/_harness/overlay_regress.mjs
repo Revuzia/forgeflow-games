@@ -268,7 +268,12 @@ const m10 = await B((b) => {
   const all = b.__actors().filter((a) => a.view && a.model && a.visible);
   const offscreenDrawn = all.filter((a) => a.root.visible && !R.worldToScreen(a.x, a.y, 1).visible && Math.hypot(a.x - R.rig.focus.x, a.y - R.rig.focus.z) > 40).map((a) => a.def);
   const crowdUnits = all.filter((a) => a.crowdBake && a.root.visible && a.view.alive && a.leaving < 0).length;
-  return { units: rows.length, missing, culled: all.filter((a) => !a.root.visible).length, drawn: all.filter((a) => a.root.visible).length, offscreenDrawn, crowdUnits, crowdInstances: R.crowd.instances, crowdSets: R.crowd.setCount };
+  // which drawn actors are off screen and why (the actor, not only its def, so a failure names its own cause)
+  const offscreenInfo = all.filter((a) => a.root.visible && !R.worldToScreen(a.x, a.y, 1).visible && Math.hypot(a.x - R.rig.focus.x, a.y - R.rig.focus.z) > 40).map((a) => {
+    const s = R.worldToScreen(a.x, a.y, 1);
+    return { id: a.id, def: a.def, x: a.x, y: a.y, sx: s.x, sy: s.y, dist: Math.hypot(a.x - R.rig.focus.x, a.y - R.rig.focus.z), leaving: a.leaving, alive: a.view.alive, state: a.view.state, culled: a.culled, crowdBake: !!a.crowdBake, kind: a.view.kind };
+  });
+  return { units: rows.length, missing, culled: all.filter((a) => !a.root.visible).length, drawn: all.filter((a) => a.root.visible).length, offscreenDrawn, offscreenInfo, focus: { x: R.rig.focus.x, z: R.rig.focus.z }, crowdUnits, crowdInstances: R.crowd.instances, crowdSets: R.crowd.setCount };
 });
 report.m10 = m10;
 console.log('M10', JSON.stringify(m10));
