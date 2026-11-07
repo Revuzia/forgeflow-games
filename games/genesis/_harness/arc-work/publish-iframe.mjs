@@ -48,7 +48,7 @@ const browser = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle
 async function open(build, query) {
   const page = await browser.newPage({ viewport: { width: 888, height: 500 } });
   const log = { errors: [], warnings: [], crashed: false, missing: [] };
-  page.on('console', (m) => { if (m.type() === 'error') log.errors.push(m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && log.errors.length < 50) log.errors.push(m.text().slice(0, 500)); });
   page.on('pageerror', (e) => log.errors.push('pageerror: ' + String(e)));
   page.on('crash', () => { log.crashed = true; });
   page.on('response', (r) => { if (r.status() >= 400) log.missing.push(`${r.status()} ${r.url()}`); });
@@ -94,16 +94,20 @@ const saveFiles = [];
 if (dists.B) {
   const o = await open('B', '?scenario=sandbox');
   await o.frame.evaluate(() => window.__GENESIS__.step(2400)).catch(() => {});
-  const bytes = await o.frame.evaluate(() => window.__GENESIS__.worlds_.saves.bytes()).catch(() => null);
-  if (bytes) { writeFileSync(join(OUT, 'baseline-save.gnss'), Buffer.from(bytes)); saveFiles.push(['baseline-save.gnss', bytes]); }
+  // base64 across CDP (a number[] of a multi-MB save blew the node heap in r1)
+  const b64 = await o.frame.evaluate(async () => { const a = await window.__GENESIS__.worlds_.saves.bytes(); if (!a) return null;
+    let s = ''; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.slice(i, i + 8192)); return btoa(s); }).catch(() => null);
+  const bytes = b64 ? Buffer.from(b64, 'base64') : null;
+  if (bytes) { writeFileSync(join(OUT, 'baseline-save.gnss'), bytes); saveFiles.push(['baseline-save.gnss', bytes]); }
   report.saves.push({ made: 'B', ok: !!bytes, n: bytes?.length ?? 0, ...o.log });
   await o.page.close();
 }
-for (const f of ['save-1.4-aru.gnss.gz', 'save-1.4-band.gnss.gz', 'save-1.5a-kin.gnss.gz']) saveFiles.push([f, Array.from(readFileSync(join(GAME, 'tests/fixtures', f)))]);
+for (const f of ['save-1.4-aru.gnss.gz', 'save-1.4-band.gnss.gz', 'save-1.5a-kin.gnss.gz']) saveFiles.push([f, readFileSync(join(GAME, 'tests/fixtures', f))]);
 for (const [name, bytes] of saveFiles) {
   const o = await open('A', '?scenario=sandbox');
   const before = await st(o.frame);
-  const ok = await o.frame.evaluate(([b, n]) => window.__GENESIS__.worlds_.saves.importFile(b, n), [bytes, name]).catch((e) => String(e));
+  const ok = await o.frame.evaluate(([b64, n]) => { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    return window.__GENESIS__.worlds_.saves.importFile(u.buffer, n); }, [Buffer.from(bytes).toString('base64'), name]).catch((e) => String(e));
   await o.page.waitForTimeout(4000);
   const s1 = await st(o.frame);
   const stepped = await o.frame.evaluate(() => window.__GENESIS__.step(720)).catch((e) => String(e));
