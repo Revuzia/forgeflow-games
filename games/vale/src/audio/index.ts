@@ -213,7 +213,10 @@
 //               over the same samples (the window's head is the master's tail before the section), the natural next
 //               section a SEG_OVERLAP_S linear fade over identical samples. A window is the whole decode's samples
 //               (_harness/fw_r5_aud_stream.mjs: bit-exact or under -115 dB). At most the playing section and the next
-//               are held, three windows for a moment when the act changes its choice: 2 x 12.5 MB a window. Only an .ogg
+//               are held, three windows for a moment when the act changes its choice: 2 x 12.5 MB a window. A window's
+//               buffers are decoded into again once no source plays them and no window holds them (STREAM_POOL per stem),
+//               so a section change leaves no 25 MB of garbage waiting for the collector (a match's polls read 0-2 windows
+//               of it, 156-226 MB, before the pool). Only an .ogg
 //               session on a 48 kHz context with an Opus AudioDecoder streams; anything else (and a stem that fails to
 //               parse or decode) decodes the bed whole, as before. The objective layer (one section long) is whole.
 //               A bed of independent loops (a main stem and 'stem…' layers only: the menu, the post-game) streams the same
@@ -297,6 +300,9 @@ interface Win { p: Promise<(AudioBuffer | null)[]>; v: (AudioBuffer | null)[] | 
 /** a chain: stems on one timeline of `n` windows of `secS` s; `acts`: the windows are a match bed's sections, chosen by
  *  the act; `main`: it carries the main stem (it starts the bed) */
 interface Stream { stems: StreamStem[]; secS: number; n: number; acts: boolean; main: boolean; win: Map<number, Win>; cur: Seg | null; next: Seg | null; stopped: boolean;
+  /** window buffers no window or source holds any more, per stem, decoded into again (a window's memory is reused, not
+   *  left to the collector: STREAM_POOL per stem), and what holds each buffer now (windows cached + sources playing it) */
+  pool: AudioBuffer[][]; holds: Map<AudioBuffer, number>;
   /** dev / probes: windows decoded, their decode times (ms), the most windows held at once */
   stats: { decoded: number; ms: number[]; maxHeld: number; late: number } }
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
@@ -385,6 +391,7 @@ const MUSIC_SECTIONS = 5;
 const SECTION_LOOKAHEAD_S = 3;
 const STREAM_SR = 48000;          // a streamed bed decodes at Opus's own rate: only a 48 kHz context streams (see `stream`)
 const STREAM_HANDLE_S = 0.3;      // a section window runs on this far either side of its section (>= SECTION_XF_S + margin)
+const STREAM_POOL = 2;            // window buffers kept per stem for the next decode (see Stream.pool)
 const LOOP_WINDOW_S = 16;         // a bed of independent loops (the menu, the post-game) streams by windows of this (s)
 const ACT_CLOCK = [0.2, 0.4];    // the next act's start, as a share of the mode's clock …
 const ACT_LOST = [0.15, 0.4];    // … or of its structures down, whichever comes first
@@ -1245,6 +1252,7 @@ class Engine implements ValeAudioPort {
         stems.push({ file: x.file, stem, dest, layer: x.layer });
       }
       chains.push({ stems, secS: c.secS, n, acts: c.acts, main: c.stems.some((x) => !x.layer), win: new Map(), cur: null, next: null, stopped: false,
+        pool: stems.map(() => []), holds: new Map(),
         stats: { decoded: 0, ms: [], maxHeld: 0, late: 0 } });
     }
     bed.streams = chains;
@@ -1292,17 +1300,41 @@ class Engine implements ValeAudioPort {
     const ctx = this.ctx!;
     const a = Math.round((k * st.secS - STREAM_HANDLE_S) * STREAM_SR), b = Math.round(((k + 1) * st.secS + STREAM_HANDLE_S) * STREAM_SR);
     const t = performance.now();
-    const p = Promise.all(st.stems.map((x) => x.stem.window(ctx, a, b).catch(() => null)));
+    const into = st.stems.map((_, i) => st.pool[i].pop() ?? null);
+    const p = Promise.all(st.stems.map((x, i) => x.stem.window(ctx, a, b, into[i]).catch(() => null)));
     const nw: Win = { p, v: null };
     w = nw;
     st.win.set(k, nw);
     st.stats.maxHeld = Math.max(st.stats.maxHeld, st.win.size);
     void p.then((v) => {
-      nw.v = v; st.stats.decoded++;
+      st.stats.decoded++;
       if (st.stats.ms.length < 64) st.stats.ms.push(Math.round(performance.now() - t));
-      if (st.win.get(k) === nw && v.every((x) => !x)) st.win.delete(k);          // failed: the next ask tries again
+      v.forEach((x, i) => { if (!x && into[i]) this.unhold(st, into[i]!, i, true); });     // a failed decode hands its buffer back
+      if (st.win.get(k) !== nw) { v.forEach((x, i) => { if (x) this.unhold(st, x, i, true); }); return; }   // dropped while decoding
+      nw.v = v;
+      v.forEach((x) => { if (x) this.hold(st, x); });
+      if (v.every((x) => !x)) st.win.delete(k);          // failed: the next ask tries again
     });
     return nw;
+  }
+
+  /** a window buffer is held once more (by the window cache, or a source playing it) */
+  private hold(st: Stream, buf: AudioBuffer): void { st.holds.set(buf, (st.holds.get(buf) ?? 0) + 1); }
+
+  /** a holder lets go; with no holder left the buffer goes back to the stem's pool (`fresh`: it was never held) */
+  private unhold(st: Stream, buf: AudioBuffer, i: number, fresh = false): void {
+    const n = fresh ? 0 : (st.holds.get(buf) ?? 1) - 1;
+    if (n > 0) { st.holds.set(buf, n); return; }
+    st.holds.delete(buf);
+    if (!st.stopped && st.pool[i] && st.pool[i].length < STREAM_POOL && !st.pool[i].includes(buf)) st.pool[i].push(buf);
+  }
+
+  /** a window leaves the cache (its buffers stay with the sources still playing them) */
+  private dropWin(st: Stream, k: number): void {
+    const w = st.win.get(k);
+    if (!w) return;
+    st.win.delete(k);
+    w.v?.forEach((x, i) => { if (x) this.unhold(st, x, i); });
   }
 
   /** window k from ctx time T (its downbeat): every stem whose window is in starts its source; `prev` (the window
@@ -1332,6 +1364,7 @@ class Engine implements ValeAudioPort {
       else if (jump) g.gain.setValueCurveAtTime(XF_CURVES.in, at, X);
       else { g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, T); }
       src.start(at, Math.max(0, off));
+      this.hold(st, buf);
       seg.srcs.push({ st: stem, src, g });
       if (old) {
         const og = old.g.gain;
@@ -1345,7 +1378,8 @@ class Engine implements ValeAudioPort {
     // the window before leaves at the downbeat (a stem with no window this time fades with it: it rejoins next time)
     if (prev) for (const o of prev.srcs) {
       if (!seg.srcs.some((x) => x.st === o.st)) { try { o.g.gain.setTargetAtTime(0, at, 0.02); } catch { /* */ } }
-      this.retire(o.src, [o.g], (late ? at + 0.05 : T) + 0.02, 'stop');
+      const ob = o.src.buffer, oi = st.stems.indexOf(o.st);
+      this.retire(o.src, [o.g], (late ? at + 0.05 : T) + 0.02, 'stop', () => { if (ob) this.unhold(st, ob, oi); });
     }
     if (late && prev) st.stats.late++;
     return seg;
@@ -1369,7 +1403,7 @@ class Engine implements ValeAudioPort {
   private prefetch(st: Stream): void {
     if (!st.cur) return;
     const want = new Set([st.cur.k, st.next ? st.next.k : this.nextWin(st, st.cur.k)]);
-    for (const k of [...st.win.keys()]) if (!want.has(k)) st.win.delete(k);
+    for (const k of [...st.win.keys()]) if (!want.has(k)) this.dropWin(st, k);
     for (const k of want) this.window(st, k);
   }
 
@@ -1678,7 +1712,8 @@ class Engine implements ValeAudioPort {
   /** dev / probes: a streamed bed's state (see `stream` in the header): null when the bed decodes whole. `windows` and
    *  `stats` are the first chain's (a match bed has one), `chains` each chain's */
   get musicStream(): { stems: { file: string; kb: number; seconds: number }[]; windows: number[]; heldMb: number; cur: number | null; next: number | null;
-    stats: Stream['stats']; chains: { n: number; secS: number; acts: boolean; windows: number[]; cur: number | null; next: number | null; maxHeld: number; decoded: number; late: number }[] } | null {
+    stats: Stream['stats']; chains: { n: number; secS: number; acts: boolean; windows: number[]; cur: number | null; next: number | null; maxHeld: number; decoded: number; late: number;
+      pooled: number; buffers: number }[] } | null {
     const cs = this.bed?.streams ?? [];
     if (!cs.length) return null;
     let bytes = 0;
@@ -1687,7 +1722,7 @@ class Engine implements ValeAudioPort {
     return { stems: cs.flatMap((c) => c.stems.map((x) => ({ file: x.file, kb: Math.round(x.stem.bytes / 1024), seconds: x.stem.duration }))), windows: [...c0.win.keys()],
       heldMb: +(bytes / 1048576).toFixed(1), cur: c0.cur?.k ?? null, next: c0.next?.k ?? null, stats: { ...c0.stats, ms: c0.stats.ms.slice() },
       chains: cs.map((c) => ({ n: c.n, secS: c.secS, acts: c.acts, windows: [...c.win.keys()], cur: c.cur?.k ?? null, next: c.next?.k ?? null, maxHeld: c.stats.maxHeld,
-        decoded: c.stats.decoded, late: c.stats.late })) };
+        decoded: c.stats.decoded, late: c.stats.late, pooled: c.pool.reduce((t, x) => t + x.length, 0), buffers: c.holds.size })) };
   }
 
   /** dev / probes: every buffer the playing bed holds (its whole files, its windows): what a live source may hold */
@@ -1729,7 +1764,7 @@ class Engine implements ValeAudioPort {
       c.stopped = true;
       for (const seg of [c.cur, c.next]) for (const x of seg?.srcs ?? []) if (!srcs.some(([q]) => q === x.src)) srcs.push([x.src, x.g]);
       for (const x of c.stems) if (!x.layer) shared.push(x.dest);
-      c.win.clear(); c.cur = null; c.next = null;
+      c.win.clear(); c.cur = null; c.next = null; c.pool = []; c.holds.clear();
     }
     let left = srcs.length;
     const last = (): void => { if (--left <= 0) for (const n of shared) try { n.disconnect(); } catch { /* gone */ } };

@@ -108,10 +108,11 @@ export class OpusStem {
     return new OpusStem(d, channels, packets, length);
   }
 
-  /** the window [a, b) of the timeline (samples; past either end it wraps) as an AudioBuffer of `ctx`; null on failure */
-  async window(ctx: BaseAudioContext, a: number, b: number): Promise<AudioBuffer | null> {
+  /** the window [a, b) of the timeline (samples; past either end it wraps) as an AudioBuffer of `ctx`, decoded into
+   *  `into` when that is one of the right shape (a buffer no source plays any more: its memory is reused); null on failure */
+  async window(ctx: BaseAudioContext, a: number, b: number, into: AudioBuffer | null = null): Promise<AudioBuffer | null> {
     if (b <= a) return null;
-    const out = ctx.createBuffer(this.channels, b - a, SR);
+    const out = into && into.length === b - a && into.numberOfChannels === this.channels && into.sampleRate === SR ? into : ctx.createBuffer(this.channels, b - a, SR);
     const L = this.length;
     // split at the wraps: [a, b) → runs within [0, L) at their place in `out`
     const runs: [number, number, number][] = [];
