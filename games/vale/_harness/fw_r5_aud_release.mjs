@@ -10,7 +10,8 @@
 //             next; then 4 s for the last fade to be due, a GC, the tally
 //   R1        audio MB at the end (the burst's cues freed as a match change frees them) within 10 MB of the menu bed + the UI
 //             set alone (the same page read after the first menu)
-//   R2        live sources with a buffer at the end: only the menu bed's (main + 2 stems = 3)
+//   R2        live sources with a long buffer (>= 10 s) at the end: only the menu bed's (its whole files or, streamed, its
+//             windows: window.__valeAudio.bedBuffers()), at least its 3 stems
 //   S1        (fake sink) the context suspended mid-bed (the device gone: no clock), the bed changed twice while it
 //             stands, then resumed: one bed sounds, the one the screen wants, and the beds retired during the stall
 //             hold no buffer (live sources = that bed's, audio MB = that bed + the UI set)
@@ -35,7 +36,9 @@ const TALLY = `(() => {
   const live = new Set();
   const S = AudioBufferSourceNode.prototype, st = S.start;
   S.start = function (...a) { const r = new WeakRef(this); const e = { r, ended: false }; live.add(e); this.addEventListener('ended', () => { e.ended = true; }); return st.apply(this, a); };
-  window.__srcTally = () => { const out = []; for (const e of live) { const s = e.r.deref(); if (!s || e.ended) { live.delete(e); continue; } if (s.buffer) out.push(+s.buffer.duration.toFixed(1)); } return out.sort((a, b) => b - a); };
+  window.__srcLive = () => { const out = []; for (const e of live) { const s = e.r.deref(); if (!s || e.ended) { live.delete(e); continue; } if (s.buffer) out.push(s); } return out; };
+  window.__srcTally = () => window.__srcLive().map((s) => +s.buffer.duration.toFixed(1)).sort((a, b) => b - a);
+  window.__srcForeign = () => { const own = window.__valeAudio.bedBuffers(); return window.__srcLive().filter((s) => s.buffer.duration >= 10 && !own.has(s.buffer)).length; };
 })();`;
 
 async function run(sink) {
@@ -53,7 +56,8 @@ async function run(sink) {
     const cdp = await context.newCDPSession(page);
     const gcRead = async () => {
       for (let i = 0; i < 3; i++) { await cdp.send('HeapProfiler.collectGarbage'); await page.waitForTimeout(300); }
-      return page.evaluate(async () => ({ audio: window.__memTrack().audio, live: window.__srcTally(), rel: window.__valeAudio.releaseState,
+      return page.evaluate(async () => ({ audio: window.__memTrack().audio, live: window.__srcTally(), foreign: window.__srcForeign(), rel: window.__valeAudio.releaseState,
+        stream: window.__valeAudio.musicStream,
         bed: window.__valeAudio.bed?.id ?? null, dec: await window.__valeAudio.decoded() }));
     };
     await page.goto(`${BASE}/?dev=1&render=0`, { waitUntil: 'domcontentloaded' });
@@ -83,7 +87,7 @@ async function run(sink) {
     log(sink, 'menu1', rep.menu1.audio.mb, 'MB, live', JSON.stringify(rep.menu1.live), JSON.stringify(rep.menu1.rel));
     rep.clock = await page.evaluate(() => window.__memTrack().clock);
     rep.R1 = Math.abs(rep.menu1.audio.mb - rep.menu0.audio.mb) <= 10;
-    rep.R2 = rep.menu1.live.filter((d) => d >= 30).length === 3;
+    rep.R2 = rep.menu1.foreign === 0 && rep.menu1.live.filter((d) => d >= 10).length >= 3;
     if (sink === 'fake') {
       // S1: the device goes (suspend), the screen changes twice, the device comes back
       await page.evaluate(() => window.__valeAudio.graph.ctx.suspend());
@@ -99,7 +103,7 @@ async function run(sink) {
       log(sink, 'stall during', during.audio.mb, 'MB live', JSON.stringify(during.live), 'after', rep.stall.after.audio.mb, 'MB live', JSON.stringify(rep.stall.after.live), JSON.stringify(rep.stall.after.rel));
       // the draft bed: main + 3 layers, 32 s each; nothing else long
       const a = rep.stall.after;
-      rep.S1 = a.bed === 'mus_draft' && a.live.filter((d) => d >= 30).length === 4 && a.live.filter((d) => d >= 30).every((d) => d === 32) && a.rel.stalled === false;
+      rep.S1 = a.bed === 'mus_draft' && a.foreign === 0 && a.live.filter((d) => d >= 10).length === 4 && a.rel.stalled === false;
     }
     rep.errors = errs.slice(0, 10);
   } catch (e) { rep.err = String(e?.stack ?? e); }

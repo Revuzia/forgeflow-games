@@ -16,7 +16,9 @@
 //       the same windows at the natural section ends and the rest of the recording
 //   L1  level: RMS 8 s each side of a jump within 6 dB; the output's sample peak stays under -0.9 dBFS
 //   M1  memory: a jump adds no decoded file; the bed's decoded files are the main stem, the combat layer, the objective
-//       layer; the objective layer <= 16 MB and the bed <= 135 MB
+//       layer; the objective layer <= 16 MB and the bed <= 135 MB. A streamed bed (round 5 AUD-4, src/audio/index.ts
+//       `stream`): the objective layer is the one whole file, the main stem and combat layer are its two streamed stems,
+//       and at most 3 section windows were ever held at once; the bed (whole files + windows held) <= 135 MB
 // Exit 0 = gates hold, 1 = a gate fails, 2 = the run failed. Report → _harness/_reports/fw_CW2_music.json. Needs the dev server.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -252,9 +254,11 @@ try {
       if (b?.length) rows.push([k.split('/').pop(), +(b.length * b.numberOfChannels * 4 / 1048576).toFixed(1), +b.duration.toFixed(2)]);
     }
     const dec = await a.decoded();
-    return { files: rows, decodedMb: +(dec.bytes / 1048576).toFixed(1) };
+    return { files: rows, decodedMb: +(dec.bytes / 1048576).toFixed(1), stream: a.musicStream };
   });
-  const mb = rep.memory.files.reduce((s, r) => s + r[1], 0);
+  // round 5 AUD-4: a streamed bed holds its main stem and combat layer as section windows (src/audio/index.ts `stream`)
+  const strm = rep.memory.stream;
+  const mb = rep.memory.files.reduce((s, r) => s + r[1], 0) + (strm?.heldMb ?? 0);
   const objFile = rep.memory.files.find((r) => /objective/.test(r[0]));
 
   const riseT = rep.actRiseClock.atMatchS;
@@ -274,7 +278,9 @@ try {
     C1_noClicks: jumps.length >= 3 && naturals.length >= 2 && jumps.every((j) => j.blocks >= 3 && j.step <= refStep * 1.5 && j.hf <= refHf * 1.5),
     L1_level: jumps.every((j) => j.levelStepDb !== null && j.levelStepDb <= 6),
     L1_peak: rep.peakDb <= -0.9,
-    M1_files: rep.memory.files.length === rep.setup.bufferFiles && rep.memory.files.length === 3 && !!objFile,
+    M1_files: rep.memory.files.length === rep.setup.bufferFiles && !!objFile && (strm
+      ? rep.memory.files.length === 1 && strm.stems.length === 2 && strm.stats.maxHeld <= 3 && strm.windows.length <= 3
+      : rep.memory.files.length === 3),
     M1_budget: !!objFile && objFile[1] <= 16 && mb <= 135,
   };
   rep.pass = Object.values(rep.gates).every(Boolean);

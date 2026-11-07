@@ -204,6 +204,21 @@
 //               own sounds 'area.<its vfx>' (a passive's area: Vashil's chord); a blow the Ringshade muffled (the
 //               damage event's `shaded`, on a structure: too few of the striker's Wicks guard it) plays 'hitShaded'
 //               with the hit under it at SHADED_GAIN, an ability's kit 'hit' too (the same tick's shaded damage)
+//   stream      (round 5 AUD-4) a match bed's main stem and combat layer (160 s of stereo each: 2 x 59 MB decoded whole) are
+//               kept compressed (about 2.5 MB each) and play by SECTION WINDOWS: section k of each, decoded with
+//               WebCodecs (src/audio/opus_stream.ts) with STREAM_HANDLE_S either side, one source per stem per section.
+//               The next section is chosen SECTION_LOOKAHEAD_S ahead by the act's order, as a whole bed's jumps are,
+//               and its window is decoded ahead (the act's next at the section's start; a new act's choice at the
+//               decision, about 65 ms a window); a jump is the same equal-power SECTION_XF_S fade ending on the downbeat
+//               over the same samples (the window's head is the master's tail before the section), the natural next
+//               section a SEG_OVERLAP_S linear fade over identical samples. A window is the whole decode's samples
+//               (_harness/fw_r5_aud_stream.mjs: bit-exact or under -115 dB). At most the playing section and the next
+//               are held, three windows for a moment when the act changes its choice: 2 x 12.5 MB a window. Only an .ogg
+//               session on a 48 kHz context with an Opus AudioDecoder streams; anything else (and a stem that fails to
+//               parse or decode) decodes the bed whole, as before. The objective layer (one section long) is whole.
+//               A bed of independent loops (a main stem and 'stem…' layers only: the menu, the post-game) streams the same
+//               way, one CHAIN per stem of LOOP_WINDOW_S windows, each always on to its next window (the menu: 64 + 48 + 80 s,
+//               74 MB whole, about 38 MB held); a bed with synced phase / urgency layers (the draft, 32 s) stays whole
 //   release     (round 5 AUD-3) a source the engine stops (a bed, a voice, an emitter, a jump's old source) lets go of its
 //               buffer and leaves the graph once its fade is due by WALL clock: a stalled or switched output device (Bluetooth
 //               headphones gone, a sleeping device, a held coreaudiod) freezes the context clock, so a stop scheduled on it is
@@ -217,6 +232,7 @@
 import type { MatchClient } from '../contracts/session.ts';
 import type { SimEvent } from '../contracts/sim.ts';
 import type { AudioPort, DraftMusicState } from '../ui/audio_port.ts';
+import { OpusStem } from './opus_stream.ts';
 
 type Bus = 'music' | 'sfx' | 'ui' | 'voice' | 'ambience';
 interface CueDef { files: string[]; bus: Bus; gain: number; pitchVar: number; maxVoices: number; priority: number; spatial: boolean; loop: boolean; cooldown: number }
@@ -269,7 +285,20 @@ interface Bed { id: string; def: MusicDefT; main: AudioBufferSourceNode | null; 
   layers: BedLayer[]; pieces: { src: AudioBufferSourceNode; gain: GainNode }[];
   /** the acts (see `acts` in the header): sections play only from this time on (the .m4a path's take-over), the last
    *  section end decided, a jump scheduled and not reached yet (`t0` = the bed's t0 from `at` on), what was decided */
-  actsFrom: number | null; decided: number; jump: { at: number; t0: number } | null; sections: { at: number; from: number; to: number; jump: boolean; act: number }[] }
+  actsFrom: number | null; decided: number; jump: { at: number; t0: number } | null; sections: { at: number; from: number; to: number; jump: boolean; act: number }[];
+  /** a streamed bed's chains (see `stream` in the header); empty: the bed decodes whole */
+  streams: Stream[] }
+/** one streamed stem: the compressed file, where its sections sound (the main stem's gain or the combat layer's) */
+interface StreamStem { file: string; stem: OpusStem; dest: GainNode; layer: BedLayer | null }
+/** one section as it plays: section `k` of every streamed stem from ctx time `T` (its downbeat) */
+interface Seg { k: number; T: number; srcs: { st: StreamStem; src: AudioBufferSourceNode; g: GainNode }[] }
+/** a window: section k's buffers per stem (null: that stem's window failed), settled or not */
+interface Win { p: Promise<(AudioBuffer | null)[]>; v: (AudioBuffer | null)[] | null }
+/** a chain: stems on one timeline of `n` windows of `secS` s; `acts`: the windows are a match bed's sections, chosen by
+ *  the act; `main`: it carries the main stem (it starts the bed) */
+interface Stream { stems: StreamStem[]; secS: number; n: number; acts: boolean; main: boolean; win: Map<number, Win>; cur: Seg | null; next: Seg | null; stopped: boolean;
+  /** dev / probes: windows decoded, their decode times (ms), the most windows held at once */
+  stats: { decoded: number; ms: number[]; maxHeld: number; late: number } }
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
 interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
@@ -354,6 +383,9 @@ const MUSIC_SECTION_BARS = 16;
 const SECTION_XF_S = 0.25;
 const MUSIC_SECTIONS = 5;
 const SECTION_LOOKAHEAD_S = 3;
+const STREAM_SR = 48000;          // a streamed bed decodes at Opus's own rate: only a 48 kHz context streams (see `stream`)
+const STREAM_HANDLE_S = 0.3;      // a section window runs on this far either side of its section (>= SECTION_XF_S + margin)
+const LOOP_WINDOW_S = 16;         // a bed of independent loops (the menu, the post-game) streams by windows of this (s)
 const ACT_CLOCK = [0.2, 0.4];    // the next act's start, as a share of the mode's clock …
 const ACT_LOST = [0.15, 0.4];    // … or of its structures down, whichever comes first
 const OBJ_INNER_M = 10;          // the objective layer is full within this of a living epic objective …
@@ -571,6 +603,9 @@ class Engine implements ValeAudioPort {
   private clockWall = 0;
   private clockCtx = 0;
   private stalled = false;
+  /** the platform can stream a bed (OpusStem.supported, asked once the context exists; see `stream` in the header) */
+  private canStream: boolean | null = null;
+  private streamCheck: Promise<void> | null = null;
   /** retired sources not freed yet: their free() and what they wait for */
   private readonly dying = new Map<() => void, RetireKind>();
   /** dev / probes: what the release did (freed by kind and by how: ended, due by wall clock, a stall) */
@@ -716,6 +751,7 @@ class Engine implements ValeAudioPort {
     if (this.draftS) this.draftCalls(true);
     if (this.wantBed) this.startBed(this.wantBed);
     if (this.tick === null) this.tick = window.setInterval(() => this.update(0.25), 250);
+    this.streamCheck = OpusStem.supported(2).then((ok) => { this.canStream = ok; }, () => { this.canStream = false; });
     // the output device going away or coming back (see `release` in the header)
     ctx.onstatechange = () => { if (this.ctx === ctx) this.clockEvent(); };
     try { navigator.mediaDevices?.addEventListener?.('devicechange', () => { if (this.ctx === ctx) this.clockEvent(true); }); } catch { /* no media devices */ }
@@ -1122,11 +1158,12 @@ class Engine implements ValeAudioPort {
       if (role === 'combat') combat = true;
       return { id: l.id, role, file: l.file, gain: g, src: null, srcGain: null, buf: null };
     });
-    const bed: Bed = { id, def, main: null, mainGain: null, t0: null, len: 0, gain, layers, pieces: [], actsFrom: null, decided: 0, jump: null, sections: [] };
+    const bed: Bed = { id, def, main: null, mainGain: null, t0: null, len: 0, gain, layers, pieces: [], actsFrom: null, decided: 0, jump: null, sections: [], streams: [] };
     this.bed = bed;
-    // each layer joins when both it and the main stem are in
+    // each layer joins when both it and the main stem are in (a streamed stem's sections are the stream's)
     const loadLayers = (): void => {
       for (const l of layers) {
+        if (bed.streams.some((c) => c.stems.some((st) => st.layer === l))) continue;
         void this.buffer(l.file).then((buf) => {
           if (this.bed !== bed || !buf || !this.ctx) return;
           l.buf = buf;
@@ -1134,16 +1171,240 @@ class Engine implements ValeAudioPort {
         });
       }
     };
+    // whether the platform streams is asked once, when the context is made, and the session's format by its first .ogg:
+    // a bed chosen before both answers waits for them (the first menu bed, at the first gesture)
+    if ((this.canStream === null && this.streamCheck) || (this.fmt === null && this.probe)) {
+      void Promise.all([this.streamCheck, this.probe]).then(() => { if (this.bed === bed && this.ctx === ctx) this.bedFrom(bed, pieces, loadLayers); });
+      return;
+    }
+    this.bedFrom(bed, pieces, loadLayers);
+  }
+
+  /** a new bed's sources: the .m4a pieces, a stream, or the whole files (see `music` / `stream` in the header) */
+  private bedFrom(bed: Bed, pieces: BedPiece[], loadLayers: () => void): void {
+    const ctx = this.ctx!;
+    const def = bed.def, layers = bed.layers;
     // the .m4a path plays a main stem it has not decoded yet piece by piece; the layers wait for the decoder
     if (this.fmt === 'm4a' && pieces.length > 1 && pieces[0].at === 0 && !this.buffers.has(def.file)) {
       void this.playPieces(bed, pieces).then(loadLayers);
       return;
     }
-    // the main stem starts as soon as it decodes
-    void this.buffer(def.file).then((main) => {
-      if (this.bed === bed && main) this.loopMain(bed, main);
+    const whole = (): void => {
+      // the main stem starts as soon as it decodes
+      void this.buffer(def.file).then((main) => {
+        if (this.bed === bed && main) this.loopMain(bed, main);
+      });
+      loadLayers();
+    };
+    // a long bed streams by windows where the platform can (see `stream` in the header)
+    const plan = this.canStream && this.fmt === 'ogg' && ctx.sampleRate === STREAM_SR && !this.buffers.has(def.file) ? this.streamPlan(def, layers) : null;
+    if (plan) {
+      void this.streamBed(bed, plan).then((ok) => { if (this.bed !== bed) return; if (ok) loadLayers(); else { bed.streams = []; whole(); } });
+      return;
+    }
+    whole();
+  }
+
+  // ── streamed beds (see `stream` in the header) ─────────────────────────────────────────────────────
+  /** the chains a bed streams as, or null (it decodes whole): a match bed's main stem and combat layer on the section
+   *  grid (the acts); a bed of independent loops (a main stem and 'stem…' layers only: the menu, the post-game) one chain
+   *  per stem of LOOP_WINDOW_S windows. Lengths are checked once the files are parsed */
+  private streamPlan(def: MusicDefT, layers: BedLayer[]): { acts: boolean; secS: number; stems: { file: string; layer: BedLayer | null }[] }[] | null {
+    if (def.loopStart !== 0 || def.loopEnd !== undefined) return null;
+    const combatL = layers.find((l) => l.role === 'combat');
+    if (combatL) {
+      if (layers.some((l) => l.role !== 'combat' && l.role !== 'objective')) return null;
+      return [{ acts: true, secS: (60 / def.bpm) * 4 * MUSIC_SECTION_BARS, stems: [{ file: def.file, layer: null }, { file: combatL.file, layer: combatL }] }];
+    }
+    if (layers.some((l) => l.role !== 'stem')) return null;
+    return [{ acts: false, secS: LOOP_WINDOW_S, stems: [{ file: def.file, layer: null }] },
+      ...layers.map((l) => ({ acts: false, secS: LOOP_WINDOW_S, stems: [{ file: l.file, layer: l }] }))];
+  }
+
+  /** fetch every streamed stem compressed, then each chain decodes its window 0 and starts on it (the main stem's
+   *  chain starts the bed). false (the bed then decodes whole) when a file is no stem this can stream (or not of the
+   *  plan's length) or the main chain's first window fails; a layer chain that fails decodes that layer whole */
+  private async streamBed(bed: Bed, plan: NonNullable<ReturnType<Engine['streamPlan']>>): Promise<boolean> {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    const files = plan.flatMap((c) => c.stems.map((x) => x.file));
+    const raw = await Promise.all(files.map((f) => this.bytes(f)));
+    if (this.bed !== bed || this.ctx !== ctx) return true;               // superseded: nothing to fall back to
+    const parsed = new Map(files.map((f, i) => [f, raw[i] ? OpusStem.parse(raw[i]!) : null]));
+    const chains: Stream[] = [];
+    for (const c of plan) {
+      const w = Math.round(c.secS * STREAM_SR);
+      const n = c.acts ? MUSIC_SECTIONS : Math.round((parsed.get(c.stems[0].file)?.length ?? 0) / w);
+      const stems: StreamStem[] = [];
+      for (const x of c.stems) {
+        const stem = parsed.get(x.file);
+        if (!stem || n < 2 || stem.length !== n * w) return false;
+        let dest: GainNode;
+        if (x.layer) dest = x.layer.gain;
+        else { dest = ctx.createGain(); dest.connect(bed.gain); }
+        stems.push({ file: x.file, stem, dest, layer: x.layer });
+      }
+      chains.push({ stems, secS: c.secS, n, acts: c.acts, main: c.stems.some((x) => !x.layer), win: new Map(), cur: null, next: null, stopped: false,
+        stats: { decoded: 0, ms: [], maxHeld: 0, late: 0 } });
+    }
+    bed.streams = chains;
+    const started = await Promise.all(chains.map(async (c) => {
+      const w0 = await this.window(c, 0).p;
+      if (this.bed !== bed || c.stopped) return true;
+      if (!w0[0]) return false;
+      const T = ctx.currentTime + 0.05;
+      c.cur = this.segment(c, 0, T, null, false);
+      this.segNow(bed, c, c.cur);
+      if (c.main) {
+        bed.mainGain = c.stems.find((x) => !x.layer)!.dest; bed.len = c.n * c.secS; bed.actsFrom = T;
+        bed.gain.gain.setTargetAtTime(bed.def.gain, T, XFADE_S / 3);
+        for (const l of bed.layers) if (l.buf) this.startLayer(bed, l);
+      } else for (const x of c.stems) if (x.layer) x.layer.gain.gain.setTargetAtTime(1, T, XFADE_S / 3);
+      this.bedRoles();
+      this.prefetch(c);
+      return true;
+    }));
+    if (this.bed !== bed) return true;
+    chains.forEach((c, i) => {
+      if (started[i] || c.main) return;
+      // a layer chain that could not start: that layer decodes whole (see `music`)
+      bed.streams = bed.streams.filter((x) => x !== c);
+      for (const x of c.stems) if (x.layer) {
+        const l = x.layer;
+        void this.buffer(l.file).then((buf) => { if (this.bed === bed && buf) { l.buf = buf; if (bed.t0 !== null) this.startLayer(bed, l); } });
+      }
     });
-    loadLayers();
+    const mainOk = chains.every((c, i) => !c.main || started[i]);
+    if (!mainOk) {
+      for (const c of chains) { c.stopped = true; for (const x of c.cur?.srcs ?? []) this.retire(x.src, [x.g], ctx.currentTime, 'stop'); }
+      for (const c of chains) for (const x of c.stems) if (!x.layer) try { x.dest.disconnect(); } catch { /* */ }
+      for (const l of bed.layers) { l.src = null; l.srcGain = null; }
+      bed.main = null; bed.mainGain = null; bed.t0 = null;
+      bed.streams = [];
+    }
+    return mainOk;
+  }
+
+  /** window k of every stem of a chain (cached on the chain while it is wanted) */
+  private window(st: Stream, k: number): Win {
+    let w = st.win.get(k);
+    if (w) return w;
+    const ctx = this.ctx!;
+    const a = Math.round((k * st.secS - STREAM_HANDLE_S) * STREAM_SR), b = Math.round(((k + 1) * st.secS + STREAM_HANDLE_S) * STREAM_SR);
+    const t = performance.now();
+    const p = Promise.all(st.stems.map((x) => x.stem.window(ctx, a, b).catch(() => null)));
+    const nw: Win = { p, v: null };
+    w = nw;
+    st.win.set(k, nw);
+    st.stats.maxHeld = Math.max(st.stats.maxHeld, st.win.size);
+    void p.then((v) => {
+      nw.v = v; st.stats.decoded++;
+      if (st.stats.ms.length < 64) st.stats.ms.push(Math.round(performance.now() - t));
+      if (st.win.get(k) === nw && v.every((x) => !x)) st.win.delete(k);          // failed: the next ask tries again
+    });
+    return nw;
+  }
+
+  /** window k from ctx time T (its downbeat): every stem whose window is in starts its source; `prev` (the window
+   *  before) hands over: an equal-power fade of SECTION_XF_S ending on T for a jump (see `acts`), a SEG_OVERLAP_S linear
+   *  one for the natural next window (the same samples either side). A T already past joins at once where the
+   *  timeline is (a decode later than the look-ahead: a background tab) */
+  private segment(st: Stream, k: number, T: number, prev: Seg | null, jump: boolean): Seg {
+    const ctx = this.ctx!;
+    const v = st.win.get(k)?.v ?? [];
+    const seg: Seg = { k, T, srcs: [] };
+    const X = jump ? SECTION_XF_S : SEG_OVERLAP_S;
+    const now = ctx.currentTime;
+    const late = T - X < now + 0.02;
+    const at = late ? now + 0.05 : T - X;
+    const off = STREAM_HANDLE_S + (at - T);
+    st.stems.forEach((stem, i) => {
+      const buf = v[i];
+      if (!buf || off >= buf.duration) return;
+      const g = ctx.createGain();
+      g.connect(stem.dest);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(g);
+      const old = prev?.srcs.find((x) => x.st === stem);
+      if (!prev) g.gain.value = 1;
+      else if (late) { g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, at + 0.03); }
+      else if (jump) g.gain.setValueCurveAtTime(XF_CURVES.in, at, X);
+      else { g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, T); }
+      src.start(at, Math.max(0, off));
+      seg.srcs.push({ st: stem, src, g });
+      if (old) {
+        const og = old.g.gain;
+        try {
+          if (late) { og.cancelScheduledValues(at); og.setValueAtTime(og.value, at); og.linearRampToValueAtTime(0, at + 0.03); }
+          else if (jump) og.setValueCurveAtTime(XF_CURVES.out, at, X);
+          else { og.setValueAtTime(1, at); og.linearRampToValueAtTime(0, T); }
+        } catch { og.setTargetAtTime(0, at, 0.01); }
+      }
+    });
+    // the window before leaves at the downbeat (a stem with no window this time fades with it: it rejoins next time)
+    if (prev) for (const o of prev.srcs) {
+      if (!seg.srcs.some((x) => x.st === o.st)) { try { o.g.gain.setTargetAtTime(0, at, 0.02); } catch { /* */ } }
+      this.retire(o.src, [o.g], (late ? at + 0.05 : T) + 0.02, 'stop');
+    }
+    if (late && prev) st.stats.late++;
+    return seg;
+  }
+
+  /** a window has become the playing one: the bed's handles follow it (the probes read bed.main and each layer's src;
+   *  the objective layer locks to t0 = the section grid) */
+  private segNow(b: Bed, st: Stream, seg: Seg): void {
+    if (st.main) b.t0 = seg.T - seg.k * st.secS;
+    const m = seg.srcs.find((x) => !x.st.layer);
+    if (m) b.main = m.src;
+    for (const x of seg.srcs) if (x.st.layer) { x.st.layer.src = x.src; x.st.layer.srcGain = x.g; }
+  }
+
+  /** the window a chain plays after k: the act's next section, else the next window */
+  private nextWin(st: Stream, k: number): number {
+    return st.acts ? nextSection(MUSIC_ACTS[this.act] ?? MUSIC_ACTS[0], k) : (k + 1) % st.n;
+  }
+
+  /** decode ahead the window a chain would play next, and drop every window no window needs */
+  private prefetch(st: Stream): void {
+    if (!st.cur) return;
+    const want = new Set([st.cur.k, st.next ? st.next.k : this.nextWin(st, st.cur.k)]);
+    for (const k of [...st.win.keys()]) if (!want.has(k)) st.win.delete(k);
+    for (const k of want) this.window(st, k);
+  }
+
+  /** a streamed bed's windows (the streamed form of sectionsNow): each chain's next window is chosen
+   *  SECTION_LOOKAHEAD_S ahead (by the act's order on a match bed, as the whole bed's jumps are) and scheduled once its
+   *  window is in */
+  private streamNow(b: Bed): void {
+    for (const st of b.streams) this.chainNow(b, st);
+  }
+
+  private chainNow(b: Bed, st: Stream): void {
+    const ctx = this.ctx;
+    if (!ctx || !st.cur || st.stopped) return;
+    const now = ctx.currentTime;
+    if (st.next && now >= st.next.T) { st.cur = st.next; st.next = null; this.segNow(b, st, st.cur); this.prefetch(st); }
+    if (st.next) return;
+    let at = st.cur.T + st.secS;
+    if (at - now > SECTION_LOOKAHEAD_S) return;
+    let from = st.cur.k;
+    // far behind (the timers were held back: a hidden tab): the timeline went on as composed, window after window; it
+    // joins the one playing now, where the timeline is (as a whole bed's stem runs on into its own next section)
+    const behind = at < now + 0.05;
+    while (at + st.secS < now + 0.1) { from = (from + 1) % st.n; at += st.secS; }
+    const natural = (from + 1) % st.n;
+    const to = behind ? natural : this.nextWin(st, from);
+    const w = this.window(st, to);
+    this.prefetch(st);
+    if (!w.v) { void w.p.then(() => { if (this.bed === b) this.chainNow(b, st); }); return; }
+    st.next = this.segment(st, to, at, st.cur, to !== natural);
+    if (st.acts && !behind) {
+      b.decided = at;
+      b.sections.push({ at, from, to, jump: to !== natural, act: this.act });
+      if (b.sections.length > 64) b.sections.shift();
+    }
+    this.prefetch(st);
   }
 
   /** the main stem starts looping now (position 0), the bed fading in */
@@ -1414,6 +1675,35 @@ class Engine implements ValeAudioPort {
     return s;
   }
 
+  /** dev / probes: a streamed bed's state (see `stream` in the header): null when the bed decodes whole. `windows` and
+   *  `stats` are the first chain's (a match bed has one), `chains` each chain's */
+  get musicStream(): { stems: { file: string; kb: number; seconds: number }[]; windows: number[]; heldMb: number; cur: number | null; next: number | null;
+    stats: Stream['stats']; chains: { n: number; secS: number; acts: boolean; windows: number[]; cur: number | null; next: number | null; maxHeld: number; decoded: number; late: number }[] } | null {
+    const cs = this.bed?.streams ?? [];
+    if (!cs.length) return null;
+    let bytes = 0;
+    for (const c of cs) for (const w of c.win.values()) for (const b of w.v ?? []) if (b) bytes += b.length * b.numberOfChannels * 4;
+    const c0 = cs[0];
+    return { stems: cs.flatMap((c) => c.stems.map((x) => ({ file: x.file, kb: Math.round(x.stem.bytes / 1024), seconds: x.stem.duration }))), windows: [...c0.win.keys()],
+      heldMb: +(bytes / 1048576).toFixed(1), cur: c0.cur?.k ?? null, next: c0.next?.k ?? null, stats: { ...c0.stats, ms: c0.stats.ms.slice() },
+      chains: cs.map((c) => ({ n: c.n, secS: c.secS, acts: c.acts, windows: [...c.win.keys()], cur: c.cur?.k ?? null, next: c.next?.k ?? null, maxHeld: c.stats.maxHeld,
+        decoded: c.stats.decoded, late: c.stats.late })) };
+  }
+
+  /** dev / probes: every buffer the playing bed holds (its whole files, its windows): what a live source may hold */
+  bedBuffers(): Set<AudioBuffer> {
+    const out = new Set<AudioBuffer>();
+    const b = this.bed;
+    if (!b) return out;
+    if (b.main?.buffer) out.add(b.main.buffer);
+    for (const l of b.layers) { if (l.buf) out.add(l.buf); if (l.src?.buffer) out.add(l.src.buffer); }
+    for (const c of b.streams) {
+      for (const w of c.win.values()) for (const x of w.v ?? []) if (x) out.add(x);
+      for (const seg of [c.cur, c.next]) for (const x of seg?.srcs ?? []) if (x.src.buffer) out.add(x.src.buffer);
+    }
+    return out;
+  }
+
   /** dev / probes: the acts as they run (see `acts` in the header) */
   get musicActs(): { act: number; objNear: number; objGain: number | null; structuresMax: number; sections: { at: number; from: number; to: number; jump: boolean; act: number }[] } {
     const b = this.bed;
@@ -1434,6 +1724,13 @@ class Engine implements ValeAudioPort {
     for (const p of b.pieces) srcs.push([p.src, p.gain]);
     for (const l of b.layers) if (l.src) srcs.push([l.src, l.srcGain]);
     const shared: AudioNode[] = [b.gain, ...b.layers.map((l) => l.gain)];
+    // a streamed bed: every section still sounding or scheduled, and no window kept (see `stream` in the header)
+    for (const c of b.streams) {
+      c.stopped = true;
+      for (const seg of [c.cur, c.next]) for (const x of seg?.srcs ?? []) if (!srcs.some(([q]) => q === x.src)) srcs.push([x.src, x.g]);
+      for (const x of c.stems) if (!x.layer) shared.push(x.dest);
+      c.win.clear(); c.cur = null; c.next = null;
+    }
     let left = srcs.length;
     const last = (): void => { if (--left <= 0) for (const n of shared) try { n.disconnect(); } catch { /* gone */ } };
     if (!left) { left = 1; last(); }
@@ -1724,6 +2021,8 @@ class Engine implements ValeAudioPort {
       const b = await Promise.race([p, new Promise<null>((r) => { setTimeout(r, 50, null); })]);
       if (b?.length) { files++; bytes += b.length * b.numberOfChannels * 4; }
     }
+    // a streamed bed's windows (see `stream` in the header)
+    for (const c of this.bed?.streams ?? []) for (const w of c.win.values()) for (const b of w.v ?? []) if (b) { files++; bytes += b.length * b.numberOfChannels * 4; }
     return { files, bytes };
   }
 
@@ -2142,7 +2441,7 @@ class Engine implements ValeAudioPort {
     const b = this.bed;
     if (!b || !this.ctx) return;
     if (view) { this.actNow(view); this.objNear = this.objectiveNear(view); } else this.objNear = 0;
-    this.sectionsNow(b);
+    if (b.streams.length) this.streamNow(b); else this.sectionsNow(b);
     // phases nobody drives walk themselves (see `music` in the header)
     const phases = b.layers.filter((l) => l.role === 'phase');
     if (!this.phaseDriven && phases.length && b.t0 !== null) {
