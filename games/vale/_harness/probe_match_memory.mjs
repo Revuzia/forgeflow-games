@@ -245,7 +245,25 @@ async function journey(mode) {
   const pre = { peak: { totalMb: 0 }, series: [] };
   let lastPre = 0;
   const preT0 = Date.now();
+  // round 5 MEM-3 refix: the match's lineup (every seat's fighter and the skin its splash art names) off the loading
+  // screen, so a GL texture delta between two matches on one map can be put to the roster (bots draft from the
+  // session's rng: the fighters differ match to match, and each fighter brings its own 2048 maps)
+  let lineup = null;
+  const readLineup = () => page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.loading .pcard')];
+    if (!cards.length) return null;
+    return cards.map((c) => {
+      const f = c.querySelector('.pcard__fighter')?.textContent?.trim() ?? '?';
+      const img = c.querySelector('img');
+      const src = img?.getAttribute('src') ?? (getComputedStyle(c.querySelector('.pcard__art') ?? c).backgroundImage || '');
+      const file = (/([^/"')]+)\.(?:webp|png|jpe?g|avif)/i.exec(src) ?? [])[1] ?? '';
+      const alt = img?.getAttribute('alt')?.trim() || f;
+      return `${c.classList.contains('pcard--enemy') ? 'B' : 'A'}:${alt}${file ? ` [${file}]` : ''}`;
+    });
+  }).catch(() => null);
   while (!(await hud.isVisible().catch(() => false))) {
+    const lu = await readLineup();
+    if (lu && lu.length) lineup = lu;
     if (Date.now() - lastPre >= 3000) {
       lastPre = Date.now();
       const f = await procs(); const t = await track();
@@ -269,7 +287,8 @@ async function journey(mode) {
   log(`${mode}: in the match`);
   await snap(`${mode}_start`);
   log(`${mode}: before the HUD (queue, draft, loading) peak ${pre.peak.totalMb} MB at ${pre.peak.atS} s on ${pre.peak.screen}; ${pre.series.length} reads`);
-  const rec = { mode, sec: SEC, peak: { totalMb: 0 }, series: [], loadMax: 0, polls: 0, preHud: pre };
+  log(`${mode}: lineup ${lineup ? lineup.join(', ') : 'not read'}`);
+  const rec = { mode, sec: SEC, peak: { totalMb: 0 }, series: [], loadMax: 0, polls: 0, preHud: pre, lineup };
   report.matches.push(rec);
   const end = Date.now() + SEC * 1000;
   let lastPoll = 0, k = 0;
@@ -292,7 +311,7 @@ async function journey(mode) {
       rec.series.push({ s: Math.round((Date.now() - end + SEC * 1000) / 1000), ...f, load: m.load, track: t });
       if (TRACK) log(`${mode} ${rec.series.at(-1).s} s: ${f.totalMb} MB (renderer ${f.rendererMb}, GPU ${f.gpuMb}; load ${m.load})${trackLine(t)}${f.cats ? `  cats ${JSON.stringify(f.cats)}` : ''}`);
       // --infra-match (diagnostic): Chrome's memory-infra at the match's first three polls: what the start transient is
-      if (INFRA_MATCH && rec.polls <= 3) {
+      if (INFRA_MATCH && (rec.polls <= 3 || rec.polls % 6 === 0)) {   // and every sixth poll after (round 5 MEM-3 refix: the in-match partitions late in a match)
         const d = await infraDump();
         (rec.infra ??= []).push({ s: rec.series.at(-1).s, ...d });
         log(`${mode} ${rec.series.at(-1).s} s memory-infra: renderer ${JSON.stringify(d.renderer ?? d.error)}`);
@@ -384,12 +403,44 @@ report.matchMargin = Object.fromEntries(report.matches.map((r) => [r.mode, MATCH
 // (GL textures + buffers + renderbuffers + audio + bitmaps + JS heap used + array-buffer backing, --track) over home_0's
 const liveMb = (t) => (t?.gl ? +(t.gl.texMb + t.gl.bufMb + t.gl.rbMb + t.audio.mb + t.bitmaps.mb + (t.heap?.usedMb ?? 0) + (t.heap?.backingMb ?? 0)).toFixed(1) : null);
 report.r27 = { matches: [], homes: [] };
+const median = (xs) => { const v = xs.filter((x) => typeof x === 'number').sort((p, q) => p - q); return v.length ? v[Math.floor((v.length - 1) / 2)] : null; };
+/** a match's steady live set (--track): medians over the polls after 20 s, by kind; the texture classes of the poll nearest
+ *  the median time; liftCopyAtS: the first poll that holds more 1920x1080 RGBA16F targets than Home (the VFX pass's
+ *  pre-VFX copy, src/render/post.ts VfxPass.pre, made at the first envelope that lifts and freed on leave) */
+function liveOf(r) {
+  const st = r.series.filter((x) => x.s > 20 && x.track?.gl);
+  if (!st.length) return null;
+  const mid = st[Math.floor((st.length - 1) / 2)];
+  const homeHf = Number((/1920x1080\/0x881a ×(\d+)/.exec((report.homes[1] ?? report.homes[0])?.track?.texClasses?.join(' ') ?? '') ?? [])[1] ?? 0);
+  const hf = (x) => Number((/1920x1080\/0x881a ×(\d+)/.exec(x.track?.texClasses?.join(' ') ?? '') ?? [])[1] ?? 0);
+  const lift = r.series.find((x) => homeHf && hf(x) > homeHf);
+  return {
+    totalMb: median(st.map((x) => x.totalMb)), rendererMb: median(st.map((x) => x.rendererMb)), gpuMb: median(st.map((x) => x.gpuMb)),
+    texMb: median(st.map((x) => x.track.gl.texMb)), texN: median(st.map((x) => x.track.gl.texN)), bufMb: median(st.map((x) => x.track.gl.bufMb)), rbMb: median(st.map((x) => x.track.gl.rbMb)),
+    audioMb: median(st.map((x) => x.track.audio?.mb)), heapMb: median(st.map((x) => x.track.heap?.usedMb)), backingMb: median(st.map((x) => x.track.heap?.backingMb)),
+    texClasses: mid.track.texClasses ?? [], liftCopyAtS: lift ? lift.s : null,
+  };
+}
 report.matches.forEach((r, i) => {
   const steady = r.series.filter((x) => x.s > 20 && x.totalMb !== null).map((x) => x.totalMb);
   const start = r.series.filter((x) => x.s <= 20 && x.totalMb !== null).map((x) => x.totalMb);
   const steadyMax = steady.length ? Math.max(...steady) : null;
   const earlier = report.matches.slice(0, i).filter((q) => q.mode === r.mode).map((q) => q.peak.totalMb);
-  report.r27.matches.push({ n: i + 1, mode: r.mode, preHudPeakMb: r.preHud?.peak.totalMb ?? null, preHudScreen: r.preHud?.peak.screen ?? null, peakMb: r.peak.totalMb, atS: r.peak.atS, steadyMaxMb: steadyMax, startTransientMb: steadyMax !== null && start.length ? Math.max(...start) - steadyMax : null, climbMb: earlier.length ? r.peak.totalMb - Math.max(...earlier) : null, loadMax: r.loadMax });
+  report.r27.matches.push({ n: i + 1, mode: r.mode, preHudPeakMb: r.preHud?.peak.totalMb ?? null, preHudScreen: r.preHud?.peak.screen ?? null, peakMb: r.peak.totalMb, atS: r.peak.atS, steadyMaxMb: steadyMax, startTransientMb: steadyMax !== null && start.length ? Math.max(...start) - steadyMax : null, climbMb: earlier.length ? r.peak.totalMb - Math.max(...earlier) : null, loadMax: r.loadMax, lineup: r.lineup ?? null, live: liveOf(r) });
+});
+// round 5 MEM-3 refix: what of a later match's climb over the same map's first is live objects and what is not. Per kind,
+// the steady median (polls after 20 s) minus the first same-map match's; residueMb = the steady total's climb minus the
+// live climb (what no object the page holds accounts for: allocator and driver pages)
+report.r27.matches.forEach((m) => {
+  const first = report.r27.matches.find((q) => q.mode === m.mode);
+  if (first === m || !m.live || !first?.live) return;
+  const d = Object.fromEntries(Object.keys(m.live).filter((k) => typeof m.live[k] === 'number').map((k) => [k, +(m.live[k] - first.live[k]).toFixed(1)]));
+  const liveKeys = ['texMb', 'bufMb', 'rbMb', 'audioMb', 'heapMb', 'backingMb'];
+  const liveClimb = +liveKeys.reduce((s, k) => s + (d[k] ?? 0), 0).toFixed(1);
+  const cls = (live) => Object.fromEntries((live.texClasses ?? []).map((c) => { const q = /^(\S+) ×(\d+) ([\d.]+)/.exec(c); return q ? [q[1], { n: +q[2], mb: +q[3] }] : [c, null]; }).filter(([, v]) => v));
+  const a = cls(first.live), b = cls(m.live);
+  const texDelta = [...new Set([...Object.keys(a), ...Object.keys(b)])].map((k) => [k, (b[k]?.n ?? 0) - (a[k]?.n ?? 0), +((b[k]?.mb ?? 0) - (a[k]?.mb ?? 0)).toFixed(1)]).filter(([, n, mb]) => n || Math.abs(mb) >= 1).map(([k, n, mb]) => `${k} ${n >= 0 ? '+' : ''}${n} (${mb >= 0 ? '+' : ''}${mb} MB)`);
+  m.overFirst = { steadyTotalMb: d.totalMb, liveMb: liveClimb, residueMb: d.totalMb !== undefined ? +(d.totalMb - liveClimb).toFixed(1) : null, byKind: d, texDelta };
 });
 const live0 = liveMb(report.homes.find((h) => h.tag === 'home_0')?.track);
 report.r27.homes = report.homes.map((h) => ({ tag: h.tag, totalMb: h.totalMb, liveMb: liveMb(h.track), liveOverFirstMb: live0 !== null && liveMb(h.track) !== null ? +(liveMb(h.track) - live0).toFixed(1) : null, load: h.load }));
