@@ -67,6 +67,9 @@
   const urlOf = new WeakMap();
   const rab = Response.prototype.arrayBuffer;
   Response.prototype.arrayBuffer = function () { const u = this.url; return rab.call(this).then((b) => { try { urlOf.set(b, u); } catch { /* */ } return b; }); };
+  // the page's audio contexts: their clock tells whether sources can end at all (a frozen device clock never ends one)
+  const ctxs = [];
+  if (window.AudioContext) { const AC = window.AudioContext; window.AudioContext = class extends AC { constructor(...a) { super(...a); ctxs.push(new WeakRef(this)); } }; }
   const A = (window.BaseAudioContext ?? window.AudioContext)?.prototype;
   if (A) {
     const dec = A.decodeAudioData;
@@ -102,6 +105,7 @@
       gl: { texN: tex.size, texMb: MB(tb), bufN: buf.size, bufMb: MB(bb), bufBig: bbig, rbN: rb.size, rbMb: MB(rbb), programs, totalMb: MB(tb + bb + rbb) },
       texClasses: classes,
       audio: { n: an, mb: MB(ab), largest: al },
+      clock: (() => { const c = ctxs.map((r) => r.deref()).filter(Boolean).at(-1); return c ? { t: +c.currentTime.toFixed(2), state: c.state, n: ctxs.length } : null; })(),
       bitmaps: { n: bn, mb: MB(bm), sizes: bl },
     };
   };

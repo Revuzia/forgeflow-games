@@ -1,6 +1,6 @@
 // VALE harness — owner ruling 20: the match's memory, in the REAL production client.
 //
-//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track]
+//   node _harness/probe_match_memory.mjs [--modes bridge,rift] [--sec 300] [--no-build] [--wait-idle <min>] [--out <json>] [--shots <prefix>] [--preset ultra] [--track] [--fake-audio]
 //
 // --track (round 4 MEM-1): _harness/fw_r4_mem_track.js rides the page (GL textures / buffers / renderbuffers by the bytes
 // their storage calls asked for, live AudioBuffers and ImageBitmaps after a GC) and the V8 heap is read too (CDP
@@ -86,7 +86,26 @@ if (WAIT_IDLE_S > 0) {
 const noteMachine = (tag) => { const m = machine(); report.machine.samples.push({ tag, ...m }); return m; };
 noteMachine('start');
 
-const { browser, page, logs } = await open('/', { wait: false, hmr: false });
+// --fake-audio (round 4): Chrome's fake output device (--disable-audio-output, as probe_audio_runtime / probe_audio_music).
+// This Mac's output device can freeze an AudioContext's clock (3fb4383ce): no source then ever ends and every decoded
+// buffer it plays stays alive, which a player's working device never does. The report says which sink it ran on
+const FAKE_AUDIO = args.includes('--fake-audio');
+report.audioSink = FAKE_AUDIO ? 'fake (--disable-audio-output)' : 'device';
+const { browser, page, logs } = FAKE_AUDIO ? await openFakeAudio() : await open('/', { wait: false, hmr: false });
+async function openFakeAudio() {
+  const { chromium } = await import('playwright-core');
+  const { holdHeavy } = await import('./heavy_slot.mjs');
+  const rel = await holdHeavy('probe_match_memory fake-audio');
+  const b = await chromium.launch({ channel: 'chrome', headless: process.env.VALE_HEADED !== '1', args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--disable-audio-output'] });
+  b.on('disconnected', rel);
+  const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  await ctx.routeWebSocket(/.*/, () => {});
+  const pg = await ctx.newPage(); const lg = [];
+  pg.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') lg.push(`[${m.type()}] ${m.text()}`); });
+  pg.on('pageerror', (e) => lg.push(`[pageerror] ${e.message}`));
+  await pg.goto(process.env.VALE_URL + '/', { waitUntil: 'domcontentloaded' });
+  return { browser: b, page: pg, logs: lg };
+}
 const bcdp = await browser.newBrowserCDPSession();
 const cdp = await page.context().newCDPSession(page);
 if (TRACK) { await page.context().addInitScript({ path: join(HERE, 'fw_r4_mem_track.js') }); await page.reload(); }
@@ -98,7 +117,7 @@ const track = async () => {
   const mb = (b) => (typeof b === 'number' ? +(b / 1048576).toFixed(1) : null);
   return { ...t, heap: h ? { usedMb: mb(h.usedSize), totalMb: mb(h.totalSize), embedderMb: mb(h.embedderHeapUsedSize), backingMb: mb(h.backingStorageSize) } : null };
 };
-const trackLine = (t) => (t?.gl ? `  [GL tex ${t.gl.texN}/${t.gl.texMb} MB buf ${t.gl.bufN}/${t.gl.bufMb} MB rb ${t.gl.rbN}/${t.gl.rbMb} MB prog ${t.gl.programs}; audio ${t.audio.n}/${t.audio.mb} MB; bitmaps ${t.bitmaps.n}/${t.bitmaps.mb} MB; heap ${t.heap?.usedMb} backing ${t.heap?.backingMb}]` : '');
+const trackLine = (t) => (t?.gl ? `  [clock ${t.clock?.t ?? '-'} s ${t.clock?.state ?? ''}; GL tex ${t.gl.texN}/${t.gl.texMb} MB buf ${t.gl.bufN}/${t.gl.bufMb} MB rb ${t.gl.rbN}/${t.gl.rbMb} MB prog ${t.gl.programs}; audio ${t.audio.n}/${t.audio.mb} MB; bitmaps ${t.bitmaps.n}/${t.bitmaps.mb} MB; heap ${t.heap?.usedMb} backing ${t.heap?.backingMb}]` : '');
 const procs = async () => {
   const ps = (await bcdp.send('SystemInfo.getProcessInfo')).processInfo;
   const gpu = ps.find((x) => x.type === 'GPU');

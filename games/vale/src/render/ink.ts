@@ -429,6 +429,15 @@ export function shadowDepth(path: 'rigid' | 'skin', instanced = false): RawShade
   if (!instanced) return (rigidDepth ??= inkMaterial('rigid', INK.depth, { name: 'vale_ink_shadow' }));
   return (instDepth ??= inkMaterial('rigid', INK.depth, { name: 'vale_ink_shadow_inst', uniforms: { uInst: { value: 1 } } }));
 }
+/** round 4 MEM-1: three's shadow pass copies the caster's map, alphaMap and displacementMap onto the depth material it
+ *  draws with (WebGLShadowMap.getDepthMaterial), so the three shared depth materials above keep the last caster's
+ *  textures alive after a match is gone (a heap snapshot at Home found a fighter's base texture held by rigidDepth).
+ *  The ink depth programs never sample them; the next shadow pass sets them again. Called on match teardown */
+export function releaseShadowRefs(): void {
+  for (const m of [rigidDepth, instDepth, skinDepth] as (RawShaderMaterial & { map?: unknown; alphaMap?: unknown; displacementMap?: unknown } | null)[]) {
+    if (m) { m.map = null; m.alphaMap = null; m.displacementMap = null; }
+  }
+}
 /** an instanced caster's shadow running its own vertex motion (sway uniforms by reference) */
 export function swayDepth(sway: (typeof INK_SWAY)[keyof typeof INK_SWAY], uniforms: U, name: string): RawShaderMaterial {
   return inkMaterial('rigid', INK.depth, { name, uniforms: { ...uniforms, uInst: { value: 1 }, uSway: { value: sway } } });

@@ -13,6 +13,7 @@
 // Then out through the menu and confirm, back to Home, the next mode in the same page.
 // --trials: also the leave press after every input round from 30 s in (about 70 per match): Esc, the menu within 3 s or
 // a shot, the state and a second Esc; the menu is closed again with Esc before play goes on.
+// --aim: each trial first learns Q/E/R (Ctrl+key) and presses one until a slot is in targeting, so the first Esc meets an aim.
 // Exit 0 = every Esc path (and trial) reached the menu within 2 presses; 1 = one never reached it in 2; 3 = broke.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -31,7 +32,8 @@ const OUT = resolve(ROOT, opt('out', '_harness/_reports/fw_r4_ui_leave.json'));
 const SHOTS = opt('shots', 'fw_r4_ui_leave');
 const QUEUE_CARD = { rift: 'Lantern Drill' };
 const PROD_DIR = join(HERE, '_prod', 'fw_r4_ui', 'dist');
-const TRIALS = args.includes('--trials');
+const TRIALS = args.includes('--trials') || args.includes('--aim');
+const AIM = args.includes('--aim');   // each trial first puts a targeted cast in aim (the cancel-then-menu path)
 const FOOTPRINT = args.includes('--footprint');   // the memory probe's 10 s polls too (CDP process list + macOS footprint on the renderer and GPU), its exact timing
 function footprintMb(pid) {
   try {
@@ -153,11 +155,24 @@ async function journey(mode) {
     // --trials: after every input round from 30 s on, the leave press itself (Esc, the menu within 3 s?), the menu
     // closed again with Esc; a press that brings no menu gets a shot, its state, and a second Esc
     if (TRIALS && Date.now() - (end - SEC * 1000) >= 30000 && Date.now() < end) {
-      const tr = { s: Math.round((Date.now() - end + SEC * 1000) / 1000), key: ['Q', 'W', 'E', 'R'][(k - 1) % 4], before: await uiState() };
+      let aimKey = null;
+      if (AIM) {
+        // a targeted cast held in aim: learn with Ctrl+key (never Ctrl+W), the mouse on the ground, the key, no click
+        for (const c of ['KeyQ', 'KeyE', 'KeyR']) await page.keyboard.press(`Control+${c}`).catch(() => {});
+        await page.mouse.move(900, 600).catch(() => {});
+        for (const c of ['KeyQ', 'KeyE', 'KeyR', 'KeyW']) {
+          await page.keyboard.press(c).catch(() => {});
+          await page.waitForTimeout(150);
+          if ((await page.locator('.aslot.is-aiming').count().catch(() => 0)) > 0) { aimKey = c; break; }
+        }
+      }
+      const tr = { s: Math.round((Date.now() - end + SEC * 1000) / 1000), key: aimKey ?? ['Q', 'W', 'E', 'R'][(k - 1) % 4], before: await uiState() };
+      if (aimKey) tr.aimKey = aimKey;
       await page.keyboard.press('Escape');
       tr.esc1 = await menuIn(3000);
       if (!tr.esc1) {
         tr.after1 = await uiState();
+        tr.aimAfter1 = tr.after1.aimingSlot.length;
         if (rec.trialShots < 6) { rec.trialShots++; tr.shot = await snap(`${mode}_trial_${tr.s}s`); }
         await page.keyboard.press('Escape');
         tr.esc2 = await menuIn(3000);

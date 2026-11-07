@@ -54,7 +54,7 @@ import { MenuWorld } from './menu.ts';
 import { BAR_KIND, BarLayer, type BarSpec, CC_PLATE, GLYPH, SHAPE } from './overlay/bars.ts';
 import { OverlayContext, overlayUniforms } from './overlay/context.ts';
 import { HoverOutline, hoverRimUniforms } from './overlay/hover.ts';
-import { inkShadows } from './ink.ts';
+import { inkShadows, releaseShadowRefs } from './ink.ts';
 import { lodReady, lodSwitch, shadowLods } from './lod.ts';
 import { CROWD_INK_TRIS_HIGH, CROWD_INK_TRIS_LOW, CROWD_OUTLINE_CROWDED, CROWD_OUTLINE_MAX, CrowdHardLatch, CrowdLayer } from './crowd.ts';
 import { RING, RingLayer } from './overlay/rings.ts';
@@ -634,6 +634,7 @@ class ValeRenderer implements Renderer {
     if (this.terrain) { this.scene.remove(this.terrain.group); this.terrain.dispose(); this.terrain = null; }
     if (this.mapScene) { this.scene.remove(this.mapScene); this.mapScene = null; }
     this.fog.dispose();
+    releaseShadowRefs();                                                   // round 4 MEM-1: ink.ts
     this.gpuTimer.clear();
     this.envReady = false;
     this.client = null;
