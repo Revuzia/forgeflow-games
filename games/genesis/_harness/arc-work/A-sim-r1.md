@@ -64,3 +64,6 @@ the god's acts: a town the god helps over 2 years can become devoted; justice, n
 - #1 card / #3 seeded dice: arc-tower-r1 tests green (6/6).
 - Focused: arc-hearts, living-relationship, prayers-pause, arc-tower, arc-tower-r1 60/60; living-content,
   living-integration, mods, omnipotence, people 92/92; tsc clean.
+- #4 strike after refusal: warn4.log (WARN_N=1, strike right after the refused warning) 8/8 provoked, 0 dead.
+- GATE: npm run check via slot.sh 831/831 green at 19:14Z (scratch/arc/A-sim-r1/check-s2b.log; check-s2 failed only on a
+  test-file cast, fixed). Lane brief for stage A r1 DONE. Nothing open in this ledger.

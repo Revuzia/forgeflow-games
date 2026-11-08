@@ -1111,3 +1111,9 @@ declined it).
   >= 80 % of natural floods that reach a town evacuate it before the water; no other disaster's numbers move.
 - A screenshot (looked at) of a river during the warning: higher and browner than the same river the day before.
 
+
+### 10.4 Lead note (stage A r1, 2026-11-08): the god's record with a town
+`regard.ts keptBy()` = clamp((help + mercy acts in the last 2 years − 2 × unprovoked harms) / 4). It scales help gains
+(×(1 + 0.8 r)), lifts loyalty's target (+0.3 r inside the trust term) and its relax rate (×(1 + r)), and slows faith's
+decay (×(1 − 0.5 r)). Justice, not favour: a god that never helped scores 0, and the record never touches pride. M3's
+kind run: 7/8 seeds devoted within 2 years.
