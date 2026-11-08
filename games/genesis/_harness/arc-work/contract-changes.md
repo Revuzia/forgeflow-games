@@ -117,3 +117,14 @@
   have no count). A year after the scattering the daughter towns' cold + hunger deaths are `scatter.lost`, relStat
   'tower.scatterLost', event `tower.lost {tower, lost, towns}` and the chronicle line `tower.lost` (events.json), once.
   The act itself still kills no one and the Book's confuse entry keeps dead 0.
+
+## Stage C UI (C-ui, 2026-11-08) — §6.7 additive (test surface only)
+- `__GENESIS__.arc.stub` gains kinds `'story'` (answers query('story'), per planet / settlement), `'covenants'` (answers
+  query('covenants')) and `'refusal'` (harmful casts without `covenant: 'break'` return the §4.4 refusal). Client-side only
+  (src/client/arcstub.ts, simclient.ts query/cmd); no sim view, event or command shape changed.
+- Readings the UI codes to (please match in the sim, or tell C-ui): `PlanetSnap.age.since` = the AgeRecord's `begun` tick
+  (the HUD shows "since year N" from it); `query('covenants', { planet })` -> `{ covenants: (Covenant & { townNames,
+  yearsKept, vowWords })[], offers }` (a bare array also works); `CovenantOffer` view `name` = "Flood of Aru" (with or
+  without "the"), `household` = clanOf's string ("the house of Hesh"); `CommandResult.refusal = { kind: 'covenant',
+  covenant, vow }` read via a cast until types.ts adds it.
+- §6.5 `open-book` is detected in the UI as well (src/ui/book.ts openBookIntent): the Book opens whatever the sim answers.

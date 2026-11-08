@@ -41,6 +41,9 @@ export interface SaveMeta {
   size: number;
   packs: PackRef[];
   auto?: boolean;
+  /** ARC §5.5: the age the world was in ("The Age of the Bow") and what they called the god, when kept */
+  age?: string;
+  epithet?: string;
 }
 export interface SaveRecord extends SaveMeta {
   bytes: ArrayBuffer;
@@ -51,6 +54,18 @@ export interface SaveRecord extends SaveMeta {
 const SCENARIO_NAMES: Record<string, string> = {
   barren: 'Barren world', twoworlds: 'Two worlds', 'twoworlds-late': 'Two worlds: the age of rockets', system: 'Living system', sandbox: 'Sandbox', lookdev: 'Lookdev',
 };
+/** ARC §5.5: the save card's story line, "The Age of the Bow · they call you the Patient" ('' before any age) */
+export function saveStoryLine(m: Pick<SaveMeta, 'age' | 'epithet'>): string {
+  return [m.age ?? '', m.epithet ? `they call you ${m.epithet}` : ''].filter(Boolean).join(' · ');
+}
+
+/** ARC §5.5: the title's Continue line, "the Age of the Bow, year 212" (null without an age: the plain line stands) */
+export function continueLine(m: Pick<SaveMeta, 'age' | 'calendar'>): string | null {
+  if (!m.age) return null;
+  const y = /Year (\d+)/i.exec(m.calendar ?? '');
+  return `${m.age.replace(/^The\s/, 'the ')}${y ? `, year ${y[1]}` : ''}`;
+}
+
 export function scenarioName(id: string): string { return SCENARIO_NAMES[id] ?? (id.startsWith('custom') ? 'Your own system' : id); }
 
 // ───────────────────────────── the file: header, bundle ─────────────────────────────
@@ -438,6 +453,7 @@ export class Saves {
       h('div', { class: 'gn-save-t' },
         h('div', { class: 'gn-save-name', text: m.name }),
         h('div', { class: 'gn-save-cal', text: [m.world, m.calendar].filter(Boolean).join(' · ') }),
+        saveStoryLine(m) ? h('div', { class: 'gn-save-age', text: saveStoryLine(m) }) : null,
         h('div', { class: 'gn-save-sub', text: `${m.worlds.length > 1 ? `${m.worlds.filter((x) => x !== m.world).join(', ')} · ` : ''}${scenarioName(m.scenario)} · seed ${m.seed}` }),
         packList.length ? h('div', { class: 'gn-save-sub gn-save-packs', title: packList.join('\n'), text: `with ${packList.join(', ')}` }) : null,
         h('div', { class: 'gn-save-sub gn-save-dim', text: `${m.summary ? `${m.summary} · ` : ''}${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${(m.size / 1048576).toFixed(1)} MB` })),
@@ -445,7 +461,7 @@ export class Saves {
   }
 
   /** what this moment is: the world on screen, its calendar at the saved tick (else the screen's), how many live */
-  private describe(tick?: number): { world: string; worlds: string[]; calendar: string; summary: string } {
+  private describe(tick?: number): { world: string; worlds: string[]; calendar: string; summary: string; age?: string; epithet?: string } {
     const v = this.host.view;
     const pv = v.planet(this.host.primary());
     let pop = 0, towns = 0;
@@ -459,7 +475,10 @@ export class Saves {
     const parts: string[] = [];
     if (pop) parts.push(`${pop} living`);
     if (towns) parts.push(`${towns} settlement${towns > 1 ? 's' : ''}`);
-    return { world: pv?.name ?? '', worlds: v.planets.filter((p) => p.params.kind !== 'moon').map((p) => p.name), calendar, summary: parts.join(' · ') };
+    return {
+      world: pv?.name ?? '', worlds: v.planets.filter((p) => p.params.kind !== 'moon').map((p) => p.name), calendar, summary: parts.join(' · '),
+      ...(pv?.age?.name ? { age: pv.age.name } : {}), ...(pv?.epithet && pv.epithet !== 'the god' ? { epithet: pv.epithet } : {}),
+    };
   }
 
   /** keep the world in a slot */

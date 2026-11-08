@@ -38,6 +38,7 @@ import { SPEED_PRESETS } from '../sim/types.ts';
 import { qRotate, qRotateInv } from '../client/orbits.ts';
 import { Toasts, type ToastSpec } from './toasts.ts';
 import { stripYear } from './words.ts';
+import { ageLine, titleCard, AgeWatch } from './book.ts';
 import { h, fmtNum, cap } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, WRATH_DEFAULT } from './powers.ts';
@@ -119,6 +120,12 @@ const QUIET_SPEEDS = new Set<number>([0, 1, 10, 100, 1000]);
 /** a day length in hours as the clock says it: 30 → "30", 26.5 → "26.5" */
 export function fmtDayHours(h: number): string { return String(Math.round(h * 10) / 10); }
 
+/** an element with plain text (names from the sim never go through innerHTML) */
+function tx<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text: string): HTMLElementTagNameMap[K] {
+  const e = el(tag, cls);
+  e.textContent = text;
+  return e;
+}
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -148,6 +155,12 @@ export class Hud {
   private worldName: HTMLSpanElement;
   private worldKind: HTMLSpanElement;
   private calText: HTMLSpanElement;
+  /** ARC §5.5: the age's name under the date (opens the Book), and the card when a new age begins */
+  private ageEl: HTMLButtonElement;
+  private ageCard: HTMLDivElement;
+  private ageKey = '';
+  private ageWatch = new AgeWatch();
+  private ageCardTimer: ReturnType<typeof setTimeout> | null = null;
   private clock: HTMLSpanElement;
   private skyDot: HTMLSpanElement;
   private speedBtns = new Map<number, HTMLButtonElement>();
@@ -211,6 +224,10 @@ export class Hud {
     this.calText = el('span');
     this.clock = el('span', 'gn-clock');
     cal.append(this.skyDot, this.calText, this.clock);
+    this.ageEl = el('button', 'gn-ageline') as HTMLButtonElement;
+    this.ageEl.type = 'button';
+    this.ageEl.hidden = true;
+    this.ageEl.addEventListener('click', () => actions.action('ui.book'));
     const speeds = el('div', 'gn-speeds');
     const speedIds = this.speedIds;
     for (const s of SPEED_PRESETS) {
@@ -256,7 +273,7 @@ export class Hud {
     row.appendChild(stepWrap);
     this.achieved = el('div', 'gn-achieved');
     row.appendChild(this.achieved);
-    time.append(world, cal, speeds, row);
+    time.append(world, cal, this.ageEl, speeds, row);
     this.root.appendChild(time);
     // the world switcher on the right never reaches over the time panel (the site's 888-px frame, seven worlds): it
     // wraps within what the panel leaves (styles.css .gn-worlds reads --gn-time-r)
@@ -291,6 +308,10 @@ export class Hud {
     this.ticker.hidden = true;
     this.ticker.addEventListener('click', () => actions.action('ui.chronicle'));
     this.root.appendChild(this.ticker);
+    this.ageCard = el('div', 'gn-agecard');
+    this.ageCard.setAttribute('aria-live', 'polite');
+    this.ageCard.hidden = true;
+    this.root.appendChild(this.ageCard);
     // ── dock ──
     this.dock = el('div', 'gn-panel gn-dock');
     const door = (id: string, ic: string, label: string, action: string) => {
@@ -736,6 +757,7 @@ export class Hud {
       const dusk = (t > 5 && t <= 7) || (t >= 17 && t < 19.5);
       const sky = dusk ? '#f0a46b' : day ? '#f3dfae' : '#7d9cd6';
       if (sky !== this.lastSky) { this.lastSky = sky; this.skyDot.style.color = sky; this.skyDot.style.background = sky; }
+      this.syncAge(view, pv);
       if (this.worldName.textContent !== pv.name) this.worldName.textContent = pv.name;
       const kind = pv.params.atmosphere.pressure > 0 ? pv.params.kind : `${pv.params.kind} · airless`;
       if (this.worldKind.textContent !== kind) this.worldKind.textContent = kind;
@@ -781,6 +803,43 @@ export class Hud {
         ] : []),
       ].map(([k, v]) => `<div class="gn-row"><span>${k}</span><b>${v}</b></div>`).join('');
     }
+  }
+
+  /** the age line (§5.5: "THE AGE OF THE BOW · since year 212", small caps, 10 px) and the title card on a new age */
+  private syncAge(view: WorldView, pv: PlanetView): void {
+    const age = pv.age;
+    const line = ageLine(age, age && age.since >= 0 ? view.calendar(pv, age.since).year : null);
+    const key = line ? `${line.name}|${line.since}` : '';
+    if (key !== this.ageKey) {
+      this.ageKey = key;
+      this.ageEl.hidden = !line;
+      this.ageEl.textContent = '';
+      if (line) {
+        this.ageEl.append(tx('span', 'gn-ageline-n', line.name), ...(line.since ? [el('span', 'gn-sep', '·'), tx('span', 'gn-ageline-y', line.since)] : []));
+        this.ageEl.title = `${line.name}${line.since ? `, ${line.since}` : ''}. Read the Book: the story they tell of you`;
+        this.ageEl.setAttribute('aria-label', `${line.name}. Read the Book`);
+      }
+    }
+    const name = this.ageWatch.step(view.planets.map((p) => `${p.id}:${p.name}`).join(','), pv.id, age, view.renderTick);
+    if (name && !this.toasts.muteNews) this.showAgeCard(name);
+  }
+
+  /** "Here begins *The Scattering at Kel-Amar*." — centred, 4 s real time, fades; never blocks input */
+  showAgeCard(name: string): void {
+    const c = titleCard(name);
+    this.ageCard.textContent = '';
+    this.ageCard.append(tx('span', 'gn-agecard-pre', `${c.pre} `), tx('i', 'gn-agecard-n', c.name), tx('span', 'gn-agecard-post', c.post));
+    this.ageCard.hidden = false;
+    this.ageCard.classList.remove('gn-on');
+    void this.ageCard.offsetWidth;
+    this.ageCard.classList.add('gn-on');
+    if (this.ageCardTimer) clearTimeout(this.ageCardTimer);
+    this.ageCardTimer = setTimeout(() => { this.ageCard.hidden = true; this.ageCard.classList.remove('gn-on'); this.ageCardTimer = null; }, 4000);
+  }
+
+  /** test surface: the age line and the card as shown */
+  ageState(): { line: string; card: string } {
+    return { line: this.ageEl.hidden ? '' : this.ageEl.textContent ?? '', card: this.ageCard.hidden ? '' : this.ageCard.textContent ?? '' };
   }
 
   private cameraLonHours(f: HudFrame, pv: PlanetView): number {

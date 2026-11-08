@@ -16,6 +16,7 @@ import { h, clear, fmtNum, store } from './dom.ts';
 import { icon } from './icons.ts';
 import { placeWords, fmtDuration } from './words.ts';
 import { fuzzy } from './fuzzy.ts';
+import { openBookIntent } from './book.ts';
 
 const HISTORY_KEY = 'genesis.freeform.history';
 
@@ -407,6 +408,20 @@ export class Freeform {
   async execute(): Promise<CommandResult | null> {
     const text = this.input.value.trim();
     if (!text || this.busy) return null;
+    // ARC §6.5 UI intent `open-book`: "tell me our story", "read the story of Aru", "what kind of god am I" open the Book
+    // (a town named after "of" narrows it); the sim answers in words too (the two character lines and the epithet)
+    const book = openBookIntent(text);
+    if (book.open) {
+      const pv = this.host.view.planet(this.host.primary());
+      const town = book.town ? pv?.settlements.find((s) => s.name.toLowerCase() === book.town!.toLowerCase() || s.name.toLowerCase().startsWith(`${book.town!.toLowerCase()} `)) : undefined;
+      this.history = [text, ...this.history.filter((x) => x !== text)].slice(0, 50);
+      store.set(HISTORY_KEY, this.history);
+      this.close();
+      this.host.action(town ? `ui.book@${town.id}` : 'ui.book');
+      const r = await this.host.cmd({ k: 'freeform', text }, { quiet: true });
+      if (r.ok && r.msg) this.host.toast({ text: r.msg, kind: 'god', ms: 7000 });
+      return r;
+    }
     if (this.unresolved) {
       // nothing to send: point at the chips instead
       this.status.textContent = 'Those words do not reach a power yet — pick one of the nearest above, or say it another way.';

@@ -12,7 +12,7 @@
 
 import type { UiHost } from './host.ts';
 import type { SaveMeta } from './saves.ts';
-import { scenarioName } from './saves.ts';
+import { scenarioName, continueLine } from './saves.ts';
 import { h, clear } from './dom.ts';
 import { icon } from './icons.ts';
 
@@ -116,7 +116,7 @@ export class Title {
       ? { id: 'continue', label: 'Continue', sub: `Return to ${this.worldName || 'the world'}`, icon: 'play', run: () => this.close('continue') }
       : {
         id: 'continue', label: 'Continue', icon: 'play', disabled: !n,
-        sub: !this.listed ? 'Looking for your worlds…' : n ? `${n.name}${n.world ? ` · ${n.world}` : ''}${n.calendar ? ` · ${n.calendar.replace(/ · \d\d:\d\d$/, '')}` : ''}` : 'Nothing kept yet: begin a new world',
+        sub: !this.listed ? 'Looking for your worlds…' : n && continueLine(n) ? continueLine(n)! : n ? `${n.name}${n.world ? ` · ${n.world}` : ''}${n.calendar ? ` · ${n.calendar.replace(/ · \d\d:\d\d$/, '')}` : ''}` : 'Nothing kept yet: begin a new world',
         run: () => void this.continueNewest(),
       };
     return [

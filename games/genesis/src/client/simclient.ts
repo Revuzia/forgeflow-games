@@ -16,7 +16,7 @@
 
 import type { Command, CommandResult, FromWorker, Snapshot, ToWorker } from '../sim/types.ts';
 import { WorldView } from './worldview.ts';
-import { applyArcStub } from './arcstub.ts';
+import { applyArcStub, arcStubCmd, arcStubQuery } from './arcstub.ts';
 import { perfmon } from '../render/perfmon.ts';
 
 export type SnapshotSink = (snap: Snapshot) => void;
@@ -335,6 +335,8 @@ export class SimClient {
   }
   cmd(c: Command): Promise<CommandResult> {
     if (!this.backend) return Promise.resolve({ ok: false, msg: 'the sim is not running' });
+    const stubbed = arcStubCmd(c); // ARC §6.7 (null unless a refusal stub is set)
+    if (stubbed) return Promise.resolve(stubbed);
     return this.backend.cmd(c);
   }
   parse(text: string): Promise<CommandResult> {
@@ -345,6 +347,8 @@ export class SimClient {
     return this.cmd({ k: 'freeform', text });
   }
   query(q: string, args?: Record<string, unknown>): Promise<unknown> {
+    const stubbed = arcStubQuery(q, args); // ARC §6.7 (undefined unless a story / covenants stub is set)
+    if (stubbed !== undefined) return Promise.resolve(stubbed);
     return this.backend ? this.backend.query(q, args) : Promise.resolve(null);
   }
   // additive (UI lane, saves panel): the world's save bytes, and a saved world restored (worker backend only)

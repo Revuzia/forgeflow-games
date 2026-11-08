@@ -19,7 +19,7 @@
 // a person's flags2); the card re-asks every ~1.2 s while open. A person who dies while selected keeps their
 // card, marked as such.
 
-import type { EntityRef, CommandResult, Command } from '../sim/types.ts';
+import type { EntityRef, CommandResult, Command, SettlementView } from '../sim/types.ts';
 import type { InspectRef } from './host.ts';
 import type { Power, PowerBook } from './powers.ts';
 import { h, cap, clear, fmtNum, fmtDist, fmtTicks, fmtLatLon } from './dom.ts';
@@ -27,6 +27,7 @@ import { icon } from './icons.ts';
 import { masteryWords } from './words.ts';
 import { DEFY_WORDS, HEART_KINDS, HEART_LABEL, captionOf, shareOf, shareWords, personHeartLine, prideWhyWords, type TownHeart } from './hearts.ts';
 import type { TowerCard } from './decision.ts';
+import { underPromise } from './book.ts';
 import { slider, toggle } from './panel.ts';
 import { METERS, meterRow, PRAYER_WORDS, PRAYER_ANSWERS, PLACE_WORDS, answerCommand, foretellForm, foretellSays, prophetState, pastYears, FOOD_ORDER, FOOD_WORDS, type ProphetRow, type PastYear } from './living.ts';
 import { AgentFlag, AgentFlag2 } from '../sim/types.ts';
@@ -64,6 +65,8 @@ export interface InspectorDeps {
   tower?(planet: number, id: number): { card: TowerCard; pos: [number, number, number] } | null;
   answerTower?(id: number, key: string): Promise<CommandResult | null>;
   lookAtPos?(planet: number, pos: [number, number, number]): void;
+  /** ARC §5.5: "Read the book of Aru" (the chronicle's Book, narrowed to the town) */
+  openBook?(settlement: number): void;
 }
 
 type Rec = Record<string, unknown>;
@@ -704,6 +707,8 @@ export class Inspector {
       this.bar(g, 'Belief', num(d.belief), 'gn-love');
       this.bar(g, 'Fear', num(d.fear), 'gn-fear');
     }
+    // ARC §4.5 / §5.5: the promise it lives under, and its own book
+    this.settlementBook(ref, str(view?.name ?? d.name, 'this town'), (liveNow?.covenant ?? view?.covenant) as SettlementView['covenant'] | undefined);
     this.livelihood(view);
     this.pastYearsFold(ref, pop);
     const lib = Array.isArray(d.library) ? (d.library as string[]) : [];
@@ -774,6 +779,21 @@ export class Inspector {
     sec.append(el('div', 'gn-insp-line', `At dusk: ${came(ht.dusk)} of ${of} at the shrine (a year ago, ${came(ht.duskYearAgo)})`));
     if (ht.theyCall) sec.append(h('div', { class: 'gn-insp-line', html: `They call the god <i>${ht.theyCall.replace(/[<>&"]/g, '')}</i>` }));
     if (ht.remember?.length) sec.append(el('div', 'gn-insp-line', `They remember: ${ht.remember.slice(0, 3).join(' · ')}`));
+  }
+
+  /** "Under the promise of year 140 (kept)" and "Read the book of Aru" */
+  private settlementBook(ref: EntityRef, name: string, cv: SettlementView['covenant'] | undefined): void {
+    const open = this.deps.openBook;
+    if (!open && !cv) return;
+    const sec = this.section('Their story');
+    sec.classList.add('gn-insp-book');
+    if (cv) sec.append(el('div', `gn-insp-line gn-insp-promise${cv.status === 'broken' ? ' gn-insp-promise-broken' : ''}`, underPromise(cv)));
+    if (open) {
+      const b = h('button', { class: 'gn-btn gn-insp-readbook', html: `${icon('chronicle')}<span></span>` });
+      (b.lastElementChild as HTMLElement).textContent = `Read the book of ${name}`;
+      b.addEventListener('click', () => open(ref.id));
+      sec.append(b);
+    }
   }
 
   /** how a settlement holds the god, what it prays for, its prophet, what it keeps holy — and a sign to send it */

@@ -2,12 +2,21 @@
 // by world, kind and importance, searchable, newest or oldest first, and exportable as Markdown, HTML or plain text.
 // An entry that names a settlement or a person is a link: click it to fly there. New entries arrive live while the
 // panel is open. The full history comes from the sim (query 'chronicle'); the mirror keeps the newest in between.
+//
+// ARC §5.5: two tabs, **Book** (the default once an age exists) and **Every day** (the list above). The Book is the
+// story the world tells about its god (query 'story', StoryView §5.3; composed by the sim, framed here): the title,
+// the opening, the people's and the god's character lines, "What they call you", the ages oldest first (the heading in
+// the serif display face, the years small and grey under it, the paragraphs, "As it is told now" in italics),
+// Generations, Promises, and the closing line. One column in the panel's scroll; a paragraph made from a chronicle line
+// that names a place flies there. A town's own book ("Read the book of Aru") narrows it. The export exports the Book
+// while it is shown ("The Book of the {people} of {planet}.md").
 
 import type { ChronicleEntry, EntityRef } from '../sim/types.ts';
 import type { UiHost } from './host.ts';
 import { Panel, segmented } from './panel.ts';
 import { h, clear, download, escapeHtml } from './dom.ts';
 import { icon } from './icons.ts';
+import { asStory, bookBlocks, bookExport, bookFileName, paragraphPlace, type StoryView } from './book.ts';
 
 const KIND_ICON: Record<string, string> = {
   discovery: 'idea', loss: 'forget', founding: 'found', split: 'split', fall: 'raze', war: 'swords', treaty: 'dove', disaster: 'd-meteor',
@@ -40,6 +49,19 @@ export class Chronicle {
   private limit = 400;
   private dirty = true;
   private lastRender = 0;
+  /** ARC §5.5 */
+  private tab: 'book' | 'days' = 'days';
+  private tabChosen = false;
+  private tabBar: HTMLDivElement;
+  private dayEls: HTMLElement[] = [];
+  private bookEl: HTMLDivElement;
+  private story: StoryView | null = null;
+  private storyKey = '';
+  private storyAt = -1e9;
+  private storyAsking = false;
+  /** a town's own book (null: the world's) */
+  private bookTown: number | null = null;
+  private bookDrawn = '';
 
   constructor(parent: HTMLElement, host: UiHost) {
     this.host = host;
@@ -55,15 +77,65 @@ export class Chronicle {
     const weight = segmented(WEIGHTS, '0', (v) => { this.minWeight = Number(v); this.dirty = true; });
     const ex = (fmt: 'md' | 'html' | 'txt', label: string, short: string) => h('button', { class: 'gn-btn gn-chron-ex', title: `Export as ${label}`, aria: { label: `Export as ${label}` }, on: { click: () => this.export(fmt) } }, short);
     this.panel.tools.append(h('span', { class: 'gn-chron-exl', html: icon('download'), title: 'Export the chronicle' }), ex('md', 'Markdown', 'MD'), ex('html', 'HTML', 'HTML'), ex('txt', 'plain text', 'TXT'));
-    this.panel.body.append(
-      h('div', { class: 'gn-chron-filters' }, this.search, this.planetBar, h('div', { class: 'gn-chron-row' }, weight, order), this.kindBar, this.countEl),
-      this.listEl);
-    this.panel.onOpen = () => { this.fetch(); this.dirty = true; };
+    const filters = h('div', { class: 'gn-chron-filters' }, this.search, this.planetBar, h('div', { class: 'gn-chron-row' }, weight, order), this.kindBar, this.countEl);
+    this.tabBar = h('div', { class: 'gn-seg gn-chron-tabs', role: 'tablist' });
+    for (const [v, label, title] of [['book', 'Book', 'The story this world tells about its god'], ['days', 'Every day', 'Everything the chronicle remembers, day by day']] as const) {
+      const b = h('button', { class: 'gn-seg-b', role: 'tab', text: label, title, data: { tab: v } });
+      b.addEventListener('click', () => { this.tabChosen = true; this.setTab(v); });
+      this.tabBar.append(b);
+    }
+    this.bookEl = h('div', { class: 'gn-book' });
+    this.dayEls = [filters, this.listEl];
+    this.panel.body.append(this.tabBar, filters, this.listEl, this.bookEl);
+    this.setTab('days');
+    this.panel.onOpen = () => { this.fetch(); this.dirty = true; this.askStory(true); };
   }
 
   get isOpen(): boolean { return this.panel.isOpen; }
 
   open(): void { this.panel.open(); }
+
+  /** the Book (§5.5: the HUD's age line, "Read the book of Aru", "tell me our story"); a town narrows it to its own */
+  openBook(town: number | null = null): void {
+    this.tabChosen = true;
+    if (town !== this.bookTown) { this.bookTown = town; this.story = null; this.bookDrawn = ''; }
+    this.setTab('book');
+    if (this.panel.isOpen) { this.panel.raise(); this.askStory(true); } else this.panel.open();
+    this.bookEl.scrollTop = 0;
+  }
+
+  private setTab(t: 'book' | 'days'): void {
+    this.tab = t;
+    for (const b of Array.from(this.tabBar.children) as HTMLElement[]) {
+      const on = b.dataset.tab === t;
+      b.classList.toggle('gn-on', on);
+      b.setAttribute('aria-selected', String(on));
+    }
+    for (const e of this.dayEls) e.hidden = t !== 'days';
+    this.bookEl.hidden = t !== 'book';
+    this.panel.root.classList.toggle('gn-chron-bookmode', t === 'book');
+    if (t === 'book') { this.bookDrawn = ''; this.renderBook(); } else this.dirty = true;
+  }
+
+  /** the story from the sim (pure and computed on demand there: asked on open and every ~8 s while the Book shows) */
+  private askStory(force = false): void {
+    const now = performance.now();
+    if (this.storyAsking || (!force && now - this.storyAt < 8000)) return;
+    this.storyAsking = true;
+    this.storyAt = now;
+    const planet = this.host.primary();
+    const town = this.bookTown;
+    const args: Record<string, unknown> = town != null ? { planet, settlement: town } : { planet };
+    void this.host.query('story', args).then((q) => {
+      if (town !== this.bookTown) return;
+      const st = asStory(q);
+      const key = st ? JSON.stringify(st) : '';
+      if (key !== this.storyKey) { this.storyKey = key; this.story = st; this.bookDrawn = ''; }
+      // the Book is the default once an age exists (unless the player chose a tab)
+      if (!this.tabChosen && st && st.ages.length && this.tab !== 'book') this.setTab('book');
+      if (this.tab === 'book') this.renderBook();
+    }).catch(() => { /* the Book waits */ }).finally(() => { this.storyAsking = false; });
+  }
   close(): void { this.panel.close(); }
   toggle(): void { if (this.isOpen) this.close(); else this.open(); }
 
@@ -88,6 +160,8 @@ export class Chronicle {
   /** per frame while open: take new entries from the mirror, re-render when something changed (throttled) */
   frame(): void {
     if (!this.isOpen) return;
+    this.askStory();
+    if (this.tab === 'book') return;
     const m = this.host.view.chronicle;
     if (m.length < this.mirrorSeen) this.mirrorSeen = m.length;
     if (m.length > this.mirrorSeen) {
@@ -170,6 +244,11 @@ export class Chronicle {
 
   /** export what is shown (the filters apply), oldest first, as a document */
   export(fmt: 'md' | 'html' | 'txt'): string {
+    if (this.tab === 'book' && this.story) {
+      const out = bookExport(this.story, fmt);
+      download(bookFileName(this.story, fmt), out, fmt === 'html' ? 'text/html' : fmt === 'md' ? 'text/markdown' : 'text/plain');
+      return out;
+    }
     const list = this.filtered();
     const worlds = [...new Set(list.map((e) => e.planet))].map((p) => this.host.view.planet(p)?.name ?? `world ${p}`);
     const title = `The Chronicle of ${worlds.length === 1 ? worlds[0] : worlds.length ? worlds.join(', ') : 'the worlds'}`;
@@ -205,10 +284,66 @@ p{margin:.25em 0}.d{font:12px Inter,system-ui,sans-serif;color:#9c968a;letter-sp
     return out;
   }
 
-  /** test surface */
-  state(): { open: boolean; entries: number; shown: number } {
-    return { open: this.isOpen, entries: this.entries.length, shown: this.listEl.querySelectorAll('.gn-chron-e').length };
+  /** the Book, drawn when what it says changed */
+  private renderBook(): void {
+    const st = this.story;
+    const town = this.bookTown;
+    const sig = `${town}|${this.storyKey}|${this.entries.length}`;
+    if (sig === this.bookDrawn) return;
+    this.bookDrawn = sig;
+    const scroll = this.bookEl.scrollTop;
+    clear(this.bookEl);
+    const pv = this.host.view.planet(this.host.primary());
+    if (town != null) {
+      const back = h('button', { class: 'gn-btn gn-book-back', title: 'The whole world\'s book' }, h('span', { html: icon('chronicle') }), h('span', { text: `The Book of ${pv?.name ?? 'the world'}` }));
+      back.addEventListener('click', () => this.openBook(null));
+      this.bookEl.append(back);
+    }
+    if (!st) {
+      this.bookEl.append(h('div', { class: 'gn-book-empty' },
+        h('p', { text: 'The Book is not written yet.' }),
+        h('p', { class: 'gn-book-dim', text: 'It begins when people settle and remember. What the god does, and does not do, they will write.' })));
+      return;
+    }
+    const planet = st.planet;
+    for (const b of bookBlocks(st)) {
+      switch (b.t) {
+        case 'title': this.bookEl.append(h('h2', { class: 'gn-book-title', text: b.text })); break;
+        case 'note': this.bookEl.append(h('p', { class: 'gn-book-note', text: b.text })); break;
+        case 'opening': this.bookEl.append(h('p', { class: 'gn-book-opening', text: b.text }), h('div', { class: 'gn-book-orn', aria: { hidden: 'true' } })); break;
+        case 'character': this.bookEl.append(h('p', { class: `gn-book-char gn-book-char-${b.who}`, text: b.text })); break;
+        case 'epithet': this.bookEl.append(h('p', { class: 'gn-book-epithet' }, h('span', { text: 'What they call you' }), h('b', { text: b.text }))); break;
+        case 'age': {
+          const sec = h('section', { class: `gn-book-age${b.open ? ' gn-book-now' : ''}`, data: { age: String(b.id), kind: b.kind } },
+            h('h3', { class: 'gn-book-ageh', text: b.name }),
+            h('div', { class: 'gn-book-years', text: b.years }));
+          for (const p of b.paragraphs) {
+            const place = paragraphPlace(p, this.entries.length ? this.entries : this.host.view.chronicle, planet);
+            const el = h(place ? 'button' : 'p', { class: `gn-book-p${place ? ' gn-book-link' : ''}`, text: p, title: place ? 'Look there' : undefined });
+            if (place) el.addEventListener('click', () => this.host.lookAtEntity(place));
+            sec.append(el);
+          }
+          if (b.told) sec.append(h('p', { class: 'gn-book-told', text: b.told }));
+          this.bookEl.append(sec);
+          break;
+        }
+        case 'section': this.bookEl.append(h('section', { class: 'gn-book-sec' }, h('h3', { class: 'gn-book-ageh', text: b.name }), h('p', { class: 'gn-book-p', text: b.lines.join(' ') }))); break;
+        case 'closing': this.bookEl.append(h('div', { class: 'gn-book-orn', aria: { hidden: 'true' } }), h('p', { class: 'gn-book-closing', text: b.text })); break;
+      }
+    }
+    this.bookEl.scrollTop = scroll;
   }
+
+  /** test surface */
+  state(): { open: boolean; entries: number; shown: number; tab: string; book: { title: string; ages: string[]; town: number | null } | null } {
+    return {
+      open: this.isOpen, entries: this.entries.length, shown: this.listEl.querySelectorAll('.gn-chron-e').length, tab: this.tab,
+      book: this.story ? { title: this.story.title, ages: this.story.ages.map((a) => a.name), town: this.bookTown } : null,
+    };
+  }
+
+  /** test surface: the tab */
+  showTab(t: 'book' | 'days'): void { this.tabChosen = true; this.setTab(t); }
 
   setSearch(q: string): void { this.search.value = q; this.dirty = true; }
 }

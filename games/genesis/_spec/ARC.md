@@ -864,8 +864,14 @@ Adds `arc: { hearts(): unknown; towers(): unknown; story(planet?): unknown; stub
 'age'|'events', data): void }`. `stub` lets the UI and render lanes inject `SettlementView.heart` / `PlanetSnap.towers` /
 `covenantOffer` / `age` into the next snapshot before the sim lands. `stub('events', SimEvent[] | { events, chronicle })`
 (stage B) appends §6.3 events and chronicle entries **once** to the next snapshot (a missing `tick` takes the snapshot's),
-so toasts and SFX cues of events the sim does not emit yet (`defy`, `defy.answered`) can be shot and tested. It is removed from the stub path (kept as a no-op)
-once stage C is green.
+so toasts and SFX cues of events the sim does not emit yet (`defy`, `defy.answered`) can be shot and tested. Stage C adds
+`stub('story', StoryView | { planet?, settlement?, story })` and `stub('covenants', rows | { covenants, offers })` (they answer
+those queries in the client, src/client/simclient.ts) and `stub('refusal', { covenant, vow, msg?, k? })` (every WRATHFUL cast,
+or the kinds in `k`, without `covenant: 'break'` answers `{ ok: false, msg, refusal }` as the §4.4 pre-check would). It is
+removed from the stub path (kept as a no-op) once stage C is green.
+UI readings (stage C, no shape change): `PlanetSnap.age.since` is the age's `begun` **tick**; `query('covenants')` may answer
+`{ covenants, offers }` or one array (items with `vow` are covenants), each covenant the §6.1 record plus `townNames`,
+`yearsKept`, `vowWords`.
 
 ### 6.8 Scenario
 `babel` in `src/data/scenarios.json` (appended): the sandbox world at the bronze era, 4 towns of one species within

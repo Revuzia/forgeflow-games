@@ -59,7 +59,7 @@ import { Credits } from './credits.ts';
 import { GodPanel, SignPicker, type GodRow, type SacredPlaceRow } from './living.ts';
 import { Invent } from './invent.ts';
 import { humanize } from './words.ts';
-import { DecisionCard, towerCard } from './decision.ts';
+import { DecisionCard, CovenantConfirm, towerCard } from './decision.ts';
 
 export interface ShellDeps {
   host: UiHost;
@@ -140,6 +140,8 @@ export class Shell {
   readonly inspector: Inspector;
   /** ARC §2.5: the great choices (the tower; later the covenant) */
   readonly decision: DecisionCard;
+  /** ARC §4.4: the confirm a cast the promise forbids shows */
+  readonly covenant: CovenantConfirm;
   readonly palette: Palette;
   readonly radial: Radial;
   readonly freeform: Freeform;
@@ -234,6 +236,7 @@ export class Shell {
       slowGreat: () => host.prefs.value.game.slowGreat !== false,
       lookAt: (planet, pos, dist, lift) => host.lookAt(planet, [pos[0], pos[1], pos[2]], dist, lift),
     });
+    this.covenant = new CovenantConfirm(root);
     this.inspector = new Inspector(root, {
       query: (q, args) => host.query(q, args),
       cmd: (c) => host.cmd(c),
@@ -263,6 +266,7 @@ export class Shell {
       },
       answerTower: (id, key) => this.decision.chooseFor(id, key),
       lookAtPos: (planet, pos) => host.lookAt(planet, pos),
+      openBook: (id) => this.action(`ui.book@${id}`),
     });
     this.palette = new Palette(root, world, host, {
       arm: (p) => this.arm(p),
@@ -537,6 +541,13 @@ export class Shell {
     if (id.startsWith('photo.')) { this.photo.action(id); return; }
     if (this.photo.isActive && !PHOTO_OK.has(id)) return;
     if (id.startsWith('ui.god@')) { this.god.open(id.slice(7) as never); return; }
+    // ARC §5.5: the Book (the HUD's age line; "Read the book of Aru" names a town: ui.book@<settlement id>)
+    if (id === 'ui.book' || id.startsWith('ui.book@')) {
+      if (this.title.isOpen) { host.sound('ui.error'); return; }
+      const town = id.startsWith('ui.book@') ? Number(id.slice(8)) : NaN;
+      this.chronicle.openBook(Number.isFinite(town) ? town : null);
+      return;
+    }
     if (id.startsWith('ui.radial@')) { const [x, y] = id.slice(10).split(',').map(Number); this.radial.open(x, Math.max(300, y), 'click'); this.hud.used('ui.radial'); return; }
     this.hud.used(id);
     // the speed presets (every one of SPEED_PRESETS has its action: time.speed1 … time.speed3000)
@@ -1216,7 +1227,7 @@ export class Shell {
     void dt;
     const f = this.deps.hudFrame();
     const dpv = host.view.planet(host.primary());
-    if (dpv) this.decision.update(dpv.id, dpv.towers, dpv.settlements, (t) => host.view.calendar(dpv, t).year, host.view.renderTick);
+    if (dpv) this.decision.update(dpv.id, dpv.towers, dpv.settlements, (t) => host.view.calendar(dpv, t).year, host.view.renderTick, dpv.covenantOffer);
     this.hud.update({
       ...f,
       labels: host.prefs.value.ui.labels,

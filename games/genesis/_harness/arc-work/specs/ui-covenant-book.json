@@ -1,0 +1,144 @@
+{
+ "_doc": "ARC \u00a74/\u00a75 UI on a live worker world (babel seed 1), sim \u00a74/\u00a75 not built: stubbed covenant offer card + pill, the confirm on a refused cast, Promises + wrath notch, inspector promise line + Read the book, the Book (888x500 and 1600x900), the age line + title card. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-covenant-book.json --port=5311 > _harness/scratch/arc/c-ui/shots.log 2>&1 &",
+ "shots": [
+  {
+   "name": "c-offer",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); document.getElementById('boot')?.remove(); G.toastLife(600000); await G.step(1440); await G.frames(3);",
+    "const pv = window.__GENESIS_FX__.fx.vis.pv; const towns = pv.settlements.filter((s) => !(s.flags & 2)); window.__towns = towns.map((s) => ({ id: s.id, pos: s.pos, name: s.name })); window.__world = pv.name; window.__pid = pv.id;",
+    "window.__mkStory = (T, world) => { const n = (i, d) => (T[i] && T[i].name) || d; const a = n(0, 'Aru'), b = n(1, 'Tesh'), c = n(2, 'Vorn'), d = n(3, 'Lune');\n return { planet: 0, title: 'The Book of the Ashuk of ' + world, opening: 'First the air thickened over ' + world + ', and the sea came. Then rain, and the first green along the shore.',\n people: { character: 'trust', line: 'They were a people of trust: they asked, and waited, and were not often let down.' },\n god: { character: 'faithfulness', line: 'Their god kept its word.', epithet: 'the One Who Drowned the World, who keeps its word' },\n ages: [\n  { id: 1, name: 'The Days of Making', kind: 'making', from: 1, to: 9, paragraphs: ['There was rock, and then air, and then the sea.', 'The first reeds grew where the river met the salt.'] },\n  { id: 2, name: 'The Years of Plenty at ' + a, kind: 'plenty', from: 9, to: 31, paragraphs: ['At ' + a + ' they had one speech, and sowed barley by the lake.', 'They asked for rain, and the rain came when it was asked.', 'From ' + a + ' went families to found ' + b + ' and ' + c + '.', 'And the years of plenty ended, when the water rose.'] },\n  { id: 3, name: 'The Flood of ' + a, kind: 'flood', from: 31, to: 33, paragraphs: ['The water came at night, and took the low houses of ' + a + '.', 'Forty-one died in ' + a + ' and ' + c + '. The rest fled to the hill.', 'Of ' + a + ', the house of Hesh came through the flood whole: nine of them.', 'The survivors looked to the sky and waited.'] },\n  { id: 4, name: 'The Age of the Bow', kind: 'covenant', from: 33, to: null, paragraphs: ['A bow stood over ' + a + ' and ' + b + ' after the rain. The god had promised never again to destroy them by water.', 'The house of Hesh saw the bow over ' + a + ' and said: the god has bound itself.', 'Rain over ' + b + ', and after it the bow. They say: the god remembers.', 'And so it is now.'], told: 'As it is told now in ' + b + ': the water rose for forty days, and the god wept, and set its colours in the sky.' } ],\n generations: ['From ' + a + ' came ' + b + ' and ' + c + '.', 'From ' + b + ' came ' + d + ', by the water.', c + ' was half lost in the Flood of ' + a + ', and built again on the hill.'],\n promises: ['After the Flood of ' + a + ' the god promised the house of Hesh never again to destroy them by water. It has kept that promise 23 years.'],\n closing: 'The story is not finished. The promise holds.' }; };",
+    "const T = window.__towns; G.arc.stub('covenant', { covenantOffer: { id: 7, name: 'Flood of ' + T[0].name, dead: 41, towns: [T[0].id, T[1].id, T[2].id], household: 'the house of Hesh', until: 1e9 } });",
+    "await G.frames(20); const r = document.querySelector('.gn-decision:not(.gn-covconfirm)')?.getBoundingClientRect();",
+    "return { decision: G.arc.decision(), card: r ? [r.left, r.top, r.width, r.height].map(Math.round) : null };"
+   ]
+  },
+  {
+   "name": "c-offer-pill",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.arc.later(); await G.frames(6); return { decision: G.arc.decision(), pill: document.querySelector('.gn-decision-pill')?.textContent };"
+   ]
+  },
+  {
+   "name": "c-confirm",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); const T = window.__towns; G.arc.stub('covenant', { covenantOffer: null, covenant: { id: 3, vow: 'gentle', status: 'kept', years: 4, towns: [T[0].id, T[1].id] } }); G.arc.stub('refusal', { covenant: 3, vow: 'gentle' }); await G.frames(6);",
+    "const r = await G.cmd({ k: 'disaster.spawn', kind: 'flood', planet: window.__pid, pos: T[0].pos }); await G.frames(6);",
+    "return { r, confirm: G.arc.confirm(), box: [...(document.querySelector('.gn-covconfirm')?.getBoundingClientRect() ? [1] : [])] };"
+   ]
+  },
+  {
+   "name": "c-promises",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.arc.hold(); const T = window.__towns; G.arc.stub('covenants', { covenants: [ { id: 1, planet: window.__pid, made: 0, vow: 'no-flood', after: 'Flood of ' + T[2].name, settlements: [T[2].id], status: 'broken', broken: 1440 * 360 * 2, townNames: [T[2].name] }, { id: 3, planet: window.__pid, made: 1440, vow: 'gentle', after: 'Flood of ' + T[0].name, settlements: [T[0].id, T[1].id], household: { id: 4, name: 'the house of Hesh' }, status: 'kept', broken: -1, yearsKept: 4, townNames: [T[0].name, T[1].name] } ], offers: [] });",
+    "await G.ui_.open('god'); await G.frames(20); const w = document.querySelector('.gn-god-promises'); w?.scrollIntoView({ block: 'start' }); await G.frames(4);",
+    "return { promises: w?.textContent, notch: document.querySelector('.gn-wrath-notch')?.getAttribute('title') ?? null };"
+   ]
+  },
+  {
+   "name": "c-insp",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.ui_.closeAll(); const T = window.__towns; G.arc.stub('hearts', [{ settlement: T[0].id, covenant: { id: 3, vow: 'gentle', status: 'kept', year: 2 } }]); G.select({ kind: 'settlement', id: T[0].id }); await G.frames(30); const b = document.querySelector('.gn-insp-book'); b?.scrollIntoView({ block: 'center' }); await G.frames(3);",
+    "return { book: b?.textContent ?? null };"
+   ]
+  },
+  {
+   "name": "c-book",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.select(null); G.ui_.closeAll(); G.arc.stub('story', window.__mkStory(window.__towns, window.__world)); G.arc.book(); await G.frames(30);",
+    "return G.arc.bookState();"
+   ]
+  },
+  {
+   "name": "c-book-ages",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); const s = document.querySelector('.gn-book-age[data-kind=\"flood\"]'); s?.scrollIntoView({ block: 'start' }); await G.frames(4); return { links: document.querySelectorAll('.gn-book-link').length };"
+   ]
+  },
+  {
+   "name": "c-book-full",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    1600,
+    900
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); await G.frames(2); G.ui_.closeAll(); await G.frames(2); G.arc.book(); await G.frames(30); return G.arc.bookState();"
+   ]
+  },
+  {
+   "name": "c-agecard",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.ui_.closeAll(); G.arc.stub('age', { age: { id: 3, name: 'The Flood of ' + window.__towns[0].name, kind: 'flood', since: 1440 * 360 }, epithet: 'the One Who Drowned the World' }); await G.frames(8);",
+    "G.arc.stub('age', { age: { id: 4, name: 'The Age of the Bow', kind: 'covenant', since: 1440 }, epithet: 'the One Who Keeps Its Word' }); await G.frames(30);",
+    "return G.arc.age();"
+   ]
+  }
+ ]
+}

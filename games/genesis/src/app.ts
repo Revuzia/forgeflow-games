@@ -31,6 +31,7 @@ import { setPlantRegistry } from './render/life/vegetation.ts';
 import type { GenesisAudio } from './audio/engine.ts';
 import { Shell } from './ui/shell.ts';
 import { spotHold } from './ui/opening.ts';
+import { covenantRefusal, confirmWords, covenantTownNames, breakCommand } from './ui/book.ts';
 import type { GroundHit, InspectRef, UiHost, CameraHost, CameraModeName, PhotoLens } from './ui/host.ts';
 import { defaultLens, blurOf, apertureOf } from './ui/photo.ts';
 import { ModLibrary, bootPacks, validatePacks, type BootProblem } from './ui/mods.ts';
@@ -1063,6 +1064,14 @@ export class App implements UiHost {
     }
     const r = await this.sim.cmd(c);
     if (c.k !== 'focus') this.freshAfter = performance.now();
+    // ARC §4.4: a cast the promise forbids comes back refused; the confirm asks (Break it sends it again, with
+    // covenant: 'break'; the words get ", and break my covenant"). The cue is the sim's `covenant.refused` event.
+    const refused = covenantRefusal(r);
+    if (refused && !opts.quiet && c.covenant !== 'break' && this.ui?.covenant) {
+      const pv = this.sim.view.planet(typeof c.planet === 'number' ? c.planet : this.primary());
+      this.ui.covenant.show(confirmWords(covenantTownNames(pv, refused.covenant), refused.vow), () => this.cmd(breakCommand(c), opts));
+      return r;
+    }
     // (an invention — a material, a plant, or one the god's words made — joins the catalogue at once: its ore in the
     // vein brush and its own colour on the outcrops it was just laid in, not a minute later)
     if (r.ok && (c.k.startsWith('content.') || c.k === 'freeform')) void this.loadPowers();

@@ -38,6 +38,8 @@ The Touch is the god's presence on the land, a ring of light at your pointer: wa
 | hearts | what a town feels shows by its name (they bow at dusk · watch the sky · murmur · raise their fists; a tower when they boast) · the Hearts layer shows every town · say “how do the people of Aru feel?” |
 | defiance | a wronged, proud town may curse the sky at dusk, throw stones at your storm, burn your shrine or carve a god of its own · there is no answer button: what you do next is the answer (strike it, help it, send a sign, or do nothing for ten days) and they remember it · say “forgive Aru”, “show Aru a sign”, “be patient with Aru” or “punish Aru for their defiance” |
 | a great tower | proud towns of one speech may raise a tower to the sky: when it rises, a card asks your answer (confuse their tongues, strike it down, send a prophet to warn them, or let it stand) · Decide later keeps it as a pill · click the tower for its card · or say “confuse their tongues” |
+| a promise | after a great destruction the survivors look to the sky: a card offers a vow (never again by water · never again so many · always gentle · always warn first), or say nothing · a cast that would break it asks first: Break it or Hold · The god lists your promises |
+| the Book | the story they tell of you, age by age: the age’s name under the date opens it (and the chronicle’s Book tab, or a town’s card: Read the book of Aru) · say “tell me our story” or “what kind of god am I?” |
 
 ## Camera modes
 

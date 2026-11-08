@@ -26,7 +26,12 @@
 //   perf(on?)                  the frame monitor (render/perfmon.ts): on=true starts measuring, the summary of the last 240 frames
 //   arc                        ARC §6.7: hearts() / towers() / story(planet?) (sim queries); stub(kind, data) puts
 //                              hearts / towers / covenant / age views into every later snapshot, and 'events'
-//                              (SimEvent[] | { events, chronicle }) once into the next one (client/arcstub.ts)
+//                              (SimEvent[] | { events, chronicle }) once into the next one (client/arcstub.ts);
+//                              stage C: 'story' / 'covenants' answer those queries, 'refusal' refuses harmful casts as
+//                              the §4.4 pre-check would. decision() / choose(key) / later() / silence() drive the
+//                              Decision card (the tower, the covenant's vows); confirm() / breakIt() / hold() the
+//                              covenant's confirm; book(town?) opens the Book and bookState() reads it; age() the HUD
+//                              age line and title card
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
 //                              points, [x, y], size) / overlay(mode) / state() / pref(path, value) — panels include
@@ -123,9 +128,21 @@ export interface GenesisTestSurface {
     hearts(): Promise<unknown>; towers(): Promise<unknown>; story(planet?: number): Promise<unknown>;
     stub(kind: ArcStubKind, data: unknown): void;
     /** the Decision card (§2.5): what is open, the pills, the options; choose by key ('1'..'4'); put it off */
-    decision(): { open: string | null; pills: string[]; options: { key: string; label: string; disabled: string | null }[] };
+    decision(): { open: string | null; title: string; meta: string; pills: string[]; options: { key: string; label: string; disabled: string | null }[] };
     choose(key: string): Promise<CommandResult | null>;
     later(): void;
+    /** the covenant's card: "Say nothing" (covenant.decline) */
+    silence(): Promise<CommandResult | null>;
+    /** the covenant's confirm (§4.4): what it says ('' when closed); Break it / Hold */
+    confirm(): string;
+    breakIt(): Promise<unknown>;
+    hold(): void;
+    /** the Book (§5.5): open it (a town's own book when named), read what it shows, export it as text */
+    book(town?: number): void;
+    bookState(): { open: boolean; tab: string; book: { title: string; ages: string[]; town: number | null } | null };
+    bookExport(fmt?: 'md' | 'html' | 'txt'): string;
+    /** the HUD age line and the title card as shown */
+    age(): { line: string; card: string };
   };
   ui_: UiSurface;
   cam_: CamSurface;
@@ -249,6 +266,14 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
       decision: () => need().ui.decision.info(),
       choose: (key) => need().ui.decision.chooseKey(key),
       later: () => need().ui.decision.later(),
+      silence: () => need().ui.decision.silence(),
+      confirm: () => need().ui.covenant.text,
+      breakIt: () => need().ui.covenant.breakIt(),
+      hold: () => need().ui.covenant.hold(),
+      book: (town) => need().ui.action(town == null ? 'ui.book' : `ui.book@${town}`),
+      bookState: () => { const s = need().ui.chronicle.state(); return { open: s.open, tab: s.tab, book: s.book }; },
+      bookExport: (fmt) => need().ui.chronicle.export(fmt ?? 'md'),
+      age: () => need().ui.hud.ageState(),
     },
     poi: (name, planet) => need().poi(name, planet),
     select: (ref) => need().select(ref),

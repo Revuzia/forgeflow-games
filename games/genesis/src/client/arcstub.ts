@@ -9,10 +9,18 @@
 //   stub('events', SimEvent[] | { events?, chronicle? })      -> appended ONCE to the next snapshot's events / chronicle
 //                                                                (stage B: `defy`, `defy.answered` before the sim emits them;
 //                                                                a missing `tick` takes the snapshot's)
+//   stub('story', StoryView | { planet?, settlement?, story }) -> the answer to query('story') (stage C: the Book before
+//                                                                story.ts lands; a settlement's book when named)
+//   stub('covenants', rows | { covenants, offers })            -> the answer to query('covenants') (Promises)
+//   stub('refusal', { covenant, vow, msg?, k? })               -> every harmful cast (WRATHFUL, or the kinds in `k`)
+//                                                                without `covenant: 'break'` answers as the sim's §4.4
+//                                                                pre-check would (the confirm); null clears it
 
-import type { Snapshot, PlanetSnap, SettlementView, TowerView, SimEvent, ChronicleEntry } from '../sim/types.ts';
+import type { Snapshot, PlanetSnap, SettlementView, TowerView, SimEvent, ChronicleEntry, Command, CommandResult } from '../sim/types.ts';
 
-export type ArcStubKind = 'hearts' | 'towers' | 'covenant' | 'age' | 'events';
+export type ArcStubKind = 'hearts' | 'towers' | 'covenant' | 'age' | 'events' | 'story' | 'covenants' | 'refusal';
+/** the casts the §4.4 pre-check reads (god/wrath.ts WRATHFUL; copied: the client does not load sim code) */
+const HARMFUL = ['disaster.spawn', 'tower.strike', 'miracle.lightning', 'miracle.fireball', 'miracle.storm', 'miracle.meteor', 'miracle.cast', 'fire.firestorm', 'water.flood', 'water.tsunami', 'defiance.answer'];
 type TownStub = { settlement: number; heart?: SettlementView['heart']; defiant?: SettlementView['defiant']; covenant?: SettlementView['covenant'] };
 
 interface Stubs {
@@ -23,8 +31,12 @@ interface Stubs {
   age: { planet: number | null; age?: PlanetSnap['age']; epithet?: string } | null;
   /** one-shot: delivered with the next snapshot, then gone */
   events: { events: Partial<SimEvent>[]; chronicle: Partial<ChronicleEntry>[] } | null;
+  /** query answers (stage C) */
+  stories: { planet: number | null; settlement: number | null; story: unknown }[] | null;
+  covenants: unknown;
+  refusal: { covenant: number; vow: string; msg?: string; k?: string[] } | null;
 }
-const S: Stubs = { towns: null, signs: null, towers: null, covenant: null, age: null, events: null };
+const S: Stubs = { towns: null, signs: null, towers: null, covenant: null, age: null, events: null, stories: null, covenants: null, refusal: null };
 
 const planetOf = (d: unknown): number | null => (d && typeof d === 'object' && typeof (d as { planet?: unknown }).planet === 'number' ? (d as { planet: number }).planet : null);
 
@@ -48,6 +60,18 @@ export function arcStub(kind: ArcStubKind, data: unknown): void {
       return;
     case 'covenant': S.covenant = data == null ? null : { planet: planetOf(data), ...(data as object) }; return;
     case 'age': S.age = data == null ? null : { planet: planetOf(data), ...(data as object) }; return;
+    case 'story': {
+      if (data == null) { S.stories = null; return; }
+      const o = data as { planet?: number; settlement?: number; story?: unknown; title?: unknown };
+      const rec = 'story' in o && o.title === undefined
+        ? { planet: typeof o.planet === 'number' ? o.planet : null, settlement: typeof o.settlement === 'number' ? o.settlement : null, story: o.story }
+        : { planet: null, settlement: null, story: data };
+      S.stories = (S.stories ?? []).filter((x) => x.planet !== rec.planet || x.settlement !== rec.settlement);
+      S.stories.push(rec);
+      return;
+    }
+    case 'covenants': S.covenants = data ?? null; return;
+    case 'refusal': S.refusal = data == null ? null : (data as Stubs['refusal']); return;
     case 'events': {
       if (data == null) { S.events = null; return; }
       const o = (Array.isArray(data) ? { events: data } : data) as { events?: Partial<SimEvent>[]; chronicle?: Partial<ChronicleEntry>[] };
@@ -57,6 +81,26 @@ export function arcStub(kind: ArcStubKind, data: unknown): void {
       return;
     }
   }
+}
+
+/** a stubbed query answer (undefined: ask the sim) */
+export function arcStubQuery(q: string, args?: Record<string, unknown>): unknown {
+  if (q === 'story' && S.stories?.length) {
+    const sid = typeof args?.settlement === 'number' ? args.settlement : null;
+    const pid = typeof args?.planet === 'number' ? args.planet : null;
+    const hit = S.stories.find((x) => x.settlement === sid && (x.planet === pid || x.planet == null || pid == null));
+    return hit ? hit.story : undefined;
+  }
+  if (q === 'covenants' && S.covenants != null) return S.covenants;
+  return undefined;
+}
+
+/** a stubbed answer to a command (the §4.4 refusal), or null: send it to the sim */
+export function arcStubCmd(c: Command): CommandResult | null {
+  const f = S.refusal;
+  if (!f || c.covenant === 'break' || !(f.k ?? HARMFUL).includes(c.k)) return null;
+  if (c.k === 'defiance.answer' && c.how !== 'wrath') return null;
+  return { ok: false, msg: f.msg ?? 'You made a promise. To break it, say so: "…, and break my covenant".', refusal: { kind: 'covenant', covenant: f.covenant, vow: f.vow } } as CommandResult;
 }
 
 export function arcStubActive(): boolean {

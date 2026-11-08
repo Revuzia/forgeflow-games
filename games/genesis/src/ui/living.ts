@@ -25,6 +25,7 @@ import { h, clear, cap, fmtNum, fmtTicks } from './dom.ts';
 import { icon } from './icons.ts';
 import { wrathWord, wrathMeans, WRATH_DEFAULT } from './powers.ts';
 import { heartGlyph } from './hearts.ts';
+import { covenantRows, covenantTownNames, promiseLine, wrathNotch, type CovenantRow } from './book.ts';
 
 // ───────────────────────────── words ─────────────────────────────
 
@@ -388,7 +389,7 @@ export interface GodDeps {
   hint(id: string): string;
 }
 
-type Section = 'regard' | 'wrath' | 'prayers' | 'prophets' | 'signs' | 'sacred' | 'towns' | 'rivals';
+type Section = 'regard' | 'wrath' | 'promises' | 'prayers' | 'prophets' | 'signs' | 'sacred' | 'towns' | 'rivals';
 
 export class GodPanel {
   readonly panel: Panel;
@@ -398,6 +399,8 @@ export class GodPanel {
   private places: SacredPlaceRow[] = [];
   private animals: SacredAnimalRow[] = [];
   private omens: OmenRow[] = [];
+  /** ARC §4.5: the covenants of this world, kept and broken (query 'covenants') */
+  private covenants: CovenantRow[] = [];
   private askedAt = -1e9;
   private asking = false;
   private renderedAt = -1e9;
@@ -411,7 +414,7 @@ export class GodPanel {
   constructor(parent: HTMLElement, deps: GodDeps) {
     this.deps = deps;
     this.panel = new Panel(parent, { name: 'god', title: 'The god', subtitle: 'how the people hold you', icon: 'regard', place: 'left' });
-    for (const s of ['regard', 'wrath', 'prayers', 'prophets', 'signs', 'sacred', 'towns', 'rivals'] as Section[]) {
+    for (const s of ['regard', 'wrath', 'promises', 'prayers', 'prophets', 'signs', 'sacred', 'towns', 'rivals'] as Section[]) {
       const el = h('div', { class: `gn-god-sec gn-god-${s}`, data: { sec: s } });
       this.secs.set(s, { el, key: '' });
       this.panel.body.append(el);
@@ -454,11 +457,13 @@ export class GodPanel {
     this.askedAt = performance.now();
     const planet = this.deps.primary();
     try {
-      const [pr, sa, om] = await Promise.all([
+      const [pr, sa, om, cv] = await Promise.all([
         this.deps.query('prophets', { planet }).catch(() => null),
         this.deps.query('sacred', { planet }).catch(() => null),
         this.deps.query('omens', { planet }).catch(() => null),
+        this.deps.query('covenants', { planet }).catch(() => null),
       ]);
+      this.covenants = covenantRows(cv, planet);
       this.prophets = arr<ProphetRow>(pr).filter((p) => p.planet === undefined || p.planet === planet);
       const s = (sa ?? {}) as { places?: unknown; animals?: unknown };
       this.places = arr<SacredPlaceRow>(s.places);
@@ -500,7 +505,8 @@ export class GodPanel {
     });
     // ── wrath ──
     const w = view.wrath ?? WRATH_DEFAULT;
-    if (performance.now() - this.wrathAt > 1500) this.put('wrath', `${w.toFixed(2)}`, (el) => {
+    const notch = wrathNotch(pv?.covenant, covenantTownNames(pv, pv?.covenant?.id ?? -1));
+    if (performance.now() - this.wrathAt > 1500) this.put('wrath', `${w.toFixed(2)}|${notch?.title ?? ''}`, (el) => {
       this.head(el, 'Wrath', 'how hard your harm falls', 'wrath');
       const word = h('b', { class: 'gn-wrath-word', text: cap(wrathWord(w)) });
       const means = h('div', { class: 'gn-wrath-means', text: wrathMeans(w) });
@@ -517,8 +523,40 @@ export class GodPanel {
       sl.classList.add('gn-wrath-slider');
       const inp = sl.querySelector('input');
       if (inp) inp.setAttribute('aria-label', 'Wrath');
+      // ARC §4.4: under "always gentle" a notch at 0.3 says the promise; the handle can pass it (the next harmful cast
+      // then asks, through the covenant's confirm)
+      if (inp && notch) {
+        const track = h('span', { class: 'gn-wrath-track' });
+        inp.replaceWith(track);
+        track.append(inp, h('i', { class: 'gn-wrath-notch', title: notch.title, aria: { label: notch.title }, style: `left: calc(6.5px + (100% - 13px) * ${notch.at})` }));
+        sl.title = notch.title;
+      }
       el.append(h('div', { class: 'gn-wrath-row' }, word, sl), means,
         h('div', { class: 'gn-god-dim', text: 'The default, 0.3, is survivable: they scare and kill, but most live, and warnings come first. Size words in "do this" set one act\'s wrath ("a gentle storm", "a huge meteor").' }));
+    });
+    // ── promises (ARC §4.5): each covenant, its vow in words, kept so long or broken when, the household, the towns ──
+    const nowYear = pv ? view.calendar(pv, tick).year : 0;
+    const names = new Map((pv?.settlements ?? []).map((s) => [s.id, s]));
+    // (until the query answers, the planet's own covenant view stands for the list: the kept one, its years)
+    const cvs: CovenantRow[] = this.covenants.length || !pv?.covenant || pv.covenant.status !== 'kept' ? this.covenants
+      : [{ id: pv.covenant.id, planet, made: tick, vow: pv.covenant.vow, after: '', settlements: pv.covenant.towns, status: 'kept', broken: -1, yearsKept: pv.covenant.years }];
+    const lines = pv ? cvs.map((c) => promiseLine(c, (t) => view.calendar(pv, t).year, nowYear, names)) : [];
+    this.put('promises', lines.map((l) => `${l.id}:${l.status}`).join('|') || 'none', (el) => {
+      if (!lines.length) return;
+      this.head(el, 'Promises', `${lines.filter((l) => l.kept).length} kept`, 'rainbow');
+      const list = h('div', { class: 'gn-god-list' });
+      for (const l of [...lines].reverse()) {
+        const look = l.look != null ? h('button', { class: 'gn-btn gn-god-look', html: icon('eye'), title: 'Look there', aria: { label: 'Look there' } }) : null;
+        const s = l.look != null ? pv?.settlements.find((x) => x.id === l.look) : undefined;
+        if (look && s) look.addEventListener('click', () => { this.deps.lookAt(planet, s.pos); this.deps.select({ kind: 'settlement', id: s.id, planet }); });
+        list.append(h('div', { class: `gn-god-row gn-promise${l.kept ? '' : ' gn-promise-broken'}`, data: { covenant: String(l.id) } },
+          h('span', { class: 'gn-god-t' },
+            h('b', { text: l.vow }),
+            h('small', { class: 'gn-promise-st', text: [l.status, l.after].filter(Boolean).join(' · ') }),
+            h('small', { text: [l.household, l.towns].filter(Boolean).join(' · ') })),
+          look));
+      }
+      el.append(list);
     });
     // ── prayers ──
     const prayers = openPrayers(view, planet);

@@ -9,12 +9,16 @@
 // game.slowGreat): a card opening above 30x eases the speed to 10x; the previous speed comes back on an answer or on
 // "Decide later". The tower's inspector card can reopen it on a standing tower (`openFor`).
 //
+// The covenant (§4.5) is the same card: on `PlanetSnap.covenantOffer` it offers the four vows, "Say nothing"
+// (covenant.decline) and "Decide later" (the pill "After the Flood of Aru"); the offer lasts a game year.
+//
 // Split for tests: `towerChoice` (pure: TowerView + names -> the card's words and buttons) and `DecisionState` (pure:
 // which choice is open or pilled, and the speed to ease to / restore); `DecisionCard` is the DOM.
 
-import type { Command, CommandResult, EntityRef, SettlementView, TowerView } from '../sim/types.ts';
+import type { Command, CommandResult, EntityRef, PlanetSnap, SettlementView, TowerView } from '../sim/types.ts';
 import { h, clear } from './dom.ts';
 import { icon } from './icons.ts';
+import { covenantChoice, declineCommand } from './book.ts';
 
 const NUM = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
 /** numbers in words up to twelve, digits above (ARC §0.3 rule 8) */
@@ -198,6 +202,7 @@ export class DecisionCard {
   readonly state = new DecisionState();
   private choices = new Map<string, Choice>();
   private towers = new Map<string, { planet: number; t: TowerView }>();
+  private offers = new Map<string, { planet: number; o: NonNullable<PlanetSnap['covenantOffer']> }>();
   private drawn = '';
   private busy = false;
   private note = '';
@@ -218,10 +223,17 @@ export class DecisionCard {
   }
 
   /** each HUD frame, from the primary planet's towers */
-  update(planet: number, towers: readonly TowerView[] | undefined | null, settlements: readonly SettlementView[], yearOf: (tick: number) => number, tick: number): void {
+  update(planet: number, towers: readonly TowerView[] | undefined | null, settlements: readonly SettlementView[], yearOf: (tick: number) => number, tick: number, offer?: PlanetSnap['covenantOffer']): void {
     const names = new Map(settlements.map((s) => [s.id, s]));
     const offered: string[] = [], answerable: string[] = [];
-    this.choices.clear(); this.towers.clear();
+    this.choices.clear(); this.towers.clear(); this.offers.clear();
+    // the covenant's offer (§4.5): open while the sim holds it and its year has not run out
+    if (offer && (offer.until == null || offer.until > tick)) {
+      const c = covenantChoice(offer, planet, names);
+      this.choices.set(c.id, c);
+      this.offers.set(c.id, { planet, o: offer });
+      offered.push(c.id); answerable.push(c.id);
+    }
     for (const t of towers ?? []) {
       const c = towerChoice(t, planet, names, yearOf(tick) - yearOf(t.begun) + 1);
       this.choices.set(c.id, c);
@@ -264,6 +276,14 @@ export class DecisionCard {
     this.draw();
   }
 
+  /** "Say nothing" on the covenant's card: covenant.decline (the sky said nothing) */
+  async silence(): Promise<CommandResult | null> {
+    const id = this.state.open;
+    const of = id ? this.offers.get(id) : undefined;
+    if (!of || this.busy) return null;
+    return this.choose({ key: '0', id: 'decline', label: 'Say nothing', says: '', cmd: declineCommand(of.o, of.planet) });
+  }
+
   later(): void {
     const sp = this.state.putOff();
     if (sp != null) this.deps.setSpeed(sp);
@@ -290,9 +310,9 @@ export class DecisionCard {
   }
 
   /** test surface */
-  info(): { open: string | null; pills: string[]; options: { key: string; label: string; disabled: string | null }[] } {
+  info(): { open: string | null; title: string; meta: string; pills: string[]; options: { key: string; label: string; disabled: string | null }[] } {
     const c = this.state.open ? this.choices.get(this.state.open) : undefined;
-    return { open: this.state.open, pills: [...this.state.later], options: (c?.options ?? []).map((o) => ({ key: o.key, label: o.label, disabled: o.disabled ?? null })) };
+    return { open: this.state.open, title: c?.title ?? '', meta: c?.meta ?? '', pills: [...this.state.later], options: (c?.options ?? []).map((o) => ({ key: o.key, label: o.label, disabled: o.disabled ?? null })) };
   }
 
   private draw(focus = false): void {
@@ -307,17 +327,19 @@ export class DecisionCard {
     for (const p of pills) {
       const pc = this.choices.get(p)!;
       this.pills.append(h('button', { class: 'gn-btn gn-decision-pill', title: 'A choice waits: reopen it', on: { click: () => { this.state.reopen(p); this.draw(true); } } },
-        h('span', { class: 'gn-decision-pill-i', html: icon('heart-proud') }), h('span', { text: pc.pill }), h('span', { class: 'gn-decision-pill-k', text: 'decide' })));
+        h('span', { class: 'gn-decision-pill-i', html: icon(this.offers.has(p) ? 'rainbow' : 'heart-proud') }), h('span', { text: pc.pill }), h('span', { class: 'gn-decision-pill-k', text: 'decide' })));
     }
     clear(this.root);
     if (!c) { this.root.hidden = true; return; }
     this.root.hidden = false;
     this.root.dataset.choice = c.id;
+    this.root.classList.toggle('gn-decision-covenant', this.offers.has(c.id));
     // (380 x 186 px: the title shares its row with Look at it / Decide later; the four answers sit two by two, each
     // with its words in full under its name)
     const tw = this.towers.get(c.id);
     const foot = h('div', { class: 'gn-decision-foot' });
     if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', title: 'The card waits as a pill while you look', on: { click: () => this.look() } }));
+    if (this.offers.has(c.id)) foot.append(h('button', { class: 'gn-btn gn-decision-silence', text: 'Say nothing', title: 'Make no promise: the survivors will wait, and the sky will say nothing', on: { click: () => void this.silence() } }));
     foot.append(h('button', { class: 'gn-btn', text: 'Decide later', title: 'Esc', on: { click: () => this.later() } }));
     this.root.append(
       h('div', { class: 'gn-decision-top' }, h('div', { class: 'gn-decision-h', title: c.title }, h('b', { text: c.title })), foot),
@@ -399,5 +421,69 @@ export class DecisionCard {
       const cut = px != null && c.getBoundingClientRect().top < edge;
       if (cut !== (c.style.visibility === 'hidden')) c.style.visibility = cut ? 'hidden' : '';
     }
+  }
+}
+
+// ───────────────────────────── the covenant's confirm (§4.4 PLY) ─────────────────────────────
+
+/**
+ * A harmful cast the sim refused because it breaks the planet's promise: a small card under the Decision card's place,
+ * "This breaks your promise to the people of Aru. They will remember." [Break it] [Hold]. Break it sends the same
+ * command again with `covenant: 'break'`; Hold (or Esc, or 20 s) lets it go. Not modal. One at a time: a newer refusal
+ * replaces it.
+ */
+export class CovenantConfirm {
+  readonly root: HTMLDivElement;
+  private resend: (() => Promise<unknown>) | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  /** test surface: what it says now ('' when closed) */
+  text = '';
+
+  constructor(parent: HTMLElement) {
+    this.root = h('div', { class: 'gn-panel gn-decision gn-covconfirm', role: 'alertdialog', aria: { modal: 'false', label: 'A promise' } });
+    this.root.tabIndex = -1;
+    this.root.hidden = true;
+    parent.append(this.root);
+    this.root.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.hold(); }
+    });
+  }
+
+  get isOpen(): boolean { return !this.root.hidden; }
+
+  /** show it; `resend` breaks the promise (the same command with covenant: 'break') */
+  show(words: { text: string; vow: string }, resend: () => Promise<unknown>): void {
+    this.resend = resend;
+    this.text = words.text;
+    clear(this.root);
+    const brk = h('button', { class: 'gn-btn gn-btn-danger gn-covconfirm-break', text: 'Break it', title: 'Send it anyway: the promise is broken, and they will remember' });
+    const hold = h('button', { class: 'gn-btn gn-btn-gold gn-covconfirm-hold', text: 'Hold', title: 'Keep your promise (Esc)' });
+    brk.addEventListener('click', () => void this.breakIt());
+    hold.addEventListener('click', () => this.hold());
+    this.root.append(
+      h('div', { class: 'gn-covconfirm-t' }, h('span', { class: 'gn-decision-pill-i', html: icon('rainbow') }), h('b', { text: words.text })),
+      h('div', { class: 'gn-decision-meta', text: words.vow }),
+      h('div', { class: 'gn-decision-foot gn-covconfirm-foot' }, hold, brk));
+    this.root.hidden = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.hold(), 20000);
+    const ae = document.activeElement as HTMLElement | null;
+    if (!ae || ae === document.body || ae.closest?.('.gn-decision')) hold.focus({ preventScroll: true });
+  }
+
+  async breakIt(): Promise<unknown> {
+    const f = this.resend;
+    this.close();
+    return f ? f() : null;
+  }
+
+  hold(): void { this.close(); }
+
+  private close(): void {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    this.resend = null;
+    this.text = '';
+    this.root.hidden = true;
+    clear(this.root);
   }
 }

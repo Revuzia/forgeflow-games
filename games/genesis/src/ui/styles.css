@@ -1326,3 +1326,82 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-decision-pill { padding: 3px 10px; border-radius: 12px; font: 600 11.5px var(--gn-serif); color: var(--gn-gold-hi); background: rgba(12, 15, 25, .82); border: 1px solid var(--gn-line-gold); animation: gnLamp 2.4s ease-in-out infinite; }
 .gn-decision-pill-i { display: inline-flex; } .gn-decision-pill-i svg { width: 13px; height: 13px; fill: none; stroke: currentColor; }
 .gn-decision-pill-k { font: 600 9.5px var(--gn-sans); letter-spacing: .08em; text-transform: uppercase; opacity: .75; border-left: 1px solid var(--gn-line-gold); padding-left: 6px; }
+
+/* ARC §4 the covenant: the vows on the Decision card (a faint spectral edge), the confirm a refused cast shows, the
+   wrath slider's notch under "always gentle", the Promises rows of The god */
+.gn-decision.gn-decision-covenant { border-image: linear-gradient(90deg, rgba(232, 120, 110, .55), rgba(240, 206, 120, .55), rgba(140, 210, 150, .5), rgba(120, 170, 230, .55), rgba(170, 130, 220, .55)) 1; border-width: 1px; border-style: solid; border-radius: 0; }
+.gn-decision-covenant .gn-decision-h { letter-spacing: .02em; }
+.gn-decision-silence { opacity: .9; }
+.gn-covconfirm { top: calc(var(--gn-time-b, 120px) + 8px); max-height: none; width: 340px; gap: 5px; padding: 9px 11px 8px; z-index: 8; border-color: rgba(190, 150, 230, .45); }
+.gn-covconfirm-t { display: flex; gap: 7px; align-items: flex-start; font: 500 14px/1.3 var(--gn-serif); color: var(--gn-ivory); }
+.gn-covconfirm-t b { font-weight: 600; }
+.gn-covconfirm-t .gn-decision-pill-i { color: #c9b2f0; margin-top: 2px; }
+.gn-covconfirm-foot { justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.gn-covconfirm-foot .gn-btn { padding: 2px 12px; font-size: 11.5px; line-height: 18px; }
+.gn-wrath-track { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.gn-wrath-notch { position: absolute; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; border-radius: 1px; pointer-events: auto; cursor: help;
+  background: linear-gradient(180deg, #e8786e, #f0ce78, #8cd296, #78aae6, #aa82dc); box-shadow: 0 0 5px rgba(240, 220, 180, .55); }
+.gn-promise .gn-god-t small { display: block; }
+.gn-promise .gn-promise-st { color: var(--gn-gold); }
+.gn-promise-broken b { color: #c9b2f0; }
+.gn-promise-broken .gn-promise-st { color: #c9b2f0; }
+.gn-insp-promise { color: var(--gn-gold-hi); font-family: var(--gn-serif); font-size: 13.5px; }
+.gn-insp-promise-broken { color: #c9b2f0; }
+.gn-insp-readbook { display: inline-flex; gap: 6px; align-items: center; margin-top: 4px; font-family: var(--gn-serif); font-size: 13px; letter-spacing: .02em; }
+.gn-insp-readbook svg { width: 14px; height: 14px; }
+
+/* ARC §5.5: the HUD age line (small caps, 10 px, under the date; opens the Book) and the title card when an age begins */
+.gn-ageline { display: flex; gap: 5px; align-items: baseline; max-width: 100%; margin: 2px 0 0; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto;
+  font: 600 10px/14px var(--gn-serif); font-variant-caps: all-small-caps; letter-spacing: .14em; color: var(--gn-gold); text-align: left; white-space: nowrap; }
+.gn-ageline[hidden] { display: none; }
+.gn-ageline:hover .gn-ageline-n { color: var(--gn-gold-hi); text-decoration: underline; text-decoration-color: var(--gn-line-gold); text-underline-offset: 2px; }
+.gn-ageline-n { overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
+.gn-ageline .gn-sep { color: var(--gn-gold); opacity: .6; }
+.gn-ageline-y { color: var(--gn-ivory-dim); font-size: 11px; flex: none; }
+.gn-agecard { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); pointer-events: none; z-index: 9; text-align: center; max-width: min(760px, calc(100vw - 48px));
+  font: 500 30px/1.25 var(--gn-serif); color: var(--gn-ivory); text-shadow: 0 2px 18px rgba(0, 0, 0, .85), 0 0 2px rgba(0, 0, 0, .9); opacity: 0; }
+.gn-agecard[hidden] { display: none; }
+.gn-agecard.gn-on { animation: gnAgeCard 4s ease both; }
+.gn-agecard-pre { font-size: .62em; letter-spacing: .3em; text-transform: uppercase; color: var(--gn-ivory-dim); display: block; margin-bottom: 4px; }
+.gn-agecard-n { color: var(--gn-gold-hi); font-style: italic; }
+.gn-agecard-post { color: var(--gn-gold-hi); }
+@keyframes gnAgeCard { 0% { opacity: 0; transform: translate(-50%, -46%); } 14% { opacity: 1; transform: translate(-50%, -50%); } 72% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -52%); } }
+@media (prefers-reduced-motion: reduce) { .gn-agecard.gn-on { animation: gnAgeCardFade 4s linear both; } @keyframes gnAgeCardFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } } }
+@media (max-height: 600px) { .gn-agecard { font-size: 24px; top: 40%; } }
+.gn-save-age { font: italic 500 13px var(--gn-serif); color: var(--gn-gold); margin-top: 1px; }
+
+/* ARC §5.5: the Book — the chronicle's first tab, one column in the panel's scroll, read like a scripture */
+.gn-chron-tabs { margin: 0 0 10px; align-self: flex-start; }
+.gn-chron-tabs .gn-seg-b { padding: 5px 14px; font-size: 11.5px; }
+.gn-chron-filters[hidden], .gn-chron-list[hidden], .gn-book[hidden] { display: none; }
+.gn-book { display: flex; flex-direction: column; padding: 2px 8px 24px; color: var(--gn-ivory); font: 500 15.5px/1.55 var(--gn-serif); max-width: 34em; margin: 0 auto; }
+.gn-book-back { align-self: flex-start; display: inline-flex; gap: 6px; align-items: center; font: 500 12.5px var(--gn-serif); padding: 2px 10px; margin-bottom: 8px; }
+.gn-book-back svg { width: 13px; height: 13px; }
+.gn-book-title { margin: 6px 0 4px; text-align: center; font: 500 24px/1.2 var(--gn-serif); letter-spacing: .03em; color: var(--gn-gold-hi); text-wrap: balance; }
+.gn-book-note { margin: 0 0 6px; text-align: center; font: italic 500 13px/1.4 var(--gn-serif); color: var(--gn-ivory-dim); }
+.gn-book-opening { margin: 6px 0 0; text-align: center; font-style: italic; color: var(--gn-ivory); opacity: .92; text-wrap: pretty; }
+.gn-book-orn { height: 14px; margin: 10px auto 12px; width: 60%; background: radial-gradient(circle at 50% 50%, var(--gn-gold) 0 2.5px, transparent 3px),
+  linear-gradient(90deg, transparent, var(--gn-line-gold) 30%, transparent 46%, transparent 54%, var(--gn-line-gold) 70%, transparent) center / 100% 1px no-repeat; opacity: .9; }
+.gn-book-char { margin: 0 0 4px; text-wrap: pretty; }
+.gn-book-char-god { color: var(--gn-gold-hi); }
+.gn-book-epithet { margin: 8px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 0; text-align: center; }
+.gn-book-epithet span { font: 600 10.5px var(--gn-sans); letter-spacing: .22em; text-transform: uppercase; color: var(--gn-ivory-dim); }
+.gn-book-epithet b { font: italic 600 19px/1.3 var(--gn-serif); color: var(--gn-gold-hi); letter-spacing: .02em; }
+.gn-book-age, .gn-book-sec { margin-top: 18px; }
+.gn-book-ageh { margin: 0; font: 500 19px/1.25 var(--gn-serif); color: var(--gn-gold-hi); letter-spacing: .03em; text-wrap: balance; }
+.gn-book-years { margin: 1px 0 6px; font: 500 10.5px var(--gn-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--gn-ivory-faint); }
+.gn-book-now .gn-book-years::after { content: ' · now'; color: var(--gn-gold); }
+.gn-book-p { display: block; margin: 0 0 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; text-wrap: pretty; }
+.gn-book-age > .gn-book-p:first-of-type::first-letter { float: left; font-size: 2.55em; line-height: .86; padding: 3px 5px 0 0; color: var(--gn-gold); font-weight: 500; }
+button.gn-book-link { cursor: pointer; pointer-events: auto; border-radius: 4px; }
+button.gn-book-link:hover { background: rgba(217, 184, 120, .07); color: var(--gn-gold-hi); }
+.gn-book-told { margin: 4px 0 0; padding-left: 10px; border-left: 2px solid var(--gn-line-gold); font-style: italic; color: #e2d3ae; }
+.gn-book-closing { margin: 0; text-align: center; font-style: italic; color: var(--gn-gold-hi); text-wrap: balance; }
+.gn-book-empty { padding: 26px 8px; text-align: center; font: italic 500 16px/1.5 var(--gn-serif); }
+.gn-book-empty .gn-book-dim { color: var(--gn-ivory-dim); font-size: 14px; }
+@media (max-height: 600px) {
+  .gn-book { font-size: 14.5px; line-height: 1.5; padding: 0 4px 18px; }
+  .gn-book-title { font-size: 21px; }
+  .gn-book-ageh { font-size: 17.5px; }
+  .gn-chron-tabs { margin-bottom: 6px; }
+}
