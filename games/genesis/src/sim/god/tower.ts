@@ -127,7 +127,7 @@ export function risingLeague(u: Universe, planet: number, sid: number): TowerSta
 
 function memOf(r: SettlementRel): Memory { return (r.memory ??= emptyMemory()); }
 
-function pushArc(u: Universe, e: Omit<ArcEvent, 'id'>): ArcEvent {
+export function pushArc(u: Universe, e: Omit<ArcEvent, 'id'>): ArcEvent {
   const R = relOf(u);
   const ev: ArcEvent = { id: R.next++, ...e, towns: e.towns.slice().sort((a, b) => a - b) };
   (R.arcEvents ??= []).push(ev);

@@ -47,6 +47,8 @@ export const TASK = {
   // LIVING RELATIONSHIP (people/shelter.ts, god/sacred.ts, god/precursors.ts): sheltering from a storm (home, else the
   // nearest building, else the lee of trees), a pilgrimage to a sacred place, an evacuation out of a disaster's reach
   shelter: 56, pilgrimage: 57, evacuate: 58,
+  // ARC §3.2 (god/defiance.ts): open defiance in the open under the sky; tData = DEFY id (curse 1, hurl 2, burn 3, idol 4)
+  defy: 59,
 } as const;
 export type TaskKind = (typeof TASK)[keyof typeof TASK];
 export const TASK_NAMES: string[] = [];
@@ -68,7 +70,7 @@ export const TASK_VERBS: Record<number, string> = {
   [TASK.bathe]: 'swimming', [TASK.possessed]: 'moved by the god', [TASK.reverse]: 'studying a strange object',
   [TASK.camp]: 'sleeping at a camp',
   [TASK.play]: 'playing', [TASK.chore]: 'doing chores', [TASK.gather]: 'at a gathering',
-  [TASK.shelter]: 'sheltering from the storm', [TASK.pilgrimage]: 'on pilgrimage', [TASK.evacuate]: 'fleeing the danger',
+  [TASK.shelter]: 'sheltering from the storm', [TASK.pilgrimage]: 'on pilgrimage', [TASK.evacuate]: 'fleeing the danger', [TASK.defy]: 'shouting at the sky',
 };
 
 /** task phase */

@@ -43,3 +43,30 @@ for covenant.* / chronicle.age already in eventmap.ts + sfx.ts from stage A. UI 
 - Tests: tests/ui-arc-covenant.test.ts (8), tests/ui-arc-book.test.ts (8). ui-*.test.ts 119/119, audio 
   + ui-arc 88/88, tsc clean.
 - Shots: _harness/arc-work/specs/ui-covenant-book.json (log scratch/arc/c-ui/shots.log), started 19:09Z.
+- Shots run 1 (19:09Z): the 1600x900 shot opened a new page, so window.__towns was gone and it FAILED; killed the run. LOOKED
+  at what had been taken: the offer card's title was cut short by "Say nothing" + "Decide later" -> FIX: "Say nothing" moved
+  to its own bottom row ("Or make no promise, and let them wait."), the why line names the towns only when they are short,
+  options are 45 px. The inspector shot did not show the promise line (stub set too late) -> the stub now goes in earlier.
+  In the Book, each sentence sat on its own line and the float drop cap pushed into the next one -> FIX: an age is one
+  passage of prose with a raised gold initial.
+- Shots run 2 (shots2.log), 11/11. LOOKED at all of them:
+  c-offer: the full title "After the Flood of Shenyaar by the Lake", meta, why, 4 vows, Say nothing row; the age line
+  under the date in small caps -> OK. c-offer-pill -> pill "After the Flood of ..." OK. c-confirm: "This breaks your promise to
+  the people of A and B. They will remember." / "You promised: always gentle." [Hold][Break it] -> OK. c-promises / c-notch:
+  Promises rows (kept four years / broken in year N, household, towns, eye); the notch tick sits under the thumb at 0.30,
+  tooltip OK. c-insp: "Their story" with "Under the promise of year 2 (kept)" + "Read the book of ..." -> OK. c-book /
+  c-book-ages / c-book-full: title, italic opening, ornament, character lines, WHAT THEY CALL YOU + gold italic epithet,
+  ages with serif headings, YEARS small grey, "since year 33 · now", prose, the italic "As it is told now" line -> reads
+  well at 888x500 and at 1600x900. DEFECT: the linked sentence (a button) broke the line -> FIX: span role=link (not
+  re-shot; a CSS/DOM-only change). c-agecard: "HERE BEGINS / The Age of the Bow." caught mid-fade, legible -> OK. c-save:
+  the save card shows "The Age of the Bow · they call you the One Who Keeps Its Word" -> OK.
+- GATE: npm run check (scratch/arc/c-ui/check.log) 846/847; the 1 failure is worker.test 'worker protocol round trip'
+  ('achieved 79x' throughput under machine load, sim lane, not touched); it passes when rerun alone -> GREEN.
+
+## NEXT (stint 2, once the sim lands §4/§5)
+1. Run ui-covenant-book.json WITHOUT stubs on a live recipe (covenant.offer debug -> card; covenant.make; a flood cast ->
+   real refusal -> confirm; arc.age -> title card; query('story') -> Book). Re-shoot c-book-ages to see the inline link.
+2. Check the sim's shapes against the readings in contract-changes.md (age.since = tick; covenants query shape; offer
+   name/household strings; CommandResult.refusal). If CommandResult gets a typed `refusal`, drop the cast in book.ts.
+3. If the sim answers the open-book free text with words, check the toast is not doubled by the app's own result toast
+   (freeform sends quiet:true and toasts r.msg itself).

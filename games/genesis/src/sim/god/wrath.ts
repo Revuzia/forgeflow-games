@@ -123,4 +123,4 @@ export function wrathWords(text: string): number | undefined {
  * commands whose harm wrath scales (they take a `wrath` parameter: god/relationship.ts wraps them). A deliberate,
  * targeted act — smiting one named person, razing a town, a rebuke — is the god's choice and is not softened.
  */
-export const WRATHFUL = ['disaster.spawn', 'tower.strike', 'miracle.lightning', 'miracle.fireball', 'miracle.storm', 'miracle.meteor', 'miracle.cast', 'fire.firestorm', 'water.flood', 'water.tsunami'];
+export const WRATHFUL = ['disaster.spawn', 'tower.strike', 'defiance.answer', 'miracle.lightning', 'miracle.fireball', 'miracle.storm', 'miracle.meteor', 'miracle.cast', 'fire.firestorm', 'water.flood', 'water.tsunami'];

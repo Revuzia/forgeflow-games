@@ -52,6 +52,7 @@ import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
 import { duskKeep, heartsDaily, heartSigns, heartsQuery, heartView, personHeart, registerArcCommands } from './arc.ts';
+import { carryMemory, defianceHourly, defianceQuery, defiantView, noteGodStorm, registerDefianceCommands } from './defiance.ts';
 import { leagueDamp, registerTowerCommands, towerDaily, towerTask, towerViews, towersQuery } from './tower.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
@@ -67,6 +68,7 @@ export function registerRelationship(r: CommandRegistry): void {
   registerSacredCommands(r);
   registerArcCommands(r);
   registerTowerCommands(r);
+  registerDefianceCommands(r);
   r.register('prayer.answer', ({ u, p, cmd }, a) => {
     if (!p.people) return fail('There is nobody here praying.');
     const st = typeof a.settlement === 'number' ? p.people.settlement(a.settlement) : undefined;
@@ -131,7 +133,13 @@ function delayedHarm(u: Universe, pl: number, sid: number, god: number): void {
 
 /** what the act was, and what it does to prayers, prophecies, omens and sacred animals */
 function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: Args, ctx: ActCtx): void {
-  if (cmd.k === 'weather.paint') stormSeen(u, p, a);
+  if (cmd.k === 'weather.paint') stormSeen(u, p, a, res);
+  // ARC §3.2 hurl: the god's storm miracle is a god-0 storm over the towns it reaches while it lasts
+  if (cmd.k === 'miracle.storm' && actor(cmd) === 0) {
+    const made = res.created?.find((c) => c.kind === 'weather');
+    const sys = made ? p.weather.find((q) => q.id === made.id) : undefined;
+    if (sys) noteGodStorm(u, p, sys.id, sys.pos, sys.radius, u.tick + (sys.life >= 0 ? sys.life : 7 * 1440));
+  }
   const list = actsOf(u, p, cmd, a, ctx);
   list.push(...omensOfCommand(u, p, cmd, res, a, ctx.killed));
   if (!list.length) return;
@@ -187,11 +195,18 @@ const RAINY = new Set(['rain', 'drizzle', 'storm', 'thunderstorm', 'monsoon', 's
  * thunderstorm, hurricane, blizzard, hail, sandstorm, ashfall) is seen as its act, like the storm miracle: a wonder
  * (0.5) with a little harm (0.1), × its intensity. The town that comes through it rallies (regard.ts weathered).
  */
-function stormSeen(u: Universe, p: Planet, a: Args): void {
+function stormSeen(u: Universe, p: Planet, a: Args, res?: CommandResult): void {
   const w = u.content.weather.find(String(a.kind));
   if (!w || !a.pos || (w.wind < 9 && w.lightning < 3)) return;
   const k = Math.max(0.2, Math.min(2, typeof a.intensity === 'number' ? a.intensity : 1));
   const R = typeof a.radius === 'number' ? a.radius : 700;
+  // ARC §3.2 hurl: the towns under the god's own storm (its weather id; the hourly check follows it while it lasts)
+  const made = res?.created?.find((c) => c.kind === 'weather');
+  if (made && actor(a) === 0) {
+    const sys = p.weather.find((q) => q.id === made.id);
+    const life = sys && sys.life >= 0 ? sys.life : 7 * 1440;
+    noteGodStorm(u, p, made.id, a.pos as [number, number, number], sys ? sys.radius : R, u.tick + life);
+  }
   godAct(u, p, a.pos as [number, number, number], R + 400, { wonder: 0.5 * k, harm: 0.1 * k }, actor(a), 'storm');
 }
 
@@ -521,7 +536,12 @@ export function relationshipHourly(u: Universe, p: Planet): void {
       const night = sunElevation(u, p, u.tick, st.pos) < -0.03;
       prayersHourly(x, st, night);
       godsFeast(x, st);
-      if (!st.band) duskBell(x, st);
+      if (!st.band) {
+        // ARC §3.2: the defiant go out at dusk (the vespers window) or under the god's storm
+        const el = sunElevation(u, p, u.tick, st.pos);
+        defianceHourly(x, st, el > VESPERS_LOW && el < VESPERS_HIGH + 0.04 && sunElevation(u, p, u.tick - 20, st.pos) > el);
+        duskBell(x, st);
+      }
     }
   }
   prophetsHourly(u, p);
@@ -583,7 +603,10 @@ export function relationshipDaily(u: Universe, p: Planet): void {
 function revolt(x: PCtx, st: Settlement): void {
   const u = x.u;
   const m = meansNow(x, st);
-  if (!(m.fear > m.trust + 0.4 && m.loyalty < 0.3)) return;
+  // ARC §0.4 memory `mercy`: a people shown mercy needs more fear before it turns on the god's own
+  const rr = srel(u, x.p.id, st.id);
+  const mercy = 0.05 * Math.min(1, rr.memory?.mercy ?? 0);
+  if (!(m.fear > m.trust + 0.4 + mercy && m.loyalty < 0.3)) return;
   const called = u.god.disciples.filter((d) => d.planet === x.p.id && d.god === 0).map((d) => x.A.slotOf(d.agent)).filter((s) => s >= 0 && x.A.settlement[s] === st.id);
   // (fix r2 #0: the prophet only if they live here — a stale record once had this town 'exile' a prophet who had moved)
   const ph0 = prophetOfSettlement(u, x.p.id, st.id);
@@ -608,6 +631,8 @@ function revolt(x: PCtx, st: Settlement): void {
   }
   // (fix r1 #2: with no other town of their kind to drive them to, the people renounce them and they stay)
   const how = kill ? 'revolt.killed' : to ? 'revolt.exile' : 'revolt.renounced';
+  // ARC §3.2 cast out: the revolt is defiance too
+  rr.defiance = Math.round(Math.min(1, (rr.defiance ?? 0) + 0.1) * 1000) / 1000;
   relStat(u, how);
   tell(u, x.p, how, vars(x, st), st, [settlementRef(x, st)], kill ? 3 : 2);
 }
@@ -639,6 +664,8 @@ function fearMigration(x: PCtx, st: Settlement): void {
   let n = 0;
   for (const h of hh) n += moveHousehold(x, h, st, dest);
   if (!n) return;
+  // ARC §0.4: the households that move carry what they remember of the god (memory × 0.5, merged by max)
+  carryMemory(u, x.p.id, st.id, dest.id);
   relStat(u, 'migration.fear', n);
   tell(u, x.p, 'migration.fear', vars(x, st, -1, { count: n, other: dest.name }), st, [settlementRef(x, st), settlementRef(x, dest)], 2);
 }
@@ -671,11 +698,13 @@ function conversions(x: PCtx, st: Settlement): void {
   const u = x.u;
   if (!u.god.gods.some((g) => g.kind === 'rival' && g.alive)) return;
   const A = x.A;
+  // ARC §3.2 idol: while their carved god stands, a rival converts them more easily (the bar 0.2 − 0.05)
+  const bar = u.god.rel?.st[`${x.p.id}:${st.id}`]?.idol !== undefined ? 0.15 : 0.2;
   for (const s of x.ps.members.get(st.id) ?? []) {
     const i = s * GODS;
     const mine = A.faith[i] * A.loyalty[i];
     for (let g = 1; g < GODS; g++) {
-      if (A.faith[i + g] * A.loyalty[i + g] - mine <= 0.2) continue;
+      if (A.faith[i + g] * A.loyalty[i + g] - mine <= bar) continue;
       A.loyalty[i] *= 0.85;
       A.loyalty[i + g] = Math.min(1, A.loyalty[i + g] + 0.05);
     }
@@ -704,6 +733,8 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     if (places || animal) v.sacred = { places, ...(animal ? { animal } : {}) };
     const heart = heartView(r, st);
     if (heart) v.heart = heart;
+    const defiant = defiantView(r, u.tick, x.day);
+    if (defiant) v.defiant = defiant;
   }
   const towers = towerViews(u, p);
   if (towers) snap.towers = towers;
@@ -729,7 +760,7 @@ export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -769,6 +800,7 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'omens': return omensQuery(u);
     case 'hearts': return heartsQuery(u, args);
     case 'towers': return towersQuery(u, args);
+    case 'defiance': return defianceQuery(u, args);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

@@ -64,6 +64,9 @@ const history: HeaderStep = () => {};
  * `towers, covenants, offers, ages, arcEvents` = [] and `annals, godActs` = {} (set in `emptyRel()` and loaded through the
  * `{ ...emptyRel(), ...copy(j.rel) }` spread, god/state.ts). Per-town state (memory, pride, hearts, dusk, lastHarm,
  * harmLoad, `since.arc0`) is filled lazily by god/arc.ts on the first ARC daily of each town.
+ * Stage B (god/defiance.ts): `defiance` starts at 0, `defied` / `answer` / `idol` absent, and the rest lives in optional
+ * `since` keys (dCurse, dHold, patT, patFast, gStorm, memY, aWrath..aPatience, idolMute) that default absent. An old save's
+ * harmLoad (counted +1 per act and step before stage B) is kept as it is and halves yearly like any other.
  */
 const arc: HeaderStep = () => {};
 

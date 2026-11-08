@@ -157,3 +157,12 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   r1-render-perf2.json (medium: lookdev 420/60 m + sandbox play 120/600 m), run on now AND on the pre-arc tree d2512fbc
   (git archive into _harness/scratch/arc/render/base, node_modules symlinked).
 - chain13 pid 3861: perf2-now, perf2-base, flood7, hearts (logs _harness/scratch/arc/render/shots-r1-perf2-*.log etc.)
+- PERF now (medium, load ~10, CPU work ms mean/p95): lookdev far 29.9/45.7, near 41.1/68.9; play near 27.3/57.6, far
+  16.95/52.4 (log shots-r1-perf2-now-load10.log). Container restarted ~23:11Z, chain13 died before perf-base.
+- 23:13Z chain14 (_harness/scratch/arc/render/chain14.sh): flood7, hearts, perf2-now, perf2-base (sequential, 5312).
+- Tower shots re-looked (r1f-struck/rising, r1h-finished-near): warm sandstone faces (87,75,70)/(99,84,76), no trees,
+  scorched lobed rubble heap with warm blocks (132,113,104) and stump: #9 confirmed DONE.
+- 23:3xZ LOOKED AT r1k-flood-warning(-near) (ochre 85 %): the town lake now warm khaki (166,156,138) (was grey-green
+  157,158,149), river risen, rain + town read; still too pale/desaturated under the rain veil to say "brown".
+  FIX ocean.ts: mud (2.0,0.8,0.2) @ 0.9, floor 0.26*sky. render-silt 6/6. flood7 killed; chain15 = chain14.sh with
+  r1-render-flood8.json (r1l-*), then hearts, perf2-now, perf2-base.

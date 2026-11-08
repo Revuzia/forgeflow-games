@@ -324,8 +324,11 @@ p{margin:.25em 0}.d{font:12px Inter,system-ui,sans-serif;color:#9c968a;letter-sp
             const place = paragraphPlace(p, this.entries.length ? this.entries : this.host.view.chronicle, planet);
             if (i) prose.append(document.createTextNode(' '));
             if (place) {
-              const a = h('button', { class: 'gn-book-link', text: p, title: 'Look there' });
+              // (a span, not a button: a button is an atomic box in Chrome and would break the line)
+              const a = h('span', { class: 'gn-book-link', role: 'link', text: p, title: 'Look there' });
+              a.tabIndex = 0;
               a.addEventListener('click', () => this.host.lookAtEntity(place));
+              a.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.host.lookAtEntity(place); } });
               prose.append(a);
             } else prose.append(document.createTextNode(p));
           });

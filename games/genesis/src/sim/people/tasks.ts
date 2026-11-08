@@ -73,6 +73,8 @@ export function workAnim(kind: number): number {
     case TASK.shelter: return AnimState.shelter;
     case TASK.evacuate: return AnimState.sit;
     case TASK.pilgrimage: return AnimState.pray;
+    // ARC §3.2: a defiant crowd (beginWork picks curse / hurl by tData)
+    case TASK.defy: return AnimState.fist;
     default: return AnimState.idle;
   }
 }
@@ -368,6 +370,8 @@ function beginWork(x: PCtx, s: number, at = x.tick): void {
   A.anim[s] = workAnim(A.task[s]);
   // (LIVING LAND: a funeral is mourned, not danced — people/gatherings.ts GATHER_KIND.funeral = 3)
   if (A.task[s] === TASK.gather && A.tData[s] === 3) A.anim[s] = AnimState.mourn;
+  // (ARC §3.2: throwing at the storm, else fists and curses by turns)
+  if (A.task[s] === TASK.defy) A.anim[s] = A.tData[s] === 2 ? AnimState.hurl : A.id[s] & 1 ? AnimState.curse : AnimState.fist;
   if (at === x.tick) syncCell(x, s);
   // under a roof: sleeping at home, warming up inside
   const k = A.task[s];

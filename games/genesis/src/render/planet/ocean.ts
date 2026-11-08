@@ -610,10 +610,11 @@ void main() {
     // (silt-laden water is BRIGHT: the suspended mud sends back the daylight as a ~0.3 albedo would — a deep lake's
     // dark body browned at its own luminance stayed a dark hole under an overcast)
     float ls = dot(skyR, LUMs);
-    // (r1 looked at: (1.45, 0.98, 0.5) at 72 % under a grey rain sky read as pale grey-green, not brown: the mud is an
-    // ochre brown, saturated, and the muddy skin mirrors less of the grey sky)
-    vec3 mud = max(lu, 0.32 * ls) * vec3(1.75, 0.88, 0.32) * (0.78 + 0.22 * streak);
-    under = mix(under, mud, 0.85 * silt);
+    // (r1 looked at: (1.45, 0.98, 0.5) at 72 % under a grey rain sky read as pale grey-green, then (1.75, 0.88, 0.32)
+    // at 85 % as pale khaki under the rain veil: the mud is a saturated ochre brown, darker, and the muddy skin
+    // mirrors less of the grey sky)
+    vec3 mud = max(lu, 0.26 * ls) * vec3(2.0, 0.8, 0.2) * (0.78 + 0.22 * streak);
+    under = mix(under, mud, 0.9 * silt);
     // the mirrored sky through a skin of muddy water: warmer, and less of it
     skyR = mix(skyR, ls * vec3(1.2, 0.98, 0.72), 0.55 * silt) * (1.0 - 0.3 * silt);
   }

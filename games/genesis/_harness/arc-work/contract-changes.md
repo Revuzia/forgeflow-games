@@ -128,3 +128,29 @@
   without "the"), `household` = clanOf's string ("the house of Hesh"); `CommandResult.refusal = { kind: 'covenant',
   covenant, vow }` read via a cast until types.ts adds it.
 - §6.5 `open-book` is detected in the UI as well (src/ui/book.ts openBookIntent): the Book opens whatever the sim answers.
+
+## Stage B sim (B-sim, 2026-11-08) — §3 defiance; additive, no §6 shape changed
+- Code: new module `src/sim/god/defiance.ts` (§3 level, acts, answers, memory decay/landmarks/daughters/newborn bias,
+  views, query, commands) called from arc.ts heartsDaily / relationship.ts hourly; ARC §0.6 lists arc.ts for this, the
+  split is organisational only.
+- §3.1 harmLoad: counted once per act (`w` 1 / 0.5 provoked-foretold) plus `w × dead / 10` as the act's dead fall
+  (regard.ts endAct; a disaster closes its act every step, so the stage-A +1 per endAct over-counted).
+- §3.2 terror (D1): nobody goes out to defy when the town's mean fear (yesterday's) or a person's own fear is >= 0.9
+  (`DEFY.terror`). The curse is rolled daily, gathered at the town's dusk window by the hourly pass (the defiant
+  hearts, up to 12); hurl is rolled once a day at the hourly check while a god-0 storm (weather.paint storm kinds and
+  miracle.storm, tracked as `since.gStorm`), a god-0 disaster or a god-0 harm within the hour is within 1 km of the
+  territory; throwers are grown, boldness >= 0.6, trust < 0.35. All rolls also take the world seed.
+- §3.2 idol where a rival holds them: the rival's faith +0.1, `defy` event with count 0 and line `defy.rival` (new id);
+  no building. The idol building is `idol` ("Carved post", recipe `religion`, appended to buildings.json).
+- §3.3: an act already under way before the defiant act (a storm that was there) is no answer. A help act on a town
+  with an open window is read by the mercy rule (witnessAct). Answer lines: `defy.mercy|wrath|sign|silence`
+  (`defy.silence` = the day-10 patience line), `defy.patience` (the year-on line). The `defy.mercy` text names the
+  help (`{what}`: rain, bread, healing, calm, gifts). ArcEvent `answer` for every answer except a silence more than once a
+  year per town; ArcEvent `defiance` for the first act of a kind per town in 2 years.
+- `defiance.answer` is in WRATHFUL (so it takes `wrath` and, later, `covenant`). It dispatches miracle.lightning 150 m
+  beside the town (or its idol), settlement.gift bread 40, or god.omen; patience sets `since.patience` only.
+- `SettlementView.heart.answered` is composed from per-town answer counts (`since.aWrath..aPatience`), e.g. "struck
+  twice, shown mercy once". `query('defiance')` adds `open`, `idol`, `answered`; `acts` come from `defied` (latest per kind).
+- §0.4 memory decay is applied in the daily pass once a year per town (`since.memY`); a landmark is a struck,
+  scattered or abandoned tower within 3 km whose ArcEvent the town remembers (strike -> wrath, confuse -> humbled,
+  warn -> patience). `freshen(A, s, means, bias?)` takes the newborn bias. Households of fearMigration carry memory x 0.5.

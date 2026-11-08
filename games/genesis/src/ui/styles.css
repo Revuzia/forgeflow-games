@@ -1398,9 +1398,9 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-book-p { display: block; margin: 0 0 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; text-wrap: pretty; }
 .gn-book-prose { text-indent: 0; hyphens: auto; }
 .gn-book-prose::first-letter { font-size: 1.75em; line-height: 0; color: var(--gn-gold); font-weight: 500; padding-right: 1px; }
-button.gn-book-link { display: inline; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: inherit; cursor: pointer; pointer-events: auto;
+span.gn-book-link { cursor: pointer; pointer-events: auto;
   text-decoration: underline; text-decoration-color: rgba(217, 184, 120, .32); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-button.gn-book-link:hover { color: var(--gn-gold-hi); text-decoration-color: var(--gn-gold); }
+span.gn-book-link:hover, span.gn-book-link:focus-visible { color: var(--gn-gold-hi); text-decoration-color: var(--gn-gold); }
 .gn-book-told { margin: 4px 0 0; padding-left: 10px; border-left: 2px solid var(--gn-line-gold); font-style: italic; color: #e2d3ae; }
 .gn-book-closing { margin: 0; text-align: center; font-style: italic; color: var(--gn-gold-hi); text-wrap: balance; }
 .gn-book-empty { padding: 26px 8px; text-align: center; font: italic 500 16px/1.5 var(--gn-serif); }

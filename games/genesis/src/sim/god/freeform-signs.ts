@@ -30,6 +30,7 @@ import { bearingDir, moveBy } from './util.ts';
 import { DISCIPLE_MODES } from './disciples.ts';
 import { currentTower, towerWords } from './tower.ts';
 import { heartWords } from './arc.ts';
+import { peekRel } from './regard.ts';
 
 interface LiveName { name: string; kind: string; id: number; planet: number; pos?: V3 }
 
@@ -162,6 +163,8 @@ export function intentSigns(c: SignClause): boolean {
   const { cx, full, mods } = c;
   const { u, p } = cx;
   const f = full;
+  // ── ARC §6.5 the god's answer to a defiant town (before "be merciful" as a disposition) ──
+  if (p && defyIntents(c, p)) return true;
   // ── wrath as a disposition: "be gentle with them", "be terrible" ──
   if (/\b(be|go) (gentle|merciful|kind|soft|lenient|mild|easy)\b|\bgo easy on\b|\bspare them\b/.test(f) && !/\b(rain|storm|wind|breeze)\b/.test(f)) {
     c.add({ k: 'set', path: 'god.wrath', value: 0.1 }, 'wrath: gentle');
@@ -398,6 +401,41 @@ const T_LET_SOFT = /\blet them build\b|\bleave them be\b/;
 const T_ASK = /\bwhat are they building\b|\bwhy are they building\b|\bwhat is (that|the) tower\b|\bwhy are they proud\b/;
 const H_ASK = /\bwhat do (they|the people|people) feel\b|\bare they (angry|afraid|happy)\b|\bdo they want to rebel\b|\bhow do (the people of [a-z' -]+|they|people|[a-z]+) feel\b|\bwhy are they angry\b|\bwhat do (they|the people) think of me\b/;
 const T_NEG = /\b(don't|do not|never|not|no)\b/;
+
+const D_MERCY = /\b(be merciful to|have mercy on|show mercy to|forgive)\s+(?!me\b)[a-z]|\bsend them (rain|bread|food) anyway\b/;
+const D_SIGN = /\bshow\s+(?!me\b)[a-z' -]+?\s+a sign\b/;
+const D_PATIENCE = /\bbe patient with\b|\blet them (curse|shout|rage)\b|^(?:please )?ignore (them|[a-z' -]+)$/;
+const D_WRATH = /\bpunish\s+[a-z' -]+?\s+for (their|its|the) (defiance|anger|stones|curses|cursing|insolence)\b|\bpunish (their|the) defiance\b/;
+
+/**
+ * ARC §6.5: "forgive Aru", "be merciful to Aru", "send them rain anyway" (mercy) / "show Aru a sign" (sign) / "be patient
+ * with Aru", "let them curse", "ignore them" (patience) / "punish Aru for their defiance" (wrath) -> defiance.answer. The
+ * town is the one named, else the newest with an open defiant act. Only a town that has defied (or has an act awaiting
+ * an answer) is answered this way; otherwise the words fall through to their ordinary reading ("show Aru a sign" is an
+ * omen). A negation refuses.
+ */
+function defyIntents(c: SignClause, p: Planet): boolean {
+  const { cx, full: f, mods } = c;
+  const how = D_WRATH.test(f) ? 'wrath' : D_MERCY.test(f) ? 'mercy' : D_SIGN.test(f) ? 'sign' : D_PATIENCE.test(f) ? 'patience' : null;
+  if (!how) return false;
+  const u = cx.u;
+  const sts = (p.people?.settlements ?? []).filter((s) => s.fallen < 0 && !s.band);
+  const named = sts.filter((s) => wordAt(f, s.name.toLowerCase()) >= 0).sort((a, b) => b.name.length - a.name.length)[0];
+  const sid = mods.place?.settlement ?? named?.id;
+  const rel = (id: number) => peekRel(u, p.id, id);
+  let st = sid !== undefined ? sts.find((s) => s.id === sid) : undefined;
+  if (!st) {
+    // the newest open defiant act
+    let best = -1;
+    for (const s of sts) { const a = rel(s.id)?.answer; if (a && a.tick > best) { best = a.tick; st = s; } }
+  }
+  if (!st) return false;
+  const r = rel(st.id);
+  if (!r?.answer && !(r?.defied && Object.keys(r.defied).length)) return false;
+  if (/\b(don't|do not|never|not)\b/.test(f)) return c.ask(`Then answer ${st.name} another way: with mercy, a sign, patience, or wrath.`);
+  c.add({ k: 'defiance.answer', settlement: st.id, how }, how === 'mercy' ? `forgive ${st.name}` : how === 'sign' ? `show ${st.name} a sign` : how === 'patience' ? `be patient with ${st.name}` : `punish ${st.name}`);
+  return true;
+}
 
 function arcIntents(c: SignClause, p: Planet): boolean {
   const { cx, full: f, mods } = c;

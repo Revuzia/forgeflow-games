@@ -26,6 +26,7 @@ import { distM } from '../people/world.ts';
 import { peekRel, srel } from './regard.ts';
 import type { CommandRegistry } from './commands.ts';
 import { fail, ok } from './util.ts';
+import { answeredWords, defianceDaily, inherit, lateActWords } from './defiance.ts';
 import scripture from '../../data/scripture.json' with { type: 'json' };
 
 /** ARC tunables (every number of ARC.md marked *(ARC)*) */
@@ -149,10 +150,12 @@ export function chosenOf(r: SettlementRel, tick: number, year: number): number {
 }
 
 /** fix a (§2.1, §3): a god-0 harm on the town (regard.ts endAct) */
-export function noteHarm(r: SettlementRel, tick: number, year: number): void {
+export function noteHarm(r: SettlementRel, tick: number, year: number, w = 1, first = true, dead = 0): void {
   decayHarm(r, tick, year);
   r.lastHarm = tick;
-  r.harmLoad = (r.harmLoad ?? 0) + 1;
+  // ARC §3.1: harmLoad += w_k × (1 + dead / 10), w_k 1 unprovoked, 0.5 provoked or foretold; the act once, its dead as they fall
+  const add = (first ? w : 0) + w * dead / 10;
+  if (add > 0) r.harmLoad = r3((r.harmLoad ?? 0) + add);
 }
 
 /** harmLoad halves yearly: decayed lazily to `tick` (since.harmT holds the tick it was last decayed to) */
@@ -177,6 +180,8 @@ function arcInit(x: PCtx, st: Settlement, r: SettlementRel): boolean {
     if (last >= 0) { r.lastHarm = last; r.harmLoad = r3(load); r.since.harmT = x.tick; }
   }
   r.defiance ??= 0;
+  // ARC §0.4: a daughter founded from a town inherits its memory, pride and defiance in part
+  if (st.founded >= 0 && x.tick - st.founded <= 2 * x.day) inherit(x.u, x.p.id, st, r);
   return true;
 }
 
@@ -230,7 +235,10 @@ export function heartsDaily(x: PCtx, st: Settlement): void {
     else { delete r.since.prideHold; delete r.since.prideHoldV; }
   }
   r.prideWhy = why;
-  r.pride = r3(first || r.pride === undefined ? target : clamp(r.pride + (target - r.pride) * ARC.prideRate));
+  r.pride = r3(first || r.pride === undefined ? Math.max(target, r.since.inPride ?? 0) : clamp(r.pride + (target - r.pride) * ARC.prideRate));
+  if (first) delete r.since.inPride;
+  // §3.1 defiance, the answer window, memory's yearly decay and the acts' daily rolls (god/defiance.ts)
+  defianceDaily(x, st, r, pass, first);
   // a rising tower's builders (§2.3): +0.002 a day, never above target + 0.15 (tower.ts sets since.tLeague daily)
   if (r.since.tLeague !== undefined && r.since.tLeague >= x.tick && r.pride < target + 0.15) r.pride = r3(Math.min(clamp(r.pride + 0.002), target + 0.15));
   // hearts
@@ -351,6 +359,9 @@ export function heartWords(u: Universe, planet: number, sid?: number): string {
     if (more.length) line += `; ${more.join(', ')}`;
     const r = peekRel(u, planet, st.id);
     if (r && (r.pride ?? 0) >= 0.6) line += '. They are proud';
+    // (§6.5: the latest defiant act, within twelve days: "Two days ago they threw stones at your storm.")
+    const late = sid !== undefined ? lateActWords(r, u.tick, Math.max(60, Math.round(p!.st.dayHours * 60))) : '';
+    if (late) line += `. ${late.replace(/\.$/, '')}`;
     const g = groups.get(line) ?? [];
     g.push(st.name);
     groups.set(line, g);
@@ -389,7 +400,7 @@ export function heartView(r: SettlementRel | undefined, st: Settlement): Settlem
   return {
     kind: h.kind, proud: h.proud, devoted: h.devoted, fearful: h.fearful, restless: h.restless, defiant: h.defiant,
     pride: r.pride ?? 0, defiance: r.defiance ?? 0, dusk: d?.ema ?? 0, duskYearAgo: d?.yearAgo ?? 0,
-    caption: caption(h.kind), line: lineOf(h.kind, st.name), remember: rememberWords(r.memory), answered: '',
+    caption: caption(h.kind), line: lineOf(h.kind, st.name), remember: rememberWords(r.memory), answered: answeredWords(r),
   };
 }
 
@@ -423,7 +434,8 @@ export function heartSigns(u: Universe, p: Planet, b: MoverBlock): void {
     if (s < 0) { out[k] = HeartSign.none; continue; }
     const task = A.task[s];
     let v: HeartSignId = HeartSign.none;
-    if (task === TASK.pray || task === TASK.worship || task === TASK.pilgrimage) v = HeartSign.pray;
+    if (task === TASK.defy) v = A.tData[s] === 2 ? HeartSign.hurl : HeartSign.fist;
+    else if (task === TASK.pray || task === TASK.worship || task === TASK.pilgrimage) v = HeartSign.pray;
     else if (!(A.flags[s] & AgentFlag.child)) {
       const sid = b.group[k];
       let t = towns.get(sid);

@@ -39,6 +39,7 @@ import { dayTicks, GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
 import { speciesInfo } from '../people/ctx.ts';
 import { currentWrath, wrathLaw, WRATH_DEFAULT } from './wrath.ts';
 import { noteHarm } from './arc.ts';
+import { answerFromAct, arcNewbornBias, harmJolt, idolStands } from './defiance.ts';
 import { towerStands } from './tower.ts';
 
 // ───────────────────────────── the universe a planet belongs to ─────────────────────────────
@@ -118,9 +119,12 @@ export function riseTrust(v: number, d: number): number {
  * faith and loyalty are set from what they hold — faith = min(1, trust + fear), loyalty = 0.5 × trust (the 1.4 save
  * migration's rule) — and a child raised among the faithful takes up part of their settlement's faith.
  */
-export function freshen(A: { faith: Float32Array; loyalty: Float32Array; love: Float32Array; fear: Float32Array }, s: number, means?: ArrayLike<number> | null): void {
+export function freshen(A: { faith: Float32Array; loyalty: Float32Array; love: Float32Array; fear: Float32Array }, s: number, means?: ArrayLike<number> | null,
+  bias?: { fear: number; trust: number }): void {
   const i = s * GODS;
   if (A.faith[i] !== 0 || A.loyalty[i] !== 0) return;
+  // ARC §0.4: what the town remembers of the god (arc newborn bias: wrath → fear, mercy → trust), added once, after seeding
+  if (bias) { A.fear[i] = Math.min(1, A.fear[i] + bias.fear); A.love[i] = Math.min(1, A.love[i] + bias.trust); }
   for (let g = 0; g < GODS; g++) {
     const love = A.love[i + g], fear = A.fear[i + g];
     if (love + fear <= 0) continue;
@@ -211,7 +215,15 @@ export function endAct(u: Universe | null, ctx: ActCtx): void {
     const r = srel(u, pl, sid);
     const dead = ctx.dead[k] ?? 0;
     const kind = ctx.killed || dead > 0 ? 'harm' : seen?.kind ?? 'harm';
-    if (kind === 'harm' && ctx.god === 0 && !ctx.natural) noteHarm(r, u.tick, yearOf(u, pl));
+    const prior = r.acts.find((q) => q.key === ctx.key);
+    if (kind === 'harm' && ctx.god === 0 && !ctx.natural) {
+      // ARC §3.1 fix a: w 1 unprovoked, 0.5 provoked or foretold, × (1 + dead / 10); the act counts once, its dead as they fall
+      const first = !(prior && prior.kind === 'harm');
+      noteHarm(r, u.tick, yearOf(u, pl), seen?.foretold || seen?.provoked ? 0.5 : 1, first, dead);
+      harmJolt(r, first);
+    }
+    // ARC §3.3: the first god-0 act on a town with an open defiant act answers it
+    if (ctx.god === 0 && !ctx.natural && r.answer) answerFromAct(u, pl, sid, kind, prior ? prior.tick : u.tick, ctx.what);
     if (delayed && kind === 'harm' && !r.acts.some((q) => q.key === ctx.key && q.kind === 'harm')) (harmed ??= []).push([pl, sid]);
     const last = r.acts.length ? r.acts[r.acts.length - 1] : null;
     if (last && last.key === ctx.key) {
@@ -342,7 +354,8 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const r = u && sid >= 0 ? u.god.rel?.st[relKey(p.id, sid)] : undefined;
     const foretold = eff === 'harm' && !!u && sid >= 0 && foretoldAt(u, p, sid, tick, day);
     const provoked = eff === 'harm' && !foretold && !!u && sid >= 0 && provokedAt(u, p, sid, tick, day);
-    const mercy = eff === 'help' && !!u && sid >= 0 && harmedLately(u, p, sid, tick, day, g);
+    // (ARC §3.3: help to a town whose defiant act awaits the god's answer is read by the mercy rule too)
+    const mercy = eff === 'help' && !!u && sid >= 0 && (harmedLately(u, p, sid, tick, day, g) || (g === 0 && !!r?.answer && tick - r.answer.tick <= 10 * day));
     const favour = !r || r.means[2] >= r.means[1];
     // a kindness that fits the god's record with them (keptBy) is believed more than a first one
     const kept = eff === 'help' && r && u ? keptBy(r, tick, yearOf(u, p.id), g) : 0;
@@ -361,8 +374,8 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const d = Math.acos(d0 > 1 ? 1 : d0 < -1 ? -1 : d0) * R;
     if (d > radius) continue;
     const i = s * GODS + g;
-    freshen(A, s);
     const sid = A.settlement[s];
+    freshen(A, s, null, u && sid >= 0 ? arcNewbornBias(u.god.rel?.st[relKey(p.id, sid)]) : undefined);
     const k = 1 - d / Math.max(1, radius);
     const mk = mag * k;
     const sp = info[A.species[s]].def;
@@ -441,9 +454,10 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
 /** move every member of a settlement (prayer answered / lapsed, a prophecy fulfilled / failed, an omen read) */
 export function moveSettlement(x: PCtx, st: Settlement, d: { faith?: number; fear?: number; trust?: number; loyalty?: number }, g = 0): void {
   const A = x.A;
-  const means = x.u.god.rel?.st[relKey(x.p.id, st.id)]?.means;
+  const rr = x.u.god.rel?.st[relKey(x.p.id, st.id)];
+  const means = rr?.means, bias = arcNewbornBias(rr);
   for (const s of x.ps.members.get(st.id) ?? []) {
-    freshen(A, s, means);
+    freshen(A, s, means, bias);
     const i = s * GODS + g;
     if (d.faith) A.faith[i] = rise(A.faith[i], d.faith);
     if (d.fear) A.fear[i] = clamp01(A.fear[i] + d.fear);
@@ -484,19 +498,24 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
   const members = x.ps.members.get(st.id) ?? [];
   const dk = x.u.god.law('belief.decay');
   const r = srel(x.u, x.p.id, st.id);
+  // ARC §0.4 memory `sign`: a town that remembers the god's signs waits 3 + 2 × min(2, w) days before its faith drifts
+  const ws = r.memory?.sign ?? 0;
+  if (!seen && ws > 0 && st.recent.godSeen !== undefined && x.tick - st.recent.godSeen < (3 + 2 * Math.min(2, ws)) * x.day) seen = true;
+  const bias = arcNewbornBias(r);
   const fk = 1 - (seen ? 0.003 : 0.01) * dk;
   const ek = 1 - (seen ? 0.01 : 0.045) * dk;
   const tk = 1 - 0.005 * dk;
   const rally = weathered(x, r, members.length);
   // §2.4 let: while the tower stands over a proud league town, its loyalty to the god aims lower
-  const lk = towerStands(x.u, x.p.id, st.id) ? 0.8 : 1;
+  // ARC §3.2 idol: while a carved god of their own stands, the same (× 0.8; both together × 0.64)
+  const lk = (towerStands(x.u, x.p.id, st.id) ? 0.8 : 1) * (idolStands(x.u, x.p.id, st.id) ? 0.8 : 1);
   // ARC §1 / owner 2026-11-08 ("he is just"): the god's record with the town (keptBy) lifts what their allegiance aims at
   // and keeps the god real to them between its acts
   const kept = keptBy(r, x.tick, x.year, 0);
   const fk0 = 1 - (seen ? 0.003 : 0.01) * dk * (1 - 0.5 * kept);
   const m = [0, 0, 0, 0];
   for (const s of members) {
-    freshen(A, s, r.means);
+    freshen(A, s, r.means, bias);
     if (rally) {
       const i = s * GODS + rally.g;
       if (!rally.natural || A.faith[i] > 0.3) { A.love[i] = riseTrust(A.love[i], rally.trust); A.loyalty[i] = clamp01(A.loyalty[i] + rally.loyalty); }
