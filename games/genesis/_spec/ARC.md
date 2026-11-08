@@ -228,7 +228,7 @@ Parts, each 0..1, written to `prideWhy`:
   tick** written at `endAct` for every god-0 harm on the town (fix a; `r.acts` is capped at 12, regard.ts:225, and must
   not be used for this). If the town was never harmed, the count starts from `r.since.arc0` (its founding tick, or the
   load tick for a migrated save).
-- **F unbelief** = `max(1 − means[0], chosen)`, where `chosen = clamp(n / 3)` and `n` counts answered prayers, halving every 3 years (r1 change, owner/spec option (c) for attended pacing: a favoured town boasts of being chosen).
+- **F unbelief** = `1 − means[0]`. (Owner ruling 2026-11-08: "its not about g-d being kind or unkind. he is just. they act, the player reacts." Pride comes from the people's own state; the god's kindness neither feeds nor prevents it. The r1 'chosen' term is removed.)
 
 `target = clamp(0.22 P + 0.18 T + 0.18 U + 0.22 L + 0.20 F − 0.6 × max(0, fear − 0.3) + memory biases (§0.4))`. The
 target is 0 when population < 40. `pride += (target − pride) × 0.02` a day (half-life ≈ 35 days ≈ 3 years).
@@ -929,9 +929,8 @@ banned word or phrase, every line ≤ 140 characters, no unfilled `{…}`, and e
 ### 8.2 Pride and the tower (stage A)
 - T1: the three pride sanity values of §2.1, ± 0.03.
 - T2: **unattended**, 8 seeds × 60 years (sandbox, no god): a tower is begun on **2-5 of 8** seeds, **none before year
-  10**, the median first attempt is in years 15-35, and no seed has more than 2 attempts. **Attended pacing** (a scripted
-  gentle god that answers prayers): the first tower begins within 7-14 game years (about 20-40 real minutes at 100x) on
-  ≥ 3 of 8 seeds.
+  10**, the median first attempt is in years 15-35, and no seed has more than 2 attempts. (Attended pacing is dropped by the owner's ruling: the people act, the god
+  reacts; there is no target for how a god's behaviour speeds the tower.)
 - T3: `babel` scenario: begun ≤ 30 game days; first `tower.choice` ≤ 2 years (2-8 real minutes at 100x); 4 shots at
   25/50/75/100 % show clearly different heights, builders on the ramp, and scaffold on the top tier.
 - T4: every attempt reaches ≥ 50 % of goal in ≤ 6 years unless abandoned or answered; ≥ 2 omens are told per tower that
@@ -939,11 +938,11 @@ banned word or phrase, every line ≤ 140 characters, no unfilled `{…}`, and e
 - T5: one speech: league pairwise `langDistance ≤ 0.18` after 2 years of building (4/4 seeds of `babel`).
 - T6: **confuse:** pairwise `langDistance ≥ 0.72` for all league pairs; `langLine[0]` unchanged; `langSeed` and
   `styleVariant` changed in every league town (a shot shows the new house tint in ≥ 2 towns); ≥ 1 new town or ≥ 20 % of
-  households moved per league town within 30 days; relation opinions ≥ 0.2 lower; 0 deaths; one `tower.apart` line per
+  households moved per league town within 30 days; relation opinions ≥ 0.2 lower; 0 deaths by the act itself (owner 2026-11-08: "confusing the tongues i would imagine would indirectly kill families" — deaths of the scattered from cold, hunger or the road are expected, counted and told in the chronicle); one `tower.apart` line per
   pair, at most once.
 - T7: **strike** at default wrath: deaths ≤ 50 % of builders on site and ≤ 10 in total on 8/8 seeds; the rubble is
   still there 50 years later.
-- T8: **warn:** the heed roll reproduces (same seed, same outcome); a heeded warning leaves a sacred place at the site;
+- T8: **warn:** heeding is **very rare** (owner 2026-11-08): per town the heed chance is at most 0.2 and typically under 0.05, so most warnings are refused; the heed roll reproduces (same seed, same outcome); a heeded warning leaves a sacred place at the site;
   a later strike after a refusal is foretold and provoked.
 - T9: **let:** finished at goal; league grievance halved; no polity merge happens; strike and confuse still work on the
   standing tower.

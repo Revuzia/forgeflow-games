@@ -136,7 +136,7 @@ export function prideParts(x: PCtx, st: Settlement, r: SettlementRel, faith: num
     T: r3(clamp((st.era - 1) / 3)),
     U: r3(clamp((k - 1) / 3) * (1 - grievance)),
     L: r3(clamp(yrs / ARC.prideYears)),
-    F: r3(Math.max(clamp(1 - faith), chosenOf(r, x.tick, x.year))),
+    F: r3(clamp(1 - faith)),
   };
 }
 

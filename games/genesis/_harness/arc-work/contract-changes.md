@@ -89,3 +89,12 @@
 - No view/event/command shape changed. New `since` keys (tDrain, tRefusals, chosenN, chosenT) default absent = 0: old saves fine.
 - All tower.ts rolls now take u.seed (salts kept); strike: regard handles trust/noteHarm within STRIKE_R; scatter site bar 3.4;
   hardship never abandons a `let` tower; the first Decision card is level-based (>= 25 %) and a refusal reopens it.
+
+## Owner rulings 2026-11-08 (applied by the lead; binding, do not revert)
+- "its not about g-d being kind or unkind. he is just. they act, the player reacts." -> pride F = 1 - faith; the r1
+  'chosen' (answered prayers feed pride) term is REMOVED from arc.ts prideParts; T2 attended pacing DROPPED from §8.2.
+  Do not tune tower pacing by the god's behaviour. (prayers.ts still counts since.chosenN; unused, harmless.)
+- "confusing the tongues i would imagine would indirectly kill families" -> T6: 0 deaths by the act itself; indirect
+  deaths of the scattered (cold, hunger, road) are expected, counted and told. Do NOT add starter fuel/winter delays.
+- "a warning prophet should be very rare" -> tower.ts heedRoll: heed = clamp(0.02 + 0.08 cred faith0 - 0.05 pride +
+  0.06 fear + 0.02 trust + 0.03 refusals, 0.01, 0.2); T8 rewritten. Do not raise it to make warnings succeed.

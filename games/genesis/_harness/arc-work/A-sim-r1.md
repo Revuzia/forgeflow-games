@@ -44,3 +44,8 @@ Items (brief index): 0 strike double regard | 1 decision card offer | 2 confuse 
 3. Read t2att1.log (probe-t2att.sh 1..8, 20 y): firstYear <= 14 on >= 3/8. If not, add option (b) chance x2 while attended.
 4. #6 M3 kind: see DIAG above. #7: re-run verify-A-r1-tower.sh let 1..8 (finished 8/8 expected).
 5. Gate: npm run check via slot.sh (another agent's check pid 3485 was running at 18:38Z on this tree: wait for it).
+
+## LEAD NOTE 2026-11-08 (owner rulings; supersedes NEXT items 1-3 and #5/#6 plans)
+See contract-changes.md "Owner rulings 2026-11-08": chosen term removed, T2 attended dropped, confuse indirect deaths
+accepted (no scatter shelter fix), heed made very rare. Remaining for this lane: #6 M3 kind run (hearts must respond to
+the god's acts: a town the god helps over 2 years can become devoted; justice, not favour), #7 let re-run, gate.

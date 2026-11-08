@@ -542,7 +542,9 @@ function heedRoll(x: PCtx, tw: TowerState, league: Settlement[]): void {
     // 0.15 not 0.6, and each warning this town refused before makes the next one likelier to land (+0.15 each): at 0.6
     // pride the roll sat at its 0.05 floor on every babel seed (pride 0.77, faith 0.12), so a warning never landed
     const faith0 = Math.min(1, faith + (r.since.tDrain ?? 0));
-    const heed = clamp(0.1 + cred * (0.4 + faith0) - 0.15 * (r.pride ?? 0) + 0.3 * fear + 0.1 * trust + 0.15 * (r.since.tRefusals ?? 0), 0.05, 0.9);
+    // (owner 2026-11-08: "a warning prophet should be very rare" — proud builders almost never go home; a believed prophet,
+    // a frightened town and a town that refused before move the odds a little, never past 1 in 5)
+    const heed = clamp(0.02 + 0.08 * cred * faith0 - 0.05 * (r.pride ?? 0) + 0.06 * fear + 0.02 * trust + 0.03 * (r.since.tRefusals ?? 0), 0.01, 0.2);
     if (heedDie(u, tw.id, s.id) < heed) {
       w.heeded.push(s.id);
       r.pride = r3(clamp((r.pride ?? 0) - 0.25));
