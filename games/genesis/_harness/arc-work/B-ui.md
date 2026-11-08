@@ -23,3 +23,26 @@ recipes, HUD fist pulse on a new `SettlementView.defiant.tick`, inspector Defian
   contract-changes.md entry. testsurface comment updated.
 - Tests: tests/ui-arc-defiance.test.ts (6) + ui-arc-hearts (title assertion updated) + audio-arc (idol/burn/hurl);
   focused ui-arc-*, audio*, ui-meta, ui-flood-*: 63/63; tsc clean.
+- Shots spec _harness/arc-work/specs/ui-defiance.json (babel seed 1, worker, stubbed; port 5311; log scratch/arc/b-ui/).
+  Run 1 (18:22-18:29Z) 3/3, 0 console errors. LOOKED:
+  b-defy-insp.png: under Defiance bar "Lately they threw stones at the storm." (red) and "What the god answered: struck
+  twice, shown mercy once" (gold), dusk + remember below; fits the inspector -> OK.
+  b-defy-chip.png (2500 m): chip "Shenyaar by the Lake" + red fist + proud tower mark; tooltip "...They raise their fists
+  · they boast · they threw stones at the storm" -> OK (pulse already over: the capture took >10 s real).
+  b-defy-toasts.png: DEFECT: the two defy toasts were trimmed out of the 2-toast column by the same-tick answered toast
+  and the sim's tower.begun milestone (equal pri 4, oldest dropped). FIX: first defy toast pri 5 (as the flood
+  warning); unit test "a first defiant act outranks...". Spec shot 1 now stubs defy only. Rerun --only=b-defy-toasts
+  queued 18:30Z (ticket #6, log scratch/arc/b-ui/shots2.log).
+- Full gate: slot.sh npm run check started 18:22Z (PID 5598), log scratch/arc/b-ui/check.log (started before the pri
+  fix; the pri fix is covered by focused tests).
+- Rerun b-defy-toasts (18:5xZ) 1/1, 0 console errors. LOOKED: two "Defiance · <town>" toasts in the voice ("In Shenyaar
+  by the Lake they are throwing stones at your storm." / "At dusk in Ashuk by the Lake they are cursing the sky."), each
+  with the single gold LOOK button; the claimed chronicle line shows in the ticker only -> OK.
+- GATE: npm run check (scratch/arc/b-ui/check.log) 830/830 pass, fail 0 -> GREEN. Post-fix focused tests + tsc green.
+
+## NEXT (stint 2, once the sim lands §3)
+1. Remove nothing: the stub path stays. Run ui-defiance.json WITHOUT stubs on a live recipe (defiance.set + a god storm,
+   D3) and look: real `defy` toasts, real `heart.answered`, chip fist on a real `SettlementView.defiant`.
+2. If the sim's freeform phrases differ from DEFY_EXAMPLES ('forgive {town}', 'be patient with {town}'), align the chips
+   (tests/ui-arc-defiance.test.ts checks them against ARC §6.5).
+3. If the sim composes `defy.answered` toasts' chronicle lines with another settlement ref, check claim() still catches them.

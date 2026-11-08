@@ -19,7 +19,8 @@ if (!t) { console.log('RESULT ' + JSON.stringify({ seed, err: 'no tower' })); pr
 const host = ps.settlement(t.host)!;
 for (const s of (ps.members.get(host.id) ?? []).filter((s) => !(A.flags[s] & 1))) { const r = sim.applyNow({ k: 'prophet.call', agent: A.id[s] } as never) as { ok: boolean }; if (r.ok) break; }
 const out: Record<string, unknown>[] = [];
-for (let k = 0; k < 4 && t.status === 'rising'; k++) {
+const warnN = Number(process.env.WARN_N ?? 4);
+for (let k = 0; k < warnN && t.status === 'rising'; k++) {
   if (t.warned && sim.u.tick < t.warned.disabledUntil) { while (sim.u.tick < t.warned.disabledUntil && t.status === 'rising') { sim.step(60); drain(); } }
   if (t.status !== 'rising') break;
   const r = sim.applyNow({ k: 'tower.warn' } as never) as { ok: boolean; msg?: string };

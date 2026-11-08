@@ -49,3 +49,18 @@ Items (brief index): 0 strike double regard | 1 decision card offer | 2 confuse 
 See contract-changes.md "Owner rulings 2026-11-08": chosen term removed, T2 attended dropped, confuse indirect deaths
 accepted (no scatter shelter fix), heed made very rare. Remaining for this lane: #6 M3 kind run (hearts must respond to
 the god's acts: a town the god helps over 2 years can become devoted; justice, not favour), #7 let re-run, gate.
+
+## Stint 2 (2026-11-08 ~18:2xZ, after the owner rulings)
+- #6 M3 kind FIXED (regard.ts keptBy / KEPT_GAIN 0.8 / KEPT_LOYALTY 0.3, see contract-changes "Stage A sim r1, stint 2").
+  Diag: a fresh sandbox town never needs anything in 2 y (hardDays 0, 0 prayers even with natural disasters on or with no
+  gifts), so the run is 8 gifts; per gift faith ~+0.035; loyalty's aim faith x trust lagged. Runs (A-sim-r1-kind.sh):
+  kind0.log before 0/8; kind1 (aim term only) 0/8; kind2 (GAIN .5) 4/8; kind3 (GAIN .8) 7/8 devoted day 19-23.
+- #2 confuse: act kills no one (test); indirect cold/hunger deaths of the daughter towns counted after 1 y
+  (tw.scatter.lost) and told once (tower.lost line + event). New test in arc-tower-r1.test.ts.
+- #4 warn (lead's heedRoll): warn3.log 8 seeds x up to 3 warnings: heed per town max 0.075, median 0.016-0.027, 0 heeds
+  in ~80 rolls (rare, as ruled); seed 1 run twice: identical RESULT (reproducible). Sacred place on heed and provoked
+  strike after refusal: unit tests (arc-tower T8, arc-tower-r1). warn4.log = WARN_N=1 + strike right after refusal.
+- #7 let: let2.log 8/8 finished at goal 80 (y5.1-5.5), later strike/confuse on the standing tower work.
+- #1 card / #3 seeded dice: arc-tower-r1 tests green (6/6).
+- Focused: arc-hearts, living-relationship, prayers-pause, arc-tower, arc-tower-r1 60/60; living-content,
+  living-integration, mods, omnipotence, people 92/92; tsc clean.

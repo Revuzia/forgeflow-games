@@ -105,3 +105,15 @@
   `defy` / `defy.answered` toasts and cues before the sim emits them.
 - No other §6 change: the UI reads `SettlementView.defiant`, `heart.defiance`, `heart.answered` and the events
   `defy {settlement, kind, count}` / `defy.answered {settlement, how}` exactly as specified.
+
+## Stage A sim r1, stint 2 (A-sim-r1, 2026-11-08) — owner rulings applied in the sim
+- Hearts answer the god's record (owner: "he is just"; M3 kind): regard.ts `keptBy(rel, tick, year, god)` = (help/mercy
+  acts on the town's record within 2 years − 2 × unprovoked harm) / 4, clamped 0..1 (0 for a god that never helped: the
+  unattended world is unchanged). Uses: a help's faith and trust gains × (1 + 0.8 kept) (`KEPT_GAIN`); god 0's loyalty
+  relaxes toward faith × clamp(trust + 0.5 fear + 0.3 kept) (`KEPT_LOYALTY`) at 5 % × (1 + kept) a day; faith's daily
+  decay × (1 − 0.5 kept). No pride/'chosen' term. M3 kind (A-sim-r1-kind.ts, 40 bread every 3 days, answer any prayer):
+  devoted on 7/8 seeds at day 19-23 of 24 (was 0/8).
+- T6 confuse indirect deaths: `TowerState.scatter?: { towns, d0, until, lost? }` (optional; old saves without it simply
+  have no count). A year after the scattering the daughter towns' cold + hunger deaths are `scatter.lost`, relStat
+  'tower.scatterLost', event `tower.lost {tower, lost, towns}` and the chronicle line `tower.lost` (events.json), once.
+  The act itself still kills no one and the Book's confuse entry keeps dead 0.

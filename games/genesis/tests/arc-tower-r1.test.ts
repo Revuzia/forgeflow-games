@@ -163,7 +163,7 @@ test('§2.4 confuse kills no one by the act; the scattered who freeze or starve 
   tw.scatter!.until = L.sim.u.tick;
   L.sim.drainEvents();
   L.sim.step(makeCtx(L.sim.u, L.sim.u.planets[0]).day + 60);
-  const ev = L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.lost') as { data: { lost: number } }[];
+  const ev = L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.lost') as unknown as { data: { lost: number } }[];
   assert.ok((tw.scatter!.lost ?? 0) >= 2, `lost ${tw.scatter!.lost}`);
   assert.equal(ev.length, 1, 'told once');
   assert.equal(ev[0].data.lost, tw.scatter!.lost);
