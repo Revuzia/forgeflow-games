@@ -702,10 +702,12 @@ export class PrayerMarks {
             this.hearts.set(key, he);
             this.root.append(he);
           }
-          const sig = `${hg.icon}|${hg.proud}`;
+          const sig = `${hg.icon}|${hg.proud}|${hg.defiantTick >= 0}`;
           if (he.dataset.sig !== sig) {
             he.dataset.sig = sig;
             he.innerHTML = '';
+            // ARC §3.4: a defiant act in the open (<= 2 days old) glows on the orbit mark too
+            he.classList.toggle('gn-lmark-defy', hg.defiantTick >= 0);
             if (hg.icon) he.append(h('span', { class: `gn-slabel-sign gn-${hg.icon}`, html: icon(hg.icon) }));
             if (hg.proud) he.append(h('span', { class: 'gn-slabel-sign gn-slabel-proud', html: icon('heart-proud') }));
           }

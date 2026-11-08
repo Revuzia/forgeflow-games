@@ -334,7 +334,7 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
   const wrathful = currentWrath() !== null;
   const cruel = cruelty(currentWrath() ?? (u ? wrathLaw(u) : WRATH_DEFAULT));
   // what the act is to each settlement (decided once per call)
-  const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean }>();
+  const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean; kept: number }>();
   const classify = (sid: number) => {
     let o = cls.get(sid);
     if (o) return o;
@@ -344,7 +344,9 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const provoked = eff === 'harm' && !foretold && !!u && sid >= 0 && provokedAt(u, p, sid, tick, day);
     const mercy = eff === 'help' && !!u && sid >= 0 && harmedLately(u, p, sid, tick, day, g);
     const favour = !r || r.means[2] >= r.means[1];
-    o = { kind: eff === 'help' ? (mercy ? 'mercy' : 'help') : eff === 'harm' ? 'harm' : 'sign', foretold, provoked, mercy, favour };
+    // a kindness that fits the god's record with them (keptBy) is believed more than a first one
+    const kept = eff === 'help' && r && u ? keptBy(r, tick, yearOf(u, p.id), g) : 0;
+    o = { kind: eff === 'help' ? (mercy ? 'mercy' : 'help') : eff === 'harm' ? 'harm' : 'sign', foretold, provoked, mercy, favour, kept };
     cls.set(sid, o);
     return o;
   };
@@ -373,8 +375,8 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     if (!(natural && A.faith[i] <= 0.3)) {
       const fk = f * (0.6 + 0.5 * (1 - b));
       if (o.kind === 'help' || o.kind === 'mercy') {
-        dF = 0.15 * mk;
-        dT = 0.25 * mk * a * (0.5 + pi);
+        dF = 0.15 * mk * (1 + KEPT_GAIN * o.kept);
+        dT = 0.25 * mk * a * (0.5 + pi) * (1 + KEPT_GAIN * o.kept);
         if (o.mercy) { dFe = -0.1 * mk; dT *= 1.5; dL = 0.05 * mag; }
       } else if (o.kind === 'harm') {
         if (o.foretold) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; }
@@ -452,6 +454,27 @@ export function moveSettlement(x: PCtx, st: Settlement, d: { faith?: number; fea
 
 // ───────────────────────────── daily drift, means, regard ─────────────────────────────
 
+/** how much the god's record with a town lifts its loyalty's aim (relDaily: faith x clamp(trust + 0.5 fear + this x kept)) */
+export const KEPT_LOYALTY = 0.3;
+/** how much more a kindness moves faith and trust when it fits the god's record (witnessAct: x (1 + this x kept)) */
+export const KEPT_GAIN = 0.8;
+
+/**
+ * The god's record with a settlement, 0..1 (A-sim-r1 #6, owner 2026-11-08: the god is just; hearts answer its acts): the
+ * help it gave them (help, mercy; answered prayers are help acts) within the last 2 years, less twice its unprovoked harm
+ * (cruelty: neither foretold, provoked nor natural), over 4. Help in plenty and help in need both count; a single cruel
+ * act cancels two kindnesses. 0 for a god that never acted for them (unattended worlds are untouched).
+ */
+export function keptBy(r: SettlementRel, tick: number, year: number, g: number): number {
+  let n = 0;
+  for (const a of r.acts) {
+    if (a.god !== g || tick - (a.until ?? a.tick) > 2 * year) continue;
+    if (a.kind === 'help' || a.kind === 'mercy') n++;
+    else if (a.kind === 'harm' && !a.foretold && !a.provoked && !a.natural) n -= 2;
+  }
+  return n <= 0 ? 0 : n >= 4 ? 1 : n / 4;
+}
+
 /**
  * Once a day per settlement (people/culture.ts cultureDaily): the drift of every member's four values, and the member
  * means kept on the settlement's record. `seen`: the god was seen there in the last 3 days.
@@ -467,6 +490,10 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
   const rally = weathered(x, r, members.length);
   // §2.4 let: while the tower stands over a proud league town, its loyalty to the god aims lower
   const lk = towerStands(x.u, x.p.id, st.id) ? 0.8 : 1;
+  // ARC §1 / owner 2026-11-08 ("he is just"): the god's record with the town (keptBy) lifts what their allegiance aims at
+  // and keeps the god real to them between its acts
+  const kept = keptBy(r, x.tick, x.year, 0);
+  const fk0 = 1 - (seen ? 0.003 : 0.01) * dk * (1 - 0.5 * kept);
   const m = [0, 0, 0, 0];
   for (const s of members) {
     freshen(A, s, r.means);
@@ -477,11 +504,11 @@ export function relDaily(x: PCtx, st: Settlement, seen: boolean): [number, numbe
     for (let g = 0; g < GODS; g++) {
       const i = s * GODS + g;
       if (A.faith[i] === 0 && A.love[i] === 0 && A.fear[i] === 0) continue;
-      A.faith[i] = A.faith[i] * fk;
+      A.faith[i] = A.faith[i] * (g === 0 ? fk0 : fk);
       A.fear[i] = A.fear[i] * ek;
       A.love[i] = A.love[i] * tk;
-      const target = A.faith[i] * clamp01(A.love[i] + 0.5 * A.fear[i]) * (g === 0 ? lk : 1);
-      A.loyalty[i] = A.loyalty[i] + (target - A.loyalty[i]) * 0.05;
+      const target = A.faith[i] * clamp01(A.love[i] + 0.5 * A.fear[i] + (g === 0 ? KEPT_LOYALTY * kept : 0)) * (g === 0 ? lk : 1);
+      A.loyalty[i] = A.loyalty[i] + (target - A.loyalty[i]) * (g === 0 ? 0.05 * (1 + kept) : 0.05);
     }
     const i0 = s * GODS;
     m[0] += A.faith[i0]; m[1] += A.fear[i0]; m[2] += A.love[i0]; m[3] += A.loyalty[i0];

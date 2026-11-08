@@ -302,7 +302,13 @@ export const ARC_CUES: Record<string, ((e: SimEvent) => CueSpec | null) | null> 
   'tower.finished': () => spec('crowd.cheer', 'news', { gain: 0.6, gap: 10, pri: 6 }),
   'tower.abandoned': null,
   'tower.rebuilt': () => spec('toil.drums', 'news', { gain: 0.45, gap: 30 }),
-  defy: (e) => spec('crowd.shout', 'news', { gain: 0.5, gap: 8, variant: str((e.data ?? {}).kind) }),
+  // §3.4: the crowd shouts (variant = kind); a raised idol is a knock of stone instead; a burning shrine also gets the
+  // existing fire cue through the fire event
+  defy: (e) => {
+    const k = str((e.data ?? {}).kind);
+    return k === 'idol' ? spec('stone.knock', 'news', { gain: 0.35, gap: 20, variant: k })
+      : spec('crowd.shout', 'news', { gain: 0.5, gap: 8, variant: k });
+  },
   'defy.answered': null,
   'covenant.offered': null,
   'covenant.bow': () => spec('covenant.chime', 'god', { gain: 0.7, gap: 10, pri: 8 }),

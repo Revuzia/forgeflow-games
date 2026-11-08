@@ -61,9 +61,9 @@ test('the banks read the same zones: the rising river wets and silts them above 
   assert.match(oc, /cap = .*\(1\.0 \+ 2\.0 \* silt\)/, 'the in-scatter cap lifts for muddy water');
 });
 
-test('a silted river stays WATER: the body browns ~70 % but the sky reflection, glints and ripples stay on top (owner #10)', () => {
+test('a silted river stays WATER: the body browns ~85 % but the sky reflection, glints and ripples stay on top (owner #10)', () => {
   const oc = readFileSync(new URL('../src/render/planet/ocean.ts', import.meta.url), 'utf8');
-  const i = oc.indexOf('under = mix(under, mud, 0.72 * silt)');
+  const i = oc.indexOf('under = mix(under, mud, 0.85 * silt)');
   const j = oc.indexOf('vec3 col = mix(under, skyR, F) + glint;');
   assert.ok(i > 0 && j > i, 'the mud goes into the body before the Fresnel sky and the glints are added');
   assert.doesNotMatch(oc, /col = mix\(col, lumC/, 'no matte recolour of the final colour (it killed the sheen)');

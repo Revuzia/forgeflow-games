@@ -213,6 +213,7 @@ kbd { font: 600 11.5px var(--gn-mono); color: var(--gn-gold-hi); border: 1px sol
 .gn-slabel-hk.gn-pulse { animation: gnFist 1.1s ease-in-out infinite; }
 @keyframes gnFist { 50% { transform: scale(1.35); filter: drop-shadow(0 0 5px rgba(255, 80, 90, .95)) drop-shadow(0 1px 2px #000); } }
 @media (prefers-reduced-motion: reduce) { .gn-slabel-hk.gn-pulse { animation: none; filter: drop-shadow(0 0 4px rgba(255, 80, 90, .95)); } }
+.gn-lmark-defy .gn-heart-defiant { filter: drop-shadow(0 0 4px rgba(255, 80, 90, .95)) drop-shadow(0 1px 2px #000); }
 @keyframes gnLamp { 50% { filter: drop-shadow(0 0 5px rgba(255, 220, 150, .9)) drop-shadow(0 1px 2px #000); } }
 /* a praying town seen from high up: a small lamp (a click selects it) */
 .gn-lmarks { pointer-events: none; }
@@ -506,6 +507,8 @@ button.gn-past-h:hover, button.gn-past-h:focus-visible { color: var(--gn-gold-hi
 .gn-insp-fill.gn-love { background: linear-gradient(90deg, #8d74c9, #d6c6ff); }
 .gn-insp-fill.gn-fear { background: linear-gradient(90deg, #7a3a36, var(--gn-bad)); }
 .gn-insp-fill.gn-pride { background: linear-gradient(90deg, #6d6450, #fff2c8); }
+.gn-insp-hearts .gn-insp-defy { color: #ff8a90; }
+.gn-insp-hearts .gn-insp-answered { color: var(--gn-gold-hi); }
 .gn-insp-fill.gn-defy { background: linear-gradient(90deg, #5e1f26, #ff5a64); }
 .gn-insp-fill.gn-heart-devoted { background: #f2c452; } .gn-insp-fill.gn-heart-fearful { background: #8c6fe6; }
 .gn-insp-fill.gn-heart-restless { background: #c4842e; } .gn-insp-fill.gn-heart-defiant { background: #cc2234; }

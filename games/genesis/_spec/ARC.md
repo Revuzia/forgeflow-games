@@ -861,8 +861,10 @@ years} · `covenant.refused` {covenant, cmd} · `covenant.broken` {covenant, act
 
 ### 6.7 Test surface (`window.__GENESIS__`, src/testsurface.ts, UI lane)
 Adds `arc: { hearts(): unknown; towers(): unknown; story(planet?): unknown; stub(kind: 'hearts'|'towers'|'covenant'|
-'age', data): void }`. `stub` lets the UI and render lanes inject `SettlementView.heart` / `PlanetSnap.towers` /
-`covenantOffer` / `age` into the next snapshot before the sim lands. It is removed from the stub path (kept as a no-op)
+'age'|'events', data): void }`. `stub` lets the UI and render lanes inject `SettlementView.heart` / `PlanetSnap.towers` /
+`covenantOffer` / `age` into the next snapshot before the sim lands. `stub('events', SimEvent[] | { events, chronicle })`
+(stage B) appends §6.3 events and chronicle entries **once** to the next snapshot (a missing `tick` takes the snapshot's),
+so toasts and SFX cues of events the sim does not emit yet (`defy`, `defy.answered`) can be shot and tested. It is removed from the stub path (kept as a no-op)
 once stage C is green.
 
 ### 6.8 Scenario

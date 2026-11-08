@@ -6,10 +6,13 @@
 //   stub('towers', TowerView[] | { planet, towers })          -> PlanetSnap.towers (the first planet unless named)
 //   stub('covenant', { planet?, covenant?, covenantOffer? })  -> PlanetSnap.covenant / covenantOffer
 //   stub('age', { planet?, age?, epithet? })                  -> PlanetSnap.age / epithet
+//   stub('events', SimEvent[] | { events?, chronicle? })      -> appended ONCE to the next snapshot's events / chronicle
+//                                                                (stage B: `defy`, `defy.answered` before the sim emits them;
+//                                                                a missing `tick` takes the snapshot's)
 
-import type { Snapshot, PlanetSnap, SettlementView, TowerView } from '../sim/types.ts';
+import type { Snapshot, PlanetSnap, SettlementView, TowerView, SimEvent, ChronicleEntry } from '../sim/types.ts';
 
-export type ArcStubKind = 'hearts' | 'towers' | 'covenant' | 'age';
+export type ArcStubKind = 'hearts' | 'towers' | 'covenant' | 'age' | 'events';
 type TownStub = { settlement: number; heart?: SettlementView['heart']; defiant?: SettlementView['defiant']; covenant?: SettlementView['covenant'] };
 
 interface Stubs {
@@ -18,8 +21,10 @@ interface Stubs {
   towers: { planet: number | null; towers: TowerView[] } | null;
   covenant: { planet: number | null; covenant?: PlanetSnap['covenant']; covenantOffer?: PlanetSnap['covenantOffer'] } | null;
   age: { planet: number | null; age?: PlanetSnap['age']; epithet?: string } | null;
+  /** one-shot: delivered with the next snapshot, then gone */
+  events: { events: Partial<SimEvent>[]; chronicle: Partial<ChronicleEntry>[] } | null;
 }
-const S: Stubs = { towns: null, signs: null, towers: null, covenant: null, age: null };
+const S: Stubs = { towns: null, signs: null, towers: null, covenant: null, age: null, events: null };
 
 const planetOf = (d: unknown): number | null => (d && typeof d === 'object' && typeof (d as { planet?: unknown }).planet === 'number' ? (d as { planet: number }).planet : null);
 
@@ -43,16 +48,30 @@ export function arcStub(kind: ArcStubKind, data: unknown): void {
       return;
     case 'covenant': S.covenant = data == null ? null : { planet: planetOf(data), ...(data as object) }; return;
     case 'age': S.age = data == null ? null : { planet: planetOf(data), ...(data as object) }; return;
+    case 'events': {
+      if (data == null) { S.events = null; return; }
+      const o = (Array.isArray(data) ? { events: data } : data) as { events?: Partial<SimEvent>[]; chronicle?: Partial<ChronicleEntry>[] };
+      S.events ??= { events: [], chronicle: [] };
+      S.events.events.push(...(o.events ?? []));
+      S.events.chronicle.push(...(o.chronicle ?? []));
+      return;
+    }
   }
 }
 
 export function arcStubActive(): boolean {
-  return !!(S.towns || S.signs != null || S.towers || S.covenant || S.age);
+  return !!(S.towns || S.signs != null || S.towers || S.covenant || S.age || S.events);
 }
 
 /** patches a snapshot in place (called by the sim client before the WorldView sees it) */
 export function applyArcStub(snap: Snapshot): void {
   if (!arcStubActive() || !snap?.planets?.length) return;
+  if (S.events) {
+    const tick = Math.floor(snap.tick ?? 0);
+    for (const e of S.events.events) (snap.events ??= []).push({ ...e, t: String(e.t ?? ''), tick: e.tick ?? tick } as SimEvent);
+    for (const c of S.events.chronicle) (snap.chronicle ??= []).push({ year: 1, day: 1, weight: 1, kind: 'god', text: '', planet: snap.planets[0].id, ...c, tick: c.tick ?? tick } as ChronicleEntry);
+    S.events = null;
+  }
   const first = snap.planets[0].id;
   const on = (p: PlanetSnap, want: number | null) => p.id === (want ?? first);
   for (const p of snap.planets) {

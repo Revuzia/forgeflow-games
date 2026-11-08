@@ -23,6 +23,7 @@
 import type { ChronicleEntry, Command, EntityRef, SimEvent, UnitVec } from '../sim/types.ts';
 import type { WorldView } from '../client/worldview.ts';
 import { stripYear } from './words.ts';
+import { defyAnsweredText, defyToastText } from './hearts.ts';
 
 export type ToastKind = 'discovery' | 'birth' | 'death' | 'founding' | 'refusal' | 'loss' | 'fall' | 'plague' | 'god' | 'nature' | 'war' | 'peace' | 'info' | 'warn';
 
@@ -266,6 +267,8 @@ export class Toasts {
     }
   }
 
+  /** ARC §3.3: the defiant acts already toasted, `planet:settlement:kind` (the first act of each kind per town is news) */
+  private defySeen = new Set<string>();
   /** the warning toast of the latest warning (its tick's evacuations are told on it, not beside it) */
   private warnHead: { tick: number; planet: number; box: HTMLElement; told: Set<string> } | null = null;
 
@@ -568,6 +571,27 @@ export class Toasts {
         if (to !== 'defiant' && to !== 'devoted') return;
         const c = this.claim(e.tick, (q) => q.kind === 'god' && mentions(q.text, where));
         this.show({ kind: 'god', title: `Hearts · ${place}`, text: c ? c.text : to === 'defiant' ? `In ${where} they raise their fists at the sky.` : `${where} has turned its face to the god again.`, date: dateFrom(c, date), at, planet });
+        return;
+      }
+      // ARC §3.3: the first act of each kind per town is a toast in the voice whose only button is "Look"; later acts
+      // stay in the chronicle (their lines are claimed here so they do not come back as milestones). No answer menu.
+      case 'defy': {
+        const kind = String(data.kind ?? '');
+        const c = this.claim(e.tick, (q) => q.kind === 'god' && mentions(q.text, where));
+        const key = `${planet}:${sid}:${kind}`;
+        if (this.defySeen.has(key)) return;
+        this.defySeen.add(key);
+        const s = view.planet(planet)?.settlements.find((q) => q.id === sid);
+        const pos = at ?? (s ? { planet, pos: s.pos } : null);
+        const look = pos ? { label: 'Look', title: 'Look there', run: () => this.actions.lookAt(pos.planet, pos.pos) } : null;
+        this.show({ kind: 'god', title: `Defiance · ${place}`, text: defyToastText(kind, where), date: dateFrom(c, date), at: pos, planet, action: look, pri: 5 }); // rare (once per kind per town): above the god's routine news
+        return;
+      }
+      // ARC §3.3: how the god's deed was read (the sim's line when it came with it)
+      case 'defy.answered': {
+        const c = this.claim(e.tick, (q) => q.kind === 'god' && mentions(q.text, where));
+        const s = view.planet(planet)?.settlements.find((q) => q.id === sid);
+        this.show({ kind: 'god', title: `Answered · ${place}`, text: c ? c.text : defyAnsweredText(String(data.how ?? ''), where), date: dateFrom(c, date), at: at ?? (s ? { planet, pos: s.pos } : null), planet });
         return;
       }
       case 'sacred.place': case 'sacred.animal': {

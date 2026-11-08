@@ -1,0 +1,40 @@
+{
+ "_doc": "A-render-r1 stint 3: frame time at medium (the default) before the arc (tree d2512fbc in _harness/scratch/arc/render/base) vs now: lookdev 420 m + 60 m, sandbox play 120 m + 600 m. Run from each tree's root.",
+ "shots": [
+  {
+   "name": "r1k-perf-lookdev",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_?.closeAll?.(); const m = async () => { G.perf(true); await G.frames(14); const s = G.perf(); G.perf(false); const sl = s.slots || {}; return { work: s.work, frame: s.frame, shadows: sl.shadows, scene: sl.scene, actors: sl.actors, planets: sl.planets, post: sl.post }; };",
+    "const p = G.poi('homestead'); await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 420, tilt: 64, yaw: p.heading + 25, fov: 50, hour: 10 }); await G.frames(8); const a = await m();",
+    "const v = G.poi('village'); await G.camera({ mode: 'orbit', lat: v.lat, lon: v.lon, dist: 60, tilt: 70, yaw: v.heading, fov: 50, hour: 10 }); await G.frames(8); const b = await m();",
+    "console.warn('PERF lookdev ' + JSON.stringify({ far: a, near: b })); return { far: a.work, near: b.work };"
+   ]
+  },
+  {
+   "name": "r1k-perf-play",
+   "params": "scenario=sandbox&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); const m = async () => { G.perf(true); await G.frames(14); const s = G.perf(); G.perf(false); const sl = s.slots || {}; return { work: s.work, frame: s.frame, shadows: sl.shadows, scene: sl.scene, actors: sl.actors, planets: sl.planets, post: sl.post }; };",
+    "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 }); const r0 = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: 60, era: 'bronze', settled: true, wildGame: false }); const sid = r0.created.find((e) => e.kind === 'settlement').id; await G.step(1440 * 4);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 120, tilt: 60, yaw: 30, fov: 50, hour: 10 }); await G.frames(8); const a = await m();",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 600, tilt: 60, yaw: 20, fov: 50, hour: 11 }); await G.frames(8); const b = await m();",
+    "console.warn('PERF play ' + JSON.stringify({ near: a, far: b })); return { near: a.work, far: b.work };"
+   ]
+  }
+ ]
+}

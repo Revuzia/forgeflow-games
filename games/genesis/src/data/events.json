@@ -263,6 +263,7 @@
     {"id": "tower.heeded", "kind": "god", "weight": 2, "text": ["{prophet} spoke for five days. On the sixth the builders of {settlement} went home."]},
     {"id": "tower.refused", "kind": "god", "weight": 2, "text": ["They laughed at {prophet} at {host}, and the work went on."]},
     {"id": "tower.confused", "kind": "god", "weight": 3, "text": ["At {host} the builders could not understand each other. They put down their tools and went home, each to its own tongue.", "Overnight the speech of {league} came apart. The tower stood, and no one climbed it."]},
+    {"id": "tower.lost", "kind": "god", "weight": 2, "text": ["Of those who went out from {host} when the tongues came apart, {count} did not live out the year on the new land."]},
     {"id": "tower.apart", "kind": "god", "weight": 2, "text": ["{a} and {b} no longer understand each other."]},
     {"id": "tower.struck", "kind": "god", "weight": 3, "text": ["Fire came down on the tower of {host}. The builders fled before it fell."]},
     {"id": "tower.struck.dead", "kind": "god", "weight": 3, "text": ["The tower of {host} fell, and {dead} died beneath it."]},

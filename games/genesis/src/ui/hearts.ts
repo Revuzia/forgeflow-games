@@ -3,7 +3,7 @@
 // asks ΔE ≥ 15 between the four kinds and the proud rim) and the layer's hover line. All sacred text (captions, mood
 // lines, memory phrases) is composed by the sim; the captions here are only the fallback for an empty `caption`.
 
-import type { HeartKind, SettlementView } from '../sim/types.ts';
+import type { DefyKind, HeartKind, SettlementView } from '../sim/types.ts';
 import type { CvdPalette } from './prefs.ts';
 
 export type TownHeart = NonNullable<SettlementView['heart']>;
@@ -52,15 +52,50 @@ export function prideWhyWords(w: { P: number; T: number; U: number; L: number; F
 export const captionOf = (h: TownHeart): string => h.caption || HEART_CAPTION[h.kind] || '';
 export const shareOf = (h: TownHeart): number => (h.kind === 'quiet' ? 0 : h[h.kind]);
 
-/** the name chip's glyph: shown when the town's heart is not quiet, or when it is proud (§1.4) */
+/** ARC §3.4: a defiant act in plain words, for the chip's tooltip ("Aru: they threw stones at the storm") */
+export const DEFY_WORDS: Record<DefyKind, string> = {
+  curse: 'they cursed the sky', hurl: 'they threw stones at the storm', burn: 'they burned the shrine', idol: 'they carved a god of their own',
+};
+
+/**
+ * ARC §3.3: the first toast of each kind of act per town, present tense, in the voice ("In Aru they are throwing stones
+ * at your storm"). Its only button is "Look". `count` is how many took part (words up to twelve, §0.3 rule 8).
+ */
+export function defyToastText(kind: string, where: string): string {
+  switch (kind) {
+    case 'curse': return `At dusk in ${where} they are cursing the sky.`;
+    case 'hurl': return `In ${where} they are throwing stones at your storm.`;
+    case 'burn': return `${where} is burning your shrine.`;
+    case 'idol': return `${where} has carved a god of its own and set it in the square.`;
+  }
+  return `In ${where} they raise their fists at the sky.`;
+}
+
+/** ARC §3.3: the god's answer to a defiant act as it was read (the fallback when no chronicle line came with it) */
+export function defyAnsweredText(how: string, where: string): string {
+  switch (how) {
+    case 'wrath': return `The god answered the stones of ${where} with fire.`;
+    case 'mercy': return `They threw stones, and the god was kind to ${where}.`;
+    case 'sign': return `A sign came over ${where}, after the stones.`;
+    case 'patience': return `The sky did not answer ${where}.`;
+  }
+  return `The god answered ${where}.`;
+}
+
+/**
+ * the name chip's glyph: shown when the town's heart is not quiet, or when it is proud (§1.4). A defiant act in the
+ * open (`SettlementView.defiant`, <= 2 days old, §3.4) shows the fist whatever the town's heart, and says what they did.
+ */
 export function heartGlyph(s: Pick<SettlementView, 'name' | 'heart' | 'defiant'>): { icon: string | null; proud: boolean; title: string; defiantTick: number } | null {
-  const h = s.heart;
-  if (!h || (h.kind === 'quiet' && !h.proud)) return null;
+  const h = s.heart, act = s.defiant;
+  if (!act && (!h || (h.kind === 'quiet' && !h.proud))) return null;
   const parts: string[] = [];
-  if (h.kind !== 'quiet') parts.push(captionOf(h));
-  if (h.proud) parts.push(HEART_CAPTION.proud.toLowerCase());
+  if (h && h.kind !== 'quiet') parts.push(captionOf(h));
+  if (h?.proud) parts.push(HEART_CAPTION.proud.toLowerCase());
+  if (act && DEFY_WORDS[act.kind]) parts.push(DEFY_WORDS[act.kind]);
   const title = `${s.name}: ${parts.join(' · ')}`;
-  return { icon: h.kind === 'quiet' ? null : `heart-${h.kind}`, proud: h.proud, title, defiantTick: s.defiant ? s.defiant.tick : -1 };
+  const icon = act ? 'heart-defiant' : h && h.kind !== 'quiet' ? `heart-${h.kind}` : null;
+  return { icon, proud: !!h?.proud, title, defiantTick: act ? act.tick : -1 };
 }
 
 /** "9 of 40 came at dusk" (dusk is the share that came; population the grown count the sim measured against) */

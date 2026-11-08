@@ -20,6 +20,17 @@ import { fuzzy } from './fuzzy.ts';
 const HISTORY_KEY = 'genesis.freeform.history';
 
 /** examples shown when the field is empty: the breadth of what words can do */
+/** ARC §6.5: offered while a town has defied the god in the open (`SettlementView.defiant`); the sim reads them as
+ *  `defiance.answer { how: 'mercy' | 'patience' }` */
+export const DEFY_EXAMPLES = ['forgive {town}', 'be patient with {town}', 'how do the people of {town} feel?'];
+
+/** the name of a town with a defiant act in the open now (the newest), or null */
+export function defiantTown(planets: readonly { settlements: readonly { name: string; flags: number; defiant?: { tick: number } }[] }[]): string | null {
+  let best: { name: string; tick: number } | null = null;
+  for (const pv of planets) for (const s of pv.settlements) if (!(s.flags & 2) && s.defiant && (!best || s.defiant.tick > best.tick)) best = { name: s.name, tick: s.defiant.tick };
+  return best ? best.name : null;
+}
+
 const EXAMPLES = [
   'make it rain here for two days',
   'raise a mountain range here',
@@ -377,7 +388,11 @@ export class Freeform {
     const wrap = h('div', { class: 'gn-ff-ex-wrap' });
     // (a great tower rising: its answers in words come first — ARC §6.5)
     const rising = this.host.view.planets.some((pv) => (pv.towers ?? []).some((t) => t.status === 'rising' && t.choiceOpen));
-    const ex = rising ? ['confuse their tongues', 'warn the builders', 'let the tower stand', ...EXAMPLES] : EXAMPLES;
+    let ex = rising ? ['confuse their tongues', 'warn the builders', 'let the tower stand', ...EXAMPLES] : EXAMPLES;
+    // (a town that defied the god in the open: there is no answer menu, the god's next deed is the answer — ARC §3.3;
+    // the box offers the words that answer without a power, then how they feel)
+    const defiant = defiantTown(this.host.view.planets);
+    if (defiant) ex = [...DEFY_EXAMPLES.map((e) => e.replace('{town}', defiant)), ...ex];
     for (const e of ex) wrap.append(this.exampleChip(e.replace('{town}', t1).replace('{town2}', t2), false));
     this.examples.append(wrap);
   }

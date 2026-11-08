@@ -146,3 +146,27 @@ test('§2.4 tower rolls are the world\'s own: two seeds give different heed and 
   for (let s = 1; s <= 64; s++) if (heedDie({ seed: s }, 1, 1) < 0.5) low++;
   assert.ok(low >= 16 && low <= 48, `town 1 rolls under 0.5 on ${low}/64 worlds`);
 });
+
+test('§2.4 confuse kills no one by the act; the scattered who freeze or starve that year are counted and told once (T6, owner 2026-11-08)', () => {
+  const L = league();
+  must(L.sim, { k: 'tower.begin', settlement: L.host.id } as never);
+  L.sim.step(makeCtx(L.sim.u, L.sim.u.planets[0]).day * 20);
+  const alive0 = L.sim.u.planets[0].people.agents.count;
+  must(L.sim, { k: 'tower.confuse' } as never);
+  assert.ok(L.sim.u.planets[0].people.agents.count >= alive0, 'the act itself kills no one');
+  const tw = towerOf(L.sim);
+  assert.ok(tw.scatter && tw.scatter.towns.length >= 1 && tw.scatter.lost === undefined, 'the daughter towns are kept for the count');
+  const ps = L.sim.u.planets[0].people;
+  const kid = ps.settlement(tw.scatter!.towns[0])!;
+  // two of the scattered froze in their first winter (as the cold would)
+  kid.stats.froze += 2;
+  tw.scatter!.until = L.sim.u.tick;
+  L.sim.drainEvents();
+  L.sim.step(makeCtx(L.sim.u, L.sim.u.planets[0]).day + 60);
+  const ev = L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.lost') as { data: { lost: number } }[];
+  assert.ok((tw.scatter!.lost ?? 0) >= 2, `lost ${tw.scatter!.lost}`);
+  assert.equal(ev.length, 1, 'told once');
+  assert.equal(ev[0].data.lost, tw.scatter!.lost);
+  L.sim.step(makeCtx(L.sim.u, L.sim.u.planets[0]).day * 2);
+  assert.equal(L.sim.drainEvents().filter((e) => (e as { t: string }).t === 'tower.lost').length, 0, 'never again');
+});

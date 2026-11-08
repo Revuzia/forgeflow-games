@@ -23,7 +23,7 @@ export function siltTarget(d: DisasterView): number {
   if (d.kind !== 'flood') return 0;
   const P = d.params ?? {};
   // the warning: brown from the first rain upstream, deepening as the river rises toward the flood
-  if (P.warning) return (P.silt ?? 1) > 0 ? 0.45 + 0.55 * Math.min(1, Math.max(0, P.rise ?? 0)) : 0;
+  if (P.warning) return (P.silt ?? 1) > 0 ? 0.7 + 0.3 * Math.min(1, Math.max(0, P.rise ?? 0)) : 0;
   // the flood itself is brown water
   return 1;
 }

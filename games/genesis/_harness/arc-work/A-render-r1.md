@@ -146,3 +146,14 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   ramp, fire on top, bare cleared site, no trees (was cold grey-blue). r1h-tower-finished-day (420 m): a hill fills
   the left of the frame (camera framing), the tower warm sandstone stepped. => #9 DONE (clearing, warm coursed stone,
   scorched ragged rubble mound with stump: r1f-tower-struck).
+
+## Stint 3 (2026-11-08 18:16Z-) — fresh context (container had restarted ~18:14Z; node_modules present)
+- LOOKED AT r1j-flood-warning (600 m) / r1j-flood-warning-near (400 m), the 2.4x zone live: town, risen lake (wider
+  than r1j-flood-before) and rain READ; but the town's lake is pale grey-green (157,158,149), NOT brown (before: dark blue).
+  FIX: ocean.ts mud tint (1.45,0.98,0.5)@0.72 -> ochre (1.75,0.88,0.32)@0.85, sky skin warmer and 30 % less;
+  silt.ts warning target 0.45+0.55*rise -> 0.7+0.3*rise. render-silt 6/6.
+- New specs: r1-render-flood7.json (r1k-flood-*: 600 m + 400 m at low/medium/high/ultra via G.quality on one page),
+  r1-render-hearts.json (r1k-heart-dusk-near/mid: ui-m4b harsh recipe until fearful, dusk 18.2 h, bolt, 24 m / 70 m),
+  r1-render-perf2.json (medium: lookdev 420/60 m + sandbox play 120/600 m), run on now AND on the pre-arc tree d2512fbc
+  (git archive into _harness/scratch/arc/render/base, node_modules symlinked).
+- chain13 pid 3861: perf2-now, perf2-base, flood7, hearts (logs _harness/scratch/arc/render/shots-r1-perf2-*.log etc.)

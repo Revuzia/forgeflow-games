@@ -25,9 +25,20 @@ for (let k = 0; k < 4 && t.status === 'rising'; k++) {
   const r = sim.applyNow({ k: 'tower.warn' } as never) as { ok: boolean; msg?: string };
   if (!r.ok) { out.push({ k, fail: r.msg }); break; }
   const ph = relOf(sim.u).prophets.find((q) => q.agent === t.warned!.agent);
-  const ins = t.league.map((id) => { const q = peekRel(sim.u, p.id, id)!; return { id, m: q.means.slice(0, 3).map(r2), pride: r2(q.pride ?? 0), drain: r2(q.since.tDrain ?? 0), ref: q.since.tRefusals ?? 0 }; });
+  const cred0 = ph?.credibility ?? 0.3;
+  const ins = t.league.map((id) => { const q = peekRel(sim.u, p.id, id)!; const f0 = Math.min(1, q.means[0] + (q.since.tDrain ?? 0));
+    const heed = Math.min(0.2, Math.max(0.01, 0.02 + 0.08 * cred0 * f0 - 0.05 * (q.pride ?? 0) + 0.06 * q.means[1] + 0.02 * q.means[2] + 0.03 * (q.since.tRefusals ?? 0)));
+    return { id, heed: Math.round(heed * 1000) / 1000, m: q.means.slice(0, 3).map(r2), pride: r2(q.pride ?? 0), drain: r2(q.since.tDrain ?? 0), ref: q.since.tRefusals ?? 0 }; });
   sim.step(6 * day + 60); drain();
   out.push({ k, y: r2(sim.u.tick / year), h: r2(t.height / t.goal), cred: ph?.credibility, ins, heeded: t.warned!.heeded, refused: t.warned!.refused, status: t.status });
 }
+// T8 last clause: a strike after a refusal is foretold or provoked (the host's act record)
+let strike: unknown = null;
+if (t.status === 'rising' && t.warned?.refused.length) {
+  const r = sim.applyNow({ k: 'tower.strike' } as never) as { ok: boolean; msg?: string };
+  sim.step(2 * day); drain();
+  const a = peekRel(sim.u, p.id, t.host)?.acts.filter((q) => q.kind === 'harm' && q.god === 0).at(-1);
+  strike = { ok: r.ok, foretold: a?.foretold, provoked: a?.provoked, dead: a?.dead };
+}
 const sacred = relOf(sim.u).places.filter((q) => (q as { by?: string }).by === 'prophet').length;
-console.log('RESULT ' + JSON.stringify({ seed, host: t.host, first: out[0], firstHeed: (out[0]?.heeded as number[] | undefined)?.length ?? 0, warnings: out.length, status: t.status, sacred, all: out.slice(1) }));
+console.log('RESULT ' + JSON.stringify({ seed, host: t.host, first: out[0], firstHeed: (out[0]?.heeded as number[] | undefined)?.length ?? 0, warnings: out.length, status: t.status, sacred, strike, all: out.slice(1) }));

@@ -330,6 +330,9 @@ export interface TowerState {
   warned?: { agent: number; tick: number; heeded: number[]; refused: number[]; disabledUntil: number };
   omens: number;
   rebuildOf?: number; converged: number;
+  /** §2.4 confuse (owner 2026-11-08): the daughter towns of the scattering, their cold and hunger deaths at founding, and
+   *  after a year the scattered it cost (`lost`, told once in the chronicle) */
+  scatter?: { towns: number[]; d0: number[]; until: number; lost?: number };
 }
 export interface CovenantOffer { id: number; planet: number; act: string; kind: 'flood' | 'fire' | 'ruin'; name: string;
   settlements: number[]; dead: number; household?: { id: number; name: string; count: number };

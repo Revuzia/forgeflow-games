@@ -25,7 +25,8 @@
 //   programs()                 names of the GPU programs linked so far (shader warm-up coverage)
 //   perf(on?)                  the frame monitor (render/perfmon.ts): on=true starts measuring, the summary of the last 240 frames
 //   arc                        ARC §6.7: hearts() / towers() / story(planet?) (sim queries); stub(kind, data) puts
-//                              hearts / towers / covenant / age views into every later snapshot (client/arcstub.ts)
+//                              hearts / towers / covenant / age views into every later snapshot, and 'events'
+//                              (SimEvent[] | { events, chronicle }) once into the next one (client/arcstub.ts)
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
 //                              points, [x, y], size) / overlay(mode) / state() / pref(path, value) — panels include

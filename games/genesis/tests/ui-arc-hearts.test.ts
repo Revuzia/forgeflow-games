@@ -31,7 +31,7 @@ test('the glyph shows only for a heart that is not quiet, or a proud town; its t
   const d = heartGlyph({ name: 'Aru', heart: H({ kind: 'defiant', defiant: 0.4 }), defiant: { kind: 'curse', tick: 77 } })!;
   assert.equal(d.icon, 'heart-defiant');
   assert.equal(d.defiantTick, 77);
-  assert.equal(d.title, 'Aru: They raise their fists', 'falls back to the §1.4 caption');
+  assert.equal(d.title, 'Aru: They raise their fists · they cursed the sky', 'falls back to the §1.4 caption, then the act (§3.4)');
   for (const k of [...HEART_KINDS.map((k) => `heart-${k}`), 'heart-proud', 'heart']) {
     assert.ok(iconKeys().includes(k), `icon ${k}`);
     assert.ok(icon(k).includes('<path'), k);

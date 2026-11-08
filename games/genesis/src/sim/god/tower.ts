@@ -48,7 +48,7 @@ import { agentName, settlementRef, vars } from '../people/util.ts';
 import { distM, isLand, spotInCell, sunElevation } from '../people/world.ts';
 import { stormSeverity } from '../people/shelter.ts';
 import { cellPos3, fail, ok } from './util.ts';
-import { relOf, srel, peekRel, meansNow, moveSettlement, currentAct, relKey, cruelty } from './regard.ts';
+import { relOf, srel, peekRel, meansNow, moveSettlement, currentAct, relKey, cruelty, relStat } from './regard.ts';
 import { godAct } from './belief.ts';
 import { lethality, currentWrath, WRATH_DEFAULT } from './wrath.ts';
 import { hardshipOf } from './prayers.ts';
@@ -391,7 +391,27 @@ export function towerDaily(u: Universe, p: Planet): void {
     if (tw.status === 'rising') rising(x, tw);
     else if (tw.status === 'finished') standing(x, tw);
     else if (tw.status === 'struck' && dayIdx % yd === hash32(tw.id) % yd) rebuildRoll(x, tw);
+    else if (tw.status === 'scattered' && tw.scatter && tw.scatter.lost === undefined && x.tick >= tw.scatter.until) scatterLost(x, tw);
   }
+}
+
+/**
+ * §2.4 confuse, a year on (owner 2026-11-08: "confusing the tongues i would imagine would indirectly kill families"): the
+ * act itself kills no one, but the scattered who froze or starved in their new towns that first year are counted on the
+ * tower (`scatter.lost`, also relStat 'tower.scatterLost') and told once.
+ */
+function scatterLost(x: PCtx, tw: TowerState): void {
+  const sc = tw.scatter!;
+  let lost = 0;
+  sc.towns.forEach((id, i) => { const st = x.ps.settlement(id); if (st) lost += Math.max(0, st.stats.starved + st.stats.froze - (sc.d0[i] ?? 0)); });
+  sc.lost = lost;
+  if (!lost) return;
+  relStat(x.u, 'tower.scatterLost', lost);
+  const host = x.ps.settlement(tw.host);
+  const at = x.ps.settlement(sc.towns[0]) ?? host;
+  if (!at) return;
+  x.u.emit({ t: 'tower.lost', planet: x.p.id, pos: tw.pos, data: { tower: tw.id, lost, towns: sc.towns.slice() } });
+  tell(x.u, x.p, 'tower.lost', vars(x, at, -1, { host: host?.name ?? at.name, count: String(lost) }), at, sc.towns.map((id) => x.ps.settlement(id)).filter((s): s is Settlement => !!s).map((s) => settlementRef(x, s)), 2);
 }
 
 function rising(x: PCtx, tw: TowerState): void {
@@ -675,6 +695,7 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
   const league = towns(x, tw.league);
   const host = x.ps.settlement(tw.host) ?? league[0];
   let scattered = 0, founded = 0;
+  const kids: number[] = [], d0: number[] = [];
   for (const st of league) {
     const line = st.langLine.length ? st.langLine : [st.langSeed];
     const d1 = driftLanguage(st.langSeed, st.id ^ hash32(x.tick, 0));
@@ -721,9 +742,10 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
     // (stint r1-1, finding 2: any site scoring above 0 was taken, and on babel the scattered households froze in their
     // first winter there; now the budding path's own bar, a site good the whole year round, else the budding search)
     const child = splitOff(x, st, leaving, 'scatter', far.cell >= 0 && far.score >= SCATTER_SITE ? far.cell : -1);
-    if (child) founded++;
+    if (child) { founded++; kids.push(child.id); d0.push(child.stats.starved + child.stats.froze); }
   }
   tw.status = 'scattered'; tw.ended = x.tick;
+  tw.scatter = { towns: kids, d0, until: x.tick + x.year };
   answered(x, tw, 'confuse');
   u.emit({ t: 'tower.confused', planet: p.id, pos: tw.pos, data: { tower: tw.id, towns: tw.league.slice(), scattered, founded } });
   tell(u, p, 'tower.confused', vars(x, host, -1, { host: host.name, league: names(league) }), host, league.map((s) => settlementRef(x, s)), 3);

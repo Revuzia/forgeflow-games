@@ -98,3 +98,10 @@
   deaths of the scattered (cold, hunger, road) are expected, counted and told. Do NOT add starter fuel/winter delays.
 - "a warning prophet should be very rare" -> tower.ts heedRoll: heed = clamp(0.02 + 0.08 cred faith0 - 0.05 pride +
   0.06 fear + 0.02 trust + 0.03 refusals, 0.01, 0.2); T8 rewritten. Do not raise it to make warnings succeed.
+
+## Stage B UI (B-ui, 2026-11-08) — §6.7 additive
+- `__GENESIS__.arc.stub` gains kind `'events'`: `SimEvent[] | { events?, chronicle? }`, appended once to the next snapshot
+  (src/client/arcstub.ts). Test-surface only; no sim view, event or command shape changed. Lets the UI shoot/test the
+  `defy` / `defy.answered` toasts and cues before the sim emits them.
+- No other §6 change: the UI reads `SettlementView.defiant`, `heart.defiance`, `heart.answered` and the events
+  `defy {settlement, kind, count}` / `defy.answered {settlement, how}` exactly as specified.

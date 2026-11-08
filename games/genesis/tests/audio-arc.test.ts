@@ -50,6 +50,10 @@ test('the cues the spec names (§1.6, §2.6, §3.4, §4.5, §5.5)', () => {
   assert.equal(c('tower.finished')?.cue, 'crowd.cheer');
   assert.equal(c('tower.warned'), null);
   assert.equal(c('defy', { kind: 'curse' })?.cue, 'crowd.shout');
+  assert.equal(c('defy', { kind: 'hurl' })?.variant, 'hurl');
+  assert.equal(c('defy', { kind: 'burn' })?.cue, 'crowd.shout', 'the fire event brings its own cue');
+  assert.equal(c('defy', { kind: 'idol' })?.cue, 'stone.knock', '§3.4: an idol is a knock of stone');
+  assert.equal(c('defy', { kind: 'idol' })?.gap, 20);
   assert.equal(c('defy.answered'), null);
   assert.equal(c('covenant.bow')?.cue, 'covenant.chime');
   assert.equal(c('covenant.broken')?.cue, 'covenant.chime.broken');

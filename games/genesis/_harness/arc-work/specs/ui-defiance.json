@@ -1,0 +1,55 @@
+{
+ "_doc": "ARC \u00a73 UI on a live worker world (babel seed 1) with stubbed defiance (sim \u00a73 not built): the first-of-kind defy toasts with their one 'Look' button + an answered toast, the inspector's Lately / What the god answered lines, the fist on the name chip at region distance. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/ui-defiance.json --port=5311 > _harness/scratch/arc/b-ui/shots.log 2>&1 &",
+ "shots": [
+  {
+   "name": "b-defy-toasts",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); document.getElementById('boot')?.remove(); G.toastLife(600000); await G.step(1440); await G.frames(3);",
+    "const pv = window.__GENESIS_FX__.fx.vis.pv; const towns = pv.settlements.filter((s) => !(s.flags & 2)); window.__towns = towns.map((s) => ({ id: s.id, pos: s.pos, name: s.name })); const tk = Math.floor(G.state ? 0 : 0);",
+    "const H = (kind, o) => Object.assign({ kind, proud: false, devoted: 0.05, fearful: 0.1, restless: 0.2, defiant: 0, pride: 0.6, defiance: 0.5, dusk: 0.2, duskYearAgo: 0.6, caption: '', line: '', remember: [], answered: '' }, o);",
+    "G.arc.stub('hearts', [{ settlement: towns[0].id, heart: H('defiant', { defiant: 0.48, proud: true, pride: 0.72, defiance: 0.64, caption: 'They raise their fists', line: 'In this town they raise their fists at the sky.', remember: ['the storm that took the harvest'], answered: 'struck twice, shown mercy once' }), defiant: { kind: 'hurl', tick: 1440 } }, { settlement: towns[1].id, heart: H('restless', { restless: 0.5, caption: 'They murmur', defiance: 0.47 }), defiant: { kind: 'curse', tick: 1440 } }]);",
+    "G.arc.stub('events', { events: [ { t: 'defy', planet: pv.id, data: { settlement: towns[0].id, kind: 'hurl', count: 8 } }, { t: 'defy', planet: pv.id, data: { settlement: towns[1].id, kind: 'curse', count: 9 } } ], chronicle: [ { planet: pv.id, kind: 'god', weight: 2, text: 'In ' + towns[0].name + ' they threw stones at the storm. The stones fell back on their fields.', refs: [{ kind: 'settlement', id: towns[0].id }] } ] });",
+    "await G.frames(20);",
+    "return { towns: window.__towns.map((t) => t.name), toasts: [...document.querySelectorAll('.gn-toast')].map((t) => t.textContent) };"
+   ]
+  },
+  {
+   "name": "b-defy-insp",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 2,
+   "script": [
+    "G.hold('ui'); const t = window.__towns; G.select({ kind: 'settlement', id: t[0].id }); await G.frames(30); const sec = document.querySelector('.gn-insp-hearts'); sec?.querySelector('.gn-insp-answered')?.scrollIntoView({ block: 'center' }); await G.frames(3);",
+    "return { hearts: sec?.textContent?.slice(0, 400) ?? null, lately: sec?.querySelector('.gn-insp-defy')?.textContent ?? null, answered: sec?.querySelector('.gn-insp-answered')?.textContent ?? null };"
+   ]
+  },
+  {
+   "name": "b-defy-chip",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.select(null); const t = window.__towns; G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: t[0].id }, dist: 2500, tilt: 50, yaw: 30, fov: 50, hour: 11 }); await G.frames(3); G.hold(true);",
+    "return { chips: [...document.querySelectorAll('.gn-slabel-name')].map((n) => ({ name: n.textContent, heart: n.querySelector('.gn-slabel-heart')?.title ?? null, pulse: !!n.querySelector('.gn-pulse') })) };"
+   ]
+  }
+ ]
+}

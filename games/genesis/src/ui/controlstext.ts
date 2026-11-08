@@ -77,6 +77,7 @@ export function livingRows(hint: Hint): [string, string][] {
     ['holy things', 'hallow a spring, a grove or a peak · a town\'s sacred animal on its card · the Signs ring of the radial has them all'],
     ['invent', 'a material or a plant from Ideas / Life (a form: name, kind, traits, uses) · Seed a vein lays ore in the ground'],
     ['hearts', 'what a town feels shows by its name (they bow at dusk · watch the sky · murmur · raise their fists; a tower when they boast) · the Hearts layer shows every town · say “how do the people of Aru feel?”'],
+    ['defiance', 'a wronged, proud town may curse the sky at dusk, throw stones at your storm, burn your shrine or carve a god of its own · there is no answer button: what you do next is the answer (strike it, help it, send a sign, or do nothing for ten days) and they remember it · say “forgive Aru”, “show Aru a sign”, “be patient with Aru” or “punish Aru for their defiance”'],
     ['a great tower', 'proud towns of one speech may raise a tower to the sky: when it rises, a card asks your answer (confuse their tongues, strike it down, send a prophet to warn them, or let it stand) · Decide later keeps it as a pill · click the tower for its card · or say “confuse their tongues”'],
   ];
 }
