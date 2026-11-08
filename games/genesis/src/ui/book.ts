@@ -65,7 +65,7 @@ export function covenantChoice(o: Offer, planet: number, names: Names): Choice {
     pill: title,
     title,
     meta,
-    why: where ? `The survivors of ${where} look to the sky.` : 'The survivors look to the sky.',
+    why: where && where.length <= 34 ? `The survivors of ${where} look to the sky.` : 'The survivors look to the sky.',
     options,
   };
 }

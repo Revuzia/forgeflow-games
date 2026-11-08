@@ -22,6 +22,7 @@ test('the covenant card says §4.5: after the flood, the dead, the towns, the ho
   assert.equal(c.pill, 'After the Flood of Aru');
   assert.equal(c.meta, '61 dead · three towns struck · the house of Hesh came through it whole');
   assert.equal(c.why, 'The survivors of Aru, Tesh and Vorn look to the sky.');
+  assert.equal(covenantChoice({ ...offer, towns: [1] }, 0, new Map([[1, { name: 'Shenyaar by the Lake and the Long Water' }]])).why, 'The survivors look to the sky.');
   assert.deepEqual(c.options.map((o) => [o.key, o.label]), [['1', 'Never again by water'], ['2', 'Never again so many'], ['3', 'Always gentle'], ['4', 'Always warn first']]);
   assert.deepEqual(c.options.map((o) => o.cmd), VOWS.map((vow) => ({ k: 'covenant.make', vow, offer: 7, planet: 0 })));
   assert.deepEqual(declineCommand(offer, 0), { k: 'covenant.decline', offer: 7, planet: 0 });

@@ -339,7 +339,6 @@ export class DecisionCard {
     const tw = this.towers.get(c.id);
     const foot = h('div', { class: 'gn-decision-foot' });
     if (tw) foot.append(h('button', { class: 'gn-btn', text: 'Look at it', title: 'The card waits as a pill while you look', on: { click: () => this.look() } }));
-    if (this.offers.has(c.id)) foot.append(h('button', { class: 'gn-btn gn-decision-silence', text: 'Say nothing', title: 'Make no promise: the survivors will wait, and the sky will say nothing', on: { click: () => void this.silence() } }));
     foot.append(h('button', { class: 'gn-btn', text: 'Decide later', title: 'Esc', on: { click: () => this.later() } }));
     this.root.append(
       h('div', { class: 'gn-decision-top' }, h('div', { class: 'gn-decision-h', title: c.title }, h('b', { text: c.title })), foot),
@@ -356,6 +355,10 @@ export class DecisionCard {
       list.append(b);
     }
     this.root.append(list);
+    // the covenant's fifth answer is silence: under the vows, beside the year the offer lasts
+    const of = this.offers.get(c.id);
+    if (of) this.root.append(h('div', { class: 'gn-decision-bottom' }, h('small', { text: 'Or make no promise, and let them wait.' }),
+      h('button', { class: 'gn-btn gn-decision-silence', text: 'Say nothing', title: 'Make no promise: the survivors will wait, and the sky will say nothing', on: { click: () => void this.silence() } })));
     if (this.note) this.root.append(h('div', { class: 'gn-decision-note', text: this.note }));
     this.layout();
     // focus for keys 1-4, unless the player is typing somewhere

@@ -317,12 +317,19 @@ p{margin:.25em 0}.d{font:12px Inter,system-ui,sans-serif;color:#9c968a;letter-sp
           const sec = h('section', { class: `gn-book-age${b.open ? ' gn-book-now' : ''}`, data: { age: String(b.id), kind: b.kind } },
             h('h3', { class: 'gn-book-ageh', text: b.name }),
             h('div', { class: 'gn-book-years', text: b.years }));
-          for (const p of b.paragraphs) {
+          // (the age's sentences run on as one passage of prose, the way a book reads; a sentence made from a chronicle
+          // line that names a place is a quiet link that flies there)
+          const prose = h('p', { class: 'gn-book-p gn-book-prose' });
+          b.paragraphs.forEach((p, i) => {
             const place = paragraphPlace(p, this.entries.length ? this.entries : this.host.view.chronicle, planet);
-            const el = h(place ? 'button' : 'p', { class: `gn-book-p${place ? ' gn-book-link' : ''}`, text: p, title: place ? 'Look there' : undefined });
-            if (place) el.addEventListener('click', () => this.host.lookAtEntity(place));
-            sec.append(el);
-          }
+            if (i) prose.append(document.createTextNode(' '));
+            if (place) {
+              const a = h('button', { class: 'gn-book-link', text: p, title: 'Look there' });
+              a.addEventListener('click', () => this.host.lookAtEntity(place));
+              prose.append(a);
+            } else prose.append(document.createTextNode(p));
+          });
+          if (b.paragraphs.length) sec.append(prose);
           if (b.told) sec.append(h('p', { class: 'gn-book-told', text: b.told }));
           this.bookEl.append(sec);
           break;

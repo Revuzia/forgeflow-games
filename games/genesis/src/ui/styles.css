@@ -1331,7 +1331,11 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
    wrath slider's notch under "always gentle", the Promises rows of The god */
 .gn-decision.gn-decision-covenant { border-image: linear-gradient(90deg, rgba(232, 120, 110, .55), rgba(240, 206, 120, .55), rgba(140, 210, 150, .5), rgba(120, 170, 230, .55), rgba(170, 130, 220, .55)) 1; border-width: 1px; border-style: solid; border-radius: 0; }
 .gn-decision-covenant .gn-decision-h { letter-spacing: .02em; }
-.gn-decision-silence { opacity: .9; }
+.gn-decision-covenant .gn-decision-opt { height: 45px; }
+.gn-decision-covenant .gn-decision-why { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-decision-bottom { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.gn-decision-bottom small { flex: 1; min-width: 0; font: italic 500 11px var(--gn-serif); color: var(--gn-ivory-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn-decision-silence { padding: 0 9px; font-size: 10.5px; line-height: 16px; }
 .gn-covconfirm { top: calc(var(--gn-time-b, 120px) + 8px); max-height: none; width: 340px; gap: 5px; padding: 9px 11px 8px; z-index: 8; border-color: rgba(190, 150, 230, .45); }
 .gn-covconfirm-t { display: flex; gap: 7px; align-items: flex-start; font: 500 14px/1.3 var(--gn-serif); color: var(--gn-ivory); }
 .gn-covconfirm-t b { font-weight: 600; }
@@ -1392,9 +1396,11 @@ body.gn-reduce-motion .gn-open-ring-o { animation: none; }
 .gn-book-years { margin: 1px 0 6px; font: 500 10.5px var(--gn-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--gn-ivory-faint); }
 .gn-book-now .gn-book-years::after { content: ' · now'; color: var(--gn-gold); }
 .gn-book-p { display: block; margin: 0 0 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; text-wrap: pretty; }
-.gn-book-age > .gn-book-p:first-of-type::first-letter { float: left; font-size: 2.55em; line-height: .86; padding: 3px 5px 0 0; color: var(--gn-gold); font-weight: 500; }
-button.gn-book-link { cursor: pointer; pointer-events: auto; border-radius: 4px; }
-button.gn-book-link:hover { background: rgba(217, 184, 120, .07); color: var(--gn-gold-hi); }
+.gn-book-prose { text-indent: 0; hyphens: auto; }
+.gn-book-prose::first-letter { font-size: 1.75em; line-height: 0; color: var(--gn-gold); font-weight: 500; padding-right: 1px; }
+button.gn-book-link { display: inline; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: inherit; cursor: pointer; pointer-events: auto;
+  text-decoration: underline; text-decoration-color: rgba(217, 184, 120, .32); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+button.gn-book-link:hover { color: var(--gn-gold-hi); text-decoration-color: var(--gn-gold); }
 .gn-book-told { margin: 4px 0 0; padding-left: 10px; border-left: 2px solid var(--gn-line-gold); font-style: italic; color: #e2d3ae; }
 .gn-book-closing { margin: 0; text-align: center; font-style: italic; color: var(--gn-gold-hi); text-wrap: balance; }
 .gn-book-empty { padding: 26px 8px; text-align: center; font: italic 500 16px/1.5 var(--gn-serif); }
