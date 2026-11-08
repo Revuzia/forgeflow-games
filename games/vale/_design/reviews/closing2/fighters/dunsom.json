@@ -1,21 +1,131 @@
 {
   "fighter": "dunsom",
   "score": 7.0,
-  "summary": "Verified 7.0/10, NOT on par (bar 7.5); no blocker open. GLB art/out/fighters/dunsom/dunsom.glb sha a875cd0f, mtime Nov 6 19:51 from the GF-1 revert commit 89112e613 (byte-identical to the Nov 5 07:38 build the reviewer measured), so the reviewer's clip_range numbers stand; I re-read them (_harness/_reports/closing2_dunsom_clip_range.txt) and the shots. CONFIRMED major: splash/portrait composites (3D render with brush filter on painted plates, figure lit flat pink against warm fires, face ~60 px). CONFIRMED major: attack weight (attack1/attack2 hips 4.0/2.5 cm, foot.L 1 mm, attack2 lantern 0.994 m in one display frame; clips_part0 shows a standing figure swinging the crook). Correction: cast_a1 is not fully foot-locked (foot.L 12.2 cm) and cast_a2 moves the hips 11.4 cm, so the casts are better than 'arm only'; the autos are the core of the major. DOWNGRADED to minor: recall/channel/taunt. Dunsom has no channelled ability (no channel def in content/fighters/dunsom.json; the channel clip plays only for state 'channel', src/sim/movement.ts:468), so the frozen channel never shows in a match; recall now moves (lantern 0.89 m) and only misses the brief's eye-level beat (lantern y min 2.098 m vs head ~1.66 m); taunt is an emote. Minors (icon blade, splash mask grin, value bands mid 43.2) confirmed. Sensitivity: hat 0.62 m flat disc, hood under it is a round dome (closing polish round 2; death-frame top view in closing2_dunsom_sheet.png shows a round head), mask is warm carved wood with amber inlays (closing2_dunsom_face_x3.png, icon_x4.png): not horror/hockey/mannequin. No missed blocker. Subscores: in-game read 8, model/materials 7, animation 6.5, cards 6. Timing not measured (load 23-65).",
+  "summary": "Verified 7.0/10: NOT on par (bar 7.5), no blocker open. GLB unchanged since 89112e613 (GF-1 revert, byte-identical to the 2026-11-05 07:38 build). One major survives: splash/portrait presentation (static posterized render on painted plates, no action, FX or shared light). Downgraded to minor: mask legibility (two amber eyes, brow and bill read on icon_x4 and portrait), materials (six material zones separate at the game camera; seams are hairline at 3x), channel clip (shaft end is visible, not sunk; face crossing is hidden under the hat at the game camera). Value-band 'worse' status rests on a lineup run that predates the current GLB, so it is not established. Sensitivity clean: hat is a very wide shallow disc over a rounded hood (Dunsom hood measured 17.7 under ruling 7's blunt rule), mask is a warm carved ochre face with a short rounded bill (ruling 5), no horror/hockey/mannequin read. Score stays 7.0 rather than rising: the remaining gap to a recent LoL champion is concentrated in the cards, which are a large part of character art presentation.",
   "gapStatus": [
-    {"id": "7. Value-gradient gate fails", "status": "open", "evidence": "art/renders/lineup/fw_CW6_m_lineup.json (newest lineup with dunsom, Nov 5 00:21): f0 66.8/43.2/28.9, f180 top 52.7; mid < 45. Not re-run after hat paint."},
-    {"id": "11. Pairwise IoU vs Tunlan/Ilsheta", "status": "closed", "evidence": "Reviewer cites integ_chars_p2.json 0.632/0.444; silhouette unchanged (GLB byte-identical to Nov 5). Not re-measured by me."},
-    {"id": "14. Lantern on nameplate text at idle", "status": "closed", "evidence": "_harness/_shots/closing2_dunsom_game_x4.png: lantern hangs past the right end of the HP bar, clear of the name text."},
-    {"id": "Lantern larger than brief 0.14 x 0.22 m", "status": "open", "evidence": "_design/fighters/dunsom.md:28,64 still say 0.14 x 0.22 m; model lantern visibly larger in closing2_dunsom_game_x4.png / splashes. Doc fix, reads well in game."},
-    {"id": "Orange fleck on left sleeve", "status": "closed", "evidence": "Not visible in closing2_dunsom_sheet.png or closing2_dunsom_sleeve_x3.png."}
+    {
+      "id": "7. Value-gradient gate fails",
+      "status": "not_measured",
+      "evidence": "fw_CW6_m_lineup_summary.txt (2026-11-05 00:22) predates the current GLB build (b4cf39106, 07:38); 'worse' not established."
+    },
+    {
+      "id": "11. Pairwise IoU vs Tunlan/Ilsheta",
+      "status": "closed",
+      "evidence": "art/renders/lineup/integ_chars_p2.json per reviewer: 0.632 / 0.444, under 0.80 (not re-measured; accepted)."
+    },
+    {
+      "id": "14. Lantern on nameplate text at idle",
+      "status": "closed",
+      "evidence": "_harness/_shots/closing2_dunsom_game_x4.png: lantern sits right of the HP bar end, clear of the name text (viewed)."
+    },
+    {
+      "id": "Lantern enlarged past brief",
+      "status": "open",
+      "evidence": "art/blender/fighters/dunsom.py:21-24 vs _design/fighters/dunsom.md:28,:64; doc-only."
+    },
+    {
+      "id": "Orange fleck on left sleeve",
+      "status": "closed",
+      "evidence": "_harness/_shots/closing2_dunsom_sleeve_x3.png: clean lavender sleeve (viewed)."
+    }
   ],
   "findings": [
-    {"id": "dunsom-c2-splash-composite", "verdict": "confirmed", "severity": "major", "title": "Splashes and portraits are filtered 3D renders pasted onto painted plates", "what": "All three splashes put the in-game model through a brush filter onto a separate plate; base figure at the right edge in flat pinkish light ignoring the warm fires, no cast shadow/rim/atmosphere shared with the scene, face ~60 px in 1600x900, lumpy faceted hook. Portraits same look. Three distinct stagings exist now.", "evidence": "_harness/_shots/closing2_dunsom_splashes_3up.png, closing2_dunsom_splash_face_x2.png, closing2_dunsom_portraits_3up.png (viewed)", "gauge": "LoL splashes are fully painted illustrations with the champion as the lit, dominant focal point and light integrated with the scene.", "fix": "Use the render as block-in; paint one key frame per skin at 2x in VALE's dusk-lantern key (lantern lights the mask from below), figure 55-65% of frame height, cast shadow and rim matched to the plate, hand-painted mask planes.", "files": "art/out/fighters/dunsom/splash.png, dunsom_highrim_splash.png, dunsom_almanac_splash.png, portrait.png, dunsom_*_portrait.png", "size": "L", "verifierNote": "Reproduced on the current files (Nov 5 PNGs). The light mismatch and filtered render look are clear at 1x."},
-    {"id": "dunsom-c2-attack-weight", "verdict": "confirmed", "severity": "major", "title": "Basic attacks are arm-only snaps with a one-frame lantern jump", "what": "attack1/attack2 hips 4.0/2.5 cm from f0, foot.L 1 mm; attack2 x_lantern steps 0.994 m in one 60 Hz frame (f20) with no smear. The clip sheet shows a standing figure moving only the crook. Correction to the reviewer: cast_a1 has a 12.2 cm foot.L move and cast_a2 11.4 cm hips, so the casts carry some body; cast_a1 still lacks the brief's rock-back.", "evidence": "_harness/_reports/closing2_dunsom_clip_range.txt (attack1/attack2/cast_a1/cast_a2 blocks); _harness/_shots/closing2_dunsom_clips_part0.png", "gauge": "LoL caster autos and casts read through the body at the game camera: wind-up in hips/shoulders, weight shift, prop follow-through.", "fix": "Re-key attack1/attack2 hip-first (6-8 cm weight transfer, ~15 deg chest counter-rotation), spread the crook arc over 3-4 frames with overshoot, lag the lantern 2 frames on x_lantern.", "files": "art/blender/fighters/dunsom.py (clip authoring ~L2843-2937), art/out/fighters/dunsom/dunsom.glb", "size": "M", "verifierNote": "Autos happen every ~1 s in lane, so this is the most-seen animation; major holds. Scope narrowed: casts are not foot-locked."},
-    {"id": "dunsom-c2-recall-channel-taunt", "verdict": "downgraded", "severity": "minor", "title": "Recall misses its eye-level lantern beat; taunt barely moves (channel unused in play)", "what": "Recall now moves (lantern 0.89 m, hand.L 0.72 m) but the lantern never drops below 2.098 m, so the brief's cupped-at-eye-level beat is missing. Channel is near-frozen (head 2.7 cm) but Dunsom has no channelled ability, so the clip never plays in a match. Taunt is a rarely used emote.", "evidence": "_harness/_reports/closing2_dunsom_clip_range.txt; content/fighters/dunsom.json (no channel def; castTimes 0.25/0.3/0/0.35); src/sim/movement.ts:468; _design/fighters/dunsom.md:125", "gauge": "LoL recalls are distinct prop-centred performances.", "fix": "Dip the crook 35-40 deg at 1.0-1.8 s so the lantern reaches ~1.6 m and both hands frame it; taunt: two lantern knocks with a visible swing.", "files": "art/blender/fighters/dunsom.py, art/out/fighters/dunsom/dunsom.glb", "size": "M", "verifierNote": "The previous major (frozen idle/recall) is fixed; what remains is a brief beat on recall plus clips that are unused (channel) or rare (taunt). Not a major."},
-    {"id": "dunsom-c2-icon-blade", "verdict": "confirmed", "severity": "minor", "title": "On the face chip the crook shaft reads as a sword blade", "what": "A pale tapering straight shaft in a fist at the left edge reads as a blade at 48 px; the lantern is only a corner glow.", "evidence": "_harness/_shots/closing2_dunsom_icon_x4.png", "gauge": "LoL icons crop to face plus one unmistakable signature cue.", "fix": "Re-crop so the hook and lit lantern panes sit upper-left behind the hat rim.", "files": "art/out/fighters/dunsom/icon.png", "size": "S", "verifierNote": "Reproduced."},
-    {"id": "dunsom-c2-mask-grin", "verdict": "confirmed", "severity": "minor", "title": "Splash filter breaks the lower mask into tooth-like blocks", "what": "In the base splash the lower mask's facets read as a pale block grin under a dark seam at ~60 px. Not horror; the model and chip read as carved wood.", "evidence": "_harness/_shots/closing2_dunsom_splash_face_x2.png vs closing2_dunsom_face_x3.png", "gauge": "LoL masked champions keep clean large mask planes at splash size.", "fix": "Merge the lower facets into 2-3 painted planes in the card paint-over; drop the seam.", "files": "art/out/fighters/dunsom/splash.png and skin splashes", "size": "S", "verifierNote": "Reproduced; not blocker class (no horror read at loading-screen size)."},
-    {"id": "dunsom-c2-value-bands", "verdict": "confirmed", "severity": "minor", "title": "Value-gradient gate still fails", "what": "f0 66.8/43.2/28.9, f180 top 52.7; mid under 45.", "evidence": "art/renders/lineup/fw_CW6_m_lineup.json", "gauge": "LoL keeps a head-to-feet light-to-dark read.", "fix": "Lift the coat's upper third to ~L* 52 with a vertical gradient.", "files": "art/blender/fighters/dunsom.py, art/out/fighters/dunsom/dunsom.glb", "size": "S", "verifierNote": "Numbers match the file; in-game disc read is fine, polish only."}
+    {
+      "id": "dunsom-splash-presentation",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Splashes and portrait are a small static render pasted on a painted plate",
+      "what": "All three splashes stage a standing, posterized 3D render at ~60-70% frame height on the right third of a painted plate; no action beat, no FX, no shared light (Highrim boots float with no contact shadow).",
+      "evidence": "_harness/_shots/closing2_dunsom_splashes_3up.png and art/out/fighters/dunsom/portrait.png viewed by verifier: figure ~0.6 of frame height, idle-like poses, filter smear on coat/face.",
+      "gauge": "LoL splash: full-bleed painted key moment, champion mid-ability with signature VFX, one shared light.",
+      "fix": "Re-stage each card as a Dunsom kit moment (Driving Hour swing, lantern bloom), light from the plate key, painted contact shadow and lantern bounce, figure 85-95% of frame height, paint-over face/lantern instead of a global posterize.",
+      "size": "L",
+      "verifierNote": "Reproduced from the cited images. Base splash is not actually cropped at the right edge (hat ends ~15 px inside), otherwise accurate."
+    },
+    {
+      "id": "dunsom-mask-illegible",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "Carved mask relief is busy at portrait/chip size",
+      "what": "The mask's many carved tiles and grooves make the face busy at portrait size, but the brow, two amber eye inlays and the short bill do read.",
+      "evidence": "art/out/fighters/dunsom/portrait.png (eye rings and bill readable at 512); _harness/_shots/closing2_dunsom_icon_x4.png (two amber eyes clearly visible at 128 px source).",
+      "gauge": "LoL masked faces keep 2-3 big planes with one clear eye accent each.",
+      "fix": "Lower the relief frequency: one brow shelf, cracks reduced to one per side, inlays one value step brighter.",
+      "size": "M",
+      "verifierNote": "Refuted the 'eyes do not read' claim: the icon shows two distinct amber eyes and the portrait shows brow and bill. Busy but legible, so minor."
+    },
+    {
+      "id": "dunsom-materials-plastic",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "Felt coat and hat lack felt cues; hairline seams in close-up",
+      "what": "Coat is flat lavender with soft vertical folds and no nap or hem band; hairline light seams on panel edges visible only at 3x close.",
+      "evidence": "_harness/_shots/closing2_dunsom_sleeve_x3.png (hairline seam on back-panel edge, no cuff band); _harness/_shots/closing2_dunsom_game_x4.png (hat, scarf, coat, belt, gloves, boots each separate in value/hue at the game camera).",
+      "gauge": "LoL separates materials at the gameplay camera with painted value breakup.",
+      "fix": "Paint fold cavities, upper-plane nap, darker hem/cuff band, rim stitch band; pad UV islands for the seam.",
+      "size": "M",
+      "verifierNote": "At the game camera (the gauge's camera) the six material zones separate clearly; the seams are hairline and only seen in 3x close-ups. Polish, not major."
+    },
+    {
+      "id": "dunsom-channel-clip",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "Channel: shaft crosses the scarf and mask; near-static hold",
+      "what": "In channel the crook is held near-vertical in front of the body and the shaft passes over the scarf and mask; the clip is near-static (hips 1.8 cm, head 2.7 cm).",
+      "evidence": "_harness/_shots/closing2_dunsom_clip_channel_x2.png; _harness/_reports/closing2_dunsom_clip_range.txt '== channel' (hips max dist 0.018, head 0.027).",
+      "gauge": "LoL channels breathe and props do not interpenetrate the body at the camera.",
+      "fix": "Plant the crook at his right side, add a 3-beat settle and lantern pulse; recheck with clip_steps and a clip sheet.",
+      "size": "S",
+      "verifierNote": "The 'lower shaft sinks into the coat' part is refuted: the shaft's pale end is visible in front of the coat at knee height. The face crossing is real but at the top-down game camera the face sits under the hat disc (closing2_dunsom_game_x4.png), so it is rarely seen. Minor."
+    },
+    {
+      "id": "dunsom-anim-snaps",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Single-frame pops on attack2 and cast_a1, soft run bob",
+      "what": "attack2 lantern 0.994 m and hand.R 0.253 m in one 60 Hz frame; cast_a1 head 0.113 m in one frame; run hips 3.1 cm from rest.",
+      "evidence": "_harness/_reports/closing2_dunsom_clip_range.txt lines 55-72 and 37-45 (re-read).",
+      "gauge": "LoL attacks carry arcs with smears/eased contacts, stable head, weighty run bob.",
+      "fix": "Spread attack2 contact over 2-3 frames, keep head under 4 cm/frame in cast_a1, 5-6 cm run hip travel.",
+      "size": "S",
+      "verifierNote": "Numbers match the report. The lantern step is a pendulum bone and partly expected on a swing hit; still minor."
+    },
+    {
+      "id": "dunsom-value-accent-bands",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "title": "Value bands and f270 accent: measurement predates the current GLB",
+      "what": "Reported f0 bands top 66.8 / mid 43.2 / bottom 28.9 and accent 0.07% at f270.",
+      "evidence": "_harness/_reports/fw_CW6_m_lineup_summary.txt mtime 2026-11-05 00:22, but the current GLB content is the b4cf39106 build (2026-11-05 07:38; 89112e613 restored it byte-identical). The f270 occlusion is plausible from the hook geometry (lantern on the right/front).",
+      "gauge": "Signature accent visible from every facing at the gameplay camera.",
+      "fix": "Re-measure on the current GLB; if confirmed, lift hat crown one L* step and hang the lantern 5-8 cm further out.",
+      "size": "S",
+      "verifierNote": "Kept as minor but the 'worse' leftover status is not established: the cited numbers were measured 7 h before the GLB now shipped. Treat as not re-measured."
+    },
+    {
+      "id": "dunsom-doc-drift",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Brief and model disagree on lantern size and swing",
+      "what": "Brief says 0.14 x 0.22 m, at most 6 degrees; model is 0.19 m across, 0.41 m with cupola, up to 16 degrees.",
+      "evidence": "_design/fighters/dunsom.md:28, :64 versus art/blender/fighters/dunsom.py:21-24 (re-read).",
+      "gauge": "n/a (documentation integrity)",
+      "fix": "Update the brief to the shipped numbers with the accent-budget reason.",
+      "size": "S",
+      "verifierNote": "Reproduced exactly."
+    },
+    {
+      "id": "dunsom-chip-lantern",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Face chip has no lantern cue; crook shaft reads as a pale blade",
+      "what": "Icon shows hat and mask on blue with a pale diagonal shaft at the left edge reading as a blade; no lantern.",
+      "evidence": "_harness/_shots/closing2_dunsom_icon_x4.png, art/out/fighters/dunsom/icon.png (viewed).",
+      "gauge": "LoL icons carry the one signature prop/accent at 48 px.",
+      "fix": "Reframe slightly wider so the lantern glow sits in a top corner and the hook curve reads.",
+      "size": "S",
+      "verifierNote": "Confirmed: the shaft looks like a sword blade held by a gold fist; only a warm glow in the top-left hints at the lantern."
+    }
   ],
   "missed": []
 }

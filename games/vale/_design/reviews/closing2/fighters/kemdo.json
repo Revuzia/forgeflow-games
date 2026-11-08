@@ -1,27 +1,143 @@
 {
   "fighter": "kemdo",
-  "score": 6.8,
-  "summary": "Verified 6.8, not on par: one confirmed sensitivity blocker. Splash art is unchanged since 8b93ac403. Base splash.png at 1:1 shows the face fully wrapped in horizontal bands inside the hood, with no eave, no slit and no eyes: a mummy read. The Highrim splash head is tilted to the sky and reads as a blank white egg. Owner ruling 2 already treats a face that reads blank at portrait size as a sensitivity issue. The Long Evening splash, the portraits and the icon do show a warm eye slit, so the fix is local to two cards. The posterized cut-out quality of the splashes is confirmed as a major. The recall clip was re-checked on a shot taken after the current GLB (GLB Nov 6 19:51, shot Nov 7 14:44): the lens frame cuts through the hood at face height in every frame. I downgraded it to minor because the only view where the cut is legible is the eye-level close camera. At the 52 degree game camera, the frame over the hood reads as holding the lens close (closing_kemdo_r2_game_x3.png). The gameplay model is solid: rounded hood, crown gate 3/3 pass (R3 13.9 cm, re-run now), clear lens ellipse, robe spring bones, distinct deluxe. The in-game hood does not read as pointed, horror or mannequin. Timing was not measured (load 11.8-39 at review time).",
+  "score": 6.6,
+  "summary": "Verified 6.6, NOT on par: the sensitivity blocker kemdo-C2-B1 is confirmed. The base splash face is a fully band-wrapped oval with no eave, slit or eyes (mummy read), and the Highrim splash head is a blank white egg. Both cards ship in the shop, loading and collection screens. The splash-finish major is confirmed, with one correction: the figure fills about 60-78% of the frame height, not a third. It reads small by area and composition, and it is posterized and lit differently from the plate. All four minors were reproduced or kept. Re-run now: the crown gate passes 3/3 (R3 13.9 cm, top 2.117) and the robe spring chains are present. The gameplay model is close to par; the score is held down by the cards. Hoods are rounded, and I found no other sensitivity problem, horror read or pointed hood. The lens-under-bar leftover is not_measured rather than still_open. Frame timing was not measured.",
   "gapStatus": [
-    {"id": "kemdo-M3 splash/portrait quality, same pose x3", "status": "partly", "evidence": "Poses differ across the three splashes (fixed). Quality is not fixed: posterized cut-outs, and the base and Highrim faces are featureless. Viewed art/out/fighters/kemdo/splash.png and kemdo_highrim_splash.png at 1600x900."},
-    {"id": "kemdo-M4 tunic secondary motion", "status": "closed", "evidence": "Robe hem varies across the run row in _harness/_shots/closing_kemdo_clips.png. x_robe bones are per the reviewer and CW5_r3_verify1."},
-    {"id": "kemdo-M5 deluxe only a recolour", "status": "closed", "evidence": "closing_kemdo_r2_portraits.png and closing_kemdo_le_splash_face_x3.png show the plum and lantern pattern sleeve, the lacquer sash and its own pose."},
-    {"id": "kemdo-M1 lens under own overhead bar", "status": "not_measured", "evidence": "Neither the reviewer nor I re-measured it (closing_kemdo_lens_under_bar_x3.png is dated Oct 29). 'still_open' is an assumption from the unchanged art.json height."},
-    {"id": "kemdo-M2 signature hue zone", "status": "open", "evidence": "closing_kemdo_r2_game_x3.png: a sand figure on a sand-brown lane. Only the lens ring carries colour."},
-    {"id": "kemdo-m3 Highrim close to base", "status": "closed", "evidence": "closing_kemdo_r2_portraits.png: Highrim is clearly paler with grey wraps."},
-    {"id": "kemdo-v1 eave as mouth stripe, no eyes at close and game cam", "status": "open", "evidence": "closing_kemdo_clips.png: every row shows a pale face oval with a thin dark band."},
-    {"id": "recall frame through hood", "status": "open", "evidence": "closing_kemdo_clip_recall_x2.png, all 4 frames. Captured after the current GLB."},
-    {"id": "crown sensitivity (ruling 7)", "status": "closed", "evidence": "Re-ran node art/tools/crown_gate.mjs art/out/fighters/kemdo: 3/3 pass, R3 13.9 cm, top 2.117 m."},
-    {"id": "pauldron side vs brief right-heavy wraps", "status": "open", "evidence": "Not re-measured by me. The reviewer's claim is plausible: kemdo.md:31 still asks for right-heavy wraps."}
+    {
+      "id": "kemdo-M4 (closing) robe secondary motion",
+      "status": "closed",
+      "evidence": "inspect_glb --json re-run: 24 x_robe_* matches (robe f/b/l/r chains present)."
+    },
+    {
+      "id": "kemdo-M3 (closing) grainy splash/portrait",
+      "status": "open",
+      "evidence": "Splash files unchanged since 8b93ac403; portraits fine; base face now blocker kemdo-C2-B1, finish is kemdo-C2-M1."
+    },
+    {
+      "id": "kemdo-M5 (closing) Long Evening recolour",
+      "status": "closed",
+      "evidence": "content/skins/kemdo.json:32 vfxTint #9C6FB8; kemdo_long_evening_splash.png has its own lens-forward pose (viewed)."
+    },
+    {
+      "id": "Recall lens through hood",
+      "status": "open",
+      "evidence": "_harness/_shots/closing_kemdo_c2b_recall_x3.png (viewed)."
+    },
+    {
+      "id": "Hood crown / ruling 7 gate",
+      "status": "closed",
+      "evidence": "node art/tools/crown_gate.mjs art/out/fighters/kemdo re-run: 3/3 pass, R3 13.9 cm, top 2.117."
+    },
+    {
+      "id": "art.json height vs brief",
+      "status": "closed",
+      "evidence": "Reviewer: height 2.12; crown gate top 2.117 agrees."
+    },
+    {
+      "id": "kemdo-M2 (closing) signature hue",
+      "status": "open",
+      "evidence": "closing_kemdo_r2_game_x3.png beige on beige (kemdo-C2-m3)."
+    },
+    {
+      "id": "kemdo-M1 (closing) lens under own bar",
+      "status": "not_measured",
+      "evidence": "Not re-measured by reviewer or verifier; reviewer's 'still_open' rests on the older _harness/_reports/closing_kemdo_verify_lens_bar.txt, so it is inferred, not measured."
+    },
+    {
+      "id": "Pauldron side",
+      "status": "open",
+      "evidence": "kemdo-C2-m4."
+    },
+    {
+      "id": "kemdo-m3 (closing) Highrim close to base",
+      "status": "closed",
+      "evidence": "Highrim splash is bleached white with its own pose (viewed)."
+    },
+    {
+      "id": "kemdo-v1 (closing) eave/slit as mouth stripe at game camera",
+      "status": "open",
+      "evidence": "closing_kemdo_r2_game_x3.png: hood front shows no legible eyes; not horror, minor."
+    }
   ],
   "findings": [
-    {"id": "kemdo-R2-B1", "verdict": "confirmed", "severity": "blocker", "title": "Base and Highrim splash heads read as a featureless wrapped/blank oval (mummy / blank mannequin)", "what": "Base splash: the whole face is horizontal linen wraps inside the hood, with no eave shadow, no slit and no eyes, so it reads as a mummy. Highrim splash: the head is tipped back and reads as a smooth white egg. The brief (kemdo.md:55) calls for a carved brow eave over a narrow ink slit. Long Evening splash, the portraits and the icon all show the warm slit with eyes, so the problem is limited to these two cards, which appear in the shop, collection, draft and loading screens.", "evidence": "Viewed art/out/fighters/kemdo/splash.png and kemdo_highrim_splash.png at full size; crops _harness/_shots/closing_kemdo_splash_face_x3.png and closing_kemdo_highrim_splash_face_x3.png. Contrast closing_kemdo_le_splash_face_x3.png and closing_kemdo_r2_portraits.png, where the eyes read. Splash files last changed in 8b93ac403. Precedent: owner_rulings.md:24 (ruling 2) treats a face that reads blank at portrait size as a sensitivity issue.", "gauge": "LoL splashes always give a hooded or wrapped champion a living focal point: eyes, a lit slit or a readable profile. They never show a blank head.", "fix": "Re-pose the base and Highrim card cameras 3/4 front-low with the head tilt at 20 degrees or less, so the sandstone eave and the warm skin slit with two catch-lit eyes are in frame. Use the same face read as the Long Evening card and the portrait. Add a darker under-eave band so the wraps are not one value.", "files": "art/blender/fighters/kemdo.py (SPLASH / skin card camera), art/out/fighters/kemdo/splash.png, kemdo_highrim_splash.png", "size": "M", "verifierNote": "I could not refute it. At 1:1 neither card has any eye or slit pixels, and the Highrim head is a single pale value. This is the blank-mannequin class from the standing rule, consistent with ruling 2. Severity holds."},
-    {"id": "kemdo-R2-M1", "verdict": "confirmed", "severity": "major", "title": "Splash cards are posterized 3D cut-outs with stair-step edges, flat-lit against the plate", "what": "All three cards composite a posterized render with blocky facets and aliased silhouettes onto a painted plate. The figure is lit flat, with no plate-sun key, no rim and no contact shadow beyond a faint smear. It sits small at the right, about 55% of frame height. The brief's beat (kemdo.md:128, :178) is missing: no stone under the boot, and no glint at the top of the frame on the base lens.", "evidence": "art/out/fighters/kemdo/splash.png, kemdo_highrim_splash.png, kemdo_long_evening_splash.png; _harness/_shots/closing_kemdo_splash_feet_x3.png, closing_kemdo_le_splash_face_x3.png.", "gauge": "LoL splashes are fully painted with integrated light and composition, and never show render artifacts or a cut-out figure.", "fix": "Render at 2x with the plate's key light and a warm rim, and drop the posterize filter. Do a paint-over pass to unify the edges, add a contact shadow and the low stone, make the lens glint the focal point, and scale the figure to about 75% of frame height on a thirds line.", "files": "art/blender/fighters/kemdo.py (SPLASH), card compositor, art/out/fighters/kemdo/*splash.png", "size": "L", "verifierNote": "The defects are plainly visible at 1600x900. Major is right: it is quality, not sensitivity."},
-    {"id": "kemdo-R2-M2", "verdict": "downgraded", "severity": "minor", "title": "Recall drives the lens frame through the hood/face in every frame", "what": "The interpenetration is real in all sampled frames, captured after the current GLB. It is legible only at the eye-level close camera. At the 52 degree game camera, the frame over the hood reads as holding the lens close to the face. Recall is not shown in the store or loading cards.", "evidence": "_harness/_shots/closing_kemdo_clip_recall_x2.png (shot dated Nov 7 14:44, GLB dated Nov 6 19:51); game-camera read in closing_kemdo_r2_game_x3.png.", "gauge": "LoL recalls show no visible interpenetration, but they are judged at the game camera.", "fix": "Hold the lens 25-30 cm in front of the eave, tilted down, and shade it with the free hand. Run the clip probe with the hood as a collider.", "files": "art/blender/fighters/kemdo.py (recall clip)", "size": "S", "verifierNote": "Downgraded from major: the clip is real, but it is not legible at the camera players use, and the clip has no card or store exposure."},
-    {"id": "kemdo-R2-m1", "verdict": "confirmed", "severity": "minor", "title": "Held Focus reads as holding a plate at chest, not a lens aimed at the target", "what": "In the ult and channel rows of closing_kemdo_clips.png, the lens lies near horizontal at chest height.", "evidence": "_harness/_shots/closing_kemdo_clips.png (rows 6-8), closing_kemdo_clip_ult_channel_x15.png", "gauge": "An ultimate holds a distinct, legible key pose.", "fix": "Raise the frame to head height and tip the lens about 60 degrees toward the target.", "files": "art/blender/fighters/kemdo.py (cast_ult, channel)", "size": "S", "verifierNote": "Seen in the sheet."},
-    {"id": "kemdo-R2-m2", "verdict": "confirmed", "severity": "minor", "title": "No signature-hue zone: beige figure on a beige lane separates by value only", "what": "Only the lens ring carries colour.", "evidence": "_harness/_shots/closing_kemdo_r2_game_x3.png", "gauge": "LoL champions carry a signature hue patch.", "fix": "Dye the waist wrap and frame bindings a desaturated kiln-terracotta outside the marigold band.", "files": "art/blender/fighters/kemdo.py palette", "size": "S", "verifierNote": "Kept as minor. Value separation is adequate in the game frame."},
-    {"id": "kemdo-R2-m3", "verdict": "confirmed", "severity": "minor", "title": "Long Evening splash reads cream and pink, not plum", "what": "The wraps dominate the card, and the plum shows only on the sleeve and lower body.", "evidence": "art/out/fighters/kemdo/kemdo_long_evening_splash.png, closing_kemdo_le_splash_face_x3.png", "gauge": "Deluxe splashes lead with the theme colour.", "fix": "Frame the card on the lantern hem and sash, and grade the plate warmer.", "files": "art/out/fighters/kemdo/kemdo_long_evening_splash.png", "size": "S", "verifierNote": "Holds."},
-    {"id": "kemdo-R2-m4", "verdict": "confirmed", "severity": "minor", "title": "At eye-level close views the face wrap reads as a pale oval with a dark stripe", "what": "Every row of the clip sheet shows a pale face oval with a thin dark band. It is not a sensitivity read at game scale, where the hood dominates (closing_kemdo_r2_game_x3.png).", "evidence": "_harness/_shots/closing_kemdo_clips.png", "gauge": "Hooded LoL champions show an eye read at close range.", "fix": "Paint a warm skin strip with two catch-lit eyes into the slit, and deepen the eave shadow.", "files": "art/blender/fighters/kemdo.py face paint", "size": "S", "verifierNote": "Kept as minor. The model is seen close only in the clip viewer. The cards are the exposed surface and are covered by B1."}
+    {
+      "id": "kemdo-C2-B1",
+      "verdict": "confirmed",
+      "severity": "blocker",
+      "title": "Base and Highrim splash faces read as a wrapped mummy and a blank egg",
+      "what": "Base splash.png: inside the rounded hood the face is a pale oval of horizontal wrap bands, with no brow eave, no ink slit and no eyes; it reads as a mummy at card and full size. kemdo_highrim_splash.png: head tipped to the sky, a featureless white oval. Long Evening splash, the portraits (portrait.png shows the eye slit with living eyes) and the icon are fine.",
+      "evidence": "Viewed art/out/fighters/kemdo/splash.png and kemdo_highrim_splash.png at 1600x900 plus _harness/_shots/closing_kemdo_c2b_splash_head_x4.png and closing_kemdo_c2b_hr_head_x4.png; files last changed in 8b93ac403 (Nov 3). Splashes ship: src/ui/screens/shop.tsx:206 (Portrait kind=splash), plus loading and collection screens.",
+      "gauge": "A LoL splash makes a covered face read as a living person: eyes and brow lit as the focal point.",
+      "fix": "Re-pose base and Highrim splash heads (pitch <= 10 deg up, 3/4 to camera) so the sandstone eave and warm eye slit show, add the portrait camera's warm under-eave bounce, add a splash head-crop QA (eye-slit contrast) and re-render those two cards.",
+      "files": "art/blender/fighters/kemdo.py (SPLASH), art/blender/common/plates.py, art/out/fighters/kemdo/splash.png, kemdo_highrim_splash.png",
+      "size": "M",
+      "verifierNote": "Could not refute. The blank-wrapped face is unambiguous at 1:1, and the standing rule (owner_rulings.md:6 faces read alive; ruling 2 'reads blank ... at portrait size') covers it. Shipped asset, so blocker stands. Hood itself is rounded, not pointed."
+    },
+    {
+      "id": "kemdo-C2-M1",
+      "verdict": "confirmed",
+      "severity": "major",
+      "title": "Splash cards are posterized 3D cut-outs with flat light that does not match the plate",
+      "what": "All three splashes paste a posterized, stair-stepped 3D render onto a painted plate; figure and plate do not share light or brushwork, and the base card lacks the brief's lens-into-the-sun hero beat. Correction: the figure is not 'a third of the frame height' - by eye in the 1600x900 files the body spans about y 290-880 (base, ~65%), 270-810 (Highrim, ~60%), 110-810 (Long Evening, ~78%); it is narrow (~15-20% of width) and pushed to the right third, so it reads small by area, not by height.",
+      "evidence": "art/out/fighters/kemdo/splash.png, kemdo_highrim_splash.png, kemdo_long_evening_splash.png viewed at full size; stair-step edges in _harness/_shots/closing_kemdo_c2b_splash_head_x4.png and closing_kemdo_c2b_hr_head_x4.png.",
+      "gauge": "A LoL splash is one painted image: the champion dominates the frame and shares light, rim and brushwork with the backdrop.",
+      "fix": "Render the subject at full resolution without posterize, key it from the plate's sun with a warm rim, run one paint pass over plate and figure together, widen the figure's share of frame area (closer camera, dynamic diagonal pose); base pose per brief.",
+      "files": "art/blender/common/plates.py; art/blender/fighters/plates.json; art/blender/fighters/kemdo.py (SPLASH)",
+      "size": "M",
+      "verifierNote": "Core claim (cut-out, posterized, light mismatch) reproduced; the 'one third of frame height' figure is wrong (60-78% by height), so the fix's 60-75% height target is already met - the problem is area, composition and finish. Severity stays major."
+    },
+    {
+      "id": "kemdo-C2-m1",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Recall drives the lens frame through the hood at face height",
+      "what": "In all three sampled recall frames the lens rim cuts through the front of the hood.",
+      "evidence": "_harness/_shots/closing_kemdo_c2b_recall_x3.png (viewed).",
+      "gauge": "LoL recall loops keep props clear of the face.",
+      "fix": "Rotate the glaive ~20 deg outward and move the lens ~12 cm forward in the recall bake; add recall to the zero-penetration gate.",
+      "files": "art/blender/fighters/kemdo.py (recall)",
+      "size": "S",
+      "verifierNote": "Clearly visible; minor is right because the 52-degree camera hides most of it."
+    },
+    {
+      "id": "kemdo-C2-m2",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Held Focus / channel reads as holding a plate at chest",
+      "what": "cast_ult and channel hold the lens flat at chest height.",
+      "evidence": "_harness/_shots/closing_kemdo_clips_part0.png rows 6-7; part1 row 5 (reviewer's sheet, not re-viewed in detail).",
+      "gauge": "LoL ult poses aim the focal prop along the ability direction.",
+      "fix": "Tilt the lens 35-45 deg toward facing at brow height with the lead arm extended.",
+      "files": "art/blender/fighters/kemdo.py",
+      "size": "S",
+      "verifierNote": "Kept as minor; opinion-level, plausible."
+    },
+    {
+      "id": "kemdo-C2-m3",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "No signature-hue zone: beige on a beige lane",
+      "what": "Sand/cream/brown model; only the azure lens ring is a hue (accentPct 1.89).",
+      "evidence": "_harness/_shots/closing_kemdo_r2_game_x3.png (viewed: separates by value and outline only); _harness/_reports/closing_kemdo_clips.log.",
+      "gauge": "LoL champions carry an ownable hue readable at gameplay zoom.",
+      "fix": "Desaturated burnt-terracotta on waist and shoulder wraps (~12% of silhouette).",
+      "files": "art/blender/fighters/kemdo.py",
+      "size": "S",
+      "verifierNote": "Reproduced in the game crop."
+    },
+    {
+      "id": "kemdo-C2-m4",
+      "verdict": "confirmed",
+      "severity": "minor",
+      "title": "Brief and model disagree on pauldron side",
+      "what": "Brief puts heavier wraps on the right; model keeps the left pauldron.",
+      "evidence": "art/renders/fighters/kemdo/_progress.md:24; _design/fighters/kemdo.md section 1/4; portrait.png shows the pauldron on her left.",
+      "gauge": "Model, splash and lore agree.",
+      "fix": "Update kemdo.md to the shipped left pauldron.",
+      "files": "_design/fighters/kemdo.md",
+      "size": "S",
+      "verifierNote": "Doc drift only."
+    }
   ],
   "missed": []
 }
