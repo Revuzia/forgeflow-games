@@ -658,6 +658,8 @@ export const ModeDef = z.object({
   rules: RulesParams,
   roles: z.boolean(),                           // role contract on (Rift)
   card: z.object({ art: AssetRef, accent: Color, glyph: AssetRef }).strict(),
+  /** pre-game countdown in seconds before the bell (seats shop and set abilities); absent = the sim's DEFAULT_PREGAME */
+  pregame: z.number().min(0).max(120).optional(),
   /** FFA: every player gets their own readability color from this list (colorblind list in settings) */
   playerColors: z.array(Color).optional(),
 }).strict();

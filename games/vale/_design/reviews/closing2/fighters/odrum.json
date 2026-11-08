@@ -1,23 +1,144 @@
 {
-  "fighter": "odrum",
-  "score": 7.0,
-  "summary": "Verifier re-score: 7.0/10, NOT on par (score < 7.5; no blocker open). odrum.glb sha 208d570f is the current shipped GLB. Both majors were reproduced. Splash M1 is confirmed and is stronger than written: the second jar, beside the mask, shows a blue ring around an orange centre and also reads as an eye, so the card carries two eye-like discs next to a pale scowling plate (_harness/_shots/closing_odrum_verify_splash_head.png). Icon M2 is confirmed. The eye recesses re-measure at p50 L* 13.0 / 2.0 (min 1.4) with sharp on art/out/fighters/odrum/icon.png, against the brief's own rule at _design/fighters/odrum.md:85 ('L* ~30 walls to ~21 floor ... never black holes'). At 48 px it reads stern, not horror, so it stays major and does not become a blocker. Re-running art/tools/clip_steps.py with Blender's bundled python reproduced the animation pops exactly: ult x_pot_l 1.902 m at f35, attack2 0.923 m, victory hand.L 0.543 m, cast_a1 1.157 m, channel 0.000 m (_harness/_reports/closing_odrum_verify_clip_steps.txt). The lineup and yoke numbers match the json. No missed sensitivity blocker: the cap is a low dome, the base mask has carved brow, nose keel and umber recesses at portrait size, and Shadeprint keeps its honey-amber inlays (ruling 2). Timing not_measured (load 85-147).",
-  "gapStatus": [
-    {"id": "leftover-1 golden-ochre identity", "status": "closed", "evidence": "closing_odrum_game0_lab.txt: mask #EFC88F sat 0.40, jar #C5A271 sat 0.43 in the live frame (_harness/_shots/closing_odrum_game0_x4.png). Cards still show the mask pale cream (portrait.png, splash.png, noon_fair splash), which is covered by M1."},
-    {"id": "leftover-2 salmon cap/shoulders", "status": "closed", "evidence": "Cap #D5C9B6 sat 0.15, chest #AD9C8A sat 0.20 in game."},
-    {"id": "leftover-3 skins inherit COAT_LIFT", "status": "open", "evidence": "art/renders/fighters/odrum/three_odrum_shadeprint.png bottom row: upper coat and sleeves render near-white grey over a dark skirt, the pale-robe read."},
-    {"id": "leftover-4 lineup valueGradientOk false", "status": "open", "evidence": "art/renders/lineup/fw_CW6_m_lineup.json odrum: f0 57.6/51.0/30.6, f180 49.7/36.1/32.9, valueGradientOk false, accentOk false."},
-    {"id": "leftover-5 splash mask Noonwhite", "status": "closed", "evidence": "closing_odrum_splash_lab.txt box 1095,185: L* 69.0, p90 73.3, 1% > 86."},
-    {"id": "timing", "status": "not_measured", "evidence": "Load averages 85 / 147 / 114 at 15:03 (uptime), so the < 3 bar cannot be met."}
-  ],
-  "findings": [
-    {"id": "odrum-C2-M1", "verdict": "confirmed", "severity": "major", "title": "Base splash: the near jar reads as a giant eyeball and the figure is a washed, posterized cut-out", "what": "The raised near jar is the largest shape on the card: a pale peach sphere, about 330 px across, with a single brown end-on disc, which reads as an eyeball. The verifier also sees the second jar, next to the mask, as a blue ring around an orange centre, a second eye-like disc beside the face. The figure is pale from mask to skirt, posterize streaks on the arms and chest read as wrappings, and the yoke is cropped to a stub. The base portrait and the Noon Fair splash show the same pale-cream mask rather than the in-game ochre.", "evidence": "art/out/fighters/odrum/splash.png; verifier crop _harness/_shots/closing_odrum_verify_splash_head.png; _harness/_reports/closing_odrum_splash_lab.txt (top jar #BB9176, chest #BA8A67).", "gauge": "In a LoL splash the signature prop reads clearly and value structure carries the figure. No prop becomes an ambiguous organic shape.", "fix": "Re-stage the base splash in Odrum's own Amber Hour throw. Run the yoke as a long diagonal, with both jars in three-quarter view showing glaze band, resin lip and lit window. Keep no jar nearer the lens than the head. Hold the figure at 60-70% of frame height. Grade the jerkin and trousers to their brief values and the mask to its in-game ochre. Re-run card_qa.", "files": "art/blender/fighters/odrum.py (SPLASH staging), art/out/fighters/odrum/splash.png", "size": "M", "verifierNote": "Reproduced by eye on the full card and the crop. Not raised to blocker: the mask has carved features and brown (not black) recesses at splash size, and the eye-like props are jars on a fighter, not a Wick face. Still, the jar/eyeball read next to a pale plate face pushes the card toward the horror line, so it should be fixed first."},
-    {"id": "odrum-C2-M2", "verdict": "confirmed", "severity": "major", "title": "Icon eye recesses render as black holes, so the plate reads menacing at HUD size", "what": "In the 128 px icon the almond recesses fall to near-black. With the cracked pale plate and the hard angled brow, the chip reads as a hollow-eyed scowl. The portrait keeps L* 26-29.", "evidence": "art/out/fighters/odrum/icon.png re-measured with sharp: box 37,57,6,3 p50 L* 13.0; box 66,57,8,3 p50 L* 2.0, min 1.4. 48 px view: _harness/_shots/closing_odrum_verify_icon48.png. The rule is at _design/fighters/odrum.md:85; precedent is owner ruling 2 (hollow eye slits read blank or menacing).", "gauge": "LoL face chips keep a readable, alive eye area at 48-64 px, even on masked champions.", "fix": "Add a low warm fill from the jar side so the recess walls hold L* 25-30 and the floor stays at or above 18, with a small amber glint per recess. Ease the brow angle for the chip camera only. Check at 48 and 64 px.", "files": "art/blender/fighters/odrum.py (ICON camera/light), art/out/fighters/odrum/icon.png", "size": "S", "verifierNote": "Measurement reproduced exactly. At 48 px it reads stern rather than horror, so it stays major. It breaks the fighter's own brief and the ruling-2 precedent, and the icon is the most-seen face in the HUD."},
-    {"id": "odrum-C2-m1", "verdict": "confirmed", "severity": "minor", "title": "One-frame jar and hand pops at the release of the ult, the autos, cast_a1 and victory", "what": "Positional jumps within one 60 Hz frame: ult x_pot_l 1.902 m at f35 (clip 17.5), attack2 x_pot_l 0.923 m, cast_a1 x_pot_l 1.157 m, victory hand.L 0.543 m.", "evidence": "Re-run: Blender python art/tools/clip_steps.py art/out/fighters/odrum/odrum.glb --clip <c> --nodes hand.L,hand.R,head,x_pot_l,x_pot_r --limit 0.15 -> _harness/_reports/closing_odrum_verify_clip_steps.txt", "gauge": "Fast LoL whips keep continuous arcs (smear or stretch frames plus a trail), never a teleport.", "fix": "Add in-betweens on the arc at the ult f17, attack2 f5 and cast_a1 f9. Spread victory's hand.L over 6 or more frames. Let the amber trail carry the speed.", "files": "art/blender/fighters/odrum.py (cast_ult, attack2, cast_a1, death, victory)", "size": "M", "verifierNote": "Numbers reproduced to the millimetre. Kept minor: these are one-frame release pops under VFX, not broken loops. The ult pop is close to major."},
-    {"id": "odrum-C2-m2", "verdict": "confirmed", "severity": "minor", "title": "Channel clip is frozen and carries the bar square", "what": "Channel hand steps are 0.000 m and yoke yaw is 0 deg, so the bar reverts square across the shoulders.", "evidence": "_harness/_reports/closing_odrum_verify_clip_steps.txt (channel, all nodes <= 0.003 m); _harness/_reports/fw_CW6_odrum_yoke.json channel yawRange [0,0].", "gauge": "LoL channel and recall loops stay alive and keep the silhouette identity.", "fix": "Rebuild the channel from the diagonal carry: a slow foot-to-foot sway, a small bar bob and a jar settle.", "files": "art/blender/fighters/odrum.py (channel)", "size": "S", "verifierNote": "Reproduced."},
-    {"id": "odrum-C2-m3", "verdict": "confirmed", "severity": "minor", "title": "Diagonal carry drops the near jar and its window low; lineup top band falls", "what": "At facing 0 the accent top-half share is 0.234 and the top band 57.6. At facing 180 the bands are 49.7/36.1/32.9. Both valueGradientOk and accentOk are false.", "evidence": "art/renders/lineup/fw_CW6_m_lineup.json odrum entry.", "gauge": "A champion's signature glow stays in the upper body at every facing.", "fix": "Raise the low end of the carry or shorten its cord so the near jar hangs at hip height or above. Put the window on the upper belly of the jar facing the camera. Re-run lineup_qa.", "files": "art/blender/fighters/odrum.py (carry pose, cords)", "size": "S", "verifierNote": "JSON values match. Minor: the in-match read is good (closing_odrum_game0_x4.png)."},
-    {"id": "odrum-C2-m4", "verdict": "confirmed", "severity": "minor", "title": "Signature hue is weak against the lane: separation is by value only", "what": "The cap (sat 0.15), the chest (sat 0.20, hue 31) and the skirt (hue 24) sit in the RIFT road's hue family (hue 33). The ochre is limited to the mask and the jars.", "evidence": "_harness/_reports/closing_odrum_game0_lab.txt; _harness/_shots/closing_odrum_game0_x4.png (the cap and coat read white-grey in game).", "gauge": "LoL champions own a readable signature hue at the gameplay camera, besides value contrast.", "fix": "Spend more area on ochre within the 40% saturation rule (cap band, strap leather, jar glaze), and keep the jerkin cool walnut.", "files": "art/blender/fighters/odrum.py (TONE)", "size": "S", "verifierNote": "Consistent with the frame. Minor."},
-    {"id": "verifier-m5", "verdict": "confirmed", "severity": "minor", "title": "Skin splashes are small cut-outs pasted on a blurred, re-used plate", "what": "In the Noon Fair splash the figure takes about 65% of the height, pinned right, with no interaction with the scene and no ground contact shadow. It reads as a render on a backdrop. Its mask is also pale cream, not ochre.", "evidence": "art/out/fighters/odrum/odrum_noon_fair_splash.png; art/out/fighters/odrum/odrum_shadeprint_splash.png", "gauge": "LoL skin splashes are bespoke compositions, with the figure lit by and integrated into its scene.", "fix": "Ground the figure (contact shadow, matched rim light from the plate's key) and give each skin its own staging pose, with the yoke on a diagonal.", "files": "art/blender/fighters/odrum.py (skin SPLASH staging)", "size": "M", "verifierNote": "Added by the verifier. The reviewer called these serviceable in its prose but did not list them. This is likely a roster-wide card pipeline issue, so it is kept minor here."}
-  ],
-  "missed": []
+ "fighter": "odrum",
+ "score": 7.0,
+ "summary": "Verified score 7.0/10. Odrum is not on par: the score is under 7.5. There is no blocker, and three majors are confirmed (M1 splashes, M2 icon black eye recesses, M3 ult and cast pose snaps). All five minors are kept. The build is unchanged: hashes for odrum.glb (208d570f), icon (8d8066fe) and the three splashes (f44a7a70, 4354af5f, 65b0c069) match the reviewer's. Card mtimes are Nov 5, and the GLB (Nov 6 19:51) predates the clip_steps report (Nov 8 00:09). I tried to refute M3 as a sampling artefact. A glTF parse shows cast_ult and cast_a1 baked at 1/30 s keys with LINEAR interpolation, so the head and pot jumps are real pose cuts between adjacent keys. I viewed the base and Noon Fair splashes at full size: the eyeball-like raised pot and the lost yoke on Noon Fair are real. I made upscaled icon views (128 px and a 48 px downsample): the slits are near-black, against odrum.md:85. In the match frame the diagonal yoke with two pots reads well, and the ochre mask block and grey-oat cap are correct. That in-game strength holds the score at 7 despite weak cards. Sensitivity: the cap is a low dome with a nub, not a hood. The mask keeps its brow band, nose keel and cheek planes at 48 px, so it reads stern, not horror, hockey mask or mannequin. The icon is the closest item to that line and is covered by M2. Shadeprint follows ruling 2. No blocker was missed. Leftover correction: 'golden-ochre diluted' is partly (fixed in game, open on the cards), not fixed. Timing not measured (load ~4).",
+ "gapStatus": [
+  {
+   "id": "Golden-ochre identity diluted to cream",
+   "status": "partly",
+   "evidence": "Fixed in game (mask #EFC88F in closing_odrum_game0_lab.txt; the x4 frame shows an ochre mask block). The cards still show a cream mask (splash.png, Noon Fair viewed), tracked under odrum-C3-M1. The reviewer's own text says 'fixed in game, still open on the cards', so this is partly, not fixed."
+  },
+  {
+   "id": "Pinkish/salmon cap and shoulders under warm light",
+   "status": "closed",
+   "evidence": "Cap #D5C9B6 hue 36.5 sat 0.15 (closing_odrum_game0_lab.txt). The x4 frame shows a grey-oat cap. GLB sha 208d570f is unchanged."
+  },
+  {
+   "id": "Skins inherit COAT_LIFT; Shadeprint pale robe",
+   "status": "open",
+   "evidence": "odrum_shadeprint_splash.png, three_odrum_shadeprint.png (odrum-C3-m5)."
+  },
+  {
+   "id": "lineup valueGradientOk false",
+   "status": "regressed",
+   "evidence": "fw_CW6_m_lineup.json: facing-0 top 57.6 (was 63.2), facing 180 49.7/36.1/32.9, accentOk false."
+  },
+  {
+   "id": "Splash mask lit planes near Noonwhite",
+   "status": "closed",
+   "evidence": "closing_odrum_splash_lab.txt box 1095,185 L* 69.0, 1% above 86. The splash is unchanged (sha f44a7a70)."
+  },
+  {
+   "id": "timing",
+   "status": "not_measured",
+   "evidence": "Load 3.9-4.1 during verification (uptime). No timing was needed for character art."
+  }
+ ],
+ "findings": [
+  {
+   "id": "odrum-C3-M1",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "All three splashes are brush-filtered model cut-outs; on the base card the raised pot reads as an eyeball",
+   "what": "splash.png, odrum_noon_fair_splash.png and odrum_shadeprint_splash.png are the in-game model, posterize-filtered and pasted on a blurred painted plate. Base: the raised pot is the largest shape on the card, a pale sphere with one dark end-on disc that reads as an eyeball beside a pale scowling plate. Noon Fair: one pot shows, the bar collapses onto the shoulder, and the figure is pushed into the right third.",
+   "evidence": "Viewed art/out/fighters/odrum/splash.png (sha f44a7a70) and odrum_noon_fair_splash.png (sha 4354af5f) at full size in this pass; both mtime Nov 5 00:13-00:14, unchanged. Earlier crops: _harness/_shots/closing_odrum_verify_splash_head.png, closing_odrum_splash_toppot.png.",
+   "gauge": "LoL splashes are painted illustrations: the signature prop reads at a glance, value and rim light structure the figure, and each skin has its own composed moment. VALE's cards are filtered 3D cut-outs with no paint-over.",
+   "fix": "Stage each card from Odrum's own kit (base: the Amber Hour lob with the yoke as a long diagonal and both pots in three-quarter view; Noon Fair: a festival porter pose with both pots on the bar; Shadeprint: a dusk silhouette keyed by the amber inlays). Drop the posterize pass, paint over face, prop edges and rim light, grade the mask to the in-game ochre #EFC88F, re-run card_qa.",
+   "files": "art/blender/fighters/odrum.py (SPLASH/CARDS), art/out/fighters/odrum/*_splash.png",
+   "size": "L",
+   "verifierNote": "Confirmed by viewing. Hashes match the reviewer's. The eyeball read on the base card is real, and Noon Fair loses the yoke. It stays a major, not a blocker: the eyeball is a prop read, not a face."
+  },
+  {
+   "id": "odrum-C3-M2",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Icon eye recesses are black holes; the 128 px chip reads as a hollow-eyed scowl",
+   "what": "In icon.png the almond recesses drop to near-black (right eye p50 L* 2.0). The brief requires umber-ink walls of L* ~30 to ~21 floor and 'never black holes'. With the pale cracked plate and the hard brow slant, the most-seen face in the HUD reads menacing. The portrait (512 px) keeps L* ~23, so the fault is the icon's light, not the paint.",
+   "evidence": "icon.png sha 8d8066fe (Nov 5 00:16), unchanged. _harness/_reports/closing_odrum_c3_icon_eyes.txt: box 66,57,8,3 p50 L* 2.0 min 1.4; box 37,57,6,3 p50 13.0. Upscaled views made in this pass: _harness/_shots/closing_odrum_v2_icon_x4.png and closing_odrum_v2_icon48_x4.png (48 px downsample, x4). Brief: _design/fighters/odrum.md:85. Precedent: owner ruling 2.",
+   "gauge": "LoL face chips of masked champions keep a readable, alive eye area at 48-64 px. The eyes are the focal point, never a void.",
+   "fix": "Re-light the icon camera only: add a warm low bounce from the pot side so recess walls hold L* 25-30 and the floor stays at or above 18, add a small amber glint per recess, soften the brow tilt a few degrees. Check at 48, 64 and 128 px.",
+   "files": "art/blender/fighters/odrum.py (ICON camera/light), art/out/fighters/odrum/icon.png",
+   "size": "S",
+   "verifierNote": "Confirmed. The black slits are against the brief's own rule (odrum.md:85). Checked for a blocker: at 48 and 128 px the mask still shows a brow band, nose keel, cheek planes, warm ochre and the felt cap, so it reads as a stern carved mask, not horror, hockey mask or mannequin. It stays a major, but it is the one item closest to the sensitivity line."
+  },
+  {
+   "id": "odrum-C3-M3",
+   "verdict": "confirmed",
+   "severity": "major",
+   "title": "Ult and casts snap the head and pots between consecutive keys",
+   "what": "cast_ult: head 0.377 m and x_pot_l 1.902 m in one 60 Hz step at clip f17.5-18. cast_a1: head 0.185 m, x_pot_l 1.157 m. cast_a3: head 0.165 m. attack2 x_pot_l 0.923 m. The GLB bakes these clips at 30 fps keys with LINEAR interpolation (cast_ult has 44 keys, integer frames 14-22 all present), so the pose change happens between two adjacent 30 fps keys. That is a pose cut, not a sampling artefact.",
+   "evidence": "_harness/_reports/closing_odrum_c3_clip_steps.txt (Nov 8 00:09, after the GLB mtime Nov 6 19:51; odrum.glb sha 208d570f). In this pass a python glTF parse of the cast_ult/cast_a1 samplers confirmed 1-frame key spacing and LINEAR interpolation. The game plays the clip by role: src/render/actors.ts:121.",
+   "gauge": "LoL ultimates whip fast along continuous arcs, using anticipation, smear frames or trails. The head never jumps position between frames, least of all on the signature cast.",
+   "fix": "Re-key the cast_ult release (f16-19) so the torso and head rotate over at least 3 keys, carry the speed with a held anticipation and an amber resin smear on the pot path, and do the same on cast_a1 f9-12, cast_a3 f8 and attack2 f5. Re-apply the death clip_lift afterwards. Gate: head at or under 0.1 m per 60 Hz frame.",
+   "files": "art/blender/fighters/odrum.py (cast_ult, cast_a1, cast_a3, attack2), art/out/fighters/odrum/odrum.glb",
+   "size": "M",
+   "verifierNote": "Tried to refute it as a sampling artefact. Refuted that idea: keys are 1/30 s apart with linear interpolation, so the 0.75 m head move between keys f17 and f18 is real. Major is right for the showcase ability. A 19 px head pop and a ~95 px pot pop at 1080p are visible even under VFX."
+  },
+  {
+   "id": "odrum-C3-m1",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Channel loop is frozen and reverts to the square carry",
+   "what": "The channel is a held pose (hands 0.000 m, head 0.003 m) and drops the diagonal carry.",
+   "evidence": "_harness/_reports/closing_odrum_c3_clip_steps.txt; _harness/_reports/fw_CW6_odrum_yoke.json (channel yawRange [0,0]).",
+   "gauge": "LoL channels stay alive and keep the silhouette.",
+   "fix": "Rebuild the channel from the diagonal carry, with a weight shift, a 1-2 cm bar bob and lagging pot settle.",
+   "files": "art/blender/fighters/odrum.py (channel)",
+   "size": "S",
+   "verifierNote": "Kept as reported."
+  },
+  {
+   "id": "odrum-C3-m2",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Lineup value gradient and accent fail at the front and back facings",
+   "what": "Facing 0: top 57.6, accent top-half share 0.234. Facing 180: 49.7/36.1/32.9. valueGradientOk false, accentOk false.",
+   "evidence": "art/renders/lineup/fw_CW6_m_lineup.json odrum entry (Nov 5 00:21). The later GLB change (Nov 6) was the death clip_lift only, so the idle lineup still applies.",
+   "gauge": "A champion's signature glow and light-head value stay in the upper body at every facing.",
+   "fix": "Raise the low end of the carry or shorten the near pot's cord so both windows sit at chest height. Re-run lineup_qa.",
+   "files": "art/blender/fighters/odrum.py (carry pose, pot cords)",
+   "size": "S",
+   "verifierNote": "Numbers reproduced from the JSON. The 'worse' label compares against an older lineup (63.2); the facing-0 drop is real."
+  },
+  {
+   "id": "odrum-C3-m3",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Signature hue barely separates from the lane",
+   "what": "The cap, chest and skirt sit in the road's hue family (hue 24-36 vs road 33). Odrum separates by value only.",
+   "evidence": "_harness/_reports/closing_odrum_game0_lab.txt; _harness/_shots/closing_odrum_game0_x4.png (viewed).",
+   "gauge": "A LoL champion keeps a signature hue that reads on any lane tile.",
+   "fix": "Widen the resin amber a little: a lampresin band on each pot's shoulder and a resin-stained hem, within the accent budget.",
+   "files": "art/blender/fighters/odrum.py (palette)",
+   "size": "S",
+   "verifierNote": "Kept. The yoke and pots still carry the silhouette in the frame."
+  },
+  {
+   "id": "odrum-C3-m4",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "In-match pot window renders as a flat white disc",
+   "what": "The near pot's window is a blown flat white disc.",
+   "evidence": "_harness/_reports/closing_odrum_game0_lab.txt box 813,503 p50 L* 94.6; clearly visible in _harness/_shots/closing_odrum_game0_x4.png.",
+   "gauge": "LoL glass and emissive props keep a core-to-edge gradient and a specular.",
+   "fix": "Cap the window's emissive, add a darker glass rim and a small specular, and keep the core under L* 86.",
+   "files": "art/blender/fighters/odrum.py (accent window material)",
+   "size": "S",
+   "verifierNote": "Confirmed by viewing the x4 frame."
+  },
+  {
+   "id": "odrum-C3-m5",
+   "verdict": "confirmed",
+   "severity": "minor",
+   "title": "Shadeprint's upper body still reads as a pale robe",
+   "what": "Shadeprint's upper coat renders near-white lavender over a darker skirt, which weakens the dusk identity.",
+   "evidence": "art/out/fighters/odrum/odrum_shadeprint_splash.png; art/renders/fighters/odrum/three_odrum_shadeprint.png.",
+   "gauge": "LoL skins carry one strong thematic value read.",
+   "fix": "Lower the Shadeprint upper coat toward #8A8896 mid and keep the pale only on the rim band.",
+   "files": "art/blender/fighters/odrum.py (Shadeprint palette)",
+   "size": "S",
+   "verifierNote": "Kept as reported. The brief itself asks for a 'pale upper body' (odrum.md:165), so this is a value-balance minor, not off-brief."
+  }
+ ],
+ "missed": []
 }

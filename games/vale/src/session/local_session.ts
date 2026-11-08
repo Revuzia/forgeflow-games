@@ -533,7 +533,7 @@ export class LocalSession implements Session {
       // inside the try: the bots factory reads the rules too, and a throw there must not strand the session in 'loading'
       const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, setup) ?? null;
       host = new LocalMatchHost(pd.simCatalog, setup, pd.you, {
-        bots, pregameSeconds: this.opts.pregameSeconds, maxTimeScale: free ? MAX_TIME_SCALE : 1, autopilot: this.autopilot('match'),
+        bots, pregameSeconds: this.opts.pregameSeconds ?? pd.mode.pregame, maxTimeScale: free ? MAX_TIME_SCALE : 1, autopilot: this.autopilot('match'),
         onEnd: (r) => { if (this.host === host) this.finishMatch(r, false); },
         onForfeit: () => { if (this.host === host) this.finishMatch(forfeitResult(setup, host.view, pd.you), true); },
       });

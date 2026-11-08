@@ -12,6 +12,7 @@
       "pick": "draft",
       "roles": true,
       "card": { "art": "assets/ui/modes/rift_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/rift_glyph.svg" },
+      "pregame": 30,
       "rules": {
         "$comment": "Target 22-28 min. First wave 0:30, a wave every 30 s (3 Shieldwicks + 3 Glimwicks), a Greatwick every 3rd wave, a Brightwick every 2nd wave from 15:00, Wicks level up every 90 s. A fallen Lantern gives the breaking team Lanternwake (team_buffs.json) until it relights 4:00 later. Sudden death 40:00 is a backstop, not a pace setter: structures keep their protection and the Gorge Wind rises every 60 s (Wicks +20 % damage and structures +15 % damage taken per step, up to 8), respawns ×2 (W4 G5).",
         "startLevel": 1,
