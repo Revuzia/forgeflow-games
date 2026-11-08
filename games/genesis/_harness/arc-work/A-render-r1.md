@@ -142,3 +142,7 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   380 m flood). Test added (render-silt 6/6).
 - flood6 (r1j-flood-*, + r1j-flood-warning-near at 400 m, no UI) chain12 pid 2665 after chain11 1215 (flood5 -> tower5).
 - 22:0xZ LOOKED AT r1i-flood-god: town, lake, a prayer ring and the rain read from 600 m (was a white wall); the town's lake pale olive-tan (old 1.6x zone), far lake blue. #10 visibility MET; colour pending flood6.
+- 22:1xZ LOOKED AT r1h-tower-finished-near (200 m, day): warm sandstone 7-tier ziggurat, buttressed coursed faces,
+  ramp, fire on top, bare cleared site, no trees (was cold grey-blue). r1h-tower-finished-day (420 m): a hill fills
+  the left of the frame (camera framing), the tower warm sandstone stepped. => #9 DONE (clearing, warm coursed stone,
+  scorched ragged rubble mound with stump: r1f-tower-struck).
