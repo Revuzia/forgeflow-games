@@ -170,7 +170,7 @@ async function journey(mode) {
       await waitFor(page, (v) => !!v.state.loading.value || !!v.state.match.value, 120000);
       return { before, after };
     });
-    await step('loading', async () => { await waitFor(page, (v) => v.state.match.value?.view.phase === 'pregame' || v.state.match.value?.view.phase === 'live', 60000); return { route: await route() }; });
+    await step('loading', async () => { await waitFor(page, (v) => v.state.match.value?.view.phase === 'pregame' || v.state.match.value?.view.phase === 'live', 60000); return { route: await route(), clock: await vale(page, (v) => ({ phase: v.state.match.value?.view.phase, time: v.state.match.value?.view.time })) }; });
     await step('match_input', async () => {
       // real input while the autopilot drives: open and close the shop, hold the scoreboard, ping
       await page.locator('.hud .dbar').first().waitFor({ state: 'visible', timeout: 60000 });   // the HUD takes input once it is up
