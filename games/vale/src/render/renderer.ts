@@ -223,10 +223,10 @@ function devDefault(): boolean {
   try { return new URLSearchParams(location.search).get('dev') === '1'; } catch { return false; }
 }
 
-/** the body veil a unit's statuses ask for (actors.ts setVeil): 1 invisible, 2 untargetable, 0 none; a permanent
- *  status (a rule of the unit) never veils */
-function veilOf(v: EntityView): 0 | 1 | 2 {
-  let m: 0 | 1 | 2 = 0;
+/** the body veil a unit asks for (actors.ts setVeil): 1 invisible, 2 untargetable, 3 a fighter in tall grass, 0 none;
+ *  a status outranks the grass; a permanent status (a rule of the unit) never veils */
+function veilOf(v: EntityView): 0 | 1 | 2 | 3 {
+  let m: 0 | 1 | 2 | 3 = v.kind === 'fighter' && v.thicket >= 0 ? 3 : 0;
   for (const s of v.statuses) {
     if (!(s.remaining > 0) || !Number.isFinite(s.remaining)) continue;
     if (s.kind === 'invisible') return 1;
@@ -919,7 +919,7 @@ class ValeRenderer implements Renderer {
         // readability colour (the cover gate is terrain.coverToward; the depth test picks the pixels)
         if (v.kind === 'fighter') {
           const cp = cam.position;
-          a.setXray(live && a.veil !== 1 && (!this.crowdHard || rel !== 'enemy') && !!this.terrain?.coverToward(a.x, a.y, cp.x, cp.z, cp.y - a.h), p.get(hex));
+          a.setXray(live && a.veil !== 1 && a.veil !== 3 && (!this.crowdHard || rel !== 'enemy') && !!this.terrain?.coverToward(a.x, a.y, cp.x, cp.z, cp.y - a.h), p.get(hex));
         }
       }
     }

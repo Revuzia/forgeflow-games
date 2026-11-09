@@ -113,6 +113,8 @@ export interface EntityView {
   readonly buffs: readonly BuffView[];
   /** bit i set ⇒ visible to team i (fog of war + thickets + invisibility) */
   readonly visibleMask: number;
+  /** index of the thicket (tall grass) the unit stands in, -1 none: presentation only (the grass veil) */
+  readonly thicket: number;
   readonly alive: boolean;
   readonly targetable: boolean;
   /** projectiles/zones/dashes: geometry for rendering */

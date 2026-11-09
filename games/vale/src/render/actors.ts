@@ -90,6 +90,9 @@ const ACCENT_REST = 0.8;
 /** veils (r12 M2): body coverage of an invisible unit its allies see, of an untargetable one; the glass rim */
 const VEIL_GHOST = 0.35;
 const VEIL_GLASS = 0.6;
+/** a fighter standing in tall grass: body coverage and how far its colour darkens (shaded, harder to pick out) */
+const VEIL_GRASS = 0.55;
+const VEIL_GRASS_DARK = 0.68;
 const VEIL_RIM_PX = 2;
 const VEIL_RIM_ALPHA = 0.9;
 const VEIL_RIM = new Color().setStyle('#BFD3E6');
@@ -1242,7 +1245,7 @@ export class Actor implements CrowdActor {
   hideOutline(): void { this.setOutline(0, this.outlineColor, 0); }
 
   // ── veils (invisible / untargetable: see the header) ──────────────────────────────────────────────
-  private veilMode: 0 | 1 | 2 = 0;
+  private veilMode: 0 | 1 | 2 | 3 = 0;
   /** shared body material → this actor's see-through clone */
   private readonly veilMats = new Map<Material, MeshStandardMaterial>();
   /** body meshes and the material(s) they wore before the veil */
@@ -1251,13 +1254,13 @@ export class Actor implements CrowdActor {
    *  shows only its nearest surface (no inner layers, no sorting artefacts) */
   private readonly veilDepth: Mesh[] = [];
   private readonly veilDepthMats: Material[] = [];
-  /** 0 none · 1 invisible (seen by allies: 35 % body, no ink outline) · 2 untargetable (60 % body, dawnglass rim) */
-  get veil(): 0 | 1 | 2 { return this.veilMode; }
-  setVeil(mode: 0 | 1 | 2): void {
+  /** 0 none · 1 invisible (seen by allies: 35 % body, no ink outline) · 2 untargetable (60 % body, dawnglass rim) · 3 in tall grass (55 % body, shaded, ink outline kept) */
+  get veil(): 0 | 1 | 2 | 3 { return this.veilMode; }
+  setVeil(mode: 0 | 1 | 2 | 3): void {
     if (mode === this.veilMode || !this.model || this.crowdBake) return;
     this.veilMode = mode;
     const on = mode !== 0;
-    const k = mode === 1 ? VEIL_GHOST : VEIL_GLASS;
+    const k = mode === 1 ? VEIL_GHOST : mode === 3 ? VEIL_GRASS : VEIL_GLASS;
     if (on && !this.veilDepth.length && this.hullParts.length) this.buildVeilDepth(this.model);
     const prepass = this.veilDepth.length > 0;
     for (const m of this.veilDepth) m.visible = on;
@@ -1284,6 +1287,7 @@ export class Actor implements CrowdActor {
           patchWorldMaterial(c, charLight(this.kind));
           this.veilMats.set(mat, c);
         }
+        (c as MeshStandardMaterial).color.copy((mat as MeshStandardMaterial).color).multiplyScalar(mode === 3 ? VEIL_GRASS_DARK : 1);
         see(c, mat.transparent ? mat.opacity : 1);
         return c;
       };

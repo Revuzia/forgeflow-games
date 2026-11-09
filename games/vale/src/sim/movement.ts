@@ -13,7 +13,7 @@
 // progress for NO_PROGRESS_TICKS (jostled in a crowd, a body parked on a corner node) treats a
 // near waypoint as reached or recomputes its route.
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
-// less when idle), except a fighter and a lane minion, which pass through each other; structures are hard circles. Walls win: a step into a blocked cell slides
+// less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.
 //
 // Dashes move along a straight line clipped to walls at start; `onPass` hits units within
@@ -325,7 +325,6 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
   for (let i = 0; i < n; i++) {
     const o = near[i];
     if (o === e || !o.alive || o.dash || o.kind === 'ward' || o.kind === 'pickup') continue;
-    if ((e.kind === 'fighter' && o.kind === 'minion') || (e.kind === 'minion' && o.kind === 'fighter')) continue; // fighters and lane minions pass through each other (ruling 29)
     let dx = x - o.x, dy = y - o.y;
     const rr = e.radius + o.radius;
     let d2 = dx * dx + dy * dy;

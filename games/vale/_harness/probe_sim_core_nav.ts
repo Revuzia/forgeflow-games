@@ -164,18 +164,6 @@ section('separation + structures', () => {
   let minD = Infinity;
   for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) minD = Math.min(minD, Math.hypot(ms[i].x - ms[j].x, ms[i].y - ms[j].y));
   check('soft separation keeps a crowd from stacking', minD > 0.5, minD.toFixed(3));
-  // ruling 29: a fighter and a lane minion pass through each other
-  const pw = makeWorld(cat, [{ fighter: 'fx_fighter_a', team: 0, x: 10, y: 10 }, { fighter: 'fx_fighter_b', team: 1, x: 55, y: 55 }]);
-  const walker = fighterEnt(pw, 0);
-  walker.x = 20; walker.y = 15;
-  const wall = [-2, -1, 0, 1, 2].map((i) => addUnit(pw, 'fx_minion', 1, 20 + i * 1.5, 18));
-  for (const m of wall) { m.autoAttack = false; }
-  const before = wall.map((m) => [m.x, m.y]);
-  issueMove(pw, walker, 20, 21, false);
-  let closest = Infinity;
-  for (let i = 0; i < 300 && walker.y < 20.9; i++) { pw.step(); for (const m of wall) closest = Math.min(closest, Math.hypot(walker.x - m.x, walker.y - m.y)); }
-  check('a fighter walks straight through a line of minions', walker.y > 20.8 && Math.abs(walker.x - 20) < 0.05 && closest < 0.3, `${walker.x.toFixed(2)},${walker.y.toFixed(2)} closest ${closest.toFixed(2)}`);
-  check('…and does not shove them aside', wall.every((m, i) => Math.hypot(m.x - before[i][0], m.y - before[i][1]) < 0.05));
   // Shift + right-click: attack-move with the clicked enemy first, while in range
   const aw = makeWorld(cat, [{ fighter: 'fx_fighter_a', team: 0, x: 10, y: 10 }, { fighter: 'fx_fighter_b', team: 1, x: 55, y: 55 }]);
   const shooter = fighterEnt(aw, 0);
