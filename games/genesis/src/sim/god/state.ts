@@ -336,10 +336,14 @@ export interface TowerState {
 }
 export interface CovenantOffer { id: number; planet: number; act: string; kind: 'flood' | 'fire' | 'ruin'; name: string;
   settlements: number[]; dead: number; household?: { id: number; name: string; count: number };
-  opens: number; until: number; natural: boolean }
+  opens: number; until: number; natural: boolean;
+  /** additive (stage C1): the covenant.offered event has fired (at `opens`) */
+  shown?: boolean }
 export interface Covenant { id: number; planet: number; made: number; vow: Vow; after: string;
   settlements: number[]; household?: { id: number; name: string }; status: 'kept' | 'broken'; broken: number;
-  breakAct?: string; signAt: number; told: number; halved: boolean }
+  breakAct?: string; signAt: number; told: number; halved: boolean;
+  /** additive (stage C1): the light shower before the bow has been painted */
+  shower?: boolean }
 export interface AgeRecord { id: number; planet: number; kind: string; name: string; place?: number;
   begun: number; ended: number; event?: number; closing?: string; n: number }
 export interface ArcEvent { id: number; planet: number; tick: number;
@@ -371,6 +375,9 @@ export interface RelState {
   godActs?: Record<string, Record<string, number>>;
   /** push (tick) order */
   arcEvents?: ArcEvent[];
+  /** additive (stage C2, story.ts): per planet, the age-namer's running state (condition clocks, the last ArcEvent read,
+   * the chronicle read pointer, migration) — keys sorted on save */
+  arcSince?: Record<string, Record<string, number>>;
 }
 
 export function emptyRel(): RelState {
@@ -392,6 +399,11 @@ function relJson(rel: RelState): RelState {
   }
   const out: RelState = { ...rel, st, stats: sortKeys(rel.stats) };
   if (rel.annals) out.annals = sortKeys(rel.annals);
+  if (rel.arcSince) {
+    const as: Record<string, Record<string, number>> = {};
+    for (const k of Object.keys(rel.arcSince).sort()) as[k] = sortKeys(rel.arcSince[k]);
+    out.arcSince = as;
+  }
   if (rel.godActs) {
     const ga: Record<string, Record<string, number>> = {};
     for (const k of Object.keys(rel.godActs).sort()) ga[k] = sortKeys(rel.godActs[k]);

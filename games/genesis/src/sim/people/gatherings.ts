@@ -37,7 +37,7 @@ import { reachOf, REACH_DAY } from '../perf/pace.ts';
 import { libHas } from './knowledge.ts';
 
 /** what a gathering task (TASK.gather) is, in its tData */
-export const GATHER_KIND = { festival: 1, wedding: 2, funeral: 3 } as const;
+export const GATHER_KIND = { festival: 1, wedding: 2, funeral: 3, covenant: 4 } as const;
 /** how long a gathering lasts (ticks): a festival into the night, a wedding or funeral an evening */
 const LASTS = { festival: 210, wedding: 150, funeral: 120 } as const;
 /** company and playmates are sought within this (m) */
@@ -239,6 +239,8 @@ export function gatherDone(x: PCtx, s: number, st: Settlement | undefined): void
   if (!st) return;
   const A = x.A, nb = s * NEED_N, N = A.needs;
   const kind = A.tData[s];
+  // ARC §4.3: under the bow of the covenant they looked up and knelt: faith, no feast
+  if (kind === GATHER_KIND.covenant) { N[nb + FAITH] = Math.min(1, N[nb + FAITH] + 0.25); N[nb + BELONG] = Math.min(1, N[nb + BELONG] + 0.2); return; }
   const g = st.land?.gatherings.find((q) => q.from === A.tTarget[s] && (kind === GATHER_KIND.funeral ? q.kind === 'funeral' : kind === GATHER_KIND.wedding ? q.kind === 'wedding' : q.kind !== 'funeral' && q.kind !== 'wedding'));
   if (g && !g.came.includes(A.id[s])) g.came.push(A.id[s]);
   N[nb + BELONG] = Math.min(1, N[nb + BELONG] + (kind === GATHER_KIND.festival ? 0.5 : 0.35));

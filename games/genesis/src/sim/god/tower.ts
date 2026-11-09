@@ -14,6 +14,8 @@
 // Deterministic: every roll is hashFloat on the planet / tower / settlement ids and the tick with the §7 salts
 // 0x70e1..0x70e5; iteration is in `ps.settlements` / sorted id order.
 
+import { noteWandering } from './story.ts';
+import { wordFor } from './legends.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { Building, Settlement } from '../people/state.ts';
@@ -746,6 +748,7 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
   }
   tw.status = 'scattered'; tw.ended = x.tick;
   tw.scatter = { towns: kids, d0, until: x.tick + x.year };
+  noteWandering(u, p.id, scattered);
   answered(x, tw, 'confuse');
   u.emit({ t: 'tower.confused', planet: p.id, pos: tw.pos, data: { tower: tw.id, towns: tw.league.slice(), scattered, founded } });
   tell(u, p, 'tower.confused', vars(x, host, -1, { host: host.name, league: names(league) }), host, league.map((s) => settlementRef(x, s)), 3);
@@ -755,7 +758,9 @@ export function confuse(x: PCtx, tw: TowerState): { scattered: number; founded: 
     const r = srel(u, p.id, a.id);
     if ((r.told ??= {})[key] !== undefined) continue;
     r.told[key] = x.tick;
-    tell(u, p, 'tower.apart', vars(x, a, -1, { a: a.name, b: b.name }), a, [settlementRef(x, a), settlementRef(x, b)], 2);
+    // stage C3: each in its own word (wordFor); the stage A line where the words came out alike
+    const wa = wordFor(x.c, a, 'tower'), wb = wordFor(x.c, b, 'tower');
+    tell(u, p, wa !== wb ? 'tower.apart.words' : 'tower.apart', vars(x, a, -1, { a: a.name, b: b.name, wordA: wa, wordB: wb }), a, [settlementRef(x, a), settlementRef(x, b)], 2);
   }
   pushArc(u, { planet: p.id, tick: x.tick, kind: 'confuse', name: `The Scattering at ${host.name}`, towns: tw.league, god: 'sign', dead: 0, ref: tw.id });
   return { scattered, founded };

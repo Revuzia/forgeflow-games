@@ -53,12 +53,17 @@ import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
 import { duskKeep, heartsDaily, heartSigns, heartsQuery, heartView, personHeart, registerArcCommands } from './arc.ts';
 import { DEFY, carryMemory, defianceHourly, defianceQuery, defiantView, noteGodStorm, registerDefianceCommands } from './defiance.ts';
+import { actClosed, breakByCast, covenantDaily, covenantHourly, covenantPrecheck, covenantRefusal, covenantSnap, covenantsQuery, covenantTownView, registerCovenantCommands, underKept } from './covenant.ts';
+import { storyHooks, agesQuery, noteGodAct, noteWandering, registerStoryCommands, storyDaily, storyQuery, storySnap } from './story.ts';
+import { legendsDaily, toldLine, wordFor } from './legends.ts';
 import { leagueDamp, registerTowerCommands, towerDaily, towerTask, towerViews, towersQuery } from './tower.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
 const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale', 'god.seen']);
 
 const installedOn: WeakSet<CommandRegistry> = new WeakSet();
+/** the WRATHFUL kinds already wrapped per registry (the wrapper adds wrath, warning and covenant once) */
+const wrapped: WeakMap<CommandRegistry, Set<string>> = new WeakMap();
 
 // ───────────────────────────── commands and hooks ─────────────────────────────
 
@@ -69,6 +74,8 @@ export function registerRelationship(r: CommandRegistry): void {
   registerArcCommands(r);
   registerTowerCommands(r);
   registerDefianceCommands(r);
+  registerCovenantCommands(r);
+  registerStoryCommands(r);
   r.register('prayer.answer', ({ u, p, cmd }, a) => {
     if (!p.people) return fail('There is nobody here praying.');
     const st = typeof a.settlement === 'number' ? p.people.settlement(a.settlement) : undefined;
@@ -85,13 +92,30 @@ export function registerRelationship(r: CommandRegistry): void {
   for (const k of WRATHFUL) {
     const h = r.handlerOf(k);
     const sc = r.schema(k);
-    if (!h || !sc || 'wrath' in sc.params) continue;
-    const params: Record<string, ParamSchema> = { ...sc.params, wrath: { type: 'number', min: 0, max: 1, desc: 'how hard it falls: 0 gentle .. 0.3 survivable (the law) .. 1 total' } };
-    if (k === 'disaster.spawn' || k === 'water.flood') params.warning = { type: 'number', min: 0, max: 10000, desc: 'ticks of warning before it strikes (0 none)' };
+    if (!h || !sc || wrapped.get(r)?.has(k)) continue;
+    (wrapped.get(r) ?? wrapped.set(r, new Set()).get(r)!).add(k);
+    const params: Record<string, ParamSchema> = { ...sc.params };
+    const ownWrath = 'wrath' in sc.params;
+    if (!ownWrath) params.wrath = { type: 'number', min: 0, max: 1, desc: 'how hard it falls: 0 gentle .. 0.3 survivable (the law) .. 1 total' };
+    if ((k === 'disaster.spawn' || k === 'water.flood') && !ownWrath) params.warning = { type: 'number', min: 0, max: 10000, desc: 'ticks of warning before it strikes (0 none)' };
+    // ARC §4.4: every harmful cast may be sent knowing it breaks the covenant
+    params.covenant = { type: 'enum', values: ['keep', 'break'], default: 'keep', desc: 'keep (refused if it would break the covenant) | break' };
     r.register(k, (ctx, a) => {
+      // §4.4 pre-check (defiance.answer's wrath is checked on the lightning it sends, with the same covenant word)
+      const pre = k === 'defiance.answer' ? null : covenantPrecheck(ctx.u, ctx.p, k, a);
+      if (pre && a.covenant !== 'break') return covenantRefusal(ctx.u, ctx.p, k, pre);
+      if (ownWrath) {
+        const res = h(ctx, a);
+        if (pre && res.ok) breakByCast(ctx.u, ctx.p, pre, k, currentAct()?.key ?? '');
+        return res;
+      }
       pushWrath(wrathOf(ctx.u, a));
       castWarning.push(typeof a.warning === 'number' ? a.warning : undefined);
-      try { return h(ctx, a); } finally { castWarning.pop(); popWrath(); }
+      try {
+        const res = h(ctx, a);
+        if (pre && res.ok) breakByCast(ctx.u, ctx.p, pre, k, currentAct()?.key ?? '');
+        return res;
+      } finally { castWarning.pop(); popWrath(); }
     }, { ...sc, params });
   }
   if (installedOn.has(r)) return;
@@ -114,6 +138,8 @@ export function registerRelationship(r: CommandRegistry): void {
   godHooks.harmScale = () => { const w = currentWrath(); return w === null ? null : { L: lethality(w), R: reach(w), B: ruination(w) }; };
   godHooks.noteDeath = noteDeath;
   actHooks.harm = delayedHarm;
+  actHooks.closed = actClosed;
+  storyHooks.told = toldLine;
   if (!strikeHooks.includes(lightningFear)) strikeHooks.push(lightningFear);
 }
 
@@ -142,6 +168,8 @@ function afterAct(u: Universe, p: Planet, cmd: Command, res: CommandResult, a: A
   }
   const list = actsOf(u, p, cmd, a, ctx);
   list.push(...omensOfCommand(u, p, cmd, res, a, ctx.killed));
+  // ARC §5.1 godActs: the god's own command as the Book counts it
+  if (actor(cmd) === 0) noteGodAct(u, p, list, ctx.killed);
   if (!list.length) return;
   answerPrayers(u, p, list);
   prophetsAct(u, p, list);
@@ -546,6 +574,7 @@ export function relationshipHourly(u: Universe, p: Planet): void {
   }
   prophetsHourly(u, p);
   sacredHourly(u, p);
+  covenantHourly(u, p);
   naturalOmens(u, p);
 }
 
@@ -585,7 +614,7 @@ export function relationshipDaily(u: Universe, p: Planet): void {
   bindUniverse(u);
   prophetsDaily(u, p);
   const ps = p.people;
-  if (!ps || !ps.settlements.length) return;
+  if (!ps || !ps.settlements.length) { storyDaily(u, p); return; }
   const x = makeCtx(u, p);
   for (const st of ps.settlements.slice()) {
     if (st.fallen >= 0 || st.band) continue;
@@ -597,6 +626,9 @@ export function relationshipDaily(u: Universe, p: Planet): void {
     heartsDaily(x, st);
   }
   towerDaily(u, p);
+  covenantDaily(u, p);
+  legendsDaily(u, p);
+  storyDaily(u, p);
 }
 
 /** fear > trust + 0.4 and loyalty < 0.3: the Called and the prophet are cast out (killed where fear > 0.85) */
@@ -644,7 +676,8 @@ function fearMigration(x: PCtx, st: Settlement): void {
   const m = meansNow(x, st);
   if (!(m.fear > 0.7 && m.trust < 0.2)) { delete r.since.dread; return; }
   r.since.dread ??= u.tick;
-  if (u.tick - r.since.dread < 3 * x.day) return;
+  // ARC §4.2: under a kept covenant they bear it 5 days, not 3
+  if (u.tick - r.since.dread < (underKept(u, x.p.id, st.id) ? 5 : 3) * x.day) return;
   delete r.since.dread;
   const harm = r.acts.slice().reverse().find((q) => q.kind === 'harm');
   void harm;
@@ -666,6 +699,7 @@ function fearMigration(x: PCtx, st: Settlement): void {
   if (!n) return;
   // ARC §0.4: the households that move carry what they remember of the god (memory × 0.5, merged by max)
   carryMemory(u, x.p.id, st.id, dest.id);
+  noteWandering(u, x.p.id, n);
   relStat(u, 'migration.fear', n);
   tell(u, x.p, 'migration.fear', vars(x, st, -1, { count: n, other: dest.name }), st, [settlementRef(x, st), settlementRef(x, dest)], 2);
 }
@@ -715,6 +749,7 @@ function conversions(x: PCtx, st: Settlement): void {
 
 /** the relationship's parts of a planet's snapshot: settlement cards and the agents' flags2 bits */
 export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
+  storySnap(u, p, snap);
   const ps = p.people;
   if (!ps) return;
   const x = makeCtx(u, p);
@@ -732,10 +767,14 @@ export function relSnapPlanet(u: Universe, p: Planet, snap: PlanetSnap): void {
     const animal = sacredAnimalOf(st);
     if (places || animal) v.sacred = { places, ...(animal ? { animal } : {}) };
     const heart = heartView(r, st);
-    if (heart) v.heart = heart;
+    // ARC §5.6: what they call the god, in their own tongue
+    if (heart) { heart.theyCall = wordFor(x.c, st, 'god'); v.heart = heart; }
     const defiant = defiantView(r, u.tick, x.day);
     if (defiant) v.defiant = defiant;
+    const cv = covenantTownView(u, p, st.id);
+    if (cv) v.covenant = cv;
   }
+  covenantSnap(u, p, snap);
   const towers = towerViews(u, p);
   if (towers) snap.towers = towers;
   const b = snap.agents;
@@ -760,7 +799,7 @@ export function relSnapGlobal(u: Universe): { regard: number; wrath: number } {
   return { regard: regardOf(u, 0), wrath: wrathLaw(u) };
 }
 
-export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance'];
+export const REL_QUERIES = ['regard', 'prayers', 'prophets', 'sacred', 'omens', 'sigils', 'hearts', 'towers', 'defiance', 'covenants', 'ages', 'story'];
 
 /** the stroke descriptions of the sigils, for the UI team's recogniser templates (hook H8) */
 export const SIGIL_STROKES: Record<string, string> = {
@@ -801,6 +840,9 @@ export function relQuery(u: Universe, q: string, args: Record<string, unknown>):
     case 'hearts': return heartsQuery(u, args);
     case 'towers': return towersQuery(u, args);
     case 'defiance': return defianceQuery(u, args);
+    case 'covenants': return covenantsQuery(u, args);
+    case 'ages': return agesQuery(u, args);
+    case 'story': return storyQuery(u, args);
     case 'sigils': {
       const bySigil: Record<string, { power: string; name: string; command: string; stroke: string }[]> = {};
       for (const pw of u.content.powers.list) if (pw.sigil) (bySigil[pw.sigil] ??= []).push({ power: pw.id, name: pw.name, command: pw.command, stroke: SIGIL_STROKES[pw.sigil] ?? '' });

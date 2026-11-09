@@ -23,6 +23,7 @@
 // Hardship (the worst of: a disaster on the town within 2 days, famine, the sick share, a storm, a drought), worked out
 // hourly and kept on the record (`since.hard`, 0..1), is what moves people to pray (god/relationship.ts).
 
+import { lapseScale } from './covenant.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { Settlement } from '../people/state.ts';
@@ -196,7 +197,9 @@ function lapse(x: PCtx, st: Settlement, pr: Prayer): void {
   r.prayers = r.prayers.filter((q) => q !== pr);
   r.lapses++;
   relStat(u, 'prayers.lapsed');
-  moveSettlement(x, st, { faith: -0.03, trust: -0.05, loyalty: -0.02 });
+  // ARC §4.2 / §0.4: a kept covenant halves the penalty; memory `kept` softens it
+  const ks = lapseScale(u, x.p.id, st.id);
+  moveSettlement(x, st, { faith: -0.03 * ks, trust: -0.05 * ks, loyalty: -0.02 * ks });
   r.since[`l:${pr.kind}`] = x.tick;
   // one 'nothing came' line a season per town (the record still counts every lapse)
   const told = r.since.lapseTold;

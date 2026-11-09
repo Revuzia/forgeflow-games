@@ -15,6 +15,8 @@
 //
 // The parser's own types are module-private: these functions see a clause through the structural `SignClause`.
 
+import { promiseWords, VOW_WORDS } from './covenant.ts';
+import { characterWords } from './story.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { Command } from '../types.ts';
@@ -163,7 +165,8 @@ export function intentSigns(c: SignClause): boolean {
   const { cx, full, mods } = c;
   const { u, p } = cx;
   const f = full;
-  // ── ARC §6.5 the god's answer to a defiant town (before "be merciful" as a disposition) ──
+  // ── ARC §6.5 the covenant (before "spare them" as a disposition) and the god's answer to a defiant town ──
+  if (p && covenantIntents(c, p)) return true;
   if (p && defyIntents(c, p)) return true;
   // ── wrath as a disposition: "be gentle with them", "be terrible" ──
   if (/\b(be|go) (gentle|merciful|kind|soft|lenient|mild|easy)\b|\bgo easy on\b|\bspare them\b/.test(f) && !/\b(rain|storm|wind|breeze)\b/.test(f)) {
@@ -414,6 +417,22 @@ const D_WRATH = /\bpunish\s+[a-z' -]+?\s+for (their|its|the) (defiance|anger|sto
  * an answer) is answered this way; otherwise the words fall through to their ordinary reading ("show Aru a sign" is an
  * omen). A negation refuses.
  */
+const C_MAKE = /\b(make|swear|give|offer|set)\b.*\b(covenant|promise|vow|oath)\b|\b(promise|swear|vow)\b.*\b(never|always|to spare|to be|to warn|not to)\b|\bset (a|the|my) (rain)?bow as\b/;
+const C_ASK = /\bwhat (did|have) i (promised?|sworn|vowed)\b|\bwhat (are|were) my (promises|vows)\b|\bwhat did i promise\b/;
+
+/** ARC §6.5: "make a covenant", "promise never to flood them again" -> covenant.make; "what did I promise" answered */
+function covenantIntents(c: SignClause, p: Planet): boolean {
+  const { cx, full: f } = c;
+  if (C_ASK.test(f)) { cx.answered = true; return c.ask(promiseWords(cx.u, p.id)); }
+  if (/\b(tell me (our|the|their) story|read (me )?the (story|book)|what kind of (people are they|god am i))\b/.test(f)) { cx.answered = true; return c.ask(characterWords(cx.u, p.id)); }
+  if (!C_MAKE.test(f) || /\bbreak\b/.test(f)) return false;
+  const vow = /\b(water|flood|floods|drown|drowned|waters)\b/.test(f) ? 'no-flood' : /\b(many|spare|kill|killing|so many)\b/.test(f) ? 'spare-the-many'
+    : /\b(gentle|anger|angry|wrath|kind)\b/.test(f) ? 'gentle' : /\b(warn|warning|warned)\b/.test(f) ? 'warn-first' : null;
+  if (!vow) return c.ask('Promise what? Never again by water, never again so many, always gentle, or always warn first.');
+  c.add({ k: 'covenant.make', vow }, `promise: ${VOW_WORDS[vow]}`);
+  return true;
+}
+
 function defyIntents(c: SignClause, p: Planet): boolean {
   const { cx, full: f, mods } = c;
   const how = D_WRATH.test(f) ? 'wrath' : D_MERCY.test(f) ? 'mercy' : D_SIGN.test(f) ? 'sign' : D_PATIENCE.test(f) ? 'patience' : null;

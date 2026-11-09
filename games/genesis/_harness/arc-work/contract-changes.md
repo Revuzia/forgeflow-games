@@ -166,3 +166,32 @@
   x (1 + k wf), trust loss x (1 - k wm), the defiance jolt x (1 - k wf)(1 + k wm) (regard.ts witnessAct, defiance.ts
   harmReaction / harmJolt). D5 accepts a >= 0.1 difference in mean defiance, fear OR trust. The rally is unchanged.
   The earlier memK experiment stays at 1 (spec weights).
+
+## Stage C sim (C-sim, 2026-11-09) — §4 covenant, §5 the Book; additive, matches the C-ui readings
+- Modules: `god/covenant.ts` (§4; ARC §0.6 says arc.ts, split for size as defiance.ts was), `god/story.ts` (§5.1-§5.5),
+  `god/legends.ts` (§5.6). Hooks: regard.ts `ActCtx.ruined` + `noteRuined` (harm.ts wreckBuildings) and
+  `actHooks.closed` (endAct); relationship.ts hourly/daily/snap/query/register as §0.6.
+- C-ui readings MATCHED: `PlanetSnap.age.since` = the AgeRecord's `begun` tick; `query('covenants', { planet? })` ->
+  `{ covenants: (Covenant & { townNames, yearsKept, vowWords, says })[], offers: (CovenantOffer & { townNames })[] }`;
+  offer/view `name` = "the Flood of Aru" (lower-case "the"; "Burning" for fire/meteor/volcano kinds, "Ruin" otherwise);
+  `covenantOffer.household` = clanOf's string ("the house of Hesh" / "the net-clan of Aru"); `CommandResult.refusal?:
+  { kind: 'covenant'; covenant; vow }` is now TYPED in types.ts (the UI cast can go). `PlanetSnap.covenantOffer` appears
+  only once the offer opens (1-3 days after the act, `covenant.offered`). `PlanetSnap.age` = the open age, else the last.
+- §4.4 pre-check runs in the WRATHFUL wrapper (it has coerced args), not in r.before. Every WRATHFUL kind (also
+  tower.strike and defiance.answer, which own `wrath`) takes `covenant: 'keep'|'break'` (enum, default keep).
+  `defiance.answer` is checked on the lightning it sends and passes the refusal through. A cast sent with 'break' breaks
+  the covenant only when the pre-check would have refused it (a 'break' on a cast that keeps the vow is a no-op).
+  spare-the-many has no cast estimate: it breaks after the fact (the act's 11th death, summed over a disaster's life).
+  warn-first: a cast's targets are the covenant towns within 2.5 km (+ its radius) of its pos/settlement/tower; a cast
+  with `warning > 0` counts as warned. No painted-storm flood check (weather.paint is not WRATHFUL).
+- While a covenant is kept on a planet no new offer opens (one kept covenant per planet); the great destruction is still
+  registered (ArcEvent `great`, ages). `covenant.offer` (Debug) opens immediately (`opens` = now) and pushes `great`.
+- Additive optional state: `CovenantOffer.shown`, `Covenant.shower`, `RelState.arcSince` (per planet: the age-namer's
+  clocks, `g` = first-seen marker for old worlds). §7 migrate15 doc updated. `CommandResult.refusal` (types.ts).
+- `chronicle.age` data adds `tone: 'dark'|'golden'` (the §5.5 SFX split; additive). `legend.retold` data {settlement,
+  legend: id}. `covenant.answer` is a chronicle line only (no event). `SettlementView.heart.theyCall` = the word only
+  (the inspector adds "They call the god"). query('hearts') rows add `theyCall`. StoryView adds optional `remember`
+  (town book). `tower.apart.words` is the C3 line; `tower.apart` stays as the fallback when both words come out alike.
+- Ages: a condition age stays while its condition holds unless a stronger one comes (defiance > dread > othergods >
+  wandering > proud > golden > dark > trust > silence > plenty); repeats: "The Second Flood of Aru" for place-named kinds,
+  else "The Long Silence, a Second Time". Making is recorded quietly (no "So began" line).

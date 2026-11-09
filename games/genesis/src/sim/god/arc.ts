@@ -27,6 +27,7 @@ import { peekRel, srel } from './regard.ts';
 import type { CommandRegistry } from './commands.ts';
 import { fail, ok } from './util.ts';
 import { answeredWords, defianceDaily, inherit, lateActWords } from './defiance.ts';
+import { wordFor } from './legends.ts';
 import scripture from '../../data/scripture.json' with { type: 'json' };
 
 /** ARC tunables (every number of ARC.md marked *(ARC)*) */
@@ -466,7 +467,7 @@ export function heartsQuery(u: Universe, args: Record<string, unknown>): unknown
       out.push({ planet: p.id, settlement: st.id, name: st.name, kind: v.kind, proud: v.proud, devoted: v.devoted, fearful: v.fearful,
         restless: v.restless, defiant: v.defiant, pride: v.pride, prideWhy: r.prideWhy ?? null, prideWords: prideWords(r.prideWhy),
         defiance: v.defiance, defied: r.defied ?? {}, memory: r.memory ?? emptyMemory(), dusk: r.dusk ?? null, caption: v.caption,
-        line: v.line, remember: v.remember });
+        line: v.line, remember: v.remember, theyCall: wordFor(u.content, st, 'god') });
     }
   }
   return out;

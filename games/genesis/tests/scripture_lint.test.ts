@@ -63,7 +63,9 @@ test('data/scripture.json keeps the voice', () => {
   const bad: string[] = [];
   for (const [path, s] of all) for (const e of lintLine(s)) {
     // captions, share words and reason words are fragments, not sentences: only the word lists apply to them
-    if (/^sentence starts lower case/.test(e) && /\.(share|prideWhy|remember)\b/.test(path)) continue;
+    if (/^sentence starts lower case/.test(e) && /\.(share|prideWhy|remember|firstwrong|epithet|generations\.apart|storyNumbers|promise\.(yearOne|years))\b/.test(path)) continue;
+    // age names are title case ("When the God Walked Near", §5.2 verbatim): "the God" there is a title word, not a name
+    if (/"God" used as a name/.test(e) && /\.ages\./.test(path)) continue;
     bad.push(`${path}: ${e}`);
   }
   assert.deepEqual(bad, []);

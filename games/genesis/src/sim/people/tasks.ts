@@ -370,6 +370,8 @@ function beginWork(x: PCtx, s: number, at = x.tick): void {
   A.anim[s] = workAnim(A.task[s]);
   // (LIVING LAND: a funeral is mourned, not danced — people/gatherings.ts GATHER_KIND.funeral = 3)
   if (A.task[s] === TASK.gather && A.tData[s] === 3) A.anim[s] = AnimState.mourn;
+  // (ARC §4.3: under the covenant's bow — GATHER_KIND.covenant = 4 — half look up, half kneel)
+  if (A.task[s] === TASK.gather && A.tData[s] === 4) A.anim[s] = A.id[s] & 1 ? AnimState.pray : AnimState.lookUp;
   // (ARC §3.2: throwing at the storm, else fists and curses by turns)
   if (A.task[s] === TASK.defy) A.anim[s] = A.tData[s] === 2 ? AnimState.hurl : A.id[s] & 1 ? AnimState.curse : AnimState.fist;
   if (at === x.tick) syncCell(x, s);

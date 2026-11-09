@@ -170,6 +170,8 @@ export interface ActCtx {
   killed: boolean;
   /** members killed per settlement ("<planet>:<sid>") */
   dead: Record<string, number>;
+  /** ARC §4.1 fix b: buildings brought to 0 hp per settlement ("<planet>:<sid>") */
+  ruined: Record<string, number>;
   /** settlements whose members witnessed it, and what it was to them */
   seen: Map<string, { kind: string; foretold: boolean; provoked: boolean; planet: number; sid: number }>;
   /** the command kind (or 'disaster:<kind>', 'thrown') */
@@ -186,7 +188,7 @@ export function currentAct(): ActCtx | null {
 export function beginAct(u: Universe | null, o: { key: string; god: number; natural?: boolean; store?: Record<string, number>; what: string }): ActCtx {
   if (u) bindUniverse(u);
   const ctx: ActCtx = {
-    store: o.store ?? {}, key: o.key, god: o.god, natural: !!o.natural, killed: (o.store?.killed ?? 0) > 0, dead: {}, seen: new Map(), what: o.what,
+    store: o.store ?? {}, key: o.key, god: o.god, natural: !!o.natural, killed: (o.store?.killed ?? 0) > 0, dead: {}, ruined: {}, seen: new Map(), what: o.what,
   };
   stack.push(ctx);
   return ctx;
@@ -198,12 +200,15 @@ export function beginAct(u: Universe | null, o: { key: string; god: number; natu
  * command's act (god/relationship.ts sets it; commands go through its own afterAct). Deduplicated by the act's key in
  * the settlement's saved `acts`, so it needs no state of its own.
  */
-export const actHooks: { harm: ((u: Universe, planet: number, sid: number, god: number) => void) | null } = { harm: null };
+export const actHooks: { harm: ((u: Universe, planet: number, sid: number, god: number) => void) | null;
+  /** ARC §4.1 / §4.4: the act closed (covenant.ts actClosed: great destruction, spare-the-many post-check, natural doubt) */
+  closed: ((u: Universe, ctx: ActCtx) => void) | null } = { harm: null, closed: null };
 
 /** close the act: each settlement that saw it remembers it (merged into the record of the same act) */
 export function endAct(u: Universe | null, ctx: ActCtx): void {
   const i = stack.lastIndexOf(ctx);
   if (i >= 0) stack.splice(i, 1);
+  if (u && actHooks.closed && (Object.keys(ctx.dead).length || Object.keys(ctx.ruined).length)) actHooks.closed(u, ctx);
   if (!u || !ctx.seen.size && !Object.keys(ctx.dead).length) return;
   if (ctx.killed) ctx.store.killed = 1;
   const keys = new Set<string>([...ctx.seen.keys(), ...Object.keys(ctx.dead)]);
@@ -249,6 +254,14 @@ function yearOf(u: Universe, pl: number): number {
   return p ? Math.max(day, Math.round(p.st.orbit.period)) : 525600;
 }
 
+/** ARC §4.1 fix b: a building of settlement sid was ruined by the act in progress (god/harm.ts) */
+export function noteRuined(p: Planet | number, sid: number): void {
+  const ctx = currentAct();
+  if (!ctx || sid < 0) return;
+  const k = relKey(typeof p === 'number' ? p : p.id, sid);
+  ctx.ruined[k] = (ctx.ruined[k] ?? 0) + 1;
+}
+
 /** a person was killed by the act in progress (god/harm.ts) */
 export function noteDeath(p: Planet | number, sid: number): void {
   const ctx = currentAct();
@@ -274,7 +287,7 @@ export function cruelty(w: number): number {
 }
 
 /** is this harm foretold here: an open prophecy of harm (or a sign) for the settlement, or an omen within 2 days */
-function foretoldAt(u: Universe, p: Planet, sid: number, tick: number, day: number): boolean {
+export function foretoldAt(u: Universe, p: Planet, sid: number, tick: number, day: number): boolean {
   const R = u.god.rel;
   if (!R) return false;
   for (const ph of R.prophecies) if (ph.planet === p.id && ph.settlement === sid && ph.kind === 'harm' && ph.from <= tick && tick <= ph.until) return true;

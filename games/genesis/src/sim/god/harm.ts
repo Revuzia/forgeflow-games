@@ -19,7 +19,7 @@ import { distM } from '../people/world.ts';
 import { herdPos, reindexHerds } from '../life/herds.ts';
 import { hashFloat } from '../core/rng.ts';
 import { harmScale } from './wrath.ts';
-import { currentAct, noteDeath } from './regard.ts';
+import { currentAct, noteDeath, noteRuined } from './regard.ts';
 import { witness } from '../people/culture.ts';
 
 /** is a point inside a live shield on this planet */
@@ -131,7 +131,7 @@ export function wreckBuildings(u: Universe, p: Planet, pos: ArrayLike<number>, r
     if (k <= 0.002) continue;
     b.damage = Math.min(1, Math.round((b.damage + k) * 10000) / 10000);
     x.ps.version++;
-    if (b.damage >= 1) { ruin(x, x.ps.settlement(b.settlement), b, why); n++; }
+    if (b.damage >= 1) { ruin(x, x.ps.settlement(b.settlement), b, why); noteRuined(p, b.settlement); n++; }
   }
   return n;
 }

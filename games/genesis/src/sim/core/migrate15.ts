@@ -67,6 +67,11 @@ const history: HeaderStep = () => {};
  * Stage B (god/defiance.ts): `defiance` starts at 0, `defied` / `answer` / `idol` absent, and the rest lives in optional
  * `since` keys (dCurse, dHold, patT, patFast, gStorm, memY, aWrath..aPatience, idolMute) that default absent. An old save's
  * harmLoad (counted +1 per act and step before stage B) is kept as it is and halves yearly like any other.
+ * Stage C (god/covenant.ts, story.ts, legends.ts): `covenants, offers, ages, arcEvents` absent = [], `annals, godActs,
+ * arcSince` absent = {}; optional `CovenantOffer.shown`, `Covenant.shower`, `SettlementRel.legends`, `memory.peak` /
+ * `refreshed` and `since` keys (cv<id>, cvAns, cvTr, cvBow, cvTold, lgN) default absent. A world with no `arcSince` at all
+ * that is past its first 30 days is an old world (story.ts storyDaily): one `making` age is added and the open age is
+ * taken from the condition rules from the load tick; its Book carries the note. Its past is not invented.
  */
 const arc: HeaderStep = () => {};
 

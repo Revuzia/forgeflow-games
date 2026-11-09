@@ -34,6 +34,7 @@
 // person or town whose name is also an ordinary word ("Rain", "Sun") only when written with a capital mid-sentence.
 
 import type { Command, CommandResult } from '../types.ts';
+import { WRATHFUL } from './wrath.ts';
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { CommandRegistry, CommandSchema } from './commands.ts';
@@ -754,6 +755,8 @@ function powerName(c: Content, cmd: Command): string | undefined {
 
 // ───────────────────────────── the parser ─────────────────────────────
 
+const BREAK_VOW = /\b(and )?(i )?break (my|the|your) (covenant|promise|vow|word)\b/;
+
 export function parseFreeform(u: Universe, reg: CommandRegistry, text: string): ParseOut {
   try {
     return parseText(u, reg, String(text ?? ''));
@@ -841,12 +844,25 @@ function parseText(u: Universe, reg: CommandRegistry, raw: string, depth = 0): P
   const cmds: Command[] = [];
   const notes: string[] = [];
   cx.multi = lifted.length > 1;
+  // ARC §6.5: "…, and break my covenant" sets covenant 'break' on the harmful casts of the sentence
+  let breakIt = false;
   for (const c of lifted) {
+    if (!BREAK_VOW.test(c.text)) continue;
+    breakIt = true;
+    if (c.text.replace(BREAK_VOW, '').replace(/\b(and|then|so)\b|[,.;!]/g, '').trim().length < 3) (c as { skip?: boolean }).skip = true;
+  }
+  for (const c of lifted) {
+    if ((c as { skip?: boolean }).skip) continue;
     cx.note = undefined;
     cx.noteAbout = undefined;
     const got = resolveClause(cx, c.core, c.mods, c.text);
     if (got.length) cmds.push(...got);
     else if (cx.note) notes.push(cx.note);
+  }
+  if (breakIt) {
+    const harm = cmds.filter((q) => WRATHFUL.includes(q.k));
+    if (!harm.length) return { ok: false, msg: 'A promise is broken by a deed, not a word.' };
+    for (const q of harm) q.covenant = 'break';
   }
   if (!cmds.length && cx.answered && notes.length) return { ok: true, msg: notes.join(' '), resolved: [] };
   if (!cmds.length) return notes.length ? { ok: false, msg: notes.join(' '), ...(cx.asked.length ? { resolved: cx.asked } : {}) } : nothing(cx, text0);

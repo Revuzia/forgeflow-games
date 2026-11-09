@@ -22,7 +22,14 @@
     "defiant": "{name} raises a fist at the sky",
     "quiet": "{name} goes about the day"
   },
-  "share": ["a few", "some", "about a third", "about half", "most", "nearly all"],
+  "share": [
+    "a few",
+    "some",
+    "about a third",
+    "about half",
+    "most",
+    "nearly all"
+  ],
   "prideWhy": {
     "P": "rich",
     "T": "skilled",
@@ -39,5 +46,316 @@
     "betrayed": "the broken promise",
     "kept": "the kept promise",
     "proud": "the tower that stood"
-  }
+  },
+  "title": {
+    "planet": "The Book of the {people} of {planet}",
+    "town": "The Book of {town}"
+  },
+  "opening": {
+    "air": "First the world had air.",
+    "sea": "The waters gathered into a sea.",
+    "rain": "Rain fell on the bare rock.",
+    "life": "Green came up out of the wet ground.",
+    "forest": "Forests stood where nothing had stood.",
+    "none": "The world was made, and waited."
+  },
+  "ages": {
+    "making": [
+      "The Days of Making",
+      "Before the People"
+    ],
+    "plenty": [
+      "The Years of Plenty at {town}",
+      "When the God Walked Near"
+    ],
+    "proud": [
+      "The Proud Years",
+      "The Age of Full Granaries"
+    ],
+    "flood": [
+      "The Flood of {town}",
+      "The Age of the Flood",
+      "When the Waters Took {town}"
+    ],
+    "fire": [
+      "The Burning of {town}",
+      "The Years of Ash"
+    ],
+    "ruin": [
+      "The Ruin of {town}",
+      "The Breaking of {town}"
+    ],
+    "tower": [
+      "The Years of Building at {town}",
+      "The Age of the Tower"
+    ],
+    "scattering": [
+      "The Scattering at {town}",
+      "The Breaking of Speech",
+      "When {town} Forgot Its Kin"
+    ],
+    "fall": [
+      "The Fall of the Tower of {town}",
+      "The Years Under the Rubble"
+    ],
+    "warning": [
+      "The Warning at {town}"
+    ],
+    "builders": [
+      "The Age of the Tower of {town}",
+      "The Years of the Standing Tower"
+    ],
+    "covenant": [
+      "The Age of the Bow",
+      "The Years of the Promise"
+    ],
+    "brokenvow": [
+      "The Age of the Broken Promise",
+      "The Years Without a Word"
+    ],
+    "defiance": [
+      "The Years of Stones Against the Sky",
+      "The Age of Raised Fists"
+    ],
+    "dread": [
+      "The Age of Dread",
+      "The Years of Watching the Sky"
+    ],
+    "trust": [
+      "The Gentle Years",
+      "The Age of Trust"
+    ],
+    "silence": [
+      "The Long Silence",
+      "The Years the God Was Still"
+    ],
+    "wandering": [
+      "The Wandering of the {people}",
+      "The Years on the Road"
+    ],
+    "golden": [
+      "The Golden Age of {town}"
+    ],
+    "dark": [
+      "The Dark Age of {town}"
+    ],
+    "othergods": [
+      "The Age of Other Gods",
+      "When {rival} Was Worshipped"
+    ]
+  },
+  "ordinal": [
+    "",
+    "First",
+    "Second",
+    "Third",
+    "Fourth",
+    "Fifth",
+    "Sixth",
+    "Seventh",
+    "Eighth",
+    "Ninth",
+    "Tenth",
+    "Eleventh",
+    "Twelfth"
+  ],
+  "open": {
+    "making": "The world was made, and no one yet stood on it to see.",
+    "plenty": "At {town} they had bread, and the god was near.",
+    "proud": "The granaries were full, and they stood taller.",
+    "flood": "The water came to {town}.",
+    "fire": "Fire came to {town}.",
+    "ruin": "The ground broke under {town}.",
+    "tower": "At {town} they began to build.",
+    "scattering": "At {town} they had one speech, and built.",
+    "fall": "At {town} the tower stood, until it fell.",
+    "warning": "A voice came to the builders at {town}.",
+    "builders": "At {town} the tower was finished, and it stood.",
+    "covenant": "After the ruin the survivors looked to the sky, and the god bound itself.",
+    "brokenvow": "The god had promised, and the promise broke.",
+    "defiance": "They stopped bowing, and raised their fists.",
+    "dread": "They watched the sky, and were afraid.",
+    "trust": "They asked, and waited, and were not let down.",
+    "silence": "The god said nothing, year after year.",
+    "wandering": "Many left their homes and took the road.",
+    "golden": "{town} grew in number, wealth and knowledge.",
+    "dark": "A dark time fell on {town}.",
+    "othergods": "They turned to other gods."
+  },
+  "again": "As in {earlier}, it came without warning.",
+  "firstwrong": {
+    "harm": "the god first struck {town}",
+    "war": "war came between the towns",
+    "famine": "hunger came to {town}"
+  },
+  "plentyEnd": "And the years of plenty ended, when {cause}.",
+  "next": "And then began {name}.",
+  "now": "And so it is now.",
+  "godPart": {
+    "wrath": "The god answered with fire.",
+    "mercy": "The god answered with mercy.",
+    "patience": "The god watched, and waited.",
+    "sign": "The god answered with a sign.",
+    "promise": "The god made a promise.",
+    "broken": "The god broke its word.",
+    "none": "The god said nothing."
+  },
+  "character": {
+    "people": {
+      "fear": "They were a people of fear: they bowed, and did not love.",
+      "trust": "They were a people of trust: they asked, and waited, and were not often let down.",
+      "pride": "They were a proud people: they built to be seen.",
+      "defiance": "They were a people who answered back.",
+      "faith": "They were a faithful people: at dusk they bowed.",
+      "forgetting": "They were a people who forgot: the god became a story told to children.",
+      "many-minds": "They were many peoples, and did not agree about their god."
+    },
+    "god": {
+      "wrath": "Their god was quick to anger.",
+      "mercy": "Their god struck, and then healed.",
+      "patience": "Their god watched, and waited, and seldom struck.",
+      "wonders": "Their god spoke in signs.",
+      "silence": "Their god was mostly silent.",
+      "faithfulness": "Their god kept its word."
+    }
+  },
+  "closing": {
+    "wrath": "The story is not finished. What will the god do next?",
+    "wonders": "The story is not finished. What will the god do next?",
+    "silence": "The story is not finished. They are still waiting to see.",
+    "patience": "The story is not finished. They are still waiting to see.",
+    "mercy": "The story is not finished. They are still waiting to see.",
+    "faithfulness": "The story is not finished. The promise holds."
+  },
+  "note": "What came before is remembered only in the chronicle.",
+  "epithet": {
+    "drowned": {
+      "name": "the One Who Drowned the World",
+      "clause": "who drowned the world"
+    },
+    "confounder": {
+      "name": "the Confounder of Tongues",
+      "clause": "who confounded their speech"
+    },
+    "breaker": {
+      "name": "the Breaker of Towers",
+      "clause": "who broke their tower"
+    },
+    "patient": {
+      "name": "the Patient",
+      "clause": "who waits"
+    },
+    "merciful": {
+      "name": "the Merciful",
+      "clause": "who forgives"
+    },
+    "keeper": {
+      "name": "the One Who Keeps Its Word",
+      "clause": "who keeps its word"
+    },
+    "oathbreaker": {
+      "name": "the Oathbreaker",
+      "clause": "who broke its word"
+    },
+    "silent": {
+      "name": "the Silent One",
+      "clause": "who does not speak"
+    },
+    "terrible": {
+      "name": "the Terrible",
+      "clause": "who is feared"
+    },
+    "rain": {
+      "name": "the Giver of Rain",
+      "clause": "who gives the rain"
+    },
+    "none": "the god"
+  },
+  "generations": {
+    "from": "From {parent} came {children}.",
+    "fromSea": "From {parent} came {children}, by the sea.",
+    "lost": "{town} was lost in {age}.",
+    "gone": "{town} is gone.",
+    "scatter": "From the scattering at {town} came {children}, who speak apart.",
+    "apart": ", who no longer speak as their mothers did"
+  },
+  "promise": {
+    "kept": "After {after} the god promised {who} {says}. It has kept that promise {years}.",
+    "broken": "After {after} the god promised {who} {says}. It broke that promise in year {year}.",
+    "yearOne": "one year",
+    "years": "{n} years",
+    "fresh": "After {after} the god promised {who} {says}. The bow has not yet been seen."
+  },
+  "nextCall": "And then came the time they call {name}.",
+  "legend": {
+    "flood": [
+      "The water came to {place} and took {count} of them.",
+      "At {place} the river rose in the night and took {count} of them."
+    ],
+    "fire": [
+      "Fire came to {place} and took {count} of them."
+    ],
+    "ruin": [
+      "The ground broke under {place}, and {count} were lost."
+    ],
+    "strike": [
+      "Fire came down on the {tower} at {place}, and {count} died under it."
+    ],
+    "confuse": [
+      "At {place} they built the {tower}, and {god} broke their speech."
+    ],
+    "tower": [
+      "At {place} they built the {tower} to be seen from far away."
+    ],
+    "covenant": [
+      "After the ruin {god} set a bow over {place} and promised."
+    ],
+    "broken": [
+      "{god} promised {place}, and broke its word."
+    ],
+    "kept": [
+      "{god} kept its promise to {place}, year after year."
+    ],
+    "warn": [
+      "A prophet told the builders at {place} to go home, and they went."
+    ],
+    "let": [
+      "{god} let the {tower} at {place} stand."
+    ],
+    "silence": [
+      "The {tower} at {place} was finished, and {god} said nothing."
+    ],
+    "answer": [
+      "{place} shouted at the sky, and {god} answered."
+    ],
+    "defiance": [
+      "At {place} they threw stones at the sky."
+    ],
+    "firstwrong": [
+      "Once {god} walked near, until the first wrong."
+    ],
+    "wandering": [
+      "Our people took the road, and {god} went with us."
+    ],
+    "othergods": [
+      "They turned to other gods, and {god} let them go."
+    ]
+  },
+  "legendCause": {
+    "wrath": ", because they were proud",
+    "mercy": ", and the god forgave them",
+    "patience": ", and the god let them be, and watched"
+  },
+  "legendHeart": {
+    "fearful": "It was a punishment. {tale}",
+    "devoted": "{tale} It is a lesson.",
+    "defiant": "{tale} The god feared what we could do."
+  },
+  "storyNumbers": [
+    "seven",
+    "twelve",
+    "forty",
+    "a hundred",
+    "a thousand"
+  ]
 }

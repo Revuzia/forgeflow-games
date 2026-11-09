@@ -71,6 +71,8 @@ export interface CommandResult {
    * already has) but is kept for the next world made — `ok` is false, the UI says "queued for the next world"
    */
   deferred?: boolean;
+  /** additive (ARC §4.4): a harmful cast refused because it would break the god's covenant (resend with covenant 'break') */
+  refusal?: { kind: 'covenant'; covenant: number; vow: Vow };
 }
 
 // ─────────────────────────────── events ─────────────────────────────────

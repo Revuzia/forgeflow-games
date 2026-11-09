@@ -609,7 +609,7 @@ export function registerDefianceCommands(reg: CommandRegistry): void {
     else if (how === 'sign') sub = { k: 'god.omen', settlement: st.id };
     else return fail('Answer how? With wrath, mercy, a sign, or patience.');
     const res = reg.dispatch(u, { ...sub, god: g, planet: p.id } as never);
-    if (!res.ok) return fail(`The answer could not be given: ${res.msg}`);
+    if (!res.ok) return res.refusal ? { ok: false, msg: res.msg, refusal: res.refusal } : fail(`The answer could not be given: ${res.msg}`);
     return { ok: true, msg: res.msg, created: res.created };
   }, { desc: 'Answer a defiant town: wrath (lightning beside them), mercy (bread), a sign, or patience (do nothing)', category: 'Signs',
     params: { settlement: { type: 'int', required: true, min: 0 }, how: { type: 'enum', values: ['wrath', 'mercy', 'sign', 'patience'], required: true },
