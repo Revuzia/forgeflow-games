@@ -62,6 +62,9 @@ export const DEFY = {
   landmarkM: 3000,
   /** daughters inherit memory x, pride x, defiance x */
   inheritMem: 0.7, inheritPride: 0.8, inheritDefy: 0.5,
+  /** (lead ruling 2026-11-09, D5) the weight of the god's answers in memory: the §0.4 wrath / patience / mercy terms of the
+   *  defiance target and the newborn bias (and its caps) are × this; pride, humbled and the tower's terms are not */
+  memK: 3,
 } as const;
 
 const KINDS: DefyKind[] = ['curse', 'hurl', 'burn', 'idol'];
@@ -79,9 +82,10 @@ export function defianceTarget(r: SettlementRel, fear: number, trust: number): n
   let t = 0.6 * load + 0.4 * (r.pride ?? 0) - 0.5 * trust - 0.8 * Math.max(0, fear - 0.6) + 0.08 * Math.min(r.lapses ?? 0, 3) / 3;
   const m = r.memory;
   if (m) {
-    if (trust < 0.3) t += 0.08 * Math.min(1, m.wrath);
-    t -= 0.04 * Math.min(1, m.patience);
-    t -= 0.10 * Math.min(1, m.mercy);
+    const k = DEFY.memK;
+    if (trust < 0.3) t += 0.08 * k * Math.min(1, m.wrath);
+    t -= 0.04 * k * Math.min(1, m.patience);
+    t -= 0.10 * k * Math.min(1, m.mercy);
   }
   return clamp(t);
 }
@@ -481,7 +485,8 @@ export function carryMemory(u: Universe, planet: number, from: number, to: numbe
 export function arcNewbornBias(r: SettlementRel | undefined): { fear: number; trust: number } | undefined {
   const m = r?.memory;
   if (!m || (!m.wrath && !m.mercy)) return undefined;
-  return { fear: Math.min(0.2, 0.05 * m.wrath), trust: Math.min(0.2, 0.05 * m.mercy) };
+  const k = DEFY.memK;
+  return { fear: Math.min(0.2 * k, 0.05 * k * m.wrath), trust: Math.min(0.2 * k, 0.05 * k * m.mercy) };
 }
 
 // ───────────────────────────── views, words, query ─────────────────────────────

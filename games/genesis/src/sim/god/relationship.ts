@@ -52,7 +52,7 @@ import { evacuationOf, evacuationsHourly, missionEvacuation } from './precursors
 import { SIGILS } from './miracles.ts';
 import { animalDef } from '../life/herds.ts';
 import { duskKeep, heartsDaily, heartSigns, heartsQuery, heartView, personHeart, registerArcCommands } from './arc.ts';
-import { carryMemory, defianceHourly, defianceQuery, defiantView, noteGodStorm, registerDefianceCommands } from './defiance.ts';
+import { DEFY, carryMemory, defianceHourly, defianceQuery, defiantView, noteGodStorm, registerDefianceCommands } from './defiance.ts';
 import { leagueDamp, registerTowerCommands, towerDaily, towerTask, towerViews, towersQuery } from './tower.ts';
 
 /** commands that are plumbing, not god acts (no act, no record) */
@@ -605,7 +605,7 @@ function revolt(x: PCtx, st: Settlement): void {
   const m = meansNow(x, st);
   // ARC §0.4 memory `mercy`: a people shown mercy needs more fear before it turns on the god's own
   const rr = srel(u, x.p.id, st.id);
-  const mercy = 0.05 * Math.min(1, rr.memory?.mercy ?? 0);
+  const mercy = 0.05 * DEFY.memK * Math.min(1, rr.memory?.mercy ?? 0);
   if (!(m.fear > m.trust + 0.4 + mercy && m.loyalty < 0.3)) return;
   const called = u.god.disciples.filter((d) => d.planet === x.p.id && d.god === 0).map((d) => x.A.slotOf(d.agent)).filter((s) => s >= 0 && x.A.settlement[s] === st.id);
   // (fix r2 #0: the prophet only if they live here — a stale record once had this town 'exile' a prophet who had moved)

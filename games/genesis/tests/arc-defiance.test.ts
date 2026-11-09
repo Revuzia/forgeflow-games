@@ -73,7 +73,7 @@ test('defiance target: load, pride and low trust raise it; terror suppresses it;
   const crushed = defianceTarget(r, 0.9, 0.1);
   assert.ok(crushed <= wronged - 0.2 + 1e-9, `terror suppresses (${crushed} vs ${wronged})`);
   r.memory!.mercy = 1;
-  assert.ok(Math.abs(defianceTarget(r, 0.3, 0.1) - (wronged - 0.1)) < 1e-9, 'mercy remembered: -0.10');
+  assert.ok(Math.abs(defianceTarget(r, 0.3, 0.1) - Math.max(0, wronged - 0.1 * DEFY.memK)) < 1e-9, 'mercy remembered: -0.10 x memK');
 });
 
 test('hurl: a defiant town under the god\'s storm throws stones; the storm is unchanged; terror stops it (D1, D3)', () => {
@@ -227,15 +227,17 @@ test('memory halves in 25 years with no keeper (one year: x0.9727); x0.99 with a
   assert.ok(Math.pow(0.99, 25) >= 0.70);
 });
 
-test('newborn bias: wrath remembered adds fear, mercy adds trust, capped 0.2, only to the fresh (§0.4)', () => {
+test('newborn bias: wrath remembered adds fear, mercy adds trust, capped 0.2 x memK, only to the fresh (§0.4)', () => {
   const bias = arcNewbornBias({ memory: { ...emptyMemory(), wrath: 2, mercy: 10 } } as never)!;
-  assert.deepEqual(bias, { fear: 0.1, trust: 0.2 });
+  const k = DEFY.memK;
+  assert.deepEqual(bias, { fear: 0.1 * k, trust: 0.2 * k });
   const A = { faith: new Float32Array(4), loyalty: new Float32Array(4), love: new Float32Array(4), fear: new Float32Array(4) };
   A.love[0] = 0.08; A.fear[0] = 0.04;
   freshen(A, 0, null, bias);
-  assert.ok(Math.abs(A.fear[0] - 0.14) < 1e-6 && Math.abs(A.love[0] - 0.28) < 1e-6);
+  assert.ok(Math.abs(A.fear[0] - (0.04 + 0.1 * k)) < 1e-6 && Math.abs(A.love[0] - Math.min(1, 0.08 + 0.2 * k)) < 1e-6);
+  const l1 = A.love[0];
   freshen(A, 0, null, bias);
-  assert.ok(Math.abs(A.love[0] - 0.28) < 1e-6, 'once');
+  assert.ok(A.love[0] === l1, 'once');
   assert.equal(arcNewbornBias({ memory: emptyMemory() } as never), undefined);
 });
 

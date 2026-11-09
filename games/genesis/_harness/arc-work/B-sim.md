@@ -48,3 +48,13 @@
 2. D3 shot (defiance.set + god storm, >= 4 hurl agents, arcs): not shot by the sim lane; B-ui NEXT 1 plans the live run.
    Note: a 30-person test town has ~5 bold members (hurl needs boldness >= 0.6), so use babel (70-110 per town).
 3. Not built: "a prophet's word there" as a sign answer; the stage-C keepers (legends) and betrayed/kept uses.
+
+## Stint 2 (2026-11-09, lead ruling on D5)
+- ARC.md §8 D5 rewritten per the lead (same provocation 25 y after the answers; defiance or fear differs >= 0.1 on >= 3/4;
+  remember/answered words tell which); contract-changes entries added (D5 ruling, prophet's word).
+- BUILT "a prophet's word there": prophet.foretell -> answerByWord (sign), line defy.word; test (arc-defiance 14/14).
+- Probe arc.ts dmercy|dwrath: 27 y = harsh year, answers to y26, then the harsh protocol 1 y in both arms (prov.*).
+- pairs2.log (weights as spec): words tell which on 4/4 (mercy towns "the mercy after the wrong" / "shown mercy
+  twice"; wrath towns "the anger of the sky" / "struck once"), but defMean/fearMean diffs 0.01-0.08: FAIL numerically.
+- Raised memory weights in proportion: DEFY.memK = 3 on the §0.4 wrath/patience/mercy defiance terms, the newborn bias
+  and its caps, and the mercy revolt bar (pride/humbled/tower terms untouched). Runs: pairs3.log, unatt2.log (05:20Z).
