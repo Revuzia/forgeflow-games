@@ -190,20 +190,24 @@ vec3 livingRot(int a, float t, int b, float tool) {
     return r;
   }
   if (a == 40) {
-    // looking up in fear: the head tipped back to the sky, the body drawn in and leaning away, one hand at the throat,
-    // the other arm held close; a slow uneasy sway and now and then a glance about
+    // looking up in fear: the head thrown back to the sky, the body recoiling (leaning back, knees bent), BOTH hands
+    // raised before the face, palms out, warding off the sky, trembling. (Owner bar: noticed without clicking at
+    // 40-80 m, ~15 px: the old one-hand-at-the-throat pose was invisible there; this is a wide raised Y on a shorter
+    // body, unlike the cheer's tall V, the fist's single straight arm and the kneeling prayer)
     float glance = smoothstep(0.7, 0.95, sin(t * 0.37));
-    if (b == 1) r = vec3(-0.1, 0.06 * s, 0.0);
-    if (b == 2) r = vec3(-0.62 + 0.25 * glance, 0.3 * glance * sin(t * 1.3), 0.0);
-    if (b == 3) r = vec3(-0.35, 0.0, 0.12); if (b == 4) r = vec3(-2.1, 0.5, 0.0);
-    if (b == 5) r = vec3(-0.15, 0.0, -0.18); if (b == 6) r = vec3(-0.65, 0.0, 0.0);
-    if (b == 7) r.x = 0.08; if (b == 9) r.x = -0.12; if (b == 8 || b == 10) r.x = 0.12;
+    float tremble = 0.06 * sin(t * 11.0);
+    if (b == 1) r = vec3(-0.24, 0.05 * s, 0.0);
+    if (b == 2) r = vec3(-0.95 + 0.2 * glance, 0.3 * glance * sin(t * 1.3), 0.0);
+    if (b == 3) r = vec3(-2.05 + tremble, 0.0, -0.75); if (b == 5) r = vec3(-2.05 - tremble, 0.0, 0.75);
+    if (b == 4 || b == 6) r = vec3(-0.75, 0.0, 0.0);
+    if (b == 7 || b == 9) r.x = -0.42; if (b == 8 || b == 10) r.x = 0.75;
     return r;
   }
   if (a == 41) {
     // a fist raised at the sky and shaken, the head up and thrust forward, the other arm hard at the side, feet apart
     float shake = sin(t * 2.0) * 0.5 + 0.5;
-    if (b == 5) r = vec3(-2.75 - 0.15 * shake, 0.0, 0.18); if (b == 6) r = vec3(-0.35 - 0.45 * shake, 0.0, 0.0);
+    // (the arm straight up, the clearest single line at play distance; the shake is in the forearm)
+    if (b == 5) r = vec3(-3.0 - 0.1 * shake, 0.0, 0.12); if (b == 6) r = vec3(-0.08 - 0.35 * shake, 0.0, 0.0);
     if (b == 3) r = vec3(0.12, 0.0, 0.22); if (b == 4) r = vec3(-0.55, 0.0, 0.0);
     if (b == 1) r = vec3(-0.06 + 0.05 * shake, 0.0, 0.05);
     if (b == 2) r = vec3(-0.45 + 0.08 * shake, 0.0, 0.0);
@@ -238,13 +242,13 @@ vec3 livingRot(int a, float t, int b, float tool) {
     r = gaitLegs(b, t, 0.42, 0.72, 0.0);
     if (b == 1) r = vec3(-0.04, 0.06 * s, 0.0);
     if (a == 44) {
-      if (b == 2) r = vec3(-0.55, -0.04 * s, 0.0);
-      if (b == 3) r = vec3(-0.35, 0.0, 0.12); if (b == 4) r = vec3(-2.1, 0.5, 0.0);
-      if (b == 5) r = vec3(-0.3 * s, 0.0, -0.07); if (b == 6) r = vec3(-0.35, 0.0, 0.0);
+      if (b == 2) r = vec3(-0.85, -0.04 * s, 0.0);
+      if (b == 3) r = vec3(-1.95, 0.0, -0.7); if (b == 5) r = vec3(-1.95, 0.0, 0.7);
+      if (b == 4 || b == 6) r = vec3(-0.8, 0.0, 0.0);
     } else {
       float shake = sin(t * 2.0) * 0.5 + 0.5;
       if (b == 2) r = vec3(-0.4 + 0.06 * shake, -0.04 * s, 0.0);
-      if (b == 5) r = vec3(-2.75 - 0.15 * shake, 0.0, 0.18); if (b == 6) r = vec3(-0.35 - 0.45 * shake, 0.0, 0.0);
+      if (b == 5) r = vec3(-3.0 - 0.1 * shake, 0.0, 0.12); if (b == 6) r = vec3(-0.08 - 0.35 * shake, 0.0, 0.0);
       if (b == 3) r = vec3(0.5 * s, 0.0, 0.07); if (b == 4) r = vec3(-0.36 - 0.3 * max(0.0, -s), 0.0, 0.0);
     }
     return r;
@@ -333,15 +337,18 @@ vec3 jointRot(int a, float t, int b, float tool) {
   }
   if (a == 5 || a == 24) {
     // kneeling prayer (a slow bow) / mourning (bowed, hands to the face)
-    float bow = a == 5 ? 0.35 + 0.35 * (0.5 + 0.5 * sin(t)) : 0.75;
+    float bow = a == 5 ? 0.05 + 0.4 * (0.5 - 0.5 * sin(t)) : 0.75;
     if (b == 7 || b == 9) r.x = -0.12;
     if (b == 8 || b == 10) r.x = 1.62;
     if (b == 1) r = vec3(bow, 0.0, 0.0);
     if (b == 2) r = vec3(a == 5 ? 0.25 : 0.55, 0.0, 0.0);
     if (a == 5) {
-      if (b == 3) r = vec3(-1.3 - 0.4 * (0.5 + 0.5 * sin(t)), 0.0, -0.32);
-      if (b == 5) r = vec3(-1.3 - 0.4 * (0.5 + 0.5 * sin(t)), 0.0, 0.32);
-      if (b == 4 || b == 6) r = vec3(-0.5, 0.0, 0.0);
+      // (kneeling with both arms lifted high to the sky and lowered with the bow: at 40-80 m a short figure with a
+      // raised V; the old forward reach read as nothing past ~30 m)
+      float lift = 0.5 + 0.5 * sin(t);
+      if (b == 3) r = vec3(-2.0 - 0.6 * lift, 0.0, -0.45);
+      if (b == 5) r = vec3(-2.0 - 0.6 * lift, 0.0, 0.45);
+      if (b == 4 || b == 6) r = vec3(-0.25, 0.0, 0.0);
     } else {
       if (b == 3) r = vec3(-0.85, 0.0, -0.3);
       if (b == 5) r = vec3(-0.85, 0.0, 0.3);
@@ -478,7 +485,7 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 11) { rot.x = -1.52; off = vec3(0.0, -0.82, 0.0); }
   else if (a == 10) { rot.x = 1.45; off = vec3(0.0, -0.78, 0.0); }
   else if (a == 9) { off.y = 0.045 * abs(s); rot.y = 0.7 * sin(t * 0.5); }
-  else if (a == 21) off.y = 0.06 * max(0.0, s);
+  else if (a == 21) off.y = 0.14 * max(0.0, s);
   else if (a == 13) rot = vec3(t * 2.0, 0.0, t * 1.3);
   else if (a == 26) { off.y = 0.075 * abs(s) - 0.03; rot.y = 0.3 * sin(t * 0.37); }
   else if (a == 35) off.y = 0.07 * abs(s);
@@ -489,7 +496,7 @@ void rootPose(int a, float t, out vec3 off, out vec3 rot) {
   else if (a == 31) off.y = 0.05 * abs(s) - 0.05;
   else if (a == 36) { off.y = 0.04 * abs(s) - 0.01; off.x = 0.05 * s; }
   else if (a == 44 || a == 45) { off.y = 0.022 * cos(2.0 * t) - 0.012; off.x = 0.012 * s; }
-  else if (a == 40) { off.z = -0.02; off.x = 0.01 * sin(t * 0.37); }
+  else if (a == 40) { off.y = -crouchDrop(0.75); off.z = -0.05; off.x = 0.01 * sin(t * 0.37); }
   else if (a == 42) { off.z = 0.06 * pow(max(0.0, s), 8.0) - 0.03; }
   else if (a == 43) off.y = 0.035 * pow(max(0.0, s), 2.0);
   else off.x = 0.01 * sin(t * 0.37);
