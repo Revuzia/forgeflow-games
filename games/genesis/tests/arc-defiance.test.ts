@@ -279,3 +279,25 @@ test('a prophet\'s word there answers an open defiant act as a sign (§3.3)', ()
   assert.equal(r.answer, null);
   assert.ok(r.memory!.sign >= 1);
 });
+
+test('memory scales the reaction to a new harm: wrath remembered cowers, mercy remembered keeps trust (§0.4, D5)', async () => {
+  const { harmReaction } = await import('../src/sim/god/defiance.ts');
+  const k = DEFY.reactK;
+  assert.deepEqual(harmReaction(undefined), { fear: 1, trust: 1, defy: 1 });
+  const w = harmReaction({ ...emptyMemory(), wrath: 2 });
+  assert.ok(w.fear === 1 + k && w.defy === 1 - k && w.trust === 1);
+  const m = harmReaction({ ...emptyMemory(), mercy: 1 });
+  assert.ok(m.trust === 1 - k && m.defy === 1 + k && m.fear === 1);
+  // in the world: the same storm costs a town that remembers mercy less trust than one that remembers wrath
+  const lost = (mem: Partial<ReturnType<typeof emptyMemory>>) => {
+    const { sim, st } = town();
+    setCol(sim, st, 'love', 0.5); setCol(sim, st, 'fear', 0.1);
+    srel(sim.u, P(sim).id, st.id).memory = { ...emptyMemory(), ...mem };
+    const t0 = mean(sim, st, 'love'), f0 = mean(sim, st, 'fear');
+    must(sim, { k: 'miracle.storm', pos: [st.pos[0], st.pos[1], st.pos[2]], radius: 350, wrath: 0.3 } as never);
+    return { trust: t0 - mean(sim, st, 'love'), fear: mean(sim, st, 'fear') - f0 };
+  };
+  const a = lost({ wrath: 1 }), b = lost({ mercy: 1 });
+  assert.ok(b.trust < a.trust, `mercy keeps trust (${b.trust} vs ${a.trust})`);
+  assert.ok(a.fear > b.fear, `wrath fears more (${a.fear} vs ${b.fear})`);
+});

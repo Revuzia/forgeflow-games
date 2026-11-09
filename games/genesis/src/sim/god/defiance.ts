@@ -65,6 +65,8 @@ export const DEFY = {
   /** (lead ruling 2026-11-09, D5) the weight of the god's answers in memory: the §0.4 wrath / patience / mercy terms of the
    *  defiance target and the newborn bias (and its caps) are × this; pride, humbled and the tower's terms are not */
   memK: 1,
+  /** (lead ruling 2026-11-09, D5) how strongly remembered answers scale the reaction to a new harm (harmReaction) */
+  reactK: 0.5,
 } as const;
 
 const KINDS: DefyKind[] = ['curse', 'hurl', 'burn', 'idol'];
@@ -154,7 +156,20 @@ function roll(x: PCtx, st: Settlement, day: number, k: DefyKind, def: number): b
 export function harmJolt(r: SettlementRel, first: boolean): void {
   if (!first) return;
   const [, fear, trust] = r.means;
-  if (trust < 0.4) r.defiance = r3(clamp((r.defiance ?? 0) + 0.1 * (1 - fear)));
+  if (trust < 0.4) r.defiance = r3(clamp((r.defiance ?? 0) + 0.1 * (1 - fear) * harmReaction(r.memory).defy));
+}
+
+/**
+ * ARC §0.4 / §3.1 (lead ruling 2026-11-09): memory scales the people's REACTION to a new god-0 harm. With wf = min(1,
+ * wrath) and wm = min(1, mercy + 0.5 patience + 0.5 sign) (patience and a sign lie between): fear gain × (1 + k wf)
+ * (cowed), trust loss × (1 − k wm) (they keep more trust: they expect a just god), the defiance jolt × (1 − k wf)(1 + k wm)
+ * (the struck cower; the forgiven, wronged, defy more openly). k = DEFY.reactK.
+ */
+export function harmReaction(m: Memory | undefined): { fear: number; trust: number; defy: number } {
+  if (!m) return { fear: 1, trust: 1, defy: 1 };
+  const k = DEFY.reactK;
+  const wf = Math.min(1, m.wrath), wm = Math.min(1, m.mercy + 0.5 * m.patience + 0.5 * m.sign);
+  return { fear: 1 + k * wf, trust: 1 - k * wm, defy: (1 - k * wf) * (1 + k * wm) };
 }
 
 // ───────────────────────────── §3.2 the acts ─────────────────────────────

@@ -39,7 +39,7 @@ import { dayTicks, GODS, MEMK, NT, TRAIT } from '../people/defs.ts';
 import { speciesInfo } from '../people/ctx.ts';
 import { currentWrath, wrathLaw, WRATH_DEFAULT } from './wrath.ts';
 import { noteHarm } from './arc.ts';
-import { answerFromAct, arcNewbornBias, harmJolt, idolStands } from './defiance.ts';
+import { answerFromAct, arcNewbornBias, harmJolt, harmReaction, idolStands } from './defiance.ts';
 import { towerStands } from './tower.ts';
 
 // ───────────────────────────── the universe a planet belongs to ─────────────────────────────
@@ -346,7 +346,7 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
   const wrathful = currentWrath() !== null;
   const cruel = cruelty(currentWrath() ?? (u ? wrathLaw(u) : WRATH_DEFAULT));
   // what the act is to each settlement (decided once per call)
-  const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean; kept: number }>();
+  const cls = new Map<number, { kind: string; foretold: boolean; provoked: boolean; mercy: boolean; favour: boolean; kept: number; fK: number; tK: number }>();
   const classify = (sid: number) => {
     let o = cls.get(sid);
     if (o) return o;
@@ -359,7 +359,9 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
     const favour = !r || r.means[2] >= r.means[1];
     // a kindness that fits the god's record with them (keptBy) is believed more than a first one
     const kept = eff === 'help' && r && u ? keptBy(r, tick, yearOf(u, p.id), g) : 0;
-    o = { kind: eff === 'help' ? (mercy ? 'mercy' : 'help') : eff === 'harm' ? 'harm' : 'sign', foretold, provoked, mercy, favour, kept };
+    // ARC §0.4 / §3.1 (lead 2026-11-09): what the town remembers of the god's answers shapes how it takes a new harm
+    const react = eff === 'harm' && g === 0 ? harmReaction(r?.memory) : null;
+    o = { kind: eff === 'help' ? (mercy ? 'mercy' : 'help') : eff === 'harm' ? 'harm' : 'sign', foretold, provoked, mercy, favour, kept, fK: react?.fear ?? 1, tK: react?.trust ?? 1 };
     cls.set(sid, o);
     return o;
   };
@@ -395,6 +397,7 @@ export function witnessAct(p: Planet, pos: ArrayLike<number>, radius: number, ki
         if (o.foretold) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; }
         else if (o.provoked) { dF = 0.2 * mk; dFe = 0.3 * mk * fk; dT = -0.05 * mk; }
         else { dF = 0.15 * mk; dFe = 0.35 * mk * fk; dT = -0.2 * mk * cruel; dL = -0.05 * mag * cruel; }
+        dFe *= o.fK; dT *= o.tK;
       } else {
         dF = 0.25 * mk;
         dFe = 0.08 * mk * f;

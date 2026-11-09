@@ -161,3 +161,8 @@
 - 2026-11-09 B-sim: §3.3 "a prophet's word there" built: `prophet.foretell` to the prophet's town with an open defiant
   act classifies a sign (defiance.ts answerByWord), told by the new line `defy.word` ("{agent} spoke the god's word in
   {settlement}, the morning after the shouting.").
+- 2026-11-09 lead ruling (D5 option 1), built by B-sim: memory scales the REACTION to a new god-0 harm (ARC.md §0.4,
+  §3.1): wf = min(1, wrath), wm = min(1, mercy + 0.5 patience + 0.5 sign), k = DEFY.reactK 0.5: the witness fear gain
+  x (1 + k wf), trust loss x (1 - k wm), the defiance jolt x (1 - k wf)(1 + k wm) (regard.ts witnessAct, defiance.ts
+  harmReaction / harmJolt). D5 accepts a >= 0.1 difference in mean defiance, fear OR trust. The rally is unchanged.
+  The earlier memK experiment stays at 1 (spec weights).

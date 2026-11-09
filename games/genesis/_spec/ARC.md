@@ -99,6 +99,11 @@ What memory does. All of these are clamped biases on existing daily targets, and
 | `kept` w | trust floor `min(0.3, 0.1 w)`; prayer-lapse penalty × `1 / (1 + 0.5 w)` |
 | `proud` w | pride target `+0.05 × min(1, w)`; faith target `−0.03 × min(1, w)` |
 
+**Memory shapes the reaction to a new harm** (lead ruling 2026-11-09; `defiance.ts harmReaction`, *(ARC)* `reactK` 0.5).
+On a god-0 harm, with `wf = min(1, wrath)` and `wm = min(1, mercy + 0.5 patience + 0.5 sign)` (patience and a sign lie
+between): fear gain × `(1 + k wf)` (cowed), trust loss × `(1 − k wm)` (they expect a just god), and the §3.1 defiance
+jolt × `(1 − k wf)(1 + k wm)` (the struck cower; the forgiven, if wronged, defy more openly). The post-harm rally stays.
+
 **The newborn hook lives in `god/regard.ts freshen()`** (regard.ts:119). That is where a new person's regard is seeded
 from the town means. Add an optional `bias?: { fear: number; trust: number }` argument that `freshen` adds after
 seeding, clamped to 0..1. Its callers pass `arcNewbornBias(x, st)` from arc.ts. No hook goes into demography.ts.
@@ -389,7 +394,8 @@ Every `tower.*` command fails cleanly when there is no tower to answer: "Nobody 
 `target = clamp(0.6 load + 0.4 pride − 0.5 trust − 0.8 × max(0, fear − 0.6) + 0.08 × min(lapses, 3) / 3 + memory biases
 (§0.4))`, and `defiance += (target − defiance) × 0.03` a day.
 **Terror suppresses** (at fear 0.85 the term is −0.2): a crushed people cowers (fearful), and a proud, wronged people
-defies. After any harm on the town with trust < 0.4: `defiance += 0.1 × (1 − fear)` at once.
+defies. After any harm on the town with trust < 0.4: `defiance += 0.1 × (1 − fear)` at once, × the remembered-answer
+factor `(1 − k wf)(1 + k wm)` of §0.4 (and the act's own fear and trust deltas × `(1 + k wf)` / `(1 − k wm)`).
 
 ### 3.2 Their acts (one roll per town per day per kind; `DEFY` ids, each kind with its own cooldown in `defied`)
 The rolls are `hashFloat(st.id, day, 0xdef1..0xdef4) < 0.25 × (defiance − threshold) / (1 − threshold) + 0.1`.
@@ -971,7 +977,7 @@ banned word or phrase, every line ≤ 140 characters, no unfilled `{…}`, and e
   the god reacts, so idle defiance at +25 y is not the test): paired seeds (mercy answers vs wrath answers, trust < 0.3
   before); 25 years after the answers the SAME provocation is applied to both arms (the harsh protocol: an unprovoked
   storm every 4 months for 1 year at wrath 0.3). The descendants respond measurably differently: mean defiance or mean
-  fear differs by ≥ 0.1 on ≥ 3/4 seeds, and the chronicle/Book can tell which answer they remember (the town's
+  fear, or mean trust (lead 2026-11-09) differs by ≥ 0.1 on ≥ 3/4 seeds, and the chronicle/Book can tell which answer they remember (the town's
   `remember` / `answered` words). The post-harm rally stays (owner: disasters build fear, trust and loyalty). Probe:
   `_harness/probes/arc.ts dmercy|dwrath`. Memory halves in 25 years (± 2 %) with no keeper and is ≥ 0.70 of the original with a rubble landmark. Daughters
   inherit × 0.7.

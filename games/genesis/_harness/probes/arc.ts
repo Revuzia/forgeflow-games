@@ -40,7 +40,7 @@ const years = Number(yearsS ?? (mode === 'babel' ? 2.2 : mode === 'attended' ? 2
 const pair = mode === 'dmercy' || mode === 'dwrath';
 const harshUntil = mode === 'harsh' ? Infinity : pair ? 1 : -1;
 const provoke = pair ? years - 1 : Infinity;
-const provT = { def: 0, fear: 0, n: 0, acts: 0 };
+const provT = { def: 0, fear: 0, trust: 0, n: 0, acts: 0 };
 const defy: Record<string, number> = {};
 let defiantDays = 0, defMax = 0, answersGiven = 0, nextHarsh = 0, defySet = false;
 let def25 = -1, newborn10 = -1, mem: unknown = null;
@@ -136,7 +136,7 @@ while (sim.u.tick < end) {
       const h = rr?.hearts;
       if (!h) { noHeart++; continue; }
       if (h.kind === 'defiant') defiantDays++;
-      if (pair && yr >= provoke) { provT.def += rr?.defiance ?? 0; provT.fear += rr?.means[1] ?? 0; provT.n++; }
+      if (pair && yr >= provoke) { provT.def += rr?.defiance ?? 0; provT.fear += rr?.means[1] ?? 0; provT.trust += rr?.means[2] ?? 0; provT.n++; }
       defMax = Math.max(defMax, rr?.defiance ?? 0);
       const k = lastKind.get(st.id);
       if (k !== undefined && k !== h.kind) heartChanges++;
@@ -148,7 +148,7 @@ function provOut(): Record<string, unknown> {
   const live = ps.settlements.filter((s) => s.fallen < 0 && !s.band);
   const avg = (f: (r: NonNullable<ReturnType<typeof peekRel>>) => number) => live.length ? Math.round(1000 * live.reduce((a, s) => a + f(peekRel(sim.u, p.id, s.id)!), 0) / live.length) / 1000 : 0;
   return { prov: { defEnd: avg((r) => r.defiance ?? 0), fearEnd: avg((r) => r.means[1]), defMean: provT.n ? Math.round(1000 * provT.def / provT.n) / 1000 : 0,
-    fearMean: provT.n ? Math.round(1000 * provT.fear / provT.n) / 1000 : 0, acts: provT.acts,
+    fearMean: provT.n ? Math.round(1000 * provT.fear / provT.n) / 1000 : 0, trustMean: provT.n ? Math.round(1000 * provT.trust / provT.n) / 1000 : 0, acts: provT.acts,
     remember: live.map((s) => heartView(peekRel(sim.u, p.id, s.id), s)?.remember ?? []), answered: live.map((s) => answeredWords(peekRel(sim.u, p.id, s.id))) } };
 }
 const list = [...tws.values()];
