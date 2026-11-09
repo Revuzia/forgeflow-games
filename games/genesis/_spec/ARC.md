@@ -1121,3 +1121,14 @@ declined it).
 (×(1 + 0.8 r)), lifts loyalty's target (+0.3 r inside the trust term) and its relax rate (×(1 + r)), and slows faith's
 decay (×(1 − 0.5 r)). Justice, not favour: a god that never helped scores 0, and the record never touches pride. M3's
 kind run: 7/8 seeds devoted within 2 years.
+
+## 11. OPEN REBELLION (owner-approved 2026-11-09; build LAST, after §1-§5 and §10 are done, verified and released)
+The climax of defiance. A town whose defiance stays very high for a season renounces the god completely (no prayer, no
+worship, every shrine and temple torn down: "In {town} they say there is no god"); restless neighbours may join; rebel
+towns may march on the god's faithful towns (the existing war system: faithful against faithless). The people can never
+harm the god. The god's answers, each with lasting, remembered consequences: JUDGMENT (the rebel city destroyed; if a
+righteous household lives there the god may warn it to leave first, and it founds a new line); LET THEM GO (a godless
+people, who may drift to a rival god; carried for generations); WIN THEM BACK (patience and signs; slow; fails under
+crushing fear); IGNORE (it spreads and often ends in a tower). The Book tells it ("The Rebellion of {town}", "The
+Judgment of the Plain"). Survivable wrath by default still applies except to an explicit judgment. Spec details,
+contracts and acceptance to be written when this step starts.
