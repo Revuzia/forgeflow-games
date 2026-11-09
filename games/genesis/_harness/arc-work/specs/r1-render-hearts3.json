@@ -1,0 +1,33 @@
+{
+ "_doc": "hearts2 at 9 m (the r1n shot came out ~60 m wide: poses unreadable at 40 px)",
+ "shots": [
+  {
+   "name": "r1o-heart-dusk-close",
+   "params": "scenario=sandbox&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); document.getElementById('boot')?.remove(); const t0 = performance.now();",
+    "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 });",
+    "const r0 = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: 45, era: 'bronze', settled: true, wildGame: false });",
+    "const sid = r0.created.find((e) => e.kind === 'settlement').id; window.__sid = sid; const pv = () => window.__GENESIS_FX__.fx.vis.pv;",
+    "const pos0 = () => pv().settlements.find((s) => s.id === sid)?.pos;",
+    "let h = null, days = 0;",
+    "for (days = 0; days < 160; days++) { if (days % 4 === 1) { const p = pos0(); if (p) { await G.cmd({ k: 'miracle.storm', pos: [...p], radius: 350, wrath: 0.3 }); await G.cmd({ k: 'miracle.lightning', pos: [...p], wrath: 0.3 }); } } await G.step(1440); const hs = (await G.query('hearts', { settlement: sid })) ?? []; h = Array.isArray(hs) ? hs[0] : hs; if (h && h.kind === 'fearful' && days % 4 >= 2) break; }",
+    "window.__h = h; await G.step(720); const p = pos0();",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: sid }, dist: 90, tilt: 62, yaw: 30, fov: 50, hour: 16.5 }); await G.cmd({ k: 'miracle.lightning', pos: [p[0] * 1.0, p[1], p[2]], wrath: 0.3 });",
+    "const R = pv().ground?.radius ?? 3000; let out = [], sig = null, it = 0; const scan = () => { const A = pv().agents; sig = [0, 0, 0, 0, 0, 0]; out = []; for (let i = 0; i < A.count; i++) { const s = A.heart ? A.heart[i] : 0; sig[s]++; if ((s === 2 || s === 3 || s === 1) && !(A.flags[i] & 256)) out.push(i); } };",
+    "for (it = 0; it < 14; it++) { await G.step(15); await G.frames(1); scan(); if (out.filter((i) => pv().agents.heart[i] !== 1).length >= 5) break; }",
+    "const A = pv().agents; let best = -1, bn = -1; for (const i of out) { let n = 0; for (const j of out) { const d = Math.acos(Math.min(1, A.pos[i*3]*A.pos[j*3] + A.pos[i*3+1]*A.pos[j*3+1] + A.pos[i*3+2]*A.pos[j*3+2])) * R; if (d < 20) n += A.heart[j] === 1 ? 1 : 2; } if (n > bn) { bn = n; best = i; } }",
+    "window.__aid = best >= 0 ? A.id[best] : null; const tgt = window.__aid != null ? { kind: 'agent', id: window.__aid } : { kind: 'settlement', id: sid }; window.__tgt = tgt;",
+    "await G.camera({ mode: 'orbit', target: tgt, dist: 9, tilt: 78, yaw: 30, fov: 45 }); await G.frames(6); G.hold(true);",
+    "return { days, it, heart: h && { kind: h.kind, fearful: h.fearful }, signsAll: sig, outdoorSigned: out.length, knot: bn, crowds: window.__GENESIS_FX__.fx.vis.life.crowds.stats };"
+   ]
+  }
+ ]
+}
