@@ -169,7 +169,7 @@ export function defianceHourly(x: PCtx, st: Settlement, dusk: boolean): void {
       if (crowd.length) act(x, st, r, 'curse', crowd);
     }
   }
-  if (def >= DEFY.hurl && cooled(x, r, 'hurl') && r.means[1] < DEFY.terror && stormNear(x, st, r)) {
+  if (def >= DEFY.hurl && cooled(x, r, 'hurl') && r.means[1] < DEFY.terror - 1e-4 && stormNear(x, st, r)) {
     const day = Math.floor(x.tick / x.day);
     if (roll(x, st, day, 'hurl', def)) {
       const crowd = gather(x, st, r, 'hurl');
@@ -215,7 +215,7 @@ function gather(x: PCtx, st: Settlement, r: SettlementRel, k: 'curse' | 'hurl'):
     const t = A.task[s];
     if (t === TASK.flee || t === TASK.evacuate || t === TASK.fight || t === TASK.sail || t === TASK.possessed || t === TASK.defy) continue;
     const i = s * GODS;
-    if (A.fear[i] >= DEFY.terror) continue; // terror suppresses (D1)
+    if (A.fear[i] >= DEFY.terror - 1e-4) continue; // terror suppresses (D1; float32 columns)
     const b = A.traits[s * NT + TRAIT.boldness];
     if (k === 'hurl' ? b < DEFY.hurlBold || A.love[i] >= 0.35 : personHeart(A, s, def, pride) !== 'defiant') continue;
     out.push(s);

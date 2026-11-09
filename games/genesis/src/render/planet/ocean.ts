@@ -611,12 +611,12 @@ void main() {
     // dark body browned at its own luminance stayed a dark hole under an overcast)
     float ls = dot(skyR, LUMs);
     // (r1 looked at: (1.45, 0.98, 0.5) at 72 % under a grey rain sky read as pale grey-green, then (1.75, 0.88, 0.32)
-    // at 85 % as pale khaki under the rain veil: the mud is a saturated ochre brown, darker, and the muddy skin
-    // mirrors less of the grey sky)
-    vec3 mud = max(lu, 0.26 * ls) * vec3(2.0, 0.8, 0.2) * (0.78 + 0.22 * streak);
+    // at 85 % as pale khaki under the rain veil, then (2.0, 0.8, 0.2) at a 0.26 floor as an opaque orange sand: the
+    // mud is a darker ochre brown with streaks, and the sky's mirror stays on it so it still reads as water)
+    vec3 mud = max(lu, 0.17 * ls) * vec3(1.9, 0.84, 0.3) * (0.66 + 0.34 * streak);
     under = mix(under, mud, 0.9 * silt);
-    // the mirrored sky through a skin of muddy water: warmer, and less of it
-    skyR = mix(skyR, ls * vec3(1.2, 0.98, 0.72), 0.55 * silt) * (1.0 - 0.3 * silt);
+    // the mirrored sky through a skin of muddy water: a little warmer, a little less of it
+    skyR = mix(skyR, ls * vec3(1.15, 1.0, 0.8), 0.45 * silt) * (1.0 - 0.12 * silt);
   }
   vec3 col = mix(under, skyR, F) + glint;
 

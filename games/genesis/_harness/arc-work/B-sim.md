@@ -24,3 +24,14 @@
   (seeds 2,4,5,6,7). With the verifier's extra bolt (HARSH_BOLT=1) fear sits at 0.95-0.99 and only 2/8 throw (terror rule).
 - RUNS (slot.sh, 23:33Z): scratch/arc/B-sim/unatt1.log (unattended 1..8, 60 y: defiant town-years, burns),
   pairs1.log (dmercy/dwrath 1..4, 26 y: def25, newborn10).
+- D5 pairs (pairs1.log, dmercy/dwrath 1..4, 26 y): FAIL as specified. Only 1-2 defiant acts per run (curse), each
+  answered; def25 mercy/wrath 0.014/0.029, 0.016/0.016, 0.144/0.117, 0.016/0.016 (diff < 0.1 on 4/4); newborn10 trust
+  0.353/0.477, 0.047/0.076, 0.006/0.157, 0.478/0.711 (differs >= 0.05 on 4/4 but HIGHER after wrath: the LIVING rally
+  after a survived harm, regard.ts weathered, lifts trust more than the mercy bias). Memory at y11 mercy 0.51-1.06 /
+  wrath 0.51. Why: once defiance.set's hold ends (30 days = 2.5 game years) both towns' targets clamp at 0 (0.4 pride -
+  0.5 trust < 0 with no harm), so the memory biases (<= 0.08-0.10) act on a zero target. D5 needs either a sustained
+  provocation in both arms (e.g. the harsh storms continued), or larger memory weights: an owner/lead call, NOT tuned.
+- Memory halving (0.9727/y), >= 0.70 with a rubble landmark (0.99^25 = 0.78), daughters x0.7: unit tests (arc-defiance).
+- Focused: arc-hearts/tower/tower-r1/freeform, scripture_lint, content, living-migration/content, prayers-pause 74/74;
+  living-relationship, determinism, save-continue, flood-warning, mods, omnipotence, living-sacred 93/93; detban clean.
+- GATE: slot.sh npm run check queued 23:40Z -> scratch/arc/B-sim/check1.log.
