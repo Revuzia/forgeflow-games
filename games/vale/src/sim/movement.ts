@@ -13,7 +13,7 @@
 // progress for NO_PROGRESS_TICKS (jostled in a crowd, a body parked on a corner node) treats a
 // near waypoint as reached or recomputes its route.
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
-// less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
+// less when idle), except a fighter and a lane minion, which pass through each other; structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.
 //
 // Dashes move along a straight line clipped to walls at start; `onPass` hits units within
@@ -59,7 +59,7 @@ const passU: Entity[] = [];
 const tmp = { x: 0, y: 0 };
 
 // ── orders ──────────────────────────────────────────────────────────────────────────────────────
-export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean): void {
+export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean, prefer = -1): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
   // a windup always finishes (the walk starts after release); a channel ends unless it allows moving
@@ -67,7 +67,7 @@ export function issueMove(w: World, e: Entity, x: number, y: number, attackMove:
   if (cs && cs.phase === 'channel' && !cs.def.channel?.canMove) interruptCast(w, e, false);
   if (!attackMove) e.atkWindup = -1;
   e.order = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
-  e.orderX = x; e.orderY = y; e.orderTarget = -1; e.pendingSlot = -1;
+  e.orderX = x; e.orderY = y; e.orderTarget = attackMove ? prefer : -1; e.pendingSlot = -1;
   e.path.length = 0; e.pathGoalX = NaN;
 }
 export function issueAttack(w: World, e: Entity, t: Entity): void {
@@ -325,6 +325,7 @@ function separate(w: World, e: Entity, x: number, y: number, factor: number): vo
   for (let i = 0; i < n; i++) {
     const o = near[i];
     if (o === e || !o.alive || o.dash || o.kind === 'ward' || o.kind === 'pickup') continue;
+    if ((e.kind === 'fighter' && o.kind === 'minion') || (e.kind === 'minion' && o.kind === 'fighter')) continue; // fighters and lane minions pass through each other (ruling 29)
     let dx = x - o.x, dy = y - o.y;
     const rr = e.radius + o.radius;
     let d2 = dx * dx + dy * dy;

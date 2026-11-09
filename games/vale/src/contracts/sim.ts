@@ -50,7 +50,7 @@ export interface MatchSetup {
 
 // ── commands (player intent; human input and bots produce the same commands) ────────────────────
 export type Command =
-  | { type: 'move'; x: number; y: number; attackMove?: boolean }
+  | { type: 'move'; x: number; y: number; attackMove?: boolean; /** attack-move only: attack this enemy first while it is in range (never chases it) */ prefer?: EntityId }
   | { type: 'attack'; target: EntityId }
   | { type: 'stop' }
   | { type: 'cast'; slot: SlotT; x?: number; y?: number; target?: EntityId }

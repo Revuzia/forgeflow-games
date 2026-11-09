@@ -41,7 +41,7 @@ export function commandSystem(w: World): void {
     if (!p) continue;
     const e = p.ent;
     switch (cmd.type) {
-      case 'move': if (e && e.alive) issueMove(w, e, cmd.x, cmd.y, !!cmd.attackMove); break;
+      case 'move': if (e && e.alive) issueMove(w, e, cmd.x, cmd.y, !!cmd.attackMove, cmd.prefer); break;
       case 'attack': {
         const t = w.live(cmd.target);
         if (e && e.alive && t && t.team !== e.team) issueAttack(w, e, t);

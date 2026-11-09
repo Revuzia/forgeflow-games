@@ -158,7 +158,7 @@ export function validCommand(c: unknown): c is Command {
   if (!c || typeof c !== 'object') return false;
   const o = c as Record<string, unknown>;
   switch (o.type) {
-    case 'move': return finite(o.x) && finite(o.y) && (o.attackMove === undefined || typeof o.attackMove === 'boolean');
+    case 'move': return finite(o.x) && finite(o.y) && (o.attackMove === undefined || typeof o.attackMove === 'boolean') && optInt(o.prefer);
     case 'attack': return Number.isInteger(o.target);
     case 'stop': case 'undo': case 'recall': return true;
     case 'cast': return typeof o.slot === 'string' && optFinite(o.x) && optFinite(o.y) && optInt(o.target);

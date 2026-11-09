@@ -84,6 +84,8 @@ export function desiredAttackTarget(w: World, e: Entity): Entity | null {
       return null;
     }
     case ORDER_ATTACK_MOVE: {
+      const picked = w.live(e.orderTarget); // the enemy the player clicked: first choice while in range, never chased
+      if (picked && attackable(w, e, picked) && inAttackRange(e, picked)) return picked;
       const cur = w.live(e.atkTarget);
       if (cur && attackable(w, e, cur) && inAttackRange(e, cur)) return cur;
       return acquireTarget(w, e);

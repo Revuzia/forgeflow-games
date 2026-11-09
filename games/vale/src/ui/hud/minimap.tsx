@@ -166,7 +166,7 @@ export function Minimap(): JSX.Element {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       focus(e);
     } else if (e.button === 2) {
-      input.moveTo(p, state.settings.value.controls.attackMoveOnClick, true);
+      input.moveTo(p, e.shiftKey || state.settings.value.controls.attackMoveOnClick, true);
     }
   };
   const onMove = (e: PointerEvent): void => { if (drag.current) focus(e); };

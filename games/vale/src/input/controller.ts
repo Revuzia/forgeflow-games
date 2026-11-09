@@ -4,7 +4,9 @@
 // the HUD's hooks for the things that are not commands (shop, scoreboard, ping wheel, markers).
 //
 //   right-click ground      move (attack-move when controls.attackMoveOnClick); held = keeps steering
-//   right-click enemy       attack it
+//   right-click enemy       attack it (chases)
+//   Shift + right-click     attack-move: walk there, stop and attack what comes in range; the clicked enemy first; never chases
+//   left-click              confirm an aimed ability, finish A attack-move, otherwise select a unit to inspect
 //   A then left-click       attack-move · S stop · B recall · P shop · Tab scoreboard (hold)
 //   Q W E R D F 1–6         cast: quick cast (controls.quickCast) at the cursor, or normal cast = aim
 //                           first (the renderer draws your indicator), then left-click or the key again;
@@ -102,6 +104,7 @@ export class InputController {
   private settings: Settings;
   private ptr = { x: -1, y: -1, inside: false };
   private rightHeld = false;
+  private rightHeldAttack = false;
   private lastHoldMove = 0;
   private lastMoveTo: { x: number; y: number } | null = null;
   /** middle-drag pan; scouting = it began on a locked camera, so release returns to your fighter */
@@ -216,7 +219,7 @@ export class InputController {
     if (this.rightHeld && !aim && now - this.lastHoldMove > HOLD_MOVE_MS) {
       this.lastHoldMove = now;
       const g = this.ground();
-      if (g && (!this.lastMoveTo || Math.hypot(g.x - this.lastMoveTo.x, g.y - this.lastMoveTo.y) > 0.6)) this.moveTo(g, false, false);
+      if (g && (!this.lastMoveTo || Math.hypot(g.x - this.lastMoveTo.x, g.y - this.lastMoveTo.y) > 0.6)) this.moveTo(g, this.rightHeldAttack, false);
     }
     if (this.centring) this.r.camera?.centerOnSelf();
   }
@@ -440,7 +443,7 @@ export class InputController {
       return;
     }
     if (e.button === 0) this.leftDown(e);
-    else if (e.button === 2) this.rightDown();
+    else if (e.button === 2) this.rightDown(e.shiftKey);
   }
   private onUp(e: PointerEvent): void {
     if (e.button === 2) this.rightHeld = false;
@@ -466,13 +469,22 @@ export class InputController {
     this.r.setTarget?.(t ? t.id : null);
   }
 
-  private rightDown(): void {
+  private rightDown(shift: boolean): void {
     if (this.wheel.value) { this.wheel.value = null; return; }
     this.cancelAim();
     if (this.attackMove.value) { this.attackMove.value = false; this.cursor.value = 'default'; }
     const body = this.body;
     if (!body || !body.alive) return;
     const t = this.entityAt();
+    if (shift) {
+      const foe = t && this.enemy(t) ? t : null;
+      const at = foe ?? this.ground();
+      if (!at) return;
+      this.moveTo({ x: at.x, y: at.y }, true, true, foe?.id);
+      this.rightHeld = true; this.rightHeldAttack = true;
+      this.lastHoldMove = performance.now();
+      return;
+    }
     if (t && this.enemy(t)) {
       this.client.send({ type: 'attack', target: t.id });
       this.hooks.marker({ x: t.x, y: t.y, kind: 'attack', target: t.id });
@@ -481,14 +493,14 @@ export class InputController {
     const g = this.ground();
     if (!g) return;
     this.moveTo(g, this.settings.controls.attackMoveOnClick, true);
-    this.rightHeld = true;
+    this.rightHeld = true; this.rightHeldAttack = false;
     this.lastHoldMove = performance.now();
   }
 
   /** move (or attack-move) to a ground point; minimap right-clicks come through here too */
-  moveTo(g: { x: number; y: number }, attackMove: boolean, marker: boolean): void {
+  moveTo(g: { x: number; y: number }, attackMove: boolean, marker: boolean, prefer?: EntityId): void {
     if (this.hooks.blocked()) return;
-    this.client.send(attackMove ? { type: 'move', x: g.x, y: g.y, attackMove: true } : { type: 'move', x: g.x, y: g.y });
+    this.client.send(attackMove ? { type: 'move', x: g.x, y: g.y, attackMove: true, ...(prefer === undefined ? {} : { prefer }) } : { type: 'move', x: g.x, y: g.y });
     this.lastMoveTo = g;
     if (marker) this.hooks.marker({ x: g.x, y: g.y, kind: attackMove ? 'attackMove' : 'move' });
   }
