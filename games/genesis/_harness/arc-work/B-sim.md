@@ -40,3 +40,11 @@
 - GATE check1.log (00:0xZ): 859/860; the one failure was the D1 terror subtest (float32 fear 0.9 = 0.89999998 slipped
   under `>= 0.9`). FIX: DEFY.terror compared with a 1e-4 epsilon (person and town mean). Focused re-run green.
   Re-run of the full gate: check2.log (queued 2026-11-09 ~00:1xZ).
+- GATE check2.log: npm run check 860/860 GREEN (detban + tsc + suite), via slot.sh.
+
+## NEXT (open)
+1. D5 generations (mercy vs wrath, def at +25 y >= 0.1 lower on >= 3/4; newborn trust) does NOT pass: lead/owner call
+   needed (see the D5 line above). Probe ready: `_harness/arc-work/B-sim-runs.sh pairs` (arc.ts dmercy|dwrath).
+2. D3 shot (defiance.set + god storm, >= 4 hurl agents, arcs): not shot by the sim lane; B-ui NEXT 1 plans the live run.
+   Note: a 30-person test town has ~5 bold members (hurl needs boldness >= 0.6), so use babel (70-110 per town).
+3. Not built: "a prophet's word there" as a sign answer; the stage-C keepers (legends) and betrayed/kept uses.
