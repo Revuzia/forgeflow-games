@@ -64,7 +64,7 @@ export const DEFY = {
   inheritMem: 0.7, inheritPride: 0.8, inheritDefy: 0.5,
   /** (lead ruling 2026-11-09, D5) the weight of the god's answers in memory: the §0.4 wrath / patience / mercy terms of the
    *  defiance target and the newborn bias (and its caps) are × this; pride, humbled and the tower's terms are not */
-  memK: 3,
+  memK: 1,
 } as const;
 
 const KINDS: DefyKind[] = ['curse', 'hurl', 'burn', 'idol'];

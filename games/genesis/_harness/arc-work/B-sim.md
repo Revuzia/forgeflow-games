@@ -58,3 +58,12 @@
   twice"; wrath towns "the anger of the sky" / "struck once"), but defMean/fearMean diffs 0.01-0.08: FAIL numerically.
 - Raised memory weights in proportion: DEFY.memK = 3 on the §0.4 wrath/patience/mercy defiance terms, the newborn bias
   and its caps, and the mercy revolt bar (pride/humbled/tower terms untouched). Runs: pairs3.log, unatt2.log (05:20Z).
+- pairs3.log (memK 3): STILL FAIL. defMean mercy/wrath 0.113/0.051, 0.100/0.149, 0.155/0.232, 0.095/0.020; fearMean
+  0.149/0.121, 0.150/0.158, 0.144/0.149, 0.080/0.091 -> diff >= 0.1 on 0/4 (by sign the mercy arm is LESS defiant on
+  2/4 only). Words still tell which answer on 4/4. Why the numbers do not separate: (1) each arm gets only 1-2 answers
+  (curse acts are rare once the hold ends), so memory w at y26 ~0.5; (2) defiance moves 0.03/day and a game year is 12
+  days, so the provocation year moves it only ~30 % toward its target; (3) the memory terms bias a target that sits near
+  its 0 clamp in both arms, and the newborn fear/trust seeds wash out in the daily drift within a year; (4) the two arms
+  diverge in towns and population over 25 years, noise ~0.05-0.1. memK reverted to 1 (spec numbers): raising it bought
+  nothing measurable. Lead call needed (e.g. memory scaling the reaction to harm itself, or a longer provocation).
+- GATE: check3.log queued (memK 1, prophet's word, probe changes).
