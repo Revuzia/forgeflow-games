@@ -35,3 +35,8 @@
 - Focused: arc-hearts/tower/tower-r1/freeform, scripture_lint, content, living-migration/content, prayers-pause 74/74;
   living-relationship, determinism, save-continue, flood-warning, mods, omnipotence, living-sacred 93/93; detban clean.
 - GATE: slot.sh npm run check queued 23:40Z -> scratch/arc/B-sim/check1.log.
+- D2 unattended (unatt1.log, 8 seeds x 60 y): 0 defiant acts, 0 burns, defiant town-years 0 % on 8/8 (defMax 0.13-0.32):
+  PASS (<= 10 %, <= 1 burn). Towers/hearts unchanged in kind from stage A.
+- GATE check1.log (00:0xZ): 859/860; the one failure was the D1 terror subtest (float32 fear 0.9 = 0.89999998 slipped
+  under `>= 0.9`). FIX: DEFY.terror compared with a 1e-4 epsilon (person and town mean). Focused re-run green.
+  Re-run of the full gate: check2.log (queued 2026-11-09 ~00:1xZ).

@@ -166,3 +166,11 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   157,158,149), river risen, rain + town read; still too pale/desaturated under the rain veil to say "brown".
   FIX ocean.ts: mud (2.0,0.8,0.2) @ 0.9, floor 0.26*sky. render-silt 6/6. flood7 killed; chain15 = chain14.sh with
   r1-render-flood8.json (r1l-*), then hearts, perf2-now, perf2-base.
+- r1l (2.0,0.8,0.2 @0.26 floor): during the FLOOD itself (k~1, rain eased) an opaque orange-sand look -> too far.
+  FIX: mud (1.9,0.84,0.3) floor 0.17*sky, streaks 0.66+0.34, sky mirror back to 0.45 mix / -12 % (water read).
+- LOOKED AT r1m-flood-warning (600 m, UI, warning rise 0.33, siltK 0.8) and r1m-flood-warning-near at low/medium/high
+  (G.quality on one page): the town's lake is risen and warm khaki-brown (158,148,134) with a soft sheen vs dark blue
+  before; rain streaks and the town read; low/medium/high look the same (no knot). Ultra not shot (container restarted
+  04:4xZ mid-chain). Under the rain veil the brown is muted but clearly browner than before. #10 §10 MET (judgement).
+- 04:4xZ chain17 = chain14.sh: hearts, perf2-now, perf2-base.
+- r1k-heart-dusk-near LOOKED AT: dusk 19 h after a bolt: the town fearful (1.0) but everyone indoors (41 none, 7 pray, 2 fear; 0 on screen): no pose visible. hearts2 spec (r1n-*: bolt at 16.5 h, step 15 min until >= 5 outdoor fear/fist) queued after chain14 pid 774 (chain18).
