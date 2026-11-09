@@ -19,3 +19,10 @@
   r1-render-flood10.json (r1p: ultra 400 m warning). Chain: poses (b-chain1), then d3 + flood10 (b-chain2).
 - Bleach (r1o): bolts live on the render clock; a held shot freezes the stroke's ground-light decal (up to ~4.5x) and
   the flash in the frame. b1-hurl-after checks the same view 2.5 s later.
+- LOOKED AT b0-pose-mix-40 (lookdev, mixed stub signs, 40 m): raised FISTS read clearly on walkers (arm straight up);
+  fear/cheer/pray hard to tell at 40 m from the high camera (tilt 66: raised arms foreshortened). b0-pose-mix-70: people
+  ~8 px dots on the path; no pose reads individually.
+- bodygen.ts bipedLow: far LOD arms 1.5x thick, mid LOD 1.25x (silhouette LODs keep a raised arm >= 1-2 px at 40-80 m).
+  clothing + render-hearts + render-arc-defiance 11/11.
+- Container restarted ~19:2xZ (chains died). b-chain3: d3 (live hurl/curse/idol + bleach check), poses2 (b0b-*: each
+  sign alone at 60 m tilt 58, mixed at low/ultra), flood10 (ultra).

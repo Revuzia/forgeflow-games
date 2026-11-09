@@ -640,9 +640,12 @@ function bipedLow(lod: number, furred: boolean): BodyMesh {
   // pixel there, and the city view's crowd is mostly this LOD)
   for (const [sx, up, fo] of [[1, 3, 4], [-1, 5, 6]] as [number, number, number][]) {
     const sh: V3 = [P[up][0] - sx * 0.015, P[up][1] + 0.015, 0], el: V3 = [P[fo][0], P[fo][1] + 0.02, P[fo][2]], wr: V3 = [sx * 0.23, 0.83, 0.015];
-    if (!mid) { b.tube([sh, wr], [[0.058, 0.055], [0.034, 0.03]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, fo, 1]), BPART.sleeve, {}, false, true); continue; }
-    b.tube([sh, el], [[0.058, 0.055], [0.044, 0.042]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, up, 0.5]), BPART.sleeve, {}, false, false);
-    b.tube([el, wr], [[0.044, 0.042], [0.03, 0.027]], ls, (t) => (t < 0.5 ? [fo, up, 0.5] : [fo, fo, 1]), BPART.forearm, {}, false, true);
+    // (ARC §1.4, owner bar "noticed without clicking" at 40-80 m: the far and mid arms are drawn ~1.5x / 1.25x thick, as
+    // a silhouette LOD should, so a raised arm - a fist, hands up in fear, a cheer, a prayer - is a pixel or two wide
+    // there and not lost under a pixel; hanging at the sides they merge with the torso as before)
+    if (!mid) { b.tube([sh, wr], [[0.088, 0.083], [0.052, 0.046]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, fo, 1]), BPART.sleeve, {}, false, true); continue; }
+    b.tube([sh, el], [[0.072, 0.069], [0.055, 0.052]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, up, 0.5]), BPART.sleeve, {}, false, false);
+    b.tube([el, wr], [[0.055, 0.052], [0.038, 0.034]], ls, (t) => (t < 0.5 ? [fo, up, 0.5] : [fo, fo, 1]), BPART.forearm, {}, false, true);
   }
   // legs: thigh and shin (bare, or trousers), a foot
   for (const [sx, th, sn] of [[1, 7, 8], [-1, 9, 10]] as [number, number, number][]) {

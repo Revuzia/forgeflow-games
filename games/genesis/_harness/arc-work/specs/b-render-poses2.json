@@ -1,0 +1,115 @@
+{
+ "_doc": "B-render: heart poses at play distance (owner bar: noticed without clicking at 40-80 m): mixed signs (fear/fist/cheer/pray by id) at 40/70 m, each sign alone at 60 m, mixed at 60 m on low/high/ultra. Lookdev village, stub signs.",
+ "shots": [
+  {
+   "name": "b0b-pose-fear-60",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('medium');",
+    "G.arc.stub('hearts', { signs: 3 }); await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'medium', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "b0b-pose-fist-60",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('medium');",
+    "G.arc.stub('hearts', { signs: 2 }); await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'medium', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "b0b-pose-cheer-60",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('medium');",
+    "G.arc.stub('hearts', { signs: 4 }); await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'medium', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "b0b-pose-pray-60",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('medium');",
+    "G.arc.stub('hearts', { signs: 1 }); await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'medium', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "b0b-pose-mix-60-low",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('low');",
+    "const A = F.fx.vis.pv.agents; const m = {}; for (let k = 0; k < A.count; k++) m[String(A.id[k])] = [3, 2, 4, 1][A.id[k] % 4]; G.arc.stub('hearts', { signs: m });",
+    "await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'low', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  },
+  {
+   "name": "b0b-pose-mix-60-ultra",
+   "params": "source=lookdev",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "canvasOnly": true,
+   "frames": 1,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.ui_.closeAll(); const F = window.__GENESIS_FX__; F.fx.hand.force = false; if (!window.__p) window.__p = G.poi('village'); const p = window.__p;",
+    "G.quality('ultra');",
+    "const A = F.fx.vis.pv.agents; const m = {}; for (let k = 0; k < A.count; k++) m[String(A.id[k])] = [3, 2, 4, 1][A.id[k] % 4]; G.arc.stub('hearts', { signs: m });",
+    "await G.frames(4);",
+    "await G.camera({ mode: 'orbit', lat: p.lat, lon: p.lon, dist: 60, tilt: 58, yaw: p.heading, fov: 50, hour: 10 }); await G.frames(8); F.advance(1); await G.frames(3);",
+    "return { q: 'ultra', drawn: F.fx.vis.life.crowds.stats };"
+   ]
+  }
+ ]
+}

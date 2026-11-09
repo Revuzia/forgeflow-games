@@ -82,3 +82,5 @@
   s4 .093/.016, .083/.106, .453/.635 (trust .18) PASS -> 3/4 PASS. Words 4/4. CAVEAT: directions are not consistent
   (the mercy arm has less trust on s1/s4, more on s2), so part of each gap is the arms drifting apart over 25 y.
 - RUNS: unatt3.log (D2 recheck), GATE check5.log (queued).
+- unatt3.log: 0 acts on 8/8 (D2 kept). check5 861/862 (worker pacing under load again; passes alone); check6 was killed
+  by my waiter's time limit; GATE check7.log: npm run check 862/862 GREEN via slot.sh. Stage B sim done; next: stage C.

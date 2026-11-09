@@ -13,7 +13,7 @@
    "frames": 1,
    "script": [
     "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove(); const t0 = performance.now(); const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv;",
-    "let best = null; for (const s of pv().settlements) { const n = [...pv().agents.group].filter((g) => g === s.id).length; if (!best || n > best.n) best = { id: s.id, n, pos: s.pos }; } const sid = best.id; window.__sid = sid; const pos = () => pv().settlements.find((s) => s.id === sid).pos;",
+    "let big = null; for (const s of pv().settlements) { const n = [...pv().agents.group].filter((g) => g === s.id).length; if (!big || n > big.n) big = { id: s.id, n, pos: s.pos }; } const sid = big.id; window.__sid = sid; const pos = () => pv().settlements.find((s) => s.id === sid).pos;",
     "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 }); await G.cmd({ k: 'defiance.set', settlement: sid, value: 0.8 }); await G.cmd({ k: 'pride.set', settlement: sid, value: 0.7 });",
     "const P = pos(); const R0 = pv().ground?.radius ?? 3000; await G.cmd({ k: 'weather.paint', kind: 'thunderstorm', pos: [...P], radius: 900, duration: 6 * 1440, pinned: true });",
     "let hurl = 0, hrs = 0; const cnt = (v) => { const A = pv().agents; let n = 0; for (let i = 0; i < A.count; i++) if (A.group[i] === sid && A.heart && A.heart[i] === v) n++; return n; };",
