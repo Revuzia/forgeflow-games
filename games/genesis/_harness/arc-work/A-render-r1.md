@@ -174,3 +174,4 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
   04:4xZ mid-chain). Under the rain veil the brown is muted but clearly browner than before. #10 §10 MET (judgement).
 - 04:4xZ chain17 = chain14.sh: hearts, perf2-now, perf2-base.
 - r1k-heart-dusk-near LOOKED AT: dusk 19 h after a bolt: the town fearful (1.0) but everyone indoors (41 none, 7 pray, 2 fear; 0 on screen): no pose visible. hearts2 spec (r1n-*: bolt at 16.5 h, step 15 min until >= 5 outdoor fear/fist) queued after chain14 pid 774 (chain18).
+- PERF now #2 (05:xxZ, load 6-12): lookdev far 41.6/104.5, near 38.8/78.6; play near 22.7/48.5, far 19.5/29.5 (CPU work ms mean/p95). Base (d2512fbc) running next.
