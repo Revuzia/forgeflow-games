@@ -967,9 +967,13 @@ banned word or phrase, every line ≤ 140 characters, no unfilled `{…}`, and e
 - D4: mercy after a `hurl` lowers defiance by ≥ 0.15 within 3 days; patience is classified at day 10 when nothing was
   done; wrath on a proud, low-trust town raises defiance (martyrs) on ≥ 5/8 seeds; **wrath never costs less trust than
   the same harm on a town that did not defy** (unit test).
-- D5: generations: paired seeds (mercy answers vs wrath answers, trust < 0.3 before) give a mean defiance at year +25
-  that is lower after mercy by ≥ 0.1 on ≥ 3/4 seeds, and a newborn mean trust that differs by ≥ 0.05 after 10 years.
-  Memory halves in 25 years (± 2 %) with no keeper and is ≥ 0.70 of the original with a rubble landmark. Daughters
+- D5 (lead ruling 2026-11-09: an unprovoked town drifting to zero defiance in both arms is correct, the people act and
+  the god reacts, so idle defiance at +25 y is not the test): paired seeds (mercy answers vs wrath answers, trust < 0.3
+  before); 25 years after the answers the SAME provocation is applied to both arms (the harsh protocol: an unprovoked
+  storm every 4 months for 1 year at wrath 0.3). The descendants respond measurably differently: mean defiance or mean
+  fear differs by ≥ 0.1 on ≥ 3/4 seeds, and the chronicle/Book can tell which answer they remember (the town's
+  `remember` / `answered` words). The post-harm rally stays (owner: disasters build fear, trust and loyalty). Probe:
+  `_harness/probes/arc.ts dmercy|dwrath`. Memory halves in 25 years (± 2 %) with no keeper and is ≥ 0.70 of the original with a rubble landmark. Daughters
   inherit × 0.7.
 
 ### 8.4 Covenant (stage C)

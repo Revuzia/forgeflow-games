@@ -7,9 +7,10 @@
 //   node _harness/probes/arc.ts babel <seed> [years=2.2]       T3 (begun <= 30 d, first tower.choice <= 2 y) and T5.
 //   node _harness/probes/arc.ts harsh <seed> [years=3]         D2 (stage B): an unprovoked storm (+ a bolt with HARSH_BOLT=1) at wrath 0.3 on
 //        the first town every 4 months (§8.1 M3 harsh): defy acts per kind (hurl on >= 4/8), defiance max.
-//   node _harness/probes/arc.ts dmercy|dwrath <seed> [years=26] D5: a year of harsh storms (trust < 0.3), defiance.set 0.6 at
-//        year 1, then every defiant act of a town answered with mercy (dmercy) or wrath (dwrath); mean defiance at year
-//        +25 after, newborn mean trust 10 years after, memory.
+//   node _harness/probes/arc.ts dmercy|dwrath <seed> [years=27] D5 (lead ruling 2026-11-09): a year of harsh storms (trust <
+//        0.3), defiance.set 0.6 at year 1, every defiant act answered with mercy (dmercy) or wrath (dwrath) through year
+//        26, then the SAME provocation in both arms (the harsh protocol for a year, no answers): the descendants' mean
+//        defiance / fear (end of it and its mean), their acts, and what they remember in words (remember, answered).
 // Every mode also reports the stage B tallies: defy events per kind, defiant town-years share, burns.
 // One JSON line per run, prefixed RESULT.
 import { Sim } from '../../src/sim/sim.ts';
@@ -19,6 +20,8 @@ import { langDistance } from '../../src/sim/people/culture.ts';
 import { TASK } from '../../src/sim/people/defs.ts';
 import { sunElevation } from '../../src/sim/people/world.ts';
 import type { TowerState } from '../../src/sim/god/state.ts';
+import { heartView } from '../../src/sim/god/arc.ts';
+import { answeredWords } from '../../src/sim/god/defiance.ts';
 
 const [mode = 'unattended', seedS = '1', yearsS] = process.argv.slice(2);
 const seed = Number(seedS);
@@ -33,8 +36,11 @@ if (mode !== 'babel') {
 const p = sim.u.planets[0], ps = p.people!, A = ps.agents;
 const day = Math.max(60, Math.round(p.st.dayHours * 60));
 const year = Math.max(day, Math.round(p.st.orbit.period));
-const years = Number(yearsS ?? (mode === 'babel' ? 2.2 : mode === 'attended' ? 20 : mode === 'harsh' ? 3 : mode === 'dmercy' || mode === 'dwrath' ? 26 : 60));
-const harshUntil = mode === 'harsh' ? Infinity : mode === 'dmercy' || mode === 'dwrath' ? 1 : -1;
+const years = Number(yearsS ?? (mode === 'babel' ? 2.2 : mode === 'attended' ? 20 : mode === 'harsh' ? 3 : mode === 'dmercy' || mode === 'dwrath' ? 27 : 60));
+const pair = mode === 'dmercy' || mode === 'dwrath';
+const harshUntil = mode === 'harsh' ? Infinity : pair ? 1 : -1;
+const provoke = pair ? years - 1 : Infinity;
+const provT = { def: 0, fear: 0, n: 0, acts: 0 };
 const defy: Record<string, number> = {};
 let defiantDays = 0, defMax = 0, answersGiven = 0, nextHarsh = 0, defySet = false;
 let def25 = -1, newborn10 = -1, mem: unknown = null;
@@ -54,10 +60,11 @@ function towers(): TowerState[] { return sim.u.god.rel?.towers ?? []; }
 while (sim.u.tick < end) {
   sim.step(Math.round(day / 4));
   const yr = (sim.u.tick - start) / year;
-  if (firstTown && yr < harshUntil && sim.u.tick >= nextHarsh && firstTown.fallen < 0) {
+  const target = firstTown && firstTown.fallen < 0 ? firstTown : ps.settlements.filter((s) => s.fallen < 0 && !s.band).sort((a, b) => (ps.members.get(b.id)?.length ?? 0) - (ps.members.get(a.id)?.length ?? 0) || a.id - b.id)[0];
+  if (target && (yr < harshUntil || yr >= provoke) && sim.u.tick >= nextHarsh) {
     nextHarsh = sim.u.tick + Math.round(year / 3);
-    sim.applyNow({ k: 'miracle.storm', pos: [...firstTown.pos], radius: 350, wrath: 0.3 } as never);
-    if (process.env.HARSH_BOLT) sim.applyNow({ k: 'miracle.lightning', pos: [...firstTown.pos], wrath: 0.3 } as never);
+    sim.applyNow({ k: 'miracle.storm', pos: [...target.pos], radius: 350, wrath: 0.3 } as never);
+    if (process.env.HARSH_BOLT) sim.applyNow({ k: 'miracle.lightning', pos: [...target.pos], wrath: 0.3 } as never);
   }
   if ((mode === 'dmercy' || mode === 'dwrath') && firstTown && !defySet && yr >= 1) {
     defySet = true;
@@ -78,7 +85,8 @@ while (sim.u.tick < end) {
     if (t === 'defy') {
       const d = (e as unknown as { data: { kind: string; settlement: number } }).data;
       defy[d.kind] = (defy[d.kind] ?? 0) + 1;
-      if (mode === 'dmercy' || mode === 'dwrath') {
+      if (pair && yr >= provoke) provT.acts++;
+      if (pair && yr < provoke) {
         const r = sim.applyNow({ k: 'defiance.answer', settlement: d.settlement, how: mode === 'dmercy' ? 'mercy' : 'wrath' } as never);
         if (r.ok) answersGiven++;
       }
@@ -128,12 +136,20 @@ while (sim.u.tick < end) {
       const h = rr?.hearts;
       if (!h) { noHeart++; continue; }
       if (h.kind === 'defiant') defiantDays++;
+      if (pair && yr >= provoke) { provT.def += rr?.defiance ?? 0; provT.fear += rr?.means[1] ?? 0; provT.n++; }
       defMax = Math.max(defMax, rr?.defiance ?? 0);
       const k = lastKind.get(st.id);
       if (k !== undefined && k !== h.kind) heartChanges++;
       lastKind.set(st.id, h.kind);
     }
   }
+}
+function provOut(): Record<string, unknown> {
+  const live = ps.settlements.filter((s) => s.fallen < 0 && !s.band);
+  const avg = (f: (r: NonNullable<ReturnType<typeof peekRel>>) => number) => live.length ? Math.round(1000 * live.reduce((a, s) => a + f(peekRel(sim.u, p.id, s.id)!), 0) / live.length) / 1000 : 0;
+  return { prov: { defEnd: avg((r) => r.defiance ?? 0), fearEnd: avg((r) => r.means[1]), defMean: provT.n ? Math.round(1000 * provT.def / provT.n) / 1000 : 0,
+    fearMean: provT.n ? Math.round(1000 * provT.fear / provT.n) / 1000 : 0, acts: provT.acts,
+    remember: live.map((s) => heartView(peekRel(sim.u, p.id, s.id), s)?.remember ?? []), answered: live.map((s) => answeredWords(peekRel(sim.u, p.id, s.id))) } };
 }
 const list = [...tws.values()];
 const towns = ps.settlements.filter((s) => s.fallen < 0 && !s.band);
@@ -145,5 +161,6 @@ console.log('RESULT ' + JSON.stringify({
   detail: list.map((w) => ({ ...w, begun: Math.round(w.begun * 10) / 10, frac: Math.round(w.frac * 100) / 100, onSitePct: w.samples ? Math.round((100 * w.onSite) / w.samples) : null })),
   defy, defiantTownYearShare: townDays ? Math.round((defiantDays / townDays) * 1000) / 1000 : 0, defMax: Math.round(defMax * 1000) / 1000,
   answersGiven, def25, newborn10, mem,
+  ...(pair ? provOut() : {}),
   events: evCount, heartChangesPerTownDay: townDays ? Math.round((heartChanges / townDays) * 1000) / 1000 : 0, noHeart,
 }));

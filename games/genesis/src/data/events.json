@@ -264,6 +264,7 @@
     {"id": "defy.mercy", "kind": "god", "weight": 2, "text": ["They shook their fists, and the god sent {what} to {settlement}.", "{settlement} cursed the sky, and the sky gave {what}."]},
     {"id": "defy.wrath", "kind": "god", "weight": 2, "text": ["The god answered the anger of {settlement} with fire.", "{settlement} shouted at the sky, and the sky struck back."]},
     {"id": "defy.sign", "kind": "god", "weight": 1, "text": ["{omen} over {settlement}, the morning after the shouting."]},
+    {"id": "defy.word", "kind": "god", "weight": 1, "text": ["{agent} spoke the god's word in {settlement}, the morning after the shouting."]},
     {"id": "defy.patience", "kind": "god", "weight": 2, "text": ["The god bore the anger of {settlement} for a year and did not strike."]},
     {"id": "defy.silence", "kind": "god", "weight": 1, "text": ["The sky did not answer {settlement}."]},
     {"id": "tower.begun", "kind": "god", "weight": 3, "text": ["The towns of {league} came together at {host} and began a tower. 'Let it reach the sky,' they said, 'and let our name last.'", "At {host} the people of {count} towns laid the first course of a tower, to be seen from everywhere.", "'We will build so high the god will have to look at us,' said {agent} of {host}, and the towns began."]},

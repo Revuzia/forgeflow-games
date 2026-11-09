@@ -154,3 +154,10 @@
 - §0.4 memory decay is applied in the daily pass once a year per town (`since.memY`); a landmark is a struck,
   scattered or abandoned tower within 3 km whose ArcEvent the town remembers (strike -> wrath, confuse -> humbled,
   warn -> patience). `freshen(A, s, means, bias?)` takes the newborn bias. Households of fearMigration carry memory x 0.5.
+- 2026-11-09 lead ruling, recorded by B-sim: §8 D5 rewritten (ARC.md): not idle defiance at +25 y, but the descendants'
+  response to the same provocation (harsh protocol, 1 year) 25 years after the mercy-vs-wrath answers: mean defiance or
+  mean fear differs by >= 0.1 on >= 3/4, and the town's remember/answered words tell which answer. The post-harm rally
+  stays. Memory weights are raised only if that fails (in proportion, D2 unattended kept at 0 acts).
+- 2026-11-09 B-sim: §3.3 "a prophet's word there" built: `prophet.foretell` to the prophet's town with an open defiant
+  act classifies a sign (defiance.ts answerByWord), told by the new line `defy.word` ("{agent} spoke the god's word in
+  {settlement}, the morning after the shouting.").

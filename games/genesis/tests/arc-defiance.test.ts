@@ -261,3 +261,19 @@ test('determinism: a defiant run saved mid-way and loaded continues identically'
   a.step(30 * 60); c.step(30 * 60);
   assert.equal(JSON.stringify(a.u.god.rel!.st), JSON.stringify(c.u.god.rel!.st));
 });
+
+test('a prophet\'s word there answers an open defiant act as a sign (§3.3)', () => {
+  const { sim, st } = town();
+  const ps = P(sim).people, A = ps.agents;
+  const grown = (ps.members.get(st.id) ?? []).filter((s) => sim.applyNow({ k: 'prophet.call', agent: A.id[s] } as never).ok);
+  assert.ok(grown.length >= 1, 'a prophet called');
+  const r = srel(sim.u, P(sim).id, st.id);
+  r.answer = { tick: sim.u.tick, kind: 'curse' };
+  (r.defied ??= {}).curse = sim.u.tick;
+  events(sim);
+  const res = sim.applyNow({ k: 'prophet.foretell', agent: A.id[grown[0]], what: 'rain' } as never) as { ok: boolean; msg: string };
+  assert.ok(res.ok, res.msg);
+  assert.equal(events(sim).find((q) => q.t === 'defy.answered')?.data?.how, 'sign');
+  assert.equal(r.answer, null);
+  assert.ok(r.memory!.sign >= 1);
+});

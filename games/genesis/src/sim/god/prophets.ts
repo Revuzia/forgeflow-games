@@ -52,6 +52,7 @@ import { meansNow, moveSettlement, relOf, relStat, rise, riseTrust, srel } from 
 import { actReaches, PRAYER_WORDS, SEASON_DAYS } from './prayers.ts';
 import { addSacredPlace, foundShrine, PILGRIM_REACH, sacredNear } from './sacred.ts';
 import { towerStands } from './tower.ts';
+import { answerByWord } from './defiance.ts';
 
 /** prophets a world may have at once */
 export const MAX_PROPHETS = 6;
@@ -632,6 +633,8 @@ export function registerProphetCommands(r: CommandRegistry): void {
     const days = Number(a.days ?? 2);
     const pr = foretell(x, ph, kind, days, 'god');
     const st = x.ps.settlement(ph.settlement);
+    // ARC §3.3: the god's word through its prophet answers a defiant act there as a sign
+    if (st) answerByWord(u, p.id, st.id, agentName(x, s));
     return ok(`${agentName(x, s)} tells ${st?.name ?? 'the town'}: ${WORDS[kind] ?? kind} within ${Math.round((pr.until - pr.from) / x.day * 10) / 10} days. Now make it true.`);
   }, {
     desc: 'Speak through your prophet: foretell an act, then make it true', category: 'Signs',

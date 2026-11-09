@@ -361,6 +361,15 @@ export function answerFromAct(u: Universe, planet: number, sid: number, reading:
   classify(u, p, st, r, how, what);
 }
 
+/** §3.3 "a prophet's word there": the god speaks through its prophet to a town with an open defiant act: a sign */
+export function answerByWord(u: Universe, planet: number, sid: number, prophet: string): void {
+  const r = peekRel(u, planet, sid);
+  const p = u.planets.find((q) => q.id === planet);
+  const st = p?.people?.settlement(sid);
+  if (!r?.answer || !p || !st || st.fallen >= 0) return;
+  classify(u, p, st, r, 'sign', `prophet:${prophet}`);
+}
+
 /** §3.3: the answer read; its effect now, memory, godActs, ArcEvent, event, line; the window closes */
 export function classify(u: Universe, p: Planet, st: Settlement, r: SettlementRel, how: Answer, what = ''): void {
   if (!r.answer) return;
@@ -395,8 +404,10 @@ export function classify(u: Universe, p: Planet, st: Settlement, r: SettlementRe
     pushArc(u, { planet: p.id, tick: x.tick, kind: 'answer', name: `The Answer to ${st.name}`, towns: [st.id], god: how, dead: 0 });
   }
   u.emit({ t: 'defy.answered', planet: p.id, pos: [st.pos[0], st.pos[1], st.pos[2]], ref: settlementRef(x, st), data: { settlement: st.id, how } });
-  const id = how === 'patience' ? 'defy.silence' : `defy.${how}`;
-  const extra: Record<string, string> = how === 'mercy' ? { what: helpNoun(what) } : how === 'sign' ? { omen: 'A sign' } : {};
+  // a sign given through the god's prophet ("prophet:<name>") is told as the prophet's word
+  const word = how === 'sign' && what.startsWith('prophet:');
+  const id = how === 'patience' ? 'defy.silence' : word ? 'defy.word' : `defy.${how}`;
+  const extra: Record<string, string> = how === 'mercy' ? { what: helpNoun(what) } : word ? { agent: what.slice(8) } : how === 'sign' ? { omen: 'A sign' } : {};
   tellDefy(x, st, r, id, how === 'patience' || how === 'sign' ? 1 : 2, extra);
 }
 
