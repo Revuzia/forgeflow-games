@@ -287,6 +287,37 @@ def oidn(on: bool = True) -> bool:
     return True
 
 
+def pose_tweak(arm, cfg: dict) -> None:
+    """Card-only pose polish (CARDS "pose": [{"bone": "head", "rot": [x, y, z]}, ...], degrees, added to the clip's pose
+    in the bone's local axes): lift a thrown-back head, clear an arm from the face. The clips and the GLB are untouched."""
+    from mathutils import Euler
+    for tw in cfg.get("pose") or []:
+        pb = arm.pose.bones.get(tw.get("bone", ""))
+        if pb is None:
+            continue
+        pb.rotation_mode = "XYZ"
+        q = pb.rotation_euler.to_quaternion() @ Euler([math.radians(float(a)) for a in tw["rot"]], "XYZ").to_quaternion()
+        pb.rotation_euler = q.to_euler("XYZ")
+    bpy.context.view_layer.update()
+
+
+def card_meta(cam, arm, cfg: dict) -> dict:
+    """Screen positions of the bones the composite needs (normalised 0..1, top-down): head (tail), neck, hands, fx bones."""
+    from bpy_extras.object_utils import world_to_camera_view
+    bpy.context.view_layer.update()
+    sc = bpy.context.scene
+    names = ["head", "neck", "hand.L", "hand.R"] + [f.get("at", "") for f in cfg.get("fx") or []]
+    pts = {}
+    for nm in names:
+        if nm not in arm.pose.bones:
+            continue
+        pb = arm.pose.bones[nm]
+        wp = arm.matrix_world @ (pb.head.lerp(pb.tail, 0.5) if nm == "head" else pb.head)
+        v = world_to_camera_view(sc, cam, wp)
+        pts[nm] = [round(float(v.x), 4), round(float(1.0 - v.y), 4)]
+    return {"pts": pts}
+
+
 def stage_lights(cam, cfg: dict, arm, target, scale: float = 1.0) -> list:
     """The staging's extra lights over bible_lights' key and rim pair: a BOUNCE (a broad soft light off the lit
     floor between the camera and the subject, `bounce` x 400 W, `bounce_color`) and FOCAL lights (`focal`: a list
@@ -470,8 +501,8 @@ def bible_lights(cam, cfg: dict, light: dict, rim: float = 1.0, scale: float = 1
     if pair:
         f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
         tgt = V(target) if target is not None else cam.location + f * 5.0 * scale
-        for nm, az, el, colr, k in (("vale_rim_cool", -46.0, 26.0, RIM_COOL, cfg.get("rim_cool", 1.0)),
-                                    ("vale_rim_warm", 44.0, 16.0, RIM_WARM, cfg.get("rim_warm", 1.0))):
+        for nm, az, el, colr, k in (("vale_rim_cool", -46.0, 26.0, cfg.get("rim_left_color") or RIM_COOL, cfg.get("rim_cool", 1.0)),
+                                    ("vale_rim_warm", 44.0, 16.0, cfg.get("rim_right_color") or RIM_WARM, cfg.get("rim_warm", 1.0))):
             if k > 0:                                          # kickers: side-back, tight enough to edge the form
                 d = view_dir_light(cam, az, el)
                 out.append(_area(nm, tgt + d * 3.0 * scale, tgt, 1500.0 * k * scale * scale, colr, 0.8 * scale))
@@ -894,6 +925,7 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     # ── splash 1600x900 ──
     if want("splash"):
         pose_frame(arm, prof, cfg["clip"], t=cfg["t"], chains=chains, clips=clips)
+        pose_tweak(arm, cfg)
         lo, hi = posed_bounds(objs)
         lo.z = min(lo.z, 0.0)
         if cfg.get("box_top") is not None:        # a staged card may frame the body and let a raised weapon leave the
@@ -924,7 +956,9 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
                 inp.default_value = v
         if pl:
             plates.keep_raw(raw_s, pl["sid"], "splash", preview)
-            out["splash"] = imageops.save(plates.finish(fg, pl, "splash", 1.0 if cfg.get("post", True) else 0.0),
+            smeta = card_meta(cam, arm, dict(cfg, fx=pl.get("fx")))
+            plates.keep_meta(pl["sid"], "splash", preview, smeta)
+            out["splash"] = imageops.save(plates.finish(fg, pl, "splash", 1.0 if cfg.get("post", True) else 0.0, smeta),
                                           dest("splash"), alpha=False)
         else:
             comp = splash_post(fg, plate, 1.0 if cfg.get("post", True) else 0.0)
@@ -935,13 +969,14 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     # ── portrait 512² (head and shoulders, three-quarter, front) ──
     t0 = time.perf_counter()
     pcfg = _portrait_cfg(spec, skin, cfg)
-    pcfg_a = dict(cfg_a, **{k: pcfg[k] for k in ("key_az", "key_el", "sun", "bounce", "bounce_color", "focal")
+    pcfg_a = dict(cfg_a, **{k: pcfg[k] for k in ("key_az", "key_el", "sun", "bounce", "bounce_color", "focal", "pose")
                             if k in pcfg})
     for k in ("rim_cool", "rim_warm"):           # a portrait override multiplies like the splash's (plates.art_light)
         if k in (stage.get("portrait") or {}):
             pcfg_a[k] = float(cfg_a.get(k, 1.0)) / max(1e-6, float(cfg.get(k, 1.0))) * float(pcfg[k])
     plight_a = dict(light_a, sunColor=pcfg["key_color"]) if pcfg.get("key_color") else light_a
     pose_frame(arm, prof, pcfg["clip"], t=pcfg["t"], chains=chains, clips=clips)
+    pose_tweak(arm, pcfg)
     pplate = None
     head = bone_pos(arm, "head")
     neck = bone_pos(arm, "neck")
@@ -975,7 +1010,9 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
                 inp.default_value = v
         if pl:
             plates.keep_raw(raw, pl["sid"], "portrait", preview)
-            out["portrait"] = imageops.save(plates.finish(fg, pl, "portrait", 1.0 if cfg.get("post", True) else 0.0),
+            pmeta = card_meta(cam, arm, dict(pcfg, fx=pl.get("fx")))
+            plates.keep_meta(pl["sid"], "portrait", preview, pmeta)
+            out["portrait"] = imageops.save(plates.finish(fg, pl, "portrait", 1.0 if cfg.get("post", True) else 0.0, pmeta),
                                             dest("portrait"), alpha=False)
         else:
             out["portrait"] = imageops.save(imageops.grade(splash_post(fg, pplate, 0.6 if cfg.get("post", True)

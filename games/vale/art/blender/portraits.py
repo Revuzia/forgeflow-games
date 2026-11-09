@@ -45,6 +45,14 @@ plates.py reads it with ast, without bpy, so no names or expressions in it):
         },
     }
 
+The card finish v2 (plates.finish2, the default; a card's "plate": {"finish": 1} keeps the old chain) adds two staging keys:
+    "pose": [{"bone": "head", "rot": [18.0, 0.0, 0.0]}]   # in "splash" or "portrait": degrees added to the clip's pose in
+                                                          # the bone's local axes (card only: lift a thrown-back head,
+                                                          # clear an arm from the face; the clips and the GLB are untouched)
+    "plate": {"fx": [{"at": "x_lens", "color": "#FFE2B4", "r": 0.08, "k": 0.26}]}   # a soft glow at a bone, the fighter's own colour
+The rim pair now follows the plate: the lead rim on the side of the plate's "glow" (x < 0.42 left, > 0.58 right, else both)
+in its glow_color, so a staged rim_cool / rim_warm sets only the strength. Set "key_az" on the same side as the glow
+(225 = camera left, 135 = camera right). Measure and compare: art/tools/card_ab.py (run its "before" measure first).
 An image with no CARDS entry renders as before (the shared SPLASH, the idle_lobby portrait). Every card render
 (staged or not) now: renders the subject at 2x the card's pixels (render.CARD_SS) with 128 samples and Cycles'
 OpenImageDenoise (albedo + normal guides, CPU), reduced premultiplied; exposes it CARD_EXPOSURE (-0.5 EV) so a pale

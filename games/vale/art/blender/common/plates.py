@@ -113,6 +113,23 @@ DEFAULTS = {
     # at black, so the card window's mid-darks still reach `card_lo` while the deepest shadows stay deep. The
     # defaults (1.0 / 0.0) are the old toe.
     "toe_black": 1.0, "toe_foot": 0.0,
+    # ── the card finish v2 (closing round 2, every fighter's shared card major): one painted illustration instead of a
+    # filtered render pasted on a plate. finish() below; finish 1 = the old chain (subject Kuwahara, then over the plate).
+    "finish": 2,
+    "paint_mix": 0.32,          # the unified paint-over: this much soft Kuwahara over the whole composite, figure AND plate
+    "paint_mix_face": 0.08,     # ... eased to this over the face and hands (render meta points), so they stay clean
+    "paint_mix_plate": 0.45,    # ... times this over the plate (the plate is already brushed once in plate())
+    "paint_r2": 3,              # its radius (px at 1600; the portrait at 512 uses 0.7 of it)
+    "paint_q": 4.0,             # sector sharpness (higher = crisper strokes)
+    "amb_tint": 0.45,           # shadow side of the figure multiplied toward the plate's mean colour (0 = off)
+    "sun_tint": 0.16,           # a colour gradient across the figure from the plate's sun side, in the glow colour
+    "haze": 0.05,               # atmospheric depth: this much of the blurred plate over the figure (x 2 at the feet)
+    "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.25,  # light wrap of the plate over the figure's edge, full on the sun side
+    "sun_edge": 0.38,           # an extra glow-coloured edge on the sun side
+    "contact": 0.8, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
+    "shadow_tint": 0.24,        # shadow colour: the plate's own, this bright
+    "shared_light": True,       # the render's rim pair comes from the plate's sun side and colour (art_light)
+    "fx": [],                   # optional soft glows at a bone: {"at": bone, "color": hex, "r": fraction of the height, "k": strength}
 }
 
 
@@ -243,7 +260,40 @@ def art_light(cfg: dict, light: dict, p: dict) -> tuple[dict, dict]:
     ca = dict(cfg)
     ca["rim_cool"] = float(cfg.get("rim_cool", 1.0)) * float(p["rim_cool"])
     ca["rim_warm"] = float(cfg.get("rim_warm", 1.0)) * float(p["rim_warm"])
+    if int(p.get("finish", 1)) >= 2 and p.get("shared_light", True):
+        # the plate decides the light: the lead rim on its low-sun side in its glow colour, the off rim dim in the plate's
+        # sky colour, and the world fill tinted with the plate's own mean colour (a staged rim_cool / rim_warm no longer
+        # picks the side; a staged "fill_tint" still wins through plates.json / the card's "plate")
+        pl = plate_light(p)
+        lead, off = pl["lead"], pl["off"]
+        k = max(float(cfg.get("rim_cool", 1.0)), float(cfg.get("rim_warm", 1.0)), 1.0)
+        ca["rim_left_color"], ca["rim_right_color"] = (lead, off) if pl["side"] <= 0 else (off, lead)
+        ca["rim_cool"], ca["rim_warm"] = (1.5 * k, 0.4) if pl["side"] < 0 else ((0.4, 1.5 * k) if pl["side"] > 0 else (k, k))
+        if not p.get("fill_tint"):
+            la["tint"] = pl["ambient"]
     return ca, la
+
+
+_PL_CACHE: dict = {}
+
+
+def plate_light(p: dict) -> dict:
+    """The plate's light, sampled (finish v2): side (-1 screen left, 1 right, 0 behind: its low sun), lead (linear rgb:
+    the glow colour), ambient (the plate's mean colour, normalised to luma 1) and off (the mean colour, a sky rim)."""
+    key = (p.get("src"), p.get("sid"), str(p.get("glow")), str(p.get("tint")), p.get("glow_color"))
+    if key in _PL_CACHE:
+        return _PL_CACHE[key]
+    small = plate(p, "splash", 96, 54, tooth_on=False)[..., :3]
+    lin = _dec(small)
+    mean = lin.reshape(-1, 3).mean(axis=0)
+    amb = mean / max(1e-5, float(mean @ Y709))
+    amb = np.clip(amb, 0.3, 2.0)
+    gx = float(p["glow"][0])
+    side = -1 if gx < 0.42 else (1 if gx > 0.58 else 0)
+    r = {"side": side, "lead": hex_linear(p["glow_color"]), "ambient": tuple(float(v) for v in amb),
+         "off": tuple(float(v) for v in np.clip(amb * 0.9, 0.0, 1.5)), "mean_display": _enc(mean).tolist()}
+    _PL_CACHE[key] = r
+    return r
 
 
 # ── numpy image helpers (the same maths as imageops, without bpy) ───────────────────────────────
@@ -436,8 +486,9 @@ def window(p: dict, kind: str, W: int, H: int) -> tuple:
     return x0, y0, x0 + ww, y0 + wh
 
 
-def plate(p: dict, kind: str, w: int, h: int) -> np.ndarray:
-    """The painted dusk plate, (h, w, 4) display sRGB before the LUT (alpha 1)."""
+def plate(p: dict, kind: str, w: int, h: int, tooth_on: bool = True) -> np.ndarray:
+    """The painted dusk plate, (h, w, 4) display sRGB before the LUT (alpha 1). tooth_on False: no canvas tooth (the
+    finish v2 lays it over the whole composite)."""
     src = source(p["src"])
     SH, SW = src.shape[:2]
     x0, y0, x1, y1 = window(p, kind, SW, SH)
@@ -476,9 +527,15 @@ def plate(p: dict, kind: str, w: int, h: int) -> np.ndarray:
         lin = lin * (float(_dec(np.float32(p["median"]))) / max(1e-5, float(np.median(lin @ Y709))))
     # the shoulder: only small highlights (the lamps) pass the knee toward `cap`
     d = _shoulder(_enc(lin), float(p["knee"]), float(p["cap"]))
-    tooth = _noise(w, h, max(8, w // 6), zlib.crc32(p.get("sid", "x").encode()) % 997)
-    d = d * (1.0 - float(p["tooth"]) / 2 + float(p["tooth"]) * tooth[..., None])
+    if tooth_on:
+        d = canvas_tooth(d, p)
     return np.concatenate([np.clip(d, 0, 1), np.ones((h, w, 1), np.float32)], axis=2)
+
+
+def canvas_tooth(d: np.ndarray, p: dict) -> np.ndarray:
+    h, w = d.shape[:2]
+    tooth = _noise(w, h, max(8, w // 6), zlib.crc32(p.get("sid", "x").encode()) % 997)
+    return d * (1.0 - float(p["tooth"]) / 2 + float(p["tooth"]) * tooth[..., None])
 
 
 def splash_post(fg: np.ndarray, pl: np.ndarray, strength: float = 1.0) -> np.ndarray:
@@ -605,9 +662,11 @@ def median3(fg: np.ndarray, passes: int) -> np.ndarray:
     return out
 
 
-def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
+def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | None = None) -> np.ndarray:
     """Subject (straight RGBA, display sRGB, at the output size) over its plate, the post (x `post`: the fighter's
-    SPLASH "post" switch), the LUT."""
+    SPLASH "post" switch), the LUT. finish 2 (default): figure and plate become one picture (see finish2)."""
+    if int(p.get("finish", 1)) >= 2:
+        return finish2(fg, p, kind, post, meta)
     h, w = fg.shape[:2]
     pl = plate(p, kind, w, h)
     fg = median3(fg.astype(np.float32), int(p.get("sub_median", 0)))
@@ -620,6 +679,323 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0) -> np.ndarray:
         comp[..., :3] = np.clip(gradelib().apply_lut(comp[..., :3], L, "trilinear"), 0, 1).astype(np.float32)
     if kind == "splash" and p.get("card_lo_q") is not None:
         comp, _s = card_floor(comp, p)
+    return comp
+
+
+# ── finish v2: one painted picture ───────────────────────────────────────────────────────────────
+def split_shadow(fg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The raw pass's film alpha holds the figure AND the shadow catcher (Cycles writes the catcher black, rgb 0). Returns
+    (figure RGBA with the figure's own alpha, shadow alpha h x w): the shadow is laid on the plate by ground_shadow, so
+    the catcher's frame-wide band never reaches the card."""
+    a = fg[..., 3]
+    m = fg[..., :3].max(axis=2)
+    t = np.clip((m - 0.012) / 0.05, 0.0, 1.0)
+    t = t * t * (3 - 2 * t)
+    af = a * t
+    out = fg.copy()
+    out[..., 3] = af
+    return out, np.clip(a - af, 0.0, 1.0).astype(np.float32)
+
+
+_FFTK: dict = {}
+
+
+def soft_kuwahara(rgb: np.ndarray, radius: float, q: float = 6.0, sectors: int = 8) -> np.ndarray:
+    """The generalized (smooth-sector) Kuwahara: `sectors` overlapping gaussian-windowed sectors around each pixel, their
+    means weighted by inverse variance^(q/2). The box Kuwahara's hard 4-quadrant switch is what stair-steps faces; here
+    every weight is continuous, so strokes form without block edges. numpy FFT only (Blender's python runs this too)."""
+    h, w = rgb.shape[:2]
+    r = max(2, int(round(radius)))
+    key = (h, w, r, sectors)
+    if key not in _FFTK:
+        yy, xx = np.mgrid[-r:r + 1, -r:r + 1].astype(np.float64)
+        d2 = xx * xx + yy * yy
+        ang = np.arctan2(yy, xx)
+        g = np.exp(-d2 / (2 * (0.55 * r) ** 2)) * (d2 <= (r + 0.5) ** 2)
+        ks = []
+        for i in range(sectors):
+            th = 2 * np.pi * i / sectors
+            ca = np.cos(ang - th)
+            win = np.clip((ca - np.cos(np.pi / sectors) * 0.35) / (1 - np.cos(np.pi / sectors) * 0.35), 0.0, 1.0) ** 2
+            win[r, r] = 1.0                                  # the centre pixel belongs to every sector
+            kk = g * win
+            kk = kk / kk.sum()
+            pad = np.zeros((h, w), np.float64)
+            pad[:kk.shape[0], :kk.shape[1]] = kk
+            pad = np.roll(np.roll(pad, -r, axis=0), -r, axis=1)
+            ks.append(np.fft.rfft2(pad))
+        _FFTK[key] = ks
+    F = lambda a: np.fft.rfft2(a)  # noqa: E731
+    I = lambda a: np.fft.irfft2(a, s=(h, w))  # noqa: E731
+    src = rgb.astype(np.float64)
+    L = src @ Y709.astype(np.float64)
+    fc = [F(src[..., c]) for c in range(3)]
+    fl, fl2 = F(L), F(L * L)
+    acc = np.zeros((h, w, 3), np.float64)
+    tot = np.zeros((h, w), np.float64)
+    for Kf in _FFTK[key]:
+        ml = I(fl * Kf)
+        v = np.maximum(I(fl2 * Kf) - ml * ml, 1e-9)
+        wt = v ** (-q / 2.0)
+        tot += wt
+        for c in range(3):
+            acc[..., c] += wt * I(fc[c] * Kf)
+    return np.clip(acc / tot[..., None], 0.0, 1.0).astype(np.float32)
+
+
+def _pt(meta: dict | None, name: str):
+    pts = (meta or {}).get("pts") or {}
+    v = pts.get(name)
+    return (float(v[0]), float(v[1])) if v else None
+
+
+def _figure_box(af: np.ndarray):
+    rows = np.where((af > 0.8).any(axis=1))[0]
+    cols = np.where((af > 0.8).any(axis=0))[0]
+    if len(rows) == 0:
+        return None
+    return int(rows[0]), int(rows[-1]), int(cols[0]), int(cols[-1])
+
+
+def face_mask(af: np.ndarray, meta: dict | None, kind: str) -> np.ndarray:
+    """1 over the face and hands (smooth ellipses from the render's bone points; without meta: the top of the figure)."""
+    h, w = af.shape
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    box = _figure_box(af)
+    m = np.zeros((h, w), np.float32)
+    if box is None:
+        return m
+    y0, y1, _c0, _c1 = box
+    fh = max(8.0, float(y1 - y0))
+    he = _pt(meta, "head")
+    ne = _pt(meta, "neck")
+    if he is not None:
+        cx, cy = he[0] * w, he[1] * h
+        rr = max(0.05 * fh, abs(he[1] - (ne[1] if ne else he[1] + 0.05)) * h * 1.25) if kind == "splash" else 0.34 * h
+    else:
+        cx, cy = 0.5 * w if kind == "portrait" else float(xx[af > 0.8].mean()), y0 + 0.11 * fh
+        rr = 0.12 * fh if kind == "splash" else 0.34 * h
+    pts = [(cx, cy, rr)]
+    for n in ("hand.L", "hand.R"):
+        pp = _pt(meta, n)
+        if pp is not None:
+            pts.append((pp[0] * w, pp[1] * h, rr * 0.55))
+    for (px, py, r) in pts:
+        d2 = ((xx - px) ** 2 + (yy - py) ** 2) / (r * r)
+        m = np.maximum(m, np.clip(1.25 - d2 * 1.25, 0.0, 1.0))
+    return m * np.clip(af, 0.0, 1.0)
+
+
+def _gauss1(arr: np.ndarray, sigma: float, axis: int) -> np.ndarray:
+    """A 1D gaussian along `axis`."""
+    r = max(1, int(sigma * 3))
+    x = np.arange(-r, r + 1, dtype=np.float32)
+    k = np.exp(-(x * x) / (2 * sigma * sigma))
+    k /= k.sum()
+    pad = [(0, 0)] * arr.ndim
+    pad[axis] = (r, r)
+    p = np.pad(arr, pad, mode="edge")
+    acc = np.zeros_like(arr)
+    for i, w in enumerate(k):
+        sl = [slice(None)] * arr.ndim
+        sl[axis] = slice(i, i + arr.shape[axis])
+        acc += w * p[tuple(sl)]
+    return acc
+
+
+def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, meta: dict | None) -> np.ndarray:
+    """The plate darkened where the figure stands (finish v2, splash): a CONTACT shadow (the feet's own mask, blurred
+    flat) so no foot floats, the renderer's real catcher shadow eased out with distance from the feet (no frame-wide
+    band), and a soft CAST shadow: the figure's mask laid flat on the ground plane, away from the plate's sun."""
+    h, w = af.shape
+    k = w / 1600.0
+    box = _figure_box(af)
+    if box is None:
+        return pl
+    y0, y1, c0, c1 = box
+    fh = max(8.0, float(y1 - y0))
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    # the feet: the mask's lowest 4 % of the figure; their centre
+    feet = af * ((yy >= y1 - 0.04 * fh) * 1.0).astype(np.float32)
+    if float(feet.sum()) < 4:
+        return pl
+    fx = float((feet * xx).sum() / feet.sum())
+    # contact: the line under the soles (each foot column's lowest pixel), spread into flat ellipses on the ground, so it
+    # shows round the feet instead of hiding behind them
+    sole = np.zeros((h, w, 1), np.float32)
+    band = max(2, int(round(3.0 * k)))
+    for col in np.where(feet.max(axis=0) > 0.5)[0]:
+        ys = np.where(af[:, col] > 0.5)[0]
+        if len(ys):
+            sole[ys[-1]:min(h, ys[-1] + band), col] = 1.0
+    c = _gauss1(_gauss1(sole, 14.0 * k, 1), 5.0 * k, 0)[..., 0]
+    c2 = _gauss1(_gauss1(sole, 42.0 * k, 1), 11.0 * k, 0)[..., 0]
+    c, c2 = c / max(1e-4, float(c.max())), c2 / max(1e-4, float(c2.max()))
+    contact = np.clip(0.8 * c + 0.45 * c2, 0.0, 1.0) * float(p.get("contact", 0.62))
+    # the real catcher shadow, kept close to the figure
+    dx = (xx - fx) / (0.55 * fh)
+    dy = (yy - y1) / (0.20 * fh)
+    fall = np.clip(1.0 - (dx * dx + dy * dy), 0.0, 1.0) ** 1.5
+    real = gaussian((shadow * fall)[..., None], 3.0 * k)[..., 0] * float(p.get("shadow_real", 0.45))
+    # cast: for a ground row y below the feet, the figure's row y0 + (y - y1) / squash, sheared away from the sun
+    side = plate_light(p)["side"]
+    gdir = 1.0 if side <= 0 else -1.0
+    squash = float(p.get("shadow_len", 0.18))
+    t = np.clip((yy - y1) / max(1.0, squash * fh), 0.0, 1.0)
+    src_y = y1 - (yy - y1) / max(1e-3, squash)
+    src_x = xx - gdir * (yy - y1) * 0.9
+    mask = (src_y >= 0) & (yy > y1 - 2)
+    H, W = af.shape
+    sx = np.clip(src_x, 0, W - 1)
+    sy = np.clip(src_y, 0, H - 1)
+    x0 = np.floor(sx).astype(int); y0i = np.floor(sy).astype(int)
+    x1 = np.minimum(x0 + 1, W - 1); y1i = np.minimum(y0i + 1, H - 1)
+    fxx = sx - x0; fyy = sy - y0i
+    cast = (af[y0i, x0] * (1 - fxx) * (1 - fyy) + af[y0i, x1] * fxx * (1 - fyy) +
+            af[y1i, x0] * (1 - fxx) * fyy + af[y1i, x1] * fxx * fyy) * mask
+    cast = gaussian(cast[..., None], 5.0 * k)[..., 0]
+    cast = cast * (1.0 - t * 0.85) * float(p.get("cast", 0.34))
+    s = np.clip(1.0 - (1.0 - contact) * (1.0 - real) * (1.0 - cast), 0.0, 0.92)
+    # the shadow keeps the plate's own colour (a darker, cooler plate), never a black stamp
+    tint = np.array(plate_light(p)["ambient"], np.float32)
+    tint = tint / max(1e-5, float(tint.max())) * float(p.get("shadow_tint", 0.32))
+    lin = _dec(pl[..., :3])
+    lin = lin * (1.0 - s[..., None] * (1.0 - tint))
+    out = pl.copy()
+    out[..., :3] = _enc(lin)
+    return out
+
+
+def shared_figure_light(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str) -> np.ndarray:
+    """The figure takes the plate's light (linear): the shadow side multiplied toward the plate's mean colour, a colour
+    gradient from the sun side in the glow colour, a touch of the plate's blurred colour as atmosphere (more at the feet)."""
+    af = fg[..., 3]
+    if float(af.max()) <= 0:
+        return fg
+    h, w = af.shape
+    lin = _dec(fg[..., :3])
+    L = (lin @ Y709)[..., None]
+    pl_info = plate_light(p)
+    amb = np.array(pl_info["ambient"], np.float32)
+    amb = amb / max(1e-5, float(amb @ Y709))
+    shade = np.clip(1.0 - _enc(L) * 1.5, 0.0, 1.0) ** 1.4
+    lin = lin * (1.0 + (amb - 1.0) * float(p.get("amb_tint", 0.45)) * shade)
+    # sun-side colour gradient across the figure
+    box = _figure_box(af)
+    if box is not None and pl_info["side"] != 0:
+        _y0, _y1, c0, c1 = box
+        xx = np.linspace(0, w - 1, w, dtype=np.float32)[None, :]
+        gg = np.clip((xx - c0) / max(1.0, float(c1 - c0)), 0.0, 1.0)
+        toward = (1.0 - gg) if pl_info["side"] < 0 else gg
+        lead = np.array(pl_info["lead"], np.float32)
+        lead = lead / max(1e-5, float(lead @ Y709))
+        lin = lin * (1.0 + (lead - 1.0) * float(p.get("sun_tint", 0.16)) * toward[..., None])
+    # atmosphere
+    pb = gaussian(pl, 18.0 * (w / 1600.0))[..., :3]
+    yy = np.linspace(0, 1, h, dtype=np.float32)[:, None]
+    haze = float(p.get("haze", 0.05)) * (1.0 + 1.0 * np.clip((yy - 0.55) / 0.45, 0.0, 1.0) if kind == "splash" else 1.0)
+    d = _enc(np.clip(lin, 0.0, 1.0))
+    d = d + (pb - d) * (np.broadcast_to(haze, (h, 1)).reshape(h, 1, 1) if np.ndim(haze) else haze)
+    out = fg.copy()
+    out[..., :3] = np.clip(d, 0.0, 1.0)
+    return out
+
+
+def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: float = 1.0) -> np.ndarray:
+    """The composite with a directional light wrap: the plate's blurred colour bleeds over the figure's edge, full on the
+    sun side and `wrap_off` of it on the far side, a glow-coloured sun edge, bloom and a gentle vignette."""
+    h, w = fg.shape[:2]
+    k = w / 1600.0 if kind == "splash" else w / 512.0 * 0.7
+    a = fg[..., 3:4]
+    comp = np.concatenate([fg[..., :3] * a + pl[..., :3] * (1 - a), np.ones_like(a)], axis=2)
+    if strength <= 0:
+        return comp
+    ab = gaussian(fg[..., 3:4], float(p.get("wrap_px", 4.0)) * k)
+    band = np.clip(a * (1.0 - ab) * 2.4, 0.0, 1.0)
+    pb = gaussian(pl, 14.0 * k)[..., :3]
+    gy, gx = np.gradient(ab[..., 0])
+    nl = np.sqrt(gx * gx + gy * gy) + 1e-5
+    pli = plate_light(p)
+    sx = -1.0 if pli["side"] < 0 else (1.0 if pli["side"] > 0 else 0.0)
+    if sx != 0.0:
+        lit = np.clip(-gx / nl * sx * 0.75 + 0.05 + 0.2 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)
+    else:
+        lit = np.clip(0.55 + 0.45 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)
+    off = float(p.get("wrap_off", 0.25))
+    side_w = (off + (1.0 - off) * lit)[..., None]
+    wr = np.clip(float(p.get("wrap", 0.32)) * strength * band * side_w, 0.0, 1.0)
+    comp[..., :3] = comp[..., :3] * (1.0 - wr) + pb * wr
+    # the sun edge: a thin glow-coloured line on the lit side
+    lead = _enc(np.array(pli["lead"], np.float32))
+    ab2 = gaussian(fg[..., 3:4], 2.0 * k)
+    thin = np.clip(a * (1.0 - ab2) * 3.0, 0.0, 1.0) * lit[..., None]
+    comp[..., :3] = comp[..., :3] + (1.0 - comp[..., :3]) * thin * float(p.get("sun_edge", 0.38)) * strength * lead
+    # bloom and vignette (the old post, unchanged)
+    lum = comp[..., :3] @ Y709
+    hi = np.clip((lum - 0.82) / 0.18, 0.0, 1.0)[..., None] * comp[..., :3]
+    hi4 = np.concatenate([hi, np.ones_like(hi[..., :1])], axis=2)
+    bloom = gaussian(hi4, 16.0 * k)[..., :3]
+    comp[..., :3] = np.clip(comp[..., :3] + 0.16 * strength * bloom, 0.0, 1.0)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    dx, dy = (xx / w - 0.62) / 0.75, (yy / h - 0.52) / 0.62
+    vig = 1.0 - 0.16 * strength * np.clip(dx * dx + dy * dy, 0.0, 1.6) ** 1.3
+    comp[..., :3] *= vig[..., None]
+    comp[..., 3] = 1.0
+    return comp
+
+
+def fx_layer(comp: np.ndarray, p: dict, meta: dict | None) -> np.ndarray:
+    """Soft additive glows at bones from the fighter's own colours (CARDS "plate": {"fx": [...]}; screen blend)."""
+    fx = p.get("fx") or []
+    if not fx or not meta:
+        return comp
+    h, w = comp.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    out = comp.copy()
+    for f in fx:
+        pt = _pt(meta, f.get("at", ""))
+        if pt is None:
+            continue
+        r = float(f.get("r", 0.08)) * h
+        g = np.exp(-((xx - pt[0] * w) ** 2 + (yy - pt[1] * h) ** 2) / (2 * r * r))
+        col = _hex(f.get("color", "#FFFFFF"))
+        out[..., :3] = 1.0 - (1.0 - out[..., :3]) * (1.0 - float(f.get("k", 0.3)) * g[..., None] * col)
+    return out
+
+
+def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | None = None) -> np.ndarray:
+    """The card finish v2. No filter on the figure alone: the render stays clean and antialiased; it is graded to the
+    plate's dusk (the same exposure logic as v1), takes the plate's light, stands on a contact and cast shadow, and the
+    one gentle paint-over (soft Kuwahara) and canvas tooth are laid on the finished composite, figure and plate
+    together, so they share a surface; face and hands keep only a trace of it."""
+    h, w = fg.shape[:2]
+    fg = fg.astype(np.float32)
+    fig, shadow = split_shadow(fg) if kind == "splash" else (fg, np.zeros((h, w), np.float32))
+    if int(p.get("sub_median", 0)) > 0:
+        fig = median3(fig, int(p["sub_median"]))
+    pl = plate(p, kind, w, h, tooth_on=False)
+    fig, _k = subject_grade(fig, p, kind)
+    fig = shared_figure_light(fig, pl, p, kind)
+    if kind == "splash":
+        pl = ground_shadow(pl, fig[..., 3], shadow, p, meta)
+    comp = integrate2(fig, pl, p, kind, post * float(p["post"] if kind == "splash" else p["post_p"]))
+    comp = fx_layer(comp, p, meta)
+    L = lut()
+    if L is not None:
+        comp[..., :3] = np.clip(gradelib().apply_lut(comp[..., :3], L, "trilinear"), 0, 1).astype(np.float32)
+    if kind == "splash" and p.get("card_lo_q") is not None:
+        comp, _s = card_floor(comp, p)
+    # the unified paint-over: soft Kuwahara mixed over the whole picture, eased over the face and hands
+    r = float(p.get("paint_r2", 5)) * (w / 1600.0 if kind == "splash" else 0.7 * w / 512.0)
+    mx = float(p.get("paint_mix", 0.55))
+    if mx > 0 and r >= 1.0:
+        painted = soft_kuwahara(comp[..., :3], r, float(p.get("paint_q", 6.0)))
+        fm = face_mask(fig[..., 3], meta, kind)[..., None]
+        m = mx + (float(p.get("paint_mix_face", 0.08)) - mx) * fm
+        m = m * (float(p.get("paint_mix_plate", 0.45)) + (1.0 - float(p.get("paint_mix_plate", 0.45))) * fig[..., 3:4])
+        comp[..., :3] = comp[..., :3] * (1.0 - m) + painted * m
+    comp[..., :3] = np.clip(canvas_tooth(comp[..., :3], p), 0.0, 1.0)
+    comp[..., 3] = 1.0
     return comp
 
 
@@ -680,6 +1056,21 @@ def keep_raw(src_png: str, sid: str, kind: str, preview: bool = False) -> str:
     return dst
 
 
+def keep_meta(sid: str, kind: str, preview: bool, meta: dict) -> None:
+    """The render's screen-space notes (normalised 0..1 bone points: head, neck, hands, fx bones) beside the kept pass."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(raw_path(sid, kind, preview) + ".json", "w", encoding="utf-8") as f:
+        json.dump(meta, f)
+
+
+def load_meta(sid: str, kind: str, preview: bool = False) -> dict | None:
+    fp = raw_path(sid, kind, preview) + ".json"
+    if not os.path.isfile(fp):
+        return None
+    with open(fp, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def fg_for(raw: np.ndarray, kind: str, size: int | None = None) -> np.ndarray:
     """The raw pass as the subject layer: the splash is used as rendered; the portrait renders at 2x (1.5x before
     the CW5 card pipeline) and is reduced premultiplied to `size` (512) like render.fighter_renders."""
@@ -709,7 +1100,7 @@ def compose_to(sid: str, kind: str, preview: bool = False) -> str | None:
     size = None
     if kind == "portrait":
         size = 512 if not preview else int(round(raw.shape[0] / 2.0))
-    img = finish(fg_for(raw, kind, size), p, kind)
+    img = finish(fg_for(raw, kind, size), p, kind, meta=load_meta(sid, kind, preview))
     return save_png(image_path(sid, kind, preview), img)
 
 

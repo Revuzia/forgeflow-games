@@ -241,19 +241,21 @@ ATLAS_SOFTEN = 0.60       # fix pass 2: 0.55 -> 0.60 (GLB headroom: fp2 build 1 
 #   Shadeprint  Mote Toss's crouched wind-up (the cup tipped and held) in an ink-violet dusk, a violet rim
 CARDS = {
     "sukri": {
-        "splash": {"clip": "victory", "t": 0.96, "yaw": 48.0, "pitch": -4.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
-                   "key_az": 220.0, "key_el": 24.0, "key_color": "#E8CFB4", "sun": 1.6, "rim_cool": 1.2,
+        "splash": {"clip": "victory", "t": 0.96, "yaw": 22.0, "pitch": -3.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
+                   "pose": [{"bone": "head", "rot": [-6.0, 0.0, 0.0]}],
+                   "key_az": 150.0, "key_el": 24.0, "key_color": "#E8CFB4", "sun": 1.6, "rim_cool": 1.2,
                    "rim_warm": 0.5, "bounce": 0.35, "bounce_color": "#E2B48A", "accent": 2.8,
                    "focal": [{"at": "x_cup", "az": 180.0, "el": 5.0, "dist": 0.05, "color": "#FFE2A8", "power": 14.0,
                               "size": 0.04},
                              {"at": "head", "az": 180.0, "el": -32.0, "dist": 0.40, "color": "#FFD69A",
                               "power": 30.0, "size": 0.12}]},
         "portrait": {"yaw": 40.0},
-        "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26},
+        "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26,
+                  "fx": [{"at": "x_cup", "color": "#FFE2A8", "r": 0.06, "k": 0.34}]},
     },
     "sukri_stillwater": {
         # (closing round 2: the recall's cup glared over the face: the Mote Toss, the face clear)
-        "splash": {"clip": "cast_a3", "t": 0.50, "yaw": -10.0, "pitch": 1.0, "lens": 62.0, "fill": 0.84, "x": 0.72,
+        "splash": {"clip": "cast_ult", "t": 0.5, "yaw": -10.0, "pitch": 1.0, "lens": 62.0, "fill": 0.84, "x": 0.72,
                    "exposure": -0.9, "key_az": 140.0, "key_el": 32.0, "key_color": "#C4DCDA", "sun": 2.2, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 2.2,
                    "focal": [{"at": "x_cup", "az": 180.0, "el": 0.0, "dist": 0.05, "color": "#CFF2EA", "power": 10.0,
@@ -267,10 +269,11 @@ CARDS = {
                                {"at": "head", "az": 175.0, "el": -20.0, "dist": 0.7, "color": "#D6F0EA", "power": 8.0,
                                 "size": 0.3}]},
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
-                  "glow_color": "#A9D2CC", "cx": 0.42},
+                  "glow_color": "#A9D2CC", "cx": 0.42,
+                  "fx": [{"at": "x_cup", "color": "#CFF2EA", "r": 0.06, "k": 0.32}]},
     },
     "sukri_shadeprint": {
-        "splash": {"clip": "cast_a1", "t": 0.28, "yaw": 26.0, "pitch": -6.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
+        "splash": {"clip": "cast_a1", "t": 0.42, "yaw": 26.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
                    "exposure": -1.0,
                    "key_az": 240.0, "key_el": 30.0, "key_color": "#D9CCF0", "sun": 2.0, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.5, "bounce_color": "#7C6CB0", "accent": 2.4,
@@ -286,7 +289,8 @@ CARDS = {
                                {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#FFD6A8", "power": 12.0,
                                 "size": 0.3}]},
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "glow": [0.30, 0.50, 0.40, 0.08],
-                  "glow_color": "#B7A6F0", "cx": 0.60},
+                  "glow_color": "#B7A6F0", "cx": 0.60,
+                  "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}]},
     },
 }
 SKINS: list = [

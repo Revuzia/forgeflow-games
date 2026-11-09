@@ -84,7 +84,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.9, "x": 0.6
 # the frame's room on the lens side) so the lens rim enters the edge and catches the light (brief section 10-11).
 CARDS = {
     "kemdo": {
-        "splash": {"clip": "victory", "t": 0.47, "yaw": 26.0, "pitch": -6.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "victory", "t": 0.47, "yaw": 26.0, "pitch": -2.0, "lens": 50.0, "fill": 0.94, "x": 0.70,
+                   "box_top": 2.95, "pose": [{"bone": "head", "rot": [18.0, 0.0, 0.0]}],
                    "key_az": 215.0, "key_el": 16.0, "key_color": "#FFD7A6", "sun": 3.2, "rim_cool": 0.6,
                    "rim_warm": 1.6, "bounce": 0.55, "bounce_color": "#E9B88A", "accent": 1.6,
                    "focal": [{"at": "x_lens", "az": 200.0, "el": 25.0, "dist": 0.7, "color": "#FFE2B4",
@@ -92,10 +93,12 @@ CARDS = {
                              {"at": "head", "az": 160.0, "el": 10.0, "dist": 0.8, "color": "#FFE0C0", "power": 20.0,
                               "size": 0.25}]},
         "portrait": {"clip": "idle", "t": 0.0, "yaw": 26.0, "lens": 70.0, "fill": 0.70, "x": 0.62},
-        "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890"},
+        "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890",
+                  "fx": [{"at": "x_lens", "color": "#FFE2B4", "r": 0.08, "k": 0.26}]},
     },
     "kemdo_highrim": {
-        "splash": {"clip": "cast_a3", "t": 0.52, "yaw": 18.0, "pitch": -5.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+        "splash": {"clip": "cast_a3", "t": 0.52, "yaw": 18.0, "pitch": -2.0, "lens": 50.0, "fill": 0.9, "x": 0.70,
+                   "box_top": 2.6, "pose": [{"bone": "head", "rot": [30.0, 0.0, 0.0]}],
                    "key_az": 175.0, "key_el": 58.0, "key_color": "#FFF4E4", "sun": 3.6, "rim_cool": 1.6,
                    "rim_warm": 0.5, "bounce": 0.45, "bounce_color": "#E8DCC6", "accent": 1.4, "exposure": -0.6,
                    "focal": [{"at": "x_lens", "az": 150.0, "el": 45.0, "dist": 0.6, "color": "#FFFFFF",
@@ -103,7 +106,8 @@ CARDS = {
                              {"at": "head", "az": 180.0, "el": 20.0, "dist": 0.8, "color": "#FFF0DC", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"clip": "victory", "t": 0.95, "yaw": 34.0, "lens": 70.0, "fill": 0.86, "x": 0.58},
-        "plate": {"glow": [0.50, 0.35, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.8},
+        "plate": {"glow": [0.50, 0.35, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.8,
+                  "fx": [{"at": "x_lens", "color": "#FFFFFF", "r": 0.08, "k": 0.22}]},
     },
     "kemdo_long_evening": {
         "splash": {"clip": "channel", "t": 0.50, "yaw": 32.0, "pitch": -4.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
@@ -114,7 +118,8 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 5.0, "dist": 0.8, "color": "#FFC890", "power": 24.0,
                               "size": 0.3}]},
         "portrait": {"yaw": 26.0, "lens": 70.0, "fill": 0.80, "x": 0.56},
-        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+        "plate": {"glow": [0.72, 0.62, 0.45, 0.10], "glow_color": "#F0A866",
+                  "fx": [{"at": "x_lens", "color": "#FFB46A", "r": 0.08, "k": 0.28}]},
     },
 }
 TEXTURE_SIZE = 2048
