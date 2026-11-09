@@ -30,3 +30,9 @@ ages, story, epithets, Generations, views) -> C3 legends.ts (wordFor, legends, t
 - RUNS: script1.log (scripted 1-4, 32 y; seed 1 had the old age naming), unatt1 KILLED (silence<->trust flip-flop every
   3 y, 17 ages on seed 1 -> FIX: a condition age holds while its condition holds; numbering only for place-named kinds).
   unatt2.log (unattended 1-8, 60 y, the fix) queued 20:13Z.
+- CONTAINER RESTART ~20:18Z: src/tests intact (tsc clean). unatt2 got seed 1 only: 13 ages (B1 >= 3 OK; a moon's
+  `making` was counted -> probe now filters planet 0). script1 seeds 1-3: scriptedOrder flood->covenant->tower->scattering
+  TRUE 3/3, story max 8 sentences/age, generations <= 12, ms 3-5, legends 11-12 per run (all gen 1 within 32 y; gen 2
+  unit-tested), legend max 97 chars, told lines 4. The scripted flood is `covenant.offer` (debug "as if a great flood"):
+  a real god flood on babel breaks the host's pride (harm) and the tower then never comes; logged in the probe header.
+- arc-covenant 7/7 (+ free text). RUNS relaunched: unatt3a.log (unattended 1-4 + scripted 4), unatt3b.log (5-8).

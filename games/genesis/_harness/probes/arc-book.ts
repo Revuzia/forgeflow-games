@@ -65,7 +65,7 @@ while (sim.u.tick < end) {
     log.push(`y${yr.toFixed(2)} defiance.set ${defTown}`); stage = 5;
   }
 }
-const ages = (sim.query('ages', {}) as { kind: string; name: string; begun: number; ended: number }[]).filter((a) => true);
+const ages = (sim.query('ages', { planet: p.id }) as { kind: string; name: string; begun: number; ended: number }[]);
 const t1 = performance.now();
 const story = sim.query('story', {}) as { title: string; opening: string; people: { line: string }; god: { line: string; epithet: string }; ages: { name: string; paragraphs: string[]; told?: string }[]; generations: string[]; promises: string[]; closing: string };
 const storyMs = Math.round((performance.now() - t1) * 10) / 10;

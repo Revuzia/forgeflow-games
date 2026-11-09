@@ -1,0 +1,112 @@
+{
+ "_doc": "B-render live (babel seed 1): hurl under a repainted god storm (>= 4 hurl signs) at 50/22 m + 2.5 s later; the idol at 14/40 m; a curse knot at dusk (<= 3 days).",
+ "shots": [
+  {
+   "name": "b3-hurl-50",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "G.hold('ui'); G.toastLife(600000); document.getElementById('boot')?.remove(); const t0 = performance.now(); const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv;",
+    "let big = null; for (const s of pv().settlements) { const n = [...pv().agents.group].filter((g) => g === s.id).length; if (!big || n > big.n) big = { id: s.id, n, pos: s.pos }; } const sid = big.id; window.__sid = sid; const pos = () => pv().settlements.find((s) => s.id === sid).pos;",
+    "await G.cmd({ k: 'set', path: 'disasters.natural', value: 0 }); await G.cmd({ k: 'defiance.set', settlement: sid, value: 0.8 }); await G.cmd({ k: 'pride.set', settlement: sid, value: 0.7 });",
+    "const P = pos(); const R0 = pv().ground?.radius ?? 3000; await G.cmd({ k: 'weather.paint', kind: 'thunderstorm', pos: [...P], radius: 900, duration: 6 * 1440, pinned: true });",
+    "let hurl = 0, hrs = 0; const cnt = (v) => { const A = pv().agents; let n = 0; for (let i = 0; i < A.count; i++) if (A.group[i] === sid && A.heart && A.heart[i] === v) n++; return n; };",
+    "for (hrs = 0; hrs < 24 * 9 && hurl < 4; hrs++) { if (hrs % 48 === 47) await G.cmd({ k: 'weather.paint', kind: 'thunderstorm', pos: [...pos()], radius: 900, duration: 3 * 1440, pinned: true }); await G.step(60); hurl = cnt(5); } await G.frames(1);",
+    "const A = pv().agents, R = pv().ground?.radius ?? 3000; const out = []; for (let i = 0; i < A.count; i++) { const s = A.heart ? A.heart[i] : 0; if (s === 5 && !(A.flags[i] & 256)) out.push(i); } let best = -1, bn = -1; for (const i of out) { let n = 0; for (const j of out) { const d = Math.acos(Math.min(1, A.pos[i*3]*A.pos[j*3] + A.pos[i*3+1]*A.pos[j*3+1] + A.pos[i*3+2]*A.pos[j*3+2])) * R; if (d < 25) n++; } if (n > bn) { bn = n; best = i; } } const tgt = best >= 0 ? { kind: 'agent', id: A.id[best] } : { kind: 'settlement', id: sid };",
+    "window.__tgt = tgt; G.hold(false); await G.camera({ mode: 'orbit', target: tgt, dist: 50, tilt: 66, yaw: 30, fov: 50 }); await G.frames(3); G.hold(true);",
+    "for (let i = 0; i < 10; i++) { F.advance(0.3); await G.frames(1); }",
+    "return { secs: Math.round((performance.now() - t0) / 1000), hrs, hurl, knot: bn, defiant: pv().settlements.find((s) => s.id === sid)?.defiant, hurlers: F.fx.vis.life.crowds.hurlers.length / 5, arcs: F.fx.defiance.stats, weather: pv().weather.map((w) => w.kind) };"
+   ]
+  },
+  {
+   "name": "b3-hurl-25",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: window.__tgt, dist: 22, tilt: 72, yaw: 50, fov: 50 }); await G.frames(3); G.hold(true); for (let i = 0; i < 8; i++) { F.advance(0.3); await G.frames(1); }",
+    "return { hurlers: F.fx.vis.life.crowds.hurlers.length / 5, arcs: F.fx.defiance.stats };"
+   ]
+  },
+  {
+   "name": "b3-hurl-after",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: window.__tgt, dist: 50, tilt: 66, yaw: 30, fov: 50 }); await G.frames(2); G.hold(true); F.advance(2.5); await G.frames(2);",
+    "return { note: 'same view 2.5 s of render time later: is a held bolt what bleaches the frame?' };"
+   ]
+  },
+  {
+   "name": "b3-idol",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "const before = new Set(pv().buildings.id); const r = await G.cmd({ k: 'settlement.build', settlement: sid, type: 'idol' }); await G.step(2); await G.frames(2);",
+    "let id = -1; const B = pv().buildings; for (let i = 0; i < B.count; i++) if (!before.has(B.id[i])) id = B.id[i];",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'building', id }, dist: 14, tilt: 75, yaw: 30, fov: 50, hour: 10 }); await G.frames(4); G.hold(true);",
+    "return { r: r.msg ?? JSON.stringify(r).slice(0, 200), id };"
+   ]
+  },
+  {
+   "name": "b3-idol-40",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "G.hold(false); const B = pv().buildings; await G.camera({ mode: 'orbit', target: { kind: 'building', id: B.id[B.count - 1] }, dist: 40, tilt: 66, yaw: 30, fov: 50, hour: 10 }); await G.frames(4); G.hold(true); return { ok: 1 };"
+   ]
+  },
+  {
+   "name": "b3-curse-dusk",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": true,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "await G.cmd({ k: 'weather.clear' }).catch(() => null); const cnt = () => { const A = pv().agents; let n = 0; for (let i = 0; i < A.count; i++) if (A.group[i] === sid && A.heart && A.heart[i] === 2 && !(A.flags[i] & 256)) n++; return n; };",
+    "await G.step(1440); let f = 0, it = 0; for (it = 0; it < 3 * 48 && f < 4; it++) { await G.step(30); await G.frames(1); f = cnt(); }",
+    "const A = pv().agents, R = pv().ground?.radius ?? 3000; const out = []; for (let i = 0; i < A.count; i++) { const s = A.heart ? A.heart[i] : 0; if (s === 2 && !(A.flags[i] & 256)) out.push(i); } let best = -1, bn = -1; for (const i of out) { let n = 0; for (const j of out) { const d = Math.acos(Math.min(1, A.pos[i*3]*A.pos[j*3] + A.pos[i*3+1]*A.pos[j*3+1] + A.pos[i*3+2]*A.pos[j*3+2])) * R; if (d < 25) n++; } if (n > bn) { bn = n; best = i; } } const tgt = best >= 0 ? { kind: 'agent', id: A.id[best] } : { kind: 'settlement', id: sid };",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: tgt, dist: 45, tilt: 66, yaw: 30, fov: 50 }); await G.frames(3); G.hold(true); F.advance(0.5); await G.frames(2);",
+    "return { it, fist: f, knot: bn, cal: JSON.stringify(G.state?.()?.calendar ?? null), defiant: pv().settlements.find((s) => s.id === sid)?.defiant };"
+   ]
+  }
+ ]
+}

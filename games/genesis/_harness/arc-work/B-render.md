@@ -26,3 +26,4 @@
   clothing + render-hearts + render-arc-defiance 11/11.
 - Container restarted ~19:2xZ (chains died). b-chain3: d3 (live hurl/curse/idol + bleach check), poses2 (b0b-*: each
   sign alone at 60 m tilt 58, mixed at low/ultra), flood10 (ultra).
+- 19:5xZ LOOKED AT b1-hurl-50/after (live babel, defiance 0.8 + painted storm, 48 h of 20-min steps): NO hurl (0 signs) - the sim chose curse (day 3, dusk toast) and IDOL (day 4, sim-raised, toast 'carved a god of its own'); 21 h night frame, no bolt -> no bleach. Retake with up to 9 days hourly + storm repaint. Container restarted 20:1xZ. 20:2xZ b-chain5: b-render-live.json (b3-*: hurl, idol, curse), poses2, flood10.
