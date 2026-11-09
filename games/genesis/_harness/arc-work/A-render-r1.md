@@ -179,3 +179,13 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 - LOOKED AT r1n-heart-dusk-near (16.75 h, 15 min after a bolt; signs 25 fear/11 pray of 49, 36 outdoors): many people out under the bolts, but the camera framed ~60 m: figures 40 px, the lookUp pose not readable. hearts3 (r1o-heart-dusk-close, 9 m) queued after chain19 (chain20).
 - GATE r1-check3 (14:21-14:59Z, load ~12): detban + typecheck clean, 861 tests 860 pass, 1 fail = ui-thumblate #832 (timing under load, ui lane; re-run focused 8/8 pass).
 - PERF base play (d2512fbc, load ~9-12): near 36.0/136.7, far 24.3/89.7 vs now near 27.3 & 22.7 / far 17.0 & 19.5 -> in play NOT worse (lower, within load noise). Lookdev: base far 34.0 near 34.5 vs now far 29.9 & 41.6, near 41.1 & 38.8 (noise +-25 %). No preset touched.
+- LOOKED AT r1o-heart-dusk-close (9 m, 16.75 h, 15 min after a bolt; sim signs 35 fear of 49, all outdoors): the town
+  is out in the open under the bolts; the near figures stand drawn in, arms close, a hand at the chest, faces up (the
+  lookUp pose from the SIM's MoverBlock.heart, not a stub). Readable at 9 m but SUBTLE at 888x500; walkers carry it
+  only in the upper body. The frame is bleached warm-white (bolt flash + snow/sand ground at low sun) - not a pose issue.
+## NEXT (stint 4)
+1. Optional: r1-render-flood9.json --only=r1m-flood-before,r1m-flood-warning,r1m-flood-warning-near-ultra (ultra not
+   shot; low/medium/high identical).
+2. Optional: make lookUp stronger at play distance (head further back + both hands up near the face) if the owner finds
+   it too subtle; look at the bolt-flash exposure at dusk (r1o is bleached).
+3. Full gate: next run should be clean (only fail was ui-thumblate timing under load 12).

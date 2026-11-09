@@ -73,3 +73,12 @@
 ## NEXT
 1. D5 (provoked form) fails numerically at memK 1 and 3 (see above); words pass. Lead call. Probe: B-sim-runs.sh pairs.
 2. D3 shot: UI/render lanes (lead).
+
+## Stint 3 (2026-11-09 ~15:00Z, lead ruling: memory scales the reaction to harm)
+- BUILT defiance.ts harmReaction (k = DEFY.reactK 0.5): witness fear x(1+k wf), trust loss x(1-k wm), jolt
+  x(1-k wf)(1+k wm); wm = mercy + 0.5 patience + 0.5 sign. ARC.md §0.4/§3.1/D5 and contract-changes updated. Test 15/15.
+- pairs4.log: defMean/fearMean/trustMean mercy vs wrath: s1 .237/.080, .141/.128, .219/.391 (def .16, trust .17) PASS;
+  s2 .016/.147, .138/.168, .690/.381 (def .13, trust .31) PASS; s3 .235/.203, .144/.177, .297/.267 FAIL (max .033);
+  s4 .093/.016, .083/.106, .453/.635 (trust .18) PASS -> 3/4 PASS. Words 4/4. CAVEAT: directions are not consistent
+  (the mercy arm has less trust on s1/s4, more on s2), so part of each gap is the arms drifting apart over 25 y.
+- RUNS: unatt3.log (D2 recheck), GATE check5.log (queued).
