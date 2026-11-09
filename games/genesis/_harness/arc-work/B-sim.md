@@ -67,3 +67,9 @@
   diverge in towns and population over 25 years, noise ~0.05-0.1. memK reverted to 1 (spec numbers): raising it bought
   nothing measurable. Lead call needed (e.g. memory scaling the reaction to harm itself, or a longer provocation).
 - GATE: check3.log queued (memK 1, prophet's word, probe changes).
+- check3.log 860/861: only tests/worker.test.ts pacing ("1000x runs 680 ticks/s") under load (render shots + my unatt2
+  probe in the other slots); passes alone 2/2. unatt2.log (8 seeds x 60 y, the new code): 0 acts on 8/8 (D2 kept).
+- GATE check4.log: npm run check 861/861 GREEN via slot.sh.
+## NEXT
+1. D5 (provoked form) fails numerically at memK 1 and 3 (see above); words pass. Lead call. Probe: B-sim-runs.sh pairs.
+2. D3 shot: UI/render lanes (lead).

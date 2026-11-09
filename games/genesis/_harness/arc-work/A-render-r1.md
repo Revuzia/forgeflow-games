@@ -177,3 +177,4 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 - PERF now #2 (05:xxZ, load 6-12): lookdev far 41.6/104.5, near 38.8/78.6; play near 22.7/48.5, far 19.5/29.5 (CPU work ms mean/p95). Base (d2512fbc) running next.
 - PERF base lookdev (d2512fbc): far 34.0/86.8, near 34.5/61.9. Container restarted again ~14:19Z before base play. 14:2xZ chain19 (hearts2, base play perf) + GATE r1-check3 (slot, log r1-check3.log).
 - LOOKED AT r1n-heart-dusk-near (16.75 h, 15 min after a bolt; signs 25 fear/11 pray of 49, 36 outdoors): many people out under the bolts, but the camera framed ~60 m: figures 40 px, the lookUp pose not readable. hearts3 (r1o-heart-dusk-close, 9 m) queued after chain19 (chain20).
+- GATE r1-check3 (14:21-14:59Z, load ~12): detban + typecheck clean, 861 tests 860 pass, 1 fail = ui-thumblate #832 (timing under load, ui lane; re-run focused 8/8 pass).
