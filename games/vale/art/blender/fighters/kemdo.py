@@ -85,7 +85,8 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.9, "x": 0.6
 CARDS = {
     "kemdo": {
         "splash": {"clip": "victory", "t": 0.47, "yaw": 26.0, "pitch": -2.0, "lens": 50.0, "fill": 0.94, "x": 0.70,
-                   "box_top": 2.95, "pose": [{"bone": "head", "rot": [18.0, 0.0, 0.0]}],
+                   "box_top": 2.95, "pose": [{"bone": "head", "rot": [18.0, 0.0, 0.0]},
+                                            {"bone": "upper_arm.L", "rot": [110.0, 0.0, 0.0]}],
                    "key_az": 215.0, "key_el": 16.0, "key_color": "#FFD7A6", "sun": 3.2, "rim_cool": 0.6,
                    "rim_warm": 1.6, "bounce": 0.55, "bounce_color": "#E9B88A", "accent": 1.6,
                    "focal": [{"at": "x_lens", "az": 200.0, "el": 25.0, "dist": 0.7, "color": "#FFE2B4",
@@ -98,7 +99,8 @@ CARDS = {
     },
     "kemdo_highrim": {
         "splash": {"clip": "cast_a3", "t": 0.52, "yaw": 18.0, "pitch": -2.0, "lens": 50.0, "fill": 0.9, "x": 0.70,
-                   "box_top": 2.6, "pose": [{"bone": "head", "rot": [30.0, 0.0, 0.0]}],
+                   "box_top": 2.6, "pose": [{"bone": "head", "rot": [30.0, 0.0, 0.0]},
+                                           {"bone": "upper_arm.L", "rot": [0.0, 0.0, 90.0]}],
                    "key_az": 175.0, "key_el": 58.0, "key_color": "#FFF4E4", "sun": 3.6, "rim_cool": 1.6,
                    "rim_warm": 0.5, "bounce": 0.45, "bounce_color": "#E8DCC6", "accent": 1.4, "exposure": -0.6,
                    "focal": [{"at": "x_lens", "az": 150.0, "el": 45.0, "dist": 0.6, "color": "#FFFFFF",
