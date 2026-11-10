@@ -44,3 +44,25 @@ ages, story, epithets, Generations, views) -> C3 legends.ts (wordFor, legends, t
   run by year 32, max 85-106 chars (<= 140), told lines 4-5; gen-2 differs (unit test). B2 story 4-5 ms (babel ~400 agents).
 - GATE: check1.log (slot.sh npm run check) queued ~01:2xZ.
 - check1 was cut by another restart (0 failures until then); check2.log queued 05:23Z.
+
+## ON HOLD (owner, 2026-11-10: performance first). State at hold
+- Tree: tsc clean. All stage C sim code is in the live src/ and tests/ (no tree copies). Focused tests green when last run:
+  arc-covenant 7/7, arc-ages 4 (+3 imported lint), arc-legends 2 (+3), scripture_lint 3, content, arc-hearts/tower/
+  tower-r1/defiance/freeform, audio-arc, ui-arc-covenant/book 61/61, living-relationship/determinism/save-continue/
+  prayers-pause/living-migration/omnipotence 79/79.
+- Full gate NOT completed: check1 cut by a container restart (0 failures to that point); check2 killed by me at the hold.
+- No runs of mine are going.
+
+## NEXT (to resume stage C sim)
+1. GATE: `setsid nohup _harness/slot.sh npm run check > _harness/scratch/arc/C-sim/check3.log 2>&1 &` (slot.sh --status
+   first; no other full suite on this tree). Fix anything red (worker.test pacing under load has flaked before: rerun alone).
+2. §8.6 perf: L1 throughput at 1 500 agents within 2 % (perf_worker) and snapshot hitch <= 8 ms with storySnap/covenantSnap
+   (epithetOf scans arcEvents per snapshot: cache per tick if it shows up). Owner now puts performance first: measure this
+   BEFORE anything else in stage C.
+3. C3 acceptance (trust stays <= 0.9 - 0.2 w for 25 years) is unit-checked for one week only: a 25-year probe would close it.
+4. Not built (logged in contract-changes "Stage C sim"): the no-flood check of painted storms; spare-the-many cast estimate
+   (post-check only); §0.4 betrayed "trust gains x 1/(1+w)" (only the ceiling is applied; covenant.ts trustGainScale exists,
+   unused); scripted B1 uses covenant.offer for the flood (a real god flood breaks babel's pride, so no tower follows).
+5. Ages: unattended worlds alternate silence/trust (5-12 ages in 60 y); if the owner finds that too busy, require trust's
+   condition to lapse for a year before silence reopens.
+6. UI lane (C-ui NEXT): run the covenant/book shots live (no stubs); CommandResult.refusal is typed now (drop the cast).
