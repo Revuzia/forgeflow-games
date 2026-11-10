@@ -34,3 +34,26 @@
   flight (stats), BUT the act fires at ~01:00 game time: night + rain, the throwers hidden behind houses - not judgeable.
   b4 (b-render-hurlday.json): same recipe, camera hour 14 at 40 m / 20 m, plus the idol 14/40 m.
 - 05:2xZ another restart; b-chain9: hurlday, poses2, flood10.
+
+## STOPPED 2026-11-10 ~05:3xZ (lead: performance first; a perf engineer takes src/render). Tree: tsc clean; last full
+gate 881/881 (b-check2) includes every code change below. All my shot/vite runs killed.
+Code changes this stage (all in, tested): bodymat.ts poses 40/41/44/45/5/21 stronger; bodygen.ts bipedLow far arms
+1.5x / mid 1.25x thick (adds no triangles); ocean.ts + silt.ts brown warning water (A r1).
+## NEXT (resume)
+1. Shots, through slot.sh on port 5312, one chain:
+   _harness/arc-work/render-chain.sh 0 b-render-hurlday.json b-render-poses2.json r1-render-flood10.json
+   - b4-hurl-40-day / b4-hurl-20-day: LOOK for >= 4 throwers in the hurl pose and visible pebble/spear arcs (D3).
+     If the camera hour 14 (time.set-hour) ends the act, instead step the sim to day 4 (Yik's next roll passes then)
+     before painting the storm. If a house hides the knot, raise the tilt.
+   - b4-idol / b4-idol-40: LOOK at the carved post (warm style colours, ~3 m, no creature).
+   - b0b-pose-*-60 (each sign alone, 60 m, tilt 58) and mixed at low/ultra: judge vs the owner bar (noticed without
+     clicking at 40-80 m). b0-pose-mix-40 showed raised fists reading clearly; fear/cheer/pray were weak from the high
+     camera; the thicker silhouette arms are not looked at yet.
+   - r1p-flood-warning-near-ultra: the last A r1 item (ultra 400 m brown warning water).
+2. Curse at dusk: b-render-live.json b3-curse-dusk (not reached yet). Burning shrine = the existing fire (not shot).
+3. Bolt bleach (A r1 r1o): likely a capture artifact (a held frame freezes the stroke's ground-light decal, ~4.5x).
+   b3-hurl-after was a night frame with no bolt, so it does not settle this: shoot a frame on a bolt, then 2.5 s later.
+4. Broken-covenant ring: signs.ts 'broken' already exists (stage C/D sim); not looked at.
+5. Perf note for the perf engineer: the in-play medium frame time is not worse than before the arc
+   (A-render-r1.md PERF lines: pre-arc d2512fbc play near 36.0 / far 24.3 ms vs now 22.7-27.3 / 17.0-19.5 ms CPU
+   work, software GL under load).

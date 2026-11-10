@@ -189,3 +189,5 @@ Brief items: #9 src/render/life/tower.ts (trees on the live tower, cold blue-gre
 2. Optional: make lookUp stronger at play distance (head further back + both hands up near the face) if the owner finds
    it too subtle; look at the bolt-flash exposure at dusk (r1o is bleached).
 3. Full gate: next run should be clean (only fail was ui-thumblate timing under load 12).
+## STOPPED 2026-11-10 (performance first). A r1 open: only the ultra 400 m warning shot (r1-render-flood10.json) and
+the bolt-at-dusk bleach check; both are listed in B-render.md NEXT. Last gate 881/881 green.
