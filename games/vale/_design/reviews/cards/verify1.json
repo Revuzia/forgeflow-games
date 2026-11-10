@@ -1,0 +1,59 @@
+{
+  "pass": false,
+  "kemdoBlockerFixed": true,
+  "cardScores": {
+    "kemdo": 5.0,
+    "sukri": 4.5
+  },
+  "problems": [
+    {
+      "card": "sukri_shadeprint_splash, sukri_shadeprint_portrait",
+      "what": "Blocker class by this verifier's judgement: the face reads as horror or a mannequin. It is a large, pale white mask with solid orange almond eyes (no pupil or lid), a fixed grin and vertical crack ticks along the jaw, set over white rib-like bars on an ink torso. The whole reads as a smiling skull costume. The closing2 verifier called this a theme-clarity major because the face smiles and has eyes; the finish now renders the mask paler and larger in the frame, and a fixed grin does not make it read as alive.",
+      "evidence": "sukri_shadeprint_splash.png face at about x 1060-1240, y 190-390, viewed at full size and 3x; portrait at 512 and 128; sukri_ab.png Shadeprint row. Owner ruling 2 rejected a grey mask with hollow eye slits as blank or menacing at portrait size.",
+      "fix": "Apply the ruling 2 Odrum Shadeprint answer: warm amber lacquer mask with honey inlays and a lid or pupil mark in the eyes, and replace the white rib bars on the torso with a band pattern that does not read as bones."
+    },
+    {
+      "card": "sukri_stillwater_splash",
+      "what": "Floating feet. The staff butt and the left boot stand in mid-air on top of a foreground tree canopy, and the right boot sits over the edge of a snow patch with no occlusion or contact shadow under the toe.",
+      "evidence": "sukri_stillwater_splash.png x 960-1090, y 760-820 (tree canopy under boot and staff) and x 1185-1330, y 750-805 (right boot); 2x crop viewed.",
+      "fix": "Move the figure onto the walkable ground of the plate, or paint a ledge under the feet. Keep foreground trees in front of the figure, not under it. Add a contact shadow under both boots."
+    },
+    {
+      "card": "sukri_splash, sukri_shadeprint_splash",
+      "what": "Grounding is still wrong. On base, the staff butt and the outer half of the left boot hang over foliage past the ledge, with the contact shadow painted across the leaves. On Shadeprint, the right boot has no visible contact shadow on the pale disc, so it hovers.",
+      "evidence": "sukri/splash.png x 965-1070, y 770-810; sukri_shadeprint_splash.png x 1210-1328, y about 800; 2x crops viewed.",
+      "fix": "Shift the figure onto the ledge on base. Project contact shadow per foot onto the actual surface, and darken it under the Shadeprint right boot."
+    },
+    {
+      "card": "kemdo_highrim_splash, sukri_stillwater_splash, sukri_splash",
+      "what": "Figure is lit differently from the plate. Highrim: the figure is evenly bright ivory while the ground it stands on is in deep violet shadow, so nothing shades its lower body. Stillwater: a bright pale-mint hood on a dim moonlit plate reads as a brighter layer on top. Sukri base uses the same plate as Kemdo base, yet its rim is on the right while the hard shadow bands on that plate run from upper left down to the right.",
+      "evidence": "Full-size splashes viewed. Plate correlation Kemdo base vs Sukri base is 0.98 at a 26 px shift (same plate). card_ab.py reports plate_sun left for Kemdo base and right for Sukri base because plates.plate_light takes side from each card's own glow x, not from the plate pixels, and rim_match is true automatically when side is 0, as on Highrim. Kemdo base rim_dL is +0.2 left and -7.0 right, so there is no measurable lit rim, yet it is marked true. The engineer's rim_match column therefore does not support the light claim.",
+      "fix": "Derive the sun side from the plate's actual shadow direction and use one value per plate. Grade the figure by the local plate value at its feet and body, darkening from the ground up on Highrim. Make rim_match fail on an absent rim and on side 0."
+    },
+    {
+      "card": "kemdo_splash, kemdo_highrim_splash, kemdo_long_evening_splash",
+      "what": "Cut-out halo artefacts remain. On base, a translucent lilac arc is drawn across the grip hand and staff, inside the figure. On Highrim, an even pale lilac outline runs around the raised fist and down the right of the hood. On Long Evening, a soft pale ghost edge sits on the left of the fist.",
+      "evidence": "splash.png x 1037-1050, y 334-370; kemdo_highrim_splash.png x about 1402, y 272-288; kemdo_long_evening_splash.png x 1012-1024, y 384-410; 4-5x crops viewed.",
+      "fix": "Compute the rim from the outer alpha only so that it cannot cross interior forms, vary its width by surface angle, and remove the matte fringe before the paint-over."
+    },
+    {
+      "card": "sukri_stillwater_splash, sukri_splash, all Kemdo splashes",
+      "what": "Hands are not clean. The posterized stair-steps are gone from faces, but hands still show angular steps. Stillwater right hand is hard low-poly finger prisms. The Sukri base fist has a notched stepped outline. Kemdo's hands are mitten blocks with no fingers on the Highrim raised fist and an unreadable blob on Long Evening.",
+      "evidence": "sukri_stillwater_splash.png x 1260-1370, y 480-590; sukri/splash.png x 1160-1222, y 316-396; kemdo_highrim_splash.png x 1340-1405, y 255-340; kemdo_long_evening_splash.png x 1012-1080, y 380-430; viewed with smooth 5x upscale so the steps are not caused by the crop.",
+      "fix": "Use a higher-detail card hand mesh or sculpted card hands with shaded, smoothed fingers, or pose hands so that the weakest ones are out of the focal area."
+    },
+    {
+      "card": "all Sukri cards (base, Stillwater, Shadeprint; splash and portrait)",
+      "what": "A dark blue-black speck or hole sits on the bridge of the nose of the mask, and reads as a render defect at full size.",
+      "evidence": "sukri/splash.png about (1083, 227); sukri_shadeprint_splash.png about (1155, 251); sukri_stillwater_splash.png about (1185, 324).",
+      "fix": "Close the mesh hole or fix the inverted face at the nose bridge in the Sukri model, then re-render."
+    },
+    {
+      "card": "kemdo_highrim_splash",
+      "what": "Watch item, not a fail on its own. The blocker checklist is met, but this is the weakest of the three Kemdo faces. White mask under a white hood, and at card size the eyes do not resolve, so the slit alone carries the read.",
+      "evidence": "480 px card-size head crop: slit clearly visible (head median L 188, minimum 79, on a box that also holds some hood shadow); eyes not separable from the slit. Full size shows the eave, slit and two eye flecks.",
+      "fix": "Warm or darken the Highrim mask wrap a step away from the hood and strengthen the iris so that the eyes survive at card size."
+    }
+  ],
+  "notes": "Checked 2026-11-09 about 18:50 Central on commit 53d603841. node tools/gen_store.ts --check passes (32 offers, 8 shelves, delta-E gate 32/32). Viewed all 12 splash and portrait cards at full size, both icons, card size 480 x 270, chip sizes 128 and 64, and kemdo_ab.png and sukri_ab.png. Kemdo blocker: fixed as written. Base and Highrim splashes now show a brow eave, an ink slit and eyes where the earlier cards had a pale oval or blank egg; both read as a veiled wanderer rather than a mummy, with Highrim the closest call (see watch item). Real progress: the posterized stair-steps are gone from all faces, the A/B improvement is plain, and no pose hides a face; Long Evening is side-on but one eye and the slit stay visible. Fails on one blocker-class judgement (Shadeprint mask, which the closing2 verifier ruled the other way, so the lead may want to record a ruling), floating feet on Stillwater and Sukri base, figure lighting that does not match the plate, halo artefacts, and hand steps. The Sukri base and Stillwater wooden masks read as a carved smiling mask rather than a horror face, but stay mannequin-leaning because the eyes are solid inlays. Scores are against a recent League of Legends splash as a quality gauge only, and are well under the 7.5 par bar: figures are still clean 3D stills on a soft plate, with no painted form, no dramatic light interaction, and Kemdo small and static in frame. The portrait plates also show a faint woven moire. Engineer's own not-fixed list: none present in _design/reviews/cards."
+}
