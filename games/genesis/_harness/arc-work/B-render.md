@@ -27,3 +27,5 @@
 - Container restarted ~19:2xZ (chains died). b-chain3: d3 (live hurl/curse/idol + bleach check), poses2 (b0b-*: each
   sign alone at 60 m tilt 58, mixed at low/ultra), flood10 (ultra).
 - 19:5xZ LOOKED AT b1-hurl-50/after (live babel, defiance 0.8 + painted storm, 48 h of 20-min steps): NO hurl (0 signs) - the sim chose curse (day 3, dusk toast) and IDOL (day 4, sim-raised, toast 'carved a god of its own'); 21 h night frame, no bolt -> no bleach. Retake with up to 9 days hourly + storm repaint. Container restarted 20:1xZ. 20:2xZ b-chain5: b-render-live.json (b3-*: hurl, idol, curse), poses2, flood10.
+- 2026-11-10 00:5xZ restart again (nothing of b-chain5/b-check1 finished). b-chain6 (live, poses2, flood10) + GATE b-check2.
+- 01:1xZ b3-hurl-50 (9 days hourly under a god storm, Shenyaar id 1, def 0.8): still 0 hurl. Probe B-render-hurlprobe.ts: stormNear true, bold 25, fear ~0.25; the seeded daily hurl roll (defyRoll) for town 1 first passes on day 12. Town 3 (Yik) at def 1 hurls at hour 0 (node). Live spec now uses town 3 / def 1; b-chain7 restarted (live, poses2, flood10). Gate b-check2 running.
