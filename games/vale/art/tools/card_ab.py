@@ -15,7 +15,7 @@ Measures, per card:
               axis. A box filter's blocks line up with the grid; a clean render's edges do not (chance level is ~13 %).
   flat        posterization: the share of figure pixels in a 5x5 neighbourhood flatter than 1.5 L*, next to strong edges
   rim_side    which side of the figure's outline is brighter than its inside (L* delta left / right), and rim_match:
-              whether that is the plate's sun side (plates.plate_light)
+              true only when the painting's sun side (plates.json plate_sun) carries a rim at least RIM_MIN L* over the inside
   dab         figure vs plate: the distance of their mean (a*, b*), measured on the figure against a ring of plate round it
   face        in the face ellipse: L* p5 / p50 / p95, value range, dark_share (pixels 18 L* under the face's median: slit,
               brow, eye sockets) and edge (mean L* gradient). A blank face has a small range and almost no dark share.
@@ -40,6 +40,7 @@ sys.path.insert(0, os.path.join(GAME, "art", "blender", "common"))
 import plates  # noqa: E402
 
 OUT = os.path.join(GAME, "_design", "reviews", "cards")
+RIM_MIN = 3.0        # L*: the lit rim must stand this far over the figure's inside
 
 
 def lab(rgb: np.ndarray) -> np.ndarray:
@@ -83,9 +84,11 @@ def card_stats(img: np.ndarray, af: np.ndarray, p: dict, face) -> dict:
     dr = float(L[right].mean() - mid) if right.any() else 0.0
     side = plates.plate_light(p)["side"]
     rim = "left" if dl > dr + 1.5 else ("right" if dr > dl + 1.5 else "even")
+    lit, other = (dl, dr) if side < 0 else (dr, dl)
     r.update({"rim_dL_left": round(dl, 1), "rim_dL_right": round(dr, 1), "rim_side": rim,
               "plate_sun": {-1: "left", 1: "right", 0: "behind"}[side],
-              "rim_match": bool((rim == "left" and side < 0) or (rim == "right" and side > 0) or side == 0)})
+              # fails when the rim is absent (< RIM_MIN L* over the figure's inside), on the far side, or the plate has no side
+              "rim_match": bool(side != 0 and lit >= RIM_MIN and lit > other + 1.5)})
     # the figure against the plate round it
     wide = plates.gaussian(af[..., None].astype(np.float32), 24.0 * W / 1600.0)[..., 0]
     ring = (wide > 0.05) & (af < 0.02)

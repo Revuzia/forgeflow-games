@@ -41,8 +41,8 @@
   "rim_dL_left": 0.4,
   "rim_dL_right": -5.5,
   "rim_side": "left",
-  "plate_sun": "behind",
-  "rim_match": true,
+  "plate_sun": "left",
+  "rim_match": false,
   "dab": 13.6,
   "face": {
    "p5": 45.1,
@@ -59,8 +59,8 @@
   "rim_dL_left": -8.8,
   "rim_dL_right": -15.6,
   "rim_side": "left",
-  "plate_sun": "behind",
-  "rim_match": true,
+  "plate_sun": "left",
+  "rim_match": false,
   "dab": 16.0,
   "face": {
    "p5": 35.4,
@@ -77,8 +77,8 @@
   "rim_dL_left": 3.0,
   "rim_dL_right": 5.4,
   "rim_side": "right",
-  "plate_sun": "left",
-  "rim_match": false,
+  "plate_sun": "right",
+  "rim_match": true,
   "dab": 8.2,
   "face": {
    "p5": 46.3,
@@ -95,7 +95,7 @@
   "rim_dL_left": -10.6,
   "rim_dL_right": -2.3,
   "rim_side": "right",
-  "plate_sun": "left",
+  "plate_sun": "right",
   "rim_match": false,
   "dab": 16.7,
   "face": {

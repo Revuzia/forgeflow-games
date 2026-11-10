@@ -39,29 +39,29 @@
   },
   "uv_coverage": 0.603,
   "bake": {
-    "base": 7.91,
-    "rough_metal": 6.35,
-    "normal": 4.55,
-    "ao": 5.55,
+    "base": 2.52,
+    "rough_metal": 2.14,
+    "normal": 1.32,
+    "ao": 1.76,
     "normal_fixed_px": 14135,
-    "projection": 116.83,
-    "pack_save": 117.51,
-    "total": 142.33
+    "projection": 34.55,
+    "pack_save": 34.66,
+    "total": 42.54
   },
   "tris": 18389,
   "mesh_top_m": 2.117,
-  "glb_bytes_raw": 2320704,
+  "glb_bytes_raw": 2319784,
   "optimize": {
     "ok": true,
-    "before": 2320704,
-    "after": 1008548
+    "before": 2319784,
+    "after": 1003892
   },
-  "glb_bytes": 1008548,
+  "glb_bytes": 1003892,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_highrim.glb (985 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: kemdo_highrim_base 2048x2048 296K, kemdo_highrim_normal 512x512 50K, kemdo_highrim_orm 256x256 28K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/kemdo/kemdo_highrim.glb (980 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: kemdo_highrim_base 2048x2048 292K, kemdo_highrim_normal 512x512 50K, kemdo_highrim_orm 256x256 28K",
       "  skinned meshes: kemdo_accent(149v), kemdo_highrim(17721v)",
       "  bones: 35 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip x_lens x_vent_chest thighL shinL footL toeL thighR shinR footR toeR x_robe_b_1 x_robe_b_2 x_robe_f_1 x_robe_f_2 x_robe_l_1 x_robe_l_2 x_robe_r_1 x_robe_r_2)",
       "  clips: ",
@@ -76,8 +76,8 @@
       "portrait": "art/out/fighters/kemdo/kemdo_highrim_portrait.png"
     },
     "seconds": {
-      "splash": 127.51,
-      "portrait": 19.49
+      "splash": 36.55,
+      "portrait": 6.73
     }
   },
   "three_qa": {
@@ -109,24 +109,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/kemdo/three_kemdo_highrim.png",
-    "seconds": 37.1,
+    "seconds": 4.9,
     "exit": 0
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.31,
-      "model": 40.5,
-      "lows_bind": 12.28,
-      "uv": 4.65,
-      "bake": 142.33,
-      "export": 0.26,
-      "optimize": 2.35,
-      "load_test": 1.2,
-      "render": 147.13,
-      "three_qa": 37.52
+      "rig": 0.0,
+      "materials": 0.1,
+      "model": 8.66,
+      "lows_bind": 2.73,
+      "uv": 1.69,
+      "bake": 42.55,
+      "export": 0.08,
+      "optimize": 0.46,
+      "load_test": 0.09,
+      "render": 43.66,
+      "three_qa": 5.06
     },
-    "total_s": 388.86
+    "total_s": 105.1
   },
   "run_ref_speed": 3.45,
   "height_m": 2.1

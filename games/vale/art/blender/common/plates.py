@@ -131,9 +131,13 @@ DEFAULTS = {
     "sun_tint": 0.16,           # a colour gradient across the figure from the plate's sun side, in the glow colour
     "haze": 0.05,               # atmospheric depth: this much of the blurred plate over the figure (x 2 at the feet)
     "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.25,  # light wrap of the plate over the figure's edge, full on the sun side
-    "sun_edge": 0.38,           # an extra glow-coloured edge on the sun side
+    "sun_edge": 0.55,           # an extra glow-coloured edge on the sun side
     "contact": 1.0, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
     "shadow_tint": 0.24,        # shadow colour: the plate's own, this bright
+    "ground_shade": 0.85,       # the figure darkened from the ground up by the plate's own value at its feet
+    "plate_cap": 2.4,           # the figure's median at most this x the plate's median round it (linear)
+    "foliage_front": 0.9,       # the plate's foreground foliage kept in front of the figure's feet (0 = off)
+    "fringe_choke": 0.08,       # the alpha choke of the matte-fringe removal
     "shared_light": True,       # the render's rim pair comes from the plate's sun side and colour (art_light)
     "fx": [],                   # optional soft glows at a bone: {"at": bone, "color": hex, "r": fraction of the height, "k": strength}
 }
@@ -202,7 +206,28 @@ def params(fid: str, skin=None, origin: str | None = None) -> dict | None:
         p.update((ent.get("skins") or {}).get(sid) or {})
     p.update((cards_of(fid).get(sid or fid) or {}).get("plate") or {})     # the staged card's own plate
     p["sid"] = sid or fid
+    if int(p.get("finish", 1)) >= 2:
+        side = plate_sun(p)
+        gx = float(p["glow"][0])
+        off = max(abs(gx - 0.5), 0.3)              # the low sun sits on the painting's sun side, never straight behind
+        p["glow"] = [0.5 + side * off] + list(p["glow"][1:])
     return p
+
+
+def plate_sun(p: dict) -> int:
+    """The painting's sun side (plates.json "plate_sun", one value per painting: -1 left, 1 right; never 0)."""
+    v = (table().get("plate_sun") or {}).get(p.get("src"))
+    if isinstance(v, (int, float)) and v != 0:
+        return -1 if v < 0 else 1
+    return -1 if float(p["glow"][0]) < 0.5 else 1
+
+
+def fit_key_az(p: dict, az: float) -> float:
+    """A view-relative key bearing mirrored onto the painting's sun side (> 180 = camera left, < 180 = camera right)."""
+    if int(p.get("finish", 1)) < 2 or not p.get("shared_light", True):
+        return az
+    side = plate_sun(p)
+    return 360.0 - az if (side < 0 and az < 180.0) or (side > 0 and az > 180.0) else az
 
 
 def ids() -> list[str]:
@@ -273,8 +298,10 @@ def art_light(cfg: dict, light: dict, p: dict) -> tuple[dict, dict]:
         pl = plate_light(p)
         lead, off = pl["lead"], pl["off"]
         k = max(float(cfg.get("rim_cool", 1.0)), float(cfg.get("rim_warm", 1.0)), 1.0)
-        ca["rim_left_color"], ca["rim_right_color"] = (lead, off) if pl["side"] <= 0 else (off, lead)
-        ca["rim_cool"], ca["rim_warm"] = (1.5 * k, 0.4) if pl["side"] < 0 else ((0.4, 1.5 * k) if pl["side"] > 0 else (k, k))
+        ca["rim_left_color"], ca["rim_right_color"] = (lead, off) if pl["side"] < 0 else (off, lead)
+        ca["rim_cool"], ca["rim_warm"] = (1.5 * k, 0.4) if pl["side"] < 0 else (0.4, 1.5 * k)
+        if "key_az" in ca:
+            ca["key_az"] = fit_key_az(p, float(ca["key_az"]))
         if not p.get("fill_tint"):
             la["tint"] = pl["ambient"]
     return ca, la
@@ -294,8 +321,7 @@ def plate_light(p: dict) -> dict:
     mean = lin.reshape(-1, 3).mean(axis=0)
     amb = mean / max(1e-5, float(mean @ Y709))
     amb = np.clip(amb, 0.3, 2.0)
-    gx = float(p["glow"][0])
-    side = -1 if gx < 0.42 else (1 if gx > 0.58 else 0)
+    side = plate_sun(p)
     r = {"side": side, "lead": hex_linear(p["glow_color"]), "ambient": tuple(float(v) for v in amb),
          "off": tuple(float(v) for v in np.clip(amb * 0.9, 0.0, 1.5)), "mean_display": _enc(mean).tolist()}
     _PL_CACHE[key] = r
@@ -541,7 +567,8 @@ def plate(p: dict, kind: str, w: int, h: int, tooth_on: bool = True) -> np.ndarr
 def canvas_tooth(d: np.ndarray, p: dict) -> np.ndarray:
     h, w = d.shape[:2]
     tooth = _noise(w, h, max(8, w // 6), zlib.crc32(p.get("sid", "x").encode()) % 997)
-    return d * (1.0 - float(p["tooth"]) / 2 + float(p["tooth"]) * tooth[..., None])
+    t = float(p["tooth"]) * (1.0 if w > 1000 else 0.4)      # the portrait's cells are a 6 px weave at chip size
+    return d * (1.0 - t / 2 + t * tooth[..., None])
 
 
 def splash_post(fg: np.ndarray, pl: np.ndarray, strength: float = 1.0) -> np.ndarray:
@@ -576,7 +603,7 @@ def _shoulder(d: np.ndarray, knee: float, cap: float) -> np.ndarray:
     return d * (Ls / np.maximum(L, 1e-5))[..., None]
 
 
-def subject_grade(fg: np.ndarray, p: dict, kind: str = "splash") -> tuple[np.ndarray, float]:
+def subject_grade(fg: np.ndarray, p: dict, kind: str = "splash", plate_med: float | None = None) -> tuple[np.ndarray, float]:
     """The dusk exposure of the subject layer (straight RGBA, display sRGB): one linear scale from its solid
     pixels' luma (the brightest 5 % at most `sub_p95`; a dark kit's median lifted toward `sub_floor`), then the
     highlight shoulder. Returns (graded, scale)."""
@@ -594,6 +621,8 @@ def subject_grade(fg: np.ndarray, p: dict, kind: str = "splash") -> tuple[np.nda
     if med * k < flo:                          # a dark kit: lift toward the floor, the highlights still capped
         k = min(flo / max(med, 1e-5), k_hi)
     k = min(k, float(_dec(np.float32(p["sub_ceil"]))) / max(med, 1e-5))
+    if plate_med is not None and p.get("plate_cap"):      # a bright figure never sits as a brighter layer on a dim plate
+        k = min(k, float(p["plate_cap"]) * plate_med / max(med, 1e-5))
     k = float(np.clip(k, float(p["sub_min_k"]), float(p["sub_max_k"])))
     lin = np.clip(lin * k, 0.0, 1.0)
     flo2 = float(_dec(np.float32(p["sub_floor_p"] if kind == "portrait" else p["sub_floor"])))
@@ -701,6 +730,59 @@ def split_shadow(fg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     out = fg.copy()
     out[..., 3] = af
     return out, np.clip(a - af, 0.0, 1.0).astype(np.float32)
+
+
+def defringe(fg: np.ndarray, p: dict) -> np.ndarray:
+    """Remove the matte fringe: edge pixels take the colour of the solid figure just inside (premultiplied spread, so
+    no plate or film colour reaches the outline) and the alpha is choked a touch."""
+    a = fg[..., 3]
+    if float(a.max()) <= 0:
+        return fg
+    k = fg.shape[1] / 1600.0
+    solid = (a > 0.98).astype(np.float32)[..., None]
+    w = gaussian(solid, max(1.0, 2.5 * k))
+    ext = gaussian(fg[..., :3] * solid, max(1.0, 2.5 * k)) / np.maximum(w, 1e-4)
+    edge = ((a < 0.98) & (a > 0.0) & (w[..., 0] > 1e-3))[..., None]
+    out = fg.copy()
+    out[..., :3] = np.where(edge, np.clip(ext, 0.0, 1.0), fg[..., :3])
+    c = float(p.get("fringe_choke", 0.08))
+    out[..., 3] = np.clip((a - c) / (1.0 - c), 0.0, 1.0)
+    return out
+
+
+def _ring_median(af: np.ndarray, pl: np.ndarray) -> float | None:
+    """The plate's median linear luma in a band round the figure."""
+    w = af.shape[1]
+    ring = (gaussian(af[..., None], 24.0 * (w / 1600.0))[..., 0] > 0.05) & (af < 0.02)
+    return float(np.median(_dec(pl[..., :3])[ring] @ Y709)) if ring.any() else None
+
+
+def outer_distance(a: np.ndarray, wmax: int) -> np.ndarray:
+    """Distance in px (capped at wmax) inward from the figure's OUTER outline only: the alpha is closed first, so finger
+    gaps and interior forms make no edge (no rim across a hand or a staff)."""
+    r = max(1, int(round(a.shape[1] / 1600.0 * 3)))
+    m = (a > 0.5).astype(np.float32)[..., None]
+    closed = (_box_mean(m, r) > 0.001).astype(np.float32)
+    closed = (_box_mean(closed, r) > 0.999).astype(np.float32)
+    d = np.zeros(a.shape, np.float32)
+    for i in range(1, wmax + 1):
+        d += (_box_mean(closed, i)[..., 0] > 0.999).astype(np.float32)
+    return d * (closed[..., 0] > 0.5) + (wmax + 1.0) * (closed[..., 0] <= 0.5)
+
+
+def foliage_front(p: dict, kind: str, w: int, h: int) -> np.ndarray:
+    """0..1: the plate's foreground foliage (green, in the lower 45 % of the window), read from the unpainted source."""
+    src = source(p["src"])
+    SH, SW = src.shape[:2]
+    x0, y0, x1, y1 = window(p, kind, SW, SH)
+    c = cut(src, x0, y0, x1, y1, w, h)
+    r, g, b = c[..., 0], c[..., 1], c[..., 2]
+    sat = (c.max(axis=2) - c.min(axis=2)) / np.maximum(c.max(axis=2), 1e-3)
+    luma = c @ Y709
+    m = ((g > b * 1.15) & (g >= r * 0.9) & (sat > 0.22) & (luma < 0.42)).astype(np.float32)   # dark leaves, not olive ground
+    yy = np.linspace(0, 1, h, dtype=np.float32)[:, None]
+    m = m * (yy > 0.55) * np.clip((yy - 0.55) / 0.06, 0.0, 1.0)
+    return gaussian(m[..., None], 1.5 * (w / 1600.0))[..., 0]
 
 
 _FFTK: dict = {}
@@ -838,16 +920,29 @@ def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, m
     fx = float((feet * xx).sum() / feet.sum())
     # contact: the line under the soles (each foot column's lowest pixel), spread into flat ellipses on the ground, so it
     # shows round the feet instead of hiding behind them
-    sole = np.zeros((h, w, 1), np.float32)
     band = max(2, int(round(3.0 * k)))
-    for col in np.where(feet.max(axis=0) > 0.5)[0]:
-        ys = np.where(af[:, col] > 0.5)[0]
-        if len(ys):
-            sole[ys[-1]:min(h, ys[-1] + band), col] = 1.0
-    c = np.roll(_gauss1(_gauss1(sole, 9.0 * k, 1), 3.0 * k, 0)[..., 0], max(1, int(round(3.0 * k))), axis=0)  # a crisp core just under the sole
-    c2 = _gauss1(_gauss1(sole, 42.0 * k, 1), 11.0 * k, 0)[..., 0]
-    c, c2 = c / max(1e-4, float(c.max())), c2 / max(1e-4, float(c2.max()))
-    contact = np.clip(1.0 * c + 0.5 * c2, 0.0, 1.0) * float(p.get("contact", 1.0))
+    cols = np.where(feet.max(axis=0) > 0.5)[0]
+    runs, start = [], None
+    for i, col in enumerate(cols):                              # one run of columns = one foot (or the staff butt)
+        if start is None:
+            start = col
+        if i == len(cols) - 1 or cols[i + 1] - col > max(4, int(round(6.0 * k))):
+            runs.append((start, col))
+            start = None
+    contact = np.zeros((h, w), np.float32)
+    for c0r, c1r in runs:
+        if c1r - c0r < 3:
+            continue
+        sole = np.zeros((h, w, 1), np.float32)
+        for col in range(c0r, c1r + 1):
+            ys = np.where(af[:, col] > 0.5)[0]
+            if len(ys):
+                sole[ys[-1]:min(h, ys[-1] + band), col] = 1.0
+        c = np.roll(_gauss1(_gauss1(sole, 9.0 * k, 1), 3.0 * k, 0)[..., 0], max(1, int(round(3.0 * k))), axis=0)
+        c2 = _gauss1(_gauss1(sole, 42.0 * k, 1), 11.0 * k, 0)[..., 0]
+        c, c2 = c / max(1e-4, float(c.max())), c2 / max(1e-4, float(c2.max()))     # each foot its own full strength
+        contact = np.maximum(contact, np.clip(1.0 * c + 0.5 * c2, 0.0, 1.0))
+    contact = contact * float(p.get("contact", 1.0))
     # the real catcher shadow, kept close to the figure
     dx = (xx - fx) / (0.55 * fh)
     dy = (yy - y1) / (0.20 * fh)
@@ -872,6 +967,8 @@ def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, m
     cast = gaussian(cast[..., None], 5.0 * k)[..., 0]
     cast = cast * (1.0 - t * 0.85) * float(p.get("cast", 0.34))
     s = np.clip(1.0 - (1.0 - contact) * (1.0 - real) * (1.0 - cast), 0.0, 0.92)
+    if float(p.get("foliage_front", 0.0)) > 0:             # a shadow falls on the ground, never across the leaves in front
+        s = s * (1.0 - foliage_front(p, "splash", w, h))
     # the shadow keeps the plate's own colour (a darker, cooler plate), never a black stamp
     tint = np.array(plate_light(p)["ambient"], np.float32)
     tint = tint / max(1e-5, float(tint.max())) * float(p.get("shadow_tint", 0.32))
@@ -905,6 +1002,21 @@ def shared_figure_light(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str) -> n
         fm, pm = lin[solid].mean(axis=0), _dec(pl[..., :3])[ring].mean(axis=0)
         fm, pm = fm / max(1e-5, float(fm @ Y709)), pm / max(1e-5, float(pm @ Y709))
         lin = lin * np.clip(pm / np.maximum(fm, 1e-5), 0.6, 1.6).astype(np.float32) ** beta
+    # the plate's value at the figure's feet and body: darker ground darkens the figure from the feet up
+    gs = float(p.get("ground_shade", 0.0))
+    fbox = _figure_box(af)
+    if gs > 0 and kind == "splash" and fbox is not None:
+        y0_, y1_, c0_, c1_ = fbox
+        fh_ = max(8.0, float(y1_ - y0_))
+        ky = w / 1600.0
+        pb = gaussian(_dec(pl[..., :3]), 36.0 * ky) @ Y709
+        prof = pb[:, c0_:c1_ + 1].mean(axis=1)
+        ref = float(np.median(prof[y0_ + int(0.15 * fh_):y0_ + int(0.5 * fh_)]))
+        k_ = np.clip(prof / max(ref, 1e-4), 0.35, 1.0) ** 0.7
+        feet_k = float(k_[min(h - 1, y1_)])
+        t_ = np.clip((np.arange(h, dtype=np.float32) - (y0_ + 0.45 * fh_)) / (0.55 * fh_), 0.0, 1.0)
+        mul = 1.0 + (feet_k - 1.0) * t_ * t_ * (3 - 2 * t_) * gs
+        lin = lin * np.maximum(mul, 0.2)[:, None, None]
     # sun-side colour gradient across the figure
     box = _figure_box(af)
     if box is not None and pl_info["side"] != 0:
@@ -935,26 +1047,25 @@ def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: flo
     comp = np.concatenate([fg[..., :3] * a + pl[..., :3] * (1 - a), np.ones_like(a)], axis=2)
     if strength <= 0:
         return comp
-    ab = gaussian(fg[..., 3:4], float(p.get("wrap_px", 4.0)) * k)
-    band = np.clip(a * (1.0 - ab) * 2.4, 0.0, 1.0)
-    pb = gaussian(pl, 14.0 * k)[..., :3]
-    gy, gx = np.gradient(ab[..., 0])
+    wpx = float(p.get("wrap_px", 4.0)) * k
+    wmax = max(2, int(round(wpx * 3)))
+    d = outer_distance(a[..., 0], wmax)                     # 0 at the outer outline; interior forms make no edge
+    ga = gaussian(np.minimum(d / wmax, 1.0)[..., None], 1.5 * k)[..., 0]
+    gy, gx = np.gradient(ga)
     nl = np.sqrt(gx * gx + gy * gy) + 1e-5
     pli = plate_light(p)
-    sx = -1.0 if pli["side"] < 0 else (1.0 if pli["side"] > 0 else 0.0)
-    if sx != 0.0:
-        lit = np.clip(-gx / nl * sx * 0.75 + 0.05 + 0.2 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)
-    else:
-        lit = np.clip(0.12 + 0.6 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)   # a sun behind: the top edges only, no pale ring
+    sx = float(pli["side"])
+    up = np.clip(gy / nl, 0.0, 1.0)                         # (d grows inward: +gy points down into the figure = an up-facing edge)
+    lit = np.clip(gx / nl * (-sx) * 0.75 + 0.05 + 0.2 * up, 0.0, 1.0)
+    width = wpx * (0.45 + 0.85 * lit)                       # the rim is wider where the surface turns to the sun
+    band = np.exp(-d / np.maximum(width, 0.5)) * (d <= wmax) * a[..., 0]
+    pb = gaussian(pl, 14.0 * k)[..., :3]
     off = float(p.get("wrap_off", 0.25))
-    side_w = (off + (1.0 - off) * lit)[..., None]
-    wr = np.clip(float(p.get("wrap", 0.32)) * strength * band * side_w, 0.0, 1.0)
+    wr = np.clip(float(p.get("wrap", 0.32)) * strength * band * (off + (1.0 - off) * lit), 0.0, 1.0)[..., None]
     comp[..., :3] = comp[..., :3] * (1.0 - wr) + pb * wr
-    # the sun edge: a thin glow-coloured line on the lit side
     lead = _enc(np.array(pli["lead"], np.float32))
-    ab2 = gaussian(fg[..., 3:4], 2.0 * k)
-    thin = np.clip(a * (1.0 - ab2) * 3.0, 0.0, 1.0) * lit[..., None]
-    comp[..., :3] = comp[..., :3] + (1.0 - comp[..., :3]) * thin * float(p.get("sun_edge", 0.38)) * strength * lead
+    thin = (np.exp(-d / max(0.8, 1.6 * k)) * (d <= wmax) * a[..., 0] * lit)[..., None]
+    comp[..., :3] = comp[..., :3] + (1.0 - comp[..., :3]) * thin * float(p.get("sun_edge", 0.55)) * strength * lead
     # bloom and vignette (the old post, unchanged)
     lum = comp[..., :3] @ Y709
     hi = np.clip((lum - 0.82) / 0.18, 0.0, 1.0)[..., None] * comp[..., :3]
@@ -996,13 +1107,21 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
     h, w = fg.shape[:2]
     fg = fg.astype(np.float32)
     fig, shadow = split_shadow(fg) if kind == "splash" else (fg, np.zeros((h, w), np.float32))
+    fig = defringe(fig, p)
     if int(p.get("sub_median", 0)) > 0:
         fig = median3(fig, int(p["sub_median"]))
     pl = plate(p, kind, w, h, tooth_on=False)
-    fig, _k = subject_grade(fig, p, kind)
+    fig, _k = subject_grade(fig, p, kind, _ring_median(fig[..., 3], pl))
     fig = shared_figure_light(fig, pl, p, kind)
     if kind == "splash":
         pl = ground_shadow(pl, fig[..., 3], shadow, p, meta)
+        fk = float(p.get("foliage_front", 0.0))
+        if fk > 0:                                         # the plate's foreground leaves stay in front of the feet
+            fig = fig.copy()
+            box = _figure_box(fig[..., 3])
+            if box is not None:
+                ty = np.clip((np.arange(h, dtype=np.float32) - (box[1] - 0.10 * (box[1] - box[0]))) / max(1.0, 0.04 * (box[1] - box[0])), 0.0, 1.0)
+                fig[..., 3] = fig[..., 3] * (1.0 - fk * foliage_front(p, "splash", w, h) * ty[:, None])
     comp = integrate2(fig, pl, p, kind, post * float(p["post"] if kind == "splash" else p["post_p"]))
     comp = fx_layer(comp, p, meta)
     L = lut()

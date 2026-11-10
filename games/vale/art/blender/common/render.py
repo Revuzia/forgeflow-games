@@ -304,6 +304,27 @@ def pose_tweak(arm, cfg: dict) -> None:
     bpy.context.view_layer.update()
 
 
+def smooth_card_hands(objs, on: bool = True) -> list:
+    """Card-only: a Laplacian smooth of the hands (after the armature, weighted by the hand bones' vertex groups), so
+    low-poly finger prisms read as shaded forms in the focal area. The GLB is untouched; returns the modifiers to remove."""
+    out = []
+    if not on:
+        return out
+    for o in objs:
+        if o.type != "MESH":
+            continue
+        for g in ("hand.L", "hand.R"):
+            if g in o.vertex_groups:
+                md = o.modifiers.new(f"card_hand_{g}", "LAPLACIANSMOOTH")
+                md.vertex_group = g
+                md.iterations = 8
+                md.lambda_factor = 1.2
+                md.lambda_border = 0.05
+                md.use_volume_preserve = True
+                out.append((o, md))
+    return out
+
+
 def card_meta(cam, arm, cfg: dict) -> dict:
     """Screen positions of the bones the composite needs (normalised 0..1, top-down): head (tail), neck, hands, fx bones."""
     from bpy_extras.object_utils import world_to_camera_view
@@ -922,6 +943,7 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
 
     clips = fighter_clips(ctx)
     out, T = {}, {}
+    hand_mods = smooth_card_hands(objs, bool(pl) and bool(cfg.get("smooth_hands", True)))
     cam = camera(lens=50)
     sky_world(light_a["sky"], light_a["ambient"], camera_strength=1.0, tint=light_a.get("tint"))
 
@@ -974,6 +996,8 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     pcfg = _portrait_cfg(spec, skin, cfg)
     pcfg_a = dict(cfg_a, **{k: pcfg[k] for k in ("key_az", "key_el", "sun", "bounce", "bounce_color", "focal", "pose")
                             if k in pcfg})
+    if pl and "key_az" in pcfg_a:                # the portrait's key follows the painting's sun too
+        pcfg_a["key_az"] = plates.fit_key_az(pl, float(pcfg_a["key_az"]))
     for k in ("rim_cool", "rim_warm"):           # a portrait override multiplies like the splash's (plates.art_light)
         if k in (stage.get("portrait") or {}):
             pcfg_a[k] = float(cfg_a.get(k, 1.0)) / max(1e-6, float(cfg.get(k, 1.0))) * float(pcfg[k])
@@ -1047,6 +1071,8 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
         if o.type == "LIGHT" and o.name.startswith("vale_key_sun"):
             o.hide_render = True
     cam.data.shift_x = cam.data.shift_y = 0.0
+    for o, md in hand_mods:
+        o.modifiers.remove(md)
     if not skin and want("turntable") and not preview:
         T["turntable"], out["turntable"] = turntable(ctx, P, chains, fast)
     for f in ("portrait_raw", "icon_raw", "splash_raw"):

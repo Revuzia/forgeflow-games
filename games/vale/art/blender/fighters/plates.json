@@ -138,5 +138,14 @@
   "tunlan": {},
   "ulkro": {},
   "vashil": {}
+ },
+ "plate_sun": {
+  "_doc": "One screen side per painting (-1 left, 1 right; never 0), read from the painting's cast shadows and lit faces: a sharp-edge polarity estimate proved too weak (needle_gorge -0.005), so this is a reading by eye, checked on art/out/backdrops/.",
+  "needle_gorge": -1,
+  "seat_center": -1,
+  "aubade_dawn": 1,
+  "serenade_dusk": 1,
+  "dialwood": -1,
+  "noonplate": 1
  }
 }

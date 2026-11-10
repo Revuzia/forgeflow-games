@@ -283,6 +283,8 @@ def build(spec, args, skin=None) -> dict:
         parts = spec.model(ctx)
     with T.step("lows_bind"):
         body, accent, highs, src, st = prepare_lows(ctx, parts)
+        if hasattr(spec, "fix_lows"):
+            spec.fix_lows(ctx, body, parts)
         report["parts"] = st
     with T.step("uv"):
         weights = {i: p.uv_weight for i, p in enumerate(parts) if p.uv_weight != 1.0}

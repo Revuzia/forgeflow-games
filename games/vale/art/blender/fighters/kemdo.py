@@ -152,7 +152,7 @@ BOOT_SHAFT_Z = 0.15
 #                blade tip; leather and the pauldron unchanged
 SKINS: list = [
     {"id": "kemdo_highrim", "extra": {}, "card": {"primary": "#7A6C58", "secondary": "#DCD3C2"},
-     "palette": {"hood": "#BDB4A3", "face": "#CBC2B1", "cloth_top": "#C2B9A8", "frame_wrap": "#DCD3C2",
+     "palette": {"hood": "#BDB4A3", "face": "#A08A68", "cloth_top": "#C2B9A8", "frame_wrap": "#DCD3C2",
                  "cloth": "#564B41", "leather": "#3A2F27", "stone": "#CDBB9C"}},
     {"id": "kemdo_long_evening", "extra": {"tassel_plates": True}, "card": {"primary": "#4A3550", "secondary": "#B9A6D6"},
      "palette": {"hood": "#9E9297", "face": "#B8AEAE", "cloth_top": "#A1949B", "cloth": "#7C6479", "stone": "#9A7A52",
@@ -1016,7 +1016,7 @@ def _wrap_paint(p, col):
     return _project._srgb(_soft_clip(lin)).astype(np.float32)
 
 
-def _slit_paint(p, n, col):
+def _slit_paint(p, n, col, strong=False):
     """The head core seen through the eye slit (fix pass 4, review: a flat dark bar): warm shadowed skin, lighter on
     the eye mounds, two almond eyes (a dark lash line, a muted shadowed white, a dark amber iris and pupil) and a
     bright catch-light each, so the eyes read under the eave in the portrait and the icon."""
@@ -1028,10 +1028,11 @@ def _slit_paint(p, n, col):
         de = np.hypot(dx / 0.019, dz / (0.0078 * (1 - 0.35 * np.clip(np.abs(dx) / 0.019, 0, 1) ** 2)))
         lash = ((1 - _ss(1.0, 1.25, de)) * _ss(0.80, 1.0, de))[:, None]
         white = (1 - _ss(0.82, 1.0, de))[:, None]
-        lin = lin * (1 - white) + _hexlin("#9A8676") * white
-        di = np.hypot((dx + 0.002 * np.sign(ex)) / 0.0075, dz / 0.0072)
+        lin = lin * (1 - white) + _hexlin("#D8C8B0" if strong else "#9A8676") * white    # strong: a Highrim card's eyes survive at card size
+        ri = 0.0098 if strong else 0.0075
+        di = np.hypot((dx + 0.002 * np.sign(ex)) / ri, dz / (0.0078 if strong else 0.0072))
         iris = (1 - _ss(0.85, 1.0, di))[:, None]
-        lin = lin * (1 - iris) + _hexlin("#3B2414") * iris
+        lin = lin * (1 - iris) + _hexlin("#23150C" if strong else "#3B2414") * iris
         pupil = (1 - _ss(0.40, 0.55, di))[:, None]
         lin = lin * (1 - pupil) + _hexlin("#0B0909") * pupil
         lin = lin * (1 - lash * 0.9) + _hexlin("#140E0C") * lash * 0.9
@@ -1298,6 +1299,9 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
         log(f"  recolour {n} ({r}): median -> {skin_pal[r]}")
     sid = next((sk["id"] for sk in SKINS if all(str(skin_pal.get(k, "")).lower() == str(v).lower()
                                                  for k, v in sk["palette"].items())), None)
+    if SKIN_FX.get(sid) == "wind_grain" and "head_core" in names:     # the Highrim eyes (cards second pass, verifier watch)
+        m = pid == names.index("head_core")
+        out[m] = _project._lin(_slit_paint(maps["P"][iy, ix][m], maps["N"][iy, ix][m], None, strong=True))
     if SKIN_FX.get(sid) == "wind_grain" and "glaive_frame" in names:
         m = pid == names.index("glaive_frame")
         P = maps["P"][iy, ix][m]

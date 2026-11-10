@@ -5,8 +5,8 @@
   "rim_dL_left": 13.4,
   "rim_dL_right": 5.6,
   "rim_side": "left",
-  "plate_sun": "right",
-  "rim_match": false,
+  "plate_sun": "left",
+  "rim_match": true,
   "dab": 24.7,
   "face": {
    "p5": 45.5,
@@ -23,8 +23,8 @@
   "rim_dL_left": 8.1,
   "rim_dL_right": 11.3,
   "rim_side": "right",
-  "plate_sun": "right",
-  "rim_match": true,
+  "plate_sun": "left",
+  "rim_match": false,
   "dab": 25.3,
   "face": {
    "p5": 22.2,

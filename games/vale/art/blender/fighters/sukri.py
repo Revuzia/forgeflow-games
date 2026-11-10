@@ -250,7 +250,7 @@ CARDS = {
                              {"at": "head", "az": 180.0, "el": -32.0, "dist": 0.40, "color": "#FFD69A",
                               "power": 30.0, "size": 0.12}]},
         "portrait": {"yaw": 40.0},
-        "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26,
+        "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26, "cx": 0.60, "cy": 0.50, "zoom": 1.30, "cx_j": 0.0, "zoom_j": 0.0,
                   "fx": [{"at": "x_cup", "color": "#FFE2A8", "r": 0.06, "k": 0.34}],
                   "face_off": {"splash": [-0.025, 0.046], "portrait": [-0.111, 0.078]}},
     },
@@ -270,7 +270,7 @@ CARDS = {
                                {"at": "head", "az": 175.0, "el": -20.0, "dist": 0.7, "color": "#D6F0EA", "power": 8.0,
                                 "size": 0.3}]},
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
-                  "glow_color": "#A9D2CC", "cx": 0.42,
+                  "glow_color": "#A9D2CC", "cx": 0.55, "cy": 0.62, "zoom": 1.35, "cx_j": 0.0, "zoom_j": 0.0,
                   "fx": [{"at": "x_cup", "color": "#CFF2EA", "r": 0.06, "k": 0.32}],
                   "face_off": {"splash": [-0.006, 0.169], "portrait": [0.085, 0.1]}},
     },
@@ -573,7 +573,20 @@ def _inlay_paint(p, lin):
     a0, a1 = _lin(_hex(EYE_INLAY_DEEP)), _lin(_hex(EYE_INLAY))
     t = ss(0.25, 0.85, dep[m])[:, None]
     out = lin.copy()
-    out[m] = a0[None, :] * (1 - t) + a1[None, :] * t
+    col = a0[None, :] * (1 - t) + a1[None, :] * t
+    # cards second pass (solid almond inlays read as a mannequin, ruling 2): honey inlay with a painted upper lid and a
+    # dark pupil mark, so the eyes look out; paint only, no recess change
+    x, z = p[m, 0], p[m, 2]
+    for ex, ez in EYES:
+        near = np.abs(x - ex) < EYE_W * 1.2
+        dz = (z - ez) / EYE_H
+        dx = (x - ex) / EYE_W
+        lid = (ss(0.25, 0.65, dz + 0.45 * dx * dx) * near)[:, None]
+        col = col * (1 - 0.85 * lid) + _lin(_hex("#3A2415"))[None, :] * 0.85 * lid
+        d = np.hypot((x - ex) / (0.021), (z - ez + 0.002) / 0.019)
+        pupil = ((1.0 - ss(0.72, 1.0, d)) * near)[:, None]
+        col = col * (1 - pupil) + _lin(_hex("#20130C"))[None, :] * pupil
+    out[m] = col
     return out, int(m.sum())
 
 
@@ -729,6 +742,45 @@ def rim_y(x, z):
 
 
 # ── the sculpt ──────────────────────────────────────────────────────────────────────────────────────
+def fix_lows(ctx, body, parts) -> None:
+    """Close the remesh defect on the mask's nose bridge (a pinched non-manifold edge and an inverted face at x 0, z 1.345:
+    the plate behind showed through as a dark speck): those faces are removed and the hole refilled, before the unwrap."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    mw = body.matrix_world
+    zone = lambda c: abs(c.x) < 0.02 and 1.325 < c.z < 1.365 and c.y < -0.2    # noqa: E731
+    mid = lambda e: mw @ ((e.verts[0].co + e.verts[1].co) / 2)                 # noqa: E731
+    # only the fold's wrong faces go (back-facing on the front of the mask, or slivers), so the surface round it stays
+    bad = set()
+    for e in bm.edges:
+        if (e.is_boundary or len(e.link_faces) > 2) and zone(mid(e)):
+            for f in e.link_faces:
+                n = mw.to_3x3() @ f.normal
+                if n.y > 0.0 or f.calc_area() < 25e-6:
+                    bad.add(f)
+    if bad:
+        mat = next(iter(bad)).material_index
+        bmesh.ops.delete(bm, geom=list(bad), context="FACES")
+        for _ in range(2):
+            edges = [e for e in bm.edges if e.is_boundary and zone(mid(e))]
+            if not edges:
+                break
+            res = bmesh.ops.holes_fill(bm, edges=edges, sides=8)
+            for f in res.get("faces", []):
+                f.material_index = mat
+                f.smooth = True
+        fs = [f for f in bm.faces if zone(mw @ f.calc_center_median())]
+        for f in fs:                                     # every face here looks out of the mask
+            if (mw.to_3x3() @ f.normal).y > 0.0:
+                f.normal_flip()
+        left = sum(1 for e in bm.edges if (e.is_boundary or len(e.link_faces) > 2) and zone(mid(e)))
+        print(f"[sukri] fix_lows: nose bridge: {len(bad)} faces replaced, {left} open edges left")
+    bm.to_mesh(body.data)
+    bm.free()
+    body.data.update()
+
+
 def sculpts() -> list:
     """(name, Sculpt, voxel scale, material role, bind, tris, uv weight) in build order."""
     out = []
@@ -2429,7 +2481,7 @@ SKIN_PARTS = {
     # fix pass 1: the feet band (L* 18) lifted: lighter leggings / boots and pale printed shin wraps; the hood and
     # plates a step darker
     "sukri_shadeprint": {"hood": "#A29EAD", "plates": "#BAB7C4",
-                         "face": "#BDB3A3", "staff": "#BFB5A4", "belt": "#34323D",
+                         "face": "#B39272", "staff": "#BFB5A4", "belt": "#34323D",
                          "bracer_L": "#383640", "bracer_R": "#383640", "pants": "#3A3843", "boots": "#3F3C46",
                          "hand_R": "#3E3C46", "hand_L": "#3E3C46", "hand_L_open": "#3E3C46", "cord": "#5A5566"},
 }
@@ -2442,6 +2494,7 @@ HI_MED = ("hood", "plates")    # matched on their lit half (fp1-4: the hood's da
 # print the other way round (light cloth, ink lines) for the feet band
 PRINT = {"sukri_shadeprint": ("#3A3946", "#A8A4B6")}       # (ink, light rim: fp1-3 a softer pair, less zebra)
 PRINT_LIGHT_SHINS = "#ABA7B6"
+PRINT_BAND = "#6A6484"                       # cards second pass: the mid-violet spiral band (no pale bars)
 _RELIEF_SMOOTH: dict = {}
 
 
@@ -2570,21 +2623,20 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             r = _smooth_in_atlas(r, m, PRINT_BLUR)
             if nm == "skirt":
                 r = _skirt_bands(P_, r)
-            if nm == "shins":
-                q = float(np.quantile(r, 1.0 - share0))
-                pale = _lin(_hex(PRINT_LIGHT_SHINS))
-                k_ = np.clip(0.80 * ss(q + 0.05, q - 0.05, r), 0, 0.8)[:, None]
-                col = pale[None, :] * (1 - k_) + ink[None, :] * k_
-                share = float((k_[:, 0] < 0.4).mean())
-            else:
-                q = float(np.quantile(r, 1.0 - share0))
-                w_ = np.clip(ss(q - 0.045, q + 0.045, r) * 0.92, 0, 0.92)
-                if nm == "skirt":
-                    hem = _skirt_hem(P_)
-                    w_ = np.maximum(w_, ss(hem + 0.034, hem + 0.022, P_[:, 2]) * 0.9)
-                col = ink[None, :] * (1 - w_[:, None]) + light[None, :] * w_[:, None]
-                col = col * (1 - 0.30 * ss(0.85, 0.65, r))[:, None]          # the dark band edges stay inked
-                share = float((w_ > 0.45).mean())
+            # cards second pass (the light bars read as ribs, a skull costume; ruling 2's answer): continuous bands that follow
+            # the wrap's spiral round the body, a mid violet on the ink, a darker upper rim; no light rims from the relief
+            band_c = _lin(_hex(PRINT_BAND))
+            ph = (P_[:, 2] / 0.115 + np.arctan2(P_[:, 0], -P_[:, 1]) / (2.0 * np.pi)) * 2.0 * np.pi
+            sw = 0.5 + 0.5 * np.sin(ph)
+            w_ = ss(0.42, 0.62, sw)
+            rim = ss(0.86, 0.98, sw)[:, None]
+            col = ink[None, :] * (1 - w_[:, None]) + band_c[None, :] * w_[:, None]
+            col = col * (1 - 0.32 * rim)
+            if nm == "skirt":
+                hem = _skirt_hem(P_)
+                ww = ss(hem + 0.034, hem + 0.022, P_[:, 2])[:, None]
+                col = col * (1 - ww) + band_c[None, :] * 0.8 * ww
+            share = float((w_ > 0.5).mean())
             out[m] = _srgb(_hi_cap(col * shade[:, None]))
             log(f"  sukri print {nm}: {100 * share:.0f}% light")
             continue
