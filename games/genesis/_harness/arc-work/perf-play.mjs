@@ -62,6 +62,18 @@ const INIT = `(() => {
     for (const n of ['compileShader', 'linkProgram']) wrap(n, (c) => { c.compile++; });
     for (const n of ['getParameter', 'getError', 'readPixels', 'getProgramParameter', 'getShaderParameter', 'getUniformLocation', 'getAttribLocation', 'checkFramebufferStatus', 'getExtension', 'getContextAttributes', 'getShaderPrecisionFormat', 'getProgramInfoLog', 'getShaderInfoLog', 'getBufferSubData', 'clientWaitSync', 'getSyncParameter', 'getQueryParameter', 'getActiveUniform', 'getActiveAttrib', 'getUniformBlockIndex', 'getActiveUniformBlockParameter', 'getIndexedParameter', 'isContextLost', 'getSupportedExtensions', 'getFramebufferAttachmentParameter', 'getTexParameter', 'finish']) wrap(n, (c) => { c.sync++; c.syncNames[n] = (c.syncNames[n] || 0) + 1; });
   }
+  P.passes = ${opts.passes === '1'}; P.pass = {}; P.passN = 0;
+  if (P.passes) {
+    const G = WebGL2RenderingContext.prototype;
+    const bind = G.bindFramebuffer, fin = G.finish, getP = G.getParameter, draws = ['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements'];
+    let cur = null, t0 = 0, drew = 0, vp = '';
+    const ext = { md: null };
+    const close = (gl) => { if (!P.on || !drew) { drew = 0; return; } fin.call(gl); const now = performance.now(); const k = vp; const e = P.pass[k] || (P.pass[k] = { ms: 0, n: 0, draws: 0 }); e.ms += now - t0; e.n++; e.draws += drew; drew = 0; };
+    G.bindFramebuffer = function (t, f) { if (f !== cur) { close(this); cur = f; t0 = performance.now(); } return bind.call(this, t, f); };
+    for (const n of draws) { const o = G[n]; G[n] = function (...a) { if (!drew) { const v = getP.call(this, this.VIEWPORT); vp = (cur ? (cur.__id || (cur.__id = 'fb' + (++P.passN))) : 'canvas') + ' ' + v[2] + 'x' + v[3]; if (!t0) t0 = performance.now(); } drew++; return o.apply(this, a); }; }
+    const ge = G.getExtension; G.getExtension = function (n) { const e = ge.call(this, n); if (e && n === 'WEBGL_multi_draw' && !e.__w) { e.__w = 1; for (const m of ['multiDrawElementsWEBGL', 'multiDrawArraysWEBGL', 'multiDrawElementsInstancedWEBGL', 'multiDrawArraysInstancedWEBGL']) { const o = e[m]; if (o) e[m] = function (...a) { if (!drew) { const gl = P.glctx; if (gl) { const v = getP.call(gl, gl.VIEWPORT); vp = (cur ? (cur.__id || (cur.__id = 'fb' + (++P.passN))) : 'canvas') + ' ' + v[2] + 'x' + v[3]; } } drew++; P.c.draw++; P.c.multi = (P.c.multi || 0) + 1; return o.apply(this, a); }; } } P.glctx = this; return e; };
+    P.closePass = () => { const gl = P.glctx; if (gl) close(gl); t0 = 0; };
+  }
   const raf = window.requestAnimationFrame.bind(window);
   let last = 0;
   window.requestAnimationFrame = (cb) => raf((t) => {
@@ -69,6 +81,7 @@ const INIT = `(() => {
     P.c = zero();
     const s = performance.now();
     cb(t);
+    if (P.closePass) P.closePass();
     const e = performance.now();
     P.frames.push({ work: e - s, interval: last ? t - last : 0, gl: P.gl ? P.c : null });
     last = t;
@@ -111,14 +124,16 @@ console.log(`boot ${bootS.toFixed(1)} s  ${quality} ${vw}x${vh}@${dpr}`);
 let world = 'fresh';
 if (opts.save) {
   const ok = await page.evaluate(async () => { const G = window.__GENESIS__; const b = await (await fetch('/__save')).arrayBuffer(); const r = await G.worlds_.saves.importFile(b, 'perf.gnss'); return r; });
-  // the import may only list it; load the newest if so
-  await page.evaluate(async () => { const G = window.__GENESIS__; const l = await G.worlds_.saves.list(); const st = G.state(); if (l.length && (st.tick ?? 0) < 1000) await G.worlds_.saves.load(l[0].id); });
-  await page.waitForFunction(() => window.__GENESIS__ && window.__GENESIS__.ready, null, { timeout: 900000 }).catch(() => null);
+  // the page may reload into the save (?load=<slot>): wait for the loaded world, whichever page it is on
+  await page.waitForTimeout(3000);
+  await page.waitForFunction(() => { try { const G = window.__GENESIS__; return !!G && G.state().tick > 1000; } catch { return false; } }, null, { timeout: 900000, polling: 1000 });
   await page.evaluate(() => window.__GENESIS__.ready);
+  console.log('loaded', page.url(), ((Date.now() - T0) / 1000).toFixed(0), 's');
   world = 'save:' + opts.save;
   console.log('import', ok, JSON.stringify(await page.evaluate(() => { const s = window.__GENESIS__.state(); return { tick: s.tick, agents: s.planets?.[0]?.agents, buildings: s.planets?.[0]?.buildings }; })));
 }
-const firstSettlement = await page.evaluate(() => { const s = window.__GENESIS__.state(); return s.planets?.[0]?.settlements?.[0]?.id ?? null; }).catch(() => null);
+const firstSettlement = await page.evaluate(() => { const s = window.__GENESIS__.state(); const l = (s.planets?.[0]?.settlements ?? []).slice().sort((a, b) => (b.pop ?? b.population ?? 0) - (a.pop ?? a.population ?? 0)); return l[0]?.id ?? null; }).catch(() => null);
+console.log('settlement', firstSettlement, JSON.stringify(await page.evaluate(() => { const p = window.__GENESIS__.state().planets?.[0] ?? {}; return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Array.isArray(v) ? `[${v.length}]` : typeof v === 'object' ? '{}' : v])); })).slice(0, 600));
 
 const CAM = {
   orbit: { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour: 10 },
@@ -135,6 +150,7 @@ for (const sc of scenes) {
   await page.evaluate((c) => window.__GENESIS__.camera(c), CAM[sc]);
   await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.settle ?? 6));
   if (opts.shot) { mkdirSync(dirname(resolve(ROOT, opts.shot)), { recursive: true }); await page.screenshot({ path: resolve(ROOT, `${opts.shot}-${sc}.png`) }); }
+  console.log('scene', sc, 'settled', ((Date.now() - T0) / 1000).toFixed(0), 's');
   for (const sp of speeds) {
     await page.evaluate((s) => { window.__GENESIS__.setSpeed(s); }, sp);
     await page.evaluate(() => window.__GENESIS__.frames(3));
@@ -157,7 +173,7 @@ for (const sc of scenes) {
     }
     let prof = null;
     if (profile) { prof = (await cdp.send('Profiler.stop')).profile; await cdp.send('Profiler.disable'); }
-    const data = await page.evaluate(() => { const P = window.__PERFPLAY__; P.on = false; const G = window.__GENESIS__; const st = G.state(); return { frames: P.frames, tasks: P.tasks, perf: G.perf(), state: { tick: st.tick, agents: st.planets?.[0]?.agents, buildings: st.planets?.[0]?.buildings, achieved: st.achievedSpeed, render: st.render } }; });
+    const data = await page.evaluate(() => { const P = window.__PERFPLAY__; P.on = false; const G = window.__GENESIS__; const st = G.state(); return { pass: P.pass, frames: P.frames, tasks: P.tasks, perf: G.perf(), state: { tick: st.tick, agents: st.planets?.[0]?.agents, buildings: st.planets?.[0]?.buildings, achieved: st.achievedSpeed, render: st.render } }; });
     await page.evaluate(() => window.__GENESIS__.setSpeed(0));
     const fr = data.frames.slice(1);
     const work = fr.map((f) => f.work);
@@ -187,6 +203,7 @@ for (const sc of scenes) {
       r.profile = { totalMs: +tot.toFixed(0), idleMs: +idle.toFixed(0), gcMs: +(self.get('(garbage collector) :0') || 0).toFixed(1), top: [...self.entries()].filter(([k2]) => !k2.startsWith('(idle)') && !k2.startsWith('(program)')).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k2, v]) => [k2, +(v / Math.max(1, fr.length)).toFixed(2)]) };
       writeFileSync(outFile.replace(/\.json$/, `-${sc}-${sp}.cpuprofile`), JSON.stringify(prof));
     }
+    if (opts.passes === '1') { r.passes = Object.fromEntries(Object.entries(data.pass).map(([k, v]) => [k, { msPerFrame: +(v.ms / Math.max(1, data.frames.length)).toFixed(1), drawsPerFrame: +(v.draws / Math.max(1, data.frames.length)).toFixed(1), binds: +(v.n / Math.max(1, data.frames.length)).toFixed(1) }]).sort((a, b) => b[1].msPerFrame - a[1].msPerFrame)); console.log('   passes', JSON.stringify(r.passes)); await page.evaluate(() => { window.__PERFPLAY__.pass = {}; }); }
     results.push(r);
     const w = r.work;
     console.log(`${sc.padEnd(7)} ${String(sp).padStart(5)}x  work mean ${w.mean.toFixed(1)} p50 ${w.p50.toFixed(1)} p95 ${w.p95.toFixed(1)} p99 ${w.p99.toFixed(1)} max ${w.max.toFixed(1)} >16:${w.over16} >33:${w.over33} >50:${w.over50} /${w.n}  | msgs ${r.msgs.n} clone p95 ${r.msgs.clone.p95.toFixed(1)} max ${r.msgs.clone.max.toFixed(1)} handle p95 ${r.msgs.handle.p95.toFixed(1)} max ${r.msgs.handle.max.toFixed(1)} | interval p50 ${r.interval.p50.toFixed(0)} | prog +${r.newPrograms}` +
