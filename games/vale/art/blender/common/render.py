@@ -254,7 +254,10 @@ def _portrait_cfg(spec, skin, cfg: dict) -> dict:
     pc = dict(cfg)
     pc.update({"pitch": 6.0, "lens": 85.0, "fill": 0.92, "x": 0.5, "yaw": cfg["portrait_yaw"]})
     if st:
-        pc.update({k: v for k, v in (st.get("portrait") or {}).items()})
+        ov = st.get("portrait") or {}
+        if "clip" in ov and "pose" not in ov:     # a splash's pose polish belongs to the splash's clip frame
+            pc.pop("pose", None)
+        pc.update(ov)
     else:
         pc.update({"clip": cfg["portrait_clip"], "t": cfg["portrait_t"]})
     return pc

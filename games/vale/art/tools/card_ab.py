@@ -120,9 +120,9 @@ def card_ids(fid: str) -> list[str]:
 
 def face_of(sid: str, kind: str, faces: dict):
     meta = plates.load_meta(sid, kind)
-    if meta and (meta.get("pts") or {}).get("head"):
-        return meta["pts"]["head"]
-    return faces.get(f"{sid}_{kind}")
+    fid = plates.fighter_of(sid)
+    fp = plates.face_point(meta, plates.params(fid, None if sid == fid else sid), kind)
+    return fp if fp is not None else faces.get(f"{sid}_{kind}")
 
 
 def measure(fids: list[str], tag: str, faces: dict) -> None:

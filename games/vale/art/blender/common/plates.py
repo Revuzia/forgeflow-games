@@ -17,6 +17,11 @@ foreground, given a soft low-sun glow on the origin's side, shouldered so only s
 luma 200, and canvas-toothed. The subject is lit to match (art_light: key, fill tint, rims). The subject is
 composed over it exactly as render.splash_post does (light wrap, bloom, vignette), then the vale_grade_01 LUT.
 
+Card finish v2 (finish2, the default since the closing round 2 card pipeline): no filter on the figure alone. The clean 2x
+render is graded to the plate, takes the plate's light (art_light: rim side and colour from its glow; shared_figure_light:
+ambient tint, colour match, atmosphere), stands on a contact and cast shadow (ground_shadow, in place of the catcher's
+frame-wide band), and one soft-Kuwahara paint-over and canvas tooth go over the finished composite, eased on face and hands.
+
 The raw subject passes (straight RGBA, display sRGB, before the post) are kept in art/.cache/fighters/plates/, so
 the plates are re-graded without Blender:
     python3 art/blender/common/plates.py compose [sids] [--preview] [--kind splash|portrait]
@@ -122,11 +127,12 @@ DEFAULTS = {
     "paint_r2": 3,              # its radius (px at 1600; the portrait at 512 uses 0.7 of it)
     "paint_q": 4.0,             # sector sharpness (higher = crisper strokes)
     "amb_tint": 0.45,           # shadow side of the figure multiplied toward the plate's mean colour (0 = off)
+    "match": 0.3,               # the figure's mean colour moved this far (ratio) toward the plate round it
     "sun_tint": 0.16,           # a colour gradient across the figure from the plate's sun side, in the glow colour
     "haze": 0.05,               # atmospheric depth: this much of the blurred plate over the figure (x 2 at the feet)
     "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.25,  # light wrap of the plate over the figure's edge, full on the sun side
     "sun_edge": 0.38,           # an extra glow-coloured edge on the sun side
-    "contact": 0.8, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
+    "contact": 1.0, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
     "shadow_tint": 0.24,        # shadow colour: the plate's own, this bright
     "shared_light": True,       # the render's rim pair comes from the plate's sun side and colour (art_light)
     "fx": [],                   # optional soft glows at a bone: {"at": bone, "color": hex, "r": fraction of the height, "k": strength}
@@ -757,7 +763,17 @@ def _figure_box(af: np.ndarray):
     return int(rows[0]), int(rows[-1]), int(cols[0]), int(cols[-1])
 
 
-def face_mask(af: np.ndarray, meta: dict | None, kind: str) -> np.ndarray:
+def face_point(meta: dict | None, p: dict, kind: str):
+    """The face centre (fractions of the image): the head bone's point plus the card's "face_off" {kind: [dx, dy]} (a head
+    built larger than its bone, Sukri's, has its face well below the bone's middle). None without render notes."""
+    he = _pt(meta, "head")
+    if he is None:
+        return None
+    off = (p.get("face_off") or {}).get(kind) or (0.0, 0.0)
+    return he[0] + float(off[0]), he[1] + float(off[1])
+
+
+def face_mask(af: np.ndarray, meta: dict | None, kind: str, p: dict | None = None) -> np.ndarray:
     """1 over the face and hands (smooth ellipses from the render's bone points; without meta: the top of the figure)."""
     h, w = af.shape
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
@@ -767,7 +783,7 @@ def face_mask(af: np.ndarray, meta: dict | None, kind: str) -> np.ndarray:
         return m
     y0, y1, _c0, _c1 = box
     fh = max(8.0, float(y1 - y0))
-    he = _pt(meta, "head")
+    he = face_point(meta, p or {}, kind)
     ne = _pt(meta, "neck")
     if he is not None:
         cx, cy = he[0] * w, he[1] * h
@@ -828,10 +844,10 @@ def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, m
         ys = np.where(af[:, col] > 0.5)[0]
         if len(ys):
             sole[ys[-1]:min(h, ys[-1] + band), col] = 1.0
-    c = _gauss1(_gauss1(sole, 14.0 * k, 1), 5.0 * k, 0)[..., 0]
+    c = np.roll(_gauss1(_gauss1(sole, 9.0 * k, 1), 3.0 * k, 0)[..., 0], max(1, int(round(3.0 * k))), axis=0)  # a crisp core just under the sole
     c2 = _gauss1(_gauss1(sole, 42.0 * k, 1), 11.0 * k, 0)[..., 0]
     c, c2 = c / max(1e-4, float(c.max())), c2 / max(1e-4, float(c2.max()))
-    contact = np.clip(0.8 * c + 0.45 * c2, 0.0, 1.0) * float(p.get("contact", 0.62))
+    contact = np.clip(1.0 * c + 0.5 * c2, 0.0, 1.0) * float(p.get("contact", 1.0))
     # the real catcher shadow, kept close to the figure
     dx = (xx - fx) / (0.55 * fh)
     dy = (yy - y1) / (0.20 * fh)
@@ -880,6 +896,15 @@ def shared_figure_light(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str) -> n
     amb = amb / max(1e-5, float(amb @ Y709))
     shade = np.clip(1.0 - _enc(L) * 1.5, 0.0, 1.0) ** 1.4
     lin = lin * (1.0 + (amb - 1.0) * float(p.get("amb_tint", 0.45)) * shade)
+    # a colour match: the figure's mean colour moves `match` of the way (in ratio) toward the plate round it, so a warm
+    # figure sits in a cool plate; the figure keeps its own hues and values
+    beta = float(p.get("match", 0.3))
+    solid = af > 0.9
+    ring = (gaussian(af[..., None], 24.0 * (w / 1600.0))[..., 0] > 0.05) & (af < 0.02)
+    if beta > 0 and solid.any() and ring.any():
+        fm, pm = lin[solid].mean(axis=0), _dec(pl[..., :3])[ring].mean(axis=0)
+        fm, pm = fm / max(1e-5, float(fm @ Y709)), pm / max(1e-5, float(pm @ Y709))
+        lin = lin * np.clip(pm / np.maximum(fm, 1e-5), 0.6, 1.6).astype(np.float32) ** beta
     # sun-side colour gradient across the figure
     box = _figure_box(af)
     if box is not None and pl_info["side"] != 0:
@@ -920,7 +945,7 @@ def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: flo
     if sx != 0.0:
         lit = np.clip(-gx / nl * sx * 0.75 + 0.05 + 0.2 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)
     else:
-        lit = np.clip(0.55 + 0.45 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)
+        lit = np.clip(0.12 + 0.6 * np.clip(-gy / nl, 0.0, 1.0), 0.0, 1.0)   # a sun behind: the top edges only, no pale ring
     off = float(p.get("wrap_off", 0.25))
     side_w = (off + (1.0 - off) * lit)[..., None]
     wr = np.clip(float(p.get("wrap", 0.32)) * strength * band * side_w, 0.0, 1.0)
@@ -990,7 +1015,7 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
     mx = float(p.get("paint_mix", 0.55))
     if mx > 0 and r >= 1.0:
         painted = soft_kuwahara(comp[..., :3], r, float(p.get("paint_q", 6.0)))
-        fm = face_mask(fig[..., 3], meta, kind)[..., None]
+        fm = face_mask(fig[..., 3], meta, kind, p)[..., None]
         m = mx + (float(p.get("paint_mix_face", 0.08)) - mx) * fm
         m = m * (float(p.get("paint_mix_plate", 0.45)) + (1.0 - float(p.get("paint_mix_plate", 0.45))) * fig[..., 3:4])
         comp[..., :3] = comp[..., :3] * (1.0 - m) + painted * m

@@ -251,7 +251,8 @@ CARDS = {
                               "power": 30.0, "size": 0.12}]},
         "portrait": {"yaw": 40.0},
         "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26,
-                  "fx": [{"at": "x_cup", "color": "#FFE2A8", "r": 0.06, "k": 0.34}]},
+                  "fx": [{"at": "x_cup", "color": "#FFE2A8", "r": 0.06, "k": 0.34}],
+                  "face_off": {"splash": [-0.025, 0.046], "portrait": [-0.111, 0.078]}},
     },
     "sukri_stillwater": {
         # (closing round 2: the recall's cup glared over the face: the Mote Toss, the face clear)
@@ -270,7 +271,8 @@ CARDS = {
                                 "size": 0.3}]},
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC", "cx": 0.42,
-                  "fx": [{"at": "x_cup", "color": "#CFF2EA", "r": 0.06, "k": 0.32}]},
+                  "fx": [{"at": "x_cup", "color": "#CFF2EA", "r": 0.06, "k": 0.32}],
+                  "face_off": {"splash": [-0.006, 0.169], "portrait": [0.085, 0.1]}},
     },
     "sukri_shadeprint": {
         "splash": {"clip": "cast_a1", "t": 0.42, "yaw": 26.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
@@ -290,7 +292,8 @@ CARDS = {
                                 "size": 0.3}]},
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "glow": [0.30, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0", "cx": 0.60,
-                  "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}]},
+                  "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}],
+                  "face_off": {"splash": [-0.02, 0.072], "portrait": [-0.028, 0.088]}},
     },
 }
 SKINS: list = [
