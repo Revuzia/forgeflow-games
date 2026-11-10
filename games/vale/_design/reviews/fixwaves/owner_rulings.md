@@ -239,3 +239,9 @@ Ruling 27's climb clause failed only on total footprint. High RIFT/BRIDGE/RIFT/R
 ## 29. Shift + right-click attack-moves; fighters collide with minions (owner, 2026-11-09)
 
 Shift + right-click attack-moves: the fighter walks to the point, stops for whatever is in attack range, attacks the clicked enemy first if it is in range, and never chases. Right-click on an enemy still attacks and chases it. Fighters and lane minions collide as before: the owner tried a walk-through version for a few minutes and had it removed once it was confirmed that the gauge does not work that way.
+
+## 30. Splash and portrait cards are painted over the 3D render (lead, by delegation, 2026-11-09)
+
+The 3D card finish (card finish v2, cards/verify1.json) scored Kemdo 5.0 and Sukri 4.5 against a League splash as a gauge: a clean 3D still on a soft plate does not reach the bar. A paint-over of the finished render through tools/imagegen/run_xai.py --ref (cards/kemdo_painted_pass_ab.png) keeps the figure on-model and adds painted form, light and living eyes. Industry practice is the same: splash art is painted over a 3D block-out. So every splash and portrait card becomes render, then painted pass, then a gate before it ships. The gate: the same pose, silhouette, palette and kit parts as the model (on-model check against the render), the sensitivity rules (no glowing, solid or hollow eyes, no horror, skull, mummy or mannequin read; no tall, pointed or conical hood), the store dE gates, and an adversarial look at full, card and chip size. A failed painted variant is never shipped; the card falls back to the 3D finish. Generated raw files stay out of git; only the accepted card is committed. Icons stay 3D.
+
+Also, Sukri Shadeprint: the skull-costume read (pale mask, solid eyes, rib bars) counts as a sensitivity problem. It takes ruling 2's answer: amber lacquer mask, lidded eyes with pupils, bands instead of ribs.
