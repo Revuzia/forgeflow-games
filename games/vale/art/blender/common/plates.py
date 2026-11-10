@@ -131,7 +131,7 @@ DEFAULTS = {
     "sun_tint": 0.16,           # a colour gradient across the figure from the plate's sun side, in the glow colour
     "haze": 0.05,               # atmospheric depth: this much of the blurred plate over the figure (x 2 at the feet)
     "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.25,  # light wrap of the plate over the figure's edge, full on the sun side
-    "sun_edge": 0.55,           # an extra glow-coloured edge on the sun side
+    "sun_edge": 1.0,           # an extra glow-coloured edge on the sun side
     "contact": 1.0, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
     "shadow_tint": 0.24,        # shadow colour: the plate's own, this bright
     "ground_shade": 0.85,       # the figure darkened from the ground up by the plate's own value at its feet
@@ -1062,10 +1062,12 @@ def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: flo
     pb = gaussian(pl, 14.0 * k)[..., :3]
     off = float(p.get("wrap_off", 0.25))
     wr = np.clip(float(p.get("wrap", 0.32)) * strength * band * (off + (1.0 - off) * lit), 0.0, 1.0)[..., None]
-    comp[..., :3] = comp[..., :3] * (1.0 - wr) + pb * wr
+    mixv = comp[..., :3] * (1.0 - wr) + pb * wr
+    lw = lit[..., None]                                     # on the sun side the plate's light only lifts the edge
+    comp[..., :3] = np.maximum(comp[..., :3], mixv) * lw + mixv * (1.0 - lw)
     lead = _enc(np.array(pli["lead"], np.float32))
-    thin = (np.exp(-d / max(0.8, 1.6 * k)) * (d <= wmax) * a[..., 0] * lit)[..., None]
-    comp[..., :3] = comp[..., :3] + (1.0 - comp[..., :3]) * thin * float(p.get("sun_edge", 0.55)) * strength * lead
+    thin = (np.exp(-d / max(1.5, 3.5 * k)) * (d <= wmax) * a[..., 0] * lit ** 1.5)[..., None]
+    comp[..., :3] = comp[..., :3] + (1.0 - comp[..., :3]) * thin * float(p.get("sun_edge", 1.0)) * strength * lead
     # bloom and vignette (the old post, unchanged)
     lum = comp[..., :3] @ Y709
     hi = np.clip((lum - 0.82) / 0.18, 0.0, 1.0)[..., None] * comp[..., :3]
