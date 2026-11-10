@@ -43,3 +43,4 @@ ages, story, epithets, Generations, views) -> C3 legends.ts (wordFor, legends, t
 - B1 scripted (babel 32 y, 4 seeds): flood -> covenant -> tower -> scattering in order 4/4 PASS. B4: legends 9-12 per
   run by year 32, max 85-106 chars (<= 140), told lines 4-5; gen-2 differs (unit test). B2 story 4-5 ms (babel ~400 agents).
 - GATE: check1.log (slot.sh npm run check) queued ~01:2xZ.
+- check1 was cut by another restart (0 failures until then); check2.log queued 05:23Z.

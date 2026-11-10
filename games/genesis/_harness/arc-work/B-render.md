@@ -29,3 +29,8 @@
 - 19:5xZ LOOKED AT b1-hurl-50/after (live babel, defiance 0.8 + painted storm, 48 h of 20-min steps): NO hurl (0 signs) - the sim chose curse (day 3, dusk toast) and IDOL (day 4, sim-raised, toast 'carved a god of its own'); 21 h night frame, no bolt -> no bleach. Retake with up to 9 days hourly + storm repaint. Container restarted 20:1xZ. 20:2xZ b-chain5: b-render-live.json (b3-*: hurl, idol, curse), poses2, flood10.
 - 2026-11-10 00:5xZ restart again (nothing of b-chain5/b-check1 finished). b-chain6 (live, poses2, flood10) + GATE b-check2.
 - 01:1xZ b3-hurl-50 (9 days hourly under a god storm, Shenyaar id 1, def 0.8): still 0 hurl. Probe B-render-hurlprobe.ts: stormNear true, bold 25, fear ~0.25; the seeded daily hurl roll (defyRoll) for town 1 first passes on day 12. Town 3 (Yik) at def 1 hurls at hour 0 (node). Live spec now uses town 3 / def 1; b-chain7 restarted (live, poses2, flood10). Gate b-check2 running.
+- GATE b-check2 (01:27Z, slot.sh npm run check, poses + bodygen arms in): 881/881 GREEN.
+- LOOKED AT b3-hurl-50 / b3-hurl-25 (live, Yik def 1, god storm): 8 hurl signs, 8 hurlers drawn, 9 -> 17 arcs in
+  flight (stats), BUT the act fires at ~01:00 game time: night + rain, the throwers hidden behind houses - not judgeable.
+  b4 (b-render-hurlday.json): same recipe, camera hour 14 at 40 m / 20 m, plus the idol 14/40 m.
+- 05:2xZ another restart; b-chain9: hurlday, poses2, flood10.

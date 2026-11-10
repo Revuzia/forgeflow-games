@@ -39,6 +39,39 @@
     "G.hold(false); await G.camera({ mode: 'orbit', target: window.__tgt, dist: 20, tilt: 66, yaw: 50, fov: 50 }); await G.frames(3); G.hold(true); for (let i = 0; i < 8; i++) { F.advance(0.3); await G.frames(1); }",
     "return { hurlers: F.fx.vis.life.crowds.hurlers.length / 5, arcs: F.fx.defiance.stats };"
    ]
+  },
+  {
+   "name": "b4-idol",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "const before = new Set(pv().buildings.id); const r = await G.cmd({ k: 'settlement.build', settlement: sid, type: 'idol' }); await G.step(2); await G.frames(2);",
+    "let id = -1; const B = pv().buildings; for (let i = 0; i < B.count; i++) if (!before.has(B.id[i])) id = B.id[i];",
+    "G.hold(false); await G.camera({ mode: 'orbit', target: { kind: 'building', id }, dist: 14, tilt: 75, yaw: 30, fov: 50, hour: 10 }); await G.frames(4); G.hold(true);",
+    "return { r: r.msg ?? JSON.stringify(r).slice(0, 200), id };"
+   ]
+  },
+  {
+   "name": "b4-idol-40",
+   "params": "scenario=babel&source=worker&seed=1",
+   "size": [
+    888,
+    500
+   ],
+   "quality": "medium",
+   "ui": false,
+   "frames": 1,
+   "script": [
+    "const F = window.__GENESIS_FX__; const pv = () => F.fx.vis.pv; const sid = window.__sid;",
+    "G.hold(false); const B = pv().buildings; await G.camera({ mode: 'orbit', target: { kind: 'building', id: B.id[B.count - 1] }, dist: 40, tilt: 66, yaw: 30, fov: 50, hour: 10 }); await G.frames(4); G.hold(true); return { ok: 1 };"
+   ]
   }
  ]
 }
