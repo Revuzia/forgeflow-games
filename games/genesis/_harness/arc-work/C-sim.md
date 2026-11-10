@@ -36,3 +36,10 @@ ages, story, epithets, Generations, views) -> C3 legends.ts (wordFor, legends, t
   unit-tested), legend max 97 chars, told lines 4. The scripted flood is `covenant.offer` (debug "as if a great flood"):
   a real god flood on babel breaks the host's pride (harm) and the tower then never comes; logged in the probe header.
 - arc-covenant 7/7 (+ free text). RUNS relaunched: unatt3a.log (unattended 1-4 + scripted 4), unatt3b.log (5-8).
+- RESTART 2 (usage pause) killed unatt3; seeds 1-2 survived. unatt4a/b.log (01:05Z) finished the rest.
+- B1 MEASURED (60 y unattended, 8 seeds): ages 12, 3, 11, 7, 12, 7, 5, 5 -> >= 3 on 8/8 PASS (plenty -> silence -> trust /
+  tower / builders / natural ruin). Epithet "the Silent One" 8/8. Story: max 8 sentences/age, generations 2-6, never
+  "The End", 2.8-3.8 ms. Natural great destructions opened offers on seeds 3, 5, 7 (no bow: no god answered).
+- B1 scripted (babel 32 y, 4 seeds): flood -> covenant -> tower -> scattering in order 4/4 PASS. B4: legends 9-12 per
+  run by year 32, max 85-106 chars (<= 140), told lines 4-5; gen-2 differs (unit test). B2 story 4-5 ms (babel ~400 agents).
+- GATE: check1.log (slot.sh npm run check) queued ~01:2xZ.
