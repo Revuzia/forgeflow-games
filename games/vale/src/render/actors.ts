@@ -952,7 +952,7 @@ export class Actor implements CrowdActor {
     const peak = Math.max(ACCENT_WINDUP_MIN, 1.35 / Math.max(0.05, luma(this.accentColor)));
     const target = v.alive && windup > 0 ? ACCENT_REST + (peak - ACCENT_REST) * Math.min(1, windup * 1.6) : ACCENT_REST;
     this.glow += (target - this.glow) * Math.min(1, dt * 18);
-    for (const m of this.accent) m.emissiveIntensity = this.glow;
+    for (const m of this.accent) m.emissiveIntensity = this.veilMode === 3 ? this.glow * VEIL_GRASS_DARK : this.glow;
     this.tickReactions(dt);
 
     if (this.mixer && this.template) {
