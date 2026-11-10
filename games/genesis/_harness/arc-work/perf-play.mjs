@@ -31,6 +31,7 @@ const outFile = resolve(ROOT, opts.out ?? `_harness/scratch/arc/perf/play-${qual
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ogg': 'audio/ogg', '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.woff': 'font/woff', '.txt': 'text/plain', '.webp': 'image/webp' };
 const server = createServer((req, res) => {
   let p = decodeURIComponent((req.url ?? '/').split('?')[0]);
+  if (p === '/__save' && opts.save) { res.setHeader('content-type', 'application/octet-stream'); res.end(readFileSync(resolve(ROOT, opts.save))); return; }
   if (p.endsWith('/')) p += 'index.html';
   const f = join(DIST, p);
   if (!f.startsWith(DIST) || !existsSync(f) || !statSync(f).isFile()) { res.statusCode = 404; res.end(); return; }
@@ -109,8 +110,7 @@ console.log(`boot ${bootS.toFixed(1)} s  ${quality} ${vw}x${vh}@${dpr}`);
 
 let world = 'fresh';
 if (opts.save) {
-  const bytes = [...readFileSync(resolve(ROOT, opts.save))];
-  const ok = await page.evaluate(async (b) => { const G = window.__GENESIS__; const r = await G.worlds_.saves.importFile(b, 'perf.gnss'); return r; }, bytes);
+  const ok = await page.evaluate(async () => { const G = window.__GENESIS__; const b = await (await fetch('/__save')).arrayBuffer(); const r = await G.worlds_.saves.importFile(b, 'perf.gnss'); return r; });
   // the import may only list it; load the newest if so
   await page.evaluate(async () => { const G = window.__GENESIS__; const l = await G.worlds_.saves.list(); const st = G.state(); if (l.length && (st.tick ?? 0) < 1000) await G.worlds_.saves.load(l[0].id); });
   await page.waitForFunction(() => window.__GENESIS__ && window.__GENESIS__.ready, null, { timeout: 900000 }).catch(() => null);
@@ -133,7 +133,8 @@ const stat = (a) => ({ n: a.length, mean: a.reduce((x, y) => x + y, 0) / Math.ma
 const results = [];
 for (const sc of scenes) {
   await page.evaluate((c) => window.__GENESIS__.camera(c), CAM[sc]);
-  await page.evaluate(() => window.__GENESIS__.frames(6));
+  await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.settle ?? 6));
+  if (opts.shot) { mkdirSync(dirname(resolve(ROOT, opts.shot)), { recursive: true }); await page.screenshot({ path: resolve(ROOT, `${opts.shot}-${sc}.png`) }); }
   for (const sp of speeds) {
     await page.evaluate((s) => { window.__GENESIS__.setSpeed(s); }, sp);
     await page.evaluate(() => window.__GENESIS__.frames(3));
