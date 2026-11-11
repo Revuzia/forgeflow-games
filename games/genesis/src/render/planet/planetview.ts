@@ -14,7 +14,7 @@ import { ChunkLOD } from './chunks.ts';
 import { DirFieldCube } from './dirtex.ts';
 import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
 import { makeOceanMaterial } from './ocean.ts';
-import { Vegetation } from '../life/vegetation.ts';
+import { PX_PER_RAD, Vegetation } from '../life/vegetation.ts';
 import { GroundCover } from '../life/groundcover.ts';
 import { LifeLayer } from '../life/life.ts';
 import { makeSiltState, SILT_MAX, updateSilt } from './silt.ts';
@@ -48,6 +48,8 @@ export interface PlanetFrameContext {
   proj: Matrix4;
   /** the view's height in CSS pixels (herds keep a readable size on screen) */
   viewH?: number;
+  /** the view's height in render pixels (the far trees' size on screen) */
+  renderH?: number;
   /** near-camera grass and stones (quality) */
   grass: boolean;
   /** life layer: sim-paced animation clock (s), point-light and particle budgets (quality) */
@@ -237,6 +239,7 @@ export class PlanetVisual {
     veg.enabled = ctx.primary && ctx.vegRange > 0;
     veg.setShadowCasting(ctx.primary && ctx.shadows);
     veg.yearFrac = ctx.yearFrac;
+    if (ctx.renderH) { veg.pxPerRad = 0.5 * ctx.renderH * ctx.proj.elements[5]; if (ctx.primary) PX_PER_RAD.value = veg.pxPerRad; }
     veg.update(pv, this.camBody, ctx.frame);
     this.groundCover.enabled = ctx.primary && ctx.grass;
     this.groundCover.yearFrac = ctx.yearFrac;
@@ -246,8 +249,8 @@ export class PlanetVisual {
       shadows: ctx.primary && ctx.shadows, lightBudget: ctx.lightBudget ?? 8, particleBudget: ctx.particleBudget ?? 20000, crowdDensity: ctx.vegDensity,
       pxPerRad: ctx.viewH ? 0.5 * ctx.viewH * ctx.proj.elements[5] : 0,
     });
-    (u.uVegFade.value as { x: number; y: number }).x = veg.group.visible ? veg.fade.value.x : 1e9;
-    (u.uVegFade.value as { x: number; y: number }).y = veg.group.visible ? veg.fade.value.y : 1e9 + 1;
+    (u.uVegFade.value as { x: number; y: number }).x = veg.nearGroup.visible ? veg.fade.value.x : 1e9;
+    (u.uVegFade.value as { x: number; y: number }).y = veg.nearGroup.visible ? veg.fade.value.y : 1e9 + 1;
     for (let L = 0; L < this.terrainMats.length; L++) {
       const [full, start] = this.lod.morphRange(L, ctx.K);
       const m = this.terrainMats[L].userData.uMorph as IUniform<{ set(x: number, y: number, z: number, w: number): void }>;

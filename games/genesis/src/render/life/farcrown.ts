@@ -146,14 +146,30 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
       tri(b0, t0, t1, false); tri(b0, t1, b1, false);
     }
   }
+  // indexed: the hull's vertices are shared by its faces (smooth normals: the same at every face), so a far tree
+  // costs ~10-20 vertex-shader runs, not 3 per triangle
+  const uniq = new Map<string, number>();
+  const idx: number[] = [];
+  const P2: number[] = [], N2: number[] = [], C2: number[] = [], W2: number[] = [], K2: number[] = [], R2: number[] = [];
+  for (let i = 0; i < pos.length / 3; i++) {
+    const key = `${pos[i * 3].toFixed(5)},${pos[i * 3 + 1].toFixed(5)},${pos[i * 3 + 2].toFixed(5)},${acard[i]}`;
+    let j = uniq.get(key);
+    if (j === undefined) {
+      j = P2.length / 3; uniq.set(key, j);
+      P2.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); N2.push(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
+      C2.push(col[i * 3], col[i * 3 + 1], col[i * 3 + 2]); W2.push(aw[i]); K2.push(acard[i]); R2.push(acrown[i]);
+    }
+    idx.push(j);
+  }
   const g = new BufferGeometry();
-  g.setAttribute('aCrown', new Float32BufferAttribute(acrown, 1));
-  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new Float32BufferAttribute(nrm, 3));
-  g.setAttribute('color', new Float32BufferAttribute(col, 3));
-  g.setAttribute('aWind', new Float32BufferAttribute(aw, 1));
-  g.setAttribute('aLeafUv', new Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
-  g.setAttribute('aCard', new Float32BufferAttribute(acard, 1));
+  g.setIndex(idx);
+  g.setAttribute('aCrown', new Float32BufferAttribute(R2, 1));
+  g.setAttribute('position', new Float32BufferAttribute(P2, 3));
+  g.setAttribute('normal', new Float32BufferAttribute(N2, 3));
+  g.setAttribute('color', new Float32BufferAttribute(C2, 3));
+  g.setAttribute('aWind', new Float32BufferAttribute(W2, 1));
+  g.setAttribute('aLeafUv', new Float32BufferAttribute(new Float32Array(P2.length / 3 * 2), 2));
+  g.setAttribute('aCard', new Float32BufferAttribute(K2, 1));
   g.computeBoundingSphere();
   return g;
 }

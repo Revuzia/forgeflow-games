@@ -540,7 +540,7 @@ export const WIND_K: IUniform<number> = { value: 0.8 };
 export const LOD_BAND: IUniform<Vector4> = { value: new Vector4(51, 69, 140, 179) };
 /** PERF P2 far layer: px of a tree's height on screen where hull lod 0 hands over to lod 1 (x..y) and where the far
  *  tree gives way to the terrain's canopy shading (z..w) */
-export const FAR_PX = { lod: [9, 14], out: [2.5, 5] } as const;
+export const FAR_PX = { lod: [12, 18], out: [3, 6] } as const;
 export const FAR_BAND: IUniform<Vector4> = { value: new Vector4(FAR_PX.lod[0], FAR_PX.lod[1], FAR_PX.out[0], FAR_PX.out[1]) };
 /** render pixels per radian of the view (vertical; set each frame) */
 export const PX_PER_RAD: IUniform<number> = { value: 536 };
@@ -692,9 +692,11 @@ function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantE
 /** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
 const FAR_DEFAULT = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('fartrees') !== '0'; } catch { return true; } })();
 /** main-thread ms a frame for making far blocks (scatter + instance data of a cell, ~0.1 ms each) */
-const FAR_BUDGET_MS = 3;
+const FAR_BUDGET_MS = (() => { try { return Number(new URLSearchParams(globalThis.location?.search ?? '').get('farbudget')) || 3; } catch { return 3; } })();
+/** main-thread ms a frame for re-listing the far cells as the camera moves */
+const FAR_SCAN_MS = 1.5;
 /** the tallest tree a far cell may hold (m), and how far ahead of need (x the reach) cells are made */
-const FAR_H_MAX = 36;
+const FAR_H_MAX = 41;
 const PREFETCH = 1.5;
 const KELP = KINDS.indexOf('kelp');
 /** the plant scatter's fields (a change re-scatters the cells around it) and the far tint's (snow, fire) */
@@ -1048,9 +1050,22 @@ export class Vegetation {
     // the camera moves up to range * 0.04 before the next rebuild: trees that may enter a band by then draw in both LODs
     const M = range * 0.04 + 2;
     const env = plantEnv(pv, dy, this.yearFrac);
+    // PERF (session 6): each cell's instance data (matrix, tint, extra) is made once and kept with its plants — a
+    // rebuild (every few metres the camera moves) only picks LODs and copies; it re-made every plant's matrix and
+    // sampled four fields per plant each time. Re-made with the cell's plants, a season step, the camera changing
+    // hemisphere, or a snow / fire / burnt / tree change around it (plantFieldsChanged).
+    const envKey = `${this.seasonStep}|${dy >= 0 ? 1 : 0}`;
+    if (envKey !== this.nearEnv) { this.nearEnv = envKey; this.nearInst.clear(); }
     let total = 0;
     for (const c of cells) {
       const rec = this.cellPlants(pv, c);
+      let ni = this.nearInst.get(c);
+      if (!ni || ni.rec !== rec) {
+        const np = rec.length / REC;
+        ni = { rec, m: new Float32Array(np * 16), c: new Float32Array(np * 3), e: new Float32Array(np * 4), sx: new Float32Array(np) };
+        for (let q = 0; q < np; q++) ni.sx[q] = plantInstance(pv, rec, q * REC, env, ni.m, q * 16, ni.c, q * 3, ni.e, q * 4);
+        this.nearInst.set(c, ni);
+      }
       for (let i = 0; i < rec.length; i += REC) {
         const gr = rec[i + 3];
         _v.set(rec[i] * gr, rec[i + 1] * gr, rec[i + 2] * gr);
@@ -1069,12 +1084,14 @@ export class Vegetation {
         const bA = this.buckets[base + la];
         const bB = lb >= 0 ? this.buckets[base + lb] : null;
         if (bA.count >= bA.mesh.instanceMatrix.count || (bB && bB.count >= bB.mesh.instanceMatrix.count)) continue;
-        const sxMax = plantInstance(pv, rec, i, env, _pm, 0, _pc, 0, _pe, 0);
+        const q = i / REC;
+        const sxMax = ni.sx[q];
         for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
           const n = b.count;
-          (b.mesh.instanceMatrix.array as Float32Array).set(_pm, n * 16);
-          (b.mesh.instanceColor!.array as Float32Array).set(_pc, n * 3);
-          b.extra.setXYZW(n, _pe[0], _pe[1], _pe[2], role + _pe[3]);
+          (b.mesh.instanceMatrix.array as Float32Array).set(ni.m.subarray(q * 16, q * 16 + 16), n * 16);
+          (b.mesh.instanceColor!.array as Float32Array).set(ni.c.subarray(q * 3, q * 3 + 3), n * 3);
+          const ea = b.extra.array as Float32Array;
+          ea[n * 4] = ni.e[q * 4]; ea[n * 4 + 1] = ni.e[q * 4 + 1]; ea[n * 4 + 2] = ni.e[q * 4 + 2]; ea[n * 4 + 3] = role + ni.e[q * 4 + 3];
           b.dist[n] = d;
           b.count++;
           const e = b.geoR * Math.max(rec[i + 5], sxMax);
@@ -1096,6 +1113,7 @@ export class Vegetation {
     }
     this.stats.instances = total;
     this.stats.cells = cells.length;
+    if (this.nearInst.size > cells.length * 3 + 64) { const keep = new Set(cells); for (const c of [...this.nearInst.keys()]) if (!keep.has(c)) this.nearInst.delete(c); }
   }
 
   // ── PERF P2 (session 6): the FAR-TREE layer ────────────────────────────────────────────────────────────────────
@@ -1112,7 +1130,7 @@ export class Vegetation {
   readonly farOn: IUniform<number> = { value: FAR_DEFAULT ? 1 : 0 };
   /** render pixels per radian of the view (vertical), set by the planet view each frame */
   pxPerRad = 536;
-  farStats = { instances: 0, cells: 0, blocks: 0, built: 0, queue: 0, ms: 0 };
+  farStats = { instances: 0, cells: 0, blocks: 0, built: 0, queue: 0, ms: 0, refreshMs: 0, refreshCells: 0, grows: 0 };
   private farMat: MeshStandardMaterial;
   private farDepth: ShaderMaterial;
   private leafTex: IUniform;
@@ -1128,16 +1146,25 @@ export class Vegetation {
   private farEnv = '';
   private fRefs = new Map<string, Float32Array | null>();
   private farEMax = 0;
+  private farMark = new Uint32Array(0);
+  /** near trees: per cell the instance data of its plants (made with them; see update) */
+  private nearInst = new Map<number, { rec: Float32Array; m: Float32Array; c: Float32Array; e: Float32Array; sx: Float32Array }>();
+  private nearEnv = '';
+  private farPend: number[] = [];
+  private scan: { cells: number[]; i: number; stamp: number; kept: number; want: number[]; wantD: number[]; pend: number[]; pendD: number[]; ms: number } | null = null;
+  private farPendAt = 0;
+  private farStamp = 0;
 
   /** the cached plants of a cell go (its inputs changed); its far block is re-made too (it keeps drawing till then) */
   private dropCell(c: number): void {
     this.cache.delete(c);
     const b = this.blocks.get(c);
-    if (b) b.stale = true;
+    if (b) { b.stale = true; this.farFrame = -1e9; }
   }
   private dropAll(): void {
     this.cache.clear();
     for (const b of this.blocks.values()) b.stale = true;
+    this.farFrame = -1e9;
   }
 
   /**
@@ -1173,10 +1200,13 @@ export class Vegetation {
       for (const c of [...this.cache.keys()]) if (cur[c]) { this.dropCell(c); any = true; }
       for (const [c, b] of this.blocks) if (cur[c]) b.stale = true;
       if (any) this.lastFrame = -1e9;
+      this.farFrame = -1e9;
     }
     if (tint) {
       const cur = grow(tint, 1);
       for (const [c, b] of this.blocks) if (cur[c]) b.stale = true;
+      for (const c of [...this.nearInst.keys()]) if (cur[c]) { this.nearInst.delete(c); this.lastFrame = -1e9; }
+      this.farFrame = -1e9;
     }
   }
 
@@ -1261,7 +1291,7 @@ export class Vegetation {
       if (b.free[k + 1] === n) b.free.splice(k, 2); else { b.free[k] += n; b.free[k + 1] -= n; }
       return at;
     }
-    if (b.hi + n > b.cap) this.growBucket(b, Math.max(b.cap * 2, Math.ceil((b.hi + n) * 1.5)));
+    if (b.hi + n > b.cap) { this.growBucket(b, Math.max(b.cap * 2, Math.ceil((b.hi + n) * 1.5))); this.farStats.grows++; }
     const at = b.hi;
     b.hi += n;
     return at;
@@ -1331,42 +1361,70 @@ export class Vegetation {
     // the far tint's season (the near trees re-tint at every 1/48 year too); a new one re-makes the blocks, nearest first
     const env = plantEnv(pv, dy, this.yearFrac);
     const envKey = `${this.seasonStep}|${dy >= 0 ? 1 : 0}`;
-    if (envKey !== this.farEnv) { this.farEnv = envKey; for (const b of this.blocks.values()) b.stale = true; }
+    if (envKey !== this.farEnv) { this.farEnv = envKey; for (const b of this.blocks.values()) b.stale = true; this.farFrame = -1e9; }
     const inner = range * 0.72;
     // ── which cells: re-listed as the camera moves (a few % of its height) or the view's scale changes ──
     const moved = camBody.distanceTo(this.farCam);
     const altG = Math.max(5, rc - R - Math.max(0, pv.maxSurface));
-    if (moved > 3 + altG * 0.03 || Math.abs(this.pxPerRad - this.farPx) > this.farPx * 0.03 || frame - this.farFrame > 90) {
+    if (!this.scan && (moved > 3 + altG * 0.06 || Math.abs(this.pxPerRad - this.farPx) > this.farPx * 0.03 || frame - this.farFrame > 90)) {
       this.farCam.copy(camBody); this.farPx = this.pxPerRad; this.farFrame = frame;
       // every forest cell above the horizon (the tallest form decides how far a cell's trees can matter)
       const hor = Math.acos(Math.min(1, R / rc)) + Math.acos(Math.min(1, R / (R + Math.max(50, pv.maxSurface))));
       const reach = (FAR_H_MAX * this.pxPerRad * PREFETCH) / FAR_PX.out[0];
       const ang = Math.min(Math.PI, hor, Math.acos(Math.max(-1, Math.min(1, (R * R + rc * rc - reach * reach) / (2 * R * rc)))) + 0.02);
-      const cells = pv.grid.cellsWithin(dx, dy, dz, ang);
+      if (this.farMark.length !== pv.grid.count) this.farMark = new Uint32Array(pv.grid.count);
+      this.scan = { cells: pv.grid.cellsWithin(dx, dy, dz, ang).slice(), i: 0, stamp: ++this.farStamp, kept: 0, want: [], wantD: [], pend: [], pendD: [], ms: 0 };
+    }
+    // the listing is spread over a few frames (~1.5 ms each): the admission slack covers it
+    const sc = this.scan;
+    if (sc) {
+      const ts = performance.now();
       const tree = pv.fields.get('tree'), shrub = pv.fields.get('shrub');
       const P = pv.grid.pos;
-      const want: number[] = [], wantD: number[] = [];
-      const keep = new Set<number>();
-      for (const c of cells) {
+      const mark = this.farMark, stamp = sc.stamp;
+      const cam = this.farCam;
+      let k = sc.i;
+      for (; k < sc.cells.length; k++) {
+        if ((k & 255) === 255 && performance.now() - ts > FAR_SCAN_MS) break;
+        const c = sc.cells[k];
         if (!((tree && tree[c] > 0.02) || (shrub && shrub[c] > 0.02))) continue;
-        keep.add(c);
+        mark[c] = stamp; sc.kept++;
         const blk = this.blocks.get(c);
-        const need = blk ? this.farNeed(blk, camBody, inner, 1.12) : 0;
+        const need = blk ? this.farNeed(blk, cam, inner, 1.15) : 0;
         const cur = this.placed.get(c);
-        if (blk && !blk.stale) this.setPlacement(c, blk, need, cur);
-        else if (blk && cur && cur.f && !need) this.setPlacement(c, blk, 0, cur);
+        // (placement changes are applied over the next frames, nearest first, under the time budget: the admission
+        // slack — a cell is placed some 15 % before its trees can show — covers the wait)
+        if (blk && (cur?.f ?? 0) !== need && (!blk.stale || !need)) { sc.pend.push(c); sc.pendD.push(Math.hypot(blk.cx - cam.x, blk.cy - cam.y, blk.cz - cam.z)); }
         if (!blk || blk.stale) {
           // to make: what is (or may soon be) needed first; the rest of the visible forest in the background
-          const d = Math.hypot(P[c * 3] * R - camBody.x, P[c * 3 + 1] * R - camBody.y, P[c * 3 + 2] * R - camBody.z);
-          want.push(c); wantD.push(d);
+          sc.want.push(c); sc.wantD.push(Math.hypot(P[c * 3] * R - cam.x, P[c * 3 + 1] * R - cam.y, P[c * 3 + 2] * R - cam.z));
         }
       }
-      // cells no longer above the horizon / in reach: unplaced (their blocks kept a while for a camera coming back)
-      for (const [c, cur] of this.placed) if (!keep.has(c) && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); this.placed.delete(c); }
-      if (this.blocks.size > keep.size * 1.5 + 2000) for (const c of [...this.blocks.keys()]) if (!keep.has(c) && !this.placed.has(c)) this.blocks.delete(c);
-      const order = want.map((_, i) => i).sort((a, b) => wantD[a] - wantD[b]);
-      this.farWant = order.map((i) => want[i]);
-      this.farWantAt = 0;
+      sc.i = k;
+      sc.ms += performance.now() - ts;
+      if (k >= sc.cells.length) {
+        // cells no longer above the horizon / in reach: unplaced (their blocks kept a while for a camera coming back)
+        for (const [c, cur] of this.placed) if (mark[c] !== stamp && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); this.placed.delete(c); }
+        if (this.blocks.size > sc.kept * 1.5 + 2000) for (const c of [...this.blocks.keys()]) if (mark[c] !== stamp && !this.placed.has(c)) this.blocks.delete(c);
+        const order = sc.want.map((_, i) => i).sort((a, b) => sc.wantD[a] - sc.wantD[b]);
+        this.farWant = order.map((i) => sc.want[i]);
+        this.farWantAt = 0;
+        const po = sc.pend.map((_, i) => i).sort((a, b) => sc.pendD[a] - sc.pendD[b]);
+        this.farPend = po.map((i) => sc.pend[i]);
+        this.farPendAt = 0;
+        this.farStats.refreshMs = sc.ms;
+        this.farStats.refreshCells = sc.cells.length;
+        this.scan = null;
+      }
+    }
+    // ── placement changes (cheap: copies), then block making ──
+    while (this.farPendAt < this.farPend.length && performance.now() - t0 < FAR_BUDGET_MS) {
+      const c = this.farPend[this.farPendAt++];
+      const blk = this.blocks.get(c);
+      if (!blk) continue;
+      const need = this.farNeed(blk, camBody, inner, 1.15);
+      if (blk.stale && need) continue;
+      this.setPlacement(c, blk, need, this.placed.get(c));
     }
     // ── make the blocks: nearest first, a time budget a frame (more while placed cells wait on a re-make) ──
     let built = 0;
@@ -1384,7 +1442,7 @@ export class Vegetation {
       built++;
       const cur = this.placed.get(c);
       if (cur && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); cur.s0 = []; cur.s1 = []; cur.f = 0; }
-      this.setPlacement(c, blk, this.farNeed(blk, camBody, inner, 1.12), cur);
+      this.setPlacement(c, blk, this.farNeed(blk, camBody, inner, 1.15), cur);
     }
     // ── upload what changed ──
     let inst = 0;
@@ -1400,13 +1458,13 @@ export class Vegetation {
         b.dirty = [];
       }
       // a bucket mostly holes is compacted (its live ranges re-placed from their blocks next listing)
-      if (b.hi > 4096 && b.live < b.hi * 0.4) this.compact(b);
+      if (b.hi > 4096 && b.live < b.hi * 0.25) this.compact(b);
     }
     this.farStats.instances = inst;
     this.farStats.cells = this.placed.size;
     this.farStats.blocks = this.blocks.size;
     this.farStats.built = built;
-    this.farStats.queue = this.farWant.length - this.farWantAt;
+    this.farStats.queue = this.farWant.length - this.farWantAt + this.farPend.length - this.farPendAt + (this.scan ? 1 : 0);
     this.farStats.ms = performance.now() - t0;
   }
 

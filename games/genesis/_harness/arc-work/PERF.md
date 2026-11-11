@@ -394,3 +394,44 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
    tightening.
 4. Vegetation instance refresh (every 15 m moved: the whole instance list) -> incremental; groundcover cellItems
    (~20 ms a cell on this box) off the main thread.
+
+## SESSION 6 (2026-11-11 ~12:00Z) — far trees first (owner: "trees populate as i looked in the area")
+- d13 (dist9) was still running at start (f200/f120, 1.5 h in a slot; could not be stopped from here): left to finish.
+- F13 FAR-TREE LAYER (landed, tsc clean, tests/render-fartrees.test.ts 3/3 + render-vegcache green; browser check next):
+  * src/render/life/farcrown.ts: per tree kind / variant a HULL fitted to the tree's own LOD-2 mesh (lathe through
+    the crown silhouette at 82nd-percentile radius; lod 0 = 5 sides, 3 rings + top + 3-sided trunk, <= 24 verts;
+    lod 1 = 4 sides, 2 rings + top, <= 10 verts; INDEXED). Same vegetation attributes: aCard 0.5 = solid foliage,
+    colour = the LOD-2 leaf vertices' mean x the leaf-atlas tile mean (canvas pixels, opaque texels) x 1.7 / 0.92,
+    so the shader's own lighting / tint / snow / char / cloud + sun shadows apply unchanged.
+  * vegetation.ts: plantInstance() = THE per-plant matrix / tint / extra (refactored out of the near loop; near uses
+    it too), so a far tree is the near tree (same position, lean, yaw, height, girth, species tint, autumn, snow,
+    char). Per cell a far BLOCK (trees only, grouped by kind/variant) is made once; blocks are PLACED into far
+    buckets' slot ranges (free list, high-water mark, zeroed = degenerate when freed, range uploads, compaction
+    under 25 % live, grow x2) as cells enter / leave; changed inputs re-make only the cells around them.
+  * Shader: vLod is now an INTERVAL [x, y) of the object-space chunk hash (was value + sign; same results for the
+    near LOD bands). Near trees with the far layer on give their chunks away across the 0.72..1.0 x range band
+    (no more shrinking into the ground); the far hull takes exactly the complementary chunks ([1-s, 1)), hull lod
+    0/1 split the far share across 12..18 px of tree height, and the far tree gives way to the terrain's canopy
+    shading at 3..6 px of height (FAR_PX; px = height x pxPerRad / distance, pxPerRad from the real render height
+    and FOV). Shadow pass uses the same vertex code: shadows cross-fade with their trees. Off-screen far trees cost
+    one degenerate vertex (no cloud lookup).
+  * Near trees no longer switch off above 1.2 x range altitude (the far layer covers every altitude).
+  * Field changes: tree / shrub / burnt / treeSpecies republishes no longer clear the whole plant cache (every cell
+    in range re-scattered in one frame): the arrays are diffed, cells within 2 rings of a change re-scatter (near)
+    and their far blocks are re-made; snow / fire diffs re-make far blocks within 1 ring (tints).
+  * Main-thread budget: listing (re-scan of the forest cells above the horizon, every 6 % of altitude moved) spread
+    at 1.5 ms a frame; placement changes + block making 3 ms a frame, nearest first, with 15 % admission slack.
+  * `?fartrees=0` = the old path (A/B shots).
+- BENCH (node, _harness/arc-work/perf-fartrees.ts, 40 962-cell world, synthetic dense forest ~60 % cover, 888x500
+  High pxPerRad 536, this box at load 5): far instances 140 k at 2 km altitude (2.2 M tris incl. off-screen ones,
+  which are degenerate), 70 k at 50 m (1.6 M); cold fill of the whole visible forest from 2 km: ~400 frames in the
+  background at 3 ms. Smooth fast descent 2000 -> 50 m in 240 frames: far part max 6.1 ms/frame (p50 0.09); pan at
+  50 m: far max 1.9 ms; climb: max 15.5 (a bucket growth). The remaining ~10 ms frame max is the NEAR rebuild
+  (every 15 m: whole instance list) = item 5.
+- F14 NEAR TREES INCREMENTAL (landed, tsc clean; render, render-warm, -plantregistry, -wildplants, -clocks, -vegcache,
+  -fartrees green): a near rebuild (every 15 m moved) no longer re-makes every plant's matrix / tint / extra and
+  samples four fields per plant: each cell's instance data is made once with its plants (nearInst, keyed by the
+  cell's plant record) and copied; re-made with the cell's plants, a season step, a hemisphere change, or a snow /
+  fire change around it (the field diff). Same numbers (plantInstance is the one function).
+- s6a queued (run-s6a.sh: dist10 = unminified build of F13 (built before F14), then perf-descent.mjs descent + zoom, fresh world,
+  ?farbudget=400 so SwiftShader's slow frames still fill the far blocks; shots shots/s6a-d*.png, s6a-z*.png).
