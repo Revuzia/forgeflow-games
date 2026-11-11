@@ -434,7 +434,7 @@
       "behavior": { "leash": 12, "resetRegen": 0.3 },
       "sightRange": 10,
       "onTakedownTeamBuff": "splinters",
-      "art": { "model": "assets/units/sunsplinter.glb", "height": 3.2, "scale": 1.4, "icon": "assets/units/sunsplinter_icon.png",
+      "art": { "model": "assets/units/sunsplinter.glb", "height": 3.2, "scale": 1.42, "icon": "assets/units/sunsplinter_icon.png",
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "cast_a2": "cast_a2", "cast_a3": "cast_a3", "death": "death" } }
     },
     {
