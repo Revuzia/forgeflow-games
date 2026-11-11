@@ -10,9 +10,13 @@
   terrain is built on helper threads (main-thread planet work at rest 9.6 -> 2.0 ms a frame here, uploads 2.5 MB ->
   80 kB a frame); grass, plants and terrain detail are prepared before they come into view; flying fast through the
   cloud deck no longer whites out the screen; exposure can no longer get stuck white or black.
-- STILL TO DO: trees are only drawn within ~380 m of the camera and switch on below ~450 m altitude, so zooming down
-  you see a forest "fill in" — a far-tree layer is next. We cannot measure your Mac here: please press Shift+F12,
-  then "Record 20 s", play (zoom in to a town, pan around), then "Copy report" and send us the text.
+- NEW (session 6, in the source, not yet on the CDN, not yet seen in a browser): FAR TREES — every tree of a forest
+  is now drawn at every altitude (the same trees: same places, species, sizes, colours), as a cheap shape past
+  ~270 m that takes over from the full tree without a pop, fading into the ground's forest colour only where a tree
+  is a few pixels tall. No more disc of trees growing around the camera. Trees also no longer re-scatter a whole
+  area whenever the forest map updates, and nearby trees are re-placed by copying instead of recomputing.
+- STILL TO DO: browser screenshots of the far trees (descent 2 km -> 50 m), the cloud / white-flash check, grass
+  preparation off the main thread. Please still send the Shift+F12 "Record 20 s" -> "Copy report" text.
 - WHAT TO EXPECT ON A MAC: fewer and shorter hitches when moving the camera and while towns grow; the same image.
 
 Rules: never lower a preset (resolution, DPR, shadows, range, density, effects). Fix causes. Bulky output: _harness/scratch/arc/perf/.
@@ -435,3 +439,22 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   fire change around it (the field diff). Same numbers (plantInstance is the one function).
 - s6a queued (run-s6a.sh: dist10 = unminified build of F13 (built before F14), then perf-descent.mjs descent + zoom, fresh world,
   ?farbudget=400 so SwiftShader's slow frames still fill the far blocks; shots shots/s6a-d*.png, s6a-z*.png).
+- s6a FINDING: the fresh sandbox world at speed 0 has NO forests (s6a-d2000-early.png LOOKED: bare brown/grey land,
+  lakes, clouds) — the descent must run on the busy save (world25.gnss: --save=$P/world25.gnss, + seed=1234), which
+  costs ~10-30 min a frame under SwiftShader. s6a (dist10, fresh) is still running its zoom phase after the descent
+  (useful only for the white-frame luminance check, phase zoom); run-s6b.sh queued behind it: v13f0 / v13 (busy
+  town shadow tris far off / on — compare v13f0 with v11's 2.41 M and v6's 2.04 M), l13 / l13r0 (low sun, FRESH
+  world: shadows of mountains only), s6pre (useless: fresh world), r13 / r14 (speed-1 AFTER table + CPU profile,
+  NOTE farbudget=400 in them: read far-block costs out of the profile separately).
+- Grass cellItems (~20 ms/cell): a lattice of ~(1.6 spacing / STEP)^2 points per cell, each a grid locate + ~12 field
+  samples; a worker port needs grid + 14 fields + ground + tower sites + the wild-plant registry (not started).
+
+## NEXT (session 7), in order
+1. Descent shots on the BUSY save with far trees: perf-descent.mjs --save=_harness/scratch/arc/perf/world25.gnss
+   --extra="seed=1234&farbudget=400" --phase=descent --steps=2000,1400,800,500,350,200,50 --settle=3 (then the same
+   with fartrees=0 for BEFORE). LOOK for: forests at 2 km, no disc at ~380 m, hull colour vs near trees in the
+   270-380 m band (tune farcrown.ts aCrown 0.8 / percentile 0.82 / colour if the far band reads lighter or darker).
+2. Zoom phase luminance: python PIL mean luminance of shots/s6a-z*.png (white frame = mean > ~0.85 or a jump).
+3. v13f0 shadowTris vs 2.41 M / 2.04 M; l13 vs l13r0 shots (mountain shadows kept).
+4. r13 / r14 tables vs r4; the owner's Mac report overrides everything.
+5. Grass cellItems in a worker (see above); far-block making could move there too (same inputs).
