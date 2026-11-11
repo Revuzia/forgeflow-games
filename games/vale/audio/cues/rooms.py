@@ -18,19 +18,19 @@ from synth import fx
 ROOMK = dict(tail_floor_db=-72.0, fade_out=0.06)
 
 
-@cue('room_rift', 'match', ('m', -16.0), (0.5, 1.4), **ROOMK)
+@cue('room_rift', 'match', ('m', -26.0), (0.5, 1.4), **ROOMK)
 def room_rift(v: int):
     return fx.shaped_ir('vale_room_rift', 0.95, 0.55, predelay_ms=18.0, er_ms=60.0, er_count=16, hp_hz=140.0,
                         lp_hz=8000.0, width_=0.9, length_s=1.1)
 
 
-@cue('room_bridge', 'match', ('m', -16.0), (0.6, 1.6), **ROOMK)
+@cue('room_bridge', 'match', ('m', -26.0), (0.6, 1.6), **ROOMK)
 def room_bridge(v: int):
     return fx.shaped_ir('vale_room_bridge', 1.25, 0.9, predelay_ms=26.0, er_ms=90.0, er_count=6, hp_hz=380.0,
                         lp_hz=9000.0, width_=1.0, length_s=1.4)
 
 
-@cue('room_fray', 'match', ('m', -16.0), (0.4, 1.1), **ROOMK)
+@cue('room_fray', 'match', ('m', -26.0), (0.4, 1.1), **ROOMK)
 def room_fray(v: int):
     return fx.shaped_ir('vale_room_fray', 0.75, 0.4, predelay_ms=14.0, er_ms=40.0, er_count=22, hp_hz=120.0,
                         lp_hz=6000.0, width_=0.85, length_s=0.85)

@@ -438,6 +438,8 @@ async function runMatch() {
       let path = 0; for (let i = 1; i < earshot.length; i++) path += Math.hypot(earshot[i][1] - earshot[i - 1][1], earshot[i][2] - earshot[i - 1][2]);
       rep.earshot = { samples: earshot.length, noneNear: frac((r) => r[4] + r[5] === 0), foeNear: frac((r) => r[5] > 0), dead: frac((r) => !r[3]), pathM: r2(path), track: earshot.filter((_, i) => i % 20 === 0) }; }
     rep.heardG2 = await page.evaluate(() => Object.fromEntries(window.__valeAudio.heard ?? []));
+    // (max SFX-9) the map's room send: live, and the response loaded (its length in s)
+    rep.room = await page.evaluate(() => ({ on: !!window.__valeAudio.roomOn, irSeconds: window.__valeAudio.room?.buffer?.duration ?? null }));
     // (max SFX-1) whose sounds the player hears in lane: the fighters' own kits (f_*) vs the rest of the sfx bus
     // (the library c_*, the Wicks' w_*, units u_*), as summed heard energy (gain x attenuation squared, per play)
     { const bus = await page.evaluate(() => Object.fromEntries(Object.entries(window.__vale.session.catalog?.audio?.cues ?? {}).map(([k, c]) => [k, c.bus])));

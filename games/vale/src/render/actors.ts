@@ -699,6 +699,11 @@ const LIFE = {
   /** soft-part follow-through: lag time constant of a chain's first segment (s; +60 % per segment down, hanging
    *  things `hangTau`), the most a part turns per 1/60 s (12 deg) and the most it may trail its clip (30 deg) */
   chain: { tau: 0.04, hangTau: 0.075, maxStep: 0.21, maxDev: 0.52 },
+  /** the stillness watch (fix round, the static holds): when the CLIP itself keeps both hands under `eps` m a frame for
+   *  `after` s (a frozen idle or recall loop), the arms' give grows up to ×(1 + `gain`) at `rise` /s and falls back at
+   *  `fall` /s once the clip moves again, so a held pose never reads as a paused frame; the clip's own motion is
+   *  measured before the life layer writes, so the layer never chases itself */
+  still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8 },
   /** state weights fade at this rate (1/s) */
   fade: 5,
 } as const;
@@ -715,6 +720,10 @@ class LifeRig {
   private wIdle = 0; private wHold = 0; private wStun = 0;
   private recT = -1; private recA = 0;
   private readonly recAxis = new Vector3();
+  private readonly hands: Object3D[] = [];
+  private readonly handPrev = [new Vector3(), new Vector3()];
+  private handInit = false;
+  private stillT = 0; private fid = 0;
 
   constructor(root: Object3D, model: Object3D, seed: number) {
     this.t = (seed * 1.6180339) % 97;
@@ -728,6 +737,10 @@ class LifeRig {
       o.parent.getWorldQuaternion(pq);
       pq.premultiply(rootQ).invert();
       this.bones.set(n, { o, saved: o.quaternion.clone(), x: new Vector3(1, 0, 0).applyQuaternion(pq), y: new Vector3(0, 1, 0).applyQuaternion(pq), z: new Vector3(0, 0, 1).applyQuaternion(pq) });
+    }
+    for (const n of ['hand.L', 'hand.R']) {
+      const o = model.getObjectByName(PropertyBinding.sanitizeNodeName(n)) ?? model.getObjectByName(n);
+      if (o) this.hands.push(o);
     }
     model.traverse((o) => {
       const seg = /^x_[a-z]+[a-z0-9]*(?:_[a-z0-9]+)*_(\d+)$/i.exec(o.name);
@@ -787,8 +800,23 @@ class LifeRig {
       // back to the local the mixer writes: parent⁻¹ × shown
       c.o.quaternion.copy(_lq2.invert()).multiply(c.shown);
     }
-    if (!ACTOR_LIFE.on) { this.recT = -1; return; }
+    if (!ACTOR_LIFE.on) { this.recT = -1; this.fid = 0; this.handInit = false; return; }
     this.t += dt;
+    // the stillness watch: the clip's own hand motion this frame (before this layer writes; actor-space drift from a
+    // turn counts as motion)
+    if (this.hands.length === 2 && dt > 0 && dt < 0.25) {
+      const W = LIFE.still;
+      let mv = 0;
+      for (let i = 0; i < 2; i++) {
+        this.hands[i].updateWorldMatrix(true, false);
+        _lv.setFromMatrixPosition(this.hands[i].matrixWorld);
+        if (this.handInit) mv = Math.max(mv, _lv.distanceTo(this.handPrev[i]) / Math.max(1, dt * 60));
+        this.handPrev[i].copy(_lv);
+      }
+      if (this.handInit) this.stillT = mv < W.eps ? this.stillT + dt : 0;
+      this.handInit = true;
+      this.fid = this.stillT > W.after ? Math.min(1, this.fid + dt * W.rise) : Math.max(0, this.fid - dt * W.fall);
+    }
     const f = Math.min(1, dt * LIFE.fade);
     const idle = role === 'idle' ? 1 : 0, hold = role === 'channel' || role === 'recall' ? 1 : 0, stun = role === 'stunned' ? 1 : 0;
     this.wIdle += (idle - this.wIdle) * f; this.wHold += (hold - this.wHold) * f; this.wStun += (stun - this.wStun) * f;
@@ -816,7 +844,7 @@ class LifeRig {
     this.rot('head', -0.35 * rx, ws * U.head * 0.6 * st2, sway * S.head * sh + ws * U.head * st3 - 0.35 * rz);
     this.rot('shoulder.L', 0, 0, breath * B.shoulder * Math.max(0, brL));
     this.rot('shoulder.R', 0, 0, -breath * B.shoulder * Math.max(0, brL));
-    const arm = wi + 0.6 * wh;
+    const arm = (wi + 0.6 * wh) * (1 + LIFE.still.gain * this.fid);
     this.rot('upper_arm.L', arm * A.upper * Math.sin(TAU * t / B.period + 0.6), 0, 0);
     this.rot('upper_arm.R', arm * A.upper * Math.sin(TAU * t / B.period + 2.2), 0, 0);
     this.rot('forearm.L', arm * A.fore * Math.sin(TAU * t / B.period + 1.1), 0, 0);

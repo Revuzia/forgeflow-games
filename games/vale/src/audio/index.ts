@@ -325,7 +325,7 @@ interface EntityLike { id: number; kind: string; def?: string; team: number; x: 
   maxHp?: number; shield?: number;
   statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
-interface Place { att: number; pan: number; lpf: number }
+interface Place { att: number; pan: number; lpf: number; d?: number }
 /** per-play options: `aware` = a threat to your fighter (the awareness pass applies, and the voice-bus duck spares
  *  it); `onVoice` hears the voice once its file is decoded and started (the announcer times its line by it) */
 interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: AudioBuffer) => void;
@@ -425,7 +425,15 @@ const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing o
 // REPEAT_JITTER_S late, so a stack of hits blurs instead of flamming (one random number per play)
 const GAIN_VAR_DB = 1.2;
 const SHIELD_BREAK_GAP_S = 0.5;
-const SHOOTERS_MAX = 256;         // attackers remembered for a shot landing after its shooter died (max SFX-1)   // one target's shield breaks sound at most this often (max SFX-7)
+// the map's room (max SFX-9): a spatial sfx voice sends ROOM_NEAR_DB re its own level at half the full-volume radius,
+// rising to ROOM_FAR_DB at the edge of hearing (far sounds are wetter); the room returns at ROOM_RETURN_DB
+const ROOM_NEAR_DB = -20;
+const ROOM_FAR_DB = -11;
+const ROOM_RETURN_DB = 10;      // (a normalised ConvolverNode returns about 9 dB of energy under its input: this puts a near
+                                // hit's room about 19 dB under it, a far one about 10 dB under: sfx_room_ab.py)
+const SHOOTERS_MAX = 256;
+const STRUCK_GAIN = 0.5;          // a structure's own answer under a blow (max SFX-5) …
+const STRUCK_GAP_S = 0.15;        // … at most this often per structure         // attackers remembered for a shot landing after its shooter died (max SFX-1)   // one target's shield breaks sound at most this often (max SFX-7)
 // the Gleam coins (max SFX-8): a last hit's gain, and its combo ladder (+GOLD_STEP_ST a rung within GOLD_CHAIN_S, GOLD_RUNGS high)
 const GOLD_GAIN = 0.8;
 const GOLD_CHAIN_S = 1.5;
@@ -550,7 +558,11 @@ class Engine implements ValeAudioPort {
   private readonly lastPlay = new Map<string, number>();
   private readonly wickHits: number[] = [];
   private readonly shieldBroke = new Map<number, number>();
-  private readonly shooters = new Map<number, EntityLike>();   // the last attackers, as they were (SHOOTERS_MAX)   // a target's last shield break (context time)
+  private readonly shooters = new Map<number, EntityLike>();
+  private readonly struckLast = new Map<number, number>();     // a structure's last struck answer (context time)
+  private roomIn: GainNode | null = null;                       // the shared room send (see ROOM_NEAR_DB) …
+  private room: ConvolverNode | null = null;
+  private roomOn = false;                                       // … live once the map's response is loaded   // the last attackers, as they were (SHOOTERS_MAX)   // a target's last shield break (context time)
   private goldRung = 0;                         // the Gleam ladder's rung, and its last last hit (context time)
   private goldLast = -1e9;   // recent Wick-on-Wick blows near the ear (wickDuck)
   private vol: AudioSettings;
@@ -808,6 +820,16 @@ class Engine implements ValeAudioPort {
       const g = ctx.createGain();
       g.connect(trim);
       this.alertBus.set(b, g);
+    }
+    // the map's room (max SFX-9): one shared convolver the spatial sfx voices send into, returning on the sfx bus (so the
+    // sfx volume and the ducks apply to it); its response is the map's 'room.<map>' cue, loaded at the match's start
+    if (typeof ctx.createConvolver === 'function') {
+      this.roomIn = ctx.createGain();
+      this.room = ctx.createConvolver();
+      this.room.normalize = true;
+      const roomOut = ctx.createGain();
+      roomOut.gain.value = Math.pow(10, ROOM_RETURN_DB / 20);
+      this.roomIn.connect(this.room).connect(roomOut).connect(this.bus.get('sfx')!);
     }
     // the ambience emitters' combat duck, into the ambience bus
     this.ambDuck = ctx.createGain();
@@ -1147,11 +1169,12 @@ class Engine implements ValeAudioPort {
     if (!ctx || ctx.state !== 'running' || this.stalled) return 'off';      // a stalled clock: nothing would sound (see `release`)
     const now = ctx.currentTime;
     if (c.cooldown > 0 && now - (this.lastPlay.get(cueId) ?? -1e9) < c.cooldown) return 'cooldown';
-    let pan = 0, att = 1, lpf = 0;
+    let pan = 0, att = 1, lpf = 0, dist = -1;
     if (pos && c.spatial) {
       const pl = this.place(pos, !!o.aware);
       if (pl.att <= 0) return 'culled';
       ({ att, pan, lpf } = pl);
+      dist = pl.d ?? -1;
     }
     // voice limits (see `priority` in the header): the cue's own maxVoices, then the global budget
     const prio = c.priority + (o.lift ?? 0);
@@ -1164,7 +1187,8 @@ class Engine implements ValeAudioPort {
     this.lastPlay.set(cueId, now);
     const varies = c.bus === 'sfx' && c.spatial && !c.loop && c.pitchVar > 0;
     const vdb = (varies ? (Math.random() * 2 - 1) * GAIN_VAR_DB : 0) + (varies && repeat ? REPEAT_DB : 0);
-    const level = c.gain * att * gainMul * Math.pow(10, vdb / 20);
+    const level = c.gain * att * gainMul;            // the placement level (the voice's own gain node) …
+    const humanise = Math.pow(10, vdb / 20);          // … and the per-play variation, a stage of its own after it
     const late = varies && repeat ? Math.random() * REPEAT_JITTER_S : 0;
     // where it joins the mix: the gate cues' alert path; a threat to your fighter past the sfx duck; else its bus
     const into = alert ? this.alertBus.get(c.bus)! : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
@@ -1191,7 +1215,20 @@ class Engine implements ValeAudioPort {
         node.connect(f); node = f; nodes.push(f);
       }
       if (pan) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; nodes.push(p); }
-      node.connect(g).connect(into);
+      if (vdb !== 0) {
+        const hv = this.ctx.createGain();
+        hv.gain.value = humanise;
+        node.connect(g).connect(hv).connect(into);
+        nodes.push(hv);
+      } else node.connect(g).connect(into);
+      // the map's room (see ROOM_NEAR_DB): a spatial sfx voice also sends into the shared room, wetter the farther it is
+      if (this.roomIn && this.roomOn && c.bus === 'sfx' && dist >= 0 && !alert) {
+        const u = Math.max(0, Math.min(1, (dist - LISTEN_INNER_M * 0.5) / (LISTEN_HEAR_M - LISTEN_INNER_M * 0.5)));
+        const sg = this.ctx.createGain();
+        sg.gain.value = Math.pow(10, (ROOM_NEAR_DB + (ROOM_FAR_DB - ROOM_NEAR_DB) * u) / 20);
+        g.connect(sg).connect(this.roomIn);
+        nodes.push(sg);
+      }
       v.src = src; v.gain = g; v.started = this.ctx.currentTime; v.nodes = nodes;
       // a one-shot of the cue build skips most of its silent codec lead (see LEAD_SKIP_S); loops and the music bus's
       // stings (their own build) start at 0
@@ -1208,7 +1245,7 @@ class Engine implements ValeAudioPort {
       else src.onended = drop;
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
-      this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + level ** 2);
+      this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + (level * humanise) ** 2);
       o.onVoice?.(v, buf);
     };
     // a decoded file starts now, inside the event's call: a promise's then() would wait for the rest of the frame
@@ -2180,12 +2217,25 @@ class Engine implements ValeAudioPort {
     em.started = true;                    // a load still in flight sees it gone (not in amb / pits) and never starts
   }
 
+  /** the map's room (max SFX-9): content binds 'room.<map id>' to a cue whose file is the map's impulse response; no
+   *  binding, no room (every voice stays dry) */
+  private setRoom(map: string): void {
+    const cueId = this.ev(`room.${map}`);
+    const file = cueId ? this.cues[cueId]?.files[0] : undefined;
+    this.roomOn = false;
+    if (!file || !this.room) return;
+    void this.buffer(file).then((buf) => {
+      if (!buf || !this.room) return;
+      try { this.room.buffer = buf; this.roomOn = true; } catch { this.roomOn = false; }
+    });
+  }
+
   /** start loops not yet started, place every emitter around the listener, duck the bus under a fight. The
    *  emitters are built once the context exists (a match attached before the first gesture waits for it) */
   private syncAmbience(): void {
     const ctx = this.ctx;
     if (!ctx || !this.client) return;
-    if (this.ambMap) { this.amb = this.emitters(ctx, this.ambMap); this.ambMap = null; }
+    if (this.ambMap) { this.setRoom(this.ambMap); this.amb = this.emitters(ctx, this.ambMap); this.ambMap = null; }
     this.syncPits(ctx);
     const t = ctx.currentTime;
     const live = (em: Emitter): boolean => this.amb.includes(em) || [...this.pits.values()].includes(em);
@@ -2299,7 +2349,7 @@ class Engine implements ValeAudioPort {
       const me = this.aliveAt();
       if (me && Math.hypot(pos.x - me.x, pos.y - me.y) <= AWARE_M) { att = AWARE_GAIN; lpf = 0; }
     }
-    return { att, pan, lpf };
+    return { att, pan, lpf, d };
   }
 
   private ent(id: unknown): EntityLike | undefined {
@@ -2504,6 +2554,14 @@ class Engine implements ValeAudioPort {
           if (t - (this.hurtLast.get(dst.id) ?? -1e9) > ROAR_CALM_S) this.cue(duk.roar, p, 1, 0, aw);
           this.hurtLast.set(dst.id, t);
         }
+        // (max SFX-5) a structure answers a blow in its own material ('structureStruck.<unit>', else 'structureStruck'),
+        // under the attacker's hit, once per STRUCK_GAP_S per structure (a Ringshade-muffled blow does not ring)
+        if (dst?.kind === 'structure' && !shaded) {
+          const now = this.ctx?.currentTime ?? 0;
+          const struck = (dst.def ? this.ev(`structureStruck.${dst.def}`) : undefined) ?? this.ev('structureStruck');
+          if (struck && now - (this.struckLast.get(dst.id) ?? -1e9) > STRUCK_GAP_S
+            && this.cue(struck, p, STRUCK_GAIN, 0, aw) === 'played') this.struckLast.set(dst.id, now);
+        }
         // (max SFX-7) a fighter's ward broken by this blow (it absorbed some and none is left): the pane cracks, an
         // awareness cue when it was yours or a foe's aimed at you (presentation only: the view's shield after the tick)
         if (dst?.kind === 'fighter' && ((e.shielded as number) || 0) > 0 && (dst.shield ?? 1) <= 0) {
@@ -2600,7 +2658,12 @@ class Engine implements ValeAudioPort {
         break;
       }
       // the world sound where it fell; the announcer line comes from the 'announce' that follows (one line per event)
-      case 'structure': this.cue(this.ev('structureFall'), at(this.ent(e.id))); break;
+      case 'structure': {
+        // (max SFX-5) the unit's own fall ('structureFall.<unit>': the Lantern, the Hourbell), else the shared one
+        const se = this.ent(e.id), def = (e.def as string | undefined) ?? se?.def;
+        this.cue((def ? this.ev(`structureFall.${def}`) : undefined) ?? this.ev('structureFall'), at(se));
+        break;
+      }
       case 'wave': if ((e.n as number) <= 1) this.cue(this.ev('waveSpawn'), null); break;
       case 'recall': if (e.player === this.client?.you) this.cue(this.ev(e.state === 'done' ? 'recallDone' : e.state === 'start' ? 'recallStart' : 'recallCancel'), null); break;
       case 'ping': {

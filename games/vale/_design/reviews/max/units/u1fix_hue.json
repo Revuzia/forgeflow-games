@@ -1,0 +1,272 @@
+{
+ "note": "MAX units fix round: fighter albedo hue lift (world_material.ts valeCharHue, valeCharChroma 2.4/0.38/0.06/0.72, scaled by valeCharMat). base = valeCharMat 0, mat = 1, same frozen frame (max_units_ab.mjs). Per fighter crop, over the pixels the switch changed: mean display L*, mean CIELAB chroma, % above L* 90. Hesmi out of frame (null).",
+ "gamecam_28_5m": {
+  "fighter_burdam_3": {
+   "px": 8670,
+   "Lstar": [
+    41.3,
+    43.3
+   ],
+   "chroma": [
+    15.6,
+    21.4
+   ],
+   "gt90": [
+    0.02,
+    0.0
+   ]
+  },
+  "fighter_dunsom_10": {
+   "px": 7693,
+   "Lstar": [
+    54.2,
+    55.0
+   ],
+   "chroma": [
+    17.2,
+    28.1
+   ],
+   "gt90": [
+    0.01,
+    0.0
+   ]
+  },
+  "fighter_ervet_1": {
+   "px": 11224,
+   "Lstar": [
+    53.3,
+    54.2
+   ],
+   "chroma": [
+    12.1,
+    16.4
+   ],
+   "gt90": [
+    2.41,
+    2.11
+   ]
+  },
+  "fighter_hesmi_8": null,
+  "fighter_kemdo_6": {
+   "px": 8958,
+   "Lstar": [
+    54.8,
+    56.1
+   ],
+   "chroma": [
+    14.2,
+    19.2
+   ],
+   "gt90": [
+    2.43,
+    2.11
+   ]
+  },
+  "fighter_marund_4": {
+   "px": 15095,
+   "Lstar": [
+    52.8,
+    54.1
+   ],
+   "chroma": [
+    13.8,
+    20.2
+   ],
+   "gt90": [
+    0.25,
+    0.07
+   ]
+  },
+  "fighter_odrum_2": {
+   "px": 6236,
+   "Lstar": [
+    39.5,
+    42.0
+   ],
+   "chroma": [
+    17.4,
+    21.8
+   ],
+   "gt90": [
+    1.15,
+    1.09
+   ]
+  },
+  "fighter_tunlan_7": {
+   "px": 7367,
+   "Lstar": [
+    70.9,
+    70.5
+   ],
+   "chroma": [
+    14.4,
+    24.1
+   ],
+   "gt90": [
+    0.12,
+    0.0
+   ]
+  },
+  "fighter_vashil_5": {
+   "px": 10849,
+   "Lstar": [
+    47.0,
+    47.9
+   ],
+   "chroma": [
+    15.9,
+    20.6
+   ],
+   "gt90": [
+    0.18,
+    0.24
+   ]
+  }
+ },
+ "second_pass": {
+  "fighter_burdam_3": {
+   "px": 11588,
+   "Lstar": [
+    41.5,
+    43.5
+   ],
+   "chroma": [
+    15.5,
+    21.5
+   ],
+   "gt90": [
+    0.02,
+    0.0
+   ]
+  },
+  "fighter_dunsom_10": {
+   "px": 9307,
+   "Lstar": [
+    55.2,
+    56.1
+   ],
+   "chroma": [
+    15.4,
+    27.7
+   ],
+   "gt90": [
+    0.0,
+    0.0
+   ]
+  },
+  "fighter_ervet_1": {
+   "px": 12502,
+   "Lstar": [
+    52.3,
+    53.3
+   ],
+   "chroma": [
+    11.0,
+    15.2
+   ],
+   "gt90": [
+    1.6,
+    1.46
+   ]
+  },
+  "fighter_hesmi_8": null,
+  "fighter_kemdo_6": {
+   "px": 10161,
+   "Lstar": [
+    56.6,
+    57.8
+   ],
+   "chroma": [
+    15.4,
+    20.2
+   ],
+   "gt90": [
+    2.91,
+    2.44
+   ]
+  },
+  "fighter_marund_4": {
+   "px": 18991,
+   "Lstar": [
+    52.6,
+    54.0
+   ],
+   "chroma": [
+    14.1,
+    20.5
+   ],
+   "gt90": [
+    0.3,
+    0.07
+   ]
+  },
+  "fighter_odrum_2": {
+   "px": 7714,
+   "Lstar": [
+    40.1,
+    42.7
+   ],
+   "chroma": [
+    17.0,
+    21.8
+   ],
+   "gt90": [
+    1.75,
+    1.79
+   ]
+  },
+  "fighter_tunlan_7": {
+   "px": 10110,
+   "Lstar": [
+    71.1,
+    70.7
+   ],
+   "chroma": [
+    14.3,
+    24.1
+   ],
+   "gt90": [
+    0.21,
+    0.07
+   ]
+  },
+  "fighter_vashil_5": {
+   "px": 10864,
+   "Lstar": [
+    49.9,
+    50.9
+   ],
+   "chroma": [
+    9.4,
+    15.9
+   ],
+   "gt90": [
+    0.35,
+    0.33
+   ]
+  }
+ },
+ "value_probe_rift_high_bridge_high": {
+  "fighterBlowout": [
+   "0.40 % PASS (worst 2.2 %)",
+   "0.04 % PASS (worst 0.4 %)"
+  ],
+  "fighterTop25": [
+   81.2,
+   80.9
+  ],
+  "band": "70-85 PASS"
+ },
+ "sunsplinter_scale_1_42": {
+  "t": 400,
+  "unitPx": 53291,
+  "gate": 51944,
+  "pass": true,
+  "erodedPx": 28889
+ },
+ "counts_high_harness": {
+  "tris": 226120,
+  "calls": 169,
+  "programs": 39
+ }
+}

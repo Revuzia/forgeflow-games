@@ -36,6 +36,7 @@ gate    Per variant, all automatic (a person still looks: `review`):
           streak   (pass 4) tear streaks, Sukri's cards only (STREAK_FACES; Kemdo's lower face is a linen wrap): under the
                    eyes found on the render, new thin dark vertical lines away from render edges, as columns that carry a
                    line over 0.25 rr, per rr: <= 0.10 (rejected Sukri splashes 0.22-0.62, accepted Stillwater <= 0.03)
+          mask     (pass 4) Shadeprint: the face's lit median within dE 10 of ruling 2's #B39272 (painted orange read 18-22)
           prop     (pass 4) invented props: local-structure Lab dE (each image minus its 4 %-height blur, so a plate regrade
                    does not count), on a 4x grid: a blob of dE >= 10 outside the render's silhouette (dilated 2 %) or of
                    dE >= 14 inside it (eroded) larger than 0.1 % of the image fails (Sukri portrait v2's crook and cup
@@ -76,8 +77,9 @@ TIER_FLOOR = {"standard": 12.0, "deluxe": 18.0, "legend": 18.0}
 FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting (ruling 12's speckle bar <= 2.5: the raw
                       # painting's pixel-scale grain read 2.6-5.2 on the figure; one pass reads 0.9-1.8, strokes survive)
 PROP = {"de_out": 10.0, "de_in": 14.0, "out_max": 0.001, "in_max": 0.001}
+MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacquer mask (the 3D card reads dE 4.2)
 STREAK_FACES = {"sukri"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
-GATE = {"new_colour": 0.0003, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
+GATE = {"new_colour": 0.0003, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
 
@@ -128,7 +130,8 @@ def prompt_of(sid: str, kind: str) -> tuple[str, int]:
     light = pr["light" if kind == "splash" else "light_portrait"].format(side=side, glow=glow)
     from build_manifest import SENSITIVITY  # the imagegen pack's sensitivity line
     frame = "A wide 16:9 splash card." if kind == "splash" else "A square head-and-shoulders portrait card."
-    text = " ".join([pr["style"], frame, pr["cards"][sid], light, pr["eyes"]] + ([pr["hands"]] if "hands" in pr else [])
+    subj = (pr.get("cards_portrait") or {}).get(sid) if kind == "portrait" else None
+    text = " ".join([pr["style"], frame, subj or pr["cards"][sid], light, pr["eyes"]] + ([pr["hands"]] if "hands" in pr else [])
                     + [pr["rules"], SENSITIVITY])
     return text, int(pr["version"])
 
@@ -258,6 +261,14 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
     if plates.fighter_of(sid) in STREAK_FACES:
         r.update(streak_measure(sid, kind, P, F, A, meta))
     r.update(prop_measure(kind, P, F, A))
+    # (pass 4) a mask held to a ruling's colour (MASK_TARGET): the lit half of the face disc's median vs the hex
+    if sid in MASK_TARGET and fp is not None:
+        yy, xx = np.mgrid[0:h, 0:w]
+        rr = (0.05 if kind == "splash" else 0.15) * h
+        fm = (((xx - fp[0] * w) ** 2 + (yy - fp[1] * h) ** 2) < rr * rr) & (A > 0.9)
+        lit = fm & (Fl[..., 0] > np.percentile(Fl[..., 0][fm], 40))
+        tgt = lab(np.array([plates._hex(MASK_TARGET[sid])], np.float64))[0]
+        r["mask_de"] = round(float(np.linalg.norm(lab(np.median(P[lit], 0)[None].astype(np.float64))[0] - tgt)), 1)
     tier = skin_tier(sid) if kind == "portrait" else None
     if tier:
         base = plates.load_image(plates.image_path(plates.fighter_of(sid), "portrait"))[..., :3]
@@ -289,6 +300,8 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
     eds, edv = r.get("eye_ds", 0), r.get("eye_dv", 0)       # glowing = brighter with more colour (both up)
     if (edv > GATE["eye_dv"] and eds > 10.0) or (eds > GATE["eye_ds"] and edv > GATE["eye_dv2"]):
         fails.append("eyes")
+    if r.get("mask_de", 0) > GATE["mask_de"]:
+        fails.append("mask_colour")
     if r.get("streak_cols", 0) > GATE["streak_cols"]:
         fails.append("streak")
     if r.get("prop_out", 0) > PROP["out_max"] or r.get("prop_in", 0) > PROP["in_max"]:
@@ -345,23 +358,25 @@ def streak_measure(sid: str, kind: str, P: np.ndarray, F: np.ndarray, A: np.ndar
     yy, xx = np.mgrid[0:h, 0:w]
     disc = (((xx - fp[0] * w) ** 2 + (yy - fp[1] * h) ** 2) < (1.8 * rr) ** 2) & (A > 0.9)
     LF = lab(F.astype(np.float64))[..., 0]
-    dark = disc & (LF < np.median(LF[disc]) - 18.0) & (yy < fp[1] * h + 0.2 * rr)
+    dark = disc & (LF < np.median(LF[disc]) - 18.0) & (yy < fp[1] * h - 0.15 * rr)     # above the face point: not the mouth
     rows = np.convolve(dark.sum(1).astype(float), np.ones(max(3, int(0.08 * rr))), "same")
     if rows.max() < 3:
         return {"streak_cols": 0.0}
     ey = int(rows.argmax())
     ex = np.nonzero((dark & (np.abs(yy - ey) < 0.10 * rr)).any(0))[0]
-    x0, x1 = int(max(0, ex.min() - 0.12 * rr)), int(min(w, ex.max() + 0.12 * rr))
+    # both eyes: the dark features' extent, at least +-1 rr round the face point (a pupil alone can be the only dark)
+    x0 = int(max(0, min(ex.min() - 0.12 * rr, fp[0] * w - 1.0 * rr)))
+    x1 = int(min(w, max(ex.max() + 0.12 * rr, fp[0] * w + 1.0 * rr)))
     y0, y1 = int(max(0, ey + 0.04 * rr)), int(min(h, ey + 1.10 * rr))
 
-    def resp(X):
+    def resp(X, sx, sy):
         Lc = lab(X[y0:y1, x0:x1].astype(np.float64))[..., 0].astype(np.float32)
-        hp = Lc - plates._gauss1(Lc[..., None], 2.0 * sc, 1)[..., 0]
-        return plates._gauss1(hp[..., None], 2.5 * sc, 0)[..., 0]
-    vP, vF = resp(P), resp(F)
+        hp = Lc - plates._gauss1(Lc[..., None], sx * sc, 1)[..., 0]
+        return plates._gauss1(hp[..., None], sy * sc, 0)[..., 0]
     fig = A[y0:y1, x0:x1] > 0.9
     Lr = plates.gaussian(LF[y0:y1, x0:x1, None].astype(np.float32), 1.5 * sc)[..., 0]
     gy, gx = np.gradient(Lr)
+    vP, vF = resp(P, 2.0, 2.5), resp(F, 2.0, 2.5)
     new = ((vP - np.minimum(vF, 0.0)) < -2.0) & fig & (np.hypot(gx, gy) < 2.0 / sc)
     col = plates._gauss1(new.astype(np.float32)[..., None], 0.25 * rr, 0)[..., 0]
     hit = col.max(0) > 0.35
@@ -371,7 +386,8 @@ def streak_measure(sid: str, kind: str, P: np.ndarray, F: np.ndarray, A: np.ndar
         m3[:, hit, 0] = 0.6
         dbg = np.concatenate([P[y0:y1, x0:x1], F[y0:y1, x0:x1], m3], 1)
         Image.fromarray((np.clip(dbg, 0, 1) * 255).astype(np.uint8)).resize((dbg.shape[1] * 2, dbg.shape[0] * 2), Image.NEAREST).save(debug)
-    return {"streak_cols": round(float(hit.sum() / rr), 3)}
+    out = {"streak_cols": round(float(hit.sum() / rr), 3)}
+    return out
 
 
 def prop_measure(kind: str, P: np.ndarray, F: np.ndarray, A: np.ndarray, debug: str | None = None) -> dict:
@@ -525,7 +541,8 @@ def accept(card: str, choice: str, why: str) -> None:
         rec[f"{sid}:{kind}"] = {"shipped": "painted", "variant": v, "why": why, "model": MODEL, "prompt_version": ver,
                                 "prompt": text, "raw": os.path.relpath(raw, GAME),
                                 "raw_sha256": hashlib.sha256(open(raw, "rb").read()).hexdigest(),
-                                "gate": gates.get(v), "figure_median": FIG_MEDIAN, "date": time.strftime("%Y-%m-%d")}
+                                "gate": gates.get(v), "figure_median": FIG_MEDIAN,
+ "date": time.strftime("%Y-%m-%d")}
     with open(record_path(fid), "w", encoding="utf-8") as f:
         json.dump(dict(sorted(rec.items())), f, indent=1)
     print(f"[paint] {sid} {kind}: shipped {choice} -> {os.path.relpath(dst, GAME)}")

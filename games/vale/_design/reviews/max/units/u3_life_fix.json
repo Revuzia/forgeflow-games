@@ -1,0 +1,487 @@
+{
+ "t": 30,
+ "frames": 360,
+ "note": "each fighter plays the role in place for `frames` display frames at 60 Hz (Actor.pose); actor space; headCm/handCm = range, holdFrames = longest run with head, chest and both hands each under 1.5 mm/frame; off = clips only, on = clips + life layer",
+ "summary": {
+  "ervet/idle": {
+   "off": {
+    "headCm": 8.5,
+    "handCm": 12.2,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 12.6,
+    "handCm": 13.4,
+    "holdFrames": 8
+   }
+  },
+  "odrum/idle": {
+   "off": {
+    "headCm": 5.6,
+    "handCm": 6,
+    "holdFrames": 24
+   },
+   "on": {
+    "headCm": 10.1,
+    "handCm": 16.1,
+    "holdFrames": 31
+   }
+  },
+  "burdam/idle": {
+   "off": {
+    "headCm": 7.4,
+    "handCm": 11.4,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 12.8,
+    "handCm": 15.3,
+    "holdFrames": 10
+   }
+  },
+  "marund/idle": {
+   "off": {
+    "headCm": 8.2,
+    "handCm": 6.7,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 15.9,
+    "handCm": 21.2,
+    "holdFrames": 1
+   }
+  },
+  "vashil/idle": {
+   "off": {
+    "headCm": 2.2,
+    "handCm": 3.2,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 6.2,
+    "handCm": 18,
+    "holdFrames": 0
+   }
+  },
+  "kemdo/idle": {
+   "off": {
+    "headCm": 4.1,
+    "handCm": 4.7,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 10.7,
+    "handCm": 18.3,
+    "holdFrames": 0
+   }
+  },
+  "tunlan/idle": {
+   "off": {
+    "headCm": 7.2,
+    "handCm": 9.5,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 10.8,
+    "handCm": 13.8,
+    "holdFrames": 6
+   }
+  },
+  "hesmi/idle": {
+   "off": {
+    "headCm": 14.1,
+    "handCm": 17.4,
+    "holdFrames": 2
+   },
+   "on": {
+    "headCm": 20,
+    "handCm": 19.8,
+    "holdFrames": 3
+   }
+  },
+  "rishal/idle": {
+   "off": {
+    "headCm": 5.3,
+    "handCm": 4.9,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 10.1,
+    "handCm": 12.3,
+    "holdFrames": 9
+   }
+  },
+  "dunsom/idle": {
+   "off": {
+    "headCm": 6.5,
+    "handCm": 6,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 8.8,
+    "handCm": 17.9,
+    "holdFrames": 1
+   }
+  },
+  "ervet/channel": {
+   "off": {
+    "headCm": 71.9,
+    "handCm": 94.5,
+    "holdFrames": 2
+   },
+   "on": {
+    "headCm": 74.7,
+    "handCm": 96.9,
+    "holdFrames": 2
+   }
+  },
+  "odrum/channel": {
+   "off": {
+    "headCm": 7.7,
+    "handCm": 0,
+    "holdFrames": 14
+   },
+   "on": {
+    "headCm": 9.7,
+    "handCm": 6.4,
+    "holdFrames": 16
+   }
+  },
+  "burdam/channel": {
+   "off": {
+    "headCm": 9.3,
+    "handCm": 8.3,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 13.2,
+    "handCm": 15.5,
+    "holdFrames": 4
+   }
+  },
+  "marund/channel": {
+   "off": {
+    "headCm": 14.3,
+    "handCm": 27.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 18.3,
+    "handCm": 28.8,
+    "holdFrames": 0
+   }
+  },
+  "vashil/channel": {
+   "off": {
+    "headCm": 1.4,
+    "handCm": 1.8,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 4.5,
+    "handCm": 13.3,
+    "holdFrames": 24
+   }
+  },
+  "kemdo/channel": {
+   "off": {
+    "headCm": 4.6,
+    "handCm": 7.7,
+    "holdFrames": 36
+   },
+   "on": {
+    "headCm": 6.4,
+    "handCm": 12.2,
+    "holdFrames": 14
+   }
+  },
+  "tunlan/channel": {
+   "off": {
+    "headCm": 6.5,
+    "handCm": 9,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 8.4,
+    "handCm": 13.1,
+    "holdFrames": 0
+   }
+  },
+  "hesmi/channel": {
+   "off": {
+    "headCm": 6.9,
+    "handCm": 10.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 10.7,
+    "handCm": 13.3,
+    "holdFrames": 0
+   }
+  },
+  "rishal/channel": {
+   "off": {
+    "headCm": 8.5,
+    "handCm": 7,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 11,
+    "handCm": 9.9,
+    "holdFrames": 4
+   }
+  },
+  "dunsom/channel": {
+   "off": {
+    "headCm": 4.7,
+    "handCm": 9.8,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 7.1,
+    "handCm": 16.1,
+    "holdFrames": 10
+   }
+  },
+  "ervet/recall": {
+   "off": {
+    "headCm": 56.6,
+    "handCm": 42.9,
+    "holdFrames": 114
+   },
+   "on": {
+    "headCm": 58,
+    "handCm": 43.7,
+    "holdFrames": 70
+   }
+  },
+  "odrum/recall": {
+   "off": {
+    "headCm": 16.4,
+    "handCm": 10.2,
+    "holdFrames": 76
+   },
+   "on": {
+    "headCm": 15.5,
+    "handCm": 11.9,
+    "holdFrames": 60
+   }
+  },
+  "burdam/recall": {
+   "off": {
+    "headCm": 11.4,
+    "handCm": 81.2,
+    "holdFrames": 128
+   },
+   "on": {
+    "headCm": 13,
+    "handCm": 84.3,
+    "holdFrames": 21
+   }
+  },
+  "marund/recall": {
+   "off": {
+    "headCm": 23.2,
+    "handCm": 117.9,
+    "holdFrames": 10
+   },
+   "on": {
+    "headCm": 23.7,
+    "handCm": 121,
+    "holdFrames": 9
+   }
+  },
+  "vashil/recall": {
+   "off": {
+    "headCm": 3.6,
+    "handCm": 58,
+    "holdFrames": 36
+   },
+   "on": {
+    "headCm": 4.7,
+    "handCm": 56.3,
+    "holdFrames": 12
+   }
+  },
+  "kemdo/recall": {
+   "off": {
+    "headCm": 27,
+    "handCm": 15.4,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 29.9,
+    "handCm": 16.8,
+    "holdFrames": 0
+   }
+  },
+  "tunlan/recall": {
+   "off": {
+    "headCm": 16.9,
+    "handCm": 61,
+    "holdFrames": 32
+   },
+   "on": {
+    "headCm": 16.7,
+    "handCm": 61.4,
+    "holdFrames": 14
+   }
+  },
+  "hesmi/recall": {
+   "off": {
+    "headCm": 7.7,
+    "handCm": 9.1,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 11.4,
+    "handCm": 12.1,
+    "holdFrames": 6
+   }
+  },
+  "rishal/recall": {
+   "off": {
+    "headCm": 60.7,
+    "handCm": 103.7,
+    "holdFrames": 26
+   },
+   "on": {
+    "headCm": 62.4,
+    "handCm": 105.2,
+    "holdFrames": 9
+   }
+  },
+  "dunsom/recall": {
+   "off": {
+    "headCm": 17.5,
+    "handCm": 72.1,
+    "holdFrames": 36
+   },
+   "on": {
+    "headCm": 18.1,
+    "handCm": 74.8,
+    "holdFrames": 16
+   }
+  },
+  "ervet/stunned": {
+   "off": {
+    "headCm": 13.9,
+    "handCm": 4.3,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 22.6,
+    "handCm": 5.9,
+    "holdFrames": 0
+   }
+  },
+  "odrum/stunned": {
+   "off": {
+    "headCm": 11,
+    "handCm": 5.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 18.2,
+    "handCm": 10.5,
+    "holdFrames": 0
+   }
+  },
+  "burdam/stunned": {
+   "off": {
+    "headCm": 43.1,
+    "handCm": 45.2,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 57.4,
+    "handCm": 48.4,
+    "holdFrames": 0
+   }
+  },
+  "marund/stunned": {
+   "off": {
+    "headCm": 14.9,
+    "handCm": 5.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 25.8,
+    "handCm": 8,
+    "holdFrames": 1
+   }
+  },
+  "vashil/stunned": {
+   "off": {
+    "headCm": 7.3,
+    "handCm": 4.5,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 14.8,
+    "handCm": 8.3,
+    "holdFrames": 7
+   }
+  },
+  "kemdo/stunned": {
+   "off": {
+    "headCm": 13.5,
+    "handCm": 5.3,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 22.7,
+    "handCm": 12.2,
+    "holdFrames": 0
+   }
+  },
+  "tunlan/stunned": {
+   "off": {
+    "headCm": 9.9,
+    "handCm": 5.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 16,
+    "handCm": 11,
+    "holdFrames": 4
+   }
+  },
+  "hesmi/stunned": {
+   "off": {
+    "headCm": 10.9,
+    "handCm": 24.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 23.4,
+    "handCm": 25.2,
+    "holdFrames": 0
+   }
+  },
+  "rishal/stunned": {
+   "off": {
+    "headCm": 25.1,
+    "handCm": 23.5,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 31.1,
+    "handCm": 24,
+    "holdFrames": 0
+   }
+  },
+  "dunsom/stunned": {
+   "off": {
+    "headCm": 3.9,
+    "handCm": 6.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 12.1,
+    "handCm": 9.4,
+    "holdFrames": 0
+   }
+  }
+ }
+}

@@ -141,6 +141,11 @@ export const worldUniforms = {
   // MAX U1/U6: the character material response on (1) / off (0, the A/B harness's 'base'); one uniform, no define, so
   // no program is added
   valeCharMat: { value: 1 },
+  // MAX U1 fix round, the albedo hue lift (fighters only, scaled by valeCharMat): x = chroma gain on the display-space
+  // albedo about its own luma (value bands kept), y = the HSV saturation it never lifts a texel past (tokens
+  // art.skins.never: no reserved hue above 40 % saturation), z = the share of the luma pulled out of very pale texels
+  // (above display luma w) so their hue can show, w = that knee
+  valeCharChroma: { value: new Vector4(2.4, 0.38, 0.06, 0.72) },
   // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
   // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
   // zw = drift (m/s)
@@ -264,6 +269,25 @@ uniform vec3 valeCharFill;
 uniform vec4 valeCharShape;
 uniform float valeCharMonster;
 uniform float valeCharMat;
+uniform vec4 valeCharChroma;
+// MAX U1 fix round: the albedo hue lift (header of worldUniforms.valeCharChroma). The bakes paint fighters at CIELAB
+// chroma 5-18 (mean), so at 28.5 m under the grade they read as hue-less clay; this lifts the display-space chroma about
+// the texel's own Rec.709 luma, never past valeCharChroma.y HSV saturation and never below black, and pulls the palest
+// texels down a few percent toward the knee so a chalk or linen part keeps a hue instead of clipping to paper.
+vec3 valeCharHue( vec3 c ) {
+  float g = 1.0 + ( valeCharChroma.x - 1.0 ) * valeCharMat;
+  if ( g <= 1.001 ) return c;
+  vec3 s = pow( max( c, vec3( 1e-5 ) ), vec3( 1.0 / 2.2 ) );
+  float L = dot( s, vec3( 0.2126, 0.7152, 0.0722 ) );
+  float mx = max( s.r, max( s.g, s.b ) ), mn = min( s.r, min( s.g, s.b ) );
+  float den = ( mx - mn ) - valeCharChroma.y * ( mx - L );
+  float k = den > 1e-5 ? valeCharChroma.y * L / den : g;
+  k = min( g, max( 1.0, k ) );
+  if ( L - mn > 1e-5 ) k = min( k, max( 1.0, L / ( L - mn ) ) );
+  vec3 o = L + ( s - L ) * k;
+  o *= 1.0 - valeCharChroma.z * valeCharMat * smoothstep( valeCharChroma.w, 1.0, L );
+  return pow( clamp( o, 0.0, 1.0 ), vec3( 2.2 ) );
+}
 `;
 /** after the material's lights (direct and sky): the character light (noon crown + eye fill), see the header */
 const CHAR_LIGHT = /* glsl */`
@@ -306,7 +330,7 @@ const CHAR_LIGHT = /* glsl */`
       // lower body never lifts out of its value band
       float valeSide = saturate( valeNdL * 0.5 + 0.5 );
       float valeDark = 1.0 - 0.65 * smoothstep( 0.2, 0.55, valeLa );
-      reflectedLight.directDiffuse += valeShare * valeCloth * valeDark * 0.2 * valeF * valeF * valeSide * valeSide * valeCharRim.rgb * valeAlb;
+      reflectedLight.directDiffuse += valeShare * valeCloth * valeDark * 0.3 * valeF * valeF * valeSide * valeSide * valeCharRim.rgb * valeAlb;
     }
     if ( valeGlass > 0.0 ) {
       vec3 valeH = normalize( valeK + geometryViewDir );
@@ -445,6 +469,7 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${CHAR_PARS}`)
         .replace('#include <lights_fragment_begin>', CHAR_LIGHTS_BEGIN)
+        .replace('#include <color_fragment>', '#include <color_fragment>\nif ( valeCharMode > 1.5 ) diffuseColor.rgb = valeCharHue( diffuseColor.rgb );')
         .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${CHAR_LIGHT}`);
     }
   };

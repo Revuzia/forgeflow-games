@@ -79,7 +79,7 @@ import {
 } from './terrain_glsl.ts';
 import { bandRing, cliffProfile, farWallProfile, flankProfile, type Strip, sweep, WallMesh, WK } from './terrain_walls.ts';
 import { bakeInlay, fracture, hourScript, INLAY, INLAY_GLSL, laneDecals, mulberry as mulberryI, numeral, roadTicks, StrokeSet } from './terrain_inlay.ts';
-import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack } from './terrain_clutter.ts';
+import { bladeTuft, fanLeaf, mossTuft, pebble, rockStack, tickFern } from './terrain_clutter.ts';
 import { BrushField, GRASS_VERT_MAIN, GRASS_VERT_PARS, TREE_SWAY_MAIN, TREE_SWAY_PARS } from './terrain_brush.ts';
 import { INK_SWAY, OCCLUDER_ORDER, swayDepth } from './ink.ts';
 import { CellInstances, type CullView, decimate, splitGeometry } from './instance_cull.ts';
@@ -1706,10 +1706,49 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         const r0 = rand(), r1 = rand(), r2 = rand(), r3 = rand();
         const e = pointInPolygon(jx, jy, poly) ? polyEdgeDist(jx, jy, poly) : 0;
         if (e > 6 && r0 < 0.45) continue;
+        // max env ENV-1 fix: the body of the wood thinned by ~18 % (a hash of the spot, after this cell's draws so every
+        // later placement keeps its numbers): the gaps let the tick-fern understory and the floor read between crowns
+        if (e > 2.4 && hash2(jx * 0.913 + 5.3, jy * 1.371 - 2.1) < 0.2) continue;
         add(jx, jy, e < 3 ? 0.82 + r1 * 0.14 : e < 6 ? 0.95 + r1 * 0.22 : 1.12 + r1 * 0.38, r2 * Math.PI * 2, r3, 1.5);
       }
     }
   });
+  // max env ENV-1 fix: the Dialwood's understory: tick-ferns on the block tops between the crowns (more in the gaps,
+  // fewer under a trunk), never within 1 m of a north lip (no added occlusion) nor on a landmark's footprint. Their own
+  // seeded stream, so no other placement moves.
+  type FernSpot = { x: number; y: number; h: number; s: number; r: number; c: number };
+  const fernSpots: FernSpot[] = [];
+  {
+    const fr = mulberry(6151);
+    const cell = 3, near = new Map<string, TreeSpot[]>();
+    for (const t of treeSpots) {
+      const k = `${Math.floor(t.x / cell)},${Math.floor(t.y / cell)}`;
+      (near.get(k) ?? near.set(k, []).get(k)!).push(t);
+    }
+    const trunkDist = (x: number, y: number): number => {
+      let d = Infinity;
+      const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const t of near.get(`${cx + i},${cy + j}`) ?? []) d = Math.min(d, Math.hypot(t.x - x, t.y - y));
+      return d;
+    };
+    walls.forEach((poly, i) => {
+      if (chasm[i] || replaced[i] || wallHeights[i] < 2.2 || surface === 'plate') return;
+      const b = wallBoxes[i], step = 1.35;
+      for (let y = b.minY + step / 2; y < b.maxY; y += step) {
+        for (let x = b.minX + step / 2; x < b.maxX; x += step) {
+          const jx = x + (fr() - 0.5) * step * 0.9, jy = y + (fr() - 0.5) * step * 0.9, a = fr(), sc = fr(), rr = fr(), cc = fr();
+          if (!pointInPolygon(jx, jy, poly) || polyEdgeDist(jx, jy, poly) < 0.45) continue;
+          if (rayOut(jx, jy, poly, -1) < 1.0) continue;
+          if (marks.some((m) => Math.abs(jx - m.x) < m.sx + 0.6 && Math.abs(jy - m.y) < m.sy + 0.6)) continue;
+          const td = trunkDist(jx, jy);
+          if (td < 0.55) continue;
+          // in a gap (no trunk within 1.6 m) nearly always; under the crowns about one in three
+          if (a > (td > 1.6 ? 0.92 : 0.36)) continue;
+          fernSpots.push({ x: jx, y: jy, h: wallHeights[i], s: (td > 1.6 ? 0.95 : 0.72) + sc * 0.4, r: rr * Math.PI * 2, c: cc });
+        }
+      }
+    });
+  }
   const TREE_TOL = 0.3;
   /** the scale a tree of real height H and crown reach R may take at a spot (0 = none fits). Overhangs: the
    *  camera sits south, so a crown leaning over a SOUTH-facing lip hides nothing walkable (a 2 m fighter at the
@@ -1842,10 +1881,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     leaf: fanLeaf(new Color(1, 1, 1)),
     pebble: pebble(lin(colors.pebble)),
     tuft: bladeTuft(lin(colors.grassRoot), lin(colors.grassTip).multiplyScalar(0.92)),
+    // the tick-fern: a dark root, the Dialwood leaf a touch yellower along the frond, a lit warm tip
+    fern: tickFern(lin(colors.leaf).multiplyScalar(0.45), lin(colors.leaf).lerp(lin(colors.grassTip), 0.25), lin(colors.grassTip).lerp(lin(colors.leaf), 0.35).multiplyScalar(1.05)),
   };
   const clutterMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, side: DoubleSide });
   patchWorldMaterial(clutterMat);
-  disposables.push(clutterGeo.moss, clutterGeo.leaf, clutterGeo.pebble, clutterGeo.tuft, clutterMat);
+  disposables.push(clutterGeo.moss, clutterGeo.leaf, clutterGeo.pebble, clutterGeo.tuft, clutterGeo.fern, clutterMat);
   let scatterParts: Group[] = [];
   let props: Partial<Record<TerrainPropRole, BufferGeometry[]>> = {};
   const disposeProps = (p: Partial<Record<TerrainPropRole, BufferGeometry[]>>): void => {
@@ -1983,6 +2024,15 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     place(clutter.leaf, clutterGeo.leaf, 'vale_clutter_leaf', 1, 0.004);
     place(clutter.pebble, clutterGeo.pebble, 'vale_clutter_pebble', 1, 0);
     place(clutter.tuft, clutterGeo.tuft, 'vale_clutter_tuft', 1.1, 0);
+    // max env ENV-1 fix: the understory (none on Low, half on Medium; no shadows: it sits in the canopy's)
+    {
+      const items = pick(fernSpots, keepC).map((f) => {
+        q.setFromAxisAngle(up, f.r); s.set(f.s, f.s * (0.85 + 0.3 * f.c), f.s); pos.set(f.x, f.h - 0.02, f.y);
+        const v = (0.82 + 0.3 * f.c) * pv.clutter;
+        return { m: new Matrix4().compose(pos, q, s), c: new Color(v * (1.02 + 0.06 * f.c), v, v * (0.94 - 0.04 * f.c)) };
+      });
+      if (items.length) scatterParts.push(chunked(clutterGeo.fern, clutterMat, items, 'vale_understory_fern', false));
+    }
     for (const g of scatterParts) scatterGroup.add(g);
   };
   setScatter(2);
@@ -2072,6 +2122,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
       // perf PERF-M1: the prop geometries are this terrain's own (loadTerrainProps clones and merges them)
       if (p !== props) disposeProps(props);
       props = p;
+      for (const g of p.tree ?? []) bakeCrownLight(g);
       awaiting.clear();
       setScatter(scatterLevel);
     },
@@ -2176,6 +2227,29 @@ function needlegrassClump(root: Color, tip: Color): BufferGeometry {
 }
 
 /** Dialwood canopy: four chiselled, flat-faceted lobes; darker underneath, sun-warm on top */
+/** max env ENV-1 fix: the top-light bake on an authored Dialwood (once per geometry): the crown's upper, sky-facing
+ *  plates lit and a touch warmer, its underside and the trunk's foot in shade, so a crown reads as a lit dome over a
+ *  dark hollow from the gameplay camera. Value-neutral on average (the lower half darkens about as much as the top
+ *  lightens), so the wood stays inside its B5 band. */
+function bakeCrownLight(g: BufferGeometry): void {
+  if (g.userData.valeCrownLit) return;
+  g.userData.valeCrownLit = true;
+  const p = g.getAttribute('position') as BufferAttribute, c = g.getAttribute('color') as BufferAttribute | undefined;
+  if (!c) return;
+  if (!g.getAttribute('normal')) g.computeVertexNormals();
+  const n = g.getAttribute('normal') as BufferAttribute;
+  let H = 0.5;
+  for (let k = 0; k < p.count; k++) H = Math.max(H, p.getY(k));
+  const sm = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  for (let k = 0; k < p.count; k++) {
+    const t = p.getY(k) / H, ny = n.getY(k);
+    const lit = Math.max(0, ny) * sm(0.55, 1.0, t);
+    const v = (0.84 + 0.16 * sm(0.15, 0.6, t)) * (1 + 0.26 * lit) * (1 - 0.14 * Math.max(0, -ny));
+    c.setXYZ(k, c.getX(k) * v * (1 + 0.05 * lit), c.getY(k) * v, c.getZ(k) * v * (1 - 0.08 * lit));
+  }
+  c.needsUpdate = true;
+}
+
 function dialwoodCanopy(leaf: Color): BufferGeometry {
   const parts: BufferGeometry[] = [];
   const lobes = [[0, 0.35, 0, 1.0], [0.55, 0.05, 0.25, 0.72], [-0.45, 0.1, -0.35, 0.78], [0.05, 0.75, -0.1, 0.62]];

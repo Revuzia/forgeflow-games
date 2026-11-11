@@ -252,3 +252,65 @@ export function spire(seed: number): BufferGeometry {
   g.computeVertexNormals();
   return g;
 }
+
+/** max env ENV-1 fix: a tick-fern, the Dialwood's understory shrub (VALE's own: each frond carries short paired
+ *  pinnae like a dial's minute ticks, the longest at the frond's middle). Seven fronds arch out of one crown and
+ *  droop at the tips; ~1 m across and ~0.5 m tall at scale 1, 70 tris. Solid (no alpha card), vertex-coloured: a dark
+ *  root, the leaf green along the frond and a lit, warmer tip (the top light the canopy lets through); normals bent
+ *  up so it shades like the floor it grows from. */
+export function tickFern(root: Color, mid: Color, tip: Color): BufferGeometry {
+  const rnd = mulberry(311);
+  const pos: number[] = [];
+  const col: number[] = [];
+  const nor: number[] = [];
+  const mix = (t: number): [number, number, number] => {
+    const a = t < 0.5 ? root : mid, b = t < 0.5 ? mid : tip, u = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+    return [a.r + (b.r - a.r) * u, a.g + (b.g - a.g) * u, a.b + (b.b - a.b) * u];
+  };
+  const push = (p: number[], t: number, dx: number, dz: number): void => {
+    pos.push(p[0], p[1], p[2]);
+    const c = mix(t);
+    col.push(c[0], c[1], c[2]);
+    const nx = dx * 0.35, ny = 0.9, nz = dz * 0.35, l = Math.hypot(nx, ny, nz);
+    nor.push(nx / l, ny / l, nz / l);
+  };
+  const F = 7;
+  for (let f = 0; f < F; f++) {
+    const a = (f / F) * Math.PI * 2 + (rnd() - 0.5) * 0.6;
+    const L = 0.38 + rnd() * 0.16;                 // reach
+    const H = 0.34 + rnd() * 0.18;                 // arch height
+    const w = 0.07 + rnd() * 0.025;                // half width at its widest
+    const dx = Math.cos(a), dz = Math.sin(a), px = -dz, pz = dx;
+    const S = 4;
+    // the rachis: up and out, then drooping (the tip sits lower than the frond's crest)
+    const at = (t: number): number[] => {
+      const r = 0.03 + L * t;
+      const y = H * Math.sin(Math.min(1, t * 1.25) * Math.PI * 0.62) - H * 0.35 * Math.max(0, t - 0.75) * 4 * Math.max(0, t - 0.75);
+      return [dx * r, Math.max(0.02, y), dz * r];
+    };
+    const wid = (t: number): number => w * Math.sin(Math.min(1, t * 1.15 + 0.08) * Math.PI) * (t < 1 ? 1 : 0);
+    for (let s = 0; s < S; s++) {
+      const t0 = s / S, t1 = (s + 1) / S;
+      const c0 = at(t0), c1 = at(t1), w0 = wid(t0), w1 = s === S - 1 ? 0 : wid(t1);
+      const L0 = [c0[0] - px * w0, c0[1], c0[2] - pz * w0], R0 = [c0[0] + px * w0, c0[1], c0[2] + pz * w0];
+      const L1 = [c1[0] - px * w1, c1[1], c1[2] - pz * w1], R1 = [c1[0] + px * w1, c1[1], c1[2] + pz * w1];
+      push(L0, t0, dx, dz); push(R0, t0, dx, dz); push(R1, t1, dx, dz);
+      if (s < S - 1) { push(L0, t0, dx, dz); push(R1, t1, dx, dz); push(L1, t1, dx, dz); }
+      // the ticks: a short pinna each side at segments 1 and 2 (the longest at the frond's middle), angled forward
+      if (s === 1 || s === 2) {
+        const tm = (t0 + t1) / 2, cm = at(tm), tl = (s === 1 ? 0.13 : 0.16) * (0.9 + rnd() * 0.2);
+        for (const sd of [-1, 1]) {
+          const b0 = [cm[0] + sd * px * wid(tm) * 0.8 - dx * 0.035, cm[1], cm[2] + sd * pz * wid(tm) * 0.8 - dz * 0.035];
+          const b1 = [cm[0] + sd * px * wid(tm) * 0.8 + dx * 0.035, cm[1], cm[2] + sd * pz * wid(tm) * 0.8 + dz * 0.035];
+          const tp = [cm[0] + sd * px * (wid(tm) + tl) + dx * tl * 0.55, cm[1] - tl * 0.35, cm[2] + sd * pz * (wid(tm) + tl) + dz * tl * 0.55];
+          push(b0, tm, dx, dz); push(b1, tm, dx, dz); push(tp, Math.min(1, tm + 0.3), dx, dz);
+        }
+      }
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('normal', new BufferAttribute(new Float32Array(nor), 3));
+  g.setAttribute('color', new BufferAttribute(new Float32Array(col), 3));
+  return g;
+}

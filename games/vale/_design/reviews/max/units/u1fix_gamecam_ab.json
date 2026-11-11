@@ -1,0 +1,29 @@
+{
+ "fighter_burdam_3": {
+  "base->mat": 1.55
+ },
+ "fighter_dunsom_10": {
+  "base->mat": 2.0
+ },
+ "fighter_ervet_1": {
+  "base->mat": 1.87
+ },
+ "fighter_hesmi_8": {
+  "base->mat": 0.0
+ },
+ "fighter_kemdo_6": {
+  "base->mat": 1.52
+ },
+ "fighter_marund_4": {
+  "base->mat": 2.89
+ },
+ "fighter_odrum_2": {
+  "base->mat": 1.13
+ },
+ "fighter_tunlan_7": {
+  "base->mat": 1.75
+ },
+ "fighter_vashil_5": {
+  "base->mat": 2.81
+ }
+}

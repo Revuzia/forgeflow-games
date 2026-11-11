@@ -1,0 +1,62 @@
+{
+ "cue": "c_hit_phys_light.ogg",
+ "nearDb": -20.0,
+ "farDb": -11.0,
+ "returnDb": 10.0,
+ "rooms": {
+  "rift": {
+   "near": {
+    "sendDb": -20.0,
+    "wetToDryDb": -18.8,
+    "lufsM": -18.0,
+    "lufsDryM": -18.1,
+    "tailMs": 688,
+    "side": 0.044
+   },
+   "far": {
+    "sendDb": -11.0,
+    "wetToDryDb": -9.8,
+    "lufsM": -17.6,
+    "lufsDryM": -18.1,
+    "tailMs": 688,
+    "side": 0.085
+   }
+  },
+  "bridge": {
+   "near": {
+    "sendDb": -20.0,
+    "wetToDryDb": -21.9,
+    "lufsM": -18.0,
+    "lufsDryM": -18.1,
+    "tailMs": 878,
+    "side": 0.038
+   },
+   "far": {
+    "sendDb": -11.0,
+    "wetToDryDb": -12.9,
+    "lufsM": -17.8,
+    "lufsDryM": -18.1,
+    "tailMs": 878,
+    "side": 0.058
+   }
+  },
+  "fray": {
+   "near": {
+    "sendDb": -20.0,
+    "wetToDryDb": -18.3,
+    "lufsM": -18.0,
+    "lufsDryM": -18.1,
+    "tailMs": 602,
+    "side": 0.046
+   },
+   "far": {
+    "sendDb": -11.0,
+    "wetToDryDb": -9.3,
+    "lufsM": -17.6,
+    "lufsDryM": -18.1,
+    "tailMs": 602,
+    "side": 0.091
+   }
+  }
+ }
+}
