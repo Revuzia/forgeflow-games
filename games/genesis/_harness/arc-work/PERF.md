@@ -543,3 +543,43 @@ a stall; (3) scene 448 ms GPU, 13.4 M tris / 8.9 M shadow tris: does zcons help 
   (the views' content streaming in, flat after the first tour), heap 26 -> 28-35 MB (sawtooth, no climb), DOM nodes
   ~1 050-1 130, JS listeners 251-256, documents 1, 0 console errors. NOTHING GROWS. (SwiftShader: only ~50 frames in
   10 min, so this covers wall-time / tick-driven growth, not per-frame growth over thousands of frames.)
+
+## OWNER A/B (M5 MacBook, Chrome, same seed, 'Rubolhin by the Lake', 20 s panning / zooming at 90-197 m; relayed)
+| run | fps | frame p50/p95 | GPU ms mean | main shadows/post (mean ms) | tris |
+| ultra baseline | 2.7 | 387/760 | 1218 | 244/105 | 13.4M |
+| ultra ?zcons=0 | 1.9 | 534/1054 | 1902 | 230/260 | 15.3M |
+| ultra ?reach=0 | 2.2 | 454/974 | 1663 | 292/147 | 11.4M |
+| HIGH | 5.4 | 187/361 | 416 | 62/105 | 5.0M |
+Coordinator: zcons HELPS on Metal (keep); reach helps a little; even HIGH spends ~416 ms "GPU" and 105 ms MAIN in
+post: bugs, not budget. Camera often inside fog / cloud at 90-200 m. Target >= 60 fps on this M5 at Ultra.
+My reading: every GPU mean exceeds the frame interval (1218 vs 387 ms): the timer spans overlap on ANGLE-Metal, so
+they rank runs but cannot itemise passes; per-pass GPU timers inside post would overlap the same way. The GL call
+trace (P1b, main-thread ms inside each GL call per slot + uploads inside a pass) is the itemisation that works there.
+- Report header now lists every URL switch (`switches reach=0&zcons=0...`), so A/B runs are self-describing.
+- g1u (dist13 = B1 + GL trace, BEFORE F15; busy town, ULTRA, 888x500, speed 1, panned; only 2 frames under
+  SwiftShader, so its ms are meaningless — the COUNTS are hardware-independent): 591 draws, 9.3 M tris (7 M shadow),
+  53 framebuffer switches / frame, 52 UPLOADS INSIDE A PASS / frame. By slot: shadows bufferData 17 calls / 19 MB a
+  frame (NEW buffers created inside the shadow pass: geometry replaced while panning — owner unknown yet), shadows
+  bufferSubData 142 calls / 1.1 MB (10 inside the pass), shadows texSubImage2D 4.7 (all inside), scene texSubImage2D
+  14.3 (all inside the pass: BatchedMesh tables / DataTextures uploaded at draw), post bufferSubData 35 (9 inside),
+  post bufferData 6 / 2.8 MB. On a tile GPU each inside-pass upload can end the render pass (store + reload the
+  attachments: the 4096^2 shadow atlas on Ultra) or force a copy / wait -> the main-thread stalls in 'shadows' / 'post'.
+- GATE check8 (whole tree incl. B1, P1b, F15, worker.test fix): 903/904; the one failure (ui-thumblate 'an encode
+  slower than the wait') is timing-sensitive and passed 2/2 when re-run alone (load ~9 then: a probe + the gate on 4
+  CPUs); not touched by this session. npm run build OK (build-prod7.log).
+
+## NEXT (session 8), in order — the owner's M5 is the target (>= 60 fps at Ultra, no quality lowered)
+1. Ship the current tree to the CDN and ask for a new "Record 20 s" on Ultra (header now lists URL switches; the
+   'gl calls' line itemises main-thread ms per slot per GL call and the uploads inside passes). Decide from it.
+2. Find the owners of shadows|bufferData (17 new buffers / 19 MB a frame while panning): perf-play --stacks=1 --attrs=1
+   on dist14 with --panreport (stacks names the call site; attrs names the scene object). Candidates: far-tree
+   bucket growth (growBucket makes a new InstancedMesh), vegetation / groundcover pools replaced, roads ribbons,
+   terrain PatchBatch grow (setGeometrySize re-creates every attribute). Make them sub-range updates of kept buffers.
+3. Move every remaining per-frame upload BEFORE the first pass of the frame (no upload after a draw into the same
+   framebuffer): buildings' BatchedMesh tables (4 batches x 5 passes; per-instance state is indexed through the table,
+   so F15's trick does not apply: per-pass rows in one table texture + a uPassBase offset patched into three's
+   getIndirectIndex in buildingmat, filled for all passes before shadows), DataTextures (renderer.initTexture at frame
+   start), instance attributes.
+4. Then re-measure g1u on dist14 (counts must drop: inside-pass uploads, bufferData in shadows), queue g1h (High).
+5. Still queued in run-s7c.sh (dist13): g1h, s7f1 (descent + zoom, far trees on), s7f0 (off). Far trees / white
+   frames / low-sun shadows / speed-1 AFTER table: NOT yet verified in a browser (session-6 items 2-5).

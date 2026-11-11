@@ -400,7 +400,7 @@ export class App implements UiHost {
       return {
         gpu, preset: String(this.quality), canvas: `${c.width}x${c.height} (css ${Math.round(r.width)}x${Math.round(r.height)}, render ${st.renderW}x${st.renderH})`,
         dpr: Math.round((globalThis.devicePixelRatio ?? 1) * 100) / 100,
-        extra: `zcons ${ZCONS.on ? 'on' : 'off' + (ZCONS.why ? ` (${ZCONS.why})` : '')} | timer ${perfmon.recorder.hasGpuTimer ? 'yes' : 'no'}`,
+        extra: `zcons ${ZCONS.on ? 'on' : 'off' + (ZCONS.why ? ` (${ZCONS.why})` : '')} | timer ${perfmon.recorder.hasGpuTimer ? 'yes' : 'no'} | switches ${location.search.replace(/^\?/, '') || 'none'}`,
       };
     };
     // ?perf=1 opens the frame monitor's overlay from the start (Shift+F12 toggles it)
