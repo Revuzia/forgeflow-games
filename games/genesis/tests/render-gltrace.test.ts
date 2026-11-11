@@ -39,3 +39,30 @@ test('GlTrace: per-slot calls, bytes, inside-pass uploads; uninstall restores th
   assert.equal(gl.bufferSubData, proto);
   assert.ok(!Object.prototype.hasOwnProperty.call(gl, 'bufferSubData'));
 });
+
+test('GlTrace: ANGLE-Metal allocation estimate (bufferData = its size, bufferSubData = the whole bound buffer)', () => {
+  class Ctx {
+    bindBuffer(..._a: unknown[]) { /* bound */ }
+    bufferData(..._a: unknown[]) { /* new */ }
+    bufferSubData(..._a: unknown[]) { /* sub */ }
+    getExtension() { return null; }
+  }
+  const gl = new Ctx() as unknown as WebGL2RenderingContext;
+  const tr = new GlTrace();
+  tr.install(gl);
+  tr.slot = 'shadows';
+  const A = {} as WebGLBuffer, B = {} as WebGLBuffer;
+  gl.bindBuffer(0x8892, A);
+  gl.bufferData(0x8892, new Float32Array(1000), 0x88e8); // 4000 B new
+  gl.bindBuffer(0x8892, B);
+  gl.bufferData(0x8892, new Float32Array(250000), 0x88e8); // 1 MB new
+  gl.bufferSubData(0x8892, 0, new Float32Array(10)); // into B: a whole-size copy (1 MB)
+  gl.bindBuffer(0x8892, A);
+  gl.bufferSubData(0x8892, 16, new Float32Array(4)); // into A: 4000 B
+  const m = tr.metal.get('shadows')!;
+  assert.equal(m.n, 4);
+  assert.equal(m.bytes, 4000 + 1e6 + 1e6 + 4000);
+  assert.ok(tr.lines(1).some((l) => l.startsWith('metal buffer allocs')));
+  tr.uninstall();
+  assert.ok(!Object.prototype.hasOwnProperty.call(gl, 'bindBuffer'));
+});

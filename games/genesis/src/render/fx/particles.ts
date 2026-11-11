@@ -24,10 +24,11 @@
 // Renderer through the life layer); wind from the sim's wind field leans the plumes.
 
 import {
-  CustomBlending, Group, InstancedBufferAttribute, InstancedBufferGeometry, Float32BufferAttribute, Mesh,
+  CustomBlending, Group, InstancedBufferGeometry, Float32BufferAttribute, Mesh,
   OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector2, type Camera, type IUniform, type Texture,
   type WebGLRenderer, type WebGLRenderTarget, type Scene,
 } from 'three';
+import { putGrowable } from '../upload.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -490,10 +491,13 @@ export class Particles {
         idx[k * 2] = i; idx[k * 2 + 1] = e.count;
       }
     }
-    this.geo.setAttribute('iOrigin', new InstancedBufferAttribute(origin, 3));
-    this.geo.setAttribute('iWind', new InstancedBufferAttribute(wind, 3));
-    this.geo.setAttribute('iParam', new InstancedBufferAttribute(param, 4));
-    this.geo.setAttribute('iIdx', new InstancedBufferAttribute(idx, 2));
+    // PERF F18 (session 8): the instance buffers are KEPT and refilled (power-of-two capacity; instanceCount bounds the
+    // draw) — new buffers of new sizes at every emitter refresh (every ~150 m of camera travel, every road / lamp
+    // change) were fresh Metal allocations on a Mac (upload.ts putGrowable)
+    putGrowable(this.geo, 'iOrigin', origin, 3, true);
+    putGrowable(this.geo, 'iWind', wind, 3, true);
+    putGrowable(this.geo, 'iParam', param, 4, true);
+    putGrowable(this.geo, 'iIdx', idx, 2, true);
     this.geo.instanceCount = n;
     this.group.visible = n > 0;
     this.stats.emitters = list.length;

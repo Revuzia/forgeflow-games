@@ -14,7 +14,7 @@
 // night each throws a pool of light on the road surface (in the ribbon shader, matching the posts exactly), its glass
 // glows (the building shader's lantern part), and the nearest become point lights (render/life/nightlights.ts).
 
-import { uploadPrefix } from '../upload.ts';
+import { putGrowable, uploadPrefix } from '../upload.ts';
 import {
   BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, ShaderMaterial, Uint32BufferAttribute, type IUniform,
@@ -452,8 +452,8 @@ export class Roads {
     if (off) { for (const p of this.shadowPosts) p.mesh.visible = false; }
     else if (Math.hypot(camX - this.shadowCam[0], camY - this.shadowCam[1], camZ - this.shadowCam[2]) > 8) this.placeShadowPosts(camX, camY, camZ);
     if (off || !road) { this.dirt.visible = this.paved.visible = false; this.stamp = ''; if (this.lampLights.length) { this.lampLights = []; this.lampVersion++; } return; }
-    this.dirt.visible = this.dirt.geometry.index !== null;
-    this.paved.visible = this.paved.geometry.index !== null;
+    this.dirt.visible = this.dirt.geometry.index !== null && this.dirt.geometry.drawRange.count > 0;
+    this.paved.visible = this.paved.geometry.index !== null && this.paved.geometry.drawRange.count > 0;
     const fieldStamp = `${pv.fieldVersion.get('road') ?? 0}|${pv.fieldVersion.get('surface') ?? 0}|${pv.settlements.length}`;
     const stamp = `${fieldStamp}|${buildings.layoutVersion}`;
     const moved = Math.hypot(camX - this.lastCam[0], camY - this.lastCam[1], camZ - this.lastCam[2]);
@@ -736,10 +736,12 @@ export class Roads {
     this.chainCache = nextCache;
     this.stats.rebuiltChains = rebuilt;
     const put = (m: Mesh, list: ChainGeo[]) => {
-      m.geometry.dispose();
       let nv = 0, ni = 0;
       for (const c of list) { nv += c.p.length / 3; ni += c.i.length; }
-      const bg = ni ? new BufferGeometry() : emptyRibbon();
+      // PERF F18 (session 8): the ribbon's buffers are KEPT and refilled (capacity in powers of two, the draw bounded
+      // by the draw range) — a rebuild every ~120 m of camera travel made seven new GPU buffers of new sizes per
+      // ribbon, fresh Metal allocations on a Mac (upload.ts putGrowable). Same vertices, same draw.
+      const bg = m.geometry as BufferGeometry;
       if (ni) {
         const P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), A = new Float32Array(nv * 4), L = new Float32Array(nv), E = new Float32Array(nv), F = new Float32Array(nv);
         const I = new Uint32Array(ni);
@@ -749,17 +751,17 @@ export class Roads {
           for (let j = 0; j < c.i.length; j++) I[k + j] = c.i[j] + v;
           v += c.p.length / 3; k += c.i.length;
         }
-        bg.setAttribute('position', new BufferAttribute(P, 3));
-        bg.setAttribute('aRoad', new BufferAttribute(A, 4));
-        bg.setAttribute('aLamp', new BufferAttribute(L, 1));
-        bg.setAttribute('aEnd', new BufferAttribute(E, 1));
-        bg.setAttribute('aLift', new BufferAttribute(F, 1));
-        bg.setIndex(new BufferAttribute(I, 1));
+        putGrowable(bg, 'position', P, 3);
+        putGrowable(bg, 'aRoad', A, 4);
+        putGrowable(bg, 'aLamp', L, 1);
+        putGrowable(bg, 'aEnd', E, 1);
+        putGrowable(bg, 'aLift', F, 1);
+        putGrowable(bg, 'index', I, 1);
         // the ribbon's own normals (it follows the slopes), wound upward: per chain (chainGeometry; chains share no
         // vertex, so these are exactly the normals of the whole ribbon)
-        bg.setAttribute('normal', new BufferAttribute(N, 3));
+        putGrowable(bg, 'normal', N, 3);
       }
-      m.geometry = bg;
+      bg.setDrawRange(0, ni);
       m.visible = ni > 0;
     };
     put(this.dirt, chainsDirt);

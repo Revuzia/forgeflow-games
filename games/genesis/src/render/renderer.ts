@@ -40,6 +40,9 @@ import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
+import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
+/** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
+const PRE_UPLOAD = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('preupload') !== '0'; } catch { return true; } })();
 
 export interface RenderStats {
   drawCalls: number;
@@ -191,6 +194,8 @@ export class Renderer {
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
     enableConservativeDepth(this.three, Z_CONS);
+    installSpanUploads(wantSpanUploads(this.three));
+    if (PRE_UPLOAD) installTexturePreUpload();
     setCityLightsRenderer(this.three);
     this.three.toneMapping = NoToneMapping;
     this.three.autoClear = true;
@@ -453,6 +458,10 @@ export class Renderer {
     this.stats.primary = primaryPv?.name ?? '';
     const wantShadows = !!primaryVis && q.shadowCascades > 0 && alt < 3500;
     perfmon.end('actors');
+    // PERF F20: the frame's texture uploads, before any render pass (upload.ts)
+    perfmon.begin('uploads');
+    if (PRE_UPLOAD) flushTextureUploads(r);
+    perfmon.end('uploads');
     perfmon.begin('shadows');
     const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;

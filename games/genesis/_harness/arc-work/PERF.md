@@ -583,3 +583,54 @@ trace (P1b, main-thread ms inside each GL call per slot + uploads inside a pass)
 4. Then re-measure g1u on dist14 (counts must drop: inside-pass uploads, bufferData in shadows), queue g1h (High).
 5. Still queued in run-s7c.sh (dist13): g1h, s7f1 (descent + zoom, far trees on), s7f0 (off). Far trees / white
    frames / low-sun shadows / speed-1 AFTER table: NOT yet verified in a browser (session-6 items 2-5).
+
+## SESSION 8 (2026-11-11 ~16:30Z) — the M5's main-thread stalls: ANGLE-Metal BUFFER RE-ALLOCATION + GC WAIT (by source)
+- Read ANGLE main (google/angle src/libANGLE/renderer/metal: BufferMtl.mm, mtl_buffer_manager.{h,mm}, TextureMtl.mm,
+  mtl_resources.mm, mtl_utils.mm, DisplayMtl.mm features; copies in the session scratchpad). What Chrome-on-Mac does
+  with our calls:
+  * gl.bufferData -> a NEW MTLBuffer from BufferManager.getBuffer (reused only at the EXACT same size, once the GPU is
+    done with the old one).
+  * gl.bufferSubData into a buffer the GPU still reads (Apple GPUs: no shadow copies, useShadowBuffersWhenAppropriate
+    is Intel-only) -> putDataInNewBufferAndStartUsingNewBuffer: a new buffer of the buffer's WHOLE size + a blit of
+    everything around the range. A 140 kB terrain patch landing in a 10 MB pool attribute = a 10 MB allocation + copy,
+    per attribute, per update range.
+  * BufferManager: once > 64 MB were freshly allocated since its last GC while buffers are in flight ->
+    flushCommandBuffer(WaitUntilFinished): THE GPU PROCESS WAITS FOR THE WHOLE GPU QUEUE, the page's main thread waits
+    for the GPU process inside whatever GL call is next to need it (the 300-500 ms 'shadows' / 'post' slots of the
+    report: those passes issue the frame's uploads). The GC then drops every cached free buffer, so the next
+    allocations are fresh again -> the next wait comes sooner. Steady churn = a full GPU drain every few frames, and
+    CPU and GPU no longer overlap (frame = CPU + GPU, not max).
+  * texSubImage2D: staged (alwaysPreferStagedTextureUploads) through a blit encoder; ends the current render pass if
+    the texture has render work pending in the open command buffer (in-pass uploads = pass breaks, not waits).
+  This matches every M5 symptom: main 415 [post 399] / [shadows 497] with trivial JS, worse while panning (terrain
+  patches landing: 7 462 in 20 s), worse on Ultra (bigger pools / more instances), fine from orbit (nothing streams).
+- P1c (landed, tsc clean, tests/render-gltrace.test.ts 2/2): the report's GL trace also estimates the Metal buffer
+  allocations per slot ('metal buffer allocs (est.)': bufferData size + WHOLE bound-buffer size per bufferSubData,
+  bindBuffer tracked) and the fresh sizes over the recording. Hardware-independent: our SwiftShader probes show it.
+- F16 (landed, tests/render-spanupload.test.ts): on ANGLE-Metal (renderer string 'Metal'/'Apple'; `?span=0/1` forces)
+  BufferAttribute.addUpdateRange keeps ONE covering span per attribute: three issued one bufferSubData per disjoint
+  range = one whole-buffer re-allocation + blit EACH on Metal. Gap bytes re-sent from the CPU copy (same bytes).
+- F17 (landed, tests/render-chunkpool.test.ts 5/5 incl. 'one page layout', render-batchtable / -patchworker /
+  -chunkrest green): TERRAIN PATCH POOLS IN FIXED PAGES of 16 slots (PATCH_PAGE; ~2.2 MB a page in all attributes)
+  instead of one BatchedMesh per level that grew x1.5 and was rebuilt smaller after evictions. A landing patch now
+  re-allocates (Metal) only its page's buffers, all pages of all levels have the SAME buffer sizes (ANGLE's free lists
+  recycle them), nothing ever grows or is rebuilt at a new size. Eviction: empty pages dropped (one reserve kept per
+  pool), with >= 2 pages' worth of free slots the emptiest page's patches move into the others (visibility kept).
+  Draws: one multi-draw per page (Metal emulates multi-draw as a loop of draws anyway: same Metal draw count).
+- F18 (landed): putGrowable (upload.ts): ROADS ribbons (7 new buffers of new sizes per ribbon at every rebuild, every
+  ~120 m of camera travel) and PARTICLES' instance buffers (4 new buffers at every emitter refresh, every ~150 m or road
+  / lamp change: the likely owner of 'post|bufferData') are KEPT at a power-of-two capacity and refilled; draw range /
+  instanceCount bound the draw. tests/render-roadkeep (now compares the drawn part) green.
+- F19 (landed, tests/render-bldtable.test.ts: drawn set == three's own compaction for a view, a narrow view, a shadow
+  cull + ortho light box; table version unchanged across passes): BUILDINGS' BatchedMesh tables: draw i = instance i
+  (identity table uploaded once / after a grow), hidden or frustum-culled instances get count-0 draws. Was: 4 batches x
+  every pass re-compacting + re-uploading the table inside the pass (pass breaks). Lost: three's front-to-back order
+  of buildings (opaque, depth-tested: same image).
+- F20 (landed, tests/render-preupload.test.ts): every texture flagged needsUpdate (wrapped Texture.needsUpdate setter)
+  is uploaded by renderer.initTexture at the start of the frame in a new perfmon slot 'uploads', before the shadow pass
+  (was: at its first draw, inside the shadow / scene pass = a pass break each on Metal). Disposed / loading textures
+  skipped. `?preupload=0` = old behaviour.
+- Render suite (35 files + ui-snapsame, through slot.sh): 112/112 pass. tsc clean.
+- Queued: run-s8a.sh g2u (dist14 = the CDN tree 7cd6ae53, ULTRA, panned, --stacks --attrs --panreport: the per-frame
+  bufferData owners + draws by object), run-s8b.sh (dist15 = session-8 tree with ?span=1, v15n town shot speed 0, and
+  v14o the same shot on dist14 for the A/B picture).

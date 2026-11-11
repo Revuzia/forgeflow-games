@@ -50,10 +50,20 @@ function world() {
   return { pv, buildings, foot, surface, road, water, fieldVersion };
 }
 
-type G = { attributes: Record<string, { array: Float32Array }>; index: { array: Uint32Array } | null };
+type G = { attributes: Record<string, { array: Float32Array; itemSize: number }>; index: { array: Uint32Array } | null; drawRange: { count: number } };
+/** the drawn part of a ribbon (PERF F18: buffers are kept at a power-of-two capacity, the draw range bounds the draw) */
+const trim = (g: G): G => {
+  if (!g.index) return g;
+  const I = g.index.array.slice(0, Math.min(g.index.array.length, g.drawRange.count));
+  let nv = 0;
+  for (let i = 0; i < I.length; i++) nv = Math.max(nv, I[i] + 1);
+  const attributes: G['attributes'] = {};
+  for (const [k, a] of Object.entries(g.attributes)) attributes[k] = { array: a.array.slice(0, nv * a.itemSize), itemSize: a.itemSize };
+  return { attributes, index: { array: I }, drawRange: { count: I.length } };
+};
 const geoOf = (r: Roads) => {
   const x = r as unknown as { dirt: { geometry: G }; paved: { geometry: G }; lampsAll: unknown[] };
-  return { dirt: x.dirt.geometry, paved: x.paved.geometry, lamps: JSON.stringify(x.lampsAll) };
+  return { dirt: trim(x.dirt.geometry), paved: trim(x.paved.geometry), lamps: JSON.stringify(x.lampsAll) };
 };
 /** typed arrays equal (a first differing index, not node's diff of 20 000 numbers: that runs out of memory) */
 const eqArr = (x: ArrayLike<number> | null, y: ArrayLike<number> | null, what: string) => {

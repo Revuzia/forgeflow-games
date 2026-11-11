@@ -13,7 +13,7 @@ interface Internal {
   curFrame: number;
   ensureGeometry(p: Patch, budget: boolean): boolean;
   evict(frame: number): void;
-  tBatch: ({ isShown(s: number): boolean; mesh: { geometry: { getAttribute(n: string): { array: Float32Array } } } } | null)[];
+  tBatch: ({ isShown(s: number): boolean; extract(s: number): { getAttribute(n: string): { array: Float32Array } }; meshOf(s: number): unknown } | null)[];
 }
 
 function makeLod(): ChunkLOD {
@@ -70,22 +70,18 @@ test('shrinking a pool keeps the surviving patches, their geometry and their vis
   for (let k = 0; k < 200; k++) { const p = mk(k); L.ensureGeometry(p, false); old.push(p); }
   // the survivors: used recently, half of them shown
   const keep = old.slice(0, 30);
-  const before = keep.map((p) => {
-    const a = L.tBatch[level]!.mesh.geometry.getAttribute('aCells').array;
-    return { slot: p.tSlot, cells: a.slice(p.tSlot * 657 * 4, p.tSlot * 657 * 4 + 657 * 4) };
-  });
+  const before = keep.map((p) => ({ slot: p.tSlot, cells: L.tBatch[level]!.extract(p.tSlot).getAttribute('aCells').array.slice() }));
   keep.forEach((p, i) => { p.lastUsed = 1000; if (i % 2 === 0) (L.tBatch[level] as unknown as { show(s: number, on: boolean): void }).show(p.tSlot, true); });
   const capBefore = lod.poolCapacity().slots;
   L.evict(1000);
   const c = lod.poolCapacity();
   assert.ok(c.slots < capBefore / 2, `pool shrank: ${capBefore} -> ${c.slots}`);
   const tb = L.tBatch[level]!;
-  const cells = tb.mesh.geometry.getAttribute('aCells').array;
   keep.forEach((p, i) => {
     assert.ok(p.built && p.tSlot >= 0, 'survivor still built');
-    assert.equal(p.mesh, tb.mesh, 'survivor points at the new pool');
+    assert.equal(p.mesh, tb.meshOf(p.tSlot), 'survivor points at the page holding it');
     assert.equal(tb.isShown(p.tSlot), i % 2 === 0, 'visibility carried over');
-    assert.deepEqual(cells.slice(p.tSlot * 657 * 4, p.tSlot * 657 * 4 + 657 * 4), before[i].cells, 'geometry carried over');
+    assert.deepEqual(tb.extract(p.tSlot).getAttribute('aCells').array, before[i].cells, 'geometry carried over');
   });
   for (const p of old.slice(30)) assert.equal(p.built, false);
 });
@@ -131,4 +127,26 @@ test('default budget: a long camera tour holds the terrain pools near the view, 
   }
   // (each slot ~140 kB CPU + its GPU mirror: 1,400 cached patches in doubling pools reached ~2,900 slots here)
   assert.ok(peak <= 1800, `peak pool capacity ${peak} slots`);
+});
+
+test('PERF F17: pools are pages of one fixed size (ANGLE-Metal recycles same-size buffers; nothing grows)', () => {
+  const lod = makeLod();
+  const L = lod as unknown as Internal & { tBatch: ({ meshes(): { geometry: { attributes: Record<string, { array: { length: number } }>; index: { array: { length: number } } } }[] } | null)[]; wBatch: ({ meshes(): { geometry: { attributes: Record<string, { array: { length: number } }>; index: { array: { length: number } } } }[] } | null)[] };
+  lod.maxCached = 200;
+  const n = lod.grid.n;
+  const sizes = new Set<string>();
+  for (let frame = 1; frame <= 6; frame++) {
+    L.curFrame = frame;
+    for (let k = 0; k < 90; k++) {
+      const level = 2 + ((k + frame) % 5), step = n / 2 ** level;
+      const p = new Patch(k % 20, level, [k % 9, frame], [(k % 9) + step, frame], [k % 9, frame + step]);
+      L.ensureGeometry(p, false);
+    }
+    L.evict(frame);
+    for (const b of [...L.tBatch, ...L.wBatch]) for (const m of b?.meshes() ?? []) {
+      const g = m.geometry;
+      sizes.add(Object.entries(g.attributes).map(([k, a]) => `${k}:${a.array.length}`).sort().join(',') + `|i:${g.index.array.length}`);
+    }
+  }
+  assert.equal(sizes.size, 1, `one page layout for every pool and level: ${[...sizes].join(' ; ')}`);
 });

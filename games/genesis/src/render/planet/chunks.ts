@@ -205,46 +205,42 @@ export interface ChunkMaterials {
  * One LOD level's patches in ONE draw (three's BatchedMesh: WEBGL_multi_draw where the browser has it, else a loop
  * of draws with no per-object cost). Every patch has the same vertex and index counts (the shared lattice), so the
  * batch is a pool of fixed-size slots: a new patch overwrites a freed slot in place (a sub-range upload) and the pool
- * grows 1.5x when it runs out (ChunkLOD.shrinkPools gives the memory back after an eviction). The patches' positions
+ * adds a page of 16 slots when it runs out (ChunkLOD.shrinkPools gives the memory back after an eviction). The patches' positions
  * are already in the body frame, so every instance matrix stays the identity; visibility per slot is set by the LOD selection (and per shadow cascade), never by three's culling (the
  * unit-direction `position` attribute would give it wrong bounds).
  */
-class PatchBatch {
-  readonly mesh: BatchedMesh;
-  /** slot capacity (the pool's CPU attribute arrays and their GPU mirrors are sized to it) */
-  cap: number;
-  /** the capacity it was made with (it never shrinks below) */
-  readonly minCap: number;
-  private used = 0;
-  private free: number[] = [];
-  private geomId: number[] = [];
-  private instId: number[] = [];
-  private visibleN = 0;
-  private vis: Uint8Array;
+/** PERF F17 (session 8): slots per pool page — every page of every level has the same buffer sizes */
+export const PATCH_PAGE = 16;
 
-  constructor(material: Material, cap: number, layer: number, name: string) {
-    this.cap = cap;
-    this.minCap = cap;
-    this.vis = new Uint8Array(cap);
-    this.mesh = new BatchedMesh(cap, cap * NVERT, cap * NINDEX, material);
+/** one page of a level's patch pool: a BatchedMesh of PATCH_PAGE slots that never grows */
+class PatchPage {
+  readonly mesh: BatchedMesh;
+  /** slots ever added to the BatchedMesh */
+  used = 0;
+  free: number[] = [];
+  geomId: number[] = [];
+  instId: number[] = [];
+  vis = new Uint8Array(PATCH_PAGE);
+  visibleN = 0;
+  constructor(material: Material, layers: number, name: string) {
+    this.mesh = new BatchedMesh(PATCH_PAGE, PATCH_PAGE * NVERT, PATCH_PAGE * NINDEX, material);
     this.mesh.name = name;
     this.mesh.perObjectFrustumCulled = false;
     this.mesh.sortObjects = false;
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
     this.mesh.visible = false;
-    this.mesh.layers.set(layer);
+    this.mesh.layers.mask = layers;
     // (perf 2026-11) the ground draws after the other opaque things — trees, houses, people — so the GPU's early depth
     // test (shaders/zcons.ts) skips its fragment shader, the costliest in the frame, wherever something stands on it.
     // Opaque and depth-tested: the image does not depend on the order
     this.mesh.renderOrder = 50;
     // PERF s7 (the owner's M5: 206 ms of main thread in the shadow pass): three's BatchedMesh re-uploads its
     // draw -> instance table (a DataTexture) at EVERY draw whose visibility changed — here every shadow cascade and
-    // the scene pass, for every LOD level's batch: dozens of texture uploads a frame issued in the middle of render
-    // passes, each one a render-pass break / resource copy on a tile GPU (ANGLE-Metal). A terrain patch's instance
-    // matrix is the identity for every slot and the batch has no per-instance colour, so WHICH instance a draw reads
-    // changes nothing: the table is uploaded once (and after a grow re-creates it), the multi-draw lists (CPU arrays
-    // passed with the draw call) still change per pass. Same image.
+    // the scene pass, for every page: texture uploads issued in the middle of render passes, each one a render-pass
+    // break on a tile GPU (ANGLE-Metal). A terrain patch's instance matrix is the identity for every slot and the
+    // batch has no per-instance colour, so WHICH instance a draw reads changes nothing: the table is uploaded once,
+    // the multi-draw lists (CPU arrays passed with the draw call) still change per pass. Same image.
     const m = this.mesh as BatchedMesh & { _indirectTexture: { version: number } | null };
     m.onBeforeRender = function (this: typeof m, ...a: Parameters<BatchedMesh['onBeforeRender']>) {
       const tex = this._indirectTexture;
@@ -253,49 +249,125 @@ class PatchBatch {
       if (tex && v > 0 && this._indirectTexture === tex) tex.version = v;
     };
   }
+  get live(): number { return this.used - this.free.length; }
+}
 
-  /** store a patch geometry, returning its slot (hidden until shown) */
-  alloc(geo: BufferGeometry): number {
-    let s = this.free.pop();
-    if (s === undefined) {
-      if (this.used >= this.cap) this.grow();
-      s = this.used++;
-      this.geomId[s] = this.mesh.addGeometry(geo, NVERT, NINDEX);
-      this.instId[s] = this.mesh.addInstance(this.geomId[s]);
+/**
+ * A level's terrain (or water) patch pool. PERF F17 (session 8): made of fixed-size PAGES instead of one BatchedMesh
+ * that grew x1.5 and was rebuilt smaller after evictions. On ANGLE-Metal (Chrome / Safari on a Mac) a patch landing in
+ * a pool the GPU still reads re-allocates the WHOLE pool attribute (BufferMtl putDataInNewBuffer…; see upload.ts F16)
+ * and every 64 MB of fresh allocations makes ANGLE wait for the whole GPU queue — a pool of 100+ slots (14 MB) took
+ * that hit for every patch while panning (the M5's 200-500 ms 'shadows' stalls: terrain uploads happen at its first
+ * draw, in the shadow pass). A page is 16 slots (~2.2 MB in all attributes), never grows (a grow or a rebuild was a
+ * new set of buffers of a never-seen size), and every page of every level has the same buffer sizes, so ANGLE's free
+ * lists recycle them. Slot ids are page * PATCH_PAGE + index. Same vertices, same draws (one multi-draw per page).
+ */
+class PatchBatch {
+  private pages: (PatchPage | null)[] = [];
+  private material: Material;
+  private layers: number;
+  private readonly name: string;
+  readonly group: Group;
+
+  constructor(material: Material, layer: number, name: string, group: Group) {
+    this.material = material;
+    this.layers = 1 << layer;
+    this.name = name;
+    this.group = group;
+  }
+
+  /** slot capacity (pages x PATCH_PAGE) */
+  get cap(): number { let n = 0; for (const p of this.pages) if (p) n += PATCH_PAGE; return n; }
+  /** pages held */
+  get pageCount(): number { let n = 0; for (const p of this.pages) if (p) n++; return n; }
+  /** any slot shown */
+  get visible(): boolean { for (const p of this.pages) if (p && p.visibleN > 0) return true; return false; }
+
+  /** the page meshes (tests, materials) */
+  meshes(): BatchedMesh[] { const out: BatchedMesh[] = []; for (const p of this.pages) if (p) out.push(p.mesh); return out; }
+
+  /** the mesh drawing slot `s` */
+  meshOf(s: number): BatchedMesh { return this.pages[Math.floor(s / PATCH_PAGE)]!.mesh; }
+
+  setMaterial(m: Material): void { this.material = m; for (const p of this.pages) if (p) p.mesh.material = m; }
+
+  /** add or remove the shadow casters' layer (1) on every page */
+  setLayer(layer: number, on: boolean): void {
+    if (on) this.layers |= 1 << layer; else this.layers &= ~(1 << layer);
+    for (const p of this.pages) if (p) p.mesh.layers.mask = this.layers;
+  }
+
+  /** store a patch geometry, returning its slot (hidden until shown); `avoid` = a page not to use (compaction) */
+  alloc(geo: BufferGeometry, avoid = -1): number {
+    // the fullest page with room (keeps pages dense, so evictions empty whole pages)
+    let pi = -1, best = -1;
+    for (let i = 0; i < this.pages.length; i++) {
+      const p = this.pages[i];
+      if (!p || i === avoid) continue;
+      if (p.free.length === 0 && p.used >= PATCH_PAGE) continue;
+      if (p.live > best) { best = p.live; pi = i; }
+    }
+    if (pi < 0) {
+      pi = this.pages.indexOf(null);
+      if (pi < 0) pi = this.pages.length;
+      const p = new PatchPage(this.material, this.layers, `${this.name}-p${pi}`);
+      this.pages[pi] = p;
+      this.group.add(p.mesh);
+    }
+    const p = this.pages[pi]!;
+    let k = p.free.pop();
+    if (k === undefined) {
+      k = p.used++;
+      p.geomId[k] = p.mesh.addGeometry(geo, NVERT, NINDEX);
+      p.instId[k] = p.mesh.addInstance(p.geomId[k]);
       // (a new instance starts visible: count it, then hide it)
-      this.vis[s] = 1;
-      this.visibleN++;
-      this.show(s, false);
+      p.vis[k] = 1;
+      p.visibleN++;
+      this.showIn(p, k, false);
     } else {
       // (a freed slot is already hidden)
-      this.mesh.setGeometryAt(this.geomId[s], geo);
+      p.mesh.setGeometryAt(p.geomId[k], geo);
     }
-    return s;
+    return pi * PATCH_PAGE + k;
   }
 
   release(s: number): void {
     if (s < 0) return;
-    this.show(s, false);
-    this.free.push(s);
+    const p = this.pages[Math.floor(s / PATCH_PAGE)];
+    if (!p) return;
+    const k = s % PATCH_PAGE;
+    this.showIn(p, k, false);
+    p.free.push(k);
   }
 
   show(s: number, on: boolean): void {
-    if (s < 0 || (this.vis[s] === 1) === on) return;
-    this.vis[s] = on ? 1 : 0;
-    this.visibleN += on ? 1 : -1;
-    this.mesh.setVisibleAt(this.instId[s], on);
-    this.mesh.visible = this.visibleN > 0;
+    if (s < 0) return;
+    const p = this.pages[Math.floor(s / PATCH_PAGE)];
+    if (p) this.showIn(p, s % PATCH_PAGE, on);
   }
 
-  isShown(s: number): boolean { return s >= 0 && this.vis[s] === 1; }
+  private showIn(p: PatchPage, k: number, on: boolean): void {
+    if ((p.vis[k] === 1) === on) return;
+    p.vis[k] = on ? 1 : 0;
+    p.visibleN += on ? 1 : -1;
+    p.mesh.setVisibleAt(p.instId[k], on);
+    p.mesh.visible = p.visibleN > 0;
+  }
+
+  isShown(s: number): boolean {
+    if (s < 0) return false;
+    const p = this.pages[Math.floor(s / PATCH_PAGE)];
+    return !!p && p.vis[s % PATCH_PAGE] === 1;
+  }
 
   /** slots holding a patch */
-  get liveSlots(): number { return this.used - this.free.length; }
+  get liveSlots(): number { let n = 0; for (const p of this.pages) if (p) n += p.live; return n; }
 
   /** a copy of a slot's vertex data as a stand-alone geometry (a patch that turns wet takes a water slot from it) */
   extract(s: number): BufferGeometry {
-    const src = this.mesh.geometry;
-    const r = this.mesh.getGeometryRangeAt(this.geomId[s]) as { vertexStart: number };
+    const p = this.pages[Math.floor(s / PATCH_PAGE)]!;
+    const src = p.mesh.geometry;
+    const r = p.mesh.getGeometryRangeAt(p.geomId[s % PATCH_PAGE]) as { vertexStart: number };
     const vs = r.vertexStart;
     const geo = new BufferGeometry();
     for (const name of Object.keys(src.attributes)) {
@@ -306,19 +378,52 @@ class PatchBatch {
     return geo;
   }
 
-  private grow(): void {
-    // (1.5x, not 2x: the pool's slack is CPU + GPU memory, ~140 kB a slot; a grow copies the pool, so not by less)
-    const cap = Math.ceil(this.cap * 1.5);
-    this.mesh.setInstanceCount(cap);
-    this.mesh.setGeometrySize(cap * NVERT, cap * NINDEX);
-    const v = new Uint8Array(cap);
-    v.set(this.vis);
-    this.vis = v;
-    this.cap = cap;
+  /**
+   * Give back memory after evictions: empty pages are dropped (one kept as a reserve), and while two or more pages'
+   * worth of slots stand free, the emptiest page's patches move into the others and it is dropped. `moved(old, new)`
+   * re-points the patch that held `old`. A page stays 16 slots, so nothing is re-allocated at a new size.
+   */
+  compact(moved: (from: number, to: number) => void): void {
+    let reserve = false;
+    for (let i = 0; i < this.pages.length; i++) {
+      const p = this.pages[i];
+      if (!p || p.live > 0) continue;
+      if (!reserve) { reserve = true; continue; }
+      this.dropPage(i);
+    }
+    for (;;) {
+      const free = this.cap - this.liveSlots;
+      if (free < 2 * PATCH_PAGE) break;
+      let pi = -1, least = PATCH_PAGE + 1;
+      for (let i = 0; i < this.pages.length; i++) { const p = this.pages[i]; if (p && p.live > 0 && p.live < least) { least = p.live; pi = i; } }
+      if (pi < 0) break;
+      const p = this.pages[pi]!;
+      const freeSet = new Set(p.free);
+      for (let k = 0; k < p.used; k++) {
+        if (freeSet.has(k)) continue;
+        const from = pi * PATCH_PAGE + k;
+        const geo = this.extract(from);
+        const to = this.alloc(geo, pi);
+        geo.dispose();
+        this.show(to, p.vis[k] === 1);
+        moved(from, to);
+      }
+      this.dropPage(pi);
+    }
+    while (this.pages.length && this.pages[this.pages.length - 1] === null) this.pages.pop();
+  }
+
+  private dropPage(i: number): void {
+    const p = this.pages[i];
+    if (!p) return;
+    this.group.remove(p.mesh);
+    p.mesh.dispose();
+    this.pages[i] = null;
   }
 
   dispose(): void {
-    this.mesh.dispose();
+    for (let i = 0; i < this.pages.length; i++) this.dropPage(i);
+    this.pages = [];
   }
 }
 
@@ -584,27 +689,18 @@ export class ChunkLOD {
     const list = water ? this.wBatch : this.tBatch;
     let b = list[level];
     if (!b) {
-      // (dry patches never take a water slot: the water pools start small)
-      b = this.newBatch(level, water, water ? 8 : 32);
+      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group);
+      if (!water && this.castShadows) b.setLayer(1, true);
       list[level] = b;
     }
     return b;
   }
 
-  private newBatch(level: number, water: boolean, cap: number): PatchBatch {
-    const b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), cap, water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`);
-    if (!water && this.castShadows) b.mesh.layers.enable(1);
-    this.group.add(b.mesh);
-    return b;
-  }
-
   /**
-   * Give back the memory of pools the eviction emptied. A pool only ever doubled (BatchedMesh can't shrink in place),
-   * so each level held its slots — CPU copies of every attribute plus three's GPU mirrors — at its high-water mark
-   * for the whole session, and a camera tour through the LOD depths grew the page by ~1 GB in 30 minutes. Now a pool
-   * whose live slots fill less than ~56% of it is rebuilt at 1.25× its live count (copying the patches over with their
-   * visibility); an empty pool is dropped. A rebuilt pool is 80% full and grows only when full (to 67%), so a level
-   * does not flap, and the total capacity stays within ~1.8× the live slots (plus the small first pools).
+   * Give back the memory of pools the eviction emptied (a camera tour through the LOD depths once grew the page by
+   * ~1 GB in 30 minutes). PERF F17: pools are pages of 16 slots; an emptied page is dropped (one kept per pool as a
+   * reserve), and a pool with two pages' worth of free slots moves its emptiest page's patches into the others (with
+   * their visibility) and drops it: capacity stays within live + 31 slots per pool; an empty pool is dropped.
    */
   private shrinkPools(): void {
     for (const water of [false, true]) {
@@ -612,31 +708,20 @@ export class ChunkLOD {
       for (let level = 0; level < list.length; level++) {
         const b = list[level];
         if (!b) continue;
-        const n = b.liveSlots;
-        if (n === 0) {
-          this.group.remove(b.mesh);
+        if (b.liveSlots === 0) {
           b.dispose();
           list[level] = null;
           continue;
         }
-        const cap = Math.max(b.minCap, Math.ceil(n * 1.25));
-        if (cap > b.cap * 0.7) continue;
-        const nb = this.newBatch(level, water, cap);
-        for (const p of this.live) {
-          if (p.level !== level) continue;
-          const s = water ? p.wSlot : p.tSlot;
-          if (s < 0) continue;
-          const geo = b.extract(s);
-          const ns = nb.alloc(geo);
-          geo.dispose();
-          nb.show(ns, b.isShown(s));
-          if (water) p.wSlot = ns;
-          else { p.tSlot = ns; p.mesh = nb.mesh; }
-        }
-        nb.mesh.material = b.mesh.material;
-        this.group.remove(b.mesh);
-        b.dispose();
-        list[level] = nb;
+        if (b.cap - b.liveSlots < 2 * PATCH_PAGE) continue;
+        const bySlot = new Map<number, Patch>();
+        for (const p of this.live) if (p.level === level) { const s = water ? p.wSlot : p.tSlot; if (s >= 0) bySlot.set(s, p); }
+        b.compact((from, to) => {
+          const p = bySlot.get(from);
+          if (!p) return;
+          if (water) p.wSlot = to;
+          else { p.tSlot = to; p.mesh = b.meshOf(to); }
+        });
       }
     }
   }
@@ -682,7 +767,7 @@ export class ChunkLOD {
     this.stats.builtTotal++;
     const tb = this.batch(p.level, false);
     p.tSlot = tb.alloc(geo);
-    p.mesh = tb.mesh;
+    p.mesh = tb.meshOf(p.tSlot);
     // the water sheet is drawn from a copy of the same vertices in the level's water batch (water pass, layer 2)
     if (p.hasWater) p.wSlot = this.batch(p.level, true).alloc(geo);
     p.built = true;
@@ -733,7 +818,7 @@ export class ChunkLOD {
     this.castShadows = on;
     for (const b of this.tBatch) {
       if (!b) continue;
-      if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1);
+      b.setLayer(1, on);
     }
   }
 
@@ -969,8 +1054,8 @@ export class ChunkLOD {
   /** draw counts of the batches (logical draws: one per non-empty level batch per pass) */
   batchStats(): { terrain: number; water: number } {
     let t = 0, w = 0;
-    for (const b of this.tBatch) if (b && b.mesh.visible) t++;
-    for (const b of this.wBatch) if (b && b.mesh.visible) w++;
+    for (const b of this.tBatch) if (b && b.visible) t++;
+    for (const b of this.wBatch) if (b && b.visible) w++;
     return { terrain: t, water: w };
   }
 
@@ -1008,7 +1093,6 @@ export class ChunkLOD {
     for (const p of this.live) { p.built = false; p.mesh = null; p.tSlot = -1; p.wSlot = -1; }
     for (const b of [...this.tBatch, ...this.wBatch]) {
       if (!b) continue;
-      this.group.remove(b.mesh);
       b.dispose();
     }
     this.tBatch = [];

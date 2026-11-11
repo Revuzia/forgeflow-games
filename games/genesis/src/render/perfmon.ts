@@ -10,7 +10,7 @@
 import { PerfRecorder, type PerfContext, type PerfEnv } from './perfreport.ts';
 
 export const PERF_SLOTS = [
-  'view', 'ui.pre', 'camera', 'hover', 'planets', 'godfx', 'actors', 'shadows', 'scene', 'post', 'sim.pump', 'audio', 'ui.post', 'other',
+  'view', 'ui.pre', 'camera', 'hover', 'planets', 'godfx', 'actors', 'uploads', 'shadows', 'scene', 'post', 'sim.pump', 'audio', 'ui.post', 'other',
 ] as const;
 export type PerfSlot = (typeof PERF_SLOTS)[number];
 

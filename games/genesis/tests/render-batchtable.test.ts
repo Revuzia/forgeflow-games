@@ -15,11 +15,12 @@ test('terrain batch: table uploaded once, draw lists follow visibility, matrices
   const lod = new ChunkLOD(grid, new Noise3(3), 3000, new Group(), { terrain: () => mat, water: () => mat }, {
     surface: new Float32Array(n), grad: null, waterLevel: new Float32Array(n).fill(-10), waterDepth: new Float32Array(n), geomVersion: 0,
   });
-  const L = lod as unknown as { curFrame: number; ensureGeometry(p: Patch, b: boolean): boolean; tBatch: ({ show(s: number, on: boolean): void; mesh: any } | null)[] };
+  const L = lod as unknown as { curFrame: number; ensureGeometry(p: Patch, b: boolean): boolean; tBatch: ({ show(s: number, on: boolean): void; meshOf(s: number): any } | null)[] };
   const slots: number[] = [];
   for (let k = 0; k < 6; k++) { const p = new Patch(k, 3, [k, 0], [k + 1, 0], [k, 1]); assert.ok(L.ensureGeometry(p, false)); slots.push((p as unknown as { tSlot: number }).tSlot); }
   const b = L.tBatch.find((x) => x)!;
-  const m = b.mesh;
+  const m = b.meshOf(slots[0]);
+  for (const s of slots) assert.equal(b.meshOf(s), m, 'six patches share one page');
   const cam = new PerspectiveCamera();
   const geo = m.geometry;
   const draw = () => { m.onBeforeRender(null, null, cam, geo, mat, null); return { v: m._indirectTexture.version, n: m._multiDrawCount }; };

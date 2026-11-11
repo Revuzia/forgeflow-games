@@ -11,7 +11,7 @@
 //   * Per-object frustum culling (also against each shadow cascade's light box) and front-to-back sorting are three's.
 
 import {
-  BatchedMesh, BufferGeometry, Color, Sphere, DataTexture, Float32BufferAttribute, FloatType, Group, Matrix4, NearestFilter, RGBAFormat,
+  BatchedMesh, BufferGeometry, Color, Frustum, Sphere, DataTexture, Float32BufferAttribute, FloatType, Group, Matrix4, NearestFilter, RGBAFormat,
   type IUniform, type Material, type MeshStandardMaterial, type ShaderMaterial,
 } from 'three';
 import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
@@ -74,6 +74,16 @@ export class BldBatch {
     // (a shadow-only batch lives on the casters' layer alone)
     if (shadowOnly) m.layers.set(1);
     this.mesh = m;
+    // PERF F19 (session 8): three's BatchedMesh.onBeforeRender compacts the visible, unculled instances into a
+    // draw -> instance table (a DataTexture) at EVERY pass — the scene, each shadow cascade (whose cull hides other
+    // instances) — and re-uploads it in the middle of that render pass: on ANGLE-Metal each upload of a texture already
+    // sampled in the open pass ends the pass (store + reload of the 4096² atlas / the MSAA HDR target), 4 batches x
+    // 5-6 passes a frame. Here draw i is always instance i: the table is the identity, uploaded once (again after a
+    // grow re-creates it), and an instance that is hidden or outside the pass's frustum gets an empty draw (count 0)
+    // in the multi-draw lists — CPU arrays passed with the call. The same instances are drawn (same per-object
+    // frustum test, on the same bounding spheres); only three's front-to-back draw order is gone (opaque and depth-
+    // tested: the same image).
+    m.onBeforeRender = (_r, _s, camera, geometry) => this.prepareDraws(camera, geometry);
     this.warm = warmBatch(name, this.material, this.depth);
   }
   /** never-drawn holder of this batch's programs (warmBatch) */
@@ -187,6 +197,53 @@ export class BldBatch {
     this.shown = this.used;
     mesh.visible = this.used > 0;
     this.texU.value.needsUpdate = true;
+  }
+
+  private tableTex: unknown = null;
+  private tableN = 0;
+  private readonly frustum = new Frustum();
+  private readonly fm = new Matrix4();
+  private readonly fs = new Sphere();
+
+  /** PERF F19: this pass's multi-draw lists over an identity draw -> instance table (see the constructor) */
+  private prepareDraws(camera: { projectionMatrix: Matrix4; matrixWorldInverse: Matrix4 }, geometry: BufferGeometry): void {
+    const mesh = this.mesh as unknown as {
+      _instanceInfo: { visible: boolean; active: boolean; geometryIndex: number }[];
+      _geometryInfo: { start: number; count: number }[];
+      _multiDrawStarts: Int32Array; _multiDrawCounts: Int32Array; _multiDrawCount: number; _multiDrawBytesPerElement: number;
+      _indirectTexture: DataTexture; _visibilityChanged: boolean; perObjectFrustumCulled: boolean; matrixWorld: Matrix4;
+    };
+    const info = mesh._instanceInfo, gi = mesh._geometryInfo, starts = mesh._multiDrawStarts, counts = mesh._multiDrawCounts;
+    const tex = mesh._indirectTexture;
+    const n = Math.min(info.length, starts.length);
+    if (this.tableTex !== tex || this.tableN < n) {
+      const arr = tex.image.data as Uint32Array;
+      for (let i = 0; i < arr.length; i++) arr[i] = i;
+      tex.needsUpdate = true;
+      this.tableTex = tex;
+      this.tableN = arr.length;
+    }
+    const index = geometry.getIndex();
+    const bpe = index === null ? 1 : index.array.BYTES_PER_ELEMENT;
+    const cull = mesh.perObjectFrustumCulled;
+    if (cull) this.frustum.setFromProjectionMatrix(this.fm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(mesh.matrixWorld));
+    const sph = this.sph, f = this.frustum, sp = this.fs;
+    for (let i = 0; i < n; i++) {
+      const it = info[i];
+      let on = it.visible && it.active && it.geometryIndex >= 0;
+      const g = on ? gi[it.geometryIndex] : null;
+      if (on && cull) {
+        const q = i * 4;
+        sp.center.set(sph[q], sph[q + 1], sph[q + 2]);
+        sp.radius = sph[q + 3];
+        on = f.intersectsSphere(sp);
+      }
+      starts[i] = g ? g.start * bpe : 0;
+      counts[i] = on && g ? g.count : 0;
+    }
+    mesh._multiDrawCount = n;
+    mesh._multiDrawBytesPerElement = bpe;
+    mesh._visibilityChanged = false;
   }
 
   private offset(i: number): number {

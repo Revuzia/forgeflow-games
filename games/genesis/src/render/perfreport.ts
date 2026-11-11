@@ -80,11 +80,28 @@ function uploadBytes(op: string, a: unknown[]): number {
 
 interface GlStat { ms: number; n: number; bytes: number; inPass: number; max: number }
 
+/**
+ * PERF s8 — the buffer memory ANGLE's Metal back end (Chrome on a Mac) allocates for these calls (BufferMtl.mm,
+ * mtl_buffer_manager.mm): gl.bufferData takes a NEW Metal buffer of its size; gl.bufferSubData into a buffer the GPU
+ * still reads (anything drawn in the last frames while the GPU lags) takes a new buffer of the buffer's WHOLE size
+ * (putDataInNewBufferAndStartUsingNewBuffer) and blits the rest across. Buffers are reused only at the exact same size
+ * once the GPU is done with them; every 64 MB of fresh allocations ANGLE flushes with WaitUntilFinished — the main
+ * thread then waits for the whole GPU queue inside that GL call. Estimated here as if every sub-updated buffer were in
+ * use (an upper bound), per slot, with the sizes seen: a size first seen this recording counts as fresh.
+ */
+export interface MetalAlloc { bytes: number; fresh: number; n: number }
+
 export class GlTrace {
   slot = 'other';
   readonly stats = new Map<string, GlStat>();
   passSwitches = 0;
   inPassUploads = 0;
+  /** per slot: Metal buffer bytes ANGLE would take (bufferData + whole-buffer copies for bufferSubData) */
+  readonly metal = new Map<string, MetalAlloc>();
+  /** buffer sizes ANGLE's free lists would hold (each size counted once: the steady state reuses them) */
+  private sizesSeen = new Map<number, number>();
+  private bound = new Map<number, WebGLBuffer | null>();
+  private bufSize = new WeakMap<WebGLBuffer, number>();
   private drawn = false;
   private restore: (() => void)[] = [];
 
@@ -105,6 +122,17 @@ export class GlTrace {
       this.restore.push(() => { if (own) obj[name] = orig; else delete obj[name]; });
     };
     for (const n of GL_TRACED) wrap(gl as unknown as Record<string, unknown>, n);
+    // (buffer bindings, untimed: which buffer a bufferData / bufferSubData targets, for the Metal estimate)
+    {
+      const o = gl as unknown as Record<string, unknown>;
+      const orig = o.bindBuffer;
+      if (typeof orig === 'function') {
+        const own = Object.prototype.hasOwnProperty.call(o, 'bindBuffer');
+        const self = this;
+        o.bindBuffer = function (target: number, buf: WebGLBuffer | null) { self.bound.set(target, buf); return (orig as (t: number, b: WebGLBuffer | null) => void).call(o, target, buf); };
+        this.restore.push(() => { if (own) o.bindBuffer = orig; else delete o.bindBuffer; });
+      }
+    }
     try {
       const md = gl.getExtension('WEBGL_multi_draw') as Record<string, unknown> | null;
       if (md) for (const n of ['multiDrawElementsWEBGL', 'multiDrawArraysWEBGL', 'multiDrawElementsInstancedWEBGL', 'multiDrawArraysInstancedWEBGL']) wrap(md, n);
@@ -113,13 +141,33 @@ export class GlTrace {
 
   uninstall(): void { for (const f of this.restore.splice(0).reverse()) f(); }
 
-  reset(): void { this.stats.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
+  reset(): void { this.stats.clear(); this.metal.clear(); this.sizesSeen.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
+
+  /** the Metal allocation a buffer call implies (see MetalAlloc) */
+  private noteMetal(op: string, a: unknown[], bytes: number): void {
+    const buf = this.bound.get(a[0] as number);
+    let size = 0;
+    if (op === 'bufferData') { size = bytes; if (buf) this.bufSize.set(buf, size); }
+    else size = buf ? this.bufSize.get(buf) ?? 0 : 0;
+    if (size <= 0) return;
+    size = Math.ceil(size / 16) * 16;
+    let m = this.metal.get(this.slot);
+    if (!m) { m = { bytes: 0, fresh: 0, n: 0 }; this.metal.set(this.slot, m); }
+    m.bytes += size; m.n++;
+    const seen = this.sizesSeen.get(size) ?? 0;
+    // (a size never seen is a fresh allocation; sizes cycle through ~3 buffers while the GPU lags two frames)
+    if (seen < 3) { m.fresh += size; this.sizesSeen.set(size, seen + 1); }
+  }
 
   private note(op: string, ms: number, a: unknown[]): void {
     let inPass = 0, bytes = 0;
     if (op === 'bindFramebuffer') { this.passSwitches++; this.drawn = false; }
     else if (GL_DRAWS.has(op)) this.drawn = true;
-    else if (GL_UPLOADS.has(op)) { bytes = uploadBytes(op, a); if (this.drawn) { inPass = 1; this.inPassUploads++; } }
+    else if (GL_UPLOADS.has(op)) {
+      bytes = uploadBytes(op, a);
+      if (this.drawn) { inPass = 1; this.inPassUploads++; }
+      if (op === 'bufferData' || op === 'bufferSubData') this.noteMetal(op, a, bytes);
+    }
     const key = `${this.slot}|${op}`;
     let s = this.stats.get(key);
     if (!s) { s = { ms: 0, n: 0, bytes: 0, inPass: 0, max: 0 }; this.stats.set(key, s); }
@@ -134,6 +182,12 @@ export class GlTrace {
     const tot = rows.reduce((x, [, s]) => x + s.ms, 0);
     const L = [`gl calls (main ms/frame in the call): total ${f1(tot * k)} | framebuffer switches ${f1(this.passSwitches * k)}/frame | uploads inside a pass ${f1(this.inPassUploads * k)}/frame`];
     L.push('  ' + rows.slice(0, 16).map(([key, s]) => `${key} ${f2(s.ms * k)}ms x${f1(s.n * k)}${s.bytes ? ` ${f2((s.bytes * k) / 1e6)}MB` : ''}${s.inPass ? ` inpass ${f1(s.inPass * k)}` : ''} max ${f1(s.max)}`).join(' · '));
+    if (this.metal.size) {
+      const ms = [...this.metal.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+      const all = ms.reduce((x, [, m]) => x + m.bytes, 0), fresh = ms.reduce((x, [, m]) => x + m.fresh, 0);
+      L.push(`metal buffer allocs (est., ANGLE-Metal): ${f1((all * k) / 1e6)} MB/frame, fresh sizes ${f1(fresh / 1e6)} MB over the recording (a full GPU wait per 64 MB fresh) | `
+        + ms.map(([s, m]) => `${s} ${f1((m.bytes * k) / 1e6)}MB x${f1(m.n * k)}`).join(' · '));
+    }
     return L;
   }
 }
