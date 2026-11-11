@@ -141,6 +141,7 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
 ## SIM ASKS
 
 ## NEXT (session 4 state; update as runs land)
+0. dist5 rebuilt with F9 (~02:5xZ) before v6/r6/r7 started; gate re-run for F9 -> check2.log.
 1. Read v5z1/v5z0 logs + shots (F1/F1b zcons 1 vs 0 at speed 0, town/region/orbit, dist4): 0 console errors and
    equal pictures -> F1 verified. Then v6 (dist5, F1b..F8) shots vs v5z1: equal pictures (trees may differ only by
    sway phase); r6: uploads by site + attrs (top 90 now) + heap vs r4; r7: CPU profile self time at speed 1.
@@ -209,3 +210,17 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   profile of 401 builds before: GC 105 ms of ~400 ms terrain time (the largest single item).
 - dist5 = unminified build of F1b..F8 (rebuilt 02:1xZ); run-r6.sh (v6 shots at speed 0 + r6 owners at speed 1) and
   run-r7.sh (CPU profile, speed 1) queued behind run-r5.
+- GATE (02:2x-02:5xZ, through slot.sh, tree with F1b..F8): npm run check = detban + typecheck + 889/889 tests pass.
+- v5z1 (dist4, zcons=1, speed 0): town / region / orbit, 0 console errors; shots v5z1-town (looked: same as the
+  pre-F1 b0-busy-town but the settlement label 'Saal by the Lake' is cut where the HUD panel overlaps it — a UI
+  stacking difference vs the Nov-10 build, not render; check v5z0), v5z1-region (looked: fine).
+- F1 VERIFIED (town): v5z0-town vs v5z1-town (zcons off / on, same save, speed 0): diff image shots/diff-v5-town.png
+  (looked): mean |d| 3.7/255; the only structured differences are tree-crown edges (wind sway keeps running at
+  speed 0), the HUD panel's blurred backdrop of those trees, and frame grain. Ground, roads, houses, shadows:
+  identical; no holes. 0 console errors with zcons on (v5z1 all three scenes).
+- F9 (landed, tests/render-vegcache.test.ts; mutation check: dropping 'water' from the diffed inputs makes it fail):
+  vegetation no longer drops its whole plant cache at every surface version. groundChanged(): cells within two
+  rings of a cell whose ground (pv.groundRev) or any other read field (water, temperature, moisture, snow, crop,
+  road, sand, soil, shrubSpecies; diffed against the arrays of the last check) changed are dropped; cells first
+  built since the last check from other input arrays (an epoch per array replacement) go too. Kept cells equal a
+  fresh scatter exactly (test, 4 rounds of random height + water changes).

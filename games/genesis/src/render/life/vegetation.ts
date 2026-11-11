@@ -541,6 +541,8 @@ interface Bucket {
   /** extent of the unit geometry about its base (bounding sphere |centre| + radius) and the largest instance's (m) */
   geoR: number; eMax: number;
 }
+/** the fields a cell's plants read besides the ground and the stamped tree / shrub / burnt / treeSpecies (PERF F9) */
+const VEG_INPUTS = ['water', 'temperature', 'moisture', 'snow', 'crop', 'road', 'sand', 'soil', 'shrubSpecies'] as const;
 /** distance bands of the per-cascade shadow prefix (PERF F6) */
 const NB = 48;
 
@@ -745,6 +747,7 @@ export class Vegetation {
     }
     rec = Float32Array.from(out);
     this.cache.set(c, rec);
+    this.young.set(c, this.epoch);
     return rec;
   }
 
@@ -833,7 +836,11 @@ export class Vegetation {
       const want = Math.min(2.5, Math.max(0.3, 0.35 + speed / 7));
       WIND_K.value += (want - WIND_K.value) * 0.02;
     }
-    const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('surface') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}|${PLANT_PROBE.version}`;
+    const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}|${PLANT_PROBE.version}`;
+    // PERF F9: a new ground drops only the cached cells whose inputs changed (below), not the whole cache
+    const sv = pv.fieldVersion.get('surface') ?? 0;
+    this.syncEpoch(pv);
+    if (sv !== this.surfVer) { this.surfVer = sv; this.groundChanged(pv); }
     // a season step re-tints the instances (autumn colour) without re-scattering them
     const season = Math.floor(this.yearFrac * 48);
     if (season !== this.seasonStep) { this.seasonStep = season; this.lastFrame = -1e9; }
@@ -978,6 +985,69 @@ export class Vegetation {
     }
     this.stats.instances = total;
     this.stats.cells = cells.length;
+  }
+
+  private surfVer = -1;
+  private surfRev = -1;
+  private refs = new Map<string, Float32Array | null>();
+  /** cell -> input epoch it was scattered in, for cells first built since the last check */
+  private young = new Map<number, number>();
+  /** bumped whenever one of the VEG_INPUTS arrays is replaced (syncEpoch, every update) */
+  private epoch = 0;
+  private refsEpoch = -1;
+  private epochArrs: (Float32Array | null)[] = [];
+
+  private syncEpoch(pv: PlanetView): void {
+    let i = 0, changed = false;
+    for (const f of VEG_INPUTS) { const a = pv.fields.get(f) ?? null; if (this.epochArrs[i] !== a) { this.epochArrs[i] = a; changed = true; } i++; }
+    if (changed) this.epoch++;
+  }
+
+  /**
+   * PERF F9 — the ground changed. The cache used to be dropped whole (and with it every cell's scatter rebuilt) at
+   * every surface version; the plants of a cell read the ground (heights + gradients: pv.groundRev) and, at their
+   * points, the fields below, so only the cells within two rings of a cell where any of them changed are dropped.
+   * Those fields were only ever refreshed by that drop, so they are diffed against what the cache was built from.
+   * The plants of a cell are a pure function of these inputs (hashes of the cell id): the kept cells are what a
+   * rebuild would make. Without per-cell revisions (or after a full pass) the whole cache drops as before.
+   */
+  private groundChanged(pv: PlanetView): void {
+    this.syncEpoch(pv);
+    const gr = pv.groundRev;
+    const n = pv.grid.count;
+    const names = VEG_INPUTS;
+    const ok = !!gr && this.surfRev >= 0 && gr.fullRev <= this.surfRev && this.cache.size > 0;
+    let dirty: Uint8Array | null = null;
+    if (ok) {
+      dirty = new Uint8Array(n);
+      const cr = gr!.cellRev, since = this.surfRev;
+      for (let c = 0; c < n; c++) if (cr[c] > since) dirty[c] = 1;
+      for (const f of names) {
+        const now = pv.fields.get(f) ?? null, then = this.refs.get(f) ?? null;
+        if (now === then) continue;
+        if (!now || !then || now.length !== n || then.length !== n) { dirty = null; break; }
+        for (let c = 0; c < n; c++) if (now[c] !== then[c]) dirty[c] = 1;
+      }
+    }
+    if (!dirty) this.cache.clear();
+    else {
+      const ns = pv.grid.nbrStart, nb = pv.grid.nbr;
+      let cur: Uint8Array = dirty;
+      for (let ring = 0; ring < 2; ring++) {
+        const grow: Uint8Array = cur.slice();
+        for (let c = 0; c < n; c++) if (cur[c]) for (let e = ns[c]; e < ns[c + 1]; e++) grow[nb[e]] = 1;
+        cur = grow;
+      }
+      for (const c of [...this.cache.keys()]) if (cur[c]) this.cache.delete(c);
+      // cells first built since the last check from other arrays than `refs` read the fields of their own moment:
+      // they go too (one built from the arrays of the last check is as consistent with refs as the old ones)
+      for (const [c, ep] of this.young) if (ep !== this.refsEpoch) this.cache.delete(c);
+    }
+    for (const f of names) this.refs.set(f, pv.fields.get(f) ?? null);
+    this.young.clear();
+    this.refsEpoch = this.epoch;
+    this.surfRev = gr ? gr.rev : -1;
+    this.lastFrame = -1e9;
   }
 
   private binW = 8;
