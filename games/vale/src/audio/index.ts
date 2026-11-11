@@ -2555,13 +2555,14 @@ class Engine implements ValeAudioPort {
           this.hurtLast.set(dst.id, t);
         }
         // (max SFX-5) a structure answers a blow in its own material ('structureStruck.<unit>', else 'structureStruck'),
-        // under the attacker's hit, once per STRUCK_GAP_S per structure (a Ringshade-muffled blow does not ring)
-        if (dst?.kind === 'structure' && !shaded) {
+        // after and under the attacker's hit, once per STRUCK_GAP_S per structure (a Ringshade-muffled blow does not ring)
+        const struck = (): void => {
+          if (dst?.kind !== 'structure' || shaded) return;
           const now = this.ctx?.currentTime ?? 0;
-          const struck = (dst.def ? this.ev(`structureStruck.${dst.def}`) : undefined) ?? this.ev('structureStruck');
-          if (struck && now - (this.struckLast.get(dst.id) ?? -1e9) > STRUCK_GAP_S
-            && this.cue(struck, p, STRUCK_GAIN, 0, aw) === 'played') this.struckLast.set(dst.id, now);
-        }
+          const id = (dst.def ? this.ev(`structureStruck.${dst.def}`) : undefined) ?? this.ev('structureStruck');
+          if (id && now - (this.struckLast.get(dst.id) ?? -1e9) > STRUCK_GAP_S
+            && this.cue(id, p, STRUCK_GAIN, 0, aw) === 'played') this.struckLast.set(dst.id, now);
+        };
         // (max SFX-7) a fighter's ward broken by this blow (it absorbed some and none is left): the pane cracks, an
         // awareness cue when it was yours or a foe's aimed at you (presentation only: the view's shield after the tick)
         if (dst?.kind === 'fighter' && ((e.shielded as number) || 0) > 0 && (dst.shield ?? 1) <= 0) {
@@ -2572,7 +2573,7 @@ class Engine implements ValeAudioPort {
           }
         }
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
-        if (e.ability) break;
+        if (e.ability) { struck(); break; }
         const uk = this.uk(src);
         const own = this.kit(src, 'attack_hit') ?? uk?.attack_hit;
         if (e.crit) {
@@ -2580,6 +2581,7 @@ class Engine implements ValeAudioPort {
           if (own) this.cue(own, p, CRIT_KIT_GAIN, 0, aw);      // whose crit it was
         } else if (uk) this.cue(own, p, 0.8 * (shaded ? SHADED_GAIN : 1), 0, aw);   // an epic unit lands like a fighter
         else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : src?.kind === 'minion' && dst?.kind === 'minion' ? this.wickDuck(p) : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
+        struck();
         break;
       }
       case 'heal': {

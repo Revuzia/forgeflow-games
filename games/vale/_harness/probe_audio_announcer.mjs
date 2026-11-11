@@ -7,7 +7,7 @@
 // fed scripted SimEvents. Only WebAudio is faked: sources END after their real file's length (the shipped .ogg), and
 // every AudioParam keeps its scheduled curve, so a duck is read at any time.
 //   A1  a structure that grants an objective (the Lantern: structure + announce + objective + announce in ONE tick)
-//       speaks exactly one voice-bus line; its world sound (c_structure_fall) still plays
+//       speaks exactly one voice-bus line; its world sound (its own structureFall.lantern, else c_structure_fall) still plays
 //   A2  one takedown's first-takedown + shutdown lines (same tick, same killer) are one line
 //   A3  merge: a double takedown queued behind a playing line becomes the triple when it comes; only the triple speaks
 //   A4  expiry: a band-4 line still waiting after its time-to-live is dropped, never spoken late
@@ -182,7 +182,8 @@ await batch([
   { e: 'announce', key: 'objective_taken', team: 0, params: { unit: 'lantern' } },
 ]);
 const a1 = voiceStarts().slice(v0).map(cueOf);
-const a1World = ctx.started.slice(s0).map(cueOf).filter((c) => c === cueFor('structureFall'));
+// (max SFX-5) the unit's own fall when content binds one ('structureFall.<unit>'), else the shared 'structureFall'
+const a1World = ctx.started.slice(s0).map(cueOf).filter((c) => c === (cueFor('structureFall.lantern') ?? cueFor('structureFall')));
 report.A1 = { lines: a1, worldSound: a1World };
 if (a1.length !== 1 || a1[0] !== cueFor('announce.structure.foe')) failures.push(`A1: the Lantern's fall spoke ${JSON.stringify(a1)} (want exactly [${cueFor('announce.structure.foe')}])`);
 if (a1World.length !== 1) failures.push(`A1: the structure's world sound played ${a1World.length}x`);
@@ -248,7 +249,8 @@ await batch([{ e: 'announce', key: 'objective_taken', team: 0, params: { unit: '
 await batch([{ e: 'damage', src: 2, dst: 1, amount: 30, dtype: 'physical', crit: false }]);
 const hitOnYou = ctx.started[ctx.started.length - 1];
 let node = hitOnYou; while (node && node.kind !== 'gain') node = node.outs[0];
-const threatRoute = node?.outs[0] === eng.threat;
+// the voice gain joins the threat path, directly or through its per-play variation stage (max SFX-3: one more gain node)
+const threatRoute = node?.outs[0] === eng.threat || (node?.outs[0]?.kind === 'gain' && node.outs[0].outs[0] === eng.threat);
 const until = eng.announcer.until;
 const mid = tLine + 0.3;
 const lineNode = voiceStarts()[voiceStarts().length - 1];
