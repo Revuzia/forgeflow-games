@@ -255,3 +255,29 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   (8181fda4, _harness/arc-work/perf-golden.ts run BEFORE the move), and an in-process structuredClone worker port
   converges to the same selection with byte-identical batch contents (terrain + water slots) while the main thread
   builds <= 100 (levels 0-1) patches. planetview passes { seed: pv.seed }.
+- F10b: during a camera cut's frames (budget 320) the worker is asked for the whole new view at once (in-flight cap =
+  max(32, budget)) instead of the main thread building up to 320 patches in the cut frame (a ~100+ ms stall on a Mac).
+  The cut shows the coarser parents for the few frames the workers take, then the same converged mesh.
+- F11 (landed, tsc clean, tests/render-shadowreach.test.ts: 20 000 random casters on circles of 1.5-30 km, exact 2-D
+  shadow ray vs the bound; capGap vs sampling): TERRAIN + BUILDING SHADOW CASTERS CULLED BY SHADOW REACH per
+  cascade. shadowreach.ts: reach = least x with e·cot(el0 − (d0 + x)/R) + margin <= x, e = caster top above the
+  LOWEST GROUND near the cascade (ChunkLOD.groundFloorNear = min hMin of the selected patches meeting the cascade
+  sphere), el0 = the sun's elevation at the camera, d0 = the caster's far distance from the camera; el <= 2° -> draw
+  all (mountains keep long evening shadows). Terrain (ChunkLOD.shadowCascade) and the buildings' shadow batch
+  (BldBatch.cullShadow: per-instance body-frame spheres kept at add(); slots hidden by dropGeom stay hidden) draw a
+  caster only if its ground gap to the cascade sphere <= reach AND it is not wholly nearer than the previous split
+  less (reach + e + margin). This REPLACES the terrain's old fixed margin (40 m relief / tan el, capped 450 m),
+  which was too short for a taller ridge at a low sun (its far-cascade shadow could be cut off). `?reach=0` = the old
+  rule (A/B shots). perf-play.mjs got low-sun scenes: regionlow, townlow, ridgelow (poi 'peak'), `--hour=`.
+- F12 (landed, tsc clean, tests/render-roadkeep.test.ts): INCREMENTAL ROAD REBUILDS. roads.ts: each chain's ribbon is
+  cached under a 64-bit hash of everything it reads (samples, wear, dense mask near the camera, dead ends, tier/era,
+  the footprints near it, ground height/curvature/soil/sand/snow and water of its cells + 2 rings); a rebuild only
+  re-makes chains whose key changed and concatenates typed arrays (was: every chain re-made in number[] arrays, ~3 MB
+  garbage, + computeVertexNormals over the whole ribbon). Normals per chain = three's over the whole ribbon (chains
+  share no vertex; test). Each chain also tests only the footprints near it (was rows x ALL footprints for inside /
+  housed: O(rows x buildings) per rebuild); same answers (test: local vs all footprints byte-identical). Test runs a
+  kept-chain Roads beside a rebuild-everything one through ground / house / camera / water+wear changes: byte-
+  identical after every step, lamps too (27 of 80 chain builds kept on that tiny town; a real town keeps nearly all
+  chains on a layout tick). Mutation checks: dropping water or the surface height from the key fails the test.
+  NOTE (node assert): assert.deepEqual on two 20 k-element typed arrays that differ OOM-killed node (its diff);
+  compare element-wise.

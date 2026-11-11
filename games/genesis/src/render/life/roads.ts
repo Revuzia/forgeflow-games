@@ -16,7 +16,7 @@
 
 import { uploadPrefix } from '../upload.ts';
 import {
-  BufferGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh,
+  BufferAttribute, BufferGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, ShaderMaterial, Uint32BufferAttribute, type IUniform,
 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
@@ -281,6 +281,67 @@ function makeRoadMaterial(shared: Record<string, IUniform>, transparent: boolean
  * holds before the first chain and after the last, so the program the load-time warm-up links is the one it draws with
  * (no index: Roads.update shows a ribbon only once it has one)
  */
+/** one chain's built ribbon (vertex attributes, chain-local indices, normals) and its lamps */
+interface ChainGeo {
+  paved: boolean;
+  p: Float32Array; n: Float32Array; a: Float32Array; l: Float32Array; e: Float32Array; f: Float32Array; i: Uint32Array;
+  lamps: { kind: number; m: number[]; seed: number }[];
+}
+
+/** a chain's arrays, with its normals by three's computeVertexNormals over the chain alone (the same numbers as over
+ * the whole ribbon: no two chains share a vertex, and each vertex sums its own triangles in the same order) */
+function chainGeometry(g: { p: number[]; a: number[]; l: number[]; e: number[]; f: number[]; i: number[] }, paved: boolean, lamps: ChainGeo['lamps']): ChainGeo {
+  const p = new Float32Array(g.p), i = new Uint32Array(g.i);
+  let n: Float32Array = new Float32Array(p.length);
+  if (i.length) {
+    const bg = new BufferGeometry();
+    bg.setAttribute('position', new Float32BufferAttribute(p, 3));
+    bg.setIndex(new Uint32BufferAttribute(i, 1));
+    bg.computeVertexNormals();
+    n = bg.getAttribute('normal').array as Float32Array;
+  }
+  return { paved, p, n, a: new Float32Array(g.a), l: new Float32Array(g.l), e: new Float32Array(g.e), f: new Float32Array(g.f), i, lamps };
+}
+
+const _kf = new Float64Array(1);
+const _ku = new Uint32Array(_kf.buffer);
+/**
+ * Everything a chain's ribbon reads, hashed (64 bits): its samples, wear and dense stretches, its dead ends, tier and
+ * era, the footprints near it, and the ground (height, curvature, soil / sand / snow) and water of its cells and two
+ * rings about them — every triangle a ribbon or lamp sample of the chain can fall in.
+ */
+function chainKey(pv: PlanetView, cells: number[], pts: number[], wr: number[], dense: boolean[], dead0: boolean, dead1: boolean, tier: number, era: number,
+  foot: [number, number, number, number][], water: ArrayLike<number> | null): string {
+  let h1 = 0x811c9dc5 | 0, h2 = 0x9747b28c | 0;
+  const word = (w: number): void => {
+    h1 = Math.imul(h1 ^ w, 0x01000193);
+    h2 = Math.imul(h2 ^ w, 0x5bd1e995); h2 ^= h2 >>> 15;
+  };
+  const num = (x: number): void => { _kf[0] = x; word(_ku[0]); word(_ku[1]); };
+  word(pts.length); word(cells.length);
+  for (let k = 0; k < pts.length; k++) num(pts[k]);
+  for (let k = 0; k < wr.length; k++) num(wr[k]);
+  let m = 0;
+  for (let k = 0; k < dense.length; k++) { m = (m << 1) | (dense[k] ? 1 : 0); if ((k & 31) === 31) { word(m); m = 0; } }
+  word(m);
+  word((dead0 ? 1 : 0) | (dead1 ? 2 : 0)); num(tier); num(era);
+  word(foot.length);
+  for (const f of foot) { num(f[0]); num(f[1]); num(f[2]); num(f[3]); }
+  const g = pv.ground, grid = pv.grid, ns = grid.nbrStart, nb = grid.nbr;
+  const ring = new Set<number>(cells);
+  for (let r = 0; r < 2; r++) {
+    for (const c of [...ring]) for (let k = ns[c]; k < ns[c + 1]; k++) ring.add(nb[k]);
+  }
+  const gr = g.grad ?? null;
+  for (const c of ring) {
+    word(c);
+    num(g.surface[c]); num(g.soil[c]); num(g.sand[c]); num(g.snow[c]);
+    if (gr) { num(gr[c * 4]); num(gr[c * 4 + 1]); num(gr[c * 4 + 2]); num(gr[c * 4 + 3]); }
+    if (water) num(water[c]);
+  }
+  return `${h1 >>> 0}:${h2 >>> 0}:${pts.length}`;
+}
+
 export function emptyRibbon(): BufferGeometry {
   const bg = new BufferGeometry();
   bg.setAttribute('position', new Float32BufferAttribute([], 3));
@@ -296,6 +357,9 @@ export function emptyRibbon(): BufferGeometry {
 const SHADOW_POST_M = 70;
 
 export class Roads {
+  /** (tests: off = every chain tests every footprint / every chain is rebuilt, as before session 5) */
+  static localFootprints = true;
+  static keepChains = true;
   readonly group = new Group();
   private dirt: Mesh;
   private paved: Mesh;
@@ -303,7 +367,9 @@ export class Roads {
   private stamp = '';
   private builtAt = -1e9;
   enabled = true;
-  stats = { chains: 0, verts: 0, lamps: 0 };
+  stats = { chains: 0, verts: 0, lamps: 0, rebuiltChains: 0 };
+  /** PERF (session 5): each chain's built ribbon by everything it reads (chainKey); kept while it is still drawn */
+  private chainCache = new Map<string, ChainGeo>();
   /** street lamps as light sources (the nearest become point lights at night) */
   lampLights: LightSource[] = [];
   lampVersion = 0;
@@ -421,7 +487,7 @@ export class Roads {
     };
     // houses near a point (lamps light the streets that have houses beside them)
     const housed = (x: number, y: number, z: number, r: number): boolean => {
-      for (const f of foot) {
+      for (const f of curFoot) {
         const ddx = x - f[0], ddy = y - f[1], ddz = z - f[2];
         if (ddx * ddx + ddy * ddy + ddz * ddz < (r + f[3]) * (r + f[3])) return true;
       }
@@ -429,17 +495,24 @@ export class Roads {
     };
     const lamps: { kind: number; m: number[]; seed: number }[] = [];
     const foot = buildings.footprints();
+    // PERF (session 5): each chain tests only the footprints near it (the same answers: a farther one can never pass
+    // the distance tests below), and its built ribbon is kept while nothing it reads changes (chainKey)
+    let curFoot: [number, number, number, number][] = foot;
+    const footDir = new Float64Array(foot.length * 3);
+    for (let k = 0; k < foot.length; k++) {
+      const f = foot[k], l = Math.hypot(f[0], f[1], f[2]) || 1;
+      footDir[k * 3] = f[0] / l; footDir[k * 3 + 1] = f[1] / l; footDir[k * 3 + 2] = f[2] / l;
+    }
     const inside = (x: number, y: number, z: number): boolean => {
-      for (const f of foot) {
+      for (const f of curFoot) {
         const ddx = x - f[0], ddy = y - f[1], ddz = z - f[2];
         if (ddx * ddx + ddy * ddy + ddz * ddz < f[3] * f[3]) return true;
       }
       return false;
     };
-    const geo = {
-      dirt: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], f: [] as number[], i: [] as number[] },
-      paved: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], f: [] as number[], i: [] as number[] },
-    };
+    const chainsDirt: ChainGeo[] = [], chainsPaved: ChainGeo[] = [];
+    const nextCache = new Map<string, ChainGeo>();
+    let rebuilt = 0;
     const waterF = pv.fields.get('water') ?? null;
     // dead ends: a chain end no other chain meets (junction ends run on into the next chain)
     const ends = new Map<number, number>();
@@ -504,7 +577,35 @@ export class Roads {
       const dead0 = !ch.loop && ends.get(ch.cells[0]) === 1, dead1 = !ch.loop && ends.get(ch.cells[ch.cells.length - 1]) === 1;
       const mid = Math.floor(np / 2);
       const tier = tierAt(pts[mid * 3], pts[mid * 3 + 1], pts[mid * 3 + 2]);
-      const out = tier >= 2 ? geo.paved : geo.dirt;
+      // the footprints near the chain: within its cap (centre + angular radius) and a generous margin of the 26 m
+      // lamp-house test and the footprint's own radius (an angle θ apart stand at least 0.9R·θ·2/π apart)
+      {
+        let cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < np; i++) { cx += pts[i * 3]; cy += pts[i * 3 + 1]; cz += pts[i * 3 + 2]; }
+        const cl = Math.hypot(cx, cy, cz) || 1;
+        cx /= cl; cy /= cl; cz /= cl;
+        let cosMin = 1;
+        for (let i = 0; i < np; i++) cosMin = Math.min(cosMin, pts[i * 3] * cx + pts[i * 3 + 1] * cy + pts[i * 3 + 2] * cz);
+        const aR = Math.acos(Math.max(-1, Math.min(1, cosMin)));
+        curFoot = Roads.localFootprints ? [] : foot;
+        for (let k = 0; Roads.localFootprints && k < foot.length; k++) {
+          const f = foot[k];
+          const lim = aR + (1.6 * (26 + f[3] + 20)) / (0.9 * R);
+          const cs = footDir[k * 3] * cx + footDir[k * 3 + 1] * cy + footDir[k * 3 + 2] * cz;
+          if (lim >= Math.PI || cs >= Math.cos(lim)) curFoot.push(f);
+        }
+      }
+      const key = chainKey(pv, ch.cells, pts, wr, dense, dead0, dead1, tier, chainEra, curFoot, waterF);
+      const kept = Roads.keepChains ? this.chainCache.get(key) : undefined;
+      if (kept) {
+        nextCache.set(key, kept);
+        (kept.paved ? chainsPaved : chainsDirt).push(kept);
+        for (const l of kept.lamps) lamps.push(l);
+        continue;
+      }
+      rebuilt++;
+      const out = { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], f: [] as number[], i: [] as number[] };
+      const lampsAt = lamps.length;
       // street lamps from the medieval era (oil lanterns), gas with steam, electric after
       const lampKind = chainEra >= 6 ? lightKindForEra(chainEra) : 0;
       const spacing = LAMP[lampKind]?.spacing ?? 1e9;
@@ -628,28 +729,46 @@ export class Roads {
         }
         prevRow = base;
       }
+      const co = chainGeometry(out, tier >= 2, lamps.slice(lampsAt));
+      nextCache.set(key, co);
+      (co.paved ? chainsPaved : chainsDirt).push(co);
     }
-    const put = (m: Mesh, g: { p: number[]; n: number[]; a: number[]; l: number[]; e: number[]; f: number[]; i: number[] }) => {
+    this.chainCache = nextCache;
+    this.stats.rebuiltChains = rebuilt;
+    const put = (m: Mesh, list: ChainGeo[]) => {
       m.geometry.dispose();
-      const bg = g.i.length ? new BufferGeometry() : emptyRibbon();
-      if (g.i.length) {
-        bg.setAttribute('position', new Float32BufferAttribute(g.p, 3));
-        bg.setAttribute('aRoad', new Float32BufferAttribute(g.a, 4));
-        bg.setAttribute('aLamp', new Float32BufferAttribute(g.l, 1));
-        bg.setAttribute('aEnd', new Float32BufferAttribute(g.e, 1));
-        bg.setAttribute('aLift', new Float32BufferAttribute(g.f, 1));
-        bg.setIndex(new Uint32BufferAttribute(g.i, 1));
-        // the ribbon's own normals (it follows the slopes), wound upward
-        bg.computeVertexNormals();
+      let nv = 0, ni = 0;
+      for (const c of list) { nv += c.p.length / 3; ni += c.i.length; }
+      const bg = ni ? new BufferGeometry() : emptyRibbon();
+      if (ni) {
+        const P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), A = new Float32Array(nv * 4), L = new Float32Array(nv), E = new Float32Array(nv), F = new Float32Array(nv);
+        const I = new Uint32Array(ni);
+        let v = 0, k = 0;
+        for (const c of list) {
+          P.set(c.p, v * 3); N.set(c.n, v * 3); A.set(c.a, v * 4); L.set(c.l, v); E.set(c.e, v); F.set(c.f, v);
+          for (let j = 0; j < c.i.length; j++) I[k + j] = c.i[j] + v;
+          v += c.p.length / 3; k += c.i.length;
+        }
+        bg.setAttribute('position', new BufferAttribute(P, 3));
+        bg.setAttribute('aRoad', new BufferAttribute(A, 4));
+        bg.setAttribute('aLamp', new BufferAttribute(L, 1));
+        bg.setAttribute('aEnd', new BufferAttribute(E, 1));
+        bg.setAttribute('aLift', new BufferAttribute(F, 1));
+        bg.setIndex(new BufferAttribute(I, 1));
+        // the ribbon's own normals (it follows the slopes), wound upward: per chain (chainGeometry; chains share no
+        // vertex, so these are exactly the normals of the whole ribbon)
+        bg.setAttribute('normal', new BufferAttribute(N, 3));
       }
       m.geometry = bg;
-      m.visible = g.i.length > 0;
+      m.visible = ni > 0;
     };
-    put(this.dirt, geo.dirt);
-    put(this.paved, geo.paved);
+    put(this.dirt, chainsDirt);
+    put(this.paved, chainsPaved);
     this.placeLamps(lamps);
     this.stats.chains = chains.length;
-    this.stats.verts = (geo.dirt.p.length + geo.paved.p.length) / 3;
+    let verts = 0;
+    for (const c of [...chainsDirt, ...chainsPaved]) verts += c.p.length / 3;
+    this.stats.verts = verts;
   }
 
   /** the shadow casters: the posts near the camera */

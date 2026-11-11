@@ -142,7 +142,7 @@ function browserPatchPort(): PatchPort | null {
 
 let nextLodId = 1;
 /** patch builds in flight per planet (a frame's requests beyond this wait for a later frame) */
-const MAX_INFLIGHT = 32;
+const MAX_INFLIGHT = 192;
 
 // ───────────────────────────── patches ─────────────────────────────
 
@@ -642,7 +642,7 @@ export class ChunkLOD {
     if (budget && this.port) {
       // (asked already: its parent draws until it lands)
       // (a camera cut's budget, 320, asks for the whole new view at once: the workers fill it in a few frames)
-      if (p.pendingSeq >= 0 || this.pending.size >= Math.max(MAX_INFLIGHT, this.buildBudgetNow)) return false;
+      if (p.pendingSeq >= 0 || this.pending.size >= Math.max(MAX_INFLIGHT, this.buildBudgetNow * 2)) return false;
       const seq = ++this.seq;
       p.pendingSeq = seq;
       this.pending.set(seq, p);
@@ -683,7 +683,8 @@ export class ChunkLOD {
   private landReady(): void {
     let n = 0;
     while (this.ready.length > 0) {
-      if (this.buildMsNow > 0 && n >= BUILD_MIN * 2 && performance.now() - this.buildT0 > this.buildMsNow) break;
+      // (a cut's frames have no time cap for building; landing keeps one: a few hundred copies in one frame is a hitch)
+      if (n >= BUILD_MIN * 2 && performance.now() - this.buildT0 > (this.buildMsNow > 0 ? this.buildMsNow : 8)) break;
       const r = this.ready.shift()!;
       const p = this.pending.get(r.seq);
       this.pending.delete(r.seq);
@@ -793,9 +794,9 @@ export class ChunkLOD {
     // ~1.5 km of ground beyond the true horizon "visible". The local occluder profile (updateLocalOccluder) gives each
     // patch the tightest valid sphere for its own sight lines and culls the far side of the horizon
     this.updateLocalOccluder(cam, rc);
-    const visit = (p: Patch): void => {
+    const visit = (p: Patch): boolean => {
       this.updateBounds(p);
-      if (!this.aboveHorizon(p, cam, rc, rOcc)) { p.split = false; return; }
+      if (!this.aboveHorizon(p, cam, rc, rOcc)) { p.split = false; return true; }
       // in use: the split ancestors of what is drawn too (only drawn leaves were stamped, so once the cache was full
       // every interior patch — and every child built for a split that had to wait a frame — was evicted at the end of
       // the frame it was built in and rebuilt the next: the whole build budget went to that churn, and after a dozen
@@ -804,10 +805,10 @@ export class ChunkLOD {
       {
         const cosT = Math.min(1, Math.max(-1, cam.dot(p.centerDir) / rc));
         const rLoc = this.occluderWithin(Math.acos(cosT) + p.angRadius);
-        if (rLoc > rOcc && rc > rLoc && !this.aboveHorizon(p, cam, rc, rLoc)) { p.split = false; this.stats.horizonCulled++; return; }
+        if (rLoc > rOcc && rc > rLoc && !this.aboveHorizon(p, cam, rc, rLoc)) { p.split = false; this.stats.horizonCulled++; return true; }
       }
       _sphere.copy(p.sphere).applyMatrix4(ctx.bodyToWorld);
-      if (!ctx.frustum.intersectsSphere(_sphere)) { p.split = false; return; }
+      if (!ctx.frustum.intersectsSphere(_sphere)) { p.split = false; return true; }
       const d = this.boundDistance(p, cam, rc);
       // silhouette-aware: a patch seen edge-on (the limb from orbit, the horizon from the ground) shows its geometric
       // error as a straight-segmented outline, so it splits up to 3.5× earlier (cubic in the grazing: only patches
@@ -821,11 +822,29 @@ export class ChunkLOD {
       const sil = 1 + this.silK * graze * graze * graze;
       const rSplit = ctx.K * this.size(p.level) * (p.split ? 1.12 : 1.0) * sil;
       let split = p.level < this.maxLevel && d < rSplit;
+      if (this.port) {
+        // WORKER PATH: the split decisions need only the bounds, so the whole tree the view wants is walked (and its
+        // missing leaves asked for) in this frame; a subtree draws when every part of it is covered by built patches,
+        // else the nearest built ancestor draws in its place (never a parent with partial children). Converges to
+        // the selection the main-thread path makes, in the few frames the workers take.
+        if (split) {
+          const kids = p.makeChildren();
+          const mark = out.length;
+          let all = true;
+          for (const k of kids) if (!visit(k)) all = false;
+          if (all) { p.split = true; return true; }
+          out.length = mark;
+        }
+        p.split = false;
+        if (p.built) { out.push(p); return true; }
+        if (p.level <= 1) { this.ensureGeometry(p, false); out.push(p); return true; }
+        if (!split) this.ensureGeometry(p, true);
+        return false;
+      }
       if (split) {
         const kids = p.makeChildren();
         // split only when every child can be drawn this frame (never mix a parent with partial children)
-        // (with a worker all four are asked for at once, so they land together)
-        for (const k of kids) if (!this.ensureGeometry(k, true)) { split = false; if (!this.port) break; }
+        for (const k of kids) if (!this.ensureGeometry(k, true)) { split = false; break; }
       }
       if (split) {
         p.split = true;
@@ -835,6 +854,7 @@ export class ChunkLOD {
         if (this.ensureGeometry(p, p.level > 1)) out.push(p);
         else if (p.level <= 1) out.push(p);
       }
+      return true;
     };
     for (const r of this.roots) visit(r);
     // visibility per batch slot: last frame's patches off, this frame's on (a patch that turned wet since it was

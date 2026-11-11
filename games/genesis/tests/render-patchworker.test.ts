@@ -80,16 +80,24 @@ test('a ChunkLOD with a patch worker converges to the same patches, byte for byt
   const ctx = (f: number) => ({ camBody, frustum, bodyToWorld, K, frame: f, buildBudget: 16, buildMs: 6 }) as never;
 
   const sync = mk(null);
-  for (let f = 0; f < 300; f++) sync.select(ctx(f));
+  const sel = (l: ChunkLOD) => l.selected.map((p) => `${p.face}/${p.level}/${p.a}/${p.b}/${p.c}`).sort().join(' ');
+  const syncSel: string[] = [];
+  for (let f = 0; f < 300; f++) { sync.select(ctx(f)); syncSel.push(sel(sync)); }
   const port = fakePort();
   const async = mk(port);
   let mainBuilt = 0;
+  const asyncSel: string[] = [];
   for (let f = 0; f < 300; f++) {
     const before = async.stats.builtTotal - async.landedTotal;
     async.select(ctx(f));
     mainBuilt += async.stats.builtTotal - async.landedTotal - before;
-    port.pump();
+    port.pump(64);
+    asyncSel.push(sel(async));
   }
+  // frames until each first shows its final selection (the worker path walks the whole wanted tree each frame)
+  const conv = (a: string[]) => { let f = a.length - 1; while (f > 0 && a[f - 1] === a[a.length - 1]) f--; return f; };
+  if (process.env.CHUNK_LOG) console.log('converged at frame: main thread', conv(syncSel), 'worker', conv(asyncSel));
+  assert.ok(conv(asyncSel) <= conv(syncSel), `the worker path converges no later (${conv(asyncSel)} vs ${conv(syncSel)})`);
   assert.ok(async.landedTotal > 100, `the worker built the view (${async.landedTotal})`);
   // the main thread built only levels 0-1 (20 + 80 patches at most, the always-drawn base)
   assert.ok(mainBuilt <= 100, `main-thread builds ${mainBuilt}`);
