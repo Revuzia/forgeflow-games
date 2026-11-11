@@ -151,7 +151,9 @@ function pace(): void {
       sim.step(1);
       debt -= 1;
       done++;
-      if ((done & 3) === 0 && now() - t0 > SLICE_MS) break;
+      // (checked after every tick: a time-lapse tick on a big world can take a large part of the slice, and four of them
+      // in a row kept a speed key / snapshot waiting for seconds)
+      if (now() - t0 > SLICE_MS) break;
     }
   } catch (e) {
     fail(e);

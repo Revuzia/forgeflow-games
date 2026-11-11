@@ -4,7 +4,7 @@
 // silhouette (5 sides, 2 rings; 4 sides, 1 ring for the smallest on screen) plus a 3-sided trunk. The hull carries the
 // vegetation material's attributes (aCard 0.5 = solid foliage, lit and tinted like leaves; aCard 0 = bark), so the
 // same shader lights, tints, snows and shadows it, and the cross-fades share its object-space chunks.
-import { BufferGeometry, Float32BufferAttribute, type Texture } from 'three';
+import { BufferGeometry, DataTexture, Float32BufferAttribute, FloatType, NearestFilter, RGBAFormat, type Texture } from 'three';
 import { treeGeometry, type TreeKind } from '../gen/treegen.ts';
 
 /** linear-RGB mean of each leaf-atlas tile over its opaque texels (alpha >= the test threshold), or null off-DOM */
@@ -122,54 +122,96 @@ export function farCrownGeometry(kind: TreeKind, variant: number, lod: 0 | 1, le
     if (m) { barkR = r / m; barkG = g / m; barkB = b / m; }
     if (nb) { bx /= nb; bz /= nb; let s = 0; for (let i = 0; i < n; i++) if (card[i] < 0.25 && P[i * 3 + 1] < 0.06) s += Math.hypot(P[i * 3] - bx, P[i * 3 + 2] - bz); trunkR = s / nb; }
   }
-  const ring = (j: number, a: number) => { const [y, r] = rings[j]; return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r] as const; };
-  const tri = (a: readonly number[], b: readonly number[], c: readonly number[], crown = true) => { vtx(a[0], a[1], a[2], crown); vtx(b[0], b[1], b[2], crown); vtx(c[0], c[1], c[2], crown); };
-  const bottom = [cx, y0, cz] as const, top = [cx, y1, cz] as const;
-  for (let s = 0; s < S; s++) {
-    const a0 = (s / S) * Math.PI * 2, a1 = ((s + 1) / S) * Math.PI * 2;
-    // bottom cap (faces down), bands between the rings, top fan (counter-clockwise seen from outside)
-    tri(bottom, ring(0, a0), ring(0, a1));
-    for (let j = 0; j + 1 < rings.length; j++) {
-      const p0 = ring(j, a0), p1 = ring(j, a1), q0 = ring(j + 1, a0), q1 = ring(j + 1, a1);
-      tri(p0, q0, q1); tri(p0, q1, p1);
-    }
-    const L = rings.length - 1;
-    tri(ring(L, a0), top, ring(L, a1));
-  }
-  // the trunk (lod 0 only, where the crown stands clear of the ground: a 3-sided prism up into the crown)
-  if (lod === 0 && leafy && y0 > 0.08 && trunkR > 0) {
-    const tr = trunkR * 1.1, ty = y0 + span * 0.15;
-    for (let s = 0; s < 3; s++) {
-      const a0 = (s / 3) * Math.PI * 2, a1 = ((s + 1) / 3) * Math.PI * 2;
-      const b0 = [bx + Math.cos(a0) * tr, 0, bz + Math.sin(a0) * tr], b1 = [bx + Math.cos(a1) * tr, 0, bz + Math.sin(a1) * tr];
-      const t0 = [cx + Math.cos(a0) * tr * 0.6, ty, cz + Math.sin(a0) * tr * 0.6], t1 = [cx + Math.cos(a1) * tr * 0.6, ty, cz + Math.sin(a1) * tr * 0.6];
-      tri(b0, t0, t1, false); tri(b0, t1, b1, false);
-    }
-  }
-  // indexed: the hull's vertices are shared by its faces (smooth normals: the same at every face), so a far tree
-  // costs ~10-20 vertex-shader runs, not 3 per triangle
-  const uniq = new Map<string, number>();
+  // PERF item 3 (session 10): a CANONICAL layout — the same vertex slots and the same index list for every kind and
+  // variant of a lod — so all far trees of a lod draw from one shared index buffer, each instance's hull read from a
+  // table texture by its hull id (farHullTable). Slots: 0 the bottom point, then the rings (ring j, side s at
+  // 1 + j·S + s), the top point, and for lod 0 the trunk (3 at the foot, 3 up in the crown). A hull without a trunk
+  // folds those six onto the bottom point: zero-area triangles, no fragments. Same triangles and the same per-vertex
+  // values as the deduplicated soup this replaced (a crown vertex had one normal, colour and card in every face).
+  const ringP = (j: number, s: number) => { const a = (s / S) * Math.PI * 2, [y, r] = rings[j]; return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r]; };
+  vtx(cx, y0, cz, true);
+  for (let j = 0; j < rings.length; j++) for (let s = 0; s < S; s++) { const q = ringP(j, s); vtx(q[0], q[1], q[2], true); }
+  vtx(cx, y1, cz, true);
+  const nb0 = 1, top = 1 + rings.length * S, L = rings.length - 1;
   const idx: number[] = [];
-  const P2: number[] = [], N2: number[] = [], C2: number[] = [], W2: number[] = [], K2: number[] = [], R2: number[] = [];
-  for (let i = 0; i < pos.length / 3; i++) {
-    const key = `${pos[i * 3].toFixed(5)},${pos[i * 3 + 1].toFixed(5)},${pos[i * 3 + 2].toFixed(5)},${acard[i]}`;
-    let j = uniq.get(key);
-    if (j === undefined) {
-      j = P2.length / 3; uniq.set(key, j);
-      P2.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); N2.push(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
-      C2.push(col[i * 3], col[i * 3 + 1], col[i * 3 + 2]); W2.push(aw[i]); K2.push(acard[i]); R2.push(acrown[i]);
+  const ri = (j: number, s: number) => nb0 + j * S + (s % S);
+  for (let s = 0; s < S; s++) {
+    // bottom cap (faces down), bands between the rings, top fan (counter-clockwise seen from outside)
+    idx.push(0, ri(0, s), ri(0, s + 1));
+    for (let j = 0; j < L; j++) idx.push(ri(j, s), ri(j + 1, s), ri(j + 1, s + 1), ri(j, s), ri(j + 1, s + 1), ri(j, s + 1));
+    idx.push(ri(L, s), top, ri(L, s + 1));
+  }
+  if (lod === 0) {
+    // the trunk (where the crown stands clear of the ground: a 3-sided prism up into the crown)
+    const trunk = leafy && y0 > 0.08 && trunkR > 0;
+    const tr = trunkR * 1.1, ty = y0 + span * 0.15;
+    const tb = top + 1;
+    for (let s = 0; s < 3; s++) {
+      const a = (s / 3) * Math.PI * 2;
+      if (trunk) vtx(bx + Math.cos(a) * tr, 0, bz + Math.sin(a) * tr, false); else vtx(cx, y0, cz, false);
     }
-    idx.push(j);
+    for (let s = 0; s < 3; s++) {
+      const a = (s / 3) * Math.PI * 2;
+      if (trunk) vtx(cx + Math.cos(a) * tr * 0.6, ty, cz + Math.sin(a) * tr * 0.6, false); else vtx(cx, y0, cz, false);
+    }
+    for (let s = 0; s < 3; s++) { const s1 = (s + 1) % 3; idx.push(tb + s, tb + 3 + s, tb + 3 + s1, tb + s, tb + 3 + s1, tb + s1); }
   }
   const g = new BufferGeometry();
   g.setIndex(idx);
-  g.setAttribute('aCrown', new Float32BufferAttribute(R2, 1));
-  g.setAttribute('position', new Float32BufferAttribute(P2, 3));
-  g.setAttribute('normal', new Float32BufferAttribute(N2, 3));
-  g.setAttribute('color', new Float32BufferAttribute(C2, 3));
-  g.setAttribute('aWind', new Float32BufferAttribute(W2, 1));
-  g.setAttribute('aLeafUv', new Float32BufferAttribute(new Float32Array(P2.length / 3 * 2), 2));
-  g.setAttribute('aCard', new Float32BufferAttribute(K2, 1));
+  g.setAttribute('aCrown', new Float32BufferAttribute(acrown, 1));
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new Float32BufferAttribute(nrm, 3));
+  g.setAttribute('color', new Float32BufferAttribute(col, 3));
+  g.setAttribute('aWind', new Float32BufferAttribute(aw, 1));
+  g.setAttribute('aLeafUv', new Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
+  g.setAttribute('aCard', new Float32BufferAttribute(acard, 1));
   g.computeBoundingSphere();
   return g;
+}
+
+/** PERF item 3: vertices of the canonical hull of each lod (lod 0: bottom, 3 rings x 5, top, 6 trunk; lod 1: 1 + 2 x 4 + 1) */
+export const FAR_HULL_VERTS = [23, 10] as const;
+/** texels per hull vertex in the table: (pos.xyz, n.x) (n.yz, colour.rg) (colour.b, wind, card, crown) */
+export const FAR_HULL_TEXELS = 3;
+
+/**
+ * PERF item 3 (session 10): every far hull in one table texture — row `key * 2 + lod` (key = kind x variants + variant)
+ * holds that hull's canonical vertices (FAR_HULL_TEXELS texels each); kinds `skip` leaves out (shrubs, kelp: the far
+ * layer draws trees only) stay zero. The far trees of a lod then draw as ONE instanced mesh over the shared canonical
+ * index list, each instance fetching its own hull's vertices by its hull id (the vertex id is the canonical slot), so
+ * the ~66 far buckets (one per kind, variant and lod) become one per lod (per distance band). Also returns the
+ * template geometry of each lod (the canonical index; position = slot 0's hull, never read by the far shader).
+ */
+export function farHullTable(kinds: readonly TreeKind[], variants: number, skip: (kind: TreeKind) => boolean, leafTex: Texture | null): { tex: DataTexture; tpl: [BufferGeometry, BufferGeometry] } {
+  const W = FAR_HULL_VERTS[0] * FAR_HULL_TEXELS, H = kinds.length * variants * 2;
+  const data = new Float32Array(W * H * 4);
+  let tpl: [BufferGeometry, BufferGeometry] | null = null;
+  for (let k = 0; k < kinds.length; k++) {
+    if (skip(kinds[k])) continue;
+    for (let v = 0; v < variants; v++) for (const lod of [0, 1] as const) {
+      const g = farCrownGeometry(kinds[k], v, lod, leafTex);
+      const P = g.getAttribute('position').array, N = g.getAttribute('normal').array, C = g.getAttribute('color').array;
+      const Wd = g.getAttribute('aWind').array, K = g.getAttribute('aCard').array, Rc = g.getAttribute('aCrown').array;
+      const nv = P.length / 3;
+      if (nv !== FAR_HULL_VERTS[lod]) throw new Error(`far hull ${kinds[k]} lod ${lod}: ${nv} vertices, the canonical layout has ${FAR_HULL_VERTS[lod]}`);
+      const row = ((k * variants + v) * 2 + lod) * W * 4;
+      for (let i = 0; i < nv; i++) {
+        const o = row + i * FAR_HULL_TEXELS * 4;
+        data.set([P[i * 3], P[i * 3 + 1], P[i * 3 + 2], N[i * 3], N[i * 3 + 1], N[i * 3 + 2], C[i * 3], C[i * 3 + 1], C[i * 3 + 2], Wd[i], K[i], Rc[i]], o);
+      }
+      if (!tpl) tpl = [null, null] as unknown as [BufferGeometry, BufferGeometry];
+      if (!tpl[lod]) {
+        const t = new BufferGeometry();
+        t.setIndex(g.getIndex()!.clone());
+        t.setAttribute('position', g.getAttribute('position').clone());
+        tpl[lod] = t;
+      }
+      g.dispose();
+    }
+  }
+  const tex = new DataTexture(data, W, H, RGBAFormat, FloatType);
+  tex.minFilter = NearestFilter; tex.magFilter = NearestFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return { tex, tpl: tpl! };
 }

@@ -213,7 +213,7 @@ export class Shell {
     const host = (this.host = deps.host);
     this.catalog = new Catalog(host);
     this.hud = new Hud(parent, {
-      setSpeed: (x) => { this.time.playerSpeed(); host.setSpeed(x); },
+      setSpeed: (x) => { this.playerSpeed(); host.setSpeed(x); },
       step: (t) => { void host.step(t); },
       flyTo: (id) => host.flyTo(id),
       lookAt: (planet, pos) => host.lookAt(planet, pos),
@@ -553,7 +553,7 @@ export class Shell {
     // the speed presets (every one of SPEED_PRESETS has its action: time.speed1 … time.speed3000)
     if (/^time\.speed\d+$/.test(id)) {
       const x = Number(id.slice(10));
-      this.time.playerSpeed();
+      this.playerSpeed();
       host.setSpeed(x);
       return;
     }
@@ -580,13 +580,13 @@ export class Shell {
       case 'time.pause':
         // time stopped by the site's Pause comes back at its own speed
         if (this.time.sitePaused && host.view.speed === 0) { this.time.resume(); return; }
-        this.time.playerSpeed();
+        this.playerSpeed();
         host.setSpeed(host.view.speed === 0 ? (this.lastSpeed || 1) : (this.lastSpeed = host.view.speed, 0));
         return;
       case 'time.faster': case 'time.slower': {
         const presets: readonly number[] = SPEED_PRESETS;
         const i = presets.indexOf(host.view.speed);
-        this.time.playerSpeed();
+        this.playerSpeed();
         host.setSpeed(presets[Math.max(0, Math.min(presets.length - 1, (i < 0 ? 1 : i) + (id === 'time.faster' ? 1 : -1)))]);
         return;
       }
@@ -889,6 +889,13 @@ export class Shell {
     this.aimCode = null;
     this.press = 'none';
   }
+
+  /**
+   * The player chose the speed (a speed key, the HUD's buttons, faster / slower, pause): it is theirs — the site's Pause
+   * lets go of it and a decision card that eased time will not restore the speed from before it (the '1' key after 1000x
+   * stays at 1x when the card is answered).
+   */
+  private playerSpeed(): void { this.time.playerSpeed(); this.decision.state.playerSpeed(); }
 
   /** the code part of the aimed throw's bound key (for tests / hints) */
   throwCode(): string { return splitCombo(this.host.keybinds.keysOf('hand.throw')[0] ?? 'Shift+KeyE').code; }

@@ -1,0 +1,44 @@
+{
+ "_doc": "PERF s10 owner item 5: babel seed 307987276, Rubolhin by the Lake (settlement 1): the land east of the town (water sheet over the hills, trunks as ghosts?). Views east from the town at 250 m and 120 m, a top-down 400 m. Run: setsid nohup _harness/slot.sh node _harness/shots.mjs _harness/arc-work/specs/perf-eastwater.json --port=5321 > _harness/scratch/arc/perf/eastwater.log 2>&1 &",
+ "shots": [
+  {
+   "name": "pe-east250",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [888, 500],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 250, tilt: 62, yaw: 90, fov: 55 }); await G.frames(14);",
+    "return { ok: 1 };"
+   ]
+  },
+  {
+   "name": "pe-east120",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [888, 500],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 120, tilt: 70, yaw: 110, fov: 55 }); await G.frames(14);",
+    "return { ok: 1 };"
+   ]
+  },
+  {
+   "name": "pe-top400",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [888, 500],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 700, tilt: 25, yaw: 0, fov: 55 }); await G.frames(14);",
+    "return { ok: 1 };"
+   ]
+  }
+ ]
+}

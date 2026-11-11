@@ -162,6 +162,12 @@ export class DecisionState {
     return p;
   }
 
+  /**
+   * The player set the speed themselves (a speed key, the HUD, the pad) while a card had eased time: their speed stands —
+   * answering or putting off the card no longer brings the old (time-lapse) speed back over it.
+   */
+  playerSpeed(): void { this.prevSpeed = null; }
+
   /** "Look at it": the card steps down to its pill so the tower can be seen, but time stays eased (prevSpeed kept) */
   peek(): void {
     if (!this.open) return;

@@ -26,7 +26,7 @@ import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
   type IUniform, type Texture,
 } from 'three';
-import { farCrownGeometry } from './farcrown.ts';
+import { FAR_HULL_TEXELS, farHullTable } from './farcrown.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import type { BuildingBlock } from '../../sim/types.ts';
 import { buildingAt } from './catalog.ts';
@@ -419,6 +419,38 @@ const VEG_AMBIENT = /* glsl */ `
   }
 `;
 
+/**
+ * PERF item 3 (session 10): the far layer draws every kind and variant of a hull lod from ONE instanced mesh. Each
+ * instance carries its hull's row in the table texture (iHull = (kind x variants + variant) x 2 + lod, farcrown.ts
+ * farHullTable); the shared canonical index list makes gl_VertexID the hull's vertex slot. The vertex's attributes are
+ * fetched first thing in main() and stand in for the attributes of the same names (macros: the rest of the shader —
+ * three's chunks and the vegetation code — reads them unchanged), so a far tree is lit, tinted, swayed and shadowed
+ * exactly as with its own geometry. Placed after every declaration (the macros must not rename them).
+ */
+const FAR_FETCH = /* glsl */ `
+#ifdef VEG_FAR
+attribute float iHull;
+uniform highp sampler2D uFarHulls;
+vec3 fPos; vec3 fNrm; vec3 fCol; float fWind; float fCard; float fCrown;
+void farFetch() {
+  ivec2 b = ivec2(gl_VertexID * ${FAR_HULL_TEXELS}, int(iHull + 0.5));
+  vec4 t0 = texelFetch(uFarHulls, b, 0), t1 = texelFetch(uFarHulls, b + ivec2(1, 0), 0), t2 = texelFetch(uFarHulls, b + ivec2(2, 0), 0);
+  fPos = t0.xyz; fNrm = vec3(t0.w, t1.xy); fCol = vec3(t1.zw, t2.x); fWind = t2.y; fCard = t2.z; fCrown = t2.w;
+}
+#define position fPos
+#define normal fNrm
+#define color fCol
+#define aWind fWind
+#define aCard fCard
+#define aCrown fCrown
+#define aLeafUv vec2(0.0)
+#endif
+`;
+const FAR_MAIN = 'void main() {\n#ifdef VEG_FAR\n  farFetch();\n#endif\n';
+/** the far hull table (made once, with the first Vegetation: it needs the leaf atlas' tile colours) */
+const FAR_HULLS: IUniform<Texture | null> = { value: null };
+let farTable: ReturnType<typeof farHullTable> | null = null;
+
 /** the vegetation material (also used by the near-camera ground cover, render/life/groundcover.ts, with its own band) */
 export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform<{ x: number; y: number }>, leafTex: IUniform, far?: { on: IUniform<number>; layer: boolean }): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side: DoubleSide });
@@ -433,7 +465,9 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
     shader.uniforms.uWindK = WIND_K;
     shader.uniforms.uLodBand = LOD_BAND;
     shader.uniforms.uGodWind = GOD_WIND;
+    shader.uniforms.uFarHulls = FAR_HULLS;
     shader.vertexShader = shader.vertexShader
+      .replace('void main() {', `${FAR_FETCH}\n${FAR_MAIN}`)
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VEG_VERT_PARS}\n${VEG_VERT_CLOUD}`)
       .replace('#include <begin_vertex>', VEG_WIND)
       .replace('#include <color_vertex>', `
@@ -531,7 +565,7 @@ ${LEAF_ALPHA}
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v12-far' : 'genesis-veg-v12');
+  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v13-far' : 'genesis-veg-v12');
   return mat;
 }
 
@@ -550,7 +584,8 @@ const VEG_DEPTH_VERT = /* glsl */ `
 #include <common>
 ${VEG_VERT_PARS}
 #include <logdepthbuf_pars_vertex>
-void main() {
+${FAR_FETCH}
+${FAR_MAIN}
 ${VEG_WIND}
 #include <project_vertex>
   vLeafUv = aLeafUv;
@@ -726,15 +761,36 @@ const PREFETCH = 1.5;
 const KELP = KINDS.indexOf('kelp');
 /** the plant scatter's fields (a change re-scatters the cells around it) and the far tint's (snow, fire) */
 const PLANT_FIELDS = ['tree', 'shrub', 'burnt', 'treeSpecies', 'snow', 'fire'] as const;
-const FAR_GEO = new Map<number, BufferGeometry>();
+/**
+ * PERF item 3: far buckets by DISTANCE BAND from the camera (x the far layer's inner edge), one per band and hull lod —
+ * every kind and variant together (the hull comes from the table by iHull). 4 bands x 2 lods = at most 8 far draws a
+ * pass (was ~66: one per kind, variant and lod); the bands let each shadow cascade draw only the far trees whose
+ * shadows can reach it (farShadow).
+ */
+const FAR_BAND_EDGES = [1.6, 2.6, 5.2] as const;
+const FAR_BANDS = FAR_BAND_EDGES.length + 1;
+/** a placed cell keeps its band while within this factor of the band's edges (no churn at an edge) */
+const FAR_BAND_SLACK = 0.1;
+function farBandOf(d: number, inner: number): number {
+  let b = 0;
+  while (b < FAR_BAND_EDGES.length && d >= FAR_BAND_EDGES[b] * inner) b++;
+  return b;
+}
+function farBandKeeps(band: number, d: number, inner: number): boolean {
+  const lo = band > 0 ? FAR_BAND_EDGES[band - 1] * inner * (1 - FAR_BAND_SLACK) : -Infinity;
+  const hi = band < FAR_BAND_EDGES.length ? FAR_BAND_EDGES[band] * inner * (1 + FAR_BAND_SLACK) : Infinity;
+  return d >= lo && d < hi;
+}
 interface FarBlock {
   n: number; keys: number[]; starts: number[]; m: Float32Array; c: Float32Array; e: Float32Array;
   hMin: number; hMax: number; cx: number; cy: number; cz: number; r: number; stale: boolean; env: string;
 }
 interface FarBucket {
-  mesh: InstancedMesh; extra: InstancedBufferAttribute; cap: number; hi: number; live: number;
+  mesh: InstancedMesh; extra: InstancedBufferAttribute; hull: InstancedBufferAttribute; cap: number; hi: number; live: number;
   /** free ranges [start, n, ...] sorted by start; dirty ranges [start, n, ...] to upload */
-  free: number[]; dirty: number[]; key: number; lod: number; tpl: BufferGeometry;
+  free: number[]; dirty: number[]; band: number; lod: number;
+  /** distance bounds (m) of its placed trees (crown extent included) from `anchor` (farBounds) */
+  dMin: number; dMax: number;
 }
 /** upload the given instance ranges of an attribute (coalesced; three bufferSubData per range) */
 function flushRanges(a: InstancedBufferAttribute | BufferAttribute, ranges: number[], w: number): void {
@@ -787,10 +843,13 @@ export class Vegetation {
     this.material = makeVegMaterial(shared, this.fade, leafTex, { on: this.farOn, layer: false });
     this.farMat = makeVegMaterial(shared, this.fade, leafTex, { on: this.farOn, layer: true });
     this.leafTex = leafTex;
-    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND, uFarOn: this.farOn, uFarBand: FAR_BAND, uPxPerRad: PX_PER_RAD };
+    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND, uFarOn: this.farOn, uFarBand: FAR_BAND, uPxPerRad: PX_PER_RAD, uFarHulls: FAR_HULLS };
     this.farDepth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide, defines: { VEG_FAR: '' } });
+    // the far hulls' table (once per page: the leaf atlas' tile colours are the same for every world)
+    farTable ??= farHullTable(KINDS, VARIANTS, (k) => SHRUB_KINDS.includes(k) || k === 'kelp', leafTex.value as Texture | null);
+    FAR_HULLS.value = farTable.tex;
     // one far mesh from the start (hidden, empty) so the load-time warm-up links the far program and its depth twin
-    this.farBucket(Math.max(0, KINDS.indexOf('broadleaf')) * VARIANTS, 0);
+    this.farBucket(0, 0);
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {
@@ -1163,7 +1222,10 @@ export class Vegetation {
   private far: (FarBucket | undefined)[] = [];
   private blocks = new Map<number, FarBlock>();
   /** cell -> lod flags placed (1 hull lod 0, 2 hull lod 1) and their slots [bucket, start, count]... per lod */
-  private placed = new Map<number, { f: number; s0: number[]; s1: number[] }>();
+  private placed = new Map<number, { f: number; s0: number[]; s1: number[]; band: number }>();
+  /** the point the far buckets' distance bounds are measured from (farBounds) */
+  private farAnchor = new Vector3(1e9, 0, 0);
+  private farBoundsDirty = true;
   private farCam = new Vector3(1e9, 0, 0);
   private farPx = 0;
   private farFrame = -1e9;
@@ -1267,25 +1329,28 @@ export class Vegetation {
     return blk;
   }
 
-  private farBucket(key: number, lod: number): FarBucket {
-    const id = key * 2 + lod;
+  private farBucket(band: number, lod: number): FarBucket {
+    const id = band * 2 + lod;
     let b = this.far[id];
     if (b) return b;
-    const kind = KINDS[Math.floor(key / VARIANTS)], variant = key % VARIANTS;
-    let tpl = FAR_GEO.get(id);
-    if (!tpl) { tpl = farCrownGeometry(kind, variant, lod as 0 | 1, this.leafTex.value as Texture | null); FAR_GEO.set(id, tpl); }
-    b = { mesh: null as unknown as InstancedMesh, extra: null as unknown as InstancedBufferAttribute, cap: 0, hi: 0, live: 0, free: [], dirty: [], key, lod, tpl };
-    this.growBucket(b, 512);
+    b = { mesh: null as unknown as InstancedMesh, extra: null as unknown as InstancedBufferAttribute, hull: null as unknown as InstancedBufferAttribute, cap: 0, hi: 0, live: 0, free: [], dirty: [], band, lod, dMin: Infinity, dMax: -Infinity };
+    this.growBucket(b, 2048);
     this.far[id] = b;
     return b;
   }
 
   /** (re)make a far bucket's mesh with room for `cap` instances, keeping its contents */
   private growBucket(b: FarBucket, cap: number): void {
-    const geo = b.tpl.clone();
+    const geo = new BufferGeometry();
+    const tpl = farTable!.tpl[b.lod];
+    geo.setIndex(tpl.getIndex());
+    geo.setAttribute('position', tpl.getAttribute('position'));
     const extra = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     extra.setUsage(DynamicDrawUsage);
     geo.setAttribute('iExtra', extra);
+    const hull = new InstancedBufferAttribute(new Float32Array(cap), 1);
+    hull.setUsage(DynamicDrawUsage);
+    geo.setAttribute('iHull', hull);
     const mesh = new InstancedMesh(geo, this.farMat, cap);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     whiteColors(mesh, cap);
@@ -1300,13 +1365,17 @@ export class Vegetation {
       (mesh.instanceMatrix.array as Float32Array).set((old.instanceMatrix.array as Float32Array).subarray(0, b.hi * 16));
       (mesh.instanceColor!.array as Float32Array).set((old.instanceColor!.array as Float32Array).subarray(0, b.hi * 3));
       (extra.array as Float32Array).set((b.extra.array as Float32Array).subarray(0, b.hi * 4));
+      (hull.array as Float32Array).set((b.hull.array as Float32Array).subarray(0, b.hi));
+      mesh.material = old.material;
       this.farGroup.remove(old);
-      old.dispose(); old.geometry.dispose();
+      // (the shared index / position of the lod template stay — a geometry's dispose frees every buffer it holds — only
+      // its instance buffers go)
+      old.dispose(); old.geometry.setIndex(null); old.geometry.deleteAttribute('position'); old.geometry.dispose();
       b.dirty = [0, b.hi];
     }
     mesh.count = b.hi;
     mesh.visible = b.hi > 0;
-    b.mesh = mesh; b.extra = extra; b.cap = cap;
+    b.mesh = mesh; b.extra = extra; b.hull = hull; b.cap = cap;
     this.farGroup.add(mesh);
   }
 
@@ -1337,28 +1406,31 @@ export class Vegetation {
     if (L && b.free[L - 2] + b.free[L - 1] === b.hi) { b.hi = b.free[L - 2]; b.free.length = L - 2; }
   }
 
-  private place(c: number, blk: FarBlock, lod: number): number[] {
-    const slots: number[] = [];
-    for (let g = 0; g < blk.keys.length; g++) {
-      const j0 = blk.starts[g], n = blk.starts[g + 1] - j0;
-      const b = this.farBucket(blk.keys[g], lod);
-      const at = this.allocSlots(b, n);
-      (b.mesh.instanceMatrix.array as Float32Array).set(blk.m.subarray(j0 * 16, (j0 + n) * 16), at * 16);
-      (b.mesh.instanceColor!.array as Float32Array).set(blk.c.subarray(j0 * 3, (j0 + n) * 3), at * 3);
-      const ea = b.extra.array as Float32Array;
-      ea.set(blk.e.subarray(j0 * 4, (j0 + n) * 4), at * 4);
-      // role: 6 hull lod 0, 7 hull lod 1 (+ the canopy fraction already in the extra's w)
-      for (let q = 0; q < n; q++) ea[(at + q) * 4 + 3] += 6 + lod;
-      b.dirty.push(at, n);
-      b.live += n;
-      slots.push(blk.keys[g] * 2 + lod, at, n);
-    }
+  /** a cell's trees of one hull lod into the far bucket of its distance band: one slot range, every kind together */
+  private place(c: number, blk: FarBlock, lod: number, band: number): number[] {
+    const n = blk.n;
+    if (!n) return [];
+    const b = this.farBucket(band, lod);
+    const at = this.allocSlots(b, n);
+    (b.mesh.instanceMatrix.array as Float32Array).set(blk.m, at * 16);
+    (b.mesh.instanceColor!.array as Float32Array).set(blk.c, at * 3);
+    const ea = b.extra.array as Float32Array;
+    ea.set(blk.e, at * 4);
+    // role: 6 hull lod 0, 7 hull lod 1 (+ the canopy fraction already in the extra's w)
+    for (let q = 0; q < n; q++) ea[(at + q) * 4 + 3] += 6 + lod;
+    // the hull of each tree: its row in the far hull table
+    const ha = b.hull.array as Float32Array;
+    for (let g = 0; g < blk.keys.length; g++) ha.fill(blk.keys[g] * 2 + lod, at + blk.starts[g], at + blk.starts[g + 1]);
+    b.dirty.push(at, n);
+    b.live += n;
+    this.farBoundsDirty = true;
     void c;
-    return slots;
+    return [band * 2 + lod, at, n];
   }
 
   private unplace(slots: number[]): void {
     for (let k = 0; k < slots.length; k += 3) { const b = this.far[slots[k]]; if (b) this.freeSlots(b, slots[k + 1], slots[k + 2]); }
+    if (slots.length) this.farBoundsDirty = true;
   }
 
   /** which hull lods a cell's trees need at this camera (0: none), with `slack` (> 1 admits a little early) */
@@ -1420,7 +1492,8 @@ export class Vegetation {
         const cur = this.placed.get(c);
         // (placement changes are applied over the next frames, nearest first, under the time budget: the admission
         // slack — a cell is placed some 15 % before its trees can show — covers the wait)
-        if (blk && (cur?.f ?? 0) !== need && (!blk.stale || !need)) { sc.pend.push(c); sc.pendD.push(Math.hypot(blk.cx - cam.x, blk.cy - cam.y, blk.cz - cam.z)); }
+        const moveBand = !!(blk && need && cur && cur.f && this.farBand(blk, cam, inner, cur.band) !== cur.band);
+        if (blk && ((cur?.f ?? 0) !== need || moveBand) && (!blk.stale || !need)) { sc.pend.push(c); sc.pendD.push(Math.hypot(blk.cx - cam.x, blk.cy - cam.y, blk.cz - cam.z)); }
         if (!blk || blk.stale) {
           // to make: what is (or may soon be) needed first; the rest of the visible forest in the background
           sc.want.push(c); sc.wantD.push(Math.hypot(P[c * 3] * R - cam.x, P[c * 3 + 1] * R - cam.y, P[c * 3 + 2] * R - cam.z));
@@ -1450,7 +1523,8 @@ export class Vegetation {
       if (!blk) continue;
       const need = this.farNeed(blk, camBody, inner, 1.15);
       if (blk.stale && need) continue;
-      this.setPlacement(c, blk, need, this.placed.get(c));
+      const cur = this.placed.get(c);
+      this.setPlacement(c, blk, need, cur, this.farBand(blk, camBody, inner, cur?.band ?? -1));
     }
     // ── make the blocks: nearest first, a time budget a frame (more while placed cells wait on a re-make) ──
     let built = 0;
@@ -1468,7 +1542,7 @@ export class Vegetation {
       built++;
       const cur = this.placed.get(c);
       if (cur && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); cur.s0 = []; cur.s1 = []; cur.f = 0; }
-      this.setPlacement(c, blk, this.farNeed(blk, camBody, inner, 1.15), cur);
+      this.setPlacement(c, blk, this.farNeed(blk, camBody, inner, 1.15), cur, this.farBand(blk, camBody, inner, cur?.band ?? -1));
     }
     // ── upload what changed ──
     let inst = 0;
@@ -1481,11 +1555,13 @@ export class Vegetation {
         flushRanges(b.mesh.instanceMatrix, b.dirty, 16);
         flushRanges(b.mesh.instanceColor!, b.dirty, 3);
         flushRanges(b.extra, b.dirty, 4);
+        flushRanges(b.hull, b.dirty, 1);
         b.dirty = [];
       }
       // a bucket mostly holes is compacted (its live ranges re-placed from their blocks next listing)
       if (b.hi > 4096 && b.live < b.hi * 0.25) this.compact(b);
     }
+    if (this.farBoundsDirty) this.farBounds(camBody);
     this.farStats.instances = inst;
     this.farStats.cells = this.placed.size;
     this.farStats.blocks = this.blocks.size;
@@ -1494,48 +1570,96 @@ export class Vegetation {
     this.farStats.ms = performance.now() - t0;
   }
 
-  private setPlacement(c: number, blk: FarBlock, need: number, cur: { f: number; s0: number[]; s1: number[] } | undefined): void {
+  /** the far band a cell's block belongs in at this camera (its current band while within the band's slack) */
+  private farBand(blk: FarBlock, cam: Vector3, inner: number, cur: number): number {
+    const d = Math.hypot(blk.cx - cam.x, blk.cy - cam.y, blk.cz - cam.z);
+    return cur >= 0 && farBandKeeps(cur, d, inner) ? cur : farBandOf(d, inner);
+  }
+
+  private setPlacement(c: number, blk: FarBlock, need: number, cur: { f: number; s0: number[]; s1: number[]; band: number } | undefined, band: number): void {
     const f = cur?.f ?? 0;
-    if (f === need) return;
-    const st = cur ?? { f: 0, s0: [], s1: [] };
-    if ((f & 1) && !(need & 1)) { this.unplace(st.s0); st.s0 = []; }
-    if ((f & 2) && !(need & 2)) { this.unplace(st.s1); st.s1 = []; }
-    if (!(f & 1) && (need & 1)) st.s0 = this.place(c, blk, 0);
-    if (!(f & 2) && (need & 2)) st.s1 = this.place(c, blk, 1);
+    if (f === need && (!need || cur!.band === band)) return;
+    const st = cur ?? { f: 0, s0: [], s1: [], band };
+    if (st.band !== band) { this.unplace(st.s0); this.unplace(st.s1); st.s0 = []; st.s1 = []; st.f = 0; st.band = band; }
+    const was = st.f;
+    if ((was & 1) && !(need & 1)) { this.unplace(st.s0); st.s0 = []; }
+    if ((was & 2) && !(need & 2)) { this.unplace(st.s1); st.s1 = []; }
+    if (!(was & 1) && (need & 1)) st.s0 = this.place(c, blk, 0, band);
+    if (!(was & 2) && (need & 2)) st.s1 = this.place(c, blk, 1, band);
     st.f = need;
     if (need) this.placed.set(c, st); else this.placed.delete(c);
   }
 
   /** re-pack a bucket: every placed cell's range in it is written again from the start (one full upload) */
   private compact(b: FarBucket): void {
-    const id = b.key * 2 + b.lod;
+    const id = b.band * 2 + b.lod;
     const ma = b.mesh.instanceMatrix.array as Float32Array, ca = b.mesh.instanceColor!.array as Float32Array, ea = b.extra.array as Float32Array;
-    const m2 = new Float32Array(ma.length), c2 = new Float32Array(ca.length), e2 = new Float32Array(ea.length);
+    const ha = b.hull.array as Float32Array;
+    const m2 = new Float32Array(ma.length), c2 = new Float32Array(ca.length), e2 = new Float32Array(ea.length), h2 = new Float32Array(ha.length);
     let at = 0;
     for (const st of this.placed.values()) {
       for (const sl of [st.s0, st.s1]) for (let k = 0; k < sl.length; k += 3) {
         if (sl[k] !== id) continue;
         const s0 = sl[k + 1], n = sl[k + 2];
         m2.set(ma.subarray(s0 * 16, (s0 + n) * 16), at * 16); c2.set(ca.subarray(s0 * 3, (s0 + n) * 3), at * 3); e2.set(ea.subarray(s0 * 4, (s0 + n) * 4), at * 4);
+        h2.set(ha.subarray(s0, s0 + n), at);
         sl[k + 1] = at; at += n;
       }
     }
-    ma.set(m2); ca.set(c2); ea.set(e2);
+    ma.set(m2); ca.set(c2); ea.set(e2); ha.set(h2);
     b.hi = at; b.live = at; b.free = []; b.dirty = [0, at];
     b.mesh.count = at;
   }
 
-  /** PERF F6 for the far layer: its trees stand past the near range, so a cascade wholly nearer than that less their
-   *  shadow's reach cannot read them (else all of it is drawn: the far cascades) */
-  private farShadow(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number): void {
+  /** each far bucket's distance bounds from `anchor` over its placed cells (crown extent included) */
+  private farBounds(anchor: Vector3): void {
+    this.farAnchor.copy(anchor);
+    this.farBoundsDirty = false;
+    for (const b of this.far) if (b) { b.dMin = Infinity; b.dMax = -Infinity; }
+    for (const [c, st] of this.placed) {
+      const blk = this.blocks.get(c);
+      if (!blk || !st.f) continue;
+      const d = Math.hypot(blk.cx - anchor.x, blk.cy - anchor.y, blk.cz - anchor.z), ext = blk.r + blk.hMax * 1.2;
+      for (const lod of [0, 1]) {
+        if (!(st.f & (1 << lod))) continue;
+        const b = this.far[st.band * 2 + lod];
+        if (!b) continue;
+        if (d - ext < b.dMin) b.dMin = d - ext;
+        if (d + ext > b.dMax) b.dMax = d + ext;
+      }
+    }
+  }
+
+  /**
+   * PERF F6 / F22 for the far layer, per distance band (PERF item 3): cascade k draws a band only if a shadow of one of
+   * its trees can reach the cascade's sphere (the band's distance bounds from the anchor against the sphere's, widened
+   * by the trees' shadow reach) and can fall at a view depth past the previous split (F22's near cut: the trees'
+   * distance from the camera plus their reach). Same bounds as the near trees' (treeShadowReach: the sun's elevation at
+   * the trees, curvature and slopes included); a sun too low to bound draws every band. k < 0 restores.
+   */
+  private farShadow(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number, cam?: { x: number; y: number; z: number }, nearSplit = 0, margin = 0): void {
     if (!this.farGroup.visible) return;
     if (k < 0) { for (const b of this.far) if (b) b.mesh.visible = b.hi > 0; return; }
-    const L = this.farCam;
-    const dc = Math.hypot(cx - L.x, cy - L.y, cz - L.z);
-    const el = Math.asin(Math.max(-1, Math.min(1, sinEl))) - 0.2 - (dc + r + this.range) / radius;
-    const reach = el > 0.035 ? this.farEMax * (1 + 1 / Math.tan(el)) + 4 : Infinity;
-    const show = !(dc + r + reach < this.range * 0.72 - this.range * 0.04 - 30);
-    for (const b of this.far) if (b) b.mesh.visible = show && b.hi > 0;
+    const A = this.farAnchor;
+    const dcA = Math.hypot(cx - A.x, cy - A.y, cz - A.z);
+    const move = cam ? Math.hypot(cam.x - A.x, cam.y - A.y, cam.z - A.z) : Infinity;
+    const el0 = Math.asin(Math.max(-1, Math.min(1, sinEl))) - 0.2;
+    for (const b of this.far) {
+      if (!b) continue;
+      let show = b.hi > 0;
+      if (show && b.dMax >= b.dMin) {
+        // (the trees are within dMax + move of the camera: the sun is at least that high over them)
+        const dFar = b.dMax + (Number.isFinite(move) ? move : 0);
+        const reach = treeShadowReach(this.farEMax, el0, Math.max(dFar, dcA + r), radius);
+        if (Number.isFinite(reach)) {
+          // the band's annulus about the anchor against the cascade sphere grown by the reach
+          if (b.dMin - dcA > r + reach + margin || dcA - b.dMax > r + reach + margin) show = false;
+          // nothing of the band can shade a pixel past the previous split
+          if (SH_NEAR && nearSplit > 0 && Number.isFinite(move) && nearSplitCut(dFar, reach, margin, nearSplit)) show = false;
+        }
+      }
+      b.mesh.visible = show;
+    }
   }
 
   private surfVer = -1;
@@ -1669,7 +1793,7 @@ export class Vegetation {
    * by day. Exact by the same argument as F6; a low sun (no finite reach) draws everything. `?shnear=0` = off.
    */
   shadowCascade(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number, cam?: { x: number; y: number; z: number }, nearSplit = 0, margin = 0): void {
-    this.farShadow(k, cx, cy, cz, r, sinEl, radius);
+    this.farShadow(k, cx, cy, cz, r, sinEl, radius, cam, nearSplit, margin);
     if (!this.nearGroup.visible) return;
     if (k < 0) {
       for (const b of this.buckets) { b.mesh.count = b.count; b.mesh.visible = b.count > 0; }
@@ -1710,7 +1834,7 @@ export class Vegetation {
 
   dispose(): void {
     for (const b of this.buckets) { b.mesh.dispose(); b.depth.dispose(); }
-    for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.dispose(); }
+    for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.setIndex(null); b.mesh.geometry.deleteAttribute('position'); b.mesh.geometry.dispose(); }
     this.farMat.dispose(); this.farDepth.dispose();
     this.material.dispose();
   }

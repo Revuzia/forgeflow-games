@@ -38,6 +38,9 @@ export interface PtrSample { x: number; y: number; t: number }
 const GRAB_KINDS = new Set(['agent', 'animal', 'building', 'item']);
 /** hold still this long on someone to pick them up (a slower click than this is a click) */
 const HOLD_MS = 400;
+/** a long press on bare ground opens the radial: held this long (wall time) and moved less than LONG_PRESS_PX css px */
+const LONG_PRESS_MS = 620;
+const LONG_PRESS_PX = 8;
 /** a release this soon after the last motion is a flick */
 const FLICK_MS = 120;
 
@@ -55,6 +58,8 @@ export class HandInput {
   private downX = 0;
   private downY = 0;
   private downT = 0;
+  /** main-thread clock when the press was HANDLED (a press queued behind a long frame carries an older event time) */
+  private downSeen = 0;
   private path = 0;
   private lastX = 0;
   private lastY = 0;
@@ -108,6 +113,7 @@ export class HandInput {
   down(x: number, y: number, e: PointerEvent | { altKey: boolean; ctrlKey: boolean; shiftKey: boolean; metaKey: boolean }, t = performance.now()): PressOwner {
     if (this.aiming) { void this.releaseAim([x, y]); this.state = 'idle'; return 'hand'; }
     this.downX = this.lastX = x; this.downY = this.lastY = y; this.downT = t;
+    this.downSeen = performance.now();
     this.path = 0;
     this.trail = [{ x, y, t }];
     this.samples = [];
@@ -174,8 +180,9 @@ export class HandInput {
    */
   frame(pointer: [number, number] | null, toolArmed = false): void {
     const now = performance.now();
-    if (this.state === 'press' && !this.slapping && this.path < 10 && now - this.downT > HOLD_MS) void this.grab(this.lastX, this.lastY);
-    if (this.state === 'ground' && !this.longPressFired && this.path < 8 && now - this.downT > 620 && this.onLongPress) {
+    const held = this.heldFor(now);
+    if (this.state === 'press' && !this.slapping && this.path < 10 && held > HOLD_MS) void this.grab(this.lastX, this.lastY);
+    if (this.state === 'ground' && !this.longPressFired && this.path < LONG_PRESS_PX && held > LONG_PRESS_MS && this.onLongPress) {
       this.longPressFired = true;
       this.onLongPress(this.downX, this.downY);
     }
@@ -186,6 +193,15 @@ export class HandInput {
     this.setCursor(this.aiming ? 'aim' : toolArmed ? 'tool' : this.state === 'carry' || (this.held() && this.state !== 'press') ? 'carry'
       : this.state === 'press' || this.state === 'rub' ? (this.slapping ? 'slap' : 'press') : this.hoverRef ? 'open' : pointer ? 'hover' : 'none');
   }
+
+  /**
+   * How long the press has been held STILL as far as this thread can know, in ms of wall time (never frames). The hold is
+   * counted from when the press was handled here, not from its event time: at a low frame rate a press waits behind a
+   * long frame, and so do the moves that follow it — the event time alone would call a drag that has not been delivered
+   * yet a long press (the radial opened under a drag). From the handling on, every move made before a frame starts is
+   * delivered before it, so `path` is up to date whenever this passes.
+   */
+  heldFor(now = performance.now()): number { return Math.min(now - this.downT, now - this.downSeen); }
 
   /** the press ended; returns 'click' when it was a plain click the App should treat as select / inspect */
   up(x: number, y: number, t = performance.now()): 'click' | 'done' | 'longpress' {
