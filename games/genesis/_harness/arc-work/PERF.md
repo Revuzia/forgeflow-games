@@ -657,3 +657,38 @@ trace (P1b, main-thread ms inside each GL call per slot + uploads inside a pass)
    F6 reach per cascade (it draws every tree in every cascade here), shadow LOD proxy only where the cascade texel is
    larger than the LOD error (needs a sub-texel proof), per-cascade instance prefix lists instead of 57 buckets x 4.
 3. Vegetation near rebuild uploads all 57 buckets whole each rebuild: upload only buckets whose content changed.
+
+## SESSION 9 (2026-11-11 ~21:05Z, after a container restart at ~20:32Z) — build 31cb64e7 (F16-F20) on the CDN
+Owner: finish BOTH (1) building / batch buffer churn -> ~0 new buffers per frame while panning and (2) cheap tree shadow
+casting with visually equal shadows; a ?switch per fix (default on); the report header lists them.
+- SWITCHES: src/render/perfswitch.ts registry; the perf report prints a line `perf fixes (A/B switches, effective):
+  bldpage=1 fartrees=1 patchworker=1 preupload=1 reach=1 shnear=1 span=0|1 zcons=1` (every fix's effective value, so a
+  run with no URL switch still labels itself). zcons / reach / preupload / fartrees / patchworker / span now register.
+- F21 (landed, tests/render-bldpage.test.ts 2/2, render-bldtable / render-warm green; `?bldpage=0` = the old growing
+  batch): BUILDING BATCHES IN FIXED PAGES. bldbatch.ts BldPage = one BatchedMesh with FIXED vertex / index capacity
+  (2^15 verts, 2^16 indices; 2^14 for the cut batches) + its own instances, state texture and materials (same program
+  key: no new programs). BldBatch: geometry ids / slots = page * 2^20 + local id. A new geometry goes into the page last
+  written (a frame's adds share one page: F16 merges them into one span), else any page with room, else the page whose
+  dropped geometries would free enough is compacted in place (three's optimize: same buffers), else a new page of the
+  same size (ANGLE recycles equal sizes). Dropping a page's last geometry keeps it as a hidden 'zombie' until the page
+  takes another (three deletes the instances of a deleted geometry). No buffer is ever re-created at a new size; space
+  of dropped per-building geometries is reused (three never reused it: the batch grew forever while panning).
+  buildings.ts: group.add(b.root), setLayers(), useDepth(). Test: 60 rounds of 30 adds / 30 drops: <= 4 pages, the
+  page arrays are never replaced, every page the same sizes, every live geometry's vertices / indices exact.
+- g3u (dist16 = CDN tree + F21, ULTRA, busy town, panned; SwiftShader: counts only): NO 'new attr' left in the attribute
+  churn (g2u: buildings-far 4-8 MB attributes re-created, terrain/water L4 pools re-created); buildings-far-p5 'upd'
+  only (12 range updates of one 2 MB page). Metal estimate 8.4 MB/frame (whole-buffer copies of in-use buffers, mostly
+  recycled sizes), FRESH sizes 2.8 MB over the whole recording. NOTE the probe's pan is wall-clock driven: under
+  SwiftShader (30-100 s a frame) the camera jumps ~15-27 km a frame (travelled 101 km in 7 frames) = every frame a cut;
+  a Mac panning 550 m/s moves ~9 m a frame. Still 16 post|bufferData + 50 shadows|bufferData per frame (new GL buffers
+  = attributes three has not seen: new objects / disposed geometry re-made); owners: g4u (--gl=1 --stacks=1, queued).
+  Shadow draws g3u: vegetation-near 15.3 M tris / 570 calls in the shadow pass vs 3.8 M in the scene (ultra range 532 m).
+- F22 (landed, tests/render-treeshadowcut.test.ts: brute-force crown-point shadows on a 3 km sphere, 4000 trials;
+  mutation (reach without the cot term) fails it; `?shnear=0` = off): TREES LEFT OUT OF CASCADES THEIR SHADOWS CANNOT
+  REACH BY VIEW DEPTH. A pixel reads cascade k only at view depth >= split(k-1), so at distance >= that from the camera;
+  a tree's shadow lies within F6's reach e(1 + cot) + 4 of it; a bucket whose farthest tree (dMax from the rebuild
+  camera + the camera's move since) plus reach plus margin (2 m + 3 texels: PCF taps + normal offset) is nearer than
+  split(k-1) is skipped in cascade k. Exact (the same bound F6 relies on). Ultra at ~100 m: splits ~176/402/850 m, LOD-0
+  bucket (<= ~100 m) only in cascade 0, LOD-1 (<= ~250 m) in 0-1, LOD-2 in 0-2 by day; low sun -> reach grows -> more.
+- Queued: run-s9b.sh (dist17 = F21 + F22: v17a shnear=1 / v17b shnear=0, ULTRA, town / townlow / f200 at speed 0:
+  shots + shadowTris), run-s9c.sh (g4u: dist17, ULTRA, panned, --gl=1 --stacks=1 --attrs=1 --panreport).
