@@ -17,6 +17,14 @@
   area whenever the forest map updates, and nearby trees are re-placed by copying instead of recomputing.
 - STILL TO DO: browser screenshots of the far trees (descent 2 km -> 50 m), the cloud / white-flash check, grass
   preparation off the main thread. Please still send the Shift+F12 "Record 20 s" -> "Copy report" text.
+- SESSION 7 (your M5 report, thank you — it is the first real data we have): 3 fps near a town on Ultra; the main
+  thread was blocked ~300 ms a frame, 206 ms of it inside the shadow pass. Found and fixed so far: (1) a real BUG —
+  the simulation rebuilt and sent the whole world to the screen 30 times a second although at 1x it changes once a
+  second (now only when something changed: ~25x less work on both threads); (2) the ground's draw tables were
+  re-uploaded to the GPU in the middle of every shadow / scene pass, dozens of times a frame — the kind of thing a
+  Mac's tile GPU pays dearly for and our software test GPU does not show at all (now once). (3) The report now also
+  times every GL call by pass, so your next "Record 20 s" will say exactly where the remaining time goes. Not yet
+  seen on a real Mac: please record again on the next build (Ultra, and once with ?zcons=0 and once on High).
 - WHAT TO EXPECT ON A MAC: fewer and shorter hitches when moving the camera and while towns grow; the same image.
 
 Rules: never lower a preset (resolution, DPR, shadows, range, density, effects). Fix causes. Bulky output: _harness/scratch/arc/perf/.
@@ -520,3 +528,18 @@ a stall; (3) scene 448 ms GPU, 13.4 M tris / 8.9 M shadow tris: does zcons help 
     thread ms inside each call, per slot, with bytes, framebuffer switches per frame and UPLOADS ISSUED INSIDE A PASS
     (after a draw into the bound framebuffer). The owner's next report itemises where the 206 ms go. Test
     tests/render-gltrace.test.ts. perf-play.mjs `--panreport=MS` records the report DURING the panned frames.
+- F15 (landed, tsc clean, tests/render-batchtable.test.ts + chunkrest / patchworker / chunkpool green): TERRAIN BATCH
+  TABLE UPLOADED ONCE. three's BatchedMesh.onBeforeRender sets `indirectTexture.needsUpdate` at every draw whose
+  visibility changed — for the terrain + water batches (one per LOD level) that is every shadow cascade (F11 changes
+  slot visibility per cascade) and the scene pass: up to ~(levels x 2) x 5 texture uploads a frame, each issued in the
+  middle of a render pass. A patch slot's instance matrix is the identity and the batch has no per-instance colour,
+  so the table's content (draw -> instance) cannot change a pixel; PatchBatch now restores the texture's version after
+  onBeforeRender once it has been uploaded (a grow re-creates it: uploaded again). The multi-draw start / count lists
+  (CPU arrays passed with the call) still follow every pass. Same image by construction.
+  NOT done: the buildings' 4 batches (perObjectFrustumCulled + sortObjects + per-cascade cull) upload their table at
+  every pass too (4 x 5 a frame); their per-instance state is indexed through it, so it needs per-pass rows (next).
+- SOAK (perf-soak.mjs, dist12, twoworlds, 1x, 10 min wall, camera moved every 45 s between town / region / globe /
+  forest; soak1.log): programs 179 -> 179 (no shader compiled after load), geometries 14 -> ~34 and textures 65 -> ~80
+  (the views' content streaming in, flat after the first tour), heap 26 -> 28-35 MB (sawtooth, no climb), DOM nodes
+  ~1 050-1 130, JS listeners 251-256, documents 1, 0 console errors. NOTHING GROWS. (SwiftShader: only ~50 frames in
+  10 min, so this covers wall-time / tick-driven growth, not per-frame growth over thousands of frames.)
