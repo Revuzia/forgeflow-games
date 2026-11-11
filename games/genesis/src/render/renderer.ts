@@ -53,6 +53,8 @@ export interface RenderStats {
   sceneTris: number;
   waterCalls: number;
   horizonCulled: number;
+  /** terrain patches built since load (all planets; PERF: must stand still at rest) */
+  patchesBuilt: number;
   primary: string;
   altitude: number;
   renderW: number;
@@ -88,6 +90,8 @@ const WEATHER_LOOK = new Map<string, { cloud: number; eye: boolean; style: numbe
 );
 const _w2b = new Matrix3();
 const _q4 = new Quaternion();
+const _cc = new Vector3();
+const _m4c = new Matrix4();
 const _m4 = new Matrix4();
 const _up = new Vector3();
 const _atmoList: PlanetVisual[] = [];
@@ -159,7 +163,7 @@ export class Renderer {
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
   readonly settings: PostSettings = { bloom: 0.045, godRays: true, fxaa: true, grain: 0.02, vignette: 0.22, flare: 1, exposureBias: 0, manualExposure: 0 };
   readonly stats: RenderStats = {
-    drawCalls: 0, triangles: 0, frameMs: 0, gpuPatches: 0, waterPatches: 0, shadowCalls: 0, shadowTris: 0, sceneCalls: 0, sceneTris: 0, waterCalls: 0,
+    drawCalls: 0, triangles: 0, frameMs: 0, gpuPatches: 0, waterPatches: 0, shadowCalls: 0, shadowTris: 0, sceneCalls: 0, sceneTris: 0, waterCalls: 0, patchesBuilt: 0,
     horizonCulled: 0, primary: '', altitude: 0, renderW: 0, renderH: 0,
   };
   /** cloud / atmosphere / UI switches for photo mode and tests */
@@ -763,6 +767,7 @@ export class Renderer {
   // ── shadow cascades: what each cascade draws ──
   private cullVis: PlanetVisual | null = null;
   private cullMargin = 50;
+  private cullSinEl = 1;
   private readonly cullView = new Vector3();
   private readonly hiddenSmall: { visible: boolean }[] = [];
   private readonly cascadeF = new Frustum();
@@ -770,6 +775,8 @@ export class Renderer {
     this.cullVis = vis;
     // terrain throws its shadows over about (relief ÷ tan elevation) — for ~40 m of relief, ~50 m at mid-morning, a few
     // hundred at sunset
+    // (the true sun elevation at the camera: camSunElevation answers 1 without an atmosphere)
+    this.cullSinEl = _up.copy(vis.camBody).normalize().dot(vis.uniforms.uSunDirBody.value as Vector3);
     const el = Math.max(0.05, Math.min(1, sunEl));
     this.cullMargin = Math.min(450, Math.max(40, (40 * Math.sqrt(1 - el * el)) / el));
     // the view direction in the body frame
@@ -783,6 +790,12 @@ export class Renderer {
     const sh = this.shadows;
     const near = k >= 1 ? sh.splits[k - 1] - this.cullMargin : 0;
     vis.lod.shadowCascade(k, vis.camBody, this.cullView, near, k >= 0 ? sh.cascadeFrustum(k, this.cascadeF) : undefined, vis.group.matrixWorld);
+    // PERF F6: trees only where their shadow can reach this cascade (was every tree in every cascade: 1.6 M of the
+    // 2.4 M shadow triangles of a town view)
+    if (k >= 0) {
+      _cc.copy(sh.centers[k]).applyMatrix4(_m4c.copy(vis.group.matrixWorld).invert());
+      vis.vegetation.shadowCascade(k, _cc.x, _cc.y, _cc.z, sh.radii[k], this.cullSinEl, vis.pv.params.radius);
+    } else vis.vegetation.shadowCascade(-1, 0, 0, 0, 0, 1, 1);
     if (k === 2 || (k < 0 && this.hiddenSmall.length)) {
       if (k === 2) {
         for (const name of ['crowds', 'animals']) {
@@ -986,8 +999,9 @@ export class Renderer {
     const info = this.three.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;
-    let p = 0, w = 0, hc = 0;
-    for (const v of this.planets.values()) { p += v.lod.stats.patches; w += v.lod.stats.waterPatches; hc += v.lod.stats.horizonCulled; }
+    let p = 0, w = 0, hc = 0, bt = 0;
+    for (const v of this.planets.values()) { p += v.lod.stats.patches; w += v.lod.stats.waterPatches; hc += v.lod.stats.horizonCulled; bt += v.lod.stats.builtTotal; }
+    this.stats.patchesBuilt = bt;
     this.stats.gpuPatches = p;
     this.stats.waterPatches = w;
     this.stats.horizonCulled = hc;

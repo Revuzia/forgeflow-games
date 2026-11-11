@@ -37,6 +37,9 @@ export interface PlanetView {
   /** bumped when any field arrives */
   anyFieldVersion: number;
   ground: GroundSource;
+  /** PERF F5: per-cell ground change revisions (groundgrad.ts GroundGradients.cellRev / changedSince); absent until
+   * the first surface commits */
+  groundRev?: GroundGradients;
   /** min / max of `surface` (metres above datum) — bounds for culling, picking and the camera */
   minSurface: number;
   maxSurface: number;
@@ -254,7 +257,10 @@ export class WorldView {
     // changed are recomputed (groundgrad.ts, bit-identical to a full pass), in slices of at most ~2 ms a snapshot
     if (gg?.pending() && gg.step(GROUND_BUDGET_MS)) {
       pv.fields.set('surface', gg.surface as never);
-      pv.fieldVersion.set('surface', (pv.fieldVersion.get('surface') ?? 0) + 1);
+      // PERF F5: a surface identical to the last (the sim republishes it with every snow / soil bump) is no change:
+      // no version bump, so nothing downstream rebuilds (it was a full re-placement of every building, ~30 MB of
+      // geometry re-uploaded, every few seconds at 1x)
+      if (gg.lastCells > 0) pv.fieldVersion.set('surface', (pv.fieldVersion.get('surface') ?? 0) + 1);
       this.commitGround(pv, gg);
       this.groundLayers(pv);
     }
@@ -285,6 +291,7 @@ export class WorldView {
   }
 
   private commitGround(pv: PlanetView, gg: GroundGradients): void {
+    pv.groundRev = gg;
     pv.minSurface = gg.minSurface;
     pv.maxSurface = gg.maxSurface;
     pv.ground.grad = gg.grad;

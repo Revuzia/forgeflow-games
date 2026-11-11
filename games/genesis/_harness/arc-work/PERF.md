@@ -141,3 +141,34 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
 ## SIM ASKS
 
 ## NEXT
+
+## SESSION 4 (2026-11-11 ~01:30Z, after a container restart; scratch survived, dist4 = unminified build of F1b+F2)
+- run-r5.sh: r4 (dist4, town, speed 1, --stacks --attrs --heap: owners of the upload churn), then v5z1 / v5z0 (dist4,
+  town,region,orbit, SPEED 0 so the two pictures can be compared, frames 2 settle 6; shots/v5z1-*.png, v5z0-*.png).
+- F3 (landed, tsc clean): `src/render/upload.ts uploadPrefix(attr, count)`: instanced pools upload only the written
+  prefix [0, count) instead of the whole capacity (three re-uploads the whole array on needsUpdate without update
+  ranges). Owners switched: bodies (all 7 per-instance attributes), vegetation, groundcover near + far (cap 6000 =
+  384 kB instanceMatrix per mesh), roads lamp posts (both pools), boats, camps. Image identical (draws are bounded by
+  mesh.count; the GPU tail is never read).
+- r4 MEASURED (dist4 = F1b+F2, busy town, speed 1, 8 frames; r4.log): uploads/frame: 15.7 MB bufSub instanceMatrix
+  (84/frame: VEGETATION, 40 buckets re-uploaded at full capacity, twice in 8 frames), 6.1 MB 2D textures (56/frame),
+  5.1 MB geometry bufSub (126/frame), 4.6 MB CityLights.uploadDirty (2 calls = TWO WHOLE FACES: the union box of a
+  face's lights spans the face once towns are everywhere), 2.9 MB instanceColor, 1.0 MB new buffers.
+  Attribute churn by owner: buildings-far / -near BatchedMesh ALL attributes re-uploaded (position/normal/color/uv/
+  aKit/index of 1556 + 38 geometries, ~45 MB of arrays) — a FULL RE-PLACEMENT of every building; heap: coverRuins
+  15 MB/frame, bankRing 11.6 MB/frame (+ vert/quad/groundOffset under it) = the same re-placement. CAUSE: buildings
+  sync() re-placed every building whenever the 'surface' field version moved, and WorldView bumps that version for
+  every surface array the sim republishes (snow / soil / ash bumps), even when not one height changed.
+- F2b (landed, tsc clean, tests/render-citylights.test.ts): city lights upload only the 32x32 tiles whose encoded
+  bytes changed (runs of tiles per tile row); mock-GL test: GPU copy byte-identical to the faces after every
+  rebuild, one house's change uploads <= a few tiles.
+- F4 (landed): vfx emitter table (5x1024 RGBA32F = 80 kB) uploaded only in a frame that wrote a row (was every frame).
+- F5 (landed, tsc clean, tests/ui-groundrev.test.ts + ui-groundgrad green): (a) groundgrad.ts keeps per-cell change
+  revisions (cellRev / fullRev / rev, changedSince(rev, cells)): the cells whose height or gradient changed at each
+  commit (the dirty list it already computed). (b) worldview.ts: a committed surface that changed no cell bumps NO
+  version (nothing downstream rebuilds; the array content is identical); pv.groundRev = the GroundGradients.
+  (c) buildings.ts sync: on a ground change only buildings whose cells (footprint + bank/yard reach + 2 cell
+  spacings) changed height/gradient, standing water (> 0.25 m either side), or soil/sand/snow cover (roughness) are
+  re-placed; the rest keep their records and conformed geometry (no dropOwn, no bank rebuild, no BatchedMesh
+  re-add). References move only at a re-check. Vegetation still clears its cache on a real surface change (its
+  plants also read crop/road/water/moisture that were only ever refreshed by that clear: kept as it was).

@@ -203,7 +203,7 @@ for (const sc of scenes) {
       const { tex, texOf } = window.__PERFPLAY__.attrs0; const done = new Set();
       R.scene.traverse((o) => texOf(o, (t, name) => { if (done.has(t)) return; done.add(t); const was = tex.get(t); const img = t.image || {}; const b = img.data ? img.data.byteLength : (img.width || 0) * (img.height || 0) * 4;
         if (was && t.version !== was.v) { const k = 'TEX ' + name + ' ' + (img.width || '?') + 'x' + (img.height || '?') + ' x' + (t.version - was.v); agg[k] = { n: t.version - was.v, b: b * (t.version - was.v) }; } }));
-      return Object.entries(agg).sort((a, b) => b[1].b - a[1].b).slice(0, 40); });
+      return Object.entries(agg).sort((a, b) => b[1].b - a[1].b).slice(0, 90); });
       const dr = await page.evaluate(() => { const P = window.__PERFPLAY__; P.undraw(); return Object.entries(P.draws).sort((a, b) => b[1].t - a[1].t).slice(0, 40); });
       console.log('   draws by target/object (per frame: calls, k tris; BatchedMesh rough):'); for (const [k2, v] of dr) console.log(`     ${(v.n / Math.max(1, nFrames)).toFixed(1).padStart(6)}  ${(v.t / Math.max(1, nFrames) / 1000).toFixed(0).padStart(6)}k  ${k2.slice(0, 160)}`);
       console.log('   attribute churn over the measured frames (object, what, kB of one copy):'); for (const [k2, v] of rows) console.log(`     ${(v.b / 1024).toFixed(0).padStart(7)} kB ${String(v.n).padStart(4)}x  ${k2.slice(0, 200)}`); }

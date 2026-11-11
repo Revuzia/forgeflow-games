@@ -79,7 +79,9 @@ export class SunShadows {
   splits = [0, 0, 0, 0];
   /** world size of one shadow texel per cascade (m) */
   readonly texel = [0, 0, 0, 0];
-  private radii = [0, 0, 0, 0];
+  /** per cascade: the bounding sphere of its view slice (world space; PERF F6 caster culling) */
+  readonly radii = [0, 0, 0, 0];
+  readonly centers = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 
   constructor(size = 2048) {
     this.size = size;
@@ -167,6 +169,7 @@ export class SunShadows {
       for (const p of _corners) r = Math.max(r, p.distanceTo(_c));
       r = Math.ceil(r * 1.02 * 16) / 16;
       this.radii[k] = r;
+      this.centers[k].copy(_c);
       const cam = this.cams[k];
       // light basis
       _up.set(0, 1, 0);

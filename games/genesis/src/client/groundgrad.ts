@@ -57,6 +57,14 @@ export class GroundGradients {
   maxSurface = 0;
   /** cells recomputed for the last commit (n = full pass) — for tests and probes */
   lastCells = 0;
+  /**
+   * PERF F5: which cells' ground (height or gradient: a changed cell and its neighbours) changed at which commit.
+   * `rev` counts commits; `cellRev[c]` is the last commit that changed cell c; `fullRev` the last full pass (every
+   * cell). Consumers that conform geometry to the ground (buildings) re-place only what stands on changed cells.
+   */
+  rev = 0;
+  fullRev = 0;
+  readonly cellRev: Uint32Array;
   private readonly grid: IcoGrid;
   private radius = NaN;
   private mark: Uint8Array;
@@ -71,6 +79,15 @@ export class GroundGradients {
     this.mark = new Uint8Array(grid.count);
     this.list = new Int32Array(grid.count);
     this.scratch = new Float32Array(grid.count * 4);
+    this.cellRev = new Uint32Array(grid.count);
+  }
+
+  /** did the ground of any of `cells` change after commit `since`? (true when a full pass came after it) */
+  changedSince(since: number, cells: ArrayLike<number>): boolean {
+    if (this.fullRev > since) return true;
+    const cr = this.cellRev;
+    for (let i = 0; i < cells.length; i++) if (cr[cells[i]] > since) return true;
+    return false;
   }
 
   /** commit `surface` now (finishing any queued work first, so the newest surface wins) */
@@ -148,6 +165,9 @@ export class GroundGradients {
     this.maxSurface = j.hi;
     this.maxGrad = Math.sqrt(j.gm);
     this.lastCells = j.full ? n : j.m;
+    this.rev++;
+    if (j.full) this.fullRev = this.rev;
+    else for (let i = 0; i < j.m; i++) this.cellRev[list[i]] = this.rev;
     this.job = null;
     const nx = this.next;
     this.next = null;

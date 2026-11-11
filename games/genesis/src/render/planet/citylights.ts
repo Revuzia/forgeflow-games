@@ -22,6 +22,8 @@ export const CITY_VMAX = 6;
 const ROAD_MIN = 0.3;
 // (a growing town changes its lights every few seconds; from afar a few seconds' lag is invisible, a hitch is not)
 const REBUILD_MS = 6000;
+/** upload granularity of a rebuild (texels; PERF F2b) */
+const TILE = 32;
 
 /** the renderer (set by Renderer): a rebuild then uploads only the texels it re-encoded (perf 2026-11) */
 let glRenderer: WebGLRenderer | null = null;
@@ -36,6 +38,7 @@ export class CityLights {
   /** per face, the texel rectangle holding anything (x0, y0, x1, y1; empty when x1 < x0): only it is cleared and
    *  re-encoded (with last build's), so a rebuild costs the settlements' area, not six whole faces */
   private box = new Int32Array(24);
+  private tileMark = new Uint8Array(4096);
   private stamp = '';
   private builtAt = -1e9;
   private kindCell: Uint8Array | null = null;
@@ -169,13 +172,34 @@ export class CityLights {
       const x0 = Math.min(b[f * 4], was[f * 4]), y0 = Math.min(b[f * 4 + 1], was[f * 4 + 1]);
       const x1 = Math.max(b[f * 4 + 2], was[f * 4 + 2]), y1 = Math.max(b[f * 4 + 3], was[f * 4 + 3]);
       if (x1 < x0) continue;
-      dirty.push(f, x0, y0, x1, y1);
       const a = this.acc[f];
       const d = this.faces[f].image.data as Uint8Array;
+      // PERF F2b: only the TILE x TILE tiles whose bytes really changed are uploaded (the union box of a face's
+      // lights spans most of the face once a world has towns all over it: two whole faces, 4.6 MB, per rebuild)
+      const nt = Math.ceil(s / TILE);
+      const tiles = this.tileMark;
+      tiles.fill(0, 0, nt * nt);
       for (let y = y0; y <= y1; y++) {
-        for (let i = (y * s + x0) * 4, e = (y * s + x1 + 1) * 4; i < e; i++) {
-          const v = a[i];
-          d[i] = v <= 0 ? 0 : v >= CITY_VMAX ? 255 : Math.round(Math.sqrt(v / CITY_VMAX) * 255);
+        const trow = ((y / TILE) | 0) * nt;
+        for (let x = x0; x <= x1; x++) {
+          const i = (y * s + x) * 4;
+          let ch = false;
+          for (let k = 0; k < 4; k++) {
+            const v = a[i + k];
+            const q = v <= 0 ? 0 : v >= CITY_VMAX ? 255 : Math.round(Math.sqrt(v / CITY_VMAX) * 255);
+            if (d[i + k] !== q) { d[i + k] = q; ch = true; }
+          }
+          if (ch) tiles[trow + ((x / TILE) | 0)] = 1;
+        }
+      }
+      // runs of changed tiles along each tile row, one upload rectangle each
+      for (let ty = 0; ty < nt; ty++) {
+        for (let tx = 0; tx < nt; tx++) {
+          if (!tiles[ty * nt + tx]) continue;
+          let te = tx;
+          while (te + 1 < nt && tiles[ty * nt + te + 1]) te++;
+          dirty.push(f, tx * TILE, ty * TILE, Math.min(s - 1, te * TILE + TILE - 1), Math.min(s - 1, ty * TILE + TILE - 1));
+          tx = te;
         }
       }
     }

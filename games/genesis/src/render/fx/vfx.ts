@@ -910,6 +910,8 @@ export class Vfx {
   private maxBlocks: number;
   private uniforms: Record<string, IUniform>;
   private dirtyBlocks = true;
+  /** PERF F4: the emitter table is uploaded only in a frame that wrote a row (it was 80 kB every frame) */
+  private dirtyEmit = true;
   stats = { emitters: 0, particles: 0 };
 
   constructor(shared: Record<string, IUniform>, fx: Record<string, IUniform>, poolParticles = 65536) {
@@ -1007,6 +1009,7 @@ export class Vfx {
 
   private write(lv: Live): void {
     const d = lv.def, o = lv.row * TEX_W * 4, E = this.emitData;
+    this.dirtyEmit = true;
     E[o] = d.x; E[o + 1] = d.y; E[o + 2] = d.z; E[o + 3] = d.sys;
     E[o + 4] = d.ax ?? 0; E[o + 5] = d.ay ?? 0; E[o + 6] = d.az ?? 0; E[o + 7] = d.size;
     E[o + 8] = d.power ?? 1; E[o + 9] = (lv.row * 0.6180339 + lv.t0 * 0.137) % 97; E[o + 10] = lv.t0; E[o + 11] = d.life;
@@ -1021,7 +1024,7 @@ export class Vfx {
     for (const lv of this.live.values()) for (const b of lv.blocks) { if (b + 1 > hi) hi = b + 1; n += BLOCK; }
     this.geo.instanceCount = hi * BLOCK;
     this.group.visible = hi > 0;
-    this.emitTex.needsUpdate = true;
+    if (this.dirtyEmit) { this.emitTex.needsUpdate = true; this.dirtyEmit = false; }
     if (this.dirtyBlocks) { this.blockTex.needsUpdate = true; this.dirtyBlocks = false; }
     this.uniforms.uViewToBody.value = viewToBody;
     (this.uniforms.uInvProj.value as Matrix4).copy(invProj);

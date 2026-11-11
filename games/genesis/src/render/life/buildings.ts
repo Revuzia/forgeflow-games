@@ -165,6 +165,11 @@ export class Buildings {
   private byId = new Map<number, Rec>();
   private lastBlock: BuildingBlock | null = null;
   private lastSurfaceVersion = -1;
+  /** PERF F5: the ground revision (pv.groundRev.rev) the records were last placed against; -1 = never */
+  private lastGroundRev = -1;
+  private readonly _near: number[] = [];
+  private lastWater: Float32Array | null = null;
+  private lastLayers: (Float32Array | null)[] = [null, null, null];
   private lastCam: [number, number, number] = [1e9, 0, 0];
   private dirty = true;
   /** buildings whose state changed without changing their meshes (rewritten in place by update) */
@@ -428,12 +433,53 @@ export class Buildings {
     const sv = pv.fieldVersion.get('surface') ?? 0;
     if (b === this.lastBlock && sv === this.lastSurfaceVersion) return;
     const groundMoved = sv !== this.lastSurfaceVersion;
+    // PERF F5: a new ground re-places only the buildings standing on cells whose height or gradient changed since
+    // they were placed (each is conformed to the ground: its own draped copy, its earth bank). Re-placing all of them
+    // at every surface change cost ~30 MB of geometry re-uploads and ~30 MB of garbage every few seconds at 1x.
+    const gr = pv.groundRev;
+    const sinceRev = this.lastGroundRev;
+    // (a building also stands on the water it was placed over: a house at the shore is lifted to the water line, so
+    // a change of the standing water under it re-places it too, as the full re-placement used to pick up)
+    const waterNow = pv.fields.get('water') ?? null, waterThen = this.lastWater;
+    const layersNow = [pv.fields.get('soil') ?? null, pv.fields.get('sand') ?? null, pv.fields.get('snow') ?? null];
+    const layersThen = this.lastLayers;
+    const touched = (px: number, py: number, pz: number, w: number, d: number): boolean => {
+      if (!groundMoved) return false;
+      if (!gr || sinceRev < 0 || !waterNow || !waterThen) return true;
+      const pl = Math.hypot(px, py, pz) || 1;
+      const R = pv.params.radius;
+      // footprint half-diagonal + the bank ring and yard reach + two cell spacings (a point's ground reads the cells
+      // of its triangle and their gradients, which the change list already widens by one ring)
+      const reach = Math.hypot(w, d) * 0.5 + 12 + 2 * pv.grid.meanEdgeAngle * R;
+      const near = pv.grid.cellsWithin(px / pl, py / pl, pz / pl, reach / R, this._near);
+      if (gr.changedSince(sinceRev, near)) return true;
+      if (waterNow !== waterThen) {
+        for (const c of near) {
+          const a = waterThen[c], b = waterNow[c];
+          if (a !== b && (a > 0.25 || b > 0.25)) return true;
+        }
+      }
+      // the ground's roughness reads the soil / sand / snow cover (surface.ts roughOf)
+      for (let k = 0; k < 3; k++) {
+        const now = layersNow[k], then = layersThen[k];
+        if (now === then) continue;
+        if (!now || !then) return true;
+        for (const c of near) if (now[c] !== then[c]) return true;
+      }
+      return false;
+    };
     const stamp = this.settleStamp(pv.settlements);
     const prev = this.lastBlock;
     if (b && prev && !groundMoved && stamp === this.lastSettleStamp && this.syncStates(pv, b, prev)) { this.lastBlock = b; return; }
     this.lastSettleStamp = stamp;
     this.lastBlock = b ?? null;
     this.lastSurfaceVersion = sv;
+    // (the reference moves only at a re-check: a sync for new buildings alone leaves the standing ones as placed)
+    if (groundMoved) {
+      this.lastGroundRev = gr ? gr.rev : -1;
+      this.lastWater = waterNow;
+      this.lastLayers = layersNow;
+    }
     this.dirty = true;
     if (!b || !b.count) {
       if (this.recs.length) this.layoutVersion++;
@@ -469,7 +515,8 @@ export class Buildings {
       const skey = `${b.type[i]}|${b.material[i]}|${style}|${st.era}|${st.mood}|${px.toFixed(6)}|${py.toFixed(6)}|${pz.toFixed(6)}|${b.rot[i].toFixed(3)}|${sc.toFixed(2)}${family ? `|${family}` : ''}`;
       const state: [number, number, number, number] = [b.progress[i], b.damage[i], b.flags[i], effectiveLight(b.light[i], b.flags[i], nl.get(b.settlement[i]) ?? 1)];
       let rec = this.byId.get(id);
-      if (rec && rec.skey === skey && !groundMoved) {
+      const moved = rec ? touched(px, py, pz, w, d) : true;
+      if (rec && rec.skey === skey && !moved) {
         if ((rec.state[2] ^ state[2]) & BuildingFlag.ruined) changed = true;
         rec.state = state;
       } else {
@@ -483,7 +530,7 @@ export class Buildings {
         rec.skey = skey;
         rec.state = state;
         if (old) { rec.ruinAt = old.ruinAt; rec.burnt = old.burnt; }
-        if (old && prev && !groundMoved && old.variant !== variant && sameButStyle(old.skey, skey)) {
+        if (old && prev && !moved && old.variant !== variant && sameButStyle(old.skey, skey)) {
           const tick = pv.paramsTick;
           rec.from = old.from && tick < (old.swapAt ?? 0) ? old.from : old.variant;
           rec.swapAt = old.from && tick < (old.swapAt ?? 0) ? old.swapAt : tick + hashFloat(id, 0x57e1) * 2 * Math.max(60, pv.params.dayHours * 60);

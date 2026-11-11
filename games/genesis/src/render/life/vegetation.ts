@@ -533,7 +533,16 @@ ${LEAF_ALPHA}
 }
 `;
 
-interface Bucket { mesh: InstancedMesh; depth: ShaderMaterial; count: number; kind: number; variant: number; lod: number; extra: InstancedBufferAttribute }
+interface Bucket {
+  mesh: InstancedMesh; depth: ShaderMaterial; count: number; kind: number; variant: number; lod: number; extra: InstancedBufferAttribute;
+  /** PERF F6: each instance's distance from the rebuild camera; after a fill the instances are ordered by distance
+   *  band and binEnd[i] = instances in bands 0..i, so a shadow cascade draws only the prefix that can reach it */
+  dist: Float32Array; binEnd: Uint32Array;
+  /** extent of the unit geometry about its base (bounding sphere |centre| + radius) and the largest instance's (m) */
+  geoR: number; eMax: number;
+}
+/** distance bands of the per-cascade shadow prefix (PERF F6) */
+const NB = 48;
 
 const SHRUB = KINDS.indexOf('shrub');
 const IS_SHRUB = KINDS.map((k) => SHRUB_KINDS.includes(k));
@@ -601,7 +610,9 @@ export class Vegetation {
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
           const depth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide });
-          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra });
+          geo.computeBoundingSphere();
+          const bs = geo.boundingSphere!;
+          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0 });
           this.group.add(mesh);
         }
       }
@@ -844,7 +855,7 @@ export class Vegetation {
     // gather from the cells around the point under the camera
     const dx = camBody.x / rc, dy = camBody.y / rc, dz = camBody.z / rc;
     const cells = pv.grid.cellsWithin(dx, dy, dz, (range + 60) / R);
-    for (const b of this.buckets) b.count = 0;
+    for (const b of this.buckets) { b.count = 0; b.eMax = 0; }
     const lod0 = range * 0.16, lod1 = range * 0.42;
     const b0a = lod0 * 0.85, b0b = lod0 * 1.15, b1a = lod1 * 0.88, b1b = lod1 * 1.12;
     LOD_BAND.value.set(b0a, b0b, b1a, b1b);
@@ -878,6 +889,7 @@ export class Vegetation {
         const bB = lb >= 0 ? this.buckets[base + lb] : null;
         if (bA.count >= bA.mesh.instanceMatrix.count || (bB && bB.count >= bB.mesh.instanceMatrix.count)) continue;
         const seed = rec[i + 9];
+        let sxMax = 0;
         // basis: up = the radial direction tilted by this tree's own lean (≤ ~5°), yaw about it, scale = height
         let ux = rec[i], uy = rec[i + 1], uz = rec[i + 2];
         let ex = uz, ez = -ux;
@@ -906,6 +918,7 @@ export class Vegetation {
           const s = rec[i + 5];
           // girth varies independently of height: some trees stocky, some slender
           const sx = s * (0.82 + 0.36 * ((seed * 13.7) % 1));
+          sxMax = sx;
           _m.set(
             ax * sx, ux * s, bx * sx, _v.x - rec[i] * 0.25,
             ay * sx, uy * s, by * sx, _v.y - rec[i + 1] * 0.25,
@@ -944,12 +957,17 @@ export class Vegetation {
         for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
           b.extra.setXYZW(b.count, snowA, kind === K('burnt') ? 0 : charA, leafless + (fruitOff ? 2 : 0), role + canopy * 0.4);
           b.mesh.setColorAt(b.count, _c);
+          b.dist[b.count] = d;
           b.mesh.setMatrixAt(b.count++, _m);
+          const e = b.geoR * Math.max(rec[i + 5], sxMax);
+          if (e > b.eMax) b.eMax = e;
         }
         total++;
       }
     }
+    this.binW = Math.max(1, range / NB);
     for (const b of this.buckets) {
+      if (b.count) this.orderByBand(b);
       b.mesh.count = b.count;
       b.mesh.visible = b.count > 0;
       if (b.count) {
@@ -960,6 +978,59 @@ export class Vegetation {
     }
     this.stats.instances = total;
     this.stats.cells = cells.length;
+  }
+
+  private binW = 8;
+  private sortTmp = new Float32Array(0);
+  private binCur = new Uint32Array(NB);
+
+  /** counting sort of a bucket's instances by distance band (matrix, colour, extra, distance move together) */
+  private orderByBand(b: Bucket): void {
+    const n = b.count, inv = 1 / this.binW, end = b.binEnd, cur = this.binCur;
+    end.fill(0);
+    for (let i = 0; i < n; i++) end[Math.min(NB - 1, Math.floor(b.dist[i] * inv))]++;
+    let acc = 0;
+    for (let j = 0; j < NB; j++) { cur[j] = acc; acc += end[j]; end[j] = acc; }
+    const perm = new Uint32Array(n);
+    for (let i = 0; i < n; i++) perm[i] = cur[Math.min(NB - 1, Math.floor(b.dist[i] * inv))]++;
+    const permute = (arr: Float32Array, w: number): void => {
+      if (this.sortTmp.length < n * w) this.sortTmp = new Float32Array(n * w * 2);
+      const t = this.sortTmp;
+      for (let i = 0; i < n; i++) { const o = perm[i] * w, q = i * w; for (let c = 0; c < w; c++) t[o + c] = arr[q + c]; }
+      arr.set(t.subarray(0, n * w));
+    };
+    permute(b.mesh.instanceMatrix.array as Float32Array, 16);
+    if (b.mesh.instanceColor) permute(b.mesh.instanceColor.array as Float32Array, 3);
+    permute(b.extra.array as Float32Array, 4);
+    permute(b.dist, 1);
+  }
+
+  /**
+   * PERF F6 — shadow cascade k (Renderer.perCascade; k < 0 restores): draw only the trees that can throw a shadow into
+   * the cascade's sphere (centre c in the body frame, radius r): within r + their shadow's reach of c. The reach is
+   * the tree's extent times (1 + cot of the sun's lowest elevation over the drawn range, less 0.2 rad for slopes
+   * falling away from the sun); a sun that low draws everything. Instances are ordered by distance band from the
+   * rebuild camera, so the cascade draws a prefix. The image is unchanged: what is left out cannot reach a pixel
+   * that reads this cascade (the shader picks the cascade by view depth, inside its sphere).
+   */
+  shadowCascade(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number): void {
+    if (!this.group.visible) return;
+    if (k < 0) {
+      for (const b of this.buckets) { b.mesh.count = b.count; b.mesh.visible = b.count > 0; }
+      return;
+    }
+    const L = this.lastCam;
+    const dc = Math.hypot(cx - L.x, cy - L.y, cz - L.z);
+    const el = Math.asin(Math.max(-1, Math.min(1, sinEl))) - (dc + r + this.range) / radius - 0.2;
+    const cot = el > 0.035 ? 1 / Math.tan(el) : Infinity;
+    for (const b of this.buckets) {
+      if (!b.count) continue;
+      const D = dc + r + b.eMax * (1 + cot) + 4;
+      const j = Number.isFinite(D) ? Math.floor(D / this.binW) : NB;
+      const n = j >= NB ? b.count : b.binEnd[j];
+      b.mesh.count = n;
+      b.mesh.visible = n > 0;
+    }
   }
 
   dispose(): void {
