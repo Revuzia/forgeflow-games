@@ -40,9 +40,10 @@ import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
+import { perfSwitch, perfSwitchNote } from './perfswitch.ts';
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
-const PRE_UPLOAD = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('preupload') !== '0'; } catch { return true; } })();
+const PRE_UPLOAD = perfSwitch('preupload');
 
 export interface RenderStats {
   drawCalls: number;
@@ -110,12 +111,12 @@ const _sunView = new Vector3();
  *  count-only budget), ?warm=0 skips the load-time shader warm-up, ?skipcopy=0 always makes the water colour copy */
 const DEV_Q = (() => { try { return new URLSearchParams(globalThis.location?.search ?? ''); } catch { return new URLSearchParams(); } })();
 /** PERF F11 shadow-reach culling of terrain / building casters (?reach=0: the margin rule before it, for A/B shots) */
-const REACH_CULL = DEV_Q.get('reach') !== '0';
+const REACH_CULL = perfSwitch('reach');
 const BUILD_MS = DEV_Q.has('buildms') ? Number(DEV_Q.get('buildms')) || 0 : 6;
 const WARM_UP = DEV_Q.get('warm') !== '0';
 const SKIP_COPY = DEV_Q.get('skipcopy') !== '0';
 // (perf 2026-11) early depth rejection under the log depth buffer (shaders/zcons.ts); ?zcons=0 is the old path
-const Z_CONS = DEV_Q.get('zcons') !== '0';
+const Z_CONS = perfSwitch('zcons');
 /** weather / shadow cube face size per preset (cloud steps → resolution) */
 const WX_RES = (steps: number): number => (steps <= 24 ? 96 : steps <= 32 ? 128 : steps <= 48 ? 192 : 256);
 /**
@@ -194,7 +195,7 @@ export class Renderer {
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
     enableConservativeDepth(this.three, Z_CONS);
-    installSpanUploads(wantSpanUploads(this.three));
+    { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();
     setCityLightsRenderer(this.three);
     this.three.toneMapping = NoToneMapping;

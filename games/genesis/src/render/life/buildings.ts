@@ -239,7 +239,7 @@ export class Buildings {
     this.bFarCut = new BldBatch('buildings-far-cut', shared, true, false, 128, 1 << 16);
     this.bShadow = new BldBatch('buildings-shadow', shared, false, true, 512, 1 << 18, true);
     this.batches = [this.bNear, this.bNearCut, this.bFar, this.bFarCut, this.bShadow];
-    for (const b of this.batches) this.group.add(b.mesh, b.warm);
+    for (const b of this.batches) this.group.add(b.root, b.warm);
     for (let i = 0; i < 2; i++) this.rubble.push(rubbleMesh(77 + i * 13, i === 0));
   }
 
@@ -247,13 +247,13 @@ export class Buildings {
     if (on === this.castShadows) return;
     this.castShadows = on;
     for (const b of this.batches) {
-      if (b.shadowOnly) { if (on) b.mesh.layers.set(1); else b.mesh.layers.disableAll(); continue; }
-      if (on && b.shadow) b.mesh.layers.enable(1); else b.mesh.layers.disable(1);
+      if (b.shadowOnly) { b.setLayers((l) => { if (on) l.set(1); else l.disableAll(); }); continue; }
+      b.setLayers((l) => { if (on && b.shadow) l.enable(1); else l.disable(1); });
     }
   }
 
   swapDepth(depth: boolean): void {
-    for (const b of this.batches) b.mesh.material = depth ? b.depth : b.material;
+    for (const b of this.batches) b.useDepth(depth);
   }
 
   private variantFor(kind: BuildingKind, matIdx: number, style: number, era: number, mood: number, w: number, d: number, family?: BuildFamily, hv?: number): Variant {

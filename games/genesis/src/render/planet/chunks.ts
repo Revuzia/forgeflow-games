@@ -33,6 +33,7 @@ import {
   type PatchArrays, type PatchReply, type PatchRequest,
 } from './patchbuild.ts';
 import { capGap, shadowReach } from './shadowreach.ts';
+import { perfSwitch } from '../perfswitch.ts';
 
 export { PATCH_RES };
 
@@ -99,7 +100,7 @@ function browserPatchPort(): PatchPort | null {
   sharedPatchPort = null;
   try {
     if (typeof Worker === 'undefined' || typeof location === 'undefined') return null;
-    if (new URLSearchParams(location.search).get('patchworker') === '0') return null;
+    if (!perfSwitch('patchworker')) return null;
     const hc = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
     const nw = hc >= 6 ? 2 : 1;
     const ws: Worker[] = [];

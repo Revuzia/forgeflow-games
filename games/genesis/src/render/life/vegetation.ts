@@ -42,6 +42,7 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
 import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
 import { GOD_WIND } from '../camera/avatar.ts';
+import { perfSwitch } from '../perfswitch.ts';
 
 const KINDS: TreeKind[] = TREE_KINDS;
 const K = (k: TreeKind): number => KINDS.indexOf(k);
@@ -690,7 +691,7 @@ function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantE
 
 // ── PERF P2 far layer: settings and types ──
 /** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
-const FAR_DEFAULT = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('fartrees') !== '0'; } catch { return true; } })();
+const FAR_DEFAULT = perfSwitch('fartrees');
 /** main-thread ms a frame for making far blocks (scatter + instance data of a cell, ~0.1 ms each) */
 const FAR_BUDGET_MS = (() => { try { return Number(new URLSearchParams(globalThis.location?.search ?? '').get('farbudget')) || 3; } catch { return 3; } })();
 /** main-thread ms a frame for re-listing the far cells as the camera moves */

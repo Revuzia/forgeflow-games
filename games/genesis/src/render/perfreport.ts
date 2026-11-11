@@ -9,6 +9,8 @@
 // percentiles, hitches over 50 ms with what was happening in them, GPU ms per pass, canvas / DPR / preset and the
 // GPU's renderer string. Costs nothing unless recording (the hooks are one branch).
 
+import { perfSwitchLine } from './perfswitch.ts';
+
 export const GPU_SLOTS = ['planets', 'actors', 'shadows', 'scene', 'post'] as const;
 type GpuSlot = (typeof GPU_SLOTS)[number];
 
@@ -346,6 +348,7 @@ export class PerfRecorder {
     const dur = F.length ? (F[F.length - 1].t - F[0].t + F[0].iv) / 1000 : 0;
     L.push(`GENESIS perf report v1 · ${new Date().toISOString().slice(0, 19)}Z · ${f1(dur)} s · ${F.length} frames`);
     if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
+    L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
     if (typeof navigator !== 'undefined') L.push(`ua: ${navigator.userAgent.replace(/\s+/g, ' ').slice(0, 160)} | cores ${navigator.hardwareConcurrency ?? '?'}`);
     if (!F.length) { L.push('no frames recorded'); return L.join('\n'); }
     const iv = F.map((r) => r.iv), wk = F.map((r) => r.work);
