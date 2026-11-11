@@ -1,5 +1,20 @@
 # PERF ledger (performance engineer, 2026-11-10) — owner: "keep the high quality but ensure the game isnt so choppy"
 
+## FOR THE OWNER (short)
+- WHAT WAS SLOW: the GPU shaded every hidden pixel (no early depth test: the costliest terrain shader ran under every
+  tree and house), every tree was drawn into all three shadow maps, and the main thread kept rebuilding things that had
+  not changed (all 1 600 buildings re-placed when any ground value was republished, whole city-light cube textures
+  re-uploaded, tree caches dropped, terrain built 16 patches a frame on the main thread, roads rebuilt whole).
+- WHAT IS FIXED: early depth test restored without changing the picture (conservative depth); shadows skip casters
+  that cannot reach the shadowed area; only changed buildings / light tiles / plant cells / road chains are rebuilt;
+  terrain is built on helper threads (main-thread planet work at rest 9.6 -> 2.0 ms a frame here, uploads 2.5 MB ->
+  80 kB a frame); grass, plants and terrain detail are prepared before they come into view; flying fast through the
+  cloud deck no longer whites out the screen; exposure can no longer get stuck white or black.
+- STILL TO DO: trees are only drawn within ~380 m of the camera and switch on below ~450 m altitude, so zooming down
+  you see a forest "fill in" — a far-tree layer is next. We cannot measure your Mac here: please press Shift+F12,
+  then "Record 20 s", play (zoom in to a town, pan around), then "Copy report" and send us the text.
+- WHAT TO EXPECT ON A MAC: fewer and shorter hitches when moving the camera and while towns grow; the same image.
+
 Rules: never lower a preset (resolution, DPR, shadows, range, density, effects). Fix causes. Bulky output: _harness/scratch/arc/perf/.
 Probe: _harness/arc-work/perf-play.mjs (built game, static server, Playwright SwiftShader; GL call counters + perfmon + CPU profile).
 
@@ -353,3 +368,29 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
       inside the deck was a full white-out before (the in-cloud fog is designed "white-out when deep").
   (b) pipeline.ts: exposure adaptation and tonemap are NaN/Inf-safe (a bad target or history used to stick until a
       cut: whole-screen white or black); bloom / luminance inputs already had sane().
+- d13 (dist9, ?perf=1, descent over a forest; LOOKED at f1200, f600-early, f350-early, f350): the overlay shows its
+  "Record 20 s" / "Copy report" bar; the in-game report printed per scene (GPU renderer string, timer yes, GPU ms per
+  pass group, hitch lines with slots / GPU / patches / long tasks) — P1 VERIFIED end to end (SwiftShader numbers are
+  meaningless as speed, the plumbing is what was checked). Report line 'worst per s' now capped at 30 buckets.
+  f350-early (2 frames into the 1.5 s flight, camera still ~450 m up): forest = green carpet, NO trees; f350 settled
+  (camera arrived): trees within ~380 m. THIS IS THE OWNER'S "trees populate": the tree layer is off above
+  1.2 x range (456 m) and drawn only within range (380 m) of the camera, so coming down, a disc of trees switches on
+  and grows outward. Not a streaming delay (cells are now prefetched). FIX = P2 NEXT #1 below.
+- GATE (check6, through slot.sh, tree with everything above): npm run check = detban + typecheck + 898/898 tests;
+  npm run build OK. (check5 had one failure, render.test 'ground cover ... no cell dropped': the prefetch ring adds
+  cells, so the cache may grow; the assertion is now >=.)
+
+## NEXT (session 6), in order
+1. P2 FAR TREES (the owner's pop-in): a far-tree layer from ~0.7 x range out to the terrain's visible distance
+   (cheap instanced crowns / octahedral impostors per species, placed from the same cellPlants records — so the trees
+   that come near are the same trees), crossfaded (dither) with the near layer's 0.72-1.0 fade band, shown at every
+   altitude where the forest covers more than a few pixels; no density or range lowered. Check the GPU cost with the
+   report's gpu ms. Then remove the alt > 1.2 x range switch-off (the far layer covers it).
+2. Ask the owner for a report: Shift+F12 -> "Record 20 s" while zooming orbit -> town and panning a town, then
+   "Copy report" (also ?perf=1). Its gpu ms per pass group says GPU- or CPU-bound and which pass.
+3. Browser-verify P3 (cloud tunnel) with a fast scripted zoom through the deck (shots inside the deck at speed), and
+   F11 at low sun: l11 / l11r0 (regionlow, ridgelow; reach on/off) and r11 (uploads/heap) / r12 (CPU profile) from
+   run-r11.sh were killed by the restart: re-run on a fresh dist. Compare shadowTris vs v11 (2.41 M) after the floor
+   tightening.
+4. Vegetation instance refresh (every 15 m moved: the whole instance list) -> incremental; groundcover cellItems
+   (~20 ms a cell on this box) off the main thread.
