@@ -574,12 +574,23 @@ ${LEAF_ALPHA}
 `;
 
 /**
- * PERF F22: can a caster whose base is within `d` of the camera, `e` tall / wide about its base, shade any pixel at
- * view depth >= nearSplit? Its shadow lies within e (1 + cot) + 4 of its base (F6's reach, cot of the lowest sun over
- * the range), a pixel's distance from the camera is at least its view depth. true = it cannot (leave it out).
+ * PERF F6 / F22: how far (m) the shadow of a caster `e` tall / wide about its base, within `d` of the camera, can run:
+ * the least x with e (1 + cot el(x)) + 4 <= x, el(x) = el0 − (d + x) / R (the sun's elevation at the camera less the
+ * slope allowance, less the planet's curvature out to the farthest shadow point); Infinity for a sun too low to bound.
  */
-export function nearSplitCut(d: number, e: number, cot: number, margin: number, nearSplit: number): boolean {
-  return d + e * (1 + cot) + 4 + margin < nearSplit;
+export function treeShadowReach(e: number, el0: number, d: number, R: number): number {
+  const f = (x: number): number => { const el = el0 - (d + x) / R; return el > 0.035 ? e * (1 + 1 / Math.tan(el)) + 4 : Infinity; };
+  let x = 0;
+  for (let it = 0; it < 12 && Number.isFinite(x); it++) x = f(x) * 1.02 + 0.5;
+  return f(x) <= x ? x : Infinity;
+}
+
+/**
+ * PERF F22: can a caster whose base is within `d` of the camera, its shadow within `reach` of the base, shade any pixel
+ * at view depth >= nearSplit? A pixel's distance from the camera is at least its view depth. true = it cannot.
+ */
+export function nearSplitCut(d: number, reach: number, margin: number, nearSplit: number): boolean {
+  return d + reach + margin < nearSplit;
 }
 
 interface Bucket {
@@ -1681,13 +1692,17 @@ export class Vegetation {
     const elT = el0 - (dc + r + reach) / radius;
     const cot = Number.isFinite(reach) && elT > 0.035 ? 1 / Math.tan(elT) : Infinity;
     const dCam = cam ? Math.hypot(cam.x - L.x, cam.y - L.y, cam.z - L.z) : Infinity;
-    const nearCut = SH_NEAR && nearSplit > 0 && Number.isFinite(cot) && Number.isFinite(dCam);
+    const nearCut = SH_NEAR && nearSplit > 0 && Number.isFinite(dCam);
     for (const b of this.buckets) {
       if (!b.count) continue;
       const D = dc + r + b.eMax * (1 + cot) + 4;
       const j = Number.isFinite(D) ? Math.floor(D / this.binW) : NB;
       let n = j >= NB ? b.count : b.binEnd[j];
-      if (nearCut && nearSplitCut(b.dMax + dCam, b.eMax, cot, margin, nearSplit)) n = 0;
+      if (nearCut && n > 0) {
+        // (the sun's elevation at these trees: nearer the camera than the cascade, so less curvature than `cot`'s)
+        const d0 = b.dMax + dCam;
+        if (nearSplitCut(d0, treeShadowReach(b.eMax, el0, d0, radius), margin, nearSplit)) n = 0;
+      }
       b.mesh.count = n;
       b.mesh.visible = n > 0;
     }

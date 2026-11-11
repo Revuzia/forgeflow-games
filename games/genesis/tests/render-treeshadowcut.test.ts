@@ -3,7 +3,7 @@
 // ray-cast along the sun to the ground; every shadow point of a cut tree must lie at view depth < nearSplit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nearSplitCut } from '../src/render/life/vegetation.ts';
+import { nearSplitCut, treeShadowReach } from '../src/render/life/vegetation.ts';
 
 test('F22 near-split cut never drops a shadow a pixel of the cascade could read', () => {
   const R = 3000;
@@ -23,27 +23,40 @@ test('F22 near-split cut never drops a shadow a pixel of the cascade could read'
     const base = up.map((x) => x * R);
     const e = 3 + rnd() * 22;
     // sun: elevation at the camera's ground point 4..80 deg, any azimuth
-    const el = (4 + rnd() * 76) * Math.PI / 180, saz = rnd() * Math.PI * 2;
+    // (every other trial the sun stands behind the camera as seen from the tree: the shadow runs straight away from it)
+    const el = (4 + rnd() * 76) * Math.PI / 180, saz = trial % 4 < 2 ? Math.atan2(-up[2], -up[0]) + (rnd() - 0.5) * 0.2 : rnd() * Math.PI * 2;
     const sun = norm([Math.cos(saz) * Math.cos(el), Math.sin(el), Math.sin(saz) * Math.cos(el)]);
-    // vegetation.ts: the lowest elevation over the drawn range, less 0.2 rad for slopes
-    const elT = el - 0.2 - (300 + 300) / R;
-    if (elT <= 0.035) continue;
-    const cot = 1 / Math.tan(elT);
+    // vegetation.ts: the sun's elevation at the camera less 0.2 rad for slopes; reach with the curvature out to it
     const d = Math.hypot(base[0] - cam[0], base[1] - cam[1], base[2] - cam[2]);
-    const nearSplit = 50 + rnd() * 400, margin = 2 + rnd() * 3;
-    if (!nearSplitCut(d, e, cot, margin, nearSplit)) continue;
+    const reach = treeShadowReach(e, el - 0.2, d, R);
+    // (half the trials put the split just past the cut's threshold: the tightest cut it makes)
+    const margin = 2 + rnd() * 3;
+    const nearSplit = trial % 2 ? 50 + rnd() * 400 : d + reach + margin + 0.01 + rnd() * 3;
+    if (!nearSplitCut(d, reach, margin, nearSplit)) continue;
     cuts++;
-    // crown points: within e of the base, above the ground; their shadows on the sphere
+    // crown points: within e of the base, above the ground; their shadows on the ground
     for (let q = 0; q < 40; q++) {
-      const h = rnd() * e, sx = (rnd() - 0.5) * e * 0.8, sz = (rnd() - 0.5) * e * 0.8;
+      const h = (q % 2 ? 0.85 + 0.15 * rnd() : rnd()) * e, sx = (rnd() - 0.5) * e * 0.8, sz = (rnd() - 0.5) * e * 0.8;
       const p = [base[0] + up[0] * h + sx, base[1] + up[1] * h, base[2] + up[2] * h + sz];
       if (Math.hypot(p[0] - base[0], p[1] - base[1], p[2] - base[2]) > e) continue;
-      // march along -sun to the sphere
-      const b = p[0] * -sun[0] + p[1] * -sun[1] + p[2] * -sun[2];
-      const c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - R * R;
-      const disc = b * b - c;
-      if (c <= 0 || disc < 0) continue;
-      const t = -b - Math.sqrt(disc);
+      // the receiving ground: the curved world, or (odd trials) a slope through the tree's foot falling away from the
+      // sun by up to 0.2 rad (the allowance vegetation.ts makes) — the longest shadows the bound has to cover
+      let t: number;
+      if (trial % 2) {
+        const sd = sun[0] * up[0] + sun[1] * up[1] + sun[2] * up[2];
+        const away = norm([-(sun[0] - up[0] * sd), -(sun[1] - up[1] * sd), -(sun[2] - up[2] * sd)]);
+        const a = rnd() * 0.2;
+        const n = [up[0] * Math.cos(a) + away[0] * Math.sin(a), up[1] * Math.cos(a) + away[1] * Math.sin(a), up[2] * Math.cos(a) + away[2] * Math.sin(a)];
+        const sn = sun[0] * n[0] + sun[1] * n[1] + sun[2] * n[2];
+        if (sn <= 1e-6) continue;
+        t = ((p[0] - base[0]) * n[0] + (p[1] - base[1]) * n[1] + (p[2] - base[2]) * n[2]) / sn;
+      } else {
+        const b = p[0] * -sun[0] + p[1] * -sun[1] + p[2] * -sun[2];
+        const c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - R * R;
+        const disc = b * b - c;
+        if (c <= 0 || disc < 0) continue;
+        t = -b - Math.sqrt(disc);
+      }
       if (t < 0) continue;
       const P = [p[0] - sun[0] * t, p[1] - sun[1] * t, p[2] - sun[2] * t];
       // (the worst view direction: straight at the shadow point, view depth = its distance; any other is less)
