@@ -1,0 +1,31 @@
+{
+  "lane": "units (fighters, monsters and Wicks in game)",
+  "verifier": "verify1",
+  "at": "2026-11-11 17:55 CST",
+  "pass": true,
+  "score": 6.8,
+  "items": [
+    {"id": "U2", "verdict": "better", "evidence": "Re-ran art/tools/glb_zero_metal.py --check on all 48 art/out/fighters/*/*.glb plus art/out/units/*.glb: 0 failures. content:check runs the new checkZeroMetal gate (tools/build_content.ts:1338) with 0 warnings. The A/B is visually near-identical (mean crop diff 0-0.72 in u2_metal_ab.json; sheet crops for dunsom_10 and tunlan_7 show no fighter in frame). The win is correctness plus a gate against regression, not something a player sees."},
+    {"id": "U1(3)+U6 material response", "verdict": "same", "evidence": "I read u1u6_material_ab.png (12 m) and u1u6_material_gamecam_ab.png (28.5 m): A and B can't be told apart by eye in any crop. Mean diffs are 0.0-1.03, hesmi_8 and ervet_7 crops are empty, and the fighters are still pale cream or grey clay. Programs stay 39 (re-measured). No harm, no visible gain."},
+    {"id": "U1(1)/(2) albedo hue and value regrade", "verdict": "same", "evidence": "Not done. This was the plan's top-impact item (pale, hue-less fighters), and it is still open."},
+    {"id": "U3 life layer", "verdict": "better", "evidence": "I re-ran _harness/max_units_life.mjs on the current build and it reproduces the claim: idle head range is now 6.2-20 cm on all fighters; Kemdo idle hold 319 -> 59 frames, Vashil channel 319 -> 50. Remaining gaps: Vashil idle still holds 180 frames (3 s); Odrum idle hold rose 24 -> 44; Ardit channel hold 16 -> 52; Ervet recall 114 -> 112 and Burdam recall 128 (run A) are essentially unchanged."},
+    {"id": "U4 chain follow-through + hit kick", "verdict": "better", "evidence": "u4_chain.json has 60 role rows and none where maxDeg with the layer on exceeds the clip alone. The worst snaps (Odrum cast_ult 126 deg, Nurrow ult 51) are capped near 24. I did not re-capture the hit kick visually."},
+    {"id": "U5 attack follow-through on stand", "verdict": "same", "evidence": "No A/B or measurement was provided and I did not reproduce it. Unverified; I see no breakage."},
+    {"id": "U8 monster size ladder", "verdict": "better", "evidence": "u8_monster_scale_ab.png: Glasshorn at x1.55 now reads as a reward-tier camp (7.2k -> 18.0k px, measured). Sunsplinter at 1.42 is a projection (~53k) and was not re-measured; at 1.4 it measured 51,671, just under the 51,944 gate. Its core and Glasshorn's restyle are not done."}
+  ],
+  "budgets": {
+    "source": "node _harness/perf_1080.mjs --prod --q high,ultra --no-dyn --no-match (fresh prod build, heavy queue, load 20-70, so timing not valid)",
+    "high": "206k tris, 136 draws, 39 programs",
+    "ultra": "212k tris, 142 draws, 39 programs",
+    "memory": "match peak renderer+GPU 2028 MB (match_4_rift) <= 3000; Home peak 995 MB; rebuild growth +3.1 % PASS",
+    "note": "memmaps match_4_rift lists 41 programs cumulatively; the earlier idle gate (idle3_g1_perf.log) shows the same 41, so this lane did not cause it",
+    "typecheck": "pass",
+    "content_check": "0 warnings",
+    "gate": "GATE PASS"
+  },
+  "problems": [
+    {"severity": "major", "what": "The headline deficit is still open: fighters read as pale, hue-less clay at the game camera. The shader response is invisible in both A/B sheets, and the albedo/value/hue regrade, heads (U7) and Ilsheta emissives (U6) were deferred.", "fix": "A per-fighter palette ruling plus an albedo value/hue pass, gated by lineup_qa (top band L* 70-85, a hue zone of at least 6 %), or strengthen the cloth sheen and glass edge until the change shows at 28.5 m."},
+    {"severity": "minor", "what": "Sunsplinter scale 1.42 was not re-measured against the 50 %-of-Longshade gate.", "fix": "Run value_probe --monsters at 1.42."},
+    {"severity": "minor", "what": "Long holds remain: Vashil idle 180 frames; Ervet and Burdam recall 112-128 frames.", "fix": "Give these clips per-fighter life amplitude, or rebuild the clips."}
+  ]
+}
