@@ -1334,6 +1334,13 @@ export class Buildings {
     this.stats.variants = nv;
   }
 
+  /** PERF F11 — shadow cascade culling of the casters (Renderer.perCascade): `keep` tests a caster's body-frame
+   * bounding sphere; null shows every caster again */
+  shadowCascade(keep: ((x: number, y: number, z: number, r: number) => boolean) | null): number {
+    if (!keep) { this.bShadow.uncull(); return 0; }
+    return this.bShadow.cullShadow(keep);
+  }
+
   dispose(): void {
     for (const b of this.batches) b.dispose();
     for (const v of this.variants.values()) for (const m of v.meshes) m?.geo.dispose();

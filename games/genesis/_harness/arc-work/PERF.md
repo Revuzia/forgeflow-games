@@ -239,3 +239,19 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
 - F1 VERIFIED (all three scenes): v5z0 vs v5z1 region mean |d| 0.8/255, orbit 0.6/255 (48 px > 24 each: grain /
   cloud motion), town see above; 0 console errors with zcons on AND off. Shots looked at (town, region, orbit).
 - GATE 2 (after F9, slot.sh): npm run check 890/890 pass; npm run build OK.
+
+## SESSION 5 (2026-11-11 ~03:15Z)
+- Queue at start: v6 (dist5) town done (see above), region/orbit still running; r6, r7, then run-r8 (check3 gate
+  running in slot 2, then v8 on dist6) queued behind it.
+- F10 (landed, tsc clean, tests/render-patchworker.test.ts + render-chunkrest + render-chunkpool green): TERRAIN
+  PATCHES BUILT OFF THE MAIN THREAD. src/render/planet/patchbuild.ts = the patch vertex build as a pure function
+  (PatchBuilder; no three.js), patchbuild.worker.ts = the worker (one or two shared workers: 2 when
+  hardwareConcurrency >= 6, least-loaded dispatch; `?patchworker=0` = old path). ChunkLOD (opts {seed, port}):
+  a patch past level 1 that the view needs is ASKED for (<= 32 in flight per planet; the four children of a split
+  together) and its parent draws until it lands — the same rule as the old per-frame budget running out, so the
+  converged image is identical; landing = the batch copy only, under the frame's time cap. Output buffers are
+  transferred both ways (recycled: no per-patch garbage on the main thread). Levels 0-1 (the always-drawn base)
+  still build on the main thread once. Same bytes: the builder's output hash equals the pre-move chunks.ts output
+  (8181fda4, _harness/arc-work/perf-golden.ts run BEFORE the move), and an in-process structuredClone worker port
+  converges to the same selection with byte-identical batch contents (terrain + water slots) while the main thread
+  builds <= 100 (levels 0-1) patches. planetview passes { seed: pv.seed }.

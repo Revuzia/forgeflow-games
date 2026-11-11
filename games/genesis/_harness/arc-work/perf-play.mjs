@@ -144,6 +144,10 @@ const CAM = {
   town: { mode: 'orbit', poi: firstSettlement != null ? `settlement:${firstSettlement}` : 'city', dist: 150, tilt: 52, hour: 10 },
   street: { mode: 'surface', poi: 'coast', alt: 40, pitch: -3, hour: 10 },
 };
+// low-sun views (PERF F11: long evening shadows must survive the shadow-reach culling); --hour=H overrides
+CAM.regionlow = { ...CAM.region, hour: Number(opts.hour ?? 17.6) };
+CAM.townlow = { ...CAM.town, hour: Number(opts.hour ?? 17.6) };
+CAM.ridgelow = { mode: 'orbit', poi: 'peak', dist: 1800, tilt: 30, hour: Number(opts.hour ?? 17.6) };
 
 const pct = (a, p) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 const stat = (a) => ({ n: a.length, mean: a.reduce((x, y) => x + y, 0) / Math.max(1, a.length), p50: pct(a, 0.5), p95: pct(a, 0.95), p99: pct(a, 0.99), max: a.length ? Math.max(...a) : 0, over16: a.filter((x) => x > 16.7).length, over33: a.filter((x) => x > 33).length, over50: a.filter((x) => x > 50).length });

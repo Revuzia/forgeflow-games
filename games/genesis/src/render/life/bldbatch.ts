@@ -11,7 +11,7 @@
 //   * Per-object frustum culling (also against each shadow cascade's light box) and front-to-back sorting are three's.
 
 import {
-  BatchedMesh, BufferGeometry, Color, DataTexture, Float32BufferAttribute, FloatType, Group, Matrix4, NearestFilter, RGBAFormat,
+  BatchedMesh, BufferGeometry, Color, Sphere, DataTexture, Float32BufferAttribute, FloatType, Group, Matrix4, NearestFilter, RGBAFormat,
   type IUniform, type Material, type MeshStandardMaterial, type ShaderMaterial,
 } from 'three';
 import { BLD_INST_PER_ROW, makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
@@ -40,6 +40,11 @@ export class BldBatch {
   private shown = 0;
   /** instances that exist in the BatchedMesh (slots ever used) */
   private made = 0;
+  /** PERF F11: per slot its bounding sphere in the body frame (x, y, z, r), for the shadow-reach cull */
+  private sph: Float32Array;
+  /** per slot: 1 = hidden by cullShadow (restored by uncull), 2 = hidden by dropGeom until the next rewrite */
+  private hid: Uint8Array;
+  private bs = new Map<number, Sphere>();
 
   constructor(name: string, shared: Record<string, IUniform>, cut: boolean, shadow: boolean, instCap = 512, vCap = 1 << 18, shadowOnly = false) {
     this.cut = cut;
@@ -49,6 +54,8 @@ export class BldBatch {
     this.vCap = vCap;
     this.iCap = vCap * 2;
     this.rows = Math.ceil(instCap / BLD_INST_PER_ROW);
+    this.sph = new Float32Array(instCap * 4);
+    this.hid = new Uint8Array(instCap);
     this.data = new Float32Array(BLD_INST_PER_ROW * 3 * 4 * this.rows);
     const tex = new DataTexture(this.data, BLD_INST_PER_ROW * 3, this.rows, RGBAFormat, FloatType);
     tex.minFilter = tex.magFilter = NearestFilter;
@@ -101,8 +108,9 @@ export class BldBatch {
     this.gids.delete(geo);
     // instances still pointing at it are re-pointed by the next rewrite before they draw; hide them meanwhile
     const info = (this.mesh as unknown as { _instanceInfo: { geometryIndex: number; active: boolean }[] })._instanceInfo;
-    for (let i = 0; i < info.length; i++) if (info[i].active && info[i].geometryIndex === id) { this.mesh.setGeometryIdAt(i, other); this.mesh.setVisibleAt(i, false); }
+    for (let i = 0; i < info.length; i++) if (info[i].active && info[i].geometryIndex === id) { this.mesh.setGeometryIdAt(i, other); this.mesh.setVisibleAt(i, false); if (i < this.hid.length) this.hid[i] = 2; }
     this.mesh.deleteGeometry(id);
+    this.bs.delete(id);
   }
 
   has(geo: BufferGeometry): boolean { return this.gids.has(geo); }
@@ -123,6 +131,17 @@ export class BldBatch {
     }
     mesh.setMatrixAt(i, m);
     mesh.setColorAt(i, color);
+    this.hid[i] = 0;
+    {
+      let bs = this.bs.get(gid);
+      if (!bs) { bs = this.mesh.getBoundingSphereAt(gid, new Sphere()) ?? new Sphere(); this.bs.set(gid, bs); }
+      const e = m.elements, c = bs.center, q = i * 4;
+      const sc = Math.sqrt(Math.max(e[0] * e[0] + e[1] * e[1] + e[2] * e[2], e[4] * e[4] + e[5] * e[5] + e[6] * e[6], e[8] * e[8] + e[9] * e[9] + e[10] * e[10]));
+      this.sph[q] = e[0] * c.x + e[4] * c.y + e[8] * c.z + e[12];
+      this.sph[q + 1] = e[1] * c.x + e[5] * c.y + e[9] * c.z + e[13];
+      this.sph[q + 2] = e[2] * c.x + e[6] * c.y + e[10] * c.z + e[14];
+      this.sph[q + 3] = bs.radius * sc;
+    }
     const o = this.offset(i);
     const d = this.data;
     d[o] = s0; d[o + 1] = s1; d[o + 2] = s2; d[o + 3] = s3;
@@ -138,6 +157,28 @@ export class BldBatch {
     const d = this.data;
     d[o] = s0; d[o + 1] = s1; d[o + 2] = s2; d[o + 3] = s3;
     this.texU.value.needsUpdate = true;
+  }
+
+  /**
+   * PERF F11 — before a shadow cascade: hide the instances `keep(x, y, z, r)` (body-frame bounding sphere) rejects;
+   * uncull() shows them again. Slots hidden for another reason stay hidden.
+   */
+  cullShadow(keep: (x: number, y: number, z: number, r: number) => boolean): number {
+    let drawn = 0;
+    const sph = this.sph, hid = this.hid, mesh = this.mesh;
+    for (let i = 0; i < this.used; i++) {
+      if (hid[i] === 2) continue;
+      const q = i * 4;
+      const on = keep(sph[q], sph[q + 1], sph[q + 2], sph[q + 3]);
+      if (on) drawn++;
+      if (on && hid[i] === 1) { mesh.setVisibleAt(i, true); hid[i] = 0; } else if (!on && hid[i] === 0) { mesh.setVisibleAt(i, false); hid[i] = 1; }
+    }
+    return drawn;
+  }
+
+  uncull(): void {
+    const hid = this.hid, mesh = this.mesh;
+    for (let i = 0; i < this.used; i++) if (hid[i] === 1) { mesh.setVisibleAt(i, true); hid[i] = 0; }
   }
 
   end(): void {
@@ -169,6 +210,8 @@ export class BldBatch {
     this.data = data;
     this.rows = rows;
     this.instCap = cap;
+    const sph = new Float32Array(cap * 4); sph.set(this.sph); this.sph = sph;
+    const hid = new Uint8Array(cap); hid.set(this.hid); this.hid = hid;
   }
 
   dispose(): void {

@@ -126,7 +126,8 @@ export class PlanetVisual {
       waterDepth: this.fields.waterDepth,
       get lava() { return self.pv.fields.get('lava') ?? null; },
       get geomVersion() { return self.fields.geomVersion; },
-    });
+    // (the noise seed lets the patch building worker make the same Noise3: terrain builds leave the main thread)
+    }, { seed: pv.seed });
     this.vegetation = new Vegetation(sharedRec);
     this.group.add(this.vegetation.group);
     this.groundCover = new GroundCover(sharedRec);

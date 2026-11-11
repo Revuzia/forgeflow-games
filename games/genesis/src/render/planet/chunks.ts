@@ -32,6 +32,7 @@ import {
   PATCH_RES, ICO_EDGE, NPTS, NSKIRT, NVERT, NINDEX, ptIndex, BOUNDARY, PATCH_ATTRS, PatchBuilder,
   type PatchArrays, type PatchReply, type PatchRequest,
 } from './patchbuild.ts';
+import { capGap, shadowReach } from './shadowreach.ts';
 
 export { PATCH_RES };
 
@@ -640,7 +641,8 @@ export class ChunkLOD {
     if (p.built) return true;
     if (budget && this.port) {
       // (asked already: its parent draws until it lands)
-      if (p.pendingSeq >= 0 || this.pending.size >= MAX_INFLIGHT) return false;
+      // (a camera cut's budget, 320, asks for the whole new view at once: the workers fill it in a few frames)
+      if (p.pendingSeq >= 0 || this.pending.size >= Math.max(MAX_INFLIGHT, this.buildBudgetNow)) return false;
       const seq = ++this.seq;
       p.pendingSeq = seq;
       this.pending.set(seq, p);
@@ -858,24 +860,57 @@ export class ChunkLOD {
   }
 
   /**
-   * Shadow cascade k (lights.ts perCascade): leave out the selected patches lying wholly nearer than `nearDepth` along
-   * the view direction (body frame) — the pixels there read a finer cascade, and the margin the caller folds into
-   * nearDepth covers the shadows those patches throw further out. k < 0 restores every selected patch.
+   * The lowest ground (m relative to the radius: min hMin) of the selected patches meeting a sphere (body frame) —
+   * the lowest receiver of a shadow cascade (shadowreach.ts). +Infinity when none meets it.
    */
-  shadowCascade(k: number, camBody: Vector3, viewDirBody: Vector3, nearDepth: number, cascade?: Frustum, bodyToWorld?: Matrix4): number {
+  groundFloorNear(cx: number, cy: number, cz: number, r: number): number {
+    let lo = Infinity;
+    for (const p of this.selected) {
+      const c = p.sphere.center;
+      const rr = p.sphere.radius + r;
+      const dx = c.x - cx, dy = c.y - cy, dz = c.z - cz;
+      if (dx * dx + dy * dy + dz * dz <= rr * rr && p.hMin < lo) lo = p.hMin;
+    }
+    return lo;
+  }
+
+  /**
+   * Shadow cascade k (lights.ts perCascade): draw only the selected patches that can throw a shadow onto a pixel
+   * reading this cascade. k < 0 restores every selected patch.
+   *  - in the cascade's light box (the batch is drawn whole: three's per-object culling did this for separate meshes);
+   *  - PERF F11: within shadow REACH of the cascade's sphere (`reach`: centre / radius in the body frame, the sun's
+   *    elevation at the camera, the planet radius): the patch's top above the lowest ground near the cascade
+   *    (`floor`, groundFloorNear) sets how far its shadow can run (shadowreach.ts; a low sun: everything, so a
+   *    mountain's evening shadow stays);
+   *  - not wholly nearer (view depth) than `nearSplit` less that reach and its height: those shadows fall on pixels
+   *    that read a finer cascade. (Was a fixed 40 m-relief margin capped at 450 m: a taller ridge at a low sun lost
+   *    the part of its shadow beyond it in the far cascades.)
+   */
+  shadowCascade(k: number, camBody: Vector3, viewDirBody: Vector3, nearSplit: number, cascade?: Frustum, bodyToWorld?: Matrix4,
+    reach?: { cx: number; cy: number; cz: number; r: number; el0: number; floor: number; legacy?: boolean }): number {
     let drawn = 0;
+    const margin = reach ? 4 + 0.02 * reach.r : 0;
     for (const p of this.selected) {
       if (!p.built) continue;
       const tb = this.tBatch[p.level]!;
       if (k < 0) { tb.show(p.tSlot, true); drawn++; continue; }
       let on = true;
-      if (nearDepth > 0) {
-        const depthMax = (p.sphere.center.x - camBody.x) * viewDirBody.x + (p.sphere.center.y - camBody.y) * viewDirBody.y
-          + (p.sphere.center.z - camBody.z) * viewDirBody.z + p.sphere.radius;
-        on = depthMax >= nearDepth;
+      let run = Infinity;
+      const c = p.sphere.center;
+      if (reach && Number.isFinite(reach.floor)) {
+        const e = p.hMax - reach.floor;
+        const d0 = (Math.hypot(c.x - camBody.x, c.y - camBody.y, c.z - camBody.z) + p.sphere.radius) * 1.05;
+        run = shadowReach(e, reach.el0, d0, this.radius, margin);
+        if (Number.isFinite(run)) {
+          on = capGap(p.centerDir.x, p.centerDir.y, p.centerDir.z, p.angRadius, reach.cx, reach.cy, reach.cz, reach.r, this.radius + reach.floor) <= run;
+          run += Math.max(0, e) + margin;
+        }
       }
-      // (the batch is drawn whole: what lies outside this cascade's light box is left out here, as three's per-object
-      // culling did for separate patch meshes)
+      if (reach?.legacy) run = 0;
+      if (on && nearSplit > 0 && Number.isFinite(run)) {
+        const depthMax = (c.x - camBody.x) * viewDirBody.x + (c.y - camBody.y) * viewDirBody.y + (c.z - camBody.z) * viewDirBody.z + p.sphere.radius;
+        on = depthMax >= nearSplit - run;
+      }
       if (on && cascade && bodyToWorld) on = cascade.intersectsSphere(_sphere.copy(p.sphere).applyMatrix4(bodyToWorld));
       tb.show(p.tSlot, on);
       if (on) drawn++;

@@ -20,6 +20,7 @@ import { syncPlanetVisuals } from './planet/planetsync.ts';
 import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
 import { PATCH_RES } from './planet/chunks.ts';
+import { capGap, shadowReach } from './planet/shadowreach.ts';
 import { AtmospherePass } from './sky/atmosphere.ts';
 import { CloudPass, type CloudStorm } from './sky/clouds.ts';
 import { BASE_PACK } from '../data/index.ts';
@@ -105,6 +106,8 @@ const _sunView = new Vector3();
 /** dev A/B for the smoothness fixes (macfix/smooth.md): ?buildms=N sets the terrain build time cap (0 = off, the old
  *  count-only budget), ?warm=0 skips the load-time shader warm-up, ?skipcopy=0 always makes the water colour copy */
 const DEV_Q = (() => { try { return new URLSearchParams(globalThis.location?.search ?? ''); } catch { return new URLSearchParams(); } })();
+/** PERF F11 shadow-reach culling of terrain / building casters (?reach=0: the margin rule before it, for A/B shots) */
+const REACH_CULL = DEV_Q.get('reach') !== '0';
 const BUILD_MS = DEV_Q.has('buildms') ? Number(DEV_Q.get('buildms')) || 0 : 6;
 const WARM_UP = DEV_Q.get('warm') !== '0';
 const SKIP_COPY = DEV_Q.get('skipcopy') !== '0';
@@ -788,12 +791,47 @@ export class Renderer {
     const vis = this.cullVis;
     if (!vis) return;
     const sh = this.shadows;
-    const near = k >= 1 ? sh.splits[k - 1] - this.cullMargin : 0;
-    vis.lod.shadowCascade(k, vis.camBody, this.cullView, near, k >= 0 ? sh.cascadeFrustum(k, this.cascadeF) : undefined, vis.group.matrixWorld);
+    // PERF F11: terrain and buildings by shadow REACH — the caster's top above the lowest ground near this cascade
+    // and the sun's elevation (shadowreach.ts) bound how far its shadow runs; a low sun draws them all (long
+    // evening shadows of the mountains stay). Replaces a fixed 40 m-relief margin (capped at 450 m) for the terrain.
+    if (k >= 0 && !REACH_CULL) {
+      // (dev A/B ?reach=0: the culling before F11)
+      _cc.copy(sh.centers[k]).applyMatrix4(_m4c.copy(vis.group.matrixWorld).invert());
+      vis.lod.shadowCascade(k, vis.camBody, this.cullView, k >= 1 ? sh.splits[k - 1] - this.cullMargin : 0, sh.cascadeFrustum(k, this.cascadeF), vis.group.matrixWorld,
+        { cx: 0, cy: 0, cz: 0, r: 0, el0: 0, floor: Infinity, legacy: true });
+    } else if (k >= 0) {
+      _cc.copy(sh.centers[k]).applyMatrix4(_m4c.copy(vis.group.matrixWorld).invert());
+      const r = sh.radii[k];
+      const floor = vis.lod.groundFloorNear(_cc.x, _cc.y, _cc.z, r);
+      const el0 = Math.asin(Math.max(-1, Math.min(1, this.cullSinEl)));
+      const reach = { cx: _cc.x, cy: _cc.y, cz: _cc.z, r, el0, floor };
+      const nearSplit = k >= 1 ? sh.splits[k - 1] : 0;
+      vis.lod.shadowCascade(k, vis.camBody, this.cullView, nearSplit, sh.cascadeFrustum(k, this.cascadeF), vis.group.matrixWorld, reach);
+      if (Number.isFinite(floor)) {
+        const R = vis.pv.params.radius, cam = vis.camBody, vd = this.cullView, margin = 4 + 0.02 * r;
+        const cl = Math.hypot(_cc.x, _cc.y, _cc.z);
+        vis.life.buildings.shadowCascade((x, y, z, br) => {
+          const d = Math.hypot(x, y, z);
+          const e = d + br - (R + floor);
+          const d0 = (Math.hypot(x - cam.x, y - cam.y, z - cam.z) + br) * 1.05;
+          const run = shadowReach(e, el0, d0, R, margin);
+          if (!Number.isFinite(run)) return true;
+          const aR = d > br ? Math.asin(br / d) : Math.PI;
+          if (cl > 0 && capGap(x / d, y / d, z / d, aR, _cc.x, _cc.y, _cc.z, r, R + floor) > run) return false;
+          if (nearSplit > 0) {
+            const depthMax = (x - cam.x) * vd.x + (y - cam.y) * vd.y + (z - cam.z) * vd.z + br;
+            if (depthMax < nearSplit - (run + Math.max(0, e) + margin)) return false;
+          }
+          return true;
+        });
+      }
+    } else {
+      vis.lod.shadowCascade(k, vis.camBody, this.cullView, 0);
+      vis.life.buildings.shadowCascade(null);
+    }
     // PERF F6: trees only where their shadow can reach this cascade (was every tree in every cascade: 1.6 M of the
     // 2.4 M shadow triangles of a town view)
     if (k >= 0) {
-      _cc.copy(sh.centers[k]).applyMatrix4(_m4c.copy(vis.group.matrixWorld).invert());
       vis.vegetation.shadowCascade(k, _cc.x, _cc.y, _cc.z, sh.radii[k], this.cullSinEl, vis.pv.params.radius);
     } else vis.vegetation.shadowCascade(-1, 0, 0, 0, 0, 1, 1);
     if (k === 2 || (k < 0 && this.hiddenSmall.length)) {
