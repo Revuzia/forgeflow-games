@@ -56,7 +56,7 @@ const INIT = `(() => {
     const bytes = (x) => (x && x.byteLength) || 0;
     // --stacks=1: who uploads (buffer / texture bytes by JS call site, while measuring)
     P.stacks = ${opts.stacks === '1'}; P.stk = {};
-    const site = (kind, b) => { if (!P.stacks || !P.on) return; const st = (new Error().stack || '').split('\n').slice(3, 9).map((l) => l.trim().replace(/^at /, '').replace(/https?:[^)]*\/assets\//, '').replace(/\?[^:]*/, '')).join(' < '); const k = kind + ' ' + st; const e = P.stk[k] || (P.stk[k] = { n: 0, b: 0 }); e.n++; e.b += b; };
+    const site = (kind, b) => { if (!P.stacks || !P.on) return; const st = (new Error().stack || '').split(String.fromCharCode(10)).slice(3, 9).map((l) => l.trim().replace('at ', '').replace(/https?:[^)]*[/]assets[/]/, '').replace(/[?][^:]*/, '')).join(' < '); const k = kind + ' ' + st; const e = P.stk[k] || (P.stk[k] = { n: 0, b: 0 }); e.n++; e.b += b; };
     wrap('bufferData', (c, a) => { const b = typeof a[1] === 'number' ? a[1] : bytes(a[1]); c.bufN++; c.bufB += b; site('bufData', b); });
     wrap('bufferSubData', (c, a) => { const b = a[4] != null ? a[4] * (a[2]?.BYTES_PER_ELEMENT || 1) : bytes(a[2]); c.bufN++; c.bufB += b; site('bufSub', b); });
     for (const n of ['texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'compressedTexImage2D', 'copyTexSubImage2D']) wrap(n, (c, a) => { c.texN++; let b = 0; for (const x of a) if (x && typeof x === 'object' && 'byteLength' in x) b += x.byteLength; else if (x && typeof x === 'object' && 'width' in x) b += x.width * x.height * 4; c.texB += b; site(n, b); });
@@ -158,6 +158,7 @@ for (const sc of scenes) {
     await page.evaluate((s) => { window.__GENESIS__.setSpeed(s); }, sp);
     await page.evaluate(() => window.__GENESIS__.frames(3));
     await page.evaluate(() => { const P = window.__PERFPLAY__; P.frames.length = 0; P.tasks.length = 0; P.on = true; window.__GENESIS__.perf(true); });
+    if (opts.heap === '1') { await cdp.send('HeapProfiler.enable'); await cdp.send('HeapProfiler.startSampling', { samplingInterval: 8192, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }
     if (profile) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
     const t0 = Date.now();
     // pan / zoom while measuring: drags across the canvas and wheel steps, between frames
@@ -173,6 +174,18 @@ for (const sc of scenes) {
       }
       await page.evaluate(() => window.__GENESIS__.frames(1));
       k++;
+    }
+    if (opts.heap === '1') {
+      // allocation sampling: bytes allocated per frame by the allocating function (self), live or already collected
+      const { profile: hp } = await cdp.send('HeapProfiler.stopSampling', {});
+      await cdp.send('HeapProfiler.disable');
+      const agg = new Map();
+      const walk = (n, chain) => { const cf = n.callFrame; const name = `${cf.functionName || '(anon)'} ${(cf.url || '').split('/').pop()}:${cf.lineNumber + 1}`; const ch = [name, ...chain].slice(0, 4); if (n.selfSize) { const k = ch.join(' < '); agg.set(k, (agg.get(k) || 0) + n.selfSize); } for (const c of n.children || []) walk(c, ch); };
+      walk(hp.head, []);
+      const nF = Math.max(1, nFrames);
+      // (sampled: live-object sizes of the samples taken, a fair estimate of the allocation rate per site)
+      console.log('   heap samples by site (kB per frame):');
+      for (const [k2, v] of [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`     ${(v / nF / 1024).toFixed(1).padStart(8)}  ${k2.slice(0, 300)}`);
     }
     let prof = null;
     if (profile) { prof = (await cdp.send('Profiler.stop')).profile; await cdp.send('Profiler.disable'); }

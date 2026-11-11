@@ -122,7 +122,10 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   (random triangles near / far / behind the eye: rasterised <= written for both paths; the old -5w branch fails).
   Browser run: `_harness/scratch/arc/perf/run-r3.sh` (dist3 = UNMINIFIED build, `npx vite build --minify false
   --outDir ...`; town, region, orbit; zcons 1 then 0; shots shots/r3z1-*.png, r3z0-*.png; logs r3z1.log, r3z0.log).
-  perf-play.mjs got `--stacks=1`: buffer / texture upload bytes per JS call site (readable with the unminified build).
+  perf-play.mjs got `--stacks=1`: buffer / texture upload bytes per JS call site (readable with the unminified build),
+  and `--heap=1`: CDP allocation sampling over the measured frames, kB/frame by allocating site (GC hunt). NOTE: code
+  injected through INIT is a template literal: no backslash escapes in it (a '\n' there broke the whole init script
+  and the first r3 run died after 15 min with `__PERFPLAY__` undefined).
 
 ## SIM ASKS
 
