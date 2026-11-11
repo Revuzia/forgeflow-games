@@ -140,7 +140,20 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
 
 ## SIM ASKS
 
-## NEXT
+## NEXT (session 4 state; update as runs land)
+1. Read v5z1/v5z0 logs + shots (F1/F1b zcons 1 vs 0 at speed 0, town/region/orbit, dist4): 0 console errors and
+   equal pictures -> F1 verified. Then v6 (dist5, F1b..F8) shots vs v5z1: equal pictures (trees may differ only by
+   sway phase); r6: uploads by site + attrs (top 90 now) + heap vs r4; r7: CPU profile self time at speed 1.
+2. Full gate: `setsid nohup _harness/slot.sh npm run check > _harness/scratch/arc/perf/check.log 2>&1 &` then
+   npm run build. New tests: render-citylights, render-chunkrest, ui-groundrev.
+3. Remaining ideas, by expected gain on a Mac: (a) terrain patch building off the main thread (worker builds the
+   attribute arrays; transfer; the main thread only copies into the batch) — buildGeometry is ~1 ms a patch here;
+   (b) terrain + building shadow casters culled by shadow REACH per cascade like F6 (needs the local minimum ground
+   height around each cascade so mountains keep their long evening shadows; the light-box test admits patches up
+   to r/sin(el) toward the sun); (c) vegetation: incremental cache invalidation on a surface change (it also reads
+   crop/road/water/moisture: diff those arrays per cell, F5-style) instead of clearing the whole cache;
+   (d) roads rebuild on every surface / layout change (whole ribbons re-made: ~3 MB garbage a rebuild);
+   (e) full-screen pass merging: not worth it by the SwiftShader split (all of them < 5 ms vs 6.6 s geometry).
 
 ## SESSION 4 (2026-11-11 ~01:30Z, after a container restart; scratch survived, dist4 = unminified build of F1b+F2)
 - run-r5.sh: r4 (dist4, town, speed 1, --stacks --attrs --heap: owners of the upload churn), then v5z1 / v5z0 (dist4,
@@ -172,3 +185,27 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   re-placed; the rest keep their records and conformed geometry (no dropOwn, no bank rebuild, no BatchedMesh
   re-add). References move only at a re-check. Vegetation still clears its cache on a real surface change (its
   plants also read crop/road/water/moisture that were only ever refreshed by that clear: kept as it was).
+- F6 (landed, tsc clean; browser check in run-r6): SHADOW CASTER CULLING PER CASCADE for vegetation (r4: 150 shadow
+  draws / 1.58 M tris a frame = every tree bucket in all 3 cascades, vs 528 k tris in the scene pass). lights.ts
+  stores each cascade's slice sphere (centers / radii). vegetation.ts: after a fill each bucket's instances are
+  counting-sorted into 48 distance bands from the rebuild camera (binEnd prefix counts; also front-to-back for the
+  main pass = better early-Z with F1); Vegetation.shadowCascade(k, centre, r, sinEl, R) draws the prefix of trees
+  within dc + r + eMax(1 + cot el') + 4 m of the cascade centre, el' = the camera's sun elevation less the planet's
+  curvature over the drawn range less 0.2 rad (slopes falling away from the sun); el' < 2° draws all. Renderer
+  perCascade calls it (k < 0 restores counts). The cascade is picked by view depth inside its sphere (no blend), so
+  a tree outside that reach cannot shade any pixel reading the cascade: same image. Expected: cascades 0 and 1 draw
+  a fraction of the trees by day (~-0.8 M shadow tris on the town view); a low sun draws them all as before.
+- TERRAIN AT REST (task 3), tests/render-chunkrest.test.ts: a still camera with fields arriving every 7 frames
+  converges (401 patches built by frame ~30 at 16/frame) and then builds NOTHING over 370 frames. The 'still
+  streaming at rest' of the busy-town measurement is the convergence itself under SwiftShader: there the 6 ms cap
+  admits only BUILD_MIN = 4 patches a frame (a patch build takes > 1.5 ms on this loaded box), so ~380 patches take
+  ~95 frames; on a Mac (~0.3-0.5 ms a patch) it converges in ~2-3 s of frames after a cut. RenderStats now carries
+  patchesBuilt (all planets) so a probe can check the rest state directly. Off-thread patch building: NOT done (see NEXT).
+- F7 (landed): buildings coverRuins (every full sync = every new building) was O(ruins x all standing) with a
+  filtered copy; now a cube hash (cube >= the largest pair reach, 27 neighbours): same pairs, same result.
+- F8 (landed, tests/render-chunkrest.test.ts 'reused scratch' = byte-identical attributes): terrain buildGeometry's
+  21 working / attribute arrays (~0.4 MB a patch) are kept on the ChunkLOD and zeroed per build; attributes view
+  them (BufferAttribute, no Float32BufferAttribute copy); PatchBatch.alloc copies into the batch as before. Node
+  profile of 401 builds before: GC 105 ms of ~400 ms terrain time (the largest single item).
+- dist5 = unminified build of F1b..F8 (rebuilt 02:1xZ); run-r6.sh (v6 shots at speed 0 + r6 owners at speed 1) and
+  run-r7.sh (CPU profile, speed 1) queued behind run-r5.

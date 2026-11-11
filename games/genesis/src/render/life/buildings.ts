@@ -342,14 +342,31 @@ export class Buildings {
 
   /** ruins under a standing building are not drawn (a rebuilt house stood on the black heap of the hut before it) */
   private coverRuins(): void {
-    const standing = this.recs.filter((r) => (r.state[2] & BuildingFlag.ruined) === 0);
+    // (PERF: standing buildings hashed in cubes of the largest reach, so each ruin tests its 27 neighbouring cubes
+    // instead of every building of the world — the same pairs pass the same test)
+    let big = 0;
+    for (const r of this.recs) big = Math.max(big, r.w, r.d);
+    const cube = Math.max(8, big * 0.75 + 1);
+    const key = (x: number, y: number, z: number) => `${Math.floor(x / cube)},${Math.floor(y / cube)},${Math.floor(z / cube)}`;
+    const hash = new Map<string, Rec[]>();
+    for (const o of this.recs) {
+      if ((o.state[2] & BuildingFlag.ruined) !== 0) continue;
+      const k = key(o.px, o.py, o.pz);
+      const l = hash.get(k);
+      if (l) l.push(o); else hash.set(k, [o]);
+    }
     for (const r of this.recs) {
       r.covered = false;
       if ((r.state[2] & BuildingFlag.ruined) === 0) continue;
       const rr = Math.max(r.w, r.d) * 0.5;
-      for (const o of standing) {
-        const d = Math.hypot(r.px - o.px, r.py - o.py, r.pz - o.pz);
-        if (d < (rr + Math.max(o.w, o.d) * 0.5) * 0.75) { r.covered = true; break; }
+      const cx = Math.floor(r.px / cube), cy = Math.floor(r.py / cube), cz = Math.floor(r.pz / cube);
+      search: for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+        const l = hash.get(`${cx + a},${cy + b},${cz + c}`);
+        if (!l) continue;
+        for (const o of l) {
+          const d = Math.hypot(r.px - o.px, r.py - o.py, r.pz - o.pz);
+          if (d < (rr + Math.max(o.w, o.d) * 0.5) * 0.75) { r.covered = true; break search; }
+        }
       }
     }
   }

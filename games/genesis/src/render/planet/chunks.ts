@@ -21,7 +21,7 @@
 // baked per vertex, band-limited per level so coarse patches do not alias, at full strength from ~1 m spacing down.
 
 import {
-  BatchedMesh, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Sphere, Vector3, Frustum, type Mesh, type Group,
+  BatchedMesh, BufferAttribute, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Sphere, Vector3, Frustum, type Mesh, type Group,
   type Material, type Matrix4,
 } from 'three';
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
@@ -499,14 +499,14 @@ export class ChunkLOD {
     const E = 2;
     const W = R + 1 + 2 * E;
     const ext = (i: number, j: number) => (j + E) * W + (i + E);
-    const dirs = new Float64Array(W * W * 3);
-    const dOwn = new Float64Array(W * W);
-    const dPar = new Float64Array(W * W);
+    const dirs = this.scratch('dirs', Float64Array, W * W * 3);
+    const dOwn = this.scratch('dOwn', Float64Array, W * W);
+    const dPar = this.scratch('dPar', Float64Array, W * W);
     // dunes (surface.ts: × the cells' dune amplitude), band-limited per level like the detail
-    const uOwn = new Float64Array(W * W);
-    const uPar = new Float64Array(W * W);
+    const uOwn = this.scratch('uOwn', Float64Array, W * W);
+    const uPar = this.scratch('uPar', Float64Array, W * W);
     const wd = duneWeight(sp), pwd = p.level > 0 ? duneWeight(sp * 2) : wd;
-    const has = new Uint8Array(W * W);
+    const has = this.scratch('has', Uint8Array, W * W);
     const fiOf = (i: number, j: number) => p.a[0] + ((p.b[0] - p.a[0]) * i) / R + ((p.c[0] - p.a[0]) * j) / R;
     const fjOf = (i: number, j: number) => p.a[1] + ((p.b[1] - p.a[1]) * i) / R + ((p.c[1] - p.a[1]) * j) / R;
     for (let j = -E; j <= R + E; j++) {
@@ -537,25 +537,25 @@ export class ChunkLOD {
       out[0] = a * ux + b * vx; out[1] = a * uy + b * vy; out[2] = a * uz + b * vz;
     };
 
-    const pos = new Float32Array(NVERT * 3);
-    const aCells = new Float32Array(NVERT * 4);
-    const aMisc = new Float32Array(NVERT * 4);
-    const aGrad = new Float32Array(NVERT * 3);
-    const aN1 = new Float32Array(NVERT * 4);
-    const aN1m = new Float32Array(NVERT * 4);
-    const aN1d = new Float32Array(NVERT * 3);
-    const aN2 = new Float32Array(NVERT * 4);
-    const aN2m = new Float32Array(NVERT * 4);
-    const aN2d = new Float32Array(NVERT * 3);
-    const aGradM = new Float32Array(NVERT * 3);
-    const aGradD = new Float32Array(NVERT * 3);
-    const aGradDM = new Float32Array(NVERT * 3);
+    const pos = this.scratch('pos', Float32Array, NVERT * 3);
+    const aCells = this.scratch('aCells', Float32Array, NVERT * 4);
+    const aMisc = this.scratch('aMisc', Float32Array, NVERT * 4);
+    const aGrad = this.scratch('aGrad', Float32Array, NVERT * 3);
+    const aN1 = this.scratch('aN1', Float32Array, NVERT * 4);
+    const aN1m = this.scratch('aN1m', Float32Array, NVERT * 4);
+    const aN1d = this.scratch('aN1d', Float32Array, NVERT * 3);
+    const aN2 = this.scratch('aN2', Float32Array, NVERT * 4);
+    const aN2m = this.scratch('aN2m', Float32Array, NVERT * 4);
+    const aN2d = this.scratch('aN2d', Float32Array, NVERT * 3);
+    const aGradM = this.scratch('aGradM', Float32Array, NVERT * 3);
+    const aGradD = this.scratch('aGradD', Float32Array, NVERT * 3);
+    const aGradDM = this.scratch('aGradDM', Float32Array, NVERT * 3);
 
     // per lattice point: cells / weights (own) — computed once, referenced by neighbours' morph targets
-    const cellA = new Float32Array(NPTS), cellB = new Float32Array(NPTS), cellC = new Float32Array(NPTS);
-    const wB = new Float32Array(NPTS), wC = new Float32Array(NPTS);
-    const gPar = new Float32Array(NPTS * 3);
-    const gParD = new Float32Array(NPTS * 3);
+    const cellA = this.scratch('cellA', Float32Array, NPTS), cellB = this.scratch('cellB', Float32Array, NPTS), cellC = this.scratch('cellC', Float32Array, NPTS);
+    const wB = this.scratch('wB', Float32Array, NPTS), wC = this.scratch('wC', Float32Array, NPTS);
+    const gPar = this.scratch('gPar', Float32Array, NPTS * 3);
+    const gParD = this.scratch('gParD', Float32Array, NPTS * 3);
     const tmp = [0, 0, 0];
     for (let j = 0; j <= R; j++) {
       for (let i = 0; i + j <= R; i++) {
@@ -608,7 +608,7 @@ export class ChunkLOD {
     }
 
     const geo = new BufferGeometry();
-    const posAttr = new Float32BufferAttribute(pos, 3);
+    const posAttr = new BufferAttribute(pos, 3);
     geo.setAttribute('position', posAttr);
     // three r186 compiles a MeshStandardMaterial as FLAT_SHADED when the geometry has no `normal` attribute (one
     // face normal per render triangle from screen derivatives): the per-cell normals, the detail gradient and the
@@ -616,21 +616,33 @@ export class ChunkLOD {
     // overrides objectNormal anyway (VERT_MAIN), so the unit `position` directions serve as the attribute — the
     // same buffer, no extra memory.
     geo.setAttribute('normal', posAttr);
-    geo.setAttribute('aCells', new Float32BufferAttribute(aCells, 4));
-    geo.setAttribute('aMisc', new Float32BufferAttribute(aMisc, 4));
-    geo.setAttribute('aGrad', new Float32BufferAttribute(aGrad, 3));
-    geo.setAttribute('aN1', new Float32BufferAttribute(aN1, 4));
-    geo.setAttribute('aN1m', new Float32BufferAttribute(aN1m, 4));
-    geo.setAttribute('aN1d', new Float32BufferAttribute(aN1d, 3));
-    geo.setAttribute('aN2', new Float32BufferAttribute(aN2, 4));
-    geo.setAttribute('aN2m', new Float32BufferAttribute(aN2m, 4));
-    geo.setAttribute('aN2d', new Float32BufferAttribute(aN2d, 3));
-    geo.setAttribute('aGradM', new Float32BufferAttribute(aGradM, 3));
-    geo.setAttribute('aGradD', new Float32BufferAttribute(aGradD, 3));
-    geo.setAttribute('aGradDM', new Float32BufferAttribute(aGradDM, 3));
+    geo.setAttribute('aCells', new BufferAttribute(aCells, 4));
+    geo.setAttribute('aMisc', new BufferAttribute(aMisc, 4));
+    geo.setAttribute('aGrad', new BufferAttribute(aGrad, 3));
+    geo.setAttribute('aN1', new BufferAttribute(aN1, 4));
+    geo.setAttribute('aN1m', new BufferAttribute(aN1m, 4));
+    geo.setAttribute('aN1d', new BufferAttribute(aN1d, 3));
+    geo.setAttribute('aN2', new BufferAttribute(aN2, 4));
+    geo.setAttribute('aN2m', new BufferAttribute(aN2m, 4));
+    geo.setAttribute('aN2d', new BufferAttribute(aN2d, 3));
+    geo.setAttribute('aGradM', new BufferAttribute(aGradM, 3));
+    geo.setAttribute('aGradD', new BufferAttribute(aGradD, 3));
+    geo.setAttribute('aGradDM', new BufferAttribute(aGradDM, 3));
     geo.setIndex(indexBuffer());
     geo.boundingSphere = p.sphere.clone();
     return geo;
+  }
+
+  /**
+   * PERF (task 3/5): the build's working arrays live as long as the ChunkLOD, zeroed per build (a patch's arrays were
+   * ~0.4 MB of garbage per build: a quarter of the build time was the collector). The geometry's attributes view them
+   * without a copy; PatchBatch.alloc copies them into the batch, and nothing keeps the geometry after that.
+   */
+  private scr = new Map<string, Float64Array | Float32Array | Uint8Array>();
+  private scratch<T extends Float64Array | Float32Array | Uint8Array>(name: string, Ctor: { new (n: number): T }, n: number): T {
+    let a = this.scr.get(name) as T | undefined;
+    if (!a || a.length !== n) { a = new Ctor(n); this.scr.set(name, a); } else a.fill(0);
+    return a;
   }
 
   /** the level's terrain (water = false) or water batch, made on first use */
