@@ -692,3 +692,26 @@ casting with visually equal shadows; a ?switch per fix (default on); the report 
   bucket (<= ~100 m) only in cascade 0, LOD-1 (<= ~250 m) in 0-1, LOD-2 in 0-2 by day; low sun -> reach grows -> more.
 - Queued: run-s9b.sh (dist17 = F21 + F22: v17a shnear=1 / v17b shnear=0, ULTRA, town / townlow / f200 at speed 0:
   shots + shadowTris), run-s9c.sh (g4u: dist17, ULTRA, panned, --gl=1 --stacks=1 --attrs=1 --panreport).
+
+## OWNER'S MAC PROTOCOL RESULTS (build 31cb64e7 = F16-F20, M5, Chrome 157, Retina css 1360x597 DPR 2.5 -> Ultra
+## 2720x1194, High 2040x895; babel scenario seed 307987276, town Rubolhin by the Lake; WASD pan, alt 50-137 m, ~11 km)
+| run | fps | p50/p95 ms | main mean | GPU total | tris (shadow) |
+| ultra | 1.3 | 767/1700 | 590 | 2464 | 28.7M (19.8M) |
+| ultra control rerun | 1.2 | 867/1700 | 748 | 2685 | 29.3M (20.4M) |
+| high | 3.7 | 267/567 | 129 | 715 | 11.5M (7.6M) |
+| ultra span=0 | 1.7 | 567/1250 | 347 | 1870 | 29.1M |
+| ultra preupload=0 | 1.9 | 533/1284 | 330 | 1778 | 29.1M |
+| ultra fartrees=0 | 1.1 | 800/1800 | 701 | 2393 | 18.2M (11.6M) |
+| ultra zcons=0 | 0.9 | 1067/2050 | 885 | 2953 | 27.8M |
+Ultra gl trace (main ms/frame in the call): total 543; shadows|bufferData 241 ms x42.9 6.1 MB (inpass 13.4, max 840);
+shadows|bufferSubData 135 ms x113.9 7.0 MB (inpass 26.1); post|bufferData 109 ms x35.9 5.1 MB; post|bufferSubData 29 ms
+x47 4.1 MB; post|multiDrawElementsWEBGL 27 ms x178; fb switches 46/frame; uploads inside a pass 62/frame; metal allocs
+est 15.4 MB/frame (shadows 8.2 MB x58, post 7.2 MB x50). Draws 1402 (~227 before far trees). Frames alternate: main
+~700-1200 ms stuck in shadows|bufferData/bufferSubData or post|bufferData, and frames main ~25 ms but GPU 2-4 s.
+High: post|bufferSubData 58 ms x59 3.6 MB; shadows|bufferSubData 31 ms x104; metal allocs 13.1 MB/frame.
+Vale on the same canvas (2720x1194): 59.9 fps, p95 17.6 ms.
+Coordinator's order: (1) owners of ~36 post|bufferData + ~43 shadows|bufferData per frame -> ~0; (2) span=1 /
+preupload=1 look HARMFUL on Metal (1.2-1.3 vs 1.7-1.9 fps): rethink (ring buffers) or default off; (3) far trees
+~1100 draws + 11 M tris: batch + cut their shadows; (4) per-pass target sizes at DPR 2.5; (5) VISUAL BUG water sheet over
+the hills east of the town (trunks as ghosts); (6) white frames through the cloud deck still; (7) '1' key after 1000x;
+long press frame-rate independent. Report after 1-2 verified.
