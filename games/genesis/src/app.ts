@@ -2242,6 +2242,7 @@ export class App implements UiHost {
     return {
       tick: Math.max(v.renderTick, v.snapTick), renderTick: v.renderTick, snapTick: v.snapTick, speed: v.speed, achievedSpeed: v.achievedSpeed, fps: this.fps,
       scenario: this.world.scenario, seed: this.world.seed, source: this.sim.source, quality: this.quality, frames: this.frames,
+      snapshots: { full: v.snapshots, same: this.sim.sameCount, hz: this.sim.snapshotHz },
       camera: { mode: this.camModeName(), rig: this.rig.mode, planet: pose.planet, pos: [...pose.pos], quat: [...pose.quat], fov: pose.fov, altitude: this.renderer.stats.altitude, walked: this.walkedMetres() },
       packs: this.packs.map((p) => p.id), content: [...this.sim.view.content],
       render: { ...this.renderer.stats },

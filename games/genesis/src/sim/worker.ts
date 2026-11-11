@@ -30,7 +30,7 @@
 import type { Command, FieldName, FromWorker, Snapshot, ToWorker, WorkerProgress } from './types.ts';
 import { TICKS_PER_SECOND_1X } from './types.ts';
 import { Sim } from './sim.ts';
-import { FAST_FIELDS } from './world/planet.ts';
+import { FAST_FIELDS, PUBLISHED_FIELDS } from './world/planet.ts';
 import { loadContent, type ContentPack } from './content.ts';
 import { lapseLevel, levelOfTps } from './perf/lapse.ts';
 import { BASE_PACK } from '../data/index.ts';
@@ -66,7 +66,21 @@ function now(): number {
   return performance.now();
 }
 
-function post(m: FromWorker | WorkerProgress, transfer: Transferable[] = []): void {
+/**
+ * PERF s7 (the owner's "choppy on a MacBook Air"): the reply to a snapshot request when nothing changed since the last
+ * snapshot sent (no tick, no message that could change the world, no field due). The client asks ~30 times a second
+ * while the world at 1x changes once a second: every request built the whole renderer view (~8 ms here on a 15-year
+ * world: people, animals, buildings, settlements) and the main thread structured-cloned ~230 kB and re-applied it, 29
+ * times in 30 for identical data. client/simclient.ts reads it apart from FromWorker's replies (like the progress).
+ */
+interface WorkerSame { type: 'same'; tick: number; speed: number; achievedSpeed: number; msPerTick: number }
+
+/** bumped by every completed tick and every message that may change the world (all but snapshot / parse requests) */
+let mutations = 0;
+/** `mutations` when the last full snapshot was built (-1 = the next one is built whatever happened) */
+let snapMutations = -1;
+
+function post(m: FromWorker | WorkerProgress | WorkerSame, transfer: Transferable[] = []): void {
   scope.postMessage(m, transfer);
 }
 
@@ -145,6 +159,7 @@ function pace(): void {
     return;
   }
   const t1 = now();
+  if (done > 0) mutations++;
   if (done > 0) msPerTick = msPerTick * 0.9 + ((t1 - t0) / done) * 0.1;
   // if we could not pay the debt within the slice, we are running slow: drop the excess (never skip sim work). (At least
   // a whole tick is kept: at 1x-5x a tenth of a second is under one tick, and clamping the fraction owed lost time.)
@@ -216,6 +231,11 @@ function setSpeed(x: number): void {
 function snapshot(full: boolean): void {
   if (!sim) return;
   const t = now();
+  if (!full && mutations === snapMutations && !fieldDue(t)) {
+    post({ type: 'same', tick: sim.tick, speed, achievedSpeed: speed > 0 ? achieved : 0, msPerTick });
+    return;
+  }
+  snapMutations = mutations;
   const include = (planet: number, field: FieldName): boolean => {
     const key = `${planet}:${field}`;
     if (full) return true;
@@ -245,6 +265,20 @@ function snapshot(full: boolean): void {
 function resetSent(): void {
   sentVer.clear();
   sentAt.clear();
+  snapMutations = -1;
+}
+
+/** a published field changed since it was last sent and its send interval has passed (a snapshot would carry it) */
+function fieldDue(t: number): boolean {
+  if (!sim) return false;
+  for (const p of sim.u.planets) {
+    for (const name of PUBLISHED_FIELDS) {
+      const key = `${p.id}:${name}`;
+      if ((p.fieldVer[name] ?? 0) <= (sentVer.get(key) ?? -1)) continue;
+      if (t - (sentAt.get(key) ?? -1e9) >= (FAST_FIELDS.has(name) ? FAST_MS : SLOW_MS)) return true;
+    }
+  }
+  return false;
 }
 
 // ───────────────────────────── mods (CONTRACT §9) ─────────────────────────────
@@ -360,6 +394,8 @@ function handle(m: ToWorker): void {
 }
 
 scope.onmessage = (ev: MessageEvent) => {
+  const type = (ev.data as { type?: unknown } | null)?.type;
+  if (type !== 'snapshot' && type !== 'parse') mutations++;
   try {
     handle(ev.data as ToWorker);
   } catch (e) {

@@ -20,6 +20,12 @@ import { applyArcStub, arcStubCmd, arcStubQuery } from './arcstub.ts';
 import { perfmon } from '../render/perfmon.ts';
 
 export type SnapshotSink = (snap: Snapshot) => void;
+/**
+ * PERF s7: the worker's answer to a snapshot request when nothing changed since its last snapshot (no tick, no
+ * command, no field due): the clock values only. At 1x the world changes once a second; the full view (~230 kB on a
+ * busy world, ~8 ms to build in the worker, a structured clone and a re-apply on the main thread) was sent 30x a second.
+ */
+export interface SnapSame { type: 'same'; tick: number; speed: number; achievedSpeed: number; msPerTick: number }
 
 export interface SimBackend {
   readonly kind: 'worker' | 'lookdev';
@@ -47,6 +53,8 @@ class WorkerBackend implements SimBackend {
   onFatal: ((msg: string) => void) | null = null;
   /** the world being built says how far it is (a worker that sends `{ type: 'progress', stage, frac }`) */
   onProgress: ((stage: string, frac: number) => void) | null = null;
+  /** a snapshot request answered with 'nothing changed' (SnapSame) */
+  onSame: ((m: SnapSame) => void) | null = null;
 
   constructor(worker: Worker) {
     this.worker = worker;
@@ -87,6 +95,7 @@ class WorkerBackend implements SimBackend {
     // (additive, forward compatible: a worker that reports the stages of building its world)
     const pm = m as unknown as { type: string; stage?: unknown; frac?: unknown };
     if (pm.type === 'progress') { this.onProgress?.(String(pm.stage ?? ''), Number(pm.frac ?? 0)); return; }
+    if (pm.type === 'same') { this.onSame?.(pm as unknown as SnapSame); return; }
     switch (m.type) {
       case 'ready':
         this.readyResolve?.(m.content);
@@ -208,6 +217,7 @@ export class SimClient {
         stage('Waking the simulation…', 0.04);
         const { spawnSimWorker } = await import('./workerspawn.ts');
         const wb = new WorkerBackend(spawnSimWorker());
+        wb.onSame = (m) => this.receiveSame(m);
         // the living sim waits as long as the world takes to build; only `auto` gives up and falls back to lookdev
         const deadline = o.source === 'auto' ? (o.readyTimeoutMs ?? 20000) : 0;
         const run = async (): Promise<void> => {
@@ -259,6 +269,8 @@ export class SimClient {
 
   /** callers waiting for a snapshot taken after a moment (see fresh()) */
   private freshWaiters: { after: number; ok: () => void }[] = [];
+  /** (probes) snapshot requests answered 'nothing changed' (SnapSame) */
+  sameCount = 0;
 
   /**
    * Resolves when a snapshot asked for now has arrived: the world as it is after every command and step already
@@ -290,6 +302,24 @@ export class SimClient {
     }
     this.view.apply(s, now);
     perfmon.message(performance.now() - now);
+    this.answered(now);
+  }
+
+  /** the worker had nothing new (SnapSame): the clock values only; the view keeps every block it holds */
+  private receiveSame(m: SnapSame): void {
+    const now = performance.now();
+    this.got++;
+    this.sameCount++;
+    let speed = m.speed;
+    if (this.speedAt >= 0) {
+      if (this.got <= this.speedAt && now - this.speedSetAt < 3000) speed = this.speedWant;
+      else this.speedAt = -1;
+    }
+    this.view.applySame(m.tick, speed, m.achievedSpeed, m.msPerTick, now);
+    this.answered(now);
+  }
+
+  private answered(now: number): void {
     this.inFlight = false;
     if (this.freshWaiters.length) {
       for (let i = this.freshWaiters.length - 1; i >= 0; i--) if (this.freshWaiters[i].after < now) { this.freshWaiters[i].ok(); this.freshWaiters.splice(i, 1); }

@@ -458,3 +458,31 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
 3. v13f0 shadowTris vs 2.41 M / 2.04 M; l13 vs l13r0 shots (mountain shadows kept).
 4. r13 / r14 tables vs r4; the owner's Mac report overrides everything.
 5. Grass cellItems in a worker (see above); far-block making could move there too (same inputs).
+
+## SESSION 7 (2026-11-11 ~15:30Z, container restarted at 15:32Z; scratch survived)
+- Started: gate check7 (slot), dist11 = unminified build of the session-6 tree, run-s7.sh queued (s7f1 descent+zoom busy
+  save far trees on; s7f0 far trees off; s7l1 / s7l0 low sun reach on / off; all busy save, farbudget=400).
+- OWNER LEAD (coordinator, top priority): "VALE runs VERY smoothly ... maybe something in the code or some kind of
+  bug" (MacBook Air: fanless, integrated Apple GPU, thermal throttling). Hunt a BUG, not scene load.
+  (Valebound's source is NOT in this repo: games/valebound holds only game_meta.json — no code diff possible.)
+- BUG B1 FOUND + FIXED: THE SIM WORKER REBUILT AND SENT THE WHOLE WORLD 30x A SECOND FOR NOTHING. simclient.pump asks
+  for a snapshot every 33 ms (one in flight); the worker answered EVERY request with a full renderer view: people,
+  animals, buildings, settlements (perf-snap.ts on world25: build 8.5 ms in the worker, 233 kB structured-cloned to the
+  main thread, then WorldView.apply + every consumer's diff of new block objects: buildings syncStates over 1 671
+  buildings, crowds / animals 'fresh' passes). At 1x the world changes ONCE A SECOND (1 tick/s): 29 of 30 snapshots were
+  byte-identical (JSON-equal, checked). Cost: ~255 ms/s of a worker core (a fanless laptop heats on it -> throttles the
+  GPU too) + ~30 deserialisations/applies a second on the main thread (r-era measure: apply p95 2.7 ms, clone p95 1.8).
+  FIX: worker.ts counts 'mutations' (a completed tick; any message but snapshot / parse); a non-full request with no
+  mutation since the last full snapshot and no field due (changed and past its 100 / 500 ms send interval) is answered
+  { type: 'same', tick, speed, achievedSpeed, msPerTick }; simclient (onSame -> receiveSame) updates the clock values
+  via WorldView.applySame (snapAt, speed, achieved, msPerTick; no block replaced, so nothing downstream re-reads).
+  Full requests, loads, rewinds (resetSent) always build. MEASURED (perf-snaprate.ts, real worker host in-process,
+  busy save, 1x, 10 s, 30 Hz asks): 11 full snapshots (10.4 ms each = 11 ms/s) + 258 'same' — was ~300 full = ~3 s of
+  worker CPU per 10 s. Test tests/ui-snapsame.test.ts (same / step / query / speed / full / parse cases).
+  NOTE (lanes): worker.ts is sim-lane; the change is host-side only (no sim logic, determinism untouched), additive.
+- Checked, NOT bugs: one rAF chain (start() once, loop re-arms itself; stop() cancels); hidden tab renders nothing;
+  readPixels only in photo-mode depth (app.depthAt <- ui/photo.ts), readMeter (probes/dev HUD only), the GPU probe at
+  boot (detectQuality); no per-frame getError / checkFramebufferStatus / finish; sim worker paces by timers (1x = one
+  tick a second, 50 ms idle checks when paused, setImmediate/MessageChannel only while behind); renderer options:
+  antialias off, msaa 0 on High, alpha off, stencil off, high-performance, DPR min(dpr, 1.5); post targets at render
+  size (half-float), bloom / god rays at 1/2 .. 1/4. focus cmd at most every 2.5 s.

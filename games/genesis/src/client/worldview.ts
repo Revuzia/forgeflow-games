@@ -210,6 +210,25 @@ export class WorldView {
     this.snapshots++;
   }
 
+  /**
+   * PERF s7: the worker's 'nothing changed' answer (client/simclient.ts SnapSame): the same tick and world, so only the
+   * clock values move; every block, field and version stays as it is (nothing downstream re-reads or rebuilds).
+   */
+  applySame(tick: number, speed: number, achievedSpeed: number, msPerTick: number, now: number): void {
+    if (this.snapshots === 0) return;
+    if (speed !== this.speed || tick !== this.snapTick) {
+      // (cannot happen with the worker's rule — a tick or a speed message always builds a full snapshot — but if it
+      // did, restart the rate estimate as a full snapshot would)
+      this.rateT.length = 0;
+      this.rateTick.length = 0;
+      this.tickRate = speed * TICKS_PER_SECOND_1X;
+    }
+    this.snapAt = now;
+    this.speed = speed;
+    this.achievedSpeed = achievedSpeed;
+    this.msPerTick = msPerTick;
+  }
+
   private createPlanet(ps: PlanetSnap): PlanetView {
     const grid = getGrid(ps.gridN);
     const z = zeros(grid.count);
