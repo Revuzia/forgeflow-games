@@ -771,3 +771,5 @@ long press frame-rate independent. Report after 1-2 verified.
 5. ITEM 6 white frames through the cloud deck (two near-white steps per zoom): luminance per frame of a scripted zoom
    (perf-descent.mjs phase zoom); check clouds.ts tunnel speed threshold vs WASD/zoom speeds, exposure post.cutExposure.
 6. ITEM 7: '1' key after 1000x (ui lane), long-press time-based and drag-cancelled (ui lane: hand/input).
+- GATE check11 (whole tree: F21, F22b, F23, span/preupload default off, build stamp; slot.sh): npm run check 913/913
+  pass; npm run build OK (build-prod10.log; the bundle carries its build stamp).
