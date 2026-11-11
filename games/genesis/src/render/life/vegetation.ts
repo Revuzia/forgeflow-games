@@ -854,6 +854,10 @@ export class Vegetation {
     this.fade.value.y = range;
     const visible = this.enabled && alt < range * 1.2;
     this.group.visible = visible;
+    // PERF P2 (no pop-in, no stall on arrival): the plants of the cells about to come into range are scattered ahead,
+    // a few ms a frame — while descending toward the trees' altitude and in a ring beyond the drawn range — so the
+    // frame that first draws them finds them ready (it scattered every cell within range at once: a long frame)
+    if (this.enabled && alt < range * 2.5) this.prefetch(pv, camBody, range);
     if (!visible) { this.stats.instances = 0; return; }
     const moved = camBody.distanceTo(this.lastCam);
     if (moved < range * 0.04 && frame - this.lastFrame < 240) return;
@@ -988,6 +992,31 @@ export class Vegetation {
   }
 
   private surfVer = -1;
+  private pfCells: number[] = [];
+  private pfAt = 0;
+  private pfCam = new Vector3(1e9, 0, 0);
+
+  /** scatter not-yet-cached cells within range + a ring beyond it, nearest first, ~2 ms a frame */
+  private prefetch(pv: PlanetView, camBody: Vector3, range: number): void {
+    const R = pv.params.radius;
+    if (camBody.distanceTo(this.pfCam) > range * 0.08 || this.pfAt >= this.pfCells.length) {
+      // (refreshed as the camera moves; once every cell is cached it only re-checks every ~30 m)
+      if (camBody.distanceTo(this.pfCam) <= range * 0.08 && this.pfAt >= this.pfCells.length) return;
+      this.pfCam.copy(camBody);
+      const rc = camBody.length() || 1;
+      const dx = camBody.x / rc, dy = camBody.y / rc, dz = camBody.z / rc;
+      const cells = pv.grid.cellsWithin(dx, dy, dz, (range * 1.35 + 60) / R).slice();
+      const P = pv.grid.pos;
+      cells.sort((a, b) => (P[b * 3] * dx + P[b * 3 + 1] * dy + P[b * 3 + 2] * dz) - (P[a * 3] * dx + P[a * 3 + 1] * dy + P[a * 3 + 2] * dz));
+      this.pfCells = cells.filter((c) => !this.cache.has(c));
+      this.pfAt = 0;
+    }
+    const t0 = performance.now();
+    while (this.pfAt < this.pfCells.length && performance.now() - t0 < 2) {
+      const c = this.pfCells[this.pfAt++];
+      if (!this.cache.has(c)) this.cellPlants(pv, c);
+    }
+  }
   private surfRev = -1;
   private refs = new Map<string, Float32Array | null>();
   /** cell -> input epoch it was scattered in, for cells first built since the last check */

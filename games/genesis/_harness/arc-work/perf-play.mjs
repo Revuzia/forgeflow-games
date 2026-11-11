@@ -147,6 +147,8 @@ const CAM = {
 // low-sun views (PERF F11: long evening shadows must survive the shadow-reach culling); --hour=H overrides
 CAM.regionlow = { ...CAM.region, hour: Number(opts.hour ?? 17.6) };
 CAM.townlow = { ...CAM.town, hour: Number(opts.hour ?? 17.6) };
+// pop-in descent over a forest (PERF P2): each scene flies (blend s) from the previous one, shot early and settled
+for (const d of [1200, 600, 350, 200, 120]) CAM['f' + d] = { mode: 'orbit', poi: 'forest', dist: d, tilt: 50, hour: 10, blend: Number(opts.blend ?? 1.5) };
 CAM.ridgelow = { mode: 'orbit', poi: 'peak', dist: 1800, tilt: 30, hour: Number(opts.hour ?? 17.6) };
 
 const pct = (a, p) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
@@ -155,9 +157,13 @@ const stat = (a) => ({ n: a.length, mean: a.reduce((x, y) => x + y, 0) / Math.ma
 const results = [];
 for (const sc of scenes) {
   await page.evaluate((c) => window.__GENESIS__.camera(c), CAM[sc]);
+  // --early=N: a shot N frames after the move too (what the player sees while things stream in)
+  if (opts.early && opts.shot) { mkdirSync(dirname(resolve(ROOT, opts.shot)), { recursive: true }); await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.early)); await page.screenshot({ path: resolve(ROOT, `${opts.shot}-${sc}-early.png`) }); }
   await page.evaluate((n) => window.__GENESIS__.frames(n), Number(opts.settle ?? 6));
   if (opts.shot) { mkdirSync(dirname(resolve(ROOT, opts.shot)), { recursive: true }); await page.screenshot({ path: resolve(ROOT, `${opts.shot}-${sc}.png`) }); }
   console.log('scene', sc, 'settled', ((Date.now() - T0) / 1000).toFixed(0), 's');
+  // --report=MS: the in-game performance report (render/perfreport.ts) over MS of frames, printed as the player gets it
+  if (opts.report) { const txt = await page.evaluate((ms) => window.__GENESIS__.perfReport(ms), Number(opts.report)); console.log('REPORT ' + sc + '\n' + txt + '\nEND REPORT'); }
   for (const sp of speeds) {
     await page.evaluate((s) => { window.__GENESIS__.setSpeed(s); }, sp);
     await page.evaluate(() => window.__GENESIS__.frames(3));

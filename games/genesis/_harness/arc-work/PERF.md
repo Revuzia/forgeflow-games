@@ -330,3 +330,26 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   R + 0.3..0.7 thickness), exposure adaptation after a cut / bright event (post.cutExposure), NaN/Inf in an HDR
   target spread by bloom, zcons/depth clamp (A/B ?zcons=0). Repro: scripted zoom orbit -> town through cloud
   altitude; add a NaN-safe guard at the tonemap/bloom input.
+
+## SESSION 5c (10:30Z, after another container restart: check5 / r11 / r12 / l11 all died; re-queued)
+- run-r13.sh: dist9 (unminified, P1 + F10..F12) then d13: a descent over a forest f1200 -> f600 -> f350 -> f200 -> f120
+  (each flown with blend 1.5 s from the last), shots EARLY (2 frames after the move: what streams in) and settled,
+  ?perf=1 overlay visible, the in-game report printed per scene (perf-play --report=MS, --early=N, scenes f*).
+- P2 fixes landed (tsc clean; browser check pending):
+  (a) vegetation.ts prefetch(): the plants of every cell within 1.35 x range + 60 m are scattered ahead, nearest
+      first, ~2 ms a frame, from 2.5 x range of altitude down — the frame that first draws a cell finds it cached (it
+      scattered every cell in range in one frame on arrival: the descent's long frame).
+  (b) groundcover.ts prefetchCover(): one cell a frame within range + 80 m from 1.5 x range + 150 m of altitude,
+      BEFORE it is drawn (it built two a frame once already on screen: the grass and stones filled in cell by cell
+      in front of the player — "populate as I looked").
+  (c) chunks.ts worker path PREFETCH: a built leaf within 1.35x its split distance has its four children asked for
+      ahead (not drawn) while fewer than 96 builds are in flight; the split then finds them ready.
+  NOT yet: a far-tree layer beyond the 380 m tree range (the tree disc still grows around a camera coming down
+  from ~450 m — designed LOD range with a 0.72-1.0 fade; see P2 analysis above), vegetation instance refresh cost.
+- P3 fixes landed (tsc clean; browser check pending):
+  (a) clouds.ts: a camera crossing the cloud deck fast (vertical speed > 0.15 deck thickness/s; zooming orbit ->
+      town crosses it in a fraction of a second) opens a clear tunnel: near-zone radius 35 m -> up to 450 m with the
+      speed, in-cloud fog faded; closes over ~1 s once the camera lingers (hovering in a cloud still fogs). Every frame
+      inside the deck was a full white-out before (the in-cloud fog is designed "white-out when deep").
+  (b) pipeline.ts: exposure adaptation and tonemap are NaN/Inf-safe (a bad target or history used to stick until a
+      cut: whole-screen white or black); bloom / luminance inputs already had sane().

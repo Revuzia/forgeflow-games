@@ -836,6 +836,11 @@ export class ChunkLOD {
           out.length = mark;
         }
         p.split = false;
+        // PREFETCH (no pop-in): a leaf the camera is closing in on (within 1.35x its split distance) has its children
+        // built ahead, so the split finds them ready instead of drawing the coarse patch until they land
+        if (!split && p.built && p.level < this.maxLevel && d < rSplit * 1.35 && this.pending.size < MAX_INFLIGHT / 2) {
+          for (const k of p.makeChildren()) this.ensureGeometry(k, true);
+        }
         if (p.built) { out.push(p); return true; }
         if (p.level <= 1) { this.ensureGeometry(p, false); out.push(p); return true; }
         if (!split) this.ensureGeometry(p, true);

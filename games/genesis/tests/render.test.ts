@@ -129,7 +129,8 @@ test('ground cover rebuilds only cells whose inputs changed, and keeps drawing m
   assert.ok(inner.stale.size === 0, 'stale cells rebuilt');
   assert.ok(gc.stats.instances < full, 'fewer tufts once a neighbour is bare');
   assert.ok(low > full * 0.3, `still drawing while rebuilding (${low} of ${full})`);
-  assert.equal(inner.cache.size, cached, 'no cell dropped');
+  // (the cache may only grow meanwhile: the prefetch ring beyond the drawn range, PERF P2, keeps adding cells)
+  assert.ok(inner.cache.size >= cached, `no cell dropped (${inner.cache.size} < ${cached})`);
   gc.dispose();
 });
 

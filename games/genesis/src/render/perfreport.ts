@@ -224,9 +224,11 @@ export class PerfRecorder {
         + `${lts.length ? ` | longtask ${Math.round(Math.max(...lts.map((x) => x.d)))}` : ''}${r.note ? ` | ${r.note}` : ''}`);
     }
     // a coarse timeline: worst interval per second
+    // (at most 30 buckets: a long recording widens them)
+    const span = Math.max(1, Math.ceil((F[F.length - 1].t + 1) / 1000 / 30));
     const secs: number[] = [];
-    for (const r of F) { const s = Math.floor(r.t / 1000); secs[s] = Math.max(secs[s] ?? 0, r.iv); }
-    L.push(`worst per s: ${Array.from(secs, (x) => Math.round(x ?? 0)).join(' ')}`);
+    for (const r of F) { const s = Math.floor(r.t / 1000 / span); secs[s] = Math.max(secs[s] ?? 0, r.iv); }
+    L.push(`worst per ${span} s: ${Array.from(secs, (x) => Math.round(x ?? 0)).join(' ')}`);
     return L.join('\n');
   }
 }

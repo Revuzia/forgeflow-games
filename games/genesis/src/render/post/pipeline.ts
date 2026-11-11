@@ -202,7 +202,12 @@ void main() {
   float target = clamp(uKey / exp2(avgLog), uRange.x, uRange.y);
   float prev = texture(tPrev, vec2(0.5)).r;
   float rate = target < prev ? 2.2 : 1.1;
-  float e = (uCut > 0.5 || prev <= 0.0) ? target : exp(mix(log(prev), log(target), 1.0 - exp(-uDt * rate)));
+  // (a NaN / Inf / non-positive history or target — one bad frame — must never stick: it whitened or blackened the
+  // whole screen until a cut; PERF P3 guard)
+  if (isnan(target) || isinf(target) || !(target > 0.0)) target = clamp(1.0, uRange.x, uRange.y);
+  bool bad = isnan(prev) || isinf(prev) || !(prev > 0.0);
+  float e = (uCut > 0.5 || bad) ? target : exp(mix(log(prev), log(target), 1.0 - exp(-uDt * rate)));
+  if (isnan(e) || isinf(e)) e = target;
   gl_FragColor = vec4(e, target, 0.0, 1.0);
 }
 `;
@@ -373,6 +378,7 @@ void main() {
   c = mix(c, b * uBloomNorm, uBloom);
   c += texture(tGod, vUv).rgb * uGod * uGodColor;
   float ex = uManualExposure > 0.0 ? uManualExposure : mix(texture(tExposure, vec2(0.5)).r, uStarExposure, uStarMix);
+  if (isnan(ex) || isinf(ex) || !(ex > 0.0)) ex = 1.0;
   c *= ex * exp2(uExposureBias);
   if (uSunOn > 0.5) c += lensFlare(vUv, sunVisibility()) * uFlare;
   c *= uWhite;

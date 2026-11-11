@@ -432,6 +432,32 @@ export class GroundCover {
     return Float32Array.from(out);
   }
 
+  private pfCells: number[] = [];
+  private pfAt = 0;
+  private pfCam: [number, number, number] = [1e9, 0, 0];
+  private prefetchCover(pv: PlanetView, camBody: Vector3, dx: number, dy: number, dz: number, range: number): void {
+    const R = pv.params.radius;
+    const moved = Math.hypot(camBody.x - this.pfCam[0], camBody.y - this.pfCam[1], camBody.z - this.pfCam[2]);
+    if (moved > 6) {
+      this.pfCam = [camBody.x, camBody.y, camBody.z];
+      const cells = pv.grid.cellsWithin(dx, dy, dz, (range + 80) / R).slice();
+      const P = pv.grid.pos;
+      cells.sort((a, b) => (P[b * 3] * dx + P[b * 3 + 1] * dy + P[b * 3 + 2] * dz) - (P[a * 3] * dx + P[a * 3 + 1] * dy + P[a * 3 + 2] * dz));
+      this.pfCells = cells;
+      this.pfAt = 0;
+    }
+    while (this.pfAt < this.pfCells.length) {
+      const c = this.pfCells[this.pfAt++];
+      if (this.cache.has(c)) continue;
+      this.cache.set(c, { rec: this.cellItems(pv, c), sig: this.signature(pv, c) });
+      this.stale.delete(c);
+      // (a cell inside the drawn reach: the next instance refresh picks it up)
+      const P = pv.grid.pos;
+      if (Math.acos(Math.min(1, P[c * 3] * dx + P[c * 3 + 1] * dy + P[c * 3 + 2] * dz)) * R < range + 40) this.pending = true;
+      return;
+    }
+  }
+
   /** refresh instances around the camera (body frame, m); quick when the camera has not moved */
   update(pv: PlanetView, camBody: Vector3, frame: number): void {
     // (the dev probe's crop remap: rebuild everything, near and far)
@@ -473,6 +499,10 @@ export class GroundCover {
     this.group.visible = this.enabled;
     this.near.visible = visible;
     this.updateFar(pv, camBody, frame, alt);
+    // PERF P2 (no pop-in): scatter the cells about to be needed one a frame BEFORE they are drawn — while the camera
+    // comes down toward the ground and in a ring beyond the drawn range — instead of two a frame once they are
+    // already on screen (the grass and stones filled in cell by cell in front of the player)
+    if (this.enabled && alt < range * 1.5 + 150) this.prefetchCover(pv, camBody, dx, dy, dz, range);
     if (!visible) { this.stats.instances = 0; return; }
     const moved = Math.hypot(camBody.x - this.lastCam[0], camBody.y - this.lastCam[1], camBody.z - this.lastCam[2]);
     if (!this.pending && moved < 1.2 && frame - this.lastFrame < 240) return;

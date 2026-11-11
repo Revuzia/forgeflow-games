@@ -1409,6 +1409,10 @@ export class CloudPass {
   /** cirrus cover 0..1 (set with the weather) */
   private cirrus = 0.4;
   readonly noise: CloudNoise;
+  private transit = 0;
+  private transitV = 0;
+  private transitR = 0;
+  private transitT = 0;
   /** the baked weather (organised coverage, storm, type, anvil) and cloud-shadow cubes */
   private wxRT: WebGLCubeRenderTarget;
   private shRT: WebGLCubeRenderTarget;
@@ -1638,8 +1642,27 @@ export class CloudPass {
     _sunB.copy(i.sunDir).applyMatrix3(i.worldToBody).normalize();
     u.uCamMuS.value = r0 > 0 ? _o.dot(_sunB) / r0 : 1;
     const edge = 20;
-    u.uCamFog.value = Math.min(1, Math.max(0, (r0 - i.innerR + edge) / edge)) * Math.min(1, Math.max(0, (i.outerR + edge - r0) / edge));
-    u.uNearR.value = 35;
+    const inShell = Math.min(1, Math.max(0, (r0 - i.innerR + edge) / edge)) * Math.min(1, Math.max(0, (i.outerR + edge - r0) / edge));
+    // PERF P3 (owner: "everything turned white"): zooming from orbit to a town crosses the cloud deck in a fraction of
+    // a second, and every frame inside it was a white-out (the in-cloud fog, and the deck at the lens). A camera
+    // passing THROUGH the deck now opens a clear tunnel about itself — the near zone grows with its vertical speed
+    // and the in-cloud fog fades — and closes it again over ~1 s once it lingers; hovering in a cloud still fogs.
+    {
+      const now = performance.now();
+      const dts = this.transitT > 0 ? Math.min(0.25, Math.max(1e-3, (now - this.transitT) / 1000)) : 0;
+      this.transitT = now;
+      const v = dts > 0 ? Math.abs(r0 - this.transitR) / dts : 0;
+      this.transitR = r0;
+      const thick = Math.max(1, i.outerR - i.innerR);
+      const want = Math.min(1, Math.max(0, (v - thick * 0.15) / (thick * 0.5)));
+      // (opens at once, closes over ~1 s)
+      this.transit = want > this.transit ? want : this.transit + (want - this.transit) * Math.min(1, dts * 1.5);
+      this.transitV = Math.max(v, this.transitV * Math.max(0, 1 - dts * 1.5));
+    }
+    const near = (r0 > i.innerR - 400 && r0 < i.outerR + 400) ? this.transit : 0;
+    // (a tiny positive fog keeps the shader's near-zone path on while the tunnel is open outside the shell edge)
+    u.uCamFog.value = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
+    u.uNearR.value = 35 + near * Math.min(450, 60 + this.transitV * 0.6);
     (u.uLensClear.value as Vector2).set(i.lensClear?.r ?? 0, i.lensClear?.k ?? 0);
     // the air's thickness from the shell (which spans 30–70 % of it): inside the air below ~1 thickness, space above 2
     const hi = i.outerR - i.radius;
