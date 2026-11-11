@@ -19,8 +19,10 @@ const extra = `${picks ? `&picks=${picks}` : ''}${arg('rot', '') ? `&rot=${arg('
 const { browser, page, logs } = await openBench({ q, t, mode: arg('mode', 'rift'), seed: Number(arg('seed', 7)), extra, land: 12000 });
 
 await page.evaluate(async () => {
-  const wm = await import('/src/render/world_material.ts');
-  const act = await import('/src/render/actors.ts');
+  // the app's own module instances (vite serves an edited module under ?t=<stamp>: a bare import would load a second copy)
+  const url = (f) => performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.includes(`/src/render/${f}`)).pop() ?? `/src/render/${f}`;
+  const wm = await import(url('world_material.ts'));
+  const act = await import(url('actors.ts'));
   window.__AB = { wm, act };
 });
 const setVariant = (v) => B(page, (b, v) => {
@@ -32,6 +34,8 @@ const setVariant = (v) => B(page, (b, v) => {
   if (act.ACTOR_LIFE) act.ACTOR_LIFE.on = all || on.has('life');
   b.renderer.scene.traverse((o) => {
     if (!o.isMesh) return;
+    const pu = b.renderer.gl.properties.get(Array.isArray(o.material) ? o.material[0] : o.material)?.uniforms;
+    if (pu?.valeCharMat && pu.valeCharMat !== wm.worldUniforms.valeCharMat) throw new Error('max_units_ab: a second world_material instance');
     let r = o; while (r && !/^actor_/.test(r.name)) r = r.parent;
     if (!r) return;
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) {

@@ -288,7 +288,7 @@ const CHAR_LIGHT = /* glsl */`
   //   cloth (r > 0.82): a soft grazing sheen on the key side, the albedo's own colour lifted (woven cloth catches
   //     light along its folds), so a robe no longer reads as the same plaster as a chalk pauldron;
   //   glass (r < 0.25, VALE dawnglass): dark-centred and bright-edged: a tight glint from the character key, a Fresnel
-  //     edge in the glass's own hue and 12 % less diffuse in the middle; at rest it stays under the bloom threshold.
+  //     edge in the glass's own hue and 14 % less diffuse in the middle; at rest it stays under the bloom threshold.
   if ( valeCharMat > 0.5 && valeCharMode > 1.1 ) {
     float valeR = roughnessFactor;
     vec3 valeK = normalize( valeKeyDir );
@@ -298,16 +298,19 @@ const CHAR_LIGHT = /* glsl */`
     float valeGlass = 1.0 - smoothstep( 0.18, 0.28, valeR );
     float valeShare = ( valeCharMode > 1.5 ? 1.0 : valeCharShape.y ) * valeCharMat;
     if ( valeCloth > 0.0 ) {
+      // strongest on mid and dark cloth (a sheen is how dark wool reads as cloth); a pale robe takes a third, so the
+      // lower body never lifts out of its value band
       float valeSide = saturate( valeNdL * 0.5 + 0.5 );
-      reflectedLight.directDiffuse += valeShare * valeCloth * 0.16 * valeF * valeF * valeSide * valeSide * valeCharRim.rgb * valeAlb;
+      float valeDark = 1.0 - 0.65 * smoothstep( 0.2, 0.55, valeLa );
+      reflectedLight.directDiffuse += valeShare * valeCloth * valeDark * 0.2 * valeF * valeF * valeSide * valeSide * valeCharRim.rgb * valeAlb;
     }
     if ( valeGlass > 0.0 ) {
       vec3 valeH = normalize( valeK + geometryViewDir );
       float valeGlint = pow( saturate( dot( geometryNormal, valeH ) ), 64.0 ) * saturate( valeNdL * 4.0 );
       float valeEdge = valeF * valeF * valeF;
       vec3 valeHue = diffuseColor.rgb / max( max( diffuseColor.r, max( diffuseColor.g, diffuseColor.b ) ), 0.02 );
-      reflectedLight.directDiffuse *= 1.0 - min( 0.12 * valeCharMat, 0.9 ) * valeGlass * ( 1.0 - valeEdge );
-      reflectedLight.directSpecular += valeShare * valeGlass * valeCharRim.rgb * ( 0.22 * valeGlint + 0.3 * valeEdge * mix( vec3( 1.0 ), valeHue, 0.6 ) );
+      reflectedLight.directDiffuse *= 1.0 - min( 0.14 * valeCharMat, 0.9 ) * valeGlass * ( 1.0 - valeEdge );
+      reflectedLight.directSpecular += valeShare * valeGlass * valeCharRim.rgb * ( 0.26 * valeGlint + 0.5 * valeEdge * mix( vec3( 1.0 ), valeHue, 0.6 ) );
     }
   }
   // a jungle monster takes the world's light (sun, sky, its crown share) and shows its own glow (a gloamoth's wing,
