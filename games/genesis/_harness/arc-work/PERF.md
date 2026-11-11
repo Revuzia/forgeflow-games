@@ -829,3 +829,36 @@ long press frame-rate independent. Report after 1-2 verified.
   script makes performance.now / rAF time advance 1/60 s per frame whatever SwiftShader takes), a shot every frame;
   _harness/arc-work/perf-lum.py <prefix> prints mean luminance / near-white share per frame. Run cz1 (dist20, babel
   seed 307987276, high 640x360, 1.2 s flight + 16 frames).
+- SHOTS (live src, medium 640x360, babel 307987276 at speed 0): pe-east120 (LOOKED): dusk, the town on its lake, palms,
+  no visible water over land in that frame; pe-east250 = inside the rain cloud (a brown wall); pe-top400 (700 m,
+  LOOKED) = the deck from above. Far trees rendered with no shader error after the 'normal' fix (the first run's
+  compile error was the flat-shading one). Item 5 NOT reproduced yet.
+- cz1 (fixed 60 fps clock zoom, dist20): the capture loop sees every ~20th 60-fps frame (each screenshot runs extra rAFs,
+  each advancing the clock 1/60 s): f000-f003 mean luminance 0.14 / 0.23 / 0.31 / 0.52 (f003 at 460 m LOOKED: the deck
+  from above, sunlit, correct), no near-white frame so far; the deck crossing comes next (log cz1.log).
+
+## NEXT (session 11), in order
+1. run-s9e: v18a's f200 and ALL of v18b died on page.screenshot timeouts (900 s) at ~23:49Z — the box ran three
+   SwiftShader jobs at load 11. v18a town / townlow exist; RE-RUN v18b (shnear=0: town, townlow only) ALONE in a quiet
+   slot, then diff against v18a (tree shadows near and far must match). g5u (dist19, panned, gl/stacks/attrs) was
+   running in slot 2 at 23:54Z: read its 'gl calls' line (bufferData per slot ~0?). Read check12.log + build-prod11.log (run-s10g.sh: full gate then npm run build, queued
+   through slot.sh). Fix anything red.
+2. Item 3 browser check: a shot on dist20+ near a forest (town, f200, descent 2000 -> 200) — far trees present at
+   every altitude, same look as before (compare v18a-town / s7f1-d*), draws count: 'fartrees' meshes <= 8.
+   perf-play `--attrs=1` names them 'fartrees'. Then g-run for shadowTris vs v18a 5.82 M.
+3. Item 6: finish cz1 (python3 _harness/arc-work/perf-lum.py _harness/scratch/arc/perf/shots/cz1-f); LOOK at the frames
+   inside the deck (alt between the shell radii). If white: candidates in order — the tunnel's near radius vs the deck
+   seen sideways (horizontal rays inside the deck beyond uNearR = white wall), uCamFog fading only by `near`, exposure
+   rate 2.2/s down / 1.1/s up (pipeline ADAPT_FRAG), cloud history reprojection at large camera steps. To see EVERY
+   frame, make the capture not tick rAF (stop the fixed clock while screenshotting: __FIXCLOCK__.off()/on() around it).
+4. Item 5: re-shoot by DAY under the deck: hour 11, orbit target settlement 1, dist 300 / 150, tilt 45-60, yaw 60 / 90
+   / 120 (east), quality high, and the same with ?fartrees=0 (rule out the far hulls) — LOOK for the water look on the
+   hills east (x 300-2000 m, y -1300..1300 in probe-eastwater's frame: many 0.2-3 m wet cells with tree cover 0.6-0.9,
+   a flooded lake-margin forest the sim keeps). Probes say the sheet geometry does not cover land > 1 m over the
+   water; suspects left: the WATER PASS drawing over terrain where the terrain is not in the depth buffer it tests
+   against (MSAA resolve / linDepth copy vs patches that land late, F10 worker patches: a water slot visible while its
+   terrain slot is hidden or not yet built), ZEDGE water depth bound, the flood-warning rise (precursors riverRise) on
+   a lake-margin forest, the rain ripple decal. Check chunks.ts showPatch(p, on, water): a patch whose terrain slot
+   shows its PARENT (worker path: subtree not yet covered) while its own water slot draws.
+5. Item 4: read the owner's 'render targets' line; then the atmosphere composite at 1/2 res with a nearest-depth
+   bilateral upsample (shots side by side: town at noon, dusk, orbit limb), cloud history at 1/2 res.
