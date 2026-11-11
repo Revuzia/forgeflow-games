@@ -1091,8 +1091,20 @@ export class Vegetation {
     }
     const L = this.lastCam;
     const dc = Math.hypot(cx - L.x, cy - L.y, cz - L.z);
-    const el = Math.asin(Math.max(-1, Math.min(1, sinEl))) - (dc + r + this.range) / radius - 0.2;
-    const cot = el > 0.035 ? 1 / Math.tan(el) : Infinity;
+    // the sun's elevation at a tree x metres from the camera is at least el − x / R (the planet's curvature: a
+    // 3 km world turns 1° every 52 m). A tree that matters lies within dc + r + reach of the camera, and its reach
+    // depends on that elevation: iterate reach = e (1 + cot(el − (dc + r + reach) / R − slopes)) up from 0
+    // (monotone; a fixed point or a sun too low to bound it)
+    const el0 = Math.asin(Math.max(-1, Math.min(1, sinEl))) - 0.2;
+    let eMax = 0;
+    for (const b of this.buckets) if (b.count && b.eMax > eMax) eMax = b.eMax;
+    // (any x with f(x) <= x bounds the shadow: the ray from a crown top descends at least x·tan(el(x)) >= e over x)
+    const f = (x: number): number => { const el = el0 - (dc + r + x) / radius; return el > 0.035 ? eMax * (1 + 1 / Math.tan(el)) + 4 : Infinity; };
+    let reach = 0;
+    for (let it = 0; it < 12 && Number.isFinite(reach); it++) reach = f(reach) * 1.02 + 0.5;
+    if (!(f(reach) <= reach)) reach = Infinity;
+    const elT = el0 - (dc + r + reach) / radius;
+    const cot = Number.isFinite(reach) && elT > 0.035 ? 1 / Math.tan(elT) : Infinity;
     for (const b of this.buckets) {
       if (!b.count) continue;
       const D = dc + r + b.eMax * (1 + cot) + 4;

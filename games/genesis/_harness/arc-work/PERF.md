@@ -138,6 +138,18 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   srcOffset) + one generateMipmap, instead of needsUpdate on the whole cube; falls back to needsUpdate before three's
   first upload. Same texels on the GPU. Renderer calls setCityLightsRenderer(three).
 
+- v6 (dist5 = F1b..F9, speed 0, town): 0 console errors so far; shots/v6-town.png vs v5z1-town: mean |d| 4.0/255,
+  diff-v6-town.png (looked) = tree-crown edges only (wind sway), ground / tree shadows / houses identical. BUT
+  shadowTris unchanged (142 calls / 2.04 M): F6 culled nothing in this view — the 3 km world's curvature term
+  (dc + r + range)/R plus the 0.2 rad slope allowance pushed the morning sun's bound below 2 deg = draw all.
+- F6b (landed after v6, tsc + focused tests + npm run build OK; NOT yet in a browser run): the curvature term now
+  uses only the distance that matters: a tree's shadow points away from the sun, so the tree is sunward of the
+  receiver; reach = least x with e(1 + cot(el - 0.2 - (dc + r + x)/R)) + 4 <= x (iterated x <- 1.02 f(x) + 0.5,
+  verified f(x) <= x, else all). Numbers (e 15 m, R 3 km): 45 deg sun, cascade 150 m out r 100 -> D 300 m (of the
+  380 m range: ~40 % of trees left out of that cascade); 25 deg -> D 440 (all); far cascades: all. A modest gain on
+  this tiny world; larger worlds gain more. run-r8.sh (queued): gate -> check3.log, then v8 (dist6) town shot +
+  shadowTris to compare with v6.
+
 ## SIM ASKS
 
 ## NEXT (session 4 state; update as runs land)
@@ -224,3 +236,6 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   road, sand, soil, shrubSpecies; diffed against the arrays of the last check) changed are dropped; cells first
   built since the last check from other input arrays (an epoch per array replacement) go too. Kept cells equal a
   fresh scatter exactly (test, 4 rounds of random height + water changes).
+- F1 VERIFIED (all three scenes): v5z0 vs v5z1 region mean |d| 0.8/255, orbit 0.6/255 (48 px > 24 each: grain /
+  cloud motion), town see above; 0 console errors with zcons on AND off. Shots looked at (town, region, orbit).
+- GATE 2 (after F9, slot.sh): npm run check 890/890 pass; npm run build OK.
