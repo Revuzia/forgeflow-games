@@ -479,7 +479,7 @@
  "shops": [],
  "art": {
   "sky": "assets/maps/map_bridge/sky.hdr",
-  "lut": "assets/grade/vale_grade_01.cube",
+  "lut": "assets/grade/vale_grade_bridge.cube",
   "minimap": "assets/maps/map_bridge/minimap.png",
   "terrain": {
    "temperatureField": {"axis": "west-east", "west": "#B8C6D9", "east": "#D9C2A0", "strength": 0.06, "appliesTo": "terrain albedo (render/terrain.ts): the Dawn Arch end leans cool, the Lamp Gate end warm; never a team hue"},

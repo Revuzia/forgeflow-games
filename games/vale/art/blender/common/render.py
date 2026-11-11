@@ -944,6 +944,10 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     clips = fighter_clips(ctx)
     out, T = {}, {}
     hand_mods = smooth_card_hands(objs, bool(pl) and bool(cfg.get("smooth_hands", True)))
+    # (cards pass 4) card-only hands: the game hands swapped for anatomical card hands (common/card_hands.py)
+    from . import card_hands
+    card_hand_undo = card_hands.install(spec, arm, objs, scene.log) if pl and cfg.get("card_hands", True) else []
+    card_grade_undo = card_hands.grade(spec, skin, objs, scene.log) if pl else []
     cam = camera(lens=50)
     sky_world(light_a["sky"], light_a["ambient"], camera_strength=1.0, tint=light_a.get("tint"))
 
@@ -1073,6 +1077,8 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     cam.data.shift_x = cam.data.shift_y = 0.0
     for o, md in hand_mods:
         o.modifiers.remove(md)
+    card_hands.remove(card_hand_undo)
+    card_hands.ungrade(card_grade_undo)
     if not skin and want("turntable") and not preview:
         T["turntable"], out["turntable"] = turntable(ctx, P, chains, fast)
     for f in ("portrait_raw", "icon_raw", "splash_raw"):

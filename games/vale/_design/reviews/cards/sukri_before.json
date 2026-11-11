@@ -1,110 +1,110 @@
 {
  "sukri_splash": {
-  "axis_edge": 0.426,
-  "flat": 0.062,
-  "rim_dL_left": 13.4,
-  "rim_dL_right": 5.6,
+  "axis_edge": 0.302,
+  "flat": 0.03,
+  "rim_dL_left": 10.8,
+  "rim_dL_right": -1.8,
   "rim_side": "left",
   "plate_sun": "left",
   "rim_match": true,
-  "dab": 24.7,
+  "dab": 32.5,
   "face": {
-   "p5": 45.5,
-   "p50": 66.0,
-   "p95": 69.3,
-   "range": 23.9,
-   "dark_share": 0.107,
-   "edge": 1.45
+   "p5": 46.7,
+   "p50": 60.9,
+   "p95": 70.1,
+   "range": 23.5,
+   "dark_share": 0.027,
+   "edge": 1.44
   }
  },
  "sukri_portrait": {
-  "axis_edge": 0.365,
-  "flat": 0.031,
-  "rim_dL_left": 8.1,
-  "rim_dL_right": 11.3,
-  "rim_side": "right",
+  "axis_edge": 0.192,
+  "flat": 0.016,
+  "rim_dL_left": 5.4,
+  "rim_dL_right": 0.9,
+  "rim_side": "left",
   "plate_sun": "left",
-  "rim_match": false,
-  "dab": 25.3,
+  "rim_match": true,
+  "dab": 22.2,
   "face": {
-   "p5": 22.2,
-   "p50": 66.6,
-   "p95": 79.2,
-   "range": 57.0,
-   "dark_share": 0.276,
-   "edge": 2.5
+   "p5": 12.9,
+   "p50": 42.5,
+   "p95": 73.1,
+   "range": 60.2,
+   "dark_share": 0.238,
+   "edge": 2.17
   }
  },
  "sukri_stillwater_splash": {
-  "axis_edge": 0.433,
-  "flat": 0.044,
-  "rim_dL_left": 18.2,
-  "rim_dL_right": -0.4,
+  "axis_edge": 0.238,
+  "flat": 0.019,
+  "rim_dL_left": 16.8,
+  "rim_dL_right": 1.5,
   "rim_side": "left",
   "plate_sun": "left",
   "rim_match": true,
-  "dab": 5.6,
+  "dab": 6.6,
   "face": {
-   "p5": 36.0,
-   "p50": 64.8,
-   "p95": 73.6,
-   "range": 37.6,
-   "dark_share": 0.191,
-   "edge": 2.68
+   "p5": 32.4,
+   "p50": 53.0,
+   "p95": 74.0,
+   "range": 41.6,
+   "dark_share": 0.1,
+   "edge": 2.48
   }
  },
  "sukri_stillwater_portrait": {
-  "axis_edge": 0.419,
-  "flat": 0.036,
-  "rim_dL_left": 17.0,
-  "rim_dL_right": -0.7,
-  "rim_side": "left",
-  "plate_sun": "left",
-  "rim_match": true,
-  "dab": 4.4,
-  "face": {
-   "p5": 8.5,
-   "p50": 42.6,
-   "p95": 63.9,
-   "range": 55.4,
-   "dark_share": 0.275,
-   "edge": 2.83
-  }
- },
- "sukri_shadeprint_splash": {
-  "axis_edge": 0.476,
-  "flat": 0.081,
+  "axis_edge": 0.196,
+  "flat": 0.006,
   "rim_dL_left": 16.1,
-  "rim_dL_right": 4.2,
+  "rim_dL_right": -1.6,
   "rim_side": "left",
   "plate_sun": "left",
   "rim_match": true,
   "dab": 5.1,
   "face": {
-   "p5": 46.4,
-   "p50": 78.3,
-   "p95": 80.6,
-   "range": 34.3,
-   "dark_share": 0.148,
-   "edge": 1.41
+   "p5": 7.6,
+   "p50": 37.2,
+   "p95": 60.6,
+   "range": 53.0,
+   "dark_share": 0.199,
+   "edge": 2.75
   }
  },
- "sukri_shadeprint_portrait": {
-  "axis_edge": 0.476,
-  "flat": 0.036,
-  "rim_dL_left": 13.7,
-  "rim_dL_right": 10.1,
+ "sukri_shadeprint_splash": {
+  "axis_edge": 0.19,
+  "flat": 0.018,
+  "rim_dL_left": 16.5,
+  "rim_dL_right": 4.9,
   "rim_side": "left",
   "plate_sun": "left",
   "rim_match": true,
-  "dab": 7.6,
+  "dab": 13.5,
   "face": {
-   "p5": 11.3,
-   "p50": 55.1,
-   "p95": 82.1,
+   "p5": 45.4,
+   "p50": 67.2,
+   "p95": 73.2,
+   "range": 27.7,
+   "dark_share": 0.204,
+   "edge": 1.5
+  }
+ },
+ "sukri_shadeprint_portrait": {
+  "axis_edge": 0.2,
+  "flat": 0.021,
+  "rim_dL_left": 18.7,
+  "rim_dL_right": 8.5,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 10.7,
+  "face": {
+   "p5": 10.1,
+   "p50": 54.8,
+   "p95": 80.8,
    "range": 70.7,
-   "dark_share": 0.331,
-   "edge": 3.49
+   "dark_share": 0.366,
+   "edge": 3.65
   }
  }
 }

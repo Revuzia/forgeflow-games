@@ -11,7 +11,7 @@
 //   VfxPass                                 the VFX scene drawn into the HDR buffer (premultiplied, soft
 //                                           depth against the stable scene depth), so emissive blooms
 //                                           and the grade applies to effects like the world
-//   EffectPass(Distort?, Bloom?, Exposure, ToneMapping NEUTRAL, LUT3D vale_grade_01, Grade, Vignette)
+//   EffectPass(Distort?, Bloom?, Exposure, ToneMapping NEUTRAL, LUT3D (map.art.lut: vale_grade_<map>, ENV-8), Grade, Vignette)
 //                                           distort: the VFX offset map bends the HDR lookup (≤ 0.015 UV;
 //                                           T3/T4 distort layers; not built on Low); bloom: mipmap,
 //                                           threshold 1.0, smoothing 0.05, intensity 0.6, radius 0.7 (off
@@ -26,7 +26,11 @@
 //   OverlayPass                             bars, rings, telegraphs, aim — drawn into the GRADED linear
 //                                           buffer (no tone map, no LUT), manually depth-tested against
 //                                           the scene's stable depth texture, so their hex is the pixel
-//   EffectPass(SMAA) | CopyPass             SMAA preset by tier; antialias 'off' ends with a plain copy
+//   EffectPass(SMAA + sharpen) | CopyPass   SMAA preset by tier; antialias 'off' ends with a plain copy. High and Ultra
+//                                           fold a contrast-adaptive sharpen (CAS-style, VALE's own, 4 taps) into the SMAA
+//                                           program (max env ENV-9: SMAA softened the ground micro detail and the crown
+//                                           plate edges); a uniform, so the program count stays the same; hard edges
+//                                           (outlines, overlay rings and bars, UI rims) fade it out (the halo guard)
 //
 // The grade (tone map + LUT + vignette) and the overlay are identical on every tier; tiers only
 // change AO, bloom, AA, distortion and resolution. The identity LUT stands in until `map.art.lut` loads.
@@ -241,6 +245,44 @@ void mainUv( inout vec2 uv ) {
   }
 }
 
+/** max env ENV-9: SMAA with a contrast-adaptive sharpen folded into its blend program (one pass, one program). The sharpen
+ *  works in a gamma-2 space on the 4-neighbour cross of the pre-AA buffer; its weight falls where the neighbourhood is
+ *  already near black or white (CAS's own limiter) and fades out over hard edges (local luma range 0.10 -> 0.22), so an
+ *  outline, a health bar or a ring rim never gains a halo; only the soft painted detail of the world is crisped. */
+const SHARPEN_TIER: Record<PostQuality['tier'], number> = { low: 0, medium: 0, high: 0.3, ultra: 0.3 };
+class SharpSMAAEffect extends SMAAEffect {
+  constructor(preset: SMAAPreset, sharp: number) {
+    super({ preset });
+    const src = this.getFragmentShader();
+    const tail = 'outputColor=color;}';
+    if (!src.trimEnd().endsWith(tail)) { console.warn('[post] SMAA shader changed: sharpen skipped'); return; }
+    this.setFragmentShader(`uniform float uSharp;
+${src.trimEnd().slice(0, -tail.length)}
+  if ( uSharp > 0.0 ) {
+    vec3 pc = sqrt( max( color.rgb, 0.0 ) );
+    vec3 pn = sqrt( max( texture2D( inputBuffer, uv + vec2( 0.0, texelSize.y ) ).rgb, 0.0 ) );
+    vec3 ps = sqrt( max( texture2D( inputBuffer, uv - vec2( 0.0, texelSize.y ) ).rgb, 0.0 ) );
+    vec3 pe = sqrt( max( texture2D( inputBuffer, uv + vec2( texelSize.x, 0.0 ) ).rgb, 0.0 ) );
+    vec3 pw = sqrt( max( texture2D( inputBuffer, uv - vec2( texelSize.x, 0.0 ) ).rgb, 0.0 ) );
+    vec3 mn = min( pc, min( min( pn, ps ), min( pe, pw ) ) );
+    vec3 mx = max( pc, max( max( pn, ps ), max( pe, pw ) ) );
+    const vec3 Y = vec3( 0.2126, 0.7152, 0.0722 );
+    float range = dot( mx - mn, Y );
+    vec3 amp = sqrt( clamp( min( mn, 1.0 - mx ) / max( mx, vec3( 1e-4 ) ), 0.0, 1.0 ) ) * ( 1.0 - smoothstep( 0.10, 0.22, range ) );
+    float wgt = -dot( amp, Y ) / mix( 8.0, 5.0, uSharp ) * uSharp * 2.0;
+    // luma only (no chroma fringes): the sharpened luma's change, carried back to linear on the pixel's own colour
+    float lc = dot( pc, Y );
+    float lo = clamp( ( lc + wgt * dot( pn + ps + pe + pw, Y ) ) / ( 1.0 + 4.0 * wgt ), 0.0, 1.0 );
+    float gain = ( lo * lo ) / max( lc * lc, 1e-5 );
+    if ( max( color.r, max( color.g, color.b ) ) <= 1.0 && lc > 0.01 ) color.rgb *= clamp( gain, 0.7, 1.3 );
+  }
+  outputColor = color;
+}`);
+    this.uniforms.set('uSharp', new Uniform(sharp));
+  }
+  set sharp(v: number) { const u = this.uniforms.get('uSharp'); if (u) u.value = v; }
+}
+
 /** draws the VFX into the current HDR buffer (no swap) */
 class VfxPass extends Pass {
   private depth: Texture | null = null;
@@ -303,6 +345,13 @@ export class PostChain {
   private renderPass: RenderPass | null = null;
   private gradePass: EffectPass | null = null;
   private aaPass: EffectPass | null = null;
+  private aaEffect: SharpSMAAEffect | null = null;
+  /** a harness seam (_harness/max_env_post_ab.mjs): the sharpen strength; null = the tier's own */
+  private sharpOverride: number | null = null;
+  setSharpen(v: number | null): void {
+    this.sharpOverride = v;
+    if (this.aaEffect) this.aaEffect.sharp = v ?? SHARPEN_TIER[this.quality.tier];
+  }
   private builtOrtho = false;
   /** r12 B4: AO eased (one denoise pass) while dynamic resolution holds the scale down (renderer.applySize) */
   private aoLow = false;
@@ -392,7 +441,7 @@ export class PostChain {
   /** every pass this chain built, freed (the overlay and VFX passes are kept: they are re-added) */
   private disposeBuilt(): void {
     for (const p of this.composer.passes) if (p !== this.overlay && p !== this.vfx) disposePass(p);
-    this.renderPass = null; this.gradePass = null; this.aaPass = null; this.aoPass = null; this.lutEffect = null;
+    this.renderPass = null; this.gradePass = null; this.aaPass = null; this.aaEffect = null; this.aoPass = null; this.lutEffect = null;
   }
 
   private build(): void {
@@ -445,7 +494,8 @@ export class PostChain {
       c.addPass(new CopyPass());
     } else {
       const preset = q.tier === 'ultra' ? SMAAPreset.ULTRA : q.tier === 'high' ? SMAAPreset.HIGH : SMAAPreset.MEDIUM;
-      this.aaPass = new EffectPass(this.camera, new SMAAEffect({ preset }));
+      this.aaEffect = new SharpSMAAEffect(preset, this.sharpOverride ?? SHARPEN_TIER[q.tier]);
+      this.aaPass = new EffectPass(this.camera, this.aaEffect);
       c.addPass(this.aaPass);
     }
   }

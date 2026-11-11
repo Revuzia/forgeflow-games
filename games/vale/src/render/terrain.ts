@@ -1534,8 +1534,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
     vec2 wp = vValeWorld.xz;
-    float h = valeNoise( wp * 1.7 + vec2( uWaterT * 0.35, uWaterT * 0.21 ) ) + 0.55 * valeNoise( wp * 3.9 - vec2( uWaterT * 0.47, -uWaterT * 0.29 ) );
-    normal = valeBump( -vViewPosition, normal, h, 0.05 );
+    // max env ENV-4: two ripple sets at different scale, stretch and heading (the shaft's slow cross-draft and a finer
+    // counter-chop), strong enough at 28.5 m that the film catches the sky in moving streaks
+    vec2 r1 = mat2( 0.8, -0.6, 0.6, 0.8 ) * wp, r2 = mat2( 0.28, 0.96, -0.96, 0.28 ) * wp;
+    float h = valeNoise( r1 * vec2( 0.8, 2.0 ) + vec2( uWaterT * 0.26, uWaterT * 0.04 ) )
+            + 0.5 * valeNoise( r2 * vec2( 2.2, 3.8 ) - vec2( uWaterT * 0.17, uWaterT * 0.34 ) );
+    normal = valeBump( -vViewPosition, normal, h, 0.15 );
   }`)
         .replace('#include <opaque_fragment>', `{
   float sd = texture( uSplat2, vValeWorld.xz * uSplatScale ).g * 8.0 - 4.0;
@@ -1570,13 +1574,31 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     outgoingLight = mix( outgoingLight, vec3( min( fl * 1.55 + uWaterLap, 0.155 ) ) * vec3( 1.0, 0.99, 0.95 ), foam * 0.75 );
     diffuseColor.a = max( diffuseColor.a, foam * 0.85 );
   }
-  // the sky in the film (roughness stays ≥ 0.5 on walkable ground): a cool sheen off the ripples at grazing view
+  // max env ENV-4: depth reads from the bank SDF: clear amber over the shallow stone, tea-dark teal toward the middle
+  // (hue moves, the value eases down ≤ 18 % so the Fallen Shaft stays inside its B5 band)
+  {
+    float dk = smoothstep( 0.2, 3.2, -sd );
+    vec3 tint = mix( vec3( 1.1, 1.0, 0.78 ), vec3( 0.84, 1.0, 0.92 ), dk );
+    outgoingLight *= tint * mix( 1.0, 0.82, dk ) / max( dot( tint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-3 );
+  }
+  // the sky in the film (roughness stays ≥ 0.5 on walkable ground, so the reflection is ours, not the BRDF's): the map's
+  // own PMREM sky, sampled sharp along the rippled normal, comes in streaks where the ripples tilt toward the camera's
+  // grazing angle (an exaggerated fresnel: the gameplay camera never sees true grazing); its luminance is capped on the
+  // floor's own value band (uWaterSheen), so the pale sky shows as streaks and never as a white sheet
   float nv = clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 );
-  outgoingLight += uWaterSheen * smoothstep( 0.98, 0.55, nv );
+  float fres = smoothstep( 0.97, 0.6, nv );
+#ifdef USE_ENVMAP
+  vec3 sky = getIBLRadiance( normalize( vViewPosition ), normal, 0.06 );
+  float skyL = max( dot( sky, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 );
+  float cap = dot( uWaterSheen, vec3( 0.2126, 0.7152, 0.0722 ) );
+  outgoingLight += sky / skyL * min( skyL * 0.22, cap * 1.2 ) * ( 0.05 + 0.95 * fres );
+#else
+  outgoingLight += uWaterSheen * fres;
+#endif
 }
 #include <opaque_fragment>`);
     };
-    mat.customProgramCacheKey = () => 'vale_water_v6';
+    mat.customProgramCacheKey = () => 'vale_water_v7';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';

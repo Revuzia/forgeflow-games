@@ -45,7 +45,7 @@ import { VfxTextures } from './atlas.ts';
 import { type ColorRef, evalCurve, GradientPool } from './curves.ts';
 import {
   type Anchor, type BeamL, type Def, DIR, type DecalL, type DistortL, type EmitterL, type FeelL, type Layer, type LightL, MESH_ALIGN, type MeshL,
-  parseDef, type RibbonL, SHAPE, type ShockwaveL,
+  DECAL_STYLES, parseDef, type RibbonL, SHAPE, type ShockwaveL,
 } from './defs.ts';
 import {
   PREMUL, VFX_KIND, VFX_KINDS, VFX_PROGRAM, vfxUniforms,
@@ -105,6 +105,8 @@ export interface SpawnOpts {
   sustain?: () => boolean;
   /** the def's clock runs this many times faster (a wind-up def fitted to castTime) */
   timeScale?: number;
+  /** max VFX-1: the share of the state still to run (0..1), read every frame by `countdown` decals (a status dial) */
+  remaining?: () => number;
   /** a world event (structure fall): the only spawns whose feel layers may shake the camera (m4) */
   world?: boolean;
   /** the clip role the attacker's swing plays (attack1 | attack2 | crit, after the actor's fallback): layers with a
@@ -127,6 +129,9 @@ const RIB_PTS = 48;
 const BEAM_MAX = 64;
 const RING_MAX = 192;
 const DECAL_MAX = 160;
+/** max VFX-2: a path's ground light never takes one of the last this-many decal slots (cracks, status marks and
+ *  telegraphs keep their room in a teamfight full of shots) */
+const DECAL_PATH_RESERVE = 32;
 const MESH_PER_SHAPE = 48;
 const DISTORT_MAX = 48;
 /** distortion strength cap (UV units; the post chain clamps the sum to the same) */
@@ -149,6 +154,9 @@ class Inst {
   /** the predicate still holds */
   held = false;
   sustain: (() => boolean) | null = null;
+  /** max VFX-1: the share of a status still to run (0..1) for `countdown` dials; null = the def's own clock */
+  remaining: (() => number) | null = null;
+  rem = 1;
   /** sim-free clock time of the release (−1 until then) */
   relT = -1;
   cancelled = false;
@@ -208,6 +216,11 @@ interface Decal {
   inst: Inst | null;
   /** spawned by a sustained instance: its styled erosion (ink, scorch, crack, frost) runs only after the hold */
   sus: boolean;
+  /** max VFX-2: a ground light riding a projectile or dash (`at: path`, `follow`): held at life × hold while its owner
+   *  is followed, then it plays its tail where the head let go */
+  path: boolean;
+  /** max VFX-1: the owner's remaining share last seen (a countdown dial keeps it once its owner is gone) */
+  rem: number;
 }
 interface MeshEl {
   on: boolean; l: MeshL | null; inst: Inst | null; pos: Vector3; q: Quaternion; age: number; s: number; slot: number; opacity: number; cap: number;
@@ -435,7 +448,7 @@ export class VfxSystem {
       mesh.frustumCulled = false; mesh.renderOrder = 8; mesh.name = 'vfx_decals';
       this.scene.add(mesh);
       this.decalDraw = { mesh, geo, aPos, aRot, aCol, aMisc, aRimC };
-      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false });
+      for (let i = 0; i < DECAL_MAX; i++) this.decals.push({ on: false, l: null, x: 0, z: 0, rot: 0, age: 0, s: 1, slot: 0, opacity: 1, cap: 1, seed: 0, rim: new Color(), rate: 1, inst: null, sus: false, path: false, rem: 1 });
     }
     for (let i = 0; i < 192; i++) {
       this.meshEls.push({ on: false, l: null, inst: null, pos: new Vector3(), q: new Quaternion(), age: 0, s: 1, slot: 0, opacity: 1, cap: 1, spinA: 0, seed: 0, rim: new Color(), edge: new Color(), follow: false, rate: 1 });
@@ -488,6 +501,8 @@ export class VfxSystem {
     it.t = 0;
     it.rate = o.timeScale && o.timeScale > 0 && Number.isFinite(o.timeScale) ? Math.min(20, o.timeScale) : 1;
     it.sustain = o.sustain ?? null;
+    it.remaining = o.remaining ?? null;
+    it.rem = 1;
     it.sustained = !!o.sustain;
     it.held = !!o.sustain;
     it.relT = -1;
@@ -844,7 +859,14 @@ export class VfxSystem {
         return;
       }
       case 'decal': {
-        if (it.tier <= 1) return; // T1: no decals
+        // T1: no decals, except a projectile's ground light (max VFX-2: where a shot is, read from the ground plane)
+        const pathLight = at === 'path' && l.follow && l.style === DECAL_STYLES.light;
+        if (it.tier <= 1 && !pathLight) return;
+        if (pathLight) {
+          let free = 0;
+          for (const x of this.decals) if (!x.on && ++free > DECAL_PATH_RESERVE) break;
+          if (free <= DECAL_PATH_RESERVE) return;
+        }
         const dc = this.decals.find((x) => !x.on);
         if (!dc) return;
         const p = this.anchorPos(it, l, _v);
@@ -853,6 +875,8 @@ export class VfxSystem {
         dc.rate = l.fitTime ? it.rate : 1;
         dc.inst = it.sustained || l.follow ? it : null;
         dc.sus = it.sustained && l.hold > 0;
+        dc.path = pathLight;
+        dc.rem = it.rem;
         this.resolve(l.rim ?? null, it, dc.rim);
         if (!l.rim) dc.rim.copy(it.team);
         it.el[li] = this.decals.indexOf(dc);
@@ -1024,6 +1048,12 @@ export class VfxSystem {
         if (!on) this.releaseInst(it, false);
       }
       it.t += d * it.rate;
+      if (it.remaining) {
+        let r = 0;
+        try { r = it.remaining(); } catch { r = 0; }
+        it.rem = Number.isFinite(r) ? Math.max(0, Math.min(1, r)) : 0;
+        if (!it.held && it.sustained) it.rem = 0;
+      } else it.rem = Math.max(0, 1 - it.t / Math.max(0.05, it.def.duration));
       if (it.following && it.followFor >= 0 && it.t > it.followFor) {
         it.following = false;                       // let go: path elements stop tracking and fade out
         for (const e of this.meshEls) if (e.inst === it) { e.inst = null; e.follow = false; }
@@ -1273,13 +1303,15 @@ export class VfxSystem {
       if (!dc.on) continue;
       const l = dc.l!;
       dc.age += d * dc.rate;
-      if (dc.inst && dc.inst.sustained && dc.inst.held && !l.repeat) dc.age = Math.min(dc.age, l.life * l.hold);
+      if (dc.inst && ((dc.inst.sustained && dc.inst.held) || (dc.path && dc.inst.following)) && !l.repeat) dc.age = Math.min(dc.age, l.life * l.hold);
       if (dc.age >= l.life) { dc.on = false; dc.inst = null; continue; }
       const t = dc.age / l.life;
       this.grads.sample(dc.slot, t, _rgb, 0);
       const e = Math.min(dc.cap, Math.max(0, evalCurve(l.emissive, t)));
       const rad = Math.max(0.01, (l.shape >= 3 ? Math.max(l.length * 0.5, evalCurve(l.radius, t)) : evalCurve(l.radius, t)) * dc.s);
-      const param = l.shape === 2 ? l.angle : l.shape >= 3 ? Math.max(0.05, (l.width || rad * 0.3) / Math.max(1e-3, rad * 2)) : 0;
+      if (dc.inst && l.countdown) dc.rem = dc.inst.rem;
+      // a countdown dial (max VFX-1): a sector of the dial whose half-angle closes with the state's remaining share
+      const param = l.shape === 2 ? (l.countdown ? Math.max(0.03, Math.PI * dc.rem) : l.angle) : l.shape >= 3 ? Math.max(0.05, (l.width || rad * 0.3) / Math.max(1e-3, rad * 2)) : 0;
       DD.aPos.setXYZW(nd, dc.x, 0.035, dc.z, rad);
       DD.aRot.setXYZW(nd, dc.rot, l.shape, l.style, Math.max(0, evalCurve(l.alpha, t)) * dc.opacity);
       DD.aCol.setXYZW(nd, _rgb[0], _rgb[1], _rgb[2], e);

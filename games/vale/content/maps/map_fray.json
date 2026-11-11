@@ -339,7 +339,7 @@
  ],
  "art": {
   "sky": "assets/maps/map_fray/sky.hdr",
-  "lut": "assets/grade/vale_grade_01.cube",
+  "lut": "assets/grade/vale_grade_fray.cube",
   "minimap": "assets/maps/map_fray/minimap.png",
   "terrain": {
    "plate": {"at": [32, 32], "radius": 30},

@@ -12,6 +12,10 @@
 //     (away from the killer) with an accelerating fall, `breakVfx` at the break; where it lands `landVfx`; it sinks
 //     through the ground and fades. The `_ruin` (≤ ruin.height m) stays for the match and the accent light dies.
 //     A structure seen first already dead is a ruin at once; a gate that respawns rises out of its plinth (0.9 s).
+//     Rubble (max env ENV-6): where the top lands, 12 faceted chunks of the structure's own masonry (the plinth's stone:
+//     each chunk takes one plinth vertex's colour and texel, dusted darker) lie along the fall for the rest of the match:
+//     one merged mesh on the plinth's own material (no new program, one draw per ruin, 960 tris), shadow-casting; a ruin
+//     seen first already dead gets the same pile.
 //   * occlusion: while your fighter, the hovered or the targeted unit stands behind a live structure from the camera,
 //     the structure's upper part (from 0.5 m above its plinth) fades to 35 % (in 0.15 s, back in 0.35 s): per-actor
 //     see-through clones over a depth prepass, so only the nearest surface shows (the actors.ts veils use the same idea).
@@ -23,13 +27,15 @@
 //     tower, or touching its proxy, is not behind it). On when ≥ 25 % of the rays are blocked, off below 12 %.
 //     While it collapses, the falling top fades whole the same way whenever it covers or buries one of them
 //     (its proxy rides along with it; a ray then counts from the moment it enters the top).
-//   * shell: while protected (untargetable) a dawnglass glaze hugs the tower's own silhouette (its surface pushed out
-//     7 cm along smoothed normals: a fresnel rim, the shield's 45° hatch, a slow rising band) over a low foot ring of
-//     twelve hour-ticks on the plinth, so the protected tower stands no larger on screen than the bare one; the glaze
-//     fades with the occlusion fade. It bursts outward in 0.45 s when the protection drops.
+//   * shell (the hour-ward, max env ENV-2): while protected (untargetable) the stone stays fully opaque; a dawnglass
+//     glaze hugs the tower's own silhouette (its surface pushed out 3 cm along smoothed normals) and draws only a
+//     ~1.5 px rim on the silhouette, a hairline fresnel inside it and one thin shimmer band sweeping up every 3 s, over
+//     a low foot ring of twelve hour-ticks turning slowly on the plinth. The protected tower stands no larger on screen
+//     than the bare one and keeps its masonry read; the glaze fades with the occlusion fade. It bursts outward in
+//     0.45 s when the protection drops.
 
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, LatheGeometry, type Material, Matrix4, Mesh,
+  Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, IcosahedronGeometry, LatheGeometry, type Material, Matrix4, Mesh,
   MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type PerspectiveCamera, Quaternion,
   type RawShaderMaterial, type ShaderMaterial, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
@@ -48,7 +54,7 @@ const RISE_S = 0.9;
 const SHELL_BREAK_S = 0.45;
 const SHELL_COLOR = new Color().setStyle('#BFD3E6');      // dawnglass (tokens: the untargetable rim, the shield)
 /** the glaze's offset off the tower's surface (m), and how far it bursts out when the protection drops */
-const SKIN_INFLATE = 0.07;
+const SKIN_INFLATE = 0.03;
 const SKIN_BURST = 0.55;
 const FALL_MAX = (80 * Math.PI) / 180;
 /** a broken-off chip: time to the ground (s), the shrink once it lands (s) */
@@ -134,6 +140,10 @@ interface Struct {
   nextDip: number;
   flareT: number;
   falling: Falling[];
+  /** max env ENV-6: the collapse's rubble (one merged mesh, root-local), null until it lands */
+  rubble: Mesh | null;
+  /** the plinth node (the rubble's stone and material) */
+  baseNode: Object3D | null;
   warmed: boolean;
 }
 
@@ -253,7 +263,7 @@ export class StructureFx {
       u, clones: [], upperMats: [], depth: [], depthMat: null, trans: false, upRest: new Matrix4(), plinth: 0.4, top: def.art.height, radius: 1,
       stage: 0, seen: false, dieT: -1, fallDir: new Vector3(1, 0, 0), broke: false, landed: false, dead: false, riseT: -1, fade: 0,
       occ: null, occWant: false, shell: null, skins: [], skinMat: null, noSkin: new Set(),
-      shellK: 0, shellBreak: -1, seed: (a.id * 0.6180339) % 1 * 100, dipUntil: 0, nextDip: 0, flareT: -1, falling: [], warmed: false,
+      shellK: 0, shellBreak: -1, seed: (a.id * 0.6180339) % 1 * 100, dipUntil: 0, nextDip: 0, flareT: -1, falling: [], rubble: null, baseNode: nodes.get('base') ?? null, warmed: false,
     };
     for (const n of [...dmg, nodes.get('core') ?? null]) if (n) for (const m of meshes(n)) s.noSkin.add(m);
     // bounds (root-local): the plinth's top, the tower's top and radius
@@ -348,6 +358,7 @@ export class StructureFx {
     s.skinMat = null;
     for (const f of s.falling) f.g.removeFromParent();
     s.falling.length = 0;
+    if (s.rubble) { s.rubble.geometry.dispose(); s.rubble.removeFromParent(); s.rubble = null; }
   }
 
   /** compile the see-through and shell programs once per template (the renderer calls it again when its sky lands) */
@@ -606,6 +617,7 @@ export class StructureFx {
     }
     if (!s.landed && t >= tLand) {
       s.landed = true;
+      this.rubble(s);
       const id = s.def.art.ruin?.landVfx;
       const reach = s.radius * 0.55 + (s.top - s.plinth) * 0.62;
       if (id) {
@@ -626,6 +638,70 @@ export class StructureFx {
     if (s.ruin) s.ruin.visible = true;
     s.u.uSfAlpha.value = 1;
     s.u.uSfClip.value = -1e4;
+    this.rubble(s);
+  }
+
+  /** max env ENV-6: the rubble pile along the fall (idempotent). Chunks: icosahedra (80 tris) squashed and jittered
+   *  into broken stones 0.2-0.6 m, half sunk, scattered from the plinth's edge to where the top landed (±1.2 m
+   *  across the fall, wider toward the end); each takes one vertex of the plinth (its colour ×0.82 for dust, its uv,
+   *  every other attribute the plinth's material reads), so the plinth's program draws it unchanged. */
+  private rubble(s: Struct): void {
+    if (s.rubble) return;
+    const src = (s.baseNode ? meshes(s.baseNode)[0] : undefined) ?? (s.ruin ? meshes(s.ruin)[0] : undefined);
+    if (!src) return;
+    const a = s.a;
+    const dirL = _v.copy(s.fallDir).applyQuaternion(_q.copy(a.root.quaternion).invert());
+    dirL.y = 0;
+    if (dirL.lengthSq() < 1e-6) dirL.set(Math.cos(s.seed), 0, Math.sin(s.seed));
+    dirL.normalize();
+    const side = new Vector3(-dirL.z, 0, dirL.x);
+    const reach = s.radius * 0.55 + (s.top - s.plinth) * 0.62;
+    const sg = src.geometry, sp = sg.getAttribute('position');
+    const names = Object.keys(sg.attributes).filter((n) => n !== 'position' && n !== 'normal');
+    const proto = new IcosahedronGeometry(1, 1).toNonIndexed();
+    const pp = proto.getAttribute('position'), nv = pp.count;
+    const N = 12, pos = new Float32Array(N * nv * 3);
+    const extra = names.map((n) => { const at = sg.getAttribute(n); return { n, at, arr: new Float32Array(N * nv * at.itemSize) }; });
+    let rng = (s.seed * 9301 + 49297) % 233280;
+    const rnd = (): number => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
+    const q = new Quaternion(), e = new Vector3(), w = new Vector3();
+    for (let i = 0; i < N; i++) {
+      const t = 0.3 + 0.75 * (i / (N - 1)) + 0.08 * (rnd() - 0.5);
+      const r = (0.2 + 0.3 * rnd()) * (i < 3 ? 1.2 : 1);
+      const lat = (rnd() - 0.5) * 2 * (0.35 + 0.85 * t);
+      const cx = dirL.x * (s.radius * 0.7 + reach * t) + side.x * lat, cz = dirL.z * (s.radius * 0.7 + reach * t) + side.z * lat;
+      q.setFromAxisAngle(e.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(), rnd() * Math.PI * 2);
+      const sx = 1, sy = 0.5 + 0.25 * rnd(), sz = 0.7 + 0.3 * rnd();
+      const pick = Math.floor(rnd() * sp.count);
+      for (let k = 0; k < nv; k++) {
+        // jitter each corner (seeded on the corner, so shared corners of a facet stay welded in shape)
+        const px = pp.getX(k), py = pp.getY(k), pz = pp.getZ(k);
+        const j = 0.82 + 0.3 * fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1) * 43758.5453));
+        w.set(px * sx * j, py * sy * j, pz * sz * j).multiplyScalar(r).applyQuaternion(q);
+        const o = (i * nv + k) * 3;
+        pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.05, w.y + r * sy * 0.35); pos[o + 2] = cz + w.z;
+        for (const x of extra) {
+          const sz2 = x.at.itemSize, b = (i * nv + k) * sz2;
+          for (let c = 0; c < sz2; c++) {
+            let val = c === 0 ? x.at.getX(pick) : c === 1 ? x.at.getY(pick) : c === 2 ? x.at.getZ(pick) : x.at.getW(pick);
+            if (x.n === 'color' && c < 3) val *= 0.82;
+            x.arr[b + c] = val;
+          }
+        }
+      }
+    }
+    proto.dispose();
+    const g = new BufferGeometry();
+    g.setAttribute('position', new BufferAttribute(pos, 3));
+    for (const x of extra) g.setAttribute(x.n, new BufferAttribute(x.arr, x.at.itemSize));
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
+    const m = new Mesh(g, src.material);
+    m.name = 'vale_struct_rubble';
+    m.castShadow = true; m.receiveShadow = true;
+    m.customDepthMaterial = shadowDepth('rigid');
+    a.root.add(m);
+    s.rubble = m;
   }
 
   private rise(s: Struct, dt: number): void {

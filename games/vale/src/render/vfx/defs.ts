@@ -117,6 +117,8 @@ export interface DecalL extends LayerBase {
   rotate: number;
   /** sustained instances: age stops at life × hold until released */
   hold: number;
+  /** max VFX-1: a cone decal whose half-angle is π × the owner's remaining share (a status dial counting down) */
+  countdown: boolean;
 }
 
 export interface LightL extends LayerBase {
@@ -329,7 +331,7 @@ function parseLayer(r: Record<string, unknown>, d: VfxDefT, binds: string[]): La
         emissive: curve(r.emissive, style === DECAL_STYLES.light ? 1.5 : 0), rim: colorRef(r.rim), tex: texSpec(legacyTex),
         angle: deg(r.angleDeg, 60) / 2, length: num(r.length, 0), width: num(r.width, 0),
         spinRandom: r.rotateDeg === undefined && (r.shape === undefined || r.shape === 'circle' || r.shape === 'ring'), rotate: deg(r.rotateDeg, 0),
-        hold: Math.max(0, Math.min(1, num(r.hold, 0.5))),
+        hold: Math.max(0, Math.min(1, num(r.hold, 0.5))), countdown: r.countdown === true,
       }];
     }
     case 'light': return [{

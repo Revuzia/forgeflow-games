@@ -1435,7 +1435,7 @@
  "shops": [],
  "art": {
   "sky": "assets/maps/map_rift/sky.hdr",
-  "lut": "assets/grade/vale_grade_01.cube",
+  "lut": "assets/grade/vale_grade_rift.cube",
   "minimap": "assets/maps/map_rift/minimap.png",
   "terrain": {
    "plazas": [{"at": [12, 55], "radius": 13, "side": 0}, {"at": [158, 55], "radius": 13, "side": 1}],

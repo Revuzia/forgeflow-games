@@ -138,6 +138,9 @@ export const worldUniforms = {
   valeCharShape: { value: new Vector4(0.3, 0.35, 0.25, 0.75) },
   // a jungle monster's share of the world's light and of its own glow (wicks keep 1)
   valeCharMonster: { value: 1 },
+  // MAX U1/U6: the character material response on (1) / off (0, the A/B harness's 'base'); one uniform, no define, so
+  // no program is added
+  valeCharMat: { value: 1 },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -256,6 +259,7 @@ uniform vec4 valeCharRim;
 uniform vec3 valeCharFill;
 uniform vec4 valeCharShape;
 uniform float valeCharMonster;
+uniform float valeCharMat;
 `;
 /** after the material's lights (direct and sky): the character light (noon crown + eye fill), see the header */
 const CHAR_LIGHT = /* glsl */`
@@ -277,6 +281,35 @@ const CHAR_LIGHT = /* glsl */`
   // brightly, so a pale kit never blows out and the lift goes to the mid-tones and the shadow side
   float valeLit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular, vec3( 0.2126, 0.7152, 0.0722 ) );
   reflectedLight.directDiffuse += valeAdd * ( 1.0 - smoothstep( valeCharShape.z, valeCharShape.w, valeLit ) );
+  // MAX U1 / U6, the material response (fighters and jungle monsters, valeCharMat): one shading model read four ways
+  // through the ORM roughness the bake already zones per part (cloth 0.85-0.95, leather and skin 0.5-0.7, chalk and
+  // lacquer 0.55-0.7, glass and bells 0.14-0.2; art/tools/part_pairs.json). A runtime branch on the texel, not a
+  // define: no program is added.
+  //   cloth (r > 0.82): a soft grazing sheen on the key side, the albedo's own colour lifted (woven cloth catches
+  //     light along its folds), so a robe no longer reads as the same plaster as a chalk pauldron;
+  //   glass (r < 0.25, VALE dawnglass): dark-centred and bright-edged: a tight glint from the character key, a Fresnel
+  //     edge in the glass's own hue and 12 % less diffuse in the middle; at rest it stays under the bloom threshold.
+  if ( valeCharMat > 0.5 && valeCharMode > 1.1 ) {
+    float valeR = roughnessFactor;
+    vec3 valeK = normalize( valeKeyDir );
+    float valeNdL = dot( geometryNormal, valeK );
+    float valeF = 1.0 - valeNdV;
+    float valeCloth = smoothstep( 0.8, 0.88, valeR );
+    float valeGlass = 1.0 - smoothstep( 0.18, 0.28, valeR );
+    float valeShare = ( valeCharMode > 1.5 ? 1.0 : valeCharShape.y ) * valeCharMat;
+    if ( valeCloth > 0.0 ) {
+      float valeSide = saturate( valeNdL * 0.5 + 0.5 );
+      reflectedLight.directDiffuse += valeShare * valeCloth * 0.16 * valeF * valeF * valeSide * valeSide * valeCharRim.rgb * valeAlb;
+    }
+    if ( valeGlass > 0.0 ) {
+      vec3 valeH = normalize( valeK + geometryViewDir );
+      float valeGlint = pow( saturate( dot( geometryNormal, valeH ) ), 64.0 ) * saturate( valeNdL * 4.0 );
+      float valeEdge = valeF * valeF * valeF;
+      vec3 valeHue = diffuseColor.rgb / max( max( diffuseColor.r, max( diffuseColor.g, diffuseColor.b ) ), 0.02 );
+      reflectedLight.directDiffuse *= 1.0 - min( 0.12 * valeCharMat, 0.9 ) * valeGlass * ( 1.0 - valeEdge );
+      reflectedLight.directSpecular += valeShare * valeGlass * valeCharRim.rgb * ( 0.22 * valeGlint + 0.3 * valeEdge * mix( vec3( 1.0 ), valeHue, 0.6 ) );
+    }
+  }
   // a jungle monster takes the world's light (sun, sky, its crown share) and shows its own glow (a gloamoth's wing,
   // a glasshorn's dawnglass) at its own share: its whole value scales, its painted contrast kept
   if ( valeCharMode > 1.1 && valeCharMode < 1.5 ) {

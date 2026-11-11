@@ -40,6 +40,37 @@
         "noise": 0.35,
         "blend": "add",
         "scroll": 2.0
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -287,6 +318,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -397,6 +459,37 @@
         "rim": "#F4EFE2",
         "rimAlpha": 0.7,
         "soft": 0.3
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -1463,13 +1556,44 @@
         "blend": "alpha",
         "soft": 0.3,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
   {
-    "$comment": "T2 · impact · a fighter falls: the mask cracks into opaque chips that fall, a short team ring, dust settles",
+    "$comment": "T2 · impact · a fighter falls — the snuffed lamp: the mask cracks into opaque chips, the fighter's light leaves as a rising plume of ink and embers, a ring runs out, a brief light pool, a scorched hour-mark stays 3 s",
     "id": "lib_death_shatter",
-    "duration": 1.0,
+    "duration": 3.2,
     "teamTint": true,
     "layers": [
       {
@@ -1638,6 +1762,266 @@
         "soft": 0.3,
         "delay": 0.15,
         "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 10,
+        "shape": "sphere",
+        "radius": 0.3,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          1.2,
+          2.4
+        ],
+        "life": [
+          0.9,
+          1.5
+        ],
+        "size": [
+          0.45,
+          1.0,
+          1.2
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -1.2,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.55,
+        "soft": 0.3,
+        "delay": 0.08
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 26,
+        "shape": "sphere",
+        "radius": 0.35,
+        "dir": "up",
+        "spreadDeg": 40,
+        "speed": [
+          1.4,
+          3.4
+        ],
+        "life": [
+          0.8,
+          1.4
+        ],
+        "size": [
+          0.12,
+          0.05
+        ],
+        "color": [
+          "signature",
+          "#FF9A4A"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.6,
+        "gravity": -1.4,
+        "drag": 1.2,
+        "turbulence": 1.4,
+        "texture": "ember",
+        "blend": "add",
+        "delay": 0.05
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 1,
+        "shape": "point",
+        "dir": "up",
+        "spreadDeg": 0,
+        "speed": [
+          1.6,
+          1.6
+        ],
+        "life": [
+          0.7,
+          0.7
+        ],
+        "size": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.3,
+            1.1
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.9
+          ],
+          [
+            0.4,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.6,
+        "drag": 1.4,
+        "texture": "glow",
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "origin",
+        "radius": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.35,
+            2.1
+          ],
+          [
+            1,
+            2.6
+          ]
+        ],
+        "width": [
+          0.18,
+          0.04
+        ],
+        "life": 0.55,
+        "color": "team",
+        "alpha": [
+          0.9,
+          0.6,
+          0
+        ],
+        "emissive": 2.2,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.06,
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": 1.6,
+        "life": 0.6,
+        "color": "signature",
+        "alpha": [
+          0.55,
+          0.3,
+          0
+        ],
+        "emissive": 1.6,
+        "texture": "glow"
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "scorch",
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.06,
+            1.15
+          ],
+          [
+            1,
+            1.2
+          ]
+        ],
+        "life": 3.2,
+        "color": "#2A2C33",
+        "alpha": [
+          [
+            0,
+            0.85
+          ],
+          [
+            0.75,
+            0.7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2,
+        "rim": "signature"
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": 1.2,
+        "life": 3.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.7
+          ],
+          [
+            0.7,
+            0.35
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.0,
+        "texture": "rune"
+      },
+      {
+        "type": "light",
+        "at": "origin",
+        "color": "signature",
+        "intensity": 8,
+        "radius": 6,
+        "life": 0.6
       }
     ]
   },
@@ -1860,10 +2244,13 @@
         "life": 0.6,
         "color": "#7FD6A0",
         "alpha": [
-          0.5,
+          0.55,
           0
         ],
         "emissive": 1.6,
+        "rim": "#7FD6A0",
+        "rimPow": 1.6,
+        "rimEmissive": 1.8,
         "noise": 0.5,
         "scroll": [
           0,
@@ -3478,6 +3865,37 @@
         "noise": 0.35,
         "blend": "add",
         "scroll": 2.0
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -3490,25 +3908,25 @@
       {
         "type": "mesh",
         "at": "origin",
-        "shape": "column",
+        "shape": "stair",
         "scale": [
           [
             0,
-            0.5
+            0.2
           ],
           [
-            0.2,
-            0.9
+            0.18,
+            1.05
           ],
           [
             1,
-            0.9
+            1.1
           ]
         ],
         "stretch": [
-          1.0,
-          2.4,
-          1.0
+          1.15,
+          2.0,
+          1.15
         ],
         "life": 1.0,
         "color": [
@@ -3521,12 +3939,12 @@
             0
           ],
           [
-            0.12,
-            0.75
+            0.1,
+            0.9
           ],
           [
             0.6,
-            0.55
+            0.6
           ],
           [
             1,
@@ -3534,19 +3952,102 @@
           ]
         ],
         "emissive": 2.8,
-        "noise": 0.4,
+        "noise": 0.3,
         "scroll": [
           0,
-          2.0
+          1.0
         ],
-        "mask": "top",
-        "maskParam": 0.5,
+        "blend": "add",
+        "spinDeg": 120,
+        "offset": [
+          0,
+          -0.9,
+          0
+        ]
+      },
+      {
+        "type": "mesh",
+        "at": "origin",
+        "shape": "shaft",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.25,
+            0.55
+          ],
+          [
+            1,
+            0.5
+          ]
+        ],
+        "stretch": [
+          0.6,
+          3.0,
+          0.6
+        ],
+        "life": 0.8,
+        "color": [
+          "#FFF4DA",
+          "signature"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.1,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.8,
+        "noise": 0.3,
+        "scroll": [
+          0,
+          2.6
+        ],
         "blend": "add",
         "offset": [
           0,
           -0.9,
           0
         ]
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.15,
+            1.25
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.1,
+        "color": "signature",
+        "alpha": [
+          0.8,
+          0.5,
+          0
+        ],
+        "emissive": 1.8,
+        "texture": "rune"
       },
       {
         "type": "emitter",
@@ -3923,6 +4424,37 @@
         "texture": "ember",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -4102,15 +4634,160 @@
           ]
         ],
         "life": 0.6
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.4,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.16
+          ],
+          [
+            0.35,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
   {
     "$comment": "T4 · Lumen · objective taken: white core flash (T4), a tall column and a wide ring in the taker's colour, motes",
     "id": "lib_objective_taken",
-    "duration": 1.4,
+    "duration": 1.6,
     "teamTint": true,
     "layers": [
+      {
+        "type": "emitter",
+        "at": "origin",
+        "offset": [
+          0,
+          9.0,
+          0
+        ],
+        "count": 1,
+        "shape": "point",
+        "dir": "down",
+        "spreadDeg": 0,
+        "speed": [
+          48,
+          48
+        ],
+        "life": [
+          0.19,
+          0.19
+        ],
+        "size": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            2.6
+          ]
+        ],
+        "color": [
+          "#FFFFFF",
+          "team"
+        ],
+        "alpha": [
+          1,
+          1
+        ],
+        "emissive": 10,
+        "texture": "shard",
+        "stretch": 0.05,
+        "blend": "add",
+        "align": "velocity",
+        "aspect": 0.4
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "offset": [
+          0,
+          9.0,
+          0
+        ],
+        "count": 10,
+        "shape": "sphere",
+        "radius": 0.3,
+        "dir": "down",
+        "spreadDeg": 4,
+        "speed": [
+          40,
+          46
+        ],
+        "life": [
+          0.17,
+          0.2
+        ],
+        "size": [
+          0.5,
+          0.1
+        ],
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          0.8,
+          0.2
+        ],
+        "emissive": 6,
+        "texture": "streak",
+        "stretch": 0.05,
+        "blend": "add"
+      },
       {
         "type": "flash",
         "at": "origin",
@@ -4118,7 +4795,8 @@
         "life": 0.06,
         "color": "team",
         "intensity": 12.0,
-        "core": "#FFFFFF"
+        "core": "#FFFFFF",
+        "delay": 0.18
       },
       {
         "type": "mesh",
@@ -4152,7 +4830,10 @@
           0.9,
           0
         ],
-        "emissive": 10,
+        "emissive": 6,
+        "rim": "team",
+        "rimPow": 1.4,
+        "rimEmissive": 6,
         "noise": 0.4,
         "scroll": [
           0,
@@ -4167,7 +4848,204 @@
         "edgeEmissive": 6,
         "mask": "top",
         "maskParam": 0.3,
-        "blend": "add"
+        "blend": "add",
+        "delay": 0.18
+      },
+      {
+        "type": "mesh",
+        "at": "origin",
+        "shape": "shaft",
+        "scale": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.2,
+            1.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "stretch": [
+          0.8,
+          8.0,
+          0.8
+        ],
+        "life": 1.0,
+        "color": [
+          "#FFFFFF",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 8,
+        "noise": 0.3,
+        "scroll": [
+          0,
+          3.0
+        ],
+        "blend": "add",
+        "delay": 0.18
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "crack",
+        "radius": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.1,
+            3.2
+          ],
+          [
+            1,
+            3.3
+          ]
+        ],
+        "life": 2.4,
+        "color": "#2A2C33",
+        "alpha": [
+          0.85,
+          0.7,
+          0
+        ],
+        "emissive": 3.0,
+        "rim": "team",
+        "delay": 0.18
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            1.0
+          ],
+          [
+            0.2,
+            3.6
+          ],
+          [
+            1,
+            3.8
+          ]
+        ],
+        "life": 1.2,
+        "color": "team",
+        "alpha": [
+          0.7,
+          0.4,
+          0
+        ],
+        "emissive": 2.4,
+        "texture": "rune",
+        "delay": 0.18
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 24,
+        "dir": "up",
+        "spreadDeg": 160,
+        "speed": [
+          4,
+          9
+        ],
+        "life": [
+          0.6,
+          1.0
+        ],
+        "size": [
+          0.24,
+          0.24,
+          0.144
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14.0,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.19,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 12,
+        "shape": "ring",
+        "radius": 1.2,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          2.5,
+          5
+        ],
+        "life": [
+          0.8,
+          1.3
+        ],
+        "size": [
+          1.0,
+          2.0,
+          2.5
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.22,
+        "secondary": true
       },
       {
         "type": "shockwave",
@@ -4200,6 +5078,7 @@
         "emissive": 6,
         "sharp": 1.6,
         "noise": 0.35,
+        "delay": 0.18,
         "blend": "add"
       },
       {
@@ -4237,6 +5116,7 @@
         "turbulence": 0.8,
         "texture": "mote",
         "blend": "add",
+        "delay": 0.18,
         "secondary": true
       },
       {
@@ -4245,7 +5125,8 @@
         "color": "team",
         "intensity": 24,
         "radius": 16,
-        "life": 0.8
+        "life": 0.8,
+        "delay": 0.18
       }
     ]
   },
@@ -4361,6 +5242,37 @@
         "noise": 0.5,
         "blend": "add",
         "scroll": 2.0
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -4455,6 +5367,37 @@
         "rim": "#F4EFE2",
         "rimAlpha": 0.6,
         "soft": 0.3
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -4851,15 +5794,54 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · respawn: a column of team light sets the fighter down, a ring settles out, motes rise",
+    "$comment": "T2 · Lumen · respawn: the Seat's light pours down onto the spot, an eroded sleeve of team light sets the fighter down, a lit pool and dial, a ring settles out, motes rise",
     "id": "lib_respawn",
     "duration": 0.9,
     "teamTint": true,
     "layers": [
       {
+        "type": "emitter",
+        "at": "origin",
+        "offset": [
+          0,
+          3.6,
+          0
+        ],
+        "count": 18,
+        "shape": "disc",
+        "radius": 0.55,
+        "dir": "down",
+        "spreadDeg": 6,
+        "speed": [
+          9,
+          13
+        ],
+        "life": [
+          0.22,
+          0.3
+        ],
+        "size": [
+          0.7,
+          0.1
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.6
+        ],
+        "emissive": 3.0,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
+      },
+      {
         "type": "mesh",
         "at": "origin",
-        "shape": "pillar",
+        "shape": "column",
         "scale": [
           [
             0,
@@ -4867,24 +5849,32 @@
           ],
           [
             1,
-            0.7
+            0.75
           ]
         ],
         "stretch": [
-          0.7,
+          0.75,
           3.5,
-          0.7
+          0.75
         ],
-        "life": 0.7,
+        "life": 0.75,
         "color": [
           "#FFFFFF",
           "team"
         ],
         "alpha": [
-          0.8,
+          0.85,
           0
         ],
         "emissive": 3.0,
+        "rim": "team",
+        "rimPow": 1.4,
+        "rimEmissive": 3.0,
+        "noise": 0.5,
+        "scroll": [
+          0,
+          -2.0
+        ],
         "dissolve": [
           0,
           0.2,
@@ -4899,6 +5889,51 @@
           -0.9,
           0
         ]
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.2,
+            1.2
+          ],
+          [
+            1,
+            1.2
+          ]
+        ],
+        "life": 0.9,
+        "color": "team",
+        "alpha": [
+          0.7,
+          0.4,
+          0
+        ],
+        "emissive": 1.6,
+        "texture": "rune"
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "circle",
+        "style": "light",
+        "radius": 1.0,
+        "life": 0.7,
+        "color": "team",
+        "alpha": [
+          0.5,
+          0.3,
+          0
+        ],
+        "emissive": 1.4,
+        "texture": "glow"
       },
       {
         "type": "shockwave",
@@ -4931,6 +5966,7 @@
         "emissive": 2.6,
         "sharp": 1.6,
         "noise": 0.35,
+        "delay": 0.18,
         "blend": "add"
       },
       {
@@ -4968,6 +6004,7 @@
         "turbulence": 0.8,
         "texture": "mote",
         "blend": "add",
+        "delay": 0.18,
         "secondary": true
       }
     ]
@@ -5281,6 +6318,37 @@
         "noise": 0.35,
         "blend": "add",
         "scroll": 2.0
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -6728,6 +7796,38 @@
         ],
         "rim": "team",
         "rimAlpha": 0.5
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.9,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -6870,6 +7970,38 @@
           ]
         ],
         "rim": "team",
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 1.0,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -7087,6 +8219,49 @@
         "texture": "streak",
         "stretch": 0.06,
         "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "offset": [
+          0,
+          0.05,
+          0
+        ],
+        "rate": 8,
+        "shape": "disc",
+        "radius": 0.3,
+        "dir": "back",
+        "spreadDeg": 30,
+        "speed": [
+          1.2,
+          2.2
+        ],
+        "life": [
+          0.2,
+          0.32
+        ],
+        "size": [
+          0.16,
+          0.05
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": 4,
+        "texture": "glint",
+        "blend": "add",
+        "spinDeg": [
+          -360,
+          360
+        ]
       }
     ]
   },
@@ -7230,7 +8405,7 @@
           0
         ],
         "shape": "ringwave",
-        "scale": 0.9,
+        "scale": 1.2,
         "color": [
           "#D9A7C7",
           "#E59BB0"
@@ -7242,11 +8417,11 @@
           ],
           [
             0.08,
-            0.95
+            0.9
           ],
           [
             0.75,
-            0.95
+            0.9
           ],
           [
             1,
@@ -7254,19 +8429,65 @@
           ]
         ],
         "emissive": 2.0,
-        "dissolve": 0.32,
+        "dissolve": 0.46,
         "noise": 0.9,
-        "noiseScale": 2.4,
+        "noiseScale": 2.6,
+        "scroll": [
+          0.6,
+          0
+        ],
         "edge": "team",
         "edgeEmissive": 2.0,
-        "edgeWidth": 0.1,
+        "edgeWidth": 0.12,
         "blend": "add",
         "align": "up",
-        "spinDeg": -20,
+        "spinDeg": -70,
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
         "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "chest",
+        "rate": 6,
+        "shape": "ring",
+        "radius": 0.55,
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.5,
+          0.7
+        ],
+        "size": [
+          0,
+          0.14,
+          0.1,
+          0
+        ],
+        "color": [
+          "#D9A7C7",
+          "#E59BB0"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.0,
+        "orbitDeg": 160,
+        "texture": "shard",
+        "blend": "add",
+        "spinDeg": [
+          -300,
+          300
+        ],
+        "space": "local"
       },
       {
         "type": "emitter",
@@ -7750,6 +8971,103 @@
         ],
         "rim": "team",
         "rimAlpha": 0.5
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "radius": [
+          [
+            0,
+            1.25
+          ],
+          [
+            1,
+            0.45
+          ]
+        ],
+        "width": [
+          0.05,
+          0.12
+        ],
+        "life": 0.5,
+        "color": "team",
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "emissive": 2.4,
+        "sharp": 1.8,
+        "blend": "add",
+        "repeat": 0.8
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "ground",
+        "rate": 10,
+        "shape": "ring",
+        "radius": 0.6,
+        "dir": "in",
+        "spreadDeg": 10,
+        "speed": [
+          0.6,
+          1.0
+        ],
+        "life": [
+          0.4,
+          0.55
+        ],
+        "size": [
+          0.3,
+          0.06
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0
+        ],
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "ink",
+        "rim": "team",
+        "rimAlpha": 0.7
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 1.15,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -7812,6 +9130,11 @@
         "rimPow": 2.2,
         "noise": 0.3,
         "blend": "ink",
+        "wobble": 0.025,
+        "scroll": [
+          0.15,
+          -0.4
+        ],
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -7958,6 +9281,119 @@
         ],
         "emissive": 2.4,
         "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "head",
+        "offset": [
+          0,
+          -0.42,
+          0
+        ],
+        "rate": 5,
+        "shape": "ring",
+        "radius": 0.16,
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.5,
+          0.6
+        ],
+        "size": [
+          0,
+          0.22,
+          0.2,
+          0
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          1,
+          1,
+          0
+        ],
+        "orbitDeg": 300,
+        "texture": "drop",
+        "blend": "ink",
+        "rim": "team",
+        "rimAlpha": 0.8,
+        "space": "local",
+        "spinDeg": [
+          -60,
+          60
+        ]
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "socket": "head",
+        "offset": [
+          0,
+          -0.3,
+          0
+        ],
+        "radius": [
+          [
+            0,
+            0.45
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "width": [
+          0.12,
+          0.03
+        ],
+        "life": 0.45,
+        "color": "#2A2C33",
+        "alpha": [
+          0.85,
+          0
+        ],
+        "emissive": 0,
+        "blend": "ink",
+        "repeat": 0.9
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.9,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -8020,6 +9456,11 @@
         "rimPow": 2.0,
         "noise": 0.5,
         "blend": "ink",
+        "wobble": 0.03,
+        "scroll": [
+          0.1,
+          0.25
+        ],
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -8121,6 +9562,134 @@
           ]
         ],
         "emissive": 0.8,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.1,
+          0
+        ],
+        "rate": 7,
+        "shape": "ring",
+        "radius": 0.42,
+        "dir": "up",
+        "spreadDeg": 30,
+        "speed": [
+          0.05,
+          0.15
+        ],
+        "life": [
+          1.2,
+          1.6
+        ],
+        "size": [
+          0,
+          0.14,
+          0.12,
+          0
+        ],
+        "color": [
+          "#F4EFE2",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          0,
+          0.85,
+          0.7,
+          0
+        ],
+        "emissive": 1.4,
+        "orbitDeg": 70,
+        "turbulence": 0.5,
+        "texture": "petal",
+        "blend": "add",
+        "spinDeg": [
+          -240,
+          240
+        ],
+        "space": "local"
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "socket": "top",
+        "offset": [
+          0,
+          0.22,
+          0
+        ],
+        "texture": "rune",
+        "size": [
+          0.9,
+          0.9
+        ],
+        "color": "#BFD3E6",
+        "emissive": 1.6,
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.7
+          ],
+          [
+            0.75,
+            0.7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 1.0,
+        "hold": 0.75,
+        "align": "ground",
+        "spinDeg": [
+          35,
+          35
+        ],
+        "rotDeg": [
+          0,
+          360
+        ],
+        "soft": 0.1
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.85,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.45
+          ],
+          [
+            0.75,
+            0.45
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.1,
+        "countdown": true,
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -8340,6 +9909,38 @@
         "emissive": 2.0,
         "texture": "shard",
         "blend": "add"
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 1.0,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.5
+          ],
+          [
+            0.75,
+            0.5
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.3,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -8676,6 +10277,85 @@
         ],
         "emissive": 3.0,
         "blend": "add"
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "socket": "head",
+        "offset": [
+          0,
+          0.2,
+          0
+        ],
+        "texture": "rune",
+        "size": [
+          1.25,
+          1.25
+        ],
+        "color": "team",
+        "emissive": 2.6,
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.95
+          ],
+          [
+            0.75,
+            0.95
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 1.0,
+        "hold": 0.75,
+        "align": "ground",
+        "spinDeg": [
+          -150,
+          -150
+        ],
+        "rotDeg": [
+          0,
+          360
+        ],
+        "soft": 0.1
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.95,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -8781,6 +10461,38 @@
         "life": 0.6,
         "repeat": 0.6,
         "hold": 0
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.95,
+        "color": "element",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.6
+          ],
+          [
+            0.75,
+            0.6
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.6,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
@@ -8813,27 +10525,70 @@
           ],
           [
             0.08,
-            0.12
+            0.08
           ],
           [
             0.75,
-            0.12
+            0.08
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 0.6,
+        "emissive": 0.5,
         "rim": "team",
-        "rimEmissive": 3.0,
-        "rimPow": 2.4,
-        "noise": 0.3,
+        "rimEmissive": 3.2,
+        "rimPow": 2.8,
+        "noise": 0.6,
+        "dissolve": 0.25,
+        "edge": "team",
+        "edgeEmissive": 2.6,
+        "edgeWidth": 0.05,
+        "scroll": [
+          0.1,
+          0.9
+        ],
+        "wobble": 0.02,
         "blend": "add",
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
         "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "rate": 10,
+        "shape": "ring",
+        "radius": 0.5,
+        "dir": "up",
+        "spreadDeg": 8,
+        "speed": [
+          1.6,
+          2.6
+        ],
+        "life": [
+          0.25,
+          0.4
+        ],
+        "size": [
+          0.34,
+          0.06
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          0.8,
+          0
+        ],
+        "emissive": 2.4,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
       },
       {
         "type": "decal",
@@ -8905,11 +10660,43 @@
         ],
         "rim": "team",
         "rimAlpha": 0.5
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 0.95,
+        "color": "team",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.5
+          ],
+          [
+            0.75,
+            0.5
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.3,
+        "countdown": true,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
       }
     ]
   },
   {
-    "$comment": "T2 · Lumen · untargetable — under glass: a dithered dawnglass bell-jar stands over the unit, rim-lit, a pale ring",
+    "$comment": "T2 · Lumen · untargetable — under glass: a fresnel-only dawnglass bell-jar turns over the unit, its glass eroding and re-forming, a stair of glass dial rings rising inside it, glints, a pale ring and dial",
     "id": "lib_status_untargetable",
     "duration": 1.0,
     "teamTint": true,
@@ -8945,32 +10732,134 @@
           ],
           [
             0.08,
-            0.32
+            0.1
           ],
           [
             0.75,
-            0.32
+            0.1
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 0.8,
+        "emissive": 0.5,
         "rim": "#F4EFE2",
-        "rimEmissive": 2.6,
-        "rimPow": 2.2,
-        "noise": 0.6,
+        "rimEmissive": 2.8,
+        "rimPow": 3.0,
+        "noise": 0.7,
         "noiseScale": 3.0,
-        "dissolve": 0.2,
+        "dissolve": 0.32,
         "edge": "#BFD3E6",
-        "edgeEmissive": 2.0,
-        "edgeWidth": 0.06,
+        "edgeEmissive": 2.4,
+        "edgeWidth": 0.07,
+        "blend": "add",
+        "scroll": [
+          0.12,
+          0.35
+        ],
+        "spinDeg": 24,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "mesh",
+        "socket": "base",
+        "shape": "stair",
+        "scale": [
+          [
+            0,
+            0.6
+          ],
+          [
+            0.1,
+            1.35
+          ],
+          [
+            1,
+            1.35
+          ]
+        ],
+        "stretch": [
+          1,
+          1.7,
+          1
+        ],
+        "color": [
+          "#BFD3E6",
+          "#F4EFE2"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.75
+          ],
+          [
+            0.75,
+            0.75
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.8,
+        "rim": "#F4EFE2",
+        "rimEmissive": 2.2,
+        "rimPow": 1.6,
+        "noise": 0.4,
+        "scroll": [
+          0,
+          0.6
+        ],
+        "spinDeg": -40,
         "blend": "add",
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
         "follow": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "socket": "base",
+        "rate": 7,
+        "shape": "aura",
+        "radius": 0.55,
+        "height": 2.2,
+        "dir": "up",
+        "speed": [
+          0.1,
+          0.3
+        ],
+        "life": [
+          0.35,
+          0.5
+        ],
+        "size": [
+          0,
+          0.14,
+          0
+        ],
+        "color": [
+          "#F4EFE2",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 2.2,
+        "texture": "glint",
+        "blend": "add",
+        "space": "local"
       },
       {
         "type": "decal",
@@ -8997,6 +10886,38 @@
           ]
         ],
         "emissive": 1.2,
+        "at": "target",
+        "life": 1.0,
+        "hold": 0.75,
+        "follow": true
+      },
+      {
+        "type": "decal",
+        "shape": "cone",
+        "style": "light",
+        "texture": "rune",
+        "radius": 1.0,
+        "color": "#F4EFE2",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.08,
+            0.5
+          ],
+          [
+            0.75,
+            0.5
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.3,
+        "countdown": true,
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -9154,6 +11075,126 @@
         "intensity": 8,
         "radius": 9,
         "life": 0.5
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 12,
+        "shape": "sphere",
+        "radius": 0.6,
+        "dir": "up",
+        "spreadDeg": 25,
+        "speed": [
+          1.6,
+          3.4
+        ],
+        "life": [
+          1.2,
+          2.0
+        ],
+        "size": [
+          1.2,
+          2.4,
+          3.0
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.6,
+          0.35,
+          0
+        ],
+        "gravity": -0.4,
+        "drag": 1.6,
+        "turbulence": 0.4,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -25,
+          25
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.05
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 6,
+        "shape": "sphere",
+        "radius": 0.5,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          0.4,
+          1.0
+        ],
+        "life": [
+          1.8,
+          2.6
+        ],
+        "size": [
+          0.7200000000000001,
+          1.6,
+          1.92
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -0.5,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.35,
+        "soft": 0.3,
+        "delay": 0.3
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": 3.0,
+        "life": 0.9,
+        "color": "team",
+        "alpha": [
+          0.5,
+          0.3,
+          0
+        ],
+        "emissive": 1.6,
+        "texture": "glow"
       }
     ]
   },
@@ -9713,6 +11754,110 @@
           0.6,
           0
         ]
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 10,
+        "shape": "disc",
+        "radius": 1.4,
+        "dir": "up",
+        "spreadDeg": 20,
+        "speed": [
+          1.0,
+          2.2
+        ],
+        "life": [
+          1.6,
+          2.4
+        ],
+        "size": [
+          1.4,
+          2.6,
+          3.2
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.5,
+          0.3,
+          0
+        ],
+        "gravity": -0.3,
+        "drag": 1.4,
+        "turbulence": 0.4,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -20,
+          20
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.15
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "rate": 5,
+        "duration": 1.6,
+        "shape": "disc",
+        "radius": 1.2,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          0.3,
+          0.8
+        ],
+        "life": [
+          1.4,
+          2.0
+        ],
+        "size": [
+          0.63,
+          1.4,
+          1.68
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -0.4,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.3,
+        "soft": 0.3
       }
     ]
   },
@@ -9801,7 +11946,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · a summon rises: a team ring, a pillar of light grows from the ground, motes go up, stone chips",
+    "$comment": "T3 · a summon rises: the ground's ink draws it up (an ink sleeve with a team rim out of an ink pool, ink threads rising), a stair of light rings steps up round a thin shaft, a team ring, motes, stone chips",
     "id": "lib_summon_rise",
     "duration": 0.9,
     "teamTint": true,
@@ -9841,27 +11986,107 @@
         "blend": "add"
       },
       {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "ink",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.2,
+            1.1
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "life": 1.6,
+        "color": "#17181B",
+        "alpha": [
+          0.85,
+          0.7,
+          0
+        ],
+        "rim": "team",
+        "fit": true
+      },
+      {
         "type": "mesh",
         "at": "ground",
-        "shape": "pillar",
+        "shape": "column",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.3,
+            0.75
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "stretch": [
+          1.0,
+          2.0,
+          1.0
+        ],
+        "life": 0.8,
+        "color": [
+          "#2A2C33",
+          "#17181B"
+        ],
+        "alpha": [
+          0.9,
+          0
+        ],
+        "emissive": 0,
+        "rim": "team",
+        "rimPow": 1.3,
+        "rimEmissive": 2.6,
+        "noise": 0.7,
+        "scroll": [
+          0,
+          1.6
+        ],
+        "dissolve": [
+          0,
+          0,
+          0.2,
+          1
+        ],
+        "edge": "team",
+        "edgeEmissive": 2.6,
+        "blend": "ink"
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "stair",
         "scale": [
           [
             0,
             0.1
           ],
           [
-            0.3,
+            0.35,
             1.0
           ],
           [
             1,
-            1.0
+            1.05
           ]
         ],
         "stretch": [
-          0.6,
-          2.4,
-          0.6
+          0.9,
+          2.2,
+          0.9
         ],
         "life": 0.7,
         "color": [
@@ -9869,23 +12094,87 @@
           "team"
         ],
         "alpha": [
-          0.8,
+          0.85,
+          0
+        ],
+        "emissive": 2.6,
+        "noise": 0.3,
+        "blend": "add",
+        "spinDeg": -90
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "shaft",
+        "scale": [
+          [
+            0,
+            0.1
+          ],
+          [
+            0.3,
+            0.6
+          ],
+          [
+            1,
+            0.6
+          ]
+        ],
+        "stretch": [
+          0.5,
+          3.0,
+          0.5
+        ],
+        "life": 0.6,
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          0.9,
           0
         ],
         "emissive": 3.0,
-        "noise": 0.5,
+        "noise": 0.4,
         "scroll": [
           0,
-          2.0
+          2.4
         ],
-        "dissolve": [
-          0,
-          0,
-          1
-        ],
-        "mask": "top",
-        "maskParam": 0.4,
         "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 14,
+        "shape": "ring",
+        "radius": 0.55,
+        "dir": "up",
+        "spreadDeg": 12,
+        "speed": [
+          1.8,
+          3.2
+        ],
+        "life": [
+          0.4,
+          0.65
+        ],
+        "size": [
+          0.4,
+          0.08
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0.9,
+          0
+        ],
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "ink",
+        "rim": "team",
+        "rimAlpha": 0.7
       },
       {
         "type": "emitter",
@@ -10100,6 +12389,37 @@
         "blend": "add",
         "face": "ground",
         "scroll": 2.0
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -10843,6 +13163,92 @@
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 3,
+        "shape": "sphere",
+        "radius": 0.12,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          0.6,
+          1.2
+        ],
+        "life": [
+          0.5,
+          0.8
+        ],
+        "size": [
+          0.24750000000000003,
+          0.55,
+          0.66
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -0.8,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "soft": 0.3
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 6,
+        "shape": "sphere",
+        "radius": 0.15,
+        "dir": "up",
+        "spreadDeg": 50,
+        "speed": [
+          0.8,
+          2.0
+        ],
+        "life": [
+          0.4,
+          0.7
+        ],
+        "size": [
+          0.08,
+          0.03
+        ],
+        "color": [
+          "team",
+          "#FF9A4A"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": -0.8,
+        "turbulence": 1.2,
+        "texture": "ember",
+        "blend": "add"
       }
     ]
   },
@@ -14003,6 +16409,37 @@
         "soft": 0.25,
         "follow": true,
         "hold": 1
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -17438,6 +19875,37 @@
         "soft": 0.25,
         "follow": true,
         "hold": 1
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -21625,6 +24093,37 @@
         ],
         "soft": 0.3,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -22520,6 +25019,37 @@
         "rimAlpha": 0.6,
         "soft": 0.3,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -24599,6 +27129,37 @@
         "soft": 0.25,
         "follow": true,
         "hold": 1
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -25718,6 +28279,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -28448,6 +31040,68 @@
         "texture": "streak",
         "stretch": 0.06,
         "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.4,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.16
+          ],
+          [
+            0.35,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -32538,6 +35192,37 @@
         "soft": 0.25,
         "follow": true,
         "hold": 1
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -35055,6 +37740,37 @@
           200
         ],
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -36690,6 +39406,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -38744,6 +41491,37 @@
         "blend": "alpha",
         "soft": 0.3,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -40622,6 +43400,37 @@
         "rim": "team",
         "rimAlpha": 0.5,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -41421,6 +44230,37 @@
           260
         ],
         "soft": 0.05
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -42013,6 +44853,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -43320,6 +46191,37 @@
         "intensity": 6,
         "radius": 5,
         "life": 0.4
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -47333,6 +50235,68 @@
         "stretch": 0.03,
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.4,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.16
+          ],
+          [
+            0.35,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -48068,6 +51032,37 @@
         "rim": "team",
         "rimAlpha": 0.55,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -48457,6 +51452,37 @@
         "rim": "#F4EFE2",
         "rimAlpha": 0.6,
         "soft": 0.3
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -50725,6 +53751,68 @@
         "rim": "signature",
         "rimAlpha": 0.55,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.4,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.16
+          ],
+          [
+            0.35,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -53788,6 +56876,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -54046,6 +57165,37 @@
         "rim": "#F4EFE2",
         "rimAlpha": 0.4,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -56147,6 +59297,37 @@
           -0.9,
           0
         ]
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -57750,6 +60931,37 @@
           -0.95,
           0
         ]
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -59230,6 +62442,68 @@
           -0.95,
           0
         ]
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.4,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.16
+          ],
+          [
+            0.35,
+            0.16
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -61931,6 +65205,37 @@
         "texture": "spark",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -62204,6 +65509,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -64174,6 +67510,37 @@
         "blend": "add",
         "secondary": true,
         "count": 28
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -66652,6 +70019,37 @@
         "rimAlpha": 0.7,
         "soft": 0.2,
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -68843,6 +72241,37 @@
         "emissive": 2.0,
         "sharp": 1.8,
         "mode": "vertical"
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -69564,6 +72993,37 @@
         "emissive": 2.6,
         "texture": "glint",
         "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.0,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.26
+          ],
+          [
+            0.35,
+            0.26
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.2
       }
     ]
   },
@@ -70496,6 +73956,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -70650,6 +74141,37 @@
         "stretch": 0.05,
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -72636,6 +76158,37 @@
         "texture": "glint",
         "blend": "add",
         "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },
@@ -73925,6 +77478,37 @@
         "emissive": 2.0,
         "blend": "add",
         "repeat": 0.08
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.15,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.34
+          ],
+          [
+            0.35,
+            0.34
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.5
       }
     ]
   },

@@ -392,3 +392,44 @@ LIGHT_EXTRA: set = {"ardit_a2_glare", "marund_a2_raise", "marund_a2_dome", "odru
 def bespoke(defs: list) -> list:
     out = [secondary_pass(ult_pass(signature_pass(drop_shake(copy.deepcopy(d))))) for d in defs]
     return [light_pass(d) if is_rekey_slot(d["id"]) else d for d in out]
+
+
+# ── max VFX-2: every projectile, skillshot and dash lights the ground under its head ───────────────────────────────
+DASH_WORDS = ("dash", "leap", "step", "hop", "spring", "rush", "lunge", "bound", "backstep", "kick", "shoulder", "beardown", "wrap")
+
+
+def _rides_path(l: dict) -> bool:
+    if l.get("at") == "path" and l["type"] in ("mesh", "ribbon", "emitter", "sprite"):
+        return True
+    return l["type"] in ("ribbon", "trail") and l.get("at") in (None, "path") and not l.get("arcRadius") and not l.get("socket")
+
+
+def _ground_lit(d: dict) -> bool:
+    return any((l["type"] == "decal" and l.get("at") == "path") or (l["type"] == "light" and l.get("at") == "path") for l in d["layers"])
+
+
+def ground_light_pass(d: dict) -> dict:
+    """max VFX-2: a def that rides a path (a shot, a skillshot, a dash) gets a soft light pool on the ground under its
+    head in the caster's signature (a wick or a structure: its team), held while the head flies and fading where it lets
+    go (system.ts: a path `light` decal is the one decal T1 draws). Ultimates and T3 shots (a Needle) add a wider, dimmer
+    second pool. Idempotent: a def that already lights the ground under its path is left alone."""
+    i = d["id"]
+    if i.endswith("_windup") or not any(_rides_path(l) for l in d["layers"]) or _ground_lit(d):
+        return d
+    dash = any(w in i for w in DASH_WORDS) and not i.endswith("_shot")
+    big = "_ult_" in i or "needle" in i
+    r, a, e = (1.0, 0.26, 1.2) if dash else (1.15, 0.34, 1.5)
+    keys = lambda peak: [[0, 0], [0.06, peak], [0.35, peak], [1, 0]]  # noqa: E731
+    layers = [L("decal", at="path", follow=True, shape="circle", style="light", texture="glow", radius=r, life=0.45, hold=0.35,
+                color="signature", alpha=keys(a), emissive=e)]
+    if big:
+        layers.append(L("decal", at="path", follow=True, shape="circle", style="light", texture="glow", radius=2.4, life=0.6, hold=0.35,
+                        color="signature", alpha=keys(0.16), emissive=1.2))
+    d = copy.deepcopy(d)
+    d["layers"] = d["layers"] + layers
+    return d
+
+
+def post(d: dict) -> dict:
+    """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
+    return ground_light_pass(d)

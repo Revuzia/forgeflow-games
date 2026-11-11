@@ -809,7 +809,7 @@ const VFX_LAYERS: Record<string, Record<string, VfxKey>> = {
   decal: {
     shape: E('circle', 'ring', 'cone', 'rect', 'line'), style: E('plain', 'scorch', 'crack', 'ink', 'frost', 'light'), radius: 'curve',
     life: 'nonneg', color: 'gradient', alpha: 'curve', emissive: 'curve', rim: 'color', texture: TEX, angleDeg: 'nonneg', length: 'nonneg', width: 'nonneg',
-    hold: 'unit', rotateDeg: 'num',
+    hold: 'unit', rotateDeg: 'num', countdown: 'bool',
   },
   light: { color: 'color', intensity: 'nonneg', radius: 'nonneg', life: 'nonneg', attack: 'nonneg', flicker: 'unit' },
   distort: { mode: E('ring', 'haze', 'bulge'), size: 'curve', strength: 'curve', life: 'nonneg', align: E('camera', 'ground') },
@@ -1321,6 +1321,39 @@ function checkFighterTriangles(c: CatalogT, assets: Map<string, AssetInfo>, dg: 
   c.skins.forEach((s, i) => { if (s.model) check(s.model, ['skins', i, 'model'], `skin ${s.id}: model`); });
 }
 
+// ── 4c. metalness 0 on character models (STYLE_BIBLE: no metal; closing OBS-metal, MAX U2) ─────────────────────
+/** the materials of a GLB whose effective metalness can be above 0 (pbrMetallicRoughness.metallicFactor > 0; the
+ *  glTF default is 1). VALE's fighters, skins, wicks and monsters are metalness 0 everywhere: partial metal (0.2-0.55
+ *  from lossy ORM B channels) takes 20-55 % off the diffuse and greys cloth, chalk and lacquer. A JSON-only fix:
+ *  python3 art/tools/glb_zero_metal.py <glb>. */
+export function glbMetalMaterials(abs: string): string[] | null {
+  const b = readFileSync(abs);
+  if (b.length < 20 || b.toString('latin1', 0, 4) !== 'glTF') return null;
+  const len = b.readUInt32LE(12);
+  let j: { materials?: { name?: string; pbrMetallicRoughness?: { metallicFactor?: number } }[] };
+  try { j = JSON.parse(b.toString('utf8', 20, 20 + len)); } catch { return null; }
+  return (j.materials ?? []).filter((m) => (m.pbrMetallicRoughness?.metallicFactor ?? 1) > 0).map((m) => m.name ?? '?');
+}
+
+function checkZeroMetal(c: CatalogT, assets: Map<string, AssetInfo>, dg: Diagnostics): void {
+  const seen = new Set<string>();
+  const check = (ref: string | undefined, path: Seg[], what: string): void => {
+    if (!ref || seen.has(ref) || !/\.glb$/i.test(ref)) return;
+    seen.add(ref);
+    const a = assets.get(ref);
+    if (!a) return;
+    const bad = glbMetalMaterials(a.abs);
+    if (bad?.length) dg.err(path, `${what} "${ref}" has metalness on ${bad.join(', ')} (VALE characters are metalness 0: run python3 art/tools/glb_zero_metal.py on it)`);
+  };
+  c.fighters.forEach((f, i) => check(f.art.model, ['fighters', i, 'art', 'model'], `fighter ${f.id}: model`));
+  c.skins.forEach((s, i) => check(s.model, ['skins', i, 'model'], `skin ${s.id}: model`));
+  c.units.forEach((u, i) => {
+    if (u.kind !== 'minion' && u.kind !== 'monster' && u.kind !== 'summon') return;
+    check(u.art.model, ['units', i, 'art', 'model'], `unit ${u.id}: model`);
+    u.art.teamModels?.forEach((ref, k) => check(ref, ['units', i, 'art', 'teamModels', k], `unit ${u.id}: team model`));
+  });
+}
+
 // ── 5. names ────────────────────────────────────────────────────────────────────────────────────
 const NAME_KEYS = new Set(['name', 'title', 'label', 'headline', 'tagline', 'badge']);
 const PROSE_KEYS = new Set(['desc', 'lore', 'job', 'body', 'sub', 'contract', 'note']);
@@ -1501,6 +1534,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   const refs = collectAssetRefs(data);
   const assets = resolveAssets(refs, opts, dg);
   if (parsed.success) checkFighterTriangles(parsed.data, assets, dg);
+  if (parsed.success) checkZeroMetal(parsed.data, assets, dg);
 
   const deny = loadDenyList(opts.designDir);
   for (const w of deny.warnings) dg.fileWarn(displayPath(opts.designDir), w);

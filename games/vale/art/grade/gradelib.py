@@ -264,6 +264,18 @@ def grade_fn(rgb, spec: dict):
             w = w * _smoothstep(0.02, 0.10, hsv[..., 1])           # greys have no hue to shift
             hsv[..., 0] = (hsv[..., 0] + op["deg"] * w) % 360.0
             x = hsv_to_rgb(hsv)
+        elif k == "splitTone":
+            # max env ENV-8 (per-map light mood, art/grade/make_map_luts.py): a luma-preserving tint of the shadows and
+            # the highlights (display offsets, feathered round `pivot`); accents skip it like every chroma op
+            y = _luma(x)
+            p, wd = op.get("pivot", 0.35), op.get("width", 0.25)
+            wh = _smoothstep(p - wd, p + wd, y)[..., None]
+            d = np.array(op["shadow"]) * (1.0 - wh) + np.array(op["highlight"]) * wh
+            d = d - _luma(d)[..., None]                       # the tint moves hue, never the value (B5 holds)
+            # the tint rolls off toward white (the Self rim, the near-white UI hexes keep their neutral)
+            ro = op.get("topRolloff", [0.80, 0.95])
+            d = d * (1.0 - _smoothstep(ro[0], ro[1], x.max(axis=-1)))[..., None]
+            x = x + d * (1.0 - prot)[..., None]
         elif k == "gamutSoftClip":
             lab = rgb_to_oklab(np.clip(x, 0, 1))
             C = np.hypot(lab[..., 1], lab[..., 2])

@@ -245,26 +245,30 @@ in vec2 vK;
 layout( location = 0 ) out highp vec4 pc_fragColor;
 ${VICTIM_FLASH_GLSL}
 vec4 valeGlaze() {
-  float f = 1.0 - abs( dot( normalize( vN ), normalize( vV ) ) );
-  float rim = pow( f, 2.2 );
+  // max env ENV-2 (the hour-ward): the stone stays opaque and readable; the ward is a ~1.5 px rim on the silhouette
+  // only (n.v over its own screen derivative, as the x-ray edge), a hairline of fresnel just inside it, and one thin
+  // shimmer band sweeping up the body every 3 s. No fill, no hatch: the glaze used to wash the whole tower to glass
+  float ndv = abs( dot( normalize( vN ), normalize( vV ) ) );
+  float edgePx = ndv / max( fwidth( ndv ), 1e-4 );
+  float rim = 1.0 - smoothstep( 0.9, 2.2, edgePx );
+  float soft = 1.0 - smoothstep( 0.0, 0.2, ndv );
   vec3 q = vW - uCenter;
-  float ang = atan( q.z, q.x );
-  // the shield's 45-degree hatch, wrapped round the tower's axis (arc length + height)
-  float hatch = smoothstep( 0.84, 0.96, fract( ( ang * max( length( q.xz ), 0.35 ) + q.y ) * 2.4 ) );
-  // a band of light rising slowly up the tower
-  float band = exp( -pow( ( fract( q.y / uH * 0.5 - uTime * 0.12 ) - 0.5 ) * 9.0, 2.0 ) );
-  float a = 0.045 + 0.34 * rim + 0.1 * hatch * ( 0.5 + rim ) + 0.09 * band * ( 0.4 + rim );
-  a = a * uK + uFlash * ( 0.2 + 0.4 * rim );
+  float ph = fract( uTime / 3.0 );
+  float band = exp( -pow( ( q.y / max( uH, 0.5 ) - ( ph * 1.3 - 0.15 ) ) * 14.0, 2.0 ) ) * ( 1.0 - smoothstep( 0.8, 1.0, ph ) );
+  float a = 0.55 * rim + 0.1 * soft + 0.1 * band * ( 0.5 + soft );
+  a = a * uK + uFlash * ( 0.2 + 0.4 * max( rim, soft ) );
   // the occlusion fade thins the glaze with the tower
   a *= mix( 1.0, uSfA, smoothstep( uSfY0, uSfY1, vW.y ) );
-  return vec4( uColor * ( 0.8 + 0.4 * rim + uFlash ), clamp( a, 0.0, 0.6 ) );
+  return vec4( uColor * ( 0.9 + 0.5 * rim + 0.3 * band + uFlash ), clamp( a, 0.0, 0.6 ) );
 }
 vec4 valeFoot() {
   float f = 1.0 - abs( dot( normalize( vN ), normalize( vV ) ) );
   float rim = pow( f, 2.0 );
   float ang = atan( vP.z, vP.x );
-  float k = fract( ang / 6.2831853 * 12.0 + 0.5 );
-  float q = step( 0.5, fract( ( ang / 6.2831853 * 12.0 + 0.5 ) / 3.0 + 0.17 ) );
+  // the ward's twelve hour-ticks turn slowly round the plinth (one turn a minute)
+  float tk = ang / 6.2831853 * 12.0 + 0.5 + uTime * 0.2;
+  float k = fract( tk );
+  float q = step( 0.5, fract( ( floor( tk ) + 0.5 ) / 3.0 + 0.17 ) );
   float tick = ( 1.0 - smoothstep( 0.035, 0.06, abs( k - 0.5 ) ) ) * ( 1.0 - smoothstep( mix( 0.26, 0.4, q ), mix( 0.34, 0.48, q ), vP.y ) );
   float foot = 1.0 - smoothstep( 0.0, 0.06, vP.y );
   float top = 1.0 - smoothstep( 0.0, 0.18, ${INK_FOOT_H.toFixed(2)} - vP.y );

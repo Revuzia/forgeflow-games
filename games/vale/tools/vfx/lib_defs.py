@@ -235,8 +235,8 @@ def defs() -> list:
                  comment="T2 · Lumen · shield: a Dawnglass shell, glass flakes rising (help), a team ring at the feet"))
     D.append(vfx("lib_heal_rise", 0.8,
                  motes("target", 22, color=SAP, rise=2.4, life=(0.5, 0.85), radius=0.55, emissive=2.2),
-                 mesh("target", "column", [[0, 0.3], [0.3, 0.8], [1, 0.8]], 0.6, color=SAP, alpha=(0.5, 0), emissive=1.6, mask="top", mask_param=0.5,
-                      stretch=[0.9, 1.8, 0.9], offset=[0, -0.9, 0], noise=0.5, scroll=[0, 2.2]),
+                 mesh("target", "column", [[0, 0.3], [0.3, 0.8], [1, 0.8]], 0.6, color=SAP, alpha=(0.55, 0), emissive=1.6, mask="top", mask_param=0.5,
+                      stretch=[0.9, 1.8, 0.9], offset=[0, -0.9, 0], noise=0.5, scroll=[0, 2.2], rim=SAP, rim_pow=1.6, rim_emissive=1.8),
                  L("emitter", at="target", count=6, shape="ring", radius=0.4, dir="up", spreadDeg=15, speed=[1.0, 1.8], life=[0.5, 0.8],
                    size=[0, 0.18, 0], color=[SAP, "#CFF2D9"], alpha=[0, 0.9, 0], emissive=1.6, texture="petal", blend="add", spinDeg=[-90, 90]),
                  shockwave("target", color=SAP, radius=(0.2, 0.9), width=(0.15, 0.04), life=0.45, emissive=1.6),
@@ -281,11 +281,22 @@ def defs() -> list:
     # ── summons / ultimates ───────────────────────────────────────────────────────────────────────
     D.append(vfx("lib_summon_rise", 0.9,
                  shockwave("ground", radius=(0.2, 1.2), width=(0.25, 0.06), life=0.4, emissive=2.6, fit=True),
-                 mesh("ground", "pillar", [[0, 0.1], [0.3, 1.0], [1, 1.0]], 0.7, color=[DAWNGLASS, "team"], alpha=(0.8, 0), emissive=3.0, mask="top",
-                      mask_param=0.4, stretch=[0.6, 2.4, 0.6], noise=0.5, scroll=[0, 2.0], dissolve=[0, 0, 1]),
+                 # max VFX-3: the ground's ink draws the summon up: an ink sleeve with a team rim climbs out of an ink pool, ink
+                 # threads rise through it, a stair of light rings steps up and a thin shaft of light marks its heart
+                 decal("ground", "ink", [[0, 0.3], [0.2, 1.1], [1, 1.1]], 1.6, color=INK, alpha=(0.85, 0.7, 0), rim="team", fit=True),
+                 mesh("ground", "column", [[0, 0.2], [0.3, 0.75], [1, 0.8]], 0.8, color=[INK2, INK], alpha=(0.9, 0), emissive=0, rim="team", rim_pow=1.3,
+                      rim_emissive=2.6, blend="ink", stretch=[1.0, 2.0, 1.0], noise=0.7, scroll=[0, 1.6], dissolve=[0, 0, 0.2, 1], edge="team",
+                      edge_emissive=2.6),
+                 mesh("ground", "stair", [[0, 0.1], [0.35, 1.0], [1, 1.05]], 0.7, color=[DAWNGLASS, "team"], alpha=(0.85, 0), emissive=2.6,
+                      stretch=[0.9, 2.2, 0.9], spin=-90, noise=0.3),
+                 mesh("ground", "shaft", [[0, 0.1], [0.3, 0.6], [1, 0.6]], 0.6, color=[DAWNGLASS, "team"], alpha=(0.9, 0), emissive=3.0,
+                      stretch=[0.5, 3.0, 0.5], scroll=[0, 2.4], noise=0.4),
+                 L("emitter", at="ground", count=14, shape="ring", radius=0.55, dir="up", spreadDeg=12, speed=[1.8, 3.2], life=[0.4, 0.65],
+                   size=[0.4, 0.08], color=[INK, INK2], alpha=[0.9, 0], texture="streak", stretch=0.06, blend="ink", rim="team", rimAlpha=0.7),
                  motes("ground", 16, rise=2.6, radius=0.6, emissive=2.6),
                  chips("ground", 8),
-                 comment="T3 · Lumen · a summon rises: a team ring, a pillar of light grows from the ground, motes go up, stone chips"))
+                 comment="T3 · a summon rises: the ground's ink draws it up (an ink sleeve with a team rim out of an ink pool, ink threads "
+                         "rising), a stair of light rings steps up round a thin shaft, a team ring, motes, stone chips"))
     D.append(vfx("lib_ult_windup", 0.8,
                  shockwave("origin", radius=(2.4, 0.4), width=(0.08, 0.28), life=0.7, emissive=3.0, alpha=(0, 1, 0.4)),
                  L("emitter", at="origin", rate=50, duration=0.6, shape="ring", radius=2.2, dir="in", spreadDeg=10, speed=[2.5, 4], life=[0.35, 0.55],
@@ -319,8 +330,13 @@ def defs() -> list:
     # ── world events ──────────────────────────────────────────────────────────────────────────────
     D.append(vfx("lib_level_up", 1.2,
                  # a deliberate moment (m2): a column of the fighter's own light (L* 85-90), two rings rising up it over 1 s
-                 mesh("origin", "column", [[0, 0.5], [0.2, 0.9], [1, 0.9]], 1.0, color=["signature", "#FFF4DA"], alpha=[[0, 0], [0.12, 0.75], [0.6, 0.55], [1, 0]],
-                      emissive=2.8, mask="top", mask_param=0.5, stretch=[1.0, 2.4, 1.0], offset=[0, -0.9, 0], noise=0.4, scroll=[0, 2.0]),
+                 # max VFX-3: hour ticks snap up a dial round the feet (a stair of dial rings rising), a short shaft of the
+                 # fighter's light, the carved dial on the ground lit once
+                 mesh("origin", "stair", [[0, 0.2], [0.18, 1.05], [1, 1.1]], 1.0, color=["signature", "#FFF4DA"], alpha=[[0, 0], [0.1, 0.9], [0.6, 0.6], [1, 0]],
+                      emissive=2.8, stretch=[1.15, 2.0, 1.15], offset=[0, -0.9, 0], noise=0.3, scroll=[0, 1.0], spin=120),
+                 mesh("origin", "shaft", [[0, 0.2], [0.25, 0.55], [1, 0.5]], 0.8, color=["#FFF4DA", "signature"], alpha=[[0, 0], [0.1, 0.9], [1, 0]],
+                      emissive=2.8, stretch=[0.6, 3.0, 0.6], offset=[0, -0.9, 0], noise=0.3, scroll=[0, 2.6]),
+                 decal("origin", "light", [[0, 0.6], [0.15, 1.25], [1, 1.3]], 1.1, color="signature", alpha=(0.8, 0.5, 0), emissive=1.8, texture="rune"),
                  *[L("emitter", at="origin", delay=dl, count=1, offset=[0, -0.85, 0], shape="point", dir="up", spreadDeg=0, speed=[2.4, 2.4], life=[0.8, 0.8],
                      size=[1.6, 1.9, 1.5], color=["signature", "#FFF4DA"], alpha=[[0, 0], [0.15, 1], [0.7, 0.8], [1, 0]], emissive=2.8, drag=1.2,
                      texture="ring_thin", align="ground", blend="add") for dl in (0.0, 0.35)],
@@ -329,24 +345,49 @@ def defs() -> list:
                  comment="T2 · Lumen · level up: a 0.9 m column of the fighter's signature light, two rings rising up it over 1 s, a team "
                          "ring at the feet, motes climb (help is up)"))
     D.append(vfx("lib_respawn", 0.9,
-                 mesh("origin", "pillar", [[0, 1.0], [1, 0.7]], 0.7, color=[WHITE, "team"], alpha=(0.8, 0), emissive=3.0, mask="top", mask_param=0.3,
-                      stretch=[0.7, 3.5, 0.7], offset=[0, -0.9, 0], dissolve=[0, 0.2, 1], edge="team"),
-                 shockwave("origin", radius=(0.2, 1.4), width=(0.3, 0.06), life=0.45, emissive=2.6),
-                 motes("origin", 16, rise=2.2, radius=0.6, emissive=2.4),
-                 comment="T2 · Lumen · respawn: a column of team light sets the fighter down, a ring settles out, motes rise"))
+                 # max VFX-3: the Seat's light pours down: streaks of team light fall onto the spot from above, an eroded sleeve of
+                 # light sets the fighter down, a lit pool and dial on the ground
+                 L("emitter", at="origin", offset=[0, 3.6, 0], count=18, shape="disc", radius=0.55, dir="down", spreadDeg=6, speed=[9, 13], life=[0.22, 0.3],
+                   size=[0.7, 0.1], color=[NOON, "team"], alpha=[0, 1, 0.6], emissive=3.0, texture="streak", stretch=0.06, blend="add"),
+                 mesh("origin", "column", [[0, 1.0], [1, 0.75]], 0.75, color=[WHITE, "team"], alpha=(0.85, 0), emissive=3.0, mask="top", mask_param=0.3,
+                      stretch=[0.75, 3.5, 0.75], offset=[0, -0.9, 0], dissolve=[0, 0.2, 1], edge="team", rim="team", rim_pow=1.4, rim_emissive=3.0,
+                      scroll=[0, -2.0], noise=0.5),
+                 decal("origin", "light", [[0, 0.5], [0.2, 1.2], [1, 1.2]], 0.9, color="team", alpha=(0.7, 0.4, 0), emissive=1.6, texture="rune"),
+                 decal("origin", "light", 1.0, 0.7, color="team", alpha=(0.5, 0.3, 0), emissive=1.4, texture="glow"),
+                 shockwave("origin", radius=(0.2, 1.4), width=(0.3, 0.06), life=0.45, emissive=2.6, delay=0.18),
+                 motes("origin", 16, rise=2.2, radius=0.6, emissive=2.4, delay=0.18),
+                 comment="T2 · Lumen · respawn: the Seat's light pours down onto the spot, an eroded sleeve of team light sets the fighter "
+                         "down, a lit pool and dial, a ring settles out, motes rise"))
     D.append(vfx("lib_recall", 1.0,
                  shockwave("origin", radius=(0.8, 0.8), width=(0.1, 0.1), life=1.0, emissive=2.0, alpha=(0, 0.9, 0.9, 0), sharp=2.0),
                  mesh("origin", "column", 0.8, 1.0, color="team", alpha=(0, 0.3, 0.3, 0), emissive=1.6, mask="top", mask_param=0.4,
                       stretch=[0.8, 2.6, 0.8], offset=[0, -0.9, 0], noise=0.6, scroll=[0, 1.0], hold=1),
                  motes("origin", 0, rate=14, rise=1.6, radius=0.7, emissive=2.0),
                  comment="T2 · Lumen · recall channel (loop): a slow team ring at the feet, a faint column, motes drifting up"))
-    D.append(vfx("lib_death_shatter", 1.0,
+    D.append(vfx("lib_death_shatter", 3.2,
                  flash(2, at="origin", color="team", scale=0.9),
                  chips("origin", 22, color=(CHALK, CHALK_DK), speed=(2.5, 6), life=(0.6, 0.9), size=0.2),
                  sparks("origin", 10, speed=(4, 8), emissive=2.4),
                  shockwave("origin", radius=(0.2, 1.0), width=(0.2, 0.05), life=0.35, emissive=2.0),
                  dust("origin", 8, size=1.2, delay=0.15, radius=0.5),
-                 comment="T2 · impact · a fighter falls: the mask cracks into opaque chips that fall, a short team ring, dust settles"))
+                 # max VFX-4 the snuffed lamp: the fighter's own light leaves the body as a rising plume of ink and embers, the
+                 # killer-side ring runs out wide, a brief pool of the fighter's light on the ground, and a scorched hour-mark stays
+                 # where they fell (3 s); never a flash to white (ruling 10)
+                 ink("origin", 10, size=1.0, speed=(1.2, 2.4), life=(0.9, 1.5), radius=0.3, dir_="up", gravity=-1.2, delay=0.08, rim_alpha=0.55),
+                 L("emitter", at="origin", count=26, shape="sphere", radius=0.35, dir="up", spreadDeg=40, speed=[1.4, 3.4], life=[0.8, 1.4],
+                   size=[0.12, 0.05], color=["signature", EMBER], alpha=[1, 0.8, 0], emissive=2.6, gravity=-1.4, drag=1.2, turbulence=1.4,
+                   texture="ember", blend="add", delay=0.05),
+                 L("emitter", at="origin", count=1, shape="point", dir="up", spreadDeg=0, speed=[1.6, 1.6], life=[0.7, 0.7],
+                   size=[[0, 0.6], [0.3, 1.1], [1, 0.4]], color="signature", alpha=[[0, 0.9], [0.4, 0.6], [1, 0]], emissive=2.6, drag=1.4,
+                   texture="glow", blend="add"),
+                 shockwave("origin", radius=(0.6, 2.6), width=(0.18, 0.04), life=0.55, emissive=2.2, delay=0.06, alpha=(0.9, 0.6, 0)),
+                 decal("origin", "light", 1.6, 0.6, color="signature", alpha=(0.55, 0.3, 0), emissive=1.6, texture="glow"),
+                 decal("origin", "scorch", [[0, 0.5], [0.06, 1.15], [1, 1.2]], 3.2, color=INK2, alpha=[[0, 0.85], [0.75, 0.7], [1, 0]], emissive=1.2,
+                       rim="signature"),
+                 decal("origin", "light", 1.2, 3.0, color="signature", alpha=[[0, 0.7], [0.7, 0.35], [1, 0]], emissive=1.0, texture="rune"),
+                 light("origin", "signature", 8, 6, 0.6),
+                 comment="T2 · impact · a fighter falls — the snuffed lamp: the mask cracks into opaque chips, the fighter's light leaves "
+                         "as a rising plume of ink and embers, a ring runs out, a brief light pool, a scorched hour-mark stays 3 s"))
     D.append(vfx("lib_gleam_pickup", 0.35,
                  motes("origin", 6, color="#FFD27A", rise=2.4, life=(0.2, 0.35), radius=0.3, emissive=1.4),
                  comment="T1 · Lumen · Gleam gained: a few warm motes hop up to the fighter (own feedback, no relationship)", team_tint=False))
@@ -381,6 +422,12 @@ def defs() -> list:
                  chips("origin", 34, color=(CHALK, CHALK_DK), speed=(2.5, 6.5), life=(0.8, 1.3), size=0.24, spread=170, gravity=13),
                  dust("origin", 10, size=1.8, speed=(1.0, 2.8), radius=0.7, life=(0.8, 1.3), delay=0.06, shape="ring"),
                  light("origin", "team", 8, 9, 0.5),
+                 # max VFX-4: a dust column climbs off the break, smoke lingers, the base's ground lights once
+                 L("emitter", at="origin", count=12, shape="sphere", radius=0.6, dir="up", spreadDeg=25, speed=[1.6, 3.4], life=[1.2, 2.0],
+                   size=[1.2, 2.4, 3.0], sizeVar=[0.8, 1.25], color=[DUST, DUST2], alpha=[0, 0.6, 0.35, 0], gravity=-0.4, drag=1.6, turbulence=0.4,
+                   rotDeg=[0, 360], spinDeg=[-25, 25], texture="dust_puff", blend="alpha", soft=0.3, delay=0.05),
+                 ink("origin", 6, size=1.6, speed=(0.4, 1.0), life=(1.8, 2.6), radius=0.5, dir_="up", gravity=-0.5, delay=0.3, rim_alpha=0.35),
+                 decal("ground", "light", 3.0, 0.9, color="team", alpha=(0.5, 0.3, 0), emissive=1.6, texture="glow"),
                  comment="T3 · impact · a structure's top shears off at the break: its light bursts out, heavy chips and a dust collar"))
     D.append(vfx("lib_structure_land", 1.8,
                  dust("ground", 22, size=2.6, speed=(2.0, 5.0), life=(1.0, 1.7), radius=1.6, delay=0.0, alpha=0.55),
@@ -389,19 +436,43 @@ def defs() -> list:
                  shockwave("ground", color=DUST, radius=(0.8, 6.0), width=(1.4, 0.3), life=0.7, emissive=0.0, alpha=(0.7, 0.5, 0), blend="alpha",
                            noise=0.5),
                  decal("ground", "crack", 3.2, 2.2, color=INK2, alpha=(0.75, 0.6, 0)),
+                 # max VFX-4: the rubble keeps smoking and a dust column hangs over the fall
+                 L("emitter", at="ground", count=10, shape="disc", radius=1.4, dir="up", spreadDeg=20, speed=[1.0, 2.2], life=[1.6, 2.4],
+                   size=[1.4, 2.6, 3.2], sizeVar=[0.8, 1.25], color=[DUST, DUST2], alpha=[0, 0.5, 0.3, 0], gravity=-0.3, drag=1.4, turbulence=0.4,
+                   rotDeg=[0, 360], spinDeg=[-20, 20], texture="dust_puff", blend="alpha", soft=0.3, delay=0.15),
+                 ink("ground", 0, size=1.4, speed=(0.3, 0.8), life=(1.4, 2.0), rate=5, duration=1.6, radius=1.2, shape="disc", dir_="up", gravity=-0.4,
+                     rim_alpha=0.3),
                  comment="T3 · settle · the fallen top hits the ground and breaks up: a wide dust ring, a burst of rubble, a crack mark"))
     D.append(vfx("lib_wick_death", 0.35,
                  flash(1, at="origin", scale=0.8),
                  dust("origin", 2, size=0.5, radius=0.1, delay=0.0),
                  chips("origin", 4, size=0.07, speed=(1.5, 3)),
+                 # max VFX-4: the guttered lamp lets go a curl of smoke and a few embers
+                 ink("origin", 3, size=0.55, speed=(0.6, 1.2), life=(0.5, 0.8), radius=0.12, dir_="up", gravity=-0.8, rim_alpha=0.5),
+                 L("emitter", at="origin", count=6, shape="sphere", radius=0.15, dir="up", spreadDeg=50, speed=[0.8, 2.0], life=[0.4, 0.7],
+                   size=[0.08, 0.03], color=["team", EMBER], alpha=[1, 0], emissive=2.0, gravity=-0.8, turbulence=1.2, texture="ember", blend="add"),
                  comment="T1 · impact · a Wick falls: its lamp gutters (a small team flash), a puff and a few chips"))
-    D.append(vfx("lib_objective_taken", 1.4,
-                 flash(4, at="origin", scale=2.0),
-                 mesh("origin", "column", [[0, 0.3], [0.2, 1.3], [1, 1.2]], 1.2, color=[WHITE, "team"], alpha=(0.9, 0), emissive=10, mask="top",
-                      mask_param=0.3, stretch=[1.4, 6.0, 1.4], noise=0.4, scroll=[0, 2.4], dissolve=[0, 0.2, 1], edge="team", edge_emissive=6),
-                 shockwave("origin", radius=(0.5, 6.0), width=(0.8, 0.12), life=0.7, emissive=6),
-                 motes("origin", 30, rise=4.0, radius=1.4, emissive=4),
-                 light("origin", "team", 24, 16, 0.8),
+    D.append(vfx("lib_objective_taken", 1.6,
+                 # max VFX-3: a sun-shard falls in out of the sky (0.18 s), lands and cracks the plaza: then the flash, a thin shaft
+                 # and an eroded sleeve of the taker's light, the ring and the crack
+                 L("emitter", at="origin", offset=[0, 9.0, 0], count=1, shape="point", dir="down", spreadDeg=0, speed=[48, 48], life=[0.19, 0.19],
+                   size=[[0, 2.2], [1, 2.6]], color=[WHITE, "team"], alpha=[1, 1], emissive=10, texture="shard", stretch=0.05, blend="add",
+                   align="velocity", aspect=0.4),
+                 L("emitter", at="origin", offset=[0, 9.0, 0], count=10, shape="sphere", radius=0.3, dir="down", spreadDeg=4, speed=[40, 46],
+                   life=[0.17, 0.2], size=[0.5, 0.1], color=[DAWNGLASS, "team"], alpha=[0.8, 0.2], emissive=6, texture="streak", stretch=0.05, blend="add"),
+                 flash(4, at="origin", scale=2.0, delay=0.18),
+                 mesh("origin", "column", [[0, 0.3], [0.2, 1.3], [1, 1.2]], 1.2, color=[WHITE, "team"], alpha=(0.9, 0), emissive=6, mask="top",
+                      mask_param=0.3, stretch=[1.4, 6.0, 1.4], noise=0.4, scroll=[0, 2.4], dissolve=[0, 0.2, 1], edge="team", edge_emissive=6,
+                      rim="team", rim_pow=1.4, rim_emissive=6, delay=0.18),
+                 mesh("origin", "shaft", [[0, 0.3], [0.2, 1.0], [1, 0.8]], 1.0, color=[WHITE, "team"], alpha=(1, 0), emissive=8, stretch=[0.8, 8.0, 0.8],
+                      noise=0.3, scroll=[0, 3.0], delay=0.18),
+                 decal("origin", "crack", [[0, 0.6], [0.1, 3.2], [1, 3.3]], 2.4, color=INK2, alpha=(0.85, 0.7, 0), emissive=3.0, rim="team", delay=0.18),
+                 decal("origin", "light", [[0, 1.0], [0.2, 3.6], [1, 3.8]], 1.2, color="team", alpha=(0.7, 0.4, 0), emissive=2.4, texture="rune", delay=0.18),
+                 chips("origin", 24, color=(CHALK, CHALK_DK), speed=(4, 9), life=(0.6, 1.0), size=0.24, delay=0.19),
+                 dust("origin", 12, size=2.0, speed=(2.5, 5), radius=1.2, life=(0.8, 1.3), delay=0.22),
+                 shockwave("origin", radius=(0.5, 6.0), width=(0.8, 0.12), life=0.7, emissive=6, delay=0.18),
+                 motes("origin", 30, rise=4.0, radius=1.4, emissive=4, delay=0.18),
+                 light("origin", "team", 24, 16, 0.8, delay=0.18),
                  shake(0.6, who="all"),
                  comment="T4 · Lumen · objective taken: white core flash (T4), a tall column and a wide ring in the taker's colour, motes"))
     return D

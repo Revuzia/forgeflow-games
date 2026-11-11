@@ -12,6 +12,8 @@ envelope, mid-scale secondary shapes, no camera shake) to the bespoke defs; drop
 Defs in content/vfx.json that no source defines yet are KEPT as they are (a port in progress never
 drops a def the catalog references); `--prune` drops them instead.
 
+After that choice passes.post (max VFX-2's ground light under every path def) runs on every def, tuned or not.
+
 Hand tuning: bespoke/tuned.json holds the whole def of every id tuned in content/vfx.json past what its source builds
 (the kit-hue, skin and combat-polish rounds tuned the shipped defs against live probes). It wins over the source, so a
 rebuild cannot undo a measured fix. To retune such a def, edit it there and in content/vfx.json, or port the change to its
@@ -61,7 +63,7 @@ def main() -> None:
     old = json.loads(out.read_text(encoding="utf-8")) if out.exists() else []
     tuned_file = HERE / "bespoke" / "tuned.json"
     if a.freeze_tuned:
-        src = {d["id"]: json.loads(json.dumps(d)) for d in built}
+        src = {d["id"]: json.loads(json.dumps(passes.post(d))) for d in built}
         drift = [d for d in old if d["id"] in src and d != src[d["id"]]]
         tuned_file.write_text(json.dumps(drift, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"bespoke/tuned.json: {len(drift)} defs tuned past their source")
@@ -70,7 +72,7 @@ def main() -> None:
     unknown = sorted(set(tuned) - {d["id"] for d in built})
     if unknown:
         raise SystemExit(f"bespoke/tuned.json names ids no source builds: {unknown}")
-    built = [tuned.get(d["id"], d) for d in built]
+    built = [passes.post(tuned.get(d["id"], d)) for d in built]
     have = {d["id"] for d in built}
     kept = [] if a.prune else [d for d in old if d["id"] not in have]
     defs = sorted(built + kept, key=lambda d: (not d["id"].startswith("lib_"), d["id"]))

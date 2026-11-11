@@ -940,6 +940,14 @@ export class Director {
     return false;
   }
 
+  /** max VFX-1: the share of a unit's status still to run (the longest of that kind), for the look's countdown dial */
+  private statusShare(id: number, kind: StatusKindT): number {
+    const e = this.host.view()?.entity(id);
+    let m = 0;
+    if (e) for (const s of e.statuses) if (s.kind === kind && s.remaining > 0 && s.duration > 0) m = Math.max(m, s.remaining / s.duration);
+    return m;
+  }
+
   private syncStatuses(view: WorldView): void {
     for (const [k, h] of this.statusFx) if (!this.vfx.isHeld(h)) { this.statusFx.delete(k); this.statusSrc.delete(k); }
     // who-applied entries for statuses that never got a look (fogged, dead, structures) are dropped once the
@@ -978,6 +986,7 @@ export class Director {
           tier: STATUS_TIER[kind] ?? 2, team: c, element: byC, ally: false,
           origin: B, target: B, ground: this.tmpC.set(B.x, 0, B.z), targetId: e.id, sourceId: by ?? -1, anchor: 'target', dir: e.facing,
           sustain: () => this.statusLive(e.id, kind),
+          remaining: () => this.statusShare(e.id, kind),
         });
         if (h > 0) this.statusFx.set(key, h);
       }

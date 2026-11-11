@@ -2,7 +2,7 @@
 // (path / dir alignment), +Y is "up" (ground layers stand on it). Every shape carries UVs the FX
 // material can scroll, mask and dissolve along:
 //   orb, dome          u around, v pole → equator (dome: v 0 at the rim, 1 at the top)
-//   cone, pillar, wall, column, tornado   u around, v 0 at the base → 1 at the top
+//   cone, pillar, wall, column, tornado, shaft, stair   u around, v 0 at the base → 1 at the top
 //   disc, ringwave     u around, v 0 at the centre / inner edge → 1 at the outer edge (polar)
 //   fan                polar sector in the vertex shader: u across the opening, v along the radius
 //   blade, crescent    u along the sweep (0 trailing → 1 leading), v across (0 inner → 1 outer edge)
@@ -17,10 +17,13 @@ import {
   BufferAttribute, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, SphereGeometry, TubeGeometry, Vector3,
 } from 'three';
 
-export const VFX_SHAPES = ['orb', 'blade', 'shard', 'cone', 'pillar', 'disc', 'spiral', 'crescent', 'spike', 'dome', 'ringwave', 'wall', 'column', 'tornado', 'fan'] as const;
+export const VFX_SHAPES = ['orb', 'blade', 'shard', 'cone', 'pillar', 'disc', 'spiral', 'crescent', 'spike', 'dome', 'ringwave', 'wall', 'column', 'tornado', 'fan',
+  'shaft', 'stair'] as const;
 export type VfxShape = (typeof VFX_SHAPES)[number];
-/** shapes whose vertex shader is special: 1 = polar fan */
-export const SHAPE_KIND: Partial<Record<VfxShape, number>> = { fan: 1 };
+/** shapes whose shader is special: 1 = polar fan (vertex); 2 = an erode sleeve (fragment, max VFX-3): open, its upper
+ *  third noise-dissolved into the air, its alpha weighted to the fresnel rim so the body under it stays readable and
+ *  the light reads as a sheath, never a filled tube */
+export const SHAPE_KIND: Partial<Record<VfxShape, number>> = { fan: 1, column: 2, shaft: 2, stair: 2 };
 
 export function shapeIndex(name: unknown): number {
   const i = VFX_SHAPES.indexOf(name as VfxShape);
@@ -39,6 +42,26 @@ function surface(nu: number, nv: number, f: (u: number, v: number, p: Vector3, n
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
     const a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
     idx.push(a, c, b, b, c, d);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('normal', new BufferAttribute(new Float32Array(nor), 3));
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
+  g.setIndex(idx);
+  return g;
+}
+
+/** four open bands (u around, v = the height in the unit box), each a step narrower: the 'stair' of dial rings */
+function stair(): BufferGeometry {
+  const pos: number[] = [], nor: number[] = [], uvs: number[] = [], idx: number[] = [];
+  const NU = 48, steps = [[0.04, 0.5], [0.3, 0.42], [0.56, 0.34], [0.82, 0.26]] as const, H = 0.09;
+  for (const [y0, r] of steps) {
+    const base = pos.length / 3;
+    for (let j = 0; j <= 1; j++) for (let i = 0; i <= NU; i++) {
+      const a = (i / NU) * Math.PI * 2, y = y0 + j * H, rr = r * (1 - 0.06 * j);
+      pos.push(Math.cos(a) * rr, y, Math.sin(a) * rr); nor.push(Math.cos(a), 0.2, Math.sin(a)); uvs.push(i / NU, y);
+    }
+    for (let i = 0; i < NU; i++) { const a = base + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
@@ -75,10 +98,20 @@ export function buildShape(name: VfxShape, lo = false): BufferGeometry {
       });
     case 'cone': { const g = new ConeGeometry(0.5, 1, 32, 4, true); g.translate(0, 0.5, 0); return g; }
     case 'pillar': case 'wall': { const g = new CylinderGeometry(0.5, 0.5, 1, 40, 4, true); g.translate(0, 0.5, 0); return g; }
-    case 'column': return surface(40, 8, (u, v, p, n) => {
-      const a = u * Math.PI * 2, r = 0.5 - 0.16 * v + 0.03 * Math.sin(v * Math.PI);
-      p.set(Math.cos(a) * r, v, Math.sin(a) * r); n.set(Math.cos(a), 0.16, Math.sin(a)).normalize();
+    // max VFX-3: an open sleeve that flares a little toward the top (the shader erodes its upper third), with
+    // shallow flutes that catch the fresnel rim as vertical light lines
+    case 'column': return surface(48, 10, (u, v, p, n) => {
+      const a = u * Math.PI * 2, fl = 0.018 * Math.cos(a * 8), r = 0.46 + 0.07 * v * v + fl;
+      p.set(Math.cos(a) * r, v, Math.sin(a) * r);
+      n.set(Math.cos(a) - 0.14 * Math.sin(a * 8) * Math.sin(a), -0.14 * v, Math.sin(a) + 0.14 * Math.sin(a * 8) * Math.cos(a)).normalize();
     });
+    // a thin fluted blade of light: a six-point star section tapering to a sliver at the top
+    case 'shaft': return surface(48, 6, (u, v, p, n) => {
+      const a = u * Math.PI * 2, star = 0.32 + 0.68 * Math.pow(Math.abs(Math.cos(a * 3)), 4), r = 0.5 * star * (1 - 0.82 * v);
+      p.set(Math.cos(a) * r, v, Math.sin(a) * r); n.set(Math.cos(a), 0.3, Math.sin(a)).normalize();
+    });
+    // stacked dial rings rising: four bands, each narrower and higher (v is the height, so the sleeve fade reads up)
+    case 'stair': return stair();
     case 'tornado': return surface(40, 12, (u, v, p, n) => {
       const a = u * Math.PI * 2, r = 0.1 + 0.4 * Math.pow(v, 1.3);
       p.set(Math.cos(a) * r, v, Math.sin(a) * r); n.set(Math.cos(a), -0.4, Math.sin(a)).normalize();

@@ -335,7 +335,7 @@ void main() {
   float m;
   if ( shape < 0.5 ) m = 1.0 - smoothstep( 0.82, 1.0, d + edgeN );
   else if ( shape < 1.5 ) m = ( 1.0 - smoothstep( 0.86, 1.0, d + edgeN ) ) * smoothstep( 0.52, 0.7, d + edgeN );
-  else if ( shape < 2.5 ) { float an = abs( atan( l.y, l.x ) ); m = ( 1.0 - smoothstep( 0.85, 1.0, d + edgeN ) ) * ( 1.0 - smoothstep( vMisc.z - 0.06, vMisc.z, an ) ) * step( 0.0, l.x ); }
+  else if ( shape < 2.5 ) { float an = abs( atan( l.y, l.x ) ); m = ( 1.0 - smoothstep( 0.85, 1.0, d + edgeN ) ) * ( 1.0 - smoothstep( vMisc.z - 0.06, vMisc.z, an ) ); }
   else if ( shape < 3.5 ) m = ( 1.0 - smoothstep( 0.9, 1.0, abs( l.x ) + edgeN ) ) * ( 1.0 - smoothstep( vMisc.z - 0.08, vMisc.z, abs( l.y ) + edgeN * 0.5 ) );
   else m = ( 1.0 - smoothstep( 0.92, 1.0, abs( l.x ) + edgeN * 0.5 ) ) * ( 1.0 - smoothstep( vMisc.z * 0.6, vMisc.z, abs( l.y ) + edgeN * 0.3 ) );
   float age = vMisc.x;
@@ -423,6 +423,7 @@ void main() {
 export const MESH_FRAG = /* glsl */`
 uniform sampler2D uNoise;
 uniform float uTime;
+uniform float uShapeKind;
 ${DEPTH}
 varying vec3 vN; varying vec3 vV; varying vec2 vUv;
 varying vec4 vColor; varying vec4 vRim; varying vec4 vEdge; varying vec4 vNoise; varying vec4 vDiss; varying float vSeed;
@@ -455,6 +456,13 @@ void main() {
   float edge = diss > 0.002 ? 1.0 - smoothstep( 0.0, max( vEdge.w, 0.005 ), keep ) : 0.0;
   float body = mix( 1.0, smoothstep( 0.1, 0.9, nz ), vNoise.w );
   float a = vColor.a * mask * vfxSoft( 0.18 );
+  if ( uShapeKind > 1.5 && uShapeKind < 2.5 ) {
+    // max VFX-3 erode sleeve (column, shaft, stair): the upper third eats away into rising noise, the alpha sits on the
+    // fresnel rim (an inside of 0.3), so the sleeve reads as a sheath of light round the body, open at the top
+    float top = smoothstep( 0.45, 1.0, vUv.y );
+    if ( nz < top * 1.15 - 0.08 ) discard;
+    a *= ( 0.3 + 0.7 * clamp( fres * 1.6, 0.0, 1.0 ) ) * ( 1.0 - top * 0.55 );
+  }
   if ( a < 0.002 ) discard;
   float mode = vDiss.w;
   vec3 rgb;

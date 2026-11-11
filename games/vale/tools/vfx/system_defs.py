@@ -58,6 +58,18 @@ def held(type_: str, **kw) -> dict:
     return L(type_, **kw)
 
 
+def dial(color="team", r: float = 0.95, a: float = 0.6, e: float = 1.6) -> dict:
+    """max VFX-1: the ground dial every held state shares (VALE's stopped hour): a ring of carved hour ticks round the
+    feet whose lit sector closes with the state's remaining share (decal `countdown`, director statusShare)"""
+    return held("decal", shape="cone", style="light", texture="rune", radius=r, color=color, alpha=ha(a), emissive=e, countdown=True)
+
+
+def crown(socket: str, color="team", size: float = 1.0, spin: float = 140, e: float = 2.6, dy: float = 0.16, a: float = 0.95) -> dict:
+    """max VFX-1: an hour-tick crown laid flat round the head, turning (ground-aligned rune sprite)"""
+    return L("sprite", at="target", socket=socket, offset=[0, dy, 0], texture="rune", size=[size, size], color=color, emissive=e,
+             alpha=ha(a), life=1.0, hold=HOLD, align="ground", spinDeg=[spin, spin], rotDeg=[0, 360], soft=0.1)
+
+
 def defs() -> list:
     D = []
     # ── hard control (T3) ────────────────────────────────────────────────────────────────────────
@@ -83,6 +95,9 @@ def defs() -> list:
                    blend="add"),
                  L("shockwave", phase="release", at="target", socket="head", offset=[0, 0.14, 0], mode="vertical", radius=[[0, 0.7], [1, 0.1]],
                    width=[0.06, 0.1], life=0.16, color="team", alpha=[0.9, 0], emissive=3.0, blend="add"),
+                 # max VFX-1: the hour-tick crown turns the other way inside the ring, the ground dial counts the stun down
+                 crown("head", size=1.25, spin=-150, dy=0.2),
+                 dial(),
                  comment="T3 · Lumen · stunned — the stopped hour: a hollow dial at the head (an ink ring with a team rim, a team ring "
                          "inside it, the head showing through), five sun-motes on ink riding it like a stopped clock's hour marks, a ring at the "
                          "feet; below the bar, distinct from silence's dark bell by silhouette; it snaps shut at the end"))
@@ -99,6 +114,12 @@ def defs() -> list:
                  L("emitter", phase="release", at="target", socket="ground", count=10, shape="ring", radius=0.6, dir="up", spreadDeg=60, speed=[1.5, 3.2],
                    life=[0.25, 0.42], size=[0.12, 0.11, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip",
                    blend="chip", spinDeg=[-500, 500], rim="team", rimAlpha=0.5),
+                 # max VFX-1: the hour-line pulls tight: a team ring closes onto the feet every 0.8 s, ink threads creep up the stakes
+                 L("shockwave", at="target", radius=[[0, 1.25], [1, 0.45]], width=[0.05, 0.12], life=0.5, color="team", alpha=[0, 0.9, 0], emissive=2.4,
+                   sharp=1.8, blend="add", repeat=0.8),
+                 L("emitter", at="target", socket="ground", rate=10, shape="ring", radius=0.6, dir="in", spreadDeg=10, speed=[0.6, 1.0], life=[0.4, 0.55],
+                   size=[0.3, 0.06], color=[INK, INK2], alpha=[0, 0.9, 0], texture="streak", stretch=0.06, blend="ink", rim="team", rimAlpha=0.7),
+                 dial(r=1.15),
                  comment="T3 · Shade · rooted — pinned to the hour-line: ink bands coil the feet under a team rim, three ink stakes with team edges "
                          "driven in a pace around them, a 1 m ink pool; the stakes break into chips when it ends"))
     D.append(vfx("lib_status_silence", 1.0,
@@ -106,7 +127,8 @@ def defs() -> list:
                  # the top-down camera, where stun is a bright hollow dial), a thin team lip at its rim, ink breath
                  # leaking from under it
                  held("mesh", socket="head", offset=[0, -0.12, 0], shape="dome", scale=[[0, 0.3], [0.1, 0.78], [1, 0.78]], stretch=[1, 1.35, 1],
-                      color=INK, alpha=ha(0.97), emissive=0, rim="team", rimEmissive=2.2, rimPow=2.2, noise=0.3, blend="ink"),
+                      color=INK, alpha=ha(0.97), emissive=0, rim="team", rimEmissive=2.2, rimPow=2.2, noise=0.3, blend="ink", wobble=0.025,
+                      scroll=[0.15, -0.4]),
                  held("mesh", socket="head", offset=[0, -0.12, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.86], [1, 0.86]], color="team",
                       alpha=ha(1.0), emissive=3.0, blend="add", align="up", mask="band", maskParam=0.35),
                  L("emitter", at="target", socket="head", offset=[0, -0.15, 0], rate=10, shape="ring", radius=0.36, dir="down", spreadDeg=40,
@@ -114,6 +136,14 @@ def defs() -> list:
                    drag=2.4, turbulence=0.6, rotDeg=[0, 360], spinDeg=[-40, 40], texture="ink_puff", blend="ink", rim=NOON, rimAlpha=0.5, soft=0.2),
                  L("shockwave", phase="release", at="target", socket="head", offset=[0, 0.05, 0], mode="vertical", radius=[[0, 0.2], [1, 0.95]],
                    width=[0.1, 0.02], life=0.24, color=DAWNGLASS, alpha=[0.9, 0], emissive=2.4, blend="add"),
+                 # max VFX-1: the stopped clapper slips inside the bell (an ink drop swinging under its lip) and every 0.9 s the bell
+                 # tolls with no sound: a dark ring rolls off its lip and dies
+                 L("emitter", at="target", socket="head", offset=[0, -0.42, 0], rate=5, shape="ring", radius=0.16, dir="none", speed=[0, 0],
+                   life=[0.5, 0.6], size=[0, 0.22, 0.2, 0], color=[INK, INK2], alpha=[0, 1, 1, 0], orbitDeg=300, texture="drop", blend="ink",
+                   rim="team", rimAlpha=0.8, space="local", spinDeg=[-60, 60]),
+                 L("shockwave", at="target", socket="head", offset=[0, -0.3, 0], radius=[[0, 0.45], [1, 1.1]], width=[0.12, 0.03], life=0.45,
+                   color=INK2, alpha=[0.85, 0], emissive=0, blend="ink", repeat=0.9),
+                 dial(r=0.9),
                  comment="T3 · Shade · silenced — the muffled bell: a dark ink bell set over the head with a team rim and a thin team lip, "
                          "ink breath leaking from under it (a dark filled dome from above, never stun's bright hollow dial); a pale ring rings "
                          "out when the voice returns"))
@@ -131,6 +161,7 @@ def defs() -> list:
                  L("emitter", at="target", socket="chest", count=10, shape="sphere", radius=0.2, dir="out", spreadDeg=160, speed=[2, 4], life=[0.25, 0.4],
                    size=[0.12, 0.11, 0.06], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], gravity=12, bounce=0.3, texture="chip", blend="chip",
                    spinDeg=[-500, 500], rim="team", rimAlpha=0.5),
+                 dial(r=0.9),
                  comment="T3 · Shade/chip · disarmed — the broken edge: the two halves of a snapped blade (ink, team-lit breaks) circle the "
                          "body at the hands inside a cracked team ring, chips fall; it starts with the weapon knocked to pieces"))
     D.append(vfx("lib_status_airborne", 1.0,
@@ -154,6 +185,7 @@ def defs() -> list:
                  held("decal", shape="ring", style="light", radius=0.74, color="element", alpha=ha(0.7), emissive=2.0),
                  L("sprite", at="target", socket="top", offset=[0, 0.2, 0], texture="flare", size=[0.55, 0.62], color="element", emissive=3.4,
                    alpha=[0, 1, 0], life=0.6, repeat=0.6, hold=0),
+                 dial("element", r=0.95),
                  comment="T3 · taunted — the drawn line: a taut tether from the unit to its taunter in the TAUNTER's relationship colour, "
                          "a ring at the feet, a slow glare over the head (1.7 Hz)"))
     D.append(vfx("lib_status_fear", 1.0,
@@ -163,16 +195,23 @@ def defs() -> list:
                  held("mesh", socket="top", offset=[0, 0.14, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.8], [1, 0.8]], color=INK, alpha=ha(0.95),
                       emissive=0, rim="team", rimEmissive=3.0, rimPow=1.2, wobble=0.07, noise=0.8, blend="ink", align="up", spinDeg=-90),
                  held("decal", shape="circle", style="ink", radius=0.85, color=INK, alpha=ha(0.65), rim="team"),
+                 dial(r=1.0),
                  comment="T3 · Shade · feared — shade wisps: ink wisps with team rims jitter round the head over a shivering ink crown, an ink pool"))
     D.append(vfx("lib_status_sleep", 1.0,
                  held("mesh", socket="top", offset=[0, -0.12, 0], shape="orb", scale=[[0, 0.2], [0.1, 0.42], [1, 0.42]], stretch=[1, 0.8, 1], color=INK,
-                      alpha=ha(0.55), emissive=0, rim=DAWNGLASS, rimEmissive=1.8, rimPow=2.0, noise=0.5, blend="ink"),
+                      alpha=ha(0.55), emissive=0, rim=DAWNGLASS, rimEmissive=1.8, rimPow=2.0, noise=0.5, blend="ink", wobble=0.03, scroll=[0.1, 0.25]),
                  L("sprite", at="target", socket="top", offset=[0, 0.32, 0], texture="glow", size=[0.5, 0.75], color="team", emissive=2.4,
                    alpha=[0, 0.9, 0], life=1.8, repeat=1.8, hold=0, soft=0.2),
                  L("emitter", at="target", socket="top", offset=[0, 0.25, 0], rate=4, shape="disc", radius=0.16, dir="up", spreadDeg=20, speed=[0.22, 0.38],
                    life=[1.1, 1.4], size=[0, 0.16, 0.22, 0], color=[DAWNGLASS, NOON], alpha=[0, 0.9, 0.6, 0], emissive=2.0, gravity=-0.03, drag=0.3,
                    turbulence=0.6, texture="mote", blend="add"),
                  held("decal", shape="ring", style="light", radius=0.62, color="team", alpha=ha(0.35), emissive=0.8),
+                 # max VFX-1: moth-dust drifts in slow loops round the head (pale petals fluttering), the crown turns at a sleeper's pace
+                 L("emitter", at="target", socket="top", offset=[0, 0.1, 0], rate=7, shape="ring", radius=0.42, dir="up", spreadDeg=30, speed=[0.05, 0.15],
+                   life=[1.2, 1.6], size=[0, 0.14, 0.12, 0], color=[NOON, DAWNGLASS], alpha=[0, 0.85, 0.7, 0], emissive=1.4, orbitDeg=70, turbulence=0.5,
+                   texture="petal", blend="add", spinDeg=[-240, 240], space="local"),
+                 crown("top", color=DAWNGLASS, size=0.9, spin=35, e=1.6, dy=0.22, a=0.7),
+                 dial(r=0.85, a=0.45, e=1.1),
                  comment="T3 · asleep — dusk motes: a dim ink veil over the eyes with a glass rim, a slow breathing glow (0.55 Hz), motes "
                          "drifting up lazily, a dim ring"))
     # ── movement and protection (T2) ─────────────────────────────────────────────────────────────
@@ -185,6 +224,7 @@ def defs() -> list:
                       emissive=0, rim="team", rimEmissive=1.6, blend="ink", align="up", spinDeg=-24),
                  L("emitter", at="target", socket="base", offset=[0, 0.4, 0], rate=12, shape="ring", radius=0.36, dir="down", spreadDeg=20, speed=[0.2, 0.5],
                    life=[0.4, 0.6], size=[0.14, 0.04], color=[DAWNGLASS, "team"], alpha=[0, 0.9, 0], emissive=2.0, texture="shard", blend="add"),
+                 dial(r=1.0, a=0.5, e=1.3),
                  comment="T2 · Lumen · slowed — dawnglass mire: a glass shackle on a dark band at the shins, a dark mire with frost underfoot "
                          "(team rim), glass flakes sink (left behind as the unit drags on)"))
     D.append(vfx("lib_status_invisible", 1.0,
@@ -194,18 +234,30 @@ def defs() -> list:
                    size=[0, 0.12, 0], color=DAWNGLASS, alpha=[0, 1, 0], emissive=2.4, texture="glint", blend="add", space="local"),
                  comment="T2 · Lumen · unseen (allies only see it) — a dawnglass shimmer column with rim light, glints"))
     D.append(vfx("lib_status_untargetable", 1.0,
-                 held("mesh", socket="base", shape="dome", scale=[[0, 0.7], [0.1, 1.2], [1, 1.2]], stretch=[1, 3.2, 1], color=DAWNGLASS, alpha=ha(0.32),
-                      emissive=0.8, rim=NOON, rimEmissive=2.6, rimPow=2.2, noise=0.6, noiseScale=3.0, dissolve=0.2, edge=DAWNGLASS, edgeEmissive=2.0,
-                      edgeWidth=0.06, blend="add"),
-                 held("decal", shape="ring", style="light", radius=0.66, color=NOON, alpha=ha(0.5), emissive=1.2),
-                 comment="T2 · Lumen · untargetable — under glass: a dithered dawnglass bell-jar stands over the unit, rim-lit, a pale ring"))
+                # max VFX-1: the bell-jar is a fresnel-only shell (the body reads through it) whose glass erodes and re-forms as it
+                # turns, over a stair of glass dial rings rising round the unit
+                held("mesh", socket="base", shape="dome", scale=[[0, 0.7], [0.1, 1.2], [1, 1.2]], stretch=[1, 3.2, 1], color=DAWNGLASS, alpha=ha(0.1),
+                      emissive=0.5, rim=NOON, rimEmissive=2.8, rimPow=3.0, noise=0.7, noiseScale=3.0, dissolve=0.32, edge=DAWNGLASS, edgeEmissive=2.4,
+                      edgeWidth=0.07, blend="add", scroll=[0.12, 0.35], spinDeg=24),
+                held("mesh", socket="base", shape="stair", scale=[[0, 0.6], [0.1, 1.35], [1, 1.35]], stretch=[1, 1.7, 1], color=[DAWNGLASS, NOON],
+                     alpha=ha(0.75), emissive=1.8, rim=NOON, rimEmissive=2.2, rimPow=1.6, noise=0.4, scroll=[0, 0.6], spinDeg=-40, blend="add"),
+                L("emitter", at="target", socket="base", rate=7, shape="aura", radius=0.55, height=2.2, dir="up", speed=[0.1, 0.3], life=[0.35, 0.5],
+                  size=[0, 0.14, 0], color=[NOON, DAWNGLASS], alpha=[0, 1, 0], emissive=2.2, texture="glint", blend="add", space="local"),
+                held("decal", shape="ring", style="light", radius=0.66, color=NOON, alpha=ha(0.5), emissive=1.2),
+                dial(NOON, r=1.0, a=0.5, e=1.3),
+                comment="T2 · Lumen · untargetable — under glass: a fresnel-only dawnglass bell-jar turns over the unit, its glass eroding "
+                        "and re-forming, a stair of glass dial rings rising inside it, glints, a pale ring and dial"))
     D.append(vfx("lib_status_unstoppable", 1.0,
-                 held("mesh", socket="chest", offset=[0, -0.1, 0], shape="orb", scale=1.05, stretch=[0.95, 1.9, 0.95], color=NOON, alpha=ha(0.12),
-                      emissive=0.6, rim="team", rimEmissive=3.0, rimPow=2.4, noise=0.3, blend="add"),
+                 held("mesh", socket="chest", offset=[0, -0.1, 0], shape="orb", scale=1.05, stretch=[0.95, 1.9, 0.95], color=NOON, alpha=ha(0.08),
+                      emissive=0.5, rim="team", rimEmissive=3.2, rimPow=2.8, noise=0.6, dissolve=0.25, edge="team", edgeEmissive=2.6, edgeWidth=0.05,
+                      scroll=[0.1, 0.9], wobble=0.02, blend="add"),
+                L("emitter", at="target", socket="base", rate=10, shape="ring", radius=0.5, dir="up", spreadDeg=8, speed=[1.6, 2.6], life=[0.25, 0.4],
+                  size=[0.34, 0.06], color=[NOON, "team"], alpha=[0.8, 0], emissive=2.4, texture="streak", stretch=0.06, blend="add"),
                  held("decal", shape="ring", style="ink", radius=0.85, color=INK, alpha=ha(0.75), rim="team"),
                  L("emitter", at="target", socket="base", rate=8, shape="disc", radius=0.35, dir="up", spreadDeg=60, speed=[1, 2], life=[0.3, 0.45],
                    size=[0.1, 0.1, 0.06], color=[INK2, CHALK_DK], alpha=[1, 1, 0], gravity=9, texture="chip", blend="chip", spinDeg=[-400, 400],
                    rim="team", rimAlpha=0.5),
+                 dial(r=0.95, a=0.5, e=1.3),
                  comment="T2 · unstoppable — a bright team-rimmed shell round the body over a dark ring at the feet, flakes shed off it"))
     D.append(vfx("lib_status_reveal", 1.0,
                  held("mesh", socket="base", shape="pillar", scale=[[0, 0.1], [0.12, 0.5], [1, 0.5]], stretch=[0.6, 6.0, 0.6], color="team", alpha=ha(0.4),
@@ -223,6 +275,10 @@ def defs() -> list:
                  L("emitter", at="target", socket="base", offset=[0, 0.55, 0], rate=6, shape="disc", radius=0.3, dir="back", spreadDeg=10, speed=[2, 3],
                    life=[0.12, 0.2], size=[0.3, 0.06], color=[NOON, "team"], alpha=[0.6, 0], emissive=2.0, drag=2, texture="streak", stretch=0.06,
                    blend="add"),
+                 # max VFX-1: chalk-light flecks kicked off the heels, turning as they fall behind
+                 L("emitter", at="target", socket="base", offset=[0, 0.05, 0], rate=8, shape="disc", radius=0.3, dir="back", spreadDeg=30, speed=[1.2, 2.2],
+                   life=[0.2, 0.32], size=[0.16, 0.05], color=[NOON, "team"], alpha=[1, 0], emissive=2.0, gravity=4, texture="glint", blend="add",
+                   spinDeg=[-360, 360]),
                  comment="T1 · hasted — low side streaks (the movement grammar), light over ink so they read on pale stone, thrown back from the "
                          "feet against the travel"))
     D.append(vfx("lib_status_grievous", 1.0,
@@ -244,8 +300,13 @@ def defs() -> list:
     D.append(vfx("lib_status_resist_shred", 1.0,
                  held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.98, color=INK, alpha=ha(0.9), emissive=0, rim=ORCHID,
                       rimEmissive=1.6, blend="ink", align="up", spinDeg=-20),
-                 held("mesh", socket="chest", offset=[0, -0.03, 0], shape="ringwave", scale=0.9, color=[ORCHID, ROSE], alpha=ha(0.95), emissive=2.0,
-                      dissolve=0.32, noise=0.9, noiseScale=2.4, edge="team", edgeEmissive=2.0, edgeWidth=0.1, blend="add", align="up", spinDeg=-20),
+                 held("mesh", socket="chest", offset=[0, -0.03, 0], shape="ringwave", scale=1.2, color=[ORCHID, ROSE], alpha=ha(0.9), emissive=2.0,
+                      dissolve=0.46, noise=0.9, noiseScale=2.6, scroll=[0.6, 0], edge="team", edgeEmissive=2.0, edgeWidth=0.12, blend="add", align="up",
+                      spinDeg=-70),
+                 # max VFX-1: the broken glass ring keeps shedding: orchid shards orbit the chest and fall out of the band
+                 L("emitter", at="target", socket="chest", rate=6, shape="ring", radius=0.55, dir="none", speed=[0, 0], life=[0.5, 0.7],
+                   size=[0, 0.14, 0.1, 0], color=[ORCHID, ROSE], alpha=[0, 1, 0.8, 0], emissive=2.0, orbitDeg=160, texture="shard", blend="add",
+                   spinDeg=[-300, 300], space="local"),
                  L("emitter", at="target", socket="chest", rate=5, shape="ring", radius=0.44, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
                    size=[0.12, 0.04], color=[ORCHID, ROSE], alpha=[1, 0], emissive=2.0, gravity=6, texture="shard", blend="add"),
                  comment="T1 · Lumen · resist shred — the cracked band in orchid glass (the magic colour) over a dark band, glass flakes falling"))

@@ -328,7 +328,9 @@ interface EntityLike { id: number; kind: string; def?: string; team: number; x: 
 interface Place { att: number; pan: number; lpf: number }
 /** per-play options: `aware` = a threat to your fighter (the awareness pass applies, and the voice-bus duck spares
  *  it); `onVoice` hears the voice once its file is decoded and started (the announcer times its line by it) */
-interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: AudioBuffer) => void }
+interface CueOpts { aware?: boolean; lift?: number; onVoice?: (v: Voice, buf: AudioBuffer) => void;
+  /** a playback-rate multiplier over the cue's own pitchVar (the gold ladder's step-up) */
+  rate?: number }
 
 export interface ValeAudioPort extends AudioPort {
   attach(client: MatchClient | null): void;
@@ -418,6 +420,13 @@ const OBJ_FADE_S = 1;            // its time constant
 const AUTO_PHASE_S = [16, 80];   // a bed's phases walk themselves (first, last phase layer) until musicPhase() drives them
 const SEG_OVERLAP_S = 0.03;  // a main stem's .m4a piece runs on this far into the next (audio/build_music.py PIECE_OVERLAP_S)
 const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing on YOU
+// repetition (max SFX-3): a spatial sfx one-shot with a pitchVar (the combat cues that repeat) also varies its gain by up to
+// ±GAIN_VAR_DB per play, and the same cue again within REPEAT_S of its last start plays REPEAT_DB down and up to
+// REPEAT_JITTER_S late, so a stack of hits blurs instead of flamming (one random number per play)
+const GAIN_VAR_DB = 1.2;
+const REPEAT_S = 0.12;
+const REPEAT_DB = -1.5;
+const REPEAT_JITTER_S = 0.004;
 const LOOP_DEFAULT_S = 2.5;  // a looping cue with no stated life stops after this
 const PROC_GAP_S = 0.3;      // one passive of one owner sounds at most this often (an on-hit passive on every attack)
 const PROC_PERIODIC_S = 6;   // … and a periodic one (an aura's tick, a run-up stack) only reminds this often
@@ -1120,7 +1129,13 @@ class Engine implements ValeAudioPort {
     const rank = prio + Math.log10(Math.max(1e-3, c.gain * att * gainMul));
     if (!this.makeRoom(this.voices.filter((v) => v.cue === cueId), c.maxVoices, rank)) return 'voices';
     if (!alert && !this.makeRoom(this.voices.filter((v) => v.pooled), MAX_VOICES, rank)) return 'voices';
+    // repetition (see GAIN_VAR_DB): a per-play gain spread on the repeating combat cues, and a quick repeat softened
+    const repeat = now - (this.lastPlay.get(cueId) ?? -1e9) < REPEAT_S;
     this.lastPlay.set(cueId, now);
+    const varies = c.bus === 'sfx' && c.spatial && !c.loop && c.pitchVar > 0;
+    const vdb = (varies ? (Math.random() * 2 - 1) * GAIN_VAR_DB : 0) + (varies && repeat ? REPEAT_DB : 0);
+    const level = c.gain * att * gainMul * Math.pow(10, vdb / 20);
+    const late = varies && repeat ? Math.random() * REPEAT_JITTER_S : 0;
     // where it joins the mix: the gate cues' alert path; a threat to your fighter past the sfx duck; else its bus
     const into = alert ? this.alertBus.get(c.bus)! : c.bus === 'sfx' && o.aware ? this.threat : this.bus.get(c.bus)!;
     const file = c.files[this.take(cueId, c.files.length)];
@@ -1134,9 +1149,10 @@ class Engine implements ValeAudioPort {
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = c.loop;
-      if (c.pitchVar) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * c.pitchVar;   // a playback-rate fraction
+      if (c.pitchVar) src.playbackRate.value = (1 + (Math.random() * 2 - 1) * c.pitchVar) * (o.rate ?? 1);   // a playback-rate fraction
+      else if (o.rate) src.playbackRate.value = o.rate;
       const g = this.ctx.createGain();
-      g.gain.value = c.gain * att * gainMul;
+      g.gain.value = level;
       let node: AudioNode = src;
       const nodes: AudioNode[] = [g];
       if (lpf > 0) {
@@ -1151,18 +1167,18 @@ class Engine implements ValeAudioPort {
       // stings (their own build) start at 0
       let skip = 0;
       if (!c.loop && c.bus !== 'music' && buf.duration > LEAD_SKIP_S * 4) {
-        const t = this.ctx.currentTime;
+        const t = this.ctx.currentTime + late;
         g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(c.gain * att * gainMul, t + LEAD_RAMP_S);
-        src.start(0, LEAD_SKIP_S);
+        g.gain.linearRampToValueAtTime(level, t + LEAD_RAMP_S);
+        src.start(late > 0 ? t : 0, LEAD_SKIP_S);
         skip = LEAD_SKIP_S;
       } else src.start();
       // a one-shot leaves the graph at its end, by the wall clock too (see `release` in the header)
-      if (!c.loop) this.retire(src, nodes, v.started + (buf.duration - skip) / Math.max(0.01, src.playbackRate.value), 'voice', drop);
+      if (!c.loop) this.retire(src, nodes, v.started + late + (buf.duration - skip) / Math.max(0.01, src.playbackRate.value), 'voice', drop);
       else src.onended = drop;
       if (c.loop) this.stopVoice(v, 0.25, Math.max(0.3, hold > 0 ? hold : LOOP_DEFAULT_S));
       if (this.log.length < 400) this.log.push(cueId);
-      this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + (c.gain * att * gainMul) ** 2);
+      this.heard.set(cueId, (this.heard.get(cueId) ?? 0) + level ** 2);
       o.onVoice?.(v, buf);
     };
     // a decoded file starts now, inside the event's call: a promise's then() would wait for the rest of the frame
