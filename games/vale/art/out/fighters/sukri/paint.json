@@ -1,0 +1,182 @@
+{
+ "sukri:portrait": {
+  "shipped": "painted",
+  "variant": 2,
+  "why": "only pre-gate pass (v1 and v3 reframed the bust and added a lantern hand); lidded amber eyes with pupils",
+  "model": "grok-imagine-image",
+  "prompt_version": 1,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A square head-and-shoulders portrait card. The character: a small, round hooded wanderer: a soft, low, rounded cream hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, thick cream wrap bands round a barrel body, a tan sash, brown bloomers and boots, a plain walking staff with a crook from which a small glass cup of warm light hangs. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_sukri_portrait__v2.png",
+  "raw_sha256": "df7d919fdc944754b77d198dba4a48e3793999d45e7f80a00b2e4601d91882f8",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.983,
+   "iou": 0.984,
+   "pal_mean": 6.8,
+   "pal_max": 12.2,
+   "face_range": 1.02,
+   "face_dark": 0.95,
+   "face_corr": 0.99,
+   "fails": [],
+   "pass": true,
+   "variant": 2
+  },
+  "date": "2026-11-09"
+ },
+ "sukri:splash": {
+  "shipped": "painted",
+  "variant": 1,
+  "why": "v1 and v3 passed; v1 has fewer grain lines near the eyes (v3 paints a thin line down from an eye corner, a tear-streak risk); lidded eyes with pupils, not glowing",
+  "model": "grok-imagine-image",
+  "prompt_version": 1,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A wide 16:9 splash card. The character: a small, round hooded wanderer: a soft, low, rounded cream hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, thick cream wrap bands round a barrel body, a tan sash, brown bloomers and boots, a plain walking staff with a crook from which a small glass cup of warm light hangs. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_sukri_splash__v1.png",
+  "raw_sha256": "84938acf56b033dc5dfe797c2236c658aee58ccf1313207b11d0b02af5c8e493",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.984,
+   "iou": 0.907,
+   "pal_mean": 11.2,
+   "pal_max": 20.0,
+   "face_range": 1.65,
+   "face_dark": null,
+   "face_corr": 0.96,
+   "fails": [],
+   "pass": true,
+   "variant": 1
+  },
+  "date": "2026-11-09"
+ },
+ "sukri_shadeprint:portrait": {
+  "shipped": "painted",
+  "variant": 1,
+  "why": "all 3 passed; v1 has the cleanest pupils and the warmest amber lacquer; store dE 31.3 over the 18 deluxe floor",
+  "model": "grok-imagine-image",
+  "prompt_version": 1,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A square head-and-shoulders portrait card. The character: a small, round hooded wanderer: a soft, low, rounded pale lilac hood and pale lilac shoulder plates, a warm amber lacquer face mask with a gentle smile and honey-amber almond eyes, ink-violet wraps with continuous mid-violet spiral bands round a barrel body, dark violet leggings and boots, a pale walking staff with a crook from which a small violet glass cup hangs. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_sukri_shadeprint_portrait__v1.png",
+  "raw_sha256": "edf0a549cdfc804926880dc4dfa9215706bae18bef83e79e0aeae38e4a097f7a",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.998,
+   "iou": 0.95,
+   "pal_mean": 8.3,
+   "pal_max": 12.8,
+   "face_range": 1.0,
+   "face_dark": 0.98,
+   "face_corr": 1.0,
+   "store_de": 31.3,
+   "store_floor": 18.0,
+   "fails": [],
+   "pass": true,
+   "variant": 1
+  },
+  "date": "2026-11-09"
+ },
+ "sukri_shadeprint:splash": {
+  "shipped": "3d",
+  "why": "all 3 variants failed silhouette and palette (iou 0.44-0.59, palette dE 21-29): the painter dulled the saturated violet wraps and warmed the plate; kept the 3D card (already ruling 2: amber lacquer mask, lidded eyes, bands)",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.957,
+    "iou": 0.442,
+    "pal_mean": 29.2,
+    "pal_max": 42.4,
+    "face_range": 1.22,
+    "face_dark": 1.24,
+    "face_corr": 0.99,
+    "fails": [
+     "silhouette",
+     "palette"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.962,
+    "iou": 0.592,
+    "pal_mean": 21.4,
+    "pal_max": 30.6,
+    "face_range": 1.23,
+    "face_dark": 1.18,
+    "face_corr": 0.99,
+    "fails": [
+     "silhouette",
+     "palette"
+    ],
+    "pass": false,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.951,
+    "iou": 0.52,
+    "pal_mean": 24.7,
+    "pal_max": 37.4,
+    "face_range": 1.22,
+    "face_dark": 1.17,
+    "face_corr": 0.98,
+    "fails": [
+     "silhouette",
+     "palette"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
+  "prompt_version": 1,
+  "date": "2026-11-09"
+ },
+ "sukri_stillwater:portrait": {
+  "shipped": "painted",
+  "variant": 3,
+  "why": "v2 and v3 passed; both are a light paint over the render (palette dE 1.7 / 3.0); v3 carries more paint; v1 reframed the figure",
+  "model": "grok-imagine-image",
+  "prompt_version": 1,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A square head-and-shoulders portrait card. The character: a small, round hooded wanderer: a soft, low, rounded pale stone hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, sea-glass grey-green wrap bands round a barrel body, dark slate leggings and boots, a pale walking staff with a crook from which a small pale-teal glass cup hangs. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_sukri_stillwater_portrait__v3.png",
+  "raw_sha256": "6e098fd27067156628f9da79664a902e61863b338bb4003c8693f75bc7cf8f46",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.992,
+   "iou": 0.982,
+   "pal_mean": 3.0,
+   "pal_max": 4.1,
+   "face_range": 0.98,
+   "face_dark": 0.95,
+   "face_corr": 1.0,
+   "store_de": 34.4,
+   "store_floor": 12.0,
+   "fails": [],
+   "pass": true,
+   "variant": 3
+  },
+  "date": "2026-11-09"
+ },
+ "sukri_stillwater:splash": {
+  "shipped": "painted",
+  "variant": 2,
+  "why": "all 3 passed; v2 has the cleanest mask (fewest painted cracks); eyes honey with pupils, not glowing at card or chip size",
+  "model": "grok-imagine-image",
+  "prompt_version": 1,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A wide 16:9 splash card. The character: a small, round hooded wanderer: a soft, low, rounded pale stone hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, sea-glass grey-green wrap bands round a barrel body, dark slate leggings and boots, a pale walking staff with a crook from which a small pale-teal glass cup hangs. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_sukri_stillwater_splash__v2.png",
+  "raw_sha256": "06262702fec00249a6d97c69e3ea83139a2653567737d33fdd2e8625281a218b",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.963,
+   "iou": 0.907,
+   "pal_mean": 8.2,
+   "pal_max": 10.6,
+   "face_range": 1.03,
+   "face_dark": 1.27,
+   "face_corr": 0.99,
+   "fails": [],
+   "pass": true,
+   "variant": 2
+  },
+  "date": "2026-11-09"
+ }
+}
