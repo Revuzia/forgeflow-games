@@ -23,9 +23,10 @@
 
 import { uploadPrefix } from '../upload.ts';
 import {
-  Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
-  type IUniform,
+  BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
+  type IUniform, type Texture,
 } from 'three';
+import { farCrownGeometry } from './farcrown.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import type { BuildingBlock } from '../../sim/types.ts';
 import { buildingAt } from './catalog.ts';
@@ -160,7 +161,8 @@ uniform float uWindK;         // wind strength from the weather (calm 0.3 … ga
 uniform vec4 uLodBand;        // LOD cross-fade bands (m from the camera): boundary 0 (x..y), boundary 1 (z..w)
 uniform mat3 uBodyToView;     // body → view rotation (planetview.ts): the camera's line of sight in the body frame
 varying vec4 vExtra;
-varying vec2 vLod;            // visibility 0..1 in the LOD cross-fade, +1 fading out / −1 fading in
+varying vec2 vLod;            // the interval [x, y) of the object-space chunk hash this mesh draws (0..1 = all):
+                              // a fading-out LOD keeps [0, t), the incoming one [t, 1), so every chunk shows once
 varying vec3 vLocalP;
 varying float vCrownIn;       // 1 when the camera is inside this tree's crown (its foliage fades away)
 varying vec2 vNearFade;       // foliage nearer the camera than x is gone, fading out to y (m): further up in the trees
@@ -170,6 +172,9 @@ uniform vec3 uWindDir;
 uniform vec4 uGodWind;        // (additive, ships/cameras lane) the walking god's feet (body frame) and its wind's strength
 uniform vec3 uCamBody;
 uniform vec2 uFade;          // (start, end) of the hand-over band, metres from the camera
+uniform float uFarOn;        // PERF P2: a far-tree layer takes the trees over past the band (dissolve, not shrink)
+uniform vec4 uFarBand;       // far layer: px of tree height where hull lod 0 -> 1 (x..y), far fade-out px (z..w)
+uniform float uPxPerRad;     // render pixels per radian (vertical): a tree's height on screen = height * this / distance
 varying vec3 vBodyPos;
 varying float vLeaf;
 varying vec2 vLeafUv;
@@ -205,10 +210,11 @@ float vegCloudShadowV(vec3 P, vec3 sunB) {
 /** alpha test for leaf cards, with Golus-style alpha sharpening so edges stay crisp at any mip; deciduous trees lose
  *  their leaves patch by patch through late autumn (vExtra.z) */
 const LEAF_ALPHA = /* glsl */ `
-  if (vLod.x < 0.999) {
+  if (vLod.x > 0.0 || vLod.y < 1.0) {
     float lch = fract(sin(dot(floor(vLocalP * 5.0 + 0.37), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    if (vLod.y < 0.0) lch = 1.0 - lch;
-    if (vCard > 0.25 ? lch > vLod.x : (vLod.y > 0.0 ? vLod.x < 0.5 : vLod.x <= 0.5)) discard;
+    // (bark — trunks — swap whole at the middle of a band: drawn by the mesh whose interval holds 0.5)
+    float lq = vCard > 0.25 ? lch : 0.5;
+    if (lq < vLod.x || lq >= vLod.y) discard;
   }
   // vExtra.z: leaf loss 0..1, plus 2 when the tree's fruit is out of season (fruit: aCard 0.35, treegen FRUIT_CARD)
   float leafLoss = vExtra.z > 1.5 ? vExtra.z - 2.0 : vExtra.z;
@@ -231,6 +237,7 @@ const LEAF_ALPHA = /* glsl */ `
 `;
 const VEG_WIND = /* glsl */ `
   vec3 transformed = vec3(position);
+  bool vegCull = false;
   {
     vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
     // hand-over to the terrain's canopy shading: WHOLE trees sink and shrink into the ground across the band (a
@@ -238,19 +245,41 @@ const VEG_WIND = /* glsl */ `
     // same vertex code, so shadows fade with their trees
     float camD = distance(ip, uCamBody);
     float handover = smoothstep(uFade.x, uFade.y, camD);
-    transformed *= 1.0 - handover;
+    vLod = vec2(0.0, 1.0);
+#ifdef VEG_FAR
+    // PERF P2 — the far layer: the same tree as a hull. It takes over the chunks the near tree gives up across the
+    // hand-over band ([1 - s, 1) of the hash), and gives them up itself — to the terrain's canopy shading — where the
+    // tree shrinks under a few pixels on screen. Hull lod 0 and 1 split its share across their own band (in px).
+    {
+      float th0 = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
+      float px = th0 * uPxPerRad / max(camD, 1.0);
+      float s = handover * smoothstep(uFarBand.z, uFarBand.w, px);
+      float a = smoothstep(uFarBand.x, uFarBand.y, px);
+      float lo = 1.0 - s, mid = 1.0 - s + s * a;
+      vLod = iExtra.w < 6.5 ? vec2(lo, mid) : vec2(mid, 1.0);
+      // trees wholly off screen (the far layer surrounds the camera) cost a degenerate vertex, no cloud lookup
+      vec4 cp = projectionMatrix * (modelViewMatrix * vec4(ip, 1.0));
+      float mg = 1.15 + 1.5 * th0 * max(projectionMatrix[0][0], projectionMatrix[1][1]) / max(abs(cp.w), 1e-3);
+      if (cp.w < -th0 * 2.0 || abs(cp.x) > mg * abs(cp.w) || abs(cp.y) > mg * abs(cp.w)) vLod = vec2(1.0, 1.0);
+    }
+#else
+    // without a far layer whole trees sink into the terrain's canopy shading across the band; with one they give
+    // their chunks over to the far hull instead (the complementary half of the hash)
+    if (uFarOn < 0.5) transformed *= 1.0 - handover;
     // LOD cross-fade: inside a band both LODs draw this tree, the outgoing one losing crown chunks as the incoming one
     // gains the complementary chunks (object-space, metres-sized: no pixel dither), trunks swap at the middle
-    vLod = vec2(1.0, 1.0);
     if (iExtra.w > 1.5) {
       float role = iExtra.w;
       bool fadeIn = role > 3.5;
       float bnd = fadeIn ? role - 4.0 : role - 2.0;
       vec2 band = bnd < 0.5 ? uLodBand.xy : uLodBand.zw;
       float t = smoothstep(band.x, band.y, camD);
-      vLod = vec2(fadeIn ? t : 1.0 - t, fadeIn ? -1.0 : 1.0);
-      transformed *= step(0.002, vLod.x);
+      vLod = fadeIn ? vec2(1.0 - t, 1.0) : vec2(0.0, 1.0 - t);
     }
+    if (uFarOn > 0.5) vLod.y = min(vLod.y, 1.0 - handover);
+#endif
+    vegCull = vLod.y - vLod.x < 0.002;
+    transformed *= vegCull ? 0.0 : 1.0;
     float ph = dot(ip, vec3(0.071, 0.113, 0.097));
     float gust = 0.55 + 0.45 * sin(uTime * 0.37 + ph * 0.2);
     float sway = (sin(uTime * 1.6 * (0.8 + 0.2 * uWindK) + ph) * 0.6 + sin(uTime * 2.9 + ph * 1.7) * 0.25) * gust;
@@ -390,11 +419,15 @@ const VEG_AMBIENT = /* glsl */ `
 `;
 
 /** the vegetation material (also used by the near-camera ground cover, render/life/groundcover.ts, with its own band) */
-export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform<{ x: number; y: number }>, leafTex: IUniform): MeshStandardMaterial {
+export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform<{ x: number; y: number }>, leafTex: IUniform, far?: { on: IUniform<number>; layer: boolean }): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side: DoubleSide });
+  if (far?.layer) mat.defines = { VEG_FAR: '' };
   mat.onBeforeCompile = (shader) => {
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     shader.uniforms.uFade = fade;
+    shader.uniforms.uFarOn = far?.on ?? { value: 0 };
+    shader.uniforms.uFarBand = FAR_BAND;
+    shader.uniforms.uPxPerRad = PX_PER_RAD;
     shader.uniforms.uLeafTex = leafTex;
     shader.uniforms.uWindK = WIND_K;
     shader.uniforms.uLodBand = LOD_BAND;
@@ -413,7 +446,7 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
   float leafy = max(step(0.25, aCard), step(0.05, aCard) * step(aCard, 0.2)) * (1.0 - step(0.3, aCard) * step(aCard, 0.4));
   vColor.xyz *= mix(vec3(dot(instanceColor.xyz, vec3(0.3, 0.55, 0.15))), instanceColor.xyz, leafy);
 #endif`)
-      .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vCloudSh = vegCloudShadowV(vBodyPos, uSunDirBody);\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
+      .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vCloudSh = vegCull ? 1.0 : vegCloudShadowV(vBodyPos, uSunDirBody);\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${VEG_FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
@@ -497,7 +530,7 @@ ${LEAF_ALPHA}
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-veg-v11';
+  mat.customProgramCacheKey = () => (far?.layer ? 'genesis-veg-v12-far' : 'genesis-veg-v12');
   return mat;
 }
 
@@ -505,6 +538,12 @@ ${LEAF_ALPHA}
 export const WIND_K: IUniform<number> = { value: 0.8 };
 /** LOD cross-fade bands (set per frame from the vegetation range) */
 export const LOD_BAND: IUniform<Vector4> = { value: new Vector4(51, 69, 140, 179) };
+/** PERF P2 far layer: px of a tree's height on screen where hull lod 0 hands over to lod 1 (x..y) and where the far
+ *  tree gives way to the terrain's canopy shading (z..w) */
+export const FAR_PX = { lod: [9, 14], out: [2.5, 5] } as const;
+export const FAR_BAND: IUniform<Vector4> = { value: new Vector4(FAR_PX.lod[0], FAR_PX.lod[1], FAR_PX.out[0], FAR_PX.out[1]) };
+/** render pixels per radian of the view (vertical; set each frame) */
+export const PX_PER_RAD: IUniform<number> = { value: 536 };
 
 const VEG_DEPTH_VERT = /* glsl */ `
 #include <common>
@@ -563,6 +602,127 @@ const CLEAR_MARGIN: Partial<Record<string, number>> = { wall: 0.5, gate: 1.5, aq
 const CLEAR_DEFAULT = 3.2;
 const SHRUB_CLOSER = 1.5;
 
+/** the season and the per-tree fields every plant instance reads (one per rebuild; dy: the camera's hemisphere) */
+interface PlantEnv { autumn: number; winterK: number; yfH: number; snowF?: Float32Array; burntF?: Float32Array; fireF?: Float32Array; treeF?: Float32Array }
+function plantEnv(pv: PlanetView, dy: number, yearFrac: number): PlantEnv {
+  // autumn at the camera's latitude (northern autumn at year fraction 0.5–0.75, southern half a year later)
+  const yfH = dy >= 0 ? yearFrac : (yearFrac + 0.5) % 1;
+  const autumn = smooth(0.5, 0.6, yfH) * (1 - smooth(0.74, 0.8, yfH));
+  // leaf fall: from the end of autumn through winter, leafing out again early in spring
+  const winterK = yfH >= 0.5 ? smooth(0.72, 0.8, yfH) : 1 - smooth(0.06, 0.14, yfH);
+  return { autumn, winterK, yfH, snowF: pv.fields.get('snow'), burntF: pv.fields.get('burnt'), fireF: pv.fields.get('fire'), treeF: pv.fields.get('tree') };
+}
+const _pm = new Float32Array(16), _pc = new Float32Array(3), _pe = new Float32Array(4);
+
+/**
+ * One plant's instance (shared by the near trees and the far layer, so a far tree IS the near tree): its matrix
+ * (column-major, into m at mo), foliage tint (c at co) and extra (snow, char, leaf loss + fruit, canopy x 0.4: the
+ * caller adds its LOD role to the last). Returns the girth scale.
+ */
+function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantEnv, m: Float32Array, mo: number, col: Float32Array, co: number, ext: Float32Array, eo: number): number {
+  const kind = rec[i + 6];
+  const gr = rec[i + 3];
+  const px = rec[i] * gr, py = rec[i + 1] * gr, pz = rec[i + 2] * gr;
+  const seed = rec[i + 9];
+  // basis: up = the radial direction tilted by this tree's own lean (≤ ~5°), yaw about it, scale = height
+  let ux = rec[i], uy = rec[i + 1], uz = rec[i + 2];
+  let ex = uz, ez = -ux;
+  const el = Math.hypot(ex, ez) || 1;
+  ex /= el; ez /= el;
+  let nx = uy * ez, ny = uz * ex - ux * ez, nz = -uy * ex;
+  const la = seed * 40.0, lt = Math.tan(0.09 * ((seed * 7.31) % 1));
+  ux += (ex * Math.cos(la) + nx * Math.sin(la)) * lt;
+  uy += (ny * Math.sin(la)) * lt;
+  uz += (ez * Math.cos(la) + nz * Math.sin(la)) * lt;
+  const ul = Math.hypot(ux, uy, uz);
+  ux /= ul; uy /= ul; uz /= ul;
+  // re-orthogonalise the tangent frame around the leaning up
+  const ed = ex * ux + ez * uz;
+  let fx = ex - ux * ed, fy = -uy * ed, fz = ez - uz * ed;
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  fx /= fl; fy /= fl; fz /= fl;
+  ex = fx; ez = fz;
+  nx = uy * fz - uz * fy; ny = uz * fx - ux * fz; nz = ux * fy - uy * fx;
+  const ey0 = fy;
+  const cy = Math.cos(rec[i + 4]), sy = Math.sin(rec[i + 4]);
+  const ax = ex * cy + nx * sy, ay = ey0 * cy + ny * sy, az = ez * cy + nz * sy;
+  // right-handed: Z = X × Y (a mirrored basis would flip the winding and cull every tree)
+  const bx = ay * uz - az * uy, by = az * ux - ax * uz, bz = ax * uy - ay * ux;
+  const s = rec[i + 5];
+  // girth varies independently of height: some trees stocky, some slender
+  const sx = s * (0.82 + 0.36 * ((seed * 13.7) % 1));
+  m[mo] = ax * sx; m[mo + 1] = ay * sx; m[mo + 2] = az * sx; m[mo + 3] = 0;
+  m[mo + 4] = ux * s; m[mo + 5] = uy * s; m[mo + 6] = uz * s; m[mo + 7] = 0;
+  m[mo + 8] = bx * sx; m[mo + 9] = by * sx; m[mo + 10] = bz * sx; m[mo + 11] = 0;
+  m[mo + 12] = px - rec[i] * 0.25; m[mo + 13] = py - rec[i + 1] * 0.25; m[mo + 14] = pz - rec[i + 2] * 0.25; m[mo + 15] = 1;
+  // foliage tint (the shader applies it to leaves only): species colour, autumn for deciduous species, and a
+  // per-tree brightness and yellow-green ↔ blue-green shift so a forest is never one colour
+  const sp = rec[i + 8];
+  const look = sp >= 0 ? SPECIES[sp] : null;
+  let tr = 1, tg = 1, tbl = 1;
+  if (look) { tr = look.tint[0]; tg = look.tint[1]; tbl = look.tint[2]; }
+  if (look?.autumn && !IS_SHRUB[kind]) {
+    const turn = Math.min(1, env.autumn * (0.55 + 0.9 * ((seed * 3.3) % 1)));
+    tr += (look.autumn[0] - tr) * turn; tg += (look.autumn[1] - tg) * turn; tbl += (look.autumn[2] - tbl) * turn;
+  }
+  // per tree: value ±20 %, a yellow-green ↔ blue-green hue shift of ±6 %
+  const th = (seed * 17.9) % 1;
+  const tb = 0.8 + 0.4 * ((seed * 5.77) % 1);
+  col[co] = tr * tb * (0.94 + 0.12 * th); col[co + 1] = tg * tb; col[co + 2] = tbl * tb * (1.06 - 0.12 * th);
+  // per tree: snow on the branches (the ground's snow cover), fire char near burnt ground, leaf fall of
+  // deciduous species through late autumn into winter (bare in winter, leafing again in spring)
+  const ux0 = rec[i], uy0 = rec[i + 1], uz0 = rec[i + 2];
+  const g = pv.grid;
+  const snowA = env.snowF ? Math.min(1, g.sample(env.snowF, ux0, uy0, uz0) / 0.25) : 0;
+  // char from the scar of a past fire, or the fire burning here now
+  const charA = Math.min(0.9, Math.max(env.burntF ? (g.sample(env.burntF, ux0, uy0, uz0) - 0.15) * 1.6 : 0, env.fireF ? g.sample(env.fireF, ux0, uy0, uz0) * 0.85 : 0, 0));
+  const leafless = look?.deciduous && !IS_SHRUB[kind] ? Math.min(1, env.winterK * (0.7 + 0.6 * ((seed * 9.1) % 1))) : 0;
+  // fruit hangs in its season only (a few days' spread from tree to tree)
+  const fs = look?.fruit;
+  const yfT = ((PLANT_PROBE.yearFrac >= 0 ? PLANT_PROBE.yearFrac : env.yfH) + ((seed * 7.3) % 1) * 0.03) % 1;
+  const fruitOff = !fs || (fs[0] <= fs[1] ? yfT < fs[0] || yfT > fs[1] : yfT < fs[0] && yfT > fs[1]);
+  // the canopy around it (0..1, carried in the role's fraction: the role is an integer 1..5): under a closed
+  // canopy the trunks and lower crown see little sky
+  const canopy = env.treeF ? Math.min(1, Math.max(0, (g.sample(env.treeF, ux0, uy0, uz0) - 0.3) / 0.5)) : 0;
+  ext[eo] = snowA; ext[eo + 1] = kind === K('burnt') ? 0 : charA; ext[eo + 2] = leafless + (fruitOff ? 2 : 0); ext[eo + 3] = canopy * 0.4;
+  return sx;
+}
+
+// ── PERF P2 far layer: settings and types ──
+/** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
+const FAR_DEFAULT = (() => { try { return new URLSearchParams(globalThis.location?.search ?? '').get('fartrees') !== '0'; } catch { return true; } })();
+/** main-thread ms a frame for making far blocks (scatter + instance data of a cell, ~0.1 ms each) */
+const FAR_BUDGET_MS = 3;
+/** the tallest tree a far cell may hold (m), and how far ahead of need (x the reach) cells are made */
+const FAR_H_MAX = 36;
+const PREFETCH = 1.5;
+const KELP = KINDS.indexOf('kelp');
+/** the plant scatter's fields (a change re-scatters the cells around it) and the far tint's (snow, fire) */
+const PLANT_FIELDS = ['tree', 'shrub', 'burnt', 'treeSpecies', 'snow', 'fire'] as const;
+const FAR_GEO = new Map<number, BufferGeometry>();
+interface FarBlock {
+  n: number; keys: number[]; starts: number[]; m: Float32Array; c: Float32Array; e: Float32Array;
+  hMin: number; hMax: number; cx: number; cy: number; cz: number; r: number; stale: boolean; env: string;
+}
+interface FarBucket {
+  mesh: InstancedMesh; extra: InstancedBufferAttribute; cap: number; hi: number; live: number;
+  /** free ranges [start, n, ...] sorted by start; dirty ranges [start, n, ...] to upload */
+  free: number[]; dirty: number[]; key: number; lod: number; tpl: BufferGeometry;
+}
+/** upload the given instance ranges of an attribute (coalesced; three bufferSubData per range) */
+function flushRanges(a: InstancedBufferAttribute | BufferAttribute, ranges: number[], w: number): void {
+  const r: [number, number][] = [];
+  for (let k = 0; k < ranges.length; k += 2) r.push([ranges[k], ranges[k] + ranges[k + 1]]);
+  r.sort((x, y) => x[0] - y[0]);
+  a.clearUpdateRanges();
+  let s0 = -1, e0 = -1;
+  const len = a.array.length;
+  const add = () => { if (s0 >= 0 && e0 > s0) a.addUpdateRange(s0 * w, Math.min(len, e0 * w) - s0 * w); };
+  for (const [s1, e1] of r) { if (s1 <= e0 + 64) e0 = Math.max(e0, e1); else { add(); s0 = s1; e0 = e1; } }
+  add();
+  a.needsUpdate = true;
+}
+
 export class Vegetation {
   readonly group = new Group();
   private buckets: Bucket[] = [];
@@ -594,8 +754,14 @@ export class Vegetation {
     this.group.name = 'vegetation';
     this.group.matrixAutoUpdate = false;
     const leafTex: IUniform = { value: leafClusterTexture() };
-    this.material = makeVegMaterial(shared, this.fade, leafTex);
-    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND };
+    this.group.add(this.nearGroup, this.farGroup);
+    this.nearGroup.matrixAutoUpdate = false; this.farGroup.matrixAutoUpdate = false;
+    this.nearGroup.name = 'vegetation-near'; this.farGroup.name = 'vegetation-far';
+    this.material = makeVegMaterial(shared, this.fade, leafTex, { on: this.farOn, layer: false });
+    this.farMat = makeVegMaterial(shared, this.fade, leafTex, { on: this.farOn, layer: true });
+    this.leafTex = leafTex;
+    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND, uFarOn: this.farOn, uFarBand: FAR_BAND, uPxPerRad: PX_PER_RAD };
+    this.farDepth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide, defines: { VEG_FAR: '' } });
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {
@@ -615,7 +781,7 @@ export class Vegetation {
           geo.computeBoundingSphere();
           const bs = geo.boundingSphere!;
           this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0 });
-          this.group.add(mesh);
+          this.nearGroup.add(mesh);
         }
       }
     }
@@ -625,10 +791,12 @@ export class Vegetation {
     if (on === this.castShadows) return;
     this.castShadows = on;
     for (const b of this.buckets) { if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1); }
+    for (const b of this.far) if (b) { if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1); }
   }
 
   swapDepth(depth: boolean): void {
     for (const b of this.buckets) b.mesh.material = depth ? b.depth : this.material;
+    for (const b of this.far) if (b) b.mesh.material = depth ? this.farDepth : this.farMat;
   }
 
   /** plants of one cell (cached) */
@@ -813,8 +981,8 @@ export class Vegetation {
       for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return false;
       return true;
     };
-    for (const [c, a] of next) if (!same(a, this.clearings.get(c))) { this.cache.delete(c); changed = true; }
-    for (const c of this.clearings.keys()) if (!next.has(c)) { this.cache.delete(c); changed = true; }
+    for (const [c, a] of next) if (!same(a, this.clearings.get(c))) { this.dropCell(c); changed = true; }
+    for (const c of this.clearings.keys()) if (!next.has(c)) { this.dropCell(c); changed = true; }
     this.clearings = next;
     if (changed) this.lastFrame = -1e9;
   }
@@ -836,7 +1004,8 @@ export class Vegetation {
       const want = Math.min(2.5, Math.max(0.3, 0.35 + speed / 7));
       WIND_K.value += (want - WIND_K.value) * 0.02;
     }
-    const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}|${PLANT_PROBE.version}`;
+    // (the scatter's own fields — tree, shrub, burnt, species — drop only the cells around a changed value: below)
+    const stamp = `${this.density}|${PLANT_PROBE.version}`;
     // PERF F9: a new ground drops only the cached cells whose inputs changed (below), not the whole cache
     const sv = pv.fieldVersion.get('surface') ?? 0;
     this.syncEpoch(pv);
@@ -844,7 +1013,8 @@ export class Vegetation {
     // a season step re-tints the instances (autumn colour) without re-scattering them
     const season = Math.floor(this.yearFrac * 48);
     if (season !== this.seasonStep) { this.seasonStep = season; this.lastFrame = -1e9; }
-    if (stamp !== this.stamp) { this.stamp = stamp; this.cache.clear(); this.lastFrame = -1e9; }
+    if (stamp !== this.stamp) { this.stamp = stamp; this.dropAll(); this.lastFrame = -1e9; }
+    this.plantFieldsChanged(pv);
     this.syncClearings(pv);
     const R = pv.params.radius;
     const rc = camBody.length();
@@ -852,8 +1022,11 @@ export class Vegetation {
     const range = this.range;
     this.fade.value.x = range * 0.72;
     this.fade.value.y = range;
-    const visible = this.enabled && alt < range * 1.2;
-    this.group.visible = visible;
+    // (with the far layer the near trees stay on at any height: what is within range is drawn — a mountain's forest
+    // under a high camera too; without it they switch off up where nothing is within range anyway)
+    const visible = this.enabled && (this.farOn.value > 0.5 || alt < range * 1.2);
+    this.nearGroup.visible = visible;
+    this.farUpdate(pv, camBody, frame, range);
     // PERF P2 (no pop-in, no stall on arrival): the plants of the cells about to come into range are scattered ahead,
     // a few ms a frame — while descending toward the trees' altitude and in a ring beyond the drawn range — so the
     // frame that first draws them finds them ready (it scattered every cell within range at once: a long frame)
@@ -872,12 +1045,7 @@ export class Vegetation {
     LOD_BAND.value.set(b0a, b0b, b1a, b1b);
     // the camera moves up to range * 0.04 before the next rebuild: trees that may enter a band by then draw in both LODs
     const M = range * 0.04 + 2;
-    // autumn at the camera's latitude (northern autumn at year fraction 0.5–0.75, southern half a year later)
-    const yfH = dy >= 0 ? this.yearFrac : (this.yearFrac + 0.5) % 1;
-    const autumn = smooth(0.5, 0.6, yfH) * (1 - smooth(0.74, 0.8, yfH));
-    // leaf fall: from the end of autumn through winter, leafing out again early in spring
-    const winterK = yfH >= 0.5 ? smooth(0.72, 0.8, yfH) : 1 - smooth(0.06, 0.14, yfH);
-    const snowF = pv.fields.get('snow'), burntF = pv.fields.get('burnt'), fireF = pv.fields.get('fire'), treeF = pv.fields.get('tree');
+    const env = plantEnv(pv, dy, this.yearFrac);
     let total = 0;
     for (const c of cells) {
       const rec = this.cellPlants(pv, c);
@@ -899,77 +1067,14 @@ export class Vegetation {
         const bA = this.buckets[base + la];
         const bB = lb >= 0 ? this.buckets[base + lb] : null;
         if (bA.count >= bA.mesh.instanceMatrix.count || (bB && bB.count >= bB.mesh.instanceMatrix.count)) continue;
-        const seed = rec[i + 9];
-        let sxMax = 0;
-        // basis: up = the radial direction tilted by this tree's own lean (≤ ~5°), yaw about it, scale = height
-        let ux = rec[i], uy = rec[i + 1], uz = rec[i + 2];
-        let ex = uz, ez = -ux;
-        const el = Math.hypot(ex, ez) || 1;
-        ex /= el; ez /= el;
-        let nx = uy * ez, ny = uz * ex - ux * ez, nz = -uy * ex;
-        {
-          const la = seed * 40.0, lt = Math.tan(0.09 * ((seed * 7.31) % 1));
-          ux += (ex * Math.cos(la) + nx * Math.sin(la)) * lt;
-          uy += (ny * Math.sin(la)) * lt;
-          uz += (ez * Math.cos(la) + nz * Math.sin(la)) * lt;
-          const ul = Math.hypot(ux, uy, uz);
-          ux /= ul; uy /= ul; uz /= ul;
-          // re-orthogonalise the tangent frame around the leaning up
-          const ed = ex * ux + ez * uz;
-          let fx = ex - ux * ed, fy = -uy * ed, fz = ez - uz * ed;
-          const fl = Math.hypot(fx, fy, fz) || 1;
-          fx /= fl; fy /= fl; fz /= fl;
-          ex = fx; ez = fz;
-          nx = uy * fz - uz * fy; ny = uz * fx - ux * fz; nz = ux * fy - uy * fx;
-          const ey0 = fy;
-          const cy = Math.cos(rec[i + 4]), sy = Math.sin(rec[i + 4]);
-          const ax = ex * cy + nx * sy, ay = ey0 * cy + ny * sy, az = ez * cy + nz * sy;
-          // right-handed: Z = X × Y (a mirrored basis would flip the winding and cull every tree)
-          const bx = ay * uz - az * uy, by = az * ux - ax * uz, bz = ax * uy - ay * ux;
-          const s = rec[i + 5];
-          // girth varies independently of height: some trees stocky, some slender
-          const sx = s * (0.82 + 0.36 * ((seed * 13.7) % 1));
-          sxMax = sx;
-          _m.set(
-            ax * sx, ux * s, bx * sx, _v.x - rec[i] * 0.25,
-            ay * sx, uy * s, by * sx, _v.y - rec[i + 1] * 0.25,
-            az * sx, uz * s, bz * sx, _v.z - rec[i + 2] * 0.25,
-            0, 0, 0, 1,
-          );
-        }
-        // foliage tint (the shader applies it to leaves only): species colour, autumn for deciduous species, and a
-        // per-tree brightness and yellow-green ↔ blue-green shift so a forest is never one colour
-        const sp = rec[i + 8];
-        const look = sp >= 0 ? SPECIES[sp] : null;
-        let tr = 1, tg = 1, tbl = 1;
-        if (look) { tr = look.tint[0]; tg = look.tint[1]; tbl = look.tint[2]; }
-        if (look?.autumn && !IS_SHRUB[kind]) {
-          const turn = Math.min(1, autumn * (0.55 + 0.9 * ((seed * 3.3) % 1)));
-          tr += (look.autumn[0] - tr) * turn; tg += (look.autumn[1] - tg) * turn; tbl += (look.autumn[2] - tbl) * turn;
-        }
-        // per tree: value ±20 %, a yellow-green ↔ blue-green hue shift of ±6 %
-        const th = (seed * 17.9) % 1;
-        const tb = 0.8 + 0.4 * ((seed * 5.77) % 1);
-        _c.setRGB(tr * tb * (0.94 + 0.12 * th), tg * tb, tbl * tb * (1.06 - 0.12 * th));
-        // per tree: snow on the branches (the ground's snow cover), fire char near burnt ground, leaf fall of
-        // deciduous species through late autumn into winter (bare in winter, leafing again in spring)
-        const ux0 = rec[i], uy0 = rec[i + 1], uz0 = rec[i + 2];
-        const snowA = snowF ? Math.min(1, pv.grid.sample(snowF, ux0, uy0, uz0) / 0.25) : 0;
-        // char from the scar of a past fire, or the fire burning here now
-        const charA = Math.min(0.9, Math.max(burntF ? (pv.grid.sample(burntF, ux0, uy0, uz0) - 0.15) * 1.6 : 0, fireF ? pv.grid.sample(fireF, ux0, uy0, uz0) * 0.85 : 0, 0));
-        const leafless = look?.deciduous && !IS_SHRUB[kind] ? Math.min(1, winterK * (0.7 + 0.6 * ((seed * 9.1) % 1))) : 0;
-        // fruit hangs in its season only (a few days' spread from tree to tree)
-        const fs = look?.fruit;
-        const yfT = ((PLANT_PROBE.yearFrac >= 0 ? PLANT_PROBE.yearFrac : yfH) + ((seed * 7.3) % 1) * 0.03) % 1;
-        const fruitOff = !fs || (fs[0] <= fs[1] ? yfT < fs[0] || yfT > fs[1] : yfT < fs[0] && yfT > fs[1]);
-        // the canopy around it (0..1, carried in the role's fraction: the role is an integer 1..5): under a closed
-        // canopy the trunks and lower crown see little sky
-        const canopy = treeF ? Math.min(1, Math.max(0, (pv.grid.sample(treeF, ux0, uy0, uz0) - 0.3) / 0.5)) : 0;
+        const sxMax = plantInstance(pv, rec, i, env, _pm, 0, _pc, 0, _pe, 0);
         for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
-          b.extra.setXYZW(b.count, snowA, kind === K('burnt') ? 0 : charA, leafless + (fruitOff ? 2 : 0), role + canopy * 0.4);
-          b.mesh.setColorAt(b.count, _c);
-          b.dist[b.count] = d;
-          b.mesh.setMatrixAt(b.count++, _m);
+          const n = b.count;
+          (b.mesh.instanceMatrix.array as Float32Array).set(_pm, n * 16);
+          (b.mesh.instanceColor!.array as Float32Array).set(_pc, n * 3);
+          b.extra.setXYZW(n, _pe[0], _pe[1], _pe[2], role + _pe[3]);
+          b.dist[n] = d;
+          b.count++;
           const e = b.geoR * Math.max(rec[i + 5], sxMax);
           if (e > b.eMax) b.eMax = e;
         }
@@ -989,6 +1094,362 @@ export class Vegetation {
     }
     this.stats.instances = total;
     this.stats.cells = cells.length;
+  }
+
+  // ── PERF P2 (session 6): the FAR-TREE layer ────────────────────────────────────────────────────────────────────
+  // Every tree past the near range is still drawn — the same plant records as the near trees (cellPlants), the same
+  // instance matrix, tint and extra (plantInstance) — as a hull of its own LOD-2 mesh (farcrown.ts), so a forest
+  // exists at every altitude and nothing grows into view around the camera. The hull takes the near tree's chunks
+  // over across the hand-over band and gives itself up to the terrain's canopy shading only where the tree is a few
+  // pixels tall (FAR_PX, by its true height and the view's pixels per radian). Per cell the trees are made once into a
+  // block (matrix, tint, extra) and placed into the far buckets' slots incrementally as cells enter / leave; a
+  // changed input re-makes just the cells around it (stale blocks keep drawing until their new one is ready).
+  readonly nearGroup = new Group();
+  readonly farGroup = new Group();
+  /** 1 = the far layer is on (`?fartrees=0` turns it off: the old shrink-into-the-canopy hand-over) */
+  readonly farOn: IUniform<number> = { value: FAR_DEFAULT ? 1 : 0 };
+  /** render pixels per radian of the view (vertical), set by the planet view each frame */
+  pxPerRad = 536;
+  farStats = { instances: 0, cells: 0, blocks: 0, built: 0, queue: 0, ms: 0 };
+  private farMat: MeshStandardMaterial;
+  private farDepth: ShaderMaterial;
+  private leafTex: IUniform;
+  private far: (FarBucket | undefined)[] = [];
+  private blocks = new Map<number, FarBlock>();
+  /** cell -> lod flags placed (1 hull lod 0, 2 hull lod 1) and their slots [bucket, start, count]... per lod */
+  private placed = new Map<number, { f: number; s0: number[]; s1: number[] }>();
+  private farCam = new Vector3(1e9, 0, 0);
+  private farPx = 0;
+  private farFrame = -1e9;
+  private farWant: number[] = [];
+  private farWantAt = 0;
+  private farEnv = '';
+  private fRefs = new Map<string, Float32Array | null>();
+  private farEMax = 0;
+
+  /** the cached plants of a cell go (its inputs changed); its far block is re-made too (it keeps drawing till then) */
+  private dropCell(c: number): void {
+    this.cache.delete(c);
+    const b = this.blocks.get(c);
+    if (b) b.stale = true;
+  }
+  private dropAll(): void {
+    this.cache.clear();
+    for (const b of this.blocks.values()) b.stale = true;
+  }
+
+  /**
+   * The scatter's own fields (tree, shrub, burnt, species) and the far tint's (snow, fire) were republished: diff the
+   * arrays, drop the cells within two rings of a changed value (a plant reads the three cells around its point) —
+   * the near trees re-scatter only those, the far blocks around them are re-made. Was: the whole cache cleared at
+   * every republish of the tree field (every cell in range re-scattered in one frame).
+   */
+  private plantFieldsChanged(pv: PlanetView): void {
+    const n = pv.grid.count;
+    let dirty: Uint8Array | null = null, tint: Uint8Array | null = null, full = false;
+    for (const f of PLANT_FIELDS) {
+      const now = pv.fields.get(f) ?? null;
+      if (!this.fRefs.has(f)) { this.fRefs.set(f, now); continue; }
+      const then = this.fRefs.get(f) ?? null;
+      if (now === then) continue;
+      this.fRefs.set(f, now);
+      const scatter = f !== 'snow' && f !== 'fire';
+      if (!now || !then || now.length !== n || then.length !== n) { if (scatter) full = true; else tint = new Uint8Array(n).fill(1); continue; }
+      const d = scatter ? (dirty ??= new Uint8Array(n)) : (tint ??= new Uint8Array(n));
+      for (let c = 0; c < n; c++) if (now[c] !== then[c]) d[c] = 1;
+    }
+    if (full) { this.dropAll(); this.lastFrame = -1e9; return; }
+    const ns = pv.grid.nbrStart, nb = pv.grid.nbr;
+    const grow = (m: Uint8Array, rings: number): Uint8Array => {
+      let cur = m;
+      for (let r = 0; r < rings; r++) { const g = cur.slice(); for (let c = 0; c < n; c++) if (cur[c]) for (let e = ns[c]; e < ns[c + 1]; e++) g[nb[e]] = 1; cur = g; }
+      return cur;
+    };
+    if (dirty) {
+      const cur = grow(dirty, 2);
+      let any = false;
+      for (const c of [...this.cache.keys()]) if (cur[c]) { this.dropCell(c); any = true; }
+      for (const [c, b] of this.blocks) if (cur[c]) b.stale = true;
+      if (any) this.lastFrame = -1e9;
+    }
+    if (tint) {
+      const cur = grow(tint, 1);
+      for (const [c, b] of this.blocks) if (cur[c]) b.stale = true;
+    }
+  }
+
+  /** the far block of a cell: its trees (no shrubs, no kelp) as instance data grouped by bucket key */
+  private makeBlock(pv: PlanetView, c: number, env: PlantEnv, keepRec: boolean): FarBlock {
+    const had = this.cache.has(c);
+    const rec = this.cellPlants(pv, c);
+    if (!had && !keepRec) { this.cache.delete(c); this.young.delete(c); }
+    const idx: number[] = [];
+    for (let i = 0; i < rec.length; i += REC) { const k = rec[i + 6]; if (!IS_SHRUB[k] && k !== KELP) idx.push(i); }
+    idx.sort((a, b) => (rec[a + 6] * VARIANTS + rec[a + 7]) - (rec[b + 6] * VARIANTS + rec[b + 7]));
+    const n = idx.length;
+    const blk: FarBlock = { n, keys: [], starts: [], m: new Float32Array(n * 16), c: new Float32Array(n * 3), e: new Float32Array(n * 4), hMin: 1e9, hMax: 0, cx: 0, cy: 0, cz: 0, r: 0, stale: false, env: this.farEnv };
+    let sx = 0, sy = 0, sz = 0;
+    for (let j = 0; j < n; j++) {
+      const i = idx[j];
+      const key = rec[i + 6] * VARIANTS + rec[i + 7];
+      if (!blk.keys.length || blk.keys[blk.keys.length - 1] !== key) { blk.keys.push(key); blk.starts.push(j); }
+      const g = plantInstance(pv, rec, i, env, blk.m, j * 16, blk.c, j * 3, blk.e, j * 4);
+      const h = rec[i + 5];
+      if (h < blk.hMin) blk.hMin = h;
+      if (h > blk.hMax) blk.hMax = h;
+      const e = h * Math.max(1, g / h) * 1.2;
+      if (e > this.farEMax) this.farEMax = e;
+      sx += blk.m[j * 16 + 12]; sy += blk.m[j * 16 + 13]; sz += blk.m[j * 16 + 14];
+    }
+    blk.starts.push(n);
+    if (n) {
+      blk.cx = sx / n; blk.cy = sy / n; blk.cz = sz / n;
+      for (let j = 0; j < n; j++) blk.r = Math.max(blk.r, Math.hypot(blk.m[j * 16 + 12] - blk.cx, blk.m[j * 16 + 13] - blk.cy, blk.m[j * 16 + 14] - blk.cz));
+    }
+    return blk;
+  }
+
+  private farBucket(key: number, lod: number): FarBucket {
+    const id = key * 2 + lod;
+    let b = this.far[id];
+    if (b) return b;
+    const kind = KINDS[Math.floor(key / VARIANTS)], variant = key % VARIANTS;
+    let tpl = FAR_GEO.get(id);
+    if (!tpl) { tpl = farCrownGeometry(kind, variant, lod as 0 | 1, this.leafTex.value as Texture | null); FAR_GEO.set(id, tpl); }
+    b = { mesh: null as unknown as InstancedMesh, extra: null as unknown as InstancedBufferAttribute, cap: 0, hi: 0, live: 0, free: [], dirty: [], key, lod, tpl };
+    this.growBucket(b, 512);
+    this.far[id] = b;
+    return b;
+  }
+
+  /** (re)make a far bucket's mesh with room for `cap` instances, keeping its contents */
+  private growBucket(b: FarBucket, cap: number): void {
+    const geo = b.tpl.clone();
+    const extra = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+    extra.setUsage(DynamicDrawUsage);
+    geo.setAttribute('iExtra', extra);
+    const mesh = new InstancedMesh(geo, this.farMat, cap);
+    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+    whiteColors(mesh, cap);
+    if (!mesh.instanceColor) mesh.setColorAt(0, _c.setRGB(1, 1, 1));
+    (mesh.instanceMatrix.array as Float32Array).fill(0);
+    mesh.frustumCulled = false;
+    mesh.matrixAutoUpdate = false;
+    mesh.name = 'fartrees';
+    if (this.castShadows) mesh.layers.enable(1);
+    const old = b.mesh;
+    if (old) {
+      (mesh.instanceMatrix.array as Float32Array).set((old.instanceMatrix.array as Float32Array).subarray(0, b.hi * 16));
+      (mesh.instanceColor!.array as Float32Array).set((old.instanceColor!.array as Float32Array).subarray(0, b.hi * 3));
+      (extra.array as Float32Array).set((b.extra.array as Float32Array).subarray(0, b.hi * 4));
+      this.farGroup.remove(old);
+      old.dispose(); old.geometry.dispose();
+      b.dirty = [0, b.hi];
+    }
+    mesh.count = b.hi;
+    mesh.visible = b.hi > 0;
+    b.mesh = mesh; b.extra = extra; b.cap = cap;
+    this.farGroup.add(mesh);
+  }
+
+  private allocSlots(b: FarBucket, n: number): number {
+    for (let k = 0; k < b.free.length; k += 2) {
+      if (b.free[k + 1] < n) continue;
+      const at = b.free[k];
+      if (b.free[k + 1] === n) b.free.splice(k, 2); else { b.free[k] += n; b.free[k + 1] -= n; }
+      return at;
+    }
+    if (b.hi + n > b.cap) this.growBucket(b, Math.max(b.cap * 2, Math.ceil((b.hi + n) * 1.5)));
+    const at = b.hi;
+    b.hi += n;
+    return at;
+  }
+
+  private freeSlots(b: FarBucket, at: number, n: number): void {
+    (b.mesh.instanceMatrix.array as Float32Array).fill(0, at * 16, (at + n) * 16);
+    b.dirty.push(at, n);
+    b.live -= n;
+    // insert sorted, merge with neighbours, give a free tail back to the high-water mark
+    let k = 0;
+    while (k < b.free.length && b.free[k] < at) k += 2;
+    b.free.splice(k, 0, at, n);
+    if (k + 2 < b.free.length && b.free[k] + b.free[k + 1] === b.free[k + 2]) { b.free[k + 1] += b.free[k + 3]; b.free.splice(k + 2, 2); }
+    if (k > 0 && b.free[k - 2] + b.free[k - 1] === b.free[k]) { b.free[k - 1] += b.free[k + 1]; b.free.splice(k, 2); k -= 2; }
+    const L = b.free.length;
+    if (L && b.free[L - 2] + b.free[L - 1] === b.hi) { b.hi = b.free[L - 2]; b.free.length = L - 2; }
+  }
+
+  private place(c: number, blk: FarBlock, lod: number): number[] {
+    const slots: number[] = [];
+    for (let g = 0; g < blk.keys.length; g++) {
+      const j0 = blk.starts[g], n = blk.starts[g + 1] - j0;
+      const b = this.farBucket(blk.keys[g], lod);
+      const at = this.allocSlots(b, n);
+      (b.mesh.instanceMatrix.array as Float32Array).set(blk.m.subarray(j0 * 16, (j0 + n) * 16), at * 16);
+      (b.mesh.instanceColor!.array as Float32Array).set(blk.c.subarray(j0 * 3, (j0 + n) * 3), at * 3);
+      const ea = b.extra.array as Float32Array;
+      ea.set(blk.e.subarray(j0 * 4, (j0 + n) * 4), at * 4);
+      // role: 6 hull lod 0, 7 hull lod 1 (+ the canopy fraction already in the extra's w)
+      for (let q = 0; q < n; q++) ea[(at + q) * 4 + 3] += 6 + lod;
+      b.dirty.push(at, n);
+      b.live += n;
+      slots.push(blk.keys[g] * 2 + lod, at, n);
+    }
+    void c;
+    return slots;
+  }
+
+  private unplace(slots: number[]): void {
+    for (let k = 0; k < slots.length; k += 3) { const b = this.far[slots[k]]; if (b) this.freeSlots(b, slots[k + 1], slots[k + 2]); }
+  }
+
+  /** which hull lods a cell's trees need at this camera (0: none), with `slack` (> 1 admits a little early) */
+  private farNeed(blk: FarBlock, camBody: Vector3, inner: number, slack: number): number {
+    if (!blk.n) return 0;
+    const dc = Math.hypot(blk.cx - camBody.x, blk.cy - camBody.y, blk.cz - camBody.z);
+    const dmin = Math.max(1, dc - blk.r - blk.hMax), dmax = dc + blk.r + blk.hMax;
+    if (dmax < inner / slack) return 0;
+    const f = this.pxPerRad;
+    const pxMax = blk.hMax * f / dmin, pxMin = blk.hMin * f / dmax;
+    if (pxMax * slack < FAR_PX.out[0]) return 0;
+    let need = 0;
+    if (pxMax * slack > FAR_PX.lod[0]) need |= 1;
+    if (pxMin / slack < FAR_PX.lod[1]) need |= 2;
+    return need;
+  }
+
+  private farUpdate(pv: PlanetView, camBody: Vector3, frame: number, range: number): void {
+    const on = this.enabled && this.farOn.value > 0.5;
+    this.farGroup.visible = on;
+    if (!on) return;
+    const t0 = performance.now();
+    const R = pv.params.radius;
+    const rc = camBody.length() || 1;
+    const dx = camBody.x / rc, dy = camBody.y / rc, dz = camBody.z / rc;
+    // the far tint's season (the near trees re-tint at every 1/48 year too); a new one re-makes the blocks, nearest first
+    const env = plantEnv(pv, dy, this.yearFrac);
+    const envKey = `${this.seasonStep}|${dy >= 0 ? 1 : 0}`;
+    if (envKey !== this.farEnv) { this.farEnv = envKey; for (const b of this.blocks.values()) b.stale = true; }
+    const inner = range * 0.72;
+    // ── which cells: re-listed as the camera moves (a few % of its height) or the view's scale changes ──
+    const moved = camBody.distanceTo(this.farCam);
+    const altG = Math.max(5, rc - R - Math.max(0, pv.maxSurface));
+    if (moved > 3 + altG * 0.03 || Math.abs(this.pxPerRad - this.farPx) > this.farPx * 0.03 || frame - this.farFrame > 90) {
+      this.farCam.copy(camBody); this.farPx = this.pxPerRad; this.farFrame = frame;
+      // every forest cell above the horizon (the tallest form decides how far a cell's trees can matter)
+      const hor = Math.acos(Math.min(1, R / rc)) + Math.acos(Math.min(1, R / (R + Math.max(50, pv.maxSurface))));
+      const reach = (FAR_H_MAX * this.pxPerRad * PREFETCH) / FAR_PX.out[0];
+      const ang = Math.min(Math.PI, hor, Math.acos(Math.max(-1, Math.min(1, (R * R + rc * rc - reach * reach) / (2 * R * rc)))) + 0.02);
+      const cells = pv.grid.cellsWithin(dx, dy, dz, ang);
+      const tree = pv.fields.get('tree'), shrub = pv.fields.get('shrub');
+      const P = pv.grid.pos;
+      const want: number[] = [], wantD: number[] = [];
+      const keep = new Set<number>();
+      for (const c of cells) {
+        if (!((tree && tree[c] > 0.02) || (shrub && shrub[c] > 0.02))) continue;
+        keep.add(c);
+        const blk = this.blocks.get(c);
+        const need = blk ? this.farNeed(blk, camBody, inner, 1.12) : 0;
+        const cur = this.placed.get(c);
+        if (blk && !blk.stale) this.setPlacement(c, blk, need, cur);
+        else if (blk && cur && cur.f && !need) this.setPlacement(c, blk, 0, cur);
+        if (!blk || blk.stale) {
+          // to make: what is (or may soon be) needed first; the rest of the visible forest in the background
+          const d = Math.hypot(P[c * 3] * R - camBody.x, P[c * 3 + 1] * R - camBody.y, P[c * 3 + 2] * R - camBody.z);
+          want.push(c); wantD.push(d);
+        }
+      }
+      // cells no longer above the horizon / in reach: unplaced (their blocks kept a while for a camera coming back)
+      for (const [c, cur] of this.placed) if (!keep.has(c) && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); this.placed.delete(c); }
+      if (this.blocks.size > keep.size * 1.5 + 2000) for (const c of [...this.blocks.keys()]) if (!keep.has(c) && !this.placed.has(c)) this.blocks.delete(c);
+      const order = want.map((_, i) => i).sort((a, b) => wantD[a] - wantD[b]);
+      this.farWant = order.map((i) => want[i]);
+      this.farWantAt = 0;
+    }
+    // ── make the blocks: nearest first, a time budget a frame (more while placed cells wait on a re-make) ──
+    let built = 0;
+    const nearR = range * 1.35 + 60;
+    while (this.farWantAt < this.farWant.length) {
+      const ms = performance.now() - t0;
+      if (ms > FAR_BUDGET_MS) break;
+      const c = this.farWant[this.farWantAt++];
+      const old = this.blocks.get(c);
+      if (old && !old.stale) continue;
+      const P = pv.grid.pos;
+      const keepRec = Math.hypot(P[c * 3] * R - camBody.x, P[c * 3 + 1] * R - camBody.y, P[c * 3 + 2] * R - camBody.z) < nearR;
+      const blk = this.makeBlock(pv, c, env, keepRec);
+      this.blocks.set(c, blk);
+      built++;
+      const cur = this.placed.get(c);
+      if (cur && cur.f) { this.unplace(cur.s0); this.unplace(cur.s1); cur.s0 = []; cur.s1 = []; cur.f = 0; }
+      this.setPlacement(c, blk, this.farNeed(blk, camBody, inner, 1.12), cur);
+    }
+    // ── upload what changed ──
+    let inst = 0;
+    for (const b of this.far) {
+      if (!b) continue;
+      b.mesh.count = b.hi;
+      b.mesh.visible = b.hi > 0;
+      inst += b.live;
+      if (b.dirty.length) {
+        flushRanges(b.mesh.instanceMatrix, b.dirty, 16);
+        flushRanges(b.mesh.instanceColor!, b.dirty, 3);
+        flushRanges(b.extra, b.dirty, 4);
+        b.dirty = [];
+      }
+      // a bucket mostly holes is compacted (its live ranges re-placed from their blocks next listing)
+      if (b.hi > 4096 && b.live < b.hi * 0.4) this.compact(b);
+    }
+    this.farStats.instances = inst;
+    this.farStats.cells = this.placed.size;
+    this.farStats.blocks = this.blocks.size;
+    this.farStats.built = built;
+    this.farStats.queue = this.farWant.length - this.farWantAt;
+    this.farStats.ms = performance.now() - t0;
+  }
+
+  private setPlacement(c: number, blk: FarBlock, need: number, cur: { f: number; s0: number[]; s1: number[] } | undefined): void {
+    const f = cur?.f ?? 0;
+    if (f === need) return;
+    const st = cur ?? { f: 0, s0: [], s1: [] };
+    if ((f & 1) && !(need & 1)) { this.unplace(st.s0); st.s0 = []; }
+    if ((f & 2) && !(need & 2)) { this.unplace(st.s1); st.s1 = []; }
+    if (!(f & 1) && (need & 1)) st.s0 = this.place(c, blk, 0);
+    if (!(f & 2) && (need & 2)) st.s1 = this.place(c, blk, 1);
+    st.f = need;
+    if (need) this.placed.set(c, st); else this.placed.delete(c);
+  }
+
+  /** re-pack a bucket: every placed cell's range in it is written again from the start (one full upload) */
+  private compact(b: FarBucket): void {
+    const id = b.key * 2 + b.lod;
+    const ma = b.mesh.instanceMatrix.array as Float32Array, ca = b.mesh.instanceColor!.array as Float32Array, ea = b.extra.array as Float32Array;
+    const m2 = new Float32Array(ma.length), c2 = new Float32Array(ca.length), e2 = new Float32Array(ea.length);
+    let at = 0;
+    for (const st of this.placed.values()) {
+      for (const sl of [st.s0, st.s1]) for (let k = 0; k < sl.length; k += 3) {
+        if (sl[k] !== id) continue;
+        const s0 = sl[k + 1], n = sl[k + 2];
+        m2.set(ma.subarray(s0 * 16, (s0 + n) * 16), at * 16); c2.set(ca.subarray(s0 * 3, (s0 + n) * 3), at * 3); e2.set(ea.subarray(s0 * 4, (s0 + n) * 4), at * 4);
+        sl[k + 1] = at; at += n;
+      }
+    }
+    ma.set(m2); ca.set(c2); ea.set(e2);
+    b.hi = at; b.live = at; b.free = []; b.dirty = [0, at];
+    b.mesh.count = at;
+  }
+
+  /** PERF F6 for the far layer: its trees stand past the near range, so a cascade wholly nearer than that less their
+   *  shadow's reach cannot read them (else all of it is drawn: the far cascades) */
+  private farShadow(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number): void {
+    if (!this.farGroup.visible) return;
+    if (k < 0) { for (const b of this.far) if (b) b.mesh.visible = b.hi > 0; return; }
+    const L = this.farCam;
+    const dc = Math.hypot(cx - L.x, cy - L.y, cz - L.z);
+    const el = Math.asin(Math.max(-1, Math.min(1, sinEl))) - 0.2 - (dc + r + this.range) / radius;
+    const reach = el > 0.035 ? this.farEMax * (1 + 1 / Math.tan(el)) + 4 : Infinity;
+    const show = !(dc + r + reach < this.range * 0.72 - this.range * 0.04 - 30);
+    for (const b of this.far) if (b) b.mesh.visible = show && b.hi > 0;
   }
 
   private surfVer = -1;
@@ -1058,7 +1519,7 @@ export class Vegetation {
         for (let c = 0; c < n; c++) if (now[c] !== then[c]) dirty[c] = 1;
       }
     }
-    if (!dirty) this.cache.clear();
+    if (!dirty) this.dropAll();
     else {
       const ns = pv.grid.nbrStart, nb = pv.grid.nbr;
       let cur: Uint8Array = dirty;
@@ -1067,10 +1528,11 @@ export class Vegetation {
         for (let c = 0; c < n; c++) if (cur[c]) for (let e = ns[c]; e < ns[c + 1]; e++) grow[nb[e]] = 1;
         cur = grow;
       }
-      for (const c of [...this.cache.keys()]) if (cur[c]) this.cache.delete(c);
+      for (const c of [...this.cache.keys()]) if (cur[c]) this.dropCell(c);
+      for (const c of this.blocks.keys()) if (cur[c]) this.dropCell(c);
       // cells first built since the last check from other arrays than `refs` read the fields of their own moment:
       // they go too (one built from the arrays of the last check is as consistent with refs as the old ones)
-      for (const [c, ep] of this.young) if (ep !== this.refsEpoch) this.cache.delete(c);
+      for (const [c, ep] of this.young) if (ep !== this.refsEpoch) this.dropCell(c);
     }
     for (const f of names) this.refs.set(f, pv.fields.get(f) ?? null);
     this.young.clear();
@@ -1113,7 +1575,8 @@ export class Vegetation {
    * that reads this cascade (the shader picks the cascade by view depth, inside its sphere).
    */
   shadowCascade(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number): void {
-    if (!this.group.visible) return;
+    this.farShadow(k, cx, cy, cz, r, sinEl, radius);
+    if (!this.nearGroup.visible) return;
     if (k < 0) {
       for (const b of this.buckets) { b.mesh.count = b.count; b.mesh.visible = b.count > 0; }
       return;
@@ -1146,6 +1609,8 @@ export class Vegetation {
 
   dispose(): void {
     for (const b of this.buckets) { b.mesh.dispose(); b.depth.dispose(); }
+    for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.dispose(); }
+    this.farMat.dispose(); this.farDepth.dispose();
     this.material.dispose();
   }
 }
