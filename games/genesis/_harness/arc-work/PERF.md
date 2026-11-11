@@ -281,3 +281,52 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   chains on a layout tick). Mutation checks: dropping water or the surface height from the key fails the test.
   NOTE (node assert): assert.deepEqual on two 20 k-element typed arrays that differ OOM-killed node (its diff);
   compare element-wise.
+- F10c (after v9 showed it): the worker path first descended ONE level per frame (a split waited for its four
+  children to land): v9 (dist7) had 180 patches drawn at rest vs 380 = coarse ground poking through the roads. Now the
+  worker path walks the whole wanted tree from the bounds alone each frame and asks for every missing leaf at once; a
+  subtree draws when fully covered by built patches, else its nearest built ancestor (never a parent with partial
+  children). In-flight cap 192 (2x the budget on a cut). Landing keeps a time cap also in cut frames (8 ms).
+  Test: same selection + bytes as the main-thread path; converges at frame 10 vs 53 (in-process port, 64 replies a
+  frame). The sync path (no worker) is unchanged code.
+- v11 (dist8 = F10..F12 + F10c, town, speed 0, 0 console errors): gpuPatches 379 (v6 380: converged), shot
+  shots/v11-town.png LOOKED: same as v6-town (roads intact, trees, houses, shadows). Main-thread 'planets' slot 1.97 ms
+  /frame (v6 9.6), buffer uploads 78 kB/frame (v6 2.5 MB), patches built 567 (v6 1061). BUT shadowTris 2.41 M (v6
+  2.04 M): F11's near-split test is honest about relief (floor = lowest ground of the WHOLE cascade sphere, lake beds
+  included) where the old 48 m margin was not. Tightened after v11 (not yet measured): the floor counts only patches
+  reaching beyond the previous split (only they hold pixels that read the cascade).
+- PARKED here for the owner's new priorities (perf report, pop-in, white flashes). Queued on dist8: l11 / l11r0 (low
+  sun A/B: regionlow, ridgelow), r11 (uploads/attrs/heap speed 1), r12 (CPU profile speed 1).
+
+## SESSION 5b — OWNER FEEDBACK on the CDN build (45fa77f6): "still quite choppy but a bit better ... glitches where
+## everything turned white ... trees populate as i looked in the area". New order: (1) in-game perf report from his
+## Mac, (2) no pop-in, (3) white flashes, (4) back to smoothness.
+- P1 PERF REPORT (landed, tsc clean, tests/render-perfreport.test.ts): src/render/perfreport.ts PerfRecorder, wired
+  into perfmon (begin/end/frameStart/frameEnd hooks, one branch when not recording). Overlay (Shift+F12 / ?perf=1)
+  has "Record 20 s" and "Copy report" (clipboard, else a selected textarea for Cmd+C; presses on the bar do not reach
+  the world). Report: frame p50/p95/p99/max, >20/>33/>50 ms counts, main-thread ms by slot (mean/p95), GPU ms per
+  pass group (planets, actors, shadows, scene, post) via EXT_disjoint_timer_query_webgl2 (disjoint-safe; "no timer
+  query in this browser" otherwise), draws/tris/shadow tris, patches built, new programs, camera altitude range and
+  travel, sim speed, long tasks, the 12 worst hitches with their top slots / GPU ms / draws / patches built / new
+  programs / altitude / camera travel / overlapping long task, and the worst interval per second; header: GPU renderer
+  string (WEBGL_debug_renderer_info), preset, canvas + css + render size, DPR, zcons state, UA, cores.
+  Test surface: __GENESIS__.perfReport(ms) -> text.
+- P2 POP-IN — analysis so far (NOT fixed yet; NEXT session starts here):
+  (a) TREES: vegetation.ts update() keeps real tree instances only within `range` = 380 m x vegetationRange of the
+      camera (3-D distance), faded over 0.72..1.0 range, and hidden entirely above alt range*1.2. Zooming down from
+      ~450 m the tree disc GROWS around the camera = "trees populate as I looked". Beyond range only the terrain's
+      forest colour shows. Fix candidates (no quality loss): a far-tree layer (instanced billboard/impostor or low LOD
+      crowns) out to the terrain's visible distance, faded in where the near trees fade out, and/or a range that
+      grows with altitude so the near/far seam is never on screen; keep the colour of the far layer matched.
+  (b) Bucket capacity: `if (bA.count >= capacity) continue` drops trees in cells order (not distance) when a LOD
+      bucket is full: check capacities on the busy town (stats) — a full bucket loses trees silently.
+  (c) Rebuild cadence: the whole instance list is rebuilt every 4 % of range moved (15 m) or 240 frames, all
+      cells within range+60 synchronously (cellPlants for new cells) — a main-thread spike during camera moves.
+      Candidate: incremental per-cell instance lists / time-sliced fill of new cells in a ring BEYOND range.
+  (d) Terrain: the worker path lands patches a frame or few after they are wanted; NEXT: prefetch (ask for the
+      children of leaves within ~1.3x their split distance, not drawn) so patches exist before the split.
+  (e) Groundcover (groundcover.ts), buildings near/far (has a fade), crowds: same review.
+  Repro: perf-play scene sequence descending over a forest (alt 900 -> 150 m, shots each step), ?perf=1.
+- P3 WHITE FLASHES — candidates to test (NOT done): camera inside the cloud shell (cloudInner..cloudOuter =
+  R + 0.3..0.7 thickness), exposure adaptation after a cut / bright event (post.cutExposure), NaN/Inf in an HDR
+  target spread by bloom, zcons/depth clamp (A/B ?zcons=0). Repro: scripted zoom orbit -> town through cloud
+  altitude; add a NaN-safe guard at the tonemap/bloom input.

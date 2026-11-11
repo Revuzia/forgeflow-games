@@ -883,10 +883,13 @@ export class ChunkLOD {
    * The lowest ground (m relative to the radius: min hMin) of the selected patches meeting a sphere (body frame) —
    * the lowest receiver of a shadow cascade (shadowreach.ts). +Infinity when none meets it.
    */
-  groundFloorNear(cx: number, cy: number, cz: number, r: number): number {
+  groundFloorNear(cx: number, cy: number, cz: number, r: number, camBody?: Vector3, viewDirBody?: Vector3, nearSplit = 0): number {
     let lo = Infinity;
     for (const p of this.selected) {
       const c = p.sphere.center;
+      // (only ground at least partly beyond the previous split can hold a pixel that reads this cascade)
+      if (nearSplit > 0 && camBody && viewDirBody
+        && (c.x - camBody.x) * viewDirBody.x + (c.y - camBody.y) * viewDirBody.y + (c.z - camBody.z) * viewDirBody.z + p.sphere.radius < nearSplit) continue;
       const rr = p.sphere.radius + r;
       const dx = c.x - cx, dy = c.y - cy, dz = c.z - cz;
       if (dx * dx + dy * dy + dz * dz <= rr * rr && p.hMin < lo) lo = p.hMin;

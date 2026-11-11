@@ -24,6 +24,7 @@ import { newPose, copyPose, type CameraPose } from './render/frame.ts';
 import { capturePhoto } from './render/camera/photo.ts';
 import { CameraRig } from './render/camera/rig.ts';
 import { newInput, type InputState } from './render/camera/common.ts';
+import { ZCONS } from './render/shaders/zcons.ts';
 import { detectQuality, isQualityName, QUALITY, type QualityName } from './render/quality.ts';
 import { pick, rayDirection, type PickHit } from './render/picking.ts';
 import { setOrePalette } from './render/planet/fieldtex.ts';
@@ -376,6 +377,32 @@ export class App implements UiHost {
     this.startAt = performance.now();
     progress('', 1);
     this.running = true;
+    // the performance report's hooks (render/perfreport.ts: the overlay's "Record 20 s")
+    perfmon.gl = this.renderer.three.getContext() as WebGL2RenderingContext;
+    perfmon.context = () => {
+      const st = this.renderer.stats;
+      const p = this.rig.pose.pos;
+      return {
+        drawCalls: st.drawCalls, triangles: st.triangles, shadowTris: st.shadowTris, patchesBuilt: st.patchesBuilt, altitude: st.altitude,
+        cam: [p[0], p[1], p[2]], speed: this.sim.view.speed, programs: perfmon.programs,
+      };
+    };
+    perfmon.env = () => {
+      const gl = perfmon.gl;
+      let gpu = '?';
+      try {
+        const dbg = gl?.getExtension('WEBGL_debug_renderer_info');
+        gpu = String(gl ? gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER) : '?');
+      } catch { /* hidden */ }
+      const c = this.canvas;
+      const r = c.getBoundingClientRect();
+      const st = this.renderer.stats;
+      return {
+        gpu, preset: String(this.quality), canvas: `${c.width}x${c.height} (css ${Math.round(r.width)}x${Math.round(r.height)}, render ${st.renderW}x${st.renderH})`,
+        dpr: Math.round((globalThis.devicePixelRatio ?? 1) * 100) / 100,
+        extra: `zcons ${ZCONS.on ? 'on' : 'off' + (ZCONS.why ? ` (${ZCONS.why})` : '')} | timer ${perfmon.recorder.hasGpuTimer ? 'yes' : 'no'}`,
+      };
+    };
     // ?perf=1 opens the frame monitor's overlay from the start (Shift+F12 toggles it)
     if (/[?&]perf=1(&|$)/.test(location.search)) perfmon.toggleOverlay(document.body, true);
     this.last = performance.now();

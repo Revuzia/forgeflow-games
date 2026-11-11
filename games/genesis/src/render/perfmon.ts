@@ -7,6 +7,8 @@
 // it repaints four times a second, never in step with the frame it measures, and costs nothing while closed.
 // The automation surface reads the same numbers (window.__GENESIS__.perf()).
 
+import { PerfRecorder, type PerfContext, type PerfEnv } from './perfreport.ts';
+
 export const PERF_SLOTS = [
   'view', 'ui.pre', 'camera', 'hover', 'planets', 'godfx', 'actors', 'shadows', 'scene', 'post', 'sim.pump', 'audio', 'ui.post', 'other',
 ] as const;
@@ -61,15 +63,33 @@ export class PerfMonitor {
   /** programs the load-time warm-up linked (app.ts writes it) */
   warmed = 0;
   private programsAtOn = -1;
+  /** the 20 s performance report (perfreport.ts) */
+  readonly recorder = new PerfRecorder(PERF_SLOTS);
+  /** what the app reports per frame to the recorder, and the report header's facts (app.ts sets them) */
+  context: (() => PerfContext) | null = null;
+  env: (() => PerfEnv) | null = null;
+  /** the GL context to time (app.ts) */
+  gl: WebGL2RenderingContext | null = null;
 
   begin(slot: PerfSlot): void {
-    if (this.on) this.open[SLOT_INDEX[slot]] = performance.now();
+    if (!this.on) return;
+    this.open[SLOT_INDEX[slot]] = performance.now();
+    if (this.recorder.recording) this.recorder.gpuBegin(slot);
   }
 
   end(slot: PerfSlot): void {
     if (!this.on) return;
+    if (this.recorder.recording) this.recorder.gpuEnd(slot);
     const i = SLOT_INDEX[slot];
     this.cur[i] += performance.now() - this.open[i];
+  }
+
+  /** record `ms` of frames; `onDone` gets the report text */
+  record(ms = 20000, onDone?: (text: string) => void): void {
+    this.on = true;
+    this.recorder.attach(this.gl);
+    try { this.recorder.env = this.env ? this.env() : null; } catch { this.recorder.env = null; }
+    this.recorder.start(ms, onDone);
   }
 
   frameStart(now: number): void {
@@ -77,6 +97,7 @@ export class PerfMonitor {
     if (this.programsAtOn < 0) this.programsAtOn = this.programs;
     this.frameT0 = performance.now();
     this.cur.fill(0);
+    this.recorder.frameBegin();
     if (this.lastFrame > 0) this.intervals[this.head] = now - this.lastFrame;
     else this.intervals[this.head] = 1000 / 60;
     this.lastFrame = now;
@@ -90,6 +111,11 @@ export class PerfMonitor {
     this.cur[NS - 1] = Math.max(0, work - sum);
     this.ring.set(this.cur, this.head * NS);
     this.works[this.head] = work;
+    if (this.recorder.recording) {
+      let ctx: PerfContext | null = null;
+      try { ctx = this.context ? this.context() : null; } catch { ctx = null; }
+      this.recorder.frameDone(this.intervals[this.head], work, this.cur, ctx);
+    }
     this.stamps[this.head] = this.frameT0;
     this.head = (this.head + 1) % FRAMES;
     if (this.count < FRAMES) this.count++;
@@ -157,7 +183,7 @@ export class PerfMonitor {
 
   /** show or hide the overlay (it switches the monitor on with it; ?perf=1 or a probe may keep it on without one) */
   toggleOverlay(host: HTMLElement, show = !this.overlay): void {
-    if (show && !this.overlay) { this.on = true; this.overlay = new PerfOverlay(host); }
+    if (show && !this.overlay) { this.on = true; this.overlay = new PerfOverlay(host, this); }
     else if (!show && this.overlay) { this.overlay.dispose(); this.overlay = null; }
   }
 
@@ -176,19 +202,83 @@ class PerfOverlay {
   private readonly hist = new Float64Array(FRAMES * 2);
   private nextPaint = 0;
 
-  constructor(host: HTMLElement) {
+  private readonly status: HTMLDivElement;
+  private readonly copyBtn: HTMLButtonElement;
+  private readonly recBtn: HTMLButtonElement;
+  private box: HTMLTextAreaElement | null = null;
+
+  constructor(host: HTMLElement, m: PerfMonitor) {
     const root = document.createElement('div');
     root.className = 'gn-perf';
     root.setAttribute('aria-hidden', 'true');
     root.style.cssText = 'position:fixed;left:6px;top:6px;z-index:2147483000;pointer-events:none;background:rgba(8,10,14,.78);'
       + 'color:#d8e2ea;font:11px/1.25 ui-monospace,Menlo,Consolas,monospace;padding:6px 7px;border-radius:4px;contain:strict;'
-      + 'width:236px;height:372px;';
+      + 'width:236px;height:430px;';
     const graph = document.createElement('canvas');
     graph.width = 236 * 2; graph.height = 60 * 2;
     graph.style.cssText = 'display:block;width:236px;height:60px;margin-bottom:4px;';
     const text = document.createElement('pre');
     text.style.cssText = 'margin:0;white-space:pre;';
-    root.append(graph, text);
+    // the performance report (perfreport.ts): record 20 s, then copy the text to paste to the developers
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:4px;margin:0 0 4px;pointer-events:auto;';
+    const btn = (label: string): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.style.cssText = 'flex:1;font:11px ui-monospace,Menlo,monospace;color:#d8e2ea;background:#26303a;border:1px solid #4a5866;'
+        + 'border-radius:3px;padding:3px 4px;cursor:pointer;';
+      return b;
+    };
+    const recBtn = btn('Record 20 s');
+    const copyBtn = btn('Copy report');
+    copyBtn.disabled = true;
+    copyBtn.style.opacity = '0.5';
+    const status = document.createElement('div');
+    status.style.cssText = 'margin:0 0 4px;color:#9fb0bf;min-height:13px;';
+    bar.append(recBtn, copyBtn);
+    // (a press on the bar is not a press on the world under it)
+    for (const ev of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'wheel', 'dblclick']) bar.addEventListener(ev, (e) => e.stopPropagation());
+    recBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (m.recorder.recording) return;
+      this.box?.remove(); this.box = null;
+      recBtn.disabled = true;
+      copyBtn.disabled = true; copyBtn.style.opacity = '0.5';
+      status.textContent = 'recording 20 s - play as usual';
+      m.record(20000, () => {
+        recBtn.disabled = false;
+        copyBtn.disabled = false; copyBtn.style.opacity = '1';
+        status.textContent = 'done - press Copy report';
+      });
+    });
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = m.recorder.report;
+      if (!text) return;
+      const fallback = () => {
+        // (the clipboard is blocked in some frames: show the text selected, for Cmd/Ctrl+C)
+        if (!this.box) {
+          const ta = document.createElement('textarea');
+          ta.readOnly = true;
+          ta.style.cssText = 'position:fixed;left:250px;top:6px;width:min(640px,70vw);height:300px;z-index:2147483001;'
+            + 'font:11px ui-monospace,Menlo,monospace;background:#0b0e12;color:#d8e2ea;border:1px solid #4a5866;';
+          ta.addEventListener('keydown', (k) => { if (k.key === 'Escape') { ta.remove(); this.box = null; } k.stopPropagation(); });
+          host.appendChild(ta);
+          this.box = ta;
+        }
+        this.box.value = text;
+        this.box.focus();
+        this.box.select();
+        status.textContent = 'press Cmd/Ctrl+C to copy (Esc closes)';
+      };
+      try {
+        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => { status.textContent = 'report copied - paste it to us'; }, fallback);
+        else fallback();
+      } catch { fallback(); }
+    });
+    this.status = status; this.copyBtn = copyBtn; this.recBtn = recBtn;
+    root.append(bar, status, graph, text);
     host.appendChild(root);
     this.root = root; this.text = text; this.graph = graph;
     this.g = graph.getContext('2d');
@@ -230,5 +320,5 @@ class PerfOverlay {
     }
   }
 
-  dispose(): void { this.root.remove(); }
+  dispose(): void { this.root.remove(); this.box?.remove(); }
 }

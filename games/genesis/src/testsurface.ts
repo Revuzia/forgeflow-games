@@ -24,6 +24,7 @@
 //   toastLife(ms)              how long toasts stay (a software-rendered capture takes seconds per frame)
 //   programs()                 names of the GPU programs linked so far (shader warm-up coverage)
 //   perf(on?)                  the frame monitor (render/perfmon.ts): on=true starts measuring, the summary of the last 240 frames
+//   perfReport(ms?)            the overlay's 'Record 20 s' report (render/perfreport.ts) as text
 //   arc                        ARC §6.7: hearts() / towers() / story(planet?) (sim queries); stub(kind, data) puts
 //                              hearts / towers / covenant / age views into every later snapshot, and 'events'
 //                              (SimEvent[] | { events, chronicle }) once into the next one (client/arcstub.ts);
@@ -121,6 +122,8 @@ export interface GenesisTestSurface {
   buildings(n?: number): { id: number; dist: number; screen: [number, number] | null }[];
   toastLife(ms: number): void;
   perf(on?: boolean): PerfSummary;
+  /** the performance report (render/perfreport.ts): record `ms` of frames, resolve with the report text */
+  perfReport(ms?: number): Promise<string>;
   /** the GPU programs linked so far, by name (material type or name) — which effects link a shader during play */
   programs(detail?: boolean | 'keys'): string[];
   /** ARC §6.7: the arc's queries, and a stub that puts arc views into the next snapshots before the sim sends them */
@@ -284,6 +287,7 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     buildings: (n) => need().drawnAgents(n ?? 20, 'building'),
     toastLife: (ms) => { need().ui.hud.toasts.life = Math.max(1000, ms); },
     perf: (on) => { if (on !== undefined) perfmon.on = on || perfmon.overlayOpen; return perfmon.summary(); },
+    perfReport: (ms = 20000) => new Promise<string>((ok) => perfmon.record(ms, ok)),
     programs: (detail) => {
       const R = need().renderer, r = R.three;
       const out = (r.info.programs ?? []).map((p) => `${(p as { id?: number }).id}:${(p as { name?: string }).name ?? '?'}`);

@@ -802,10 +802,10 @@ export class Renderer {
     } else if (k >= 0) {
       _cc.copy(sh.centers[k]).applyMatrix4(_m4c.copy(vis.group.matrixWorld).invert());
       const r = sh.radii[k];
-      const floor = vis.lod.groundFloorNear(_cc.x, _cc.y, _cc.z, r);
+      const nearSplit = k >= 1 ? sh.splits[k - 1] : 0;
+      const floor = vis.lod.groundFloorNear(_cc.x, _cc.y, _cc.z, r, vis.camBody, this.cullView, nearSplit);
       const el0 = Math.asin(Math.max(-1, Math.min(1, this.cullSinEl)));
       const reach = { cx: _cc.x, cy: _cc.y, cz: _cc.z, r, el0, floor };
-      const nearSplit = k >= 1 ? sh.splits[k - 1] : 0;
       vis.lod.shadowCascade(k, vis.camBody, this.cullView, nearSplit, sh.cascadeFrustum(k, this.cascadeF), vis.group.matrixWorld, reach);
       if (Number.isFinite(floor)) {
         const R = vis.pv.params.radius, cam = vis.camBody, vd = this.cullView, margin = 4 + 0.02 * r;
