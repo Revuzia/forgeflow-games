@@ -74,6 +74,10 @@ test('shrinking a pool keeps the surviving patches, their geometry and their vis
   keep.forEach((p, i) => { p.lastUsed = 1000; if (i % 2 === 0) (L.tBatch[level] as unknown as { show(s: number, on: boolean): void }).show(p.tSlot, true); });
   const capBefore = lod.poolCapacity().slots;
   L.evict(1000);
+  // (PERF F23: patches are moved to give pages back only once the slack has lasted ~600 frames: not while streaming)
+  L.curFrame = 1700;
+  keep.forEach((p) => { p.lastUsed = 1700; });
+  L.evict(1700);
   const c = lod.poolCapacity();
   assert.ok(c.slots < capBefore / 2, `pool shrank: ${capBefore} -> ${c.slots}`);
   const tb = L.tBatch[level]!;
@@ -149,4 +153,29 @@ test('PERF F17: pools are pages of one fixed size (ANGLE-Metal recycles same-siz
     }
   }
   assert.equal(sizes.size, 1, `one page layout for every pool and level: ${[...sizes].join(' ; ')}`);
+});
+
+test('PERF F23: steady panning lands patches in kept pages: no new page (no new GL buffers) after warm-up', () => {
+  const lod = makeLod();
+  const L = lod as unknown as Internal & { tBatch: ({ meshes(): object[] } | null)[]; wBatch: ({ meshes(): object[] } | null)[]; selected: Patch[] };
+  lod.maxCached = 220;
+  const n = lod.grid.n;
+  const seen = new Set<object>();
+  let fresh = 0;
+  // the camera pans: every frame 30 patches of levels 5-6 enter the view at a new place, the oldest age out
+  for (let frame = 1; frame <= 400; frame++) {
+    L.curFrame = frame;
+    const view: Patch[] = [];
+    for (let k = 0; k < 30; k++) {
+      const level = 5 + (k % 2), step = n / 2 ** level;
+      const s = ((frame * 3 + k) % 61) / 61 * n * 0.5, t = (k % 7) / 7 * n * 0.5;
+      const p = new Patch((frame + k) % 20, level, [s, t], [s + step, t], [s, t + step]);
+      L.ensureGeometry(p, false);
+      view.push(p);
+    }
+    L.selected = view;
+    L.evict(frame);
+    for (const b of [...L.tBatch, ...L.wBatch]) for (const m of b?.meshes() ?? []) if (!seen.has(m)) { seen.add(m); if (frame > 40) fresh++; }
+  }
+  assert.equal(fresh, 0, `pages made while panning after warm-up: ${fresh} (of ${seen.size})`);
 });

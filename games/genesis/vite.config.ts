@@ -11,10 +11,22 @@ import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SHOTS_DIR = resolve(ROOT, '_shots');
+
+/** PERF report header: the commit the bundle was built from (+dirty when the game's tree had uncommitted changes) and when */
+function buildStamp(): string {
+  let rev = 'unknown';
+  try {
+    rev = execSync('git rev-parse --short=8 HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    const dirty = execSync('git status --porcelain -- .', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    if (dirty) rev += '+dirty';
+  } catch { /* not a git checkout */ }
+  return `${rev} built ${new Date().toISOString().slice(0, 16)}Z`;
+}
 
 function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((ok, fail) => {
@@ -58,6 +70,7 @@ export default defineConfig({
   base: './',
   clearScreen: false,
   plugins: [shotEndpoint()],
+  define: { __GENESIS_BUILD__: JSON.stringify(buildStamp()) },
   css: { postcss: { plugins: [] } },
   server: {
     port: 5190,

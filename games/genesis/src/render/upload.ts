@@ -75,18 +75,17 @@ export function putGrowable(geo: BufferGeometry, name: string, src: Float32Array
   return a;
 }
 
-/** is this context ANGLE on Metal (where F16 pays)? `?span=` overrides */
-export function wantSpanUploads(r: WebGLRenderer): boolean {
+/**
+ * F16 is OFF by default since session 9 (`?span=1` turns it on): the owner's M5 A/B (build 31cb64e7) ran 1.2-1.3 fps
+ * with it and 1.7 without, main thread 590-748 ms vs 347. Reading: the whole-buffer re-allocation it avoided happens
+ * in the GPU process (a memcpy + a blit there), but every byte of a bufferSubData — the GAP bytes of a merged span
+ * included — crosses Chrome's command-buffer transfer memory from the page's main thread, which blocks when that ring
+ * is full: two patches landing in slots 0 and 15 of a page sent 2.2 MB instead of 280 kB per attribute set.
+ * F23 (no page churn) removes the fresh allocations F16 was meant to save.
+ */
+export function wantSpanUploads(_r: WebGLRenderer): boolean {
   try {
-    const q = new URLSearchParams(globalThis.location?.search ?? '').get('span');
-    if (q === '0') return false;
-    if (q === '1') return true;
-  } catch { /* no location */ }
-  try {
-    const gl = r.getContext();
-    const ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-    return /metal/i.test(name) || /apple/i.test(name);
+    return new URLSearchParams(globalThis.location?.search ?? '').get('span') === '1';
   } catch { return false; }
 }
 

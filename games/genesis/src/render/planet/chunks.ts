@@ -251,6 +251,63 @@ class PatchPage {
     };
   }
   get live(): number { return this.used - this.free.length; }
+
+  /** PERF F23: take this page into a pool (material, layers, name); every slot is free and hidden */
+  reset(material: Material, layers: number, name: string): void {
+    this.mesh.material = material;
+    this.mesh.layers.mask = layers;
+    this.mesh.name = name;
+    for (let k = 0; k < this.used; k++) if (this.vis[k]) { this.vis[k] = 0; this.mesh.setVisibleAt(this.instId[k], false); }
+    this.visibleN = 0;
+    this.mesh.visible = false;
+    this.free = [];
+    for (let k = this.used - 1; k >= 0; k--) this.free.push(k);
+  }
+}
+
+/** PERF F23: `?pagepool=0` = F17's pages dropped (GL buffers deleted) and patches moved between pages to free them */
+const PAGE_POOL = perfSwitch('pagepool');
+/** frames an idle page is kept beyond the reserve before its GL buffers are deleted */
+const IDLE_FRAMES = 900;
+/** idle pages always kept */
+const IDLE_RESERVE = 6;
+/** frames a pool's slack (>= 2 pages free) must persist before its patches are moved to give pages back */
+const SLACK_FRAMES = 600;
+
+/**
+ * PERF F23 (session 9; the owner's M5 trace: shadows|bufferData x43 and post|bufferData x36 a frame, ~140 kB each =
+ * one patch page's attribute): F17's pools dropped an emptied page (deleting its GL buffers) and moved patches out of
+ * sparse pages, and the next landing made a NEW page — every frame while panning, the terrain pages created in the
+ * shadow pass (their first draw) and the water pages in the water pass ('post'): new GL buffers = new Metal buffers.
+ * Every page of every level, terrain and water, has the same layout, so a page a pool gives up waits here, buffers and
+ * all, for the next pool that needs one (any level, terrain or water): reset() re-materials it, its slots are reused
+ * in place. Pages idle for IDLE_FRAMES beyond IDLE_RESERVE are deleted (memory after a tour through the LOD depths).
+ */
+export class PagePool {
+  private idle: { p: PatchPage; since: number }[] = [];
+  frame = 0;
+  take(material: Material, layers: number, name: string, group: Group): PatchPage | null {
+    const e = this.idle.pop();
+    if (!e) return null;
+    e.p.reset(material, layers, name);
+    group.add(e.p.mesh);
+    return e.p;
+  }
+  give(p: PatchPage, group: Group): void {
+    group.remove(p.mesh);
+    p.reset(p.mesh.material as Material, p.mesh.layers.mask, p.mesh.name);
+    this.idle.push({ p, since: this.frame });
+  }
+  /**
+   * delete the GL buffers of pages idle too long, and of the oldest idle pages beyond half the pages in use (the
+   * memory bound after a tour through the LOD depths: in use + 12 %, about the one reserve page per pool F17 kept); the most recently idle are kept
+   */
+  trim(inUse: number): void {
+    const cap = Math.max(IDLE_RESERVE, Math.ceil(inUse / 8));
+    while (this.idle.length > cap || (this.idle.length > IDLE_RESERVE && this.frame - this.idle[0].since > IDLE_FRAMES)) this.idle.shift()!.p.mesh.dispose();
+  }
+  get count(): number { return this.idle.length; }
+  dispose(): void { for (const e of this.idle) e.p.mesh.dispose(); this.idle = []; }
 }
 
 /**
@@ -270,7 +327,11 @@ class PatchBatch {
   private readonly name: string;
   readonly group: Group;
 
-  constructor(material: Material, layer: number, name: string, group: Group) {
+  private readonly pool: PagePool | null;
+  private slackSince = -1;
+
+  constructor(material: Material, layer: number, name: string, group: Group, pool: PagePool | null = null) {
+    this.pool = PAGE_POOL ? pool : null;
     this.material = material;
     this.layers = 1 << layer;
     this.name = name;
@@ -311,9 +372,10 @@ class PatchBatch {
     if (pi < 0) {
       pi = this.pages.indexOf(null);
       if (pi < 0) pi = this.pages.length;
-      const p = new PatchPage(this.material, this.layers, `${this.name}-p${pi}`);
+      const name = `${this.name}-p${pi}`;
+      const p = this.pool?.take(this.material, this.layers, name, this.group) ?? new PatchPage(this.material, this.layers, name);
+      if (p.mesh.parent !== this.group) this.group.add(p.mesh);
       this.pages[pi] = p;
-      this.group.add(p.mesh);
     }
     const p = this.pages[pi]!;
     let k = p.free.pop();
@@ -384,8 +446,18 @@ class PatchBatch {
    * worth of slots stand free, the emptiest page's patches move into the others and it is dropped. `moved(old, new)`
    * re-points the patch that held `old`. A page stays 16 slots, so nothing is re-allocated at a new size.
    */
-  compact(moved: (from: number, to: number) => void): void {
-    let reserve = false;
+  compact(moved: (from: number, to: number) => void, frame = 0): void {
+    // F23: with the page pool, a pool keeps its pages through the eviction's saw-tooth (64 patches dropped at once,
+    // landed again over the next frames) and gives pages back only when its slack has lasted SLACK_FRAMES (not while
+    // streaming) or it is half empty (the view is leaving this level); moving patches re-uploads them
+    if (this.pool) {
+      const slack = this.cap - this.liveSlots;
+      if (slack < 2 * PATCH_PAGE) { this.slackSince = -1; return; }
+      if (this.slackSince < 0) this.slackSince = frame;
+      if (slack < Math.max(3 * PATCH_PAGE, this.liveSlots) && frame - this.slackSince < SLACK_FRAMES) return;
+      this.slackSince = -1;
+    }
+    let reserve = !!this.pool;
     for (let i = 0; i < this.pages.length; i++) {
       const p = this.pages[i];
       if (!p || p.live > 0) continue;
@@ -417,8 +489,8 @@ class PatchBatch {
   private dropPage(i: number): void {
     const p = this.pages[i];
     if (!p) return;
-    this.group.remove(p.mesh);
-    p.mesh.dispose();
+    if (this.pool) this.pool.give(p, this.group);
+    else { this.group.remove(p.mesh); p.mesh.dispose(); }
     this.pages[i] = null;
   }
 
@@ -497,6 +569,8 @@ export class ChunkLOD {
   private curFrame = 0;
   /** per LOD level: the terrain batch and the water batch (created on first use) */
   private tBatch: (PatchBatch | null)[] = [];
+  /** PERF F23: idle patch pages shared by every pool of this planet */
+  private readonly pagePool = new PagePool();
   private wBatch: (PatchBatch | null)[] = [];
   /**
    * built patches kept for reuse (the view in use always stays, see evict). Each costs ~140 kB of CPU attribute copies
@@ -690,7 +764,7 @@ export class ChunkLOD {
     const list = water ? this.wBatch : this.tBatch;
     let b = list[level];
     if (!b) {
-      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group);
+      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group, this.pagePool);
       if (!water && this.castShadows) b.setLayer(1, true);
       list[level] = b;
     }
@@ -722,9 +796,13 @@ export class ChunkLOD {
           if (!p) return;
           if (water) p.wSlot = to;
           else { p.tSlot = to; p.mesh = b.meshOf(to); }
-        });
+        }, this.curFrame);
       }
     }
+    this.pagePool.frame = this.curFrame;
+    let inUse = 0;
+    for (const b of [...this.tBatch, ...this.wBatch]) if (b) inUse += b.pageCount;
+    this.pagePool.trim(inUse);
   }
 
   /** slot capacity of every terrain + water pool (memory regression tests) */
@@ -734,6 +812,7 @@ export class ChunkLOD {
       if (!b) continue;
       slots += b.cap; live += b.liveSlots; pools++;
     }
+    slots += this.pagePool.count * PATCH_PAGE;
     return { slots, live, pools };
   }
 
@@ -1098,6 +1177,7 @@ export class ChunkLOD {
     }
     this.tBatch = [];
     this.wBatch = [];
+    this.pagePool.dispose();
     this.live.clear();
   }
 }

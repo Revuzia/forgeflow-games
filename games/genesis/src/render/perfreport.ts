@@ -11,6 +11,10 @@
 
 import { perfSwitchLine } from './perfswitch.ts';
 
+declare const __GENESIS_BUILD__: string | undefined;
+/** the commit + build time vite.config.ts stamps into the bundle ('dev' when run from source) */
+export const BUILD_STAMP: string = typeof __GENESIS_BUILD__ === 'string' ? __GENESIS_BUILD__ : 'dev';
+
 export const GPU_SLOTS = ['planets', 'actors', 'shadows', 'scene', 'post'] as const;
 type GpuSlot = (typeof GPU_SLOTS)[number];
 
@@ -346,7 +350,7 @@ export class PerfRecorder {
     const L: string[] = [];
     const env = this.env;
     const dur = F.length ? (F[F.length - 1].t - F[0].t + F[0].iv) / 1000 : 0;
-    L.push(`GENESIS perf report v1 · ${new Date().toISOString().slice(0, 19)}Z · ${f1(dur)} s · ${F.length} frames`);
+    L.push(`GENESIS perf report v1 · ${new Date().toISOString().slice(0, 19)}Z · ${f1(dur)} s · ${F.length} frames · build ${BUILD_STAMP}`);
     if (env) L.push(`gpu: ${env.gpu} | preset ${env.preset} | canvas ${env.canvas} | dpr ${env.dpr}${env.extra ? ' | ' + env.extra : ''}`);
     L.push(`perf fixes (A/B switches, effective): ${perfSwitchLine() || 'none'}`);
     if (typeof navigator !== 'undefined') L.push(`ua: ${navigator.userAgent.replace(/\s+/g, ' ').slice(0, 160)} | cores ${navigator.hardwareConcurrency ?? '?'}`);

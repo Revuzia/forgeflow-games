@@ -43,7 +43,10 @@ import { perfmon } from './perfmon.ts';
 import { perfSwitch, perfSwitchNote } from './perfswitch.ts';
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
-const PRE_UPLOAD = perfSwitch('preupload');
+// (OFF by default since session 9, `?preupload=1` = on: the owner's M5 A/B ran 1.9 fps without it vs 1.2-1.3 with it;
+// it also uploads textures nothing draws this frame — other planets' particle fields, hidden batches — whose bytes
+// cross the command-buffer transfer memory on the main thread for nothing)
+const PRE_UPLOAD = perfSwitch('preupload', false);
 
 export interface RenderStats {
   drawCalls: number;

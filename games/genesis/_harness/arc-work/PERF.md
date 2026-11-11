@@ -715,3 +715,59 @@ preupload=1 look HARMFUL on Metal (1.2-1.3 vs 1.7-1.9 fps): rethink (ring buffer
 ~1100 draws + 11 M tris: batch + cut their shadows; (4) per-pass target sizes at DPR 2.5; (5) VISUAL BUG water sheet over
 the hills east of the town (trunks as ghosts); (6) white frames through the cloud deck still; (7) '1' key after 1000x;
 long press frame-rate independent. Report after 1-2 verified.
+
+## SESSION 9b — acting on the owner's protocol (items 1-2 first)
+- v18a (dist18 = F21 + F22 with per-bucket reach, ULTRA 888x500, busy town at speed 0, shnear=1): shadowTris 5.82 M
+  (v17a, F22's first version: 8.89 M); vegetation-near shadow 3.86 M vs its scene 2.31 M (1.7x; g3u: 4x). v18b
+  (shnear=0, same view) for the picture A/B is queued in run-s9e.sh (shots/v18a-*.png vs v18b-*.png; town, townlow,
+  f200). NOT yet compared — next session: LOOK at the pairs (tree shadows near and far, low and high sun).
+- F22b: the near cut computes each bucket's own reach with the curvature out to ITS trees (treeShadowReach(e, el0,
+  dMax + dCam, R)); the first version used the cascade sphere's far-edge elevation (on a 3 km world ~20 deg lower:
+  infinite reach = no cut in cascades 2-3). Test: crown points ray-cast onto the curved world AND onto slopes falling
+  away from the sun by up to 0.2 rad, sun behind the camera for half the trials, split at the cut's threshold for half:
+  passes; halving the reach in the cut fails it.
+- OWNER ITEM 1 (post|bufferData x36, shadows|bufferData x43 a frame, ~140 kB each): 140 kB = ONE PATCH PAGE ATTRIBUTE
+  (16 slots x ~9 kB). F17's pools dropped emptied pages (gl.deleteBuffer) at every eviction (64 patches dropped at
+  once) and made new pages as patches landed over the next frames: new GL buffers every frame while panning — terrain
+  pages created at their first draw (the shadow pass), water pages in the water pass ('post'). F17's moving
+  compaction also re-uploaded whole patches.
+  F23 (landed, tests/render-chunkpool.test.ts 6/6 incl. new 'steady panning lands patches in kept pages: no new page
+  after warm-up' = 0 new pages in 360 panned frames (old path: 102 of 144); chunkrest / patchworker / batchtable /
+  shadowreach green; `?pagepool=0` = F17): chunks.ts PagePool per planet: a page a pool gives up keeps its GL buffers
+  and is reused by any level, terrain or water (one page layout); a pool keeps its own pages through the eviction
+  saw-tooth and gives pages back only when half empty (the view left that level) or after 600 frames of slack; idle
+  pages beyond max(6, in-use/8) or idle > 900 frames are deleted. Memory: the tour tests' bounds still hold (peak 1504
+  -> <= 1800 slots on the default-budget tour).
+- OWNER ITEM 2: span and preupload DEFAULT OFF now (`?span=1`, `?preupload=1` turn them on; the header prints
+  span=0 preupload=0). Reasoning (upload.ts / renderer.ts comments): ANGLE's whole-buffer re-allocation that F16 avoided
+  costs the GPU process a memcpy + blit, but every byte of a bufferSubData — merged-span GAP bytes included — crosses
+  Chrome's command-buffer transfer memory from the main thread, which blocks when that ring is full (two patches in
+  slots 0 and 15 of a page: 2.2 MB instead of 280 kB per attribute set); the owner's trace shows the main thread
+  waiting inside bufferSubData. Pre-upload uploaded every flagged texture, also ones nothing draws this frame (other
+  planets' particle fields, hidden batches): bytes for nothing on the same path. With F23 the fresh allocations F16 was
+  meant to save are gone at the source. Ring buffers (N=3) for dynamic instance data were considered: they double the
+  bytes resident and still send the same bytes; not needed once nothing re-allocates.
+- REPORT HEADER: `· build <commit8>[+dirty] built <UTC>` (vite.config.ts define __GENESIS_BUILD__, perfreport.ts
+  BUILD_STAMP; 'dev' from source) and the `perf fixes (A/B switches, effective): ...` line (bldpage pagepool shnear
+  fartrees patchworker preupload reach span zcons).
+- Queued (run-s9e.sh): v18b (dist18, shnear=0 shots), then g5u (dist19 = everything above, ULTRA, panned, --gl=1
+  --stacks=1 --attrs=1 --panreport): expect shadows|bufferData and post|bufferData ~0 per frame (read the
+  'gl calls' line and 'uploads by site').
+
+## NEXT (session 10), in order — owner items 3-7
+1. Read g5u: bufferData per slot ~0? remaining bufferSubData owners by site; v18a vs v18b shots LOOKED (F22 equal).
+2. ITEM 3 FAR TREES (~1100 draws, 11 M tris): one InstancedMesh per hull LOD for ALL kinds/variants (vertex pulling:
+   pad every hull to one topology, per-vertex position/normal/colour from a small table texture indexed by
+   (kind*VARIANTS+variant, gl_VertexID), per-instance hull id in a new instanced attribute) = 2 draws per pass instead
+   of ~66; slot allocator per LOD bucket unchanged. Shadow: far hulls currently cast into every cascade whose sphere
+   their reach meets (farShadow is all-or-nothing): add F22's near cut (far trees start at 0.72 x range) and a far cut
+   per cascade by distance band (sort far blocks by cell distance at placement).
+3. ITEM 4: list each post pass's target size at DPR 2.5 Ultra (2720x1194): post.ts / pipeline.ts targets (hdr MSAA 4x,
+   GTAO half, clouds quarter + resolve full, atmosphere composite full, bloom chain, god rays) — print in the report
+   header; move low-frequency passes to their intended fraction with bilateral upsample where they run full-res.
+4. ITEM 5 VISUAL BUG: water sheet over the hills east of the town (trunks ghosted): suspects water patches built for
+   land cells (wSlot from a patch that turns wet: extract), ZEDGE water depth path, flood-warning silt/rise zones.
+   Repro on the babel scenario seed 307987276 near 'Rubolhin by the Lake'.
+5. ITEM 6 white frames through the cloud deck (two near-white steps per zoom): luminance per frame of a scripted zoom
+   (perf-descent.mjs phase zoom); check clouds.ts tunnel speed threshold vs WASD/zoom speeds, exposure post.cutExposure.
+6. ITEM 7: '1' key after 1000x (ui lane), long-press time-based and drag-cancelled (ui lane: hand/input).
