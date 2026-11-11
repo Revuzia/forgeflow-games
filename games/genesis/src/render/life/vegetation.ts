@@ -718,7 +718,7 @@ function flushRanges(a: InstancedBufferAttribute | BufferAttribute, ranges: numb
   let s0 = -1, e0 = -1;
   const len = a.array.length;
   const add = () => { if (s0 >= 0 && e0 > s0) a.addUpdateRange(s0 * w, Math.min(len, e0 * w) - s0 * w); };
-  for (const [s1, e1] of r) { if (s1 <= e0 + 64) e0 = Math.max(e0, e1); else { add(); s0 = s1; e0 = e1; } }
+  for (const [s1, e1] of r) { if (s0 >= 0 && s1 <= e0 + 64) e0 = Math.max(e0, e1); else { add(); s0 = s1; e0 = e1; } }
   add();
   a.needsUpdate = true;
 }
@@ -762,6 +762,8 @@ export class Vegetation {
     this.leafTex = leafTex;
     const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uBodyToView: shared.uBodyToView, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND, uGodWind: GOD_WIND, uFarOn: this.farOn, uFarBand: FAR_BAND, uPxPerRad: PX_PER_RAD };
     this.farDepth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide, defines: { VEG_FAR: '' } });
+    // one far mesh from the start (hidden, empty) so the load-time warm-up links the far program and its depth twin
+    this.farBucket(Math.max(0, KINDS.indexOf('broadleaf')) * VARIANTS, 0);
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {
