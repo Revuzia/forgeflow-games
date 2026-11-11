@@ -486,3 +486,19 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   tick a second, 50 ms idle checks when paused, setImmediate/MessageChannel only while behind); renderer options:
   antialias off, msaa 0 on High, alpha off, stencil off, high-performance, DPR min(dpr, 1.5); post targets at render
   size (half-float), bloom / god rays at 1/2 .. 1/4. focus cmd at most every 2.5 s.
+
+## OWNER'S MAC REPORT (2026-11-11, build 1e0d2af4 on the CDN; verbatim as relayed by the coordinator)
+```
+GENESIS perf report v1 · 20.3 s · 65 frames
+gpu: ANGLE (Apple, ANGLE Metal Renderer: Apple M5) | preset ultra | canvas 1686x872 (css 1349x698, render 1686x873) | dpr 1.25 | zcons on | timer yes | Chrome 157 | cores 10
+frame ms: p50 320.4 p95 693.5 p99 760.2 | fps 3.2 | >50ms 58 of 65
+main ms: mean 302.5 p95 506.4 max 763.1
+main by slot (mean/p95): planets 15/63.6 godfx 0.1/0.2 actors 0.1/0.2 shadows 206.1/489.9 scene 5.8/0.7 post 74.6/341.9 audio 0.1 ui.post 0.5 other 0.1
+gpu ms (mean/p95): planets 0/0 actors 0/0 shadows 36/257.1 scene 448/556.1 post 490.1/882.8 | total 974.2/1439.6
+render: draws 227 (max 295) tris 13.4M shadow 8.9M | patches built 7462 | new programs 0
+camera: alt 80-197 m, travelled 11158 m (fast panning near a town) | sim speed 1
+hitches (sample): main 476 [shadows 331 planets 87 post 57] gpu 1143; main 351 [shadows 314 ...] gpu 722; main 225 [post 214] gpu 1240; one frame main 6 ms but gpu 816 (pure GPU).
+From orbit it was fine. Vale in the same Chrome tab on the same M5 holds 75 fps (13.3 ms frames).
+```
+Coordinator's reading: (1) post 490 ms GPU = a pathological pass on ULTRA; (2) shadows 206 ms main = CPU (culling?) or
+a stall; (3) scene 448 ms GPU, 13.4 M tris / 8.9 M shadow tris: does zcons help or hurt on Metal; (4) 7462 patches.
