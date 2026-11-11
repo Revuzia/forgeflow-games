@@ -1,0 +1,726 @@
+{
+ "frames": 240,
+ "note": "per display frame (60 Hz) world-space turn of the chain and hanging bones; off = clip only, on = clip + follow-through (lag, 12 deg/frame cap, 30 deg max trail)",
+ "summary": {
+  "ardit/run": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 16,
+    "p99Deg": 13.1
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 15.1,
+    "p99Deg": 7.9
+   }
+  },
+  "ulkro/run": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 5.5,
+    "p99Deg": 5.5
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 4.2,
+    "p99Deg": 2.9
+   }
+  },
+  "lisvel/run": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 6.6,
+    "p99Deg": 6.6
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 5.2,
+    "p99Deg": 4.1
+   }
+  },
+  "nurrow/run": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 3.6,
+    "p99Deg": 3.6
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 2.8,
+    "p99Deg": 2.8
+   }
+  },
+  "kemdo/run": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 4.9,
+    "p99Deg": 4.9
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 3.9,
+    "p99Deg": 3.3
+   }
+  },
+  "burdam/run": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 4.5,
+    "p99Deg": 4.4
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 3.6,
+    "p99Deg": 3.4
+   }
+  },
+  "ervet/run": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 2.4,
+    "p99Deg": 2.4
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 2.2,
+    "p99Deg": 2.2
+   }
+  },
+  "vashil/run": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 0.6,
+    "p99Deg": 0.6
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 0.6,
+    "p99Deg": 0.6
+   }
+  },
+  "odrum/run": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 0.4,
+    "p99Deg": 0.4
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 0.2,
+    "p99Deg": 0.2
+   }
+  },
+  "sukri/run": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 1.9,
+    "p99Deg": 1.9
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 0.4,
+    "p99Deg": 0.4
+   }
+  },
+  "ardit/attack1": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 10.8,
+    "p99Deg": 9
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 7.1,
+    "p99Deg": 4.6
+   }
+  },
+  "ulkro/attack1": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 6.1,
+    "p99Deg": 5.8
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 4.7,
+    "p99Deg": 2.6
+   }
+  },
+  "lisvel/attack1": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 2.4,
+    "p99Deg": 2.2
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 1,
+    "p99Deg": 1
+   }
+  },
+  "nurrow/attack1": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 26,
+    "p99Deg": 25
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 20,
+    "p99Deg": 12
+   }
+  },
+  "kemdo/attack1": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 10.8,
+    "p99Deg": 10.6
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 6.7,
+    "p99Deg": 6
+   }
+  },
+  "burdam/attack1": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 15.5,
+    "p99Deg": 7
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 6.9,
+    "p99Deg": 4.8
+   }
+  },
+  "ervet/attack1": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 6.2,
+    "p99Deg": 6.2
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 4,
+    "p99Deg": 3.9
+   }
+  },
+  "vashil/attack1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 12.8,
+    "p99Deg": 12.8
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 9,
+    "p99Deg": 9
+   }
+  },
+  "odrum/attack1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 22,
+    "p99Deg": 19.7
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 5.2,
+    "p99Deg": 4.2
+   }
+  },
+  "sukri/attack1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 10.4,
+    "p99Deg": 10.4
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 2.1,
+    "p99Deg": 2.1
+   }
+  },
+  "ardit/attack2": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 11,
+    "p99Deg": 9.5
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 7.1,
+    "p99Deg": 4.6
+   }
+  },
+  "ulkro/attack2": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 10.5,
+    "p99Deg": 10.2
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 8.4,
+    "p99Deg": 4.7
+   }
+  },
+  "lisvel/attack2": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 3.4,
+    "p99Deg": 3
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 1.3,
+    "p99Deg": 0.9
+   }
+  },
+  "nurrow/attack2": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 23.7,
+    "p99Deg": 23.4
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 12,
+    "p99Deg": 10
+   }
+  },
+  "kemdo/attack2": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 5.8,
+    "p99Deg": 4.5
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 3.5,
+    "p99Deg": 3.2
+   }
+  },
+  "burdam/attack2": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 16.8,
+    "p99Deg": 7.6
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 12,
+    "p99Deg": 7.5
+   }
+  },
+  "ervet/attack2": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 13.4,
+    "p99Deg": 13.2
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 9,
+    "p99Deg": 8.5
+   }
+  },
+  "vashil/attack2": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 25,
+    "p99Deg": 25
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 16.8,
+    "p99Deg": 16.8
+   }
+  },
+  "odrum/attack2": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 10.2,
+    "p99Deg": 9.1
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 3.1,
+    "p99Deg": 2.6
+   }
+  },
+  "sukri/attack2": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 12.6,
+    "p99Deg": 12.6
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 2.5,
+    "p99Deg": 2.5
+   }
+  },
+  "ardit/cast_a1": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 31.8,
+    "p99Deg": 17.9
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 7.8,
+    "p99Deg": 6.3
+   }
+  },
+  "ulkro/cast_a1": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 26.5,
+    "p99Deg": 13
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 12,
+    "p99Deg": 6
+   }
+  },
+  "lisvel/cast_a1": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 4.8,
+    "p99Deg": 2.2
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 1.9,
+    "p99Deg": 1.3
+   }
+  },
+  "nurrow/cast_a1": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 53.3,
+    "p99Deg": 19.1
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 21.7,
+    "p99Deg": 8.4
+   }
+  },
+  "kemdo/cast_a1": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 13.9,
+    "p99Deg": 13.3
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 7.4,
+    "p99Deg": 5.7
+   }
+  },
+  "burdam/cast_a1": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 23.3,
+    "p99Deg": 10.8
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 7.6,
+    "p99Deg": 5.3
+   }
+  },
+  "ervet/cast_a1": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 18.3,
+    "p99Deg": 18.1
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 10,
+    "p99Deg": 9.6
+   }
+  },
+  "vashil/cast_a1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 14.1,
+    "p99Deg": 14.1
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 8.1,
+    "p99Deg": 7.4
+   }
+  },
+  "odrum/cast_a1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 55,
+    "p99Deg": 50.8
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 24.1,
+    "p99Deg": 24.1
+   }
+  },
+  "sukri/cast_a1": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 34.6,
+    "p99Deg": 34.6
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 6.9,
+    "p99Deg": 6.9
+   }
+  },
+  "ardit/cast_ult": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 4.6,
+    "p99Deg": 4.3
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 2.9,
+    "p99Deg": 2.4
+   }
+  },
+  "ulkro/cast_ult": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 18.7,
+    "p99Deg": 18.4
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 17.1,
+    "p99Deg": 6.7
+   }
+  },
+  "lisvel/cast_ult": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 5.2,
+    "p99Deg": 2.9
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 2,
+    "p99Deg": 1.7
+   }
+  },
+  "nurrow/cast_ult": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 51.1,
+    "p99Deg": 35.1
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 24.1,
+    "p99Deg": 24.1
+   }
+  },
+  "kemdo/cast_ult": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 3.5,
+    "p99Deg": 3.1
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 2.8,
+    "p99Deg": 2.3
+   }
+  },
+  "burdam/cast_ult": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 11.9,
+    "p99Deg": 6
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 8.4,
+    "p99Deg": 4.4
+   }
+  },
+  "ervet/cast_ult": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 10.4,
+    "p99Deg": 10.3
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 7.1,
+    "p99Deg": 6.1
+   }
+  },
+  "vashil/cast_ult": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 50.3,
+    "p99Deg": 22
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 24.1,
+    "p99Deg": 24.1
+   }
+  },
+  "odrum/cast_ult": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 126.2,
+    "p99Deg": 119
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 24.1,
+    "p99Deg": 24.1
+   }
+  },
+  "sukri/cast_ult": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 31.6,
+    "p99Deg": 26.1
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 6.3,
+    "p99Deg": 5.2
+   }
+  },
+  "ardit/dash": {
+   "off": {
+    "bones": 6,
+    "maxDeg": 14.6,
+    "p99Deg": 13.4
+   },
+   "on": {
+    "bones": 6,
+    "maxDeg": 8.1,
+    "p99Deg": 6.6
+   }
+  },
+  "ulkro/dash": {
+   "off": {
+    "bones": 10,
+    "maxDeg": 37.3,
+    "p99Deg": 14.3
+   },
+   "on": {
+    "bones": 10,
+    "maxDeg": 8.7,
+    "p99Deg": 7.6
+   }
+  },
+  "lisvel/dash": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 6.2,
+    "p99Deg": 6.1
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 2.3,
+    "p99Deg": 1.7
+   }
+  },
+  "nurrow/dash": {
+   "off": {
+    "bones": 3,
+    "maxDeg": 12.7,
+    "p99Deg": 12.7
+   },
+   "on": {
+    "bones": 3,
+    "maxDeg": 5.8,
+    "p99Deg": 5.8
+   }
+  },
+  "kemdo/dash": {
+   "off": {
+    "bones": 8,
+    "maxDeg": 2.6,
+    "p99Deg": 2.5
+   },
+   "on": {
+    "bones": 8,
+    "maxDeg": 1.8,
+    "p99Deg": 1.6
+   }
+  },
+  "burdam/dash": {
+   "off": {
+    "bones": 9,
+    "maxDeg": 12.7,
+    "p99Deg": 10.7
+   },
+   "on": {
+    "bones": 9,
+    "maxDeg": 4.8,
+    "p99Deg": 3.6
+   }
+  },
+  "ervet/dash": {
+   "off": {
+    "bones": 5,
+    "maxDeg": 13.9,
+    "p99Deg": 10.6
+   },
+   "on": {
+    "bones": 5,
+    "maxDeg": 4.6,
+    "p99Deg": 3.6
+   }
+  },
+  "vashil/dash": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 14.2,
+    "p99Deg": 14.2
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 6.8,
+    "p99Deg": 6.8
+   }
+  },
+  "odrum/dash": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 12,
+    "p99Deg": 12
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 2.5,
+    "p99Deg": 2.5
+   }
+  },
+  "sukri/dash": {
+   "off": {
+    "bones": 2,
+    "maxDeg": 6.1,
+    "p99Deg": 6.1
+   },
+   "on": {
+    "bones": 2,
+    "maxDeg": 1.2,
+    "p99Deg": 1.2
+   }
+  }
+ }
+}

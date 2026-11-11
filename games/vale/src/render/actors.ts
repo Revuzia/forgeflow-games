@@ -686,8 +686,8 @@ export const ACTOR_LIFE = { on: true, chains: true };
  *  never move in lockstep. A hit kicks the upper body away from the attacker (a whip: spine, then chest, the head
  *  last) and settles in 0.3 s. Soft parts follow through in WORLD space: chain bones (x_<chain>_<n>: tabards,
  *  skirts, capes, hood tails, sleeves) and hanging things (pot hangers, cords, mantle flaps, a hung lantern) trail the
- *  body's turns and swings by a short lag (longer down the chain), at most 30 deg off their clip and at most 12 deg a
- *  1/60 s frame, so a keyed snap of 70-90 deg in one frame becomes a follow-through. */
+ *  body's turns and swings by a short lag (longer down the chain), about 30 deg at most off their clip (the excess closes at up to
+ *  another 12 deg a frame) and at most 12 deg a 1/60 s frame otherwise, so a keyed snap of 70-90 deg in one frame becomes a follow-through. */
 const LIFE = {
   breath: { period: 2.8, chest: 0.028, shoulder: 0.03, neck: 0.012 },
   shift: { period: 6.2, spine: 0.052, head: -0.034 },
@@ -781,7 +781,9 @@ class LifeRig {
       if (ang < 1e-5) continue;
       c.shown.slerp(_lq, Math.min(1 - Math.exp(-dt / c.tau), cap / ang));
       const dev = c.shown.angleTo(_lq);
-      if (dev > C.maxDev) c.shown.copy(_lq).slerp(c.shown, C.maxDev / dev);
+      // past the most it may trail, it closes the excess at up to another cap a frame (a hard clamp would let a fast
+      // spin snap it along at the body's own speed)
+      if (dev > C.maxDev) c.shown.slerp(_lq, Math.min(dev - C.maxDev, cap) / dev);
       // back to the local the mixer writes: parent⁻¹ × shown
       c.o.quaternion.copy(_lq2.invert()).multiply(c.shown);
     }
