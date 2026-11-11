@@ -172,7 +172,7 @@
   },
   "shadow_slab": {
     "id": "shadow_slab",
-    "tris": 643,
+    "tris": 979,
     "size_m": [
       1.81,
       2.9
@@ -186,10 +186,10 @@
       -1.45,
       1.45
     ],
-    "kb_raw": 180,
-    "kb": 63,
+    "kb_raw": 194,
+    "kb": 72,
     "texture": 1024,
-    "buried_faces_dropped": 41,
+    "buried_faces_dropped": 449,
     "nodes": [
       "body"
     ]

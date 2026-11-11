@@ -7,7 +7,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 
 const tag = arg('tag', 'now'), q = arg('q', 'high'), t = Number(arg('t', 20)), only = arg('spots', '');
 const SPOTS = {
   rift: {
-    core: [22, 55], gate: [30, 52], tower: [46, 57.8], jungle_w: [40, 36], xi: [55.3, 30], shaft: [85, 68], shaft_s: [85, 78], seat: [85, 55], jungle_e: [128, 74], slab: [85, 22],
+    core: [22, 55], gate: [30, 52], tower: [46, 57.8], jungle_w: [40, 36], xi: [55.3, 30], shaft: [85, 68], shaft_s: [85, 78], seat: [85, 55], jungle_e: [128, 74], slab: [85, 22], slab2: [80, 15],
   },
   bridge: { base: [18, 22], deck: [45, 22], snap: [78, 22] },
   fray: { centre: [32, 32], stones: [44, 22] },

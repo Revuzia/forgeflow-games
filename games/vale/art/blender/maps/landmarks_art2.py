@@ -1048,7 +1048,19 @@ def shadow_slab(B, rng):
     # chalk coping: a saddle-backed cap stone along the top, proud on every side
     sec = [(-th - 0.07, 0.0), (th + 0.07, 0.0), (th + 0.07, 0.1), (0.0, 0.3), (-th - 0.07, 0.1)]
     v, f = K.prism(sec, origin=(0, 0, ht), u=(1, 0, 0), v=(0, 0, 1), depth=2 * wd + 0.14, chamfer=0.03)
-    B.add("chalk", lean_v(v, f))
+    # max env ENV-7: the coping painted down (a weathered chalk, L* ~45 on screen, was a smooth L* 63.5 lid) and carved
+    # with an hour band: twelve shallow ticks across the saddle, the quarters long, in the slab's own basalt
+    B.add("coping", lean_v(v, f))
+    for k in range(12):
+        yk = -wd + 0.12 + k * (2 * wd - 0.24) / 11
+        long_ = k % 3 == 0
+        for sxx in (-1, 1):
+            # on the saddle's slope (it falls 0.2 m over th + 0.07 from the ridge), sunk so only 4 mm stand proud
+            xc = sxx * (th + 0.07) * 0.45
+            zc_ = ht + 0.1 + 0.2 * (1 - abs(xc) / (th + 0.07)) - 0.008
+            tick = K.box((xc, yk, zc_), ((th + 0.07) * (0.4 if long_ else 0.26), 0.022, 0.012), 0.004)
+            tv = K.rot(np.asarray(tick[0], dtype=np.float64), (0, 1, 0), sxx * math.atan2(0.2, th + 0.07), about=(xc, yk, zc_))
+            B.add("basalt", lean_v(tv, tick[1]))
     # a chalk bead up each end's two arrises (the lit edges the camera sees on the south end; the faces stay basalt)
     for sy in (-1, 1):
         for sx in (-1, 1):
@@ -2035,6 +2047,9 @@ FAIR_MATS = {
 
 
 SLAB_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"],
+             # max env ENV-7: the coping, a weathered chalk two-thirds down in value (rain streaks, chips), so the cap
+             # reads as stone and not as a white lid from the gameplay camera
+             "coping": dict(CHALK, hex="#9A958B", streaks=0.6, chips=0.65, var=0.11),
              "basalt": dict(hex="#4C4854", chisel=0.9, var=0.09, streaks=0.3, chips=0.6, speckle=0.35, scale=0.55, rough=0.62,
                             edge_light=(0.04, 0.55, 0.6, 0.1))}
 NOON_MATS = {"dialstone": DIAL, "chalk": CHALK, "steel": DAWN_MATS["steel"]}

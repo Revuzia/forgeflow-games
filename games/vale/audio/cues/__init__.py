@@ -11,6 +11,7 @@ content/audio.json with cuelib.REGISTRY:
     world.py   amb_* the maps' ambience loops (bus ambience; content lists them in audio.ambience.<map>)
     areas.py   f_<fighter>_<slot>_land / _zone: a kitted fighter's own area landings and zone loops (closing AUD-C1)
     states.py  c_haste, c_unstoppable, c_veil, c_shield_break: the buff states and the shield break (max SFX-7)
+    rooms.py   room_<map>: each map's impulse response for the engine's shared room send (max SFX-9)
     wicks.py   w_*: the Wicks' own wax, tallow and brass family (max SFX-1)
     zones.py   f_<fighter>_<slot>_zone: the lasting zones that were silent after their cast (max SFX-6)
     epic.py    u_<unit>_<slot>: the epic objectives' kits (Longshade, Sunsplinter) and c_monster_fall (closing AUD-C3)
@@ -31,3 +32,4 @@ from . import zones  # noqa: F401  (after areas: it uses its zone blocks)
 from . import epic  # noqa: F401
 from . import wicks  # noqa: F401
 from . import states  # noqa: F401
+from . import rooms  # noqa: F401

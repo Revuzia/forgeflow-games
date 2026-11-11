@@ -424,15 +424,17 @@ const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing o
 // ±GAIN_VAR_DB per play, and the same cue again within REPEAT_S of its last start plays REPEAT_DB down and up to
 // REPEAT_JITTER_S late, so a stack of hits blurs instead of flamming (one random number per play)
 const GAIN_VAR_DB = 1.2;
-const SHIELD_BREAK_GAP_S = 0.5;   // one target's shield breaks sound at most this often (max SFX-7)
+const SHIELD_BREAK_GAP_S = 0.5;
+const SHOOTERS_MAX = 256;         // attackers remembered for a shot landing after its shooter died (max SFX-1)   // one target's shield breaks sound at most this often (max SFX-7)
 // the Gleam coins (max SFX-8): a last hit's gain, and its combo ladder (+GOLD_STEP_ST a rung within GOLD_CHAIN_S, GOLD_RUNGS high)
 const GOLD_GAIN = 0.8;
 const GOLD_CHAIN_S = 1.5;
 const GOLD_STEP_ST = 2;
 const GOLD_RUNGS = 2;
 // Wick-on-Wick blows (max SFX-1): at WICK_HIT_GAIN, and at WICK_DENSE_GAIN once WICK_DENSE_N landed within WICK_DENSE_S
-const WICK_HIT_GAIN = 0.45;
-const WICK_DENSE_GAIN = 0.3;
+const WICK_HIT_GAIN = 0.32;     // (a Wick's blow on a fighter, a structure or a monster stays at the units' 0.45: it is news)
+const WICK_DENSE_GAIN = 0.2;
+const WICK_SWING_GAIN = 0.22;   // a Wick's own swing / shot (the other units' at 0.3)
 const WICK_DENSE_N = 3;
 const WICK_DENSE_S = 0.25;
 const REPEAT_S = 0.12;
@@ -547,7 +549,8 @@ class Engine implements ValeAudioPort {
   private readonly voices: Voice[] = [];
   private readonly lastPlay = new Map<string, number>();
   private readonly wickHits: number[] = [];
-  private readonly shieldBroke = new Map<number, number>();   // a target's last shield break (context time)
+  private readonly shieldBroke = new Map<number, number>();
+  private readonly shooters = new Map<number, EntityLike>();   // the last attackers, as they were (SHOOTERS_MAX)   // a target's last shield break (context time)
   private goldRung = 0;                         // the Gleam ladder's rung, and its last last hit (context time)
   private goldLast = -1e9;   // recent Wick-on-Wick blows near the ear (wickDuck)
   private vol: AudioSettings;
@@ -2379,7 +2382,14 @@ class Engine implements ValeAudioPort {
 
   private onEvent(e: Record<string, unknown>): void {
     const kind = e.e as string;
-    const src = this.ent(e.src), dst = this.ent(e.dst);
+    // a shot that lands after its shooter died still sounds as the shooter's (max SFX-1: a dead Wick's bolt was the
+    // library's c_hit_phys_light): the attacker as it was when it swung or fired
+    const src = this.ent(e.src) ?? (kind === 'damage' && typeof e.src === 'number' ? this.shooters.get(e.src) : undefined), dst = this.ent(e.dst);
+    if ((kind === 'attack' || kind === 'projectile') && src) {
+      this.shooters.delete(src.id);
+      this.shooters.set(src.id, { id: src.id, kind: src.kind, def: src.def, team: src.team, x: src.x, y: src.y });
+      if (this.shooters.size > SHOOTERS_MAX) this.shooters.delete(this.shooters.keys().next().value as number);
+    }
     // before fog: whose damage this tick was (vamp), and a wipe (the HUD banners both whatever you can see)
     if (kind === 'damage' && typeof e.src === 'number') this.dealt.set(e.src, e.t as number);
     if (kind === 'status' && e.status === 'airborne' && typeof e.dst === 'number') this.knocked.set(e.dst, e.t as number);
@@ -2475,7 +2485,7 @@ class Engine implements ValeAudioPort {
         // an epic unit swings at a fighter's level, with its own swing (see `epic` in the header)
         const uk = this.uk(src);
         const swing = this.kit(src, 'attack_swing') ?? (uk ? uk.attack_swing : this.abilitySfx.get(`attack:${src?.def}`)?.sfx ?? this.ev('attack'));
-        this.cue(swing, at(src), src?.kind === 'fighter' || uk ? 0.6 : src?.kind === 'structure' ? 0.8 : 0.3, 0, aw);
+        this.cue(swing, at(src), src?.kind === 'fighter' || uk ? 0.6 : src?.kind === 'structure' ? 0.8 : src?.kind === 'minion' ? WICK_SWING_GAIN : 0.3, 0, aw);
         break;
       }
       case 'damage': {
@@ -2564,7 +2574,7 @@ class Engine implements ValeAudioPort {
           if (e.dst === youEnt) this.cue(this.ev('selfDown'), null);
           else if (dst && dst.team === this.myTeam()) this.cue(this.ev('allyDown'), null);
           else if (dst && e.by !== this.client?.you) this.cue(this.ev('enemyDown'), null);   // yours: 'takedown' carries it
-        } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.6);
+        } else if (k === 'minion') this.cue(this.ev('minionDeath'), at(dst), 0.45);
         else if (k === 'ward') this.cue(this.ev('wardOut'), at(dst));
         else if (k === 'summon') this.cue(this.ev('summonOut'), at(dst), 0.8);
         else if (k === 'monster') {

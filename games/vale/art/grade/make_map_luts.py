@@ -31,16 +31,20 @@ import gradelib as G  # noqa: E402
 import make_lut as L  # noqa: E402
 
 MAP_OPS = {
+    # relative split tones (a share of the pixel's own value per channel, the luma kept): near black and the fog of war
+    # stay neutral, the tint lives in the lit mid-tones and highlights where the mood reads
     "rift": [
-        {"op": "splitTone", "shadow": [-0.010, 0.008, 0.010], "highlight": [0.018, 0.004, -0.020], "pivot": 0.34, "width": 0.22},
+        {"op": "splitTone", "relative": True, "shadow": [-0.04, 0.02, 0.03], "highlight": [0.035, 0.01, -0.045], "pivot": 0.34, "width": 0.22},
         {"op": "hueSat", "space": "HSV", "featherDeg": 10, "bands": [{"hue": [70, 150], "sat": 0.94, "onlyIfValueBelow": 0.85}]},
     ],
     "bridge": [
-        {"op": "splitTone", "shadow": [-0.020, 0.002, 0.032], "highlight": [0.040, 0.010, -0.042], "pivot": 0.36, "width": 0.24},
-        {"op": "hueSat", "space": "HSV", "featherDeg": 10, "bands": [{"hue": [20, 45], "sat": 1.05, "onlyIfValueBelow": 0.85}]},
+        {"op": "splitTone", "relative": True, "shadow": [-0.03, 0.0, 0.05], "highlight": [0.055, 0.02, -0.05], "pivot": 0.3, "width": 0.24},
+        # the warm plazas already sit near the ground's saturation cap (value_probe base*_plaza <= 0.40): the amber
+        # moves their hue, a band takes back the chroma it adds
+        {"op": "hueSat", "space": "HSV", "featherDeg": 10, "bands": [{"hue": [20, 50], "sat": 0.95, "onlyIfValueBelow": 0.85}]},
     ],
     "fray": [
-        {"op": "splitTone", "shadow": [0.016, -0.016, 0.026], "highlight": [0.030, 0.012, -0.020], "pivot": 0.38, "width": 0.24},
+        {"op": "splitTone", "relative": True, "shadow": [0.015, -0.02, 0.03], "highlight": [0.045, 0.02, -0.04], "pivot": 0.38, "width": 0.24},
         {"op": "hueSat", "space": "HSV", "featherDeg": 10, "bands": [{"hue": [30, 60], "sat": 1.04, "onlyIfValueBelow": 0.85}]},
     ],
 }

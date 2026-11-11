@@ -62,7 +62,8 @@ Contract gates (every build, over the shipped files in audio/out; `--gates` runs
              hits, ability hits, procs, FAST_ROLES) has >= RR_MIN variants unless its own cooldown is >= RR_SLOW_COOLDOWN
   as heard   (closing AUD-C1) summing every cue the engine plays for each kitted fighter's cast, area / zone, projectile
              and hit chain (heard_chains, resolved as src/audio/index.ts does): 0 library cues on a kitted fighter's
-             area / zone, 0 library cues (c_ult_release above all) under any ultimate; every 'area.<vfx>' binding of a
+             area / zone, 0 library cues (c_ult_release above all) under any ultimate; every own zone of ZONE_HEARD_S (2 s)
+             or longer is heard (max SFX-6: an 'area.<vfx>' binding); every 'area.<vfx>' binding of a
              fighter's own vfx rendered and that fighter's alone. Allowed shared layers, listed: the enemy wind-up swell
              (STYLE_BIBLE) and a damage-type / crit hitSfx under the kit hit
   epic       (closing AUD-C3) every objective unit (content/maps camps flagged objective) has its own kit u_<unit>_<slot> (attack swing /
@@ -934,7 +935,9 @@ def heard_chains(contract: dict) -> dict:
                     got = bound or (sfx if sfx and sfx.startswith(f'f_{fid}_') else None)
                 else:
                     got = sfx or bound
-                areas.append({'op': o['op'], 'vfx': vfx, 'present': sfx, 'heard': got})
+                life = o.get('life') or o.get('duration') or 0
+                life = max(life) if isinstance(life, list) else life
+                areas.append({'op': o['op'], 'vfx': vfx, 'present': sfx, 'heard': got, 'life': life})
             proj = [o for o in ops if o['op'] == 'projectile']
             # (max SFX-1) a kitted fighter's shot plays no generic whoosh at all (its own swing / cast carries the throw)
             whoosh = ev.get('projectile') if proj and not kitted else None
@@ -947,6 +950,9 @@ def heard_chains(contract: dict) -> dict:
                 'areas': areas, 'projectile': whoosh, 'hits': [h for h in hits if h]}
         out[fid] = {'kitted': kitted, 'abilities': abil}
     return out
+
+
+ZONE_HEARD_S = 2.0     # (max SFX-6) an own zone lasting this long or longer has its own bound loop
 
 
 def asheard_gate(contract: dict) -> tuple[list[str], dict]:
@@ -1017,6 +1023,11 @@ def asheard_gate(contract: dict) -> tuple[list[str], dict]:
                 rep['libraryUnderUlts'] += len(lib)
                 for c in lib:
                     fails.append(f'as-heard: {c} sounds under {fid}\'s ultimate ({a["id"]})')
+        # (max SFX-6) a lasting zone of the fighter's own (ZONE_HEARD_S or longer, with a vfx) is never silent after the cast
+        for slot, a in ch['abilities'].items():
+            for x in a['areas']:
+                if x['op'] == 'zone' and x['vfx'] and (x['life'] or 0) >= ZONE_HEARD_S and not x['heard']:
+                    fails.append(f"as-heard: {fid} {slot} zone {x['vfx']} lasts {x['life']:g} s and is silent (bind area.{x['vfx']})")
         rep['libraryOnAreas'] += len(lib_areas)
         for x in lib_areas:
             fails.append(f'as-heard: {fid} {x.split(":")[0]} area/zone plays the library cue {x.split(":")[1]}')

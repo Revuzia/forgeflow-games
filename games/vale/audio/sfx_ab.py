@@ -3,7 +3,7 @@
 
     python3 sfx_ab.py --pair "label=<before glob>|<after glob>" [--pair …] --sheet out.png --json out.json
 
-Each side of a pair is a glob of decoded-able files (.ogg / .m4a), e.g. a copy of the shipped files taken before a
+Each side of a pair is a glob (several joined by ';') of decoded-able files (.ogg / .m4a), e.g. a copy of the shipped files taken before a
 rebuild and audio/out/<cue>*.ogg after it. Per side (the mean over its takes): max momentary loudness (LUFS),
 true peak (dBTP), onset rise (ms from the -40 dB onset to the peak of the sample envelope), spectral centroid (Hz),
 energy share 2-6 kHz / 6-12 kHz / above 12 kHz, side/mid energy, and the take similarity: the highest correlation
@@ -77,7 +77,7 @@ def main() -> int:
         bg, ag = globs.split('|', 1)
         row = {}
         for side, g in (('before', bg), ('after', ag)):
-            files = sorted(glob.glob(g)) if g else []
+            files = sorted({f for gg in g.split(';') if gg for f in glob.glob(gg)})
             if not files:
                 row[side] = None
                 continue

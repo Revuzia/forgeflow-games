@@ -128,7 +128,8 @@ def prompt_of(sid: str, kind: str) -> tuple[str, int]:
     light = pr["light" if kind == "splash" else "light_portrait"].format(side=side, glow=glow)
     from build_manifest import SENSITIVITY  # the imagegen pack's sensitivity line
     frame = "A wide 16:9 splash card." if kind == "splash" else "A square head-and-shoulders portrait card."
-    text = " ".join([pr["style"], frame, pr["cards"][sid], light, pr["eyes"], pr["rules"], SENSITIVITY])
+    text = " ".join([pr["style"], frame, pr["cards"][sid], light, pr["eyes"]] + ([pr["hands"]] if "hands" in pr else [])
+                    + [pr["rules"], SENSITIVITY])
     return text, int(pr["version"])
 
 

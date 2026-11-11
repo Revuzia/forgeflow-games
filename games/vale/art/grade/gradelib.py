@@ -271,6 +271,8 @@ def grade_fn(rgb, spec: dict):
             p, wd = op.get("pivot", 0.35), op.get("width", 0.25)
             wh = _smoothstep(p - wd, p + wd, y)[..., None]
             d = np.array(op["shadow"]) * (1.0 - wh) + np.array(op["highlight"]) * wh
+            if op.get("relative"):
+                d = d * x                                     # a tint in proportion to the pixel: near black stays neutral
             d = d - _luma(d)[..., None]                       # the tint moves hue, never the value (B5 holds)
             # the tint rolls off toward white (the Self rim, the near-white UI hexes keep their neutral)
             ro = op.get("topRolloff", [0.80, 0.95])

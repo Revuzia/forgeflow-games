@@ -458,7 +458,7 @@ def remove(undo: list) -> None:
 # metallic mirrored the violet plate into the pupils). mul tuned on the preview cards (pass 4: 0.70/0.78/0.42 read
 # 154,123,98 splash / 153,120,74 portrait, dark olive; target 179,146,114).
 GRADE = {
-    "sukri_shadeprint": {"face": {"mul": (0.98, 1.15, 0.72), "rough": 0.42, "eye_mul": 0.55, "eye_spec": 0.04,
+    "sukri_shadeprint": {"face": {"mul": (1.05, 1.22, 0.82), "pupil": (0.014, 0.0068, 0.0037), "rough": 0.42, "eye_mul": 0.55, "eye_spec": 0.04,
                                   "eye_rough": 0.75}},
 }
 
@@ -497,7 +497,37 @@ def _grade_material(mat, g: dict):
     nt.links.new(_sock(mul.outputs, "Result", "RGBA"), _sock(dk.inputs, "A", "RGBA"))
     e = float(g.get("eye_mul", 1.0))
     _sock(dk.inputs, "B", "RGBA").default_value = (e, e, e, 1.0)
-    nt.links.new(_sock(dk.outputs, "Result", "RGBA"), bc)
+    out_col = _sock(dk.outputs, "Result", "RGBA")
+    if g.get("pupil"):
+        # a cool (violet / blue) texel on the mask is a pupil the skin recolour left pale (the splash read lavender
+        # pupils: Shadeprint's light-rim #C6C3CE in the pupil recess): hue 0.55-0.90 -> the dark amber pupil
+        lo_ = nt.nodes.new("ShaderNodeMapRange")
+        _sock(lo_.inputs, "From Min", "VALUE").default_value = 0.50
+        _sock(lo_.inputs, "From Max", "VALUE").default_value = 0.56
+        hi_ = nt.nodes.new("ShaderNodeMapRange")
+        _sock(hi_.inputs, "From Min", "VALUE").default_value = 0.94
+        _sock(hi_.inputs, "From Max", "VALUE").default_value = 0.90
+        nt.links.new(hsv.outputs[0], _sock(lo_.inputs, "Value", "VALUE"))
+        nt.links.new(hsv.outputs[0], _sock(hi_.inputs, "Value", "VALUE"))
+        both = nt.nodes.new("ShaderNodeMath")
+        both.operation = "MINIMUM"
+        nt.links.new(_sock(lo_.outputs, "Result", "VALUE"), both.inputs[0])
+        nt.links.new(_sock(hi_.outputs, "Result", "VALUE"), both.inputs[1])
+        sat = nt.nodes.new("ShaderNodeMath")          # only where the texel carries colour (not the grey grain)
+        sat.operation = "MULTIPLY"
+        nt.links.new(both.outputs[0], sat.inputs[0])
+        sm = nt.nodes.new("ShaderNodeMapRange")
+        _sock(sm.inputs, "From Min", "VALUE").default_value = 0.025     # the skin's light rim #C6C3CE has S 0.05
+        _sock(sm.inputs, "From Max", "VALUE").default_value = 0.045
+        nt.links.new(hsv.outputs[1], _sock(sm.inputs, "Value", "VALUE"))
+        nt.links.new(_sock(sm.outputs, "Result", "VALUE"), sat.inputs[1])
+        pu = nt.nodes.new("ShaderNodeMix")
+        pu.data_type = "RGBA"
+        nt.links.new(sat.outputs[0], _sock(pu.inputs, "Factor", "VALUE"))
+        nt.links.new(out_col, _sock(pu.inputs, "A", "RGBA"))
+        _sock(pu.inputs, "B", "RGBA").default_value = (*g["pupil"], 1.0)
+        out_col = _sock(pu.outputs, "Result", "RGBA")
+    nt.links.new(out_col, bc)
     # lacquer is a dielectric: the ORM texture's metallic on the face mirrored the violet plate into the pupils
     for lk in list(bsdf.inputs["Metallic"].links):
         nt.links.remove(lk)

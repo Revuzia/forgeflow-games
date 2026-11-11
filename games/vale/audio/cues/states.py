@@ -32,11 +32,12 @@ def c_haste(v: int):
     k = vary('c_haste', v)
     r = R('c_haste', v=v)
     L = Layers(0.5)
-    L.add(S.whoosh(r, 0.28 * k['dk'], 700 * k['fk'], 4200 * k['fk'], q=1.6, peak_at=0.75, rise=-0.8, fall=3.0), 0.0,
-          peak_db=0, width=0.7)
+    a, b = (('A6', 'E7'), ('E6', 'B6'), ('D7', 'A6'))[v % 3]
+    L.add(S.whoosh(r, 0.28 * k['dk'], (500, 800, 650)[v % 3] * k['fk'], (3600, 4800, 3000)[v % 3], q=(1.3, 1.8, 1.5)[v % 3],
+                   peak_at=(0.75, 0.65, 0.8)[v % 3], rise=-0.8, fall=3.0), 0.0, peak_db=0, width=0.7)
     L.add(S.burst(r, 0.02, 1500, 5000, 0.008), 0.0, peak_db=-12)
-    L.add(tink(hz('A6') * k['fk'] ** 0.1, 0.12, 0.06, bright=0.4), 0.19 * k['dk'] + k['off'], peak_db=-9)
-    L.add(tink(hz('E7'), 0.1, 0.05, bright=0.35), 0.22 * k['dk'] + k['off'], peak_db=-13)
+    L.add(tink(hz(a), 0.12, 0.06, bright=0.4), 0.19 * k['dk'] + k['off'], peak_db=-8)
+    L.add(tink(hz(b), 0.1, 0.05, bright=0.35), 0.22 * k['dk'] + k['off'], peak_db=-11)
     return finish(spread(L.out(), 0.3), hp_hz=300, eq=[('peak', 3300, -2.0, 0.8)])
 
 
@@ -45,11 +46,15 @@ def c_unstoppable(v: int):
     k = vary('c_unstoppable', v)
     r = R('c_unstoppable', v=v)
     L = Layers(0.6)
-    L.add(S.thump(0.3, 110 * k['fk'], 55, 0.02, 0.18 * k['dk'], 2.2), 0.0, peak_db=-2)
-    # iron settling: a dull, heavy metal clank (inharmonic, low-passed: no bright ring)
-    L.add(lp(S.partials(240 * k['fk'], (1.0, 2.76, 5.4, 8.9), (1.0, 0.6, 0.3, 0.12), (0.35, 0.15, 0.07, 0.04), 0.5, r, 0.8),
-             2200), 0.0, peak_db=0)
-    L.add(S.knock(r, 520 * k['fk'], 0.06, 5, 'stone'), 0.0, peak_db=-6)
+    L.add(S.thump(0.3, 120 * k['fk'], 60, 0.02, 0.16 * k['dk'], 2.6), 0.0, peak_db=-8)
+    # iron settling: a dull, heavy metal clank (inharmonic, low-passed: no bright ring, but a laptop still hears it)
+    L.add(lp(S.partials(330 * k['fk'], (1.0, 2.76, 5.4, 8.9), (1.0, 0.6, 0.3, 0.12), (0.35, 0.15, 0.07, 0.04), 0.5, r, 0.8),
+             3200), 0.0, peak_db=0)
+    # its chain settling: a few short iron links chinking 1.4-2.6 kHz over 150 ms (no stone in it)
+    for i in range(4):
+        rr = R('c_unstoppable', f'link{i}', v)
+        L.add(lp(S.partials(float(rr.uniform(1400, 2600)), (1.0, 2.4, 3.9), (1.0, 0.4, 0.15), (0.04, 0.025, 0.015), 0.08, rr),
+                 4200), 0.02 + 0.035 * i + k['off'] * 0.5, peak_db=-7 - 2 * i)
     L.add(lp(S.partials(165, (1.0, 2.76), (1.0, 0.4), (0.3, 0.12), 0.4, r, 0.5), 1400), 0.07 + k['off'], peak_db=-7)
     return finish(room(L.out(), 'stone', wet=0.1), hp_hz=40)
 
@@ -59,9 +64,9 @@ def c_veil(v: int):
     k = vary('c_veil', v)
     r = R('c_veil', v=v)
     L = Layers(0.7)
-    L.add(breath(0.4 * k['dk'], 2600 * k['fk'], 380, shape='breath', q=1.8, seed=f'veil{v}', peak_at=0.03), 0.0,
-          peak_db=0, width=0.8)
-    L.add(hollow(hz('D4') * k['fk'] ** 0.2, 0.5, 0.3 * k['dk'], r, odd=4, hit_ms=4.0), 0.02 + k['off'], peak_db=-6)
+    L.add(breath(0.4 * k['dk'], (2600, 3400, 2000)[v % 3] * k['fk'], (380, 520, 300)[v % 3], shape='breath',
+                 q=(1.8, 2.4, 1.4)[v % 3], seed=f'veil{v}', peak_at=0.03), 0.0, peak_db=0, width=0.8)
+    L.add(hollow(hz(('D4', 'A3', 'F4')[v % 3]), 0.5, 0.3 * k['dk'], r, odd=4, hit_ms=4.0), 0.02 + k['off'], peak_db=-6)
     L.add(lp(S.burst(r, 0.03, 300, 2500, 0.012), 2500), 0.0, peak_db=-10)
     return finish(spread(L.out(), 0.35), hp_hz=90, eq=[('high', 7000, -4.0)])
 

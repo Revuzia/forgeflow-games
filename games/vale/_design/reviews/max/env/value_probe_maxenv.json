@@ -1,0 +1,359 @@
+{
+ "note": "max env lane B5 value probe (_harness/value_probe.mjs, High 1920x1080, fog off, VFX/UI hidden). maxenv_after: first pass (clouds darken-only, 0.25): bridge/fray lane p50 FAIL; maxenv_nocloud: same build, clouds off (isolates the cloud cause); maxenv_after2: clouds luminance-neutral (rift 0.14, bridge 0.12, fray none): all PASS; maxenv_final: final grades, gnomon trees, new stones (bridge rerun after the plaza saturation fix).",
+ "runs": {
+  "maxenv_after": {
+   "rift_high": {
+    "frame": {
+     "share": 1,
+     "p5": 19,
+     "p50": 60,
+     "p95": 98,
+     "p99": 113,
+     "mean": 60.43,
+     "spread": 79,
+     "lstarP50": 25.5,
+     "sat": 0.4,
+     "satP50": 0.4
+    },
+    "verdict": {
+     "laneP50": "86 PASS (85-100)",
+     "walkableSpread": "45 PASS (<= 45)",
+     "laneSpread": "38 PASS (<= 45)",
+     "frameP50": "60 PASS (55-75)",
+     "frameP95": "98 PASS (<= 130)",
+     "frameP99": "113 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "103 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.35 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.6 PASS (70-85), over lane 44.6 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.85 % of fighter pixels PASS (< 2 %), worst fighter 3.3 %, p99 89.5",
+     "wickTop25": "61.3 (info: <= 65, WICK lane)",
+     "monsterTop25": "72.2 (info)",
+     "flash": "2.63x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.29 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 77.5 PASS (<= 80); luma p95 191 vs fighters 211 PASS; above 180: 10.0 %",
+     "base1_plaza": "saturation 0.37 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 70 PASS (<= 80); luma p95 166 vs fighters 211 PASS; above 180: 2.6 %"
+    }
+   },
+   "bridge_high": {
+    "frame": {
+     "share": 1,
+     "p5": 21,
+     "p50": 64,
+     "p95": 94,
+     "p99": 128,
+     "mean": 60.98,
+     "spread": 73,
+     "lstarP50": 27,
+     "sat": 0.32,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "82 FAIL (85-100)",
+     "walkableSpread": "31 PASS (<= 45)",
+     "laneSpread": "31 PASS (<= 45)",
+     "frameP50": "64 PASS (55-75)",
+     "frameP95": "94 PASS (<= 130)",
+     "frameP99": "128 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "101 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.26 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.7 PASS (70-85), over lane 46.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.05 % of fighter pixels PASS (< 2 %), worst fighter 0.4 %, p99 86",
+     "wickTop25": "56.6 (info: <= 65, WICK lane)",
+     "flash": "2.63x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.34 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 75.5 PASS (<= 80); luma p95 186 vs fighters 209 PASS; above 180: 7.3 %",
+     "base1_plaza": "saturation 0.36 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 69.5 PASS (<= 80); luma p95 164 vs fighters 209 PASS; above 180: 2.2 %"
+    }
+   },
+   "fray_high": {
+    "frame": {
+     "share": 1,
+     "p5": 23,
+     "p50": 81,
+     "p95": 100,
+     "p99": 116,
+     "mean": 75.25,
+     "spread": 77,
+     "lstarP50": 35,
+     "sat": 0.27,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "84 FAIL (85-100)",
+     "walkableSpread": "45 PASS (<= 45)",
+     "laneSpread": "45 PASS (<= 45)",
+     "frameP50": "81 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "100 PASS (<= 130)",
+     "frameP99": "116 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "116 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.049 % of frame PASS",
+     "groundSat": "0.29 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.7 PASS (70-85), over lane 40.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.89 % of fighter pixels PASS (< 2 %), worst fighter 1.5 %, p99 89.5",
+     "flash": "2.69x PASS (>= 2.0x)"
+    }
+   }
+  },
+  "maxenv_nocloud": {
+   "bridge_high": {
+    "frame": {
+     "share": 1,
+     "p5": 22,
+     "p50": 69,
+     "p95": 101,
+     "p99": 130,
+     "mean": 66.02,
+     "spread": 79,
+     "lstarP50": 29.5,
+     "sat": 0.35,
+     "satP50": 0.4
+    },
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "33 PASS (<= 45)",
+     "laneSpread": "33 PASS (<= 45)",
+     "frameP50": "69 PASS (55-75)",
+     "frameP95": "101 PASS (<= 130)",
+     "frameP99": "130 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "107 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.31 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.7 PASS (70-85), over lane 43.2 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.05 % of fighter pixels PASS (< 2 %), worst fighter 0.4 %, p99 86",
+     "wickTop25": "56.6 (info: <= 65, WICK lane)",
+     "flash": "2.52x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.35 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 75.5 PASS (<= 80); luma p95 186 vs fighters 209 PASS; above 180: 7.3 %",
+     "base1_plaza": "saturation 0.36 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 69.5 PASS (<= 80); luma p95 164 vs fighters 209 PASS; above 180: 2.2 %"
+    }
+   },
+   "fray_high": {
+    "frame": {
+     "share": 1,
+     "p5": 24,
+     "p50": 85,
+     "p95": 103,
+     "p99": 119,
+     "mean": 77.97,
+     "spread": 79,
+     "lstarP50": 36.5,
+     "sat": 0.28,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "87 PASS (85-100)",
+     "walkableSpread": "44 PASS (<= 45)",
+     "laneSpread": "44 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "103 PASS (<= 130)",
+     "frameP99": "119 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "118 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.049 % of frame PASS",
+     "groundSat": "0.29 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.7 PASS (70-85), over lane 39.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.89 % of fighter pixels PASS (< 2 %), worst fighter 1.5 %, p99 89.5",
+     "flash": "2.46x PASS (>= 2.0x)"
+    }
+   }
+  },
+  "maxenv_after2": {
+   "rift_high": {
+    "frame": {
+     "share": 1,
+     "p5": 19,
+     "p50": 63,
+     "p95": 100,
+     "p99": 115,
+     "mean": 62.68,
+     "spread": 81,
+     "lstarP50": 27,
+     "sat": 0.39,
+     "satP50": 0.4
+    },
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "44 PASS (<= 45)",
+     "laneSpread": "36 PASS (<= 45)",
+     "frameP50": "63 PASS (55-75)",
+     "frameP95": "100 PASS (<= 130)",
+     "frameP99": "115 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "105 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.36 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.6 PASS (70-85), over lane 43.1 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.87 % of fighter pixels PASS (< 2 %), worst fighter 3.9 %, p99 89.5",
+     "wickTop25": "61.3 (info: <= 65, WICK lane)",
+     "monsterTop25": "72.1 (info)",
+     "flash": "2.52x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.3 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 78.5 PASS (<= 80); luma p95 193 vs fighters 211 PASS; above 180: 11.0 %",
+     "base1_plaza": "saturation 0.38 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 70 PASS (<= 80); luma p95 167 vs fighters 211 PASS; above 180: 2.8 %"
+    }
+   },
+   "bridge_high": {
+    "frame": {
+     "share": 1,
+     "p5": 21,
+     "p50": 68,
+     "p95": 99,
+     "p99": 130,
+     "mean": 64.61,
+     "spread": 78,
+     "lstarP50": 29,
+     "sat": 0.34,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "88 PASS (85-100)",
+     "walkableSpread": "32 PASS (<= 45)",
+     "laneSpread": "32 PASS (<= 45)",
+     "frameP50": "68 PASS (55-75)",
+     "frameP95": "99 PASS (<= 130)",
+     "frameP99": "130 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "105 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.3 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.7 PASS (70-85), over lane 44.2 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.06 % of fighter pixels PASS (< 2 %), worst fighter 0.4 %, p99 86",
+     "wickTop25": "56.6 (info: <= 65, WICK lane)",
+     "flash": "2.55x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.35 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 76 PASS (<= 80); luma p95 187 vs fighters 209 PASS; above 180: 8.1 %",
+     "base1_plaza": "saturation 0.37 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 69.5 PASS (<= 80); luma p95 164 vs fighters 209 PASS; above 180: 2.4 %"
+    }
+   },
+   "fray_high": {
+    "frame": {
+     "share": 1,
+     "p5": 23,
+     "p50": 85,
+     "p95": 102,
+     "p99": 119,
+     "mean": 77.75,
+     "spread": 79,
+     "lstarP50": 36.5,
+     "sat": 0.28,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "87 PASS (85-100)",
+     "walkableSpread": "44 PASS (<= 45)",
+     "laneSpread": "44 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "102 PASS (<= 130)",
+     "frameP99": "119 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "118 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.049 % of frame PASS",
+     "groundSat": "0.29 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.7 PASS (70-85), over lane 39.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.91 % of fighter pixels PASS (< 2 %), worst fighter 1.5 %, p99 89.5",
+     "flash": "2.49x PASS (>= 2.0x)"
+    }
+   }
+  },
+  "maxenv_final": {
+   "rift_high": {
+    "frame": {
+     "share": 1,
+     "p5": 19,
+     "p50": 62,
+     "p95": 100,
+     "p99": 115,
+     "mean": 62.51,
+     "spread": 81,
+     "lstarP50": 26.5,
+     "sat": 0.33,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "90 PASS (85-100)",
+     "walkableSpread": "44 PASS (<= 45)",
+     "laneSpread": "36 PASS (<= 45)",
+     "frameP50": "62 PASS (55-75)",
+     "frameP95": "100 PASS (<= 130)",
+     "frameP99": "115 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "105 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.32 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.6 PASS (70-85), over lane 43.1 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.85 % of fighter pixels PASS (< 2 %), worst fighter 3.6 %, p99 89.5",
+     "wickTop25": "61.3 (info: <= 65, WICK lane)",
+     "monsterTop25": "71.8 (info)",
+     "flash": "2.52x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.27 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 78.5 PASS (<= 80); luma p95 193 vs fighters 211 PASS; above 180: 11.0 %",
+     "base1_plaza": "saturation 0.36 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 70 PASS (<= 80); luma p95 167 vs fighters 211 PASS; above 180: 2.8 %"
+    }
+   },
+   "bridge_high": {
+    "frame": {
+     "share": 1,
+     "p5": 21,
+     "p50": 69,
+     "p95": 101,
+     "p99": 132,
+     "mean": 65.5,
+     "spread": 80,
+     "lstarP50": 29.5,
+     "sat": 0.34,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "89 PASS (85-100)",
+     "walkableSpread": "33 PASS (<= 45)",
+     "laneSpread": "33 PASS (<= 45)",
+     "frameP50": "69 PASS (55-75)",
+     "frameP95": "101 PASS (<= 130)",
+     "frameP99": "132 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "107 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.000 % of frame PASS",
+     "groundSat": "0.32 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "81.7 PASS (70-85), over lane 43.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.06 % of fighter pixels PASS (< 2 %), worst fighter 0.4 %, p99 86",
+     "wickTop25": "56.9 (info: <= 65, WICK lane)",
+     "flash": "2.52x PASS (>= 2.0x)",
+     "base0_plaza": "saturation 0.32 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base0_structure": "L* p95 76.5 PASS (<= 80); luma p95 187 vs fighters 209 PASS; above 180: 9.1 %",
+     "base1_plaza": "saturation 0.36 PASS (0.17-0.40; mean HSV, as groundSat)",
+     "base1_structure": "L* p95 69.5 PASS (<= 80); luma p95 166 vs fighters 209 PASS; above 180: 2.5 %"
+    }
+   },
+   "fray_high": {
+    "frame": {
+     "share": 1,
+     "p5": 23,
+     "p50": 85,
+     "p95": 102,
+     "p99": 119,
+     "mean": 77.72,
+     "spread": 79,
+     "lstarP50": 36,
+     "sat": 0.27,
+     "satP50": 0.3
+    },
+    "verdict": {
+     "laneP50": "87 PASS (85-100)",
+     "walkableSpread": "44 PASS (<= 45)",
+     "laneSpread": "44 PASS (<= 45)",
+     "frameP50": "85 PASS (<= 90, FRAY: follows the plate)",
+     "frameP95": "102 PASS (<= 130)",
+     "frameP99": "119 PASS (<= 180, whole frame: ruling 14)",
+     "frameP99Env": "119 PASS (<= 160, environment pixels only: ruling 14)",
+     "env180": "other 0.000 % of env, lamps 0.049 % of frame PASS",
+     "groundSat": "0.3 PASS (0.17-0.40; spec 0.22-0.35)",
+     "fighterTop25": "76.7 PASS (70-85), over lane 39.7 PASS (>= 30)",
+     "fighterBlowout": "above L* 90: 0.90 % of fighter pixels PASS (< 2 %), worst fighter 1.5 %, p99 89.5",
+     "flash": "2.5x PASS (>= 2.0x)"
+    }
+   }
+  }
+ }
+}

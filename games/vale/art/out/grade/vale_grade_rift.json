@@ -1,21 +1,22 @@
 {
   "id": "vale_grade_rift",
   "file": "art/out/grade/vale_grade_rift.cube",
-  "sha256": "353d40b26a4e7a5c25ded58068b31d540a1673d0684e6249c83ec7dbcb83afb2",
+  "sha256": "3e9440bf5728b27fe5c0c596c5d2acea9de525c9540b25a8202b2446f5361eb5",
   "bytes": 970599,
   "base": "vale_grade_01",
   "mapOps": [
     {
       "op": "splitTone",
+      "relative": true,
       "shadow": [
-        -0.01,
-        0.008,
-        0.01
+        -0.04,
+        0.02,
+        0.03
       ],
       "highlight": [
-        0.018,
-        0.004,
-        -0.02
+        0.035,
+        0.01,
+        -0.045
       ],
       "pivot": 0.34,
       "width": 0.22
@@ -73,9 +74,9 @@
         "full_value_trilinear": 1.32,
         "full_value_tetrahedral": 1.32,
         "full_value_out": "#FEF9E8",
-        "as_is_trilinear": 4.46,
-        "as_is_tetrahedral": 4.4,
-        "as_is_out": "#B5AA98",
+        "as_is_trilinear": 5.3,
+        "as_is_tetrahedral": 5.24,
+        "as_is_out": "#B6AA95",
         "pass": true
       },
       "self_deutan": {
@@ -173,9 +174,9 @@
         "full_value_trilinear": 0.22,
         "full_value_tetrahedral": 0.22,
         "full_value_out": "#FF4B69",
-        "as_is_trilinear": 3.5,
-        "as_is_tetrahedral": 3.5,
-        "as_is_out": "#C03246",
+        "as_is_trilinear": 3.02,
+        "as_is_tetrahedral": 3.03,
+        "as_is_out": "#BF3347",
         "pass": true
       },
       "seat_II_olive": {
@@ -183,9 +184,9 @@
         "full_value_trilinear": 0.29,
         "full_value_tetrahedral": 0.29,
         "full_value_out": "#FFFA0C",
-        "as_is_trilinear": 2.08,
-        "as_is_tetrahedral": 2.09,
-        "as_is_out": "#7D7602",
+        "as_is_trilinear": 1.8,
+        "as_is_tetrahedral": 1.8,
+        "as_is_out": "#7C7604",
         "pass": true
       },
       "seat_III_lime": {
@@ -203,9 +204,9 @@
         "full_value_trilinear": 0.05,
         "full_value_tetrahedral": 0.05,
         "full_value_out": "#32FF7C",
-        "as_is_trilinear": 2.93,
-        "as_is_tetrahedral": 2.93,
-        "as_is_out": "#35A64A",
+        "as_is_trilinear": 2.85,
+        "as_is_tetrahedral": 2.85,
+        "as_is_out": "#32A74C",
         "pass": true
       },
       "seat_V_cyan": {
@@ -253,9 +254,9 @@
         "full_value_trilinear": 0.67,
         "full_value_tetrahedral": 0.67,
         "full_value_out": "#FF6AF3",
-        "as_is_trilinear": 2.39,
-        "as_is_tetrahedral": 2.39,
-        "as_is_out": "#A53D95",
+        "as_is_trilinear": 2.23,
+        "as_is_tetrahedral": 2.23,
+        "as_is_out": "#A43D95",
         "pass": true
       },
       "seat_X_rose": {
@@ -263,8 +264,8 @@
         "full_value_trilinear": 0.37,
         "full_value_tetrahedral": 0.37,
         "full_value_out": "#FF74AC",
-        "as_is_trilinear": 1.93,
-        "as_is_tetrahedral": 1.93,
+        "as_is_trilinear": 1.94,
+        "as_is_tetrahedral": 1.94,
         "as_is_out": "#E56394",
         "pass": true
       }
@@ -273,9 +274,9 @@
     "pass": true
   },
   "vs_vale_grade_01": {
-    "dE2000_mean": 0.64,
-    "dE2000_p95": 2.16,
-    "dLstar_mean": 0.099,
-    "dLstar_p99": 0.606
+    "dE2000_mean": 0.77,
+    "dE2000_p95": 3.06,
+    "dLstar_mean": 0.112,
+    "dLstar_p99": 0.774
   }
 }
