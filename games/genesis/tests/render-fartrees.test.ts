@@ -19,11 +19,11 @@ import { SHRUB_KINDS, TREE_KINDS } from '../src/render/gen/treegen.ts';
 function rng(seed: number) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32); }
 const SHARED = { uTime: { value: 0 }, uWindDir: { value: null }, uCamBody: { value: null }, uBodyToView: { value: null }, uSunDirBody: { value: null } } as never;
 
-type FB = { mesh: { instanceMatrix: { array: Float32Array }; instanceColor: { array: Float32Array } }; extra: { array: Float32Array }; hi: number; live: number; key: number; lod: number; free: number[] };
+type FB = { mesh: { instanceMatrix: { array: Float32Array }; instanceColor: { array: Float32Array } }; extra: { array: Float32Array }; hull: { array: Float32Array }; hi: number; live: number; band: number; lod: number; free: number[] };
 type Blk = { n: number; keys: number[]; starts: number[]; m: Float32Array; c: Float32Array; e: Float32Array; stale: boolean };
 type V = {
   update(pv: unknown, cam: Vector3, frame: number): void; far: (FB | undefined)[]; blocks: Map<number, Blk>;
-  placed: Map<number, { f: number; s0: number[]; s1: number[] }>; farNeed(b: Blk, cam: Vector3, inner: number, slack: number): number;
+  placed: Map<number, { f: number; s0: number[]; s1: number[]; band: number }>; farNeed(b: Blk, cam: Vector3, inner: number, slack: number): number;
   farCam: Vector3; farWant: number[]; farWantAt: number; makeBlock(pv: unknown, c: number, env: unknown, keep: boolean): Blk; cache: Map<number, Float32Array>;
   cellPlants(pv: unknown, c: number): Float32Array; pxPerRad: number; range: number; farStats: { instances: number; queue: number };
 };
@@ -63,11 +63,13 @@ function checkSlots(v: V): number {
       for (let k = 0; k < sl.length; k += 3) {
         const b = v.far[sl[k]]!;
         assert.equal(b.lod, lod);
+        assert.equal(b.band, st.band, 'the cell sits in its band\'s bucket');
+        assert.equal(sl.length, 3, 'one slot range per lod: every kind of the cell together');
         const at = sl[k + 1], n = sl[k + 2];
-        const g = blk.keys.indexOf(b.key);
-        assert.ok(g >= 0, 'bucket key belongs to the block');
-        const j0 = blk.starts[g];
-        assert.equal(n, blk.starts[g + 1] - j0);
+        const j0 = 0;
+        assert.equal(n, blk.n);
+        // each tree's hull: its kind / variant's row of the table for this lod
+        for (let g = 0; g < blk.keys.length; g++) for (let q = blk.starts[g]; q < blk.starts[g + 1]; q++) assert.equal(b.hull.array[at + q], blk.keys[g] * 2 + lod, 'hull id');
         let cv = cover.get(sl[k]); if (!cv) { cv = new Uint8Array(b.mesh.instanceMatrix.array.length / 16); cover.set(sl[k], cv); }
         for (let q = 0; q < n; q++) {
           assert.ok(at + q < b.hi, 'slot below the high-water mark');
@@ -180,4 +182,62 @@ test('far hulls: vegetation attributes, unit box, few triangles', () => {
       for (let i = 0; i < c.length; i++) assert.ok(Number.isFinite(c[i]) && c[i] >= 0 && c[i] < 2, `${kind} colour`);
     }
   }
+});
+
+test('far bands: a band left out of a shadow cascade holds no tree whose shadow could reach it (PERF item 3)', async () => {
+  const { treeShadowReach } = await import('../src/render/life/vegetation.ts');
+  const { pv, R } = world();
+  const v = new Vegetation(SHARED) as unknown as V & { farShadow(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number, cam?: Vector3, nearSplit?: number, margin?: number): void; farEMax: number };
+  v.pxPerRad = 536;
+  const frame = { n: 0 };
+  const dir = new Vector3(0.3, 0.8, 0.52).normalize();
+  const rnd = rng(77);
+  let hidden = 0, shown = 0, bands = new Set<number>(), minSlack = Infinity;
+  for (const alt of [120, 400, 1200]) {
+    const cam = dir.clone().normalize().multiplyScalar(R + 60 + alt);
+    settle(v, pv, cam, frame);
+    for (const st of v.placed.values()) bands.add(st.band);
+    for (let trial = 0; trial < 300; trial++) {
+      // the camera moved a little since the bounds' anchor; a cascade sphere ahead of it; a sun from 8 to 80 degrees
+      const camNow = cam.clone().add(new Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(30));
+      const look = new Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize();
+      let C = camNow.clone().addScaledVector(look, 100 + rnd() * 1500);
+      const r = 80 + rnd() * 700, el = (rnd() < 0.7 ? 7 + rnd() * 15 : 22 + rnd() * 60) * Math.PI / 180, nearSplit = rnd() < 0.5 ? 0 : 100 + rnd() * 900, margin = 3;
+      if (trial & 1) {
+        // adversarial: the sphere just past a placed tree, along the line from the camera (inward or outward), within
+        // a few of its shadow reaches — the cases a bound without the reach (or a short one) gets wrong
+        const cells = [...v.placed.keys()];
+        const blk = v.blocks.get(cells[Math.floor(rnd() * cells.length)])!;
+        const j = Math.floor(rnd() * blk.n);
+        const p = new Vector3(blk.m[j * 16 + 12], blk.m[j * 16 + 13], blk.m[j * 16 + 14]);
+        const u = p.clone().sub(camNow).normalize().multiplyScalar(rnd() < 0.5 ? 1 : -1);
+        C = p.clone().addScaledVector(u, r + rnd() * 400);
+      }
+      v.farShadow(1, C.x, C.y, C.z, r, Math.sin(el), R, camNow, trial & 1 ? 0 : nearSplit, margin);
+      for (const [c, st] of v.placed) {
+        const blk = v.blocks.get(c)!;
+        for (const lod of [0, 1]) {
+          if (!(st.f & (1 << lod))) continue;
+          const b = v.far[st.band * 2 + lod] as unknown as { mesh: { visible: boolean } };
+          if (b.mesh.visible) { shown++; continue; }
+          hidden++;
+          for (let j = 0; j < blk.n; j++) {
+            const p = new Vector3(blk.m[j * 16 + 12], blk.m[j * 16 + 13], blk.m[j * 16 + 14]);
+            const h = Math.hypot(blk.m[j * 16 + 4], blk.m[j * 16 + 5], blk.m[j * 16 + 6]);
+            const dCam = p.distanceTo(camNow);
+            // this tree's own shadow bound (its height as its extent, the sun's elevation at it less 0.2 rad of slope)
+            const reach = treeShadowReach(h * 1.2, el - 0.2, dCam, R);
+            if (!Number.isFinite(reach)) assert.fail('a band was left out at a sun too low to bound its shadows');
+            const far = p.distanceTo(C) > r + reach + margin;
+            if ((trial & 1) || nearSplit === 0) minSlack = Math.min(minSlack, (p.distanceTo(C) - r - margin) / reach);
+            const near = !(trial & 1) && nearSplit > 0 && dCam + reach + margin < nearSplit;
+            assert.ok(far || near, `cell ${c}: a tree ${p.distanceTo(C).toFixed(0)} m from the cascade (r ${r.toFixed(0)}, reach ${reach.toFixed(0)}) was left out`);
+          }
+        }
+      }
+    }
+    v.farShadow(-1, 0, 0, 0, 0, 1, 1);
+  }
+  assert.ok(hidden > 0 && shown > 0, `both outcomes seen (hidden ${hidden}, shown ${shown})`);
+  assert.ok(bands.size >= 2, `more than one band in use (${[...bands]})`);
 });

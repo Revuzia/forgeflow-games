@@ -106,7 +106,9 @@ export class SunShadows {
     dt.minFilter = LinearFilter;
     dt.magFilter = LinearFilter;
     // the colour attachment is required by the framebuffer but never written (colorWrite = false)
-    return new WebGLRenderTarget(size, size, { depthTexture: dt, format: RedFormat, type: UnsignedByteType, depthBuffer: true });
+    const t = new WebGLRenderTarget(size, size, { depthTexture: dt, format: RedFormat, type: UnsignedByteType, depthBuffer: true });
+    t.texture.name = 'shadowAtlas';
+    return t;
   }
 
   /** allocate the depth atlas on the GPU now, so samplers bound to it are valid before the first shadow pass */

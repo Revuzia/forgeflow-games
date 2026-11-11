@@ -97,8 +97,25 @@ interface GlStat { ms: number; n: number; bytes: number; inPass: number; max: nu
  */
 export interface MetalAlloc { bytes: number; fresh: number; n: number }
 
+/** what a render target is, for the report: name (texture.name), size, format, MSAA samples */
+export interface RtInfo { name: string; w: number; h: number; fmt: string; samples: number }
+const TYPE_NAMES: Record<number, string> = { 1009: '8', 1015: '32f', 1016: '16f', 1013: '8i', 1010: '8s', 1014: '32i', 1012: '16i', 1011: '16u', 1017: '4444', 1018: '5551', 1020: 'd24s8', 35902: '11f', 1021: '10f' };
+const FORMAT_NAMES: Record<number, string> = { 1023: 'rgba', 1028: 'r', 1030: 'rg', 1026: 'depth', 1027: 'depthstencil', 1022: 'rgb' };
+/** a three.js render target (or null = the canvas) as RtInfo */
+export function describeTarget(t: unknown, canvasW = 0, canvasH = 0): RtInfo {
+  const rt = t as { width?: number; height?: number; samples?: number; texture?: { name?: string; type?: number; format?: number }; textures?: { name?: string; type?: number; format?: number }[]; isWebGLCubeRenderTarget?: boolean } | null;
+  if (!rt) return { name: 'canvas', w: canvasW, h: canvasH, fmt: 'rgba8', samples: 0 };
+  const texs = rt.textures?.length ? rt.textures : rt.texture ? [rt.texture] : [];
+  const one = (x: { type?: number; format?: number }) => `${FORMAT_NAMES[x.format ?? 0] ?? `f${x.format}`}${TYPE_NAMES[x.type ?? 0] ?? `t${x.type}`}`;
+  const fmt = texs.length > 1 ? `${texs.length}x${one(texs[0])}` : texs.length ? one(texs[0]) : '?';
+  return { name: texs[0]?.name || (rt.isWebGLCubeRenderTarget ? 'cube' : 'rt'), w: rt.width ?? 0, h: rt.height ?? 0, fmt, samples: rt.samples ?? 0 };
+}
+
 export class GlTrace {
   slot = 'other';
+  /** PERF item 4: the bound render target (setRenderTarget) and, per (slot, target), binds and draws */
+  target: RtInfo = { name: 'canvas', w: 0, h: 0, fmt: 'rgba8', samples: 0 };
+  readonly targets = new Map<string, { rt: RtInfo; slot: string; binds: number; draws: number }>();
   readonly stats = new Map<string, GlStat>();
   passSwitches = 0;
   inPassUploads = 0;
@@ -147,7 +164,20 @@ export class GlTrace {
 
   uninstall(): void { for (const f of this.restore.splice(0).reverse()) f(); }
 
-  reset(): void { this.stats.clear(); this.metal.clear(); this.sizesSeen.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
+  /** setRenderTarget(t) was called (PerfRecorder wraps the renderer's) */
+  bindTarget(rt: RtInfo): void {
+    this.target = rt;
+    this.tgtRec().binds++;
+  }
+  private tgtRec(): { rt: RtInfo; slot: string; binds: number; draws: number } {
+    const t = this.target;
+    const key = `${this.slot}|${t.name}|${t.w}x${t.h}|${t.fmt}|${t.samples}`;
+    let r = this.targets.get(key);
+    if (!r) { r = { rt: t, slot: this.slot, binds: 0, draws: 0 }; this.targets.set(key, r); }
+    return r;
+  }
+
+  reset(): void { this.targets.clear(); this.stats.clear(); this.metal.clear(); this.sizesSeen.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
 
   /** the Metal allocation a buffer call implies (see MetalAlloc) */
   private noteMetal(op: string, a: unknown[], bytes: number): void {
@@ -168,7 +198,7 @@ export class GlTrace {
   private note(op: string, ms: number, a: unknown[]): void {
     let inPass = 0, bytes = 0;
     if (op === 'bindFramebuffer') { this.passSwitches++; this.drawn = false; }
-    else if (GL_DRAWS.has(op)) this.drawn = true;
+    else if (GL_DRAWS.has(op)) { this.drawn = true; this.tgtRec().draws++; }
     else if (GL_UPLOADS.has(op)) {
       bytes = uploadBytes(op, a);
       if (this.drawn) { inPass = 1; this.inPassUploads++; }
@@ -193,6 +223,13 @@ export class GlTrace {
       const all = ms.reduce((x, [, m]) => x + m.bytes, 0), fresh = ms.reduce((x, [, m]) => x + m.fresh, 0);
       L.push(`metal buffer allocs (est., ANGLE-Metal): ${f1((all * k) / 1e6)} MB/frame, fresh sizes ${f1(fresh / 1e6)} MB over the recording (a full GPU wait per 64 MB fresh) | `
         + ms.map(([s, m]) => `${s} ${f1((m.bytes * k) / 1e6)}MB x${f1(m.n * k)}`).join(' · '));
+    }
+    if (this.targets.size) {
+      // PERF item 4: every render target drawn into, its size and format, per slot: binds and draws a frame, and the
+      // pixels written a frame by full-screen passes (binds x pixels; geometry passes say 'geo')
+      const rows2 = [...this.targets.values()].sort((a, b) => b.rt.w * b.rt.h * b.binds - a.rt.w * a.rt.h * a.binds);
+      L.push(`render targets (slot name WxH format [msaa] binds/frame draws/frame): ` + rows2.slice(0, 40).map((r) =>
+        `${r.slot} ${r.rt.name} ${r.rt.w}x${r.rt.h} ${r.rt.fmt}${r.rt.samples ? ` msaa${r.rt.samples}` : ''} ${f1(r.binds * k)}/${f1(r.draws * k)}`).join(' · '));
     }
     return L;
   }
@@ -227,6 +264,25 @@ export class PerfRecorder {
 
   constructor(slotNames: readonly string[]) { this.slotNames = slotNames; }
 
+  /** the three.js renderer whose setRenderTarget calls are traced while recording (PERF item 4: target sizes) */
+  private three: { setRenderTarget: (...a: unknown[]) => unknown; getDrawingBufferSize?: (v: { x: number; y: number }) => unknown } | null = null;
+  private unwrapThree: (() => void) | null = null;
+  attachRenderer(r: unknown): void { this.three = r as typeof this.three; }
+  private wrapThree(): void {
+    const r = this.three;
+    if (!r || this.unwrapThree) return;
+    const orig = r.setRenderTarget;
+    const own = Object.prototype.hasOwnProperty.call(r, 'setRenderTarget');
+    const tr = this.glTrace;
+    const sz = { x: 0, y: 0, set(x: number, y: number) { this.x = x; this.y = y; return this; } };
+    r.setRenderTarget = function (this: unknown, ...a: unknown[]) {
+      const out = orig.apply(r, a);
+      try { if (!a[0]) r.getDrawingBufferSize?.(sz); tr.bindTarget(describeTarget(a[0], sz.x, sz.y)); } catch { /* untraced */ }
+      return out;
+    };
+    this.unwrapThree = () => { if (own) r.setRenderTarget = orig; else delete (r as { setRenderTarget?: unknown }).setRenderTarget; this.unwrapThree = null; };
+  }
+
   /** the GL context whose passes are timed (null: no GPU column) */
   attach(gl: WebGL2RenderingContext | null): void {
     this.gl = gl;
@@ -250,7 +306,7 @@ export class PerfRecorder {
     this.report = '';
     this.glTrace.reset();
     this.glTrace.slot = 'other';
-    try { if (this.gl && !/[?&]gltrace=0(&|$)/.test(globalThis.location?.search ?? '')) this.glTrace.install(this.gl); } catch { /* untraced */ }
+    try { if (this.gl && !/[?&]gltrace=0(&|$)/.test(globalThis.location?.search ?? '')) { this.glTrace.install(this.gl); this.wrapThree(); } } catch { /* untraced */ }
     this.onDone = onDone ?? null;
     try {
       if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
@@ -336,6 +392,7 @@ export class PerfRecorder {
     if (!this.recording) return;
     this.recording = false;
     this.glTrace.uninstall();
+    this.unwrapThree?.();
     if (this.openSlot >= 0) this.gpuEnd(GPU_SLOTS[this.openSlot]);
     try { this.obs?.disconnect(); } catch { /* gone */ }
     this.obs = null;

@@ -379,6 +379,7 @@ export class App implements UiHost {
     this.running = true;
     // the performance report's hooks (render/perfreport.ts: the overlay's "Record 20 s")
     perfmon.gl = this.renderer.three.getContext() as WebGL2RenderingContext;
+    perfmon.three = this.renderer.three;
     perfmon.context = () => {
       const st = this.renderer.stats;
       const p = this.rig.pose.pos;

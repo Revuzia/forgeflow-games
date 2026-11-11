@@ -773,3 +773,59 @@ long press frame-rate independent. Report after 1-2 verified.
 6. ITEM 7: '1' key after 1000x (ui lane), long-press time-based and drag-cancelled (ui lane: hand/input).
 - GATE check11 (whole tree: F21, F22b, F23, span/preupload default off, build stamp; slot.sh): npm run check 913/913
   pass; npm run build OK (build-prod10.log; the bundle carries its build stamp).
+
+## SESSION 10 (2026-11-11 ~23:00Z) — owner items 3-7 on build c1342092
+- Item 0: run-s9e still in its queue at start (v18a f200 in slot 1 since 21:59Z; v18b shnear=0 and g5u after it):
+  NOT yet read — see NEXT.
+- ITEM 7 (ui, landed, tests/ui-longpress.test.ts 4/4 + ui-arc-decision green):
+  * LONG PRESS (handinput.ts heldFor): the hold is wall time from when the press was HANDLED on the main thread, not
+    from its event time. At 1-3 fps a press waits behind a long frame with an event time hundreds of ms old; the next
+    frame saw now - downT > 620 ms before the drag's moves (queued behind the same frame) were delivered, and opened
+    the radial under a drag. Now min(now - eventTime, now - handledTime) > 620 ms AND path < 8 px: every move made
+    before a frame starts is delivered before it, so a drag is always known by then. Same for the 400 ms hold-to-grab.
+    Test: 16/100/400/1000 ms frames fire at 620 ms +- one frame; a press handled 900 ms late + a drag never opens;
+    mutation (event time only) fails it.
+  * '1' AFTER 1000x: the decision card (tower / covenant) eases 1000x to 10x and RESTORES the speed from before it when
+    answered / put off / expired (DecisionState.prevSpeed): a '1' pressed meanwhile was overridden back to 1000x. Now
+    every speed the player sets (keys, HUD, faster/slower, pause: Shell.playerSpeed) clears prevSpeed. The worker side
+    was checked in-process (_harness/arc-work/perf-speed1.ts: 1000x -> setSpeed(1) -> speed 1, lapse level 0, 1.0
+    ticks/s at once). Worker pacing (sim lane, pacing only): the slice time is checked after EVERY tick (was every 4th:
+    four time-lapse ticks of a big world kept a speed key / snapshot request waiting).
+- ITEM 3 (render, landed, tsc clean, tests/render-fartrees 4/4 incl. a new adversarial exactness test with a mutation
+  check, render-vegcache / -treeshadowcut green; browser check pending): FAR TREES AS ONE MESH PER (DISTANCE BAND,
+  HULL LOD). farcrown.ts: the hull is emitted in a CANONICAL layout (lod 0: 23 vertices / 36 triangles incl. a trunk
+  folded to a point when absent; lod 1: 10 / 16), identical for every kind and variant; verified one-off that every
+  non-degenerate triangle with all its attributes equals the old deduplicated hull (90 hulls, 0 differ).
+  farHullTable(): all hulls in one RGBA32F table texture (row = (kind x 3 + variant) x 2 + lod, 3 texels a vertex).
+  vegetation.ts: the far shader (VEG_FAR, main + depth) fetches its vertex from the table by (gl_VertexID, iHull) first
+  thing in main() and macros stand it in for position / normal / color / aWind / aCard / aCrown / aLeafUv, so lighting,
+  tint, sway, fades and shadows are the same code. Buckets: 4 distance bands from the camera (x the far inner edge
+  0.72 range: 1.6 / 2.6 / 5.2) x 2 lods = at most 8 far draws a pass (was ~66 = one per kind, variant, lod; owner
+  measured ~1100 far draws a frame over 5 passes). A cell's block goes into its band as ONE slot range (all kinds);
+  it keeps its band within 10 % of the edges (no churn), moves when it leaves. SHADOWS PER CASCADE: each band keeps
+  its trees' distance bounds from an anchor (farBounds); cascade k draws a band only if a tree's shadow (treeShadowReach,
+  F22's bound) can reach the cascade sphere AND fall past the previous split (F22 near cut) — was all-or-nothing.
+  NOTE the template geometry must carry a 'normal' attribute (three flat-shades a Standard material without one: the
+  first browser run failed to compile 'vNormal' — caught in the east-water shot log, fixed). Shared index / position /
+  normal are detached before a bucket geometry's dispose (dispose frees every buffer of a geometry).
+- ITEM 4 (report part, landed, tests/render-gltrace 3/3): the perf report's GL trace now wraps three's setRenderTarget
+  while recording and prints `render targets (slot name WxH format [msaa] binds/frame draws/frame)` for EVERY target
+  drawn into (named: hdr, sceneCopy, linDepth, atmoA/B, prevColor, god*, bloom0-6, ldr, lum*, adapt*, gtao, gtaoBlur,
+  cloudsRaw, cloudsHistA/B, shadowAtlas, lens; canvas). The owner's next Ultra report lists them at DPR 2.5. From the
+  code at 2720x1194 Ultra: hdr rgba16f msaa4 + depth f32; sceneCopy, atmoA, atmoB, prevColor, ldr(rgba8) FULL res;
+  linDepth r32f full; cloudsRaw 2x rgba16f at 1/2 x 1/2 (cloudScale 0.5 -> k 2) + cloudsHist 2x rgba16f FULL; gtao /
+  gtaoBlur (setSize from renderer: check the report); god rays 1/4; bloom from 1/2 down 7 mips; shadow atlas 4096^2.
+  Candidates for reduced res (NOT done, needs side-by-side shots): the atmosphere composite (full res, 24 steps at
+  Ultra, ping-pong atmoA/B) — aerial perspective is low frequency except at silhouettes: march at 1/2 res + depth-aware
+  (bilateral, nearest-depth) upsample; the cloud history at full res x 2 MRT (resolve could run at 1/2 with the
+  composite reading it bilinearly).
+- ITEM 5 (in progress): probes in arc-work: probe-eastwater.ts (wet cells near Rubolhin: many lake-margin cells with
+  0.2-3 m of water AND tree cover 0.6-0.9 — a flooded forest the sim keeps), probe-drape.ts / probe-drape2.ts (the
+  water sheet as the shader builds it — fieldpack levels, ocean.ts drape — against the ground tG on a 6 m lattice,
+  2.2 km round the town): the drape covers NO ground more than 1 m above the water's level (detail relief is <= ~2 m
+  and the drape needs vSimD >= 0.1), the level's chord shows water over 86 points only. So the sheet geometry alone
+  does not explain "hills covered by water"; the shots (perf-eastwater.json, medium 640x360) decide. Lake level ~0.2.
+- ITEM 6 (in progress): perf-descent.mjs --phase=zoomfixed: the orbit -> town zoom on a FIXED 60 fps clock (an init
+  script makes performance.now / rAF time advance 1/60 s per frame whatever SwiftShader takes), a shot every frame;
+  _harness/arc-work/perf-lum.py <prefix> prints mean luminance / near-white share per frame. Run cz1 (dist20, babel
+  seed 307987276, high 640x360, 1.2 s flight + 16 frames).

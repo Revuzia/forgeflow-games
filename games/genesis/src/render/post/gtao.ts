@@ -242,6 +242,7 @@ export class GtaoPass {
     const mk = () => new WebGLRenderTarget(2, 2, { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
     this.ao = mk();
     this.blur = mk();
+    this.ao.texture.name = 'gtao'; this.blur.texture.name = 'gtaoBlur';
     this.ao.texture.minFilter = this.ao.texture.magFilter = NearestFilter;
   }
 

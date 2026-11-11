@@ -66,3 +66,24 @@ test('GlTrace: ANGLE-Metal allocation estimate (bufferData = its size, bufferSub
   tr.uninstall();
   assert.ok(!Object.prototype.hasOwnProperty.call(gl, 'bindBuffer'));
 });
+
+test('GlTrace: render targets by slot with size, format, MSAA, binds and draws (PERF item 4)', async () => {
+  const { describeTarget } = await import('../src/render/perfreport.ts');
+  const { WebGLRenderTarget, HalfFloatType, FloatType, RedFormat } = await import('three');
+  class Ctx { drawArrays() {} drawElements() {} getExtension() { return null; } }
+  const gl = new Ctx() as unknown as WebGL2RenderingContext;
+  const tr = new GlTrace();
+  tr.install(gl);
+  const hdr = new WebGLRenderTarget(2720, 1194, { type: HalfFloatType, samples: 4 }); hdr.texture.name = 'hdr';
+  const lin = new WebGLRenderTarget(2720, 1194, { type: FloatType, format: RedFormat }); lin.texture.name = 'linDepth';
+  assert.deepEqual(describeTarget(hdr), { name: 'hdr', w: 2720, h: 1194, fmt: 'rgba16f', samples: 4 });
+  assert.equal(describeTarget(lin).fmt, 'r32f');
+  assert.equal(describeTarget(null, 2720, 1194).name, 'canvas');
+  tr.slot = 'scene'; tr.bindTarget(describeTarget(hdr));
+  for (let i = 0; i < 5; i++) (gl as unknown as { drawElements(): void }).drawElements();
+  tr.slot = 'post'; tr.bindTarget(describeTarget(lin)); (gl as unknown as { drawArrays(): void }).drawArrays();
+  const line = tr.lines(1).find((l) => l.startsWith('render targets'))!;
+  assert.match(line, /scene hdr 2720x1194 rgba16f msaa4 1\/5/);
+  assert.match(line, /post linDepth 2720x1194 r32f 1\/1/);
+  tr.uninstall();
+});

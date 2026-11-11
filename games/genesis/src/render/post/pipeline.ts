@@ -563,6 +563,8 @@ export class PostPipeline {
   constructor() {
     for (let i = 0; i < 2; i++) this.adapt.push(rt(1, 1, FloatType, RGFormat, NearestFilter));
     this.lum.push(rt(64, 64, FloatType, RGFormat, LinearFilter), rt(16, 16, FloatType, RGFormat, LinearFilter), rt(4, 4, FloatType, RGFormat, LinearFilter), rt(1, 1, FloatType, RGFormat, NearestFilter));
+    this.adapt.forEach((t, i) => { t.texture.name = `adapt${i}`; });
+    this.lum.forEach((t, i) => { t.texture.name = `lum${i}`; });
   }
 
   /** next frame's exposure snaps to its target (after camera cuts / teleports) */
@@ -593,6 +595,11 @@ export class PostPipeline {
       bw = Math.floor(bw / 2); bh = Math.floor(bh / 2);
     }
     this.ldr = rt(w, h, UnsignedByteType, RGBAFormat, LinearFilter);
+    // (names for the perf report's render-target list)
+    const nm: [WebGLRenderTarget, string][] = [[this.hdr, 'hdr'], [this.sceneCopy, 'sceneCopy'], [this.linDepth, 'linDepth'], [this.atmoA, 'atmoA'], [this.atmoB, 'atmoB'],
+      [this.prevColor, 'prevColor'], [this.godMask, 'godMask'], [this.godA, 'godA'], [this.godB, 'godB'], [this.ldr, 'ldr']];
+    for (const [t, n] of nm) t.texture.name = n;
+    this.bloomMips.forEach((t, i) => { t.texture.name = `bloom${i}`; });
     this.cut = true;
   }
 

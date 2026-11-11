@@ -4,39 +4,39 @@
   {
    "name": "pe-east250",
    "params": "scenario=babel&source=worker&seed=307987276",
-   "size": [888, 500],
-   "quality": "high",
+   "size": [640, 360],
+   "quality": "medium",
    "ui": false,
    "frames": 2,
    "script": [
     "document.getElementById('boot')?.remove(); G.setSpeed(0);",
-    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 250, tilt: 62, yaw: 90, fov: 55 }); await G.frames(14);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 250, tilt: 62, yaw: 90, fov: 55 }); await G.frames(8);",
     "return { ok: 1 };"
    ]
   },
   {
    "name": "pe-east120",
    "params": "scenario=babel&source=worker&seed=307987276",
-   "size": [888, 500],
-   "quality": "high",
+   "size": [640, 360],
+   "quality": "medium",
    "ui": false,
    "frames": 2,
    "script": [
     "document.getElementById('boot')?.remove(); G.setSpeed(0);",
-    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 120, tilt: 70, yaw: 110, fov: 55 }); await G.frames(14);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 120, tilt: 70, yaw: 110, fov: 55 }); await G.frames(8);",
     "return { ok: 1 };"
    ]
   },
   {
    "name": "pe-top400",
    "params": "scenario=babel&source=worker&seed=307987276",
-   "size": [888, 500],
-   "quality": "high",
+   "size": [640, 360],
+   "quality": "medium",
    "ui": false,
    "frames": 2,
    "script": [
     "document.getElementById('boot')?.remove(); G.setSpeed(0);",
-    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 700, tilt: 25, yaw: 0, fov: 55 }); await G.frames(14);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 700, tilt: 25, yaw: 0, fov: 55 }); await G.frames(8);",
     "return { ok: 1 };"
    ]
   }

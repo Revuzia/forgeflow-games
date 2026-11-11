@@ -204,6 +204,8 @@ export function farHullTable(kinds: readonly TreeKind[], variants: number, skip:
         const t = new BufferGeometry();
         t.setIndex(g.getIndex()!.clone());
         t.setAttribute('position', g.getAttribute('position').clone());
+        // (a mesh without a normal attribute is flat-shaded by three: a different program, no vNormal)
+        t.setAttribute('normal', g.getAttribute('normal').clone());
         tpl[lod] = t;
       }
       g.dispose();

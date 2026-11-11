@@ -1345,6 +1345,7 @@ export class Vegetation {
     const tpl = farTable!.tpl[b.lod];
     geo.setIndex(tpl.getIndex());
     geo.setAttribute('position', tpl.getAttribute('position'));
+    geo.setAttribute('normal', tpl.getAttribute('normal'));
     const extra = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     extra.setUsage(DynamicDrawUsage);
     geo.setAttribute('iExtra', extra);
@@ -1366,11 +1367,11 @@ export class Vegetation {
       (mesh.instanceColor!.array as Float32Array).set((old.instanceColor!.array as Float32Array).subarray(0, b.hi * 3));
       (extra.array as Float32Array).set((b.extra.array as Float32Array).subarray(0, b.hi * 4));
       (hull.array as Float32Array).set((b.hull.array as Float32Array).subarray(0, b.hi));
-      mesh.material = old.material;
+      mesh.material = old.material as MeshStandardMaterial;
       this.farGroup.remove(old);
       // (the shared index / position of the lod template stay — a geometry's dispose frees every buffer it holds — only
       // its instance buffers go)
-      old.dispose(); old.geometry.setIndex(null); old.geometry.deleteAttribute('position'); old.geometry.dispose();
+      old.dispose(); old.geometry.setIndex(null); old.geometry.deleteAttribute('position'); old.geometry.deleteAttribute('normal'); old.geometry.dispose();
       b.dirty = [0, b.hi];
     }
     mesh.count = b.hi;
@@ -1834,7 +1835,7 @@ export class Vegetation {
 
   dispose(): void {
     for (const b of this.buckets) { b.mesh.dispose(); b.depth.dispose(); }
-    for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.setIndex(null); b.mesh.geometry.deleteAttribute('position'); b.mesh.geometry.dispose(); }
+    for (const b of this.far) if (b) { b.mesh.dispose(); b.mesh.geometry.setIndex(null); b.mesh.geometry.deleteAttribute('position'); b.mesh.geometry.deleteAttribute('normal'); b.mesh.geometry.dispose(); }
     this.farMat.dispose(); this.farDepth.dispose();
     this.material.dispose();
   }

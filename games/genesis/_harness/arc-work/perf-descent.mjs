@@ -5,6 +5,9 @@
 //                    (settled), with the far / near tree counts per step
 //   --phase=zoom     a fast zoom orbit -> town through the cloud deck: a shot EVERY frame of the flight
 //                    (`<shot>-zNN.png`) for mean-luminance (white frames) checks, plus camera altitude per frame
+//   --phase=zoomfixed  the same zoom on a FIXED 60 fps clock (performance.now / rAF time advance 1/60 s per frame,
+//                    whatever the real frame takes): every frame of a --zsecs flight, as a 60 fps Mac would draw it;
+//                    shots `<shot>-fNNN.png`; mean luminance per frame: python3 _harness/arc-work/perf-lum.py <shot>-f
 //   --phase=lowsun   region + ridge views at a low sun (--hour), shots + shadow stats (A/B with --extra=reach=0)
 // Usage: node _harness/arc-work/perf-descent.mjs --dist=DIR --phase=descent,zoom --shot=PATH [--extra=a=1&b=2]
 //        [--size=888x500] [--quality=high] [--save=world.gnss] [--steps=2000,1850,...] [--blend=0.8] [--settle=6]
@@ -37,6 +40,15 @@ const PORT = server.address().port;
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-sandbox', '--autoplay-policy=no-user-gesture-required'] });
 const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+// (the fixed clock for --phase=zoomfixed: off until window.__FIXCLOCK__.on(); then time moves 1/60 s per frame)
+await ctx.addInitScript(() => {
+  const real = performance.now.bind(performance);
+  const rraf = window.requestAnimationFrame.bind(window);
+  let on = false, base = 0, t = 0;
+  window.__FIXCLOCK__ = { on() { base = real(); t = 0; on = true; }, off() { on = false; } };
+  performance.now = () => (on ? base + t : real());
+  window.requestAnimationFrame = (cb) => rraf((ts) => { if (on) { t += 1000 / 60; cb(base + t); } else cb(ts); });
+});
 const page = await ctx.newPage();
 page.setDefaultTimeout(3600000);
 const errors = [];
@@ -101,6 +113,25 @@ if (phases.includes('zoom')) {
     console.log('zoom', i, el(), JSON.stringify(st));
   }
   out.phases.zoom = rows;
+}
+
+if (phases.includes('zoomfixed')) {
+  const rows = [];
+  await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour: 10 });
+  await page.evaluate(() => window.__GENESIS__.frames(8));
+  await page.evaluate(() => window.__FIXCLOCK__.on());
+  const secs = Number(opts.zsecs ?? 1.2);
+  await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', poi: town, dist: 150, tilt: 52, hour: 10, blend: secs });
+  const n = Math.round(secs * 60) + Number(opts.zafter ?? 20);
+  for (let i = 0; i < n; i++) {
+    await page.evaluate(() => window.__GENESIS__.frames(1));
+    await page.screenshot({ path: `${shot}-f${String(i).padStart(3, '0')}.png` });
+    const st = await stats();
+    rows.push({ i, ...st });
+    console.log('zf', i, el(), JSON.stringify({ alt: st.alt, draws: st.draws }));
+  }
+  await page.evaluate(() => window.__FIXCLOCK__.off());
+  out.phases.zoomfixed = rows;
 }
 
 if (phases.includes('lowsun')) {

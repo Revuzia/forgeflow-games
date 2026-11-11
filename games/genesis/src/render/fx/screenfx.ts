@@ -285,6 +285,7 @@ export class ScreenFx {
       if (!this.lensRT || this.lensRT.width !== hw || this.lensRT.height !== hh) {
         this.lensRT?.dispose();
         this.lensRT = new WebGLRenderTarget(hw, hh, { type: HalfFloatType, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
+        this.lensRT.texture.name = 'lens';
       }
       this.copy.uniforms.tSrc.value = target.texture as Texture;
       fsq.render(r, this.copy, this.lensRT);

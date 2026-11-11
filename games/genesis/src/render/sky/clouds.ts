@@ -1434,6 +1434,7 @@ export class CloudPass {
     this.noise = new CloudNoise();
     this.raw = mrt(4, 4, NearestFilter);
     this.hist = [mrt(4, 4, LinearFilter), mrt(4, 4, LinearFilter)];
+    this.raw.texture.name = 'cloudsRaw'; this.hist[0].texture.name = 'cloudsHistA'; this.hist[1].texture.name = 'cloudsHistB';
     this.wxRT = cubeTarget(this.wxSize);
     this.shRT = cubeTarget(this.wxSize);
     this.shared = {

@@ -70,6 +70,8 @@ export class PerfMonitor {
   env: (() => PerfEnv) | null = null;
   /** the GL context to time (app.ts) */
   gl: WebGL2RenderingContext | null = null;
+  /** the three.js renderer (app.ts): its render-target binds are traced while recording (target sizes / formats) */
+  three: unknown = null;
 
   begin(slot: PerfSlot): void {
     if (!this.on) return;
@@ -88,6 +90,7 @@ export class PerfMonitor {
   record(ms = 20000, onDone?: (text: string) => void): void {
     this.on = true;
     this.recorder.attach(this.gl);
+    this.recorder.attachRenderer(this.three);
     try { this.recorder.env = this.env ? this.env() : null; } catch { this.recorder.env = null; }
     this.recorder.start(ms, onDone);
   }
