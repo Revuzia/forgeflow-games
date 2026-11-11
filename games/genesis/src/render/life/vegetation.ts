@@ -21,6 +21,7 @@
 //     Per tree: snow on the branches, fire char (a past fire's scar or the fire burning there now), leaf fall of
 //     deciduous species from late autumn to spring. Trees cast shadows.
 
+import { uploadPrefix } from '../upload.ts';
 import {
   Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
   type IUniform,
@@ -952,9 +953,9 @@ export class Vegetation {
       b.mesh.count = b.count;
       b.mesh.visible = b.count > 0;
       if (b.count) {
-        b.mesh.instanceMatrix.needsUpdate = true;
-        if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
-        b.extra.needsUpdate = true;
+        uploadPrefix(b.mesh.instanceMatrix, b.count);
+        uploadPrefix(b.mesh.instanceColor, b.count);
+        uploadPrefix(b.extra, b.count);
       }
     }
     this.stats.instances = total;

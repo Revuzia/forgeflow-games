@@ -4,6 +4,7 @@
 //   iColC (cloth or wool, skin or coat, hair or belly — linear RGB), iStyle (style bits, tool, cadence, flags).
 // Buckets grow by doubling; the CPU writes only what moved.
 
+import { uploadPrefix } from '../upload.ts';
 import {
   BufferGeometry, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4,
   type IUniform, type Material, type ShaderMaterial, type MeshStandardMaterial,
@@ -145,8 +146,9 @@ export class BodyBuckets {
       b.mesh.visible = b.count > 0;
       n += b.count;
       if (!b.count) continue;
-      b.mesh.instanceMatrix.needsUpdate = true;
-      b.anim.needsUpdate = true; b.colA.needsUpdate = true; b.colB.needsUpdate = true; b.colC.needsUpdate = true; b.style.needsUpdate = true; b.fade.needsUpdate = true;
+      const c = b.count;
+      uploadPrefix(b.mesh.instanceMatrix, c);
+      uploadPrefix(b.anim, c); uploadPrefix(b.colA, c); uploadPrefix(b.colB, c); uploadPrefix(b.colC, c); uploadPrefix(b.style, c); uploadPrefix(b.fade, c);
     }
     return n;
   }

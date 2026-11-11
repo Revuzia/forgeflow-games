@@ -20,6 +20,7 @@
 //     instances shrink into the ground across a hand-over band at the edge of the range (no popping, no speckle).
 //     Ground cover casts no shadows (too small to matter at the cascade resolutions).
 
+import { uploadPrefix } from '../upload.ts';
 import { Color, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, DynamicDrawUsage, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
@@ -576,8 +577,8 @@ export class GroundCover {
       mesh.count = n;
       mesh.visible = n > 0;
       if (n) {
-        mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        uploadPrefix(mesh.instanceMatrix, n);
+        uploadPrefix(mesh.instanceColor, n);
       }
     }
     this.stats.instances = total;
@@ -658,7 +659,7 @@ export class GroundCover {
     this.farMeshes.forEach((m, v) => {
       m.count = counts[v];
       m.visible = counts[v] > 0;
-      if (counts[v]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+      if (counts[v]) { uploadPrefix(m.instanceMatrix, counts[v]); uploadPrefix(m.instanceColor, counts[v]); }
     });
   }
 

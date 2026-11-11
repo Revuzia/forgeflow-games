@@ -14,6 +14,7 @@
 // night each throws a pool of light on the road surface (in the ribbon shader, matching the posts exactly), its glass
 // glows (the building shader's lantern part), and the nearest become point lights (render/life/nightlights.ts).
 
+import { uploadPrefix } from '../upload.ts';
 import {
   BufferGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, ShaderMaterial, Uint32BufferAttribute, type IUniform,
@@ -679,9 +680,9 @@ export class Roads {
     }
     for (const p of this.shadowPosts) {
       p.mesh.visible = p.mesh.count > 0;
-      p.mesh.instanceMatrix.needsUpdate = true;
-      p.state.needsUpdate = true;
-      p.info.needsUpdate = true;
+      uploadPrefix(p.mesh.instanceMatrix, p.mesh.count);
+      uploadPrefix(p.state, p.mesh.count);
+      uploadPrefix(p.info, p.mesh.count);
     }
   }
 
@@ -716,9 +717,9 @@ export class Roads {
     }
     for (const p of this.posts) {
       p.mesh.visible = p.mesh.count > 0;
-      p.mesh.instanceMatrix.needsUpdate = true;
-      p.state.needsUpdate = true;
-      p.info.needsUpdate = true;
+      uploadPrefix(p.mesh.instanceMatrix, p.mesh.count);
+      uploadPrefix(p.state, p.mesh.count);
+      uploadPrefix(p.info, p.mesh.count);
     }
     this.stats.lamps = lamps.length;
     this.lampVersion++;

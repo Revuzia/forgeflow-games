@@ -3,6 +3,7 @@
 // vesselMesh), drawn with the building material (wood, cloth, weathering, shadows, night) as instances at the water
 // surface under their rider, bow along the rider's heading. Crowds (crowds.ts) seats the rider and calls add().
 
+import { uploadPrefix } from '../upload.ts';
 import {
   DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, type BufferGeometry, type IUniform, type Material, type ShaderMaterial,
 } from 'three';
@@ -93,7 +94,7 @@ export class Boats {
     for (const b of this.buckets) {
       b.mesh.count = b.count;
       b.mesh.visible = b.count > 0;
-      if (b.count) { b.mesh.instanceMatrix.needsUpdate = true; b.state.needsUpdate = true; b.info.needsUpdate = true; }
+      if (b.count) { uploadPrefix(b.mesh.instanceMatrix, b.count); uploadPrefix(b.state, b.count); uploadPrefix(b.info, b.count); }
     }
   }
 

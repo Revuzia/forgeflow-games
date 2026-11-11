@@ -5,6 +5,7 @@
 // of stones, an ember bed, sticks leaning in, a woodpile). The fire's flames, embers, smoke and light come from the
 // life layer's particles and night lights (life.ts collectFx reads `fires`). Instanced like the boats (boats.ts): the
 // building material and depth, one bucket per prop, grown on demand.
+import { uploadPrefix } from '../upload.ts';
 import {
   DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, type BufferGeometry, type IUniform, type Material, type ShaderMaterial,
 } from 'three';
@@ -98,7 +99,7 @@ export class Camps {
     for (const b of this.buckets) {
       b.mesh.count = b.count;
       b.mesh.visible = b.count > 0;
-      if (b.count) { b.mesh.instanceMatrix.needsUpdate = true; b.state.needsUpdate = true; b.info.needsUpdate = true; }
+      if (b.count) { uploadPrefix(b.mesh.instanceMatrix, b.count); uploadPrefix(b.state, b.count); uploadPrefix(b.info, b.count); }
     }
     if (this.nextSig !== this.sig) { this.sig = this.nextSig; this.version++; }
   }
