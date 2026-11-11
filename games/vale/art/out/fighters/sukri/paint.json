@@ -1,27 +1,60 @@
 {
  "sukri:portrait": {
-  "shipped": "painted",
-  "variant": 2,
-  "why": "only pre-gate pass (v1 and v3 reframed the bust and added a lantern hand); lidded amber eyes with pupils",
-  "model": "grok-imagine-image",
+  "shipped": "3d",
+  "why": "v2 was the only pre-gate pass, but on the A/B look check it paints in a crook and cup at the lower left that the render does not show (an added prop; the silhouette IoU misses it in a corner); v1 and v3 reframed the bust; kept the 3D card",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.511,
+    "iou": 0.756,
+    "pal_mean": 26.0,
+    "pal_max": 36.0,
+    "face_range": 0.98,
+    "face_dark": 0.81,
+    "face_corr": 0.18,
+    "fails": [
+     "framing",
+     "silhouette",
+     "palette",
+     "face"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.983,
+    "iou": 0.984,
+    "pal_mean": 6.8,
+    "pal_max": 12.2,
+    "face_range": 1.02,
+    "face_dark": 0.95,
+    "face_corr": 0.99,
+    "fails": [],
+    "pass": true,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.363,
+    "iou": 0.589,
+    "pal_mean": 27.3,
+    "pal_max": 51.3,
+    "face_range": 1.09,
+    "face_dark": 1.04,
+    "face_corr": -0.06,
+    "fails": [
+     "framing",
+     "silhouette",
+     "palette",
+     "face"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
   "prompt_version": 1,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A square head-and-shoulders portrait card. The character: a small, round hooded wanderer: a soft, low, rounded cream hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, thick cream wrap bands round a barrel body, a tan sash, brown bloomers and boots, a plain walking staff with a crook from which a small glass cup of warm light hangs. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_sukri_portrait__v2.png",
-  "raw_sha256": "df7d919fdc944754b77d198dba4a48e3793999d45e7f80a00b2e4601d91882f8",
-  "gate": {
-   "aspect_err": 0.0,
-   "struct": 0.983,
-   "iou": 0.984,
-   "pal_mean": 6.8,
-   "pal_max": 12.2,
-   "face_range": 1.02,
-   "face_dark": 0.95,
-   "face_corr": 0.99,
-   "fails": [],
-   "pass": true,
-   "variant": 2
-  },
-  "date": "2026-11-09"
+  "date": "2026-11-10"
  },
  "sukri:splash": {
   "shipped": "painted",
@@ -45,7 +78,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "sukri_shadeprint:portrait": {
   "shipped": "painted",
@@ -71,7 +105,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "sukri_shadeprint:splash": {
   "shipped": "3d",
@@ -131,29 +166,30 @@
  },
  "sukri_stillwater:portrait": {
   "shipped": "painted",
-  "variant": 3,
-  "why": "v2 and v3 passed; both are a light paint over the render (palette dE 1.7 / 3.0); v3 carries more paint; v1 reframed the figure",
+  "variant": 2,
+  "why": "v2 and v3 passed the pre-gate; v3's paint read speckle 2.59 over ruling 12's 2.5 before the figure median and v2 2.06; v2 is a light paint over the render (palette dE 1.7); v1 reframed the figure",
   "model": "grok-imagine-image",
   "prompt_version": 1,
   "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. A square head-and-shoulders portrait card. The character: a small, round hooded wanderer: a soft, low, rounded pale stone hood, a carved warm wooden face mask with a gentle smile and honey-amber almond eyes, sea-glass grey-green wrap bands round a barrel body, dark slate leggings and boots, a pale walking staff with a crook from which a small pale-teal glass cup hangs. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: alive, with upper lids and dark pupils, looking out; never glowing, never solid colour, never empty or hollow. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_sukri_stillwater_portrait__v3.png",
-  "raw_sha256": "6e098fd27067156628f9da79664a902e61863b338bb4003c8693f75bc7cf8f46",
+  "raw": "tools/imagegen/raw/card_sukri_stillwater_portrait__v2.png",
+  "raw_sha256": "f3d55868e2985d32a569e5a79a5ad946e15ea1f76bc769d3f0a39e9becb212fe",
   "gate": {
    "aspect_err": 0.0,
-   "struct": 0.992,
-   "iou": 0.982,
-   "pal_mean": 3.0,
-   "pal_max": 4.1,
-   "face_range": 0.98,
-   "face_dark": 0.95,
+   "struct": 0.999,
+   "iou": 0.983,
+   "pal_mean": 1.7,
+   "pal_max": 2.0,
+   "face_range": 1.01,
+   "face_dark": 0.98,
    "face_corr": 1.0,
-   "store_de": 34.4,
+   "store_de": 34.6,
    "store_floor": 12.0,
    "fails": [],
    "pass": true,
-   "variant": 3
+   "variant": 2
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "sukri_stillwater:splash": {
   "shipped": "painted",
@@ -177,6 +213,7 @@
    "pass": true,
    "variant": 2
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  }
 }

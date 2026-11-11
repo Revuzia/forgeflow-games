@@ -25,7 +25,8 @@ gate    Per variant, all automatic (a person still looks: `review`):
                    least half the render's share, L* structure correlation >= 0.45
           store    a skin portrait: mean CIE76 dE against the shipped base portrait (256 px, the gen_store.ts measure) at its tier's
                    floor (standard 12, deluxe or legend 18); node tools/gen_store.ts --check is still run after accepting
-accept  Copies the variant (or the 3D reference) to the card's shipped path (plates.image_path, the path the build writes, so
+accept  Copies the variant (resized, then FIG_MEDIAN 3x3 median passes inside the render's figure: ruling 12's speckle bar) or
+        the 3D reference to the card's shipped path (plates.image_path, the path the build writes, so
         npm run content and the store read it) and records card, variant, prompt version and full text, raw file, model,
         gate numbers and why in art/out/fighters/<fid>/paint.json.
 """
@@ -53,6 +54,8 @@ CACHE = os.path.join(GAME, "art", ".cache", "fighters", "paint")
 PROMPTS = os.path.join(HERE, "paint_prompts.json")
 MODEL = "grok-imagine-image"
 TIER_FLOOR = {"standard": 12.0, "deluxe": 18.0, "legend": 18.0}
+FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting (ruling 12's speckle bar <= 2.5: the raw
+                      # painting's pixel-scale grain read 2.6-5.2 on the figure; one pass reads 0.9-1.8, strokes survive)
 GATE = {"aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
@@ -287,6 +290,15 @@ def review(fid: str, out_dir: str) -> None:
         print(f"[paint] review {sid} {kind}: " + "; ".join(labels))
 
 
+def shipped_painting(sid: str, kind: str, v: int) -> np.ndarray:
+    """The accepted painting as shipped: resized to the card, then FIG_MEDIAN median passes inside the render's figure."""
+    P, _asp = load_variant(raw_variant(sid, kind, v), kind)
+    if FIG_MEDIAN > 0:
+        _F, A, _m = ref3d(sid, kind)
+        P = plates.median3(np.concatenate([P, A[..., None]], 2).astype(np.float32), FIG_MEDIAN)[..., :3]
+    return P
+
+
 def record_path(fid: str) -> str:
     return os.path.join(plates.OUT_DIR, fid, "paint.json")
 
@@ -308,13 +320,13 @@ def accept(card: str, choice: str, why: str) -> None:
                                 "date": time.strftime("%Y-%m-%d")}
     else:
         v = int(choice)
-        P, _asp = load_variant(raw_variant(sid, kind, v), kind)
+        P = shipped_painting(sid, kind, v)
         plates.save_png(dst, P)
         raw = raw_variant(sid, kind, v)
         rec[f"{sid}:{kind}"] = {"shipped": "painted", "variant": v, "why": why, "model": MODEL, "prompt_version": ver,
                                 "prompt": text, "raw": os.path.relpath(raw, GAME),
                                 "raw_sha256": hashlib.sha256(open(raw, "rb").read()).hexdigest(),
-                                "gate": gates.get(v), "date": time.strftime("%Y-%m-%d")}
+                                "gate": gates.get(v), "figure_median": FIG_MEDIAN, "date": time.strftime("%Y-%m-%d")}
     with open(record_path(fid), "w", encoding="utf-8") as f:
         json.dump(dict(sorted(rec.items())), f, indent=1)
     print(f"[paint] {sid} {kind}: shipped {choice} -> {os.path.relpath(dst, GAME)}")
@@ -329,7 +341,7 @@ def apply(fid: str) -> None:
             if not os.path.isfile(raw) or hashlib.sha256(open(raw, "rb").read()).hexdigest() != r["raw_sha256"]:
                 print(f"[paint] {card}: the kept raw is missing or changed: the 3D card stays; repaint it")
                 continue
-            plates.save_png(plates.image_path(sid, kind), load_variant(raw, kind)[0])
+            plates.save_png(plates.image_path(sid, kind), shipped_painting(sid, kind, int(r["variant"])))
             print(f"[paint] {card}: re-shipped variant {r['variant']}")
 
 

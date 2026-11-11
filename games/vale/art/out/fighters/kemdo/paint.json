@@ -21,7 +21,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "kemdo:splash": {
   "shipped": "painted",
@@ -45,7 +46,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "kemdo_highrim:portrait": {
   "shipped": "painted",
@@ -71,7 +73,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "kemdo_highrim:splash": {
   "shipped": "painted",
@@ -95,7 +98,8 @@
    "pass": true,
    "variant": 1
   },
-  "date": "2026-11-09"
+  "figure_median": 1,
+  "date": "2026-11-10"
  },
  "kemdo_long_evening:portrait": {
   "shipped": "3d",
