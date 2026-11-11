@@ -1,0 +1,28 @@
+{
+  "lane": "Visual effects (max pass)",
+  "verifier": "adversarial verifier 1",
+  "date": "2026-11-11",
+  "pass": true,
+  "score": 7.5,
+  "items": [
+    {"id": "VFX-1", "verdict": "better", "evidence": "Read VFX-1a/1b sheets and recaptured _harness/_shots/vfxv1_01.png (current build): the countdown dial sweeps down over 0.1-1.0 s on stun, silence, sleep and untargetable; stun has a turning tick crown; untargetable is now open glass rings over a dial instead of an opaque egg. Weak spots: silence is still a dark blue ball on the head (the clapper and toll ring barely read), and resist shred is now a dim purple ring that reads weaker than the old pink torus."},
+    {"id": "VFX-2", "verdict": "better", "evidence": "VFX-2 sheet plus the lib_bolt_lumen recapture: a signature-coloured pool sits under the head while it flies and fades where it lets go. passes.ground_light_pass is in post(); build_vfx --check reports 0 diffs."},
+    {"id": "VFX-3", "verdict": "better", "evidence": "Level-up is now a dial-ring stair with a shaft and tick dial (recaptured). Objective cracks the plaza and no longer fills the frame with a white tube. Respawn still reads as a single light column at 0.1-0.3 s, and summon rise is a stacked translucent cylinder that leaves a black ink stain."},
+    {"id": "VFX-4", "verdict": "better", "evidence": "Recaptured lib_death_shatter: a ring, chips, an ink/ember plume and a dial-ringed scorch that stays to 1.0 s and more (before: gone by 0.6 s). The scorch's centre is a near-black disc that reads somewhat like a hole. structure_break's 9 m team light washes the whole frame blue for about 0.3 s."},
+    {"id": "VFX-5", "verdict": "better", "evidence": "Partial. Sunsplinter's burst and volley in sun-gold with cracks read well, and the Needle tiers clearly scale. Both sweeps are the old opaque cone mesh recoloured; Longshade's is cream with black blobs and looks crude. Item-proc variants and monster death/enrage defs were not built."},
+    {"id": "VFX-6", "verdict": "better", "evidence": "Only Marund was done. The dome is now a rim-weighted shell with ring fronts, and the body under it stays visible. My probe_combat_polish run with --ults all passes: Marund core x2.16 (ruling 10a target x2.0), detail min 0.43 with 1 frame lost, box white 0.066. Hesmi, Lisvel, Nurrow and Vashil were not re-tuned; their detail-lost counts sit at the limit of 2."},
+    {"id": "VFX-7", "verdict": "better", "evidence": "VFX-7-8 sheet: heavy hit and crit add a second beat (a ground light pool and a dust ring at 0.3 s) where before there was nothing past the spark."},
+    {"id": "VFX-8", "verdict": "same", "evidence": "No visible difference on lib_hit_magic or lib_hit_phys_light in the sheet. The hold is measured now: disc >= 0.5 lasts kemdo 300 ms, rishal 333 ms and tunlan 200 ms, all >= 167 ms, so it passes but adds no visible gain."},
+    {"id": "VFX-9", "verdict": "better", "evidence": "Gleam coins arc with glints, and the bounty adds a ring. Before it was 3 dots that were gone by 0.3 s. director.ts fires it for the viewer's own kills only and has no content ids in src."},
+    {"id": "VFX-10", "verdict": "same", "evidence": "ardit_a1_windup before and after are nearly identical. The marund and lib_windup_ult pools are hard to separate from fight noise in the sheet."},
+    {"id": "VFX-11", "verdict": "same", "evidence": "Ultra's 6 lights and x1.3 secondary density are not visible in any A/B. Counts stay within budget (see budgets); fps is unverified."}
+  ],
+  "problems": [
+    {"what": "The silence look is still a dark ball over the head", "severity": "minor", "fix": "Swap the sphere for an open bell rim or shell (rim-only alpha) so the clapper and toll read and the head shows through."},
+    {"what": "Sunsplinter and Longshade sweeps reuse the opaque cone mesh; Longshade's is cream with black blobs", "severity": "minor", "fix": "Use an additive, rim-weighted erode cone (uShapeKind 2 path) or a ground-decal sweep with an ink edge."},
+    {"what": "VFX-5c item procs, monster death/enrage, and VFX-6 for Hesmi/Lisvel/Nurrow/Vashil are not done", "severity": "minor", "fix": "Finish them in a follow-up pass. Lisvel, Nurrow and Vashil are at detailLost 2 (the limit)."},
+    {"what": "lib_structure_break's 9 m team light floods the whole frame for about 0.3 s, and the death scorch centre reads as a black hole", "severity": "minor", "fix": "Bring the light radius to about 5-6 m or intensity to about 5. Lift the scorch centre to a dark warm grey with the tick ring kept."}
+  ],
+  "budgets": "perf_1080 --prod --q high,ultra --no-dyn --no-match --no-mem (current build, RIFT t=600) gives High 184 draws, 231k tris, 39 programs and Ultra 134 draws, 206k tris, 39 programs. Both are within 450 draws, 500k tris and 40 programs. The engineer's stress frame (High 168 calls, 296k tris, 39 programs) is also within budget. Load was 24-49, so timing was not measured; fps is owed to the idle gate. Match memory was not measured: the lane adds no textures and about 0.1 MB of geometry. typecheck passes. build_vfx --check: 293 defs, 0 changes. probes 55/55 pass. probe_combat_polish ult,hold --ults all PASS. content:check fails only on content/audio.json missing *_4.ogg/m4a files, which belong to the audio lane's uncommitted edit; there are 0 VFX errors.",
+  "notes": "Recapture: _harness/_shots/vfxv1_01.png (gitignored). Probe report: _harness/_reports/fw_W1_combat_polish_vfx_verify1.json (gitignored). No sensitivity or originality issues: the motifs are VALE's hour-dial, ink, Gleam and Seat. The lane is clearly better overall on status, projectiles, deaths, events and hits. The wind-ups and the Ultra tier show no visible change."
+}
