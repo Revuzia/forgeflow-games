@@ -1535,6 +1535,7 @@ ${TERRAIN_VERT_CORE}
     if (lavaH > 0.0) {
       vec3 upV = normalize(position);
       tPos += upV * lavaH;
+      tZEdge += lavaH;
       tNrm = normalize(mix(tNrm, upV, smoothstep(0.15, 1.5, lavaH) * 0.65));
     }
   }

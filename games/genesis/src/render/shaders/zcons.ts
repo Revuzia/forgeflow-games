@@ -18,10 +18,10 @@
 // Close to the camera the tangent goes below zero, hence EXT_depth_clamp (depth clamps to 0, still a lower bound).
 //
 // The terrain is one object from horizon to feet, so no single tangent fits it. It defines GENESIS_ZEDGE instead, a
-// bound e on the length of any edge at this vertex: the vertex gets its exact log depth minus the most a straight
-// interpolation can exceed the convex curve inside a triangle, K·(e / (w − e))² / (8 ln 2) (chord error ≤ Δu²·L''/8
-// with Δu ≤ e / (w_min·w_max), L'' ≤ K·w_max² / ln 2 and w_min ≥ w − e; 0.2705 = 1.5 / (8 ln 2), half as much again
-// for safety). With LOD-sized triangles that slack is centimetres, so the ground is rejected under anything on it.
+// bound e on the length of any edge at this vertex, and gets per vertex the clip z of its exact log depth lowered by
+// the most an affine interpolation of the convex g(w) = w·(2L(w) − 1) can rise above g inside a triangle (see VERTEX;
+// valid for vertices behind the eye too — review 2026-11-11: the first version's 'too close' branch, z = −5w, was
+// positive behind the eye and broke the bound near the camera). With LOD-sized triangles the slack is centimetres.
 // Without both extensions nothing is touched.
 
 import { ShaderChunk, type WebGLRenderer } from 'three';
@@ -46,18 +46,17 @@ const VERTEX = /* glsl */ `
 	if ( vIsPerspective != 0.0 ) {
 		float zcK = logDepthBufFC * 0.5;
 		#ifdef GENESIS_ZEDGE
-			// a finely tessellated mesh that knows its longest edge (m): the exact log depth at each vertex, lowered by
-			// the most the rasteriser's straight interpolation can rise above the curve within a triangle
+			// a finely tessellated mesh that knows a bound e (m) on the edges at this vertex. Work in clip space, where
+			// z and w interpolate affinely over the triangle (also after clipping): the clip z that yields the log depth
+			// is g(w) = w·(2L(w) − 1), convex, continued by its tangent −w behind the eye (w < 0). The affine
+			// interpolation of g exceeds g by at most sup(g'')·Δw²/8 with Δw ≤ e and g'' ≤ 2K'(I + I²),
+			// I = 1/(1 + max(w − e, 0)) (K' = K/ln 2, g'' falls with w); half as much again for safety, plus the margin
 			float zcE = GENESIS_ZEDGE;
 			float zcW = gl_Position.w;
-			if ( zcW > 2.0 * zcE ) {
-				float zcR = zcE / ( zcW - zcE );
-				float zcD = zcK * log2( 1.0 + zcW ) - zcK * zcR * zcR * 0.2705 - ${MARGIN};
-				gl_Position.z = ( 2.0 * zcD - 1.0 ) * zcW;
-			} else {
-				// too close for the bound: far below the curve (never rejected early; the depth clamps to 0)
-				gl_Position.z = - 5.0 * zcW;
-			}
+			float zcI = 1.0 / ( 1.0 + max( zcW - zcE, 0.0 ) );
+			float zcG = 2.0 * zcK * 1.4426950 * ( zcI + zcI * zcI );
+			float zcZ = zcW > 0.0 ? zcW * ( 2.0 * zcK * log2( 1.0 + zcW ) - 1.0 ) : - zcW;
+			gl_Position.z = zcZ - 0.1875 * zcG * zcE * zcE - 2.0 * ${MARGIN} * abs( zcW );
 		#else
 			#ifdef GENESIS_ZREF
 				float zcW0 = GENESIS_ZREF;
@@ -119,4 +118,21 @@ export function depthClamp(renderer: WebGLRenderer, on: boolean): void {
   if (!ZCONS.on) return;
   const gl = renderer.getContext();
   if (on) gl.enable(DEPTH_CLAMP); else gl.disable(DEPTH_CLAMP);
+}
+
+// ── JS mirrors of the two vertex bounds (tests/render-zcons.test.ts checks them against the log depth) ──
+const MARGIN_N = Number(MARGIN);
+/** clip z the tangent path gives a vertex at view depth w for reference depth w0 (K = logDepthBufFC / 2) */
+export function tangentClipZ(w: number, w0: number, K: number): number {
+  const r = Math.min(Math.max(w0, 1), 1e7);
+  const S = (K * r * r) / (Math.LN2 * (r + 1));
+  const A = K * Math.log2(1 + r) + S / r - MARGIN_N;
+  return (2 * A - 1) * w - 2 * S;
+}
+/** clip z the edge path gives a vertex at view depth w whose edges are at most e long */
+export function edgeClipZ(w: number, e: number, K: number): number {
+  const I = 1 / (1 + Math.max(w - e, 0));
+  const G = 2 * K * Math.LOG2E * (I + I * I);
+  const g = w > 0 ? w * (2 * K * Math.log2(1 + w) - 1) : -w;
+  return g - 0.1875 * G * e * e - 2 * MARGIN_N * Math.abs(w);
 }

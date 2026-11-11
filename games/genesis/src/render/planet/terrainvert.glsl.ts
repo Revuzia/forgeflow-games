@@ -10,10 +10,11 @@
 import { CURVE_ALPHA } from '../../sim/grid/surface.ts';
 
 export const TERRAIN_VERT_PARS = /* glsl */ `
-// early depth rejection (shaders/zcons.ts): no edge of a patch at this level is longer than this (m). The lattice
-// spacing is at most uMorph.z / 1.5 (ChunkLOD.skirtDepth), so 3 × uMorph.z covers an edge on a 70° slope plus the skirt
-// that hangs from a border vertex, and 2 m more the detail relief and lava
-#define GENESIS_ZEDGE (3.0 * uMorph.z + 2.0)
+// early depth rejection (shaders/zcons.ts): a bound on the length of the edges at this vertex (m), tZEdge, set at the
+// end of TERRAIN_VERT_CORE: the lattice spacing is at most uMorph.z / 1.5 (ChunkLOD.skirtDepth), so 3 × uMorph.z covers
+// a diagonal edge on a ~70° slope plus the skirt that hangs from a border vertex, 2 m more the detail relief; steeper
+// ground widens it by 1 / (n·up) (a cliff's own vertices see the cliff), and lava by its depth (terrainmat VERT_MAIN)
+#define GENESIS_ZEDGE tZEdge
 uniform highp sampler2D uFieldA;
 uniform highp sampler2D uFieldN;
 uniform highp sampler2D uFieldG;
@@ -145,6 +146,7 @@ export const TERRAIN_VERT_CORE = /* glsl */ `
       tG = mix(tG, 0.5 * (g1 + g2), tMorph);
     }
   }
+  float tZEdge = (3.0 * uMorph.z + 2.0) / max(dot(tNrm, position), 0.3);
 #ifndef WATER_SURFACE
   // skirts hang below the ground to hide transient LOD cracks; the water sheet must not get them (they would be
   // vertical curtains of water — straight 'channel walls' — wherever a patch border crosses a river or a lake)

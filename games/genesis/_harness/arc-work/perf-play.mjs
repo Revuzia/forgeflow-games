@@ -54,9 +54,12 @@ const INIT = `(() => {
     wrap('useProgram', (c) => { c.prog++; });
     for (const n of Object.getOwnPropertyNames(G)) if (/^uniform/.test(n) && n !== 'uniformBlockBinding') wrap(n, (c) => { c.unif++; });
     const bytes = (x) => (x && x.byteLength) || 0;
-    wrap('bufferData', (c, a) => { c.bufN++; c.bufB += typeof a[1] === 'number' ? a[1] : bytes(a[1]); });
-    wrap('bufferSubData', (c, a) => { c.bufN++; c.bufB += a[4] != null ? a[4] * (a[2]?.BYTES_PER_ELEMENT || 1) : bytes(a[2]); });
-    for (const n of ['texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'compressedTexImage2D', 'copyTexSubImage2D']) wrap(n, (c, a) => { c.texN++; for (const x of a) if (x && typeof x === 'object' && 'byteLength' in x) c.texB += x.byteLength; else if (x && typeof x === 'object' && 'width' in x) c.texB += x.width * x.height * 4; });
+    // --stacks=1: who uploads (buffer / texture bytes by JS call site, while measuring)
+    P.stacks = ${opts.stacks === '1'}; P.stk = {};
+    const site = (kind, b) => { if (!P.stacks || !P.on) return; const st = (new Error().stack || '').split('\n').slice(3, 9).map((l) => l.trim().replace(/^at /, '').replace(/https?:[^)]*\/assets\//, '').replace(/\?[^:]*/, '')).join(' < '); const k = kind + ' ' + st; const e = P.stk[k] || (P.stk[k] = { n: 0, b: 0 }); e.n++; e.b += b; };
+    wrap('bufferData', (c, a) => { const b = typeof a[1] === 'number' ? a[1] : bytes(a[1]); c.bufN++; c.bufB += b; site('bufData', b); });
+    wrap('bufferSubData', (c, a) => { const b = a[4] != null ? a[4] * (a[2]?.BYTES_PER_ELEMENT || 1) : bytes(a[2]); c.bufN++; c.bufB += b; site('bufSub', b); });
+    for (const n of ['texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'compressedTexImage2D', 'copyTexSubImage2D']) wrap(n, (c, a) => { c.texN++; let b = 0; for (const x of a) if (x && typeof x === 'object' && 'byteLength' in x) b += x.byteLength; else if (x && typeof x === 'object' && 'width' in x) b += x.width * x.height * 4; c.texB += b; site(n, b); });
     wrap('bindFramebuffer', (c) => { c.fbo++; });
     for (const n of ['enable', 'disable', 'blendFunc', 'blendFuncSeparate', 'depthMask', 'depthFunc', 'colorMask', 'cullFace', 'viewport', 'scissor', 'bindTexture', 'activeTexture', 'bindVertexArray', 'bindBuffer']) wrap(n, (c) => { c.state++; });
     for (const n of ['compileShader', 'linkProgram']) wrap(n, (c) => { c.compile++; });
@@ -209,6 +212,7 @@ for (const sc of scenes) {
     console.log(`${sc.padEnd(7)} ${String(sp).padStart(5)}x  work mean ${w.mean.toFixed(1)} p50 ${w.p50.toFixed(1)} p95 ${w.p95.toFixed(1)} p99 ${w.p99.toFixed(1)} max ${w.max.toFixed(1)} >16:${w.over16} >33:${w.over33} >50:${w.over50} /${w.n}  | msgs ${r.msgs.n} clone p95 ${r.msgs.clone.p95.toFixed(1)} max ${r.msgs.clone.max.toFixed(1)} handle p95 ${r.msgs.handle.p95.toFixed(1)} max ${r.msgs.handle.max.toFixed(1)} | interval p50 ${r.interval.p50.toFixed(0)} | prog +${r.newPrograms}` +
       (r.gl ? ` | gl draw ${r.gl.draw} prog ${r.gl.prog} unif ${r.gl.unif} buf ${(r.gl.bufB / 1024).toFixed(0)}k/${r.gl.bufN} tex ${(r.gl.texB / 1024).toFixed(0)}k/${r.gl.texN} sync ${r.gl.sync} ${JSON.stringify(r.gl.syncNames)}` : ''));
     console.log('   slots', JSON.stringify(Object.fromEntries(Object.entries(r.slots).filter(([, v]) => v > 0.05).map(([k2, v]) => [k2, +v.toFixed(2)]))), 'render', JSON.stringify(r.state.render));
+    if (opts.stacks === '1') { const stk = await page.evaluate(() => { const P = window.__PERFPLAY__; const o = P.stk; P.stk = {}; return o; }); const nF = Math.max(1, nFrames); console.log('   uploads by site (per frame):'); for (const [k2, v] of Object.entries(stk).sort((a, b) => b[1].b - a[1].b).slice(0, 25)) console.log(`     ${(v.b / nF / 1024).toFixed(0).padStart(7)} kB ${(v.n / nF).toFixed(1).padStart(6)}x  ${k2.slice(0, 400)}`); }
     if (r.profile) console.log('   profile gc', r.profile.gcMs, 'ms; top/frame:', r.profile.top.slice(0, 14).map(([k2, v]) => `${k2}=${v}`).join(' | '));
   }
 }
