@@ -1,0 +1,487 @@
+{
+ "t": 10,
+ "frames": 400,
+ "note": "each fighter plays the role in place for `frames` display frames at 60 Hz (Actor.pose); actor space; headCm/handCm = range, holdFrames = longest run with head, chest and both hands each under 1.5 mm/frame; off = clips only, on = clips + life layer",
+ "summary": {
+  "ardit/idle": {
+   "off": {
+    "headCm": 3.7,
+    "handCm": 3.3,
+    "holdFrames": 359
+   },
+   "on": {
+    "headCm": 8.2,
+    "handCm": 10,
+    "holdFrames": 27
+   }
+  },
+  "ilsheta/idle": {
+   "off": {
+    "headCm": 9.3,
+    "handCm": 11.9,
+    "holdFrames": 14
+   },
+   "on": {
+    "headCm": 13.7,
+    "handCm": 16.3,
+    "holdFrames": 14
+   }
+  },
+  "lisvel/idle": {
+   "off": {
+    "headCm": 4,
+    "handCm": 3.9,
+    "holdFrames": 359
+   },
+   "on": {
+    "headCm": 8.6,
+    "handCm": 7.7,
+    "holdFrames": 64
+   }
+  },
+  "nurrow/idle": {
+   "off": {
+    "headCm": 6.9,
+    "handCm": 12.1,
+    "holdFrames": 22
+   },
+   "on": {
+    "headCm": 11.6,
+    "handCm": 14.9,
+    "holdFrames": 22
+   }
+  },
+  "sukri/idle": {
+   "off": {
+    "headCm": 5.1,
+    "handCm": 7.8,
+    "holdFrames": 16
+   },
+   "on": {
+    "headCm": 10.1,
+    "handCm": 10.2,
+    "holdFrames": 20
+   }
+  },
+  "ulkro/idle": {
+   "off": {
+    "headCm": 3.6,
+    "handCm": 3.1,
+    "holdFrames": 359
+   },
+   "on": {
+    "headCm": 8.6,
+    "handCm": 9.5,
+    "holdFrames": 59
+   }
+  },
+  "ervet/idle": {
+   "off": {
+    "headCm": 8.5,
+    "handCm": 12.2,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 14,
+    "handCm": 13.7,
+    "holdFrames": 8
+   }
+  },
+  "odrum/idle": {
+   "off": {
+    "headCm": 5.6,
+    "handCm": 6,
+    "holdFrames": 24
+   },
+   "on": {
+    "headCm": 9.9,
+    "handCm": 9.3,
+    "holdFrames": 45
+   }
+  },
+  "burdam/idle": {
+   "off": {
+    "headCm": 7.4,
+    "handCm": 11.4,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 14.3,
+    "handCm": 17.5,
+    "holdFrames": 8
+   }
+  },
+  "marund/idle": {
+   "off": {
+    "headCm": 8.2,
+    "handCm": 6.7,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 14.1,
+    "handCm": 12,
+    "holdFrames": 12
+   }
+  },
+  "ardit/channel": {
+   "off": {
+    "headCm": 1.9,
+    "handCm": 1.3,
+    "holdFrames": 16
+   },
+   "on": {
+    "headCm": 6.6,
+    "handCm": 7.1,
+    "holdFrames": 52
+   }
+  },
+  "ilsheta/channel": {
+   "off": {
+    "headCm": 6.9,
+    "handCm": 8.8,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 10.8,
+    "handCm": 12.3,
+    "holdFrames": 0
+   }
+  },
+  "lisvel/channel": {
+   "off": {
+    "headCm": 1.3,
+    "handCm": 1.3,
+    "holdFrames": 359
+   },
+   "on": {
+    "headCm": 6.2,
+    "handCm": 7.4,
+    "holdFrames": 52
+   }
+  },
+  "nurrow/channel": {
+   "off": {
+    "headCm": 5.4,
+    "handCm": 7.3,
+    "holdFrames": 32
+   },
+   "on": {
+    "headCm": 6.3,
+    "handCm": 11.2,
+    "holdFrames": 32
+   }
+  },
+  "sukri/channel": {
+   "off": {
+    "headCm": 2.4,
+    "handCm": 9.3,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 5.1,
+    "handCm": 12.1,
+    "holdFrames": 0
+   }
+  },
+  "ulkro/channel": {
+   "off": {
+    "headCm": 1.4,
+    "handCm": 2,
+    "holdFrames": 38
+   },
+   "on": {
+    "headCm": 4.5,
+    "handCm": 7,
+    "holdFrames": 34
+   }
+  },
+  "ervet/channel": {
+   "off": {
+    "headCm": 71.9,
+    "handCm": 94.5,
+    "holdFrames": 2
+   },
+   "on": {
+    "headCm": 75.5,
+    "handCm": 97.5,
+    "holdFrames": 2
+   }
+  },
+  "odrum/channel": {
+   "off": {
+    "headCm": 7.7,
+    "handCm": 0,
+    "holdFrames": 14
+   },
+   "on": {
+    "headCm": 10.3,
+    "handCm": 5.7,
+    "holdFrames": 14
+   }
+  },
+  "burdam/channel": {
+   "off": {
+    "headCm": 9.3,
+    "handCm": 8.3,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 13.6,
+    "handCm": 15.5,
+    "holdFrames": 4
+   }
+  },
+  "marund/channel": {
+   "off": {
+    "headCm": 14.3,
+    "handCm": 27.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 17.7,
+    "handCm": 28.9,
+    "holdFrames": 0
+   }
+  },
+  "ardit/recall": {
+   "off": {
+    "headCm": 56.5,
+    "handCm": 57.4,
+    "holdFrames": 18
+   },
+   "on": {
+    "headCm": 57.1,
+    "handCm": 58.4,
+    "holdFrames": 16
+   }
+  },
+  "ilsheta/recall": {
+   "off": {
+    "headCm": 15.2,
+    "handCm": 45.1,
+    "holdFrames": 44
+   },
+   "on": {
+    "headCm": 15.2,
+    "handCm": 44.2,
+    "holdFrames": 44
+   }
+  },
+  "lisvel/recall": {
+   "off": {
+    "headCm": 26.9,
+    "handCm": 58.9,
+    "holdFrames": 18
+   },
+   "on": {
+    "headCm": 27.7,
+    "handCm": 59.3,
+    "holdFrames": 20
+   }
+  },
+  "nurrow/recall": {
+   "off": {
+    "headCm": 24,
+    "handCm": 69.8,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 25.3,
+    "handCm": 68.7,
+    "holdFrames": 18
+   }
+  },
+  "sukri/recall": {
+   "off": {
+    "headCm": 23,
+    "handCm": 39.3,
+    "holdFrames": 16
+   },
+   "on": {
+    "headCm": 25.3,
+    "handCm": 39.7,
+    "holdFrames": 16
+   }
+  },
+  "ulkro/recall": {
+   "off": {
+    "headCm": 37.8,
+    "handCm": 79.2,
+    "holdFrames": 24
+   },
+   "on": {
+    "headCm": 38.8,
+    "handCm": 80.1,
+    "holdFrames": 26
+   }
+  },
+  "ervet/recall": {
+   "off": {
+    "headCm": 56.6,
+    "handCm": 42.9,
+    "holdFrames": 114
+   },
+   "on": {
+    "headCm": 57.7,
+    "handCm": 43.1,
+    "holdFrames": 112
+   }
+  },
+  "odrum/recall": {
+   "off": {
+    "headCm": 16.4,
+    "handCm": 10.2,
+    "holdFrames": 76
+   },
+   "on": {
+    "headCm": 16.4,
+    "handCm": 11.7,
+    "holdFrames": 55
+   }
+  },
+  "burdam/recall": {
+   "off": {
+    "headCm": 12.9,
+    "handCm": 81.4,
+    "holdFrames": 128
+   },
+   "on": {
+    "headCm": 13.5,
+    "handCm": 83.5,
+    "holdFrames": 27
+   }
+  },
+  "marund/recall": {
+   "off": {
+    "headCm": 23.2,
+    "handCm": 117.9,
+    "holdFrames": 10
+   },
+   "on": {
+    "headCm": 23.1,
+    "handCm": 120.7,
+    "holdFrames": 10
+   }
+  },
+  "ardit/stunned": {
+   "off": {
+    "headCm": 14.6,
+    "handCm": 7.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 24,
+    "handCm": 15.5,
+    "holdFrames": 0
+   }
+  },
+  "ilsheta/stunned": {
+   "off": {
+    "headCm": 7.8,
+    "handCm": 5.4,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 15.9,
+    "handCm": 11.7,
+    "holdFrames": 8
+   }
+  },
+  "lisvel/stunned": {
+   "off": {
+    "headCm": 9,
+    "handCm": 20.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 16,
+    "handCm": 21.1,
+    "holdFrames": 0
+   }
+  },
+  "nurrow/stunned": {
+   "off": {
+    "headCm": 6.7,
+    "handCm": 5.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 15.5,
+    "handCm": 10.3,
+    "holdFrames": 6
+   }
+  },
+  "sukri/stunned": {
+   "off": {
+    "headCm": 5.8,
+    "handCm": 6.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 14.8,
+    "handCm": 14.4,
+    "holdFrames": 0
+   }
+  },
+  "ulkro/stunned": {
+   "off": {
+    "headCm": 10.7,
+    "handCm": 5.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 18.3,
+    "handCm": 9.2,
+    "holdFrames": 0
+   }
+  },
+  "ervet/stunned": {
+   "off": {
+    "headCm": 13.9,
+    "handCm": 4.3,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 23.7,
+    "handCm": 6.6,
+    "holdFrames": 6
+   }
+  },
+  "odrum/stunned": {
+   "off": {
+    "headCm": 11,
+    "handCm": 5.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 17.9,
+    "handCm": 10.4,
+    "holdFrames": 0
+   }
+  },
+  "burdam/stunned": {
+   "off": {
+    "headCm": 43.1,
+    "handCm": 45.2,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 57.2,
+    "handCm": 48.5,
+    "holdFrames": 0
+   }
+  },
+  "marund/stunned": {
+   "off": {
+    "headCm": 14.9,
+    "handCm": 5.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 25.7,
+    "handCm": 7.9,
+    "holdFrames": 1
+   }
+  }
+ }
+}

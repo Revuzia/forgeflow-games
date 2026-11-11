@@ -56,7 +56,7 @@ import {
   type AnimationActionLoopStyles, type AnimationClip, AnimationMixer, BufferAttribute, BufferGeometry, CapsuleGeometry, Color,
   CylinderGeometry, DoubleSide, Float32BufferAttribute, type Material, Matrix3, Matrix4, Group, LatheGeometry, LoopOnce,
   LoopRepeat, Mesh, MeshStandardMaterial, NoBlending, NormalBlending, type Object3D, OctahedronGeometry,
-  PropertyBinding, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
+  PropertyBinding, Quaternion, SkinnedMesh, Uint16BufferAttribute, Uint32BufferAttribute, Vector2,
   Vector3,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
@@ -675,6 +675,153 @@ function lerpAngle(a: number, b: number, t: number): number {
 }
 function luma(c: Color): number { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
 
+// ── the life layer (MAX U3 / U4 / hit reactions): presentation-only motion on top of the clips ─────────────────────
+/** the harness's A/B switch (max_units_ab.mjs `life`); on in the game */
+export const ACTOR_LIFE = { on: true, chains: true };
+/** VALE's idle beats, rad and s. A fighter standing still breathes (chest and shoulders on a 2.8 s cycle), shifts its
+ *  weight between the feet over 6.2 s (the spine rolls, the head counter-rolls so the gaze stays level; the hips and
+ *  feet stay planted, so nothing skates) and lets its gaze drift (9.3 s); the arms hang with a little give, out of
+ *  step with each other. Channel and recall keep a deeper breath and half the sway, so a held loop never freezes;
+ *  stunned staggers (a fast, uneven sway of spine, chest and head). Every period is offset per actor, so two fighters
+ *  never move in lockstep. A hit kicks the upper body away from the attacker (a whip: spine, then chest, the head
+ *  last) and settles in 0.3 s. Soft parts follow through in WORLD space: chain bones (x_<chain>_<n>: tabards,
+ *  skirts, capes, hood tails, sleeves) and hanging things (pot hangers, cords, mantle flaps, a hung lantern) trail the
+ *  body's turns and swings by a short lag (longer down the chain), at most 30 deg off their clip and at most 12 deg a
+ *  1/60 s frame, so a keyed snap of 70-90 deg in one frame becomes a follow-through. */
+const LIFE = {
+  breath: { period: 2.8, chest: 0.028, shoulder: 0.03, neck: 0.012 },
+  shift: { period: 6.2, spine: 0.052, head: -0.034 },
+  look: { period: 9.3, yaw: 0.06, nod: 0.018 },
+  arms: { upper: 0.04, fore: 0.045 },
+  stun: { spine: 0.075, chest: 0.055, head: 0.09 },
+  /** hit recoil: rad per metre of flinch (actors.ts VictimFx: 0.03-0.11 m), cap, rise and settle (s) */
+  recoil: { perM: 2.0, max: 0.2, rise: 0.05, settle: 0.11 },
+  /** soft-part follow-through: lag time constant of a chain's first segment (s; +60 % per segment down, hanging
+   *  things `hangTau`), the most a part turns per 1/60 s (12 deg) and the most it may trail its clip (30 deg) */
+  chain: { tau: 0.04, hangTau: 0.075, maxStep: 0.21, maxDev: 0.52 },
+  /** state weights fade at this rate (1/s) */
+  fade: 5,
+} as const;
+type LifeBone = { o: Object3D; saved: Quaternion; x: Vector3; y: Vector3; z: Vector3 };
+const _lq = new Quaternion();
+const _lv = new Vector3();
+const _lq2 = new Quaternion();
+
+class LifeRig {
+  private readonly bones = new Map<string, LifeBone>();
+  private readonly chains: { o: Object3D; shown: Quaternion; tau: number; init: boolean }[] = [];
+  private applied = false;
+  private t: number;
+  private wIdle = 0; private wHold = 0; private wStun = 0;
+  private recT = -1; private recA = 0;
+  private readonly recAxis = new Vector3();
+
+  constructor(root: Object3D, model: Object3D, seed: number) {
+    this.t = (seed * 1.6180339) % 97;
+    root.updateMatrixWorld(true);
+    const rootQ = root.getWorldQuaternion(new Quaternion()).invert();
+    const pq = new Quaternion();
+    for (const n of ['spine', 'chest', 'neck', 'head', 'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R']) {
+      const o = model.getObjectByName(PropertyBinding.sanitizeNodeName(n)) ?? model.getObjectByName(n);
+      if (!o || !o.parent) continue;
+      // the actor's axes (x lateral, y up, z forward: models face +Z) in the bone's parent frame, from the bind pose
+      o.parent.getWorldQuaternion(pq);
+      pq.premultiply(rootQ).invert();
+      this.bones.set(n, { o, saved: o.quaternion.clone(), x: new Vector3(1, 0, 0).applyQuaternion(pq), y: new Vector3(0, 1, 0).applyQuaternion(pq), z: new Vector3(0, 0, 1).applyQuaternion(pq) });
+    }
+    model.traverse((o) => {
+      const seg = /^x_[a-z]+[a-z0-9]*(?:_[a-z0-9]+)*_(\d+)$/i.exec(o.name);
+      if (seg) this.chains.push({ o, shown: new Quaternion(), tau: LIFE.chain.tau * (1 + 0.6 * (Number(seg[1]) - 1)), init: false });
+      else if (/^x_(?:hang_[lr]|cord|cord_swing|mantle_[lr]|lantern)$/i.test(o.name)) this.chains.push({ o, shown: new Quaternion(), tau: LIFE.chain.hangTau, init: false });
+    });
+  }
+
+  get ok(): boolean { return this.bones.has('spine') && this.bones.has('head'); }
+
+  /** undo last frame's offsets before the mixer writes this frame's pose (a bone no clip keys keeps its own) */
+  restore(): void {
+    if (!this.applied) return;
+    for (const b of this.bones.values()) b.o.quaternion.copy(b.saved);
+    this.applied = false;
+  }
+
+  /** a hit from model-space direction (dx, dz) (away from the attacker) of flinch size k metres */
+  recoil(dx: number, dz: number, k: number): void {
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-4 || k <= 0) return;
+    // tilt the top toward the push: axis = up × push
+    this.recAxis.set(dz / l, 0, -dx / l);
+    this.recA = Math.min(LIFE.recoil.max, k * LIFE.recoil.perM);
+    this.recT = 0;
+  }
+
+  private rot(name: string, ax: number, ay: number, az: number): void {
+    const b = this.bones.get(name);
+    if (!b) return;
+    _lv.set(0, 0, 0).addScaledVector(b.x, ax).addScaledVector(b.y, ay).addScaledVector(b.z, az);
+    const a = _lv.length();
+    if (a < 1e-6) return;
+    _lq.setFromAxisAngle(_lv.multiplyScalar(1 / a), a);
+    b.o.quaternion.premultiply(_lq);
+  }
+
+  /** after the mixer: the chain follow-through, then the state's life and the recoil */
+  apply(role: string, dt: number): void {
+    const C = LIFE.chain;
+    const cap = C.maxStep * Math.max(1, dt * 60);
+    if (!ACTOR_LIFE.chains) for (const c of this.chains) c.init = false;
+    else for (const c of this.chains) {
+      // the clip's world orientation (the parent's, already lagged when it is a chain segment itself, × the clip's local)
+      const p = c.o.parent!;
+      p.updateWorldMatrix(true, false);
+      p.getWorldQuaternion(_lq2);
+      _lq.copy(_lq2).multiply(c.o.quaternion);
+      if (!c.init || dt <= 0 || dt > 0.25) { c.shown.copy(_lq); c.init = true; continue; }
+      const ang = c.shown.angleTo(_lq);
+      if (ang < 1e-5) continue;
+      c.shown.slerp(_lq, Math.min(1 - Math.exp(-dt / c.tau), cap / ang));
+      const dev = c.shown.angleTo(_lq);
+      if (dev > C.maxDev) c.shown.copy(_lq).slerp(c.shown, C.maxDev / dev);
+      // back to the local the mixer writes: parent⁻¹ × shown
+      c.o.quaternion.copy(_lq2.invert()).multiply(c.shown);
+    }
+    if (!ACTOR_LIFE.on) { this.recT = -1; return; }
+    this.t += dt;
+    const f = Math.min(1, dt * LIFE.fade);
+    const idle = role === 'idle' ? 1 : 0, hold = role === 'channel' || role === 'recall' ? 1 : 0, stun = role === 'stunned' ? 1 : 0;
+    this.wIdle += (idle - this.wIdle) * f; this.wHold += (hold - this.wHold) * f; this.wStun += (stun - this.wStun) * f;
+    let rec = 0;
+    if (this.recT >= 0) {
+      this.recT += dt;
+      const R = LIFE.recoil;
+      rec = this.recT < R.rise ? this.recT / R.rise : Math.exp(-(this.recT - R.rise) / R.settle) * Math.cos((this.recT - R.rise) * 9);
+      if (this.recT > R.rise + R.settle * 4) { this.recT = -1; rec = 0; }
+      rec *= this.recA;
+    }
+    const wi = this.wIdle, wh = this.wHold, ws = this.wStun;
+    if (wi + wh + ws < 1e-3 && rec === 0) return;
+    for (const b of this.bones.values()) b.saved.copy(b.o.quaternion);
+    this.applied = true;
+    const TAU = Math.PI * 2, t = this.t, B = LIFE.breath, S = LIFE.shift, L = LIFE.look, A = LIFE.arms, U = LIFE.stun;
+    const br = Math.sin(TAU * t / B.period), brL = Math.sin(TAU * t / B.period - 0.5);
+    const breath = wi + 1.35 * wh, sway = wi + 0.5 * wh, look = wi + 0.5 * wh;
+    const sh = Math.sin(TAU * t / S.period) + 0.25 * Math.sin(TAU * t / (S.period * 0.43) + 1.3);
+    const st1 = Math.sin(TAU * t / 1.3), st2 = Math.sin(TAU * t / 1.7 + 0.5), st3 = Math.sin(TAU * t / 1.1 + 1.0);
+    const rx = this.recAxis.x * rec, rz = this.recAxis.z * rec;
+    this.rot('spine', 0.6 * rx + ws * U.chest * 0.5 * st2, 0, sway * S.spine * sh + ws * U.spine * st1 + 0.6 * rz);
+    this.rot('chest', -breath * B.chest * br + ws * U.chest * st2 + 0.45 * rx, 0, 0.45 * rz);
+    this.rot('neck', breath * B.neck * brL + look * L.nod * Math.sin(TAU * t / (L.period * 0.47)), look * L.yaw * Math.sin(TAU * t / L.period + 1.0), 0);
+    this.rot('head', -0.35 * rx, ws * U.head * 0.6 * st2, sway * S.head * sh + ws * U.head * st3 - 0.35 * rz);
+    this.rot('shoulder.L', 0, 0, breath * B.shoulder * Math.max(0, brL));
+    this.rot('shoulder.R', 0, 0, -breath * B.shoulder * Math.max(0, brL));
+    const arm = wi + 0.6 * wh;
+    this.rot('upper_arm.L', arm * A.upper * Math.sin(TAU * t / B.period + 0.6), 0, 0);
+    this.rot('upper_arm.R', arm * A.upper * Math.sin(TAU * t / B.period + 2.2), 0, 0);
+    this.rot('forearm.L', arm * A.fore * Math.sin(TAU * t / B.period + 1.1), 0, 0);
+    this.rot('forearm.R', arm * A.fore * Math.sin(TAU * t / B.period + 2.9), 0, 0);
+  }
+}
+
 export class Actor implements CrowdActor {
   readonly id: number;
   readonly kind: ActorKind;
@@ -747,6 +894,8 @@ export class Actor implements CrowdActor {
   private wobSquash = 0;
   private readonly wobDir = new Vector2();
   private baseScale = 1;
+  /** the life layer (fighters with a biped rig) */
+  private life: LifeRig | null = null;
   /** animation LOD: dt held back while the mixer is skipped (off-frustum) or throttled (distant wicks) */
   private animAcc = 0;
   disposed = false;
@@ -866,6 +1015,7 @@ export class Actor implements CrowdActor {
     shadowLods(model);
     this.root.add(model);
     if (t.clips.size > 0) this.mixer = new AnimationMixer(model);
+    if (this.kind === 'fighter' && t.clips.size > 0) { const r = new LifeRig(this.root, model, this.id); this.life = r.ok ? r : null; }
     for (const [k, bone] of Object.entries(this.socketNames)) {
       const o = model.getObjectByName(PropertyBinding.sanitizeNodeName(bone)) ?? model.getObjectByName(bone);
       if (o) this.sockets.set(k, o);
@@ -1014,7 +1164,8 @@ export class Actor implements CrowdActor {
   /** a held cast clip playing on after its cast state: role, seconds since the cast began, impact time;
    *  `still`: only while the unit stands (a step cancels it into the run) — follow-throughs and instant casts */
   private hold: { role: string; t: number; impact: number; still?: boolean } | null = null;
-  /** the cast clip of the current cast state (its follow-through continues when the cast releases) */
+  /** the cast (or attack) clip of the current cast (attack) state: its follow-through continues when the state ends
+   *  into a stand */
   private castTrack: { role: string; t: number; impact: number } | null = null;
 
   /** an instant cast (castTime 0: the sim releases it in the tick it starts, so the unit never shows a
@@ -1028,6 +1179,7 @@ export class Actor implements CrowdActor {
 
   /** drive the clip for one frame */
   private animate(v: EntityView, dt: number, alpha: number): void {
+    this.life?.restore();
     let role = this.roleOf(v);
     // held casts: entering a held cast starts the hold; afterwards idle/run keep the cast clip until it ends
     const delay = this.castHold.get(role);
@@ -1039,6 +1191,10 @@ export class Actor implements CrowdActor {
     } else if (v.state === 'cast' && role.startsWith('cast_')) {
       // remember where the cast clip is, so its follow-through can continue past the release
       this.castTrack = { role, t: v.stateTime, impact: v.stateDuration > 0.02 ? v.stateDuration : 0.25 };
+      this.hold = null;
+    } else if (v.state === 'attack') {
+      // MAX U5: remember where the swing is, so a last swing settles through its follow-through instead of stopping dead
+      this.castTrack = { role, t: v.stateTime, impact: Math.max(0.05, this.attackWindup * (v.stateDuration || 1)) };
       this.hold = null;
     } else {
       // the cast just released into a stand: keep its follow-through (60 % of the clip after the impact)
@@ -1079,7 +1235,7 @@ export class Actor implements CrowdActor {
       if (role === 'run') {
         const speed = Math.hypot(v.vx, v.vy);
         act.timeScale = Math.max(0.35, Math.min(2.2, speed / Math.max(0.1, this.runRef)));
-      } else if (role.startsWith('attack') || role === 'crit') {
+      } else if ((role.startsWith('attack') || role === 'crit') && v.state === 'attack') {
         const impact = Math.max(0.05, this.attackWindup * (v.stateDuration || 1));
         act.timeScale = 0;
         act.time = Math.min(clipDur - 1e-3, st * (IMPACT_AT * clipDur) / impact);
@@ -1109,6 +1265,7 @@ export class Actor implements CrowdActor {
       }
     }
     this.mixer!.update(dt);
+    this.life?.apply(v.alive ? role : 'death', dt);
   }
 
   /** showcase (menu plinth): loop one role regardless of any view */
@@ -1125,7 +1282,9 @@ export class Actor implements CrowdActor {
       this.currentKey = role;
     }
     this.tickReactions(dt);
+    this.life?.restore();
     this.mixer.update(dt);
+    this.life?.apply(role, dt);
   }
 
   // ── outline hull + hit flash ────────────────────────────────────────────────────────────────────
@@ -1403,6 +1562,11 @@ export class Actor implements CrowdActor {
     const l = Math.hypot(dx, dz);
     if (l > 1e-4) this.wobDir.set(dx / l, dz / l); else this.wobDir.set(0, 0);
     this.wobT = 0; this.wobK = Math.min(0.15, k); this.wobSquash = Math.min(0.3, squash);
+    // the upper body's recoil, in the model's frame (root.rotation.y = π/2 - facing)
+    if (this.life && l > 1e-4 && k > 0) {
+      const r = -this.root.rotation.y, c = Math.cos(r), sn = Math.sin(r);
+      this.life.recoil(dx * c + dz * sn, -dx * sn + dz * c, k);
+    }
   }
 
   /**
