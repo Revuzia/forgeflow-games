@@ -246,10 +246,11 @@ def windup(id_: str, rec: dict, ab: dict, slot: str) -> dict:
         L("sprite", at="caster", socket=S, texture="glow", size=[[0, 0.5 * k], [1, 0.95 * k]], color=[SIG, SEC], emissive=[[0, 0.8], [1, cap]],
           alpha=[[0, 0.6], [0.9, 1], [1, 1]], life=1.0, fitTime=True, hold=1.0, soft=0.2),
         # the caster's own read at the feet (signature; reads on self against pale stone), the team edge closing outside it
+        # max VFX-10: the ring is a small secondary now; the read is the motif at the socket (below)
         L("decal", at="caster", follow=True, shape="ring", style="light", radius=0.8 * k, life=1.0, fitTime=True, hold=1.0, color=SIG,
-          alpha=[[0, 0.35], [0.3, 0.5], [1, 0.65]], emissive=1.4),
-        L("shockwave", at="caster", radius=[[0, 1.55 * k], [1, 0.9 * k]], width=[0.05, 0.08], life=1.0, fitTime=True, color="team",
-          alpha=[[0, 0], [0.25, 0.5], [1, 0.75]], emissive=1.6, sharp=2.0, blend="add"),
+          alpha=[[0, 0.25], [0.3, 0.35], [1, 0.5]], emissive=1.2),
+        L("shockwave", at="caster", radius=[[0, 1.55 * k], [1, 0.9 * k]], width=[0.04, 0.06], life=1.0, fitTime=True, color="team",
+          alpha=[[0, 0], [0.25, 0.45], [1, 0.7]], emissive=1.6, sharp=2.0, blend="add"),
         *motif(kit["motif"], S, k, cap),
         *release(kit["fam"], S, k, cap, ult),
     ]
@@ -259,6 +260,12 @@ def windup(id_: str, rec: dict, ab: dict, slot: str) -> dict:
     if ult:
         # stored light bends the air round the socket as the ultimate charges (T4 lensing; off on Low)
         layers.append(L("distort", at="caster", socket=S, follow=True, mode="bulge", size=[[0, 0.6], [1, 1.6]], strength=[[0, 0.003], [1, 0.011]],
+                        life=1.0, fitTime=True))
+        # max VFX-10: the ground under the caster drinks the light in: a pool of the signature swells under them, the air ripples
+        # inward on the ground toward their feet
+        layers.append(L("decal", at="caster", follow=True, shape="circle", style="light", texture="glow", radius=[[0, 2.2], [1, 1.3]], life=1.0,
+                        fitTime=True, hold=1.0, color=SIG, alpha=[[0, 0.0], [0.4, 0.22], [1, 0.4]], emissive=1.6))
+        layers.append(L("distort", at="caster", follow=True, mode="ring", align="ground", size=[[0, 3.0], [1, 0.8]], strength=[[0, 0.0], [0.5, 0.006], [1, 0.01]],
                         life=1.0, fitTime=True))
     who = rec["name"]
     return vfx(id_, 1.0, *layers, comment=f"{'T4' if ult else 'T2'} · {kit['fam']} · {who} {slot} wind-up ({ab['id']}, {ab['castTime']} s, fitted): the "

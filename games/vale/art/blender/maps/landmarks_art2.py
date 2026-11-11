@@ -1069,41 +1069,91 @@ HOUR_H = 1.2             # the wall block's height (map_fray art.terrain.wallHei
 HOUR_HALF = (2.3, 0.9)   # the wall polygon's half extents (map_gen.py build_fray: rect 4.6 x 1.8, tangential)
 
 
-def hour_stone(B, rng):
-    """FRAY's hour-stone (brief map_fray_landmarks.md §2 stone ring, §3): a low carved block of dark basalt, the
-    frame stone, never the plate's pale stone. A proud footing course, a monolith with its four plan corners cut
-    back, a cap stone whose chamfered top edge is chalked (the chalk top edge / lip), and the half-hour tick inlaid
-    in chalk down the middle of each broad face and across the top (radial: the tick the hour-ring carries between
-    two marks). Blender +Y faces the plate's centre (content `rot`), X runs along the rim.
+def _slope_top(v, z_top, k, ay):
+    """Tilt a prism's top ring into a reading slope: z += -k * y / ay on every vertex at its top (the dial face leans
+    toward the plate's centre, +Y)."""
+    v = np.asarray(v, dtype=np.float64).copy()
+    top = v[:, 2] > z_top - 0.09
+    v[top, 2] += -k * v[top, 1] / ay * np.clip((v[top, 2] - (z_top - 0.09)) / 0.09, 0.0, 1.0)
+    return v
+
+
+def _cut_rect(x0, x1, y0, y1, c):
+    return [(x0 + c, y0), (x1 - c, y0), (x1, y0 + c), (x1, y1 - c), (x1 - c, y1), (x0 + c, y1), (x0, y1 - c), (x0, y0 + c)]
+
+
+def hour_stone(B, rng, gnomon=False):
+    """FRAY's hour-stone (brief map_fray_landmarks.md §2 stone ring, §3; max env ENV-3 rebuild): a broken dial block of
+    dark basalt, the frame stone, never the plate's pale stone. No lid and no centre seam (the old cap stone and its
+    chalk lip read as a casket): two offset dial blocks of different height on one proud footing, the west one longer
+    and proud of the east one, each with its top cut as a reading slope leaning toward the plate's centre; the hour's
+    bronze dial boss (a ring, a hand and a stud: warm metal, the stone's only spec) inlaid in the high block's slope;
+    tool-mark bands across the broad faces, spalled corners, chips at the foot and lichen in the joints; the half-hour
+    tick inlaid in chalk down each broad face. `gnomon`: a low shadow-gnomon stub stands on the east block (half the
+    ring carries one, hour_stone_g). Blender +Y faces the plate's centre (content `rot`), X runs along the rim.
     The renderer stands a landmark on groundAt(), which inside its own (not replaced) wall block is the block's top;
-    the stone is built from z 0 and sunk by HOUR_H at export (SINK), so it encloses the block and stands 1.25 m
-    on the plate. Every face clears the block's battered courses and organic outline (<= 0.13 m out) by >= 0.15 m."""
+    the stone is built from z 0 and sunk by HOUR_H at export (SINK), so it encloses the block and stands <= 1.25 m on
+    the plate. Every face clears the block's battered courses and organic outline (<= 0.13 m out) as before (the
+    blocks keep the old monolith's plan margin, the proud block steps out 4 cm more)."""
     hx, hy = HOUR_HALF
     m = 0.17
-    # the footing course: proud on every side
-    B.add("hourface", K.box((0, 0, 0.13), (hx + m + 0.06, hy + m + 0.06, 0.15), 0.05))
-    # the monolith: an octagon in plan (corners cut 0.32 m), 0.26 -> 1.08
     ax, ay = hx + m, hy + m
-    c = 0.32
-    plan = [(-ax + c, -ay), (ax - c, -ay), (ax, -ay + c), (ax, ay - c), (ax - c, ay), (-ax + c, ay), (-ax, ay - c), (-ax, -ay + c)]
-    v, f = K.prism(plan, origin=(0, 0, 0.27), u=(1, 0, 0), v=(0, 1, 0), depth=0.82, chamfer=0.035, center=False)
-    B.add("hourface", (v, f))
-    # the cap stone: proud 4 cm, a 7 cm chamfer all round its top edge (the chalked lip catches the noon sun)
-    cx, cy, cc = ax + 0.04, ay + 0.04, c + 0.03
-    cap = [(-cx + cc, -cy), (cx - cc, -cy), (cx, -cy + cc), (cx, cy - cc), (cx - cc, cy), (-cx + cc, cy), (-cx, cy - cc), (-cx, -cy + cc)]
-    v, f = K.prism(cap, origin=(0, 0, 1.08), u=(1, 0, 0), v=(0, 1, 0), depth=0.17, chamfer=0.07, center=False)
-    B.add("hourbasalt", (v, f))
-    # the chalk lip: a slim chalk fillet along both long top arrises (what reads as the lit edge from 28 m)
+    # the footing course: proud on every side, its corners chipped
+    B.add("hourface", K.box((0, 0, 0.13), (ax + 0.06, ay + 0.06, 0.15), 0.05))
+    # the two dial blocks: west (high, proud) and east (low), meeting at a joint off centre (x = 0.42)
+    xj = 0.42
+    blocks = (("W", -ax - 0.04, xj, ay + 0.04, 1.16, 0.09), ("E", xj, ax, ay, 1.0, 0.07))
+    for tag, x0, x1, yy, ztop, k in blocks:
+        plan = _cut_rect(x0, x1, -yy, yy, 0.24 if tag == "W" else 0.18)
+        # the block's body (the lighter face wash: walls take little of the overhead sun) and its top course, flush
+        # (no overhang, no lid), cut to the reading slope in the dark basalt the sun lights
+        v, f = K.prism(plan, origin=(0, 0, 0.27), u=(1, 0, 0), v=(0, 1, 0), depth=ztop - 0.27 - 0.2, chamfer=0.03, center=False)
+        B.add("hourface", (v, f))
+        v, f = K.prism(plan, origin=(0, 0, ztop - 0.2), u=(1, 0, 0), v=(0, 1, 0), depth=0.2, chamfer=0.045, center=False)
+        B.add("hourbasalt", (_slope_top(v, ztop, k, yy), f))
+        # tool-mark bands: two slim dressed courses across each broad face (a darker wash), breaking the long plane
+        for zb in ((0.52, 0.8) if tag == "W" else (0.5,)):
+            for sy in (-1, 1):
+                B.add("hourbasalt", K.box(((x0 + x1) / 2, sy * (yy + 0.006), zb), ((x1 - x0) / 2 - 0.2, 0.012, 0.022), 0.006))
+        # spalled top corners: a few broken stones lying off the arris
+        for _ in range(2):
+            cx = rng.choice((x0 + 0.25, x1 - 0.25))
+            cy = rng.choice((-yy + 0.1, yy - 0.1))
+            chunk(B, "hourface", (cx, cy, ztop - k * cy / yy - 0.02), (0.1, 0.08, 0.05), rng)
+    # the hour's dial boss on the high block's slope: a bronze ring, a bronze hand toward the plate's centre, a stud
+    xb, zb0, kW, yW = -1.05, 1.16, 0.09, ay + 0.04
+    tilt = math.atan2(kW, yW)
+    def on_slope(vf, y=0.0, lift=0.012):
+        vv, ff = vf
+        vv = K.rot(np.asarray(vv, dtype=np.float64), (1, 0, 0), -tilt)
+        return K.move(vv, (xb, y, zb0 - kW * y / yW + lift)), ff
+    ring = K.lathe([(0.27, -0.012), (0.36, -0.012), (0.36, 0.018), (0.27, 0.018)], 24, closed=True)
+    B.add("hourbronze", on_slope(ring))
+    B.add("hourbronze", on_slope(K.box((0, 0.13, 0), (0.035, 0.16, 0.016), 0.008), 0.0))
+    B.add("hourbronze", on_slope(K.lathe([(0.0, -0.01), (0.07, -0.01), (0.07, 0.03), (0.0, 0.05)], 12), 0.0))
+    # the half-hour tick: chalk inlaid down each broad face of the high block (no chalk on any top: no pale stripe)
     for sy in (-1, 1):
-        B.add("hourchalk", K.box((0, sy * (cy - 0.035), 1.235), (cx - cc - 0.05, 0.05, 0.025), 0.012))
-    # the half-hour tick: chalk inlaid down each broad face and across the top (radial, toward the plate's centre)
-    for sy in (-1, 1):
-        B.add("hourchalk", K.box((0, sy * (ay + 0.008), 0.68), (0.055, 0.02, 0.33), 0.008))
-        B.add("hourchalk", K.box((0, sy * (ay + 0.008), 0.33), (0.2, 0.02, 0.03), 0.006))     # its foot bar
-    B.add("hourchalk", K.box((0, 0, 1.252), (0.055, cy - 0.2, 0.012), 0.006))
+        B.add("hourchalk", K.box((-1.05, sy * (yW + 0.008), 0.66), (0.05, 0.02, 0.26), 0.008))
+        B.add("hourchalk", K.box((-1.05, sy * (yW + 0.008), 0.37), (0.18, 0.02, 0.026), 0.006))
+    # lichen in the joints: along the footing at the blocks' feet and in the joint between them
+    for (lx, ly, lw) in ((-1.9, -(ay + 0.07), 0.32), (0.42, -(ay + 0.03), 0.16), (1.6, ay + 0.06, 0.28), (-0.4, ay + 0.1, 0.2),
+                         (0.42, ay + 0.02, 0.12)):
+        B.add("hourlichen", K.box((lx, ly, 0.285), (lw, 0.06, 0.012), 0.008, rz=rng.uniform(-0.15, 0.15)))
+    B.add("hourlichen", K.box((xj, 0.0, 1.0 - 0.004), (0.035, ay * 0.7, 0.01), 0.004))
     # spalled chips at the foot (the camera side and one end)
-    for cc_, h in (((1.4, -(hy + m + 0.32), 0.07), (0.12, 0.1, 0.07)), ((-(hx + m + 0.3), 0.4, 0.06), (0.1, 0.13, 0.06))):
+    for cc_, h in (((1.4, -(ay + 0.32), 0.07), (0.12, 0.1, 0.07)), ((-(ax + 0.3), 0.4, 0.06), (0.1, 0.13, 0.06)),
+                   ((-0.6, -(ay + 0.26), 0.05), (0.08, 0.07, 0.05))):
         chunk(B, "hourface", cc_, h, rng)
+    if gnomon:
+        # a low shadow-gnomon stub on the east block: a stone fin rising toward the plate's centre, bronze on its edge
+        zt = 1.0
+        fin = [(-0.3, 0.0), (0.32, 0.0), (0.32, 0.34)]
+        v, f = K.prism(fin, origin=(1.45, -0.04, zt - 0.03), u=(0, 1, 0), v=(0, 0, 1), depth=0.1, chamfer=0.012, center=True)
+        B.add("hourbasalt", (v, f))
+        B.add("hourface", K.box((1.45, 0.0, zt + 0.02), (0.14, 0.42, 0.05), 0.02))
+        edge = K.box((0, 0, 0), (0.016, 0.36, 0.014), 0.006)
+        ev = K.rot(np.asarray(edge[0], dtype=np.float64), (1, 0, 0), math.atan2(0.34, 0.62))
+        B.add("hourbronze", (K.move(ev, (1.45, 0.0, zt + 0.15)), edge[1]))
 
 
 # values on screen (brief §3, FRAY's overhead noon sun): lit top L* 20-28, faces 12-18, chalk edge light <= 48. The
@@ -1111,11 +1161,16 @@ def hour_stone(B, rng):
 # basalt, a lighter wash) and the chalk is a toned chalk; all of it a neutral, slightly warm grey (a cool basalt goes
 # navy under the noon grade)
 HOUR_MATS = {
-    "hourbasalt": dict(hex="#4B4846", chisel=0.9, var=0.07, streaks=0.25, chips=0.55, speckle=0.35, scale=0.5, rough=0.64,
+    # max env ENV-3: painted wear instead of speckle (stronger variation, rain streaks and chipped arrises; speckle low)
+    "hourbasalt": dict(hex="#4B4846", chisel=0.9, var=0.11, streaks=0.45, chips=0.7, speckle=0.12, scale=0.5, rough=0.64,
                        edge_light=(0.06, 0.9, 0.65, 0.1)),
-    "hourface": dict(hex="#7F7B77", chisel=0.9, var=0.07, streaks=0.35, chips=0.55, speckle=0.35, scale=0.5, rough=0.66,
+    "hourface": dict(hex="#7F7B77", chisel=0.9, var=0.11, streaks=0.5, chips=0.7, speckle=0.12, scale=0.5, rough=0.66,
                      edge_light=(0.05, 0.6, 0.65, 0.1)),
     "hourchalk": dict(CHALK, hex="#87837A", streaks=0.2, chips=0.3, edge_light=(0.02, 0.3, 0.4, 0.05)),
+    # the dial boss: warm bronze, the stone's one spec hit (low roughness), its value kept under the chalk's edge light
+    "hourbronze": dict(hex="#8A6A40", chisel=0.2, var=0.08, streaks=0.2, chips=0.25, speckle=0.0, scale=0.9, rough=0.36,
+                       edge_light=(0.04, 0.7, 0.5, 0.08)),
+    "hourlichen": dict(hex="#5D6444", chisel=0.2, var=0.18, streaks=0.0, chips=0.0, speckle=0.3, scale=0.6, rough=0.92),
 }
 
 
@@ -2013,6 +2068,7 @@ DESIGNS = {
     "numeral_iiii": (lambda B, rng: numeral(B, rng, "IIII"), NUM_MATS, 2048, 0.6),   # refix E1: 2048 (the fine paint survives)
     "shadow_slab": (shadow_slab, SLAB_MATS, 1024, 0.5),
     "hour_stone": (hour_stone, HOUR_MATS, 1024, 0.4),
+    "hour_stone_g": (lambda B, rng: hour_stone(B, rng, gnomon=True), HOUR_MATS, 1024, 0.4),   # max env ENV-3: with the gnomon
     "camp_glasshorn": (camp_glasshorn, CAMP_MATS, 512, 0.3),
     "camp_gloamoths": (camp_gloamoths, CAMP_MATS, 512, 0.3),
     "camp_strays": (camp_strays, CAMP_MATS, 512, 0.3),
@@ -2025,7 +2081,7 @@ DESIGNS = {
     "fair_stand_high": (lambda B, rng: fair_stand(B, rng, 3, 1.0), FAIR_MATS, 2048, 0.8),
     "fair_stand_low": (lambda B, rng: fair_stand(B, rng, 2, 0.5), FAIR_MATS, 2048, 0.6),
 }
-SINK = {"hour_stone": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
+SINK = {"hour_stone": HOUR_H, "hour_stone_g": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
 SCALE = {"lamp_dome": DOME_S}
 AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
 # closing CW4 refix (E1 tier): the E1 landmarks take the joint and cavity AO deeper (the course joints, the skirt's
@@ -2093,7 +2149,7 @@ def build_one(name: str, fast: bool = False, preview: bool = False) -> dict:
 # landmarks stand beyond the map's edge, so the camera sees the Dawn Arch from the east and the Lamp Gate from the west
 LOOK = {"shaft_drum": (0.0, 0.0, 11.0), "snap_stub": (0.0, 0.0, 10.0), "dawn_arch": (6.0, 0.0, 46.0), "lamp_gate": (-6.0, 0.0, 46.0),
         "glass_belfry": (4.0, 0.0, 40.0), "lamp_dome": (-4.0, 0.0, 40.0), "noon_stone": (0.0, 0.0, 22.0), "shadow_slab": (0.0, 0.0, 12.0),
-        "hour_stone": (0.0, 0.0, 12.0), "vi_slab": (0.0, 0.0, 12.0),
+        "hour_stone": (0.0, 0.0, 12.0), "hour_stone_g": (0.0, 0.0, 12.0), "vi_slab": (0.0, 0.0, 12.0),
         **{f"camp_mark_{c}": (0.0, 0.0, 5.0) for c in CAMP_SIGNS},
         **{f"numeral_{g}": (0.0, 0.0, 22.0) for g in ("xi", "ii", "vii", "iiii")}, **{f"camp_{c}": (0.0, 0.0, 6.0) for c in ("glasshorn", "gloamoths", "strays", "resinback", "stilltusks")}, "lampwright_stall": (0.0, 0.0, 12.0), "lampwright_stall_dome": (0.0, 0.0, 12.0), "hour_lamp": (0.0, 0.0, 6.0),
         "lampwright_cart": (0.0, 0.0, 11.0), "fair_stand_high": (1.5, 1.5, 20.0), "fair_stand_low": (1.5, 1.5, 16.0)}

@@ -307,6 +307,8 @@ export class VfxSystem {
    *  lifts effects like the ground (the pre-F4 look; a harness seam: probe_combat_polish / value_probe --vfxcap) */
   liftCap: number | null = VFX_LIFT_CAP;
   budget = 4000;
+  /** max VFX-11: extra density for secondary emitters (Ultra 1.3; quality.ts) */
+  secondaryDensity = 1;
   density = 1;
   onFeel: ((e: FeelEvent) => void) | null = null;
 
@@ -758,7 +760,7 @@ export class VfxSystem {
   }
 
   private fireEmitter(it: Inst, li: number, l: EmitterL, d: number, t: number): void {
-    const den = it.density * (l.secondary ? it.secondary : 1);
+    const den = it.density * (l.secondary ? it.secondary * this.secondaryDensity : 1);
     const at = this.atOf(it, l);
     if (!it.fired[li]) {
       it.fired[li] = 1;
@@ -990,15 +992,18 @@ export class VfxSystem {
 
   private fireLight(it: Inst, l: LightL): void {
     if (!this.lights.length) return;
-    const le = this.lights.find((x) => x.age >= x.life) ?? this.lights.reduce<LightEl | null>((a, b) => (!a || b.peak < a.peak ? b : a), null);
-    if (!le) return;
+    const peak = Math.min(l.intensity, it.tier >= 4 ? 40 : TIER_CAP[it.tier] * 5) * it.opacity;
+    // max VFX-11: a full pool gives its dimmest live light (by what it shows now) to a brighter flash only: a T3/T4
+    // landing is never left dark by a crowd of small hits
+    const le = this.lights.find((x) => x.age >= x.life) ?? this.lights.reduce<LightEl | null>((a, b) => (!a || b.light.intensity < a.light.intensity ? b : a), null);
+    if (!le || (le.age < le.life && le.light.intensity > peak)) return;
     const p = this.anchorPos(it, l, _v);
     le.light.position.copy(p).y += this.atOf(it, l) === 'ground' ? 0.6 : 0.3;
     this.resolve(l.color, it, le.light.color);
     le.light.distance = l.radius * Math.max(1, Math.sqrt(this.fitOf(it, l)));
     const fit = l.fitTime ? it.rate : 1;
     le.age = 0; le.life = l.life / fit; le.attack = l.attack / fit; le.flicker = l.flicker;
-    le.peak = Math.min(l.intensity, it.tier >= 4 ? 40 : TIER_CAP[it.tier] * 5) * it.opacity;
+    le.peak = peak;
   }
 
   private fireFeel(it: Inst, l: FeelL): void {

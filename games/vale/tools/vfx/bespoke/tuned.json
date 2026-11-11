@@ -269,6 +269,161 @@
     "soft": 0.3,
     "delay": 0.2,
     "secondary": true
+   },
+   {
+    "type": "feel",
+    "squash": 0.12,
+    "hitFlash": 1.3,
+    "at": "target"
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.09,
+    "count": 9,
+    "dir": "up",
+    "spreadDeg": 150,
+    "speed": [
+     2.2,
+     4.6
+    ],
+    "life": [
+     0.3,
+     0.5
+    ],
+    "size": [
+     0.15,
+     0.15,
+     0.09
+    ],
+    "sizeVar": [
+     0.6,
+     1.3
+    ],
+    "color": [
+     "#F1E2C6",
+     "#8A8478"
+    ],
+    "alpha": [
+     1,
+     1,
+     1,
+     0
+    ],
+    "gravity": 14,
+    "drag": 0.8,
+    "bounce": 0.35,
+    "texture": "chip",
+    "blend": "chip",
+    "spinDeg": [
+     -540,
+     540
+    ],
+    "rim": "#F4EFE2",
+    "rimAlpha": 0.5,
+    "secondary": true
+   },
+   {
+    "type": "shockwave",
+    "at": "target",
+    "delay": 0.08,
+    "radius": [
+     [
+      0,
+      0.3
+     ],
+     [
+      0.35,
+      1.265
+     ],
+     [
+      1,
+      1.6099999999999999
+     ]
+    ],
+    "width": [
+     0.3,
+     0.06
+    ],
+    "life": 0.4,
+    "color": [
+     "#6E6A62",
+     "#57544E"
+    ],
+    "alpha": [
+     0.7,
+     0.45,
+     0
+    ],
+    "emissive": 0,
+    "sharp": 1.2,
+    "noise": 0.5,
+    "blend": "alpha"
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.1,
+    "count": 4,
+    "shape": "ring",
+    "radius": 0.35,
+    "dir": "out",
+    "spreadDeg": 35,
+    "speed": [
+     0.8,
+     2.0
+    ],
+    "life": [
+     0.5,
+     0.8
+    ],
+    "size": [
+     0.4,
+     0.85,
+     1.05
+    ],
+    "color": [
+     "#6E6A62",
+     "#57544E"
+    ],
+    "alpha": [
+     0,
+     0.45,
+     0.27,
+     0
+    ],
+    "gravity": -0.25,
+    "drag": 2.8,
+    "turbulence": 0.3,
+    "rotDeg": [
+     0,
+     360
+    ],
+    "spinDeg": [
+     -30,
+     30
+    ],
+    "texture": "dust_puff",
+    "blend": "alpha",
+    "soft": 0.3,
+    "secondary": true
+   },
+   {
+    "type": "decal",
+    "at": "target",
+    "delay": 0.06,
+    "shape": "circle",
+    "style": "light",
+    "texture": "glow",
+    "radius": 1.38,
+    "life": 0.45,
+    "color": "signature",
+    "alpha": [
+     0.5,
+     0.3,
+     0
+    ],
+    "emissive": 1.4
    }
   ]
  },
@@ -593,6 +748,49 @@
     "rimAlpha": 0.5,
     "delay": 0.03,
     "secondary": true
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.05,
+    "count": 1,
+    "shape": "point",
+    "dir": "none",
+    "speed": [
+     0,
+     0
+    ],
+    "life": [
+     0.22,
+     0.22
+    ],
+    "size": [
+     1.0499999999999998,
+     1.19
+    ],
+    "color": "#F1E2C6",
+    "alpha": [
+     [
+      0,
+      0.9
+     ],
+     [
+      0.6,
+      0.7
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "emissive": 2.0,
+    "texture": "glow",
+    "blend": "add",
+    "rotDeg": [
+     0,
+     360
+    ],
+    "soft": 0.25
    }
   ]
  },
@@ -923,6 +1121,161 @@
     "soft": 0.3,
     "delay": 0.08,
     "secondary": true
+   },
+   {
+    "type": "feel",
+    "squash": 0.1,
+    "hitFlash": 1.25,
+    "at": "target"
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.09,
+    "count": 8,
+    "dir": "up",
+    "spreadDeg": 150,
+    "speed": [
+     2.2,
+     4.6
+    ],
+    "life": [
+     0.3,
+     0.5
+    ],
+    "size": [
+     0.15,
+     0.15,
+     0.09
+    ],
+    "sizeVar": [
+     0.6,
+     1.3
+    ],
+    "color": [
+     "#F1E2C6",
+     "#8A8478"
+    ],
+    "alpha": [
+     1,
+     1,
+     1,
+     0
+    ],
+    "gravity": 14,
+    "drag": 0.8,
+    "bounce": 0.35,
+    "texture": "chip",
+    "blend": "chip",
+    "spinDeg": [
+     -540,
+     540
+    ],
+    "rim": "#F4EFE2",
+    "rimAlpha": 0.5,
+    "secondary": true
+   },
+   {
+    "type": "shockwave",
+    "at": "target",
+    "delay": 0.08,
+    "radius": [
+     [
+      0,
+      0.3
+     ],
+     [
+      0.35,
+      1.1
+     ],
+     [
+      1,
+      1.4
+     ]
+    ],
+    "width": [
+     0.3,
+     0.06
+    ],
+    "life": 0.4,
+    "color": [
+     "#6E6A62",
+     "#57544E"
+    ],
+    "alpha": [
+     0.7,
+     0.45,
+     0
+    ],
+    "emissive": 0,
+    "sharp": 1.2,
+    "noise": 0.5,
+    "blend": "alpha"
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.1,
+    "count": 4,
+    "shape": "ring",
+    "radius": 0.35,
+    "dir": "out",
+    "spreadDeg": 35,
+    "speed": [
+     0.8,
+     2.0
+    ],
+    "life": [
+     0.5,
+     0.8
+    ],
+    "size": [
+     0.4,
+     0.85,
+     1.05
+    ],
+    "color": [
+     "#6E6A62",
+     "#57544E"
+    ],
+    "alpha": [
+     0,
+     0.45,
+     0.27,
+     0
+    ],
+    "gravity": -0.25,
+    "drag": 2.8,
+    "turbulence": 0.3,
+    "rotDeg": [
+     0,
+     360
+    ],
+    "spinDeg": [
+     -30,
+     30
+    ],
+    "texture": "dust_puff",
+    "blend": "alpha",
+    "soft": 0.3,
+    "secondary": true
+   },
+   {
+    "type": "decal",
+    "at": "target",
+    "delay": 0.06,
+    "shape": "circle",
+    "style": "light",
+    "texture": "glow",
+    "radius": 1.2,
+    "life": 0.45,
+    "color": "signature",
+    "alpha": [
+     0.5,
+     0.3,
+     0
+    ],
+    "emissive": 1.4
    }
   ]
  },
@@ -1177,6 +1530,49 @@
     "rimAlpha": 0.5,
     "delay": 0.03,
     "secondary": true
+   },
+   {
+    "type": "emitter",
+    "at": "target",
+    "delay": 0.05,
+    "count": 1,
+    "shape": "point",
+    "dir": "none",
+    "speed": [
+     0,
+     0
+    ],
+    "life": [
+     0.22,
+     0.22
+    ],
+    "size": [
+     0.9299999999999999,
+     1.054
+    ],
+    "color": "#F1E2C6",
+    "alpha": [
+     [
+      0,
+      0.9
+     ],
+     [
+      0.6,
+      0.7
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "emissive": 2.0,
+    "texture": "glow",
+    "blend": "add",
+    "rotDeg": [
+     0,
+     360
+    ],
+    "soft": 0.25
    }
   ]
  },
@@ -10630,7 +11026,7 @@
   ]
  },
  {
-  "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shell lands lit, its glaze glowing jade at the slam and settling over 0.2 s, so the first beat reads as light over the core, not a dark lid)",
+  "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shell lands lit, its glaze glowing jade at the slam and settling over 0.2 s, so the first beat reads as light over the core, not a dark lid) · max VFX-6: the dome is a rim-weighted additive shell (inside 0.18-0.22) that a ring front runs out of, so the struck bodies read through it",
   "id": "marund_ult_domefall",
   "duration": 1.7,
   "teamTint": true,
@@ -10669,24 +11065,20 @@
     "life": 0.8,
     "color": [
      "secondary",
-     "#4A4038"
+     "signature"
     ],
     "alpha": [
      [
       0,
-      1
+      0.22
      ],
      [
-      0.6,
-      1.0
+      0.5,
+      0.18
      ],
      [
       0.78,
-      0.34
-     ],
-     [
-      0.912,
-      0.09
+      0.06
      ],
      [
       1,
@@ -10696,28 +11088,24 @@
     "emissive": [
      [
       0,
-      2.4
+      1.6
      ],
      [
       0.06,
-      3.8
+      2.4
      ],
      [
       0.12,
-      1.0
-     ],
-     [
-      0.25,
-      0.35
+      0.8
      ],
      [
       1,
-      0.35
+      0.3
      ]
     ],
     "rim": "signature",
-    "rimPow": 2.6,
-    "rimEmissive": 3.0,
+    "rimPow": 2.2,
+    "rimEmissive": 4.0,
     "noise": 0.3,
     "noiseScale": 1.6,
     "dissolve": [
@@ -10741,8 +11129,80 @@
     "edge": "signature",
     "edgeWidth": 0.14,
     "edgeEmissive": 8,
-    "blend": "chip",
+    "blend": "add",
     "fit": true
+   },
+   {
+    "type": "shockwave",
+    "at": "ground",
+    "radius": [
+     [
+      0,
+      0.15
+     ],
+     [
+      0.35,
+      0.85
+     ],
+     [
+      1,
+      1.05
+     ]
+    ],
+    "width": [
+     0.4,
+     0.1
+    ],
+    "life": 0.32,
+    "color": "signature",
+    "alpha": [
+     1,
+     0.8,
+     0
+    ],
+    "emissive": 4.0,
+    "sharp": 1.8,
+    "noise": 0.3,
+    "fit": true,
+    "blend": "add"
+   },
+   {
+    "type": "shockwave",
+    "at": "ground",
+    "mode": "vertical",
+    "radius": [
+     [
+      0,
+      0.3
+     ],
+     [
+      0.4,
+      1.6
+     ],
+     [
+      1,
+      2.1
+     ]
+    ],
+    "width": [
+     0.3,
+     0.06
+    ],
+    "life": 0.3,
+    "color": [
+     "signature",
+     "secondary"
+    ],
+    "alpha": [
+     0.9,
+     0.6,
+     0
+    ],
+    "emissive": 3.0,
+    "sharp": 1.6,
+    "noise": 0.3,
+    "fit": true,
+    "blend": "add"
    },
    {
     "type": "mesh",

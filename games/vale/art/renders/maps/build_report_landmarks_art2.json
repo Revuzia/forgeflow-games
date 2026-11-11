@@ -196,24 +196,24 @@
   },
   "hour_stone": {
     "id": "hour_stone",
-    "tris": 590,
+    "tris": 1470,
     "size_m": [
       5.42,
-      2.66
+      2.77
     ],
-    "height": 1.26,
+    "height": 1.28,
     "x": [
       -2.89,
       2.53
     ],
     "y": [
-      -1.53,
-      1.13
+      -1.52,
+      1.25
     ],
-    "kb_raw": 155,
-    "kb": 49,
+    "kb_raw": 218,
+    "kb": 91,
     "texture": 1024,
-    "buried_faces_dropped": 13,
+    "buried_faces_dropped": 137,
     "nodes": [
       "body"
     ]
@@ -722,6 +722,30 @@
     "kb": 15,
     "texture": 256,
     "buried_faces_dropped": 2,
+    "nodes": [
+      "body"
+    ]
+  },
+  "hour_stone_g": {
+    "id": "hour_stone_g",
+    "tris": 1563,
+    "size_m": [
+      5.43,
+      2.76
+    ],
+    "height": 1.33,
+    "x": [
+      -2.9,
+      2.53
+    ],
+    "y": [
+      -1.51,
+      1.25
+    ],
+    "kb_raw": 241,
+    "kb": 104,
+    "texture": 1024,
+    "buried_faces_dropped": 157,
     "nodes": [
       "body"
     ]

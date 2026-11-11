@@ -141,6 +141,10 @@ export const worldUniforms = {
   // MAX U1/U6: the character material response on (1) / off (0, the A/B harness's 'base'); one uniform, no define, so
   // no program is added
   valeCharMat: { value: 1 },
+  // max env ENV-10: drifting cloud shadow on the sun term of world (non-character) materials: x = its amplitude (0 =
+  // off; setCloudShadow: the map's art.terrain.cloudShadow × the tier's switch), y = 1 / the cloud scale (m),
+  // zw = drift (m/s)
+  valeCloud: { value: new Vector4(0, 1 / 24, 0.46, 0.38) },
 };
 
 /** GLSL: the fog-of-war + edge haze functions (shared with custom ShaderMaterials) */
@@ -340,6 +344,42 @@ export interface WorldPatchOptions {
 
 const PATCHED = Symbol('valePatched');
 
+/** max env ENV-10: the cloud shadow. Two octaves of value noise in world xz, drifting ~0.6 m/s, thresholded into soft
+ *  fair-weather blobs (~20 m across, 35.5 % mean cover). It moves only the SUN (never the sky or the character light)
+ *  and is luminance-neutral on average: the sun takes ×(1 + a·(0.355 − cloud)), a little brighter in the open and up
+ *  to a·0.645 darker under a cloud, so the map's authored B5 values hold as the mean and a lane spot drifts only a few
+ *  luma either way (value_probe.mjs). A few ALU on lit world fragments, no texture, no define: no program is added.
+ *  Fighters, wicks and monsters keep their own key unclouded (readability). */
+const CLOUD_COVER_MEAN = 0.355;
+const cloudState = { tier: 1, map: 0 };
+/** the cloud shadow's switch: `tier` 0 | 1 (post.ts: off on Low), `map` the amplitude (terrain.ts: the map's own
+ *  art.terrain.cloudShadow; 0 = none, the Shadowless Noon) */
+export function setCloudShadow(o: { tier?: number; map?: number }): void {
+  if (o.tier !== undefined) cloudState.tier = o.tier;
+  if (o.map !== undefined) cloudState.map = o.map;
+  worldUniforms.valeCloud.value.x = cloudState.tier * cloudState.map;
+}
+const CLOUD_PARS = /* glsl */`
+uniform vec4 valeCloud;
+uniform float valeTime;
+float valeCloudHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+float valeCloudNoise( vec2 p ) {
+  vec2 i = floor( p ), f = fract( p );
+  f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( valeCloudHash( i ), valeCloudHash( i + vec2( 1.0, 0.0 ) ), f.x ),
+              mix( valeCloudHash( i + vec2( 0.0, 1.0 ) ), valeCloudHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y );
+}
+float valeCloudShade( vec2 xz ) {
+  if ( valeCloud.x <= 0.0 ) return 1.0;
+  vec2 p = ( xz - valeCloud.zw * valeTime ) * valeCloud.y;
+  float n = valeCloudNoise( p ) * 0.62 + valeCloudNoise( p * 2.27 + vec2( 7.1, 3.3 ) ) * 0.38;
+  return 1.0 + valeCloud.x * ( ${CLOUD_COVER_MEAN} - smoothstep( 0.45, 0.68, n ) );
+}
+`;
+const CLOUD_LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
+  .split('getDirectionalLightInfo( directionalLight, directLight );')
+  .join('getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= valeCloudShade( vValeWorld.xz );');
+
 /** the fighter key light and its shadow floor, applied where valeCharMode says fighter (2); a wick (1) or a jungle
  *  monster (1.25) keeps the sun exactly (× 1.0; the monster's share of the world's light applies in CHAR_LIGHT) */
 const CHAR_LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
@@ -393,6 +433,11 @@ export function patchWorldMaterial(material: Material, opts: WorldPatchOptions =
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${keep ? '#define VALE_KEEP_COLOR\n' : ''}varying vec3 vValeWorld;\n${WORLD_FOG_PARS}`)
         .replace('#include <opaque_fragment>', `outgoingLight = valeApplyWorldFog( outgoingLight, vValeWorld );\n#include <opaque_fragment>`);
+      if (!fighter && !unit) {
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>\n${CLOUD_PARS}`)
+          .replace('#include <lights_fragment_begin>', CLOUD_LIGHTS_BEGIN);
+      }
     }
     if (fighter || unit) {
       // a fighter's one directional light (the sun) becomes its view-space key at valeCharKey × its colour, its shadow

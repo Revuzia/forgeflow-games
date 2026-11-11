@@ -79,7 +79,9 @@ export type EventVfxKey = 'levelUp' | 'respawn' | 'death' | 'unitDeath' | 'struc
   | 'noonToll' | 'noonTollPlate'
   /** the Dawn Seal ending (rules.dawnSeal.until): each standing sealed structure sheds its seal · each Gorge Wind step
    *  (WorldView.gorgeWind rising): a gust across the map */
-  | 'sealBreak' | 'gorgeGust';
+  | 'sealBreak' | 'gorgeGust'
+  /** max VFX-9: the viewer's own last hit on a unit (gold coins pop toward the killer) and own champion kill (the bounty) */
+  | 'lastHit' | 'bounty';
 export type EventVfxMap = Partial<Record<EventVfxKey, string>>;
 export type StatusVfxMap = Partial<Record<StatusKindT, string>>;
 
@@ -698,6 +700,12 @@ export class Director {
           } else {
             const id = ev.kind === 'fighter' ? this.eventVfx.death : this.eventVfx.unitDeath;
             this.fire(id, ev.dst, ev.kind === 'fighter' ? 3 : 1, { origin: B, target: B, ground: B, anchor: 'origin' });
+            // max VFX-9: the viewer's own kill pays out in the world (own feedback only: nobody else sees your coins)
+            const gid = ev.kind === 'fighter' ? this.eventVfx.bounty : this.eventVfx.lastHit;
+            const killer = gid && ev.killer >= 0 ? view.entity(ev.killer) : undefined;
+            if (gid && killer && killer.kind === 'fighter' && this.colorFor(killer, killer.team, killer.owner).rel === 'self') {
+              this.fire(gid, killer.id, 2, { origin: B, target: B, ground: B, anchor: 'origin', dir: Math.atan2(killer.y - dst.y, killer.x - dst.x) });
+            }
           }
           break;
         }

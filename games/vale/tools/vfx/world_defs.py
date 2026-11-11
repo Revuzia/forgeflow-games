@@ -8,11 +8,15 @@ thrown outward is harm or control, motes rising are help. Built into content/vfx
 """
 from __future__ import annotations
 
-from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, EMBER, INK, INK2, NOON, SAP, L, chips, decal, flash, light, mesh, shockwave, vfx)
+from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, SAP, L, chips, decal, dust, flash, glow, ink, light, mesh, ribbon,
+                    shards, shockwave, vfx)
 
 RESIN = "#D9A15A"      # warm resin amber (Resinburn): the burn of sap, never the heal hue
 SAP_WARM = "#B8D98A"   # sap-light: SAP warmed toward honey, still inside the help read
 HOUR = "#E8D9B4"       # the hour-dial's pale brass-chalk (Hourstring / Stillhour)
+SUN = "#F2B84B"        # Sunsplinter's sun-gold (max VFX-5a)
+SUN_HI = "#FFE2A0"
+LAMP = "#E8A04A"       # Longshade's lamp-amber (its lamp eyes)
 
 
 def defs() -> list:
@@ -148,4 +152,66 @@ def defs() -> list:
                    texture="streak", stretch=0.1, blend="add", align="velocity", fit=False),
                  comment="T2 · world · a Gorge Wind step: a gust runs across the whole map, long pale wind streaks low over the "
                          "ground (weather, not an ability)"))
+
+    # ── epic monsters (max VFX-5a): each in its own light and ink, so a player tells them at a glance ─────────────
+    # Sunsplinter: a split shard of the stopped sun (sun-gold glass, splinters); Longshade: the long evening shadow
+    # (ink, its brass hour-line, its lamp eyes' amber)
+    D.append(vfx("lib_sunsplinter_volley", 0.7,
+                 mesh("path", "shard", 0.5, 0.7, color=[SUN_HI, SUN], alpha=1, emissive=3.0, rim="team", rim_pow=1.5, rim_emissive=2.4,
+                      align="velocity", stretch=[0.7, 0.7, 1.8], hold=1),
+                 glow("path", SUN, 1.0, 0.7, 2.6, alpha=(1, 1, 1, 0.8), follow=True),
+                 ribbon("path", SUN, width=(0.0, 0.24), life=0.2, alpha=(0, 0.55), emissive=2.4, noise=0.3),
+                 L("emitter", at="path", rate=30, shape="point", dir="back", spreadDeg=40, speed=[0.4, 1.4], life=[0.16, 0.3], size=[0.12, 0.03],
+                   color=[SUN_HI, SUN], alpha=[1, 0], emissive=2.6, gravity=2, texture="shard", blend="add", align="velocity", aspect=0.45),
+                 comment="T2 · Lumen · Sunsplinter's volley: sun-gold glass splinters with a team edge, a sun glow, splinters shed behind"))
+    D.append(vfx("lib_sunsplinter_burst", 1.2,
+                 flash(3, at="ground", color=SUN, scale=1.4),
+                 mesh("ground", "orb", [[0, 0.2], [0.25, 0.9], [1, 1.0]], 0.3, color=[SUN_HI, SUN], alpha=(0.35, 0), emissive=3.0, rim=SUN,
+                      rim_pow=2.2, rim_emissive=4.0, noise=0.5, dissolve=[0, 0.3, 1], edge="team", edge_emissive=3.0, fit=True),
+                 shockwave("ground", color=[SUN_HI, "team"], radius=(0.2, 1.1), width=(0.35, 0.06), life=0.34, emissive=3.6, fit=True),
+                 shards("ground", 20, color=(SUN_HI, SUN), speed=(5, 11), emissive=3.0, size=0.34),
+                 L("emitter", at="ground", count=6, shape="disc", radius=0.4, dir="up", spreadDeg=12, speed=[5, 8], life=[0.3, 0.45],
+                   size=[0.9, 0.2], color=[SUN_HI, SUN], alpha=[1, 0], emissive=3.4, texture="streak", stretch=0.06, blend="add"),
+                 decal("ground", "crack", [[0, 0.4], [0.1, 1.0], [1, 1.05]], 1.3, color=INK2, alpha=(0.85, 0.7, 0), emissive=2.0, rim=SUN, fit=True),
+                 decal("ground", "light", 1.2, 0.8, color=SUN, alpha=(0.6, 0.35, 0), emissive=2.0, texture="glow", fit=True),
+                 chips("ground", 12, speed=(3, 7)),
+                 L("distort", at="ground", mode="ring", align="ground", size=[[0, 0.6], [1, 3.2]], strength=[[0, 0.012], [0.5, 0.005], [1, 0]],
+                   life=0.45, fit=True),
+                 light("ground", SUN, 10, 8, 0.45),
+                 comment="T3 · Lumen · Sunsplinter's burst: a splinter of the sun lands: a sun-gold flash and shell, splinters flung out and "
+                         "up, the ground cracks with sunlight in it, the air ripples out"))
+    D.append(vfx("lib_sunsplinter_sweep", 0.7,
+                 mesh("origin", "fan", [[0, 1.0], [1, 1.0]], 0.3, color=[SUN_HI, SUN], alpha=(0.85, 0.85, 0), emissive=3.0, mask="sweep",
+                      mask_param=[0, 1.1], angle=70, align="dir", fit=True, offset=[0.2, 0.35, 0], stretch=[3.0, 1, 3.0]),
+                 L("emitter", at="origin", count=22, shape="cone", angleDeg=70, length=3.0, dir="forward", spreadDeg=30, speed=[5, 9],
+                   life=[0.15, 0.3], size=[0.22, 0.16, 0], color=[SUN_HI, SUN], alpha=[1, 0], emissive=3.0, drag=2, texture="shard", align="velocity",
+                   aspect=0.45, blend="add"),
+                 decal("origin", "light", 3.0, 0.6, shape="cone", angle=70, color=SUN, alpha=(0.5, 0.3, 0), emissive=1.6, fit=True),
+                 decal("origin", "scorch", 2.6, 1.0, shape="cone", angle=60, color=INK2, alpha=(0.55, 0.4, 0), emissive=1.2, rim=SUN, fit=True),
+                 comment="T2 · Lumen · Sunsplinter's sweep: a fan of sun-glass sweeps the arc, splinters fly, the cone scorches"))
+    D.append(vfx("lib_longshade_sweep", 0.8,
+                 mesh("origin", "fan", [[0, 1.0], [1, 1.0]], 0.34, color=[LAMP, HOUR], alpha=(0.75, 0.7, 0), emissive=2.4, mask="sweep",
+                      mask_param=[0, 1.1], angle=80, align="dir", fit=True, offset=[0.2, 0.3, 0], stretch=[3.0, 1, 3.0]),
+                 L("emitter", at="origin", count=12, shape="cone", angleDeg=80, length=3.0, dir="forward", spreadDeg=30, speed=[2, 4],
+                   life=[0.4, 0.7], size=[0.5, 1.0, 1.1], color=[INK, INK2], alpha=[0, 0.85, 0], drag=2.4, rotDeg=[0, 360], texture="ink_puff",
+                   blend="ink", rim=LAMP, rimAlpha=0.6, soft=0.3),
+                 decal("origin", "ink", 3.0, 1.0, shape="cone", angle=80, color=INK, alpha=(0.7, 0.55, 0), rim=HOUR, fit=True),
+                 decal("origin", "light", 2.8, 0.8, shape="cone", angle=80, color=HOUR, alpha=(0.4, 0.25, 0), emissive=1.2, texture="rune", fit=True),
+                 comment="T2 · Shade · Longshade's sweep: the long shadow swings through the arc (ink with a brass hour-line edge), ink rolls "
+                         "out, the cone stays inked with the dial's ticks in it"))
+    D.append(vfx("lib_longshade_slam", 1.1,
+                 flash(3, at="ground", color=LAMP, scale=1.0, light=False),
+                 decal("ground", "crack", [[0, 0.4], [0.1, 1.05], [1, 1.1]], 1.4, color=INK, alpha=(0.9, 0.8, 0), emissive=1.4, rim=LAMP, fit=True),
+                 decal("ground", "light", [[0, 0.4], [0.15, 0.9], [1, 0.95]], 1.2, color=HOUR, alpha=(0.35, 0.22, 0), emissive=1.4, texture="rune", fit=True),
+                 shockwave("ground", color=[INK2, INK], radius=(0.3, 1.2), width=(0.5, 0.12), life=0.4, emissive=0, alpha=(0.9, 0.6, 0), blend="ink",
+                           fit=True),
+                 shockwave("ground", color=LAMP, radius=(0.2, 1.05), width=(0.12, 0.03), life=0.32, emissive=2.6, fit=True),
+                 ink("ground", 8, size=1.0, speed=(2.5, 4.5), life=(0.45, 0.8), radius=0.4, shape="disc", dir_="out", gravity=-0.1),
+                 chips("ground", 16, speed=(3.5, 8), size=0.16),
+                 dust("ground", 8, size=1.3, speed=(1.5, 3.4), radius=0.7),
+                 L("distort", at="ground", mode="ring", align="ground", size=[[0, 0.5], [1, 3.0]], strength=[[0, 0.014], [0.5, 0.006], [1, 0]],
+                   life=0.45, fit=True),
+                 L("feel", at="ground", squash=0.12),
+                 comment="T3 · Shade · Longshade's slam: the ground cracks with lamp-amber in it, the hour-dial flashes under the blow, an ink "
+                         "wave and a lamp ring run out, ink and stone thrown, the air ripples"))
     return D

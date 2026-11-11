@@ -28,10 +28,18 @@ gate    Per variant, all automatic (a person still looks: `review`):
           colour   (third pass) no NEW colour inside the figure: pixels with chroma >= 18 (and >= 1.2 x the render's) in a
                    hue the render's figure does not carry (its 24-bin hue histogram, a bin and both neighbours < 0.5 %)
                    and clustered (>= 30 % of a 5 x 5 window) may be at most 0.03 % of the figure
-          eyes     (third pass) the render's eye pixels (the face box's most saturated 15 % and its dark features): the
-                   painting's saturation and brightness p95 (HSV, 0-255): fails when one rises > 30 and the other > 10 (ember eyes)
-          streak   (third pass) thin vertical dark lines in the eye-to-nose band (a horizontal high-pass held over 9 px
-                   vertically, < -5 L*): the painting's share at most 0.04 over the render's (tear streaks)
+          eyes     (pass 4 recalibration) the eye pixels: the face box's warm chromatic pixels (hue <= 60 / >= 345 deg,
+                   S > 40) at their top 20 % saturation (the third pass's most-saturated 15 % took Shadeprint's violet hood).
+                   Painting vs render saturation and brightness p95 (HSV, 0-255): fails when brightness rises > 30 with
+                   saturation > 10 (verify 2's ember Shadeprint portrait: +41 / +22), or saturation > 30 with brightness
+                   > 25 (the third pass's 10: Long Evening's calm eyes under the lantern grade read +12..+23 / +29..+35)
+          streak   (pass 4) tear streaks, Sukri's cards only (STREAK_FACES; Kemdo's lower face is a linen wrap): under the
+                   eyes found on the render, new thin dark vertical lines away from render edges, as columns that carry a
+                   line over 0.25 rr, per rr: <= 0.10 (rejected Sukri splashes 0.22-0.62, accepted Stillwater <= 0.03)
+          prop     (pass 4) invented props: local-structure Lab dE (each image minus its 4 %-height blur, so a plate regrade
+                   does not count), on a 4x grid: a blob of dE >= 10 outside the render's silhouette (dilated 2 %) or of
+                   dE >= 14 inside it (eroded) larger than 0.1 % of the image fails (Sukri portrait v2's crook and cup
+                   0.73 %, Highrim portrait v1/v2's lens and sun 0.11 / 0.32 %; accepted cards <= 0.05 %)
           menu     (third pass) the loading-card (splash) / draft-cell (portrait) crop: p50 70-110, <= 5 % over luma 200,
                    when the 3D card holds it
           store    a skin portrait: mean CIE76 dE against the shipped base portrait (256 px, the gen_store.ts measure) at its tier's
@@ -67,7 +75,9 @@ MODEL = "grok-imagine-image"
 TIER_FLOOR = {"standard": 12.0, "deluxe": 18.0, "legend": 18.0}
 FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting (ruling 12's speckle bar <= 2.5: the raw
                       # painting's pixel-scale grain read 2.6-5.2 on the figure; one pass reads 0.9-1.8, strokes survive)
-GATE = {"new_colour": 0.0003, "eye_ds": 30.0, "eye_dv": 30.0, "streak": 0.04, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
+PROP = {"de_out": 10.0, "de_in": 14.0, "out_max": 0.001, "in_max": 0.001}
+STREAK_FACES = {"sukri"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
+GATE = {"new_colour": 0.0003, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
 
@@ -230,19 +240,23 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
                 return np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-5), 0) * 255.0, mx * 255.0
             SF, VF = hsv(F)
             SP_, VP = hsv(P)
-            LF = Fl[..., 0]
-            eye = fm & ((SF >= np.percentile(SF[fm], 85)) | (LF < np.median(LF[fm]) - 18.0))
-            if eye.sum() > 8:
+            # (pass 4) the eye pixels: the face disc's WARM chromatic pixels (hue <= 60 or >= 345 deg, S > 40) at their
+            # top 20 % saturation. Every card's eyes are warm (amber, honey, brown) and the ember read is warm; the third
+            # pass's "most saturated 15 %" took Shadeprint's violet hood instead of its eyes
+            hx = F.max(-1)
+            dd = np.maximum(hx - F.min(-1), 1e-6)
+            r_, g_, b_ = F[..., 0], F[..., 1], F[..., 2]
+            HF = np.where(hx == r_, ((g_ - b_) / dd) % 6, np.where(hx == g_, (b_ - r_) / dd + 2, (r_ - g_) / dd + 4)) * 60
+            warm = fm & ((HF <= 60) | (HF >= 345)) & (SF > 40)
+            if warm.sum() > 16:
+                eye = warm & (SF >= np.percentile(SF[warm], 80))
                 r["eye_ds"] = round(float(np.percentile(SP_[eye], 95) - np.percentile(SF[eye], 95)), 1)
                 r["eye_dv"] = round(float(np.percentile(VP[eye], 95) - np.percentile(VF[eye], 95)), 1)
-            # the eye-to-nose band: thin vertical dark lines
-            band = (np.abs(xx - fp[0] * w) < 0.35 * rr) & (yy > fp[1] * h - 0.35 * rr) & (yy < fp[1] * h + 0.45 * rr) & (A > 0.9)
-            if band.sum() > 32:
-                def streaks(Lc):
-                    hp = Lc - plates._gauss1(Lc[..., None].astype(np.float32), 3.0, 1)[..., 0]
-                    v = plates._gauss1(hp[..., None].astype(np.float32), 4.0, 0)[..., 0]
-                    return float((v[band] < -5.0).mean())
-                r["streak"] = round(streaks(Pl[..., 0]) - streaks(Fl[..., 0]), 3)
+    # (pass 4) tear streaks (streak_measure) on the cards whose face under the eyes is bare (a mask or skin); Kemdo's is a
+    # linen wrap whose painted folds run down by design (they read 0.6-0.9 here and are not tears)
+    if plates.fighter_of(sid) in STREAK_FACES:
+        r.update(streak_measure(sid, kind, P, F, A, meta))
+    r.update(prop_measure(kind, P, F, A))
     tier = skin_tier(sid) if kind == "portrait" else None
     if tier:
         base = plates.load_image(plates.image_path(plates.fighter_of(sid), "portrait"))[..., :3]
@@ -271,16 +285,134 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
         fails.append("menu_luma")
     if r["new_colour"] > GATE["new_colour"]:
         fails.append("new_colour")
-    eds, edv = r.get("eye_ds", 0), r.get("eye_dv", 0)       # glowing = more saturated AND brighter (both up)
-    if (eds > GATE["eye_ds"] and edv > 10.0) or (edv > GATE["eye_dv"] and eds > 10.0):
+    eds, edv = r.get("eye_ds", 0), r.get("eye_dv", 0)       # glowing = brighter with more colour (both up)
+    if (edv > GATE["eye_dv"] and eds > 10.0) or (eds > GATE["eye_ds"] and edv > GATE["eye_dv2"]):
         fails.append("eyes")
-    if r.get("streak", 0) > GATE["streak"]:
+    if r.get("streak_cols", 0) > GATE["streak_cols"]:
         fails.append("streak")
+    if r.get("prop_out", 0) > PROP["out_max"] or r.get("prop_in", 0) > PROP["in_max"]:
+        fails.append("prop")
     if tier and r["store_de"] < r["store_floor"]:
         fails.append("store_dE")
     r["fails"] = fails
     r["pass"] = not fails
     return r
+
+
+def _components(m: np.ndarray) -> list[np.ndarray]:
+    """4-connected components of a boolean mask: a list of (N, 2) (y, x) index arrays (small masks only)"""
+    lab_ = np.zeros(m.shape, np.int32)
+    out = []
+    ys, xs = np.nonzero(m)
+    for y0, x0 in zip(ys, xs):
+        if lab_[y0, x0]:
+            continue
+        k = len(out) + 1
+        st = [(y0, x0)]
+        lab_[y0, x0] = k
+        pts = []
+        while st:
+            y, x = st.pop()
+            pts.append((y, x))
+            for yy, xx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= yy < m.shape[0] and 0 <= xx < m.shape[1] and m[yy, xx] and not lab_[yy, xx]:
+                    lab_[yy, xx] = k
+                    st.append((yy, xx))
+        out.append(np.array(pts))
+    return out
+
+
+def streak_measure(sid: str, kind: str, P: np.ndarray, F: np.ndarray, A: np.ndarray, meta: dict | None,
+                   debug: str | None = None) -> dict:
+    """(cards pass 4) tear streaks: thin dark lines running DOWN the face under the eyes that the render does not have
+    (verify 2: dark grain lines from the inner eye corners beside the nose; the third pass's 9 px nose-bridge band read
+    0.0 on all three rejected Sukri splashes).
+    The band: under the eyes (found on the render: the row of most dark features (L* 18 under the median) in a 1.8 rr
+    face disc, and their x extent + 0.12 rr), from the eye line down 1.1 rr, on the figure.
+    A new line pixel: the painting's L* minus its horizontal Gaussian (sigma 2 px at 1600) held over 2.5 px vertically,
+    at least 2 L* darker than the render's own (negative) response there, away from render edges (the render's L*
+    gradient under 2 L*/px: a painted line that sharpens a fold or rim the render has is not a streak).
+    streak_cols: the band columns whose line pixels, smoothed over 0.25 rr vertically, cover >= 35 % (a line running
+    down that column), per rr of face. Calibrated on verify 2 and the third pass (art/tools/paint_card.py history):
+    the rejected Sukri splashes 0.22-0.62, the accepted Stillwater cards <= 0.03."""
+    fp = plates.face_point(meta, params_of(sid), kind)
+    if fp is None:
+        return {}
+    h, w = A.shape
+    rr = (0.05 if kind == "splash" else 0.15) * h
+    sc = h / 900.0 if kind == "splash" else h / 512.0 * 1.6
+    yy, xx = np.mgrid[0:h, 0:w]
+    disc = (((xx - fp[0] * w) ** 2 + (yy - fp[1] * h) ** 2) < (1.8 * rr) ** 2) & (A > 0.9)
+    LF = lab(F.astype(np.float64))[..., 0]
+    dark = disc & (LF < np.median(LF[disc]) - 18.0) & (yy < fp[1] * h + 0.2 * rr)
+    rows = np.convolve(dark.sum(1).astype(float), np.ones(max(3, int(0.08 * rr))), "same")
+    if rows.max() < 3:
+        return {"streak_cols": 0.0}
+    ey = int(rows.argmax())
+    ex = np.nonzero((dark & (np.abs(yy - ey) < 0.10 * rr)).any(0))[0]
+    x0, x1 = int(max(0, ex.min() - 0.12 * rr)), int(min(w, ex.max() + 0.12 * rr))
+    y0, y1 = int(max(0, ey + 0.04 * rr)), int(min(h, ey + 1.10 * rr))
+
+    def resp(X):
+        Lc = lab(X[y0:y1, x0:x1].astype(np.float64))[..., 0].astype(np.float32)
+        hp = Lc - plates._gauss1(Lc[..., None], 2.0 * sc, 1)[..., 0]
+        return plates._gauss1(hp[..., None], 2.5 * sc, 0)[..., 0]
+    vP, vF = resp(P), resp(F)
+    fig = A[y0:y1, x0:x1] > 0.9
+    Lr = plates.gaussian(LF[y0:y1, x0:x1, None].astype(np.float32), 1.5 * sc)[..., 0]
+    gy, gx = np.gradient(Lr)
+    new = ((vP - np.minimum(vF, 0.0)) < -2.0) & fig & (np.hypot(gx, gy) < 2.0 / sc)
+    col = plates._gauss1(new.astype(np.float32)[..., None], 0.25 * rr, 0)[..., 0]
+    hit = col.max(0) > 0.35
+    if debug:
+        m3 = np.zeros(new.shape + (3,), np.float32)
+        m3[..., 1] = new
+        m3[:, hit, 0] = 0.6
+        dbg = np.concatenate([P[y0:y1, x0:x1], F[y0:y1, x0:x1], m3], 1)
+        Image.fromarray((np.clip(dbg, 0, 1) * 255).astype(np.uint8)).resize((dbg.shape[1] * 2, dbg.shape[0] * 2), Image.NEAREST).save(debug)
+    return {"streak_cols": round(float(hit.sum() / rr), 3)}
+
+
+def prop_measure(kind: str, P: np.ndarray, F: np.ndarray, A: np.ndarray, debug: str | None = None) -> dict:
+    """(cards pass 4) invented props (verify 2 / third pass: a crook and cup painted into Sukri's portrait corner, a lens
+    and a sun disc into Highrim's): on a 4x-reduced grid, blurred Lab dE painting vs 3D card. Outside the render's
+    silhouette (dilated 2 % of the height) a blob of dE >= PROP["de_out"] is something painted where the render has only
+    plate; inside it (eroded) a blob of dE >= PROP["de_in"] is a new shape on the figure. Returns each side's largest
+    blob as a share of the image (prop_out, prop_in) and its bounding box fill."""
+    h, w = A.shape
+    f = 4
+    hh, ww = h // f, w // f
+    red = lambda x: x[:hh * f, :ww * f].reshape(hh, f, ww, f, -1).mean((1, 3))  # noqa: E731
+    Pr, Fr = red(P), red(F)
+    Ar = red(A[..., None])[..., 0]
+    s_ = max(1.0, hh / 225.0)
+    # local structure only: a painter's regrade of the plate (a warmer sky, a lighter cliff) moves large areas in colour
+    # and is not a prop; each image minus its own large-scale blur (sigma 4 % of the height) keeps forms and edges
+    Lp, Lf = lab(blur(Pr, 1.5 * s_).astype(np.float64)), lab(blur(Fr, 1.5 * s_).astype(np.float64))
+    big = 0.04 * hh
+    Lp = Lp - blur(Lp.astype(np.float32), big)
+    Lf = Lf - blur(Lf.astype(np.float32), big)
+    dE = np.sqrt(((Lp - Lf) ** 2).sum(-1))
+    sil = blur(Ar.astype(np.float32), 0.02 * hh) > 0.02
+    inner = blur(Ar.astype(np.float32), 0.01 * hh) > 0.97
+    out = {}
+    dbg = np.zeros((hh, ww, 3), np.float32)
+    for nm, m, thr, ch in (("prop_out", ~sil & (dE >= PROP["de_out"]), PROP["de_out"], 0),
+                           ("prop_in", inner & (dE >= PROP["de_in"]), PROP["de_in"], 1)):
+        best, fill = 0.0, 0.0
+        for c in _components(m):
+            a_ = len(c) / float(hh * ww)
+            if a_ > best:
+                bh = np.ptp(c[:, 0]) + 1
+                bw = np.ptp(c[:, 1]) + 1
+                best, fill = a_, len(c) / float(bh * bw)
+            dbg[c[:, 0], c[:, 1], ch] = 1.0
+        out[nm] = round(best, 4)
+        out[nm + "_fill"] = round(fill, 2)
+    if debug:
+        im = np.concatenate([Pr, Fr, dbg], 1)
+        Image.fromarray((np.clip(im, 0, 1) * 255).astype(np.uint8)).save(debug)
+    return out
 
 
 def gate_card(sid: str, kind: str, n: int) -> list[dict]:

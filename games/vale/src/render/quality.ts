@@ -66,6 +66,8 @@ export interface ResolvedQuality {
   particleDensity: number;
   /** pooled point lights for `flash` layers (fixed per tier: changing it recompiles materials) */
   flashLights: number;
+  /** max VFX-11: extra density for SECONDARY emitters only (chips, dust, motes, petals): the readable cores never change */
+  secondaryDensity: number;
 }
 
 export const PRESETS: Readonly<Record<Tier, Omit<Video, 'preset' | 'fpsCap' | 'fullscreen' | 'ambientEffects'>>> = {
@@ -103,9 +105,11 @@ export function resolveQuality(v: Video): ResolvedQuality {
     particles,
     scatter: clampInt<0 | 1 | 2>(v.scatter, 0, 2),
     fpsCap: v.fpsCap || 0,
-    particleBudget: tier === 'ultra' ? 2500 : tier === 'high' ? 2000 : tier === 'medium' ? 900 : 450,
+    particleBudget: tier === 'ultra' ? 3000 : tier === 'high' ? 2000 : tier === 'medium' ? 900 : 450,
     particleDensity: particles === 2 ? 1 : particles === 1 ? 0.6 : 0.35,
-    flashLights: tier === 'low' ? 0 : tier === 'medium' ? 2 : 4,
+    // max VFX-11: Ultra pools 6 flash lights (High 4) and fills the secondary layers 1.3x
+    flashLights: tier === 'low' ? 0 : tier === 'medium' ? 2 : tier === 'ultra' ? 6 : 4,
+    secondaryDensity: tier === 'ultra' && particles === 2 ? 1.3 : 1,
   };
 }
 

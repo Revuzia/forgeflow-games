@@ -48,7 +48,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -59,18 +59,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -326,7 +326,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -337,18 +337,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -467,7 +467,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -478,18 +478,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -1435,6 +1435,161 @@
         "soft": 0.3,
         "delay": 0.2,
         "secondary": true
+      },
+      {
+        "type": "feel",
+        "squash": 0.12,
+        "hitFlash": 1.3,
+        "at": "target"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.09,
+        "count": 9,
+        "dir": "up",
+        "spreadDeg": 150,
+        "speed": [
+          2.2,
+          4.6
+        ],
+        "life": [
+          0.3,
+          0.5
+        ],
+        "size": [
+          0.15,
+          0.15,
+          0.09
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "delay": 0.08,
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            1.265
+          ],
+          [
+            1,
+            1.6099999999999999
+          ]
+        ],
+        "width": [
+          0.3,
+          0.06
+        ],
+        "life": 0.4,
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0.7,
+          0.45,
+          0
+        ],
+        "emissive": 0,
+        "sharp": 1.2,
+        "noise": 0.5,
+        "blend": "alpha"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.1,
+        "count": 4,
+        "shape": "ring",
+        "radius": 0.35,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.8,
+          2.0
+        ],
+        "life": [
+          0.5,
+          0.8
+        ],
+        "size": [
+          0.4,
+          0.85,
+          1.05
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "target",
+        "delay": 0.06,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.38,
+        "life": 0.45,
+        "color": "signature",
+        "alpha": [
+          0.5,
+          0.3,
+          0
+        ],
+        "emissive": 1.4
       }
     ]
   },
@@ -1575,11 +1730,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -1766,23 +1921,23 @@
       {
         "type": "emitter",
         "at": "origin",
-        "count": 10,
+        "count": 7,
         "shape": "sphere",
         "radius": 0.3,
         "dir": "up",
         "spreadDeg": 60,
         "speed": [
-          1.2,
-          2.4
+          1.4,
+          2.6
         ],
         "life": [
-          0.9,
-          1.5
+          0.8,
+          1.3
         ],
         "size": [
-          0.45,
-          1.0,
-          1.2
+          0.315,
+          0.7,
+          0.84
         ],
         "sizeVar": [
           0.8,
@@ -1798,7 +1953,7 @@
           0.75,
           0
         ],
-        "gravity": -1.2,
+        "gravity": -1.4,
         "drag": 2.6,
         "turbulence": 0.6,
         "rotDeg": [
@@ -1812,7 +1967,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.55,
+        "rimAlpha": 0.6,
         "soft": 0.3,
         "delay": 0.08
       },
@@ -2086,26 +2241,154 @@
     ]
   },
   {
-    "$comment": "T1 · Lumen · Gleam gained: a few warm motes hop up to the fighter (own feedback, no relationship)",
-    "id": "lib_gleam_pickup",
-    "duration": 0.35,
+    "$comment": "T2 · Lumen · your champion kill pays its bounty: the last-hit coins at 1.35x with a warm ring out on the ground where they fell",
+    "id": "lib_gleam_bounty",
+    "duration": 0.9,
     "teamTint": false,
     "layers": [
       {
+        "type": "flash",
+        "at": "origin",
+        "radius": 0.557,
+        "life": 0.05,
+        "color": "#FFD27A",
+        "intensity": 3.0,
+        "light": false
+      },
+      {
         "type": "emitter",
         "at": "origin",
-        "count": 6,
+        "count": 16,
+        "shape": "sphere",
+        "radius": 0.12,
+        "dir": "forward",
+        "spreadDeg": 38,
+        "speed": [
+          3.5100000000000002,
+          5.670000000000001
+        ],
+        "velocity": [
+          0,
+          3.6,
+          0
+        ],
+        "life": [
+          0.5,
+          0.62
+        ],
+        "size": [
+          0.4590000000000001,
+          0.54,
+          0.27
+        ],
+        "color": [
+          "#FFD27A",
+          "#FFE9B0"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": 9,
+        "drag": 0.4,
+        "spinDeg": [
+          -400,
+          400
+        ],
+        "texture": "glint",
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 8,
+        "shape": "sphere",
+        "radius": 0.1,
+        "dir": "up",
+        "spreadDeg": 50,
+        "speed": [
+          1.5,
+          2.6
+        ],
+        "life": [
+          0.25,
+          0.4
+        ],
+        "size": [
+          0.1,
+          0.03
+        ],
+        "color": "#FFD27A",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": 4,
+        "texture": "spark",
+        "stretch": 0.03,
+        "blend": "add"
+      },
+      {
+        "type": "sprite",
+        "at": "caster",
+        "delay": 0.42,
+        "texture": "flare",
+        "size": [
+          [
+            0,
+            0.675
+          ],
+          [
+            0.3,
+            1.1475
+          ],
+          [
+            1,
+            0.945
+          ]
+        ],
+        "color": "#FFD27A",
+        "emissive": 2.4,
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            1
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.24,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "space": "world",
+        "hold": 0
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "count": 8,
         "shape": "disc",
         "radius": 0.3,
         "dir": "up",
         "spreadDeg": 25,
         "speed": [
-          1.2,
-          2.4
+          0.8,
+          1.6
         ],
         "life": [
-          0.2,
-          0.35
+          0.3,
+          0.5
         ],
         "size": [
           0,
@@ -2120,12 +2403,257 @@
           0.8,
           0
         ],
-        "emissive": 1.4,
+        "emissive": 2.0,
         "gravity": -0.2,
         "drag": 1.2,
         "turbulence": 0.8,
         "texture": "mote",
         "blend": "add",
+        "delay": 0.44,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "origin",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            1.575
+          ],
+          [
+            1,
+            2.0
+          ]
+        ],
+        "width": [
+          0.22,
+          0.05
+        ],
+        "life": 0.45,
+        "color": [
+          "#FFD27A",
+          "#FFE9B0"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.4,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "caster",
+        "radius": [
+          [
+            0,
+            1.2
+          ],
+          [
+            0.35,
+            0.525
+          ],
+          [
+            1,
+            0.3
+          ]
+        ],
+        "width": [
+          0.12,
+          0.05
+        ],
+        "life": 0.3,
+        "color": "#FFD27A",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.2,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.42,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · your last hit pays: eight warm Gleam coins pop off the unit and arc to you, a soft glint lands on you (own feedback, no relationship)",
+    "id": "lib_gleam_pickup",
+    "duration": 0.9,
+    "teamTint": false,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 0.413,
+        "life": 0.05,
+        "color": "#FFD27A",
+        "intensity": 3.0,
+        "light": false
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 8,
+        "shape": "sphere",
+        "radius": 0.12,
+        "dir": "forward",
+        "spreadDeg": 38,
+        "speed": [
+          2.6,
+          4.2
+        ],
+        "velocity": [
+          0,
+          3.6,
+          0
+        ],
+        "life": [
+          0.5,
+          0.62
+        ],
+        "size": [
+          0.34,
+          0.4,
+          0.2
+        ],
+        "color": [
+          "#FFD27A",
+          "#FFE9B0"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": 9,
+        "drag": 0.4,
+        "spinDeg": [
+          -400,
+          400
+        ],
+        "texture": "glint",
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 4,
+        "shape": "sphere",
+        "radius": 0.1,
+        "dir": "up",
+        "spreadDeg": 50,
+        "speed": [
+          1.5,
+          2.6
+        ],
+        "life": [
+          0.25,
+          0.4
+        ],
+        "size": [
+          0.1,
+          0.03
+        ],
+        "color": "#FFD27A",
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": 4,
+        "texture": "spark",
+        "stretch": 0.03,
+        "blend": "add"
+      },
+      {
+        "type": "sprite",
+        "at": "caster",
+        "delay": 0.42,
+        "texture": "flare",
+        "size": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.3,
+            0.85
+          ],
+          [
+            1,
+            0.7
+          ]
+        ],
+        "color": "#FFD27A",
+        "emissive": 2.4,
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            1
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.24,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "space": "world",
+        "hold": 0
+      },
+      {
+        "type": "emitter",
+        "at": "caster",
+        "count": 4,
+        "shape": "disc",
+        "radius": 0.3,
+        "dir": "up",
+        "spreadDeg": 25,
+        "speed": [
+          0.8,
+          1.6
+        ],
+        "life": [
+          0.3,
+          0.5
+        ],
+        "size": [
+          0,
+          0.2,
+          0.16000000000000003,
+          0
+        ],
+        "color": "#FFD27A",
+        "alpha": [
+          0,
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": -0.2,
+        "drag": 1.2,
+        "turbulence": 0.8,
+        "texture": "mote",
+        "blend": "add",
+        "delay": 0.44,
         "secondary": true
       }
     ]
@@ -2659,6 +3187,49 @@
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.05,
+        "count": 1,
+        "shape": "point",
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.22,
+          0.22
+        ],
+        "size": [
+          1.0499999999999998,
+          1.19
+        ],
+        "color": "#F1E2C6",
+        "alpha": [
+          [
+            0,
+            0.9
+          ],
+          [
+            0.6,
+            0.7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.0,
+        "texture": "glow",
+        "blend": "add",
+        "rotDeg": [
+          0,
+          360
+        ],
+        "soft": 0.25
       }
     ]
   },
@@ -2989,6 +3560,161 @@
         "soft": 0.3,
         "delay": 0.08,
         "secondary": true
+      },
+      {
+        "type": "feel",
+        "squash": 0.1,
+        "hitFlash": 1.25,
+        "at": "target"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.09,
+        "count": 8,
+        "dir": "up",
+        "spreadDeg": 150,
+        "speed": [
+          2.2,
+          4.6
+        ],
+        "life": [
+          0.3,
+          0.5
+        ],
+        "size": [
+          0.15,
+          0.15,
+          0.09
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "delay": 0.08,
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            1.1
+          ],
+          [
+            1,
+            1.4
+          ]
+        ],
+        "width": [
+          0.3,
+          0.06
+        ],
+        "life": 0.4,
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0.7,
+          0.45,
+          0
+        ],
+        "emissive": 0,
+        "sharp": 1.2,
+        "noise": 0.5,
+        "blend": "alpha"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.1,
+        "count": 4,
+        "shape": "ring",
+        "radius": 0.35,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.8,
+          2.0
+        ],
+        "life": [
+          0.5,
+          0.8
+        ],
+        "size": [
+          0.4,
+          0.85,
+          1.05
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "secondary": true
+      },
+      {
+        "type": "decal",
+        "at": "target",
+        "delay": 0.06,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.2,
+        "life": 0.45,
+        "color": "signature",
+        "alpha": [
+          0.5,
+          0.3,
+          0
+        ],
+        "emissive": 1.4
       }
     ]
   },
@@ -3243,6 +3969,49 @@
         "rimAlpha": 0.5,
         "delay": 0.03,
         "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "delay": 0.05,
+        "count": 1,
+        "shape": "point",
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.22,
+          0.22
+        ],
+        "size": [
+          0.9299999999999999,
+          1.054
+        ],
+        "color": "#F1E2C6",
+        "alpha": [
+          [
+            0,
+            0.9
+          ],
+          [
+            0.6,
+            0.7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.0,
+        "texture": "glow",
+        "blend": "add",
+        "rotDeg": [
+          0,
+          360
+        ],
+        "soft": 0.25
       }
     ]
   },
@@ -3884,11 +4653,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -4432,7 +5201,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -4443,18 +5212,480 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · Longshade's slam: the ground cracks with lamp-amber in it, the hour-dial flashes under the blow, an ink wave and a lamp ring run out, ink and stone thrown, the air ripples",
+    "id": "lib_longshade_slam",
+    "duration": 1.1,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "ground",
+        "radius": 1.1,
+        "life": 0.06,
+        "color": "#E8A04A",
+        "intensity": 6.0,
+        "light": false
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "crack",
+        "radius": [
+          [
+            0,
+            0.4
+          ],
+          [
+            0.1,
+            1.05
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "life": 1.4,
+        "color": "#17181B",
+        "alpha": [
+          0.9,
+          0.8,
+          0
+        ],
+        "emissive": 1.4,
+        "rim": "#E8A04A",
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.4
+          ],
+          [
+            0.15,
+            0.9
+          ],
+          [
+            1,
+            0.95
+          ]
+        ],
+        "life": 1.2,
+        "color": "#E8D9B4",
+        "alpha": [
+          0.35,
+          0.22,
+          0
+        ],
+        "emissive": 1.4,
+        "texture": "rune",
+        "fit": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            0.9749999999999999
+          ],
+          [
+            1,
+            1.2
+          ]
+        ],
+        "width": [
+          0.5,
+          0.12
+        ],
+        "life": 0.4,
+        "color": [
+          "#2A2C33",
+          "#17181B"
+        ],
+        "alpha": [
+          0.9,
+          0.6,
+          0
+        ],
+        "emissive": 0,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "fit": true,
+        "blend": "ink"
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.8375000000000001
+          ],
+          [
+            1,
+            1.05
+          ]
+        ],
+        "width": [
+          0.12,
+          0.03
+        ],
+        "life": 0.32,
+        "color": "#E8A04A",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.6,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 8,
+        "shape": "disc",
+        "radius": 0.4,
+        "dir": "out",
+        "spreadDeg": 60,
+        "speed": [
+          2.5,
+          4.5
+        ],
+        "life": [
+          0.45,
+          0.8
+        ],
+        "size": [
+          0.45,
+          1.0,
+          1.2
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -0.1,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.6,
+        "soft": 0.3
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 16,
+        "dir": "up",
+        "spreadDeg": 160,
+        "speed": [
+          3.5,
+          8
+        ],
+        "life": [
+          0.35,
+          0.6
+        ],
+        "size": [
+          0.16,
+          0.16,
+          0.096
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14.0,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.03,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 8,
+        "shape": "ring",
+        "radius": 0.7,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          1.5,
+          3.4
+        ],
+        "life": [
+          0.5,
+          0.9
+        ],
+        "size": [
+          0.65,
+          1.3,
+          1.625
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.08,
+        "secondary": true
+      },
+      {
+        "type": "distort",
+        "at": "ground",
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            0.5
+          ],
+          [
+            1,
+            3.0
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.014
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.45,
+        "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.12
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · Longshade's sweep: the long shadow swings through the arc (ink with a brass hour-line edge), ink rolls out, the cone stays inked with the dial's ticks in it",
+    "id": "lib_longshade_sweep",
+    "duration": 0.8,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "at": "origin",
+        "shape": "fan",
+        "scale": [
+          [
+            0,
+            1.0
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "stretch": [
+          3.0,
+          1,
+          3.0
+        ],
+        "life": 0.34,
+        "color": [
+          "#E8A04A",
+          "#E8D9B4"
+        ],
+        "alpha": [
+          0.75,
+          0.7,
+          0
+        ],
+        "emissive": 2.4,
+        "mask": "sweep",
+        "maskParam": [
+          0,
+          1.1
+        ],
+        "blend": "add",
+        "align": "dir",
+        "angleDeg": 80,
+        "fit": true,
+        "offset": [
+          0.2,
+          0.3,
+          0
+        ]
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 12,
+        "shape": "cone",
+        "angleDeg": 80,
+        "length": 3.0,
+        "dir": "forward",
+        "spreadDeg": 30,
+        "speed": [
+          2,
+          4
+        ],
+        "life": [
+          0.4,
+          0.7
+        ],
+        "size": [
+          0.5,
+          1.0,
+          1.1
+        ],
+        "color": [
+          "#17181B",
+          "#2A2C33"
+        ],
+        "alpha": [
+          0,
+          0.85,
+          0
+        ],
+        "drag": 2.4,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#E8A04A",
+        "rimAlpha": 0.6,
+        "soft": 0.3
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "cone",
+        "style": "ink",
+        "radius": 3.0,
+        "life": 1.0,
+        "color": "#17181B",
+        "alpha": [
+          0.7,
+          0.55,
+          0
+        ],
+        "rim": "#E8D9B4",
+        "angleDeg": 80,
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "cone",
+        "style": "light",
+        "radius": 2.8,
+        "life": 0.8,
+        "color": "#E8D9B4",
+        "alpha": [
+          0.4,
+          0.25,
+          0
+        ],
+        "emissive": 1.2,
+        "texture": "rune",
+        "angleDeg": 80,
+        "fit": true
       }
     ]
   },
@@ -4535,7 +5766,7 @@
     ]
   },
   {
-    "$comment": "T3 · Lumen · a Needle (tower) fires: a long team spike with a hard streak; muzzle flash and a heat shimmer at the needle tip, light bent along the bolt",
+    "$comment": "T3 · Lumen · an outer Needle fires: a long team spike with a hard streak; muzzle flash and a heat shimmer at the needle tip, light bent along the bolt, its light on the ground under it",
     "id": "lib_needle_shot",
     "duration": 0.6,
     "teamTint": true,
@@ -4642,7 +5873,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -4653,18 +5884,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       },
       {
         "type": "decal",
@@ -4673,7 +5904,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 2.4,
+        "radius": 2.0,
         "life": 0.6,
         "hold": 0.35,
         "color": "signature",
@@ -4684,18 +5915,505 @@
           ],
           [
             0.06,
-            0.16
+            0.09
           ],
           [
             0.35,
-            0.16
+            0.09
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.2
+        "emissive": 1.1
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · the Hourbell's needles fire: the heaviest shot, 1.35x, a bright head, a doubled 2.2x wake of team and glass, sparks shed, a ring of air at the muzzle",
+    "id": "lib_needle_shot_bell",
+    "duration": 0.6,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 1.215,
+        "life": 0.05,
+        "color": "team",
+        "intensity": 3.0
+      },
+      {
+        "type": "mesh",
+        "at": "path",
+        "shape": "spike",
+        "scale": 1.215,
+        "stretch": [
+          0.35,
+          0.35,
+          2.4
+        ],
+        "life": 0.6,
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": 1,
+        "emissive": 3.9000000000000004,
+        "rim": "team",
+        "rimEmissive": 4.050000000000001,
+        "blend": "add",
+        "align": "velocity",
+        "hold": 1
+      },
+      {
+        "type": "ribbon",
+        "at": "path",
+        "color": "team",
+        "width": [
+          0.0,
+          0.405
+        ],
+        "life": 0.30800000000000005,
+        "alpha": [
+          0,
+          0.6
+        ],
+        "emissive": 2.6,
+        "noise": 0.2,
+        "blend": "add",
+        "scroll": 2.0
+      },
+      {
+        "type": "distort",
+        "at": "origin",
+        "mode": "haze",
+        "size": [
+          0.945,
+          1.4850000000000003
+        ],
+        "strength": [
+          [
+            0,
+            0.004
+          ],
+          [
+            0.25,
+            0.012
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.4
+      },
+      {
+        "type": "distort",
+        "at": "path",
+        "follow": true,
+        "mode": "bulge",
+        "size": 0.7425000000000002,
+        "strength": [
+          [
+            0,
+            0.009
+          ],
+          [
+            0.8,
+            0.007
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.6
+      },
+      {
+        "type": "sprite",
+        "at": "path",
+        "follow": true,
+        "texture": "glow",
+        "size": [
+          1.5,
+          1.62
+        ],
+        "color": "team",
+        "emissive": 3.6,
+        "alpha": [
+          1,
+          1,
+          1,
+          0.8
+        ],
+        "life": 0.6,
+        "soft": 0.25
+      },
+      {
+        "type": "ribbon",
+        "at": "path",
+        "color": "#BFD3E6",
+        "width": [
+          0.0,
+          0.14
+        ],
+        "life": 0.3,
+        "alpha": [
+          0,
+          0.7
+        ],
+        "emissive": 3.0,
+        "noise": 0.1,
+        "blend": "add",
+        "scroll": 2.0
+      },
+      {
+        "type": "emitter",
+        "at": "path",
+        "rate": 46,
+        "shape": "point",
+        "dir": "back",
+        "spreadDeg": 40,
+        "speed": [
+          0.6,
+          1.8
+        ],
+        "life": [
+          0.16,
+          0.3
+        ],
+        "size": [
+          0.14,
+          0.03
+        ],
+        "color": [
+          "team",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "drag": 2,
+        "texture": "spark",
+        "stretch": 0.03,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "origin",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            1.0999999999999999
+          ],
+          [
+            1,
+            1.4
+          ]
+        ],
+        "width": [
+          0.2,
+          0.04
+        ],
+        "life": 0.25,
+        "color": "team",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 3.0,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "mode": "vertical",
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.1,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.28
+          ],
+          [
+            0.35,
+            0.28
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.4
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.0,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.09
+          ],
+          [
+            0.35,
+            0.09
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.1
+      }
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · an inner Needle fires: the outer shot at 1.15x with a glowing head, a 1.6x wake and glints shed",
+    "id": "lib_needle_shot_inner",
+    "duration": 0.6,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 1.035,
+        "life": 0.05,
+        "color": "team",
+        "intensity": 3.0
+      },
+      {
+        "type": "mesh",
+        "at": "path",
+        "shape": "spike",
+        "scale": 1.035,
+        "stretch": [
+          0.35,
+          0.35,
+          2.4
+        ],
+        "life": 0.6,
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": 1,
+        "emissive": 3.4499999999999997,
+        "rim": "team",
+        "rimEmissive": 3.4499999999999997,
+        "blend": "add",
+        "align": "velocity",
+        "hold": 1
+      },
+      {
+        "type": "ribbon",
+        "at": "path",
+        "color": "team",
+        "width": [
+          0.0,
+          0.345
+        ],
+        "life": 0.22400000000000003,
+        "alpha": [
+          0,
+          0.6
+        ],
+        "emissive": 2.6,
+        "noise": 0.2,
+        "blend": "add",
+        "scroll": 2.0
+      },
+      {
+        "type": "distort",
+        "at": "origin",
+        "mode": "haze",
+        "size": [
+          0.8049999999999999,
+          1.265
+        ],
+        "strength": [
+          [
+            0,
+            0.004
+          ],
+          [
+            0.25,
+            0.012
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.4
+      },
+      {
+        "type": "distort",
+        "at": "path",
+        "follow": true,
+        "mode": "bulge",
+        "size": 0.6325,
+        "strength": [
+          [
+            0,
+            0.009
+          ],
+          [
+            0.8,
+            0.007
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.6
+      },
+      {
+        "type": "sprite",
+        "at": "path",
+        "follow": true,
+        "texture": "glow",
+        "size": [
+          1.1,
+          1.1880000000000002
+        ],
+        "color": "team",
+        "emissive": 3.0,
+        "alpha": [
+          1,
+          1,
+          1,
+          0.8
+        ],
+        "life": 0.6,
+        "soft": 0.25
+      },
+      {
+        "type": "emitter",
+        "at": "path",
+        "rate": 30,
+        "shape": "point",
+        "dir": "back",
+        "spreadDeg": 30,
+        "speed": [
+          0.4,
+          1.2
+        ],
+        "life": [
+          0.14,
+          0.26
+        ],
+        "size": [
+          0.1,
+          0.02
+        ],
+        "color": [
+          "team",
+          "#BFD3E6"
+        ],
+        "alpha": [
+          0.9,
+          0
+        ],
+        "emissive": 2.6,
+        "drag": 2,
+        "texture": "glint",
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.1,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.28
+          ],
+          [
+            0.35,
+            0.28
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.4
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 2.0,
+        "life": 0.6,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.09
+          ],
+          [
+            0.35,
+            0.09
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.1
       }
     ]
   },
@@ -4818,34 +6536,44 @@
         ],
         "stretch": [
           1.4,
-          6.0,
+          4.5,
           1.4
         ],
-        "life": 1.2,
+        "life": 0.85,
         "color": [
           "#FFFFFF",
           "team"
         ],
         "alpha": [
-          0.9,
-          0
+          [
+            0,
+            0.6
+          ],
+          [
+            0.4,
+            0.3
+          ],
+          [
+            1,
+            0
+          ]
         ],
-        "emissive": 6,
+        "emissive": 4,
         "rim": "team",
         "rimPow": 1.4,
-        "rimEmissive": 6,
-        "noise": 0.4,
+        "rimEmissive": 5,
+        "noise": 0.5,
         "scroll": [
           0,
           2.4
         ],
         "dissolve": [
           0,
-          0.2,
+          0.25,
           1
         ],
         "edge": "team",
-        "edgeEmissive": 6,
+        "edgeEmissive": 5,
         "mask": "top",
         "maskParam": 0.3,
         "blend": "add",
@@ -4862,28 +6590,38 @@
           ],
           [
             0.2,
-            1.0
+            0.8
           ],
           [
             1,
-            0.8
+            0.6
           ]
         ],
         "stretch": [
-          0.8,
-          8.0,
-          0.8
+          0.6,
+          6.0,
+          0.6
         ],
-        "life": 1.0,
+        "life": 0.6,
         "color": [
           "#FFFFFF",
           "team"
         ],
         "alpha": [
-          1,
-          0
+          [
+            0,
+            1
+          ],
+          [
+            0.5,
+            0.4
+          ],
+          [
+            1,
+            0
+          ]
         ],
-        "emissive": 8,
+        "emissive": 6,
         "noise": 0.3,
         "scroll": [
           0,
@@ -5250,7 +6988,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -5261,18 +6999,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -5375,7 +7113,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -5386,18 +7124,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -6326,7 +8064,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -6337,18 +8075,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -8417,31 +10155,33 @@
           ],
           [
             0.08,
-            0.9
+            0.85
           ],
           [
             0.75,
-            0.9
+            0.85
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 2.0,
-        "dissolve": 0.46,
+        "emissive": 1.8,
+        "dissolve": 0.58,
         "noise": 0.9,
-        "noiseScale": 2.6,
+        "noiseScale": 3.2,
         "scroll": [
           0.6,
           0
         ],
         "edge": "team",
         "edgeEmissive": 2.0,
-        "edgeWidth": 0.12,
+        "edgeWidth": 0.14,
         "blend": "add",
         "align": "up",
         "spinDeg": -70,
+        "mask": "band",
+        "maskParam": 0.45,
         "at": "target",
         "life": 1.0,
         "hold": 0.75,
@@ -10798,22 +12538,22 @@
           ],
           [
             0.08,
-            0.75
+            0.4
           ],
           [
             0.75,
-            0.75
+            0.4
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.8,
+        "emissive": 1.3,
         "rim": "#F4EFE2",
-        "rimEmissive": 2.2,
+        "rimEmissive": 1.8,
         "rimPow": 1.6,
-        "noise": 0.4,
+        "noise": 0.5,
         "scroll": [
           0,
           0.6
@@ -12094,7 +13834,7 @@
           "team"
         ],
         "alpha": [
-          0.85,
+          0.6,
           0
         ],
         "emissive": 2.6,
@@ -12349,6 +14089,570 @@
     ]
   },
   {
+    "$comment": "T3 · Lumen · Sunsplinter's burst: a splinter of the sun lands: a sun-gold flash and shell, splinters flung out and up, the ground cracks with sunlight in it, the air ripples out",
+    "id": "lib_sunsplinter_burst",
+    "duration": 1.2,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "ground",
+        "radius": 1.54,
+        "life": 0.06,
+        "color": "#F2B84B",
+        "intensity": 6.0
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "orb",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.25,
+            0.9
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.3,
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          0.35,
+          0
+        ],
+        "emissive": 3.0,
+        "rim": "#F2B84B",
+        "rimPow": 2.2,
+        "rimEmissive": 4.0,
+        "noise": 0.5,
+        "dissolve": [
+          0,
+          0.3,
+          1
+        ],
+        "edge": "team",
+        "edgeEmissive": 3.0,
+        "blend": "add",
+        "fit": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.875
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "width": [
+          0.35,
+          0.06
+        ],
+        "life": 0.34,
+        "color": [
+          "#FFE2A0",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 3.6,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 20,
+        "shape": "sphere",
+        "radius": 0.2,
+        "dir": "out",
+        "spreadDeg": 170,
+        "speed": [
+          5,
+          11
+        ],
+        "life": [
+          0.3,
+          0.55
+        ],
+        "size": [
+          0.34,
+          0.272,
+          0
+        ],
+        "sizeVar": [
+          0.6,
+          1.4
+        ],
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "gravity": 6.0,
+        "drag": 1.8,
+        "texture": "shard",
+        "blend": "add",
+        "align": "velocity",
+        "aspect": 0.45
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 6,
+        "shape": "disc",
+        "radius": 0.4,
+        "dir": "up",
+        "spreadDeg": 12,
+        "speed": [
+          5,
+          8
+        ],
+        "life": [
+          0.3,
+          0.45
+        ],
+        "size": [
+          0.9,
+          0.2
+        ],
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.4,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "crack",
+        "radius": [
+          [
+            0,
+            0.4
+          ],
+          [
+            0.1,
+            1.0
+          ],
+          [
+            1,
+            1.05
+          ]
+        ],
+        "life": 1.3,
+        "color": "#2A2C33",
+        "alpha": [
+          0.85,
+          0.7,
+          0
+        ],
+        "emissive": 2.0,
+        "rim": "#F2B84B",
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": 1.2,
+        "life": 0.8,
+        "color": "#F2B84B",
+        "alpha": [
+          0.6,
+          0.35,
+          0
+        ],
+        "emissive": 2.0,
+        "texture": "glow",
+        "fit": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 12,
+        "dir": "up",
+        "spreadDeg": 160,
+        "speed": [
+          3,
+          7
+        ],
+        "life": [
+          0.35,
+          0.6
+        ],
+        "size": [
+          0.17,
+          0.17,
+          0.10200000000000001
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14.0,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.03,
+        "secondary": true
+      },
+      {
+        "type": "distort",
+        "at": "ground",
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            0.6
+          ],
+          [
+            1,
+            3.2
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.012
+          ],
+          [
+            0.5,
+            0.005
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.45,
+        "fit": true
+      },
+      {
+        "type": "light",
+        "at": "ground",
+        "color": "#F2B84B",
+        "intensity": 10,
+        "radius": 8,
+        "life": 0.45
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Sunsplinter's sweep: a fan of sun-glass sweeps the arc, splinters fly, the cone scorches",
+    "id": "lib_sunsplinter_sweep",
+    "duration": 0.7,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "at": "origin",
+        "shape": "fan",
+        "scale": [
+          [
+            0,
+            1.0
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "stretch": [
+          3.0,
+          1,
+          3.0
+        ],
+        "life": 0.3,
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          0.85,
+          0.85,
+          0
+        ],
+        "emissive": 3.0,
+        "mask": "sweep",
+        "maskParam": [
+          0,
+          1.1
+        ],
+        "blend": "add",
+        "align": "dir",
+        "angleDeg": 70,
+        "fit": true,
+        "offset": [
+          0.2,
+          0.35,
+          0
+        ]
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 22,
+        "shape": "cone",
+        "angleDeg": 70,
+        "length": 3.0,
+        "dir": "forward",
+        "spreadDeg": 30,
+        "speed": [
+          5,
+          9
+        ],
+        "life": [
+          0.15,
+          0.3
+        ],
+        "size": [
+          0.22,
+          0.16,
+          0
+        ],
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 3.0,
+        "drag": 2,
+        "texture": "shard",
+        "align": "velocity",
+        "aspect": 0.45,
+        "blend": "add"
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "cone",
+        "style": "light",
+        "radius": 3.0,
+        "life": 0.6,
+        "color": "#F2B84B",
+        "alpha": [
+          0.5,
+          0.3,
+          0
+        ],
+        "emissive": 1.6,
+        "angleDeg": 70,
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "origin",
+        "shape": "cone",
+        "style": "scorch",
+        "radius": 2.6,
+        "life": 1.0,
+        "color": "#2A2C33",
+        "alpha": [
+          0.55,
+          0.4,
+          0
+        ],
+        "emissive": 1.2,
+        "rim": "#F2B84B",
+        "angleDeg": 60,
+        "fit": true
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Sunsplinter's volley: sun-gold glass splinters with a team edge, a sun glow, splinters shed behind",
+    "id": "lib_sunsplinter_volley",
+    "duration": 0.7,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "at": "path",
+        "shape": "shard",
+        "scale": 0.5,
+        "stretch": [
+          0.7,
+          0.7,
+          1.8
+        ],
+        "life": 0.7,
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": 1,
+        "emissive": 3.0,
+        "rim": "team",
+        "rimPow": 1.5,
+        "rimEmissive": 2.4,
+        "blend": "add",
+        "align": "velocity",
+        "hold": 1
+      },
+      {
+        "type": "sprite",
+        "at": "path",
+        "follow": true,
+        "texture": "glow",
+        "size": [
+          1.0,
+          1.08
+        ],
+        "color": "#F2B84B",
+        "emissive": 2.6,
+        "alpha": [
+          1,
+          1,
+          1,
+          0.8
+        ],
+        "life": 0.7,
+        "soft": 0.25
+      },
+      {
+        "type": "ribbon",
+        "at": "path",
+        "color": "#F2B84B",
+        "width": [
+          0.0,
+          0.24
+        ],
+        "life": 0.2,
+        "alpha": [
+          0,
+          0.55
+        ],
+        "emissive": 2.4,
+        "noise": 0.3,
+        "blend": "add",
+        "scroll": 2.0
+      },
+      {
+        "type": "emitter",
+        "at": "path",
+        "rate": 30,
+        "shape": "point",
+        "dir": "back",
+        "spreadDeg": 40,
+        "speed": [
+          0.4,
+          1.4
+        ],
+        "life": [
+          0.16,
+          0.3
+        ],
+        "size": [
+          0.12,
+          0.03
+        ],
+        "color": [
+          "#FFE2A0",
+          "#F2B84B"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "gravity": 2,
+        "texture": "shard",
+        "blend": "add",
+        "align": "velocity",
+        "aspect": 0.45
+      },
+      {
+        "type": "decal",
+        "at": "path",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": 1.1,
+        "life": 0.45,
+        "hold": 0.35,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.06,
+            0.28
+          ],
+          [
+            0.35,
+            0.28
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.4
+      }
+    ]
+  },
+  {
     "$comment": "T2 · Lumen · spinning thrown blade: opaque chalk crescent, team edge, short streak",
     "id": "lib_thrown_blade",
     "duration": 0.6,
@@ -12397,7 +14701,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -12408,18 +14712,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -12760,6 +15064,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -12947,6 +15256,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -16417,7 +18731,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -16428,18 +18742,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -16511,18 +18825,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -16538,8 +18852,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -16551,11 +18865,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -17262,18 +19576,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -17289,8 +19603,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -17302,11 +19616,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -18015,18 +20329,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -18042,8 +20356,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -18055,11 +20369,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -19078,18 +21392,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -19105,8 +21419,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -19118,11 +21432,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -19344,6 +21658,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -19894,11 +22278,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -21051,18 +23435,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -21078,8 +23462,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -21091,11 +23475,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -22643,6 +25027,11 @@
         "align": "ground",
         "fit": true,
         "delay": 0.3
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -23472,18 +25861,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -23499,8 +25888,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -23512,11 +25901,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -24101,7 +26490,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -24112,18 +26501,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -24195,18 +26584,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -24222,8 +26611,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -24235,11 +26624,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -25027,7 +27416,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -25038,18 +27427,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -25759,6 +28148,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -26131,18 +28525,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -26158,8 +28552,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -26171,11 +28565,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -26462,6 +28856,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -27137,7 +29601,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -27148,18 +29612,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -27231,18 +29695,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -27258,8 +29722,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -27271,11 +29735,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -27920,18 +30384,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -27947,8 +30411,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -27960,11 +30424,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -28298,11 +30762,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -28381,18 +30845,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -28408,8 +30872,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -28421,11 +30885,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -29724,18 +32188,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -29751,8 +32215,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -29764,11 +32228,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -31059,11 +33523,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -31079,7 +33543,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 2.4,
+        "radius": 2.0,
         "life": 0.6,
         "hold": 0.35,
         "color": "signature",
@@ -31090,18 +33554,18 @@
           ],
           [
             0.06,
-            0.16
+            0.09
           ],
           [
             0.35,
-            0.16
+            0.09
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.2
+        "emissive": 1.1
       }
     ]
   },
@@ -31649,6 +34113,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -32170,6 +34639,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -32241,18 +34715,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -32268,8 +34742,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -32281,11 +34755,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -32544,6 +35018,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -35211,11 +37755,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -37138,6 +39682,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -37209,18 +39758,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -37236,8 +39785,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -37249,11 +39798,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -37573,6 +40122,76 @@
         ],
         "life": 1.0,
         "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
       }
     ]
   },
@@ -37748,7 +40367,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -37759,18 +40378,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -37842,18 +40461,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -37869,8 +40488,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -37882,11 +40501,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -38498,18 +41117,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -38525,8 +41144,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -38538,11 +41157,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -39414,7 +42033,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -39425,18 +42044,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -39967,6 +42586,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "origin",
+        "squash": 0.14
       }
     ]
   },
@@ -40394,18 +43018,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -40421,8 +43045,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -40434,11 +43058,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -40650,6 +43274,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -40997,18 +43691,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -41024,8 +43718,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -41037,11 +43731,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -41510,11 +44204,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -42924,18 +45618,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -42951,8 +45645,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -42964,11 +45658,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -43210,6 +45904,76 @@
         ],
         "life": 1.0,
         "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
       }
     ]
   },
@@ -43408,7 +46172,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -43419,18 +46183,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -43757,18 +46521,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -43784,8 +46548,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -43797,11 +46561,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -44249,11 +47013,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -44861,7 +47625,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -44872,18 +47636,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -45438,6 +48202,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -45509,18 +48278,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -45536,8 +48305,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -45549,11 +48318,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -45782,6 +48551,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -46210,11 +49049,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -46293,18 +49132,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -46320,8 +49159,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -46333,11 +49172,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -47563,18 +50402,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -47590,8 +50429,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -47603,11 +50442,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -48602,18 +51441,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -48629,8 +51468,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -48642,11 +51481,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -49354,7 +52193,7 @@
     ]
   },
   {
-    "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shell lands lit, its glaze glowing jade at the slam and settling over 0.2 s, so the first beat reads as light over the core, not a dark lid)",
+    "$comment": "T4 · Lumen · Domefall landing: a jade core flash (white heart), a whole deep-jade glazed shell slams down, holds a beat and splits along glowing jade seams while a course of light runs up it and the windows flare, glazed fragments fly out, the team ring is brightest, a dark cracked floor settles (polish C2: the ground scar comes in 0.2 s after the landing, once the exposure beat has peaked: light first, then the mark) (CW1 refix C2: the shell lands lit, its glaze glowing jade at the slam and settling over 0.2 s, so the first beat reads as light over the core, not a dark lid) · max VFX-6: the dome is a rim-weighted additive shell (inside 0.18-0.22) that a ring front runs out of, so the struck bodies read through it",
     "id": "marund_ult_domefall",
     "duration": 1.7,
     "teamTint": true,
@@ -49393,24 +52232,20 @@
         "life": 0.8,
         "color": [
           "secondary",
-          "#4A4038"
+          "signature"
         ],
         "alpha": [
           [
             0,
-            1
+            0.22
           ],
           [
-            0.6,
-            1.0
+            0.5,
+            0.18
           ],
           [
             0.78,
-            0.34
-          ],
-          [
-            0.912,
-            0.09
+            0.06
           ],
           [
             1,
@@ -49420,28 +52255,24 @@
         "emissive": [
           [
             0,
-            2.4
+            1.6
           ],
           [
             0.06,
-            3.8
+            2.4
           ],
           [
             0.12,
-            1.0
-          ],
-          [
-            0.25,
-            0.35
+            0.8
           ],
           [
             1,
-            0.35
+            0.3
           ]
         ],
         "rim": "signature",
-        "rimPow": 2.6,
-        "rimEmissive": 3.0,
+        "rimPow": 2.2,
+        "rimEmissive": 4.0,
         "noise": 0.3,
         "noiseScale": 1.6,
         "dissolve": [
@@ -49465,8 +52296,80 @@
         "edge": "signature",
         "edgeWidth": 0.14,
         "edgeEmissive": 8,
-        "blend": "chip",
+        "blend": "add",
         "fit": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.15
+          ],
+          [
+            0.35,
+            0.85
+          ],
+          [
+            1,
+            1.05
+          ]
+        ],
+        "width": [
+          0.4,
+          0.1
+        ],
+        "life": 0.32,
+        "color": "signature",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 4.0,
+        "sharp": 1.8,
+        "noise": 0.3,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "mode": "vertical",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.4,
+            1.6
+          ],
+          [
+            1,
+            2.1
+          ]
+        ],
+        "width": [
+          0.3,
+          0.06
+        ],
+        "life": 0.3,
+        "color": [
+          "signature",
+          "secondary"
+        ],
+        "alpha": [
+          0.9,
+          0.6,
+          0
+        ],
+        "emissive": 3.0,
+        "sharp": 1.6,
+        "noise": 0.3,
+        "fit": true,
+        "blend": "add"
       },
       {
         "type": "mesh",
@@ -49986,6 +52889,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -50254,11 +53162,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -50274,7 +53182,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 2.4,
+        "radius": 2.0,
         "life": 0.6,
         "hold": 0.35,
         "color": "signature",
@@ -50285,18 +53193,18 @@
           ],
           [
             0.06,
-            0.16
+            0.09
           ],
           [
             0.35,
-            0.16
+            0.09
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.2
+        "emissive": 1.1
       }
     ]
   },
@@ -50368,18 +53276,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -50395,8 +53303,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -50408,11 +53316,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -50787,6 +53695,76 @@
         ],
         "life": 1.0,
         "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
       }
     ]
   },
@@ -51051,11 +54029,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -51460,7 +54438,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -51471,18 +54449,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -51554,18 +54532,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -51581,8 +54559,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -51594,11 +54572,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -52240,18 +55218,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -52267,8 +55245,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -52280,11 +55258,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -53504,6 +56482,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "target",
+        "squash": 0.14
       }
     ]
   },
@@ -53770,11 +56753,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -53790,7 +56773,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 2.4,
+        "radius": 2.0,
         "life": 0.6,
         "hold": 0.35,
         "color": "signature",
@@ -53801,18 +56784,18 @@
           ],
           [
             0.06,
-            0.16
+            0.09
           ],
           [
             0.35,
-            0.16
+            0.09
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.2
+        "emissive": 1.1
       }
     ]
   },
@@ -53884,18 +56867,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -53911,8 +56894,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -53924,11 +56907,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -54198,6 +57181,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -56895,11 +59948,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -57173,7 +60226,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -57184,18 +60237,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -58586,6 +61639,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -58657,18 +61715,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -58684,8 +61742,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -58697,11 +61755,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -58981,6 +62039,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -59316,11 +62444,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -59948,18 +63076,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -59975,8 +63103,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -59988,11 +63116,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -60950,11 +64078,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -61668,6 +64796,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "origin",
+        "squash": 0.14
       }
     ]
   },
@@ -62461,11 +65594,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -62481,7 +65614,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 2.4,
+        "radius": 2.0,
         "life": 0.6,
         "hold": 0.35,
         "color": "signature",
@@ -62492,18 +65625,18 @@
           ],
           [
             0.06,
-            0.16
+            0.09
           ],
           [
             0.35,
-            0.16
+            0.09
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.2
+        "emissive": 1.1
       }
     ]
   },
@@ -62575,18 +65708,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -62602,8 +65735,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -62615,11 +65748,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -62814,6 +65947,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -63569,18 +66772,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -63596,8 +66799,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -63609,11 +66812,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -64201,18 +67404,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -64228,8 +67431,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -64241,11 +67444,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -65224,11 +68427,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -65517,7 +68720,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -65528,18 +68731,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -66470,6 +69673,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "origin",
+        "squash": 0.14
       }
     ]
   },
@@ -66541,18 +69749,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -66568,8 +69776,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -66581,11 +69789,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -66795,6 +70003,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -67518,7 +70796,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -67529,18 +70807,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -67612,18 +70890,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -67639,8 +70917,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -67652,11 +70930,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -68851,18 +72129,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -68878,8 +72156,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -68891,11 +72169,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -69498,18 +72776,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -69525,8 +72803,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -69538,11 +72816,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -70027,7 +73305,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -70038,18 +73316,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -71194,6 +74472,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "origin",
+        "squash": 0.14
       }
     ]
   },
@@ -71578,18 +74861,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -71605,8 +74888,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -71618,11 +74901,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -71906,6 +75189,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,
@@ -72249,7 +75602,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -72260,18 +75613,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -72343,18 +75696,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -72370,8 +75723,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -72383,11 +75736,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -73012,11 +76365,11 @@
           ],
           [
             0.06,
-            0.26
+            0.22
           ],
           [
             0.35,
-            0.26
+            0.22
           ],
           [
             1,
@@ -73439,18 +76792,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -73466,8 +76819,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -73479,11 +76832,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -73964,7 +77317,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -73975,18 +77328,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -74149,7 +77502,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -74160,18 +77513,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -74815,6 +78168,11 @@
         "life": 0.5,
         "align": "ground",
         "fit": true
+      },
+      {
+        "type": "feel",
+        "at": "ground",
+        "squash": 0.14
       }
     ]
   },
@@ -75695,18 +79053,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -75722,8 +79080,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -75735,11 +79093,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -76166,7 +79524,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -76177,18 +79535,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -76260,18 +79618,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -76287,8 +79645,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -76300,11 +79658,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -76992,18 +80350,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -77019,8 +80377,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -77032,11 +80390,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -77486,7 +80844,7 @@
         "shape": "circle",
         "style": "light",
         "texture": "glow",
-        "radius": 1.15,
+        "radius": 1.1,
         "life": 0.45,
         "hold": 0.35,
         "color": "signature",
@@ -77497,18 +80855,18 @@
           ],
           [
             0.06,
-            0.34
+            0.28
           ],
           [
             0.35,
-            0.34
+            0.28
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.5
+        "emissive": 1.4
       }
     ]
   },
@@ -78612,18 +81970,18 @@
         "alpha": [
           [
             0,
-            0.35
+            0.25
           ],
           [
             0.3,
-            0.5
+            0.35
           ],
           [
             1,
-            0.65
+            0.5
           ]
         ],
-        "emissive": 1.4
+        "emissive": 1.2
       },
       {
         "type": "shockwave",
@@ -78639,8 +81997,8 @@
           ]
         ],
         "width": [
-          0.05,
-          0.08
+          0.04,
+          0.06
         ],
         "life": 1.0,
         "fitTime": true,
@@ -78652,11 +82010,11 @@
           ],
           [
             0.25,
-            0.5
+            0.45
           ],
           [
             1,
-            0.75
+            0.7
           ]
         ],
         "emissive": 1.6,
@@ -78882,6 +82240,76 @@
           [
             1,
             0.011
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true
+      },
+      {
+        "type": "decal",
+        "at": "caster",
+        "follow": true,
+        "shape": "circle",
+        "style": "light",
+        "texture": "glow",
+        "radius": [
+          [
+            0,
+            2.2
+          ],
+          [
+            1,
+            1.3
+          ]
+        ],
+        "life": 1.0,
+        "fitTime": true,
+        "hold": 1.0,
+        "color": "signature",
+        "alpha": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.4,
+            0.22
+          ],
+          [
+            1,
+            0.4
+          ]
+        ],
+        "emissive": 1.6
+      },
+      {
+        "type": "distort",
+        "at": "caster",
+        "follow": true,
+        "mode": "ring",
+        "align": "ground",
+        "size": [
+          [
+            0,
+            3.0
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.0
+          ],
+          [
+            0.5,
+            0.006
+          ],
+          [
+            1,
+            0.01
           ]
         ],
         "life": 1.0,

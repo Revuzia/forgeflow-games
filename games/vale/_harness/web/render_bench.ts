@@ -67,7 +67,8 @@ function buildSetup(catalog: CatalogT, modeArg: string | null, seed: number): Ma
 let menuScale: number | null = null;
 
 async function main(): Promise<void> {
-  const cat = await loadCatalog({ url: new URL('/catalog/manifest.json', location.href).href });
+  // ?catalog=<manifest url>: a pinned catalog (an A/B's before and after, whatever dist-catalog holds now)
+  const cat = await loadCatalog({ url: new URL(new URLSearchParams(location.search).get('catalog') || '/catalog/manifest.json', location.href).href });
   const catalog = cat.catalog;
   const settings = defaultSettings();
   const tier = (qs.get('q') ?? 'high') as Tier;

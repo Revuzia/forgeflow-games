@@ -161,16 +161,50 @@ def m_recall_done(v: int):
     return finish(room(L.out(), 'plate', wet=0.18), hp_hz=100, eq=[('peak', 3300, -2, 0.8)])
 
 
-@cue('m_gleam', 'match', ('m', -21.0), (0.1, 0.4), variants=3, instant=True, **EVTK)
+GLEAM_TAKES = 4
+GLEAM_NOTES = (('A5', 'D6'), ('B5', 'E6'), ('A5', 'E6'), ('G5', 'D6'))   # in key (D dorian), each take its own pair
+
+
+def coin(note, v: int, seed: str, bright: float = 0.7, body: float = 0.06) -> np.ndarray:
+    """One small glass coin landing: a 3-5 kHz glint (the tick of glass on glass), a short glassy body on `note`
+    and a whisper of shimmer above it."""
+    r = R('coin', seed, v)
+    L = Layers(0.26)
+    L.add(tink(float(r.uniform(3300, 4800)), 0.03, 0.012, bright=0.55), 0.0, peak_db=-8)
+    L.add(S.burst(r, 0.012, 2800, 7500, 0.003, q=0.8), 0.0, peak_db=-14)
+    L.add(glass(note, 0.22, 0.85, decay=body * float(r.uniform(0.85, 1.15)), bright=bright, seed=f'cn{seed}{v}'), 0.0005, peak_db=0)
+    L.add(shimmer(hz(note) * 2.0, 0.18, 0.4, decay=0.12, index=1.4, seed=f'cs{seed}{v}'), 0.004, peak_db=-17)
+    return L.out()
+
+
+@cue('m_gleam', 'match', ('m', -19.0), (0.1, 0.45), variants=GLEAM_TAKES, instant=True, **EVTK)
 def m_gleam(v: int):
-    """Gleam earned (every last hit): two quick glints of light, A5 then D6, 35 ms apart, like small coins
-    of glass. Pitched low enough that a farming lane of them never tires the ear. Three round-robin takes (a wave
-    cleared at once earns several in a second): the same notes, each glass struck anew, the gap 30-40 ms."""
-    k = '' if v == 0 else f'v{v}'
-    L = Layers(0.3)
-    L.add(glass('A5', 0.24, 0.8, decay=0.07, bright=0.7, seed=f'gl1{k}'), 0.0, peak_db=0)
-    L.add(glass('D6', 0.22, 0.75, decay=0.06, bright=0.65, seed=f'gl2{k}'), (0.035, 0.03, 0.04)[v % 3], peak_db=-2)
-    return finish(spread(L.out(), 0.3), hp_hz=400, eq=[('peak', 3300, -3, 0.8), ('high', 8000, -3)])
+    """Gleam earned (every last hit, max SFX-8): two small glass coins landing 30-45 ms apart, each with a 3-5 kHz glint
+    transient, a short glassy body and a whisper of shimmer: crisp and rewarding, still soft enough that a farmed
+    wave never tires the ear. Four takes, each its own in-key note pair, coin timing and glint (the engine steps the
+    pitch up +2 semitones a rung when last hits chain within 1.5 s: a combo ladder)."""
+    a, b = GLEAM_NOTES[v % GLEAM_TAKES]
+    L = Layers(0.32)
+    L.add(coin(a, v, 'a'), 0.0, peak_db=0, pan=-0.12)
+    L.add(coin(b, v, 'b', bright=0.65), (0.034, 0.042, 0.03, 0.038)[v % GLEAM_TAKES], peak_db=-2.5, pan=0.12)
+    return finish(spread(L.out(), 0.3), hp_hz=420, eq=[('peak', 3300, -1.5, 0.8), ('high', 10000, -2)])
+
+
+@cue('m_gleam_kill', 'match', ('m', -17.5), (0.25, 0.8), variants=2, instant=True, **EVTK)
+def m_gleam_kill(v: int):
+    """Gleam for a kill (max SFX-8): a spill of glass coins, a first coin on the frame and three more tumbling after it
+    down D6-A5-F5-D5, over a soft purse-weight thump; bigger than a last hit, smaller than the takedown fanfare."""
+    notes = ('D6', 'A5', 'F5', 'D5') if v == 0 else ('E6', 'A5', 'G5', 'D5')
+    r = R('m_gleam_kill', v=v)
+    L = Layers(0.7)
+    t = 0.0
+    for i, note in enumerate(notes):
+        L.add(coin(note, v, f'k{i}', bright=0.7 - 0.05 * i, body=0.08), t, peak_db=-1.5 * i,
+              pan=float(r.uniform(-0.35, 0.35)))
+        t += float(r.uniform(0.045, 0.075))
+    L.add(S.thump(0.12, 260, 140, 0.01, 0.06, 1.2), 0.0, peak_db=-14)
+    L.add(S.sparkle(r, 0.35, 6, 88, 100, t60=0.1, decay_level=1.0), 0.04, peak_db=-18)
+    return finish(spread(L.out(), 0.35), hp_hz=300, eq=[('peak', 3300, -1.5, 0.8), ('high', 10000, -2)])
 
 
 @cue('m_sunmote', 'match', ('m', -19.0), (0.5, 1.6), instant=True, **EVTK)

@@ -1,0 +1,42 @@
+{
+ "fighter_ardit_1": {
+  "base->mat": 1.25,
+  "base->matx3": 1.91
+ },
+ "fighter_dunsom_9": {
+  "base->mat": 0.25,
+  "base->matx3": 0.52
+ },
+ "fighter_ervet_7": {
+  "base->mat": 0.02,
+  "base->matx3": 0.02
+ },
+ "fighter_ilsheta_2": {
+  "base->mat": 0.27,
+  "base->matx3": 0.66
+ },
+ "fighter_lisvel_3": {
+  "base->mat": 0.09,
+  "base->matx3": 0.56
+ },
+ "fighter_marund_10": {
+  "base->mat": 0.31,
+  "base->matx3": 0.73
+ },
+ "fighter_nurrow_4": {
+  "base->mat": 0.19,
+  "base->matx3": 0.43
+ },
+ "fighter_odrum_8": {
+  "base->mat": 0.29,
+  "base->matx3": 0.6
+ },
+ "fighter_sukri_5": {
+  "base->mat": 0.26,
+  "base->matx3": 0.94
+ },
+ "fighter_ulkro_6": {
+  "base->mat": 0.09,
+  "base->matx3": 0.23
+ }
+}

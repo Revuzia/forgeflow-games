@@ -322,7 +322,7 @@ interface Stream { stems: StreamStem[]; secS: number; n: number; acts: boolean; 
 /** a main stem's .m4a piece: `at` = where it starts on the bed's timeline (s) */
 interface BedPiece { at: number; file: string }
 interface EntityLike { id: number; kind: string; def?: string; team: number; x: number; y: number; visibleMask?: number; alive?: boolean;
-  maxHp?: number;
+  maxHp?: number; shield?: number;
   statuses?: readonly { kind: string; src?: number }[] }
 /** a spatial cue's placement around the listener */
 interface Place { att: number; pan: number; lpf: number }
@@ -424,6 +424,17 @@ const YOU_CC_GAIN = Math.pow(10, 3 / 20);   // +3 dB: a control status landing o
 // ±GAIN_VAR_DB per play, and the same cue again within REPEAT_S of its last start plays REPEAT_DB down and up to
 // REPEAT_JITTER_S late, so a stack of hits blurs instead of flamming (one random number per play)
 const GAIN_VAR_DB = 1.2;
+const SHIELD_BREAK_GAP_S = 0.5;   // one target's shield breaks sound at most this often (max SFX-7)
+// the Gleam coins (max SFX-8): a last hit's gain, and its combo ladder (+GOLD_STEP_ST a rung within GOLD_CHAIN_S, GOLD_RUNGS high)
+const GOLD_GAIN = 0.8;
+const GOLD_CHAIN_S = 1.5;
+const GOLD_STEP_ST = 2;
+const GOLD_RUNGS = 2;
+// Wick-on-Wick blows (max SFX-1): at WICK_HIT_GAIN, and at WICK_DENSE_GAIN once WICK_DENSE_N landed within WICK_DENSE_S
+const WICK_HIT_GAIN = 0.45;
+const WICK_DENSE_GAIN = 0.3;
+const WICK_DENSE_N = 3;
+const WICK_DENSE_S = 0.25;
 const REPEAT_S = 0.12;
 const REPEAT_DB = -1.5;
 const REPEAT_JITTER_S = 0.004;
@@ -535,6 +546,10 @@ class Engine implements ValeAudioPort {
   private readonly settled = new WeakMap<Promise<AudioBuffer | null>, AudioBuffer | null>();
   private readonly voices: Voice[] = [];
   private readonly lastPlay = new Map<string, number>();
+  private readonly wickHits: number[] = [];
+  private readonly shieldBroke = new Map<number, number>();   // a target's last shield break (context time)
+  private goldRung = 0;                         // the Gleam ladder's rung, and its last last hit (context time)
+  private goldLast = -1e9;   // recent Wick-on-Wick blows near the ear (wickDuck)
   private vol: AudioSettings;
   private readonly cues: Record<string, CueDef>;
   /** engine event role → cue id (content/audio.json `events`) */
@@ -1036,6 +1051,18 @@ class Engine implements ValeAudioPort {
 
   /** a fighter's own cue for a kit slot (see `kits` in the header); undefined when `x` is no fighter or content
    *  has no such cue (the catalog's present and the generic roles then decide) */
+  /** a Wick-on-Wick blow's gain (max SFX-1): WICK_HIT_GAIN, or WICK_DENSE_GAIN once WICK_DENSE_N of them landed near the
+   *  ear within WICK_DENSE_S (a wave fight is texture under the fighters, not a machine gun) */
+  private wickDuck(p: { x: number; y: number } | null): number {
+    const now = this.ctx?.currentTime ?? 0;
+    const ear = this.ear();
+    if (!p || !ear || Math.hypot(p.x - ear.x, p.y - ear.y) > LISTEN_HEAR_M) return WICK_HIT_GAIN;
+    const w = this.wickHits;
+    w.push(now);
+    while (w.length && now - w[0] > WICK_DENSE_S) w.shift();
+    return w.length >= WICK_DENSE_N ? WICK_DENSE_GAIN : WICK_HIT_GAIN;
+  }
+
   private kit(x: EntityLike | undefined, slot: KitSlot): string | undefined {
     return x?.kind === 'fighter' && x.def ? this.kits.get(x.def)?.[slot] : undefined;
   }
@@ -2411,8 +2438,11 @@ class Engine implements ValeAudioPort {
       case 'projectile': {
         // the generic whoosh, except under a kitted ult (its release is the sound) and an epic unit's shot (its own
         // attack_swing / land carries it; see `kits` / `epic` in the header)
+        // (max SFX-1) nor under a kitted fighter's shot (its own swing / cast carries the throw) or a Wick's (its own
+        // shot cue carries its whoosh): the generic pass-by is for unkitted sources only (Needles, camps, items)
         const own = this.ownAb.get(e.ability as string);
         if (this.uk(src) || (own?.slot === 'ult' && this.kits.get(own.fighter)?.ult_release)) break;
+        if (src?.kind === 'minion' || (src?.kind === 'fighter' && !!src.def && this.kits.has(src.def))) break;
         this.cue(this.ev('projectile'), at(src), 0.7, 0, aw);
         break;
       }
@@ -2464,6 +2494,15 @@ class Engine implements ValeAudioPort {
           if (t - (this.hurtLast.get(dst.id) ?? -1e9) > ROAR_CALM_S) this.cue(duk.roar, p, 1, 0, aw);
           this.hurtLast.set(dst.id, t);
         }
+        // (max SFX-7) a fighter's ward broken by this blow (it absorbed some and none is left): the pane cracks, an
+        // awareness cue when it was yours or a foe's aimed at you (presentation only: the view's shield after the tick)
+        if (dst?.kind === 'fighter' && ((e.shielded as number) || 0) > 0 && (dst.shield ?? 1) <= 0) {
+          const now = this.ctx?.currentTime ?? 0;
+          if (now - (this.shieldBroke.get(dst.id) ?? -1e9) > SHIELD_BREAK_GAP_S) {
+            this.shieldBroke.set(dst.id, now);
+            this.cue(this.ev('shieldBreak'), p, 1, 0, dst.id === youId ? { aware: true, lift: 1 } : aw);
+          }
+        }
         // ability hits voice through `hit`; a passive's damage with no delivery through the `proc` that follows it
         if (e.ability) break;
         const uk = this.uk(src);
@@ -2472,7 +2511,7 @@ class Engine implements ValeAudioPort {
           this.cue(this.ev('crit'), p, 1, 0, aw);
           if (own) this.cue(own, p, CRIT_KIT_GAIN, 0, aw);      // whose crit it was
         } else if (uk) this.cue(own, p, 0.8 * (shaded ? SHADED_GAIN : 1), 0, aw);   // an epic unit lands like a fighter
-        else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
+        else this.cue(own ?? this.abilitySfx.get(`attack:${src?.def}`)?.hitSfx ?? this.ev(e.dtype === 'magic' ? 'hitMagic' : e.dtype === 'true' ? 'hitTrue' : 'hitPhysical'), p, (src?.kind === 'fighter' ? 0.8 : src?.kind === 'minion' && dst?.kind === 'minion' ? this.wickDuck(p) : 0.45) * (shaded ? SHADED_GAIN : 1), 0, aw);
         break;
       }
       case 'heal': {
@@ -2538,7 +2577,18 @@ class Engine implements ValeAudioPort {
       case 'takedown': if (e.killer === this.client?.you) this.cue(this.ev('takedown'), null); break;
       case 'respawn': if (e.player === this.client?.you) this.cue(this.ev('respawn'), null); break;
       case 'levelUp': if (e.player === this.client?.you) this.cue(this.ev('levelUp'), null); break;
-      case 'gold': if (e.player === this.client?.you && (e.reason === 'cs' || e.reason === 'kill')) this.cue(this.ev('gold'), null, 0.6); break;
+      case 'gold': {
+        // (max SFX-8) a last hit's coins at GOLD_GAIN, stepping up GOLD_STEP_ST a rung while last hits chain within
+        // GOLD_CHAIN_S (a combo ladder, GOLD_RUNGS high); a kill's own spill ('goldKill'), else the last-hit coins
+        if (e.player !== this.client?.you) break;
+        const now = this.ctx?.currentTime ?? 0;
+        if (e.reason === 'cs') {
+          this.goldRung = now - this.goldLast < GOLD_CHAIN_S ? Math.min(GOLD_RUNGS, this.goldRung + 1) : 0;
+          this.goldLast = now;
+          this.cue(this.ev('gold'), null, GOLD_GAIN, 0, { rate: Math.pow(2, (GOLD_STEP_ST * this.goldRung) / 12) });
+        } else if (e.reason === 'kill') this.cue(this.ev('goldKill') ?? this.ev('gold'), null, GOLD_GAIN);
+        break;
+      }
       // the world sound where it fell; the announcer line comes from the 'announce' that follows (one line per event)
       case 'structure': this.cue(this.ev('structureFall'), at(this.ent(e.id))); break;
       case 'wave': if ((e.n as number) <= 1) this.cue(this.ev('waveSpawn'), null); break;

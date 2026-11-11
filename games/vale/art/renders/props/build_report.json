@@ -65,6 +65,24 @@
   "tris": 692,
   "verts": 650
  },
+ "dialwood_gnomon": {
+  "budget": 750,
+  "gloss": {
+   "glossy_verts": 0,
+   "mean": 0.0
+  },
+  "kb": 21.3,
+  "midribs": 45,
+  "plates": 45,
+  "role": "tree",
+  "size_m": [
+   1.24,
+   0.99,
+   3.5
+  ],
+  "tris": 588,
+  "verts": 535
+ },
  "dialwood_lean": {
   "budget": 750,
   "gloss": {

@@ -465,6 +465,7 @@ class ValeRenderer implements Renderer {
     this.post.setQuality({ ao: this.q.ao, bloom: this.q.bloom, aa: this.q.aa, tier: this.q.tier });
     this.vfx.budget = this.q.particleBudget;
     this.vfx.density = this.q.particleDensity;
+    this.vfx.secondaryDensity = this.q.secondaryDensity;
     this.vfx.setLightCount(this.q.flashLights);
     this.terrain?.setScatter(this.q.scatter, this.q.ao > 0);
     this.ambientOn = video.ambientEffects !== false;

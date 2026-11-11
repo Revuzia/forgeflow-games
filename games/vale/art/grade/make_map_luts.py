@@ -32,7 +32,7 @@ import make_lut as L  # noqa: E402
 
 MAP_OPS = {
     "rift": [
-        {"op": "splitTone", "shadow": [-0.018, 0.016, 0.018], "highlight": [0.026, 0.006, -0.030], "pivot": 0.34, "width": 0.22},
+        {"op": "splitTone", "shadow": [-0.010, 0.008, 0.010], "highlight": [0.018, 0.004, -0.020], "pivot": 0.34, "width": 0.22},
         {"op": "hueSat", "space": "HSV", "featherDeg": 10, "bands": [{"hue": [70, 150], "sat": 0.94, "onlyIfValueBelow": 0.85}]},
     ],
     "bridge": [

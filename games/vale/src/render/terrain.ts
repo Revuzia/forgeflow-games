@@ -72,7 +72,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MapDefT } from '../contracts/catalog.ts';
 import { NOISE_GLSL } from './glsl.ts';
 import { FRAY_SEATS } from './palette.ts';
-import { patchWorldMaterial, worldUniforms } from './world_material.ts';
+import { patchWorldMaterial, setCloudShadow, worldUniforms } from './world_material.ts';
 import {
   GROUND_MAIN_GLSL, GROUND_PARS_GLSL, GROUND_SHEEN_GLSL, QUAD_TINT_GLSL, QUAD_TINT_VERT, SHADOW_MAIN_GLSL, SHADOW_PARS_GLSL, TERRAIN_HELPERS_GLSL, WALL_MAIN_GLSL,
   GORGE_MIST_PARS, gorgeFogLift, gorgeMistApply, MIST_SHEET_MAIN, MIST_SHEET_PARS, WALL_PARS_GLSL, WALL_VERT_MAIN, WALL_VERT_PARS,
@@ -607,6 +607,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   const [SX, SY] = map.size;
   const tr = (map.art.terrain ?? {}) as Record<string, unknown>;
   const colors = colorsFrom(tr);
+  // max env ENV-10: the map's drifting cloud shadow amplitude (art.terrain.cloudShadow; none when absent)
+  setCloudShadow({ map: num(tr.cloudShadow) ?? 0 });
   const gorge = tr.wallStyle === 'gorge';
   const surface: Surface = tr.surface === 'span' || tr.surface === 'plate' || tr.surface === 'dial' ? tr.surface
     : gorge ? 'span' : map.lanes.length === 0 ? 'plate' : 'dial';
@@ -1918,8 +1920,12 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         q.setFromAxisAngle(up, t.r); s.setScalar(sc); pos.set(t.x, t.h - 0.12, t.y);
         // the deep wood a shade darker and cooler than the edge rows (they catch the light at the lip)
         const deep = Math.min(1, Math.max(0, (t.e - 2) / 6));
-        const k = 1 - 0.1 * deep;
-        items.push({ x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color((0.86 + t.tint * 0.22) * k, (0.9 + t.tint * 0.14) * k, (0.86 + t.tint * 0.12) * (k + 0.04 * deep)).multiplyScalar(pv.tree) });
+        // max env ENV-1: each crown its own shade: value ±6 % and a small warm / cool turn (a hash of its spot, stable),
+        // so neighbouring crowns of one variant never read as stamped copies
+        const jv = 1 + 0.12 * (hash2(t.x * 3.7 + 11.3, t.y * 2.9 - 4.1) - 0.5);
+        const jh = 0.08 * (hash2(t.x * 1.3 - 7.7, t.y * 4.1 + 2.2) - 0.5);
+        const k = (1 - 0.1 * deep) * jv;
+        items.push({ x: t.x, y: t.y, m: new Matrix4().compose(pos, q, s), c: new Color((0.86 + t.tint * 0.22) * k * (1 + jh), (0.9 + t.tint * 0.14) * k, (0.86 + t.tint * 0.12) * (k + 0.04 * deep) * (1 - jh)).multiplyScalar(pv.tree) });
       }
       scatterParts.push(...propParts(geos, items, 'vale_trees', true, true));
     } else if (trees.length) {

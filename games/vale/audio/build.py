@@ -466,7 +466,65 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     rep['impact'] = xrep
     rep['asHeard'] = hrep
     rep['epic'] = erep
-    return fails + pf + af + kf + xf + hf + ef, rep
+    wf, wrep = wick_gate(contract)
+    rep['wicks'] = wrep
+    return fails + pf + af + kf + xf + hf + ef + wf, rep
+
+
+# ── the Wicks' own family (max SFX-1) ─────────────────────────────────────────────────────────────
+WICK_MIN_TAKES = 4
+WICK_MAX_VOICES = 3
+WICK_TAKE_SIM_MAX = 0.985    # take-to-take smoothed log-spectrum correlation (sfx_ab.logspec): no near-clones
+
+
+def wick_gate(contract: dict) -> tuple[list[str], dict]:
+    """wicks (max SFX-1): every lane minion's attack present.sfx / hitSfx is a Wick cue (w_…) used by no fighter, item or
+    other unit kind, rendered with >= WICK_MIN_TAKES takes no two of which are near-clones (<= WICK_TAKE_SIM_MAX), at most
+    WICK_MAX_VOICES voices, and its hits lose <= LAPTOP_MAX_LU on a laptop."""
+    from sfx_ab import logspec
+    fails: list[str] = []
+    cues = contract['cues']
+    rep: dict = {}
+    units = _read('units.json')['units']
+    other = set()
+    for u in units:
+        if u.get('kind') != 'minion':
+            other |= _sfx_refs(u)
+    for fd in _fighters():
+        other |= _sfx_refs(fd)
+    for u in units:
+        if u.get('kind') != 'minion' or not u.get('attack'):
+            continue
+        pr = u['attack'].get('present') or {}
+        for role in ('sfx', 'hitSfx'):
+            c = pr.get(role)
+            if not c:
+                fails.append(f"wicks: {u['id']} has no attack {role}")
+                continue
+            if not c.startswith('w_') or c not in cues:
+                fails.append(f"wicks: {u['id']} attack {role} is {c}, not a Wick cue")
+                continue
+            if c in other:
+                fails.append(f"wicks: {c} is also used outside the Wicks")
+            if c in rep:
+                continue
+            xs = [decode(out_path(f)) for f in cues[c]['files'] if os.path.exists(out_path(f))]
+            if len(xs) < len(cues[c]['files']):
+                fails.append(f'wicks: {c} is not rendered')
+                continue
+            sp = [logspec(x) for x in xs]
+            sim = max((float(np.corrcoef(sp[i], sp[j])[0, 1]) for i in range(len(sp)) for j in range(i + 1, len(sp))), default=0.0)
+            lap = max(laptop_loss(x) for x in xs) if role == 'hitSfx' else None
+            rep[c] = {'takes': len(xs), 'takeSim': sim, 'maxVoices': cues[c].get('maxVoices'), 'laptop': lap}
+            if len(xs) < WICK_MIN_TAKES:
+                fails.append(f'wicks: {c} has {len(xs)} takes (< {WICK_MIN_TAKES})')
+            if sim > WICK_TAKE_SIM_MAX:
+                fails.append(f'wicks: {c} takes are near-clones (similarity {sim:.3f} > {WICK_TAKE_SIM_MAX})')
+            if (cues[c].get('maxVoices') or 4) > WICK_MAX_VOICES:
+                fails.append(f"wicks: {c} maxVoices {cues[c].get('maxVoices')} > {WICK_MAX_VOICES}")
+            if lap is not None and lap > LAPTOP_MAX_LU:
+                fails.append(f'wicks: {c} loses {lap:.1f} LU on a laptop (> {LAPTOP_MAX_LU:g})')
+    return fails, rep
 
 
 # ── instant cues and impacts on a laptop (final parity AUD-m1, AUD-4) ────────────────────────────────
@@ -878,7 +936,8 @@ def heard_chains(contract: dict) -> dict:
                     got = sfx or bound
                 areas.append({'op': o['op'], 'vfx': vfx, 'present': sfx, 'heard': got})
             proj = [o for o in ops if o['op'] == 'projectile']
-            whoosh = ev.get('projectile') if proj and not (kitted and slot == 'ult' and own('ult_release')) else None
+            # (max SFX-1) a kitted fighter's shot plays no generic whoosh at all (its own swing / cast carries the throw)
+            whoosh = ev.get('projectile') if proj and not kitted else None
             hit_lib = set()
             _hit_sfx({'effects': ab.get('effects', [])}, hit_lib)
             hits = ([own('hit')] if own('hit') else sorted(hit_lib) or [ev.get('hitAbility')]) + \
@@ -1376,6 +1435,8 @@ def print_gates(fails: list[str], rep: dict) -> None:
     for uid, u in ep.get('units', {}).items():
         lv = '  '.join(f"{s} {x['level']:.1f}" for s, x in u['levels'].items())
         print(f"  {uid:12s} kit {len(u['kit'])} slots{(' MISSING ' + ','.join(u['missing'])) if u['missing'] else ''}; autos {lv}")
+    wk = rep.get('wicks', {})
+    print(f'wick gate: {len(wk)} Wick cues: ' + ', '.join(f"{c} {x['takes']}x sim {x['takeSim']:.3f}" + (f" lap {x['laptop']:.1f}" if x['laptop'] is not None else '') for c, x in wk.items()))
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
                  f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
                  f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points;'

@@ -82,8 +82,8 @@ def w_greatwick_throw(v: int):
     k = vary('w_greatwick_throw', v)
     r = R('w_greatwick_throw', v=v)
     L = Layers(0.4)
-    L.add(S.whoosh(r, 0.3 * k['dk'], 240 * k['fk'], 520 * k['fk'], q=1.0, peak_at=0.35, f_mid=900 * k['fk2'],
-                   low_body=0.7, rise=-1.3), 0.0, peak_db=0, width=0.4)
+    L.add(S.whoosh(r, 0.3 * k['dk'], 240 * k['fk'], 520 * k['fk'], q=0.9 + 0.15 * v, peak_at=0.28 + 0.05 * v,
+                   f_mid=(760 + 110 * v) * k['fk2'], low_body=0.5 + 0.15 * v, rise=-1.3), 0.0, peak_db=0, width=0.4)
     L.add(S.thump(0.18, 150 * k['fk'], 75, 0.03, 0.1 * k['dk'], 1.6), 0.02 + k['off'], peak_db=-8)
     L.add(brass_tick(r, 1320 * k['fk2'], 0.07 * k['dk']), 0.05 + k['off2'], peak_db=-15 + k['lv'])
     L.add(brass_tick(R('w_greatwick_throw', 'lid', v), 1720 * k['fk'], 0.05), 0.085 + k['off'], peak_db=-19 + k['lv'])
@@ -137,8 +137,9 @@ def w_wick_hit_heavy(v: int):
     r = R('w_wick_hit_heavy', v=v)
     L = Layers(0.3)
     L.add(lp(S.snap(r, 2000 * k['fk'], 1.8), 3800), 0.0, peak_db=-12)
-    L.add(tallow(r, 310 * k['fk'], 0.07 * k['dk']), 0.0, peak_db=0)
-    L.add(S.thump(0.2, 150 * k['fk2'], 62, 0.018, 0.11 * k['dk'], 2.2), 0.0, peak_db=-4)
+    L.add(tallow(r, 370 * k['fk'], 0.07 * k['dk']), 0.0, peak_db=0)
+    L.add(tallow(R('w_wick_hit_heavy', 'b', v), 690 * k['fk2'], 0.045 * k['dk']), 0.001 + k['off2'] * 0.5, peak_db=-4)
+    L.add(S.thump(0.2, 170 * k['fk2'], 80, 0.018, 0.1 * k['dk'], 2.6), 0.0, peak_db=-9)
     L.add(lp(brass_tick(r, 760 * k['fk2'], 0.09 * k['dk']), 3000), 0.004 + k['off'], peak_db=-8 + k['lv'])
     L.add(lp(S.burst(r, 0.05, 400, 2000, 0.025 * k['dk'], q=0.9), 2400), 0.0, peak_db=-9)
     return finish(room(L.out(), 'tiny', wet=0.08), hp_hz=45, eq=SOFT_TOP)

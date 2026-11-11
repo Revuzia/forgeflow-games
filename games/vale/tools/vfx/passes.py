@@ -418,13 +418,13 @@ def ground_light_pass(d: dict) -> dict:
         return d
     dash = any(w in i for w in DASH_WORDS) and not i.endswith("_shot")
     big = "_ult_" in i or "needle" in i
-    r, a, e = (1.0, 0.26, 1.2) if dash else (1.15, 0.34, 1.5)
+    r, a, e = (1.0, 0.22, 1.2) if dash else (1.1, 0.28, 1.4)
     keys = lambda peak: [[0, 0], [0.06, peak], [0.35, peak], [1, 0]]  # noqa: E731
     layers = [L("decal", at="path", follow=True, shape="circle", style="light", texture="glow", radius=r, life=0.45, hold=0.35,
                 color="signature", alpha=keys(a), emissive=e)]
     if big:
-        layers.append(L("decal", at="path", follow=True, shape="circle", style="light", texture="glow", radius=2.4, life=0.6, hold=0.35,
-                        color="signature", alpha=keys(0.16), emissive=1.2))
+        layers.append(L("decal", at="path", follow=True, shape="circle", style="light", texture="glow", radius=2.0, life=0.6, hold=0.35,
+                        color="signature", alpha=keys(0.09), emissive=1.1))
     d = copy.deepcopy(d)
     d["layers"] = d["layers"] + layers
     return d
@@ -432,4 +432,15 @@ def ground_light_pass(d: dict) -> dict:
 
 def post(d: dict) -> dict:
     """passes applied to every def after its source (and its bespoke/tuned.json hand tuning) is chosen"""
-    return ground_light_pass(d)
+    return ult_feel_pass(ground_light_pass(d))
+
+
+def ult_feel_pass(d: dict) -> dict:
+    """max VFX-7: an ultimate's landing squashes the body it strikes (feel squash, no hit flash: the T4 beat already
+    lights the victim, and the body must keep its detail); defs that carry their own feel are left alone. Idempotent."""
+    if "_ult_" not in d["id"] or d["id"].endswith("_windup") or not _is_t4_impact(d) or any(l["type"] == "feel" for l in d["layers"]):
+        return d
+    d = copy.deepcopy(d)
+    at = next((l.get("at") for l in d["layers"] if l["type"] == "flash"), "ground")
+    d["layers"] = d["layers"] + [L("feel", at=at, squash=0.14)]
+    return d

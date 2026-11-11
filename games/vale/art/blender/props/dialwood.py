@@ -503,6 +503,18 @@ TREES: dict[str, TreeSpec] = {
               Pad((-0.22, -0.14, 1.64), 0.52, 0.27, hang=0.18, yaw=4.0),
               Pad((0.16, -0.18, 2.04), 0.54, 0.28, hang=0.12, yaw=2.4, sq=0.9)],
         r0=0.14, roots=2, reach=1.14, scale=1.22),
+    # gnomon (max env ENV-1): a tall narrow column of small pads stacked tight up a straight bole, like the dial's
+    # hand stood on end: its long, thin shadow reads as a sundial hand across the wood. A second silhouette family
+    # among the fan crowns (an egg, an umbrella, a mound, a stem, a lean, and now a column)
+    "dialwood_gnomon": TreeSpec(
+        seed=71, tint="#4F7A70", hue=4.0,                          # deep blue-green: the coolest, the darkest crowns
+        spine=[(0, 0, 0), (0.0, 0.0, 0.3), (0.02, 0.01, 1.2), (-0.01, 0.0, 2.2), (0.0, 0.01, 3.05)],
+        pads=[Pad((0.08, -0.04, 0.95), 0.50, 0.30, tilt=0.62, hang=0.06, yaw=0.3, sq=0.95, leaf=0.85),
+              Pad((-0.08, 0.06, 1.42), 0.48, 0.30, tilt=0.62, hang=0.06, yaw=1.6, sq=0.95, leaf=0.85),
+              Pad((0.07, 0.05, 1.88), 0.44, 0.29, tilt=0.64, hang=0.06, yaw=3.0, sq=0.95, leaf=0.8),
+              Pad((-0.05, -0.06, 2.32), 0.38, 0.27, tilt=0.66, hang=0.05, yaw=4.3, sq=0.95, leaf=0.75),
+              Pad((0.02, 0.02, 2.74), 0.30, 0.24, tilt=0.7, hang=0.0, yaw=5.5, sq=0.95, leaf=0.7)],
+        r0=0.16, roots=2, reach=0.72, scale=1.12),
     # leaning: the bole bends out; pads step up along it, a small one left behind near the foot
     "dialwood_lean": TreeSpec(
         seed=59, tint="#748C7C",                                   # sage-teal

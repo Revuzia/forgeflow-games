@@ -37,7 +37,8 @@
 //     counts the sim's own enemy fighter deaths, and when none has happened by --seconds minus 30 it forces one beside
 //     your fighter (killEntity on an enemy fighter, no killer: a kill of yours would sound as takedown instead; reported as forced), so the gate is always measured (closing r2 probe:runtime-gates).
 //     Lamp cues: lampSetFires / lampOutFires answer the sim's own lamps set or put out in sight AND inside the hearing range
-//     (a lamp farther away is rightly culled; null = this capture had none). No near lamp out by --seconds minus 25: one of
+//     (a lamp farther away is rightly culled; null = this capture had none). (max SFX-1) fighterKitShareGe50: the fighters' own kit
+//     cues (f_*) are >= 50 % of the sfx-bus energy heard (rep.kitShare: f_ / c_ / w_ / u_ / m_ shares, the top cues). No near lamp out by --seconds minus 25: one of
 //     your team's lit lamps is put out beside your fighter (killEntity), reported as forcedLampOut.
 //   node _harness/probe_audio_runtime.mjs dead [--out <json>]
 //     The music's dead state live (closing AUD-C4): a real match (render off), every bus but the music muted, the final
@@ -437,6 +438,14 @@ async function runMatch() {
       let path = 0; for (let i = 1; i < earshot.length; i++) path += Math.hypot(earshot[i][1] - earshot[i - 1][1], earshot[i][2] - earshot[i - 1][2]);
       rep.earshot = { samples: earshot.length, noneNear: frac((r) => r[4] + r[5] === 0), foeNear: frac((r) => r[5] > 0), dead: frac((r) => !r[3]), pathM: r2(path), track: earshot.filter((_, i) => i % 20 === 0) }; }
     rep.heardG2 = await page.evaluate(() => Object.fromEntries(window.__valeAudio.heard ?? []));
+    // (max SFX-1) whose sounds the player hears in lane: the fighters' own kits (f_*) vs the rest of the sfx bus
+    // (the library c_*, the Wicks' w_*, units u_*), as summed heard energy (gain x attenuation squared, per play)
+    { const bus = await page.evaluate(() => Object.fromEntries(Object.entries(window.__vale.session.catalog?.audio?.cues ?? {}).map(([k, c]) => [k, c.bus])));
+      const sfxIds = Object.keys(rep.heardG2).filter((k) => bus[k] === 'sfx');
+      const tot = sfxIds.reduce((a, k) => a + rep.heardG2[k], 0) || 1;
+      const by = (re) => r2(100 * sfxIds.filter((k) => re.test(k)).reduce((a, k) => a + rep.heardG2[k], 0) / tot);
+      rep.kitShare = { fighterPct: by(/^f_/), libraryPct: by(/^c_/), wickPct: by(/^w_/), unitPct: by(/^u_/), matchPct: by(/^m_/),
+        top: sfxIds.sort((a, b) => rep.heardG2[b] - rep.heardG2[a]).slice(0, 12).map((k) => [k, r2(100 * rep.heardG2[k] / tot)]) }; }
     await page.evaluate(() => { try { window.__vale.state.match.value?.leave(); } catch { /* */ } });
     // ── analysis ──
     const col = (i) => blocks.map((r) => r[i]);
@@ -495,6 +504,8 @@ async function runMatch() {
       announcerPeakOverSfxP99Ge3: rep.announcer.lines > 0 && rep.announcer.peakOverSfxP99 >= 3,
       // a match's loudness needs a match: a short capture (the countdown, no fights) reports it, not gates it
       masterIntegratedInTokens: rep.seconds < 240 ? null : loud.out.I !== null && Math.abs(loud.out.I - TOK.integratedLUFS) <= TOK.toleranceLU,
+      // (max SFX-1) in a laning capture the fighters' own kits are at least half of the sfx heard (closing2 / max: 34 %)
+      fighterKitShareGe50: rep.seconds < 240 ? null : rep.kitShare.fighterPct >= 50,
     };
     rep.tokens = TOK;
     // reported, not gated: the lines against the teamfight windows' sfx (measured before the 6 dB news-line duck, so

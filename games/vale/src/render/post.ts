@@ -53,7 +53,7 @@ import {
 } from 'postprocessing';
 import { N8AOPostPass } from 'n8ao';
 import { LIFT_BODY_CAP, LIFT_GROUND_TOP, MAX_LIFTS, screenFx, screenUniforms } from './vfx/screen.ts';
-import { setFogGrade } from './world_material.ts';
+import { setCloudShadow, setFogGrade } from './world_material.ts';
 
 export interface PostQuality {
   ao: 0 | 1 | 2;
@@ -348,6 +348,8 @@ export class PostChain {
   private aaEffect: SharpSMAAEffect | null = null;
   /** a harness seam (_harness/max_env_post_ab.mjs): the sharpen strength; null = the tier's own */
   private sharpOverride: number | null = null;
+  /** a harness seam (_harness/max_env_cloud_ab.mjs): 0 = the cloud shadow off, null = back to the tier's own */
+  setCloud(v: number | null): void { setCloudShadow({ tier: v ?? (this.quality.tier === 'low' ? 0 : 1) }); }
   setSharpen(v: number | null): void {
     this.sharpOverride = v;
     if (this.aaEffect) this.aaEffect.sharp = v ?? SHARPEN_TIER[this.quality.tier];
@@ -449,6 +451,9 @@ export class PostChain {
     this.disposeBuilt();
     c.removeAllPasses();
     const q = this.quality;
+    // max env ENV-10: the drifting cloud shadow (world_material.ts) follows the tier here because the tier lives here:
+    // off on Low (its amplitude is the map's own, terrain.ts)
+    setCloudShadow({ tier: q.tier === 'low' ? 0 : 1 });
     this.builtOrtho = (this.camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true;
     this.renderPass = new RenderPass(this.scene, this.camera);
     c.addPass(this.renderPass);

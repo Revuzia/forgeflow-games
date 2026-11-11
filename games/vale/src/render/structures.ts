@@ -14,7 +14,7 @@
 //     A structure seen first already dead is a ruin at once; a gate that respawns rises out of its plinth (0.9 s).
 //     Rubble (max env ENV-6): where the top lands, 12 faceted chunks of the structure's own masonry (the plinth's stone:
 //     each chunk takes one plinth vertex's colour and texel, dusted darker) lie along the fall for the rest of the match:
-//     one merged mesh on the plinth's own material (no new program, one draw per ruin, 960 tris), shadow-casting; a ruin
+//     one merged mesh on the plinth's own material (no new program, one draw per ruin, 192 tris), shadow-casting; a ruin
 //     seen first already dead gets the same pile.
 //   * occlusion: while your fighter, the hovered or the targeted unit stands behind a live structure from the camera,
 //     the structure's upper part (from 0.5 m above its plinth) fades to 35 % (in 0.15 s, back in 0.35 s): per-actor
@@ -35,7 +35,7 @@
 //     0.45 s when the protection drops.
 
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, IcosahedronGeometry, LatheGeometry, type Material, Matrix4, Mesh,
+  Box3, BoxGeometry, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, IcosahedronGeometry, LatheGeometry, type Material, Matrix4, Mesh,
   MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type PerspectiveCamera, Quaternion,
   type RawShaderMaterial, type ShaderMaterial, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
@@ -641,10 +641,10 @@ export class StructureFx {
     this.rubble(s);
   }
 
-  /** max env ENV-6: the rubble pile along the fall (idempotent). Chunks: icosahedra (80 tris) squashed and jittered
-   *  into broken stones 0.2-0.6 m, half sunk, scattered from the plinth's edge to where the top landed (±1.2 m
-   *  across the fall, wider toward the end); each takes one vertex of the plinth (its colour ×0.82 for dust, its uv,
-   *  every other attribute the plinth's material reads), so the plinth's program draws it unchanged. */
+  /** max env ENV-6: the rubble pile along the fall (idempotent). Chunks: boxes (12 tris) and icosahedra (20 tris), jittered:
+   *  dressed blocks and rough spalls 0.26-0.8 m, lying on the floor, scattered from the plinth's edge to where the top landed (±1.2 m
+   *  across the fall, wider toward the end); each takes the centroid of one plinth triangle (its colour ×0.82 for dust,
+   *  its uv, every other attribute the plinth's material reads), so the plinth's program draws it unchanged. */
   private rubble(s: Struct): void {
     if (s.rubble) return;
     const src = (s.baseNode ? meshes(s.baseNode)[0] : undefined) ?? (s.ruin ? meshes(s.ruin)[0] : undefined);
@@ -656,41 +656,54 @@ export class StructureFx {
     dirL.normalize();
     const side = new Vector3(-dirL.z, 0, dirL.x);
     const reach = s.radius * 0.55 + (s.top - s.plinth) * 0.62;
-    const sg = src.geometry, sp = sg.getAttribute('position');
+    const sg = src.geometry, sp = sg.getAttribute('position'), si = sg.index;
+    const nTri = Math.floor((si ? si.count : sp.count) / 3);
     const names = Object.keys(sg.attributes).filter((n) => n !== 'position' && n !== 'normal');
-    const proto = new IcosahedronGeometry(1, 1).toNonIndexed();
-    const pp = proto.getAttribute('position'), nv = pp.count;
-    const N = 12, pos = new Float32Array(N * nv * 3);
-    const extra = names.map((n) => { const at = sg.getAttribute(n); return { n, at, arr: new Float32Array(N * nv * at.itemSize) }; });
+    // dressed blocks (a box, 12 tris) and rough spalls (an icosahedron, 20 tris), alternating; corners jittered
+    const protos = [new BoxGeometry(1.6, 1, 1.2).toNonIndexed(), new IcosahedronGeometry(1, 0).toNonIndexed()];
+    const N = 12;
+    const nvOf = (i: number): number => protos[i % 2].getAttribute('position').count;
+    let total = 0;
+    for (let i = 0; i < N; i++) total += nvOf(i);
+    const pos = new Float32Array(total * 3);
+    const extra = names.map((n) => { const at = sg.getAttribute(n); return { n, at, arr: new Float32Array(total * at.itemSize) }; });
     let rng = (s.seed * 9301 + 49297) % 233280;
     const rnd = (): number => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
     const q = new Quaternion(), e = new Vector3(), w = new Vector3();
+    const vtx = (t: number, c: number): number => (si ? si.getX(t * 3 + c) : t * 3 + c);
+    let base = 0;
     for (let i = 0; i < N; i++) {
+      const pp = protos[i % 2].getAttribute('position'), nv = pp.count;
       const t = 0.3 + 0.75 * (i / (N - 1)) + 0.08 * (rnd() - 0.5);
-      const r = (0.2 + 0.3 * rnd()) * (i < 3 ? 1.2 : 1);
+      const r = (0.13 + 0.2 * rnd()) * (i < 3 ? 1.25 : 1);
       const lat = (rnd() - 0.5) * 2 * (0.35 + 0.85 * t);
       const cx = dirL.x * (s.radius * 0.7 + reach * t) + side.x * lat, cz = dirL.z * (s.radius * 0.7 + reach * t) + side.z * lat;
-      q.setFromAxisAngle(e.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(), rnd() * Math.PI * 2);
-      const sx = 1, sy = 0.5 + 0.25 * rnd(), sz = 0.7 + 0.3 * rnd();
-      const pick = Math.floor(rnd() * sp.count);
+      // lying blocks: mostly a yaw, a small tilt (they came to rest on the floor)
+      q.setFromAxisAngle(e.set((rnd() - 0.5) * 0.5, 1, (rnd() - 0.5) * 0.5).normalize(), rnd() * Math.PI * 2);
+      const sy = 0.55 + 0.3 * rnd(), sz = 0.75 + 0.35 * rnd();
+      // the stone of one plinth face: the centroid of a random triangle (its texel and colour, away from the seams)
+      const tri = Math.floor(rnd() * nTri);
+      const v0 = vtx(tri, 0), v1 = vtx(tri, 1), v2 = vtx(tri, 2);
       for (let k = 0; k < nv; k++) {
-        // jitter each corner (seeded on the corner, so shared corners of a facet stay welded in shape)
         const px = pp.getX(k), py = pp.getY(k), pz = pp.getZ(k);
-        const j = 0.82 + 0.3 * fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1) * 43758.5453));
-        w.set(px * sx * j, py * sy * j, pz * sz * j).multiplyScalar(r).applyQuaternion(q);
-        const o = (i * nv + k) * 3;
-        pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.05, w.y + r * sy * 0.35); pos[o + 2] = cz + w.z;
+        // jitter each corner (seeded on the corner, so a corner shared by facets stays one point)
+        const h = (u: number): number => fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1 + u) * 43758.5453)) - 0.5;
+        w.set(px + 0.28 * h(1), (py + 0.28 * h(2)) * sy, (pz + 0.28 * h(3)) * sz).multiplyScalar(r).applyQuaternion(q);
+        const o = (base + k) * 3;
+        pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.04, w.y + r * sy * 0.3); pos[o + 2] = cz + w.z;
         for (const x of extra) {
-          const sz2 = x.at.itemSize, b = (i * nv + k) * sz2;
-          for (let c = 0; c < sz2; c++) {
-            let val = c === 0 ? x.at.getX(pick) : c === 1 ? x.at.getY(pick) : c === 2 ? x.at.getZ(pick) : x.at.getW(pick);
+          const n = x.at.itemSize, b = (base + k) * n;
+          for (let c = 0; c < n; c++) {
+            const g = (v: number): number => (c === 0 ? x.at.getX(v) : c === 1 ? x.at.getY(v) : c === 2 ? x.at.getZ(v) : x.at.getW(v));
+            let val = (g(v0) + g(v1) + g(v2)) / 3;
             if (x.n === 'color' && c < 3) val *= 0.82;
             x.arr[b + c] = val;
           }
         }
       }
+      base += nv;
     }
-    proto.dispose();
+    for (const p of protos) p.dispose();
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(pos, 3));
     for (const x of extra) g.setAttribute(x.n, new BufferAttribute(x.arr, x.at.itemSize));

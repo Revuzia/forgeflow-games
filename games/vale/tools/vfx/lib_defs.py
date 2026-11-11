@@ -7,6 +7,8 @@ zones sit on the `ground` (radius-like values scale with the area: `fit`); dashe
 """
 from __future__ import annotations
 
+GOLD = "#FFD27A"   # Gleam (the game's gold)
+
 from vfxkit import (CAP, CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, FLASH_R, INK, INK2, NOON, ORCHID, ROSE, SAP, WHITE, beam, chips, decal,
                     dust, flash, glow, impact, ink, light, mesh, motes, petals, ribbon, shake, shards, shockwave, sparks, streaks, vfx, L)
 
@@ -66,16 +68,33 @@ def defs() -> list:
                  L("emitter", at="path", rate=30, dir="back", spreadDeg=50, speed=[0.3, 1.0], life=[0.25, 0.5], size=[0.1, 0.03],
                    color=[EMBER, "team"], alpha=[1, 0], emissive=2.4, gravity=3, texture="ember", blend="add", secondary=True),
                  comment="T2 · Lumen · lobbed shell on an arc: stone core in a team glow, embers shed behind; the landing is a separate area"))
-    D.append(vfx("lib_needle_shot", 0.6,
-                 flash(2, at="origin", scale=1.2),
-                 mesh("path", "spike", 0.9, 0.6, color=[DAWNGLASS, "team"], alpha=1, emissive=3.0, rim="team", rim_emissive=3.0, align="velocity",
-                      stretch=[0.35, 0.35, 2.4], hold=1),
-                 ribbon("path", "team", width=(0.0, 0.3), life=0.14, alpha=(0, 0.6), emissive=2.6, noise=0.2),
-                 # the shot's heat: the air at the needle tip shimmers as it lets go, the bolt bends light along its way (T3)
-                 L("distort", at="origin", mode="haze", size=[0.7, 1.1], strength=[[0, 0.004], [0.25, 0.012], [1, 0]], life=0.4),
-                 L("distort", at="path", follow=True, mode="bulge", size=0.55, strength=[[0, 0.009], [0.8, 0.007], [1, 0]], life=0.6),
-                 comment="T3 · Lumen · a Needle (tower) fires: a long team spike with a hard streak; muzzle flash and a heat shimmer at the "
-                         "needle tip, light bent along the bolt"))
+    def needle(id_: str, k: float, wake: float, extra=(), comment: str = "") -> dict:
+        """a Needle's shot by tier (max VFX-5b): outer 1.0, inner and the Bell's ring brighter, longer, heavier"""
+        return vfx(id_, 0.6,
+                   flash(2, at="origin", scale=1.2 * k),
+                   mesh("path", "spike", 0.9 * k, 0.6, color=[DAWNGLASS, "team"], alpha=1, emissive=3.0 * min(k, 1.3), rim="team", rim_emissive=3.0 * k,
+                        align="velocity", stretch=[0.35, 0.35, 2.4], hold=1),
+                   ribbon("path", "team", width=(0.0, 0.3 * k), life=0.14 * wake, alpha=(0, 0.6), emissive=2.6, noise=0.2),
+                   # the shot's heat: the air at the needle tip shimmers as it lets go, the bolt bends light along its way (T3)
+                   L("distort", at="origin", mode="haze", size=[0.7 * k, 1.1 * k], strength=[[0, 0.004], [0.25, 0.012], [1, 0]], life=0.4),
+                   L("distort", at="path", follow=True, mode="bulge", size=0.55 * k, strength=[[0, 0.009], [0.8, 0.007], [1, 0]], life=0.6),
+                   *extra, comment=comment)
+    D.append(needle("lib_needle_shot", 1.0, 1.0, comment="T3 · Lumen · an outer Needle fires: a long team spike with a hard streak; muzzle flash "
+                    "and a heat shimmer at the needle tip, light bent along the bolt, its light on the ground under it"))
+    D.append(needle("lib_needle_shot_inner", 1.15, 1.6,
+                    extra=(glow("path", "team", 1.1, 0.6, 3.0, alpha=(1, 1, 1, 0.8), follow=True),
+                           L("emitter", at="path", rate=30, shape="point", dir="back", spreadDeg=30, speed=[0.4, 1.2], life=[0.14, 0.26],
+                             size=[0.1, 0.02], color=["team", DAWNGLASS], alpha=[0.9, 0], emissive=2.6, drag=2, texture="glint", blend="add")),
+                    comment="T3 · Lumen · an inner Needle fires: the outer shot at 1.15x with a glowing head, a 1.6x wake and glints shed"))
+    D.append(needle("lib_needle_shot_bell", 1.35, 2.2,
+                    extra=(glow("path", "team", 1.5, 0.6, 3.6, alpha=(1, 1, 1, 0.8), follow=True),
+                           ribbon("path", DAWNGLASS, width=(0.0, 0.14), life=0.3, alpha=(0, 0.7), emissive=3.0, noise=0.1),
+                           L("emitter", at="path", rate=46, shape="point", dir="back", spreadDeg=40, speed=[0.6, 1.8], life=[0.16, 0.3],
+                             size=[0.14, 0.03], color=["team", DAWNGLASS], alpha=[1, 0], emissive=3.0, drag=2, texture="spark", stretch=0.03,
+                             blend="add"),
+                           shockwave("origin", radius=(0.2, 1.4), width=(0.2, 0.04), life=0.25, emissive=3.0, vertical=True)),
+                    comment="T3 · Lumen · the Hourbell's needles fire: the heaviest shot, 1.35x, a bright head, a doubled 2.2x wake of team and "
+                            "glass, sparks shed, a ring of air at the muzzle"))
 
     # ── impacts (at target) ───────────────────────────────────────────────────────────────────────
     # basic and ability hits (r12 M5): a 1-2 frame warm-white core big enough to read on pale stone (>= 0.6 m, L* >= 90),
@@ -287,7 +306,7 @@ def defs() -> list:
                  mesh("ground", "column", [[0, 0.2], [0.3, 0.75], [1, 0.8]], 0.8, color=[INK2, INK], alpha=(0.9, 0), emissive=0, rim="team", rim_pow=1.3,
                       rim_emissive=2.6, blend="ink", stretch=[1.0, 2.0, 1.0], noise=0.7, scroll=[0, 1.6], dissolve=[0, 0, 0.2, 1], edge="team",
                       edge_emissive=2.6),
-                 mesh("ground", "stair", [[0, 0.1], [0.35, 1.0], [1, 1.05]], 0.7, color=[DAWNGLASS, "team"], alpha=(0.85, 0), emissive=2.6,
+                 mesh("ground", "stair", [[0, 0.1], [0.35, 1.0], [1, 1.05]], 0.7, color=[DAWNGLASS, "team"], alpha=(0.6, 0), emissive=2.6,
                       stretch=[0.9, 2.2, 0.9], spin=-90, noise=0.3),
                  mesh("ground", "shaft", [[0, 0.1], [0.3, 0.6], [1, 0.6]], 0.6, color=[DAWNGLASS, "team"], alpha=(0.9, 0), emissive=3.0,
                       stretch=[0.5, 3.0, 0.5], scroll=[0, 2.4], noise=0.4),
@@ -373,7 +392,7 @@ def defs() -> list:
                  # max VFX-4 the snuffed lamp: the fighter's own light leaves the body as a rising plume of ink and embers, the
                  # killer-side ring runs out wide, a brief pool of the fighter's light on the ground, and a scorched hour-mark stays
                  # where they fell (3 s); never a flash to white (ruling 10)
-                 ink("origin", 10, size=1.0, speed=(1.2, 2.4), life=(0.9, 1.5), radius=0.3, dir_="up", gravity=-1.2, delay=0.08, rim_alpha=0.55),
+                 ink("origin", 7, size=0.7, speed=(1.4, 2.6), life=(0.8, 1.3), radius=0.3, dir_="up", gravity=-1.4, delay=0.08, rim_alpha=0.6),
                  L("emitter", at="origin", count=26, shape="sphere", radius=0.35, dir="up", spreadDeg=40, speed=[1.4, 3.4], life=[0.8, 1.4],
                    size=[0.12, 0.05], color=["signature", EMBER], alpha=[1, 0.8, 0], emissive=2.6, gravity=-1.4, drag=1.2, turbulence=1.4,
                    texture="ember", blend="add", delay=0.05),
@@ -388,9 +407,26 @@ def defs() -> list:
                  light("origin", "signature", 8, 6, 0.6),
                  comment="T2 · impact · a fighter falls — the snuffed lamp: the mask cracks into opaque chips, the fighter's light leaves "
                          "as a rising plume of ink and embers, a ring runs out, a brief light pool, a scorched hour-mark stays 3 s"))
-    D.append(vfx("lib_gleam_pickup", 0.35,
-                 motes("origin", 6, color="#FFD27A", rise=2.4, life=(0.2, 0.35), radius=0.3, emissive=1.4),
-                 comment="T1 · Lumen · Gleam gained: a few warm motes hop up to the fighter (own feedback, no relationship)", team_tint=False))
+    def gleam(id_: str, n: int, k: float, comment: str, extra=()) -> dict:
+        """max VFX-9: Gleam paid out: warm coins pop off the victim and arc toward the killer (the spawn's dir), a soft glint
+        lands on the killer as they arrive (`at: caster`), a few motes rise off them; own feedback only (the director)"""
+        return vfx(id_, 0.9,
+                   flash(2, at="origin", color=GOLD, scale=0.55 * k, light=False),
+                   L("emitter", at="origin", count=n, shape="sphere", radius=0.12, dir="forward", spreadDeg=38, speed=[2.6 * k, 4.2 * k],
+                     velocity=[0, 3.6, 0], life=[0.5, 0.62], size=[0.34 * k, 0.4 * k, 0.2 * k], color=[GOLD, "#FFE9B0"], alpha=[1, 1, 0],
+                     emissive=2.4, gravity=9, drag=0.4, spinDeg=[-400, 400], texture="glint", blend="add"),
+                   L("emitter", at="origin", count=n // 2, shape="sphere", radius=0.1, dir="up", spreadDeg=50, speed=[1.5, 2.6], life=[0.25, 0.4],
+                     size=[0.1, 0.03], color=GOLD, alpha=[1, 0], emissive=2.4, gravity=4, texture="spark", stretch=0.03, blend="add"),
+                   L("sprite", at="caster", delay=0.42, texture="flare", size=[[0, 0.5 * k], [0.3, 0.85 * k], [1, 0.7 * k]], color=GOLD, emissive=2.4,
+                     alpha=[[0, 0], [0.2, 1], [1, 0]], life=0.24, rotDeg=[0, 360], space="world", hold=0),
+                   motes("caster", n // 2, color=GOLD, rise=1.6, life=(0.3, 0.5), radius=0.3, emissive=2.0, delay=0.44),
+                   *extra, comment=comment, team_tint=False)
+    D.append(gleam("lib_gleam_pickup", 8, 1.0, "T2 · Lumen · your last hit pays: eight warm Gleam coins pop off the unit and arc to you, "
+                   "a soft glint lands on you (own feedback, no relationship)"))
+    D.append(gleam("lib_gleam_bounty", 16, 1.35, "T2 · Lumen · your champion kill pays its bounty: the last-hit coins at 1.35x with a warm "
+                   "ring out on the ground where they fell",
+                   extra=(shockwave("origin", color=[GOLD, "#FFE9B0"], radius=(0.3, 2.0), width=(0.22, 0.05), life=0.45, emissive=2.4),
+                          shockwave("caster", color=GOLD, radius=(1.2, 0.3), width=(0.12, 0.05), life=0.3, emissive=2.2, delay=0.42))))
     D.append(vfx("lib_sunmote_pickup", 0.7,
                  flash(2, at="origin", color="#FFD27A", scale=1.0),
                  motes("origin", 16, color="#FFD27A", rise=3.0, radius=0.5, emissive=2.6),
@@ -461,11 +497,11 @@ def defs() -> list:
                  L("emitter", at="origin", offset=[0, 9.0, 0], count=10, shape="sphere", radius=0.3, dir="down", spreadDeg=4, speed=[40, 46],
                    life=[0.17, 0.2], size=[0.5, 0.1], color=[DAWNGLASS, "team"], alpha=[0.8, 0.2], emissive=6, texture="streak", stretch=0.05, blend="add"),
                  flash(4, at="origin", scale=2.0, delay=0.18),
-                 mesh("origin", "column", [[0, 0.3], [0.2, 1.3], [1, 1.2]], 1.2, color=[WHITE, "team"], alpha=(0.9, 0), emissive=6, mask="top",
-                      mask_param=0.3, stretch=[1.4, 6.0, 1.4], noise=0.4, scroll=[0, 2.4], dissolve=[0, 0.2, 1], edge="team", edge_emissive=6,
-                      rim="team", rim_pow=1.4, rim_emissive=6, delay=0.18),
-                 mesh("origin", "shaft", [[0, 0.3], [0.2, 1.0], [1, 0.8]], 1.0, color=[WHITE, "team"], alpha=(1, 0), emissive=8, stretch=[0.8, 8.0, 0.8],
-                      noise=0.3, scroll=[0, 3.0], delay=0.18),
+                 mesh("origin", "column", [[0, 0.3], [0.2, 1.3], [1, 1.2]], 0.85, color=[WHITE, "team"], alpha=[[0, 0.6], [0.4, 0.3], [1, 0]], emissive=4,
+                      mask="top", mask_param=0.3, stretch=[1.4, 4.5, 1.4], noise=0.5, scroll=[0, 2.4], dissolve=[0, 0.25, 1], edge="team", edge_emissive=5,
+                      rim="team", rim_pow=1.4, rim_emissive=5, delay=0.18),
+                 mesh("origin", "shaft", [[0, 0.3], [0.2, 0.8], [1, 0.6]], 0.6, color=[WHITE, "team"], alpha=[[0, 1], [0.5, 0.4], [1, 0]], emissive=6,
+                      stretch=[0.6, 6.0, 0.6], noise=0.3, scroll=[0, 3.0], delay=0.18),
                  decal("origin", "crack", [[0, 0.6], [0.1, 3.2], [1, 3.3]], 2.4, color=INK2, alpha=(0.85, 0.7, 0), emissive=3.0, rim="team", delay=0.18),
                  decal("origin", "light", [[0, 1.0], [0.2, 3.6], [1, 3.8]], 1.2, color="team", alpha=(0.7, 0.4, 0), emissive=2.4, texture="rune", delay=0.18),
                  chips("origin", 24, color=(CHALK, CHALK_DK), speed=(4, 9), life=(0.6, 1.0), size=0.24, delay=0.19),

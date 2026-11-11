@@ -1,0 +1,32 @@
+{
+ "fighter_burdam_3": {
+  "base->metal0": 0.72
+ },
+ "fighter_dunsom_10": {
+  "base->metal0": 0.0
+ },
+ "fighter_ervet_1": {
+  "base->metal0": 0.46
+ },
+ "fighter_hesmi_8": {
+  "base->metal0": 0.08
+ },
+ "fighter_kemdo_6": {
+  "base->metal0": 0.41
+ },
+ "fighter_marund_4": {
+  "base->metal0": 0.47
+ },
+ "fighter_odrum_2": {
+  "base->metal0": 0.59
+ },
+ "fighter_rishal_9": {
+  "base->metal0": 0.23
+ },
+ "fighter_tunlan_7": {
+  "base->metal0": 0.0
+ },
+ "fighter_vashil_5": {
+  "base->metal0": 0.26
+ }
+}

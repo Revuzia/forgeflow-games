@@ -14,9 +14,9 @@ for a higher-detail CARD hand built here:
     after the bake (Kemdo's right fist is turned 62 degrees about the wrist), so the transform sculpt -> rest is
     measured, not assumed: an ICP of the cached bake source (<part>_high) onto the game hand's vertices (rigid, from the
     identity and the principal-axis starts; mean residual logged, a bad fit keeps the game hand);
-  * the skin: the card hand takes the game hand's material and its UVs (a Data Transfer from the game hand's faces,
-    nearest face, interpolated), so each skin's glove colour and baked paint carry over; the material copy drops a
-    normal map (the low mesh's baked normals belong to the low mesh);
+  * the skin: the card hand takes the game hand's material, its base colour read from a colour attribute sampled from
+    the game hand's own texture (per vertex, inverse-distance from the 6 nearest game vertices), so each skin's glove
+    colour carries over; no UVs, so no normal map or texture roughness (matte leather 0.68);
   * the bind: rigid on the bone the game hand is weighted to (an Armature modifier on a weight-1 group), so every clip
     and card pose moves it exactly as the game hand; the game hand is hidden by a Mask modifier on a "card_hide" group.
 
@@ -34,7 +34,7 @@ import numpy as np
 from .hifi import sdf
 from .hifi.sdf import Capsule, Ellipsoid, FlatCapsule, RoundBox, Sculpt, Sphere, Tube
 
-VOXEL = 0.0012
+VOXEL = 0.0014
 FIT_MAX = 0.006          # m: the ICP's mean residual above which the card keeps the game hand
 
 
@@ -273,6 +273,71 @@ def _bone_of(o, mask: np.ndarray) -> str | None:
     return max(w, key=w.get) if w else None
 
 
+def _upstream_image(sock, depth=0):
+    """the first Image Texture node upstream of a socket"""
+    if depth > 8 or not sock.is_linked:
+        return None
+    n = sock.links[0].from_node
+    if n.type == "TEX_IMAGE":
+        return n
+    for i in n.inputs:
+        r = _upstream_image(i, depth + 1)
+        if r is not None:
+            return r
+    return None
+
+
+def _vertex_colours(o, mat, m, vi):
+    """(V, 3) linear colour per vertex of o from its material's base-colour texture at the loops' UVs (hand verts only)"""
+    if mat is None or not mat.use_nodes or not o.data.uv_layers.active:
+        return None
+    bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    tex = _upstream_image(bsdf.inputs["Base Color"]) if bsdf else None
+    if tex is None or tex.image is None:
+        return None
+    img = tex.image
+    W, H = img.size
+    px = np.empty(W * H * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(H, W, 4)[..., :3]
+    if img.colorspace_settings.name.lower().startswith("srgb") and not img.is_float:
+        px = np.where(px <= 0.04045, px / 12.92, ((px + 0.055) / 1.055) ** 2.4)
+    uv = np.empty(len(o.data.loops) * 2, dtype=np.float32)
+    o.data.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    sel = m[vi]
+    x = np.clip((uv[sel, 0] % 1.0) * W, 0, W - 1).astype(int)
+    y = np.clip((uv[sel, 1] % 1.0) * H, 0, H - 1).astype(int)
+    acc = np.zeros((len(sel[sel]), 3))
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            acc += px[np.clip(y + dy, 0, H - 1), np.clip(x + dx, 0, W - 1)]
+    acc /= 9.0
+    out = np.zeros((len(m), 3))
+    cnt = np.zeros(len(m))
+    np.add.at(out, vi[sel], acc)
+    np.add.at(cnt, vi[sel], 1.0)
+    out[cnt > 0] /= cnt[cnt > 0, None]
+    return out
+
+
+def _vcol_material(mat):
+    """the copy reads its base colour from the card hand's colour attribute; no texture-driven roughness / normal (the
+    card hand has no UVs): a matte leather 0.68"""
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None:
+        return
+    for nm in ("Base Color", "Roughness", "Normal", "Metallic"):
+        for lk in list(bsdf.inputs[nm].links):
+            nt.links.remove(lk)
+    at = nt.nodes.new("ShaderNodeAttribute")
+    at.attribute_name = "card_col"
+    nt.links.new(at.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.68
+    bsdf.inputs["Metallic"].default_value = 0.0
+
+
 def install(spec, arm, objs, log=print) -> list:
     """Swap the hands of the meshes in `objs` for card hands; returns the undo list for remove()."""
     fid = getattr(spec, "ID", "")
@@ -309,20 +374,10 @@ def install(spec, arm, objs, log=print) -> list:
             bone = _bone_of(o, m)
             if bone is None:
                 continue
-            # the UV source: the game hand's faces alone, at rest
-            src_me = o.data.copy()
-            src = bpy.data.objects.new(f"card_hand_src_{part}", src_me)
-            bpy.context.scene.collection.objects.link(src)
-            src.matrix_world = o.matrix_world.copy()
-            import bmesh
-            bm = bmesh.new()
-            bm.from_mesh(src_me)
-            bm.verts.ensure_lookup_table()
-            bmesh.ops.delete(bm, geom=[bm.verts[i] for i in range(len(bm.verts)) if not m[i]], context="VERTS")
-            bm.to_mesh(src_me)
-            bm.free()
-            src.hide_render = True
-            # material: the faces' own, without the low mesh's normal map
+            # colour: the game hand's texture sampled at its own vertices (each loop's texel, averaged per vertex),
+            # carried to the card hand by inverse-distance weights of the 6 nearest game vertices (rest). A UV
+            # transfer straddled the atlas islands (light seam lines across the fingers); the hand's texture is a
+            # near-flat glove tone, and the new geometry carries the form.
             pm = np.empty(len(o.data.polygons), dtype=np.int64)
             o.data.polygons.foreach_get("material_index", pm)
             vi = np.empty(len(o.data.loops), dtype=np.int64)
@@ -332,10 +387,16 @@ def install(spec, arm, objs, log=print) -> list:
             hand_polys = m[vi[ls]]
             mi = int(np.bincount(pm[hand_polys]).argmax()) if hand_polys.any() else 0
             mat = o.data.materials[mi].copy() if len(o.data.materials) else None
-            if mat is not None and mat.use_nodes:
-                for lk in list(mat.node_tree.links):
-                    if lk.from_node.type == "NORMAL_MAP" and lk.to_socket.name == "Normal":
-                        mat.node_tree.links.remove(lk)
+            vcol = _vertex_colours(o, mat, m, vi)
+            Pw = _world(o)
+            hv = np.nonzero(m)[0]
+            if vcol is not None:
+                cols = np.empty((len(v), 3))
+                for k0 in range(0, len(v), 4096):
+                    d = np.sqrt(((v[k0:k0 + 4096, None, :] - Pw[hv][None]) ** 2).sum(-1))
+                    j = np.argsort(d, 1)[:, :6]
+                    wgt = 1.0 / (np.take_along_axis(d, j, 1) + 1e-4)
+                    cols[k0:k0 + 4096] = (vcol[hv][j] * wgt[..., None]).sum(1) / wgt.sum(1, keepdims=True)
             Mo = np.array(o.matrix_world)
             vl = (v - Mo[:3, 3]) @ np.linalg.inv(Mo[:3, :3]).T
             me = sdf.to_mesh(f"card_{part}_{o.name}", vl, q)
@@ -345,17 +406,14 @@ def install(spec, arm, objs, log=print) -> list:
             ob.parent = o.parent
             ob.matrix_world = o.matrix_world.copy()
             if mat is not None:
+                if vcol is not None:
+                    ca = me.color_attributes.new("card_col", "FLOAT_COLOR", "POINT")
+                    ca.data.foreach_set("color", np.concatenate([cols, np.ones((len(cols), 1))], 1).astype(np.float32).ravel())
+                    _vcol_material(mat)
                 me.materials.append(mat)
-            uvn = o.data.uv_layers.active.name if o.data.uv_layers.active else "UVMap"
-            me.uv_layers.new(name=uvn)
             g = ob.vertex_groups.new(name=bone)
             g.add(list(range(len(me.vertices))), 1.0, "REPLACE")
-            dt = ob.modifiers.new("card_uv", "DATA_TRANSFER")
-            dt.object = src
-            dt.use_object_transform = True
-            dt.use_loop_data = True
-            dt.data_types_loops = {"UV"}
-            dt.loop_mapping = "POLYINTERP_NEAREST"
+            src = None
             am = ob.modifiers.new("card_arm", "ARMATURE")
             am.object = arm
             hide = o.vertex_groups.get("card_hide") or o.vertex_groups.new(name="card_hide")
@@ -384,9 +442,10 @@ def remove(undo: list) -> None:
         me = ob.data
         bpy.data.objects.remove(ob, do_unlink=True)
         bpy.data.meshes.remove(me)
-        sme = src.data
-        bpy.data.objects.remove(src, do_unlink=True)
-        bpy.data.meshes.remove(sme)
+        if src is not None:
+            sme = src.data
+            bpy.data.objects.remove(src, do_unlink=True)
+            bpy.data.meshes.remove(sme)
         if mat is not None:
             bpy.data.materials.remove(mat)
 
@@ -395,9 +454,11 @@ def remove(undo: list) -> None:
 # Sukri Shadeprint (ruling 2 via ruling 30): the mask's albedo is #B39272 but the violet key and the warm focal read it
 # pale peach on the cards (measured 203,161,162 splash / 209,157,156 portrait); the card grade multiplies the mask's
 # colour toward the amber lacquer, darkens the eye inlays (dark amber, the painted lid kept) and takes the specular
-# off them (the violet rim lights glinted in the pupils), with a lacquer sheen on the rest.
+# off them (the violet rim lights glinted in the pupils), with a lacquer sheen on the rest; metallic 0 (the ORM's
+# metallic mirrored the violet plate into the pupils). mul tuned on the preview cards (pass 4: 0.70/0.78/0.42 read
+# 154,123,98 splash / 153,120,74 portrait, dark olive; target 179,146,114).
 GRADE = {
-    "sukri_shadeprint": {"face": {"mul": (0.70, 0.78, 0.42), "rough": 0.42, "eye_mul": 0.55, "eye_spec": 0.04,
+    "sukri_shadeprint": {"face": {"mul": (0.98, 1.15, 0.72), "rough": 0.42, "eye_mul": 0.55, "eye_spec": 0.04,
                                   "eye_rough": 0.75}},
 }
 
@@ -437,6 +498,10 @@ def _grade_material(mat, g: dict):
     e = float(g.get("eye_mul", 1.0))
     _sock(dk.inputs, "B", "RGBA").default_value = (e, e, e, 1.0)
     nt.links.new(_sock(dk.outputs, "Result", "RGBA"), bc)
+    # lacquer is a dielectric: the ORM texture's metallic on the face mirrored the violet plate into the pupils
+    for lk in list(bsdf.inputs["Metallic"].links):
+        nt.links.remove(lk)
+    bsdf.inputs["Metallic"].default_value = 0.0
     for key, sock, base in (("rough", "Roughness", None), ("eye_spec", "Specular IOR Level", 0.5)):
         if key not in g or sock not in bsdf.inputs:
             continue

@@ -98,7 +98,7 @@
       "kind": "structure",
       "base": { "hp": 3600, "ad": 170, "armor": 50, "resist": 50, "attackSpeed": 0.83, "moveSpeed": 0 },
       "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 22,
-        "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
+        "present": { "anim": "attack1", "vfx": "lib_needle_shot_inner", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
       "collisionRadius": 1.1,
       "bounty": { "gold": 140, "goldGlobal": 100, "xp": 140 },
       "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.35, "rampMax": 1.05, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
@@ -116,7 +116,7 @@
       "kind": "structure",
       "base": { "hp": 2800, "ad": 190, "armor": 60, "resist": 60, "attackSpeed": 0.9, "moveSpeed": 0 },
       "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 24,
-        "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
+        "present": { "anim": "attack1", "vfx": "lib_needle_shot_bell", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
       "collisionRadius": 1.1,
       "bounty": { "gold": 50, "goldGlobal": 50, "xp": 100 },
       "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.4, "rampMax": 1.2, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
@@ -196,7 +196,7 @@
       "behavior": { "leash": 9, "resetRegen": 0.3 },
       "sightRange": 8,
       "onTakedownTeamBuff": "clearglass",
-      "art": { "model": "assets/units/glasshorn.glb", "height": 2.2, "icon": "assets/units/glasshorn_icon.png",
+      "art": { "model": "assets/units/glasshorn.glb", "height": 2.2, "scale": 1.55, "icon": "assets/units/glasshorn_icon.png",
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
     },
     {
@@ -231,7 +231,7 @@
       "behavior": { "leash": 9, "resetRegen": 0.3 },
       "sightRange": 8,
       "onTakedownTeamBuff": "resinburn",
-      "art": { "model": "assets/units/resinback.glb", "height": 1.8, "icon": "assets/units/resinback_icon.png",
+      "art": { "model": "assets/units/resinback.glb", "height": 1.8, "scale": 1.2, "icon": "assets/units/resinback_icon.png",
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
     },
     {
@@ -369,7 +369,7 @@
       "kind": "monster",
       "base": { "hp": 4200, "ad": 90, "armor": 30, "resist": 30, "attackSpeed": 0.5, "moveSpeed": 3.0 },
       "attack": { "range": 6, "windup": 0.4, "damageType": "magic", "projectileSpeed": 16,
-        "present": { "anim": "attack1", "vfx": "lib_shard_volley", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
+        "present": { "anim": "attack1", "vfx": "lib_sunsplinter_volley", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
       "collisionRadius": 1.4,
       "bounty": { "gold": 100, "goldGlobal": 75, "xp": 250 },
       "abilities": [
@@ -385,7 +385,7 @@
           "effects": [
             { "op": "area", "shape": { "kind": "circle", "radius": 2.5 }, "at": "point", "delay": 1.0,
               "onHit": [ { "op": "damage", "amount": 110, "type": "magic", "to": "hit" } ],
-              "present": { "vfx": "lib_burst_lumen", "sfx": "c_burst_lumen", "telegraph": "everyone" } }
+              "present": { "vfx": "lib_sunsplinter_burst", "sfx": "c_burst_lumen", "telegraph": "everyone" } }
           ],
           "ai": { "use": ["damage", "poke"] },
           "present": { "anim": "cast_a1" }
@@ -425,7 +425,7 @@
                 { "op": "damage", "amount": 130, "type": "phys", "to": "hit" },
                 { "op": "displace", "mode": "knockback", "distance": 1.5, "duration": 0.25, "to": "hit" }
               ],
-              "present": { "vfx": "lib_cone_sweep", "sfx": "c_cast_lumen", "telegraph": "everyone" } }
+              "present": { "vfx": "lib_sunsplinter_sweep", "sfx": "c_cast_lumen", "telegraph": "everyone" } }
           ],
           "ai": { "use": ["damage", "cc"] },
           "present": { "anim": "cast_a3" }
@@ -434,7 +434,7 @@
       "behavior": { "leash": 12, "resetRegen": 0.3 },
       "sightRange": 10,
       "onTakedownTeamBuff": "splinters",
-      "art": { "model": "assets/units/sunsplinter.glb", "height": 3.2, "icon": "assets/units/sunsplinter_icon.png",
+      "art": { "model": "assets/units/sunsplinter.glb", "height": 3.2, "scale": 1.4, "icon": "assets/units/sunsplinter_icon.png",
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "cast_a2": "cast_a2", "cast_a3": "cast_a3", "death": "death" } }
     },
     {
@@ -478,7 +478,7 @@
                 { "op": "damage", "amount": 200, "type": "phys", "to": "hit" },
                 { "op": "displace", "mode": "knockback", "distance": 2.5, "duration": 0.3, "to": "hit" }
               ],
-              "present": { "vfx": "lib_cone_sweep", "sfx": "c_swing_heavy", "telegraph": "everyone" } }
+              "present": { "vfx": "lib_longshade_sweep", "sfx": "c_swing_heavy", "telegraph": "everyone" } }
           ],
           "ai": { "use": ["damage", "cc"] },
           "present": { "anim": "cast_a1" }
@@ -519,7 +519,7 @@
                 { "op": "damage", "amount": 320, "type": "magic", "to": "hit" },
                 { "op": "status", "status": "stun", "duration": 1, "to": "hit" }
               ],
-              "present": { "vfx": "lib_slam_ground", "sfx": "c_slam", "telegraph": "everyone" } }
+              "present": { "vfx": "lib_longshade_slam", "sfx": "c_slam", "telegraph": "everyone" } }
           ],
           "ai": { "use": ["damage", "cc"] },
           "present": { "anim": "cast_a3" }

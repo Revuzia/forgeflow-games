@@ -409,11 +409,18 @@ def lighting(map_id):
     return lt
 
 
+HOUR_STONE_NOTE = ("a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, "
+                   "the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, "
+                   "the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub "
+                   "(hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall "
+                   "block (wallHeights.hourStones), which it encloses")
+
+
 def art(map_id, music, terrain):
     return {
         "scene": f"assets/maps/{map_id}/scene.glb",
         "sky": f"assets/maps/{map_id}/sky.hdr",
-        "lut": "assets/grade/vale_grade_01.cube",
+        "lut": f"assets/grade/vale_grade_{map_id.removeprefix('map_')}.cube",   # max env ENV-8: the map's own mood
         "minimap": f"assets/maps/{map_id}/minimap.png",
         "terrain": terrain,
         "lighting": lighting(map_id),
@@ -855,8 +862,8 @@ def build_fray():
             landmark("lampwright_cart", "Lampwright's cart", C, (2.6, 2.6), 3.0, "the shared shop: a lampwright's two-wheeled wagon, banded ironstone over planked timber, a painted canvas tilt, one lamp on its mast (art/blender/maps/landmarks_art2.py); its 1.3 m footprint is a wall", model="assets/maps/landmarks/lampwright_cart.glb"),
             *[landmark(f"hour_mark_{k + 1}", f"hour-mark {k + 1}", clock(26.0, 36 * k), (2.4, 2.4), 0.02, "flush carved numeral, lit in its seat colour", flush=True) for k in range(10)],
             *[landmark(f"hour_stone_{k + 1}", "hour-stone", clock(19.5, 36 * k + 18), (1.8, 1.8), 1.2,
-                       "low carved block (a wall): dark basalt, chalked cap edge and lip, the half-hour tick inlaid in chalk on both broad faces and across the top (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses",
-                       model="assets/maps/landmarks/hour_stone.glb", rot=162.0 - 36 * k) for k in range(10)],
+                       HOUR_STONE_NOTE,
+                       model=f"assets/maps/landmarks/hour_stone{'_g' if k % 2 else ''}.glb", rot=162.0 - 36 * k) for k in range(10)],
             landmark("fair_stand_nw", "fair stand", (4.0, 4.0), (6, 6), 3.0, "tiered stone-and-timber seating of the Shadowless Noon fair, stepping up to its map corner and facing the plate (art/blender/maps/landmarks_art2.py fair_stand)", model="assets/maps/landmarks/fair_stand_high.glb"),
             landmark("fair_stand_ne", "fair stand", (W - 4.0, 4.0), (6, 6), 3.0, "tiered stone-and-timber seating of the Shadowless Noon fair, stepping up to its map corner and facing the plate (art/blender/maps/landmarks_art2.py fair_stand)", model="assets/maps/landmarks/fair_stand_high.glb", rot=-90),
             landmark("fair_stand_sw", "fair stand", (4.0, H - 4.0), (6, 6), 1.0, "tiered stone-and-timber seating of the Shadowless Noon fair, stepping up to its map corner and facing the plate (art/blender/maps/landmarks_art2.py fair_stand)", model="assets/maps/landmarks/fair_stand_low.glb", rot=90),
