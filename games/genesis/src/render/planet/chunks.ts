@@ -26,28 +26,18 @@ import {
 } from 'three';
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
 import { newHit } from '../../sim/grid/icogrid.ts';
-import { detailNoise, duneNoise, DUNE_WAVELENGTH, type Noise3 } from '../../sim/grid/noise.ts';
+import type { Noise3 } from '../../sim/grid/noise.ts';
 import { curveMargin } from '../../sim/grid/surface.ts';
+import {
+  PATCH_RES, ICO_EDGE, NPTS, NSKIRT, NVERT, NINDEX, ptIndex, BOUNDARY, PATCH_ATTRS, PatchBuilder,
+  type PatchArrays, type PatchReply, type PatchRequest,
+} from './patchbuild.ts';
 
-export const PATCH_RES = 32;
-/** angle subtended by an icosahedron edge */
-const ICO_EDGE = 1.1071487177940904;
+export { PATCH_RES };
 
 // ───────────────────────────── shared topology ─────────────────────────────
 
 const R = PATCH_RES;
-const NPTS = ((R + 1) * (R + 2)) / 2;
-const NSKIRT = 3 * R;
-const NVERT = NPTS + NSKIRT;
-/** indices per patch: R² lattice triangles + two per skirt quad */
-const NINDEX = (R * R + 6 * R) * 3;
-const ptIndex = (i: number, j: number): number => j * (R + 1) - (j * (j - 1)) / 2 + i;
-
-/** boundary lattice points in CCW order (A→B, B→C, C→A), 3R of them */
-const BOUNDARY: [number, number][] = [];
-for (let i = 0; i < R; i++) BOUNDARY.push([i, 0]);
-for (let j = 0; j < R; j++) BOUNDARY.push([R - j, j]);
-for (let j = R; j > 0; j--) BOUNDARY.push([0, j]);
 
 let sharedIndex: Uint16BufferAttribute | null = null;
 function indexBuffer(): Uint16BufferAttribute {
@@ -70,37 +60,88 @@ function indexBuffer(): Uint16BufferAttribute {
   return sharedIndex;
 }
 
-/** the two even lattice neighbours an odd vertex morphs toward (both = self for even vertices) */
-function morphNeighbours(i: number, j: number): [number, number, number, number] {
-  const io = i & 1, jo = j & 1;
-  if (!io && !jo) return [i, j, i, j];
-  if (io && !jo) return [i - 1, j, i + 1, j];
-  if (!io && jo) return [i, j - 1, i, j + 1];
-  return [i - 1, j + 1, i + 1, j - 1];
+/** a patch geometry viewing built arrays (no copy: PatchBatch.alloc copies them into the batch) */
+function geometryOf(r: PatchArrays, sphere: Sphere): BufferGeometry {
+  const geo = new BufferGeometry();
+  for (let k = 0; k < PATCH_ATTRS.length; k++) {
+    const [name, size] = PATCH_ATTRS[k];
+    const attr = new BufferAttribute(r.attrs[k], size);
+    geo.setAttribute(name, attr);
+    // three r186 compiles a MeshStandardMaterial as FLAT_SHADED when the geometry has no `normal` attribute (one
+    // face normal per render triangle from screen derivatives): the per-cell normals, the detail gradient and the
+    // curved ground then never reach the lighting and the terrain shades as a triangle mosaic. The vertex shader
+    // overrides objectNormal anyway (VERT_MAIN), so the unit `position` directions serve as the attribute — the
+    // same buffer, no extra memory.
+    if (name === 'position') geo.setAttribute('normal', attr);
+  }
+  geo.setIndex(indexBuffer());
+  geo.boundingSphere = sphere.clone();
+  return geo;
 }
 
-/** band-limit weights for the two detail octaves (≈12 m and ≈3.2 m features) at a vertex spacing */
-function detailWeights(spacing: number): [number, number] {
-  const w = (feature: number) => Math.min(1, Math.max(0, (feature / spacing - 1.5) / 1.5));
-  return [w(12), w(3.2)];
+// ───────────────────────────── the patch building worker ─────────────────────────────
+
+/** how a ChunkLOD reaches a patch building worker (the browser's shared pool; tests pass an in-process stand-in) */
+export interface PatchPort {
+  send(m: PatchRequest, transfer?: Transferable[]): void;
+  listen(id: number, onReply: (r: PatchReply) => void, onFail: () => void): void;
+  unlisten(id: number): void;
 }
 
-/** band-limit weight of the dunes at a vertex spacing (gone where the lattice cannot carry a 26 m ridge) */
-function duneWeight(spacing: number): number {
-  return Math.min(1, Math.max(0, (DUNE_WAVELENGTH / spacing - 2) / 1.5));
+let sharedPatchPort: PatchPort | null | undefined;
+/**
+ * The shared patch workers, or null where there are none (made on first use; one that fails is not retried). Two
+ * workers where the machine has the cores for them (a camera cut needs a few hundred patches: two halve the fill-in).
+ */
+function browserPatchPort(): PatchPort | null {
+  if (sharedPatchPort !== undefined) return sharedPatchPort;
+  sharedPatchPort = null;
+  try {
+    if (typeof Worker === 'undefined' || typeof location === 'undefined') return null;
+    if (new URLSearchParams(location.search).get('patchworker') === '0') return null;
+    const hc = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+    const nw = hc >= 6 ? 2 : 1;
+    const ws: Worker[] = [];
+    const subs = new Map<number, { reply: (r: PatchReply) => void; fail: () => void }>();
+    let dead = false;
+    const fail = (): void => {
+      if (dead) return;
+      dead = true;
+      sharedPatchPort = null;
+      for (const w of ws) { try { w.terminate(); } catch { /* gone */ } }
+      for (const s of [...subs.values()]) s.fail();
+      subs.clear();
+    };
+    const load = new Int32Array(nw);
+    for (let i = 0; i < nw; i++) {
+      const w = new Worker(new URL('./patchbuild.worker.ts', import.meta.url), { type: 'module', name: `genesis-patches-${i}` });
+      w.onmessage = (e: MessageEvent<PatchReply>) => { load[i]--; subs.get(e.data.id)?.reply(e.data); };
+      w.onerror = (e) => { console.warn('[genesis] patch building worker failed; building on the main thread', e.message ?? e); fail(); };
+      w.onmessageerror = fail;
+      ws.push(w);
+    }
+    sharedPatchPort = {
+      send: (m, transfer) => {
+        if (m.k !== 'build') { for (const w of ws) w.postMessage(m); return; }
+        // the least loaded worker (each answers in order; the replies carry their own seq)
+        let best = 0;
+        for (let i = 1; i < nw; i++) if (load[i] < load[best]) best = i;
+        load[best]++;
+        ws[best].postMessage(m, transfer ?? []);
+      },
+      listen: (id, reply, onFail) => { subs.set(id, { reply, fail: onFail }); },
+      unlisten: (id) => { subs.delete(id); },
+    };
+  } catch (e) {
+    console.warn('[genesis] no patch building worker; building on the main thread', e);
+    sharedPatchPort = null;
+  }
+  return sharedPatchPort;
 }
 
-function filteredDetail(noise: Noise3, x: number, y: number, z: number, radius: number, w1: number, w2: number): number {
-  if (w1 >= 1 && w2 >= 1) return detailNoise(noise, x, y, z, radius);
-  if (w1 <= 0 && w2 <= 0) return 0;
-  // the same two octaves as detailNoise, faded (identical to detailNoise when both weights are 1)
-  const f1 = radius / 12;
-  const f2 = radius / 3.2;
-  let v = 0;
-  if (w1 > 0) v += noise.noise(x * f1, y * f1, z * f1) * 1.6 * w1;
-  if (w2 > 0) v += noise.noise(x * f2 + 31.7, y * f2, z * f2) * 0.35 * w2;
-  return v;
-}
+let nextLodId = 1;
+/** patch builds in flight per planet (a frame's requests beyond this wait for a later frame) */
+const MAX_INFLIGHT = 32;
 
 // ───────────────────────────── patches ─────────────────────────────
 
@@ -131,6 +172,8 @@ export class Patch {
   tSlot = -1;
   wSlot = -1;
   lastUsed = 0;
+  /** the worker build in flight for it (−1: none) */
+  pendingSeq = -1;
   readonly sphere = new Sphere();
 
   constructor(face: number, level: number, a: [number, number], b: [number, number], c: [number, number]) {
@@ -348,11 +391,37 @@ export class ChunkLOD {
   /** this frame's silhouette split boost (see SILHOUETTE_SPLIT), set by select() */
   silK = SILHOUETTE_SPLIT;
 
-  constructor(grid: IcoGrid, noise: Noise3, radius: number, group: Group, mats: ChunkMaterials, fields: ChunkFieldSource) {
+  private builder: PatchBuilder;
+  /**
+   * PERF (session 5): patches beyond the first two levels are built by a helper worker (patchbuild.ts) when there is
+   * one: select() asks for a patch the view needs and draws its parent until it arrives (as when the per-frame build
+   * budget ran out before), so a camera move or cut never stalls the main thread on terrain. Same bytes either way.
+   */
+  private port: PatchPort | null = null;
+  private readonly lodId = nextLodId++;
+  private seq = 0;
+  private pending = new Map<number, Patch>();
+  private ready: PatchReply[] = [];
+  /** the worker's output buffers, handed back with the next request once their contents are in a batch */
+  private recycle: ArrayBuffer[][] = [];
+  /** patches landed from the worker (stats / tests) */
+  landedTotal = 0;
+
+  /** `opts.seed`: the planet's noise seed (lets a worker rebuild the same Noise3); `opts.port`: a worker port (null =
+   * always this thread; default: the browser's shared one when a seed is given) */
+  constructor(grid: IcoGrid, noise: Noise3, radius: number, group: Group, mats: ChunkMaterials, fields: ChunkFieldSource,
+    opts?: { seed?: number | string; port?: PatchPort | null }) {
     this.grid = grid; this.noise = noise; this.radius = radius; this.group = group; this.mats = mats; this.fields = fields;
     const n = grid.n;
     for (let f = 0; f < 20; f++) this.roots.push(new Patch(f, 0, [0, 0], [n, 0], [0, n]));
     this.spacing0 = (ICO_EDGE * radius) / R;
+    this.builder = new PatchBuilder(grid, noise, radius);
+    const port = opts?.port !== undefined ? opts.port : (opts?.seed !== undefined ? browserPatchPort() : null);
+    if (port && opts?.seed !== undefined) {
+      this.port = port;
+      port.send({ k: 'init', id: this.lodId, gridN: grid.n, seed: opts.seed, radius });
+      port.listen(this.lodId, (r) => this.ready.push(r), () => this.portFailed());
+    }
     // deepest level: lattice spacing ≈ 0.8 m (the 3.2 m detail octave is then fully resolved)
     this.maxLevel = Math.max(0, Math.ceil(Math.log2(this.spacing0 / 0.8)));
   }
@@ -488,161 +557,11 @@ export class ChunkLOD {
 
   // ── geometry ──
 
+  /** build a patch's geometry on this thread (its attributes view the builder's reused arrays: copy before the next) */
   private buildGeometry(p: Patch): BufferGeometry {
-    const g = this.grid;
-    const noise = this.noise;
-    const radius = this.radius;
-    const sp = this.spacing(p.level);
-    const [w1, w2] = detailWeights(sp);
-    const [pw1, pw2] = p.level > 0 ? detailWeights(sp * 2) : [w1, w2];
-    // extended lattice (2 rings beyond the patch) for central-difference gradients at both resolutions
-    const E = 2;
-    const W = R + 1 + 2 * E;
-    const ext = (i: number, j: number) => (j + E) * W + (i + E);
-    const dirs = this.scratch('dirs', Float64Array, W * W * 3);
-    const dOwn = this.scratch('dOwn', Float64Array, W * W);
-    const dPar = this.scratch('dPar', Float64Array, W * W);
-    // dunes (surface.ts: × the cells' dune amplitude), band-limited per level like the detail
-    const uOwn = this.scratch('uOwn', Float64Array, W * W);
-    const uPar = this.scratch('uPar', Float64Array, W * W);
-    const wd = duneWeight(sp), pwd = p.level > 0 ? duneWeight(sp * 2) : wd;
-    const has = this.scratch('has', Uint8Array, W * W);
-    const fiOf = (i: number, j: number) => p.a[0] + ((p.b[0] - p.a[0]) * i) / R + ((p.c[0] - p.a[0]) * j) / R;
-    const fjOf = (i: number, j: number) => p.a[1] + ((p.b[1] - p.a[1]) * i) / R + ((p.c[1] - p.a[1]) * j) / R;
-    for (let j = -E; j <= R + E; j++) {
-      for (let i = -E; i <= R + E; i++) {
-        if (i + j > R + E || i + j < -E) continue;
-        const k = ext(i, j);
-        this.flatDir(p.face, fiOf(i, j), fjOf(i, j), _v);
-        dirs[k * 3] = _v.x; dirs[k * 3 + 1] = _v.y; dirs[k * 3 + 2] = _v.z;
-        dOwn[k] = filteredDetail(noise, _v.x, _v.y, _v.z, radius, w1, w2);
-        dPar[k] = (pw1 === w1 && pw2 === w2) ? dOwn[k] : filteredDetail(noise, _v.x, _v.y, _v.z, radius, pw1, pw2);
-        const du = wd > 0 || pwd > 0 ? duneNoise(noise, _v.x, _v.y, _v.z, radius) : 0;
-        uOwn[k] = du * wd;
-        uPar[k] = du * pwd;
-        has[k] = 1;
-      }
-    }
-    // tangent gradient of the detail from lattice differences: solve g·u = Du, g·v = Dv with g in span(u, v)
-    const grad = (i: number, j: number, step: number, d: Float64Array, out: number[]): void => {
-      const kp = ext(i + step, j), km = ext(i - step, j), lp = ext(i, j + step), lm = ext(i, j - step);
-      if (!has[kp] || !has[km] || !has[lp] || !has[lm]) { out[0] = out[1] = out[2] = 0; return; }
-      const ux = (dirs[kp * 3] - dirs[km * 3]) * radius, uy = (dirs[kp * 3 + 1] - dirs[km * 3 + 1]) * radius, uz = (dirs[kp * 3 + 2] - dirs[km * 3 + 2]) * radius;
-      const vx = (dirs[lp * 3] - dirs[lm * 3]) * radius, vy = (dirs[lp * 3 + 1] - dirs[lm * 3 + 1]) * radius, vz = (dirs[lp * 3 + 2] - dirs[lm * 3 + 2]) * radius;
-      const Du = d[kp] - d[km], Dv = d[lp] - d[lm];
-      const uu = ux * ux + uy * uy + uz * uz, uv = ux * vx + uy * vy + uz * vz, vv = vx * vx + vy * vy + vz * vz;
-      const det = uu * vv - uv * uv || 1e-12;
-      const a = (Du * vv - Dv * uv) / det;
-      const b = (Dv * uu - Du * uv) / det;
-      out[0] = a * ux + b * vx; out[1] = a * uy + b * vy; out[2] = a * uz + b * vz;
-    };
-
-    const pos = this.scratch('pos', Float32Array, NVERT * 3);
-    const aCells = this.scratch('aCells', Float32Array, NVERT * 4);
-    const aMisc = this.scratch('aMisc', Float32Array, NVERT * 4);
-    const aGrad = this.scratch('aGrad', Float32Array, NVERT * 3);
-    const aN1 = this.scratch('aN1', Float32Array, NVERT * 4);
-    const aN1m = this.scratch('aN1m', Float32Array, NVERT * 4);
-    const aN1d = this.scratch('aN1d', Float32Array, NVERT * 3);
-    const aN2 = this.scratch('aN2', Float32Array, NVERT * 4);
-    const aN2m = this.scratch('aN2m', Float32Array, NVERT * 4);
-    const aN2d = this.scratch('aN2d', Float32Array, NVERT * 3);
-    const aGradM = this.scratch('aGradM', Float32Array, NVERT * 3);
-    const aGradD = this.scratch('aGradD', Float32Array, NVERT * 3);
-    const aGradDM = this.scratch('aGradDM', Float32Array, NVERT * 3);
-
-    // per lattice point: cells / weights (own) — computed once, referenced by neighbours' morph targets
-    const cellA = this.scratch('cellA', Float32Array, NPTS), cellB = this.scratch('cellB', Float32Array, NPTS), cellC = this.scratch('cellC', Float32Array, NPTS);
-    const wB = this.scratch('wB', Float32Array, NPTS), wC = this.scratch('wC', Float32Array, NPTS);
-    const gPar = this.scratch('gPar', Float32Array, NPTS * 3);
-    const gParD = this.scratch('gParD', Float32Array, NPTS * 3);
-    const tmp = [0, 0, 0];
-    for (let j = 0; j <= R; j++) {
-      for (let i = 0; i + j <= R; i++) {
-        const v = ptIndex(i, j);
-        g.locateFaceCoords(p.face, fiOf(i, j), fjOf(i, j), _hit);
-        cellA[v] = _hit.a; cellB[v] = _hit.b; cellC[v] = _hit.c;
-        // locateFaceCoords returns (a, b, c, wa, wb, wc); shaders use wA = 1 − wB − wC
-        wB[v] = _hit.wb; wC[v] = _hit.wc;
-        if (((i | j) & 1) === 0) {
-          grad(i, j, 2, dPar, tmp);
-          gPar[v * 3] = tmp[0]; gPar[v * 3 + 1] = tmp[1]; gPar[v * 3 + 2] = tmp[2];
-          grad(i, j, 2, uPar, tmp);
-          gParD[v * 3] = tmp[0]; gParD[v * 3 + 1] = tmp[1]; gParD[v * 3 + 2] = tmp[2];
-        }
-      }
-    }
-    const writeVertex = (dst: number, i: number, j: number, skirt: number): void => {
-      const v = ptIndex(i, j);
-      const k = ext(i, j);
-      pos[dst * 3] = dirs[k * 3]; pos[dst * 3 + 1] = dirs[k * 3 + 1]; pos[dst * 3 + 2] = dirs[k * 3 + 2];
-      aCells[dst * 4] = cellA[v]; aCells[dst * 4 + 1] = cellB[v]; aCells[dst * 4 + 2] = cellC[v]; aCells[dst * 4 + 3] = wB[v];
-      aMisc[dst * 4] = wC[v]; aMisc[dst * 4 + 1] = dOwn[k]; aMisc[dst * 4 + 2] = skirt; aMisc[dst * 4 + 3] = uOwn[k];
-      grad(i, j, 1, dOwn, tmp);
-      aGrad[dst * 3] = tmp[0]; aGrad[dst * 3 + 1] = tmp[1]; aGrad[dst * 3 + 2] = tmp[2];
-      grad(i, j, 1, uOwn, tmp);
-      aGradD[dst * 3] = tmp[0]; aGradD[dst * 3 + 1] = tmp[1]; aGradD[dst * 3 + 2] = tmp[2];
-      const [i1, j1, i2, j2] = morphNeighbours(i, j);
-      const v1 = ptIndex(i1, j1), v2 = ptIndex(i2, j2);
-      const k1 = ext(i1, j1), k2 = ext(i2, j2);
-      aN1[dst * 4] = cellA[v1]; aN1[dst * 4 + 1] = cellB[v1]; aN1[dst * 4 + 2] = cellC[v1]; aN1[dst * 4 + 3] = wB[v1];
-      aN1m[dst * 4] = wC[v1]; aN1m[dst * 4 + 1] = dPar[k1]; aN1m[dst * 4 + 2] = uPar[k1];
-      aN1d[dst * 3] = dirs[k1 * 3]; aN1d[dst * 3 + 1] = dirs[k1 * 3 + 1]; aN1d[dst * 3 + 2] = dirs[k1 * 3 + 2];
-      aN2[dst * 4] = cellA[v2]; aN2[dst * 4 + 1] = cellB[v2]; aN2[dst * 4 + 2] = cellC[v2]; aN2[dst * 4 + 3] = wB[v2];
-      aN2m[dst * 4] = wC[v2]; aN2m[dst * 4 + 1] = dPar[k2]; aN2m[dst * 4 + 2] = uPar[k2];
-      aN2d[dst * 3] = dirs[k2 * 3]; aN2d[dst * 3 + 1] = dirs[k2 * 3 + 1]; aN2d[dst * 3 + 2] = dirs[k2 * 3 + 2];
-      aGradM[dst * 3] = 0.5 * (gPar[v1 * 3] + gPar[v2 * 3]);
-      aGradM[dst * 3 + 1] = 0.5 * (gPar[v1 * 3 + 1] + gPar[v2 * 3 + 1]);
-      aGradM[dst * 3 + 2] = 0.5 * (gPar[v1 * 3 + 2] + gPar[v2 * 3 + 2]);
-      aGradDM[dst * 3] = 0.5 * (gParD[v1 * 3] + gParD[v2 * 3]);
-      aGradDM[dst * 3 + 1] = 0.5 * (gParD[v1 * 3 + 1] + gParD[v2 * 3 + 1]);
-      aGradDM[dst * 3 + 2] = 0.5 * (gParD[v1 * 3 + 2] + gParD[v2 * 3 + 2]);
-    };
-    for (let j = 0; j <= R; j++) for (let i = 0; i + j <= R; i++) writeVertex(ptIndex(i, j), i, j, 0);
-    for (let k = 0; k < NSKIRT; k++) writeVertex(NPTS + k, BOUNDARY[k][0], BOUNDARY[k][1], 1);
-    // the distinct cells the vertices interpolate (morph targets are lattice points of this patch too)
-    {
-      const seen = new Set<number>();
-      for (let v = 0; v < NPTS; v++) { seen.add(cellA[v]); seen.add(cellB[v]); seen.add(cellC[v]); }
-      p.vcells = Int32Array.from(seen);
-    }
-
-    const geo = new BufferGeometry();
-    const posAttr = new BufferAttribute(pos, 3);
-    geo.setAttribute('position', posAttr);
-    // three r186 compiles a MeshStandardMaterial as FLAT_SHADED when the geometry has no `normal` attribute (one
-    // face normal per render triangle from screen derivatives): the per-cell normals, the detail gradient and the
-    // curved ground then never reach the lighting and the terrain shades as a triangle mosaic. The vertex shader
-    // overrides objectNormal anyway (VERT_MAIN), so the unit `position` directions serve as the attribute — the
-    // same buffer, no extra memory.
-    geo.setAttribute('normal', posAttr);
-    geo.setAttribute('aCells', new BufferAttribute(aCells, 4));
-    geo.setAttribute('aMisc', new BufferAttribute(aMisc, 4));
-    geo.setAttribute('aGrad', new BufferAttribute(aGrad, 3));
-    geo.setAttribute('aN1', new BufferAttribute(aN1, 4));
-    geo.setAttribute('aN1m', new BufferAttribute(aN1m, 4));
-    geo.setAttribute('aN1d', new BufferAttribute(aN1d, 3));
-    geo.setAttribute('aN2', new BufferAttribute(aN2, 4));
-    geo.setAttribute('aN2m', new BufferAttribute(aN2m, 4));
-    geo.setAttribute('aN2d', new BufferAttribute(aN2d, 3));
-    geo.setAttribute('aGradM', new BufferAttribute(aGradM, 3));
-    geo.setAttribute('aGradD', new BufferAttribute(aGradD, 3));
-    geo.setAttribute('aGradDM', new BufferAttribute(aGradDM, 3));
-    geo.setIndex(indexBuffer());
-    geo.boundingSphere = p.sphere.clone();
-    return geo;
-  }
-
-  /**
-   * PERF (task 3/5): the build's working arrays live as long as the ChunkLOD, zeroed per build (a patch's arrays were
-   * ~0.4 MB of garbage per build: a quarter of the build time was the collector). The geometry's attributes view them
-   * without a copy; PatchBatch.alloc copies them into the batch, and nothing keeps the geometry after that.
-   */
-  private scr = new Map<string, Float64Array | Float32Array | Uint8Array>();
-  private scratch<T extends Float64Array | Float32Array | Uint8Array>(name: string, Ctor: { new (n: number): T }, n: number): T {
-    let a = this.scr.get(name) as T | undefined;
-    if (!a || a.length !== n) { a = new Ctor(n); this.scr.set(name, a); } else a.fill(0);
-    return a;
+    const r = this.builder.build(p.face, p.level, p.a, p.b, p.c);
+    p.vcells = r.vcells;
+    return geometryOf(r, p.sphere);
   }
 
   /** the level's terrain (water = false) or water batch, made on first use */
@@ -719,13 +638,29 @@ export class ChunkLOD {
 
   private ensureGeometry(p: Patch, budget: boolean): boolean {
     if (p.built) return true;
+    if (budget && this.port) {
+      // (asked already: its parent draws until it lands)
+      if (p.pendingSeq >= 0 || this.pending.size >= MAX_INFLIGHT) return false;
+      const seq = ++this.seq;
+      p.pendingSeq = seq;
+      this.pending.set(seq, p);
+      const recycle = this.recycle.pop() ?? [];
+      this.port.send({ k: 'build', id: this.lodId, seq, face: p.face, level: p.level, a: p.a, b: p.b, c: p.c, recycle }, recycle);
+      return false;
+    }
     if (budget && this.builtThisFrame >= this.buildBudgetNow) return false;
     if (budget && this.buildMsNow > 0 && this.builtThisFrame >= BUILD_MIN && performance.now() - this.buildT0 > this.buildMsNow) return false;
     this.updateBounds(p);
     const geo = this.buildGeometry(p);
+    this.builtThisFrame++;
+    this.store(p, geo);
+    return true;
+  }
+
+  /** put a built patch into its level's batches */
+  private store(p: Patch, geo: BufferGeometry): void {
     // now that the vertex cells are known, the exact water test (bounds were derived before the build)
     if (p.hasWater && p.vcells) p.hasWater = this.vertexWater(p.vcells, this.fields.surface, this.fields.waterLevel, this.fields.waterDepth);
-    this.builtThisFrame++;
     p.lastUsed = this.curFrame;
     this.built++;
     this.stats.builtTotal++;
@@ -735,8 +670,41 @@ export class ChunkLOD {
     // the water sheet is drawn from a copy of the same vertices in the level's water batch (water pass, layer 2)
     if (p.hasWater) p.wSlot = this.batch(p.level, true).alloc(geo);
     p.built = true;
+    p.pendingSeq = -1;
     this.live.add(p);
-    return true;
+  }
+
+  /**
+   * Put the patches the worker finished into their batches (a copy each; under the frame's time cap, BUILD_MIN at
+   * least — what is left lands next frame). A patch built here meanwhile drops its reply.
+   */
+  private landReady(): void {
+    let n = 0;
+    while (this.ready.length > 0) {
+      if (this.buildMsNow > 0 && n >= BUILD_MIN * 2 && performance.now() - this.buildT0 > this.buildMsNow) break;
+      const r = this.ready.shift()!;
+      const p = this.pending.get(r.seq);
+      this.pending.delete(r.seq);
+      if (p && !p.built && p.pendingSeq === r.seq) {
+        p.pendingSeq = -1;
+        this.updateBounds(p);
+        p.vcells = r.vcells;
+        const geo = geometryOf(r, p.sphere);
+        this.store(p, geo);
+        this.landedTotal++;
+        n++;
+      } else if (p) p.pendingSeq = -1;
+      if (this.recycle.length < MAX_INFLIGHT) this.recycle.push(r.attrs.map((x) => x.buffer as ArrayBuffer));
+    }
+  }
+
+  /** the worker died: forget what was asked (those patches build here from now on) */
+  private portFailed(): void {
+    this.port = null;
+    for (const p of this.pending.values()) p.pendingSeq = -1;
+    this.pending.clear();
+    this.ready = [];
+    this.recycle = [];
   }
 
   private buildBudgetNow = 16;
@@ -807,6 +775,7 @@ export class ChunkLOD {
     this.buildMsNow = ctx.buildMs ?? 0;
     this.buildT0 = performance.now();
     this.stats.horizonCulled = 0;
+    if (this.port || this.ready.length > 0) this.landReady();
     const out: Patch[] = [];
     const cam = ctx.camBody;
     const rc = cam.length();
@@ -853,7 +822,8 @@ export class ChunkLOD {
       if (split) {
         const kids = p.makeChildren();
         // split only when every child can be drawn this frame (never mix a parent with partial children)
-        for (const k of kids) if (!this.ensureGeometry(k, true)) { split = false; break; }
+        // (with a worker all four are asked for at once, so they land together)
+        for (const k of kids) if (!this.ensureGeometry(k, true)) { split = false; if (!this.port) break; }
       }
       if (split) {
         p.split = true;
@@ -954,6 +924,10 @@ export class ChunkLOD {
   }
 
   dispose(): void {
+    if (this.port) { this.port.unlisten(this.lodId); this.port.send({ k: 'drop', id: this.lodId }); this.port = null; }
+    for (const p of this.pending.values()) p.pendingSeq = -1;
+    this.pending.clear();
+    this.ready = [];
     for (const p of this.live) { p.built = false; p.mesh = null; p.tSlot = -1; p.wSlot = -1; }
     for (const b of [...this.tBatch, ...this.wBatch]) {
       if (!b) continue;
