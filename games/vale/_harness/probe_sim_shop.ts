@@ -49,6 +49,21 @@ section('access rules', () => {
   e4.x = 25; e4.y = 31; s4.world.hashDirty = true;
   s4.step();
   check("'shops': inside a MapDef.shops circle", p4.canShop && buy(s4, 'fx_sword') && p4.items[0] === 'fx_sword');
+  killEntity(s4.world, e4, null);
+  s4.step();
+  check("'shops': yes when dead (shop while you wait)", p4.canShop);
+  // the whole home platform counts as base, not just the shop counter circle
+  const s5 = mk();
+  const w5 = s5.world, p5 = w5.players[0], e5 = p5.ent!, b5 = w5.mapDef.bases.find((b) => b.team === 0)!;
+  const f5 = b5.fountain.at, sh5 = b5.shop;
+  let spot: [number, number] | null = null;
+  for (let a = 0; a < 64 && !spot; a++) {
+    const x = f5[0] + Math.cos(a / 64 * Math.PI * 2) * 15, y = f5[1] + Math.sin(a / 64 * Math.PI * 2) * 15;
+    if (Math.hypot(x - sh5.at[0], y - sh5.at[1]) > sh5.radius + 0.5 && x > 0 && y > 0 && x < w5.mapDef.size[0] && y < w5.mapDef.size[1]) spot = [x, y];
+  }
+  if (spot) { e5.x = spot[0]; e5.y = spot[1]; w5.hashDirty = true; }
+  s5.step();
+  check("'base': anywhere on the home platform (15 m from the fountain, outside the counter circle)", !!spot && p5.canShop, spot);
 });
 
 section('pool, basic buy, stats, buy event', () => {

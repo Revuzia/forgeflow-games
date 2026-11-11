@@ -1,10 +1,11 @@
 // VALE sim — in-match item shop (CONTRACT §5.6).
 //
 // Access (rules.shopAccess):
-//   base          alive and inside the team's base shop circle (MapDef.bases[].shop)
-//   base_or_dead  inside the base shop circle, or dead
+//   base          alive and in the team's base: its shop circle (MapDef.bases[].shop) or within BASE_ZONE_R of
+//                 its fountain (the whole home platform, so a player plans without walking to the counter)
+//   base_or_dead  in the base, or dead
 //   anywhere      always (alive or dead)
-//   shops         alive and inside any MapDef.shops circle (or the team's base shop, if it has one)
+//   shops         inside any MapDef.shops circle (or the team's base, if it has one), or dead
 //   needles       inside the base shop circle, or dead, or alive within rules.shopAt.radius of one of the team's own
 //                 standing structures whose unit is in rules.shopAt.units (W4 re-key: BRIDGE shops at its Needles)
 // Pool: an item is sold when ItemDef.pools is empty or contains rules.itemPool.
@@ -63,17 +64,20 @@ function inCircle(x: number, y: number, c: { at: readonly [number, number] | num
   return dx * dx + dy * dy <= c.radius * c.radius;
 }
 
+/** the home platform: a seat this close to its own fountain counts as in base for shopping (m) */
+const BASE_ZONE_R = 18;
+
 /** may this seat use the shop right now (rules.shopAccess) */
 export function canShopNow(w: World, p: Player): boolean {
   const e = p.ent;
   if (!e || w.phase === 'ended') return false;
   const base = w.mapDef.bases.find((b) => b.team === p.team);
-  const inBase = !!base && inCircle(e.x, e.y, base.shop);
+  const inBase = !!base && (inCircle(e.x, e.y, base.shop) || inCircle(e.x, e.y, { at: base.fountain.at, radius: BASE_ZONE_R }));
   switch (w.rules.shopAccess) {
     case 'anywhere': return true;
     case 'base': return e.alive && inBase;
     case 'base_or_dead': return !e.alive || inBase;
-    case 'shops': return e.alive && (inBase || w.mapDef.shops.some((s) => inCircle(e.x, e.y, s)));
+    case 'shops': return !e.alive || inBase || w.mapDef.shops.some((s) => inCircle(e.x, e.y, s));
     case 'needles': return !e.alive || inBase || nearOwnShopStructure(w, e);
   }
 }
