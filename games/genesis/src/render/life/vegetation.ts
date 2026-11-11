@@ -573,6 +573,15 @@ ${LEAF_ALPHA}
 }
 `;
 
+/**
+ * PERF F22: can a caster whose base is within `d` of the camera, `e` tall / wide about its base, shade any pixel at
+ * view depth >= nearSplit? Its shadow lies within e (1 + cot) + 4 of its base (F6's reach, cot of the lowest sun over
+ * the range), a pixel's distance from the camera is at least its view depth. true = it cannot (leave it out).
+ */
+export function nearSplitCut(d: number, e: number, cot: number, margin: number, nearSplit: number): boolean {
+  return d + e * (1 + cot) + 4 + margin < nearSplit;
+}
+
 interface Bucket {
   mesh: InstancedMesh; depth: ShaderMaterial; count: number; kind: number; variant: number; lod: number; extra: InstancedBufferAttribute;
   /** PERF F6: each instance's distance from the rebuild camera; after a fill the instances are ordered by distance
@@ -580,6 +589,8 @@ interface Bucket {
   dist: Float32Array; binEnd: Uint32Array;
   /** extent of the unit geometry about its base (bounding sphere |centre| + radius) and the largest instance's (m) */
   geoR: number; eMax: number;
+  /** PERF F22: the farthest instance's distance from the rebuild camera (m) */
+  dMax: number;
 }
 /** the fields a cell's plants read besides the ground and the stamped tree / shrub / burnt / treeSpecies (PERF F9) */
 const VEG_INPUTS = ['water', 'temperature', 'moisture', 'snow', 'crop', 'road', 'sand', 'soil', 'shrubSpecies'] as const;
@@ -692,6 +703,8 @@ function plantInstance(pv: PlanetView, rec: Float32Array, i: number, env: PlantE
 // ── PERF P2 far layer: settings and types ──
 /** the far layer on by default; `?fartrees=0` = the old hand-over (whole trees shrink into the canopy shading) */
 const FAR_DEFAULT = perfSwitch('fartrees');
+/** PERF F22: trees left out of the cascades their shadows cannot reach by view depth (`?shnear=0` = off) */
+const SH_NEAR = perfSwitch('shnear');
 /** main-thread ms a frame for making far blocks (scatter + instance data of a cell, ~0.1 ms each) */
 const FAR_BUDGET_MS = (() => { try { return Number(new URLSearchParams(globalThis.location?.search ?? '').get('farbudget')) || 3; } catch { return 3; } })();
 /** main-thread ms a frame for re-listing the far cells as the camera moves */
@@ -785,7 +798,7 @@ export class Vegetation {
           const depth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide });
           geo.computeBoundingSphere();
           const bs = geo.boundingSphere!;
-          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0 });
+          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra, dist: new Float32Array(cap), binEnd: new Uint32Array(NB), geoR: bs.center.length() + bs.radius, eMax: 0, dMax: 0 });
           this.nearGroup.add(mesh);
         }
       }
@@ -1044,7 +1057,7 @@ export class Vegetation {
     // gather from the cells around the point under the camera
     const dx = camBody.x / rc, dy = camBody.y / rc, dz = camBody.z / rc;
     const cells = pv.grid.cellsWithin(dx, dy, dz, (range + 60) / R);
-    for (const b of this.buckets) { b.count = 0; b.eMax = 0; }
+    for (const b of this.buckets) { b.count = 0; b.eMax = 0; b.dMax = 0; }
     const lod0 = range * 0.16, lod1 = range * 0.42;
     const b0a = lod0 * 0.85, b0b = lod0 * 1.15, b1a = lod1 * 0.88, b1b = lod1 * 1.12;
     LOD_BAND.value.set(b0a, b0b, b1a, b1b);
@@ -1094,6 +1107,7 @@ export class Vegetation {
           const ea = b.extra.array as Float32Array;
           ea[n * 4] = ni.e[q * 4]; ea[n * 4 + 1] = ni.e[q * 4 + 1]; ea[n * 4 + 2] = ni.e[q * 4 + 2]; ea[n * 4 + 3] = role + ni.e[q * 4 + 3];
           b.dist[n] = d;
+          if (d > b.dMax) b.dMax = d;
           b.count++;
           const e = b.geoR * Math.max(rec[i + 5], sxMax);
           if (e > b.eMax) b.eMax = e;
@@ -1634,8 +1648,16 @@ export class Vegetation {
    * falling away from the sun); a sun that low draws everything. Instances are ordered by distance band from the
    * rebuild camera, so the cascade draws a prefix. The image is unchanged: what is left out cannot reach a pixel
    * that reads this cascade (the shader picks the cascade by view depth, inside its sphere).
+   *
+   * PERF F22 (session 9; g2u: near trees = 6.2 M of 7.1 M shadow triangles at Ultra, every LOD-0 tree in all four
+   * cascades): a pixel reads cascade k only if its view depth is past the previous split `nearSplit`, so its distance
+   * from the camera is too; a tree's shadow lies within its reach (the bound above) of the tree, and the tree within
+   * dMax (+ the camera's move since the rebuild) of the camera. A bucket whose every tree is nearer than nearSplit less
+   * its reach (less `margin`: filter taps and normal offset) cannot shade any pixel that reads cascade k and is left
+   * out of it — the LOD-0 bucket (the costly full trees, within ~0.2 x range) then draws only into the first cascade
+   * by day. Exact by the same argument as F6; a low sun (no finite reach) draws everything. `?shnear=0` = off.
    */
-  shadowCascade(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number): void {
+  shadowCascade(k: number, cx: number, cy: number, cz: number, r: number, sinEl: number, radius: number, cam?: { x: number; y: number; z: number }, nearSplit = 0, margin = 0): void {
     this.farShadow(k, cx, cy, cz, r, sinEl, radius);
     if (!this.nearGroup.visible) return;
     if (k < 0) {
@@ -1658,11 +1680,14 @@ export class Vegetation {
     if (!(f(reach) <= reach)) reach = Infinity;
     const elT = el0 - (dc + r + reach) / radius;
     const cot = Number.isFinite(reach) && elT > 0.035 ? 1 / Math.tan(elT) : Infinity;
+    const dCam = cam ? Math.hypot(cam.x - L.x, cam.y - L.y, cam.z - L.z) : Infinity;
+    const nearCut = SH_NEAR && nearSplit > 0 && Number.isFinite(cot) && Number.isFinite(dCam);
     for (const b of this.buckets) {
       if (!b.count) continue;
       const D = dc + r + b.eMax * (1 + cot) + 4;
       const j = Number.isFinite(D) ? Math.floor(D / this.binW) : NB;
-      const n = j >= NB ? b.count : b.binEnd[j];
+      let n = j >= NB ? b.count : b.binEnd[j];
+      if (nearCut && nearSplitCut(b.dMax + dCam, b.eMax, cot, margin, nearSplit)) n = 0;
       b.mesh.count = n;
       b.mesh.visible = n > 0;
     }

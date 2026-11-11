@@ -842,7 +842,8 @@ export class Renderer {
     // PERF F6: trees only where their shadow can reach this cascade (was every tree in every cascade: 1.6 M of the
     // 2.4 M shadow triangles of a town view)
     if (k >= 0) {
-      vis.vegetation.shadowCascade(k, _cc.x, _cc.y, _cc.z, sh.radii[k], this.cullSinEl, vis.pv.params.radius);
+      vis.vegetation.shadowCascade(k, _cc.x, _cc.y, _cc.z, sh.radii[k], this.cullSinEl, vis.pv.params.radius,
+        vis.camBody, k >= 1 ? sh.splits[k - 1] : 0, 2 + 3 * sh.texel[k]);
     } else vis.vegetation.shadowCascade(-1, 0, 0, 0, 0, 1, 1);
     if (k === 2 || (k < 0 && this.hiddenSmall.length)) {
       if (k === 2) {

@@ -318,7 +318,12 @@ export class BldBatch {
   /** instances written in the current rewrite (all pages) */
   get used(): number { let n = 0; for (const p of this.pages) n += p.used; return n; }
 
-  constructor(private readonly name: string, private readonly shared: Record<string, IUniform>, cut: boolean, shadow: boolean, instCap = 512, vCap = 1 << 18, shadowOnly = false) {
+  private readonly name: string;
+  private readonly shared: Record<string, IUniform>;
+
+  constructor(name: string, shared: Record<string, IUniform>, cut: boolean, shadow: boolean, instCap = 512, vCap = 1 << 18, shadowOnly = false) {
+    this.name = name;
+    this.shared = shared;
     this.cut = cut;
     this.shadow = shadow;
     this.shadowOnly = shadowOnly;

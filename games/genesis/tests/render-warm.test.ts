@@ -20,7 +20,7 @@ test('a building batch carries a never-drawn twin with geometry and per-instance
     assert.ok((w as unknown as { _colorsTexture: unknown })._colorsTexture, 'batchingColor');
     for (const a of ['position', 'normal', 'color', 'uv', 'aKit']) assert.ok(w.geometry.getAttribute(a), a);
   }
-  assert.deepEqual(b.warm.children.map((w) => (w as BatchedMesh).material), [b.material, b.depth]);
+  assert.deepEqual(b.warm.children.map((w) => (w as BatchedMesh).material), [b.pages[0].material, b.pages[0].depth]);
   b.dispose();
 });
 
