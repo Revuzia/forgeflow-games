@@ -12,6 +12,7 @@ import { siltLensClear } from './planet/silt.ts';
 import {
   Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform,
 } from 'three';
+import { depthClamp, enableConservativeDepth } from './shaders/zcons.ts';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
 import { syncPlanetVisuals } from './planet/planetsync.ts';
@@ -102,6 +103,8 @@ const DEV_Q = (() => { try { return new URLSearchParams(globalThis.location?.sea
 const BUILD_MS = DEV_Q.has('buildms') ? Number(DEV_Q.get('buildms')) || 0 : 6;
 const WARM_UP = DEV_Q.get('warm') !== '0';
 const SKIP_COPY = DEV_Q.get('skipcopy') !== '0';
+// (perf 2026-11) early depth rejection under the log depth buffer (shaders/zcons.ts); ?zcons=0 is the old path
+const Z_CONS = DEV_Q.get('zcons') !== '0';
 /** weather / shadow cube face size per preset (cloud steps → resolution) */
 const WX_RES = (steps: number): number => (steps <= 24 ? 96 : steps <= 32 ? 128 : steps <= 48 ? 192 : 256);
 /**
@@ -179,6 +182,7 @@ export class Renderer {
       canvas, antialias: false, alpha: false, depth: true, stencil: false, logarithmicDepthBuffer: true,
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
+    enableConservativeDepth(this.three, Z_CONS);
     this.three.toneMapping = NoToneMapping;
     this.three.autoClear = true;
     this.three.setClearColor(0x000000, 1);
@@ -451,7 +455,10 @@ export class Renderer {
       this.shadows.fit(cam, _sun, q.shadowCascades, near, far, Math.min(4000, pv.params.radius));
       const vis = primaryVis;
       this.shadowCull(vis, camSunEl);
+      // (the light boxes clip at their near and far planes, as they always did)
+      depthClamp(r, false);
       this.shadows.render(r, this.scene, (depth) => { vis.swapDepth(depth); this.godfx.swapDepth(depth); this.ships.swapDepth(depth); }, this.perCascade);
+      depthClamp(r, true);
     } else {
       this.shadows.uniforms.uShadowOn.value = 0;
     }

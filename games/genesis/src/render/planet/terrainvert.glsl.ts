@@ -10,6 +10,10 @@
 import { CURVE_ALPHA } from '../../sim/grid/surface.ts';
 
 export const TERRAIN_VERT_PARS = /* glsl */ `
+// early depth rejection (shaders/zcons.ts): no edge of a patch at this level is longer than this (m). The lattice
+// spacing is at most uMorph.z / 1.5 (ChunkLOD.skirtDepth), so 3 × uMorph.z covers an edge on a 70° slope plus the skirt
+// that hangs from a border vertex, and 2 m more the detail relief and lava
+#define GENESIS_ZEDGE (3.0 * uMorph.z + 2.0)
 uniform highp sampler2D uFieldA;
 uniform highp sampler2D uFieldN;
 uniform highp sampler2D uFieldG;

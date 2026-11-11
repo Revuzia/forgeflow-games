@@ -190,6 +190,10 @@ class PatchBatch {
     this.mesh.matrixAutoUpdate = false;
     this.mesh.visible = false;
     this.mesh.layers.set(layer);
+    // (perf 2026-11) the ground draws after the other opaque things — trees, houses, people — so the GPU's early depth
+    // test (shaders/zcons.ts) skips its fragment shader, the costliest in the frame, wherever something stands on it.
+    // Opaque and depth-tested: the image does not depend on the order
+    this.mesh.renderOrder = 50;
   }
 
   /** store a patch geometry, returning its slot (hidden until shown) */

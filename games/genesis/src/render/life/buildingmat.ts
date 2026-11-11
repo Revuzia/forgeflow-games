@@ -780,6 +780,8 @@ void main() {
   }
   vec4 mv = modelViewMatrix * I_MATRIX * vec4(transformed, 1.0);
   gl_Position = projectionMatrix * mv;
+// (early depth rejection, shaders/zcons.ts: the reference distance is this building's own origin)
+#define GENESIS_ZREF (-(modelViewMatrix * vec4(I_MATRIX[3].xyz, 1.0)).z)
 #include <logdepthbuf_vertex>
 }
 `;
