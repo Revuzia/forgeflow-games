@@ -31,10 +31,15 @@ class Client {
     this.send(m);
     return p;
   }
-  async snapshot(full = false): Promise<Snapshot> {
-    const p = this.next<{ type: 'snapshot'; snap: Snapshot }>((x) => x.type === 'snapshot');
+  /** (PERF s7) a request with nothing changed since the last snapshot is answered { type: 'same', tick, speed,
+   *  achievedSpeed, msPerTick }: returned here as a snapshot with no blocks and no fields, `same` set */
+  async snapshot(full = false): Promise<Snapshot & { same?: boolean }> {
+    const p = this.next<FromWorker>((x) => x.type === 'snapshot' || (x as { type: string }).type === 'same');
     this.send({ type: 'snapshot', full });
-    return (await p).snap;
+    const m = await p;
+    if (m.type === 'snapshot') return m.snap;
+    const s = m as unknown as { tick: number; speed: number; achievedSpeed: number; msPerTick: number };
+    return { tick: s.tick, speed: s.speed, achievedSpeed: s.achievedSpeed, msPerTick: s.msPerTick, planets: [{ fields: undefined }], same: true } as unknown as Snapshot & { same: boolean };
   }
 }
 
@@ -58,6 +63,7 @@ test('worker protocol round trip', async () => {
     // nothing changed since: the next snapshot ships no field arrays
     const quiet = await c.snapshot(false);
     assert.equal(quiet.planets[0].fields, undefined);
+    assert.equal(quiet.same, true, 'nothing changed: the clock only (PERF s7)');
     // step 120 ticks (paused world), then fields that changed come again — but the slow fields not within ~500 ms of the
     // last time they were sent. (LIVING integration, 2026-10-20: the check is made on a round that stays inside the
     // window — a full snapshot sends the fields, the step and the next snapshot follow at once; on a machine so loaded

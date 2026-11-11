@@ -238,6 +238,20 @@ class PatchBatch {
     // test (shaders/zcons.ts) skips its fragment shader, the costliest in the frame, wherever something stands on it.
     // Opaque and depth-tested: the image does not depend on the order
     this.mesh.renderOrder = 50;
+    // PERF s7 (the owner's M5: 206 ms of main thread in the shadow pass): three's BatchedMesh re-uploads its
+    // draw -> instance table (a DataTexture) at EVERY draw whose visibility changed — here every shadow cascade and
+    // the scene pass, for every LOD level's batch: dozens of texture uploads a frame issued in the middle of render
+    // passes, each one a render-pass break / resource copy on a tile GPU (ANGLE-Metal). A terrain patch's instance
+    // matrix is the identity for every slot and the batch has no per-instance colour, so WHICH instance a draw reads
+    // changes nothing: the table is uploaded once (and after a grow re-creates it), the multi-draw lists (CPU arrays
+    // passed with the draw call) still change per pass. Same image.
+    const m = this.mesh as BatchedMesh & { _indirectTexture: { version: number } | null };
+    m.onBeforeRender = function (this: typeof m, ...a: Parameters<BatchedMesh['onBeforeRender']>) {
+      const tex = this._indirectTexture;
+      const v = tex ? tex.version : 0;
+      BatchedMesh.prototype.onBeforeRender.apply(this, a);
+      if (tex && v > 0 && this._indirectTexture === tex) tex.version = v;
+    };
   }
 
   /** store a patch geometry, returning its slot (hidden until shown) */

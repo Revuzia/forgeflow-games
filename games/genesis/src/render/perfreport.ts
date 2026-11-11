@@ -49,7 +49,99 @@ interface TimerExt { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
 const pct = (a: number[], p: number) => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 const f1 = (x: number) => (Math.round(x * 10) / 10).toString();
 
+/**
+ * PERF s7 (the owner's M5 report: 300 ms frames with 206 ms of MAIN-thread time in the shadow pass and GPU timer sums
+ * of ~1 s a frame — more than the frame itself, so ANGLE-Metal's timers overlap and cannot itemise the GPU): while
+ * recording, every GL call that can block or move data is timed on the main thread and charged to the frame's current
+ * slot: uploads (bytes), draws, framebuffer switches, syncs, compiles. An upload issued after a draw into the same
+ * framebuffer is counted 'inside a pass': on a tile GPU (Apple) ANGLE must end the render pass there (store and reload
+ * every attachment) or copy the resource — a cost no software renderer shows. Restored when the recording stops.
+ */
+const GL_TRACED = [
+  'bufferData', 'bufferSubData', 'texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'compressedTexSubImage2D', 'copyTexSubImage2D',
+  'generateMipmap', 'blitFramebuffer', 'readPixels', 'clear', 'invalidateFramebuffer', 'bindFramebuffer', 'useProgram', 'linkProgram',
+  'compileShader', 'getProgramParameter', 'getShaderParameter', 'flush', 'finish', 'clientWaitSync', 'getError', 'getParameter',
+  'drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements', 'bindVertexArray',
+] as const;
+const GL_UPLOADS = new Set<string>(['bufferData', 'bufferSubData', 'texImage2D', 'texSubImage2D', 'texImage3D', 'texSubImage3D', 'compressedTexSubImage2D', 'generateMipmap']);
+const GL_DRAWS = new Set<string>(['drawArrays', 'drawElements', 'drawArraysInstanced', 'drawElementsInstanced', 'drawRangeElements', 'multiDrawElementsWEBGL', 'multiDrawArraysWEBGL', 'multiDrawElementsInstancedWEBGL', 'multiDrawArraysInstancedWEBGL']);
+
+/** bytes an upload call moves (approximate for images: width x height x 4 when the source is not a typed array) */
+function uploadBytes(op: string, a: unknown[]): number {
+  const view = (x: unknown) => (x && typeof x === 'object' && 'byteLength' in (x as object) ? (x as ArrayBufferView).byteLength : 0);
+  if (op === 'bufferData') return typeof a[1] === 'number' ? (a[1] as number) : view(a[1]);
+  if (op === 'bufferSubData') return typeof a[4] === 'number' && a[2] && (a[2] as { BYTES_PER_ELEMENT?: number }).BYTES_PER_ELEMENT ? (a[4] as number) * (a[2] as { BYTES_PER_ELEMENT: number }).BYTES_PER_ELEMENT : view(a[2]);
+  if (op === 'texSubImage2D') return typeof a[4] === 'number' && typeof a[5] === 'number' ? (a[4] as number) * (a[5] as number) * 4 : 0;
+  if (op === 'texImage2D') return typeof a[3] === 'number' && typeof a[4] === 'number' ? (a[3] as number) * (a[4] as number) * 4 : 0;
+  if (op === 'texSubImage3D') return typeof a[5] === 'number' ? (a[5] as number) * (a[6] as number) * (a[7] as number) * 4 : 0;
+  if (op === 'texImage3D') return typeof a[3] === 'number' ? (a[3] as number) * (a[4] as number) * (a[5] as number) * 4 : 0;
+  return 0;
+}
+
+interface GlStat { ms: number; n: number; bytes: number; inPass: number; max: number }
+
+export class GlTrace {
+  slot = 'other';
+  readonly stats = new Map<string, GlStat>();
+  passSwitches = 0;
+  inPassUploads = 0;
+  private drawn = false;
+  private restore: (() => void)[] = [];
+
+  /** wrap the context's (and WEBGL_multi_draw's) calls; idempotent */
+  install(gl: WebGL2RenderingContext): void {
+    if (this.restore.length) return;
+    const wrap = (obj: Record<string, unknown>, name: string) => {
+      const orig = obj[name];
+      if (typeof orig !== 'function') return;
+      const own = Object.prototype.hasOwnProperty.call(obj, name);
+      const self = this;
+      obj[name] = function (this: unknown, ...a: unknown[]) {
+        const t = performance.now();
+        const r = (orig as (...x: unknown[]) => unknown).apply(obj, a);
+        self.note(name, performance.now() - t, a);
+        return r;
+      };
+      this.restore.push(() => { if (own) obj[name] = orig; else delete obj[name]; });
+    };
+    for (const n of GL_TRACED) wrap(gl as unknown as Record<string, unknown>, n);
+    try {
+      const md = gl.getExtension('WEBGL_multi_draw') as Record<string, unknown> | null;
+      if (md) for (const n of ['multiDrawElementsWEBGL', 'multiDrawArraysWEBGL', 'multiDrawElementsInstancedWEBGL', 'multiDrawArraysInstancedWEBGL']) wrap(md, n);
+    } catch { /* none */ }
+  }
+
+  uninstall(): void { for (const f of this.restore.splice(0).reverse()) f(); }
+
+  reset(): void { this.stats.clear(); this.passSwitches = 0; this.inPassUploads = 0; this.drawn = false; }
+
+  private note(op: string, ms: number, a: unknown[]): void {
+    let inPass = 0, bytes = 0;
+    if (op === 'bindFramebuffer') { this.passSwitches++; this.drawn = false; }
+    else if (GL_DRAWS.has(op)) this.drawn = true;
+    else if (GL_UPLOADS.has(op)) { bytes = uploadBytes(op, a); if (this.drawn) { inPass = 1; this.inPassUploads++; } }
+    const key = `${this.slot}|${op}`;
+    let s = this.stats.get(key);
+    if (!s) { s = { ms: 0, n: 0, bytes: 0, inPass: 0, max: 0 }; this.stats.set(key, s); }
+    s.ms += ms; s.n++; s.bytes += bytes; s.inPass += inPass;
+    if (ms > s.max) s.max = ms;
+  }
+
+  /** report lines: the costliest (slot, call) pairs per frame */
+  lines(frames: number): string[] {
+    const k = 1 / Math.max(1, frames);
+    const rows = [...this.stats.entries()].sort((a, b) => b[1].ms - a[1].ms);
+    const tot = rows.reduce((x, [, s]) => x + s.ms, 0);
+    const L = [`gl calls (main ms/frame in the call): total ${f1(tot * k)} | framebuffer switches ${f1(this.passSwitches * k)}/frame | uploads inside a pass ${f1(this.inPassUploads * k)}/frame`];
+    L.push('  ' + rows.slice(0, 16).map(([key, s]) => `${key} ${f2(s.ms * k)}ms x${f1(s.n * k)}${s.bytes ? ` ${f2((s.bytes * k) / 1e6)}MB` : ''}${s.inPass ? ` inpass ${f1(s.inPass * k)}` : ''} max ${f1(s.max)}`).join(' · '));
+    return L;
+  }
+}
+const f2 = (x: number) => (Math.round(x * 100) / 100).toString();
+
 export class PerfRecorder {
+  /** GL calls timed per slot while recording (GlTrace) */
+  readonly glTrace = new GlTrace();
   recording = false;
   /** the finished report text (after stop) */
   report = '';
@@ -96,6 +188,9 @@ export class PerfRecorder {
     this.until = this.t0 + ms;
     this.recording = true;
     this.report = '';
+    this.glTrace.reset();
+    this.glTrace.slot = 'other';
+    try { if (this.gl && !/[?&]gltrace=0(&|$)/.test(globalThis.location?.search ?? '')) this.glTrace.install(this.gl); } catch { /* untraced */ }
     this.onDone = onDone ?? null;
     try {
       if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
@@ -107,6 +202,7 @@ export class PerfRecorder {
 
   /** perfmon.begin / end of a slot while recording: GPU timer queries around the pass groups */
   gpuBegin(slot: string): void {
+    this.glTrace.slot = slot;
     const gl = this.gl, ext = this.ext;
     if (!gl || !ext || this.openSlot >= 0 || !this.cur) return;
     const i = (GPU_SLOTS as readonly string[]).indexOf(slot);
@@ -121,6 +217,7 @@ export class PerfRecorder {
   }
 
   gpuEnd(slot: string): void {
+    if (this.glTrace.slot === slot) this.glTrace.slot = 'other';
     const gl = this.gl, ext = this.ext;
     if (!gl || !ext || this.openSlot < 0 || GPU_SLOTS[this.openSlot] !== slot) return;
     try { gl.endQuery(ext.TIME_ELAPSED_EXT); } catch { this.ext = null; }
@@ -178,6 +275,7 @@ export class PerfRecorder {
   stop(): void {
     if (!this.recording) return;
     this.recording = false;
+    this.glTrace.uninstall();
     if (this.openSlot >= 0) this.gpuEnd(GPU_SLOTS[this.openSlot]);
     try { this.obs?.disconnect(); } catch { /* gone */ }
     this.obs = null;
@@ -205,9 +303,10 @@ export class PerfRecorder {
     if (this.gpuOk) {
       const g = GPU_SLOTS.map((n, i) => { const v = F.map((r) => r.gpu[i]).filter((x) => x >= 0); return [n, mean(v), pct(v, 0.95), v.length] as [string, number, number, number]; });
       const tot = F.map((r) => { let s = 0, any = false; for (const x of r.gpu) if (x >= 0) { s += x; any = true; } return any ? s : -1; }).filter((x) => x >= 0);
-      L.push(`gpu ms (mean/p95): ${g.map(([n, m, p]) => `${n} ${f1(m)}/${f1(p)}`).join(' ')} | total ${f1(mean(tot))}/${f1(pct(tot, 0.95))}${this.disjoint ? ` (disjoint ${this.disjoint})` : ''}`);
+      L.push(`gpu ms (mean/p95): ${g.map(([n, m, p]) => `${n} ${f1(m)}/${f1(p)}`).join(' ')} | total ${f1(mean(tot))}/${f1(pct(tot, 0.95))}${this.disjoint ? ` (disjoint ${this.disjoint})` : ''}${mean(tot) > mean(iv) * 1.05 ? ' | NOTE: more GPU ms than frame ms: this driver\'s timer spans overlap, not additive' : ''}`);
     } else L.push(`gpu ms: ${this.ext || this.disjoint ? 'no results' : 'no timer query in this browser'}`);
     L.push(`render: draws ${Math.round(mean(F.map((r) => r.draws)))} (max ${Math.max(...F.map((r) => r.draws))}) tris ${f1(mean(F.map((r) => r.tris)) / 1e6)}M shadow ${f1(mean(F.map((r) => r.shadowTris)) / 1e6)}M | patches built ${F.reduce((a, r) => a + r.built, 0)} | new programs ${F.reduce((a, r) => a + r.programs, 0)}`);
+    if (this.glTrace.stats.size) L.push(...this.glTrace.lines(this.frames.length));
     const alts = F.map((r) => r.alt);
     L.push(`camera: alt ${Math.round(Math.min(...alts))}-${Math.round(Math.max(...alts))} m, travelled ${Math.round(F.reduce((a, r) => a + r.moved, 0))} m | sim speed ${[...new Set(F.map((r) => r.speed))].join('/')}`);
     const lt = this.longTasks;

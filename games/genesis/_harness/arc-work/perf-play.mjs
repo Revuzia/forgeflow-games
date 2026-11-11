@@ -187,6 +187,8 @@ for (const sc of scenes) {
     if (opts.heap === '1') { await cdp.send('HeapProfiler.enable'); await cdp.send('HeapProfiler.startSampling', { samplingInterval: 8192, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }
     if (profile) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
     const t0 = Date.now();
+    // --panreport=MS: the in-game report (with the GL call trace) recorded DURING the measured, panned frames
+    if (opts.panreport) await page.evaluate((ms) => { window.__PANREP__ = window.__GENESIS__.perfReport(ms); }, Number(opts.panreport));
     // pan / zoom while measuring: drags across the canvas and wheel steps, between frames
     let k = 0;
     while (true) {
@@ -201,6 +203,7 @@ for (const sc of scenes) {
       await page.evaluate(() => window.__GENESIS__.frames(1));
       k++;
     }
+    if (opts.panreport) { const txt = await page.evaluate(() => window.__PANREP__); console.log('PANREPORT ' + sc + ' ' + sp + '\n' + txt + '\nEND REPORT'); }
     if (opts.attrs === '1') { const rows = await page.evaluate(() => {
       const R = globalThis.__GENESIS_R__; const { seen, path } = window.__PERFPLAY__.attrs0; const agg = {};
       const add = (o, what, b) => { const k = path(o) + ' ' + what; const e = agg[k] || (agg[k] = { n: 0, b: 0 }); e.n++; e.b += b; };

@@ -502,3 +502,21 @@ From orbit it was fine. Vale in the same Chrome tab on the same M5 holds 75 fps 
 ```
 Coordinator's reading: (1) post 490 ms GPU = a pathological pass on ULTRA; (2) shadows 206 ms main = CPU (culling?) or
 a stall; (3) scene 448 ms GPU, 13.4 M tris / 8.9 M shadow tris: does zcons help or hurt on Metal; (4) 7462 patches.
+- GATE check7 (tree = session 6 + B1 mid-run): 900/901; the one failure was B1's protocol change (tests/worker.test.ts
+  'worker protocol round trip' waited for a 'snapshot' where the worker now answers 'same'): the test's client maps
+  'same' to an empty snapshot and asserts it (worker.test green). Full gate to re-run at the end of the session.
+- READING OF THE M5 REPORT (analysis; not yet verifiable here):
+  * The GPU timers cannot be itemised further: their sum (974 ms) exceeds the frame interval (p50 320 ms), so on
+    ANGLE-Metal the TIME_ELAPSED spans overlap (command-buffer granularity). The report now says so when it happens.
+  * Main thread 302 ms of a 312 ms frame, 206 in 'shadows': the shadow pass is the FIRST pass of the frame that draws
+    the terrain batches, trees, buildings, so every lazily uploaded buffer / texture of the frame (three uploads at
+    first draw) is uploaded INSIDE it, between draws into the shadow atlas. On a tile GPU an upload into a resource
+    the current or an in-flight command buffer uses makes ANGLE either end the render pass (store + reload every
+    attachment: the 4096^2 atlas on Ultra) or copy / wait; on SwiftShader none of this costs anything. Suspects by
+    volume while panning fast (11 km in 20 s, 7 462 patches): terrain PatchBatch slots (140 kB each, sub-range
+    uploads into pools of tens of MB), BatchedMesh visibility textures re-uploaded per cascade (setVisibleAt per
+    cascade), vegetation / far-tree instance ranges, field textures.
+  * P1b (landed): the perf report TRACES GL CALLS while recording (perfreport.ts GlTrace; `?gltrace=0` = off): main-
+    thread ms inside each call, per slot, with bytes, framebuffer switches per frame and UPLOADS ISSUED INSIDE A PASS
+    (after a draw into the bound framebuffer). The owner's next report itemises where the 206 ms go. Test
+    tests/render-gltrace.test.ts. perf-play.mjs `--panreport=MS` records the report DURING the panned frames.
