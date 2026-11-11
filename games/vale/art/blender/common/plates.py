@@ -1135,6 +1135,8 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
     plate's dusk (the same exposure logic as v1), takes the plate's light, stands on a contact and cast shadow, and the
     one gentle paint-over (soft Kuwahara) and canvas tooth are laid on the finished composite, figure and plate
     together, so they share a surface; face and hands keep only a trace of it."""
+    if p.get(kind + "_over"):                      # (third pass) a card's per-kind overrides: "splash_over" / "portrait_over"
+        p = dict(p, **p[kind + "_over"])
     h, w = fg.shape[:2]
     fg = fg.astype(np.float32)
     fig, shadow = split_shadow(fg) if kind == "splash" else (fg, np.zeros((h, w), np.float32))

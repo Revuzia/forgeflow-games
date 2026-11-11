@@ -32,6 +32,8 @@ gate    Per variant, all automatic (a person still looks: `review`):
                    painting's saturation and brightness p95 (HSV, 0-255): fails when one rises > 30 and the other > 10 (ember eyes)
           streak   (third pass) thin vertical dark lines in the eye-to-nose band (a horizontal high-pass held over 9 px
                    vertically, < -5 L*): the painting's share at most 0.04 over the render's (tear streaks)
+          menu     (third pass) the loading-card (splash) / draft-cell (portrait) crop: p50 70-110, <= 5 % over luma 200,
+                   when the 3D card holds it
           store    a skin portrait: mean CIE76 dE against the shipped base portrait (256 px, the gen_store.ts measure) at its tier's
                    floor (standard 12, deluxe or legend 18); node tools/gen_store.ts --check is still run after accepting
 accept  Copies the variant (resized, then FIG_MEDIAN 3x3 median passes inside the render's figure: ruling 12's speckle bar) or
@@ -259,6 +261,14 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
         if r["face_range"] < GATE["face_range"] or r["face_corr"] < GATE["face_corr"] or \
                 (r.get("face_dark") is not None and r["face_dark"] < GATE["face_dark"]):
             fails.append("face")
+    # (third pass) the menu crops (plates.py measure): the loading card / draft cell p50 70-110 and <= 5 % over luma 200;
+    # a variant fails only when it breaks a band the 3D card holds (a 3D card already outside it is a separate miss)
+    crop = (lambda x: plates.card_crop(x)) if kind == "splash" else (lambda x: plates.cell_crop(x))
+    sp_, sf_ = plates.stats(crop(P)), plates.stats(crop(F))
+    r["menu_p50"], r["menu_over200"] = sp_["p50"], sp_["over200"]
+    ok3 = lambda st: 70 <= st["p50"] <= 110 and st["over200"] <= 5.0  # noqa: E731
+    if ok3(sf_) and not ok3(sp_):
+        fails.append("menu_luma")
     if r["new_colour"] > GATE["new_colour"]:
         fails.append("new_colour")
     eds, edv = r.get("eye_ds", 0), r.get("eye_dv", 0)       # glowing = more saturated AND brighter (both up)
