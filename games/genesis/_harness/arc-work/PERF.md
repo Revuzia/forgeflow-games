@@ -634,3 +634,26 @@ trace (P1b, main-thread ms inside each GL call per slot + uploads inside a pass)
 - Queued: run-s8a.sh g2u (dist14 = the CDN tree 7cd6ae53, ULTRA, panned, --stacks --attrs --panreport: the per-frame
   bufferData owners + draws by object), run-s8b.sh (dist15 = session-8 tree with ?span=1, v15n town shot speed 0, and
   v14o the same shot on dist14 for the A/B picture).
+- CONTAINER RESTART ~20:30Z killed check9 / v15n / v14o mid-run; scratch and src survived; all re-run.
+- g2u (dist14 = CDN tree, ULTRA, busy town, panned; SwiftShader: counts only) BEFORE session 8: scene|bufferData 6.5/frame
+  18.5 MB = buildings-far BatchedMesh grown (setGeometrySize: new 4-8 MB attributes); buildings-near 38 geometry adds in
+  4 frames (6 attributes x 2-4 MB each, ranges); terrain-L4 / water-L4 pools re-created (new attrs 0.5-0.7 MB x 15);
+  vegetation-near instanceMatrix 57 buckets re-uploaded whole per near rebuild; particles' 12 field DataTextures
+  (256x161) re-uploaded per emitter refresh (now pre-uploaded, F20). DRAWS (GPU load, track B): shadow pass 7.1 M tris =
+  vegetation-near 6.17 M in 228 draws (4.0x its 1.54 M scene tris: every near tree in all 4 cascades at full LOD),
+  terrain L1-L4 2.2 M, buildings-shadow 0.7 M, far trees 0.47 M. (perf-play --stacks crashed at its print: guarded.)
+- GATE check9 (whole tree, slot.sh): 909/909 pass. npm run build OK (build-prod8.log).
+- v15n (dist15 = session-8 tree, ?span=1, High, town, speed 0): 0 console errors; shots/v15n-town.png LOOKED vs
+  v14o-town.png (dist14, same run args): same huts, trees, tree shadows, cloud shadow, label; both runs show coarse ground
+  through the west road after 11 frames (terrain not yet converged under SwiftShader: gpuPatches 185 new / 167 old, v11
+  had 379 at settle 10) — the same in both trees, not a session-8 change.
+
+## NEXT (session 8 continued / session 9)
+1. Owner's new report on the session-8 build: look at 'metal buffer allocs (est.)' and the slot ms ('uploads' slot new).
+   If main still stalls in scene/shadows: buildings BatchedMesh (BldBatch) growth + per-frame geometry adds are the
+   largest remaining buffer churn (g2u): pre-size vCap per batch from the town size, page it like F17, or add
+   per-building geometries in a staging list landed once per frame.
+2. Track B (GPU): near trees in the shadow pass = 6.2 M of 7.1 M shadow tris. Candidates that keep the image: tighter
+   F6 reach per cascade (it draws every tree in every cascade here), shadow LOD proxy only where the cascade texel is
+   larger than the LOD error (needs a sub-texel proof), per-cascade instance prefix lists instead of 57 buckets x 4.
+3. Vegetation near rebuild uploads all 57 buckets whole each rebuild: upload only buckets whose content changed.
