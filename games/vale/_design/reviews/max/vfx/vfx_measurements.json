@@ -1,0 +1,224 @@
+{
+ "status_animated_layers_[animated,total]": {
+  "lib_status_airborne": {
+   "before": [
+    2,
+    6
+   ],
+   "after": [
+    2,
+    6
+   ]
+  },
+  "lib_status_armor_shred": {
+   "before": [
+    2,
+    2
+   ],
+   "after": [
+    2,
+    2
+   ]
+  },
+  "lib_status_disarm": {
+   "before": [
+    5,
+    5
+   ],
+   "after": [
+    6,
+    6
+   ]
+  },
+  "lib_status_fear": {
+   "before": [
+    2,
+    3
+   ],
+   "after": [
+    3,
+    4
+   ]
+  },
+  "lib_status_grievous": {
+   "before": [
+    1,
+    2
+   ],
+   "after": [
+    1,
+    2
+   ]
+  },
+  "lib_status_haste": {
+   "before": [
+    0,
+    3
+   ],
+   "after": [
+    1,
+    4
+   ]
+  },
+  "lib_status_invisible": {
+   "before": [
+    1,
+    2
+   ],
+   "after": [
+    1,
+    2
+   ]
+  },
+  "lib_status_resist_shred": {
+   "before": [
+    2,
+    3
+   ],
+   "after": [
+    3,
+    4
+   ]
+  },
+  "lib_status_reveal": {
+   "before": [
+    2,
+    2
+   ],
+   "after": [
+    2,
+    2
+   ]
+  },
+  "lib_status_root": {
+   "before": [
+    3,
+    7
+   ],
+   "after": [
+    5,
+    10
+   ]
+  },
+  "lib_status_silence": {
+   "before": [
+    1,
+    4
+   ],
+   "after": [
+    5,
+    7
+   ]
+  },
+  "lib_status_sleep": {
+   "before": [
+    1,
+    4
+   ],
+   "after": [
+    5,
+    7
+   ]
+  },
+  "lib_status_slow": {
+   "before": [
+    2,
+    5
+   ],
+   "after": [
+    3,
+    6
+   ]
+  },
+  "lib_status_stun": {
+   "before": [
+    4,
+    8
+   ],
+   "after": [
+    6,
+    10
+   ]
+  },
+  "lib_status_taunt": {
+   "before": [
+    2,
+    3
+   ],
+   "after": [
+    3,
+    4
+   ]
+  },
+  "lib_status_unstoppable": {
+   "before": [
+    1,
+    3
+   ],
+   "after": [
+    3,
+    5
+   ]
+  },
+  "lib_status_untargetable": {
+   "before": [
+    0,
+    2
+   ],
+   "after": [
+    3,
+    5
+   ]
+  }
+ },
+ "path_defs_with_ground_light": {
+  "before": "0/45",
+  "after": "48/48"
+ },
+ "defs_using_column_shape": {
+  "before": 12,
+  "after": 13
+ },
+ "defs_with_feel_squash": {
+  "before": 0,
+  "after": 19
+ },
+ "defs_total": {
+  "before": 285,
+  "after": 293
+ },
+ "stress_frame_densest_rift_fight_plus_47_forced_effects": {
+  "before": {
+   "high": {
+    "calls": 166,
+    "tris": 289372,
+    "programs": 39,
+    "particles": 806
+   },
+   "ultra": {
+    "calls": 166,
+    "tris": 289640,
+    "programs": 39,
+    "particles": 965
+   }
+  },
+  "after": {
+   "high": {
+    "calls": 168,
+    "tris": 296055,
+    "programs": 39,
+    "particles": 994
+   },
+   "ultra": {
+    "calls": 168,
+    "tris": 296329,
+    "programs": 39,
+    "particles": 1151
+   }
+  },
+  "note": "31 status/event/hit/ult defs + 16 path defs fired at once at the densest fight (t 75 s, RIFT), max over 6 frames; calls/tris/programs from renderer.info (whole frame, every pass). Budgets: <= 500k tris, <= 450 calls, <= 40 programs. Textures 195 before and after; geometries +1 (the stair/shaft shapes). Frame timing not claimed (machine load 10-25 during the run)."
+ },
+ "idle_fight_counts": {
+  "note": "4 densest-fight frames, High/Ultra, no forced effects: calls 151-156, tris 257-268k, programs 39, before and after alike"
+ }
+}

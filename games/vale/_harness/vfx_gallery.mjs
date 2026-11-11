@@ -25,7 +25,8 @@ const CW = 560, CH = 400;
 // --catalog <manifest url>: a pinned catalog (an A/B's before and after side by side, whatever dist-catalog holds now);
 // the page never hot-reloads under a run (other lanes edit the shared checkout)
 const cat = opt('catalog', null);
-const { browser, page } = await open('/_harness/web/render_bench.html?mode=rift&q=high&t=1&dev=1&hud=0&manual=1' + (cat ? `&catalog=${encodeURIComponent(cat)}` : ''), { wait: false, hmr: false });
+// --bench <page>: another copy of the bench page (vite caches _harness/web modules it does not watch)
+const { browser, page } = await open((opt('bench', null) ?? '/_harness/web/render_bench.html') + '?mode=rift&q=high&t=1&dev=1&hud=0&manual=1' + (cat ? `&catalog=${encodeURIComponent(cat)}` : ''), { wait: false, hmr: false });
 await page.waitForFunction(() => window.__VALE_BENCH__?.ready === true || window.__VALE_BENCH__?.error, null, { timeout: 120000 });
 const B = (fn, a) => page.evaluate(([src, x]) => (0, eval)(`(${src})`)(window.__VALE_BENCH__, x), [fn.toString(), a]);
 await B((b) => b.frames(30, 1 / 30));
