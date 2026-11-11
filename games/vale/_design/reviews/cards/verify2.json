@@ -1,0 +1,167 @@
+{
+  "pass": false,
+  "cardScores": {
+    "kemdo": 5.5,
+    "sukri": 5.0
+  },
+  "perCard": [
+    {
+      "card": "kemdo_splash",
+      "shipped": "painted",
+      "verdict": "fail",
+      "issues": [
+        "On-model: pose, silhouette, staff, lens and kit match the 3D render. No added props. The shoulder wrap is repainted from cream to grey (the prompt asks for a 'grey stone pauldron'; the design doc gives cloth #9A8D7C), so the change is acceptable, but it was the prompt's choice, not the render's.",
+        "Sensitivity: clean. Lidded eyes with dark pupils under the brow band, no glow, and the hood stays soft.",
+        "Grounding: the left boot sole hovers a few px above its own cast shadow with a lit gap between them, and a thin dark vertical line drops from under that boot (x ~1115-1125, y ~855-900). The same defect is in the 3D reference and the paint did not fix it.",
+        "The grip hand on the staff is still a blocky mitten with flat facets (x 1010-1060, y 330-400). This is verify1's hand problem, unchanged.",
+        "A light rim runs down the shadow-side (right) edge of the right boot and shin, though the sun is on the left. It is a faint cut-out edge."
+      ]
+    },
+    {
+      "card": "kemdo_portrait",
+      "shipped": "painted",
+      "verdict": "ok",
+      "issues": [
+        "On-model against the render, with no added parts. The eyes are lidded with pupils and the paint adds warm light from the left.",
+        "The hand at the lower left is still blocky. It sits at the frame edge, so this is minor."
+      ]
+    },
+    {
+      "card": "kemdo_highrim_splash",
+      "shipped": "painted",
+      "verdict": "fail",
+      "issues": [
+        "Cut-out halo: a continuous warm orange-cream 1-2 px outline runs around the whole silhouette: hood, both shoulders, the raised right fist, both legs and both boots, including the shadow side. paint.json calls it a sun rim, but it is on both sides at even width, so it is a matte edge. The paint made verify1's lilac outline warmer and stronger, not softer.",
+        "The legs and knees keep low-poly facets (x 1070-1290, y 640-780), so they read as a 3D render, not painted form.",
+        "Verify1's watch item stands: at card size (480 px) the eyes do not resolve under a white hood."
+      ]
+    },
+    {
+      "card": "kemdo_highrim_portrait",
+      "shipped": "painted",
+      "verdict": "fail",
+      "issues": [
+        "Invented ornament: the paint adds a saturated blue band across the top of the cream rolled clasp on the chest (about x 335-360, y 340-350). The clasp has no blue in the render or in the 3D card. It is bleed from the prompt's 'thin blue ring', and it breaks the no-added-parts rule.",
+        "Otherwise on-model, with good eyes."
+      ]
+    },
+    {
+      "card": "kemdo_long_evening_splash",
+      "shipped": "3d",
+      "verdict": "fail",
+      "issues": [
+        "Worse than verify1. The second pass's outer-alpha rim drew a pale 1-2 px outline around the legs, boots, robe and arms. Verify1's version (53d603841) has no such line: compared side by side at 2x, x 1000-1260, y 560-830. The whole figure now reads as a cut-out sticker.",
+        "Verify1's problems remain: a blob grip hand, a ghost edge at the fist and a 3D look with no painted form."
+      ]
+    },
+    {
+      "card": "kemdo_long_evening_portrait",
+      "shipped": "3d",
+      "verdict": "ok",
+      "issues": [
+        "No worse than verify1 at portrait scale: one visible eye with a lid and the slit, and the hood stays soft. It is still a 3D still with a blob hand at the lower edge. Because Kemdo's base is now painted and this skin is still 3D, the line has a style break."
+      ]
+    },
+    {
+      "card": "sukri_splash",
+      "shipped": "painted",
+      "verdict": "fail",
+      "issues": [
+        "Tear-streak risk: the paint turns the wood grain into dark vertical streaks that run down from the inner corners of both eyes beside the nose to the nostrils (face at x ~1060-1160, y ~180-300, clear at full size and 2.5x). paint.json rejected v3 for 'a thin line down from an eye corner'. v1 has the same read, with more streaks.",
+        "The fist holding the lantern is still four stacked sausage blocks (x 1150-1230, y 310-400). This is verify1's hand problem, unchanged.",
+        "On-model otherwise. Grounding is fixed: the boots have a contact shadow on walkable ground. The warm light now matches the plate."
+      ]
+    },
+    {
+      "card": "sukri_portrait",
+      "shipped": "3d",
+      "verdict": "ok",
+      "issues": [
+        "Better than verify1: the eyes now have pupils. The fallback is correct, since painted v2 added a crook and cup.",
+        "The nostril reads as a dark punched hole, and a dark vertical crease runs down the nose bridge (x 200-260, y 250-345). At full size it can read as a broken nose. Not a blocker, but verify1's nose-defect class is not fully gone."
+      ]
+    },
+    {
+      "card": "sukri_stillwater_splash",
+      "shipped": "painted",
+      "verdict": "ok",
+      "issues": [
+        "On-model, and verify1's grounding fail is fixed: both boots and the staff butt sit on the snow path with contact shadow.",
+        "Watch item: the paint gives the eyes heavy dark upper lids and saturated orange irises, so the smile now reads sly or glaring rather than gentle at card size. They do not glow (eye V p95 136 against mask 161).",
+        "A small dark notch remains at the top of the nose bridge (verify1's speck class)."
+      ]
+    },
+    {
+      "card": "sukri_stillwater_portrait",
+      "shipped": "painted",
+      "verdict": "ok",
+      "issues": [
+        "Very light paint (palette dE 1.7), so this is close to the 3D card. On-model, with eyes lidded and pupilled. It adds little painted form."
+      ]
+    },
+    {
+      "card": "sukri_shadeprint_splash",
+      "shipped": "3d",
+      "verdict": "ok",
+      "issues": [
+        "Verify1's skull-costume blocker is fixed as ruling 30 asked: a warm mask, eyes with pupils, and violet bands in place of the rib bars.",
+        "Remaining: the vertical crack ticks along the jaw and lower cheeks are still there. The mask samples pale peach (226,171,164) under the violet light, not ruling 2's amber lacquer #B39272. The pale smiling oval face stays doll-leaning, and it no longer matches the painted Shadeprint portrait's saturated orange mask."
+      ]
+    },
+    {
+      "card": "sukri_shadeprint_portrait",
+      "shipped": "painted",
+      "verdict": "fail",
+      "issues": [
+        "Sensitivity (glowing-eye class): the paint gives each eye a hot, saturated orange iris ring around the pupil (eye S p95 230 against 185 in the render, V ~239) inside dark half-closed lids. On a smiling mask on a dark violet plate, it reads as ember eyes in a jack-o'-lantern face at full size.",
+        "The whole mask is pushed warmer and brighter than the render, so it looks lit from inside against the dim hood.",
+        "Consistency: the splash for the same skin is the 3D card with a pale peach mask and calm eyes, so splash and portrait read as two different masks."
+      ]
+    }
+  ],
+  "problems": [
+    {
+      "card": "kemdo_highrim_splash",
+      "what": "A cut-out halo outlines the whole figure, both sides at even width, and the paint turned it warm orange.",
+      "evidence": "kemdo_highrim_splash.png: hood x 1150-1260 y 230-300, raised fist x 1300-1340 y 300-360, legs and boots x 1060-1290 y 640-880. Viewed at 2.2-3x next to the cached 3D ref (art/.cache/fighters/paint/kemdo_highrim_splash_3d.png), which already has a pale line there.",
+      "fix": "Defringe the matte (erode alpha 1-2 px and decontaminate the edge colour) before the paint pass, and keep the rim to the sun side only. Otherwise fall back to a 3D card without the outer-alpha rim."
+    },
+    {
+      "card": "kemdo_long_evening_splash",
+      "what": "A regression since verify1: the outer-alpha rim added in 8074fc916 drew a pale outline around the legs, boots and robe.",
+      "evidence": "Side by side with the verify1 version (git show 53d603841:games/vale/art/out/fighters/kemdo/kemdo_long_evening_splash.png) at x 1000-1260 y 560-830, 2x. The old card has no line and the current one has a continuous one.",
+      "fix": "Limit the outer-alpha rim to the sun-facing edge with a falloff, or drop it on this plate. Re-render the 3D fallback."
+    },
+    {
+      "card": "kemdo_highrim_portrait",
+      "what": "An invented blue band is painted on the chest clasp.",
+      "evidence": "kemdo_highrim_portrait.png about x 335-360 y 340-350 against kemdo_highrim_portrait_3d.png (cream clasp, no blue). 2.3x crop.",
+      "fix": "Paint the band out to the clasp's cream, or ship the 3D portrait. Add a hue check to the gate: flag new saturated colours outside the render's palette inside the figure mask."
+    },
+    {
+      "card": "sukri_shadeprint_portrait",
+      "what": "Ember or glowing-eye read: saturated hot-orange iris rings in half-closed lids on a smiling mask that is brightened against a dark plate.",
+      "evidence": "sukri_shadeprint_portrait.png face x 240-440 y 120-320 at 2.6x next to the 3D ref. Eye sample S p95 230 painted against 185 in the render.",
+      "fix": "Ship the 3D portrait (which already meets ruling 30's Shadeprint answer), or repaint the eyes as a dark amber iris with an upper-lid shadow and no bright ring, and hold the mask at ruling 2's #B39272 lacquer value. Grade splash and portrait to the same mask colour."
+    },
+    {
+      "card": "sukri_splash",
+      "what": "Dark vertical grain streaks run down from the inner eye corners beside the nose, the tear-streak class the engineer used to reject v3.",
+      "evidence": "splash.png face x 1000-1250 y 120-380 at 2.5x. The streaks are much stronger than in sukri_splash_3d.png.",
+      "fix": "Soften or remove the vertical grain under the eyes on the mask (keep grain horizontal or away from the eye-to-nose band), or ship the 3D splash."
+    },
+    {
+      "card": "kemdo_splash",
+      "what": "The left boot floats above its cast shadow, and a thin dark line hangs under it.",
+      "evidence": "splash.png x 1060-1300 y 760-900 at 3x, in both the 3D ref and the shipped card.",
+      "fix": "Set the foot contact so the sole meets its shadow (move the figure down 3-5 px or paint a contact occluder), and remove the stray vertical line."
+    },
+    {
+      "card": "all Kemdo and Sukri cards with visible hands",
+      "what": "Verify1's hand problem is not fixed. The paint keeps the render's mitten and stacked-block fists.",
+      "evidence": "kemdo_splash grip x 1010-1060 y 330-400; sukri_splash lantern fist x 1150-1230 y 310-400; Long Evening grip blob.",
+      "fix": "Give the card pose a hand mesh with real finger breaks, or paint over the hands only, with a hand-specific gate."
+    }
+  ],
+  "notes": "Checked 2026-11-10 at about 23:48 Central on commit 91fcf06c1. The rules file named in the brief (scratchpad/vale_rules.md) did not exist, so the rules came from MEMORY and the brief. I viewed all 12 shipped cards at full size, each against its cached 3D reference (art/.cache/fighters/paint/*_3d.png), with 2-4x crops of the face, hands and feet, at 480x270 card size and at 256, 128 and 64 chips, plus kemdo_painted_ab.png and sukri_painted_ab.png. The 3D fallbacks were also compared with the verify1 versions from 53d603841. node tools/gen_store.ts --check passes (32 offers, 8 shelves, dE gate 32/32). art/tools/card_qa.py kemdo sukri ran standalone, wrote to scratch only, and found 12 cards with 0 gate misses; figure speckle p50 is 0.60-1.84, under ruling 12's 2.5. Raw generations are gitignored (tools/imagegen/raw), as ruling 30 requires. What improved: verify1's Shadeprint skull-costume blocker is fixed, the Sukri base and Stillwater grounding fails are fixed, Sukri's eyes now have pupils, and the painted Kemdo base and Sukri base splashes carry real warm light and painted form. Those two are the best cards in the set. Fails: one sensitivity-class call (the painted Shadeprint portrait's ember-ring eyes), one tear-streak-class risk (Sukri base splash grain under the eyes), a cut-out halo made worse by the paint (Highrim splash), a regression on the 3D fallback (Long Evening splash outline from the second pass's outer-alpha rim), an invented ornament (Highrim portrait blue clasp band, a second pre-gate miss of the kind the brief warned about), and unfixed hands and floating feet. Consistency: each fighter is now a mix of painted and 3D cards (Kemdo base painted next to Long Evening 3D, and Shadeprint's 3D splash next to its painted portrait), so the base, skin and portrait of one fighter do not share a finish. Shadeprint's two cards also show two different mask colours. Kemdo's hood is still under ruling 7's crown bar until CW5; it is not peaked on any card, but this is noted. Scores are against a recent League of Legends splash as a gauge only: Kemdo 5.5 and Sukri 5.0, up from 5.0 and 4.5. That is still well under the 7.5 par bar: static centred stances on a soft plate, no action or light interaction beyond a rim, and 3D-looking hands and legs."
+}
