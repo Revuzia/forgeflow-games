@@ -130,14 +130,15 @@ DEFAULTS = {
     "match": 0.3,               # the figure's mean colour moved this far (ratio) toward the plate round it
     "sun_tint": 0.16,           # a colour gradient across the figure from the plate's sun side, in the glow colour
     "haze": 0.05,               # atmospheric depth: this much of the blurred plate over the figure (x 2 at the feet)
-    "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.25,  # light wrap of the plate over the figure's edge, full on the sun side
+    "wrap": 0.32, "wrap_px": 4.0, "wrap_off": 0.0,  # light wrap of the plate over the figure's edge, full on the sun side
     "sun_edge": 1.0,           # an extra glow-coloured edge on the sun side
     "contact": 1.0, "cast": 0.5, "shadow_real": 0.7, "shadow_len": 0.18,  # grounding: see ground_shadow()
     "shadow_tint": 0.24,        # shadow colour: the plate's own, this bright
     "ground_shade": 0.85,       # the figure darkened from the ground up by the plate's own value at its feet
     "plate_cap": 2.4,           # the figure's median at most this x the plate's median round it (linear)
     "foliage_front": 0.9,       # the plate's foreground foliage kept in front of the figure's feet (0 = off)
-    "fringe_choke": 0.08,       # the alpha choke of the matte-fringe removal
+    "fringe_choke": 0.08,
+    "fringe_erode": 1.0,        # px (at 1600) the matte is eroded before the composite       # the alpha choke of the matte-fringe removal
     "shared_light": True,       # the render's rim pair comes from the plate's sun side and colour (art_light)
     "fx": [],                   # optional soft glows at a bone: {"at": bone, "color": hex, "r": fraction of the height, "k": strength}
 }
@@ -746,7 +747,15 @@ def defringe(fg: np.ndarray, p: dict) -> np.ndarray:
     out = fg.copy()
     out[..., :3] = np.where(edge, np.clip(ext, 0.0, 1.0), fg[..., :3])
     c = float(p.get("fringe_choke", 0.08))
-    out[..., 3] = np.clip((a - c) / (1.0 - c), 0.0, 1.0)
+    a2 = np.clip((a - c) / (1.0 - c), 0.0, 1.0)
+    # (cards third pass, verify 2 halos) erode the matte by `fringe_erode` px (a min filter), re-softened by half a px, so
+    # the outermost ring of mixed film colour never reaches the composite
+    for _ in range(int(round(float(p.get("fringe_erode", 1.0)) * max(1.0, k)))):
+        pp = np.pad(a2, 1, mode="edge")
+        h_, w_ = a2.shape
+        a2 = np.min(np.stack([pp[dy:dy + h_, dx:dx + w_] for dy in range(3) for dx in range(3)]), axis=0)
+    a2 = np.minimum(a2, gaussian(a2[..., None], 0.5)[..., 0] * 1.15)
+    out[..., 3] = np.clip(a2, 0.0, 1.0)
     return out
 
 
@@ -884,6 +893,20 @@ def face_mask(af: np.ndarray, meta: dict | None, kind: str, p: dict | None = Non
     return m * np.clip(af, 0.0, 1.0)
 
 
+def _mm1(a: np.ndarray, r: int, axis: int, fn) -> np.ndarray:
+    pad = [(0, 0)] * a.ndim
+    pad[axis] = (r, r)
+    p = np.pad(a, pad, mode="edge")
+    n = a.shape[axis]
+    return fn(np.stack([np.take(p, range(i, i + n), axis=axis) for i in range(2 * r + 1)]), axis=0)
+
+
+def _open2(a: np.ndarray, r: int) -> np.ndarray:
+    """a morphological opening (separable min then max filter, radius r): strokes thinner than 2r + 1 px vanish"""
+    m = _mm1(_mm1(a, r, 0, np.min), r, 1, np.min)
+    return _mm1(_mm1(m, r, 0, np.max), r, 1, np.max)
+
+
 def _gauss1(arr: np.ndarray, sigma: float, axis: int) -> np.ndarray:
     """A 1D gaussian along `axis`."""
     r = max(1, int(sigma * 3))
@@ -938,7 +961,7 @@ def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, m
             ys = np.where(af[:, col] > 0.5)[0]
             if len(ys):
                 sole[ys[-1]:min(h, ys[-1] + band), col] = 1.0
-        c = np.roll(_gauss1(_gauss1(sole, 9.0 * k, 1), 3.0 * k, 0)[..., 0], max(1, int(round(3.0 * k))), axis=0)
+        c = _gauss1(_gauss1(sole, 9.0 * k, 1), 3.0 * k, 0)[..., 0]     # (third pass) starts at the sole: no lit gap
         c2 = _gauss1(_gauss1(sole, 42.0 * k, 1), 11.0 * k, 0)[..., 0]
         c, c2 = c / max(1e-4, float(c.max())), c2 / max(1e-4, float(c2.max()))     # each foot its own full strength
         contact = np.maximum(contact, np.clip(1.0 * c + 0.5 * c2, 0.0, 1.0))
@@ -947,7 +970,10 @@ def ground_shadow(pl: np.ndarray, af: np.ndarray, shadow: np.ndarray, p: dict, m
     dx = (xx - fx) / (0.55 * fh)
     dy = (yy - y1) / (0.20 * fh)
     fall = np.clip(1.0 - (dx * dx + dy * dy), 0.0, 1.0) ** 1.5
-    real = gaussian((shadow * fall)[..., None], 3.0 * k)[..., 0] * float(p.get("shadow_real", 0.45))
+    # (third pass) an opening removes the catcher's thin lines (a staff's long shadow read as a dark stroke under a boot)
+    ro = max(2, int(round(3.0 * k)))
+    sh_ = _open2(shadow * fall, ro)
+    real = gaussian(sh_[..., None], 3.0 * k)[..., 0] * float(p.get("shadow_real", 0.45))
     # cast: for a ground row y below the feet, the figure's row y0 + (y - y1) / squash, sheared away from the sun
     side = plate_light(p)["side"]
     gdir = 1.0 if side <= 0 else -1.0
@@ -1050,13 +1076,16 @@ def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: flo
     wpx = float(p.get("wrap_px", 4.0)) * k
     wmax = max(2, int(round(wpx * 3)))
     d = outer_distance(a[..., 0], wmax)                     # 0 at the outer outline; interior forms make no edge
-    ga = gaussian(np.minimum(d / wmax, 1.0)[..., None], 1.5 * k)[..., 0]
+    # (cards third pass) the edge normal from the alpha itself (it rises inward); the distance field was wmax + 1 outside
+    # and 0 on the outline, so its gradient flipped across the edge and every edge read as sun-facing (verify 2's outline)
+    ga = gaussian(a, max(1.0, 1.5 * k))[..., 0]
     gy, gx = np.gradient(ga)
     nl = np.sqrt(gx * gx + gy * gy) + 1e-5
     pli = plate_light(p)
     sx = float(pli["side"])
-    up = np.clip(gy / nl, 0.0, 1.0)                         # (d grows inward: +gy points down into the figure = an up-facing edge)
-    lit = np.clip(gx / nl * (-sx) * 0.75 + 0.05 + 0.2 * up, 0.0, 1.0)
+    up = np.clip(gy / nl, 0.0, 1.0)                         # (alpha rises downward into the figure = an up-facing edge)
+    facing = np.clip(gx / nl * (-sx), 0.0, 1.0)              # (cards third pass) only edges that face the sun
+    lit = np.clip(facing ** 1.5 * (0.8 + 0.4 * up), 0.0, 1.0)
     width = wpx * (0.45 + 0.85 * lit)                       # the rim is wider where the surface turns to the sun
     band = np.exp(-d / np.maximum(width, 0.5)) * (d <= wmax) * a[..., 0]
     pb = gaussian(pl, 14.0 * k)[..., :3]

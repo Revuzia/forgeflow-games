@@ -34,30 +34,30 @@
   },
   "uv_coverage": 0.608,
   "bake": {
-    "base": 4.56,
-    "rough_metal": 3.73,
-    "normal": 1.5,
-    "ao": 1.62,
+    "base": 4.35,
+    "rough_metal": 3.29,
+    "normal": 1.36,
+    "ao": 1.61,
     "normal_fixed_px": 111816,
-    "projection": 24.07,
-    "pack_save": 24.19,
-    "total": 35.89
+    "projection": 24.24,
+    "pack_save": 24.36,
+    "total": 35.27
   },
   "tris": 16958,
   "mesh_top_m": 1.648,
-  "glb_bytes_raw": 2766384,
+  "glb_bytes_raw": 2766180,
   "optimize": {
     "ok": true,
-    "before": 2766384,
-    "after": 1035836,
+    "before": 2766180,
+    "after": 1035564,
     "q_base": 68
   },
-  "glb_bytes": 1035836,
+  "glb_bytes": 1035564,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_stillwater.glb (1012 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sukri_stillwater_base 2048x2048 197K, sukri_stillwater_normal 512x512 69K, sukri_stillwater_orm 512x512 87K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_stillwater.glb (1011 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_stillwater_base 2048x2048 196K, sukri_stillwater_normal 512x512 69K, sukri_stillwater_orm 512x512 87K",
       "  skinned meshes: sukri_accent_1(144v), sukri_accent_2(82v), sukri_stillwater(19752v)",
       "  bones: 31 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_cord_swing x_fist_L x_open_L shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
       "  clips: ",
@@ -72,8 +72,8 @@
       "portrait": "art/out/fighters/sukri/sukri_stillwater_portrait.png"
     },
     "seconds": {
-      "splash": 52.62,
-      "portrait": 8.41
+      "splash": 45.48,
+      "portrait": 7.9
     }
   },
   "three_qa": {
@@ -105,24 +105,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/sukri/three_sukri_stillwater.png",
-    "seconds": 5.8,
+    "seconds": 4.8,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
-      "materials": 0.12,
-      "model": 24.18,
-      "lows_bind": 6.4,
-      "uv": 2.52,
-      "bake": 36.0,
+      "materials": 0.13,
+      "model": 21.98,
+      "lows_bind": 6.08,
+      "uv": 2.53,
+      "bake": 35.36,
       "export": 0.05,
-      "optimize": 0.47,
-      "load_test": 0.1,
-      "render": 61.17,
-      "three_qa": 5.97
+      "optimize": 0.51,
+      "load_test": 0.09,
+      "render": 53.53,
+      "three_qa": 5.04
     },
-    "total_s": 137.04
+    "total_s": 125.39
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56

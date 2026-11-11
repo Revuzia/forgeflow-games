@@ -281,14 +281,14 @@ CARDS = {
                    "rim_warm": 0.3, "bounce": 0.5, "bounce_color": "#7C6CB0", "accent": 2.4,
                    "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 12.0,
                               "size": 0.04},
-                             {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#FFD6A8",
-                              "power": 12.0, "size": 0.3}]},
+                             {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#E8C9A0",
+                              "power": 5.0, "size": 0.3}]},       # (third pass) the amber mask, not lit pale
         # (closing round 2: the frontal key made a flat white mask: a side key, the face turns and warms)
         "portrait": {"yaw": 24.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
                      "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 8.0,
                                 "size": 0.04},
                                # (the cup's warm glow on the plate, so the pale stone does not read as a white mask)
-                               {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#FFD6A8", "power": 12.0,
+                               {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#E8C9A0", "power": 5.0,
                                 "size": 0.3}]},
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "glow": [0.30, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0", "cx": 0.60,
@@ -540,7 +540,9 @@ def _eye_zone(x, z):
         above = ss(ez + 0.010, ez + 0.022, z) * (1.0 - ss(1.455, 1.470, z)) * (1.0 - ss(0.070, 0.085, np.abs(x - ex)))
         w = np.maximum(w, np.maximum(ax * below, above))
     cap = 1.0 - ss(GRAIN_CLEAN_R[0], GRAIN_CLEAN_R[1], _crack_dist(x, z, GRAIN_CLEAN))
-    return np.maximum(w, cap)
+    # cards third pass (verify 2: crack ticks along the jaw and lower cheeks): the whole lower cheek and jaw band, both sides
+    jaw = ss(0.095, 0.115, np.abs(x)) * (1.0 - ss(1.27, 1.30, z))
+    return np.maximum(np.maximum(w, cap), jaw)
 
 
 def _face_clean(p, n, lin, cell=0.0025):
@@ -2658,6 +2660,8 @@ def _recolour(img, maps, names, roles, base_pal, skin_pal, skip=None, log=print)
             sh = _shift_to(c, targets[nm], med)
             if keep is not None and keep.any():
                 sh[keep] = c[keep]
+                if sid == "sukri_shadeprint":       # (cards third pass, ruling 2) dark amber eyes under the lacquer, no bright ring
+                    sh[keep] = np.clip(c[keep] * np.array([0.72, 0.62, 0.55], np.float32), 0.0, 1.0)
             out[m] = sh
             log(f"  sukri recolour {nm} -> {targets[nm]}")
     return out.astype(np.float32)

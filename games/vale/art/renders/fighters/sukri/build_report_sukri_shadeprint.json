@@ -33,30 +33,30 @@
   },
   "uv_coverage": 0.602,
   "bake": {
-    "base": 4.57,
-    "rough_metal": 4.41,
-    "normal": 1.49,
-    "ao": 1.85,
+    "base": 3.56,
+    "rough_metal": 2.97,
+    "normal": 1.33,
+    "ao": 1.42,
     "normal_fixed_px": 111014,
-    "projection": 26.4,
-    "pack_save": 26.53,
-    "total": 39.14
+    "projection": 23.05,
+    "pack_save": 23.16,
+    "total": 32.7
   },
   "tris": 16260,
   "mesh_top_m": 1.648,
-  "glb_bytes_raw": 2727648,
+  "glb_bytes_raw": 2728596,
   "optimize": {
     "ok": true,
-    "before": 2727648,
-    "after": 1006688,
+    "before": 2728596,
+    "after": 1010208,
     "q_base": 68
   },
-  "glb_bytes": 1006688,
+  "glb_bytes": 1010208,
   "three_load_test": {
     "ok": true,
     "log": [
-      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_shadeprint.glb (983 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sukri_shadeprint_base 2048x2048 197K, sukri_shadeprint_normal 512x512 69K, sukri_shadeprint_orm 512x512 86K",
+      "[three] /Users/sitskovich/Developer/forgeflow-games/games/vale/art/out/fighters/sukri/sukri_shadeprint.glb (987 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sukri_shadeprint_base 2048x2048 200K, sukri_shadeprint_normal 512x512 69K, sukri_shadeprint_orm 512x512 86K",
       "  skinned meshes: sukri_accent_1(144v), sukri_accent_2(82v), sukri_shadeprint(18874v)",
       "  bones: 31 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL x_cord_swing x_fist_L x_open_L shoulderR upper_armR forearmR handR propR x_cup_hook x_cup x_staff_top thighL shinL footL toeL thighR shinR footR toeR x_cord)",
       "  clips: ",
@@ -71,8 +71,8 @@
       "portrait": "art/out/fighters/sukri/sukri_shadeprint_portrait.png"
     },
     "seconds": {
-      "splash": 52.29,
-      "portrait": 8.37
+      "splash": 38.87,
+      "portrait": 5.92
     }
   },
   "three_qa": {
@@ -104,24 +104,24 @@
     ],
     "clips": 0,
     "out": "art/renders/fighters/sukri/three_sukri_shadeprint.png",
-    "seconds": 5.9,
+    "seconds": 5,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
       "materials": 0.14,
-      "model": 22.73,
+      "model": 22.04,
       "lows_bind": 6.14,
-      "uv": 2.9,
-      "bake": 39.25,
+      "uv": 2.86,
+      "bake": 32.8,
       "export": 0.05,
-      "optimize": 0.48,
-      "load_test": 0.1,
-      "render": 60.81,
-      "three_qa": 6.18
+      "optimize": 0.51,
+      "load_test": 0.09,
+      "render": 44.88,
+      "three_qa": 5.19
     },
-    "total_s": 138.94
+    "total_s": 114.81
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56

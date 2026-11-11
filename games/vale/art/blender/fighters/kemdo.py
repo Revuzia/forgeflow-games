@@ -94,7 +94,7 @@ CARDS = {
                              {"at": "head", "az": 160.0, "el": 10.0, "dist": 0.8, "color": "#FFE0C0", "power": 20.0,
                               "size": 0.25}]},
         "portrait": {"clip": "idle", "t": 0.0, "yaw": 26.0, "lens": 70.0, "fill": 0.70, "x": 0.62},
-        "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890",
+        "plate": {"glow": [0.20, 0.55, 0.42, 0.12], "glow_color": "#F4C890", "cx": 0.56, "cx_j": 0.0,   # (third pass) both boots on the terrace, the painted seam off the left boot
                   "fx": [{"at": "x_lens", "color": "#FFE2B4", "r": 0.08, "k": 0.26}]},
     },
     "kemdo_highrim": {

@@ -33,14 +33,14 @@
   },
   "uv_coverage": 0.602,
   "bake": {
-    "base": 4.0,
-    "rough_metal": 3.67,
-    "normal": 1.54,
-    "ao": 1.54,
+    "base": 3.65,
+    "rough_metal": 2.71,
+    "normal": 1.27,
+    "ao": 1.41,
     "normal_fixed_px": 111019,
-    "projection": 19.95,
-    "pack_save": 20.07,
-    "total": 31.12
+    "projection": 19.55,
+    "pack_save": 19.67,
+    "total": 28.98
   },
   "tris": 16260,
   "mesh_top_m": 1.648,
@@ -145,14 +145,14 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3086824,
+  "glb_bytes_raw": 3086564,
   "optimize": {
     "ok": true,
-    "before": 3086824,
-    "after": 1174756,
+    "before": 3086564,
+    "after": 1174644,
     "q_base": 68
   },
-  "glb_bytes": 1174756,
+  "glb_bytes": 1174644,
   "three_load_test": {
     "ok": true,
     "log": [
@@ -175,10 +175,10 @@
       "turntable": "art/renders/fighters/sukri/turntable.png"
     },
     "seconds": {
-      "splash": 37.61,
-      "portrait": 6.15,
-      "icon": 2.29,
-      "turntable": 3.33
+      "splash": 36.28,
+      "portrait": 5.98,
+      "icon": 2.09,
+      "turntable": 3.62
     }
   },
   "three_qa": {
@@ -210,26 +210,26 @@
     ],
     "clips": 16,
     "out": "art/renders/fighters/sukri/three_sukri.png",
-    "seconds": 6.2,
+    "seconds": 5.2,
     "exit": 0
   },
   "timings": {
     "steps_s": {
       "rig": 0.0,
       "materials": 0.11,
-      "model": 21.3,
-      "lows_bind": 6.45,
-      "uv": 2.87,
-      "bake": 31.22,
-      "clips": 0.13,
-      "export": 1.01,
-      "optimize": 0.6,
-      "load_test": 0.1,
-      "render": 49.58,
-      "three_qa": 6.3,
-      "cache": 0.13
+      "model": 20.1,
+      "lows_bind": 5.69,
+      "uv": 2.8,
+      "bake": 29.1,
+      "clips": 0.14,
+      "export": 1.05,
+      "optimize": 0.57,
+      "load_test": 0.11,
+      "render": 48.2,
+      "three_qa": 5.44,
+      "cache": 0.14
     },
-    "total_s": 119.84
+    "total_s": 113.48
   },
   "run_ref_speed": 3.4,
   "height_m": 1.56
