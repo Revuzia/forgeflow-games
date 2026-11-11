@@ -11,7 +11,7 @@
 // Values are stored as sqrt(v / VMAX) in RGBA8 (a 100:1 range from a hamlet's hearths to a city core) with mipmaps;
 // the terrain shows s itself, compressed (terrainmat.ts FRAG_EMISSIVE), so mip filtering averages what is displayed.
 
-import { CubeTexture, DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, UnsignedByteType, ClampToEdgeWrapping } from 'three';
+import { CubeTexture, DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, UnsignedByteType, ClampToEdgeWrapping, type WebGLRenderer } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { BuildingFlag } from '../../sim/types.ts';
 import { extractRoads } from '../life/roadnet.ts';
@@ -22,6 +22,10 @@ export const CITY_VMAX = 6;
 const ROAD_MIN = 0.3;
 // (a growing town changes its lights every few seconds; from afar a few seconds' lag is invisible, a hitch is not)
 const REBUILD_MS = 6000;
+
+/** the renderer (set by Renderer): a rebuild then uploads only the texels it re-encoded (perf 2026-11) */
+let glRenderer: WebGLRenderer | null = null;
+export function setCityLightsRenderer(r: WebGLRenderer | null): void { glRenderer = r; }
 
 export class CityLights {
   readonly size: number;
@@ -159,11 +163,13 @@ export class CityLights {
       }
     }
     // ── encode ──
+    const dirty: number[] = [];
     for (let f = 0; f < 6; f++) {
       const b = this.box;
       const x0 = Math.min(b[f * 4], was[f * 4]), y0 = Math.min(b[f * 4 + 1], was[f * 4 + 1]);
       const x1 = Math.max(b[f * 4 + 2], was[f * 4 + 2]), y1 = Math.max(b[f * 4 + 3], was[f * 4 + 3]);
       if (x1 < x0) continue;
+      dirty.push(f, x0, y0, x1, y1);
       const a = this.acc[f];
       const d = this.faces[f].image.data as Uint8Array;
       for (let y = y0; y <= y1; y++) {
@@ -173,7 +179,36 @@ export class CityLights {
         }
       }
     }
-    this.texture.needsUpdate = true;
+    if (!this.uploadDirty(dirty)) this.texture.needsUpdate = true;
+  }
+
+  /**
+   * Upload only the re-encoded boxes of the cube (union of last build's lights and this one's) and rebuild its mips:
+   * a whole re-upload was 6 × size² × 4 bytes (14 MB on a 3 km world, every ≤ 6 s while the lights change) plus
+   * three's full-cube mip pass. The texels outside the boxes are what the GPU already holds, so the texture is the
+   * same. False (the caller falls back to needsUpdate) before three's first upload or without the renderer.
+   */
+  private uploadDirty(dirty: number[]): boolean {
+    const r = glRenderer;
+    if (!r) return false;
+    const props = r.properties.get(this.texture) as { __webglTexture?: WebGLTexture; __version?: number };
+    if (!props.__webglTexture || props.__version !== this.texture.version) return false;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    const s = this.size;
+    r.state.bindTexture(gl.TEXTURE_CUBE_MAP, props.__webglTexture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, s);
+    for (let i = 0; i < dirty.length; i += 5) {
+      const f = dirty[i], x0 = dirty[i + 1], y0 = dirty[i + 2], x1 = dirty[i + 3], y1 = dirty[i + 4];
+      const d = this.faces[f].image.data as Uint8Array;
+      gl.texSubImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1, gl.RGBA, gl.UNSIGNED_BYTE, d, (y0 * s + x0) * 4);
+    }
+    gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    if (dirty.length) gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+    return true;
   }
 
   /** add a Gaussian (σ in texels, amplitude so the splat's integral is `power` texel²-units / 2πσ² at its peak) */

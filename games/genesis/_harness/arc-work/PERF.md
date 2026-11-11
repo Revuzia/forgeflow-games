@@ -127,6 +127,17 @@ interpolated, so the written depth is exactly L(w) = K·log2(1+w) of the fragmen
   injected through INIT is a template literal: no backslash escapes in it (a '\n' there broke the whole init script
   and the first r3 run died after 15 min with `__PERFPLAY__` undefined).
 
+- MEASURED (r3z1, dist3, busy town, speed 1, 4 frames): uploads by call site: 14.0 MB/frame = ONE CubeTexture's 6
+  faces re-uploaded whole (city lights, 768² RGBA per face on the 3 km world; on SwiftShader every frame because a
+  frame takes 30 s > the 6 s rebuild throttle; on a Mac: a 14 MB upload + full mip rebuild + CPU rebuild every <= 6 s
+  while the lights change = a periodic hitch); 9.4 MB/frame bufferSubData of instanceMatrix (49.5 meshes/frame);
+  7.0 MB/frame NEW buffers (16.5/frame, geometry attributes replaced); 4.9 MB/frame 2D DataTextures (36/frame);
+  3.6 MB/frame geometry attribute updates (82/frame). Owners of the buffer churn: next run with `--attrs=1`
+  (per scene object: attributes re-uploaded / replaced over the measured frames).
+- F2 (landed, tsc clean): citylights.ts uploads only the re-encoded boxes (texSubImage2D per face, ROW_LENGTH = size,
+  srcOffset) + one generateMipmap, instead of needsUpdate on the whole cube; falls back to needsUpdate before three's
+  first upload. Same texels on the GPU. Renderer calls setCityLightsRenderer(three).
+
 ## SIM ASKS
 
 ## NEXT

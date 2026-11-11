@@ -8,6 +8,7 @@
 // ambient of every other material) and the exposure meters down to moonlit ground.
 // It reads the WorldView and a CameraPose; it never writes the world.
 
+import { setCityLightsRenderer } from './planet/citylights.ts';
 import { siltLensClear } from './planet/silt.ts';
 import {
   Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform,
@@ -183,6 +184,7 @@ export class Renderer {
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
     enableConservativeDepth(this.three, Z_CONS);
+    setCityLightsRenderer(this.three);
     this.three.toneMapping = NoToneMapping;
     this.three.autoClear = true;
     this.three.setClearColor(0x000000, 1);

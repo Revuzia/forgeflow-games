@@ -158,6 +158,22 @@ for (const sc of scenes) {
     await page.evaluate((s) => { window.__GENESIS__.setSpeed(s); }, sp);
     await page.evaluate(() => window.__GENESIS__.frames(3));
     await page.evaluate(() => { const P = window.__PERFPLAY__; P.frames.length = 0; P.tasks.length = 0; P.on = true; window.__GENESIS__.perf(true); });
+    if (opts.attrs === '1') await page.evaluate(() => {
+      // --attrs=1: which scene objects re-upload or replace their vertex data while we measure (by object path)
+      const R = globalThis.__GENESIS_R__; const seen = new Map();
+      const path = (o) => { const a = []; for (let x = o; x && a.length < 5; x = x.parent) a.push(x.name || x.type); return a.reverse().join('/'); };
+      R.scene.traverse((o) => { const g = o.geometry; if (!g) return; const at = { ...g.attributes }; if (g.index) at.index = g.index; if (o.instanceMatrix) at.instanceMatrix = o.instanceMatrix; if (o.instanceColor) at.instanceColor = o.instanceColor; seen.set(o, { geo: g, at: Object.fromEntries(Object.entries(at).map(([k, v]) => [k, { a: v, v: v.version }])) }); });
+      const tex = new Map();
+      const texOf = (o, cb) => { const ms = o.material; for (const m of (Array.isArray(ms) ? ms : ms ? [ms] : [])) { for (const [k, u] of Object.entries(m.uniforms || {})) { const v = u && u.value; if (v && v.isTexture) cb(v, path(o) + ' ' + k); } for (const k of ['map', 'normalMap']) if (m[k] && m[k].isTexture) cb(m[k], path(o) + ' ' + k); } };
+      R.scene.traverse((o) => texOf(o, (t, name) => { if (!tex.has(t)) tex.set(t, { v: t.version, name }); }));
+      window.__PERFPLAY__.attrs0 = { seen, path, tex, texOf };
+      // draws by target and object (rough triangles: index or position count / 3 × instances; BatchedMesh = its live slots' total)
+      const T = R.three, orig = T.renderBufferDirect.bind(T), dr = {}; window.__PERFPLAY__.draws = dr;
+      T.renderBufferDirect = (cam, scene, geo, mat, obj, group) => { const rt = T.getRenderTarget(); const tgt = cam.isOrthographicCamera ? 'shadow' : rt ? 'rt' + rt.width + 'x' + rt.height : 'canvas';
+        const n = (geo.index ? geo.index.count : geo.attributes.position ? geo.attributes.position.count : 0) / 3; const inst = obj.isInstancedMesh ? obj.count : obj.isBatchedMesh ? 1 : (geo.instanceCount ?? 1);
+        const k = tgt + ' ' + path(obj) + ' [' + (mat.name || mat.type) + ']'; const e = dr[k] || (dr[k] = { n: 0, t: 0 }); e.n++; e.t += (obj.isBatchedMesh ? Math.min(n, (geo.drawRange.count === Infinity ? n * 3 : geo.drawRange.count) / 3) : n) * (inst === Infinity ? 1 : inst); return orig(cam, scene, geo, mat, obj, group); };
+      window.__PERFPLAY__.undraw = () => { T.renderBufferDirect = orig; };
+    });
     if (opts.heap === '1') { await cdp.send('HeapProfiler.enable'); await cdp.send('HeapProfiler.startSampling', { samplingInterval: 8192, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }
     if (profile) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start'); }
     const t0 = Date.now();
@@ -175,6 +191,22 @@ for (const sc of scenes) {
       await page.evaluate(() => window.__GENESIS__.frames(1));
       k++;
     }
+    if (opts.attrs === '1') { const rows = await page.evaluate(() => {
+      const R = globalThis.__GENESIS_R__; const { seen, path } = window.__PERFPLAY__.attrs0; const agg = {};
+      const add = (o, what, b) => { const k = path(o) + ' ' + what; const e = agg[k] || (agg[k] = { n: 0, b: 0 }); e.n++; e.b += b; };
+      R.scene.traverse((o) => { const g = o.geometry; if (!g) return; const old = seen.get(o);
+        if (!old) { add(o, 'NEW OBJECT', 0); return; }
+        if (old.geo !== g) add(o, 'NEW GEOMETRY', 0);
+        const at = { ...g.attributes }; if (g.index) at.index = g.index; if (o.instanceMatrix) at.instanceMatrix = o.instanceMatrix; if (o.instanceColor) at.instanceColor = o.instanceColor;
+        for (const [k, v] of Object.entries(at)) { const was = old.at[k]; const b = v.array ? v.array.byteLength : 0;
+          if (!was || was.a !== v) add(o, 'new attr ' + k, b); else if (v.version !== was.v) add(o, 'upd ' + k + ' x' + (v.version - was.v), b * Math.min(1, v.version - was.v)); } });
+      const { tex, texOf } = window.__PERFPLAY__.attrs0; const done = new Set();
+      R.scene.traverse((o) => texOf(o, (t, name) => { if (done.has(t)) return; done.add(t); const was = tex.get(t); const img = t.image || {}; const b = img.data ? img.data.byteLength : (img.width || 0) * (img.height || 0) * 4;
+        if (was && t.version !== was.v) { const k = 'TEX ' + name + ' ' + (img.width || '?') + 'x' + (img.height || '?') + ' x' + (t.version - was.v); agg[k] = { n: t.version - was.v, b: b * (t.version - was.v) }; } }));
+      return Object.entries(agg).sort((a, b) => b[1].b - a[1].b).slice(0, 40); });
+      const dr = await page.evaluate(() => { const P = window.__PERFPLAY__; P.undraw(); return Object.entries(P.draws).sort((a, b) => b[1].t - a[1].t).slice(0, 40); });
+      console.log('   draws by target/object (per frame: calls, k tris; BatchedMesh rough):'); for (const [k2, v] of dr) console.log(`     ${(v.n / Math.max(1, nFrames)).toFixed(1).padStart(6)}  ${(v.t / Math.max(1, nFrames) / 1000).toFixed(0).padStart(6)}k  ${k2.slice(0, 160)}`);
+      console.log('   attribute churn over the measured frames (object, what, kB of one copy):'); for (const [k2, v] of rows) console.log(`     ${(v.b / 1024).toFixed(0).padStart(7)} kB ${String(v.n).padStart(4)}x  ${k2.slice(0, 200)}`); }
     if (opts.heap === '1') {
       // allocation sampling: bytes allocated per frame by the allocating function (self), live or already collected
       const { profile: hp } = await cdp.send('HeapProfiler.stopSampling', {});
