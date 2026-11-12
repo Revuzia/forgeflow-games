@@ -197,7 +197,13 @@ CARDS = {
                                 "power": 40.0, "size": 0.10},
                                {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
                                 "power": 25.0, "size": 0.08}]},
-        "plate": {"glow": [0.80, 0.52, 0.30, 0.05], "median": 0.27},
+        "plate": {"glow": [0.80, 0.52, 0.30, 0.05], "median": 0.27,
+                  # (max2 cards g1, verify roll1: the bust's viewer-left eye slot read as a solid black hollow and the
+                  # lantern's crescent shadow on the right cheek as a bruise): the slots opened to shadowed lids, the
+                  # crescent filled from the clean cheek
+                  "retouch": {"portrait": [{"op": "fill", "at": [0.0, 0.048], "r": [0.065, 0.036], "px": 6, "q": 55},
+                                           {"op": "lift", "at": [-0.164, -0.013], "r": [0.058, 0.022], "px": 14, "k": 0.32},
+                                           {"op": "lift", "at": [-0.024, -0.007], "r": [0.05, 0.02], "px": 14, "k": 0.32}]}},
     },
     "tunlan_lamplit": {
         # (card engineer 1: at t 0.40 the raised hand crossed the mask in a glare streak (closing TUN2-M1, again on the
@@ -222,7 +228,10 @@ CARDS = {
                   "glow_color": "#C9A0E0", "cx": 0.40},
     },
     "tunlan_noon_fair": {
-        "splash": {"clip": "cast_ult", "t": 0.14, "yaw": 16.0, "pitch": -2.0, "lens": 55.0, "fill": 0.88, "x": 0.71,
+        # (max2 cards g1, verify roll1: the brim hid the eyes and the face read as a blank block: the head lifted and
+        # the camera a little under the brim, so the carved lids read)
+        "splash": {"clip": "cast_ult", "t": 0.14, "yaw": 16.0, "pitch": 3.0, "lens": 55.0, "fill": 0.88, "x": 0.71,
+                   "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}],
                    "key_az": 240.0, "key_el": 50.0, "key_color": "#FFF1DA", "sun": 3.2, "rim_cool": 0.8,
                    "rim_warm": 1.2, "bounce": 0.8, "bounce_color": "#E8C9A2", "accent": 1.4,
                    "focal": [{"at": "head", "az": 200.0, "el": 20.0, "dist": 0.8, "color": "#FFF0DC", "power": 20.0,
