@@ -19,6 +19,10 @@ import { GroundCover } from '../life/groundcover.ts';
 import { LifeLayer } from '../life/life.ts';
 import { makeSiltState, SILT_MAX, updateSilt } from './silt.ts';
 
+// (probes only, PERF s11: `?vegrange=<m>` sets the near-tree range, so the same trees can be shot as near trees and as
+// far hulls for a colour A/B; never set by the game)
+const VEG_RANGE_PROBE = (() => { try { return Number(new URLSearchParams(globalThis.location?.search ?? '').get('vegrange')) || 0; } catch { return 0; } })();
+
 export interface PlanetVisualDeps {
   clouds: CloudPass;
   shadows: SunShadows;
@@ -234,7 +238,7 @@ export class PlanetVisual {
     });
     // trees near the camera (primary planet only)
     const veg = this.vegetation;
-    veg.range = ctx.vegRange;
+    veg.range = VEG_RANGE_PROBE > 0 && ctx.vegRange > 0 ? VEG_RANGE_PROBE : ctx.vegRange;
     veg.density = ctx.vegDensity;
     veg.enabled = ctx.primary && ctx.vegRange > 0;
     veg.setShadowCasting(ctx.primary && ctx.shadows);

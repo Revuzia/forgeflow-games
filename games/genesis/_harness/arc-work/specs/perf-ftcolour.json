@@ -1,0 +1,37 @@
+{
+ "_doc": "PERF s11 far-tree colour A/B: the same forest at 500 m as far hulls (default) and as near trees (vegrange=1600).",
+ "shots": [
+  {
+   "name": "ftc-far",
+   "params": "scenario=babel&source=worker&seed=307987276&farbudget=400",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', poi: 'forest', dist: 500, tilt: 50, hour: 10 }); await G.frames(14);",
+    "return { ok: 1 };"
+   ]
+  },
+  {
+   "name": "ftc-near",
+   "params": "scenario=babel&source=worker&seed=307987276&farbudget=400&vegrange=1600",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', poi: 'forest', dist: 500, tilt: 50, hour: 10 }); await G.frames(14);",
+    "return { ok: 1 };"
+   ]
+  }
+ ]
+}

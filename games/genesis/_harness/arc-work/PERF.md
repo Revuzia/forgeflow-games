@@ -888,3 +888,45 @@ long press frame-rate independent. Report after 1-2 verified.
   blurred backdrop / counters; ground, tree shadows near and far (also the long evening shadows), houses: identical.
   shadowTris town 5.82 M (on) vs 9.39 M (off) = -38 %; townlow 11.80 M vs 11.66 M (a low sun's reach covers every
   split: nothing to cut, as designed). 0 console errors.
+- CONTAINER RESTART ~03:21Z killed ft1 mid-run (scratch, src, node_modules survived). Queue re-made as run-s11d.sh
+  (ONE browser job at a time): ft1b (150/50) -> ft0 -> cw1 -> eastwater5 (spec perf-eastwater3.json) -> cw2 ->
+  ftcolour (spec perf-ftcolour.json). check13 (full gate) + build-prod12 started ~04:5xZ alongside.
+- ITEM 3 FAR TREES, BROWSER CHECK (dist21 = session-10 tree, babel 307987276, forest poi, High 640x360, descent;
+  ft1 = fartrees=1, ft0 = fartrees=0; shots ft1-d2000/-d0500, ft1b-d0150/-d0050, ft0-d*; LOOKED):
+  | alt | far meshes drawn (of made) | far inst | tris on / off | shadow tris on / off |
+  | 1614 m | 1 / 3 | 91 583 | 7.55 M / 1.68 M | 5.00 M / 0.60 M |
+  |  409 m | 7 / 8 | 102 540 | 9.36 M / 1.89 M | 6.65 M / 1.04 M |
+  |  165 m | 7 / 8 | 65 356 | 8.67 M / 3.55 M | 5.93 M / 2.11 M |
+  |   99 m | 7 / 8 | 49 750 | 9.43 M / 4.78 M | 6.50 M / 3.01 M |
+  DRAWS: <= 8 far meshes per pass at every altitude (target met; was ~66 per pass). PRESENCE: forests at every
+  altitude; with fartrees=0 the babel forest at 409 m is bare grass (no near trees above 1.2 x range and NO canopy
+  colour in the terrain there), so the far layer is what makes the forest exist from the air. No pop seen between steps.
+  CONCERNS (not fixed): (a) LOOK: the hulls read as bright lime low-poly blobs — at 2 km a sprinkle of bright dots over
+  a darker canopy (shots/cmp-ft-d2000.png), at 409 m pentagonal crowns (cmp-ft-d500.png), palms at ~250 m as flat
+  umbrella discs (crop-ft1b-150.png). The hull colour = the leaf-atlas tile mean x 1.7/0.92 lit as a SOLID surface: no
+  self-shadow / gaps a real crown shows from afar, so it is brighter than the near tree. Measure with ftcolour (same
+  forest at 500 m as hulls vs as near trees: new probe-only switch `?vegrange=<m>` in planetview.ts) and darken the
+  hull by the measured ratio (farcrown.ts colour) — a colour match, not a quality cut. (b) COST: the far layer adds
+  ~4.4-5.6 M (instance-counted) shadow tris and ~4.6-5.9 M tris: vertex work of 50-100 k hull instances per pass.
+- ITEM 6 (in progress): shell heights on the babel world (3 km): deck 180-420 m above datum. Normal orbit distances
+  (300-700 m) put the camera INSIDE the deck: pe2-e300-y60 (alt 316 m, camera still) is a fully white frame by design
+  ('hovering in a cloud still fogs'). The tunnel (clouds.ts) only opens for vertical speed > 0.15 x 240 m = 36 m/s,
+  full at 156 m/s. Mouse notches (14 % jumps) exceed that; a trackpad scroll (~1-2 m a frame at 300 m = 60-120 m/s) only
+  half-opens it (uCamFog ~0.5 over 50-90 m of dense deck = OD ~4: white). cw1 (mouse wheel, -100 every 4 frames, fixed
+  clock, shots cw1-w*.png alt 750 -> 110) was at frame 14 (alt 686, lum 0.52) at 05:00Z; cw2 (trackpad) queued.
+
+## NEXT (session 12), in order
+1. Read cw1 / cw2: `python3 _harness/arc-work/perf-lum.py _harness/scratch/arc/perf/shots/cw1-w` (and cw2-w), LOOK at
+   the frames between alt 420 and 180. If the white comes from the in-cloud fog during a slow (trackpad) zoom: open the
+   tunnel for ANY sustained vertical travel (want from ~5 m/s, full by ~30 m/s; keep the ~1 s close so a camera that
+   stops in the deck still fogs). If it comes on entering / leaving the deck with the tunnel open: exposure (ADAPT_FRAG
+   rate 2.2/s down) or cloud history; A/B with the fixed clock. Then the question for the owner: a camera RESTING in the
+   deck (orbit 300-700 m on a 3 km world) is a white screen by design — ask whether that is wanted.
+2. Item 5: eastwater5 shots (pe3-e120-y60/90/120 + ft0, by day under the deck) LOOKED for water on the hills east of
+   Rubolhin; suspects in PERF session-10 NEXT #4 (coarse parent water slot in the worker path, ZEDGE, the flood-warning
+   rise, real lake-margin flooded forest with 0.2-3 m water + tree cover: trunks seen refracted = 'ghosts').
+3. Far-tree colour: ftcolour (ftc-far vs ftc-near) -> mean crown colour ratio -> farcrown.ts colour factor; re-shoot.
+4. Item 4 (atmosphere composite at 1/2 res): by the shader's cost (24 steps x 2 LUT fetches + 2 exp per pixel) it is
+   ~0.5 ms at 3.25 MP on an M5-class GPU: low expected gain vs the shadow / geometry passes; do it only after 1-3.
+5. GATE check13 (session-10 tree + probe switch vegrange): 919/919 pass; npm run build OK (build-prod12.log). run-s11d.sh
+   keeps running (cw1 at frame 17, alt 611 m, ~6 min a frame; then eastwater5, cw2, ftcolour): read their logs / shots.
