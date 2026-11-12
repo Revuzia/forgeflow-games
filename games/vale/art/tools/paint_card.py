@@ -306,8 +306,9 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
     # (max2) the by-eye blocker detector (card_qa.face_blockers, calibrated on the round-1 verdicts): a painting that
     # trips hollow / blank / glow fails; the 3D render's own reading is kept beside it (a render that trips it cannot
     # ship as the fallback either); new bright dots the render lacks are reported
-    fb = card_qa.face_blockers(P, A, fp, kind, plates.fighter_of(sid), F)
-    fb3 = card_qa.face_blockers(F, A, fp, kind, plates.fighter_of(sid))
+    fps = fp and (*fp, plates.face_scale(params_of(sid), kind))     # (max2 g2) the card's face_r
+    fb = card_qa.face_blockers(P, A, fps, kind, plates.fighter_of(sid), F)
+    fb3 = card_qa.face_blockers(F, A, fps, kind, plates.fighter_of(sid))
     if fb:
         r["blockers"] = {k: fb[k] for k in ("hollow", "blank", "glow", "streak", "cracked", "dots", "hits") if k in fb}
     if fb3:

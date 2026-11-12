@@ -167,7 +167,8 @@ def blockers_of(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, r
     r3 = os.path.join(GAME, "art", ".cache", "fighters", "paint", f"{sid}_{kind}_3d.png")
     if os.path.isfile(r3):
         ref = load(r3)[..., :3]
-    return face_blockers(img, a, plates.face_point(meta, p, kind), kind, fid, ref)
+    fp = plates.face_point(meta, p, kind)
+    return face_blockers(img, a, fp and (*fp, plates.face_scale(p, kind)), kind, fid, ref)
 
 
 PUPIL_GATE = {"sukri"}     # (cards ks1 fix) fighters whose carved eyes carry a painted pupil: the pupil check is a GATE
@@ -249,7 +250,9 @@ BN = 128
 
 def _face_crop(img: np.ndarray, a: np.ndarray, fp, kind: str, fid: str) -> tuple[np.ndarray, np.ndarray]:
     H, W = img.shape[:2]
-    rr = (0.05 if kind == "splash" else 0.15) * H * PUPIL_R.get(fid, 1.0)
+    # (max2 g2) fp may carry a third value, the card's "face_r" (plates.face_scale): a three-quarter hero splash frames
+    # the head ~2-3x a full-body card's, so the fixed 0.05 H disc covered only the brow between the eyes
+    rr = (0.05 if kind == "splash" else 0.15) * H * PUPIL_R.get(fid, 1.0) * (float(fp[2]) if len(fp) > 2 else 1.0)
     cx, cy = fp[0] * W, fp[1] * H
     box = (cx - rr, cy - rr, cx + rr, cy + rr)
     im = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).transform((BN, BN), Image.EXTENT, box, Image.BICUBIC)

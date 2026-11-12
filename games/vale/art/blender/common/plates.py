@@ -922,6 +922,12 @@ def face_point(meta: dict | None, p: dict, kind: str):
     return he[0] + float(off[0]), he[1] + float(off[1])
 
 
+def face_scale(p: dict, kind: str) -> float:
+    """(max2 g2) the card's "face_r" {kind: x}: the blocker detector's face disc (card_qa, paint_card's gate) x this, for
+    a card framed tighter than a full-body splash (a three-quarter hero shot's head is ~2-3x larger)."""
+    return float(((p or {}).get("face_r") or {}).get(kind, 1.0))
+
+
 def face_mask(af: np.ndarray, meta: dict | None, kind: str, p: dict | None = None) -> np.ndarray:
     """1 over the face and hands (smooth ellipses from the render's bone points; without meta: the top of the figure)."""
     h, w = af.shape

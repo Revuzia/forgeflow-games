@@ -134,7 +134,8 @@ CARDS = {
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46, "mask_to": "#EFC88F",   # the in-game ochre mask (closing2: cream on the cards)
                   # (max2 g2: on the three-quarter splash the mask is ~3x the old disc, which the mask_to gain left as a
                   # pale-gold spot on the brow: the disc on the face's middle and grown to the mask)
-                  "face_off": {"splash": [0.0, 0.035]}, "mask_r": {"splash": 2.6}},
+                  "face_off": {"splash": [0.0, 0.035]}, "mask_r": {"splash": 2.6},
+                  "face_r": {"splash": 1.7}},     # the blocker detector's disc on the larger face
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
