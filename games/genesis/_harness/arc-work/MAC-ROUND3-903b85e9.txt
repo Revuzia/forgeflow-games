@@ -1,0 +1,77 @@
+GENESIS Mac ROUND 3 (bisection), build 903b85e9. Every header: "build 903b85e9+dirty built 2026-11-12T13:22Z", "zcons on", "preset ultra".
+Recorded 15:23–16:08 UTC. Full exact report texts (all 28, in order) are in genesis_mac_perf_round3_2026-11-12.txt.
+
+SETUP
+- Lid CLOSED. One external DELL S3222HN at 1920x1080, dpr 1.25. Chrome window 1686x1050, same for the whole session.
+  Canvas css 1349x698, render 1686x873 (1.47 MP). This is a different display and size from round 2 (2560x1233),
+  so compare within this round only.
+- Chrome only, one Genesis tab. Hard-reloaded once.
+- Memory before: 51% free, Swap Used 8.55 GB (pressure colour not captured).
+- Memory after: pressure WARN (yellow), 26% free, Swap Used 11.76 GB.
+- Zoom as in round 2. Runs 1–2 used real wheel input. Chrome sends each 10-tick scroll as one deltaY -800 event,
+  so from run 3 on the same events were sent to the canvas directly.
+- Camera at alt 60 m and still in every run, except run 10 (water=0), which ended at 5 m.
+- Run 21 was redone: the first try started recording before the world had loaded.
+
+RESULTS (fps | GPU mean ms: scene / post / total)
+01 A             1.4 | 565 / 6328 / 6391
+02 msaa=0        3.3 | 206 / 2157 / 2317
+03 A             1.8 | 383 / 4276 / 4443
+04 flat=1        6.8 |  17 /  772 /  808
+05 A             2.0 | 324 / 3642 / 3811
+06 scene=0       4.8 |  20 / 1052 / 1086
+07 A             2.3 | 310 / 3365 / 3538
+08 clouds=0      2.4 | 289 / 2739 / 2945
+09 A             2.1 | 317 / 3429 / 3614
+10 water=0       2.6 | 318 / 1862 / 2117   (camera ended at 5 m, different framing)
+11 A             2.3 | 323 / 3141 / 3341
+12 gtao=0        2.2 | 342 / 3996 / 4160
+13 A             2.1 | 362 / 4053 / 4223
+14 shadows=0     1.9 | 382 / 4078 / 4221
+15 A             2.0 | 366 / 3777 / 3964
+16 hide=veg,cover,life 1.6 | 423 / 4633 / 4770
+17 A             1.5 | 491 / 5047 / 5195
+18 hide=terrain  3.7 |  43 / 1564 / 1599
+19 A             1.7 | 392 / 4930 / 5053
+20 atmo,clouds,gtao=0  1.7 | 430 / 3018 / 3260
+21 A             1.5 | 516 / 5694 / 5900
+22 fx,decals,lum,bloom,godrays=0  1.5 | 543 / 4388 / 4605
+23 A             1.3 | 564 / 5842 / 5939
+24 invalidate=0  1.8 | 418 / 4177 / 4394
+25 A             1.9 | 417 / 4474 / 4648
+26 rscale=0.5    4.0 | 173 / 1624 / 1769
+27 A             1.5 | 454 / 5122 / 5278
+28 passsync=1    1.4 | 511 / 5572 / 5683
+
+READING
+- A drifted from about 2.3 down to 1.3–1.5 fps over the 45 minutes, while swap grew to nearly full.
+- The clear wins are the ones that stop drawing the terrain:
+  * flat=1: 6.8 fps
+  * scene=0: 4.8 fps
+  * hide=terrain: 3.7 fps
+  * msaa=0: 3.3 fps (scene drops 3 ms → 206 ms GPU, post drops sharply as well)
+  * rscale=0.5: 4.0 fps
+- Within noise: clouds, gtao, shadows, veg/cover/life, atmo+clouds+gtao, fx/bloom/lum/godrays/decals, invalidate.
+- water=0: 2.6 fps, but the framing changed, so it isn't a clean comparison.
+- Per-pass timing (run 28, passsync=1, mean ms):
+  * scene:opaque 553
+  * post:water 938 (the largest)
+  * gtao 537, copies 539, clouds 473, atmo 494, fx 494, god 495, bloom 449, lum 402, tonemap 170, fxaa 86
+
+ODD-LOOKING RUNS
+- 04 flat=1: everything is pale grey haze; no ground or water; only flat-coloured trees.
+- 06 scene=0: no land or trees, only a pale water/cloud surface.
+- 10 water=0: the camera ended low on a sandy slope with villagers instead of the usual shore view.
+- 16 hide=veg,cover,life: the trees are gone but their shadows are still drawn on the beach.
+- 18 hide=terrain: trees float in grey haze.
+- 22 fx/decals/lum/bloom/godrays off: the misty hill east of the shore disappeared, leaving flat open water.
+
+CLOUD CHECK (fine wheel steps in place of the trackpad)
+- Going down through the deck, the screen turns fully WHITE and stays white while stopped there (waited 5 s).
+- One step lower it clears into thick mist. At alt 320 m inside the layer the ground IS visible through the mist:
+  shoreline, lake and rain, washed-out grey.
+
+MANGROVE CHECK
+- NO mangroves seen in the shallow water east of Rubolhin. Checked at alt 177 m; the zoom steps would not stop nearer 100 m.
+- What is there: the rippled water surface lying over the hills (the known bug) with tree trunks showing through,
+  and a few tiny reddish specks near the palm shore.
