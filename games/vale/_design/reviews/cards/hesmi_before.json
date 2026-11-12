@@ -1,0 +1,68 @@
+{
+ "hesmi_splash": {
+  "axis_edge": 0.396,
+  "flat": 0.066,
+  "rim_dL_left": 5.0,
+  "rim_dL_right": 11.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 22.9,
+  "face": null
+ },
+ "hesmi_portrait": {
+  "axis_edge": 0.388,
+  "flat": 0.05,
+  "rim_dL_left": -6.4,
+  "rim_dL_right": -1.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 19.1,
+  "face": null
+ },
+ "hesmi_gorgewalk_splash": {
+  "axis_edge": 0.427,
+  "flat": 0.037,
+  "rim_dL_left": 24.8,
+  "rim_dL_right": 22.4,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 3.9,
+  "face": null
+ },
+ "hesmi_gorgewalk_portrait": {
+  "axis_edge": 0.369,
+  "flat": 0.042,
+  "rim_dL_left": -1.0,
+  "rim_dL_right": 5.0,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 2.5,
+  "face": null
+ },
+ "hesmi_shadeprint_splash": {
+  "axis_edge": 0.394,
+  "flat": 0.069,
+  "rim_dL_left": 18.5,
+  "rim_dL_right": 6.7,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 7.6,
+  "face": null
+ },
+ "hesmi_shadeprint_portrait": {
+  "axis_edge": 0.426,
+  "flat": 0.046,
+  "rim_dL_left": 7.0,
+  "rim_dL_right": -12.2,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 3.2,
+  "face": null
+ }
+}

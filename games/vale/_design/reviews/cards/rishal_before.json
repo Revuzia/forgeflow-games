@@ -1,0 +1,68 @@
+{
+ "rishal_splash": {
+  "axis_edge": 0.415,
+  "flat": 0.036,
+  "rim_dL_left": -1.9,
+  "rim_dL_right": -7.0,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 9.8,
+  "face": null
+ },
+ "rishal_portrait": {
+  "axis_edge": 0.366,
+  "flat": 0.041,
+  "rim_dL_left": 11.7,
+  "rim_dL_right": 1.9,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 9.1,
+  "face": null
+ },
+ "rishal_chalkline_splash": {
+  "axis_edge": 0.408,
+  "flat": 0.052,
+  "rim_dL_left": 12.3,
+  "rim_dL_right": 7.1,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 5.6,
+  "face": null
+ },
+ "rishal_chalkline_portrait": {
+  "axis_edge": 0.364,
+  "flat": 0.046,
+  "rim_dL_left": 15.7,
+  "rim_dL_right": 13.0,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 6.5,
+  "face": null
+ },
+ "rishal_lamplit_splash": {
+  "axis_edge": 0.419,
+  "flat": 0.053,
+  "rim_dL_left": 9.3,
+  "rim_dL_right": 10.9,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 7.0,
+  "face": null
+ },
+ "rishal_lamplit_portrait": {
+  "axis_edge": 0.379,
+  "flat": 0.046,
+  "rim_dL_left": 6.7,
+  "rim_dL_right": 8.4,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 7.5,
+  "face": null
+ }
+}

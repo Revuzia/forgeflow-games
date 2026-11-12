@@ -1,0 +1,68 @@
+{
+ "ardit_splash": {
+  "axis_edge": 0.54,
+  "flat": 0.062,
+  "rim_dL_left": -6.4,
+  "rim_dL_right": -9.8,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 17.5,
+  "face": null
+ },
+ "ardit_portrait": {
+  "axis_edge": 0.477,
+  "flat": 0.063,
+  "rim_dL_left": 2.5,
+  "rim_dL_right": -0.8,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 14.8,
+  "face": null
+ },
+ "ardit_chalkline_splash": {
+  "axis_edge": 0.543,
+  "flat": 0.056,
+  "rim_dL_left": 3.3,
+  "rim_dL_right": -6.2,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 4.4,
+  "face": null
+ },
+ "ardit_chalkline_portrait": {
+  "axis_edge": 0.53,
+  "flat": 0.049,
+  "rim_dL_left": 2.3,
+  "rim_dL_right": -2.6,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 3.3,
+  "face": null
+ },
+ "ardit_first_bell_splash": {
+  "axis_edge": 0.413,
+  "flat": 0.038,
+  "rim_dL_left": -0.1,
+  "rim_dL_right": 1.4,
+  "rim_side": "even",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 5.9,
+  "face": null
+ },
+ "ardit_first_bell_portrait": {
+  "axis_edge": 0.423,
+  "flat": 0.057,
+  "rim_dL_left": -14.1,
+  "rim_dL_right": -11.1,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 11.0,
+  "face": null
+ }
+}

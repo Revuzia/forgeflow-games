@@ -7,8 +7,8 @@ its slot, by both measures (audio/build.py id_distance), with a margin for the c
 
 Every option (level scale x band ratio) is rendered and mastered once (cuelib.master, no codec), its features measured
 as the kit gate does; then coordinate descent over the cues picks, per cue, the option and take count (3 or HIT_TAKES)
-that maximises its brightness score with no pair under the bar. Prints the table to paste into kits_c.CRACK_TUNE /
-CRACK_TAKES.
+that maximises its brightness score with no pair under the bar, starting from the shipped table (feasible). Prints the
+table to paste into kits_c.CRACK_TUNE / CRACK_TAKES (and writes it as JSON with --out).
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ sys.path.insert(0, HERE)
 import numpy as np  # noqa: E402
 
 SCALES = (0.0, 0.3, 0.55, 0.8, 1.0)
+GRITS = (0.08, 0.16, 0.28)          # the grit's length (s): kits_c.GRIT_S, or a long splinter / crumble / tinkle
 RATIOS = (0.65, 0.8, 1.0, 1.25, 1.55)
 FLOOR_26, FLOOR_6 = 0.04, 0.006     # the least bite (2-6 kHz) and air (> 6 kHz) share a hit should have
 SLOTS = ('attack_hit', 'hit')
@@ -71,8 +72,16 @@ def main() -> int:
     from cues import kits_c as K
     fids = K.FIGHTERS
     cues = [f'f_{f}_{s}' for s in SLOTS for f in fids]
-    opts = [(sc, r, m) for sc, r, m in itertools.product(SCALES, RATIOS, ('full', 'crack')) if sc > 0]
-    opts += [(0.0, 1.0, 'full'), (0.0, 1.0, 'plain')]
+    opts = [(sc, r, m, g) for sc, r, m, g in itertools.product(SCALES, RATIOS, ('full', 'crack'), GRITS) if sc > 0]
+    opts += [(0.0, 1.0, 'full', K.GRIT_S), (0.0, 1.0, 'plain', K.GRIT_S)]
+
+    def as_opt(t):
+        t = tuple(t)
+        return t if len(t) > 3 else (*t, K.GRIT_S)
+    shipped = {c: (as_opt(K.CRACK_TUNE.get(c, (1.0, 1.0, 'full'))), K.CRACK_TAKES.get(c, K.HIT_TAKES)) for c in cues}
+    for o, _ in shipped.values():
+        if o not in opts:
+            opts.append(o)
     jobs = [(c, o, v) for c in cues for o in opts for v in range(K.HIT_TAKES)]
     X: dict = {}
     with mp.Pool(a.j) as p:
@@ -91,12 +100,13 @@ def main() -> int:
         if o[2] == 'plain' and n != 3:
             return -100.0
         return (min(1.0, f['b26'] / K.BITE_SHARE) + min(1.0, f['b6'] / K.AIR_SHARE) + 0.25 * o[0] + 0.3 * (n == K.HIT_TAKES)
+                - 0.1 * (o[3] > K.GRIT_S)
                 + 1.5 * (f['b26'] >= FLOOR_26) + 1.5 * (f['b6'] >= FLOOR_6) - (0 if ok else 5.0))
 
     def dist(k1, k2):
         return min(B.id_distance(F[k1], F[k2]))
 
-    choice = {c: ((0.0, 1.0, 'plain'), 3) for c in cues}       # start from the shipped takes (feasible)
+    choice = dict(shipped)                                      # start from the shipped table (feasible)
     keys = [(o, n) for o in opts for n in (3, K.HIT_TAKES)]
     for it in range(8):
         changed = 0
@@ -124,10 +134,11 @@ def main() -> int:
         near = min((min(B.id_distance(F[k], F[(d, *choice[d])])), d) for d in others)
         f = F[k]
         worst.append(near[0])
-        print(f"{c:22s} scale {choice[c][0][0]:.2f} ratio {choice[c][0][1]:.2f} {choice[c][0][2]:5s} takes {choice[c][1]}  near {near[0]:4.1f} ({near[1]})"
+        print(f"{c:22s} scale {choice[c][0][0]:.2f} ratio {choice[c][0][1]:.2f} {choice[c][0][2]:5s} grit {choice[c][0][3]:.2f} takes {choice[c][1]}  near {near[0]:4.1f} ({near[1]})"
               f"  2-6k {f['b26'] * 100:4.1f}%  >6k {f['b6'] * 100:4.2f}%  onset<= {f['on_max']:.3f}  2-5k {f['b25']:.2f}  lap {f['lap']:.1f}")
     print(f'min distance {min(worst):.2f} (bar {bar:.1f})')
-    tune = {c: list(choice[c][0]) for c in cues if choice[c][0] != (1.0, 1.0, 'full')}
+    tune = {c: list(choice[c][0][:3]) + ([choice[c][0][3]] if choice[c][0][3] != K.GRIT_S else []) for c in cues
+            if choice[c][0] != (1.0, 1.0, 'full', K.GRIT_S)}
     takes = {c: choice[c][1] for c in cues if choice[c][1] != K.HIT_TAKES}
     if a.out:
         with open(a.out, 'w') as f:

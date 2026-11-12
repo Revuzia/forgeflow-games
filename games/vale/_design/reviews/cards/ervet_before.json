@@ -1,0 +1,68 @@
+{
+ "ervet_splash": {
+  "axis_edge": 0.469,
+  "flat": 0.045,
+  "rim_dL_left": 12.8,
+  "rim_dL_right": 20.3,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 18.0,
+  "face": null
+ },
+ "ervet_portrait": {
+  "axis_edge": 0.454,
+  "flat": 0.07,
+  "rim_dL_left": -1.9,
+  "rim_dL_right": -0.6,
+  "rim_side": "even",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 16.9,
+  "face": null
+ },
+ "ervet_stillwater_splash": {
+  "axis_edge": 0.472,
+  "flat": 0.05,
+  "rim_dL_left": 17.7,
+  "rim_dL_right": 11.5,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 8.9,
+  "face": null
+ },
+ "ervet_stillwater_portrait": {
+  "axis_edge": 0.42,
+  "flat": 0.047,
+  "rim_dL_left": -4.1,
+  "rim_dL_right": -2.9,
+  "rim_side": "even",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 7.2,
+  "face": null
+ },
+ "ervet_lamplit_splash": {
+  "axis_edge": 0.391,
+  "flat": 0.051,
+  "rim_dL_left": 2.5,
+  "rim_dL_right": -4.1,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 20.2,
+  "face": null
+ },
+ "ervet_lamplit_portrait": {
+  "axis_edge": 0.419,
+  "flat": 0.061,
+  "rim_dL_left": -3.3,
+  "rim_dL_right": -14.5,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 19.1,
+  "face": null
+ }
+}

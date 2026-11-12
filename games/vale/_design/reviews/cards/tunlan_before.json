@@ -1,0 +1,68 @@
+{
+ "tunlan_splash": {
+  "axis_edge": 0.594,
+  "flat": 0.069,
+  "rim_dL_left": 13.6,
+  "rim_dL_right": 12.4,
+  "rim_side": "even",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 7.5,
+  "face": null
+ },
+ "tunlan_portrait": {
+  "axis_edge": 0.534,
+  "flat": 0.059,
+  "rim_dL_left": 12.4,
+  "rim_dL_right": 14.5,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 2.4,
+  "face": null
+ },
+ "tunlan_noon_fair_splash": {
+  "axis_edge": 0.594,
+  "flat": 0.064,
+  "rim_dL_left": -1.0,
+  "rim_dL_right": 0.6,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 7.5,
+  "face": null
+ },
+ "tunlan_noon_fair_portrait": {
+  "axis_edge": 0.565,
+  "flat": 0.064,
+  "rim_dL_left": -12.5,
+  "rim_dL_right": -12.1,
+  "rim_side": "even",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 5.5,
+  "face": null
+ },
+ "tunlan_lamplit_splash": {
+  "axis_edge": 0.524,
+  "flat": 0.041,
+  "rim_dL_left": 14.4,
+  "rim_dL_right": 8.4,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 17.7,
+  "face": null
+ },
+ "tunlan_lamplit_portrait": {
+  "axis_edge": 0.507,
+  "flat": 0.051,
+  "rim_dL_left": 7.5,
+  "rim_dL_right": 14.6,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 22.7,
+  "face": null
+ }
+}

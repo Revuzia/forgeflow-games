@@ -1,0 +1,68 @@
+{
+ "burdam_splash": {
+  "axis_edge": 0.431,
+  "flat": 0.033,
+  "rim_dL_left": 11.5,
+  "rim_dL_right": 15.5,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 5.6,
+  "face": null
+ },
+ "burdam_portrait": {
+  "axis_edge": 0.352,
+  "flat": 0.032,
+  "rim_dL_left": 28.6,
+  "rim_dL_right": 31.0,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 8.0,
+  "face": null
+ },
+ "burdam_stillwater_splash": {
+  "axis_edge": 0.432,
+  "flat": 0.053,
+  "rim_dL_left": 11.4,
+  "rim_dL_right": 10.0,
+  "rim_side": "even",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 4.5,
+  "face": null
+ },
+ "burdam_stillwater_portrait": {
+  "axis_edge": 0.389,
+  "flat": 0.028,
+  "rim_dL_left": -4.4,
+  "rim_dL_right": 16.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 8.7,
+  "face": null
+ },
+ "burdam_almanac_splash": {
+  "axis_edge": 0.477,
+  "flat": 0.048,
+  "rim_dL_left": -2.4,
+  "rim_dL_right": 15.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 6.1,
+  "face": null
+ },
+ "burdam_almanac_portrait": {
+  "axis_edge": 0.376,
+  "flat": 0.035,
+  "rim_dL_left": -4.2,
+  "rim_dL_right": 33.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 0.9,
+  "face": null
+ }
+}

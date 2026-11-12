@@ -262,13 +262,17 @@ CRACK: dict[str, tuple[str, float, tuple[float, float], float]] = {
 CRACK_ONSET = 0.17           # the onset's > 2 kHz share a crack lifts a take to (the contact pass tames above 0.24)
 AIR_SHARE = 0.014            # the take's > 6 kHz energy share its air lifts it to …
 BITE_SHARE = 0.06            # … and its 2-6 kHz share
+GRIT_S = 0.08               # the grit's default length (s) …
+GRIT_TOP, GRIT_LONG_TOP = 0.5, 0.85   # … and its level cap re the take's peak (a long grit spreads its energy thinner)
 CRACK_MIN_DB = -20.0         # a take already bright enough still gets its crack at this level re its peak
 AIR_MAX_DB = -9.0            # the air never comes nearer the peak than this (no hiss on top of a hit)
 # cue id → (level scale of the solved crack / grit / air, band ratio, mode): found by audio/crack_search.py so every
 # fighter keeps >= ID_MIN_DIST_DB from every other in its slot (a dark fighter's identity is its darkness: its crack is
 # small). mode 'full': crack, grit and air; 'crack': the onset crack and grit only (no air tail); 'plain': the take as
-# the recipe made it (no crack, no take shape). Absent: (1.0, 1.0, 'full').
-CRACK_TUNE: dict[str, tuple[float, float, str]] = {
+# the recipe made it (no crack, no take shape). Absent: (1.0, 1.0, 'full'). An optional 4th value is the grit's length
+# (s, default GRIT_S): a longer grit is the material's splinter / crumble / tinkle running on behind the crack (a dark
+# take's body otherwise drowns a short grit's 2-6 kHz share), its level cap GRIT_LONG_TOP instead of GRIT_TOP.
+CRACK_TUNE: dict[str, tuple] = {
     'f_ardit_attack_hit': (0.3, 1.55, 'full'),
     'f_ardit_hit': (1.0, 0.8, 'full'),
     'f_burdam_attack_hit': (0.0, 1.0, 'plain'),
@@ -315,7 +319,7 @@ TAKE_SHAPE = (
 )
 
 
-def _crack(fid: str, v: int, ratio: float = 1.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _crack(fid: str, v: int, ratio: float = 1.0, glen: float = GRIT_S) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(crack, grit, air) for one take of a fighter's hit, each mono and peak-normalised: the crack is the 1-3 ms click
     and its material's ring (glass tinks, plate partials, a wood snap's mode, stone's first chip), the grit the
     material's short debris (2-6 kHz, 10-60 ms), the air a noise tail that swells to its peak and dies in the
@@ -351,14 +355,15 @@ def _crack(fid: str, v: int, ratio: float = 1.0) -> tuple[np.ndarray, np.ndarray
         d = ns(gap / 1000.0)
         crack[d:] += 10 ** (gdb / 20) * crack[:n - d] * np.cos(np.linspace(0, 0.3, n - d))
     crack = norm(crack)
-    gl = ns(0.08)
+    gk = glen / GRIT_S                  # a long grit: more grains, spread and dying over its length
+    gl = ns(glen)
     grit = np.zeros(gl)
-    for _ in range(int(14 * (1.5 if v % len(TAKE_SHAPE) == 2 else 1.0))):
-        t0 = r.exponential(0.018)
-        if t0 > 0.065:
+    for _ in range(int(14 * gk * (1.5 if v % len(TAKE_SHAPE) == 2 else 1.0))):
+        t0 = r.exponential(0.018 * gk)
+        if t0 > glen - 0.015:
             continue
         g = ns(r.uniform(0.0006, 0.0025))
-        c = r.standard_normal(g) * np.linspace(1, 0, g) ** 2 * np.exp(-t0 / 0.025) * r.uniform(0.3, 1.0)
+        c = r.standard_normal(g) * np.linspace(1, 0, g) ** 2 * np.exp(-t0 / (0.025 * gk)) * r.uniform(0.3, 1.0)
         i0 = ns(t0)
         grit[i0:i0 + g] += c[:max(0, min(g, gl - i0))]
     grit = norm(F.apply(grit, [F.bandpass(min(fc * 0.85, 5200.0), 1.6), F.highpass(1800.0, 0.7071)]))
@@ -404,7 +409,9 @@ def _solve(base: np.ndarray, layer: np.ndarray, meas, goal: float, top: float) -
 def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     """The crack pass (see the section note): shape the take (TAKE_SHAPE: pitch, body decay), then add its crack at the
     onset, the grit and the air just behind it, each at its solved level scaled by the cue's CRACK_TUNE."""
-    scale, ratio, mode = CRACK_TUNE.get(cid, (1.0, 1.0, 'full'))
+    tune = CRACK_TUNE.get(cid, (1.0, 1.0, 'full'))
+    scale, ratio, mode = tune[:3]
+    glen = tune[3] if len(tune) > 3 else GRIT_S
     if mode == 'plain':
         return x
     _, _, _, _, apk, tau, pr = TAKE_SHAPE[v % len(TAKE_SHAPE)]
@@ -422,13 +429,14 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     xs = norm(xs)
     if scale <= 0:
         return xs
-    crack, grit, air = _crack(fid, v, ratio)
+    crack, grit, air = _crack(fid, v, ratio, glen)
     lc, lg, la = _place(n, crack, i), _place(n, grit, i + ns(0.004)), _place(n, air, i + ns(0.002))
     mid = xs.mean(axis=0)
     fl = 10 ** (CRACK_MIN_DB / 20)
     g_c = scale * max(fl, _solve(mid, lc, lambda m: _share(m), CRACK_ONSET, 0.8))
     mid = mid + g_c * lc
-    g_g = scale * max(fl * 0.7, _solve(mid, lg, lambda m: _band_share(m, 2000.0, 6000.0), BITE_SHARE, 0.5))
+    g_g = scale * max(fl * 0.7, _solve(mid, lg, lambda m: _band_share(m, 2000.0, 6000.0), BITE_SHARE,
+                                     GRIT_LONG_TOP if glen > GRIT_S else GRIT_TOP))
     mid = mid + g_g * lg
     g_a = 0.0 if mode == 'crack' else scale * max(fl * 0.5, _solve(mid, la, lambda m: _band_share(m, 6000.0), AIR_SHARE,
                                                                        10 ** (AIR_MAX_DB / 20)))

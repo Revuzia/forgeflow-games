@@ -2016,8 +2016,8 @@ from common import plates as _plates  # noqa: E402
 _orig_plate = _plates.plate
 
 
-def _plate(p, kind, w, h):
-    out = _orig_plate(p, kind, w, h)
+def _plate(p, kind, w, h, **kw):
+    out = _orig_plate(p, kind, w, h, **kw)
     hound = CARDS.get(p.get("sid"), {}).get("splash", {}).get("hound")
     if kind == "splash" and hound:
         out = _hound_screen(out, hound)
@@ -2066,8 +2066,8 @@ def _lantern_key(comp, alpha, xy, k):
     return res
 
 
-def _finish(fg, p, kind, post=1.0):
-    comp = _orig_finish(fg, p, kind, post)
+def _finish(fg, p, kind, post=1.0, **kw):
+    comp = _orig_finish(fg, p, kind, post, **kw)
     k = CARDS.get(p.get("sid"), {}).get("splash", {}).get("lantern")
     if kind == "splash" and k and _LAMP_XY[0] is not None:
         comp = _lantern_key(comp, fg[..., 3].astype(np.float32), _LAMP_XY[0], k)

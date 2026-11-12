@@ -1,0 +1,68 @@
+{
+ "odrum_splash": {
+  "axis_edge": 0.438,
+  "flat": 0.047,
+  "rim_dL_left": -11.2,
+  "rim_dL_right": -5.5,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 11.1,
+  "face": null
+ },
+ "odrum_portrait": {
+  "axis_edge": 0.396,
+  "flat": 0.037,
+  "rim_dL_left": -10.0,
+  "rim_dL_right": -13.0,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 6.0,
+  "face": null
+ },
+ "odrum_noon_fair_splash": {
+  "axis_edge": 0.394,
+  "flat": 0.037,
+  "rim_dL_left": -6.9,
+  "rim_dL_right": -3.4,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 10.4,
+  "face": null
+ },
+ "odrum_noon_fair_portrait": {
+  "axis_edge": 0.433,
+  "flat": 0.047,
+  "rim_dL_left": -12.8,
+  "rim_dL_right": -10.0,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 12.9,
+  "face": null
+ },
+ "odrum_shadeprint_splash": {
+  "axis_edge": 0.482,
+  "flat": 0.066,
+  "rim_dL_left": 9.9,
+  "rim_dL_right": 2.3,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 1.4,
+  "face": null
+ },
+ "odrum_shadeprint_portrait": {
+  "axis_edge": 0.438,
+  "flat": 0.045,
+  "rim_dL_left": -14.4,
+  "rim_dL_right": -28.5,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 7.1,
+  "face": null
+ }
+}

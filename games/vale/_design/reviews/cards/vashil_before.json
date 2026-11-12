@@ -1,0 +1,68 @@
+{
+ "vashil_splash": {
+  "axis_edge": 0.576,
+  "flat": 0.046,
+  "rim_dL_left": -1.9,
+  "rim_dL_right": -3.7,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 21.3,
+  "face": null
+ },
+ "vashil_portrait": {
+  "axis_edge": 0.445,
+  "flat": 0.039,
+  "rim_dL_left": -3.4,
+  "rim_dL_right": -13.1,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 20.1,
+  "face": null
+ },
+ "vashil_chalkline_splash": {
+  "axis_edge": 0.604,
+  "flat": 0.087,
+  "rim_dL_left": 18.8,
+  "rim_dL_right": 16.1,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 5.9,
+  "face": null
+ },
+ "vashil_chalkline_portrait": {
+  "axis_edge": 0.465,
+  "flat": 0.063,
+  "rim_dL_left": -5.9,
+  "rim_dL_right": 1.6,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 10.0,
+  "face": null
+ },
+ "vashil_first_bell_splash": {
+  "axis_edge": 0.53,
+  "flat": 0.055,
+  "rim_dL_left": 4.2,
+  "rim_dL_right": -0.0,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 15.6,
+  "face": null
+ },
+ "vashil_first_bell_portrait": {
+  "axis_edge": 0.447,
+  "flat": 0.062,
+  "rim_dL_left": 1.6,
+  "rim_dL_right": -2.0,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 21.8,
+  "face": null
+ }
+}

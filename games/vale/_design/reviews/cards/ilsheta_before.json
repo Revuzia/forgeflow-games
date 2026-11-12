@@ -1,0 +1,68 @@
+{
+ "ilsheta_splash": {
+  "axis_edge": 0.226,
+  "flat": 0.021,
+  "rim_dL_left": 12.3,
+  "rim_dL_right": 7.0,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 8.5,
+  "face": null
+ },
+ "ilsheta_portrait": {
+  "axis_edge": 0.211,
+  "flat": 0.012,
+  "rim_dL_left": 9.3,
+  "rim_dL_right": 0.3,
+  "rim_side": "left",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 8.5,
+  "face": null
+ },
+ "ilsheta_stillwater_splash": {
+  "axis_edge": 0.206,
+  "flat": 0.035,
+  "rim_dL_left": 11.6,
+  "rim_dL_right": 5.6,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 8.7,
+  "face": null
+ },
+ "ilsheta_stillwater_portrait": {
+  "axis_edge": 0.24,
+  "flat": 0.017,
+  "rim_dL_left": 3.3,
+  "rim_dL_right": -3.3,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 5.6,
+  "face": null
+ },
+ "ilsheta_first_bell_splash": {
+  "axis_edge": 0.242,
+  "flat": 0.027,
+  "rim_dL_left": 4.7,
+  "rim_dL_right": 6.8,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 4.8,
+  "face": null
+ },
+ "ilsheta_first_bell_portrait": {
+  "axis_edge": 0.211,
+  "flat": 0.022,
+  "rim_dL_left": 6.3,
+  "rim_dL_right": 7.2,
+  "rim_side": "even",
+  "plate_sun": "right",
+  "rim_match": false,
+  "dab": 8.6,
+  "face": null
+ }
+}
