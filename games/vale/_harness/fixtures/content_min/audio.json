@@ -39,7 +39,10 @@
     "notify": "fx_cue_hit",
     "shop_buy": "fx_cue_hit",
     "shop_sell": "fx_cue_hit",
-    "shop_undo": "fx_cue_hit"
+    "shop_undo": "fx_cue_hit",
+    "shop_open": "fx_cue_hit",
+    "shop_close": "fx_cue_hit",
+    "ping_wheel": "fx_cue_hit"
   },
   "screens": {
     "menu": "fx_music_a",
