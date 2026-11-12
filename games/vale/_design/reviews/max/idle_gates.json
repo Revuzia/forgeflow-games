@@ -1,0 +1,45 @@
+{
+  "lane": "idle gates after the max-visuals pass",
+  "date": "2026-11-12",
+  "machine": "Apple M5, ANGLE Metal; heavy slots free for every gate; one gate at a time",
+  "summary": "All hard gates pass. One regression found and fixed: value_probe base0_structure L* p95 failed on Low (RIFT 82, BRIDGE 80.5; bar <= 80) because the max env ENV-2 hour-ward glaze rim (a fixed ~1.5 px dawnglass rim on protected base structures) is a larger share of the tower at 720p. A/B with the ward off read 79 / 76, so the ward alone added +3 / +4.5. Fix in src/render/ink.ts valeGlaze: rim alpha 0.55 -> 0.40 and rim colour gain 0.9+0.5*rim -> 0.85+0.25*rim (the rim, fresnel hairline and shimmer band all stay); re-run reads 79.5 / 76.5 Low and 77.5 / 75 High, 0 FAIL on all six map/tier cells. The fix source landed in wip sync 601960631. The real-time match ran twice and came back not_measured both times because of outside load spikes (5-min load 3.31, then 4.6 from macOS Spotlight indexing, spotlightknowledged at ~100 % CPU); the second run reads 99.8 % of seconds at 58+ with the worst second at 46 frames, which the harness labels 'would pass'.",
+  "gates": [
+    {"id": "content", "cmd": "npm run content", "status": "pass", "measured": "exit 0, 0 warnings", "bar": "exit 0, 0 warnings", "load": "0.80 before"},
+    {"id": "typecheck", "cmd": "npm run -s typecheck", "status": "pass", "measured": "exit 0 (also after the ink.ts fix)", "bar": "exit 0"},
+    {"id": "content_check", "cmd": "npm run -s content:check", "status": "pass", "measured": "exit 0, 0 warnings", "bar": "exit 0, 0 warnings"},
+    {"id": "probe", "cmd": "npm run -s probe", "status": "pass", "measured": "55 passed, 0 skipped, 0 failed", "bar": "0 failed, 0 skipped"},
+    {"id": "build", "cmd": "npm run -s build", "status": "pass", "measured": "exit 0; rebuilt after the fix, dist/ left in place", "bar": "exit 0"},
+    {"id": "perf_1080_prod", "cmd": "node _harness/perf_1080.mjs --prod --match-seeds 7,11,23 --wait-idle 30 (fresh bench build: the --no-build bench was from 00:03, older than the 01:51 src change)", "status": "pass", "load_before": "1.64 1.04 0.92", "load_after": "1.12 1.04 1.07",
+      "measured": "GATE PASS. High 60.1 fps p95 16.7 p99 16.8 ms 0 dropped cpu 2.17 ms draws 139 programs 39 tris 206k; Low 60.1 fps p95 16.7 0 dropped draws 107 programs 27 tris 133k; Ultra 60.1 fps p95 16.7 p99 16.8 0 dropped cpu 2.31 ms draws 140 programs 39 tris 206k; gpubound last 8 s 58.8 fps (scale left at 1.1 s); calibrate high x3, 9x pixels medium; dynres menu 1 / match 1; memory menu_2->menu_5 +2.4 % GPU, tracked materials and geometries flat; Home peak 1031 MB; match seeds 7/11/23 peak 459k/462k/449k tris, 260/254/278 draws, 40 programs, 0 programs first seen after 1:00",
+      "bar": "<= 500k tris, <= 450 draws, <= 40 programs; High/Ultra avg >= 59.4, p95 <= 17.2, p99 <= 25, <= 1 % dropped; Low 0 dropped; cpu <= 6 ms; gpubound tail >= 58; Home <= 2500 MB; GPU growth <= 5 %",
+      "note": "Peak match triangles 462k is the closest bar (38k margin). memmaps match_4_rift lists 41 live programs in the client footprint read; the gated per-frame program count stays at 40."},
+    {"id": "realtime_match", "cmd": "node _harness/perf_1080.mjs --prod [--no-build] --match-only --match-scale 1 --match-min 26 --wait-idle 30", "status": "not_measured",
+      "runs": [
+        {"load_before": "1.02 1.02 1.07", "load_after": "1.19 1.01 1.08", "measured": "99.6 % at 58+, worst second 22 frames at 633.5 s tagged 'machine' (pump 1.3, render 10.4 ms); machine busy (load 1.74/3.31/1.19)", "exit": 2},
+        {"load_before": "2.15 2.11 1.86", "load_after": "1.90 2.02 2.06", "measured": "99.8 % at 58+, worst second 46 frames (render 7.1 ms, tagged 'machine'); machine busy (load 2.22/4.6/1.9); harness: 'would pass'. Fresh bench with the ink.ts fix; peak 443k tris, 246 draws, 40 programs", "exit": 2}
+      ],
+      "measured": "99.8 % at 58+, worst second 46 (would pass) but load reached 4.6",
+      "bar": ">= 99 % of wall-seconds at 58+, no second under 45, load < 3",
+      "cause": "outside the workflow: macOS Spotlight indexing (spotlightknowledged ~95-100 % CPU, corespotlightd), no harness or agent jobs running; heavy slots free"},
+    {"id": "match_memory", "cmd": "node _harness/probe_match_memory.mjs --wait-idle 30 --fake-audio", "status": "pass", "load_before": "0.94 0.96 1.06", "load_after": "1.08 1.42 1.30",
+      "measured": "GATE PASS: BRIDGE 2307 MB, RIFT 2865 MB (peak at 1 s, steady max 2544); Homes 663 / 722 / 1176 / 1247 MB", "bar": "match <= 3000 MB on BRIDGE and RIFT, Home <= 2500 MB",
+      "note": "RIFT margin is 135 MB; the peak is the 1 s start transient (+321 MB over steady)."},
+    {"id": "e2e_all", "cmd": "node _harness/e2e.mjs all (dev server started for it, stopped after)", "status": "pass", "load_before": "1.10 1.40 1.30", "load_after": "2.98 2.16 1.72",
+      "measured": "PASS flow_dodge, flow_readycheck, flow_netdown, rift, bridge, fray, hud_leak, store all ok; 0 console lines", "bar": "one sweep passes everything, 0 console lines"},
+    {"id": "audio_sync", "cmd": "node _harness/probe_audio_runtime.mjs sync", "status": "pass", "load_before": "1.64 1.95 1.66", "load_after": "1.29 1.57 1.62",
+      "measured": "PASS, 3/3 runs; notMeasured empty (rAF gates armed, pump-late p95 1.8 ms); engine over sfx bus p50 2.05 / p95 1.11 ms", "bar": "all 3 runs pass, cue path <= 4 ms over sfx bus, rAF gates armed"},
+    {"id": "value_probe", "cmd": "node _harness/value_probe.mjs --maps rift,bridge,fray --tiers high,low --fog 1 --shots 0", "status": "pass", "load_before": "1.21 1.54 1.61 (first run) / 2.65 2.14 1.85 (after fix)", "load_after": "2.80 1.97 1.76 / 2.31 2.14 1.87",
+      "measured": "first run: 2 FAIL (rift_low.base0_structure L* p95 82, bridge_low.base0_structure 80.5). After the ink.ts fix: 0 FAIL. base0_structure L* p95 RIFT 77.5 High / 79.5 Low, BRIDGE 75 High / 76.5 Low; frame p50/p95/p99 RIFT 63/100/116 and 66/99/127, BRIDGE 69/101/133 and 72/103/142, FRAY 85/102/119 and 85/105/120",
+      "bar": "no FAIL in the log (structure L* p95 <= 80, frame p99 <= 180, env p99 <= 160, ...)",
+      "report": "_design/reviews/max/idle_gates_value.json",
+      "ab": "ward glaze off: Low RIFT 79 / BRIDGE 76; ward at the fixed weights: 79.5 / 76.5"}
+  ],
+  "fixes": [
+    {"file": "src/render/ink.ts", "commit": "601960631 (wip sync carried the edit)", "lane_item": "max env ENV-2 hour-ward (wip syncs from 1f04fe38a era)", "change": "valeGlaze rim alpha 0.55 -> 0.40, rim colour gain 0.9+0.5*rim -> 0.85+0.25*rim", "why": "value_probe base0_structure L* p95 > 80 on Low"}
+  ],
+  "open": [
+    "realtime_match needs one idle re-run (load < 3 throughout) to close; both runs here were spoiled by outside load, the second reads 'would pass'.",
+    "Tight margins to watch: match peak 462k of 500k tris; RIFT match memory 2865 of 3000 MB; RIFT Low structure L* p95 79.5 of 80."
+  ],
+  "housekeeping": "Killed a 10-hour-old orphan vite dev server (reap_orphans --kill) and a stale perf_1080 run of mine; tracked harness reports restored with git checkout."
+}
