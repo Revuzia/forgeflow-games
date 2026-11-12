@@ -57,3 +57,25 @@ test('without the timer extension the report still comes, and says so', () => {
   assert.match(t, /gpu ms: no timer query in this browser/);
   assert.match(t, /frame ms: p50 16\.7/);
 });
+
+test('bisection: GPU ms per named pass inside scene / post (timer queries split at each mark, never nested)', () => {
+  const r = new PerfRecorder(SLOTS);
+  r.attach(fakeGl(true) as unknown as WebGL2RenderingContext);
+  let text = '';
+  r.start(1e9, (t) => { text = t; });
+  const slots = new Float64Array(SLOTS.length);
+  for (let f = 0; f < 20; f++) {
+    r.frameBegin();
+    r.gpuBegin('shadows'); r.gpuMark('post:nope'); r.gpuEnd('shadows');
+    r.gpuBegin('scene'); r.gpuMark('scene:opaque'); r.gpuEnd('scene');
+    r.gpuBegin('post'); r.gpuMark('post:clouds'); r.gpuMark('post:atmo'); r.gpuEnd('post');
+    slots.fill(1);
+    r.frameDone(16.7, 8, slots, { drawCalls: 1, triangles: 1, shadowTris: 0, patchesBuilt: 0, altitude: 1, cam: [0, 0, 0], speed: 1, programs: 0 });
+  }
+  r.stop();
+  const t = text || r.report;
+  // each query of the fake lasts 2 ms: scene = 'scene' + 'scene:opaque', post = 'post' + clouds + atmo
+  assert.match(t, /gpu ms \(mean\/p95\): planets 0\/0 actors 0\/0 shadows 2\/2 scene 4\/4 post 6\/6/);
+  assert.match(t, /gpu ms by pass .*scene 2\/2 · scene:opaque 2\/2 · post 2\/2 · post:clouds 2\/2 · post:atmo 2\/2/);
+  assert.doesNotMatch(t, /post:nope/);
+});

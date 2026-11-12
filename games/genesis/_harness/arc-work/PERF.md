@@ -956,3 +956,18 @@ long press frame-rate independent. Report after 1-2 verified.
   (d) hue: foliage hull colour x (0.76, 0.88, 0.6) (was paler / bluer than the near crowns at the same light).
   ftc2 (a+b+d first values): green share 0.53, green mean (77,117,30) vs near (67,104,29); ftc3 (+fill gaps, hue):
   (69,109,24), share 0.52 (crowns still too wide at 400-700 m: clumps unresolved there) -> (c) narrowing; ftc4 queued.
+- OWNER MAC ROUND 2 (b54f2105, MAC-ROUND2-b54f2105.txt): Ultra 1.5 fps, High 3.1; metal allocs 6.5 MB/frame (pagepool=0:
+  17.8: F23 is real). GPU-BOUND (main ~25 ms vs 700-2000 ms frames; fartrees=0 cuts tris 28 -> 11.8 M, no fps gain;
+  cost ~linear in pixels): something costs ~100x per pixel on Apple TBDR.
+- BISECTION BUILD (landed, tsc clean; tests/render-perfreport 3/3 incl. new pass-split test):
+  * perfreport.ts gpuMark / perfmon.mark(name): inside the 'scene' and 'post' groups the GPU timer query is split at
+    each mark (queries cannot nest; group ms = sum of its passes). Report line `gpu ms by pass (mean/p95 ...)`:
+    scene, scene:opaque, post, post:gtao, post:copies (scene colour + linear depth copies for the water), post:decals,
+    post:water (the water sheet into the MSAA hdr), post:clouds (march + resolve), post:atmo (each composite),
+    post:fx (particles, god FX, ships, worlds), post:keep (keepPrevious copy), post:photo, post:god, post:bloom,
+    post:tonemap (incl. luminance + adaptation), post:fxaa.
+  * DIAGNOSTIC switches (default ON = the game's look; `=0` skips): msaa (hdr samples 0), clouds (no march / bake /
+    composite cloud), water (no water pass), gtao, atmo (no atmosphere composites), bloom, godrays (+ flare). With
+    zcons, fartrees, deckzoom, deckmist etc. all print in the report header's effective-switch line.
+  * Smoke runs queued (run-s12f.sh: smoke1 default / smoke0 all off, ULTRA, --report): must show 0 errors and the
+    pass line.

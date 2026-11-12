@@ -517,13 +517,16 @@ export class Renderer {
       // sky / direct-sun irradiance: ~0.13 under a high sun (the sky fill is art-directed down, atmosphere.ts
       // SKY_FILL), the sky wins as the sun sets
       const skyRatio = 0.13 + 0.87 * (1 - ss(0.0, 0.45, camSunEl));
+      perfmon.mark('post:gtao');
       this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
     }
     // ── water (reads copies of colour and linear depth) ──
     let anyWater = false;
     for (const vis of this.planets.values()) if (vis.lod.stats.waterPatches > 0) anyWater = true;
+    perfmon.mark('post:copies');
     post.copyForWater(r, this.fsq, cam.far, anyWater || this.ships.fx.wantsSceneCopy || !SKIP_COPY);
     // ground decals and FX lights (brush, reticles, the hand's shadow, crater glow, cracks…) under the water and haze
+    perfmon.mark('post:decals');
     this.godfx.renderDecals(r, this.scene, cam, post);
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
     this.waterScene.tSceneDepth.value = post.linDepth.texture;
@@ -532,7 +535,8 @@ export class Renderer {
     this.waterScene.uPrevValid.value = post.prevValid ? 1 : 0;
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
     this.waterScene.uFrame.value = this.frameNo % 64;
-    if (anyWater) {
+    perfmon.mark('post:water');
+    if (anyWater && SW_WATER) {
       cam.layers.set(2);
       r.autoClear = false;
       r.setRenderTarget(post.hdr);
@@ -556,7 +560,7 @@ export class Renderer {
     // so passes that draw into post.hdr when no atmosphere runs still start from it
     const atmoVis = _atmoList;
     atmoVis.length = 0;
-    for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
+    if (SW_ATMO) for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
     atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
     if (aoS && atmoVis.length === 0) this.gtao.apply(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.far, post.w, post.h, post.hdr.texture, post.atmoB, post.hdr);
     let outIdx = 0;
@@ -569,6 +573,7 @@ export class Renderer {
       if (withClouds) {
         const w2b = _w2b.setFromMatrix4(_m4.makeRotationFromQuaternion(vis.group.quaternion).invert());
         _bodyToClip.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(vis.group.matrixWorld);
+        perfmon.mark('post:clouds');
         this.clouds.render(r, this.fsq, {
           depth: post.depthTexture, invProj: _invProj, camRot: _camRot, worldToBody: w2b, far: cam.far, planetPos, sunDir,
           innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo, altitude: vis.camBody.length() - pv.params.radius, radius: pv.params.radius,
@@ -631,6 +636,7 @@ export class Renderer {
       // inside a wood (the primary planet, the camera under its canopy height): the haze between the trunks
       (u.uForest.value as Vector4).set(vis === primaryVis ? this.forestK : 0, this.forestCamH, 18, 0);
       const target = outIdx === 0 ? post.atmoA : post.atmoB;
+      perfmon.mark('post:atmo');
       this.fsq.render(r, m, target);
       input = target.texture;
       outIdx ^= 1;
@@ -638,6 +644,7 @@ export class Renderer {
     // ── fire, smoke and embers over the composited image (render/fx/particles.ts via the life layer): after the
     // atmosphere, so smoke against the sky is never taken for stars, with soft depth from the linear depth copy ──
     FX_EXPOSURE.value = post.exposureTexture();
+    perfmon.mark('post:fx');
     if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
     // the god layer's FX over the composited image (plumes, funnels, bolts, domes, auroras, the hand's glow…)
     this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post, this.fsq);
@@ -653,6 +660,7 @@ export class Renderer {
     const cutNow = this.wbSnap;
     this.whiteBalance(primaryVis, starCol);
     // ── post ──
+    perfmon.mark('post:keep');
     post.keepPrevious(r, this.fsq, input);
     const sun = this.sunScreen(pose, primaryVis);
     // exposure key (mid-grey target, the scene's log-average): 0.133 by day (→ ~122/255 on the curve), dusky at
@@ -720,6 +728,7 @@ export class Renderer {
     // photo mode: the lens's depth of field on the composited image, its exposure / bloom / vignette / grain
     // (the lens's temporal resolve accumulates only while the view holds still: a moved camera or a cut starts over)
     const still = this.cutFrames === 0 && this.poseStill(pose);
+    perfmon.mark('post:photo');
     const finishIn = this.photoPost.apply(r, this.fsq, input, post.linDepth.texture, post.w, post.h, still);
     // (additive, god layer: an eclipse darkens the land — the auto-exposure must not simply lift it back to day)
     const evGod = this.godfx.exposureEV;

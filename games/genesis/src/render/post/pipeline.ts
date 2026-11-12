@@ -20,6 +20,12 @@ import {
   type TextureDataType, type PixelFormat, type MagnificationTextureFilter,
 } from 'three';
 import { FullscreenQuad, passMaterial } from './fsquad.ts';
+import { perfmon } from '../perfmon.ts';
+import { perfSwitch } from '../perfswitch.ts';
+
+// PERF s12 bisection (diagnostics only, default on): `?bloom=0`, `?godrays=0` skip those passes
+const SW_BLOOM = perfSwitch('bloom');
+const SW_GOD = perfSwitch('godrays');
 import { LOGDEPTH_DECODE } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 
@@ -649,8 +655,9 @@ export class PostPipeline {
   finish(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, s: PostSettings, sun: SunScreen, dt: number, time: number, target: WebGLRenderTarget | null = null): void {
     const aspect = this.w / this.h;
     // god rays
-    const godOn = s.godRays && sun.strength > 0.01;
-    if (godOn || s.flare > 0) {
+    perfmon.mark('post:god');
+    const godOn = SW_GOD && s.godRays && sun.strength > 0.01;
+    if (godOn || (SW_GOD && s.flare > 0)) {
       const m = this.godMaskMat.uniforms;
       m.tColor.value = input;
       m.tDepth.value = this.hdr.depthTexture;
@@ -674,7 +681,8 @@ export class PostPipeline {
       this.tonemapMat.uniforms.tGod.value = src.texture;
     }
     // bloom
-    if (s.bloom > 0 && this.bloomMips.length) {
+    perfmon.mark('post:bloom');
+    if (SW_BLOOM && s.bloom > 0 && this.bloomMips.length) {
       let src: Texture = input;
       let sw = this.w, sh = this.h;
       for (let i = 0; i < this.bloomMips.length; i++) {
@@ -722,7 +730,7 @@ export class PostPipeline {
     t.tHDR.value = input;
     t.tBloom.value = this.bloomMips.length ? this.bloomMips[0].texture : input;
     // bloom weight on the level-normalised chain: twice the preset's mix (≈ 9 % of a wide glow at High)
-    t.uBloom.value = this.bloomMips.length ? 2 * this.bloomScale * (s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix) : 0;
+    t.uBloom.value = SW_BLOOM && this.bloomMips.length ? 2 * this.bloomScale * (s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix) : 0;
     t.uBloomNorm.value = this.bloomMips.length ? 1 / this.bloomMips.length : 1;
     t.uStarExposure.value = this.starExposure;
     t.uStarMix.value = this.starMix;
@@ -734,11 +742,12 @@ export class PostPipeline {
     t.uSunUV.value.copy(sun.uv);
     t.uSunOn.value = sun.onScreen && s.flare > 0 ? 1 : 0;
     t.uSunColor.value.copy(sun.color);
-    t.uFlare.value = s.flare;
+    t.uFlare.value = SW_GOD ? s.flare : 0;
     t.uAspect.value = aspect;
     t.uExposureBias.value = s.exposureBias;
     t.uManualExposure.value = s.manualExposure;
     t.uVignette.value = s.vignette;
+    perfmon.mark('post:tonemap');
     fsq.render(r, this.tonemapMat, this.ldr);
     // AA + grain → screen
     const f = this.fxaaMat.uniforms;
@@ -747,6 +756,7 @@ export class PostPipeline {
     f.uFxaa.value = s.fxaa ? 1 : 0;
     f.uGrain.value = s.grain;
     f.uTime.value = time % 100;
+    perfmon.mark('post:fxaa');
     fsq.render(r, this.fxaaMat, target);
   }
 
