@@ -496,15 +496,15 @@ def _tight(x: np.ndarray, ms: float = TIGHT_MS) -> np.ndarray:
 
 def _ease(x: np.ndarray, ms: float = TIGHT_MS + 1.0) -> np.ndarray:
     """The blow lands first: past the first `ms` after the onset, the take's 2 ms RMS envelope is held EASE_DB under
-    its level there (a smoothed gain: a 2 ms look-ahead minimum, then a 4 ms average), so a later bloom, flam, boom
-    or room never rides over the strike."""
+    its level there (a smoothed gain: a +-4 ms minimum, then a 4 ms average, which stays under the gain each 2 ms
+    window needs), so a later bloom, flam, boom or room never rides over the strike."""
     e = _env2(x)
     i = int(np.argmax(e > e.max() * 0.01))
     w = i + ns(ms / 1000.0)
     a = float(e[i:w + 1].max()) * 10 ** (-EASE_DB / 20)
     g = np.ones_like(e)
     g[w:] = np.minimum(1.0, a / np.maximum(e[w:], 1e-12))
-    k = ns(0.002)
+    k = ns(0.004)
     gm = np.array([g[max(0, j - k):j + k].min() for j in range(0, g.size, 8)])
     g2 = np.interp(np.arange(g.size), np.arange(0, g.size, 8), gm)
     k4 = ns(0.004)

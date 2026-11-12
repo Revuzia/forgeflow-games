@@ -1,0 +1,299 @@
+{
+ "verifier": "g1b (max2 round 2, adversarial card verifier after the g1 fix round: sukri, tunlan, ervet, marund, ardit, hesmi, ilsheta)",
+ "date": "2026-11-12 about 15:05 Central",
+ "commitReviewed": "3be949fe1 (g1 fix round on verify_r2_g1a) with the card files from wip syncs fb0c9fb84 and ba2991e68",
+ "pass": false,
+ "checked": 42,
+ "failed": 11,
+ "method": "Viewed all 42 shipped cards in art/out/fighters/<id>/ by eye: per-skin sheets with the splash at 800 px (card size and above) beside its 3D reference (art/.cache/fighters/paint/<sid>_<kind>_3d.png), the portrait at 480 beside its 3D, and 128/64 px chips (LANCZOS down, nearest-neighbour up to view). Full-resolution face crops at 2-6x on every changed card and on every Hesmi, Marund and Ilsheta face; feet crops on Ervet Stillwater; hand and lantern crops on Tunlan. Each fix-round card compared with the file g1a reviewed (git show d492b25c3:<path>). Note: the 3D references for marund (base and Gorgewalk splash) and all Hesmi splashes predate the fix-round renders; those ship as 3D and were judged on the card. Re-ran card_qa.py on the 7 fighters and node tools/gen_store.ts --check.",
+ "gates": {
+  "store": "pass: store.json current (32 offers, 8 shelves; dE gate 32/32)",
+  "cardQa": "42 cards, 1 gate miss: ilsheta_stillwater splash blank 0.65 (restored round-1 file). Fix-round blanks: sukri splash 0.55 (was 0.74), tunlan_lamplit splash 0.49 (was 0.70), marund_gorgewalk splash 0.64. Highest glow: sukri_shadeprint portrait 0.12. The automated gates do not catch the Hesmi notched eye or the Marund Gorgewalk beak."
+ },
+ "cardScores": {
+  "sukri": 5.0,
+  "tunlan": 5.0,
+  "ervet": 4.0,
+  "marund": 4.0,
+  "ardit": 5.5,
+  "hesmi": 2.5,
+  "ilsheta": 4.5
+ },
+ "scoreNote": "Gauge only, against a recent LoL splash (painted, dynamic, face-forward figure with strong value design and a figure that owns the frame). None reaches 7.5. Gains this round: Sukri's base splash is clean, Tunlan Lamplit's hero shot finally owns the frame, Ervet Stillwater is grounded. Most cards remain a 3D figure (or a light regrade of one) standing small on a painted plate. Hesmi drops: the notched fish-tail eye is in the model and now shows on all six cards, and the wrap design keeps a mummy/ghost lean.",
+ "fixRound": {
+  "nowPass": [
+   "sukri_splash",
+   "sukri_shadeprint_splash",
+   "tunlan_lamplit_splash",
+   "ervet_stillwater_splash",
+   "marund_splash",
+   "ilsheta_splash"
+  ],
+  "stillFail": [
+   "tunlan_portrait (eyes still dark bands under the brow, no lid read)",
+   "marund_gorgewalk_splash (pale beak, no eyes, black wedge, chin slashes)",
+   "marund_gorgewalk_portrait (same, barely changed)",
+   "hesmi_splash (notched torn-hole eye; mummy lean)",
+   "hesmi_gorgewalk_splash (notched eye unchanged by the restage)",
+   "hesmi_gorgewalk_portrait (same)",
+   "hesmi_shadeprint_splash (ghost/mummy lean; eye tick)",
+   "ilsheta_first_bell_splash (restored g1a file, blank plate)",
+   "ilsheta_stillwater_splash (restored round-1 file, blank plate, card_qa blank)"
+  ],
+  "newlyFailed": [
+   "hesmi_portrait (notched eye, previously passed)",
+   "hesmi_shadeprint_portrait (notched eye, previously passed)"
+  ]
+ },
+ "perCard": [
+  {
+   "card": "sukri_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (painted v1 over the retouched 3D). The under-eye drip wedges are gone at 2.4x (crop 940-1260 x 180-420, beside the 3D): lidded eyes with iris and pupil, carved nose, one warm smile. Lantern hand jointed, feet seated with a shadow. card_qa blank 0.55 (was 0.74). Watch: the paint is a light regrade of the 3D; small dark notch on the hood's left edge."
+  },
+  {
+   "card": "sukri_portrait",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Lidded eyes with pupils, no curtain or drips. Watch: the small grey tick at the outer corner of the viewer-right eye."
+  },
+  {
+   "card": "sukri_stillwater_splash",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Amber lidded eyes with pupils, no ticks under the lids, staff and lantern on-model, feet seated."
+  },
+  {
+   "card": "sukri_stillwater_portrait",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Clean cheeks, lidded eyes with pupils. Watch: almost identical to the 3D (little paint); grime patch on the hood."
+  },
+  {
+   "card": "sukri_shadeprint_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (3D). At 2x (1020-1340 x 130-400) the orange dabs and the ragged nose patch are gone: amber lacquer mask, almond eyes with near-black pupils, one warm smile, rounded hood. The slate wraps now break the pale bands on the torso, so it reads as a wrapped garment, not ribs. Feet seated with a shadow. Watch: lilac figure on a lilac plate, low contrast; the pale forked staff; eyes have pupils but thin lids."
+  },
+  {
+   "card": "sukri_shadeprint_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Amber mask, lidded dark eyes, rounded hood. Watch: violet hood wash (glow 0.12)."
+  },
+  {
+   "card": "tunlan_splash",
+   "verdict": "ok",
+   "issues": "Not changed. Carved puppet face with closed lids and smile, wolf-shadow screen, feet seated. Watch: small figure."
+  },
+  {
+   "card": "tunlan_portrait",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (the file differs from the one g1a failed, d492b25c3). The head lift shows more face and the chips read better, but at 2-3x (150-450 x 60-330) the eyes are still dark shadow bands under the brow plate: the viewer-left eye a near-black wedge, the viewer-right a dark brown bar, with no lid edge, lid crease or carved line that reads as a closed eye (compare the Noon Fair portrait, where the carved lids read as lids). At 128 and 64 the face shows two dark bars under the brim. The g1a blocker (solid dark eye slots) is not closed. Also watch: the lantern bead behind the hand reads as a pale ball with two blue eye-like spots (in the model and the 3D, also on the Lamplit cards)."
+  },
+  {
+   "card": "tunlan_lamplit_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (painted v2, three-quarter hero shot). The face now owns the frame: carved closed lids, brows, smile all readable at full, card and 128 size; card_qa blank 0.49 (was 0.70). Jointed wooden fingers match the 3D, no extra or melted fingers; the long robe tatters are in the 3D. Watch: the lantern bead is a gold ball with two blue spots that reads like a small creature's eyes (in the model)."
+  },
+  {
+   "card": "tunlan_lamplit_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Lidded carved eyes and smile, on-model. Watch: the lantern bead (gold with a blue ring) can read as an eyeball at 128."
+  },
+  {
+   "card": "tunlan_noon_fair_splash",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Brow band, carved lids and smile read under the brim; feet seated."
+  },
+  {
+   "card": "tunlan_noon_fair_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Carved lids and smile, jointed fingers on-model."
+  },
+  {
+   "card": "ervet_splash",
+   "verdict": "ok",
+   "issues": "Not changed. Closed visor helm (eyeless by design), blue inlay does not glow. Watch: posterised 3D finish."
+  },
+  {
+   "card": "ervet_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. On-model helm. Watch: black smudge under the chin (also in the 3D)."
+  },
+  {
+   "card": "ervet_lamplit_splash",
+   "verdict": "ok",
+   "issues": "Not changed. Hunched pose, sword and feet on-model."
+  },
+  {
+   "card": "ervet_lamplit_portrait",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Warm lamp grade kept, gorget over the strap ends."
+  },
+  {
+   "card": "ervet_stillwater_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (3D). Compared with the g1a file at 1.8x and 4x (900-1340 x 620-820): both boots now sit in a soft contact-shadow pool on the snow (the right boot had none before). Wide planted stance, sword and helm on-model."
+  },
+  {
+   "card": "ervet_stillwater_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Clean on-model helm."
+  },
+  {
+   "card": "marund_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (3D). Compared with the g1a file at 2x (920-1260 x 200-480): the pure-black gap between mask and brim is closed and two squinting lid creases now read beside the nose, as on the base portrait that passes. Hammer, fist and feet on-model. Watch: still a patchwork carved face with a pale nose; the lids are small at card size and do not read at 64."
+  },
+  {
+   "card": "marund_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Heavy brow with squint lids, carved beard, goggled hat. Watch: eyes not readable at 64."
+  },
+  {
+   "card": "marund_gorgewalk_splash",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (3D, three-quarter shot). At 2x (930-1230 x 270-520): the nose keel is still a pale cream beak (not toned to walnut as the commit says), no lid, iris or pupil reads on either side of it, a pure-black triangular hole sits on the viewer-left side of the face, and the dark chin slashes are still there. The hat brim covers the top of the face, so at card size and 128 the face is a patchwork block with a white beak. card_qa blank 0.64. The roll1/g1a failure stands."
+  },
+  {
+   "card": "marund_gorgewalk_portrait",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (painted v1 re-applied) but hardly different from the g1a file at 2x (110-410 x 190-420): pale beak keel, brown blobs where the eyes should be with no lid or pupil, black wedge on the viewer-left cheek edge, chin slashes still present. At 128 and 64 a block face with a white beak and no eyes."
+  },
+  {
+   "card": "marund_long_evening_splash",
+   "verdict": "ok",
+   "issues": "Not changed. Shovel and feet seated, warm grade. Watch: no readable eyes at card size."
+  },
+  {
+   "card": "marund_long_evening_portrait",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Head lifted, lid and beard read. Watch: block face at 64."
+  },
+  {
+   "card": "ardit_splash",
+   "verdict": "ok",
+   "issues": "Not changed. Box helm, spear, painted pavise, feet seated; the strongest card in the set."
+  },
+  {
+   "card": "ardit_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. The helm leads; no bare face by design."
+  },
+  {
+   "card": "ardit_chalkline_splash",
+   "verdict": "ok",
+   "issues": "Not changed. On-model, boot on the cliff lip."
+  },
+  {
+   "card": "ardit_chalkline_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Watch: the bar across the mouth slot leans toward a muzzle at 3x."
+  },
+  {
+   "card": "ardit_first_bell_splash",
+   "verdict": "ok",
+   "issues": "Not changed. On-model. Watch: dark figure on the plate; pavise crosses the lower helm."
+  },
+  {
+   "card": "ardit_first_bell_portrait",
+   "verdict": "ok",
+   "issues": "Not changed since g1a. Helm and T slot lead; told apart from the base by its cream armour."
+  },
+  {
+   "card": "hesmi_splash",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (3D, three-quarter victory hold). The head is no longer a ball, but at 5x (920-1100 x 230-290) the viewer-left eye is a small dark hole with a forked fish-tail notch and a white dot (the torn-hole class failed on Gorgewalk), and the viewer-right eye is a slate slit with a grey blob for an iris. The whole head is still peach wrap bands (brow band, eye band, full lower-face wrap) inside a peach hood over a peach wrapped torso: a mummy lean at card and 128 size. The notched eye is in the model's eye band (hesmi.py), so every Hesmi card carries it."
+  },
+  {
+   "card": "hesmi_portrait",
+   "verdict": "fail",
+   "issues": "Not changed, passed by g1a, failed here (default fail, consistency with Gorgewalk): at 6x (150-260 x 210-260) the viewer-left eye is the same notched fish-tail hole with a white dot, and the viewer-right eye a dark slit with a pale inner shape (an inverted, pale pupil). This is the same eye-band shape g1a failed on hesmi_gorgewalk as a blocker; it reads less at 128 but is plain at full size."
+  },
+  {
+   "card": "hesmi_gorgewalk_splash",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (re-staged from her left). At 4x (1060-1200 x 180-290) the eye openings are not the smooth almond the commit describes: the viewer-left eye is still a notched fish-tail shape with no iris or pupil, set in a white face patch inside a pale hood and face wrap. At card size: two dark slits in a white bandaged face (ghost/mummy lean). Blocker stands."
+  },
+  {
+   "card": "hesmi_gorgewalk_portrait",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (re-staged from her left). At 4x (140-330 x 180-300) the viewer-left eye is the same notched, torn-looking hole, no pupil; dark smudges on the forehead under the hood edge. At 128 a grey bundle with two dark slits. Blocker stands."
+  },
+  {
+   "card": "hesmi_shadeprint_splash",
+   "verdict": "fail",
+   "issues": "Changed in the fix round (3D, relit). The glow is gone and the eyes are dark slits with catch-lights, but at 4x (1020-1180 x 200-300) a small tail tick still hangs off the viewer-left eye, and at card size the figure is a white face band with two dark slits inside an all-lilac hood, wrap and body on a lilac plate: the ghost/mummy lean g1a failed is not resolved."
+  },
+  {
+   "card": "hesmi_shadeprint_portrait",
+   "verdict": "fail",
+   "issues": "Not changed, passed by g1a, failed here: at 4x (140-320 x 210-330) the viewer-left eye is the notched fish-tail hole (same model eye band), with a violet wash inside the hood. Default fail for consistency with the Gorgewalk blocker."
+  },
+  {
+   "card": "ilsheta_splash",
+   "verdict": "ok",
+   "issues": "Changed in the fix round (face-only repaint). At 3.5x (1060-1240 x 170-340, beside the 3D): the light up-pointing ^ chevron is back (not the dark V), amber-brown lidded eyes with pupils, brows, nose and mouth that match the base portrait's model face. No cracks, no streaks. Watch: a porcelain-doll face, more modelled than the 3D splash's soft plate; a thin white chimney reflection crosses the brow."
+  },
+  {
+   "card": "ilsheta_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Lidded amber eyes with pupils, nose, mouth, light chevron."
+  },
+  {
+   "card": "ilsheta_first_bell_splash",
+   "verdict": "fail",
+   "issues": "Restored in the fix round to the file g1a failed (same blob as b962d8ad2). At 3x (1040-1200 x 180-340): a blank pale oval plate with only two brown eyes and a white vertical streak down the forehead: blank-mannequin lean."
+  },
+  {
+   "card": "ilsheta_first_bell_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Lidded brown eyes with pupils, nose and mouth. Watch: stern carved look."
+  },
+  {
+   "card": "ilsheta_stillwater_splash",
+   "verdict": "fail",
+   "issues": "Restored to the round-1 file (same blob as bd9187663). Flat pale disc with only two amber eyes: blank mannequin lean; card_qa blank 0.65 trips (the only gate miss)."
+  },
+  {
+   "card": "ilsheta_stillwater_portrait",
+   "verdict": "ok",
+   "issues": "Not changed. Amber lidded eyes with pupils, nose, mouth and brows readable. Watch: bright forehead highlight."
+  }
+ ],
+ "problems": [
+  {
+   "card": "tunlan_portrait",
+   "severity": "blocker",
+   "what": "Eyes still read as solid dark bands under the brow plate with no lid edge (sensitivity: solid/hollow eyes).",
+   "fix": "Model or 3D-finish fix: give the closed lids a lit carved lid plane and crease (as on the Noon Fair portrait), or fill the slot shadow so a lid line reads at 128."
+  },
+  {
+   "card": "marund_gorgewalk_splash, marund_gorgewalk_portrait",
+   "severity": "major",
+   "what": "Pale cream beak keel, no readable eyes, a pure-black wedge on the viewer-left face edge, chin slashes.",
+   "fix": "Tone the keel in the skin's albedo (not only a retouch), close the mesh gap, remove the slashes, and carve lid creases like the base face."
+  },
+  {
+   "card": "hesmi (all six cards)",
+   "severity": "blocker",
+   "what": "The viewer-left eye opening in the eye band is a notched fish-tail shape that reads as a torn hole (white catch-light dot, no iris on Gorgewalk); the viewer-right eye shows a pale inner shape on the base portrait. Restaging does not hide it.",
+   "fix": "Fix the eye-band cut in art/blender/fighters/hesmi.py to a smooth almond with lid, iris and pupil, rebuild, then re-render all six cards."
+  },
+  {
+   "card": "hesmi_splash, hesmi_gorgewalk_*, hesmi_shadeprint_splash",
+   "severity": "major",
+   "what": "All-one-value wrap (hood, face wrap, torso) gives a mummy/ghost lean at card size.",
+   "fix": "A value and hue break between hood, face wrap and body (darker hood lining, skin showing round the eyes), or a lead ruling on the wrap design."
+  },
+  {
+   "card": "ilsheta_first_bell_splash, ilsheta_stillwater_splash",
+   "severity": "major",
+   "what": "Face is a blank plate with two eyes (blank mannequin lean); Stillwater trips card_qa blank.",
+   "fix": "Bring the model's nose, mouth and brows through in the splash light (as on the portraits and the repainted base splash), then a face-only repaint that keeps the carved mask."
+  }
+ ],
+ "notes": [
+  "Default fail was applied to hesmi_portrait and hesmi_shadeprint_portrait, which g1a passed: the notched eye is the same shape g1a failed as a blocker on Gorgewalk, so passing it on two cards and failing it on two would be inconsistent. The lead may overrule with a recorded ruling.",
+  "The fix-round commit message says ilsheta_first_bell and ilsheta_stillwater splashes were left untouched; the files did change in fb0c9fb84/ba2991e68 and were restored in 3be949fe1 to the exact blobs g1a reviewed (a02e8ade, 6157d06f), so the shipped state matches g1a.",
+  "The marund_gorgewalk commit text says the keel and pale blocks were toned to walnut; on the shipped splash the keel is still pale cream.",
+  "Watch for the lead: the Tunlan lantern bead (gold or pale ball with two blue spots) reads like a small face or eyeball inside the cage on the base and Lamplit cards; it is in the model, not a paint artefact.",
+  "Cards that pass here and are not already on the CDN: sukri_splash, sukri_shadeprint_splash, tunlan_lamplit_splash, ervet_stillwater_splash, marund_splash, ilsheta_splash, plus the g1a passes. Nothing was rendered, painted or deployed by this verifier."
+ ]
+}
