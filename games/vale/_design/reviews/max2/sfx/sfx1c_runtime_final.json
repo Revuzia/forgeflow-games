@@ -1,0 +1,325 @@
+{
+ "what": "max2 SFX-1c final runtime mix on the closing build (HEAD f4db1c56d + SFX-10 round 2): probe_audio_runtime match, 300 s, rift_coop, Chrome fake output; before = the round-1 build captured at 04:41 (same probe, same seeds)",
+ "tokens": {
+  "integratedLUFS": -18,
+  "toleranceLU": 1.5,
+  "kitShareMin": 50
+ },
+ "seats": {
+  "lisvel seed 21": {
+   "before": {
+    "pass": false,
+    "I": -20.16,
+    "kitPct": 46.18,
+    "libPct": 45.19,
+    "top": [
+     [
+      "f_lisvel_attack_hit",
+      27.12
+     ],
+     [
+      "f_lisvel_attack_swing",
+      13.86
+     ],
+     [
+      "c_monster_fall",
+      6
+     ],
+     [
+      "c_cast_big",
+      5.68
+     ],
+     [
+      "c_hit_magic",
+      5.14
+     ],
+     [
+      "c_needle_shot",
+      4.45
+     ]
+    ],
+    "failed": [
+     "masterIntegratedInTokens",
+     "fighterKitShareGe50"
+    ]
+   },
+   "after": {
+    "pass": true,
+    "I": -18.31,
+    "kitPct": 72,
+    "libPct": 20.9,
+    "top": [
+     [
+      "f_lisvel_attack_hit",
+      42.2
+     ],
+     [
+      "f_lisvel_attack_swing",
+      22.28
+     ],
+     [
+      "c_needle_shot",
+      2.53
+     ],
+     [
+      "c_proc_item",
+      2.29
+     ],
+     [
+      "c_proc_team",
+      1.89
+     ],
+     [
+      "f_marund_passive",
+      1.65
+     ]
+    ],
+    "failed": []
+   }
+  },
+  "lisvel seed 3": {
+   "before": {
+    "pass": true,
+    "I": -18.27,
+    "kitPct": 53.83,
+    "libPct": 29.83,
+    "top": [
+     [
+      "f_lisvel_hit",
+      6.13
+     ],
+     [
+      "c_hit_phys_light",
+      4.78
+     ],
+     [
+      "f_lisvel_attack_hit",
+      4.46
+     ],
+     [
+      "f_odrum_hit",
+      4.39
+     ],
+     [
+      "f_ilsheta_attack_hit",
+      3.95
+     ],
+     [
+      "c_needle_shot",
+      3.86
+     ]
+    ],
+    "failed": []
+   },
+   "after": {
+    "pass": true,
+    "I": -16.92,
+    "kitPct": 67.54,
+    "libPct": 20.52,
+    "top": [
+     [
+      "f_lisvel_a1_hit",
+      8.21
+     ],
+     [
+      "f_lisvel_attack_hit",
+      6.63
+     ],
+     [
+      "f_odrum_a1_hit",
+      4.89
+     ],
+     [
+      "f_lisvel_attack_swing",
+      4.5
+     ],
+     [
+      "f_ilsheta_attack_hit",
+      4.43
+     ],
+     [
+      "f_odrum_attack_hit",
+      3.95
+     ]
+    ],
+    "failed": []
+   }
+  },
+  "odrum seed 7": {
+   "before": {
+    "pass": false,
+    "I": -19.52,
+    "kitPct": 67.61,
+    "libPct": 28.09,
+    "top": [
+     [
+      "f_odrum_hit",
+      26.79
+     ],
+     [
+      "f_odrum_attack_hit",
+      16.71
+     ],
+     [
+      "f_odrum_attack_swing",
+      9.27
+     ],
+     [
+      "f_odrum_a1_land",
+      4.45
+     ],
+     [
+      "c_cast_big",
+      4.17
+     ],
+     [
+      "c_monster_fall",
+      4.17
+     ]
+    ],
+    "failed": [
+     "masterIntegratedInTokens"
+    ]
+   },
+   "after": {
+    "pass": true,
+    "I": -17.81,
+    "kitPct": 86.92,
+    "libPct": 10.22,
+    "top": [
+     [
+      "f_odrum_a1_hit",
+      33.01
+     ],
+     [
+      "f_odrum_attack_hit",
+      22.01
+     ],
+     [
+      "f_odrum_attack_swing",
+      12.16
+     ],
+     [
+      "f_odrum_a1",
+      4.91
+     ],
+     [
+      "f_odrum_a1_land",
+      4.63
+     ],
+     [
+      "f_odrum_passive",
+      2.91
+     ]
+    ],
+    "failed": []
+   }
+  },
+  "vashil seed 11": {
+   "before": {
+    "pass": false,
+    "I": -19.88,
+    "kitPct": 50.9,
+    "libPct": 22.13,
+    "top": [
+     [
+      "f_vashil_attack_hit",
+      8.74
+     ],
+     [
+      "f_burdam_passive",
+      7.7
+     ],
+     [
+      "w_glimwick_hit",
+      6.7
+     ],
+     [
+      "f_vashil_hit",
+      6.24
+     ],
+     [
+      "f_vashil_attack_swing",
+      6.18
+     ],
+     [
+      "c_needle_shot",
+      5.6
+     ]
+    ],
+    "failed": [
+     "masterIntegratedInTokens"
+    ]
+   },
+   "after": {
+    "pass": true,
+    "I": -18.02,
+    "kitPct": 67.48,
+    "libPct": 13.75,
+    "top": [
+     [
+      "f_vashil_attack_hit",
+      12.37
+     ],
+     [
+      "f_vashil_attack_swing",
+      8.66
+     ],
+     [
+      "f_burdam_passive",
+      8.43
+     ],
+     [
+      "f_vashil_a1",
+      6.58
+     ],
+     [
+      "f_vashil_passive",
+      6.26
+     ],
+     [
+      "f_vashil_a2",
+      5.47
+     ]
+    ],
+    "failed": []
+   }
+  },
+  "burdam seed 21": {
+   "before": null,
+   "after": {
+    "pass": true,
+    "I": -17.91,
+    "kitPct": 76.93,
+    "libPct": 16.68,
+    "top": [
+     [
+      "f_burdam_attack_hit",
+      24.95
+     ],
+     [
+      "f_burdam_attack_swing",
+      14.75
+     ],
+     [
+      "f_burdam_dash",
+      7.25
+     ],
+     [
+      "f_burdam_a1",
+      6.97
+     ],
+     [
+      "f_burdam_a3_hit",
+      6.69
+     ],
+     [
+      "f_burdam_a3",
+      5.82
+     ]
+    ],
+    "failed": []
+   }
+  }
+ }
+}

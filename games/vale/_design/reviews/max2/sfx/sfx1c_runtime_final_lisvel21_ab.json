@@ -1,0 +1,240 @@
+{
+ "before": {
+  "families": {
+   "f_": 46.18,
+   "c_": 45.19,
+   "w_": 3.57,
+   "u_": 0.0,
+   "m_": 5.05
+  },
+  "top": [
+   [
+    "f_lisvel_attack_hit",
+    27.12
+   ],
+   [
+    "f_lisvel_attack_swing",
+    13.86
+   ],
+   [
+    "c_monster_fall",
+    6.0
+   ],
+   [
+    "c_cast_big",
+    5.68
+   ],
+   [
+    "c_hit_magic",
+    5.14
+   ],
+   [
+    "c_needle_shot",
+    4.45
+   ],
+   [
+    "c_slam",
+    3.64
+   ],
+   [
+    "c_proc_item",
+    2.97
+   ],
+   [
+    "c_monster_hit",
+    2.6
+   ],
+   [
+    "c_proc_team",
+    2.53
+   ]
+  ],
+  "plays": {
+   "w_glimwick_bolt": 572,
+   "w_glimwick_hit": 509,
+   "w_shieldwick_swing": 388,
+   "w_wick_hit": 351,
+   "w_greatwick_throw": 136,
+   "w_wick_hit_heavy": 122,
+   "f_lisvel_attack_swing": 96,
+   "f_lisvel_attack_hit": 92,
+   "c_struck_needle": 73,
+   "c_wick_die": 69
+  },
+  "loudness": {
+   "out": {
+    "I": -20.16,
+    "p10": -24.12,
+    "p50": -20.64,
+    "p90": -17.83,
+    "p99": -15.2,
+    "Mmax": -8.72
+   },
+   "music": {
+    "I": -30.7,
+    "p10": -32.21,
+    "p50": -30.68,
+    "p90": -29.62,
+    "p99": -29.1,
+    "Mmax": -26.95
+   },
+   "sfx": {
+    "I": -23.88,
+    "p10": -142.95,
+    "p50": -30.41,
+    "p90": -23.02,
+    "p99": -20.75,
+    "Mmax": -15.46
+   },
+   "voice": {
+    "I": -14.04,
+    "p10": -200.69,
+    "p50": -182.96,
+    "p90": -173.86,
+    "p99": -18.47,
+    "Mmax": -10.32
+   },
+   "ambience": {
+    "I": -25.79,
+    "p10": -29.97,
+    "p50": -26.41,
+    "p90": -23.2,
+    "p99": -22.74,
+    "Mmax": -20.58
+   }
+  },
+  "gates": {
+   "healPerMinLe6": true,
+   "enemyDownFires": true,
+   "lampSetFires": true,
+   "lampOutFires": null,
+   "announcerPeakOverSfxP99Ge3": true,
+   "masterIntegratedInTokens": false,
+   "fighterKitShareGe50": false
+  },
+  "seconds": 332.8,
+  "room": {
+   "on": true,
+   "irSeconds": 0.6877083333333334
+  }
+ },
+ "after": {
+  "families": {
+   "f_": 72.0,
+   "c_": 20.9,
+   "w_": 3.17,
+   "u_": 0.0,
+   "m_": 3.94
+  },
+  "top": [
+   [
+    "f_lisvel_attack_hit",
+    42.2
+   ],
+   [
+    "f_lisvel_attack_swing",
+    22.28
+   ],
+   [
+    "c_needle_shot",
+    2.53
+   ],
+   [
+    "c_proc_item",
+    2.29
+   ],
+   [
+    "c_proc_team",
+    1.89
+   ],
+   [
+    "f_marund_passive",
+    1.65
+   ],
+   [
+    "m_level_up",
+    1.6
+   ],
+   [
+    "c_monster_fall",
+    1.55
+   ],
+   [
+    "c_cast_big",
+    1.5
+   ],
+   [
+    "w_glimwick_hit",
+    1.38
+   ]
+  ],
+  "plays": {
+   "w_glimwick_bolt": 572,
+   "w_glimwick_hit": 511,
+   "w_shieldwick_swing": 388,
+   "w_wick_hit": 351,
+   "w_greatwick_throw": 136,
+   "w_wick_hit_heavy": 122,
+   "f_lisvel_attack_swing": 96,
+   "f_lisvel_attack_hit": 92,
+   "c_struck_needle": 74,
+   "c_wick_die": 69
+  },
+  "loudness": {
+   "out": {
+    "I": -18.31,
+    "p10": -22.01,
+    "p50": -18.58,
+    "p90": -16.13,
+    "p99": -14.33,
+    "Mmax": -8.47
+   },
+   "music": {
+    "I": -30.7,
+    "p10": -32.21,
+    "p50": -30.68,
+    "p90": -29.63,
+    "p99": -29.11,
+    "Mmax": -27
+   },
+   "sfx": {
+    "I": -22.92,
+    "p10": -141.43,
+    "p50": -30.63,
+    "p90": -22.66,
+    "p99": -21.16,
+    "Mmax": -14.89
+   },
+   "voice": {
+    "I": -14.11,
+    "p10": -200.69,
+    "p50": -200.69,
+    "p90": -176.43,
+    "p99": -18.47,
+    "Mmax": -10.35
+   },
+   "ambience": {
+    "I": -23.19,
+    "p10": -27.51,
+    "p50": -23.92,
+    "p90": -20.62,
+    "p99": -20.28,
+    "Mmax": -17.79
+   }
+  },
+  "gates": {
+   "healPerMinLe6": true,
+   "enemyDownFires": true,
+   "lampSetFires": true,
+   "lampOutFires": null,
+   "announcerPeakOverSfxP99Ge3": true,
+   "masterIntegratedInTokens": true,
+   "fighterKitShareGe50": true
+  },
+  "seconds": 333.65,
+  "room": {
+   "on": true,
+   "irSeconds": 0.6877083333333334
+  }
+ }
+}
