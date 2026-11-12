@@ -1138,3 +1138,16 @@ long press frame-rate independent. Report after 1-2 verified.
   no climb. NOTE (not a leak): while flying, slot capacity is ~2.9x live (pages per level part-filled; compaction waits
   SLACK_FRAMES=600 of lasting slack) — at rest it compacts.
 - A/B run-s15a.sh: cut2 (dist29 default) and cut2off (dist29, all five switches off) at the cut1 settings.
+- CUT #9 landed `?watershare=0` (chunks.ts WATER_SHARE): each terrain PatchPage gets a companion water BatchedMesh
+  (made on the first wet slot shown) whose geometry / _geometryInfo ARE the page's (no extract() copy, no water pages);
+  water slot k = terrain slot k, shown per patch (PatchBatch.showWater), carried through compaction, hidden on release
+  / pool reset; disposal swaps the companion's geometry out first. Node soak: pages 146 -> 73, slots 2336 -> 1168 for
+  the same 800 live patches (the water half gone). tests: pagenormal (+#9), chunkpool bounds now count the page pool's
+  idle reserve apart (no water pool's allowance to hide it), patchworker counts wet by hasWater.
+- A/B cut2 (all on) vs cut2off (dist29, #3 #5 #6 #7 #8 off), LOOKED: region mean |d| 0.90/255 (sway specks, coast
+  sparkle; session-14 noise floor 0.95) = identical. Town 4.97/255: ground, cloud shadows, houses identical; a road
+  stretch (known streaming lag) and the near forest on the right: lower-left foliage DARKER with the cuts on. Suspect
+  #8's shared-iExtra fix (perf-play boots 'sandbox' then loads the save: 2+ PlanetVisuals, so before the fix the
+  primary's near trees drew another world's iExtra = snow/char/leaf-loss/LOD role). Bisect queued: lp0 (town,
+  lazypools=0 only) — run-s15c.sh, then soak3 (22 min, 320x180 High, babel) and ws1/ws0 (#9 A/B).
+- CONTAINER RESTART at ~23:22Z killed run-s15b (soak never ran); scratch survived; re-queued as run-s15c.sh.
