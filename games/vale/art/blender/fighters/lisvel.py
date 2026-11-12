@@ -109,7 +109,6 @@ CARDS = {
         # across the torso: the full draw of her plain shot from her right, looking square onto the bow's plane, so the
         # limb is thin, the string makes its V to the drawing hand and the torso stands clear)
         "splash": {"clip": "attack1", "t": 0.30, "yaw": -30.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
-                   "box_top": 2.0, "box_lo": 0.62, "box_w": 0.42,
                    "key_az": 250.0, "key_el": 38.0, "key_color": "#FFDDB0", "sun": 2.2, "rim_cool": 1.6,
                    "rim_warm": 0.8, "bounce": 0.3, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.85,
                    "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 14.0,
@@ -126,7 +125,9 @@ CARDS = {
         "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4"},
     },
     "lisvel_gorgewalk": {
-        "splash": {"clip": "cast_ult", "t": 0.42, "yaw": 40.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
+        # (card engineer 2, closing2: the Sun Corridor raise crossed the upper limb over the head: Dawn Line's draw from
+        # her right, the bow's plane square to the camera, the face clear)
+        "splash": {"clip": "cast_a1", "t": 0.75, "yaw": -40.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
                    "key_az": 145.0, "key_el": 40.0, "key_color": "#DDE6EE", "sun": 2.8, "rim_cool": 2.0,
                    "rim_warm": 0.4, "bounce": 0.3, "bounce_color": "#A8B4BE", "accent": 1.5, "exposure": -0.35,
                    "focal": [{"at": "head", "az": 165.0, "el": 20.0, "dist": 0.7, "color": "#F0F4F8", "power": 24.0,

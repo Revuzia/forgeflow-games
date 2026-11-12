@@ -2066,8 +2066,8 @@ def _lantern_key(comp, alpha, xy, k):
     return res
 
 
-def _finish(fg, p, kind, post=1.0, **kw):
-    comp = _orig_finish(fg, p, kind, post, **kw)
+def _finish(fg, p, kind, post=1.0, *a, **kw):
+    comp = _orig_finish(fg, p, kind, post, *a, **kw)
     k = CARDS.get(p.get("sid"), {}).get("splash", {}).get("lantern")
     if kind == "splash" and k and _LAMP_XY[0] is not None:
         comp = _lantern_key(comp, fg[..., 3].astype(np.float32), _LAMP_XY[0], k)

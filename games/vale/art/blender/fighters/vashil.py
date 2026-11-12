@@ -231,24 +231,26 @@ SKIN_FLAT: dict = {}
 #               a warm first-light key, gold light on the halo, the clappers hot, the struck ground bouncing warm
 CARDS = {
     "vashil": {
-        "splash": {"clip": "victory", "t": 0.92, "yaw": 31.0, "pitch": -7.0, "lens": 52.0, "fill": 0.88, "x": 0.71,
+        # (card engineer 2, closing2 VAS2-M1: the victory hold was a static stand with the raised wrist over the cowl: Ring
+        # Out's two-handed swing at the centre of its arc, the rod across the front, the halo swinging out)
+        "splash": {"clip": "cast_a3", "t": 0.40, "yaw": 31.0, "pitch": -7.0, "lens": 52.0, "fill": 0.88, "x": 0.71,
                    "key_az": 212.0, "key_el": 20.0, "key_color": "#FFD7A8", "sun": 3.3, "rim_cool": 1.3,
                    "rim_warm": 0.7, "bounce": 0.55, "bounce_color": "#E8BC8C", "accent": 1.6,
                    "focal": [{"at": "x_halo", "off": [0.0, 0.0, -0.04], "az": 205.0, "el": 30.0, "dist": 0.9,
                               "color": "#FFD9A0", "power": 70.0, "size": 0.35},
                              {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE6CC", "power": 22.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 28.0},
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 28.0, "bust_lo": 0.42},     # (card engineer 2: the whole bell ring in frame)
     },
     "vashil_chalkline": {
-        "splash": {"clip": "taunt", "t": 0.40, "yaw": 42.0, "pitch": 3.0, "lens": 68.0, "fill": 0.86, "x": 0.72,
+        "splash": {"clip": "cast_a2", "t": 0.38, "yaw": 42.0, "pitch": 3.0, "lens": 68.0, "fill": 0.86, "x": 0.72,
                    "key_az": 140.0, "key_el": 38.0, "key_color": "#C7D4F2", "sun": 2.4, "rim_cool": 2.0,
                    "rim_warm": 0.35, "bounce": 0.2, "bounce_color": "#8C9CC0", "accent": 1.3, "exposure": -0.4,
                    "focal": [{"at": "x_rod_head", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#E4EEFF",
                               "power": 55.0, "size": 0.2},
                              {"at": "head", "az": 150.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 36.0},
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 36.0, "bust_lo": 0.42},
         # (CW5 refix 2, done:2: every skin its own painting, not the origin's aubade_dawn: the night gorge here)
         "plate": {"src": "needle_gorge", "tint": "#8E9CCB", "sat": 0.7, "median": 0.29,
                   "glow": [0.12, 0.55, 0.40, 0.05], "glow_color": "#B8C6EC"},

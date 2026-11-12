@@ -97,14 +97,15 @@ CARDS = {
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
     },
     "nurrow_noon_fair": {
-        "splash": {"clip": "taunt", "t": 0.62, "yaw": -22.0, "pitch": -4.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+        # (card engineer 2: the taunt's hand clawed over the mask on both Noon Fair cards: the hooked slash, the face clear)
+        "splash": {"clip": "attack1", "t": 0.40, "yaw": -22.0, "pitch": -4.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
                    "key_az": 200.0, "key_el": 55.0, "key_color": "#FFF0DC", "sun": 3.4, "rim_cool": 0.6,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#F0C8A8", "accent": 1.4, "exposure": -0.6,
                    "focal": [{"at": "x_hat_rim", "az": 170.0, "el": 30.0, "dist": 0.8, "color": "#FFD8C8",
                               "power": 40.0, "size": 0.4},
                              {"at": "head", "az": 160.0, "el": 0.0, "dist": 0.8, "color": "#FFE8D0", "power": 24.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": -28.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.50},
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": -28.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.50},
         "plate": {"glow": [0.55, 0.30, 0.50, 0.10], "glow_color": "#FFD6B8", "sat": 0.9},
     },
     "nurrow_shadeprint": {
@@ -115,7 +116,7 @@ CARDS = {
                               "power": 45.0, "size": 0.3},
                              {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#F0ECFF", "power": 24.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 34.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
+        "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 34.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},   # (card engineer 2: the attack2 bust put the blade across the mask)
         "plate": {"glow": [0.25, 0.40, 0.50, 0.08], "glow_color": "#C8B8F0", "sat": 0.85},
     },
 }

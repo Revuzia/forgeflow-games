@@ -76,6 +76,7 @@ MODEL = "grok-imagine-image"
 TIER_FLOOR = {"standard": 12.0, "deluxe": 18.0, "legend": 18.0}
 FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting (ruling 12's speckle bar <= 2.5: the raw
                       # painting's pixel-scale grain read 2.6-5.2 on the figure; one pass reads 0.9-1.8, strokes survive)
+BLENDER_REF = {"tunlan:splash"}   # cards with fighter-only Blender post: referenced from <sid>_<kind>_blender.png (ref3d)
 PROP = {"de_out": 10.0, "de_in": 14.0, "out_max": 0.001, "in_max": 0.001}
 MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacquer mask (the 3D card reads dE 4.2)
 # (cards ks1 fix) the HOLD: a painting is held to its render where the painter keeps breaking on-model in the same place:
@@ -86,8 +87,8 @@ MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacqu
 #   * a ruled mask colour (MASK_TARGET): plates.mask_to's gain on the painting's face disc
 # The hold runs before the gate and on the shipped card (shipped_painting), so the gate sees what ships.
 EYE_HOLD_S = 0.03
-FACE_HOLD = {"sukri": (2.2, 0.7)}
-STREAK_FACES = {"sukri"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
+FACE_HOLD = {"sukri": (2.2, 0.7), "tunlan": (1.8, 0.6)}
+STREAK_FACES = {"sukri", "tunlan", "marund", "burdam", "dunsom"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
 GATE = {"new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
@@ -127,6 +128,20 @@ def ref3d(sid: str, kind: str, bg: bool = False) -> tuple[np.ndarray, np.ndarray
         fg = fg.copy()
         fg[..., 3] = 0.0
     img = plates.finish(fg, p, kind, meta=meta)[..., :3]
+    # (card engineer 1) a card whose Blender run adds fighter-only post the composer here cannot rebuild (Tunlan's base
+    # splash: the hound screen and the lantern key, tunlan.py _plate / _finish over plates.*) is referenced from a copy of
+    # its Blender card kept beside the paint cache (BLENDER_REF, saved right after the render): the card itself; the
+    # figure-less card is that copy away from the figure (its alpha grown 3 %) and the composed plate behind it
+    if f"{sid}:{kind}" in BLENDER_REF:
+        bp = os.path.join(CACHE, f"{sid}_{kind}_blender.png")
+        if os.path.isfile(bp):
+            S = np.asarray(Image.open(bp).convert("RGB").resize(img.shape[1::-1], Image.LANCZOS), np.float32) / 255.0
+            if not bg:
+                img = S
+            else:
+                h_ = img.shape[0]
+                g = blur((fig[..., 3] > 0.02).astype(np.float32)[..., None], 0.03 * h_)[..., 0] > 0.01
+                img = np.where(g[..., None], img, S)
     return img, fig[..., 3], meta
 
 
@@ -140,7 +155,8 @@ def prompt_of(sid: str, kind: str) -> tuple[str, int]:
     from build_manifest import SENSITIVITY  # the imagegen pack's sensitivity line
     frame = "A wide 16:9 splash card." if kind == "splash" else "A square head-and-shoulders portrait card."
     subj = (pr.get("cards_portrait") or {}).get(sid) if kind == "portrait" else None
-    text = " ".join([pr["style"], frame, subj or pr["cards"][sid], light, pr["eyes"]] + ([pr["hands"]] if "hands" in pr else [])
+    eyes = (pr.get("eyes_cards") or {}).get(sid) or (pr.get("eyes_cards") or {}).get(plates.fighter_of(sid)) or pr["eyes"]
+    text = " ".join([pr["style"], frame, subj or pr["cards"][sid], light, eyes] + ([pr["hands"]] if "hands" in pr else [])
                     + [pr["rules"], SENSITIVITY])
     return text, int(pr["version"])
 

@@ -493,6 +493,14 @@ const PROBE_MS = 10000;      // the format-deciding .ogg: other loads wait this 
                              // next one probes: a stalled request), and its decode counts as failed if unsettled
                              // this long after the bytes arrived (a hung decoder); neither may mute the game.
                              // Generous: boot can stall the main thread for seconds
+/** a volume change's glide (τ 50 ms) from where the gain is now: earlier glides still pending are dropped first, so the
+ *  last setting always wins (a stale target left in the timeline could otherwise hold a bus at an old level) */
+function glide(p: AudioParam, v: number, t: number, tau = 0.05): void {
+  p.cancelScheduledValues(t);
+  p.setValueAtTime(p.value, t);
+  p.setTargetAtTime(v, t, tau);
+}
+
 /** the gate roles (see `alert path` in the header): UI roles (audio.ui) and engine event roles (audio.events) */
 const ALERT_UI_ROLES = ['queue_pop', 'queue_remind'];
 const ALERT_EVENT_ROLES = ['countdown', 'matchStart'];
@@ -970,14 +978,17 @@ class Engine implements ValeAudioPort {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const mute = this.hidden && this.vol.muteInBackground;
-    this.master.gain.setTargetAtTime(mute ? 0 : this.vol.master, t, 0.05);
+    glide(this.master.gain, mute ? 0 : this.vol.master, t);
     for (const b of BUSES) {
-      this.bus.get(b)!.gain.setTargetAtTime(this.vol[b], t, 0.05);
-      // never muted in the background; floored; a master at 0 (the player's full mute) is honoured
+      glide(this.bus.get(b)!.gain, this.vol[b], t);
+      // never muted in the background; floored; a master at 0 (the player's full mute) is honoured, at once (an alert
+      // can be due the next instant: no glide is left for it to sound through)
       const alert = this.vol.master <= 0 ? 0 : Math.max(ALERT_FLOOR, this.vol.master * this.vol[b]);
-      this.alertBus.get(b)!.gain.setTargetAtTime(alert, t, 0.05);
+      const ag = this.alertBus.get(b)!.gain;
+      if (alert > 0) glide(ag, alert, t);
+      else { ag.cancelScheduledValues(t); ag.setValueAtTime(0, t); }
     }
-    this.threat.gain.setTargetAtTime(this.vol.sfx, t, 0.05);
+    glide(this.threat.gain, this.vol.sfx, t);
     // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
     this.out.channelCount = this.vol.mono ? 1 : 2;
     const soften = !!this.vol.softenLoud;

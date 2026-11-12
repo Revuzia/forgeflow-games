@@ -118,7 +118,9 @@ MATERIAL_SET = "bible"
 #   Shadeprint   the ink-pot pour (cast_a1 f7: the right pot tipped into the sling pouch) in an ink-violet dusk
 CARDS = {
     "odrum": {
-        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 30.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+        # (card engineer 2, closing2 odrum-C3-M1: the ult's raised pot read as an eyeball beside the mask: Resin Shot's
+        # follow-through, the yoke a long diagonal toward the target with both pots in three-quarter view)
+        "splash": {"clip": "cast_a1", "t": 0.55, "yaw": 30.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
                    "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
                    "focal": [{"at": "x_sling_pouch", "az": 190.0, "el": 20.0, "dist": 0.5, "color": "#FFC060",
@@ -126,10 +128,12 @@ CARDS = {
                              {"at": "head", "az": 195.0, "el": 5.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"clip": "victory", "t": 0.96},
-        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
+        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46, "mask_to": "#EFC88F"},   # the in-game ochre mask (closing2: cream on the cards)
     },
     "odrum_noon_fair": {
-        "splash": {"clip": "run", "t": 0.25, "yaw": -24.0, "pitch": 0.0, "lens": 55.0, "fill": 0.84, "x": 0.71,
+        # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
+        # victory hold, both lanterns on the bar, the cap tipped)
+        "splash": {"clip": "victory", "t": 0.92, "yaw": -24.0, "pitch": 0.0, "lens": 55.0, "fill": 0.84, "x": 0.71,
                    "key_az": 240.0, "key_el": 55.0, "key_color": "#FFF1DA", "sun": 3.4, "rim_cool": 0.8,
                    "rim_warm": 1.0, "bounce": 0.9, "bounce_color": "#E8C9A2", "accent": 1.3,
                    "focal": [{"at": "head", "az": 200.0, "el": 25.0, "dist": 0.8, "color": "#FFF0DC", "power": 18.0,

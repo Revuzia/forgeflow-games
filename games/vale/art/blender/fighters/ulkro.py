@@ -82,7 +82,9 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 
 # each card's frame and light (closer lens).
 CARDS = {
     "ulkro": {
-        "splash": {"clip": "cast_a1", "t": 0.50, "yaw": 8.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        # (card engineer 2, closing2: t 0.50 was the follow-through, the thrower low and pointing down: the draw over the
+        # shoulder, the left arm pointing at the target)
+        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": 8.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
                    "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
                    "focal": [{"at": "x_dart_tip", "az": 200.0, "el": 15.0, "dist": 0.6, "color": "#FFE6C0",
@@ -93,7 +95,8 @@ CARDS = {
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496"},
     },
     "ulkro_highrim": {
-        "splash": {"clip": "cast_a2", "t": 0.45, "yaw": -24.0, "pitch": -6.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+        # (card engineer 2, closing2: Bound's leap floated the figure off the ground: the Hamstring Dart's crouch, feet down)
+        "splash": {"clip": "cast_a3", "t": 0.40, "yaw": -24.0, "pitch": -6.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
                    "key_az": 120.0, "key_el": 58.0, "key_color": "#FFF6E6", "sun": 3.6, "rim_cool": 1.5,
                    "rim_warm": 0.5, "bounce": 0.5, "bounce_color": "#E6D8BE", "accent": 1.4, "exposure": -0.6,
                    "focal": [{"at": "head", "az": 150.0, "el": 25.0, "dist": 0.8, "color": "#FFF2E0", "power": 24.0,

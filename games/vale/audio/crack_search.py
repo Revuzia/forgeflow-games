@@ -13,9 +13,9 @@ table to paste into kits_c.CRACK_TUNE / CRACK_TAKES (and writes it as JSON with 
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import itertools
 import json
-import multiprocessing as mp
 import os
 import sys
 
@@ -33,13 +33,16 @@ SR = 48000
 
 
 def _render(job):
+    """One option of one cue: every take rendered and mastered, then measured (only the features travel back: the
+    renders of every option at once would not fit in memory)."""
     import build as B  # noqa: F401  (registers the cues)
     from cues import kits_c as K
     from cuelib import REGISTRY, master
-    cid, cfg, v = job
+    cid, cfg = job
     K.CRACK_TUNE[cid] = cfg
-    y, _ = master(REGISTRY[cid].fn(v), REGISTRY[cid])
-    return job, np.pad(y, ((0, 0), (240, 0))).astype(np.float32)
+    xs = [np.pad(master(REGISTRY[cid].fn(v), REGISTRY[cid])[0], ((0, 0), (240, 0))).astype(np.float32)
+          for v in range(K.HIT_TAKES)]
+    return job, {n: _feat(xs[:n]) for n in (3, K.HIT_TAKES)}
 
 
 def _feat(xs):
@@ -82,16 +85,15 @@ def main() -> int:
     for o, _ in shipped.values():
         if o not in opts:
             opts.append(o)
-    jobs = [(c, o, v) for c in cues for o in opts for v in range(K.HIT_TAKES)]
-    X: dict = {}
-    with mp.Pool(a.j) as p:
-        for (c, o, v), y in p.imap_unordered(_render, jobs, chunksize=4):
-            X.setdefault((c, o), {})[v] = y
+    jobs = [(c, o) for c in cues for o in opts]
     F: dict = {}
-    for (c, o), d in X.items():
-        xs = [d[v] for v in sorted(d)]
-        for n in (3, K.HIT_TAKES):
-            F[(c, o, n)] = _feat(xs[:n])
+    # a process pool that fails loudly (BrokenProcessPool) when a worker dies, where mp.Pool would wait forever
+    with cf.ProcessPoolExecutor(a.j) as p:
+        for k, ((c, o), fs) in enumerate(p.map(_render, jobs, chunksize=2)):
+            for n, f in fs.items():
+                F[(c, o, n)] = f
+            if k % 200 == 0:
+                print(f'measured {k}/{len(jobs)}', flush=True)
     bar = B.ID_MIN_DIST_DB + a.margin
 
     def score(c, o, n):
