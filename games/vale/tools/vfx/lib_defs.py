@@ -324,7 +324,7 @@ def defs() -> list:
                    size=[0.12, 0.05], color="team", alpha=[0, 1, 0], emissive=3.0, texture="spark", stretch=0.03, blend="add"),
                  glow("origin", "team", 1.6, 0.8, 3.0, alpha=(0, 0.5, 1, 0), offset=[0, 1.0, 0]),
                  light("origin", "team", 8, 6, 0.8, attack=0.6),
-                 *ult_tell(0.75),
+                 *ult_tell(0.75, held=False),
                  comment="T3 · Lumen · ultimate wind-up: a team ring closes in, light gathers inward and up (the warning); max2: the "
                          "closing hour-dial and the standing shaft every ultimate wind-up shares"))
     D.append(vfx("lib_ult_lumen", 1.4,
