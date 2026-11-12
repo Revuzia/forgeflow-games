@@ -256,7 +256,7 @@ CARDS = {
                   # (max2 cards g1, verify ks2: the lid-shadow curtain with two drips under the viewer-right eye, the tick
                   # under the left eye and the jaw line come from the carved recesses: a card face retouch closes them)
                   "retouch": {"portrait": [{"op": "fill", "at": [0.086, 0.041], "r": [0.055, 0.026], "px": 5, "q": 60},
-                                           {"op": "close", "at": [-0.053, 0.040], "r": [0.03, 0.02], "px": 4},
+                                           {"op": "fill", "at": [-0.062, 0.042], "r": [0.04, 0.022], "px": 5, "q": 60},
                                            {"op": "close", "at": [0.14, 0.193], "r": [0.035, 0.05], "px": 3}]}},
     },
     "sukri_stillwater": {
@@ -284,7 +284,8 @@ CARDS = {
                                          {"op": "close", "at": [0.090, -0.059], "r": [0.014, 0.010], "px": 3},
                                          {"op": "close", "at": [0.031, -0.052], "r": [0.030, 0.020], "px": 4}],
                               "portrait": [{"op": "close", "at": [-0.075, -0.035], "r": [0.022, 0.032], "px": 3},
-                                           {"op": "close", "at": [0.068, -0.033], "r": [0.022, 0.034], "px": 3}]}},
+                                           {"op": "close", "at": [0.068, -0.033], "r": [0.022, 0.034], "px": 3},
+                                           {"op": "close", "at": [0.023, -0.107], "r": [0.016, 0.045], "px": 3}]}},
     },
     "sukri_shadeprint": {
         "splash": {"clip": "cast_a1", "t": 0.42, "yaw": 26.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
@@ -315,7 +316,20 @@ CARDS = {
                   "contact": 1.5, "shadow_tint": 0.18,
                   "portrait_over": {"median": 0.30},      # (the draft cell read p50 67, under the 70-110 band)
                   "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}],
-                  "face_off": {"splash": [-0.02, 0.072], "portrait": [-0.028, 0.088]}},
+                  "face_off": {"splash": [-0.02, 0.072], "portrait": [-0.028, 0.088]},
+                  # (max2 cards g1, verify ks2: saturated yellow inlays round crimson pupils read as glowing eyes on the
+                  # splash; the game shows amber irises with dark pupils): the inlay to a honey amber, the pupils near black
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.051, -0.050], "r": [0.032, 0.018], "h": [310.0, 25.0],
+                                          "s_min": 0.35, "v_max": 0.75, "val": 0.45, "sat": 0.5, "to": "#2A1C14", "mix": 0.8},
+                                         {"op": "hue", "at": [0.063, -0.050], "r": [0.034, 0.018], "h": [310.0, 25.0],
+                                          "s_min": 0.35, "v_max": 0.75, "val": 0.45, "sat": 0.5, "to": "#2A1C14", "mix": 0.8},
+                                         {"op": "hue", "at": [-0.051, -0.050], "r": [0.034, 0.018], "h": [28.0, 70.0],
+                                          "s_min": 0.42, "sat": 0.75, "val": 0.68, "to": "#9A6A30", "mix": 0.6},
+                                         {"op": "hue", "at": [0.063, -0.050], "r": [0.036, 0.018], "h": [28.0, 70.0],
+                                          "s_min": 0.42, "sat": 0.75, "val": 0.68, "to": "#9A6A30", "mix": 0.6},
+                                         {"op": "hue", "at": [0.008, 0.041], "r": [0.065, 0.018], "h": [28.0, 70.0],
+                                          "s_min": 0.35, "sat": 0.7, "val": 0.72, "to": "#8A5A30", "mix": 0.5},
+                                         {"op": "close", "at": [-0.092, 0.056], "r": [0.014, 0.014], "px": 3}]}},
     },
 }
 SKINS: list = [
