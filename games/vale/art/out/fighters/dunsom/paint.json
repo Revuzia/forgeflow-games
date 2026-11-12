@@ -1,270 +1,559 @@
 {
  "dunsom:portrait": {
   "shipped": "painted",
-  "variant": 3,
-  "why": "ce1 retry: all 3 pass; v3 the most painted, mask held to the render",
+  "variant": 2,
+  "why": "max2 r2: v1-v3 pass every gate; v2 closest to the render (palette dE 1.2 / 1.9); by eye a smooth carved face with calm lidded eyes and pupils, clean at 512 / 128 / 64",
   "model": "grok-imagine-image",
-  "prompt_version": 4,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The warm dusk light in the reference is canonical: keep every colour exactly as rendered, the coat and the hood in the reference's warm rose and peach light; never recolour them lavender, grey or blue. The character: a tall, slender herder in a wide, low, round pale felt hood brim (a shallow round brim, never tall or pointed) over a cream linen wrap, a carved ochre wooden mask with honey-amber eye inlays with small catch-lights and a short rounded bill (never a long beak), a long felt coat with vertical folds and a leather belt, a knotted linen scarf, dark trousers and boots, holding a tall pale carved wooden shepherd's crook with a dark wooden lantern hung from its hook, its panes warm amber glass round a small blue core. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the right, a warm rim light along the character's right edges, cooler shadow on the far side. Eyes: the mask's honey-amber eye inlays exactly as rendered, each with a dark pupil and one small catch-light, as muted as in the reference; never glowing, never brighter or more saturated, never empty or hollow; no line runs down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_dunsom_portrait__v3.png",
-  "raw_sha256": "4560816a19ae8cffe9ee23524660adcc930b3ae8fe610e2f8d8242d5e61de06a",
+  "prompt_version": 5,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The warm dusk light in the reference is canonical: keep every colour exactly as rendered, the coat and the hood in the reference's warm rose and peach light; never recolour them lavender, grey or blue. The character: a tall, slender herder in a wide, low, round pale felt hood brim (a shallow round brim, never tall or pointed) over a cream linen wrap, a smooth carved ochre wooden mask with two calm lidded carved eyes, each with a dark iris, a pupil and a small catch-light, and a short rounded bill (never a long beak), a long felt coat with vertical folds and a leather belt, a knotted linen scarf, dark trousers and boots, holding a tall pale carved wooden shepherd's crook with a dark wooden lantern hung from its hook, its panes warm amber glass round a small blue core. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The mask is one smooth carved surface with no crack, split, seam or tile line across it. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the right, a warm rim light along the character's right edges, cooler shadow on the far side. Eyes: two calm lidded carved eyes, each with a dark iris, a pupil and one small catch-light, exactly as rendered and as muted; never glowing, never brighter or more saturated, never slits, never empty or hollow; no crack or line runs across the mask or down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_dunsom_portrait__v2.png",
+  "raw_sha256": "1e5736283c65c9b0732200ee76de5a8bc252cec2329094d00a7e7a5bc14f997b",
   "gate": {
    "aspect_err": 0.0,
-   "struct": 0.997,
-   "iou": 0.989,
-   "pal_mean": 3.3,
-   "pal_max": 6.9,
-   "face_range": 1.02,
-   "face_dark": 1.0,
+   "struct": 1.0,
+   "iou": 0.991,
+   "pal_mean": 1.2,
+   "pal_max": 1.9,
+   "face_range": 1.01,
+   "face_dark": 0.95,
    "face_corr": 1.0,
    "new_colour": 0.0,
-   "eye_ds": -3.4,
-   "eye_dv": -6.5,
+   "eye_ds": -1.2,
+   "eye_dv": -7.8,
    "streak_cols": 0.0,
    "prop_out": 0.0,
    "prop_out_fill": 0.0,
    "prop_in": 0.0,
    "prop_in_fill": 0.0,
-   "menu_p50": 80,
-   "menu_over200": 0.4,
-   "fails": [],
-   "pass": true,
-   "variant": 3
-  },
-  "figure_median": 1,
-  "date": "2026-11-11"
- },
- "dunsom:splash": {
-  "shipped": "painted",
-  "variant": 1,
-  "why": "ce1 retry (prompt: the render's warm grade canonical; the first 3 recoloured the coat lavender after the brief): all 3 pass with the carved-mask face hold; v1 carries the most painted form",
-  "model": "grok-imagine-image",
-  "prompt_version": 4,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A wide 16:9 splash card. The warm dusk light in the reference is canonical: keep every colour exactly as rendered, the coat and the hood in the reference's warm rose and peach light; never recolour them lavender, grey or blue. The character: a tall, slender herder in a wide, low, round pale felt hood brim (a shallow round brim, never tall or pointed) over a cream linen wrap, a carved ochre wooden mask with honey-amber eye inlays with small catch-lights and a short rounded bill (never a long beak), a long felt coat with vertical folds and a leather belt, a knotted linen scarf, dark trousers and boots, holding a tall pale carved wooden shepherd's crook with a dark wooden lantern hung from its hook, its panes warm amber glass round a small blue core. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the right, a warm rim light along the character's right edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: the mask's honey-amber eye inlays exactly as rendered, each with a dark pupil and one small catch-light, as muted as in the reference; never glowing, never brighter or more saturated, never empty or hollow; no line runs down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_dunsom_splash__v1.png",
-  "raw_sha256": "1bec9c8d45cbcf7bc55211e77818d7ce37a05343fe63416f4ed5f232557986d6",
-  "gate": {
-   "aspect_err": 0.0,
-   "struct": 0.998,
-   "iou": 0.939,
-   "pal_mean": 4.9,
-   "pal_max": 7.4,
-   "face_range": 1.11,
-   "face_dark": null,
-   "face_corr": 1.0,
-   "new_colour": 0.0,
-   "eye_ds": -3.3,
-   "eye_dv": -10.8,
-   "streak_cols": 0.067,
-   "prop_out": 0.0,
-   "prop_out_fill": 0.0,
-   "prop_in": 0.0,
-   "prop_in_fill": 0.0,
-   "menu_p50": 94,
+   "blockers": {
+    "hollow": 5.345,
+    "blank": 0.431,
+    "glow": 0.0,
+    "streak": 0.0198,
+    "cracked": 0.0543,
+    "dots": 35,
+    "hits": []
+   },
+   "blockers_3d": [],
+   "menu_p50": 79,
    "menu_over200": 0.3,
    "fails": [],
    "pass": true,
-   "variant": 1
+   "variant": 2
   },
   "figure_median": 1,
-  "date": "2026-11-11"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "pass",
+   "card_qa": "every gate passes (blank 0.44 < 0.65)",
+   "date": "2026-11-12"
+  }
  },
- "dunsom_almanac:portrait": {
-  "shipped": "painted",
-  "variant": 1,
-  "why": "ce1: v1 the only pass (v2/v3 repainted the lantern cage, prop)",
-  "model": "grok-imagine-image",
-  "prompt_version": 4,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The cool dusk light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale hood brim printed with fine tables (a shallow round brim, never tall or pointed) over a cream wrap, a carved ochre wooden mask with honey-amber eye inlays and a short rounded bill (never a long beak), a long coat with a leather belt, dark boots, holding a tall ink-black crook with a dark wooden lantern and small folded pages hung from its hook. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: the mask's honey-amber eye inlays exactly as rendered, each with a dark pupil and one small catch-light, as muted as in the reference; never glowing, never brighter or more saturated, never empty or hollow; no line runs down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_dunsom_almanac_portrait__v1.png",
-  "raw_sha256": "0ed6d553122d2e07f7fb725c546152aa12b63da2c4b8d04017e9e859363cd289",
-  "gate": {
-   "aspect_err": 0.0,
-   "struct": 0.999,
-   "iou": 0.987,
-   "pal_mean": 1.7,
-   "pal_max": 2.2,
-   "face_range": 1.01,
-   "face_dark": 1.03,
-   "face_corr": 1.0,
-   "new_colour": 0.0,
-   "eye_ds": 4.2,
-   "eye_dv": -0.3,
-   "streak_cols": 0.0,
-   "prop_out": 0.0,
-   "prop_out_fill": 0.0,
-   "prop_in": 0.0,
-   "prop_in_fill": 0.0,
-   "store_de": 35.7,
-   "store_floor": 18.0,
-   "menu_p50": 53,
-   "menu_over200": 1.5,
-   "fails": [],
-   "pass": true,
-   "variant": 1
-  },
-  "figure_median": 1,
-  "date": "2026-11-11"
- },
- "dunsom_almanac:splash": {
+ "dunsom:splash": {
   "shipped": "3d",
-  "why": "ce1: 6 of 6 variants over two prompts repainted the pale lavender coat and the small figure off the render (palette dE 14-25, iou 0.48-0.76); the 3D finish v2 card ships",
+  "why": "max2 r2: no painted variant passes (all trip the blank tripwire, which also fires on this smooth mask's 3D; Almanac's add silhouette / palette / prop); the 3D finish of the rebuilt mask (MASK_CALM 1.0) reads one smooth carved lacquer face with calm lidded eyes, pupils and a short bill, no crack, seam, socket or streak, at full, card and chip size",
   "gates": [
    {
     "aspect_err": 0.0,
-    "struct": 0.948,
-    "iou": 0.478,
-    "pal_mean": 25.2,
-    "pal_max": 33.5,
-    "face_range": 1.09,
-    "face_dark": 0.92,
+    "struct": 0.991,
+    "iou": 0.777,
+    "pal_mean": 10.6,
+    "pal_max": 16.2,
+    "face_range": 1.17,
+    "face_dark": null,
     "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -5.4,
-    "eye_dv": -22.2,
-    "streak_cols": 0.022,
+    "eye_ds": -3.6,
+    "eye_dv": -11.7,
+    "streak_cols": 0.089,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.003,
-    "prop_in_fill": 0.73,
-    "menu_p50": 97,
-    "menu_over200": 0.7,
+    "prop_in": 0.0005,
+    "prop_in_fill": 0.47,
+    "blockers": {
+     "hollow": 0.942,
+     "blank": 0.815,
+     "glow": 0.0,
+     "streak": 0.0146,
+     "cracked": 0.0315,
+     "dots": 281,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 94,
+    "menu_over200": 0.4,
     "fails": [
      "silhouette",
-     "palette",
-     "prop"
+     "blocker:blank"
     ],
     "pass": false,
     "variant": 1
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.959,
-    "iou": 0.535,
-    "pal_mean": 20.0,
-    "pal_max": 26.4,
-    "face_range": 1.11,
-    "face_dark": 1.07,
+    "struct": 0.985,
+    "iou": 0.774,
+    "pal_mean": 11.9,
+    "pal_max": 18.0,
+    "face_range": 1.2,
+    "face_dark": null,
     "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -6.8,
-    "eye_dv": -19.6,
-    "streak_cols": 0.044,
+    "eye_ds": -2.6,
+    "eye_dv": -14.6,
+    "streak_cols": 0.089,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.0011,
-    "prop_in_fill": 0.78,
-    "menu_p50": 96,
-    "menu_over200": 0.7,
+    "prop_in": 0.0009,
+    "prop_in_fill": 0.53,
+    "blockers": {
+     "hollow": 0.759,
+     "blank": 0.816,
+     "glow": 0.0,
+     "streak": 0.0172,
+     "cracked": 0.033,
+     "dots": 253,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 95,
+    "menu_over200": 0.4,
     "fails": [
      "silhouette",
-     "palette",
-     "prop"
+     "blocker:blank"
     ],
     "pass": false,
     "variant": 2
    },
    {
     "aspect_err": 0.0,
-    "struct": 0.963,
-    "iou": 0.496,
-    "pal_mean": 23.6,
-    "pal_max": 31.2,
-    "face_range": 1.09,
-    "face_dark": 0.8,
+    "struct": 0.995,
+    "iou": 0.897,
+    "pal_mean": 7.5,
+    "pal_max": 11.7,
+    "face_range": 1.14,
+    "face_dark": null,
     "face_corr": 0.99,
     "new_colour": 0.0,
-    "eye_ds": -7.2,
-    "eye_dv": -21.7,
+    "eye_ds": -2.9,
+    "eye_dv": -7.8,
     "streak_cols": 0.044,
     "prop_out": 0.0,
     "prop_out_fill": 0.0,
-    "prop_in": 0.0021,
-    "prop_in_fill": 0.53,
-    "menu_p50": 100,
-    "menu_over200": 0.7,
+    "prop_in": 0.0001,
+    "prop_in_fill": 0.67,
+    "blockers": {
+     "hollow": 0.844,
+     "blank": 0.823,
+     "glow": 0.0,
+     "streak": 0.0136,
+     "cracked": 0.0303,
+     "dots": 201,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 94,
+    "menu_over200": 0.3,
     "fails": [
-     "silhouette",
-     "palette",
-     "prop"
+     "blocker:blank"
     ],
     "pass": false,
     "variant": 3
    }
   ],
-  "prompt_version": 4,
-  "date": "2026-11-11"
+  "prompt_version": 5,
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.87 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
+ },
+ "dunsom_almanac:portrait": {
+  "shipped": "painted",
+  "variant": 3,
+  "why": "max2 r2: the only variant passing every gate (v1 / v2 add a prop); smooth dark lacquer face with calm lidded amber eyes and pupils, no seam lines, clean at 512 / 128 / 64",
+  "model": "grok-imagine-image",
+  "prompt_version": 5,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The cool dusk light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale hood brim printed with fine tables (a shallow round brim, never tall or pointed) over a cream wrap, a smooth carved ochre wooden mask with two calm lidded carved eyes, each with a dark iris and a pupil, and a short rounded bill (never a long beak), a long coat with a leather belt, dark boots, holding a tall ink-black crook with a dark wooden lantern and small folded pages hung from its hook. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The mask is one smooth carved surface with no crack, split, seam or tile line across it. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low cool silver sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: two calm lidded carved eyes, each with a dark iris, a pupil and one small catch-light, exactly as rendered and as muted; never glowing, never brighter or more saturated, never slits, never empty or hollow; no crack or line runs across the mask or down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "raw": "tools/imagegen/raw/card_dunsom_almanac_portrait__v3.png",
+  "raw_sha256": "ba4372e1ba2528055847ad25ea0a6701cbf96d62831b022602001b76718a93c1",
+  "gate": {
+   "aspect_err": 0.0,
+   "struct": 0.999,
+   "iou": 0.989,
+   "pal_mean": 1.8,
+   "pal_max": 3.1,
+   "face_range": 0.98,
+   "face_dark": 0.85,
+   "face_corr": 1.0,
+   "new_colour": 0.0,
+   "eye_ds": -0.4,
+   "eye_dv": 8.5,
+   "streak_cols": 0.0,
+   "prop_out": 0.0,
+   "prop_out_fill": 0.0,
+   "prop_in": 0.0,
+   "prop_in_fill": 0.0,
+   "blockers": {
+    "hollow": 4.231,
+    "blank": 0.326,
+    "glow": 0.0031,
+    "streak": 0.0394,
+    "cracked": 0.086,
+    "dots": 39,
+    "hits": []
+   },
+   "blockers_3d": [],
+   "store_de": 35.4,
+   "store_floor": 18.0,
+   "menu_p50": 53,
+   "menu_over200": 1.4,
+   "fails": [],
+   "pass": true,
+   "variant": 3
+  },
+  "figure_median": 1,
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "pass",
+   "card_qa": "every gate passes (blank 0.34 < 0.65)",
+   "date": "2026-11-12"
+  }
+ },
+ "dunsom_almanac:splash": {
+  "shipped": "3d",
+  "why": "max2 r2: no painted variant passes (all trip the blank tripwire, which also fires on this smooth mask's 3D; Almanac's add silhouette / palette / prop); the 3D finish of the rebuilt mask (MASK_CALM 1.0) reads one smooth carved lacquer face with calm lidded eyes, pupils and a short bill, no crack, seam, socket or streak, at full, card and chip size",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.946,
+    "iou": 0.51,
+    "pal_mean": 21.7,
+    "pal_max": 28.1,
+    "face_range": 1.16,
+    "face_dark": null,
+    "face_corr": 0.99,
+    "new_colour": 0.0,
+    "eye_ds": -4.0,
+    "eye_dv": -7.2,
+    "streak_cols": 0.044,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.001,
+    "prop_in_fill": 0.45,
+    "blockers": {
+     "hollow": 0.181,
+     "blank": 0.776,
+     "glow": 0.0,
+     "streak": 0.0115,
+     "cracked": 0.0228,
+     "dots": 196,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 99,
+    "menu_over200": 0.6,
+    "fails": [
+     "silhouette",
+     "palette",
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.958,
+    "iou": 0.507,
+    "pal_mean": 23.8,
+    "pal_max": 31.5,
+    "face_range": 1.13,
+    "face_dark": null,
+    "face_corr": 0.99,
+    "new_colour": 0.0,
+    "eye_ds": -4.7,
+    "eye_dv": -13.0,
+    "streak_cols": 0.067,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0022,
+    "prop_in_fill": 0.55,
+    "blockers": {
+     "hollow": 0.081,
+     "blank": 0.776,
+     "glow": 0.0,
+     "streak": 0.0083,
+     "cracked": 0.0199,
+     "dots": 221,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 102,
+    "menu_over200": 0.7,
+    "fails": [
+     "silhouette",
+     "palette",
+     "prop",
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.941,
+    "iou": 0.496,
+    "pal_mean": 24.0,
+    "pal_max": 30.0,
+    "face_range": 1.15,
+    "face_dark": null,
+    "face_corr": 0.98,
+    "new_colour": 0.0,
+    "eye_ds": -3.7,
+    "eye_dv": -13.0,
+    "streak_cols": 0.044,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0027,
+    "prop_in_fill": 0.67,
+    "blockers": {
+     "hollow": 1.946,
+     "blank": 0.769,
+     "glow": 0.0,
+     "streak": 0.0081,
+     "cracked": 0.0194,
+     "dots": 129,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 97,
+    "menu_over200": 0.7,
+    "fails": [
+     "silhouette",
+     "palette",
+     "prop",
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
+  "prompt_version": 5,
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.82 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
  },
  "dunsom_highrim:portrait": {
   "shipped": "painted",
   "variant": 2,
-  "why": "ce1: all 3 pass; v2 the most painted",
+  "why": "max2 r2: v1-v3 pass every gate; v2 closest to the render (palette dE 0.9 / 1.1); smooth carved face, calm lidded eyes with pupils, the raised hand a fist, clean at 512 / 128 / 64",
   "model": "grok-imagine-image",
-  "prompt_version": 4,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The pale high light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale sandstone hood brim (a shallow round brim, never tall or pointed) over a cream wrap, a carved ochre wooden mask with honey-amber eye inlays and a short rounded bill (never a long beak), a long pale coat with a leather belt, dark boots, holding a tall bleached walnut crook with a dark wooden lantern hung from its hook, its panes amber round a small blue core. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: the mask's honey-amber eye inlays exactly as rendered, each with a dark pupil and one small catch-light, as muted as in the reference; never glowing, never brighter or more saturated, never empty or hollow; no line runs down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+  "prompt_version": 5,
+  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A square head-and-shoulders portrait card. The pale high light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale sandstone hood brim (a shallow round brim, never tall or pointed) over a cream wrap, a smooth carved ochre wooden mask with two calm lidded carved eyes, each with a dark iris and a pupil, and a short rounded bill (never a long beak), a long pale coat with a leather belt, dark boots, holding a tall bleached walnut crook with a dark wooden lantern hung from its hook, its panes amber round a small blue core. The portrait shows only what the reference shows: a part named above that is out of frame stays out of frame. The mask is one smooth carved surface with no crack, split, seam or tile line across it. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side. Eyes: two calm lidded carved eyes, each with a dark iris, a pupil and one small catch-light, exactly as rendered and as muted; never glowing, never brighter or more saturated, never slits, never empty or hollow; no crack or line runs across the mask or down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
   "raw": "tools/imagegen/raw/card_dunsom_highrim_portrait__v2.png",
-  "raw_sha256": "582b761fcac39330801344a64299b097f90174e472a121e806f367bec31de5e2",
+  "raw_sha256": "c37f568d52ae55de4d24ee32b3d4fffbfd87cfb7e18d8b1a959febc3191c821a",
   "gate": {
    "aspect_err": 0.0,
-   "struct": 0.994,
+   "struct": 0.999,
    "iou": 0.994,
-   "pal_mean": 2.2,
-   "pal_max": 2.9,
-   "face_range": 1.03,
-   "face_dark": 1.02,
+   "pal_mean": 0.9,
+   "pal_max": 1.1,
+   "face_range": 1.01,
+   "face_dark": 1.01,
    "face_corr": 1.0,
    "new_colour": 0.0,
-   "eye_ds": 4.9,
-   "eye_dv": -1.3,
+   "eye_ds": 0.7,
+   "eye_dv": -0.8,
    "streak_cols": 0.0,
-   "prop_out": 0.0003,
-   "prop_out_fill": 0.83,
+   "prop_out": 0.0,
+   "prop_out_fill": 0.0,
    "prop_in": 0.0,
    "prop_in_fill": 0.0,
-   "store_de": 30.0,
+   "blockers": {
+    "hollow": 1.717,
+    "blank": 0.359,
+    "glow": 0.0,
+    "streak": 0.026,
+    "cracked": 0.0662,
+    "dots": 36,
+    "hits": []
+   },
+   "blockers_3d": [],
+   "store_de": 29.3,
    "store_floor": 12.0,
-   "menu_p50": 77,
-   "menu_over200": 2.4,
+   "menu_p50": 82,
+   "menu_over200": 1.0,
    "fails": [],
    "pass": true,
    "variant": 2
   },
   "figure_median": 1,
-  "date": "2026-11-11"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "pass",
+   "card_qa": "every gate passes (blank 0.39 < 0.65)",
+   "date": "2026-11-12"
+  }
  },
  "dunsom_highrim:splash": {
-  "shipped": "painted",
-  "variant": 2,
-  "why": "ce1: all 3 pass with the face hold (2.2, 0.8); v2 has more painted light on the plate and coat",
-  "model": "grok-imagine-image",
-  "prompt_version": 4,
-  "prompt": "Repaint this exact image as one finished, hand-painted fantasy game key-art illustration: painterly brushwork with soft and lost edges over the figure and the landscape alike, painted form and light, a rich value structure. Keep the composition, the camera, the framing, the background layout and the character's pose, silhouette, proportions, costume parts and colours exactly as in the reference. Do not add or remove props, limbs or figures; do not move, turn or resize the character. Add no colour, ornament, band or part that is not in the reference. Paint only what is visible in the reference: anything described below that is out of frame stays out of frame. Add no object, light source, sun disc, lens or prop that the reference does not show. Keep the reference's overall brightness and the background's value; do not brighten the image. A wide 16:9 splash card. The pale high light in the reference is canonical: keep every colour exactly as rendered. The character: a tall, slender herder in a wide, low, round pale sandstone hood brim (a shallow round brim, never tall or pointed) over a cream wrap, a carved ochre wooden mask with honey-amber eye inlays and a short rounded bill (never a long beak), a long pale coat with a leather belt, dark boots, holding a tall bleached walnut crook with a dark wooden lantern hung from its hook, its panes amber round a small blue core. The cheeks and the band under the eyes are smooth carved planes: no new line, crack, drip or streak running down from an eye. Light: a low warm golden sun from the left, a warm rim light along the character's left edges, cooler shadow on the far side, a soft shadow cast from the feet onto the ground they stand on. Eyes: the mask's honey-amber eye inlays exactly as rendered, each with a dark pupil and one small catch-light, as muted as in the reference; never glowing, never brighter or more saturated, never empty or hollow; no line runs down from an eye. Hands: gloved hands with separate fingers, knuckles and a thumb exactly as in the reference, each finger where it is rendered; never a mitten, a block or fused fingers. Painted form, not a 3D render; no outline halo. No text, no letters, no logo, no signature, no border, no frame. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-  "raw": "tools/imagegen/raw/card_dunsom_highrim_splash__v2.png",
-  "raw_sha256": "b007f040244c78c8e5b3b87529679c229e6dc907fd4260bbe2681a5ab6849db7",
-  "gate": {
-   "aspect_err": 0.0,
-   "struct": 0.997,
-   "iou": 0.908,
-   "pal_mean": 4.2,
-   "pal_max": 7.5,
-   "face_range": 1.05,
-   "face_dark": null,
-   "face_corr": 1.0,
-   "new_colour": 0.0,
-   "eye_ds": 0.1,
-   "eye_dv": -3.4,
-   "streak_cols": 0.022,
-   "prop_out": 0.0001,
-   "prop_out_fill": 0.67,
-   "prop_in": 0.0,
-   "prop_in_fill": 0.0,
-   "menu_p50": 91,
-   "menu_over200": 2.6,
-   "fails": [],
-   "pass": true,
-   "variant": 2
-  },
-  "figure_median": 1,
-  "date": "2026-11-11"
+  "shipped": "3d",
+  "why": "max2 r2: no painted variant passes (all trip the blank tripwire, which also fires on this smooth mask's 3D; Almanac's add silhouette / palette / prop); the 3D finish of the rebuilt mask (MASK_CALM 1.0) reads one smooth carved lacquer face with calm lidded eyes, pupils and a short bill, no crack, seam, socket or streak, at full, card and chip size",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.997,
+    "iou": 0.912,
+    "pal_mean": 4.7,
+    "pal_max": 8.2,
+    "face_range": 1.06,
+    "face_dark": null,
+    "face_corr": 1.0,
+    "new_colour": 0.0,
+    "eye_ds": 0.2,
+    "eye_dv": -5.1,
+    "streak_cols": 0.022,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "blockers": {
+     "hollow": 1.432,
+     "blank": 0.758,
+     "glow": 0.0,
+     "streak": 0.0074,
+     "cracked": 0.0265,
+     "dots": 223,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 94,
+    "menu_over200": 3.1,
+    "fails": [
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.998,
+    "iou": 0.914,
+    "pal_mean": 2.5,
+    "pal_max": 5.4,
+    "face_range": 1.04,
+    "face_dark": null,
+    "face_corr": 1.0,
+    "new_colour": 0.0,
+    "eye_ds": 0.1,
+    "eye_dv": -1.0,
+    "streak_cols": 0.022,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "blockers": {
+     "hollow": 1.121,
+     "blank": 0.755,
+     "glow": 0.0,
+     "streak": 0.0083,
+     "cracked": 0.0297,
+     "dots": 221,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 95,
+    "menu_over200": 3.1,
+    "fails": [
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.997,
+    "iou": 0.907,
+    "pal_mean": 4.7,
+    "pal_max": 10.1,
+    "face_range": 1.03,
+    "face_dark": null,
+    "face_corr": 1.0,
+    "new_colour": 0.0,
+    "eye_ds": 0.3,
+    "eye_dv": -4.3,
+    "streak_cols": 0.022,
+    "prop_out": 0.0,
+    "prop_out_fill": 1.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "blockers": {
+     "hollow": 1.27,
+     "blank": 0.753,
+     "glow": 0.0,
+     "streak": 0.0093,
+     "cracked": 0.0283,
+     "dots": 172,
+     "hits": [
+      "blank"
+     ]
+    },
+    "blockers_3d": [
+     "blank"
+    ],
+    "menu_p50": 94,
+    "menu_over200": 2.4,
+    "fails": [
+     "blocker:blank"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
+  "prompt_version": 5,
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.77 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
  }
 }
