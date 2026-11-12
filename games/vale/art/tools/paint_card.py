@@ -11,6 +11,7 @@
     python3 art/tools/paint_card.py hand <sid>:<kind> <bone> --what "<the hand>"    # hand-only repaint (crop, edit, blend, gate)
                                                                                     # (bone "head": a face-only repaint, prompt "face")
     python3 art/tools/paint_card.py hand-accept <sid>:<kind> <bone> <variant> --why "<text>"
+    python3 art/tools/paint_card.py hand-gate <sid>:<kind> <bone> [--free 1]          # re-gate kept raws (--free: disc blend)
 
 paint   The 3D reference is composed fresh from the kept subject pass (art/.cache/fighters/plates/, plates.finish) into
         art/.cache/fighters/paint/<sid>_<kind>_3d.png, then sent to xAI's edit endpoint through tools/imagegen/run_xai.py
@@ -685,6 +686,10 @@ def sheet(fid: str, rev: str) -> None:
 
 
 # ── hands: a hand-only repaint through the same edit path (cards third pass, verify 2 item 6) ───────────────────────
+HAND_BOX = {"nurrow_noon_fair:splash:hand.L": 0.24, "nurrow_shadeprint:splash:hand.L": 0.24}      # (max2 g2 fix) "<sid>:<kind>:<bone>" -> the crop's side as a share of the card height (default 0.16 /
+                    # 0.30 head / 0.32 portrait): Nurrow's splayed hip hand reached past the 0.16 crop's disc
+
+
 def hand_box(sid: str, kind: str, bone: str) -> tuple[int, int, int]:
     meta = plates.load_meta(sid, kind)
     pt = (meta or {}).get("pts", {}).get(bone)
@@ -693,7 +698,7 @@ def hand_box(sid: str, kind: str, bone: str) -> tuple[int, int, int]:
     if pt is None:
         raise SystemExit(f"{sid} {kind}: no render point for {bone}")
     w, h = size_of(kind)
-    S = int(round(((0.30 if bone == "head" else 0.16) if kind == "splash" else 0.32) * h))
+    S = int(round(HAND_BOX.get(f"{sid}:{kind}:{bone}", (0.30 if bone == "head" else 0.16) if kind == "splash" else 0.32) * h))
     cx = int(round(min(max(pt[0] * w, S / 2), w - S / 2)))
     cy = int(round(min(max(pt[1] * h, S / 2), h - S / 2)))
     return cx - S // 2, cy - S // 2, S
@@ -703,11 +708,18 @@ def hand_raw(sid, kind, bone, v):
     return os.path.join(RAW, f"hand_{sid}_{kind}_{bone}__v{v}.png")
 
 
-def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: np.ndarray) -> np.ndarray:
-    """the repainted crop over the card: a soft disc round the hand, limited to the figure (the plate is never touched)"""
+def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: np.ndarray, free: bool = False) -> np.ndarray:
+    """the repainted crop over the card: a soft disc round the hand, limited to the figure (the plate is never touched).
+    free (max2 g2 fix): the disc alone, so a repaint that closes a splayed hand also paints the plate back where the old
+    fingers' spikes stood (limited to the figure, a closed hand left the spikes' ghosts round it: Nurrow's hip hand)"""
     yy, xx = np.mgrid[0:S, 0:S].astype(np.float32)
     d = np.hypot(xx - S / 2, yy - S / 2) / (S / 2)
     disc = np.clip((0.95 - d) / 0.3, 0.0, 1.0)
+    if free:
+        disc = np.clip((0.80 - d) / 0.25, 0.0, 1.0)
+        out = base.copy()
+        out[y0:y0 + S, x0:x0 + S] = base[y0:y0 + S, x0:x0 + S] * (1 - disc[..., None]) + crop * disc[..., None]
+        return out
     fig = np.clip(plates.gaussian(A[y0:y0 + S, x0:x0 + S, None].astype(np.float32), 1.5)[..., 0] * 1.2, 0.0, 1.0)
     m = (disc * fig)[..., None]
     out = base.copy()
@@ -715,7 +727,7 @@ def hand_blend(base: np.ndarray, crop: np.ndarray, x0: int, y0: int, S: int, A: 
     return out
 
 
-def hand(sid: str, kind: str, bone: str, what: str, n: int) -> float:
+def hand(sid: str, kind: str, bone: str, what: str, n: int, free: bool = False) -> float:
     import run_xai
     from pathlib import Path
     base = plates.load_image(plates.image_path(sid, kind))[..., :3]
@@ -739,11 +751,11 @@ def hand(sid: str, kind: str, bone: str, what: str, n: int) -> float:
     for i, b in enumerate(imgs[:n], 1):
         with open(hand_raw(sid, kind, bone, i), "wb") as f:
             f.write(b)
-    hand_gate(sid, kind, bone, n, text)
+    hand_gate(sid, kind, bone, n, text, free)
     return 0.02 * len(imgs)
 
 
-def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "") -> list[dict]:
+def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "", free: bool = False) -> list[dict]:
     base = plates.load_image(plates.image_path(sid, kind))[..., :3]
     _F, A, _m = ref3d(sid, kind)
     x0, y0, S = hand_box(sid, kind, bone)
@@ -754,9 +766,9 @@ def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "") -> list[di
         if not os.path.isfile(fp):
             continue
         c = np.asarray(Image.open(fp).convert("RGB").resize((S, S), Image.LANCZOS), np.float32) / 255.0
-        blended = hand_blend(base, c, x0, y0, S, A)
+        blended = hand_blend(base, c, x0, y0, S, A, free)
         bb = blended[y0:y0 + S, x0:x0 + S]
-        g = {"variant": v}
+        g = {"variant": v, "free": bool(free)}
         sm = lambda x: np.asarray(Image.fromarray((np.clip(x, 0, 1) * 255).astype(np.uint8)).resize((48, 48), Image.BILINEAR), np.float32).mean(-1)  # noqa: E731
         g["struct"] = round(float(np.corrcoef(sm(bb).ravel(), sm(bc).ravel())[0, 1]), 3)
         fm = A[y0:y0 + S, x0:x0 + S] > 0.9
@@ -779,7 +791,10 @@ def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "") -> list[di
             sh.paste(Image.fromarray((np.clip(im, 0, 1) * 255).astype(np.uint8)).resize((300, 300), Image.LANCZOS), (i * 306, 0))
         sh.save(os.path.join(CACHE, f"hand_{sid}_{kind}_{bone}_v{v}_review.png"))
         print(f"  hand {sid} {kind} {bone} v{v}: {'PASS' if g['pass'] else 'FAIL ' + ','.join(fails)} struct {g['struct']} pal {g['pal_mean']}")
-    with open(os.path.join(CACHE, f"hand_{sid}_{kind}_{bone}_gate.json"), "w", encoding="utf-8") as f:
+    gp = os.path.join(CACHE, f"hand_{sid}_{kind}_{bone}_gate.json")
+    if not text and os.path.isfile(gp):           # a re-gate keeps the prompt that made the raws
+        text = json.load(open(gp, encoding="utf-8")).get("prompt", "")
+    with open(gp, "w", encoding="utf-8") as f:
         json.dump({"prompt": text, "gates": out}, f, indent=1)
     return out
 
@@ -881,7 +896,10 @@ def main(argv: list[str]) -> int:
         apply(pos[0])
     elif cmd == "hand":
         sid, kind = pos[0].split(":")
-        print(f"[paint] cost ~${hand(sid, kind, pos[1], opts.get('what', 'a hand'), n):.2f}")
+        print(f"[paint] cost ~${hand(sid, kind, pos[1], opts.get('what', 'a hand'), n, opts.get('free') == '1'):.2f}")
+    elif cmd == "hand-gate":
+        sid, kind = pos[0].split(":")
+        hand_gate(sid, kind, pos[1], n, "", opts.get("free") == "1")
     elif cmd == "hand-accept":
         hand_accept(pos[0], pos[1], int(pos[2]), opts.get("why", ""))
     elif cmd == "sheet":

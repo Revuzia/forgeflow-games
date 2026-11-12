@@ -277,7 +277,7 @@
  },
  "ervet_stillwater:splash": {
   "shipped": "3d",
-  "why": "max2 g1 (verify roll1: cast_a2 t 0.42 kicked the right leg out, a broken one-foot stand): re-staged on cast_a1 t 0.40, both boots planted with contact shadow and the blade swept out low; shipped 3D: all 3 paintings fail new colour (v1/v2 also silhouette/face)",
+  "why": "max2 g1 fix (verify_r2_g1a: both boots planted but no contact shadow on the bright snow, the feet read pasted on): the 3D finish lays a firmer contact shadow (contact 2.4), keeps the catcher's real shadow (0.85) and a darker cool shadow colour (shadow_tint 0.18); shipped 3D as round 2 (the paintings add new colour)",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -380,7 +380,7 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
+  "prompt_version": 7,
   "date": "2026-11-12"
  }
 }

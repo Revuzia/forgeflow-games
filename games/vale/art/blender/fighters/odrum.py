@@ -135,7 +135,10 @@ CARDS = {
                   # (max2 g2: on the three-quarter splash the mask is ~3x the old disc, which the mask_to gain left as a
                   # pale-gold spot on the brow: the disc on the face's middle and grown to the mask)
                   "face_off": {"splash": [0.0, 0.035]}, "mask_r": {"splash": 2.6},
-                  "face_r": {"splash": 1.7}},     # the blocker detector's disc on the larger face
+                  "face_r": {"splash": 1.7},     # the blocker detector's disc on the larger face
+                  # (max2 g2 fix, verify_r2_g2a: the face-only xAI repaint put photo-real white-sclera eyes in the cracked
+                  # mask: stylised lidded eyes painted in the recesses on the 3D card instead, plates.paint_eyes)
+                  "retouch": {"splash": [{"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#C29660", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
@@ -151,7 +154,8 @@ CARDS = {
                               "size": 0.15}]},
         "portrait": {"clip": "idle_lobby", "t": 0.0, "key_az": 150.0, "key_el": 55.0},
         "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4",
-                  "face_off": {"splash": [0.0, 0.035]}},     # (max2 g2: the face's middle on the three-quarter splash)
+                  "face_off": {"splash": [0.0, 0.035]},     # (max2 g2: the face's middle on the three-quarter splash)
+                  "retouch": {"splash": [{"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#CBBDA8", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_shadeprint": {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
@@ -172,7 +176,11 @@ CARDS = {
         # brief gives ink #2B2A33: the dusk cast held off the figure as on Hesmi Shadeprint, ks1's fig_chroma fix)
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0", "fig_chroma": 0.40, "amb_tint": 0.15, "match": 0.1, "sub_floor": 0.10,
-                  "sub_max_k": 1.0, "haze": 0.02},
+                  "sub_max_k": 1.0, "haze": 0.02,
+                  # (max2 g2 fix, verify_r2_g2a: dense cracks over the mask, solid yellow slits with no pupils: the thin
+                  # crack lines closed, the slits painted as lidded eyes in the recesses)
+                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}],
+                              "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
     },
 }
 SKINS: list = [
@@ -206,7 +214,9 @@ SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_sling_pouch", "pot_l": "x_pot_l"
 # the cap near the reserved Noonwhite; the game's read is unchanged by this)
 # (final parity client F3: fill 0.78 -> 0.86 and the box centre at 70 % across: the figure stood at 0.77 of the
 # splash's height, 0.64 of W2's loading card; now in the cast's 0.82-0.89 band with both jars inside the frame)
+# (max2 g2 fix) "eyes3d": the almond recesses' centres (EYES; rest, m, on the voids' floor) for plates.paint_eyes
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.86, "x": 0.70, "pitch": 1.0, "yaw": 30.0,
+          "eyes3d": [[-0.079, -0.150, 1.651], [0.067, -0.150, 1.652]],
           "sun": 2.25}
 HERO_SPEC = 0.0                       # the hero renders' specular level (see _install_render)
 HERO_FILL = 0.55                      # ... and the sky fill under the map's (see _install_render): the shading carries

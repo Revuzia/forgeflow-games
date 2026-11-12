@@ -1384,7 +1384,8 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
     crease above and a socket shade round it. Sizes in cm on the face: "w" / "h" the almond's half length / height,
     "tilt" its outer corner's lift (cm per cm), "lid_k" the share of the almond under the lid (0..1), "line" the lash
     line's half width, "socket" (0..1) the shade, "smoke" [w, h, k] a wider darker ellipse behind each eye (Lisvel's
-    smoky glass band), "crease"; colours "iris" / "ink" hex, "lid" hex or the local colour x "lid_val";
+    smoky glass band), "crease"; colours "iris" / "ink" hex, "lid" hex or the local colour x "lid_val"; "bed" [kw, kh, k]
+    fills an almond kw x kh the eye's size with the lid colour (a step darker) first, a deep recess made a carved socket;
     "mode": "open" or "closed" (a lash arc under a lit lid); "only": [i, ...] the eyes to paint; "k" overall mix."""
     pts = (meta or {}).get("pts") or {}
     h, w = comp.shape[:2]
@@ -1434,6 +1435,14 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
             lidc = np.broadcast_to(_hex(op["lid"]).astype(np.float64), rgb.shape)
         else:
             lidc = np.clip(rgb0 * float(op.get("lid_val", 0.9)), 0.0, 1.0)
+        bed = op.get("bed")
+        if bed:                      # a deep recess (Odrum's almond voids) filled to a carved socket in the lid colour first
+            kw, kh, kb = (float(t) for t in bed)
+            ub, vb_ = ua / (ew * kw), (vb - float(op.get("tilt", 0.0)) * ua) / (eh * kh)
+            qb = np.clip(1.0 - ub * ub, 0.0, 1.0)
+            inb = _sst(np.minimum.reduce([(qb ** 0.7 - vb_) * eh * kh, (vb_ + 0.75 * qb ** 0.9) * eh * kh,
+                                          (1.0 - np.abs(ub)) * ew * kw]) / (2.0 * soft))
+            rgb = rgb + (lidc * 0.82 - rgb) * (kb * inb)[..., None]
         if op.get("mode", "open") == "open":
             rgb = rgb + (iris[None, None] - rgb) * (0.96 * ins)[..., None]
             edge = top - float(op.get("lid_k", 0.5)) * (top - bot)

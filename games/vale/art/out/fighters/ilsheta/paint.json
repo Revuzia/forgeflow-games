@@ -76,7 +76,45 @@
    "variant": 2
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "head",
+   "variant": 1,
+   "why": "max2 g1 fix (verify_r2_g1a: the full-card paint turned the model's light ^ forehead chevron into a bold dark V): a face-only repaint (prompt v7 face + face_eyes) over the shipped v2: the chevron back to a thin light ^ pointing up, calm lidded amber-brown eyes with dark pupils, the carved nose and closed mouth kept; second round v1 passes the head gate incl. sclera (first round's on-model v1 failed sclera 0.18 on hood-rim highlights and was not used)",
+   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: the smooth pale chalk face plate inside the hood, behind its clear glass with the same vertical reflection streak: two calm lidded eyes with warm amber-brown irises and dark pupils, matte, no highlight dot in them, a small straight nose and a small closed mouth softly carved into the plate exactly where the reference has them; high on the forehead only a thin, faint, light carved chevron pointing upward like a roof (^), never a dark V and never a frown mark; the plate smooth and young, no cracks, wrinkles or lines. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_ilsheta_splash_head__v1.png",
+   "raw_sha256": "322424ac7074ce2bb25426f1e8c1c4523edd216d52717dedccfa8a1c832bdf56",
+   "gate": {
+    "variant": 1,
+    "free": false,
+    "struct": 0.989,
+    "pal_mean": 2.9,
+    "sclera": 0.028,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "head",
+    "variant": 1,
+    "why": "max2 g1 fix (verify_r2_g1a: the full-card paint turned the model's light ^ forehead chevron into a bold dark V): a face-only repaint (prompt v7 face + face_eyes) over the shipped v2: the chevron back to a thin light ^ pointing up, calm lidded amber-brown eyes with dark pupils, the carved nose and closed mouth kept; second round v1 passes the head gate incl. sclera (first round's on-model v1 failed sclera 0.18 on hood-rim highlights and was not used)",
+    "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: the smooth pale chalk face plate inside the hood, behind its clear glass with the same vertical reflection streak: two calm lidded eyes with warm amber-brown irises and dark pupils, matte, no highlight dot in them, a small straight nose and a small closed mouth softly carved into the plate exactly where the reference has them; high on the forehead only a thin, faint, light carved chevron pointing upward like a roof (^), never a dark V and never a frown mark; the plate smooth and young, no cracks, wrinkles or lines. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Eyes, wherever the face shows them: stylised and painted like the rest of the figure, never realistic or photographic: each eye a soft dark almond under a heavy upper lid, the iris and pupil one dark muted tone, no white of the eye showing, no catch-light or bright dot, no bright ring; calm and half-closed, never staring, never glowing, never an empty hole. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_ilsheta_splash_head__v1.png",
+    "raw_sha256": "322424ac7074ce2bb25426f1e8c1c4523edd216d52717dedccfa8a1c832bdf56",
+    "gate": {
+     "variant": 1,
+     "free": false,
+     "struct": 0.989,
+     "pal_mean": 2.9,
+     "sclera": 0.028,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  },
  "ilsheta_first_bell:portrait": {
   "shipped": "painted",

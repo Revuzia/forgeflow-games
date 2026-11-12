@@ -170,7 +170,17 @@ CARDS = {
                   "retouch": {"splash": [{"op": "hue", "at": [0.002, 0.020], "r": [0.065, 0.022], "h": [225.0, 295.0],
                                           "s_min": 0.33, "val": 0.5, "sat": 0.4, "to": "#3A3450", "mix": 0.6},
                                          {"op": "hue", "at": [0.0, -0.017], "r": [0.06, 0.012], "h": [225.0, 295.0],
-                                          "s_min": 0.33, "val": 0.7, "sat": 0.45, "to": "#4A4460", "mix": 0.5}]}},
+                                          "s_min": 0.33, "val": 0.7, "sat": 0.45, "to": "#4A4460", "mix": 0.5},
+                                         # (max2 g1 fix, verify_r2_g1a: the all-pale lilac bundle read as a ghost): the
+                                         # mantle, wraps and legs under the hood a value step down toward the skin's ink,
+                                         # the hood and face wrap left pale, so the face reads framed
+                                         {"op": "hue", "at": [0.0, 0.31], "r": [0.20, 0.23], "h": [215.0, 335.0],
+                                          "s_min": 0.0, "s_max": 0.45, "v_max": 0.80, "val": 0.62},
+                                         # (the notched left eye and the ink tick on the band's left: the tick closed,
+                                         # the eye's notch softened into its almond)
+                                         {"op": "close", "at": [-0.029, 0.004], "r": [0.012, 0.011], "px": 4},
+                                         {"op": "blur", "at": [-0.029, 0.004], "r": [0.012, 0.011], "px": 1.2},
+                                         {"op": "blur", "at": [-0.020, 0.027], "r": [0.018, 0.009], "px": 0.8}]}},
     },
 }
 SKINS: list = [

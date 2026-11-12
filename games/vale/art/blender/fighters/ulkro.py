@@ -73,7 +73,9 @@ SOCKETS = {"weapon": "prop.R", "dart_tip": "x_dart_tip", "quiver": "x_quiver"}
 # the rims at Kemdo's strengths (FIX PASS 1, review: 'the shin wraps and boots come out near-white'): the splash's
 # low back rims put a grazing white sheen over the dark wraps and boots at full strength
 # (final parity client F3: fill 0.88 -> 0.94, the figure at 0.81 of the splash's height, 0.68 of W2's loading card)
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.94, "yaw": 22.0, "rim_cool": 0.35, "rim_warm": 0.45,
+          # (max2 g2 fix) two eyes in the carved band's slit (rest, m: BAND_Z - BAND_H + 6 mm), for plates.paint_eyes
+          "eyes3d": [[-0.030, -0.138, 1.699], [0.030, -0.138, 1.699]]}
 # PER-SKIN CARDS (closing review ULK-M1; schema: art/blender/portraits.py header). Each card is its own moment, the crest
 # of darts fanning to screen-right (the camera on her right side): base: the Hurl's draw on the high rim at dusk, low
 # stride, the thrower drawn back, the laid dart's dawnglass catching the low sun as the key; Highrim: Bound's leap
@@ -90,7 +92,9 @@ CARDS = {
         # (head ~2x) so the painted pass can keep two lidded eyes)
         "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
                    "box_lo": 0.75, "box_w": 0.70,
-                   "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
+                   # (max2 g2 fix, verify_r2_g2a "lower robe see-through": the low key (el 14) laid the darts' and the
+                   # quiver's long shadows across the robe in stripes that read as the plate's steps behind it: el 34)
+                   "key_az": 205.0, "key_el": 34.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
                    "focal": [{"at": "x_dart_tip", "az": 200.0, "el": 15.0, "dist": 0.6, "color": "#FFE6C0",
                               "power": 55.0, "size": 0.25},
@@ -99,8 +103,10 @@ CARDS = {
         "portrait": {"yaw": 16.0, "lens": 70.0},
         # (max2 g2, verify_roll2: the compose washed the figure milky against the render: less plate haze, match and
         # light wrap over the figure, so the sandstone hood and brown tunic keep the render's value and chroma)
+        # (max2 g2 fix: the face-only xAI repaint put photo-real eyes in the slit: two stylised lidded eyes painted on
+        # the 3D card instead, plates.paint_eyes; the painted portrait keeps its own)
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496", "haze": 0.0, "match": 0.12,
-                  "wrap": 0.16, "amb_tint": 0.30},
+                  "wrap": 0.16, "amb_tint": 0.30, "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#9C8466", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
     },
     "ulkro_highrim": {
         # (card engineer 2, closing2: Bound's leap floated the figure off the ground: the Hamstring Dart's crouch, feet down)
@@ -110,12 +116,16 @@ CARDS = {
                    "focal": [{"at": "head", "az": 150.0, "el": 25.0, "dist": 0.8, "color": "#FFF2E0", "power": 24.0,
                               "size": 0.3}]},
         "portrait": {"yaw": -22.0, "lens": 70.0},
-        "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85},
+        # (max2 g2 fix, verify_r2_g2a "no eyes: blank/mummy wrap face": two lidded eyes in the slit, plates.paint_eyes)
+        "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85,
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#A39C90", "socket": 0.15, "line": 0.08, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#A39C90", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
     },
     "ulkro_long_evening": {
         # (max2 g2, verify_roll2: one dark dot in the slit read as a single cyclops eye at card size: a three-quarter
         # hero frame, the head ~2x, so the slit holds two lidded eyes in the painted pass)
-        "splash": {"clip": "victory", "t": 0.55, "yaw": 34.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
+        # (max2 g2 fix, verify_r2_g2a: the victory frame held the thrower up like a bone and both gloves open as claws:
+        # the base's release (Hurl, cast_a1 t 0.43), the thrower's dart in flight, the gloves low)
+        "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
                    "box_lo": 0.75, "box_w": 0.60,
                    "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
                    "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.5, "exposure": -0.55,
@@ -123,8 +133,9 @@ CARDS = {
                               "size": 0.35},
                              {"at": "x_quiver", "az": 20.0, "el": 20.0, "dist": 0.9, "color": "#FFB070",
                               "power": 40.0, "size": 0.4}]},
-        "portrait": {"yaw": 30.0, "lens": 70.0},
-        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
+        "portrait": {"yaw": 16.0, "lens": 70.0},
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
     },
 }
 TEXTURE_SIZE = 2048
