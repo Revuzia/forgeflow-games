@@ -1,0 +1,26 @@
+{
+ "lane": "max2 env: maps, lighting and post (round 2 engineer)",
+ "date": "2026-11-12 Central",
+ "note": "Source changes were carried to git by the wip syncs (156a07fb4, e25bcfb8f, 3174fe24a, ba76912d5); this file and the sheets are the lane's evidence. Before shots: _harness/_shots/maxenv/max2_before (round-2 start), after: max2_after4 (same spot order, High, t=20, 28.5 m). Structures: _harness/_shots/max2_struct_sootoff_* vs max2c_struct_*.",
+ "done": [
+  {"id": "ENV-1 canopy species", "sheet": "ENV-1_canopy_species_ab.png", "what": "Two new VALE crown species built in art/blender/props/dialwood.py: the Hourtier (Aubade west; silvered sage, three flat pagoda tiers with air between, 600 tris) and the Lampbough (Serenade east; amber quill parasol on a tall bare bole, 528 tris). They replace Dialwood instances in irregular groves (map_rift.json art.terrain.treeGroves, render/terrain.ts treeVariantOf: 64/28/8 % west, 64/8/28 % east, a fifth of a species grove stays Dialwood).", "budget": "whole-map tree triangles: mean 604.6 per tree now vs 620 for the six Dialwood alone (-2.5 %, _harness/max2_env_treecount.mjs); +2 instanced variants (+3-6 draws per RIFT spot, main+shadow); programs unchanged (39)."},
+  {"id": "ENV-1 clearing floor", "sheet": "ENV-1_floor_breakup_ab.png", "what": "Block-top floor between crowns (terrain_glsl WALL_MAIN): warm dapple pools, species leaf drifts (amber east, silvered sage west), sparse dial-stone slabs with a dark seam; the mean held inside the block top's dark band."},
+  {"id": "ENV-4 outflow", "sheet": "ENV-4_outflow_edge_ab.png", "what": "Banks feather into the spill 1 m past both mouth ends (no lit side strip), broken crest clots, denser streaks of uneven length; round-2 fix lifts the fall's pale cap 0.155 -> 0.2 and the spill alpha 0.5 -> 0.55 (water shader terrain.ts)."},
+  {"id": "ENV-6 rubble", "sheet": "ENV-6_rubble_fix_ab.png", "what": "Rubble piles as a heap where the top landed (8 of 12 chunks, lifted onto each other); it draws with a sooted clone of the plinth stone (soot 0.75) over a warm grime: the flat cool-grey chunks are gone."},
+  {"id": "ENV-6 tower soot / scorch states", "sheet": "ENV-6_soot_fix_ab.png", "what": "structures.ts uSoot by damage stage (0 / 0.8 / 1.0), ruin 0.9: umber soot patches and streaks climbing from the foot, warm grime, darkest x0.42 (never a hole). Same program (uniform only, the |vsf key)."},
+  {"id": "ENV-5 base plaza dressing", "sheet": "ENV-5_plaza_dressing_ab.png", "what": "Plaza floor dressing in the ground shader: per-flag stone families (warm / cool / pale, value +-4 %, one flag in eleven a darker replacement), a walked track from the fountain toward the lanes, litter and dust drift against the kerb. Floor-only (no new props: zero triangles and draws)."},
+  {"id": "ENV-11 BRIDGE deck bays", "sheet": "ENV-11_deck_bays_ab.png", "what": "Every 9 m a paler drum cross-course (0.84 m) with chalk hour ticks every 1.2 m and dark joints; each bay its own tone (+-4.5 %). Shader only."},
+  {"id": "ENV-7 recapture", "sheet": "ENV-7_slab_recapture.png", "what": "Recaptured on the current build (round-2 start vs now); no code change to the shadow-slab cap this round."}
+ ],
+ "notDone": [
+  {"id": "god rays", "why": "Not built. At the 28.5 m, ~52 deg gameplay camera a light shaft is seen from above and collapses to a pale smear on the floor; the read that remains (sun pools under the canopy) is delivered for free by the ENV-1 dapple pools. A volumetric or card-based shaft would add transparent overdraw, draws and a program against margins of 462k-496k / 500k tris and 39-40 / 40 programs, and would spend the top of the value range B5 reserves for fighters and effects. Revisit only with a cheap screen-space post pass if a later budget frees a program."}
+ ],
+ "gates": {
+  "typecheck": "pass",
+  "probe": "55 passed, 0 failed",
+  "content_check": "OK, 0 warnings (npm run content run first)",
+  "value_probe": "tag max2env, rift/bridge/fray x high/low: 0 FAIL. Structure L* p95: RIFT high 77.5 / low 79.5, BRIDGE high 75 / low 76.5 (<= 80). Env-frame p99 106/103/106/108/119/119 (value_probe_max2env.json)",
+  "perf_1080_prod_match": "GATE PASS (--prod --match-only, seeds 7/11/23): peak 451k / 497k / 459k tris, 294 / 271 / 289 draws, 40 programs, 0 programs after 1:00. Seed 11's 497k peak frame is actors 273k (fighter rebuilds in other lanes); this lane's canopy is -2.5 % per tree. The 500k margin is now 3.5k on seed 11: flagged for the lead.",
+  "match_memory": "see the lane return (probe_match_memory ran under other lanes' load)"
+ }
+}
