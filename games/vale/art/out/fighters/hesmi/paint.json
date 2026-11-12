@@ -84,7 +84,7 @@
  },
  "hesmi:splash": {
   "shipped": "3d",
-  "why": "max2 g1 (verify roll1: a dark ring round a pale cream disc, a blank white-pupil eye): the 3D finish takes the pale centre to a dark brown iris inside its slate rim (plates.retouch hue); blockers pass (blank 0.42); the one passing painting (v1) drifts the warm linen to a cool grey (pal 13.4), v2/v3 fail; shipped 3D. Watch: the face wrap under the cowl is the model's",
+  "why": "max2 g1 fix (verify_r2_g1a: the stab's head-down lean read as a bandaged ball with one eye slit, a mummy lean): re-staged on the victory hold the bust passes on (upright, chin raised, both eyes in the band) as a three-quarter hero shot (box_lo 0.85); in the 3D finish the eyes' pale centres taken to a dark brown iris in their slate almond and the face wrap a warm sand step darker than the hood (plates.retouch); shipped 3D (paintings failed palette / new colour in round 1)",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -189,7 +189,7 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
+  "prompt_version": 7,
   "date": "2026-11-12"
  },
  "hesmi_gorgewalk:portrait": {

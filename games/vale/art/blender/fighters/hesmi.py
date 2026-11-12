@@ -132,7 +132,18 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 10.0, "dist": 0.8, "color": "#FFE4C8", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
-        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
+        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46,
+                  # (max2 g1 fix, verify_r2_g1a, the victory three-quarter): the eyes' pale blue-grey centres taken to a
+                  # dark brown iris (as round 2 did on the stab), and the face wrap under the eye-band a warm sand step
+                  # darker than the hood, so the band and its eyes read framed rather than one bandaged ball
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.015, -0.027], "r": [0.017, 0.008], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.30, "v_min": 0.50, "val": 0.32, "to": "#3B2A22", "mix": 0.9},
+                                         {"op": "hue", "at": [-0.0345, -0.0285], "r": [0.012, 0.0075], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.30, "v_min": 0.66, "val": 0.45, "to": "#5A6278", "mix": 0.8},
+                                         {"op": "hue", "at": [-0.095, -0.027], "r": [0.018, 0.010], "h": [180.0, 270.0],
+                                          "s_min": 0.03, "v_min": 0.35, "val": 0.40, "to": "#3B2A22", "mix": 0.9},
+                                         {"op": "hue", "at": [-0.030, 0.045], "r": [0.075, 0.040], "h": [5.0, 60.0],
+                                          "s_min": 0.05, "s_max": 0.55, "v_min": 0.45, "val": 0.88, "to": "#B07E5C", "mix": 0.5}]}},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
         # (max2 g1 fix, verify_r2_g1a: from her right the eye openings read as jagged torn holes in the pale band): the
