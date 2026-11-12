@@ -374,7 +374,7 @@ function staticChecks(m: MapDefT): void {
   // art landmarks (art.terrain.landmarks, the Blender brief): solid ones stand on wall cells or off
   // the map, and hide no open ground from the 52° camera beyond what a standard cliff (3.4 m, the
   // render's tallest wall) already hides; flush inlays may lie on open ground
-  const lms = ((m.art.terrain as { landmarks?: { id: string; at: V2; size: V2; height: number; flush?: boolean }[] }).landmarks) ?? [];
+  const lms = ((m.art.terrain as { landmarks?: { id: string; at: V2; size: V2; height: number; flush?: boolean; rot?: number; footprint?: string }[] }).landmarks) ?? [];
   if (lms.length) {
     const solidBad: string[] = [];
     const isSolid = (x: number, y: number): boolean => x < 0 || y < 0 || x > m.size[0] || y > m.size[1] || !nav.wallFree(x, y);
@@ -383,6 +383,23 @@ function staticChecks(m: MapDefT): void {
     const cliffHidden = (x: number, y: number): boolean => { for (let t = 0.25; t <= CLIFF + 1e-6; t += 0.25) if (isSolid(x, y + t)) return true; return false; };
     for (const l of lms) {
       if (l.flush) continue;
+      if (l.footprint === 'oriented') {
+        // max env ENV-3: `size` in the landmark's own frame, turned by `rot` (render/terrain.ts): the turned rectangle
+        // (inset 0.25 m: the stone's dressing may overhang its wall a little) must be wall, and the ground it hides to
+        // its north (height x cot 52) wall or already hidden by a cliff
+        const r = ((l.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r), hx = l.size[0] / 2 - 0.25, hy = l.size[1] / 2 - 0.25;
+        const inRect = (x: number, y: number): boolean => { const dx = x - l.at[0], dy = y - l.at[1]; return Math.abs(dx * c - dy * sn) <= hx && Math.abs(dx * sn + dy * c) <= hy; };
+        const R = Math.hypot(hx, hy), reach = l.height * HIDE;
+        let ok = true;
+        for (let y = l.at[1] - R - reach; y <= l.at[1] + R + 1e-6 && ok; y += 0.25) for (let x = l.at[0] - R; x <= l.at[0] + R + 1e-6; x += 0.25) {
+          const inside = inRect(x, y);
+          let shadow = false;
+          if (!inside) for (let t = 0.25; t <= reach + 1e-6 && !shadow; t += 0.25) shadow = inRect(x, y + t);
+          if (!inside && !shadow) continue;
+          if (!isSolid(x, y) && !(shadow && cliffHidden(x, y))) { ok = false; solidBad.push(`${l.id} (open ground at ${f1(x)}, ${f1(y)}${shadow ? ', hidden behind it' : ''})`); break; }
+        }
+        continue;
+      }
       const [w2, d2] = [l.size[0] / 2, l.size[1] / 2];
       const yTop = l.at[1] - d2 - l.height * HIDE;
       let ok = true;
