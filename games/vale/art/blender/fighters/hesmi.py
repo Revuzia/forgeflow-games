@@ -129,7 +129,12 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 10.0, "dist": 0.8, "color": "#FFE4C8", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
-        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
+        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46,
+                  # (max2 cards g1, verify roll1: the eye read as a dark ring round a pale cream disc, a blank white
+                  # pupil): the pale centre taken to a dark brown iris inside its slate rim
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.025, -0.025], "r": [0.016, 0.009], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.25, "v_min": 0.55, "val": 0.32, "sat": 1.0,
+                                          "to": "#3B2A22", "mix": 0.9}]}},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
         "splash": {"clip": "attack2", "t": 0.35, "yaw": -24.0, "pitch": 2.0, "exposure": -0.9, "lens": 55.0, "fill": 0.84, "x": 0.72,
@@ -152,7 +157,14 @@ CARDS = {
                               "size": 0.25}]},
         "portrait": {"yaw": 30.0, "clip": "idle_lobby", "t": 0.0},   # (polish: the cast_ult bust turned the face away)
         "plate": {"src": "dialwood", "fig_chroma": 0.45, "amb_tint": 0.2, "tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
-                  "glow_color": "#B7A6F0"},
+                  "glow_color": "#B7A6F0",
+                  # (max2 cards g1, verify roll1: saturated violet slit eyes read as glowing; the feet washed into the
+                  # snow): the eye inlays and lid line taken to a dark muted ink, a firmer contact and cast shadow
+                  "contact": 2.2, "shadow_real": 0.8,
+                  "retouch": {"splash": [{"op": "hue", "at": [0.002, 0.020], "r": [0.065, 0.022], "h": [225.0, 295.0],
+                                          "s_min": 0.33, "val": 0.5, "sat": 0.4, "to": "#3A3450", "mix": 0.6},
+                                         {"op": "hue", "at": [0.0, -0.017], "r": [0.06, 0.012], "h": [225.0, 295.0],
+                                          "s_min": 0.33, "val": 0.7, "sat": 0.45, "to": "#4A4460", "mix": 0.5}]}},
     },
 }
 SKINS: list = [
