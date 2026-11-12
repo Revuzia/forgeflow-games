@@ -386,6 +386,15 @@ def build(spec, args, skin=None) -> dict:
         # keeps the signature-hue zones; a fighter without a recipe is untouched
         with T.step("zone_grade"):
             report["zone_grade"] = zone_grade(sid, glb, T0)
+        # MAX2: VALE characters ship metalness 0 (content:check checkZeroMetal); a fresh export carries the Principled
+        # BSDF's metallic, so every rebuild failed the content build until art/tools/glb_zero_metal.py was run by hand
+        with T.step("zero_metal"):
+            import subprocess
+            r = subprocess.run(["python3", os.path.join(scene.TOOLS_DIR, "glb_zero_metal.py"), glb], cwd=scene.GAME_DIR,
+                               capture_output=True, text=True, encoding="utf-8")
+            scene.log(r.stdout.strip()[-300:] or r.stderr.strip()[-300:])
+            if r.returncode:
+                raise SystemExit(f"{sid}: glb_zero_metal failed: {r.stderr.strip()[-600:]}")
     report["glb_bytes"] = os.path.getsize(glb)
     with T.step("load_test"):
         report["three_load_test"] = export.load_test(glb, skin=skin is not None,

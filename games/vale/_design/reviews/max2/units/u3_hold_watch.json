@@ -1,0 +1,488 @@
+{
+ "t": 30,
+ "frames": 360,
+ "note": "each fighter plays the role in place for `frames` display frames at 60 Hz (Actor.pose); actor space; headCm/handCm = range, holdFrames = longest run with head, chest and both hands each under 1.5 mm/frame; off = clips only, on = clips + life layer",
+ "summary": {
+  "ervet/idle": {
+   "off": {
+    "headCm": 8.5,
+    "handCm": 12.2,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 12.6,
+    "handCm": 13.4,
+    "holdFrames": 8
+   }
+  },
+  "odrum/idle": {
+   "off": {
+    "headCm": 5.6,
+    "handCm": 6,
+    "holdFrames": 24
+   },
+   "on": {
+    "headCm": 10.1,
+    "handCm": 16.1,
+    "holdFrames": 31
+   }
+  },
+  "vashil/idle": {
+   "off": {
+    "headCm": 2.2,
+    "handCm": 3.2,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 6.1,
+    "handCm": 17,
+    "holdFrames": 0
+   }
+  },
+  "burdam/idle": {
+   "off": {
+    "headCm": 7.4,
+    "handCm": 11.4,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 14.9,
+    "handCm": 16.5,
+    "holdFrames": 7
+   }
+  },
+  "lisvel/idle": {
+   "off": {
+    "headCm": 4,
+    "handCm": 3.9,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 10.4,
+    "handCm": 19.6,
+    "holdFrames": 4
+   }
+  },
+  "ilsheta/idle": {
+   "off": {
+    "headCm": 9.3,
+    "handCm": 11.9,
+    "holdFrames": 14
+   },
+   "on": {
+    "headCm": 14.1,
+    "handCm": 18.5,
+    "holdFrames": 13
+   }
+  },
+  "ardit/idle": {
+   "off": {
+    "headCm": 3.7,
+    "handCm": 3.3,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 12.3,
+    "handCm": 19.7,
+    "holdFrames": 0
+   }
+  },
+  "kemdo/idle": {
+   "off": {
+    "headCm": 4.1,
+    "handCm": 4.7,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 9.8,
+    "handCm": 17.8,
+    "holdFrames": 1
+   }
+  },
+  "tunlan/idle": {
+   "off": {
+    "headCm": 7.2,
+    "handCm": 9.5,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 10.9,
+    "handCm": 14.9,
+    "holdFrames": 6
+   }
+  },
+  "hesmi/idle": {
+   "off": {
+    "headCm": 14.1,
+    "handCm": 17.4,
+    "holdFrames": 2
+   },
+   "on": {
+    "headCm": 19.4,
+    "handCm": 21.1,
+    "holdFrames": 2
+   }
+  },
+  "ervet/channel": {
+   "off": {
+    "headCm": 71.9,
+    "handCm": 94.5,
+    "holdFrames": 2
+   },
+   "on": {
+    "headCm": 74.7,
+    "handCm": 96.9,
+    "holdFrames": 2
+   }
+  },
+  "odrum/channel": {
+   "off": {
+    "headCm": 7.7,
+    "handCm": 0,
+    "holdFrames": 14
+   },
+   "on": {
+    "headCm": 9.7,
+    "handCm": 9.5,
+    "holdFrames": 12
+   }
+  },
+  "vashil/channel": {
+   "off": {
+    "headCm": 1.4,
+    "handCm": 1.8,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 4.3,
+    "handCm": 19.6,
+    "holdFrames": 10
+   }
+  },
+  "burdam/channel": {
+   "off": {
+    "headCm": 9.3,
+    "handCm": 8.3,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 13.4,
+    "handCm": 15.5,
+    "holdFrames": 4
+   }
+  },
+  "lisvel/channel": {
+   "off": {
+    "headCm": 1.3,
+    "handCm": 1.3,
+    "holdFrames": 319
+   },
+   "on": {
+    "headCm": 5.7,
+    "handCm": 17.5,
+    "holdFrames": 10
+   }
+  },
+  "ilsheta/channel": {
+   "off": {
+    "headCm": 6.9,
+    "handCm": 8.8,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 10.6,
+    "handCm": 12.7,
+    "holdFrames": 0
+   }
+  },
+  "ardit/channel": {
+   "off": {
+    "headCm": 1.9,
+    "handCm": 1.3,
+    "holdFrames": 16
+   },
+   "on": {
+    "headCm": 6.3,
+    "handCm": 23.3,
+    "holdFrames": 14
+   }
+  },
+  "kemdo/channel": {
+   "off": {
+    "headCm": 4.6,
+    "handCm": 7.7,
+    "holdFrames": 36
+   },
+   "on": {
+    "headCm": 7.6,
+    "handCm": 18.7,
+    "holdFrames": 14
+   }
+  },
+  "tunlan/channel": {
+   "off": {
+    "headCm": 6.5,
+    "handCm": 9,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 9.3,
+    "handCm": 12.6,
+    "holdFrames": 0
+   }
+  },
+  "hesmi/channel": {
+   "off": {
+    "headCm": 6.9,
+    "handCm": 10.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 11,
+    "handCm": 15.1,
+    "holdFrames": 0
+   }
+  },
+  "ervet/recall": {
+   "off": {
+    "headCm": 56.6,
+    "handCm": 42.9,
+    "holdFrames": 114
+   },
+   "on": {
+    "headCm": 58,
+    "handCm": 45.1,
+    "holdFrames": 20
+   }
+  },
+  "odrum/recall": {
+   "off": {
+    "headCm": 16.4,
+    "handCm": 10.2,
+    "holdFrames": 76
+   },
+   "on": {
+    "headCm": 15.5,
+    "handCm": 20.1,
+    "holdFrames": 10
+   }
+  },
+  "vashil/recall": {
+   "off": {
+    "headCm": 3.6,
+    "handCm": 58,
+    "holdFrames": 36
+   },
+   "on": {
+    "headCm": 5.1,
+    "handCm": 61.7,
+    "holdFrames": 14
+   }
+  },
+  "burdam/recall": {
+   "off": {
+    "headCm": 11.4,
+    "handCm": 81.2,
+    "holdFrames": 128
+   },
+   "on": {
+    "headCm": 11.6,
+    "handCm": 84.2,
+    "holdFrames": 9
+   }
+  },
+  "lisvel/recall": {
+   "off": {
+    "headCm": 26.9,
+    "handCm": 58.9,
+    "holdFrames": 18
+   },
+   "on": {
+    "headCm": 26.6,
+    "handCm": 59.1,
+    "holdFrames": 9
+   }
+  },
+  "ilsheta/recall": {
+   "off": {
+    "headCm": 15.2,
+    "handCm": 45.1,
+    "holdFrames": 44
+   },
+   "on": {
+    "headCm": 16,
+    "handCm": 47.4,
+    "holdFrames": 10
+   }
+  },
+  "ardit/recall": {
+   "off": {
+    "headCm": 56.5,
+    "handCm": 57.4,
+    "holdFrames": 18
+   },
+   "on": {
+    "headCm": 57.2,
+    "handCm": 62.6,
+    "holdFrames": 8
+   }
+  },
+  "kemdo/recall": {
+   "off": {
+    "headCm": 27,
+    "handCm": 15.4,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 30.3,
+    "handCm": 16.1,
+    "holdFrames": 0
+   }
+  },
+  "tunlan/recall": {
+   "off": {
+    "headCm": 16.9,
+    "handCm": 61,
+    "holdFrames": 32
+   },
+   "on": {
+    "headCm": 16.1,
+    "handCm": 62.6,
+    "holdFrames": 8
+   }
+  },
+  "hesmi/recall": {
+   "off": {
+    "headCm": 7.7,
+    "handCm": 9.1,
+    "holdFrames": 8
+   },
+   "on": {
+    "headCm": 11.6,
+    "handCm": 12.2,
+    "holdFrames": 6
+   }
+  },
+  "ervet/stunned": {
+   "off": {
+    "headCm": 13.9,
+    "handCm": 4.3,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 22.6,
+    "handCm": 5.9,
+    "holdFrames": 0
+   }
+  },
+  "odrum/stunned": {
+   "off": {
+    "headCm": 11,
+    "handCm": 5.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 18.2,
+    "handCm": 10.5,
+    "holdFrames": 0
+   }
+  },
+  "vashil/stunned": {
+   "off": {
+    "headCm": 7.3,
+    "handCm": 4.5,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 15,
+    "handCm": 9.8,
+    "holdFrames": 5
+   }
+  },
+  "burdam/stunned": {
+   "off": {
+    "headCm": 43.1,
+    "handCm": 45.2,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 55.5,
+    "handCm": 48.7,
+    "holdFrames": 0
+   }
+  },
+  "lisvel/stunned": {
+   "off": {
+    "headCm": 9,
+    "handCm": 20.6,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 14.4,
+    "handCm": 20.9,
+    "holdFrames": 0
+   }
+  },
+  "ilsheta/stunned": {
+   "off": {
+    "headCm": 7.8,
+    "handCm": 5.4,
+    "holdFrames": 12
+   },
+   "on": {
+    "headCm": 16.3,
+    "handCm": 12.1,
+    "holdFrames": 10
+   }
+  },
+  "ardit/stunned": {
+   "off": {
+    "headCm": 14.6,
+    "handCm": 7.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 24.5,
+    "handCm": 15.1,
+    "holdFrames": 0
+   }
+  },
+  "kemdo/stunned": {
+   "off": {
+    "headCm": 13.5,
+    "handCm": 5.3,
+    "holdFrames": 4
+   },
+   "on": {
+    "headCm": 22.4,
+    "handCm": 12.3,
+    "holdFrames": 0
+   }
+  },
+  "tunlan/stunned": {
+   "off": {
+    "headCm": 9.9,
+    "handCm": 5.2,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 15.9,
+    "handCm": 10.2,
+    "holdFrames": 6
+   }
+  },
+  "hesmi/stunned": {
+   "off": {
+    "headCm": 10.9,
+    "handCm": 24.1,
+    "holdFrames": 0
+   },
+   "on": {
+    "headCm": 26.3,
+    "handCm": 28.3,
+    "holdFrames": 0
+   }
+  }
+ },
+ "note_max2": "MAX2 stillness watch (actors.ts LIFE.still tau 0.25, hold 2.8): clip motion smoothed over 0.25 s, and in channel/recall an in-phase give of both arms. Round-1 verify2 baseline (life on): ervet/recall 70, odrum/recall 60, vashil/channel 24, lisvel/channel 40. Picks run at t 30, seed 7, high, current dev build."
+}

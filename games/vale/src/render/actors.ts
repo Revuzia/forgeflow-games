@@ -706,7 +706,7 @@ const LIFE = {
    *  `tau` s (a recall that nudges a hand past `eps` now and then no longer resets the watch), and in a channel or
    *  recall the watch adds an IN-PHASE give of both arms (`hold` x the arms' give; the upper arms on the breath, the
    *  forearms on a second, faster period), so a two-handed grip stays closed while the held pose keeps moving */
-  still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8, tau: 0.25, hold: 1.6 },
+  still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8, tau: 0.25, hold: 2.8 },
   /** state weights fade at this rate (1/s) */
   fade: 5,
 } as const;

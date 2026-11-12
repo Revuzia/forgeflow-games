@@ -1,0 +1,136 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "kemdo_zone2": {
+      "glb": "art/out/fighters/kemdo/kemdo.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 139,
+          "valueBands": {
+            "top": 55.6,
+            "mid": 45.5,
+            "bottom": 20.9
+          },
+          "accentPct": 2.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.08,
+          "sigPct": 33.83
+        },
+        "90": {
+          "heightPx": 135,
+          "valueBands": {
+            "top": 49.6,
+            "mid": 46.7,
+            "bottom": 22.6
+          },
+          "accentPct": 1.45,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.45,
+          "sigPct": 35.7
+        },
+        "180": {
+          "heightPx": 163,
+          "valueBands": {
+            "top": 63.9,
+            "mid": 43.0,
+            "bottom": 25.1
+          },
+          "accentPct": 1.14,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.14,
+          "sigPct": 42.04
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.08,
+      "sigPctMean": 37.19,
+      "accentOk": true
+    },
+    "vashil_zone2": {
+      "glb": "art/out/fighters/vashil/vashil.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 75.6,
+            "mid": 49.4,
+            "bottom": 23.2
+          },
+          "accentPct": 0.01,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.01,
+          "sigPct": 35.32
+        },
+        "90": {
+          "heightPx": 161,
+          "valueBands": {
+            "top": 74.7,
+            "mid": 48.7,
+            "bottom": 23.6
+          },
+          "accentPct": 0.02,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.02,
+          "sigPct": 27.55
+        },
+        "180": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 75.6,
+            "mid": 49.8,
+            "bottom": 29.4
+          },
+          "accentPct": 0.0,
+          "accentTopHalfShare": null,
+          "accentTopHalfPctOfFighter": 0.0,
+          "sigPct": 43.33
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.02,
+      "sigPctMean": 35.4,
+      "accentOk": false
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180
+  ],
+  "pairs": [
+    {
+      "a": "kemdo_zone2",
+      "b": "vashil_zone2",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.479,
+        "90": 0.589,
+        "180": 0.502
+      },
+      "iou64Max": 0.589,
+      "iou64_norm": {
+        "0": 0.387,
+        "90": 0.537,
+        "180": 0.513
+      },
+      "iou64NormMax": 0.537,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/max2_u1_zoning_b.png",
+  "seconds": 22.8
+}
