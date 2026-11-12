@@ -317,5 +317,217 @@
   "GLB bytes": "burdam 1,185,148 (1157.4 KiB, budget 1172), kemdo 1,173,596, vashil 1,179,624, tunlan 1,184,156, rishal 1,186,868",
   "gates": "npm run -s typecheck pass; npm run -s probe 55 passed 0 failed; npm run -s content:check 0 warnings",
   "still open": "Burdam bottom band 16.9 at facing 180 (the skirt zone lift 24 -> 27 moved nothing: the dark mass at the back is the x_cowl chain, cards lane this round); U7 crowns on the other 10 fighters and all head modelling; glasshorn_icon.png fawn (icons lane); ruling 32 scope over unzoned bakes (lead call)"
+ },
+ "round 2 fix 2 (verify2_q / verify2_r 7.2)": {
+  "at": "2026-11-12 13:50 CST",
+  "Tunlan hat (major, both verifiers)": {
+   "what": "zone_grades.json: the hat back to the concept's pale lacquered straw (approved look: 'a pale lacquered lampshade hat with a stepped octagonal crown'), L* 56 C 17 h 81 (round 1: 53/14/72), under the harm band's 0.4 HSV saturation; the stepped octagonal crown (part hat x --cyl r < 0.21 m, z > 1.972) a deep plum lacquer L* 28 C 16 and the iron rim plum L* 24 C 9. Tried and rejected: a deeper honey straw (L* 40-48) and plum bands on the brim top (r 0.41/0.44/0.48-0.53): +1-5 dE in game but lineup_qa top band 42.7-57.3",
+   "game camera seed 31 t 300 (same frozen frame, hat ellipse mean, CIELAB D65)": {
+    "before": {
+     "tunlan hat": "L 85.6 C 15.4 h 326",
+     "dE76 vs Dunsom hat": 8.8,
+     "dE76 vs Vashil hood": 18.0,
+     "per-pixel mean dE vs Dunsom": 9.6
+    },
+    "after": {
+     "tunlan hat": "L 76.6 C 12.2 h 53 (straw field L 80.8 C 13.3 h 62, plum 11 %)",
+     "dE76 vs Dunsom hat": 15.0,
+     "dE76 vs Vashil hood": 18.4,
+     "per-pixel mean dE vs Dunsom": 23.5
+    }
+   },
+   "caveat": "my whole-hat mean reads lower chroma than verify2_q's method (its r2 reading L 80.1 C 33.9 is my L 85.6 C 15.4; its dE 13.3 is my 8.8), so my 15.0 is not on the same scale as its >= 25 bar; the hue now sits opposite Dunsom's (straw 53-62 vs lilac 329) and the r2 collision is visibly gone (r2f_tunlan_hat_ab.png)",
+   "lineup_qa facing 0 / 180": {
+    "top band": [
+     [
+      72.1,
+      70.1
+     ],
+     [
+      62.4,
+      58.5
+     ]
+    ],
+    "crown": "L 67.7 C 19.2 h 310 (Dunsom's crown L 63.3 C 18.9 h 299, dE ~5) -> L 68.8 C 7.5 h 55 (dE ~24); crown break facing 0 no -> yes (dL 10.1)",
+    "sigPct": [
+     [
+      71.1,
+      77.0
+     ],
+     [
+      24.7,
+      30.7
+     ]
+    ]
+   },
+   "note": "the top band falls 72 -> 62 at lineup_qa (round 1 read about 68): the plum crown and rim and a straw that renders darker in Blender than in game (game hat L 76.6). Bible 70-85; reported, not relaxed",
+   "evidence": [
+    "r2f_tunlan_hat_ab.png",
+    "r2f_u7_lineup_post_c.json"
+   ]
+  },
+  "U7 crowns (major: lane below par)": {
+   "what": "albedo crown zones on seven more fighters, chosen as hue families so no two crowns of one shape share a hue: Ervet helm a darker cool gunmetal (L 53 -> 42) with the crest, scarf and pauldrons signature magenta; Marund's dome cap teal (hue 152, the sky ambient pulls 162 toward blue) and band; Ardit's helm periwinkle-blued steel (L 40) with pale periwinkle pauldrons and tiers; Ilsheta's hood signature green; Lisvel's head wrap pale morning cyan (cowl kept cream as the break); Sukri's hood pale lemon; Burdam's back hem lifted (below)",
+   "roster crown families at the game camera": "Kemdo coral hood, Vashil lilac hood, Dunsom lilac disc (cards lane), Tunlan straw disc + plum crown, Ervet steel helm + magenta, Ardit periwinkle helm, Marund teal dome, Ilsheta green hood + grey chimney, Lisvel cyan wrap, Sukri lemon hood, Nurrow yellow cone (unchanged), Odrum felt cap (unchanged), Ulkro dark hood (unchanged), Hesmi pale shard rack (unchanged), Burdam cream hood (cards lane), Rishal crimson visor",
+   "lineup_qa sigPct facing 0 / 180 before -> after": {
+    "ervet": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      20.9,
+      27.9
+     ]
+    ],
+    "marund": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      5.5,
+      3.3
+     ]
+    ],
+    "ardit": [
+     [
+      0.1,
+      0.2
+     ],
+     [
+      18.6,
+      21.8
+     ]
+    ],
+    "ilsheta": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      4.5,
+      13.3
+     ]
+    ],
+    "lisvel": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      7.7,
+      11.6
+     ]
+    ],
+    "sukri": [
+     [
+      7.2,
+      7.4
+     ],
+     [
+      39.2,
+      55.6
+     ]
+    ]
+   },
+   "lineup_qa crown sigPct facing 0 before -> after": {
+    "ervet": [
+     0,
+     45.4
+    ],
+    "ardit": [
+     0.2,
+     73.2
+    ],
+    "lisvel": [
+     0,
+     82.2
+    ],
+    "sukri": [
+     0,
+     76.8
+    ],
+    "marund": [
+     0,
+     1.5
+    ],
+    "ilsheta": [
+     0,
+     7.5
+    ]
+   },
+   "game camera": "r2f_u7_gamecam_ab.png / .json (seed 31 t 300, same frozen frame, 16 fighters; mean |diff| tunlan 6.58, ardit 5.58, marund 2.09, lisvel 1.47, ervet 1.34, sukri 0.92, ilsheta 0.68; unzoned controls vashil, kemdo, ulkro 0.00)",
+   "weak": "Marund reads teal in game but lineup_qa's lighting reads it blue (sigPct 5.5 / 3.3 under 6); Ilsheta's top 12 % is the grey chimney (hard stone), so its crown sigPct stays low; crown break (dL >= 8 or dHue >= 20) is met by Tunlan (facing 0), Ilsheta (0), Burdam (0) only - most crowns now differ from the shoulders in hue family but under 20 deg at chroma >= 12",
+   "evidence": [
+    "r2f_u7_gamecam_ab.png",
+    "r2f_u7_gamecam_ab.json",
+    "r2f_u7_lineup_ab.png",
+    "r2f_u7_lineup_pre.json",
+    "r2f_u7_lineup_post.json"
+   ]
+  },
+  "Burdam bottom band facing 180 (minor)": {
+   "what": "zone: the back hem and heels (rear, under 0.75 m, texels under L* 24 of any material) lifted to L* 28 C 12 oxblood, k 0.6; the hood, cowl and mask untouched (cards lane)",
+   "lineup_qa bottom facing 180": [
+    16.9,
+    21.2
+   ],
+   "evidence": "r2f_u7_lineup_post_b.json"
+  },
+  "Sunsplinter tip (minor)": {
+   "what": "creatures_b.py: the tip leans 38 deg to its right (was 28) and its base sits 21 cm right (was 14)",
+   "value_probe --monsters RIFT High t 400 unitPx (gate 51,944)": {
+    "seed 19": [
+     52464,
+     52825
+    ],
+    "seed 7": [
+     71571,
+     72667
+    ]
+   },
+   "budgets": "8218 -> 8224 tris (+6), textures unchanged, GLB 774 -> 790 KiB, top 3.201 m; sunsplinter_icon.png restored (cards lane)",
+   "evidence": "r2f_sunsplinter_tip_ab.png"
+  },
+  "ruling 32 (zoned albedo, every reserved band <= 8 %)": {
+   "tunlan": {
+    "harm": 3.52
+   },
+   "ervet": {
+    "harm": 1.52
+   },
+   "marund": {
+    "harm": 4.74,
+    "heal": 0.07
+   },
+   "ardit": {
+    "harm": 0.92
+   },
+   "ilsheta": {
+    "harm": 0.02
+   },
+   "lisvel": {
+    "harm": 0.2
+   },
+   "sukri": {
+    "harm": "19.96 -> 7.6 (reserveModes harm=sat: the cap moves the browns nearest the 0.4 line to 0.3 saturation; albedo mean dE 2.35)"
+   },
+   "burdam": {
+    "harm": 6.63
+   }
+  },
+  "budgets": "GLBs (KiB): tunlan 1154.3, ervet 1139.0, marund 1154.4, ardit 1155.0, ilsheta 1159.6, lisvel 1161.3 (was 1162.7), sukri 1154.2, burdam 1159.3, all under 1172; texture sizes and counts unchanged (WebP re-encode only), so match memory is unaffected (probe_match_memory not re-run). perf_1080 --prod counts: High 221k tris / 154 draws / 39 programs, Ultra 237k / 157 / 39, match peak 456k triangles / 294 draws / 40 programs: GATE PASS; frame timing not measured (machine busy), owed to the final idle gate",
+  "gates": "npm run -s typecheck pass; npm run -s probe 55/55 pass; npm run -s content:check 0 warnings",
+  "tools": "glb_paint_grade.mjs --cyl (ring masks round a vertical axis); zone_grade.py zones may intersect parts with boxes / cyls (notCyls too); lineup_qa.py reports crown (top 12 %) vs shoulders (next 12 %): CIELAB, dL, dHue, break, crown sigPct",
+  "not done": {
+   "Odrum crown": "a cap zone makes Odrum a zoned fighter, and ruling 32's strict reading then caps the whole bake (38.6 % harm, its amber identity): the trial pulled it to 7.83 % with 36 % of texels moved (mean dE 4.98) and greyed the amber mask; not shipped. Needs the lead's call on whether the cap covers whole unzoned bakes",
+   "Ulkro crown": "its hood is already a dark brown (not cream); a zone would trigger the same strict cap (12.8 % bake) and a green hood would sit in Ilsheta's family",
+   "Hesmi crown": "the crown read is the pale honed shard rack (the brief's hook, hard stone), not the hood; no part map; unchanged",
+   "Burdam / Dunsom heads and hoods": "cards lane this round",
+   "U6 glass": "no visible change is reachable without emissive glass, which the bible forbids outside wind-ups ('a glow is a warning') and ilsheta.py keeps factor-only; the round-2 shader edit is harmless (programs 39) and is left; needs the lead to close or re-scope",
+   "U1(2) ORM bands": "unchanged: the bake already bands roughness per class (u1_orm_bands.json); separation is not visible at 28.5 m and a second lossy ORM encode was reverted in round 1",
+   "U3": "done in round 1 (verify2: better): Ervet 70 -> 20, Odrum 60 -> 10 hold frames"
+  }
  }
 }
