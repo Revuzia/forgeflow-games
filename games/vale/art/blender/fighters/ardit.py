@@ -118,7 +118,9 @@ CARDS = {
                               "power": 110.0, "size": 0.3},
                              {"at": "head", "az": 205.0, "el": 12.0, "dist": 0.8, "color": "#FFEBD6", "power": 30.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": 34.0},
+        # (max2 cards g1, verify roll1: the cast_a2 bust put the blank pavise over half the square: the base bust's
+        # victory moment, the pavise lowered beside the helm)
+        "portrait": {"yaw": 30.0, "clip": "victory", "t": 0.92},
         "plate": {"src": "noonplate", "median": 0.22, "glow": [0.78, 0.62, 0.38, 0.14], "glow_color": "#F6CF98"},
     },
 }

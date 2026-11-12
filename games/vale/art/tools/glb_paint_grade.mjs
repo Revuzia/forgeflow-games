@@ -16,6 +16,8 @@
 //                             CIELAB: hue = the hex colour's hue angle, mean L* = L with each texel's own deviation from
 //                             the part's mean kept x k (default 1), chroma C (scaled by the texel's own relative chroma,
 //                             3/4 fixed + 1/4 its own). Absolute targets, so a second run lands on the same values.
+//   --cyl cx,cy,r0,r1,z0,z1   (MAX2 U7) like --box, a ring round the vertical axis through (cx, cy): plan radius r0-r1,
+//                             height z0-z1 (Blender axes, m; repeatable, a texel in any box or ring is in the mask)
 //   --mask-out out.png        write the --box mask (texture size) as a PNG and stop (no grade; zone_grade.py combines it
 //                             with the ORM roughness class for a fighter whose bake wrote no part map)
 //   --part-gain mask.png:g    multiply the texels under a part mask by g (repeatable; applied after the rest; masks from
@@ -31,6 +33,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const input = args[0];
 const boxes = args.flatMap((a, i) => (a === '--box' ? [args[i + 1].split(',').map(Number)] : []));
+const cyls = args.flatMap((a, i) => (a === '--cyl' ? [args[i + 1].split(',').map(Number)] : []));
 const recess = Number(opt('--recess', 0));
 const darkK = Number(opt('--dark-gain', 1));
 const darkL = Number(opt('--dark-l', 0));
@@ -55,9 +58,10 @@ const C = info.channels;
 
 // the mask: rasterise each triangle of the primitives using this texture, testing its rest position
 let mask = null;
-if (boxes.length) {
+if (boxes.length || cyls.length) {
   mask = new Uint8Array(W * H);
-  const inBox = (x, y, z) => boxes.some((b) => x >= b[0] && y >= b[1] && z >= b[2] && x <= b[3] && y <= b[4] && z <= b[5]);
+  const inBox = (x, y, z) => boxes.some((b) => x >= b[0] && y >= b[1] && z >= b[2] && x <= b[3] && y <= b[4] && z <= b[5])
+    || cyls.some((c) => { const r = Math.hypot(x - c[0], y - c[1]); return r >= c[2] && r <= c[3] && z >= c[4] && z <= c[5]; });
   const skin = root.listSkins()[0];
   const joints = skin ? skin.listJoints() : [];
   const ibm = skin ? skin.getInverseBindMatrices() : null;
@@ -118,7 +122,7 @@ if (boxes.length) {
   }
 }
 if (args.includes('--mask-out')) {
-  if (!mask) throw new Error('--mask-out needs --box');
+  if (!mask) throw new Error('--mask-out needs --box or --cyl');
   const g = new Uint8Array(W * H);
   for (let p = 0; p < W * H; p++) g[p] = mask[p] ? 255 : 0;
   await sharp(g, { raw: { width: W, height: H, channels: 1 } }).png().toFile(opt('--mask-out'));

@@ -99,15 +99,29 @@ CARDS = {
     },
     "marund_gorgewalk": {
         # (closing round 2: the low wide lens at fill 0.86 cut the dome at the frame top: head at 0.002)
-        "splash": {"clip": "attack1", "t": 0.35, "yaw": -22.0, "pitch": -9.0, "lens": 42.0, "fill": 0.84, "x": 0.71,
+        # (max2 cards g1, verify roll1: no eyes under the brim and the pale keel read as a beak: the head lifted as on
+        # the base bust; the keel toned to the walnut face in the plate's retouch)
+        "splash": {"clip": "attack1", "t": 0.35, "yaw": -22.0, "pitch": 4.0, "lens": 42.0, "fill": 0.84, "x": 0.71,
+                   "pose": [{"bone": "head", "rot": [-24.0, 0.0, 0.0]}],
                    "exposure": -0.9, "key_az": 150.0, "key_el": 40.0, "key_color": "#D0D8E4", "sun": 2.4, "rim_cool": 1.6,
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
                    "focal": [{"at": "head", "az": 150.0, "el": 15.0, "dist": 0.9, "color": "#E0E6F0", "power": 7.0,
-                              "size": 0.3}]},
-        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.88, "clip": "idle_lobby", "t": 0.0},
+                              "size": 0.3},
+                             {"at": "head", "az": 175.0, "el": -22.0, "dist": 0.6, "color": "#E6E2DA", "power": 12.0,
+                              "size": 0.25}]},     # (max2 g1: a low fill under the brim, so the lids read)
+        "portrait": {"yaw": -28.0, "pitch": 5.0, "fill": 0.88, "clip": "idle_lobby", "t": 0.0,
+                     "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}]},
         # (closing round 2: the slate's painted flecks took the bust's speckle p50 to 2.58 > 2.5: a 2 px subject brush)
         "plate": {"sub_paint_r": 2, "tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.70, 0.38, 0.40, 0.05],
-                  "glow_color": "#D8DCE8"},
+                  "glow_color": "#D8DCE8",
+                  # (max2 cards g1, verify roll1: the pale keel on the walnut face read as a beak): the keel toned to
+                  # pale wood, so it sits in the face as the base's same-colour keel does
+                  "retouch": {"portrait": [{"op": "hue", "at": [0.091, -0.023], "r": [0.045, 0.095], "h": [0.0, 360.0],
+                                            "s_min": 0.0, "s_max": 0.14, "v_min": 0.70, "val": 0.74, "to": "#B09478", "mix": 0.6}],
+                              "splash": [{"op": "hue", "at": [0.039, -0.037], "r": [0.026, 0.042], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.14, "v_min": 0.70, "val": 0.74, "to": "#B09478", "mix": 0.6},
+                                         {"op": "close", "at": [-0.042, -0.026], "r": [0.016, 0.022], "px": 4},
+                                         {"op": "close", "at": [-0.090, 0.025], "r": [0.018, 0.020], "px": 4}]}},
     },
     "marund_long_evening": {
         "splash": {"clip": "victory", "t": 0.80, "yaw": -30.0, "pitch": -2.0, "lens": 58.0, "fill": 0.86, "x": 0.72,
@@ -117,9 +131,15 @@ CARDS = {
                               "size": 0.25},
                              {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.6, "color": "#FFCC90", "power": 22.0,
                               "size": 0.2}]},
-        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.88},
+        # (max2 cards g1, verify roll1: the victory t 0.80 bust turned the head down into a jumble of carved blocks with
+        # no eye: the base bust's moment and head lift, from this card's side)
+        "portrait": {"yaw": -32.0, "pitch": 5.0, "fill": 0.88, "clip": "victory", "t": 0.96,
+                     "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}]},
         "plate": {"tint": "#B08C9C", "sat": 0.85, "median": 0.23, "cx": 0.60, "glow": [0.30, 0.55, 0.35, 0.12],
-                  "glow_color": "#FFB067"},
+                  "glow_color": "#FFB067",
+                  # (max2 cards g1: the new bust shows a black diamond notch on the far cheek that reads as a hole)
+                  "retouch": {"portrait": [{"op": "close", "at": [-0.196, 0.083], "r": [0.035, 0.05], "px": 6},
+                                           {"op": "fill", "at": [-0.196, 0.083], "r": [0.035, 0.05], "px": 5, "q": 50}]}},
     },
 }
 SKINS: list = [

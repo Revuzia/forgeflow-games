@@ -84,31 +84,41 @@ def node() -> str:
 
 
 def zone_mask(sid: str, glb: str, z: dict, size: tuple, tmp: str, i: int) -> str:
+    """a zone's texels: part-map parts and/or rest-position boxes and rings (--cyl: cx, cy, r0, r1, z0, z1; MAX2 U7
+    crown bands), intersected, minus notBoxes / notCyls, then the optional ORM roughness band and L* range"""
     W, H = size
     out = os.path.join(tmp, f"zone{i}.png")
+    m = None
     if "parts" in z:
         pm = np.load(os.path.join(PARTMAP, f"{sid}.npz"))
         names = [str(n) for n in pm["names"]]
         missing = [p for p in z["parts"] if p not in names]
         if missing:
             raise SystemExit(f"{sid}: parts {missing} are not in the part map")
-        m = np.isin(pm["part"], [names.index(p) for p in z["parts"]])
-        Image.fromarray((m * 255).astype("uint8")).resize((W, H), Image.NEAREST).save(out)
-        return out
-    def boxmask(boxes, tag):
+        pmask = np.isin(pm["part"], [names.index(p) for p in z["parts"]])
+        m = np.asarray(Image.fromarray((pmask * 255).astype("uint8")).resize((W, H), Image.NEAREST)) >= 128
+
+    def geomask(boxes, cyls, tag):
         box = os.path.join(tmp, f"{tag}{i}.png")
         cmd = [node(), GRADE, glb]
         for b in boxes:
             cmd += ["--box", ",".join(str(v) for v in b)]
+        for c in cyls:
+            cmd += ["--cyl", ",".join(str(v) for v in c)]
         subprocess.run(cmd + ["--mask-out", box], check=True, cwd=GAME, capture_output=True)
         return np.asarray(Image.open(box).convert("L")) >= 128
-    m = boxmask(z["boxes"], "box")
-    if "notBoxes" in z:       # texels to leave alone (another lane's part, e.g. Burdam's hood and cowl)
-        m &= ~boxmask(z["notBoxes"], "not")
-    lo, hi = z.get("rough", [0.0, 1.0])
-    orm = Image.fromarray(glb_image(glb, "_orm")).resize((W, H), Image.NEAREST)
-    r = np.asarray(orm)[..., 1] / 255.0
-    m &= (r >= lo) & (r <= hi)
+    if "boxes" in z or "cyls" in z:
+        g = geomask(z.get("boxes", []), z.get("cyls", []), "box")
+        m = g if m is None else (m & g)
+    if m is None:
+        raise SystemExit(f"{sid}: zone {i} names no parts, boxes or cyls")
+    if "notBoxes" in z or "notCyls" in z:       # texels to leave alone (another lane's part, e.g. Burdam's hood and cowl)
+        m &= ~geomask(z.get("notBoxes", []), z.get("notCyls", []), "not")
+    if "rough" in z or "parts" not in z:
+        lo, hi = z.get("rough", [0.0, 1.0])
+        orm = Image.fromarray(glb_image(glb, "_orm")).resize((W, H), Image.NEAREST)
+        r = np.asarray(orm)[..., 1] / 255.0
+        m &= (r >= lo) & (r <= hi)
     if "maxL" in z or "minL" in z:
         from part_lab import srgb_to_lab
         L = srgb_to_lab(glb_image(glb, "_base") / 255.0)[..., 0]

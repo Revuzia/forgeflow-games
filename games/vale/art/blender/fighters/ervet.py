@@ -130,7 +130,9 @@ CARDS = {
                               "power": 70.0, "size": 0.35},
                              {"at": "head", "az": 200.0, "el": 5.0, "dist": 0.9, "color": "#FFCB94", "power": 24.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 30.0, "lens": 70.0},
+        # (max2 cards g1, verify roll1: the strap ends left of the gorget read as a claw: the bust turned so the gorget
+        # covers them)
+        "portrait": {"yaw": 18.0, "lens": 70.0},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
     },
 }

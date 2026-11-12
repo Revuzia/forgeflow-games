@@ -260,7 +260,11 @@ CARDS = {
         # smeared the face into a blob and left the number alone: one 3x3 median pass under the default 1 px brush)
         # (closing round 3, ilsheta-face-seam: the 1 px brush itself stepped the dark glass beside the plate: no brush on her
         # cards, the median alone keeps the speckle under its gate)
-        "plate": {"sub_median": 1, "sub_paint_r": 0},
+        # (max2 cards g1, verify roll2: wide orange irises with pinhole pupils read as a stare): the glass eyes
+        # deepened to a dark amber round their pupils on the splash
+        "plate": {"sub_median": 1, "sub_paint_r": 0,
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.027, 0.029], "r": [0.040, 0.012], "h": [5.0, 50.0], "s_min": 0.30, "sat": 0.8,
+                                          "val": 0.55, "to": "#6B4424", "mix": 0.5}]}},
     },
     "ilsheta_stillwater": {
         # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
@@ -275,7 +279,11 @@ CARDS = {
                      "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 30.0,
                                 "size": 0.25}]},
         "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
-                  "glow_color": "#A9D2CC"},
+                  "glow_color": "#A9D2CC",
+                  # (max2 cards g1, verify roll2: a flat pale disc with two eyes, a blank lean): the glass eyes
+                  # deepened to a dark amber round their pupils
+                  "retouch": {"splash": [{"op": "hue", "at": [0.028, 0.001], "r": [0.040, 0.012], "h": [5.0, 50.0], "s_min": 0.30, "sat": 0.8,
+                                          "val": 0.55, "to": "#6B4424", "mix": 0.5}]}},
     },
     "ilsheta_first_bell": {
         # (CW6 cards: the ult's bloom tipped her head back, so the splash saw the top of the hood and no face): the
@@ -299,7 +307,13 @@ CARDS = {
         # (CW6: the First Bell cards shared the base's cool Aubade plate, which held the portrait to dE 15.8 against
         # the deluxe floor 18: its own warm first-light grade, as Stillwater has its teal one)
         "plate": {"sub_median": 1, "sub_paint_r": 0, "tint": "#C7976A", "sat": 0.85, "median": 0.32, "glow": [0.78, 0.60, 0.38, 0.14],
-                  "glow_color": "#F6CF98"},
+                  "glow_color": "#F6CF98",
+                  # (max2 cards g1, verify roll2: red-rimmed eyes with pinhole pupils read haunted): the glass eyes
+                  # deepened to a dark amber round their pupils on the splash
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.034, 0.024], "r": [0.016, 0.010], "h": [0.0, 50.0],
+                                          "s_min": 0.40, "sat": 0.8, "val": 0.55, "to": "#6B4424", "mix": 0.5},
+                                         {"op": "hue", "at": [0.012, 0.024], "r": [0.016, 0.010], "h": [0.0, 50.0],
+                                          "s_min": 0.40, "sat": 0.8, "val": 0.55, "to": "#6B4424", "mix": 0.5}]}},
     },
 }
 HEIGHT = 1.72             # the plates' scale: the chimney's top rim (content art.height)

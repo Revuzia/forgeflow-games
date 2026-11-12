@@ -120,8 +120,8 @@ CARDS = {
     "odrum": {
         # (card engineer 2, closing2 odrum-C3-M1: the ult's raised pot read as an eyeball beside the mask: Resin Shot's
         # follow-through, the yoke a long diagonal toward the target with both pots in three-quarter view)
-        # (max2 g2, verify_roll2 hollow-eye blocker: a three-quarter hero shot, the head ~2x larger, and a low warm
-        # focal into the mask's umber recesses so the painted pass has eyes to keep)
+        # (max2 g2, verify_roll2 hollow-eye blocker: a three-quarter hero shot, the head ~2x larger, so the painted
+        # pass has eyes to keep (a low focal into the recesses glared on the beak and was dropped))
         "splash": {"clip": "cast_a1", "t": 0.55, "yaw": 30.0, "exposure": -1.0,   # (card engineer 2: the finish v2 render blew the jerkin to pale orange)
                    "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70, "box_lo": 0.70, "box_w": 0.80,
                    "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
@@ -129,11 +129,12 @@ CARDS = {
                    "focal": [{"at": "x_sling_pouch", "az": 190.0, "el": 20.0, "dist": 0.5, "color": "#FFC060",
                               "power": 35.0, "size": 0.2},
                              {"at": "head", "az": 195.0, "el": 5.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
-                              "size": 0.25},
-                             {"at": "head", "az": 182.0, "el": -18.0, "dist": 0.6, "color": "#FFD8B0", "power": 14.0,
-                              "size": 0.15}]},
+                              "size": 0.25}]},
         "portrait": {"clip": "victory", "t": 0.96},
-        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46, "mask_to": "#EFC88F"},   # the in-game ochre mask (closing2: cream on the cards)
+        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46, "mask_to": "#EFC88F",   # the in-game ochre mask (closing2: cream on the cards)
+                  # (max2 g2: on the three-quarter splash the mask is ~3x the old disc, which the mask_to gain left as a
+                  # pale-gold spot on the brow: the disc on the face's middle and grown to the mask)
+                  "face_off": {"splash": [0.0, 0.035]}, "mask_r": {"splash": 2.6}},
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
@@ -148,7 +149,8 @@ CARDS = {
                              {"at": "head", "az": 178.0, "el": -18.0, "dist": 0.6, "color": "#FFE8CC", "power": 14.0,
                               "size": 0.15}]},
         "portrait": {"clip": "idle_lobby", "t": 0.0, "key_az": 150.0, "key_el": 55.0},
-        "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4"},
+        "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4",
+                  "face_off": {"splash": [0.0, 0.035]}},     # (max2 g2: the face's middle on the three-quarter splash)
     },
     "odrum_shadeprint": {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)

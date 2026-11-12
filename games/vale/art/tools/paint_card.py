@@ -9,6 +9,7 @@
     python3 art/tools/paint_card.py apply <fid>                                     # re-ship the accepted variants after a re-render
     python3 art/tools/paint_card.py sheet <fid> --rev <git rev of the old cards>    # A/B: old shipped | 3D v2 | shipped now
     python3 art/tools/paint_card.py hand <sid>:<kind> <bone> --what "<the hand>"    # hand-only repaint (crop, edit, blend, gate)
+                                                                                    # (bone "head": a face-only repaint, prompt "face")
     python3 art/tools/paint_card.py hand-accept <sid>:<kind> <bone> <variant> --why "<text>"
 
 paint   The 3D reference is composed fresh from the kept subject pass (art/.cache/fighters/plates/, plates.finish) into
@@ -686,10 +687,12 @@ def sheet(fid: str, rev: str) -> None:
 def hand_box(sid: str, kind: str, bone: str) -> tuple[int, int, int]:
     meta = plates.load_meta(sid, kind)
     pt = (meta or {}).get("pts", {}).get(bone)
+    if bone == "head":       # (max2 g2) the face: the card's face point (face_off), a crop the size of the whole head
+        pt = plates.face_point(meta, params_of(sid), kind)
     if pt is None:
         raise SystemExit(f"{sid} {kind}: no render point for {bone}")
     w, h = size_of(kind)
-    S = int(round((0.16 if kind == "splash" else 0.32) * h))
+    S = int(round(((0.30 if bone == "head" else 0.16) if kind == "splash" else 0.32) * h))
     cx = int(round(min(max(pt[0] * w, S / 2), w - S / 2)))
     cy = int(round(min(max(pt[1] * h, S / 2), h - S / 2)))
     return cx - S // 2, cy - S // 2, S
@@ -722,7 +725,10 @@ def hand(sid: str, kind: str, bone: str, what: str, n: int) -> float:
     Image.fromarray((np.clip(crop, 0, 1) * 255).astype(np.uint8)).resize((1024, 1024), Image.LANCZOS).save(ref)
     pr = json.load(open(PROMPTS, encoding="utf-8"))
     from build_manifest import SENSITIVITY
-    text = pr["hand"].format(what=what) + " " + SENSITIVITY
+    # (max2 g2) bone "head": the same local repaint for a face the full-card pass cannot reach at splash size (Odrum's
+    # mask recesses read as hollow holes at 30 px; every full-card painting drifted off the kit's palette), with the
+    # "face" prompt; the shipped card is then gated by card_qa's face blockers as any other
+    text = pr["face" if bone == "head" and "face" in pr else "hand"].format(what=what) + " " + SENSITIVITY
     key = run_xai.find_key(None)
     imgs = run_xai.call_edit(key, text, [Path(ref)], n, MODEL, "1:1", "2k")
     del key

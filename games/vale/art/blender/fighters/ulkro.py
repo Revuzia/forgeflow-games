@@ -84,14 +84,18 @@ CARDS = {
     "ulkro": {
         # (card engineer 2, closing2: t 0.50 was the follow-through, the thrower low and pointing down: the draw over the
         # shoulder, the left arm pointing at the target)
-        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": 8.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        # (max2 g2, verify_roll2: at yaw 8 the drawn dart stood up the middle of the face (an arrow-through-head read)
+        # and the slit's stitch ticks read as teeth on the bust: the camera round to 32 deg so the dart clears the
+        # face, and a three-quarter hero frame (head ~2x) so the painted pass can keep two lidded eyes)
+        "splash": {"clip": "cast_a1", "t": 0.30, "yaw": 32.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "box_lo": 0.75, "box_w": 0.70,
                    "key_az": 205.0, "key_el": 14.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
                    "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#D8A47A", "accent": 1.6, "exposure": -0.5,
                    "focal": [{"at": "x_dart_tip", "az": 200.0, "el": 15.0, "dist": 0.6, "color": "#FFE6C0",
                               "power": 55.0, "size": 0.25},
                              {"at": "head", "az": 170.0, "el": 10.0, "dist": 0.8, "color": "#FFDCB8", "power": 26.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 14.0, "lens": 70.0},
+        "portrait": {"yaw": 32.0, "lens": 70.0},
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496"},
     },
     "ulkro_highrim": {
@@ -105,7 +109,10 @@ CARDS = {
         "plate": {"glow": [0.55, 0.30, 0.50, 0.08], "glow_color": "#F6EEDC", "sat": 0.85},
     },
     "ulkro_long_evening": {
+        # (max2 g2, verify_roll2: one dark dot in the slit read as a single cyclops eye at card size: a three-quarter
+        # hero frame, the head ~2x, so the slit holds two lidded eyes in the painted pass)
         "splash": {"clip": "victory", "t": 0.55, "yaw": 34.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
+                   "box_lo": 0.75, "box_w": 0.60,
                    "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
                    "rim_warm": 1.6, "bounce": 0.6, "bounce_color": "#E8A866", "accent": 1.5, "exposure": -0.55,
                    "focal": [{"at": "head", "az": 200.0, "el": 0.0, "dist": 0.8, "color": "#FFC890", "power": 30.0,

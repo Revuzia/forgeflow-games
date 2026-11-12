@@ -1206,7 +1206,9 @@ def _face_disc(shape, af: np.ndarray, p: dict, kind: str, meta: dict | None, gro
     if fp is None:
         return None
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    rr = (0.05 if kind == "splash" else 0.15) * h * grow * float(p.get("mask_r", 1.0))
+    mr = p.get("mask_r", 1.0)
+    mr = mr.get(kind, 1.0) if isinstance(mr, dict) else mr      # (max2 g2) per kind: a three-quarter splash's larger face
+    rr = (0.05 if kind == "splash" else 0.15) * h * grow * float(mr)
     d = np.sqrt((xx - fp[0] * w) ** 2 + (yy - fp[1] * h) ** 2) / rr
     t = np.clip((1.15 - d) / 0.3, 0.0, 1.0)
     return (t * t * (3 - 2 * t) * np.clip(af, 0.0, 1.0)).astype(np.float32)
@@ -1267,7 +1269,8 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
                                  pixels at least the ellipse's q-th luma percentile, spread by a normalised gaussian
                                  (sigma s px), kept only where it lifts.
       {"op": "hue", "h": [h0, h1], "s_min": s, "v_max": v, "sat": k, "val": k, "to": "#hex", "mix": m}
-                                 pixels in that hue band (deg, h0 > h1 wraps) above saturation s (and value at most v)
+                                 pixels in that hue band (deg, h0 > h1 wraps) above saturation s (and value at most v;
+                                 optional "s_max" / "v_min" select a pale part, Gorgewalk's white keel)
                                  get saturation x sat and value x val, then mixed `mix` toward the hex at their own luma
                                  (an off-model eye colour back to the sheet).
       {"op": "lift", "px": n, "k": k}   dark pixels well under their n px surround's median are lifted k of the way
@@ -1323,7 +1326,8 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
             H = (np.degrees(np.arctan2(np.sqrt(3.0) * (g_ - b_), 2 * r_ - g_ - b_)) + 360.0) % 360.0
             h0, h1 = (float(v) for v in op.get("h", (0.0, 360.0)))
             band = (H >= h0) & (H <= h1) if h0 <= h1 else (H >= h0) | (H <= h1)
-            sel = band & (S >= float(op.get("s_min", 0.3))) & (mx <= float(op.get("v_max", 1.0)))
+            sel = (band & (S >= float(op.get("s_min", 0.3))) & (S <= float(op.get("s_max", 1.0)))
+                   & (mx <= float(op.get("v_max", 1.0))) & (mx >= float(op.get("v_min", 0.0))))
             selw = _gauss1(_gauss1(sel.astype(np.float32), 0.8, 0), 0.8, 1)[..., None]
             L = (rgb @ Y709)[..., None]
             new = np.clip((L + (rgb - L) * float(op.get("sat", 1.0))) * float(op.get("val", 1.0)), 0.0, 1.0)

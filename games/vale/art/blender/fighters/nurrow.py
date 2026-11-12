@@ -85,7 +85,9 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0}
 # and violet sleep-shadow bounce off the ground. The portraits derive from each card's frame and light (closer lens).
 CARDS = {
     "nurrow": {
-        "splash": {"clip": "cast_ult", "t": 0.34, "yaw": 26.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        # (max2 g2, verify_roll2: the ult's raised palm read as a claw and the plum felt merged with the orange plate:
+        # the hooked slash (the Noon Fair card's first fix), hand on the blade)
+        "splash": {"clip": "attack1", "t": 0.40, "yaw": 30.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
                    "key_az": 150.0, "key_el": 22.0, "key_color": "#E4DCEA", "sun": 2.8, "rim_cool": 1.3,
                    "rim_warm": 0.9, "bounce": 0.35, "bounce_color": "#D8A87C", "accent": 1.6, "exposure": -0.55,
                    # the lamp stays a focal at the lull hand only (the first pass washed the plum felt salmon-orange)
@@ -93,14 +95,15 @@ CARDS = {
                               "power": 35.0, "size": 0.3},
                              {"at": "head", "az": 200.0, "el": -10.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
                               "size": 0.3}]},
-        "portrait": {"yaw": 24.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
+        "portrait": {"clip": "cast_ult", "t": 0.34, "yaw": 24.0, "pitch": -3.0, "lens": 70.0, "fill": 0.80, "x": 0.52},
         "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866"},
     },
     "nurrow_noon_fair": {
         # (card engineer 2: the taunt's hand clawed over the mask on both Noon Fair cards: the hooked slash, the face clear)
-        "splash": {"clip": "attack1", "t": 0.40, "yaw": -22.0, "pitch": -4.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
+        # (max2 g2, verify_roll2: from -22 deg the slash turned her back and the brim hid the face: from her front side)
+        "splash": {"clip": "attack1", "t": 0.40, "yaw": 30.0, "pitch": -4.0, "lens": 50.0, "fill": 0.84, "x": 0.70,
                    "key_az": 200.0, "key_el": 55.0, "key_color": "#FFF0DC", "sun": 3.4, "rim_cool": 0.6,
-                   "rim_warm": 1.4, "bounce": 0.55, "bounce_color": "#F0C8A8", "accent": 1.4, "exposure": -0.6,
+                   "rim_warm": 1.4, "bounce": 0.40, "bounce_color": "#F0C8A8", "accent": 1.4, "exposure": -0.7,
                    "focal": [{"at": "x_hat_rim", "az": 170.0, "el": 30.0, "dist": 0.8, "color": "#FFD8C8",
                               "power": 40.0, "size": 0.4},
                              {"at": "head", "az": 160.0, "el": 0.0, "dist": 0.8, "color": "#FFE8D0", "power": 24.0,
@@ -109,7 +112,9 @@ CARDS = {
         "plate": {"glow": [0.55, 0.30, 0.50, 0.10], "glow_color": "#FFD6B8", "sat": 0.9},
     },
     "nurrow_shadeprint": {
-        "splash": {"clip": "attack2", "t": 0.55, "yaw": 38.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
+        # (max2 g2, verify_roll2: attack2's raised blade ran down across the mask: the hooked slash's extension, the
+        # blade out to the side)
+        "splash": {"clip": "attack1", "t": 0.40, "yaw": 38.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
                    "key_az": 130.0, "key_el": 45.0, "key_color": "#E2DAF2", "sun": 3.0, "rim_cool": 1.7,
                    "rim_warm": 0.4, "bounce": 0.6, "bounce_color": "#8E7CC8", "accent": 1.5, "exposure": -0.55,
                    "focal": [{"at": "x_blade_tip", "az": 170.0, "el": 20.0, "dist": 0.8, "color": "#E8E0FF",

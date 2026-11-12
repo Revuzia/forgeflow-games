@@ -23,6 +23,8 @@ Metrics (JSON + sheet in art/renders/lineup/<name>.{png,json}):
                     (bible: <= 0.80). Pairs of the same fighter (base vs `<id>_<variant>` skins)
                     are reported but not gated (skins keep the silhouette class on purpose).
   iou64_norm        the same with every silhouette scaled to 64 px tall (shape only, height removed)
+  crown             (MAX2 U7) the top 12 % of the silhouette against the next 12 % (shoulders): mean CIELAB [L, C, h, a, b]
+                    of each, dL*, hue difference (both at chroma >= 12), break = dL >= 8 or dHue >= 20, crown sigPct
   sigPct            (MAX2 U1) share of the silhouette's covered pixels whose on-screen CIELAB hue lies within 25 deg
                     of the fighter's signature (content/fighters/<id>.json vfx.signature) at chroma >= 12: the
                     material-zoning gate is >= 6 %
@@ -315,6 +317,21 @@ def main():
                     dh = np.abs((hue - sh + 180) % 360 - 180)
                     sig = core & sil & (dh <= 25) & (np.hypot(lab[..., 1], lab[..., 2]) >= 12)
                     fi["sigPct"] = round(100.0 * float(sig.sum()) / max(1, int((core & sil).sum())), 2)
+                # (MAX2 U7) the crown (top 12 % of the silhouette) against the shoulders (the next 12 %): mean CIELAB of
+                # each, the break (dL*, hue difference at chroma >= 12) and the crown's signature share
+                lab = srgb_lab(np.clip(rgb, 0, 1))
+                crown = core & sil & (rows < y0 + 0.12 * hgt)
+                shoul = core & sil & (rows >= y0 + 0.12 * hgt) & (rows < y0 + 0.24 * hgt)
+                if crown.any() and shoul.any():
+                    def mlab(m):
+                        Lm, am, bm = (float(lab[..., c][m].mean()) for c in range(3))
+                        return [round(Lm, 1), round(float(np.hypot(am, bm)), 1), round(float(np.degrees(np.arctan2(bm, am)) % 360), 1), round(am, 1), round(bm, 1)]
+                    cr, sh_ = mlab(crown), mlab(shoul)
+                    dh = abs((cr[2] - sh_[2] + 180) % 360 - 180) if min(cr[1], sh_[1]) >= 12 else 0.0
+                    fi["crown"] = {"lab": cr, "shoulders": sh_, "dL": round(abs(cr[0] - sh_[0]), 1), "dHue": round(dh, 1),
+                                   "break": bool(abs(cr[0] - sh_[0]) >= 8 or dh >= 20)}
+                    if sh is not None:
+                        fi["crown"]["sigPct"] = round(100.0 * float((sig & crown).sum()) / max(1, int(crown.sum())), 2)
             info["facings"][str(f)] = fi
             masks[nm][f] = sil
             if f == A["facings"][0]:
