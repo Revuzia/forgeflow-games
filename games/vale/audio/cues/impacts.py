@@ -38,7 +38,7 @@ import numpy as np
 from cuelib import REGISTRY, cue
 from synth import filters as F
 from synth import sfx as S
-from synth.core import ns
+from synth.core import SR, ns
 
 from .fighters import detune
 from .kit import Layers, finish, mono, norm, room
@@ -104,12 +104,18 @@ HF_FLOOR = (0.05, 0.0085)      # (2-6 kHz, > 6 kHz) energy share of the finished
                                # the codec's and the mastering's margin
 FLOORS = True
 SUB_LP_HZ = 70.0
-TAKE_SEMIS = (0.0, 0.0, 0.0)  # per take: the lead's own pitch (the takes differ in pitch as well as shape)              # the boom / thump stay under the identity bands (ID_FROM_HZ 125 Hz)
+TAKE_SEMIS = (0.0, -1.2, 1.0)  # per take: the lead's own pitch (the takes differ in pitch as well as shape: tf <= 0.95)
 # the layers' defaults per kind (dB re the lead's peak; None leaves the layer out) …
-P_HEAVY = dict(semis=0.0, flam=-6.0, flam_semis=0.0, sig=None, crack=None, grit=None, sub=None, wet=0.0, base=0, floors=False)
-P_ULT = dict(semis=0.0, flam=-5.0, sig=None, bloom=None, crack=None, grit=None, air=None, sub=None, wet=0.12, base=0, floors=False)
+P_HEAVY = dict(semis=0.0, flam=-6.0, flam_semis=0.0, sig=None, crack=None, grit=None, sub=-14.0, wet=0.0, base=0, floors=True,
+               ease_ms=1.0)
+P_ULT = dict(semis=0.0, flam=-5.0, sig=None, bloom=None, crack=None, grit=None, air=None, sub=-10.0, wet=0.12, base=0, floors=True,
+             ease_ms=1.0)
 # … and per cue (found by the identity search: every pair of ults, and of heavies, >= 8 dB apart by both measures)
-IMP_TUNE: dict[str, dict] = {}
+IMP_TUNE: dict[str, dict] = {
+    # (takes still near-clones after the voicing: a wider pitch spread between them)
+    'f_kemdo_a1_hit': {'ts': (0.0, -1.8, 1.5)}, 'f_tunlan_ult_hit': {'ts': (0.0, -1.8, 1.5)},
+    'f_odrum_ult_hit': {'ts': (0.0, -2.5, 2.0)},
+}
 
 
 def _p(cid: str, base: dict) -> dict:
@@ -133,10 +139,11 @@ def _sub(dur: float, f0: float, f1: float, drop: float, t60: float) -> np.ndarra
     return norm(F.apply(y, [F.lowpass(SUB_LP_HZ, q) for q in (0.5098, 0.6013, 0.9000, 2.5629)]))
 
 
-def _lead(fid: str, v: int, semis: float) -> np.ndarray:
+def _lead(fid: str, v: int, semis: float, ts=None) -> np.ndarray:
     """The fighter's shared impact (kits_c's voiced, cracked, contacted take v), `semis` down, its attack cut."""
     x = np.atleast_2d(REGISTRY[f'f_{fid}_hit'].fn(v % HIT_TAKES))
-    semis += TAKE_SEMIS[v % len(TAKE_SEMIS)]
+    ts = ts or TAKE_SEMIS
+    semis += ts[v % len(ts)]
     if semis:
         x = _lower(x, 2 ** (semis / 12))
     return mono(x)
@@ -155,15 +162,78 @@ def _floors(x: np.ndarray, fid: str, v: int, i: int) -> np.ndarray:
     return x + a * la
 
 
-EASE_MATCH = True   # an impact takes the blow-first pass exactly when its fighter's shared impact does (kits_c.EASE_SKIP)
+EASE_MATCH = False  # an impact takes the blow-first pass exactly when its fighter's shared impact does (kits_c.EASE_SKIP)
 
 
 def _eased(fid: str) -> bool:
     return not (EASE_MATCH and f'f_{fid}_hit' in EASE_SKIP)
 
 
-def _ez(fid: str, x: np.ndarray) -> np.ndarray:
-    return _ease(x) if _eased(fid) else x
+IMP_EASE_DB = 1.5   # an impact's later 2 ms RMS sits this far under its strike (kits_c's 0.5 dB left a flam or a bloom
+                    # within a codec's smear of it)
+
+
+def _ez(fid: str, x: np.ndarray, ms: float = 1.5) -> np.ndarray:
+    return _ease(x, ms=ms, db=IMP_EASE_DB) if _eased(fid) else x
+
+
+EQ_HZ = (160.0, 315.0, 630.0, 1250.0, 2500.0, 5000.0, 10000.0)   # the voicing curve's control points …
+# … and per cue its gains there (dB): the voicing that sets the 16 ults, and the 16 heavies, >= 8 dB apart by both
+# identity measures with the HF floors held (found by modelling each cue's bands under a curve and searching the
+# curves, then re-rendering and refining; +-9 dB at most)
+IMP_EQ: dict[str, tuple[float, ...]] = {
+    'f_ardit_ult_hit': (-6, -4.5, 4.5, 3, -7.5, 6, 9),
+    'f_burdam_ult_hit': (-9, 6, 4.5, 0, 1.5, 9, -9),
+    'f_dunsom_ult_hit': (-4.5, 3, -7.5, -3, 4.5, -9, 3),
+    'f_ervet_ult_hit': (-3, 6, 0, 0, 0, 6, 6),
+    'f_hesmi_ult_hit': (-4.5, -6, 4.5, -6, 9, -9, 6),
+    'f_ilsheta_ult_hit': (3, 4.5, -7.5, -9, 1.5, 9, -9),
+    'f_kemdo_ult_hit': (7.5, -6, -6, -9, 4.5, 4.5, 7.5),
+    'f_lisvel_ult_hit': (1.5, 7.5, -4.5, -4.5, -4.5, 0, 4.5),
+    'f_marund_ult_hit': (0, -7.5, 4.5, -6, -4.5, 6, 6),
+    'f_nurrow_ult_hit': (-6, 4.5, -9, -6, 0, 6, -4.5),
+    'f_odrum_ult_hit': (-9, -3, -9, 6, 7.5, 4.5, 4.5),
+    'f_rishal_ult_hit': (0, -9, -9, 0, 6, 1.5, 0),
+    'f_sukri_ult_hit': (-9, -3, 6, 0, -1.5, 0, 3),
+    'f_tunlan_ult_hit': (-4.5, -7.5, 4.5, 1.5, -3, 4.5, -3),
+    'f_ulkro_ult_hit': (-9, -7.5, -9, -4.5, 6, 4.5, 6),
+    'f_vashil_ult_hit': (-6, -6, 3, 3, -4.5, 6, 0),
+    'f_ardit_a1_hit': (-9, 1.5, 0, -3, -1.5, 0, -6),
+    'f_burdam_a3_hit': (-9, -7.5, -1.5, 0, 1.5, 7.5, -9),
+    'f_dunsom_a2_hit': (-6, 1.5, -9, -9, 3, -3, -1.5),
+    'f_ervet_a3_hit': (7.5, 7.5, -6, -6, 0, 6, 3),
+    'f_hesmi_a1_hit': (-6, -9, 4.5, -1.5, 7.5, -9, 6),
+    'f_ilsheta_a1_hit': (3, -9, -9, 4.5, 6, 9, -7.5),
+    'f_kemdo_a1_hit': (-4.5, -9, 3, 1.5, 4.5, 7.5, 9),
+    'f_lisvel_a1_hit': (0, 0, 0, -1.5, -4.5, 0, 6),
+    'f_marund_a1_hit': (3, -6, -1.5, -1.5, -7.5, 9, 9),
+    'f_nurrow_a1_hit': (0, 3, -7.5, -9, -9, 7.5, 9),
+    'f_odrum_a1_hit': (0, -4.5, -1.5, 3, -4.5, 1.5, -4.5),
+    'f_rishal_a1_hit': (-1.5, -9, -9, 0, 0, 0, 0),
+    'f_sukri_a1_hit': (-1.5, 6, -9, -7.5, -1.5, -6, 0),
+    'f_tunlan_a1_hit': (-3, -3, -3, -1.5, 6, 9, 3),
+    'f_ulkro_a1_hit': (-9, 0, -1.5, -1.5, -4.5, 0, 0),
+    'f_vashil_a1_hit': (-6, -9, -9, 6, -1.5, 4.5, 9),
+}
+
+
+def _curve(x: np.ndarray, gains) -> np.ndarray:
+    """The cue's voicing: a minimum-phase filter whose magnitude is `gains` (dB at EQ_HZ, interpolated over log
+    frequency, held flat beyond the ends), so the blow keeps its onset (no pre-ring)."""
+    if not gains or not any(gains):
+        return x
+    N = 4096
+    f = np.fft.rfftfreq(N, 1 / SR)
+    mag = 10 ** (np.interp(np.log2(np.maximum(f, 1.0)), np.log2(EQ_HZ), gains) / 20)
+    cep = np.fft.irfft(np.log(mag), n=N)
+    fold = np.zeros(N)
+    fold[0], fold[N // 2] = cep[0], cep[N // 2]
+    fold[1:N // 2] = 2.0 * cep[1:N // 2]
+    h = np.fft.irfft(np.exp(np.fft.rfft(fold)), n=N)[:N // 2]
+    h *= np.r_[np.ones(N // 4), 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, N // 4))]
+    m = np.atleast_2d(x)
+    y = np.stack([np.convolve(c, h)[:c.size] for c in m])
+    return y[0] if np.ndim(x) == 1 else y
 
 
 def _opt(L: Layers, make, t: float, db: float | None) -> None:
@@ -185,19 +255,20 @@ def _make_heavy(fid: str, slot: str):
         b = p['base']
         crack, grit = _grit(fid, v + 7)
         L = Layers(0.6)
-        L.add(_lead(fid, v + b, p['semis']), 0.0, peak_db=0)
-        _opt(L, lambda: _lead(fid, v + b, p['semis'] + p['flam_semis']), FLAM_S[v % 3], p['flam'])
+        L.add(_lead(fid, v + b, p['semis'], p.get('ts')), 0.0, peak_db=0)
+        _opt(L, lambda: _lead(fid, v + b, p['semis'] + p['flam_semis'], p.get('ts')), FLAM_S[v % 3], p['flam'])
         _opt(L, lambda: _tight(_sig(fid, v, 0.5)), 0.0, p['sig'])
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.003, p['grit'])
         _opt(L, lambda: _sub(0.3, 62 * detune(v, 40), 38, 0.025, 0.2), 0.0, p['sub'])
-        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])), p['ease_ms'])
         x = mono(_voice(finish(x, hp_hz=30), p.get('eq')))
-        return _ez(fid, _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
+        x = _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x
+        return _ez(fid, _curve(x, IMP_EQ.get(cid)), p['ease_ms'])
     recipe.__doc__ = (f"{fid.capitalize()}'s heaviest ability ({slot}) lands: its own impact a semitone down struck twice, "
                       f"its signature on the blow, its crack and grit, a sub thump under it.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid))
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid), ease_db=IMP_EASE_DB)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 
@@ -213,22 +284,23 @@ def _make_ult(fid: str):
         crack, grit = _grit(fid, v + 11)
         _, _, air = _crack(fid, v + 13, 1.0, 0.28)
         L = Layers(1.1)
-        L.add(_lead(fid, v + b, p['semis']), 0.0, peak_db=0)
-        _opt(L, lambda: _lead(fid, v + b, p['semis']), ULT_FLAM_S[v % 3], p['flam'])
+        L.add(_lead(fid, v + b, p['semis'], p.get('ts')), 0.0, peak_db=0)
+        _opt(L, lambda: _lead(fid, v + b, p['semis'], p.get('ts')), ULT_FLAM_S[v % 3], p['flam'])
         _opt(L, lambda: sig, 0.0, p['sig'])
         _opt(L, lambda: mono(_lo(sig, 2.0)), 0.008, p['bloom'])
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.004, p['grit'])
         _opt(L, lambda: air, 0.006, p['air'])
         _opt(L, lambda: _sub(0.9, 56 * detune(v, 40), 30, 0.04, 0.55), 0.0, p['sub'])
-        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = _ez(fid, mono(room(L.out(), ROOMS[fid], wet=p['wet'])), p['ease_ms'])
         x = mono(_voice(finish(x, hp_hz=25), p.get('eq')))
-        return _ez(fid, _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
+        x = _floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x
+        return _ez(fid, _curve(x, IMP_EQ.get(cid)), p['ease_ms'])
     recipe.__doc__ = (f"{fid.capitalize()}'s ult lands: its own impact struck hard with its signature and that "
                       f"signature's octave-down bloom, its crack, grit and air, a deep sub boom under it, in a wetter "
                       f"{ROOMS[fid]} room.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid))
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=_eased(_fid), ease_db=IMP_EASE_DB)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 

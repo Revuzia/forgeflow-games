@@ -494,14 +494,14 @@ def _tight(x: np.ndarray, ms: float = TIGHT_MS) -> np.ndarray:
     return y[0] if np.ndim(x) == 1 else y
 
 
-def _ease(x: np.ndarray, ms: float = TIGHT_MS + 1.0) -> np.ndarray:
+def _ease(x: np.ndarray, ms: float = TIGHT_MS + 1.0, db: float = EASE_DB) -> np.ndarray:
     """The blow lands first: past the first `ms` after the onset, the take's 2 ms RMS envelope is held EASE_DB under
     its level there (a smoothed gain: a +-4 ms minimum, then a 4 ms average, which stays under the gain each 2 ms
     window needs), so a later bloom, flam, boom or room never rides over the strike."""
     e = _env2(x)
     i = int(np.argmax(e > e.max() * 0.01))
     w = i + ns(ms / 1000.0)
-    a = float(e[i:w + 1].max()) * 10 ** (-EASE_DB / 20)
+    a = float(e[i:w + 1].max()) * 10 ** (-db / 20)
     g = np.ones_like(e)
     g[w:] = np.minimum(1.0, a / np.maximum(e[w:], 1e-12))
     k = ns(0.004)
@@ -575,7 +575,7 @@ def _snap_layer(xs: np.ndarray, ms: float = SNAP_MAX_MS) -> np.ndarray:
 
 
 def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -1.5, boost: float = 0.0,
-              ease: bool | None = None) -> np.ndarray:
+              ease: bool | None = None, ease_db: float = EASE_DB) -> np.ndarray:
     """The snap pass on a MASTERED take (audio/build.py calls it after cuelib.master, before the codec; see the section
     note): when the take's peak is not its first SNAP_WIN_MS, the body's peaks are eased (a look-ahead limiter) to
     SNAP_MARGIN_DB under the transient's level SNAP_PEAK_DBFS, and the take's own impulse is set at the onset at the level
@@ -583,7 +583,7 @@ def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -
     did (a transient added before it moved the clip's harmonics and so the fighter's spectrum)."""
     eased = (cid not in EASE_SKIP) if ease is None else ease     # the blow first (_ease), around the snap
     if eased:
-        y = _ease(y)
+        y = _ease(y, db=ease_db)
     tune = SNAP_TUNE.get(cid, (SNAP_MARGIN_DB, SNAP_MAX_MS))
     if tune is None:
         return y
@@ -623,7 +623,7 @@ def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -
     a = level(base)
     xs = base
     out = fx.limit(xs + a * lay, ceiling)[:, :xs.shape[-1]]      # its true peak (inter-sample) under the ceiling too
-    return _ease(out) if eased else out                           # (a gain under 1 only: the peak stays under it)
+    return _ease(out, db=ease_db) if eased else out                           # (a gain under 1 only: the peak stays under it)
 
 
 def _stages(vc) -> tuple:
