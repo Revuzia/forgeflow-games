@@ -57,6 +57,8 @@ interface SpeciesLook {
   /** when its fruit hangs (plants.json fruit.season, fractions of the local year; the fruit is shown from a little
    *  before it ripens), or null: no fruit drawn */
   fruit: [number, number] | null;
+  /** standing water (m) a tree of this species stands in (plants.json water[1] for shore / water trees: mangroves); 0 = dry land only */
+  wetMax: number;
 }
 const srgbToLin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 function hexLin(h: string | undefined, fallback: [number, number, number]): [number, number, number] {
@@ -103,7 +105,11 @@ function speciesLook(pl: PlantDef): SpeciesLook {
   const [h0, h1] = pl.height ?? [8, 20];
   const fs = (pl as { fruit?: { season?: [number, number] } }).fruit?.season;
   const fruit: [number, number] | null = Array.isArray(fs) && fs.length === 2 ? [Number(fs[0]) - 0.08, Number(fs[1]) + 0.03] : null;
-  return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous, fruit };
+  // (PERF s13: a mangrove stand in the sea shallows was never scattered — every point in water was refused — so the
+  // sim's tree cover there showed only as dark shapes under the sheet; shore / water trees now stand in their water)
+  const pw = (pl as { water?: [number, number]; habitat?: string }).water, hab = (pl as { habitat?: string }).habitat;
+  const wetMax = layer === 'tree' && (hab === 'shore' || hab === 'water') && Array.isArray(pw) ? Math.max(0, Number(pw[1]) || 0) : 0;
+  return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous, fruit, wetMax };
 }
 const BASE_PLANTS = BASE_PACK.plants ?? [];
 const SPECIES: SpeciesLook[] = BASE_PLANTS.map(speciesLook);
@@ -959,7 +965,9 @@ export class Vegetation {
         }
       }
     }
-    if ((tc > 0.02 || sc > 0.02) && !(water && water[c] > 1)) {
+    const cellLook = treeSp && treeSp[c] >= 0 ? SPECIES[Math.round(treeSp[c])] : null;
+    const wetC = water ? water[c] : 0;
+    if ((tc > 0.02 || sc > 0.02) && (wetC <= 1 || (cellLook != null && cellLook.wetMax > 0 && wetC <= cellLook.wetMax + 0.3))) {
       const area = g.area[c] * R * R;
       const spacing = Math.sqrt(area);
       const P = g.pos;
@@ -1003,7 +1011,8 @@ export class Vegetation {
         if (h3 > cover) return;
         // (no tree or bush on a field: the terrain tills its rows from crop ≈ 0.02 and they are plain by ≈ 0.1 — cleared
         // only above 0.4, palms stood in the furrows of every young field; orchards are trees, not crop)
-        if (at(water) > 0.05 || at(road) > 0.45 || at(crop) > 0.08 || at(snow) > 1.2 || at(sand) > 0.5) return;
+        const wAt = at(water);
+        if ((wAt > 0.05 && isShrub) || at(road) > 0.45 || at(crop) > 0.08 || at(snow) > 1.2 || at(sand) > 0.5) return;
         const t = at(temp), m = at(moist), b = at(burnt);
         // species: one of the three cells around the point, chosen by its weight (stands mix along their borders)
         const hs4 = hashFloat(c, i, salt + 6);
@@ -1016,6 +1025,8 @@ export class Vegetation {
         if (look && look.layer === 'sea') return; // kelp grows under the sea, placed above
         // a species of the wrong functional type for this layer (a mod, a stale index) is ignored, not obeyed
         if (look && (look.layer === 'shrub') !== isShrub) look = null;
+        // standing water: only a tree that grows in it (mangrove) stands there, up to its depth
+        if (wAt > 0.05 && !(look && look.wetMax > 0 && wAt <= look.wetMax + 0.3)) return;
         let kind: number;
         if (isShrub) kind = b > 0.6 ? K('burnt') : look ? look.kind : K('shrub');
         else if (b > 0.5) kind = K('burnt');
