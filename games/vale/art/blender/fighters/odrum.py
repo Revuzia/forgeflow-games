@@ -120,7 +120,8 @@ CARDS = {
     "odrum": {
         # (card engineer 2, closing2 odrum-C3-M1: the ult's raised pot read as an eyeball beside the mask: Resin Shot's
         # follow-through, the yoke a long diagonal toward the target with both pots in three-quarter view)
-        "splash": {"clip": "cast_a1", "t": 0.55, "yaw": 30.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_a1", "t": 0.55, "yaw": 30.0, "exposure": -1.0,   # (card engineer 2: the finish v2 render blew the jerkin to pale orange)
+                   "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
                    "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
                    "focal": [{"at": "x_sling_pouch", "az": 190.0, "el": 20.0, "dist": 0.5, "color": "#FFC060",
