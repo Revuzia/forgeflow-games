@@ -1,21 +1,21 @@
 {
  "verifier": "g1b (max2 round 2, adversarial card verifier after the g1 fix round: sukri, tunlan, ervet, marund, ardit, hesmi, ilsheta)",
- "date": "2026-11-12 about 15:05 Central",
- "commitReviewed": "3be949fe1 (g1 fix round on verify_r2_g1a) with the card files from wip syncs fb0c9fb84 and ba2991e68",
+ "date": "2026-11-12 about 17:25 Central (second g1b pass; the first g1b draft of about 15:05 was carried into the tree by wip sync 772f2556e and is superseded by this file)",
+ "commitReviewed": "772f2556e (HEAD): no card file for these 7 fighters changed after 3be949fe1 (git log 3be949fe1..HEAD on art/out/fighters/<id> is empty, working tree clean for them)",
  "pass": false,
  "checked": 42,
- "failed": 11,
- "method": "Viewed all 42 shipped cards in art/out/fighters/<id>/ by eye: per-skin sheets with the splash at 800 px (card size and above) beside its 3D reference (art/.cache/fighters/paint/<sid>_<kind>_3d.png), the portrait at 480 beside its 3D, and 128/64 px chips (LANCZOS down, nearest-neighbour up to view). Full-resolution face crops at 2-6x on every changed card and on every Hesmi, Marund and Ilsheta face; feet crops on Ervet Stillwater; hand and lantern crops on Tunlan. Each fix-round card compared with the file g1a reviewed (git show d492b25c3:<path>). Note: the 3D references for marund (base and Gorgewalk splash) and all Hesmi splashes predate the fix-round renders; those ship as 3D and were judged on the card. Re-ran card_qa.py on the 7 fighters and node tools/gen_store.ts --check.",
+ "failed": 12,
+ "method": "Viewed all 42 shipped cards in art/out/fighters/<id>/ by eye: per-skin sheets with the splash at 800 px (card size and above) beside its 3D reference (art/.cache/fighters/paint/<sid>_<kind>_3d.png), the portrait at 480 beside its 3D, and 128/64 px chips (LANCZOS down, nearest-neighbour up to view). Full-resolution face crops at 2-6x on every changed card and on every Hesmi, Marund and Ilsheta face; feet crops on Ervet Stillwater; hand and lantern crops on Tunlan. Each fix-round card compared with the file g1a reviewed (git show d492b25c3:<path>). Note: the 3D references for marund (base and Gorgewalk splash) and all Hesmi splashes predate the fix-round renders; those ship as 3D and were judged on the card. Re-ran card_qa.py on the 7 fighters and node tools/gen_store.ts --check. Second pass (17:25): rebuilt per-skin sheets (splash at 1200 beside its 3D reference, splash at 480 card size, portrait at 480 beside its 3D, 128/64 chips) for all 42 cards and viewed each; 2-4x crops of Tunlan Noon Fair (hands, plate prop), Marund Long Evening (both faces vs 3D), Ardit First Bell (both faces), Ilsheta Stillwater and First Bell faces. Gates re-run.",
  "gates": {
-  "store": "pass: store.json current (32 offers, 8 shelves; dE gate 32/32)",
-  "cardQa": "42 cards, 1 gate miss: ilsheta_stillwater splash blank 0.65 (restored round-1 file). Fix-round blanks: sukri splash 0.55 (was 0.74), tunlan_lamplit splash 0.49 (was 0.70), marund_gorgewalk splash 0.64. Highest glow: sukri_shadeprint portrait 0.12. The automated gates do not catch the Hesmi notched eye or the Marund Gorgewalk beak."
+  "store": "pass: store.json current (32 offers, 8 shelves; dE gate 32/32) (re-run 17:20, unchanged)",
+  "cardQa": "42 cards, 1 gate miss: ilsheta_stillwater splash blank 0.65 (restored round-1 file). Fix-round blanks: sukri splash 0.55 (was 0.74), tunlan_lamplit splash 0.49 (was 0.70), marund_gorgewalk splash 0.64. Highest glow: sukri_shadeprint portrait 0.12. The automated gates do not catch the Hesmi notched eye or the Marund Gorgewalk beak. Re-run 17:20: same, 42 cards, 1 gate miss (ilsheta_stillwater splash blank 0.65)."
  },
  "cardScores": {
   "sukri": 5.0,
   "tunlan": 5.0,
   "ervet": 4.0,
   "marund": 4.0,
-  "ardit": 5.5,
+  "ardit": 5.0,
   "hesmi": 2.5,
   "ilsheta": 4.5
  },
@@ -42,7 +42,8 @@
   ],
   "newlyFailed": [
    "hesmi_portrait (notched eye, previously passed)",
-   "hesmi_shadeprint_portrait (notched eye, previously passed)"
+   "hesmi_shadeprint_portrait (notched eye, previously passed)",
+   "ardit_first_bell_portrait (pink-red cracked face in the helm slot, second g1b pass)"
   ]
  },
  "perCard": [
@@ -159,12 +160,12 @@
   {
    "card": "marund_long_evening_splash",
    "verdict": "ok",
-   "issues": "Not changed. Shovel and feet seated, warm grade. Watch: no readable eyes at card size."
+   "issues": "Not changed. Shovel and feet seated, warm grade. Watch: no readable eyes at card size. Second pass: a small dark slit on the viewer-left side panel of the head reads like a third eye at 2x (in the 3D too)."
   },
   {
    "card": "marund_long_evening_portrait",
    "verdict": "ok",
-   "issues": "Not changed since g1a. Head lifted, lid and beard read. Watch: block face at 64."
+   "issues": "Not changed since g1a. Head lifted, lid and beard read. Watch: block face at 64. Second pass at 2x beside the 3D: a patchwork of pale and dark facets with crack lines across both cheeks; brow, squint creases, nose and moustache still read, and it matches the 3D. Kept ok as the carved-wood design the base passes with; watch for a cracked-face read at 128."
   },
   {
    "card": "ardit_splash",
@@ -189,12 +190,12 @@
   {
    "card": "ardit_first_bell_splash",
    "verdict": "ok",
-   "issues": "Not changed. On-model. Watch: dark figure on the plate; pavise crosses the lower helm."
+   "issues": "Not changed. On-model. Watch: dark figure on the plate; pavise crosses the lower helm. Second pass: the same pink-red cracked face shows in the slot at 4x (1020-1220 x 160-335) but is too small to read at card size; it should be re-rendered with the portrait fix."
   },
   {
    "card": "ardit_first_bell_portrait",
-   "verdict": "ok",
-   "issues": "Not changed since g1a. Helm and T slot lead; told apart from the base by its cream armour."
+   "verdict": "fail",
+   "issues": "Not changed since g1a; failed in this pass (default fail). At 4x (200-400 x 60-235) the face behind the T slot is pale with pink-red smears and dark crack lines across the cheeks and mouth, no eye reads under the visor bar; at 128 and 64 it is a pink blotch inside the helm (raw or cracked face lean). The base and Chalkline portraits show a clean brown face in the same slot. It is in the 3D reference too, so it is the skin albedo or the 3D finish, not paint."
   },
   {
    "card": "hesmi_splash",
@@ -287,6 +288,12 @@
    "severity": "major",
    "what": "Face is a blank plate with two eyes (blank mannequin lean); Stillwater trips card_qa blank.",
    "fix": "Bring the model's nose, mouth and brows through in the splash light (as on the portraits and the repainted base splash), then a face-only repaint that keeps the carved mask."
+  },
+  {
+   "card": "ardit_first_bell_portrait (and its splash)",
+   "severity": "major",
+   "what": "Face behind the T slot is pale with pink-red smears and crack lines, no eyes; reads as a raw or cracked face at chip size.",
+   "fix": "Give the First Bell face the base skin's clean brown carved face (albedo zone in the skin or a plates.retouch in the 3D finish), re-render portrait and splash."
   }
  ],
  "notes": [
@@ -294,6 +301,8 @@
   "The fix-round commit message says ilsheta_first_bell and ilsheta_stillwater splashes were left untouched; the files did change in fb0c9fb84/ba2991e68 and were restored in 3be949fe1 to the exact blobs g1a reviewed (a02e8ade, 6157d06f), so the shipped state matches g1a.",
   "The marund_gorgewalk commit text says the keel and pale blocks were toned to walnut; on the shipped splash the keel is still pale cream.",
   "Watch for the lead: the Tunlan lantern bead (gold or pale ball with two blue spots) reads like a small face or eyeball inside the cage on the base and Lamplit cards; it is in the model, not a paint artefact.",
-  "Cards that pass here and are not already on the CDN: sukri_splash, sukri_shadeprint_splash, tunlan_lamplit_splash, ervet_stillwater_splash, marund_splash, ilsheta_splash, plus the g1a passes. Nothing was rendered, painted or deployed by this verifier."
+  "Cards that pass here and are not already on the CDN: sukri_splash, sukri_shadeprint_splash, tunlan_lamplit_splash, ervet_stillwater_splash, marund_splash, ilsheta_splash, plus the g1a passes. Nothing was rendered, painted or deployed by this verifier.",
+  "Second g1b pass (17:25 Central) found no file changes since the first draft and agrees with it card by card except ardit_first_bell_portrait, now failed. Default fail applied because g1a and the first draft passed it without a face crop.",
+  "Ilsheta: the tall glass chimney on the head is a vessel, not a hood; the hood under it is rounded, so it was not failed under the conical-hood rule. Flagged for the lead to confirm."
  ]
 }
