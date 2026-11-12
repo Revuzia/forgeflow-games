@@ -99,14 +99,15 @@ def impact_slots() -> dict[str, list[str]]:
 
 
 FLAM_S = (0.022, 0.031, 0.017)  # the heavy's second blow, per take
+ULT_FLAM_S = (0.034, 0.027, 0.041)  # … and the ult's
 HF_FLOOR = (0.05, 0.0085)      # (2-6 kHz, > 6 kHz) energy share of the finished take: the lane's floors 4 % / 0.6 % plus
                                # the codec's and the mastering's margin
 FLOORS = True
-SUB_LP_HZ = 95.0
-TAKE_SEMIS = (0.0, 0.7, -0.6)  # per take: the lead's own pitch (the takes differ in pitch as well as shape)              # the boom / thump stay under the identity bands (ID_FROM_HZ 125 Hz)
+SUB_LP_HZ = 70.0
+TAKE_SEMIS = (0.0, 0.0, 0.0)  # per take: the lead's own pitch (the takes differ in pitch as well as shape)              # the boom / thump stay under the identity bands (ID_FROM_HZ 125 Hz)
 # the layers' defaults per kind (dB re the lead's peak; None leaves the layer out) …
-P_HEAVY = dict(semis=1.0, flam=-7.0, flam_semis=4.0, sig=-4.0, crack=-6.0, grit=-12.0, sub=-8.0, wet=0.12, base=0)
-P_ULT = dict(semis=0.0, sig=-2.0, bloom=-11.0, crack=-4.0, grit=-10.0, air=-16.0, sub=-6.0, wet=0.26, base=0)
+P_HEAVY = dict(semis=0.0, flam=-6.0, flam_semis=0.0, sig=None, crack=None, grit=None, sub=None, wet=0.0, base=0, floors=False)
+P_ULT = dict(semis=0.0, flam=-5.0, sig=None, bloom=None, crack=None, grit=None, air=None, sub=None, wet=0.12, base=0, floors=False)
 # … and per cue (found by the identity search: every pair of ults, and of heavies, >= 8 dB apart by both measures)
 IMP_TUNE: dict[str, dict] = {}
 
@@ -138,7 +139,7 @@ def _lead(fid: str, v: int, semis: float) -> np.ndarray:
     semis += TAKE_SEMIS[v % len(TAKE_SEMIS)]
     if semis:
         x = _lower(x, 2 ** (semis / 12))
-    return _tight(mono(x))
+    return mono(x)
 
 
 def _floors(x: np.ndarray, fid: str, v: int, i: int) -> np.ndarray:
@@ -174,14 +175,14 @@ def _make_heavy(fid: str, slot: str):
         crack, grit = _grit(fid, v + 7)
         L = Layers(0.6)
         L.add(_lead(fid, v + b, p['semis']), 0.0, peak_db=0)
-        _opt(L, lambda: _lead(fid, v + b + 1, p['semis'] + p['flam_semis']), FLAM_S[v % 3], p['flam'])
+        _opt(L, lambda: _lead(fid, v + b, p['semis'] + p['flam_semis']), FLAM_S[v % 3], p['flam'])
         _opt(L, lambda: _tight(_sig(fid, v, 0.5)), 0.0, p['sig'])
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.003, p['grit'])
-        _opt(L, lambda: _sub(0.3, 95 * detune(v, 40), 52, 0.025, 0.2), 0.0, p['sub'])
+        _opt(L, lambda: _sub(0.3, 62 * detune(v, 40), 38, 0.025, 0.2), 0.0, p['sub'])
         x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
         x = mono(_voice(finish(x, hp_hz=30), p.get('eq')))
-        return _ease(_floors(x, fid, v, _onset(x)) if FLOORS else x)
+        return _ease(_floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s heaviest ability ({slot}) lands: its own impact a semitone down struck twice, "
                       f"its signature on the blow, its crack and grit, a sub thump under it.")
     recipe.__name__ = cid
@@ -202,15 +203,16 @@ def _make_ult(fid: str):
         _, _, air = _crack(fid, v + 13, 1.0, 0.28)
         L = Layers(1.1)
         L.add(_lead(fid, v + b, p['semis']), 0.0, peak_db=0)
+        _opt(L, lambda: _lead(fid, v + b, p['semis']), ULT_FLAM_S[v % 3], p['flam'])
         _opt(L, lambda: sig, 0.0, p['sig'])
         _opt(L, lambda: mono(_lo(sig, 2.0)), 0.008, p['bloom'])
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.004, p['grit'])
         _opt(L, lambda: air, 0.006, p['air'])
-        _opt(L, lambda: _sub(0.9, 78 * detune(v, 40), 36, 0.04, 0.55), 0.0, p['sub'])
+        _opt(L, lambda: _sub(0.9, 56 * detune(v, 40), 30, 0.04, 0.55), 0.0, p['sub'])
         x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
         x = mono(_voice(finish(x, hp_hz=25), p.get('eq')))
-        return _ease(_floors(x, fid, v, _onset(x)) if FLOORS else x)
+        return _ease(_floors(x, fid, v, _onset(x)) if p.get('floors', FLOORS) else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s ult lands: its own impact struck hard with its signature and that "
                       f"signature's octave-down bloom, its crack, grit and air, a deep sub boom under it, in a wetter "
                       f"{ROOMS[fid]} room.")

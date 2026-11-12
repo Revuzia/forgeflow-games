@@ -138,7 +138,8 @@ CARDS = {
                   "face_r": {"splash": 1.7},     # the blocker detector's disc on the larger face
                   # (max2 g2 fix, verify_r2_g2a: the face-only xAI repaint put photo-real white-sclera eyes in the cracked
                   # mask: stylised lidded eyes painted in the recesses on the 3D card instead, plates.paint_eyes)
-                  "retouch": {"splash": [{"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#C29660", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
+                  # (and "pot reads as an eyeball": the near pot's blue glass a step calmer, less saturated and darker)
+                  "retouch": {"splash": [{"op": "hue", "at": [-0.53, 0.24], "r": [0.075, 0.085], "h": [185.0, 250.0], "s_min": 0.25, "sat": 0.45, "val": 0.72}, {"op": "eyes", "w": 3.0, "h": 1.25, "tilt": 0.12, "lid_k": 0.48, "iris": "#3E2F24", "ink": "#151112", "lid": "#C29660", "bed": [1.4, 1.6, 0.95], "bed_val": 0.62, "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
@@ -155,7 +156,8 @@ CARDS = {
         "portrait": {"clip": "idle_lobby", "t": 0.0, "key_az": 150.0, "key_el": 55.0},
         "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4",
                   "face_off": {"splash": [0.0, 0.035]},     # (max2 g2: the face's middle on the three-quarter splash)
-                  "retouch": {"splash": [{"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#CBBDA8", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
+                  # (max2 g2 fix, verify_r2_g2a "fragmented yoke hand": the skin hand's holes and shard gaps closed)
+                  "retouch": {"splash": [{"op": "close", "px": 7, "at": [-0.225, 0.075], "r": [0.05, 0.045]}, {"op": "eyes", "w": 3.0, "h": 1.25, "tilt": 0.12, "lid_k": 0.48, "iris": "#2A211C", "ink": "#151112", "lid": "#CBBDA8", "bed": [1.4, 1.6, 0.95], "bed_val": 0.45, "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
     "odrum_shadeprint": {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
@@ -179,8 +181,8 @@ CARDS = {
                   "sub_max_k": 1.0, "haze": 0.02,
                   # (max2 g2 fix, verify_r2_g2a: dense cracks over the mask, solid yellow slits with no pupils: the thin
                   # crack lines closed, the slits painted as lidded eyes in the recesses)
-                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}],
-                              "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 2.3, "h": 0.95, "tilt": 0.12, "lid_k": 0.45, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.7, 1.8, 0.9], "socket": 0.10, "line": 0.12, "crease": 0.0}]}},
+                  "retouch": {"splash": [{"op": "close", "px": 2, "at": [0.0, 0.0], "r": [0.05, 0.055]}, {"op": "eyes", "w": 3.0, "h": 1.25, "tilt": 0.12, "lid_k": 0.34, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.4, 1.6, 0.95], "bed_val": 0.45, "socket": 0.0, "line": 0.17, "crease": 0.0}],
+                              "portrait": [{"op": "close", "px": 4, "at": [0.0, 0.0], "r": [0.20, 0.22]}, {"op": "eyes", "w": 3.0, "h": 1.25, "tilt": 0.12, "lid_k": 0.48, "iris": "#2A211C", "ink": "#151112", "lid": "#ABA0AE", "bed": [1.4, 1.6, 0.95], "bed_val": 0.45, "socket": 0.0, "line": 0.12, "crease": 0.0}]}},
     },
 }
 SKINS: list = [

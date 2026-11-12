@@ -147,7 +147,43 @@
    }
   ],
   "prompt_version": 6,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.L",
+   "variant": 1,
+   "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a tan leather glove resting against her hip, the knuckles rounded, the thumb over the fingers; remove the thin splayed spiky fingers entirely and paint the background back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_nurrow_splash_hand.L__v1.png",
+   "raw_sha256": "daacbc440d36dc4968da41751fdf205c7142ee060ff1fd91a18f4691a328dd31",
+   "gate": {
+    "variant": 1,
+    "free": true,
+    "struct": 0.972,
+    "pal_mean": 2.8,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.L",
+    "variant": 1,
+    "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a tan leather glove resting against her hip, the knuckles rounded, the thumb over the fingers; remove the thin splayed spiky fingers entirely and paint the background back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_nurrow_splash_hand.L__v1.png",
+    "raw_sha256": "daacbc440d36dc4968da41751fdf205c7142ee060ff1fd91a18f4691a328dd31",
+    "gate": {
+     "variant": 1,
+     "free": true,
+     "struct": 0.972,
+     "pal_mean": 2.8,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  },
  "nurrow_noon_fair:portrait": {
   "shipped": "painted",
@@ -300,7 +336,43 @@
    }
   ],
   "prompt_version": 6,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.L",
+   "variant": 1,
+   "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a glove of the same colour resting against her hip, the knuckles rounded, the thumb over the fingers; remove every thin splayed spiky finger entirely and paint the background or the robe back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_nurrow_noon_fair_splash_hand.L__v1.png",
+   "raw_sha256": "c9e7776a606e962904b176a7c3a03f13116a682a037197bf09521e0dfb6b1bb4",
+   "gate": {
+    "variant": 1,
+    "free": true,
+    "struct": 0.97,
+    "pal_mean": 2.8,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.L",
+    "variant": 1,
+    "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a glove of the same colour resting against her hip, the knuckles rounded, the thumb over the fingers; remove every thin splayed spiky finger entirely and paint the background or the robe back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_nurrow_noon_fair_splash_hand.L__v1.png",
+    "raw_sha256": "c9e7776a606e962904b176a7c3a03f13116a682a037197bf09521e0dfb6b1bb4",
+    "gate": {
+     "variant": 1,
+     "free": true,
+     "struct": 0.97,
+     "pal_mean": 2.8,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  },
  "nurrow_shadeprint:portrait": {
   "shipped": "painted",
@@ -451,6 +523,42 @@
    }
   ],
   "prompt_version": 6,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.L",
+   "variant": 1,
+   "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a glove of the same colour resting against her hip, the knuckles rounded, the thumb over the fingers; remove every thin splayed spiky finger entirely and paint the background or the robe back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_nurrow_shadeprint_splash_hand.L__v1.png",
+   "raw_sha256": "77bebdabcffcd0e7024ab9af5aba5447361e4619d9535caa955939d79bc3a730",
+   "gate": {
+    "variant": 1,
+    "free": true,
+    "struct": 0.995,
+    "pal_mean": 1.8,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.L",
+    "variant": 1,
+    "why": "max2 g2 fix (verify_r2_g2a): the hip hand's splayed spiked fingers (model skinning at attack1 t 0.40) repainted as a closed gloved fist, disc blend (--free) so the old spikes are painted out; hand cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: her left hand redrawn as a soft closed fist in a glove of the same colour resting against her hip, the knuckles rounded, the thumb over the fingers; remove every thin splayed spiky finger entirely and paint the background or the robe back where they were, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_nurrow_shadeprint_splash_hand.L__v1.png",
+    "raw_sha256": "77bebdabcffcd0e7024ab9af5aba5447361e4619d9535caa955939d79bc3a730",
+    "gate": {
+     "variant": 1,
+     "free": true,
+     "struct": 0.995,
+     "pal_mean": 1.8,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  }
 }

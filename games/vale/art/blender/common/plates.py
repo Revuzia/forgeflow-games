@@ -1289,14 +1289,12 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
     ops = (p.get("retouch") or {}).get(kind)
     if not ops:
         return comp
-    eye_ops = [op for op in ops if op.get("op") == "eyes"]
+    eye_ops = [op for op in ops if op.get("op") == "eyes"]        # painted last: a "close" would lift their dark lines
     ops = [op for op in ops if op.get("op") != "eyes"]
-    for op in eye_ops:
-        comp = paint_eyes(comp, af, meta, op)
-    if not ops:
-        return comp
-    fp = face_point(meta, p, kind)
+    fp = face_point(meta, p, kind) if ops else None
     if fp is None:
+        for op in eye_ops:
+            comp = paint_eyes(comp, af, meta, op)
         return comp
     h, w = comp.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
@@ -1364,7 +1362,10 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
                 new = new + float(op.get("mix", 1.0)) * (np.clip(tg * (nl / max(tl, 1e-3)), 0.0, 1.0) - new)
             new = rgb + (new - rgb) * selw
         out[..., :3] = rgb + (new - rgb) * wgt
-    return out.astype(np.float32)
+    out = out.astype(np.float32)
+    for op in eye_ops:
+        out = paint_eyes(out, af, meta, op)
+    return out
 
 
 def _sst(x):
@@ -1385,7 +1386,7 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
     "tilt" its outer corner's lift (cm per cm), "lid_k" the share of the almond under the lid (0..1), "line" the lash
     line's half width, "socket" (0..1) the shade, "smoke" [w, h, k] a wider darker ellipse behind each eye (Lisvel's
     smoky glass band), "crease"; colours "iris" / "ink" hex, "lid" hex or the local colour x "lid_val"; "bed" [kw, kh, k]
-    fills an almond kw x kh the eye's size with the lid colour (a step darker) first, a deep recess made a carved socket;
+    fills an almond kw x kh the eye's size with the lid colour x "bed_val" (0.82) first, a deep recess made a shaded socket;
     "mode": "open" or "closed" (a lash arc under a lit lid); "only": [i, ...] the eyes to paint; "k" overall mix."""
     pts = (meta or {}).get("pts") or {}
     h, w = comp.shape[:2]
@@ -1442,7 +1443,7 @@ def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) ->
             qb = np.clip(1.0 - ub * ub, 0.0, 1.0)
             inb = _sst(np.minimum.reduce([(qb ** 0.7 - vb_) * eh * kh, (vb_ + 0.75 * qb ** 0.9) * eh * kh,
                                           (1.0 - np.abs(ub)) * ew * kw]) / (2.0 * soft))
-            rgb = rgb + (lidc * 0.82 - rgb) * (kb * inb)[..., None]
+            rgb = rgb + (lidc * float(op.get("bed_val", 0.82)) - rgb) * (kb * inb)[..., None]
         if op.get("mode", "open") == "open":
             rgb = rgb + (iris[None, None] - rgb) * (0.96 * ins)[..., None]
             edge = top - float(op.get("lid_k", 0.5)) * (top - bot)

@@ -45,7 +45,7 @@
  },
  "odrum:splash": {
   "shipped": "3d",
-  "why": "max2 g2: three-quarter hero frame; mask_to disc grown to the mask",
+  "why": "max2 g2 fix (verify_r2_g2a): the 3D finish with the card's stylised lidded eyes painted in the recesses (plates.paint_eyes: one dark muted iris under a lid, no sclera, no catch-light) in place of the face-only xAI repaint's photo-real eyes",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -162,23 +162,44 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
+  "prompt_version": 7,
   "date": "2026-11-12",
   "hand": {
-   "bone": "head",
+   "bone": "hand.L",
    "variant": 1,
-   "why": "max2 g2: face-only repaint, calm lidded eyes with pupils in the recesses (verify_roll2 hollow-eye blocker); the rest of the card is the 3D finish",
-   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: the same carved warm ochre sandstone mask with its brow shelf and small beak, unchanged, and in its two almond eye recesses two calm living eyes with upper lids, whites and dark pupils looking out; never black holes, never glowing, smooth unmarked mask. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-   "raw": "tools/imagegen/raw/hand_odrum_splash_head__v1.png",
-   "raw_sha256": "aea825ff4bdea6f35d9c03cd3c5a1e767eb9e3ed7a8bdf7b2696531dae908783",
+   "why": "max2 g2 fix (verify_r2_g2a 'stump hand'): the free hand repainted as a closed gloved fist with knuckles and a thumb",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his free hand hanging by his side: a relaxed closed gloved fist with rounded knuckles and a thumb, clearly a hand, not a stump or a block, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_odrum_splash_hand.L__v1.png",
+   "raw_sha256": "9ba124b94827289df43fa3ba3722201cd91f656c9c6732112b6714b435278947",
    "gate": {
     "variant": 1,
-    "struct": 0.912,
-    "pal_mean": 8.6,
+    "free": false,
+    "struct": 0.993,
+    "pal_mean": 2.1,
     "fails": [],
     "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.L",
+    "variant": 1,
+    "why": "max2 g2 fix (verify_r2_g2a 'stump hand'): the free hand repainted as a closed gloved fist with knuckles and a thumb",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his free hand hanging by his side: a relaxed closed gloved fist with rounded knuckles and a thumb, clearly a hand, not a stump or a block, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_odrum_splash_hand.L__v1.png",
+    "raw_sha256": "9ba124b94827289df43fa3ba3722201cd91f656c9c6732112b6714b435278947",
+    "gate": {
+     "variant": 1,
+     "free": false,
+     "struct": 0.993,
+     "pal_mean": 2.1,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
    }
-  }
+  ]
  },
  "odrum_noon_fair:portrait": {
   "shipped": "painted",
@@ -226,11 +247,47 @@
    "variant": 3
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.R",
+   "variant": 1,
+   "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_odrum_noon_fair_portrait_hand.R__v1.png",
+   "raw_sha256": "52a6bfac171b8132b28a9a854ae4de83683dd2727548726307f757278653a843",
+   "gate": {
+    "variant": 1,
+    "free": false,
+    "struct": 0.97,
+    "pal_mean": 2.8,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.R",
+    "variant": 1,
+    "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_odrum_noon_fair_portrait_hand.R__v1.png",
+    "raw_sha256": "52a6bfac171b8132b28a9a854ae4de83683dd2727548726307f757278653a843",
+    "gate": {
+     "variant": 1,
+     "free": false,
+     "struct": 0.97,
+     "pal_mean": 2.8,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  },
  "odrum_noon_fair:splash": {
   "shipped": "3d",
-  "why": "max2 g2: three-quarter hero frame",
+  "why": "max2 g2 fix (verify_r2_g2a): the 3D finish with the card's stylised lidded eyes in the recesses (plates.paint_eyes, no sclera, no catch-light) in place of the face-only xAI repaint's photo-real eyes; the skin's fragmented yoke hand closed in the finish (retouch close: its holes and shard gaps filled; three hand-only repaints kept the shards)",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -338,27 +395,12 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
-  "date": "2026-11-12",
-  "hand": {
-   "bone": "head",
-   "variant": 1,
-   "why": "max2 g2: face-only repaint, calm lidded eyes with pupils in the recesses (verify_roll2 hollow-eye blocker); the rest of the card is the 3D finish",
-   "prompt": "Repaint only the face in the middle of this crop as a well-drawn, hand-painted face: the same carved pale cream sandstone mask with its brow shelf and small beak, unchanged, and in its two almond eye recesses two calm living eyes with upper lids, whites and dark pupils looking out; never black holes, never glowing, smooth unmarked mask. Keep the head's position, size, angle, outline and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
-   "raw": "tools/imagegen/raw/hand_odrum_noon_fair_splash_head__v1.png",
-   "raw_sha256": "82789203eef50075f0f7f302b1f2af8b4012b53da019d6025102d42689d5e5f2",
-   "gate": {
-    "variant": 1,
-    "struct": 0.981,
-    "pal_mean": 4.1,
-    "fails": [],
-    "pass": true
-   }
-  }
+  "prompt_version": 7,
+  "date": "2026-11-12"
  },
  "odrum_shadeprint:portrait": {
   "shipped": "3d",
-  "why": "card engineer 2: all 3 fail silhouette, palette and props",
+  "why": "max2 g2 fix (verify_r2_g2a): the 3D finish with the card's stylised lidded eyes painted in the recesses (plates.paint_eyes: one dark muted iris under a lid, no sclera, no catch-light) in place of the face-only xAI repaint's photo-real eyes; mask cracks closed (retouch close)",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -376,7 +418,17 @@
     "prop_out_fill": 0.0,
     "prop_in": 0.002,
     "prop_in_fill": 0.53,
-    "store_de": 42.2,
+    "blockers": {
+     "hollow": 3.699,
+     "blank": 0.414,
+     "glow": 0.0025,
+     "streak": 0.0157,
+     "cracked": 0.0758,
+     "dots": 147,
+     "hits": []
+    },
+    "blockers_3d": [],
+    "store_de": 41.9,
     "store_floor": 18.0,
     "menu_p50": 91,
     "menu_over200": 2.3,
@@ -405,7 +457,17 @@
     "prop_out_fill": 0.0,
     "prop_in": 0.0021,
     "prop_in_fill": 0.58,
-    "store_de": 42.3,
+    "blockers": {
+     "hollow": 4.623,
+     "blank": 0.428,
+     "glow": 0.0009,
+     "streak": 0.0188,
+     "cracked": 0.0736,
+     "dots": 123,
+     "hits": []
+    },
+    "blockers_3d": [],
+    "store_de": 42.0,
     "store_floor": 18.0,
     "menu_p50": 87,
     "menu_over200": 1.6,
@@ -433,7 +495,17 @@
     "prop_out_fill": 0.0,
     "prop_in": 0.0015,
     "prop_in_fill": 0.48,
-    "store_de": 41.1,
+    "blockers": {
+     "hollow": 6.357,
+     "blank": 0.421,
+     "glow": 0.0087,
+     "streak": 0.0157,
+     "cracked": 0.0718,
+     "dots": 137,
+     "hits": []
+    },
+    "blockers_3d": [],
+    "store_de": 40.6,
     "store_floor": 18.0,
     "menu_p50": 84,
     "menu_over200": 1.4,
@@ -447,12 +519,48 @@
     "variant": 3
    }
   ],
-  "prompt_version": 4,
-  "date": "2026-11-11"
+  "prompt_version": 7,
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.R",
+   "variant": 2,
+   "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_odrum_shadeprint_portrait_hand.R__v2.png",
+   "raw_sha256": "2c6ba8b131977f86b46f55852aa7a0d1977cc139fbb16f140feb471b8e87e2f3",
+   "gate": {
+    "variant": 2,
+    "free": false,
+    "struct": 0.917,
+    "pal_mean": 4.1,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.R",
+    "variant": 2,
+    "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_odrum_shadeprint_portrait_hand.R__v2.png",
+    "raw_sha256": "2c6ba8b131977f86b46f55852aa7a0d1977cc139fbb16f140feb471b8e87e2f3",
+    "gate": {
+     "variant": 2,
+     "free": false,
+     "struct": 0.917,
+     "pal_mean": 4.1,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  },
  "odrum_shadeprint:splash": {
   "shipped": "3d",
-  "why": "max2 g2 (verify_roll2 palette): near-neutral key and ink bounce, fig_chroma 0.40, so the ink lower body renders ink not violet; the mask's honey eye inlays as before. Gate miss: card_qa blank tripwire 0.69 (round-1 card 0.71, its face passed by eye); every painting fails new_colour, the face-only repaint framing/palette",
+  "why": "max2 g2 fix (verify_r2_g2a): the 3D finish with the card's stylised lidded eyes painted in the recesses (plates.paint_eyes: one dark muted iris under a lid, no sclera, no catch-light) in place of the face-only xAI repaint's photo-real eyes; mask cracks closed (retouch close); the slits' solid yellow covered by the eyes",
   "gates": [
    {
     "aspect_err": 0.0,
@@ -567,7 +675,43 @@
     "variant": 3
    }
   ],
-  "prompt_version": 6,
-  "date": "2026-11-12"
+  "prompt_version": 7,
+  "date": "2026-11-12",
+  "hand": {
+   "bone": "hand.R",
+   "variant": 3,
+   "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+   "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+   "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v3.png",
+   "raw_sha256": "cb72beba5eeeedc99e1025383ba97bc29bc8b0bcb32e251d3a2bc2c105b5d916",
+   "gate": {
+    "variant": 3,
+    "free": false,
+    "struct": 0.907,
+    "pal_mean": 5.9,
+    "fails": [],
+    "pass": true
+   },
+   "date": "2026-11-12"
+  },
+  "hands": [
+   {
+    "bone": "hand.R",
+    "variant": 3,
+    "why": "max2 g2 fix (verify_r2_g2a): the skin's fragmented/holed hand mesh repainted as a solid closed gloved fist (hand-only repaint, palette and wraps kept); cropped at 3x and checked",
+    "prompt": "Repaint only the hand in the middle of this crop as a well-drawn, hand-painted hand: his hand gripping the wooden yoke pole on his shoulder: a solid, closed gloved fist wrapped round the pole, four fingers curled over it and the thumb under, one clean solid shape with no holes, gaps, shards or broken pieces, with distinct fingers, knuckles and a thumb, soft painted form and the same light. Keep its position, size, pose and colours, and keep everything else in the crop exactly as it is. No new objects, no text. Sensitivity: no blank, smooth, cracked or skull-like masks, no hockey masks, no mannequin faces, no empty or glowing eye holes, no glowing eyes; no animal ears, no full-head cowls, no capes, no skull plates, no horns; no tall, pointed or conical hoods (any hood is soft, low and rounded); no faceless crowds, no armies or rows of small soldiers, no little figures with faces on the roads; nothing that resembles a character from another game, film or comic.",
+    "raw": "tools/imagegen/raw/hand_odrum_shadeprint_splash_hand.R__v3.png",
+    "raw_sha256": "cb72beba5eeeedc99e1025383ba97bc29bc8b0bcb32e251d3a2bc2c105b5d916",
+    "gate": {
+     "variant": 3,
+     "free": false,
+     "struct": 0.907,
+     "pal_mean": 5.9,
+     "fails": [],
+     "pass": true
+    },
+    "date": "2026-11-12"
+   }
+  ]
  }
 }
