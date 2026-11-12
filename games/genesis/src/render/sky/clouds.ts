@@ -69,6 +69,7 @@ import { ATMO_PARS, LOGDEPTH_DECODE, SKY_LOOKUP } from '../shaders/atmosphere.gl
 import { FullscreenQuad, passMaterial } from '../post/fsquad.ts';
 import type { AtmosphereModel } from './atmosphere.ts';
 import { blueNoiseTexture } from './bluenoise.ts';
+import { perfSwitch } from '../perfswitch.ts';
 
 // ───────────────────────────── tiling 3D noise generation ─────────────────────────────
 
@@ -704,6 +705,7 @@ uniform float uCloudBright;
 uniform float uNearR;     // the near zone (m) where cloud at the lens dissolves into fog
 uniform vec2 uLensClear;  // ARC §10 (planet/silt.ts siltLensClear): x reach (m) along the ray, y strength 0..1
 uniform float uCamFog;    // 0..1: the camera is inside the shell (in-cloud fog from the local density)
+uniform float uCamMist;   // (deckmist, PERF s12) floor of the in-cloud fog's transmittance: the ground stays readable
 uniform float uInsideAir; // 0 seen from space .. 1 from inside the air (art-directed low-sun reddening)
 uniform float uCamMuS;    // sine of the sun's elevation at the camera
 uniform vec2 uFullRes;    // render resolution
@@ -947,7 +949,7 @@ void main() {
       float od = lightOD(o, sun, wx, 0.5, thick);
       vec3 S = cloudSun(r0, dot(up, sun)) * msScatter(od, phS) * uCloudBright + mix(ambBot, ambTop, 0.5 + 0.5 * hn) * mix(0.5, 1.0, hn);
       float fl = min(uNearR * 0.6, tEnd);
-      float stepT = exp(-dens * fl);
+      float stepT = max(exp(-dens * fl), uCamMist);
       L += S * (1.0 - stepT);
       T *= stepT;
       tW += (1.0 - stepT) * fl * 0.5; wW += 1.0 - stepT;
@@ -1386,6 +1388,50 @@ function cubeTarget(n: number): WebGLCubeRenderTarget {
   return c;
 }
 
+// PERF s11/12 (owner: white frames zooming through the deck). `?deckzoom=0` = the session-5 rule (tunnel only above
+// 0.15 deck thicknesses a second of vertical speed: a trackpad zoom, ~60-120 m/s at the deck, half-opened it = white).
+const DECK_ZOOM = perfSwitch('deckzoom');
+// OWNER RULING 2026-11-12: a camera RESTING inside the deck sees the ground through a thinned local mist instead of
+// the old white-out (default on; `?deckmist=0` = the white-out, for A/B). Only inside the shell: from outside and above
+// the deck is unchanged
+const DECK_MIST = perfSwitch('deckmist', true);
+
+export interface TunnelState { t: number; r: number; v: number; vS: number; open: number }
+export function newTunnelState(): TunnelState { return { t: 0, r: 0, v: 0, vS: 0, open: 0 }; }
+
+/**
+ * The clear tunnel about a camera travelling vertically through the cloud deck (clouds.ts uCamFog / uNearR). `now` in
+ * ms, radii in m, inShell 0..1 (the camera inside the shell, with its 20 m edge ramp).
+ * A zoom through the deck (mouse notches or a trackpad's steady scroll) opens it: the vertical speed is smoothed over
+ * ~0.15 s (a single notch is a one-frame jump) and opens the tunnel from 4 m/s, fully from 30 m/s, with the near zone at
+ * its full 485 m (the whole deck along the view); it closes over ~1 s once the camera stops, so a camera that rests in
+ * the deck still fogs (unless deckmist).
+ */
+export function deckTunnel(st: TunnelState, r0: number, now: number, innerR: number, outerR: number, inShell: number): { camFog: number; nearR: number; mist: number } {
+  const dts = st.t > 0 ? Math.min(0.25, Math.max(1e-3, (now - st.t) / 1000)) : 0;
+  st.t = now;
+  const v = dts > 0 ? Math.abs(r0 - st.r) / dts : 0;
+  st.r = r0;
+  let want: number;
+  if (DECK_ZOOM) {
+    st.vS += (v - st.vS) * Math.min(1, dts / 0.15);
+    want = Math.min(1, Math.max(0, (st.vS - 4) / 26));
+  } else {
+    const thick = Math.max(1, outerR - innerR);
+    want = Math.min(1, Math.max(0, (v - thick * 0.15) / (thick * 0.5)));
+  }
+  // (opens at once, closes over ~1 s)
+  st.open = want > st.open ? want : st.open + (want - st.open) * Math.min(1, dts * 1.5);
+  st.v = Math.max(v, st.v * Math.max(0, 1 - dts * 1.5));
+  let near = r0 > innerR - 400 && r0 < outerR + 400 ? st.open : 0;
+  if (DECK_MIST) near = Math.max(near, 0.7 * inShell);
+  // (a tiny positive fog keeps the shader's near-zone path on while the tunnel is open outside the shell edge)
+  const camFog = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
+  const nearR = 35 + near * (DECK_ZOOM ? 450 : Math.min(450, 60 + st.v * 0.6));
+  // (deckmist: the fog in front of the lens lets at least 45 % of the view through while resting in the deck)
+  return { camFog, nearR, mist: DECK_MIST ? 0.45 * inShell : 0 };
+}
+
 export class CloudPass {
   readonly material: ShaderMaterial;
   /** the resolved (temporally accumulated, full-resolution) clouds the atmosphere composite reads (textures[0]) */
@@ -1409,10 +1455,7 @@ export class CloudPass {
   /** cirrus cover 0..1 (set with the weather) */
   private cirrus = 0.4;
   readonly noise: CloudNoise;
-  private transit = 0;
-  private transitV = 0;
-  private transitR = 0;
-  private transitT = 0;
+  private readonly tunnel = newTunnelState();
   /** the baked weather (organised coverage, storm, type, anvil) and cloud-shadow cubes */
   private wxRT: WebGLCubeRenderTarget;
   private shRT: WebGLCubeRenderTarget;
@@ -1470,7 +1513,7 @@ export class CloudPass {
       uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() },
       uWorldToBody: { value: new Matrix3() }, uFar: { value: 2e7 }, uPlanetPos: { value: new Vector3() },
       uSunDir: { value: new Vector3(1, 0, 0) }, uShell: { value: new Vector2(3180, 3420) }, uSteps: { value: 48 },
-      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.9 }, uNearR: { value: 35 }, uLensClear: { value: new Vector2(0, 0) }, uCamFog: { value: 0 },
+      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.9 }, uNearR: { value: 35 }, uLensClear: { value: new Vector2(0, 0) }, uCamFog: { value: 0 }, uCamMist: { value: 0 },
       uInsideAir: { value: 1 }, uCamMuS: { value: 1 }, uFullRes: { value: new Vector2(4, 4) }, uOffset: { value: new Vector2() }, uK: { value: 2 },
       uPixelAngle: { value: 0.001 }, uNearDetail: { value: 1 }, uCirrus: { value: 0.4 }, uCirrusR: { value: 3528 },
       uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonE: { value: new Vector3() }, uDebugView: { value: 0 }, uAurora: { value: new Vector4() },
@@ -1649,21 +1692,11 @@ export class CloudPass {
     // passing THROUGH the deck now opens a clear tunnel about itself — the near zone grows with its vertical speed
     // and the in-cloud fog fades — and closes it again over ~1 s once it lingers; hovering in a cloud still fogs.
     {
-      const now = performance.now();
-      const dts = this.transitT > 0 ? Math.min(0.25, Math.max(1e-3, (now - this.transitT) / 1000)) : 0;
-      this.transitT = now;
-      const v = dts > 0 ? Math.abs(r0 - this.transitR) / dts : 0;
-      this.transitR = r0;
-      const thick = Math.max(1, i.outerR - i.innerR);
-      const want = Math.min(1, Math.max(0, (v - thick * 0.15) / (thick * 0.5)));
-      // (opens at once, closes over ~1 s)
-      this.transit = want > this.transit ? want : this.transit + (want - this.transit) * Math.min(1, dts * 1.5);
-      this.transitV = Math.max(v, this.transitV * Math.max(0, 1 - dts * 1.5));
+      const t = deckTunnel(this.tunnel, r0, performance.now(), i.innerR, i.outerR, inShell);
+      u.uCamFog.value = t.camFog;
+      u.uNearR.value = t.nearR;
+      u.uCamMist.value = t.mist;
     }
-    const near = (r0 > i.innerR - 400 && r0 < i.outerR + 400) ? this.transit : 0;
-    // (a tiny positive fog keeps the shader's near-zone path on while the tunnel is open outside the shell edge)
-    u.uCamFog.value = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
-    u.uNearR.value = 35 + near * Math.min(450, 60 + this.transitV * 0.6);
     (u.uLensClear.value as Vector2).set(i.lensClear?.r ?? 0, i.lensClear?.k ?? 0);
     // the air's thickness from the shell (which spans 30–70 % of it): inside the air below ~1 thickness, space above 2
     const hi = i.outerR - i.radius;

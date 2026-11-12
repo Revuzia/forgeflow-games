@@ -195,3 +195,7 @@
 - Ages: a condition age stays while its condition holds unless a stronger one comes (defiance > dread > othergods >
   wandering > proud > golden > dark > trust > silence > plenty); repeats: "The Second Flood of Aru" for place-named kinds,
   else "The Long Silence, a Second Time". Making is recorded quietly (no "So began" line).
+
+## Owner ruling 2026-11-12
+- Clouds: a camera resting inside the cloud deck must not show a white screen. Thin the deck locally around the camera (default ON, URL switch to disable). Open the clear tunnel for any sustained vertical travel.
+- "fix the found issues": far-tree colour/shape match, white frames, water over hills east of Rubolhin, reduced-res post where identical.

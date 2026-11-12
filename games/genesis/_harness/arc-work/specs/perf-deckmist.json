@@ -1,0 +1,37 @@
+{
+ "_doc": "PERF s12: camera RESTING inside the deck (babel 307987276, alt ~316 m): old white-out (deckmist=0) vs the owner's ruling (deckmist, default on).",
+ "shots": [
+  {
+   "name": "dm-rest-off",
+   "params": "scenario=babel&source=worker&seed=307987276&deckmist=0",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 0, fov: 55, hour: 11 }); await G.frames(12);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "dm-rest-on",
+   "params": "scenario=babel&source=worker&seed=307987276&deckmist=1",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 0, fov: 55, hour: 11 }); await G.frames(12);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  }
+ ]
+}
