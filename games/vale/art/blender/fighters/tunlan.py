@@ -192,7 +192,9 @@ CARDS = {
                              "length": 0.345, "tilt": 8.0, "soft": 5.0, "depth": 0.82, "pool_x": 0.47, "pool_y": 0.36,
                              "floor": 0.22, "peak": 0.56, "color": "#E2965A", "shadow": "#2E2024"}},
         # (the bust keeps its own softer lantern: the splash's hot one blew the chest out at this range)
-        "portrait": {"yaw": 24.0, "accent": 2.6, "sun": 1.5,
+        # (max2 g1 fix, verify_r2_g1a: the eyes still read as solid dark slots under the brim: the head lifted and the
+        # camera brought level with the brim, so the carved lids read as on the Noon Fair cards)
+        "portrait": {"yaw": 24.0, "accent": 2.6, "sun": 1.5, "pitch": 0.0, "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}],
                      "focal": [{"at": "head", "az": 185.0, "el": -25.0, "dist": 0.35, "color": "#FFC27A",
                                 "power": 40.0, "size": 0.10},
                                {"at": "x_lamp", "az": 175.0, "el": 10.0, "dist": 0.30, "color": "#FFD9A0",
@@ -209,7 +211,10 @@ CARDS = {
         # (card engineer 1: at t 0.40 the raised hand crossed the mask in a glare streak (closing TUN2-M1, again on the
         # v2 re-render); t 0.90 is the swing's end, the brim knocked up, the lantern hanging clear and the face open;
         # the under-brim focals softer and wider so the pale mask keeps its planes)
-        "splash": {"clip": "cast_a3", "t": 0.90, "yaw": -26.0, "pitch": -9.0, "lens": 45.0, "fill": 0.86, "x": 0.70,
+        # (max2 g1 fix, verify_r2_g1a: the face a small pale block at card size, card_qa blank 0.70: a three-quarter
+        # hero shot, the legs out of frame, so the mask and its carved lids are larger)
+        "splash": {"clip": "cast_a3", "t": 0.90, "yaw": -26.0, "pitch": -6.0, "lens": 45.0, "fill": 0.86, "x": 0.70,
+                   "box_lo": 0.80, "box_w": 0.55,
                    "key_az": 150.0, "key_el": 20.0, "key_color": "#D8C2E6", "sun": 1.8, "rim_cool": 1.6,
                    "rim_warm": 0.5, "bounce": 0.5, "bounce_color": "#8C76A8", "accent": 2.2,
                    "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.40, "color": "#FFC680",

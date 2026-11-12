@@ -77,7 +77,9 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 # turn away, the knives sweeping toward screen right), framed like the roster's other victory splashes
 # (final parity client F3: fill 0.86 -> 0.90, the figure at 0.83 of the splash's height, 0.70 of W2's loading card)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.90, "x": 0.64,
-          "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 28.0, "icon_yaw": 20.0}
+          "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 28.0, "icon_yaw": 20.0,
+          # (max2 g2 fix) the ink almonds' centres on the face-plate (EYE_ALMOND, EYE_Z; rest, m) for plates.paint_eyes
+          "eyes3d": [[-0.041, -0.130, 1.661], [0.041, -0.130, 1.661]]}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
 # and under the band, as in the concept's three-quarter
@@ -118,10 +120,14 @@ CARDS = {
                               "power": 15.0, "size": 0.15}]},
         # (CW6 refix, par:rishal: the busts read as chaotic crest crops: each is a calm three-quarter visor bust now)
         # (closing round 2: the head focal blew the chalk face-plate to a blank egg: a low side key and -1.1 EV)
-        "portrait": {"yaw": 28.0, "clip": "idle_lobby", "t": 0.0, "exposure": -1.1, "key_az": 240.0, "key_el": 26.0, "sun": 2.2,
+        # (max2 g2 fix, verify_r2_g2a "mannequin face plate": the idle_lobby bust looked at the plate side-on: the splash's
+        # Glint Cut frame, the face square to the camera, the eyes painted on the plate's almonds)
+        "portrait": {"yaw": -12.0, "exposure": -1.1, "key_az": 240.0, "key_el": 26.0, "sun": 2.2,
                      "focal": [{"at": "x_visor_ridge", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE6C8",
                                 "power": 8.0, "size": 0.15}]},
-        "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44},
+        # (max2 g2 fix: "floating feet": a firmer contact and cast shadow)
+        "plate": {"glow": [0.15, 0.60, 0.42, 0.10], "cx": 0.44, "contact": 1.6, "cast": 0.8,
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}]}},
     },
     "rishal_chalkline": {
         # (card engineer 2: the dash at t 0.40 had the rear foot in the air: its crouch, knives dragged back, feet down)
@@ -134,20 +140,23 @@ CARDS = {
                    "focal": [{"at": "head", "az": 120.0, "el": 20.0, "dist": 0.9, "color": "#F0F2F8", "power": 5.0,
                               "size": 0.3}]},
         # (closing round 2: the frontal head focal flattened the plate to a white oval: a side key, the relief reads)
-        "portrait": {"yaw": -34.0, "clip": "idle", "t": 0.25, "key_az": 120.0, "key_el": 28.0,
+        # (max2 g2 fix: card_qa hollow 14.2 on the idle bust: the base's Glint Cut frame, the face to camera)
+        "portrait": {"yaw": -16.0, "clip": "cast_a2", "t": 0.40, "key_az": 120.0, "key_el": 28.0,
                      "focal": [{"at": "head", "az": 120.0, "el": 20.0, "dist": 0.9, "color": "#F0F2F8", "power": 5.0,
                                 "size": 0.3}]},
         # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)
         # (CW6 refix, rishal-M1: a tint on the base's Aubade painting held the splash at MAD 27.6: its own painting, the
         # pale Seat walls, under the same ink-blue chalk-dusk grade)
         "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.24, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
-                  "glow_color": "#C8D4EC"},
+                  "glow_color": "#C8D4EC",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}]}},
     },
     "rishal_lamplit": {
         # (closing round 2: the lamps ride his right side, so the card turns that side to camera; the old key blew the
         # walnut out to peach, a calmer warm key and focal keep the coat walnut and the glass amber)
         # (card engineer 2: the Feint's apex at t 0.40 lifted a foot: the head fake's false lunge, feet down)
-        "splash": {"clip": "cast_a3", "t": 0.15, "yaw": -24.0, "pitch": -6.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
+        # (max2 g2 fix, verify_r2_g2a "back-turned head, crumpled foot": the base's Glint Cut frame, both feet planted)
+        "splash": {"clip": "cast_a2", "t": 0.40, "yaw": -18.0, "pitch": -4.0, "lens": 50.0, "fill": 0.80, "x": 0.71,
                    # (closing round 2: still pale cream at -0.5 EV: -1.2 EV so the walnut coat is the card's mid value)
                    "exposure": -1.2, "key_az": 140.0, "key_el": 22.0, "key_color": "#FFDDB8", "sun": 1.25, "rim_cool": 0.6,
                    "rim_warm": 1.1, "bounce": 0.25, "bounce_color": "#C88A50", "accent": 1.8,
@@ -155,11 +164,12 @@ CARDS = {
                               "size": 0.18},
                              {"at": "x_visor_ridge", "az": 160.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A",
                               "power": 7.0, "size": 0.12}]},
-        "portrait": {"yaw": -34.0, "clip": "idle_lobby", "t": 0.5, "exposure": -1.3, "key_az": 125.0, "sun": 1.1,
+        "portrait": {"yaw": -16.0, "exposure": -1.3, "key_az": 125.0, "sun": 1.1,
                      "focal": [{"at": "x_visor_ridge", "az": 160.0, "el": 20.0, "dist": 0.5, "color": "#FFD09A", "power": 5.0,
                                 "size": 0.12}]},
         "plate": {"tint": "#C4A08A", "sat": 0.85, "median": 0.26, "cx": 0.60, "glow": [0.25, 0.55, 0.35, 0.12],
-                  "glow_color": "#FFB067"},
+                  "glow_color": "#FFB067",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.45, "h": 0.62, "tilt": 0.10, "lid_k": 0.45, "iris": "#262A36", "ink": "#15161C", "lid_val": 1.0, "socket": 0.30, "line": 0.09, "crease": 0.30}]}},
     },
 }
 SKINS: list = [

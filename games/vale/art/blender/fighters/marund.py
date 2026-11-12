@@ -84,7 +84,10 @@ AO_INTO_BASE = 0.25       # the projected painting already carries its painted o
 #                  above on the cap's lamp finial, a deep dusk grade
 CARDS = {
     "marund": {
-        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": 28.0, "pitch": -4.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+        # (max2 g1 fix, verify_r2_g1a: under the cap the beaked mask showed no eyes: the bust's head lift, the camera a
+        # little lower, so the carved lids read beside the keel as on the portrait)
+        "splash": {"clip": "cast_a2", "t": 0.42, "yaw": 28.0, "pitch": -7.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}],
                    "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
                    "focal": [{"at": "x_cap", "az": 210.0, "el": 45.0, "dist": 0.9, "color": "#FFE0B8", "power": 35.0,
@@ -99,7 +102,10 @@ CARDS = {
     },
     "marund_gorgewalk": {
         # (closing round 2: the low wide lens at fill 0.86 cut the dome at the frame top: head at 0.002)
+        # (max2 g1 fix, verify_r2_g1a: blank face at card size, card_qa 0.66): a three-quarter hero shot with the
+        # bust's head lift, so the face is larger and its lids read under the brim
         "splash": {"clip": "attack1", "t": 0.35, "yaw": -22.0, "pitch": -9.0, "lens": 42.0, "fill": 0.84, "x": 0.71,
+                   "box_lo": 0.75, "box_w": 0.60, "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}],
                    "exposure": -0.9, "key_az": 150.0, "key_el": 40.0, "key_color": "#D0D8E4", "sun": 2.4, "rim_cool": 1.6,
                    "rim_warm": 0.7, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.6,
                    "focal": [{"at": "head", "az": 150.0, "el": 15.0, "dist": 0.9, "color": "#E0E6F0", "power": 7.0,

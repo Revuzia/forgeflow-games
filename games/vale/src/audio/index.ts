@@ -1256,8 +1256,12 @@ class Engine implements ValeAudioPort {
       src.loop = c.loop;
       if (c.pitchVar) src.playbackRate.value = (1 + (Math.random() * 2 - 1) * c.pitchVar) * (o.rate ?? 1);   // a playback-rate fraction
       else if (o.rate) src.playbackRate.value = o.rate;
+      // pan law (max2 SFX-4 refix): a StereoPanner's equal-power law takes a MONO source to cos(pi/4) (-3 dB) per side at
+      // the centre, while an unpanned mono source plays at unity on both sides and a stereo one passes the panner at
+      // unity; a panned mono voice gets the +3 dB back so it sits where it does unpanned (constant power across the field)
+      const lv = pan && buf.numberOfChannels === 1 ? level * Math.SQRT2 : level;
       const g = this.ctx.createGain();
-      g.gain.value = level;
+      g.gain.value = lv;
       let node: AudioNode = src;
       const nodes: AudioNode[] = [g];
       if (lpf > 0) {
@@ -1287,7 +1291,7 @@ class Engine implements ValeAudioPort {
       if (!c.loop && c.bus !== 'music' && buf.duration > LEAD_SKIP_S * 4) {
         const t = this.ctx.currentTime + late;
         g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(level, t + LEAD_RAMP_S);
+        g.gain.linearRampToValueAtTime(lv, t + LEAD_RAMP_S);
         src.start(late > 0 ? t : 0, LEAD_SKIP_S);
         skip = LEAD_SKIP_S;
       } else src.start();

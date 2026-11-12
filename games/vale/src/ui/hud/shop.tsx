@@ -118,7 +118,7 @@ export function ShopPanel(): JSX.Element | null {
     sound.play('shop_buy');
     client.send({ type: 'buy', item: it.id });
   };
-  const sellSlot = (i: number): void => { if (!me.items[i]) return; sound.play('shop_sell'); client.send({ type: 'sell', slot: i }); };
+  const sellSlot = (i: number): void => { if (!me.items[i]) return; if (me.canShop) sound.play('shop_sell'); client.send({ type: 'sell', slot: i }); };   // sounds only where the sim takes the sale
 
   return (
     <section class="lshop plate plate--raised" role="dialog" aria-label={cv.t('hud.shopui.title', 'Lampwright')} onContextMenu={(e) => e.preventDefault()}>
@@ -183,7 +183,7 @@ export function ShopPanel(): JSX.Element | null {
               })}
             </div>
             <button type="button" class="hbtn lshop__undo" title={cv.t('hud.shopui.undo_hint', 'Undo returns your last purchase for the full price.')}
-              onClick={() => { sound.play('shop_undo'); client.send({ type: 'undo' }); }}>{cv.t('hud.item.undo', 'Undo purchase')}</button>
+              onClick={() => { if (me.canShop) sound.play('shop_undo'); client.send({ type: 'undo' }); }}>{cv.t('hud.item.undo', 'Undo purchase')}</button>
           </div>
         </aside>
       </div>

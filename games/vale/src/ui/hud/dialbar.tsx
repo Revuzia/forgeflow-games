@@ -506,7 +506,7 @@ function ItemSlot(p: { i: number }): JSX.Element | null {
         e.preventDefault();
         if (e.button === 0 && e.altKey) { e.stopPropagation(); if (it) model.callout(`item${p.i}`); return; }
         if (e.button === 0) { dragFrom = g.id ? p.i : -1; if (it?.active) input.press(slot); }
-        if (e.button === 2 && it && (shopOpen.value || model.me?.canShop)) { sound.play('shop_sell'); client.send({ type: 'sell', slot: p.i }); }
+        if (e.button === 2 && it && (shopOpen.value || model.me?.canShop)) { if (model.me?.canShop) sound.play('shop_sell'); client.send({ type: 'sell', slot: p.i }); }   // the sale's sound only where the sim takes it (shopAccess)
       }}
       onPointerUp={(e) => { if (e.button === 0 && dragFrom >= 0 && dragFrom !== p.i) client.send({ type: 'swapItems', a: dragFrom, b: p.i }); dragFrom = -1; }}
       onContextMenu={(e) => e.preventDefault()}>

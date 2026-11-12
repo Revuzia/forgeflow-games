@@ -339,6 +339,26 @@ def card_meta(cam, arm, cfg: dict) -> dict:
         wp = arm.matrix_world @ (pb.head.lerp(pb.tail, 0.5) if nm == "head" else pb.head)
         v = world_to_camera_view(sc, cam, wp)
         pts[nm] = [round(float(v.x), 4), round(float(1.0 - v.y), 4)]
+    # (max2 g2 fix) "eyes3d": [[x, y, z], ...] rest-space (armature) eye centres on the face's front, carried by the head
+    # bone: each is noted as "eye<i>": [x, y, ux, uy, vx, vy, facing] (normalised, top-down): the centre, where 1 cm
+    # along the face's x (outward for the eye's side) and 1 cm up land, and whether the eye faces the camera. plates
+    # retouch's "eyes" op paints the card's stylised lidded eyes there (a 2D decal at card resolution: the model's
+    # painted eyes are a few texels, under a pixel in a splash).
+    hb = arm.pose.bones.get("head")
+    if hb is not None and cfg.get("eyes3d"):
+        from mathutils import Vector
+        M = arm.matrix_world @ hb.matrix @ hb.bone.matrix_local.inverted()
+        cz = world_to_camera_view(sc, cam, arm.matrix_world @ hb.head).z
+        for i, c in enumerate(cfg["eyes3d"]):
+            c = Vector(c)
+            sx = 1.0 if c.x >= 0 else -1.0
+            P0 = world_to_camera_view(sc, cam, M @ c)
+            Pu = world_to_camera_view(sc, cam, M @ (c + Vector((0.01 * sx, 0.0, 0.0))))
+            Pv = world_to_camera_view(sc, cam, M @ (c + Vector((0.0, 0.0, 0.01))))
+            Pb = world_to_camera_view(sc, cam, M @ (c + Vector((0.0, 0.03, 0.0))))   # 3 cm into the head
+            pts[f"eye{i}"] = [round(float(P0.x), 5), round(float(1.0 - P0.y), 5), round(float(Pu.x - P0.x), 5),
+                              round(float(P0.y - Pu.y), 5), round(float(Pv.x - P0.x), 5), round(float(P0.y - Pv.y), 5),
+                              int(P0.z < Pb.z and P0.z < cz + 0.5)]
     return {"pts": pts}
 
 

@@ -425,6 +425,8 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
         xs = np.vstack([xs[0], xs[0]])
     if pr != 1.0:
         xs = _lower(xs, pr)
+    if cid not in EASE_SKIP:
+        xs = _tight(xs)                  # the body starts on its blow (max2 round 2: see _tight)
     e = np.max(np.abs(xs), axis=0)
     i = int(np.argmax(e > e.max() * 0.01))
     n = xs.shape[-1]
@@ -448,6 +450,67 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     w = np.array([1.0, 0.92])            # the debris sits a touch off-centre (it sums back in mono)
     side = (g_g * lg + g_a * la)
     return norm(xs + (g_c * lc)[None, :] + side[None, :] * w[:, None] + 0.08 * np.vstack([side, -side]))
+
+
+# ── the blow first (max2 round 2, verify1_q): the 2 ms RMS envelope, not only the sample peak, peaks at the onset ──────
+# The snap below put a 1-3 ms transient on the onset, so the SAMPLE peak came first, but a body that swells (a drum's
+# stroke, a struck bar's bloom) still put the 2 ms RMS peak 6-35 ms in (median 7.6 ms on the 32 kit hits): a click, then
+# the blow. Now the body's own attack ramp is cut (_tight, before the crack: the take starts on its blow) and, after
+# the mastering, a smoothed gain holds every later 2 ms RMS EASE_DB under the strike's (_ease, around the snap), so the
+# blow itself lands first. The cues where either costs the identity gate (8 dB between fighters) keep their body
+# (EASE_SKIP, found by audio/snap_search.py --ease; listed with the reason in _design/reviews/max2/sfx/).
+TIGHT_MS = 1.0               # a body's 2 ms RMS envelope peaks this soon after its onset (its ramp is cut)
+EASE_DB = 0.5                # every later 2 ms RMS sits this far under the strike's
+# (snap_search.py --ease, margin 0.15 dB): the cues whose blow-first pass took them or a neighbour in their slot under
+# the identity bar; they keep their own body (their swell IS what tells them apart: the drum strokes, the bloom of a
+# struck bar). f_burdam_attack_hit / f_marund_attack_hit sit 8.12 dB apart with neither eased (as shipped)
+EASE_SKIP: set[str] = {
+    'f_ardit_attack_hit', 'f_ardit_hit', 'f_burdam_attack_hit', 'f_burdam_hit', 'f_dunsom_attack_hit', 'f_hesmi_hit',
+    'f_ilsheta_attack_hit', 'f_lisvel_hit', 'f_marund_attack_hit', 'f_marund_hit', 'f_nurrow_hit', 'f_odrum_attack_hit',
+    'f_sukri_attack_hit', 'f_ulkro_hit', 'f_vashil_attack_hit', 'f_vashil_hit',
+}
+
+
+def _env2(x: np.ndarray) -> np.ndarray:
+    m = np.atleast_2d(x).mean(axis=0)
+    k = ns(0.002)
+    return np.sqrt(np.convolve(m * m, np.ones(k) / k, mode='same'))
+
+
+def _tight(x: np.ndarray, ms: float = TIGHT_MS) -> np.ndarray:
+    """Cut a layer's attack ramp: when its 2 ms RMS envelope peaks later than `ms` after its -40 dB onset, the samples
+    between the onset and the peak (less `ms`) go, so the layer starts on its blow (a 0.3 ms raised-cosine fade-in on
+    the join; the silence before the onset is kept)."""
+    xs = np.atleast_2d(np.asarray(x, float))
+    e = _env2(xs)
+    i = int(np.argmax(e > e.max() * 0.01))
+    p = int(np.argmax(e))
+    cut = p - ns(ms / 1000.0) - i
+    if cut <= 0:
+        return x
+    y = np.concatenate([xs[:, :i], xs[:, i + cut:]], axis=1)
+    k = ns(0.0003)
+    y[:, i:i + k] *= (0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, k)))[None, :]
+    return y[0] if np.ndim(x) == 1 else y
+
+
+def _ease(x: np.ndarray, ms: float = TIGHT_MS + 1.0) -> np.ndarray:
+    """The blow lands first: past the first `ms` after the onset, the take's 2 ms RMS envelope is held EASE_DB under
+    its level there (a smoothed gain: a 2 ms look-ahead minimum, then a 4 ms average), so a later bloom, flam, boom
+    or room never rides over the strike."""
+    e = _env2(x)
+    i = int(np.argmax(e > e.max() * 0.01))
+    w = i + ns(ms / 1000.0)
+    a = float(e[i:w + 1].max()) * 10 ** (-EASE_DB / 20)
+    g = np.ones_like(e)
+    g[w:] = np.minimum(1.0, a / np.maximum(e[w:], 1e-12))
+    k = ns(0.002)
+    gm = np.array([g[max(0, j - k):j + k].min() for j in range(0, g.size, 8)])
+    g2 = np.interp(np.arange(g.size), np.arange(0, g.size, 8), gm)
+    k4 = ns(0.004)
+    g2 = np.convolve(np.pad(g2, (k4, k4), mode='edge'), np.ones(k4) / k4, mode='same')[k4:-k4]
+    g2[:w] = 1.0
+    return x * g2
 
 
 # ── the snap pass (max2 SFX-2b): every kit hit's onset-to-peak <= SNAP_GOAL_MS ──────────────────────────────────────
@@ -511,12 +574,16 @@ def _snap_layer(xs: np.ndarray, ms: float = SNAP_MAX_MS) -> np.ndarray:
     return norm(y)
 
 
-def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -1.5, boost: float = 0.0) -> np.ndarray:
+def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -1.5, boost: float = 0.0,
+              ease: bool | None = None) -> np.ndarray:
     """The snap pass on a MASTERED take (audio/build.py calls it after cuelib.master, before the codec; see the section
     note): when the take's peak is not its first SNAP_WIN_MS, the body's peaks are eased (a look-ahead limiter) to
     SNAP_MARGIN_DB under the transient's level SNAP_PEAK_DBFS, and the take's own impulse is set at the onset at the level
     that puts the window's peak on SNAP_PEAK_DBFS. After the mastering, so its soft clip colours the body exactly as it
     did (a transient added before it moved the clip's harmonics and so the fighter's spectrum)."""
+    eased = (cid not in EASE_SKIP) if ease is None else ease     # the blow first (_ease), around the snap
+    if eased:
+        y = _ease(y)
     tune = SNAP_TUNE.get(cid, (SNAP_MARGIN_DB, SNAP_MAX_MS))
     if tune is None:
         return y
@@ -555,7 +622,8 @@ def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -
             break
     a = level(base)
     xs = base
-    return fx.limit(xs + a * lay, ceiling)[:, :xs.shape[-1]]      # its true peak (inter-sample) under the ceiling too
+    out = fx.limit(xs + a * lay, ceiling)[:, :xs.shape[-1]]      # its true peak (inter-sample) under the ceiling too
+    return _ease(out) if eased else out                           # (a gain under 1 only: the peak stays under it)
 
 
 def _stages(vc) -> tuple:

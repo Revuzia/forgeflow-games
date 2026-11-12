@@ -268,8 +268,11 @@ CARDS = {
     },
     "ilsheta_stillwater": {
         # (closing round 2: the recall at yaw 52 showed the hood's side, no face: the Glint throw, the lamp low and out)
+        # (max2 g1 fix, verify_r2_g1a: a blank disc face at card size, card_qa blank 0.65): a three-quarter hero shot
+        # (the boots out of frame) so the face plate is larger, the key raking from the glow's side so its recesses model
         "splash": {"clip": "cast_a1", "t": 0.50, "yaw": 2.0, "pitch": 0.0, "lens": 66.0, "fill": 0.84, "x": 0.72,
-                   "exposure": -1.2, "key_az": 130.0, "key_el": 30.0, "key_color": "#C4DCDA", "sun": 1.9, "rim_cool": 1.8,
+                   "box_lo": 0.55, "box_w": 0.45,
+                   "exposure": -1.2, "key_az": 215.0, "key_el": 30.0, "key_color": "#C4DCDA", "sun": 1.9, "rim_cool": 1.8,
                    "rim_warm": 0.2, "bounce": 0.7, "bounce_color": "#6FA49A", "accent": 1.4, "exposure": -0.4,
                    "focal": [{"at": "x_lamp", "az": 160.0, "el": 10.0, "dist": 0.6, "color": "#BFE8E0", "power": 40.0,
                               "size": 0.25},
@@ -289,7 +292,10 @@ CARDS = {
         # opened a black gap over the collar and the eyes tipped up to arcs. Per-clip head pitch measured from the GLB (idle
         # 0-2 deg, attack1 t 0.55 -5, cast_a3 t 0.5 +26): the guard's raised lamp, beside the face, with the head level, the
         # plate seated and the amber eyes seen; a level neutral key, as the eyes went pink under the warm one; no head focal)
+        # (max2 g1 fix, verify_r2_g1a: the face a blank pale plate with two dark holes at card size): a three-quarter
+        # hero shot (the boots out of frame), so the plate's brow, nose and mouth carving is large enough to read
         "splash": {"clip": "attack2", "t": 0.72, "yaw": 6.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
+                   "box_lo": 0.55, "box_w": 0.45,
                    "exposure": -1.35, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFF3E2", "sun": 2.5, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.5, "bounce_color": "#E8D4B8", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#FFD48C", "power": 45.0,

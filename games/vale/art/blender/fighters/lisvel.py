@@ -86,7 +86,9 @@ SOCKETS = {"weapon": "prop.R", "arrow_nock": "x_arrow_nock", "bow_tip_l": "x_bow
 # 0.93 / 0.95, Gorgewalk keeps 0.88 now that its tapped bow tip under the ground no longer stretches the fit)
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "fill": 0.93, "yaw": 22.0, "pitch": -2.0, "rim_cool": 0.35,
           "rim_warm": 0.45,
-          "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0}
+          "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0,
+          # (max2 g2 fix) the eyes behind the visor's front (rest, m): render.card_meta notes them for plates.paint_eyes
+          "eyes3d": [[-0.031, -0.128, 1.7335], [0.031, -0.128, 1.7335]]}
 # (CW5 refix 2, lisvel-M1: the 512 px bust was half bow fist under a small pale face: every bust is framed tight
 # on the head, bust_lo 0.10 / bust_hi 0.30, render._portrait box)
 # PER-SKIN CARDS (closing review lisvel-M2 / m4; schema: art/blender/portraits.py header): each card its own beat,
@@ -123,7 +125,10 @@ CARDS = {
                                 "size": 0.10},
                                {"at": "x_bow_tip_l", "az": 220.0, "el": 25.0, "dist": 0.6, "color": "#FFE8C8",
                                 "power": 40.0, "size": 0.25}]},
-        "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4"},
+        # (max2 g2 fix, verify_r2_g2a "wrapped head with eye band (mummy/blindfold)": the brief's smoky glass band with
+        # the eyes reading through it, painted at card size where the head carries them (plates.paint_eyes; SPLASH eyes3d)
+        "plate": {"glow": [0.15, 0.62, 0.45, 0.10], "glow_color": "#F4DAB4",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
     },
     "lisvel_gorgewalk": {
         # (card engineer 2, closing2: the Sun Corridor raise crossed the upper limb over the head: Dawn Line's draw from
@@ -143,7 +148,8 @@ CARDS = {
                                {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",
                                 "power": 40.0, "size": 0.25}]},
         "plate": {"tint": "#9AA6B2", "sat": 0.75, "median": 0.30, "glow": [0.12, 0.50, 0.40, 0.06],
-                  "glow_color": "#C8D4DE"},
+                  "glow_color": "#C8D4DE",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
     },
     "lisvel_almanac": {
         # (CW5 round 3 refix, finding:almanac-splash-face: from yaw 22 the head, turned 28 deg to her right, showed a pale
@@ -165,7 +171,8 @@ CARDS = {
                                {"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 40.0,
                                 "size": 0.3}]},
         # (CW5 round 3, client:CL-1: the reading lamp's warm evening behind her, against the base's cold dawn)
-        "plate": {"tint": "#D2AE86", "sat": 0.9, "median": 0.34, "glow": [0.35, 0.60, 0.45, 0.12], "glow_color": "#F0D2A0"},
+        "plate": {"tint": "#D2AE86", "sat": 0.9, "median": 0.34, "glow": [0.35, 0.60, 0.45, 0.12], "glow_color": "#F0D2A0",
+                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
     },
 }
 TEXTURE_SIZE = 2048

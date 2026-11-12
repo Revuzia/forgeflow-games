@@ -121,7 +121,9 @@ AO_INTO_BASE = 0.25       # the projected painting already carries its painted o
 #               dusk, a violet rim and bounce
 CARDS = {
     "hesmi": {
-        "splash": {"clip": "cast_a1", "t": 0.40, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+        # (max2 g1 fix, verify_r2_g1a: the stab's head-down lean showed one eye slit in a wrapped ball, a mummy read at
+        # card size): the victory hold the bust passes on, upright, chin raised, both eyes in the band
+        "splash": {"clip": "victory", "t": 0.96, "yaw": 26.0, "pitch": -2.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
                    "key_az": 240.0, "key_el": 12.0, "key_color": "#FFC896", "sun": 3.0, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.5, "bounce_color": "#D8A880", "accent": 1.4,
                    "focal": [{"at": "x_rack_top", "az": 230.0, "el": 30.0, "dist": 0.8, "color": "#FFD8A8",
@@ -129,33 +131,36 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 10.0, "dist": 0.8, "color": "#FFE4C8", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 26.0, "clip": "victory", "t": 0.96},
-        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46,
-                  # (max2 cards g1, verify roll1: the eye read as a dark ring round a pale cream disc, a blank white
-                  # pupil): the pale centre taken to a dark brown iris inside its slate rim
-                  "retouch": {"splash": [{"op": "hue", "at": [-0.025, -0.025], "r": [0.016, 0.009], "h": [0.0, 360.0],
-                                          "s_min": 0.0, "s_max": 0.25, "v_min": 0.55, "val": 0.32, "sat": 1.0,
-                                          "to": "#3B2A22", "mix": 0.9}]}},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
+        "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
-        "splash": {"clip": "attack2", "t": 0.35, "yaw": -24.0, "pitch": 2.0, "exposure": -0.9, "lens": 55.0, "fill": 0.84, "x": 0.72,
+        # (max2 g1 fix, verify_r2_g1a: from her right the eye openings read as jagged torn holes in the pale band): the
+        # same moment from her left, where the openings show their almond shape (as on the base cards)
+        "splash": {"clip": "attack2", "t": 0.35, "yaw": 24.0, "pitch": 2.0, "exposure": -0.9, "lens": 55.0, "fill": 0.84, "x": 0.72,
                    "key_az": 150.0, "key_el": 30.0, "key_color": "#C8D0DC", "sun": 2.6, "rim_cool": 1.5,
                    "rim_warm": 0.8, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.2,
                    "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#E0E6F0", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"yaw": -28.0},
+        "portrait": {"yaw": 26.0},
         "plate": {"tint": "#8D96A8", "sat": 0.65, "median": 0.29, "cx": 0.36, "glow": [0.75, 0.40, 0.40, 0.05],
                   "glow_color": "#D8DCE8"},
     },
     "hesmi_shadeprint": {
         # (closing round 2: the ult's bloom tipped the head back and the face read as a chin: the Felled Shard heave)
         "splash": {"clip": "cast_a2", "t": 0.40, "yaw": 24.0, "pitch": -5.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
-                   "key_az": 235.0, "key_el": 40.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
+                   # (max2 g1 fix, verify_r2_g1a: the all-pale bundle read as a ghost): a lower key, the face lit by a
+                   # tight focal, so the hood and wraps sit a value step under the face
+                   "key_az": 235.0, "key_el": 40.0, "key_color": "#DCD0F4", "sun": 1.4, "rim_cool": 1.9,
                    "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
                    "focal": [{"at": "x_shard_mid", "az": 200.0, "el": 30.0, "dist": 0.8, "color": "#C8B8FF",
-                              "power": 35.0, "size": 0.3},
-                             {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
-                              "size": 0.25}]},
-        "portrait": {"yaw": 30.0, "clip": "idle_lobby", "t": 0.0},   # (polish: the cast_ult bust turned the face away)
+                              "power": 22.0, "size": 0.3},
+                             {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.45, "color": "#EEE4F4", "power": 14.0,
+                              "size": 0.12}]},
+        "portrait": {"yaw": 30.0, "clip": "idle_lobby", "t": 0.0, "sun": 2.2,
+                     "focal": [{"at": "x_shard_mid", "az": 200.0, "el": 30.0, "dist": 0.8, "color": "#C8B8FF",
+                                "power": 35.0, "size": 0.3},
+                               {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
+                                "size": 0.25}]},   # (polish: the cast_ult bust turned the face away)
         "plate": {"src": "dialwood", "fig_chroma": 0.45, "amb_tint": 0.2, "tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0",
                   # (max2 cards g1, verify roll1: saturated violet slit eyes read as glowing; the feet washed into the

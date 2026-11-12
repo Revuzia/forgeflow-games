@@ -42,11 +42,11 @@ from synth.core import ns
 
 from .fighters import detune
 from .kit import Layers, finish, mono, norm, room
-from .kits_c import (FIGHTERS, HIT_TAKES, ROOMS, SNAP_RISE_MAX_MS, _band_share, _crack, _lower, _place, _sig, _solve,
-                     snap_post)
+from .kits_c import (FIGHTERS, HIT_TAKES, ROOMS, SNAP_RISE_MAX_MS, _band_share, _crack, _ease, _lower, _place, _sig,
+                     _solve, _tight, _voice, snap_post)
 
 T_HEAVY = ('m', -16.0)
-T_ULT = ('m', -15.0)
+T_ULT = ('m', -14.7)     # heard about 2.2 dB over the shared impact (catalog gains: both about -0.5 dB)
 HEAVYW = (0.2, 1.0)
 ULTW = (0.3, 1.6)
 IMPK = dict(tail_floor_db=-54.0, clip_drive=1.5, max_gr_db=6.0)
@@ -98,12 +98,12 @@ def impact_slots() -> dict[str, list[str]]:
     return out
 
 
-TIGHT_MS = 1.0                # a body layer's 2 ms RMS envelope peaks this soon after its onset (its ramp is cut)
 FLAM_S = (0.022, 0.031, 0.017)  # the heavy's second blow, per take
 HF_FLOOR = (0.05, 0.0085)      # (2-6 kHz, > 6 kHz) energy share of the finished take: the lane's floors 4 % / 0.6 % plus
                                # the codec's and the mastering's margin
 FLOORS = True
-SUB_LP_HZ = 110.0              # the boom / thump stay under the identity bands (ID_FROM_HZ 125 Hz)
+SUB_LP_HZ = 95.0
+TAKE_SEMIS = (0.0, 0.7, -0.6)  # per take: the lead's own pitch (the takes differ in pitch as well as shape)              # the boom / thump stay under the identity bands (ID_FROM_HZ 125 Hz)
 # the layers' defaults per kind (dB re the lead's peak; None leaves the layer out) …
 P_HEAVY = dict(semis=1.0, flam=-7.0, flam_semis=4.0, sig=-4.0, crack=-6.0, grit=-12.0, sub=-8.0, wet=0.12, base=0)
 P_ULT = dict(semis=0.0, sig=-2.0, bloom=-11.0, crack=-4.0, grit=-10.0, air=-16.0, sub=-6.0, wet=0.26, base=0)
@@ -125,38 +125,17 @@ def _grit(fid: str, v: int) -> tuple[np.ndarray, np.ndarray]:
     return crack, grit
 
 
-def _env2(x: np.ndarray) -> np.ndarray:
-    m = np.atleast_2d(x).mean(axis=0)
-    k = ns(0.002)
-    return np.sqrt(np.convolve(m * m, np.ones(k) / k, mode='same'))
-
-
-def _tight(x: np.ndarray, ms: float = TIGHT_MS) -> np.ndarray:
-    """Cut a layer's attack ramp: when its 2 ms RMS envelope peaks later than `ms` after its -40 dB onset, the samples
-    between the onset and the peak (less `ms`) go, so the layer starts on its blow (a 0.3 ms raised-cosine fade-in on
-    the join; the silence before the onset is kept)."""
-    xs = np.atleast_2d(np.asarray(x, float))
-    e = _env2(xs)
-    i = int(np.argmax(e > e.max() * 0.01))
-    p = int(np.argmax(e))
-    cut = p - ns(ms / 1000.0) - i
-    if cut <= 0:
-        return x
-    y = np.concatenate([xs[:, :i], xs[:, i + cut:]], axis=1)
-    k = ns(0.0003)
-    y[:, i:i + k] *= (0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, k)))[None, :]
-    return y[0] if np.ndim(x) == 1 else y
-
-
 def _sub(dur: float, f0: float, f1: float, drop: float, t60: float) -> np.ndarray:
-    """A pitch-dropping sine body kept under SUB_LP_HZ (no saturation: its harmonics would land in the identity bands)."""
+    """A pitch-dropping sine body kept under SUB_LP_HZ (8th order; no saturation: its harmonics would land in the
+    identity bands)."""
     y = S.thump(dur, f0, f1, drop, t60, 0.0)
-    return norm(F.apply(y, [F.lowpass(SUB_LP_HZ, 0.5412), F.lowpass(SUB_LP_HZ, 1.3066)]))
+    return norm(F.apply(y, [F.lowpass(SUB_LP_HZ, q) for q in (0.5098, 0.6013, 0.9000, 2.5629)]))
 
 
 def _lead(fid: str, v: int, semis: float) -> np.ndarray:
     """The fighter's shared impact (kits_c's voiced, cracked, contacted take v), `semis` down, its attack cut."""
     x = np.atleast_2d(REGISTRY[f'f_{fid}_hit'].fn(v % HIT_TAKES))
+    semis += TAKE_SEMIS[v % len(TAKE_SEMIS)]
     if semis:
         x = _lower(x, 2 ** (semis / 12))
     return _tight(mono(x))
@@ -200,13 +179,13 @@ def _make_heavy(fid: str, slot: str):
         _opt(L, lambda: crack, 0.0, p['crack'])
         _opt(L, lambda: grit, 0.003, p['grit'])
         _opt(L, lambda: _sub(0.3, 95 * detune(v, 40), 52, 0.025, 0.2), 0.0, p['sub'])
-        x = mono(room(L.out(), ROOMS[fid], wet=p['wet']))
-        x = mono(finish(x, hp_hz=40))
-        return _floors(x, fid, v, _onset(x)) if FLOORS else x
+        x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = mono(_voice(finish(x, hp_hz=30), p.get('eq')))
+        return _ease(_floors(x, fid, v, _onset(x)) if FLOORS else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s heaviest ability ({slot}) lands: its own impact a semitone down struck twice, "
                       f"its signature on the blow, its crack and grit, a sub thump under it.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=True)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 
@@ -229,14 +208,14 @@ def _make_ult(fid: str):
         _opt(L, lambda: grit, 0.004, p['grit'])
         _opt(L, lambda: air, 0.006, p['air'])
         _opt(L, lambda: _sub(0.9, 78 * detune(v, 40), 36, 0.04, 0.55), 0.0, p['sub'])
-        x = mono(room(L.out(), ROOMS[fid], wet=p['wet']))
-        x = mono(finish(norm(x), hp_hz=30))
-        return _floors(x, fid, v, _onset(x)) if FLOORS else x
+        x = _ease(mono(room(L.out(), ROOMS[fid], wet=p['wet'])))
+        x = mono(_voice(finish(x, hp_hz=25), p.get('eq')))
+        return _ease(_floors(x, fid, v, _onset(x)) if FLOORS else x)
     recipe.__doc__ = (f"{fid.capitalize()}'s ult lands: its own impact struck hard with its signature and that "
                       f"signature's octave-down bloom, its crack, grit and air, a deep sub boom under it, in a wetter "
                       f"{ROOMS[fid]} room.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost, ease=True)
     REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 

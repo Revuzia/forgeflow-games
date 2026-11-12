@@ -1284,6 +1284,12 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
     ops = (p.get("retouch") or {}).get(kind)
     if not ops:
         return comp
+    eye_ops = [op for op in ops if op.get("op") == "eyes"]
+    ops = [op for op in ops if op.get("op") != "eyes"]
+    for op in eye_ops:
+        comp = paint_eyes(comp, af, meta, op)
+    if not ops:
+        return comp
     fp = face_point(meta, p, kind)
     if fp is None:
         return comp
@@ -1345,6 +1351,94 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
             new = rgb + (new - rgb) * selw
         out[..., :3] = rgb + (new - rgb) * wgt
     return out.astype(np.float32)
+
+
+def _sst(x):
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def paint_eyes(comp: np.ndarray, af: np.ndarray, meta: dict | None, op: dict) -> np.ndarray:
+    """(max2 g2 fix, verify_r2_g2a: Lisvel's eye band read as a blindfold / mummy wrap, Rishal's plate as a blank
+    mannequin, Ulkro Highrim's slit as a lip with no eyes) the retouch op "eyes": VALE's carved-mask eye, painted at card
+    resolution where the render notes put the face's eyes (render.card_meta "eye<i>", from the fighter's SPLASH
+    "eyes3d": rest-space centres carried by the head bone, with the face's own x / up axes projected, so the eye turns
+    and foreshortens with the head; an eye facing away is skipped). The model paints these eyes too, but a few texels
+    wide (Lisvel's lid lines are 1.2 mm: under a pixel in a splash).
+    The eye: one dark muted almond (iris and pupil one tone: no white of the eye, no catch-light, ruling 30's
+    sensitivity line) under a heavy upper lid in the face's own colour, an ink lash line on the lid's edge, a soft lid
+    crease above and a socket shade round it. Sizes in cm on the face: "w" / "h" the almond's half length / height,
+    "tilt" its outer corner's lift (cm per cm), "lid_k" the share of the almond under the lid (0..1), "line" the lash
+    line's half width, "socket" (0..1) the shade, "smoke" [w, h, k] a wider darker ellipse behind each eye (Lisvel's
+    smoky glass band), "crease"; colours "iris" / "ink" hex, "lid" hex or the local colour x "lid_val";
+    "mode": "open" or "closed" (a lash arc under a lit lid); "only": [i, ...] the eyes to paint; "k" overall mix."""
+    pts = (meta or {}).get("pts") or {}
+    h, w = comp.shape[:2]
+    out = comp.copy()
+    a = np.clip(af, 0.0, 1.0)
+    iris, ink = _hex(op.get("iris", "#2B2622")), _hex(op.get("ink", "#17161A"))
+    ew, eh = float(op.get("w", 1.5)), float(op.get("h", 0.7))
+    only = op.get("only")
+    for i in range(8):
+        e = pts.get(f"eye{i}")
+        if e is None or (only is not None and i not in only) or not int(e[6]):
+            continue
+        c = np.array([e[0] * w, e[1] * h])
+        U = np.array([e[2] * w, e[3] * h])                  # px per cm along the face's x (outward)
+        V = np.array([e[4] * w, e[5] * h])                  # px per cm up the face
+        M = np.array([[U[0], V[0]], [U[1], V[1]]])
+        if abs(np.linalg.det(M)) < 1e-3:
+            continue
+        Mi = np.linalg.inv(M)
+        sm = op.get("smoke") or [0.0, 0.0, 0.0]
+        R = max(ew * 1.9, float(sm[0]) * 1.2, 1.0) * max(np.hypot(*U), np.hypot(*V)) + 4
+        x0, x1 = int(max(0, c[0] - R)), int(min(w, c[0] + R + 1))
+        y0, y1 = int(max(0, c[1] - R)), int(min(h, c[1] + R + 1))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float64)
+        dx, dy = xx - c[0], yy - c[1]
+        ua = Mi[0, 0] * dx + Mi[0, 1] * dy                    # cm along the face's x (outward)
+        vb = Mi[1, 0] * dx + Mi[1, 1] * dy                    # cm up
+        px_cm = 1.0 / max(1e-6, min(np.hypot(*U), np.hypot(*V)))   # cm per pixel (the shorter axis: the foreshortened one)
+        soft = max(float(op.get("soft", 0.05)), 0.8 * px_cm)
+        ln = max(float(op.get("line", 0.09)), 0.55 * px_cm)
+        rgb = out[y0:y1, x0:x1, :3].astype(np.float64)
+        rgb0 = rgb.copy()
+        fa = a[y0:y1, x0:x1].astype(np.float64)
+        u = ua / ew
+        v = (vb - float(op.get("tilt", 0.0)) * ua) / eh
+        q = np.clip(1.0 - u * u, 0.0, 1.0)
+        top, bot = q ** 0.7, -0.75 * q ** 0.9
+        ins = _sst(np.minimum.reduce([(top - v) * eh, (v - bot) * eh, (1.0 - np.abs(u)) * ew]) / soft)
+        if sm[2] > 0:
+            smoke = np.exp(-((ua / float(sm[0])) ** 2 + (vb / float(sm[1])) ** 2) ** 2 * 1.5)
+            rgb = rgb * (1.0 - float(sm[2]) * smoke)[..., None]
+        sock = np.exp(-((u / 1.5) ** 2 + (v / 2.3) ** 2) * 2.0)
+        rgb = rgb * (1.0 - float(op.get("socket", 0.25)) * sock)[..., None]
+        if op.get("lid"):
+            lidc = np.broadcast_to(_hex(op["lid"]).astype(np.float64), rgb.shape)
+        else:
+            lidc = np.clip(rgb0 * float(op.get("lid_val", 0.9)), 0.0, 1.0)
+        if op.get("mode", "open") == "open":
+            rgb = rgb + (iris[None, None] - rgb) * (0.96 * ins)[..., None]
+            edge = top - float(op.get("lid_k", 0.5)) * (top - bot)
+            lid = ins * _sst((v - edge) * eh / soft)
+            rgb = rgb + (lidc - rgb) * lid[..., None]
+            lash = _sst((ln - np.abs((v - edge) * eh)) / (0.5 * ln)) * _sst((1.06 - np.abs(u)) * ew / soft)
+        else:
+            arc = -0.30 * q
+            lit = _sst((top - v) * eh / soft) * _sst((v - arc) * eh / soft) * _sst((1.0 - np.abs(u)) * ew / soft)
+            rgb = rgb + (lidc - rgb) * (0.6 * lit)[..., None]
+            lash = _sst((ln - np.abs((v - arc) * eh)) / (0.5 * ln)) * _sst((1.0 - np.abs(u)) * ew / soft)
+        rgb = rgb + (ink[None, None] - rgb) * (0.92 * lash)[..., None]
+        cr = float(op.get("crease", 0.3))
+        if cr > 0:
+            crease = _sst((0.6 * ln - np.abs((v - (top + 0.55)) * eh)) / (0.4 * ln)) * _sst((0.85 - np.abs(u)) / 0.15)
+            rgb = rgb * (1.0 - cr * crease)[..., None]
+        k = float(op.get("k", 1.0)) * fa
+        out[y0:y1, x0:x1, :3] = (rgb0 + (rgb - rgb0) * k[..., None]).astype(np.float32)
+    return out
 
 
 def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | None = None) -> np.ndarray:

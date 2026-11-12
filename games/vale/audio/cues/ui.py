@@ -23,7 +23,9 @@ UICHIME = dict(tail_floor_db=-54.0, fade_out=0.03)
 UIMOMENT = dict(tail_floor_db=-56.0, fade_out=0.05)
 
 
-@cue('ui_hover', 'ui', ('pk', -20.0), UI_TICK, tail_floor_db=-54)
+# max2 SFX-10 refix: the hovers sat about 20 dB under the click (as heard -47.4 / -45.7 LUFS-M against -27.4), lost
+# under the music; they now sit about 10 dB under it (-37 / -36), a soft tick still the quietest step of the UI ladder
+@cue('ui_hover', 'ui', ('m', -30.0), UI_TICK, tail_floor_db=-54)
 def ui_hover(v: int):
     """A quiet dawnglass tink on E6 (tokens: 40 ms): soft 2 ms attack, faint partials, nothing to tire of."""
     L = Layers(0.08)
@@ -32,7 +34,7 @@ def ui_hover(v: int):
     return finish(spread(mono(L.out()), 0.25), hp_hz=400)
 
 
-@cue('ui_hover_fighter', 'ui', ('pk', -19.0), UI_TICK, tail_floor_db=-54)
+@cue('ui_hover_fighter', 'ui', ('m', -29.0), UI_TICK, tail_floor_db=-54)
 def ui_hover_fighter(v: int):
     """Fighter-portrait hover: a warmer B5 glass tink with a soft wooden touch under it (the card)."""
     r = R('ui_hover_fighter')

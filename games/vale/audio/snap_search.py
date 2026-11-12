@@ -4,12 +4,17 @@ gate's identity distance from every other in its slot (audio/build.py id_distanc
 codec, while as many kit hits as possible snap (onset to peak <= kits_c.SNAP_GOAL_MS).
 
     python3 snap_search.py [--margin 0.15] [-j 6]
+    python3 snap_search.py --ease [--margin 0.15] [-j 6]     (max2 round 2: kits_c.EASE_SKIP)
 
 Every kit attack hit and ability hit is rendered and mastered once per take (cuelib.master, no codec), then measured
 under each snap state, in order of preference: the default (SNAP_MARGIN_DB, SNAP_MAX_MS), a lighter easing and a
 shorter transient, and none (the cue keeps its own onset). Greedy: while a pair in a slot sits under the bar, the cue of
 that pair whose next state lifts its own nearest distance most moves on. Prints the table to paste into
 kits_c.SNAP_TUNE (only the cues that leave the default) and each cue's mastered onset-to-peak per take.
+
+--ease searches the blow-first pass instead (kits_c._tight / _ease, with SNAP_TUNE as shipped): every cue starts with
+it; while a pair sits under the bar, the cue of that pair whose switching it off lifts its own nearest distance most
+keeps its own body. Prints kits_c.EASE_SKIP and each cue's 2 ms RMS onset-to-peak per take.
 """
 from __future__ import annotations
 
@@ -54,18 +59,50 @@ def _feats(cid: str) -> dict:
     return out
 
 
+def _rms_rise(z: np.ndarray) -> float:
+    m = np.atleast_2d(z).mean(axis=0)
+    e = np.sqrt(np.convolve(m * m, np.ones(96) / 96, mode='same'))
+    i = int(np.argmax(e > e.max() * 0.01))
+    return round(float(np.argmax(e) - i) / 48.0, 1)
+
+
+def _ease_feats(cid: str) -> dict:
+    import cues  # noqa: F401
+    import build as B
+    from cuelib import REGISTRY, master
+    from cues import kits_c as K
+    sp = REGISTRY[cid]
+    centres = 1000.0 * 2.0 ** (np.arange(-16, 13) / 3.0)
+    out = {}
+    for on in (True, False):
+        (K.EASE_SKIP.discard if on else K.EASE_SKIP.add)(cid)
+        ps, takes, rises = [], [], []
+        for v in range(sp.variants):
+            z = sp.extra['post'](master(sp.fn(v), sp)[0], v)
+            ps.append(10 ** (B.third_octave_db(z) / 10))
+            takes.append(B.confuse_db(z))
+            rises.append(_rms_rise(z))
+        hi = np.mean(ps, axis=0)[centres >= B.ID_FROM_HZ * 0.99]
+        hi = hi / (hi.sum() + 1e-30)
+        out[str(on)] = {'hi': 10 * np.log10(np.maximum(hi, 1e-9)), 'takes': takes, 'rise': rises}
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--margin', type=float, default=0.15)
     ap.add_argument('-j', type=int, default=6)
     ap.add_argument('--slots', default=','.join(SLOTS), help='comma-separated slots to search (pairs only meet within a slot)')
+    ap.add_argument('--ease', action='store_true', help='search kits_c.EASE_SKIP (the blow-first pass) instead')
     a = ap.parse_args()
     import json
     import build as B
     with open(B.CONTRACT, encoding='utf8') as f:
         ids = [k for k in json.load(f)['cues'] if k.startswith('f_') and any(k == f"f_{k.split('_')[1]}_{s}" for s in a.slots.split(','))]
     with cf.ProcessPoolExecutor(max_workers=a.j) as ex:
-        F = dict(zip(ids, ex.map(_feats, ids)))
+        F = dict(zip(ids, ex.map(_ease_feats if a.ease else _feats, ids)))
+    if a.ease:
+        return _ease_main(F, ids, B.ID_MIN_DIST_DB + a.margin, B)
     bar = B.ID_MIN_DIST_DB + a.margin
     state = {c: 0 for c in ids}
     slot = {c: c.split('_', 2)[2] for c in ids}
@@ -102,6 +139,39 @@ def main() -> int:
     for c in ids:
         st = str(STATES[state[c]])
         print(f"{c:24s} {st:12s} rise {F[c][st]['rise']}  nearest {nearest(c):.2f}")
+    return 0
+
+
+def _ease_main(F: dict, ids: list[str], bar: float, B) -> int:
+    on = {c: True for c in ids}
+    slot = {c: c.split('_', 2)[2] for c in ids}
+
+    def dist(x: str, y: str) -> float:
+        return min(B.id_distance(F[x][str(on[x])], F[y][str(on[y])]))
+
+    def nearest(c: str) -> float:
+        return min(dist(c, o) for o in ids if o != c and slot[o] == slot[c])
+
+    for _ in range(100):
+        bad = [(x, y) for i, x in enumerate(ids) for y in ids[i + 1:] if slot[x] == slot[y] and dist(x, y) < bar]
+        if not bad:
+            break
+        best = None
+        for c in sorted({c for p in bad for c in p if on[c]}):
+            before = nearest(c)
+            on[c] = False
+            gain = nearest(c) - before
+            on[c] = True
+            if best is None or gain > best[0]:
+                best = (gain, c)
+        if best is None:
+            print('no move left; pairs under the bar:', [(x, y, round(dist(x, y), 2)) for x, y in bad])
+            break
+        on[best[1]] = False
+    print('EASE_SKIP = {' + ', '.join(repr(c) for c in ids if not on[c]) + '}')
+    for c in ids:
+        print(f"{c:24s} {'ease' if on[c] else 'own body':9s} rms rise {F[c][str(on[c])]['rise']} (eased {F[c]['True']['rise']},"
+              f" own {F[c]['False']['rise']})  nearest {nearest(c):.2f}")
     return 0
 
 

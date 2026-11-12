@@ -485,7 +485,9 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
     rep['wicks'] = wrep
     sf, srep = snap_gate(contract)
     rep['snap'] = srep
-    return fails + pf + af + kf + xf + hf + ef + wf + sf, rep
+    jf, jrep = impact_id_gate(contract)
+    rep['impactId'] = jrep
+    return fails + pf + af + kf + xf + hf + ef + wf + sf + jf, rep
 
 
 # ── max2: the hits' snap, the per-ability impacts, the shop's crisp clicks ────────────────────────
@@ -541,6 +543,91 @@ def snap_gate(contract: dict) -> tuple[list[str], dict]:
         fails.append('snap: events.shopDenied has no cue of its own (it is the general error)')
     allr = [x for c, r in rep['rise'].items() if not c.startswith('ui_') for x in r]
     rep['medianRiseMs'] = float(np.median(allr)) if allr else None
+    return fails, rep
+
+
+# ── max2 round 2: the per-ability impacts' identity, brightness, blow and level (verify1_q) ─────────
+IMPACT_HF_FLOOR = (0.04, 0.006)   # every take of an ult / heavy impact: >= 4 % of its energy in 2-6 kHz, >= 0.6 % above 6 kHz
+IMPACT_TF_MAX = 0.95              # its takes' median time-frequency similarity (sfx_ab.tf_sim)
+RMS_RISE_MAX_MS = 3.0             # its 2 ms RMS envelope's onset (-40 dB) to peak: the blow, not only a click, lands first
+ULT_OVER_HIT_DB = (1.5, 3.0)      # an ult heard over its fighter's shared impact (file max momentary + catalog gain)
+HEAVY_OVER_HIT_DB = (0.0, 2.0)    # … and the heaviest Q/W/E
+
+
+def rms_rise_ms(x: np.ndarray, win_ms: float = 2.0) -> float:
+    """ms from the -40 dB onset to the peak of the take's `win_ms` RMS envelope (mid)."""
+    m = stereo(x).mean(axis=0)
+    k = max(1, ns_(win_ms / 1000.0))
+    e = np.sqrt(np.convolve(m * m, np.ones(k) / k, mode='same'))
+    i = int(np.argmax(e > e.max() * 0.01))
+    return float((int(np.argmax(e)) - i) / SR * 1000.0)
+
+
+def _hf(x: np.ndarray) -> tuple[float, float]:
+    m = stereo(x).mean(axis=0)
+    P = np.abs(np.fft.rfft(m)) ** 2
+    f = np.fft.rfftfreq(m.size, 1 / SR)
+    t = P[f > 20].sum() + 1e-30
+    return float(P[(f >= 2000) & (f < 6000)].sum() / t), float(P[f >= 6000].sum() / t)
+
+
+def impact_id_gate(contract: dict) -> tuple[list[str], dict]:
+    """(max2 SFX-4 refix) the per-ability impacts as two identity groups, the ults and the heaviest Q/W/Es: every pair
+    in a group >= ID_MIN_DIST_DB apart by both kit-gate measures (id_distance); every take over IMPACT_HF_FLOOR; takes
+    that differ (tf_sim <= IMPACT_TF_MAX); the blow first (2 ms RMS rise <= RMS_RISE_MAX_MS, every take); and heard
+    over the shared impact they replace by ULT_OVER_HIT_DB / HEAVY_OVER_HIT_DB."""
+    from cues.impacts import SLOTS
+    from sfx_ab import tf_sim
+    cues = contract['cues']
+    fails: list[str] = []
+    rep: dict = {'groups': {}, 'cues': {}}
+    groups: dict[str, dict[str, str]] = {'ult': {}, 'heavy': {}}
+    for fid, sl in SLOTS.items():
+        for s in sl:
+            c = f'f_{fid}_{s}_hit'
+            if c in cues:
+                groups['ult' if s == 'ult' else 'heavy'][fid] = c
+
+    def heard(c: str, xs: list) -> float:
+        return float(np.mean([L.max_momentary(x) for x in xs])) + 20 * math.log10(max(1e-6, cues[c].get('gain', 1.0)))
+
+    for g, m in groups.items():
+        specs = {f: cue_spectrum(c, cues) for f, c in m.items()}
+        ids = sorted(f for f, sp in specs.items() if sp is not None)
+        near: dict[str, tuple[float, str]] = {}
+        for i, a in enumerate(ids):
+            for b in ids[i + 1:]:
+                d, cc = id_distance(specs[a], specs[b])
+                for x, y in ((a, b), (b, a)):
+                    if x not in near or min(d, cc) < near[x][0]:
+                        near[x] = (min(d, cc), y)
+                if min(d, cc) < ID_MIN_DIST_DB:
+                    fails.append(f'impacts: {m[a]} is {d:.1f} / {cc:.1f} dB from {m[b]} (1/3-octave / confusability, < {ID_MIN_DIST_DB:g} dB)')
+        rep['groups'][g] = {f: [y, round(d, 2)] for f, (d, y) in sorted(near.items())}
+        for fid, c in sorted(m.items()):
+            xs = [decode(out_path(f)) for f in cues[c]['files'] if os.path.exists(out_path(f))]
+            if len(xs) != len(cues[c]['files']):
+                fails.append(f'impacts: {c} is not rendered')
+                continue
+            hf = [_hf(x) for x in xs]
+            tf = tf_sim(xs)
+            rr = [round(rms_rise_ms(x), 1) for x in xs]
+            over = heard(c, xs)
+            sh = f'f_{fid}_hit'
+            if sh in cues:
+                over -= heard(sh, [decode(out_path(f)) for f in cues[sh]['files']])
+            lo, hi = ULT_OVER_HIT_DB if g == 'ult' else HEAVY_OVER_HIT_DB
+            rep['cues'][c] = {'b2_6': round(min(h[0] for h in hf), 4), 'b6': round(min(h[1] for h in hf), 4),
+                              'tf': round(tf, 3) if tf is not None else None, 'rmsRiseMs': rr, 'overSharedDb': round(over, 2)}
+            if min(h[0] for h in hf) < IMPACT_HF_FLOOR[0] or min(h[1] for h in hf) < IMPACT_HF_FLOOR[1]:
+                fails.append(f'impacts: {c} has a take under the HF floors (2-6 kHz {min(h[0] for h in hf):.3f}, > 6 kHz'
+                             f' {min(h[1] for h in hf):.4f}; floors {IMPACT_HF_FLOOR[0]:g} / {IMPACT_HF_FLOOR[1]:g})')
+            if tf is not None and tf > IMPACT_TF_MAX:
+                fails.append(f'impacts: {c} takes are near-clones (tf {tf:.3f} > {IMPACT_TF_MAX:g})')
+            if max(rr) > RMS_RISE_MAX_MS:
+                fails.append(f'impacts: {c} 2 ms RMS peaks {max(rr):.1f} ms after its onset (> {RMS_RISE_MAX_MS:g} ms)')
+            if not lo <= over <= hi:
+                fails.append(f'impacts: {c} is heard {over:+.1f} dB over {sh} (wanted {lo:g} to {hi:g})')
     return fails, rep
 
 
@@ -1473,6 +1560,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def print_gates(fails: list[str], rep: dict) -> None:
+    ji = rep.get('impactId', {})
+    for g, near in ji.get('groups', {}).items():
+        print(f"impact identity ({g}): nearest " + ', '.join(f'{f} {d:.1f}' for f, (_, d) in near.items()))
+    if ji.get('cues'):
+        print('  impacts (min 2-6k / >6k, tf, rms rise max, over shared dB): ' + ', '.join(
+            f"{c[2:-4]} {x['b2_6'] * 100:.1f}/{x['b6'] * 100:.2f} {x['tf']} {max(x['rmsRiseMs']):.1f} {x['overSharedDb']:+.1f}" for c, x in ji['cues'].items()))
     sn = rep.get('snap', {})
     if sn:
         print(f"snap gate: {len(sn['rise'])} cues, median kit onset-to-peak {sn['medianRiseMs']} ms; exempt (identity): "

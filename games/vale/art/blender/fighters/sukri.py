@@ -255,7 +255,15 @@ CARDS = {
                   "face_off": {"splash": [-0.025, 0.046], "portrait": [-0.111, 0.078]},
                   # (max2 cards g1, verify ks2: the lid-shadow curtain with two drips under the viewer-right eye, the tick
                   # under the left eye and the jaw line come from the carved recesses: a card face retouch closes them)
-                  "retouch": {"portrait": [{"op": "fill", "at": [0.086, 0.041], "r": [0.055, 0.026], "px": 5, "q": 60},
+                  # (max2 g1 fix, verify_r2_g1a: the same drip shadows under both eyes on the splash; its irises a step
+                  # deeper so the eyes, not the carving, carry the face at card size: card_qa blank 0.74)
+                  "retouch": {"splash": [{"op": "fill", "at": [-0.026, 0.008], "r": [0.026, 0.013], "px": 4, "q": 60},
+                                         {"op": "fill", "at": [0.066, -0.017], "r": [0.022, 0.009], "px": 4, "q": 60},
+                                         {"op": "hue", "at": [-0.040, -0.021], "r": [0.024, 0.009], "h": [10.0, 50.0],
+                                          "s_min": 0.35, "v_min": 0.50, "val": 0.50},
+                                         {"op": "hue", "at": [0.082, -0.043], "r": [0.028, 0.011], "h": [10.0, 50.0],
+                                          "s_min": 0.35, "v_min": 0.50, "val": 0.50}],
+                              "portrait": [{"op": "fill", "at": [0.086, 0.041], "r": [0.055, 0.026], "px": 5, "q": 60},
                                            {"op": "fill", "at": [-0.062, 0.042], "r": [0.04, 0.022], "px": 5, "q": 60},
                                            {"op": "close", "at": [0.14, 0.193], "r": [0.035, 0.05], "px": 3}]}},
     },

@@ -98,7 +98,7 @@ HI_BAR = 231.0        # (max2 g2) card_qa's highlight gate is p99.9 >= 230; a sh
 HI_TARGET = 0.95      # ... its figure's p99.7 lifted to this display value (the 3D finish's sub_hi is 0.93)
 FACE_HOLD = {"sukri": (2.2, 0.7), "tunlan": (1.8, 0.6), "marund": (1.8, 0.6), "burdam": (1.8, 0.6), "dunsom": (2.2, 0.8)}
 STREAK_FACES = {"sukri", "tunlan", "marund", "burdam", "dunsom"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
-GATE = {"new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
+GATE = {"sclera": 0.04, "new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
 
@@ -729,7 +729,10 @@ def hand(sid: str, kind: str, bone: str, what: str, n: int) -> float:
     # (max2 g2) bone "head": the same local repaint for a face the full-card pass cannot reach at splash size (Odrum's
     # mask recesses read as hollow holes at 30 px; every full-card painting drifted off the kit's palette), with the
     # "face" prompt; the shipped card is then gated by card_qa's face blockers as any other
-    text = pr["face" if bone == "head" and "face" in pr else "hand"].format(what=what) + " " + SENSITIVITY
+    text = pr["face" if bone == "head" and "face" in pr else "hand"].format(what=what) + " "
+    if bone == "head" and pr.get("face_eyes"):         # (prompt v7) stylised dark lidded eyes, no sclera, no catch-light
+        text += pr["face_eyes"] + " "
+    text += SENSITIVITY
     key = run_xai.find_key(None)
     imgs = run_xai.call_edit(key, text, [Path(ref)], n, MODEL, "1:1", "2k")
     del key
@@ -764,6 +767,10 @@ def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "") -> list[di
             fails.append("framing")
         if g["pal_mean"] is not None and g["pal_mean"] > 12.0:
             fails.append("palette")
+        if bone == "head":
+            g["sclera"] = sclera_share(bb, bc, A[y0:y0 + S, x0:x0 + S])
+            if g["sclera"] > GATE["sclera"]:
+                fails.append("sclera")
         g["fails"], g["pass"] = fails, not fails
         out.append(g)
         plates.save_png(os.path.join(CACHE, f"hand_{sid}_{kind}_{bone}_v{v}_card.png"), blended)
@@ -777,6 +784,39 @@ def hand_gate(sid: str, kind: str, bone: str, n: int, text: str = "") -> list[di
     return out
 
 
+def sclera_share(bb: np.ndarray, bc: np.ndarray, A: np.ndarray) -> float:
+    """(max2 g2 fix, verify_r2_g2a) the white of an eye beside a new dark iris: a face repaint's dark blobs the card
+    before it did not carry (luma < 0.45 x the face disc's median, 3 px to 1 % of the crop), and round each one a ring
+    (n/80 px) whose pixels are at least the face's median luma and less saturated than its median by 0.05 (a white or
+    cream sclera on a warm mask). Returns the worst blob's ring share. A stylised lidded eye has lid and mask round its
+    iris, not a pale ring. A tripwire, not a judge: the round-1 face repaints the verdict read as photo-real measure
+    0.05-0.58, but a tiny splash-size eye can slip under it; a person still looks at every head repaint."""
+    from scipy import ndimage as ndi
+    n_ = bb.shape[0]
+
+    def ys(x):
+        mx, mn = x.max(-1), x.min(-1)
+        return x @ card_qa.Y709, np.where(mx > 1e-5, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
+    Yb, Sb = ys(bb)
+    Yc, _Sc = ys(bc)
+    yy, xx = np.mgrid[0:n_, 0:n_]
+    disc = (np.hypot(xx - n_ / 2, yy - n_ / 2) < 0.35 * n_) & (A > 0.5)
+    if disc.sum() < 50:
+        return 0.0
+    med, smed = float(np.median(Yb[disc])), float(np.median(Sb[disc]))
+    newd = (Yb < 0.45 * med) & disc & ~ndi.binary_dilation(Yc < 0.45 * float(np.median(Yc[disc])), iterations=1)
+    lab_, k = ndi.label(newd)
+    worst = 0.0
+    for i in range(1, k + 1):
+        m = lab_ == i
+        if m.sum() < 3 or m.sum() > 0.01 * n_ * n_:
+            continue
+        ring = ndi.binary_dilation(m, iterations=max(2, n_ // 80)) & ~m & disc
+        if ring.sum() >= 4:
+            worst = max(worst, float(((Yb[ring] >= med) & (Sb[ring] < smed - 0.05)).mean()))
+    return round(worst, 3)
+
+
 def hand_accept(card: str, bone: str, v: int, why: str) -> None:
     sid, kind = card.split(":")
     fid = plates.fighter_of(sid)
@@ -785,9 +825,14 @@ def hand_accept(card: str, bone: str, v: int, why: str) -> None:
     plates.save_png(plates.image_path(sid, kind), plates.load_image(src)[..., :3])
     g = json.load(open(os.path.join(CACHE, f"hand_{sid}_{kind}_{bone}_gate.json")))
     raw = hand_raw(sid, kind, bone, v)
-    rec[card]["hand"] = {"bone": bone, "variant": v, "why": why, "prompt": g["prompt"], "raw": os.path.relpath(raw, GAME),
-                         "raw_sha256": hashlib.sha256(open(raw, "rb").read()).hexdigest(),
-                         "gate": next((x for x in g["gates"] if x["variant"] == v), None)}
+    ent = {"bone": bone, "variant": v, "why": why, "prompt": g["prompt"], "raw": os.path.relpath(raw, GAME),
+           "raw_sha256": hashlib.sha256(open(raw, "rb").read()).hexdigest(),
+           "gate": next((x for x in g["gates"] if x["variant"] == v), None), "date": time.strftime("%Y-%m-%d")}
+    # (max2 g2 fix) a card may take more than one local repaint (a face and a hand): each is kept, in order
+    prev = [h for h in (rec[card].get("hands") or ([rec[card]["hand"]] if rec[card].get("hand") else []))
+            if h.get("bone") != bone]
+    rec[card]["hand"] = ent
+    rec[card]["hands"] = prev + [ent]
     with open(record_path(fid), "w", encoding="utf-8") as f:
         json.dump(dict(sorted(rec.items())), f, indent=1)
     print(f"[paint] {card}: hand {bone} v{v} shipped")
