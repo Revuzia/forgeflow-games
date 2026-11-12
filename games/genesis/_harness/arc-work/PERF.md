@@ -862,3 +862,23 @@ long press frame-rate independent. Report after 1-2 verified.
    shows its PARENT (worker path: subtree not yet covered) while its own water slot draws.
 5. Item 4: read the owner's 'render targets' line; then the atmosphere composite at 1/2 res with a nearest-depth
    bilateral upsample (shots side by side: town at noon, dusk, orbit limb), cloud history at 1/2 res.
+
+## SESSION 11 (2026-11-12 ~23:55Z) — items 0, 3, 6, 5, 4 on build c1342092
+- GATE check12 (run-s10g: session-10 tree): npm run check 919/919 pass; npm run build OK (build-prod11.log).
+- g5u (dist19 = session-9 tree incl. F21/F22b/F23, ULTRA 888x500, busy town, panned; SwiftShader pans by wall time =
+  every frame a 15-27 km cut, so these are upper bounds): gl calls total 74 ms/frame; shadows|bufferData 7.5/frame
+  1.07 MB (owner's M5 trace on 31cb64e7: 42.9/frame), post|bufferData 9.3/frame 1.17 MB (35.9), metal buffer allocs
+  est. 4.2 MB/frame (15.4), fresh sizes 3.6 MB over the whole recording; attribute churn: NO 'new attr' in the measured
+  frames (only range updates: vegetation-near instanceMatrix x57 buckets, building pages aKit/position ranges, roads).
+  Remaining bufferData = new objects' first upload (createBuffer under projectObject) on those cuts. uploads inside a
+  pass 97/frame are mostly scene|texSubImage2D (61.8/frame: particles' field DataTextures re-uploaded per emitter
+  refresh at 256x161 x 9 fields + city-light tiles); preupload (F20) is default off since session 9.
+- cz1 (session 10, fixed-clock flyTo zoom) stopped: each capture ran ~20 hidden 60 fps frames (screenshot rAFs); f004 at
+  209 m LOOKED: clear town under the deck, no white. perf-descent.mjs: __FIXCLOCK__.hold() freezes time during a
+  screenshot / stats (every 60 fps frame is seen), --zhi/--zlo shoot only inside an altitude window, --zevery N, and a
+  new phase 'wheelfixed' = the PLAYER's zoom: WheelEvents on the canvas (--wdy px per event every --wevery frames:
+  -100/4 a mouse wheel, -5/1 a trackpad), prints the cloud shell heights; stats now count far-tree meshes drawn.
+- Queue (ONE browser job at a time; run-s11a/b/c.sh in scratch/arc/perf): v18b (shnear=0 town/townlow, dist18) ->
+  cw1 (mouse-wheel zoom through the deck, dist21 = fresh unminified build of the session-10 tree) -> eastwater4 (spec
+  arc-work/specs/perf-eastwater2.json: day views east of Rubolhin, + fartrees=0) -> ft1 / ft0 (far trees on/off
+  descent 2000/500/150/50 on babel, forest poi) -> cw2 (trackpad zoom).
