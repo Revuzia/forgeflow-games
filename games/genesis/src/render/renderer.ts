@@ -41,6 +41,14 @@ import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
 import { perfSwitch, perfSwitchNote } from './perfswitch.ts';
+// PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
+// OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
+// prints their effective values. NOT quality settings: diagnostics.
+const SW_MSAA = perfSwitch('msaa');
+const SW_CLOUDS = perfSwitch('clouds');
+const SW_WATER = perfSwitch('water');
+const SW_GTAO = perfSwitch('gtao');
+const SW_ATMO = perfSwitch('atmo');
 import { flushTextureUploads, installSpanUploads, installTexturePreUpload, wantSpanUploads } from './upload.ts';
 /** PERF F20: textures flagged for upload go up before the frame's first pass (`?preupload=0` = at their draw, as before) */
 // (OFF by default since session 9, `?preupload=1` = on: the owner's M5 A/B ran 1.9 fps without it vs 1.2-1.3 with it;
@@ -243,7 +251,7 @@ export class Renderer {
     this.three.setSize(this.cssW, this.cssH, false);
     const w = Math.max(2, Math.round(this.cssW * pr * this.quality.renderScale));
     const h = Math.max(2, Math.round(this.cssH * pr * this.quality.renderScale));
-    this.post.setSize(w, h, this.quality.msaa);
+    this.post.setSize(w, h, SW_MSAA ? this.quality.msaa : 0);
     this.clouds.setSize(w, h, this.farClouds ? farViewQuality(this.quality, 2).cloudScale : this.quality.cloudScale);
     this.orbits.setResolution(w, h);
     this.ships.setResolution(w, h, pr * this.quality.renderScale);
@@ -415,7 +423,7 @@ export class Renderer {
     this.worlds.update(view, pose, this.worldRefs, this.scene, time, this.camQInv.copy(cam.quaternion).invert());
     // ── cloud weather of the primary planet: organised and baked (weather + shadow cubes) BEFORE the scene, whose
     // materials read the cloud-shadow cube ──
-    const cloudVis = primaryVis && primaryVis.atmo.has && primaryVis.hasClouds && primaryVis.cloudCube ? primaryVis : null;
+    const cloudVis = SW_CLOUDS && primaryVis && primaryVis.atmo.has && primaryVis.hasClouds && primaryVis.cloudCube ? primaryVis : null;
     if (cloudVis) {
       const pv = cloudVis.pv;
       this.clouds.bind(cloudVis.atmo, cloudVis.cloudCube!.texture);
@@ -493,6 +501,7 @@ export class Renderer {
     cam.layers.set(0);
     r.setRenderTarget(post.hdr);
     r.setClearColor(0x000000, 1);
+    perfmon.mark('scene:opaque');
     r.render(this.scene, cam);
     const callsScene = r.info.render.calls, trisScene = r.info.render.triangles;
     perfmon.end('scene');
@@ -501,7 +510,7 @@ export class Renderer {
     // sheet's edge against the beach was a crease it darkened — a dashed black line along every waterline — and the
     // water surface itself took AO. (aoFactor weighs each AO sample by depth, so water pixels, whose depth is the
     // sheet's, keep their light.)
-    const aoS = q.ssao ? aoFor(q.name) : null;
+    const aoS = q.ssao && SW_GTAO ? aoFor(q.name) : null;
     if (aoS) {
       if (primaryVis) _sunView.copy(primaryVis.uniforms.uSunDirView.value as Vector3); else _sunView.set(0, 0, -1);
       const ss = (a: number, b: number, x: number) => smoothstepN(a, b, x);

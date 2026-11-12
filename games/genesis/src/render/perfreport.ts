@@ -48,6 +48,8 @@ interface FrameRec {
   draws: number; tris: number; shadowTris: number; built: number; programs: number; alt: number; moved: number; speed: number;
   note: string;
   gpu: Float64Array;
+  /** GPU ms per named pass inside the 'scene' and 'post' groups (perfmon.mark) */
+  sub: Map<string, number>;
 }
 
 interface TimerExt { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }
@@ -249,7 +251,9 @@ export class PerfRecorder {
   private gl: WebGL2RenderingContext | null = null;
   private ext: TimerExt | null = null;
   private pool: WebGLQuery[] = [];
-  private pending: { q: WebGLQuery; slot: number; rec: FrameRec }[] = [];
+  private pending: { q: WebGLQuery; slot: number; rec: FrameRec; name?: string }[] = [];
+  /** the named pass the open query times (inside 'scene' / 'post'), or null */
+  private openSub: string | null = null;
   private openSlot = -1;
   private cur: FrameRec | null = null;
   private lastCam: [number, number, number] | null = null;
@@ -328,7 +332,9 @@ export class PerfRecorder {
       if (!q) return;
       gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
       this.openSlot = i;
-      this.pending.push({ q, slot: i, rec: this.cur });
+      const sub = slot === 'scene' || slot === 'post' ? slot : undefined;
+      this.openSub = sub ?? null;
+      this.pending.push({ q, slot: i, rec: this.cur, name: sub });
     } catch { this.ext = null; }
   }
 
@@ -338,12 +344,31 @@ export class PerfRecorder {
     if (!gl || !ext || this.openSlot < 0 || GPU_SLOTS[this.openSlot] !== slot) return;
     try { gl.endQuery(ext.TIME_ELAPSED_EXT); } catch { this.ext = null; }
     this.openSlot = -1;
+    this.openSub = null;
+  }
+
+  /**
+   * PERF s12 bisection: inside the 'scene' / 'post' groups the GPU time is split by pass — the open query ends here and
+   * a new one starts for `name` (timer queries cannot nest; the group's ms is the sum of its passes). Outside those
+   * groups, or without a timer, nothing.
+   */
+  gpuMark(name: string): void {
+    const gl = this.gl, ext = this.ext;
+    if (!gl || !ext || this.openSlot < 0 || this.openSub === null || !this.cur) return;
+    try {
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      const q = this.pool.pop() ?? gl.createQuery();
+      if (!q) { this.openSlot = -1; this.openSub = null; return; }
+      gl.beginQuery(ext.TIME_ELAPSED_EXT, q);
+      this.openSub = name;
+      this.pending.push({ q, slot: this.openSlot, rec: this.cur, name });
+    } catch { this.ext = null; }
   }
 
   /** the start of a frame being recorded (perfmon.frameStart) */
   frameBegin(): void {
     if (!this.recording) return;
-    this.cur = { t: 0, iv: 0, work: 0, slots: new Float64Array(this.slotNames.length), draws: 0, tris: 0, shadowTris: 0, built: 0, programs: 0, alt: 0, moved: 0, speed: 0, note: '', gpu: new Float64Array(GPU_SLOTS.length).fill(-1) };
+    this.cur = { t: 0, iv: 0, work: 0, slots: new Float64Array(this.slotNames.length), draws: 0, tris: 0, shadowTris: 0, built: 0, programs: 0, alt: 0, moved: 0, speed: 0, note: '', gpu: new Float64Array(GPU_SLOTS.length).fill(-1), sub: new Map() };
   }
 
   /** the end of a frame (perfmon.frameEnd): its interval, the main thread's ms and slots, and the app's context */
@@ -381,6 +406,7 @@ export class PerfRecorder {
         if (!gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE)) { if (final) { gl.deleteQuery(p.q); this.pending.shift(); continue; } break; }
         const ns = gl.getQueryParameter(p.q, gl.QUERY_RESULT) as number;
         p.rec.gpu[p.slot] = (p.rec.gpu[p.slot] < 0 ? 0 : p.rec.gpu[p.slot]) + ns / 1e6;
+        if (p.name) p.rec.sub.set(p.name, (p.rec.sub.get(p.name) ?? 0) + ns / 1e6);
         this.gpuOk = true;
         this.pool.push(p.q);
         this.pending.shift();
@@ -422,6 +448,13 @@ export class PerfRecorder {
       const g = GPU_SLOTS.map((n, i) => { const v = F.map((r) => r.gpu[i]).filter((x) => x >= 0); return [n, mean(v), pct(v, 0.95), v.length] as [string, number, number, number]; });
       const tot = F.map((r) => { let s = 0, any = false; for (const x of r.gpu) if (x >= 0) { s += x; any = true; } return any ? s : -1; }).filter((x) => x >= 0);
       L.push(`gpu ms (mean/p95): ${g.map(([n, m, p]) => `${n} ${f1(m)}/${f1(p)}`).join(' ')} | total ${f1(mean(tot))}/${f1(pct(tot, 0.95))}${this.disjoint ? ` (disjoint ${this.disjoint})` : ''}${mean(tot) > mean(iv) * 1.05 ? ' | NOTE: more GPU ms than frame ms: this driver\'s timer spans overlap, not additive' : ''}`);
+      // (bisection) GPU ms per pass inside scene / post, in the order they first ran
+      const names: string[] = [];
+      for (const r of F) for (const k of r.sub.keys()) if (!names.includes(k)) names.push(k);
+      if (names.length) {
+        const parts = names.map((n) => { const v = F.map((r) => r.sub.get(n) ?? -1).filter((x) => x >= 0); return `${n} ${f1(mean(v))}/${f1(pct(v, 0.95))}`; });
+        L.push(`gpu ms by pass (mean/p95; 'scene' / 'post' = the untagged rest of the group): ${parts.join(' · ')}`);
+      }
     } else L.push(`gpu ms: ${this.ext || this.disjoint ? 'no results' : 'no timer query in this browser'}`);
     L.push(`render: draws ${Math.round(mean(F.map((r) => r.draws)))} (max ${Math.max(...F.map((r) => r.draws))}) tris ${f1(mean(F.map((r) => r.tris)) / 1e6)}M shadow ${f1(mean(F.map((r) => r.shadowTris)) / 1e6)}M | patches built ${F.reduce((a, r) => a + r.built, 0)} | new programs ${F.reduce((a, r) => a + r.programs, 0)}`);
     if (this.glTrace.stats.size) L.push(...this.glTrace.lines(this.frames.length));

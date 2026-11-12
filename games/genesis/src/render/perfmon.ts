@@ -86,6 +86,11 @@ export class PerfMonitor {
     this.cur[i] += performance.now() - this.open[i];
   }
 
+  /** (bisection) a named GPU pass starts here inside the 'scene' / 'post' slot: timed separately while recording */
+  mark(name: string): void {
+    if (this.on && this.recorder.recording) this.recorder.gpuMark(name);
+  }
+
   /** record `ms` of frames; `onDone` gets the report text */
   record(ms = 20000, onDone?: (text: string) => void): void {
     this.on = true;
