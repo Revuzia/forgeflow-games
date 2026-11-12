@@ -526,8 +526,13 @@ def snap_gate(contract: dict) -> tuple[list[str], dict]:
         if not all(os.path.exists(p) for p in ps):
             fails.append(f'snap: {c} is not rendered')
             continue
-        r = [round(rise_ms(decode(p)), 1) for p in ps]
+        xs = [decode(p) for p in ps]
+        r = [round(rise_ms(x), 1) for x in xs]
         rep['rise'][c] = r
+        if c not in hits[:len(hits) - sum(len(v) for v in rep['impacts'].values())] and not c.startswith('ui_'):
+            lap = max(laptop_loss(x) for x in xs)     # a per-ability impact reads on a laptop like the kit's hits
+            if lap > LAPTOP_MAX_LU:
+                fails.append(f'snap: {c} loses {lap:.1f} LU on a laptop (> {LAPTOP_MAX_LU:g})')
         top = UI_SHOP_RISE_MAX_MS if c.startswith('ui_') else KIT_RISE_MAX_MS
         if c not in rep['exempt'] and max(r) > top:
             fails.append(f'snap: {c} peaks {max(r):.1f} ms after its onset (> {top:g} ms)')

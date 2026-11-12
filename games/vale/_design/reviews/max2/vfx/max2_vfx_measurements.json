@@ -1,0 +1,41 @@
+{
+ "lane": "Visual effects, max pass round 2 (engineer)",
+ "date": "2026-11-12 Central",
+ "abSheets": {
+  "how": "node _harness/vfx_gallery.mjs <ids> --per 1 --zoom 31 (the gameplay camera's default distance; round 1 shot at 24.5) [--scale 1: world events at the director's scale] --catalog <pinned catalog>, BEFORE = catalog 2026.11.5 as shipped (round 1), AFTER = the working tree; rows stacked before/after per def. Real map (RIFT centre), real post chain, High.",
+  "m2_events_ab.png": "lib_structure_break, lib_structure_land, lib_death_shatter, lib_respawn, lib_summon_rise, lib_status_silence, lib_status_resist_shred at 0.1/0.3/0.6/1.2 s",
+  "m2_sweeps_ab.png": "lib_sunsplinter_sweep, lib_longshade_sweep, lib_cone_sweep at 0.1/0.2/0.35/0.7 s",
+  "m2_heavyhit_ab.png": "lib_hit_phys_heavy (T3) at 0.05/0.1/0.2/0.4 s: the added heat ring",
+  "m2_items_monster_ab.png": "the generic look each item used (lib_ring_pulse, lib_shield_up, lib_empower, lib_burst_lumen, lib_haste, lib_heal_rise) vs its new family def; lib_wick_death vs lib_monster_fall",
+  "m2_ult_windups_ab.png": "ardit, burdam, marund ult wind-ups and lib_ult_windup at 0.2/0.5/0.8/0.95 of the wind-up"
+ },
+ "fixes": {
+  "lib_structure_break": "team light 9 m x8 -> 5.5 m x5 (life 0.5 -> 0.45), the flash's own pooled light off, ground glow decal 3.0 m a0.5 -> 2.2 m a0.4; smoke SMOKE2/DUST instead of ink",
+  "lib_death_shatter": "scorch #2A2C33 a0.85 -> CHAR #5A5046 a0.7 (a warm char, the tick ring kept); the plume is SMOKE #4A443D / SMOKE2 #5B544B, 7 -> 6 puffs, rim 0.6 -> 0.45",
+  "lib_structure_land": "smoke SMOKE2/DUST, rate 5 -> 4, rim 0.3 -> 0.2",
+  "lib_status_silence": "the dome is additive, rim-only (open bell, rimPow 2.2 -> 1.7, rim 2.2 -> 2.6): the head shows through; clapper and toll unchanged",
+  "lib_status_resist_shred": "ink band a0.9 -> 0.55 (INK2), glass band 1.2 -> 1.3 m, emissive 1.8 -> 2.6, dissolve 0.58 -> 0.4; shards 6/s 0.14 -> 9/s 0.2",
+  "sweeps": "lib_sunsplinter_sweep, lib_longshade_sweep, lib_cone_sweep: the opaque fan mesh is gone; a ring_thin light decal runs out across the cone as the bright front over a growing cone fill (Longshade: an ink cone that grows with a lamp-amber arc, 7 smaller warm-grey puffs instead of 12 black ones). One mesh draw fewer per sweep",
+  "lib_respawn": "column a0.85 WHITE -> a0.5 Dawnglass; two dial rings step down onto the feet; an upward streak ring at 0.3 s",
+  "lib_summon_rise": "the 1.6 s black ink decal -> a 0.7 s SMOKE ring over a lit rune dial; the stair and shaft cylinders removed, one rim-lit Dawnglass sleeve",
+  "VFX-5c items": "8 family defs (lib_item_bell_toll, _lamp_glow, _glass_ward, _stone_brace, _edge_pace, _resin_mend, _glass_echo, _needle_shadow); 15 items.json vfx refs moved off the generic lib looks (warning_bell, bellrope, watchbell, kindly_lamp, shelter_lamp, dialcutter, glass_veil, glintmail, ironstone_guard, hourcleaver, seatstone, callstone, resin_maul, afterlight, needlefall)",
+  "monster death": "lib_monster_fall bound by vfxEvents.monsterDeath (director: kind monster, falls back to unitDeath)",
+  "VFX-10": "kit_defs.ult_tell on every ult wind-up (16 kit, burdam/ulkro tuned, lib_ult_windup unheld): a closing countdown hour-dial in team colour, radius 2.3 m, and a signature shaft brightening to the release",
+  "VFX-11": "lib_hit_phys_heavy: a 0.28 s distort ring (strength 0.009); distort draws only at tier >= 3 and never on Low (system.ts), so basic attacks never pay for it",
+  "VFX-6": "feel hitFlash 0.7 (Vashil 0.55) at +30 ms on hesmi_ult_shard/_shadow, lisvel_ult_corridor (9 feel points along the corridor), nurrow_ult_lull, vashil_ult_toll; lisvel light 24 -> 14"
+ },
+ "probe_combat_polish": {
+  "base": "_harness/_reports/fw_W1_combat_polish_m2_base.json (ult,hold --ults all): PASS; detailLost 2 on hesmi, lisvel, nurrow, vashil",
+  "after": "_harness/_reports/fw_W1_combat_polish_m2_r3.json (ult --ults hesmi,lisvel,nurrow,vashil): PASS",
+  "hesmi": {"before": "lost 2, min 0.37, box 0.068, core x2.10", "after": "lost 2, min 0.36, box 0.060, core x2.09"},
+  "lisvel": {"before": "lost 2, min 0.24, box 0.265, full-frame body white 0.392, core x2.44", "after": "lost 2, min 0.31, box 0.183, full-frame body white 0.23, core x2.43"},
+  "nurrow": {"before": "lost 2, min 0.31, core x2.02", "after": "lost 1, min 0.48, core x1.96 / ground x2.01 (probe PASS)"},
+  "vashil": {"before": "lost 2, min 0.28, box 0.319, core x2.28", "after": "lost 2, min 0.31, box 0.209, core x2.22"},
+  "rootCause": "On the remaining flat frames the body keeps 0.73-0.87 of its detail with the actor's victim flash hidden (noFlash) and only 0.34-0.63 with the VFX pass off: the flattening is the T4 victim flash (actors.ts VICTIM_FLASH.k.T4 1.0), which the def-level feel hitFlash did not reach on Hesmi's and Vashil's beats",
+  "VFX-8 hold (base run)": "discMs kemdo 300, rishal 333, tunlan 200 (gate >= 167): unchanged from round 1"
+ },
+ "budgets": {
+  "perf_1080 --prod --q high,ultra --no-dyn --no-mem --match-seeds 7 (dist-catalog carrying this lane's defs)": "High 151 draws, 210.6k tris, 39 programs; Ultra 150 draws, 222.4k tris, 39 programs; match peak (seed 7) 450k tris, 294 draws, 40 programs, vfx 35k tris / 18 draws in the peak frame. All within 500k / 450 / 40. Timing not measured (load 26-34).",
+  "memory": "not re-measured: no texture, render target or new geometry shape was added (the shaft, ring_thin and countdown decal already existed; the sweeps drop a mesh draw)"
+ }
+}

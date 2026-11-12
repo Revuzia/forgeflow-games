@@ -1,0 +1,85 @@
+{
+ "lane": "units (fighters, monsters and Wicks in game), max2 round 2, engineer",
+ "at": "2026-11-12 05:50 CST",
+ "U1(1) material zoning": {
+  "what": "per-fighter signature-hue albedo zones, art/tools/zone_grades.json applied by zone_grade.py inside pipeline.build",
+  "lineup_qa sigPct mean (gate >= 6 %)": {
+   "kemdo": [
+    3.73,
+    37.1
+   ],
+   "burdam": [
+    17.5,
+    34.3
+   ],
+   "vashil": [
+    0.0,
+    34.4
+   ],
+   "tunlan": [
+    0.37,
+    18.0
+   ],
+   "rishal": [
+    0.14,
+    14.4
+   ]
+  },
+  "lineup_qa bottom band L* (20-35)": {
+   "kemdo": [
+    17.6,
+    20.9
+   ],
+   "burdam": [
+    22.6,
+    21.5
+   ],
+   "vashil": [
+    26.7,
+    23.2
+   ],
+   "tunlan": [
+    32.7,
+    29.3
+   ],
+   "rishal": [
+    30.8,
+    30.8
+   ]
+  },
+  "gamecam 28.5 m (u1_zoning_gamecam_ab.json, same frozen frame seed 7 t 420)": "changed-pixel chroma kemdo 19.1->23.7, burdam 21.2->26.6, vashil 17.1->30.4, tunlan 14.4->25.9, rishal 13.9->26.9; signature-hue pixels per crop 3796->5197, 1281->2816, 1104->2366, 59->1196, 14->707",
+  "reserved hues (art.skins.never: <= 8 % albedo above 40 % saturation in a reserved band)": "rishal hue set to #B30066 (tritan rose 7.7 % at #B3004A -> 0.37 %); others unchanged or lower",
+  "budgets": "no geometry or texture-size change; GLBs within +24 KiB (burdam rebuilt 1203 -> 1201.5 KiB); harness frame counts before/after tris 220,251/220,237, calls 151/151, programs 39/39, textures 186/186"
+ },
+ "U1(2) ORM bands": "measured, not rewritten (u1_orm_bands.json): the bake already bands roughness per class (cloth 0.86-0.92, leather 0.74-0.78, chalk/lacquer 0.6-0.7, glass 0.13-0.2); a second lossy ORM encode was reverted in round 1",
+ "U3 hold stillness": {
+  "file": "u3_hold_watch.json",
+  "holdFrames life on, verify2 -> now": {
+   "ervet/recall": [
+    70,
+    20
+   ],
+   "odrum/recall": [
+    60,
+    10
+   ],
+   "vashil/channel": [
+    24,
+    10
+   ],
+   "lisvel/channel": [
+    40,
+    10
+   ],
+   "burdam/recall": [
+    21,
+    9
+   ],
+   "ilsheta/recall": [
+    20,
+    10
+   ]
+  }
+ },
+ "Hesmi in game": "hesmi_ingame_seed11.png (max_units_ab skips fighters the viewer's team does not see; Hesmi seated on the viewer's side)"
+}

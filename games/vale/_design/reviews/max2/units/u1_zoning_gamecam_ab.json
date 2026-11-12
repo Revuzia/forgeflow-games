@@ -1,0 +1,67 @@
+{
+ "kemdo_1": {
+  "changedPx": 2436,
+  "before": {
+   "chromaChanged": 19.1,
+   "LstarChanged": 39.4,
+   "sigHuePxInCrop": 3796
+  },
+  "after": {
+   "chromaChanged": 23.7,
+   "LstarChanged": 38.7,
+   "sigHuePxInCrop": 5197
+  }
+ },
+ "burdam_2": {
+  "changedPx": 6149,
+  "before": {
+   "chromaChanged": 21.2,
+   "LstarChanged": 41.9,
+   "sigHuePxInCrop": 1281
+  },
+  "after": {
+   "chromaChanged": 26.6,
+   "LstarChanged": 43.6,
+   "sigHuePxInCrop": 2816
+  }
+ },
+ "vashil_3": {
+  "changedPx": 1784,
+  "before": {
+   "chromaChanged": 17.1,
+   "LstarChanged": 40.0,
+   "sigHuePxInCrop": 1104
+  },
+  "after": {
+   "chromaChanged": 30.4,
+   "LstarChanged": 37.2,
+   "sigHuePxInCrop": 2366
+  }
+ },
+ "tunlan_4": {
+  "changedPx": 1431,
+  "before": {
+   "chromaChanged": 14.4,
+   "LstarChanged": 18.2,
+   "sigHuePxInCrop": 59
+  },
+  "after": {
+   "chromaChanged": 25.9,
+   "LstarChanged": 16.0,
+   "sigHuePxInCrop": 1196
+  }
+ },
+ "rishal_5": {
+  "changedPx": 1218,
+  "before": {
+   "chromaChanged": 13.9,
+   "LstarChanged": 47.0,
+   "sigHuePxInCrop": 14
+  },
+  "after": {
+   "chromaChanged": 26.9,
+   "LstarChanged": 39.8,
+   "sigHuePxInCrop": 707
+  }
+ }
+}
