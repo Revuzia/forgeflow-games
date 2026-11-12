@@ -1079,3 +1079,10 @@ long press frame-rate independent. Report after 1-2 verified.
   slope. Now 2x the edge bound and a 0.15 floor on n·up (4x the chord slack, still rejecting under trees), and
   `?zedge=0` = terrain + water on the plain tangent bound. ASK THE OWNER at that spot: default vs ?zedge=0 vs ?zcons=0.
 - Note (round 3): hide=veg leaves tree shadows (debug switch; the shadow casters are other objects): fine.
+- CUTS A/B (cut0 = dist27 before, cut1 = dist28 with #1 #2 #4; busy save, ULTRA 640x360, speed 0; diff-cut-region.png,
+  diff-cut-town.png, cmp-cut-town.png LOOKED): region mean |d| 0.95/255 (tree sway specks, coastline water motion),
+  clouds and shadows identical; town 2.4/255: sway + one road stretch that the BEFORE run had not converged yet
+  (coarse ground through the road, the known SwiftShader streaming lag), intact after: not a cut. 0 errors.
+- GATE check18 (all of session 14): 925/925 pass; npm run build OK (build-prod17.log).
+- NEXT: cuts #3 (patch page normal alias), #5 (prevColor), #6/#7 (GTAO aliasing), #8 (lazy pools); a long-frame soak
+  (tiny viewport) for growth; owner A/B at the water-over-hills spot: default / ?zedge=0 / ?zcons=0.
