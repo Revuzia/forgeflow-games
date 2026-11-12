@@ -238,12 +238,12 @@ class Glasshorn(Creature):
     # sundial's hour lines, not a fawn's dapple), pale dawnglass hour ticks across the mantle that tie the body to the
     # glass rack, and ink-dark legs. Every hue stays out of the reserved bands (all under 40 % saturation).
     # (value kept: the coat sits at the fawn's L* ~55 so the stag still stands off the jungle floor, max2u_mon70)
-    # (r2: the coat a step lighter, hide/flank/coat_lo, to lift the stag's value off the floor back toward round 1's dL*
+    # (r2: the coat two steps lighter, hide/flank/coat_hi/coat_lo, the mantle a little lighter, to lift the stag's value off the floor back toward round 1's dL*
     # 25: the dusk restyle had dropped it 25.4 -> 18.4)
-    PAL = {"hide": "#ADA9C6", "flank": "#BCB8D3", "belly": "#E6DED0", "leg": "#58546F", "sock": "#2F2D40",
+    PAL = {"hide": "#BAB6D2", "flank": "#C8C4DD", "belly": "#E6DED0", "leg": "#58546F", "sock": "#2F2D40",
            "ruff": "#ECE5D6", "muzzle": "#3A3850", "nose": "#22212E", "eye": "#17161F", "hoof": "#2A2836",
-           "ear_in": "#B7A9C2", "rump": "#EDE7DA", "tick": "#C9DCEA", "pedicle": "#E8E1D2", "saddle": "#3B3854",
-           "dot": "#F2ECDF", "coat_hi": "#CCC8E0", "coat_lo": "#8C88A8", "divide": "#2E2C42"}
+           "ear_in": "#B7A9C2", "rump": "#EDE7DA", "tick": "#C9DCEA", "pedicle": "#E8E1D2", "saddle": "#46435F",
+           "dot": "#F2ECDF", "coat_hi": "#D6D2E8", "coat_lo": "#9894B3", "divide": "#2E2C42"}
 
     def joints(self):
         return dict(
