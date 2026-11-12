@@ -983,3 +983,28 @@ long press frame-rate independent. Report after 1-2 verified.
 - FIX (GPU-HUNT-PLAN §1a, `invalidate`, default ON): after the water pass, when atmosphere composites follow (every
   later reader uses the resolved hdr.texture / depthTexture), gl.invalidateFramebuffer on the MSAA hdr's multisampled
   framebuffer (colour + depth): a tile GPU need not store the 4x buffers. Picture A/B inv1 / inv0 queued.
+- SMOKES (dist24/25, ULTRA 640x360, region): smoke2 (all diagnostics off, 40 s report): by-pass GPU line present;
+  smk-a (passsync=1, recms=40000): 'pass ms (passsync ...)' line, header prints every switch; smk-b (flat, hide=veg+
+  cover+life, shadows=0, rscale=0.5, atmosteps=4, cloudsteps=8, decals=0, fx=0, lum=0, msaa=0, invalidate=0) and
+  smk-c (scene=0, hide=terrain): 0 console errors in all.
+- INVALIDATE A/B (inv1 vs inv0, dist25, ULTRA, speed 0): region mean |d| 1.1/255, orbit 0.4/255; diff-inv-region.png
+  LOOKED: grain, drifting cloud edges and water ripples only (animated); no structural change. Kept default on.
+- GATE check15 (all of the above + cloud fix + far-tree look): 923/923 pass; npm run build OK (build-prod14.log).
+- FAR TREES ftc4 (fill narrowing; _shots/ftc4-d500.png, cmp-ftc4.png LOOKED: before / after / near reference):
+  green-pixel share 0.90 -> 0.37 (near 0.35), region mean (81,109,51) -> (88,92,44) (near 89,91,50), brown floor
+  between crowns as under the near trees; individual crowns still a little greener / brighter (G 117 vs 104).
+- CONTAINER RESTARTS at ~06:5xZ? and ~08:21Z: run-s12h queue died after inv0; not yet re-run: ftc4 d2000/d150,
+  deckmist2 (resting-in-deck before/after), eastwater5 (+pe3-stream / pe3-pond), tq0 / tq1 (trackpad zoom before/after).
+
+## NEXT (session 13), in order
+1. Re-queue ONE AT A TIME (dist26 = fresh unminified build): deckmist2 (spec perf-deckmist.json: dm-rest-off
+   deckmist=0 vs dm-rest-on, babel orbit dist 300 tilt 50 = alt ~316 m in the 180-420 m deck) -> LOOK: on = ground
+   readable through mist, off = white; tq0 / tq1 (wheelfixed trackpad -3 px/frame from dist 540: deckzoom=0&deckmist=0
+   vs default) -> perf-lum.py: no white frames with the fix; one shot from above the deck to confirm clouds unchanged
+   from outside.
+2. Far trees: ftc4-d2000 / -d150 shots; crowns' G a bit high -> farcrown.ts cg factor 0.88 -> ~0.8, re-shoot d500.
+3. Item 5: eastwater5 (perf-eastwater3.json: pe3-stream, pe3-pond = the wet hillside cells 1.4-1.7 km east: 0.4 m films
+   at h 0.5-12.7 m and a 5 m pond at 9.5-11.4 m; pe3-e120-*). Also the sim facts: the land east of Rubolhin has many
+   cells 0.2-2.8 m BELOW the lake level with tree cover 0.5-0.9 (flooded forest the sim keeps) -> trunks seen through
+   water = 'ghosts'. Decide render-side (shore film over slope cells) vs sim-side (sim lane: trees in deep water).
+4. Item 4 reduced-res post: only with A/B-identical shots; the owner's bisection report decides which pass matters.
