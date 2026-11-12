@@ -1,0 +1,236 @@
+{
+ "before": {
+  "families": {
+   "f_": 36.28,
+   "c_": 58.8,
+   "w_": 0.0,
+   "u_": 0.0,
+   "m_": 4.92
+  },
+  "top": [
+   [
+    "c_hit_phys_light",
+    19.27
+   ],
+   [
+    "c_proj_whoosh",
+    13.28
+   ],
+   [
+    "f_lisvel_hit",
+    6.52
+   ],
+   [
+    "c_shot_bolt_lumen",
+    5.14
+   ],
+   [
+    "c_swing_light",
+    3.68
+   ],
+   [
+    "f_lisvel_attack_hit",
+    3.2
+   ],
+   [
+    "f_lisvel_attack_swing",
+    3.12
+   ],
+   [
+    "m_enemy_windup",
+    3.03
+   ],
+   [
+    "c_buff",
+    2.42
+   ],
+   [
+    "c_hit_phys_heavy",
+    2.25
+   ]
+  ],
+  "plays": {
+   "c_hit_phys_light": 1123,
+   "c_proj_whoosh": 723,
+   "c_shot_bolt_lumen": 672,
+   "c_swing_light": 551,
+   "c_thrown": 100,
+   "f_lisvel_hit": 88,
+   "c_hit_phys_heavy": 82,
+   "f_lisvel_attack_swing": 60,
+   "c_wick_die": 60,
+   "c_buff": 60
+  },
+  "loudness": {
+   "out": {
+    "I": -17.65,
+    "p10": -23.69,
+    "p50": -17.85,
+    "p90": -14.73,
+    "p99": -13.28,
+    "Mmax": -8.11
+   },
+   "music": {
+    "I": -29.13,
+    "p10": -31.57,
+    "p50": -29.24,
+    "p90": -27.4,
+    "p99": -26.98,
+    "Mmax": -25.75
+   },
+   "sfx": {
+    "I": -19.77,
+    "p10": -200.69,
+    "p50": -22.73,
+    "p90": -17.88,
+    "p99": -16.3,
+    "Mmax": -12.81
+   },
+   "voice": {
+    "I": -14.11,
+    "p10": -200.69,
+    "p50": -200.69,
+    "p90": -176.02,
+    "p99": -18.47,
+    "Mmax": -10.34
+   },
+   "ambience": {
+    "I": -25.85,
+    "p10": -30.97,
+    "p50": -26.58,
+    "p90": -23.13,
+    "p99": -22.79,
+    "Mmax": -20.63
+   }
+  },
+  "gates": {
+   "healPerMinLe6": true,
+   "enemyDownFires": true,
+   "lampSetFires": true,
+   "lampOutFires": true,
+   "announcerPeakOverSfxP99Ge3": true,
+   "masterIntegratedInTokens": true
+  },
+  "seconds": 274.6,
+  "room": null
+ },
+ "after": {
+  "families": {
+   "f_": 50.27,
+   "c_": 29.52,
+   "w_": 13.12,
+   "u_": 0.0,
+   "m_": 7.09
+  },
+  "top": [
+   [
+    "f_lisvel_hit",
+    7.45
+   ],
+   [
+    "c_hit_phys_light",
+    6.25
+   ],
+   [
+    "m_enemy_windup",
+    4.46
+   ],
+   [
+    "f_lisvel_attack_hit",
+    4.44
+   ],
+   [
+    "w_glimwick_hit",
+    4.38
+   ],
+   [
+    "f_lisvel_attack_swing",
+    3.79
+   ],
+   [
+    "w_wick_hit",
+    3.53
+   ],
+   [
+    "c_needle_shot",
+    2.84
+   ],
+   [
+    "f_ulkro_attack_hit",
+    2.6
+   ],
+   [
+    "c_slow",
+    2.44
+   ]
+  ],
+  "plays": {
+   "w_glimwick_bolt": 987,
+   "w_glimwick_hit": 822,
+   "w_shieldwick_swing": 801,
+   "w_wick_hit": 707,
+   "w_greatwick_throw": 121,
+   "w_wick_hit_heavy": 102,
+   "f_lisvel_hit": 91,
+   "c_wick_die": 87,
+   "c_struck_needle": 79,
+   "c_haste": 78
+  },
+  "loudness": {
+   "out": {
+    "I": -18.25,
+    "p10": -23.42,
+    "p50": -19.11,
+    "p90": -15.31,
+    "p99": -13.66,
+    "Mmax": -8.59
+   },
+   "music": {
+    "I": -29.02,
+    "p10": -31.32,
+    "p50": -29.07,
+    "p90": -27.4,
+    "p99": -26.97,
+    "Mmax": -25.72
+   },
+   "sfx": {
+    "I": -20.47,
+    "p10": -200.69,
+    "p50": -25.57,
+    "p90": -18.3,
+    "p99": -16.3,
+    "Mmax": -12.04
+   },
+   "voice": {
+    "I": -14.11,
+    "p10": -200.69,
+    "p50": -176.43,
+    "p90": -170.27,
+    "p99": -18.47,
+    "Mmax": -10.34
+   },
+   "ambience": {
+    "I": -25.93,
+    "p10": -31.12,
+    "p50": -26.63,
+    "p90": -23.09,
+    "p99": -22.72,
+    "Mmax": -20.46
+   }
+  },
+  "gates": {
+   "healPerMinLe6": true,
+   "enemyDownFires": true,
+   "lampSetFires": true,
+   "lampOutFires": true,
+   "announcerPeakOverSfxP99Ge3": true,
+   "masterIntegratedInTokens": true,
+   "fighterKitShareGe50": true
+  },
+  "seconds": 337.07,
+  "room": {
+   "on": true,
+   "irSeconds": 0.6877083333333334
+  }
+ }
+}
