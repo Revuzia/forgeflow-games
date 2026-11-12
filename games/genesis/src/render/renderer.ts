@@ -1164,10 +1164,6 @@ function invalidateMsaa(r: WebGLRenderer, rt: WebGLRenderTarget): void {
   r.state.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
-/**
- * (PERF s14 memory audit) the typed arrays live geometries and data textures keep on the CPU after upload, by owner
- * (the first two named ancestors: 'planet-0/vegetation', 'planet-0/life' ...), each array counted once
- */
 function ownerOf(o: { name: string; parent: unknown }): string {
   const names: string[] = [];
   let p: { name: string; parent: unknown } | null = o;
@@ -1207,6 +1203,10 @@ function sceneOwners(scene: Scene): Map<object, string> {
   return out;
 }
 
+/**
+ * (PERF s14 memory audit) the typed arrays live geometries and data textures keep on the CPU after upload, by owner
+ * (the first two named ancestors: 'planet-0/vegetation', 'planet-0/life' ...), each array counted once
+ */
 function cpuRetained(scene: Scene): Map<string, number> {
   const seen = new Set<ArrayBufferLike>();
   const out = new Map<string, number>();
