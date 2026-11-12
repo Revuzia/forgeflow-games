@@ -14,7 +14,7 @@ import { ChunkLOD } from './chunks.ts';
 import { DirFieldCube } from './dirtex.ts';
 import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
 import { makeOceanMaterial } from './ocean.ts';
-import { PX_PER_RAD, Vegetation } from '../life/vegetation.ts';
+import { FAR_PX, PX_PER_RAD, Vegetation } from '../life/vegetation.ts';
 import { GroundCover } from '../life/groundcover.ts';
 import { LifeLayer } from '../life/life.ts';
 import { makeSiltState, SILT_MAX, updateSilt } from './silt.ts';
@@ -255,6 +255,16 @@ export class PlanetVisual {
     });
     (u.uVegFade.value as { x: number; y: number }).x = veg.nearGroup.visible ? veg.fade.value.x : 1e9;
     (u.uVegFade.value as { x: number; y: number }).y = veg.nearGroup.visible ? veg.fade.value.y : 1e9 + 1;
+    {
+      // PERF s12 (owner: far trees must read like the near trees): with the far-tree layer drawing, the trees stand out
+      // to where a typical tree (14 m) is 6 -> 3 px tall, so the ground under them is their forest floor (as under the
+      // near trees), not the canopy stand-in, which painted a green carpet under the far hulls
+      const cf = u.uCanopyFade.value as { x: number; y: number };
+      if (veg.farGroup.visible && veg.pxPerRad > 0) {
+        cf.x = (14 * veg.pxPerRad) / FAR_PX.out[1];
+        cf.y = (14 * veg.pxPerRad) / FAR_PX.out[0];
+      } else { cf.x = (u.uVegFade.value as { x: number }).x; cf.y = (u.uVegFade.value as { y: number }).y; }
+    }
     for (let L = 0; L < this.terrainMats.length; L++) {
       const [full, start] = this.lod.morphRange(L, ctx.K);
       const m = this.terrainMats[L].userData.uMorph as IUniform<{ set(x: number, y: number, z: number, w: number): void }>;

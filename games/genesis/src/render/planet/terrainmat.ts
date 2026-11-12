@@ -103,6 +103,9 @@ uniform float uBrushOn;
 uniform sampler2D uOverlay;
 uniform vec3 uOverlayK;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
+// (PERF s12) the band where the canopy shading takes over from the instanced trees: the near hand-over band without a
+// far-tree layer; with one, where far trees of a typical height shrink under 6 -> 3 px and give way (planetview.ts)
+uniform vec2 uCanopyFade;
 uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only, 5 albedo + mid-distance breakup tint, 6 camera distance (blue <120 m, red ramp to 500 m, yellow beyond), 7 lit but without the mid-distance breakup (A/B)
 ${GROUND_FRAG_PARS}
 
@@ -760,7 +763,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       }
       // within the instanced-tree range the real trees stand here: show their floor (litter, shade), not canopy
       // (no trees instanced at all — the planet view parks the band at 1e9 — means canopy everywhere, not floor)
-      float inst = uVegFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
+      float inst = uCanopyFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uCanopyFade.x, uCanopyFade.y, camDist);
       float cover = tw * mix(0.8, 1.0, crown) * (1.0 - inst);
       vcol = mix(vcol, tc, cover);
       canopyW = cover; canopyCrown = crown;
@@ -1825,7 +1828,7 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uBrush: { value: new Vector4(0, 1, 0, 0.02) }, uBrushColor: { value: new Vector3(1.2, 0.95, 0.55) }, uBrushOn: { value: 0 },
     // map overlay (UI lane: planet/overlaytex.ts applyOverlay); off by default
     uOverlay: { value: null }, uOverlayK: { value: new Vector3(0, 0.8, 0.3) },
-    uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
+    uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uCanopyFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
     // this frame's view space → last frame's clip space through the planet body frame (water SSR reprojection)
     uViewToPrevClip: { value: new Matrix4() },
     // additive (render lane, phase 4b: a falling moon): the tidal bulge on the water — body-frame direction to the moon

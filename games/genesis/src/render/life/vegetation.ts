@@ -364,6 +364,8 @@ varying vec2 vLeafUv;
 varying float vCard;
 varying float vLocalY;
 varying float vCrown;
+// the crown depth the lighting uses (= vCrown; a far hull's own clumps and gaps on it, see VEG_FAR below)
+float vegCrownV;
 varying vec4 vExtra;
 varying vec2 vLod;
 varying vec3 vLocalP;
@@ -389,7 +391,7 @@ const VEG_LIGHT = /* glsl */ `
     vec3 upB = vBodyPos / rP;
     float sh = sunShadow(-vViewPosition, normal);
     // the crown shades itself: interior foliage (and bark inside the crown) sees less sun than the outer shell
-    float crownDirect = mix(0.55, 1.0, smoothstep(0.35, 0.95, vCrown));
+    float crownDirect = mix(0.55, 1.0, smoothstep(0.35, 0.95, vegCrownV));
     vec3 sunCol = uSunE * sunTransmittance(rP, dot(upB, uSunDirBody)) * sh * vCloudSh * crownDirect;
     IncidentLight sunL;
     sunL.direction = uSunDirView;
@@ -412,10 +414,10 @@ const VEG_AMBIENT = /* glsl */ `
     // under a closed canopy the trunks and the lower, inner crowns see little open sky, and what they see comes
     // through leaves (green); in the open the sky is all around (a forest's inside was lit like a meadow)
     float canopy = clamp(fract(vExtra.w) * 2.5, 0.0, 1.0);
-    float under = vLeaf < 0.5 ? 1.0 : 1.0 - smoothstep(0.4, 0.9, vCrown);
+    float under = vLeaf < 0.5 ? 1.0 : 1.0 - smoothstep(0.4, 0.9, vegCrownV);
     e *= mix(vec3(1.0), vec3(0.34, 0.42, 0.28), canopy * under);
     // crown AO (cheap volumetric occlusion from the baked crown depth); the sky enters once (see terrainmat FRAG_AMBIENT)
-    iblIrradiance += e * mix(0.45, 1.0, smoothstep(0.3, 0.95, vCrown));
+    iblIrradiance += e * mix(0.45, 1.0, smoothstep(0.3, 0.95, vegCrownV));
   }
 `;
 
@@ -485,7 +487,27 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${VEG_FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+  vegCrownV = vCrown;
 ${LEAF_ALPHA}
+#ifdef VEG_FAR
+  // PERF s12 (owner: far trees must read like the near trees — not lime, not pentagons, not flat discs): a far hull is
+  // shaded as a crown, not a solid: clumps of foliage (cells in the tree's own unit-height frame) lit as the crown's
+  // outer leaves, the gaps between them as its shaded interior (the same crown-depth lighting the near leaves get),
+  // and where the clumps are resolved the gaps on the outline are open, so the silhouette is ragged like the near
+  // crown's sprays. Unresolved (a few px), the mean of the pattern. Same draws.
+  if (vLeaf > 0.5) {
+    vec3 cq = vLocalP * 7.0;
+    float cAA = 1.0 - smoothstep(0.3, 0.8, length(fwidth(cq)));
+    vec3 cv = voronoi3(cq);
+    float gap = 1.0 - smoothstep(0.04, 0.3, cv.y - cv.x);
+    float heart = 1.0 - smoothstep(0.0, 0.55, cv.x);
+    float cl = clamp(0.55 + 0.45 * heart - 0.6 * gap, 0.0, 1.0);
+    vegCrownV = mix(0.6, mix(0.25, 0.98, cl), cAA);
+    diffuseColor.rgb *= mix(0.9, mix(0.78, 1.04, cl) * (0.92 + 0.16 * cv.z), cAA);
+    float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+    if (cAA > 0.5 && gap > 0.5 && rim > 0.45) discard;
+  }
+#endif
   // foliage right by the camera (within ~5 m), and all of a tree's foliage when the camera is inside its crown, fades
   // out in object-space chunks (~25 cm: whole sprays, no pixel dither); bark stays
   // (trees only: vCrownIn < 0 marks ground cover and small shrubs, whose tufts at the camera's feet stay)
