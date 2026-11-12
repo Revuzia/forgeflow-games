@@ -1,69 +1,69 @@
 {
- "what": "max_units_ab seed 31 t 300 RIFT High, same frozen frame, picks in three runs (A tunlan,dunsom,vashil,ervet,marund / B odrum,ardit,ilsheta,lisvel,ulkro / C sukri,nurrow,hesmi,kemdo,burdam,rishal); before = round 2 as verified (_harness/_shots/maxunits/u7pre_*), after = r2 fix (u7post_*, Tunlan u7post3_A); fighters with no change are controls",
+ "what": "max_units_ab seed 31 t 300 RIFT High, same frozen frame, picks in three runs (A tunlan,dunsom,vashil,ervet,marund / B odrum,ardit,ilsheta,lisvel,ulkro / C sukri,nurrow,hesmi,kemdo,burdam,rishal); before = round 2 as verified (_harness/_shots/maxunits/u7pre_*), after = r2 fix (u7fin_*). Unzoned fighters are controls (their crops move only where a zoned neighbour or a frame-dependent effect is in them)",
  "perCrop": {
   "tunlan": {
-   "meanAbsDiff": 7.96,
-   "changedPx>15": 9117
+   "meanAbsDiff": 6.58,
+   "changedPx>15": 9760
   },
   "dunsom": {
-   "meanAbsDiff": 1.71,
-   "changedPx>15": 1778
+   "meanAbsDiff": 0.37,
+   "changedPx>15": 233
   },
   "vashil": {
    "meanAbsDiff": 0.0,
    "changedPx>15": 0
   },
   "ervet": {
-   "meanAbsDiff": 1.43,
-   "changedPx>15": 2330
+   "meanAbsDiff": 1.34,
+   "changedPx>15": 2298
   },
   "marund": {
-   "meanAbsDiff": 2.47,
-   "changedPx>15": 6221
+   "meanAbsDiff": 2.09,
+   "changedPx>15": 5785
   },
   "ardit": {
-   "meanAbsDiff": 5.34,
-   "changedPx>15": 7061
+   "meanAbsDiff": 5.58,
+   "changedPx>15": 7217
   },
   "ilsheta": {
-   "meanAbsDiff": 0.49,
-   "changedPx>15": 1010
+   "meanAbsDiff": 0.68,
+   "changedPx>15": 1234
   },
   "lisvel": {
-   "meanAbsDiff": 1.33,
-   "changedPx>15": 1813
+   "meanAbsDiff": 1.47,
+   "changedPx>15": 1763
   },
   "sukri": {
-   "meanAbsDiff": 0.54,
-   "changedPx>15": 351
+   "meanAbsDiff": 0.92,
+   "changedPx>15": 2822
   },
   "burdam": {
-   "meanAbsDiff": 0.33,
-   "changedPx>15": 220
+   "meanAbsDiff": 0.52,
+   "changedPx>15": 640
   },
   "odrum": {
-   "meanAbsDiff": 2.76,
-   "changedPx>15": 1682
+   "meanAbsDiff": 2.81,
+   "changedPx>15": 1761
   },
   "ulkro": {
    "meanAbsDiff": 0.0,
    "changedPx>15": 0
   },
   "hesmi": {
-   "meanAbsDiff": 0.08,
-   "changedPx>15": 21
+   "meanAbsDiff": 0.09,
+   "changedPx>15": 32
   },
   "nurrow": {
-   "meanAbsDiff": 1.08,
-   "changedPx>15": 235
+   "meanAbsDiff": 1.28,
+   "changedPx>15": 361
   },
   "kemdo": {
    "meanAbsDiff": 0.0,
    "changedPx>15": 0
   },
   "rishal": {
-   "meanAbsDiff": 1.48,
-   "changedPx>15": 1869
+   "meanAbsDiff": 1.4,
+   "changedPx>15": 1926
   }
  }
 }

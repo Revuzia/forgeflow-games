@@ -121,10 +121,56 @@ def _card_inset(fid: str, objs: list) -> None:
     me.update()
 
 
-def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0) -> dict:
+def _glb_albedo(fid: str, P: dict) -> None:
+    """(max2 g2 fix) --glb-albedo: the base card takes the SHIPPED base GLB's albedo (<fid>_base) in place of the cached
+    bake's. The cached .blend is written by the fighter build before pipeline.zone_grade re-grades the exported GLB's base
+    colour (MAX2 U1 material zoning, the round-2 crown breaks, ruling 32's reserved-hue cap), so a base card rendered from
+    the cache alone shows the pre-zoning colours (verify_r2_g2a: Lisvel, Rishal, Vashil "stale vs rebuilt GLB"). The
+    geometry, UVs and the card-only steps (CARD_INSET, card hands) stay the cache's; only the image changes."""
+    import json as _json
+    import struct
+    import tempfile
+    glb = os.path.join(P["out"], f"{fid}.glb")
+    with open(glb, "rb") as f:
+        b = f.read()
+    off, js, binc = 12, None, None
+    while off < len(b):
+        ln, ty = struct.unpack_from("<II", b, off)
+        chunk = b[off + 8: off + 8 + ln]
+        if ty == 0x4E4F534A:
+            js = _json.loads(chunk)
+        else:
+            binc = chunk
+        off += 8 + ln
+    im = next((x for x in js.get("images", []) if x.get("name", "").endswith("_base")), None)
+    tgt = bpy.data.images.get(f"{fid}_base")
+    if im is None or tgt is None:
+        scene.log(f"WARNING {fid}: --glb-albedo found no {fid}_base image (GLB {im is not None}, cache {tgt is not None})")
+        return
+    bv = js["bufferViews"][im["bufferView"]]
+    ext = {"image/webp": ".webp", "image/png": ".png", "image/jpeg": ".jpg"}.get(im.get("mimeType", ""), ".png")
+    tmp = os.path.join(tempfile.mkdtemp(prefix=f"vale_glbalb_{fid}_"), f"{fid}_base_glb{ext}")
+    with open(tmp, "wb") as f:
+        f.write(binc[bv.get("byteOffset", 0): bv.get("byteOffset", 0) + bv["byteLength"]])
+    new = bpy.data.images.load(tmp)
+    new.colorspace_settings.name = tgt.colorspace_settings.name
+    new.pack()
+    n = 0
+    for m in bpy.data.materials:
+        if m.use_nodes:
+            for nd in m.node_tree.nodes:
+                if nd.type == "TEX_IMAGE" and nd.image == tgt:
+                    nd.image = new
+                    n += 1
+    scene.log(f"{fid}: --glb-albedo: {tgt.name} {tuple(tgt.size)} -> the shipped GLB's {tuple(new.size)} on {n} node(s)")
+
+
+def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0, glb_albedo: bool = False) -> dict:
     spec = load_spec(fid)
     P = pipeline.paths(spec)
     bpy.ops.wm.open_mainfile(filepath=P["cache"])
+    if glb_albedo:
+        _glb_albedo(fid, P)
     arm = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
     ctx = Context(spec=spec)
     # the joints a build's rig carries (clip overrides read them, e.g. Ervet's guard pose needs palm.R)
@@ -214,6 +260,8 @@ def main():
         p.add_argument("--skins", action="store_true", help="also render every skin from its shipped GLB")
         p.add_argument("--skin", default="", help="only this skin (implies --skins)")
         p.add_argument("--no-base", action="store_true", help="skins only")
+        p.add_argument("--glb-albedo", action="store_true",
+                       help="the base card takes the shipped base GLB's (zone-graded) albedo, not the cached bake's")
     args = scene.parse_args(extra)
     only = {x for x in args.only.split(",") if x} or None
     ids = args.ids or [os.path.splitext(os.path.basename(p))[0]
@@ -222,7 +270,7 @@ def main():
         print("[vale-art] no cached fighters in art/.cache/fighters - build a fighter first")
     for fid in ids:
         if not args.no_base:
-            res = render_cached(fid, args.fast, only, args.scale)
+            res = render_cached(fid, args.fast, only, args.scale, getattr(args, "glb_albedo", False))
             scene.log(f"portraits {fid}: {res['seconds']}")
         if args.skins or args.skin:
             spec = load_spec(fid)

@@ -109,6 +109,7 @@ CARDS = {
         # across the torso: the full draw of her plain shot from her right, looking square onto the bow's plane, so the
         # limb is thin, the string makes its V to the drawing hand and the torso stands clear)
         "splash": {"clip": "attack1", "t": 0.30, "yaw": -30.0, "pitch": -3.0, "lens": 58.0, "fill": 0.94, "x": 0.66,
+                   "lightline": False,
                    "key_az": 250.0, "key_el": 38.0, "key_color": "#FFDDB0", "sun": 2.2, "rim_cool": 1.6,
                    "rim_warm": 0.8, "bounce": 0.3, "bounce_color": "#EBC9A0", "accent": 1.6, "exposure": -0.85,
                    "focal": [{"at": "head", "az": 262.0, "el": 48.0, "dist": 0.6, "color": "#FFE6C4", "power": 14.0,
@@ -2870,6 +2871,10 @@ def _install_renders() -> None:
 
     def fighter_renders(ctx, objs, P, skin, fast=False, clip_sheet=False, only=None, scale=1.0):
         if skin or getattr(ctx.spec, "ID", None) != ID:
+            return orig(ctx, objs, P, skin, fast=fast, clip_sheet=clip_sheet, only=only, scale=scale)
+        # (max2 g2 fix, verify_r2_g2a: "white-stripe quad at the feet") the base splash is staged on the plain shot
+        # (attack1), not the Dawn Line victory the strip belongs to: a card may leave it out ("lightline": False)
+        if not CARDS.get(ID, {}).get("splash", {}).get("lightline", True):
             return orig(ctx, objs, P, skin, fast=fast, clip_sheet=clip_sheet, only=only, scale=scale)
         ln = _lightline(ctx.col)
         ln.hide_render = False

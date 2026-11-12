@@ -259,12 +259,12 @@
     ]
    },
    {
-    "why": "r2f: the hat back to the concept's pale lacquered straw at round 1's own value, a touch warmer (L* 53 C 14 h 72 -> L* 53 C 17 h 81; the hue sits in the harm band's HSV range, so it stays under 0.4 saturation): the r2 plum hat rendered as Dunsom's lilac disc at the game camera (hat dE76 13.3). A deeper honey straw (L* 40) with a wide plum band was tried: +2 dE in game for a lineup_qa top value band of 42.7 (bible 70-85), so not kept",
+    "why": "r2f: the hat back to the concept's pale lacquered straw, a touch paler and warmer than round 1 (L* 53 C 14 h 72 -> L* 56 C 17 h 81; the hue sits in the harm band's HSV range, so it stays under 0.4 saturation): the r2 plum hat rendered as Dunsom's lilac disc at the game camera (hat dE76 13.3). Tried and not kept: a deeper honey straw (L* 40) and plum bands on the brim's top (r 0.41 / 0.45 / 0.48 - 0.53 m): +1-2 dE in game for a lineup_qa top value band of 42.7-57.3 (bible 70-85)",
     "parts": [
      "hat"
     ],
     "hex": "#C8A97A",
-    "L": 53,
+    "L": 56,
     "C": 17
    },
    {
@@ -284,25 +284,6 @@
     ],
     "hex": "#9A00B4",
     "L": 28,
-    "C": 16
-   },
-   {
-    "why": "r2f: a narrow plum band at the brim's outer edge (r 0.48-0.53 m) with the iron rim, so the straw disc reads edged in plum",
-    "parts": [
-     "hat"
-    ],
-    "cyls": [
-     [
-      0,
-      0,
-      0.48,
-      0.53,
-      1.86,
-      2.3
-     ]
-    ],
-    "hex": "#9A00B4",
-    "L": 30,
     "C": 16
    },
    {
