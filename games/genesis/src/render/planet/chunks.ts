@@ -223,6 +223,15 @@ class PatchPage {
   instId: number[] = [];
   vis = new Uint8Array(PATCH_PAGE);
   visibleN = 0;
+  /**
+   * PERF s15 cut #9 (WATER_SHARE): the page's water sheet — a BatchedMesh drawing the SAME geometry (vertex buffers,
+   * index, slot table) with the water material on the water layer; slot k's water is instance wInst[k] (made on the
+   * first wet slot shown)
+   */
+  water: BatchedMesh | null = null;
+  wInst: number[] = [];
+  wvis = new Uint8Array(PATCH_PAGE);
+  wVisibleN = 0;
   constructor(material: Material, layers: number, name: string) {
     this.mesh = new BatchedMesh(PATCH_PAGE, PATCH_PAGE * NVERT, PATCH_PAGE * NINDEX, material);
     this.mesh.name = name;
@@ -242,15 +251,72 @@ class PatchPage {
     // break on a tile GPU (ANGLE-Metal). A terrain patch's instance matrix is the identity for every slot and the
     // batch has no per-instance colour, so WHICH instance a draw reads changes nothing: the table is uploaded once,
     // the multi-draw lists (CPU arrays passed with the draw call) still change per pass. Same image.
-    const m = this.mesh as BatchedMesh & { _indirectTexture: { version: number } | null };
-    m.onBeforeRender = function (this: typeof m, ...a: Parameters<BatchedMesh['onBeforeRender']>) {
-      const tex = this._indirectTexture;
-      const v = tex ? tex.version : 0;
-      BatchedMesh.prototype.onBeforeRender.apply(this, a);
-      if (tex && v > 0 && this._indirectTexture === tex) tex.version = v;
-    };
+    keepIndirectTable(this.mesh);
   }
   get live(): number { return this.used - this.free.length; }
+
+  /** the water sheet over this page's slots (made on first use: shares the page's geometry, nothing is copied) */
+  ensureWater(material: Material, name: string): BatchedMesh {
+    if (this.water) return this.water;
+    const w = new BatchedMesh(PATCH_PAGE, 1, 1, material) as BatchedMesh & Record<string, unknown>;
+    const src = this.mesh as unknown as Record<string, unknown>;
+    w.geometry.dispose();
+    w.geometry = this.mesh.geometry;
+    w._geometryInfo = src._geometryInfo;
+    w._maxVertexCount = src._maxVertexCount;
+    w._maxIndexCount = src._maxIndexCount;
+    w._geometryInitialized = true;
+    w.name = name;
+    w.perObjectFrustumCulled = false;
+    w.sortObjects = false;
+    w.frustumCulled = false;
+    w.matrixAutoUpdate = false;
+    w.visible = false;
+    w.layers.mask = 1 << 2;
+    w.renderOrder = 50;
+    keepIndirectTable(w);
+    this.water = w;
+    for (let k = 0; k < this.used; k++) this.addWaterSlot(k);
+    this.mesh.parent?.add(w);
+    return w;
+  }
+
+  /** slot k's water instance (hidden) */
+  addWaterSlot(k: number): void {
+    const w = this.water;
+    if (!w) return;
+    this.wInst[k] = w.addInstance(this.geomId[k]);
+    w.setVisibleAt(this.wInst[k], false);
+    this.wvis[k] = 0;
+  }
+
+  showWater(k: number, on: boolean): void {
+    if (!this.water || (this.wvis[k] === 1) === on) return;
+    this.wvis[k] = on ? 1 : 0;
+    this.wVisibleN += on ? 1 : -1;
+    this.water.setVisibleAt(this.wInst[k], on);
+    this.water.visible = this.wVisibleN > 0;
+  }
+
+  /** the page and its water sheet leave / join a group */
+  setParent(g: Group | null): void {
+    for (const m of this.water ? [this.mesh, this.water] : [this.mesh]) {
+      if (g) { if (m.parent !== g) g.add(m); } else m.parent?.remove(m);
+    }
+  }
+
+  /** delete the GL buffers (the water sheet's own tables only: the geometry is the page's) */
+  dispose(): void {
+    if (this.water) {
+      const w = this.water as BatchedMesh & Record<string, unknown>;
+      w.parent?.remove(w);
+      w.geometry = new BufferGeometry();
+      w._geometryInfo = [];
+      w.dispose();
+      this.water = null;
+    }
+    this.mesh.dispose();
+  }
 
   /** PERF F23: take this page into a pool (material, layers, name); every slot is free and hidden */
   reset(material: Material, layers: number, name: string): void {
@@ -260,10 +326,38 @@ class PatchPage {
     for (let k = 0; k < this.used; k++) if (this.vis[k]) { this.vis[k] = 0; this.mesh.setVisibleAt(this.instId[k], false); }
     this.visibleN = 0;
     this.mesh.visible = false;
+    for (let k = 0; k < this.used; k++) this.showWater(k, false);
     this.free = [];
     for (let k = this.used - 1; k >= 0; k--) this.free.push(k);
   }
 }
+
+/**
+ * PERF s7 (the owner's M5: 206 ms of main thread in the shadow pass): three's BatchedMesh re-uploads its draw ->
+ * instance table (a DataTexture) at EVERY draw whose visibility changed — here every shadow cascade and the scene
+ * pass, for every page: texture uploads issued in the middle of render passes, each one a render-pass break on a tile
+ * GPU (ANGLE-Metal). A patch's instance matrix is the identity for every slot and the batch has no per-instance
+ * colour, so WHICH instance a draw reads changes nothing: the table is uploaded once, the multi-draw lists (CPU arrays
+ * passed with the draw call) still change per pass. Same image.
+ */
+function keepIndirectTable(mesh: BatchedMesh): void {
+  const m = mesh as BatchedMesh & { _indirectTexture: { version: number } | null };
+  m.onBeforeRender = function (this: typeof m, ...a: Parameters<BatchedMesh['onBeforeRender']>) {
+    const tex = this._indirectTexture;
+    const v = tex ? tex.version : 0;
+    BatchedMesh.prototype.onBeforeRender.apply(this, a);
+    if (tex && v > 0 && this._indirectTexture === tex) tex.version = v;
+  };
+}
+
+/**
+ * PERF s15 (GPU-MEMORY-PLAN cut #9): the water sheet of a wet patch was drawn from a COPY of its vertices in its
+ * level's water batch (extract(): a second set of pages, ~2.2 MB each, CPU + GPU, and whole-page uploads as patches
+ * turned wet). Now each terrain page carries a companion BatchedMesh with the water material on the water layer that
+ * draws the page's own geometry (same buffers, same slot table): water slot k = terrain slot k, shown when the patch is
+ * wet. The same vertices are drawn by the same shaders: the same image. `?watershare=0` = the separate water batches.
+ */
+const WATER_SHARE = perfSwitch('watershare');
 
 /**
  * PERF s15 (GPU-MEMORY-PLAN cut #3): a patch's 'normal' attribute IS its 'position' (geometryOf), but three's
@@ -306,11 +400,11 @@ export class PagePool {
     const e = this.idle.pop();
     if (!e) return null;
     e.p.reset(material, layers, name);
-    group.add(e.p.mesh);
+    e.p.setParent(group);
     return e.p;
   }
   give(p: PatchPage, group: Group): void {
-    group.remove(p.mesh);
+    p.setParent(null);
     p.reset(p.mesh.material as Material, p.mesh.layers.mask, p.mesh.name);
     this.idle.push({ p, since: this.frame });
   }
@@ -320,10 +414,10 @@ export class PagePool {
    */
   trim(inUse: number): void {
     const cap = Math.max(IDLE_RESERVE, Math.ceil(inUse / 8));
-    while (this.idle.length > cap || (this.idle.length > IDLE_RESERVE && this.frame - this.idle[0].since > IDLE_FRAMES)) this.idle.shift()!.p.mesh.dispose();
+    while (this.idle.length > cap || (this.idle.length > IDLE_RESERVE && this.frame - this.idle[0].since > IDLE_FRAMES)) this.idle.shift()!.p.dispose();
   }
   get count(): number { return this.idle.length; }
-  dispose(): void { for (const e of this.idle) e.p.mesh.dispose(); this.idle = []; }
+  dispose(): void { for (const e of this.idle) e.p.dispose(); this.idle = []; }
 }
 
 /**
@@ -346,7 +440,11 @@ class PatchBatch {
   private readonly pool: PagePool | null;
   private slackSince = -1;
 
-  constructor(material: Material, layer: number, name: string, group: Group, pool: PagePool | null = null) {
+  /** WATER_SHARE: the level's water material, drawn by each page's companion sheet (null: a separate water batch) */
+  private readonly waterMat: Material | null;
+
+  constructor(material: Material, layer: number, name: string, group: Group, pool: PagePool | null = null, waterMat: Material | null = null) {
+    this.waterMat = waterMat;
     this.pool = PAGE_POOL ? pool : null;
     this.material = material;
     this.layers = 1 << layer;
@@ -390,7 +488,8 @@ class PatchBatch {
       if (pi < 0) pi = this.pages.length;
       const name = `${this.name}-p${pi}`;
       const p = this.pool?.take(this.material, this.layers, name, this.group) ?? new PatchPage(this.material, this.layers, name);
-      if (p.mesh.parent !== this.group) this.group.add(p.mesh);
+      p.setParent(this.group);
+      if (p.water && this.waterMat) { p.water.material = this.waterMat; p.water.name = `${name}-water`; }
       this.pages[pi] = p;
     }
     const p = this.pages[pi]!;
@@ -400,6 +499,7 @@ class PatchBatch {
       p.geomId[k] = p.mesh.addGeometry(geo, NVERT, NINDEX);
       if (k === 0 && NORMAL_ALIAS) aliasNormal(p.mesh);
       p.instId[k] = p.mesh.addInstance(p.geomId[k]);
+      p.addWaterSlot(k);
       // (a new instance starts visible: count it, then hide it)
       p.vis[k] = 1;
       p.visibleN++;
@@ -417,8 +517,21 @@ class PatchBatch {
     if (!p) return;
     const k = s % PATCH_PAGE;
     this.showIn(p, k, false);
+    p.showWater(k, false);
     p.free.push(k);
   }
+
+  /** WATER_SHARE: show / hide slot `s`'s water sheet (the page's companion, made on the first wet slot) */
+  showWater(s: number, on: boolean): void {
+    if (s < 0 || !this.waterMat) return;
+    const p = this.pages[Math.floor(s / PATCH_PAGE)];
+    if (!p) return;
+    if (on) p.ensureWater(this.waterMat, `${p.mesh.name}-water`);
+    p.showWater(s % PATCH_PAGE, on);
+  }
+
+  /** any water sheet shown */
+  get waterVisible(): boolean { for (const p of this.pages) if (p && p.wVisibleN > 0) return true; return false; }
 
   show(s: number, on: boolean): void {
     if (s < 0) return;
@@ -499,6 +612,7 @@ class PatchBatch {
         const to = this.alloc(geo, pi);
         geo.dispose();
         this.show(to, p.vis[k] === 1);
+        if (p.wvis[k] === 1) this.showWater(to, true);
         moved(from, to);
       }
       this.dropPage(pi);
@@ -510,7 +624,7 @@ class PatchBatch {
     const p = this.pages[i];
     if (!p) return;
     if (this.pool) this.pool.give(p, this.group);
-    else { this.group.remove(p.mesh); p.mesh.dispose(); }
+    else { p.setParent(null); p.dispose(); }
     this.pages[i] = null;
   }
 
@@ -784,7 +898,8 @@ export class ChunkLOD {
     const list = water ? this.wBatch : this.tBatch;
     let b = list[level];
     if (!b) {
-      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group, this.pagePool);
+      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`, this.group, this.pagePool,
+        !water && WATER_SHARE ? this.mats.water(level) : null);
       if (!water && this.castShadows) b.setLayer(1, true);
       list[level] = b;
     }
@@ -869,7 +984,7 @@ export class ChunkLOD {
     p.tSlot = tb.alloc(geo);
     p.mesh = tb.meshOf(p.tSlot);
     // the water sheet is drawn from a copy of the same vertices in the level's water batch (water pass, layer 2)
-    if (p.hasWater) p.wSlot = this.batch(p.level, true).alloc(geo);
+    if (p.hasWater && !WATER_SHARE) p.wSlot = this.batch(p.level, true).alloc(geo);
     p.built = true;
     p.pendingSeq = -1;
     this.live.add(p);
@@ -1069,7 +1184,7 @@ export class ChunkLOD {
       p.lastUsed = ctx.frame;
       if (!p.built) continue;
       const wet = this.waterEnabled && p.hasWater;
-      if (wet && p.wSlot < 0) {
+      if (wet && p.wSlot < 0 && !WATER_SHARE) {
         const geo = this.batch(p.level, false).extract(p.tSlot);
         p.wSlot = this.batch(p.level, true).alloc(geo);
       }
@@ -1148,7 +1263,8 @@ export class ChunkLOD {
   private showPatch(p: Patch, on: boolean, water: boolean): void {
     if (!p.built) return;
     this.tBatch[p.level]?.show(p.tSlot, on);
-    if (p.wSlot >= 0) this.wBatch[p.level]?.show(p.wSlot, on && water);
+    if (WATER_SHARE) this.tBatch[p.level]?.showWater(p.tSlot, on && water);
+    else if (p.wSlot >= 0) this.wBatch[p.level]?.show(p.wSlot, on && water);
   }
 
   /** draw counts of the batches (logical draws: one per non-empty level batch per pass) */
@@ -1156,6 +1272,7 @@ export class ChunkLOD {
     let t = 0, w = 0;
     for (const b of this.tBatch) if (b && b.visible) t++;
     for (const b of this.wBatch) if (b && b.visible) w++;
+    if (WATER_SHARE) for (const b of this.tBatch) if (b && b.waterVisible) w++;
     return { terrain: t, water: w };
   }
 

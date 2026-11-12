@@ -54,3 +54,34 @@ test('PERF s15 #3: every patch page binds its positions as the normal (one array
   }
   assert.ok(pages > 0);
 });
+
+test('PERF s15 #9: a wet patch\'s water sheet draws its terrain page\'s own geometry (no copy), shown / hidden per slot', () => {
+  const lod = makeLod();
+  const L = lod as unknown as Internal & { showPatch(p: Patch, on: boolean, water: boolean): void; tBatch: ({ meshes(): { geometry: BufferGeometry; parent: unknown }[]; waterVisible: boolean } | null)[]; pagePool: { dispose(): void } };
+  lod.maxCached = 60;
+  const n = lod.grid.n;
+  const level = 4, step = n / 16;
+  L.curFrame = 0;
+  const ps: Patch[] = [];
+  for (let k = 0; k < 40; k++) { const p = new Patch(k % 20, level, [k % 8, 0], [(k % 8) + step, 0], [k % 8, step]); L.ensureGeometry(p, false); ps.push(p); }
+  const wet = ps.filter((p) => p.hasWater);
+  assert.ok(wet.length > 0, 'some patches are wet');
+  for (const p of ps) { assert.equal(p.wSlot, -1, 'no water slot: no copy'); L.showPatch(p, true, p.hasWater); }
+  assert.ok(L.wBatch.every((b) => !b), 'no water batch');
+  const tb = L.tBatch[level] as unknown as { pages: ({ mesh: { geometry: BufferGeometry }; water: { geometry: BufferGeometry; visible: boolean; parent: unknown; layers: { mask: number } } | null; wVisibleN: number } | null)[]; waterVisible: boolean };
+  assert.ok(tb.waterVisible);
+  let sheets = 0;
+  for (const pg of tb.pages) if (pg?.water) {
+    sheets++;
+    assert.equal(pg.water.geometry, pg.mesh.geometry, 'the sheet draws the page geometry');
+    assert.equal(pg.water.layers.mask, 1 << 2, 'on the water layer');
+    assert.ok(pg.water.parent, 'in the scene');
+  }
+  assert.ok(sheets > 0);
+  const shown = tb.pages.reduce((s, pg) => s + (pg?.wVisibleN ?? 0), 0);
+  assert.equal(shown, wet.length, 'one water slot shown per wet patch');
+  for (const p of ps) L.showPatch(p, false, false);
+  assert.equal(tb.waterVisible, false);
+  // eviction and disposal: the page geometry outlives its sheet's dispose
+  lod.dispose();
+});

@@ -51,8 +51,10 @@ test('a camera tour through the LOD depths leaves bounded patch pools (shrink af
     peak.slots = Math.max(peak.slots, c.slots);
     const live = (lod as unknown as { live: Set<Patch> }).live.size;
     assert.ok(live <= lod.maxCached, `live ${live} within the cache budget at level ${level}`);
-    // total capacity within ~3x the live count plus the small per-level minimum pools (32 terrain / 8 water)
-    assert.ok(c.slots <= 2 * c.live + 40 * c.pools, `level ${level}: ${c.slots} slots for ${c.live} live patches in ${c.pools} pools`);
+    // total capacity within ~3x the live count plus the small per-level minimum pools (32 terrain / 8 water), plus the
+    // page pool's idle reserve (6 pages; PERF s15: with the water sheets on the terrain pages there is no water pool
+    // whose allowance used to cover it)
+    assert.ok(c.slots <= 2 * c.live + 40 * c.pools + 6 * 16, `level ${level}: ${c.slots} slots for ${c.live} live patches in ${c.pools} pools`);
   }
   // (unbounded: 8 levels x (512 terrain + water) slots would remain)
   assert.ok(peak.slots < 1200, `peak pool capacity ${peak.slots}`);
@@ -72,14 +74,16 @@ test('shrinking a pool keeps the surviving patches, their geometry and their vis
   const keep = old.slice(0, 30);
   const before = keep.map((p) => ({ slot: p.tSlot, cells: L.tBatch[level]!.extract(p.tSlot).getAttribute('aCells').array.slice() }));
   keep.forEach((p, i) => { p.lastUsed = 1000; if (i % 2 === 0) (L.tBatch[level] as unknown as { show(s: number, on: boolean): void }).show(p.tSlot, true); });
-  const capBefore = lod.poolCapacity().slots;
+  // (in-use capacity: the page pool's idle reserve is counted apart)
+  const idleSlots = () => (lod as unknown as { pagePool: { count: number } }).pagePool.count * 16;
+  const capBefore = lod.poolCapacity().slots - idleSlots();
   L.evict(1000);
   // (PERF F23: patches are moved to give pages back only once the slack has lasted ~600 frames: not while streaming)
   L.curFrame = 1700;
   keep.forEach((p) => { p.lastUsed = 1700; });
   L.evict(1700);
   const c = lod.poolCapacity();
-  assert.ok(c.slots < capBefore / 2, `pool shrank: ${capBefore} -> ${c.slots}`);
+  assert.ok(c.slots - idleSlots() < capBefore / 2, `pool shrank: ${capBefore} -> ${c.slots - idleSlots()} (+ ${idleSlots()} idle)`);
   const tb = L.tBatch[level]!;
   keep.forEach((p, i) => {
     assert.ok(p.built && p.tSlot >= 0, 'survivor still built');

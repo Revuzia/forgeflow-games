@@ -114,8 +114,9 @@ test('a ChunkLOD with a patch worker converges to the same patches, byte for byt
     assert.equal(q.hasWater, p.hasWater);
     const A = batches(sync).tBatch[p.level]!.extract(p.tSlot), Bq = batches(async).tBatch[q.level]!.extract(q.tSlot);
     for (const nm of Object.keys(A.attributes)) assert.deepEqual(Bq.attributes[nm].array, A.attributes[nm].array, `${key(p)} ${nm}`);
+    // (PERF s15 cut #9: a wet patch's water sheet draws its terrain slot — compared above — unless ?watershare=0)
+    if (p.hasWater) wet++;
     if (p.wSlot >= 0) {
-      wet++;
       const W1 = batches(sync).wBatch[p.level]!.extract(p.wSlot), W2 = batches(async).wBatch[q.level]!.extract(q.wSlot);
       assert.deepEqual(W2.attributes.aCells.array, W1.attributes.aCells.array);
     }
