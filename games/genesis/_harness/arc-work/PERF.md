@@ -1052,3 +1052,30 @@ long press frame-rate independent. Report after 1-2 verified.
   and the town, its pond and the forest come through the mist below.
 - GATE check17 (session-13 tree: mangrove scatter, far-tree colour (0.7, 0.72, 0.6)): 924/924 pass; npm run build OK
   (build-prod16.log). Reduced-res post: waiting for the owner's bisection data (coordinator).
+
+## SESSION 14 (2026-11-12 ~18:00Z) — owner round 3 (903b85e9): GPU-bound, swap 8.6 -> 11.8 GB: memory first
+- GPU MEMORY AUDIT (landed, tsc clean, tests/render-gpumem.test.ts): src/render/gpumem.ts wraps the GL allocators
+  (bufferData, texImage2D/3D, texStorage2D/3D, generateMipmap (+1/3), renderbufferStorage(Multisample), deletes) from
+  the Renderer's construction on; the perf report prints `gpu mem (est., live GL allocations): total / peak / MB per
+  min / by kind`, `gpu mem largest: ...` (12 biggest objects with size + format), `gpu mem buffer sizes` (count x
+  size classes: patch pages, pools), `cpu retained (typed arrays ... by owner)` (scene walk: first two named
+  ancestors) and `js heap`. Probe global window.__GENESIS_GPUMEM__ (total, peak, live, cpuProbe()).
+- SOAK soak2 (dist27, babel 307987276, ULTRA, 6 views round Rubolhin + orbit, 15 min wall, SwiftShader: only 96
+  frames): GPU 237 -> 398 MB as the views stream in, 390 after; CPU retained 224 -> 465 -> 439 MB; heap 30-46 MB;
+  no climb while the view holds (samples 438-679 s flat). Too few frames to see frame-driven growth: NEXT run it at
+  a tiny viewport / High for thousands of frames, or replay the pan in node (chunk pools are node-testable).
+- CUTS landed (tsc clean; picture A/B cut0 (dist27) vs cut1 (dist28) queued, run-s14b.sh, busy save, ULTRA, region +
+  town at speed 0):
+  #1 clouds history aux RGBA16F -> RG16F (only .xy written / read): -11 MB at 2720x1194 (-4.5 at 1686x873).
+  #2 shadow atlas: the never-written R8 colour attachment detached after the framebuffer exists (completeness checked,
+     else restored) and its storage respecified 1x1: -16 MB at 4096². `?shcolour=1` keeps it.
+  #4 ground cover iExtra: one (0,0,0,1) with divisor = capacity instead of cap copies (~3.4 MB CPU + GPU).
+- CLOUDS round 3 (owner: fully white resting in the deck's UPPER part): the resting clear zone now reaches through the
+  deck below the camera: nearR >= inShell x min(1200, 120 + 2.5 x (height above the deck base)). dm-top-off / -on
+  (alt 372 m, cmp-dmtop.png LOOKED): off white, on = town and forest readable through mist. Test extended.
+- WATER OVER THE HILLS (Mac only): reading — hills at mid distance showing the trees behind them and the lake beyond
+  "through" them is what terrain fragments REJECTED EARLY on a broken conservative-depth bound look like (SwiftShader
+  never rejects early, so it cannot show it). The edge bound used the smooth shading normal, not the coarse facet's
+  slope. Now 2x the edge bound and a 0.15 floor on n·up (4x the chord slack, still rejecting under trees), and
+  `?zedge=0` = terrain + water on the plain tangent bound. ASK THE OWNER at that spot: default vs ?zedge=0 vs ?zcons=0.
+- Note (round 3): hide=veg leaves tree shadows (debug switch; the shadow casters are other objects): fine.

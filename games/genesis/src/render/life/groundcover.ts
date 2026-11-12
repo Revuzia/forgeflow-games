@@ -189,10 +189,10 @@ export class GroundCover {
     // plain (0, 0, 0, 1). Without it the shader read whatever generic value another program had left at that attribute
     // location (often a ShaderMaterial's default colour, 1, 1, 1): "snow" on every upward face and "char" on the rest —
     // the pale coins with dark rims that the stones read as on the grass, frosted crops and tufts
+    // (PERF s14 memory cut #4: one (0, 0, 0, 1) for every instance — a single element whose divisor is the pool's
+    // capacity — instead of cap copies of it: the same value at every instance, 16 B instead of 96 kB a pool)
     const plain = (g: BufferGeometry, cap: number): BufferGeometry => {
-      const a = new Float32Array(cap * 4);
-      for (let i = 3; i < a.length; i += 4) a[i] = 1;
-      g.setAttribute('iExtra', new InstancedBufferAttribute(a, 4));
+      g.setAttribute('iExtra', new InstancedBufferAttribute(new Float32Array([0, 0, 0, 1]), 4, false, cap));
       return g;
     };
     for (let v = 0; v < KVARS[GK.crop]; v++) {
