@@ -211,8 +211,54 @@ for (const spec of args.flatMap((a, i) => (a === '--part-tint' ? [args[i + 1]] :
   });
   console.log(`${path}: ${idx.length} texels tinted ${hex} (mean L* ${mL.toFixed(1)} -> ${Lt}, chroma ${mC.toFixed(1)} -> ${Ct})`);
 }
+// --reserve-cap pct (MAX2 round 2, ruling 32): after the rest, bring every reserved hue band (tokens vfx.reservedHuesHSV,
+// measured as art/tools/zone_grade.py reserved_pct: HSV hue in the band, saturation > 0.4, of the painted texels) to at
+// most pct % of the albedo. The cheapest texels move first (those nearest the 0.4 line), so the visible change is the
+// smallest that meets the cap. Per band, --reserve-mode band=edge|sat (default: every band edge):
+//   edge  hue-shifted just outside the band's nearer edge (by --reserve-margin deg, default 4), saturation and value
+//         kept (a harm-band brown turns a little redder or yellower and stays a brown of the same strength)
+//   sat   desaturated to --reserve-sat (default 0.30), hue and value kept
+// The lossy WebP encode pulls some moved texels back, so zone_grade.py aims a few points under the cap and checks.
+if (args.includes('--reserve-cap')) {
+  const cap = Number(opt('--reserve-cap', 8)) / 100;
+  const margin = Number(opt('--reserve-margin', 4));
+  const modes = Object.fromEntries(args.flatMap((a, i) => (a === '--reserve-mode' ? [args[i + 1].split('=')] : [])));
+  const bands = { harm: [28, 50], ally: [200, 225], heal: [125, 150], tritanAltRose: [340, 350] };
+  const hsv = (p) => {
+    const r = data[p * C], g = data[p * C + 1], b = data[p * C + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+    // PIL quantises hue to 0-255 before zone_grade.py scales it to degrees: measure the same way
+    return [Math.round((h / 360) * 255) / 255 * 360, mx ? d / mx : 0, mx];
+  };
+  let used = 0;
+  for (let p = 0; p < W * H; p++) if (Math.max(data[p * C], data[p * C + 1], data[p * C + 2]) > 2) used++;
+  for (const [name, [a, b]] of Object.entries(bands)) {
+    const how = modes[name] ?? 'edge';
+    const hit = [];
+    for (let p = 0; p < W * H; p++) {
+      const [h, s] = hsv(p);
+      if (h >= a && h <= b && s > 0.4 && Math.max(data[p * C], data[p * C + 1], data[p * C + 2]) > 2) hit.push([p, s]);
+    }
+    const excess = hit.length - Math.floor(cap * used);
+    if (excess <= 0) { console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % (aim ${(100 * cap).toFixed(1)} %) kept`); continue; }
+    hit.sort((x, y) => x[1] - y[1]);
+    for (const [p] of hit.slice(0, excess)) {
+      const [h, s, v] = hsv(p);
+      const ns = how === 'sat' ? Number(opt('--reserve-sat', 0.3)) : s;
+      const nh = how === 'sat' ? h : (h < (a + b) / 2 ? a - margin + 360 : b + margin) % 360;
+      // HSV -> RGB at the new hue / saturation, the value kept
+      const c = v * ns, x = c * (1 - Math.abs(((nh / 60) % 2) - 1)), m = v - c;
+      const [r1, g1, b1] = nh < 60 ? [c, x, 0] : nh < 120 ? [x, c, 0] : nh < 180 ? [0, c, x] : nh < 240 ? [0, x, c] : nh < 300 ? [x, 0, c] : [c, 0, x];
+      data[p * C] = Math.round(r1 + m); data[p * C + 1] = Math.round(g1 + m); data[p * C + 2] = Math.round(b1 + m);
+    }
+    console.log(`reserve-cap ${name}: ${(100 * hit.length / used).toFixed(2)} % -> ${(100 * (hit.length - excess) / used).toFixed(2)} % (${excess} texels, ${how})`);
+  }
+}
 const old = tex.getImage().byteLength;
-const webp = await sharp(data, { raw: { width: W, height: H, channels: C } }).webp({ quality }).toBuffer();
+const webp =await sharp(data, { raw: { width: W, height: H, channels: C } }).webp({ quality }).toBuffer();
 tex.setImage(new Uint8Array(webp));
 tex.setMimeType('image/webp');
 await io.write(input, doc);

@@ -259,12 +259,9 @@ def default_chains(ctx) -> list:
 
 def zone_grade(sid: str, glb: str, fresh: float = 0.0) -> dict:
     """art/tools/zone_grade.py on the freshly optimised GLB (MAX2 U1(1) material zoning), in a child Python that has
-    numpy and PIL; a fighter or skin without a recipe in art/tools/zone_grades.json is left as built."""
-    import json
+    numpy and PIL; a fighter or skin without a recipe in art/tools/zone_grades.json is left as built and only checked
+    against its ruling-32 baseline (art/tools/reserved_baselines.json: no bake may raise a reserved hue band)."""
     import subprocess
-    recipes = os.path.join(scene.TOOLS_DIR, "zone_grades.json")
-    if not os.path.isfile(recipes) or sid not in json.load(open(recipes)):
-        return {"skipped": "no recipe"}
     py = next((p for p in (os.path.expanduser("~/Developer/forgeflow-games/.venv/bin/python3"), "/opt/homebrew/bin/python3")
                if os.path.isfile(p)), "python3")
     r = subprocess.run([py, os.path.join(scene.TOOLS_DIR, "zone_grade.py"), sid, "--glb", glb, "--fresh", str(fresh)],

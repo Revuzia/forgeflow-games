@@ -1882,9 +1882,11 @@ class Sunsplinter(Monster):
     # the glass sunburst, its crown splinters and the keel move out with it. Same sphere segments: same tris.
     CORE_R = 0.56
     C = np.array([0.0, 0.0, 1.58])
-    # tip: broken base B, axis 38 degrees above forward
-    TA = K.nrm(np.array([0.0, -math.cos(math.radians(38)), math.sin(math.radians(38))]))
-    TB = np.array([0.0, -0.36, 1.98])
+    # tip: broken base B, axis 46 degrees above forward (MAX2 r2: was 38 degrees from (0, -0.36, 1.98); facing the
+    # camera, the tip slab covered the orb's top at the game camera and the unit's pixel count read under its gate at
+    # some facings (verify1_q seed 19): the base 8 cm higher and the blade steeper lift it off the orb)
+    TA = K.nrm(np.array([0.0, -math.cos(math.radians(46)), math.sin(math.radians(46))]))
+    TB = np.array([0.0, -0.34, 2.06])
     TLS, TLP, TW0, TW1 = 1.02, 0.86, 0.3, 0.25
     TCUT = 0.5                                          # the stone pyramid stops here; the glazed point continues
     # CW4 (closing critic:monsters): a warm needle-stone (honey limestone in noon light) instead of flat chalk-grey;

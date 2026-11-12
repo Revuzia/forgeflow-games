@@ -1,0 +1,101 @@
+{
+ "seed7_kemdo_2": {
+  "signature": "#F2896C",
+  "sigHuePx before->after": [
+   8165,
+   7966
+  ],
+  "creamPx before->after": [
+   939,
+   885
+  ]
+ },
+ "seed7_vashil_4": {
+  "signature": "#A66CF2",
+  "sigHuePx before->after": [
+   1513,
+   1513
+  ],
+  "creamPx before->after": [
+   1677,
+   1677
+  ]
+ },
+ "seed7_tunlan_5": {
+  "signature": "#9A00B4",
+  "sigHuePx before->after": [
+   2491,
+   2491
+  ],
+  "creamPx before->after": [
+   261,
+   261
+  ]
+ },
+ "seed7_rishal_6": {
+  "signature": "#B3004A",
+  "sigHuePx before->after": [
+   695,
+   692
+  ],
+  "creamPx before->after": [
+   862,
+   862
+  ]
+ },
+ "seed23_kemdo_2": {
+  "signature": "#F2896C",
+  "sigHuePx before->after": [
+   2679,
+   2677
+  ],
+  "creamPx before->after": [
+   469,
+   469
+  ]
+ },
+ "seed23_burdam_3": {
+  "signature": "#B30300",
+  "sigHuePx before->after": [
+   2086,
+   2080
+  ],
+  "creamPx before->after": [
+   503,
+   503
+  ]
+ },
+ "seed23_vashil_4": {
+  "signature": "#A66CF2",
+  "sigHuePx before->after": [
+   1757,
+   1757
+  ],
+  "creamPx before->after": [
+   1519,
+   1519
+  ]
+ },
+ "seed23_tunlan_5": {
+  "signature": "#9A00B4",
+  "sigHuePx before->after": [
+   1555,
+   1555
+  ],
+  "creamPx before->after": [
+   260,
+   260
+  ]
+ },
+ "seed23_rishal_6": {
+  "signature": "#B3004A",
+  "sigHuePx before->after": [
+   5783,
+   5856
+  ],
+  "creamPx before->after": [
+   1190,
+   1199
+  ]
+ }
+}

@@ -1,0 +1,34 @@
+{
+ "item": "U7 heads (critic gap 5; verify1_q / verify1_r: 'no spec')",
+ "written": "2026-11-12, max2 units round 2 engineer",
+ "problem": "At the 28.5 m game camera (pitch 52 deg) the head is the first thing seen, from above. Most of the roster's crowns (hoods, cowls, hats, caps, hair) are one cream or clay family over a cream robe, so the top-down read leads with cream, not with the fighter (verify1_q v1q2 / v1q2h crops: Tunlan's hat, Burdam's hood and pauldrons, Kemdo's and Vashil's hoods).",
+ "goal": "Every fighter's head reads, from above, as that fighter: a crown shape with its own value or signature break from the shoulders, and (where the face shows) a face that reads alive, never blank.",
+ "bars": {
+  "crown break": "lineup_qa at facings 0 and 180: the crown (top 12 % of the silhouette) differs from the shoulders band (next 12 %) by dL* >= 8 or by >= 20 deg of CIELAB hue at chroma >= 12 (signature hue counts)",
+  "signature on the crown": "where the crown is a soft covering (hood, cowl, cap, hat), sigPct over the crown >= 15 % (the fighter's vfx.signature within 25 deg)",
+  "value bands kept": "lineup_qa top band L* 70-85 is not pushed under 70 by a crown change on a fighter that met it before (bible fighter.valueLstar); bottom band 20-35 kept",
+  "ruling 7": "soft coverings keep R >= 10 cm at 3 cm under the top (geo2.mjs) and 'a pale covering over a pale robe takes a dark break' (visual check from behind and three-quarter behind)",
+  "sensitivity": "no tall, pointed or conical hood; no face that reads as horror, hockey mask, plague doctor, mummy or blank mannequin; Wicks have no face",
+  "ruling 32": "every zoned albedo <= 8 % in each reserved band (zone_grade.py enforces)",
+  "budgets": "no triangle or texture-size increase (albedo zoning is free; a modelled change pays its tris inside the same GLB); GLB <= 1172 KiB"
+ },
+ "method": [
+  "1. Albedo first (no rebuild): a crown zone in art/tools/zone_grades.json per fighter, part-map parts (hood, cowl, hat, cap, hair) or box x roughness for a fighter with no part map; the signature hue at the covering's own value, plus a darker rim or cowl band where ruling 7's dark break is needed.",
+  "2. Then modelling where albedo cannot reach the bar (flat cap tops with no form to catch the key light, a face that reads blank at chip size): a fighter .py change, rebuilt through pipeline.build (which re-applies the zone grade).",
+  "3. Gate: lineup_qa (crown break, sigPct, value bands) + max_units_ab game-camera A/B at two seeds."
+ ],
+ "owners": {
+  "units lane": "kemdo, vashil, tunlan, rishal, ervet, hesmi, ilsheta, lisvel, marund, nurrow, odrum, sukri, ulkro, ardit",
+  "cards lane (round 2)": "burdam and dunsom heads, masks and cowls (commit 382856482); the units lane zones only below the cowl on those two"
+ },
+ "status round 2": {
+  "done (albedo crown breaks, zone_grades.json r2)": {
+   "kemdo": "hood signature coral at its own value (L* 44, C 22) + the upper pauldron coral-sand",
+   "vashil": "hood lilac (L* 52), cowl deep violet (L* 40) as ruling 7's dark break, halo ring pale lilac",
+   "tunlan": "the wide hat dusty plum (L* 55), the dark brim rim kept as the edge break",
+   "rishal": "head is a hard visor (ruling 3 accent); the torso zone carries the signature instead",
+   "burdam": "pauldrons oxblood; hood and cowl are the cards lane's this round"
+  },
+  "not started": "ervet, hesmi, ilsheta, lisvel, marund, nurrow, odrum, sukri, ulkro, ardit (need a crown audit with the crown-break metric, which lineup_qa does not compute yet), and every modelling change"
+ }
+}

@@ -238,10 +238,12 @@ class Glasshorn(Creature):
     # sundial's hour lines, not a fawn's dapple), pale dawnglass hour ticks across the mantle that tie the body to the
     # glass rack, and ink-dark legs. Every hue stays out of the reserved bands (all under 40 % saturation).
     # (value kept: the coat sits at the fawn's L* ~55 so the stag still stands off the jungle floor, max2u_mon70)
-    PAL = {"hide": "#9E9AB8", "flank": "#AEAAC6", "belly": "#E6DED0", "leg": "#58546F", "sock": "#2F2D40",
+    # (r2: the coat a step lighter, hide/flank/coat_lo, to lift the stag's value off the floor back toward round 1's dL*
+    # 25: the dusk restyle had dropped it 25.4 -> 18.4)
+    PAL = {"hide": "#ADA9C6", "flank": "#BCB8D3", "belly": "#E6DED0", "leg": "#58546F", "sock": "#2F2D40",
            "ruff": "#ECE5D6", "muzzle": "#3A3850", "nose": "#22212E", "eye": "#17161F", "hoof": "#2A2836",
            "ear_in": "#B7A9C2", "rump": "#EDE7DA", "tick": "#C9DCEA", "pedicle": "#E8E1D2", "saddle": "#3B3854",
-           "dot": "#F2ECDF", "coat_hi": "#C0BCD6", "coat_lo": "#7E7A9A", "divide": "#2E2C42"}
+           "dot": "#F2ECDF", "coat_hi": "#CCC8E0", "coat_lo": "#8C88A8", "divide": "#2E2C42"}
 
     def joints(self):
         return dict(
@@ -456,13 +458,21 @@ class Glasshorn(Creature):
         col = col * (1 - 0.62 * cover[:, None]) + c("saddle") * 0.62 * cover[:, None]
         divide = _smooth_arr(0.05, 0.02, np.abs(z - 0.97 - 0.05 * np.sin(y * 9.0))) * _smooth_arr(-0.5, -0.4, y) * _smooth_arr(0.55, 0.45, y)
         col = col * (1 - 0.8 * divide[:, None]) + c("divide") * 0.8 * divide[:, None]
-        # MAX2: chalk dial chevrons on each flank (the sundial's hour lines fanning back from the shoulder, pointing
-        # forward), bold enough to read at 28.5 m; they replace the fawn's dapple rows
-        side = _smooth_arr(0.15, 0.55, np.abs(N[:, 0])) * _smooth_arr(0.9, 0.98, z) * _smooth_arr(1.3, 1.2, z) \
-            * _smooth_arr(-0.36, -0.26, y) * _smooth_arr(0.5, 0.4, y)
-        cv = (y + 0.9 * np.abs(z - 1.09)) / 0.17
-        chev =_smooth_arr(0.13, 0.08, np.abs(cv - np.round(cv)))
-        col = col * (1 - 0.88 * (chev * side)[:, None]) + c("dot") * 0.88 * (chev * side)[:, None]
+        # MAX2 r2: one chalk sundial on each haunch (a ring and seven short hour ticks radiating from it), in place of
+        # round 1's flank chevrons: rib-parallel stripes down the barrel read as a rib cage at the game camera (verify1_r).
+        # The ticks radiate, so no mark runs along the ribs; chalk at 0.62, softer than the chevrons' 0.88
+        side = _smooth_arr(0.2, 0.6, np.abs(N[:, 0])) * _smooth_arr(0.82, 0.9, z)
+        y0, z0 = 0.43, 1.04
+        dy, dz = y - y0, z - z0
+        rr = np.hypot(dy, dz)
+        th = np.degrees(np.arctan2(dz, -dy))      # 0 = toward the head, 90 = up
+        ring = _smooth_arr(0.016, 0.008, np.abs(rr - 0.075))
+        tick_a = np.zeros(n)
+        for a in (-45.0, -15.0, 15.0, 45.0, 75.0, 105.0, 135.0):
+            tick_a = np.maximum(tick_a, _smooth_arr(0.013, 0.006, rr * np.abs(np.radians(((th - a + 180.0) % 360.0) - 180.0))))
+        tick = tick_a * _smooth_arr(0.105, 0.115, rr) * _smooth_arr(0.19, 0.175, rr)
+        dial = np.maximum(ring, tick) * side
+        col = col * (1 - 0.62 * dial[:, None]) + c("dot") * 0.62 * dial[:, None]
         rough = np.full(n, 0.82)
         # tagged regions (nearest tag wins, 1 cm blend)
         dmin = np.min(np.stack(list(tags.values())), 0)

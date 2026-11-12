@@ -266,11 +266,11 @@ ATLAS_SOFTEN = 0.45
 # leave the frame), the head ~3x larger
 CARDS = {
     "dunsom": {
-        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 34.0, "pitch": -4.0, "lens": 48.0, "fill": 0.86, "x": 0.77,
-                   "box_lo": 0.80, "box_w": 0.45, "box_top": 2.2,
+        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 34.0, "pitch": -4.0, "lens": 48.0, "fill": 0.86, "x": 0.80,
+                   "box_lo": 0.60, "box_w": 0.45, "box_top": 2.2,
                    "key_az": 225.0, "key_el": 18.0, "key_color": "#FFD2A8", "sun": 2.2, "rim_cool": 1.0,
                    "rim_warm": 1.2, "bounce": 0.5, "bounce_color": "#E2A46A", "accent": 2.4,
-                   "focal": [{"at": "head", "az": 180.0, "el": -30.0, "dist": 0.45, "color": "#FFC27A",
+                   "focal": [{"at": "head", "az": 240.0, "el": 32.0, "dist": 0.45, "color": "#FFC27A",
                               "power": 40.0, "size": 0.14},
                              {"at": "x_lantern", "az": 170.0, "el": 10.0, "dist": 0.35, "color": "#FFD9A0",
                               "power": 25.0, "size": 0.10}]},
@@ -282,7 +282,7 @@ CARDS = {
                    "box_lo": 0.95, "box_w": 0.45, "box_top": 2.12,
                    "key_az": 265.0, "key_el": 9.0, "key_color": "#FFC88E", "sun": 3.2, "rim_cool": 0.7,
                    "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8B07A", "accent": 1.5,
-                   "focal": [{"at": "head", "az": 215.0, "el": 8.0, "dist": 0.8, "color": "#FFD9B0", "power": 22.0,
+                   "focal": [{"at": "head", "az": 245.0, "el": 32.0, "dist": 0.8, "color": "#FFD9B0", "power": 22.0,
                               "size": 0.25}]},
         "portrait": {"yaw": -30.0},
         "plate": {"src": "needle_gorge", "tint": "#C8A88C", "sat": 0.85, "median": 0.32, "cx": 0.38,
@@ -293,14 +293,14 @@ CARDS = {
                    "box_lo": 0.85, "box_w": 0.45, "box_top": 2.2,
                    "key_az": 150.0, "key_el": 35.0, "key_color": "#AFC0E0", "sun": 1.4, "rim_cool": 1.8,
                    "rim_warm": 0.3, "bounce": 0.3, "bounce_color": "#C09060", "accent": 2.8,
-                   "focal": [{"at": "head", "az": 185.0, "el": -10.0, "dist": 0.40, "color": "#FFC87E",
+                   "focal": [{"at": "head", "az": 235.0, "el": 30.0, "dist": 0.40, "color": "#FFC87E",
                               "power": 45.0, "size": 0.12},
                              {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 20.0, "size": 0.08}]},
         # (closing round 2: the head focal blew the scarf and the mask: softer and off-axis)
         # (max2 card round 2: the night mask read as a dark oval with point-of-light eyes at chip size: lifted a step)
-        "portrait": {"yaw": 34.0, "exposure": -0.6,
-                     "focal": [{"at": "head", "az": 215.0, "el": -5.0, "dist": 0.7, "color": "#FFC87E", "power": 16.0,
+        "portrait": {"yaw": 34.0, "exposure": -0.5,
+                     "focal": [{"at": "head", "az": 200.0, "el": 0.0, "dist": 0.55, "color": "#FFC87E", "power": 30.0,
                                 "size": 0.3},
                                {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                                 "power": 20.0, "size": 0.08}]},

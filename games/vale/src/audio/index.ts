@@ -5,7 +5,7 @@
 //               engine's mix makeup, the same for every bus and the alert path, so the default settings (master 0.8)
 //               land the match on the tokens' −18 ± 1.5 LUFS integrated (closing critic 'audio-runtime': two RIFT
 //               captures read −21.5 / −21.8 before it; at 3.0 dB −18.75 and −18.07 (245 s), at 3.5 dB −16.07 / −16.59 over the band's
-//               top, so most of the spread is the match; _harness/probe_audio_runtime.mjs match; max2 SFX-1b: 4.0, see
+//               top, so most of the spread is the match; _harness/probe_audio_runtime.mjs match; max2 SFX-1b: 3.5, see
 //               MIX_TRIM_DB, after round 1's quieter kits and the mix focus). The limiter (a compressor) can
 //               overshoot on a fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing
 //               passes −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both
@@ -381,10 +381,10 @@ const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame 
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
-// (max2 SFX-1b: 3.0 -> 4.0) round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5):
+// (max2 SFX-1b: 3.0 -> 3.5) round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5):
 // in a quiet stretch the master is mostly the ambience bed and the music, so an sfx-only lift moved it 0.4 dB for 2.4 dB
 // of sfx (and cost a teamfight seat the announcer's 3 dB margin); the whole mix's makeup moves every seat alike
-const MIX_TRIM_DB = 4.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
+const MIX_TRIM_DB = 3.5;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
 // mix focus (max2 SFX-1b): the fighters' kits were under half of the heard sfx on a jungle-heavy seat (library camp
 // cues: c_cast_big, c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's
 // kit cues play OWN_KIT_DB over everyone else's, and a camp monster's own sounds (its casts, abilities, blows and fall;
@@ -505,8 +505,9 @@ const T3_STATUS = new Set(['stun', 'root', 'slow', 'silence', 'disarm', 'airborn
 const T3_OPS = new Set(['displace', 'dash', 'blink', 'zone']);
 const AMB_INNER_M = 10;      // an ambience emitter's point is at full level within this of the listener …
 const AMB_HEAR_M = 32;       // … and silent past this
-const AMB_CALM_LIFT_DB = 2;  // the emitters away from a fight (below AMB_DUCK_FROM): a quiet seat's floor is the world's; a seat that hardly meets
-                             // a fight read 0.3 LU under the mix's band with the world at 0 dB, and a loud one barely gains (closing r3) …
+const AMB_CALM_LIFT_DB = 3;  // the emitters away from a fight (below AMB_DUCK_FROM): a quiet seat's floor is the world's; a seat that hardly meets
+                             // a fight read 0.3 LU under the mix's band with the world at 0 dB, and a loud one barely gains (closing r3;
+                             // 2 -> 3 in max2 SFX-1b: a jungle seat read -19.3 / -20.2 LUFS, a brawling one -16.7 on one build) …
 const AMB_DUCK_DB = 6;       // … the ambience bus under a fight: full duck at fight heat AMB_DUCK_FULL …
 const AMB_DUCK_FROM = 0.2;   // … none below this (a lone poke); the heat counts fighter-vs-fighter damage only
 const AMB_DUCK_FULL = 0.6;

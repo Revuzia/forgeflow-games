@@ -1,0 +1,291 @@
+{
+ "_doc": "ruling 32 baselines: % of each fighter/skin albedo above 40 % HSV saturation in each reserved band, measured on the shipped GLBs (zone_grade.py --baselines). A rebuild may not raise a band above max(8, baseline) + 0.5; zoned fighters are held to 8 % outright.",
+ "ardit": {
+  "ally": 0.25,
+  "harm": 0.96,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ardit_chalkline": {
+  "ally": 0.28,
+  "harm": 0.99,
+  "tritanAltRose": 0.0,
+  "heal": 0.01
+ },
+ "ardit_first_bell": {
+  "ally": 0.05,
+  "harm": 1.19,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "burdam": {
+  "ally": 0.0,
+  "harm": 7.21,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "burdam_almanac": {
+  "ally": 0.0,
+  "harm": 14.5,
+  "tritanAltRose": 0.01,
+  "heal": 0.0
+ },
+ "burdam_stillwater": {
+  "ally": 0.0,
+  "harm": 11.79,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "dunsom": {
+  "ally": 0.0,
+  "harm": 16.46,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "dunsom_almanac": {
+  "ally": 0.0,
+  "harm": 9.83,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "dunsom_highrim": {
+  "ally": 0.0,
+  "harm": 12.53,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ervet": {
+  "ally": 0.05,
+  "harm": 1.33,
+  "tritanAltRose": 0.02,
+  "heal": 0.0
+ },
+ "ervet_lamplit": {
+  "ally": 0.0,
+  "harm": 9.42,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ervet_stillwater": {
+  "ally": 0.04,
+  "harm": 0.25,
+  "tritanAltRose": 0.02,
+  "heal": 0.03
+ },
+ "hesmi": {
+  "ally": 0.18,
+  "harm": 0.02,
+  "tritanAltRose": 0.02,
+  "heal": 0.0
+ },
+ "hesmi_gorgewalk": {
+  "ally": 0.53,
+  "harm": 0.44,
+  "tritanAltRose": 0.01,
+  "heal": 0.0
+ },
+ "hesmi_shadeprint": {
+  "ally": 0.0,
+  "harm": 0.0,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ilsheta": {
+  "ally": 0.18,
+  "harm": 0.02,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ilsheta_first_bell": {
+  "ally": 0.12,
+  "harm": 20.46,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ilsheta_stillwater": {
+  "ally": 1.0,
+  "harm": 0.02,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "kemdo": {
+  "ally": 0.0,
+  "harm": 4.45,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "kemdo_highrim": {
+  "ally": 0.0,
+  "harm": 1.34,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "kemdo_long_evening": {
+  "ally": 0.0,
+  "harm": 11.3,
+  "tritanAltRose": 0.04,
+  "heal": 0.0
+ },
+ "lisvel": {
+  "ally": 0.0,
+  "harm": 0.16,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "lisvel_almanac": {
+  "ally": 0.0,
+  "harm": 0.3,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "lisvel_gorgewalk": {
+  "ally": 0.0,
+  "harm": 0.08,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "marund": {
+  "ally": 0.0,
+  "harm": 4.72,
+  "tritanAltRose": 0.01,
+  "heal": 0.0
+ },
+ "marund_gorgewalk": {
+  "ally": 2.16,
+  "harm": 4.02,
+  "tritanAltRose": 0.03,
+  "heal": 0.0
+ },
+ "marund_long_evening": {
+  "ally": 0.0,
+  "harm": 0.3,
+  "tritanAltRose": 1.4,
+  "heal": 0.0
+ },
+ "nurrow": {
+  "ally": 0.0,
+  "harm": 1.55,
+  "tritanAltRose": 0.15,
+  "heal": 0.0
+ },
+ "nurrow_noon_fair": {
+  "ally": 0.0,
+  "harm": 0.33,
+  "tritanAltRose": 0.2,
+  "heal": 0.0
+ },
+ "nurrow_shadeprint": {
+  "ally": 0.02,
+  "harm": 0.25,
+  "tritanAltRose": 0.16,
+  "heal": 0.0
+ },
+ "odrum": {
+  "ally": 0.0,
+  "harm": 38.6,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "odrum_noon_fair": {
+  "ally": 0.0,
+  "harm": 33.8,
+  "tritanAltRose": 0.17,
+  "heal": 0.0
+ },
+ "odrum_shadeprint": {
+  "ally": 0.11,
+  "harm": 6.92,
+  "tritanAltRose": 0.01,
+  "heal": 0.02
+ },
+ "rishal": {
+  "ally": 1.12,
+  "harm": 0.28,
+  "tritanAltRose": 6.56,
+  "heal": 0.0
+ },
+ "rishal_chalkline": {
+  "ally": 2.42,
+  "harm": 0.49,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "rishal_lamplit": {
+  "ally": 0.0,
+  "harm": 23.0,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "sukri": {
+  "ally": 0.0,
+  "harm": 19.96,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "sukri_shadeprint": {
+  "ally": 0.0,
+  "harm": 1.89,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "sukri_stillwater": {
+  "ally": 0.0,
+  "harm": 2.77,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "tunlan": {
+  "ally": 0.0,
+  "harm": 2.99,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "tunlan_lamplit": {
+  "ally": 0.0,
+  "harm": 15.78,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "tunlan_noon_fair": {
+  "ally": 0.0,
+  "harm": 1.8,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ulkro": {
+  "ally": 0.0,
+  "harm": 12.77,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ulkro_highrim": {
+  "ally": 0.01,
+  "harm": 6.75,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "ulkro_long_evening": {
+  "ally": 0.0,
+  "harm": 4.72,
+  "tritanAltRose": 0.06,
+  "heal": 0.0
+ },
+ "vashil": {
+  "ally": 0.02,
+  "harm": 0.05,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "vashil_chalkline": {
+  "ally": 0.07,
+  "harm": 0.1,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ },
+ "vashil_first_bell": {
+  "ally": 0.03,
+  "harm": 0.27,
+  "tritanAltRose": 0.0,
+  "heal": 0.0
+ }
+}

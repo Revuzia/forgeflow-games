@@ -33,6 +33,13 @@ sys.path.insert(0, HERE)
 GAME = os.path.dirname(os.path.dirname(HERE))
 PARTMAP = os.path.join(GAME, "art", ".cache", "fighters", "partmap")
 RECIPES = os.path.join(HERE, "zone_grades.json")
+BASELINES = os.path.join(HERE, "reserved_baselines.json")
+# ruling 32: a zoned fighter's albedo ends with every reserved band at <= 8 %; the grade aims at 7 % (glb_paint_grade.mjs
+# --reserve-cap: the fewest, cheapest texels desaturated or hue-shifted) so the lossy WebP encode keeps a margin
+CAP = 8.0
+# (aim %, hue margin deg): tried in order until the encoded albedo holds the cap (the WebP encode pulls dark texels'
+# hue back toward the band, so a bake far over the cap needs a lower aim and a wider shift)
+LADDER = ((7.0, 6), (6.0, 8), (5.0, 10), (4.0, 12), (3.0, 14))
 GRADE = os.path.join(HERE, "glb_paint_grade.mjs")
 
 
@@ -111,7 +118,7 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
     build whose paint path wrote none (a stale map whose texels no longer line up) is not graded through it"""
     recipes = json.load(open(RECIPES))
     if sid not in recipes:
-        return {"sid": sid, "skipped": "no recipe"}
+        return baseline_check(sid, glb)
     rec = recipes[sid]
     glb = glb or os.path.join(GAME, "art", "out", "fighters", rec.get("fighter", sid), f"{sid}.glb")
     if any("parts" in z for z in rec["zones"]) and not os.path.isfile(os.path.join(PARTMAP, f"{sid}.npz")):
@@ -134,28 +141,71 @@ def grade(sid: str, glb: str | None = None, dry: bool = False, fresh: float = 0.
         # and under 1160 KiB (or, for a GLB already past that, no larger than it was) (the fighter budget is 1172, pipeline load_test); GPU memory is unchanged either way (the
         # decoded texture is the same 2048^2)
         trial = os.path.join(tmp, "trial.glb")
-        for q in range(84, 59, -4):
-            shutil.copyfile(glb, trial)
-            r = subprocess.run([node(), GRADE, trial, "--q", str(q)] + tint, cwd=GAME, capture_output=True, text=True)
-            if r.returncode:
-                raise SystemExit(r.stderr[-1200:])
-            if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
+        pre = reserved_pct(base)
+        for aim, margin in LADDER:
+            for q in range(84, 59, -4):
+                shutil.copyfile(glb, trial)
+                r = subprocess.run([node(), GRADE, trial, "--q", str(q), "--reserve-cap", str(aim), "--reserve-margin",
+                                    str(margin)] + tint, cwd=GAME, capture_output=True, text=True)
+                if r.returncode:
+                    raise SystemExit(r.stderr[-1200:])
+                if os.path.getsize(trial) <= max(min(before + 24 * 1024, 1160 * 1024), before) or q <= 60:
+                    break
+            # ruling 32 (max2 round 2, strict reading): a zoned fighter's albedo ends with every reserved band at
+            # <= 8 %, whatever its bake held (the grade's --reserve-cap brings a bake over the cap under it); a grade
+            # that misses it on every step of the ladder is not applied and the build fails
+            post = reserved_pct(glb_image(trial, "_base"))
+            bad = {k: (pre[k], post[k]) for k in RESERVED if post[k] > CAP}
+            if not bad:
                 break
-        # ruling 32: a zone grade keeps every reserved band at <= 8 % of the albedo (or, where the bake already sat
-        # above the cap, never raises it); a grade that breaks it is not applied and the build fails
-        pre, post = reserved_pct(base), reserved_pct(glb_image(trial, "_base"))
-        bad = {k: (pre[k], post[k]) for k in RESERVED if post[k] > max(8.0, pre[k]) + 0.05}
         if bad:
             raise SystemExit(f"{sid}: zone grade breaks the reserved-hue cap (ruling 32, before -> after %): {bad}")
         shutil.copyfile(trial, glb)
         print(r.stdout.strip().replace(trial, glb))
         print(f"{sid}: reserved hues (ruling 32) % before {pre} after {post}")
-        print(f"{sid}: WebP q {q}, GLB {before / 1024:.1f} -> {os.path.getsize(glb) / 1024:.1f} KiB")
+        print(f"{sid}: reserve aim {aim} % margin {margin} deg, WebP q {q}, GLB {before / 1024:.1f} -> {os.path.getsize(glb) / 1024:.1f} KiB")
     return {"sid": sid, "ok": True}
+
+
+def fighter_glb(sid: str) -> str | None:
+    import glob
+    hits = glob.glob(os.path.join(GAME, "art", "out", "fighters", "*", f"{sid}.glb"))
+    return hits[0] if hits else None
+
+
+def baseline_check(sid: str, glb: str | None) -> dict:
+    """a fighter or skin with no zone recipe: its bake may not raise a reserved band above max(8 %, the share recorded
+    in art/tools/reserved_baselines.json) (ruling 32's scope over whole bakes waits on the lead; until then no bake
+    can rise). A sid with no baseline is reported, not gated."""
+    glb = glb or fighter_glb(sid)
+    if not glb or not os.path.isfile(glb):
+        return {"sid": sid, "skipped": "no recipe, no GLB"}
+    now = reserved_pct(glb_image(glb, "_base"))
+    base = json.load(open(BASELINES)).get(sid) if os.path.isfile(BASELINES) else None
+    if base is None:
+        return {"sid": sid, "skipped": "no recipe", "reserved": now, "baseline": None}
+    bad = {k: (base.get(k, 0.0), now[k]) for k in RESERVED if now[k] > max(CAP, base.get(k, 0.0)) + 0.5}
+    if bad:
+        raise SystemExit(f"{sid}: the bake raises a reserved hue band over its ruling-32 baseline (baseline -> now %): {bad}")
+    return {"sid": sid, "skipped": "no recipe", "reserved": now, "baseline": base}
+
+
+def write_baselines() -> None:
+    import glob
+    out = {"_doc": "ruling 32 baselines: % of each fighter/skin albedo above 40 % HSV saturation in each reserved band, "
+                   "measured on the shipped GLBs (zone_grade.py --baselines). A rebuild may not raise a band above "
+                   "max(8, baseline) + 0.5; zoned fighters are held to 8 % outright."}
+    for p in sorted(glob.glob(os.path.join(GAME, "art", "out", "fighters", "*", "*.glb"))):
+        out[os.path.basename(p)[:-4]] = reserved_pct(glb_image(p, "_base"))
+    json.dump(out, open(BASELINES, "w"), indent=1)
+    print(f"{BASELINES}: {len(out) - 1} GLBs")
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if "--baselines" in a:
+        write_baselines()
+        sys.exit(0)
     glb = a[a.index("--glb") + 1] if "--glb" in a else None
     ids = [k for k in json.load(open(RECIPES)) if not k.startswith("_")] if "--all" in a else [a[0]]
     for s in ids:
