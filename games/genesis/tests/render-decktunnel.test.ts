@@ -1,6 +1,6 @@
 // the clear tunnel through the cloud deck (src/render/sky/clouds.ts deckTunnel): a player's zoom through the deck —
 // a trackpad's steady scroll as well as mouse-wheel notches — must not white out the frames inside the deck; a camera
-// that stops in the deck still fogs (the designed in-cloud fog) once the tunnel has closed
+// resting in the deck sees the ground through a thinned mist (owner ruling 2026-11-12)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deckTunnel, newTunnelState } from '../src/render/sky/clouds.ts';

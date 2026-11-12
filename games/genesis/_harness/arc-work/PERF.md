@@ -930,3 +930,14 @@ long press frame-rate independent. Report after 1-2 verified.
    ~0.5 ms at 3.25 MP on an M5-class GPU: low expected gain vs the shadow / geometry passes; do it only after 1-3.
 5. GATE check13 (session-10 tree + probe switch vegrange): 919/919 pass; npm run build OK (build-prod12.log). run-s11d.sh
    keeps running (cw1 at frame 17, alt 611 m, ~6 min a frame; then eastwater5, cw2, ftcolour): read their logs / shots.
+
+## SESSION 12 (2026-11-12 ~05:00Z) — owner: "fix the found issues. and i follow your recommendation on the clouds."
+- owner ruling 2026-11-12: clouds thinned around the camera (default on). `?deckmist=0` = the old white-out (A/B).
+- ITEM 6 FIX (landed, tsc clean, tests/render-decktunnel.test.ts 3/3; mutation: `?deckzoom=0` (the session-5 rule)
+  fails the trackpad case with in-cloud fog 0.87 = white): clouds.ts deckTunnel() (pure, tested) replaces the inline
+  tunnel. (a) `deckzoom` (default on): vertical speed smoothed over 0.15 s opens the tunnel from 4 m/s, fully at 30 m/s
+  (was 36 / 156 m/s on the 240 m deck: a trackpad zoom at 60-120 m/s half-opened it = white), near zone the full 485 m
+  when open; closes over ~1 s. (b) `deckmist` (default on, owner ruling): resting inside the shell keeps 70 % of the
+  tunnel open (350 m clear zone) and the in-cloud fog's transmittance floor uCamMist = 0.45 (shader: stepT =
+  max(exp(-dens fl), uCamMist)): the ground reads through mist. Only while the camera is inside the shell: from
+  outside / above the deck nothing changes (test). Both switches print in the perf report header.

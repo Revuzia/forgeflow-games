@@ -1404,8 +1404,8 @@ export function newTunnelState(): TunnelState { return { t: 0, r: 0, v: 0, vS: 0
  * ms, radii in m, inShell 0..1 (the camera inside the shell, with its 20 m edge ramp).
  * A zoom through the deck (mouse notches or a trackpad's steady scroll) opens it: the vertical speed is smoothed over
  * ~0.15 s (a single notch is a one-frame jump) and opens the tunnel from 4 m/s, fully from 30 m/s, with the near zone at
- * its full 485 m (the whole deck along the view); it closes over ~1 s once the camera stops, so a camera that rests in
- * the deck still fogs (unless deckmist).
+ * its full 485 m (the whole deck along the view); it closes over ~1 s once the camera stops, to the resting mist (deckmist, default
+ * on: a 350 m clear zone and a fog that lets >= 45 % of the view through) or, with ?deckmist=0, to the old white-out.
  */
 export function deckTunnel(st: TunnelState, r0: number, now: number, innerR: number, outerR: number, inShell: number): { camFog: number; nearR: number; mist: number } {
   const dts = st.t > 0 ? Math.min(0.25, Math.max(1e-3, (now - st.t) / 1000)) : 0;
