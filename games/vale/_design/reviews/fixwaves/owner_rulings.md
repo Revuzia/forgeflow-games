@@ -249,3 +249,7 @@ Also, Sukri Shadeprint: the skull-costume read (pale mask, solid eyes, rib bars)
 ## 31. Shopping works anywhere in your own base (lead, by delegation, 2026-11-12)
 
 The owner asked to buy "when dead or in base". The 18 m home-platform circle (75ab44c52) missed the far side of the base (the critic measured 21.5 m as still in base but unable to shop). The base zone is now 25 m from the fountain: the fountain, the core and its Needles, up to just inside the inner gate line (RIFT 27.6 m, BRIDGE 25.7 m). Past the gates is the lane, not the base. Dead seats shop in every mode. This is more generous than the genre norm (fountain only), on purpose, so players can plan builds. Probe: probe_sim_shop "the far side of the base (24 m)" and "not past the base (30 m)".
+
+## 32. Fighter colour zones keep the reserved harm-hue cap (lead, by delegation, 2026-11-12)
+
+The max2 units colour zoning pushed Burdam and Rishal to about 27 % of albedo texels above 40 % saturation inside the reserved harm hue band. The skins rule (at most 8 %) stays and applies to base fighters' zone grades too: the band is how players read danger, as the genre norm keeps damage colours reserved. Zones are hue-shifted or desaturated until the cap holds; signature colours stay readable outside the band.
