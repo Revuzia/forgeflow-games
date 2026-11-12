@@ -1045,3 +1045,10 @@ long press frame-rate independent. Report after 1-2 verified.
 - FAR TREES ftc6 (0.7, 0.72, 0.6; cmp-ftc6.png LOOKED): crowns' green mean (74,111,28) vs ftc5 (76,114,28) vs near
   (67,104,29); region and coverage unchanged (88,91,45 / 0.37): closer: KEPT.
 - STATE.md: sim-lane note on the lake-edge houses standing in the water.
+- ITEM 6 TRACKPAD PROOF (tr0 / tr1: dist26, babel, high 320x180, fixed 60 fps clock, wheel -3 px every frame =
+  a slow trackpad zoom from inside the deck top, alt 423 -> ~330 m, shots every 20 frames; cmp-tr.png LOOKED):
+  OLD rule (deckzoom=0&deckmist=0): mean luminance 0.77 -> 0.84, near-white share 0.38 -> 0.58 = a white-out growing
+  as the camera sinks; NEW (default): 0.77 -> 0.53, white share 0.32 -> 0.06: the tunnel opens within the first frames
+  and the town, its pond and the forest come through the mist below.
+- GATE check17 (session-13 tree: mangrove scatter, far-tree colour (0.7, 0.72, 0.6)): 924/924 pass; npm run build OK
+  (build-prod16.log). Reduced-res post: waiting for the owner's bisection data (coordinator).
