@@ -150,15 +150,19 @@ CARDS = {
                                 "power": 40.0, "size": 0.25}]},
         "plate": {"tint": "#9AA6B2", "sat": 0.75, "median": 0.30, "glow": [0.12, 0.50, 0.40, 0.06],
                   "glow_color": "#C8D4DE",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
+                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.75, "at": [0.005, 0.026], "r": [0.017, 0.030]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.90, "to": "#9C7458", "mix": 0.9, "at": [0.0, 0.128], "r": [0.085, 0.095]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
     },
     "lisvel_almanac": {
         # (CW5 round 3 refix, finding:almanac-splash-face: from yaw 22 the head, turned 28 deg to her right, showed a pale
         # oval 30 px wide: the camera comes round to the side she looks to and in to mid-thigh, the head a three-quarter
         # 24 deg off camera; the head's lamp and the key leave the near-frontal for her upper right, as on the portrait,
         # and the floor bounce halves, so the nose keeps its shadow and the mouth its line)
-        "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -4.0, "pitch": -4.0, "lens": 58.0, "fill": 0.92, "x": 0.64,
-                   "box_top": 2.2, "box_lo": 0.72, "box_w": 0.48,
+        # (max2 g2 fix 2, verify_r2_g2a "bow at hip with slack string; legs cut": the Morning Draw frame held the bow
+        # low across the hip with the string slack, cut at the knee: the base card's full draw of the plain shot from
+        # her right (attack1 t 0.30, the bow's plane square to camera, the string's V to the drawing hand), cut at
+        # mid-thigh (box_lo 0.95) as a hero three-quarter; the fan and its lamp stay)
+        "splash": {"clip": "attack1", "t": 0.30, "yaw": -30.0, "pitch": -4.0, "lens": 58.0, "fill": 0.92, "x": 0.64,
+                   "box_lo": 0.95, "box_w": 0.60,
                    "key_az": 240.0, "key_el": 36.0, "key_color": "#FFE3B8", "sun": 2.2, "rim_cool": 0.8,
                    "rim_warm": 1.5, "bounce": 0.35, "bounce_color": "#E8CFA0", "accent": 1.5, "exposure": -0.85,
                    "focal": [{"at": "x_fan", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#FFDCA0", "power": 50.0,
@@ -173,7 +177,7 @@ CARDS = {
                                 "size": 0.3}]},
         # (CW5 round 3, client:CL-1: the reading lamp's warm evening behind her, against the base's cold dawn)
         "plate": {"tint": "#D2AE86", "sat": 0.9, "median": 0.34, "glow": [0.35, 0.60, 0.45, 0.12], "glow_color": "#F0D2A0",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
+                  "retouch": {"splash": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.82, "to": "#9C7458", "mix": 0.8, "at": [0.024, 0.04], "r": [0.02, 0.028]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}], "portrait": [{"op": "hue", "h": [0.0, 360.0], "s_min": 0.0, "val": 0.86, "to": "#9C7458", "mix": 0.9, "at": [-0.03, 0.115], "r": [0.09, 0.11]}, {"op": "eyes", "w": 1.6, "h": 0.75, "tilt": 0.10, "lid_k": 0.40, "iris": "#24262D", "ink": "#14151A", "lid_val": 0.78, "socket": 0.30, "smoke": [3.0, 1.8, 0.50], "line": 0.10, "crease": 0.3}]}},
     },
 }
 TEXTURE_SIZE = 2048

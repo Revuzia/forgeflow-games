@@ -79,7 +79,9 @@ SOCKETS = {"weapon": "prop.R", "knife_tip_r": "x_knife_tip_r", "knife_tip_l": "x
 SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 10.0, "fill": 0.90, "x": 0.64,
           "sun": 1.9, "rim_cool": 0.6, "rim_warm": 0.6, "portrait_yaw": 28.0, "icon_yaw": 20.0,
           # (max2 g2 fix) the ink almonds' centres on the face-plate (EYE_ALMOND, EYE_Z; rest, m) for plates.paint_eyes
-          "eyes3d": [[-0.041, -0.130, 1.661], [0.041, -0.130, 1.661]]}
+          # (max2 g2 fix 2: x was EX + EL, the almonds' outer corners (0.041): the decal landed 1.5 cm out, the left one
+          # off the head beside the hook; the centres are EYE_ALMOND's EX 0.026)
+          "eyes3d": [[-0.026, -0.130, 1.661], [0.026, -0.130, 1.661]]}
 # (FIX ROUND 2, verify: at 36 degrees the portrait saw the hook side-on, a tall glass slab with the mask a sliver
 # behind it): the brief's yaw 28, so the near cheek, the jaw, the mouth line's end and the chin show beside the hook
 # and under the band, as in the concept's three-quarter
@@ -149,7 +151,9 @@ CARDS = {
         # (polish: the pale grey plate held the splash to MAD 28.7 vs the base (floor 30): an ink-blue chalk-dusk plate)
         # (CW6 refix, rishal-M1: a tint on the base's Aubade painting held the splash at MAD 27.6: its own painting, the
         # pale Seat walls, under the same ink-blue chalk-dusk grade)
-        "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.24, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
+        # (max2 g2 fix 2: both busts now share the Glint Cut frame, so the portrait read MAD 28.2 vs the base (floor
+        # 30): the chalk-dusk plate's median 0.24 -> 0.18, a deeper dusk behind the pale plate)
+        "plate": {"src": "seat_center", "tint": "#6C7890", "sat": 0.70, "median": 0.18, "cx": 0.32, "glow": [0.80, 0.35, 0.45, 0.06],
                   "glow_color": "#C8D4EC",
                   "retouch": {"splash": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}], "portrait": [{"op": "eyes", "w": 1.9, "h": 0.85, "tilt": 0.10, "lid_k": 0.42, "iris": "#22252F", "ink": "#121318", "lid_val": 1.0, "socket": 0.30, "smoke": [3.0, 1.7, 0.35], "line": 0.11, "crease": 0.30}]}},
     },

@@ -90,8 +90,12 @@ CARDS = {
         # arrow-through-head read on splash and bust alike, and turning the camera only laid it across the slit: the
         # release (t 0.43), the thrower whipped forward and the dart gone, the face clear; a three-quarter hero frame
         # (head ~2x) so the painted pass can keep two lidded eyes)
+        # (max2 g2 fix 2, verify_r2_g2a "lower robe see-through", still read after the el 34 key: in the release's
+        # stride the skirt's front split opens on the trousers, pale strips through the robe: the hero frame's box
+        # bottom 0.75 -> 0.95 m, cut at mid-thigh, the sash and the split's top only; the painted eyes as Long Evening's
+        # (1.7 x 0.75 cm, socket 0.60): the new frame's dashes tripped card_qa blank 0.69)
         "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
-                   "box_lo": 0.75, "box_w": 0.70,
+                   "box_lo": 0.95, "box_w": 0.70,
                    # (max2 g2 fix, verify_r2_g2a "lower robe see-through": the low key (el 14) laid the darts' and the
                    # quiver's long shadows across the robe in stripes that read as the plate's steps behind it: el 34)
                    "key_az": 205.0, "key_el": 34.0, "key_color": "#FFD2A0", "sun": 3.2, "rim_cool": 1.0,
@@ -106,7 +110,7 @@ CARDS = {
         # (max2 g2 fix: the face-only xAI repaint put photo-real eyes in the slit: two stylised lidded eyes painted on
         # the 3D card instead, plates.paint_eyes; the painted portrait keeps its own)
         "plate": {"glow": [0.22, 0.56, 0.42, 0.10], "glow_color": "#F2C496", "haze": 0.0, "match": 0.12,
-                  "wrap": 0.16, "amb_tint": 0.30, "retouch": {"splash": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#9C8466", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
+                  "wrap": 0.16, "amb_tint": 0.30, "retouch": {"splash": [{"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#9C8466", "socket": 0.60, "line": 0.10, "crease": 0.0}]}},
     },
     "ulkro_highrim": {
         # (card engineer 2, closing2: Bound's leap floated the figure off the ground: the Hamstring Dart's crouch, feet down)
@@ -126,7 +130,7 @@ CARDS = {
         # (max2 g2 fix, verify_r2_g2a: the victory frame held the thrower up like a bone and both gloves open as claws:
         # the base's release (Hurl, cast_a1 t 0.43), the thrower's dart in flight, the gloves low)
         # (max2 g2 fix 2: the splash's painted eyes read as two closed dashes and tripped card_qa blank 0.68: the almonds
-        # 1.35 x 0.55 -> 1.7 x 0.75 cm, lid 0.45 -> 0.40, the socket shade 0.15 -> 0.60)
+        # 1.35 x 0.55 -> 1.7 x 0.75 cm, lid 0.45 -> 0.40, the socket shade 0.15 -> 0.60; the right glove's holes and shard gaps closed in the finish (close 9 px at the glove), as Odrum Noon Fair's yoke hand)
         "splash": {"clip": "cast_a1", "t": 0.43, "yaw": 16.0, "pitch": -4.0, "lens": 52.0, "fill": 0.86, "x": 0.70,
                    "box_lo": 0.75, "box_w": 0.60,
                    "key_az": 160.0, "key_el": 20.0, "key_color": "#E6D6EE", "sun": 2.6, "rim_cool": 1.2,
@@ -136,8 +140,9 @@ CARDS = {
                              {"at": "x_quiver", "az": 20.0, "el": 20.0, "dist": 0.9, "color": "#FFB070",
                               "power": 40.0, "size": 0.4}]},
         "portrait": {"yaw": 16.0, "lens": 70.0},
-        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866",
-                  "retouch": {"splash": [{"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.60, "line": 0.10, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
+        # (max2 g2 fix 2: the restaged splash's highlights sat at p99.9 229 under card_qa's 230: sub_hi 0.93 -> 0.95)
+        "plate": {"glow": [0.30, 0.62, 0.45, 0.10], "glow_color": "#F0A866", "sub_hi": 0.95,
+                  "retouch": {"splash": [{"op": "close", "px": 9, "at": [-0.07, 0.395], "r": [0.075, 0.07]}, {"op": "eyes", "w": 1.7, "h": 0.75, "tilt": 0.06, "lid_k": 0.40, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.60, "line": 0.10, "crease": 0.0}], "portrait": [{"op": "eyes", "w": 1.35, "h": 0.55, "tilt": 0.06, "lid_k": 0.45, "iris": "#211C1A", "ink": "#121012", "lid": "#8E6E5A", "socket": 0.15, "line": 0.08, "crease": 0.0}]}},
     },
 }
 TEXTURE_SIZE = 2048
