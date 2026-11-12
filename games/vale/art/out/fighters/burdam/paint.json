@@ -44,7 +44,13 @@
    "variant": 1
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.65 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
  },
  "burdam:splash": {
   "shipped": "3d",
@@ -169,7 +175,13 @@
    }
   ],
   "prompt_version": 5,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.76 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
  },
  "burdam_almanac:portrait": {
   "shipped": "painted",
@@ -216,7 +228,12 @@
    "variant": 1
   },
   "figure_median": 1,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "pass",
+   "card_qa": "every gate passes (blank 0.64 < 0.65)",
+   "date": "2026-11-12"
+  }
  },
  "burdam_almanac:splash": {
   "shipped": "3d",
@@ -344,7 +361,13 @@
    }
   ],
   "prompt_version": 5,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.84 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye: lidded eyes with pupils, no socket, crack or streak; the tripwire reads a smooth mask with small eyes as featureless. Not a pass under the full gate set: ship the live card unless the verifier clears it.",
+   "date": "2026-11-12"
+  }
  },
  "burdam_stillwater:portrait": {
   "shipped": "painted",
@@ -516,6 +539,12 @@
    }
   ],
   "prompt_version": 5,
-  "date": "2026-11-12"
+  "date": "2026-11-12",
+  "max2_r2": {
+   "status": "gate-miss: blank tripwire",
+   "card_qa": "blank 0.91 >= 0.65 (card_qa.BLOCKER; the only gate it misses)",
+   "note": "by eye borderline: a bowed pale bald dome with faint lidded eyes, close to the blank-face class at card size. Not a pass: ship the live card.",
+   "date": "2026-11-12"
+  }
  }
 }
