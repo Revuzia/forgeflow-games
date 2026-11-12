@@ -1,0 +1,37 @@
+{
+ "_doc": "PERF s13 AFTER the shore-tree scatter fix (compare pe4-mangrove60 / 150).",
+ "shots": [
+  {
+   "name": "pe6-mangrove60",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 139.6, dist: 60, tilt: 70, yaw: 300, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe6-mangrove150",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', lat: -10.4, lon: 139.6, dist: 150, tilt: 60, yaw: 0, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, alt: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  }
+ ]
+}

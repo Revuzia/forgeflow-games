@@ -1,7 +1,7 @@
 // PERF s13 (owner: 'water over the hills east of the town, trunks as ghosts'): the sea shallows south-east of Rubolhin
 // carry the sim's mangrove stand (species 'mangrove', habitat shore, water 0-2 m). The scatter refused every point in
 // water, so the stand never stood: only dark shapes under the sheet. Shore trees now stand in water up to their depth;
-// other trees (and every shrub) still never stand in water.
+// other trees (and every shrub) still never stand in water. (The sea bed there is sand, 0.6: the beach rule refused them too.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getGrid } from '../src/sim/grid/icogrid.ts';
@@ -19,7 +19,7 @@ function world(species: number, depth: number) {
   const fields = new Map<string, Float32Array>();
   fields.set('tree', f(0.9)); fields.set('shrub', f(0)); fields.set('burnt', f(0)); fields.set('water', f(depth));
   fields.set('temperature', f(27)); fields.set('moisture', f(0.9)); fields.set('snow', f(0)); fields.set('crop', f(0));
-  fields.set('road', f(0)); fields.set('sand', f(0)); fields.set('soil', f(0.4)); fields.set('treeSpecies', f(species)); fields.set('shrubSpecies', f(-1));
+  fields.set('road', f(0)); fields.set('sand', f(0.6)); fields.set('soil', f(0.4)); fields.set('treeSpecies', f(species)); fields.set('shrubSpecies', f(-1));
   const surface = f(-depth);
   fields.set('surface', surface);
   const gg = new GroundGradients(grid);

@@ -1012,7 +1012,7 @@ export class Vegetation {
         // (no tree or bush on a field: the terrain tills its rows from crop ≈ 0.02 and they are plain by ≈ 0.1 — cleared
         // only above 0.4, palms stood in the furrows of every young field; orchards are trees, not crop)
         const wAt = at(water);
-        if ((wAt > 0.05 && isShrub) || at(road) > 0.45 || at(crop) > 0.08 || at(snow) > 1.2 || at(sand) > 0.5) return;
+        if ((wAt > 0.05 && isShrub) || at(road) > 0.45 || at(crop) > 0.08 || at(snow) > 1.2 || (at(sand) > 0.5 && isShrub)) return;
         const t = at(temp), m = at(moist), b = at(burnt);
         // species: one of the three cells around the point, chosen by its weight (stands mix along their borders)
         const hs4 = hashFloat(c, i, salt + 6);
@@ -1027,6 +1027,8 @@ export class Vegetation {
         if (look && (look.layer === 'shrub') !== isShrub) look = null;
         // standing water: only a tree that grows in it (mangrove) stands there, up to its depth
         if (wAt > 0.05 && !(look && look.wetMax > 0 && wAt <= look.wetMax + 0.3)) return;
+        // (sand: no tree on a beach or a dune — but a mangrove's bed is the tidal sand it stands in)
+        if (at(sand) > 0.5 && !(look && look.wetMax > 0)) return;
         let kind: number;
         if (isShrub) kind = b > 0.6 ? K('burnt') : look ? look.kind : K('shrub');
         else if (b > 0.5) kind = K('burnt');
