@@ -296,7 +296,8 @@ CARDS = {
         # hero shot (the boots out of frame), so the plate's brow, nose and mouth carving is large enough to read
         "splash": {"clip": "attack2", "t": 0.72, "yaw": 6.0, "pitch": -2.0, "lens": 50.0, "fill": 0.88, "x": 0.71,
                    "box_lo": 0.55, "box_w": 0.45,
-                   "exposure": -1.35, "key_az": 205.0, "key_el": 24.0, "key_color": "#FFF3E2", "sun": 2.5, "rim_cool": 0.8,
+                   # (and the portrait's raking side key: the frontal one flattened the carving to a blank plate)
+                   "exposure": -1.35, "key_az": 140.0, "key_el": 28.0, "key_color": "#FFF3E2", "sun": 2.5, "rim_cool": 0.8,
                    "rim_warm": 1.4, "bounce": 0.5, "bounce_color": "#E8D4B8", "accent": 2.2,
                    "focal": [{"at": "x_lamp", "az": 150.0, "el": 20.0, "dist": 0.6, "color": "#FFD48C", "power": 45.0,
                               "size": 0.3}]},

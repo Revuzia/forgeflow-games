@@ -200,7 +200,9 @@ PALETTE = materials.bible_palette(chalk="#D9D4C6", dawnglass="#B9D0E2", stone="#
                                   under="#313439", ink="#17181B", accent="#3F9CFF")
 VALUE_GRADIENT_STOPS = materials.BIBLE_GRADIENT_STOPS
 SOCKETS = {"weapon": "prop.R", "weapon_tip": "x_rod_head", "rod_head": "x_rod_head", "halo": "x_halo"}
-SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_yaw": 2.0, "icon_yaw": 0.0}
+SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92, "yaw": 22.0, "portrait_yaw": 2.0, "icon_yaw": 0.0,
+          # (max2 g2 fix) the eyes behind the pane's lower half (rest, m), for plates.paint_eyes (render.card_meta)
+          "eyes3d": [[-0.032, -0.116, 1.778], [0.032, -0.116, 1.778]]}
 TEXTURE_SIZE = 2048
 TEXTURE_SIZES = {"normal": 512, "orm": 256}
 GLB_COMPRESS = True
@@ -241,6 +243,9 @@ CARDS = {
                              {"at": "head", "az": 200.0, "el": 12.0, "dist": 0.8, "color": "#FFE6CC", "power": 22.0,
                               "size": 0.25}]},
         "portrait": {"clip": "idle", "t": 0.0, "yaw": 28.0, "bust_lo": 0.42},     # (card engineer 2: the whole bell ring in frame)
+        # (max2 g2 fix, verify_r2_g2a: card_qa blank 0.67 on the portrait, the pane a flat cyan with nothing behind it:
+        # two calm lidded eyes read through the glass, plates.paint_eyes)
+        "plate": {"retouch": {"splash": [{"op": "eyes", "w": 1.5, "h": 0.68, "tilt": 0.08, "lid_k": 0.42, "iris": "#1C262C", "ink": "#121619", "lid_val": 0.80, "socket": 0.25, "smoke": [2.6, 1.5, 0.30], "line": 0.09, "crease": 0.25}], "portrait": [{"op": "eyes", "w": 1.5, "h": 0.68, "tilt": 0.08, "lid_k": 0.42, "iris": "#1C262C", "ink": "#121619", "lid_val": 0.80, "socket": 0.25, "smoke": [2.6, 1.5, 0.30], "line": 0.09, "crease": 0.25}]}},
     },
     "vashil_chalkline": {
         "splash": {"clip": "cast_a2", "t": 0.38, "yaw": 42.0, "pitch": 3.0, "lens": 68.0, "fill": 0.86, "x": 0.72,
@@ -250,10 +255,13 @@ CARDS = {
                               "power": 55.0, "size": 0.2},
                              {"at": "head", "az": 150.0, "el": 15.0, "dist": 0.8, "color": "#DCE6FF", "power": 18.0,
                               "size": 0.25}]},
-        "portrait": {"clip": "idle", "t": 0.0, "yaw": 36.0, "bust_lo": 0.42},
+        # (max2 g2 fix, verify_r2_g2a: "blank 0.79, ring cropped": the box 0.36 -> 0.52 m over the head so the ring is
+        # whole; the eyes through the pane, portrait only, the passing splash untouched)
+        "portrait": {"clip": "idle", "t": 0.0, "yaw": 36.0, "bust_lo": 0.42, "bust_hi": 0.52},
         # (CW5 refix 2, done:2: every skin its own painting, not the origin's aubade_dawn: the night gorge here)
         "plate": {"src": "needle_gorge", "tint": "#8E9CCB", "sat": 0.7, "median": 0.29,
-                  "glow": [0.12, 0.55, 0.40, 0.05], "glow_color": "#B8C6EC"},
+                  "glow": [0.12, 0.55, 0.40, 0.05], "glow_color": "#B8C6EC",
+                  "retouch": {"portrait": [{"op": "eyes", "w": 1.5, "h": 0.68, "tilt": 0.08, "lid_k": 0.42, "iris": "#1C262C", "ink": "#121619", "lid_val": 0.80, "socket": 0.25, "smoke": [2.6, 1.5, 0.30], "line": 0.09, "crease": 0.25}]}},
     },
     "vashil_first_bell": {
         "splash": {"clip": "cast_ult", "t": 0.56, "yaw": 16.0, "pitch": -4.0, "lens": 46.0, "fill": 0.84, "x": 0.70,

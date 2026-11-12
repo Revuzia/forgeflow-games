@@ -124,6 +124,7 @@ CARDS = {
         # (max2 g1 fix, verify_r2_g1a: the stab's head-down lean showed one eye slit in a wrapped ball, a mummy read at
         # card size): the victory hold the bust passes on, upright, chin raised, both eyes in the band
         "splash": {"clip": "victory", "t": 0.96, "yaw": 26.0, "pitch": -2.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "box_lo": 0.85, "box_w": 0.60,
                    "key_az": 240.0, "key_el": 12.0, "key_color": "#FFC896", "sun": 3.0, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.5, "bounce_color": "#D8A880", "accent": 1.4,
                    "focal": [{"at": "x_rack_top", "az": 230.0, "el": 30.0, "dist": 0.8, "color": "#FFD8A8",

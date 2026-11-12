@@ -262,7 +262,9 @@ CARDS = {
                                          {"op": "hue", "at": [-0.040, -0.021], "r": [0.024, 0.009], "h": [10.0, 50.0],
                                           "s_min": 0.35, "v_min": 0.50, "val": 0.50},
                                          {"op": "hue", "at": [0.082, -0.043], "r": [0.028, 0.011], "h": [10.0, 50.0],
-                                          "s_min": 0.35, "v_min": 0.50, "val": 0.50}],
+                                          "s_min": 0.35, "v_min": 0.50, "val": 0.50},
+                                         {"op": "hue", "at": [0.038, 0.064], "r": [0.068, 0.016], "h": [10.0, 50.0],
+                                          "s_min": 0.30, "v_max": 0.80, "val": 0.52}],
                               "portrait": [{"op": "fill", "at": [0.086, 0.041], "r": [0.055, 0.026], "px": 5, "q": 60},
                                            {"op": "fill", "at": [-0.062, 0.042], "r": [0.04, 0.022], "px": 5, "q": 60},
                                            {"op": "close", "at": [0.14, 0.193], "r": [0.035, 0.05], "px": 3}]}},
@@ -335,9 +337,17 @@ CARDS = {
                                           "s_min": 0.42, "sat": 0.75, "val": 0.68, "to": "#9A6A30", "mix": 0.6},
                                          {"op": "hue", "at": [0.063, -0.050], "r": [0.036, 0.018], "h": [28.0, 70.0],
                                           "s_min": 0.42, "sat": 0.75, "val": 0.68, "to": "#9A6A30", "mix": 0.6},
-                                         {"op": "hue", "at": [0.008, 0.041], "r": [0.065, 0.018], "h": [28.0, 70.0],
-                                          "s_min": 0.35, "sat": 0.7, "val": 0.72, "to": "#8A5A30", "mix": 0.5},
-                                         {"op": "close", "at": [-0.092, 0.056], "r": [0.014, 0.014], "px": 3}]}},
+                                         # (max2 g1 fix, verify_r2_g1a: the round-2 mouth op left orange dabs in the
+                                         # smile and the nostril shading read as a ragged peach patch): the smile one
+                                         # dark warm groove, the nostril blotch smoothed
+                                         {"op": "hue", "at": [0.008, 0.043], "r": [0.062, 0.016], "h": [12.0, 75.0],
+                                          "s_min": 0.28, "sat": 0.6, "val": 0.74, "to": "#5E4028", "mix": 0.6},
+                                         {"op": "blur", "at": [0.0, 0.009], "r": [0.028, 0.014], "px": 3.0},
+                                         {"op": "close", "at": [-0.092, 0.056], "r": [0.014, 0.014], "px": 3},
+                                         # (the all-pale bundle leaned to a mummy read): the slate wraps and legs
+                                         # back to a slate value under the pale bands, as in the game
+                                         {"op": "hue", "at": [0.0, 0.27], "r": [0.22, 0.27], "h": [215.0, 330.0],
+                                          "s_min": 0.0, "s_max": 0.40, "v_max": 0.76, "val": 0.62}]}},
     },
 }
 SKINS: list = [

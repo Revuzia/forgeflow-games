@@ -122,7 +122,10 @@ CARDS = {
                              {"at": "head", "az": 160.0, "el": 25.0, "dist": 0.9, "color": "#F0F6F2", "power": 20.0,
                               "size": 0.3}]},
         "portrait": {"yaw": -20.0, "lens": 70.0},
-        "plate": {"glow": [0.62, 0.40, 0.48, 0.08], "glow_color": "#CFE6DA", "sat": 0.8, "sub_median": 2},
+        # (max2 g1 fix, verify_r2_g1a: both boots planted but with no contact shadow on the bright snow, so the feet
+        # read pasted on): a firmer contact, the catcher's real shadow kept, a darker cooler shadow colour
+        "plate": {"glow": [0.62, 0.40, 0.48, 0.08], "glow_color": "#CFE6DA", "sat": 0.8, "sub_median": 2,
+                  "contact": 2.4, "shadow_real": 0.85, "cast": 0.45, "shadow_tint": 0.18},
     },
     "ervet_lamplit": {
         "splash": {"clip": "cast_ult", "t": 0.62, "yaw": 36.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,

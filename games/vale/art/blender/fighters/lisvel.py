@@ -135,7 +135,8 @@ CARDS = {
         # her right, the bow's plane square to the camera, the face clear)
         "splash": {"clip": "cast_a1", "t": 0.75, "yaw": -40.0, "pitch": -6.0, "lens": 48.0, "fill": 0.84, "x": 0.70,
                    "key_az": 145.0, "key_el": 40.0, "key_color": "#DDE6EE", "sun": 2.8, "rim_cool": 2.0,
-                   "rim_warm": 0.4, "bounce": 0.3, "bounce_color": "#A8B4BE", "accent": 1.5, "exposure": -0.35,
+                   # (max2 g2 fix, verify_r2_g2a "milky figure": -0.35 -> -0.65 EV, the bounce halved)
+                   "rim_warm": 0.4, "bounce": 0.15, "bounce_color": "#A8B4BE", "accent": 1.5, "exposure": -0.65,
                    "focal": [{"at": "head", "az": 165.0, "el": 20.0, "dist": 0.7, "color": "#F0F4F8", "power": 24.0,
                               "size": 0.2},
                              {"at": "x_bow_tip_r", "az": 140.0, "el": 30.0, "dist": 0.6, "color": "#E4ECF4",

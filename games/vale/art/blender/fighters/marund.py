@@ -98,7 +98,13 @@ CARDS = {
         # the busts look up under the brim at pitch 5 so the eyes and the keel read together, as the brief asks)
         "portrait": {"yaw": 26.0, "pitch": 5.0, "fill": 0.88, "clip": "victory", "t": 0.96,
                      "pose": [{"bone": "head", "rot": [-14.0, 0.0, 0.0]}]},   # (card engineer 1: the face lifted out of the cap's shade: the eyes were hidden, closing marund-C3-M1)
-        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46},
+        "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46,
+                  # (max2 g1 fix, verify_r2_g1a: a pure-black mesh gap between the mask's corner and the brim; the carved
+                  # lid creases too shallow to read at card size): the gap closed from its surround, the lid lines deepened
+                  "retouch": {"splash": [{"op": "close", "at": [0.124, -0.052], "r": [0.018, 0.012], "px": 9},
+                                         {"op": "blur", "at": [0.124, -0.052], "r": [0.018, 0.012], "px": 1.5},
+                                         {"op": "deepen", "at": [0.005, -0.036], "r": [0.036, 0.013], "px": 10, "k": 0.9},
+                                         {"op": "deepen", "at": [-0.085, -0.033], "r": [0.022, 0.013], "px": 10, "k": 0.9}]}},
     },
     "marund_gorgewalk": {
         # (closing round 2: the low wide lens at fill 0.86 cut the dome at the frame top: head at 0.002)
@@ -117,7 +123,20 @@ CARDS = {
                   "glow_color": "#D8DCE8",
                   # (max2 cards g1, verify roll1: the pale keel on the walnut face read as a beak): the keel toned to
                   # pale wood, so it sits in the face as the base's same-colour keel does
-                  "retouch": {"portrait": [{"op": "hue", "at": [0.091, -0.023], "r": [0.045, 0.095], "h": [0.0, 360.0],
+                  # (max2 g1 fix, verify_r2_g1a, the three-quarter splash): the face point on the mask's centre; the keel
+                  # and the jagged pale blocks beside it toned into the walnut, the slash marks over the moustache
+                  # closed, the closed lids' creases each side of the keel deepened so the eye pair reads
+                  "face_off": {"splash": [0.0253, -0.035]}, "face_r": {"splash": 1.6},
+                  "retouch": {"splash": [{"op": "hue", "at": [0.010, -0.015], "r": [0.042, 0.066], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.14, "v_min": 0.70, "val": 0.74, "to": "#B09478", "mix": 0.6},
+                                         {"op": "hue", "at": [-0.125, -0.030], "r": [0.032, 0.022], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.16, "v_min": 0.62, "val": 0.70, "to": "#8A6A50", "mix": 0.7},
+                                         {"op": "hue", "at": [-0.075, 0.065], "r": [0.032, 0.026], "h": [0.0, 360.0],
+                                          "s_min": 0.0, "s_max": 0.16, "v_min": 0.62, "val": 0.70, "to": "#8A6A50", "mix": 0.7},
+                                         {"op": "close", "at": [-0.023, 0.085], "r": [0.032, 0.016], "px": 4},
+                                         {"op": "deepen", "at": [-0.075, -0.035], "r": [0.036, 0.020], "px": 12, "k": 0.9},
+                                         {"op": "deepen", "at": [0.060, -0.040], "r": [0.026, 0.020], "px": 12, "k": 0.9}],
+                              "portrait": [{"op": "hue", "at": [0.091, -0.023], "r": [0.045, 0.095], "h": [0.0, 360.0],
                                             "s_min": 0.0, "s_max": 0.14, "v_min": 0.70, "val": 0.74, "to": "#B09478", "mix": 0.6}]}},
     },
     "marund_long_evening": {

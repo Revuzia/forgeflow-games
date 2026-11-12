@@ -1280,7 +1280,12 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
                                  get saturation x sat and value x val, then mixed `mix` toward the hex at their own luma
                                  (an off-model eye colour back to the sheet).
       {"op": "lift", "px": n, "k": k}   dark pixels well under their n px surround's median are lifted k of the way
-                                 toward it (a solid black slot opened to a shadowed lid)."""
+                                 toward it (a solid black slot opened to a shadowed lid).
+      {"op": "deepen", "px": n, "k": k}   (max2 g1 fix) the inverse: pixels under their n px surround's median (a lid
+                                 crease, a carved smile) are taken k of their depth further down, so a shallow carved
+                                 feature reads at card size; flat planes, with nothing under their surround, stay.
+      {"op": "blur", "px": s}    (max2 g1 fix) a gaussian smooth (sigma s px) inside the ellipse: a ragged retouch or
+                                 render edge (a mottled mouth, a blotched nostril) settled into one soft form."""
     ops = (p.get("retouch") or {}).get(kind)
     if not ops:
         return comp
@@ -1325,6 +1330,15 @@ def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
             den = _gauss1(_gauss1(m, sg, 0), sg, 1)[..., None]
             fill = num / np.maximum(den, 1e-4)
             new = np.where((fill @ Y709)[..., None] > (rgb @ Y709)[..., None], fill, rgb)
+        elif kind_ == "blur":
+            sg = float(op.get("px", 2.0))
+            new = np.stack([_gauss1(_gauss1(rgb[..., i], sg, 0), sg, 1) for i in range(3)], -1)
+        elif kind_ == "deepen":
+            n = max(2, int(op.get("px", 6)))
+            Y = rgb @ Y709
+            ref = _gauss1(_gauss1(_mm1(_mm1(Y, n // 2, 0, np.median), n // 2, 1, np.median), n / 2.0, 0), n / 2.0, 1)
+            gain = np.clip((Y - float(op.get("k", 0.6)) * np.clip(ref - Y, 0.0, None)) / np.maximum(Y, 1e-3), 0.25, 1.0)
+            new = np.clip(rgb * gain[..., None], 0.0, 1.0)
         elif kind_ == "lift":
             n = max(2, int(op.get("px", 6)))
             Y = rgb @ Y709
