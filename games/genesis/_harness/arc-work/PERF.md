@@ -882,3 +882,9 @@ long press frame-rate independent. Report after 1-2 verified.
   cw1 (mouse-wheel zoom through the deck, dist21 = fresh unminified build of the session-10 tree) -> eastwater4 (spec
   arc-work/specs/perf-eastwater2.json: day views east of Rubolhin, + fartrees=0) -> ft1 / ft0 (far trees on/off
   descent 2000/500/150/50 on babel, forest poi) -> cw2 (trackpad zoom).
+- ITEM 0 VERIFIED (F22 near cut, shnear): v18b (dist18, shnear=0) re-run ALONE vs v18a (shnear=1), ULTRA 888x500 busy
+  town at speed 0. town: mean |d| 3.2/255, townlow (17:35 low sun): 1.6/255; diff images shots/diff-v18-town.png,
+  diff-v18-townlow.png LOOKED: the only differences are tree-crown edges (wind sway runs at speed 0) and the HUD's
+  blurred backdrop / counters; ground, tree shadows near and far (also the long evening shadows), houses: identical.
+  shadowTris town 5.82 M (on) vs 9.39 M (off) = -38 %; townlow 11.80 M vs 11.66 M (a low sun's reach covers every
+  split: nothing to cut, as designed). 0 console errors.

@@ -150,7 +150,7 @@ if (phases.includes('wheelfixed')) {
   const dist0 = Number(opts.wdist ?? 1400), wdy = Number(opts.wdy ?? -100), every = Number(opts.wevery ?? 4);
   await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', poi: town, dist: dist0, tilt: 52, hour: Number(opts.hour ?? 10) });
   await page.evaluate(() => window.__GENESIS__.frames(10));
-  console.log('shell', JSON.stringify(await page.evaluate(() => { for (const v of globalThis.__GENESIS_R__.planets.values()) if (v.cloudOuter) return { inner: v.cloudInner - v.params.radius, outer: v.cloudOuter - v.params.radius, R: v.params.radius }; return null; })));
+  console.log('shell', JSON.stringify(await page.evaluate(() => { for (const v of globalThis.__GENESIS_R__.planets.values()) if (v.cloudOuter) { const R = v.pv?.params?.radius ?? v.params?.radius ?? 0; return { inner: v.cloudInner - R, outer: v.cloudOuter - R, R }; }; return null; })));
   await page.evaluate(() => window.__FIXCLOCK__.on());
   const zhi = Number(opts.zhi ?? 1e9), zlo = Number(opts.zlo ?? -1e9);
   const n = Number(opts.wframes ?? 240);
