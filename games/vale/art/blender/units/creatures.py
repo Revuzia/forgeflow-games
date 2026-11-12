@@ -237,10 +237,11 @@ class Glasshorn(Creature):
     # stag: a dusk-slate coat under a deep mantle, a chalk mane and belly, chalk dial chevrons on the flanks (the
     # sundial's hour lines, not a fawn's dapple), pale dawnglass hour ticks across the mantle that tie the body to the
     # glass rack, and ink-dark legs. Every hue stays out of the reserved bands (all under 40 % saturation).
-    PAL = {"hide": "#77738F", "flank": "#8A86A2", "belly": "#E6DED0", "leg": "#45425B", "sock": "#29273A",
+    # (value kept: the coat sits at the fawn's L* ~55 so the stag still stands off the jungle floor, max2u_mon70)
+    PAL = {"hide": "#9E9AB8", "flank": "#AEAAC6", "belly": "#E6DED0", "leg": "#58546F", "sock": "#2F2D40",
            "ruff": "#ECE5D6", "muzzle": "#3A3850", "nose": "#22212E", "eye": "#17161F", "hoof": "#2A2836",
            "ear_in": "#B7A9C2", "rump": "#EDE7DA", "tick": "#C9DCEA", "pedicle": "#E8E1D2", "saddle": "#3B3854",
-           "dot": "#EEE7D8", "coat_hi": "#A29EBB", "coat_lo": "#5B5776", "divide": "#2E2C42"}
+           "dot": "#F2ECDF", "coat_hi": "#C0BCD6", "coat_lo": "#7E7A9A", "divide": "#2E2C42"}
 
     def joints(self):
         return dict(

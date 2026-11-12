@@ -81,5 +81,91 @@
    ]
   }
  },
- "Hesmi in game": "hesmi_ingame_seed11.png (max_units_ab skips fighters the viewer's team does not see; Hesmi seated on the viewer's side)"
+ "Hesmi in game": "hesmi_ingame_seed11.png (max_units_ab skips fighters the viewer's team does not see; Hesmi seated on the viewer's side)",
+ "at_part2": "2026-11-12 08:45 CST",
+ "Glasshorn restyle (closing2 NEU-3)": {
+  "what": "creatures.py Glasshorn: realistic spotted fawn -> VALE dusk stag: dusk-lilac coat (fawn's L* kept), deep mantle, chalk mane and belly, chalk dial chevrons on the flanks in place of the dapple, pale dawnglass hour ticks over the mantle, ink legs; the dawnglass rack 1.35x wider, 1.2x deeper, crystals 1.15x thicker (same crystal count)",
+  "evidence": [
+   "glasshorn_restyle_sheet_ab.png",
+   "glasshorn_restyle_gamecam_ab.png"
+  ],
+  "value_probe --monsters RIFT High t 70 (round 1 -> now)": {
+   "unitPx": [
+    18027,
+    18314
+   ],
+   "dE76 vs floor": [
+    32.2,
+    32.2
+   ],
+   "dLstarP50": [
+    25.4,
+    18.4
+   ],
+   "unitL* p50": [
+    54.8,
+    47.5
+   ],
+   "maxIoU": "resinback 0.36 (round 1); silhouette unchanged except the wider rack"
+  },
+  "note": "a first darker coat measured dL 9.3 / dE 29.1 and was lifted before shipping; harm-band albedo share 24.2 % -> 0.3 % (the buff camp no longer wears the danger hue)",
+  "budgets": "8032 -> 8032 tris, textures 1024/1024/512 unchanged, GLB 471 -> 488 KiB; bounds width 0.80 -> 1.01 m, top 2.196 m",
+  "not changed": "glasshorn_icon.png still shows the fawn (icons are the card pipeline's)"
+ },
+ "Sunsplinter core (closing2 NEU-1)": {
+  "what": "creatures_b.py Sunsplinter: the noon orb 0.42 -> 0.56 m radius (same 20x12 segments), centre 8 cm lower, the tip's broken base 11 cm forward, the glass sunburst 0.72 -> 0.86 m, crown splinters out with the orb, keel 0.82 -> 0.95 m; the cast_a3 burst keeps its absolute peak radius (1.05 m)",
+  "evidence": [
+   "sunsplinter_core_sheet_ab.png",
+   "sunsplinter_core_gamecam_ab.png"
+  ],
+  "value_probe --monsters RIFT High t 400": {
+   "unitPx": [
+    53291,
+    69879
+   ],
+   "gate (>= 50 % of Longshade)": 51944,
+   "eroded px": [
+    27780,
+    41534
+   ],
+   "dE76": [
+    41.4,
+    44.1
+   ]
+  },
+  "budgets": "8216 -> 8216 tris, textures unchanged, GLB 788 -> 766 KiB, top 3.201 m",
+  "info": "harm-band albedo share 16.3 -> 20.9 % (the amber noon core is the objective's designed glow; ruling 32 is a fighter rule)"
+ },
+ "monster builds zero metal": "creatures.py and creatures_b.py now run glb_zero_metal.py after optimize (a rebuild failed content:check's checkZeroMetal until it was run by hand)",
+ "ruling 32 gate": {
+  "what": "art/tools/zone_grade.py measures the reserved-band share (HSV sat > 0.4) before and after a zone grade and fails the build if any band ends above max(8 %, its pre-grade share)",
+  "harm % pre-grade bake -> zoned": {
+   "kemdo": [
+    5.08,
+    4.47
+   ],
+   "burdam": [
+    30.49,
+    27.8
+   ],
+   "vashil": [
+    0.07,
+    0.07
+   ],
+   "tunlan": [
+    2.01,
+    2.47
+   ],
+   "rishal": [
+    0.16,
+    0.21
+   ]
+  },
+  "finding for the lead": "the ruling's ~27 % is Burdam's bake, not the zones (zoning lowered it 30.5 -> 27.8; the cards lane's mask rebuild now reads 18.95 %). Pre-existing over the 8 % cap with no zones involved: odrum 38.6, sukri 20.0, dunsom 16.5, ulkro 12.8, burdam 19.0 and skins (rishal_lamplit 23.0, ilsheta_first_bell 20.5, tunlan_lamplit 15.8). The texels are dark leather and wood browns (Burdam mean RGB 74/56/35, V ~0.29) that HSV counts as saturated. Not relaxed and not regraded: a call on whether the cap applies to whole bakes (and whether HSV is the right measure for dark browns) is the lead's"
+ },
+ "not done this round": {
+  "U6 emissives": "Ilsheta's chimney glass is a kept factor-only material designed never emissive (ilsheta.py:814, glow is a warning, cap 0.8); the round-1 glass response is in world_material.ts. No spec beyond 'Ilsheta emissives' exists, and making it glow conflicts with the source's rule, so it waits for a lead call",
+  "U7 heads": "no written spec (the round-1 plan file does not exist); head modelling of 14 fighters is a multi-session job and Burdam/Dunsom heads belong to the cards lane this round",
+  "U1(2) ORM bands": "closed by measurement in part 1 (u1_orm_bands.json: the bake already bands roughness per class and the shader reads them); not rewritten"
+ }
 }
