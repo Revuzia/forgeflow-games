@@ -19,7 +19,11 @@ const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i
 const prefixes = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--')));
 const per = Number(opt('per', 8));
 const name = opt('name', 'gallery');
-const TIMES = [0.1, 0.3, 0.6, 1.0];
+// --times a,b,c (s) and --zoom d (camera distance; 31 = the gameplay camera's default, 24.5 the closest)
+const TIMES = (opt('times', null) ?? '0.1,0.3,0.6,1.0').split(',').map(Number);
+const ZOOM = Number(opt('zoom', 24.5));
+// --scale s: the spawn's area scale (2.5 the gallery default; the director fires world events at 1)
+const SCALE = Number(opt('scale', 2.5));
 const CW = 560, CH = 400;
 
 // --catalog <manifest url>: a pinned catalog (an A/B's before and after side by side, whatever dist-catalog holds now);
@@ -53,11 +57,11 @@ const flushSheet = async () => {
 };
 for (const id of ids) {
   const info = await B((b, id) => b.renderer.vfxInfo(id), id);
-  await B((b, s) => { b.focus(s.x, s.y); b.zoom(24.5); b.frames(12, 1 / 30); }, spot);
+  await B((b, s) => { b.focus(s.x, s.y); b.zoom(s.zoom); b.frames(12, 1 / 30); }, { ...spot, zoom: ZOOM });
   const path = info?.path;
   // casts read left → right inside the crop: origin 1.5 m left of the spot, target 1.5 m right
   const from = path ? [spot.x - 3, spot.y] : [spot.x - 1.5, spot.y];
-  await B((b, a) => b.renderer.vfxTest(a.id, a.from[0], a.from[1], a.path ? { to: [a.from[0] + 6, a.from[1]], travel: 0.6 } : { to: [a.from[0] + 3, a.from[1]] }), { id, from, path });
+  await B((b, a) => b.renderer.vfxTest(a.id, a.from[0], a.from[1], { scale: a.scale, ...(a.path ? { to: [a.from[0] + 6, a.from[1]], travel: 0.6 } : { to: [a.from[0] + 3, a.from[1]] }) }), { id, from, path, scale: SCALE });
   const sc = await B((b, s) => b.screen(s.x, s.y, 0.8), spot);
   const tiles = [];
   let t = 0;

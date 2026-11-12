@@ -1575,6 +1575,13 @@ float valeMouth( vec2 p, out float u, out float span ) {
   u = dot( p - uMouth.xy, d / L );
   span = smoothstep( -0.15, 0.45, u ) * smoothstep( -0.15, 0.45, L - u ) * uMouthN.z;
   return dot( p - uMouth.xy, uMouthN.xy );
+}
+// max2 ENV-4: the mouth's span, wide (1 m past both ends, eased): the banks beside the mouth fade with it, so the
+// channel's side edges feather into the spill the way its lip does
+float valeMouthWide( vec2 p ) {
+  vec2 d = uMouth.zw - uMouth.xy; float L = max( length( d ), 1e-4 );
+  float u = dot( p - uMouth.xy, d / L );
+  return smoothstep( -1.3, 0.2, u ) * smoothstep( -1.3, 0.2, L - u ) * uMouthN.z;
 }`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
@@ -1594,7 +1601,7 @@ float valeMouth( vec2 p, out float u, out float span ) {
   float sd = texture( uSplat2, vValeWorld.xz * uSplatScale ).g * 8.0 - 4.0;
   // max env ENV-4 fix: no bank at the mouth (it is open water running out): the lap, the wet lip and the bank lace fade
   float mu, ms; float mt = valeMouth( vValeWorld.xz, mu, ms );
-  float mband = ms * smoothstep( -1.0, -0.15, mt );
+  float mband = max( ms * smoothstep( -1.0, -0.15, mt ), valeMouthWide( vValeWorld.xz ) * smoothstep( -3.2, -0.4, mt ) );
   float lap = ( 1.0 - smoothstep( 0.0, 0.35, -sd ) ) * ( 1.0 - mband );
   diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
   outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( uWaterLap ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
@@ -1653,16 +1660,20 @@ float valeMouth( vec2 p, out float u, out float span ) {
   // capped as the bank lace is (display L* ~46), never a white line.
   if ( ms > 0.0 ) {
     float ol = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-    float crest = ( 1.0 - smoothstep( 0.02, 0.18, abs( mt + 0.3 + 0.05 * sin( uWaterT * 2.1 + mu * 3.0 ) ) ) )
-                * ( 0.35 + 0.65 * smoothstep( 0.25, 0.6, valeNoise( vec2( mu * 3.2 + uWaterT * 0.6, uWaterT * 0.9 ) ) ) );
-    float st = smoothstep( 0.55, 0.82, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) )
-             * smoothstep( -0.32, -0.05, mt ) * ( 1.0 - smoothstep( 0.25, 0.95, mt ) );
+    // (max2 ENV-4: the crest broken into churning clots along the lip and wandering in height, never a ruled line)
+    float crest = ( 1.0 - smoothstep( 0.0, 0.24, abs( mt + 0.3 + 0.05 * sin( uWaterT * 2.1 + mu * 3.0 ) + 0.12 * ( valeNoise( vec2( mu * 1.7, 4.0 ) ) - 0.5 ) ) ) )
+                * smoothstep( 0.3, 0.72, valeNoise( vec2( mu * 3.2 + uWaterT * 0.6, uWaterT * 0.9 ) ) );
+    // max2 ENV-4: the fall reads at game zoom: denser streaks (a lower threshold), running further down the spill
+    // (each streak starts at its own height over the lip and runs out its own length: never a comb of equal bars)
+    float colN = valeNoise( vec2( mu * 6.3, 2.7 ) ), colM = valeNoise( vec2( mu * 4.1, 8.3 ) );
+    float st = smoothstep( 0.45, 0.76, valeNoise( vec2( mu * 11.0 + 0.5 * sin( mt * 3.0 + mu * 1.3 ), mt * 0.7 - uWaterT * 2.4 ) ) )
+             * smoothstep( -0.5 + 0.4 * colN, -0.12 + 0.12 * colN, mt ) * ( 1.0 - smoothstep( 0.15 + 0.4 * colM, 0.7 + 0.45 * colM, mt ) );
     float mist = ( 1.0 - smoothstep( 0.0, 0.7, abs( mt - 0.12 ) ) ) * ( 0.55 + 0.45 * sin( uWaterT * 0.7 + mu * 1.3 ) )
                * valeNoise( vec2( mu * 1.2 - uWaterT * 0.2, mt * 1.5 + uWaterT * 0.3 ) );
     float curl = smoothstep( -0.12, 0.0, mt ) * ( 1.0 - smoothstep( 0.0, 0.22, mt ) );
     outgoingLight *= 1.0 - 0.3 * curl * ms;
-    float pale = clamp( crest + st * 0.7, 0.0, 1.0 ) * ms;
-    outgoingLight = mix( outgoingLight, vec3( min( ol * 1.8 + uWaterLap * 1.3, 0.155 ) ) * vec3( 1.0, 0.99, 0.95 ), pale * 0.9 );
+    float pale = clamp( crest * 1.15 + st * 0.95, 0.0, 1.0 ) * ms;
+    outgoingLight = mix( outgoingLight, vec3( min( ol * 2.1 + uWaterLap * 1.6, 0.17 ) ) * vec3( 1.0, 0.99, 0.95 ), pale * 0.92 );
     outgoingLight += vec3( uWaterLap * 0.8 ) * mist * ms;
     float spill = step( 0.0, mt );
     diffuseColor.a = max( diffuseColor.a, ( pale * 0.7 + mist * 0.25 ) * ( 1.0 - spill ) );
@@ -1670,13 +1681,14 @@ float valeMouth( vec2 p, out float u, out float span ) {
   // the spill strip owns no bank: past the lip its alpha is the spill's alone (0 beyond the mouth's span, so the strip's
   // own edges never show)
   if ( uMouthN.z > 0.5 && mt > 0.0 ) {
-    float pale2 = ms * smoothstep( 0.55, 0.82, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) ) * ( 1.0 - smoothstep( 0.25, 0.95, mt ) );
-    diffuseColor.a = ms * max( 0.5 * ( 1.0 - smoothstep( 0.05, ${SPILL_M.toFixed(2)}, mt ) ), pale2 * 0.6 );
+    float colM2 = valeNoise( vec2( mu * 4.1, 8.3 ) );
+    float pale2 = ms * smoothstep( 0.45, 0.76, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) ) * ( 1.0 - smoothstep( 0.15 + 0.4 * colM2, 0.7 + 0.45 * colM2, mt ) );
+    diffuseColor.a = ms * max( 0.5 * ( 1.0 - smoothstep( 0.05, ${SPILL_M.toFixed(2)}, mt ) ), pale2 * 0.8 );
   }
 }
 #include <opaque_fragment>`);
     };
-    mat.customProgramCacheKey = () => 'vale_water_v7';
+    mat.customProgramCacheKey = () => 'vale_water_v8';
     patchWorldMaterial(mat);
     const mesh = new Mesh(geo, mat);
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
@@ -2009,10 +2021,32 @@ float valeMouth( vec2 p, out float u, out float span ) {
   disposables.push(propMat, treeMat, treeDepth);
   /** a spot's variant is a hash of its position: stable across quality changes */
   const variantOf = (x: number, y: number, n: number): number => Math.floor(hash2(x * 1.7, y * 2.3) * n) % n;
+  // max2 ENV-1: tree SPECIES grow in groves (art.terrain.treeGroves: families of indices into props.tree, a grove cell
+  // size, and the families' shares at the west and east edges; the shares blend across the middle third). A grove is
+  // a warped cell of the floor, so groves have soft, irregular edges; inside a species grove a fifth of the trees stay
+  // the first family (the wood never turns into a plantation). Without the field (or with a list that does not
+  // match the loaded props) every variant is equally likely, as before.
+  const groveDef = (tr.treeGroves ?? null) as { families?: unknown; cell?: unknown; west?: unknown; east?: unknown } | null;
+  const groveFams = Array.isArray(groveDef?.families) ? (groveDef!.families as unknown[]).map((f) => (Array.isArray(f) ? f.filter((i): i is number => Number.isInteger(i) && i >= 0) : [])) : [];
+  const shareOf = (v: unknown): number[] => (Array.isArray(v) && v.length === groveFams.length ? v.map((x) => (typeof x === 'number' && x >= 0 ? x : 0)) : []);
+  const groveW = shareOf(groveDef?.west), groveE = shareOf(groveDef?.east), groveCell = num(groveDef?.cell) ?? 9;
+  const treeVariantOf = (x: number, y: number, n: number): number => {
+    if (!groveFams.length || !groveW.length || !groveE.length || groveFams.some((f) => !f.length || f.some((i) => i >= n))) return variantOf(x, y, n);
+    const k = Math.min(1, Math.max(0, (x / SX - 1 / 3) * 3));
+    const sh = groveW.map((w, i) => w + (groveE[i] - w) * k), tot = sh.reduce((a, b) => a + b, 0) || 1;
+    const wx = x + 2.6 * Math.sin(y * 0.21 + 1.3) + 1.4 * Math.sin(y * 0.53 - 0.4);
+    const wy = y + 2.6 * Math.sin(x * 0.19 - 0.7) + 1.4 * Math.sin(x * 0.47 + 2.1);
+    let g = hash2(Math.floor(wx / groveCell) * 1.131 + 7.1, Math.floor(wy / groveCell) * 0.877 - 3.3) * tot, f = 0;
+    while (f < sh.length - 1 && g >= sh[f]) { g -= sh[f]; f++; }
+    if (f > 0 && hash2(x * 2.11 + 0.7, y * 1.73 - 1.9) < 0.2) f = 0;
+    const fam = groveFams[f];
+    return fam[Math.floor(hash2(x * 1.7, y * 2.3) * fam.length) % fam.length];
+  };
   /** instanced props by variant */
   const propParts = (geos: BufferGeometry[], items: { x: number; y: number; m: Matrix4; c?: Color }[], name: string, shadows = true, sway = false): Group[] => {
     const by: { m: Matrix4; c?: Color }[][] = geos.map(() => []);
-    for (const it of items) by[variantOf(it.x, it.y, geos.length)].push(it);
+    const vf = sway ? treeVariantOf : variantOf;
+    for (const it of items) by[vf(it.x, it.y, geos.length)].push(it);
     // props (Dialwood, boulders, stones): 1 m past their bounds (the cull runs every frame for that frame's camera, so
     // nothing can pop in; the bounds already hold the crowns, sway is ≤ 4 cm).
     // r12 B4 Dialwood LOD, decided: a VISIBLE tree keeps its full crown at any distance (lod.dist Infinity). Every
@@ -2057,7 +2091,7 @@ float valeMouth( vec2 p, out float u, out float span ) {
       const geos = props.tree, dims = geos.map(dimsOf);
       const items: { x: number; y: number; m: Matrix4; c: Color }[] = [];
       for (const t of trees) {
-        const d = dims[variantOf(t.x, t.y, geos.length)];
+        const d = dims[treeVariantOf(t.x, t.y, geos.length)];
         const sc = treeScale(t, d.H, d.R);
         if (sc <= 0) continue;
         q.setFromAxisAngle(up, t.r); s.setScalar(sc); pos.set(t.x, t.h - 0.12, t.y);

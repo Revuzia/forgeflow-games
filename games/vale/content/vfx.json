@@ -1070,49 +1070,38 @@
     "teamTint": true,
     "layers": [
       {
-        "type": "mesh",
+        "type": "decal",
         "at": "origin",
-        "shape": "fan",
-        "scale": [
+        "shape": "cone",
+        "style": "light",
+        "radius": [
           [
             0,
-            1.0
+            0.4
+          ],
+          [
+            0.7,
+            3.0
           ],
           [
             1,
-            1.0
+            3.1
           ]
         ],
-        "stretch": [
-          3.0,
-          1,
-          3.0
-        ],
-        "life": 0.26,
+        "life": 0.5,
         "color": [
           "team",
           "#BFD3E6"
         ],
         "alpha": [
-          0.85,
-          0.85,
+          1,
+          0.7,
           0
         ],
         "emissive": 2.6,
-        "mask": "sweep",
-        "maskParam": [
-          0,
-          1.1
-        ],
-        "blend": "add",
-        "align": "dir",
+        "texture": "ring_thin",
         "angleDeg": 70,
-        "fit": true,
-        "offset": [
-          0.2,
-          0.35,
-          0
-        ]
+        "fit": true
       },
       {
         "type": "emitter",
@@ -1151,15 +1140,28 @@
         "at": "origin",
         "shape": "cone",
         "style": "light",
-        "radius": 3.0,
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.4,
+            3.0
+          ],
+          [
+            1,
+            3.0
+          ]
+        ],
         "life": 0.5,
         "color": "team",
         "alpha": [
-          0.45,
+          0.5,
           0.3,
           0
         ],
-        "emissive": 1.2,
+        "emissive": 1.3,
         "angleDeg": 70,
         "fit": true
       }
@@ -1921,7 +1923,7 @@
       {
         "type": "emitter",
         "at": "origin",
-        "count": 7,
+        "count": 6,
         "shape": "sphere",
         "radius": 0.3,
         "dir": "up",
@@ -1931,21 +1933,21 @@
           2.6
         ],
         "life": [
-          0.8,
-          1.3
+          0.7,
+          1.1
         ],
         "size": [
-          0.315,
-          0.7,
-          0.84
+          0.27,
+          0.6,
+          0.72
         ],
         "sizeVar": [
           0.8,
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#4A443D",
+          "#5B544B"
         ],
         "alpha": [
           0,
@@ -1967,7 +1969,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.45,
         "soft": 0.3,
         "delay": 0.08
       },
@@ -2127,15 +2129,15 @@
           ]
         ],
         "life": 3.2,
-        "color": "#2A2C33",
+        "color": "#5A5046",
         "alpha": [
           [
             0,
-            0.85
+            0.7
           ],
           [
             0.75,
-            0.7
+            0.55
           ],
           [
             1,
@@ -3234,7 +3236,7 @@
     ]
   },
   {
-    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (heavy: 1.45-1.8 m, emissive 2.4, so a dull signature still spans ~0.6 x the victim), warm white turning to the signature, holds full for 7 sim frames (238 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (CW1 r2 done:1: as the light hit, the glint holds the warm white flat to 40 % of its life and is 5 % larger, so a deep signature (Kemdo's coral) keeps the lit disc >= 0.5 x the victim through frame 4, where it dipped to 0.49 at frame 3)",
+    "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (heavy: 1.45-1.8 m, emissive 2.4, so a dull signature still spans ~0.6 x the victim), warm white turning to the signature, holds full for 7 sim frames (238 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (CW1 r2 done:1: as the light hit, the glint holds the warm white flat to 40 % of its life and is 5 % larger, so a deep signature (Kemdo's coral) keeps the lit disc >= 0.5 x the victim through frame 4, where it dipped to 0.49 at frame 3) · max2 VFX-11: a short heat ring bends the air round the blow (distortion draws only at T3+ on Medium and up, so basic attacks never pay for it)",
     "id": "lib_hit_phys_heavy",
     "duration": 0.8,
     "teamTint": true,
@@ -3715,6 +3717,36 @@
           0
         ],
         "emissive": 1.4
+      },
+      {
+        "type": "distort",
+        "at": "target",
+        "mode": "ring",
+        "size": [
+          [
+            0,
+            0.4
+          ],
+          [
+            1,
+            1.9
+          ]
+        ],
+        "strength": [
+          [
+            0,
+            0.009
+          ],
+          [
+            0.5,
+            0.004
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "life": 0.28
       }
     ]
   },
@@ -4183,6 +4215,564 @@
     ]
   },
   {
+    "$comment": "T2 · Lumen · item family Bell (Warning Bell, Bellrope, Watchbell): the bell tolls: a brass toll ring stands up off the holder, two brass rings ring out over the area, brass streaks",
+    "id": "lib_item_bell_toll",
+    "duration": 0.9,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "shockwave",
+        "at": "target",
+        "mode": "vertical",
+        "radius": [
+          [
+            0,
+            0.25
+          ],
+          [
+            1,
+            1.1
+          ]
+        ],
+        "width": [
+          0.14,
+          0.03
+        ],
+        "life": 0.32,
+        "color": [
+          "#D8B46A",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "blend": "add",
+        "offset": [
+          0,
+          0.6,
+          0
+        ]
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.15
+          ],
+          [
+            0.35,
+            0.7875
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "width": [
+          0.22,
+          0.05
+        ],
+        "life": 0.42,
+        "color": [
+          "#D8B46A",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.6,
+        "sharp": 2.4,
+        "noise": 0.35,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.1
+          ],
+          [
+            0.35,
+            0.625
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "width": [
+          0.12,
+          0.03
+        ],
+        "life": 0.42,
+        "color": [
+          "#E8D9B4",
+          "team"
+        ],
+        "alpha": [
+          0.8,
+          0.5,
+          0
+        ],
+        "emissive": 2.0,
+        "sharp": 2.4,
+        "noise": 0.35,
+        "delay": 0.14,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 10,
+        "shape": "ring",
+        "radius": 0.45,
+        "dir": "out",
+        "spreadDeg": 6,
+        "speed": [
+          3.5,
+          5.0
+        ],
+        "life": [
+          0.22,
+          0.32
+        ],
+        "size": [
+          0.34,
+          0.08
+        ],
+        "color": [
+          "#D8B46A",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "drag": 2.2,
+        "texture": "streak",
+        "stretch": 0.05,
+        "blend": "add",
+        "align": "velocity"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · item family Edge (Dialcutter): the dial's edge gathers pace: hour-ticks circle the weapon and a brass flare, pace streaks peel off the heels",
+    "id": "lib_item_edge_pace",
+    "duration": 0.8,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "origin",
+        "socket": "weapon",
+        "follow": true,
+        "count": 12,
+        "shape": "ring",
+        "radius": 0.35,
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.4,
+          0.55
+        ],
+        "size": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            0.2
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "color": [
+          "#E8D9B4",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "orbitDeg": 360,
+        "texture": "streak",
+        "stretch": 0.0,
+        "blend": "add",
+        "space": "local"
+      },
+      {
+        "type": "sprite",
+        "at": "origin",
+        "socket": "weapon",
+        "follow": true,
+        "texture": "glow",
+        "size": [
+          0.8,
+          0.8640000000000001
+        ],
+        "color": "team",
+        "emissive": 2.4,
+        "alpha": [
+          0,
+          1,
+          0.6,
+          0
+        ],
+        "life": 0.6,
+        "soft": 0.25
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 8,
+        "shape": "disc",
+        "radius": 0.3,
+        "dir": "back",
+        "spreadDeg": 15,
+        "speed": [
+          3,
+          5
+        ],
+        "life": [
+          0.12,
+          0.2
+        ],
+        "size": [
+          0.4,
+          0.08
+        ],
+        "color": [
+          "#E8D9B4",
+          "team"
+        ],
+        "alpha": [
+          0.9,
+          0
+        ],
+        "emissive": 2.2,
+        "drag": 3,
+        "texture": "streak",
+        "stretch": 0.07,
+        "blend": "add",
+        "offset": [
+          0,
+          -0.7,
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · item family Lens (Afterlight): the light lands twice: a lens ring closes on the spot, then a glass burst with a team edge ring and shards",
+    "id": "lib_item_glass_echo",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            1.0
+          ],
+          [
+            1,
+            0.25
+          ]
+        ],
+        "life": 0.3,
+        "color": "#BFD3E6",
+        "alpha": [
+          0.6,
+          0
+        ],
+        "emissive": 2.0,
+        "texture": "ring_thin",
+        "fit": true
+      },
+      {
+        "type": "flash",
+        "at": "ground",
+        "radius": 0.9,
+        "life": 0.05,
+        "color": "team",
+        "intensity": 3.0,
+        "delay": 0.3
+      },
+      {
+        "type": "mesh",
+        "at": "ground",
+        "shape": "orb",
+        "scale": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.25,
+            0.85
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.26,
+        "color": [
+          "#F4EFE2",
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          0.75,
+          0
+        ],
+        "emissive": 2.8,
+        "rim": "team",
+        "rimPow": 1.4,
+        "rimEmissive": 3.0,
+        "noise": 0.5,
+        "dissolve": [
+          0,
+          0.3,
+          1
+        ],
+        "edge": "team",
+        "edgeEmissive": 2.6,
+        "blend": "add",
+        "delay": 0.3,
+        "fit": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.8375000000000001
+          ],
+          [
+            1,
+            1.05
+          ]
+        ],
+        "width": [
+          0.3,
+          0.06
+        ],
+        "life": 0.32,
+        "color": "team",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.8,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.3,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 12,
+        "shape": "sphere",
+        "radius": 0.2,
+        "dir": "out",
+        "spreadDeg": 170,
+        "speed": [
+          4,
+          8
+        ],
+        "life": [
+          0.3,
+          0.55
+        ],
+        "size": [
+          0.3,
+          0.24,
+          0
+        ],
+        "sizeVar": [
+          0.6,
+          1.4
+        ],
+        "color": [
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": 6.0,
+        "drag": 1.8,
+        "texture": "shard",
+        "blend": "add",
+        "align": "velocity",
+        "aspect": 0.45,
+        "delay": 0.3
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · item family Glass (Glass Veil, Glintmail): glass settles round the holder: shards fly in and lock into a faceted Dawnglass shell with a team rim, glints catch on it",
+    "id": "lib_item_glass_ward",
+    "duration": 0.9,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "mesh",
+        "at": "target",
+        "shape": "orb",
+        "scale": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.15,
+            1.5
+          ],
+          [
+            1,
+            1.45
+          ]
+        ],
+        "life": 0.85,
+        "color": "#BFD3E6",
+        "alpha": [
+          0,
+          0.28,
+          0.22,
+          0
+        ],
+        "emissive": 1.2,
+        "rim": "team",
+        "rimPow": 1.8,
+        "rimEmissive": 3.0,
+        "noise": 0.7,
+        "noiseScale": 3.0,
+        "scroll": [
+          0.2,
+          0.4
+        ],
+        "blend": "add",
+        "hold": 0.6
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 12,
+        "shape": "sphere",
+        "radius": 0.75,
+        "surface": true,
+        "dir": "in",
+        "spreadDeg": 10,
+        "speed": [
+          0.8,
+          1.4
+        ],
+        "life": [
+          0.25,
+          0.35
+        ],
+        "size": [
+          0.22,
+          0.16,
+          0
+        ],
+        "color": [
+          "#F4EFE2",
+          "#BFD3E6",
+          "team"
+        ],
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "texture": "shard",
+        "blend": "add",
+        "align": "velocity",
+        "aspect": 0.45
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 6,
+        "shape": "sphere",
+        "radius": 0.8,
+        "surface": true,
+        "dir": "none",
+        "speed": [
+          0,
+          0
+        ],
+        "life": [
+          0.5,
+          0.7
+        ],
+        "size": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            0.18
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "color": "#F4EFE2",
+        "alpha": [
+          0,
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "texture": "glint",
+        "blend": "add",
+        "delay": 0.12
+      }
+    ]
+  },
+  {
     "$comment": "T2 · Lumen · Hold the Hour: a still ring of hour-light round the caster and glints hung motionless in the air around them for 1.5 s (time held), a pale floor",
     "id": "lib_item_hold_the_hour",
     "duration": 1.5,
@@ -4346,6 +4936,582 @@
         "emissive": 1.0,
         "rim": "team",
         "follow": true
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · item family Lamp (Kindly Lamp, Shelter Lamp): the lamp is turned up: a warm lamp pool and ring over the area, lamp embers rise off the holder (help is up)",
+    "id": "lib_item_lamp_glow",
+    "duration": 1.0,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.25,
+            1.0
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.9,
+        "color": "#E8A04A",
+        "alpha": [
+          0.55,
+          0.3,
+          0
+        ],
+        "emissive": 1.6,
+        "texture": "glow",
+        "fit": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.8
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "width": [
+          0.18,
+          0.04
+        ],
+        "life": 0.5,
+        "color": [
+          "#E8A04A",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.2,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "fit": true,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 14,
+        "shape": "disc",
+        "radius": 0.6,
+        "dir": "up",
+        "spreadDeg": 20,
+        "speed": [
+          0.8,
+          1.6
+        ],
+        "life": [
+          0.6,
+          0.9
+        ],
+        "size": [
+          0,
+          0.16,
+          0.12,
+          0
+        ],
+        "color": [
+          "#E8A04A",
+          "#FFE4B8"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.2,
+        "gravity": -0.3,
+        "drag": 1.0,
+        "turbulence": 0.8,
+        "texture": "ember",
+        "blend": "add",
+        "offset": [
+          0,
+          -0.8,
+          0
+        ]
+      },
+      {
+        "type": "sprite",
+        "at": "target",
+        "offset": [
+          0,
+          0.4,
+          0
+        ],
+        "texture": "glow",
+        "size": [
+          0.9,
+          0.9720000000000001
+        ],
+        "color": "#E8A04A",
+        "emissive": 2.0,
+        "alpha": [
+          0,
+          0.7,
+          0
+        ],
+        "life": 0.5,
+        "soft": 0.25
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · item family Needle (Needlefall): the needle's shadow falls: pale needles drop round the holder, a ring, ink shadow streaks peel off the heels while the haste lasts",
+    "id": "lib_item_needle_shadow",
+    "duration": 0.9,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "rate": 30,
+        "duration": 0.8,
+        "shape": "disc",
+        "radius": 0.35,
+        "dir": "back",
+        "spreadDeg": 20,
+        "speed": [
+          3,
+          6
+        ],
+        "life": [
+          0.12,
+          0.22
+        ],
+        "size": [
+          0.5,
+          0.1
+        ],
+        "color": [
+          "#2A2C33",
+          "#17181B"
+        ],
+        "alpha": [
+          0.9,
+          0
+        ],
+        "drag": 3,
+        "texture": "streak",
+        "stretch": 0.08,
+        "blend": "ink",
+        "rim": "team",
+        "rimAlpha": 0.8,
+        "offset": [
+          0,
+          -0.6,
+          0
+        ]
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 8,
+        "shape": "ring",
+        "radius": 0.5,
+        "dir": "down",
+        "spreadDeg": 4,
+        "speed": [
+          7,
+          9
+        ],
+        "life": [
+          0.14,
+          0.18
+        ],
+        "size": [
+          0.5,
+          0.06
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.4,
+        "texture": "streak",
+        "stretch": 0.06,
+        "blend": "add",
+        "offset": [
+          0,
+          1.6,
+          0
+        ]
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.6500000000000001
+          ],
+          [
+            1,
+            0.8
+          ]
+        ],
+        "width": [
+          0.12,
+          0.03
+        ],
+        "life": 0.3,
+        "color": "team",
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.0,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.12,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · item family Resin (Resin Maul): resin drips off the holder and the warmth rises back as Sap motes (help is up), a resin-to-Sap ring",
+    "id": "lib_item_resin_mend",
+    "duration": 0.9,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 6,
+        "shape": "disc",
+        "radius": 0.35,
+        "dir": "down",
+        "spreadDeg": 10,
+        "speed": [
+          0.4,
+          0.8
+        ],
+        "life": [
+          0.3,
+          0.45
+        ],
+        "size": [
+          0.16,
+          0.12
+        ],
+        "color": [
+          "#D9A15A",
+          "#B57A3A"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "gravity": 8,
+        "texture": "drop",
+        "blend": "alpha",
+        "rim": "#FFE4B8",
+        "rimAlpha": 0.7,
+        "offset": [
+          0,
+          0.6,
+          0
+        ]
+      },
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 16,
+        "shape": "disc",
+        "radius": 0.5,
+        "dir": "up",
+        "spreadDeg": 25,
+        "speed": [
+          1.1,
+          2.2
+        ],
+        "life": [
+          0.5,
+          0.8
+        ],
+        "size": [
+          0,
+          0.2,
+          0.16000000000000003,
+          0
+        ],
+        "color": [
+          "#B8D98A",
+          "#7FD6A0"
+        ],
+        "alpha": [
+          0,
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.0,
+        "gravity": -0.2,
+        "drag": 1.2,
+        "turbulence": 0.8,
+        "texture": "mote",
+        "blend": "add",
+        "delay": 0.1,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "target",
+        "radius": [
+          [
+            0,
+            0.2
+          ],
+          [
+            0.35,
+            0.6875
+          ],
+          [
+            1,
+            0.85
+          ]
+        ],
+        "width": [
+          0.14,
+          0.04
+        ],
+        "life": 0.42,
+        "color": [
+          "#D9A15A",
+          "#7FD6A0"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 1.6,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.1,
+        "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · impact · item family Stone (Ironstone Guard, Hourcleaver, Seatstone, Callstone): chalk plates snap in and lock round the holder in a team-lit band, a ring and a little dust at the feet",
+    "id": "lib_item_stone_brace",
+    "duration": 0.8,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "emitter",
+        "at": "target",
+        "count": 10,
+        "shape": "ring",
+        "radius": 0.95,
+        "dir": "in",
+        "spreadDeg": 4,
+        "speed": [
+          2.6,
+          3.2
+        ],
+        "life": [
+          0.22,
+          0.26
+        ],
+        "size": [
+          0.28,
+          0.28,
+          0.24
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          0
+        ],
+        "drag": 0.5,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -200,
+          200
+        ],
+        "rim": "team",
+        "rimAlpha": 0.7,
+        "offset": [
+          0,
+          -0.2,
+          0
+        ]
+      },
+      {
+        "type": "mesh",
+        "at": "target",
+        "shape": "ringwave",
+        "scale": [
+          [
+            0,
+            1.2
+          ],
+          [
+            0.25,
+            0.72
+          ],
+          [
+            1,
+            0.72
+          ]
+        ],
+        "life": 0.7,
+        "color": [
+          "#F1E2C6",
+          "team"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.25,
+            0.9
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 1.8,
+        "mask": "band",
+        "maskParam": 0.35,
+        "blend": "add",
+        "align": "up",
+        "delay": 0.18,
+        "offset": [
+          0,
+          -0.3,
+          0
+        ]
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.3
+          ],
+          [
+            0.35,
+            0.75
+          ],
+          [
+            1,
+            0.9
+          ]
+        ],
+        "width": [
+          0.16,
+          0.04
+        ],
+        "life": 0.3,
+        "color": [
+          "#F1E2C6",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 1.8,
+        "sharp": 1.6,
+        "noise": 0.35,
+        "delay": 0.2,
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 4,
+        "shape": "ring",
+        "radius": 0.4,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          0.8,
+          2.2
+        ],
+        "life": [
+          0.5,
+          0.9
+        ],
+        "size": [
+          0.4,
+          0.8,
+          1.0
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.45,
+          0.27,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.2,
+        "secondary": true
       }
     ]
   },
@@ -5566,54 +6732,40 @@
     "teamTint": true,
     "layers": [
       {
-        "type": "mesh",
+        "type": "decal",
         "at": "origin",
-        "shape": "fan",
-        "scale": [
+        "shape": "cone",
+        "style": "light",
+        "radius": [
           [
             0,
-            1.0
+            0.4
+          ],
+          [
+            0.7,
+            3.0
           ],
           [
             1,
-            1.0
+            3.1
           ]
         ],
-        "stretch": [
-          3.0,
-          1,
-          3.0
-        ],
-        "life": 0.34,
-        "color": [
-          "#E8A04A",
-          "#E8D9B4"
-        ],
+        "life": 0.65,
+        "color": "#E8A04A",
         "alpha": [
-          0.75,
+          1,
           0.7,
           0
         ],
-        "emissive": 2.4,
-        "mask": "sweep",
-        "maskParam": [
-          0,
-          1.1
-        ],
-        "blend": "add",
-        "align": "dir",
+        "emissive": 2.6,
+        "texture": "ring_thin",
         "angleDeg": 80,
-        "fit": true,
-        "offset": [
-          0.2,
-          0.3,
-          0
-        ]
+        "fit": true
       },
       {
         "type": "emitter",
         "at": "origin",
-        "count": 12,
+        "count": 7,
         "shape": "cone",
         "angleDeg": 80,
         "length": 3.0,
@@ -5624,21 +6776,21 @@
           4
         ],
         "life": [
-          0.4,
-          0.7
+          0.35,
+          0.6
         ],
         "size": [
-          0.5,
-          1.0,
-          1.1
+          0.35,
+          0.7,
+          0.8
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#4A443D",
+          "#5B544B"
         ],
         "alpha": [
           0,
-          0.85,
+          0.6,
           0
         ],
         "drag": 2.4,
@@ -5649,7 +6801,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#E8A04A",
-        "rimAlpha": 0.6,
+        "rimAlpha": 0.5,
         "soft": 0.3
       },
       {
@@ -5657,12 +6809,25 @@
         "at": "origin",
         "shape": "cone",
         "style": "ink",
-        "radius": 3.0,
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.45,
+            3.0
+          ],
+          [
+            1,
+            3.0
+          ]
+        ],
         "life": 1.0,
-        "color": "#17181B",
+        "color": "#2A2C33",
         "alpha": [
-          0.7,
           0.55,
+          0.4,
           0
         ],
         "rim": "#E8D9B4",
@@ -5762,6 +6927,270 @@
         "texture": "spark",
         "stretch": 0.035,
         "blend": "add"
+      }
+    ]
+  },
+  {
+    "$comment": "T2 · impact · a neutral monster falls: a heavy dust ring and stone chips, its wild light leaves as embers and a warm smoke curl, a cracked mark stays",
+    "id": "lib_monster_fall",
+    "duration": 1.6,
+    "teamTint": true,
+    "layers": [
+      {
+        "type": "flash",
+        "at": "origin",
+        "radius": 0.675,
+        "life": 0.05,
+        "color": "#FF9A4A",
+        "intensity": 3.0,
+        "light": false
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 12,
+        "shape": "ring",
+        "radius": 0.9,
+        "dir": "out",
+        "spreadDeg": 35,
+        "speed": [
+          1.6,
+          3.6
+        ],
+        "life": [
+          0.7,
+          1.2
+        ],
+        "size": [
+          0.8,
+          1.6,
+          2.0
+        ],
+        "color": [
+          "#6E6A62",
+          "#57544E"
+        ],
+        "alpha": [
+          0,
+          0.5,
+          0.3,
+          0
+        ],
+        "gravity": -0.25,
+        "drag": 2.8,
+        "turbulence": 0.3,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -30,
+          30
+        ],
+        "texture": "dust_puff",
+        "blend": "alpha",
+        "soft": 0.3,
+        "delay": 0.05,
+        "secondary": true
+      },
+      {
+        "type": "emitter",
+        "at": "ground",
+        "count": 16,
+        "dir": "up",
+        "spreadDeg": 160,
+        "speed": [
+          2.5,
+          6
+        ],
+        "life": [
+          0.6,
+          1.0
+        ],
+        "size": [
+          0.2,
+          0.2,
+          0.12
+        ],
+        "sizeVar": [
+          0.6,
+          1.3
+        ],
+        "color": [
+          "#F1E2C6",
+          "#8A8478"
+        ],
+        "alpha": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "gravity": 14.0,
+        "drag": 0.8,
+        "bounce": 0.35,
+        "texture": "chip",
+        "blend": "chip",
+        "spinDeg": [
+          -540,
+          540
+        ],
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.5,
+        "delay": 0.03,
+        "secondary": true
+      },
+      {
+        "type": "shockwave",
+        "at": "ground",
+        "radius": [
+          [
+            0,
+            0.4
+          ],
+          [
+            0.35,
+            1.75
+          ],
+          [
+            1,
+            2.2
+          ]
+        ],
+        "width": [
+          0.6,
+          0.12
+        ],
+        "life": 0.5,
+        "color": "#6E6A62",
+        "alpha": [
+          0.6,
+          0.4,
+          0
+        ],
+        "emissive": 0.0,
+        "sharp": 1.6,
+        "noise": 0.5,
+        "blend": "alpha"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 18,
+        "shape": "sphere",
+        "radius": 0.4,
+        "dir": "up",
+        "spreadDeg": 40,
+        "speed": [
+          1.2,
+          3.0
+        ],
+        "life": [
+          0.8,
+          1.3
+        ],
+        "size": [
+          0.12,
+          0.05
+        ],
+        "color": [
+          "#FF9A4A",
+          "#FFE4B8"
+        ],
+        "alpha": [
+          1,
+          0.8,
+          0
+        ],
+        "emissive": 2.4,
+        "gravity": -1.2,
+        "drag": 1.2,
+        "turbulence": 1.4,
+        "texture": "ember",
+        "blend": "add",
+        "delay": 0.08
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 4,
+        "shape": "sphere",
+        "radius": 0.3,
+        "dir": "up",
+        "spreadDeg": 60,
+        "speed": [
+          1.0,
+          2.0
+        ],
+        "life": [
+          0.8,
+          1.2
+        ],
+        "size": [
+          0.36000000000000004,
+          0.8,
+          0.96
+        ],
+        "sizeVar": [
+          0.8,
+          1.25
+        ],
+        "color": [
+          "#4A443D",
+          "#5B544B"
+        ],
+        "alpha": [
+          0,
+          0.9,
+          0.75,
+          0
+        ],
+        "gravity": -1.0,
+        "drag": 2.6,
+        "turbulence": 0.6,
+        "rotDeg": [
+          0,
+          360
+        ],
+        "spinDeg": [
+          -40,
+          40
+        ],
+        "texture": "ink_puff",
+        "blend": "ink",
+        "rim": "#F4EFE2",
+        "rimAlpha": 0.35,
+        "soft": 0.3,
+        "delay": 0.12
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "crack",
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.08,
+            1.4
+          ],
+          [
+            1,
+            1.45
+          ]
+        ],
+        "life": 1.4,
+        "color": "#5A5046",
+        "alpha": [
+          0.7,
+          0.55,
+          0
+        ],
+        "emissive": 1.2,
+        "rim": "#FF9A4A"
       }
     ]
   },
@@ -7532,7 +8961,7 @@
     ]
   },
   {
-    "$comment": "T2 · Lumen · respawn: the Seat's light pours down onto the spot, an eroded sleeve of team light sets the fighter down, a lit pool and dial, a ring settles out, motes rise",
+    "$comment": "T2 · Lumen · respawn: the Seat's light pours down onto the spot, two dial rings step down onto the feet round a thin sleeve, a lit pool and dial, a ring settles out, streaks and motes rise",
     "id": "lib_respawn",
     "duration": 0.9,
     "teamTint": true,
@@ -7591,20 +9020,20 @@
           ]
         ],
         "stretch": [
-          0.75,
-          3.5,
-          0.75
+          0.7,
+          3.0,
+          0.7
         ],
-        "life": 0.75,
+        "life": 0.6,
         "color": [
-          "#FFFFFF",
+          "#BFD3E6",
           "team"
         ],
         "alpha": [
-          0.85,
+          0.5,
           0
         ],
-        "emissive": 3.0,
+        "emissive": 2.4,
         "rim": "team",
         "rimPow": 1.4,
         "rimEmissive": 3.0,
@@ -7627,6 +9056,148 @@
           -0.9,
           0
         ]
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "delay": 0.05,
+        "count": 1,
+        "offset": [
+          0,
+          0.8,
+          0
+        ],
+        "shape": "point",
+        "dir": "down",
+        "spreadDeg": 0,
+        "speed": [
+          6.5,
+          6.5
+        ],
+        "life": [
+          0.5,
+          0.5
+        ],
+        "size": [
+          1.0,
+          1.5,
+          1.7
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.15,
+            1
+          ],
+          [
+            0.8,
+            0.8
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.6,
+        "drag": 2.5,
+        "texture": "ring_thin",
+        "align": "ground",
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "delay": 0.2,
+        "count": 1,
+        "offset": [
+          0,
+          0.8,
+          0
+        ],
+        "shape": "point",
+        "dir": "down",
+        "spreadDeg": 0,
+        "speed": [
+          6.5,
+          6.5
+        ],
+        "life": [
+          0.5,
+          0.5
+        ],
+        "size": [
+          1.0,
+          1.5,
+          1.7
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          [
+            0,
+            0
+          ],
+          [
+            0.15,
+            1
+          ],
+          [
+            0.8,
+            0.8
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "emissive": 2.6,
+        "drag": 2.5,
+        "texture": "ring_thin",
+        "align": "ground",
+        "blend": "add"
+      },
+      {
+        "type": "emitter",
+        "at": "origin",
+        "count": 10,
+        "shape": "ring",
+        "radius": 0.9,
+        "dir": "up",
+        "spreadDeg": 8,
+        "speed": [
+          1.6,
+          2.6
+        ],
+        "life": [
+          0.35,
+          0.5
+        ],
+        "size": [
+          0.5,
+          0.08
+        ],
+        "color": [
+          "#F4EFE2",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "emissive": 2.6,
+        "texture": "streak",
+        "stretch": 0.05,
+        "blend": "add",
+        "delay": 0.3
       },
       {
         "type": "decal",
@@ -10103,8 +11674,8 @@
           0
         ],
         "shape": "ringwave",
-        "scale": 0.98,
-        "color": "#17181B",
+        "scale": 0.9,
+        "color": "#2A2C33",
         "alpha": [
           [
             0,
@@ -10112,11 +11683,11 @@
           ],
           [
             0.08,
-            0.9
+            0.55
           ],
           [
             0.75,
-            0.9
+            0.55
           ],
           [
             1,
@@ -10125,7 +11696,7 @@
         ],
         "emissive": 0,
         "rim": "#D9A7C7",
-        "rimEmissive": 1.6,
+        "rimEmissive": 2.0,
         "blend": "ink",
         "align": "up",
         "spinDeg": -20,
@@ -10143,7 +11714,7 @@
           0
         ],
         "shape": "ringwave",
-        "scale": 1.2,
+        "scale": 1.3,
         "color": [
           "#D9A7C7",
           "#E59BB0"
@@ -10155,19 +11726,19 @@
           ],
           [
             0.08,
-            0.85
+            1.0
           ],
           [
             0.75,
-            0.85
+            1.0
           ],
           [
             1,
             0
           ]
         ],
-        "emissive": 1.8,
-        "dissolve": 0.58,
+        "emissive": 2.6,
+        "dissolve": 0.4,
         "noise": 0.9,
         "noiseScale": 3.2,
         "scroll": [
@@ -10175,7 +11746,7 @@
           0
         ],
         "edge": "team",
-        "edgeEmissive": 2.0,
+        "edgeEmissive": 2.6,
         "edgeWidth": 0.14,
         "blend": "add",
         "align": "up",
@@ -10191,9 +11762,9 @@
         "type": "emitter",
         "at": "target",
         "socket": "chest",
-        "rate": 6,
+        "rate": 9,
         "shape": "ring",
-        "radius": 0.55,
+        "radius": 0.6,
         "dir": "none",
         "speed": [
           0,
@@ -10205,8 +11776,8 @@
         ],
         "size": [
           0,
+          0.2,
           0.14,
-          0.1,
           0
         ],
         "color": [
@@ -10219,7 +11790,7 @@
           0.8,
           0
         ],
-        "emissive": 2.0,
+        "emissive": 2.4,
         "orbitDeg": 160,
         "texture": "shard",
         "blend": "add",
@@ -10833,11 +12404,11 @@
           ],
           [
             0.1,
-            0.78
+            0.8
           ],
           [
             1,
-            0.78
+            0.8
           ]
         ],
         "stretch": [
@@ -10853,11 +12424,11 @@
           ],
           [
             0.08,
-            0.97
+            1.0
           ],
           [
             0.75,
-            0.97
+            1.0
           ],
           [
             1,
@@ -10866,10 +12437,10 @@
         ],
         "emissive": 0,
         "rim": "team",
-        "rimEmissive": 2.2,
-        "rimPow": 2.2,
+        "rimEmissive": 2.6,
+        "rimPow": 1.7,
         "noise": 0.3,
-        "blend": "ink",
+        "blend": "add",
         "wobble": 0.025,
         "scroll": [
           0.15,
@@ -12677,7 +14248,8 @@
         "radius": 1.54,
         "life": 0.06,
         "color": "team",
-        "intensity": 6.0
+        "intensity": 6.0,
+        "light": false
       },
       {
         "type": "emitter",
@@ -12812,9 +14384,9 @@
         "type": "light",
         "at": "origin",
         "color": "team",
-        "intensity": 8,
-        "radius": 9,
-        "life": 0.5
+        "intensity": 5,
+        "radius": 5.5,
+        "life": 0.45
       },
       {
         "type": "emitter",
@@ -12870,7 +14442,7 @@
       {
         "type": "emitter",
         "at": "origin",
-        "count": 6,
+        "count": 5,
         "shape": "sphere",
         "radius": 0.5,
         "dir": "up",
@@ -12880,21 +14452,21 @@
           1.0
         ],
         "life": [
-          1.8,
-          2.6
+          1.6,
+          2.4
         ],
         "size": [
-          0.7200000000000001,
-          1.6,
-          1.92
+          0.63,
+          1.4,
+          1.68
         ],
         "sizeVar": [
           0.8,
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#5B544B",
+          "#6E6A62"
         ],
         "alpha": [
           0,
@@ -12916,7 +14488,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.35,
+        "rimAlpha": 0.25,
         "soft": 0.3,
         "delay": 0.3
       },
@@ -12925,15 +14497,15 @@
         "at": "ground",
         "shape": "circle",
         "style": "light",
-        "radius": 3.0,
-        "life": 0.9,
+        "radius": 2.2,
+        "life": 0.8,
         "color": "team",
         "alpha": [
-          0.5,
-          0.3,
+          0.4,
+          0.22,
           0
         ],
-        "emissive": 1.6,
+        "emissive": 1.4,
         "texture": "glow"
       }
     ]
@@ -13549,7 +15121,7 @@
       {
         "type": "emitter",
         "at": "ground",
-        "rate": 5,
+        "rate": 4,
         "duration": 1.6,
         "shape": "disc",
         "radius": 1.2,
@@ -13573,8 +15145,8 @@
           1.25
         ],
         "color": [
-          "#17181B",
-          "#2A2C33"
+          "#5B544B",
+          "#6E6A62"
         ],
         "alpha": [
           0,
@@ -13596,7 +15168,7 @@
         "texture": "ink_puff",
         "blend": "ink",
         "rim": "#F4EFE2",
-        "rimAlpha": 0.3,
+        "rimAlpha": 0.2,
         "soft": 0.3
       }
     ]
@@ -13686,7 +15258,7 @@
     ]
   },
   {
-    "$comment": "T3 · a summon rises: the ground's ink draws it up (an ink sleeve with a team rim out of an ink pool, ink threads rising), a stair of light rings steps up round a thin shaft, a team ring, motes, stone chips",
+    "$comment": "T3 · a summon rises: the ground's ink draws it up (ink threads rising out of a thin drying ink ring over a lit dial), one rim-lit sleeve of team light, a team ring, motes, stone chips",
     "id": "lib_summon_rise",
     "duration": 0.9,
     "teamTint": true,
@@ -13737,21 +15309,51 @@
           ],
           [
             0.2,
+            0.95
+          ],
+          [
+            1,
+            1.0
+          ]
+        ],
+        "life": 0.7,
+        "color": "#4A443D",
+        "alpha": [
+          0.55,
+          0.3,
+          0
+        ],
+        "rim": "team",
+        "fit": true
+      },
+      {
+        "type": "decal",
+        "at": "ground",
+        "shape": "circle",
+        "style": "light",
+        "radius": [
+          [
+            0,
+            0.4
+          ],
+          [
+            0.2,
             1.1
           ],
           [
             1,
-            1.1
+            1.15
           ]
         ],
-        "life": 1.6,
-        "color": "#17181B",
+        "life": 0.9,
+        "color": "team",
         "alpha": [
-          0.85,
-          0.7,
+          0.6,
+          0.35,
           0
         ],
-        "rim": "team",
+        "emissive": 1.8,
+        "texture": "rune",
         "fit": true
       },
       {
@@ -13765,31 +15367,31 @@
           ],
           [
             0.3,
-            0.75
+            0.7
           ],
           [
             1,
-            0.8
+            0.72
           ]
         ],
         "stretch": [
-          1.0,
-          2.0,
-          1.0
+          0.9,
+          1.6,
+          0.9
         ],
-        "life": 0.8,
+        "life": 0.6,
         "color": [
-          "#2A2C33",
-          "#17181B"
+          "#BFD3E6",
+          "team"
         ],
         "alpha": [
-          0.9,
+          0.7,
           0
         ],
-        "emissive": 0,
+        "emissive": 2.2,
         "rim": "team",
         "rimPow": 1.3,
-        "rimEmissive": 2.6,
+        "rimEmissive": 2.8,
         "noise": 0.7,
         "scroll": [
           0,
@@ -13798,88 +15400,11 @@
         "dissolve": [
           0,
           0,
-          0.2,
+          0.25,
           1
         ],
         "edge": "team",
         "edgeEmissive": 2.6,
-        "blend": "ink"
-      },
-      {
-        "type": "mesh",
-        "at": "ground",
-        "shape": "stair",
-        "scale": [
-          [
-            0,
-            0.1
-          ],
-          [
-            0.35,
-            1.0
-          ],
-          [
-            1,
-            1.05
-          ]
-        ],
-        "stretch": [
-          0.9,
-          2.2,
-          0.9
-        ],
-        "life": 0.7,
-        "color": [
-          "#BFD3E6",
-          "team"
-        ],
-        "alpha": [
-          0.6,
-          0
-        ],
-        "emissive": 2.6,
-        "noise": 0.3,
-        "blend": "add",
-        "spinDeg": -90
-      },
-      {
-        "type": "mesh",
-        "at": "ground",
-        "shape": "shaft",
-        "scale": [
-          [
-            0,
-            0.1
-          ],
-          [
-            0.3,
-            0.6
-          ],
-          [
-            1,
-            0.6
-          ]
-        ],
-        "stretch": [
-          0.5,
-          3.0,
-          0.5
-        ],
-        "life": 0.6,
-        "color": [
-          "#BFD3E6",
-          "team"
-        ],
-        "alpha": [
-          0.9,
-          0
-        ],
-        "emissive": 3.0,
-        "noise": 0.4,
-        "scroll": [
-          0,
-          2.4
-        ],
         "blend": "add"
       },
       {
@@ -14399,49 +15924,35 @@
     "teamTint": true,
     "layers": [
       {
-        "type": "mesh",
+        "type": "decal",
         "at": "origin",
-        "shape": "fan",
-        "scale": [
+        "shape": "cone",
+        "style": "light",
+        "radius": [
           [
             0,
-            1.0
+            0.4
+          ],
+          [
+            0.7,
+            3.0
           ],
           [
             1,
-            1.0
+            3.1
           ]
         ],
-        "stretch": [
-          3.0,
-          1,
-          3.0
-        ],
-        "life": 0.3,
-        "color": [
-          "#FFE2A0",
-          "#F2B84B"
-        ],
+        "life": 0.55,
+        "color": "#FFE2A0",
         "alpha": [
-          0.85,
-          0.85,
+          1,
+          0.75,
           0
         ],
         "emissive": 3.0,
-        "mask": "sweep",
-        "maskParam": [
-          0,
-          1.1
-        ],
-        "blend": "add",
-        "align": "dir",
+        "texture": "ring_thin",
         "angleDeg": 70,
-        "fit": true,
-        "offset": [
-          0.2,
-          0.35,
-          0
-        ]
+        "fit": true
       },
       {
         "type": "emitter",
@@ -14485,11 +15996,24 @@
         "at": "origin",
         "shape": "cone",
         "style": "light",
-        "radius": 3.0,
+        "radius": [
+          [
+            0,
+            0.5
+          ],
+          [
+            0.4,
+            3.0
+          ],
+          [
+            1,
+            3.0
+          ]
+        ],
         "life": 0.6,
         "color": "#F2B84B",
         "alpha": [
-          0.5,
+          0.55,
           0.3,
           0
         ],

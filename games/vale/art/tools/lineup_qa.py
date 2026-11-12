@@ -23,6 +23,9 @@ Metrics (JSON + sheet in art/renders/lineup/<name>.{png,json}):
                     (bible: <= 0.80). Pairs of the same fighter (base vs `<id>_<variant>` skins)
                     are reported but not gated (skins keep the silhouette class on purpose).
   iou64_norm        the same with every silhouette scaled to 64 px tall (shape only, height removed)
+  sigPct            (MAX2 U1) share of the silhouette's covered pixels whose on-screen CIELAB hue lies within 25 deg
+                    of the fighter's signature (content/fighters/<id>.json vfx.signature) at chroma >= 12: the
+                    material-zoning gate is >= 6 %
 """
 from __future__ import annotations
 
@@ -65,6 +68,27 @@ def args():
     if not out["glbs"]:
         raise SystemExit(__doc__)
     return out
+
+
+def signature_lab_hue(name: str):
+    """the fighter's signature hue angle (CIELAB, deg) from content/fighters/<id>.json, or None"""
+    import json
+    fid = name.split("_")[0]
+    p = os.path.join(os.path.dirname(ART), "content", "fighters", f"{fid}.json")
+    try:
+        sig = json.load(open(p))["vfx"]["signature"]
+    except Exception:
+        return None
+    lab = srgb_lab(np.array([[scene.hex_srgb(sig)]], np.float32))[0, 0]
+    return float(np.degrees(np.arctan2(lab[2], lab[1])) % 360)
+
+
+def srgb_lab(rgb: np.ndarray) -> np.ndarray:
+    c = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    M = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]], np.float32)
+    xyz = c @ M.T / np.array([0.95047, 1.0, 1.08883], np.float32)
+    f = np.where(xyz > 216 / 24389, np.cbrt(xyz), (24389 / 27 * xyz + 16) / 116)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
 
 
 def import_glb(path: str):
@@ -284,6 +308,13 @@ def main():
                 fi["accentPct"] = round(100.0 * n_acc / sil.sum(), 2)
                 fi["accentTopHalfShare"] = round(float((acc & tophalf).sum() / n_acc), 3) if n_acc else None
                 fi["accentTopHalfPctOfFighter"] = round(100.0 * float((acc & tophalf).sum()) / sil.sum(), 2)
+                sh = signature_lab_hue(nm)
+                if sh is not None:
+                    lab = srgb_lab(np.clip(rgb, 0, 1))
+                    hue = np.degrees(np.arctan2(lab[..., 2], lab[..., 1])) % 360
+                    dh = np.abs((hue - sh + 180) % 360 - 180)
+                    sig = core & sil & (dh <= 25) & (np.hypot(lab[..., 1], lab[..., 2]) >= 12)
+                    fi["sigPct"] = round(100.0 * float(sig.sum()) / max(1, int((core & sil).sum())), 2)
             info["facings"][str(f)] = fi
             masks[nm][f] = sil
             if f == A["facings"][0]:
@@ -302,6 +333,9 @@ def main():
         accs = [fi.get("accentPct", 0) for fi in info["facings"].values()]
         tops = [fi.get("accentTopHalfShare") or 0 for fi in info["facings"].values()]
         info["accentPctMax"] = max(accs)
+        sigs = [fi["sigPct"] for fi in info["facings"].values() if "sigPct" in fi]
+        if sigs:
+            info["sigPctMean"] = round(float(np.mean(sigs)), 2)
         info["accentOk"] = max(accs) <= 5.0 and min(tops) >= 0.9 and min(accs) >= 1.0
         res["fighters"][nm] = info
         scene.log(f"{nm}: height {f0.get('heightPx')} px, value bands {vb}, accent {[float(a) for a in accs]} %")

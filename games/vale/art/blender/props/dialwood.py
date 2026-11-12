@@ -76,6 +76,15 @@ class TreeSpec:
     hue: float = 0.0                              # the tree's own hue turn (deg, same value; env F5: ±3 % per tree)
     reach: float = 9.0                            # max crown reach from the trunk's foot (authored m)
     scale: float = 1.0                            # the whole tree, uniformly (leaves too)
+    # max2 ENV-1: a second and third crown SPECIES among the fan crowns (defaults: the Dialwood fan)
+    ramp: list | None = None                      # the leaf ramp's hue (value kept from LEAF, so the band holds)
+    hues: list | None = None                      # the per-leaf hue mix (default HUES)
+    tris: int = 0                                 # midribs while the tree stays under this (0: TREE_TRIS)
+    leaf_k: int = 0                               # triangles per leaf plate (0: K_LEAF)
+    spread: tuple | None = None                   # the plate's fan angle range (rad; None: from the stem spacing)
+    round_: tuple = (0.22, 0.32)                  # corner rounding range
+    crimp: tuple = (0.10, 0.16)                   # rib / valley crimp range
+    notch: bool = True                            # the notched tip (m-7)
 
 
 # leaves: deep cool teal underside → sap green → warm lit yellow-green crown (the hue turns with the value,
@@ -128,7 +137,8 @@ def _ell_normal(P: np.ndarray, c, r) -> np.ndarray:
     return g / np.maximum(np.linalg.norm(g, axis=1, keepdims=True), 1e-9)
 
 
-def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator, rib_min: float = math.inf) -> list[Part]:
+def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator, rib_min: float = math.inf,
+              spec: "TreeSpec | None" = None) -> list[Part]:
     """The cushion and its rosette, built round the origin, then squashed, turned, tipped and moved to the
     pad's place. Leaves carry dome / own normals separately (blended once the crown's form is known). A leaf
     at least `rib_min` long carries a midrib vertex (kit.fan_plate midrib; no RNG drawn, so the layout is the
@@ -190,6 +200,8 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator,
         t = -ad + math.sqrt(max(ad * ad - float(np.dot(a_xy, a_xy)) + (1.04 * r) ** 2, 0.0))
         L = float(np.clip(max(t, 0.55 * r), 0.45 * r, 0.80 * r)) * rng.uniform(1 - PLATE_SCALE, 1 + PLATE_SCALE) * pad.leaf
         spread = float(np.clip(1.5 * lo_ / (0.5 * L), 1.7, 2.5))
+        if spec is not None and spec.spread is not None:
+            spread = float(rng.uniform(*spec.spread))
         key = float(np.dot(a_xy - axis_xy, d2))           # downstream: lower
         leaves.append((key, a_xy, d2, L, spread))
     keys = np.array([l[0] for l in leaves])
@@ -217,10 +229,11 @@ def build_pad(pi: int, pad: Pad, trunk_xy: np.ndarray, rng: np.random.Generator,
             ax2 = ax * math.cos(p) + nz * math.sin(p)
         nz = nz * math.cos(p) - ax * math.sin(p)
         ax = ax2 / np.linalg.norm(ax2)
-        leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=K_LEAF, crimp=rng.uniform(0.10, 0.16),
+        sp_ = spec if spec is not None else TreeSpec(seed=0, pads=[], spine=[], r0=0.0)
+        leaf = fan_plate(L, spread * rng.uniform(0.94, 1.06), K=sp_.leaf_k or K_LEAF, crimp=rng.uniform(*sp_.crimp),
                          pleat=rng.uniform(0.012, 0.018), droop=kappa * L, curl=kappa * L * 0.5,
-                         round_=rng.uniform(0.22, 0.32), midrib=MIDRIB if L >= rib_min else 0.0,
-                         notch=NOTCH[0] + (NOTCH[1] - NOTCH[0]) * float(hash01(pi * 7.31 + a_xy[0] * 13.1 + a_xy[1] * 5.7)))
+                         round_=rng.uniform(*sp_.round_), midrib=MIDRIB if L >= rib_min else 0.0,
+                         notch=(NOTCH[0] + (NOTCH[1] - NOTCH[0]) * float(hash01(pi * 7.31 + a_xy[0] * 13.1 + a_xy[1] * 5.7))) if sp_.notch else 0.0)
         part = leaf.transformed(frame(apex, ax, nz))
         part.A["leafL"] = np.full(len(part.P), L)
         # the dome normal at each vertex (local, before the pad's transform)
@@ -265,7 +278,7 @@ def build_tree(spec: TreeSpec) -> Part:
     t = _build_tree(spec, math.inf)
     first = (t.A["kind"] == 1) & (t.A["u"] == 0)                  # one stem vertex per leaf
     lens = np.sort(t.A["leafL"][first])[::-1]
-    room = max(0, (TREE_TRIS - t.tris) // 2)
+    room = max(0, ((spec.tris or TREE_TRIS) - t.tris) // 2)
     if room == 0:
         return t
     return _build_tree(spec, 0.0 if room >= len(lens) else float(lens[room - 1]))
@@ -280,7 +293,7 @@ def _build_tree(spec: TreeSpec, rib_min: float) -> Part:
         k = int(np.clip(np.searchsorted(spine[:, 2], zc), 1, len(spine) - 1))
         f = (zc - spine[k - 1, 2]) / max(spine[k, 2] - spine[k - 1, 2], 1e-6)
         txy = spine[k - 1, :2] * (1 - f) + spine[k, :2] * f if zc <= spine[-1, 2] else spine[-1, :2]
-        parts += build_pad(pi, pad, txy, rng, rib_min)
+        parts += build_pad(pi, pad, txy, rng, rib_min, spec)
     # trunk: six facets, a flare ring at the foot that alternates root buttress and hollow
     n_s = len(spine)
     rad = spec.r0 * np.linspace(1.0, 0.42, n_s) ** 1.2
@@ -377,7 +390,8 @@ def _hue_turn(c: np.ndarray, deg: float) -> np.ndarray:
     return _keep_lum(np.clip(c @ M.T, 1e-4, 1), c)
 
 
-def paint_tree(t: Part, seed: int, tint: str = "#808080", hue_deg: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+def paint_tree(t: Part, seed: int, tint: str = "#808080", hue_deg: float = 0.0,
+               spec: "TreeSpec | None" = None) -> tuple[np.ndarray, np.ndarray]:
     """→ sRGB colours (n,3) and the GLOSS mask (n,) for COLOR_0.a (0 everywhere since r12 M11: matte plates)."""
     P, N, A = t.P, t.N, t.A
     kind = A["kind"]
@@ -424,10 +438,13 @@ def paint_tree(t: Part, seed: int, tint: str = "#808080", hue_deg: float = 0.0) 
     v += np.where(leaf, VEIN * vein * (0.4 + 0.6 * lit) + LIFT, 0.0)            # the midrib: a light stroke stem → tip
     v = np.where(core, v - 0.11, v)                               # the cushions: inner foliage, deeper in shade (the gaps read as depth)
     c = ramp(np.clip(v, 0, 1), LEAF)
+    if spec is not None and spec.ramp:                            # max2 ENV-1: a species' own hue, the Dialwood's value
+        c = _keep_lum(np.maximum(ramp(np.clip(v, 0, 1), spec.ramp), 1e-4), c)
     # leaf hue at the same value (yellow-green / blue-green / olive / fresh / jade), mixed per leaf
+    hues_ = [hexc(h) for h in spec.hues] if spec is not None and spec.hues else HUES
     hue = A.get("hue", np.zeros(len(P)))
-    hk = np.floor(hue * len(HUES)).astype(int) % len(HUES)
-    hc = np.array([HUES[k] for k in hk])
+    hk = np.floor(hue * len(hues_)).astype(int) % len(hues_)
+    hc = np.array([hues_[k] for k in hk])
     hw = HUE_W * leaf
     c = c * (1 - hw[:, None]) + _keep_lum(hc, c) * hw[:, None]
     # every pad leans warmer (sun-fed) or cooler, like paint mixed per mass; the tips of the lit crown warmer
@@ -515,6 +532,39 @@ TREES: dict[str, TreeSpec] = {
               Pad((-0.05, -0.06, 2.32), 0.38, 0.27, tilt=0.66, hang=0.05, yaw=4.3, sq=0.95, leaf=0.75),
               Pad((0.02, 0.02, 2.74), 0.30, 0.24, tilt=0.7, hang=0.0, yaw=5.5, sq=0.95, leaf=0.7)],
         r0=0.16, roots=2, reach=0.72, scale=1.12),
+    # ── max2 ENV-1: two more SPECIES in the Dialwood (the wood was one fan-plate species). Same kit (cushions under
+    # plates, the same value law: the ramp's value is LEAF's, only the hue is the species'), new silhouettes and leaves.
+    # hourtier: the Aubade's tree (cool, silvered sage like dawnglass over chalk): a pagoda of three FLAT tiers with
+    # open air between them up a straight bole: broad, wide-fanned, nearly level plates, so from the 52° camera it
+    # reads as stacked discs with the trunk showing between, never as a mound or an egg
+    "hourtier": TreeSpec(
+        seed=83, tint="#7E8A90", hue=0.0,
+        spine=[(0, 0, 0), (0.0, 0.0, 0.3), (0.02, 0.01, 1.2), (0.0, 0.02, 2.0), (0.01, 0.0, 2.74)],
+        pads=[Pad((0.40, 0.12, 1.12), 0.64, 0.12, n=9, tilt=0.14, hang=0.05, yaw=0.4, sq=0.96, leaf=1.1),
+              Pad((-0.32, 0.36, 1.10), 0.62, 0.12, n=9, tilt=0.14, hang=0.05, yaw=2.2, sq=0.96, leaf=1.1),
+              Pad((-0.12, -0.44, 1.13), 0.62, 0.12, n=9, tilt=0.14, hang=0.05, yaw=4.2, sq=0.96, leaf=1.1),
+              Pad((0.06, -0.02, 1.93), 0.62, 0.11, n=11, tilt=0.16, yaw=1.0, sq=0.94, leaf=1.05),
+              Pad((0.0, 0.02, 2.66), 0.42, 0.11, n=8, tilt=0.20, yaw=5.0)],
+        r0=0.17, roots=3, reach=1.34, scale=1.12, tris=600,
+        spread=(2.5, 2.9), round_=(0.30, 0.40), crimp=(0.06, 0.10),
+        ramp=[(0.00, "#0F1D22"), (0.15, "#152B2C"), (0.31, "#1F3D3A"), (0.48, "#2E544A"), (0.64, "#426C5C"),
+              (0.80, "#5A826E"), (0.92, "#72967E"), (1.00, "#8AA88E")],
+        hues=["#5A8A78", "#709480", "#527E7E", "#7E9A7E"]),
+    # lampbough: the Serenade's tree (warm lampresin amber, walnut wood): a PARASOL, one flat cap of narrow quill
+    # leaves on a tall bare bole: from above a fine spiky starburst over a deep shadow, from the side a
+    # lamp-post with a shade; the thin quills (4 triangles) let the dark cushion show between them
+    "lampbough": TreeSpec(
+        seed=97, tint="#8A7C70", hue=0.0,
+        spine=[(0, 0, 0), (0.02, 0.0, 0.3), (0.07, 0.02, 1.1), (0.12, 0.0, 1.8), (0.10, 0.02, 2.18)],
+        pads=[Pad((0.08, 0.02, 2.34), 0.60, 0.15, n=13, tilt=0.26, yaw=0.3, leaf=1.25),
+              Pad((0.70, 0.20, 2.16), 0.56, 0.14, n=11, tilt=0.28, hang=0.10, yaw=0.8, leaf=1.25),
+              Pad((-0.44, 0.52, 2.14), 0.54, 0.14, n=11, tilt=0.28, hang=0.10, yaw=2.4, leaf=1.25),
+              Pad((-0.26, -0.58, 2.18), 0.56, 0.14, n=11, tilt=0.28, hang=0.10, yaw=4.1, leaf=1.25)],
+        r0=0.15, roots=3, reach=1.50, scale=1.10, tris=580,
+        leaf_k=4, spread=(0.70, 0.95), round_=(0.04, 0.10), crimp=(0.22, 0.30), notch=False,
+        ramp=[(0.00, "#2A140C"), (0.15, "#3C1C0E"), (0.31, "#562812"), (0.48, "#743A14"), (0.64, "#924E16"),
+              (0.80, "#AE6818"), (0.92, "#C68424"), (1.00, "#D49A34")],
+        hues=["#C06A1E", "#A44E1C", "#C89028", "#9A6020"]),
     # leaning: the bole bends out; pads step up along it, a small one left behind near the foot
     "dialwood_lean": TreeSpec(
         seed=59, tint="#748C7C",                                   # sage-teal

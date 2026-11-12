@@ -182,6 +182,8 @@ def render(cid: str, files: list[str]) -> list[dict]:
             if 'error' in info:
                 rows.append(dict(id=cid, file=ref, error=info['error']))
                 break
+            if spec.extra.get('post'):            # a post-master pass (kits_c.snap_post: a kit hit's onset transient)
+                y = spec.extra['post'](y, i % max(1, spec.variants))
             if not spec.loop:
                 y = np.pad(y, ((0, 0), (ns_(LEAD_S), 0)))
             side = 0.5 * (y[0] - y[1])

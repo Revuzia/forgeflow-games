@@ -147,7 +147,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_shield_up",
+            "vfx": "lib_item_stone_brace",
             "sfx": "c_shield"
           }
         }
@@ -872,7 +872,7 @@
                         }
                       ],
                       "present": {
-                        "vfx": "lib_ring_pulse",
+                        "vfx": "lib_item_bell_toll",
                         "sfx": "c_burst_lumen",
                         "hitVfx": "lib_slow_glass"
                       }
@@ -933,7 +933,7 @@
                   "maxStacks": 4,
                   "to": "self",
                   "present": {
-                    "vfx": "lib_empower"
+                    "vfx": "lib_item_edge_pace"
                   }
                 }
               ]
@@ -1290,7 +1290,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_ring_pulse",
+                    "vfx": "lib_item_lamp_glow",
                     "sfx": "c_shield",
                     "hitVfx": "lib_shield_up"
                   }
@@ -1732,7 +1732,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_shield_up",
+            "vfx": "lib_item_glass_ward",
             "sfx": "c_shield"
           }
         }
@@ -1806,7 +1806,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_shield_up",
+            "vfx": "lib_item_glass_ward",
             "sfx": "c_shield"
           }
         }
@@ -1943,7 +1943,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_heal_rise"
+            "vfx": "lib_item_resin_mend"
           }
         }
       ],
@@ -2152,7 +2152,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_ring_pulse",
+                    "vfx": "lib_item_bell_toll",
                     "sfx": "c_shield",
                     "hitVfx": "lib_shield_up"
                   }
@@ -2481,7 +2481,7 @@
           "minTargets": 1
         },
         "present": {
-          "vfx": "lib_shield_up",
+          "vfx": "lib_item_stone_brace",
           "sfx": "c_shield"
         }
       },
@@ -2574,7 +2574,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_shield_up",
+            "vfx": "lib_item_stone_brace",
             "sfx": "c_shield",
             "hitVfx": "lib_hit_phys_heavy",
             "hitSfx": "c_hit_phys_heavy"
@@ -2663,7 +2663,7 @@
               }
             ],
             "present": {
-              "vfx": "lib_ring_pulse",
+              "vfx": "lib_item_lamp_glow",
               "hitVfx": "lib_shield_up",
               "telegraph": "ally_only"
             }
@@ -2780,7 +2780,7 @@
           "minTargets": 1
         },
         "present": {
-          "vfx": "lib_shield_up",
+          "vfx": "lib_item_stone_brace",
           "sfx": "c_shield"
         }
       },
@@ -2963,7 +2963,7 @@
             }
           ],
           "present": {
-            "vfx": "lib_haste",
+            "vfx": "lib_item_needle_shadow",
             "sfx": "c_buff"
           }
         }
@@ -3118,7 +3118,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_burst_lumen",
+                    "vfx": "lib_item_glass_echo",
                     "sfx": "c_burst_lumen",
                     "hitVfx": "lib_hit_magic",
                     "telegraph": "everyone"
@@ -3203,7 +3203,7 @@
                     }
                   ],
                   "present": {
-                    "vfx": "lib_ring_pulse",
+                    "vfx": "lib_item_bell_toll",
                     "hitVfx": "lib_reveal_mark"
                   }
                 }

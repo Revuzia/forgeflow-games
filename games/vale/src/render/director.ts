@@ -72,7 +72,7 @@ import type { Palette, Relation } from './palette.ts';
 import { screenFx } from './vfx/screen.ts';
 import type { Tier, VfxSystem } from './vfx/system.ts';
 
-export type EventVfxKey = 'levelUp' | 'respawn' | 'death' | 'unitDeath' | 'structureFall' | 'recall' | 'pickup' | 'objective'
+export type EventVfxKey = 'levelUp' | 'respawn' | 'death' | 'unitDeath' | 'monsterDeath' | 'structureFall' | 'recall' | 'pickup' | 'objective'
   | 'blink' | 'crit' | 'heal' | 'shield' | 'ultWindup' | 'windup' | 'ultCharge' | 'castFlash'
   /** the Noon Toll (announce 'noon_toll', a mode's rules.noonToll): the light on each fighter still standing for the
    *  reveal, and the bell's ring over the plate */
@@ -698,7 +698,8 @@ export class Director {
             this.host.shake(4, 120);
             this.pulse(ev.dst, C.set(B.x, 0.5, B.z), 4, FALL_EXPOSURE);
           } else {
-            const id = ev.kind === 'fighter' ? this.eventVfx.death : this.eventVfx.unitDeath;
+            // max2: a neutral monster falls with its own look (vfxEvents.monsterDeath), else the generic unit fall
+            const id = ev.kind === 'fighter' ? this.eventVfx.death : ev.kind === 'monster' ? this.eventVfx.monsterDeath ?? this.eventVfx.unitDeath : this.eventVfx.unitDeath;
             this.fire(id, ev.dst, ev.kind === 'fighter' ? 3 : 1, { origin: B, target: B, ground: B, anchor: 'origin' });
             // max VFX-9: the viewer's own kill pays out in the world (own feedback only: nobody else sees your coins)
             const gid = ev.kind === 'fighter' ? this.eventVfx.bounty : this.eventVfx.lastHit;

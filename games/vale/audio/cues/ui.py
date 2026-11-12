@@ -198,38 +198,58 @@ def ui_ban(v: int):
     return finish(room(L.out(), 'small', wet=0.12), hp_hz=50, lp_hz=7000)
 
 
+# The shop (max2 SFX-10): every shop action lands on its click (onset to peak <= 5 ms: the press IS the sound), each
+# has its own gesture in glass and wood, and they sit on one level ladder (as heard: file max momentary + catalog gain):
+# buy -24, sell -25, undo -26, cannot afford -24 LUFS-M (the click -27, the confirm -24).
 @cue('ui_shop_buy', 'ui', ('m', -21.0), UI_CHIME, **UICHIME)
 def ui_shop_buy(v: int):
-    """Buy an item: two small glass clinks (G5, D6) like coins of light, the item tocking into its slot."""
+    """Buy an item: the item tocks into its slot on the click itself, with a G5 glass clink struck on the same instant
+    and a D6 clink answering 38 ms later, like two coins of light; a pinch of sparkle as they settle."""
     r = R('ui_shop_buy')
     L = Layers(0.45)
-    L.add(glass('G5', 0.4, 0.85, decay=0.12, bright=0.75, seed='sb1'), 0.0, peak_db=0)
-    L.add(glass('D6', 0.36, 0.8, decay=0.1, bright=0.65, seed='sb2'), 0.042, peak_db=-2)
-    L.add(at_len(esc('tock', 0.8, seed='sb'), 0.06), 0.075, peak_db=-9)
-    L.add(S.sparkle(r, 0.25, 3, 93, 100, t60=0.08), 0.06, peak_db=-19)
+    L.add(at_len(esc('tock', 0.95, seed='sb'), 0.06), 0.0, peak_db=0)
+    L.add(glass('G5', 0.4, 0.85, decay=0.12, bright=0.75, seed='sb1', strike=1.4), 0.0, peak_db=-3)
+    L.add(glass('D6', 0.36, 0.8, decay=0.1, bright=0.65, seed='sb2'), 0.038, peak_db=-6)
+    L.add(S.sparkle(r, 0.22, 3, 93, 100, t60=0.07), 0.05, peak_db=-21)
     return finish(room(L.out(), 'wood', wet=0.1), hp_hz=200, eq=[('peak', 3300, -2.5, 0.8)])
 
 
 @cue('ui_shop_sell', 'ui', ('m', -22.0), UI_CHIME, **UICHIME)
 def ui_shop_sell(v: int):
-    """Sell: the buy clink turned over (D6 falling to G5), softer, with the item breathing out."""
+    """Sell: the buy turned over: a tick and the D6 clink on the click, G5 falling after it, softer, the item breathing
+    out of its slot."""
     L = Layers(0.4)
-    L.add(at_len(esc('tick', 0.7, seed='ss'), 0.05), 0.0, peak_db=-11)
-    L.add(glass('D6', 0.3, 0.7, decay=0.09, bright=0.55, seed='ss1'), 0.0, peak_db=-1)
-    L.add(glass('G5', 0.34, 0.7, decay=0.11, bright=0.5, seed='ss2'), 0.05, peak_db=0)
-    L.add(breath(0.16, 2600, 900, shape='breath', q=1.6, seed='ss', peak_at=0.04, vel=0.5), 0.02, peak_db=-15)
+    L.add(at_len(esc('tick', 0.9, seed='ss'), 0.05), 0.0, peak_db=-2)
+    L.add(glass('D6', 0.3, 0.75, decay=0.09, bright=0.55, seed='ss1', strike=1.3), 0.0, peak_db=0)
+    L.add(glass('G5', 0.34, 0.7, decay=0.11, bright=0.5, seed='ss2'), 0.05, peak_db=-5)
+    L.add(breath(0.16, 2600, 900, shape='breath', q=1.6, seed='ss', peak_at=0.04, vel=0.5), 0.02, peak_db=-17)
     return finish(room(L.out(), 'wood', wet=0.08), hp_hz=220, lp_hz=9000, eq=[('peak', 3300, -2.5, 0.8)])
 
 
 @cue('ui_shop_undo', 'ui', ('m', -23.0), UI_SHORT, **UICHIME)
 def ui_shop_undo(v: int):
-    """Undo: a glass note run backwards (time rewinding) closing on a wooden tock."""
+    """Undo: a wooden tock on the click, then the purchase rewinding: a quick glass glint run backwards into a soft E5
+    tink (time put back)."""
     L = Layers(0.3)
-    g = glass('A5', 0.1, 0.8, decay=0.1, bright=0.6, seed='su')
-    L.add(rev(g, 0.008), 0.0, peak_db=-2)
-    L.add(at_len(esc('tock', 0.8, seed='su'), 0.06), 0.095, peak_db=0)
-    L.add(tink(hz('E5'), 0.08, 0.06, bright=0.2), 0.097, peak_db=-12)
+    L.add(at_len(esc('tock', 0.9, seed='su'), 0.06), 0.0, peak_db=0)
+    g = glass('A5', 0.07, 0.8, decay=0.07, bright=0.6, seed='su')
+    L.add(rev(g, 0.006), 0.012, peak_db=-7)
+    L.add(tink(hz('E5'), 0.08, 0.06, bright=0.2), 0.082, peak_db=-9)
     return finish(L.out(), hp_hz=220, eq=[('peak', 3200, -2.5, 0.8)])
+
+
+@cue('ui_shop_denied', 'ui', ('m', -21.0), UI_SHORT, **UICHIME)
+def ui_shop_denied(v: int):
+    """Cannot afford: the buy's G5 clink struck dead (a hand on the glass: no ring) over a dull clay knock, then a lower
+    damped D5 that does not answer it. Not the general error (that one is a clay double-thud with no glass at all): the
+    shop's own no, so the player knows it was the price."""
+    r = R('ui_shop_denied')
+    L = Layers(0.3)
+    L.add(S.knock(r, hz('D3'), 0.07, 5, 'clay'), 0.0, peak_db=0)
+    L.add(glass('G5', 0.08, 0.8, decay=0.025, bright=0.35, seed='sd1', strike=1.3), 0.0, peak_db=-5)
+    L.add(glass('D5', 0.1, 0.7, decay=0.03, bright=0.25, seed='sd2'), 0.075, peak_db=-8)
+    L.add(S.thump(0.1, 220, 140, 0.01, 0.05, 1.6), 0.075, peak_db=-9)
+    return finish(room(L.out(), 'wood', wet=0.06), hp_hz=90, lp_hz=6000)
 
 
 @cue('ui_currency_tick', 'ui', ('m', -24.0), UI_TICK, **UITICK)

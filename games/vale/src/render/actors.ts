@@ -702,8 +702,11 @@ const LIFE = {
   /** the stillness watch (fix round, the static holds): when the CLIP itself keeps both hands under `eps` m a frame for
    *  `after` s (a frozen idle or recall loop), the arms' give grows up to ×(1 + `gain`) at `rise` /s and falls back at
    *  `fall` /s once the clip moves again, so a held pose never reads as a paused frame; the clip's own motion is
-   *  measured before the life layer writes, so the layer never chases itself */
-  still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8 },
+   *  measured before the life layer writes, so the layer never chases itself. MAX2: the clip's motion is smoothed over
+   *  `tau` s (a recall that nudges a hand past `eps` now and then no longer resets the watch), and in a channel or
+   *  recall the watch adds an IN-PHASE give of both arms (`hold` x the arms' give; the upper arms on the breath, the
+   *  forearms on a second, faster period), so a two-handed grip stays closed while the held pose keeps moving */
+  still: { eps: 0.0015, after: 0.15, gain: 1.8, rise: 4, fall: 0.8, tau: 0.25, hold: 1.6 },
   /** state weights fade at this rate (1/s) */
   fade: 5,
 } as const;
@@ -723,7 +726,7 @@ class LifeRig {
   private readonly hands: Object3D[] = [];
   private readonly handPrev = [new Vector3(), new Vector3()];
   private handInit = false;
-  private stillT = 0; private fid = 0;
+  private stillT = 0; private fid = 0; private mvAvg = 0;
 
   constructor(root: Object3D, model: Object3D, seed: number) {
     this.t = (seed * 1.6180339) % 97;
@@ -800,7 +803,7 @@ class LifeRig {
       // back to the local the mixer writes: parent⁻¹ × shown
       c.o.quaternion.copy(_lq2.invert()).multiply(c.shown);
     }
-    if (!ACTOR_LIFE.on) { this.recT = -1; this.fid = 0; this.handInit = false; return; }
+    if (!ACTOR_LIFE.on) { this.recT = -1; this.fid = 0; this.mvAvg = 0; this.handInit = false; return; }
     this.t += dt;
     // the stillness watch: the clip's own hand motion this frame (before this layer writes; actor-space drift from a
     // turn counts as motion)
@@ -813,7 +816,10 @@ class LifeRig {
         if (this.handInit) mv = Math.max(mv, _lv.distanceTo(this.handPrev[i]) / Math.max(1, dt * 60));
         this.handPrev[i].copy(_lv);
       }
-      if (this.handInit) this.stillT = mv < W.eps ? this.stillT + dt : 0;
+      if (this.handInit) {
+        this.mvAvg += (mv - this.mvAvg) * Math.min(1, dt / W.tau);
+        this.stillT = Math.min(mv, this.mvAvg) < W.eps ? this.stillT + dt : 0;
+      }
       this.handInit = true;
       this.fid = this.stillT > W.after ? Math.min(1, this.fid + dt * W.rise) : Math.max(0, this.fid - dt * W.fall);
     }
@@ -849,6 +855,13 @@ class LifeRig {
     this.rot('upper_arm.R', arm * A.upper * Math.sin(TAU * t / B.period + 2.2), 0, 0);
     this.rot('forearm.L', arm * A.fore * Math.sin(TAU * t / B.period + 1.1), 0, 0);
     this.rot('forearm.R', arm * A.fore * Math.sin(TAU * t / B.period + 2.9), 0, 0);
+    // the held pose's in-phase give (channel, recall): both arms the same way, so hands on one prop stay together
+    const hg = wh * this.fid * LIFE.still.hold;
+    if (hg > 1e-3) {
+      const up = hg * A.upper * Math.sin(TAU * t / B.period + 0.3), fo = hg * A.fore * Math.sin(TAU * t / (B.period * 0.57) + 1.3);
+      this.rot('upper_arm.L', up, 0, 0); this.rot('upper_arm.R', up, 0, 0);
+      this.rot('forearm.L', fo, 0, 0); this.rot('forearm.R', fo, 0, 0);
+    }
   }
 }
 

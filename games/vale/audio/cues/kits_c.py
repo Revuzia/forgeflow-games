@@ -40,6 +40,7 @@ import numpy as np
 
 from cuelib import REGISTRY, cue, master
 from synth import filters as F
+from synth import fx
 from synth import loudness as LD
 from synth import sfx as S
 from synth.core import SR, hz, ns
@@ -52,7 +53,7 @@ from .kits_b import cup, dome, growl, handbell, roarer, rod, slit, vessel
 
 T_IMP = ('m', -17.0)         # loudness (max momentary, asset level): an ability impact sits a touch over the auto (-17.5)
 T_DASH = ('m', -18.5)
-IMPW = (0.14, 0.9)           # QA duration windows (s; a shaped take with a fast body decay can end at 0.15 s)
+IMPW = (0.15, 0.9)           # QA duration windows (s)
 DASHW = (0.2, 0.8)
 IMPK = dict(tail_floor_db=-48.0, clip_drive=1.5, max_gr_db=6.0)      # mastering profiles
 DASHK = dict(tail_floor_db=-48.0, fade_out=0.02)
@@ -307,6 +308,9 @@ CRACK_TUNE: dict[str, tuple] = {
 }
 # … and the cues that keep 3 takes (a 4th sat too near another fighter's); every other kit hit has HIT_TAKES
 CRACK_TAKES: dict[str, int] = {'f_burdam_hit': 3, 'f_ervet_attack_hit': 3, 'f_hesmi_hit': 3, 'f_odrum_attack_hit': 3, 'f_odrum_hit': 3, 'f_vashil_attack_hit': 3}
+# … and the cues whose takes keep a slower body decay than TAKE_SHAPE's (s): f_odrum_hit's short take ended under the
+# 0.15 s QA window at tau 0.22 (round 1 relaxed the window to 0.14 s; max2 restores it and re-takes the cue instead)
+TAKE_TAU_MIN: dict[str, float] = {'f_odrum_hit': 0.3}
 HIT_TAKES = 4                # a kit attack hit and ability hit: 4 takes, each its own shape (TAKE_SHAPE)
 # per take: (crack centre ratio, flam: (gap ms, level dB) or None, crack length ms, air t60 ratio, air peak ms,
 #            body decay tau s after the first 30 ms (None: untouched), pitch ratio (playback slower > 1))
@@ -414,6 +418,8 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     if mode == 'plain':
         return x
     _, _, _, _, apk, tau, pr = TAKE_SHAPE[v % len(TAKE_SHAPE)]
+    if tau:
+        tau = max(tau, TAKE_TAU_MIN.get(cid, 0.0))
     xs = np.atleast_2d(np.asarray(x, float))
     if xs.shape[0] == 1:
         xs = np.vstack([xs[0], xs[0]])
@@ -442,6 +448,79 @@ def with_crack(x: np.ndarray, fid: str, v: int, cid: str) -> np.ndarray:
     w = np.array([1.0, 0.92])            # the debris sits a touch off-centre (it sums back in mono)
     side = (g_g * lg + g_a * la)
     return norm(xs + (g_c * lc)[None, :] + side[None, :] * w[:, None] + 0.08 * np.vstack([side, -side]))
+
+
+# ── the snap pass (max2 SFX-2b): every kit hit's onset-to-peak <= SNAP_GOAL_MS ──────────────────────────────────────
+# A hit reads as a hit when its loudest instant is its first: the crack above adds bite and air, but a body that swells
+# (a drum's stroke, a struck bar's bloom, the signature instrument struck 20-80 ms in) still puts the take's peak 6-80 ms
+# after its onset (round 1: median 6.4 ms). The snap is a 1-3 ms transient set at the onset of the MASTERED take
+# (snap_post, which audio/build.py runs after cuelib.master and before the codec) so it IS the take's peak,
+# SNAP_MARGIN_DB over everything after its first SNAP_WIN_MS (the body's peaks eased under it by a look-ahead limiter
+# when they ride that high): the onset-to-peak then sits at the transient's own (< 1 ms). The transient is the take's
+# OWN material struck as one impulse: the minimum-phase impulse whose spectrum is the take's (1/6-octave smoothed), cut
+# to SNAP_MAX_MS. So a glass hit snaps glassy and a dark wood hit snaps dark, every band keeps its share, and the whole
+# energy it adds is a 1-3 ms burst's. Two first tries cost the identity gate (8 dB between fighters) up to 3 dB: a
+# foreign material click (it flattened every fighter's spectrum toward its own), and the take's own impulse added
+# BEFORE the mastering (the transient then set the soft clip's level, so the body lost the clip's harmonics).
+SNAP_GOAL_MS = 2.0           # mastered onset (-40 dB) to peak; the build gate: KIT_RISE_MAX_MS (3 ms, decoded)
+SNAP_WIN_MS = 3.0            # the transient window after the onset …
+SNAP_MARGIN_DB = 0.8         # … whose peak stands this far over the rest of the take (the codec smears a click a little)
+SNAP_PEAK_DBFS = -1.8         # the transient's sample peak (the mastering's true-peak ceiling is -1.5 dBTP)
+SNAP_KEEP_DB = 0.5            # a take that already peaks in its first SNAP_WIN_MS by this much keeps its own onset
+SNAP_MAX_MS = 2.0            # the transient layer's own length
+
+
+def _snap_layer(xs: np.ndarray) -> np.ndarray:
+    """The take's own impulse (mono, peak 1, SNAP_MAX_MS): the minimum-phase response of its 1/6-octave smoothed spectrum."""
+    m = xs.mean(axis=0)
+    N = 8192
+    P = np.abs(np.fft.rfft(m, n=max(N, 1 << int(np.ceil(np.log2(m.size)))))) ** 2
+    f = np.fft.rfftfreq((P.size - 1) * 2, 1 / SR)
+    fg = np.fft.rfftfreq(N, 1 / SR)
+    c = np.cumsum(P)
+    lo = np.searchsorted(f, np.maximum(fg, 20.0) * 2 ** (-1 / 12))
+    hi = np.maximum(np.searchsorted(f, np.maximum(fg, 20.0) * 2 ** (1 / 12)), lo + 1)
+    mag = np.sqrt((c[np.minimum(hi, c.size - 1)] - c[np.minimum(lo, c.size - 1)]) / (hi - lo)) + 1e-9
+    mag[fg < 30.0] = mag[np.argmax(fg >= 30.0)] * np.maximum(fg[fg < 30.0] / 30.0, 1e-3)   # no DC / sub: the body carries those
+    cep = np.fft.irfft(np.log(mag), n=N)
+    fold = np.zeros(N)
+    fold[0], fold[N // 2] = cep[0], cep[N // 2]
+    fold[1:N // 2] = 2.0 * cep[1:N // 2]
+    h = np.fft.irfft(np.exp(np.fft.rfft(fold)), n=N)
+    k = ns(SNAP_MAX_MS / 1000.0)
+    y = h[:k].copy()
+    fe = ns(0.0008)
+    y[-fe:] *= 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fe))
+    return norm(y)
+
+
+def snap_post(y: np.ndarray, fid: str, v: int) -> np.ndarray:
+    """The snap pass on a MASTERED take (audio/build.py calls it after cuelib.master, before the codec; see the section
+    note): when the take's peak is not its first SNAP_WIN_MS, the body's peaks are eased (a look-ahead limiter) to
+    SNAP_MARGIN_DB under the transient's level SNAP_PEAK_DBFS, and the take's own impulse is set at the onset at the level
+    that puts the window's peak on SNAP_PEAK_DBFS. After the mastering, so its soft clip colours the body exactly as it
+    did (a transient added before it moved the clip's harmonics and so the fighter's spectrum)."""
+    xs = np.atleast_2d(np.asarray(y, float))
+    e = np.max(np.abs(xs), axis=0)
+    i = int(np.argmax(e > e.max() * 0.01))
+    w = i + ns(SNAP_WIN_MS / 1000.0)
+    p = int(np.argmax(e))
+    rest = float(np.max(e[w:])) if w < e.size else 0.0
+    if (p - i) / SR * 1000.0 <= SNAP_GOAL_MS and float(np.max(e[i:w])) >= rest * 10 ** (SNAP_KEEP_DB / 20):
+        return y
+    top = 10 ** (SNAP_PEAK_DBFS / 20)
+    room_ = top * 10 ** (-SNAP_MARGIN_DB / 20)
+    if rest > room_:
+        xs = fx.limit(xs, 20 * np.log10(room_) - 0.1, release_ms=40.0)[:, :xs.shape[-1]]
+    lay = _place(xs.shape[-1], _snap_layer(xs), i)[None, :]
+    a, b = 0.0, 4.0 * top
+    for _ in range(24):
+        g = 0.5 * (a + b)
+        if float(np.max(np.abs(xs + g * lay)[:, i:w])) < top:
+            a = g
+        else:
+            b = g
+    return xs + a * lay
 
 
 def _stages(vc) -> tuple:
@@ -579,6 +658,7 @@ def _wrap(cid: str, fid: str) -> None:
     spec.fn = voiced
     if slot in CONTACT_SLOTS:
         spec.variants = CRACK_TAKES.get(cid, HIT_TAKES)
+        spec.extra['post'] = lambda y, v, _fid=fid: snap_post(y, _fid, v)
 
 
 # ── recipes ──────────────────────────────────────────────────────────────────────────────────────

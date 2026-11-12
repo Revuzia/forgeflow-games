@@ -126,8 +126,10 @@ def defs() -> list:
                  # the muffled bell, read by silhouette: a DARK ink bell set down over the head (a filled dark dome from
                  # the top-down camera, where stun is a bright hollow dial), a thin team lip at its rim, ink breath
                  # leaking from under it
-                 held("mesh", socket="head", offset=[0, -0.12, 0], shape="dome", scale=[[0, 0.3], [0.1, 0.78], [1, 0.78]], stretch=[1, 1.35, 1],
-                      color=INK, alpha=ha(0.97), emissive=0, rim="team", rimEmissive=2.2, rimPow=2.2, noise=0.3, blend="ink", wobble=0.025,
+                 # max2: the bell is an OPEN shell, rim light only (additive, no body colour), so the head shows through it and the
+                 # clapper and the soundless toll read inside it (was a 0.97 ink dome: a dark ball over the head)
+                 held("mesh", socket="head", offset=[0, -0.12, 0], shape="dome", scale=[[0, 0.3], [0.1, 0.8], [1, 0.8]], stretch=[1, 1.35, 1],
+                      color=INK, alpha=ha(1.0), emissive=0, rim="team", rimEmissive=2.6, rimPow=1.7, noise=0.3, blend="add", wobble=0.025,
                       scroll=[0.15, -0.4]),
                  held("mesh", socket="head", offset=[0, -0.12, 0], shape="ringwave", scale=[[0, 0.3], [0.1, 0.86], [1, 0.86]], color="team",
                       alpha=ha(1.0), emissive=3.0, blend="add", align="up", mask="band", maskParam=0.35),
@@ -298,14 +300,16 @@ def defs() -> list:
                    rim="team", rimAlpha=0.5),
                  comment="T1 · chip · armour shred — a cracked dark plate band round the chest (team-lit cracks), plate chips flaking off"))
     D.append(vfx("lib_status_resist_shred", 1.0,
-                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.98, color=INK, alpha=ha(0.9), emissive=0, rim=ORCHID,
-                      rimEmissive=1.6, blend="ink", align="up", spinDeg=-20),
-                 held("mesh", socket="chest", offset=[0, -0.03, 0], shape="ringwave", scale=1.2, color=[ORCHID, ROSE], alpha=ha(0.85), emissive=1.8,
-                      dissolve=0.58, noise=0.9, noiseScale=3.2, scroll=[0.6, 0], edge="team", edgeEmissive=2.0, edgeWidth=0.14, blend="add", align="up",
+                 # max2: the orchid glass band is the read again (it lost to the dark band under it): the ink band is thinner and
+                 # lighter, the glass ring wider, brighter and less eaten, the shards larger and more of them
+                 held("mesh", socket="chest", offset=[0, -0.05, 0], shape="ringwave", scale=0.9, color=INK2, alpha=ha(0.55), emissive=0, rim=ORCHID,
+                      rimEmissive=2.0, blend="ink", align="up", spinDeg=-20),
+                 held("mesh", socket="chest", offset=[0, -0.03, 0], shape="ringwave", scale=1.3, color=[ORCHID, ROSE], alpha=ha(1.0), emissive=2.6,
+                      dissolve=0.4, noise=0.9, noiseScale=3.2, scroll=[0.6, 0], edge="team", edgeEmissive=2.6, edgeWidth=0.14, blend="add", align="up",
                       spinDeg=-70, mask="band", maskParam=0.45),
                  # max VFX-1: the broken glass ring keeps shedding: orchid shards orbit the chest and fall out of the band
-                 L("emitter", at="target", socket="chest", rate=6, shape="ring", radius=0.55, dir="none", speed=[0, 0], life=[0.5, 0.7],
-                   size=[0, 0.14, 0.1, 0], color=[ORCHID, ROSE], alpha=[0, 1, 0.8, 0], emissive=2.0, orbitDeg=160, texture="shard", blend="add",
+                 L("emitter", at="target", socket="chest", rate=9, shape="ring", radius=0.6, dir="none", speed=[0, 0], life=[0.5, 0.7],
+                   size=[0, 0.2, 0.14, 0], color=[ORCHID, ROSE], alpha=[0, 1, 0.8, 0], emissive=2.4, orbitDeg=160, texture="shard", blend="add",
                    spinDeg=[-300, 300], space="local"),
                  L("emitter", at="target", socket="chest", rate=5, shape="ring", radius=0.44, dir="down", spreadDeg=40, speed=[0.3, 0.8], life=[0.28, 0.38],
                    size=[0.12, 0.04], color=[ORCHID, ROSE], alpha=[1, 0], emissive=2.0, gravity=6, texture="shard", blend="add"),

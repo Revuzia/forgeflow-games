@@ -435,22 +435,48 @@ def bill(x, z):
     return BILL_OUT * np.clip(1.0 - d2, 0.0, 1.0) ** 0.6
 
 
+# max2 card blockers (round-1 card verify: "a cracked plate face with deep vertical splits like teeth and slit eyes ...
+# a cracked skull mask", all 12 cards failed; the same read in game): the mask is ONE smooth carved lacquer-wood face.
+# The painted tile cracks are no longer cut (nor pillowed) and the paint wipes them; the concept's slanted slit recesses
+# give way to calm LIDDED almond eyes: a 5 mm carved recess, a convex eyeball in it and a carved upper lid over its top
+# ~40 %, the pupil and iris painted on the eyeball (_mask_eyes). Inner ends a little low (8 degrees), not a frown.
+EYES = ((-0.0805, 1.8375, -1.0), (0.0405, 1.8415, 1.0))     # centre x, z; the side (-1 his right = viewer's left)
+EYE_HW, EYE_HH = 0.026, 0.0135                              # the almond's half-width / half-height (m)
+EYE_SLANT = 8.0                                             # degrees, inner end down
+EYE_LID = 0.0015                                            # the upper lid's edge, local z above the centre (m)
+_EYE_R = (EYE_HW ** 2 + EYE_HH ** 2) / (2 * EYE_HH)
+
+
+def eye_local(x, z):
+    """per point: (u along the nearer almond, w up it, the almond outline distance dd (< 0 inside), side)"""
+    x, z = np.asarray(x, float), np.asarray(z, float)
+    pick = np.where(x < (EYES[0][0] + EYES[1][0]) / 2, 0, 1)
+    cx = np.where(pick == 0, EYES[0][0], EYES[1][0])
+    cz = np.where(pick == 0, EYES[0][1], EYES[1][1])
+    sd = np.where(pick == 0, EYES[0][2], EYES[1][2])
+    t = np.radians(EYE_SLANT) * sd                     # viewer-left eye (sd -1): the inner (+x) end down
+    dx, dz = x - cx, z - cz
+    u = dx * np.cos(t) + dz * np.sin(t)
+    w = -dx * np.sin(t) + dz * np.cos(t)
+    off = _EYE_R - EYE_HH
+    dd = np.maximum(np.hypot(u, w - off), np.hypot(u, w + off)) - _EYE_R
+    return u, w, dd, sd
+
+
 def mask_relief(P):
-    """forward relief (m) on the mask: tiles pillowed between the painted cracks, the cracks cut in, the almond eye
-    recesses, a brow shelf over the eyes and the short rounded bill under the brow (the facing cue)"""
+    """forward relief (m) on the mask: a smooth carved face, a brow shelf over the eyes, the lidded almond eyes and the
+    short rounded bill under the brow (the facing cue)"""
     x, z = P[:, 0], P[:, 2]
-    tile = face_map("tile", x, z)
-    crack = face_map("crack", x, z)
-    eye = face_map("eye", x, z)
-    # closing polish (dunsom-face-skull / originality C2): the cracks under the eyes cut half as deep (a calmer lower
-    # face), and the almond recesses are shallower (2.0 -> 1.2 cm) so the lampresin inlays set in them catch the key
-    below = ss(1.822, 1.800, z) * ss(1.700, 1.716, z)
-    r = 0.0026 * ss(0.0, 1.0, tile) - 0.0042 * crack * (1.0 - 0.5 * below)
-    r = r - 0.012 * eye
+    u, w, dd, _sd = eye_local(x, z)
+    inside = 1.0 - ss(-0.0015, 0.0005, dd)
+    rho2 = np.clip((u / EYE_HW) ** 2 + (w / EYE_HH) ** 2, 0.0, 1.0)
+    r = -0.005 * inside + 0.003 * inside * (1.0 - rho2)                            # recess + the convex eyeball
+    lid = (1.0 - ss(0.0, 0.0025, dd)) * ss(EYE_LID - 0.0008, EYE_LID + 0.0008, w)
+    r = r + 0.0055 * lid                                                            # the carved upper lid
     brow = ss(1.852, 1.866, z) * ss(1.912, 1.890, z) * (1 - ss(0.095, 0.118, np.abs(x - MX)))
     r = r + 0.006 * brow
-    r = r + bill(x, z) * (1 - eye)
-    return r + 0.0012 * NOISE(P, 40.0)
+    r = r + bill(x, z) * (1 - inside)
+    return r + 0.0008 * NOISE(P, 40.0)
 
 
 def finger_pts(C, a, f, out, i, s=HS, curl=1.0):
@@ -1876,36 +1902,49 @@ def _paint(maps, plates, vis, names, tops=None, flat=None, eps=0.02, bleed=True,
     return out
 
 
-# closing polish (dunsom-face-skull, hud-c10, originality C2: the ink eye recesses read hollow and skull-adjacent at
-# chip size): honey-amber lampresin almond inlays set into the recesses (the treatment owner ruling 2 approved for Odrum
-# Shadeprint), deeper under the brow and warmer toward the lower lid, each with one small warm catch-light at the same
-# upper offset (a reflection, not a glow: nothing here is emissive); and the painted cracks under the eyes eased by half
-INLAY_TOP, INLAY_LOW, INLAY_CATCH = "#6A4520", "#B8853F", "#FFF0CF"
+# closing polish (dunsom-face-skull, hud-c10, originality C2) set honey-amber inlays in the slit recesses; max2 card
+# blockers (round-1 card verify: the cards still read a cracked skull mask with slit eyes): the painted tile cracks and
+# the concept's slit eyes are wiped to the lacquer, the tiles calmed toward one smooth carved face (a soft top light kept),
+# and the lidded almond eyes are painted on the sculpt's eyeball and lid: a shaded lacquer lid, a dark lash line, a muted
+# warm white, a dark umber iris with a pupil and one small catch-light (a reflection, nothing emissive), a soft lower lid
+EYE_WHITE, EYE_IRIS, EYE_PUPIL, EYE_CATCH, EYE_LASH = "#C4A47A", "#4A2C15", "#140C07", "#FFF0D6", "#2A190D"
+MASK_CALM = 0.45              # the tiles' painted value variation pulled this far toward one smooth lacquer
 
 
 def _mask_inlays(c, pp):
     x, z = pp[:, 0], pp[:, 2]
-    eye = face_map("eye", x, z)
+    eye_old = face_map("eye", x, z)
     crack = face_map("crack", x, z)
-    below = ss(1.822, 1.800, z) * ss(1.700, 1.716, z)
-    med = np.median(c[(eye < 0.05) & (crack < 0.2)], axis=0) if np.any((eye < 0.05) & (crack < 0.2)) else c.mean(0)
-    a = (0.5 * ss(0.15, 0.7, crack) * below)[:, None]
+    clean = (eye_old < 0.05) & (crack < 0.2)
+    med = np.median(c[clean], axis=0) if np.any(clean) else c.mean(0)
+    a = np.maximum(ss(0.08, 0.55, crack), ss(0.03, 0.45, eye_old))[:, None]
     c = c * (1 - a) + med[None, :] * a
+    smooth = med[None, :] * (1.0 + 0.6 * np.clip((z - 1.79) / 0.10, -0.6, 0.8))[:, None]
+    c = c * (1 - MASK_CALM) + smooth * MASK_CALM
+    u, w, dd, sd = eye_local(x, z)
+    sel = dd < 0.004
+    if not sel.any():
+        return c
     out = c.copy()
-    w = ss(0.25, 0.75, eye)[:, None]
-    for cx, cz in ((-0.0809, 1.8372), (0.0407, 1.8416)):
-        side = np.abs(x - cx) < 0.045
-        if not side.any():
-            continue
-        v = np.clip((z[side] - (cz - 0.014)) / 0.028, 0.0, 1.0)[:, None]          # 0 lower lid .. 1 under the brow
-        col = _lin(_hex(INLAY_LOW))[None, :] * (1 - v) + _lin(_hex(INLAY_TOP))[None, :] * v
-        shade = (0.92 + 0.08 * NOISE(pp[side], 140.0))[:, None]
-        col = col * shade
-        d2 = ((x[side] - (cx + 0.009)) ** 2 + (z[side] - (cz + 0.004)) ** 2) / 0.0042 ** 2
-        catch = (np.exp(-d2) * ss(0.5, 0.9, eye[side]))[:, None]
-        col = col * (1 - catch) + _lin(_hex(INLAY_CATCH))[None, :] * catch
-        ws = w[side]
-        out[side] = c[side] * (1 - ws) + col * ws
+    u, w, dd, sd = u[sel], w[sel], dd[sel], sd[sel]
+    inside = (1.0 - ss(-0.0012, 0.0006, dd))[:, None]
+    col = _lin(_hex(EYE_WHITE))[None, :] * (0.9 + 0.1 * np.clip(-w / EYE_HH, 0, 1))[:, None]
+    di = np.hypot((u + sd * 0.0015) / 0.0085, (w + 0.0012) / 0.0085)
+    iris = (1.0 - ss(0.86, 1.0, di))[:, None]
+    col = col * (1 - iris) + _lin(_hex(EYE_IRIS))[None, :] * iris
+    pupil = (1.0 - ss(0.36, 0.48, di))[:, None]
+    col = col * (1 - pupil) + _lin(_hex(EYE_PUPIL))[None, :] * pupil
+    dc = np.hypot((u + sd * 0.0015 - 0.0036) / 0.0020, (w + 0.0002) / 0.0018)
+    catch = ((1.0 - ss(0.5, 1.0, dc)) * 0.9)[:, None]
+    col = col * (1 - catch) + _lin(_hex(EYE_CATCH))[None, :] * catch
+    lower = (ss(-0.0030, -0.0010, dd) * (1.0 - ss(-0.0010, 0.0004, dd)) * (w < 0))[:, None]
+    col = col * (1 - 0.45 * lower) + _lin(_hex(EYE_LASH))[None, :] * 0.45 * lower
+    lid = ss(EYE_LID - 0.0008, EYE_LID + 0.0006, w)[:, None]
+    col = col * (1 - lid) + (med * 0.80)[None, :] * lid
+    lash = ss(EYE_LID - 0.0024, EYE_LID - 0.0011, w) * (1.0 - ss(EYE_LID - 0.0002, EYE_LID + 0.0008, w))
+    lash = (lash * (1.0 - ss(-0.0015, 0.0, dd)))[:, None]
+    col = col * (1 - 0.9 * lash) + _lin(_hex(EYE_LASH))[None, :] * 0.9 * lash
+    out[sel] = c[sel] * (1 - inside) + col * inside
     return out
 
 

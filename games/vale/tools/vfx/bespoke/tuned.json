@@ -795,7 +795,7 @@
   ]
  },
  {
-  "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (heavy: 1.45-1.8 m, emissive 2.4, so a dull signature still spans ~0.6 x the victim), warm white turning to the signature, holds full for 7 sim frames (238 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (CW1 r2 done:1: as the light hit, the glint holds the warm white flat to 40 % of its life and is 5 % larger, so a deep signature (Kemdo's coral) keeps the lit disc >= 0.5 x the victim through frame 4, where it dipped to 0.49 at frame 3)",
+  "$comment": "T2 · impact · heavy physical hit: the light hit at 0.85 m with a wider cut, more chips, a short crack and settling dust (combat F6: the warm white is #FFEFD8, S 0.15: it reads as the shared white in play, not as HARM-band orange) (combat m-1: a mid-scale dawnglass glint (heavy: 1.45-1.8 m, emissive 2.4, so a dull signature still spans ~0.6 x the victim), warm white turning to the signature, holds full for 7 sim frames (238 ms) and eases out over ~120 ms (polish C3) on the struck face (0.4 m toward the attacker, so the body never hides it): the impact reads for ~270 ms at ~0.6-0.7 x victim height) (CW1 r2 done:1: as the light hit, the glint holds the warm white flat to 40 % of its life and is 5 % larger, so a deep signature (Kemdo's coral) keeps the lit disc >= 0.5 x the victim through frame 4, where it dipped to 0.49 at frame 3) · max2 VFX-11: a short heat ring bends the air round the blow (distortion draws only at T3+ on Medium and up, so basic attacks never pay for it)",
   "id": "lib_hit_phys_heavy",
   "duration": 0.8,
   "teamTint": true,
@@ -1276,6 +1276,36 @@
      0
     ],
     "emissive": 1.4
+   },
+   {
+    "type": "distort",
+    "at": "target",
+    "mode": "ring",
+    "size": [
+     [
+      0,
+      0.4
+     ],
+     [
+      1,
+      1.9
+     ]
+    ],
+    "strength": [
+     [
+      0,
+      0.009
+     ],
+     [
+      0.5,
+      0.004
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "life": 0.28
    }
   ]
  },

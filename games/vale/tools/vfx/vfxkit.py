@@ -30,6 +30,11 @@ INK = "#17181B"
 INK2 = "#2A2C33"
 DUST = "#6E6A62"
 DUST2 = "#57544E"
+# max2 VFX: settle smoke over a body or a ruin is a warm dark grey between ink and dust (a near-black ink blob read as a hole
+# at the game camera); a fallen fighter's scorch is a dark warm char, never a black disc
+SMOKE = "#4A443D"
+SMOKE2 = "#5B544B"
+CHAR = "#5A5046"
 ORCHID = "#D9A7C7"      # magic mark
 ROSE = "#E59BB0"
 SAP = "#7FD6A0"         # heal (reserved heal hue band 125-150)

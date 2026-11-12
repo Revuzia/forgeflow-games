@@ -85,7 +85,7 @@ export interface StructHost {
 }
 
 interface Uniforms {
-  uSfY0: { value: number }; uSfY1: { value: number }; uSfA: { value: number }; uSfAlpha: { value: number }; uSfClip: { value: number };
+  uSfY0: { value: number }; uSfY1: { value: number }; uSfA: { value: number }; uSfAlpha: { value: number }; uSfClip: { value: number }; uSoot: { value: number };
 }
 
 /** one occluder volume (root-local, y up): a band's slab ∩ a footprint box ∩ its bounding cylinder */
@@ -143,6 +143,8 @@ interface Struct {
   falling: Falling[];
   /** max env ENV-6: the collapse's rubble (one merged mesh, root-local), null until it lands */
   rubble: Mesh | null;
+  /** max2 ENV-6: the rubble's sooted clone of the plinth's stone (same program) */
+  rubbleMat?: Material;
   /** the plinth node (the rubble's stone and material) */
   baseNode: Object3D | null;
   warmed: boolean;
@@ -196,7 +198,9 @@ function meshes(node: Object3D): Mesh[] {
 }
 
 /** the see-through uniforms of a part that never fades (the plinth, the ruin, the base's hour-ticks): an exact no-op */
-const SF_OFF: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 } };
+const SF_OFF: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 }, uSoot: { value: 0 } };
+/** max2 ENV-6: soot by damage stage (the upper), on the ruin and on the rubble (0 = clean stone) */
+const SOOT = { stage: [0, 0, 0], ruin: 0, rubble: 0 }; // TMPAB
 const sfPatched = new WeakSet<Material>();
 
 /** a structure template's world material (actors.ts ModelLibrary, before its warm-up compile): the see-through code,
@@ -217,9 +221,25 @@ function patchStructure(mat: Material, u: Uniforms): void {
     prev.call(mat, sh, r);
     Object.assign(sh.uniforms, u);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uSfY0;\nuniform float uSfY1;\nuniform float uSfA;\nuniform float uSfAlpha;\nuniform float uSfClip;')
+      .replace('#include <common>', `#include <common>
+uniform float uSfY0;\nuniform float uSfY1;\nuniform float uSfA;\nuniform float uSfAlpha;\nuniform float uSfClip;\nuniform float uSoot;
+float valeSootN( vec2 p ) {
+  vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+  vec4 h = fract( sin( vec4( dot( i, vec2( 127.1, 311.7 ) ), dot( i + vec2( 1.0, 0.0 ), vec2( 127.1, 311.7 ) ),
+    dot( i + vec2( 0.0, 1.0 ), vec2( 127.1, 311.7 ) ), dot( i + 1.0, vec2( 127.1, 311.7 ) ) ) ) * 43758.5453 );
+  return mix( mix( h.x, h.y, f.x ), mix( h.z, h.w, f.x ), f.y );
+}`)
       .replace('#include <opaque_fragment>', `if ( vValeWorld.y < uSfClip ) discard;
 diffuseColor.a *= mix( 1.0, uSfA, smoothstep( uSfY0, uSfY1, vValeWorld.y ) ) * uSfAlpha;
+// max2 ENV-6: soot. Warm umber smoke-black in patches and in streaks running up the stone from the cracks (world space,
+// so a tower's sides and its ruin agree); the darkest soot keeps 40 % of the stone's light, never a hole in the frame
+if ( uSoot > 0.0 ) {
+  vec3 sp = vValeWorld;
+  float n1 = valeSootN( sp.xz * 2.3 + sp.y * vec2( 0.7, -0.5 ) );
+  float st = valeSootN( vec2( ( sp.x - sp.z ) * 3.1, sp.y * 0.45 ) );
+  float sm = smoothstep( 0.42, 0.8, n1 * 0.55 + st * 0.5 + uSoot * 0.32 - 0.12 ) * uSoot;
+  outgoingLight *= mix( vec3( 1.0 ), vec3( 0.46, 0.4, 0.34 ), sm );
+}
 #include <opaque_fragment>`);
   };
   const key = mat.customProgramCacheKey;
@@ -258,7 +278,7 @@ export class StructureFx {
     if (ruin) ruin.visible = false;
     const dmg = [nodes.get('dmg1') ?? null, nodes.get('dmg2') ?? null];
     for (const d of dmg) if (d) d.visible = false;
-    const u: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 } };
+    const u: Uniforms = { uSfY0: { value: 1e4 }, uSfY1: { value: 1e4 + 1 }, uSfA: { value: 1 }, uSfAlpha: { value: 1 }, uSfClip: { value: -1e4 }, uSoot: { value: 0 } };
     const s: Struct = {
       a, def, upper, ruin, chips: [nodes.get('chip1') ?? null, nodes.get('chip2') ?? null], dmg, accents: [],
       u, clones: [], upperMats: [], depth: [], depthMat: null, trans: false, upRest: new Matrix4(), plinth: 0.4, top: def.art.height, radius: 1,
@@ -312,6 +332,27 @@ export class StructureFx {
         d.visible = false;
         m.add(d);
         s.depth.push(d);
+      }
+    }
+    // max2 ENV-6: the ruin wears its own clones (never fading, sooted): the same program as the template's, as the
+    // upper's clones are; the rubble takes the ruin's stone clone at a lighter soot
+    if (ruin) {
+      const ru: Uniforms = { ...SF_OFF, uSoot: { value: SOOT.ruin } };
+      const cl = new Map<Material, Material>();
+      for (const m of meshes(ruin)) {
+        const swap = (mat: Material): Material => {
+          if (!(mat as MeshStandardMaterial).isMeshStandardMaterial || mat.name === 'accent') return mat;
+          let c = cl.get(mat);
+          if (!c) { c = mat.clone(); patchWorldMaterial(c); patchStructure(c, ru); s.clones.push(c); cl.set(mat, c); }
+          return c;
+        };
+        m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);
+      }
+      const base0 = s.baseNode ? meshes(s.baseNode)[0] : undefined;
+      const bm = base0 && !Array.isArray(base0.material) ? base0.material : undefined;
+      if (bm && (bm as MeshStandardMaterial).isMeshStandardMaterial) {
+        const c = bm.clone(); patchWorldMaterial(c); patchStructure(c, { ...SF_OFF, uSoot: { value: SOOT.rubble } }); s.clones.push(c);
+        s.rubbleMat = c;
       }
     }
     // every other world material of the structure (plinth, ruin, the base's hour-ticks) carries the see-through code
@@ -471,6 +512,7 @@ export class StructureFx {
       stage = want;
     } else while (stage > 0 && f > at[stage - 1] + MEND) stage--;
     if (stage !== s.stage || !s.seen) { s.stage = stage; this.showStage(s, stage); }
+    s.u.uSoot.value = SOOT.stage[Math.min(stage, SOOT.stage.length - 1)];
   }
 
   private showStage(s: Struct, stage: number): void {
@@ -727,9 +769,13 @@ export class StructureFx {
     let base = 0;
     for (let i = 0; i < N; i++) {
       const pp = protos[i % 2].getAttribute('position'), nv = pp.count;
-      const t = 0.3 + 0.75 * (i / (N - 1)) + 0.08 * (rnd() - 0.5);
-      const r = (0.13 + 0.2 * rnd()) * (i < 3 ? 1.25 : 1);
-      const lat = (rnd() - 0.5) * 2 * (0.35 + 0.85 * t);
+      // max2 ENV-6: a heap, not a scatter: two thirds of the chunks pile where the top landed (leaning on each other,
+      // the later ones lifted onto the earlier), the rest trail back toward the plinth
+      const heap = i < 8;
+      const t = heap ? 0.8 + 0.24 * rnd() : 0.32 + 0.4 * ((i - 8) / 3) + 0.06 * (rnd() - 0.5);
+      const r = (0.13 + 0.2 * rnd()) * (i < 3 ? 1.3 : 1);
+      const lat = (rnd() - 0.5) * 2 * (heap ? 0.75 : 0.35 + 0.6 * t);
+      const lift = heap ? r * 0.55 * (i / 8) : 0;
       const cx = dirL.x * (s.radius * 0.7 + reach * t) + side.x * lat, cz = dirL.z * (s.radius * 0.7 + reach * t) + side.z * lat;
       // lying blocks: mostly a yaw, a small tilt (they came to rest on the floor)
       q.setFromAxisAngle(e.set((rnd() - 0.5) * 0.5, 1, (rnd() - 0.5) * 0.5).normalize(), rnd() * Math.PI * 2);
@@ -773,7 +819,7 @@ export class StructureFx {
           const h = (u: number): number => fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1 + u) * 43758.5453)) - 0.5;
           w.set(px + 0.2 * h(1), (py + 0.2 * h(2)) * sy, (pz + 0.2 * h(3)) * sz).multiplyScalar(r).applyQuaternion(q);
           const o = (base + kk) * 3;
-          pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.04, w.y + r * sy * 0.3); pos[o + 2] = cz + w.z;
+          pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.04, w.y + r * sy * 0.3 + lift); pos[o + 2] = cz + w.z;
           // planar coords on the facet's dominant plane, folded into the source triangle (barycentric b1, b2)
           let u1 = ax >= ay && ax >= az ? pz : ay >= az ? px : px, u2 = ax >= ay && ax >= az ? py : ay >= az ? pz : py;
           u1 = fract(0.5 + u1 * 0.5 * rs + ro), u2 = fract(0.5 + u2 * 0.5 * rs + ro * 1.7);
@@ -807,7 +853,7 @@ export class StructureFx {
     }
     g.computeBoundingSphere();
     // the plinth's own material (a copy would compile its own program: perf_1080 caught a 41st mid-match)
-    const m = new Mesh(g, src.material);
+    const m = new Mesh(g, s.rubbleMat ?? src.material);
     m.name = 'vale_struct_rubble';
     m.castShadow = true; m.receiveShadow = true;
     m.customDepthMaterial = shadowDepth('rigid');

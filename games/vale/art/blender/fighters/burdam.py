@@ -391,10 +391,32 @@ class Lens(sdf.Prim):
 # the mask's almond eye recesses (fix pass 5): the concept's open almonds, ~9.6 x 4 cm, inner corners at the nose's
 # root, tilted 14 degrees down toward it
 EYES = ((-1, -0.075), (1, 0.051))
+# max2 card blockers (round-1 card verify: "empty dark almond eye holes, no pupils, no lids": a hockey / horror mask
+# at card size): the almond is a SHALLOW carved recess (the lens 1.8 cm further forward: 2.6 -> 0.8 cm deep at its
+# centre), filled by a convex carved eyeball 2 mm behind the face plane and roofed by a carved upper lid that covers
+# the top ~45 % of it; mask_paint paints the lid, the lash line, the iris and the pupil on those surfaces
+EYE_FWD = 0.018
+EYE_C_Y = -0.190 - EYE_FWD
+LID_EDGE = 0.002              # the lid's lower edge, local z above the almond's centre (m)
 
 
 def eye_lens(sx: int, xc: float) -> "Lens":
-    return Lens((xc, -0.190, 2.000), 0.068, 0.020, axes=rot(ry=-sx * 14.0))
+    return Lens((xc, EYE_C_Y, 2.000), 0.068, 0.020, axes=rot(ry=-sx * 14.0))
+
+
+def eye_ball(sx: int, xc: float) -> Ellipsoid:
+    """the carved eyeball filling the shallow almond: its front 2 mm behind the face plane (y -0.168)"""
+    return Ellipsoid((xc, -0.152, 2.000), (0.040, 0.014, 0.0175), axes=rot(ry=-sx * 14.0))
+
+
+def eye_lid(sx: int, xc: float) -> RoundBox:
+    """the carved upper lid: a rounded band across the almond's top, its lower edge LID_EDGE over the centre"""
+    return RoundBox((xc, -0.161, 2.000 + LID_EDGE + 0.010), (0.042, 0.0055, 0.006), 0.004, axes=rot(ry=-sx * 14.0))
+
+
+def eye_frame(sx: int, xc: float):
+    """(centre, axes) of an eye's local frame: x along the almond, z up it"""
+    return np.array([xc, EYE_C_Y, 2.000]), rot(ry=-sx * 14.0)
 
 
 class Hull(sdf.Prim):
@@ -589,6 +611,8 @@ def sculpts() -> list:
                   k=0.005), k=0.012)                                                    # the beak nose (a wedge)
     for sx, xc in EYES:
         mask.sub(eye_lens(sx, xc), k=0.005)                                     # almond eyes, inner ends low
+        mask.add(eye_ball(sx, xc), k=0.003)                                     # max2: the carved eyeball (no socket)
+        mask.add(eye_lid(sx, xc), k=0.004)                                      # max2: the carved upper lid
     mask.sub(Tube([(-0.083, -0.168, 1.853), (-0.045, -0.176, 1.874), (0.025, -0.176, 1.874), (0.062, -0.168, 1.853)],
                   [0.0065] * 4, k=0.004), k=0.004)                                     # the set frown
     mask.add(RoundBox((-0.012, 0.0, 1.80), (0.095, 0.10, 0.04), 0.03), k=0.02)          # neck plug under the cowl
@@ -2652,10 +2676,12 @@ BLADE_GAIN = 0.72         # (polish: 0.62 -> 0.72, the value lift: the blade is 
 # walks him away from it) the top quarter is the cowl, the crown, both pauldrons and the blade, so those step up; the
 # coat, belt and legs stay dark (the brief's light-top / dark-feet gradient; the review: the coat, the belt, the cowl
 # and the plates sat in one taupe family)
-MASK_FACE = "#D6BB7A"         # the lit face's mean: the concept's ochre-gold lacquer, L* ~77 (polish: was #C6A55E, L* 69;
+MASK_FACE = "#CFA262"         # max2 card blockers: a warmer, deeper honey lacquer (L* ~69, b* ~+40), never bone (round-1
+                              # card verify: "a pale bald egg mask", a skull read on the cards and from the game camera);
+                              # was #D6BB7A. The lit face's mean: the concept's ochre-gold lacquer, L* ~77 (polish: was #C6A55E, L* 69;
                               # the review measured the splash mask L* 65 against the concept's 81; fix pass 5: pale ochre
                               # rendered bone-white in game and the crown read as a bald skull from the top-down camera)
-CROWN_DARK = 0.10             # the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
+CROWN_DARK = 0.18             # max2: 0.10 -> 0.18 (the pale dome read as a bald skull on the cards); the crown's lacquer a step darker toward the back (polish: half the pass-5 0.20, the crown is
                               # the top of the figure from the game camera)
 COWL_MEAN = "#8E7B66"         # polish: the concept's warm taupe felt (L* ~53, b* ~+14; was #6A5845, L* 39: from the RIFT
                               # probe's spot the cowl is 16 % of his pixels and 40 % of it sits in the top quarter); a
@@ -2686,9 +2712,10 @@ HEEL_CHALK = "#8E8983"        # chalked convex edges
 # (x, y centre) on top, seen from the game camera
 # fix pass 5: the concept's layout, fewer and bolder: two rows of three on the forehead, one group on each cheekbone
 # plane, two small ones on the chin under the frown (nine fine groups on the brow read as pock dots at range)
+# max2 card blockers: the two cheekbone groups (vertical strokes just under the eyes) read as tear streaks / scratches
+# across the face on the cards; the forehead and chin keep the ledger
 TALLY_FRONT = [(-0.074, 2.101), (-0.012, 2.104), (0.050, 2.101),
-               (-0.078, 2.071), (-0.012, 2.073), (0.054, 2.071),
-               (-0.096, 1.951), (0.072, 1.951)]
+               (-0.078, 2.071), (-0.012, 2.073), (0.054, 2.071)]
 TALLY_CHIN = [(-0.040, 1.848), (0.016, 1.848)]
 # fix pass 4: no tallies on the crown (from the 52 degree camera 1-2 px strokes on the dome read as speckle, a
 # pock-marked skull); the back of the head carries four bold groups (the concept's back view), the dome clean lacquer
@@ -2747,6 +2774,11 @@ def _seg_d(x, z, x0, z0, x1, z1):
     dx, dz = x1 - x0, z1 - z0
     t = np.clip(((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz), 0.0, 1.0)
     return np.hypot(x - (x0 + t * dx), z - (z0 + t * dz))
+
+
+def _ss2(a: float, b: float, x) -> np.ndarray:
+    t = np.clip((np.asarray(x, dtype=np.float64) - a) / (b - a), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
 
 
 def tally_ink(a: np.ndarray, b: np.ndarray, groups, half_len=0.0145, gap=0.0068, width=0.0017, seed=0) -> np.ndarray:
@@ -2859,12 +2891,43 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
         fz = np.minimum(fz, _seg_d(xm, zm, x0, z0, x1, z1))
     frown = np.clip(1.0 - (fz - 0.0045) / 0.003, 0.0, 1.0) * (nym < -0.3)
     c = c * (1 - 0.72 * frown[:, None]) + ink * 0.72 * frown[:, None]
-    # 5. the ink eye recesses: the almond (lens) cuts of the sculpt, inked where the texel lies on their surface
-    eye = np.zeros(m.sum(), dtype=bool)
+    # 5. max2 card blockers (round-1 card verify: empty dark almond holes read as a hockey / horror mask): LIDDED
+    # carved eyes painted on the sculpt's eyeball and lid: the lid in a shaded lacquer, a dark lash line under it, a
+    # muted warm white, a dark umber iris with a pupil and one small catch-light (a reflection, nothing emissive), a
+    # soft lower-lid line. Drawn in each almond's own frame (x along it, z up it), seen from the front
     Pm = np.stack([xm, ym, zm], axis=1)
+    lac = np.median(c[fr & (zm > 1.90) & (cov < 0.2)], axis=0) if np.any(fr & (zm > 1.90)) else c.mean(axis=0)
+    Rl, hl = 0.068, 0.020
+    off = Rl - hl
     for sx, xc in EYES:
-        eye |= (eye_lens(sx, xc).d(Pm) < 0.0035) & (ym < -0.12)
-    c[eye] = c[eye] * 0.15 + _hexlin("#17181B") * 0.85
+        c0, ax = eye_frame(sx, xc)
+        q = (Pm - c0) @ ax.T
+        u, w = q[:, 0], q[:, 2]
+        dd = np.maximum(np.hypot(u, w - off), np.hypot(u, w + off)) - Rl          # the almond outline, front view
+        sel = (dd < 0.004) & (ym < -0.12)
+        if not sel.any():
+            continue
+        u, w, dd = u[sel], w[sel], dd[sel]
+        e = c[sel]
+        inside = (1.0 - _ss2(-0.0012, 0.0006, dd))[:, None]
+        white = _hexlin("#B9A07A")[None, :] * (0.9 + 0.1 * np.clip(-w / 0.02, 0, 1))[:, None]
+        col = white
+        di = np.hypot((u + sx * 0.002) / 0.0105, (w + 0.0015) / 0.0105)
+        iris = (1.0 - _ss2(0.86, 1.0, di))[:, None]
+        col = col * (1 - iris) + _hexlin("#4B2C14")[None, :] * iris
+        pupil = (1.0 - _ss2(0.36, 0.48, di))[:, None]
+        col = col * (1 - pupil) + _hexlin("#120B07")[None, :] * pupil
+        dc = np.hypot((u + sx * 0.002 - 0.0045) / 0.0024, (w + 0.0005) / 0.0022)
+        catch = ((1.0 - _ss2(0.5, 1.0, dc)) * 0.9)[:, None]
+        col = col * (1 - catch) + _hexlin("#FFF1D6")[None, :] * catch
+        lower = (_ss2(-0.0035, -0.0012, dd) * (1.0 - _ss2(-0.0012, 0.0004, dd)) * (w < 0))[:, None]
+        col = col * (1 - 0.45 * lower) + _hexlin("#3A2716")[None, :] * 0.45 * lower
+        lid = _ss2(LID_EDGE - 0.0008, LID_EDGE + 0.0006, w)[:, None]
+        col = col * (1 - lid) + (lac * 0.80)[None, :] * lid
+        lash = (_ss2(LID_EDGE - 0.0026, LID_EDGE - 0.0012, w) * (1.0 - _ss2(LID_EDGE - 0.0002, LID_EDGE + 0.0008, w)))
+        lash = (lash * (1.0 - _ss2(-0.0015, 0.0, dd)))[:, None]
+        col = col * (1 - 0.9 * lash) + _hexlin("#24170E")[None, :] * 0.9 * lash
+        c[sel] = e * (1 - inside) + col * inside
     # 6. below the chin: the felt roll's shadow (the neck plug and the chin's underside); fix pass 5 a little lower,
     # so the chin (its two tally groups) shows under the frown
     w = np.clip((1.840 - zm) / 0.012, 0.0, 1.0)[:, None]

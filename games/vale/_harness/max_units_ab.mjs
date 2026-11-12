@@ -2,6 +2,8 @@
 // from the SAME frozen frame (toggled in the page, so another lane's edit or a different pose never confounds them).
 //   node _harness/max_units_ab.mjs --tag u2 --variants base,metal0 [--picks a,b,...] [--t 420] [--q high] [--zoom 28.5]
 //        [--seed 7] [--mode rift] [--crop 200x240] [--far 1]
+//   A fighter is shot only when the viewer's team sees it (fog of war); seat it on the viewer's side (--picks, seats
+//   0-4) to be sure of a crop.
 // Variants (comma list, each a '+' join of switches): base (everything as it was before this lane's runtime changes),
 //   metal0 (metalness 0 on every actor material), mat (worldUniforms.valeCharMat = 1: the character material response),
 //   life (worldUniforms-free: actors' procedural life layer on; see actors.ts ACTOR_LIFE).
@@ -51,10 +53,17 @@ const counts = {};
 const fight = await B(page, (b) => b.fight());
 const ents = await B(page, (b) => b.entities().filter((e) => e.alive && (e.kind === 'fighter' || e.kind === 'monster')));
 const only = arg('only', '');
-const targets = ents.filter((e) => e.kind === 'fighter' && e.mask !== 0 && (!only || only.split(',').includes(e.def))).concat(ents.filter((e) => e.kind === 'monster').slice(0, Number(arg('monsters', 0))));
+// MAX2: only what the viewer's team sees is drawn (fog of war); a fighter the viewer cannot see (visibleMask without the
+// viewer team's bit, e.g. Hesmi in the enemy jungle on seeds 7 and 11) gave an empty crop. Pick it onto the viewer's
+// side with --picks (seats 0-4) or let the harness skip it and say so.
+const me = await B(page, (b) => b.you());
+const seen = (e) => (me && me.team >= 0 ? (e.mask & (1 << me.team)) !== 0 : e.mask !== 0);
+for (const e of ents) if (e.kind === 'fighter' && !seen(e) && (!only || only.split(',').includes(e.def))) console.log(`skip ${e.def}_${e.id}: not visible to the viewer's team (mask ${e.mask})`);
+const targets = ents.filter((e) => e.kind === 'fighter' && seen(e) && (!only || only.split(',').includes(e.def))).concat(ents.filter((e) => e.kind === 'monster').slice(0, Number(arg('monsters', 0))));
 const shots = [];
 if (fight) shots.push({ name: 'frame', x: fight.x, y: fight.y, full: true });
-for (const e of targets) shots.push({ name: `${e.kind}_${e.def}_${e.id}`, x: e.x, y: e.y, id: e.id });
+for (const e of targets) shots.push({ name: `${e.kind}_${e.def}_${e.id}`, x: e.x, y: e.y, id: e.id, state: e.state });
+console.log('targets', JSON.stringify(targets.map((e) => ({ def: e.def, id: e.id, state: e.state, x: e.x, y: e.y, mask: e.mask }))));
 for (const s of shots) {
   await B(page, (b, s) => { b.focus(s.x, s.y); b.zoom(s.z); b.frames(3, 1e-4); }, { ...s, z: zoom });
   for (const v of variants) {

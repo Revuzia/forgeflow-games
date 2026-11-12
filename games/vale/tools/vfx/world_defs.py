@@ -8,7 +8,7 @@ thrown outward is harm or control, motes rising are help. Built into content/vfx
 """
 from __future__ import annotations
 
-from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, SAP, L, chips, decal, dust, flash, glow, ink, light, mesh, ribbon,
+from vfxkit import (CHALK, CHALK_DK, DAWNGLASS, DUST, DUST2, EMBER, INK, INK2, NOON, SAP, SMOKE, SMOKE2, L, chips, decal, dust, flash, glow, ink, light, mesh, motes, ribbon,
                     shards, shockwave, vfx)
 
 RESIN = "#D9A15A"      # warm resin amber (Resinburn): the burn of sap, never the heal hue
@@ -87,6 +87,88 @@ def defs() -> list:
                    emissive=1.0, rim="team", follow=True),
                  comment="T2 · Lumen · Hold the Hour: a still ring of hour-light round the caster and glints hung motionless in the air "
                          "around them for 1.5 s (time held), a pale floor"))
+
+    # ── max2 VFX-5c: item-family procs. Each family of item speaks in its own material, so a player learns which
+    # item fired from the look alone: bells toll (brass rings that ring out and a vertical toll), lamps glow (a warm pool
+    # and rising lamp motes), glass settles (a faceted Dawnglass shell), stone braces (chalk plates locking round the
+    # body), the dial's edge gathers pace (hour ticks round the weapon), resin mends (Sap rising out of a resin drip),
+    # the afterlight lands twice (a lens echo), the needle's shadow falls (shadow streaks off the heels) ──
+    BRASS = "#D8B46A"
+    D.append(vfx("lib_item_bell_toll", 0.9,
+                 L("shockwave", at="target", mode="vertical", radius=[[0, 0.25], [1, 1.1]], width=[0.14, 0.03], life=0.32, color=[BRASS, "team"],
+                   alpha=[1, 0], emissive=2.6, blend="add", offset=[0, 0.6, 0]),
+                 shockwave("ground", color=[BRASS, "team"], radius=(0.15, 1.0), width=(0.22, 0.05), life=0.42, emissive=2.6, sharp=2.4, fit=True),
+                 shockwave("ground", color=[HOUR, "team"], radius=(0.1, 0.8), width=(0.12, 0.03), life=0.42, emissive=2.0, delay=0.14,
+                           alpha=(0.8, 0.5, 0), sharp=2.4, fit=True),
+                 L("emitter", at="target", count=10, shape="ring", radius=0.45, dir="out", spreadDeg=6, speed=[3.5, 5.0], life=[0.22, 0.32],
+                   size=[0.34, 0.08], color=[BRASS, "team"], alpha=[1, 0], emissive=2.4, drag=2.2, texture="streak", stretch=0.05, blend="add",
+                   align="velocity"),
+                 comment="T2 · Lumen · item family Bell (Warning Bell, Bellrope, Watchbell): the bell tolls: a brass toll ring stands up "
+                         "off the holder, two brass rings ring out over the area, brass streaks"))
+    D.append(vfx("lib_item_lamp_glow", 1.0,
+                 decal("ground", "light", [[0, 0.3], [0.25, 1.0], [1, 1.0]], 0.9, color=LAMP, alpha=(0.55, 0.3, 0), emissive=1.6, texture="glow", fit=True),
+                 shockwave("ground", color=[LAMP, "team"], radius=(0.2, 1.0), width=(0.18, 0.04), life=0.5, emissive=2.2, fit=True),
+                 L("emitter", at="target", count=14, shape="disc", radius=0.6, dir="up", spreadDeg=20, speed=[0.8, 1.6], life=[0.6, 0.9],
+                   size=[0, 0.16, 0.12, 0], color=[LAMP, "#FFE4B8"], alpha=[0, 1, 0.8, 0], emissive=2.2, gravity=-0.3, drag=1.0, turbulence=0.8,
+                   texture="ember", blend="add", offset=[0, -0.8, 0]),
+                 glow("target", LAMP, 0.9, 0.5, 2.0, alpha=(0, 0.7, 0), offset=[0, 0.4, 0]),
+                 comment="T2 · Lumen · item family Lamp (Kindly Lamp, Shelter Lamp): the lamp is turned up: a warm lamp pool and ring "
+                         "over the area, lamp embers rise off the holder (help is up)"))
+    D.append(vfx("lib_item_glass_ward", 0.9,
+                 mesh("target", "orb", [[0, 0.5], [0.15, 1.5], [1, 1.45]], 0.85, color=DAWNGLASS, alpha=(0, 0.28, 0.22, 0), emissive=1.2, rim="team",
+                      rim_pow=1.8, rim_emissive=3.0, noise=0.7, noise_scale=3.0, scroll=[0.2, 0.4], hold=0.6),
+                 L("emitter", at="target", count=12, shape="sphere", radius=0.75, surface=True, dir="in", spreadDeg=10, speed=[0.8, 1.4],
+                   life=[0.25, 0.35], size=[0.22, 0.16, 0], color=[NOON, DAWNGLASS, "team"], alpha=[0, 1, 0], emissive=2.6, texture="shard",
+                   blend="add", align="velocity", aspect=0.45),
+                 L("emitter", at="target", count=6, shape="sphere", radius=0.8, surface=True, dir="none", speed=[0, 0], life=[0.5, 0.7],
+                   size=[[0, 0], [0.2, 0.18], [1, 0]], color=NOON, alpha=[0, 1, 0], emissive=2.6, texture="glint", blend="add", delay=0.12),
+                 comment="T2 · Lumen · item family Glass (Glass Veil, Glintmail): glass settles round the holder: shards fly in and lock "
+                         "into a faceted Dawnglass shell with a team rim, glints catch on it"))
+    D.append(vfx("lib_item_stone_brace", 0.8,
+                 L("emitter", at="target", count=10, shape="ring", radius=0.95, dir="in", spreadDeg=4, speed=[2.6, 3.2], life=[0.22, 0.26],
+                   size=[0.28, 0.28, 0.24], color=[CHALK, CHALK_DK], alpha=[1, 1, 0], drag=0.5, texture="chip", blend="chip", spinDeg=[-200, 200],
+                   rim="team", rimAlpha=0.7, offset=[0, -0.2, 0]),
+                 mesh("target", "ringwave", [[0, 1.2], [0.25, 0.72], [1, 0.72]], 0.7, color=[CHALK, "team"], alpha=[[0, 0], [0.25, 0.9], [1, 0]],
+                      emissive=1.8, align="up", offset=[0, -0.3, 0], mask="band", mask_param=0.35, delay=0.18),
+                 shockwave("ground", color=[CHALK, "team"], radius=(0.3, 0.9), width=(0.16, 0.04), life=0.3, emissive=1.8, delay=0.2),
+                 dust("ground", 4, size=0.8, radius=0.4, delay=0.2),
+                 comment="T2 · impact · item family Stone (Ironstone Guard, Hourcleaver, Seatstone, Callstone): chalk plates snap in and "
+                         "lock round the holder in a team-lit band, a ring and a little dust at the feet"))
+    D.append(vfx("lib_item_edge_pace", 0.8,
+                 L("emitter", at="origin", socket="weapon", follow=True, count=12, shape="ring", radius=0.35, dir="none", speed=[0, 0], life=[0.4, 0.55],
+                   size=[[0, 0], [0.2, 0.2], [1, 0]], color=[HOUR, "team"], alpha=[0, 1, 0], emissive=2.6, orbitDeg=360, texture="streak", stretch=0.0,
+                   blend="add", space="local"),
+                 glow("origin", "team", 0.8, 0.6, 2.4, alpha=(0, 1, 0.6, 0), socket="weapon", follow=True),
+                 L("emitter", at="origin", count=8, shape="disc", radius=0.3, dir="back", spreadDeg=15, speed=[3, 5], life=[0.12, 0.2], size=[0.4, 0.08],
+                   color=[HOUR, "team"], alpha=[0.9, 0], emissive=2.2, drag=3, texture="streak", stretch=0.07, blend="add", offset=[0, -0.7, 0]),
+                 comment="T2 · Lumen · item family Edge (Dialcutter): the dial's edge gathers pace: hour-ticks circle the weapon and a "
+                         "brass flare, pace streaks peel off the heels"))
+    D.append(vfx("lib_item_resin_mend", 0.9,
+                 L("emitter", at="target", count=6, shape="disc", radius=0.35, dir="down", spreadDeg=10, speed=[0.4, 0.8], life=[0.3, 0.45],
+                   size=[0.16, 0.12], color=[RESIN, "#B57A3A"], alpha=[1, 1, 0], gravity=8, texture="drop", blend="alpha", rim="#FFE4B8", rimAlpha=0.7,
+                   offset=[0, 0.6, 0]),
+                 motes("target", 16, color=[SAP_WARM, SAP], rise=2.2, life=(0.5, 0.8), radius=0.5, emissive=2.0, delay=0.1),
+                 shockwave("target", color=[RESIN, SAP], radius=(0.2, 0.85), width=(0.14, 0.04), life=0.42, emissive=1.6, delay=0.1),
+                 comment="T2 · Lumen · item family Resin (Resin Maul): resin drips off the holder and the warmth rises back as Sap "
+                         "motes (help is up), a resin-to-Sap ring"))
+    D.append(vfx("lib_item_glass_echo", 1.0,
+                 decal("ground", "light", [[0, 1.0], [1, 0.25]], 0.3, color=DAWNGLASS, alpha=(0.6, 0), emissive=2.0, texture="ring_thin", fit=True),
+                 flash(2, at="ground", scale=1.2, delay=0.3),
+                 mesh("ground", "orb", [[0, 0.2], [0.25, 0.85], [1, 1.0]], 0.26, color=[NOON, DAWNGLASS, "team"], alpha=(0.75, 0), emissive=2.8,
+                      rim="team", rim_pow=1.4, rim_emissive=3.0, noise=0.5, dissolve=[0, 0.3, 1], edge="team", edge_emissive=2.6, delay=0.3, fit=True),
+                 shockwave("ground", radius=(0.2, 1.05), width=(0.3, 0.06), life=0.32, emissive=2.8, delay=0.3, fit=True),
+                 shards("ground", 12, speed=(4, 8), emissive=2.4, delay=0.3),
+                 comment="T2 · Lumen · item family Lens (Afterlight): the light lands twice: a lens ring closes on the spot, then a glass "
+                         "burst with a team edge ring and shards"))
+    D.append(vfx("lib_item_needle_shadow", 0.9,
+                 L("emitter", at="target", rate=30, duration=0.8, shape="disc", radius=0.35, dir="back", spreadDeg=20, speed=[3, 6], life=[0.12, 0.22],
+                   size=[0.5, 0.1], color=[INK2, INK], alpha=[0.9, 0], drag=3, texture="streak", stretch=0.08, blend="ink", rim="team", rimAlpha=0.8,
+                   offset=[0, -0.6, 0]),
+                 L("emitter", at="target", count=8, shape="ring", radius=0.5, dir="down", spreadDeg=4, speed=[7, 9], life=[0.14, 0.18],
+                   size=[0.5, 0.06], color=[NOON, "team"], alpha=[1, 0], emissive=2.4, texture="streak", stretch=0.06, blend="add", offset=[0, 1.6, 0]),
+                 shockwave("ground", radius=(0.2, 0.8), width=(0.12, 0.03), life=0.3, emissive=2.0, delay=0.12),
+                 comment="T2 · Shade · item family Needle (Needlefall): the needle's shadow falls: pale needles drop round the holder, a ring, "
+                         "ink shadow streaks peel off the heels while the haste lasts"))
 
     # ── team buffs ─────────────────────────────────────────────────────────────────────────────────────────────
     # Resinburn: the stuck resin ignites on the struck target (magic damage)
@@ -181,21 +263,27 @@ def defs() -> list:
                  comment="T3 · Lumen · Sunsplinter's burst: a splinter of the sun lands: a sun-gold flash and shell, splinters flung out and "
                          "up, the ground cracks with sunlight in it, the air ripples out"))
     D.append(vfx("lib_sunsplinter_sweep", 0.7,
-                 mesh("origin", "fan", [[0, 1.0], [1, 1.0]], 0.3, color=[SUN_HI, SUN], alpha=(0.85, 0.85, 0), emissive=3.0, mask="sweep",
-                      mask_param=[0, 1.1], angle=70, align="dir", fit=True, offset=[0.2, 0.35, 0], stretch=[3.0, 1, 3.0]),
+                 # max2: a ground sweep, not a mesh: a thin arc of sun-gold runs out across the cone (a ring_thin light decal
+                 # growing to the edge) over a lit fill that follows it (the fan mesh read as a solid tilted sheet)
+                 decal("origin", "light", [[0, 0.4], [0.7, 3.0], [1, 3.1]], 0.55, shape="cone", angle=70, color=SUN_HI, alpha=(1, 0.75, 0),
+                       emissive=3.0, texture="ring_thin", fit=True),
                  L("emitter", at="origin", count=22, shape="cone", angleDeg=70, length=3.0, dir="forward", spreadDeg=30, speed=[5, 9],
                    life=[0.15, 0.3], size=[0.22, 0.16, 0], color=[SUN_HI, SUN], alpha=[1, 0], emissive=3.0, drag=2, texture="shard", align="velocity",
                    aspect=0.45, blend="add"),
-                 decal("origin", "light", 3.0, 0.6, shape="cone", angle=70, color=SUN, alpha=(0.5, 0.3, 0), emissive=1.6, fit=True),
+                 decal("origin", "light", [[0, 0.5], [0.4, 3.0], [1, 3.0]], 0.6, shape="cone", angle=70, color=SUN, alpha=(0.55, 0.3, 0), emissive=1.6,
+                       fit=True),
                  decal("origin", "scorch", 2.6, 1.0, shape="cone", angle=60, color=INK2, alpha=(0.55, 0.4, 0), emissive=1.2, rim=SUN, fit=True),
                  comment="T2 · Lumen · Sunsplinter's sweep: a fan of sun-glass sweeps the arc, splinters fly, the cone scorches"))
     D.append(vfx("lib_longshade_sweep", 0.8,
-                 mesh("origin", "fan", [[0, 1.0], [1, 1.0]], 0.34, color=[LAMP, HOUR], alpha=(0.75, 0.7, 0), emissive=2.4, mask="sweep",
-                      mask_param=[0, 1.1], angle=80, align="dir", fit=True, offset=[0.2, 0.3, 0], stretch=[3.0, 1, 3.0]),
-                 L("emitter", at="origin", count=12, shape="cone", angleDeg=80, length=3.0, dir="forward", spreadDeg=30, speed=[2, 4],
-                   life=[0.4, 0.7], size=[0.5, 1.0, 1.1], color=[INK, INK2], alpha=[0, 0.85, 0], drag=2.4, rotDeg=[0, 360], texture="ink_puff",
-                   blend="ink", rim=LAMP, rimAlpha=0.6, soft=0.3),
-                 decal("origin", "ink", 3.0, 1.0, shape="cone", angle=80, color=INK, alpha=(0.7, 0.55, 0), rim=HOUR, fit=True),
+                 # max2: a ground sweep, not a mesh: the long shadow runs out across the cone as an ink decal that grows with a thin
+                 # lamp-amber arc on its front; fewer, smaller warm-grey smoke puffs (was a cream sheet with black blobs)
+                 decal("origin", "light", [[0, 0.4], [0.7, 3.0], [1, 3.1]], 0.65, shape="cone", angle=80, color=LAMP, alpha=(1, 0.7, 0),
+                       emissive=2.6, texture="ring_thin", fit=True),
+                 L("emitter", at="origin", count=7, shape="cone", angleDeg=80, length=3.0, dir="forward", spreadDeg=30, speed=[2, 4],
+                   life=[0.35, 0.6], size=[0.35, 0.7, 0.8], color=[SMOKE, SMOKE2], alpha=[0, 0.6, 0], drag=2.4, rotDeg=[0, 360], texture="ink_puff",
+                   blend="ink", rim=LAMP, rimAlpha=0.5, soft=0.3),
+                 decal("origin", "ink", [[0, 0.5], [0.45, 3.0], [1, 3.0]], 1.0, shape="cone", angle=80, color=INK2, alpha=(0.55, 0.4, 0), rim=HOUR,
+                       fit=True),
                  decal("origin", "light", 2.8, 0.8, shape="cone", angle=80, color=HOUR, alpha=(0.4, 0.25, 0), emissive=1.2, texture="rune", fit=True),
                  comment="T2 · Shade · Longshade's sweep: the long shadow swings through the arc (ink with a brass hour-line edge), ink rolls "
                          "out, the cone stays inked with the dial's ticks in it"))

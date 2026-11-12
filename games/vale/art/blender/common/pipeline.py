@@ -257,6 +257,24 @@ def default_chains(ctx) -> list:
     return [anim.ChainCfg(bones) for bones in ctx.chains.values()]
 
 
+def zone_grade(sid: str, glb: str) -> dict:
+    """art/tools/zone_grade.py on the freshly optimised GLB (MAX2 U1(1) material zoning), in a child Python that has
+    numpy and PIL; a fighter or skin without a recipe in art/tools/zone_grades.json is left as built."""
+    import json
+    import subprocess
+    recipes = os.path.join(scene.TOOLS_DIR, "zone_grades.json")
+    if not os.path.isfile(recipes) or sid not in json.load(open(recipes)):
+        return {"skipped": "no recipe"}
+    py = next((p for p in (os.path.expanduser("~/Developer/forgeflow-games/.venv/bin/python3"), "/opt/homebrew/bin/python3")
+               if os.path.isfile(p)), "python3")
+    r = subprocess.run([py, os.path.join(scene.TOOLS_DIR, "zone_grade.py"), sid, "--glb", glb],
+                       cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+    scene.log(r.stdout.strip()[-600:] or r.stderr.strip()[-600:])
+    if r.returncode:
+        raise SystemExit(f"{sid}: zone_grade failed: {r.stderr.strip()[-800:]}")
+    return {"ok": True}
+
+
 def build(spec, args, skin=None) -> dict:
     sid = skin["id"] if skin else spec.ID
     T = scene.Timer(sid)
@@ -362,6 +380,10 @@ def build(spec, args, skin=None) -> dict:
     if not args.no_optimize:
         with T.step("optimize"):
             report["optimize"] = export.optimize(glb, fighter=getattr(spec, "GLB_COMPRESS", True))
+        # MAX2 U1(1): the per-fighter material zoning (art/tools/zone_grades.json) is part of the build, so a rebuild
+        # keeps the signature-hue zones; a fighter without a recipe is untouched
+        with T.step("zone_grade"):
+            report["zone_grade"] = zone_grade(sid, glb)
     report["glb_bytes"] = os.path.getsize(glb)
     with T.step("load_test"):
         report["three_load_test"] = export.load_test(glb, skin=skin is not None,

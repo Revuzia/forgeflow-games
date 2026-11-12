@@ -1,0 +1,34 @@
+{
+  "_doc": "MAX2 U1(1) material zoning per fighter (art/tools/zone_grade.py; pipeline.build re-applies it after every build). Each zone: parts of the bake's part map, or boxes (rest position, Blender axes, m) x an ORM roughness band [lo, hi] x an optional max L*; hex = the hue (CIELAB angle of the colour), L = the zone's mean L*, C = its chroma, k = the texel's own L* deviation kept (default 1). Signature hues are content/fighters/<id>.json vfx.signature. Gate: lineup_qa sigPct >= 6 % and the bottom value band at L* 20-35.",
+  "kemdo": {
+    "zones": [
+      {"why": "signature coral on the cowl and the shoulder wrap (mid body)", "parts": ["cowl", "wrap", "glaive_wrap"], "hex": "#F2896C", "L": 47, "C": 32},
+      {"why": "the robe a deeper terracotta, apart from the cream hood and pauldrons", "parts": ["robe", "panel"], "hex": "#F2896C", "L": 38, "C": 18},
+      {"why": "lower body into the dark band", "parts": ["trousers"], "hex": "#6B5A4A", "L": 22, "C": 7}
+    ]
+  },
+  "burdam": {
+    "zones": [
+      {"why": "signature oxblood red on the coat (mid body); the head, mask and cowl untouched (cards lane)", "parts": ["coat"], "hex": "#B30300", "L": 27, "C": 30},
+      {"why": "the skirt, the part the game camera sees under the cowl, a deeper oxblood (lower body)", "parts": ["skirt"], "hex": "#B30300", "L": 24, "C": 24}
+    ]
+  },
+  "vashil": {
+    "zones": [
+      {"why": "signature violet on the stole and sash (mid body)", "parts": ["stole", "sash"], "hex": "#A66CF2", "L": 38, "C": 30},
+      {"why": "the long skirt a dusk violet-slate, darker (lower body)", "parts": ["skirt"], "hex": "#A66CF2", "L": 30, "C": 12, "k": 0.9}
+    ]
+  },
+  "tunlan": {
+    "zones": [
+      {"why": "signature plum on the robe skirt (mid and lower body)", "parts": ["robe_skirt"], "hex": "#9A00B4", "L": 30, "C": 28},
+      {"why": "the sleeves a lighter plum", "parts": ["sleeve_R", "sleeve_L"], "hex": "#9A00B4", "L": 40, "C": 22}
+    ]
+  },
+  "rishal": {
+    "zones": [
+      {"why": "signature crimson on the slate torso cloth (no part map: torso box x cloth roughness x the darker cloth only, not the pale cowl, sleeves or apron)", "boxes": [[-0.2, -0.3, 0.95, 0.2, 0.3, 1.42]], "rough": [0.8, 1.0], "maxL": 66, "hex": "#B30066", "L": 33, "C": 34},
+      {"why": "the trousers a dark crimson (lower body; the chest plate and pale cowl cover most of the torso at the game camera)", "boxes": [[-0.3, -0.3, 0.06, 0.3, 0.3, 0.95]], "rough": [0.8, 1.0], "maxL": 50, "hex": "#B30066", "L": 27, "C": 26}
+    ]
+  }
+}

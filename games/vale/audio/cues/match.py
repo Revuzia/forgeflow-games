@@ -263,7 +263,7 @@ def m_ping_onmyway(v: int):
     r = R('m_ping_onmyway')
     L = Layers(0.6)
     for i, note in enumerate(('D5', 'E5', 'G5', 'A5')):
-        L.add(harp(note, 0.45, 0.7 + 0.05 * i, bright=0.55, seed='omw', rr=i), 0.045 * i, peak_db=-1.5 + 0.5 * i, pan=-0.3 + 0.2 * i)
+        L.add(harp(note, 0.45, 0.85 - 0.03 * i, bright=0.55, seed='omw', rr=i), 0.045 * i, peak_db=0.0 - 0.8 * i, pan=-0.3 + 0.2 * i)
     L.add(tink(hz('A6'), 0.2, 0.15, bright=0.3), 0.135, peak_db=-13)
     L.add(S.whoosh(r, 0.22, 800, 2500, q=1.2, peak_at=0.6), 0.0, peak_db=-15, width=0.6)
     return finish(room(L.out(), 'wood', wet=0.1), hp_hz=150, eq=[('peak', 3300, -2, 0.8)])
@@ -275,7 +275,7 @@ def m_ping_missing(v: int):
     shade breath (they went into the dark)."""
     L = Layers(0.8)
     L.add(glass('G5', 0.4, 0.8, decay=0.15, bright=0.6, seed='pm'), 0.0, peak_db=0)
-    L.add(fm_tone(hz('C6'), hz('D6'), 0.38, ratio=2.32, i0=0.9, i1=0.2, t60=0.32, curve=-1.5), 0.13, peak_db=-1)
+    L.add(fm_tone(hz('C6'), hz('D6'), 0.38, ratio=2.32, i0=0.9, i1=0.2, t60=0.32, curve=-1.5), 0.13, peak_db=-4)
     L.add(breath(0.45, 1500, 500, shape='breath', q=1.6, seed='pm', peak_at=0.15, vel=0.6), 0.15, peak_db=-12)
     return finish(room(L.out(), 'glass', wet=0.12), hp_hz=200, lp_hz=8000, eq=[('peak', 3300, -2, 0.8)])
 
@@ -294,10 +294,10 @@ def m_ping_assist(v: int):
 def m_ping_push(v: int):
     """Ping 'push': a frame-drum march, tek-tek-DOUM, with a D5 harp and A5 glass on the downbeat."""
     L = Layers(0.7)
-    L.add(drum('D3', 0.7, 'tek', seed='pp1', dur=0.25, t60=0.12), 0.0, peak_db=-5)
-    L.add(drum('D3', 0.75, 'tek', seed='pp2', dur=0.25, t60=0.12, rr=1), 0.1, peak_db=-4)
-    L.add(drum('D2', 0.9, 'doum', seed='pp3', dur=0.6, t60=0.35, kick=0.4), 0.2, peak_db=-3)
-    L.add(harp('D5', 0.5, 0.8, bright=0.55, seed='pp'), 0.2, peak_db=-3)
+    L.add(drum('D3', 0.85, 'tek', seed='pp1', dur=0.25, t60=0.12), 0.0, peak_db=0)
+    L.add(drum('D3', 0.8, 'tek', seed='pp2', dur=0.25, t60=0.12, rr=1), 0.1, peak_db=-2.5)
+    L.add(drum('D2', 0.9, 'doum', seed='pp3', dur=0.6, t60=0.35, kick=0.4), 0.2, peak_db=-4)
+    L.add(harp('D5', 0.5, 0.8, bright=0.55, seed='pp'), 0.2, peak_db=-5)
     L.add(glass('A5', 0.5, 0.7, decay=0.18, seed='pp'), 0.205, peak_db=-8)
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=50, eq=[('peak', 3300, -2, 0.8)])
 
@@ -308,8 +308,8 @@ def m_ping_vision(v: int):
     opening upward G#5 → G#6 into a bloom on G#6 (the Lydian colour), a D6 glass under it and a little sparkle."""
     r = R('m_ping_vision')
     L = Layers(0.7)
-    L.add(fm_tone(hz('G#5'), hz('G#6'), 0.06, ratio=3.5, i0=0.6, i1=2.2, t60=0.08, curve=-1.5), 0.0, peak_db=-4)
-    L.add(shimmer('G#6', 0.6, 0.8, decay=0.4, index=3.0, seed='pvx'), 0.035, peak_db=0)
+    L.add(fm_tone(hz('G#5'), hz('G#6'), 0.06, ratio=3.5, i0=0.6, i1=2.2, t60=0.08, curve=-1.5), 0.0, peak_db=-1)
+    L.add(shimmer('G#6', 0.6, 0.8, decay=0.4, index=3.0, seed='pvx'), 0.035, peak_db=-3)
     L.add(glass('D6', 0.6, 0.7, decay=0.25, seed='pv'), 0.0, peak_db=-5)
     L.add(S.sparkle(r, 0.35, 6, 90, 100, t60=0.1, pcs=(2, 8, 9)), 0.04, peak_db=-15)
     return finish(room(L.out(), 'glass', wet=0.14), hp_hz=300, eq=[('peak', 3300, -2, 0.8)])
@@ -331,7 +331,7 @@ def m_ping_retreat(v: int):
     """Ping 'retreat': THREE notes falling fast, A5-E5-A4 (glass on bell), a breath swept down under them."""
     L = Layers(0.9)
     for i, note in enumerate(('A5', 'E5', 'A4')):
-        L.add(glass(note, 0.6, 0.85, decay=0.2, bright=0.75, seed=f'pr{i}'), 0.065 * i, peak_db=0 - 0.5 * i, pan=0.25 - 0.25 * i)
+        L.add(glass(note, 0.6, 0.85, decay=0.2, bright=0.75, seed=f'pr{i}'), 0.065 * i, peak_db=0 - 1.5 * i, pan=0.25 - 0.25 * i)
         L.add(bell(note, 0.6, 0.6, decay=0.08, seed=f'pr{i}'), 0.065 * i, peak_db=-8)
     L.add(breath(0.32, 3000, 600, shape='breath', q=1.5, seed='pr', peak_at=0.06, vel=0.6), 0.0, peak_db=-10)
     return finish(room(L.out(), 'small', wet=0.1), hp_hz=150, eq=[('peak', 3300, -2, 0.8)])

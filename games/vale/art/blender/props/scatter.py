@@ -104,7 +104,7 @@ def build(name: str) -> tuple[str, kit.Part, np.ndarray, np.ndarray]:
     if name in dialwood.TREES:
         sp = dialwood.TREES[name]
         part = dialwood.build_tree(sp)
-        col, gloss = dialwood.paint_tree(part, sp.seed, sp.tint, sp.hue)
+        col, gloss = dialwood.paint_tree(part, sp.seed, sp.tint, sp.hue, spec=sp)
         return "tree", part, col, gloss
     role, sp = STONES[name]
     part = stones.build_stone(sp)
@@ -278,7 +278,7 @@ def preview_trees(res: int = 1920, samples: int = 48):
         cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
         sc.collection.objects.link(cam)
         cam.data.type = "ORTHO"
-        cam.data.ortho_scale = 17.0
+        cam.data.ortho_scale = max(17.0, 3.3 * len(dialwood.TREES) + 1.5)   # max2: every species in frame
         pitch = math.radians(52)
         tgt = Vector((0.0, 0.0, 1.5))
         cam.location = tgt + Vector((0, -math.cos(pitch) * 40, math.sin(pitch) * 40))

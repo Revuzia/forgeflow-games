@@ -155,6 +155,42 @@
   "tris": 408,
   "verts": 366
  },
+ "hourtier": {
+  "budget": 750,
+  "gloss": {
+   "glossy_verts": 0,
+   "mean": 0.0
+  },
+  "kb": 22.2,
+  "midribs": 18,
+  "plates": 46,
+  "role": "tree",
+  "size_m": [
+   2.3,
+   2.18,
+   3.28
+  ],
+  "tris": 600,
+  "verts": 561
+ },
+ "lampbough": {
+  "budget": 750,
+  "gloss": {
+   "glossy_verts": 0,
+   "mean": 0.0
+  },
+  "kb": 19.2,
+  "midribs": 46,
+  "plates": 46,
+  "role": "tree",
+  "size_m": [
+   2.49,
+   2.5,
+   2.95
+  ],
+  "tris": 528,
+  "verts": 477
+ },
  "needle_chip": {
   "budget": 300,
   "gloss": {

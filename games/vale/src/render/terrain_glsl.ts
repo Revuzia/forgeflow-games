@@ -882,6 +882,24 @@ export const WALL_MAIN_GLSL = /* glsl */`
     vec3 b = valeOrganic( mix( mL, tL.rgb, 0.7 ), mL, under * vec3( 1.14, 0.95, 0.72 ), 0.5 );
     float m = smoothstep( 0.4, 0.62, med * 0.55 + big * 0.5 + ( tM.a - 0.6 ) * 0.5 );
     c = mix( b, a, m );
+    // max2 ENV-1 floor break-up: the gaps between the crowns read as one even dark moss. Three painted breaks, the mean
+    // held (each lifts some patches and sinks others, all inside the block top's dark band):
+    //  · dapple: sun through the canopy in soft warm pools (×1.0-1.75), never a hard spot
+    //  · drifts of the wood's fallen plates in the species' hues: amber in the Serenade half, silvered sage in the
+    //    Aubade half (the temperature field), each a patch a few metres across
+    //  · old dial-stone breaking through the moss in sparse slabs, a cool mid-grey with a dark seam round them
+    float dap = smoothstep( 0.5, 0.76, valeFbm( q * 0.62 + seed * 0.7 ) + ( med - 0.5 ) * 0.25 );
+    float hol = smoothstep( 0.5, 0.2, valeNoise( q * 0.5 + 77.0 ) * 0.6 + big * 0.4 );
+    vec3 sideT = mix( vec3( 0.86, 1.02, 1.04 ), vec3( 1.2, 0.98, 0.7 ), smoothstep( 0.3, 0.7, q.x / uMapSize.x ) );
+    float drift = smoothstep( 0.62, 0.8, valeNoise( q * 0.34 + 23.0 ) + ( tL.a - 0.6 ) * 0.6 ) * ( 1.0 - m * 0.6 );
+    c *= mix( vec3( 1.0 ), sideT * 1.45, drift * 0.85 );
+    float slabN = valeNoise( q * 0.41 + 51.0 ) + ( med - 0.5 ) * 0.2;
+    float slab = smoothstep( 0.74, 0.77, slabN );
+    float seam = smoothstep( 0.7, 0.74, slabN ) - slab;
+    vec3 slabC = uTop * 0.8 * ( 0.88 + 0.24 * valeNoise( q * 1.3 ) ) * mix( vec3( 1.0 ), tM.rgb / mM, 0.25 );
+    c = mix( c, slabC, slab * 0.85 );
+    c *= 1.0 - 0.35 * seam;
+    c *= ( 1.0 + 0.75 * dap * vec3( 1.05, 1.0, 0.84 ) ) * ( 1.0 - 0.22 * hol );
     // just inside the lip a little more light reaches the floor (still darker than the walkable floor)
     float rimZ = 1.0 - smoothstep( 0.05, 1.4, wi + ( n2 - 0.5 ) * 0.4 );
     c *= 1.0 + 0.15 * rimZ;

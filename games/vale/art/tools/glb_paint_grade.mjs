@@ -12,6 +12,12 @@
 //   --part-contrast mask.png:k  stretch the texels under a part mask round the part's median luma by k, hue kept (after
 //                             the rest; closing CW5 r2 refix 2)
 //   --part-lift mask.png:t:y  under a part mask, lift luma below t (0-1) by t x (v / t)^y, y < 1; above t unchanged
+//   --part-tint mask.png:#hex:L:C[:k]  (MAX2 U1 material zoning) under a part mask, re-colour the painted texels in
+//                             CIELAB: hue = the hex colour's hue angle, mean L* = L with each texel's own deviation from
+//                             the part's mean kept x k (default 1), chroma C (scaled by the texel's own relative chroma,
+//                             3/4 fixed + 1/4 its own). Absolute targets, so a second run lands on the same values.
+//   --mask-out out.png        write the --box mask (texture size) as a PNG and stop (no grade; zone_grade.py combines it
+//                             with the ORM roughness class for a fighter whose bake wrote no part map)
 //   --part-gain mask.png:g    multiply the texels under a part mask by g (repeatable; applied after the rest; masks from
 //                             art/tools/partmap_mask.py, closing CW5 r2 refix: id-masked material steps)
 //
@@ -111,6 +117,14 @@ if (boxes.length) {
     }
   }
 }
+if (args.includes('--mask-out')) {
+  if (!mask) throw new Error('--mask-out needs --box');
+  const g = new Uint8Array(W * H);
+  for (let p = 0; p < W * H; p++) g[p] = mask[p] ? 255 : 0;
+  await sharp(g, { raw: { width: W, height: H, channels: 1 } }).png().toFile(opt('--mask-out'));
+  console.log(`${opt('--mask-out')}: ${g.reduce((a, v) => a + (v ? 1 : 0), 0)} of ${W * H} texels in the box mask`);
+  process.exit(0);
+}
 const lum = (i) => (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
 const vals = [];
 for (let p = 0; p < W * H; p++) if (!mask || mask[p]) vals.push(lum(p * C));
@@ -160,6 +174,42 @@ for (const spec of args.flatMap((a, i) => (a === '--part-lift' ? [args[i + 1]] :
     const r = (t * (v / t) ** Number(gamma)) / v;
     for (let c = 0; c < 3; c++) data[p * C + c] = Math.max(0, Math.min(255, Math.round(data[p * C + c] * r)));
   }
+}
+// sRGB <-> CIELAB (D65), for --part-tint
+const lin = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const gam = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+const fL = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+const fi = (t) => (t > 6 / 29 ? t * t * t : (116 * t - 16) / (24389 / 27));
+const toLab = (r, g, b) => {
+  const R = lin(r), G = lin(g), B2 = lin(b);
+  const x = (0.4124 * R + 0.3576 * G + 0.1805 * B2) / 0.95047, y = 0.2126 * R + 0.7152 * G + 0.0722 * B2, z = (0.0193 * R + 0.1192 * G + 0.9505 * B2) / 1.08883;
+  return [116 * fL(y) - 16, 500 * (fL(x) - fL(y)), 200 * (fL(y) - fL(z))];
+};
+const fromLab = (L, a, b) => {
+  const fy = (L + 16) / 116, x = fi(fy + a / 500) * 0.95047, y = fi(fy), z = fi(fy - b / 200) * 1.08883;
+  return [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.204 * y + 1.057 * z].map((v) => gam(Math.max(0, Math.min(1, v))));
+};
+for (const spec of args.flatMap((a, i) => (a === '--part-tint' ? [args[i + 1]] : []))) {
+  const [path, hex, Lt, Ct, kk] = spec.split(':');
+  const k = kk === undefined ? 1 : Number(kk);
+  const h = hex.replace('#', '');
+  const sig = toLab(...[0, 2, 4].map((o) => parseInt(h.slice(o, o + 2), 16) / 255));
+  const ang = Math.atan2(sig[2], sig[1]);
+  const m = await sharp(path).resize(W, H, { kernel: 'nearest' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const idx = [];
+  for (let p = 0; p < W * H; p++) if (m.data[p * m.info.channels] >= 128) idx.push(p);
+  if (!idx.length) { console.log(`${path}: empty mask`); continue; }
+  const labs = idx.map((p) => toLab(data[p * C] / 255, data[p * C + 1] / 255, data[p * C + 2] / 255));
+  const mL = labs.reduce((a, l) => a + l[0], 0) / labs.length;
+  const mC = labs.reduce((a, l) => a + Math.hypot(l[1], l[2]), 0) / labs.length || 1;
+  idx.forEach((p, j) => {
+    const [L0, a0, b0] = labs[j];
+    const L1 = Math.max(2, Math.min(95, Number(Lt) + (L0 - mL) * k));
+    const C1 = Number(Ct) * (0.75 + 0.25 * Math.min(2, Math.hypot(a0, b0) / mC)) * Math.min(1, (L1 / Number(Lt)) ** 0.5);
+    const rgb = fromLab(L1, C1 * Math.cos(ang), C1 * Math.sin(ang));
+    for (let c = 0; c < 3; c++) data[p * C + c] = Math.round(rgb[c] * 255);
+  });
+  console.log(`${path}: ${idx.length} texels tinted ${hex} (mean L* ${mL.toFixed(1)} -> ${Lt}, chroma ${mC.toFixed(1)} -> ${Ct})`);
 }
 const old = tex.getImage().byteLength;
 const webp = await sharp(data, { raw: { width: W, height: H, channels: C } }).webp({ quality }).toBuffer();
