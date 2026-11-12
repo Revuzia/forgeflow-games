@@ -1086,3 +1086,22 @@ long press frame-rate independent. Report after 1-2 verified.
 - GATE check18 (all of session 14): 925/925 pass; npm run build OK (build-prod17.log).
 - NEXT: cuts #3 (patch page normal alias), #5 (prevColor), #6/#7 (GTAO aliasing), #8 (lazy pools); a long-frame soak
   (tiny viewport) for growth; owner A/B at the water-over-hills spot: default / ?zedge=0 / ?zcons=0.
+
+## NEXT (session 15) — coordinator's order after the session-14 ship (this session's context is exhausted)
+1. Cuts from GPU-MEMORY-PLAN.md §2, each with an identical-image A/B (perf-play busy save, ULTRA 640x360, region +
+   town, speed 0, dist before vs after, diff LOOKED; expect only sway / water motion / streaming lag):
+   #3 patch page normal alias (chunks.ts:76-77; set geometry.attributes.normal = position after a page's first
+   addGeometry; single update range per landing; three r186), #5 drop prevColor (water samples the last atmo target;
+   lazily allocated copy only for airless frames), #6 GTAO raw -> sceneCopy alias (scale 1), #7 GTAO blur -> atmoB
+   alias when a composite follows, #8 lazy near-veg / ground-cover pools (start 256, double to today's caps; per-bucket
+   geometry with its own iExtra).
+2. gpu mem line: GPU ownership — in Renderer.cpuRetained's scene walk also look up each texture's
+   renderer.properties.get(tex).__webglTexture in gpuMem.live (bytes by owner); for buffers, wrap three's
+   WebGLAttributes via renderer.attributes is not public: instead tag bufferData with the owner of the object being
+   drawn (wrap Object3D.onBeforeRender? or perfmon slot + three's renderBufferDirect object name, as glTrace's
+   --attrs does). ANGLE transients: per frame, bufferSubData count / bytes and the whole-buffer copy estimate already
+   computed by GlTrace (metal allocs est.) — keep a light always-on counter (not only while recording) and print
+   'angle transients est. MB/frame' in the gpu mem line.
+3. Growth soak with many frames: perf-soak.mjs --views=babel at a small viewport (add --size=320x180 to its context)
+   and --quality=high, 20+ min; sample __GENESIS_GPUMEM__ total / live.size / cpuProbe; look for a monotonic climb
+   (pages never freed, lazy targets, orphaned buffers). In node, the chunk-pool tour tests can run thousands of frames.
