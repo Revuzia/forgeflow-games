@@ -1,0 +1,411 @@
+{
+ "verifier": "g1a (max2 round 2, adversarial card verifier: sukri, tunlan, ervet, marund, ardit, hesmi, ilsheta)",
+ "date": "2026-11-12",
+ "commitReviewed": "d492b25c3 (g1 round-2 card commits 229050141, b8578a4ec, 077d953bf, 520ad6a20, 5da8d6bce, 5d537334d, d492b25c3, 7605a93c5 and wip sync b962d8ad2)",
+ "pass": false,
+ "checked": 42,
+ "failed": 15,
+ "method": "Viewed every shipped card in art/out/fighters/<id>/ by eye: each splash at full 1600x900, plus a per-card sheet with the card at 480 px wide beside its 3D reference (art/.cache/fighters/paint/<sid>_<kind>_3d.png), a face crop at about 3x around plates.face_point, and 128 and 64 px chips (LANCZOS down, then enlarged nearest-neighbour to view). Targeted 2-4x crops of eyes, mouths, feet and edges; the round-2 changed cards compared with their pre-round-2 files (git show <commit>^). Luma and high-pass checks on Sukri's portrait and Stillwater portrait streak zones. Re-ran card_qa.py on the 7 fighters and node tools/gen_store.ts --check. The 3D references for marund_gorgewalk_splash and hesmi_gorgewalk_* are newer than the shipped cards (rejected test renders), so those were judged on the card alone.",
+ "gates": {
+  "store": "pass: store.json current, dE gate 32/32",
+  "cardQa": "42 cards, 4 gate misses, all blank tripwire: sukri splash 0.74, tunlan_lamplit splash 0.70, marund_gorgewalk splash 0.66, ilsheta_stillwater splash 0.65. All four cards are unchanged in round 2. No hollow, glow, streak, cracked or dots gate misses; the highest glow diagnostic is sukri_shadeprint portrait at 0.12."
+ },
+ "cardScores": {
+  "sukri": 5.0,
+  "tunlan": 4.5,
+  "ervet": 4.0,
+  "marund": 4.0,
+  "ardit": 5.5,
+  "hesmi": 3.0,
+  "ilsheta": 4.5
+ },
+ "scoreNote": "Gauge only, against a recent LoL splash (a painted, dynamic, face-forward figure with strong value design and rim light). None of the seven reaches the 7.5 par bar. The painted cards are mostly a light regrade of the 3D (Sukri Stillwater portrait is almost identical to its reference). The 3D-shipped splashes (Ervet base and Stillwater, Marund base, Hesmi all six, Sukri Shadeprint, Ilsheta Stillwater) read as posterised clay figures on painted plates, with small static figures and single-hue light. Ardit is the strongest, with a readable silhouette and a painted pavise; Hesmi is the weakest, all 3D with wrap and eye-hole problems.",
+ "round2Changed": {
+  "nowPass": [
+   "sukri_portrait",
+   "sukri_stillwater_splash",
+   "sukri_stillwater_portrait",
+   "tunlan_noon_fair_splash",
+   "ervet_lamplit_portrait",
+   "marund_long_evening_portrait",
+   "ardit_first_bell_portrait"
+  ],
+  "stillFail": [
+   "sukri_shadeprint_splash (new retouch artefacts in the mouth and nose)",
+   "tunlan_portrait (eyes still solid slots)",
+   "ervet_stillwater_splash (feet with no contact shadow)",
+   "marund_gorgewalk_portrait (still no eyes, beak)",
+   "hesmi_splash (eye fixed; mummy lean)",
+   "hesmi_shadeprint_splash (glow fixed; torn-hole eye, ghost/mummy lean)",
+   "ilsheta_splash (cracks fixed; forehead chevron repainted as a dark V)",
+   "ilsheta_first_bell_splash (rims fixed; blank plate with eye-holes)"
+  ]
+ },
+ "perCard": [
+  {
+   "card": "sukri_splash",
+   "shipped": "painted",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Not changed in round 2. At 4x (crop 1000-1180 x 220-320) soft grey-brown drip shadows hang under both eyes from the lower lid: the same under-eye streak class that ks2 failed on the portrait and that g1 retouched away on the other Sukri cards, but this card was not retouched. They show as dark ticks under the eyes even at 1600 px. card_qa also trips the blank gate (0.74). The rest is good: on-model, seated feet, the best-painted Sukri card."
+  },
+  {
+   "card": "sukri_portrait",
+   "shipped": "painted v2",
+   "verdict": "ok",
+   "issues": "Changed in round 2. The lid-shadow curtain and drips are gone: rows 298-310 under the viewer-right eye now read 170-175, where ks2 measured 117-120. Lidded eyes with dark pupils, on-model. Watch: a small grey tick of about 8 px stays at the outer lower corner of the viewer-right eye (x 284-290, y 294-302, about 126 against a 160-170 cheek). It reads as lid shadow at 512 and is gone at 128."
+  },
+  {
+   "card": "sukri_stillwater_splash",
+   "shipped": "painted v2",
+   "verdict": "ok",
+   "issues": "Changed in round 2. The ks1/ks2 drip ticks under the eyes are gone, both in the paint and in the retouched 3D. Amber lidded eyes with dark pupils, staff and lantern on-model, feet seated. Watch: a sly half-lidded leer on a grey-green mask; faint forehead seam lines."
+  },
+  {
+   "card": "sukri_stillwater_portrait",
+   "shipped": "painted v2",
+   "verdict": "ok",
+   "issues": "Changed in round 2. The cheek streaks no longer measure: the high-pass across both cheeks below the eyes is within +-3 of the 3D, and the 3D is clean. Lidded eyes with pupils. Watch: hardly painted (it is almost identical to the 3D reference), and a dark grime patch sits on the hood's left side, also in the model."
+  },
+  {
+   "card": "sukri_shadeprint_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2: the eyes are now honey amber with near-black pupils, which fixes the ks2 eye read. But the round-2 face retouch left new artefacts that the pre-round-2 card did not have (4x crop 1120-1240 x 270-350, compared with the previous commit). Orange-salmon dabs sit broken across the inside of the mouth, and a ragged peach patch sits on the nose tip. At card size the whole figure is pale lavender: a banded wrap body with white boots under a pale hood, on a lavender plate. It leans toward a mummy read, and it is a flat clay 3D figure with no paint."
+  },
+  {
+   "card": "sukri_shadeprint_portrait",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Amber lacquer mask with dark lidded eyes, the hood rounded. Watch: the violet hood wash (card_qa glow 0.12, the highest in this set) and the side-eye."
+  },
+  {
+   "card": "tunlan_splash",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. On-model puppet face with a smile and closed lids, the shadow-wolf screen, feet seated. Watch: the figure is small in the frame and the paint adds little form."
+  },
+  {
+   "card": "tunlan_portrait",
+   "shipped": "painted v2",
+   "verdict": "fail",
+   "severity": "blocker",
+   "issues": "Changed in round 2. The lantern crescent (bruise) on the cheek is filled. But both eyes are still solid dark slots with no lid, iris or pupil (3x crop 180-360 x 120-260): the viewer-left eye is near-black, and the viewer-right eye is a dark maroon bar. At 128 and 64 they read as two dark bars under the brim. That is the hollow/solid-eye read that roll1 failed, only recoloured. A small dark dot is left on the right cheek, and a green-grey smudge sits at the nose bridge."
+  },
+  {
+   "card": "tunlan_lamplit_splash",
+   "shipped": "painted",
+   "verdict": "fail",
+   "severity": "minor",
+   "issues": "Not changed in round 2. card_qa trips the blank gate (0.70). By eye the closed lids and smile are there at full size, but the face is a pale rectangle at card size and at 128, and the figure is small. This is the round-1 card already on the CDN. It is failed on the gate under default-fail. A tighter or lower-camera restage would clear it."
+  },
+  {
+   "card": "tunlan_lamplit_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Lidded carved eyes and a smile, on-model; the paint is a little cooler than the magenta 3D."
+  },
+  {
+   "card": "tunlan_noon_fair_splash",
+   "shipped": "painted v1",
+   "verdict": "ok",
+   "issues": "Changed in round 2. With the head lifted, the brow band, carved closed lids and smile read under the brim at full and card size, so it no longer reads as a blank mannequin. Feet seated with a light shadow. Watch: the paint pushes the robe from the 3D's pink-mauve toward lavender (the portrait stays pink), and it sharpens the sundial dais's hour marks into letter-like glyphs (in the plate in both; they read as marks, not words)."
+  },
+  {
+   "card": "tunlan_noon_fair_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Lidded eyes, jointed fingers on-model. Watch: thin carved vertical lines on the left cheek (in the model)."
+  },
+  {
+   "card": "ervet_splash",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. A closed visor helm, eyeless by design, with blue lacquer inlay slits that do not glow. Watch: the posterised 3D finish smears the viewer-left scale pauldron into a white-blue blob and the gauntlet into a claw-like white curve at full size. It is weak art but not a listed blocker."
+  },
+  {
+   "card": "ervet_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. On-model helm. Watch: a black smudge under the helm's chin, also in the 3D."
+  },
+  {
+   "card": "ervet_lamplit_splash",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Hunched pose, sword and feet on-model."
+  },
+  {
+   "card": "ervet_lamplit_portrait",
+   "shipped": "painted v2",
+   "verdict": "ok",
+   "issues": "Changed in round 2. It keeps the warm lamp-lit peach (it no longer drifts to the base portrait's cream), the gorget covers the strap ends, and the helm leads. At 128 and 64 it is distinct from the base."
+  },
+  {
+   "card": "ervet_stillwater_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The one-foot kick is fixed: both boots are planted in a wide sweep stance. But in the 2x feet crop (920-1320 x 640-820) neither boot has a contact shadow on the bright snow. The viewer-left boot's toe block sits on light snow with the plate's shadow band below it, and the right boot is a long flat sole with nothing under it, so the feet read pasted on and not standing. The figure is a pale green posterised 3D with no paint."
+  },
+  {
+   "card": "ervet_stillwater_portrait",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Clean on-model helm at every size."
+  },
+  {
+   "card": "marund_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Not changed in round 2; round 1 passed it. At 2.2x (960-1260 x 220-420) the face is a patchwork of carved plates with a large pale beak nose and no readable eyes, only the brow shadow under the brim. That is the same stitched patch mask with a beak that failed Gorgewalk in roll1. At 4x a pure-black triangular mesh gap sits between the mask's right edge and the brim (about 1225,240, about 20 px; also in the 3D reference), and it shows at full size."
+  },
+  {
+   "card": "marund_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Heavy brow with squint lids, carved beard, goggled hat. Watch: the eyes cannot be read at 64."
+  },
+  {
+   "card": "marund_gorgewalk_splash",
+   "shipped": "painted (round-1 card)",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Not changed in round 2 (g1 restored the round-1 file). The roll1 failure stands: a white beak nose on a patchwork face, no visible eyes, and card_qa blank 0.66 trips."
+  },
+  {
+   "card": "marund_gorgewalk_portrait",
+   "shipped": "painted v1",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The keel is toned only from white to pale cream, and the 14-degree head lift still shows no eyes (2.3x crop 120-400 x 200-350, compared with the previous card): the brow band and cheek bulges sit on either side of the keel, with no lid, iris or pupil. At 128 and 64 it still reads as a beaked patch mask. Two dark slash marks on the chin plate (also in the 3D) add a scarred read."
+  },
+  {
+   "card": "marund_long_evening_splash",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Shovel and feet seated, warm grade held. Watch: no readable eyes at card size."
+  },
+  {
+   "card": "marund_long_evening_portrait",
+   "shipped": "painted v2",
+   "verdict": "ok",
+   "issues": "Changed in round 2. The base bust's victory pose with the head lifted: a closed lid shows above the nose, the beard and the gloved hand read, and the pink blob now reads as a glove. Watch: at 64 it is still a block face under a big hat, and the eyes cannot be read at chip size."
+  },
+  {
+   "card": "ardit_splash",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Box helm, spear, painted-glass pavise, feet seated; the most finished Ardit card."
+  },
+  {
+   "card": "ardit_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. The helm leads. Watch: the face behind the T slot is a ribbed brown shape with no eyes at 3x (no bare face by design)."
+  },
+  {
+   "card": "ardit_chalkline_splash",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. On-model, boot grounded on the cliff lip."
+  },
+  {
+   "card": "ardit_chalkline_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Watch: the vertical bar across the mouth slot leans toward a muzzle at 3x; it is fine at card size."
+  },
+  {
+   "card": "ardit_first_bell_splash",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. On-model. Watch: the pavise crosses the lower helm, and the figure is dark against the plate."
+  },
+  {
+   "card": "ardit_first_bell_portrait",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Changed in round 2. With the restage, the helm and T slot lead and the blank pavise panel is gone, so the roll1 failure is closed. It shares the base bust's pose; at 64 it is told apart from the base by its all-cream armour (the base has a blue-grey chest)."
+  },
+  {
+   "card": "hesmi_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The white-pupil eye is fixed: it is now a dark brown iris in a slate rim. But in the hunched, head-down pose the whole head is a ball of peach wrap bands (a band over the brow, the eye band, the full lower-face wrap), inside a hood of the same peach, over a wrapped torso. At card size (480) and 128 it reads as a bandaged head with one eye slit, a mummy lean, and roll1 already flagged the portrait as leaning toward a mummy at 64. The fix is in the model: a colour break between the wrap and the hood, or less banding on the face."
+  },
+  {
+   "card": "hesmi_portrait",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Dark navy almond eyes with catch-lights and lids, and the veil reads as a heavy scarf. Watch: the viewer-left eye has a notched tail at 3x; a thin dark scratch on the left cheek wrap; a mummy lean at 64."
+  },
+  {
+   "card": "hesmi_gorgewalk_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "blocker",
+   "issues": "Not changed in round 2 (g1 dropped the retouch). The roll1 failure stands: jagged, torn eye holes with no pupils in a white face patch, inside a pale hood and wrap."
+  },
+  {
+   "card": "hesmi_gorgewalk_portrait",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "blocker",
+   "issues": "Not changed in round 2. The roll1 failure stands: the same jagged, torn eye holes; at 128 it is a grey bundle with two holes."
+  },
+  {
+   "card": "hesmi_shadeprint_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The glowing violet slits are now dark ink with a catch-light (3x crop 1030-1180 x 200-300, compared with the previous commit), so they no longer glow. But the viewer-left eye is still a ragged, notched shape that reads as a torn hole (the Gorgewalk class, from the same eye-band geometry). A dark ink tick sits on the brow band, a dark scratch on the left cheek wrap, and a saturated violet rim line still runs under the band. At card size the whole pale-lavender hood, wrap and body read as a ghost or mummy bundle."
+  },
+  {
+   "card": "hesmi_shadeprint_portrait",
+   "shipped": "3d",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Dark blue lidded eyes with pupils. Watch: violet wash inside the hood, the same notched left-eye shape at 3x."
+  },
+  {
+   "card": "ilsheta_splash",
+   "shipped": "painted v2",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The cracked, aged face and the orange stare are fixed: a smooth plate with lidded brown eyes and pupils. But the paint turns the model's faint light up-pointing chevron on the forehead (as in the portrait and its 3D reference) into a bold dark down-pointing V (1.6x crop 1020-1300 x 180-500, compared with ilsheta_splash_3d). That changes an on-model part and gives the face a frowning brand mark; it is not the character's mark."
+  },
+  {
+   "card": "ilsheta_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Lidded amber eyes with pupils; nose, mouth and a light ^ chevron, all on-model."
+  },
+  {
+   "card": "ilsheta_first_bell_splash",
+   "shipped": "painted v3",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Changed in round 2. The red rims, nostril hollows and invented hem dots are gone. But the face is now a blank pale oval plate with no nose, mouth or brows: only two dark brown eyes with pin pupils, and a white vertical streak (the chimney reflection) down the forehead (3x crop 1040-1200 x 180-340). The pupils vanish at card size and 128, so it reads as a blank mask with two dark eye-holes (mannequin and hollow-eye lean). It also does not read as the same character as its own First Bell portrait, which has a nose, mouth and brows."
+  },
+  {
+   "card": "ilsheta_first_bell_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Lidded brown eyes with pupils, nose and mouth. Watch: stern, carved look with nasolabial creases."
+  },
+  {
+   "card": "ilsheta_stillwater_splash",
+   "shipped": "3d",
+   "verdict": "fail",
+   "severity": "major",
+   "issues": "Not changed in round 2. The roll2 failure stands: the face is a flat pale disc with only the two eyes, a blank mannequin lean at card size, and card_qa blank 0.65 trips."
+  },
+  {
+   "card": "ilsheta_stillwater_portrait",
+   "shipped": "painted",
+   "verdict": "ok",
+   "issues": "Not changed in round 2. Amber lidded eyes with pupils; the paint makes the model's nose, mouth and brows readable. Watch: a bright forehead highlight from the chimney."
+  }
+ ],
+ "problems": [
+  {
+   "card": "sukri_splash",
+   "severity": "major",
+   "what": "Under-eye drip shadows under both eyes (the streak class); card_qa blank 0.74.",
+   "fix": "Apply the round-2 face retouch (close/fill under the lids) to the base splash's 3D finish, then repaint."
+  },
+  {
+   "card": "sukri_shadeprint_splash",
+   "severity": "major",
+   "what": "Retouch artefacts: orange dabs inside the mouth and a ragged peach patch on the nose; the all-pale wrapped figure leans toward a mummy read.",
+   "fix": "Drop or redo the hue op on the mouth and nose; give the wrap bands a darker value break against the hood, or warm the body."
+  },
+  {
+   "card": "tunlan_portrait",
+   "severity": "blocker",
+   "what": "Both eyes still solid dark slots with no lid or pupil.",
+   "fix": "Model or retouch carved lids with a visible iris and pupil; lift the head or lower the camera so light reaches the sockets."
+  },
+  {
+   "card": "tunlan_lamplit_splash",
+   "severity": "minor",
+   "what": "card_qa blank 0.70; the face is a pale block at card size.",
+   "fix": "Restage closer or from a lower camera so the lids and smile carry."
+  },
+  {
+   "card": "ervet_stillwater_splash",
+   "severity": "major",
+   "what": "No contact shadow under either boot on the bright snow; the feet read pasted on.",
+   "fix": "Strengthen the shadow catcher and contact AO under both boots, or move the figure onto a darker ground."
+  },
+  {
+   "card": "marund_splash",
+   "severity": "major",
+   "what": "No readable eyes on the beaked patch mask; a black mesh gap between the mask and the brim.",
+   "fix": "Close the gap in marund.py and give the mask a readable lid and iris pair under the brim (affects every skin)."
+  },
+  {
+   "card": "marund_gorgewalk_splash",
+   "severity": "major",
+   "what": "Round-1 failure stands (no eyes, white beak, blank 0.66).",
+   "fix": "Same model fix as the base splash."
+  },
+  {
+   "card": "marund_gorgewalk_portrait",
+   "severity": "major",
+   "what": "Still no eyes; the keel is still pale; slash marks on the chin.",
+   "fix": "Model eyes under the brim; tone the keel to the mask wood; remove the chin slash marks."
+  },
+  {
+   "card": "hesmi_splash",
+   "severity": "major",
+   "what": "The head reads as a wrapped ball with one eye slit (mummy lean) at card size.",
+   "fix": "Colour or value break between the wrap and the hood, fewer face bands, a pose that shows both eyes."
+  },
+  {
+   "card": "hesmi_gorgewalk_splash",
+   "severity": "blocker",
+   "what": "Jagged, torn eye holes (roll1 failure stands).",
+   "fix": "Remodel the Gorgewalk face patch's eye cut-outs as smooth almonds with iris and pupil."
+  },
+  {
+   "card": "hesmi_gorgewalk_portrait",
+   "severity": "blocker",
+   "what": "Jagged, torn eye holes (roll1 failure stands).",
+   "fix": "Same as the Gorgewalk splash."
+  },
+  {
+   "card": "hesmi_shadeprint_splash",
+   "severity": "major",
+   "what": "Notched torn-hole left eye, ink ticks and scratches, and a pale-lavender ghost/mummy bundle at card size.",
+   "fix": "Smooth the eye-band cut, clean the ticks, and add a darker or warmer accent to break the all-lavender wrap."
+  },
+  {
+   "card": "ilsheta_splash",
+   "severity": "major",
+   "what": "The paint turned the model's light ^ forehead chevron into a dark down-pointing V.",
+   "fix": "Reject v2 or retouch the chevron back to the light ^ (or mask the forehead out of the paint)."
+  },
+  {
+   "card": "ilsheta_first_bell_splash",
+   "severity": "major",
+   "what": "A blank pale plate with two dark eye-holes; no nose, mouth or brows; does not match its own portrait.",
+   "fix": "Restage or relight so the nose, mouth and brows read as they do in the portrait, then repaint."
+  },
+  {
+   "card": "ilsheta_stillwater_splash",
+   "severity": "major",
+   "what": "Roll2 failure stands: blank disc face, blank 0.65.",
+   "fix": "Restage closer or relight so the face features read."
+  }
+ ],
+ "notes": [
+  "Default-fail was applied to tunlan_lamplit_splash (card_qa blank miss; by eye borderline) and to hesmi_splash and the Hesmi Shadeprint splash's mummy lean (a judgement on the wrap design, not a card defect). The lead may overrule these with a recorded ruling.",
+  "Not changed in round 2 but failed here for the first time: sukri_splash (under-eye drip shadows; the same class that was fixed on the other Sukri cards, so applying the same plates.retouch ops to the base splash should clear it) and marund_splash (no eyes plus a black mesh gap between the mask and the brim). Round 1 passed both. They are on the CDN today.",
+  "Hesmi's Gorgewalk and Shadeprint torn-eye shapes and Marund's eyeless beak mask need model fixes (the face patch and eye-band geometry, an eye pair under the brim); card retouches have not closed them in two rounds.",
+  "No cut-out halos found at the figure edges checked. No AI finger or limb artefacts in the painted cards. No tall, pointed or conical soft hoods: Ilsheta's chimney and Tunlan's finial are hard parts."
+ ]
+}
