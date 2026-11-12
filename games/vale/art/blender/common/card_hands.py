@@ -531,8 +531,8 @@ def _face_texels(o, polys, W, H):
 
 def _face_wipe(o, polys, mat, spec, log=print):
     """(cards ks1 fix) the carved face disc wiped to smooth, polished wood on COPIES of the material's base-colour and
-    normal images: every front texel of the disc between the chin and the brow (z < 1.44: the forehead's relief grain
-    stays, the paint matching it) takes the face plane's low-pass value (sigma 7.5 mm over the same texels, the eye and
+    normal images: every front texel of the disc, chin to crown (the forehead's grain too: the ks1 preview still read
+    it as a dark line running down between the eyes), takes the face plane's low-pass value (sigma 7.5 mm over the same texels, the eye and
     mouth recesses and the nose tip left out of it), ramped in over the 2-4.5 mm round the eye slits and the smile so
     the carved lips keep their edge; the nose's tip and wings keep their paint, its bridge is wiped. Thin vertical marks
     (grain cracks, jaw ticks, the drip ticks under the lids, the pale streak down the bridge, the baked grain in the
@@ -562,12 +562,11 @@ def _face_wipe(o, polys, mat, spec, log=print):
         es, ms = spec.eye_sd(x, z), spec.mouth_sd(x, z)
         disc = spec.face_sd(x, z) < -0.002
         keep_nose = nose & (z < 1.30)                                     # the tip and the wings
-        src = front & disc & (es > 0.0025) & (ms > 0.0025) & ~keep_nose & (z < 1.47)
+        src = front & disc & (es > 0.0025) & (ms > 0.0025) & ~keep_nose
         col = px[ty, tx, :3].astype(np.float64)
         lp, has = spec._grid_mean(x, z, col, src, 0.0025, 3.0)
         w = (front & disc & has).astype(np.float64)
         w *= ss(0.002, 0.0045, es) * ss(0.002, 0.0045, ms)
-        w *= 1.0 - ss(1.43, 1.45, z)
         w *= np.where(nose, ss(1.28, 1.31, z), 1.0)
         w *= ss(0.0, -0.006, spec.face_sd(x, z))                          # the disc's rim keeps its paint
         new = col * (1.0 - w[:, None]) + lp * w[:, None]

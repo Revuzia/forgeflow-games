@@ -242,7 +242,7 @@ ATLAS_SOFTEN = 0.60       # fix pass 2: 0.55 -> 0.60 (GLB headroom: fp2 build 1 
 CARDS = {
     "sukri": {
         "splash": {"clip": "victory", "t": 0.96, "yaw": 22.0, "pitch": -3.0, "lens": 52.0, "fill": 0.84, "x": 0.70,
-                   "pose": [{"bone": "head", "rot": [-6.0, 0.0, 0.0]}],
+                   "pose": [{"bone": "head", "rot": [-6.0, 0.0, 0.0]}, {"bone": "x_fist_L", "rot": [0.0, 0.0, 45.0]}],
                    "key_az": 150.0, "key_el": 24.0, "key_color": "#E8CFB4", "sun": 1.6, "rim_cool": 1.2,
                    "rim_warm": 0.5, "bounce": 0.35, "bounce_color": "#E2B48A", "accent": 2.8,
                    "focal": [{"at": "x_cup", "az": 180.0, "el": 5.0, "dist": 0.05, "color": "#FFE2A8", "power": 14.0,
@@ -286,7 +286,7 @@ CARDS = {
         # (closing round 2: the frontal key made a flat white mask: a side key, the face turns and warms)
         # (cards ks1 fix: cast_a1's raised staff left its pale crook cut by the frame over the hood, a scythe read on a
         # hooded masked figure) the base card's victory moment: the lantern held low, the staff out of the bust
-        "portrait": {"clip": "victory", "t": 0.96, "yaw": 30.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
+        "portrait": {"clip": "victory", "t": 0.96, "yaw": 40.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
                      "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 8.0,
                                 "size": 0.04},
                                # (the cup's warm glow on the plate, so the pale stone does not read as a white mask)
@@ -301,6 +301,7 @@ CARDS = {
                   # them saturated violet, 115,91,188); both cards' masks held to ruling 2's #B39272
                   "fig_chroma": 0.4, "amb_tint": 0.2, "match": 0.1, "mask_to": "#B39272", "mask_r": 1.8,
                   "contact": 1.5, "shadow_tint": 0.18,
+                  "portrait_over": {"median": 0.30},      # (the draft cell read p50 67, under the 70-110 band)
                   "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}],
                   "face_off": {"splash": [-0.02, 0.072], "portrait": [-0.028, 0.088]}},
     },

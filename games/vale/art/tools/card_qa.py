@@ -136,8 +136,52 @@ def card(sid: str, fid: str, kind: str) -> dict | None:
         w = a[a > 0.6]
         r["frame"] = {"mass_x": round(float((xs * w).sum() / w.sum()) / W, 3), "x0": round(xs.min() / W, 3),
                       "x1": round(xs.max() / W, 3), "top": round(ys.min() / H, 3), "feet": round(ys.max() / H, 3)}
+    r["pupil"] = pupils(img, a, sid, fid, kind, rp)
     r["_img"], r["_a"] = img, a
     return r
+
+
+PUPIL_GATE = {"sukri"}     # (cards ks1 fix) fighters whose carved eyes carry a painted pupil: the pupil check is a GATE
+
+
+def pupils(img: np.ndarray, a: np.ndarray, sid: str, fid: str, kind: str, rp: str) -> dict | None:
+    """(cards ks1 fix: verify ks1's blocker, Shadeprint's pupils read as pale lavender holes through the mask) in the face
+    disc (render notes + the card's face_off): the eye pixels are the warm, saturated top 20 % (the honey / amber inlay),
+    grown 3 px; the pupil is the darkest 4 % of that region. GATE (PUPIL_GATE fighters): the pupil's luma at least 25
+    under the iris's median, and not cool (its blue at most its red + 8: a plate seen through a hole is the sky's hue)."""
+    mp = rp + ".json"
+    if not os.path.isfile(mp):
+        return None
+    sys.path.insert(0, os.path.join(GAME, "art", "blender", "common"))
+    import plates  # noqa: E402
+    with open(mp, encoding="utf-8") as f:
+        meta = json.load(f)
+    p = plates.params(fid, None if sid == fid else sid) or {}
+    fp = plates.face_point(meta, p, kind)
+    if fp is None:
+        return None
+    H, W = img.shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W]
+    rr = (0.05 if kind == "splash" else 0.15) * H
+    fm = (((xx - fp[0] * W) ** 2 + (yy - fp[1] * H) ** 2) < rr * rr) & (a > 0.5)
+    mx, mn = img.max(-1), img.min(-1)
+    S = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
+    warm = fm & (img[..., 0] > img[..., 2] + 0.08) & (S > 0.35)
+    if warm.sum() < 12:
+        return None
+    eye = warm & (S >= np.percentile(S[warm], 80))
+    g = eye.astype(np.float32)
+    for _ in range(3):
+        pp = np.pad(g, 1)
+        g = np.max(np.stack([pp[dy:dy + H, dx:dx + W] for dy in range(3) for dx in range(3)]), axis=0)
+    reg = (g > 0) & fm
+    Y = (img @ Y709) * 255.0
+    pup = reg & (Y <= np.percentile(Y[reg], 4))
+    iris = float(np.median(Y[eye]))
+    pl = float(Y[pup].mean())
+    pc = img[pup].mean(0) * 255.0
+    ok = (pl <= iris - 25.0) and (pc[2] <= pc[0] + 8.0)
+    return {"iris_luma": round(iris, 1), "pupil_luma": round(pl, 1), "pupil_rgb": [int(round(v)) for v in pc], "ok": bool(ok)}
 
 
 def mad(a: dict, b: dict) -> float:
@@ -183,8 +227,10 @@ def main(argv: list[str]) -> int:
                 ok_h = (h["p99_9"] or 0) >= 230
                 r["mad"] = mad(r, base[kind]) if sid != fid and kind in base else None
                 ok_m = r["mad"] is None or r["mad"] >= 30.0
-                r["gates"] = {"speckle": ok_g, "highlights": ok_h, "mad": ok_m}
-                bad += (not ok_g) + (not ok_h) + (not ok_m)
+                pu = r.get("pupil")
+                ok_p = not (fid in PUPIL_GATE and pu is not None and not pu["ok"])
+                r["gates"] = {"speckle": ok_g, "highlights": ok_h, "mad": ok_m, "pupil": ok_p}
+                bad += (not ok_g) + (not ok_h) + (not ok_m) + (not ok_p)
                 fr = r.get("frame", {})
                 lines.append(
                     f"  {sid:<22} {kind:<8} grain fig p50 {g['fig_p50']:5.2f} p90 {g['fig_p90']:5.2f} | plate p50 "
@@ -194,6 +240,8 @@ def main(argv: list[str]) -> int:
                     + f" || hi p50 {h['p50']} p99 {h['p99']} p99.7 {h['p99_7']} p99.9 {h['p99_9']} max {h['max']}"
                     f"{'' if ok_h else ' !'}"
                     + (f" || mad {r['mad']:.1f}{'' if ok_m else ' !'}" if r["mad"] is not None else "")
+                    + (f" || pupil {pu['pupil_luma']:.0f} vs iris {pu['iris_luma']:.0f} rgb {pu['pupil_rgb']}"
+                       f"{'' if ok_p else ' !'}" if pu else "")
                     + (f" || mass x {fr['mass_x']:.3f} ({fr['x0']:.2f}-{fr['x1']:.2f}) top {fr['top']:.3f} feet "
                        f"{fr['feet']:.3f}" if fr and kind == "splash" else ""))
                 rows.append({k: v for k, v in r.items() if not k.startswith("_")})
