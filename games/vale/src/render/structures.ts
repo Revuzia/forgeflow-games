@@ -667,7 +667,9 @@ export class StructureFx {
     const sg = src.geometry, sp = sg.getAttribute('position'), si = sg.index;
     const nTri = Math.floor((si ? si.count : sp.count) / 3);
     const names = Object.keys(sg.attributes).filter((n) => n !== 'position' && n !== 'normal');
-    const protos = [chippedBlock(), new IcosahedronGeometry(1, 0).toNonIndexed()];
+    // three's polyhedra are built non-indexed already: toNonIndexed() on them only logs a warning (e2e console gate)
+    const ico = new IcosahedronGeometry(1, 0);
+    const protos = [chippedBlock(), ico.index ? ico.toNonIndexed() : ico];
     const N = 12;
     const nvOf = (i: number): number => protos[i % 2].getAttribute('position').count;
     let total = 0;
