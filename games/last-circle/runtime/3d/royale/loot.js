@@ -1308,9 +1308,9 @@ function rampTopAt(c, x, z) {
 }
 /** What is within 0.9 m under a body whose base is at y: 2 = a box top or the ground (what surfaceUnder - the contact blob and the floor ring - can
  *  sit on), 1 = only a ramp surface (an item on a stair: no blob, the ring floats flat at the item), 0 = nothing (over a hole, in the air). */
-function floorUnder(M, x, z, y) {
+function floorUnder(M, x, z, y, near) {
   let floor = M.heightAt(x, z), ramp = -Infinity;
-  const cs = M.queryColliders(x, z, 0.05, _stCols);
+  const cs = near || M.queryColliders(x, z, 0.05, _stCols);
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];
     if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
@@ -1322,8 +1322,8 @@ function floorUnder(M, x, z, y) {
 }
 /** does a body (radius rad, from y + 0.05 up to y + hi) overlap the interior of a solid box? A box whose top is at or under the body's base is
  *  the floor it rests on, not a solid it is inside. */
-function bodyInSolid(M, x, z, y, rad, hi) {
-  const cs = M.queryColliders(x, z, rad + 0.05, _stCols);
+function bodyInSolid(M, x, z, y, rad, hi, near) {
+  const cs = near || M.queryColliders(x, z, rad + 0.05, _stCols);
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];
     if (c.kind !== "box") continue;
@@ -1337,19 +1337,29 @@ const _settled = { x: 0, z: 0, moved: false };
 /** Fills and returns `_settled` (shared scratch). The authored spot stays when it is clear of every solid and a box top or the ground is under
  *  it; else the nearest spot within 2 m that is (a spot only a RAMP supports is a last resort: an item lying on a stair stays on the stair unless a
  *  slab or the ground is within reach, and so does a death drop); else the authored spot again. */
+// (W9 R1 fix camwall) settle asks the map ONCE: the colliders round the whole search (SETTLE_RINGS' outer ring + the body's reach), copied into
+// _stNear, and every candidate's bodyInSolid / floorUnder reads that list. Both tests keep their own exact box checks, so the answer is the same as one
+// query per candidate (a superset list, order-free tests: any-hit / max): player_camwall isla_viva, 8eaae688 - a swap drop over open water (no floor
+// within 0.9 m anywhere in reach) ran all 160 candidates = 320 queryColliders in one frame (388 in that frame, bar 150).
+const _stNear = [];
+const SETTLE_REACH = SETTLE_RINGS[SETTLE_RINGS.length - 1];
 function settle(W, x, y, z, rad, hi) {
   const M = W.map;
   _settled.x = x; _settled.z = z; _settled.moved = false;
   if (!M || !M.queryColliders) return _settled;
   const k0 = bodyInSolid(M, x, z, y, rad, hi) ? 0 : floorUnder(M, x, z, y);
   if (k0 === 2) return _settled;
+  const q = M.queryColliders(x, z, SETTLE_REACH + rad + 0.05, _stCols);
+  for (let i = 0; i < q.length; i++) _stNear[i] = q[i];
+  _stNear.length = q.length;
+  const near = _stNear;
   for (let pass = 2; pass >= 1; pass--) {                    // pass 1 takes a box top / the ground, pass 2 settles for a ramp surface
     if (pass === 1 && k0 === 1) return _settled;             // already on a stair and nothing better in reach
     for (let ri = 0; ri < SETTLE_RINGS.length; ri++) {
       const r = SETTLE_RINGS[ri];
       for (let k = 0; k < SETTLE_STEPS; k++) {
         const nx = x + SETTLE_DIR[k][0] * r, nz = z + SETTLE_DIR[k][1] * r;
-        if (bodyInSolid(M, nx, nz, y, rad, hi) || floorUnder(M, nx, nz, y) < pass) continue;
+        if (bodyInSolid(M, nx, nz, y, rad, hi, near) || floorUnder(M, nx, nz, y, near) < pass) continue;
         _settled.x = nx; _settled.z = nz; _settled.moved = true;
         return _settled;
       }

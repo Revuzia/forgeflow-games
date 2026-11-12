@@ -55,6 +55,14 @@ Plants (`--plant`, fixture and housegen sources; only the designated rows count,
   no-ceiling          the top storey's roof and ceiling not drawn      -> ceiling FAILS
   grass-on-floor      (MATCH source only; Wave 8 fix round) three grass tufts stood on every room's own floor lattice for the grass render
                                                                        -> grass-indoors FAILS (the control of the counted-pixel correction)
+  leaf-drawn-shut     (MATCH source only; Wave 9, lane R1A) every door leaf DRAWN shut (its BatchedMesh instance posed at k = 0, as maps.js poses a
+                      shut door) while its slab colliders stay open    -> kit-agree FAILS (the control that the drawn leaves are read at their poses)
+
+Door leaves (Wave 9, LC-91; match source): maps.js draws every door leaf as an INSTANCE of one BatchedMesh ("houses:doors@all", per-leaf matrices: the
+swing). probe_interior.js makeTris applies InstancedMesh matrices only, so it read that mesh's leaves at their model origin - nowhere near the doors
+(kit-agree then read the open slab colliders as walls nobody drew). The gate adds, before the houses are judged, one mesh with every leaf's triangles
+in world space (instance matrix x matrixWorld, the GPU's own transform), on layer 31 (no camera or shadow pass draws it), userData.lcPart "door"
+(structure). The doors row then measures the clear width with the leaves OPEN (the start state): contract C1 / design W2 row (b).
 Exit 0 pass / 1 fail / 2 could-not-judge.
 """
 from __future__ import annotations
@@ -83,8 +91,58 @@ PLANT_ROWS = {"furniture-in-door": {"furniture-clear"}, "window-solid": {"window
               "empty-room": {"furniture-view", "furniture-pixels"},      # one room holds no furniture: only a neighbour's pieces can be seen from its door
               "crate-steps": {"reach", "loot-reach"},                   # (fixture) the front door reachable only over furniture tops
               # Wave 8 fix round (lane K3, on lane K1's request): the control of the grass-indoors pixel correction (match source only)
-              "grass-on-floor": {"grass-indoors"}}
-MATCH_PLANTS = {"grass-on-floor"}
+              "grass-on-floor": {"grass-indoors"},
+              # Wave 9 (lane R1A): the control of the drawn-leaf adapter (match source only)
+              "leaf-drawn-shut": {"kit-agree"}}
+MATCH_PLANTS = {"grass-on-floor", "leaf-drawn-shut"}
+LEAF_LAYER = 31              # the drawn-leaf mesh's layer: no camera / shadow camera enables it (they draw layer 0)
+# (Wave 9, lane R1A) the door leaves as the GPU draws them, for the probe: see "Door leaves" above
+LEAF_JS = r"""
+(o) => {
+  const W = window.__LC__.W, m = W.map, root = W.group("map");
+  let bm = null;
+  root.traverse((q) => { if (q.isBatchedMesh && q.name === "houses:doors@all") bm = q; });
+  const doors = (m && m.doors) || [], nLeaf = doors.reduce((a, D) => a + D.leaves.length, 0);
+  if (!bm) return { doors: doors.length, leaves: nLeaf, added: 0, why: nLeaf ? "map.doors has leaves but no houses:doors@all mesh" : "no door leaves on this map" };
+  const old = root.getObjectByName("interiorcheck:door-leaves");
+  if (old) { old.parent.remove(old); old.geometry.dispose(); }
+  bm.updateMatrixWorld(true);
+  const MW = bm.matrixWorld.elements, M4 = new bm.matrixWorld.constructor(), R = {};
+  let planted = 0;
+  if (o.plant === "leaf-drawn-shut") for (const D of doors) for (const lf of D.leaves) {
+    if (lf.inst < 0) continue;
+    const L = lf.L;
+    M4.makeRotationY(L.q0 * Math.PI / 2); M4.setPosition(L.pivot[0], L.y, L.pivot[1]);
+    bm.setMatrixAt(lf.inst, M4); planted++;
+  }
+  const pos = bm.geometry.attributes.position, idx = bm.geometry.index, P = [];
+  let added = 0, tris = 0, shut = 0;
+  for (const D of doors) {
+    if (D.k !== undefined && D.k < 1) shut++;
+    for (const lf of D.leaves) {
+      if (lf.inst < 0) continue;
+      const r = bm.getGeometryRangeAt(bm.getGeometryIdAt(lf.inst), R);
+      bm.getMatrixAt(lf.inst, M4);
+      const e = M4.elements;
+      for (let i = r.start; i < r.start + r.count; i++) {
+        const v = idx ? idx.getX(i) : r.vertexStart + (i - r.start), x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+        const ix = e[0] * x + e[4] * y + e[8] * z + e[12], iy = e[1] * x + e[5] * y + e[9] * z + e[13], iz = e[2] * x + e[6] * y + e[10] * z + e[14];
+        P.push(MW[0] * ix + MW[4] * iy + MW[8] * iz + MW[12], MW[1] * ix + MW[5] * iy + MW[9] * iz + MW[13], MW[2] * ix + MW[6] * iy + MW[10] * iz + MW[14]);
+      }
+      added++; tris += r.count / 3;
+    }
+  }
+  const g = new bm.geometry.constructor();
+  g.setAttribute("position", new pos.constructor(new Float32Array(P), 3));
+  g.computeBoundingBox();
+  const Mesh = Object.getPrototypeOf(bm.constructor);
+  const mesh = new Mesh(g, bm.material);
+  mesh.name = "interiorcheck:door-leaves"; mesh.userData.lcPart = "door"; mesh.layers.set(o.layer); mesh.castShadow = false; mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+  root.add(mesh); mesh.updateMatrixWorld(true);
+  return { doors: doors.length, leaves: nLeaf, added, tris, notOpen: shut, planted, layer: o.layer };
+}
+"""
 FURN_MIN = 3
 DOOR_MIN = 2.0
 LUMA_ABS = 25.0              # every interior view: mean luma >= 25 / 255 ("not black") and <= 30 % of its pixels under 16 / 255. Set on the first measurements,
@@ -253,6 +311,10 @@ def browser_half(args, v, shots_dir):
             if setup and setup.get("error"):
                 v.cnj("browser setup [%s]" % map_id, setup["error"])
                 continue
+            if args.source == "match":
+                lv = s.js("(o) => (" + LEAF_JS + ")(o)", {"plant": args.plant, "layer": LEAF_LAYER})
+                extras.setdefault("leaves", {})[map_id] = lv
+                print("  [%s] door leaves for the probe: %s" % (map_id, lv), flush=True)
             hl = s.js("(o) => window.__LCINT_PAGE__.houses(o)", {"max": args.houses, "seed": args.seed})
             extras["maps"][map_id] = {"setup": setup, "houses": hl, "load": lr}
             print("  [%s] setup %s; houses: records=%s n=%s (surveyed %s)" % (map_id, setup, hl.get("records"), hl.get("n"), hl.get("surveyed")), flush=True)
@@ -321,9 +383,14 @@ def main(v, args):
     if args.node_only:
         return
     br, ex = browser_half(args, v, shots_dir)
-    v.data["browser"] = {k: ex[k] for k in ("maps", "errors")}
+    v.data["browser"] = {k: ex.get(k) for k in ("maps", "errors", "leaves")}
     v.data["browserHouses"] = [house_summary(l, h, rc, x) for l, h, rc, x in br]
     if args.source == "match":
+        lvs = ex.get("leaves") or {}
+        v.info("door leaves (drawn)", "the leaves of houses:doors@all added to the probe's drawn world (BatchedMesh instance matrices applied; layer %d, no camera draws it): %s" % (
+            LEAF_LAYER, " | ".join("%s: %s of %s leaves (%s triangles, %s doors not open%s)%s" % (k, l.get("added"), l.get("leaves"), l.get("tris"), l.get("notOpen"),
+                                   ", %s planted shut" % l["planted"] if l.get("planted") else "", (" - " + l["why"]) if l.get("why") else "") for k, l in lvs.items())))
+        leaf_miss = [k for k, l in lvs.items() if l.get("leaves") and l.get("added") != l.get("leaves")]
         recs = [m["houses"].get("records") for m in ex["maps"].values()]
         rows.check("house-records", bool(recs) and all(recs), "the map exposes housegen house records on %d of %d maps (%s); without them the rooms come from the collider survey" % (
             sum(1 for r in recs if r), len(recs), {k: m["houses"].get("recordsField") for k, m in ex["maps"].items()}))
@@ -331,6 +398,8 @@ def main(v, args):
         rows.check("browser houses", None, "no house judged in the page (%s)" % {k: m["houses"].get("n") for k, m in ex["maps"].items()})
     else:
         A = aggregate(br)
+        if args.source == "match" and leaf_miss:      # (Wave 9) the probe's drawn world lacks door leaves the map has: kit-agree cannot judge
+            A["kit-agree"] = (None, "the drawn door leaves could not be read on %s (%s); without them: %s" % (leaf_miss, {k: (ex.get("leaves") or {})[k] for k in leaf_miss}, A["kit-agree"][1]))
         for k, (ok, det) in A.items():
             rows.check(k, ok, det)
         # rendered rows

@@ -3,6 +3,70 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-11-02 — Wave 9 round 1: doors on houses, bot fall guard + revive fixes, terminal velocity (LIVE ?v=1793664196)
+
+Round 1 of Wave 9 (brief `F:/lc_p23/w9/BRIEF.md`, lanes R1A doors geometry and R1B bots / fall). Every map's buildings changed, so
+`MAP_GEN_VERSION` is 8: an older page and this one cannot share a squad room. Phones are unchanged.
+
+**Doors (LC-91, geometry only this round)**
+- Every outside door and about half the inside doors now have swinging double doors, drawn in one batch (`houses:doors@all`), with solid
+  "closed" and "open" collision slabs and a door API on the map (`setDoor`, `doorNear`, `doorAt`, `doorStates`, `applyDoorStates`, `doorChanged`).
+- Every door starts **open** this round. The start state is read once per map build from `K.DOOR_START` (only the word "closed" shuts a door);
+  the sim does not set it yet, so all doors stay open until players and bots can open doors (round 2).
+- Doors swing clear of furniture: wall art and decorations taller than a rug are kept out of a door's swing.
+- Furnished rooms keep every route between doorways and stair ends at least 1.4 m wide, so bots never climb a stair they cannot come back down.
+- The furniture check judges what you actually see from the third-person camera; every building passes (116 of 116 views).
+- Runtime colliders: `maps.js` gains `addDynamicCollider` / `removeDynamicCollider`; the city kit's collider shape matches `maps.js` again.
+
+**Bots**
+- Swimmers are no longer exempt from the stuck-loop breaker: a bot stuck swimming heads for the nearest shore.
+- Calm drop guard: a calm bot no longer walks off ledges higher than 6.3 m (Isla Viva Volcano Rim); it re-plans, and its edge guard walks it
+  to a route corner short of the drop instead of holding it at the lip.
+- A downed bot's teammate commits to fighting or reviving instead of dithering; no revive starts while an enemy was seen in the last 10 s;
+  a pressing storm rotation still outranks a committed revive.
+- Shields (OD-16): far big-shield seeking is parked (it cost about 25 KB per frame in fights and bought no shield); the supply crate is
+  unchanged.
+
+**Falling (LC-61)**
+- Falls now have a terminal velocity. A fall of more than 12 m ends in a heavy landing that blocks firing and aiming for at least 0.3 s
+  (not after a glide or parachute landing).
+
+**Gates**
+- New rows, each with a planted fault that must fail it: collisioncheck doors-open / doors-closed / door-cycle; interiorcheck reads door leaves
+  where the GPU draws them; housegen selftest C3 (no-hash) and C1 start-state (start-ignored); p23_fall terminal / heavy / heavy-12.2 / rim and
+  the lip part over Isla Viva seeds 77 + 7; p23_dbno bot dither / revive-start and the two-human size row; p23_tierprof bots p95 <= 3 ms;
+  p23_botbatch census-600; probe_match sweep + swim-trap and the scripted Volcano Rim pen (`--pencheck`).
+- Corrected measures (bars unchanged): housegen_demo_nav's stand-in skips dead colliders like the game does; houseload compares both builds on
+  the same replayed query stream (x1.25 kept); framecheck draws drop frame 1 from the live build's landing zone (x1.25 kept).
+- `MAP_GEN_TARGET` 8; housegen_demo_looks is counted now (`LOOKS_INFO = False`).
+
+**Fix round (lanes hudfeel, camwall, botpen, doorstuck)**
+- W9 R1 fix (hudfeel): loot pills are clamped 4 px inside the viewport, so they are never clipped by the screen edge, and they are hidden while the local player is dead or spectating. Fixes hud_checks pixel7 915x412 death 'CHEST' clipped 21 px past the edge.
+- W9 R1 fix (hudfeel): hud_checks gains an EDGES row (loot anchor at NDC x +/-0.99 -> 0 pills clipped) with the falsifier --only edges --plant pill-unclamped (must FAIL). hud_checks is now 118 rows.
+- W9 R1 fix (hudfeel): feelcheck places its pinned targets on the round's own line of fire (eye to body, K.segmentColliders + terrain, in front of the muzzle) and turns the subject on the spot to a clear 4-14 m facing. MAP_GEN 8 lands the ashgrid 4242 subject 0.53 m from a wall, which had left every pinned row could-not-judge.
+- W9 R1 fix (camwall): loot.js settle(): a floorless swap / death drop asked the map 322 times in one frame (player_camwall isla_viva maxInOneFrame 388 > 150 on 8eaae688); settle now queries the colliders once over its whole reach and runs the same box tests on that list - 3 calls per settle, same settled spots (6000 settles x 3 maps, diff 0), seeded worlds unchanged.
+- W9 R1 fix (camwall): player_camwall: new deterministic row, a floorless drop settles in <= 4 queryColliders calls (by caller settle) and keeps its x/z, on all 3 maps; plant settle-requery must FAIL it.
+- gate.py registers both new plants: hud_checks-plant-pill-unclamped and player_camwall-plant-settle-requery.
+- (W9 R1 fix botpen) Bots no longer get penned at a route corner near a cliff: edgeGuard's corner rule measures the run-on past the corner from the corner itself (0.2 m samples, 1.1 m), finds the corner past collinear grid waypoints, checks the walk to it, and applies to the flight test too (probe_match --pencheck 3/3 reach 11.5/8/10 s, 0 stuck episodes on the doors world).
+- (W9 R1 fix botpen) A wounded bot that turns between two fall-guard probes is re-probed at once (heading change > 0.2 rad yaw or 0.25 stick), and a hop is only made when its arc lands within the drop the bot may fall (p23_fall lips: 0 deaths over 27 judged lips x 5 runs; was 1 death in 2 runs).
+- (W9 R1 fix botpen) p23_fall: the bots-avoid lips row counts 3 repeats per seed (every run judged, bar 0 deaths unchanged) and a new deterministic row 'bots-avoid lips turned' with its plant no-turn-reprobe (MUST FAIL).
+- W9 R1 fix (doorstuck): house loot and chests are no longer placed where an open door leaf hides them from their stand point. Before, a bot stood in the doorway beside the leaf and never got the item (isla_viva seed 3, 14 stuck episodes).
+- W9 R1 fix (doorstuck): bots now go through a leafed doorway straight on. A window-planner route that crosses one passes two points on the door's axis (ashgrid seed 1 had a 3.6 s in/out loop at a back door, 7 episodes). probe_match_sweep is back to PASS 13/0, worst 3, the same as live.
+- W9 R1 fix (doorstuck): new housegen selftest row leafsee with its negative control; new probe_match plant no-door-funnel (the sweep must FAIL with it).
+- (W9 R1 fix mergefix) A calm bot no longer re-plans when edgeGuard holds it at a lip only because its steered heading still points along the old leg after it took its route's corner waypoints early. The hold lets the yaw come round, for at most 1.5 s; after that the bot re-plans as before, so the trap breaker stays reachable. Before, the re-plan's grid route led down the face, looped, and the trap breaker parked the goal (probe_match --pencheck setup 3, s18 at 40 hp: never reached; now 3/3 reach 11.5 / 8.5 / 11.5 s, 0 stuck episodes). Plant no-calm-lag MUST FAIL.
+- (W9 R1 fix mergefix) Bots now turn early at a grid-route corner that sits nearer a lip than edgeGuard's run-on margin. EDGE_EARLY moves the turn back at most 1.2 m along the heading, only where navgrid walkSegment certifies the cut leg, and a waypoint turning more than 18 deg now counts as a corner (was 45). A failed early-turn search is remembered per waypoint, so it is not repeated every tick. The Isla Viva seed 1 Coco Village terrace corner, 0.6 m from the face, had held s21 at every look. New scripted row probe_match --cornercheck: 3/3 reach in 1 / 1.5 / 2 s; it fails on base f2396d7f and with plant no-early-turn (never reached).
+- (W9 R1 fix mergefix) probe_match episode sweep on the merged doors + botpen build: all 18 runs now have a worst bot at 4 stuck episodes or fewer (was isla_viva seed 1, s21 = 5). The pen driver now looks for the route corner on every tick.
+- gate.py registers the fix-round-2 plants: p23_fall-plant-no-turn-reprobe and probe_match-plant-no-door-funnel.
+
+**Known gaps**
+- OD-16 bot shield economy: the median late-match bot shield is about 11-15 against a target of 75. Accepted by the owner on 2026-11-02;
+  the bar stays at 75 and the p23_botbatch shield-600 row stays registered and red.
+- houseload `--seed 9`: the Savanna (ashgrid) outpost district draws 19 calls against a bar of 16. This is the same on the live build
+  (pre-existing, not caused by this round); the counted houseload run uses seed 7.
+- p23_tierprof auto-ground on Savanna: raw p50 about 20.1-20.3 ms against 20 ms. This is shared-machine timing; the live build's base
+  09720db0 fails the same row.
+- A calm bot can still be penned at the Volcano Rim face by a town-grid route (navgrid, outside this round's files); scheduled for a later round.
+
 ## 2026-10-30 — Wave 8 + parity waves P1 / P2 / P3: team modes, revives, fall damage, grenades, new guns, furnished houses (LIVE ?v=1793384602)
 
 One release for four waves of work: Wave 8 (furnished interiors) and the parity waves P1, P2 and P3 (what the big battle royales do that we did

@@ -143,7 +143,7 @@ WAVE7C_REV = "6191b380"      # the Wave-7 COMPLETION release (live until the Wav
                              # MAP_GEN_VERSION 4). NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 # ---- Wave 7b (lane B2). Which maps' rows COUNT. Isla Viva and Deepwood get their towns and endgame areas from lane B1 in the same stage; each constant was set at the END of the stage to what B1
 # reported landed (README "Wave-7b gates"). A map left out of a list runs as INFORMATION ("would PASS / would FAIL"), never silently skipped.
-MAP_GEN_TARGET = 7                                     # genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
+MAP_GEN_TARGET = 8                                     # Wave 9 R1A: 7 -> 8 (LC-91 door leaves + slabs change every map's colliders; OD-16 supply roll rides the same bump). Was: genversion --expect-version: MAP_GEN_VERSION on all three maps (Wave 8 stage B, lane I1: 5 -> 6 ONCE - housegen changes every map's buildings; release prep 10-27: 6 -> 7, the parity waves P1-P3 change every map's world and loot)
 ALL_MAPS = "isla_viva,ashgrid,deepwood"
 CITY_BLOCK = ALL_MAPS                                  # citycheck --block-maps (all three maps: lane B1 landed the themed towns, compounds and both endgame areas)
 NAVTOWN_BLOCK = ALL_MAPS                               # navtown --block-maps
@@ -158,7 +158,7 @@ THEMES_INFO = False                                    # themeshots (lane B3's g
 # "must fail" build of interiorcheck --source match. NEVER moves (common.LIVE_REV moves after the next deploy; this does not)
 WAVE7B_REV = "9115494d"
 INTERIOR_MAPS = ALL_MAPS                               # interiorcheck --source match --maps: BLOCKING on all three maps (owner O3 + plan Wave 8 verify "every map")
-LOOKS_INFO = True                                      # housegen_demo_looks: INFORMATION until it is green (stage A: view-pixels 115/116, lodge_tower.f1r1 storage shows 2 pieces); counted afterwards
+LOOKS_INFO = False                                     # Wave 9 R1A: COUNTED (view-pixels 116/116, compound 23/23). Was: housegen_demo_looks: INFORMATION until it is green (stage A: view-pixels 115/116, lodge_tower.f1r1 storage shows 2 pieces); counted afterwards
 PREL5_REV = "874ab0ca"       # the last-circle build BEFORE lane L5 (3474f1c0, 2026-10-04): every chute deploy allocated geometries (200 -> 212 over the 10 SPACE toggles on isla_viva): the frozen "must fail" build of framecheck's
                              # 10-SPACE-toggle row (Wave-7 fix round: the row now excludes the terrain's lazily built chunks and must still see this)
 WAVE4_REV = "7f6a9fb2"       # the Wave-4 merge commit: the frozen "must fail" build of the Wave-5 gates
@@ -224,7 +224,7 @@ GATES = [
     ("framecheck", "framecheck.py", [], 5400, False),
     # Wave 7 (lane 7D): the default gate only ever ran Isla Viva. Savanna counts; Deepwood is not touched by Wave 7, so its rows are INFORMATION until Wave 7b
     # (its one failing row, 10 SPACE toggles: geometries flat, reads 163 -> 164 on the live build too - see README "Wave 7")
-    ("framecheck_ashgrid", "framecheck.py", ["--map", "ashgrid"], 5400, False),
+    ("framecheck_ashgrid", "framecheck.py", ["--map", "ashgrid"], 5400, False),   # W9 R1A 1b: FRAME1_VERSION 2 - drop frame 1 drawn from the live build's landing zone (bar x1.25 kept)
     # Wave-7 completion round: COUNTED (was information until Wave 7b). Its one failing row (10 SPACE toggles) was a lazily built near-LOD terrain chunk, fixed in the definition by the Wave-7 fix round
     # (lane 7G; the same defect on the live build 60b854d0 = not the chute); passed 18/18 four times since. Controls: framecheck_deepwood-plant-chute-leak and the real pre-L5 build (NEGATIVE below)
     ("framecheck_deepwood", "framecheck.py", ["--map", "deepwood"], 5400, False),
@@ -240,6 +240,13 @@ GATES = [
     ("rigcheck_ashgrid", "rigcheck.py", ["--seeds", "7,11,23", "--map", "ashgrid"], 5400, False),
     ("rigcheck_deepwood", "rigcheck.py", ["--seeds", "7,11,23", "--map", "deepwood"], 5400, False),
     ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
+    # Wave 9 R1B: 3 maps x seeds 1-6, worst <= 4 stuck episodes per run + the scripted swim-trap (a swimmer held 4 s: loop breaker trips, not stuck again in 8 s).
+    # Controls: probe_match-plant-stall-surge (sweep worst row) and probe_match-plant-swim-exempt (swim-trap) in P23_PENDING_NEG
+    ("probe_match_sweep", "probe_match.py", ["--sweep", "--swimcheck"], 7200, False),
+    # Wave 9 R1B pass 3: the scripted Volcano Rim pen (isla_viva seed 5, 3 setups: every setup reaches its goal in 30 s with 0 stuck episodes). Control: probe_match-plant-no-pen-fix
+    ("probe_match_pencheck", "probe_match.py", ["--pencheck"], 1800, False),
+    # W9 R1 fix mergefix: the scripted Coco Village corner (isla_viva seed 1, 3 setups: reach in 30 s, 0 stuck episodes). Control: probe_match-plant-no-early-turn
+    ("probe_match_cornercheck", "probe_match.py", ["--cornercheck"], 1800, False),
     # the same-seed replay, the census (>= 3 guns per player) and the path search on SAVANNA: 3 whole matches (11 twice, 12), ~2 min
     ("probe_match_ashgrid", "probe_match.py", ["--runs", "11:ashgrid,11:ashgrid,12:ashgrid", "--paths-maps", "ashgrid", "--small-run"], 7200, False),
     ("leaktest", "leaktest.py", [], 7200, False),
@@ -262,12 +269,12 @@ GATES = [
     # the gate's own reference house: every row must PASS on it (its plants below must FAIL) - the judge is checked before it judges the game (~1 min)
     ("interiorcheck_fixture", "interiorcheck.py", ["--source", "fixture"], 1800, False),
     # lane H4's nav gate: 300 housegen houses, every room planned on NavGrid.bakeTown and walked IN and OUT by the real mover (Node, ~30 s)
-    ("housegen_demo_nav", "housegen_demo_nav.py", [], 1800, False),
+    ("housegen_demo_nav", "housegen_demo_nav.py", [], 1800, False),        # W9 R1A 1b: the stand-in queryColliders skips dead colliders like maps.js (closed leaf slabs start dead): 2103/2103
     # lane H4/H6's looks gate (first-person views of 12 buildings, glass, kit extents): INFORMATION until green (LOOKS_INFO)
     ("housegen_demo_looks", "housegen_demo_looks.py", [], 1800, LOOKS_INFO),
     # NEW: colliders returned per bot query (battery at every footprint centre, exact) and per frame (600 stepped frames), vs common.LIVE_REV x1.25; <= 16 draw calls per district.
     # Two Chromes per map (candidate, baseline), ~1 min each
-    ("houseload", "houseload.py", [], 3600, False),
+    ("houseload", "houseload.py", [], 3600, False),                        # W9 R1A 1b: collider-load-frame judged on the candidate's replayed 600-frame query stream on both builds (bar x1.25 kept)
     # Wave 7b (lane B3's gate, registered here by lane B2): what the kit's town THEMES look like (resort / lodge colourways, palette looks, tables in sync with towngen / citykit, 0 new programs); one
     # Chrome at the menu, ~1 min. THEMES_INFO until the palette patch is on the tree
     ("themeshots", "themeshots.py", ["--themes", "resort,lodge,city", "--label", "gate"], 1800, THEMES_INFO),
@@ -281,7 +288,7 @@ GATES = [
     # the cumulative cost of the city). ONE candidate match per seed is judged against both baselines (rows "[ashgrid s31337 vs 60b854d0]"); every baseline is cached per commit x map x seed, so only the
     # first run against a new baseline loads the extra matches (~1 min each)
     ("perf_district", "perf_district.py", ["--seeds", PERF_SEEDS, "--baseline", LIVE_REV + "," + WAVE6_REV], 7200, False),
-    ("citykit_probe", "citykit_probe.py", [], 3600, False),
+    ("citykit_probe", "citykit_probe.py", [], 3600, False),               # W9 R1A 1b: collider-shape list knows door / dslab
     # Wave 7: the kit inside a real Savanna match (inmatch-warm: 0 new programs, inmatch-cost: <= +40 calls / <= 25 % triangles per frame). The collider count is no longer a literal (it moved with every manifest)
     ("citykit_probe_inmatch", "citykit_probe.py", ["--in-match"], 3600, False),
     # Wave 7: citycheck is a PERMANENT BLOCKING gate on Savanna (200 seeds; Node ~3.5 min + one Chrome for the detector parity). Isla Viva / Deepwood rows are printed as
@@ -380,6 +387,7 @@ GATES = [
     ("p23_lootp2", "p23/lootp2.py", [], 7200, P23_PENDING),               # P2-H death pile, supply drops (>= 3 by 760 s, beacons, open), tiers 1.5x + hot zone
     ("p23_footsteps", "p23/footsteps.py", [], 3600, P23_PENDING),         # LC-52 footstep census >= 90 % per zone
     ("p23_tierprof", "p23/tierprof.py", ["--gpu", "default"], 5400, P23_PENDING),    # C-GFX per-tier profile on the iGPU: KB/frame, queryColliders, programs, GPU order
+    # W9 R1B: + census-600 (unclaimed in-circle big shields at 600 s <= 3). shield-600 (median >= 75) STAYS REGISTERED at bar 75: KNOWN GAP OD-16 (owner 2026-11-02), expected red
     ("p23_botbatch", "p23/botbatch.py", [], 36000, P23_PENDING),          # P2-B 24-match AFK batch: re-sight, cover, shields, AFK survival, frags, match length
     ("p23_netseq", "p23/netseq.py", [], 3600, P23_PENDING),               # LC-49: late (reordered) state packets never pull a remote back; rejoin <= 60 s on ?room=
     # lane net's live probe, promoted in the fix round (cases mode / mode3 / match; the in-process server with backlog 256; a browser-level wrong-key rejoin)
@@ -643,6 +651,14 @@ NEGATIVE = [
     # look mean x13.9) or always answers true (400 wrong answers at empty probe points). Under a plant collider-load judges only that plant's queries
     ("houseload-plant-look-flood", "houseload.py", ["--maps", "deepwood", "--plant", "look-flood"], 1800),
     ("houseload-plant-look-true", "houseload.py", ["--maps", "deepwood", "--plant", "look-true"], 1800),
+    # ---- Wave 9 R1A (doors geometry): each new row's planted fault MUST exit 1
+    ("collisioncheck-plant-door-stuck-closed", "collisioncheck.py", ["--plant", "door-stuck-closed"], 1800),   # doors-open
+    ("collisioncheck-plant-door-ghost", "collisioncheck.py", ["--plant", "door-ghost"], 1800),                 # doors-closed
+    ("collisioncheck-plant-door-crush", "collisioncheck.py", ["--plant", "door-crush"], 1800),                 # door-cycle
+    ("interiorcheck-plant-leaf-drawn-shut", "interiorcheck.py", ["--source", "match", "--maps", "ashgrid", "--plant", "leaf-drawn-shut", "--houses", "4", "--camwall-houses", "0", "--shot-houses", "0", "--no-walk"], 1800),
+    ("housegen_demo_looks-plant-eye-only-phase5", "housegen_demo_looks.py", ["--plant", "eye-only-phase5"], 1800),
+    # houseload 1b: a real collider-density control (every house duplicated through addDynamicCollider) must fail the replayed collider-load-frame row (x1.91)
+    ("houseload-plant-house-dup", "houseload.py", ["--maps", "ashgrid", "--plant", "house-dup"], 1800),
     # ---- Wave 8 fix round (lane K3): each corrected row keeps a failing control
     # placementcheck ramp-start-step no longer judges housegen ROOF planks (house.roofRamps): the first housegen STAIR lifted 0.8 m must still fail it
     ("placementcheck-plant-house-stair-lip", "placementcheck.py", ["--plant", "house-stair-lip", "--quick"], 900),
@@ -732,6 +748,29 @@ P23_PENDING_NEG = [
     ("p23_footsteps-plant-beside-wood", "p23/footsteps.py", ["--plant", "beside-wood", "--maps", "ashgrid"], 3600),
     ("p23_tierprof-plant-alloc-leak", "p23/tierprof.py", ["--plant", "alloc-leak", "--gpu", "default"], 5400),
     ("p23_botbatch-plant-shield-cap", "p23/botbatch.py", ["--plant", "shield-cap", "--runs", "2:isla_viva"], 5400),
+    # ---- Wave 9 R1B (bots / fall): each new row's planted fault MUST FAIL
+    ("p23_botbatch-plant-census-surge", "p23/botbatch.py", ["--runs", "2:isla_viva", "--plant", "census-surge"], 3600),   # census-600
+    # NOT registered: botbatch no-far-big (retired R1B pass 2: WANT_BIG is false, the plant served the lane unchanged)
+    ("p23_fall-plant-calm-guard-off", "p23/fall.py", ["--plant", "calm-guard-off", "--parts", "rim"], 3600),
+    ("p23_fall-plant-no-terminal", "p23/fall.py", ["--plant", "no-terminal", "--parts", "human"], 1800),
+    ("p23_fall-plant-no-heavy", "p23/fall.py", ["--plant", "no-heavy", "--parts", "human"], 1800),
+    ("p23_fall-plant-heavy-12.5", "p23/fall.py", ["--plant", "heavy-12.5", "--parts", "human"], 1800),
+    ("p23_dbno-plant-no-commit", "p23/dbno.py", ["--parts", "bot", "--plant", "no-commit"], 3600),
+    ("p23_dbno-plant-no-revive-threat", "p23/dbno.py", ["--parts", "bot", "--plant", "no-revive-threat"], 3600),
+    ("p23_dbno-control-h2-fat-downed", "p23/dbno.py", ["--parts", "human2", "--control", "h2-fat-downed"], 3600),
+    ("p23_tierprof-plant-bots-slow", "p23/tierprof.py", ["--plant", "bots-slow", "--gpu", "default"], 5400),
+    ("probe_match-plant-swim-exempt", "probe_match.py", ["--swimcheck", "--plant", "swim-exempt"], 1800),
+    ("probe_match-plant-stall-surge", "probe_match.py", ["--sweep", "--plant", "stall-surge"], 7200),        # probe_match_sweep worst <= 4 row
+    ("probe_match-plant-no-pen-fix", "probe_match.py", ["--pencheck", "--plant", "no-pen-fix"], 1800),        # probe_match_pencheck (EDGE_TURN off)
+    # ---- Wave 9 R1 fix round (lanes hudfeel / camwall): each new row's planted fault MUST FAIL (exit 1)
+    ("hud_checks-plant-pill-unclamped", "new/hud_checks.py", ["--only", "edges", "--plant", "pill-unclamped"], 1800),   # W9 R1 hudfeel: hud.js served without the loot pill's horizontal clamp -> the edges row MUST FAIL (exit 1)
+    ("player_camwall-plant-settle-requery", "new/player_camwall.py", ["--maps", "isla_viva,ashgrid,deepwood", "--settle-only", "--plant", "settle-requery"], 1800),   # W9 R1 camwall: loot.js settle() served with 160 extra probes (reads 163 calls) -> the floorless-settle row MUST FAIL
+    # ---- Wave 9 R1 fix round 2 (lanes botpen / doorstuck): each new row's planted fault MUST FAIL (exit 1)
+    ("p23_fall-plant-no-turn-reprobe", "p23/fall.py", ["--plant", "no-turn-reprobe", "--parts", "lip"], 3600),   # W9 R1 botpen: p23_fall 'bots-avoid lips turned' (edgeGuard's turned-heading re-probe off)
+    ("probe_match-plant-no-door-funnel", "probe_match.py", ["--sweep", "--plant", "no-door-funnel"], 7200),   # W9 R1 doorstuck: bots.js doorFunnel off -> probe_match_sweep MUST FAIL (checker: 11/2, ashgrid s1 7, isla_viva s2 5)
+    # ---- Wave 9 R1 fix round 3 (lane mergefix): each new row's planted fault MUST FAIL (exit 1)
+    ("probe_match-plant-no-calm-lag", "probe_match.py", ["--pencheck", "--plant", "no-calm-lag"], 1800),      # W9 R1 mergefix: calmHeld CALM_ROUTE_ONLY off -> probe_match_pencheck MUST FAIL (setup 3 never)
+    ("probe_match-plant-no-early-turn", "probe_match.py", ["--cornercheck", "--plant", "no-early-turn"], 1800),  # W9 R1 mergefix: EDGE_EARLY off -> probe_match_cornercheck MUST FAIL (never x3)
     ("p23_netseq-plant-pull-back", "p23/netseq.py", ["--plant", "pull-back"], 3600),
     ("p23_tierprof-plant-query-flood", "p23/tierprof.py", ["--plant", "query-flood", "--gpu", "default"], 5400),
     # p23_netlive (fix round): the host's order gate off (every packet 'new') must FAIL the late / duplicate row; the guest's revive gate off must
@@ -741,6 +780,13 @@ P23_PENDING_NEG = [
 ]
 if not P23_PENDING:
     NEGATIVE = NEGATIVE + P23_PENDING_NEG
+
+
+# Node planted faults (each MUST exit 1), run right after the Node selftests (W9 R1A: housegen C3 no-hash, C1 start-ignored)
+NODE_NEGATIVE = [
+    ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "no-hash"]),
+    ("runtime/3d/royale/housegen.selftest.cjs", ["--plant", "start-ignored"]),
+]
 
 
 def node_selftests():
@@ -759,6 +805,17 @@ def node_selftests():
             code, tail = 2, ["node not found on PATH"]
         out.append({"name": "node " + rel, "exit": code, "wall": round(time.time() - t0, 1), "tail": tail})
         print("  %-4s node %s (%.0f s) %s" % ({0: "PASS", 1: "FAIL", 2: "CNJ "}[code], rel, time.time() - t0, " | ".join(tail)[:200]), flush=True)
+    for rel, extra in NODE_NEGATIVE:
+        t0 = time.time()
+        try:
+            r = subprocess.run(["node", os.path.join(C.ROOT, rel)] + list(extra), cwd=C.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+            code = {1: 0, 0: 1}.get(r.returncode, 2)          # a planted fault must FAIL the selftest: exit 1 is the pass here
+            tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-2:]
+        except subprocess.TimeoutExpired:
+            code, tail = 2, ["timeout after 900 s"]
+        name = "node " + rel + " " + " ".join(extra)
+        out.append({"name": name, "exit": code, "wall": round(time.time() - t0, 1), "tail": tail, "negative": True})
+        print("  %-4s %s (must exit 1) %s" % ({0: "PASS", 1: "FAIL", 2: "CNJ "}[code], name, " | ".join(tail)[:200]), flush=True)
     return out
 
 

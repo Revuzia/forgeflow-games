@@ -9,8 +9,11 @@ hud (BLEEDING OUT, [HOLD E] Revive), loot (downed gate). The gate reads only the
     python _harness/p23/dbno.py --disk --plant crawl-fast           # K.DBNO_CRAWL = 4 - MUST FAIL (crawl row)
     python _harness/p23/dbno.py --disk --plant no-bleed             # K.DBNO_BLEED_HPS = 0 - MUST FAIL (bleed / bleed-out rows)
     python _harness/p23/dbno.py --disk --plant revive-quick         # K.REVIVE_S = 1 - MUST FAIL (5 s channel row)
+    python _harness/p23/dbno.py --disk --parts bot --plant no-commit   # bots.js served with the revive commitment off - MUST FAIL (dither)
+    python _harness/p23/dbno.py --disk --parts bot --plant no-revive-threat   # bots.js: no revive while an enemy was seen in 10 s - MUST FAIL (revive-start)
     python _harness/p23/dbno.py --lanes all                         # validation: every lane's work served over the base
     python _harness/p23/dbno.py --disk --parts human2 --control h2-short-hold  # E released after 3 s of GAME time - MUST FAIL (human2 revive row)
+    python _harness/p23/dbno.py --disk --parts human2 --control h2-fat-downed  # (W9 R1B 1b) +16 B per downed state message - MUST FAIL (size row)
 
 Part SOLO (STANDARD, solo, Savanna seed 7): W.match.mode 'solo', every actor its own team; a lethal hit on the human kills it (never downed);
   120 s of the match through fastForward: 0 'actorDowned' events (solo play unchanged).
@@ -29,6 +32,17 @@ Part BOT (STANDARD, duo, Savanna seed 7): the human and its bot teammate are mov
                'actorRevived'(mate, human) after 5.0 +- 0.15 s of channel (K.REVIVE_S), mate hp 30; the [HOLD E] Revive prompt was shown
   bleed-out    the human's 2nd knock, the mate held 100 m away: it dies within 100 / K.DBNO_BLEED_HPS s, and drains faster than knock 1
   team-elim    a TRIO match (seed 11): two members knocked stay downed while the third is up; the third knocked -> all three die
+  (W9 R1B, "a bot mate dithers between fighting and reviving while you bleed out"; a fresh DUO match, Savanna seed 7, frames stepped at 60 Hz)
+  The human is knocked 15 m from its (armed, guarded) bot mate; an enemy bot (unarmed, guarded, pinned) PEEKS at the mate: 2 s on a spot in the
+  open, 2 s out of sight (moved 350 m off), over and over. DITHER_N episodes per threat range (a first knock each: knocks reset - setup), each
+  until the revive completes or DITHER_CAP_S (then a setup rescue: the mate is put 1 m from the human, the enemy hidden, so the next episode
+  starts from an up human; a mate that has not revived it 1 s before its bleed-out leaves the rescue to the game's own revive entry).
+  dither       threat at 30 m: REVIVE <-> ENGAGE flips of the mate per downed-human episode: median <= 2 and max <= 4 (design pick: the brief
+               has no number; label: W9 G design)
+  revive-start threat at 50 m (> 45 m): the mate starts the revive channel before the human bleeds out in >= 80 % of the episodes
+  --plant no-commit: bots.js served with the revive commitment / hysteresis off (REVIVE_COMMIT = false) - MUST FAIL dither
+  --plant no-revive-threat: bots.js served with REVIVE scored 0 while an enemy was seen in the last 10 s (the mate that will not revive with a
+               threat about, however far) - MUST FAIL revive-start (no-commit cannot: past 45 m the pre-W9 rule already revived)
 Part HUMAN2 (two pages, the squad relay stand-in of squadguard_live, a REAL duo match on both): the guest is knocked on its own page; the host
   sees the guest's body downed within 1 s; the guest crawls (real W) and the host sees it move; the host (teleported 1.2 m away) holds real E
   until its sim completes the revive (cap 5 s / host sim rate + 1.5 s real) and the channel took 5.0 +- 0.25 s of the host's GAME time;
@@ -52,7 +66,88 @@ PLANTS = {
     "crawl-fast": "K.DBNO_CRAWL = 4; if (K.DBNO) K.DBNO.CRAWL = 4",
     "no-bleed": "K.DBNO_BLEED_HPS = 0; if (K.DBNO) K.DBNO.BLEED_HPS = 0; if (typeof K.dbnoBleedRate === 'function') K.dbnoBleedRate = () => 0",
     "revive-quick": "K.REVIVE_S = 1; if (K.DBNO) K.DBNO.REVIVE_S = 1",
+    # (W9 R1B) bots.js served with REVIVE_COMMIT = false (NO_COMMIT below): no page snippet
+    "no-commit": "",
+    # (W9 R1B) bots.js served with NO_REVIVE_THREAT below: no page snippet
+    "no-revive-threat": "",
 }
+NO_COMMIT = [("const REVIVE_COMMIT = true;", "const REVIVE_COMMIT = false;")]
+NO_REVIVE_THREAT = [("      if (md > REVIVE_SEEK_M) s.REVIVE = 0;", "      if (md > REVIVE_SEEK_M || W.t - bb.targetSeenT < 10) s.REVIVE = 0;")]
+DITHER_N, DITHER_CAP_S, DITHER_MATE_M, DITHER_PEEK_S = 4, 52, 15, 2.0
+DITHER_MED_MAX, DITHER_MAX_MAX, REVSTART_MIN = 2, 4, 80.0
+# one episode: knock the human, the enemy peeks at the mate (2 s seen / 2 s hidden), every frame the mate's state; the episode ends at the revive,
+# the human's death, or capS (then the setup rescue). Returns the flip count (REVIVE <-> ENGAGE between consecutive REVIVE / ENGAGE states).
+DITHER_JS = r"""([me, mate, foe, cx, cz, threatM, capS, peekS, mateM]) => {
+  const W = window.__LC__.W, M = W.map, P = window.__H_PUMP__, Q = window.__P23D__, K = W.SIM, H = (M.half || 760) - 40;
+  const cl = (v) => Math.max(-H, Math.min(H, v));
+  const at = (x, z) => [cl(x), M.heightAt(cl(x), cl(z)) + 0.05, cl(z)];
+  const put = (a, q) => { a.pos.set(q[0], q[1], q[2]); a.vel.set(0, 0, 0); a.onGround = true; a.gliding = false; if (a.obj) a.obj.position.copy(a.pos); };
+  const A = W.actorById.get(me), B = W.actorById.get(mate), E = W.actorById.get(foe);
+  if (!A || !B || !E || !A.alive || !B.alive || !E.alive || A.downed) return { error: 'actors', alive: [!!(A && A.alive), !!(B && B.alive), !!(E && E.alive)], downed: !!(A && A.downed) };
+  // SETUP: the mate armed (an AR + 120 rounds when it carries no loaded gun); the enemy unarmed (it never shoots back: the mate is never hurt)
+  const sl = B.inventory.slots;
+  const loaded = sl.some((s2) => s2 && s2.kind === 'weapon' && K.WEAPONS[s2.id] && (s2.mag > 0 || (B.inventory.ammo[K.WEAPONS[s2.id].ammo] || 0) > 0));
+  if (!loaded) { sl[0] = { kind: 'weapon', id: 'ar', rarity: 1, mag: K.WEAPONS.ar.mag }; B.inventory.ammo.medium = 120; B.inventory.active = 0; }
+  const es = E.inventory.slots; for (let i = 0; i < es.length; i++) es[i] = null; for (const k in E.inventory.ammo) E.inventory.ammo[k] = 0;
+  // the human at (cx, cz), the mate mateM m west of it; the enemy's open spot threatM from the mate, north or south (whichever the mate's eye sees)
+  const hm = at(cx, cz), bm = at(cx - mateM, cz);
+  let vis = null;
+  // north or south first; then (W9 R1B) west (away from the human), the four diagonals, east: a plant that changes the earlier parts' outcomes
+  // moves the isolated spot, and north / south alone found no open line at 50 m there (could-not-judge instead of the control's FAIL)
+  for (const [ux, uz] of [[0, 1], [0, -1], [-1, 0], [-0.7071, 0.7071], [-0.7071, -0.7071], [0.7071, 0.7071], [0.7071, -0.7071], [1, 0]]) {
+    const q = at(bm[0] + ux * threatM, bm[2] + uz * threatM); if (!M.losBlocked(bm[0], bm[1] + 1.5, bm[2], q[0], q[1] + 1.2, q[2])) { vis = q; break; } }
+  if (!vis) return { error: 'no open peek spot', threatM };
+  const hid = at(bm[0], bm[2] + (vis[2] > bm[2] ? -350 : 350));
+  put(A, hm); put(B, bm); put(E, vis);
+  if (B.brain) { B.brain.bb.target = null; B.brain.state = 'WANDER'; B.brain.nextThink = 0; }
+  P.step(2, 1 / 60, false);
+  // the knock: a first knock every episode (knocks reset - setup), 250 from the enemy
+  A.knocks = 0; A.hp = 100; A.shield = 0; W.hurtActor(A, 250, foe, 'ar', false);
+  P.step(1, 1 / 60, false);
+  if (!A.downed) return { error: 'not downed', alive: !!A.alive };
+  // (W9 R1B) SETUP FENCE: every other actor is kept FENCE_M from the spot, every frame (a 52 s episode let third parties walk in: 'otherTarget'
+  // in the hundreds, and under the no-revive-threat plant a passer-by killed the downed human, which ended the run's setup - could-not-judge)
+  const FENCE_M = 200, fence = () => { for (const o of W.actors) { if (o === A || o === B || o === E || !o.alive || o.gliding) continue;
+    const dx = o.pos.x - cx, dz = o.pos.z - cz, d = Math.hypot(dx, dz); if (d < FENCE_M) { const k = (FENCE_M + 5) / Math.max(0.1, d); put(o, at(cx + dx * k, cz + dz * k)); } } };
+  fence();
+  const from = Q.ev.length, t0 = W.t;
+  let flips = 0, last = null, revStart = null, revived = null, died = null, seenN = 0, otherTarget = 0, minFoeD = 1e9; const states = [];
+  for (let f = 0; f < capS * 60; f++) {
+    const shown = Math.floor((W.t - t0) / peekS) % 2 === 0;
+    put(E, shown ? vis : hid); E.hp = 100; E.shield = 100; fence();
+    P.step(1, 1 / 60, false);
+    const st = B.brain ? B.brain.state : null;
+    if (st === 'REVIVE' || st === 'ENGAGE') { if (last && st !== last) flips++; last = st; }
+    if (!states.length || states[states.length - 1][1] !== st) states.push([+(W.t - t0).toFixed(2), st]);
+    if (B.brain && B.brain.bb.target === foe && W.t - B.brain.bb.targetSeenT < 0.05) seenN++;
+    if (B.brain && B.brain.bb.target && B.brain.bb.target !== foe) otherTarget++;
+    if (shown) minFoeD = Math.min(minFoeD, Math.hypot(E.pos.x - B.pos.x, E.pos.z - B.pos.z));
+    for (const e of Q.ev.slice(from)) {
+      if (e.n === 'reviveStart' && e.a === mate && e.b === me && revStart == null) revStart = +(e.t - t0).toFixed(2);
+      if (e.n === 'actorRevived' && e.a === me && revived == null) revived = +(e.t - t0).toFixed(2);
+      if (e.n === 'actorDied' && e.a === me && died == null) died = +(e.t - t0).toFixed(2);
+    }
+    if (revived != null || died != null || !A.alive) break;
+  }
+  const bleedLeftS = A.downed ? +(A.downedHp / (K.dbnoBleedRate ? K.dbnoBleedRate(A.knocks || 1) : 1)).toFixed(1) : null;
+  // SETUP RESCUE (not measured): the human still down at capS -> the mate is put 1 m from it and the enemy hidden, so the next episode starts up
+  let rescued = null;
+  if (revived == null && died == null && A.alive && A.downed) {
+    put(B, at(A.pos.x - 1, A.pos.z)); put(E, hid);
+    const r0 = Q.ev.length;
+    // (W9 R1B) up to 15 s, but never into the bleed-out (a mate that will not revive - the no-revive-threat plant - bled the human out here
+    // and every later episode lost its setup: could-not-judge, not the FAIL the control is for); still down -> the game's own revive entry
+    const rate0 = K.dbnoBleedRate ? K.dbnoBleedRate(A.knocks || 1) : 0, capF = rate0 > 0 ? Math.min(15 * 60, Math.max(0, Math.floor((A.downedHp / rate0 - 1) * 60))) : 15 * 60;
+    for (let f = 0; f < capF; f++) { put(E, hid); E.hp = 100; fence(); P.step(1, 1 / 60, false);
+      if (Q.ev.slice(r0).some((e) => e.n === 'actorRevived' && e.a === me) || !A.alive) break; }
+    let byHarness = false;
+    if (A.alive && A.downed) { byHarness = true; if (typeof W.reviveActor === 'function') W.reviveActor(A, B); else { A.downed = false; A.downedHp = 0; A.hp = K.REVIVE_HP; W.events.emit('actorRevived', A, B); } P.step(1, 1 / 60, false); }
+    rescued = { up: !!(A.alive && !A.downed), byHarness };
+  }
+  put(E, hid);
+  return { threatM, flips, revStart, revived, died, bleedLeftS, rescued, seenN, otherTarget, minFoeD: +minFoeD.toFixed(1), vis: vis.map((v) => +v.toFixed(1)),
+           states: states.slice(0, 40), mateState: B.brain ? B.brain.state : null, humanUp: !!(A.alive && !A.downed) }; }"""
+
 CONTRACT = {
     "K.DBNO_CRAWL": "typeof K.DBNO_CRAWL === 'number'",
     "K.DBNO_BLEED_HPS": "typeof K.DBNO_BLEED_HPS === 'number'",
@@ -133,6 +228,10 @@ def part_solo(args, v):
 
 def part_bot(args, v):
     with C.Session(args, "p23_dbno_bot") as s:
+        if args.plant == "no-commit":
+            v.data["plant_served"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_COMMIT)
+        elif args.plant == "no-revive-threat":
+            v.data["plant_served"] = L.serve_patched(s, "runtime/3d/royale/bots.js", NO_REVIVE_THREAT)
         s.boot()
         L.dismiss_cards(s)
         st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
@@ -314,6 +413,62 @@ def part_bot(args, v):
                 "downed, downed, up -> all dead")
         L.pin_actor(s, None)
         L.errors_row(v, s, "errors [trio]")
+        part_dither(s, v)
+
+
+def part_dither(s, v):
+    """(W9 R1B) the bot mate that dithered between fighting and reviving: a fresh DUO match in the bot part's page (see the docstring)."""
+    s.thaw_loop()
+    st = L.start(s, "standard", 7, "ashgrid", team="duo", guard=True)
+    v.data["dither_start"] = st
+    s.land(140, protect=True)
+    s.freeze_loop()
+    s.install_pump()
+    s.js("() => { window.__P23D__ = null; }")
+    s.js(EV_JS)
+    info = s.js("() => { const W = window.__LC__.W, p = W.player; const m = W.actors.find((a) => a !== p && a.teamId != null && a.teamId === p.teamId);"
+                " const e = W.actors.find((a) => a.isBot && a.alive && a.teamId !== p.teamId); return { mode: W.match && W.match.mode, me: p.id, mate: m && m.alive ? m.id : null, foe: e && e.id }; }")
+    v.data["dither_ids"] = info
+    name_d = "dither (threat peeking at 30 m, 2 s seen / 2 s hidden: REVIVE <-> ENGAGE flips per downed episode median <= %d, max <= %d; W9 design pick)" % (DITHER_MED_MAX, DITHER_MAX_MAX)
+    name_r = "revive-start (threat peeking at 50 m, > 45 m: the mate starts the revive before the human bleeds out in >= %.0f %% of episodes)" % REVSTART_MIN
+    if info["mode"] != "duo" or not info["mate"] or not info["foe"]:
+        v.cnj(name_d, "SETUP: no duo bot mate / enemy: %s" % info)
+        v.cnj(name_r, "SETUP: no duo bot mate / enemy: %s" % info)
+        return
+    iso = s.js(ISO_JS)
+    if not iso:
+        v.cnj(name_d, "SETUP: no isolated flat spot")
+        v.cnj(name_r, "SETUP: no isolated flat spot")
+        return
+    s.guard_player(False)
+    L.guard_ids(s, [info["mate"]])
+    eps = {30: [], 50: []}
+    # (W9 R1B) the 50 m episodes first: under a plant whose mate never revives (no-revive-threat) every episode runs its full cap, and the 50 m
+    # set, run after four capped 30 m episodes, met the closing storm at the isolated spot (the human died in it: setup lost, could-not-judge)
+    for threat in (50, 30):
+        for _ in range(DITHER_N):
+            r = s.js(DITHER_JS, [info["me"], info["mate"], info["foe"], iso["x"], iso["z"], threat, DITHER_CAP_S, DITHER_PEEK_S, DITHER_MATE_M])
+            eps[threat].append(r)
+            if r.get("error") or (r.get("rescued") and not r["rescued"]["up"]) or r.get("died") is not None:
+                break
+    L.guard_ids(s, [])
+    v.data["dither"] = eps
+    good30 = [r for r in eps[30] if not r.get("error")]
+    good50 = [r for r in eps[50] if not r.get("error")]
+    brief = lambda rs: [{k: r.get(k) for k in ("flips", "revStart", "revived", "died", "bleedLeftS", "rescued", "seenN", "otherTarget", "minFoeD")} for r in rs]
+    if len(good30) < 3 or sum(1 for r in good30 if r["seenN"] > 0) < 2:
+        v.cnj(name_d, "SETUP missed: %d usable episodes (want >= 3, the mate saw the enemy in >= 2): %s" % (len(good30), brief(eps[30])))
+    else:
+        fl = [r["flips"] for r in good30]
+        v.check(name_d, statistics.median(fl) <= DITHER_MED_MAX and max(fl) <= DITHER_MAX_MAX,
+                {"flips": fl, "median": statistics.median(fl), "max": max(fl), "episodes": brief(good30)}, "median <= %d, max <= %d" % (DITHER_MED_MAX, DITHER_MAX_MAX))
+    if len(good50) < 3:
+        v.cnj(name_r, "SETUP missed: %d usable episodes (want >= 3): %s" % (len(good50), brief(eps[50])))
+    else:
+        started = [r for r in good50 if r["revStart"] is not None and (r["died"] is None or r["revStart"] < r["died"])]
+        pct = 100.0 * len(started) / len(good50)
+        v.check(name_r, pct >= REVSTART_MIN, {"startedPct": round(pct, 1), "started": len(started), "episodes": brief(good50)}, ">= %.0f %%" % REVSTART_MIN)
+    L.errors_row(v, s, "errors [dither]")
 
 
 # ───────────────────────── part HUMAN2: two pages, the squad relay stand-in ─────────────────────────
@@ -346,10 +501,21 @@ def part_human2(args, v):
         gpg.evaluate("""() => { const S = window.__LC__.W.net; if (!S || !S.rtc || S.rtc.__p23sz) return; const f = S.rtc.sendState;
             S.rtc.sendState = function (env) { try { if (env && env.t === 'state') { const A = window.__SQ_STATE_RTC__ = window.__SQ_STATE_RTC__ || []; A.push(JSON.stringify(env.d).length); if (A.length > 600) A.shift(); window.__SQ_STATE_LAST__ = env.d; } } catch (e) {}
               return f.apply(this, arguments); }; S.rtc.__p23sz = true; }""")
-        hpg.wait_for_timeout(2500)
+        if getattr(args, "control", None) == "h2-fat-downed":       # (W9 R1B pass 1b) the size row's control: +16 B per downed state message (outside the size hook: it runs first)
+            gpg.evaluate("""() => { const W = window.__LC__.W, S = W.net; if (!S || !S.rtc) return; const f = S.rtc.sendState;
+                S.rtc.sendState = function (env) { if (env && env.t === 'state' && env.d && W.player.downed) env.d.pad = 'xxxxxxxx'; return f.apply(this, arguments); }; }""")
         size_js = ("() => { const pick = (S) => (S || []).slice(-40); const R = pick(window.__SQ_STATE_RTC__), B = pick(window.__SQ_STATE__); const S = R.length >= 10 ? R : B;"
                    " return S.length >= 10 ? S.reduce((a, b) => a + b, 0) / S.length : null; }")
-        up_b = gpg.evaluate(size_js)
+        # (W9 R1B pass 1b, the upBytes-null flake) the UP size was sampled while the GUEST was the hidden tab (hpg fronted above for the rates): a
+        # background page gets no rAF, its game does not tick and sends a handful of state packets in 2.5 s - under the 10 the size needs (check2
+        # dbno_full: upBytes null, upKeys present with t 4.07; the downed size, read after gpg is fronted, was 117.2). The sender is fronted for
+        # its own sample now, and the sample waits for >= 10 packets (8 s cap) after the same 2.5 s
+        gpg.bring_to_front()
+        gpg.wait_for_timeout(2500)
+        up_b, t_up = gpg.evaluate(size_js), time.time()
+        while up_b is None and time.time() - t_up < 8.0:
+            gpg.wait_for_timeout(250)
+            up_b = gpg.evaluate(size_js)
         keys_js = "() => { const d = window.__SQ_STATE_LAST__; const me = d && (Array.isArray(d.p) ? d.p[0] : d); return d ? { top: Object.keys(d).sort(), sample: JSON.stringify(d).slice(0, 240) } : null; }"
         up_k = gpg.evaluate(keys_js)
         gpg.bring_to_front()          # the page that acts must be the visible one: a background tab gets no rAF, so its game does not tick
@@ -436,8 +602,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     L.add_args(ap, plants=PLANTS)
     ap.add_argument("--parts", default="solo,bot,human2")
-    ap.add_argument("--control", default=None, choices=["h2-short-hold"],
-                    help="harness-side planted control (this gate must then FAIL): h2-short-hold = the host releases E after 3 s of game time")
+    ap.add_argument("--control", default=None, choices=["h2-short-hold", "h2-fat-downed"],
+                    help="harness-side planted control (this gate must then FAIL): h2-short-hold = the host releases E after 3 s of game time; "
+                         "h2-fat-downed = the guest's state message carries 16 B more while it is downed (human2 size row)")
     args = L.parse(ap)
     parts = set(args.parts.split(","))
     os.makedirs(os.path.join(C.REPORTS, "p23_shots"), exist_ok=True)

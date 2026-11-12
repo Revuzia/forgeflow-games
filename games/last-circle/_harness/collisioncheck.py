@@ -65,6 +65,19 @@ rotated-wall rows come from the Node census (placement_census.mjs: every box map
                  whose 3.5 m start stands behind another building (a narrow alley) starts where the approach is clear (>= 1.5 m); a door with no clear
                  approach at any angle is a FAILED walk. Control --plant door-shift (every record moved 2 m along its wall) must FAIL
   thin-walls     0 sprints cross a thin wall from either side at 90/60/30/10 deg (Wave 4: 0/288)
+  doors-open     (Wave 9, LC-91: design W2 row (c), contract C1) every leafed door of the map SHUT and then OPENED through W.map.setDoor (the closed slabs
+                 must die), then the doors row's walks again AND the same street-door walk at up to 14 LEAFED street doors (DOOR_JS walkDoors: the
+                 probe's walk, copied - probe_collision.js returns no per-walk depth): >= 99 % get in, each (the doors row's bar). Control --plant
+                 door-stuck-closed (an open leaves the closed slabs alive, in the page) must FAIL it
+  doors-closed   every leafed door SHUT (W.map.setDoor), the leafed street-door walks again: 0 get in and no walker comes closer than 0.45 m to the
+                 wall line at any tick (the capsule <= 2 cm into the 4 cm closed slab); a leafed door with no clear 1.5 m approach fails the row
+                 (doors without leaves - the swing clearance refused them - are open doorways, walked by the doors row). Control --plant door-ghost
+                 (a close never brings the closed slabs alive) must FAIL it
+  door-cycle     200 close / open cycles (20 street doors x 10) with the player standing in the doorway (the close must be REFUSED: "blocked"), in the
+                 swing clear of the doorway (the close goes through), in an open slab's place when the door opens (that slab waits: it must not come
+                 alive inside the body) and then clear of it (it comes alive): every frame the capsule is <= 0.02 m inside a live slab of the door.
+                 Control --plant door-crush (a close never sees the bodies in the doorway: the actors lifted out of setDoor's occupancy test, in the
+                 page) must FAIL it
   errors         0 page errors / console errors / failed requests / shader errors
 
 Exit 0 pass / 1 fail / 2 could-not-judge (a map would not load in time, Chrome did not start, a probe measured nothing).
@@ -113,14 +126,164 @@ MIN_KIND_N = 5
 # rocks-small: every rock box shrunk to 35 % of its outline, so the capsule walks into the drawn rock.
 # door-shift (Wave 8, lane K3): in the page, every housegen street-door record is moved 2.0 m along its wall before the walk (nothing served, no file touched): the walk aims at
 # solid wall and the doors row must FAIL - the control that the corrected door set (housegen's own records) is walked, not trusted
-PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}, "door-shift": {"doors"}}
+# door-stuck-closed / door-ghost (Wave 9, lane R1A): W.map.setDoor wrapped IN THE PAGE (no file touched) - an open leaves the closed slabs alive / a close
+# never brings them alive: doors-open / doors-closed must FAIL. door-crush: setDoor's close made with the actors lifted out of its occupancy test (then put
+# back): the slabs close on a body standing in the doorway - door-cycle must FAIL
+PLANTS = {"container-narrow": {"container-lean"}, "rocks-small": {"sprints-rocks"}, "door-shift": {"doors"}, "door-stuck-closed": {"doors-open"}, "door-ghost": {"doors-closed"}, "door-crush": {"door-cycle"}}
+DOOR_PLANTS = {"door-stuck-closed", "door-ghost", "door-crush"}
+DOOR_STOP = -0.449                # doors-closed: the capsule centre ends >= 0.45 m outside the wall line (R 0.45 + the slab's 2 cm half-thickness - 2 cm allowed into it)
+DOOR_PEN = 0.02                   # door-cycle: max capsule depth inside a live slab of the door
+CYCLES_MIN = 200
 PLANT_KIND = {"container-narrow": "container", "rocks-small": "rocks"}
 PLANT_SKIP = "doors,walls,ramps,falls"       # a plant run needs props + live only
-PLANT_SKIPS = {"door-shift": "props,live,walls,ramps,falls"}   # ... except door-shift: doors only
-PLANT_MAPS_BY = {"door-shift": "deepwood"}   # door-shift: a map with housegen houses and few kit shells (stage-B verify: 451 street doors on seed 7)
+PLANT_SKIPS = {"door-shift": "props,live,walls,ramps,falls", "door-stuck-closed": "props,live,walls,ramps,falls,door-cycle", "door-ghost": "props,live,walls,ramps,falls,door-cycle", "door-crush": "props,live,walls,ramps,falls"}   # ... except the door plants: doors only
+PLANT_MAPS_BY = {"door-shift": "deepwood", "door-stuck-closed": "deepwood", "door-ghost": "deepwood", "door-crush": "deepwood"}   # door-shift: a map with housegen houses and few kit shells (stage-B verify: 451 street doors on seed 7)
 PLANT_MAPS = "ashgrid"                       # containers and rocks are both plentiful there
 LEAN_OPTIONAL = "isla_viva,deepwood"         # container-lean: maps that place NO prop containers (the container yard is Savanna's; Wave 7b stage B, lane S3). A map listed here with no container is
                                              # information; any other map of the run must measure >= MIN_KIND_N containers or the row is could-not-judge. "none" = every map required
+
+
+# (Wave 9, lane R1A) the in-page door driver: every leafed door shut / opened through W.map.setDoor, the plants, the door-cycle row
+DOOR_JS = r"""
+() => {
+  const C = window.__LC__, W = C.W;
+  const S = (window.FFG && window.FFG.sim && window.FFG.sim.Royale) || W.SIM;
+  const R = S.PLAYERK.radius, CAPH = S.PLAYERK.height;
+  const M = () => W.map;
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  let T = 1e5;                                            // (setDoor's t: ahead of the doors' clock, so a gate stepping no frames is never "cool")
+  function count() { const m = M(); return { doors: (m.doors || []).length, api: typeof m.setDoor === "function", leaves: (m.doors || []).reduce((a, D) => a + D.leaves.length, 0) }; }
+  // the plants: the API wrapped in the page (nothing served, no file touched)
+  function plant(kind) {
+    const m = M(), orig = m.setDoor;
+    if (typeof orig !== "function") return null;
+    m.setDoor = function (i, open, by, t) {
+      // door-crush: the close is made with every actor lifted 500 m (setDoor's occupancy test sees nobody), then put back - the slabs close on the body
+      const lift = kind === "door-crush" && !open ? (W.actors || []).filter((a) => a && a.pos) : [];
+      for (const a of lift) a.pos.y += 500;
+      let r;
+      try { r = orig.call(this, i, open, by, t); } finally { for (const a of lift) a.pos.y -= 500; }
+      const D = m.doors[i];
+      if (r === true && D) {
+        if (kind === "door-stuck-closed" && open) for (const lf of D.leaves) lf.cClosed.dead = false;
+        if (kind === "door-ghost" && !open) for (const lf of D.leaves) lf.cClosed.dead = true;
+      }
+      return r;
+    };
+    return kind;
+  }
+  function setAll(open) {
+    const m = M(), P = W.player, keep = [P.pos.x, P.pos.y, P.pos.z];
+    P.pos.set(keep[0], keep[1] + 500, keep[2]);            // (no body in any doorway: a close is refused while one stands there)
+    const out = { open, doors: m.doors.length, done: 0, blocked: 0, cool: 0, other: 0, closedAlive: 0, openAlive: 0 };
+    T += 10;
+    for (let i = 0; i < m.doors.length; i++) { const r = m.setDoor(i, open, "collisioncheck", T); if (r === true) out.done++; else if (r === "blocked") out.blocked++; else if (r === "cool") out.cool++; else out.other++; }
+    P.pos.set(keep[0], keep[1], keep[2]);
+    for (const D of m.doors) for (const lf of D.leaves) { if (!lf.cClosed.dead) out.closedAlive++; if (!lf.cOpen.dead) out.openAlive++; }
+    return out;
+  }
+  const leafedIds = () => M().doors.map((D) => D.id);
+  function place(x, z, y) {
+    const P = W.player;
+    P.alive = true; P.hp = 100; P.shield = 100;
+    P.pos.set(x, y, z); P.vel.set(0, 0, 0);
+    P.onGround = false; P.gliding = false; P.swimming = false; P.mantleT = null; P.emoting = null; P.healing = null; P._portalBoost = false;
+    const inp = P.input; inp.mx = 0; inp.mz = 0; inp.jump = false; inp.sprint = false; inp.ads = false; inp.crouch = false; inp.fire = false; inp.pitch = 0;
+  }
+  // the capsule's depth inside the live slabs of door D (2D, over the capsule's height)
+  function pen(D) {
+    const P = W.player, px = P.pos.x, py = P.pos.y, pz = P.pos.z;
+    let worst = 0;
+    for (const lf of D.leaves) for (const c of [lf.cClosed, lf.cOpen]) {
+      if (c.dead || py + CAPH <= c.minY || py >= c.maxY) continue;
+      const ex = px < c.minX ? c.minX - px : px > c.maxX ? px - c.maxX : 0, ez = pz < c.minZ ? c.minZ - pz : pz > c.maxZ ? pz - c.maxZ : 0;
+      const d = Math.sqrt(ex * ex + ez * ez), inside = ex === 0 && ez === 0;
+      const p = inside ? R + Math.min(px - c.minX, c.maxX - px, pz - c.minZ, c.maxZ - pz) : R - d;
+      if (p > worst) worst = p;
+    }
+    return worst;
+  }
+  // the street-door walk of probe_collision.js doors() (its copy: that file returns no per-walk depth), on the LEAFED street doors only: from 3.5 m out
+  // (pulled in to a clear approach, never < 1.5 m) at 0 / 20 / 35 / 50 degrees, 90 ticks toward a point 2 m inside; per walk the final depth past the wall
+  // line and the deepest one over the walk (inside > 0 = past the wall line)
+  const qc = (x, z, r) => { const out = []; M().queryColliders(x, z, r, out); return out; };
+  const dRect = (o, x, z) => { const ex = x < o.minX ? o.minX - x : x > o.maxX ? x - o.maxX : 0, ez = z < o.minZ ? o.minZ - z : z > o.maxZ ? z - o.maxZ : 0; return Math.sqrt(ex * ex + ez * ez); };
+  const freeAt = (x, z, y, rad) => { for (const o of qc(x, z, rad + 2)) { if (o.dead || o.kind === "ramp") continue; if (o.maxY <= y + 0.55 || o.minY >= y + CAPH) continue; if (dRect(o, x, z) < rad) return false; } return true; };
+  const groundAt = (x, z, y0) => { const m = M(); let y = m.heightAt(x, z); for (const o of qc(x, z, 0.3)) if (!o.dead && o.kind !== "ramp" && x >= o.minX && x <= o.maxX && z >= o.minZ && z <= o.maxZ && o.maxY < y0 + 0.6 && o.maxY > y) y = o.maxY; return y; };
+  function walkDoors(opt) {
+    const m = M(), want = (opt && opt.max) || 14, P = W.player;
+    const street = m.doors.map((D, i) => i).filter((i) => { const D = m.doors[i]; return D.kind !== "interior" && Math.abs(D.y - m.heightAt(D.x, D.z)) < 1.0; });
+    const pick = [];
+    for (let k = 0; k < Math.min(want, street.length); k++) pick.push(street[Math.floor(k * street.length / Math.min(want, street.length))]);
+    const walks = [];
+    let noApproach = 0;
+    for (const i of pick) {
+      const D = m.doors[i], n = D.leaves[0].L.n, nx = -n[0], nz = -n[1];        // (outward: the leaves swing into the house)
+      let ran = 0;
+      for (const deg of [0, 20, 35, 50]) {
+        const a = deg * Math.PI / 180, ox = nx * Math.cos(a) - nz * Math.sin(a), oz = nx * Math.sin(a) + nz * Math.cos(a);
+        let dist = 3.5, sx = D.x + ox * dist, sz = D.z + oz * dist;
+        const yy = D.y + 1.0, hit = S.segmentColliders(D.x + ox * 0.3, yy, D.z + oz * 0.3, sx, yy, sz, qc((D.x + sx) / 2, (D.z + sz) / 2, 2.6));
+        if (hit) { dist = 0.3 + hit.t * (dist - 0.3) - R - 0.15; if (dist < 1.5) continue; sx = D.x + ox * dist; sz = D.z + oz * dist; }
+        const gy = groundAt(sx, sz, D.y);
+        if (!freeAt(sx, sz, gy, R) || m.heightAt(sx, sz) < m.waterY + 0.3) continue;
+        place(sx, sz, gy + 0.02); C.fastForward(4 / 60);
+        ran++;
+        const tx = D.x - nx * 2 - sx, tz = D.z - nz * 2 - sz, tl = Math.hypot(tx, tz), inp = P.input;
+        inp.yaw = Math.atan2(-tx / tl, -tz / tl); inp.mz = 1; inp.mx = 0; inp.sprint = false;
+        let deepest = -1e9, last = 0;
+        for (let k = 0; k < 90; k++) { C.fastForward(1 / 60); P.hp = 100; last = -((P.pos.x - D.x) * nx + (P.pos.z - D.z) * nz); if (Math.abs(P.pos.y - D.y) < 1.5 && last > deepest) deepest = last; }
+        inp.mz = 0;
+        walks.push({ id: D.id, deg, inside: r3(last), deepest: r3(deepest), gotIn: last > 0.8, start: r3(dist) });
+      }
+      if (!ran) { noApproach++; walks.push({ id: D.id, deg: null, inside: null, deepest: null, gotIn: false, why: "no clear 1.5 m approach at any angle" }); }
+    }
+    return { doors: pick.length, runs: walks.length, gotIn: walks.filter((w) => w.gotIn).length, noApproach, walks };
+  }
+  // (kernel frames, not fastForward: the doors' clock, the swing and the pending open slab run in the map's updater, as in the live loop)
+  function frames(D, n, res) { for (let k = 0; k < n; k++) { C.stepFrames(1, 1 / 60, false); const p = pen(D); if (p > res.maxPen) { res.maxPen = r3(p); res.worst = D.id; } } }
+  function cycle(opt) {
+    const m = M(), per = (opt && opt.per) || 10, want = (opt && opt.doors) || 20;
+    const street = m.doors.map((D, i) => i).filter((i) => m.doors[i].kind !== "interior" && Math.abs(m.doors[i].y - m.heightAt(m.doors[i].x, m.doors[i].z)) < 1.5);
+    const pick = [];
+    for (let k = 0; k < Math.min(want, street.length); k++) pick.push(street[Math.floor(k * street.length / Math.min(want, street.length))]);
+    const res = { doors: pick.length, cycles: 0, refused: 0, closedInDoorway: 0, closedClear: 0, notClosedClear: 0, heldBack: 0, opensInSlab: 0, aliveAfter: 0, notAliveAfter: 0, maxPen: 0, worst: null, bad: [] };
+    for (const i of pick) {
+      const D = m.doors[i], L = D.leaves[0].L, y = D.y + 0.02;
+      if (!D.open) { T += 10; m.setDoor(i, true, "collisioncheck", T); }
+      // (each toggle at t = T + 1: past the door's 0.3 s cooldown, whatever the frames stepped)
+      const n = L.n, td = L.tdir;
+      const A = [D.x, D.z], B = [D.x + n[0] * 0.8, D.z + n[1] * 0.8];
+      const Cs = [L.hinge[0] + td[0] * 0.45 + n[0] * 0.6, L.hinge[1] + td[1] * 0.45 + n[1] * 0.6];
+      for (let k = 0; k < per; k++) {
+        // 1. in the doorway: the close must be refused
+        place(A[0], A[1], y); frames(D, 6, res);
+        const r1 = m.setDoor(i, false, "collisioncheck", T += 1);
+        if (r1 === "blocked") res.refused++; else { res.closedInDoorway++; if (res.bad.length < 6) res.bad.push(D.id + " closed with the player in the doorway: " + r1); }
+        frames(D, 20, res);
+        // 2. in the swing, the doorway clear: the close goes through, nobody inside a slab
+        place(B[0], B[1], y); frames(D, 6, res);
+        const r2 = m.setDoor(i, false, "collisioncheck", T += 1);
+        if (r2 === true) res.closedClear++; else { res.notClosedClear++; if (res.bad.length < 6) res.bad.push(D.id + " close with the doorway clear: " + r2); }
+        frames(D, 24, res);
+        // 3. the door opens with the player standing where leaf 0 comes to rest: that open slab must wait
+        place(Cs[0], Cs[1], y); frames(D, 6, res);
+        const r3_ = m.setDoor(i, true, "collisioncheck", T += 1);
+        if (r3_ === true) res.opensInSlab++;
+        frames(D, 20, res);
+        if (D.leaves[0].cOpen.dead) res.heldBack++;
+        else if (res.bad.length < 6) res.bad.push(D.id + " open slab alive inside the player");
+        // 4. the player steps clear: it comes alive
+        place(B[0] + n[0] * 0.6, B[1] + n[1] * 0.6, y); frames(D, 24, res);
+        if (D.leaves.every((lf) => !lf.cOpen.dead)) res.aliveAfter++; else { res.notAliveAfter++; if (res.bad.length < 6) res.bad.push(D.id + " open slab still dead after the swing cleared"); }
+        res.cycles++;
+      }
+    }
+    return res;
+  }
+  return { count, plant, setAll, leafedIds, walkDoors, cycle };
+}
+"""
 
 
 def lean_optional(args):
@@ -236,6 +399,26 @@ def measure_map(v, args, map_id, src, quick):
         res["props"] = run("props", "props")
         res["live"] = run("live", "live", {"perKind": 4 if quick else 8})
         res["doors"] = run("doors", "doors", {"max": 6 if quick else 14, "plant": args.plant})
+        # (Wave 9, LC-91) the door leaves: every leafed door shut then opened (doors-open), shut (doors-closed), the door-cycle row
+        if "doors" not in skip:
+            s.js("() => { window.__LCDOOR__ = (" + DOOR_JS + ")(); return true; }")
+            res["doorCount"] = s.js("() => window.__LCDOOR__.count()")
+            if args.plant in DOOR_PLANTS:
+                res["doorPlant"] = s.js("(k) => window.__LCDOOR__.plant(k)", args.plant)
+                print("  [%s] plant %s installed: %s" % (map_id, args.plant, res["doorPlant"]), flush=True)
+            if res["doorCount"].get("doors") and res["doorCount"].get("api"):
+                res["doorsOpenSet"] = s.js("() => { const a = window.__LCDOOR__.setAll(false); const b = window.__LCDOOR__.setAll(true); return { shut: a, open: b }; }")
+                res["doorsOpen"] = run("doors-open", "doors", {"max": 6 if quick else 14})
+                t1 = time.time()
+                res["doorsOpenLeafed"] = s.js("(o) => window.__LCDOOR__.walkDoors(o)", {"max": 6 if quick else 14})
+                res["doorsClosedSet"] = s.js("() => window.__LCDOOR__.setAll(false)")
+                res["doorsClosed"] = s.js("(o) => window.__LCDOOR__.walkDoors(o)", {"max": 6 if quick else 14})
+                print("  [%s] leafed-door walks open + shut %.0f s" % (map_id, time.time() - t1), flush=True)
+                s.js("() => window.__LCDOOR__.setAll(true)")
+                if "door-cycle" not in skip:
+                    t1 = time.time()
+                    res["doorCycle"] = s.js("(o) => window.__LCDOOR__.cycle(o)", {"doors": 4 if quick else 20, "per": 10})
+                    print("  [%s] door-cycle %.0f s" % (map_id, time.time() - t1), flush=True)
         res["walls"] = run("walls", "walls", {"max": 8 if quick else 16})
         res["ramps"] = run("ramps", "ramps", {"max": 6 if quick else 14})
         res["falls"] = run("falls", "falls", {"slabs": 3 if quick else 6})
@@ -444,6 +627,56 @@ def judge(v, per_map, rot, args):
         v.check("thin-walls", wc == 0, "%d of %d sprints into thin walls crossed (%d walls)" % (wc, wr, sum((r.get("walls") or {}).get("walls", 0) for r in per_map.values())), "0 crossings")
     else:
         v.cnj("thin-walls", "no thin ground-level wall found")
+
+    # ---- (Wave 9, LC-91) the door leaves
+    if any("doorCount" in r for r in per_map.values()):
+        cnt = {m: (r.get("doorCount") or {}) for m, r in per_map.items()}
+        nod = [m for m, c in cnt.items() if not c.get("doors") or not c.get("api")]
+        v.info("doors (leaves)", " | ".join("%s: %s leafed doors, %s leaves, setDoor %s; shut %s / open %s" % (m, c.get("doors"), c.get("leaves"), c.get("api"),
+               json.dumps((per_map[m].get("doorsOpenSet") or {}).get("shut")), json.dumps((per_map[m].get("doorsOpenSet") or {}).get("open"))) for m, c in cnt.items()))
+        if nod:
+            for row in ("doors-open", "doors-closed", "door-cycle"):
+                v.check(row, False, "no leafed doors / no W.map.setDoor on %s (LC-91 not in this build)" % nod)
+        else:
+            orr = sum((r.get("doorsOpen") or {}).get("runs", 0) for r in per_map.values())
+            org = sum((r.get("doorsOpen") or {}).get("gotIn", 0) for r in per_map.values())
+            lor = sum((r.get("doorsOpenLeafed") or {}).get("runs", 0) for r in per_map.values())
+            log_ = sum((r.get("doorsOpenLeafed") or {}).get("gotIn", 0) for r in per_map.values())
+            if orr and lor:
+                fails = [x for r in per_map.values() for x in ((r.get("doorsOpen") or {}).get("failed") or [])]
+                lfails = [dict(x, map=m) for m, r in per_map.items() for x in ((r.get("doorsOpenLeafed") or {}).get("walks") or []) if not x.get("gotIn")]
+                v.check("doors-open", org / orr >= DOOR_MIN and log_ / lor >= DOOR_MIN, "every leafed door shut and then opened through W.map.setDoor: the doors row's walks %d of %d got inside (%.1f%%), walks at LEAFED street doors %d of %d (%.1f%%)%s" % (
+                    org, orr, 100.0 * org / orr, log_, lor, 100.0 * log_ / lor, ("; failed " + json.dumps(fails[:3] + lfails[:3])[:500]) if fails or lfails else ""), ">= 99 % each")
+            else:
+                v.cnj("doors-open", "no door walk ran with the doors opened (doors row %d, leafed %d)" % (orr, lor))
+            lw, na = [], 0
+            for m, r in per_map.items():
+                for x in (r.get("doorsClosed") or {}).get("walks") or []:
+                    if x.get("inside") is None:
+                        na += 1
+                        continue
+                    lw.append(dict(x, map=m))
+            if lw:
+                got = [x for x in lw if x.get("gotIn")]
+                deep = [x for x in lw if x["deepest"] > DOOR_STOP]
+                v.check("doors-closed", not got and not deep and na == 0, "every leafed door shut: %d walks at %d leafed street doors, %d got in, %d came closer than 0.45 m to the wall line (deepest %.3f m: the capsule %.3f m into the 2 cm half-slab), %d doors with no clear approach%s" % (
+                    len(lw), sum((r.get("doorsClosed") or {}).get("doors", 0) for r in per_map.values()), len(got), len(deep), max(x["deepest"] for x in lw), max(0.0, max(x["deepest"] for x in lw) + 0.47), na,
+                    ("; e.g. " + json.dumps((got + deep)[:4])[:400]) if got or deep else ""), "0 in, every walker stopped at the slab (<= 2 cm into it)")
+            else:
+                v.cnj("doors-closed", "no walk ran at a leafed street door with the doors shut")
+            cy = [r.get("doorCycle") for r in per_map.values() if r.get("doorCycle")]
+            if cy:
+                n = sum(c["cycles"] for c in cy)
+                bad = [b for c in cy for b in c.get("bad") or []]
+                mp = max(c["maxPen"] for c in cy)
+                ok = (n >= CYCLES_MIN * len(cy) / max(1, len(per_map)) and n >= min(CYCLES_MIN, 10 * sum(c["doors"] for c in cy)) and mp <= DOOR_PEN and sum(c["closedInDoorway"] for c in cy) == 0
+                      and sum(c["refused"] for c in cy) == n and sum(c["notClosedClear"] for c in cy) == 0 and sum(c["heldBack"] for c in cy) == n and sum(c["notAliveAfter"] for c in cy) == 0)
+                v.check("door-cycle", ok, "%d close / open cycles at %d street doors: close refused with the player in the doorway %d / %d (%d closed on him), closed with the doorway clear %d, the open slab held back while he stood in it %d / %d, alive once clear %d / %d, deepest capsule in a live slab %.3f m (%s)%s" % (
+                    n, sum(c["doors"] for c in cy), sum(c["refused"] for c in cy), n, sum(c["closedInDoorway"] for c in cy), sum(c["closedClear"] for c in cy),
+                    sum(c["heldBack"] for c in cy), n, sum(c["aliveAfter"] for c in cy), n, mp, ", ".join("%s: %d" % (m, (r.get("doorCycle") or {}).get("cycles", 0)) for m, r in per_map.items()),
+                    ("; " + " | ".join(bad[:4])) if bad else ""), ">= 200 cycles a map, penetration <= 0.02 m, every occupied close refused")
+            elif "door-cycle" not in (args.skip or ""):
+                v.cnj("door-cycle", "no door-cycle measured")
 
     # ---- errors
     probs = {m: r.get("problems") for m, r in per_map.items() if r.get("problems")}
