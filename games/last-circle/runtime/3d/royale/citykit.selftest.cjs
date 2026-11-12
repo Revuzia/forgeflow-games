@@ -63,11 +63,11 @@ function refBox(b, q, k, x, y, z) {
 
   // ---------------------------------------------------------------- mkCollider contract (maps.js:228)
   const mk = K.mkCollider("box", 1, 2, 3, 4, 5, 6, -1, null, -1, 0);
-  const KEYS = ["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs"];
-  ok(Object.keys(mk).join() === KEYS.join() && K.COLLIDER_KEYS.join() === KEYS.join(), "mkCollider has maps.js's 13 fields in maps.js's order (one hidden class)", Object.keys(mk));
-  ok(mk.kind === "box" && mk.dir === -1 && mk.prop === null && mk.idx === -1 && mk.hp === 0 && mk.dead === false && mk._qs === 0, "a kit collider is a non-destructible static box: dir -1, prop null, idx -1, hp 0, dead false, _qs 0");
+  const KEYS = ["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs", "door", "dslab"];   // (Wave 9, C1: + door, dslab)
+  ok(Object.keys(mk).join() === KEYS.join() && K.COLLIDER_KEYS.join() === KEYS.join(), "mkCollider has maps.js's 15 fields in maps.js's order (one hidden class)", Object.keys(mk));
+  ok(mk.kind === "box" && mk.dir === -1 && mk.prop === null && mk.idx === -1 && mk.hp === 0 && mk.dead === false && mk._qs === 0 && mk.door === -1 && mk.dslab === 0, "a kit collider is a non-destructible static box: dir -1, prop null, idx -1, hp 0, dead false, _qs 0, door -1, dslab 0 (never a door leaf)");
   const src = fs.readFileSync(path.join(GAME, "runtime", "3d", "royale", "maps.js"), "utf8");
-  const live = /function mkCollider\(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp\) \{\s*return \{ kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0 \};/.test(src);
+  const live = /function mkCollider\(kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp\) \{\s*return \{ kind, minX, maxX, minY, maxY, minZ, maxZ, dir, prop, idx, hp, dead: false, _qs: 0, door: -1, dslab: 0 \};/.test(src);
   ok(live, "maps.js still declares mkCollider with exactly this signature and object literal (the copy cannot silently drift)");
 
   // ---------------------------------------------------------------- rotation rules
@@ -99,7 +99,7 @@ function refBox(b, q, k, x, y, z) {
         const c = cs[i], r = refBox(m.colliders[i], q, k, x, y, z);
         boxesChecked++;
         if (c.minX !== r[0] || c.maxX !== r[1] || c.minY !== r[2] || c.maxY !== r[3] || c.minZ !== r[4] || c.maxZ !== r[5]) { exactFail++; firstBad = firstBad || ["exact", id, q, pi, i, [c.minX, c.maxX, c.minY, c.maxY, c.minZ, c.maxZ], r]; }
-        if (Object.keys(c).join() !== KEYS.join() || c.kind !== "box" || c.prop !== null || c.hp !== 0 || c.dir !== -1 || c.idx !== -1 || c.dead !== false || c._qs !== 0 || !(c.minX < c.maxX && c.minY < c.maxY && c.minZ < c.maxZ)) shapeFail++;
+        if (Object.keys(c).join() !== KEYS.join() || c.kind !== "box" || c.prop !== null || c.hp !== 0 || c.dir !== -1 || c.idx !== -1 || c.dead !== false || c._qs !== 0 || c.door !== -1 || c.dslab !== 0 || !(c.minX < c.maxX && c.minY < c.maxY && c.minZ < c.maxZ)) shapeFail++;
       }
       const again = K.colliderFor(id, x, y, z, q, k === 1 ? undefined : k);
       if (dump(again) !== dump(cs)) detFail++;
@@ -112,7 +112,7 @@ function refBox(b, q, k, x, y, z) {
   }
   ok(countFail === 0, "every type x 4 rotations x 3 placements yields exactly the manifest's number of boxes", { countFail, firstBad });
   ok(exactFail === 0, "every one of " + boxesChecked + " world boxes EQUALS the independent corner-matrix reference bit for bit", { exactFail, firstBad });
-  ok(shapeFail === 0, "every collider is a well-formed mkCollider box (13 fields in order, min < max on all three axes)", shapeFail);
+  ok(shapeFail === 0, "every collider is a well-formed mkCollider box (15 fields in order, min < max on all three axes)", shapeFail);
   ok(detFail === 0, "two calls give identical colliders (deterministic, no hidden state)", detFail);
   ok(aliasFail === 0, "q + 4 and the radian spelling of a quarter turn give the same boxes as the index", aliasFail);
   const fp = fnv(all.map(dump).join("|"));

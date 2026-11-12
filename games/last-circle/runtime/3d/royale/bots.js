@@ -128,14 +128,84 @@ function buildFallTable() {
 // (a knocked man's pool is downedHp: damage to a downed actor comes off it, C-DBNO)
 const fallHp = (a) => Math.max(0, Math.min(200, Math.round((a.downed ? a.downedHp : a.hp) || 0)));
 function lethalDrop(a) { return LETHAL_H ? LETHAL_H[fallHp(a)] : Infinity; }
-/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). */
-function walkDrop(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
+/** The highest drop a bot walks off on purpose (a quarter of its hp, at least 6, left over). (W9 R1B, Volcano Rim) ...and in a CALM state no more than
+ *  the path planner itself drops (CALM_DROP_H = NAV_DROP_MAX + 0.3 m): a full-hp bot's hp limit is ~14 m, so calm bots stepped off the 6-9 m terrace
+ *  edges of Isla Viva's Volcano Rim village that the planner routes round by the stairs. bb.calmDrop is set by act() every frame (calmDropOn). */
+function walkDrop(a) {
+  if (!WALK_H) return Infinity;
+  const h = WALK_H[fallHp(a)], br = a.brain;
+  return br && br.bb.calmDrop && h > CALM_DROP_H ? CALM_DROP_H : h;
+}
+/** the hp limit alone (what walkDrop was before W9): the calm cap's fall-back and its "would the hp limit have held this?" test */
+function walkDropHp(a) { return WALK_H ? WALK_H[fallHp(a)] : Infinity; }
+// (W9 R1B) the calm states (the planner's drop limit applies); FLEE, CLOSEIN, ENGAGE, HEAL, REVIVE and a storm-pressed ROTATE keep the hp limit
+const CALM_DROP_ST = { WANDER: 1, LOOT: 1, ROTATE: 1, FOLLOW: 1, PING: 1, ASSIST: 1, HUNT: 1, SUPPLY: 1, PUSH: 1, CAMP: 1 };
+const CALM_HOLD_N = 3, CALM_HOLD_WIN_S = 10, CALM_OFF_S = 5;
+function calmDropOn(W, b) {
+  const bb = b.bb;
+  return CALM_DROP_ST[b.state] === 1 && !(b.state === "ROTATE" && bb.rotPress) && !(W.t < bb.calmOffUntil);
+}
+/** (W9 R1B) edgeGuard held a calm bot at a drop only the calm cap refuses (the hp limit would let it walk off): its next moveToward asks the planner
+ *  for a route at once (bb.edgeReplan - a drop is no wall, so nothing else asked: the bot pushed at the lip until something gave; the planner's
+ *  own drop limit, NAV_DROP_MAX, routes it round by the stairs). */
+function calmHeld(W, b, drop) {
+  const a = b.actor, bb = b.bb;
+  if (!bb.calmDrop || !(drop <= walkDropHp(a))) return;
+  // ...unless the last re-plan's route has just led it back to a refused drop here: the planner walks a steep face in 0.5 m steps that each fall
+  // less than NAV_DROP_MAX while the mover flies the whole face (p23_fall rim, Isla seed 7 lip (-70, -34): 23 holds, each re-plan the same route,
+  // held 2.5-8 s at a time). That route counts as a failed re-plan (calmReplanFailed: 3 -> the trap breaker), and no new search is asked for.
+  const dx = a.pos.x - bb.calmRpX, dz = a.pos.z - bb.calmRpZ;
+  if (W.t - bb.calmRpT < CALM_RP_S && dx * dx + dz * dz < CALM_RP_M * CALM_RP_M) { nav.st.calmLoops++; calmReplanFailed(W, b); return; }
+  // (W9 R1 fix mergefix) ...and not when the bot's ROUTE does not go this way: the held heading is the legs' (the steered yaw), and a bot whose route
+  // has just turned (its corner waypoints taken 1-1.6 m early) still walks the old heading for a few frames. probe_match --pencheck setup 3 (s18,
+  // 40 hp, in the west doorway of the terrace hut): held facing the lip 2.8 m west while its route ran north along the top; the re-plan's grid route
+  // went down the face (refused again, the same route: calmLoops -> the trap breaker parked the goal, never reached). The hold alone lets the yaw
+  // come round (as at 17 hp). A route whose next waypoint is within 45 deg of the held heading, or no route: re-planned as before.
+  const P = bb.path;
+  if (CALM_ROUTE_ONLY && P && P.length && P[0]) {
+    const px = P[0].x - a.pos.x, pz = P[0].z - a.pos.z, pd = Math.sqrt(px * px + pz * pz);
+    if (pd > 0.5 && px * bb.edgeBanX + pz * bb.edgeBanZ < 0.7071 * pd) {
+      // (W9 R1 fix2 mergefix) ...for CALM_LAG_S only: a yaw lag lasts a few frames, so a bot still held off its route's heading CALM_LAG_S after the
+      // first such hold here (within CALM_RP_M, inside CALM_HOLD_WIN_S) re-plans as any other hold - and its failed re-plans reach the trap breaker.
+      const lx = a.pos.x - bb.calmLagX, lz = a.pos.z - bb.calmLagZ;
+      if (!(W.t - bb.calmLagT0 <= CALM_HOLD_WIN_S) || lx * lx + lz * lz > CALM_RP_M * CALM_RP_M) { bb.calmLagT0 = W.t; bb.calmLagX = a.pos.x; bb.calmLagZ = a.pos.z; }
+      if (W.t - bb.calmLagT0 < CALM_LAG_S) { nav.st.calmLag++; return; }
+      nav.st.calmLagOut++;
+    }
+  }
+  bb.edgeReplan = true;
+}
+const CALM_LAG_S = 1.5;           // (W9 R1 fix2 mergefix) the longest a calm hold off the route's heading is put down to yaw lag
+const CALM_ROUTE_ONLY = true;     // (W9 R1 fix mergefix) false = every calm hold re-plans, as before (probe_match --pencheck --plant no-calm-lag)
+const CALM_RP_S = 3, CALM_RP_M = 2;   // (W9 R1B) a calm hold this soon after, and this near to, the last calm re-plan's route = that route failed
+/** (W9 R1B) ...and that re-plan found no route (or its route led straight back: calmHeld). CALM_HOLD_N of them inside CALM_HOLD_WIN_S: the trap
+ *  breaker (trapBreak: the goal parked, an exit under the same calm limit, committed) - a goal behind a drop is given up, not jumped to. Only when
+ *  the breaker finds NO exit under the calm limit is the bot penned: the hp limit for CALM_OFF_S - no permanent pen. (The design's "3 failed
+ *  re-plans -> the hp limit" alone walked a PUSH bot off the 9.3 m lip at Volcano Rim (88, -138) in p23_fall rim; a second stage that released the
+ *  cap on any 3 more failures inside 10 s walked 7 of 12 rim bots off 6.8-9 m lips once their re-plans were seen to loop: the break-out comes
+ *  first, and the cap is lifted for a real pen only.) */
+function calmReplanFailed(W, b) {
+  const bb = b.bb;
+  if (W.t - bb.calmHold0 > CALM_HOLD_WIN_S) { bb.calmHold0 = W.t; bb.calmHoldN = 0; }
+  if (++bb.calmHoldN < CALM_HOLD_N) return;
+  bb.calmHoldN = 0; bb.calmHold0 = W.t; bb.calmBreakT = W.t; bb.calmRpT = -99;
+  nav.st.calmBreak++; if (b.state === "PUSH" && bb.heard) bb.heard.t = -99;
+  trapBreak(W, b); b.nextThink = 0;
+  if (!(W.t < bb.escUntil)) { bb.calmOffUntil = W.t + CALM_OFF_S; bb.calmDrop = false; nav.st.calmOff++; }
+}
 // (C-DBNO) who revives whom: target id -> reviver id (bots' own channel and the humans' via the events), and the hook into player.js
 const reviving = new Map();
 // (integrator D3) sim's K is the single source of the DBNO tunables (K.REVIVE_RANGE / REVIVE_S / REVIVE_HP): nothing below hardcodes one.
 // A bot walks in to 80 % of the reach before it holds E (it stops short of the line, not on it: player.js canRevive refuses past K.REVIVE_RANGE).
 const reviveR = () => K.REVIVE_RANGE * 0.8;
 const REVIVE_SEEK_M = 80;         // a downed squadmate within this range is worth going to
+// (W9 R1B, bot mate dither) the revive's commitment (think: the REVIVE score) - REVIVE_COMMIT false = the pre-W9 flip-flop (dbno --plant no-commit)
+const REVIVE_COMMIT = true;
+const REVIVE_COMMIT_M = 6;        // within this of the downed mate the revive holds (92) ...
+const REVIVE_HURT_S = 1.5;        // ... unless hit this recently with hp + shield under 60 ...
+const REVIVE_CLOSE_M = 15;        // ... or an enemy is seen inside this
+const REVIVE_ENGAGE_HOLD_S = 3;   // a REVIVE -> ENGAGE switch outside the commit zone holds the fight this long (or until its target is dead / unseen this long)
+const REVIVE_URGENT_NEAR_M = 20;  // bleed-out urgency (+6) applies unless the enemy is inside this
 /** player.js runs the revive channel itself (lane player: W.canRevive + reviveStep on every up actor's interactDown) - the bots then only hold E. */
 const PLAYER_REVIVE = (W) => typeof W.canRevive === "function";
 /** Revive `t` by `by`: player.js's own entry when it exports one (the integrator wires W.reviveActor), else the contract's state change. */
@@ -367,7 +437,7 @@ export function debugBrains() { return brains; }
  */
 export function setLobbySkill(W) {
   loadPace(W);
-  humanLandT.clear(); reviving.clear();     // (P23) this match's grace clocks and revive channels
+  humanLandT.clear(); reviving.clear(); shieldClaims.clear();     // (P23) this match's grace clocks and revive channels; (W9 R1B) far-shield claims
   buildFallTable();                         // (P23, C-FALL) from this sim's fall constants (none: no guard)
   W.matchWasNet = !!W.net;          // captured BEFORE a takeover nulls W.net
   W.matchSkill = readSkill(W);
@@ -437,7 +507,9 @@ class Blackboard {
       // reviveId / reviveT / reviveHurtT: the revive channel (C-DBNO); leaderId: whom this bot follows (C-MODE); edgeT: the next fall-guard probe (C-FALL)
       this.graceMul = 0; this.assist = null; this.ping = null; this.pingRec = null; this.pingGoT = -1; this.pingDone = 0; this.dangerX = 0; this.dangerZ = 0; this.dangerR = 0; this.dangerUntil = 0;
       this.nadeS = 0; this.nadeKind = 0; this.nadeSlot = -1; this.nadePrev = -1; this.nadeX = 0; this.nadeY = 0; this.nadeZ = 0; this.nadeYaw = 0; this.nadePitch = 0; this.nadeT = -99; this.nadeNextT = 0; this.nadeCheckT = 0; this.smokeWant = 0;
-      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
+      this.reviveId = null; this.reviveT = 0; this.reviveHurtT = 0; this.reviveStarted = false; this.leaderId = null; this.leaderT = -99; this.followX = 0; this.followZ = 0; this.followBack = false; this.edgeT = 0; this.edgeYaw = 0; this.edgeMz = 0; this.edgeMx = 0; this.edgeBanUntil = 0; this.edgeBanX = 0; this.edgeBanZ = 0; this.edgeAir = false; this.edgeWalkUntil = 0;
+      this.revEngUntil = -99;     // (W9 R1B) the REVIVE -> ENGAGE hold
+      this.calmDrop = false; this.rotPress = false; this.calmHoldN = 0; this.calmHold0 = -99; this.calmOffUntil = -99; this.calmBreakT = -99; this.edgeReplan = false; this.calmRpT = -99; this.calmRpX = 0; this.calmRpZ = 0;   // (W9 R1B) walkDrop's calm cap
       this.wantShield = false; this.shieldScanT = 0; this.shieldNear = false; this.shieldGo = null; this.roomFor = null; this.nadePushT = -99; this.fdN = 0; this.fdR = 0; this.fdW = 0; this.fdB = 0; this.fdP = 0; this.fdS = 0; this.fdA = 0; this.arcSweepT = 0; this.reSightT = -99; this.pileX = 0; this.pileZ = 0; this.pileT = -99; this.coverTX = 0; this.coverTZ = 0; this.coverPeekT = -99;
       // (release blockers) the two fields still grown on first use (think's storm latch, actEngage's bolt wait): a bot's first write re-shaped
       // its blackboard mid-match (a 'wrong map' deopt of every optimized reader). Same readers: false / 0 behave as the old undefined.
@@ -831,6 +903,15 @@ function formIndex(W, a) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
+  // (W9 R1B) the bots-section timer for p23_tierprof's "bots" row (PLAN sec 5: bots section p95 <= 3 ms): only while a harness has set W.botsProf =
+  // { ms: Float64Array(n), i: 0 } - the game itself pays one property read a frame
+  const PF = W.botsProf;
+  if (!PF) { updateBots(W, dt); return; }
+  const t0 = navNow();
+  updateBots(W, dt);
+  if (PF.i < PF.ms.length) PF.ms[PF.i++] = navNow() - t0;
+}
+function updateBots(W, dt) {
   if (!brains.length) return;
   if (IND.map !== W.map) indEnsure(W);       // (Wave 8) the room graph and the cover test's cell table: built once per map, before the first brain tick
   if (OCC.map !== W.map && !W.map.hasCollidersNear) occBuild(W.map);
@@ -960,6 +1041,22 @@ function think(W, b) {
   // because they had no bullets rather than looking for chests").
   for (let i = 0; i < slots0.length; i++) { const s2 = slots0[i]; if (s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0) { hasFirepower = true; break; } }
 
+  // BATTLE-ROYALE PRIORITY MODEL (rotation urgency, see s.ROTATE below)
+  let rotScore = 0;
+  if (outsideNext) {
+    const scx = st.nextCenter ? st.nextCenter.x : st.center.x;
+    const scz = st.nextCenter ? st.nextCenter.z : st.center.z;
+    const overM = hyp(a.pos.x - scx, a.pos.z - scz) - (st.nextRadius || 0);
+    const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
+    const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
+    rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
+    // BOT_PACE.rotateLeadS: the leisurely "40" rotation starts only this many seconds before the
+    // "70" one, instead of at second 0 - every bot outside the next ring used to start walking to
+    // the centre the moment it had a gun, so the whole lobby converged inside the first two minutes.
+    if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
+  }
+  bb.rotPress = rotScore >= 70 || inStorm;     // (W9 R1B) a pressing rotation keeps the hp drop limit (walkDrop) and skips the reserve-big hunt; computed
+  // here, before wantBig and the inStorm return read it (it was set after both: wantBig / calmDropOn read the previous tick's value)
   // hard overrides
   if (inStorm) { if (b.state === "REVIVE") cancelRevive(W, b); b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
   // (P23, LC-20) a cell popped behind a cover wall mid-fight stays an ENGAGE cover hold (coverStepQ holds the wall until the heal is in)
@@ -1026,7 +1123,13 @@ function think(W, b) {
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   // (P23, LC-20) ...and goes and gets a shield when it has none: calm, upgraded, bar under 75, no shield item carried, a shield it could take
   // (or make room for: makeRoom) or an unopened chest within SHIELD_SEEK_M. pickLoot ranks shields first while bb.wantShield is set.
-  bb.wantShield = calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP());
+  // (W9 R1B, OD-16) ...AND A RESERVE BIG FOR THE LATE GAME. p23_botbatch read the median alive-bot shield at t >= 600 s at 13 (bar 75) while the census
+  // counted 11 big shields lying unclaimed inside the next circle: after the mid-game fights a bot had no big shield to refill past 50, and nothing
+  // sent it for one unless its bar sat exactly at the mini cap. From WANT_BIG_T a calm, upgraded bot with no big shield in the bag and a bar under
+  // 100 (not on a pressing rotation: it would walk away from the circle) wants one too (wantBig): the same scans, a big shield only (shieldGoal).
+  // PARKED PER OD-16 (known gap): WANT_BIG is false, so wantBig is always false here and the far scan keeps the pre-W9 mini-cap rule (see WANT_BIG).
+  const wantBig = WANT_BIG && calm && upgraded && W.t >= WANT_BIG_T && a.shield < 100 && !shieldItem && !bb.rotPress && bigCount(a) === 0;
+  bb.wantShield = (calm && upgraded && a.shield < 75 && !shieldItem && !carriesShield(a, a.shield >= MINI_CAP())) || wantBig;
   if (!bb.wantShield) bb.shieldGo = null;
   else if (W.t >= bb.shieldScanT) {
     bb.shieldScanT = W.t + 2;
@@ -1036,7 +1139,9 @@ function think(W, b) {
     // 4 m vertical window (NEAR_DY) drops anything up or down a slope, and the LOOT scan stops at 90 m. So once the bar sits at the cap a calm
     // bot looks out to SHIELD_FAR_M, slope or not, for a big shield (a death pile's too) or an unopened supply crate (two of them), inside the
     // next circle, and walks to it (bb.shieldGo: onEnter LOOT takes it over a pick that is not a shield).
-    bb.shieldGo = n && n.type === "item" ? n : (a.shield >= MINI_CAP() ? farShield(W, a) : null);
+    // (W9 R1B, OD-16) the far scan at ANY bar under 75 (and for wantBig), not only at the mini cap: a bot that wants a shield holds no big one
+    // (carriesShield), and the near scan's 80 m / 4 m-high window found nothing it can use
+    bb.shieldGo = n && n.type === "item" ? n : (WANT_BIG || a.shield >= MINI_CAP() ? farShield(W, a) : null);
     // (final, OD-13) ...AND THE DEAD MEN'S SHIELDS. A body's bag is on the floor in its death pile (loot.js deathDrop); a calm bot under the cap
     // walks to the nearest pile still holding a shield it can use, out to PILE_SHIELD_M and up or down a slope, over an unopened chest (a pile's
     // shield is certain, a chest's is 6 in 10) unless the chest is much nearer
@@ -1080,19 +1185,6 @@ function think(W, b) {
   // safe"): rotation urgency = how far past safety you are vs time left.
   // Only a genuinely pressing storm outranks a live fight — otherwise bots
   // were sprinting straight past enemies all mid-game.
-  let rotScore = 0;
-  if (outsideNext) {
-    const scx = st.nextCenter ? st.nextCenter.x : st.center.x;
-    const scz = st.nextCenter ? st.nextCenter.z : st.center.z;
-    const overM = hyp(a.pos.x - scx, a.pos.z - scz) - (st.nextRadius || 0);
-    const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
-    const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
-    rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
-    // BOT_PACE.rotateLeadS: the leisurely "40" rotation starts only this many seconds before the
-    // "70" one, instead of at second 0 - every bot outside the next ring used to start walking to
-    // the centre the moment it had a gun, so the whole lobby converged inside the first two minutes.
-    if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
-  }
   s.ROTATE = rotScore;
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   // PUSH toward gunfire — but not into it at 30 EHP: a hurt bot that pushes a
@@ -1120,7 +1212,27 @@ function think(W, b) {
     const mate = downedMate(W, b);
     if (mate) {
       const md = hyp(mate.pos.x - a.pos.x, mate.pos.z - a.pos.z);
-      s.REVIVE = !liveTarget ? 87 : (tDist > 45 && W.t - (a.lastDamageT || -99) > 1.5 ? 84 : 0);
+      const hitRecent = W.t - (a.lastDamageT || -99) <= REVIVE_HURT_S;
+      let rv = !liveTarget ? 87 : (tDist > 45 && !hitRecent ? 84 : 0);
+      // (W9 R1B, the mate that dithered) BLEED-OUT URGENCY: the mate bleeds out before this bot could walk there and finish the channel (+2 s) ->
+      // +6 over the calm score (93: over a mid-range ENGAGE 88), unless the enemy is inside REVIVE_URGENT_NEAR_M
+      const rate = K.dbnoBleedRate ? K.dbnoBleedRate(mate.knocks || 1) : 0;
+      if (rate > 0 && (mate.downedHp || 0) / rate < md / 6 + K.REVIVE_S + 2 && !(liveTarget && tDist < REVIVE_URGENT_NEAR_M)) rv = Math.max(rv, 87) + 6;
+      // (W9 R1B) COMMITMENT + HYSTERESIS. An enemy peeking in and out of sight inside 45 m flipped the state every ~1.2 s (seen: ENGAGE 88 > REVIVE 0;
+      // unseen 1.2 s: REVIVE 87 > ENGAGE 42), so the mate walked a step toward the knock, turned back to the fight, and the man bled out. Now:
+      //  - inside REVIVE_COMMIT_M of the mate the revive scores 92 (over any fight score) and holds, unless the break rule fires: hit in the last
+      //    REVIVE_HURT_S with hp + shield under 60, or an enemy SEEN inside REVIVE_CLOSE_M - then ENGAGE, and the revive resumes when it clears;
+      //  - a bot already walking to the knock (REVIVE chosen) keeps going until it is there or the break rule fires;
+      //  - a REVIVE -> ENGAGE switch outside the commit zone holds the fight REVIVE_ENGAGE_HOLD_S (or until its target is dead / unseen that long).
+      if (REVIVE_COMMIT) {
+        const brk = (hitRecent && a.hp + a.shield < 60) || (liveTarget && tDist < REVIVE_CLOSE_M && W.t - bb.targetSeenT < 0.5);
+        const commit = md < REVIVE_COMMIT_M;
+        if (commit || (b.state === "REVIVE" && bb.reviveId === mate.id)) {
+          if (brk) rv = 0;
+          else { rv = Math.max(rv, commit ? 92 : 0, s.ENGAGE + 1, s.CLOSEIN + 1); if (s.CLOSEIN) s.CLOSEIN = 0; if (bb.rotPress && s.ROTATE > 0) rv = Math.min(rv, s.ROTATE - 1); }   // a pressing storm rotation (bb.rotPress: rotScore >= 70) still outranks the committed revive (pre-W9 REVIVE topped out at 87)
+        } else if (W.t < bb.revEngUntil && tAct && tAct.alive && W.t - bb.targetSeenT < REVIVE_ENGAGE_HOLD_S) rv = 0;
+      }
+      s.REVIVE = rv;
       if (md > REVIVE_SEEK_M) s.REVIVE = 0;
       if (s.REVIVE && bb.reviveId !== mate.id) { bb.reviveId = mate.id; bb.reviveT = 0; bb.reviveStarted = false; }
     } else s.REVIVE = 0;
@@ -1161,7 +1273,10 @@ function think(W, b) {
   let best = "WANDER", bs = -1;
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
   if (bb.pingRec) pingAckStep(W, b, best);
-  if (b.state !== best) { b.state = best; onEnter(W, b, best); }
+  if (b.state !== best) {
+    if (b.state === "REVIVE" && best === "ENGAGE") bb.revEngUntil = W.t + REVIVE_ENGAGE_HOLD_S;      // (W9 R1B) the fight it turned to is held
+    b.state = best; onEnter(W, b, best);
+  }
   if (best === "LOOT" && grab && bb.lootId !== grab.id) {
     bb.lootId = grab.id; bb.lootType = "item"; bb.nearLootT = 0;
     setLootGoal(bb, grab);
@@ -1660,6 +1775,7 @@ function act(W, b, dt) {
   // crouched — and at CROUCH.speedMult 0.45 — for the rest of the match.
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false; inp.crouch = false;
   inp.interactDown = false;       // (P23, C-DBNO) held only by actRevive, frame by frame (player.js reviveStep channels while it is held)
+  bb.calmDrop = calmDropOn(W, b);   // (W9 R1B) walkDrop's calm cap, for this frame's state
 
   if (a.gliding) {
     // steer toward drop target, dive (sprint) when above it
@@ -1870,7 +1986,9 @@ function actTail(W, b, dt) {
   // yet has not left that disc in TRAP_S has met a trap: it breaks out at once (trapBreak). Fights, heals, chests and emotes are exempt, as above.
   const mt = bb.moveTo;
   let tq = 0;
-  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && !a.swimming && W.t >= bb.escUntil) {
+  // (W9 R1B, swimmer trapBreak) swimmers are no longer exempt: deepwood seed 1 s4 spent 3 of its 4 stuck episodes swimming at (52.5, 74.5) in LOOT,
+  // its goal 10.8 m off - the breaker never looked at it. trapBreak's water branch (swimExit) hauls it out or swims it away instead.
+  if (MOVING_STATES[b.state] && mt && !bb.chestId && !a.healing && !a.emoting && W.t >= bb.escUntil) {
     const gx = mt.x - a.pos.x, gz = mt.z - a.pos.z, ax = a.pos.x - bb.trapX, az = a.pos.z - bb.trapZ;
     if (gx * gx + gz * gz > TRAP_GOAL_M * TRAP_GOAL_M && ax * ax + az * az <= TRAP_R * TRAP_R) tq = W.t - bb.trapT >= TRAP_S ? 2 : 1;
   }
@@ -2136,7 +2254,11 @@ function trapBreak(W, b) {
   const gyaw = mt ? Math.atan2(-(mt.x - a.pos.x), -(mt.z - a.pos.z)) : a.input.yaw;
   bb.path = null; bb.pathGoal = null; bb.progGoal = null; bb.stuckT = 0;
   let ex = null;
-  if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
+  if (a.swimming) {
+    // (W9 R1B) THE WATER BRANCH: the nearest haul-out (swimStep's own rule) or dry shore, else 12 m of open water away from the goal (swimExit)
+    ex = swimExit(W, a, gyaw, bb.trapN);
+    if (ex) nav.st.trapSwim++;
+  } else if (a.onGround && a.pos.y - W.map.heightAt(a.pos.x, a.pos.z) >= DECK_AGL && !underCeiling(W, b) && deckExitPoint(W, a, gyaw)) {
     ex = [{ x: _dkx.x, y: null, z: _dkx.z, k: 1 }];
     ex.exit = true;
     nav.st.trapDeck++;
@@ -2151,7 +2273,7 @@ function trapBreak(W, b) {
     // whose last point's surroundings, falls further than the bot may walk off is refused (the heading walk below is tried instead)
     if (ex && !exitFallSafe(W, a, ex, walkDrop(a))) { ex = null; nav.st.trapUnsafe++; }
   }
-  if (!ex) {
+  if (!ex && !a.swimming) {
     const side = (bb.trapN & 1) ? 1 : -1, lim = walkDrop(a);
     for (let k = 0; k < TRAP_HEADINGS.length; k++) {
       const yaw = gyaw + side * TRAP_HEADINGS[k];
@@ -2173,6 +2295,45 @@ function trapBreak(W, b) {
   bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
   bb.escX = last.x; bb.escZ = last.z; bb.escUntil = W.t + TRAP_ESC_S;
   bb.nextPathT = W.t + 2.5;
+}
+const SWIM_RING_M = [3, 6, 12];   // (W9 R1B) the haul-out ring search: 8 headings at each of these radii, nearest ring first
+const SWIM_FEET = 0.45;           // player.js swimStep: swimFeet = pos.y + 0.45 (its probe height for collision and the haul-out)
+const SWIM_HAUL_UP = SWIM_FEET + 0.55;    // ... and a ledge is climbed onto up to swimFeet + STEP_UP over pos.y
+const SWIM_AWAY = [Math.PI, Math.PI * 0.75, -Math.PI * 0.75, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
+/** (W9 R1B, swimmer trapBreak) a trapped swimmer's way out, deterministic (no rng draw):
+ *    1. the nearest point on rings of 3 / 6 / 12 m (8 headings each, from the goal's heading round) whose support passes swimStep's own haul-out rule
+ *       (a top above waterY - 0.25 and at most swimFeet + STEP_UP: the ledge it climbs onto) or whose terrain is dry (above waterY + 0.1: the shore);
+ *    2. else TRAP_WALK_M of water along the first heading away from the goal (straight away first, then +-135, +-90, +-45 deg; the side alternates with
+ *       the trip count as the land branch does).
+ *  Either goal needs a clear straight swim: no collider the swimmer's move test would stop at (fitsAt at the swim tick's feet) every 1 m of it. */
+function swimExit(W, a, gyaw, trapN) {
+  const M = W.map, wy = M.waterY, py = a.pos.y, feet = py + SWIM_FEET;
+  for (let ri = 0; ri < SWIM_RING_M.length; ri++) {
+    const r = SWIM_RING_M[ri];
+    for (let k = 0; k < 8; k++) {
+      const yaw = gyaw + (k & 1 ? -1 : 1) * Math.ceil(k / 2) * Math.PI / 4;
+      const x = a.pos.x - Math.sin(yaw) * r, z = a.pos.z - Math.cos(yaw) * r;
+      if (Math.abs(x) >= M.half || Math.abs(z) >= M.half) continue;
+      const dry = M.heightAt(x, z) > wy + 0.1;
+      if (!dry) { const ledge = supportAt(W, x, z, py + 0.9); if (!(ledge > wy - 0.25 && ledge <= py + SWIM_HAUL_UP)) continue; }
+      if (!swimClear(W, a, x, z, feet)) continue;
+      return [{ x, y: null, z, k: 0 }];
+    }
+  }
+  const side = (trapN & 1) ? 1 : -1;
+  for (let k = 0; k < SWIM_AWAY.length; k++) {
+    const yaw = gyaw + side * SWIM_AWAY[k];
+    const x = a.pos.x - Math.sin(yaw) * TRAP_WALK_M, z = a.pos.z - Math.cos(yaw) * TRAP_WALK_M;
+    if (Math.abs(x) >= M.half || Math.abs(z) >= M.half) continue;
+    if (!swimClear(W, a, x, z, feet)) continue;
+    return [{ x, y: null, z, k: 0 }];
+  }
+  return null;
+}
+function swimClear(W, a, x, z, feet) {
+  const dx = x - a.pos.x, dz = z - a.pos.z, n = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dz * dz)));
+  for (let i = 1; i <= n; i++) if (!fitsAt(W, a.pos.x + dx * i / n, a.pos.z + dz * i / n, feet)) return false;
+  return true;
 }
 const TRAP_OVERRUN_M = 3.0;       // (pass 2) a sprint arriving at a break-out goal runs on (and turns) this far past it ...
 const TRAP_LIP_R = 2.5;           // ... and no ground within this of the goal may lie more than the walking margin under it
@@ -2747,6 +2908,10 @@ const NAV_NODES = NAV_CELLS * NAV_L;
 const NAV_STEP_UP = 0.55;                 // player.js STEP_UP
 const NAV_RAMP_EXTRA = 0.45;              // a ramp may rise faster than a step per 0.5 m sub-step
 const NAV_DROP_MAX = 6.0;
+// (W9 R1B pass 3) the per-bot drop limit + steep-face run in requestPath's window planner (PER_BOT_DROP / navDropLim / navDropRun, pass 1b) is
+// REMOVED: it never changed a measured outcome. probe_match --pencheck (the scripted Volcano Rim pen, 3 setups) and the 18-run sweep read the same
+// with it off as on; the routes the pen is planned on there are town-grid routes, which it never touched. The pen fix is edgeGuard's corner rule (EDGE_TURN).
+const CALM_DROP_H = NAV_DROP_MAX + 0.3;     // (W9 R1B) a calm bot's walk-off limit: the planner's own drop limit + 0.3 m of sampling slack (walkDrop)
 const NAV_DROP_COST = 2.0;
 const NAV_LAYER_EPS = 1.0;
 const NAV_MAX_EXPAND = 2600;
@@ -3227,7 +3392,7 @@ const NAV_OPTS = { hw: 1.6, maxExpand: 22000 };
 const NAV_OPTS_PRICE = { hw: 1.6, maxExpand: 22000, noPull: true };       // pickLoot only needs how long a route is: the node chain, without the string pull (the pull is most of a query's replays and garbage)
 const navNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 const navStats0 = () => ({ queries: 0, ms: 0, maxMs: 0, nulls: 0, misses: 0, fallbacks: 0, skipped: 0, picks: 0, pickPaths: 0, pickNulls: 0, pickMiss: 0,
-  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
+  exits: 0, coarseMs: 0, coarseJobs: 0, bgMs: 0, barrierMs: 0, req: [0, 0, 0, 0, 0, 0, 0], fineJobs: 0, fineMs: 0, fineMaxMs: 0, slices: 0, sliceMs: 0, sliceMaxMs: 0, jobSlicesMax: 0, ticksWorked: 0, tickMaxMs: 0, prefetch: 0, needJobs: 0, tiles: 0, areas: 0, hops: 0, houseExits: 0, reversed: 0, coverIn: 0, coverInDoor: 0, coverInFail: 0, routedFrames: 0, stairSearch: 0, offFurn: 0, lootParked: 0, trapBreaks: 0, trapDeck: 0, trapWalk: 0, trapSwim: 0, edgeTurns: 0, edgeEarly: 0, calmOff: 0, calmBreak: 0, calmRoutes: 0, calmLoops: 0, calmLag: 0, calmLagOut: 0, edgeEarlyMemo: 0, trapUnsafe: 0, solidEsc: 0, furnEsc: 0, furnDwell: 0, edgeHolds: 0, edgeSlows: 0, edgeFlights: 0, edgeJumps: 0, frags: 0, smokes: 0, revives: 0, coverRange: 0, smokeCuts: 0, roomDrops: 0, wallSpan: 0, roofQ: 0, error: null });
 nav.st = navStats0();
 
 function navReset() {
@@ -3592,6 +3757,8 @@ function findPathSettled(W, sx, sy, sz, tx, tz, ty) {
 /** Test hook for the lane probes: the live pathfinder (findPath settles grid misses at once, see findPathSettled; findPathGame is the game's). */
 export function debugNav() {
   return { findPath: findPathSettled, findPathGame: findPath, findExit, findPathOld, CELL, GRID_R, wallAhead, navInfo, navBoth,
+    // (W9 R1 fix botpen) the fall guard itself, for p23_fall's turned-heading row: one edgeGuard call on brain b with the input as the caller set it
+    edgeGuard: (W, b) => { edgeGuard(W, b); },
     // (Wave 7b, S1) the heal / fight steering probes, for the probes only: headingBlocked's two halves along a world heading (hx, hz)
     headingBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return headingBlocked(W, wallCols(W, b), b); },
     rampLegBlocked: (W, b, hx, hz) => { _hd.x = hx; _hd.z = hz; return rampLegBlocked(W, wallCols(W, b), b); },
@@ -3880,7 +4047,69 @@ function standAt(W, x, z, y) {
   if (obstacleAt(W, x, z, s)) return NaN;
   return s;
 }
-let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck)
+/* (Wave 9 fix doorstuck) DOORWAYS WITH LEAVES. An open door leaf stands 1.125 m into the room at each jamb of a leafed door (housegen H.doorLeaves): the
+   doorway is a 2.18 m wide, 1.3 m deep slot, not a 0.24 m gap in a wall. The grid knows (it bakes the leaf slabs and replays every leg through the mover), but
+   a window-planner route (findPathOld: a goal out of the grid's reach) has legs that cross the doorway on the slant - a bot following one, or one that turned
+   on an arc onto it, met the jamb or a leaf, the wall probe dropped the route and the bot slid along the wall, then walked in with no route and was sent
+   back out by the room graph (measured: ashgrid seed 1, yard@p3's back door, a 3.6 s loop for 90 s, 7 stuck episodes). So a window route that crosses a
+   leafed doorway passes through two points on the door's axis: FUNNEL_OUT m out on the plain side, FUNNEL_SWING m in on the swing side (past the leaf tips).
+   Grid routes (.nav) and roof exits (.exit) are left alone. Without leaves (every build before Wave 9) nothing changes. */
+const FUNNEL_OUT = 1.0, FUNNEL_SWING = 1.45, FUNNEL_HW = 1.4;     // m; FUNNEL_HW: a leg meeting the door line this near its centre crosses the doorway
+const LD = { built: -1, grid: new Map() };
+function leafDoorsEnsure(W) {
+  if (LD.built === IND.built) return;
+  LD.built = IND.built; LD.grid.clear();
+  const HS = W.map && W.map.houses;
+  if (!Array.isArray(HS)) return;
+  for (const h of HS) {
+    if (!h || !Array.isArray(h.doorLeaves) || !h.doorLeaves.length || !Array.isArray(h.doors)) continue;
+    const byId = new Map(); for (const d of h.doors) byId.set(d.id, d);
+    const seen = new Set();
+    for (const L of h.doorLeaves) {
+      const d = byId.get(L.door);
+      if (!d || seen.has(d.id) || d.nx == null || !L.hinge) continue;
+      seen.add(d.id);
+      const sw = (L.hinge[0] - d.x) * d.nx + (L.hinge[1] - d.z) * d.nz >= 0 ? 1 : -1;     // the swing side: the hinge (a jamb face) is on it
+      const rec = { x: d.x, y: d.y, z: d.z, nx: d.nx, nz: d.nz, sw };
+      const k = indKey(Math.floor(d.x / IND_CELL), Math.floor(d.z / IND_CELL));
+      let l = LD.grid.get(k); if (!l) { l = []; LD.grid.set(k, l); } l.push(rec);
+    }
+  }
+}
+function doorFunnel(W, p, sx, sy, sz) {
+  if (IND.H === null || !p.length) return;
+  leafDoorsEnsure(W);
+  if (!LD.grid.size) return;
+  let px = sx, py = sy, pz = sz;
+  for (let i = 0; i < p.length && i < 64; i++) {
+    const q = p[i], qy = q.y != null ? q.y : py;
+    const c0 = Math.floor(Math.min(px, q.x) / IND_CELL - 0.1), c1 = Math.floor(Math.max(px, q.x) / IND_CELL + 0.1);
+    const r0 = Math.floor(Math.min(pz, q.z) / IND_CELL - 0.1), r1 = Math.floor(Math.max(pz, q.z) / IND_CELL + 0.1);
+    let hit = null, hs = 0, best = 2;
+    for (let cx = c0; cx <= c1; cx++) for (let cz = r0; cz <= r1; cz++) {
+      const l = LD.grid.get(indKey(cx, cz));
+      if (!l) continue;
+      for (const d of l) {
+        if (Math.abs(py - d.y) > 1.5 && Math.abs(qy - d.y) > 1.5) continue;
+        const sp = (px - d.x) * d.nx + (pz - d.z) * d.nz, sq = (q.x - d.x) * d.nx + (q.z - d.z) * d.nz;
+        if (sp * sq >= 0) continue;
+        const s = sp / (sp - sq), ix = px + (q.x - px) * s, iz = pz + (q.z - pz) * s;
+        if (Math.abs((ix - d.x) * -d.nz + (iz - d.z) * d.nx) > FUNNEL_HW || s >= best) continue;
+        best = s; hit = d; hs = sp > 0 ? 1 : -1;
+      }
+    }
+    if (hit) {
+      const dA = hs === hit.sw ? FUNNEL_SWING : FUNNEL_OUT, dB = -hs === hit.sw ? FUNNEL_SWING : FUNNEL_OUT;
+      const sp = (px - hit.x) * hit.nx + (pz - hit.z) * hit.nz, sq = (q.x - hit.x) * hit.nx + (q.z - hit.z) * hit.nz;
+      const ins = [];
+      if (Math.abs(sp) > dA + 0.2) ins.push({ x: hit.x + hit.nx * hs * dA, z: hit.z + hit.nz * hs * dA, y: hit.y });
+      if (Math.abs(sq) > dB + 0.2) ins.push({ x: hit.x - hit.nx * hs * dB, z: hit.z - hit.nz * hs * dB, y: hit.y });
+      if (ins.length) { p.splice(i, 0, ...ins); nav.st.funnels = (nav.st.funnels || 0) + 1; i += ins.length; }
+    }
+    px = q.x; py = qy; pz = q.z;
+  }
+}
+let reqWhy = 0;                   // stats only: who asked (1 progress-stuck, 2 wrong floor, 3 proactive, 4 wall reflex, 5 hard-stuck, 6 calm drop cap: W9)
 function requestPath(W, b, tx, tz, ty, urgent) {
   const bb = b.bb;
   if ((bb.nextPathT || 0) > W.t) return;
@@ -3893,6 +4122,7 @@ function requestPath(W, b, tx, tz, ty, urgent) {
     nav.st.req[reqWhy]++;
   }
   bb.path = findPath(W, a.pos.x, a.pos.y, a.pos.z, tx, tz, ty);
+  if (bb.path && !bb.path.nav && !bb.path.exit) doorFunnel(W, bb.path, a.pos.x, a.pos.y, a.pos.z);   // (Wave 9 fix doorstuck) through a leafed doorway square-on
   bb.nextPathT = W.t + (navMiss ? 1.0 : 2.5);       // (Wave 7) a building tile the route needs is queued: ask again soon
   bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
   bb.noRouteT = (!bb.path && !navMiss) ? W.t : -99;       // (Wave 7, round 2) a real "no way": a bot on a roof may walk off it (deckExitPath)
@@ -4057,6 +4287,14 @@ function moveTowardQ(W, b, dt, sprint, ty) {
       bb.badLoot[bb.lootId] = W.t + 30;
       bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
     }
+  }
+  // (W9 R1B) the calm drop cap held this bot at a lip last frame (edgeGuard -> calmHeld): ask for a route NOW (the leg it walked, if any, is refused);
+  // no route -> calmReplanFailed (after 3: the trap breaker, after 3 more: the hp limit)
+  if (bb.edgeReplan) {
+    bb.edgeReplan = false;
+    if (bb.path) { bb.path = null; bb.pathGoal = null; }
+    reqWhy = 6; bb.nextPathT = 0; requestPath(W, b, tx, tz, ty, true);
+    if (bb.path) { nav.st.calmRoutes++; bb.calmRpT = W.t; bb.calmRpX = a.pos.x; bb.calmRpZ = a.pos.z; } else calmReplanFailed(W, b);
   }
   // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
   // Drop the plan when the caller's goal has moved well away from the one the
@@ -5177,7 +5415,17 @@ function edgeGuard(W, b) {
   // without the heading arithmetic (every number of it was a heap box while this ran unoptimized: tierprof's first window after the landing)
   if (bb.edgeAir && a.onGround) { bb.edgeAir = false; bb.edgeT = W.t; }
   if (W.t < bb.edgeWalkUntil) inp.sprint = false;       // (R3 steer) a slope this bot may walk down but not sprint down: walked until the next look says otherwise
-  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || W.t < bb.edgeT)) return;
+  // (W9 R1 fix botpen) A JUMP IS A FLIGHT TOO. The probes below judge the legs (a walk off, a run's flight from rest); a hop asked this frame - actMove's
+  // obstacle hop (support 0.55-2.2 m up, 1.4 m ahead), the stuck hop, a fight's hop - leaves the ground at jumpV and lands from its apex. p23_fall
+  // lips, isla_viva seed 77, s14 at 10 hp fleeing downhill at a sprint (ground 36.3 m) hopped at a rock: apex 37.8, landed on 30.6 m terrain 4 m
+  // on - 7.2 m, 19 hp, dead. Every frame a jump is asked on the ground: the hop's arc (jumpLandsFrom) against the drop this bot may fall; a hop that
+  // lands lower than that is not made (the legs keep the heading; the probes still judge them).
+  if (inp.jump && a.onGround && !jumpArcSafe(W, a, inp)) { inp.jump = false; nav.st.edgeJumps++; }
+  // (W9 R1 fix botpen) ...unless the heading TURNED since the last probe: the probe is due at once (edgeTurned). p23_fall lips, isla_viva seed 7, s48 at
+  // 10 hp 0.8 m from an 8.2 m lip: held 1 s heading straight over it, then FLEE turned 50 deg (still 0.45 toward the lip) with the next probe
+  // 0.15 s away - the turned heading was never probed, the bot sprinted off at once and was in the air 0.17 s later (6.7 m, 14 hp, dead). Whether
+  // a probe fell inside those 0.17 s was the frame phase of the turn: the row died 1 run in 2.
+  if (!(W.t < bb.edgeBanUntil) && (!a.onGround || (W.t < bb.edgeT && !edgeTurned(inp, bb)))) return;
   const B = basisOf(inp, _mb0);
   let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
   const m = Math.sqrt(wx * wx + wz * wz);         // hyp, inlined (R3 steer, tierprof kb: a call with double arguments boxes them)
@@ -5186,12 +5434,13 @@ function edgeGuard(W, b) {
   // (a held heading holds the jump too, and holds in the air: stub duo 10-26, Isla seed 2, a camper held at a 10 m lip hopped - the state's step
   // hop - and the next airborne frames' air control carried it over the lip it was being held at)
   if (W.t < bb.edgeBanUntil && wx * bb.edgeBanX + wz * bb.edgeBanZ > 0.7) { inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false; return; }
-  if (!a.onGround || W.t < bb.edgeT) return;
+  if (!a.onGround || (W.t < bb.edgeT && !edgeTurned(inp, bb))) return;
   // (the probe interval and the look-ahead scale with the speed: at a sprint's ~8 m/s a 0.25 s probe let the bot travel 2 m between looks, and the
   // lip of a face first seen in the 4th sample was already under its feet at the next look - stub duo 10-26, Isla seed 2: s11 fleeing at 20 hp
   // found the face at 0.8 m, too late to stop, and fell 10 m; s43 following at 30 hp crossed a slope break at speed, flew, and met the face airborne)
   const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z);
   bb.edgeT = W.t + (spd > 4 ? 0.15 : 0.25);
+  bb.edgeYaw = inp.yaw; bb.edgeMz = inp.mz; bb.edgeMx = inp.mx;     // the heading this probe judged (edgeTurned)
   const lim = walkDrop(a);
   if (!(lim < 1e6)) return;
   GA[0] = a.pos.x; GA[1] = a.pos.z; groundA(W, GA, 0);
@@ -5204,7 +5453,7 @@ function edgeGuard(W, b) {
   // NOW: a bot held at a lip stands still when its hold ends and is back at 7.8 m/s 0.4 s later (sq_duo6, Isla seed 5: a follower at 12 hp
   // on a rock top - window 3 - ran the 2.8 m to the lip it had been held at). 6 samples on the ground, 4 up on a collider
   const win = elevated ? 4 : 6, kMax = win + (elevated ? 6 : 10);
-  let runTop = NaN, prev = a.pos.y;
+  let runTop = NaN, prev = a.pos.y, kTop = 0;
   for (let k = 1; k <= kMax; k++) {
     const px = a.pos.x + wx * 0.8 * k, pz = a.pos.z + wz * 0.8 * k;
     let sup;
@@ -5212,12 +5461,18 @@ function edgeGuard(W, b) {
     else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
     if (wyE != null && sup < wyE) sup = wyE;      // water breaks a fall
     const steep = prev - sup > STEEP_STEP;
-    if (steep && runTop !== runTop && k <= win) runTop = prev;
+    if (steep && runTop !== runTop && k <= win) { runTop = prev; kTop = k; }
     if ((k <= 3 && a.pos.y - sup > lim) || (runTop === runTop && runTop - sup > lim)) {
+      // (W9 R1B) ...unless the bot's ROUTE turns before it gets there: a path that runs along the top of a face (its corner waypoint 2 m short of
+      // the lip, the next leg along it) was held at the look-ahead's 4.8 m, every look, and never reached the corner (probe_match isla_viva seed 5:
+      // s19 held at (-69.6, -78) heading for the corner (-71.6, -77.6) of a route north along a 8.4 m face - 3-4 stuck episodes). It WALKS to the
+      // corner (no sprint, the next look 0.25 s on); past the corner the next leg's heading is looked at as any other.
+      if (EDGE_TURN && routeTurnsBefore(W, b, wx, wz, 0.8 * ((runTop === runTop ? kTop : k) - 1), elevated)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
       bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
       inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
       bb.nextPathT = 0;
       nav.st.edgeHolds++;
+      if (bb.calmDrop) calmHeld(W, b, k <= 3 && a.pos.y - sup > lim ? a.pos.y - sup : runTop - sup);
       return;
     }
     if (a.pos.y - sup < -1.0 && runTop !== runTop) break;                     // rising ground / a wall: no edge this way
@@ -5247,10 +5502,114 @@ function edgeGuard(W, b) {
   FLQ[0] = wx; FLQ[1] = wz; FLQ[2] = spd > uT ? spd : uT; FLQ[3] = lim; FLQ[4] = win * 0.8;
   if (flightSafe(W, a)) return;
   if (FLQ[2] > walkV + 0.25) { FLQ[2] = walkV; if (flightSafe(W, a)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.6; nav.st.edgeSlows++; return; } }
+  // (W9 R1 fix botpen) the corner rule here too: the flight test looks 16 m down this heading, past a route corner the bot turns at (probe_match
+  // --pencheck setup 3: s18 sprinting west 2.96 m short of the corner (-72.4, -77.6), the lip's steep run starting past the look's 6-sample window -
+  // the flight test held it, every look, never the lip test with its corner rule: 3 stuck episodes, never reached). The corner inside the look's
+  // window, its walk and run-on clear (routeTurnsBefore): walked to the corner, as at a lip.
+  if (EDGE_TURN && routeTurnsBefore(W, b, wx, wz, FLQ[4], false)) { inp.sprint = false; bb.edgeWalkUntil = W.t + 0.3; nav.st.edgeTurns++; return; }
   bb.edgeBanX = wx; bb.edgeBanZ = wz; bb.edgeBanUntil = W.t + 0.6;
   inp.mz = 0; inp.mx = 0; inp.sprint = false; inp.jump = false;
   bb.nextPathT = 0;
   nav.st.edgeHolds++; nav.st.edgeFlights++;
+  if (bb.calmDrop) { FLQ[2] = walkV; FLQ[3] = walkDropHp(a); if (flightSafe(W, a)) calmHeld(W, b, 0); }
+}
+/** (W9 R1 fix botpen) The legs' heading moved since edgeGuard's last probe: the yaw by more than EDGE_RETURN_YAW rad, or the move stick by more than
+ *  EDGE_RETURN_STICK (|dmz| + |dmx|) - the probe interval assumed the heading it judged. Plain compares of the input numbers (no heading arithmetic). */
+const EDGE_RETURN_YAW = 0.2, EDGE_RETURN_STICK = 0.25;
+function edgeTurned(inp, bb) {
+  const dy = inp.yaw - bb.edgeYaw, dm = inp.mz - bb.edgeMz, dx = inp.mx - bb.edgeMx;
+  return dy > EDGE_RETURN_YAW || dy < -EDGE_RETURN_YAW || (dm < 0 ? -dm : dm) + (dx < 0 ? -dx : dx) > EDGE_RETURN_STICK;
+}
+/** (W9 R1B) edgeGuard's corner rule: the bot is heading (wx, wz) for its path's next waypoint, on its own level, short of the face (faceD m ahead,
+ *  the look's last level sample), and the route turns there (the next leg leaves this heading by more than 45 deg) - the face is not on the route.
+ *  (W9 R1 fix botpen) The run-on past the corner is measured FROM THE CORNER, not from the look's 0.8 m samples: the old test (corner + EDGE_TURN_M
+ *  <= faceD) read the face 0-0.8 m early depending on where the bot stood when it looked, and a bot held at the first look stands still, so every
+ *  later look read the same: probe_match --pencheck on the doors world (isla_viva seed 5, s18 sprinting due west along z -77.6) was held at
+ *  (-69.5, -77.6), 2.49 m short of the corner (-72, -77.5), the lip at -73.7 sampled at faceD 4.0 < 2.49 + 1.6 - held for good (1 stuck episode,
+ *  never reached). Now: from the corner along the heading, every 0.2 m out to EDGE_TURN_M + 0.2, the ground (the support on a deck) falls no
+ *  more than EDGE_TURN_STEP per step - the lip at least ~EDGE_TURN_M past the corner, wherever the bot stands. */
+const EDGE_TURN = true;           // false = every face in the look-ahead holds the bot, as before W9 (probe_match --pencheck --plant no-pen-fix: MUST FAIL)
+const EDGE_TURN_M = 1.1;          // the corner at least this short of the face. (fix botpen) Was 1.6 read at 0.8 m resolution (1.6-2.4 m in effect);
+                                  // now exact to 0.2 m: a walk's run-on past the corner is walk x accelT - 0.55 m consumed early = 6 x 0.13 - 0.55 =
+                                  // 0.23 m, so a 1.1 m gap keeps the feet >= 0.85 m off the lip (the grid routes Isla seed 5 north along the top at
+                                  // x -72.4, 1.3 m in from the lip at -73.7: the 1.6 m rule held s18 at its corner for good)
+const EDGE_TURN_K = Math.round((EDGE_TURN_M + 0.2) / 0.2);   // 0.2 m steps from the corner
+const EDGE_TURN_STEP = 0.225;     // a 0.2 m step falling more than this is the face: STEEP_STEP (0.9 m per 0.8 m sample, ~48 deg) per 0.2 m
+function routeTurnsBefore(W, b, wx, wz, faceD, elevated) {
+  const P = b.bb.path, a = b.actor;
+  if (!P || P.length < 2) return false;
+  // (W9 R1 fix botpen) the corner is the first waypoint where the route TURNS, not only the next one: a grid route lays a waypoint every 1.5 m along
+  // a straight leg, so the corner of the pen's route (-72.4, -77.6) sat behind (-70.9, -77.6) on the same line (pencheck setup 3: held at the first).
+  // Waypoints on this heading (within 18 deg) and on the bot's level are walked through, up to 4 of them.
+  let p = null, q = null, dx = 0, dz = 0, d = 0, pi0 = -1;
+  for (let i = 0; i + 1 < P.length && i < 4; i++) {
+    const pi = P[i];
+    if (pi.y == null || Math.abs(pi.y - a.pos.y) > 0.6) return false;
+    const ix = pi.x - a.pos.x, iz = pi.z - a.pos.z, id = Math.sqrt(ix * ix + iz * iz);
+    if (id > faceD || (id >= 0.3 && (ix * wx + iz * wz) < 0.95 * id)) return false;
+    const qi = P[i + 1], ex = qi.x - pi.x, ez = qi.z - pi.z, e = Math.sqrt(ex * ex + ez * ez);
+    if ((e > 0.3 && (ex * wx + ez * wz) < EDGE_TURN_COS * e) || pi.edgeTurn) { p = pi; q = qi; dx = ix; dz = iz; d = id; pi0 = i; break; }
+  }
+  if (!p || d < 0.3) return false;
+  const wy = W.map.waterY, wyN = wy != null ? +wy : -1e9;
+  // (W9 R1 fix botpen) the walk TO the corner: every 0.2 m from the feet to the corner, no step falling more than EDGE_TURN_STEP and no ground more
+  // than 1 m under the feet (no face, no ditch, no flight on the way)
+  const nW = Math.ceil(d / 0.2);
+  let prev = a.pos.y;
+  for (let k = 1; k <= nW; k++) {
+    const f = k / nW, px = a.pos.x + dx * f, pz = a.pos.z + dz * f;
+    let sup;
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = a.pos.y; supportA(W, SPQ, 0); sup = SPQ[3]; }
+    else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
+    if (sup < wyN) sup = wyN;
+    if (prev - sup > EDGE_TURN_STEP || a.pos.y - sup > 1.0) return false;
+    prev = sup;
+  }
+  if (runOnClear(W, p.x, p.z, wx, wz, a.pos.y, elevated)) return true;
+  // (W9 R1 fix mergefix) EARLY TURN. A grid route's corner can sit closer to the lip than EDGE_TURN_M (the grid certifies the legs, not the run-on
+  // past a corner: isla_viva seed 1, s21 on Coco Village's terrace, the corner (-3.8, 1.7) 0.6 m from a 5 m face, every look held - 2 of its 5
+  // stuck episodes, the merged build's sweep row). The turn is moved back along this heading to the first point whose run-on is clear (0.2 m steps,
+  // up to EDGE_EARLY_M, never behind the bot or the waypoint before it), and only where the grid's own walk (navgrid walkSegment, the mover replayed)
+  // certifies the cut leg from there to the next waypoint. The new waypoint is a corner by mark (edgeTurn): the cut leg turns less than 45 deg.
+  if (!EDGE_EARLY || !P.nav || !nav.ready || !nav.G || !nav.world || elevated) return false;
+  // (W9 R1 fix2 mergefix) a failed search is remembered on the waypoint: the same heading (within ~1.8 deg) from no farther away has a subset of
+  // the same candidates on the same static ground and grid, so a bot held at a lip does not repeat up to 6 run-on scans + 6 walkSegment replays
+  // on every edgeGuard probe (a new route = new waypoint objects = a fresh search).
+  if (p.eeNoD != null && d <= p.eeNoD + 1e-6 && wx * p.eeNoWx + wz * p.eeNoWz >= 0.9995) { nav.st.edgeEarlyMemo++; return false; }
+  const back = pi0 > 0 ? Math.hypot(p.x - P[pi0 - 1].x, p.z - P[pi0 - 1].z) - 0.3 : d - 0.3;
+  for (let s = 0.2; s <= EDGE_EARLY_M + 1e-6 && s <= back && s <= d - 0.3; s += 0.2) {
+    const cx = p.x - wx * s, cz = p.z - wz * s;
+    if (!runOnClear(W, cx, cz, wx, wz, a.pos.y, false)) continue;
+    let ok = null;
+    try { ok = nav.G.walkSegment(nav.world, cx, p.y, cz, q.x, q.z); } catch (err) { ok = null; }
+    if (!ok || (q.y != null && Math.abs(ok.y - q.y) > 0.6)) continue;
+    P[pi0] = Object.assign({}, p, { x: cx, z: cz, edgeTurn: true });
+    nav.st.edgeEarly++;
+    return true;
+  }
+  p.eeNoD = d; p.eeNoWx = wx; p.eeNoWz = wz;
+  return false;
+}
+const EDGE_TURN_COS = 0.95;       // (W9 R1 fix mergefix) a waypoint where the route turns by more than 18 deg is a corner (was 45 deg: the Coco Village terrace
+                                  // corner turns 34 deg off a heading whose look meets the face 0.6 m past it - no corner, held at every look; the walk is
+                                  // only ever allowed TO the corner, its run-on clear, and the next heading is looked at as any other)
+const EDGE_EARLY = true;          // (W9 R1 fix mergefix) false = a corner too near the lip holds the bot, as before (probe_match --sweep --plant no-early-turn)
+const EDGE_EARLY_M = 1.2;         // the turn is moved back at most this far (a grid route lays its waypoints 1.5 m apart)
+/** (W9 R1 fix botpen / mergefix) edgeGuard's run-on rule: from (x, z) along (wx, wz), every 0.2 m out to EDGE_TURN_M + 0.2, the ground (the support
+ *  on a deck, read at the bot's height y) falls no more than EDGE_TURN_STEP per step. */
+function runOnClear(W, x, z, wx, wz, y, elevated) {
+  const wy = W.map.waterY, wyN = wy != null ? +wy : -1e9;
+  let prev = NaN;
+  for (let k = 0; k <= EDGE_TURN_K; k++) {          // the corner, then 0.2 m steps to EDGE_TURN_M + 0.2
+    const px = x + wx * 0.2 * k, pz = z + wz * 0.2 * k;
+    let sup;
+    if (elevated) { SPQ[0] = px; SPQ[1] = pz; SPQ[2] = y; supportA(W, SPQ, 0); sup = SPQ[3]; }
+    else { GA[0] = px; GA[1] = pz; groundA(W, GA, 0); sup = GA[2]; }
+    if (sup < wyN) sup = wyN;
+    if (k > 0 && prev - sup > EDGE_TURN_STEP) return false;
+    prev = sup;
+  }
+  return true;
 }
 /** (R3 steer) Walk the heading FLQ = [wx, wz, u, lim, dmax] from the feet in 2-tick steps at u m/s over the terrain (water floors it): on the ground
  *  while the ground falls less than 0.1 m a step (player.js leaves the ground past that), in the air under gravity once it falls more, and every
@@ -5278,6 +5637,31 @@ function flightSafe(W, a) {
     }
   }
   return true;
+}
+/** (W9 R1 fix botpen) The hop asked this frame, flown: from the feet at jumpV up, along the legs' heading at the bot's speed (at least a walk), under
+ *  gravity, landing on the support under it (a rock or a roof it lands on is support: supportA), 2-tick steps; false = it lands more than the drop
+ *  this bot may fall (walkDrop) under the arc's apex. Terrain and colliders, no rng draw; runs only on a frame a hop is asked. */
+function jumpArcSafe(W, a, inp) {
+  if (!LETHAL_H) return true;
+  const lim = walkDrop(a);
+  if (!(lim < 1e6)) return true;
+  const B = basisOf(inp, _mb1);
+  let wx = B.fx * inp.mz + B.rx * inp.mx, wz = B.fz * inp.mz + B.rz * inp.mx;
+  const m = Math.sqrt(wx * wx + wz * wz);
+  if (m < 0.05) return true;                              // a hop on the spot lands where it left
+  wx /= m; wz /= m;
+  const spd = Math.sqrt(a.vel.x * a.vel.x + a.vel.z * a.vel.z), walkV = K.MOVE.walk, u = spd > walkV ? spd : walkV;
+  const g = Math.abs((K.MOVE && K.MOVE.gravity) || 22), dt = 2 / 30, wy0 = W.map.waterY, wy = wy0 != null ? +wy0 : -1e9;
+  let x = a.pos.x, z = a.pos.z, y = a.pos.y, vy = (K.MOVE && K.MOVE.jumpV) || 7.8, top = y;
+  for (let n = 0; n < 60; n++) {
+    x += wx * u * dt; z += wz * u * dt; y += vy * dt; vy -= g * dt;
+    if (y > top) top = y;
+    if (vy > 0) continue;
+    SPQ[0] = x; SPQ[1] = z; SPQ[2] = y; supportA(W, SPQ, 0);
+    const sup = SPQ[3] < wy ? wy : SPQ[3];
+    if (y <= sup) return !(top - sup > lim);
+  }
+  return false;                                           // still falling after 4 s: no landing it may take
 }
 /** (C-FALL) a fight's hop lands where it was: no ground more than 2.5 m lower along the run or the strafe within a hop's 4.5 m (stub duo 10-26,
  *  Isla seed 2: a bot strafe-hopping on a hilltop at 56 hp was shot to 5 in the air and the hop carried it over a 9 m lip). Terrain only. */
@@ -5367,6 +5751,14 @@ function shieldGoal(a, n) {
  *  (SHIELD_FAR_DY), inside the next circle (6 m in from its edge: the walk there is a walk the storm wants anyway), that this bot has not
  *  failed to reach (badLoot), with headroom over it and on this bot's shore. One query per 2 s per calm bot at the cap with no big shield. */
 const SHIELD_FAR_M = 220, SHIELD_FAR_DY = 60;
+// (W9 R1B, OD-16) the reserve-big trigger (think: wantBig) and the far scan at any bar; WANT_BIG false = the pre-W9 rules.
+// (W9 R1B pass 2) OFF: with it on, p23_tierprof kb [ashgrid ultra] read 97-101 KB/frame (bar 85; off: 77) - the far walks put more bots in fights
+// inside the profiled window - and it bought no shield (botbatch 24 shield-600: on 12, off 25 vs bar 75). OD-16 parks the shield economy.
+// PARKED PER OD-16 (KNOWN GAP, owner 2026-11-02): WANT_BIG stays false. Every WANT_BIG branch (wantBig in think, the far scan at any bar,
+// claimFree / shieldClaims below) is parked code that does not run in this build; the shield-600 row stays registered and red. Do not turn it
+// on without re-running p23_tierprof kb [ashgrid ultra] and p23_botbatch.
+const WANT_BIG = false;
+const WANT_BIG_T = 420;           // from this match time (the batch measures from 600 s: a reserve picked up at 420-600 s refills the bar after the 600 s fights)
 function farShield(W, a) {
   if (!W.nearbyLoot) return null;
   let cx = 0, cz = 0, cr = Infinity;
@@ -5382,10 +5774,24 @@ function farShield(W, a) {
     if (bad && bad[n.id] > W.t) continue;
     if (cr < Infinity && hyp(n.pos.x - cx, n.pos.z - cz) > cr) continue;
     if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data) && !shieldNeedsRoom(W, a, n.data)) continue;
+    if (n.type === "item" && WANT_BIG && !claimFree(W, n.id, a)) continue;          // (W9 R1B, OD-16) another bot is on its way to it
     if (lowCeiling(W, n.pos.x, n.pos.y, n.pos.z) || offShore(W, a, n.pos)) continue;
+    if (n.type === "item" && WANT_BIG) shieldClaims.set(n.id, a.id);
     return n;
   }
   return null;
+}
+/** (W9 R1B, OD-16) CLAIM, NOT STAMPEDE: a far big shield is claimed by the bot the far scan sent for it, so two bots do not walk 200 m to the same
+ *  item (the second takes the next candidate). A claim holds while its bot is alive and that item is still its shield goal (bb.shieldGo): picked
+ *  up, given up (badLoot, no longer wanted) or dead, it is free again. Cleared every match (spawnBrains). */
+const shieldClaims = new Map();
+function claimFree(W, id, a) {
+  const by = shieldClaims.get(id);
+  if (by === undefined || by === a.id) return true;
+  const o = W.actorById.get(by), g = o && o.alive && o.brain ? o.brain.bb.shieldGo : null;
+  if (g && g.id === id && o.brain.bb.wantShield) return false;
+  shieldClaims.delete(id);
+  return true;
 }
 /** (final, OD-13) THE DEATH-PILE SHIELD SCAN: the best shield item still in a death pile (W.pileShields) within PILE_SHIELD_M, any slope up to
  *  PILE_SHIELD_DY, that adds to this bar (shieldGoal), that the bag would take (or make room for), not under a low ceiling or off-shore, not one

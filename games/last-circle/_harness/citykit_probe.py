@@ -295,7 +295,7 @@ def main_fn(v, args):
         return ref == M["colliders"], "%d boxes in the browser, %d in Node; first difference at index %s" % (
             len(M["colliders"]), len(ref), next((i for i, (a, b) in enumerate(zip(ref, M["colliders"])) if a != b), "none"))
     guarded("colliders-node", r_colliders_node)
-    guarded("collider-shape", lambda: (M["colliderKeys"] == ["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs"], "keys %s" % M["colliderKeys"]))
+    guarded("collider-shape", lambda: (M["colliderKeys"] == ["kind", "minX", "maxX", "minY", "maxY", "minZ", "maxZ", "dir", "prop", "idx", "hp", "dead", "_qs", "door", "dslab"], "keys %s" % M["colliderKeys"]))
 
     def r_glb_fail():
         gl, nom = FP["gl"], FP["nomanifest"]

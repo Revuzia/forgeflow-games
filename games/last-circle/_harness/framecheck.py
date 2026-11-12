@@ -306,7 +306,12 @@ def mdelta(m0, m1, nf):
 
 TRIS_VS_LIVE = 1.25                       # same factor as perf_district's tris-vs-baseline
 LIVE_RELATIVE_MAPS = ("isla_viva", "ashgrid", "deepwood")       # Wave 7b: Isla Viva too (its towns are new); it ALSO keeps the absolute 1.5 M bar below
-FRAME1_VERSION = 1                       # bump when the drop-frame-1 measurement below changes (it names the cached baseline files)
+FRAME1_VERSION = 2                       # bump when the drop-frame-1 measurement below changes (it names the cached baseline files)
+# v2 (W9 R1A 1b): the live record carries its landing zone (the human's x, z on the drop, before frame 1) and the candidate's drop frame 1 is rendered from
+# THAT spot. Without a pick the drop spot is the quietest POI by the bots' dropTargets, which moves whenever the seeded world does (W9 housegen v6: ashgrid
+# branch -429,387 vs live 60,-423; deepwood 300,-80 vs 60,-520) - the row then compared two different views (x2.23 / x2.34 with the SAME draws: branch at
+# the live LZ x1.000, live at the branch LZ x0.976 / x1.000). Pinned, both builds draw the same view; the bar stays x1.25. The candidate goes back to its own
+# spot right after frame 1, so every later row runs exactly as before.
 
 
 def git_sha(rev):
@@ -314,6 +319,11 @@ def git_sha(rev):
     if not sha:
         raise C.HarnessError("unknown git revision %r" % rev)
     return sha
+
+
+LZ_JS = "() => { const p = window.__LC__.W.player; return [p.pos.x, p.pos.z]; }"
+# put the human (and so the drop camera, which follows it on the next rendered frame) at x, z; returns where it was
+PIN_LZ_JS = r"""([x, z]) => { const p = window.__LC__.W.player, was = [p.pos.x, p.pos.z]; p.pos.x = x; p.pos.z = z; if (p.obj) p.obj.position.copy(p.pos); return was; }"""
 
 
 def live_frame1(args):
@@ -334,10 +344,11 @@ def live_frame1(args):
         s.js(STUB_DRAWS_JS)
         s.js(ATTR_JS)
         s.start_match("standard", args.seed, args.map, enter=True)
+        lz = s.js(LZ_JS)
         s.js("() => { window.__FC__.want = true; }")
         s.step_frames(1, 1 / 60, render=True)
         f1 = s.js("() => window.__FC__.last")
-    d = {"tris": f1["tris"], "calls": f1["calls"], "newPrograms": f1["newPrograms"], "sha": sha, "map": args.map, "seed": args.seed, "cached": False}
+    d = {"tris": f1["tris"], "calls": f1["calls"], "newPrograms": f1["newPrograms"], "sha": sha, "map": args.map, "seed": args.seed, "lz": lz, "cached": False}
     os.makedirs(C.REPORTS, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(d, fh)
@@ -405,10 +416,16 @@ def main():
             if args.plant == "extra-tris":
                 import perf_district as PD
                 v.info("plant extra-tris", s.js(PD.PLANT_JS, ["extra-tris", 24]))   # 24 x 81,920 tris = +1.97 M: the Wave-7 completion city draws ~1.3 M on its drop frame (the live build 2.08 M), so +1.97 M reads ~x1.6 of live; the bar is x1.25
-            # ---- drop frame 1 (the first rendered frame of the drop)
+            # ---- drop frame 1 (the first rendered frame of the drop), from the live build's landing zone when one is known (FRAME1_VERSION 2)
+            own_lz = None
+            if lv is not None and lv.get("lz"):
+                own_lz = s.js(PIN_LZ_JS, lv["lz"])
+                v.info("drop frame 1 landing zone pinned to the live build's", {"live": [round(c, 1) for c in lv["lz"]], "candidateOwn": [round(c, 1) for c in own_lz]})
             s.js("() => { window.__FC__.want = true; }")
             s.step_frames(1, 1 / 60, render=True)
             f1 = s.js("() => window.__FC__.last")
+            if own_lz is not None:
+                s.js(PIN_LZ_JS, own_lz)        # back to its own drop spot: the later rows run as before
             v.data["dropFrame1"] = f1
             att = f1.get("attr") or {}
             sh_act = attr_sum(att, lambda k: k.startswith("shadow:actor"), 1)
@@ -421,7 +438,8 @@ def main():
                     ratio = f1["tris"] / lv["tris"] if lv["tris"] else 0
                     v.data["liveFrame1"] = lv
                     v.check("drop frame 1: total tris <= %.2f x the live build" % TRIS_VS_LIVE, bool(lv["tris"]) and ratio <= TRIS_VS_LIVE,
-                            {"tris": f1["tris"], "calls": f1["calls"], "liveTris": lv["tris"], "liveCalls": lv["calls"], "liveSha": lv["sha"][:8], "ratio": round(ratio, 3), "cachedBaseline": lv["cached"]},
+                            {"tris": f1["tris"], "calls": f1["calls"], "liveTris": lv["tris"], "liveCalls": lv["calls"], "liveSha": lv["sha"][:8], "ratio": round(ratio, 3), "cachedBaseline": lv["cached"],
+                             "lzPinned": bool(own_lz is not None), "lz": [round(c, 1) for c in (lv.get("lz") or [])]},
                             expect="<= %.2f x the live build's drop frame 1 on this map (the absolute 1.5 M bar is calibrated on isla_viva, 1.0 M)" % TRIS_VS_LIVE)
             if args.map == "isla_viva":
                 v.check("drop frame 1: total tris < 1.5 M", f1["tris"] < 1_500_000, {"tris": f1["tris"], "calls": f1["calls"]}, expect="< 1.5 M (was 9.91 M)")

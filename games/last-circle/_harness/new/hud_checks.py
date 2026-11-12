@@ -34,6 +34,11 @@ PHONES + TABLETS (touch forced, 667x375 / 852x393 / 915x412 / 1180x820 / 1024x60
   post-match   the standings are reachable by scrolling, every button >= 44 px, 0 fonts < 12 px, 0 clipped
 FALLBACK (assets/hud/*.png answer 404): the kill feed row reads "killer > victim . Weapon" in text, the weapon card shows
   the rendered 3D thumb, and the game still boots and plays (the one expected 404 is listed, not hidden).
+EDGES (W9 R1 fix hudfeel; 1280x720, the same isla_viva match): the world-anchored loot pills are CLAMPED into the viewport. The player stands
+  4 m from the nearest loot and turns until that loot's anchor projects at the right edge (NDC x +0.99) and then the left edge (-0.99): every
+  drawn loot pill is inside the viewport (0 clipped). Could-not-judge when no loot is within 250 m, the anchor cannot be brought within 0.03 of
+  the edge, or no pill is drawn. Falsifier: `--only edges --plant pill-unclamped` (hud.js served without the horizontal clamp) MUST FAIL it.
+  (the pills are also hidden while the local player is dead - recorded as info here; the phone death rows' 0-clipped check covers it)
 """
 from __future__ import annotations
 
@@ -197,6 +202,113 @@ def start_landed(s, seed=7, map_id="isla_viva", mode="standard", guard_first=Fal
     if guard_first:
         info["guardBeforeEnter"] = st.get("guardBeforeEnter")
     return info
+
+
+# ───────────────────────────────────────── edges (W9 R1 fix, hudfeel) ─────────────────────────────────────────
+# the player 4 m from the nearest loot (searched out to 250 m); the loot record is kept for the aim loop
+EDGE_MOVE_JS = r"""() => { const W = window.__LC__.W, p = W.player;
+  let near = [];
+  for (const R of [9, 30, 60, 120, 250]) { near = W.nearbyLoot(p.pos, R); if (near.length) break; }
+  if (!near.length) return null;
+  const n = near[0], x = n.pos.x + 4, z = n.pos.z;
+  p.pos.set(x, W.map.heightAt(x, z), z); p.vel.set(0, 0, 0); if (p.obj) p.obj.position.copy(p.pos); p.input.pitch = 0;
+  window.__EDGE__ = { n, ay: n.pos.y + (n.type === 'chest' ? 1.0 : 0.55) };
+  return { type: n.type, at: [+x.toFixed(2), +z.toFixed(2)] }; }"""
+# where the kept loot's anchor projects now (the HUD's own anchor height), and every loot pill drawn (hud.js R.lootLbls: the absolutely positioned,
+# transform-placed 7 px-radius pills), with the count outside the viewport
+EDGE_READ_JS = r"""() => { const W = window.__LC__.W, cam = W.camera, c = window.__EDGE__; cam.updateMatrixWorld(true);
+  const v = new W.THREE.Vector3(c.n.pos.x, c.ay, c.n.pos.z).project(cam);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const pills = [...document.querySelectorAll('div')].filter((e) => e.style.willChange === 'transform' && e.style.position === 'absolute' && e.style.display === 'block' && e.style.borderRadius === '7px')
+    .map((e) => { const r = e.getBoundingClientRect(); return { t: e.textContent, r: [r.left, r.top, r.right, r.bottom].map(Math.round) }; });
+  return { vw, vh, ndc: [+v.x.toFixed(3), +v.y.toFixed(3)], z: +v.z.toFixed(3), pills, clipped: pills.filter((p) => p.r[0] < 0 || p.r[2] > vw || p.r[1] < 0 || p.r[3] > vh) }; }"""
+EDGE_CLAMP_LINE = rb"lx = Math.min(Math.max(lx, hw + LOOT_EDGE), sw - hw - LOOT_EDGE);"
+
+
+def plant_pill_unclamped(s):
+    """pill-unclamped: serve hud.js without the loot pill's horizontal viewport clamp (the 8eaae688 behaviour: a pill hangs past the edge).
+    A PAGE route over the run's own bytes (--disk working copy / --rev blob / the server), the same mechanism as feelcheck's kill-marker-short."""
+    import urllib.parse
+    st = {"served": 0, "patched": 0, "err": None}
+
+    def handler(route):
+        try:
+            u = urllib.parse.urlparse(route.request.url)
+            if s.disk is not None:
+                rel = urllib.parse.unquote(u.path[len(C.GAME_PATH):])
+                if s.disk.git is not None:
+                    body = s.disk.git.read(rel)
+                else:
+                    p = C.disk_file_for(u.path)
+                    body = open(p, "rb").read() if p else None
+            else:
+                body = route.fetch().body()
+            if body is None:
+                return route.fallback()
+            n = body.count(EDGE_CLAMP_LINE)
+            body = body.replace(EDGE_CLAMP_LINE, b"/* PLANTED pill-unclamped: no horizontal clamp */", 1)
+            st["served"] += 1
+            st["patched"] += min(n, 1)
+            route.fulfill(status=200, body=body, headers={"Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store",
+                                                          "Access-Control-Allow-Origin": "*"})
+        except Exception as e:
+            st["err"] = str(e)[:200]
+            route.fallback()
+    s.page.route(lambda url: "/runtime/3d/royale/hud.js" in url, handler)
+    return st
+
+
+def edges(v, args):
+    name = "edges 1280x720: a loot pill whose anchor projects at the screen edge (NDC x +/-0.99) stays inside the viewport (clamped, 0 clipped)"
+    with C.Session(args, "hud_checks-edges", viewport={"width": 1280, "height": 720}) as s:
+        plant = None
+        if args.plant == "pill-unclamped":
+            plant = plant_pill_unclamped(s)
+            v.note("PLANTED FAULT: hud.js served without the loot pill's horizontal viewport clamp (the edges row MUST fail)")
+        s.boot()
+        if plant is not None:
+            v.info("plant applied", dict(plant))
+            if not plant["patched"]:
+                v.cnj(name, "the clamp line was not found / not served (%s) - nothing planted" % plant)
+                return
+        v.info("landed (setup, protected)", start_landed(s))
+        s.freeze_loop()
+        mv = s.js(EDGE_MOVE_JS)
+        if not mv:
+            v.cnj(name, "no loot within 250 m of the landed player")
+            return
+        step(s, 30, render=True)
+        rows, bad = [], None
+        for target in (0.99, -0.99):
+            sgn, prev, r = 1.0, None, None
+            for it in range(14):                       # turn until the anchor sits at the edge (secant-free: flip the turn if the error grew)
+                step(s, 8, render=True)
+                r = s.js(EDGE_READ_JS)
+                ex = target - r["ndc"][0]
+                if prev is not None and abs(ex) > abs(prev):
+                    sgn = -sgn
+                prev = ex
+                if abs(ex) < 0.012:
+                    break
+                s.js("(dy) => { window.__LC__.W.player.input.yaw += dy; }", sgn * ex * 0.5)
+            step(s, 8, render=True)
+            r = s.js(EDGE_READ_JS)
+            r["target"] = target
+            rows.append(r)
+            if abs(r["ndc"][0] - target) > 0.03 or r["z"] > 1:
+                bad = "the anchor could not be brought to the edge (target %s, at %s)" % (target, r["ndc"])
+            elif not r["pills"]:
+                bad = "no loot pill drawn with the anchor at %s" % r["ndc"]
+        if bad:
+            v.cnj(name, {"why": bad, "loot": mv, "rows": rows})
+        else:
+            v.check(name, all(not r["clipped"] for r in rows), {"loot": mv, "rows": [{k: r[k] for k in ("target", "ndc", "clipped", "pills")} for r in rows]})
+        # the dead player's view: the pills are hidden while the local player is dead (info: the phone death rows judge the clipping)
+        s.guard_player(False)
+        s.js(WORST_DEATH_JS, WORST_WEAPON)
+        step(s, 10, render=True)
+        dead = s.js(EDGE_READ_JS)
+        v.info("edges: loot pills drawn while the local player is dead (spectating)", {"alive": s.js("() => window.__LC__.W.player.alive"), "pills": dead["pills"]})
 
 
 # ───────────────────────────────────────── desktop ─────────────────────────────────────────
@@ -637,8 +749,13 @@ def fallback(v, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
-    ap.add_argument("--only", choices=["desktop", "phones", "fallback"], default=None)
+    ap.add_argument("--only", choices=["desktop", "phones", "fallback", "edges"], default=None)
+    ap.add_argument("--plant", default=None, choices=["pill-unclamped"],
+                    help="FALSIFIER (W9 R1 hudfeel): pill-unclamped = hud.js served without the loot pill's horizontal viewport clamp; "
+                         "the edges row MUST FAIL (run it with --only edges)")
     args = ap.parse_args()
+    if args.plant and not args.report:
+        args.report = "hud_checks_plant_" + args.plant.replace("-", "_")
 
     def body(v):
         if args.only in (None, "desktop"):
@@ -647,6 +764,8 @@ def main():
             phones(v, args)
         if args.only in (None, "fallback"):
             fallback(v, args)
+        if args.only in (None, "edges"):
+            edges(v, args)
     return C.run_gate("hud_checks", body, args)
 
 
