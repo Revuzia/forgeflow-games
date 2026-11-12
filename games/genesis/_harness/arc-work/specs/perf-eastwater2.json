@@ -1,0 +1,85 @@
+{
+ "_doc": "PERF s11 item 5: babel 307987276 Rubolhin by the Lake by DAY (hour 11), views east; ft0 = fartrees off. Run through slot.sh alone.",
+ "shots": [
+  {
+   "name": "pe2-e300-y60",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 60, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, s: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe2-e300-y120",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 120, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, s: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe2-e150-y90",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 150, tilt: 55, yaw: 90, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, s: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe2-e300-y90-ft0",
+   "params": "scenario=babel&source=worker&seed=307987276&fartrees=0",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 90, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, s: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  },
+  {
+   "name": "pe2-e300-y90",
+   "params": "scenario=babel&source=worker&seed=307987276",
+   "size": [
+    640,
+    360
+   ],
+   "quality": "high",
+   "ui": false,
+   "frames": 2,
+   "script": [
+    "document.getElementById('boot')?.remove(); G.setSpeed(0);",
+    "await G.camera({ mode: 'orbit', target: { kind: 'settlement', id: 1 }, dist: 300, tilt: 50, yaw: 90, fov: 55, hour: 11 }); await G.frames(10);",
+    "return { ok: 1, s: globalThis.__GENESIS_R__?.stats?.altitude };"
+   ]
+  }
+ ]
+}

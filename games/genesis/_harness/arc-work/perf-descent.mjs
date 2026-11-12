@@ -44,10 +44,11 @@ const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, devi
 await ctx.addInitScript(() => {
   const real = performance.now.bind(performance);
   const rraf = window.requestAnimationFrame.bind(window);
-  let on = false, base = 0, t = 0;
-  window.__FIXCLOCK__ = { on() { base = real(); t = 0; on = true; }, off() { on = false; } };
+  let on = false, hold = false, base = 0, t = 0;
+  // hold(): time stands still (frames drawn meanwhile, e.g. by a screenshot, see dt = 0) so every 60 fps frame is seen
+  window.__FIXCLOCK__ = { on() { base = real(); t = 0; on = true; hold = false; }, off() { on = false; }, hold(h) { hold = h; } };
   performance.now = () => (on ? base + t : real());
-  window.requestAnimationFrame = (cb) => rraf((ts) => { if (on) { t += 1000 / 60; cb(base + t); } else cb(ts); });
+  window.requestAnimationFrame = (cb) => rraf((ts) => { if (on) { if (!hold) t += 1000 / 60; cb(base + t); } else cb(ts); });
 });
 const page = await ctx.newPage();
 page.setDefaultTimeout(3600000);
@@ -72,7 +73,10 @@ const stats = () => page.evaluate(() => {
   const R = globalThis.__GENESIS_R__; const s = R.stats;
   let far = null, near = null;
   for (const v of R.planets.values()) if (v.vegetation && v.vegetation.farStats) { far = { ...v.vegetation.farStats }; near = { ...v.vegetation.stats }; break; }
-  return { alt: Math.round(s.altitude), draws: s.drawCalls, tris: s.triangles, shadowTris: s.shadowTris, sceneTris: s.sceneTris, far, near };
+  // far-tree meshes that draw (count > 0, visible): the far draws per pass
+  let farMeshes = 0, farMeshesAll = 0;
+  for (const v of R.planets.values()) v.vegetation?.farGroup?.traverse((o) => { if (o.name === 'fartrees') { farMeshesAll++; if (o.visible && o.count > 0) farMeshes++; } });
+  return { alt: Math.round(s.altitude), draws: s.drawCalls, tris: s.triangles, shadowTris: s.shadowTris, sceneTris: s.sceneTris, farMeshes, farMeshesAll, far, near };
 });
 const out = { url, phases: {} };
 const firstSettlement = await page.evaluate(() => { const s = window.__GENESIS__.state(); const l = (s.planets?.[0]?.settlements ?? []).slice().sort((a, b) => (b.pop ?? 0) - (a.pop ?? 0)); return l[0]?.id ?? null; }).catch(() => null);
@@ -123,15 +127,50 @@ if (phases.includes('zoomfixed')) {
   const secs = Number(opts.zsecs ?? 1.2);
   await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', poi: town, dist: 150, tilt: 52, hour: 10, blend: secs });
   const n = Math.round(secs * 60) + Number(opts.zafter ?? 20);
+  // --zhi / --zlo: shoot only frames with the camera altitude in [zlo, zhi] (the deck crossing); others just advance
+  const zhi = Number(opts.zhi ?? 1e9), zlo = Number(opts.zlo ?? -1e9);
   for (let i = 0; i < n; i++) {
     await page.evaluate(() => window.__GENESIS__.frames(1));
-    await page.screenshot({ path: `${shot}-f${String(i).padStart(3, '0')}.png` });
+    await page.evaluate(() => window.__FIXCLOCK__.hold(true));
     const st = await stats();
+    if (st.alt <= zhi && st.alt >= zlo) await page.screenshot({ path: `${shot}-f${String(i).padStart(3, '0')}.png` });
+    await page.evaluate(() => window.__FIXCLOCK__.hold(false));
     rows.push({ i, ...st });
     console.log('zf', i, el(), JSON.stringify({ alt: st.alt, draws: st.draws }));
+    if (st.alt < zlo) break;
   }
   await page.evaluate(() => window.__FIXCLOCK__.off());
   out.phases.zoomfixed = rows;
+}
+
+if (phases.includes('wheelfixed')) {
+  // the player's zoom through the deck: wheel events on the canvas on the fixed 60 fps clock (--wdy per event, one
+  // event every --wevery frames: -100 / 4 = a mouse wheel spun briskly, -6 / 1 = a trackpad scroll), from --wdist
+  const rows = [];
+  const dist0 = Number(opts.wdist ?? 1400), wdy = Number(opts.wdy ?? -100), every = Number(opts.wevery ?? 4);
+  await page.evaluate((c) => window.__GENESIS__.camera(c), { mode: 'orbit', poi: town, dist: dist0, tilt: 52, hour: Number(opts.hour ?? 10) });
+  await page.evaluate(() => window.__GENESIS__.frames(10));
+  console.log('shell', JSON.stringify(await page.evaluate(() => { for (const v of globalThis.__GENESIS_R__.planets.values()) if (v.cloudOuter) return { inner: v.cloudInner - v.params.radius, outer: v.cloudOuter - v.params.radius, R: v.params.radius }; return null; })));
+  await page.evaluate(() => window.__FIXCLOCK__.on());
+  const zhi = Number(opts.zhi ?? 1e9), zlo = Number(opts.zlo ?? -1e9);
+  const n = Number(opts.wframes ?? 240);
+  let below = 0;
+  for (let i = 0; i < n; i++) {
+    if (i % every === 0) await page.evaluate((dy) => {
+      const cs = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height);
+      cs[0].dispatchEvent(new WheelEvent('wheel', { deltaY: dy, deltaMode: 0, bubbles: true, cancelable: true }));
+    }, wdy);
+    await page.evaluate(() => window.__GENESIS__.frames(1));
+    await page.evaluate(() => window.__FIXCLOCK__.hold(true));
+    const st = await stats();
+    if (st.alt <= zhi && st.alt >= zlo && i % Number(opts.zevery ?? 1) === 0) await page.screenshot({ path: `${shot}-w${String(i).padStart(3, '0')}.png` });
+    await page.evaluate(() => window.__FIXCLOCK__.hold(false));
+    rows.push({ i, ...st });
+    console.log('wf', i, el(), JSON.stringify({ alt: st.alt, draws: st.draws }));
+    if (st.alt < zlo && ++below > 6) break;
+  }
+  await page.evaluate(() => window.__FIXCLOCK__.off());
+  out.phases.wheelfixed = rows;
 }
 
 if (phases.includes('lowsun')) {
