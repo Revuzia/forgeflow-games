@@ -12,6 +12,7 @@
    "dur_ms": 912.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_buff.ogg"
    ]
@@ -28,6 +29,7 @@
    "dur_ms": 307.90972222222223,
    "takes": 3,
    "takeSim": 0.9787658530929686,
+   "takeTfSim": 0.7306887281506534,
    "files": [
     "c_haste_1.ogg",
     "c_haste_2.ogg",
@@ -48,6 +50,7 @@
    "dur_ms": 912.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_buff.ogg"
    ]
@@ -64,6 +67,7 @@
    "dur_ms": 654.0902777777778,
    "takes": 3,
    "takeSim": 0.9415565450694486,
+   "takeTfSim": 0.889861186757799,
    "files": [
     "c_unstoppable_1.ogg",
     "c_unstoppable_2.ogg",
@@ -84,6 +88,7 @@
    "dur_ms": 912.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_buff.ogg"
    ]
@@ -100,6 +105,7 @@
    "dur_ms": 427.28472222222223,
    "takes": 3,
    "takeSim": 0.9474418531317427,
+   "takeTfSim": 0.7607845823291673,
    "files": [
     "c_veil_1.ogg",
     "c_veil_2.ogg",
@@ -121,6 +127,7 @@
    "dur_ms": 555.75,
    "takes": 3,
    "takeSim": 0.785939784788475,
+   "takeTfSim": 0.6087957273879666,
    "files": [
     "c_shield_break_1.ogg",
     "c_shield_break_2.ogg",

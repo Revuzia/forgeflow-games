@@ -12,6 +12,7 @@
    "dur_ms": 214.2777777777778,
    "takes": 3,
    "takeSim": 0.9550993715989508,
+   "takeTfSim": 0.9373551554358351,
    "files": [
     "m_gleam.ogg",
     "m_gleam_2.ogg",
@@ -30,6 +31,7 @@
    "dur_ms": 192.19791666666669,
    "takes": 4,
    "takeSim": 0.9445655637963937,
+   "takeTfSim": 0.8063954583245989,
    "files": [
     "m_gleam.ogg",
     "m_gleam_2.ogg",
@@ -51,6 +53,7 @@
    "dur_ms": 214.2777777777778,
    "takes": 3,
    "takeSim": 0.9550993715989508,
+   "takeTfSim": 0.9373551554358351,
    "files": [
     "m_gleam.ogg",
     "m_gleam_2.ogg",
@@ -69,6 +72,7 @@
    "dur_ms": 414.3020833333333,
    "takes": 2,
    "takeSim": 0.8682629905653065,
+   "takeTfSim": 0.7831420041257116,
    "files": [
     "m_gleam_kill.ogg",
     "m_gleam_kill_2.ogg"

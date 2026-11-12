@@ -13,6 +13,7 @@
    "dur_ms": 548.9027777777778,
    "takes": 3,
    "takeSim": 0.8654627525171806,
+   "takeTfSim": 0.8470322072624263,
    "files": [
     "c_struck_needle_1.ogg",
     "c_struck_needle_2.ogg",
@@ -34,6 +35,7 @@
    "dur_ms": 469.9236111111111,
    "takes": 3,
    "takeSim": 0.9011964708387922,
+   "takeTfSim": 0.7667695384585254,
    "files": [
     "c_struck_lantern_1.ogg",
     "c_struck_lantern_2.ogg",
@@ -55,6 +57,7 @@
    "dur_ms": 763.7152777777777,
    "takes": 3,
    "takeSim": 0.9777198082427627,
+   "takeTfSim": 0.9370382470368283,
    "files": [
     "c_struck_hourbell_1.ogg",
     "c_struck_hourbell_2.ogg",
@@ -75,6 +78,7 @@
    "dur_ms": 2564.6666666666665,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_structure_fall.ogg"
    ]
@@ -91,6 +95,7 @@
    "dur_ms": 1384.125,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_lantern_fall.ogg"
    ]
@@ -109,6 +114,7 @@
    "dur_ms": 2564.6666666666665,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_structure_fall.ogg"
    ]
@@ -125,6 +131,7 @@
    "dur_ms": 4065.8958333333335,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "c_hourbell_fall.ogg"
    ]

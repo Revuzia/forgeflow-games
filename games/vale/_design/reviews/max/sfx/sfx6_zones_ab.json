@@ -13,6 +13,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_ervet_a3_zone.ogg"
    ]
@@ -32,6 +33,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_hesmi_ult_zone.ogg"
    ]
@@ -51,6 +53,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_ilsheta_a2_zone.ogg"
    ]
@@ -70,6 +73,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_ilsheta_ult_zone.ogg"
    ]
@@ -89,6 +93,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_kemdo_a2_zone.ogg"
    ]
@@ -108,6 +113,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_odrum_ult_zone.ogg"
    ]
@@ -127,6 +133,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_rishal_a1_zone.ogg"
    ]
@@ -146,6 +153,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_rishal_a3_zone.ogg"
    ]
@@ -165,6 +173,7 @@
    "dur_ms": 2000.0,
    "takes": 1,
    "takeSim": null,
+   "takeTfSim": null,
    "files": [
     "f_rishal_ult_zone.ogg"
    ]

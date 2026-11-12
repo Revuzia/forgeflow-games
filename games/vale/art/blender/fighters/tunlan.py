@@ -200,13 +200,16 @@ CARDS = {
         "plate": {"glow": [0.80, 0.52, 0.30, 0.05], "median": 0.27},
     },
     "tunlan_lamplit": {
-        "splash": {"clip": "cast_a3", "t": 0.40, "yaw": -26.0, "pitch": -9.0, "lens": 45.0, "fill": 0.86, "x": 0.70,
+        # (card engineer 1: at t 0.40 the raised hand crossed the mask in a glare streak (closing TUN2-M1, again on the
+        # v2 re-render); t 0.90 is the swing's end, the brim knocked up, the lantern hanging clear and the face open;
+        # the under-brim focals softer and wider so the pale mask keeps its planes)
+        "splash": {"clip": "cast_a3", "t": 0.90, "yaw": -26.0, "pitch": -9.0, "lens": 45.0, "fill": 0.86, "x": 0.70,
                    "key_az": 150.0, "key_el": 20.0, "key_color": "#D8C2E6", "sun": 1.8, "rim_cool": 1.6,
                    "rim_warm": 0.5, "bounce": 0.5, "bounce_color": "#8C76A8", "accent": 2.2,
-                   "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.30, "color": "#FFC680",
-                              "power": 60.0, "size": 0.20},
-                             {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.45, "color": "#FFD2A0",
-                              "power": 22.0, "size": 0.12}]},
+                   "focal": [{"at": "x_hat", "az": 180.0, "el": -55.0, "dist": 0.40, "color": "#FFC680",
+                              "power": 40.0, "size": 0.30},
+                             {"at": "head", "az": 190.0, "el": -15.0, "dist": 0.60, "color": "#FFD2A0",
+                              "power": 12.0, "size": 0.25}]},
         # (polish: the cast_a3 bust put her raised hand across the mask in a glare streak; the bust takes the
         # recall's cupped lantern instead, its glow on the face from below)
         # (closing round 2: the head focal blew a white patch on the pale mask: softer and wider on the bust)

@@ -87,7 +87,7 @@ MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacqu
 #   * a ruled mask colour (MASK_TARGET): plates.mask_to's gain on the painting's face disc
 # The hold runs before the gate and on the shipped card (shipped_painting), so the gate sees what ships.
 EYE_HOLD_S = 0.03
-FACE_HOLD = {"sukri": (2.2, 0.7), "tunlan": (1.8, 0.6)}
+FACE_HOLD = {"sukri": (2.2, 0.7), "tunlan": (1.8, 0.6), "marund": (1.8, 0.6)}
 STREAK_FACES = {"sukri", "tunlan", "marund", "burdam", "dunsom"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
 GATE = {"new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
