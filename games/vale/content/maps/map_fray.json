@@ -464,81 +464,81 @@
      "id": "hour_stone_1", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 162.0,
      "name": "hour-stone",
      "at": [38.0, 13.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_2", "model": "assets/maps/landmarks/hour_stone_g.glb", "rot": 126.0,
      "name": "hour-stone",
      "at": [47.8, 20.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_3", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 90.0,
      "name": "hour-stone",
      "at": [51.5, 32.0],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_4", "model": "assets/maps/landmarks/hour_stone_g.glb", "rot": 54.0,
      "name": "hour-stone",
      "at": [47.8, 43.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_5", "model": "assets/maps/landmarks/hour_stone.glb", "rot": 18.0,
      "name": "hour-stone",
      "at": [38.0, 50.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_6", "model": "assets/maps/landmarks/hour_stone_g.glb", "rot": -18.0,
      "name": "hour-stone",
      "at": [26.0, 50.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_7", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -54.0,
      "name": "hour-stone",
      "at": [16.2, 43.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_8", "model": "assets/maps/landmarks/hour_stone_g.glb", "rot": -90.0,
      "name": "hour-stone",
      "at": [12.5, 32.0],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_9", "model": "assets/maps/landmarks/hour_stone.glb", "rot": -126.0,
      "name": "hour-stone",
      "at": [16.2, 20.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "hour_stone_10", "model": "assets/maps/landmarks/hour_stone_g.glb", "rot": -162.0,
      "name": "hour-stone",
      "at": [26.0, 13.5],
-     "size": [1.8, 1.8],
+     "size": [4.9, 2.1], "footprint": "oriented",
      "height": 1.2,
-     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); its origin is the top of its own 1.2 m wall block (wallHeights.hourStones), which it encloses"
+     "note": "a broken dial block (a wall; max env ENV-3): two offset dark basalt blocks on a proud footing, sloped reading tops, the hour's bronze dial boss inlaid in the high block, tool-mark bands, spalled corners and lichen in the joints, the half-hour tick inlaid in chalk down both broad faces; every second stone carries a low shadow-gnomon stub (hour_stone_g) (art/blender/maps/landmarks_art2.py hour_stone); it IS its wall (footprint oriented: the turned 4.9 x 2.1 m rectangle replaces the tangential 4.6 x 1.8 m wall polygon, so no cliff block is drawn under it) and stands from the plate; the two dial blocks part with a 0.24 m gap and a 0.24 m height step (max env ENV-3 fix)"
     },
     {
      "id": "fair_stand_nw", "model": "assets/maps/landmarks/fair_stand_high.glb",

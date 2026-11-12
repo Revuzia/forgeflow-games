@@ -1527,7 +1527,7 @@
        [80.0, 73.2]
       ]
      ],
-     "water": "shallow, <= 0.05 m over pale stone",
+     "water": "shallow, <= 0.05 m over pale stone", "mouth": [[82.4, 93.2], [87.6, 93.2]], "$mouth": "max env ENV-4 fix: where the shaft spills onto the South Road: a foam crest, falling streaks, a mist breath and a wet spill (render/terrain.ts)",
      "valueLstar": [24, 30]
     }
    },

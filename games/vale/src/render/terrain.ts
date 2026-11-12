@@ -750,7 +750,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   // ── map marks from art.terrain ─────────────────────────────────────────────────────────────────
   const noon = tr.noonline as Record<string, unknown> | undefined;
   const shadowDef = noon?.standingShadow as { floor?: unknown; tint?: unknown; tip?: unknown } | undefined;
-  const shaftDef = noon?.fallenShaft as { floor?: unknown } | undefined;
+  const shaftDef = noon?.fallenShaft as { floor?: unknown; mouth?: unknown } | undefined;
   const shadowPolys = polysOf(shadowDef?.floor), shaftPolys = polysOf(shaftDef?.floor);
   const shadowBoxes = shadowPolys.map(bbox), shaftBoxes = shaftPolys.map(bbox);
   // chasm polygons that share an edge (Needlespan's gorge is split in two at the Snap's meridian) are ONE drop:
@@ -1066,10 +1066,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   // authored landmarks (map.art.terrain.landmarks with a model): scatter keeps out of their footprint (and
   // well clear on the camera side, +y, so canopies never hide them); a landmark that covers a whole wall
   // polygon IS that wall (a fallen drum, a slab), so the polygon gets no cliff block of its own
-  const marks = (Array.isArray(tr.landmarks) ? (tr.landmarks as { model?: unknown; at?: unknown; size?: unknown; height?: unknown }[]) : [])
+  // max env ENV-3 fix: a landmark with `"footprint": "oriented"` reads its `size` in its own frame (turned by `rot`, as
+  // the model is): it replaces a ROTATED wall polygon it covers (FRAY's hour-stones, tangential walls), and its axis
+  // box (sx, sy) is the turned rectangle's, for the scatter and cover rules
+  type Mark = { x: number; y: number; sx: number; sy: number; h: number; ob?: { c: number; s: number; hx: number; hy: number } };
+  const marks: Mark[] = (Array.isArray(tr.landmarks) ? (tr.landmarks as { model?: unknown; at?: unknown; size?: unknown; height?: unknown; rot?: unknown; footprint?: unknown }[]) : [])
     .filter((l) => typeof l.model === 'string' && Array.isArray(l.at))
-    .map((l) => {
+    .map((l): Mark => {
       const at = l.at as number[], sz = Array.isArray(l.size) ? (l.size as number[]) : [2, 2];
+      if (l.footprint === 'oriented') {
+        const r = typeof l.rot === 'number' ? (l.rot * Math.PI) / 180 : 0, c = Math.cos(r), sn = Math.sin(r), hx = sz[0] / 2, hy = sz[1] / 2;
+        return { x: at[0], y: at[1], sx: Math.abs(c) * hx + Math.abs(sn) * hy, sy: Math.abs(sn) * hx + Math.abs(c) * hy, h: num(l.height) ?? 3, ob: { c, s: sn, hx, hy } };
+      }
       return { x: at[0], y: at[1], sx: sz[0] / 2, sy: sz[1] / 2, h: num(l.height) ?? 3 };
     })
     // r12 M14: the ambient props (art.ambient.props: banners, resin lamps on the wall lips) keep a small footprint
@@ -1078,6 +1086,13 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
   // loose stones keep off a landmark's footprint and the strip in front of it (camera side, +y)
   const onMark = (x: number, y: number): boolean => marks.some((m) => Math.abs(x - m.x) < m.sx + 1.0 && y > m.y - m.sy - 1.0 && y < m.y + m.sy + 2);
   const replaced = walls.map((_, i) => marks.some((m) => {
+    if (m.ob) {
+      const o = m.ob;
+      return walls[i].every((v) => {
+        const dx = v[0] - m.x, dy = v[1] - m.y;
+        return Math.abs(dx * o.c - dy * o.s) <= o.hx + 0.3 && Math.abs(dx * o.s + dy * o.c) <= o.hy + 0.3;
+      });
+    }
     const b = wallBoxes[i];
     return b.minX >= m.x - m.sx - 0.3 && b.maxX <= m.x + m.sx + 0.3 && b.minY >= m.y - m.sy - 0.3 && b.maxY <= m.y + m.sy + 0.3;
   }));
@@ -1516,6 +1531,23 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     group.add(mesh);
     disposables.push(fill, mat);
   }
+  // max env ENV-4 fix: the shaft's mouth (art.terrain.noonline.fallenShaft.mouth: the open edge where it spills onto the
+  // road): its segment and outward normal (away from the floor's centroid); z = 1 when the map names one
+  const mouthA = Array.isArray(shaftDef?.mouth) ? pt((shaftDef.mouth as unknown[])[0]) : undefined;
+  const mouthB = Array.isArray(shaftDef?.mouth) ? pt((shaftDef.mouth as unknown[])[1]) : undefined;
+  const mouthU = new Vector4(0, 0, 1, 0), mouthN = new Vector3(0, 1, 0);
+  const SPILL_M = 1.1;
+  if (mouthA && mouthB && shaftPolys.length) {
+    const P = shaftPolys[0];
+    let cx = 0, cy = 0;
+    for (const v of P) { cx += v[0]; cy += v[1]; }
+    cx /= P.length; cy /= P.length;
+    const dx = mouthB[0] - mouthA[0], dy = mouthB[1] - mouthA[1], l = Math.hypot(dx, dy) || 1;
+    let nx = -dy / l, ny = dx / l;
+    if ((mouthA[0] + dx / 2 - cx) * nx + (mouthA[1] + dy / 2 - cy) * ny < 0) { nx = -nx; ny = -ny; }
+    mouthU.set(mouthA[0], mouthA[1], mouthB[0], mouthB[1]);
+    mouthN.set(nx, ny, 1);
+  }
   for (const poly of shaftPolys) {
     const geo = new ShapeGeometry(shapeOf(poly), 1);
     geo.rotateX(-Math.PI / 2);
@@ -1528,11 +1560,22 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     // the floor's albedo luminance, so a rebased floor rebases its water
     const wl = lum(lin(colors.shaftFloor));
     const wU = { uWaterT: worldUniforms.valeTime, uSplat2: { value: splat2Tex }, uSplatScale: gu.uSplatScale,
-      uWaterSheen: { value: new Vector3(0.55, 0.69, 0.83).multiplyScalar(wl) }, uWaterLap: { value: 0.07 * wl } };
+      uWaterSheen: { value: new Vector3(0.55, 0.69, 0.83).multiplyScalar(wl) }, uWaterLap: { value: 0.07 * wl },
+      uMouth: { value: mouthU }, uMouthN: { value: mouthN } };
     mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
       Object.assign(shader.uniforms, wU);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\nuniform float uWaterT; uniform sampler2D uSplat2; uniform vec2 uSplatScale; uniform vec3 uWaterSheen; uniform float uWaterLap;\n${NOISE_GLSL}`)
+        .replace('#include <common>', `#include <common>\nuniform float uWaterT; uniform sampler2D uSplat2; uniform vec2 uSplatScale; uniform vec3 uWaterSheen; uniform float uWaterLap;
+uniform vec4 uMouth; uniform vec3 uMouthN;
+${NOISE_GLSL}
+// max env ENV-4 fix: the frame of the shaft's mouth: returns the distance past its lip (< 0 in the shaft, > 0 out on the
+// road), u = the distance along it, span = 1 across it (eased at its two ends; 0 on a map without a mouth)
+float valeMouth( vec2 p, out float u, out float span ) {
+  vec2 d = uMouth.zw - uMouth.xy; float L = max( length( d ), 1e-4 );
+  u = dot( p - uMouth.xy, d / L );
+  span = smoothstep( -0.15, 0.45, u ) * smoothstep( -0.15, 0.45, L - u ) * uMouthN.z;
+  return dot( p - uMouth.xy, uMouthN.xy );
+}`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   {
     vec2 wp = vValeWorld.xz;
@@ -1541,11 +1584,18 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     vec2 r1 = mat2( 0.8, -0.6, 0.6, 0.8 ) * wp, r2 = mat2( 0.28, 0.96, -0.96, 0.28 ) * wp;
     float h = valeNoise( r1 * vec2( 0.8, 2.0 ) + vec2( uWaterT * 0.26, uWaterT * 0.04 ) )
             + 0.5 * valeNoise( r2 * vec2( 2.2, 3.8 ) - vec2( uWaterT * 0.17, uWaterT * 0.34 ) );
+    // max env ENV-4 fix: toward the mouth the ripples give way to the draw: streaks along the flow, quickening at the lip
+    float mu, ms; float mt = valeMouth( wp, mu, ms );
+    float flow = ms * smoothstep( -2.4, -0.6, mt );
+    h = mix( h, 1.2 * valeNoise( vec2( mu * 4.5, mt * 0.9 - uWaterT * ( 1.0 + 1.4 * smoothstep( -2.0, 0.0, mt ) ) ) ), flow * 0.75 );
     normal = valeBump( -vViewPosition, normal, h, 0.15 );
   }`)
         .replace('#include <opaque_fragment>', `{
   float sd = texture( uSplat2, vValeWorld.xz * uSplatScale ).g * 8.0 - 4.0;
-  float lap = 1.0 - smoothstep( 0.0, 0.35, -sd );
+  // max env ENV-4 fix: no bank at the mouth (it is open water running out): the lap, the wet lip and the bank lace fade
+  float mu, ms; float mt = valeMouth( vValeWorld.xz, mu, ms );
+  float mband = ms * smoothstep( -1.0, -0.15, mt );
+  float lap = ( 1.0 - smoothstep( 0.0, 0.35, -sd ) ) * ( 1.0 - mband );
   diffuseColor.a = mix( diffuseColor.a, 0.75, lap );
   outgoingLight = mix( outgoingLight, outgoingLight * 1.25 + vec3( uWaterLap ), lap * ( 0.6 + 0.4 * sin( uWaterT * 0.9 + vValeWorld.x * 2.0 + vValeWorld.z ) ) );
   // closing env m-1: the film's hue drifts green-ochre over the shallow banks to a quiet cool in the middle, at a stone's
@@ -1556,7 +1606,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     float ol = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
     vec3 tinted = outgoingLight * hd;
     outgoingLight = mix( vec3( ol ), tinted * ( ol / max( dot( tinted, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-5 ) ), 0.8 );
-    float lipW = ( 1.0 - smoothstep( 0.0, 0.15, -sd ) ) * step( sd, 0.0 );
+    float lipW = ( 1.0 - smoothstep( 0.0, 0.15, -sd ) ) * step( sd, 0.0 ) * ( 1.0 - mband );
     outgoingLight = mix( outgoingLight, vec3( ol * 1.45 + uWaterLap * 1.4 ) * vec3( 1.02, 1.0, 0.94 ), lipW * 0.6 );
     diffuseColor.a = max( diffuseColor.a, lipW * 0.8 );
   }
@@ -1570,7 +1620,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     float l2 = 1.0 - smoothstep( 0.01, 0.04, abs( fd - ( 0.42 + 0.1 * swell ) ) );
     float brk = smoothstep( 0.32, 0.62, valeNoise( wp * 1.6 + vec2( uWaterT * 0.12, uWaterT * 0.07 ) ) );
     float brk2 = smoothstep( 0.45, 0.7, valeNoise( wp * 1.1 + vec2( 9.0 - uWaterT * 0.09, 4.0 ) ) );
-    float foam = clamp( l1 * ( 0.35 + 0.65 * brk ) + 0.55 * l2 * brk2, 0.0, 1.0 ) * step( sd, 0.0 );
+    float foam = clamp( l1 * ( 0.35 + 0.65 * brk ) + 0.55 * l2 * brk2, 0.0, 1.0 ) * step( sd, 0.0 ) * ( 1.0 - mband );
     float fl = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
     // the lace is capped at display L* ~46 (linear luminance 0.155 before the grade): pale, never a white line
     outgoingLight = mix( outgoingLight, vec3( min( fl * 1.55 + uWaterLap, 0.155 ) ) * vec3( 1.0, 0.99, 0.95 ), foam * 0.75 );
@@ -1597,6 +1647,32 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
 #else
   outgoingLight += uWaterSheen * fres;
 #endif
+  // max env ENV-4 fix: the mouth. A churning foam crest rolls just above the lip, thin pale streaks fall over it and run
+  // out down the spill, a mist breath swells and fades over the lip, the lip's face is a darker curl of water, and past
+  // it the film thins to a wet sheen on the road stone, feathered out over SPILL_M (no hard edge anywhere). Pale values
+  // capped as the bank lace is (display L* ~46), never a white line.
+  if ( ms > 0.0 ) {
+    float ol = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
+    float crest = ( 1.0 - smoothstep( 0.02, 0.18, abs( mt + 0.3 + 0.05 * sin( uWaterT * 2.1 + mu * 3.0 ) ) ) )
+                * ( 0.35 + 0.65 * smoothstep( 0.25, 0.6, valeNoise( vec2( mu * 3.2 + uWaterT * 0.6, uWaterT * 0.9 ) ) ) );
+    float st = smoothstep( 0.55, 0.82, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) )
+             * smoothstep( -0.32, -0.05, mt ) * ( 1.0 - smoothstep( 0.25, 0.95, mt ) );
+    float mist = ( 1.0 - smoothstep( 0.0, 0.7, abs( mt - 0.12 ) ) ) * ( 0.55 + 0.45 * sin( uWaterT * 0.7 + mu * 1.3 ) )
+               * valeNoise( vec2( mu * 1.2 - uWaterT * 0.2, mt * 1.5 + uWaterT * 0.3 ) );
+    float curl = smoothstep( -0.12, 0.0, mt ) * ( 1.0 - smoothstep( 0.0, 0.22, mt ) );
+    outgoingLight *= 1.0 - 0.3 * curl * ms;
+    float pale = clamp( crest + st * 0.7, 0.0, 1.0 ) * ms;
+    outgoingLight = mix( outgoingLight, vec3( min( ol * 1.8 + uWaterLap * 1.3, 0.155 ) ) * vec3( 1.0, 0.99, 0.95 ), pale * 0.9 );
+    outgoingLight += vec3( uWaterLap * 0.8 ) * mist * ms;
+    float spill = step( 0.0, mt );
+    diffuseColor.a = max( diffuseColor.a, ( pale * 0.7 + mist * 0.25 ) * ( 1.0 - spill ) );
+  }
+  // the spill strip owns no bank: past the lip its alpha is the spill's alone (0 beyond the mouth's span, so the strip's
+  // own edges never show)
+  if ( uMouthN.z > 0.5 && mt > 0.0 ) {
+    float pale2 = ms * smoothstep( 0.55, 0.82, valeNoise( vec2( mu * 9.0, mt * 0.7 - uWaterT * 2.4 ) ) ) * ( 1.0 - smoothstep( 0.25, 0.95, mt ) );
+    diffuseColor.a = ms * max( 0.5 * ( 1.0 - smoothstep( 0.05, ${SPILL_M.toFixed(2)}, mt ) ), pale2 * 0.6 );
+  }
 }
 #include <opaque_fragment>`);
     };
@@ -1606,6 +1682,27 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     mesh.receiveShadow = true; mesh.name = 'vale_fallen_shaft';
     group.add(mesh);
     disposables.push(geo, mat);
+    // max env ENV-4 fix: the spill past the mouth (same material and program: one more draw), a strip SPILL_M deep and
+    // a little wider than the mouth; its alpha comes from the mouth frame in the shader
+    if (mouthN.z > 0 && poly === shaftPolys[0]) {
+      const ax = mouthU.x, ay = mouthU.y, bx = mouthU.z, by = mouthU.w, tl = Math.hypot(bx - ax, by - ay) || 1;
+      const tx = (bx - ax) / tl * 0.3, ty = (by - ay) / tl * 0.3, ox = mouthN.x * SPILL_M, oy = mouthN.y * SPILL_M;
+      const q0 = [ax - tx, ay - ty], q1 = [bx + tx, by + ty];
+      const sp = new BufferGeometry();
+      sp.setAttribute('position', new BufferAttribute(new Float32Array([
+        q0[0], 0.03, q0[1], q1[0], 0.03, q1[1], q1[0] + ox, 0.03, q1[1] + oy,
+        q0[0], 0.03, q0[1], q1[0] + ox, 0.03, q1[1] + oy, q0[0] + ox, 0.03, q0[1] + oy]), 3));
+      sp.setAttribute('normal', new BufferAttribute(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), 3));
+      sp.setAttribute('uv', new BufferAttribute(new Float32Array(12), 2));
+      // face up whatever the mouth's winding
+      const pa = sp.getAttribute('position') as BufferAttribute;
+      const e1x = pa.getX(1) - pa.getX(0), e1z = pa.getZ(1) - pa.getZ(0), e2x = pa.getX(2) - pa.getX(0), e2z = pa.getZ(2) - pa.getZ(0);
+      if (e1z * e2x - e1x * e2z < 0) { sp.setIndex([0, 2, 1, 3, 5, 4]); }
+      const spill = new Mesh(sp, mat);
+      spill.receiveShadow = true; spill.name = 'vale_fallen_shaft_spill';
+      group.add(spill);
+      disposables.push(sp);
+    }
   }
 
   // ── scatter (quality dependent) ─────────────────────────────────────────────────────────────
@@ -1744,7 +1841,7 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
           if (td < 0.55) continue;
           // in a gap (no trunk within 1.6 m) nearly always; under the crowns about one in three
           if (a > (td > 1.6 ? 0.92 : 0.36)) continue;
-          fernSpots.push({ x: jx, y: jy, h: wallHeights[i], s: (td > 1.6 ? 0.95 : 0.72) + sc * 0.4, r: rr * Math.PI * 2, c: cc });
+          fernSpots.push({ x: jx, y: jy, h: wallHeights[i], s: (td > 1.6 ? 1.25 : 0.9) + sc * 0.5, r: rr * Math.PI * 2, c: cc });
         }
       }
     });
@@ -1849,6 +1946,11 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
         if (wd <= 0.05 || td < 0.35 || ld < LANE_HALF + 0.7 || cd < 0.3) { cr(); cr(); cr(); continue; }
         if (field(F.sh, jx, jy) < 0.5 || field(F.sf, jx, jy) < 0.7 || inPlaza(jx, jy, 0.5) || (seatV.z > 0 && Math.hypot(jx - seatV.x, jy - seatV.y) < seatV.z + 0.8)) { cr(); cr(); cr(); continue; }
         if (clearings.some((c) => !c.camp && Math.hypot(jx - c.x, jy - c.y) < c.r - 1)) { cr(); cr(); cr(); continue; }
+        // max env ENV-1 fix: tick-ferns hug the cliff feet of the walkable wood (a hash, so this stream keeps its numbers):
+        // low (<= 0.45 m), in the 0.85 m band against the wall where no one stands, never a brush look-alike
+        if (wd < 0.85 && hash2(jx * 1.91 + 0.7, jy * 2.37 + 9.1) < 0.17) {
+          fernSpots.push({ x: jx, y: jy, h: 0, s: 0.62 + 0.3 * hash2(jy * 3.1, jx * 1.7), r: hash2(jx * 7.7, jy * 5.3) * Math.PI * 2, c: hash2(jx * 2.9, jy * 4.4) });
+        }
         const mossy = vnoise(jx * 0.05 + 3.7, jy * 0.05) ;
         const foot = Math.max(0, 1 - wd / 1.3);
         const verge = ld < LANE_HALF + 2.2 ? 1 : 0;
@@ -2028,7 +2130,8 @@ export function buildTerrain(map: MapDefT): TerrainBuild {
     {
       const items = pick(fernSpots, keepC).map((f) => {
         q.setFromAxisAngle(up, f.r); s.set(f.s, f.s * (0.85 + 0.3 * f.c), f.s); pos.set(f.x, f.h - 0.02, f.y);
-        const v = (0.82 + 0.3 * f.c) * pv.clutter;
+        // the Dialwood's own value band (propValue.tree), a step lighter than the crowns' shade so the fronds read
+        const v = (1.05 + 0.3 * f.c) * pv.tree;
         return { m: new Matrix4().compose(pos, q, s), c: new Color(v * (1.02 + 0.06 * f.c), v, v * (0.94 - 0.04 * f.c)) };
       });
       if (items.length) scatterParts.push(chunked(clutterGeo.fern, clutterMat, items, 'vale_understory_fern', false));

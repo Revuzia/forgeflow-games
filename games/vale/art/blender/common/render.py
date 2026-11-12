@@ -946,7 +946,7 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
     hand_mods = smooth_card_hands(objs, bool(pl) and bool(cfg.get("smooth_hands", True)))
     # (cards pass 4) card-only hands: the game hands swapped for anatomical card hands (common/card_hands.py)
     from . import card_hands
-    card_hand_undo = card_hands.install(spec, arm, objs, scene.log) if pl and cfg.get("card_hands", True) else []
+    card_hand_undo = card_hands.install(spec, arm, objs, scene.log) if pl and cfg.get("card_hands", True) and not os.environ.get("VALE_NO_CARD_HANDS") else []
     card_grade_undo = card_hands.grade(spec, skin, objs, scene.log) if pl else []
     cam = camera(lens=50)
     sky_world(light_a["sky"], light_a["ambient"], camera_strength=1.0, tint=light_a.get("tint"))

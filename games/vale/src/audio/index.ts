@@ -432,7 +432,7 @@ const ROOM_FAR_DB = -11;
 const ROOM_RETURN_DB = 10;      // (a normalised ConvolverNode returns about 9 dB of energy under its input: this puts a near
                                 // hit's room about 19 dB under it, a far one about 10 dB under: sfx_room_ab.py)
 const SHOOTERS_MAX = 256;
-const STRUCK_GAIN = 0.5;          // a structure's own answer under a blow (max SFX-5) …
+const STRUCK_GAIN = 0.4;          // a structure's own answer under a blow (max SFX-5) …
 const STRUCK_GAP_S = 0.15;        // … at most this often per structure         // attackers remembered for a shot landing after its shooter died (max SFX-1)   // one target's shield breaks sound at most this often (max SFX-7)
 // the Gleam coins (max SFX-8): a last hit's gain, and its combo ladder (+GOLD_STEP_ST a rung within GOLD_CHAIN_S, GOLD_RUNGS high)
 const GOLD_GAIN = 0.8;

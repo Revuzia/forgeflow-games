@@ -1051,15 +1051,20 @@ def shadow_slab(B, rng):
     # max env ENV-7: the coping painted down (a weathered chalk, L* ~45 on screen, was a smooth L* 63.5 lid) and carved
     # with an hour band: twelve shallow ticks across the saddle, the quarters long, in the slab's own basalt
     B.add("coping", lean_v(v, f))
+    # max env ENV-7 fix: ONE row of twelve hour ticks along the ridge (no rows down the slopes: those read as vent slots).
+    # Each tick straddles the ridge as a shallow chevron; the four quarters run well down both slopes, the eight hours
+    # are short nicks at the ridge, so the band reads as a dial's chapter ring
+    run = th + 0.07
     for k in range(12):
         yk = -wd + 0.12 + k * (2 * wd - 0.24) / 11
         long_ = k % 3 == 0
+        half = run * (0.62 if long_ else 0.2)
+        wid = 0.03 if long_ else 0.022
         for sxx in (-1, 1):
-            # on the saddle's slope (it falls 0.2 m over th + 0.07 from the ridge), sunk so only 4 mm stand proud
-            xc = sxx * (th + 0.07) * 0.45
-            zc_ = ht + 0.1 + 0.2 * (1 - abs(xc) / (th + 0.07)) - 0.008
-            tick = K.box((xc, yk, zc_), ((th + 0.07) * (0.4 if long_ else 0.26), 0.022, 0.012), 0.004)
-            tv = K.rot(np.asarray(tick[0], dtype=np.float64), (0, 1, 0), sxx * math.atan2(0.2, th + 0.07), about=(xc, yk, zc_))
+            xc = sxx * half / 2
+            zc_ = ht + 0.1 + 0.2 * (1 - abs(xc) / run) - 0.008
+            tick = K.box((xc, yk, zc_), (half / 2 + 0.01, wid, 0.012), 0.004)
+            tv = K.rot(np.asarray(tick[0], dtype=np.float64), (0, 1, 0), sxx * math.atan2(0.2, run), about=(xc, yk, zc_))
             B.add("basalt", lean_v(tv, tick[1]))
     # a chalk bead up each end's two arrises (the lit edges the camera sees on the south end; the faces stay basalt)
     for sy in (-1, 1):
@@ -1103,18 +1108,20 @@ def hour_stone(B, rng, gnomon=False):
     tool-mark bands across the broad faces, spalled corners, chips at the foot and lichen in the joints; the half-hour
     tick inlaid in chalk down each broad face. `gnomon`: a low shadow-gnomon stub stands on the east block (half the
     ring carries one, hour_stone_g). Blender +Y faces the plate's centre (content `rot`), X runs along the rim.
-    The renderer stands a landmark on groundAt(), which inside its own (not replaced) wall block is the block's top;
-    the stone is built from z 0 and sunk by HOUR_H at export (SINK), so it encloses the block and stands <= 1.25 m on
-    the plate. Every face clears the block's battered courses and organic outline (<= 0.13 m out) as before (the
+    max env ENV-3 fix: the stone replaces its wall (content footprint "oriented": no cliff block under it) and stands
+    from the plate (no SINK); it stands <= 1.25 m. Every face clears the block's battered courses and organic outline (<= 0.13 m out) as before (the
     blocks keep the old monolith's plan margin, the proud block steps out 4 cm more)."""
     hx, hy = HOUR_HALF
     m = 0.17
     ax, ay = hx + m, hy + m
     # the footing course: proud on every side, its corners chipped
     B.add("hourface", K.box((0, 0, 0.13), (ax + 0.06, ay + 0.06, 0.15), 0.05))
-    # the two dial blocks: west (high, proud) and east (low), meeting at a joint off centre (x = 0.42)
-    xj = 0.42
-    blocks = (("W", -ax - 0.04, xj, ay + 0.04, 1.16, 0.09), ("E", xj, ax, ay, 1.0, 0.07))
+    # the two dial blocks: west (high, proud) and east (low), parted round x = 0.42 (max env ENV-3 fix: a 0.24 m gap down
+    # to the footing and a 0.24 m step between their tops, so the camera reads two broken stones, never one long box;
+    # the reading tops tilt ~11 deg toward the plate's centre so they catch the noon light). The stone IS its wall now
+    # (content footprint "oriented"): no cliff block under it, it stands from the plate (no SINK)
+    xj, gap = 0.42, 0.12
+    blocks = (("W", -ax - 0.04, xj - gap, ay + 0.04, 1.03, 0.2), ("E", xj + gap, ax, ay, 0.79, 0.15))
     for tag, x0, x1, yy, ztop, k in blocks:
         plan = _cut_rect(x0, x1, -yy, yy, 0.24 if tag == "W" else 0.18)
         # the block's body (the lighter face wash: walls take little of the overhead sun) and its top course, flush
@@ -1133,7 +1140,7 @@ def hour_stone(B, rng, gnomon=False):
             cy = rng.choice((-yy + 0.1, yy - 0.1))
             chunk(B, "hourface", (cx, cy, ztop - k * cy / yy - 0.02), (0.1, 0.08, 0.05), rng)
     # the hour's dial boss on the high block's slope: a bronze ring, a bronze hand toward the plate's centre, a stud
-    xb, zb0, kW, yW = -1.05, 1.16, 0.09, ay + 0.04
+    xb, zb0, kW, yW = -1.05, 1.03, 0.2, ay + 0.04
     tilt = math.atan2(kW, yW)
     def on_slope(vf, y=0.0, lift=0.012):
         vv, ff = vf
@@ -1151,14 +1158,17 @@ def hour_stone(B, rng, gnomon=False):
     for (lx, ly, lw) in ((-1.9, -(ay + 0.07), 0.32), (0.42, -(ay + 0.03), 0.16), (1.6, ay + 0.06, 0.28), (-0.4, ay + 0.1, 0.2),
                          (0.42, ay + 0.02, 0.12)):
         B.add("hourlichen", K.box((lx, ly, 0.285), (lw, 0.06, 0.012), 0.008, rz=rng.uniform(-0.15, 0.15)))
-    B.add("hourlichen", K.box((xj, 0.0, 1.0 - 0.004), (0.035, ay * 0.7, 0.01), 0.004))
+    # the gap between the blocks: lichen on the footing and two fallen chips wedged in it
+    B.add("hourlichen", K.box((xj, 0.0, 0.285), (0.08, ay * 0.75, 0.012), 0.004))
+    for cy_ in (-0.45, 0.38):
+        chunk(B, "hourface", (xj + rng.uniform(-0.03, 0.03), cy_, 0.36), (0.08, 0.1, 0.07), rng)
     # spalled chips at the foot (the camera side and one end)
     for cc_, h in (((1.4, -(ay + 0.32), 0.07), (0.12, 0.1, 0.07)), ((-(ax + 0.3), 0.4, 0.06), (0.1, 0.13, 0.06)),
                    ((-0.6, -(ay + 0.26), 0.05), (0.08, 0.07, 0.05))):
         chunk(B, "hourface", cc_, h, rng)
     if gnomon:
         # a low shadow-gnomon stub on the east block: a stone fin rising toward the plate's centre, bronze on its edge
-        zt = 1.0
+        zt = 0.79
         fin = [(-0.3, 0.0), (0.32, 0.0), (0.32, 0.34)]
         v, f = K.prism(fin, origin=(1.45, -0.04, zt - 0.03), u=(0, 1, 0), v=(0, 0, 1), depth=0.1, chamfer=0.012, center=True)
         B.add("hourbasalt", (v, f))
@@ -2096,7 +2106,7 @@ DESIGNS = {
     "fair_stand_high": (lambda B, rng: fair_stand(B, rng, 3, 1.0), FAIR_MATS, 2048, 0.8),
     "fair_stand_low": (lambda B, rng: fair_stand(B, rng, 2, 0.5), FAIR_MATS, 2048, 0.6),
 }
-SINK = {"hour_stone": HOUR_H, "hour_stone_g": HOUR_H}                # built from z 0, exported sunk: it stands on its own wall block's top
+SINK = {}                # max env ENV-3 fix: the hour-stones replace their walls (content footprint "oriented") and stand from the plate
 SCALE = {"lamp_dome": DOME_S}
 AFTER = {"lamp_dome": dome_court}            # built after the scale (full-size pieces)
 # closing CW4 refix (E1 tier): the E1 landmarks take the joint and cavity AO deeper (the course joints, the skirt's

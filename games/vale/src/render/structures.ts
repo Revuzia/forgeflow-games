@@ -35,7 +35,7 @@
 //     0.45 s when the protection drops.
 
 import {
-  Box3, BoxGeometry, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, IcosahedronGeometry, LatheGeometry, type Material, Matrix4, Mesh,
+  Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, IcosahedronGeometry, LatheGeometry, type Material, Matrix4, Mesh,
   MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type PerspectiveCamera, Quaternion,
   type RawShaderMaterial, type ShaderMaterial, Vector2, Vector3, type WebGLProgramParametersWithUniforms,
 } from 'three';
@@ -45,6 +45,7 @@ import type { Actor } from './actors.ts';
 import type { VfxSystem } from './vfx/system.ts';
 import { footMaterial, glazeMaterial, INK_FOOT_H, prepassMaterial, shadowDepth, shellUniforms } from './ink.ts';
 import { patchWorldMaterial, veilOff, veilOn } from './world_material.ts';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
 /** occlusion fade: alpha of the faded part, its band above the plinth (m), fade in / out (s), share of the unit's
  *  body rays the fade-able part must block to turn the fade on / keep it on */
@@ -358,7 +359,11 @@ export class StructureFx {
     s.skinMat = null;
     for (const f of s.falling) f.g.removeFromParent();
     s.falling.length = 0;
-    if (s.rubble) { s.rubble.geometry.dispose(); s.rubble.removeFromParent(); s.rubble = null; }
+    if (s.rubble) {
+      s.rubble.geometry.dispose();
+      for (const mm of Array.isArray(s.rubble.material) ? s.rubble.material : [s.rubble.material]) mm.dispose();
+      s.rubble.removeFromParent(); s.rubble = null;
+    }
   }
 
   /** compile the see-through and shell programs once per template (the renderer calls it again when its sky lands) */
@@ -641,10 +646,14 @@ export class StructureFx {
     this.rubble(s);
   }
 
-  /** max env ENV-6: the rubble pile along the fall (idempotent). Chunks: boxes (12 tris) and icosahedra (20 tris), jittered:
-   *  dressed blocks and rough spalls 0.26-0.8 m, lying on the floor, scattered from the plinth's edge to where the top landed (±1.2 m
-   *  across the fall, wider toward the end); each takes the centroid of one plinth triangle (its colour ×0.82 for dust,
-   *  its uv, every other attribute the plinth's material reads), so the plinth's program draws it unchanged. */
+  /** max env ENV-6: the rubble pile along the fall (idempotent). Chunks: chipped dressed blocks (a box with every corner
+   *  cut, the cuts jittered per corner: 44 tris) and rough spalls (an icosahedron, 20 tris), 0.26-0.8 m, lying on the
+   *  floor from the plinth's edge to where the top landed (±1.2 m across the fall, wider toward the end).
+   *  ENV-6 fix: each chunk takes one face of the plinth's paved ring (sky-facing, outer 40 % of its reach, nearest the ring
+   *  faces' median uv: the ring's own island; or, when the albedo can be read, the face nearest its 70th-percentile value)
+   *  and maps that face's texture onto every one of its facets (a planar projection folded into the face, kept near its
+   *  centre), so a chunk shows the stone's tooling and wear instead of one flat texel; vertex colour (if any) is floored
+   *  at 80 % of the plinth's median and the normals lean 30 % to the sky, so no face goes near black. The plinth's program draws it unchanged. */
   private rubble(s: Struct): void {
     if (s.rubble) return;
     const src = (s.baseNode ? meshes(s.baseNode)[0] : undefined) ?? (s.ruin ? meshes(s.ruin)[0] : undefined);
@@ -659,8 +668,7 @@ export class StructureFx {
     const sg = src.geometry, sp = sg.getAttribute('position'), si = sg.index;
     const nTri = Math.floor((si ? si.count : sp.count) / 3);
     const names = Object.keys(sg.attributes).filter((n) => n !== 'position' && n !== 'normal');
-    // dressed blocks (a box, 12 tris) and rough spalls (an icosahedron, 20 tris), alternating; corners jittered
-    const protos = [new BoxGeometry(1.6, 1, 1.2).toNonIndexed(), new IcosahedronGeometry(1, 0).toNonIndexed()];
+    const protos = [chippedBlock(), new IcosahedronGeometry(1, 0).toNonIndexed()];
     const N = 12;
     const nvOf = (i: number): number => protos[i % 2].getAttribute('position').count;
     let total = 0;
@@ -671,6 +679,50 @@ export class StructureFx {
     const rnd = (): number => { rng = (rng * 9301 + 49297) % 233280; return rng / 233280; };
     const q = new Quaternion(), e = new Vector3(), w = new Vector3();
     const vtx = (t: number, c: number): number => (si ? si.getX(t * 3 + c) : t * 3 + c);
+    const P = (v: number, o: Vector3): Vector3 => o.set(sp.getX(v), sp.getY(v), sp.getZ(v));
+    const pa = new Vector3(), pb = new Vector3(), pc = new Vector3();
+    const area = (t: number): number => {
+      P(vtx(t, 0), pa); P(vtx(t, 1), pb); P(vtx(t, 2), pc);
+      return pb.sub(pa).cross(pc.sub(pa)).length();
+    };
+    // the plinth's colour median (vertex colour), the floor a chunk's colour keeps to
+    const col = sg.getAttribute('color');
+    let floorL = 0;
+    if (col) {
+      const ls: number[] = [];
+      for (let k = 0; k < 64; k++) { const v = vtx(Math.floor(rnd() * nTri), 0); ls.push(0.2126 * col.getX(v) + 0.7152 * col.getY(v) + 0.0722 * col.getZ(v)); }
+      ls.sort((x, y) => x - y);
+      floorL = 0.8 * ls[ls.length >> 1];
+    }
+    const uvA = sg.getAttribute('uv'), sn = sg.getAttribute('normal');
+    let reachR = 0;
+    for (let k = 0; k < sp.count; k++) reachR = Math.max(reachR, Math.hypot(sp.getX(k), sp.getZ(k)));
+    const ringFace = (t: number): boolean => {
+      const a0 = vtx(t, 0), a1 = vtx(t, 1), a2 = vtx(t, 2);
+      if (sn && (sn.getY(a0) + sn.getY(a1) + sn.getY(a2)) / 3 < 0.7) return false;
+      const x = (sp.getX(a0) + sp.getX(a1) + sp.getX(a2)) / 3, z = (sp.getZ(a0) + sp.getZ(a1) + sp.getZ(a2)) / 3;
+      return Math.hypot(x, z) > 0.6 * reachR;
+    };
+    const lumAt = albedoSampler(src.material);
+    let lumRef = 0;
+    if (lumAt && uvA) {
+      const ls: number[] = [];
+      for (let k = 0; k < 96; k++) { const v = vtx(Math.floor(rnd() * nTri), 0); ls.push(lumAt(uvA.getX(v), uvA.getY(v))); }
+      ls.sort((x, y) => x - y);
+      lumRef = ls[Math.floor(ls.length * 0.7)];
+    }
+    let medUV: [number, number] | null = null;
+    if (uvA) {
+      const us: number[] = [], vs: number[] = [];
+      for (let k = 0; k < 400 && us.length < 64; k++) {
+        const t = Math.floor(rnd() * nTri);
+        if (!ringFace(t)) continue;
+        const v = vtx(t, 0);
+        us.push(uvA.getX(v)); vs.push(uvA.getY(v));
+      }
+      if (us.length > 8) { us.sort((x, y) => x - y); vs.sort((x, y) => x - y); medUV = [us[us.length >> 1], vs[vs.length >> 1]]; }
+    }
+    const fn = new Vector3(), f0 = new Vector3(), f1 = new Vector3(), f2 = new Vector3();
     let base = 0;
     for (let i = 0; i < N; i++) {
       const pp = protos[i % 2].getAttribute('position'), nv = pp.count;
@@ -681,23 +733,61 @@ export class StructureFx {
       // lying blocks: mostly a yaw, a small tilt (they came to rest on the floor)
       q.setFromAxisAngle(e.set((rnd() - 0.5) * 0.5, 1, (rnd() - 0.5) * 0.5).normalize(), rnd() * Math.PI * 2);
       const sy = 0.55 + 0.3 * rnd(), sz = 0.75 + 0.35 * rnd();
-      // the stone of one plinth face: the centroid of a random triangle (its texel and colour, away from the seams)
-      const tri = Math.floor(rnd() * nTri);
+      // the stone of one plinth face: the largest of eight sampled triangles (a dressed face, not a joint or a sliver)
+      // When the plinth's albedo can be read (a 64 px copy, once per material), the face whose texel at its centre is
+      // nearest the plinth's 70th-percentile value wins (its lit dressed stone, never a joint's ink or a baked shadow)
+      // Without a readable albedo (the usual case: its bitmap is closed once uploaded), a face of the plinth's paved
+      // ring: sky-facing and in the outer 40 % of its reach (the lit dressed stone the camera sees, never the dark disc
+      // under the tower, an inner wall or an underside)
+      let tri = 0, best = -Infinity;
+      for (let k = 0, got = 0; k < 64 && got < 10; k++) {
+        const c = Math.floor(rnd() * nTri), ar = area(c);
+        if (!(lumAt && uvA) && k < 56 && !ringFace(c)) continue;
+        got++;
+        let score = ar;
+        if (!lumAt && uvA && medUV) {
+          // the ring's own uv island: the face nearest the ring faces' median uv (an inlay, a panel or a lit cap that
+          // happens to face up lies off in its own island)
+          const v0_ = vtx(c, 0), v1_ = vtx(c, 1), v2_ = vtx(c, 2);
+          score = -Math.hypot((uvA.getX(v0_) + uvA.getX(v1_) + uvA.getX(v2_)) / 3 - medUV[0], (uvA.getY(v0_) + uvA.getY(v1_) + uvA.getY(v2_)) / 3 - medUV[1]) + Math.min(ar, 0.02);
+        }
+        if (lumAt && uvA) {
+          const v0_ = vtx(c, 0), v1_ = vtx(c, 1), v2_ = vtx(c, 2);
+          const L = lumAt((uvA.getX(v0_) + uvA.getX(v1_) + uvA.getX(v2_)) / 3, (uvA.getY(v0_) + uvA.getY(v1_) + uvA.getY(v2_)) / 3);
+          score = -Math.abs(L - lumRef) * 10 + Math.min(ar, 0.05);
+        }
+        if (score > best) { best = score; tri = c; }
+      }
       const v0 = vtx(tri, 0), v1 = vtx(tri, 1), v2 = vtx(tri, 2);
-      for (let k = 0; k < nv; k++) {
-        const px = pp.getX(k), py = pp.getY(k), pz = pp.getZ(k);
-        // jitter each corner (seeded on the corner, so a corner shared by facets stays one point)
-        const h = (u: number): number => fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1 + u) * 43758.5453)) - 0.5;
-        w.set(px + 0.28 * h(1), (py + 0.28 * h(2)) * sy, (pz + 0.28 * h(3)) * sz).multiplyScalar(r).applyQuaternion(q);
-        const o = (base + k) * 3;
-        pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.04, w.y + r * sy * 0.3); pos[o + 2] = cz + w.z;
-        for (const x of extra) {
-          const n = x.at.itemSize, b = (base + k) * n;
-          for (let c = 0; c < n; c++) {
-            const g = (v: number): number => (c === 0 ? x.at.getX(v) : c === 1 ? x.at.getY(v) : c === 2 ? x.at.getZ(v) : x.at.getW(v));
-            let val = (g(v0) + g(v1) + g(v2)) / 3;
-            if (x.n === 'color' && c < 3) val *= 0.82;
-            x.arr[b + c] = val;
+      const ro = rnd(), rs = 0.55 + 0.35 * rnd();
+      for (let k = 0; k < nv; k += 3) {
+        // the facet's own frame: its normal picks the projection plane
+        f0.set(pp.getX(k), pp.getY(k), pp.getZ(k)); f1.set(pp.getX(k + 1), pp.getY(k + 1), pp.getZ(k + 1)); f2.set(pp.getX(k + 2), pp.getY(k + 2), pp.getZ(k + 2));
+        fn.subVectors(f1, f0).cross(_v2.subVectors(f2, f0));
+        const ax = Math.abs(fn.x), ay = Math.abs(fn.y), az = Math.abs(fn.z);
+        for (let c3 = 0; c3 < 3; c3++) {
+          const kk = k + c3;
+          const px = pp.getX(kk), py = pp.getY(kk), pz = pp.getZ(kk);
+          // jitter each corner (seeded on the corner, so a corner shared by facets stays one point)
+          const h = (u: number): number => fract(Math.sin((px * 12.99 + py * 78.23 + pz * 37.71 + i * 4.1 + u) * 43758.5453)) - 0.5;
+          w.set(px + 0.2 * h(1), (py + 0.2 * h(2)) * sy, (pz + 0.2 * h(3)) * sz).multiplyScalar(r).applyQuaternion(q);
+          const o = (base + kk) * 3;
+          pos[o] = cx + w.x; pos[o + 1] = Math.max(-0.04, w.y + r * sy * 0.3); pos[o + 2] = cz + w.z;
+          // planar coords on the facet's dominant plane, folded into the source triangle (barycentric b1, b2)
+          let u1 = ax >= ay && ax >= az ? pz : ay >= az ? px : px, u2 = ax >= ay && ax >= az ? py : ay >= az ? pz : py;
+          u1 = fract(0.5 + u1 * 0.5 * rs + ro), u2 = fract(0.5 + u2 * 0.5 * rs + ro * 1.7);
+          if (u1 + u2 > 1) { u1 = 1 - u1; u2 = 1 - u2; }
+          // kept near the face's centre (45 % of the way out toward its corners): its tooling and wear, not its joints
+          const b1 = 1 / 3 + 0.45 * (u1 - 1 / 3), b2 = 1 / 3 + 0.45 * (u2 - 1 / 3), b0 = 1 - b1 - b2;
+          for (const x of extra) {
+            const n = x.at.itemSize, b = (base + kk) * n;
+            const g = (v: number, cc: number): number => (cc === 0 ? x.at.getX(v) : cc === 1 ? x.at.getY(v) : cc === 2 ? x.at.getZ(v) : x.at.getW(v));
+            for (let cc = 0; cc < n; cc++) x.arr[b + cc] = g(v0, cc) * b0 + g(v1, cc) * b1 + g(v2, cc) * b2;
+            if (x.n === 'color') {
+              const L = 0.2126 * x.arr[b] + 0.7152 * x.arr[b + 1] + 0.0722 * x.arr[b + 2];
+              const k2 = 0.9 * Math.max(1, floorL / Math.max(1e-4, 0.9 * L));
+              for (let cc = 0; cc < Math.min(3, n); cc++) x.arr[b + cc] *= k2;
+            }
           }
         }
       }
@@ -708,8 +798,23 @@ export class StructureFx {
     g.setAttribute('position', new BufferAttribute(pos, 3));
     for (const x of extra) g.setAttribute(x.n, new BufferAttribute(x.arr, x.at.itemSize));
     g.computeVertexNormals();
+    // the facets lean 30 % to the sky: a chunk's shaded side stays in the plinth's value range, never a black face
+    const nm = g.getAttribute('normal') as BufferAttribute;
+    for (let k = 0; k < nm.count; k++) {
+      const x = nm.getX(k) * 0.7, y = nm.getY(k) * 0.7 + 0.3, z = nm.getZ(k) * 0.7, l = Math.hypot(x, y, z) || 1;
+      nm.setXYZ(k, x / l, y / l, z / l);
+    }
     g.computeBoundingSphere();
-    const m = new Mesh(g, src.material);
+    // its own copy of the plinth's material, its albedo eased ×0.8 (linear): the ring island's texels are the lit dressed
+    // stone, and loose blocks on the floor sit a step under the structure (screen p50 44 / p99 120 vs 36 / near-black
+    // before); same program (the copy keeps the patch and the cache key), freed with the rubble
+    const lift = (mm: Material): Material => {
+      const c = mm.clone();
+      const std = c as MeshStandardMaterial;
+      if (std.color) std.color.multiplyScalar(0.8);
+      return c;
+    };
+    const m = new Mesh(g, Array.isArray(src.material) ? src.material.map(lift) : lift(src.material));
     m.name = 'vale_struct_rubble';
     m.castShadow = true; m.receiveShadow = true;
     m.customDepthMaterial = shadowDepth('rigid');
@@ -1147,3 +1252,46 @@ function smooth(a: number, b: number, x: number): number {
 }
 
 function fract(x: number): number { return x - Math.floor(x); }
+
+/** max env ENV-6 fix: a dressed block with every corner knocked off (the convex hull of the box's corners pulled 22 % in
+ *  along each of their three edges, each cut a little different): 6 octagonal faces and 8 chip facets, 44 tris,
+ *  non-indexed, 1.6 x 1 x 1.2 at scale 1 */
+function chippedBlock(): BufferGeometry {
+  const hx = 0.8, hy = 0.5, hz = 0.6;
+  const pts: Vector3[] = [];
+  let k = 0;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    const c = 0.16 + 0.12 * fract(Math.sin(++k * 91.7) * 4375.85);
+    pts.push(new Vector3(sx * hx * (1 - c), sy * hy, sz * hz), new Vector3(sx * hx, sy * hy * (1 - c * 1.3), sz * hz), new Vector3(sx * hx, sy * hy, sz * hz * (1 - c)));
+  }
+  return new ConvexGeometry(pts);
+}
+
+/** max env ENV-6 fix: a luminance reader for a material's albedo map (a 64 x 64 copy drawn once per texture, cached), or
+ *  null when its image cannot be drawn (no map, a compressed or closed image, no 2D canvas). uv as glTF (flipY false). */
+const albedoCache = new WeakMap<object, ((u: number, v: number) => number) | null>();
+function albedoSampler(mat: Material | Material[]): ((u: number, v: number) => number) | null {
+  const m = (Array.isArray(mat) ? mat[0] : mat) as MeshStandardMaterial;
+  const tex = m?.map;
+  if (!tex) return null;
+  if (albedoCache.has(tex)) return albedoCache.get(tex) ?? null;
+  let fn: ((u: number, v: number) => number) | null = null;
+  try {
+    const img = tex.image as CanvasImageSource & { width?: number; height?: number };
+    if (img && (img.width ?? 0) > 0 && typeof OffscreenCanvas !== 'undefined') {
+      const N = 64, cv = new OffscreenCanvas(N, N), cx = cv.getContext('2d', { willReadFrequently: true });
+      if (cx) {
+        cx.drawImage(img, 0, 0, N, N);
+        const d = cx.getImageData(0, 0, N, N).data;
+        const flip = tex.flipY;
+        fn = (u: number, v: number): number => {
+          const x = Math.min(N - 1, Math.max(0, Math.floor(fract(u) * N))), yy = Math.min(N - 1, Math.max(0, Math.floor(fract(flip ? 1 - v : v) * N)));
+          const o = (yy * N + x) * 4;
+          return 0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2];
+        };
+      }
+    }
+  } catch { fn = null; }
+  albedoCache.set(tex, fn);
+  return fn;
+}

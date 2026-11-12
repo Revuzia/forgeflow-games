@@ -76,8 +76,14 @@ def hand(name, C, a, f, out, s, curl=1.0, grip_r=None, filled=True, relaxed=Fals
         sp = (i - 1.5) * spacing * s
         rr = (0.0110 if i else 0.0098) * s ** 0.85 * fat * (1.06 if relaxed else 1.0)
         ln = (0.86, 1.0, 1.06, 1.0)[i]                     # ring / middle a little longer, the pinky short
-        K = C + f * 0.006 * s + out * 0.026 * s + a * sp
-        M = C + f * (0.040 + 0.016 * o) * s * ln + out * (0.004 + 0.020 * o) * s + a * sp
+        fist = grip_r is None and curl > 0.6
+        # a closed fist seen from the front read as four equal stacked tubes (verify 2's "sausage blocks"): the fingers
+        # stagger (the middle finger furthest forward, the pinky tucked back and lower) and taper, so each reads
+        st = (-0.006, 0.0, 0.004, 0.001)[i] * s if fist else 0.0
+        if fist:
+            rr *= (0.90, 0.95, 0.97, 0.95)[i]
+        K = C + f * (0.006 * s + st * 0.5) + out * 0.026 * s + a * sp
+        M = C + f * ((0.040 + 0.016 * o) * s * ln + st) + out * (0.004 + 0.020 * o) * s + a * sp
         T = C + f * (0.026 + 0.050 * o) * s * ln - out * (0.026 - 0.040 * o) * s * ln + a * sp
         if relaxed:
             spread = a * ((i - 1.5) * 0.0030 * s)
@@ -103,7 +109,7 @@ def hand(name, C, a, f, out, s, curl=1.0, grip_r=None, filled=True, relaxed=Fals
         fs.add(Tube([P, D], [rr * 0.97, rr * 0.92], k=0.0), k=0.0012 * s)
         fs.add(Tube([D, T], [rr * 0.89, rr * 0.80], k=0.0), k=0.0010 * s)
         fs.add(Sphere(K + out * 0.006 * s, rr * 1.12), k=0.003 * s)                     # MCP knuckle
-        fs.add(Sphere(P + unit(P - C - a * (P - C).dot(a)) * 0.0028 * s, rr * 0.98), k=0.0016 * s)   # PIP bump
+        fs.add(Sphere(P + unit(P - C - a * (P - C).dot(a)) * 0.0040 * s, rr * 1.0), k=0.0016 * s)   # PIP bump
         fs.add(Sphere(D + unit(D - C - a * (D - C).dot(a)) * 0.0018 * s, rr * 0.88), k=0.0012 * s)   # DIP
         for op, prim, k, tg in fs.ops:
             fingers.ops.append((op, prim, k, tg))
@@ -113,6 +119,11 @@ def hand(name, C, a, f, out, s, curl=1.0, grip_r=None, filled=True, relaxed=Fals
     tb = C - f * 0.034 * s - out * 0.018 * s + a * 0.046 * s
     tm = C + f * 0.006 * s - out * (0.034 - 0.006 * o) * s + a * (0.050 + 0.004 * o) * s
     tt = C + f * (0.040 + 0.010 * o) * s - out * (0.016 + 0.004 * o) * s + a * (0.034 + 0.010 * o) * s
+    if grip_r is None and curl > 0.6:
+        # a closed fist's thumb folds ACROSS the front of the index and middle fingers' middle phalanges
+        tb = C - f * 0.022 * s - out * 0.022 * s + a * 0.050 * s
+        tm = C + f * 0.030 * s - out * 0.024 * s + a * 0.042 * s
+        tt = C + f * 0.052 * s - out * 0.008 * s + a * 0.012 * s
     if grip_r is not None:
         for X in (tm, tt):
             r = X - C - a * (X - C).dot(a)
@@ -397,6 +408,9 @@ def install(spec, arm, objs, log=print) -> list:
                     j = np.argsort(d, 1)[:, :6]
                     wgt = 1.0 / (np.take_along_axis(d, j, 1) + 1e-4)
                     cols[k0:k0 + 4096] = (vcol[hv][j] * wgt[..., None]).sum(1) / wgt.sum(1, keepdims=True)
+                # half toward the glove's median: the low mesh's painted creases sat on the low mesh's fingers and drew
+                # light seam lines across the card hand's; the card hand's own geometry carries the form
+                cols = 0.5 * cols + 0.5 * np.median(vcol[hv], 0)[None]
             Mo = np.array(o.matrix_world)
             vl = (v - Mo[:3, 3]) @ np.linalg.inv(Mo[:3, :3]).T
             me = sdf.to_mesh(f"card_{part}_{o.name}", vl, q)

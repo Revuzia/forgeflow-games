@@ -172,12 +172,12 @@
   },
   "shadow_slab": {
     "id": "shadow_slab",
-    "tris": 979,
+    "tris": 1203,
     "size_m": [
       1.81,
       2.9
     ],
-    "height": 3.91,
+    "height": 3.93,
     "x": [
       -1.07,
       0.74
@@ -186,34 +186,34 @@
       -1.45,
       1.45
     ],
-    "kb_raw": 194,
-    "kb": 72,
+    "kb_raw": 217,
+    "kb": 85,
     "texture": 1024,
-    "buried_faces_dropped": 449,
+    "buried_faces_dropped": 337,
     "nodes": [
       "body"
     ]
   },
   "hour_stone": {
     "id": "hour_stone",
-    "tris": 1470,
+    "tris": 1616,
     "size_m": [
-      5.42,
-      2.77
+      5.43,
+      2.76
     ],
-    "height": 1.28,
+    "height": 1.25,
     "x": [
-      -2.89,
+      -2.9,
       2.53
     ],
     "y": [
-      -1.52,
+      -1.51,
       1.25
     ],
-    "kb_raw": 218,
-    "kb": 91,
+    "kb_raw": 244,
+    "kb": 107,
     "texture": 1024,
-    "buried_faces_dropped": 137,
+    "buried_faces_dropped": 106,
     "nodes": [
       "body"
     ]
@@ -728,24 +728,24 @@
   },
   "hour_stone_g": {
     "id": "hour_stone_g",
-    "tris": 1563,
+    "tris": 1700,
     "size_m": [
       5.43,
       2.76
     ],
-    "height": 1.33,
+    "height": 1.27,
     "x": [
       -2.9,
       2.53
     ],
     "y": [
-      -1.51,
+      -1.52,
       1.25
     ],
-    "kb_raw": 241,
-    "kb": 104,
+    "kb_raw": 258,
+    "kb": 113,
     "texture": 1024,
-    "buried_faces_dropped": 157,
+    "buried_faces_dropped": 129,
     "nodes": [
       "body"
     ]
