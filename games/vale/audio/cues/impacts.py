@@ -29,7 +29,7 @@ from synth import sfx as S
 from .fighters import detune
 from .kit import Layers, finish, mono, norm, room
 from .kits_a import SOFT_TOP
-from .kits_c import FIGHTERS, HIT_BASE, ROOMS, _ORIG, _crack, _lower, _sig, _voice, snap_post, with_body
+from .kits_c import FIGHTERS, HIT_BASE, ROOMS, SNAP_RISE_MAX_MS, _ORIG, _crack, _lower, _sig, _voice, snap_post, with_body
 
 T_HEAVY = ('m', -16.5)
 T_ULT = ('m', -16.0)
@@ -117,7 +117,8 @@ def _make_heavy(fid: str, slot: str):
     recipe.__doc__ = (f"{fid.capitalize()}'s heaviest ability ({slot}) lands: its attack material a minor third down, its "
                       f"signature struck twice (the call's note and a fifth under it), a heavy thump, its crack and grit.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost)
+    REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 
 
@@ -140,7 +141,8 @@ def _make_ult(fid: str):
     recipe.__doc__ = (f"{fid.capitalize()}'s ult lands: its attack material a fourth down, its signature struck hard with "
                       f"its own octave-down bloom, a deep boom, its crack and grit, in a wetter {ROOMS[fid]} room.")
     recipe.__name__ = cid
-    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling)
+    REGISTRY[cid].extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost)
+    REGISTRY[cid].extra['rise_max_ms'] = SNAP_RISE_MAX_MS
     return recipe
 
 

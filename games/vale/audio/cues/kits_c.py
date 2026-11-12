@@ -476,6 +476,7 @@ SNAP_TUNE: dict[str, tuple[float, float] | None] = {
     'f_kemdo_hit': None, 'f_nurrow_hit': None, 'f_odrum_hit': None, 'f_ulkro_hit': None,
 }
 SNAP_PEAK_DBFS = -1.8         # the transient's sample peak (the mastering's true-peak ceiling is -1.5 dBTP)
+SNAP_RISE_MAX_MS = 3.0        # the build re-masters a take whose DECODED onset-to-peak is over this, its easing BOOSTED (see build.render)
 SNAP_LOUD_LU = 0.6            # the most max-momentary loudness the easing may cost a take (the build's tolerance: 1 LU)
 SNAP_KEEP_DB = 0.5            # a take that already peaks in its first SNAP_WIN_MS by this much keeps its own onset
 SNAP_MAX_MS = 2.0            # the transient layer's own length
@@ -505,7 +506,7 @@ def _snap_layer(xs: np.ndarray, ms: float = SNAP_MAX_MS) -> np.ndarray:
     return norm(y)
 
 
-def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -1.5) -> np.ndarray:
+def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -1.5, boost: float = 0.0) -> np.ndarray:
     """The snap pass on a MASTERED take (audio/build.py calls it after cuelib.master, before the codec; see the section
     note): when the take's peak is not its first SNAP_WIN_MS, the body's peaks are eased (a look-ahead limiter) to
     SNAP_MARGIN_DB under the transient's level SNAP_PEAK_DBFS, and the take's own impulse is set at the onset at the level
@@ -525,21 +526,29 @@ def snap_post(y: np.ndarray, fid: str, v: int, cid: str = '', ceiling: float = -
         return y
     top = 10 ** (min(SNAP_PEAK_DBFS, ceiling - 0.3) / 20)     # under the ceiling the build masters to (a codec retry lowers it)
     lay = _place(xs.shape[-1], _snap_layer(xs, ms), i)[None, :]
-    l0 = LD.max_momentary(xs)
-    for mg in (margin, 0.5 * margin, 0.0):          # the least easing that keeps the take's loudness (SNAP_LOUD_LU)
-        room_ = top * 10 ** (-mg / 20)
-        base = fx.limit(xs, 20 * np.log10(room_) - 0.1, release_ms=40.0)[:, :xs.shape[-1]] if rest > room_ else xs
-        if l0 - LD.max_momentary(base) <= SNAP_LOUD_LU:
-            break
-    a, b = 0.0, 4.0 * top
     s0, s1 = max(0, i - ns(0.002)), min(xs.shape[-1], w + ns(0.002))
     tdb = 20 * np.log10(top)
-    for _ in range(24):                              # the transient's TRUE peak (a 1-2 ms impulse overshoots between samples)
-        g = 0.5 * (a + b)
-        if LD.true_peak((base + g * lay)[:, s0:s1]) < tdb:
-            a = g
-        else:
-            b = g
+
+    def level(base: np.ndarray) -> float:
+        """the transient's gain: its TRUE peak on the ceiling's side of `top` (a 1-2 ms impulse overshoots between samples)"""
+        a, b = 0.0, 4.0 * top
+        for _ in range(24):
+            g = 0.5 * (a + b)
+            if LD.true_peak((base + g * lay)[:, s0:s1]) < tdb:
+                a = g
+            else:
+                b = g
+        return a
+    g = level(xs)
+    pk = float(np.max(np.abs(xs + g * lay)[:, i:w]))            # the transient's SAMPLE peak: the body goes under this
+    l0 = LD.max_momentary(xs)
+    base = xs
+    for mg in (margin + boost, 0.5 * margin + boost, boost):    # the least easing that keeps the take's loudness
+        room_ = pk * 10 ** (-mg / 20)
+        base = fx.limit(xs, 20 * np.log10(room_) - 0.1, release_ms=8.0)[:, :xs.shape[-1]] if rest > room_ else xs
+        if l0 - LD.max_momentary(base) <= SNAP_LOUD_LU:
+            break
+    a = level(base)
     xs = base
     return fx.limit(xs + a * lay, ceiling)[:, :xs.shape[-1]]      # its true peak (inter-sample) under the ceiling too
 
@@ -679,7 +688,8 @@ def _wrap(cid: str, fid: str) -> None:
     spec.fn = voiced
     if slot in CONTACT_SLOTS:
         spec.variants = CRACK_TAKES.get(cid, HIT_TAKES)
-        spec.extra['post'] = lambda y, v, ceiling=-1.5, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling)
+        spec.extra['post'] = lambda y, v, ceiling=-1.5, boost=0.0, _fid=fid, _cid=cid: snap_post(y, _fid, v, _cid, ceiling, boost)
+        spec.extra['rise_max_ms'] = SNAP_RISE_MAX_MS if SNAP_TUNE.get(cid, ()) is not None else None
 
 
 # ── recipes ──────────────────────────────────────────────────────────────────────────────────────

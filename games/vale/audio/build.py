@@ -77,6 +77,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import dataclasses
 import json
 import math
 import os
@@ -177,13 +178,16 @@ def render(cid: str, files: list[str]) -> list[dict]:
         t0 = time.time()
         raw = spec.fn(i % max(1, spec.variants))
         ceiling = CEILING_DBTP
-        for attempt in range(4):
-            y, info = master(raw, spec, ceiling)
+        boost = 0.0                               # (max2) a snapped take's extra body easing after a late decoded peak …
+        lift = 0.0                                # … and the mastering target's lift that gives back the loudness it cost
+        for attempt in range(7):
+            y, info = master(raw, spec if not lift else dataclasses.replace(spec, target=(spec.target[0], spec.target[1] + lift)),
+                             ceiling)
             if 'error' in info:
                 rows.append(dict(id=cid, file=ref, error=info['error']))
                 break
             if spec.extra.get('post'):            # a post-master pass (kits_c.snap_post: a kit hit's onset transient)
-                y = spec.extra['post'](y, i % max(1, spec.variants), ceiling)
+                y = spec.extra['post'](y, i % max(1, spec.variants), ceiling, boost)
             if not spec.loop:
                 y = np.pad(y, ((0, 0), (ns_(LEAD_S), 0)))
             side = 0.5 * (y[0] - y[1])
@@ -206,9 +210,16 @@ def render(cid: str, files: list[str]) -> list[dict]:
             aac.encode_m4a(data, m4a, AAC_KBPS[ch], loop=spec.loop)
             dm = decode(m4a)
             over = max(tp, float(L.true_peak(dm, circular=spec.loop))) - TP_MAX
-            if over <= 0 or attempt == 3:
+            late = bool(spec.extra.get('rise_max_ms')) and rise_ms(dec) > spec.extra['rise_max_ms']
+            short = (spec.target[1] - measure(dec, spec.target[0], spec.loop)) if spec.extra.get('post') else 0.0
+            if (over <= 0 and not late and abs(short) <= 0.5) or attempt == 6:
                 break
-            ceiling -= over + 0.3                 # codec overshoot: master again under a lower ceiling
+            if abs(short) > 0.5:
+                lift += 0.6 * short               # the snap's easing moved the loudness: master hotter (cooler), damped
+            if over > 0:
+                ceiling -= over + 0.3             # codec overshoot: master again under a lower ceiling
+            if late:
+                boost += 1.5                      # the codec smeared the snap under the body: ease the body further
         if 'error' in info:
             continue
         kind, tgt = spec.target
