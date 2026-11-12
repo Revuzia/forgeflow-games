@@ -33,6 +33,88 @@
   "figure_median": 1,
   "date": "2026-11-11"
  },
+ "ervet:splash": {
+  "shipped": "3d",
+  "why": "ce1 (re-staged to cast_a3 t 0.12: the visor clear, closing ervet-C2-M1): all 3 paintings are on-model and read well by eye, but each fails the eye gate (eye_ds +43..+67): Ervet's helm has no eyes, so the gate's warm face pixels are the warm-lit chalk face-plate; not relaxed here, the 3D card ships and the lead is asked for a ruling on visor helms",
+  "gates": [
+   {
+    "aspect_err": 0.0,
+    "struct": 0.984,
+    "iou": 0.941,
+    "pal_mean": 7.6,
+    "pal_max": 10.0,
+    "face_range": 1.39,
+    "face_dark": 1.03,
+    "face_corr": 0.94,
+    "new_colour": 0.0,
+    "eye_ds": 66.6,
+    "eye_dv": -15.5,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "menu_p50": 112,
+    "menu_over200": 1.7,
+    "fails": [
+     "menu_luma",
+     "eyes_sat"
+    ],
+    "pass": false,
+    "variant": 1
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.929,
+    "iou": 0.852,
+    "pal_mean": 10.5,
+    "pal_max": 16.3,
+    "face_range": 1.27,
+    "face_dark": 1.08,
+    "face_corr": 0.93,
+    "new_colour": 0.0,
+    "eye_ds": 60.4,
+    "eye_dv": -20.4,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "menu_p50": 108,
+    "menu_over200": 0.9,
+    "fails": [
+     "eyes_sat"
+    ],
+    "pass": false,
+    "variant": 2
+   },
+   {
+    "aspect_err": 0.0,
+    "struct": 0.981,
+    "iou": 0.953,
+    "pal_mean": 6.1,
+    "pal_max": 8.0,
+    "face_range": 1.24,
+    "face_dark": 1.05,
+    "face_corr": 0.98,
+    "new_colour": 0.0,
+    "eye_ds": 43.1,
+    "eye_dv": -15.5,
+    "prop_out": 0.0,
+    "prop_out_fill": 0.0,
+    "prop_in": 0.0,
+    "prop_in_fill": 0.0,
+    "menu_p50": 112,
+    "menu_over200": 1.2,
+    "fails": [
+     "menu_luma",
+     "eyes_sat"
+    ],
+    "pass": false,
+    "variant": 3
+   }
+  ],
+  "prompt_version": 4,
+  "date": "2026-11-11"
+ },
  "ervet_lamplit:portrait": {
   "shipped": "painted",
   "variant": 1,
