@@ -9,6 +9,7 @@
 
 import { PerfRecorder, type PerfContext, type PerfEnv } from './perfreport.ts';
 import { perfNum, perfSwitch } from './perfswitch.ts';
+import { gpuMem } from './gpumem.ts';
 
 // PERF s12 bisection (GPU-HUNT-PLAN §2): `?recms=10000` the report's recording length (default 20 s, whatever asks);
 // `?passsync=1` gl.finish() at every slot begin / end and pass mark while recording: per-pass ms that are exact on a
@@ -76,7 +77,10 @@ export class PerfMonitor {
   context: (() => PerfContext) | null = null;
   env: (() => PerfEnv) | null = null;
   /** the GL context to time (app.ts) */
-  gl: WebGL2RenderingContext | null = null;
+  private gl_: WebGL2RenderingContext | null = null;
+  /** the GL context to time (app.ts); setting it also starts the live GPU memory audit (gpumem.ts) */
+  get gl(): WebGL2RenderingContext | null { return this.gl_; }
+  set gl(g: WebGL2RenderingContext | null) { this.gl_ = g; if (g) { try { gpuMem.install(g); } catch { /* unaudited */ } } }
   /** the three.js renderer (app.ts): its render-target binds are traced while recording (target sizes / formats) */
   three: unknown = null;
 

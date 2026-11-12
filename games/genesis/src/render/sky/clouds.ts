@@ -1427,7 +1427,11 @@ export function deckTunnel(st: TunnelState, r0: number, now: number, innerR: num
   if (DECK_MIST) near = Math.max(near, 0.7 * inShell);
   // (a tiny positive fog keeps the shader's near-zone path on while the tunnel is open outside the shell edge)
   const camFog = Math.max(inShell * (1 - near), near > 0.01 ? 1e-4 : 0);
-  const nearR = 35 + near * (DECK_ZOOM ? 450 : Math.min(450, 60 + st.v * 0.6));
+  let nearR = 35 + near * (DECK_ZOOM ? 450 : Math.min(450, 60 + st.v * 0.6));
+  // (round 3, owner: stepping down into the deck's UPPER part stayed fully white: from up there the deck below the
+  // camera is longer than the 350 m clear zone along the view — the clear zone of a resting camera reaches through the
+  // deck beneath it, ~2.5x its height above the deck base)
+  if (DECK_MIST && inShell > 0) nearR = Math.max(nearR, inShell * Math.min(1200, 120 + 2.5 * Math.max(0, r0 - innerR)));
   // (deckmist: the fog in front of the lens lets at least 45 % of the view through while resting in the deck)
   return { camFog, nearR, mist: DECK_MIST ? 0.45 * inShell : 0 };
 }

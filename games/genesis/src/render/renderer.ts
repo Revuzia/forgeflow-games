@@ -40,6 +40,7 @@ import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
 import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 import { perfmon } from './perfmon.ts';
+import { gpuMem } from './gpumem.ts';
 import { perfList, perfNum, perfSwitch, perfSwitchNote } from './perfswitch.ts';
 // PERF s12 BISECTION switches (owner's M5 is GPU-bound: ~100x per pixel vs Vale). Each turns a heavy pass / feature
 // OFF for an A/B run only (`?msaa=0`, `?clouds=0`, ...); all default ON (the game's look), and the perf report header
@@ -218,6 +219,8 @@ export class Renderer {
       canvas, antialias: false, alpha: false, depth: true, stencil: false, logarithmicDepthBuffer: true,
       powerPreference: 'high-performance', preserveDrawingBuffer: false,
     });
+    // (PERF s14) the live GPU memory audit from the first allocation on (the perf report's 'gpu mem' lines)
+    try { gpuMem.install(this.three.getContext() as WebGL2RenderingContext); } catch { /* unaudited */ }
     enableConservativeDepth(this.three, Z_CONS);
     { const sp = wantSpanUploads(this.three); perfSwitchNote('span', sp ? '1' : '0'); installSpanUploads(sp); }
     if (PRE_UPLOAD) installTexturePreUpload();

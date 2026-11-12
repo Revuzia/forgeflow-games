@@ -49,6 +49,10 @@ test('a camera resting inside the deck sees through a thinned mist (owner ruling
   assert.ok(last.camFog > 0.2 && last.camFog < 0.4, `resting fog: ${last.camFog}`);
   assert.ok(last.mist >= 0.4, `resting mist floor: ${last.mist}`);
   assert.ok(last.nearR > 300, `resting clear zone: ${last.nearR}`);
+  // resting in the deck's upper part (round 3: fully white there): the clear zone reaches through the deck below
+  const top = newTunnelState();
+  for (let f = 0; f < 300; f++) last = deckTunnel(top, OUTER - 10, 1000 + f * 16.7, INNER, OUTER, inShellOf(OUTER - 10));
+  assert.ok(last.nearR > (OUTER - 10 - INNER) * 2, `clear zone at the deck top: ${last.nearR}`);
   // above the deck, still: no fog, no clear zone, no mist (the deck seen from above is the deck)
   const above = newTunnelState();
   for (let f = 0; f < 120; f++) last = deckTunnel(above, OUTER + 600, 1000 + f * 16.7, INNER, OUTER, 0);
