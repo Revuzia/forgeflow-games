@@ -27,15 +27,37 @@
  "probe_combat_polish": {
   "base": "_harness/_reports/fw_W1_combat_polish_m2_base.json (ult,hold --ults all): PASS; detailLost 2 on hesmi, lisvel, nurrow, vashil",
   "after": "_harness/_reports/fw_W1_combat_polish_m2_r3.json (ult --ults hesmi,lisvel,nurrow,vashil): PASS",
-  "hesmi": {"before": "lost 2, min 0.37, box 0.068, core x2.10", "after": "lost 2, min 0.36, box 0.060, core x2.09"},
-  "lisvel": {"before": "lost 2, min 0.24, box 0.265, full-frame body white 0.392, core x2.44", "after": "lost 2, min 0.31, box 0.183, full-frame body white 0.23, core x2.43"},
-  "nurrow": {"before": "lost 2, min 0.31, core x2.02", "after": "lost 1, min 0.48, core x1.96 / ground x2.01 (probe PASS)"},
-  "vashil": {"before": "lost 2, min 0.28, box 0.319, core x2.28", "after": "lost 2, min 0.31, box 0.209, core x2.22"},
+  "hesmi": {
+   "before": "lost 2, min 0.37, box 0.068, core x2.10",
+   "after": "lost 2, min 0.36, box 0.060, core x2.09"
+  },
+  "lisvel": {
+   "before": "lost 2, min 0.24, box 0.265, full-frame body white 0.392, core x2.44",
+   "after": "lost 2, min 0.31, box 0.183, full-frame body white 0.23, core x2.43"
+  },
+  "nurrow": {
+   "before": "lost 2, min 0.31, core x2.02",
+   "after": "lost 1, min 0.48, core x1.96 / ground x2.01 (probe PASS)"
+  },
+  "vashil": {
+   "before": "lost 2, min 0.28, box 0.319, core x2.28",
+   "after": "lost 2, min 0.31, box 0.209, core x2.22"
+  },
   "rootCause": "On the remaining flat frames the body keeps 0.73-0.87 of its detail with the actor's victim flash hidden (noFlash) and only 0.34-0.63 with the VFX pass off: the flattening is the T4 victim flash (actors.ts VICTIM_FLASH.k.T4 1.0), which the def-level feel hitFlash did not reach on Hesmi's and Vashil's beats",
   "VFX-8 hold (base run)": "discMs kemdo 300, rishal 333, tunlan 200 (gate >= 167): unchanged from round 1"
  },
  "budgets": {
   "perf_1080 --prod --q high,ultra --no-dyn --no-mem --match-seeds 7 (dist-catalog carrying this lane's defs)": "High 151 draws, 210.6k tris, 39 programs; Ultra 150 draws, 222.4k tris, 39 programs; match peak (seed 7) 450k tris, 294 draws, 40 programs, vfx 35k tris / 18 draws in the peak frame. All within 500k / 450 / 40. Timing not measured (load 26-34).",
   "memory": "not re-measured: no texture, render target or new geometry shape was added (the shaft, ring_thin and countdown decal already existed; the sweeps drop a mesh draw)"
+ },
+ "round2b": {
+  "date": "2026-11-12 08:40 Central",
+  "m2r2_sweep_lisvel_ab.png": "node _harness/vfx_gallery.mjs lib_sunsplinter_sweep lisvel_ult_corridor --per 2 --zoom 31 --times 0.05,0.15,0.3,0.6; BEFORE = HEAD 501e85d8f defs, AFTER = working tree (both pinned into the same catalog). Rows: before/after per def",
+  "lib_sunsplinter_sweep": "the scorch stood at its full 2.6 m from frame 1 as a near-black wedge (#2A2C33 a0.55) ahead of the light front (visible at 0.05-0.15 s in m2_sweeps_ab AFTER too); now it grows behind the front ([0 0.4, 0.5 2.6]) as warm CHAR #5A5046 with alpha 0 -> 0.5 -> 0. Sheet: the black wedge is gone, the end frame keeps a faint warm char",
+  "VFX-6 feel timing": "instrumented run (scratch copy of probe_combat_polish): Hesmi's damage and the shard spawn land on f34, but the landing also spawns lib_hit_phys_heavy whose feel hitFlash 1.25 multiplies the ult's x0.7 back to 0.875; Vashil's damage lands one frame before the toll def, so its feel boosts at f28 (fk 1.0 -> 0.34 then). The +30 ms feel delay is removed on all 13 ult feel layers (they fire on the landing frame); the flat frames are the flash and the exposure lift together (noFlash 0.73-0.87, noVfx 0.34-0.66)",
+  "VFX-6 probe": "_harness/_reports/fw_W1_combat_polish_m2r2_a.json (delay removed): no change. m2r2_b (hitFlash Hesmi 0.5, Lisvel 0.5, Vashil 0.4): Lisvel min 0.32 -> 0.40 (f36 0.42 -> 0.48), Hesmi full 0.38 unchanged (noVfx 0.34 -> 0.42), Vashil 0.31 unchanged. Kept: Lisvel x0.5; Hesmi x0.7 and Vashil x0.55 restored (a weaker landing flash with no gain in the full frame). All PASS; detailLost Hesmi 2, Lisvel 2, Nurrow 1, Vashil 2 (gate <= 2)",
+  "VFX-8 hold": "_harness/_reports/fw_W1_combat_polish_m2r2_hold.json: discMs kemdo 300, rishal 333, tunlan 200 (gate >= 167), unchanged",
+  "budgets": "decal radius/colour/alpha and feel parameters only: no mesh, texture, draw or program added (triangle-, draw- and memory-neutral); perf_1080 and probe_match_memory not re-run for this change",
+  "checks": "build_vfx --check clean (302 defs, 51 tuned); npm run -s typecheck, npm run -s probe (55/55), npm run -s content:check pass"
  }
 }
