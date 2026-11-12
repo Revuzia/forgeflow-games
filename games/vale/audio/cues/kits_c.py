@@ -268,7 +268,42 @@ AIR_MAX_DB = -9.0            # the air never comes nearer the peak than this (no
 # fighter keeps >= ID_MIN_DIST_DB from every other in its slot (a dark fighter's identity is its darkness: its crack is
 # small). mode 'full': crack, grit and air; 'crack': the onset crack and grit only (no air tail); 'plain': the take as
 # the recipe made it (no crack, no take shape). Absent: (1.0, 1.0, 'full').
-CRACK_TUNE: dict[str, tuple[float, float, str]] = {}
+CRACK_TUNE: dict[str, tuple[float, float, str]] = {
+    'f_ardit_attack_hit': (0.3, 1.55, 'full'),
+    'f_ardit_hit': (1.0, 0.8, 'full'),
+    'f_burdam_attack_hit': (0.0, 1.0, 'plain'),
+    'f_burdam_hit': (0.8, 0.8, 'crack'),
+    'f_dunsom_attack_hit': (0.0, 1.0, 'full'),
+    'f_dunsom_hit': (0.3, 0.8, 'crack'),
+    'f_ervet_attack_hit': (1.0, 0.65, 'full'),
+    'f_ervet_hit': (1.0, 0.65, 'full'),
+    'f_hesmi_attack_hit': (0.0, 1.0, 'full'),
+    'f_hesmi_hit': (0.3, 1.55, 'full'),
+    'f_ilsheta_attack_hit': (1.0, 0.65, 'full'),
+    'f_ilsheta_hit': (1.0, 1.25, 'full'),
+    'f_kemdo_attack_hit': (1.0, 0.65, 'full'),
+    'f_kemdo_hit': (1.0, 1.25, 'full'),
+    'f_lisvel_attack_hit': (0.0, 1.0, 'full'),
+    'f_lisvel_hit': (1.0, 1.55, 'full'),
+    'f_marund_attack_hit': (1.0, 0.65, 'full'),
+    'f_marund_hit': (1.0, 1.25, 'full'),
+    'f_nurrow_attack_hit': (1.0, 1.0, 'crack'),
+    'f_nurrow_hit': (0.8, 1.25, 'crack'),
+    'f_odrum_attack_hit': (0.3, 1.55, 'full'),
+    'f_odrum_hit': (1.0, 0.65, 'full'),
+    'f_rishal_attack_hit': (1.0, 0.65, 'full'),
+    'f_rishal_hit': (0.0, 1.0, 'full'),
+    'f_sukri_attack_hit': (0.0, 1.0, 'full'),
+    'f_sukri_hit': (1.0, 1.55, 'full'),
+    'f_tunlan_attack_hit': (0.0, 1.0, 'plain'),
+    'f_tunlan_hit': (0.0, 1.0, 'full'),
+    'f_ulkro_attack_hit': (0.3, 1.0, 'crack'),
+    'f_ulkro_hit': (0.3, 1.25, 'crack'),
+    'f_vashil_attack_hit': (0.8, 1.55, 'crack'),
+    'f_vashil_hit': (0.55, 1.25, 'full'),
+}
+# … and the cues that keep 3 takes (a 4th sat too near another fighter's); every other kit hit has HIT_TAKES
+CRACK_TAKES: dict[str, int] = {'f_burdam_attack_hit': 3, 'f_burdam_hit': 3, 'f_lisvel_attack_hit': 3, 'f_lisvel_hit': 3, 'f_odrum_hit': 3, 'f_tunlan_attack_hit': 3, 'f_ulkro_attack_hit': 3}
 HIT_TAKES = 4                # a kit attack hit and ability hit: 4 takes, each its own shape (TAKE_SHAPE)
 # per take: (crack centre ratio, flam: (gap ms, level dB) or None, crack length ms, air t60 ratio, air peak ms,
 #            body decay tau s after the first 30 ms (None: untouched), pitch ratio (playback slower > 1))
@@ -533,7 +568,7 @@ def _wrap(cid: str, fid: str) -> None:
     voiced.__doc__ = (fn.__doc__ or '') + ' [kits_c identity pass]'
     spec.fn = voiced
     if slot in CONTACT_SLOTS:
-        spec.variants = HIT_TAKES
+        spec.variants = CRACK_TAKES.get(cid, HIT_TAKES)
 
 
 # ── recipes ──────────────────────────────────────────────────────────────────────────────────────

@@ -476,13 +476,15 @@ def contract_gates(contract: dict) -> tuple[list[str], dict]:
 WICK_MIN_TAKES = 4
 WICK_MAX_VOICES = 3
 WICK_TAKE_SIM_MAX = 0.985    # take-to-take smoothed log-spectrum correlation (sfx_ab.logspec): no near-clones
+WICK_TAKE_TF_MAX = 0.965     # … and the takes' median time-frequency correlation (sfx_ab.tf_sim): they differ in time too
 
 
 def wick_gate(contract: dict) -> tuple[list[str], dict]:
     """wicks (max SFX-1): every lane minion's attack present.sfx / hitSfx is a Wick cue (w_…) used by no fighter, item or
-    other unit kind, rendered with >= WICK_MIN_TAKES takes no two of which are near-clones (<= WICK_TAKE_SIM_MAX), at most
+    other unit kind, rendered with >= WICK_MIN_TAKES takes no two of which are near-clones (<= WICK_TAKE_SIM_MAX) and
+    which differ in time as well (median time-frequency similarity <= WICK_TAKE_TF_MAX), at most
     WICK_MAX_VOICES voices, and its hits lose <= LAPTOP_MAX_LU on a laptop."""
-    from sfx_ab import logspec
+    from sfx_ab import logspec, tf_sim
     fails: list[str] = []
     cues = contract['cues']
     rep: dict = {}
@@ -516,7 +518,10 @@ def wick_gate(contract: dict) -> tuple[list[str], dict]:
             sp = [logspec(x) for x in xs]
             sim = max((float(np.corrcoef(sp[i], sp[j])[0, 1]) for i in range(len(sp)) for j in range(i + 1, len(sp))), default=0.0)
             lap = max(laptop_loss(x) for x in xs) if role == 'hitSfx' else None
-            rep[c] = {'takes': len(xs), 'takeSim': sim, 'maxVoices': cues[c].get('maxVoices'), 'laptop': lap}
+            tfs = tf_sim(xs) or 0.0
+            rep[c] = {'takes': len(xs), 'takeSim': sim, 'takeTfSim': tfs, 'maxVoices': cues[c].get('maxVoices'), 'laptop': lap}
+            if tfs > WICK_TAKE_TF_MAX:
+                fails.append(f'wicks: {c} takes differ only by seed (time-frequency similarity {tfs:.3f} > {WICK_TAKE_TF_MAX})')
             if len(xs) < WICK_MIN_TAKES:
                 fails.append(f'wicks: {c} has {len(xs)} takes (< {WICK_MIN_TAKES})')
             if sim > WICK_TAKE_SIM_MAX:
@@ -1447,7 +1452,7 @@ def print_gates(fails: list[str], rep: dict) -> None:
         lv = '  '.join(f"{s} {x['level']:.1f}" for s, x in u['levels'].items())
         print(f"  {uid:12s} kit {len(u['kit'])} slots{(' MISSING ' + ','.join(u['missing'])) if u['missing'] else ''}; autos {lv}")
     wk = rep.get('wicks', {})
-    print(f'wick gate: {len(wk)} Wick cues: ' + ', '.join(f"{c} {x['takes']}x sim {x['takeSim']:.3f}" + (f" lap {x['laptop']:.1f}" if x['laptop'] is not None else '') for c, x in wk.items()))
+    print(f'wick gate: {len(wk)} Wick cues: ' + ', '.join(f"{c} {x['takes']}x sim {x['takeSim']:.3f} tf {x['takeTfSim']:.3f}" + (f" lap {x['laptop']:.1f}" if x['laptop'] is not None else '') for c, x in wk.items()))
     print('  ' + ('\n  '.join(f'FAIL {x}' for x in fails) if fails else
                  f'PASS: a distinct cue per control kind, c_buff for buffs only, all land <= {CC_ONSET_MS:g} ms, >= {CC_MIN_DIST_DB:g} dB apart;'
                  f' every paying passive has a proc cue; every map {AMB_MIN}-{AMB_MAX} ambience emitters on real points;'

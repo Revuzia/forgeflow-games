@@ -7,7 +7,8 @@ Each side of a pair is a glob (several joined by ';') of decoded-able files (.og
 rebuild and audio/out/<cue>*.ogg after it. Per side (the mean over its takes): max momentary loudness (LUFS),
 true peak (dBTP), onset rise (ms from the -40 dB onset to the peak of the sample envelope), spectral centroid (Hz),
 energy share 2-6 kHz / 6-12 kHz / above 12 kHz, side/mid energy, and the take similarity: the highest correlation
-between two takes' smoothed log spectra (1/6-octave, 100 Hz - 16 kHz; the max audit's measure; 1.0 = clones).
+between two takes' smoothed log spectra (1/6-octave, 100 Hz - 16 kHz; the max audit's measure; 1.0 = clones), and the
+median time-frequency similarity of the takes (tfspec: how alike they are in time as well as spectrum).
 """
 from __future__ import annotations
 
@@ -37,6 +38,30 @@ def logspec(x: np.ndarray) -> np.ndarray:
     return 10 * np.log10(b / (b.sum() + 1e-30) + 1e-12)
 
 
+def tfspec(x: np.ndarray, dur: float = 0.35) -> np.ndarray:
+    """A take's time-frequency print: the first `dur` s after its -40 dB onset, STFT (1024 / hop 240) power in 1/3-octave
+    bands 100 Hz - 16 kHz, in dB re its strongest cell, floored at -50 (a take that differs only by seed scores ~0.99
+    against its siblings; a different transient, decay or material moves it)."""
+    m = x.mean(axis=0)
+    e = np.abs(m)
+    i0 = int(np.argmax(e > e.max() * 0.01))
+    k = int(dur * SR)
+    m = np.pad(m[i0:i0 + k], (0, max(0, k - m[i0:i0 + k].size)))
+    w = np.hanning(1024)
+    S = np.array([np.abs(np.fft.rfft(w * m[j:j + 1024])) ** 2 for j in range(0, m.size - 1024, 240)])
+    f = np.fft.rfftfreq(1024, 1 / SR)
+    cs = 100.0 * 2 ** (np.arange(0, 7.4, 1 / 3))
+    B = np.stack([S[:, (f >= c * 2 ** (-1 / 6)) & (f < c * 2 ** (1 / 6))].sum(axis=1) for c in cs], axis=1)
+    return 10 * np.log10(B / (B.max() + 1e-30) + 1e-5).ravel()
+
+
+def tf_sim(xs: list[np.ndarray]) -> float | None:
+    """The median time-frequency correlation over every pair of takes (1.0 = clones in time and spectrum)."""
+    t = [tfspec(x) for x in xs]
+    s = [float(np.corrcoef(t[i], t[j])[0, 1]) for i in range(len(t)) for j in range(i + 1, len(t))]
+    return float(np.median(s)) if s else None
+
+
 def metrics(x: np.ndarray) -> dict:
     m = x.mean(axis=0)
     P = np.abs(np.fft.rfft(m)) ** 2
@@ -60,6 +85,7 @@ def side_stats(files: list[str]) -> tuple[dict, list[np.ndarray]]:
     sims = [float(np.corrcoef(sp[i], sp[j])[0, 1]) for i in range(len(sp)) for j in range(i + 1, len(sp))]
     out['takes'] = len(xs)
     out['takeSim'] = max(sims) if sims else None
+    out['takeTfSim'] = tf_sim(xs)
     out['files'] = [os.path.basename(p) for p in files]
     return out, xs
 
@@ -83,14 +109,15 @@ def main() -> int:
                 continue
             st, xs = side_stats(files)
             row[side] = st
-            sim = f"  sim {st['takeSim']:.3f}" if st['takeSim'] is not None else ''
+            sim = f"  sim {st['takeSim']:.3f} tf {st['takeTfSim']:.3f}" if st['takeSim'] is not None else ''
             lines = [f"{side}: {st['takes']} take(s)  {st['lufs']:.1f} LUFS-M  tp {st['tp']:.1f}  rise {st['rise_ms']:.1f} ms",
                      f"centroid {st['centroid']:.0f} Hz  2-6k {st['b2_6'] * 100:.1f}%  6-12k {st['b6_12'] * 100:.1f}%{sim}"]
             tiles.append(viz.tile(xs[0], f'{label} [{side}] {os.path.basename(files[0])}', lines))
         rep[label] = row
         print(f"{label:28s} " + '  |  '.join(
             f"{s}: n{r['takes']} {r['lufs']:.1f}LUFS rise {r['rise_ms']:.1f}ms cen {r['centroid']:.0f} 2-6k {r['b2_6'] * 100:.1f}% "
-            f"6-12k {r['b6_12'] * 100:.1f}% sim {r['takeSim'] if r['takeSim'] is None else round(r['takeSim'], 3)}"
+            f"6-12k {r['b6_12'] * 100:.1f}% sim {r['takeSim'] if r['takeSim'] is None else round(r['takeSim'], 3)} "
+            f"tf {r['takeTfSim'] if r['takeTfSim'] is None else round(r['takeTfSim'], 3)}"
             if r else f'{s}: -' for s, r in row.items()))
     if a.sheet:
         os.makedirs(os.path.dirname(os.path.abspath(a.sheet)), exist_ok=True)
