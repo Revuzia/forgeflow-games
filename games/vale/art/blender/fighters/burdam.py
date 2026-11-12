@@ -76,9 +76,13 @@ SPLASH = {"map": "map_rift", "clip": "victory", "t": 0.92,
 # under the burning city's warm rim and bounce;
 # Stillwater: Stubborn's planted post, head bowed, in cold river light; Almanac Ledger: the victory's tally scored with
 # the thumbnail, the ledger board on his right hip under a lamp
+# max2 card round 2 (cards/verify_r2_bd1.json: every splash's head was 2-3 % of the frame, a blank egg / slab at card
+# and chip size): the splashes are three-quarter hero shots (box_lo / box_w / box_top: the legs and the long prop
+# leave the frame), the head ~3x larger
 CARDS = {
     "burdam": {
         "splash": {"clip": "cast_ult", "t": 0.45, "yaw": 30.0, "pitch": -7.0, "lens": 46.0, "fill": 0.88, "x": 0.70,
+                   "box_lo": 0.95, "box_w": 0.55, "box_top": 2.2,
                    "key_az": 215.0, "key_el": 28.0, "key_color": "#FFE6CC", "sun": 2.6, "rim_cool": 0.7,
                    "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#EDB27A", "accent": 2.2,
                    "focal": [{"at": "x_notch_mid", "az": 200.0, "el": 20.0, "dist": 0.7, "color": "#FFD08A",
@@ -89,7 +93,8 @@ CARDS = {
         "plate": {"glow": [0.75, 0.55, 0.42, 0.16], "glow_color": "#F2A666"},
     },
     "burdam_stillwater": {
-        "splash": {"clip": "cast_a2", "t": 0.55, "yaw": 42.0, "pitch": -4.0, "lens": 58.0, "fill": 0.86, "x": 0.71,
+        "splash": {"clip": "cast_a2", "t": 0.55, "yaw": 8.0, "pitch": -4.0, "lens": 58.0, "fill": 0.86, "x": 0.71,
+                   "box_lo": 0.95, "box_w": 0.55, "box_top": 2.2,
                    "key_az": 150.0, "key_el": 32.0, "key_color": "#E6ECE8", "sun": 2.4, "rim_cool": 1.8,
                    "rim_warm": 0.4, "bounce": 0.35, "bounce_color": "#9DB8AE", "accent": 1.5, "exposure": -0.4,
                    "focal": [{"at": "head", "az": 175.0, "el": 18.0, "dist": 0.8, "color": "#FFE9CC", "power": 22.0,
@@ -104,6 +109,7 @@ CARDS = {
     },
     "burdam_almanac": {
         "splash": {"clip": "victory", "t": 0.48, "yaw": -24.0, "pitch": -5.0, "lens": 50.0, "fill": 0.86, "x": 0.70,
+                   "box_lo": 0.95, "box_w": 0.55, "box_top": 2.2,
                    "key_az": 140.0, "key_el": 26.0, "key_color": "#FFE7C2", "sun": 2.6, "rim_cool": 0.9,
                    "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E8C79A", "accent": 1.6,
                    "focal": [{"at": "hips", "off": [-0.28, -0.22, 0.10], "az": 150.0, "el": 30.0, "dist": 0.7,
@@ -2719,6 +2725,10 @@ HEEL_CHALK = "#8E8983"        # chalked convex edges
 TALLY_FRONT = [(-0.074, 2.101), (-0.012, 2.104), (0.050, 2.101),
                (-0.078, 2.071), (-0.012, 2.073), (0.054, 2.071)]
 TALLY_CHIN = [(-0.040, 1.848), (0.016, 1.848)]
+# max2 card round 2 (cards/verify_r2_bd1.json: the Stillwater portrait's two chin groups under the frown read as a
+# stitched mouth at 128 px): a skin listed here paints no chin tallies. Skin-only: the base keeps them (its portrait
+# passed by eye) and a base rebuild is held by ruling 32's zone-grade check
+TALLY_CHIN_OFF = ("burdam_stillwater",)
 # fix pass 4: no tallies on the crown (from the 52 degree camera 1-2 px strokes on the dome read as speckle, a
 # pock-marked skull); the back of the head carries four bold groups (the concept's back view), the dome clean lacquer
 TALLY_BACK = [(-0.052, 2.072), (0.062, 2.068), (-0.058, 1.995), (0.056, 1.992)]
@@ -2876,8 +2886,9 @@ def mask_paint(lin: np.ndarray, maps: dict, names: list, log=print) -> np.ndarra
     # fix pass 8 (the review: the lower-face tallies and the frown blurred in the splash): the chin groups and the
     # frown cut bolder
     cov[fr] = tally_ink(xm[fr], zm[fr], TALLY_FRONT, half_len=0.0135, gap=0.0068, width=0.0021, seed=1)
-    cov[fr] = np.maximum(cov[fr], tally_ink(xm[fr], zm[fr], TALLY_CHIN, half_len=0.0120, gap=0.0064, width=0.0024,
-                                            seed=4))
+    if (_STATE.get("skin") or {}).get("id") not in TALLY_CHIN_OFF:
+        cov[fr] = np.maximum(cov[fr], tally_ink(xm[fr], zm[fr], TALLY_CHIN, half_len=0.0120, gap=0.0064, width=0.0024,
+                                                seed=4))
     cov[bk] = np.maximum(cov[bk], tally_ink(-xm[bk], zm[bk], TALLY_BACK, half_len=0.019, gap=0.0085, width=0.0023,
                                             seed=2))
     if TALLY_CROWN:

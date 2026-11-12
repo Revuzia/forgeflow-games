@@ -5,7 +5,8 @@
 //               engine's mix makeup, the same for every bus and the alert path, so the default settings (master 0.8)
 //               land the match on the tokens' −18 ± 1.5 LUFS integrated (closing critic 'audio-runtime': two RIFT
 //               captures read −21.5 / −21.8 before it; at 3.0 dB −18.75 and −18.07 (245 s), at 3.5 dB −16.07 / −16.59 over the band's
-//               top, so most of the spread is the match; _harness/probe_audio_runtime.mjs match). The limiter (a compressor) can
+//               top, so most of the spread is the match; _harness/probe_audio_runtime.mjs match; max2 SFX-1b: 4.0, see
+//               MIX_TRIM_DB, after round 1's quieter kits and the mix focus). The limiter (a compressor) can
 //               overshoot on a fast transient, so a soft clip after it bends the top CLIP_KNEE..CLIP_CEIL and nothing
 //               passes −1 dBFS. Accessibility (final parity AUD-m4): `mono` sums the output to one channel (both
 //               speakers carry everything: one-sided hearing, a single earbud); `softenLoud` puts a gentle
@@ -380,19 +381,18 @@ const LEAD_RAMP_S = 0.001;   // fade-in brings the hit 4 ms closer to its frame 
 const HEAL_MIN_FRAC = 0.05;  // a heal tick chimes only at this share of the target's max HP or more (closing AUD-C5) …
 const HEAL_CHAIN_S = 1.2;    // … and not when the same target was healed this recently (a repeat chain: its first tick)
 // the mixer (see `buses` / `ducking` in the header)
-const MIX_TRIM_DB = 3.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
-// mix focus (max2 SFX-1b): round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5)
-// and the fighters' kits under half of the heard sfx on a jungle-heavy seat (library camp cues: c_cast_big,
-// c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's kit cues play
-// OWN_KIT_DB over everyone else's, a camp monster's own sounds (its casts, abilities, blows and fall; never an epic
-// unit's kit) CAMP_DB under, and the sfx bus carries SFX_MAKEUP_DB of engine makeup over its slider (the threat path
-// too), so the sfx sits over the ambience bed it was level with (-23.4 / -24.3 LUFS integrated, Lisvel seed 21)
-const OWN_KIT_DB = 1.5;
+// (max2 SFX-1b: 3.0 -> 4.0) round 1's live captures put the master at -19.6 to -20.2 LUFS on 3 of 5 (tokens -18 +/- 1.5):
+// in a quiet stretch the master is mostly the ambience bed and the music, so an sfx-only lift moved it 0.4 dB for 2.4 dB
+// of sfx (and cost a teamfight seat the announcer's 3 dB margin); the whole mix's makeup moves every seat alike
+const MIX_TRIM_DB = 4.0;     // the engine's mix makeup after the master volume, before the limiter (see `buses`)
+// mix focus (max2 SFX-1b): the fighters' kits were under half of the heard sfx on a jungle-heavy seat (library camp
+// cues: c_cast_big, c_monster_fall, c_hit_magic, c_slam). A MOBA mix leads with the player's own hero: your fighter's
+// kit cues play OWN_KIT_DB over everyone else's, and a camp monster's own sounds (its casts, abilities, blows and fall;
+// never an epic unit's kit) CAMP_DB under
+const OWN_KIT_DB = 1.0;
 const CAMP_DB = -3;
-const SFX_MAKEUP_DB = 1.5;
 const OWN_KIT_GAIN = Math.pow(10, OWN_KIT_DB / 20);
 const CAMP_GAIN = Math.pow(10, CAMP_DB / 20);
-const SFX_MAKEUP = Math.pow(10, SFX_MAKEUP_DB / 20);
 const CLIP_KNEE = 0.7;       // the soft clip is linear up to −3.1 dBFS …
 const CLIP_CEIL = 0.891;     // … and bends everything above into −1 dBFS
 const VOICE_DUCK_DB = 6;     // music and ambience under an announcer line …
@@ -1007,7 +1007,7 @@ class Engine implements ValeAudioPort {
     const mute = this.hidden && this.vol.muteInBackground;
     glide(this.master.gain, mute ? 0 : this.vol.master, t);
     for (const b of BUSES) {
-      glide(this.bus.get(b)!.gain, this.vol[b] * (b === 'sfx' ? SFX_MAKEUP : 1), t);
+      glide(this.bus.get(b)!.gain, this.vol[b], t);
       // never muted in the background; floored; a master at 0 (the player's full mute) is honoured, at once (an alert
       // can be due the next instant: no glide is left for it to sound through)
       const alert = this.vol.master <= 0 ? 0 : Math.max(ALERT_FLOOR, this.vol.master * this.vol[b]);
@@ -1015,7 +1015,7 @@ class Engine implements ValeAudioPort {
       if (alert > 0) glide(ag, alert, t);
       else { ag.cancelScheduledValues(t); ag.setValueAtTime(0, t); }
     }
-    glide(this.threat.gain, this.vol.sfx * SFX_MAKEUP, t);
+    glide(this.threat.gain, this.vol.sfx, t);
     // accessibility (see `buses`): mono sums to one channel the speakers up-mix; soften re-wires its compressor in
     this.out.channelCount = this.vol.mono ? 1 : 2;
     const soften = !!this.vol.softenLoud;

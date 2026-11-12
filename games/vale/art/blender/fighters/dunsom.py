@@ -261,9 +261,13 @@ ATLAS_SOFTEN = 0.45
 #            rim under a warm grazing sun from the side, its own gorge plate
 #   Almanac  the recall's lantern at eye level, cupped and read by (t 0.45), at night on the dial-wood plate: the
 #            lantern the key, a cool moon rim
+# max2 card round 2 (cards/verify_r2_bd1.json: every splash's head was 2-3 % of the frame, a blank egg / slab at card
+# and chip size): the splashes are three-quarter hero shots (box_lo / box_w / box_top: the legs and the long prop
+# leave the frame), the head ~3x larger
 CARDS = {
     "dunsom": {
-        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 34.0, "pitch": -4.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
+        "splash": {"clip": "cast_ult", "t": 0.40, "yaw": 34.0, "pitch": -4.0, "lens": 48.0, "fill": 0.86, "x": 0.77,
+                   "box_lo": 0.80, "box_w": 0.45, "box_top": 2.2,
                    "key_az": 225.0, "key_el": 18.0, "key_color": "#FFD2A8", "sun": 2.2, "rim_cool": 1.0,
                    "rim_warm": 1.2, "bounce": 0.5, "bounce_color": "#E2A46A", "accent": 2.4,
                    "focal": [{"at": "head", "az": 180.0, "el": -30.0, "dist": 0.45, "color": "#FFC27A",
@@ -275,6 +279,7 @@ CARDS = {
     },
     "dunsom_highrim": {
         "splash": {"clip": "cast_a3", "t": 0.42, "yaw": -24.0, "pitch": -2.0, "lens": 55.0, "fill": 0.86, "x": 0.71,
+                   "box_lo": 0.95, "box_w": 0.45, "box_top": 2.12,
                    "key_az": 265.0, "key_el": 9.0, "key_color": "#FFC88E", "sun": 3.2, "rim_cool": 0.7,
                    "rim_warm": 1.5, "bounce": 0.6, "bounce_color": "#E8B07A", "accent": 1.5,
                    "focal": [{"at": "head", "az": 215.0, "el": 8.0, "dist": 0.8, "color": "#FFD9B0", "power": 22.0,
@@ -284,7 +289,8 @@ CARDS = {
                   "glow": [0.90, 0.56, 0.40, 0.12], "glow_color": "#FFC08A"},
     },
     "dunsom_almanac": {
-        "splash": {"clip": "recall", "t": 0.45, "yaw": 40.0, "pitch": 0.0, "lens": 60.0, "fill": 0.84, "x": 0.72,
+        "splash": {"clip": "recall", "t": 0.45, "yaw": 28.0, "pitch": 0.0, "lens": 60.0, "fill": 0.84, "x": 0.72,
+                   "box_lo": 0.85, "box_w": 0.45, "box_top": 2.2,
                    "key_az": 150.0, "key_el": 35.0, "key_color": "#AFC0E0", "sun": 1.4, "rim_cool": 1.8,
                    "rim_warm": 0.3, "bounce": 0.3, "bounce_color": "#C09060", "accent": 2.8,
                    "focal": [{"at": "head", "az": 185.0, "el": -10.0, "dist": 0.40, "color": "#FFC87E",
@@ -292,8 +298,9 @@ CARDS = {
                              {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                               "power": 20.0, "size": 0.08}]},
         # (closing round 2: the head focal blew the scarf and the mask: softer and off-axis)
-        "portrait": {"yaw": 34.0, "exposure": -0.9,
-                     "focal": [{"at": "head", "az": 215.0, "el": -5.0, "dist": 0.7, "color": "#FFC87E", "power": 8.0,
+        # (max2 card round 2: the night mask read as a dark oval with point-of-light eyes at chip size: lifted a step)
+        "portrait": {"yaw": 34.0, "exposure": -0.6,
+                     "focal": [{"at": "head", "az": 215.0, "el": -5.0, "dist": 0.7, "color": "#FFC87E", "power": 16.0,
                                 "size": 0.3},
                                {"at": "x_lantern", "az": 180.0, "el": 0.0, "dist": 0.30, "color": "#FFD9A0",
                                 "power": 20.0, "size": 0.08}]},
@@ -2422,17 +2429,26 @@ anim.sample_clip = _sample_clip
 
 # ── portrait / icon framing (render._fit_camera wrapper): the head boxes take in the hat's brim and the lantern ──
 _orig_fit_camera = _render._fit_camera
+# max2 card round 2 (cards/verify_r2_bd1.json: the base and Almanac portraits took in the upper body and the whole
+# lantern, the face ~25 % of the frame width, a pale / dark block at 128 and 64 px): a card listed here frames a tight
+# head and shoulders: no lantern, the hat's brim only to `brim` x its radius (the rim leaves the frame's sides), so
+# the face is ~40 % of the width. Highrim (passed) keeps the lantern bust.
+# `h`: the fit box's height under the hat's top (m; the square frame is ~1.1 x it)
+PORTRAIT_TIGHT = {"dunsom": {"brim": 0.55, "h": 0.46}, "dunsom_almanac": {"brim": 0.55, "h": 0.46}}
+_CARD = {"sid": ID}
 
 
 def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=None):
     arm = next((o for o in bpy.data.objects if o.type == "ARMATURE" and o.name.startswith(ID + "_")), None)
     if arm is not None and (hi.z - lo.z) < 1.0:
+        tight = PORTRAIT_TIGHT.get(_CARD["sid"]) if (hi.z - lo.z) > 0.6 else None
         pts = [V((HAT_C[0] - HAT_R, HAT_C[1], 1.95)), V((HAT_C[0] + HAT_R, HAT_C[1], 1.95))]
         if arm is not None and "head" in arm.pose.bones:
             mw = arm.matrix_world
             hb = arm.pose.bones["head"]
-            pts = [mw @ hb.matrix @ V((x, hb.length * 0.85, 0.0)) for x in (-HAT_R, HAT_R)]
-            if "x_lantern" in arm.pose.bones:
+            br = HAT_R * (tight["brim"] if tight else 1.0)
+            pts = [mw @ hb.matrix @ V((x, hb.length * 0.85, 0.0)) for x in (-br, br)]
+            if "x_lantern" in arm.pose.bones and not tight:
                 lb = arm.pose.bones["x_lantern"]
                 c = mw @ lb.head
                 if (hi.z - lo.z) > 0.6:                 # the portrait: the whole lantern
@@ -2442,6 +2458,8 @@ def _fit_camera(cam, lo, hi, yaw, pitch, lens, fill, aspect, x_frac, y_center=No
         for q in pts:
             lo = V((min(lo.x, q.x - 0.06), min(lo.y, q.y - 0.06), lo.z))
             hi = V((max(hi.x, q.x + 0.06), max(hi.y, q.y + 0.06), max(hi.z, q.z + 0.10)))
+        if tight:
+            lo = V((lo.x, lo.y, max(lo.z, hi.z - tight["h"])))
         # the shared fit frames the box's height only: a square frame must be as tall as the box is wide
         w = max(hi.x - lo.x, hi.y - lo.y) * 0.92
         if aspect <= 1.01 and w > hi.z - lo.z:
@@ -2461,6 +2479,7 @@ _orig_fighter_renders = _render.fighter_renders
 
 def _fighter_renders(ctx, objs, P, skin, *a, **k):
     saved = []
+    _CARD["sid"] = (skin or {}).get("id") or ID
     if getattr(ctx.spec, "ID", None) == ID:
         for o in objs:
             if o.type != "MESH":
