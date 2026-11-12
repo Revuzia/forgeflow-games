@@ -52,7 +52,7 @@ from .kits_b import cup, dome, growl, handbell, roarer, rod, slit, vessel
 
 T_IMP = ('m', -17.0)         # loudness (max momentary, asset level): an ability impact sits a touch over the auto (-17.5)
 T_DASH = ('m', -18.5)
-IMPW = (0.15, 0.9)           # QA duration windows (s)
+IMPW = (0.14, 0.9)           # QA duration windows (s; a shaped take with a fast body decay can end at 0.15 s)
 DASHW = (0.2, 0.8)
 IMPK = dict(tail_floor_db=-48.0, clip_drive=1.5, max_gr_db=6.0)      # mastering profiles
 DASHK = dict(tail_floor_db=-48.0, fade_out=0.02)
@@ -273,41 +273,40 @@ AIR_MAX_DB = -9.0            # the air never comes nearer the peak than this (no
 # (s, default GRIT_S): a longer grit is the material's splinter / crumble / tinkle running on behind the crack (a dark
 # take's body otherwise drowns a short grit's 2-6 kHz share), its level cap GRIT_LONG_TOP instead of GRIT_TOP.
 CRACK_TUNE: dict[str, tuple] = {
-    'f_ardit_attack_hit': (0.3, 1.55, 'full'),
-    'f_ardit_hit': (1.0, 0.8, 'full'),
-    'f_burdam_attack_hit': (0.0, 1.0, 'plain'),
-    'f_burdam_hit': (0.8, 0.8, 'crack'),
+    'f_ardit_attack_hit': (0.3, 1.55, 'full', 0.28),
+    'f_ardit_hit': (0.8, 1.55, 'crack'),
+    'f_burdam_attack_hit': (1.0, 1.55, 'full', 0.28),
+    'f_burdam_hit': (0.55, 0.8, 'full'),
     'f_dunsom_attack_hit': (0.0, 1.0, 'full'),
-    'f_dunsom_hit': (0.3, 0.8, 'crack'),
-    'f_ervet_attack_hit': (1.0, 0.65, 'full'),
-    'f_ervet_hit': (1.0, 0.65, 'full'),
+    'f_dunsom_hit': (0.3, 1.0, 'crack'),
+    'f_ervet_attack_hit': (1.0, 1.55, 'full'),
+    'f_ervet_hit': (1.0, 1.55, 'full'),
     'f_hesmi_attack_hit': (0.0, 1.0, 'full'),
-    'f_hesmi_hit': (0.3, 1.55, 'full'),
-    'f_ilsheta_attack_hit': (1.0, 0.65, 'full'),
+    'f_hesmi_hit': (1.0, 1.55, 'full'),
     'f_ilsheta_hit': (1.0, 1.25, 'full'),
-    'f_kemdo_attack_hit': (1.0, 0.65, 'full'),
+    'f_kemdo_attack_hit': (1.0, 1.55, 'crack'),
     'f_kemdo_hit': (1.0, 1.25, 'full'),
     'f_lisvel_attack_hit': (0.0, 1.0, 'full'),
-    'f_lisvel_hit': (1.0, 1.55, 'full'),
-    'f_marund_attack_hit': (1.0, 0.65, 'full'),
-    'f_marund_hit': (1.0, 1.25, 'full'),
-    'f_nurrow_attack_hit': (1.0, 1.0, 'crack'),
-    'f_nurrow_hit': (0.8, 1.25, 'crack'),
-    'f_odrum_attack_hit': (0.3, 1.55, 'full'),
+    'f_lisvel_hit': (1.0, 1.55, 'full', 0.28),
+    'f_marund_attack_hit': (0.8, 1.55, 'full'),
+    'f_marund_hit': (1.0, 1.55, 'full'),
+    'f_nurrow_attack_hit': (1.0, 1.0, 'crack', 0.28),
+    'f_nurrow_hit': (0.3, 0.65, 'full'),
+    'f_odrum_attack_hit': (0.55, 0.8, 'full'),
     'f_odrum_hit': (1.0, 0.65, 'full'),
-    'f_rishal_attack_hit': (1.0, 0.65, 'full'),
+    'f_rishal_attack_hit': (1.0, 1.55, 'full'),
     'f_rishal_hit': (0.0, 1.0, 'full'),
-    'f_sukri_attack_hit': (0.0, 1.0, 'full'),
+    'f_sukri_attack_hit': (1.0, 1.0, 'full', 0.16),
     'f_sukri_hit': (1.0, 1.55, 'full'),
-    'f_tunlan_attack_hit': (0.0, 1.0, 'plain'),
+    'f_tunlan_attack_hit': (1.0, 0.8, 'full', 0.28),
     'f_tunlan_hit': (0.0, 1.0, 'full'),
-    'f_ulkro_attack_hit': (0.3, 1.0, 'crack'),
-    'f_ulkro_hit': (0.3, 1.25, 'crack'),
-    'f_vashil_attack_hit': (0.8, 1.55, 'crack'),
-    'f_vashil_hit': (0.55, 1.25, 'full'),
+    'f_ulkro_attack_hit': (0.0, 1.0, 'full'),
+    'f_ulkro_hit': (0.8, 1.55, 'full'),
+    'f_vashil_attack_hit': (1.0, 0.65, 'full', 0.28),
+    'f_vashil_hit': (1.0, 0.8, 'full', 0.28),
 }
 # … and the cues that keep 3 takes (a 4th sat too near another fighter's); every other kit hit has HIT_TAKES
-CRACK_TAKES: dict[str, int] = {'f_burdam_attack_hit': 3, 'f_burdam_hit': 3, 'f_lisvel_attack_hit': 3, 'f_lisvel_hit': 3, 'f_odrum_hit': 3, 'f_tunlan_attack_hit': 3, 'f_ulkro_attack_hit': 3}
+CRACK_TAKES: dict[str, int] = {'f_burdam_hit': 3, 'f_ervet_attack_hit': 3, 'f_hesmi_hit': 3, 'f_odrum_attack_hit': 3, 'f_odrum_hit': 3, 'f_vashil_attack_hit': 3}
 HIT_TAKES = 4                # a kit attack hit and ability hit: 4 takes, each its own shape (TAKE_SHAPE)
 # per take: (crack centre ratio, flam: (gap ms, level dB) or None, crack length ms, air t60 ratio, air peak ms,
 #            body decay tau s after the first 30 ms (None: untouched), pitch ratio (playback slower > 1))
@@ -495,7 +494,6 @@ VOICING: dict[str, dict | tuple] = {
     'f_odrum_attack_swing': {'hp': 280, 'lp': 1200},
     'f_odrum_ult_release': {'hp': 280, 'peaks': ((3150, 6.0, 1.4),)},
     'f_odrum_ult_windup': {'peaks': ((500, -9.0, 1.4),)},
-    'f_tunlan_attack_hit': {'peaks': ((1250, 6.0, 1.4),)},
     'f_tunlan_attack_swing': {'hp': 400, 'peaks': ((2000, -9.0, 1.4),)},
     'f_tunlan_ult_release': {'peaks': ((3150, -9.0, 1.4),)},
     'f_ulkro_attack_hit': {'hp': 200, 'lp': 3200, 'peaks': ((800, -9.0, 1.4),)},
@@ -516,6 +514,10 @@ VOICING: dict[str, dict | tuple] = {
     'f_tunlan_hit': {'lp': 8000, 'peaks': ((315, -9.0, 1.4),)},
     'f_ulkro_hit': {'hp': 400, 'peaks': ((3150, -9.0, 1.4),)},
     'f_vashil_hit': {'hp': 800, 'lp': 3200, 'peaks': ((1250, 6.0, 1.4),)},
+    # max SFX-2 fix: the voicings that make room for a bright crack (crack_search.py, then a voicing pass per dark hit)
+    'f_lisvel_hit': {'peaks': ((2000, -9.0, 1.4),)},
+    'f_sukri_attack_hit': {'hp': 800},
+    'f_tunlan_attack_hit': ({'peaks': ((1250, 6.0, 1.4),)}, {'hp': 800}),
     # the dashes (integration audio-09): with DASH_AIR / DASH_SIG, each sits >= 8 dB by both measures from every other
     # fighter's and from the displacement's c_dash (a knocked unit), found by the same kind of search; a dash's voicing
     # colours its rush and never cuts its own band away (high-pass <= 1.26 x the band's floor, low-pass >= 0.8 x its

@@ -132,7 +132,7 @@ CARDS = {
         "plate": {"src": "seat_center", "glow": [0.15, 0.62, 0.40, 0.10], "glow_color": "#FFC08A", "cx": 0.46},   # (card engineer 1: all three cards shared the needle_gorge vista, closing hesmi-c2r-M1: the base takes the seat terraces, Shadeprint the dial wood, Gorgewalk keeps the gorge)
     },
     "hesmi_gorgewalk": {
-        "splash": {"clip": "attack2", "t": 0.35, "yaw": -24.0, "pitch": 2.0, "lens": 55.0, "fill": 0.84, "x": 0.72,
+        "splash": {"clip": "attack2", "t": 0.35, "yaw": -24.0, "pitch": 2.0, "exposure": -0.9, "lens": 55.0, "fill": 0.84, "x": 0.72,
                    "key_az": 150.0, "key_el": 30.0, "key_color": "#C8D0DC", "sun": 2.6, "rim_cool": 1.5,
                    "rim_warm": 0.8, "bounce": 0.4, "bounce_color": "#9AA4B4", "accent": 1.2,
                    "focal": [{"at": "head", "az": 160.0, "el": 15.0, "dist": 0.8, "color": "#E0E6F0", "power": 18.0,
@@ -151,7 +151,7 @@ CARDS = {
                              {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
                               "size": 0.25}]},
         "portrait": {"yaw": 30.0, "clip": "idle_lobby", "t": 0.0},   # (polish: the cast_ult bust turned the face away)
-        "plate": {"src": "dialwood", "tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
+        "plate": {"src": "dialwood", "fig_chroma": 0.45, "amb_tint": 0.2, "tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
                   "glow_color": "#B7A6F0"},
     },
 }

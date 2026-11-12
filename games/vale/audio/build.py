@@ -198,16 +198,17 @@ def render(cid: str, files: list[str]) -> list[dict]:
                 encode_opus(wav, ogg, 1 if is_mono else 2)
             dec = decode(ogg)
             tp = L.true_peak(dec, circular=spec.loop)
-            if tp <= TP_MAX or attempt == 3:
+            # the .m4a sibling, from the same final master (its codec overshoots on its own: both must hold the peak)
+            ch = 1 if is_mono else 2
+            m4a = aac.m4a_path(ogg)
+            aac.encode_m4a(data, m4a, AAC_KBPS[ch], loop=spec.loop)
+            dm = decode(m4a)
+            over = max(tp, float(L.true_peak(dm, circular=spec.loop))) - TP_MAX
+            if over <= 0 or attempt == 3:
                 break
-            ceiling -= (tp - TP_MAX) + 0.3        # codec overshoot: master again under a lower ceiling
+            ceiling -= over + 0.3                 # codec overshoot: master again under a lower ceiling
         if 'error' in info:
             continue
-        # the .m4a sibling, from the same final master
-        ch = 1 if is_mono else 2
-        m4a = aac.m4a_path(ogg)
-        aac.encode_m4a(data, m4a, AAC_KBPS[ch], loop=spec.loop)
-        dm = decode(m4a)
         kind, tgt = spec.target
         got = measure(dec, kind, spec.loop)
         dur = dec.shape[1] / SR
