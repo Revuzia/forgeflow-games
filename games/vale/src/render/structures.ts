@@ -361,7 +361,6 @@ export class StructureFx {
     s.falling.length = 0;
     if (s.rubble) {
       s.rubble.geometry.dispose();
-      for (const mm of Array.isArray(s.rubble.material) ? s.rubble.material : [s.rubble.material]) mm.dispose();
       s.rubble.removeFromParent(); s.rubble = null;
     }
   }
@@ -653,7 +652,7 @@ export class StructureFx {
    *  faces' median uv: the ring's own island; or, when the albedo can be read, the face nearest its 70th-percentile value)
    *  and maps that face's texture onto every one of its facets (a planar projection folded into the face, kept near its
    *  centre), so a chunk shows the stone's tooling and wear instead of one flat texel; vertex colour (if any) is floored
-   *  at 80 % of the plinth's median and the normals lean 30 % to the sky, so no face goes near black. The plinth's program draws it unchanged. */
+   *  at 80 % of the plinth's median and the normals lean 20 % to the sky, so no face goes near black. The plinth's program draws it unchanged. */
   private rubble(s: Struct): void {
     if (s.rubble) return;
     const src = (s.baseNode ? meshes(s.baseNode)[0] : undefined) ?? (s.ruin ? meshes(s.ruin)[0] : undefined);
@@ -798,23 +797,15 @@ export class StructureFx {
     g.setAttribute('position', new BufferAttribute(pos, 3));
     for (const x of extra) g.setAttribute(x.n, new BufferAttribute(x.arr, x.at.itemSize));
     g.computeVertexNormals();
-    // the facets lean 30 % to the sky: a chunk's shaded side stays in the plinth's value range, never a black face
+    // the facets lean 20 % to the sky: a chunk's shaded side stays in the plinth's value range, never a black face
     const nm = g.getAttribute('normal') as BufferAttribute;
     for (let k = 0; k < nm.count; k++) {
-      const x = nm.getX(k) * 0.7, y = nm.getY(k) * 0.7 + 0.3, z = nm.getZ(k) * 0.7, l = Math.hypot(x, y, z) || 1;
+      const x = nm.getX(k) * 0.8, y = nm.getY(k) * 0.8 + 0.2, z = nm.getZ(k) * 0.8, l = Math.hypot(x, y, z) || 1;
       nm.setXYZ(k, x / l, y / l, z / l);
     }
     g.computeBoundingSphere();
-    // its own copy of the plinth's material, its albedo eased ×0.8 (linear): the ring island's texels are the lit dressed
-    // stone, and loose blocks on the floor sit a step under the structure (screen p50 44 / p99 120 vs 36 / near-black
-    // before); same program (the copy keeps the patch and the cache key), freed with the rubble
-    const lift = (mm: Material): Material => {
-      const c = mm.clone();
-      const std = c as MeshStandardMaterial;
-      if (std.color) std.color.multiplyScalar(0.8);
-      return c;
-    };
-    const m = new Mesh(g, Array.isArray(src.material) ? src.material.map(lift) : lift(src.material));
+    // the plinth's own material (a copy would compile its own program: perf_1080 caught a 41st mid-match)
+    const m = new Mesh(g, src.material);
     m.name = 'vale_struct_rubble';
     m.castShadow = true; m.receiveShadow = true;
     m.customDepthMaterial = shadowDepth('rigid');

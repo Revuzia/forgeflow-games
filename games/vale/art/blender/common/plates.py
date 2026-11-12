@@ -719,6 +719,59 @@ def finish(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | N
 
 
 # ── finish v2: one painted picture ───────────────────────────────────────────────────────────────
+def _enclosed(low: np.ndarray) -> np.ndarray:
+    """The pixels of `low` (bool h x w) in a 4-connected region that does not reach the frame's edge. Run-length union
+    find in plain numpy + python (no scipy: Blender's python runs this too)."""
+    h, w = low.shape
+    runs = []                       # per row: (starts, ends) of the True runs, ends exclusive
+    for y in range(h):
+        r = low[y].astype(np.int8)
+        d = np.diff(np.concatenate([[0], r, [0]]))
+        runs.append((np.nonzero(d == 1)[0], np.nonzero(d == -1)[0]))
+    base = np.cumsum([0] + [len(s) for s, _ in runs])
+    n = int(base[-1])
+    if n == 0:
+        return np.zeros_like(low)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    edge = np.zeros(n, bool)
+    for y in range(h):
+        s, e = runs[y]
+        if not len(s):
+            continue
+        b = int(base[y])
+        edge[b:b + len(s)] |= (s == 0) | (e == w) | (y == 0) | (y == h - 1)
+        if y == 0 or not len(runs[y - 1][0]):
+            continue
+        ps, pe = runs[y - 1]
+        pb = int(base[y - 1])
+        # overlapping run pairs between this row and the last: run i overlaps prev j when s_i < pe_j and ps_j < e_i
+        lo_ = np.searchsorted(pe, s, side="right")
+        hi_ = np.searchsorted(ps, e, side="left")
+        for i in range(len(s)):
+            for j in range(int(lo_[i]), int(hi_[i])):
+                ra, rb = find(b + i), find(pb + j)
+                if ra != rb:
+                    parent[ra] = rb
+    roots = np.array([find(i) for i in range(n)])
+    touch = np.zeros(n, bool)
+    touch[roots[edge]] = True
+    keep = ~touch[roots]
+    out = np.zeros_like(low)
+    for y in range(h):
+        s, e = runs[y]
+        b = int(base[y])
+        for i in np.nonzero(keep[b:b + len(s)])[0]:
+            out[y, s[i]:e[i]] = True
+    return out
+
+
 def split_shadow(fg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """The raw pass's film alpha holds the figure AND the shadow catcher (Cycles writes the catcher black, rgb 0). Returns
     (figure RGBA with the figure's own alpha, shadow alpha h x w): the shadow is laid on the plate by ground_shadow, so
@@ -727,6 +780,11 @@ def split_shadow(fg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     m = fg[..., :3].max(axis=2)
     t = np.clip((m - 0.012) / 0.05, 0.0, 1.0)
     t = t * t * (3 - 2 * t)
+    # (cards ks1 fix) a near-black figure pixel ENCLOSED by the figure (a dark pupil, a shadowed recess) is figure, never
+    # catcher: the colour test alone made Sukri Shadeprint's dark umber pupils transparent, so the violet plate showed
+    # through them (verify ks1's "hollow lavender pupils" blocker). The catcher and the empty film are one region that
+    # reaches the frame's edge; a dark region the lit figure closes all round keeps the film alpha
+    t = np.where(_enclosed(t < 0.999), 1.0, t)
     af = a * t
     out = fg.copy()
     out[..., 3] = af
@@ -1086,6 +1144,17 @@ def integrate2(fg: np.ndarray, pl: np.ndarray, p: dict, kind: str, strength: flo
     up = np.clip(gy / nl, 0.0, 1.0)                         # (alpha rises downward into the figure = an up-facing edge)
     facing = np.clip(gx / nl * (-sx), 0.0, 1.0)              # (cards third pass) only edges that face the sun
     lit = np.clip(facing ** 1.5 * (0.8 + 0.4 * up), 0.0, 1.0)
+    # (cards ks1 fix) verify ks1: a thin pale rim stayed on the boot backs (Kemdo High Rim / Long Evening): the sun edge
+    # and the wrap fade over the figure's lowest `rim_low` (fraction of its height, default the lowest 22 %, eased in
+    # over the next 8 %) to `rim_low_k` of themselves; the boots sit in the ground's shade, not the sky's rim
+    box = _figure_box(a[..., 0]) if kind == "splash" else None          # (a portrait's bust is cut by the frame)
+    if box is not None:
+        y0_, y1_ = float(box[0]), float(box[1])
+        fh_ = max(8.0, y1_ - y0_)
+        rl = float(p.get("rim_low", 0.22))
+        yyr = np.arange(h, dtype=np.float32)[:, None]
+        t_ = np.clip((yyr - (y1_ - (rl + 0.08) * fh_)) / max(1.0, 0.08 * fh_), 0.0, 1.0)
+        lit = lit * (1.0 - (1.0 - float(p.get("rim_low_k", 0.2))) * t_ * t_ * (3 - 2 * t_))
     width = wpx * (0.45 + 0.85 * lit)                       # the rim is wider where the surface turns to the sun
     band = np.exp(-d / np.maximum(width, 0.5)) * (d <= wmax) * a[..., 0]
     pb = gaussian(pl, 14.0 * k)[..., :3]
@@ -1130,6 +1199,63 @@ def fx_layer(comp: np.ndarray, p: dict, meta: dict | None) -> np.ndarray:
     return out
 
 
+def _face_disc(shape, af: np.ndarray, p: dict, kind: str, meta: dict | None, grow: float = 1.0):
+    """a soft disc over the face (face_point, the gate's radius: 0.05 h splash / 0.15 h portrait) on the figure"""
+    h, w = shape
+    fp = face_point(meta, p, kind)
+    if fp is None:
+        return None
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    rr = (0.05 if kind == "splash" else 0.15) * h * grow * float(p.get("mask_r", 1.0))
+    d = np.sqrt((xx - fp[0] * w) ** 2 + (yy - fp[1] * h) ** 2) / rr
+    t = np.clip((1.15 - d) / 0.3, 0.0, 1.0)
+    return (t * t * (3 - 2 * t) * np.clip(af, 0.0, 1.0)).astype(np.float32)
+
+
+def figure_chroma(fig: np.ndarray, p: dict, kind: str, meta: dict | None) -> np.ndarray:
+    """(cards ks1 fix) "fig_chroma": the figure's chroma (about its own luma) scaled by this, the face disc left out. A
+    dusk plate's cast (Shadeprint's violet sky fill, bounce and rim) pushed the slate wraps to a saturated violet
+    (median 115,91,188 on the verify ks1 card) the game never shows; None = off."""
+    k = p.get("fig_chroma")
+    if k is None:
+        return fig
+    face = _face_disc(fig.shape[:2], fig[..., 3], p, kind, meta, 1.1)
+    wgt = 1.0 - (face if face is not None else 0.0)
+    rgb = fig[..., :3]
+    L = (rgb @ Y709)[..., None]
+    s = 1.0 + (float(k) - 1.0) * np.asarray(wgt, np.float32)[..., None]
+    out = fig.copy()
+    out[..., :3] = np.clip(L + (rgb - L) * s, 0.0, 1.0)
+    return out
+
+
+def mask_to(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | None) -> np.ndarray:
+    """(cards ks1 fix) "mask_to": a face mask held to its sheet colour on the finished card (Sukri Shadeprint, ruling 2's
+    #B39272: verify ks1 read it olive-gold on the portrait and orange-tan on the splash). The lit half of the face disc's
+    warm pixels (R >= B) is measured; a per-channel gain (bounded 0.75-1.30, `mask_k` of the way) takes its median to
+    the hex, laid on through the soft face disc, so the splash and the portrait show one mask."""
+    hx = p.get("mask_to")
+    if not hx:
+        return comp
+    disc = _face_disc(comp.shape[:2], af, p, kind, meta)
+    if disc is None:
+        return comp
+    rgb = comp[..., :3]
+    warm = (rgb[..., 0] >= rgb[..., 2]) & (disc > 0.9)
+    if warm.sum() < 32:
+        return comp
+    L = rgb @ Y709
+    lit = warm & (L > np.percentile(L[warm], 40))
+    med = np.median(rgb[lit], axis=0)
+    tgt = np.asarray(_hex(hx), np.float32)
+    gain = np.clip(tgt / np.maximum(med, 1e-4), 0.75, 1.30)
+    gain = 1.0 + (gain - 1.0) * float(p.get("mask_k", 1.0))
+    wm = (disc * (rgb[..., 0] >= rgb[..., 2] - 0.02))[..., None]
+    out = comp.copy()
+    out[..., :3] = np.clip(rgb * (1.0 + (gain[None, None, :] - 1.0) * wm), 0.0, 1.0)
+    return out
+
+
 def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | None = None) -> np.ndarray:
     """The card finish v2. No filter on the figure alone: the render stays clean and antialiased; it is graded to the
     plate's dusk (the same exposure logic as v1), takes the plate's light, stands on a contact and cast shadow, and the
@@ -1146,6 +1272,7 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
     pl = plate(p, kind, w, h, tooth_on=False)
     fig, _k = subject_grade(fig, p, kind, _ring_median(fig[..., 3], pl))
     fig = shared_figure_light(fig, pl, p, kind)
+    fig = figure_chroma(fig, p, kind, meta)
     if kind == "splash":
         pl = ground_shadow(pl, fig[..., 3], shadow, p, meta)
         fk = float(p.get("foliage_front", 0.0))
@@ -1162,6 +1289,7 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
         comp[..., :3] = np.clip(gradelib().apply_lut(comp[..., :3], L, "trilinear"), 0, 1).astype(np.float32)
     if kind == "splash" and p.get("card_lo_q") is not None:
         comp, _s = card_floor(comp, p)
+    comp = mask_to(comp, fig[..., 3], p, kind, meta)
     # the unified paint-over: soft Kuwahara mixed over the whole picture, eased over the face and hands
     r = float(p.get("paint_r2", 5)) * (w / 1600.0 if kind == "splash" else 0.7 * w / 512.0)
     mx = float(p.get("paint_mix", 0.55))

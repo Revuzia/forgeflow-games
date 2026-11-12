@@ -79,7 +79,7 @@ FIG_MEDIAN = 1        # 3x3 median passes on the figure of an accepted painting 
 PROP = {"de_out": 10.0, "de_in": 14.0, "out_max": 0.001, "in_max": 0.001}
 MASK_TARGET = {"sukri_shadeprint": "#B39272"}   # ruling 2 / 30: the amber lacquer mask (the 3D card reads dE 4.2)
 STREAK_FACES = {"sukri"}      # fighters whose face under the eyes is bare (a carved mask): the tear-streak check runs
-GATE = {"new_colour": 0.0003, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
+GATE = {"new_colour": 0.0003, "eye_ds_cap": 15.0, "eye_ds": 30.0, "eye_dv": 30.0, "eye_dv2": 25.0, "streak_cols": 0.10, "mask_de": 10.0, "aspect": 0.015, "struct": 0.70, "iou": 0.80, "pal_mean": 14.0, "pal_max": 24.0,
         "face_range": 0.70, "face_dark": 0.5, "face_corr": 0.45}
 
 
@@ -300,6 +300,10 @@ def gate_variant(sid: str, kind: str, P: np.ndarray, asp: float, F: np.ndarray, 
     eds, edv = r.get("eye_ds", 0), r.get("eye_dv", 0)       # glowing = brighter with more colour (both up)
     if (edv > GATE["eye_dv"] and eds > 10.0) or (eds > GATE["eye_ds"] and edv > GATE["eye_dv2"]):
         fails.append("eyes")
+    # (cards ks1 fix) an absolute cap on the eyes' saturation: p95 S at most the render's + 15 (verify ks1: Sukri's v2
+    # portrait passed at eye_ds 26.8 with eye_dv 10.9 and read as saturated amber ember rings round the irises)
+    elif eds > GATE["eye_ds_cap"]:
+        fails.append("eyes_sat")
     if r.get("mask_de", 0) > GATE["mask_de"]:
         fails.append("mask_colour")
     if r.get("streak_cols", 0) > GATE["streak_cols"]:

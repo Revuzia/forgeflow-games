@@ -278,13 +278,15 @@ CARDS = {
         "splash": {"clip": "cast_a1", "t": 0.42, "yaw": 26.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.71,
                    "exposure": -1.6,
                    "key_az": 240.0, "key_el": 30.0, "key_color": "#E2CDBE", "sun": 1.5, "rim_cool": 1.9,
-                   "rim_warm": 0.3, "bounce": 0.12, "bounce_color": "#7C6CB0", "accent": 2.4,
+                   "rim_warm": 0.3, "bounce": 0.12, "bounce_color": "#7E7A92", "accent": 2.4,
                    "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 3.0,
                               "size": 0.04},
                              {"at": "head", "az": 200.0, "el": -25.0, "dist": 0.7, "color": "#E8C9A0",
                               "power": 5.0, "size": 0.3}]},       # (third pass) the amber mask, not lit pale
         # (closing round 2: the frontal key made a flat white mask: a side key, the face turns and warms)
-        "portrait": {"yaw": 24.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
+        # (cards ks1 fix: cast_a1's raised staff left its pale crook cut by the frame over the hood, a scythe read on a
+        # hooded masked figure) the base card's victory moment: the lantern held low, the staff out of the bust
+        "portrait": {"clip": "victory", "t": 0.96, "yaw": 30.0, "exposure": -1.0, "key_az": 245.0, "key_el": 24.0,
                      "focal": [{"at": "x_cup", "az": 170.0, "el": 10.0, "dist": 0.05, "color": "#E8DCFF", "power": 8.0,
                                 "size": 0.04},
                                # (the cup's warm glow on the plate, so the pale stone does not read as a white mask)
@@ -295,6 +297,10 @@ CARDS = {
                   # (cards third pass, ruling 2: one amber mask on both cards) the splash's highlight expansion took the pale
                   # mask, the largest light area of a dark kit, toward white: only the top 0.05 % (the cup) is expanded now
                   "splash_over": {"sub_hi": 0.98, "sub_hi_q": 99.95, "sub_p95": 0.58},
+                  # (cards ks1 fix) the slate wraps keep their value and lose the plate's violet cast (verify ks1 read
+                  # them saturated violet, 115,91,188); both cards' masks held to ruling 2's #B39272
+                  "fig_chroma": 0.4, "amb_tint": 0.2, "match": 0.1, "mask_to": "#B39272", "mask_r": 1.8,
+                  "contact": 1.5, "shadow_tint": 0.18,
                   "fx": [{"at": "x_cup", "color": "#B7A6F0", "r": 0.06, "k": 0.36}],
                   "face_off": {"splash": [-0.02, 0.072], "portrait": [-0.028, 0.088]}},
     },

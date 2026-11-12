@@ -473,8 +473,114 @@ def remove(undo: list) -> None:
 # 154,123,98 splash / 153,120,74 portrait, dark olive; target 179,146,114).
 GRADE = {
     "sukri_shadeprint": {"face": {"mul": (1.05, 1.22, 0.82), "pupil": (0.014, 0.0068, 0.0037), "rough": 0.42, "eye_mul": 0.55, "eye_spec": 0.04,
-                                  "eye_rough": 0.75}},
+                                  "eye_rough": 0.75, "wipe": True}},
+    # (cards ks1 fix) verify ks1: jaw cracks, grain lines between the eyes and drip ticks under the lower lids on every
+    # Sukri card, though the GLB's paint wiped GRAIN_CLEAN's spans: the card face is wiped smooth (_face_wipe)
+    "sukri": {"face": {"wipe": True}},
+    "sukri_stillwater": {"face": {"wipe": True}},
 }
+
+
+def _face_texels(o, polys, W, H):
+    """the texels covered by the polygons `polys` of o (UV raster, 1 px grown at the island edges): (ty, tx, P, N) with
+    P the rest position and N the polygon normal at each texel"""
+    me = o.data
+    uvl = me.uv_layers.active
+    nl = len(me.loops)
+    uv = np.empty(nl * 2, dtype=np.float64)
+    uvl.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2) * np.array([W, H]) - 0.5
+    vi = np.empty(nl, dtype=np.int64)
+    me.loops.foreach_get("vertex_index", vi)
+    co = _world(o)
+    ys, xs, Ps, Ns = [], [], [], []
+    for pi in polys:
+        p = me.polygons[int(pi)]
+        ls = list(p.loop_indices)
+        nrm = np.array(o.matrix_world.to_3x3() @ p.normal)
+        for k in range(1, len(ls) - 1):
+            L = (ls[0], ls[k], ls[k + 1])
+            T = uv[list(L)]
+            x0, y0 = np.floor(T.min(0) - 1.0).astype(int)
+            x1, y1 = np.ceil(T.max(0) + 1.0).astype(int)
+            gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+            gx, gy = gx.ravel(), gy.ravel()
+            d = (T[1, 1] - T[2, 1]) * (T[0, 0] - T[2, 0]) + (T[2, 0] - T[1, 0]) * (T[0, 1] - T[2, 1])
+            if abs(d) < 1e-9:
+                continue
+            b0 = ((T[1, 1] - T[2, 1]) * (gx - T[2, 0]) + (T[2, 0] - T[1, 0]) * (gy - T[2, 1])) / d
+            b1 = ((T[2, 1] - T[0, 1]) * (gx - T[2, 0]) + (T[0, 0] - T[2, 0]) * (gy - T[2, 1])) / d
+            b2 = 1.0 - b0 - b1
+            B = np.stack([b0, b1, b2], 1)
+            # 1 px grown: the edge distance of a texel centre in px is b * (the triangle's height over that edge)
+            e = np.array([np.linalg.norm(T[1] - T[2]), np.linalg.norm(T[2] - T[0]), np.linalg.norm(T[0] - T[1])])
+            hgt = abs(d) / np.maximum(e, 1e-9)
+            ok = np.all(B * hgt[None, :] >= -1.0, axis=1) & (gx >= 0) & (gx < W) & (gy >= 0) & (gy < H)
+            if not ok.any():
+                continue
+            Bc = np.clip(B[ok], 0.0, None)
+            Bc /= Bc.sum(1, keepdims=True)
+            ys.append(gy[ok])
+            xs.append(gx[ok])
+            Ps.append(Bc @ co[vi[list(L)]])
+            Ns.append(np.repeat(nrm[None], int(ok.sum()), 0))
+    if not ys:
+        return None
+    return np.concatenate(ys), np.concatenate(xs), np.concatenate(Ps), np.concatenate(Ns)
+
+
+def _face_wipe(o, polys, mat, spec, log=print):
+    """(cards ks1 fix) the carved face disc wiped to smooth, polished wood on COPIES of the material's base-colour and
+    normal images: every front texel of the disc between the chin and the brow (z < 1.44: the forehead's relief grain
+    stays, the paint matching it) takes the face plane's low-pass value (sigma 7.5 mm over the same texels, the eye and
+    mouth recesses and the nose tip left out of it), ramped in over the 2-4.5 mm round the eye slits and the smile so
+    the carved lips keep their edge; the nose's tip and wings keep their paint, its bridge is wiped. Thin vertical marks
+    (grain cracks, jaw ticks, the drip ticks under the lids, the pale streak down the bridge, the baked grain in the
+    normal map) go; the broad painted shading and the carved forms stay. Returns the new images (the caller removes them)."""
+    bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None or not o.data.uv_layers.active or not hasattr(spec, "eye_sd"):
+        return []
+    made = []
+    for sock in ("Base Color", "Normal"):
+        tex = _upstream_image(bsdf.inputs[sock])
+        if tex is None or tex.image is None:
+            continue
+        img = tex.image
+        W, H = img.size
+        r = _face_texels(o, polys, W, H)
+        if r is None:
+            continue
+        ty, tx, P, N = r
+        px = np.empty(W * H * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(H, W, 4)
+        x, y, z = P[:, 0], P[:, 1], P[:, 2]
+        ss = spec.ss
+        front = N[:, 1] < -0.2
+        off = (spec.face_front(x, z) - spec.face_relief(P)) - y          # > 0: in front of the carved face (the nose)
+        nose = off > 0.003
+        es, ms = spec.eye_sd(x, z), spec.mouth_sd(x, z)
+        disc = spec.face_sd(x, z) < -0.002
+        keep_nose = nose & (z < 1.30)                                     # the tip and the wings
+        src = front & disc & (es > 0.0025) & (ms > 0.0025) & ~keep_nose & (z < 1.47)
+        col = px[ty, tx, :3].astype(np.float64)
+        lp, has = spec._grid_mean(x, z, col, src, 0.0025, 3.0)
+        w = (front & disc & has).astype(np.float64)
+        w *= ss(0.002, 0.0045, es) * ss(0.002, 0.0045, ms)
+        w *= 1.0 - ss(1.43, 1.45, z)
+        w *= np.where(nose, ss(1.28, 1.31, z), 1.0)
+        w *= ss(0.0, -0.006, spec.face_sd(x, z))                          # the disc's rim keeps its paint
+        new = col * (1.0 - w[:, None]) + lp * w[:, None]
+        img2 = img.copy()
+        img2.name = img.name + "_card_wipe"
+        out = px.copy()
+        out[ty, tx, :3] = new.astype(np.float32)
+        img2.pixels.foreach_set(out.ravel())
+        img2.update()
+        tex.image = img2
+        made.append(img2)
+        log(f"card face wipe {sock} on {o.name}: {int((w > 0.5).sum())} texels of {len(w)} (front {int(front.sum())})")
+    return made
 
 
 def _sock(socks, name, typ):
@@ -489,6 +595,8 @@ def _grade_material(mat, g: dict):
         return
     bc = bsdf.inputs["Base Color"]
     if not bc.is_linked:
+        return
+    if "mul" not in g:                                 # a wipe-only grade: the material keeps its own look
         return
     src = bc.links[0].from_socket
     hsv = nt.nodes.new("ShaderNodeSeparateColor")
@@ -600,6 +708,7 @@ def grade(spec, skin, objs, log=print) -> list:
             mi = int(np.bincount(pm[allin]).argmax()) if allin.any() else 0
             mat = me.materials[mi].copy()
             mat.name = f"card_grade_{part}"
+            img2 = _face_wipe(o, np.nonzero(allin)[0], mat, spec, log) if g.get("wipe") else []
             _grade_material(mat, g)
             me.materials.append(mat)
             new = len(me.materials) - 1
@@ -608,16 +717,18 @@ def grade(spec, skin, objs, log=print) -> list:
             pm2[allin] = new
             me.polygons.foreach_set("material_index", pm2)
             me.update()
-            undo.append((o, old, mat))
+            undo.append((o, old, mat, img2))
             log(f"card grade {sid} {part} on {o.name}: {int(allin.sum())} faces")
     return undo
 
 
 def ungrade(undo: list) -> None:
-    for o, old, mat in undo:
+    for o, old, mat, img2 in undo:
         me = o.data
         me.polygons.foreach_set("material_index", old)
         i = list(me.materials).index(mat)
         me.materials.pop(index=i)
         bpy.data.materials.remove(mat)
+        for im in img2:
+            bpy.data.images.remove(im)
         me.update()
