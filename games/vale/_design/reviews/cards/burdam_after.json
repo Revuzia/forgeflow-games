@@ -1,0 +1,110 @@
+{
+ "burdam_splash": {
+  "axis_edge": 0.189,
+  "flat": 0.007,
+  "rim_dL_left": 6.6,
+  "rim_dL_right": 12.4,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 12.4,
+  "face": {
+   "p5": 41.0,
+   "p50": 72.7,
+   "p95": 88.7,
+   "range": 47.7,
+   "dark_share": 0.108,
+   "edge": 3.42
+  }
+ },
+ "burdam_portrait": {
+  "axis_edge": 0.136,
+  "flat": 0.012,
+  "rim_dL_left": 13.8,
+  "rim_dL_right": 17.7,
+  "rim_side": "right",
+  "plate_sun": "right",
+  "rim_match": true,
+  "dab": 6.0,
+  "face": {
+   "p5": 29.0,
+   "p50": 74.2,
+   "p95": 82.3,
+   "range": 53.2,
+   "dark_share": 0.138,
+   "edge": 1.96
+  }
+ },
+ "burdam_stillwater_splash": {
+  "axis_edge": 0.205,
+  "flat": 0.013,
+  "rim_dL_left": 20.2,
+  "rim_dL_right": 8.4,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 5.8,
+  "face": {
+   "p5": 39.7,
+   "p50": 68.0,
+   "p95": 74.4,
+   "range": 34.7,
+   "dark_share": 0.114,
+   "edge": 1.47
+  }
+ },
+ "burdam_stillwater_portrait": {
+  "axis_edge": 0.174,
+  "flat": 0.013,
+  "rim_dL_left": 9.3,
+  "rim_dL_right": 11.5,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 6.7,
+  "face": {
+   "p5": 40.7,
+   "p50": 74.9,
+   "p95": 90.4,
+   "range": 49.7,
+   "dark_share": 0.102,
+   "edge": 1.54
+  }
+ },
+ "burdam_almanac_splash": {
+  "axis_edge": 0.283,
+  "flat": 0.026,
+  "rim_dL_left": 19.6,
+  "rim_dL_right": 10.9,
+  "rim_side": "left",
+  "plate_sun": "left",
+  "rim_match": true,
+  "dab": 3.2,
+  "face": {
+   "p5": 39.6,
+   "p50": 73.1,
+   "p95": 84.7,
+   "range": 45.0,
+   "dark_share": 0.089,
+   "edge": 1.98
+  }
+ },
+ "burdam_almanac_portrait": {
+  "axis_edge": 0.165,
+  "flat": 0.02,
+  "rim_dL_left": 13.3,
+  "rim_dL_right": 21.2,
+  "rim_side": "right",
+  "plate_sun": "left",
+  "rim_match": false,
+  "dab": 2.2,
+  "face": {
+   "p5": 43.3,
+   "p50": 73.6,
+   "p95": 84.0,
+   "range": 40.6,
+   "dark_share": 0.133,
+   "edge": 1.23
+  }
+ }
+}
