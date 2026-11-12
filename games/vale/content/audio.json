@@ -19,6 +19,9 @@
     "ui_shop_buy": {"files": ["assets/audio/ui_shop_buy.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 2, "priority": 6, "spatial": false, "loop": false, "cooldown": 0.05},
     "ui_shop_sell": {"files": ["assets/audio/ui_shop_sell.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 2, "priority": 5, "spatial": false, "loop": false, "cooldown": 0.05},
     "ui_shop_undo": {"files": ["assets/audio/ui_shop_undo.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 1, "priority": 5, "spatial": false, "loop": false, "cooldown": 0.05},
+    "ui_shop_open": {"files": ["assets/audio/ui_shop_open.ogg"], "bus": "ui", "gain": 0.6, "pitchVar": 0, "maxVoices": 1, "priority": 4, "spatial": false, "loop": false, "cooldown": 0.1},
+    "ui_shop_close": {"files": ["assets/audio/ui_shop_close.ogg"], "bus": "ui", "gain": 0.6, "pitchVar": 0, "maxVoices": 1, "priority": 4, "spatial": false, "loop": false, "cooldown": 0.1},
+    "ui_ping_wheel": {"files": ["assets/audio/ui_ping_wheel.ogg"], "bus": "ui", "gain": 0.6, "pitchVar": 0, "maxVoices": 1, "priority": 3, "spatial": false, "loop": false, "cooldown": 0.08},
     "ui_shop_denied": {"files": ["assets/audio/ui_shop_denied.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 1, "priority": 5, "spatial": false, "loop": false, "cooldown": 0.15},
     "ui_rank_up": {"files": ["assets/audio/ui_rank_up.ogg"], "bus": "ui", "gain": 0.7, "pitchVar": 0, "maxVoices": 2, "priority": 6, "spatial": false, "loop": false, "cooldown": 0.05},
     "ui_currency_tick": {"files": ["assets/audio/ui_currency_tick.ogg"], "bus": "ui", "gain": 0.35, "pitchVar": 0.03, "maxVoices": 3, "priority": 3, "spatial": false, "loop": false, "cooldown": 0.04},
@@ -473,7 +476,7 @@
     "tab": "ui_tab", "toggle": "ui_toggle", "slider": "ui_slider", "queue_search": "ui_queue_search", "queue_pop": "ui_queue_pop", "queue_remind": "ui_queue_remind",
     "accept": "ui_accept", "lockin": "ui_lockin", "ban": "ui_ban", "hover_fighter": "ui_hover_fighter", "currency_tick": "ui_currency_tick",
     "equip": "ui_equip", "purchase": "ui_purchase", "reward_reveal": "ui_reward_reveal", "level_account": "ui_level_account", "notify": "ui_notify",
-    "shop_buy": "ui_shop_buy", "shop_sell": "ui_shop_sell", "shop_undo": "ui_shop_undo"
+    "shop_buy": "ui_shop_buy", "shop_sell": "ui_shop_sell", "shop_undo": "ui_shop_undo", "shop_open": "ui_shop_open", "shop_close": "ui_shop_close", "ping_wheel": "ui_ping_wheel"
   },
   "screens": { "menu": "mus_menu", "draft": "mus_draft", "postgame": "mus_postgame" },
   "stings": { "victory": "m_victory_sting", "defeat": "m_defeat_sting", "placement": "m_placement_sting" },

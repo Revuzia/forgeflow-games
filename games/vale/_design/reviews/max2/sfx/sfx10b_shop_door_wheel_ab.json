@@ -1,0 +1,187 @@
+{
+ "_what": "max2 SFX-10 round 2 (sfx lane): the shop's door and the ping wheel get their own cues; round 1 covered buy, sell, undo, cannot afford, rank-up spend and the pings (sfx10_ui_shop_ping_ab, sfx2c_snap_rankup_ab). Before: opening the shop played the generic ui_tab, closing it ui_back (and the gleam button, Esc and the shop's own Escape were silent), right-click sell on an item slot was silent, the ping wheel opening was silent.",
+ "_wiring": {
+  "shop_open": "hotkey toggle (hud/index.tsx), gleam button (hud/dialbar.tsx)",
+  "shop_close": "hotkey toggle, closeShop hook, Esc (useEsc), Close button and search-field Escape (hud/shop.tsx), gleam button",
+  "shop_sell": "now also on right-click sell from the item bar (hud/dialbar.tsx)",
+  "ping_wheel": "PingWheel open edge (hud/world.tsx)"
+ },
+ "_asHeardLUFSM": {
+  "ui_shop_open": -25.4,
+  "ui_shop_close": -26.2,
+  "ui_ping_wheel": -29.4,
+  "ladder (unchanged)": {
+   "ui_shop_buy": -24.0,
+   "ui_shop_sell": -25.0,
+   "ui_shop_undo": -26.1,
+   "ui_back": -26.4,
+   "ui_click": -27.4,
+   "ui_tab": -28.2
+  }
+ },
+ "_gate": "audio/build.py snap gate: UI_SHOP_CUES now includes ui_shop_open, ui_shop_close, ui_ping_wheel (onset to peak <= 5 ms); build.py --gates PASS; 2-6 kHz kept soft (open 1.5 %, close 1.2 %, wheel 0.6 %) since they repeat",
+ "shop open (was ui_tab)": {
+  "before": {
+   "lufs": -22.99710566264326,
+   "tp": -7.702132322247288,
+   "rise_ms": 1.2916666666666667,
+   "centroid": 1372.395432542085,
+   "b2_6": 0.0764535808457163,
+   "b6_12": 0.011287520982685722,
+   "b12": 0.001661988360668364,
+   "side": 0.0,
+   "dur_ms": 275.125,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_tab.ogg"
+   ]
+  },
+  "after": {
+   "lufs": -20.992510165173787,
+   "tp": -5.36837700749179,
+   "rise_ms": 1.1875,
+   "centroid": 1106.043175235558,
+   "b2_6": 0.015277020260536317,
+   "b6_12": 0.00014334316568046586,
+   "b12": 0.0001018308908969643,
+   "side": 0.03843900401131262,
+   "dur_ms": 332.25,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_shop_open.ogg"
+   ]
+  }
+ },
+ "shop close (was ui_back)": {
+  "before": {
+   "lufs": -21.953782928782253,
+   "tp": -8.74147305098604,
+   "rise_ms": 2.2083333333333335,
+   "centroid": 1187.4861888917992,
+   "b2_6": 0.06484398739023922,
+   "b6_12": 5.0967229000002516e-05,
+   "b12": 5.828873330190859e-06,
+   "side": 0.019464781247529303,
+   "dur_ms": 288.5,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_back.ogg"
+   ]
+  },
+  "after": {
+   "lufs": -21.81497824914574,
+   "tp": -1.7870004461574656,
+   "rise_ms": 1.125,
+   "centroid": 828.6074001955174,
+   "b2_6": 0.011843158058961255,
+   "b6_12": 1.741798909988656e-05,
+   "b12": 1.1127544430494324e-06,
+   "side": 0.011404181695552604,
+   "dur_ms": 218.64583333333334,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_shop_close.ogg"
+   ]
+  }
+ },
+ "ping wheel open (was silent)": {
+  "before": null,
+  "after": {
+   "lufs": -25.012677036845872,
+   "tp": -6.316800189851572,
+   "rise_ms": 2.3541666666666665,
+   "centroid": 1465.9851120689407,
+   "b2_6": 0.0059824369866863444,
+   "b6_12": 4.066103706376266e-06,
+   "b12": 1.0942344457284158e-07,
+   "side": 0.0,
+   "dur_ms": 52.5625,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_ping_wheel.ogg"
+   ]
+  }
+ },
+ "hover (kept)": {
+  "before": {
+   "lufs": -40.488520636327294,
+   "tp": -20.044219322867786,
+   "rise_ms": 1.6666666666666667,
+   "centroid": 1321.2626535774568,
+   "b2_6": 0.004965768592071914,
+   "b6_12": 6.257883492957554e-08,
+   "b12": 2.3082097380711785e-11,
+   "side": 0.06125420638539238,
+   "dur_ms": 59.291666666666664,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_hover.ogg"
+   ]
+  },
+  "after": {
+   "lufs": -40.488520636327294,
+   "tp": -20.044219322867786,
+   "rise_ms": 1.6666666666666667,
+   "centroid": 1321.2626535774568,
+   "b2_6": 0.004965768592071914,
+   "b6_12": 6.257883492957554e-08,
+   "b12": 2.3082097380711785e-11,
+   "side": 0.06125420638539238,
+   "dur_ms": 59.291666666666664,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_hover.ogg"
+   ]
+  }
+ },
+ "click (kept)": {
+  "before": {
+   "lufs": -23.006809800762472,
+   "tp": -4.103868781385075,
+   "rise_ms": 1.0208333333333333,
+   "centroid": 1780.2441794883105,
+   "b2_6": 0.07361922225428401,
+   "b6_12": 0.00010444787774209037,
+   "b12": 7.518584098279604e-06,
+   "side": 0.007739464333394043,
+   "dur_ms": 158.91666666666669,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_click.ogg"
+   ]
+  },
+  "after": {
+   "lufs": -23.006809800762472,
+   "tp": -4.103868781385075,
+   "rise_ms": 1.0208333333333333,
+   "centroid": 1780.2441794883105,
+   "b2_6": 0.07361922225428401,
+   "b6_12": 0.00010444787774209037,
+   "b12": 7.518584098279604e-06,
+   "side": 0.007739464333394043,
+   "dur_ms": 158.91666666666669,
+   "takes": 1,
+   "takeSim": null,
+   "takeTfSim": null,
+   "files": [
+    "ui_click.ogg"
+   ]
+  }
+ }
+}

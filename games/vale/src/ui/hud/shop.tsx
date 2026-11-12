@@ -131,9 +131,9 @@ export function ShopPanel(): JSX.Element | null {
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5 5" /></svg>
           <input type="search" value={query} placeholder={cv.t('hud.shopui.search', 'Search items')} aria-label={cv.t('hud.shopui.search', 'Search items')}
             onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (query) setQuery(''); else shopOpen.value = false; } }} />
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (query) setQuery(''); else { shopOpen.value = false; sound.play('shop_close'); } } }} />
         </label>
-        <button type="button" class="hbtn" onClick={() => { shopOpen.value = false; sound.play('back'); }}>{cv.t('hud.shopui.close', 'Close')} <span class="keycap keycap--quiet">{key('shop')}</span></button>
+        <button type="button" class="hbtn" onClick={() => { shopOpen.value = false; sound.play('shop_close'); }}>{cv.t('hud.shopui.close', 'Close')} <span class="keycap keycap--quiet">{key('shop')}</span></button>
       </header>
       <div class="lshop__body">
         <nav class="lshop__tags" aria-label={cv.t('hud.shopui.filter', 'Filter')}>

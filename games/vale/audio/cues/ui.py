@@ -252,6 +252,46 @@ def ui_shop_denied(v: int):
     return finish(room(L.out(), 'wood', wet=0.06), hp_hz=90, lp_hz=6000)
 
 
+@cue('ui_shop_open', 'ui', ('m', -21.0), UI_CHIME, instant=True, **UICHIME)
+def ui_shop_open(v: int):
+    """Open the shop (max2 SFX-10 round 2; it was the generic tab): the gleam cabinet's wooden latch lifts on the click,
+    its drawer slides out on a short soft wood-and-air breath, and a G5 glass with a B5 over it glints as the wares come
+    into the light. The shop's own door, so the open reads apart from a tab change."""
+    r = R('ui_shop_open')
+    L = Layers(0.45)
+    L.add(at_len(esc('tick', 0.95, seed='so', res=(760.0, 1700.0)), 0.05), 0.0, peak_db=0)
+    L.add(S.knock(r, 300, 0.04, 4, 'wood'), 0.0, peak_db=-8)
+    L.add(breath(0.12, 700, 2200, shape='swell', q=1.3, seed='so', peak_at=0.6, vel=0.5), 0.008, peak_db=-15)
+    L.add(glass('G5', 0.34, 0.8, decay=0.1, bright=0.6, seed='so1', strike=1.3), 0.062, peak_db=-4)
+    L.add(glass('B5', 0.3, 0.7, decay=0.09, bright=0.55, seed='so2'), 0.088, peak_db=-8)
+    return finish(room(L.out(), 'wood', wet=0.1), hp_hz=180, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('ui_shop_close', 'ui', ('m', -22.0), UI_SHORT, instant=True, **UICHIME)
+def ui_shop_close(v: int):
+    """Close the shop: the open turned over and shorter: the latch drops with a low wooden tock on the click itself, the
+    drawer's falling breath tucked under it, one damped D5 glass settling it 30 ms later and a faint tick as the catch
+    seats. Dry: the counter is shut."""
+    r = R('ui_shop_close')
+    L = Layers(0.3)
+    L.add(at_len(esc('tock', 0.95, seed='sc2', res=(620.0, 1450.0)), 0.06), 0.0, peak_db=0)
+    L.add(S.knock(r, 240, 0.04, 4, 'wood'), 0.0, peak_db=-7)
+    L.add(breath(0.06, 1800, 700, shape='breath', q=1.3, seed='sc', peak_at=0.015, vel=0.5), 0.0, peak_db=-18)
+    L.add(glass('D5', 0.18, 0.7, decay=0.05, bright=0.4, seed='sc1'), 0.03, peak_db=-8)
+    L.add(at_len(esc('tick', 0.6, seed='sc'), 0.03), 0.048, peak_db=-12)
+    return finish(room(L.out(), 'wood', wet=0.06), hp_hz=160, lp_hz=8500, eq=[('peak', 3300, -2.5, 0.8)])
+
+
+@cue('ui_ping_wheel', 'ui', ('m', -25.0), UI_TICK, instant=True, **UITICK)
+def ui_ping_wheel(v: int):
+    """The ping wheel opens under your cursor (max2 SFX-10 round 2; it was silent): the dial's ratchet catching, a
+    small dry wooden tick with a faint A5 glass grain, quiet and short so the ping that follows owns the moment."""
+    L = Layers(0.1)
+    L.add(at_len(esc('tick', 0.85, seed='pw', res=(700.0, 1500.0), band=1800.0, q=2.5), 0.04, fout=0.015), 0.0, peak_db=0)
+    L.add(tink(hz('A5'), 0.07, 0.04, bright=0.2, attack=0.001), 0.004, peak_db=-9)
+    return finish(L.out(), hp_hz=300, lp_hz=4500, eq=[('peak', 2800, -3.0, 0.9)])
+
+
 @cue('ui_rank_up', 'ui', ('m', -22.0), UI_SHORT, instant=True, **UICHIME)
 def ui_rank_up(v: int):
     """Spend a skill point (max2 SFX-10, events.rankUp: your fighter's ability ranks rose): a wooden notch cut into the

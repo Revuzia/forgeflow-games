@@ -74,8 +74,8 @@ export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Elemen
     client, renderer: selecting(r, model), index, settings: state.settings.peek(),
     surface: document.body,
     hooks: {
-      toggleShop: () => { shopOpen.value = !shopOpen.value; sound.play(shopOpen.value ? 'tab' : 'back'); },
-      closeShop: () => { if (!shopOpen.value) return false; shopOpen.value = false; sound.play('back'); return true; },
+      toggleShop: () => { shopOpen.value = !shopOpen.value; sound.play(shopOpen.value ? 'shop_open' : 'shop_close'); },
+      closeShop: () => { if (!shopOpen.value) return false; shopOpen.value = false; sound.play('shop_close'); return true; },
       scoreboard: (on) => { board.value = on; },
       denied: (slot, why) => denied(model, cv, index, slot, why),
       marker: (m) => {
@@ -143,7 +143,7 @@ export function Hud(p: { client: MatchClient; onMenu?: () => void }): JSX.Elemen
 
   // Esc: aiming / the wheel / the shop answer before the in-match menu (the controller handles those
   // first in the capture phase); the scoreboard never needs Esc (it is held)
-  useEsc(() => { if (shopOpen.value) { shopOpen.value = false; return true; } return false; });
+  useEsc(() => { if (shopOpen.value) { shopOpen.value = false; sound.play('shop_close'); return true; } return false; });
 
   // one context value per match: a new object per HUD render would force every useHud() consumer to
   // re-render, pinned ones included (HUD-4)

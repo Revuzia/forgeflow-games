@@ -7,7 +7,7 @@ export const UI_CUE_KINDS = [
   'hover', 'click', 'confirm', 'back', 'error', 'tab', 'toggle', 'slider',
   'queue_search', 'queue_pop', 'accept', 'lockin', 'ban', 'hover_fighter',
   'currency_tick', 'equip', 'purchase', 'reward_reveal', 'level_account', 'notify',
-  'shop_buy', 'shop_sell', 'shop_undo',
+  'shop_buy', 'shop_sell', 'shop_undo', 'shop_open', 'shop_close', 'ping_wheel',
 ] as const;
 /** roles the client plays when content binds them and skips silently otherwise (the build does not require them):
  *  queue_remind sounds once when an unanswered ready check has READY_REMIND_S left (src/ui/state.ts) */

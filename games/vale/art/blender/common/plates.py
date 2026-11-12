@@ -1256,6 +1256,87 @@ def mask_to(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | N
     return out
 
 
+def retouch(comp: np.ndarray, af: np.ndarray, p: dict, kind: str, meta: dict | None) -> np.ndarray:
+    """(max2 cards g1) "retouch": {kind: [op, ...]}, a card's face retouch on the finished composite, the 2D finish a
+    render cannot reach without changing the GLB. Each op works in a soft ellipse round the face point: "at" [dx, dy]
+    and "r" [rx, ry] in fractions of the image height (dx, dy from face_point), on the figure only.
+      {"op": "close", "px": n}   a morphological closing (max then min, radius n px at the card's size), kept only where
+                                 it lifts: thin dark marks (lid drips, cheek streaks, cast-shadow ticks) narrower than
+                                 2n + 1 px fill in from their surround; broad shading and the carved forms stay.
+      {"op": "fill", "px": s, "q": q}   a soft cast shadow (a lid's curtain with drips) filled from the clean surround: the
+                                 pixels at least the ellipse's q-th luma percentile, spread by a normalised gaussian
+                                 (sigma s px), kept only where it lifts.
+      {"op": "hue", "h": [h0, h1], "s_min": s, "v_max": v, "sat": k, "val": k, "to": "#hex", "mix": m}
+                                 pixels in that hue band (deg, h0 > h1 wraps) above saturation s (and value at most v)
+                                 get saturation x sat and value x val, then mixed `mix` toward the hex at their own luma
+                                 (an off-model eye colour back to the sheet).
+      {"op": "lift", "px": n, "k": k}   dark pixels well under their n px surround's median are lifted k of the way
+                                 toward it (a solid black slot opened to a shadowed lid)."""
+    ops = (p.get("retouch") or {}).get(kind)
+    if not ops:
+        return comp
+    fp = face_point(meta, p, kind)
+    if fp is None:
+        return comp
+    h, w = comp.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    out = comp.copy()
+    a = np.clip(af, 0.0, 1.0)
+    for op in ops:
+        dx, dy = (float(v) for v in op.get("at", (0.0, 0.0)))
+        rx, ry = (float(v) for v in op.get("r", (0.05, 0.05)))
+        d = np.sqrt(((xx - (fp[0] * w + dx * h)) / max(1.0, rx * h)) ** 2 + ((yy - (fp[1] * h + dy * h)) / max(1.0, ry * h)) ** 2)
+        t = np.clip((1.0 - d) / 0.35, 0.0, 1.0)
+        wgt = (t * t * (3 - 2 * t) * a)[..., None]
+        if not (wgt > 0.01).any():
+            continue
+        rgb = out[..., :3]
+        kind_ = op.get("op", "close")
+        if kind_ == "close":
+            n = max(1, int(op.get("px", 3)))
+            c = _mm1(_mm1(rgb, n, 0, np.max), n, 1, np.max)
+            c = _mm1(_mm1(c, n, 0, np.min), n, 1, np.min)
+            lift = np.clip(c - rgb, 0.0, None)
+            lift = np.stack([_gauss1(_gauss1(lift[..., i], 1.0, 0), 1.0, 1) for i in range(3)], -1)
+            new = rgb + lift
+        elif kind_ == "fill":
+            # the clean surround (pixels at least the q-th percentile of the ellipse's luma, ellipse grown x1.6) spread
+            # in by a normalised gaussian; kept only where it lifts
+            Y = rgb @ Y709
+            zone = (d < 1.6) & (a > 0.5)
+            m = (zone & (Y >= np.percentile(Y[zone], float(op.get("q", 55))))).astype(np.float32)
+            sg = float(op.get("px", 6))
+            num = np.stack([_gauss1(_gauss1(rgb[..., i] * m, sg, 0), sg, 1) for i in range(3)], -1)
+            den = _gauss1(_gauss1(m, sg, 0), sg, 1)[..., None]
+            fill = num / np.maximum(den, 1e-4)
+            new = np.where((fill @ Y709)[..., None] > (rgb @ Y709)[..., None], fill, rgb)
+        elif kind_ == "lift":
+            n = max(2, int(op.get("px", 6)))
+            Y = rgb @ Y709
+            ref = _gauss1(_gauss1(_mm1(_mm1(Y, n // 2, 0, np.median), n // 2, 1, np.median), n / 2.0, 0), n / 2.0, 1)
+            gain = np.clip((Y + float(op.get("k", 0.6)) * np.clip(ref - Y, 0.0, None)) / np.maximum(Y, 1e-3), 1.0, 4.0)
+            new = np.clip(rgb * gain[..., None], 0.0, 1.0)
+        else:  # hue
+            mx, mn = rgb.max(-1), rgb.min(-1)
+            S = np.where(mx > 1e-5, (mx - mn) / np.maximum(mx, 1e-5), 0.0)
+            r_, g_, b_ = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+            H = (np.degrees(np.arctan2(np.sqrt(3.0) * (g_ - b_), 2 * r_ - g_ - b_)) + 360.0) % 360.0
+            h0, h1 = (float(v) for v in op.get("h", (0.0, 360.0)))
+            band = (H >= h0) & (H <= h1) if h0 <= h1 else (H >= h0) | (H <= h1)
+            sel = band & (S >= float(op.get("s_min", 0.3))) & (mx <= float(op.get("v_max", 1.0)))
+            selw = _gauss1(_gauss1(sel.astype(np.float32), 0.8, 0), 0.8, 1)[..., None]
+            L = (rgb @ Y709)[..., None]
+            new = np.clip((L + (rgb - L) * float(op.get("sat", 1.0))) * float(op.get("val", 1.0)), 0.0, 1.0)
+            if op.get("to"):
+                tg = np.asarray(_hex(op["to"]), np.float32)
+                tl = float(tg @ Y709)
+                nl = (new @ Y709)[..., None]
+                new = new + float(op.get("mix", 1.0)) * (np.clip(tg * (nl / max(tl, 1e-3)), 0.0, 1.0) - new)
+            new = rgb + (new - rgb) * selw
+        out[..., :3] = rgb + (new - rgb) * wgt
+    return out.astype(np.float32)
+
+
 def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | None = None) -> np.ndarray:
     """The card finish v2. No filter on the figure alone: the render stays clean and antialiased; it is graded to the
     plate's dusk (the same exposure logic as v1), takes the plate's light, stands on a contact and cast shadow, and the
@@ -1290,6 +1371,7 @@ def finish2(fg: np.ndarray, p: dict, kind: str, post: float = 1.0, meta: dict | 
     if kind == "splash" and p.get("card_lo_q") is not None:
         comp, _s = card_floor(comp, p)
     comp = mask_to(comp, fig[..., 3], p, kind, meta)
+    comp = retouch(comp, fig[..., 3], p, kind, meta)
     # the unified paint-over: soft Kuwahara mixed over the whole picture, eased over the face and hands
     r = float(p.get("paint_r2", 5)) * (w / 1600.0 if kind == "splash" else 0.7 * w / 512.0)
     mx = float(p.get("paint_mix", 0.55))

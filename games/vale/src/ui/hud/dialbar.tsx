@@ -471,7 +471,7 @@ function StatCell(p: { d: StatDef; i: number; els: (HTMLSpanElement | null)[]; n
 let dragFrom = -1;
 
 function ItemSlot(p: { i: number }): JSX.Element | null {
-  const { cv } = useApp();
+  const { cv, sound } = useApp();
   const { model, input, index, client, key, shopOpen } = useHud();
   const get = (): { id: string | null; cd: number; act: boolean; lock: string | null; canShop: boolean } => {
     const me = model.me, body = model.body;
@@ -506,7 +506,7 @@ function ItemSlot(p: { i: number }): JSX.Element | null {
         e.preventDefault();
         if (e.button === 0 && e.altKey) { e.stopPropagation(); if (it) model.callout(`item${p.i}`); return; }
         if (e.button === 0) { dragFrom = g.id ? p.i : -1; if (it?.active) input.press(slot); }
-        if (e.button === 2 && it && (shopOpen.value || model.me?.canShop)) client.send({ type: 'sell', slot: p.i });
+        if (e.button === 2 && it && (shopOpen.value || model.me?.canShop)) { sound.play('shop_sell'); client.send({ type: 'sell', slot: p.i }); }
       }}
       onPointerUp={(e) => { if (e.button === 0 && dragFrom >= 0 && dragFrom !== p.i) client.send({ type: 'swapItems', a: dragFrom, b: p.i }); dragFrom = -1; }}
       onContextMenu={(e) => e.preventDefault()}>
@@ -521,7 +521,7 @@ function ItemSlot(p: { i: number }): JSX.Element | null {
 }
 
 function Utility(): JSX.Element | null {
-  const { cv } = useApp();
+  const { cv, sound } = useApp();
   const { model, client, shopOpen, key, input } = useHud();
   useViewKey(() => { const me = model.me; return me ? `${me.canShop ? 1 : 0}|${me.recallProgress > 0 ? 1 : 0}` : ''; });
   const gold = useRef<HTMLSpanElement>(null);
@@ -537,7 +537,7 @@ function Utility(): JSX.Element | null {
     <>
       <button type="button" style={at(F.gleam[0], F.gleam[1], F.gleam[2], F.gleam[3])} class={`gleambtn ${me.canShop ? 'is-shop' : ''} ${shopOpen.value ? 'is-open' : ''}`} {...gleamTip}
         aria-label={`${cv.t('hud.gleam', 'Gleam')}. ${cv.t('hud.shop_open', 'Open the shop')}`}
-        onClick={() => { shopOpen.value = !shopOpen.value; input.cancelAim(); }}>
+        onClick={() => { shopOpen.value = !shopOpen.value; sound.play(shopOpen.value ? 'shop_open' : 'shop_close'); input.cancelAim(); }}>
         <GleamGlyph size={14} />
         <span class="num gleambtn__n" ref={gold} />
         <span class="gleambtn__key">{key('shop')}</span>

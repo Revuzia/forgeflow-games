@@ -120,25 +120,33 @@ CARDS = {
     "odrum": {
         # (card engineer 2, closing2 odrum-C3-M1: the ult's raised pot read as an eyeball beside the mask: Resin Shot's
         # follow-through, the yoke a long diagonal toward the target with both pots in three-quarter view)
+        # (max2 g2, verify_roll2 hollow-eye blocker: a three-quarter hero shot, the head ~2x larger, and a low warm
+        # focal into the mask's umber recesses so the painted pass has eyes to keep)
         "splash": {"clip": "cast_a1", "t": 0.55, "yaw": 30.0, "exposure": -1.0,   # (card engineer 2: the finish v2 render blew the jerkin to pale orange)
-                   "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70,
+                   "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.70, "box_lo": 0.70, "box_w": 0.80,
                    "key_az": 225.0, "key_el": 20.0, "key_color": "#FFD2A8", "sun": 2.8, "rim_cool": 1.0,
                    "rim_warm": 1.3, "bounce": 0.6, "bounce_color": "#E2A46A", "accent": 2.0,
                    "focal": [{"at": "x_sling_pouch", "az": 190.0, "el": 20.0, "dist": 0.5, "color": "#FFC060",
                               "power": 35.0, "size": 0.2},
                              {"at": "head", "az": 195.0, "el": 5.0, "dist": 0.8, "color": "#FFE2C4", "power": 18.0,
-                              "size": 0.25}]},
+                              "size": 0.25},
+                             {"at": "head", "az": 182.0, "el": -18.0, "dist": 0.6, "color": "#FFD8B0", "power": 14.0,
+                              "size": 0.15}]},
         "portrait": {"clip": "victory", "t": 0.96},
         "plate": {"glow": [0.85, 0.52, 0.32, 0.08], "cx": 0.46, "mask_to": "#EFC88F"},   # the in-game ochre mask (closing2: cream on the cards)
     },
     "odrum_noon_fair": {
         # (card engineer 2, closing2: the run collapsed the bar onto the shoulder and hid a pot: the festival porter's
         # victory hold, both lanterns on the bar, the cap tipped)
+        # (max2 g2: the hollow-eye blocker, the base card's three-quarter framing and recess focal)
         "splash": {"clip": "victory", "t": 0.92, "yaw": -24.0, "pitch": 0.0, "lens": 55.0, "fill": 0.84, "x": 0.71,
+                   "box_lo": 0.70, "box_w": 0.80,
                    "key_az": 240.0, "key_el": 55.0, "key_color": "#FFF1DA", "sun": 3.4, "rim_cool": 0.8,
                    "rim_warm": 1.0, "bounce": 0.9, "bounce_color": "#E8C9A2", "accent": 1.3,
                    "focal": [{"at": "head", "az": 200.0, "el": 25.0, "dist": 0.8, "color": "#FFF0DC", "power": 18.0,
-                              "size": 0.25}]},
+                              "size": 0.25},
+                             {"at": "head", "az": 178.0, "el": -18.0, "dist": 0.6, "color": "#FFE8CC", "power": 14.0,
+                              "size": 0.15}]},
         "portrait": {"clip": "idle_lobby", "t": 0.0, "key_az": 150.0, "key_el": 55.0},
         "plate": {"median": 0.36, "sat": 0.95, "glow": [0.25, 0.30, 0.45, 0.10], "glow_color": "#FFE9C4"},
     },
@@ -146,8 +154,10 @@ CARDS = {
         # (closing round 2: the bent neck of cast_a1 lost the eye inlays and the raised pole shrank the figure)
         "splash": {"clip": "victory", "t": 0.96, "yaw": -22.0, "pitch": -6.0, "lens": 48.0, "fill": 0.86, "x": 0.70,
                    "box_top": 2.0,
-                   "key_az": 235.0, "key_el": 35.0, "key_color": "#DCD0F4", "sun": 2.2, "rim_cool": 1.9,
-                   "rim_warm": 0.3, "bounce": 0.6, "bounce_color": "#6C5BA8", "accent": 2.0,
+                   # (max2 g2, verify_roll2 palette: a near-neutral key and an ink bounce, so the ink lower body
+                   # renders ink #2B2A33, not the violet the lilac key and bounce made of it)
+                   "key_az": 235.0, "key_el": 35.0, "key_color": "#E6E0EE", "sun": 2.2, "rim_cool": 1.2,
+                   "rim_warm": 0.3, "bounce": 0.35, "bounce_color": "#4A4656", "accent": 2.0,
                    "focal": [{"at": "x_pot_r", "az": 190.0, "el": 30.0, "dist": 0.6, "color": "#C8B8FF",
                               "power": 30.0, "size": 0.2},
                              {"at": "head", "az": 190.0, "el": 5.0, "dist": 0.8, "color": "#E6DCFF", "power": 18.0,
@@ -155,8 +165,11 @@ CARDS = {
         # (closing round 2: the cast_a1 bust looked down, the eye inlays lost under the brow: the head level, the amber
         # inlays toward the camera)
         "portrait": {"clip": "idle_lobby", "t": 0.0, "yaw": 20.0, "key_az": 215.0, "key_el": 25.0},
+        # (max2 g2, verify_roll2: the compose pushed the ink trousers and pots to electric violet, 108,82,208 where the
+        # brief gives ink #2B2A33: the dusk cast held off the figure as on Hesmi Shadeprint, ks1's fig_chroma fix)
         "plate": {"tint": "#8A7CC0", "sat": 0.80, "median": 0.24, "cx": 0.62, "glow": [0.35, 0.50, 0.40, 0.08],
-                  "glow_color": "#B7A6F0"},
+                  "glow_color": "#B7A6F0", "fig_chroma": 0.40, "amb_tint": 0.15, "match": 0.1, "sub_floor": 0.10,
+                  "sub_max_k": 1.0, "haze": 0.02},
     },
 }
 SKINS: list = [

@@ -252,7 +252,12 @@ CARDS = {
         "portrait": {"yaw": 40.0},
         "plate": {"glow": [0.78, 0.55, 0.25, 0.04], "median": 0.26, "cx": 0.60, "cy": 0.50, "zoom": 1.30, "cx_j": 0.0, "zoom_j": 0.0,
                   "fx": [{"at": "x_cup", "color": "#FFE2A8", "r": 0.06, "k": 0.34}],
-                  "face_off": {"splash": [-0.025, 0.046], "portrait": [-0.111, 0.078]}},
+                  "face_off": {"splash": [-0.025, 0.046], "portrait": [-0.111, 0.078]},
+                  # (max2 cards g1, verify ks2: the lid-shadow curtain with two drips under the viewer-right eye, the tick
+                  # under the left eye and the jaw line come from the carved recesses: a card face retouch closes them)
+                  "retouch": {"portrait": [{"op": "fill", "at": [0.086, 0.041], "r": [0.055, 0.026], "px": 5, "q": 60},
+                                           {"op": "close", "at": [-0.053, 0.040], "r": [0.03, 0.02], "px": 4},
+                                           {"op": "close", "at": [0.14, 0.193], "r": [0.035, 0.05], "px": 3}]}},
     },
     "sukri_stillwater": {
         # (closing round 2: the recall's cup glared over the face: the Mote Toss, the face clear)
@@ -272,7 +277,14 @@ CARDS = {
         "plate": {"tint": "#7FA3A6", "sat": 0.75, "median": 0.28, "glow": [0.15, 0.62, 0.45, 0.06],
                   "glow_color": "#A9D2CC", "cx": 0.55, "cy": 0.62, "zoom": 1.35, "cx_j": 0.0, "zoom_j": 0.0,
                   "fx": [{"at": "x_cup", "color": "#CFF2EA", "r": 0.06, "k": 0.32}],
-                  "face_off": {"splash": [-0.006, 0.169], "portrait": [0.085, 0.1]}},
+                  "face_off": {"splash": [-0.006, 0.169], "portrait": [0.085, 0.1]},
+                  # (max2 cards g1, verify ks2: the drip ticks under both lids and the lines beside the nose on the splash,
+                  # the faint streaks down both cheeks on the portrait: card face retouch)
+                  "retouch": {"splash": [{"op": "close", "at": [-0.043, -0.060], "r": [0.014, 0.010], "px": 3},
+                                         {"op": "close", "at": [0.090, -0.059], "r": [0.014, 0.010], "px": 3},
+                                         {"op": "close", "at": [0.031, -0.052], "r": [0.030, 0.020], "px": 4}],
+                              "portrait": [{"op": "close", "at": [-0.075, -0.035], "r": [0.022, 0.032], "px": 3},
+                                           {"op": "close", "at": [0.068, -0.033], "r": [0.022, 0.034], "px": 3}]}},
     },
     "sukri_shadeprint": {
         "splash": {"clip": "cast_a1", "t": 0.42, "yaw": 26.0, "pitch": -4.0, "lens": 46.0, "fill": 0.86, "x": 0.71,

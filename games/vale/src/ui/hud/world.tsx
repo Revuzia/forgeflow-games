@@ -206,9 +206,11 @@ export function ViewPlate(): JSX.Element | null {
 const WHEEL_R = 92;
 
 export function PingWheel(): JSX.Element | null {
-  const { cv } = useApp();
+  const { cv, sound } = useApp();
   const { input } = useHud();
   const w = input.wheel.value;
+  const open = !!w;
+  useEffect(() => { if (open) sound.play('ping_wheel'); }, [open]);   // max2 SFX-10: the wheel catching under the cursor
   if (!w) return null;
   const sel = w.sel;
   return (
