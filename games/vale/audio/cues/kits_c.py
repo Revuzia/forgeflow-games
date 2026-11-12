@@ -470,10 +470,15 @@ SNAP_MARGIN_DB = 0.8         # … whose peak stands this far over the rest of t
 SNAP_TUNE: dict[str, tuple[float, float] | None] = {
     'f_burdam_attack_hit': (0.3, 2.0), 'f_marund_attack_hit': (0.3, 2.0), 'f_vashil_attack_hit': (0.3, 1.0),
     'f_ervet_hit': (0.3, 1.0),
+    # max2 round 2 (snap_search.py --slots hit, with the lightest state (0.1 dB, 1 ms) added): Marund's impact takes the
+    # light snap, which frees Ilsheta's to take the default one (Kemdo's stays unsnapped: the two cannot both snap and
+    # keep 8 dB after the codec, decoded 7.9-8.0)
+    'f_marund_hit': (0.1, 1.0),
     # the ability impacts whose snap took a neighbour under the 8 dB identity bar (snap_search.py, margin 0.15 dB): the
-    # 'hit' slot is the kit's most crowded (every fighter's impact a whole tone under its own attack hit)
-    'f_ardit_hit': None, 'f_burdam_hit': None, 'f_dunsom_hit': None, 'f_hesmi_hit': None, 'f_ilsheta_hit': None,
-    'f_kemdo_hit': None, 'f_nurrow_hit': None, 'f_odrum_hit': None, 'f_ulkro_hit': None,
+    # 'hit' slot is the kit's most crowded (every fighter's impact a whole tone under its own attack hit); since SFX-4
+    # each voices only its fighter's two lighter abilities (the ult and the heaviest Q/W/E have their own snapped impact)
+    'f_ardit_hit': None, 'f_burdam_hit': None, 'f_dunsom_hit': None, 'f_hesmi_hit': None, 'f_kemdo_hit': None,
+    'f_nurrow_hit': None, 'f_odrum_hit': None, 'f_ulkro_hit': None,
 }
 SNAP_PEAK_DBFS = -1.8         # the transient's sample peak (the mastering's true-peak ceiling is -1.5 dBTP)
 SNAP_RISE_MAX_MS = 3.0        # the build re-masters a take whose DECODED onset-to-peak is over this, its easing BOOSTED (see build.render)

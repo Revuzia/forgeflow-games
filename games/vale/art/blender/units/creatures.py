@@ -458,7 +458,7 @@ class Glasshorn(Creature):
         col = col * (1 - 0.62 * cover[:, None]) + c("saddle") * 0.62 * cover[:, None]
         divide = _smooth_arr(0.05, 0.02, np.abs(z - 0.97 - 0.05 * np.sin(y * 9.0))) * _smooth_arr(-0.5, -0.4, y) * _smooth_arr(0.55, 0.45, y)
         col = col * (1 - 0.8 * divide[:, None]) + c("divide") * 0.8 * divide[:, None]
-        # MAX2 r2: one chalk sundial on each haunch (a ring and seven short hour ticks radiating from it), in place of
+        # MAX2 r2: one chalk sundial on each haunch (a ring and eight short hour ticks radiating all round it), in place of
         # round 1's flank chevrons: rib-parallel stripes down the barrel read as a rib cage at the game camera (verify1_r).
         # The ticks radiate, so no mark runs along the ribs; chalk at 0.62, softer than the chevrons' 0.88
         side = _smooth_arr(0.2, 0.6, np.abs(N[:, 0])) * _smooth_arr(0.82, 0.9, z)
@@ -468,7 +468,7 @@ class Glasshorn(Creature):
         th = np.degrees(np.arctan2(dz, -dy))      # 0 = toward the head, 90 = up
         ring = _smooth_arr(0.016, 0.008, np.abs(rr - 0.075))
         tick_a = np.zeros(n)
-        for a in (-45.0, -15.0, 15.0, 45.0, 75.0, 105.0, 135.0):
+        for a in (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0):   # a full sun of ticks (a half fan read as a lashed eye)
             tick_a = np.maximum(tick_a, _smooth_arr(0.013, 0.006, rr * np.abs(np.radians(((th - a + 180.0) % 360.0) - 180.0))))
         tick = tick_a * _smooth_arr(0.105, 0.115, rr) * _smooth_arr(0.19, 0.175, rr)
         dial = np.maximum(ring, tick) * side

@@ -1,23 +1,23 @@
 {
   "id": "sunsplinter",
   "rest_solve_err": 4.440892098500626e-16,
-  "tris": 8214,
+  "tris": 8218,
   "parts": {
     "stone": 0,
     "core": 1,
     "glass": 2
   },
-  "uv_coverage": 0.644,
+  "uv_coverage": 0.663,
   "bake": {
-    "base": 16.49,
-    "rough_metal": 12.93,
-    "normal": 4.36,
-    "ao": 4.89,
-    "normal_fixed_px": 2223,
-    "pack_save": 0.62,
-    "total": 40.68
+    "base": 4.5,
+    "rough_metal": 5.19,
+    "normal": 2.45,
+    "ao": 2.37,
+    "normal_fixed_px": 2419,
+    "pack_save": 0.59,
+    "total": 15.73
   },
-  "bake_holes_filled": 1,
+  "bake_holes_filled": 3,
   "clips": {
     "idle": {
       "frames": 120,
@@ -156,22 +156,22 @@
       ]
     ]
   },
-  "glb_bytes_raw": 2452820,
+  "glb_bytes_raw": 2484824,
   "optimize": {
     "ok": true,
-    "before": 2452820,
-    "after": 786584
+    "before": 2484824,
+    "after": 792512
   },
-  "glb_bytes": 786636,
+  "glb_bytes": 792564,
   "icon": {
     "out": "art/out/units/sunsplinter_icon.png"
   },
   "inspect": [
     "  material sunsplinter_body: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.00,0.00,0.00 base=1,1,1,1",
     "  material sunsplinter_noon: maps=[baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture] emissive=0.80,0.80,0.80 base=1,1,1,1",
-    "  texture sunsplinter_normal: image/webp ? 106.1 KiB",
-    "  texture sunsplinter_orm: image/webp ? 36.7 KiB",
-    "  texture sunsplinter_base: image/webp ? 117.1 KiB",
+    "  texture sunsplinter_normal: image/webp ? 106.0 KiB",
+    "  texture sunsplinter_orm: image/webp ? 37.0 KiB",
+    "  texture sunsplinter_base: image/webp ? 123.3 KiB",
     "  clip attack1      1.000 s (30 f) channels=55 bones=28",
     "  clip cast_a1      1.333 s (40 f) channels=68 bones=28",
     "  clip cast_a2      1.500 s (45 f) channels=54 bones=28",
@@ -181,40 +181,42 @@
     "  clip run          0.800 s (24 f) channels=54 bones=28"
   ],
   "load_test": {
-    "ok": true,
+    "ok": false,
     "log": [
-      "[three] art/out/units/sunsplinter.glb (768 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
-      "  webp: sunsplinter_base 1024x1024 117K, sunsplinter_normal 1024x1024 106K, sunsplinter_orm 512x512 37K",
-      "  skinned meshes: sunsplinter_1(7273v), sunsplinter_2(296v)",
+      "[three] art/out/units/sunsplinter.glb (774 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: sunsplinter_base 1024x1024 123K, sunsplinter_normal 1024x1024 106K, sunsplinter_orm 512x512 37K",
+      "  skinned meshes: sunsplinter_1(7249v), sunsplinter_2(298v)",
       "  bones: 29 (root hips c0 c1 c2 c3 c4 c5 core g0 g1 g2 g3 g4 g5 g6 head s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11)",
       "  clips: attack1:1.000s/55tr, cast_a1:1.333s/68tr, cast_a2:1.500s/54tr, cast_a3:1.167s/68tr, death:1.667s/54tr, idle:4.000s/42tr, run:0.800s/54tr",
       "  tracks checked: 395; materials: sunsplinter_body, sunsplinter_noon; textures: sunsplinter_body.map=1024x1024, sunsplinter_body.normalMap=1024x1024, sunsplinter_body.roughnessMap=512x512, sunsplinter_body.metalnessMap=512x512, sunsplinter_body.aoMap=512x512, sunsplinter_noon.map=1024x1024, sunsplinter_noon.normalMap=1024x1024, sunsplinter_noon.roughnessMap=512x512, sunsplinter_noon.metalnessMap=512x512, sunsplinter_noon.aoMap=512x512, sunsplinter_noon.emissiveMap=1024x1024",
-      "  tris: 8214; bind-pose bounds (three units, Y up): 3.29 x 2.77 x 3.56; facing (-0.00, 1.00); head bone y 2.50; runRefSpeed -",
+      "  tris: 8218; bind-pose bounds (three units, Y up): 3.29 x 2.77 x 3.36; facing (0.45, 0.89); head bone y 2.50; runRefSpeed -",
       "  run: 24 f, planted samples undefined, max foot-speed error undefined%",
-      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+      "[three] FAIL (1)",
+      "  - model faces (0.45, 0.89) in three, not +Z"
     ]
   },
   "sheet": {
-    "ok": true,
+    "ok": false,
     "out": "art/renders/units/sunsplinter.png",
     "log": [
-      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.645,0.426,-1.636],[1.646,3.201,1.923]],\"facing\":[0,1],\"headY\":2.503,\"heightPx1080\":177,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/sunsplinter.png\",\"seconds\":83.9}"
+      "[three-snap] {\"ok\":true,\"mode\":\"unit\",\"bindBox\":[[-1.645,0.426,-1.636],[1.646,3.201,1.72]],\"facing\":[0.455,0.891],\"headY\":2.503,\"heightPx1080\":177,\"rows\":[\"facings\",\"attack1\",\"cast_a1\",\"cast_a2\",\"cast_a3\",\"death\",\"idle\",\"run\"],\"size\":[2400,2400],\"clips\":7,\"out\":\"art/renders/units/sunsplinter.png\",\"seconds\":19.9}",
+      "[three-snap] FAIL: model does not face +Z"
     ]
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "sculpt": 271.75,
-      "bind": 0.18,
-      "uv": 24.39,
-      "bake": 42.27,
-      "clips": 2.33,
-      "ground_qa": 0.67,
-      "export": 2.62,
-      "optimize": 2.33,
-      "icon": 6.07,
-      "qa": 86.8
+      "rig": 0.0,
+      "sculpt": 193.09,
+      "bind": 0.09,
+      "uv": 19.9,
+      "bake": 17.4,
+      "clips": 1.74,
+      "ground_qa": 0.5,
+      "export": 2.57,
+      "optimize": 1.94,
+      "icon": 2.52,
+      "qa": 21.44
     },
-    "total_s": 440.23
+    "total_s": 261.58
   }
 }

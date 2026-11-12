@@ -1,0 +1,358 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "kemdo": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/pre/kemdo.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 139,
+          "valueBands": {
+            "top": 55.6,
+            "mid": 45.5,
+            "bottom": 20.9
+          },
+          "accentPct": 2.08,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.08,
+          "sigPct": 33.83
+        },
+        "180": {
+          "heightPx": 163,
+          "valueBands": {
+            "top": 63.9,
+            "mid": 43.0,
+            "bottom": 25.1
+          },
+          "accentPct": 1.14,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.14,
+          "sigPct": 42.04
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.08,
+      "sigPctMean": 37.94,
+      "accentOk": true
+    },
+    "burdam": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/pre/burdam.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 177,
+          "valueBands": {
+            "top": 29.6,
+            "mid": 39.1,
+            "bottom": 21.6
+          },
+          "accentPct": 1.71,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.71,
+          "sigPct": 35.22
+        },
+        "180": {
+          "heightPx": 134,
+          "valueBands": {
+            "top": 48.6,
+            "mid": 30.7,
+            "bottom": 16.9
+          },
+          "accentPct": 1.3,
+          "accentTopHalfShare": 0.895,
+          "accentTopHalfPctOfFighter": 1.16,
+          "sigPct": 38.03
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": false,
+      "accentPctMax": 1.71,
+      "sigPctMean": 36.62,
+      "accentOk": false
+    },
+    "vashil": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/pre/vashil.glb",
+      "idleAction": "idle.002",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 75.6,
+            "mid": 49.4,
+            "bottom": 23.2
+          },
+          "accentPct": 0.01,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 0.01,
+          "sigPct": 35.32
+        },
+        "180": {
+          "heightPx": 151,
+          "valueBands": {
+            "top": 75.6,
+            "mid": 49.8,
+            "bottom": 29.4
+          },
+          "accentPct": 0.0,
+          "accentTopHalfShare": null,
+          "accentTopHalfPctOfFighter": 0.0,
+          "sigPct": 43.33
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 0.01,
+      "sigPctMean": 39.33,
+      "accentOk": false
+    },
+    "tunlan": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/pre/tunlan.glb",
+      "idleAction": "idle.003",
+      "facings": {
+        "0": {
+          "heightPx": 144,
+          "valueBands": {
+            "top": 71.0,
+            "mid": 60.0,
+            "bottom": 29.3
+          },
+          "accentPct": 2.49,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.49,
+          "sigPct": 15.32
+        },
+        "180": {
+          "heightPx": 143,
+          "valueBands": {
+            "top": 69.0,
+            "mid": 54.2,
+            "bottom": 18.3
+          },
+          "accentPct": 1.15,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.15,
+          "sigPct": 21.74
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.49,
+      "sigPctMean": 18.53,
+      "accentOk": true
+    },
+    "rishal": {
+      "glb": "../../../../../../private/tmp/claude-501/-Users-sitskovich-Developer-forgeflow-games/03f17c1d-60ba-4393-8820-fb1c6015dccd/scratchpad/pre/rishal.glb",
+      "idleAction": "idle.004",
+      "facings": {
+        "0": {
+          "heightPx": 123,
+          "valueBands": {
+            "top": 75.3,
+            "mid": 51.7,
+            "bottom": 30.8
+          },
+          "accentPct": 2.16,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.16,
+          "sigPct": 14.12
+        },
+        "180": {
+          "heightPx": 124,
+          "valueBands": {
+            "top": 69.9,
+            "mid": 48.9,
+            "bottom": 20.6
+          },
+          "accentPct": 1.81,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.81,
+          "sigPct": 10.81
+        }
+      },
+      "valueGradientOk": true,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.16,
+      "sigPctMean": 12.46,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    180
+  ],
+  "pairs": [
+    {
+      "a": "kemdo",
+      "b": "burdam",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.584,
+        "180": 0.491
+      },
+      "iou64Max": 0.584,
+      "iou64_norm": {
+        "0": 0.462,
+        "180": 0.391
+      },
+      "iou64NormMax": 0.462,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.479,
+        "180": 0.502
+      },
+      "iou64Max": 0.502,
+      "iou64_norm": {
+        "0": 0.387,
+        "180": 0.513
+      },
+      "iou64NormMax": 0.513,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "tunlan",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.472,
+        "180": 0.45
+      },
+      "iou64Max": 0.472,
+      "iou64_norm": {
+        "0": 0.555,
+        "180": 0.425
+      },
+      "iou64NormMax": 0.555,
+      "ok": true
+    },
+    {
+      "a": "kemdo",
+      "b": "rishal",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.356,
+        "180": 0.412
+      },
+      "iou64Max": 0.412,
+      "iou64_norm": {
+        "0": 0.368,
+        "180": 0.358
+      },
+      "iou64NormMax": 0.368,
+      "ok": true
+    },
+    {
+      "a": "burdam",
+      "b": "vashil",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.432,
+        "180": 0.454
+      },
+      "iou64Max": 0.454,
+      "iou64_norm": {
+        "0": 0.474,
+        "180": 0.439
+      },
+      "iou64NormMax": 0.474,
+      "ok": true
+    },
+    {
+      "a": "burdam",
+      "b": "tunlan",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.468,
+        "180": 0.467
+      },
+      "iou64Max": 0.468,
+      "iou64_norm": {
+        "0": 0.448,
+        "180": 0.497
+      },
+      "iou64NormMax": 0.497,
+      "ok": true
+    },
+    {
+      "a": "burdam",
+      "b": "rishal",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.332,
+        "180": 0.345
+      },
+      "iou64Max": 0.345,
+      "iou64_norm": {
+        "0": 0.475,
+        "180": 0.471
+      },
+      "iou64NormMax": 0.475,
+      "ok": true
+    },
+    {
+      "a": "vashil",
+      "b": "tunlan",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.57,
+        "180": 0.528
+      },
+      "iou64Max": 0.57,
+      "iou64_norm": {
+        "0": 0.559,
+        "180": 0.494
+      },
+      "iou64NormMax": 0.559,
+      "ok": true
+    },
+    {
+      "a": "vashil",
+      "b": "rishal",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.415,
+        "180": 0.49
+      },
+      "iou64Max": 0.49,
+      "iou64_norm": {
+        "0": 0.479,
+        "180": 0.426
+      },
+      "iou64NormMax": 0.479,
+      "ok": true
+    },
+    {
+      "a": "tunlan",
+      "b": "rishal",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.298,
+        "180": 0.335
+      },
+      "iou64Max": 0.335,
+      "iou64_norm": {
+        "0": 0.443,
+        "180": 0.458
+      },
+      "iou64NormMax": 0.458,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/r2_zoning_pre.png",
+  "seconds": 9.1
+}

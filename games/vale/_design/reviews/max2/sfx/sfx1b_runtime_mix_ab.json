@@ -1,0 +1,450 @@
+{
+ "probe": "probe_audio_runtime match, 300 s, rift_coop, Chrome fake output (--disable-audio-output)",
+ "tokens": {
+  "integratedLUFS": -18,
+  "toleranceLU": 1.5,
+  "kitShareMin": 50,
+  "announcerOverSfxP99Min": 3
+ },
+ "seats": {
+  "Lisvel seed 21 (jungle-heavy)": {
+   "before": {
+    "file": "rt_base_lisvel21.json",
+    "pass": true,
+    "err": null,
+    "I": -19.29,
+    "sfxI": -23.38,
+    "ambI": -24.25,
+    "musicI": -30.7,
+    "kitPct": 63.09,
+    "libPct": 29.65,
+    "wickPct": 3.04,
+    "annOverSfxP99": 10.57,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": true,
+     "lampOutFires": null,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_lisvel_attack_hit",
+      37.29
+     ],
+     [
+      "f_lisvel_attack_swing",
+      18.85
+     ],
+     [
+      "c_monster_fall",
+      3.11
+     ],
+     [
+      "c_cast_big",
+      3
+     ],
+     [
+      "c_hit_magic",
+      2.52
+     ],
+     [
+      "c_proc_item",
+      2.47
+     ],
+     [
+      "c_needle_shot",
+      2.39
+     ],
+     [
+      "c_monster_hit",
+      2.17
+     ]
+    ]
+   },
+   "after": {
+    "file": "rt_a5_lisvel21.json",
+    "pass": true,
+    "err": null,
+    "I": -18.3,
+    "sfxI": -23.01,
+    "ambI": -23.26,
+    "musicI": -30.7,
+    "kitPct": 69.71,
+    "libPct": 23.05,
+    "wickPct": 3.31,
+    "annOverSfxP99": 10.79,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": true,
+     "lampOutFires": null,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_lisvel_attack_hit",
+      38.45
+     ],
+     [
+      "f_lisvel_attack_swing",
+      20.31
+     ],
+     [
+      "c_needle_shot",
+      2.75
+     ],
+     [
+      "c_hit_phys_heavy",
+      2.16
+     ],
+     [
+      "c_proc_item",
+      2.13
+     ],
+     [
+      "c_proc_team",
+      1.7
+     ],
+     [
+      "f_marund_passive",
+      1.68
+     ],
+     [
+      "m_level_up",
+      1.45
+     ]
+    ]
+   }
+  },
+  "Vashil seed 11": {
+   "before": {
+    "I": -19.95,
+    "kitPct": 51.2,
+    "src": "verify2 capture on the round-1 build: FAIL"
+   },
+   "after": {
+    "file": "rt_a5_vashil11.json",
+    "pass": true,
+    "err": null,
+    "I": -18.03,
+    "sfxI": -21.91,
+    "ambI": -23.71,
+    "musicI": -29.24,
+    "kitPct": 66.8,
+    "libPct": 15.07,
+    "wickPct": 12.69,
+    "annOverSfxP99": 6.14,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": null,
+     "lampOutFires": null,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_vashil_attack_hit",
+      11.42
+     ],
+     [
+      "f_vashil_attack_swing",
+      8.72
+     ],
+     [
+      "f_burdam_passive",
+      8.44
+     ],
+     [
+      "f_vashil_a1",
+      6.99
+     ],
+     [
+      "f_vashil_passive",
+      6.88
+     ],
+     [
+      "f_vashil_a2",
+      4.82
+     ],
+     [
+      "f_vashil_a1_hit",
+      4.69
+     ],
+     [
+      "w_glimwick_hit",
+      4.3
+     ]
+    ]
+   }
+  },
+  "Lisvel seed 3 (brawling)": {
+   "before": {
+    "I": null,
+    "kitPct": 53.5,
+    "src": "verify1: pass; I not recorded"
+   },
+   "after": {
+    "file": "rt_a5_lisvel3.json",
+    "pass": true,
+    "err": null,
+    "I": -16.93,
+    "sfxI": -18.51,
+    "ambI": -23.5,
+    "musicI": -29.33,
+    "kitPct": 67.59,
+    "libPct": 20.46,
+    "wickPct": 7.7,
+    "annOverSfxP99": 3.68,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": true,
+     "lampOutFires": true,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_lisvel_a1_hit",
+      7.87
+     ],
+     [
+      "f_lisvel_attack_hit",
+      6.44
+     ],
+     [
+      "f_odrum_a1_hit",
+      4.69
+     ],
+     [
+      "f_lisvel_attack_swing",
+      4.66
+     ],
+     [
+      "f_ilsheta_attack_hit",
+      4.61
+     ],
+     [
+      "f_odrum_attack_hit",
+      3.9
+     ],
+     [
+      "c_hit_phys_light",
+      3.65
+     ],
+     [
+      "f_ilsheta_attack_swing",
+      3.1
+     ]
+    ]
+   }
+  },
+  "Odrum seed 7": {
+   "before": {
+    "I": null,
+    "kitPct": 63.5,
+    "src": "verify1: pass; I not recorded"
+   },
+   "after": {
+    "file": "rt_a5_odrum7.json",
+    "pass": true,
+    "err": null,
+    "I": -17.8,
+    "sfxI": -20.51,
+    "ambI": -23.25,
+    "musicI": -30.71,
+    "kitPct": 86.72,
+    "libPct": 10.4,
+    "wickPct": 0.71,
+    "annOverSfxP99": 7.1,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": true,
+     "lampOutFires": true,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_odrum_a1_hit",
+      32.84
+     ],
+     [
+      "f_odrum_attack_hit",
+      21.78
+     ],
+     [
+      "f_odrum_attack_swing",
+      12.13
+     ],
+     [
+      "f_odrum_a1_land",
+      4.77
+     ],
+     [
+      "f_odrum_a1",
+      4.51
+     ],
+     [
+      "f_odrum_passive",
+      2.7
+     ],
+     [
+      "c_proc_item",
+      1.31
+     ],
+     [
+      "c_proc_team",
+      1.31
+     ]
+    ]
+   }
+  },
+  "Lisvel seed 15 (closing gate, loud seat)": {
+   "before": {
+    "I": -18.25,
+    "kitPct": 50.27,
+    "src": "max SFX-1 after, before round-1 fixes"
+   },
+   "after": {
+    "file": "rt_a5_lisvel15.json",
+    "pass": true,
+    "err": null,
+    "I": -17.03,
+    "sfxI": -19.37,
+    "ambI": -23.48,
+    "musicI": -29.2,
+    "kitPct": 67.45,
+    "libPct": 19.31,
+    "wickPct": 8.35,
+    "annOverSfxP99": 4.71,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": true,
+     "lampOutFires": true,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_lisvel_a1_hit",
+      11.88
+     ],
+     [
+      "f_ulkro_attack_hit",
+      4.87
+     ],
+     [
+      "f_lisvel_attack_swing",
+      4.84
+     ],
+     [
+      "f_lisvel_attack_hit",
+      4.68
+     ],
+     [
+      "c_hit_phys_light",
+      4.68
+     ],
+     [
+      "f_lisvel_a1",
+      3.2
+     ],
+     [
+      "m_enemy_windup",
+      3.2
+     ],
+     [
+      "f_ulkro_a1",
+      2.96
+     ]
+    ]
+   }
+  },
+  "Burdam seed 21 (closing gate, quiet seat)": {
+   "before": null,
+   "after": {
+    "file": "rt_a5_burdam21.json",
+    "pass": true,
+    "err": null,
+    "I": -17.89,
+    "sfxI": -21.71,
+    "ambI": -23.23,
+    "musicI": -30.66,
+    "kitPct": 77.57,
+    "libPct": 16.11,
+    "wickPct": 2.53,
+    "annOverSfxP99": 8.84,
+    "gates": {
+     "healPerMinLe6": true,
+     "enemyDownFires": true,
+     "lampSetFires": null,
+     "lampOutFires": null,
+     "announcerPeakOverSfxP99Ge3": true,
+     "masterIntegratedInTokens": true,
+     "fighterKitShareGe50": true
+    },
+    "top": [
+     [
+      "f_burdam_attack_hit",
+      25.44
+     ],
+     [
+      "f_burdam_attack_swing",
+      14.43
+     ],
+     [
+      "f_burdam_a1",
+      7.22
+     ],
+     [
+      "f_burdam_dash",
+      7.18
+     ],
+     [
+      "f_burdam_a3_hit",
+      6.81
+     ],
+     [
+      "f_burdam_a3",
+      6.05
+     ],
+     [
+      "c_proc_team",
+      1.85
+     ],
+     [
+      "c_proc_item",
+      1.75
+     ]
+    ]
+   }
+  }
+ },
+ "alsoBefore": {
+  "Lisvel seed 21": [
+   {
+    "I": -20.18,
+    "kitPct": 47.5,
+    "src": "verify2 capture, FAIL"
+   },
+   {
+    "I": -19.6,
+    "kitPct": 46.4,
+    "src": "round-1 engineer capture, FAIL"
+   }
+  ]
+ }
+}
